@@ -75,7 +75,7 @@ export default function Page() {
             </Row>
             <Field label="Tempo na função" htmlFor="tempo">
               <select id="tempo" className="input" value={dados.tempo} onChange={set("tempo")}>
-                <option>menos de 1 ano</option><option>1 a 3 anos</option><option>3 a 5 anos</option><option>mais de 5 anos</option>
+                <option>Menos de 1 ano</option><option>1 a 3 anos</option><option>3 a 5 anos</option><option>Mais de 5 anos</option>
               </select>
             </Field>
             <Field label="Entregas e atividades recentes" htmlFor="entregas" hint="Cole itens do kanban, do 1:1 ou da avaliação. Quanto mais concreto, melhor.">
@@ -126,7 +126,7 @@ function Resultado({ pdi, dados, meta }: { pdi: PDI; dados: DadosPDI; meta: Meta
           colunas={[
             { chave: "competencia", titulo: "Competência", render: (l) => <strong>{l.competencia}</strong> },
             { chave: "impacto", titulo: "Impacto no negócio", render: (l) => l.impacto },
-            { chave: "prioridade", titulo: "Prioridade", render: (l) => <Chip nivel={l.prioridade}>{l.prioridade}</Chip> },
+            { chave: "prioridade", titulo: "Prioridade", render: (l) => <Chip nivel={l.prioridade} /> },
           ]}
           linhas={pdi.lacunas}
         />

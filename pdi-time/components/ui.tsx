@@ -148,11 +148,9 @@ export function ResultHead({ titulo, subtitulo, children }: { titulo: string; su
 
 /** Linha de proveniência do resultado: de onde veio e quando. O nome do modelo só aparece no title. */
 export function Origem({ meta }: { meta: Meta }) {
-  const data = new Date(meta.geradoEm);
-  const quando = `${new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(data)} às ${new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(data)}`;
   const texto = meta.demo
     ? `Exemplo ilustrativo a partir de ${meta.insumo}. Conecte a IA para analisar seus dados`
-    : `Gerado com IA a partir de ${meta.insumo}, em ${quando}`;
+    : `Gerado com IA a partir de ${meta.insumo}, em ${data(meta.geradoEm, { comHora: true })}`;
   return <p className="text-muted text-[13px] mb-4" title={meta.model}>{texto}</p>;
 }
 
@@ -182,9 +180,16 @@ export function Item({ children, className = "" }: { children: ReactNode; classN
   return <div className={`card shadow-none px-5 py-[18px] ${className}`}>{children}</div>;
 }
 
-export function Chip({ nivel, children }: { nivel: string; children: ReactNode }) {
+const ROTULOS_NIVEL: Record<string, string> = { alta: "Alta", media: "Média", baixa: "Baixa", positivo: "Positivo", neutro: "Neutro", negativo: "Negativo" };
+
+function sentenceCase(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+/** Sem children, mostra o rótulo humano do nível (ex.: "alta" → "Alta"); níveis fora do mapa padrão caem no sentence case do próprio texto. */
+export function Chip({ nivel, children }: { nivel: string; children?: ReactNode }) {
   const classe = nivel.toLowerCase().replace("é", "e");
-  return <span className={`chip-${classe}`}>{children}</span>;
+  return <span className={`chip-${classe}`}>{children ?? ROTULOS_NIVEL[classe] ?? sentenceCase(nivel)}</span>;
 }
 
 export type Coluna<T> = { chave: string; titulo: string; render: (linha: T) => ReactNode; classe?: string };
@@ -241,3 +246,18 @@ export function useScrollToResult(pronto: boolean) {
 }
 
 export function esc(s: unknown) { return String(s ?? ""); }
+
+/** Formata número no padrão pt-BR (vírgula decimal), com `casas` dígitos após a vírgula. */
+export function numero(n: number, casas = 0) {
+  return new Intl.NumberFormat("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas }).format(n);
+}
+
+/** Formata data no padrão pt-BR; inclui o ano só quando fora do ano corrente, e a hora quando `comHora`. */
+export function data(d: Date | string, { comHora = false }: { comHora?: boolean } = {}) {
+  const dt = typeof d === "string" ? new Date(d) : d;
+  const opcoes: Intl.DateTimeFormatOptions = { day: "2-digit", month: "2-digit" };
+  if (dt.getFullYear() !== new Date().getFullYear()) opcoes.year = "numeric";
+  let texto = new Intl.DateTimeFormat("pt-BR", opcoes).format(dt);
+  if (comHora) texto += ` às ${new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(dt)}`;
+  return texto;
+}
