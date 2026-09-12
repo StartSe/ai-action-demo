@@ -1,9 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Chip, CopyButton, DataTable, Empty, ErrorBox, Field, Item, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, useScrollToResult, useStatus } from "@/components/ui";
+import { Chip, CopyButton, DataTable, Empty, ErrorBox, Field, Item, Loading, MaisDetalhes, OptInGuardar, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
+import { SENSIVEL } from "@/lib/sensivel";
 import type { Meta } from "@/lib/ai";
 import type { DadosPDI, PDI } from "@/lib/types";
+
+type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
 
 const EXEMPLO: DadosPDI = {
   nome: "Marina Costa",
@@ -39,20 +43,34 @@ export default function Page() {
   const { status, erro } = useStatus();
   const [dados, setDados] = useState<DadosPDI>(VAZIO);
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
+  const [guardar, setGuardar] = useState(false);
+  const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const autoEnviado = useRef(false);
 
   useScrollToResult(estado.fase === "pronto");
 
+  function carregarHistorico() {
+    fetch("/api/pdi").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
+  }
+
+  useEffect(() => { carregarHistorico(); }, []);
+
+  function apagarHistorico() {
+    if (!window.confirm("Apagar todos os resultados salvos? Essa ação não pode ser desfeita.")) return;
+    fetch("/api/pdi", { method: "DELETE" }).then(carregarHistorico);
+  }
+
   const set = (campo: keyof DadosPDI) => (e: { target: { value: string } }) => setDados((d) => ({ ...d, [campo]: e.target.value }));
 
-  async function gerar(d: DadosPDI) {
+  async function gerar(d: DadosPDI, guardarResultado: boolean) {
     setEstado({ fase: "carregando" });
     try {
-      const r = await fetch("/api/pdi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || "Falha ao gerar o PDI.");
-      setEstado({ fase: "pronto", pdi: data.pdi, dados: d, meta: data.meta, id: data.id });
+      const r = await fetch("/api/pdi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...d, guardar: guardarResultado }) });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Falha ao gerar o PDI.");
+      setEstado({ fase: "pronto", pdi: resposta.pdi, dados: d, meta: resposta.meta, id: resposta.id });
+      fetch("/api/pdi").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
     } catch (e) {
       setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado.", dados: d });
     }
@@ -60,7 +78,7 @@ export default function Page() {
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    gerar(dados);
+    gerar(dados, guardar);
   }
 
   function preencherExemplo() {
@@ -73,7 +91,7 @@ export default function Page() {
     if (autoEnviado.current) return;
     if (new URLSearchParams(location.search).get("exemplo") === "1") {
       autoEnviado.current = true;
-      setTimeout(() => { setDados(EXEMPLO); gerar(EXEMPLO); }, 0);
+      setTimeout(() => { setDados(EXEMPLO); gerar(EXEMPLO, false); }, 0);
     }
   }, []);
 
@@ -106,15 +124,36 @@ export default function Page() {
                 <input id="aspiracoes" className="input" placeholder="Ex.: assumir a gerência da área em 2 anos" value={dados.aspiracoes} onChange={set("aspiracoes")} />
               </Field>
             </MaisDetalhes>
+            {SENSIVEL && <OptInGuardar checked={guardar} onChange={setGuardar} />}
             <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Gerando plano" : "Gerar PDI"}</button>
           </form>
-          <Privacidade detalhe="Nada é salvo. O plano existe só nesta tela até você imprimir ou copiar." />
+          <Privacidade detalhe="O plano fica salvo neste app até você apagar em 'Últimos resultados'." />
+
+          <MaisDetalhes titulo="Últimos resultados">
+            {historico === null ? (
+              <p className="text-muted text-sm">Carregando...</p>
+            ) : historico.length === 0 ? (
+              <p className="text-muted text-sm">Nenhum resultado salvo ainda.</p>
+            ) : (
+              <>
+                <ul className="flex flex-col gap-1.5 text-sm mb-3">
+                  {historico.map((h) => (
+                    <li key={h.id} className="flex justify-between gap-3">
+                      <Link href={`/r/${h.id}`} className="text-accent-ink font-semibold hover:underline truncate">{h.titulo}</Link>
+                      <span className="text-muted shrink-0">{data(h.criadoEm)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
+              </>
+            )}
+          </MaisDetalhes>
         </Panel>
 
         <Stage>
           {estado.fase === "vazio" && <Empty ilustracao={<IlustracaoPlano />} titulo="O plano aparece aqui" descricao="Pontos fortes, lacunas priorizadas, três objetivos com ações em 30, 60 e 90 dias e perguntas para a conversa." acao="Preencher com um exemplo" onAcao={preencherExemplo} />}
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
-          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={() => gerar(estado.dados)} />}
+          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={() => gerar(estado.dados, guardar)} />}
           {estado.fase === "pronto" && <Resultado pdi={estado.pdi} dados={estado.dados} meta={estado.meta} />}
         </Stage>
       </Workspace>

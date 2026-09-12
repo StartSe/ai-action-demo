@@ -337,6 +337,16 @@ export function Privacidade({ detalhe }: { detalhe?: string }) {
   );
 }
 
+/** Opt-in de guarda temporária, exibido só nos apps com lib/historico.ts SENSIVEL = true (dados sensíveis não ficam salvos por padrão). */
+export function OptInGuardar({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-2 text-[13px] mb-4 cursor-pointer">
+      <input type="checkbox" className="w-4 h-4" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      Guardar este resultado por 30 dias
+    </label>
+  );
+}
+
 export function CopyButton({ texto, rotulo = "Copiar texto" }: { texto: () => string; rotulo?: string }) {
   const [ok, setOk] = useState(false);
   return (

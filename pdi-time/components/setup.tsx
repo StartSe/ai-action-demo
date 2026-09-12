@@ -2,7 +2,7 @@
 // Tela de configuração inicial, gerada a partir de lib/integracoes.ts. Compartilhada pela suíte: copie sem alterar.
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Topbar, useStatus } from "./ui";
+import { MaisDetalhes, Topbar, useStatus } from "./ui";
 import type { CampoStatus, IntegracaoStatus } from "@/lib/setup-comum";
 
 type Resposta = { integracoes: IntegracaoStatus[]; pronto: boolean };
@@ -53,6 +53,10 @@ export function SetupPage({ marca, nome, area }: { marca: string; nome: string; 
           <Link href="/" className="btn-primary !w-auto">Ir para o app</Link>
           <span className="text-muted text-sm">Variáveis de ambiente, quando existirem, têm prioridade sobre o que é salvo aqui.</span>
         </div>
+
+        <MaisDetalhes titulo="Para a equipe técnica">
+          <p className="text-muted text-[13px]">Neste plano de hospedagem, o histórico pode se perder ao reiniciar.</p>
+        </MaisDetalhes>
       </main>
     </>
   );

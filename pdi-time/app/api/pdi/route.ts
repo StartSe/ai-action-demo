@@ -1,6 +1,6 @@
 import { aiEnabled, askJSON, meta } from "@/lib/ai";
 import { esperar, pdiDemo } from "@/lib/demo";
-import { salvar } from "@/lib/historico";
+import { apagarTodos, listar, salvar, SENSIVEL } from "@/lib/historico";
 import type { DadosPDI, PDI } from "@/lib/types";
 
 const SYSTEM = `Você é um especialista em desenvolvimento de pessoas que apoia líderes de empresas brasileiras.
@@ -21,29 +21,47 @@ Formato de saída (JSON):
   "conversa_sugerida": ["pergunta para a conversa de feedback"]
 }`;
 
+/** Quando o app é sensível, só salva com opt-in explícito e por 30 dias; pdi-time não é sensível, então sempre salva sem prazo. */
+function idSalvo({ nome, dados, saida, metaGerada, guardar }: { nome: string; dados: DadosPDI; saida: PDI; metaGerada: ReturnType<typeof meta>; guardar?: boolean }) {
+  if (SENSIVEL && !guardar) return undefined;
+  return salvar({ tipo: "pdi", titulo: `PDI de ${nome}`, entrada: dados, saida, meta: metaGerada, expiraEmDias: SENSIVEL ? 30 : undefined });
+}
+
 export async function POST(req: Request) {
-  const dados = (await req.json().catch(() => ({}))) as Partial<DadosPDI>;
-  const { nome, cargo, tempo, entregas, objetivos, aspiracoes } = dados;
+  const corpo = (await req.json().catch(() => ({}))) as Partial<DadosPDI> & { guardar?: boolean };
+  const { nome, cargo, tempo, entregas, objetivos, aspiracoes, guardar } = corpo;
   if (!nome || !cargo || !entregas || !objetivos) {
     return Response.json({ error: "Preencha nome, cargo, entregas recentes e objetivos da empresa." }, { status: 400 });
   }
+  const dados: DadosPDI = { nome, cargo, tempo: tempo || "", entregas, objetivos, aspiracoes };
   try {
     const insumo = "entregas recentes e objetivos da empresa";
     if (!aiEnabled()) {
       await esperar(1200);
       const pdiGerado = pdiDemo({ nome, cargo });
       const metaGerada = meta({ demo: true, insumo });
-      const id = salvar({ tipo: "pdi", entrada: dados, saida: pdiGerado, meta: metaGerada });
+      const id = idSalvo({ nome, dados, saida: pdiGerado, metaGerada, guardar });
       return Response.json({ demo: true, pdi: pdiGerado, meta: metaGerada, id });
     }
     const prompt = `Profissional: ${nome}\nCargo: ${cargo}\nTempo na função: ${tempo || "não informado"}\n\nEntregas e atividades recentes:\n${entregas}\n\nObjetivos da empresa para o período:\n${objetivos}\n\nAspirações declaradas pelo profissional:\n${aspiracoes || "não informadas"}`;
     const pdi = await askJSON<PDI>({ system: SYSTEM, prompt });
     const metaGerada = meta({ demo: false, insumo });
-    const id = salvar({ tipo: "pdi", entrada: dados, saida: pdi, meta: metaGerada });
+    const id = idSalvo({ nome, dados, saida: pdi, metaGerada, guardar });
     return Response.json({ demo: false, pdi, meta: metaGerada, id });
   } catch (err) {
     console.error(err);
     const mensagem = err instanceof Error ? err.message : "Não foi possível gerar o PDI agora. Tente novamente.";
     return Response.json({ error: mensagem }, { status: 500 });
   }
+}
+
+/** Últimos resultados salvos, para a lista "Últimos resultados" no painel. */
+export async function GET() {
+  return Response.json({ itens: listar(10) });
+}
+
+/** Apaga todo o histórico salvo (botão "Apagar tudo"). */
+export async function DELETE() {
+  apagarTodos();
+  return Response.json({ ok: true });
 }
