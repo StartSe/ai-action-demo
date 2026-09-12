@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Chip, CopyButton, DataTable, Empty, ErrorBox, Field, Item, Loading, Origem, Panel, ResultHead, Row, Section, Stage, Topbar, Workspace, useScrollToResult, useStatus } from "@/components/ui";
+import { Chip, CopyButton, DataTable, Empty, ErrorBox, Field, Item, Loading, MaisDetalhes, Origem, Panel, ResultHead, Row, Section, Stage, Topbar, Workspace, useScrollToResult, useStatus } from "@/components/ui";
 import type { Meta } from "@/lib/ai";
 import type { DadosPDI, PDI } from "@/lib/types";
 
@@ -67,7 +67,7 @@ export default function Page() {
       <Topbar marca="P" nome="PDI do Time" area="Recursos Humanos" status={status} erro={erro} resumo="Modo demonstração: o plano exibido é um exemplo." />
 
       <Workspace>
-        <Panel titulo="Um plano de desenvolvimento em três minutos." lead="Descreva o que a pessoa entregou e o que a empresa precisa. A IA conecta os dois em um PDI de 90 dias pronto para a conversa de feedback.">
+        <Panel titulo="Um plano de desenvolvimento em três minutos." lead="Descreva o que a pessoa entregou e o que a empresa precisa para receber um PDI de 90 dias pronto para a conversa de feedback.">
           <form ref={formRef} onSubmit={onSubmit}>
             <Row>
               <Field label="Nome" htmlFor="nome"><input id="nome" className="input" required placeholder="Marina Costa" value={dados.nome} onChange={set("nome")} /></Field>
@@ -84,9 +84,11 @@ export default function Page() {
             <Field label="Objetivos da empresa para o período" htmlFor="objetivos">
               <textarea id="objetivos" className="input min-h-24 resize-y" required placeholder="Ex.: crescer 30% em receita recorrente, abrir o mercado corporativo, reduzir churn para 2%..." value={dados.objetivos} onChange={set("objetivos")} />
             </Field>
-            <Field label="Aspirações da pessoa (opcional)" htmlFor="aspiracoes">
-              <input id="aspiracoes" className="input" placeholder="Ex.: assumir a gerência da área em 2 anos" value={dados.aspiracoes} onChange={set("aspiracoes")} />
-            </Field>
+            <MaisDetalhes>
+              <Field label="Aspirações da pessoa (opcional)" htmlFor="aspiracoes">
+                <input id="aspiracoes" className="input" placeholder="Ex.: assumir a gerência da área em 2 anos" value={dados.aspiracoes} onChange={set("aspiracoes")} />
+              </Field>
+            </MaisDetalhes>
             <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Gerando plano" : "Gerar PDI"}</button>
           </form>
           <p className="mt-3.5 text-muted text-[12.5px]">Nada é salvo. O plano existe só nesta tela até você imprimir ou copiar.</p>

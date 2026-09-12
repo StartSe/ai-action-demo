@@ -81,7 +81,7 @@ export function Workspace({ children }: { children: ReactNode }) {
 export function Panel({ titulo, lead, children }: { titulo: string; lead: string; children: ReactNode }) {
   return (
     <section className="no-print card p-7 max-md:p-[22px] self-start md:sticky md:top-6 md:max-h-[calc(100vh-48px)] md:overflow-y-auto">
-      <h1 className="text-[30px] max-md:text-[26px] leading-[1.15] font-extrabold tracking-[-0.025em] mb-2.5">{titulo}</h1>
+      <h1 className="text-[26px] max-md:text-[24px] leading-[1.15] font-extrabold tracking-[-0.025em] mb-2.5">{titulo}</h1>
       <p className="text-muted mb-6">{lead}</p>
       {children}
     </section>
@@ -95,6 +95,19 @@ export function Field({ label, htmlFor, hint, children }: { label: string; htmlF
       {children}
       {hint && <span className="text-[12.5px] text-muted">{hint}</span>}
     </div>
+  );
+}
+
+/** <details> com o mesmo espaçamento vertical dos Field; agrupa campos secundários fora do fluxo principal do painel. */
+export function MaisDetalhes({ titulo = "Mais detalhes", children }: { titulo?: string; children: ReactNode }) {
+  return (
+    <details className="group mb-4">
+      <summary className="text-[13px] font-semibold cursor-pointer select-none marker:content-none flex items-center gap-1.5">
+        <span className="text-muted transition-transform group-open:rotate-90">›</span>
+        {titulo}
+      </summary>
+      <div className="mt-3.5 [&>*:last-child]:mb-0">{children}</div>
+    </details>
   );
 }
 

@@ -81,3 +81,14 @@ Started: Sat Sep 12 16:56:50 -03 2026
   - Ver seção "Codebase Patterns" acima (helpers `numero`/`data` agora são a forma canônica de formatar números e datas nos 10 apps).
   - `Chip` com `children` omitido só funciona bem quando `nivel` é um dos valores semânticos do mapa (`alta`/`media`/`baixa`/`positivo`/`neutro`/`negativo`); para categorias livres (como `tipo` de recurso: "Mentoria", "Curso") continue passando `children` explícito com o texto já em sentence case, como em `<Chip nivel="neutral">{r.tipo}</Chip>`.
 ---
+
+## [2026-09-12] - US-007
+- `Panel` em `pdi-time/components/ui.tsx`: título passou de 30 px (26 px no celular) para 26 px (24 px no celular) — só troquei a classe do `<h1>`, sem outra mudança na assinatura do componente.
+- Novo componente `MaisDetalhes` em `components/ui.tsx`: `<details className="group mb-4">` com `<summary>` "Mais detalhes" (seta `›` que gira 90° com `group-open:rotate-90`, `marker:content-none` para tirar o marcador nativo do `<summary>`) e um `<div className="mt-3.5">` para o conteúdo; a margem externa (`mb-4`) replica o espaçamento vertical do `Field`.
+- `pdi-time/app/page.tsx`: o `lead` do `Panel` virou uma frase só (antes eram duas: "Descreva..." + "A IA conecta..."); o campo "Aspirações da pessoa (opcional)" saiu do fluxo principal do formulário e foi para dentro de `<MaisDetalhes>`.
+- Arquivos alterados: `pdi-time/components/ui.tsx`, `pdi-time/app/page.tsx`.
+- Verificação: `npx tsc --noEmit` e `npm run lint` limpos. Subi `PORT=3051 npm run dev` e usei `chromium --headless --run-all-compositor-stages-before-draw --window-size=1400,900 --virtual-time-budget=8000 --screenshot=...` no estado vazio (`?captura=1`): confirmei visualmente que o botão "Gerar PDI" fica visível dentro do painel sem precisar rolar, e que "Mais detalhes" aparece fechado por padrão logo antes do botão. Repeti em `--window-size=390,900` para o celular: título em 24 px, layout ok. Confirmei via `--dump-dom` com `?exemplo=1&captura=1` que o fluxo de preenchimento automático ainda chega a "PDI de Marina Costa" (aspirações movido para dentro de `<details>` não quebrou o envio do formulário).
+- **Learnings for future iterations:**
+  - `<details>`/`<summary>` nativos bastam para o padrão "Mais detalhes" da suíte — não precisou de estado React; abrir/fechar é comportamento nativo do navegador. Ao usar `group` do Tailwind num elemento `<details>`, o `group-open:` funciona porque o Tailwind trata o atributo `open` do próprio elemento como o gatilho do grupo.
+  - Não foi possível simular o clique no `<summary>` via `chromium --headless --dump-dom`/`--screenshot` (sem interação real de mouse) para capturar o estado aberto — verificação de que o toggle abre/fecha visualmente segue como verificação manual pendente, mesmo padrão já registrado em US-004 para interações de clique.
+---
