@@ -1,6 +1,6 @@
 {
   "titulo": "IA para Executivos",
-  "lead": "Cada um resolve um problema específico e roda sem login e sem chave. Abra, teste em dois minutos com dados de exemplo e publique na sua conta do Render com um clique.",
+  "lead": "Cada um resolve um problema específico e roda sem login e sem chave. Abra, teste em dois minutos com dados de exemplo e publique na nuvem com um clique, na sua própria conta.",
   "registro": "ghcr.io/startse",
   "repoPrivado": "StartSe/ai-action-demo",
   "repoPublico": "StartSe/ai-action-app-deploy",

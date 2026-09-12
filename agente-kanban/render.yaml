@@ -1,6 +1,6 @@
-# Blueprint do Render para Agente de Kanban (https://render.com/docs/blueprint-spec)
+# Blueprint de publicação de Agente de Kanban (especificação: https://render.com/docs/blueprint-spec)
 # Imagem pública publicada pelo GitHub Actions em ghcr.io/startse/agente-kanban:latest.
-# Nenhuma chave é necessária aqui: após o deploy, abra https://<seu-app>.onrender.com/setup e conecte a IA.
+# Nenhuma chave é necessária aqui: após publicar, abra /setup no app e conecte a IA.
 # As chaves ficam em SQLite em /app/data. No plano free o disco é efêmero e a configuração se perde a cada deploy.
 services:
   - type: web

@@ -4,17 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IA para Executivos</title>
-<meta name="description" content="Dez apps de IA para o dia a dia de uma empresa. Filtre por área e publique na sua conta do Render com um clique.">
+<meta name="description" content="Dez apps de IA para o dia a dia de uma empresa. Escolha um, clique em Publicar e em poucos minutos ele está no ar na sua conta.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
     --fundo: #f4f5f7; --cartao: #ffffff; --tinta: #161a22; --suave: #5b6270; --linha: #dfe3e9; --realce: #eceef2;
+    --primario: #1f4fd8; --primario-hover: #1a43b8; --primario-texto: #ffffff;
     color-scheme: light dark;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --fundo: #101318; --cartao: #181c24; --tinta: #eef1f6; --suave: #9aa3b2; --linha: #2a303b; --realce: #222834; }
+    :root {
+      --fundo: #101318; --cartao: #181c24; --tinta: #eef1f6; --suave: #9aa3b2; --linha: #2a303b; --realce: #222834;
+      --primario: #4f7cff; --primario-hover: #6a90ff; --primario-texto: #0b1020;
+    }
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
@@ -24,7 +28,7 @@
     font: 500 16px/1.55 Manrope, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   a { color: inherit; }
-  :focus-visible { outline: 3px solid var(--tinta); outline-offset: 2px; border-radius: 6px; }
+  :focus-visible { outline: 3px solid var(--primario); outline-offset: 2px; border-radius: 6px; }
   .largura { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
 
   .topo { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 22px 0; }
@@ -48,7 +52,20 @@
   .chip[aria-pressed="true"] { background: var(--tinta); color: var(--fundo); border-color: var(--tinta); }
   .contagem { color: var(--suave); margin: 18px 0 0; }
 
-  .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; padding: 10px 0 56px; }
+  /* Botões: um único estilo primário em toda a página */
+  .btn, .btn-ghost {
+    font: inherit; font-weight: 700; font-size: 1rem; text-decoration: none; cursor: pointer;
+    min-height: 48px; padding: 12px 20px; border-radius: 10px; border: 1.5px solid transparent;
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px; line-height: 1.2;
+  }
+  .btn { background: var(--primario); color: var(--primario-texto); }
+  .btn:hover { background: var(--primario-hover); }
+  .btn svg { width: 18px; height: 18px; flex: none; }
+  .btn-ghost { background: transparent; color: var(--tinta); border-color: var(--linha); }
+  .btn-ghost:hover { border-color: var(--suave); background: var(--realce); }
+  .btn-largo { width: 100%; }
+
+  .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; padding: 10px 0 40px; }
   .card {
     background: var(--cartao); border: 1px solid var(--linha); border-top: 4px solid var(--acento);
     border-radius: 14px; padding: 24px 24px 20px; display: flex; flex-direction: column; gap: 14px;
@@ -62,33 +79,51 @@
   dl div { display: grid; grid-template-columns: 7.5rem 1fr; gap: 10px; }
   dt { color: var(--suave); font-size: .92rem; }
   dd { margin: 0; font-size: .95rem; }
-  .acoes { display: flex; flex-wrap: wrap; gap: 10px; margin-top: auto; padding-top: 8px; align-items: center; }
-  .btn, .btn-ghost {
-    font: inherit; font-weight: 700; font-size: .95rem; text-decoration: none; cursor: pointer;
-    padding: 10px 16px; border-radius: 9px; border: 1.5px solid transparent; display: inline-block;
-  }
-  .btn { background: var(--acento, var(--tinta)); color: #fff; }
-  .btn:hover { filter: brightness(1.08); }
-  .btn-ghost { background: transparent; color: var(--tinta); border-color: var(--linha); }
-  .btn-ghost:hover { border-color: var(--suave); }
-  details.local { width: 100%; }
-  details.local summary { cursor: pointer; color: var(--suave); font-size: .95rem; list-style: none; padding: 4px 0; }
-  details.local summary::-webkit-details-marker { display: none; }
-  details.local summary::before { content: "+"; display: inline-block; width: 1.2em; font-weight: 700; }
-  details.local[open] summary::before { content: "–"; }
-  details.local summary:hover { color: var(--tinta); }
-  .comando { display: flex; gap: 8px; align-items: stretch; margin: 10px 0 8px; }
-  pre { margin: 0; flex: 1; overflow-x: auto; background: var(--realce); border-radius: 8px; padding: 10px 12px; font: 500 .82rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .copiar { font: inherit; font-weight: 600; font-size: .85rem; cursor: pointer; padding: 0 12px; border-radius: 8px; border: 1.5px solid var(--linha); background: var(--cartao); color: var(--tinta); white-space: nowrap; }
-  .copiar:hover { border-color: var(--suave); }
-  .depois { margin: 0; color: var(--suave); font-size: .9rem; }
+  .acoes { display: flex; flex-direction: column; gap: 10px; margin-top: auto; padding-top: 10px; }
+  .dica { margin: 0; color: var(--suave); font-size: .88rem; text-align: center; }
 
-  .suite, .saiba { border-top: 1px solid var(--linha); padding: 44px 0; }
-  .suite h2, .saiba h2 { font-size: 1.6rem; letter-spacing: -0.02em; margin: 0 0 10px; font-weight: 800; }
-  .suite p { color: var(--suave); max-width: 60ch; margin: 0 0 20px; }
+  /* Opções avançadas: recolhidas por padrão */
+  details.avancado { width: 100%; min-width: 0; margin-top: 4px; border-top: 1px solid var(--linha); padding-top: 8px; }
+  details.avancado summary {
+    cursor: pointer; color: var(--suave); font-size: .9rem; font-weight: 600; list-style: none;
+    padding: 6px 0; display: flex; align-items: center; gap: 8px; user-select: none;
+  }
+  details.avancado summary::-webkit-details-marker { display: none; }
+  details.avancado summary::before {
+    content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg); transition: transform .15s; margin-left: 2px;
+  }
+  details.avancado[open] summary::before { transform: rotate(45deg); }
+  details.avancado summary:hover { color: var(--tinta); }
+  .avancado-corpo { padding: 6px 0 2px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
+  .avancado-corpo h3 { margin: 0; font-size: .95rem; font-weight: 700; }
+  .avancado-corpo p { margin: 0; color: var(--suave); font-size: .9rem; }
+  .comando { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  pre { margin: 0; min-width: 0; white-space: pre-wrap; word-break: break-all; background: var(--realce); border-radius: 8px; padding: 10px 12px; font: 500 .82rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .copiar { font: inherit; font-weight: 600; font-size: .85rem; cursor: pointer; padding: 8px 12px; align-self: flex-start; border-radius: 8px; border: 1.5px solid var(--linha); background: var(--cartao); color: var(--tinta); white-space: nowrap; }
+  .copiar:hover { border-color: var(--suave); }
+
+  /* Como funciona */
+  .passos { border-top: 1px solid var(--linha); padding: 44px 0; }
+  .passos h2, .suite h2, .saiba h2 { font-size: 1.6rem; letter-spacing: -0.02em; margin: 0 0 10px; font-weight: 800; }
+  .passos ol { list-style: none; margin: 24px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; counter-reset: passo; }
+  .passos li { counter-increment: passo; background: var(--cartao); border: 1px solid var(--linha); border-radius: 14px; padding: 22px 22px 20px; display: grid; gap: 8px; }
+  .passos li::before {
+    content: counter(passo); width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--primario); color: var(--primario-texto); font-weight: 800; font-size: 1rem; margin-bottom: 4px;
+  }
+  .passos li strong { font-size: 1.08rem; font-weight: 800; letter-spacing: -0.01em; }
+  .passos li span { color: var(--suave); font-size: .96rem; }
+  .passos > p, .suite p { color: var(--suave); max-width: 60ch; margin: 0; }
+
+  .suite { border-top: 1px solid var(--linha); padding: 44px 0; }
+  .suite .btn { margin-top: 20px; }
+
+  .saiba { border-top: 1px solid var(--linha); padding: 44px 0; }
   .saiba ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; max-width: 64ch; }
   .saiba li { padding-left: 18px; position: relative; }
   .saiba li::before { content: ""; position: absolute; left: 0; top: .62em; width: 7px; height: 7px; border-radius: 50%; background: var(--suave); }
+  .saiba details.avancado { max-width: 64ch; margin-top: 24px; }
   .saiba code { font: 500 .9em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--realce); padding: 1px 6px; border-radius: 5px; }
 
   footer { color: var(--suave); font-size: .92rem; padding: 28px 0 48px; border-top: 1px solid var(--linha); }
@@ -99,11 +134,10 @@
     .hero { padding-top: 24px; }
     .card { padding: 20px 18px 16px; }
     dl div { grid-template-columns: 1fr; gap: 2px; }
-    .comando { flex-direction: column; }
-    .copiar { padding: 8px 12px; }
+    .suite .btn { width: 100%; }
   }
   @media (prefers-reduced-motion: no-preference) {
-    .chip, .btn, .btn-ghost, .copiar { transition: border-color .15s, background-color .15s, filter .15s; }
+    .chip, .btn, .btn-ghost, .copiar { transition: border-color .15s, background-color .15s; }
   }
 </style>
 </head>
@@ -111,7 +145,7 @@
 <div class="largura">
   <header class="topo">
     <a class="marca" href="./">IA para Executivos</a>
-    <a class="discreto" id="linkRepo" href="#">Arquivos de publicação</a>
+    <a class="discreto" href="#como-funciona">Como funciona</a>
   </header>
 
   <main>
@@ -124,20 +158,39 @@
 
     <section class="grade" id="apps" aria-label="Apps"></section>
 
+    <section class="passos" id="como-funciona">
+      <h2>Como funciona</h2>
+      <p>Não é preciso instalar nada nem saber programar. Publicar leva poucos minutos.</p>
+      <ol>
+        <li><strong>Clique em Publicar</strong><span>Escolha o app e clique no botão azul. Uma nova aba abre com o serviço de hospedagem na nuvem.</span></li>
+        <li><strong>Entre ou crie sua conta</strong><span>A conta gratuita basta. Confirme a publicação: o app é criado na sua conta, não na nossa.</span></li>
+        <li><strong>Conecte a IA</strong><span>Abra o app publicado e clique em Configurações. Em um minuto a IA está conectada. Até lá ele roda em modo demonstração.</span></li>
+      </ol>
+    </section>
+
     <section class="suite">
       <h2>Publicar os dez de uma vez</h2>
-      <p>Um único Blueprint cria os dez serviços na sua conta do Render. Depois, abra a página de configuração de cada um e conecte a IA.</p>
-      <a class="btn" id="publicarSuite" href="#" target="_blank" rel="noopener">Publicar os dez no Render</a>
+      <p>Um único clique cria os dez apps na sua conta. Depois, abra cada um e conecte a IA em Configurações.</p>
+      <a class="btn" id="publicarSuite" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+        Publicar os dez apps
+      </a>
     </section>
 
     <section class="saiba">
-      <h2>Antes de clicar</h2>
+      <h2>Bom saber</h2>
       <ul>
-        <li>É preciso ter uma conta no Render. O plano free serve e o serviço é criado na sua conta, não na nossa.</li>
-        <li>Nenhuma chave é pedida no deploy. Depois de publicar, abra <code>/setup</code> no app e conecte a IA em um minuto, por login no OpenRouter ou colando uma chave. Até lá o app roda em modo demonstração.</li>
-        <li>No plano free o app hiberna após inatividade e o disco é efêmero: a configuração feita em <code>/setup</code> se perde a cada deploy. Para persistir, use um plano pago e descomente o bloco <code>disk</code> do Blueprint.</li>
-        <li>Para rodar no seu computador basta o Docker instalado. As imagens são públicas e não precisam de login.</li>
+        <li>Nenhuma senha ou chave é pedida na publicação. A IA é conectada depois, dentro do app, em Configurações.</li>
+        <li>No plano gratuito o app adormece após um tempo sem uso e leva alguns segundos para acordar no próximo acesso.</li>
+        <li>Também no plano gratuito, a conexão com a IA pode se perder quando o app for atualizado. Basta refazê-la em Configurações. Um plano pago mantém tudo salvo.</li>
+        <li>Os apps usam dados de exemplo e servem para aprendizado e testes. Não coloque dados sensíveis da sua empresa.</li>
       </ul>
+      <details class="avancado">
+        <summary>Para a equipe técnica</summary>
+        <div class="avancado-corpo">
+          <p>Cada app é uma imagem Docker pública em <code>ghcr.io/startse/&lt;app&gt;</code>, sem login para baixar. A configuração fica em SQLite em <code>/app/data</code>; a página <code>/setup</code> aceita login no OpenRouter ou uma chave de API colada. Os arquivos de publicação (um Blueprint por app e um da suíte) estão em <a id="linkRepo" href="#">github.com/StartSe/ai-action-app-deploy</a>. Para persistir a configuração entre deploys, use um plano pago e descomente o bloco <code>disk</code> do Blueprint.</p>
+        </div>
+      </details>
     </section>
   </main>
 
@@ -156,12 +209,20 @@
       <div><dt>Conecta com</dt><dd class="integracoes"></dd></div>
     </dl>
     <div class="acoes">
-      <a class="btn publicar" target="_blank" rel="noopener">Publicar no Render</a>
-      <a class="btn-ghost demo" target="_blank" rel="noopener" hidden>Ver demonstração</a>
-      <details class="local">
-        <summary>Rodar no meu computador</summary>
-        <div class="comando"><pre><code></code></pre><button type="button" class="copiar">Copiar comando</button></div>
-        <p class="depois"></p>
+      <a class="btn btn-largo publicar" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+        Publicar este app
+      </a>
+      <a class="btn-ghost btn-largo demo" target="_blank" rel="noopener" hidden>Ver demonstração</a>
+      <p class="dica">Gratuito. Abre em uma nova aba, na sua conta.</p>
+      <details class="avancado">
+        <summary>Opções avançadas</summary>
+        <div class="avancado-corpo">
+          <h3>Rodar no meu computador</h3>
+          <p>Requer o Docker instalado. Cole o comando no terminal:</p>
+          <div class="comando"><pre><code></code></pre><button type="button" class="copiar">Copiar comando</button></div>
+          <p class="depois"></p>
+        </div>
       </details>
     </div>
   </article>
@@ -197,7 +258,7 @@
     $(".ia", el).textContent = app.ia;
     $(".integracoes", el).textContent = app.integracoes;
     $(".publicar", el).href = app.publicar;
-    $(".publicar", el).setAttribute("aria-label", `Publicar ${app.nome} no Render`);
+    $(".publicar", el).setAttribute("aria-label", `Publicar ${app.nome}`);
     if (app.demo) { const d = $(".demo", el); d.href = app.demo; d.hidden = false; }
     $("code", el).textContent = app.docker;
     $(".depois", el).textContent = `Depois abra http://localhost:${app.porta} e, para conectar a IA, http://localhost:${app.porta}/setup.`;

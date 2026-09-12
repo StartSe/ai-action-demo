@@ -43,9 +43,9 @@ const cabecalho = (texto) => `# ${texto.split("\n").join("\n# ")}\n`;
 function renderApp(app) {
   return (
     cabecalho(
-      `Blueprint do Render para ${app.nome} (https://render.com/docs/blueprint-spec)
+      `Blueprint de publicação de ${app.nome} (especificação: https://render.com/docs/blueprint-spec)
 Imagem pública publicada pelo GitHub Actions em ${imagem(app)}.
-Nenhuma chave é necessária aqui: após o deploy, abra https://<seu-app>.onrender.com/setup e conecte a IA.
+Nenhuma chave é necessária aqui: após publicar, abra /setup no app e conecte a IA.
 As chaves ficam em SQLite em /app/data. No plano free o disco é efêmero e a configuração se perde a cada deploy.`
     ) +
     "services:\n" +
@@ -56,10 +56,10 @@ As chaves ficam em SQLite em /app/data. No plano free o disco é efêmero e a co
 function renderSuite() {
   return (
     cabecalho(
-      `Blueprint único da suíte ${cat.titulo}: publica os ${cat.apps.length} apps de uma vez no Render.
+      `Blueprint único da suíte ${cat.titulo}: publica os ${cat.apps.length} apps de uma vez.
 Cada app também tem seu próprio Blueprint (branch deploy-<app> em ${repoPublicoUrl}).
 Imagens públicas publicadas pelo GitHub Actions em ${cat.registro}/<app>:latest.
-Nenhuma chave é necessária aqui: após o deploy, abra https://<app>.onrender.com/setup e conecte a IA.
+Nenhuma chave é necessária aqui: após publicar, abra /setup em cada app e conecte a IA.
 Gerado por scripts/gerar-deploy.mjs a partir de catalogo.json. Não edite à mão.`
     ) +
     "services:\n" +
@@ -71,7 +71,7 @@ function readmePublico() {
   const linhas = cat.apps
     .map(
       (a) =>
-        `| [${a.nome}](${repoPublicoUrl}/tree/${branchDeploy(a)}) | ${a.areas.join(", ")} | ${a.problema} | [Publicar no Render](${urlPublicar(a)}) |`
+        `| [${a.nome}](${repoPublicoUrl}/tree/${branchDeploy(a)}) | ${a.areas.join(", ")} | ${a.problema} | [Publicar este app](${urlPublicar(a)}) |`
     )
     .join("\n");
   return `# ${cat.titulo}
@@ -80,21 +80,21 @@ ${cat.lead}
 
 Catálogo com filtro por área: **${cat.paginaPublica}**
 
-Este repositório guarda só os arquivos de publicação (Blueprints do Render e a página do catálogo). Ele é gerado automaticamente a partir do repositório privado \`${cat.repoPrivado}\`; nada aqui é editado à mão.
+Este repositório guarda só os arquivos de publicação (um Blueprint por app, um da suíte e a página do catálogo). Ele é gerado automaticamente a partir do repositório privado \`${cat.repoPrivado}\`; nada aqui é editado à mão.
 
 ## Publicar os ${cat.apps.length} apps de uma vez
 
-[![Publicar no Render](https://render.com/images/deploy-to-render-button.svg)](${urlPublicarSuite})
+[![Publicar os ${cat.apps.length} apps](https://img.shields.io/badge/Publicar%20os%20${cat.apps.length}%20apps-1f4fd8?style=for-the-badge)](${urlPublicarSuite})
 
-## Publicar um app
+## Publicar um app de cada vez
 
 | App | Área | Problema que resolve | |
 |---|---|---|---|
 ${linhas}
 
-## Rodar no seu computador
+## Opção avançada: rodar no seu computador
 
-Cada app é uma imagem Docker pública. Exemplo:
+Requer o Docker instalado. Cada app é uma imagem pública, sem login para baixar. Exemplo:
 
 \`\`\`bash
 ${comandoDocker(cat.apps[0])}
@@ -103,9 +103,9 @@ ${comandoDocker(cat.apps[0])}
 
 ## O que saber antes de clicar
 
-- É preciso ter uma conta no Render (o plano free serve). O serviço é criado na sua conta.
-- Nenhuma chave é pedida no deploy. Depois de publicar, abra \`/setup\` no app e conecte a IA e as integrações em um minuto.
-- No plano free o app hiberna após inatividade e o disco é efêmero: a configuração feita em \`/setup\` se perde a cada deploy. Para persistir, use um plano pago e descomente o bloco \`disk\` do Blueprint.
+- Ao clicar em Publicar, você entra (ou cria uma conta gratuita) no serviço de hospedagem e confirma. O app é criado na sua conta, não na nossa.
+- Nenhuma chave é pedida na publicação. Depois, abra o app, clique em Configurações (\`/setup\`) e conecte a IA e as integrações em um minuto.
+- No plano gratuito o app adormece após um tempo sem uso e a configuração feita em Configurações pode se perder quando ele for atualizado. Um plano pago mantém tudo salvo (descomente o bloco \`disk\` do Blueprint).
 `;
 }
 
@@ -114,18 +114,18 @@ function readmeBranch(app) {
 
 ${app.problema} ${app.ia}
 
-[![Publicar no Render](https://render.com/images/deploy-to-render-button.svg)](${urlPublicar(app)})
+[![Publicar este app](https://img.shields.io/badge/Publicar%20este%20app-1f4fd8?style=for-the-badge)](${urlPublicar(app)})
 
 Imagem: \`${imagem(app)}\`
 
-Rodar no seu computador:
+Opção avançada, rodar no seu computador (requer Docker):
 
 \`\`\`bash
 ${comandoDocker(app)}
 # depois abra http://localhost:${app.porta}
 \`\`\`
 
-Depois de publicar, abra \`/setup\` no app para conectar a IA. Catálogo completo: ${cat.paginaPublica}
+Depois de publicar, abra o app e clique em Configurações (\`/setup\`) para conectar a IA. Catálogo completo: ${cat.paginaPublica}
 `;
 }
 
