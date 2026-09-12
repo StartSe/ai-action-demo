@@ -1,5 +1,6 @@
-import { aiEnabled, askJSON } from "@/lib/ai";
+import { aiEnabled, askJSON, meta } from "@/lib/ai";
 import { esperar, scorecardDemo } from "@/lib/demo";
+import { apagarTodos, listar, salvar } from "@/lib/historico";
 import type { Scorecard, Troca, Vaga } from "@/lib/types";
 
 const SYSTEM_AVALIAR = `Você é uma especialista em recrutamento e seleção que avalia a transcrição de uma entrevista de triagem conduzida por uma IA, para apoiar a decisão do gestor de contratação.
@@ -56,16 +57,33 @@ export async function POST(req: Request) {
     return Response.json({ error: "É preciso ter ao menos uma resposta do candidato para gerar o scorecard." }, { status: 400 });
   }
   try {
+    const insumo = "toda a conversa e os requisitos da vaga";
     if (!aiEnabled()) {
       await esperar(1200);
-      return Response.json({ demo: true, scorecard: scorecardDemo({ vaga }) });
+      const scorecard = scorecardDemo({ vaga });
+      const metaGerada = meta({ demo: true, insumo });
+      const id = salvar({ tipo: "entrevista", titulo: `Scorecard de ${vaga.candidato}`, entrada: { vaga, historico: hist }, saida: scorecard, meta: metaGerada });
+      return Response.json({ scorecard, meta: metaGerada, id });
     }
     const prompt = construirPromptAvaliacao({ vaga, historico: hist });
     const scorecard = await askJSON<Scorecard>({ system: SYSTEM_AVALIAR, prompt, maxTokens: 2000 });
-    return Response.json({ demo: false, scorecard });
+    const metaGerada = meta({ demo: false, insumo });
+    const id = salvar({ tipo: "entrevista", titulo: `Scorecard de ${vaga.candidato}`, entrada: { vaga, historico: hist }, saida: scorecard, meta: metaGerada });
+    return Response.json({ scorecard, meta: metaGerada, id });
   } catch (err) {
     console.error(err);
     const mensagem = err instanceof Error ? err.message : "Não foi possível gerar o scorecard agora. Tente novamente.";
     return Response.json({ error: mensagem }, { status: 500 });
   }
+}
+
+/** Últimos resultados salvos, para a lista "Últimos resultados" no painel. */
+export async function GET() {
+  return Response.json({ itens: listar(10) });
+}
+
+/** Apaga todo o histórico salvo (botão "Apagar tudo"). */
+export async function DELETE() {
+  apagarTodos();
+  return Response.json({ ok: true });
 }

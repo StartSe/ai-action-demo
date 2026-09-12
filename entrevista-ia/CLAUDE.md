@@ -1,1 +1,10 @@
 @AGENTS.md
+
+## Notas específicas deste app
+
+- `components/ui.tsx`/`lib/ai.ts`/`lib/formato.ts`/`lib/sensivel.ts`/`lib/historico.ts`/`instrumentation.ts` são cópias literais de `pdi-time` (arquivos genéricos, sem lógica específica do app). Só `app/r/[id]/page.tsx`, `app/imprimir/[id]/page.tsx` e os `not-found.tsx` são próprios daqui, porque dependem do `Resultado`/tipo de dado deste app (`Scorecard`, com `entrada = { vaga, historico }`).
+- `SENSIVEL = false` (a vaga/candidato não está na lista de apps sensíveis do PRD — só Contratos e Financeiro); por isso `OptInGuardar` não é usado aqui, o `POST /api/entrevista/avaliar` sempre salva.
+- `Destaque` é o "dado que decide" deste app: a nota geral do scorecard (`Destaque valor="X,X/10" rotulo="Nota geral"`), com `tom` derivado da recomendação (`avançar` → `ok`, `não avançar` → `danger`, `avaliar com o gestor` → `warn`). As classes antigas `.nota-summary`/`.nota-grande` foram removidas de `globals.css` (substituídas pelo componente compartilhado).
+- **Gotcha de português no template de `Origem`:** o texto fixo é `"...a partir de ${meta.insumo}..."`. Se `insumo` começar com um substantivo singular que pede artigo definido (ex.: "a transcrição"), o resultado fica errado ("a partir de a transcrição"). Ou comece `insumo` sem artigo (plural genérico, como em `pdi-time`: "entregas recentes e objetivos da empresa") ou use "toda a"/"todo o" antes do substantivo (aqui: `"toda a conversa e os requisitos da vaga"`, que funciona porque "de" não é seguido diretamente por "a"/"o"). Revisar o mesmo ponto ao replicar a fundação para os próximos apps.
+- A "sala de entrevista" (`components/Sala.tsx`, CSS `.room`/`.avatar`/`.chat`/`.bubble`/`.resposta`/`.ligacao`) é específica deste app e não foi tocada por esta história — só o formulário (`app/page.tsx`) e o resultado (`Resultado`/scorecard) entraram na fundação compartilhada.
+- Os campos "Tom da entrevista" e "Número de perguntas" (ambos com valor padrão já preenchido) foram para dentro de `MaisDetalhes`, como o campo "opcional" desta história (só título, requisitos e nome do candidato ficam no fluxo principal).
