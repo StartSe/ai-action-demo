@@ -43,3 +43,16 @@ Started: Sat Sep 12 16:56:50 -03 2026
   - `meta()` usa `insumo` como uma frase fixa por rota (o que descreve os dados de entrada), definida no próprio `route.ts`; cada app decide seu texto de `insumo` ao adotar o padrão.
   - Não existe ainda o helper `data()` de US-006; a formatação de data em `Origem` foi feita diretamente com `Intl.DateTimeFormat` neste componente. Quando US-006 criar o helper `data(d, { comHora })` em `ui.tsx`, `Origem` deve passar a usá-lo em vez de duplicar a formatação.
 ---
+
+## [2026-09-12] - US-004
+- `DemoNotice` (faixa de largura total abaixo da Topbar) removido de `pdi-time/components/ui.tsx`; a função de avisar sobre modo demonstração migrou para dentro do próprio `Topbar`.
+- `Topbar` ganhou a prop opcional `resumo?: string`. Quando `demo` é verdadeiro e `resumo` foi passado, o chip "Modo demonstração" vira um `<button aria-haspopup="dialog" aria-expanded>` que abre um popover (`role="dialog"`, posicionado com `absolute`) contendo a frase `resumo` e o link "Conectar a IA em 1 minuto" para `/setup`. Sem `resumo` (ex.: a Topbar usada em `components/setup.tsx`) ou fora do modo demo, o chip continua sendo um `<span>` estático.
+- Popover fecha com Esc (`keydown` no `document`) e com clique fora (`mousedown` no `document` checando `ref` do container); como é um `<button>` nativo, já é focável e ativável por teclado (Enter/Espaço) sem esforço extra.
+- O badge do chip ganhou `min-w-[142px]` (`min-w-[110px]` no celular) e `justify-center`, para que a largura mínima (e portanto a altura da barra, que já era fixa) não dependa do texto ("Verificando IA" vs "Modo demonstração" vs "IA conectada" vs "Servidor indisponível").
+- `app/page.tsx`: removida a chamada a `DemoNotice` e o import correspondente; `Topbar` agora recebe `resumo="Modo demonstração: o plano exibido é um exemplo."`.
+- Arquivos alterados: `pdi-time/components/ui.tsx`, `pdi-time/app/page.tsx`.
+- Verificação: `npx tsc --noEmit` e `npm run lint` limpos. Sem ferramenta de browser (MCP) disponível nesta sessão, usei `chromium --headless --disable-gpu --virtual-time-budget=<n> --dump-dom` em duas capturas (budget 1 vs 6000) de `http://localhost:3021/` para comparar o HTML do badge antes e depois de `/api/status` resolver: a classe `min-w-[142px] max-md:min-w-[110px]` é idêntica nos dois casos, só o texto e a cor mudam — confirma que não há salto de layout. Também confirmei que o `aria-haspopup="dialog"`/`aria-expanded="false"` aparece no botão quando o app está em modo demo. Não foi possível simular clique/Esc/clique-fora sem uma ferramenta de browser interativa (puppeteer/CDP não estão disponíveis no ambiente) — a lógica de abrir/fechar foi verificada por revisão de código, mas a interação em si pede verificação manual num browser real.
+- **Learnings for future iterations:**
+  - `components/setup.tsx` também usa `Topbar` (sem `DemoNotice`/popover, e sem `resumo`) — por isso `resumo` precisa ser opcional em `Topbar`, não obrigatório.
+  - Não há ferramenta de browser MCP configurada neste projeto; a verificação visual "Verify in browser using dev-browser skill" nas próximas histórias precisará seguir o mesmo caminho alternativo (`chromium --headless --dump-dom`) ou ser sinalizada como pendente de verificação manual quando envolver interação (clique, popover, formulário) em vez de apenas leitura de estado.
+---

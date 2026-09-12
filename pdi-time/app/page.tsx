@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Chip, CopyButton, DataTable, DemoNotice, Empty, ErrorBox, Field, Item, Loading, Origem, Panel, ResultHead, Row, Section, Stage, Topbar, Workspace, useScrollToResult, useStatus } from "@/components/ui";
+import { Chip, CopyButton, DataTable, Empty, ErrorBox, Field, Item, Loading, Origem, Panel, ResultHead, Row, Section, Stage, Topbar, Workspace, useScrollToResult, useStatus } from "@/components/ui";
 import type { Meta } from "@/lib/ai";
 import type { DadosPDI, PDI } from "@/lib/types";
 
@@ -64,8 +64,7 @@ export default function Page() {
 
   return (
     <>
-      <Topbar marca="P" nome="PDI do Time" area="Recursos Humanos" status={status} erro={erro} />
-      <DemoNotice visivel={Boolean(status && !status.ai)} resumo="Modo demonstração: o plano exibido é um exemplo." />
+      <Topbar marca="P" nome="PDI do Time" area="Recursos Humanos" status={status} erro={erro} resumo="Modo demonstração: o plano exibido é um exemplo." />
 
       <Workspace>
         <Panel titulo="Um plano de desenvolvimento em três minutos." lead="Descreva o que a pessoa entregou e o que a empresa precisa. A IA conecta os dois em um PDI de 90 dias pronto para a conversa de feedback.">

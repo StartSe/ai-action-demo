@@ -1,7 +1,7 @@
 "use client";
 // Componentes visuais compartilhados pela suíte. Copie este arquivo para cada app sem alterar.
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Meta } from "@/lib/ai";
 
 export type Status = { ai: boolean; demo: boolean; model: string; integrations?: Record<string, boolean>; setup?: { pronto: boolean; url: string } };
@@ -15,9 +15,36 @@ export function useStatus() {
   return { status, erro };
 }
 
-export function Topbar({ marca, nome, area, status, erro }: { marca: string; nome: string; area: string; status: Status | null; erro?: boolean }) {
+/** Chip de status; quando em modo demonstração vira botão que abre um popover com o contexto do app. */
+export function Topbar({ marca, nome, area, status, erro, resumo }: { marca: string; nome: string; area: string; status: Status | null; erro?: boolean; resumo?: string }) {
+  const [aberto, setAberto] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const texto = erro ? "Servidor indisponível" : !status ? "Verificando IA" : status.ai ? "IA conectada" : "Modo demonstração";
   const demo = status ? !status.ai : false;
+
+  useEffect(() => {
+    if (!aberto) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setAberto(false);
+    }
+    function onClickFora(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) setAberto(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("mousedown", onClickFora);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("mousedown", onClickFora);
+    };
+  }, [aberto]);
+
+  const badge = (
+    <span className={`inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full text-[13px] max-md:text-xs font-semibold whitespace-nowrap min-w-[142px] max-md:min-w-[110px] ${demo ? "bg-[#fff4e0] text-[#7a4d00]" : "bg-accent-soft text-accent-ink"}`}>
+      <span className={`w-2 h-2 rounded-full shrink-0 ${demo ? "bg-warn" : "bg-accent"}`} />
+      {texto}
+    </span>
+  );
+
   return (
     <header className="no-print flex items-center justify-between gap-4 px-8 py-3.5 max-md:px-4 max-md:py-3 bg-surface border-b border-line">
       <div className="flex items-center gap-3 min-w-0">
@@ -28,24 +55,22 @@ export function Topbar({ marca, nome, area, status, erro }: { marca: string; nom
         </div>
       </div>
       <div className="flex items-center gap-3 shrink-0">
-        <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] max-md:text-xs font-semibold whitespace-nowrap ${demo ? "bg-[#fff4e0] text-[#7a4d00]" : "bg-accent-soft text-accent-ink"}`}>
-          <span className={`w-2 h-2 rounded-full ${demo ? "bg-warn" : "bg-accent"}`} />
-          {texto}
-        </span>
+        {demo && resumo ? (
+          <div className="relative" ref={popoverRef}>
+            <button type="button" className="cursor-pointer" aria-haspopup="dialog" aria-expanded={aberto} onClick={() => setAberto((v) => !v)}>
+              {badge}
+            </button>
+            {aberto && (
+              <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-72 max-md:w-64 card p-4 text-[13.5px] text-ink">
+                <p className="mb-3">{resumo}</p>
+                <Link href="/setup" className="font-bold text-accent underline underline-offset-2" onClick={() => setAberto(false)}>Conectar a IA em 1 minuto</Link>
+              </div>
+            )}
+          </div>
+        ) : badge}
         <Link href="/setup" className="text-[13px] font-semibold text-muted hover:text-ink max-md:hidden">Configurações</Link>
       </div>
     </header>
-  );
-}
-
-/** Aviso de modo demonstração com atalho para a configuração inicial (/setup). */
-export function DemoNotice({ visivel, resumo, children }: { visivel: boolean; resumo: string; children?: ReactNode }) {
-  if (!visivel) return null;
-  return (
-    <div className="no-print mx-8 mt-5 max-md:mx-4 px-4 py-2.5 rounded-[10px] text-[13.5px] bg-[#fff8ea] border border-[#f3dfb3] text-[#6b4300] flex items-center justify-between gap-3 flex-wrap">
-      <span>{resumo}{children ? <> {children}</> : null}</span>
-      <Link href="/setup" className="shrink-0 font-bold underline underline-offset-2">Conectar a IA em 1 minuto</Link>
-    </div>
   );
 }
 

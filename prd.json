@@ -63,7 +63,7 @@
         "Verify in browser using dev-browser skill: recarregar a página e confirmar que nada salta"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
