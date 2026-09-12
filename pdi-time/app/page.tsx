@@ -33,7 +33,7 @@ function IlustracaoPlano() {
   );
 }
 
-type Estado = { fase: "vazio" } | { fase: "carregando" } | { fase: "erro"; mensagem: string; dados: DadosPDI } | { fase: "pronto"; pdi: PDI; dados: DadosPDI; meta: Meta };
+type Estado = { fase: "vazio" } | { fase: "carregando" } | { fase: "erro"; mensagem: string; dados: DadosPDI } | { fase: "pronto"; pdi: PDI; dados: DadosPDI; meta: Meta; id?: string };
 
 export default function Page() {
   const { status, erro } = useStatus();
@@ -52,7 +52,7 @@ export default function Page() {
       const r = await fetch("/api/pdi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "Falha ao gerar o PDI.");
-      setEstado({ fase: "pronto", pdi: data.pdi, dados: d, meta: data.meta });
+      setEstado({ fase: "pronto", pdi: data.pdi, dados: d, meta: data.meta, id: data.id });
     } catch (e) {
       setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado.", dados: d });
     }
@@ -122,7 +122,7 @@ export default function Page() {
   );
 }
 
-function Resultado({ pdi, dados, meta }: { pdi: PDI; dados: DadosPDI; meta: Meta }) {
+export function Resultado({ pdi, dados, meta }: { pdi: PDI; dados: DadosPDI; meta: Meta }) {
   return (
     <article className="reveal">
       <ResultHead titulo={`PDI de ${dados.nome}`} subtitulo={`${dados.cargo}, ${dados.tempo} na função`}>

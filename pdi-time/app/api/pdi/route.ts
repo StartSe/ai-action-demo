@@ -1,5 +1,6 @@
 import { aiEnabled, askJSON, meta } from "@/lib/ai";
 import { esperar, pdiDemo } from "@/lib/demo";
+import { salvar } from "@/lib/historico";
 import type { DadosPDI, PDI } from "@/lib/types";
 
 const SYSTEM = `Você é um especialista em desenvolvimento de pessoas que apoia líderes de empresas brasileiras.
@@ -30,11 +31,16 @@ export async function POST(req: Request) {
     const insumo = "entregas recentes e objetivos da empresa";
     if (!aiEnabled()) {
       await esperar(1200);
-      return Response.json({ demo: true, pdi: pdiDemo({ nome, cargo }), meta: meta({ demo: true, insumo }) });
+      const pdiGerado = pdiDemo({ nome, cargo });
+      const metaGerada = meta({ demo: true, insumo });
+      const id = salvar({ tipo: "pdi", entrada: dados, saida: pdiGerado, meta: metaGerada });
+      return Response.json({ demo: true, pdi: pdiGerado, meta: metaGerada, id });
     }
     const prompt = `Profissional: ${nome}\nCargo: ${cargo}\nTempo na função: ${tempo || "não informado"}\n\nEntregas e atividades recentes:\n${entregas}\n\nObjetivos da empresa para o período:\n${objetivos}\n\nAspirações declaradas pelo profissional:\n${aspiracoes || "não informadas"}`;
     const pdi = await askJSON<PDI>({ system: SYSTEM, prompt });
-    return Response.json({ demo: false, pdi, meta: meta({ demo: false, insumo }) });
+    const metaGerada = meta({ demo: false, insumo });
+    const id = salvar({ tipo: "pdi", entrada: dados, saida: pdi, meta: metaGerada });
+    return Response.json({ demo: false, pdi, meta: metaGerada, id });
   } catch (err) {
     console.error(err);
     const mensagem = err instanceof Error ? err.message : "Não foi possível gerar o PDI agora. Tente novamente.";
