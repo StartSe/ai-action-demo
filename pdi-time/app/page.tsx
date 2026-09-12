@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Chip, CopyButton, DataTable, DemoNotice, Empty, ErrorBox, Field, Item, Loading, Panel, ResultHead, Row, Section, Stage, Topbar, Workspace, useScrollToResult, useStatus } from "@/components/ui";
+import { Chip, CopyButton, DataTable, DemoNotice, Empty, ErrorBox, Field, Item, Loading, Origem, Panel, ResultHead, Row, Section, Stage, Topbar, Workspace, useScrollToResult, useStatus } from "@/components/ui";
+import type { Meta } from "@/lib/ai";
 import type { DadosPDI, PDI } from "@/lib/types";
 
 const EXEMPLO: DadosPDI = {
@@ -15,7 +16,7 @@ const EXEMPLO: DadosPDI = {
 
 const VAZIO: DadosPDI = { nome: "", cargo: "", tempo: "1 a 3 anos", entregas: "", objetivos: "", aspiracoes: "" };
 
-type Estado = { fase: "vazio" } | { fase: "carregando" } | { fase: "erro"; mensagem: string } | { fase: "pronto"; pdi: PDI; dados: DadosPDI; demo: boolean };
+type Estado = { fase: "vazio" } | { fase: "carregando" } | { fase: "erro"; mensagem: string } | { fase: "pronto"; pdi: PDI; dados: DadosPDI; meta: Meta };
 
 export default function Page() {
   const { status, erro } = useStatus();
@@ -34,7 +35,7 @@ export default function Page() {
       const r = await fetch("/api/pdi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "Falha ao gerar o PDI.");
-      setEstado({ fase: "pronto", pdi: data.pdi, dados: d, demo: data.demo });
+      setEstado({ fase: "pronto", pdi: data.pdi, dados: d, meta: data.meta });
     } catch (e) {
       setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." });
     }
@@ -96,20 +97,22 @@ export default function Page() {
           {estado.fase === "vazio" && <Empty glifo="90" titulo="O plano aparece aqui" descricao="Pontos fortes, lacunas priorizadas, três objetivos com ações em 30, 60 e 90 dias e perguntas para a conversa." acao="Preencher com um exemplo" onAcao={preencherExemplo} />}
           {estado.fase === "carregando" && <Loading texto="Lendo entregas, cruzando com os objetivos da empresa e montando o plano..." />}
           {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} />}
-          {estado.fase === "pronto" && <Resultado pdi={estado.pdi} dados={estado.dados} demo={estado.demo} />}
+          {estado.fase === "pronto" && <Resultado pdi={estado.pdi} dados={estado.dados} meta={estado.meta} />}
         </Stage>
       </Workspace>
     </>
   );
 }
 
-function Resultado({ pdi, dados, demo }: { pdi: PDI; dados: DadosPDI; demo: boolean }) {
+function Resultado({ pdi, dados, meta }: { pdi: PDI; dados: DadosPDI; meta: Meta }) {
   return (
     <article className="reveal">
-      <ResultHead titulo={`PDI de ${dados.nome}`} subtitulo={`${dados.cargo}, ${dados.tempo} na função${demo ? " (exemplo em modo demonstração)" : ""}`}>
+      <ResultHead titulo={`PDI de ${dados.nome}`} subtitulo={`${dados.cargo}, ${dados.tempo} na função`}>
         <button type="button" className="btn-ghost" onClick={() => window.print()}>Imprimir ou salvar PDF</button>
         <CopyButton texto={() => pdiParaTexto(pdi, dados)} />
       </ResultHead>
+
+      <Origem meta={meta} />
 
       <p className="summary">{pdi.resumo}</p>
 

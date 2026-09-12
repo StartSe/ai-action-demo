@@ -2,6 +2,7 @@
 // Componentes visuais compartilhados pela suíte. Copie este arquivo para cada app sem alterar.
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
+import type { Meta } from "@/lib/ai";
 
 export type Status = { ai: boolean; demo: boolean; model: string; integrations?: Record<string, boolean>; setup?: { pronto: boolean; url: string } };
 
@@ -118,6 +119,16 @@ export function ResultHead({ titulo, subtitulo, children }: { titulo: string; su
       {children && <div className="no-print flex gap-2.5 shrink-0 max-md:flex-wrap max-md:w-full [&>*]:max-md:flex-1">{children}</div>}
     </div>
   );
+}
+
+/** Linha de proveniência do resultado: de onde veio e quando. O nome do modelo só aparece no title. */
+export function Origem({ meta }: { meta: Meta }) {
+  const data = new Date(meta.geradoEm);
+  const quando = `${new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(data)} às ${new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(data)}`;
+  const texto = meta.demo
+    ? `Exemplo ilustrativo a partir de ${meta.insumo}. Conecte a IA para analisar seus dados`
+    : `Gerado com IA a partir de ${meta.insumo}, em ${quando}`;
+  return <p className="text-muted text-[13px] mb-4" title={meta.model}>{texto}</p>;
 }
 
 export function Section({ titulo, children }: { titulo: string; children: ReactNode }) {

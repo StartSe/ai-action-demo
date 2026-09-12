@@ -1,4 +1,4 @@
-import { aiEnabled, askJSON } from "@/lib/ai";
+import { aiEnabled, askJSON, meta } from "@/lib/ai";
 import { esperar, pdiDemo } from "@/lib/demo";
 import type { DadosPDI, PDI } from "@/lib/types";
 
@@ -26,13 +26,14 @@ export async function POST(req: Request) {
     return Response.json({ error: "Preencha nome, cargo, entregas recentes e objetivos da empresa." }, { status: 400 });
   }
   try {
+    const insumo = "entregas recentes e objetivos da empresa";
     if (!aiEnabled()) {
       await esperar(1200);
-      return Response.json({ demo: true, pdi: pdiDemo({ nome, cargo }) });
+      return Response.json({ demo: true, pdi: pdiDemo({ nome, cargo }), meta: meta({ demo: true, insumo }) });
     }
     const prompt = `Profissional: ${nome}\nCargo: ${cargo}\nTempo na função: ${tempo || "não informado"}\n\nEntregas e atividades recentes:\n${entregas}\n\nObjetivos da empresa para o período:\n${objetivos}\n\nAspirações declaradas pelo profissional:\n${aspiracoes || "não informadas"}`;
     const pdi = await askJSON<PDI>({ system: SYSTEM, prompt });
-    return Response.json({ demo: false, pdi });
+    return Response.json({ demo: false, pdi, meta: meta({ demo: false, insumo }) });
   } catch (err) {
     console.error(err);
     const mensagem = err instanceof Error ? err.message : "Não foi possível gerar o PDI agora. Tente novamente.";

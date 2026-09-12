@@ -30,3 +30,16 @@ Started: Sat Sep 12 16:56:50 -03 2026
   - Next.js App Router detecta `app/icon.svg` sem nenhuma configuração extra em `layout.tsx` — basta o arquivo existir nessa pasta.
   - Para checar ícone/título sem browser MCP, `curl -s http://localhost:<porta>/icon.svg` e `curl -s http://localhost:<porta>/ | grep -o "<title>[^<]*</title>"` com o `next dev` rodando em background bastam como evidência.
 ---
+
+## [2026-09-12] - US-003
+- `lib/ai.ts` ganhou o tipo `Meta` e a função `meta({ demo, insumo })`, que devolve `{ demo, model: modelName(), geradoEm: new Date().toISOString(), insumo }`.
+- `app/api/pdi/route.ts` agora inclui `meta` na resposta, tanto no caminho de demonstração quanto no caminho real de IA (mesmo `insumo` fixo: "entregas recentes e objetivos da empresa").
+- Novo componente `Origem` em `components/ui.tsx`: recebe `meta: Meta`, formata a data com `Intl.DateTimeFormat("pt-BR", ...)` (dia/mês/ano e hora/minuto separados e concatenados com "às"), e escolhe o texto conforme `meta.demo`. O nome do modelo só entra no atributo `title` do `<p>`, nunca no texto visível.
+- `app/page.tsx`: `Estado` (fase "pronto") trocou o campo `demo: boolean` por `meta: Meta`; `Resultado` renderiza `<Origem meta={meta} />` logo abaixo de `ResultHead`, e o subtítulo perdeu o sufixo `" (exemplo em modo demonstração)"` (essa informação agora vive só na linha Origem).
+- Arquivos alterados: `pdi-time/lib/ai.ts`, `pdi-time/components/ui.tsx`, `pdi-time/app/api/pdi/route.ts`, `pdi-time/app/page.tsx`.
+- Verificação: `npx tsc --noEmit` e `npm run lint` limpos; subi `pdi-time` com `PORT=3011 npm run dev` e usei `chromium --headless --virtual-time-budget=8000 --dump-dom "http://localhost:3011/?exemplo=1&captura=1"` — confirmei a linha "Exemplo ilustrativo a partir de entregas recentes e objetivos da empresa. Conecte a IA para analisar seus dados" (modo demo, sem chave configurada), o atributo `title="nvidia/nemotron-3-super-120b-a12b:free"` na linha, e que o subtítulo do resultado voltou a ser só "Coordenadora de Marketing, 1 a 3 anos na função" (sem o sufixo antigo).
+- **Learnings for future iterations:**
+  - `Origem` importa `type { Meta } from "@/lib/ai"` dentro de `components/ui.tsx` — como `lib/ai.ts` também é um arquivo compartilhado replicado sem alteração nos 10 apps (junto com `ui.tsx`), esse acoplamento é seguro e deve ser preservado ao copiar a fundação para os outros apps (US-017 em diante).
+  - `meta()` usa `insumo` como uma frase fixa por rota (o que descreve os dados de entrada), definida no próprio `route.ts`; cada app decide seu texto de `insumo` ao adotar o padrão.
+  - Não existe ainda o helper `data()` de US-006; a formatação de data em `Origem` foi feita diretamente com `Intl.DateTimeFormat` neste componente. Quando US-006 criar o helper `data(d, { comHora })` em `ui.tsx`, `Origem` deve passar a usá-lo em vez de duplicar a formatação.
+---
