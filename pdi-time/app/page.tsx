@@ -16,7 +16,24 @@ const EXEMPLO: DadosPDI = {
 
 const VAZIO: DadosPDI = { nome: "", cargo: "", tempo: "1 a 3 anos", entregas: "", objetivos: "", aspiracoes: "" };
 
-type Estado = { fase: "vazio" } | { fase: "carregando" } | { fase: "erro"; mensagem: string } | { fase: "pronto"; pdi: PDI; dados: DadosPDI; meta: Meta };
+const ETAPAS_CARREGANDO = ["Lendo as entregas recentes...", "Cruzando com os objetivos da empresa...", "Montando o plano de 30, 60 e 90 dias..."];
+
+/** Desenho de três blocos crescentes rotulados 30/60/90, no lugar de um glifo genérico no estado vazio. */
+function IlustracaoPlano() {
+  return (
+    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 48h56" />
+      <rect x="6" y="33" width="14" height="15" rx="3" />
+      <rect x="25" y="24" width="14" height="24" rx="3" />
+      <rect x="44" y="14" width="14" height="34" rx="3" />
+      <text x="13" y="43" textAnchor="middle" fontSize="7" stroke="none" fill="currentColor">30</text>
+      <text x="32" y="38" textAnchor="middle" fontSize="7" stroke="none" fill="currentColor">60</text>
+      <text x="51" y="33" textAnchor="middle" fontSize="7" stroke="none" fill="currentColor">90</text>
+    </svg>
+  );
+}
+
+type Estado = { fase: "vazio" } | { fase: "carregando" } | { fase: "erro"; mensagem: string; dados: DadosPDI } | { fase: "pronto"; pdi: PDI; dados: DadosPDI; meta: Meta };
 
 export default function Page() {
   const { status, erro } = useStatus();
@@ -37,7 +54,7 @@ export default function Page() {
       if (!r.ok) throw new Error(data.error || "Falha ao gerar o PDI.");
       setEstado({ fase: "pronto", pdi: data.pdi, dados: d, meta: data.meta });
     } catch (e) {
-      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." });
+      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado.", dados: d });
     }
   }
 
@@ -95,9 +112,9 @@ export default function Page() {
         </Panel>
 
         <Stage>
-          {estado.fase === "vazio" && <Empty glifo="90" titulo="O plano aparece aqui" descricao="Pontos fortes, lacunas priorizadas, três objetivos com ações em 30, 60 e 90 dias e perguntas para a conversa." acao="Preencher com um exemplo" onAcao={preencherExemplo} />}
-          {estado.fase === "carregando" && <Loading texto="Lendo entregas, cruzando com os objetivos da empresa e montando o plano..." />}
-          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} />}
+          {estado.fase === "vazio" && <Empty ilustracao={<IlustracaoPlano />} titulo="O plano aparece aqui" descricao="Pontos fortes, lacunas priorizadas, três objetivos com ações em 30, 60 e 90 dias e perguntas para a conversa." acao="Preencher com um exemplo" onAcao={preencherExemplo} />}
+          {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
+          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={() => gerar(estado.dados)} />}
           {estado.fase === "pronto" && <Resultado pdi={estado.pdi} dados={estado.dados} meta={estado.meta} />}
         </Stage>
       </Workspace>

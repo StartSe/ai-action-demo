@@ -126,7 +126,7 @@
         "Verify in browser using dev-browser skill: os três estados (vazio, carregando, erro forçado)"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

@@ -119,10 +119,11 @@ export function Stage({ children }: { children: ReactNode }) {
   return <section id="stage" className="min-h-[520px] max-md:min-h-0">{children}</section>;
 }
 
-export function Empty({ glifo, titulo, descricao, acao, onAcao }: { glifo: string; titulo: string; descricao: string; acao?: string; onAcao?: () => void }) {
+/** Ilustração (SVG inline, 64 px, traço 1,5 px) no lugar de um glifo genérico; cada app entrega a sua. */
+export function Empty({ ilustracao, titulo, descricao, acao, onAcao }: { ilustracao: ReactNode; titulo: string; descricao: string; acao?: string; onAcao?: () => void }) {
   return (
     <div className="h-full min-h-[520px] max-md:min-h-[320px] flex flex-col items-center justify-center text-center text-muted p-10 max-md:px-4 max-md:py-7 border border-dashed border-line rounded-card">
-      <div className="w-16 h-16 rounded-[18px] bg-accent-soft text-accent grid place-items-center text-[26px] font-extrabold mb-[18px]">{glifo}</div>
+      <div className="text-accent mb-[18px]">{ilustracao}</div>
       <h2 className="text-ink text-lg font-bold mb-1.5">{titulo}</h2>
       <p className="max-w-[380px]">{descricao}</p>
       {acao && onAcao && <button type="button" className="btn-link mt-1" onClick={onAcao}>{acao}</button>}
@@ -130,10 +131,28 @@ export function Empty({ glifo, titulo, descricao, acao, onAcao }: { glifo: strin
   );
 }
 
-export function Loading({ texto }: { texto: string }) {
+/** Com `etapas`, troca a frase a cada 1,2 s parando na última; `texto` continua aceito para uma frase fixa. */
+export function Loading({ texto, etapas }: { texto?: string; etapas?: string[] }) {
+  const [indice, setIndice] = useState(0);
+  useEffect(() => {
+    if (!etapas || etapas.length <= 1) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = setInterval(() => {
+      setIndice((i) => {
+        if (i >= etapas.length - 1) {
+          clearInterval(id);
+          return i;
+        }
+        return i + 1;
+      });
+    }, 1200);
+    return () => clearInterval(id);
+  }, [etapas]);
+
+  const frase = etapas && etapas.length > 0 ? etapas[indice] : texto ?? "";
   return (
     <div className="flex flex-col gap-3.5 py-2" aria-live="polite">
-      <p className="text-muted text-sm">{texto}</p>
+      <p className="text-muted text-sm">{frase}</p>
       <div className="skeleton h-11 w-4/5" />
       <div className="skeleton w-3/5" />
       <div className="skeleton w-[70%]" />
@@ -143,8 +162,18 @@ export function Loading({ texto }: { texto: string }) {
   );
 }
 
-export function ErrorBox({ mensagem }: { mensagem: string }) {
-  return <div className="bg-[#fde8e6] border border-[#f5c2bd] text-danger px-4 py-3.5 rounded-[10px]"><strong>Não deu certo.</strong> {mensagem}</div>;
+/** Rola até si mesma no celular ao aparecer (mesmo critério de useScrollToResult); onTentarNovamente exibe o botão "Tentar de novo". */
+export function ErrorBox({ mensagem, onTentarNovamente }: { mensagem: string; onTentarNovamente?: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (podeRolarAutomaticamente()) ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+  return (
+    <div ref={ref} className="bg-[#fde8e6] border border-[#f5c2bd] text-danger px-4 py-3.5 rounded-[10px]">
+      <strong>Não deu certo.</strong> {mensagem}
+      {onTentarNovamente && <div className="mt-3"><button type="button" className="btn-ghost" onClick={onTentarNovamente}>Tentar de novo</button></div>}
+    </div>
+  );
 }
 
 export function ResultHead({ titulo, subtitulo, children }: { titulo: string; subtitulo?: string; children?: ReactNode }) {
@@ -250,10 +279,14 @@ export function CopyButton({ texto, rotulo = "Copiar texto" }: { texto: () => st
   );
 }
 
+function podeRolarAutomaticamente() {
+  return window.innerWidth <= 768 && !location.search.includes("captura");
+}
+
 /** No celular, rola até o resultado quando ele aparece (desligado com ?captura=1). */
 export function useScrollToResult(pronto: boolean) {
   useEffect(() => {
-    if (!pronto || window.innerWidth > 768 || location.search.includes("captura")) return;
+    if (!pronto || !podeRolarAutomaticamente()) return;
     document.getElementById("stage")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [pronto]);
 }
