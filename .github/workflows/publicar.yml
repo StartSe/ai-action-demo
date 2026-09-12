@@ -21,6 +21,7 @@ concurrency:
 env:
   REGISTRO: ghcr.io/startse
   REPO_PUBLICO: git@github.com:StartSe/ai-action-app-deploy.git
+  REPO_PUBLICO_HTTP: https://github.com/StartSe/ai-action-app-deploy
   PLATAFORMAS: linux/amd64   # acrescente ",linux/arm64" para Macs com Apple Silicon; exige runner arm ou emulação
 
 jobs:
@@ -77,8 +78,10 @@ jobs:
           tags: |
             ${{ env.REGISTRO }}/${{ matrix.app }}:latest
             ${{ env.REGISTRO }}/${{ matrix.app }}:${{ github.sha }}
+          # O vínculo com o repositório público faz novos packages herdarem
+          # visibilidade pública sem expor o repositório do código-fonte.
           labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.source=${{ env.REPO_PUBLICO_HTTP }}
             org.opencontainers.image.title=${{ matrix.app }}
             org.opencontainers.image.description=IA para Executivos: ${{ matrix.app }}
           cache-from: type=gha,scope=${{ matrix.app }}
