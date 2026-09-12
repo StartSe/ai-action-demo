@@ -1,1 +1,9 @@
 @AGENTS.md
+
+## Notas específicas deste app
+
+- `components/ui.tsx`/`lib/ai.ts`/`lib/formato.ts`/`lib/sensivel.ts`/`lib/historico.ts`/`instrumentation.ts` são cópias literais de `pdi-time`. Só `app/r/[id]/page.tsx`, `app/imprimir/[id]/page.tsx` e os `not-found.tsx` são próprios daqui, porque dependem do `Resultado`/tipo salvo neste app (`tipo: "leads"`, `entrada = DadosBusca`, `saida = ResultadoBusca { fonte, leads }`).
+- `SENSIVEL = false` (prospecção não está na lista de apps sensíveis do PRD — só Contratos e Financeiro), então `POST /api/leads` sempre salva no histórico, sem opt-in.
+- Só a **busca de leads** (`POST /api/leads`) gera `meta`+`id` e salva no histórico; é o único "Resultado" com link permanente (`/r/[id]`, `/imprimir/[id]`) e com `Entregar` (que traz o extra "Exportar CSV", já que CSV é sobre a lista inteira, não sobre um lead). A **abordagem por lead** (`POST /api/abordagem`) também devolve `meta` (por isso `AbordagemView` tem sua própria `Origem`), mas não é persistida separadamente — evita duas "fontes de verdade" de resultado dentro do mesmo fluxo.
+- `Resultado`/`ConteudoLeads` (`app/page.tsx`) aceitam `onEscrever` como prop **opcional**: quando vem de um Server Component (`app/r/[id]/page.tsx`), não dá pra passar uma função (Server Component não serializa handlers para Client Component), então a coluna de ação "Escrever abordagem" simplesmente não é adicionada ao array de colunas nesse caso.
+- **Limitação conhecida, investigada e não resolvida** ao gerar o PDF de `/imprimir/[id]` com a tabela de 5 leads: `chromium --print-to-pdf` pagina 1 linha por página quase inteira em branco, em vez de várias linhas por página A4. Não é causada por `break-inside` (testado com `auto !important` em `.card` inteiro e o resultado do PDF não mudou nem um byte). Ver detalhes da investigação em `pdi-time/CLAUDE.md`. Tratar como problema em aberto da fundação compartilhada, não específico deste app.

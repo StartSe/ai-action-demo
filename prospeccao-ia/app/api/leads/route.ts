@@ -1,6 +1,8 @@
+import { meta } from "@/lib/ai";
 import { esperar, leadsDemo } from "@/lib/demo";
+import { apagarTodos, listar, salvar } from "@/lib/historico";
 import { getConfig } from "@/lib/store";
-import type { Lead } from "@/lib/types";
+import type { DadosBusca, Lead } from "@/lib/types";
 
 const QUANTIDADES_VALIDAS = [5, 10, 15];
 
@@ -68,12 +70,17 @@ export async function POST(req: Request) {
   if (!segmento || !cargo || !localizacao || !proposta) {
     return Response.json({ error: "Preencha segmento, cargo-alvo, localização e o que sua empresa vende." }, { status: 400 });
   }
+  const dados: DadosBusca = { segmento, cargo, localizacao, porte, proposta, quantidade: String(quantidade) };
+  const insumo = "segmento, cargo-alvo e localização informados";
+  const titulo = `Leads: ${cargo} em ${segmento}`;
 
   try {
     if (!apolloEnabled()) {
       await esperar(1200);
       const leads = leadsDemo({ segmento, cargo, porte: intervalo, localizacao, quantidade });
-      return Response.json({ fonte: "demo", leads });
+      const metaGerada = meta({ demo: true, insumo });
+      const id = salvar({ tipo: "leads", titulo, entrada: dados, saida: { fonte: "demo", leads }, meta: metaGerada });
+      return Response.json({ fonte: "demo", leads, meta: metaGerada, id });
     }
     const r = await fetch("https://api.apollo.io/api/v1/mixed_people/search", {
       method: "POST",
@@ -94,10 +101,23 @@ export async function POST(req: Request) {
     const data = await r.json();
     const pessoas: ApolloPessoa[] = Array.isArray(data?.people) ? data.people : [];
     const leads = pessoas.slice(0, quantidade).map((p, i) => mapApolloPessoa(p, i, segmento));
-    return Response.json({ fonte: "apollo", leads });
+    const metaGerada = meta({ demo: false, insumo });
+    const id = salvar({ tipo: "leads", titulo, entrada: dados, saida: { fonte: "apollo", leads }, meta: metaGerada });
+    return Response.json({ fonte: "apollo", leads, meta: metaGerada, id });
   } catch (err) {
     console.error(err);
     const mensagem = err instanceof Error ? err.message : "Não foi possível buscar os leads agora. Tente novamente.";
     return Response.json({ error: mensagem }, { status: 500 });
   }
+}
+
+/** Últimas buscas salvas, para a lista "Últimos resultados" no painel. */
+export async function GET() {
+  return Response.json({ itens: listar(10) });
+}
+
+/** Apaga todo o histórico salvo (botão "Apagar tudo"). */
+export async function DELETE() {
+  apagarTodos();
+  return Response.json({ ok: true });
 }

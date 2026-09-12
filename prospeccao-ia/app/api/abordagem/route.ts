@@ -1,4 +1,4 @@
-import { aiEnabled, askJSON } from "@/lib/ai";
+import { aiEnabled, askJSON, meta } from "@/lib/ai";
 import { abordagemDemo, esperar } from "@/lib/demo";
 import { getConfig } from "@/lib/store";
 import type { Abordagem, Lead } from "@/lib/types";
@@ -66,10 +66,12 @@ export async function POST(req: Request) {
     return Response.json({ error: "Descreva o que sua empresa vende e para quem." }, { status: 400 });
   }
 
+  const insumo = "dados do lead e a proposta enviada";
+
   try {
     if (!aiEnabled()) {
       await esperar(1100);
-      return Response.json({ demo: true, abordagem: abordagemDemo({ lead, proposta, segmento }) });
+      return Response.json({ demo: true, abordagem: abordagemDemo({ lead, proposta, segmento }), meta: meta({ demo: true, insumo }) });
     }
     let contexto = "";
     if (brightdataEnabled() && lead.site) {
@@ -91,7 +93,7 @@ Segmento-alvo desta prospecção: ${segmento || "não informado"}${
       contexto ? `\n\nTrecho do site da empresa do lead (contexto adicional; use só o que for relevante):\n"""\n${contexto}\n"""` : ""
     }`;
     const abordagem = await askJSON<Abordagem>({ system: SYSTEM_ABORDAGEM, prompt, maxTokens: 2000 });
-    return Response.json({ demo: false, abordagem });
+    return Response.json({ demo: false, abordagem, meta: meta({ demo: false, insumo }) });
   } catch (err) {
     console.error(err);
     const mensagem = err instanceof Error ? err.message : "Não foi possível montar a abordagem agora. Tente novamente.";

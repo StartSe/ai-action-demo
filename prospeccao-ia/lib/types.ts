@@ -29,3 +29,8 @@ export interface Abordagem {
   whatsapp: string;
   proximo_passo: string;
 }
+
+export interface ResultadoBusca {
+  fonte: Fonte;
+  leads: Lead[];
+}
