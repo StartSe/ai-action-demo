@@ -23,7 +23,7 @@ Executivos vão abrir o app, testar em 2 minutos e decidir se vale conectar as c
 - Copie `app/layout.tsx` trocando `title`/`description`. Fonte Manrope via `next/font/google`.
 - Classes utilitárias já definidas: `.card`, `.input`, `.btn-primary`, `.btn-ghost`, `.btn-link`, `.chip-alta|media|baixa|neutral|positivo|neutro|negativo`, `.section-title`, `.summary`, `.skeleton`, `.reveal`, `.no-print`.
 - Estrutura da tela: `Topbar` + `DemoNotice` (uma frase visível e o restante dentro de "Como ativar a versão real") + `Workspace` com `Panel` (h1 curto com a promessa do app, lead de uma frase, formulário) à esquerda e `Stage` à direita (`Empty` -> `Loading` -> resultado em `<article className="reveal">` ou `ErrorBox`).
-- Atalho `?exemplo=1` preenche e envia o exemplo (dentro de `useEffect` com `setTimeout(…, 0)` para o lint aceitar). `?captura=1` desliga a rolagem automática até o resultado.
+- Atalho `?exemplo=1` preenche e envia o exemplo (dentro de `useEffect` com `setTimeout(…, 0)` para o lint aceitar). O efeito marca um `useRef` (`autoEnviado`/`autoIniciado`) como `true` antes de agendar o `setTimeout`, mas **não** registra `return () => clearTimeout(t)`: em `next dev` (React Strict Mode) o efeito roda setup → cleanup → setup de novo, e um cleanup que cancela o timer o mataria antes de disparar, deixando o atalho quebrado só em dev. `?captura=1` desliga a rolagem automática até o resultado.
 - Uma única animação: o `reveal` do resultado. Sem gradientes decorativos, sem marcadores numerados salvo sequência real.
 
 ## Setup inicial e configuração sem variáveis de ambiente (igual em todos)

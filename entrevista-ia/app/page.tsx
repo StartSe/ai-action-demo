@@ -92,12 +92,11 @@ export default function Page() {
     if (autoIniciado.current) return;
     if (new URLSearchParams(location.search).get("exemplo") === "1") {
       autoIniciado.current = true;
-      const t = setTimeout(() => {
+      setTimeout(() => {
         setVaga(EXEMPLO);
         setModoExemplo(true);
         setEstado({ fase: "entrevista" });
       }, 0);
-      return () => clearTimeout(t);
     }
   }, []);
 

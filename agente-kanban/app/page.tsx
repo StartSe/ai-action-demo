@@ -88,8 +88,7 @@ export default function Page() {
     if (autoEnviado.current) return;
     if (new URLSearchParams(location.search).get("exemplo") === "1") {
       autoEnviado.current = true;
-      const t = setTimeout(() => enviarMensagem(EXEMPLO_COMPOSTO), 0);
-      return () => clearTimeout(t);
+      setTimeout(() => enviarMensagem(EXEMPLO_COMPOSTO), 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma única vez ao abrir a página
   }, []);

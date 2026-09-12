@@ -55,8 +55,7 @@ export default function Page() {
     if (autoEnviado.current) return;
     if (new URLSearchParams(location.search).get("exemplo") === "1") {
       autoEnviado.current = true;
-      const t = setTimeout(() => { setDados(EXEMPLO); gerar(EXEMPLO); }, 0);
-      return () => clearTimeout(t);
+      setTimeout(() => { setDados(EXEMPLO); gerar(EXEMPLO); }, 0);
     }
   }, []);
 

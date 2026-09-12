@@ -136,12 +136,11 @@ export default function Page() {
     if (autoEnviado.current) return;
     if (new URLSearchParams(location.search).get("exemplo") === "1") {
       autoEnviado.current = true;
-      const t = setTimeout(async () => {
+      setTimeout(async () => {
         const texto = await preencherExemplo();
         const lista = comentariosDoTexto(texto).slice(0, LIMITE_COMENTARIOS);
         if (lista.length) analisar(lista, "app do banco");
       }, 0);
-      return () => clearTimeout(t);
     }
   }, []);
 

@@ -110,11 +110,10 @@ export default function Page() {
     if (autoEnviado.current) return;
     if (new URLSearchParams(location.search).get("exemplo") === "1") {
       autoEnviado.current = true;
-      const t = setTimeout(async () => {
+      setTimeout(async () => {
         await enviarSimulada("Quanto custa o clareamento dental?");
         await enviarSimulada("Fazem cirurgia cardíaca?");
       }, 0);
-      return () => clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

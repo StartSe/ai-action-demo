@@ -1,3 +1,21 @@
 # Ralph Progress Log
 Started: Sat Sep 12 16:56:50 -03 2026
 ---
+
+## Codebase Patterns
+- Todos os 10 apps (pdi-time + agente-kanban, contratos-ia, entrevista-ia, financas-ia, posts-sociais, prospeccao-ia, reunioes-ia, voz-do-cliente, whatsapp-atendente) replicam o mesmo esqueleto de `app/page.tsx`: um `useRef` guarda ("autoEnviado"/"autoIniciado") mais um `useEffect([])` que lê `?exemplo=1` da URL e dispara o fluxo via `setTimeout(..., 0)`. Mudanças nesse padrão devem ser copiadas sem alterar nos 10 apps (regra do PRD).
+- Cada app roda `next dev` na porta 3000 (não há porta fixa 3001 como o texto de uma acceptance criteria sugere); usar `PORT=xxxx npm run dev` se precisar rodar vários em paralelo.
+- Não há script de typecheck no package.json; usar `npx tsc --noEmit -p tsconfig.json` dentro da pasta do app.
+- Para verificar comportamento client-side sem servidor de browser MCP: `chromium --headless --disable-gpu --virtual-time-budget=8000 --dump-dom "<url>"` roda timers/fetches por Xms antes de despejar o DOM final — útil para confirmar que o atalho `?exemplo=1` realmente chegou ao estado "pronto" (procurar `class="reveal"` ou texto do resultado).
+
+## [2026-09-12] - US-001
+- Corrigido o bug do atalho `?exemplo=1` em `next dev` (React Strict Mode) nos 10 apps da suíte.
+- Causa raiz: o `useEffect` marcava `autoEnviado.current = true` de forma síncrona e retornava um `cleanup` que cancelava o `setTimeout` (`return () => clearTimeout(t)`). Em Strict Mode (dev), o efeito roda: setup → cleanup → setup novamente. O cleanup cancelava o timer agendado na primeira chamada; na segunda chamada do setup, o guard `autoEnviado.current` já estava `true`, então o timer nunca chegava a disparar.
+- Correção: manter a marcação do ref antes do `setTimeout` (para não duplicar em Strict Mode), mas remover o `return () => clearTimeout(t)`. Assim o único timer agendado (o da primeira invocação do efeito) sobrevive ao ciclo de desmontagem simulada do Strict Mode e dispara normalmente; a segunda invocação do efeito é bloqueada pelo guard e não agenda um segundo timer.
+- Arquivos alterados: `pdi-time/app/page.tsx`, `agente-kanban/app/page.tsx`, `contratos-ia/app/page.tsx`, `entrevista-ia/app/page.tsx`, `financas-ia/app/page.tsx`, `posts-sociais/app/page.tsx`, `prospeccao-ia/app/page.tsx`, `reunioes-ia/app/page.tsx`, `voz-do-cliente/app/page.tsx`, `whatsapp-atendente/app/page.tsx`.
+- Não toquei no outro `useEffect` de `agente-kanban` (carregamento inicial do quadro, linha ~43) pois não faz parte do atalho `?exemplo=1` e está fora do escopo da história.
+- Verificação: `npx tsc --noEmit` e `npm run lint` passando nos 10 apps; testei em `next dev` com `chromium --headless --virtual-time-budget=8000 --dump-dom "http://localhost:3000/?exemplo=1"` em pdi-time (achou "PDI de Marina Costa") e financas-ia (achou `class="reveal"`, ou seja, chegou ao estado "pronto").
+- **Learnings for future iterations:**
+  - Ver seção "Codebase Patterns" acima.
+  - Não existe um app rodando de fato na porta 3001; a menção a 3001 na US-001 não corresponde à config real (`next dev` sempre sobe em 3000 salvo `PORT` explícita).
+---

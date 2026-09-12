@@ -108,8 +108,7 @@ export default function Page() {
     if (new URLSearchParams(location.search).get("exemplo") === "1") {
       autoEnviado.current = true;
       autoAbrirPrimeiro.current = true;
-      const t = setTimeout(() => { setDados(EXEMPLO); buscarLeads(EXEMPLO); }, 0);
-      return () => clearTimeout(t);
+      setTimeout(() => { setDados(EXEMPLO); buscarLeads(EXEMPLO); }, 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

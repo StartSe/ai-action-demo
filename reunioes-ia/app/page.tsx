@@ -92,7 +92,7 @@ export default function Page() {
     if (autoEnviado.current) return;
     if (new URLSearchParams(location.search).get("exemplo") === "1") {
       autoEnviado.current = true;
-      const t = setTimeout(async () => {
+      setTimeout(async () => {
         entradaRef.current?.selecionarAbaTexto();
         let texto = "";
         try {
@@ -104,7 +104,6 @@ export default function Page() {
         setDados(DADOS_EXEMPLO);
         await gerarAta(texto, DADOS_EXEMPLO, null);
       }, 0);
-      return () => clearTimeout(t);
     }
   }, []);
 
