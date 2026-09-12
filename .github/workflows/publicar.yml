@@ -87,7 +87,8 @@ jobs:
   publico:
     name: Atualizar repositório público
     needs: [mudancas, imagens]
-    if: always() && needs.mudancas.result == 'success'
+    # Não divulga botões que apontam para imagens que falharam na construção.
+    if: needs.mudancas.result == 'success' && (needs.imagens.result == 'success' || needs.imagens.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
