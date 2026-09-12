@@ -143,9 +143,9 @@ function Resultado({ pdi, dados, meta }: { pdi: PDI; dados: DadosPDI; meta: Meta
       <Section titulo="Lacunas priorizadas">
         <DataTable
           colunas={[
-            { chave: "competencia", titulo: "Competência", render: (l) => <strong>{l.competencia}</strong> },
-            { chave: "impacto", titulo: "Impacto no negócio", render: (l) => l.impacto },
-            { chave: "prioridade", titulo: "Prioridade", render: (l) => <Chip nivel={l.prioridade} /> },
+            { chave: "competencia", titulo: "Competência", papel: "titulo", largura: "22%", render: (l) => <strong>{l.competencia}</strong> },
+            { chave: "impacto", titulo: "Impacto no negócio", papel: "resumo", render: (l) => l.impacto },
+            { chave: "prioridade", titulo: "Prioridade", papel: "chip", largura: "110px", render: (l) => <Chip nivel={l.prioridade} /> },
           ]}
           linhas={pdi.lacunas}
         />

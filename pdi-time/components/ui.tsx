@@ -234,20 +234,35 @@ export function Chip({ nivel, children }: { nivel: string; children?: ReactNode 
   return <span className={`chip-${classe}`}>{children ?? ROTULOS_NIVEL[classe] ?? sentenceCase(nivel)}</span>;
 }
 
-export type Coluna<T> = { chave: string; titulo: string; render: (linha: T) => ReactNode; classe?: string };
+export type Coluna<T> = {
+  chave: string;
+  titulo: string;
+  render: (linha: T) => ReactNode;
+  classe?: string;
+  /** No celular: "titulo" (negrito, cabeçalho do cartão), "resumo" (uma linha, logo abaixo), "chip" (à direita do título) ou "detalhe" (dentro de "Ver mais"). Sem papel, mantém o rótulo acima do valor. */
+  papel?: "titulo" | "resumo" | "chip" | "detalhe";
+  /** No desktop, aplica width fixa à coluna (ex.: "20%", "120px"). */
+  largura?: string;
+};
 
-/** Tabela responsiva: linhas no desktop, blocos rotulados no celular. */
+/** Tabela responsiva: linhas no desktop, cartões no celular (título + resumo + chip visíveis, detalhes atrás de "Ver mais"). */
 export function DataTable<T>({ colunas, linhas }: { colunas: Coluna<T>[]; linhas: T[] }) {
+  const titulo = colunas.find((c) => c.papel === "titulo");
+  const resumo = colunas.find((c) => c.papel === "resumo");
+  const chip = colunas.find((c) => c.papel === "chip");
+  const detalhes = colunas.filter((c) => c.papel === "detalhe");
+  const semPapel = colunas.filter((c) => !c.papel);
+
   return (
     <>
       <table className="max-md:hidden w-full border-collapse text-sm card shadow-none overflow-hidden">
         <thead>
-          <tr>{colunas.map((c) => <th key={c.chave} className="text-left px-3.5 py-[11px] border-b border-line font-bold text-[13px] text-muted bg-[#fafbfc]">{c.titulo}</th>)}</tr>
+          <tr>{colunas.map((c) => <th key={c.chave} style={c.largura ? { width: c.largura } : undefined} className="text-left px-3.5 py-[11px] border-b border-line font-bold text-[13px] text-muted bg-[#fafbfc]">{c.titulo}</th>)}</tr>
         </thead>
         <tbody>
           {linhas.map((l, i) => (
             <tr key={i} className="[&:last-child>td]:border-b-0">
-              {colunas.map((c) => <td key={c.chave} className={`px-3.5 py-[11px] border-b border-line align-top ${c.classe ?? ""}`}>{c.render(l)}</td>)}
+              {colunas.map((c) => <td key={c.chave} style={c.largura ? { width: c.largura } : undefined} className={`px-3.5 py-[11px] border-b border-line align-top ${c.classe ?? ""}`}>{c.render(l)}</td>)}
             </tr>
           ))}
         </tbody>
@@ -255,12 +270,32 @@ export function DataTable<T>({ colunas, linhas }: { colunas: Coluna<T>[]; linhas
       <div className="md:hidden card shadow-none divide-y divide-line text-sm">
         {linhas.map((l, i) => (
           <div key={i} className="px-3.5 py-2.5 flex flex-col gap-1.5">
-            {colunas.map((c) => (
+            {(titulo || chip) && (
+              <div className="flex items-start justify-between gap-2">
+                {titulo && <div className="font-bold">{titulo.render(l)}</div>}
+                {chip && <div className="shrink-0">{chip.render(l)}</div>}
+              </div>
+            )}
+            {resumo && <div className="truncate text-muted">{resumo.render(l)}</div>}
+            {semPapel.map((c) => (
               <div key={c.chave}>
                 <div className="text-[11.5px] font-bold text-muted">{c.titulo}</div>
                 <div>{c.render(l)}</div>
               </div>
             ))}
+            {detalhes.length > 0 && (
+              <details className="group mt-1">
+                <summary className="text-[13px] font-bold text-accent-ink cursor-pointer marker:content-none">Ver mais</summary>
+                <div className="mt-1.5 flex flex-col gap-1.5">
+                  {detalhes.map((c) => (
+                    <div key={c.chave}>
+                      <div className="text-[11.5px] font-bold text-muted">{c.titulo}</div>
+                      <div>{c.render(l)}</div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         ))}
       </div>
