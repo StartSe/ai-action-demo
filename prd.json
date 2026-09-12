@@ -190,7 +190,7 @@
         "Verify in browser using dev-browser skill: pré-visualização de impressão em PDF sem elementos cortados"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

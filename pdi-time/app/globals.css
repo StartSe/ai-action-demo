@@ -46,4 +46,11 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
 @media print {
   .no-print { display: none !important; }
   body { background: #fff; }
+
+  /* Folha de impressão (/imprimir/[id]): A4, margem 18mm, sem sombra e sem cor de acento em fundos. */
+  @page folha-impressao { size: A4; margin: 18mm; }
+  .print-sheet { page: folha-impressao; }
+  .print-sheet .card,
+  .print-sheet .summary { box-shadow: none; break-inside: avoid; }
+  .print-sheet .chip-neutral { background: none; border: 1px solid currentColor; }
 }

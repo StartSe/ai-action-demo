@@ -132,6 +132,15 @@ export function Resultado({ pdi, dados, meta }: { pdi: PDI; dados: DadosPDI; met
 
       <Origem meta={meta} />
 
+      <ConteudoPDI pdi={pdi} />
+    </article>
+  );
+}
+
+/** Corpo do PDI (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
+export function ConteudoPDI({ pdi }: { pdi: PDI }) {
+  return (
+    <>
       <p className="summary">{pdi.resumo}</p>
 
       <Section titulo="Pontos fortes a preservar">
@@ -176,7 +185,7 @@ export function Resultado({ pdi, dados, meta }: { pdi: PDI; dados: DadosPDI; met
       <Section titulo="Para abrir a conversa de feedback">
         <Item>{pdi.conversa_sugerida.map((q) => <p key={q} className="my-1.5">“{q}”</p>)}</Item>
       </Section>
-    </article>
+    </>
   );
 }
 
