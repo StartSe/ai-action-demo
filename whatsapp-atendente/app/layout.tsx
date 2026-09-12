@@ -5,7 +5,7 @@ import "./globals.css";
 const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: "Atendente no WhatsApp",
+  title: "Atendente no WhatsApp · IA para Executivos",
   description: "Atendente de IA que responde clientes no WhatsApp com base no conhecimento da empresa e transfere para um humano quando não sabe.",
 };
 

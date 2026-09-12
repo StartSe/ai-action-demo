@@ -19,3 +19,14 @@ Started: Sat Sep 12 16:56:50 -03 2026
   - Ver seção "Codebase Patterns" acima.
   - Não existe um app rodando de fato na porta 3001; a menção a 3001 na US-001 não corresponde à config real (`next dev` sempre sobe em 3000 salvo `PORT` explícita).
 ---
+
+## [2026-09-12] - US-002
+- Criado `scripts/gerar-icones.mjs`: lê `catalogo.json` e escreve `<app>/app/icon.svg` (32x32, `rect` com `rx=7` na cor `acento` do app e a inicial do nome em branco, 700, 17px) para os 10 apps; remove `app/favicon.ico` de cada app processado (Next.js App Router detecta `app/icon.svg` automaticamente como ícone via convenção de arquivo, sem precisar declarar em `layout.tsx`).
+- `metadata.title` de cada `layout.tsx` dos 10 apps passou para `'{Nome do app} · IA para Executivos'` (script Node ad hoc, não versionado, que leu `catalogo.json` e fez a troca por regex).
+- `PADRAO.md`: seção "Novo app na suíte" agora cita o passo de rodar `node scripts/gerar-icones.mjs` e ajustar o título ao criar um app novo.
+- Arquivos alterados: `scripts/gerar-icones.mjs` (novo), `PADRAO.md`, `<app>/app/icon.svg` (novo, 10x) e `<app>/app/layout.tsx` (título) nos 10 apps; `<app>/app/favicon.ico` removido nos 10 apps.
+- Verificação: `npx tsc --noEmit` e `npm run lint` limpos nos 10 apps; subi `pdi-time` (PORT=3001) e `financas-ia` (PORT=3009) com `next dev` e confirmei via curl que `GET /icon.svg` devolve 200 com o SVG esperado (cor de acento e inicial certas) e que o HTML da página tem `<title>Nome do app · IA para Executivos</title>`.
+- **Learnings for future iterations:**
+  - Next.js App Router detecta `app/icon.svg` sem nenhuma configuração extra em `layout.tsx` — basta o arquivo existir nessa pasta.
+  - Para checar ícone/título sem browser MCP, `curl -s http://localhost:<porta>/icon.svg` e `curl -s http://localhost:<porta>/ | grep -o "<title>[^<]*</title>"` com o `next dev` rodando em background bastam como evidência.
+---

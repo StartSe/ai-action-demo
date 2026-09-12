@@ -5,7 +5,7 @@ import "./globals.css";
 const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: "Agente de Kanban",
+  title: "Agente de Kanban · IA para Executivos",
   description: "Agente de IA que cria, move, comenta e arquiva cartões do seu quadro Kanban a partir de comandos em português.",
 };
 

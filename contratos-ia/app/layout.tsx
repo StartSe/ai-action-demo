@@ -5,7 +5,7 @@ import "./globals.css";
 const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: "Leitura de Contratos",
+  title: "Leitura de Contratos · IA para Executivos",
   description: "Análise de contratos por IA: riscos, prazos críticos, obrigações e o que está faltando, do ponto de vista de quem vai assinar.",
 };
 

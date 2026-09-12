@@ -5,7 +5,7 @@ import "./globals.css";
 const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: "Ata Executiva",
+  title: "Ata Executiva · IA para Executivos",
   description: "Transforma a transcrição ou a gravação de uma reunião em ata executiva com decisões, ações, responsáveis e prazos.",
 };
 

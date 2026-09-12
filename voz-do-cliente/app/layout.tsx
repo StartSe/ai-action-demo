@@ -5,7 +5,7 @@ import "./globals.css";
 const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: "Voz do Cliente",
+  title: "Voz do Cliente · IA para Executivos",
   description: "Leitura de comentários de clientes com IA: agrupa por tema, mede o sentimento, calcula o NPS e prioriza o que fazer.",
 };
 

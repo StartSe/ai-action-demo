@@ -5,7 +5,7 @@ import "./globals.css";
 const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: "Prospecção com IA",
+  title: "Prospecção com IA · IA para Executivos",
   description: "Monta a lista de leads a partir do perfil de cliente ideal e escreve a primeira abordagem personalizada por lead.",
 };
 

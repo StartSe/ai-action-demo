@@ -5,7 +5,7 @@ import "./globals.css";
 const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: "Entrevistadora IA",
+  title: "Entrevistadora IA · IA para Executivos",
   description: "Entrevistadora de IA que conduz a primeira triagem de candidatos por voz e texto e entrega um scorecard para o gestor.",
 };
 

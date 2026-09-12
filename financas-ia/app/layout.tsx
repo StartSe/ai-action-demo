@@ -5,7 +5,7 @@ import "./globals.css";
 const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: "Analista Financeiro",
+  title: "Analista Financeiro · IA para Executivos",
   description: "Leitura instantânea da planilha de despesas por IA: solte o CSV, veja os números que importam e pergunte em linguagem natural.",
 };
 

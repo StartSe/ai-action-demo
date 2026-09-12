@@ -5,7 +5,7 @@ import "./globals.css";
 const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: "Posts em Minutos",
+  title: "Posts em Minutos · IA para Executivos",
   description: "Posts prontos para LinkedIn, Instagram e X gerados por IA a partir de um briefing curto, com imagem sob demanda.",
 };
 

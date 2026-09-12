@@ -5,7 +5,7 @@ import "./globals.css";
 const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: "PDI do Time",
+  title: "PDI do Time · IA para Executivos",
   description: "Plano de desenvolvimento individual gerado por IA a partir das entregas e dos objetivos da empresa.",
 };
 

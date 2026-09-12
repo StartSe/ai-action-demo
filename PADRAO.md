@@ -47,4 +47,4 @@ Executivos vão abrir o app, testar em 2 minutos e decidir se vale conectar as c
 4. Encerre o servidor (`lsof -ti :<porta> | xargs kill`). Não rode `docker build`: o GitHub Actions constrói e publica a imagem a cada push na `main`.
 
 ## Novo app na suíte
-1. Crie a pasta copiando `pdi-time/`. 2. Acrescente a entrada em `catalogo.json` (id igual ao nome da pasta, áreas, textos, cor de acento e porta seguinte). 3. Rode `node scripts/gerar-deploy.mjs` e acrescente o serviço no `docker-compose.yml`. 4. Faça o push: o workflow constrói a imagem e atualiza o catálogo público sozinho.
+1. Crie a pasta copiando `pdi-time/`. 2. Acrescente a entrada em `catalogo.json` (id igual ao nome da pasta, áreas, textos, cor de acento e porta seguinte). 3. Rode `node scripts/gerar-deploy.mjs` e acrescente o serviço no `docker-compose.yml`. 4. Rode `node scripts/gerar-icones.mjs` para gerar `app/icon.svg` do novo app (e atualizar os demais se a cor de acento de algum mudou) e ajuste `metadata.title` em `app/layout.tsx` para `'Nome do app · IA para Executivos'`. 5. Faça o push: o workflow constrói a imagem e atualiza o catálogo público sozinho.
