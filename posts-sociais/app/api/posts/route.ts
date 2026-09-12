@@ -1,5 +1,6 @@
-import { aiEnabled, askJSON } from "@/lib/ai";
+import { aiEnabled, askJSON, meta } from "@/lib/ai";
 import { esperar, postsDemo } from "@/lib/demo";
+import { apagarTodos, listar, salvar } from "@/lib/historico";
 import type { DadosPosts, Post, Rede, ResultadoPosts } from "@/lib/types";
 
 const REDES: Record<Rede, string> = { linkedin: "LinkedIn", instagram: "Instagram", x: "X" };
@@ -34,17 +35,34 @@ export async function POST(req: Request) {
     return Response.json({ error: "Escolha pelo menos uma rede social." }, { status: 400 });
   }
   try {
+    const insumo = "dados da empresa, o tema e o público-alvo informados";
     if (!aiEnabled()) {
       await esperar(1300);
-      return Response.json({ demo: true, resultado: postsDemo({ empresa, tema, redes: lista }) });
+      const resultado = postsDemo({ empresa, tema, redes: lista });
+      const metaGerada = meta({ demo: true, insumo });
+      const id = salvar({ tipo: "posts", titulo: `Posts de ${empresa}`, entrada: dados, saida: resultado, meta: metaGerada });
+      return Response.json({ resultado, meta: metaGerada, id });
     }
     const prompt = `Empresa ou marca: ${empresa}\nTema ou novidade:\n${tema}\n\nObjetivo: ${objetivo || "fortalecer marca"}\nTom: ${tom || "executivo"}\nPúblico-alvo: ${publico || "não informado"}\nRedes solicitadas (gere exatamente um post para cada, nesta ordem): ${lista.map((r) => REDES[r]).join(", ")}`;
     const resultado = await askJSON<ResultadoPosts>({ system: SYSTEM, prompt });
     resultado.posts = (resultado.posts || []).map((p: Post) => ({ ...p, rede: String(p.rede || "").toLowerCase() as Rede, hashtags: Array.isArray(p.hashtags) ? p.hashtags : [] }));
-    return Response.json({ demo: false, resultado });
+    const metaGerada = meta({ demo: false, insumo });
+    const id = salvar({ tipo: "posts", titulo: `Posts de ${empresa}`, entrada: dados, saida: resultado, meta: metaGerada });
+    return Response.json({ resultado, meta: metaGerada, id });
   } catch (err) {
     console.error(err);
     const mensagem = err instanceof Error ? err.message : "Não foi possível gerar os posts agora. Tente novamente.";
     return Response.json({ error: mensagem }, { status: 500 });
   }
+}
+
+/** Últimos resultados salvos, para a lista "Últimos resultados" no painel. */
+export async function GET() {
+  return Response.json({ itens: listar(10) });
+}
+
+/** Apaga todo o histórico salvo (botão "Apagar tudo"). */
+export async function DELETE() {
+  apagarTodos();
+  return Response.json({ ok: true });
 }

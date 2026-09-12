@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { Chip } from "@/components/ui";
 import type { Post, Rede } from "@/lib/types";
 
 export const REDES: Record<Rede, { nome: string; limite: number; proporcao: string }> = {
@@ -169,7 +170,7 @@ export function PreviaPost({
   return (
     <article className="card p-4 pb-[18px]">
       <div className="flex justify-between items-center gap-2.5 mb-3">
-        <span className="chip-neutral">{info.nome}</span>
+        <Chip nivel="neutral">{info.nome}</Chip>
         <span className={`text-[12.5px] ${n > info.limite ? "text-danger font-bold" : "text-muted"}`}>{n} / {info.limite} caracteres</span>
       </div>
       <div className="border border-line rounded-[10px] px-4 pt-3.5 pb-4 bg-white">

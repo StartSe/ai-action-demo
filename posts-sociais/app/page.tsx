@@ -1,9 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { CopyButton, DemoNotice, Empty, ErrorBox, Field, Loading, Panel, ResultHead, Row, Stage, Topbar, Workspace, useScrollToResult, useStatus } from "@/components/ui";
+import { Empty, Entregar, ErrorBox, Field, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
 import { PreviaPost, REDES, textoDoPost } from "@/components/PreviaPost";
+import type { Meta } from "@/lib/ai";
 import type { DadosPosts, Post, Rede, ResultadoPosts } from "@/lib/types";
+
+type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
 
 const EXEMPLO: DadosPosts = {
   empresa: "Vetra Logística",
@@ -16,21 +20,54 @@ const EXEMPLO: DadosPosts = {
 
 const VAZIO: DadosPosts = { empresa: "", tema: "", objetivo: "fortalecer marca", tom: "executivo", redes: ["linkedin", "instagram"], publico: "" };
 
+const ETAPAS_CARREGANDO = ["Lendo o briefing e definindo a ideia central...", "Escrevendo o texto no formato de cada rede...", "Sugerindo hashtags e o melhor horário..."];
+
+/** Três cartões de post sobrepostos, no lugar de um glifo genérico no estado vazio. */
+function IlustracaoPosts() {
+  return (
+    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="14" width="17" height="36" rx="3" />
+      <rect x="23.5" y="8" width="17" height="42" rx="3" />
+      <rect x="44" y="14" width="17" height="36" rx="3" />
+      <circle cx="9.5" cy="21" r="2.5" />
+      <path d="M15 21h3" />
+      <path d="M6.5 28h11M6.5 33h11M6.5 38h7" />
+      <circle cx="30" cy="16" r="2.5" />
+      <path d="M35.5 16h3" />
+      <path d="M27 23h11M27 28h11M27 33h7" />
+      <circle cx="50.5" cy="21" r="2.5" />
+      <path d="M56 21h3" />
+      <path d="M47.5 28h11M47.5 33h11M47.5 38h7" />
+    </svg>
+  );
+}
+
 type Estado =
   | { fase: "vazio" }
   | { fase: "carregando" }
   | { fase: "erro"; mensagem: string }
-  | { fase: "pronto"; resultado: ResultadoPosts; dados: DadosPosts; demo: boolean };
+  | { fase: "pronto"; resultado: ResultadoPosts; dados: DadosPosts; meta: Meta; id?: string };
 
 export default function Page() {
   const { status, erro } = useStatus();
   const [dados, setDados] = useState<DadosPosts>(VAZIO);
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
-  const [imagens, setImagens] = useState<Record<number, string>>({});
+  const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const autoEnviado = useRef(false);
 
   useScrollToResult(estado.fase === "pronto");
+
+  function carregarHistorico() {
+    fetch("/api/posts").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
+  }
+
+  useEffect(() => { carregarHistorico(); }, []);
+
+  function apagarHistorico() {
+    if (!window.confirm("Apagar todos os resultados salvos? Essa ação não pode ser desfeita.")) return;
+    fetch("/api/posts", { method: "DELETE" }).then(carregarHistorico);
+  }
 
   const set = (campo: keyof DadosPosts) => (e: { target: { value: string } }) => setDados((d) => ({ ...d, [campo]: e.target.value }));
 
@@ -47,12 +84,12 @@ export default function Page() {
       return;
     }
     setEstado({ fase: "carregando" });
-    setImagens({});
     try {
       const r = await fetch("/api/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || "Falha ao gerar os posts.");
-      setEstado({ fase: "pronto", resultado: data.resultado, dados: d, demo: data.demo });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Falha ao gerar os posts.");
+      setEstado({ fase: "pronto", resultado: resposta.resultado, dados: d, meta: resposta.meta, id: resposta.id });
+      fetch("/api/posts").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
     } catch (e) {
       setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." });
     }
@@ -80,20 +117,11 @@ export default function Page() {
     }
   }, []);
 
-  function atualizarTexto(i: number, texto: string) {
-    setEstado((e) => {
-      if (e.fase !== "pronto") return e;
-      const posts = e.resultado.posts.map((p, idx) => (idx === i ? { ...p, texto } : p));
-      return { ...e, resultado: { ...e.resultado, posts } };
-    });
-  }
-
   const carregando = estado.fase === "carregando";
 
   return (
     <>
-      <Topbar marca="S" nome="Posts em Minutos" area="Marketing" status={status} erro={erro} />
-      <DemoNotice visivel={Boolean(status && !status.ai)} resumo="Modo demonstração: os posts exibidos são exemplos." />
+      <Topbar marca="S" nome="Posts em Minutos" area="Marketing" status={status} erro={erro} resumo="Modo demonstração: os posts exibidos são exemplos." />
 
       <Workspace>
         <Panel titulo="O que sua empresa tem a dizer, pronto para cada rede." lead="Descreva a novidade em poucas linhas. A IA escreve o post no formato certo para LinkedIn, Instagram e X, com sugestão de imagem e horário.">
@@ -107,18 +135,18 @@ export default function Page() {
             <Row>
               <Field label="Objetivo" htmlFor="objetivo">
                 <select id="objetivo" className="input" value={dados.objetivo} onChange={set("objetivo")}>
-                  <option value="gerar leads">gerar leads</option>
-                  <option value="fortalecer marca">fortalecer marca</option>
-                  <option value="engajar comunidade">engajar comunidade</option>
-                  <option value="anunciar novidade">anunciar novidade</option>
+                  <option value="gerar leads">Gerar leads</option>
+                  <option value="fortalecer marca">Fortalecer marca</option>
+                  <option value="engajar comunidade">Engajar comunidade</option>
+                  <option value="anunciar novidade">Anunciar novidade</option>
                 </select>
               </Field>
               <Field label="Tom" htmlFor="tom">
                 <select id="tom" className="input" value={dados.tom} onChange={set("tom")}>
-                  <option value="executivo">executivo</option>
-                  <option value="próximo">próximo</option>
-                  <option value="provocador">provocador</option>
-                  <option value="didático">didático</option>
+                  <option value="executivo">Executivo</option>
+                  <option value="próximo">Próximo</option>
+                  <option value="provocador">Provocador</option>
+                  <option value="didático">Didático</option>
                 </select>
               </Field>
             </Row>
@@ -132,59 +160,92 @@ export default function Page() {
                 ))}
               </div>
             </Field>
-            <Field label="Público-alvo (opcional)" htmlFor="publico">
-              <input id="publico" className="input" placeholder="Ex.: gerentes de logística de indústrias médias" value={dados.publico} onChange={set("publico")} />
-            </Field>
+            <MaisDetalhes>
+              <Field label="Público-alvo (opcional)" htmlFor="publico">
+                <input id="publico" className="input" placeholder="Ex.: gerentes de logística de indústrias médias" value={dados.publico} onChange={set("publico")} />
+              </Field>
+            </MaisDetalhes>
             <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Gerando posts" : "Gerar posts"}</button>
           </form>
-          <p className="mt-3.5 text-muted text-[12.5px]">Nada é salvo. Os posts existem só nesta tela até você copiar ou baixar.</p>
+          <Privacidade detalhe="Os posts ficam salvos neste app até você apagar em 'Últimos resultados'." />
+
+          <MaisDetalhes titulo="Últimos resultados">
+            {historico === null ? (
+              <p className="text-muted text-sm">Carregando...</p>
+            ) : historico.length === 0 ? (
+              <p className="text-muted text-sm">Nenhum resultado salvo ainda.</p>
+            ) : (
+              <>
+                <ul className="flex flex-col gap-1.5 text-sm mb-3">
+                  {historico.map((h) => (
+                    <li key={h.id} className="flex justify-between gap-3">
+                      <Link href={`/r/${h.id}`} className="text-accent-ink font-semibold hover:underline truncate">{h.titulo}</Link>
+                      <span className="text-muted shrink-0">{data(h.criadoEm)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
+              </>
+            )}
+          </MaisDetalhes>
         </Panel>
 
         <Stage>
-          {estado.fase === "vazio" && <Empty glifo="S" titulo="Os posts aparecem aqui" descricao="Uma prévia por rede, com o texto no formato certo, hashtags, melhor horário para publicar e imagem gerada sob demanda." acao="Preencher com um exemplo" onAcao={preencherExemplo} />}
-          {estado.fase === "carregando" && <Loading texto="Lendo o briefing, definindo a ideia central e adaptando o texto ao formato de cada rede..." />}
+          {estado.fase === "vazio" && <Empty ilustracao={<IlustracaoPosts />} titulo="Os posts aparecem aqui" descricao="Uma prévia por rede, com o texto no formato certo, hashtags, melhor horário para publicar e imagem gerada sob demanda." acao="Preencher com um exemplo" onAcao={preencherExemplo} />}
+          {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
           {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} />}
-          {estado.fase === "pronto" && (
-            <Resultado
-              resultado={estado.resultado}
-              dados={estado.dados}
-              demo={estado.demo}
-              imagens={imagens}
-              onImagemGerada={(i, url) => setImagens((m) => ({ ...m, [i]: url }))}
-              onTextoAtualizado={atualizarTexto}
-            />
-          )}
+          {estado.fase === "pronto" && <Resultado resultado={estado.resultado} dados={estado.dados} meta={estado.meta} id={estado.id} />}
         </Stage>
       </Workspace>
     </>
   );
 }
 
-function Resultado({
-  resultado,
-  dados,
-  demo,
+export function Resultado({ resultado, dados, meta, id }: { resultado: ResultadoPosts; dados: DadosPosts; meta: Meta; id?: string }) {
+  const [posts, setPosts] = useState<Post[]>(resultado.posts || []);
+  const [imagens, setImagens] = useState<Record<number, string>>({});
+
+  const copiarTudo = () => posts.map((p) => `${REDES[p.rede]?.nome || p.rede}\n\n${textoDoPost(p)}`).join("\n\n----------\n\n");
+
+  return (
+    <article className="reveal">
+      <ResultHead titulo={`Posts de ${dados.empresa}`} subtitulo={`${posts.length} ${posts.length === 1 ? "rede" : "redes"}, objetivo: ${dados.objetivo}, tom ${dados.tom}`}>
+        <Entregar id={id} titulo={`Posts de ${dados.empresa}`} texto={copiarTudo} />
+      </ResultHead>
+
+      <Origem meta={meta} />
+
+      <ConteudoPosts
+        posts={posts}
+        empresa={dados.empresa}
+        ideiaCentral={resultado.ideia_central}
+        imagens={imagens}
+        onImagemGerada={(i, url) => setImagens((m) => ({ ...m, [i]: url }))}
+        onTextoAtualizado={(i, texto) => setPosts((ps) => ps.map((p, idx) => (idx === i ? { ...p, texto } : p)))}
+      />
+    </article>
+  );
+}
+
+/** Ideia central + prévia por rede (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
+export function ConteudoPosts({
+  posts,
+  empresa,
+  ideiaCentral,
   imagens,
   onImagemGerada,
   onTextoAtualizado,
 }: {
-  resultado: ResultadoPosts;
-  dados: DadosPosts;
-  demo: boolean;
+  posts: Post[];
+  empresa: string;
+  ideiaCentral: string;
   imagens: Record<number, string>;
   onImagemGerada: (i: number, url: string) => void;
   onTextoAtualizado: (i: number, texto: string) => void;
 }) {
-  const posts = resultado.posts || [];
-  const copiarTudo = () => posts.map((p: Post) => `${REDES[p.rede]?.nome || p.rede}\n\n${textoDoPost(p)}`).join("\n\n----------\n\n");
-
   return (
-    <article className="reveal">
-      <ResultHead titulo={`Posts de ${dados.empresa}`} subtitulo={`${posts.length} ${posts.length === 1 ? "rede" : "redes"}, objetivo: ${dados.objetivo}, tom ${dados.tom}${demo ? " (exemplo em modo demonstração)" : ""}`}>
-        <CopyButton texto={copiarTudo} rotulo="Copiar todos" />
-      </ResultHead>
-
-      <p className="summary">{resultado.ideia_central}</p>
+    <>
+      <p className="summary">{ideiaCentral}</p>
 
       <div className="mb-8">
         <h2 className="section-title">Prévia por rede</h2>
@@ -193,8 +254,8 @@ function Resultado({
             <PreviaPost
               key={i}
               post={p}
-              empresa={dados.empresa}
-              ideiaCentral={resultado.ideia_central}
+              empresa={empresa}
+              ideiaCentral={ideiaCentral}
               imagemUrl={imagens[i]}
               onImagemGerada={(url) => onImagemGerada(i, url)}
               onTextoAtualizado={(texto) => onTextoAtualizado(i, texto)}
@@ -202,6 +263,6 @@ function Resultado({
           ))}
         </div>
       </div>
-    </article>
+    </>
   );
 }
