@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Chip, CopyButton, DataTable, Empty, ErrorBox, Field, Item, Loading, MaisDetalhes, Origem, Panel, ResultHead, Row, Section, Stage, Topbar, Workspace, useScrollToResult, useStatus } from "@/components/ui";
+import { Chip, CopyButton, DataTable, Empty, ErrorBox, Field, Item, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, useScrollToResult, useStatus } from "@/components/ui";
 import type { Meta } from "@/lib/ai";
 import type { DadosPDI, PDI } from "@/lib/types";
 
@@ -108,7 +108,7 @@ export default function Page() {
             </MaisDetalhes>
             <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Gerando plano" : "Gerar PDI"}</button>
           </form>
-          <p className="mt-3.5 text-muted text-[12.5px]">Nada é salvo. O plano existe só nesta tela até você imprimir ou copiar.</p>
+          <Privacidade detalhe="Nada é salvo. O plano existe só nesta tela até você imprimir ou copiar." />
         </Panel>
 
         <Stage>

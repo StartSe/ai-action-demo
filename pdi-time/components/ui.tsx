@@ -303,6 +303,39 @@ export function DataTable<T>({ colunas, linhas }: { colunas: Coluna<T>[]; linhas
   );
 }
 
+/** Área de upload tracejada compartilhada: arrastar e soltar ou clicar para selecionar; nome do arquivo escolhido fica visível. */
+export function Dropzone({ id = "dropzone-arquivo", accept, tiposLabel, maxSizeMB, arquivo, onArquivo }: { id?: string; accept: string; tiposLabel: string; maxSizeMB: number; arquivo: File | null; onArquivo: (file: File | null) => void }) {
+  const [arrastando, setArrastando] = useState(false);
+  const ativo = arrastando || !!arquivo;
+
+  return (
+    <label
+      htmlFor={id}
+      onDragEnter={(e) => { e.preventDefault(); setArrastando(true); }}
+      onDragOver={(e) => { e.preventDefault(); setArrastando(true); }}
+      onDragLeave={(e) => { e.preventDefault(); setArrastando(false); }}
+      onDrop={(e) => { e.preventDefault(); setArrastando(false); onArquivo(e.dataTransfer.files?.[0] ?? null); }}
+      className={`flex flex-col items-center justify-center gap-1.5 text-center py-9 px-4 rounded-card border-[1.5px] border-dashed cursor-pointer transition-colors ${ativo ? "border-accent bg-accent-soft" : "border-line text-muted"}`}
+    >
+      <input id={id} type="file" accept={accept} hidden onChange={(e) => onArquivo(e.target.files?.[0] ?? null)} />
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={ativo ? "text-accent" : "text-muted"}>
+        <path d="M12 16V4M12 4l-4 4M12 4l4 4" />
+        <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+      </svg>
+      <strong className="text-ink text-[14.5px] font-bold">Arraste o arquivo aqui ou selecione</strong>
+      <span className="text-[12.5px]">{tiposLabel}, até {maxSizeMB} MB</span>
+      {arquivo && <span className="mt-1 text-[13px] font-bold text-accent-ink">{arquivo.name}</span>}
+    </label>
+  );
+}
+
+/** Frase padrão de privacidade do rodapé; `detalhe` acrescenta contexto específico do app só no title. */
+export function Privacidade({ detalhe }: { detalhe?: string }) {
+  return (
+    <p className="mt-3.5 text-muted text-[12.5px]" title={detalhe}>Seus dados ficam só neste app e você pode apagar quando quiser.</p>
+  );
+}
+
 export function CopyButton({ texto, rotulo = "Copiar texto" }: { texto: () => string; rotulo?: string }) {
   const [ok, setOk] = useState(false);
   return (
