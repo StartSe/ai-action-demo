@@ -376,7 +376,7 @@ export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: s
     setAberto(false);
   }
 
-  const link = id ? `${location.origin}/r/${id}` : undefined;
+  const link = id && typeof window !== "undefined" ? `${location.origin}/r/${id}` : undefined;
   const itemClasse = "w-full text-left px-3 py-2 rounded-md hover:bg-accent-soft cursor-pointer";
 
   return (
