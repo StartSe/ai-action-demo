@@ -156,6 +156,19 @@ export function Origem({ meta }: { meta: Meta }) {
   return <p className="text-muted text-[13px] mb-4" title={meta.model}>{texto}</p>;
 }
 
+const CORES_TOM: Record<string, string> = { ok: "text-ok", warn: "text-warn", danger: "text-danger", neutro: "text-accent-ink" };
+
+/** Dado que decide, exibido antes do resumo: um número grande com rótulo e interpretação. */
+export function Destaque({ valor, rotulo, interpretacao, tom = "neutro" }: { valor: string; rotulo: string; interpretacao?: string; tom?: "ok" | "warn" | "danger" | "neutro" }) {
+  return (
+    <div className="mb-6">
+      <div className={`text-[40px] leading-none font-extrabold tracking-[-0.02em] ${CORES_TOM[tom]}`}>{valor}</div>
+      <div className="text-[13px] font-semibold text-muted mt-2">{rotulo}</div>
+      {interpretacao && <div className="text-sm text-muted mt-1">{interpretacao}</div>}
+    </div>
+  );
+}
+
 export function Section({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
     <div className="mb-8">

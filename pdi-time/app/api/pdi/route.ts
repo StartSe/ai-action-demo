@@ -9,9 +9,10 @@ Regras:
 - Conecte cada objetivo do PDI a um objetivo da empresa.
 - Ações devem ser concretas e verificáveis, distribuídas em 30, 60 e 90 dias.
 - Máximo de 3 pontos fortes, 3 lacunas, 3 objetivos e 3 recursos.
+- O resumo tem no máximo 45 palavras.
 Formato de saída (JSON):
 {
-  "resumo": "2 a 3 frases sobre o momento do profissional e o salto esperado",
+  "resumo": "2 a 3 frases sobre o momento do profissional e o salto esperado, em no máximo 45 palavras",
   "pontos_fortes": [{"titulo": "", "evidencia": ""}],
   "lacunas": [{"competencia": "", "impacto": "", "prioridade": "alta|média|baixa"}],
   "objetivos": [{"titulo": "", "resultado_esperado": "", "indicador": "", "acoes": [{"prazo": "30 dias", "acao": ""}, {"prazo": "60 dias", "acao": ""}, {"prazo": "90 dias", "acao": ""}]}],

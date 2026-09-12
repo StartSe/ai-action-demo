@@ -7,6 +7,8 @@ Started: Sat Sep 12 16:56:50 -03 2026
 - Cada app roda `next dev` na porta 3000 (não há porta fixa 3001 como o texto de uma acceptance criteria sugere); usar `PORT=xxxx npm run dev` se precisar rodar vários em paralelo.
 - Não há script de typecheck no package.json; usar `npx tsc --noEmit -p tsconfig.json` dentro da pasta do app.
 - Para verificar comportamento client-side sem servidor de browser MCP: `chromium --headless --disable-gpu --virtual-time-budget=8000 --dump-dom "<url>"` roda timers/fetches por Xms antes de despejar o DOM final — útil para confirmar que o atalho `?exemplo=1` realmente chegou ao estado "pronto" (procurar `class="reveal"` ou texto do resultado).
+- Para `--screenshot`, adicionar sempre `--run-all-compositor-stages-before-draw`: sem essa flag o chromium headless às vezes despeja a captura com a animação `.reveal` (fade-in) presa a meio caminho (opacidade baixa), deixando a tela toda "apagada" mesmo com `virtual-time-budget` alto. Com a flag, a captura sai no estado final real.
+- Nem toda user story precisa que `Destaque` (componente de US-005) seja usado no `Resultado` de todo app: o PRD (linha ~238 de `tasks/prd-ui-ux-executivos.md`) só lista um "dado principal" natural para Contratos (nota de risco), Voz do Cliente (NPS), Financeiro (total do período), Entrevistadora (nota) e Ata (contagem de decisões/ações). `pdi-time` não tem um número único que decida, então a AC "Destaque (quando houver)" é satisfeita criando o componente em `ui.tsx` sem chamá-lo no `Resultado` do pdi-time.
 
 ## [2026-09-12] - US-001
 - Corrigido o bug do atalho `?exemplo=1` em `next dev` (React Strict Mode) nos 10 apps da suíte.
@@ -55,4 +57,14 @@ Started: Sat Sep 12 16:56:50 -03 2026
 - **Learnings for future iterations:**
   - `components/setup.tsx` também usa `Topbar` (sem `DemoNotice`/popover, e sem `resumo`) — por isso `resumo` precisa ser opcional em `Topbar`, não obrigatório.
   - Não há ferramenta de browser MCP configurada neste projeto; a verificação visual "Verify in browser using dev-browser skill" nas próximas histórias precisará seguir o mesmo caminho alternativo (`chromium --headless --dump-dom`) ou ser sinalizada como pendente de verificação manual quando envolver interação (clique, popover, formulário) em vez de apenas leitura de estado.
+---
+
+## [2026-09-12] - US-005
+- Novo componente `Destaque` em `pdi-time/components/ui.tsx`: props `{ valor, rotulo, interpretacao?, tom?: "ok" | "warn" | "danger" | "neutro" }`, número em 40 px (`font-extrabold`), rótulo em 13 px e interpretação em uma linha; cor do número muda conforme `tom` (mapa `CORES_TOM`). Não é usado no `Resultado` do pdi-time (ver Codebase Patterns acima), apenas exportado para os apps que têm um dado principal.
+- `.summary` em `pdi-time/app/globals.css`: de 22 px/19 px semibold com borda lateral de acento para 17 px (16 px no celular), peso 500 (`font-medium`), sem `border-l-4 border-accent` (virou `rounded-card` completo em vez de `rounded-r-card`).
+- `pdi-time/app/api/pdi/route.ts`: `SYSTEM` ganhou a regra "O resumo tem no máximo 45 palavras" e o campo `resumo` do formato de saída JSON reforça o limite. `lib/demo.ts` já tinha um resumo com 34 palavras, dentro do limite, não precisou de alteração.
+- Arquivos alterados: `pdi-time/components/ui.tsx`, `pdi-time/app/globals.css`, `pdi-time/app/api/pdi/route.ts`.
+- Verificação: `npx tsc --noEmit` e `npm run lint` limpos em `pdi-time`. Rodei `PORT=3031 npm run dev` e usei `chromium --headless --run-all-compositor-stages-before-draw --window-size=1400,1800 --virtual-time-budget=10000 --screenshot=... "http://localhost:3031/?exemplo=1&captura=1"` para desktop e `--window-size=390,1800` para celular: confirmei visualmente o `.summary` sem borda lateral, tamanho de corpo (não mais destaque de citação) e a ordem `ResultHead → Origem → .summary → Pontos fortes`. Também confirmei via `--dump-dom` + busca de índice de substring que `PDI de Marina` < `Exemplo ilustrativo...` (Origem) < `class="summary"` < `Pontos fortes` no HTML final.
+- **Learnings for future iterations:**
+  - Ver seção "Codebase Patterns" acima (flag `--run-all-compositor-stages-before-draw` e critério de quando usar `Destaque`).
 ---
