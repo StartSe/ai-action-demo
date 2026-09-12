@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+data/
+.env
+.env.*
+!.env.example
+.DS_Store
+npm-debug.log*
+*.tsbuildinfo
+next-env.d.ts
+publico/
+# Projeto separado (DecisionOS Pocket) copiado para esta pasta; não faz parte da suíte.
+automl-pocket/

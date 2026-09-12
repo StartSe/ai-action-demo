@@ -1,0 +1,21 @@
+# Blueprint do Render para Ata Executiva (https://render.com/docs/blueprint-spec)
+# Imagem pública publicada pelo GitHub Actions em ghcr.io/startse/reunioes-ia:latest.
+# Nenhuma chave é necessária aqui: após o deploy, abra https://<seu-app>.onrender.com/setup e conecte a IA.
+# As chaves ficam em SQLite em /app/data. No plano free o disco é efêmero e a configuração se perde a cada deploy.
+services:
+  - type: web
+    name: reunioes-ia
+    runtime: image
+    image:
+      url: ghcr.io/startse/reunioes-ia:latest
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "10000"
+    # Para manter a configuração feita em /setup entre deploys (exige plano pago):
+    # disk:
+    #   name: dados
+    #   mountPath: /app/data
+    #   sizeGB: 1

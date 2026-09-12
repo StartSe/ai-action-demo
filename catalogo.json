@@ -1,0 +1,143 @@
+{
+  "titulo": "IA para Executivos",
+  "lead": "Cada um resolve um problema específico e roda sem login e sem chave. Abra, teste em dois minutos com dados de exemplo e publique na sua conta do Render com um clique.",
+  "registro": "ghcr.io/startse",
+  "repoPrivado": "StartSe/ai-action-demo",
+  "repoPublico": "StartSe/ai-action-app-deploy",
+  "paginaPublica": "https://startse.github.io/ai-action-app-deploy/",
+  "apps": [
+    {
+      "id": "pdi-time",
+      "nome": "PDI do Time",
+      "areas": [
+        "RH"
+      ],
+      "problema": "O líder chega à conversa de feedback sem um plano de desenvolvimento pronto.",
+      "ia": "Cruza as entregas da pessoa com os objetivos da empresa e gera um PDI de 90 dias.",
+      "integracoes": "Só a IA (OpenRouter).",
+      "acento": "#2b5d8c",
+      "porta": 3001,
+      "demo": null
+    },
+    {
+      "id": "agente-kanban",
+      "nome": "Agente de Kanban",
+      "areas": [
+        "Gestão",
+        "RH"
+      ],
+      "problema": "Operar o quadro de tarefas toma tempo do gestor.",
+      "ia": "Um agente com ferramentas cria, move, comenta e arquiva cartões a partir de comandos em português.",
+      "integracoes": "Trello (chave e token). Adaptável a Jira, Notion ou monday.",
+      "acento": "#1f5f5b",
+      "porta": 3002,
+      "demo": null
+    },
+    {
+      "id": "entrevista-ia",
+      "nome": "Entrevistadora IA",
+      "areas": [
+        "RH"
+      ],
+      "problema": "A triagem inicial de candidatos consome horas da equipe.",
+      "ia": "Conduz a entrevista por voz e texto e entrega um scorecard para o gestor.",
+      "integracoes": "ElevenLabs (voz e ligação por agente conversacional).",
+      "acento": "#5b3f9e",
+      "porta": 3003,
+      "demo": null
+    },
+    {
+      "id": "posts-sociais",
+      "nome": "Posts em Minutos",
+      "areas": [
+        "Marketing"
+      ],
+      "problema": "Há o que dizer, mas não há tempo de escrever para cada rede.",
+      "ia": "Escreve o post para LinkedIn, Instagram e X a partir de um briefing curto e gera a imagem.",
+      "integracoes": "OpenAI Images para a imagem (trocável).",
+      "acento": "#7a2e8e",
+      "porta": 3004,
+      "demo": null
+    },
+    {
+      "id": "prospeccao-ia",
+      "nome": "Prospecção com IA",
+      "areas": [
+        "Vendas"
+      ],
+      "problema": "Montar a lista de leads e escrever a primeira abordagem é lento.",
+      "ia": "Monta a lista pelo perfil de cliente ideal e escreve e-mail, LinkedIn e WhatsApp para cada lead.",
+      "integracoes": "Apollo (busca) e Bright Data (enriquecimento).",
+      "acento": "#0f4c81",
+      "porta": 3005,
+      "demo": null
+    },
+    {
+      "id": "whatsapp-atendente",
+      "nome": "Atendente no WhatsApp",
+      "areas": [
+        "Atendimento",
+        "Vendas"
+      ],
+      "problema": "Perguntas repetidas chegam fora do horário e ficam sem resposta.",
+      "ia": "Responde com base no conhecimento da empresa e transfere para uma pessoa quando não sabe.",
+      "integracoes": "WhatsApp Cloud API (Meta) via webhook.",
+      "acento": "#128c7e",
+      "porta": 3006,
+      "demo": null
+    },
+    {
+      "id": "contratos-ia",
+      "nome": "Leitura de Contratos",
+      "areas": [
+        "Jurídico"
+      ],
+      "problema": "Decidir o que negociar antes de acionar o jurídico.",
+      "ia": "Lê o PDF, pontua o risco e lista cláusulas críticas, prazos e o que está faltando.",
+      "integracoes": "Só a IA (texto extraído do PDF no servidor).",
+      "acento": "#3b3f8f",
+      "porta": 3007,
+      "demo": null
+    },
+    {
+      "id": "reunioes-ia",
+      "nome": "Ata Executiva",
+      "areas": [
+        "Gestão"
+      ],
+      "problema": "A reunião acaba sem decisões e responsáveis registrados.",
+      "ia": "Transcreve o áudio e gera a ata com ações, prazos e o e-mail de follow-up.",
+      "integracoes": "ElevenLabs Scribe ou OpenAI Whisper para transcrição.",
+      "acento": "#8a5a00",
+      "porta": 3008,
+      "demo": null
+    },
+    {
+      "id": "financas-ia",
+      "nome": "Analista Financeiro",
+      "areas": [
+        "Financeiro"
+      ],
+      "problema": "A planilha de despesas chega e não há tempo de destrinchar.",
+      "ia": "Lê o CSV, mostra os números que importam e responde perguntas em linguagem natural.",
+      "integracoes": "Só a IA. Os dados ficam no navegador; só agregados vão para o modelo.",
+      "acento": "#0b6e4f",
+      "porta": 3009,
+      "demo": null
+    },
+    {
+      "id": "voz-do-cliente",
+      "nome": "Voz do Cliente",
+      "areas": [
+        "CX",
+        "Marketing"
+      ],
+      "problema": "Centenas de comentários de clientes que ninguém consegue ler.",
+      "ia": "Agrupa por tema, mede o sentimento e o NPS e prioriza o que fazer.",
+      "integracoes": "Só a IA (OpenRouter).",
+      "acento": "#a8324a",
+      "porta": 3010,
+      "demo": null
+    }
+  ]
+}

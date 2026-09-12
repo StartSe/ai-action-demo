@@ -1,0 +1,50 @@
+# Padrão da suíte "IA para Executivos" (Next.js + Tailwind)
+
+Dez apps independentes, cada um em sua própria pasta, sem nada compartilhado em tempo de execução. Cada pasta é um projeto Next.js completo: código, Dockerfile, `docker-compose.yml`, `render.yaml` e README. O projeto de referência é `pdi-time/`. Copie a estrutura dele literalmente e adapte só o que o app precisa.
+
+## Público e princípio
+Executivos vão abrir o app, testar em 2 minutos e decidir se vale conectar as chaves reais. Portanto:
+- Tudo funciona sem nenhuma chave configurada (modo demonstração com dados de exemplo plausíveis e em português).
+- Cada app resolve um problema específico muito bem. Nada de menus, login ou configurações escondidas.
+- Interface em português do Brasil, sentence case, sem rótulos em caixa alta, sem setas em botões, sem jargão técnico na tela. Botões dizem exatamente o que fazem.
+- Estados vazios convidam à ação e oferecem "Preencher com um exemplo". Erros explicam o que aconteceu e como resolver.
+
+## Stack (igual em todos)
+- Next.js 16 (App Router, TypeScript), Tailwind CSS 4, React 19. Sem bibliotecas de UI. Só adicione dependência se for indispensável (ex.: `unpdf` para ler PDF).
+- **IA via OpenRouter** (`lib/ai.ts`, copie exatamente do `pdi-time`): `aiEnabled()`, `modelName()`, `askText({system, prompt, maxTokens, temperature})`, `askJSON<T>()`, `parseJSON()`. Chave em `OPENROUTER_API_KEY`; modelo padrão gratuito `nvidia/nemotron-3-super-120b-a12b:free`, com `models` de reserva (fallback nativo do OpenRouter). Para tool use, use o formato `tools`/`tool_calls` da API compatível com OpenAI no mesmo endpoint, com loop manual enquanto `finish_reason === "tool_calls"`. Para PDF, extraia o texto no servidor com `unpdf` e envie como texto. Para chat multi-turno, monte `messages` com o histórico.
+- `lib/demo.ts`: respostas de exemplo do app, com `esperar(ms)` (900 a 1500 ms). `lib/types.ts`: tipos do domínio.
+- Rotas em `app/api/<nome>/route.ts` com `Request`/`Response.json`. Obrigatórias: `GET /api/health` -> `{ok:true}`; `GET /api/status` -> `{ ai, demo, model, integrations: { nome: boolean } }` (`export const dynamic = "force-dynamic"`). Toda rota com IA cai para o demo quando `!aiEnabled()`. Toda integração externa cai para um fallback local (memória) quando a variável não existe. Erros: `console.error` + `Response.json({ error: "mensagem clara em português" }, { status })`. Upload de arquivo: `await req.formData()` e `File.arrayBuffer()`.
+- Estado em memória do servidor (Map em módulo) é aceitável; some ao reiniciar.
+- Frontend: `app/page.tsx` é um client component (`"use client"`) que monta a tela única com os componentes de `components/ui.tsx`.
+
+## Visual (igual em todos, troca só o acento)
+- Copie `app/globals.css` inteiro e altere apenas `--color-accent`, `--color-accent-soft`, `--color-accent-ink` no `@theme`. Estilos específicos do app vão no fim do arquivo, depois de `/* Específico deste app */`. Atenção: no Tailwind 4 o `@apply` não aceita classes customizadas dentro de outras.
+- Copie `components/ui.tsx` sem alterar: `useStatus`, `Topbar`, `DemoNotice`, `Workspace`, `Panel`, `Field`, `Row`, `Stage`, `Empty`, `Loading`, `ErrorBox`, `ResultHead`, `Section`, `Item`, `Chip`, `DataTable` (linhas no desktop, blocos rotulados no celular), `CopyButton`, `useScrollToResult`. Componentes novos do app ficam em `components/<Nome>.tsx`.
+- Copie `app/layout.tsx` trocando `title`/`description`. Fonte Manrope via `next/font/google`.
+- Classes utilitárias já definidas: `.card`, `.input`, `.btn-primary`, `.btn-ghost`, `.btn-link`, `.chip-alta|media|baixa|neutral|positivo|neutro|negativo`, `.section-title`, `.summary`, `.skeleton`, `.reveal`, `.no-print`.
+- Estrutura da tela: `Topbar` + `DemoNotice` (uma frase visível e o restante dentro de "Como ativar a versão real") + `Workspace` com `Panel` (h1 curto com a promessa do app, lead de uma frase, formulário) à esquerda e `Stage` à direita (`Empty` -> `Loading` -> resultado em `<article className="reveal">` ou `ErrorBox`).
+- Atalho `?exemplo=1` preenche e envia o exemplo (dentro de `useEffect` com `setTimeout(…, 0)` para o lint aceitar). `?captura=1` desliga a rolagem automática até o resultado.
+- Uma única animação: o `reveal` do resultado. Sem gradientes decorativos, sem marcadores numerados salvo sequência real.
+
+## Setup inicial e configuração sem variáveis de ambiente (igual em todos)
+- **Nenhuma variável é obrigatória.** As chaves são conectadas em `/setup` e gravadas em SQLite (`lib/store.ts`, `node:sqlite`, arquivo `DATA_DIR/app.sqlite`, padrão `./data`, no Docker `/app/data` com volume). Variáveis de ambiente, se existirem, têm prioridade (`getConfig(chave)` lê env e depois o banco). Nunca use `process.env.X` direto para chaves: use `getConfig("X")`.
+- Arquivos compartilhados, copiados sem alteração do `pdi-time`: `lib/store.ts`, `lib/setup-comum.ts` (tipos `Integracao`/`Campo`, `statusIntegracoes`, `baseUrl`, integração `OPENROUTER` com OAuth PKCE), `components/setup.tsx` (tela genérica), `app/api/setup/route.ts` (GET status, PUT salvar; `""` mantém, `null` apaga), `app/api/setup/testar/route.ts`, `app/api/setup/oauth/openrouter/*` (início e callback do OAuth), `app/setup/page.tsx` (só troca marca/nome/área).
+- **Por app**: `lib/integracoes.ts` exporta `INTEGRACOES: Integracao[]`, sempre começando por `OPENROUTER` e seguindo com as integrações do app. Cada integração tem `id`, `titulo`, `descricao` em linguagem de negócio, `obrigatoria`, `link` para onde obter a chave, `campos` (`secret` | `text` | `select`, com `ajuda`, `placeholder`, `opcional`, `padrao`, `opcoes` ou `opcoesDinamicas(config)` para listas carregadas da própria integração, como quadros do Trello ou vozes da ElevenLabs), `testar(config)` que chama a API real e devolve `{ok, mensagem}` e, quando existir fluxo de autorização em um clique, `oauth: { tipo, rotulo, url }` apontando para uma rota do app (o Trello usa `https://trello.com/1/authorize?...&return_url=<baseUrl>/setup/trello` e a página `app/setup/trello/page.tsx` lê o token do fragmento da URL e grava via `PUT /api/setup`).
+- `GET /api/status` devolve também `setup: { pronto, url: "/setup" }` e `integrations` calculadas com `getConfig`. O `DemoNotice` recebe só a frase curta e mostra o link "Conectar a IA em 1 minuto" para `/setup`; a barra superior tem o link "Configurações".
+- Segredos nunca voltam inteiros para o navegador: a tela mostra `mascarado` (4 primeiros e 4 últimos caracteres) e a origem (`env` ou `banco`).
+- Webhooks e callbacks montam a URL pública com `baseUrl(req)` (respeita `x-forwarded-host`/`x-forwarded-proto`).
+- Dockerfile: `DATA_DIR=/app/data`, `NODE_OPTIONS=--disable-warning=ExperimentalWarning`, `mkdir -p /app/data && chown app:app /app/data`, `VOLUME ["/app/data"]`. Compose: volume nomeado em `/app/data`. `render.yaml`: só `PORT`, com o bloco `disk` comentado. `.env.example` só com alternativas opcionais. `.gitignore` e `.dockerignore` ignoram `data/`.
+- `@types/node` deve ser `^22` (tipos do `node:sqlite`).
+
+## Deploy (igual em todos)
+- `next.config.ts` com `output: "standalone"`. `Dockerfile` multi-stage (deps, build, runner em `node:22-alpine`, usuário não root, `PORT=10000`, `DATA_DIR=/app/data`, `CMD ["node","server.js"]`), `.dockerignore`, `.env.example`, `docker-compose.yml` (porta `30XX:10000` e volume `dados:/app/data`, ver tabela no README da raiz), `render.yaml` gerado por `scripts/gerar-deploy.mjs` a partir de `catalogo.json` (`runtime: image`, imagem `ghcr.io/startse/<app>:latest`, `healthCheckPath: /api/health` e só `PORT` em `envVars`). Não edite o `render.yaml` à mão: altere o `catalogo.json` e rode o gerador.
+- `README.md` com as seções do de referência: o que resolve, stack, rodar localmente, rodar com Docker, publicar imagem e deploy no Render, tabela de variáveis (com link de onde obter cada chave), estrutura.
+
+## Verificação obrigatória antes de encerrar
+1. `npm install`, `npm run lint` (zero erros) e `npm run build` (sem erros).
+2. `cp -r public .next/standalone/; cp -r .next/static .next/standalone/.next/; DATA_DIR=/tmp/<app>-dados PORT=<porta> HOSTNAME=127.0.0.1 node --disable-warning=ExperimentalWarning .next/standalone/server.js &` e `curl` em `/api/health`, `/api/status`, `/api/setup` (GET; PUT salvando uma chave falsa e conferindo que `/api/status` passa a `ai:true` e que `integrations` reflete as chaves das outras integrações; PUT com `null` apagando), `POST /api/setup/testar` para cada integração (deve devolver `ok:false` com mensagem clara para chave falsa) e nas rotas principais em modo demonstração. Entradas inválidas devem dar 400 com mensagem.
+3. Capture também `/setup` (desktop 1400x1000 e celular) e revise. Capturas de tela com o script `/private/tmp/claude-501/-Users-rafael-Desktop-projetos/696d123c-4430-4695-b494-fbfde8bed49f/scratchpad/shot.mjs` (`node shot.mjs <url> <saida.png> <largura> <altura> <esperaMs> <mobile 1|0>`; use `timeout 90` na frente): desktop vazio (1400x900), desktop com `?exemplo=1&captura=1` (1400x1500, espera 5000) e celular com `?exemplo=1&captura=1` (390x2600, mobile 1). Abra as imagens (ferramenta Read) e corrija o que estiver quebrado ou feio. Repita até ficar limpo.
+4. Encerre o servidor (`lsof -ti :<porta> | xargs kill`). Não rode `docker build`: o GitHub Actions constrói e publica a imagem a cada push na `main`.
+
+## Novo app na suíte
+1. Crie a pasta copiando `pdi-time/`. 2. Acrescente a entrada em `catalogo.json` (id igual ao nome da pasta, áreas, textos, cor de acento e porta seguinte). 3. Rode `node scripts/gerar-deploy.mjs` e acrescente o serviço no `docker-compose.yml`. 4. Faça o push: o workflow constrói a imagem e atualiza o catálogo público sozinho.

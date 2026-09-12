@@ -1,0 +1,94 @@
+# Sobe a suíte inteira: docker compose up --build   (ou docker compose pull && docker compose up, sem construir nada)
+# Cada app fica em uma porta: 3001 a 3010 (veja a tabela no README).
+# Nenhuma variável é obrigatória: abra http://localhost:30XX/setup em cada app para conectar a IA e as integrações.
+# As chaves ficam em SQLite dentro do volume de cada app e sobrevivem a reinícios.
+# Um .env na raiz é opcional (copie de .env.example); variáveis de ambiente têm prioridade sobre o setup.
+
+x-app: &app
+  restart: unless-stopped
+  env_file:
+    - path: .env
+      required: false
+
+services:
+  pdi-time:
+    <<: *app
+    build: ./pdi-time
+    image: ghcr.io/startse/pdi-time:latest
+    ports: ["3001:10000"]
+    volumes: [pdi-time-dados:/app/data]
+
+  agente-kanban:
+    <<: *app
+    build: ./agente-kanban
+    image: ghcr.io/startse/agente-kanban:latest
+    ports: ["3002:10000"]
+    volumes: [agente-kanban-dados:/app/data]
+
+  entrevista-ia:
+    <<: *app
+    build: ./entrevista-ia
+    image: ghcr.io/startse/entrevista-ia:latest
+    ports: ["3003:10000"]
+    volumes: [entrevista-ia-dados:/app/data]
+
+  posts-sociais:
+    <<: *app
+    build: ./posts-sociais
+    image: ghcr.io/startse/posts-sociais:latest
+    ports: ["3004:10000"]
+    volumes: [posts-sociais-dados:/app/data]
+
+  prospeccao-ia:
+    <<: *app
+    build: ./prospeccao-ia
+    image: ghcr.io/startse/prospeccao-ia:latest
+    ports: ["3005:10000"]
+    volumes: [prospeccao-ia-dados:/app/data]
+
+  whatsapp-atendente:
+    <<: *app
+    build: ./whatsapp-atendente
+    image: ghcr.io/startse/whatsapp-atendente:latest
+    ports: ["3006:10000"]
+    volumes: [whatsapp-atendente-dados:/app/data]
+
+  contratos-ia:
+    <<: *app
+    build: ./contratos-ia
+    image: ghcr.io/startse/contratos-ia:latest
+    ports: ["3007:10000"]
+    volumes: [contratos-ia-dados:/app/data]
+
+  reunioes-ia:
+    <<: *app
+    build: ./reunioes-ia
+    image: ghcr.io/startse/reunioes-ia:latest
+    ports: ["3008:10000"]
+    volumes: [reunioes-ia-dados:/app/data]
+
+  financas-ia:
+    <<: *app
+    build: ./financas-ia
+    image: ghcr.io/startse/financas-ia:latest
+    ports: ["3009:10000"]
+    volumes: [financas-ia-dados:/app/data]
+
+  voz-do-cliente:
+    <<: *app
+    build: ./voz-do-cliente
+    image: ghcr.io/startse/voz-do-cliente:latest
+    ports: ["3010:10000"]
+    volumes: [voz-do-cliente-dados:/app/data]
+
+volumes:
+  pdi-time-dados:
+  agente-kanban-dados:
+  entrevista-ia-dados:
+  posts-sociais-dados:
+  prospeccao-ia-dados:
+  whatsapp-atendente-dados:
+  contratos-ia-dados:
+  reunioes-ia-dados:
+  financas-ia-dados:
+  voz-do-cliente-dados:

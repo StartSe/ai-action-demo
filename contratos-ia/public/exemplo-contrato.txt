@@ -1,0 +1,72 @@
+CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE DESENVOLVIMENTO E SUSTENTAÇÃO DE PLATAFORMA DIGITAL
+
+Pelo presente instrumento particular, de um lado, GRUPO AURORA VAREJO S.A., sociedade anônima inscrita no CNPJ sob o nº 12.345.678/0001-90, com sede na Avenida Paulista, 1.500, São Paulo/SP, neste ato representada na forma de seu estatuto social, doravante denominada CONTRATANTE; e, de outro lado, TECHNOVA SOLUÇÕES DIGITAIS LTDA., sociedade limitada inscrita no CNPJ sob o nº 98.765.432/0001-10, com sede na Rua das Inovações, 320, Campinas/SP, neste ato representada por seu sócio administrador, doravante denominada CONTRATADA; têm entre si justo e contratado o que segue.
+
+CLÁUSULA 1 – DO OBJETO
+1.1. O presente contrato tem por objeto a prestação, pela CONTRATADA, de serviços de desenvolvimento, evolução e sustentação da plataforma de comércio eletrônico da CONTRATANTE, incluindo integrações com o sistema ERP e com meios de pagamento, conforme descrito no Anexo I.
+1.2. O escopo detalhado das funcionalidades será definido de comum acordo pelas partes ao longo da execução, por meio de trocas de e-mail entre os responsáveis designados.
+
+CLÁUSULA 2 – DO PRAZO E DA VIGÊNCIA
+2.1. O contrato vigorará pelo prazo de 24 (vinte e quatro) meses, contados da data de sua assinatura.
+2.2. Ao término do prazo, o contrato será renovado automaticamente por períodos iguais e sucessivos, salvo manifestação em contrário de qualquer das partes, por escrito, com antecedência mínima de 90 (noventa) dias do término da vigência.
+
+CLÁUSULA 3 – DO PREÇO E DAS CONDIÇÕES DE PAGAMENTO
+3.1. Pelos serviços, a CONTRATANTE pagará à CONTRATADA o valor mensal de R$ 48.000,00 (quarenta e oito mil reais), até o dia 5 (cinco) de cada mês, mediante apresentação de nota fiscal.
+3.2. Serviços adicionais fora do escopo serão cobrados à razão de R$ 220,00 (duzentos e vinte reais) por hora, mediante aprovação prévia da CONTRATANTE por e-mail.
+3.3. O atraso no pagamento sujeitará a CONTRATANTE a multa de 2% (dois por cento) sobre o valor devido, juros de 1% (um por cento) ao mês e correção monetária pelo IGP-M.
+3.4. Os valores serão reajustados anualmente pelo IGP-M ou por índice que a CONTRATADA venha a indicar, caso aquele seja extinto ou deixe de refletir a variação de custos do setor.
+
+CLÁUSULA 4 – DOS NÍVEIS DE SERVIÇO
+4.1. A CONTRATADA empregará seus melhores esforços para atender aos chamados de suporte abertos pela CONTRATANTE.
+4.2. Chamados classificados como críticos terão atendimento inicial em até 8 (oito) horas úteis, contadas da abertura do chamado pela ferramenta indicada pela CONTRATADA.
+
+CLÁUSULA 5 – DAS OBRIGAÇÕES DA CONTRATADA
+5.1. Alocar equipe tecnicamente qualificada para a execução dos serviços.
+5.2. Manter sigilo sobre todas as informações da CONTRATANTE a que tiver acesso.
+5.3. Entregar relatório mensal de atividades executadas e horas consumidas.
+5.4. Realizar backups semanais da base de dados da plataforma.
+
+CLÁUSULA 6 – DAS OBRIGAÇÕES DA CONTRATANTE
+6.1. Fornecer, em tempo hábil, acessos, ambientes e informações necessários à execução dos serviços.
+6.2. Designar um responsável técnico para acompanhamento do contrato e aprovação das demandas.
+6.3. Homologar as entregas realizadas pela CONTRATADA em até 5 (cinco) dias úteis, sendo consideradas aceitas tacitamente as entregas não contestadas nesse prazo.
+
+CLÁUSULA 7 – DA PROPRIEDADE INTELECTUAL
+7.1. O código-fonte, a documentação técnica e os demais entregáveis produzidos em razão deste contrato permanecerão de propriedade da CONTRATADA até a quitação integral de todos os valores devidos ao término do contrato, quando então serão cedidos à CONTRATANTE, mediante termo específico.
+7.2. Componentes, bibliotecas e frameworks proprietários da CONTRATADA eventualmente utilizados na plataforma são licenciados à CONTRATANTE de forma não exclusiva e intransferível, exclusivamente enquanto vigente este contrato.
+
+CLÁUSULA 8 – DA CONFIDENCIALIDADE
+8.1. As partes obrigam-se a manter em sigilo todas as informações confidenciais a que tiverem acesso em razão deste contrato, durante a sua vigência e por 5 (cinco) anos após o seu término.
+
+CLÁUSULA 9 – DA PROTEÇÃO DE DADOS
+9.1. As partes se comprometem a observar a legislação aplicável em matéria de proteção de dados pessoais.
+
+CLÁUSULA 10 – DA RESCISÃO
+10.1. Qualquer das partes poderá rescindir o presente contrato, imotivadamente, mediante aviso prévio por escrito de 90 (noventa) dias.
+10.2. Caso a rescisão imotivada seja promovida pela CONTRATANTE antes do término do prazo previsto na Cláusula 2.1, será devida à CONTRATADA multa equivalente a 30% (trinta por cento) do valor remanescente do contrato.
+10.3. Em caso de descumprimento de qualquer obrigação contratual, a parte prejudicada notificará a parte infratora, que terá 30 (trinta) dias para sanar a irregularidade, sob pena de rescisão por culpa.
+10.4. Encerrado o contrato por qualquer motivo, a CONTRATADA disponibilizará à CONTRATANTE os dados e o código da plataforma em até 60 (sessenta) dias após a quitação de eventuais pendências financeiras.
+
+CLÁUSULA 11 – DA LIMITAÇÃO DE RESPONSABILIDADE
+11.1. A responsabilidade total da CONTRATADA por quaisquer danos decorrentes deste contrato fica limitada ao valor de 1 (uma) mensalidade, excluídos lucros cessantes, danos indiretos e perda de receita, inclusive em casos de indisponibilidade da plataforma ou perda de dados.
+
+CLÁUSULA 12 – DA NÃO SOLICITAÇÃO
+12.1. A CONTRATANTE obriga-se a não contratar, direta ou indiretamente, colaboradores da CONTRATADA envolvidos na execução dos serviços, durante a vigência deste contrato e por 12 (doze) meses após o seu término, sob pena de multa equivalente a 12 (doze) vezes a remuneração mensal do profissional.
+
+CLÁUSULA 13 – DA SUBCONTRATAÇÃO
+13.1. A CONTRATADA poderá subcontratar parte dos serviços a seu exclusivo critério, permanecendo responsável perante a CONTRATANTE pela qualidade das entregas.
+
+CLÁUSULA 14 – DAS DISPOSIÇÕES GERAIS
+14.1. Qualquer alteração deste contrato somente terá validade se formalizada por aditivo escrito e assinado por ambas as partes.
+14.2. A tolerância de uma parte quanto ao descumprimento de qualquer cláusula não implicará novação ou renúncia de direitos.
+14.3. Este contrato obriga as partes e seus sucessores a qualquer título.
+14.4. Fica eleito o foro da Comarca de Campinas/SP para dirimir quaisquer controvérsias oriundas deste contrato, com renúncia a qualquer outro, por mais privilegiado que seja.
+
+E, por estarem assim justas e contratadas, as partes assinam o presente instrumento em 2 (duas) vias de igual teor e forma, na presença de 2 (duas) testemunhas.
+
+São Paulo, 15 de março de 2025.
+
+GRUPO AURORA VAREJO S.A. – CONTRATANTE
+TECHNOVA SOLUÇÕES DIGITAIS LTDA. – CONTRATADA
+Testemunha 1 – Nome e CPF
+Testemunha 2 – Nome e CPF

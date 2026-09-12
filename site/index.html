@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IA para Executivos</title>
+<meta name="description" content="Dez apps de IA para o dia a dia de uma empresa. Filtre por área e publique na sua conta do Render com um clique.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fundo: #f4f5f7; --cartao: #ffffff; --tinta: #161a22; --suave: #5b6270; --linha: #dfe3e9; --realce: #eceef2;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --fundo: #101318; --cartao: #181c24; --tinta: #eef1f6; --suave: #9aa3b2; --linha: #2a303b; --realce: #222834; }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--fundo); color: var(--tinta);
+    font: 500 16px/1.55 Manrope, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  a { color: inherit; }
+  :focus-visible { outline: 3px solid var(--tinta); outline-offset: 2px; border-radius: 6px; }
+  .largura { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  .topo { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 22px 0; }
+  .marca { font-weight: 800; letter-spacing: -0.01em; text-decoration: none; }
+  .topo a.discreto { color: var(--suave); font-size: .95rem; text-decoration: none; }
+  .topo a.discreto:hover { color: var(--tinta); text-decoration: underline; }
+
+  .hero { padding: 40px 0 28px; }
+  h1 {
+    font-size: clamp(2rem, 4.6vw, 3.4rem); line-height: 1.04; letter-spacing: -0.025em; font-weight: 800;
+    max-width: 19ch; margin: 0 0 18px;
+  }
+  .lead { font-size: 1.12rem; color: var(--suave); max-width: 58ch; margin: 0 0 30px; }
+
+  .filtro { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    font: inherit; font-weight: 600; font-size: 1rem; cursor: pointer;
+    padding: 10px 18px; border-radius: 999px; border: 1.5px solid var(--linha); background: var(--cartao); color: var(--tinta);
+  }
+  .chip:hover { border-color: var(--suave); }
+  .chip[aria-pressed="true"] { background: var(--tinta); color: var(--fundo); border-color: var(--tinta); }
+  .contagem { color: var(--suave); margin: 18px 0 0; }
+
+  .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; padding: 10px 0 56px; }
+  .card {
+    background: var(--cartao); border: 1px solid var(--linha); border-top: 4px solid var(--acento);
+    border-radius: 14px; padding: 24px 24px 20px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .card[hidden] { display: none; }
+  .areas { display: flex; flex-wrap: wrap; gap: 6px; }
+  .area { font-size: .82rem; font-weight: 600; color: var(--suave); background: var(--realce); padding: 3px 10px; border-radius: 999px; }
+  .card h2 { font-size: 1.45rem; line-height: 1.15; letter-spacing: -0.015em; margin: 0; font-weight: 800; }
+  .problema { margin: 0; font-size: 1.02rem; }
+  dl { margin: 0; display: grid; gap: 10px; padding-top: 8px; border-top: 1px solid var(--linha); }
+  dl div { display: grid; grid-template-columns: 7.5rem 1fr; gap: 10px; }
+  dt { color: var(--suave); font-size: .92rem; }
+  dd { margin: 0; font-size: .95rem; }
+  .acoes { display: flex; flex-wrap: wrap; gap: 10px; margin-top: auto; padding-top: 8px; align-items: center; }
+  .btn, .btn-ghost {
+    font: inherit; font-weight: 700; font-size: .95rem; text-decoration: none; cursor: pointer;
+    padding: 10px 16px; border-radius: 9px; border: 1.5px solid transparent; display: inline-block;
+  }
+  .btn { background: var(--acento, var(--tinta)); color: #fff; }
+  .btn:hover { filter: brightness(1.08); }
+  .btn-ghost { background: transparent; color: var(--tinta); border-color: var(--linha); }
+  .btn-ghost:hover { border-color: var(--suave); }
+  details.local { width: 100%; }
+  details.local summary { cursor: pointer; color: var(--suave); font-size: .95rem; list-style: none; padding: 4px 0; }
+  details.local summary::-webkit-details-marker { display: none; }
+  details.local summary::before { content: "+"; display: inline-block; width: 1.2em; font-weight: 700; }
+  details.local[open] summary::before { content: "–"; }
+  details.local summary:hover { color: var(--tinta); }
+  .comando { display: flex; gap: 8px; align-items: stretch; margin: 10px 0 8px; }
+  pre { margin: 0; flex: 1; overflow-x: auto; background: var(--realce); border-radius: 8px; padding: 10px 12px; font: 500 .82rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .copiar { font: inherit; font-weight: 600; font-size: .85rem; cursor: pointer; padding: 0 12px; border-radius: 8px; border: 1.5px solid var(--linha); background: var(--cartao); color: var(--tinta); white-space: nowrap; }
+  .copiar:hover { border-color: var(--suave); }
+  .depois { margin: 0; color: var(--suave); font-size: .9rem; }
+
+  .suite, .saiba { border-top: 1px solid var(--linha); padding: 44px 0; }
+  .suite h2, .saiba h2 { font-size: 1.6rem; letter-spacing: -0.02em; margin: 0 0 10px; font-weight: 800; }
+  .suite p { color: var(--suave); max-width: 60ch; margin: 0 0 20px; }
+  .saiba ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; max-width: 64ch; }
+  .saiba li { padding-left: 18px; position: relative; }
+  .saiba li::before { content: ""; position: absolute; left: 0; top: .62em; width: 7px; height: 7px; border-radius: 50%; background: var(--suave); }
+  .saiba code { font: 500 .9em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--realce); padding: 1px 6px; border-radius: 5px; }
+
+  footer { color: var(--suave); font-size: .92rem; padding: 28px 0 48px; border-top: 1px solid var(--linha); }
+  footer a { color: inherit; }
+  .erro { padding: 24px; border: 1px solid var(--linha); border-radius: 12px; background: var(--cartao); }
+
+  @media (max-width: 560px) {
+    .hero { padding-top: 24px; }
+    .card { padding: 20px 18px 16px; }
+    dl div { grid-template-columns: 1fr; gap: 2px; }
+    .comando { flex-direction: column; }
+    .copiar { padding: 8px 12px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .chip, .btn, .btn-ghost, .copiar { transition: border-color .15s, background-color .15s, filter .15s; }
+  }
+</style>
+</head>
+<body>
+<div class="largura">
+  <header class="topo">
+    <a class="marca" href="./">IA para Executivos</a>
+    <a class="discreto" id="linkRepo" href="#">Arquivos de publicação</a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1 id="titulo">Dez apps de IA para o dia a dia de uma empresa.</h1>
+      <p class="lead" id="lead"></p>
+      <div class="filtro" id="filtro" role="group" aria-label="Filtrar por área"></div>
+      <p class="contagem" id="contagem" aria-live="polite"></p>
+    </section>
+
+    <section class="grade" id="apps" aria-label="Apps"></section>
+
+    <section class="suite">
+      <h2>Publicar os dez de uma vez</h2>
+      <p>Um único Blueprint cria os dez serviços na sua conta do Render. Depois, abra a página de configuração de cada um e conecte a IA.</p>
+      <a class="btn" id="publicarSuite" href="#" target="_blank" rel="noopener">Publicar os dez no Render</a>
+    </section>
+
+    <section class="saiba">
+      <h2>Antes de clicar</h2>
+      <ul>
+        <li>É preciso ter uma conta no Render. O plano free serve e o serviço é criado na sua conta, não na nossa.</li>
+        <li>Nenhuma chave é pedida no deploy. Depois de publicar, abra <code>/setup</code> no app e conecte a IA em um minuto, por login no OpenRouter ou colando uma chave. Até lá o app roda em modo demonstração.</li>
+        <li>No plano free o app hiberna após inatividade e o disco é efêmero: a configuração feita em <code>/setup</code> se perde a cada deploy. Para persistir, use um plano pago e descomente o bloco <code>disk</code> do Blueprint.</li>
+        <li>Para rodar no seu computador basta o Docker instalado. As imagens são públicas e não precisam de login.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    Feito pela StartSe para as aulas de IA aplicada. Imagens Docker públicas em <a id="linkRegistro" href="https://github.com/orgs/StartSe/packages">ghcr.io/startse</a>.
+  </footer>
+</div>
+
+<template id="modeloCard">
+  <article class="card">
+    <div class="areas"></div>
+    <h2></h2>
+    <p class="problema"></p>
+    <dl>
+      <div><dt>O que a IA faz</dt><dd class="ia"></dd></div>
+      <div><dt>Conecta com</dt><dd class="integracoes"></dd></div>
+    </dl>
+    <div class="acoes">
+      <a class="btn publicar" target="_blank" rel="noopener">Publicar no Render</a>
+      <a class="btn-ghost demo" target="_blank" rel="noopener" hidden>Ver demonstração</a>
+      <details class="local">
+        <summary>Rodar no meu computador</summary>
+        <div class="comando"><pre><code></code></pre><button type="button" class="copiar">Copiar comando</button></div>
+        <p class="depois"></p>
+      </details>
+    </div>
+  </article>
+</template>
+
+<script>
+(async function () {
+  const $ = (s, r = document) => r.querySelector(s);
+  let dados;
+  try {
+    const r = await fetch("catalogo.json", { cache: "no-cache" });
+    if (!r.ok) throw new Error(r.status);
+    dados = await r.json();
+  } catch (e) {
+    $("#apps").innerHTML = '<div class="erro">Não foi possível carregar a lista de apps. Recarregue a página.</div>';
+    return;
+  }
+
+  $("#lead").textContent = dados.lead;
+  $("#linkRepo").href = dados.repoPublico;
+  $("#publicarSuite").href = dados.publicarSuite;
+  document.title = dados.titulo;
+
+  const grade = $("#apps");
+  const modelo = $("#modeloCard");
+  for (const app of dados.apps) {
+    const el = modelo.content.firstElementChild.cloneNode(true);
+    el.style.setProperty("--acento", app.acento);
+    el.dataset.areas = app.areas.join("|");
+    $(".areas", el).innerHTML = app.areas.map((a) => `<span class="area">${a}</span>`).join("");
+    $("h2", el).textContent = app.nome;
+    $(".problema", el).textContent = app.problema;
+    $(".ia", el).textContent = app.ia;
+    $(".integracoes", el).textContent = app.integracoes;
+    $(".publicar", el).href = app.publicar;
+    $(".publicar", el).setAttribute("aria-label", `Publicar ${app.nome} no Render`);
+    if (app.demo) { const d = $(".demo", el); d.href = app.demo; d.hidden = false; }
+    $("code", el).textContent = app.docker;
+    $(".depois", el).textContent = `Depois abra http://localhost:${app.porta} e, para conectar a IA, http://localhost:${app.porta}/setup.`;
+    $(".copiar", el).addEventListener("click", async (ev) => {
+      const b = ev.currentTarget;
+      try { await navigator.clipboard.writeText(app.docker); b.textContent = "Copiado"; }
+      catch { b.textContent = "Selecione e copie"; }
+      setTimeout(() => (b.textContent = "Copiar comando"), 1600);
+    });
+    grade.appendChild(el);
+  }
+
+  const areas = [...new Set(dados.apps.flatMap((a) => a.areas))];
+  const filtro = $("#filtro");
+  const chips = [["", "Todas as áreas"], ...areas.map((a) => [a, a])].map(([valor, rotulo]) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = rotulo; b.dataset.area = valor;
+    b.addEventListener("click", () => aplicar(valor, true));
+    filtro.appendChild(b);
+    return b;
+  });
+
+  function aplicar(area, gravar) {
+    let n = 0;
+    for (const card of grade.children) {
+      const mostra = !area || card.dataset.areas.split("|").includes(area);
+      card.hidden = !mostra; if (mostra) n++;
+    }
+    for (const c of chips) c.setAttribute("aria-pressed", String(c.dataset.area === area));
+    $("#contagem").textContent = area ? `${n} ${n === 1 ? "app" : "apps"} em ${area}` : `${n} apps`;
+    if (gravar) history.replaceState(null, "", area ? `#area=${encodeURIComponent(area)}` : location.pathname);
+  }
+  const inicial = decodeURIComponent((location.hash.match(/#area=(.+)/) || [, ""])[1]);
+  aplicar(areas.includes(inicial) ? inicial : "", false);
+})();
+</script>
+</body>
+</html>

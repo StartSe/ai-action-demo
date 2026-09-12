@@ -1,0 +1,135 @@
+name: Publicar imagens e catálogo
+
+# A cada push na main: constrói só as imagens dos apps cuja pasta mudou, publica em ghcr.io/startse/<app>
+# e regenera o repositório público (Blueprints do Render + página do catálogo).
+# Rodar à mão com "Reconstruir todas" marcado reconstrói as 10 imagens.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      todos:
+        description: "Reconstruir todas as imagens"
+        type: boolean
+        default: false
+
+concurrency:
+  group: publicar
+  cancel-in-progress: false
+
+env:
+  REGISTRO: ghcr.io/startse
+  REPO_PUBLICO: git@github.com:StartSe/ai-action-app-deploy.git
+  PLATAFORMAS: linux/amd64   # acrescente ",linux/arm64" para Macs com Apple Silicon; exige runner arm ou emulação
+
+jobs:
+  mudancas:
+    name: Descobrir apps alterados
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.lista.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: lista
+        env:
+          TODOS: ${{ github.event_name == 'workflow_dispatch' && inputs.todos }}
+          ANTES: ${{ github.event.before }}
+        run: |
+          APPS="$(jq -r '.apps[].id' catalogo.json | sort)"
+          if [ "$TODOS" = "true" ] || [ -z "$ANTES" ] || [ "$ANTES" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$ANTES" 2>/dev/null; then
+            LISTA="$APPS"
+          else
+            ALTERADOS="$(git diff --name-only "$ANTES" "$GITHUB_SHA" | cut -d/ -f1 | sort -u)"
+            LISTA="$(comm -12 <(echo "$APPS") <(echo "$ALTERADOS"))"
+          fi
+          JSON="$(printf '%s\n' "$LISTA" | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+          echo "apps=$JSON" >> "$GITHUB_OUTPUT"
+          echo "Apps a construir: $JSON"
+
+  imagens:
+    name: Imagem ${{ matrix.app }}
+    needs: mudancas
+    if: needs.mudancas.outputs.apps != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.mudancas.outputs.apps) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.app }}
+          platforms: ${{ env.PLATAFORMAS }}
+          push: true
+          tags: |
+            ${{ env.REGISTRO }}/${{ matrix.app }}:latest
+            ${{ env.REGISTRO }}/${{ matrix.app }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.title=${{ matrix.app }}
+            org.opencontainers.image.description=IA para Executivos: ${{ matrix.app }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  publico:
+    name: Atualizar repositório público
+    needs: [mudancas, imagens]
+    if: always() && needs.mudancas.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Gerar Blueprints e página
+        run: node scripts/gerar-deploy.mjs
+      - name: Publicar em ${{ env.REPO_PUBLICO }}
+        env:
+          CHAVE_SSH: ${{ secrets.CHAVE_DEPLOY_PUBLICO }}
+        run: scripts/publicar-publico.sh "$REPO_PUBLICO"
+      - name: Conferir se as imagens estão públicas
+        run: |
+          PRIVADAS=""
+          for app in $(jq -r '.apps[].id' catalogo.json); do
+            TOKEN="$(curl -s "https://ghcr.io/token?scope=repository:startse/$app:pull" | jq -r '.token // empty')"
+            CODIGO="$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" \
+              -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json" \
+              "https://ghcr.io/v2/startse/$app/manifests/latest")"
+            [ "$CODIGO" = "200" ] || PRIVADAS="$PRIVADAS $app($CODIGO)"
+          done
+          if [ -n "$PRIVADAS" ]; then
+            {
+              echo "## Imagens ainda não públicas"
+              echo
+              echo "O botão do Render só funciona com imagem pública. Em https://github.com/orgs/StartSe/packages abra cada pacote abaixo, Package settings, Change visibility, Public:"
+              echo
+              for p in $PRIVADAS; do echo "- $p"; done
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Imagens ainda privadas ou inexistentes:$PRIVADAS"
+          else
+            echo "## Todas as imagens estão públicas" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Avisar o Render (deploy hooks das instâncias de demonstração)
+        if: needs.imagens.result == 'success' && vars.RENDER_DEPLOY_HOOKS_ATIVO == 'true'
+        env:
+          HOOKS: ${{ secrets.RENDER_DEPLOY_HOOKS }}
+          APPS: ${{ needs.mudancas.outputs.apps }}
+        run: |
+          # RENDER_DEPLOY_HOOKS é um JSON { "pdi-time": "https://api.render.com/deploy/srv-...?key=..." }.
+          for app in $(echo "$APPS" | jq -r '.[]'); do
+            URL="$(echo "$HOOKS" | jq -r --arg a "$app" '.[$a] // empty')"
+            [ -n "$URL" ] && curl -fsS -X POST "$URL" > /dev/null && echo "redeploy pedido: $app" || true
+          done

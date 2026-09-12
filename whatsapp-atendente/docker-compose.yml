@@ -1,0 +1,13 @@
+# Sobe só este app: docker compose up --build  (http://localhost:3006)
+# Nenhuma variável é obrigatória: abra /setup no navegador para conectar a IA e o número de WhatsApp.
+services:
+  whatsapp-atendente:
+    build: .
+    ports:
+      - "3006:10000"
+    volumes:
+      - dados:/app/data
+    restart: unless-stopped
+
+volumes:
+  dados:
