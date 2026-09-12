@@ -347,6 +347,61 @@ export function OptInGuardar({ checked, onChange }: { checked: boolean; onChange
   );
 }
 
+/** Bloco de entrega padrão: baixar PDF (abre /imprimir/<id>; sem id imprime a própria tela) e um menu "Mais" com copiar texto, e-mail, link e extras do app. */
+export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: string; texto: () => string; extras?: { rotulo: string; onClick: () => void }[] }) {
+  const [aberto, setAberto] = useState(false);
+  const [copiadoTexto, setCopiadoTexto] = useState(false);
+  const [copiadoLink, setCopiadoLink] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!aberto) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setAberto(false);
+    }
+    function onClickFora(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setAberto(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("mousedown", onClickFora);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("mousedown", onClickFora);
+    };
+  }, [aberto]);
+
+  async function copiar(t: string, marcar: (v: boolean) => void) {
+    try { await navigator.clipboard.writeText(t); marcar(true); } catch { alert(t); }
+    setTimeout(() => marcar(false), 1800);
+    setAberto(false);
+  }
+
+  const link = id ? `${location.origin}/r/${id}` : undefined;
+  const itemClasse = "w-full text-left px-3 py-2 rounded-md hover:bg-accent-soft cursor-pointer";
+
+  return (
+    <div className="flex gap-2.5 max-md:w-full">
+      <button type="button" className="btn-primary !w-auto max-md:flex-1" onClick={() => (id ? window.open(`/imprimir/${id}`, "_blank") : window.print())}>Baixar PDF</button>
+      <div className="relative shrink-0" ref={menuRef}>
+        <button type="button" className="btn-ghost" aria-haspopup="menu" aria-expanded={aberto} aria-label="Mais opções para entregar este resultado" onClick={() => setAberto((v) => !v)}>
+          <span className="max-md:hidden">Mais</span>
+          <svg className="md:hidden" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
+        </button>
+        {aberto && (
+          <div role="menu" className="absolute right-0 top-[calc(100%+8px)] z-20 w-56 card p-1.5 text-[13.5px]">
+            <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(texto(), setCopiadoTexto)}>{copiadoTexto ? "Copiado" : "Copiar texto"}</button>
+            <a role="menuitem" className={`${itemClasse} block`} href={`mailto:?subject=${encodeURIComponent(titulo)}&body=${encodeURIComponent(texto())}`} onClick={() => setAberto(false)}>Enviar por e-mail</a>
+            {link && <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(link, setCopiadoLink)}>{copiadoLink ? "Copiado" : "Copiar link"}</button>}
+            {extras?.map((ex) => (
+              <button key={ex.rotulo} type="button" role="menuitem" className={itemClasse} onClick={() => { ex.onClick(); setAberto(false); }}>{ex.rotulo}</button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function CopyButton({ texto, rotulo = "Copiar texto" }: { texto: () => string; rotulo?: string }) {
   const [ok, setOk] = useState(false);
   return (

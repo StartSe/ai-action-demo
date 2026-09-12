@@ -14,7 +14,7 @@ export default async function Page({ params }: PageProps<"/r/[id]">) {
     <>
       <Topbar marca="P" nome="PDI do Time" area="Recursos Humanos" status={{ ai: !registro.meta.demo, demo: registro.meta.demo, model: registro.meta.model }} />
       <main className="max-w-[860px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
-        <Resultado pdi={registro.saida} dados={registro.entrada} meta={registro.meta} />
+        <Resultado pdi={registro.saida} dados={registro.entrada} meta={registro.meta} id={id} />
       </main>
     </>
   );

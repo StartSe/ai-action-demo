@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Chip, CopyButton, DataTable, Empty, ErrorBox, Field, Item, Loading, MaisDetalhes, OptInGuardar, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
+import { Chip, DataTable, Empty, Entregar, ErrorBox, Field, Item, Loading, MaisDetalhes, OptInGuardar, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
 import { SENSIVEL } from "@/lib/sensivel";
 import type { Meta } from "@/lib/ai";
 import type { DadosPDI, PDI } from "@/lib/types";
@@ -154,19 +154,18 @@ export default function Page() {
           {estado.fase === "vazio" && <Empty ilustracao={<IlustracaoPlano />} titulo="O plano aparece aqui" descricao="Pontos fortes, lacunas priorizadas, três objetivos com ações em 30, 60 e 90 dias e perguntas para a conversa." acao="Preencher com um exemplo" onAcao={preencherExemplo} />}
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
           {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={() => gerar(estado.dados, guardar)} />}
-          {estado.fase === "pronto" && <Resultado pdi={estado.pdi} dados={estado.dados} meta={estado.meta} />}
+          {estado.fase === "pronto" && <Resultado pdi={estado.pdi} dados={estado.dados} meta={estado.meta} id={estado.id} />}
         </Stage>
       </Workspace>
     </>
   );
 }
 
-export function Resultado({ pdi, dados, meta }: { pdi: PDI; dados: DadosPDI; meta: Meta }) {
+export function Resultado({ pdi, dados, meta, id }: { pdi: PDI; dados: DadosPDI; meta: Meta; id?: string }) {
   return (
     <article className="reveal">
       <ResultHead titulo={`PDI de ${dados.nome}`} subtitulo={`${dados.cargo}, ${dados.tempo} na função`}>
-        <button type="button" className="btn-ghost" onClick={() => window.print()}>Imprimir ou salvar PDF</button>
-        <CopyButton texto={() => pdiParaTexto(pdi, dados)} />
+        <Entregar id={id} titulo={`PDI de ${dados.nome}`} texto={() => pdiParaTexto(pdi, dados)} />
       </ResultHead>
 
       <Origem meta={meta} />
