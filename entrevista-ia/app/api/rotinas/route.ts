@@ -47,6 +47,11 @@ export async function POST(req: Request) {
     return Response.json({ error: "Informe o e-mail de destino." }, { status: 400 });
   }
 
-  const id = criar({ tipo, frequencia, hora, diaSemana, diaMes, dataUnica, canal, destino, parametros: {} });
+  // parametros: dados específicos do tipo de rotina (ex.: o perfil buscado de uma rotina de leads),
+  // enviados por um botão próprio do app; a maioria dos tipos não precisa e omite o campo.
+  const parametrosBrutos = corpo?.parametros;
+  const parametros = parametrosBrutos && typeof parametrosBrutos === "object" && !Array.isArray(parametrosBrutos) ? parametrosBrutos : {};
+
+  const id = criar({ tipo, frequencia, hora, diaSemana, diaMes, dataUnica, canal, destino, parametros });
   return Response.json({ id });
 }

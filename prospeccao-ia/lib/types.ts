@@ -35,4 +35,6 @@ export interface Abordagem {
 export interface ResultadoBusca {
   fonte: Fonte;
   leads: Lead[];
+  /** Abordagens já escritas para esses leads (rotina "leads novos toda semana"); ausente numa busca manual comum. */
+  abordagens?: Record<string, Abordagem>;
 }

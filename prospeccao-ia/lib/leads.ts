@@ -64,7 +64,11 @@ function mapApolloPessoa(p: ApolloPessoa, i: number, segmento: string): Lead {
 export async function buscarLeads(dados: DadosBusca): Promise<ResultadoBusca & { meta: ReturnType<typeof meta> }> {
   const { segmento, cargo, localizacao } = dados;
   const porte = dados.porte || "51-200";
-  const quantidade = QUANTIDADES_VALIDAS.includes(Number(dados.quantidade)) ? Number(dados.quantidade) : 10;
+  // Aceita qualquer quantidade positiva (não só QUANTIDADES_VALIDAS): a busca manual e a ferramenta MCP já
+  // validam contra QUANTIDADES_VALIDAS antes de chamar esta função, mas a rotina semanal de leads novos
+  // (lib/rotinas-do-app.ts) pede quantidades maiores (10, 20 ou 30) que não fazem sentido numa busca única.
+  const quantidadeBruta = Number(dados.quantidade);
+  const quantidade = Number.isFinite(quantidadeBruta) && quantidadeBruta > 0 ? Math.min(30, Math.floor(quantidadeBruta)) : 10;
   const intervalo = porte.replace("-", ",");
   const insumo = "segmento, cargo-alvo e localização informados";
 

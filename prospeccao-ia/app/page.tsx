@@ -361,7 +361,104 @@ export function Resultado({
       <Origem meta={meta} />
 
       <ConteudoLeads dados={dados} leads={leads} onEscrever={onEscrever} onEscreverLote={onEscreverLote} leadsProntos={leadsProntos} carregandoIds={carregandoIds} erroLote={erroLote} />
+
+      <ReceberLeadsSemanais dados={dados} />
     </article>
+  );
+}
+
+type EstadoNotificacoes = { configurada: boolean; canal: "email" | "slack"; destino: string };
+type RotinaLeads = { id: string; tipo: string; parametros: Partial<DadosBusca> };
+
+/** Mesma normalização de lib/leads-vistos.ts (chavePerfil), duplicada aqui porque esse arquivo importa
+ * node:sqlite e não pode ser importado por um componente "use client". */
+function chavePerfil(d: Pick<DadosBusca, "segmento" | "cargo" | "localizacao" | "porte">): string {
+  return [d.segmento, d.cargo, d.localizacao, d.porte].map((v) => String(v || "").trim().toLowerCase()).join("|");
+}
+
+/** Depois de uma busca, oferece automatizar a prospecção: uma rotina semanal que busca leads novos
+ * para o mesmo perfil, exclui quem já foi entregue antes e já escreve a abordagem de cada um. */
+function ReceberLeadsSemanais({ dados }: { dados: DadosBusca }) {
+  const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
+  const [rotinaId, setRotinaId] = useState<string | null | undefined>(undefined);
+  const [quantidade, setQuantidade] = useState("10");
+  const [criando, setCriando] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/setup")
+      .then((r) => r.json())
+      .then((d) => {
+        const integracao = (d.integracoes || []).find((i: { id: string }) => i.id === "notificacoes");
+        const campos: { chave: string; valorVisivel?: string }[] = integracao?.campos || [];
+        const canal = campos.find((c) => c.chave === "NOTIFICACOES_CANAL")?.valorVisivel === "slack" ? "slack" : "email";
+        const destino = campos.find((c) => c.chave === "NOTIFICACOES_DESTINO")?.valorVisivel || "";
+        setNotificacoes({ configurada: Boolean(integracao?.configurada), canal, destino });
+      })
+      .catch(() => setNotificacoes({ configurada: false, canal: "email", destino: "" }));
+    const perfilAtual = chavePerfil(dados);
+    fetch("/api/rotinas")
+      .then((r) => r.json())
+      .then((d) => {
+        const existente = (d.itens || []).find((i: RotinaLeads) => i.tipo === "leads-semanais" && chavePerfil(i.parametros as DadosBusca) === perfilAtual);
+        setRotinaId(existente?.id ?? null);
+      })
+      .catch(() => setRotinaId(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function criar() {
+    if (!notificacoes?.configurada) return;
+    setCriando(true);
+    try {
+      const r = await fetch("/api/rotinas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "leads-semanais",
+          frequencia: "semanal",
+          diaSemana: 1,
+          hora: "08:00",
+          canal: notificacoes.canal,
+          destino: notificacoes.canal === "email" ? notificacoes.destino || undefined : undefined,
+          parametros: { ...dados, quantidade },
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Não foi possível criar a rotina.");
+      setRotinaId(d.id);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar a rotina.");
+    } finally {
+      setCriando(false);
+    }
+  }
+
+  if (rotinaId === undefined || notificacoes === null) return null;
+
+  return (
+    <Item className="mt-4">
+      {rotinaId ? (
+        <p className="text-muted text-sm">Você já recebe leads novos toda semana para esse perfil, toda segunda às 8h.</p>
+      ) : (
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <label className="flex items-center gap-1.5 text-[13px] font-semibold">
+            Quantidade
+            <select className="input !w-auto" value={quantidade} onChange={(e) => setQuantidade(e.target.value)}>
+              <option value="10">10 leads</option>
+              <option value="20">20 leads</option>
+              <option value="30">30 leads</option>
+            </select>
+          </label>
+          {notificacoes.configurada ? (
+            <button type="button" className="btn-ghost !w-auto" onClick={criar} disabled={criando}>
+              {criando ? "Criando..." : "Receber leads novos toda semana"}
+            </button>
+          ) : (
+            <a href="/setup#notificacoes" className="btn-ghost !w-auto">Receber leads novos toda semana</a>
+          )}
+        </div>
+      )}
+    </Item>
   );
 }
 

@@ -21,7 +21,7 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
         <div className="text-muted text-sm">{data(new Date())}</div>
       </header>
 
-      <ConteudoLeads dados={registro.entrada} leads={registro.saida.leads} />
+      <ConteudoLeads dados={registro.entrada} leads={registro.saida.leads} leadsProntos={new Set(Object.keys(registro.saida.abordagens || {}))} />
 
       <footer className="mt-8 pt-4 border-t border-line">
         <Origem meta={registro.meta} />
