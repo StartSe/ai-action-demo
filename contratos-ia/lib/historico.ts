@@ -80,6 +80,14 @@ export function listar(limite = 10): Pick<Resultado, "id" | "tipo" | "titulo" | 
   return linhas;
 }
 
+/** Resultados de um `tipo`, mais recentes primeiro, com entrada/saida completos (ao contrário de listar()). */
+export function listarPorTipo<E = unknown, S = unknown, M = unknown>(tipo: string, limite = 50): Resultado<E, S, M>[] {
+  const linhas = abrir()
+    .prepare("SELECT * FROM resultados WHERE tipo = ? ORDER BY criadoEm DESC LIMIT ?")
+    .all(tipo, limite) as Linha[];
+  return linhas.map((l) => linhaParaResultado<E, S, M>(l));
+}
+
 export function apagar(id: string): void {
   abrir().prepare("DELETE FROM resultados WHERE id = ?").run(id);
 }

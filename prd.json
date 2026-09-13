@@ -1105,7 +1105,7 @@
         "Verify in browser using dev-browser skill: formulário de aprovação em celular"
       ],
       "priority": 71,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

@@ -2,9 +2,10 @@
 // para esse tipo (lib/formularios.ts: registrarCallback/obterCallback), que pode gerar um resultado.
 // Ao contrário de lib/formularios.ts e app/f/[token]/page.tsx, este arquivo NÃO é copiado sem alterar:
 // cada app pode precisar importar seu próprio módulo (ex.: lib/pdi.ts) para garantir que o callback
-// já esteja registrado quando a rota carrega. Nenhum callback foi registrado ainda neste app.
+// já esteja registrado quando a rota carrega.
 import { NextResponse } from "next/server";
 import { obter, obterCallback, responder } from "@/lib/formularios";
+import "@/lib/rascunhos";
 
 export async function POST(request: Request, { params }: RouteContext<"/api/f/[token]">) {
   const { token } = await params;

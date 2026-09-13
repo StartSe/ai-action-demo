@@ -26,10 +26,16 @@ export function FormularioPublico({ token, marca, nome, titulo, descricao, campo
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    // Campos "nota" são um grupo de botões, sem validação nativa de "required" do HTML.
+    // Campos "nota"/"decisao" são grupos de botões, sem validação nativa de "required" do HTML.
     const notaFaltando = campos.find((c) => c.tipo === "nota" && c.obrigatorio && !dados[c.chave]);
     if (notaFaltando) {
       setMensagemErro(`Escolha uma nota para "${notaFaltando.rotulo}".`);
+      setFase("erro");
+      return;
+    }
+    const decisaoFaltando = campos.find((c) => c.tipo === "decisao" && c.obrigatorio && !dados[c.chave]);
+    if (decisaoFaltando) {
+      setMensagemErro(`Escolha uma opção para "${decisaoFaltando.rotulo}".`);
       setFase("erro");
       return;
     }
@@ -100,6 +106,29 @@ export function FormularioPublico({ token, marca, nome, titulo, descricao, campo
                         onClick={() => setDados((d) => ({ ...d, [campo.chave]: String(n) }))}
                       >
                         {n}
+                      </button>
+                    ))}
+                  </div>
+                ) : campo.tipo === "decisao" ? (
+                  <div id={campo.chave} className="flex flex-wrap gap-2" role="radiogroup" aria-label={campo.rotulo}>
+                    {(
+                      [
+                        { valor: "aprovar", rotulo: "Aprovar" },
+                        { valor: "ajustar", rotulo: "Pedir ajuste" },
+                        { valor: "descartar", rotulo: "Descartar" },
+                      ] as const
+                    ).map((opcao) => (
+                      <button
+                        key={opcao.valor}
+                        type="button"
+                        role="radio"
+                        aria-checked={dados[campo.chave] === opcao.valor}
+                        className={`px-3.5 py-2 rounded-[10px] border text-sm font-semibold transition-colors ${
+                          dados[campo.chave] === opcao.valor ? "bg-accent border-accent text-white" : "border-line bg-white text-ink hover:bg-bg"
+                        }`}
+                        onClick={() => setDados((d) => ({ ...d, [campo.chave]: opcao.valor }))}
+                      >
+                        {opcao.rotulo}
                       </button>
                     ))}
                   </div>

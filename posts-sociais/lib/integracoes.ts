@@ -1,5 +1,5 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
-import { OPENROUTER, type Integracao, type Opcao } from "./setup-comum";
+import { NOTIFICACOES, OPENROUTER, type Integracao, type Opcao } from "./setup-comum";
 
 const MODELOS_IMAGEM: Opcao[] = [
   { valor: "gpt-image-1", rotulo: "gpt-image-1 (padrão, mais qualidade)" },
@@ -26,4 +26,4 @@ export const OPENAI_IMAGENS: Integracao = {
   },
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, OPENAI_IMAGENS];
+export const INTEGRACOES: Integracao[] = [OPENROUTER, OPENAI_IMAGENS, NOTIFICACOES];

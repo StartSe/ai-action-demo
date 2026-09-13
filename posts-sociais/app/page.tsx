@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Empty, Entregar, ErrorBox, Field, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
+import { Aprovados } from "@/components/Aprovados";
 import { GradePosts, REDES, textoDoPost } from "@/components/PreviaPost";
 import type { Meta } from "@/lib/ai";
 import type { DadosPosts, ImagemGerada, Post, Rede, ResultadoPosts } from "@/lib/types";
@@ -187,6 +188,10 @@ export default function Page() {
                 <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
               </>
             )}
+          </MaisDetalhes>
+
+          <MaisDetalhes titulo="Aprovados">
+            <Aprovados />
           </MaisDetalhes>
         </Panel>
 
