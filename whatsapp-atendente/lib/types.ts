@@ -47,6 +47,8 @@ export interface ItemRelatorioAtendimento {
   frequencia: number;
   transferida: boolean;
   respostaSugerida: string;
+  /** Nome da ferramenta dos sistemas da empresa (MCP) consultada para montar a resposta sugerida, se alguma foi usada. */
+  ferramentaUsada?: string;
 }
 
 /** Entrada/saída salvas em lib/historico.ts (tipo "relatorio-atendimento") pela rotina diária. */

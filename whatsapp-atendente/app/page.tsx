@@ -263,7 +263,7 @@ export default function Page() {
       if (!r.ok) throw new Error(resposta.error || "Falha ao responder.");
       setMensagens((m) => [
         ...m.filter((x) => !x.pendente),
-        { papel: "atendente", texto: resposta.resposta, transferido: resposta.transferir, hora: horaAtual() },
+        { papel: "atendente", texto: resposta.resposta, transferido: resposta.transferir, ferramentaUsada: resposta.ferramentaUsada, hora: horaAtual() },
       ]);
       setEstadoConversas({ fase: "pronto", conversas: resposta.conversas, meta: resposta.meta, id: resposta.id });
       fetch("/api/simular").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
@@ -686,7 +686,14 @@ export function ConteudoRelatorio({ itens }: { itens: ItemRelatorioAtendimento[]
             {item.transferida && <Chip nivel="media">Transferida</Chip>}
             {item.frequencia > 1 && <Chip nivel="neutral">Perguntada {item.frequencia} vezes</Chip>}
           </div>
-          <p className="text-sm text-muted mb-3">Resposta sugerida: {item.respostaSugerida}</p>
+          <div className="mb-3">
+            <p className="text-sm text-muted">Resposta sugerida: {item.respostaSugerida}</p>
+            {item.ferramentaUsada && (
+              <p className="text-[11px] text-muted mt-0.5" title={`Ferramenta MCP: ${item.ferramentaUsada}`}>
+                Consultado em {item.ferramentaUsada}
+              </p>
+            )}
+          </div>
           <div className="flex gap-4">
             <a className="btn-link" href={`/?atender=${encodeURIComponent(item.numero)}`}>Aprovar</a>
             <a className="btn-link" href={`/?atender=${encodeURIComponent(item.numero)}&corrigir=1`}>Corrigir</a>
@@ -705,7 +712,9 @@ function relatorioParaTexto(itens: ItemRelatorioAtendimento[]): string {
   }
   itens.forEach((i) => {
     l.push(`${i.pergunta}${i.transferida ? " (transferida)" : ""}${i.frequencia > 1 ? ` (${i.frequencia}x)` : ""}`);
-    l.push(`Resposta sugerida: ${i.respostaSugerida}`, "");
+    l.push(`Resposta sugerida: ${i.respostaSugerida}`);
+    if (i.ferramentaUsada) l.push(`Consultado em ${i.ferramentaUsada}`);
+    l.push("");
   });
   return l.join("\n").trim();
 }

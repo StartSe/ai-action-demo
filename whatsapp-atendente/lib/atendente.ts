@@ -1,7 +1,8 @@
 // Pipeline de resposta do atendente: memória de conversa por número + IA (com fallback local sem chave).
-import { aiEnabled, askText } from "./ai";
+import { aiEnabled, askText, askWithTools, type ToolMessage } from "./ai";
 import { baseAprovadaComoTexto } from "./base";
 import { esperar, respostaLocal } from "./demo";
+import { toolsParaAtendente } from "./empresa-mcp";
 import { getConfig } from "./estado";
 import type { CanalOrigem, Config, Conversa, ItemRelatorioAtendimento, MensagemChat } from "./types";
 
@@ -52,6 +53,29 @@ Regras:
   }. Nesses casos, termine a resposta com o marcador [TRANSFERIR] sozinho na última linha.`;
 }
 
+/**
+ * Chama a IA para uma resposta de texto livre, usando tool use com as ferramentas dos sistemas da
+ * empresa (lib/empresa-mcp.ts) quando alguma estiver conectada e liberada. Devolve o nome da primeira
+ * ferramenta chamada (se alguma foi), para a tela e o relatório diário mostrarem "Consultado em X".
+ */
+async function perguntarComFerramentas({ system, prompt, maxTokens }: { system: string; prompt: string; maxTokens: number }): Promise<{ texto: string; ferramentaUsada?: string }> {
+  const ferramentas = await toolsParaAtendente().catch(() => null);
+  if (!ferramentas) return { texto: await askText({ system, prompt, maxTokens }) };
+  const usadas: string[] = [];
+  const messages: ToolMessage[] = [{ role: "user", content: prompt }];
+  const texto = await askWithTools({
+    system,
+    messages,
+    tools: ferramentas.tools,
+    maxTokens,
+    executeTool: async (nome, args) => {
+      usadas.push(nome);
+      return ferramentas.executeTool(nome, args);
+    },
+  });
+  return { texto, ferramentaUsada: usadas[0] };
+}
+
 /** Soma as perguntas/respostas aprovadas pela equipe (lib/base.ts) ao texto livre da base de conhecimento. */
 function comBaseAprovada(config: Config): Config {
   const extra = baseAprovadaComoTexto();
@@ -79,7 +103,7 @@ export async function responder({
   origem?: CanalOrigem;
   /** Configuração ainda não salva (testada no simulador antes de clicar em "Salvar"); sem ela, usa a configuração salva. */
   config?: Config;
-}): Promise<{ resposta: string; transferir: boolean }> {
+}): Promise<{ resposta: string; transferir: boolean; ferramentaUsada?: string }> {
   const config = comBaseAprovada(configRascunho ?? getConfig());
   const conversa = obterConversa(numero, origem);
   conversa.origem = origem;
@@ -87,15 +111,17 @@ export async function responder({
 
   let resposta: string;
   let transferir: boolean;
+  let ferramentaUsada: string | undefined;
   if (aiEnabled()) {
     const historico = conversa.mensagens
       .slice(-MAX_MENSAGENS)
       .map((m) => `${m.papel === "cliente" ? "Cliente" : config.atendente}: ${m.texto}`)
       .join("\n");
     const prompt = `${historico}\n\nResponda como ${config.atendente} à última mensagem do cliente.`;
-    const bruta = await askText({ system: montarSystemPrompt(config), prompt, maxTokens: 400 });
+    const { texto: bruta, ferramentaUsada: usada } = await perguntarComFerramentas({ system: montarSystemPrompt(config), prompt, maxTokens: 400 });
     transferir = /\[TRANSFERIR\]\s*$/i.test(bruta.trim());
     resposta = bruta.replace(/\[TRANSFERIR\]\s*$/i, "").trim();
+    ferramentaUsada = usada;
   } else {
     await esperar(700);
     const r = respostaLocal(texto, config);
@@ -109,7 +135,7 @@ export async function responder({
   conversa.transferir = transferir;
   conversa.atualizadoEm = Date.now();
 
-  return { resposta, transferir };
+  return { resposta, transferir, ferramentaUsada };
 }
 
 export function listarConversas(): Conversa[] {
@@ -176,8 +202,10 @@ Regras: no máximo 2 a 3 frases, sem formatação markdown, sem falar em transfe
  * tenha a informação exata (sinalizando isso no texto). Sem IA configurada, devolve um aviso em vez de
  * inventar uma sugestão.
  */
-export async function sugerirResposta(pergunta: string): Promise<string> {
-  if (!aiEnabled()) return 'Configure a chave da IA em /setup para receber uma sugestão automática. Por enquanto, use "Corrigir" para gravar a resposta certa.';
+export async function sugerirResposta(pergunta: string): Promise<{ resposta: string; ferramentaUsada?: string }> {
+  if (!aiEnabled())
+    return { resposta: 'Configure a chave da IA em /setup para receber uma sugestão automática. Por enquanto, use "Corrigir" para gravar a resposta certa.' };
   const config = comBaseAprovada(getConfig());
-  return (await askText({ system: montarSystemPromptSugestao(config), prompt: pergunta, maxTokens: 200 })).trim();
+  const { texto, ferramentaUsada } = await perguntarComFerramentas({ system: montarSystemPromptSugestao(config), prompt: pergunta, maxTokens: 200 });
+  return { resposta: texto.trim(), ferramentaUsada };
 }

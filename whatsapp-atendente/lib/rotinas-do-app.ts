@@ -25,7 +25,8 @@ registrarExecutor("relatorio-atendimento", async () => {
 
   const itens: ItemRelatorioAtendimento[] = [];
   for (const p of pendentes) {
-    itens.push({ ...p, respostaSugerida: await sugerirResposta(p.pergunta) });
+    const { resposta, ferramentaUsada } = await sugerirResposta(p.pergunta);
+    itens.push({ ...p, respostaSugerida: resposta, ferramentaUsada });
   }
 
   const titulo = "Relatório diário do atendimento";

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { MensagemChat } from "@/lib/types";
 
 /** `hora` é gravada no momento em que a mensagem é enviada/recebida, não recalculada a cada render. */
-export type BolhaChat = MensagemChat & { transferido?: boolean; erro?: boolean; pendente?: boolean; hora?: string };
+export type BolhaChat = MensagemChat & { transferido?: boolean; erro?: boolean; pendente?: boolean; hora?: string; ferramentaUsada?: string };
 
 /** Aprova ou corrige a resposta do atendente para o par {pergunta, resposta} entrar na base. */
 export type AoSalvarBase = (pergunta: string, resposta: string) => void;
@@ -170,6 +170,11 @@ export function Celular({
                   {m.texto}
                   {m.hora && <span className="absolute right-3 bottom-1 text-[10px] text-muted">{m.hora}</span>}
                 </div>
+                {m.ferramentaUsada && (
+                  <span className="text-[11px] text-muted px-1" title={`Ferramenta MCP: ${m.ferramentaUsada}`}>
+                    Consultado em {m.ferramentaUsada}
+                  </span>
+                )}
                 {podeAvaliar && pergunta && (
                   <AcoesResposta pergunta={pergunta} resposta={m.texto} onAprovar={onAprovar} onCorrigir={onCorrigir} />
                 )}

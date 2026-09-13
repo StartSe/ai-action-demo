@@ -213,3 +213,38 @@ export const MCP_CRM: Integracao = {
     }
   },
 };
+
+/** Sistemas internos da empresa (pedidos, estoque, ERP...) que um assistente pode consultar via MCP antes de responder. */
+export const MCP_EMPRESA: Integracao = {
+  id: "mcp-empresa",
+  titulo: "Sistemas da empresa (MCP)",
+  descricao: "Conecte os sistemas onde ficam pedidos, estoque ou outros dados do seu negócio (um ERP, uma planilha compartilhada, um CRM — o que já expuser um servidor MCP) para o assistente consultar dados reais antes de responder.",
+  obrigatoria: false,
+  campos: [
+    {
+      chave: "MCP_EMPRESA_URL",
+      rotulo: "Endereço do sistema",
+      tipo: "text",
+      placeholder: "https://seu-sistema.exemplo.com/mcp",
+      ajuda: "Copie do painel de integrações do seu ERP/CRM, ou do cartão \"Usar dentro do seu assistente\" de outro app desta suíte.",
+    },
+    {
+      chave: "MCP_EMPRESA_CODIGO",
+      rotulo: "Código de acesso",
+      tipo: "secret",
+      opcional: true,
+      ajuda: "Gerado no mesmo lugar do endereço, dentro do sistema conectado.",
+    },
+  ],
+  testar: async (config) => {
+    const url = config.MCP_EMPRESA_URL;
+    if (!url) return { ok: false, mensagem: "Informe o endereço do sistema antes de testar." };
+    try {
+      const ferramentas = await listarFerramentas(conectar(url, config.MCP_EMPRESA_CODIGO));
+      if (ferramentas.length === 0) return { ok: true, mensagem: "Conectado, mas o sistema não expõe nenhuma consulta ainda." };
+      return { ok: true, mensagem: `Conectado. Consultas disponíveis: ${ferramentas.map((f) => f.nome).join(", ")}.` };
+    } catch (err) {
+      return { ok: false, mensagem: err instanceof Error ? err.message : "Não foi possível conectar ao sistema." };
+    }
+  },
+};

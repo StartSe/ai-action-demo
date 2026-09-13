@@ -1,4 +1,5 @@
 import { AcessoMCP } from "@/components/AcessoMCP";
+import { FerramentasEmpresa } from "@/components/FerramentasEmpresa";
 import { Rotinas } from "@/components/Rotinas";
 import { SetupPage } from "@/components/setup";
 import { WebhookWhatsApp } from "@/components/WebhookWhatsApp";
@@ -10,6 +11,7 @@ export default function Page() {
       <div className="max-w-[860px] mx-auto px-8 max-md:px-4 pb-16 flex flex-col gap-6">
         <WebhookWhatsApp />
         <AcessoMCP />
+        <FerramentasEmpresa />
         <Rotinas />
       </div>
     </>

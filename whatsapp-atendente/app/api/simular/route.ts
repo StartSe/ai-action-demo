@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   // O simulador testa o rascunho que a pessoa está editando no painel, não só a configuração já salva.
   const configRascunho: Config | undefined = config ? { ...getConfig(), ...config } : undefined;
   try {
-    const { resposta, transferir } = await responder({ numero, texto: textoLimpo, origem: "simulador", config: configRascunho });
+    const { resposta, transferir, ferramentaUsada } = await responder({ numero, texto: textoLimpo, origem: "simulador", config: configRascunho });
     const metaGerada = meta({ demo: !aiEnabled(), insumo: "mensagens do cliente e a base de conhecimento configurada" });
     const conversas = listarConversas();
     const id = salvar({
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
       saida: { resposta, transferir, conversas },
       meta: metaGerada,
     });
-    return Response.json({ resposta, transferir, conversas, meta: metaGerada, id });
+    return Response.json({ resposta, transferir, ferramentaUsada, conversas, meta: metaGerada, id });
   } catch (err) {
     console.error(err);
     const mensagem = err instanceof Error ? err.message : "Não foi possível gerar a resposta agora. Tente novamente.";
