@@ -431,3 +431,16 @@ Started: Sat Sep 12 16:56:50 -03 2026
 - **Learnings for future iterations:**
   - Ver a nova entrada na seção "Codebase Patterns" acima sobre cartões de `/setup` com valor gerado + "Copiar" fora do modelo genérico de `Integracao`.
 ---
+
+## [2026-09-12] - US-032
+- Criado `tasks/oauth-integracoes.md`: documento de investigação (sem mudança de código) avaliando viabilidade, pré-requisitos e esforço de trocar "colar chave" por "Autorizar" (OAuth) para Meta Embedded Signup (WhatsApp Cloud API, `whatsapp-atendente`), HubSpot (`prospeccao-ia`/`voz-do-cliente`) e Google Drive+Sheets+Calendar (`reunioes-ia`/`financas-ia`).
+- O documento primeiro descreve os dois padrões de OAuth já implementados na suíte, como referência de esforço para os novos: PKCE de servidor (OpenRouter, `app/api/setup/oauth/openrouter/{route,callback}`) e token flow no navegador com chave pública embutida (Trello, US-030, `app/api/setup/oauth/trello`).
+- Conclusões principais: HubSpot e Google se encaixam quase diretamente no padrão PKCE do OpenRouter (esforço baixo/médio); Meta Embedded Signup é bem mais distante (popup + `postMessage`, encadeamento de chamadas Graph API até um token de System User, e depende de Business Verification/App Review da Meta, fora do nosso controle) — esforço alto. Registrado também que ElevenLabs, OpenAI, Apollo e Bright Data não têm OAuth (só chave de API de conta) e seguem com o passo a passo de três passos já padronizado (US-029).
+- Ordem recomendada: 1) HubSpot, 2) Google (Drive/Sheets/Calendar), 3) Meta Embedded Signup (maior ganho de UX, mas maior esforço e única dependência não-técnica).
+- Arquivos alterados: `tasks/oauth-integracoes.md` (novo), `prd.json` (US-032 → `passes: true`).
+- Verificação: história é só de documentação; não há código para rodar typecheck/lint (nenhum `.ts`/`.tsx` alterado). Conferido `git status` para garantir que só o `.md` novo e o `prd.json` entraram no diff.
+- **Learnings for future iterations:**
+  - O campo `oauth: { tipo, rotulo, url }` de `Integracao` (`lib/setup-comum.ts`) já suporta os dois desenhos (PKCE de servidor e token flow no navegador) sem precisar de um terceiro tipo de dado — só a rota `/api/setup/oauth/<provedor>` (e, no caso do token flow, uma página `/setup/<provedor>` client-side) muda por provedor.
+  - Para qualquer OAuth "PKCE de servidor" novo (HubSpot, Google), copiar o par `openrouter/route.ts` + `openrouter/callback/route.ts` como esqueleto é mais rápido que copiar o de Trello (que é token flow, exige página cliente extra e só serve para provedores sem client secret confidencial).
+  - Escopos "sensíveis"/"restritos" do Google (Drive/Sheets amplos) disparam fila de verificação do Google (semanas); `drive.file` evita isso mas exige um picker de arquivo na primeira vez — importante lembrar disso ao implementar a história real de Google OAuth (ainda não numerada no PRD além desta investigação).
+---
