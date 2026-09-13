@@ -22,6 +22,13 @@ export function modelName(): string {
   return getConfig("OPENROUTER_MODEL") || DEFAULT_MODEL;
 }
 
+// Informações de proveniência exibidas pelo componente Origem (components/ui.tsx).
+export type Meta = { demo: boolean; model: string; geradoEm: string; insumo: string };
+
+export function meta({ demo, insumo }: { demo: boolean; insumo: string }): Meta {
+  return { demo, model: modelName(), geradoEm: new Date().toISOString(), insumo };
+}
+
 type Message = { role: "system" | "user" | "assistant"; content: string };
 
 export async function askText({ system, prompt, maxTokens = 4000, temperature = 0.4 }: { system: string; prompt: string; maxTokens?: number; temperature?: number }): Promise<string> {

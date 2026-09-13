@@ -36,3 +36,8 @@ export type Insights = {
   destaques: Destaque[];
   perguntas_sugeridas: string[];
 };
+
+/** Entrada salva no histórico (lib/historico.ts): só o nome do arquivo, nunca os lançamentos. */
+export type EntradaInsights = { nomeArquivo: string };
+/** Saída salva no histórico: o resumo agregado e a leitura da IA (a amostra de lançamentos não é persistida). */
+export type SaidaInsights = { resumo: Resumo; insights: Insights };
