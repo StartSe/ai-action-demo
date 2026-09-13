@@ -55,7 +55,7 @@ function paraComentario(r: { dados: DadosPesquisa }): Comentario {
   const partes = [r.dados.comentario?.trim()].filter(Boolean) as string[];
   if (r.dados.segmento?.trim()) partes.push(`Segmento: ${r.dados.segmento.trim()}`);
   if (r.dados.produto?.trim()) partes.push(`Produto: ${r.dados.produto.trim()}`);
-  return { texto: partes.join(" — ") || "(sem comentário, só a nota)", nota: Number(r.dados.nota) };
+  return { texto: partes.join(" — ") || "(sem comentário, só a nota)", nota: Number(r.dados.nota), origem: "pesquisa" };
 }
 
 /** Respostas de todas as pesquisas numa janela de dias atrás (início inclusivo, fim exclusivo): ex. (7, 0) = últimos

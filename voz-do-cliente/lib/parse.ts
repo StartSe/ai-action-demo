@@ -78,7 +78,7 @@ export function adivinharColunaNota(headers: string[]): number {
 export function comentariosDoArquivo(dados: ArquivoDados | null, idxTexto: number, idxNota: number): Comentario[] {
   if (!dados) return [];
   if (dados.tipo === "txt") {
-    return dados.linhas.map((texto) => ({ texto }));
+    return dados.linhas.map((texto) => ({ texto, origem: "arquivo" }));
   }
   return dados.rows
     .map((row) => {
@@ -89,7 +89,7 @@ export function comentariosDoArquivo(dados: ArquivoDados | null, idxTexto: numbe
         const n = parseFloat(String(row[idxNota] || "").replace(",", "."));
         if (Number.isFinite(n) && n >= 0 && n <= 10) nota = n;
       }
-      return { texto, nota } as Comentario;
+      return { texto, nota, origem: "arquivo" } as Comentario;
     })
     .filter((c): c is Comentario => c !== null);
 }

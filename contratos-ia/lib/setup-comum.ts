@@ -181,11 +181,11 @@ export const MCP_TAREFAS: Integracao = {
   },
 };
 
-/** CRM externo (como o HubSpot, que expõe um servidor MCP dentro da própria conta) que recebe os leads e negócios gerados aqui. */
+/** CRM ou sistema de atendimento externo (como HubSpot, Zendesk ou Intercom, que expõem um servidor MCP dentro da própria conta) que recebe os leads e negócios gerados aqui, ou de onde importamos tickets de atendimento. */
 export const MCP_CRM: Integracao = {
   id: "mcp-crm",
   titulo: "CRM (MCP)",
-  descricao: "Conecte o CRM onde o seu time trabalha (o HubSpot, por exemplo, expõe um servidor MCP nas configurações de integrações da conta) para mandar contatos e negócios direto daqui.",
+  descricao: "Conecte o CRM ou sistema de atendimento onde o seu time trabalha (HubSpot, Zendesk e Intercom, por exemplo, expõem um servidor MCP nas configurações de integrações da conta) para mandar contatos e negócios ou importar tickets direto daqui.",
   obrigatoria: false,
   campos: [
     {
@@ -193,7 +193,7 @@ export const MCP_CRM: Integracao = {
       rotulo: "Endereço do CRM",
       tipo: "text",
       placeholder: "https://seu-crm.exemplo.com/mcp",
-      ajuda: "No HubSpot, fica em Configurações › Integrações › Conectar aplicativos privados/MCP. Copie o endereço mostrado lá.",
+      ajuda: "No HubSpot, no Zendesk ou no Intercom, fica em Configurações › Integrações › Conectar aplicativos privados/MCP. Copie o endereço mostrado lá.",
     },
     {
       chave: "MCP_CRM_CODIGO",

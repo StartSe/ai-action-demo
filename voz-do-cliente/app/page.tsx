@@ -83,6 +83,9 @@ export default function Page() {
   const [criandoPesquisa, setCriandoPesquisa] = useState(false);
   const [pesquisas, setPesquisas] = useState<PesquisaAtiva[] | null>(null);
   const [periodoPesquisa, setPeriodoPesquisa] = useState("30");
+  const [crmConfigurado, setCrmConfigurado] = useState<boolean | undefined>(undefined);
+  const [periodoTickets, setPeriodoTickets] = useState("30");
+  const [importandoTickets, setImportandoTickets] = useState(false);
   const autoEnviado = useRef(false);
 
   useScrollToResult(estado.fase === "pronto");
@@ -96,6 +99,16 @@ export default function Page() {
   }
 
   useEffect(() => { carregarHistorico(); carregarPesquisas(); }, []);
+
+  useEffect(() => {
+    fetch("/api/setup")
+      .then((r) => r.json())
+      .then((d) => {
+        const integracao = (d.integracoes || []).find((i: { id: string }) => i.id === "mcp-crm");
+        setCrmConfigurado(Boolean(integracao?.configurada));
+      })
+      .catch(() => setCrmConfigurado(false));
+  }, []);
 
   async function criarPesquisa() {
     setCriandoPesquisa(true);
@@ -139,6 +152,37 @@ export default function Page() {
       carregarHistorico();
     } catch (e) {
       setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." });
+    }
+  }
+
+  async function importarTicketsClick() {
+    setImportandoTickets(true);
+    setEstado({ fase: "carregando" });
+    try {
+      const r = await fetch("/api/tickets/importar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ diasAtras: Number(periodoTickets) }),
+      });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Falha ao importar os tickets.");
+      setEstado({
+        fase: "pronto",
+        contexto: resposta.contexto,
+        saida: {
+          analise: resposta.analise,
+          totalEnviado: resposta.total_enviado,
+          totalAnalisado: resposta.total_analisado,
+          truncado: resposta.truncado,
+        },
+        meta: resposta.meta,
+        id: resposta.id,
+      });
+      carregarHistorico();
+    } catch (e) {
+      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." });
+    } finally {
+      setImportandoTickets(false);
     }
   }
 
@@ -346,6 +390,26 @@ export default function Page() {
             <button type="button" className="btn-ghost !w-auto" disabled={carregando} onClick={analisarRespostasPesquisa}>Analisar respostas recebidas</button>
           </MaisDetalhes>
 
+          <MaisDetalhes titulo="Tickets de atendimento (CRM)">
+            <p className="text-muted text-[13px] mb-3">Importe os tickets do seu CRM ou sistema de suporte (HubSpot, Zendesk, Intercom...) para incluir quem reclamou na análise.</p>
+            {crmConfigurado ? (
+              <>
+                <Field label="Importar tickets de" htmlFor="periodoTickets">
+                  <select id="periodoTickets" className="input" value={periodoTickets} onChange={(e) => setPeriodoTickets(e.target.value)}>
+                    <option value="7">Últimos 7 dias</option>
+                    <option value="30">Últimos 30 dias</option>
+                    <option value="90">Últimos 90 dias</option>
+                  </select>
+                </Field>
+                <button type="button" className="btn-ghost !w-auto" disabled={carregando || importandoTickets} onClick={importarTicketsClick}>
+                  {importandoTickets ? "Importando..." : "Importar tickets do período"}
+                </button>
+              </>
+            ) : (
+              <a href="/setup#mcp-crm" className="btn-ghost !w-auto">Conectar um CRM em 1 minuto</a>
+            )}
+          </MaisDetalhes>
+
           <MaisDetalhes titulo="Últimos resultados">
             {historico === null ? (
               <p className="text-muted text-sm">Carregando...</p>
@@ -500,6 +564,8 @@ export function Resultado({ saida, contexto, meta, id }: { saida: SaidaAnalise; 
   );
 }
 
+const ROTULO_ORIGEM: Record<string, string> = { pesquisa: "Pesquisa", arquivo: "Arquivo", ticket: "Ticket" };
+
 /** Nome do tema como gatilho de <details>: clicar revela os comentários reais por trás da contagem. */
 function TemaComComentarios({ tema }: { tema: Tema }) {
   return (
@@ -507,8 +573,13 @@ function TemaComComentarios({ tema }: { tema: Tema }) {
       <summary className="font-bold cursor-pointer marker:content-none underline decoration-dotted decoration-muted underline-offset-4 hover:text-accent-ink">
         {tema.tema}
       </summary>
-      <ul className="mt-1.5 flex flex-col gap-1 text-[13px] text-muted font-normal">
-        {tema.exemplos.map((e, i) => <li key={i}>&ldquo;{e}&rdquo;</li>)}
+      <ul className="mt-1.5 flex flex-col gap-1.5 text-[13px] text-muted font-normal">
+        {tema.exemplos.map((e, i) => (
+          <li key={i} className="flex items-start gap-1.5 flex-wrap">
+            <span>&ldquo;{e.texto}&rdquo;</span>
+            {e.origem && <Chip nivel="cinza">{ROTULO_ORIGEM[e.origem]}</Chip>}
+          </li>
+        ))}
       </ul>
     </details>
   );
@@ -619,7 +690,7 @@ function exportarCSV(temas: Tema[]) {
   const cabecalho = ["Tema", "Menções", "Sentimento", "Exemplo", "Ação sugerida"];
   const linhas = [cabecalho.join(";")];
   temas.forEach((t) => {
-    const campos = [t.tema, String(t.mencoes), t.sentimento_dominante, t.exemplos.join(" | "), t.acao_sugerida];
+    const campos = [t.tema, String(t.mencoes), t.sentimento_dominante, t.exemplos.map((e) => e.texto).join(" | "), t.acao_sugerida];
     linhas.push(campos.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"));
   });
   const csv = "﻿" + linhas.join("\r\n");

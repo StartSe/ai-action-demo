@@ -1,7 +1,7 @@
 // Respostas de exemplo usadas quando não há chave de IA configurada.
 // As contagens são derivadas do número real de comentários enviados,
 // para que a demonstração pareça coerente mesmo sem chamar a IA.
-import type { Analise, Comentario } from "./types";
+import type { AnaliseBruta, Comentario } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
@@ -56,7 +56,7 @@ export const COMENTARIOS_EXEMPLO: Comentario[] = [
   { texto: "Adoro a transparência do extrato detalhado, dá para entender cada cobrança.", nota: 9 },
 ];
 
-export function analiseDemo({ comentarios = [], contexto = "" }: { comentarios?: Comentario[]; contexto?: string } = {}): Omit<Analise, "nps"> {
+export function analiseDemo({ comentarios = [], contexto = "" }: { comentarios?: Comentario[]; contexto?: string } = {}): AnaliseBruta {
   const total = Math.max(comentarios.length, 1);
   const tema = (contexto || "o produto").trim() || "o produto";
 

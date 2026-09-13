@@ -1,11 +1,36 @@
 // Análise de comentários (IA real ou fallback de demonstração), reaproveitada por app/api/analisar/route.ts e lib/ferramentas.ts (MCP).
 import { aiEnabled, askJSON } from "./ai";
 import { analiseDemo, esperar } from "./demo";
-import type { Analise, Comentario, ContagemSentimento, Nps, Sentimento } from "./types";
+import type { Analise, AnaliseBruta, Comentario, ContagemSentimento, Nps, Sentimento, Tema, TemaBruto } from "./types";
 
 const LIMITE_COMENTARIOS = 500;
 const TAMANHO_LOTE = 60; // acima de 120 comentários, classificamos em lotes desse tamanho
 const LIMITE_LOTES_EM_PARALELO = 3;
+
+/** Encontra, entre os comentários enviados, aquele de onde uma citação (exemplo) provavelmente veio, comparando o texto (não é feito pela IA, que só cita o trecho). */
+function origemDoExemplo(exemplo: string, comentarios: Comentario[]): Comentario["origem"] {
+  const alvo = exemplo.trim().toLowerCase();
+  if (!alvo) return undefined;
+  const achado = comentarios.find((c) => {
+    const texto = c.texto.trim().toLowerCase();
+    return !!texto && (texto.includes(alvo) || alvo.includes(texto));
+  });
+  return achado?.origem;
+}
+
+/** Quando todos os comentários enviados vêm da mesma origem (o caso comum: uma análise só junta pesquisa, ou só arquivo, ou só tickets importados), usada como resposta de todos os exemplos que o casamento por texto não encontrar — inclusive no modo demonstração, cujas citações são fixas e nunca batem literalmente com o texto enviado. */
+function origemComum(comentarios: Comentario[]): Comentario["origem"] {
+  const origens = new Set(comentarios.map((c) => c.origem).filter((o): o is NonNullable<typeof o> => !!o));
+  return origens.size === 1 ? [...origens][0] : undefined;
+}
+
+function comOrigem(temas: TemaBruto[], comentarios: Comentario[]): Tema[] {
+  const fallback = origemComum(comentarios);
+  return temas.map((t) => ({
+    ...t,
+    exemplos: (t.exemplos || []).map((texto) => ({ texto, origem: origemDoExemplo(texto, comentarios) ?? fallback })),
+  }));
+}
 
 // --- NPS: sempre calculado no servidor a partir das notas, nunca pela IA. ---
 function calcularNps(comentarios: Comentario[]): Nps | null {
@@ -69,7 +94,7 @@ function formatarComentarios(lista: Comentario[]) {
 
 async function analiseUnica(lista: Comentario[], contexto: string) {
   const prompt = `Contexto: os comentários são sobre "${contexto || "o produto/serviço"}".\nTotal de comentários: ${lista.length}.\n\nComentários:\n${formatarComentarios(lista)}`;
-  return askJSON<Omit<Analise, "nps">>({ system: SYSTEM_ANALISE, prompt, maxTokens: 8000 });
+  return askJSON<AnaliseBruta>({ system: SYSTEM_ANALISE, prompt, maxTokens: 8000 });
 }
 
 // --- Classificação em lotes para volumes grandes (> 120 comentários) ---
@@ -156,7 +181,7 @@ Formato de saída (JSON), sem os campos "sentimento" e "nps" (são calculados fo
   "acoes_prioritarias": [{"acao": "", "impacto": "alto|médio|baixo", "esforco": "alto|médio|baixo", "justificativa": ""}]
 }`;
 
-async function analiseEmLotes(lista: Comentario[], contexto: string): Promise<Omit<Analise, "nps">> {
+async function analiseEmLotes(lista: Comentario[], contexto: string): Promise<AnaliseBruta> {
   const { sentimentoTotais, gruposOrdenados } = await classificarEmLotes(lista, contexto);
 
   const resumoGrupos = gruposOrdenados
@@ -170,7 +195,7 @@ async function analiseEmLotes(lista: Comentario[], contexto: string): Promise<Om
 
   const prompt = `Contexto: os comentários são sobre "${contexto || "o produto/serviço"}".\nTotal de comentários analisados: ${lista.length}.\nDistribuição de sentimento já calculada: ${sentimentoTotais.positivo} positivos, ${sentimentoTotais.neutro} neutros, ${sentimentoTotais.negativo} negativos.\n\nTemas brutos agregados:\n${resumoGrupos}`;
 
-  const consolidado = await askJSON<Omit<Analise, "nps" | "sentimento">>({ system: SYSTEM_CONSOLIDACAO, prompt, maxTokens: 8000 });
+  const consolidado = await askJSON<Omit<AnaliseBruta, "sentimento">>({ system: SYSTEM_CONSOLIDACAO, prompt, maxTokens: 8000 });
   return { ...consolidado, sentimento: sentimentoTotais };
 }
 
@@ -184,7 +209,7 @@ export async function analisarComentarios({ comentarios, contexto }: { comentari
   const { lista, truncado, totalEnviado, totalAnalisado } = limitarComentarios(comentarios);
   const demo = !aiEnabled();
 
-  let resultado: Omit<Analise, "nps">;
+  let resultado: AnaliseBruta;
   if (demo) {
     await esperar(1200);
     resultado = analiseDemo({ comentarios: lista, contexto });
@@ -194,11 +219,12 @@ export async function analisarComentarios({ comentarios, contexto }: { comentari
     resultado = await analiseUnica(lista, contexto);
   }
 
+  const temasBrutos = Array.isArray(resultado.temas) ? resultado.temas.slice(0, 8) : [];
   const analise: Analise = {
     resumo_executivo: String(resultado.resumo_executivo || ""),
     sentimento: corrigirSentimento(resultado.sentimento, totalAnalisado),
     nps: calcularNps(lista),
-    temas: Array.isArray(resultado.temas) ? resultado.temas.slice(0, 8) : [],
+    temas: comOrigem(temasBrutos, lista),
     elogios_frequentes: Array.isArray(resultado.elogios_frequentes) ? resultado.elogios_frequentes : [],
     reclamacoes_frequentes: Array.isArray(resultado.reclamacoes_frequentes) ? resultado.reclamacoes_frequentes : [],
     citacoes_marcantes: Array.isArray(resultado.citacoes_marcantes) ? resultado.citacoes_marcantes.slice(0, 4) : [],
