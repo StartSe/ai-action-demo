@@ -25,7 +25,6 @@ import {
   useStatus,
 } from "@/components/ui";
 import { Celular, type BolhaChat } from "@/components/Celular";
-import { ConectarWhatsApp } from "@/components/ConectarWhatsApp";
 import type { Meta } from "@/lib/ai";
 import type { Config, Conversa } from "@/lib/types";
 
@@ -55,6 +54,7 @@ type EstadoConversas = { fase: "carregando" } | { fase: "erro"; mensagem: string
 export default function Page() {
   const { status, erro } = useStatus();
   const [config, setConfig] = useState<Config>(CONFIG_VAZIA);
+  const [configSalva, setConfigSalva] = useState<Config>(CONFIG_VAZIA);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
   const [erroConfig, setErroConfig] = useState<string | null>(null);
@@ -65,9 +65,14 @@ export default function Page() {
 
   const [estadoConversas, setEstadoConversas] = useState<EstadoConversas>({ fase: "carregando" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
-  const [webhookUrl, setWebhookUrl] = useState("");
-  const [verifyToken, setVerifyToken] = useState("");
   const autoEnviado = useRef(false);
+  const configAlterada = JSON.stringify(config) !== JSON.stringify(configSalva);
+  // Espelha o rascunho mais recente para o simulador, sem tornar `enviarSimulada` reativo a `config`
+  // (o que forçaria listá-la como dependência do efeito de auto-envio de ?exemplo=1).
+  const configRef = useRef(config);
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
 
   useScrollToResult(mensagens.length > 0);
 
@@ -79,14 +84,10 @@ export default function Page() {
   }
 
   useEffect(() => {
-    fetch("/api/config").then((r) => r.json()).then(setConfig).catch(() => {});
+    fetch("/api/config").then((r) => r.json()).then((c) => { setConfig(c); setConfigSalva(c); }).catch(() => {});
     // Com ?exemplo=1, o envio automático abaixo já traz a lista de conversas atualizada;
     // carregar aqui também correria com aquela resposta e poderia sobrescrevê-la.
     if (new URLSearchParams(location.search).get("exemplo") !== "1") carregarConversas();
-    fetch("/api/whatsapp/webhook-info")
-      .then((r) => r.json())
-      .then((d) => { setWebhookUrl(d.url || ""); setVerifyToken(d.verifyToken || ""); })
-      .catch(() => {});
     fetch("/api/simular").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
   }, []);
 
@@ -114,6 +115,7 @@ export default function Page() {
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "Não foi possível salvar a configuração.");
       setConfig(data);
+      setConfigSalva(data);
       setSalvo(true);
       setTimeout(() => setSalvo(false), 1500);
     } catch (err) {
@@ -132,7 +134,7 @@ export default function Page() {
       const r = await fetch("/api/simular", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ de: "simulador", texto }),
+        body: JSON.stringify({ de: "simulador", texto, config: configRef.current }),
       });
       const resposta = await r.json();
       if (!r.ok) throw new Error(resposta.error || "Falha ao responder.");
@@ -187,7 +189,7 @@ export default function Page() {
           titulo="Um atendente que já conhece o seu negócio."
           lead="Clientes perguntam a mesma coisa no WhatsApp fora do horário. Configure abaixo o que a IA pode responder, teste ao lado e conecte ao número de verdade quando fizer sentido."
         >
-          <form onSubmit={salvarConfig}>
+          <form id="form-config" onSubmit={salvarConfig}>
             <Row>
               <Field label="Nome do negócio" htmlFor="negocio">
                 <input id="negocio" className="input" required placeholder="Sorriso Pleno Odontologia" value={config.negocio} onChange={(e) => setCampo("negocio", e.target.value)} />
@@ -230,9 +232,6 @@ export default function Page() {
                 <strong>Não deu certo.</strong> {erroConfig}
               </div>
             )}
-            <button type="submit" className="btn-primary" disabled={salvando}>
-              {salvando ? "Salvando" : salvo ? "Configuração salva" : "Salvar configuração"}
-            </button>
           </form>
           <Privacidade detalhe="As conversas ficam salvas neste app até você apagar em 'Últimos resultados'." />
 
@@ -255,6 +254,15 @@ export default function Page() {
               </>
             )}
           </MaisDetalhes>
+
+          {(configAlterada || salvo) && (
+            <div className="sticky bottom-0 -mx-7 max-md:-mx-[22px] -mb-7 max-md:-mb-[22px] mt-6 px-7 max-md:px-[22px] py-4 bg-surface border-t border-line rounded-b-card flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-accent-ink">{configAlterada ? "Alterações não salvas" : "Configuração salva"}</span>
+              <button type="submit" form="form-config" className="btn-primary w-auto" disabled={salvando}>
+                {salvando ? "Salvando" : "Salvar"}
+              </button>
+            </div>
+          )}
         </Panel>
 
         <Stage>
@@ -291,9 +299,8 @@ export default function Page() {
           {conectado ? (
             <div className="flex items-center gap-2.5 px-4 py-3.5 bg-accent-soft text-accent-ink rounded-[10px] font-semibold mt-8">Conectado ao número configurado.</div>
           ) : (
-            <div className="mt-8">
-              <h2 className="section-title">Conectar ao WhatsApp de verdade</h2>
-              <ConectarWhatsApp url={webhookUrl} verifyToken={verifyToken} />
+            <div className="mt-8 text-center">
+              <Link href="/setup#whatsapp" className="btn-link">Conectar meu número</Link>
             </div>
           )}
         </Stage>

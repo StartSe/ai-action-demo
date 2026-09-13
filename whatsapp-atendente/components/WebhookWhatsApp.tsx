@@ -12,9 +12,9 @@ export function WebhookWhatsApp() {
 
   return (
     <section className="card p-6 max-md:p-5">
-      <h2 className="text-lg font-bold mb-1">Webhook do WhatsApp</h2>
+      <h2 className="text-lg font-bold mb-1">Dados para a equipe técnica</h2>
       <p className="text-muted text-sm mb-4 max-w-[640px]">
-        Depois de conectar o número acima, cole estes dois valores na configuração de webhooks do painel da Meta, no campo <strong>messages</strong>.
+        Depois de conectar o número acima, cole estes dois valores na configuração de mensagens do painel da Meta, no campo <strong>messages</strong>.
       </p>
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3 flex-wrap">

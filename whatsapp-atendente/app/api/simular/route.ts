@@ -1,18 +1,22 @@
 import { aiEnabled, meta } from "@/lib/ai";
 import { listarConversas, responder } from "@/lib/atendente";
+import { getConfig } from "@/lib/estado";
 import { apagarTodos, listar, salvar } from "@/lib/historico";
+import type { Config } from "@/lib/types";
 
 // Simulador de conversa (celular na tela).
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => ({}))) as { de?: string; texto?: string };
-  const { de, texto } = body;
+  const body = (await req.json().catch(() => ({}))) as { de?: string; texto?: string; config?: Partial<Config> };
+  const { de, texto, config } = body;
   if (!texto || !String(texto).trim()) {
     return Response.json({ error: "Digite uma mensagem para simular." }, { status: 400 });
   }
   const numero = de && String(de).trim() ? String(de).trim() : "simulador";
   const textoLimpo = String(texto).trim();
+  // O simulador testa o rascunho que a pessoa está editando no painel, não só a configuração já salva.
+  const configRascunho: Config | undefined = config ? { ...getConfig(), ...config } : undefined;
   try {
-    const { resposta, transferir } = await responder({ numero, texto: textoLimpo, origem: "simulador" });
+    const { resposta, transferir } = await responder({ numero, texto: textoLimpo, origem: "simulador", config: configRascunho });
     const metaGerada = meta({ demo: !aiEnabled(), insumo: "mensagens do cliente e a base de conhecimento configurada" });
     const conversas = listarConversas();
     const id = salvar({

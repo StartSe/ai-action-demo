@@ -150,12 +150,15 @@ export async function responder({
   numero,
   texto,
   origem = "simulador",
+  config: configRascunho,
 }: {
   numero: string;
   texto: string;
   origem?: CanalOrigem;
+  /** Configuração ainda não salva (testada no simulador antes de clicar em "Salvar"); sem ela, usa a configuração salva. */
+  config?: Config;
 }): Promise<{ resposta: string; transferir: boolean }> {
-  const config = getConfig();
+  const config = configRascunho ?? getConfig();
   const conversa = obterConversa(numero, origem);
   conversa.origem = origem;
   conversa.mensagens.push({ papel: "cliente", texto });
