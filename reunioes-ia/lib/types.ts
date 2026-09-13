@@ -11,6 +11,12 @@ export interface Acao {
   concluida?: boolean;
   /** true depois de enviada com sucesso para um quadro de tarefas externo via MCP (US-064). */
   noQuadro?: boolean;
+  /** Token do formulário público de confirmação (US-065), gerado uma vez por ação e reaproveitado (ex.: US-076). */
+  tokenConfirmacao?: string;
+  /** Preenchido quando o responsável responde ao link de confirmação (US-065). */
+  confirmacao?: "confirmada" | "prazo_ajustado";
+  /** Comentário livre deixado pelo responsável ao confirmar (US-065). */
+  comentarioResponsavel?: string;
 }
 
 export interface EmailFollowup {

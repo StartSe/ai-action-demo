@@ -381,6 +381,8 @@ export function ConteudoAta({
   const [enviandoQuadro, setEnviandoQuadro] = useState(false);
   const [erroEnvio, setErroEnvio] = useState<string | null>(null);
   const [resultadosEnvio, setResultadosEnvio] = useState<Record<number, ResultadoEnvio> | null>(null);
+  const [gerandoConfirmacao, setGerandoConfirmacao] = useState(false);
+  const [erroConfirmacao, setErroConfirmacao] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -411,6 +413,22 @@ export function ConteudoAta({
       setErroEnvio(e instanceof Error ? e.message : "Erro inesperado.");
     } finally {
       setEnviandoQuadro(false);
+    }
+  }
+
+  async function pedirConfirmacao() {
+    if (!id) return;
+    setGerandoConfirmacao(true);
+    setErroConfirmacao(null);
+    try {
+      const r = await fetch(`/api/ata/${id}/confirmacoes`, { method: "POST" });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Falha ao gerar os links de confirmação.");
+      setAcoes(resposta.ata.acoes || []);
+    } catch (e) {
+      setErroConfirmacao(e instanceof Error ? e.message : "Erro inesperado.");
+    } finally {
+      setGerandoConfirmacao(false);
     }
   }
 
@@ -460,6 +478,8 @@ export function ConteudoAta({
         <div className="flex flex-wrap items-center gap-1.5">
           <strong className={l.concluida ? "line-through text-muted" : undefined}>{l.acao}</strong>
           {l.noQuadro && <Chip nivel="positivo">No quadro</Chip>}
+          {l.confirmacao === "confirmada" && <Chip nivel="positivo">Confirmada</Chip>}
+          {l.confirmacao === "prazo_ajustado" && <Chip nivel="media">Prazo ajustado</Chip>}
         </div>
       ),
     },
@@ -483,6 +503,14 @@ export function ConteudoAta({
         ),
     },
   );
+  if (acoes.some((a) => a.comentarioResponsavel)) {
+    colunasAcoes.push({
+      chave: "comentario",
+      titulo: "Comentário do responsável",
+      papel: "detalhe",
+      render: (l) => l.comentarioResponsavel || <span className="text-muted text-[12.5px]">Sem comentário</span>,
+    });
+  }
 
   return (
     <>
@@ -509,6 +537,7 @@ export function ConteudoAta({
         <DataTable colunas={colunasAcoes} linhas={acoes} />
         {!acoes.length && <p className="text-muted text-sm mt-2">Nenhuma ação identificada.</p>}
         {!!acoes.length && id && (
+          <>
           <div className="mt-3.5 flex flex-col gap-2.5">
             {mcpConfigurado === false && (
               <a href="/setup#mcp-tarefas" className="btn-ghost self-start">Enviar ações para o quadro</a>
@@ -559,6 +588,39 @@ export function ConteudoAta({
               </ul>
             )}
           </div>
+          <div className="mt-3.5 flex flex-col gap-2.5">
+            <button
+              type="button"
+              className="btn-ghost self-start"
+              onClick={pedirConfirmacao}
+              disabled={gerandoConfirmacao || acoes.every((a) => a.tokenConfirmacao)}
+            >
+              {gerandoConfirmacao
+                ? "Gerando links..."
+                : acoes.every((a) => a.tokenConfirmacao)
+                  ? "Links de confirmação já gerados"
+                  : "Pedir confirmação aos responsáveis"}
+            </button>
+            {erroConfirmacao && <p className="text-danger text-sm">{erroConfirmacao}</p>}
+            {acoes.some((a) => a.tokenConfirmacao) && (
+              <ul className="text-sm flex flex-col gap-1.5">
+                {acoes.map(
+                  (a, i) =>
+                    a.tokenConfirmacao && (
+                      <li key={i} className="flex flex-wrap items-center gap-2">
+                        <span className="text-muted">
+                          {a.acao} — {a.responsavel || "sem responsável"}
+                          {a.confirmacao === "confirmada" && <> · <Chip nivel="positivo">Confirmada</Chip></>}
+                          {a.confirmacao === "prazo_ajustado" && <> · <Chip nivel="media">Prazo ajustado</Chip></>}
+                        </span>
+                        <CopyButton texto={() => `${location.origin}/f/${a.tokenConfirmacao}`} rotulo="Copiar link" />
+                      </li>
+                    )
+                )}
+              </ul>
+            )}
+          </div>
+          </>
         )}
       </Section>
 
