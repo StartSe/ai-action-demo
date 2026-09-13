@@ -51,11 +51,22 @@ export function SetupPage({ marca, nome, area }: { marca: string; nome: string; 
 
         <div className="mt-8 flex gap-3 flex-wrap items-center">
           <Link href="/" className="btn-primary !w-auto">Ir para o app</Link>
-          <span className="text-muted text-sm">Variáveis de ambiente, quando existirem, têm prioridade sobre o que é salvo aqui.</span>
         </div>
 
         <MaisDetalhes titulo="Para a equipe técnica">
+          <p className="text-muted text-[13px]">Variáveis de ambiente, quando existirem, têm prioridade sobre o que é salvo aqui.</p>
           <p className="text-muted text-[13px]">Neste plano de hospedagem, o histórico pode se perder ao reiniciar.</p>
+          {dados && (
+            <ul className="mt-2 flex flex-col gap-1 text-[13px] text-muted">
+              {dados.integracoes.flatMap((i) =>
+                i.campos.filter((c) => c.definido).map((c) => (
+                  <li key={c.chave}>
+                    <code>{c.chave}</code>: {c.origem === "env" ? "variável de ambiente (tem prioridade sobre o valor salvo aqui)" : "salvo neste app"}
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
         </MaisDetalhes>
       </main>
     </>
@@ -116,6 +127,7 @@ function CartaoIntegracao({ integracao: i, aoSalvar }: { integracao: IntegracaoS
   const acoesSalvar = (
     <div className="flex items-center gap-3 flex-wrap mt-4">
       <button type="button" className="btn-primary !w-auto" onClick={salvar} disabled={!alterado || salvando}>{salvando ? "Salvando" : "Salvar"}</button>
+      {!alterado && <span className="text-muted text-sm">Preencha ao menos um campo para salvar</span>}
       {i.link && <a className="btn-link text-sm" href={i.link.url} target="_blank" rel="noreferrer">{i.link.rotulo}</a>}
     </div>
   );
@@ -156,6 +168,7 @@ function CartaoIntegracao({ integracao: i, aoSalvar }: { integracao: IntegracaoS
           {campos}
           <div className="flex items-center gap-3 flex-wrap mt-4">
             <button type="button" className="btn-primary !w-auto" onClick={salvar} disabled={!alterado || salvando}>{salvando ? "Salvando" : "Salvar"}</button>
+            {!alterado && <span className="text-muted text-sm">Preencha ao menos um campo para salvar</span>}
             {i.configurada && <button type="button" className="btn-ghost" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>}
             {i.link && <a className="btn-link text-sm" href={i.link.url} target="_blank" rel="noreferrer">{i.link.rotulo}</a>}
           </div>
@@ -178,7 +191,6 @@ function passosSetup(i: IntegracaoStatus): string[] {
 function CampoSetup({ campo: c, valor, aoMudar }: { campo: CampoStatus; valor: string; aoMudar: (v: string) => void }) {
   const id = `campo-${c.chave}`;
   const rotulo = `${c.rotulo}${c.opcional ? " (opcional)" : ""}`;
-  const origem = c.origem === "env" ? "Definido por variável de ambiente; o valor salvo aqui não será usado." : null;
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={id} className="text-[13px] font-semibold">{rotulo}</label>
@@ -191,7 +203,7 @@ function CampoSetup({ campo: c, valor, aoMudar }: { campo: CampoStatus; valor: s
         <input id={id} className="input" type={c.tipo === "secret" ? "password" : "text"} autoComplete="off" value={valor} onChange={(e) => aoMudar(e.target.value)}
           placeholder={c.tipo === "secret" && c.mascarado ? `salvo: ${c.mascarado}` : c.tipo === "text" && c.valorVisivel ? c.valorVisivel : c.placeholder || ""} />
       )}
-      {(origem || c.ajuda) && <span className="text-[12.5px] text-muted">{origem || c.ajuda}</span>}
+      {c.ajuda && <span className="text-[12.5px] text-muted">{c.ajuda}</span>}
     </div>
   );
 }
