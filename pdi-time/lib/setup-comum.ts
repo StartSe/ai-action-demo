@@ -2,6 +2,7 @@
 // A lista de integrações de cada app fica em lib/integracoes.ts.
 import { getConfig, mascarar, origemConfig } from "./store";
 import { enviar, type Canal } from "./notificacoes";
+import { conectar, listarFerramentas } from "./mcp-cliente";
 
 export type Opcao = { valor: string; rotulo: string };
 
@@ -139,5 +140,41 @@ export const NOTIFICACOES: Integracao = {
       titulo: "Mensagem de teste",
       texto: "Se você recebeu isto, as notificações deste app estão prontas para uso.",
     });
+  },
+};
+
+/** Quadro de tarefas externo (outro app da suíte, como o Agente de quadro, ou qualquer servidor MCP compatível) que recebe as ações geradas aqui como cartões. */
+export const MCP_TAREFAS: Integracao = {
+  id: "mcp-tarefas",
+  titulo: "Quadro de tarefas (MCP)",
+  descricao:
+    "Conecte um quadro de tarefas (como o Agente de quadro desta suíte) para transformar as ações desta conversa em cartões onde o seu time já trabalha.",
+  obrigatoria: false,
+  campos: [
+    {
+      chave: "MCP_TAREFAS_URL",
+      rotulo: "Endereço do quadro",
+      tipo: "text",
+      placeholder: "https://seu-quadro.exemplo.com/mcp",
+      ajuda: "Copie do cartão \"Usar dentro do seu assistente\", no setup do quadro de tarefas.",
+    },
+    {
+      chave: "MCP_TAREFAS_CODIGO",
+      rotulo: "Código de acesso",
+      tipo: "secret",
+      opcional: true,
+      ajuda: "Gerado no mesmo cartão do quadro de tarefas.",
+    },
+  ],
+  testar: async (config) => {
+    const url = config.MCP_TAREFAS_URL;
+    if (!url) return { ok: false, mensagem: "Informe o endereço do quadro antes de testar." };
+    try {
+      const ferramentas = await listarFerramentas(conectar(url, config.MCP_TAREFAS_CODIGO));
+      if (ferramentas.length === 0) return { ok: true, mensagem: "Conectado, mas o quadro não expõe nenhuma ação ainda." };
+      return { ok: true, mensagem: `Conectado. Ações disponíveis: ${ferramentas.map((f) => f.nome).join(", ")}.` };
+    } catch (err) {
+      return { ok: false, mensagem: err instanceof Error ? err.message : "Não foi possível conectar ao quadro." };
+    }
   },
 };

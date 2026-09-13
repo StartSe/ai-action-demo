@@ -21,6 +21,7 @@ ARQUIVOS=(
   "lib/setup-comum.ts"
   "lib/historico.ts"
   "lib/mcp.ts"
+  "lib/mcp-cliente.ts"
   "lib/formularios.ts"
   "lib/notificacoes.ts"
   "lib/rotinas.ts"

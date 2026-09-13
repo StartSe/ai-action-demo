@@ -986,7 +986,7 @@
         "Verify in browser using dev-browser skill: cartão em reunioes-ia com 'Testar conexão' apontando para o /mcp de agente-kanban local"
       ],
       "priority": 63,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

@@ -1,5 +1,5 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
-import { OPENROUTER, type Integracao } from "./setup-comum";
+import { OPENROUTER, MCP_TAREFAS, type Integracao } from "./setup-comum";
 
 export const TRANSCRICAO_ELEVENLABS: Integracao = {
   id: "elevenlabs",
@@ -38,4 +38,4 @@ export const TRANSCRICAO_OPENAI: Integracao = {
   },
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, TRANSCRICAO_ELEVENLABS, TRANSCRICAO_OPENAI];
+export const INTEGRACOES: Integracao[] = [OPENROUTER, TRANSCRICAO_ELEVENLABS, TRANSCRICAO_OPENAI, MCP_TAREFAS];
