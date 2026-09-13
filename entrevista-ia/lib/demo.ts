@@ -17,10 +17,13 @@ const MODELOS: ((item: string) => string)[] = [
   (item) => `Qual foi um desafio que você enfrentou envolvendo ${item} e como você resolveu?`,
   (item) => `Como você avalia o seu nível hoje em ${item}? Me dê um exemplo concreto que sustente isso.`,
   (item) => `Fale sobre um resultado do qual você se orgulha relacionado a ${item}.`,
+  (item) => `O que costuma ser mais difícil, na prática, quando o assunto é ${item}?`,
+  (item) => `Me dá um exemplo de como ${item} apareceu no seu dia a dia recentemente?`,
 ];
 
 // Roteiro fixo: uma pergunta de abertura, perguntas cicladas pelos requisitos informados
-// e um follow-up simples quando a última resposta do candidato foi muito curta.
+// (um requisito por vez, com um modelo diferente a cada volta pela lista, para não repetir a mesma
+// frase para requisitos diferentes) e um follow-up simples quando a última resposta foi muito curta.
 export function proximaPerguntaDemo({ vaga, historico, perguntasFeitas }: { vaga: Vaga; historico: Troca[]; perguntasFeitas: number }): string {
   if (perguntasFeitas === 0) {
     return `Para começar, me conta rapidamente sobre sua trajetória e o que te chamou atenção na vaga de ${vaga.titulo}.`;
@@ -31,7 +34,7 @@ export function proximaPerguntaDemo({ vaga, historico, perguntasFeitas }: { vaga
     return "Pode detalhar com um exemplo concreto? Uma situação real ajuda bastante a entender melhor.";
   }
   const itens = parseRequisitos(vaga.requisitos);
-  const item = itens.length ? itens[(perguntasFeitas - 1) % itens.length].toLowerCase() : "os requisitos da vaga";
+  const item = itens.length ? itens[(perguntasFeitas - 1) % itens.length] : "os requisitos da vaga";
   const modelo = MODELOS[(perguntasFeitas - 1) % MODELOS.length];
   return modelo(item);
 }
@@ -42,20 +45,47 @@ export function mensagemEncerramento({ vaga }: { vaga?: Vaga } = {}): string {
   return `${saudacao} Foi ótimo te conhecer melhor. Vou repassar essa conversa para o gestor da vaga, que entra em contato em breve com os próximos passos.`;
 }
 
-export function scorecardDemo({ vaga }: { vaga?: Vaga } = {}): Scorecard {
+/** Para cada pergunta da entrevistadora (numerada na ordem em que aparece), a resposta do candidato que a sucede. */
+function paresPerguntaResposta(historico: Troca[]): { pergunta: number; resposta: string }[] {
+  const pares: { pergunta: number; resposta: string }[] = [];
+  let n = 0;
+  historico.forEach((h, i) => {
+    if (h.papel !== "entrevistadora") return;
+    n++;
+    const resposta = historico.slice(i + 1).find((h2) => h2.papel === "candidato");
+    if (resposta) pares.push({ pergunta: n, resposta: resposta.texto });
+  });
+  return pares;
+}
+
+function trecho(texto: string, max = 130) {
+  const limpo = texto.trim();
+  return limpo.length > max ? `${limpo.slice(0, max).trim()}...` : limpo;
+}
+
+// Evidências distintas por critério: cada uma cita a resposta real do candidato à pergunta correspondente
+// (a primeira pergunta, de abertura, não conta — as seguintes seguem a ordem dos requisitos da vaga).
+export function scorecardDemo({ vaga, historico = [] }: { vaga?: Vaga; historico?: Troca[] } = {}): Scorecard {
   const nome = vaga?.candidato || "Candidato(a)";
   const titulo = vaga?.titulo || "a vaga";
   const itens = parseRequisitos(vaga?.requisitos);
   const base = itens.length >= 3 ? itens.slice(0, 4) : ["Comunicação", "Experiência técnica", "Adequação cultural", "Motivação"];
   const notas = [8, 7, 6.5, 8];
+  const paresPorRequisito = paresPerguntaResposta(historico).slice(1);
   return {
     nota_geral: 7.4,
     resumo: `${nome} demonstrou boa aderência aos requisitos de ${titulo}, com respostas objetivas e exemplos concretos na maior parte das perguntas. Recomenda-se uma conversa com o gestor para aprofundar dois pontos específicos antes de avançar.`,
-    criterios: base.map((c, i) => ({
-      criterio: c,
-      nota: notas[i % notas.length],
-      evidencia: `Trouxe um exemplo concreto relacionado a ${c.toLowerCase()} durante a conversa.`,
-    })),
+    criterios: base.map((c, i) => {
+      const par = paresPorRequisito[i];
+      return {
+        criterio: c,
+        nota: notas[i % notas.length],
+        evidencia: par
+          ? `Ao ser perguntado(a) sobre ${c}, respondeu: "${trecho(par.resposta)}"`
+          : `Não trouxe um exemplo direto sobre ${c} durante a conversa.`,
+        pergunta: par?.pergunta,
+      };
+    }),
     pontos_fortes: [
       "Comunicação clara e direta nas respostas.",
       "Exemplos concretos ligados aos requisitos da vaga.",

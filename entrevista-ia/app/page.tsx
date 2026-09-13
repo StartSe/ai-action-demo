@@ -63,7 +63,7 @@ type Estado =
   | { fase: "entrevista" }
   | { fase: "carregando" }
   | { fase: "erro"; mensagem: string }
-  | { fase: "pronto"; scorecard: Scorecard; meta: Meta; id?: string };
+  | { fase: "pronto"; scorecard: Scorecard; meta: Meta; historico: Troca[]; id?: string };
 
 export default function Page() {
   const { status, erro } = useStatus();
@@ -99,7 +99,7 @@ export default function Page() {
       });
       const resposta = await r.json();
       if (!r.ok) throw new Error(resposta.error || "Falha ao gerar o scorecard.");
-      setEstado({ fase: "pronto", scorecard: resposta.scorecard, meta: resposta.meta, id: resposta.id });
+      setEstado({ fase: "pronto", scorecard: resposta.scorecard, meta: resposta.meta, historico: historicoEntrevista, id: resposta.id });
       carregarHistorico();
     } catch (e) {
       setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." });
@@ -227,14 +227,40 @@ export default function Page() {
           )}
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
           {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} />}
-          {estado.fase === "pronto" && <Resultado vaga={vaga} scorecard={estado.scorecard} meta={estado.meta} id={estado.id} status={status} />}
+          {estado.fase === "pronto" && (
+            <Resultado
+              vaga={vaga}
+              scorecard={estado.scorecard}
+              meta={estado.meta}
+              historico={estado.historico}
+              id={estado.id}
+              status={status}
+              aoNovaEntrevista={() => setEstado({ fase: "vazio" })}
+            />
+          )}
         </Stage>
       </Workspace>
     </>
   );
 }
 
-export function Resultado({ vaga, scorecard, meta, id, status }: { vaga: Vaga; scorecard: Scorecard; meta: Meta; id?: string; status: Status | null }) {
+export function Resultado({
+  vaga,
+  scorecard,
+  meta,
+  historico,
+  id,
+  status,
+  aoNovaEntrevista,
+}: {
+  vaga: Vaga;
+  scorecard: Scorecard;
+  meta: Meta;
+  historico: Troca[];
+  id?: string;
+  status: Status | null;
+  aoNovaEntrevista?: () => void;
+}) {
   return (
     <article className="reveal">
       <ResultHead titulo={`Scorecard de ${vaga.candidato}`} subtitulo={vaga.titulo}>
@@ -242,13 +268,13 @@ export function Resultado({ vaga, scorecard, meta, id, status }: { vaga: Vaga; s
           id={id}
           titulo={`Scorecard de ${vaga.candidato}`}
           texto={() => scorecardParaTexto(scorecard, vaga)}
-          extras={[{ rotulo: "Nova entrevista", onClick: () => location.reload() }]}
+          extras={aoNovaEntrevista ? [{ rotulo: "Nova entrevista", onClick: aoNovaEntrevista }] : undefined}
         />
       </ResultHead>
 
       <Origem meta={meta} />
 
-      <ConteudoScorecard scorecard={scorecard} />
+      <ConteudoScorecard scorecard={scorecard} historico={historico} />
 
       <SecaoLigar vaga={vaga} habilitado={Boolean(status?.integrations?.ligacao)} />
     </article>
@@ -256,7 +282,7 @@ export function Resultado({ vaga, scorecard, meta, id, status }: { vaga: Vaga; s
 }
 
 /** Corpo do scorecard (sem cabeçalho, Origem nem a ligação para o candidato), reaproveitado pela página de impressão. */
-export function ConteudoScorecard({ scorecard }: { scorecard: Scorecard }) {
+export function ConteudoScorecard({ scorecard, historico }: { scorecard: Scorecard; historico: Troca[] }) {
   const recClasse = scorecard.recomendacao === "avançar" ? "baixa" : scorecard.recomendacao === "não avançar" ? "alta" : "media";
   const tomNota = scorecard.recomendacao === "avançar" ? "ok" : scorecard.recomendacao === "não avançar" ? "danger" : "warn";
   return (
@@ -269,21 +295,34 @@ export function ConteudoScorecard({ scorecard }: { scorecard: Scorecard }) {
         <DataTable
           colunas={[
             { chave: "criterio", titulo: "Critério", papel: "titulo", render: (c) => <strong>{c.criterio}</strong> },
-            { chave: "nota", titulo: "Nota", papel: "chip", largura: "70px", render: (c) => `${c.nota}/10` },
-            { chave: "evidencia", titulo: "Evidência", papel: "resumo", render: (c) => c.evidencia },
+            { chave: "nota", titulo: "Nota", papel: "chip", largura: "70px", render: (c) => `${numero(c.nota, 1)}/10` },
+            {
+              chave: "evidencia",
+              titulo: "Evidência",
+              papel: "resumo",
+              render: (c) => (c.pergunta ? <a href={`#pergunta-${c.pergunta}`} className="hover:underline">{c.evidencia}</a> : c.evidencia),
+            },
           ]}
           linhas={scorecard.criterios}
         />
       </Section>
 
       <Section titulo="Pontos fortes">
-        <div className="grid grid-cols-2 max-md:grid-cols-1 gap-3.5">
-          {scorecard.pontos_fortes.map((p, i) => (
-            <Item key={i}>
-              <p>{p}</p>
-            </Item>
-          ))}
-        </div>
+        {scorecard.pontos_fortes.length === 3 ? (
+          <ul className="list-disc pl-5 flex flex-col gap-1.5">
+            {scorecard.pontos_fortes.map((p, i) => (
+              <li key={i}>{p}</li>
+            ))}
+          </ul>
+        ) : (
+          <div className="grid grid-cols-2 max-md:grid-cols-1 gap-3.5">
+            {scorecard.pontos_fortes.map((p, i) => (
+              <Item key={i}>
+                <p>{p}</p>
+              </Item>
+            ))}
+          </div>
+        )}
       </Section>
 
       <Section titulo="Pontos de atenção">
@@ -305,6 +344,20 @@ export function ConteudoScorecard({ scorecard }: { scorecard: Scorecard }) {
           ))}
         </Item>
       </Section>
+
+      <details className="mt-2">
+        <summary className="text-[13px] font-bold text-accent-ink cursor-pointer marker:content-none mb-3">Ver a conversa completa</summary>
+        <div className="flex flex-col gap-2.5 card shadow-none p-4">
+          {historico.map((h, i) => {
+            const n = historico.slice(0, i + 1).filter((t) => t.papel === "entrevistadora").length;
+            return (
+              <p key={i} id={h.papel === "entrevistadora" ? `pergunta-${n}` : undefined} className="text-sm">
+                <strong>{h.papel === "entrevistadora" ? "Entrevistadora" : "Candidato"}:</strong> {h.texto}
+              </p>
+            );
+          })}
+        </div>
+      </details>
     </>
   );
 }
@@ -317,7 +370,7 @@ function SecaoLigar({ vaga, habilitado }: { vaga: Vaga; habilitado: boolean }) {
   if (!habilitado) {
     return (
       <p className="text-muted text-[12.5px] mb-8">
-        Ligação automática por telefone desligada. <a href="/setup" className="btn-link">Conectar a IA em 1 minuto</a> para habilitar.
+        Ligação automática por telefone desligada. <a href="/setup#elevenlabs-ligacao" className="btn-link">Ativar ligação automática</a>
       </p>
     );
   }
@@ -363,14 +416,14 @@ function scorecardParaTexto(sc: Scorecard, vaga: Vaga) {
   const linhas: string[] = [
     `Scorecard de ${vaga.candidato} (${vaga.titulo})`,
     "",
-    `Nota geral: ${sc.nota_geral}/10`,
+    `Nota geral: ${numero(sc.nota_geral, 1)}/10`,
     `Recomendação: ${sc.recomendacao}`,
     "",
     sc.resumo,
     "",
     "Critérios:",
   ];
-  sc.criterios.forEach((c) => linhas.push(`- ${c.criterio}: ${c.nota} — ${c.evidencia}`));
+  sc.criterios.forEach((c) => linhas.push(`- ${c.criterio}: ${numero(c.nota, 1)} — ${c.evidencia}`));
   linhas.push("", "Pontos fortes:");
   sc.pontos_fortes.forEach((p) => linhas.push(`- ${p}`));
   linhas.push("", "Pontos de atenção:");

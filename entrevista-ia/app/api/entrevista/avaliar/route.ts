@@ -9,13 +9,14 @@ Regras:
 - Seja honesta: se a conversa foi curta ou rasa, isso deve refletir em notas mais baixas e pontos de atenção.
 - "nota_geral" é um número de 0 a 10 (pode ter uma casa decimal).
 - "criterios" deve conter de 3 a 5 critérios derivados dos principais requisitos da vaga, cada um com nota de 0 a 10 e uma evidência curta extraída da conversa.
+- Cada critério também deve trazer "pergunta": o número da pergunta (conforme numerada na transcrição abaixo) cuja resposta sustenta a evidência. Se nenhuma pergunta específica sustentar bem o critério, omita "pergunta".
 - Máximo de 4 pontos fortes, 4 pontos de atenção e 4 próximos passos.
 - "recomendacao" deve ser exatamente um destes valores: "avançar", "avaliar com o gestor" ou "não avançar".
 Formato de saída (JSON):
 {
   "nota_geral": 0,
   "resumo": "2 a 3 frases sobre o desempenho geral do candidato na triagem",
-  "criterios": [{"criterio": "", "nota": 0, "evidencia": ""}],
+  "criterios": [{"criterio": "", "nota": 0, "evidencia": "", "pergunta": 0}],
   "pontos_fortes": [""],
   "pontos_atencao": [""],
   "recomendacao": "avançar|avaliar com o gestor|não avançar",
@@ -29,9 +30,13 @@ function normalizarHistorico(historico: unknown): Troca[] {
   );
 }
 
+/** Numera as perguntas da entrevistadora na ordem em que aparecem, para o modelo poder referenciá-las em "pergunta". */
 function formatarHistorico(historico: Troca[]): string {
   if (!historico.length) return "(nenhuma troca ainda)";
-  return historico.map((h) => `${h.papel === "entrevistadora" ? "Entrevistadora" : "Candidato"}: ${h.texto}`).join("\n");
+  let n = 0;
+  return historico
+    .map((h) => (h.papel === "entrevistadora" ? `Pergunta ${++n}: ${h.texto}` : `Candidato: ${h.texto}`))
+    .join("\n");
 }
 
 function construirPromptAvaliacao({ vaga, historico }: { vaga: Vaga; historico: Troca[] }) {
@@ -60,7 +65,7 @@ export async function POST(req: Request) {
     const insumo = "toda a conversa e os requisitos da vaga";
     if (!aiEnabled()) {
       await esperar(1200);
-      const scorecard = scorecardDemo({ vaga });
+      const scorecard = scorecardDemo({ vaga, historico: hist });
       const metaGerada = meta({ demo: true, insumo });
       const id = salvar({ tipo: "entrevista", titulo: `Scorecard de ${vaga.candidato}`, entrada: { vaga, historico: hist }, saida: scorecard, meta: metaGerada });
       return Response.json({ scorecard, meta: metaGerada, id });

@@ -19,6 +19,8 @@ export interface Criterio {
   criterio: string;
   nota: number;
   evidencia: string;
+  /** Número (1-based) da pergunta da entrevistadora, na ordem da conversa, que originou esta evidência. Ausente quando não há uma correspondência clara. */
+  pergunta?: number;
 }
 
 export interface Scorecard {

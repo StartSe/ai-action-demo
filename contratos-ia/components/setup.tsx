@@ -150,7 +150,7 @@ function CartaoIntegracao({ integracao: i, aoSalvar, destaque }: { integracao: I
   );
 
   return (
-    <section className={`card p-6 max-md:p-5 ${destaque ? "border-accent border-2" : ""}`}>
+    <section id={i.id} className={`card p-6 max-md:p-5 ${destaque ? "border-accent border-2" : ""}`}>
       <div className="flex justify-between gap-4 items-start mb-2 flex-wrap">
         <h2 className="text-lg font-bold">{i.titulo}</h2>
         <span className={i.configurada ? "chip-positivo" : i.obrigatoria ? "chip-media" : "chip-neutral"}>{i.configurada ? "conectado" : i.obrigatoria ? "pendente" : "opcional"}</span>

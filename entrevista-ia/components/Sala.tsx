@@ -51,6 +51,7 @@ export function Sala({
   const [historico, setHistorico] = useState<Troca[]>([]);
   const [resposta, setResposta] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [encerrando, setEncerrando] = useState(false);
   const [mudo, setMudo] = useState(false);
   const [falando, setFalando] = useState(false);
   const [ouvindo, setOuvindo] = useState(false);
@@ -62,6 +63,8 @@ export function Sala({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mudoRef = useRef(false);
   const iniciouRef = useRef(false);
+  const gestoRef = useRef(false);
+  const pendenteRef = useRef<string | null>(null);
 
   useEffect(() => {
     mudoRef.current = mudo;
@@ -79,8 +82,33 @@ export function Sala({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A voz só toca depois do primeiro gesto do usuário (clique ou tecla) dentro da sala,
+  // para respeitar a política de autoplay dos navegadores: a primeira pergunta fica pendente
+  // e é falada assim que o gesto acontece.
+  useEffect(() => {
+    function ativar() {
+      if (gestoRef.current) return;
+      gestoRef.current = true;
+      if (pendenteRef.current) {
+        falarTexto(pendenteRef.current);
+        pendenteRef.current = null;
+      }
+    }
+    window.addEventListener("pointerdown", ativar);
+    window.addEventListener("keydown", ativar);
+    return () => {
+      window.removeEventListener("pointerdown", ativar);
+      window.removeEventListener("keydown", ativar);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function falarTexto(texto: string) {
     if (mudoRef.current) return;
+    if (!gestoRef.current) {
+      pendenteRef.current = texto;
+      return;
+    }
     if (status?.integrations?.tts) {
       const audio = new Audio(`/api/tts?texto=${encodeURIComponent(texto)}`);
       audioRef.current = audio;
@@ -172,6 +200,12 @@ export function Sala({
     setMudo((m) => !m);
   }
 
+  async function onEncerrar() {
+    if (encerrando || !historico.some((h) => h.papel === "candidato")) return;
+    setEncerrando(true);
+    await finalizarEntrevista(historico);
+  }
+
   return (
     <div className="room reveal">
       <div className="room-head">
@@ -182,10 +216,19 @@ export function Sala({
           <h2>Entrevistadora IA</h2>
           <div className="who">
             Conversando com {vaga.candidato} · {vaga.titulo}
+            {falando && <span className="text-accent-ink font-semibold"> · Falando</span>}
           </div>
         </div>
         <button className="btn-ghost" type="button" onClick={alternarMudo}>
           {mudo ? "Ativar voz" : "Silenciar voz"}
+        </button>
+        <button
+          className="btn-ghost"
+          type="button"
+          onClick={onEncerrar}
+          disabled={encerrando || !historico.some((h) => h.papel === "candidato")}
+        >
+          Encerrar entrevista
         </button>
       </div>
 

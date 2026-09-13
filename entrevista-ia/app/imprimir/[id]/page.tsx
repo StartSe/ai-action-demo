@@ -24,7 +24,7 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
         <div className="text-muted text-sm">{data(new Date())}</div>
       </header>
 
-      <ConteudoScorecard scorecard={registro.saida} />
+      <ConteudoScorecard scorecard={registro.saida} historico={registro.entrada.historico} />
 
       <footer className="mt-8 pt-4 border-t border-line">
         <Origem meta={registro.meta} />
