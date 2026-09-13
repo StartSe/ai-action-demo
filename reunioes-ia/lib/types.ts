@@ -9,6 +9,8 @@ export interface Acao {
   /** Data completa no formato AAAA-MM-DD (nunca só dia da semana ou prazo vago), para exibir formatada e gerar o .ics de calendário. */
   prazo: string;
   concluida?: boolean;
+  /** true depois de enviada com sucesso para um quadro de tarefas externo via MCP (US-064). */
+  noQuadro?: boolean;
 }
 
 export interface EmailFollowup {

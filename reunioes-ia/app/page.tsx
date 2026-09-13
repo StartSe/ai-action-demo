@@ -61,6 +61,8 @@ function IlustracaoAta() {
   );
 }
 
+type ResultadoEnvio = { indice: number; acao: string; ok: boolean; mensagem: string; link?: string };
+
 const PRAZO_VALIDO = /^\d{4}-\d{2}-\d{2}$/;
 const PRAZO_PARTES = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -374,6 +376,43 @@ export function ConteudoAta({
 }) {
   const [transcricaoAberta, setTranscricaoAberta] = useState(false);
   const [acoes, setAcoes] = useState(ata.acoes || []);
+  const [mcpConfigurado, setMcpConfigurado] = useState<boolean | null>(null);
+  const [confirmandoEnvio, setConfirmandoEnvio] = useState(false);
+  const [enviandoQuadro, setEnviandoQuadro] = useState(false);
+  const [erroEnvio, setErroEnvio] = useState<string | null>(null);
+  const [resultadosEnvio, setResultadosEnvio] = useState<Record<number, ResultadoEnvio> | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+    fetch("/api/setup")
+      .then((r) => r.json())
+      .then((r: { integracoes?: { id: string; configurada: boolean }[] }) => {
+        setMcpConfigurado(Boolean(r.integracoes?.find((i) => i.id === "mcp-tarefas")?.configurada));
+      })
+      .catch(() => setMcpConfigurado(false));
+  }, [id]);
+
+  const acoesPendentes = acoes.filter((a) => !a.noQuadro);
+
+  async function enviarParaQuadro() {
+    if (!id) return;
+    setConfirmandoEnvio(false);
+    setEnviandoQuadro(true);
+    setErroEnvio(null);
+    try {
+      const r = await fetch(`/api/ata/${id}/quadro`, { method: "POST" });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Falha ao enviar para o quadro.");
+      setAcoes(resposta.ata.acoes || []);
+      const mapa: Record<number, ResultadoEnvio> = {};
+      for (const res of (resposta.resultados || []) as ResultadoEnvio[]) mapa[res.indice] = res;
+      setResultadosEnvio(mapa);
+    } catch (e) {
+      setErroEnvio(e instanceof Error ? e.message : "Erro inesperado.");
+    } finally {
+      setEnviandoQuadro(false);
+    }
+  }
 
   async function alternarConcluida(indice: number) {
     if (indice < 0) return;
@@ -412,7 +451,18 @@ export function ConteudoAta({
     });
   }
   colunasAcoes.push(
-    { chave: "acao", titulo: "Ação", papel: "titulo", largura: "34%", render: (l) => <strong className={l.concluida ? "line-through text-muted" : undefined}>{l.acao}</strong> },
+    {
+      chave: "acao",
+      titulo: "Ação",
+      papel: "titulo",
+      largura: "34%",
+      render: (l) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <strong className={l.concluida ? "line-through text-muted" : undefined}>{l.acao}</strong>
+          {l.noQuadro && <Chip nivel="positivo">No quadro</Chip>}
+        </div>
+      ),
+    },
     { chave: "responsavel", titulo: "Responsável", papel: "resumo", render: (l) => l.responsavel },
     {
       chave: "prazo",
@@ -458,6 +508,58 @@ export function ConteudoAta({
       <Section titulo="Ações">
         <DataTable colunas={colunasAcoes} linhas={acoes} />
         {!acoes.length && <p className="text-muted text-sm mt-2">Nenhuma ação identificada.</p>}
+        {!!acoes.length && id && (
+          <div className="mt-3.5 flex flex-col gap-2.5">
+            {mcpConfigurado === false && (
+              <a href="/setup#mcp-tarefas" className="btn-ghost self-start">Enviar ações para o quadro</a>
+            )}
+            {mcpConfigurado === true && !confirmandoEnvio && !enviandoQuadro && (
+              <button
+                type="button"
+                className="btn-ghost self-start"
+                onClick={() => setConfirmandoEnvio(true)}
+                disabled={!acoesPendentes.length}
+              >
+                {acoesPendentes.length ? "Enviar ações para o quadro" : "Todas as ações já estão no quadro"}
+              </button>
+            )}
+            {confirmandoEnvio && (
+              <div className="card shadow-none px-4 py-3.5 flex flex-col gap-2.5">
+                <p className="text-sm font-semibold">
+                  Enviar {acoesPendentes.length} {acoesPendentes.length === 1 ? "ação" : "ações"} para o quadro de tarefas?
+                </p>
+                <ul className="text-sm text-muted list-disc pl-5">
+                  {acoesPendentes.map((a, i) => (
+                    <li key={i}>
+                      {a.acao} — {a.responsavel || "sem responsável"} — {PRAZO_VALIDO.test(a.prazo) ? dataPrazo(a.prazo) : a.prazo}
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex gap-2.5">
+                  <button type="button" className="btn-primary" onClick={enviarParaQuadro}>Confirmar</button>
+                  <button type="button" className="btn-ghost" onClick={() => setConfirmandoEnvio(false)}>Cancelar</button>
+                </div>
+              </div>
+            )}
+            {enviandoQuadro && <p className="text-muted text-sm">Enviando para o quadro...</p>}
+            {erroEnvio && <p className="text-danger text-sm">{erroEnvio}</p>}
+            {resultadosEnvio && (
+              <ul className="text-sm flex flex-col gap-1">
+                {Object.values(resultadosEnvio).map((r) => (
+                  <li key={r.indice} className={r.ok ? "text-ok" : "text-danger"}>
+                    {r.mensagem}
+                    {r.link && (
+                      <>
+                        {" "}
+                        · <a className="btn-link" href={r.link} target="_blank" rel="noreferrer">Abrir</a>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </Section>
 
       <Section titulo="Riscos e bloqueios">
