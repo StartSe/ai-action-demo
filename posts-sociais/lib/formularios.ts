@@ -34,8 +34,9 @@ function abrir(): DatabaseSync {
 
 /** Um campo declarado pelo app: chave usada em `dados`, rótulo exibido e o tipo de controle na tela pública.
  * "arquivo" lê o conteúdo do arquivo escolhido como texto (ex.: CSV) e guarda em `dados` como qualquer outro campo;
- * `aceitar` vira o atributo `accept` do seletor de arquivo. */
-export type CampoFormulario = { chave: string; rotulo: string; tipo: "texto" | "textarea" | "arquivo"; obrigatorio?: boolean; aceitar?: string };
+ * `aceitar` vira o atributo `accept` do seletor de arquivo. "nota" é uma escala fixa de 0 a 10 (ex.: pergunta de NPS),
+ * exibida como botões na tela pública; o valor guardado em `dados` é o número escolhido como string ("0" a "10"). */
+export type CampoFormulario = { chave: string; rotulo: string; tipo: "texto" | "textarea" | "arquivo" | "nota"; obrigatorio?: boolean; aceitar?: string };
 
 /** Dados exibidos pela tela pública genérica (app/f/[token]/page.tsx), guardados dentro de `parametros`. */
 export type ParametrosPublicos = { marca: string; nome: string; titulo: string; descricao?: string };
@@ -86,6 +87,25 @@ export function criar({ tipo, campos, parametros, expiraEmDias, limite }: { tipo
 export function obter<P = unknown>(token: string): Formulario<P> | null {
   const linha = abrir().prepare("SELECT * FROM formularios WHERE token = ?").get(token) as LinhaFormulario | undefined;
   return linha ? linhaParaFormulario<P>(linha) : null;
+}
+
+/** Formulários de um `tipo`, mais recentes primeiro (ex.: listar "Pesquisas ativas" de um link reaproveitado várias vezes). */
+export function listarPorTipo<P = unknown>(tipo: string, limite = 50): Formulario<P>[] {
+  const linhas = abrir()
+    .prepare("SELECT * FROM formularios WHERE tipo = ? ORDER BY criadoEm DESC LIMIT ?")
+    .all(tipo, limite) as LinhaFormulario[];
+  return linhas.map((l) => linhaParaFormulario<P>(l));
+}
+
+/** Total de respostas de um formulário, sem o limite de `listarRespostas`. */
+export function contarRespostas(token: string): number {
+  const linha = abrir().prepare("SELECT COUNT(*) AS total FROM respostas WHERE token = ?").get(token) as { total: number };
+  return linha.total;
+}
+
+/** Encerra manualmente um link (define expiraEm para agora): para de aceitar respostas novas sem apagar as já recebidas. */
+export function encerrar(token: string): void {
+  abrir().prepare("UPDATE formularios SET expiraEm = ? WHERE token = ?").run(new Date().toISOString(), token);
 }
 
 /** true quando o formulário já passou do prazo; centralizado aqui para nunca chamar Date.now() direto de um componente. */

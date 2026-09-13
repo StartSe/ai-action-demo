@@ -7,6 +7,7 @@ import { CampoArquivo } from "@/components/CampoArquivo";
 import { MatrizPrioridade } from "@/components/MatrizPrioridade";
 import {
   Chip,
+  CopyButton,
   DataTable,
   Destaque,
   Empty,
@@ -46,6 +47,7 @@ const LIMITE_COMENTARIOS = 500;
 const ETAPAS_CARREGANDO = ["Lendo os comentários...", "Agrupando por tema...", "Medindo o sentimento e priorizando ações..."];
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
+type PesquisaAtiva = { codigo: string; titulo: string; total: number; criadoEm: string };
 
 /** Dois balões de conversa com sentimento (um positivo, um neutro), no lugar de um glifo genérico no estado vazio. */
 function IlustracaoComentarios() {
@@ -77,6 +79,10 @@ export default function Page() {
   const [comentariosExemplo, setComentariosExemplo] = useState<Comentario[] | null>(null);
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
+  const [tituloPesquisa, setTituloPesquisa] = useState("");
+  const [criandoPesquisa, setCriandoPesquisa] = useState(false);
+  const [pesquisas, setPesquisas] = useState<PesquisaAtiva[] | null>(null);
+  const [periodoPesquisa, setPeriodoPesquisa] = useState("30");
   const autoEnviado = useRef(false);
 
   useScrollToResult(estado.fase === "pronto");
@@ -85,7 +91,56 @@ export default function Page() {
     fetch("/api/analisar").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
   }
 
-  useEffect(() => { carregarHistorico(); }, []);
+  function carregarPesquisas() {
+    fetch("/api/pesquisas").then((r) => r.json()).then((r) => setPesquisas(r.itens)).catch(() => setPesquisas([]));
+  }
+
+  useEffect(() => { carregarHistorico(); carregarPesquisas(); }, []);
+
+  async function criarPesquisa() {
+    setCriandoPesquisa(true);
+    try {
+      await fetch("/api/pesquisas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ titulo: tituloPesquisa }) });
+      setTituloPesquisa("");
+      carregarPesquisas();
+    } finally {
+      setCriandoPesquisa(false);
+    }
+  }
+
+  async function encerrarPesquisaClick(codigo: string) {
+    if (!window.confirm("Encerrar esta pesquisa? O link deixa de aceitar novas respostas.")) return;
+    await fetch(`/api/pesquisas/${codigo}/encerrar`, { method: "POST" });
+    carregarPesquisas();
+  }
+
+  async function analisarRespostasPesquisa() {
+    setEstado({ fase: "carregando" });
+    try {
+      const r = await fetch("/api/pesquisas/analisar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ diasAtras: periodoPesquisa ? Number(periodoPesquisa) : null }),
+      });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Falha ao analisar as respostas da pesquisa.");
+      setEstado({
+        fase: "pronto",
+        contexto: resposta.contexto,
+        saida: {
+          analise: resposta.analise,
+          totalEnviado: resposta.total_enviado,
+          totalAnalisado: resposta.total_analisado,
+          truncado: resposta.truncado,
+        },
+        meta: resposta.meta,
+        id: resposta.id,
+      });
+      carregarHistorico();
+    } catch (e) {
+      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." });
+    }
+  }
 
   function apagarHistorico() {
     if (!window.confirm("Apagar todos os resultados salvos? Essa ação não pode ser desfeita.")) return;
@@ -241,6 +296,52 @@ export default function Page() {
           </form>
           <p className="mt-3.5 text-muted text-[12.5px]">Limite de 500 comentários por análise; acima disso, analisamos os 500 primeiros.</p>
           <Privacidade detalhe="A análise fica salva neste app até você apagar em 'Últimos resultados'." />
+
+          <MaisDetalhes titulo="Pesquisa NPS por link">
+            <Field label="Título da pesquisa" htmlFor="tituloPesquisa">
+              <input
+                id="tituloPesquisa"
+                className="input"
+                placeholder="Ex.: O quanto você nos recomendaria?"
+                value={tituloPesquisa}
+                onChange={(e) => setTituloPesquisa(e.target.value)}
+              />
+            </Field>
+            <button type="button" className="btn-ghost !w-auto mb-4" disabled={criandoPesquisa} onClick={criarPesquisa}>
+              {criandoPesquisa ? "Criando..." : "Criar pesquisa"}
+            </button>
+
+            {pesquisas === null ? (
+              <p className="text-muted text-sm mb-4">Carregando...</p>
+            ) : pesquisas.length === 0 ? (
+              <p className="text-muted text-sm mb-4">Nenhuma pesquisa ativa ainda.</p>
+            ) : (
+              <ul className="flex flex-col gap-2.5 text-sm mb-4">
+                {pesquisas.map((p) => (
+                  <li key={p.codigo} className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="min-w-0">
+                      <Link href={`/f/${p.codigo}`} target="_blank" className="text-accent-ink font-semibold hover:underline truncate">{p.titulo}</Link>
+                      <div className="text-muted text-[12.5px]">{p.total} resposta{p.total === 1 ? "" : "s"} recebida{p.total === 1 ? "" : "s"}</div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <CopyButton texto={() => `${location.origin}/f/${p.codigo}`} rotulo="Copiar link" />
+                      <button type="button" className="btn-ghost !w-auto" onClick={() => encerrarPesquisaClick(p.codigo)}>Encerrar</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <Field label="Analisar respostas recebidas de" htmlFor="periodoPesquisa">
+              <select id="periodoPesquisa" className="input" value={periodoPesquisa} onChange={(e) => setPeriodoPesquisa(e.target.value)}>
+                <option value="7">Últimos 7 dias</option>
+                <option value="30">Últimos 30 dias</option>
+                <option value="90">Últimos 90 dias</option>
+                <option value="">Todo o período</option>
+              </select>
+            </Field>
+            <button type="button" className="btn-ghost !w-auto" disabled={carregando} onClick={analisarRespostasPesquisa}>Analisar respostas recebidas</button>
+          </MaisDetalhes>
 
           <MaisDetalhes titulo="Últimos resultados">
             {historico === null ? (

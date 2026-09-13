@@ -1060,7 +1060,7 @@
         "Verify in browser using dev-browser skill: pesquisa pública em celular"
       ],
       "priority": 68,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

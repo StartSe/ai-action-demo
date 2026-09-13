@@ -26,6 +26,13 @@ export function FormularioPublico({ token, marca, nome, titulo, descricao, campo
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    // Campos "nota" são um grupo de botões, sem validação nativa de "required" do HTML.
+    const notaFaltando = campos.find((c) => c.tipo === "nota" && c.obrigatorio && !dados[c.chave]);
+    if (notaFaltando) {
+      setMensagemErro(`Escolha uma nota para "${notaFaltando.rotulo}".`);
+      setFase("erro");
+      return;
+    }
     setFase("enviando");
     try {
       const r = await fetch(`/api/f/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dados, armadilha }) });
@@ -39,7 +46,7 @@ export function FormularioPublico({ token, marca, nome, titulo, descricao, campo
   }
 
   return (
-    <div className="max-w-[560px] mx-auto px-8 py-12 max-md:px-4 max-md:py-8">
+    <div className="max-w-[560px] mx-auto px-8 py-12 max-md:px-4 max-md:py-8" style={{ colorScheme: "light" }}>
       <div className="flex items-center gap-3 mb-7">
         <div className="shrink-0 w-[34px] h-[34px] rounded-[9px] bg-accent text-white grid place-items-center font-extrabold text-[15px] tracking-tight">{marca}</div>
         <div className="font-bold text-[15px]">{nome}</div>
@@ -79,6 +86,23 @@ export function FormularioPublico({ token, marca, nome, titulo, descricao, campo
                   </>
                 ) : campo.tipo === "textarea" ? (
                   <textarea id={campo.chave} className="input min-h-24 resize-y" required={campo.obrigatorio} maxLength={4000} value={dados[campo.chave]} onChange={set(campo.chave)} />
+                ) : campo.tipo === "nota" ? (
+                  <div id={campo.chave} className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={campo.rotulo}>
+                    {Array.from({ length: 11 }, (_, n) => n).map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        role="radio"
+                        aria-checked={dados[campo.chave] === String(n)}
+                        className={`h-9 w-9 rounded-[10px] border text-sm font-bold transition-colors ${
+                          dados[campo.chave] === String(n) ? "bg-accent border-accent text-white" : "border-line bg-white text-ink hover:bg-bg"
+                        }`}
+                        onClick={() => setDados((d) => ({ ...d, [campo.chave]: String(n) }))}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
                 ) : (
                   <input id={campo.chave} className="input" required={campo.obrigatorio} maxLength={4000} value={dados[campo.chave]} onChange={set(campo.chave)} />
                 )}

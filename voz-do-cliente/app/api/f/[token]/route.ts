@@ -28,6 +28,9 @@ export async function POST(request: Request, { params }: RouteContext<"/api/f/[t
     if (campo.obrigatorio && !valor) {
       return NextResponse.json({ error: `Preencha "${campo.rotulo}".` }, { status: 400, headers: { "Cache-Control": "no-store" } });
     }
+    if (campo.tipo === "nota" && valor && (!/^\d+$/.test(valor) || Number(valor) < 0 || Number(valor) > 10)) {
+      return NextResponse.json({ error: `Escolha uma nota entre 0 e 10 para "${campo.rotulo}".` }, { status: 400, headers: { "Cache-Control": "no-store" } });
+    }
     dados[campo.chave] = valor;
   }
 
