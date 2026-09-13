@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Chip, DataTable, Empty, Entregar, ErrorBox, Field, Item, Loading, MaisDetalhes, OptInGuardar, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
 import { DialogoAutoavaliacao } from "@/components/DialogoAutoavaliacao";
+import { LembrarCheckins } from "@/components/LembrarCheckins";
 import { SENSIVEL } from "@/lib/sensivel";
 import type { Meta } from "@/lib/ai";
 import type { DadosPDI, PDI } from "@/lib/types";
@@ -224,6 +225,7 @@ export function Resultado({ pdi, dados, meta, id }: { pdi: PDI; dados: DadosPDI;
       </ResultHead>
 
       <Origem meta={meta} />
+      {id && <LembrarCheckins resultadoId={id} />}
 
       <ConteudoPDI pdi={pdi} dataConversa={dados.dataConversa} />
     </article>
@@ -288,6 +290,24 @@ export function ConteudoPDI({ pdi, dataConversa }: { pdi: PDI; dataConversa?: st
       <Section titulo="Para abrir a conversa de feedback">
         <Item>{pdi.conversa_sugerida.map((q) => <p key={q} className="my-1.5">“{q}”</p>)}</Item>
       </Section>
+
+      {pdi.acompanhamento && pdi.acompanhamento.length > 0 && (
+        <Section titulo="Acompanhamento">
+          <div className="flex flex-col gap-3">
+            {pdi.acompanhamento.map((a, i) => (
+              <div key={i} className="card shadow-none px-[22px] py-4">
+                <p className="text-[13px] text-muted mb-1.5">Check-in de {a.marco} dias · {data(a.data, { comHora: true })}</p>
+                <p className="mb-2">{a.texto}</p>
+                {a.statusAcoes.length > 0 && (
+                  <ul className="text-sm flex flex-col gap-1">
+                    {a.statusAcoes.map((s, j) => <li key={j}><strong>{s.acao}</strong>: {s.status}</li>)}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
     </>
   );
 }
@@ -303,5 +323,12 @@ function pdiParaTexto(pdi: PDI, d: DadosPDI) {
   pdi.recursos.forEach((r) => l.push(`- ${r.tipo}: ${r.nome} (${r.motivo})`));
   l.push("", "Perguntas para a conversa:");
   pdi.conversa_sugerida.forEach((q) => l.push(`- ${q}`));
+  if (pdi.acompanhamento?.length) {
+    l.push("", "Acompanhamento:");
+    pdi.acompanhamento.forEach((a) => {
+      l.push(`- Check-in de ${a.marco} dias (${a.data}): ${a.texto}`);
+      a.statusAcoes.forEach((s) => l.push(`    ${s.acao}: ${s.status}`));
+    });
+  }
   return l.join("\n");
 }

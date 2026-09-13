@@ -12,6 +12,15 @@ export interface PDI {
   }[];
   recursos: { tipo: string; nome: string; motivo: string }[];
   conversa_sugerida: string[];
+  /** Respostas dos lembretes de check-in de 30/60/90 dias (US-070), anexadas depois de o PDI já estar salvo. */
+  acompanhamento?: EntradaAcompanhamento[];
+}
+
+export interface EntradaAcompanhamento {
+  data: string;
+  marco: 30 | 60 | 90;
+  texto: string;
+  statusAcoes: { objetivo: string; acao: string; status: string }[];
 }
 
 export interface DadosPDI {

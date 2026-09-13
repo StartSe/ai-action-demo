@@ -3,6 +3,9 @@
 // aqui o que faz sentido rodar sozinho (ver padrão em app/api/f/[token]/route.ts com lib/pdi.ts).
 import { listar as listarHistorico } from "./historico";
 import { registrarExecutor, type Rotina } from "./rotinas";
+// Registra o executor "checkin-pdi" (lembretes de 30/60/90 dias); não entra em TIPOS_ROTINA porque
+// é criado por um botão próprio do resultado (parametros vêm do PDI), não pelo formulário genérico.
+import "./checkins";
 
 /** Tipos de rotina disponíveis neste app, para o cartão de /setup listar num seletor. */
 export const TIPOS_ROTINA: { tipo: string; rotulo: string }[] = [{ tipo: "resumo-pdi-time", rotulo: "Resumo dos PDIs gerados" }];

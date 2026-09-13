@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { obter, obterCallback, responder } from "@/lib/formularios";
 import "@/lib/pdi";
+import "@/lib/checkins";
 
 export async function POST(request: Request, { params }: RouteContext<"/api/f/[token]">) {
   const { token } = await params;
