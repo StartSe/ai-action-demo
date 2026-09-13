@@ -17,6 +17,8 @@ ARQUIVOS=(
   "lib/store.ts"
   "lib/setup-comum.ts"
   "lib/historico.ts"
+  "lib/mcp.ts"
+  "app/mcp"
   "app/api/setup"
   "app/r"
   "app/imprimir"

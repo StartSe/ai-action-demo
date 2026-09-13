@@ -4,6 +4,8 @@ import { gerarPDI } from "./pdi";
 import type { Ferramenta } from "./mcp";
 import type { DadosPDI } from "./types";
 
+export const NOME_SERVIDOR = "pdi-time";
+
 export const FERRAMENTAS: Ferramenta[] = [
   {
     nome: "gerar_pdi",
