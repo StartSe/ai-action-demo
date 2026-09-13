@@ -15,6 +15,7 @@ Regras:
 - nota_risco vai de 0 a 10, onde 10 é o mais arriscado para o papel informado. Seja calibrado: 3 a 4 para contratos equilibrados, 7 ou mais quando há cláusulas claramente desfavoráveis.
 - Se o usuário indicou uma preocupação, trate-a explicitamente em pelo menos um item.
 - Se uma política de contratos da empresa for informada, avalie o contrato contra cada item dela e liste em "fora_da_politica" toda cláusula que viole um item, citando o item da política e a cláusula do contrato. Sem política informada, ou sem violação encontrada, devolva a lista vazia.
+- Em "prazos", extraia eventos de calendário que decidem uma ação do usuário (renovação automática e o aviso para evitá-la, reajuste de valor, fim de vigência, entrega de dados após rescisão etc.), cada um com uma data completa no formato AAAA-MM-DD (nunca só "90 dias antes" ou um dia da semana). Use a data de hoje informada no prompt como referência: quando o contrato tiver uma data de assinatura ou início explícita, calcule a partir dela; quando não tiver, estime a partir de hoje. Em "descricao", cite a cláusula de origem e a ação sugerida em até 2 frases.
 - Máximo de 8 cláusulas de risco, 8 prazos, 8 obrigações, 8 pontos ausentes, 6 perguntas e 8 itens fora da política.
 - Se o documento não for um contrato ou não tiver texto legível, explique isso no resumo_executivo e devolva as listas vazias.
 Formato de saída (JSON):
@@ -29,7 +30,7 @@ Formato de saída (JSON):
     "multa": {"numero": "curto, ex.: 30% do saldo (ou 'Não especificada')", "detalhe": "até 2 linhas: quando incide e para quem"}
   },
   "nota_risco": 0,
-  "prazos_criticos": [{"evento": "", "prazo": ""}],
+  "prazos": [{"tipo": "ex.: Aviso de não renovação, Reajuste anual, Fim da vigência", "data": "AAAA-MM-DD", "descricao": "cláusula de origem e ação sugerida, até 2 frases"}],
   "clausulas_risco": [{"clausula": "", "trecho": "", "risco": "", "severidade": "alta|média|baixa", "sugestao_negociacao": ""}],
   "obrigacoes_principais": ["obrigação do papel informado"],
   "pontos_ausentes": ["o que um contrato deste tipo costuma ter e este não tem"],
@@ -57,7 +58,7 @@ export async function analisarContrato({
   const blocoPolitica = temPolitica
     ? `\n\nPolítica de contratos da empresa (avalie o contrato contra cada item e preencha "fora_da_politica" citando o item violado):\n${politicaComoTexto(politica)}`
     : "";
-  const prompt = `Papel do usuário neste contrato: ${papel}.\nO que mais preocupa o usuário: ${preocupacao || "não informado"}.${blocoPolitica}\n\nContrato (texto integral):\n"""\n${texto}\n"""\n\nAnalise o contrato acima e devolva o JSON pedido.`;
+  const prompt = `Data de hoje: ${new Date().toISOString().slice(0, 10)}\nPapel do usuário neste contrato: ${papel}.\nO que mais preocupa o usuário: ${preocupacao || "não informado"}.${blocoPolitica}\n\nContrato (texto integral):\n"""\n${texto}\n"""\n\nAnalise o contrato acima e devolva o JSON pedido.`;
   const analise = await askJSON<Analise>({ system: SYSTEM_ANALISE, prompt, maxTokens: 8000 });
   return { demo: false, analise, meta: meta({ demo: false, insumo }) };
 }

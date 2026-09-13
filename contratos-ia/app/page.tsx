@@ -28,9 +28,10 @@ import {
   useScrollToResult,
   useStatus,
 } from "@/components/ui";
+import { AvisarPrazos } from "@/components/AvisarPrazos";
 import { SENSIVEL } from "@/lib/sensivel";
 import type { Meta } from "@/lib/ai";
-import type { Analise, ItemEssencial } from "@/lib/types";
+import type { Analise, ItemEssencial, Prazo } from "@/lib/types";
 import { PAPEIS } from "@/lib/types";
 
 const LIMITE_PDF = 10 * 1024 * 1024; // 10 MB
@@ -361,6 +362,59 @@ function baixarTexto(nomeArquivo: string, conteudo: string) {
   URL.revokeObjectURL(url);
 }
 
+const DATA_VALIDA = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** Formata um prazo AAAA-MM-DD sem risco de virar o dia anterior por fuso horário (evita `new Date("AAAA-MM-DD")`, que é meia-noite UTC). */
+function dataPrazo(iso: string): string {
+  const m = DATA_VALIDA.exec(iso);
+  if (!m) return iso;
+  return data(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+}
+
+function paraIcsData(iso: string): string {
+  return iso.replaceAll("-", "");
+}
+
+/** Dia seguinte ao prazo, em aritmética UTC pura: DTEND de um evento de dia inteiro é exclusivo. */
+function diaSeguinteIcs(iso: string): string {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  const proximo = new Date(Date.UTC(ano, mes - 1, dia + 1));
+  return `${proximo.getUTCFullYear()}${String(proximo.getUTCMonth() + 1).padStart(2, "0")}${String(proximo.getUTCDate()).padStart(2, "0")}`;
+}
+
+function escaparIcs(texto: string): string {
+  return texto.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+}
+
+/** Baixa um .ics de dia inteiro para o prazo, com a cláusula/ação sugerida na descrição. */
+function baixarIcsPrazo(prazo: Prazo, tituloContrato: string) {
+  const dtStamp = `${new Date().toISOString().replace(/[-:]/g, "").split(".")[0]}Z`;
+  const uid = `prazo-${Date.now()}-${Math.random().toString(36).slice(2)}@ia-para-executivos`;
+  const linhas = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//IA para Executivos//Leitura de Contratos//PT-BR",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `DTSTAMP:${dtStamp}`,
+    `DTSTART;VALUE=DATE:${paraIcsData(prazo.data)}`,
+    `DTEND;VALUE=DATE:${diaSeguinteIcs(prazo.data)}`,
+    `SUMMARY:${escaparIcs(`${prazo.tipo} — ${tituloContrato || "Contrato"}`)}`,
+    `DESCRIPTION:${escaparIcs(prazo.descricao)}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ];
+  const blob = new Blob([linhas.join("\r\n")], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "prazo.ics";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function analiseParaTexto(a: Analise, papel: string) {
   const l: string[] = [a.tipo_contrato || "Contrato", `Análise do ponto de vista de quem é ${papel}`, "", a.resumo_executivo, "", "O essencial:"];
   l.push(`- Valor mensal: ${a.essencial.valor_mensal.numero} — ${a.essencial.valor_mensal.detalhe}`);
@@ -368,8 +422,8 @@ function analiseParaTexto(a: Analise, papel: string) {
   l.push(`- Multa: ${a.essencial.multa.numero} — ${a.essencial.multa.detalhe}`);
   l.push("", "Cláusulas que merecem atenção:");
   (a.clausulas_risco || []).forEach((c) => l.push(`- ${c.clausula} (${c.severidade}): ${c.risco} Sugestão: ${c.sugestao_negociacao}`));
-  l.push("", "Prazos críticos:");
-  (a.prazos_criticos || []).forEach((p) => l.push(`- ${p.prazo}: ${p.evento}`));
+  l.push("", "Prazos:");
+  (a.prazos || []).forEach((p) => l.push(`- ${dataPrazo(p.data)} — ${p.tipo}: ${p.descricao}`));
   l.push("", "Obrigações principais:");
   (a.obrigacoes_principais || []).forEach((o) => l.push(`- ${o}`));
   l.push("", "O que não está no contrato:");
@@ -427,6 +481,7 @@ export function Resultado({
         analise={analise}
         papel={papel}
         politicaCadastrada={politicaCadastrada}
+        resultadoId={id}
         slotAposEssencial={idContrato && <SecaoPerguntar idContrato={idContrato} sugestoes={(analise.perguntas_para_o_juridico || []).slice(0, 3)} />}
       />
 
@@ -458,7 +513,7 @@ function BlocoTrecho({ trecho }: { trecho: string }) {
 }
 
 /** Corpo da análise (sem cabeçalho nem Origem), reaproveitado pela página de impressão; `slotAposEssencial` injeta a caixa de perguntas logo após "O essencial" no fluxo principal, sem entrar no PDF/impressão. */
-export function ConteudoAnalise({ analise: a, papel, politicaCadastrada, slotAposEssencial }: { analise: Analise; papel: string; politicaCadastrada?: boolean; slotAposEssencial?: ReactNode }) {
+export function ConteudoAnalise({ analise: a, papel, politicaCadastrada, slotAposEssencial, resultadoId }: { analise: Analise; papel: string; politicaCadastrada?: boolean; slotAposEssencial?: ReactNode; resultadoId?: string }) {
   const nota = Math.max(0, Math.min(10, Number(a.nota_risco) || 0));
   const cls = classeRisco(nota);
   const tom = cls === "alto" ? "danger" : cls === "moderado" ? "warn" : "ok";
@@ -536,12 +591,17 @@ export function ConteudoAnalise({ analise: a, papel, politicaCadastrada, slotApo
         </Item>
       </Section>
 
-      <Section titulo="Prazos críticos">
+      <Section titulo="Prazos">
+        {resultadoId && <AvisarPrazos resultadoId={resultadoId} prazos={a.prazos || []} />}
         <div className="flex flex-col gap-2.5">
-          {(a.prazos_criticos || []).map((p, i) => (
+          {(a.prazos || []).map((p, i) => (
             <div key={i} className="card shadow-none flex max-md:flex-col items-baseline gap-3.5 px-3.5 py-3 text-sm">
-              <span className="font-extrabold text-accent-ink whitespace-nowrap shrink-0">{p.prazo}</span>
-              <span>{p.evento}</span>
+              <span className="font-extrabold text-accent-ink whitespace-nowrap shrink-0">{dataPrazo(p.data)}</span>
+              <div className="flex-1">
+                <strong>{p.tipo}</strong>
+                <p className="text-muted mt-0.5">{p.descricao}</p>
+              </div>
+              <button type="button" className="btn-link text-[12.5px] shrink-0" onClick={() => baixarIcsPrazo(p, a.tipo_contrato)}>Adicionar ao calendário</button>
             </div>
           ))}
         </div>

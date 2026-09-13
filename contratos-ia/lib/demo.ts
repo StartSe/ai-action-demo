@@ -1,10 +1,26 @@
 // Respostas de exemplo usadas quando não há chave de IA configurada.
 // O exemplo corresponde ao contrato em public/exemplo-contrato.txt (prestação de serviços de tecnologia).
 import type { PoliticaContratos } from "./politica";
-import type { Analise, ItemForaDaPolitica } from "./types";
+import type { Analise, ItemForaDaPolitica, Prazo } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** "AAAA-MM-DD" de hoje mais `dias`, pelas partes locais do Date (nunca `toISOString()`: ver gotcha de fuso em pdi-time/CLAUDE.md). */
+function emDias(dias: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + dias);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Prazos do contrato de exemplo, com datas relativas a hoje (o texto de exemplo não tem data de assinatura fixa). */
+function prazosDemo(): Prazo[] {
+  return [
+    { tipo: "Aviso de não renovação automática", data: emDias(40), descricao: "Cláusula 2 – Vigência. Avise por escrito com 90 dias de antecedência do fim da vigência para não renovar automaticamente por mais 24 meses." },
+    { tipo: "Fim da vigência atual (se não renovado)", data: emDias(130), descricao: "Cláusula 2 – Vigência. Prepare a transição: dados, código-fonte e credenciais, condicionados à quitação de pendências (Cláusula 10)." },
+    { tipo: "Reajuste anual do valor mensal", data: emDias(300), descricao: "Cláusula 3 – Reajuste. Reajuste pelo IGP-M ou índice indicado pela contratada; negocie a troca para IPCA com teto antes da data." },
+  ];
 }
 
 /**
@@ -87,14 +103,7 @@ export function analiseDemo({ preocupacao = "", politica }: { papel?: string; pr
       multa: { numero: "30% do saldo", detalhe: "Só para a contratante, se sair antes do fim. A fornecedora sai sem multa." },
     },
     nota_risco: 7,
-    prazos_criticos: [
-      { evento: "Aviso para evitar a renovação automática por mais 24 meses", prazo: "90 dias antes do fim da vigência" },
-      { evento: "Pagamento da mensalidade (atraso gera multa de 2% mais juros)", prazo: "Até o dia 5 de cada mês" },
-      { evento: "Homologação das entregas; depois disso o aceite é tácito", prazo: "5 dias úteis após cada entrega" },
-      { evento: "Prazo para corrigir um descumprimento antes da rescisão por culpa", prazo: "30 dias após a notificação" },
-      { evento: "Entrega de dados e código após o término, condicionada à quitação", prazo: "Até 60 dias após a rescisão" },
-      { evento: "Proibição de contratar colaboradores da TechNova", prazo: "Durante o contrato e 12 meses depois" },
-    ],
+    prazos: prazosDemo(),
     clausulas_risco: [
       {
         clausula: "Cláusula 7 – Propriedade intelectual",

@@ -15,9 +15,13 @@ export interface Parte {
   papel: string;
 }
 
-export interface PrazoCritico {
-  evento: string;
-  prazo: string;
+/** Um prazo com data de calendário (real ou estimada), usado para "Adicionar ao calendário" e para o aviso de 30 dias antes. */
+export interface Prazo {
+  tipo: string;
+  /** "AAAA-MM-DD"; estimada a partir de hoje quando o contrato não informa uma data de assinatura/início explícita. */
+  data: string;
+  /** Cláusula de origem e ação sugerida, em até 2 frases. */
+  descricao: string;
 }
 
 export interface ClausulaRisco {
@@ -54,7 +58,7 @@ export interface Analise {
   objeto: string;
   essencial: { valor_mensal: ItemEssencial; prazo: ItemEssencial; multa: ItemEssencial };
   nota_risco: number;
-  prazos_criticos: PrazoCritico[];
+  prazos: Prazo[];
   clausulas_risco: ClausulaRisco[];
   obrigacoes_principais: string[];
   pontos_ausentes: string[];

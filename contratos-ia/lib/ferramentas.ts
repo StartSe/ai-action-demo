@@ -9,7 +9,7 @@ export const FERRAMENTAS: Ferramenta[] = [
   {
     nome: "analisar_contrato",
     descricao:
-      "Analisa o texto de um contrato empresarial do ponto de vista do papel informado (contratante, contratado, locador etc.): resumo executivo, nota de risco, cláusulas de risco, prazos críticos, obrigações, pontos ausentes e perguntas para o jurídico.",
+      "Analisa o texto de um contrato empresarial do ponto de vista do papel informado (contratante, contratado, locador etc.): resumo executivo, nota de risco, cláusulas de risco, prazos com data de calendário, obrigações, pontos ausentes e perguntas para o jurídico.",
     schema: {
       type: "object",
       properties: {
