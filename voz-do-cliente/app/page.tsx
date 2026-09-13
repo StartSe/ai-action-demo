@@ -316,20 +316,23 @@ export default function Page() {
             ) : pesquisas.length === 0 ? (
               <p className="text-muted text-sm mb-4">Nenhuma pesquisa ativa ainda.</p>
             ) : (
-              <ul className="flex flex-col gap-2.5 text-sm mb-4">
-                {pesquisas.map((p) => (
-                  <li key={p.codigo} className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="min-w-0">
-                      <Link href={`/f/${p.codigo}`} target="_blank" className="text-accent-ink font-semibold hover:underline truncate">{p.titulo}</Link>
-                      <div className="text-muted text-[12.5px]">{p.total} resposta{p.total === 1 ? "" : "s"} recebida{p.total === 1 ? "" : "s"}</div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <CopyButton texto={() => `${location.origin}/f/${p.codigo}`} rotulo="Copiar link" />
-                      <button type="button" className="btn-ghost !w-auto" onClick={() => encerrarPesquisaClick(p.codigo)}>Encerrar</button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul className="flex flex-col gap-2.5 text-sm mb-4">
+                  {pesquisas.map((p) => (
+                    <li key={p.codigo} className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="min-w-0">
+                        <Link href={`/f/${p.codigo}`} target="_blank" className="text-accent-ink font-semibold hover:underline truncate">{p.titulo}</Link>
+                        <div className="text-muted text-[12.5px]">{p.total} resposta{p.total === 1 ? "" : "s"} recebida{p.total === 1 ? "" : "s"}</div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <CopyButton texto={() => `${location.origin}/f/${p.codigo}`} rotulo="Copiar link" />
+                        <button type="button" className="btn-ghost !w-auto" onClick={() => encerrarPesquisaClick(p.codigo)}>Encerrar</button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <ReceberAnaliseSemanal />
+              </>
             )}
 
             <Field label="Analisar respostas recebidas de" htmlFor="periodoPesquisa">
@@ -380,6 +383,97 @@ export default function Page() {
         </Stage>
       </Workspace>
     </>
+  );
+}
+
+type EstadoNotificacoes = { configurada: boolean; canal: "email" | "slack"; destino: string };
+type RotinaExistente = { id: string; tipo: string };
+
+/** Depois de haver ao menos uma pesquisa ativa, oferece automatizar o acompanhamento: uma análise semanal
+ * (compara sentimento e NPS com a semana anterior) e um alerta diário quando o percentual de detratores subir. */
+function ReceberAnaliseSemanal() {
+  const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
+  const [rotinaId, setRotinaId] = useState<string | null | undefined>(undefined);
+  const [limite, setLimite] = useState("10");
+  const [criando, setCriando] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/setup")
+      .then((r) => r.json())
+      .then((d) => {
+        const integracao = (d.integracoes || []).find((i: { id: string }) => i.id === "notificacoes");
+        const campos: { chave: string; valorVisivel?: string }[] = integracao?.campos || [];
+        const canal = campos.find((c) => c.chave === "NOTIFICACOES_CANAL")?.valorVisivel === "slack" ? "slack" : "email";
+        const destino = campos.find((c) => c.chave === "NOTIFICACOES_DESTINO")?.valorVisivel || "";
+        setNotificacoes({ configurada: Boolean(integracao?.configurada), canal, destino });
+      })
+      .catch(() => setNotificacoes({ configurada: false, canal: "email", destino: "" }));
+    fetch("/api/rotinas")
+      .then((r) => r.json())
+      .then((d) => {
+        const existente = (d.itens || []).find((i: RotinaExistente) => i.tipo === "analise-semanal");
+        setRotinaId(existente?.id ?? null);
+      })
+      .catch(() => setRotinaId(null));
+  }, []);
+
+  async function criar() {
+    if (!notificacoes?.configurada) return;
+    setCriando(true);
+    try {
+      const canal = notificacoes.canal;
+      const destino = canal === "email" ? notificacoes.destino || undefined : undefined;
+      const r1 = await fetch("/api/rotinas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: "analise-semanal", frequencia: "semanal", diaSemana: 1, hora: "08:00", canal, destino }),
+      });
+      const d1 = await r1.json();
+      if (!r1.ok) throw new Error(d1.error || "Não foi possível criar a análise semanal.");
+      const r2 = await fetch("/api/rotinas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "alerta-sentimento",
+          frequencia: "diaria",
+          hora: "08:00",
+          canal,
+          destino,
+          parametros: { limite: Number(limite) || 10 },
+        }),
+      });
+      if (!r2.ok) throw new Error("Análise semanal criada, mas não foi possível criar o alerta de sentimento.");
+      setRotinaId(d1.id);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar a análise semanal.");
+    } finally {
+      setCriando(false);
+    }
+  }
+
+  if (rotinaId === undefined || notificacoes === null) return null;
+
+  return (
+    <div className="mb-4">
+      {rotinaId ? (
+        <p className="text-muted text-sm">Você já recebe a análise toda semana e um alerta quando o percentual de detratores subir.</p>
+      ) : (
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <label className="flex items-center gap-1.5 text-[13px] font-semibold">
+            Avisar quando o negativo subir mais de
+            <input type="number" min={1} max={100} className="input !w-20" value={limite} onChange={(e) => setLimite(e.target.value)} />
+            pontos em 7 dias
+          </label>
+          {notificacoes.configurada ? (
+            <button type="button" className="btn-ghost !w-auto" onClick={criar} disabled={criando}>
+              {criando ? "Criando..." : "Receber a análise toda semana"}
+            </button>
+          ) : (
+            <a href="/setup#notificacoes" className="btn-ghost !w-auto">Receber a análise toda semana</a>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

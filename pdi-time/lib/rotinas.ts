@@ -123,8 +123,8 @@ function marcarExecutada(id: string, quando: string): void {
   abrir().prepare("UPDATE rotinas SET ultimaExecucao = ? WHERE id = ?").run(quando, id);
 }
 
-/** O que um `tipo` de rotina devolve ao rodar; vira a notificação enviada (titulo, texto e, quando houver, o link /r/<resultadoId>). */
-export type ResultadoRotina = { titulo: string; texto: string; resultadoId?: string };
+/** O que um `tipo` de rotina devolve ao rodar; vira a notificação enviada (titulo, texto e, quando houver, o link /r/<resultadoId>). enviar: false (ex.: uma rotina de alerta que só deve falar quando algo mudou) pula o envio desta execução, sem deixar de marcar a rotina como executada. */
+export type ResultadoRotina = { titulo: string; texto: string; resultadoId?: string; enviar?: boolean };
 export type ExecutorRotina = (rotina: Rotina) => Promise<ResultadoRotina>;
 
 const executores = new Map<string, ExecutorRotina>();
@@ -184,6 +184,8 @@ async function executar(r: Rotina): Promise<{ id: string; ok: boolean; mensagem:
   if (!executor) return { id: r.id, ok: false, mensagem: `Nenhuma ação registrada para o tipo "${r.tipo}".` };
   try {
     const resultado = await executor(r);
+    marcarExecutada(r.id, new Date().toISOString());
+    if (resultado.enviar === false) return { id: r.id, ok: true, mensagem: "Nada para avisar desta vez." };
     const base = getConfig("APP_URL") || "http://localhost:3000";
     const envio = await enviar({
       canal: r.canal,
@@ -192,7 +194,6 @@ async function executar(r: Rotina): Promise<{ id: string; ok: boolean; mensagem:
       texto: resultado.texto,
       link: resultado.resultadoId ? `${base}/r/${resultado.resultadoId}` : undefined,
     });
-    marcarExecutada(r.id, new Date().toISOString());
     return { id: r.id, ok: envio.ok, mensagem: envio.mensagem };
   } catch (err) {
     marcarExecutada(r.id, new Date().toISOString());
