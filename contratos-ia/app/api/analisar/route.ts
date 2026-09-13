@@ -1,7 +1,8 @@
 import { extractText } from "unpdf";
-import { aiEnabled, askJSON } from "@/lib/ai";
+import { aiEnabled, askJSON, meta } from "@/lib/ai";
 import { analiseDemo, esperar } from "@/lib/demo";
 import { guardarContrato } from "@/lib/estado";
+import { apagarTodos, listar, salvar, SENSIVEL } from "@/lib/historico";
 import { PAPEIS, type Analise } from "@/lib/types";
 
 const LIMITE_PDF = 10 * 1024 * 1024; // 10 MB
@@ -33,6 +34,19 @@ Formato de saída (JSON):
   "perguntas_para_o_juridico": ["pergunta objetiva"]
 }`;
 
+/** Quando o app é sensível, só salva com opt-in explícito e por 30 dias. */
+function idSalvo({ analise, papel, preocupacao, metaGerada, guardar }: { analise: Analise; papel: string; preocupacao: string; metaGerada: ReturnType<typeof meta>; guardar: boolean }) {
+  if (SENSIVEL && !guardar) return undefined;
+  return salvar({
+    tipo: "contrato",
+    titulo: `Análise: ${analise.tipo_contrato || "Contrato"}`,
+    entrada: { papel, preocupacao },
+    saida: analise,
+    meta: metaGerada,
+    expiraEmDias: SENSIVEL ? 30 : undefined,
+  });
+}
+
 export async function POST(req: Request) {
   let form: FormData;
   try {
@@ -45,6 +59,7 @@ export async function POST(req: Request) {
   const papelInformado = String(form.get("papel") || "").trim().toLowerCase();
   const papel = VALORES_PAPEL.includes(papelInformado) ? papelInformado : "outro";
   const preocupacao = String(form.get("preocupacao") || "").trim();
+  const guardar = String(form.get("guardar") || "") === "true";
 
   let texto: string;
 
@@ -74,18 +89,35 @@ export async function POST(req: Request) {
   }
 
   try {
+    const insumo = "todo o contrato enviado e o papel informado";
     if (!aiEnabled()) {
       await esperar(1400);
-      const id = guardarContrato({ texto, papel, preocupacao });
-      return Response.json({ id, demo: true, analise: analiseDemo({ papel, preocupacao }) });
+      const idContrato = guardarContrato({ texto, papel, preocupacao });
+      const analise = analiseDemo({ papel, preocupacao });
+      const metaGerada = meta({ demo: true, insumo });
+      const id = idSalvo({ analise, papel, preocupacao, metaGerada, guardar });
+      return Response.json({ idContrato, id, analise, meta: metaGerada });
     }
     const prompt = `Papel do usuário neste contrato: ${papel}.\nO que mais preocupa o usuário: ${preocupacao || "não informado"}.\n\nContrato (texto integral):\n"""\n${texto}\n"""\n\nAnalise o contrato acima e devolva o JSON pedido.`;
     const analise = await askJSON<Analise>({ system: SYSTEM_ANALISE, prompt, maxTokens: 8000 });
-    const id = guardarContrato({ texto, papel, preocupacao });
-    return Response.json({ id, demo: false, analise });
+    const idContrato = guardarContrato({ texto, papel, preocupacao });
+    const metaGerada = meta({ demo: false, insumo });
+    const id = idSalvo({ analise, papel, preocupacao, metaGerada, guardar });
+    return Response.json({ idContrato, id, analise, meta: metaGerada });
   } catch (err) {
     console.error(err);
     const mensagem = err instanceof Error ? err.message : "Não foi possível analisar o contrato agora. Tente novamente.";
     return Response.json({ error: mensagem }, { status: 500 });
   }
+}
+
+/** Últimos resultados salvos, para a lista "Últimos resultados" no painel. */
+export async function GET() {
+  return Response.json({ itens: listar(10) });
+}
+
+/** Apaga todo o histórico salvo (botão "Apagar tudo"). */
+export async function DELETE() {
+  apagarTodos();
+  return Response.json({ ok: true });
 }

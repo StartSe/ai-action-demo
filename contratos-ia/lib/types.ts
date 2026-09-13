@@ -28,6 +28,12 @@ export interface ClausulaRisco {
   sugestao_negociacao: string;
 }
 
+/** Dados de entrada guardados no histórico (lib/historico.ts); o texto do contrato não é persistido, só fica em memória em lib/estado.ts. */
+export interface EntradaAnalise {
+  papel: string;
+  preocupacao: string;
+}
+
 export interface Analise {
   tipo_contrato: string;
   resumo_executivo: string;

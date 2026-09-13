@@ -1,7 +1,35 @@
 "use client";
 
-import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
-import { Chip, DataTable, DemoNotice, Empty, ErrorBox, Field, Item, Loading, Panel, ResultHead, Section, Stage, Topbar, Workspace, useScrollToResult, useStatus } from "@/components/ui";
+import Link from "next/link";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  Chip,
+  DataTable,
+  Destaque,
+  Dropzone,
+  Empty,
+  Entregar,
+  ErrorBox,
+  Field,
+  Item,
+  Loading,
+  MaisDetalhes,
+  OptInGuardar,
+  Origem,
+  Panel,
+  Privacidade,
+  ResultHead,
+  Section,
+  Stage,
+  Topbar,
+  Workspace,
+  data,
+  numero,
+  useScrollToResult,
+  useStatus,
+} from "@/components/ui";
+import { SENSIVEL } from "@/lib/sensivel";
+import type { Meta } from "@/lib/ai";
 import type { Analise } from "@/lib/types";
 import { PAPEIS } from "@/lib/types";
 
@@ -9,31 +37,55 @@ const LIMITE_PDF = 10 * 1024 * 1024; // 10 MB
 const PAPEL_PADRAO = "contratante";
 const PREOCUPACAO_EXEMPLO = "Multa de cancelamento e quem fica com o código";
 
+type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
+
+const ETAPAS_CARREGANDO = ["Lendo o contrato...", "Identificando partes, prazos e obrigações...", "Calculando o nível de risco..."];
+
+/** Desenho de um documento com uma barra de risco, no lugar de um glifo genérico no estado vazio. */
+function IlustracaoContrato() {
+  return (
+    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 6h22l10 10v42a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" />
+      <path d="M38 6v10h10" />
+      <path d="M21 30h22M21 37h22M21 44h14" />
+      <rect x="19" y="52" width="26" height="4" rx="2" fill="currentColor" stroke="none" opacity="0.18" />
+      <rect x="19" y="52" width="17" height="4" rx="2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 type Aba = "pdf" | "texto";
 type Estado =
   | { fase: "vazio" }
   | { fase: "carregando" }
-  | { fase: "erro"; mensagem: string }
-  | { fase: "pronto"; id: string; analise: Analise; papel: string; demo: boolean };
-
-function formatarTamanho(bytes: number) {
-  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
+  | { fase: "erro"; mensagem: string; fd: FormData }
+  | { fase: "pronto"; idContrato: string; id?: string; analise: Analise; papel: string; meta: Meta };
 
 export default function Page() {
   const { status, erro } = useStatus();
   const [aba, setAba] = useState<Aba>("pdf");
   const [arquivo, setArquivo] = useState<File | null>(null);
-  const [arrastando, setArrastando] = useState(false);
   const [texto, setTexto] = useState("");
   const [papel, setPapel] = useState(PAPEL_PADRAO);
   const [preocupacao, setPreocupacao] = useState("");
+  const [guardar, setGuardar] = useState(false);
   const [erroForm, setErroForm] = useState("");
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
-  const arquivoInputRef = useRef<HTMLInputElement>(null);
+  const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const autoEnviado = useRef(false);
 
   useScrollToResult(estado.fase === "pronto");
+
+  function carregarHistorico() {
+    fetch("/api/analisar").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
+  }
+
+  useEffect(() => { carregarHistorico(); }, []);
+
+  function apagarHistorico() {
+    if (!window.confirm("Apagar todos os resultados salvos? Essa ação não pode ser desfeita.")) return;
+    fetch("/api/analisar", { method: "DELETE" }).then(carregarHistorico);
+  }
 
   function validarArquivo(f: File): string {
     const ehPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name || "");
@@ -48,22 +100,16 @@ export default function Page() {
     else setErroForm("");
   }
 
-  function onDrop(e: DragEvent<HTMLLabelElement>) {
-    e.preventDefault();
-    setArrastando(false);
-    const f = e.dataTransfer?.files?.[0];
-    if (f) selecionarArquivo(f);
-  }
-
   async function analisar(fd: FormData) {
     setEstado({ fase: "carregando" });
     try {
       const r = await fetch("/api/analisar", { method: "POST", body: fd });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || "Falha ao analisar o contrato.");
-      setEstado({ fase: "pronto", id: data.id, analise: data.analise, papel: String(fd.get("papel") || papel), demo: data.demo });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Falha ao analisar o contrato.");
+      setEstado({ fase: "pronto", idContrato: resposta.idContrato, id: resposta.id, analise: resposta.analise, papel: String(fd.get("papel") || papel), meta: resposta.meta });
+      fetch("/api/analisar").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
     } catch (e) {
-      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." });
+      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado.", fd });
     }
   }
 
@@ -82,6 +128,7 @@ export default function Page() {
     }
     fd.append("papel", papel);
     fd.append("preocupacao", preocupacao.trim());
+    fd.append("guardar", String(guardar));
     analisar(fd);
   }
 
@@ -124,6 +171,7 @@ export default function Page() {
         fd.append("texto", conteudo);
         fd.append("papel", PAPEL_PADRAO);
         fd.append("preocupacao", PREOCUPACAO_EXEMPLO);
+        fd.append("guardar", "false");
         analisar(fd);
       }, 0);
     }
@@ -134,9 +182,12 @@ export default function Page() {
 
   return (
     <>
-      <Topbar marca="C" nome="Leitura de Contratos" area="Jurídico" status={status} erro={erro} />
-      <DemoNotice
-        visivel={Boolean(status && !status.ai)}
+      <Topbar
+        marca="C"
+        nome="Leitura de Contratos"
+        area="Jurídico"
+        status={status}
+        erro={erro}
         resumo="Modo demonstração: a análise exibida é um exemplo de contrato de prestação de serviços de tecnologia, seja qual for o arquivo enviado."
       />
 
@@ -162,32 +213,7 @@ export default function Page() {
 
             {aba === "pdf" && (
               <div className="mb-4">
-                <label
-                  htmlFor="arquivo"
-                  onDragEnter={(e) => { e.preventDefault(); setArrastando(true); }}
-                  onDragOver={(e) => { e.preventDefault(); setArrastando(true); }}
-                  onDragLeave={(e) => { e.preventDefault(); setArrastando(false); }}
-                  onDrop={onDrop}
-                  className={`flex flex-col items-center justify-center gap-1.5 text-center py-9 px-4 rounded-card border-[1.5px] border-dashed cursor-pointer transition-colors ${
-                    arrastando || arquivo ? "border-accent bg-accent-soft" : "border-line text-muted"
-                  }`}
-                >
-                  <input
-                    ref={arquivoInputRef}
-                    id="arquivo"
-                    type="file"
-                    accept="application/pdf,.pdf"
-                    hidden
-                    onChange={(e) => selecionarArquivo(e.target.files?.[0] ?? null)}
-                  />
-                  <strong className="text-ink text-[14.5px] font-bold">Arraste o PDF aqui ou clique para selecionar</strong>
-                  <span className="text-[12.5px]">Somente PDF, até 10 MB</span>
-                  {arquivo && (
-                    <span className="mt-1 text-[13px] font-bold text-accent-ink">
-                      {arquivo.name} ({formatarTamanho(arquivo.size)})
-                    </span>
-                  )}
-                </label>
+                <Dropzone id="arquivo" accept="application/pdf,.pdf" tiposLabel="Somente PDF" maxSizeMB={10} arquivo={arquivo} onArquivo={selecionarArquivo} />
               </div>
             )}
 
@@ -211,37 +237,62 @@ export default function Page() {
               </select>
             </Field>
 
-            <Field label="O que mais te preocupa? (opcional)" htmlFor="preocupacao">
-              <input
-                id="preocupacao"
-                className="input"
-                placeholder="Ex.: multa por cancelamento, prazo de pagamento, quem fica com o código"
-                value={preocupacao}
-                onChange={(e) => setPreocupacao(e.target.value)}
-              />
-            </Field>
+            <MaisDetalhes>
+              <Field label="O que mais te preocupa? (opcional)" htmlFor="preocupacao">
+                <input
+                  id="preocupacao"
+                  className="input"
+                  placeholder="Ex.: multa por cancelamento, prazo de pagamento, quem fica com o código"
+                  value={preocupacao}
+                  onChange={(e) => setPreocupacao(e.target.value)}
+                />
+              </Field>
+            </MaisDetalhes>
 
             {erroForm && <p className="text-danger text-[13px] mb-3">{erroForm}</p>}
 
+            {SENSIVEL && <OptInGuardar checked={guardar} onChange={setGuardar} />}
             <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Analisando" : "Analisar contrato"}</button>
           </form>
           <p className="mt-3.5 text-muted text-[12.5px] border-t border-line pt-3">Apoio à leitura. Não substitui a análise do seu departamento jurídico.</p>
-          <p className="mt-1.5 text-muted text-[12px]">Nada é gravado em disco. O contrato fica em memória por 1 hora para responder às suas perguntas e depois é descartado.</p>
+          <Privacidade detalhe="Sem marcar 'Guardar', nada fica salvo: o contrato existe só nesta tela por 1 hora, para responder às suas perguntas, e depois é descartado." />
+
+          <MaisDetalhes titulo="Últimos resultados">
+            {historico === null ? (
+              <p className="text-muted text-sm">Carregando...</p>
+            ) : historico.length === 0 ? (
+              <p className="text-muted text-sm">Nenhum resultado salvo ainda.</p>
+            ) : (
+              <>
+                <ul className="flex flex-col gap-1.5 text-sm mb-3">
+                  {historico.map((h) => (
+                    <li key={h.id} className="flex justify-between gap-3">
+                      <Link href={`/r/${h.id}`} className="text-accent-ink font-semibold hover:underline truncate">{h.titulo}</Link>
+                      <span className="text-muted shrink-0">{data(h.criadoEm)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
+              </>
+            )}
+          </MaisDetalhes>
         </Panel>
 
         <Stage>
           {estado.fase === "vazio" && (
             <Empty
-              glifo="§"
+              ilustracao={<IlustracaoContrato />}
               titulo="A análise aparece aqui"
               descricao="Resumo executivo, nível de risco, cláusulas que merecem atenção, prazos críticos, o que falta no contrato e perguntas para levar ao jurídico."
               acao="Usar contrato de exemplo"
               onAcao={preencherExemplo}
             />
           )}
-          {estado.fase === "carregando" && <Loading texto="Lendo o contrato, identificando partes, prazos e cláusulas que pesam contra você..." />}
-          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} />}
-          {estado.fase === "pronto" && <Resultado id={estado.id} analise={estado.analise} papel={estado.papel} demo={estado.demo} onNovo={analisarOutro} />}
+          {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
+          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={() => analisar(estado.fd)} />}
+          {estado.fase === "pronto" && (
+            <Resultado id={estado.id} idContrato={estado.idContrato} analise={estado.analise} papel={estado.papel} meta={estado.meta} onNovo={analisarOutro} />
+          )}
         </Stage>
       </Workspace>
     </>
@@ -254,18 +305,6 @@ function classeRisco(nota: number) {
   return "baixo";
 }
 
-function corTexto(cls: string) {
-  if (cls === "alto") return "text-danger";
-  if (cls === "moderado") return "text-warn";
-  return "text-ok";
-}
-
-function corBarra(cls: string) {
-  if (cls === "alto") return "bg-danger";
-  if (cls === "moderado") return "bg-warn";
-  return "bg-ok";
-}
-
 function textoRisco(nota: number, papel: string) {
   const quem = papel === "outro" ? "para você" : `para você como ${papel}`;
   if (nota >= 7) return `Risco alto ${quem}. Há cláusulas que pesam claramente contra a sua posição: negocie antes de assinar.`;
@@ -273,55 +312,71 @@ function textoRisco(nota: number, papel: string) {
   return `Risco baixo ${quem}. O contrato está relativamente equilibrado; confira os detalhes abaixo.`;
 }
 
-type QA = { pergunta: string; resposta?: string; erro?: string; carregando: boolean };
+function analiseParaTexto(a: Analise, papel: string) {
+  const l: string[] = [a.tipo_contrato || "Contrato", `Análise do ponto de vista de quem é ${papel}`, "", a.resumo_executivo, "", "Cláusulas que merecem atenção:"];
+  (a.clausulas_risco || []).forEach((c) => l.push(`- ${c.clausula} (${c.severidade}): ${c.risco} Sugestão: ${c.sugestao_negociacao}`));
+  l.push("", "Prazos críticos:");
+  (a.prazos_criticos || []).forEach((p) => l.push(`- ${p.prazo}: ${p.evento}`));
+  l.push("", "Obrigações principais:");
+  (a.obrigacoes_principais || []).forEach((o) => l.push(`- ${o}`));
+  l.push("", "O que não está no contrato:");
+  (a.pontos_ausentes || []).forEach((o) => l.push(`- ${o}`));
+  l.push("", "Perguntas para o jurídico:");
+  (a.perguntas_para_o_juridico || []).forEach((q) => l.push(`- ${q}`));
+  return l.join("\n");
+}
 
-function Resultado({ id, analise: a, papel, demo, onNovo }: { id: string; analise: Analise; papel: string; demo: boolean; onNovo: () => void }) {
-  const [pergunta, setPergunta] = useState("");
-  const [qas, setQas] = useState<QA[]>([]);
-  const nota = Math.max(0, Math.min(10, Number(a.nota_risco) || 0));
-  const cls = classeRisco(nota);
-
-  async function perguntar(e: FormEvent) {
-    e.preventDefault();
-    const p = pergunta.trim();
-    if (!p) return;
-    setPergunta("");
-    setQas((prev) => [...prev, { pergunta: p, carregando: true }]);
-    try {
-      const r = await fetch("/api/perguntar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, pergunta: p }) });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || "Não foi possível responder.");
-      setQas((prev) => prev.map((qa) => (qa.pergunta === p && qa.carregando ? { pergunta: p, resposta: data.resposta, carregando: false } : qa)));
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Não foi possível responder.";
-      setQas((prev) => prev.map((qa) => (qa.pergunta === p && qa.carregando ? { pergunta: p, erro: msg, carregando: false } : qa)));
-    }
-  }
-
+export function Resultado({
+  id,
+  idContrato,
+  analise,
+  papel,
+  meta,
+  onNovo,
+}: {
+  id?: string;
+  idContrato?: string;
+  analise: Analise;
+  papel: string;
+  meta: Meta;
+  onNovo?: () => void;
+}) {
   return (
     <article className="reveal">
-      <ResultHead titulo={a.tipo_contrato || "Contrato"} subtitulo={`Análise do ponto de vista de quem é ${papel}${demo ? " (exemplo em modo demonstração)" : ""}`}>
-        <button type="button" className="btn-ghost" onClick={() => window.print()}>Imprimir ou salvar PDF</button>
-        <button type="button" className="btn-ghost" onClick={onNovo}>Analisar outro</button>
+      <ResultHead titulo={analise.tipo_contrato || "Contrato"} subtitulo={`Análise do ponto de vista de quem é ${papel}`}>
+        <Entregar
+          id={id}
+          titulo={analise.tipo_contrato || "Contrato"}
+          texto={() => analiseParaTexto(analise, papel)}
+          extras={onNovo ? [{ rotulo: "Analisar outro", onClick: onNovo }] : undefined}
+        />
       </ResultHead>
+
+      <Origem meta={meta} />
+
+      <ConteudoAnalise analise={analise} papel={papel} />
+
+      {idContrato && <SecaoPerguntar idContrato={idContrato} />}
+
+      <p className="text-muted text-[12.5px] border-t border-line pt-3">Apoio à leitura. Não substitui a análise do seu departamento jurídico.</p>
+    </article>
+  );
+}
+
+/** Corpo da análise (sem cabeçalho, Origem nem a caixa de perguntas), reaproveitado pela página de impressão. */
+export function ConteudoAnalise({ analise: a, papel }: { analise: Analise; papel: string }) {
+  const nota = Math.max(0, Math.min(10, Number(a.nota_risco) || 0));
+  const cls = classeRisco(nota);
+  const tom = cls === "alto" ? "danger" : cls === "moderado" ? "warn" : "ok";
+
+  return (
+    <>
+      <Destaque valor={`${numero(nota, 1)}/10`} rotulo="Nível de risco" interpretacao={textoRisco(nota, papel)} tom={tom} />
 
       <p className="summary">{a.resumo_executivo}</p>
 
-      <div className="grid grid-cols-2 max-md:grid-cols-1 gap-3.5 mb-8">
+      <Section titulo="Partes">
         <Item>
-          <h3 className="font-bold mb-3">Nível de risco</h3>
-          <div className="flex items-center gap-3 mb-2.5">
-            <span className={`text-2xl font-extrabold tracking-tight shrink-0 ${corTexto(cls)}`}>
-              {nota}<small className="text-[13px] font-semibold text-muted"> /10</small>
-            </span>
-            <div className="flex-1 h-2.5 rounded-full bg-bg overflow-hidden" role="img" aria-label={`Nota de risco ${nota} de 10`}>
-              <div className={`h-full rounded-full ${corBarra(cls)}`} style={{ width: `${nota * 10}%` }} />
-            </div>
-          </div>
-          <p className="text-muted text-sm">{textoRisco(nota, papel)}</p>
-        </Item>
-        <Item>
-          <h3 className="font-bold mb-3">Partes</h3>
           <ul className="flex flex-col gap-2.5">
             {(a.partes || []).map((p, i) => (
               <li key={i} className="flex items-center gap-2.5">
@@ -331,7 +386,7 @@ function Resultado({ id, analise: a, papel, demo, onNovo }: { id: string; analis
             ))}
           </ul>
         </Item>
-      </div>
+      </Section>
 
       <Section titulo="O essencial">
         <div className="grid grid-cols-3 max-md:grid-cols-1 gap-3.5">
@@ -347,6 +402,8 @@ function Resultado({ id, analise: a, papel, demo, onNovo }: { id: string; analis
             {
               chave: "clausula",
               titulo: "Cláusula",
+              papel: "titulo",
+              largura: "22%",
               render: (c) => (
                 <>
                   <strong>{c.clausula}</strong>
@@ -354,9 +411,9 @@ function Resultado({ id, analise: a, papel, demo, onNovo }: { id: string; analis
                 </>
               ),
             },
-            { chave: "risco", titulo: "Risco para você", render: (c) => c.risco },
-            { chave: "severidade", titulo: "Severidade", render: (c) => <Chip nivel={c.severidade}>{c.severidade}</Chip> },
-            { chave: "sugestao", titulo: "Sugestão de negociação", render: (c) => c.sugestao_negociacao },
+            { chave: "severidade", titulo: "Severidade", papel: "chip", largura: "100px", render: (c) => <Chip nivel={c.severidade} /> },
+            { chave: "risco", titulo: "Risco para você", papel: "resumo", render: (c) => c.risco },
+            { chave: "sugestao", titulo: "Sugestão de negociação", papel: "detalhe", render: (c) => c.sugestao_negociacao },
           ]}
           linhas={a.clausulas_risco || []}
         />
@@ -396,37 +453,62 @@ function Resultado({ id, analise: a, papel, demo, onNovo }: { id: string; analis
           ))}
         </Item>
       </Section>
+    </>
+  );
+}
 
-      <Section titulo="Pergunte sobre este contrato">
-        <Item>
-          <form onSubmit={perguntar} className="flex gap-2.5 mb-3.5">
-            <input
-              className="input flex-1"
-              placeholder="Ex.: Posso cancelar sem multa depois de 12 meses?"
-              autoComplete="off"
-              value={pergunta}
-              onChange={(e) => setPergunta(e.target.value)}
-            />
-            <button type="submit" className="btn-primary w-auto">Perguntar</button>
-          </form>
-          {qas.length > 0 && (
-            <div className="flex flex-col">
-              {qas.map((qa, i) => (
-                <div key={i} className="pb-3.5 mb-3.5 border-b border-line last:border-b-0 last:mb-0 last:pb-0">
-                  <p className="font-bold mb-1.5 text-sm">{qa.pergunta}</p>
-                  {qa.carregando && <p className="text-muted text-sm">Lendo o contrato para responder...</p>}
-                  {qa.erro && <p className="text-danger text-sm">{qa.erro}</p>}
-                  {qa.resposta && qa.resposta.split(/\n{2,}/).map((par, j) => (
-                    <p key={j} className="text-muted text-sm mb-2 last:mb-0">{par}</p>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-        </Item>
-      </Section>
+type QA = { pergunta: string; resposta?: string; erro?: string; carregando: boolean };
 
-      <p className="text-muted text-[12.5px] border-t border-line pt-3">Apoio à leitura. Não substitui a análise do seu departamento jurídico.</p>
-    </article>
+/** Caixa de perguntas ao contrato; só aparece quando o texto ainda está guardado em memória (1 hora), ver lib/estado.ts. */
+function SecaoPerguntar({ idContrato }: { idContrato: string }) {
+  const [pergunta, setPergunta] = useState("");
+  const [qas, setQas] = useState<QA[]>([]);
+
+  async function perguntar(e: FormEvent) {
+    e.preventDefault();
+    const p = pergunta.trim();
+    if (!p) return;
+    setPergunta("");
+    setQas((prev) => [...prev, { pergunta: p, carregando: true }]);
+    try {
+      const r = await fetch("/api/perguntar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: idContrato, pergunta: p }) });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Não foi possível responder.");
+      setQas((prev) => prev.map((qa) => (qa.pergunta === p && qa.carregando ? { pergunta: p, resposta: resposta.resposta, carregando: false } : qa)));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Não foi possível responder.";
+      setQas((prev) => prev.map((qa) => (qa.pergunta === p && qa.carregando ? { pergunta: p, erro: msg, carregando: false } : qa)));
+    }
+  }
+
+  return (
+    <Section titulo="Pergunte sobre este contrato">
+      <Item>
+        <form onSubmit={perguntar} className="flex gap-2.5 mb-3.5">
+          <input
+            className="input flex-1"
+            placeholder="Ex.: Posso cancelar sem multa depois de 12 meses?"
+            autoComplete="off"
+            value={pergunta}
+            onChange={(e) => setPergunta(e.target.value)}
+          />
+          <button type="submit" className="btn-primary w-auto">Perguntar</button>
+        </form>
+        {qas.length > 0 && (
+          <div className="flex flex-col">
+            {qas.map((qa, i) => (
+              <div key={i} className="pb-3.5 mb-3.5 border-b border-line last:border-b-0 last:mb-0 last:pb-0">
+                <p className="font-bold mb-1.5 text-sm">{qa.pergunta}</p>
+                {qa.carregando && <p className="text-muted text-sm">Lendo o contrato para responder...</p>}
+                {qa.erro && <p className="text-danger text-sm">{qa.erro}</p>}
+                {qa.resposta && qa.resposta.split(/\n{2,}/).map((par, j) => (
+                  <p key={j} className="text-muted text-sm mb-2 last:mb-0">{par}</p>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </Item>
+    </Section>
   );
 }
