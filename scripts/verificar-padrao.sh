@@ -10,6 +10,9 @@ APPS=(agente-kanban contratos-ia entrevista-ia financas-ia posts-sociais prospec
 
 # Lista de arquivos/pastas comparados entre pdi-time e cada app. Estenda aqui quando um novo
 # arquivo compartilhado nascer em pdi-time e precisar ser replicado sem alteração nos outros.
+# app/api/f/[token]/route.ts fica de fora de propósito: por design (ver o comentário no topo do
+# próprio arquivo) cada app pode precisar importar seu próprio módulo ali, então ele nunca é
+# idêntico entre todos os apps — só lib/formularios.ts e app/f/** (a UI pública) são compartilhados.
 ARQUIVOS=(
   "components/ui.tsx"
   "components/setup.tsx"
@@ -18,11 +21,17 @@ ARQUIVOS=(
   "lib/setup-comum.ts"
   "lib/historico.ts"
   "lib/mcp.ts"
+  "lib/formularios.ts"
+  "lib/notificacoes.ts"
+  "lib/rotinas.ts"
   "app/mcp"
+  "app/f"
+  "app/api/rotinas"
   "app/api/setup"
   "app/r"
   "app/imprimir"
   "app/globals.css"
+  "proxy.ts"
 )
 
 # app/globals.css só é comparado até esta linha: o que vem depois é específico de cada app.
