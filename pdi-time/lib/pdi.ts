@@ -2,6 +2,7 @@
 // e a ferramenta MCP (lib/ferramentas.ts), para não duplicar o prompt nem a gravação no histórico.
 import { aiEnabled, askJSON, meta, type Meta } from "./ai";
 import { esperar, pdiDemo } from "./demo";
+import { criar, registrarCallback, type CampoFormulario, type ParametrosPublicos } from "./formularios";
 import { salvar, SENSIVEL } from "./historico";
 import type { DadosPDI, PDI } from "./types";
 
@@ -44,3 +45,33 @@ export async function gerarPDI(dados: DadosPDI, opts: { guardar?: boolean } = {}
   const id = idSalvo({ nome: dados.nome, dados, saida: pdi, metaGerada, guardar: opts.guardar });
   return { demo: false, pdi, meta: metaGerada, id };
 }
+
+const CAMPOS_AUTOAVALIACAO: CampoFormulario[] = [
+  { chave: "nome", rotulo: "Seu nome", tipo: "texto", obrigatorio: true },
+  { chave: "cargo", rotulo: "Seu cargo", tipo: "texto", obrigatorio: true },
+  { chave: "tempo", rotulo: "Há quanto tempo você está nessa função", tipo: "texto", obrigatorio: true },
+  { chave: "entregas", rotulo: "Suas entregas e atividades recentes", tipo: "textarea", obrigatorio: true },
+  { chave: "aspiracoes", rotulo: "Suas aspirações de carreira", tipo: "textarea" },
+];
+
+/** Parâmetros próprios do link de autoavaliação: os objetivos da empresa, informados pelo líder ao criar o link. */
+export type ParametrosAutoavaliacao = ParametrosPublicos & { objetivosEmpresa: string };
+
+/** Cria o link público (/f/<código>) que o colaborador preenche para gerar o próprio PDI. */
+export function criarLinkAutoavaliacao(objetivosEmpresa: string, expiraEmDias: number): string {
+  const parametros: ParametrosAutoavaliacao = {
+    marca: "P",
+    nome: "PDI do Time",
+    titulo: "Sua autoavaliação para o PDI",
+    descricao: "Suas respostas viram a base do seu Plano de Desenvolvimento Individual (PDI). Leva menos de 5 minutos.",
+    objetivosEmpresa,
+  };
+  return criar({ tipo: "autoavaliacao", campos: CAMPOS_AUTOAVALIACAO, parametros, expiraEmDias, limite: 1 });
+}
+
+registrarCallback("autoavaliacao", async ({ dados, parametros }) => {
+  const { objetivosEmpresa } = parametros as ParametrosAutoavaliacao;
+  const dadosPDI: DadosPDI = { nome: dados.nome, cargo: dados.cargo, tempo: dados.tempo, entregas: dados.entregas, objetivos: objetivosEmpresa, aspiracoes: dados.aspiracoes };
+  const resultado = await gerarPDI(dadosPDI, { guardar: true });
+  return { resultadoId: resultado.id };
+});

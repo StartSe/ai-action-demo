@@ -116,6 +116,14 @@ export function listarRespostas<D = Record<string, string>>(token: string, limit
   return linhas.map((l) => linhaParaResposta<D>(l));
 }
 
+/** Respostas mais recentes de um `tipo`, juntando vários formulários/tokens (ex.: um convite por pessoa). */
+export function listarRespostasPorTipo<D = Record<string, string>>(tipo: string, limite = 50): RespostaFormulario<D>[] {
+  const linhas = abrir()
+    .prepare("SELECT r.* FROM respostas r JOIN formularios f ON r.token = f.token WHERE f.tipo = ? ORDER BY r.criadoEm DESC LIMIT ?")
+    .all(tipo, limite) as LinhaResposta[];
+  return linhas.map((l) => linhaParaResposta<D>(l));
+}
+
 /** Apaga o formulário e as respostas recebidas por ele. */
 export function apagar(token: string): void {
   const d = abrir();
