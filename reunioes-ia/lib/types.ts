@@ -17,6 +17,8 @@ export interface Acao {
   confirmacao?: "confirmada" | "prazo_ajustado";
   /** Comentário livre deixado pelo responsável ao confirmar (US-065). */
   comentarioResponsavel?: string;
+  /** Id da rotina de cobrança na véspera do prazo (US-076), enquanto ela ainda não foi cancelada. */
+  cobrancaRotinaId?: string;
 }
 
 export interface EmailFollowup {
@@ -39,6 +41,8 @@ export interface DadosAta {
   titulo: string;
   participantes: string;
   contexto: string;
+  /** Uma pessoa por linha, "Nome: e-mail" (US-076), usado para cobrar cada responsável na véspera do prazo. */
+  emailsParticipantes: string;
 }
 
 export type FonteTranscricao = "elevenlabs" | "openai" | "demo";
@@ -48,6 +52,7 @@ export interface EntradaAta {
   titulo: string;
   participantes: string;
   contexto: string;
+  emailsParticipantes: string;
   transcricao: string;
   fonteTranscricao: FonteTranscricao | null;
 }

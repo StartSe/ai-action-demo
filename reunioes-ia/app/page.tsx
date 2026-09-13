@@ -37,9 +37,11 @@ const DADOS_EXEMPLO: DadosAta = {
   titulo: "Reunião de diretoria — Vetta Alimentos",
   participantes: "Renata Cavalcanti, Marcelo Duarte, Juliana Prado, Thiago Almeida, Patrícia Nunes",
   contexto: "Reunião mensal de diretoria, foco no fechamento do terceiro trimestre e no lançamento de outubro.",
+  emailsParticipantes:
+    "Renata Cavalcanti: renata.cavalcanti@vettaalimentos.com.br\nMarcelo Duarte: marcelo.duarte@vettaalimentos.com.br\nJuliana Prado: juliana.prado@vettaalimentos.com.br\nThiago Almeida: thiago.almeida@vettaalimentos.com.br\nPatrícia Nunes: patricia.nunes@vettaalimentos.com.br",
 };
 
-const DADOS_VAZIOS: DadosAta = { titulo: "", participantes: "", contexto: "" };
+const DADOS_VAZIOS: DadosAta = { titulo: "", participantes: "", contexto: "", emailsParticipantes: "" };
 
 const ETAPAS_CARREGANDO = ["Preparando a transcrição...", "Transcrevendo o áudio, se houver...", "Lendo a transcrição e organizando decisões, ações e responsáveis..."];
 
@@ -62,6 +64,7 @@ function IlustracaoAta() {
 }
 
 type ResultadoEnvio = { indice: number; acao: string; ok: boolean; mensagem: string; link?: string };
+type ResultadoCobrancaItem = { indice: number; acao: string; ok: boolean; mensagem: string };
 
 const PRAZO_VALIDO = /^\d{4}-\d{2}-\d{2}$/;
 const PRAZO_PARTES = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -166,7 +169,14 @@ export default function Page() {
       const r = await fetch("/api/ata", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcricao, titulo: dadosAta.titulo, participantes: dadosAta.participantes, contexto: dadosAta.contexto, fonteTranscricao }),
+        body: JSON.stringify({
+          transcricao,
+          titulo: dadosAta.titulo,
+          participantes: dadosAta.participantes,
+          contexto: dadosAta.contexto,
+          emailsParticipantes: dadosAta.emailsParticipantes,
+          fonteTranscricao,
+        }),
       });
       const resposta = await r.json();
       if (!r.ok) throw new Error(resposta.error || "Falha ao gerar a ata.");
@@ -272,6 +282,19 @@ export default function Page() {
             <MaisDetalhes>
               <Field label="Contexto (opcional)" htmlFor="contexto">
                 <textarea id="contexto" className="input min-h-20 resize-y" placeholder="Ex.: reunião mensal de diretoria, foco no fechamento do trimestre" value={dados.contexto} onChange={set("contexto")} />
+              </Field>
+              <Field
+                label="E-mails dos participantes (opcional)"
+                htmlFor="emailsParticipantes"
+                hint="Uma pessoa por linha, no formato Nome: e-mail. Usado para cobrar cada responsável na véspera do prazo da ação dele."
+              >
+                <textarea
+                  id="emailsParticipantes"
+                  className="input min-h-20 resize-y"
+                  placeholder={"Ex.: Renata Cavalcanti: renata@empresa.com\nMarcelo Duarte: marcelo@empresa.com"}
+                  value={dados.emailsParticipantes}
+                  onChange={set("emailsParticipantes")}
+                />
               </Field>
             </MaisDetalhes>
 
@@ -383,6 +406,9 @@ export function ConteudoAta({
   const [resultadosEnvio, setResultadosEnvio] = useState<Record<number, ResultadoEnvio> | null>(null);
   const [gerandoConfirmacao, setGerandoConfirmacao] = useState(false);
   const [erroConfirmacao, setErroConfirmacao] = useState<string | null>(null);
+  const [cobrandoVespera, setCobrandoVespera] = useState(false);
+  const [erroCobranca, setErroCobranca] = useState<string | null>(null);
+  const [resultadosCobranca, setResultadosCobranca] = useState<Record<number, ResultadoCobrancaItem> | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -395,6 +421,7 @@ export function ConteudoAta({
   }, [id]);
 
   const acoesPendentes = acoes.filter((a) => !a.noQuadro);
+  const acoesElegiveisCobranca = acoes.filter((a) => !a.concluida && PRAZO_VALIDO.test(a.prazo));
 
   async function enviarParaQuadro() {
     if (!id) return;
@@ -429,6 +456,25 @@ export function ConteudoAta({
       setErroConfirmacao(e instanceof Error ? e.message : "Erro inesperado.");
     } finally {
       setGerandoConfirmacao(false);
+    }
+  }
+
+  async function cobrarNaVespera() {
+    if (!id) return;
+    setCobrandoVespera(true);
+    setErroCobranca(null);
+    try {
+      const r = await fetch(`/api/ata/${id}/cobranca`, { method: "POST" });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Falha ao agendar a cobrança.");
+      setAcoes(resposta.ata.acoes || []);
+      const mapa: Record<number, ResultadoCobrancaItem> = {};
+      for (const res of (resposta.resultados || []) as ResultadoCobrancaItem[]) mapa[res.indice] = res;
+      setResultadosCobranca(mapa);
+    } catch (e) {
+      setErroCobranca(e instanceof Error ? e.message : "Erro inesperado.");
+    } finally {
+      setCobrandoVespera(false);
     }
   }
 
@@ -480,6 +526,7 @@ export function ConteudoAta({
           {l.noQuadro && <Chip nivel="positivo">No quadro</Chip>}
           {l.confirmacao === "confirmada" && <Chip nivel="positivo">Confirmada</Chip>}
           {l.confirmacao === "prazo_ajustado" && <Chip nivel="media">Prazo ajustado</Chip>}
+          {l.cobrancaRotinaId && <Chip nivel="neutral">Cobrança agendada</Chip>}
         </div>
       ),
     },
@@ -617,6 +664,32 @@ export function ConteudoAta({
                       </li>
                     )
                 )}
+              </ul>
+            )}
+          </div>
+          <div className="mt-3.5 flex flex-col gap-2.5">
+            <button
+              type="button"
+              className="btn-ghost self-start"
+              onClick={cobrarNaVespera}
+              disabled={cobrandoVespera || !acoesElegiveisCobranca.length || acoesElegiveisCobranca.every((a) => a.cobrancaRotinaId)}
+            >
+              {cobrandoVespera
+                ? "Agendando..."
+                : !acoesElegiveisCobranca.length
+                  ? "Nenhuma ação pendente para cobrar"
+                  : acoesElegiveisCobranca.every((a) => a.cobrancaRotinaId)
+                    ? "Cobranças já agendadas"
+                    : "Cobrar na véspera"}
+            </button>
+            {erroCobranca && <p className="text-danger text-sm">{erroCobranca}</p>}
+            {resultadosCobranca && (
+              <ul className="text-sm flex flex-col gap-1">
+                {Object.values(resultadosCobranca).map((r) => (
+                  <li key={r.indice} className={r.ok ? "text-ok" : "text-danger"}>
+                    {r.acao}: {r.mensagem}
+                  </li>
+                ))}
               </ul>
             )}
           </div>

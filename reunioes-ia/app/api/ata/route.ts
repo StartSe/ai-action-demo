@@ -7,16 +7,24 @@ interface Payload {
   titulo?: string;
   participantes?: string;
   contexto?: string;
+  emailsParticipantes?: string;
   fonteTranscricao?: FonteTranscricao | null;
 }
 
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as Payload;
-  const { transcricao, titulo, participantes, contexto, fonteTranscricao } = body;
+  const { transcricao, titulo, participantes, contexto, emailsParticipantes, fonteTranscricao } = body;
   if (!transcricao || !String(transcricao).trim()) {
     return Response.json({ error: "Cole, envie ou grave uma transcrição antes de gerar a ata." }, { status: 400 });
   }
-  const entrada = { titulo: titulo || "", participantes: participantes || "", contexto: contexto || "", transcricao, fonteTranscricao: fonteTranscricao ?? null };
+  const entrada = {
+    titulo: titulo || "",
+    participantes: participantes || "",
+    contexto: contexto || "",
+    emailsParticipantes: emailsParticipantes || "",
+    transcricao,
+    fonteTranscricao: fonteTranscricao ?? null,
+  };
   try {
     const { ata, meta: metaGerada } = await gerarAta({ transcricao, titulo, participantes, contexto });
     const id = salvar({ tipo: "ata", titulo: ata.titulo || titulo || "Ata da reunião", entrada, saida: ata, meta: metaGerada });
