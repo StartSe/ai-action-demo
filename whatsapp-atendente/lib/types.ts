@@ -1,6 +1,7 @@
 export type Tom = "cordial" | "direto" | "descontraido";
 export type NaoSei = "humano" | "contato" | "site";
-export type Origem = "simulador" | "whatsapp";
+// Renomeado de "Origem" para não colidir com o componente Origem de components/ui.tsx (linha de proveniência do resultado).
+export type CanalOrigem = "simulador" | "whatsapp";
 
 export interface Config {
   negocio: string;
@@ -16,10 +17,22 @@ export interface Conversa {
   ultima_mensagem: string;
   hora: string;
   transferir: boolean;
-  origem: Origem;
+  origem: CanalOrigem;
 }
 
 export interface MensagemChat {
   papel: "cliente" | "atendente";
   texto: string;
+}
+
+/** Entrada/saída salvas em lib/historico.ts (tipo "atendimento") a cada mensagem respondida. */
+export interface AtendimentoEntrada {
+  numero: string;
+  texto: string;
+}
+
+export interface AtendimentoSaida {
+  resposta: string;
+  transferir: boolean;
+  conversas: Conversa[];
 }

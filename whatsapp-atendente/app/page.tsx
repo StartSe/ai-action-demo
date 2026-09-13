@@ -1,15 +1,56 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { DemoNotice, Field, Panel, Row, Stage, Topbar, Workspace, useScrollToResult, useStatus } from "@/components/ui";
+import {
+  Chip,
+  DataTable,
+  Empty,
+  Entregar,
+  ErrorBox,
+  Field,
+  Loading,
+  MaisDetalhes,
+  Origem,
+  Panel,
+  Privacidade,
+  ResultHead,
+  Row,
+  Stage,
+  Topbar,
+  Workspace,
+  data,
+  type Coluna,
+  useScrollToResult,
+  useStatus,
+} from "@/components/ui";
 import { Celular, type BolhaChat } from "@/components/Celular";
-import { Conversas } from "@/components/Conversas";
 import { ConectarWhatsApp } from "@/components/ConectarWhatsApp";
+import type { Meta } from "@/lib/ai";
 import type { Config, Conversa } from "@/lib/types";
 
 const CONFIG_VAZIA: Config = { negocio: "", atendente: "", tom: "cordial", horario: "", baseConhecimento: "", naoSei: "humano" };
 
 const SUGESTOES = ["Quanto custa o clareamento dental?", "Vocês atendem aos sábados?", "Fazem cirurgia cardíaca?"];
+
+const ETAPAS_CARREGANDO = ["Abrindo as conversas...", "Quase pronto..."];
+
+type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
+
+/** Balão de conversa (estilo WhatsApp) com três pontos de "digitando", no lugar de um glifo genérico no estado vazio. */
+function IlustracaoConversa() {
+  return (
+    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="7" y="9" width="50" height="34" rx="8" />
+      <path d="M20 43l-4 10 12-10" />
+      <circle cx="22" cy="26" r="1.8" fill="currentColor" stroke="none" />
+      <circle cx="32" cy="26" r="1.8" fill="currentColor" stroke="none" />
+      <circle cx="42" cy="26" r="1.8" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+type EstadoConversas = { fase: "carregando" } | { fase: "erro"; mensagem: string } | { fase: "pronto"; conversas: Conversa[]; meta: Meta; id?: string };
 
 export default function Page() {
   const { status, erro } = useStatus();
@@ -22,29 +63,38 @@ export default function Page() {
   const [valor, setValor] = useState("");
   const [enviando, setEnviando] = useState(false);
 
-  const [conversas, setConversas] = useState<Conversa[]>([]);
+  const [estadoConversas, setEstadoConversas] = useState<EstadoConversas>({ fase: "carregando" });
+  const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [verifyToken, setVerifyToken] = useState("");
   const autoEnviado = useRef(false);
 
   useScrollToResult(mensagens.length > 0);
 
+  function carregarConversas() {
+    fetch("/api/conversas")
+      .then((r) => r.json())
+      .then((r) => setEstadoConversas({ fase: "pronto", conversas: r.itens, meta: r.meta }))
+      .catch(() => setEstadoConversas({ fase: "erro", mensagem: "Não foi possível carregar as conversas agora." }));
+  }
+
   useEffect(() => {
     fetch("/api/config").then((r) => r.json()).then(setConfig).catch(() => {});
-    carregarConversas();
+    // Com ?exemplo=1, o envio automático abaixo já traz a lista de conversas atualizada;
+    // carregar aqui também correria com aquela resposta e poderia sobrescrevê-la.
+    if (new URLSearchParams(location.search).get("exemplo") !== "1") carregarConversas();
     fetch("/api/whatsapp/webhook-info")
       .then((r) => r.json())
       .then((d) => { setWebhookUrl(d.url || ""); setVerifyToken(d.verifyToken || ""); })
       .catch(() => {});
+    fetch("/api/simular").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
   }, []);
 
-  async function carregarConversas() {
-    try {
-      const r = await fetch("/api/conversas");
-      setConversas(await r.json());
-    } catch {
-      // mantém a lista como estava
-    }
+  function apagarHistorico() {
+    if (!window.confirm("Apagar todos os resultados salvos? Essa ação não pode ser desfeita.")) return;
+    fetch("/api/simular", { method: "DELETE" }).then(() =>
+      fetch("/api/simular").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]))
+    );
   }
 
   function setCampo<K extends keyof Config>(campo: K, valor: Config[K]) {
@@ -84,22 +134,23 @@ export default function Page() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ de: "simulador", texto }),
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || "Falha ao responder.");
-      setMensagens((m) => [...m.filter((x) => !x.pendente), { papel: "atendente", texto: data.resposta, transferido: data.transferir }]);
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Falha ao responder.");
+      setMensagens((m) => [...m.filter((x) => !x.pendente), { papel: "atendente", texto: resposta.resposta, transferido: resposta.transferir }]);
+      setEstadoConversas({ fase: "pronto", conversas: resposta.conversas, meta: resposta.meta, id: resposta.id });
+      fetch("/api/simular").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
     } catch (err) {
       const mensagem = err instanceof Error ? err.message : "erro inesperado";
       setMensagens((m) => [...m.filter((x) => !x.pendente), { papel: "atendente", texto: `Não deu certo: ${mensagem}`, transferido: true }]);
     } finally {
       setEnviando(false);
-      await carregarConversas();
     }
   }
 
   async function limparConversa(numero: string) {
     try {
       await fetch(`/api/conversas/${encodeURIComponent(numero)}`, { method: "DELETE" });
-      await carregarConversas();
+      carregarConversas();
     } catch {
       // ignora falha silenciosamente
     }
@@ -115,15 +166,21 @@ export default function Page() {
         await enviarSimulada("Fazem cirurgia cardíaca?");
       }, 0);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const conectado = Boolean(status?.integrations?.whatsapp);
+  const carregando = estadoConversas.fase === "carregando";
 
   return (
     <>
-      <Topbar marca="W" nome="Atendente no WhatsApp" area="Atendimento e Vendas" status={status} erro={erro} />
-      <DemoNotice visivel={Boolean(status && !status.ai)} resumo="Modo demonstração: as respostas vêm de uma busca simples na base de conhecimento, não da IA." />
+      <Topbar
+        marca="W"
+        nome="Atendente no WhatsApp"
+        area="Atendimento e Vendas"
+        status={status}
+        erro={erro}
+        resumo="Modo demonstração: as respostas vêm de uma busca simples na base de conhecimento, não da IA."
+      />
 
       <Workspace>
         <Panel
@@ -139,16 +196,6 @@ export default function Page() {
                 <input id="atendenteNome" className="input" required placeholder="Bia" value={config.atendente} onChange={(e) => setCampo("atendente", e.target.value)} />
               </Field>
             </Row>
-            <Field label="Tom de voz" htmlFor="tom">
-              <select id="tom" className="input" value={config.tom} onChange={(e) => setCampo("tom", e.target.value as Config["tom"])}>
-                <option value="cordial">Cordial</option>
-                <option value="direto">Direto</option>
-                <option value="descontraido">Descontraído</option>
-              </select>
-            </Field>
-            <Field label="Horário de atendimento humano" htmlFor="horario">
-              <input id="horario" className="input" placeholder="segunda a sexta, das 8h às 18h" value={config.horario} onChange={(e) => setCampo("horario", e.target.value)} />
-            </Field>
             <Field label="Base de conhecimento" htmlFor="baseConhecimento" hint="Tudo o que o atendente pode responder deve estar aqui. Ele não inventa informação fora disso.">
               <textarea
                 id="baseConhecimento"
@@ -159,13 +206,25 @@ export default function Page() {
                 onChange={(e) => setCampo("baseConhecimento", e.target.value)}
               />
             </Field>
-            <Field label="Quando não souber a resposta" htmlFor="naoSei">
-              <select id="naoSei" className="input" value={config.naoSei} onChange={(e) => setCampo("naoSei", e.target.value as Config["naoSei"])}>
-                <option value="humano">Avisar que um humano vai responder</option>
-                <option value="contato">Pedir e-mail e telefone</option>
-                <option value="site">Indicar o site</option>
-              </select>
-            </Field>
+            <MaisDetalhes>
+              <Field label="Tom de voz" htmlFor="tom">
+                <select id="tom" className="input" value={config.tom} onChange={(e) => setCampo("tom", e.target.value as Config["tom"])}>
+                  <option value="cordial">Cordial</option>
+                  <option value="direto">Direto</option>
+                  <option value="descontraido">Descontraído</option>
+                </select>
+              </Field>
+              <Field label="Horário de atendimento humano" htmlFor="horario">
+                <input id="horario" className="input" placeholder="segunda a sexta, das 8h às 18h" value={config.horario} onChange={(e) => setCampo("horario", e.target.value)} />
+              </Field>
+              <Field label="Quando não souber a resposta" htmlFor="naoSei">
+                <select id="naoSei" className="input" value={config.naoSei} onChange={(e) => setCampo("naoSei", e.target.value as Config["naoSei"])}>
+                  <option value="humano">Avisar que um humano vai responder</option>
+                  <option value="contato">Pedir e-mail e telefone</option>
+                  <option value="site">Indicar o site</option>
+                </select>
+              </Field>
+            </MaisDetalhes>
             {erroConfig && (
               <div className="bg-[#fde8e6] border border-[#f5c2bd] text-danger px-4 py-3 rounded-[10px] mb-4 text-sm">
                 <strong>Não deu certo.</strong> {erroConfig}
@@ -175,6 +234,27 @@ export default function Page() {
               {salvando ? "Salvando" : salvo ? "Configuração salva" : "Salvar configuração"}
             </button>
           </form>
+          <Privacidade detalhe="As conversas ficam salvas neste app até você apagar em 'Últimos resultados'." />
+
+          <MaisDetalhes titulo="Últimos resultados">
+            {historico === null ? (
+              <p className="text-muted text-sm">Carregando...</p>
+            ) : historico.length === 0 ? (
+              <p className="text-muted text-sm">Nenhum resultado salvo ainda.</p>
+            ) : (
+              <>
+                <ul className="flex flex-col gap-1.5 text-sm mb-3">
+                  {historico.map((h) => (
+                    <li key={h.id} className="flex justify-between gap-3">
+                      <Link href={`/r/${h.id}`} className="text-accent-ink font-semibold hover:underline truncate">{h.titulo}</Link>
+                      <span className="text-muted shrink-0">{data(h.criadoEm)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
+              </>
+            )}
+          </MaisDetalhes>
         </Panel>
 
         <Stage>
@@ -193,15 +273,25 @@ export default function Page() {
             ))}
           </div>
 
-          <div className="mb-8">
-            <h2 className="section-title">Conversas recebidas</h2>
-            <Conversas lista={conversas} onLimpar={limparConversa} />
-          </div>
+          {carregando && <Loading etapas={ETAPAS_CARREGANDO} />}
+          {estadoConversas.fase === "erro" && <ErrorBox mensagem={estadoConversas.mensagem} onTentarNovamente={carregarConversas} />}
+          {estadoConversas.fase === "pronto" && estadoConversas.conversas.length === 0 && (
+            <Empty
+              ilustracao={<IlustracaoConversa />}
+              titulo="Nenhuma conversa ainda"
+              descricao="Teste uma pergunta no celular acima ou aguarde mensagens reais do WhatsApp."
+              acao="Testar com uma pergunta"
+              onAcao={() => enviarSimulada(SUGESTOES[0])}
+            />
+          )}
+          {estadoConversas.fase === "pronto" && estadoConversas.conversas.length > 0 && (
+            <Resultado conversas={estadoConversas.conversas} meta={estadoConversas.meta} id={estadoConversas.id} onLimpar={limparConversa} />
+          )}
 
           {conectado ? (
-            <div className="flex items-center gap-2.5 px-4 py-3.5 bg-accent-soft text-accent-ink rounded-[10px] font-semibold">Conectado ao número configurado.</div>
+            <div className="flex items-center gap-2.5 px-4 py-3.5 bg-accent-soft text-accent-ink rounded-[10px] font-semibold mt-8">Conectado ao número configurado.</div>
           ) : (
-            <div>
+            <div className="mt-8">
               <h2 className="section-title">Conectar ao WhatsApp de verdade</h2>
               <ConectarWhatsApp url={webhookUrl} verifyToken={verifyToken} />
             </div>
@@ -210,4 +300,48 @@ export default function Page() {
       </Workspace>
     </>
   );
+}
+
+export function Resultado({ conversas, meta, id, onLimpar }: { conversas: Conversa[]; meta: Meta; id?: string; onLimpar?: (numero: string) => void }) {
+  return (
+    <article className="reveal">
+      <ResultHead titulo="Conversas recebidas">
+        <Entregar id={id} titulo="Conversas recebidas" texto={() => conversasParaTexto(conversas)} />
+      </ResultHead>
+
+      <Origem meta={meta} />
+
+      <ConteudoConversas conversas={conversas} onLimpar={onLimpar} />
+    </article>
+  );
+}
+
+/** Corpo da lista de conversas (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
+export function ConteudoConversas({ conversas, onLimpar }: { conversas: Conversa[]; onLimpar?: (numero: string) => void }) {
+  const colunas: Coluna<Conversa>[] = [
+    { chave: "numero", titulo: "Número", papel: "titulo", largura: "22%", render: (c) => <strong>{c.numero}</strong> },
+    { chave: "ultima_mensagem", titulo: "Última mensagem", papel: "resumo", render: (c) => c.ultima_mensagem },
+    {
+      chave: "status",
+      titulo: "Status",
+      papel: "chip",
+      largura: "190px",
+      render: (c) => (
+        <div className="flex gap-1.5 flex-wrap justify-end">
+          {c.transferir && <Chip nivel="media">Transferida</Chip>}
+          <Chip nivel="neutral">{c.origem === "whatsapp" ? "WhatsApp" : "Simulador"}</Chip>
+        </div>
+      ),
+    },
+    { chave: "hora", titulo: "Hora", render: (c) => c.hora },
+  ];
+  if (onLimpar) colunas.push({ chave: "acoes", titulo: "", render: (c) => <button type="button" className="btn-link" onClick={() => onLimpar(c.numero)}>Limpar</button> });
+
+  return <DataTable colunas={colunas} linhas={conversas} />;
+}
+
+function conversasParaTexto(conversas: Conversa[]): string {
+  const l: string[] = ["Conversas recebidas", ""];
+  conversas.forEach((c) => l.push(`${c.numero} (${c.origem === "whatsapp" ? "WhatsApp" : "Simulador"}${c.transferir ? ", transferida" : ""}): ${c.ultima_mensagem} — ${c.hora}`));
+  return l.join("\n");
 }

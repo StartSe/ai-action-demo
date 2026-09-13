@@ -2,7 +2,7 @@
 import { aiEnabled, askText } from "./ai";
 import { esperar } from "./demo";
 import { getConfig } from "./estado";
-import type { Config, Conversa, MensagemChat, Origem } from "./types";
+import type { CanalOrigem, Config, Conversa, MensagemChat } from "./types";
 
 const MAX_MENSAGENS = 20;
 
@@ -10,7 +10,7 @@ interface ConversaInterna {
   mensagens: MensagemChat[];
   ultima_mensagem: string;
   transferir: boolean;
-  origem: Origem;
+  origem: CanalOrigem;
   atualizadoEm: number;
 }
 
@@ -137,7 +137,7 @@ Regras:
   }. Nesses casos, termine a resposta com o marcador [TRANSFERIR] sozinho na última linha.`;
 }
 
-function obterConversa(numero: string, origem: Origem): ConversaInterna {
+function obterConversa(numero: string, origem: CanalOrigem): ConversaInterna {
   let c = conversas.get(numero);
   if (!c) {
     c = { mensagens: [], ultima_mensagem: "", transferir: false, origem, atualizadoEm: Date.now() };
@@ -153,7 +153,7 @@ export async function responder({
 }: {
   numero: string;
   texto: string;
-  origem?: Origem;
+  origem?: CanalOrigem;
 }): Promise<{ resposta: string; transferir: boolean }> {
   const config = getConfig();
   const conversa = obterConversa(numero, origem);
