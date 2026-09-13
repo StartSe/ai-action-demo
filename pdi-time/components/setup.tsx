@@ -13,6 +13,7 @@ export function SetupPage({ marca, nome, area }: { marca: string; nome: string; 
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
 
   const carregar = () => fetch("/api/setup").then((r) => r.json()).then(setDados).catch(() => setAviso({ tipo: "erro", texto: "Não foi possível carregar a configuração." }));
+  const primeiroPendenteId = dados?.integracoes.find((i) => i.obrigatoria && !i.configurada)?.id;
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -33,9 +34,12 @@ export function SetupPage({ marca, nome, area }: { marca: string; nome: string; 
           <h1 className="text-[30px] max-md:text-[26px] leading-[1.15] font-extrabold tracking-[-0.025em] mb-2.5">Configuração inicial</h1>
           <p className="text-muted max-w-[620px]">Conecte o que o app precisa. As chaves ficam guardadas só neste app, nunca aparecem por inteiro depois de salvas, e você pode trocá-las quando quiser.</p>
           {dados && (
-            <p className={`mt-3 text-sm font-semibold ${dados.pronto ? "text-ok" : "text-warn"}`}>
-              {dados.pronto ? "Tudo pronto para usar com IA de verdade." : "Falta conectar a inteligência artificial para sair do modo demonstração."}
-            </p>
+            <div className="mt-3 flex items-center gap-3 flex-wrap">
+              <span className="text-sm font-semibold text-muted">{dados.integracoes.filter((i) => i.configurada).length} de {dados.integracoes.length} conectados</span>
+              <span className={`text-sm font-semibold ${dados.pronto ? "text-ok" : "text-warn"}`}>
+                {dados.pronto ? "Tudo pronto para usar com IA de verdade." : "Falta conectar a inteligência artificial para sair do modo demonstração."}
+              </span>
+            </div>
           )}
         </div>
 
@@ -45,8 +49,21 @@ export function SetupPage({ marca, nome, area }: { marca: string; nome: string; 
 
         {!dados && !aviso && <p className="text-muted">Carregando...</p>}
 
+        {dados?.pronto && (
+          <section className="card border-accent p-6 max-md:p-5 mb-5">
+            <h2 className="text-lg font-bold mb-1">Tudo pronto</h2>
+            <p className="text-muted text-sm mb-4">Já dá para usar o app com IA de verdade.</p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <Link href="/?exemplo=1" className="btn-primary !w-auto">Testar com um exemplo</Link>
+              <Link href="/" className="btn-ghost">Ir para o app</Link>
+            </div>
+          </section>
+        )}
+
         <div className="flex flex-col gap-5">
-          {dados?.integracoes.map((i) => <CartaoIntegracao key={i.id} integracao={i} aoSalvar={carregar} />)}
+          {dados?.integracoes.map((i) => (
+            <CartaoIntegracao key={i.id} integracao={i} aoSalvar={carregar} destaque={i.id === primeiroPendenteId} />
+          ))}
         </div>
 
         <div className="mt-8 flex gap-3 flex-wrap items-center">
@@ -73,7 +90,7 @@ export function SetupPage({ marca, nome, area }: { marca: string; nome: string; 
   );
 }
 
-function CartaoIntegracao({ integracao: i, aoSalvar }: { integracao: IntegracaoStatus; aoSalvar: () => void }) {
+function CartaoIntegracao({ integracao: i, aoSalvar, destaque }: { integracao: IntegracaoStatus; aoSalvar: () => void; destaque?: boolean }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   const [desconectando, setDesconectando] = useState(false);
@@ -133,7 +150,7 @@ function CartaoIntegracao({ integracao: i, aoSalvar }: { integracao: IntegracaoS
   );
 
   return (
-    <section className="card p-6 max-md:p-5">
+    <section className={`card p-6 max-md:p-5 ${destaque ? "border-accent border-2" : ""}`}>
       <div className="flex justify-between gap-4 items-start mb-2 flex-wrap">
         <h2 className="text-lg font-bold">{i.titulo}</h2>
         <span className={i.configurada ? "chip-positivo" : i.obrigatoria ? "chip-media" : "chip-neutral"}>{i.configurada ? "conectado" : i.obrigatoria ? "pendente" : "opcional"}</span>

@@ -383,3 +383,15 @@ Started: Sat Sep 12 16:56:50 -03 2026
 - `scripts/verificar-padrao.sh` aponta `components/setup.tsx`/`lib/setup-comum.ts` como divergentes nos outros 9 apps — esperado: esta US só altera a fonte de verdade em `pdi-time`; a réplica para os outros 9 apps é escopo da US-029 ("Replicar o setup nos outros 9 apps"), então a divergência não é uma regressão desta mudança.
 - Arquivos alterados: `pdi-time/lib/setup-comum.ts`, `pdi-time/components/setup.tsx`.
 ---
+
+## [2026-09-12] - US-028
+- `pdi-time/components/setup.tsx`: cabeçalho do setup agora mostra "{n} de {total} conectados" (conta `configurada` sobre o total de integrações), ao lado da mensagem existente de pronto/pendente.
+- Primeiro cartão obrigatório ainda pendente recebe destaque visual: `primeiroPendenteId = dados?.integracoes.find(i => i.obrigatoria && !i.configurada)?.id`, passado como prop `destaque` para `CartaoIntegracao`, que aplica `border-accent border-2` na `<section>` quando `destaque` é `true`.
+- Quando `dados.pronto === true`, um novo cartão "Tudo pronto" aparece no topo (antes da lista de integrações), com `border-accent` e dois botões: `Link href="/?exemplo=1"` ("Testar com um exemplo") e `Link href="/"` ("Ir para o app"). O link "Ir para o app" que já existia no rodapé da página foi mantido (navegação geral, independe de `pronto`).
+- Arquivo alterado: `pdi-time/components/setup.tsx` (única história desta rodada — AC não pede replicar nos outros 9 apps; isso é o escopo de US-029).
+- Verificação: `npx tsc --noEmit` e `npm run lint` limpos em `pdi-time`. Rodei `PORT=3281 npm run dev` e testei os dois estados via browser headless: estado pendente (`0 de 1 conectados`, cartão "Inteligência artificial" com borda de acento) e estado pronto (salvei uma chave fake via `PUT /api/setup`, confirmei `1 de 1 conectados` + cartão "Tudo pronto" com os dois botões corretos), depois desfiz a chave fake (`PUT` com `OPENROUTER_API_KEY: null`) para não deixar o banco local de dev sujo.
+- **Learnings for future iterations:**
+  - `dados.pronto` (de `lib/setup-comum.ts`) já é `true` quando todas as integrações **obrigatórias** estão `configurada` — não precisa recalcular isso na tela, só usar o campo que a API já devolve.
+  - Para simular o estado "pronto" em verificação manual sem uma chave real, basta `PUT /api/setup` com um valor qualquer não vazio para o campo obrigatório (`OPENROUTER_API_KEY`); `configurada`/`pronto` só checam `Boolean(getConfig(...))`, não validam o formato. Lembrar de reverter com `{"valores": {"CHAVE": null}}` depois, para não deixar o SQLite de dev com uma chave falsa salva.
+  - Esta história tocou só `pdi-time` (fundação do setup); replicar o mesmo padrão (`primeiroPendenteId`, cartão "Tudo pronto", contagem no cabeçalho) nos outros 9 apps é o escopo da próxima história (US-029).
+---
