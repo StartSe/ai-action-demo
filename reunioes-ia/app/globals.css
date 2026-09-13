@@ -34,7 +34,7 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   .chip-baixa, .chip-positivo { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-[#e4f4ec] text-ok; }
   .chip-neutral { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-accent-soft text-accent-ink; }
   .section-title { @apply text-[13px] font-bold text-accent mb-3 tracking-[0.01em]; }
-  .summary { @apply text-[22px] max-md:text-[19px] leading-[1.35] font-semibold tracking-[-0.01em] text-ink px-7 py-6 bg-surface border-l-4 border-accent rounded-r-card shadow-card mb-7; }
+  .summary { @apply text-[17px] max-md:text-[16px] leading-[1.5] font-medium tracking-[-0.01em] text-ink px-7 py-6 bg-surface rounded-card shadow-card mb-7; }
   .skeleton { @apply h-[14px] rounded-md bg-[linear-gradient(90deg,#e9ebf0_25%,#f4f5f7_50%,#e9ebf0_75%)] bg-[length:200%_100%] animate-[shimmer_1.4s_infinite]; }
 }
 
@@ -46,4 +46,12 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
 @media print {
   .no-print { display: none !important; }
   body { background: #fff; }
+
+  /* Folha de impressão (/imprimir/[id]): A4, margem 18mm, sem sombra e sem cor de acento em fundos. */
+  @page folha-impressao { size: A4; margin: 18mm; }
+  .print-sheet { page: folha-impressao; }
+  .print-sheet .card,
+  .print-sheet .summary { box-shadow: none; break-inside: avoid; }
+  .print-sheet .chip-neutral { background: none; border: 1px solid currentColor; }
 }
+/* Específico deste app */

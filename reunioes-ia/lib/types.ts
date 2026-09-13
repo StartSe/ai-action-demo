@@ -32,3 +32,12 @@ export interface DadosAta {
 }
 
 export type FonteTranscricao = "elevenlabs" | "openai" | "demo";
+
+/** Formato salvo em lib/historico.ts (tipo "ata"): reunioes-ia não é sensível, então a transcrição inteira é guardada. */
+export interface EntradaAta {
+  titulo: string;
+  participantes: string;
+  contexto: string;
+  transcricao: string;
+  fonteTranscricao: FonteTranscricao | null;
+}
