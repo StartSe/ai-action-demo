@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Empty, Entregar, ErrorBox, Field, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
-import { PreviaPost, REDES, textoDoPost } from "@/components/PreviaPost";
+import { GradePosts, REDES, textoDoPost } from "@/components/PreviaPost";
 import type { Meta } from "@/lib/ai";
-import type { DadosPosts, Post, Rede, ResultadoPosts } from "@/lib/types";
+import type { DadosPosts, ImagemGerada, Post, Rede, ResultadoPosts } from "@/lib/types";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
 
@@ -203,7 +203,7 @@ export default function Page() {
 
 export function Resultado({ resultado, dados, meta, id }: { resultado: ResultadoPosts; dados: DadosPosts; meta: Meta; id?: string }) {
   const [posts, setPosts] = useState<Post[]>(resultado.posts || []);
-  const [imagens, setImagens] = useState<Record<number, string>>({});
+  const [imagens, setImagens] = useState<Record<number, ImagemGerada>>({});
 
   const copiarTudo = () => posts.map((p) => `${REDES[p.rede]?.nome || p.rede}\n\n${textoDoPost(p)}`).join("\n\n----------\n\n");
 
@@ -220,7 +220,7 @@ export function Resultado({ resultado, dados, meta, id }: { resultado: Resultado
         empresa={dados.empresa}
         ideiaCentral={resultado.ideia_central}
         imagens={imagens}
-        onImagemGerada={(i, url) => setImagens((m) => ({ ...m, [i]: url }))}
+        onImagemGerada={(i, imagem) => setImagens((m) => ({ ...m, [i]: imagem }))}
         onTextoAtualizado={(i, texto) => setPosts((ps) => ps.map((p, idx) => (idx === i ? { ...p, texto } : p)))}
       />
     </article>
@@ -239,8 +239,8 @@ export function ConteudoPosts({
   posts: Post[];
   empresa: string;
   ideiaCentral: string;
-  imagens: Record<number, string>;
-  onImagemGerada: (i: number, url: string) => void;
+  imagens: Record<number, ImagemGerada>;
+  onImagemGerada: (i: number, imagem: ImagemGerada) => void;
   onTextoAtualizado: (i: number, texto: string) => void;
 }) {
   return (
@@ -249,19 +249,14 @@ export function ConteudoPosts({
 
       <div className="mb-8">
         <h2 className="section-title">Prévia por rede</h2>
-        <div className="grid grid-cols-2 max-[1180px]:grid-cols-1 gap-[18px] items-start">
-          {posts.map((p, i) => (
-            <PreviaPost
-              key={i}
-              post={p}
-              empresa={empresa}
-              ideiaCentral={ideiaCentral}
-              imagemUrl={imagens[i]}
-              onImagemGerada={(url) => onImagemGerada(i, url)}
-              onTextoAtualizado={(texto) => onTextoAtualizado(i, texto)}
-            />
-          ))}
-        </div>
+        <GradePosts
+          posts={posts}
+          empresa={empresa}
+          ideiaCentral={ideiaCentral}
+          imagens={imagens}
+          onImagemGerada={onImagemGerada}
+          onTextoAtualizado={onTextoAtualizado}
+        />
       </div>
     </>
   );

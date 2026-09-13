@@ -73,14 +73,22 @@ export function gerarCartaz({ texto = "", rede = "linkedin", marca = "" }: { tex
 
   // Texto curto o bastante para caber com destaque.
   let frase = String(texto).replace(/\s+/g, " ").trim();
-  if (frase.length > 150) frase = frase.slice(0, 147).replace(/\s+\S*$/, "") + "…";
+  if (frase.length > 220) frase = frase.slice(0, 217).replace(/\s+\S*$/, "") + "…";
 
   const margem = Math.round(W * 0.08);
   const larguraTexto = W - margem * 2;
+  const MAX_LINHAS = 3;
+  const FONT_MIN = 28;
   let fontSize = frase.length < 60 ? Math.round(W * 0.062) : frase.length < 100 ? Math.round(W * 0.05) : Math.round(W * 0.042);
   let linhas = quebrar(frase, larguraTexto, fontSize);
-  while (linhas.length * fontSize * 1.18 > H * 0.6 && fontSize > 28) {
+  // Encolhe a fonte até caber em três linhas...
+  while (linhas.length > MAX_LINHAS && fontSize > FONT_MIN) {
     fontSize -= 4;
+    linhas = quebrar(frase, larguraTexto, fontSize);
+  }
+  // ...e, se ainda não coube na fonte mínima, corta o texto até caber.
+  while (linhas.length > MAX_LINHAS) {
+    frase = frase.slice(0, Math.floor(frase.length * 0.85)).replace(/\s+\S*$/, "") + "…";
     linhas = quebrar(frase, larguraTexto, fontSize);
   }
   const alturaBloco = linhas.length * fontSize * 1.18;

@@ -21,3 +21,9 @@ export interface DadosPosts {
   redes: Rede[];
   publico?: string;
 }
+
+/** Imagem associada a um post: `demo` indica se veio do cartaz local (sem gerador de imagens configurado). */
+export interface ImagemGerada {
+  url: string;
+  demo: boolean;
+}

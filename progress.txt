@@ -504,3 +504,11 @@ Started: Sat Sep 12 16:56:50 -03 2026
   - Ver a nova entrada em `entrevista-ia/CLAUDE.md` para os detalhes completos desta história.
   - Ao adotar "voz só depois do gesto" em outro app com TTS automático, reaproveitar o mesmo padrão de `pendenteRef`/listener em `window` de `Sala.tsx`.
 ---
+
+## [2026-09-12] - US-037
+- Implementado em `posts-sociais`: cartaz provisório com rótulo, abas por rede no celular + grade de 3 colunas de altura igual no desktop, "Patrocinado" removido do Instagram, "Copiar" com submenu (com/sem hashtags) e "Agendar" (.ics).
+- Arquivos: `lib/cartaz.ts` (limite de 3 linhas: encolhe fonte até `FONT_MIN`, depois corta texto com "…"), `lib/types.ts` (novo `ImagemGerada { url, demo }`), novo `lib/agenda.ts` (`proximaDataSugerida`, `gerarIcsPost`, `baixarArquivo`), `components/PreviaPost.tsx` (novo `CopiarBotao` com popover, novo `GradePosts` com abas + grid, `Midia` agora recebe `imagem: ImagemGerada` e mostra o rótulo "Imagem provisória..." quando `demo`, `Cabecalho` do Instagram sem "Patrocinado"), `app/page.tsx` e `app/imprimir/[id]/ConteudoImpresso.tsx` (estado `imagens` trocou de `Record<number, string>` para `Record<number, ImagemGerada>`, `ConteudoPosts` agora usa `GradePosts`).
+- **Learnings for future iterations:**
+  - `lib/agenda.ts`: quando o "melhor horário" é texto livre gerado pela IA (não uma data estruturada), um parser simples por regex (primeiro dia da semana + primeira hora mencionados no texto) é suficiente para gerar um `.ics` plausível; fallback para "amanhã às 9h" quando nada é reconhecido. Padrão reaproveitável em outros apps que sugerem horário em texto livre.
+  - Ao testar com Playwright um layout que usa "abas no celular, grade no desktop" onde todos os itens ficam sempre no DOM (só escondidos via `max-md:hidden`/`md:hidden`), os seletores de botão precisam do filtro `:visible` (`button:has-text("X"):visible`) — sem isso, `.first()` pode resolver para um elemento oculto de uma aba inativa e o clique trava em "element is not visible".
+  - "Baixar imagem"/"Agendar" e outros botões cujo estado depende de uma imagem opcional (`ImagemGerada | undefined`) devem checar o objeto inteiro, não só a URL, para saber se a imagem já existe.
