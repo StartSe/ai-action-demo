@@ -1,6 +1,8 @@
-// Upload de arquivo CSV/TXT com seleção de coluna, processado no navegador.
+// Upload de arquivo CSV/TXT (Dropzone compartilhado) com seleção de coluna quando é CSV, processado no navegador.
+import { Dropzone } from "@/components/ui";
+
 export function CampoArquivo({
-  nomeArquivo,
+  arquivo,
   headers,
   idxTexto,
   idxNota,
@@ -8,7 +10,7 @@ export function CampoArquivo({
   onColTexto,
   onColNota,
 }: {
-  nomeArquivo: string;
+  arquivo: File | null;
   headers: string[] | null;
   idxTexto: number;
   idxNota: number;
@@ -17,23 +19,11 @@ export function CampoArquivo({
   onColNota: (idx: number) => void;
 }) {
   return (
-    <div className="flex flex-col gap-1.5 mb-4 min-w-0 [&>*]:min-w-0">
-      <label htmlFor="arquivo" className="text-[13px] font-semibold">Ou envie um arquivo CSV ou TXT</label>
-      <div className="flex items-center gap-3 flex-wrap">
-        <label className="file-btn" htmlFor="arquivo">Escolher arquivo CSV ou TXT</label>
-        <input
-          id="arquivo"
-          type="file"
-          className="file-hidden"
-          accept=".csv,.txt,text/csv,text/plain"
-          onChange={(e) => onArquivo(e.target.files?.[0] ?? null)}
-        />
-        {nomeArquivo && <span className="text-[12.5px] text-muted">Arquivo: {nomeArquivo}</span>}
-      </div>
-      <span className="text-[12.5px] text-muted">Processado aqui no navegador, nada é enviado antes de você analisar.</span>
+    <div className="mb-4">
+      <Dropzone id="arquivo-comentarios" accept=".csv,.txt,text/csv,text/plain" tiposLabel="CSV ou TXT" maxSizeMB={5} arquivo={arquivo} onArquivo={onArquivo} />
 
       {headers && headers.length > 0 && (
-        <div className="flex flex-col gap-1.5 mt-2">
+        <div className="flex flex-col gap-1.5 mt-3">
           <label htmlFor="colTexto" className="text-[13px] font-semibold">Coluna com o comentário</label>
           <select id="colTexto" className="input" value={idxTexto} onChange={(e) => onColTexto(Number(e.target.value))}>
             {headers.map((h, i) => (

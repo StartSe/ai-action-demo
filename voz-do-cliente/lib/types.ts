@@ -57,3 +57,16 @@ export interface RespostaAnalise {
   total_analisado: number;
   analise: Analise;
 }
+
+/** Entrada salva no histórico (/r/[id], /imprimir/[id]) — os comentários brutos não são persistidos, só o contexto informado. */
+export interface EntradaAnalise {
+  contexto: string;
+}
+
+/** Saída salva no histórico: a análise da IA mais os números de volume desta rodada. */
+export interface SaidaAnalise {
+  analise: Analise;
+  totalEnviado: number;
+  totalAnalisado: number;
+  truncado: boolean;
+}

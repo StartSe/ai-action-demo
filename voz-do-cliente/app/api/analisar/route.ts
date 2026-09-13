@@ -1,6 +1,7 @@
-import { aiEnabled, askJSON } from "@/lib/ai";
+import { aiEnabled, askJSON, meta } from "@/lib/ai";
 import { analiseDemo, esperar } from "@/lib/demo";
-import type { Analise, Comentario, ContagemSentimento, Nps, Sentimento } from "@/lib/types";
+import { apagarTodos, listar, salvar } from "@/lib/historico";
+import type { Analise, Comentario, ContagemSentimento, EntradaAnalise, Nps, SaidaAnalise, Sentimento } from "@/lib/types";
 
 const LIMITE_COMENTARIOS = 500;
 const TAMANHO_LOTE = 60; // acima de 120 comentários, classificamos em lotes desse tamanho
@@ -219,16 +220,40 @@ export async function POST(req: Request) {
       acoes_prioritarias: Array.isArray(resultado.acoes_prioritarias) ? resultado.acoes_prioritarias.slice(0, 6) : [],
     };
 
+    const insumo = "comentários enviados e o contexto informado";
+    const metaGerada = meta({ demo, insumo });
+    const titulo = `Análise de ${totalAnalisado} comentário${totalAnalisado === 1 ? "" : "s"}${contexto ? ` sobre ${contexto}` : ""}`;
+    const id = salvar({
+      tipo: "voz-do-cliente",
+      titulo,
+      entrada: { contexto } satisfies EntradaAnalise,
+      saida: { analise, totalEnviado, totalAnalisado, truncado } satisfies SaidaAnalise,
+      meta: metaGerada,
+    });
+
     return Response.json({
       demo,
       truncado,
       total_enviado: totalEnviado,
       total_analisado: totalAnalisado,
       analise,
+      meta: metaGerada,
+      id,
     });
   } catch (err) {
     console.error(err);
     const mensagem = err instanceof Error ? err.message : "Não foi possível analisar os comentários agora. Tente novamente.";
     return Response.json({ error: mensagem }, { status: 500 });
   }
+}
+
+/** Últimos resultados salvos, para a lista "Últimos resultados" no painel. */
+export async function GET() {
+  return Response.json({ itens: listar(10) });
+}
+
+/** Apaga todo o histórico salvo (botão "Apagar tudo"). */
+export async function DELETE() {
+  apagarTodos();
+  return Response.json({ ok: true });
 }
