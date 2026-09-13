@@ -65,6 +65,7 @@ export function SetupPage({ marca, nome, area }: { marca: string; nome: string; 
 function CartaoIntegracao({ integracao: i, aoSalvar }: { integracao: IntegracaoStatus; aoSalvar: () => void }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
+  const [desconectando, setDesconectando] = useState(false);
   const [teste, setTeste] = useState<{ ok: boolean; mensagem: string } | null>(null);
   const [testando, setTestando] = useState(false);
   const alterado = Object.values(valores).some((v) => v !== "");
@@ -81,6 +82,19 @@ function CartaoIntegracao({ integracao: i, aoSalvar }: { integracao: IntegracaoS
     } finally { setSalvando(false); }
   }
 
+  async function desconectar() {
+    setDesconectando(true); setTeste(null);
+    try {
+      const valoresNulos = Object.fromEntries(i.campos.map((c) => [c.chave, null]));
+      const r = await fetch("/api/setup", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ valores: valoresNulos }) });
+      if (!r.ok) throw new Error("Falha ao desconectar.");
+      setValores({});
+      aoSalvar();
+    } catch (e) {
+      setTeste({ ok: false, mensagem: e instanceof Error ? e.message : "Falha ao desconectar." });
+    } finally { setDesconectando(false); }
+  }
+
   async function testar() {
     setTestando(true); setTeste(null);
     try {
@@ -90,6 +104,22 @@ function CartaoIntegracao({ integracao: i, aoSalvar }: { integracao: IntegracaoS
     finally { setTestando(false); }
   }
 
+  const chaveSecreta = i.campos.find((c) => c.tipo === "secret");
+  const passos = i.oauth ? [] : passosSetup(i);
+
+  const campos = (
+    <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4 [&>*]:min-w-0">
+      {i.campos.map((c) => <CampoSetup key={c.chave} campo={c} valor={valores[c.chave] ?? ""} aoMudar={(v) => setValores((s) => ({ ...s, [c.chave]: v }))} />)}
+    </div>
+  );
+
+  const acoesSalvar = (
+    <div className="flex items-center gap-3 flex-wrap mt-4">
+      <button type="button" className="btn-primary !w-auto" onClick={salvar} disabled={!alterado || salvando}>{salvando ? "Salvando" : "Salvar"}</button>
+      {i.link && <a className="btn-link text-sm" href={i.link.url} target="_blank" rel="noreferrer">{i.link.rotulo}</a>}
+    </div>
+  );
+
   return (
     <section className="card p-6 max-md:p-5">
       <div className="flex justify-between gap-4 items-start mb-2 flex-wrap">
@@ -98,25 +128,51 @@ function CartaoIntegracao({ integracao: i, aoSalvar }: { integracao: IntegracaoS
       </div>
       <p className="text-muted text-sm mb-4 max-w-[640px]">{i.descricao}</p>
 
-      {i.oauth && (
-        <div className="flex items-center gap-3 flex-wrap mb-4">
-          <a href={i.oauth.url} className="btn-primary !w-auto">{i.oauth.rotulo}</a>
-          <span className="text-muted text-sm">ou cole uma chave abaixo</span>
-        </div>
+      {i.oauth ? (
+        <>
+          <div className="flex items-center gap-3 flex-wrap mb-4">
+            {i.configurada ? (
+              <>
+                <span className="chip-positivo">Conectado{chaveSecreta?.mascarado ? ` · ${chaveSecreta.mascarado}` : ""}</span>
+                <button type="button" className="btn-ghost" onClick={desconectar} disabled={desconectando}>{desconectando ? "Desconectando" : "Desconectar"}</button>
+                <button type="button" className="btn-ghost" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>
+              </>
+            ) : (
+              <a href={i.oauth.url} className="btn-primary !w-auto">{i.oauth.rotulo}</a>
+            )}
+          </div>
+          <MaisDetalhes titulo="Opções avançadas: colar uma chave">
+            {campos}
+            {acoesSalvar}
+          </MaisDetalhes>
+        </>
+      ) : (
+        <>
+          {passos.length > 0 && (
+            <ol className="list-decimal list-inside flex flex-col gap-1 text-sm text-muted mb-4">
+              {passos.map((p) => <li key={p}>{p}</li>)}
+            </ol>
+          )}
+          {campos}
+          <div className="flex items-center gap-3 flex-wrap mt-4">
+            <button type="button" className="btn-primary !w-auto" onClick={salvar} disabled={!alterado || salvando}>{salvando ? "Salvando" : "Salvar"}</button>
+            {i.configurada && <button type="button" className="btn-ghost" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>}
+            {i.link && <a className="btn-link text-sm" href={i.link.url} target="_blank" rel="noreferrer">{i.link.rotulo}</a>}
+          </div>
+        </>
       )}
-
-      <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4 [&>*]:min-w-0">
-        {i.campos.map((c) => <CampoSetup key={c.chave} campo={c} valor={valores[c.chave] ?? ""} aoMudar={(v) => setValores((s) => ({ ...s, [c.chave]: v }))} />)}
-      </div>
-
-      <div className="flex items-center gap-3 flex-wrap mt-4">
-        <button type="button" className="btn-primary !w-auto" onClick={salvar} disabled={!alterado || salvando}>{salvando ? "Salvando" : "Salvar"}</button>
-        {i.configurada && <button type="button" className="btn-ghost" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>}
-        {i.link && <a className="btn-link text-sm" href={i.link.url} target="_blank" rel="noreferrer">{i.link.rotulo}</a>}
-      </div>
       {teste && <p className={`mt-3 text-sm font-semibold ${teste.ok ? "text-ok" : "text-danger"}`}>{teste.mensagem}</p>}
     </section>
   );
+}
+
+/** Passo a passo de até três passos, gerado a partir do link para obter a chave e da ajuda do primeiro campo. */
+function passosSetup(i: IntegracaoStatus): string[] {
+  const passos: string[] = [];
+  if (i.link) passos.push(`Abra "${i.link.rotulo}" e copie a chave.`);
+  if (i.campos[0]?.ajuda) passos.push(i.campos[0].ajuda);
+  passos.push("Cole a chave abaixo e clique em Salvar.");
+  return passos.slice(0, 3);
 }
 
 function CampoSetup({ campo: c, valor, aoMudar }: { campo: CampoStatus; valor: string; aoMudar: (v: string) => void }) {

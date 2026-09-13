@@ -411,7 +411,7 @@
         "Verify in browser using dev-browser skill: /setup em desktop e celular, antes e depois de salvar uma chave falsa"
       ],
       "priority": 26,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
