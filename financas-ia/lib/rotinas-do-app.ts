@@ -3,6 +3,7 @@
 // aqui o que faz sentido rodar sozinho, chamando registrarExecutor (ver pdi-time/lib/rotinas-do-app.ts).
 import { formatarMoeda } from "./analise";
 import { listar as listarHistorico, obter } from "./historico";
+import { getOrcamento, orcamentoDaCategoria } from "./orcamento";
 import { registrarExecutor } from "./rotinas";
 import type { SaidaInsights } from "./types";
 
@@ -42,6 +43,23 @@ registrarExecutor("resumo-mensal", async () => {
         ? `Alerta: a categoria "${maiorCategoria.categoria}" variou mais de 50% entre os dois últimos meses.`
         : "Nenhum alerta neste período.";
 
-  const texto = [linhaTotal, linhaVariacao, linhaCategoria, linhaLancamento, linhaAlerta].join("\n");
+  const orcamento = getOrcamento();
+  const mesesNoPeriodo = Math.max(resumo.meses.length, 1);
+  const estouros = resumo.categorias
+    .map((c) => {
+      const orcadoMensal = orcamentoDaCategoria(orcamento, c.categoria);
+      const orcadoPeriodo = orcadoMensal !== undefined ? orcadoMensal * mesesNoPeriodo : undefined;
+      return { categoria: c.categoria, total: c.total, orcadoPeriodo };
+    })
+    .filter((c) => c.orcadoPeriodo !== undefined && c.total > c.orcadoPeriodo!);
+  const linhaOrcamento = orcamento.length
+    ? estouros.length
+      ? `Estouraram o orçamento: ${estouros.map((c) => `${c.categoria} (${formatarMoeda(c.total)} de ${formatarMoeda(c.orcadoPeriodo!)})`).join(", ")}.`
+      : "Nenhuma categoria estourou o orçamento neste período."
+    : null;
+
+  const texto = [linhaTotal, linhaVariacao, linhaCategoria, linhaLancamento, linhaAlerta, linhaOrcamento]
+    .filter((l): l is string => Boolean(l))
+    .join("\n");
   return { titulo, texto, resultadoId: ultima.id };
 });

@@ -35,6 +35,7 @@ import { parseCSV, sugerirMapeamento } from "@/lib/csv";
 import { calcularResumo, formatarMoeda, normalizarRegistros } from "@/lib/analise";
 import { GraficoCategorias } from "@/components/GraficoCategorias";
 import { GraficoMeses } from "@/components/GraficoMeses";
+import type { ItemOrcamento } from "@/lib/orcamento-calculo";
 import type { Destaque as TipoDestaque, Insights, LancamentoResumo, Mapeamento, Resumo } from "@/lib/types";
 
 type ArquivoState = { nome: string; cabecalho: string[]; linhas: string[][] };
@@ -78,6 +79,7 @@ export default function Page() {
   const [guardar, setGuardar] = useState(false);
   const [estado, setEstado] = useState<EstadoAnalise>({ fase: "vazio" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
+  const [orcamento, setOrcamento] = useState<ItemOrcamento[]>([]);
   const autoEnviado = useRef(false);
 
   useScrollToResult(estado.fase === "pronto");
@@ -87,6 +89,9 @@ export default function Page() {
   }
 
   useEffect(() => { carregarHistorico(); }, []);
+  useEffect(() => {
+    fetch("/api/orcamento").then((r) => r.json()).then((d) => setOrcamento(d.itens || [])).catch(() => setOrcamento([]));
+  }, []);
 
   function apagarHistorico() {
     if (!window.confirm("Apagar todos os resultados salvos? Essa ação não pode ser desfeita.")) return;
@@ -363,6 +368,7 @@ export default function Page() {
               meta={estado.meta}
               nomeArquivo={estado.nomeArquivo}
               todosLancamentos={estado.todos}
+              orcamento={orcamento}
             />
           )}
         </Stage>
@@ -381,6 +387,7 @@ export function Resultado({
   meta,
   nomeArquivo,
   todosLancamentos,
+  orcamento,
 }: {
   id?: string;
   resumo: Resumo;
@@ -389,6 +396,7 @@ export function Resultado({
   meta: Meta;
   nomeArquivo: string;
   todosLancamentos?: LancamentoResumo[];
+  orcamento?: ItemOrcamento[];
 }) {
   const titulo = `Leitura de ${nomeArquivo}`;
   return (
@@ -404,7 +412,7 @@ export function Resultado({
 
       <Origem meta={meta} />
 
-      <ConteudoFinancas resumo={resumo} insights={insights} />
+      <ConteudoFinancas resumo={resumo} insights={insights} orcamento={orcamento} />
 
       <AutomatizarProximosMeses />
 
@@ -523,7 +531,15 @@ function AutomatizarProximosMeses() {
 }
 
 /** Corpo da leitura (sem cabeçalho, Origem nem a caixa de perguntas), reaproveitado pela página de impressão. */
-export function ConteudoFinancas({ resumo, insights }: { resumo: Resumo; insights: Insights }) {
+export function ConteudoFinancas({
+  resumo,
+  insights,
+  orcamento,
+}: {
+  resumo: Resumo;
+  insights: Insights;
+  orcamento?: ItemOrcamento[];
+}) {
   const ultimoMes = resumo.meses[resumo.meses.length - 1];
   const maiorCrescimento = resumo.categoriasQueCresceram[0];
   const variacao = resumo.variacaoUltimoMes;
@@ -564,7 +580,12 @@ export function ConteudoFinancas({ resumo, insights }: { resumo: Resumo; insight
 
       <Section titulo="Despesas por categoria">
         <div className="card shadow-none p-4">
-          <GraficoCategorias categorias={resumo.categorias} maiorCrescimento={maiorCrescimento} />
+          <GraficoCategorias
+            categorias={resumo.categorias}
+            maiorCrescimento={maiorCrescimento}
+            orcamento={orcamento}
+            meses={resumo.meses.length}
+          />
         </div>
       </Section>
 

@@ -3,6 +3,7 @@ import { Origem } from "@/components/ui";
 import { data } from "@/lib/formato";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
+import { getOrcamento } from "@/lib/orcamento";
 import type { EntradaInsights, SaidaInsights } from "@/lib/types";
 import { ConteudoFinancas } from "../../page";
 import { ImprimirAoCarregar } from "./ImprimirAoCarregar";
@@ -21,7 +22,7 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
         <div className="text-muted text-sm">{data(new Date())}</div>
       </header>
 
-      <ConteudoFinancas resumo={registro.saida.resumo} insights={registro.saida.insights} />
+      <ConteudoFinancas resumo={registro.saida.resumo} insights={registro.saida.insights} orcamento={getOrcamento()} />
 
       <footer className="mt-8 pt-4 border-t border-line">
         <Origem meta={registro.meta} />
