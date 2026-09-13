@@ -24,8 +24,9 @@ import {
   useScrollToResult,
   useStatus,
 } from "@/components/ui";
-import { Celular, horaAtual, type BolhaChat } from "@/components/Celular";
+import { AcoesResposta, Celular, horaAtual, type AoSalvarBase, type BolhaChat } from "@/components/Celular";
 import type { Meta } from "@/lib/ai";
+import type { ParBase } from "@/lib/base";
 import type { Config, Conversa } from "@/lib/types";
 
 const CONFIG_VAZIA: Config = { negocio: "", atendente: "", tom: "cordial", horario: "", baseConhecimento: "", naoSei: "humano" };
@@ -65,6 +66,7 @@ export default function Page() {
 
   const [estadoConversas, setEstadoConversas] = useState<EstadoConversas>({ fase: "carregando" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
+  const [base, setBase] = useState<ParBase[] | null>(null);
   const autoEnviado = useRef(false);
   const configAlterada = JSON.stringify(config) !== JSON.stringify(configSalva);
   // Espelha o rascunho mais recente para o simulador, sem tornar `enviarSimulada` reativo a `config`
@@ -89,7 +91,21 @@ export default function Page() {
     // carregar aqui também correria com aquela resposta e poderia sobrescrevê-la.
     if (new URLSearchParams(location.search).get("exemplo") !== "1") carregarConversas();
     fetch("/api/simular").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
+    fetch("/api/base").then((r) => r.json()).then((r) => setBase(r.itens)).catch(() => setBase([]));
   }, []);
+
+  const salvarBase: AoSalvarBase = (pergunta, resposta) => {
+    fetch("/api/base", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pergunta, resposta }),
+    })
+      .then((r) => r.json())
+      .then((r) => {
+        if (r.itens) setBase(r.itens);
+      })
+      .catch(() => {});
+  };
 
   function apagarHistorico() {
     if (!window.confirm("Apagar todos os resultados salvos? Essa ação não pode ser desfeita.")) return;
@@ -258,6 +274,25 @@ export default function Page() {
             )}
           </MaisDetalhes>
 
+          <MaisDetalhes titulo="Base de respostas aprovadas">
+            {base === null ? (
+              <p className="text-muted text-sm">Carregando...</p>
+            ) : base.length === 0 ? (
+              <p className="text-muted text-sm">
+                Nenhuma resposta aprovada ainda. Use &quot;Aprovar&quot; ou &quot;Corrigir&quot; nas respostas do simulador ou das conversas para alimentar a base.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2.5 text-sm">
+                {base.map((p, i) => (
+                  <li key={i} className="border-b border-line pb-2.5 last:border-0 last:pb-0">
+                    <p className="font-semibold">{p.pergunta}</p>
+                    <p className="text-muted">{p.resposta}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </MaisDetalhes>
+
           {(configAlterada || salvo) && (
             <div className="sticky bottom-0 -mx-7 max-md:-mx-[22px] -mb-7 max-md:-mb-[22px] mt-6 px-7 max-md:px-[22px] py-4 bg-surface border-t border-line rounded-b-card flex items-center justify-between gap-3">
               <span className="text-sm font-semibold text-accent-ink">{configAlterada ? "Alterações não salvas" : "Configuração salva"}</span>
@@ -269,7 +304,17 @@ export default function Page() {
         </Panel>
 
         <Stage>
-          <Celular nome={config.atendente} negocio={config.negocio} mensagens={mensagens} valor={valor} onValorChange={setValor} onEnviar={enviarSimulada} enviando={enviando} />
+          <Celular
+            nome={config.atendente}
+            negocio={config.negocio}
+            mensagens={mensagens}
+            valor={valor}
+            onValorChange={setValor}
+            onEnviar={enviarSimulada}
+            enviando={enviando}
+            onAprovar={salvarBase}
+            onCorrigir={salvarBase}
+          />
 
           <div className="flex flex-wrap gap-2 justify-center mb-8">
             {SUGESTOES.map((s) => (
@@ -296,7 +341,14 @@ export default function Page() {
             />
           )}
           {estadoConversas.fase === "pronto" && estadoConversas.conversas.length > 0 && (
-            <Resultado conversas={estadoConversas.conversas} meta={estadoConversas.meta} id={estadoConversas.id} onLimpar={limparConversa} />
+            <Resultado
+              conversas={estadoConversas.conversas}
+              meta={estadoConversas.meta}
+              id={estadoConversas.id}
+              onLimpar={limparConversa}
+              onAprovar={salvarBase}
+              onCorrigir={salvarBase}
+            />
           )}
 
           {conectado ? (
@@ -312,7 +364,21 @@ export default function Page() {
   );
 }
 
-export function Resultado({ conversas, meta, id, onLimpar }: { conversas: Conversa[]; meta: Meta; id?: string; onLimpar?: (numero: string) => void }) {
+export function Resultado({
+  conversas,
+  meta,
+  id,
+  onLimpar,
+  onAprovar,
+  onCorrigir,
+}: {
+  conversas: Conversa[];
+  meta: Meta;
+  id?: string;
+  onLimpar?: (numero: string) => void;
+  onAprovar?: AoSalvarBase;
+  onCorrigir?: AoSalvarBase;
+}) {
   return (
     <article className="reveal">
       <ResultHead titulo="Conversas recebidas">
@@ -321,13 +387,23 @@ export function Resultado({ conversas, meta, id, onLimpar }: { conversas: Conver
 
       <Origem meta={meta} />
 
-      <ConteudoConversas conversas={conversas} onLimpar={onLimpar} />
+      <ConteudoConversas conversas={conversas} onLimpar={onLimpar} onAprovar={onAprovar} onCorrigir={onCorrigir} />
     </article>
   );
 }
 
 /** Corpo da lista de conversas (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
-export function ConteudoConversas({ conversas, onLimpar }: { conversas: Conversa[]; onLimpar?: (numero: string) => void }) {
+export function ConteudoConversas({
+  conversas,
+  onLimpar,
+  onAprovar,
+  onCorrigir,
+}: {
+  conversas: Conversa[];
+  onLimpar?: (numero: string) => void;
+  onAprovar?: AoSalvarBase;
+  onCorrigir?: AoSalvarBase;
+}) {
   const colunas: Coluna<Conversa>[] = [
     { chave: "numero", titulo: "Número", papel: "titulo", largura: "22%", render: (c) => <strong>{c.numero === "simulador" ? "Simulador" : c.numero}</strong> },
     { chave: "ultima_mensagem", titulo: "Última mensagem", papel: "resumo", render: (c) => c.ultima_mensagem },
@@ -345,6 +421,16 @@ export function ConteudoConversas({ conversas, onLimpar }: { conversas: Conversa
     },
     { chave: "hora", titulo: "Hora", render: (c) => c.hora },
   ];
+  if (onAprovar || onCorrigir)
+    colunas.push({
+      chave: "aprovacao",
+      titulo: "Aprovar resposta",
+      papel: "detalhe",
+      render: (c) =>
+        c.ultima_resposta ? (
+          <AcoesResposta pergunta={c.ultima_mensagem} resposta={c.ultima_resposta} onAprovar={onAprovar} onCorrigir={onCorrigir} />
+        ) : null,
+    });
   if (onLimpar)
     colunas.push({
       chave: "acoes",

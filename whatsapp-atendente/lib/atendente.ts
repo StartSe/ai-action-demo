@@ -1,5 +1,6 @@
 // Pipeline de resposta do atendente: memória de conversa por número + IA (com fallback local sem chave).
 import { aiEnabled, askText } from "./ai";
+import { baseAprovadaComoTexto } from "./base";
 import { esperar, respostaLocal } from "./demo";
 import { getConfig } from "./estado";
 import type { CanalOrigem, Config, Conversa, MensagemChat } from "./types";
@@ -51,6 +52,13 @@ Regras:
   }. Nesses casos, termine a resposta com o marcador [TRANSFERIR] sozinho na última linha.`;
 }
 
+/** Soma as perguntas/respostas aprovadas pela equipe (lib/base.ts) ao texto livre da base de conhecimento. */
+function comBaseAprovada(config: Config): Config {
+  const extra = baseAprovadaComoTexto();
+  if (!extra) return config;
+  return { ...config, baseConhecimento: `${config.baseConhecimento}\n\nPerguntas já respondidas e aprovadas pela equipe:\n\n${extra}` };
+}
+
 function obterConversa(numero: string, origem: CanalOrigem): ConversaInterna {
   let c = conversas.get(numero);
   if (!c) {
@@ -72,7 +80,7 @@ export async function responder({
   /** Configuração ainda não salva (testada no simulador antes de clicar em "Salvar"); sem ela, usa a configuração salva. */
   config?: Config;
 }): Promise<{ resposta: string; transferir: boolean }> {
-  const config = configRascunho ?? getConfig();
+  const config = comBaseAprovada(configRascunho ?? getConfig());
   const conversa = obterConversa(numero, origem);
   conversa.origem = origem;
   conversa.mensagens.push({ papel: "cliente", texto });
@@ -110,6 +118,7 @@ export function listarConversas(): Conversa[] {
     .map(([numero, c]) => ({
       numero,
       ultima_mensagem: c.ultima_mensagem,
+      ultima_resposta: [...c.mensagens].reverse().find((m) => m.papel === "atendente")?.texto ?? "",
       hora: new Date(c.atualizadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
       transferir: c.transferir,
       origem: c.origem,

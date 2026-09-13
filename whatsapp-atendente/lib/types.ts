@@ -15,6 +15,8 @@ export interface Config {
 export interface Conversa {
   numero: string;
   ultima_mensagem: string;
+  /** Última resposta do atendente a essa conversa (para os botões Aprovar/Corrigir na lista de conversas). */
+  ultima_resposta: string;
   hora: string;
   transferir: boolean;
   origem: CanalOrigem;

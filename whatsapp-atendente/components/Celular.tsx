@@ -1,13 +1,88 @@
 "use client";
 
-import { useEffect, useRef, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { MensagemChat } from "@/lib/types";
 
 /** `hora` é gravada no momento em que a mensagem é enviada/recebida, não recalculada a cada render. */
 export type BolhaChat = MensagemChat & { transferido?: boolean; erro?: boolean; pendente?: boolean; hora?: string };
 
+/** Aprova ou corrige a resposta do atendente para o par {pergunta, resposta} entrar na base. */
+export type AoSalvarBase = (pergunta: string, resposta: string) => void;
+
 export function horaAtual() {
   return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+/**
+ * "Aprovar" grava a resposta como está; "Corrigir" abre um campo com a resposta certa antes de gravar.
+ * Reaproveitado tanto no simulador (por bolha) quanto na lista de conversas (por linha).
+ */
+export function AcoesResposta({
+  pergunta,
+  resposta,
+  onAprovar,
+  onCorrigir,
+}: {
+  pergunta: string;
+  resposta: string;
+  onAprovar?: AoSalvarBase;
+  onCorrigir?: AoSalvarBase;
+}) {
+  const [modo, setModo] = useState<"padrao" | "corrigindo" | "salvo">("padrao");
+  const [texto, setTexto] = useState(resposta);
+
+  if (modo === "salvo") return <span className="text-[11px] font-semibold text-accent-ink px-1">Adicionado à base ✓</span>;
+
+  if (modo === "corrigindo")
+    return (
+      <div className="w-full flex flex-col gap-1.5 px-1">
+        <textarea
+          className="input text-sm min-h-[70px]"
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          autoFocus
+        />
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="btn-primary !w-auto text-xs px-3 py-1.5"
+            onClick={() => {
+              const corrigida = texto.trim();
+              if (!corrigida) return;
+              onCorrigir?.(pergunta, corrigida);
+              setModo("salvo");
+            }}
+          >
+            Salvar correção
+          </button>
+          <button type="button" className="btn-ghost !w-auto text-xs px-3 py-1.5" onClick={() => setModo("padrao")}>
+            Cancelar
+          </button>
+        </div>
+      </div>
+    );
+
+  return (
+    <div className="flex gap-3 px-1">
+      {onAprovar && (
+        <button
+          type="button"
+          className="text-[11px] font-semibold text-accent-ink hover:underline"
+          onClick={() => {
+            onAprovar(pergunta, resposta);
+            setModo("salvo");
+          }}
+        >
+          Aprovar
+        </button>
+      )}
+      {onCorrigir && (
+        <button type="button" className="text-[11px] font-semibold text-muted hover:underline" onClick={() => setModo("corrigindo")}>
+          Corrigir
+        </button>
+      )}
+    </div>
+  );
 }
 
 function saudacaoPadrao(nome: string, negocio: string): string {
@@ -25,6 +100,8 @@ export function Celular({
   onValorChange,
   onEnviar,
   enviando,
+  onAprovar,
+  onCorrigir,
 }: {
   nome: string;
   negocio: string;
@@ -33,6 +110,8 @@ export function Celular({
   onValorChange: (v: string) => void;
   onEnviar: (texto: string) => void;
   enviando: boolean;
+  onAprovar?: AoSalvarBase;
+  onCorrigir?: AoSalvarBase;
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -71,18 +150,29 @@ export function Celular({
               {saudacaoPadrao(nome, negocio)}
             </div>
           )}
-          {mensagens.map((m, i) => (
-            <div
-              key={i}
-              className={`max-w-[82%] px-3 pt-2 pb-[18px] rounded-xl text-sm leading-snug shadow-[0_1px_1px_rgba(0,0,0,0.08)] relative break-words ${
-                m.papel === "cliente" ? "self-end bg-[#dcf8c6] rounded-br-[3px]" : "self-start bg-white rounded-bl-[3px]"
-              } ${m.transferido ? "border border-warn" : ""} ${m.erro ? "border border-danger" : ""} ${m.pendente ? "text-muted italic" : ""}`}
-            >
-              {m.transferido && <span className="block text-[11px] font-bold text-warn mb-0.5">Encaminhado para uma pessoa</span>}
-              {m.texto}
-              {m.hora && <span className="absolute right-3 bottom-1 text-[10px] text-muted">{m.hora}</span>}
-            </div>
-          ))}
+          {mensagens.map((m, i) => {
+            const pergunta = m.papel === "atendente" && mensagens[i - 1]?.papel === "cliente" ? mensagens[i - 1].texto : undefined;
+            const podeAvaliar = pergunta && !m.pendente && !m.erro && (onAprovar || onCorrigir);
+            return (
+              <div
+                key={i}
+                className={`flex flex-col gap-1 max-w-[82%] ${m.papel === "cliente" ? "self-end items-end" : "self-start items-start"}`}
+              >
+                <div
+                  className={`w-full px-3 pt-2 pb-[18px] rounded-xl text-sm leading-snug shadow-[0_1px_1px_rgba(0,0,0,0.08)] relative break-words ${
+                    m.papel === "cliente" ? "bg-[#dcf8c6] rounded-br-[3px]" : "bg-white rounded-bl-[3px]"
+                  } ${m.transferido ? "border border-warn" : ""} ${m.erro ? "border border-danger" : ""} ${m.pendente ? "text-muted italic" : ""}`}
+                >
+                  {m.transferido && <span className="block text-[11px] font-bold text-warn mb-0.5">Encaminhado para uma pessoa</span>}
+                  {m.texto}
+                  {m.hora && <span className="absolute right-3 bottom-1 text-[10px] text-muted">{m.hora}</span>}
+                </div>
+                {podeAvaliar && pergunta && (
+                  <AcoesResposta pergunta={pergunta} resposta={m.texto} onAprovar={onAprovar} onCorrigir={onCorrigir} />
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <form onSubmit={submit} className="flex gap-2 p-2.5 bg-[#f0f0f0] border-t border-line shrink-0">
