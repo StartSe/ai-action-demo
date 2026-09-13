@@ -3,15 +3,23 @@
 import { useEffect, useRef, type FormEvent } from "react";
 import type { MensagemChat } from "@/lib/types";
 
-export type BolhaChat = MensagemChat & { transferido?: boolean; pendente?: boolean };
+/** `hora` é gravada no momento em que a mensagem é enviada/recebida, não recalculada a cada render. */
+export type BolhaChat = MensagemChat & { transferido?: boolean; erro?: boolean; pendente?: boolean; hora?: string };
 
-function horaAtual() {
+export function horaAtual() {
   return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function saudacaoPadrao(nome: string, negocio: string): string {
+  const quem = nome.trim() || "o atendente";
+  const sufixoEmpresa = negocio.trim() ? ` da ${negocio.trim()}` : "";
+  return `Olá! Eu sou ${quem}${sufixoEmpresa}. Como posso ajudar?`;
 }
 
 /** Mockup de celular com a conversa de WhatsApp simulada. */
 export function Celular({
   nome,
+  negocio,
   mensagens,
   valor,
   onValorChange,
@@ -19,6 +27,7 @@ export function Celular({
   enviando,
 }: {
   nome: string;
+  negocio: string;
   mensagens: BolhaChat[];
   valor: string;
   onValorChange: (v: string) => void;
@@ -57,15 +66,21 @@ export function Celular({
         </div>
 
         <div ref={bodyRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-2.5 bg-[#e5ddd5]">
+          {mensagens.length === 0 && (
+            <div className="max-w-[82%] px-3 py-2 rounded-xl text-sm leading-snug shadow-[0_1px_1px_rgba(0,0,0,0.08)] self-start bg-white rounded-bl-[3px]">
+              {saudacaoPadrao(nome, negocio)}
+            </div>
+          )}
           {mensagens.map((m, i) => (
             <div
               key={i}
               className={`max-w-[82%] px-3 pt-2 pb-[18px] rounded-xl text-sm leading-snug shadow-[0_1px_1px_rgba(0,0,0,0.08)] relative break-words ${
                 m.papel === "cliente" ? "self-end bg-[#dcf8c6] rounded-br-[3px]" : "self-start bg-white rounded-bl-[3px]"
-              } ${m.transferido ? "border border-warn" : ""} ${m.pendente ? "text-muted italic" : ""}`}
+              } ${m.transferido ? "border border-warn" : ""} ${m.erro ? "border border-danger" : ""} ${m.pendente ? "text-muted italic" : ""}`}
             >
+              {m.transferido && <span className="block text-[11px] font-bold text-warn mb-0.5">Encaminhado para uma pessoa</span>}
               {m.texto}
-              <span className="absolute right-3 bottom-1 text-[10px] text-muted">{horaAtual()}</span>
+              {m.hora && <span className="absolute right-3 bottom-1 text-[10px] text-muted">{m.hora}</span>}
             </div>
           ))}
         </div>

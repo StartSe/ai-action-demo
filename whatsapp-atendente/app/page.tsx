@@ -24,7 +24,7 @@ import {
   useScrollToResult,
   useStatus,
 } from "@/components/ui";
-import { Celular, type BolhaChat } from "@/components/Celular";
+import { Celular, horaAtual, type BolhaChat } from "@/components/Celular";
 import type { Meta } from "@/lib/ai";
 import type { Config, Conversa } from "@/lib/types";
 
@@ -128,7 +128,7 @@ export default function Page() {
   async function enviarSimulada(textoBruto: string) {
     const texto = textoBruto.trim();
     if (!texto) return;
-    setMensagens((m) => [...m, { papel: "cliente", texto }, { papel: "atendente", texto: "digitando...", pendente: true }]);
+    setMensagens((m) => [...m, { papel: "cliente", texto, hora: horaAtual() }, { papel: "atendente", texto: "digitando...", pendente: true }]);
     setEnviando(true);
     try {
       const r = await fetch("/api/simular", {
@@ -138,12 +138,15 @@ export default function Page() {
       });
       const resposta = await r.json();
       if (!r.ok) throw new Error(resposta.error || "Falha ao responder.");
-      setMensagens((m) => [...m.filter((x) => !x.pendente), { papel: "atendente", texto: resposta.resposta, transferido: resposta.transferir }]);
+      setMensagens((m) => [
+        ...m.filter((x) => !x.pendente),
+        { papel: "atendente", texto: resposta.resposta, transferido: resposta.transferir, hora: horaAtual() },
+      ]);
       setEstadoConversas({ fase: "pronto", conversas: resposta.conversas, meta: resposta.meta, id: resposta.id });
       fetch("/api/simular").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
     } catch (err) {
       const mensagem = err instanceof Error ? err.message : "erro inesperado";
-      setMensagens((m) => [...m.filter((x) => !x.pendente), { papel: "atendente", texto: `Não deu certo: ${mensagem}`, transferido: true }]);
+      setMensagens((m) => [...m.filter((x) => !x.pendente), { papel: "atendente", texto: `Não deu certo: ${mensagem}`, erro: true, hora: horaAtual() }]);
     } finally {
       setEnviando(false);
     }
@@ -266,7 +269,7 @@ export default function Page() {
         </Panel>
 
         <Stage>
-          <Celular nome={config.atendente} mensagens={mensagens} valor={valor} onValorChange={setValor} onEnviar={enviarSimulada} enviando={enviando} />
+          <Celular nome={config.atendente} negocio={config.negocio} mensagens={mensagens} valor={valor} onValorChange={setValor} onEnviar={enviarSimulada} enviando={enviando} />
 
           <div className="flex flex-wrap gap-2 justify-center mb-8">
             {SUGESTOES.map((s) => (
@@ -326,7 +329,7 @@ export function Resultado({ conversas, meta, id, onLimpar }: { conversas: Conver
 /** Corpo da lista de conversas (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
 export function ConteudoConversas({ conversas, onLimpar }: { conversas: Conversa[]; onLimpar?: (numero: string) => void }) {
   const colunas: Coluna<Conversa>[] = [
-    { chave: "numero", titulo: "Número", papel: "titulo", largura: "22%", render: (c) => <strong>{c.numero}</strong> },
+    { chave: "numero", titulo: "Número", papel: "titulo", largura: "22%", render: (c) => <strong>{c.numero === "simulador" ? "Simulador" : c.numero}</strong> },
     { chave: "ultima_mensagem", titulo: "Última mensagem", papel: "resumo", render: (c) => c.ultima_mensagem },
     {
       chave: "status",
@@ -342,13 +345,39 @@ export function ConteudoConversas({ conversas, onLimpar }: { conversas: Conversa
     },
     { chave: "hora", titulo: "Hora", render: (c) => c.hora },
   ];
-  if (onLimpar) colunas.push({ chave: "acoes", titulo: "", render: (c) => <button type="button" className="btn-link" onClick={() => onLimpar(c.numero)}>Limpar</button> });
+  if (onLimpar)
+    colunas.push({
+      chave: "acoes",
+      titulo: "",
+      render: (c) => {
+        const simulador = c.numero === "simulador";
+        const rotulo = simulador ? "Apagar conversas do simulador" : "Limpar";
+        const confirmacao = simulador
+          ? "Apagar as conversas do simulador? Essa ação não pode ser desfeita."
+          : "Apagar esta conversa? Essa ação não pode ser desfeita.";
+        return (
+          <button
+            type="button"
+            className="btn-link"
+            onClick={() => {
+              if (window.confirm(confirmacao)) onLimpar(c.numero);
+            }}
+          >
+            {rotulo}
+          </button>
+        );
+      },
+    });
 
   return <DataTable colunas={colunas} linhas={conversas} />;
 }
 
 function conversasParaTexto(conversas: Conversa[]): string {
   const l: string[] = ["Conversas recebidas", ""];
-  conversas.forEach((c) => l.push(`${c.numero} (${c.origem === "whatsapp" ? "WhatsApp" : "Simulador"}${c.transferir ? ", transferida" : ""}): ${c.ultima_mensagem} — ${c.hora}`));
+  conversas.forEach((c) =>
+    l.push(
+      `${c.numero === "simulador" ? "Simulador" : c.numero} (${c.origem === "whatsapp" ? "WhatsApp" : "Simulador"}${c.transferir ? ", transferida" : ""}): ${c.ultima_mensagem} — ${c.hora}`
+    )
+  );
   return l.join("\n");
 }
