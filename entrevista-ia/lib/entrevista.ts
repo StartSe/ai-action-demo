@@ -4,8 +4,8 @@
 import { aiEnabled, askJSON, meta, type Meta } from "./ai";
 import { esperar, scorecardDemo } from "./demo";
 import { criar, type ParametrosPublicos } from "./formularios";
-import { salvar } from "./historico";
-import type { Scorecard, Troca, Vaga } from "./types";
+import { listar, obter, salvar } from "./historico";
+import type { CandidatoRanking, Ranking, Recomendacao, Scorecard, Troca, Vaga } from "./types";
 
 const SYSTEM_AVALIAR = `Você é uma especialista em recrutamento e seleção que avalia a transcrição de uma entrevista de triagem conduzida por uma IA, para apoiar a decisão do gestor de contratação.
 Regras:
@@ -90,4 +90,49 @@ export function criarLinkCandidato(vaga: Vaga, expiraEmDias: number): string {
     vaga,
   };
   return criar({ tipo: "scorecard", campos: [], parametros, expiraEmDias, limite: 1 });
+}
+
+export type CandidatoDaVaga = { id: string; candidato: string; nota_geral: number; recomendacao: Recomendacao; criadoEm: string };
+
+type EntradaScorecard = { vaga: Vaga; historico: Troca[] };
+
+/** Scorecards já salvos (pelo gestor ou por link de candidato) da mesma vaga, sem os campos pesados; não há um id de vaga próprio, então o agrupamento é pelo título digitado. */
+function registrosDaVaga(tituloVaga: string) {
+  const titulo = tituloVaga.trim().toLowerCase();
+  if (!titulo) return [];
+  return listar(200)
+    .filter((r) => r.tipo === "entrevista" || r.tipo === "scorecard")
+    .map((r) => obter<EntradaScorecard, Scorecard, Meta>(r.id))
+    .filter((r): r is NonNullable<typeof r> => r !== null && r.entrada.vaga.titulo.trim().toLowerCase() === titulo);
+}
+
+/** Candidatos desta vaga, mais recentes primeiro, para o bloco "Candidatos desta vaga" no painel. */
+export function listarCandidatosDaVaga(tituloVaga: string): CandidatoDaVaga[] {
+  return registrosDaVaga(tituloVaga).map((r) => ({
+    id: r.id,
+    candidato: r.entrada.vaga.candidato,
+    nota_geral: r.saida.nota_geral,
+    recomendacao: r.saida.recomendacao,
+    criadoEm: r.criadoEm,
+  }));
+}
+
+/** Gera e salva o ranking dos candidatos desta vaga, ordenado por nota (maior primeiro); null se houver menos de 2 candidatos avaliados. */
+export function gerarRanking(tituloVaga: string): { ranking: Ranking; meta: Meta; id: string } | null {
+  const registros = registrosDaVaga(tituloVaga);
+  if (registros.length < 2) return null;
+  const candidatos: CandidatoRanking[] = registros
+    .map((r) => ({
+      id: r.id,
+      candidato: r.entrada.vaga.candidato,
+      nota_geral: r.saida.nota_geral,
+      recomendacao: r.saida.recomendacao,
+      pontos_fortes: r.saida.pontos_fortes,
+      pontos_atencao: r.saida.pontos_atencao,
+    }))
+    .sort((a, b) => b.nota_geral - a.nota_geral);
+  const ranking: Ranking = { vagaTitulo: tituloVaga.trim(), candidatos };
+  const metaGerada = meta({ demo: !aiEnabled(), insumo: "toda a lista de scorecards desta vaga" });
+  const id = salvar({ tipo: "ranking", titulo: `Ranking de ${ranking.vagaTitulo}`, entrada: { vagaTitulo: ranking.vagaTitulo }, saida: ranking, meta: metaGerada });
+  return { ranking, meta: metaGerada, id };
 }

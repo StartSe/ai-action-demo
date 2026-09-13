@@ -31,9 +31,14 @@ import {
 import { Sala } from "@/components/Sala";
 import { DialogoLinkCandidato } from "@/components/DialogoLinkCandidato";
 import type { Meta } from "@/lib/ai";
-import type { Scorecard, Troca, Vaga } from "@/lib/types";
+import type { CandidatoRanking, Ranking, Recomendacao, Scorecard, Troca, Vaga } from "@/lib/types";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
+type CandidatoDaVaga = { id: string; candidato: string; nota_geral: number; recomendacao: Recomendacao; criadoEm: string };
+
+function nivelRecomendacao(r: Recomendacao): "baixa" | "media" | "alta" {
+  return r === "avançar" ? "baixa" : r === "não avançar" ? "alta" : "media";
+}
 
 const EXEMPLO: Vaga = {
   titulo: "Analista de Customer Success",
@@ -64,7 +69,8 @@ type Estado =
   | { fase: "entrevista" }
   | { fase: "carregando" }
   | { fase: "erro"; mensagem: string }
-  | { fase: "pronto"; scorecard: Scorecard; meta: Meta; historico: Troca[]; id?: string };
+  | { fase: "pronto"; scorecard: Scorecard; meta: Meta; historico: Troca[]; id?: string }
+  | { fase: "ranking"; ranking: Ranking; meta: Meta; id: string };
 
 export default function Page() {
   const { status, erro } = useStatus();
@@ -73,9 +79,11 @@ export default function Page() {
   const [modoExemplo, setModoExemplo] = useState(false);
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const [linkCandidatoAberto, setLinkCandidatoAberto] = useState(false);
+  const [candidatosVaga, setCandidatosVaga] = useState<CandidatoDaVaga[] | null>(null);
+  const [comparando, setComparando] = useState(false);
   const autoIniciado = useRef(false);
 
-  useScrollToResult(estado.fase === "pronto");
+  useScrollToResult(estado.fase === "pronto" || estado.fase === "ranking");
 
   function carregarHistorico() {
     fetch("/api/entrevista/avaliar").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
@@ -86,6 +94,43 @@ export default function Page() {
   function apagarHistorico() {
     if (!window.confirm("Apagar todos os resultados salvos? Essa ação não pode ser desfeita.")) return;
     fetch("/api/entrevista/avaliar", { method: "DELETE" }).then(carregarHistorico);
+  }
+
+  function carregarCandidatosVaga(titulo: string) {
+    const t = titulo.trim();
+    if (!t) {
+      setCandidatosVaga([]);
+      return;
+    }
+    fetch(`/api/entrevista/candidatos?vaga=${encodeURIComponent(t)}`)
+      .then((r) => r.json())
+      .then((r) => setCandidatosVaga(r.itens))
+      .catch(() => setCandidatosVaga([]));
+  }
+
+  // Debounça a busca dos candidatos da vaga enquanto o gestor ainda digita o título.
+  useEffect(() => {
+    const t = setTimeout(() => carregarCandidatosVaga(vaga.titulo), 400);
+    return () => clearTimeout(t);
+  }, [vaga.titulo]);
+
+  async function comparar() {
+    setComparando(true);
+    try {
+      const r = await fetch("/api/entrevista/ranking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vagaTitulo: vaga.titulo }),
+      });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Não foi possível gerar o ranking.");
+      setEstado({ fase: "ranking", ranking: resposta.ranking, meta: resposta.meta, id: resposta.id });
+      carregarHistorico();
+    } catch (e) {
+      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." });
+    } finally {
+      setComparando(false);
+    }
   }
 
   const set = (campo: "titulo" | "requisitos" | "candidato" | "tom") => (e: { target: { value: string } }) =>
@@ -103,6 +148,7 @@ export default function Page() {
       if (!r.ok) throw new Error(resposta.error || "Falha ao gerar o scorecard.");
       setEstado({ fase: "pronto", scorecard: resposta.scorecard, meta: resposta.meta, historico: historicoEntrevista, id: resposta.id });
       carregarHistorico();
+      carregarCandidatosVaga(vaga.titulo);
     } catch (e) {
       setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." });
     }
@@ -198,6 +244,42 @@ export default function Page() {
             <button type="button" className="btn-ghost" onClick={() => setLinkCandidatoAberto(true)}>Criar link para candidatos</button>
           </div>
 
+          {vaga.titulo.trim() && (
+            <MaisDetalhes titulo="Candidatos desta vaga">
+              {candidatosVaga === null ? (
+                <p className="text-muted text-sm">Carregando...</p>
+              ) : candidatosVaga.length === 0 ? (
+                <p className="text-muted text-sm">Nenhum scorecard salvo ainda para esta vaga.</p>
+              ) : (
+                <>
+                  <ul className="flex flex-col gap-2 text-sm mb-3">
+                    {candidatosVaga.map((c) => (
+                      <li key={c.id} className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold truncate">{c.candidato}</div>
+                          <div className="text-muted text-[12.5px] flex items-center gap-1.5 mt-0.5">
+                            <span>{numero(c.nota_geral, 1)}/10</span>
+                            <Chip nivel={nivelRecomendacao(c.recomendacao)}>{c.recomendacao}</Chip>
+                          </div>
+                        </div>
+                        <Link href={`/r/${c.id}`} className="btn-ghost shrink-0">Abrir</Link>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={comparar}
+                    disabled={candidatosVaga.length < 2 || comparando}
+                    title={candidatosVaga.length < 2 ? "Precisa de pelo menos 2 candidatos para comparar." : undefined}
+                  >
+                    {comparando ? "Comparando..." : "Comparar"}
+                  </button>
+                </>
+              )}
+            </MaisDetalhes>
+          )}
+
           <MaisDetalhes titulo="Últimos resultados">
             {historico === null ? (
               <p className="text-muted text-sm">Carregando...</p>
@@ -245,6 +327,7 @@ export default function Page() {
               aoNovaEntrevista={() => setEstado({ fase: "vazio" })}
             />
           )}
+          {estado.fase === "ranking" && <ResultadoRanking ranking={estado.ranking} meta={estado.meta} id={estado.id} />}
         </Stage>
       </Workspace>
 
@@ -294,7 +377,7 @@ export function Resultado({
 
 /** Corpo do scorecard (sem cabeçalho, Origem nem a ligação para o candidato), reaproveitado pela página de impressão. */
 export function ConteudoScorecard({ scorecard, historico }: { scorecard: Scorecard; historico: Troca[] }) {
-  const recClasse = scorecard.recomendacao === "avançar" ? "baixa" : scorecard.recomendacao === "não avançar" ? "alta" : "media";
+  const recClasse = nivelRecomendacao(scorecard.recomendacao);
   const tomNota = scorecard.recomendacao === "avançar" ? "ok" : scorecard.recomendacao === "não avançar" ? "danger" : "warn";
   return (
     <>
@@ -441,5 +524,52 @@ function scorecardParaTexto(sc: Scorecard, vaga: Vaga) {
   sc.pontos_atencao.forEach((p) => linhas.push(`- ${p}`));
   linhas.push("", "Próximos passos:");
   sc.proximos_passos.forEach((p) => linhas.push(`- ${p}`));
+  return linhas.join("\n");
+}
+
+export function ResultadoRanking({ ranking, meta, id }: { ranking: Ranking; meta: Meta; id?: string }) {
+  return (
+    <article className="reveal">
+      <ResultHead titulo="Ranking dos candidatos" subtitulo={ranking.vagaTitulo}>
+        <Entregar id={id} titulo={`Ranking de ${ranking.vagaTitulo}`} texto={() => rankingParaTexto(ranking)} />
+      </ResultHead>
+
+      <Origem meta={meta} />
+
+      <ConteudoRanking ranking={ranking} />
+    </article>
+  );
+}
+
+/** Corpo do ranking (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
+export function ConteudoRanking({ ranking }: { ranking: Ranking }) {
+  return (
+    <Section titulo="Candidatos ordenados por nota">
+      <DataTable
+        colunas={[
+          { chave: "candidato", titulo: "Candidato", papel: "titulo", render: (c) => <Link href={`/r/${c.id}`} className="hover:underline">{c.candidato}</Link> },
+          { chave: "nota", titulo: "Nota", papel: "chip", largura: "70px", render: (c) => `${numero(c.nota_geral, 1)}/10` },
+          { chave: "recomendacao", titulo: "Recomendação", render: (c) => <Chip nivel={nivelRecomendacao(c.recomendacao)}>{c.recomendacao}</Chip> },
+          { chave: "resumo", titulo: "Pontos fortes e de atenção", papel: "resumo", render: (c) => resumoCandidatoRanking(c) },
+        ]}
+        linhas={ranking.candidatos}
+      />
+    </Section>
+  );
+}
+
+function resumoCandidatoRanking(c: CandidatoRanking) {
+  const fortes = c.pontos_fortes.slice(0, 2).join("; ") || "—";
+  const atencao = c.pontos_atencao.slice(0, 2).join("; ") || "—";
+  return `Fortes: ${fortes} · Atenção: ${atencao}`;
+}
+
+function rankingParaTexto(ranking: Ranking) {
+  const linhas: string[] = [`Ranking de candidatos — ${ranking.vagaTitulo}`, ""];
+  ranking.candidatos.forEach((c, i) => {
+    linhas.push(`${i + 1}. ${c.candidato} — ${numero(c.nota_geral, 1)}/10 (${c.recomendacao})`);
+    linhas.push(`   Pontos fortes: ${c.pontos_fortes.join(", ") || "—"}`);
+    linhas.push(`   Pontos de atenção: ${c.pontos_atencao.join(", ") || "—"}`);
+  });
   return linhas.join("\n");
 }

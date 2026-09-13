@@ -32,3 +32,17 @@ export interface Scorecard {
   recomendacao: Recomendacao;
   proximos_passos: string[];
 }
+
+export interface CandidatoRanking {
+  id: string;
+  candidato: string;
+  nota_geral: number;
+  recomendacao: Recomendacao;
+  pontos_fortes: string[];
+  pontos_atencao: string[];
+}
+
+export interface Ranking {
+  vagaTitulo: string;
+  candidatos: CandidatoRanking[];
+}
