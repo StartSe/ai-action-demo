@@ -48,13 +48,13 @@ Regras:
 - Escreva em português do Brasil, direto, sem jargão.
 - Agrupe os comentários em 5 a 8 temas, ordenados do mais para o menos mencionado.
 - "sentimento" deve ser a contagem de comentários positivos, neutros e negativos, e a soma das três precisa ser exatamente igual ao número total de comentários fornecidos.
-- Cite trechos reais dos comentários recebidos (não invente citações).
+- Para cada tema, cite de 1 a 2 trechos reais dos comentários recebidos (não invente citações).
 - Ações prioritárias devem ser concretas e realistas para um time de produto/CX.
 Formato de saída (JSON), sem o campo "nps" (ele é calculado fora da IA):
 {
   "resumo_executivo": "3 frases sobre o que os comentários revelam e o que fazer a respeito",
   "sentimento": {"positivo": 0, "neutro": 0, "negativo": 0},
-  "temas": [{"tema": "", "mencoes": 0, "sentimento_dominante": "positivo|neutro|negativo", "exemplo": "trecho real de um comentário", "acao_sugerida": ""}],
+  "temas": [{"tema": "", "mencoes": 0, "sentimento_dominante": "positivo|neutro|negativo", "exemplos": ["trecho real de um comentário"], "acao_sugerida": ""}],
   "elogios_frequentes": ["frase curta"],
   "reclamacoes_frequentes": ["frase curta"],
   "citacoes_marcantes": [{"texto": "trecho real de um comentário", "sentimento": "positivo|neutro|negativo"}],
@@ -144,12 +144,12 @@ async function classificarEmLotes(lista: Comentario[], contexto: string) {
 const SYSTEM_CONSOLIDACAO = `Você recebe uma lista de temas brutos já contados a partir de centenas de comentários de clientes (cada um com quantas vezes apareceu, o sentimento predominante e exemplos reais) e precisa consolidar isso em um relatório executivo para um time de produto/CX no Brasil.
 Regras:
 - Junte temas brutos parecidos em 5 a 8 temas finais, somando as menções dos temas que você juntar.
-- Use os exemplos fornecidos como citações reais, não invente falas novas.
+- Use os exemplos fornecidos como citações reais, não invente falas novas; escolha até 2 por tema final.
 - Escreva em português do Brasil, direto, sem jargão.
 Formato de saída (JSON), sem os campos "sentimento" e "nps" (são calculados fora da IA):
 {
   "resumo_executivo": "3 frases sobre o que os comentários revelam e o que fazer a respeito",
-  "temas": [{"tema": "", "mencoes": 0, "sentimento_dominante": "positivo|neutro|negativo", "exemplo": "trecho real de um comentário", "acao_sugerida": ""}],
+  "temas": [{"tema": "", "mencoes": 0, "sentimento_dominante": "positivo|neutro|negativo", "exemplos": ["trecho real de um comentário"], "acao_sugerida": ""}],
   "elogios_frequentes": ["frase curta"],
   "reclamacoes_frequentes": ["frase curta"],
   "citacoes_marcantes": [{"texto": "trecho real de um comentário", "sentimento": "positivo|neutro|negativo"}],

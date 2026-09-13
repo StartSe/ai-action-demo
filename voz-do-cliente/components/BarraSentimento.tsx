@@ -8,9 +8,15 @@ export function BarraSentimento({ sentimento, nps }: { sentimento: ContagemSenti
   return (
     <div>
       <div className="sentiment-bar">
-        <div className="seg positivo" style={{ width: `${pct(sentimento.positivo)}%` }} />
-        <div className="seg neutro" style={{ width: `${pct(sentimento.neutro)}%` }} />
-        <div className="seg negativo" style={{ width: `${pct(sentimento.negativo)}%` }} />
+        <div className="seg positivo" style={{ width: `${pct(sentimento.positivo)}%` }}>
+          {pct(sentimento.positivo) >= 12 && <span className="seg-pct">{pct(sentimento.positivo)}%</span>}
+        </div>
+        <div className="seg neutro" style={{ width: `${pct(sentimento.neutro)}%` }}>
+          {pct(sentimento.neutro) >= 12 && <span className="seg-pct">{pct(sentimento.neutro)}%</span>}
+        </div>
+        <div className="seg negativo" style={{ width: `${pct(sentimento.negativo)}%` }}>
+          {pct(sentimento.negativo) >= 12 && <span className="seg-pct">{pct(sentimento.negativo)}%</span>}
+        </div>
       </div>
       <div className="sentiment-legend">
         <span><i className="dot positivo" />Positivo · {pct(sentimento.positivo)}% ({sentimento.positivo})</span>

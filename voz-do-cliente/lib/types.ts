@@ -23,7 +23,7 @@ export interface Tema {
   tema: string;
   mencoes: number;
   sentimento_dominante: Sentimento;
-  exemplo: string;
+  exemplos: string[];
   acao_sugerida: string;
 }
 

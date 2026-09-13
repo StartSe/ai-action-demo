@@ -60,10 +60,9 @@ lib/store.ts                    configuração em SQLite (node:sqlite), com vari
 lib/setup-comum.ts              tipos do setup e integração OpenRouter (compartilhado)
 lib/integracoes.ts              integrações que este app precisa
 lib/ai.ts                       cliente OpenRouter (askText, askJSON)
-lib/demo.ts                     análise de exemplo do modo demonstração
+lib/demo.ts                     análise de exemplo do modo demonstração; COMENTARIOS_EXEMPLO tem os 45 comentários (com nota NPS) do botão de exemplo
 lib/parse.ts                    leitura de CSV/TXT no navegador
 lib/types.ts                    tipos do domínio
-public/exemplo-feedbacks.txt    45 comentários fictícios de um app de banco digital, usados no botão de exemplo
 Dockerfile                      build multi-stage com saída standalone
 docker-compose.yml              sobe este app isolado
 render.yaml                     blueprint do Render (runtime image)

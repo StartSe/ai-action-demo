@@ -38,6 +38,7 @@ import {
   type ArquivoDados,
 } from "@/lib/parse";
 import type { Meta } from "@/lib/ai";
+import { COMENTARIOS_EXEMPLO } from "@/lib/demo";
 import type { Analise, Comentario, SaidaAnalise, Tema } from "@/lib/types";
 
 const LIMITE_COMENTARIOS = 500;
@@ -73,6 +74,7 @@ export default function Page() {
   const [usarArquivo, setUsarArquivo] = useState(false);
   const [idxTexto, setIdxTexto] = useState(0);
   const [idxNota, setIdxNota] = useState(-1);
+  const [comentariosExemplo, setComentariosExemplo] = useState<Comentario[] | null>(null);
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const autoEnviado = useRef(false);
@@ -92,8 +94,9 @@ export default function Page() {
 
   const comentarios: Comentario[] = useMemo(() => {
     if (usarArquivo && arquivoDados) return comentariosDoArquivo(arquivoDados, idxTexto, idxNota);
+    if (comentariosExemplo) return comentariosExemplo;
     return comentariosDoTexto(textoComentarios);
-  }, [usarArquivo, arquivoDados, idxTexto, idxNota, textoComentarios]);
+  }, [usarArquivo, arquivoDados, idxTexto, idxNota, comentariosExemplo, textoComentarios]);
 
   const headersCSV = usarArquivo && arquivoDados && arquivoDados.tipo === "csv" ? arquivoDados.headers : null;
 
@@ -109,6 +112,7 @@ export default function Page() {
 
   function onTextoChange(v: string) {
     setTextoComentarios(v);
+    setComentariosExemplo(null);
     if (v.trim()) {
       setUsarArquivo(false);
       setArquivoDados(null);
@@ -171,19 +175,14 @@ export default function Page() {
     analisar(lista, contexto);
   }
 
-  async function preencherExemplo() {
+  function preencherExemplo() {
     setContexto("app do banco");
     setUsarArquivo(false);
     setArquivoDados(null);
     setArquivoBruto(null);
-    try {
-      const r = await fetch("/exemplo-feedbacks.txt");
-      const texto = await r.text();
-      setTextoComentarios(texto);
-      return texto;
-    } catch {
-      return "";
-    }
+    setTextoComentarios(COMENTARIOS_EXEMPLO.map((c) => c.texto).join("\n"));
+    setComentariosExemplo(COMENTARIOS_EXEMPLO);
+    return COMENTARIOS_EXEMPLO;
   }
 
   // Atalho para demonstrações: /?exemplo=1 preenche e envia o formulário.
@@ -191,9 +190,8 @@ export default function Page() {
     if (autoEnviado.current) return;
     if (new URLSearchParams(location.search).get("exemplo") === "1") {
       autoEnviado.current = true;
-      setTimeout(async () => {
-        const texto = await preencherExemplo();
-        const lista = comentariosDoTexto(texto).slice(0, LIMITE_COMENTARIOS);
+      setTimeout(() => {
+        const lista = preencherExemplo().slice(0, LIMITE_COMENTARIOS);
         if (lista.length) analisar(lista, "app do banco");
       }, 0);
     }
@@ -287,7 +285,7 @@ export default function Page() {
 export function Resultado({ saida, contexto, meta, id }: { saida: SaidaAnalise; contexto: string; meta: Meta; id?: string }) {
   const { analise, totalAnalisado, totalEnviado, truncado } = saida;
   const titulo = `Análise de ${totalAnalisado} comentário${totalAnalisado === 1 ? "" : "s"}`;
-  const subtitulo = `${contexto || "sem contexto informado"}${truncado ? ` · analisamos os ${totalAnalisado} primeiros de ${totalEnviado}` : ""}`;
+  const subtitulo = `${sentenceCase(contexto || "sem contexto informado")}${truncado ? ` · analisamos os ${totalAnalisado} primeiros de ${totalEnviado}` : ""}`;
 
   return (
     <article className="reveal">
@@ -307,14 +305,45 @@ export function Resultado({ saida, contexto, meta, id }: { saida: SaidaAnalise; 
   );
 }
 
+/** Nome do tema como gatilho de <details>: clicar revela os comentários reais por trás da contagem. */
+function TemaComComentarios({ tema }: { tema: Tema }) {
+  return (
+    <details>
+      <summary className="font-bold cursor-pointer marker:content-none underline decoration-dotted decoration-muted underline-offset-4 hover:text-accent-ink">
+        {tema.tema}
+      </summary>
+      <ul className="mt-1.5 flex flex-col gap-1 text-[13px] text-muted font-normal">
+        {tema.exemplos.map((e, i) => <li key={i}>&ldquo;{e}&rdquo;</li>)}
+      </ul>
+    </details>
+  );
+}
+
+/** Barra horizontal proporcional ao maior número de menções entre os temas, com o valor ao lado. */
+function BarraMencoes({ valor, maximo }: { valor: number; maximo: number }) {
+  const pct = Math.max(6, Math.round((valor / maximo) * 100));
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-[7px] w-16 rounded-full bg-[#eef0f2] overflow-hidden shrink-0">
+        <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-[13px] tabular-nums text-muted">{valor}</span>
+    </div>
+  );
+}
+
+function sentenceCase(s: string) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
 /** Corpo da análise (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
 export function ConteudoAnalise({ analise }: { analise: Analise }) {
   const destaque = destaqueDoResultado(analise);
+  const maxMencoes = Math.max(1, ...analise.temas.map((t) => t.mencoes));
   const colunasTemas: Coluna<Tema>[] = [
-    { chave: "tema", titulo: "Tema", papel: "titulo", largura: "24%", render: (t) => <strong>{t.tema}</strong> },
-    { chave: "mencoes", titulo: "Menções", largura: "90px", render: (t) => t.mencoes },
+    { chave: "tema", titulo: "Tema", papel: "titulo", largura: "26%", render: (t) => <TemaComComentarios tema={t} /> },
+    { chave: "mencoes", titulo: "Menções", largura: "120px", render: (t) => <BarraMencoes valor={t.mencoes} maximo={maxMencoes} /> },
     { chave: "sentimento", titulo: "Sentimento", papel: "chip", largura: "112px", render: (t) => <Chip nivel={t.sentimento_dominante} /> },
-    { chave: "exemplo", titulo: "Exemplo", papel: "detalhe", render: (t) => <em>&ldquo;{t.exemplo}&rdquo;</em> },
     { chave: "acao", titulo: "Ação sugerida", papel: "detalhe", render: (t) => t.acao_sugerida },
   ];
 
@@ -395,7 +424,7 @@ function exportarCSV(temas: Tema[]) {
   const cabecalho = ["Tema", "Menções", "Sentimento", "Exemplo", "Ação sugerida"];
   const linhas = [cabecalho.join(";")];
   temas.forEach((t) => {
-    const campos = [t.tema, String(t.mencoes), t.sentimento_dominante, t.exemplo, t.acao_sugerida];
+    const campos = [t.tema, String(t.mencoes), t.sentimento_dominante, t.exemplos.join(" | "), t.acao_sugerida];
     linhas.push(campos.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"));
   });
   const csv = "﻿" + linhas.join("\r\n");
