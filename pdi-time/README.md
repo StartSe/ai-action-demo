@@ -31,6 +31,17 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 - Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
 - O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração se perde a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
 
+## Usar dentro de um assistente de IA (MCP)
+O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, para que assistentes como Claude ou ChatGPT chamem a ferramenta `gerar_pdi` diretamente. Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
+
+Decisão de implementação: protocolo implementado à mão em `lib/mcp.ts` (JSON-RPC 2.0: `initialize`, `tools/list`, `tools/call`), em vez do pacote `@modelcontextprotocol/sdk`. O app só precisa desses três métodos, sem `resources`, `prompts` nem streaming de progresso — a mesma filosofia de `lib/store.ts` (SQLite sem dependências externas) evita adicionar uma dependência pesada para um uso pequeno. Rate limit de 60 chamadas por minuto por código, em memória (`lib/mcp.ts`); reinicia ao reiniciar o servidor ou ao gerar um novo código.
+
+```bash
+curl -X POST https://<seu-app>/mcp \
+  -H "Authorization: Bearer <código>" -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
 ## Variáveis de ambiente (todas opcionais)
 Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando definidas, têm prioridade sobre o que foi salvo.
 | Variável | Descrição |
@@ -44,16 +55,22 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 ```
 app/page.tsx            tela única (formulário + resultado)
 app/api/pdi/route.ts    geração do PDI
-app/setup/page.tsx      configuração inicial (chaves, OAuth, teste de conexão)
+app/mcp/route.ts        endpoint MCP (JSON-RPC 2.0) para assistentes de IA
+app/api/mcp/token/route.ts  gera, consulta e revoga o código de acesso do endpoint MCP
+app/setup/page.tsx      configuração inicial (chaves, OAuth, teste de conexão, acesso MCP)
 app/api/setup/          leitura/gravação da configuração, teste e OAuth do OpenRouter
 app/api/status/route.ts informa ao frontend se a IA está conectada
 app/api/health/route.ts health check
 components/ui.tsx       componentes visuais compartilhados pela suíte
 components/setup.tsx    tela de setup genérica, gerada a partir de lib/integracoes.ts
+components/AcessoMCP.tsx cartão do /setup para gerar/revogar o acesso MCP
 lib/store.ts            configuração em SQLite (node:sqlite), com variáveis de ambiente como prioridade
 lib/setup-comum.ts      tipos do setup e integração OpenRouter (compartilhado)
 lib/integracoes.ts      integrações que este app precisa
 lib/ai.ts               cliente OpenRouter (askText, askJSON, askWithTools)
+lib/mcp.ts              protocolo MCP (JSON-RPC 2.0), código de acesso e limite de chamadas
+lib/ferramentas.ts      ferramentas expostas via MCP (gerar_pdi)
+lib/pdi.ts              lógica de geração do PDI, usada pela rota HTTP e pela ferramenta MCP
 lib/demo.ts             resposta de exemplo do modo demonstração
 lib/types.ts            tipos do domínio
 Dockerfile              build multi-stage com saída standalone
