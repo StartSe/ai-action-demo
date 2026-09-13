@@ -11,9 +11,16 @@ export function AcessoMCP() {
   const [codigoNovo, setCodigoNovo] = useState<string | null>(null);
   const [gerando, setGerando] = useState(false);
   const [revogando, setRevogando] = useState(false);
+  const [endereco, setEndereco] = useState("/mcp");
 
   useEffect(() => {
-    fetch("/api/mcp/token").then((r) => r.json()).then(setStatus).catch(() => {});
+    fetch("/api/mcp/token")
+      .then((r) => r.json())
+      .then((d) => {
+        setStatus(d);
+        setEndereco(`${window.location.origin}/mcp`);
+      })
+      .catch(() => {});
   }, []);
 
   async function gerar() {
@@ -39,7 +46,13 @@ export function AcessoMCP() {
     }
   }
 
-  const endereco = typeof window !== "undefined" ? `${window.location.origin}/mcp` : "/mcp";
+  const configuracao = codigoNovo
+    ? JSON.stringify(
+        { mcpServers: { "pdi-time": { url: endereco, headers: { Authorization: `Bearer ${codigoNovo}` } } } },
+        null,
+        2
+      )
+    : null;
 
   return (
     <section className="card p-6 max-md:p-5">
@@ -76,6 +89,39 @@ export function AcessoMCP() {
           )}
         </div>
         {codigoNovo && <p className="text-[12.5px] text-muted">Guarde este código agora: por segurança, ele não aparece de novo depois desta tela.</p>}
+      </div>
+
+      <div className="grid grid-cols-2 gap-6 max-md:grid-cols-1 mt-6">
+        <div>
+          <h3 className="text-sm font-semibold mb-2">Conectar no Claude Desktop</h3>
+          <ol className="text-[13px] text-muted list-decimal pl-5 space-y-1">
+            <li>Abra Configurações → Conectores → &quot;Adicionar conector personalizado&quot; → &quot;Editar configuração&quot;.</li>
+            <li>Clique em &quot;Copiar configuração&quot; abaixo e cole no arquivo que abrir.</li>
+            <li>Salve e reinicie o Claude Desktop: o PDI do Time aparece na lista de conectores.</li>
+          </ol>
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold mb-2">Conectar no ChatGPT</h3>
+          <ol className="text-[13px] text-muted list-decimal pl-5 space-y-1">
+            <li>Abra Configurações → Conectores → &quot;Criar&quot; (conector personalizado).</li>
+            <li>Cole o Endereço acima em &quot;URL&quot; e, em &quot;Autenticação&quot;, escolha &quot;Chave de acesso&quot; e cole o código gerado acima.</li>
+            <li>Salve: o PDI do Time aparece nas ferramentas disponíveis dentro da conversa.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <h3 className="text-sm font-semibold mb-2">Configuração pronta</h3>
+        {configuracao ? (
+          <>
+            <pre className="bg-bg border border-line rounded-md p-3 text-[12px] leading-relaxed overflow-x-auto whitespace-pre-wrap break-all">{configuracao}</pre>
+            <div className="mt-2">
+              <CopyButton texto={() => configuracao} rotulo="Copiar configuração" />
+            </div>
+          </>
+        ) : (
+          <p className="text-[12.5px] text-muted">Gere um acesso acima para liberar a configuração pronta, já com o código incluído.</p>
+        )}
       </div>
     </section>
   );

@@ -42,6 +42,14 @@ curl -X POST https://<seu-app>/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
+O cartão também mostra um passo a passo de três passos para o Claude Desktop e para o ChatGPT, e um botão "Copiar configuração" que copia um JSON pronto (endereço + código) logo após gerar um acesso.
+
+### Testar com o MCP Inspector
+```bash
+npx @modelcontextprotocol/inspector
+```
+Na interface que abre no navegador, escolha o transporte "Streamable HTTP", cole `http://localhost:3000/mcp` (ou o endereço do deploy) em URL e adicione o cabeçalho `Authorization: Bearer <código>` em "Custom Headers". Clique em "Connect": a aba "Tools" deve listar `gerar_pdi`; ao executá-la com os campos obrigatórios preenchidos, o resultado devolvido é o mesmo objeto (pontos fortes, lacunas, objetivos) que a rota `/api/pdi` produz.
+
 ## Variáveis de ambiente (todas opcionais)
 Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando definidas, têm prioridade sobre o que foi salvo.
 | Variável | Descrição |
