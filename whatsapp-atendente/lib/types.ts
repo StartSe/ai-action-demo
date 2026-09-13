@@ -1,7 +1,7 @@
 export type Tom = "cordial" | "direto" | "descontraido";
 export type NaoSei = "humano" | "contato" | "site";
 // Renomeado de "Origem" para não colidir com o componente Origem de components/ui.tsx (linha de proveniência do resultado).
-export type CanalOrigem = "simulador" | "whatsapp";
+export type CanalOrigem = "simulador" | "whatsapp" | "mcp";
 
 export interface Config {
   negocio: string;

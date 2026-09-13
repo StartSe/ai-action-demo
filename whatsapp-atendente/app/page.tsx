@@ -27,7 +27,7 @@ import {
 import { AcoesResposta, Celular, horaAtual, type AoSalvarBase, type BolhaChat } from "@/components/Celular";
 import type { Meta } from "@/lib/ai";
 import type { ParBase } from "@/lib/base";
-import type { Config, Conversa } from "@/lib/types";
+import type { CanalOrigem, Config, Conversa } from "@/lib/types";
 
 const CONFIG_VAZIA: Config = { negocio: "", atendente: "", tom: "cordial", horario: "", baseConhecimento: "", naoSei: "humano" };
 
@@ -415,7 +415,7 @@ export function ConteudoConversas({
       render: (c) => (
         <div className="flex gap-1.5 flex-wrap justify-end">
           {c.transferir && <Chip nivel="media">Transferida</Chip>}
-          <Chip nivel="neutral">{c.origem === "whatsapp" ? "WhatsApp" : "Simulador"}</Chip>
+          <Chip nivel="neutral">{rotuloOrigem(c.origem)}</Chip>
         </div>
       ),
     },
@@ -458,12 +458,16 @@ export function ConteudoConversas({
   return <DataTable colunas={colunas} linhas={conversas} />;
 }
 
+function rotuloOrigem(origem: CanalOrigem): string {
+  if (origem === "whatsapp") return "WhatsApp";
+  if (origem === "mcp") return "Assistente de IA";
+  return "Simulador";
+}
+
 function conversasParaTexto(conversas: Conversa[]): string {
   const l: string[] = ["Conversas recebidas", ""];
   conversas.forEach((c) =>
-    l.push(
-      `${c.numero === "simulador" ? "Simulador" : c.numero} (${c.origem === "whatsapp" ? "WhatsApp" : "Simulador"}${c.transferir ? ", transferida" : ""}): ${c.ultima_mensagem} — ${c.hora}`
-    )
+    l.push(`${c.numero === "simulador" ? "Simulador" : c.numero} (${rotuloOrigem(c.origem)}${c.transferir ? ", transferida" : ""}): ${c.ultima_mensagem} — ${c.hora}`)
   );
   return l.join("\n");
 }
