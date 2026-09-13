@@ -18,10 +18,13 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
       <header className="mb-8 pb-4 border-b border-line">
         <div className="text-[13px] font-semibold text-muted">PDI do Time</div>
         <h1 className="text-2xl font-extrabold tracking-[-0.01em]">{`PDI de ${registro.entrada.nome}`}</h1>
-        <div className="text-muted text-sm">{data(new Date())}</div>
+        <div className="text-muted text-sm">
+          {data(new Date())}
+          {registro.entrada.preparadoPor && ` · Preparado por ${registro.entrada.preparadoPor}`}
+        </div>
       </header>
 
-      <ConteudoPDI pdi={registro.saida} />
+      <ConteudoPDI pdi={registro.saida} dataConversa={registro.entrada.dataConversa} />
 
       <footer className="mt-8 pt-4 border-t border-line">
         <Origem meta={registro.meta} />

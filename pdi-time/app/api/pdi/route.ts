@@ -1,6 +1,7 @@
 import { aiEnabled, askJSON, meta } from "@/lib/ai";
 import { esperar, pdiDemo } from "@/lib/demo";
 import { apagarTodos, listar, salvar, SENSIVEL } from "@/lib/historico";
+import { getConfig, setConfig } from "@/lib/store";
 import type { DadosPDI, PDI } from "@/lib/types";
 
 const SYSTEM = `Você é um especialista em desenvolvimento de pessoas que apoia líderes de empresas brasileiras.
@@ -29,11 +30,12 @@ function idSalvo({ nome, dados, saida, metaGerada, guardar }: { nome: string; da
 
 export async function POST(req: Request) {
   const corpo = (await req.json().catch(() => ({}))) as Partial<DadosPDI> & { guardar?: boolean };
-  const { nome, cargo, tempo, entregas, objetivos, aspiracoes, guardar } = corpo;
+  const { nome, cargo, tempo, entregas, objetivos, aspiracoes, dataConversa, preparadoPor, guardar } = corpo;
   if (!nome || !cargo || !entregas || !objetivos) {
     return Response.json({ error: "Preencha nome, cargo, entregas recentes e objetivos da empresa." }, { status: 400 });
   }
-  const dados: DadosPDI = { nome, cargo, tempo: tempo || "", entregas, objetivos, aspiracoes };
+  const dados: DadosPDI = { nome, cargo, tempo: tempo || "", entregas, objetivos, aspiracoes, dataConversa, preparadoPor };
+  if (preparadoPor) setConfig("NOME_USUARIO", preparadoPor);
   try {
     const insumo = "entregas recentes e objetivos da empresa";
     if (!aiEnabled()) {
@@ -55,9 +57,9 @@ export async function POST(req: Request) {
   }
 }
 
-/** Últimos resultados salvos, para a lista "Últimos resultados" no painel. */
+/** Últimos resultados salvos, para a lista "Últimos resultados" no painel; nomeUsuario pré-preenche "Seu nome". */
 export async function GET() {
-  return Response.json({ itens: listar(10) });
+  return Response.json({ itens: listar(10), nomeUsuario: getConfig("NOME_USUARIO") });
 }
 
 /** Apaga todo o histórico salvo (botão "Apagar tudo"). */

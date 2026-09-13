@@ -18,7 +18,7 @@ const EXEMPLO: DadosPDI = {
   aspiracoes: "Assumir a gerência de marketing nos próximos 2 anos",
 };
 
-const VAZIO: DadosPDI = { nome: "", cargo: "", tempo: "1 a 3 anos", entregas: "", objetivos: "", aspiracoes: "" };
+const VAZIO: DadosPDI = { nome: "", cargo: "", tempo: "1 a 3 anos", entregas: "", objetivos: "", aspiracoes: "", dataConversa: "", preparadoPor: "" };
 
 const ETAPAS_CARREGANDO = ["Lendo as entregas recentes...", "Cruzando com os objetivos da empresa...", "Montando o plano de 30, 60 e 90 dias..."];
 
@@ -51,7 +51,10 @@ export default function Page() {
   useScrollToResult(estado.fase === "pronto");
 
   function carregarHistorico() {
-    fetch("/api/pdi").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
+    fetch("/api/pdi").then((r) => r.json()).then((r) => {
+      setHistorico(r.itens);
+      if (r.nomeUsuario) setDados((d) => (d.preparadoPor ? d : { ...d, preparadoPor: r.nomeUsuario }));
+    }).catch(() => setHistorico([]));
   }
 
   useEffect(() => { carregarHistorico(); }, []);
@@ -123,6 +126,14 @@ export default function Page() {
               <Field label="Aspirações da pessoa (opcional)" htmlFor="aspiracoes">
                 <input id="aspiracoes" className="input" placeholder="Ex.: assumir a gerência da área em 2 anos" value={dados.aspiracoes} onChange={set("aspiracoes")} />
               </Field>
+              <Row>
+                <Field label="Data da conversa (opcional)" htmlFor="dataConversa" hint="Usada para calcular as datas reais das ações de 30, 60 e 90 dias.">
+                  <input id="dataConversa" type="date" className="input" value={dados.dataConversa ?? ""} onChange={set("dataConversa")} />
+                </Field>
+                <Field label="Seu nome (opcional)" htmlFor="preparadoPor" hint="Aparece como 'Preparado por' na folha de impressão.">
+                  <input id="preparadoPor" className="input" placeholder="Seu nome" value={dados.preparadoPor ?? ""} onChange={set("preparadoPor")} />
+                </Field>
+              </Row>
             </MaisDetalhes>
             {SENSIVEL && <OptInGuardar checked={guardar} onChange={setGuardar} />}
             <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Gerando plano" : "Gerar PDI"}</button>
@@ -170,13 +181,23 @@ export function Resultado({ pdi, dados, meta, id }: { pdi: PDI; dados: DadosPDI;
 
       <Origem meta={meta} />
 
-      <ConteudoPDI pdi={pdi} />
+      <ConteudoPDI pdi={pdi} dataConversa={dados.dataConversa} />
     </article>
   );
 }
 
+/** "30 dias" vira "30 dias · 12/10/2026" quando há uma data da conversa para calcular a partir dela. */
+function prazoComData(prazo: string, dataConversa?: string) {
+  if (!dataConversa) return prazo;
+  const dias = Number(prazo.match(/\d+/)?.[0]);
+  if (!dias) return prazo;
+  const data_ = new Date(`${dataConversa}T00:00:00`);
+  data_.setDate(data_.getDate() + dias);
+  return `${prazo} · ${data(data_, { comAno: true })}`;
+}
+
 /** Corpo do PDI (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
-export function ConteudoPDI({ pdi }: { pdi: PDI }) {
+export function ConteudoPDI({ pdi, dataConversa }: { pdi: PDI; dataConversa?: string }) {
   return (
     <>
       <p className="summary">{pdi.resumo}</p>
@@ -201,13 +222,13 @@ export function ConteudoPDI({ pdi }: { pdi: PDI }) {
       <Section titulo="Objetivos de desenvolvimento para 90 dias">
         {pdi.objetivos.map((o) => (
           <div key={o.titulo} className="card shadow-none px-[22px] py-5 mb-3.5">
-            <header className="flex justify-between gap-4 mb-3 flex-wrap">
+            <header className="flex justify-between gap-4 mb-3 max-md:flex-col">
               <div><h3 className="font-bold">{o.titulo}</h3><p className="text-muted text-sm">{o.resultado_esperado}</p></div>
-              <div className="text-[13px] text-muted">Indicador<br /><strong className="text-ink">{o.indicador}</strong></div>
+              <div className="text-[13px] text-muted md:w-40 md:shrink-0 md:text-right">Indicador<br /><strong className="text-ink">{o.indicador}</strong></div>
             </header>
             <div className="border-t border-line divide-y divide-line text-sm">
               {o.acoes.map((a) => (
-                <div key={a.prazo} className="flex gap-4 py-[11px]"><span className="w-24 shrink-0 font-bold text-accent-ink">{a.prazo}</span><span>{a.acao}</span></div>
+                <div key={a.prazo} className="flex gap-4 py-[11px]"><span className={`${dataConversa ? "w-36" : "w-24"} shrink-0 font-bold text-accent-ink`}>{prazoComData(a.prazo, dataConversa)}</span><span>{a.acao}</span></div>
               ))}
             </div>
           </div>

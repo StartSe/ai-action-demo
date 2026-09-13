@@ -21,4 +21,6 @@ export interface DadosPDI {
   entregas: string;
   objetivos: string;
   aspiracoes?: string;
+  dataConversa?: string;
+  preparadoPor?: string;
 }
