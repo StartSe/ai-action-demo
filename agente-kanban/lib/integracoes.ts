@@ -1,21 +1,39 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 import { OPENROUTER, type Integracao } from "./setup-comum";
 
+/**
+ * Chave de API do app desta suíte, cadastrada em https://trello.com/power-ups/admin.
+ * O Trello trata essa chave como pública (identifica o app, não a pessoa) — quem é secreto
+ * é o token, gerado por pessoa ao clicar em "Autorizar no Trello". Por isso ela mora aqui
+ * embutida em vez de pedir que o executivo cole a própria antes de autorizar.
+ * Quem publica a suíte define TRELLO_API_KEY_APP no ambiente com a chave do Power-Up real;
+ * sem ela, o cartão volta a pedir uma chave em "Opções avançadas" antes de autorizar.
+ */
+export const TRELLO_API_KEY = process.env.TRELLO_API_KEY_APP || "";
+
 const TRELLO: Integracao = {
   id: "trello",
   titulo: "Quadro do Trello",
   descricao:
     "Conecte o quadro do Trello que o agente vai operar de verdade: criar, mover, comentar e arquivar cartões. Sem ela, o agente faz tudo isso em um quadro de exemplo em memória, só para teste.",
   obrigatoria: false,
-  link: { url: "https://trello.com/power-ups/admin", rotulo: "Obter a chave de API do Trello" },
+  link: { url: "https://trello.com/power-ups/admin", rotulo: "Obter uma chave própria de API do Trello" },
   oauth: { tipo: "trello", rotulo: "Autorizar no Trello", url: "/api/setup/oauth/trello" },
   campos: [
-    { chave: "TRELLO_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sua chave do Trello" },
+    {
+      chave: "TRELLO_API_KEY",
+      rotulo: "Chave da API",
+      tipo: "secret",
+      placeholder: "sua chave do Trello",
+      opcional: true,
+      padrao: TRELLO_API_KEY,
+      ajuda: "Preencha só se quiser autorizar com uma chave própria em vez da chave já embutida neste app",
+    },
     {
       chave: "TRELLO_API_TOKEN",
       rotulo: "Token de acesso",
       tipo: "secret",
-      ajuda: "Clique em Autorizar no Trello depois de salvar a chave",
+      ajuda: "Gerado sozinho ao clicar em Autorizar no Trello; preencha aqui só para colar um token obtido de outra forma",
     },
     {
       chave: "TRELLO_BOARD_ID",

@@ -4,14 +4,16 @@
 //
 // Para trocar por outra ferramenta (Jira, Notion, monday.com, ou um servidor MCP dela),
 // escreva um módulo com as mesmas sete funções chamando a API daquela ferramenta.
+import { TRELLO_API_KEY } from "./integracoes";
 import type { Cartao, DadosNovoCartao, Lista, ProvedorQuadro, Quadro } from "./quadro";
 import { getConfig } from "./store";
 
 const BASE = "https://api.trello.com/1";
 
 // Lidas a cada chamada (nunca em módulo): a configuração pode mudar em /setup sem reiniciar o app.
+// Sem chave própria salva, usa a chave pública embutida no app (ver lib/integracoes.ts).
 function chaveToken() {
-  return { key: getConfig("TRELLO_API_KEY"), token: getConfig("TRELLO_API_TOKEN") };
+  return { key: getConfig("TRELLO_API_KEY") || TRELLO_API_KEY, token: getConfig("TRELLO_API_TOKEN") };
 }
 
 function boardId(): string {
