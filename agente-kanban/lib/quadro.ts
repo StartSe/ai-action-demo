@@ -9,6 +9,9 @@ export interface Lista {
   nome: string;
 }
 
+/** Urgência de um pedido, exibida como etiqueta colorida no cartão (classes .chip-alta/media/baixa já existentes em globals.css). */
+export type Etiqueta = "alta" | "media" | "baixa";
+
 export interface Cartao {
   id: string;
   nome: string;
@@ -17,6 +20,8 @@ export interface Cartao {
   vencimento: string | null;
   /** Data/hora (ISO) da última atualização do cartão (criação, mudança de lista...); usada para detectar cartões "parados". */
   atualizadoEm: string;
+  /** Urgência do pedido que deu origem ao cartão; null quando o cartão não veio de um pedido com urgência declarada. */
+  etiqueta: Etiqueta | null;
 }
 
 export interface ListaComCartoes extends Lista {
@@ -32,6 +37,7 @@ export interface DadosNovoCartao {
   descricao?: string;
   listaId: string;
   vencimento?: string | null;
+  etiqueta?: Etiqueta | null;
 }
 
 export interface ProvedorQuadro {

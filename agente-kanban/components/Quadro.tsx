@@ -1,5 +1,7 @@
 import type { Cartao, Quadro as QuadroType } from "@/lib/quadro";
 
+const RÓTULO_ETIQUETA = { alta: "Alta", media: "Média", baixa: "Baixa" } as const;
+
 function formatarDataPtBr(iso: string | null): string {
   if (!iso) return "";
   const [ano, mes, dia] = iso.split("-");
@@ -35,7 +37,10 @@ export function Quadro({
                   setAlterados.has(c.id) ? "border-accent ring-2 ring-accent-soft" : "border-line"
                 }`}
               >
-                <div className="font-bold text-sm mb-1">{c.nome}</div>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="font-bold text-sm">{c.nome}</div>
+                  {c.etiqueta && <span className={`chip-${c.etiqueta} shrink-0`}>{RÓTULO_ETIQUETA[c.etiqueta]}</span>}
+                </div>
                 {c.descricao && <div className="text-[12.5px] text-muted mb-2">{c.descricao}</div>}
                 <div className="flex justify-between gap-2 text-xs text-muted">
                   {c.responsavel ? (

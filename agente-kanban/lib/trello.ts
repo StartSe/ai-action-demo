@@ -5,7 +5,7 @@
 // Para trocar por outra ferramenta (Jira, Notion, monday.com, ou um servidor MCP dela),
 // escreva um módulo com as mesmas sete funções chamando a API daquela ferramenta.
 import { TRELLO_API_KEY } from "./integracoes";
-import type { Cartao, DadosNovoCartao, Lista, ProvedorQuadro, Quadro } from "./quadro";
+import type { Cartao, DadosNovoCartao, Etiqueta, Lista, ProvedorQuadro, Quadro } from "./quadro";
 import { getConfig } from "./store";
 
 const BASE = "https://api.trello.com/1";
@@ -59,6 +59,26 @@ interface MembroTrello {
   username?: string;
 }
 
+// O Trello não tem um conceito de "etiqueta de urgência" pronto sem mapear cores de label por
+// quadro (fora do escopo desta integração); a aproximação usada é guardar a urgência como a
+// primeira linha da descrição do cartão e extrair de volta ao ler, igual à aproximação já
+// existente para atualizadoEm (dateLastActivity).
+const RÓTULO_ETIQUETA: Record<Etiqueta, string> = { alta: "alta", media: "média", baixa: "baixa" };
+const PREFIXO_ETIQUETA = /^Urgência:\s*(alta|média|media|baixa)\s*\n\n?/i;
+
+function comEtiqueta(descricao: string, etiqueta?: Etiqueta | null): string {
+  if (!etiqueta) return descricao;
+  return `Urgência: ${RÓTULO_ETIQUETA[etiqueta]}\n\n${descricao}`;
+}
+
+function extrairEtiqueta(desc: string | undefined): { etiqueta: Etiqueta | null; descricao: string } {
+  const texto = desc || "";
+  const m = PREFIXO_ETIQUETA.exec(texto);
+  if (!m) return { etiqueta: null, descricao: texto };
+  const semAcento = m[1].toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  return { etiqueta: semAcento as Etiqueta, descricao: texto.slice(m[0].length) };
+}
+
 let membrosCache: Record<string, string> | null = null;
 let membrosCacheEm = 0;
 
@@ -81,22 +101,26 @@ async function listarCartoesComLista(): Promise<(Cartao & { listaId: string })[]
     chamar<CartaoTrello[]>("GET", `/boards/${boardId()}/cards`, { fields: "name,desc,idList,due,idMembers,dateLastActivity", filter: "open" }),
     mapaMembros(),
   ]);
-  return (cartoes || []).map((c) => ({
-    id: c.id,
-    nome: c.name,
-    descricao: c.desc || "",
-    listaId: c.idList,
-    responsavel: (c.idMembers || []).map((id) => membros[id]).filter(Boolean).join(", "),
-    vencimento: c.due ? c.due.slice(0, 10) : null,
-    // Trello não expõe "quando o cartão entrou na lista atual" sem consultar o histórico de ações
-    // (chamada extra por cartão); dateLastActivity (qualquer atividade: edição, comentário, mover...)
-    // é a aproximação usada aqui para "cartão parado" (ver lib/rotinas-do-app.ts).
-    atualizadoEm: c.dateLastActivity || new Date().toISOString(),
-  }));
+  return (cartoes || []).map((c) => {
+    const { etiqueta, descricao } = extrairEtiqueta(c.desc);
+    return {
+      id: c.id,
+      nome: c.name,
+      descricao,
+      listaId: c.idList,
+      responsavel: (c.idMembers || []).map((id) => membros[id]).filter(Boolean).join(", "),
+      vencimento: c.due ? c.due.slice(0, 10) : null,
+      // Trello não expõe "quando o cartão entrou na lista atual" sem consultar o histórico de ações
+      // (chamada extra por cartão); dateLastActivity (qualquer atividade: edição, comentário, mover...)
+      // é a aproximação usada aqui para "cartão parado" (ver lib/rotinas-do-app.ts).
+      atualizadoEm: c.dateLastActivity || new Date().toISOString(),
+      etiqueta,
+    };
+  });
 }
 
 function semLista(c: Cartao & { listaId: string }): Cartao {
-  return { id: c.id, nome: c.nome, descricao: c.descricao, responsavel: c.responsavel, vencimento: c.vencimento, atualizadoEm: c.atualizadoEm };
+  return { id: c.id, nome: c.nome, descricao: c.descricao, responsavel: c.responsavel, vencimento: c.vencimento, atualizadoEm: c.atualizadoEm, etiqueta: c.etiqueta };
 }
 
 async function listarCartoes(): Promise<Cartao[]> {
@@ -114,21 +138,23 @@ async function obterQuadro(): Promise<Quadro> {
   };
 }
 
-async function criarCartao({ nome, descricao = "", listaId, vencimento = null }: DadosNovoCartao): Promise<Cartao> {
+async function criarCartao({ nome, descricao = "", listaId, vencimento = null, etiqueta = null }: DadosNovoCartao): Promise<Cartao> {
   const cartao = await chamar<CartaoTrello>("POST", `/cards`, {
     idList: listaId,
     name: nome,
-    desc: descricao,
+    desc: comEtiqueta(descricao, etiqueta),
     due: vencimento || undefined,
   });
   if (!cartao) throw new Error("O Trello não retornou o cartão criado.");
-  return { id: cartao.id, nome: cartao.name, descricao: cartao.desc || "", responsavel: "", vencimento: cartao.due ? cartao.due.slice(0, 10) : null, atualizadoEm: cartao.dateLastActivity || new Date().toISOString() };
+  const extraido = extrairEtiqueta(cartao.desc);
+  return { id: cartao.id, nome: cartao.name, descricao: extraido.descricao, responsavel: "", vencimento: cartao.due ? cartao.due.slice(0, 10) : null, atualizadoEm: cartao.dateLastActivity || new Date().toISOString(), etiqueta: extraido.etiqueta };
 }
 
 async function moverCartao({ cartaoId, listaId }: { cartaoId: string; listaId: string }): Promise<Cartao> {
   const cartao = await chamar<CartaoTrello>("PUT", `/cards/${cartaoId}`, { idList: listaId });
   if (!cartao) throw new Error("O Trello não retornou o cartão movido.");
-  return { id: cartao.id, nome: cartao.name, descricao: cartao.desc || "", responsavel: "", vencimento: cartao.due ? cartao.due.slice(0, 10) : null, atualizadoEm: cartao.dateLastActivity || new Date().toISOString() };
+  const extraido = extrairEtiqueta(cartao.desc);
+  return { id: cartao.id, nome: cartao.name, descricao: extraido.descricao, responsavel: "", vencimento: cartao.due ? cartao.due.slice(0, 10) : null, atualizadoEm: cartao.dateLastActivity || new Date().toISOString(), etiqueta: extraido.etiqueta };
 }
 
 // Encontra o membro do quadro cujo nome (completo ou de usuário) mais se aproxima do texto informado.
@@ -153,7 +179,8 @@ async function atribuir({ cartaoId, responsavel }: { cartaoId: string; responsav
   if (!cartao) throw new Error("O Trello não retornou o cartão atualizado.");
   const membros = await mapaMembros();
   const nomesResponsaveis = (cartao.idMembers || []).map((id) => membros[id]).filter(Boolean).join(", ");
-  return { id: cartao.id, nome: cartao.name, descricao: cartao.desc || "", responsavel: nomesResponsaveis, vencimento: cartao.due ? cartao.due.slice(0, 10) : null, atualizadoEm: cartao.dateLastActivity || new Date().toISOString() };
+  const extraido = extrairEtiqueta(cartao.desc);
+  return { id: cartao.id, nome: cartao.name, descricao: extraido.descricao, responsavel: nomesResponsaveis, vencimento: cartao.due ? cartao.due.slice(0, 10) : null, atualizadoEm: cartao.dateLastActivity || new Date().toISOString(), etiqueta: extraido.etiqueta };
 }
 
 async function comentar({ cartaoId, texto }: { cartaoId: string; texto: string }): Promise<{ ok: true; comentarioId: string }> {

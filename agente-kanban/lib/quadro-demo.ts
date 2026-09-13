@@ -39,6 +39,7 @@ function cartoesIniciais(): CartaoInterno[] {
       responsavel: "Camila Duarte",
       vencimento: "2026-09-18",
       atualizadoEm: diasAtras(2),
+      etiqueta: null,
       arquivado: false,
       comentarios: [],
     },
@@ -50,6 +51,7 @@ function cartoesIniciais(): CartaoInterno[] {
       responsavel: "Camila Duarte",
       vencimento: "2026-09-22",
       atualizadoEm: diasAtras(1),
+      etiqueta: null,
       arquivado: false,
       comentarios: [],
     },
@@ -61,6 +63,7 @@ function cartoesIniciais(): CartaoInterno[] {
       responsavel: "Juliana Alves",
       vencimento: "2026-09-25",
       atualizadoEm: diasAtras(7),
+      etiqueta: null,
       arquivado: false,
       comentarios: [],
     },
@@ -72,6 +75,7 @@ function cartoesIniciais(): CartaoInterno[] {
       responsavel: "Rafael Ribeiro",
       vencimento: "2026-09-15",
       atualizadoEm: diasAtras(6),
+      etiqueta: null,
       arquivado: false,
       comentarios: [],
     },
@@ -83,6 +87,7 @@ function cartoesIniciais(): CartaoInterno[] {
       responsavel: "Juliana Alves",
       vencimento: "2026-09-20",
       atualizadoEm: diasAtras(3),
+      etiqueta: null,
       arquivado: false,
       comentarios: [],
     },
@@ -94,6 +99,7 @@ function cartoesIniciais(): CartaoInterno[] {
       responsavel: "Camila Duarte",
       vencimento: "2026-09-30",
       atualizadoEm: diasAtras(1),
+      etiqueta: null,
       arquivado: false,
       comentarios: [],
     },
@@ -105,6 +111,7 @@ function cartoesIniciais(): CartaoInterno[] {
       responsavel: "Juliana Alves",
       vencimento: "2026-09-01",
       atualizadoEm: diasAtras(10),
+      etiqueta: null,
       arquivado: false,
       comentarios: [],
     },
@@ -132,7 +139,7 @@ export function reiniciarQuadroDemo(visitanteId: string): void {
 }
 
 function cartaoPublico(c: CartaoInterno): Cartao {
-  return { id: c.id, nome: c.nome, descricao: c.descricao || "", responsavel: c.responsavel || "", vencimento: c.vencimento || null, atualizadoEm: c.atualizadoEm };
+  return { id: c.id, nome: c.nome, descricao: c.descricao || "", responsavel: c.responsavel || "", vencimento: c.vencimento || null, atualizadoEm: c.atualizadoEm, etiqueta: c.etiqueta };
 }
 
 /** Quadro de exemplo fixo (mesmos cartões iniciais), sem vínculo com nenhum visitante — usado por tarefas
@@ -165,7 +172,7 @@ export function quadroDemoPara(visitanteId: string): ProvedorQuadro {
     };
   }
 
-  async function criarCartao({ nome, descricao = "", listaId, vencimento = null }: DadosNovoCartao): Promise<Cartao> {
+  async function criarCartao({ nome, descricao = "", listaId, vencimento = null, etiqueta = null }: DadosNovoCartao): Promise<Cartao> {
     const estado = estadoDe(visitanteId);
     const lista = estado.listas.find((l) => l.id === listaId) || estado.listas[0];
     const cartao: CartaoInterno = {
@@ -176,6 +183,7 @@ export function quadroDemoPara(visitanteId: string): ProvedorQuadro {
       responsavel: "",
       vencimento: vencimento || null,
       atualizadoEm: new Date().toISOString(),
+      etiqueta: etiqueta || null,
       arquivado: false,
       comentarios: [],
     };

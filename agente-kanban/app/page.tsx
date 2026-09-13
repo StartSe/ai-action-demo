@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Chat, type MensagemChat } from "@/components/Chat";
 import { Quadro as QuadroBoard } from "@/components/Quadro";
-import { Empty, ErrorBox, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Stage, Topbar, Workspace, data, Entregar, useStatus } from "@/components/ui";
+import { CopyButton, Empty, ErrorBox, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Stage, Topbar, Workspace, data, Entregar, useStatus } from "@/components/ui";
 import type { Acao, Desfazer, HistoricoItem } from "@/lib/agente";
 import type { Meta } from "@/lib/ai";
 import type { Cartao, Quadro } from "@/lib/quadro";
@@ -20,6 +20,8 @@ const ETAPAS_CARREGANDO = ["Abrindo o quadro...", "Organizando as colunas...", "
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
 
 type EstadoNotificacoes = { configurada: boolean; canal: "email" | "slack"; destino: string };
+
+type PedidoRecebido = { id: string; quemPede: string; oQuePrecisa: string; resultadoId: string | null; criadoEm: string };
 
 function novoId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
@@ -72,6 +74,9 @@ export default function Page() {
   const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
   const [resumoMatinalId, setResumoMatinalId] = useState<string | null | undefined>(undefined);
   const [criandoResumoMatinal, setCriandoResumoMatinal] = useState(false);
+  const [caixaEntradaCodigo, setCaixaEntradaCodigo] = useState<string | null | undefined>(undefined);
+  const [criandoCaixaEntrada, setCriandoCaixaEntrada] = useState(false);
+  const [pedidosRecebidos, setPedidosRecebidos] = useState<PedidoRecebido[] | null>(null);
   const autoEnviado = useRef(false);
   const primeiraCarga = useRef(true);
   const desfazerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -138,6 +143,33 @@ export default function Page() {
       .then((d) => setResumoMatinalId((d.itens || []).find((i: { tipo: string }) => i.tipo === "resumo-quadro")?.id ?? null))
       .catch(() => setResumoMatinalId(null));
   }, []);
+
+  useEffect(() => {
+    fetch("/api/caixa-entrada")
+      .then((r) => r.json())
+      .then((d) => {
+        setCaixaEntradaCodigo(d.codigo ?? null);
+        setPedidosRecebidos(d.itens || []);
+      })
+      .catch(() => {
+        setCaixaEntradaCodigo(null);
+        setPedidosRecebidos([]);
+      });
+  }, []);
+
+  async function criarCaixaEntrada() {
+    setCriandoCaixaEntrada(true);
+    try {
+      const r = await fetch("/api/caixa-entrada", { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Não foi possível criar a caixa de entrada.");
+      setCaixaEntradaCodigo(d.codigo);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar a caixa de entrada.");
+    } finally {
+      setCriandoCaixaEntrada(false);
+    }
+  }
 
   async function criarResumoMatinal() {
     if (!notificacoes?.configurada) return;
@@ -345,6 +377,38 @@ export default function Page() {
           ) : (
             <a href="/setup#notificacoes" className="btn-ghost mt-3.5">Receber um resumo do quadro toda manhã</a>
           )}
+
+          {caixaEntradaCodigo === undefined ? null : caixaEntradaCodigo ? (
+            <div className="card p-3.5 mt-3.5 flex items-center gap-2 flex-wrap">
+              <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[200px]">{`${location.origin}/f/${caixaEntradaCodigo}`}</code>
+              <CopyButton texto={() => `${location.origin}/f/${caixaEntradaCodigo}`} rotulo="Copiar link da caixa de entrada" />
+            </div>
+          ) : (
+            <button type="button" className="btn-ghost mt-3.5" onClick={criarCaixaEntrada} disabled={criandoCaixaEntrada}>
+              {criandoCaixaEntrada ? "Criando..." : "Criar caixa de entrada"}
+            </button>
+          )}
+
+          <MaisDetalhes titulo="Pedidos recebidos">
+            {pedidosRecebidos === null ? (
+              <p className="text-muted text-sm">Carregando...</p>
+            ) : pedidosRecebidos.length === 0 ? (
+              <p className="text-muted text-sm">Nenhum pedido recebido ainda.</p>
+            ) : (
+              <ul className="flex flex-col gap-1.5 text-sm">
+                {pedidosRecebidos.map((p) => (
+                  <li key={p.id} className="flex justify-between gap-3">
+                    {p.resultadoId ? (
+                      <Link href={`/r/${p.resultadoId}`} className="text-accent-ink font-semibold hover:underline truncate">{p.quemPede || "Alguém"}: {p.oQuePrecisa}</Link>
+                    ) : (
+                      <span className="truncate">{p.quemPede || "Alguém"}: {p.oQuePrecisa}</span>
+                    )}
+                    <span className="text-muted shrink-0">{data(p.criadoEm)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </MaisDetalhes>
 
           <MaisDetalhes titulo="Últimos resultados">
             {historico === null ? (
