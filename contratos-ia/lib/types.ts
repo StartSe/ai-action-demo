@@ -28,6 +28,13 @@ export interface ClausulaRisco {
   sugestao_negociacao: string;
 }
 
+/** Uma cláusula que viola um item da política de contratos da empresa (lib/politica.ts). */
+export interface ItemForaDaPolitica {
+  item_da_politica: string;
+  clausula: string;
+  detalhe: string;
+}
+
 /** Um cartão de "O essencial": número curto em destaque (ex.: "R$ 48.000/mês", "24 meses", "30%") e até duas linhas de apoio. */
 export interface ItemEssencial {
   numero: string;
@@ -52,4 +59,5 @@ export interface Analise {
   obrigacoes_principais: string[];
   pontos_ausentes: string[];
   perguntas_para_o_juridico: string[];
+  fora_da_politica: ItemForaDaPolitica[];
 }

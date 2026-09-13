@@ -1,12 +1,74 @@
 // Respostas de exemplo usadas quando não há chave de IA configurada.
 // O exemplo corresponde ao contrato em public/exemplo-contrato.txt (prestação de serviços de tecnologia).
-import type { Analise } from "./types";
+import type { PoliticaContratos } from "./politica";
+import type { Analise, ItemForaDaPolitica } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-export function analiseDemo({ preocupacao = "" }: { papel?: string; preocupacao?: string } = {}): Analise {
+/**
+ * Compara os fatos fixos do contrato de exemplo (multa de 30%, 24 meses, aviso de 90 dias,
+ * foro de Campinas, sem SLA/proteção de dados formais, propriedade só ao final) com a política
+ * que o usuário cadastrou de verdade em /setup, para ilustrar a seção "Fora da política" mesmo
+ * em modo demonstração.
+ */
+function foraDaPoliticaDemo(politica?: PoliticaContratos): ItemForaDaPolitica[] {
+  if (!politica) return [];
+  const itens: ItemForaDaPolitica[] = [];
+  if (politica.multaMaximaPct != null && 30 > politica.multaMaximaPct) {
+    itens.push({
+      item_da_politica: `Multa máxima aceitável: ${politica.multaMaximaPct}%`,
+      clausula: "Cláusula 10 – Rescisão",
+      detalhe: `O contrato prevê multa de 30% do saldo remanescente, acima do teto de ${politica.multaMaximaPct}% definido na política.`,
+    });
+  }
+  if (politica.prazoMaximoMeses != null && 24 > politica.prazoMaximoMeses) {
+    itens.push({
+      item_da_politica: `Prazo máximo: ${politica.prazoMaximoMeses} meses`,
+      clausula: "Cláusula 2 – Vigência",
+      detalhe: `A vigência de 24 meses ultrapassa o limite de ${politica.prazoMaximoMeses} meses da política.`,
+    });
+  }
+  if (politica.avisoPrevioMinimoDias != null && 90 < politica.avisoPrevioMinimoDias) {
+    itens.push({
+      item_da_politica: `Aviso prévio mínimo: ${politica.avisoPrevioMinimoDias} dias`,
+      clausula: "Cláusula 2 – Vigência",
+      detalhe: `O contrato exige só 90 dias de aviso prévio, menos que os ${politica.avisoPrevioMinimoDias} dias mínimos da política.`,
+    });
+  }
+  if (politica.foroPreferido.trim() && !/campinas/i.test(politica.foroPreferido)) {
+    itens.push({
+      item_da_politica: `Foro preferido: ${politica.foroPreferido.trim()}`,
+      clausula: "Cláusula 15 – Foro",
+      detalhe: "O contrato elege o foro de Campinas, diferente do foro preferido pela política.",
+    });
+  }
+  if (politica.exigencias.sla) {
+    itens.push({
+      item_da_politica: "Exige SLA com penalidade",
+      clausula: "Cláusula 4 – Níveis de serviço",
+      detalhe: 'O contrato só promete "melhores esforços", sem metas de disponibilidade nem penalidade por descumprimento.',
+    });
+  }
+  if (politica.exigencias.protecaoDados) {
+    itens.push({
+      item_da_politica: "Exige cláusula de proteção de dados",
+      clausula: "Ausente no contrato",
+      detalhe: "O contrato não define papéis de controlador/operador nem regras para incidentes ou subcontratados.",
+    });
+  }
+  if (politica.exigencias.propriedadeProgressiva) {
+    itens.push({
+      item_da_politica: "Exige propriedade progressiva do código",
+      clausula: "Cláusula 7 – Propriedade intelectual",
+      detalhe: "O código só passa a ser da contratante após a quitação integral ao final do contrato, não a cada entrega.",
+    });
+  }
+  return itens;
+}
+
+export function analiseDemo({ preocupacao = "", politica }: { papel?: string; preocupacao?: string; politica?: PoliticaContratos } = {}): Analise {
   const foco = preocupacao
     ? ` Sobre a sua preocupação ("${preocupacao}"), veja as cláusulas destacadas abaixo e a caixa de perguntas ao final.`
     : "";
@@ -118,6 +180,7 @@ export function analiseDemo({ preocupacao = "" }: { papel?: string; preocupacao?
       "O foro em Campinas traz algum prejuízo prático para nós, com sede em São Paulo?",
       "Podemos exigir que a limitação de responsabilidade não se aplique a vazamento de dados?",
     ],
+    fora_da_politica: foraDaPoliticaDemo(politica),
   };
 }
 

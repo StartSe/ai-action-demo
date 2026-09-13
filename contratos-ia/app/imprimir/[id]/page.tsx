@@ -3,6 +3,7 @@ import { Origem } from "@/components/ui";
 import { data } from "@/lib/formato";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
+import { getPolitica, politicaCadastrada } from "@/lib/politica";
 import type { Analise, EntradaAnalise } from "@/lib/types";
 import { ConteudoAnalise } from "../../page";
 import { ImprimirAoCarregar } from "./ImprimirAoCarregar";
@@ -21,7 +22,7 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
         <div className="text-muted text-sm">{data(new Date())}</div>
       </header>
 
-      <ConteudoAnalise analise={registro.saida} papel={registro.entrada.papel} />
+      <ConteudoAnalise analise={registro.saida} papel={registro.entrada.papel} politicaCadastrada={politicaCadastrada(getPolitica())} />
 
       <footer className="mt-8 pt-4 border-t border-line">
         <Origem meta={registro.meta} />

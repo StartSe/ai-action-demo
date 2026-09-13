@@ -72,9 +72,14 @@ export default function Page() {
   const [erroForm, setErroForm] = useState("");
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
+  const [politicaCadastrada, setPoliticaCadastrada] = useState(false);
   const autoEnviado = useRef(false);
 
   useScrollToResult(estado.fase === "pronto");
+
+  useEffect(() => {
+    fetch("/api/politica").then((r) => r.json()).then((p) => setPoliticaCadastrada(Boolean(p.cadastrada))).catch(() => {});
+  }, []);
 
   function carregarHistorico() {
     fetch("/api/analisar").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
@@ -291,7 +296,7 @@ export default function Page() {
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
           {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={() => analisar(estado.fd)} />}
           {estado.fase === "pronto" && (
-            <Resultado id={estado.id} idContrato={estado.idContrato} analise={estado.analise} papel={estado.papel} meta={estado.meta} onNovo={analisarOutro} />
+            <Resultado id={estado.id} idContrato={estado.idContrato} analise={estado.analise} papel={estado.papel} meta={estado.meta} politicaCadastrada={politicaCadastrada} onNovo={analisarOutro} />
           )}
         </Stage>
       </Workspace>
@@ -371,6 +376,10 @@ function analiseParaTexto(a: Analise, papel: string) {
   (a.pontos_ausentes || []).forEach((o) => l.push(`- ${o}`));
   l.push("", "Perguntas para o jurídico:");
   (a.perguntas_para_o_juridico || []).forEach((q) => l.push(`- ${q}`));
+  if ((a.fora_da_politica || []).length > 0) {
+    l.push("", "Fora da política da empresa:");
+    a.fora_da_politica.forEach((f) => l.push(`- ${f.item_da_politica} (${f.clausula}): ${f.detalhe}`));
+  }
   return l.join("\n");
 }
 
@@ -380,6 +389,7 @@ export function Resultado({
   analise,
   papel,
   meta,
+  politicaCadastrada,
   onNovo,
 }: {
   id?: string;
@@ -387,6 +397,7 @@ export function Resultado({
   analise: Analise;
   papel: string;
   meta: Meta;
+  politicaCadastrada?: boolean;
   onNovo?: () => void;
 }) {
   return (
@@ -415,6 +426,7 @@ export function Resultado({
       <ConteudoAnalise
         analise={analise}
         papel={papel}
+        politicaCadastrada={politicaCadastrada}
         slotAposEssencial={idContrato && <SecaoPerguntar idContrato={idContrato} sugestoes={(analise.perguntas_para_o_juridico || []).slice(0, 3)} />}
       />
 
@@ -446,7 +458,7 @@ function BlocoTrecho({ trecho }: { trecho: string }) {
 }
 
 /** Corpo da análise (sem cabeçalho nem Origem), reaproveitado pela página de impressão; `slotAposEssencial` injeta a caixa de perguntas logo após "O essencial" no fluxo principal, sem entrar no PDF/impressão. */
-export function ConteudoAnalise({ analise: a, papel, slotAposEssencial }: { analise: Analise; papel: string; slotAposEssencial?: ReactNode }) {
+export function ConteudoAnalise({ analise: a, papel, politicaCadastrada, slotAposEssencial }: { analise: Analise; papel: string; politicaCadastrada?: boolean; slotAposEssencial?: ReactNode }) {
   const nota = Math.max(0, Math.min(10, Number(a.nota_risco) || 0));
   const cls = classeRisco(nota);
   const tom = cls === "alto" ? "danger" : cls === "moderado" ? "warn" : "ok";
@@ -502,6 +514,26 @@ export function ConteudoAnalise({ analise: a, papel, slotAposEssencial }: { anal
           ]}
           linhas={a.clausulas_risco || []}
         />
+      </Section>
+
+      <Section titulo="Fora da política">
+        <Item>
+          {!politicaCadastrada ? (
+            <Link href="/setup#politica-de-contratos" className="text-accent-ink font-semibold hover:underline">Cadastrar a política da empresa</Link>
+          ) : (a.fora_da_politica || []).length === 0 ? (
+            <p className="text-muted text-sm">Nenhuma cláusula em desacordo com a política encontrada.</p>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {(a.fora_da_politica || []).map((f, i) => (
+                <li key={i} className="text-sm">
+                  <strong>{f.item_da_politica}</strong>
+                  <span className="text-muted"> — {f.clausula}</span>
+                  <p className="text-muted mt-0.5">{f.detalhe}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Item>
       </Section>
 
       <Section titulo="Prazos críticos">
