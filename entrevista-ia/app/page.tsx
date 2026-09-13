@@ -29,6 +29,7 @@ import {
   type Status,
 } from "@/components/ui";
 import { Sala } from "@/components/Sala";
+import { DialogoLinkCandidato } from "@/components/DialogoLinkCandidato";
 import type { Meta } from "@/lib/ai";
 import type { Scorecard, Troca, Vaga } from "@/lib/types";
 
@@ -71,6 +72,7 @@ export default function Page() {
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
   const [modoExemplo, setModoExemplo] = useState(false);
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
+  const [linkCandidatoAberto, setLinkCandidatoAberto] = useState(false);
   const autoIniciado = useRef(false);
 
   useScrollToResult(estado.fase === "pronto");
@@ -191,6 +193,11 @@ export default function Page() {
           </form>
           <Privacidade detalhe="O scorecard fica salvo neste app até você apagar em 'Últimos resultados'." />
 
+          <div className="mt-5 pt-5 border-t border-line">
+            <p className="text-[13px] font-semibold mb-2">Prefere que o próprio candidato converse com a entrevistadora?</p>
+            <button type="button" className="btn-ghost" onClick={() => setLinkCandidatoAberto(true)}>Criar link para candidatos</button>
+          </div>
+
           <MaisDetalhes titulo="Últimos resultados">
             {historico === null ? (
               <p className="text-muted text-sm">Carregando...</p>
@@ -240,6 +247,10 @@ export default function Page() {
           )}
         </Stage>
       </Workspace>
+
+      {linkCandidatoAberto && (
+        <DialogoLinkCandidato onFechar={() => setLinkCandidatoAberto(false)} vagaInicial={vaga} />
+      )}
     </>
   );
 }

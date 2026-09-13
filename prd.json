@@ -914,7 +914,7 @@
         "Verify in browser using dev-browser skill: sala pública em celular"
       ],
       "priority": 58,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

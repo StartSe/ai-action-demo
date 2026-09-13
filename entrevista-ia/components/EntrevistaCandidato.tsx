@@ -1,0 +1,60 @@
+"use client";
+// Tela pública do link de candidato (app/entrevista/[token]): em vez do formulário genérico de
+// campos texto/textarea (app/f/[token]), reaproveita a própria sala de entrevista (components/Sala.tsx),
+// já que a conversa é o formulário. Ao concluir, envia a transcrição para gerar o scorecard (que só o
+// gestor vê, em /r/[id]) e mostra uma tela de agradecimento para o candidato.
+import { useState } from "react";
+import { Sala } from "./Sala";
+import { useStatus } from "./ui";
+import type { Troca, Vaga } from "@/lib/types";
+
+type Fase = "entrevista" | "enviando" | "concluida" | "erro";
+
+export function EntrevistaCandidato({ codigo, marca, nome, vaga }: { codigo: string; marca: string; nome: string; vaga: Vaga }) {
+  const { status } = useStatus();
+  const [fase, setFase] = useState<Fase>("entrevista");
+  const [mensagemErro, setMensagemErro] = useState("");
+
+  async function onFinalizar(historico: Troca[]) {
+    setFase("enviando");
+    try {
+      const r = await fetch(`/api/entrevista/candidato/${codigo}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ historico }) });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Não foi possível concluir a entrevista.");
+      setFase("concluida");
+    } catch (err) {
+      setMensagemErro(err instanceof Error ? err.message : "Erro inesperado.");
+      setFase("erro");
+    }
+  }
+
+  function onErro(mensagem: string) {
+    setMensagemErro(mensagem);
+    setFase("erro");
+  }
+
+  return (
+    <div className="max-w-[640px] mx-auto px-8 py-12 max-md:px-4 max-md:py-8">
+      <div className="flex items-center gap-3 mb-7">
+        <div className="shrink-0 w-[34px] h-[34px] rounded-[9px] bg-accent text-white grid place-items-center font-extrabold text-[15px] tracking-tight">{marca}</div>
+        <div className="font-bold text-[15px]">{nome}</div>
+      </div>
+
+      {fase === "concluida" ? (
+        <div className="card p-7 max-md:p-[22px] text-center">
+          <h1 className="text-xl font-extrabold mb-1.5">Obrigado, sua entrevista foi enviada.</h1>
+          <p className="text-muted">Você já pode fechar esta página. A equipe de recrutamento vai analisar suas respostas.</p>
+        </div>
+      ) : fase === "erro" ? (
+        <div className="card p-7 max-md:p-[22px] text-center">
+          <h1 className="text-xl font-extrabold mb-1.5">Não foi possível continuar</h1>
+          <p className="text-muted">{mensagemErro}</p>
+        </div>
+      ) : (
+        <Sala vaga={vaga} status={status} modoExemplo={false} onFinalizar={onFinalizar} onErro={onErro} />
+      )}
+
+      {fase === "enviando" && <p className="text-muted text-sm text-center mt-4">Enviando suas respostas...</p>}
+    </div>
+  );
+}
