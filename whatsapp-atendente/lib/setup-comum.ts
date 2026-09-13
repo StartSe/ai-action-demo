@@ -92,11 +92,11 @@ export const MODELOS_GRATUITOS: Opcao[] = [
 
 export const OPENROUTER: Integracao = {
   id: "openrouter",
-  titulo: "Inteligência artificial (OpenRouter)",
+  titulo: "Inteligência artificial",
   descricao: "Uma conta gratuita no OpenRouter dá acesso a dezenas de modelos, vários sem custo. Conecte em um clique ou cole uma chave.",
   obrigatoria: true,
-  link: { url: "https://openrouter.ai/keys", rotulo: "Criar uma chave no OpenRouter" },
-  oauth: { tipo: "openrouter", rotulo: "Conectar com OpenRouter", url: "/api/setup/oauth/openrouter" },
+  link: { url: "https://openrouter.ai/keys", rotulo: "Criar uma chave gratuita" },
+  oauth: { tipo: "openrouter", rotulo: "Conectar a IA", url: "/api/setup/oauth/openrouter" },
   campos: [
     { chave: "OPENROUTER_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk-or-v1-..." },
     { chave: "OPENROUTER_MODEL", rotulo: "Modelo", tipo: "select", opcional: true, padrao: "nvidia/nemotron-3-super-120b-a12b:free", opcoes: MODELOS_GRATUITOS, ajuda: "Comece com um gratuito. Troque por um pago quando quiser mais qualidade." },

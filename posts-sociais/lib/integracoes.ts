@@ -13,7 +13,7 @@ export const OPENAI_IMAGENS: Integracao = {
   obrigatoria: false,
   link: { url: "https://platform.openai.com/api-keys", rotulo: "Obter a chave da OpenAI" },
   campos: [
-    { chave: "OPENAI_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk-..." },
+    { chave: "OPENAI_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk-...", ajuda: "Fica em API keys, dentro do painel da OpenAI." },
     { chave: "OPENAI_IMAGE_MODEL", rotulo: "Modelo de imagem", tipo: "select", opcional: true, padrao: "gpt-image-1", opcoes: MODELOS_IMAGEM },
   ],
   testar: async (config) => {

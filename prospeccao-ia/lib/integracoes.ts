@@ -7,7 +7,7 @@ export const APOLLO: Integracao = {
   descricao: "Busca leads reais na base da Apollo.io a partir do perfil de cliente ideal informado. Sem ela, o app mostra leads de exemplo fictícios.",
   obrigatoria: false,
   link: { url: "https://app.apollo.io/#/settings/integrations/api", rotulo: "Obter a chave do Apollo" },
-  campos: [{ chave: "APOLLO_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "•••••••••••••••••" }],
+  campos: [{ chave: "APOLLO_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "•••••••••••••••••", ajuda: "Fica em Settings › Integrations › API, dentro da sua conta do Apollo." }],
   testar: async (config) => {
     const chave = config.APOLLO_API_KEY;
     if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
@@ -28,7 +28,7 @@ export const BRIGHTDATA: Integracao = {
   obrigatoria: false,
   link: { url: "https://brightdata.com/cp/zones", rotulo: "Criar uma zona Web Unlocker" },
   campos: [
-    { chave: "BRIGHTDATA_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "•••••••••••••••••" },
+    { chave: "BRIGHTDATA_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "•••••••••••••••••", ajuda: "Fica no topo do painel da Bright Data, junto com a lista de zonas." },
     { chave: "BRIGHTDATA_ZONE", rotulo: "Zona", tipo: "text", placeholder: "web_unlocker1" },
   ],
   testar: async (config) => {

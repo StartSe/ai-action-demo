@@ -8,7 +8,7 @@ export const TRANSCRICAO_ELEVENLABS: Integracao = {
     "É a opção preferida para transformar áudio de reunião em texto: reconhece vários falantes e funciona bem com sotaques e reuniões em português. Sem ela (nem a alternativa da OpenAI abaixo), só a aba \"Colar transcrição\" gera atas reais; enviar ou gravar áudio devolve uma transcrição de exemplo.",
   obrigatoria: false,
   link: { url: "https://elevenlabs.io/app/settings/api-keys", rotulo: "Criar uma chave na ElevenLabs" },
-  campos: [{ chave: "ELEVENLABS_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk_..." }],
+  campos: [{ chave: "ELEVENLABS_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk_...", ajuda: "Fica em Settings › API Keys, dentro da sua conta da ElevenLabs." }],
   testar: async (config) => {
     const chave = config.ELEVENLABS_API_KEY;
     if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
@@ -27,7 +27,7 @@ export const TRANSCRICAO_OPENAI: Integracao = {
     "Alternativa à ElevenLabs para transformar áudio de reunião em texto, usada quando a ElevenLabs não está conectada. Sem nenhuma das duas, só a aba \"Colar transcrição\" gera atas reais.",
   obrigatoria: false,
   link: { url: "https://platform.openai.com/api-keys", rotulo: "Criar uma chave na OpenAI" },
-  campos: [{ chave: "OPENAI_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk-..." }],
+  campos: [{ chave: "OPENAI_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk-...", ajuda: "Fica em API keys, dentro do painel da OpenAI." }],
   testar: async (config) => {
     const chave = config.OPENAI_API_KEY;
     if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };

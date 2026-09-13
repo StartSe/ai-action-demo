@@ -12,7 +12,7 @@ const ELEVENLABS_VOZ: Integracao = {
   obrigatoria: false,
   link: { url: "https://elevenlabs.io/app/settings/api-keys", rotulo: "Obter a chave da ElevenLabs" },
   campos: [
-    { chave: "ELEVENLABS_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk_..." },
+    { chave: "ELEVENLABS_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk_...", ajuda: "Fica em Settings › API Keys, dentro da sua conta da ElevenLabs." },
     {
       chave: "ELEVENLABS_VOICE_ID",
       rotulo: "Voz",

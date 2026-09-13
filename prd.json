@@ -456,7 +456,7 @@
         "Verify in browser using dev-browser skill: /setup de 3 apps com integrações diferentes (entrevista-ia, prospeccao-ia, reunioes-ia)"
       ],
       "priority": 29,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
