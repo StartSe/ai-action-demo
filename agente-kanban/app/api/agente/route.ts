@@ -2,13 +2,14 @@ import { aiEnabled, meta } from "@/lib/ai";
 import { processarMensagem, type HistoricoItem } from "@/lib/agente";
 import { apagarTodos, listar, salvar } from "@/lib/historico";
 import { trelloConfigurado } from "@/lib/quadro";
-import { quadroDemo } from "@/lib/quadro-demo";
+import { quadroDemoPara } from "@/lib/quadro-demo";
 import { trello } from "@/lib/trello";
+import { visitanteId } from "@/lib/visitante";
 
 export const dynamic = "force-dynamic";
 
-function provedor() {
-  return trelloConfigurado() ? trello : quadroDemo;
+function provedor(id: string) {
+  return trelloConfigurado() ? trello : quadroDemoPara(id);
 }
 
 /** Título curto para a lista "Últimos resultados": a própria mensagem, cortada. */
@@ -23,10 +24,11 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Escreva um comando para o agente, como "crie um cartão...".' }, { status: 400 });
   }
   try {
-    const resultado = await processarMensagem({ mensagem, historico, provedor: provedor() });
+    const idVisitante = await visitanteId();
+    const resultado = await processarMensagem({ mensagem, historico, provedor: provedor(idVisitante) });
     const metaGerada = meta({ demo: !aiEnabled(), insumo: "o quadro e o comando enviado ao agente" });
     const id = salvar({ tipo: "agente-kanban", titulo: titulo(mensagem), entrada: { mensagem }, saida: resultado, meta: metaGerada });
-    return Response.json({ ...resultado, meta: metaGerada, id });
+    return Response.json({ ...resultado, meta: metaGerada, id, quadroDemo: !trelloConfigurado() });
   } catch (err) {
     console.error(err);
     const mensagemErro = err instanceof Error ? err.message : "Não foi possível falar com o agente agora. Tente novamente.";

@@ -126,6 +126,31 @@ async function moverCartao({ cartaoId, listaId }: { cartaoId: string; listaId: s
   return { id: cartao.id, nome: cartao.name, descricao: cartao.desc || "", responsavel: "", vencimento: cartao.due ? cartao.due.slice(0, 10) : null };
 }
 
+// Encontra o membro do quadro cujo nome (completo ou de usuário) mais se aproxima do texto informado.
+async function encontrarMembroId(nome: string): Promise<string | null> {
+  const membros = await mapaMembros();
+  const alvo = nome.trim().toLowerCase();
+  if (!alvo) return null;
+  for (const [id, nomeMembro] of Object.entries(membros)) {
+    if (nomeMembro.toLowerCase() === alvo) return id;
+  }
+  for (const [id, nomeMembro] of Object.entries(membros)) {
+    const nomeMembroNorm = nomeMembro.toLowerCase();
+    if (nomeMembroNorm.includes(alvo) || alvo.includes(nomeMembroNorm)) return id;
+  }
+  return null;
+}
+
+async function atribuir({ cartaoId, responsavel }: { cartaoId: string; responsavel: string }): Promise<Cartao> {
+  const membroId = await encontrarMembroId(responsavel);
+  if (!membroId) throw new Error(`Não encontrei ninguém chamado "${responsavel}" entre os membros deste quadro do Trello.`);
+  const cartao = await chamar<CartaoTrello>("PUT", `/cards/${cartaoId}`, { idMembers: membroId });
+  if (!cartao) throw new Error("O Trello não retornou o cartão atualizado.");
+  const membros = await mapaMembros();
+  const nomesResponsaveis = (cartao.idMembers || []).map((id) => membros[id]).filter(Boolean).join(", ");
+  return { id: cartao.id, nome: cartao.name, descricao: cartao.desc || "", responsavel: nomesResponsaveis, vencimento: cartao.due ? cartao.due.slice(0, 10) : null };
+}
+
 async function comentar({ cartaoId, texto }: { cartaoId: string; texto: string }): Promise<{ ok: true }> {
   await chamar("POST", `/cards/${cartaoId}/actions/comments`, { text: texto });
   return { ok: true };
@@ -142,6 +167,7 @@ export const trello: ProvedorQuadro = {
   obterQuadro,
   criarCartao,
   moverCartao,
+  atribuir,
   comentar,
   arquivarCartao,
 };

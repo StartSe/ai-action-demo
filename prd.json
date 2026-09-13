@@ -531,7 +531,7 @@
         "Verify in browser using dev-browser skill: executar o mesmo comando duas vezes em sessões diferentes e confirmar que não duplica"
       ],
       "priority": 34,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

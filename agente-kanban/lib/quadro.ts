@@ -38,6 +38,7 @@ export interface ProvedorQuadro {
   obterQuadro(): Promise<Quadro>;
   criarCartao(dados: DadosNovoCartao): Promise<Cartao>;
   moverCartao(dados: { cartaoId: string; listaId: string }): Promise<Cartao>;
+  atribuir(dados: { cartaoId: string; responsavel: string }): Promise<Cartao>;
   comentar(dados: { cartaoId: string; texto: string }): Promise<{ ok: true }>;
   arquivarCartao(dados: { cartaoId: string }): Promise<{ ok: true }>;
 }

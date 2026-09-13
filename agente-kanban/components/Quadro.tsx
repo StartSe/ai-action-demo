@@ -1,4 +1,4 @@
-import type { Quadro as QuadroType } from "@/lib/quadro";
+import type { Cartao, Quadro as QuadroType } from "@/lib/quadro";
 
 function formatarDataPtBr(iso: string | null): string {
   if (!iso) return "";
@@ -7,7 +7,16 @@ function formatarDataPtBr(iso: string | null): string {
   return `${dia}/${mes}/${ano}`;
 }
 
-export function Quadro({ quadro, alterados = [] }: { quadro: QuadroType; alterados?: string[] }) {
+export function Quadro({
+  quadro,
+  alterados = [],
+  onAtribuir,
+}: {
+  quadro: QuadroType;
+  alterados?: string[];
+  /** Ausente em contextos de leitura (/r/[id], /imprimir/[id]): sem ele, um cartão sem responsável só mostra o texto "Sem responsável". */
+  onAtribuir?: (cartao: Cartao) => void;
+}) {
   const setAlterados = new Set(alterados);
   return (
     <div className="flex max-md:flex-col gap-4 items-start overflow-x-auto pb-1.5">
@@ -29,7 +38,13 @@ export function Quadro({ quadro, alterados = [] }: { quadro: QuadroType; alterad
                 <div className="font-bold text-sm mb-1">{c.nome}</div>
                 {c.descricao && <div className="text-[12.5px] text-muted mb-2">{c.descricao}</div>}
                 <div className="flex justify-between gap-2 text-xs text-muted">
-                  <span>{c.responsavel || "Sem responsável"}</span>
+                  {c.responsavel ? (
+                    <span>{c.responsavel}</span>
+                  ) : onAtribuir ? (
+                    <button type="button" className="btn-link text-xs" onClick={() => onAtribuir(c)}>Atribuir a alguém</button>
+                  ) : (
+                    <span>Sem responsável</span>
+                  )}
                   {c.vencimento && <span className="font-bold text-accent-ink whitespace-nowrap">{formatarDataPtBr(c.vencimento)}</span>}
                 </div>
               </div>

@@ -23,7 +23,7 @@ export interface ResultadoAgente {
 
 const SYSTEM = `Você é um agente de gestão que opera um quadro Kanban de Recursos Humanos por conta de um gestor.
 Regras:
-- Sempre que for mover, comentar ou arquivar um cartão, chame antes a ferramenta listar_quadro para descobrir os IDs corretos de listas e cartões. Nunca invente um ID.
+- Sempre que for mover, atribuir, comentar ou arquivar um cartão, chame antes a ferramenta listar_quadro para descobrir os IDs corretos de listas e cartões. Nunca invente um ID.
 - Nunca invente cartões: se o gestor mencionar um cartão que não existe no quadro, avise e pergunte o que ele quer dizer, em vez de criar ou mover algo incorreto.
 - Se o pedido for ambíguo (por exemplo, mais de um cartão parecido, ou a lista de destino não estiver clara), pergunte antes de agir.
 - Depois de agir, responda em português do Brasil, em 1 a 2 frases, confirmando exatamente o que foi feito.
@@ -70,6 +70,22 @@ const TOOLS: ToolDefinition[] = [
         },
         additionalProperties: false,
         required: ["cartao_id", "lista_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "atribuir_cartao",
+      description: "Define quem é o responsável por um cartão existente.",
+      parameters: {
+        type: "object",
+        properties: {
+          cartao_id: { type: "string", description: "ID do cartão, obtido em listar_quadro." },
+          responsavel: { type: "string", description: "Nome da pessoa responsável pelo cartão." },
+        },
+        additionalProperties: false,
+        required: ["cartao_id", "responsavel"],
       },
     },
   },
@@ -137,6 +153,14 @@ async function executarFerramenta(nome: string, input: Record<string, unknown>, 
   if (nome === "mover_cartao") {
     const cartao = await provedor.moverCartao({ cartaoId: String(input.cartao_id || ""), listaId: String(input.lista_id || "") });
     rastro.acoes.push({ tipo: "mover_cartao", descricao: `Moveu o cartão "${cartao.nome}"` });
+    rastro.alterados.push(cartao.id);
+    return cartao;
+  }
+  if (nome === "atribuir_cartao") {
+    const cartaoId = String(input.cartao_id || "");
+    const responsavel = String(input.responsavel || "");
+    const cartao = await provedor.atribuir({ cartaoId, responsavel });
+    rastro.acoes.push({ tipo: "atribuir_cartao", descricao: `Atribuiu o cartão "${cartao.nome}" a ${cartao.responsavel}` });
     rastro.alterados.push(cartao.id);
     return cartao;
   }
@@ -299,12 +323,13 @@ function formatarDataPtBr(iso: string | null): string {
   return `${dia}/${mes}/${ano}`;
 }
 
-type TipoBloco = "criar" | "mover" | "comentar" | "arquivar" | "listar" | null;
+type TipoBloco = "criar" | "mover" | "atribuir" | "comentar" | "arquivar" | "listar" | null;
 
 // Divide a mensagem em blocos de ação, com base nos verbos-gatilho encontrados.
 const GATILHOS: { tipo: TipoBloco; regex: RegExp }[] = [
   { tipo: "criar", regex: /\b(crie|criar|cria|adicione|adicionar|adiciona|novo cart[aã]o|nova tarefa|nova carta)\b/i },
   { tipo: "mover", regex: /\b(mova|mover|move|mude|mudar|mude-o|passe|passar|passa)\b/i },
+  { tipo: "atribuir", regex: /\b(atribua|atribuir|designe|designar|responsabilize)\b/i },
   { tipo: "comentar", regex: /\b(comente|coment(e|ar|ando|a))\b/i },
   { tipo: "arquivar", regex: /\b(arquive|arquivar|remova|remover|exclua|excluir)\b/i },
   { tipo: "listar", regex: /\b(liste|listar|mostre|mostrar|quais cart[oõ]es|como est[aá] o quadro)\b/i },
@@ -391,6 +416,33 @@ async function processarSemIA({ mensagem, provedor }: { mensagem: string; proved
       rastro.acoes.push({ tipo: "mover_cartao", descricao: `Moveu o cartão "${atualizado.nome}" para "${listaDestino.nome}"` });
       rastro.alterados.push(atualizado.id);
       respostas.push(`Movi o cartão "${atualizado.nome}" para "${listaDestino.nome}".`);
+      continue;
+    }
+
+    if (bloco.tipo === "atribuir") {
+      const cartoesAtuais = await provedor.listarCartoes();
+      const semVerbo = texto.replace(/\b(atribua|atribuir|designe|designar|responsabilize)\b/gi, "");
+      const respMatch = semVerbo.match(/\b(?:a|para)\s+([^"]+)$/i);
+      const responsavel = respMatch ? respMatch[1].trim().replace(/[.,;]+$/, "") : "";
+      let livre = respMatch ? semVerbo.slice(0, respMatch.index) : semVerbo;
+      livre = livre.replace(/^\s*o\s+cart[aã]o\s+/i, "").replace(/"/g, "").trim();
+      const { cartao, ambiguo, opcoes } = encontrarCartao(livre, cartoesAtuais);
+      if (!cartao) {
+        respostas.push(`Não encontrei nenhum cartão parecido com "${limparConsulta(livre)}" para atribuir. Pode confirmar o nome?`);
+        continue;
+      }
+      if (ambiguo) {
+        respostas.push(`Há mais de um cartão parecido com "${limparConsulta(livre)}" (${(opcoes || []).map((o) => `"${o.nome}"`).join(", ")}). Qual deles devo atribuir?`);
+        continue;
+      }
+      if (!responsavel) {
+        respostas.push(`Encontrei o cartão "${cartao.nome}", mas não entendi para quem atribuir. Pode dizer o nome da pessoa?`);
+        continue;
+      }
+      const atualizado = await provedor.atribuir({ cartaoId: cartao.id, responsavel });
+      rastro.acoes.push({ tipo: "atribuir_cartao", descricao: `Atribuiu o cartão "${atualizado.nome}" a ${atualizado.responsavel}` });
+      rastro.alterados.push(atualizado.id);
+      respostas.push(`Atribuí o cartão "${atualizado.nome}" a ${atualizado.responsavel}.`);
       continue;
     }
 

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
 export interface MensagemChat {
   id: string;
@@ -34,6 +34,7 @@ export function Chat({
   onEnviar: (mensagem: string) => void;
 }) {
   const logRef = useRef<HTMLDivElement>(null);
+  const [usadas, setUsadas] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -53,6 +54,13 @@ export function Chat({
     }
   }
 
+  function usarSugestao(s: (typeof SUGESTOES)[number]) {
+    setUsadas((atual) => new Set(atual).add(s.rotulo));
+    onEnviar(s.mensagem);
+  }
+
+  const sugestoesDisponiveis = SUGESTOES.filter((s) => !usadas.has(s.rotulo));
+
   return (
     <>
       <div ref={logRef} className="flex flex-col gap-2.5 mb-4 max-h-[46vh] overflow-y-auto pr-0.5">
@@ -70,20 +78,6 @@ export function Chat({
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4">
-        {SUGESTOES.map((s) => (
-          <button
-            key={s.rotulo}
-            type="button"
-            className="bg-accent-soft text-accent-ink rounded-full px-3.5 py-[7px] text-[13px] font-semibold text-left hover:bg-accent/15 disabled:opacity-60"
-            disabled={carregando}
-            onClick={() => onEnviar(s.mensagem)}
-          >
-            {s.rotulo}
-          </button>
-        ))}
-      </div>
-
       <form className="flex gap-2 items-end" onSubmit={enviarValorAtual}>
         <textarea
           className="input min-h-[46px] max-h-[140px] resize-y flex-1"
@@ -97,6 +91,22 @@ export function Chat({
           {carregando ? "Enviando" : "Enviar"}
         </button>
       </form>
+
+      {sugestoesDisponiveis.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-3">
+          {sugestoesDisponiveis.map((s) => (
+            <button
+              key={s.rotulo}
+              type="button"
+              className="btn-ghost px-3 py-1.5 text-[13px] font-semibold rounded-full"
+              disabled={carregando}
+              onClick={() => usarSugestao(s)}
+            >
+              {s.rotulo}
+            </button>
+          ))}
+        </div>
+      )}
     </>
   );
 }

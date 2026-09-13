@@ -7,7 +7,7 @@ import { Quadro as QuadroBoard } from "@/components/Quadro";
 import { Empty, ErrorBox, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Stage, Topbar, Workspace, data, Entregar, useStatus } from "@/components/ui";
 import type { HistoricoItem } from "@/lib/agente";
 import type { Meta } from "@/lib/ai";
-import type { Quadro } from "@/lib/quadro";
+import type { Cartao, Quadro } from "@/lib/quadro";
 
 const MENSAGEM_BOAS_VINDAS =
   "Olá. Eu opero o quadro Kanban por você: crio, movo, comento e arquivo cartões a partir do que você me pedir em português. Experimente uma das sugestões abaixo ou descreva o que precisa.";
@@ -53,7 +53,7 @@ function quadroParaTexto(quadro: Quadro, resposta?: string): string {
 type EstadoQuadro =
   | { fase: "carregando" }
   | { fase: "erro"; mensagem: string }
-  | { fase: "pronto"; quadro: Quadro; alterados: string[]; meta: Meta; id?: string; resposta?: string };
+  | { fase: "pronto"; quadro: Quadro; alterados: string[]; meta: Meta; id?: string; resposta?: string; quadroDemo: boolean };
 
 export default function Page() {
   const { status, erro } = useStatus();
@@ -63,6 +63,7 @@ export default function Page() {
   const [carregando, setCarregando] = useState(false);
   const [estadoQuadro, setEstadoQuadro] = useState<EstadoQuadro>({ fase: "carregando" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
+  const [reiniciando, setReiniciando] = useState(false);
   const autoEnviado = useRef(false);
   const primeiraCarga = useRef(true);
 
@@ -71,11 +72,31 @@ export default function Page() {
       const r = await fetch("/api/quadro");
       const resposta = await r.json();
       if (!r.ok) throw new Error(resposta.error || "Não foi possível carregar o quadro agora.");
-      const { meta: metaGerada, ...quadro } = resposta;
-      setEstadoQuadro({ fase: "pronto", quadro: quadro as Quadro, alterados: [], meta: metaGerada });
+      const { meta: metaGerada, quadroDemo, ...quadro } = resposta;
+      setEstadoQuadro({ fase: "pronto", quadro: quadro as Quadro, alterados: [], meta: metaGerada, quadroDemo });
     } catch (e) {
       setEstadoQuadro({ fase: "erro", mensagem: e instanceof Error ? e.message : "Não foi possível carregar o quadro agora." });
     }
+  }
+
+  async function reiniciarQuadro() {
+    if (!window.confirm("Reiniciar o quadro de exemplo? Os cartões voltam ao estado inicial.")) return;
+    setReiniciando(true);
+    try {
+      const r = await fetch("/api/quadro/reiniciar", { method: "POST" });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Não foi possível reiniciar o quadro agora.");
+      const { meta: metaGerada, quadroDemo, ...quadro } = resposta;
+      setEstadoQuadro({ fase: "pronto", quadro: quadro as Quadro, alterados: [], meta: metaGerada, quadroDemo });
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível reiniciar o quadro agora.");
+    } finally {
+      setReiniciando(false);
+    }
+  }
+
+  function atribuir(cartao: Cartao) {
+    setValor(`Atribua o cartão "${cartao.nome}" a `);
   }
 
   // Com ?exemplo=1, o envio automático abaixo já carrega o quadro atualizado; chamar
@@ -127,7 +148,7 @@ export default function Page() {
       setMensagens((atual) => [...atual, { id: novoId(), papel: "assistente", texto: textoResposta }]);
       setHistoricoConversa((h) => [...h, { role: "assistant", content: textoResposta }]);
       if (resposta.quadro) {
-        setEstadoQuadro({ fase: "pronto", quadro: resposta.quadro as Quadro, alterados: resposta.alterados || [], meta: resposta.meta, id: resposta.id, resposta: textoResposta });
+        setEstadoQuadro({ fase: "pronto", quadro: resposta.quadro as Quadro, alterados: resposta.alterados || [], meta: resposta.meta, id: resposta.id, resposta: textoResposta, quadroDemo: Boolean(resposta.quadroDemo) });
       }
       fetch("/api/agente").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
     } catch (e) {
@@ -156,16 +177,22 @@ export default function Page() {
         area="Gestão e RH"
         status={status}
         erro={erro}
-        resumo="Modo demonstração: sem IA, o agente interpreta comandos por palavras-chave; sem o Trello conectado, ele opera um quadro de exemplo em memória."
+        resumo="Modo demonstração: sem IA conectada, o agente segue por palavras-chave; sem o Trello conectado, ele opera um quadro de exemplo só seu, que você pode reiniciar quando quiser."
       />
 
       <Workspace>
         <Panel
           titulo="Fale com o quadro, não com o mouse."
-          lead="Descreva em português o que precisa: criar, mover, comentar ou arquivar um cartão. O agente opera o quadro por você."
+          lead="Descreva em português o que precisa: criar, mover, atribuir, comentar ou arquivar um cartão. O agente opera o quadro por você."
         >
           <Chat mensagens={mensagens} carregando={carregando} valor={valor} onValorChange={setValor} onEnviar={enviarMensagem} />
           <Privacidade detalhe="As ações ficam salvas neste app até você apagar em 'Últimos resultados'." />
+
+          {estadoQuadro.fase === "pronto" && estadoQuadro.quadroDemo && (
+            <button type="button" className="btn-ghost mt-3.5" onClick={reiniciarQuadro} disabled={reiniciando}>
+              {reiniciando ? "Reiniciando..." : "Reiniciar quadro de exemplo"}
+            </button>
+          )}
 
           <MaisDetalhes titulo="Últimos resultados">
             {historico === null ? (
@@ -195,13 +222,13 @@ export default function Page() {
             <Empty
               ilustracao={<IlustracaoQuadro />}
               titulo="O quadro está vazio"
-              descricao="Peça ao agente para criar, mover, comentar ou arquivar um cartão a partir de um comando em português."
+              descricao="Peça ao agente para criar, mover, atribuir, comentar ou arquivar um cartão a partir de um comando em português."
               acao="Testar com um exemplo"
               onAcao={() => enviarMensagem(EXEMPLO_COMPOSTO)}
             />
           )}
           {estadoQuadro.fase === "pronto" && totalCartoes(estadoQuadro.quadro) > 0 && (
-            <Resultado quadro={estadoQuadro.quadro} alterados={estadoQuadro.alterados} meta={estadoQuadro.meta} id={estadoQuadro.id} resposta={estadoQuadro.resposta} />
+            <Resultado quadro={estadoQuadro.quadro} alterados={estadoQuadro.alterados} meta={estadoQuadro.meta} id={estadoQuadro.id} resposta={estadoQuadro.resposta} onAtribuir={atribuir} />
           )}
         </Stage>
       </Workspace>
@@ -209,7 +236,21 @@ export default function Page() {
   );
 }
 
-export function Resultado({ quadro, alterados, meta, id, resposta }: { quadro: Quadro; alterados: string[]; meta: Meta; id?: string; resposta?: string }) {
+export function Resultado({
+  quadro,
+  alterados,
+  meta,
+  id,
+  resposta,
+  onAtribuir,
+}: {
+  quadro: Quadro;
+  alterados: string[];
+  meta: Meta;
+  id?: string;
+  resposta?: string;
+  onAtribuir?: (cartao: Cartao) => void;
+}) {
   return (
     <article className="reveal">
       <ResultHead titulo="Quadro atualizado">
@@ -218,17 +259,27 @@ export function Resultado({ quadro, alterados, meta, id, resposta }: { quadro: Q
 
       <Origem meta={meta} />
 
-      <ConteudoQuadro quadro={quadro} alterados={alterados} resposta={resposta} />
+      <ConteudoQuadro quadro={quadro} alterados={alterados} resposta={resposta} onAtribuir={onAtribuir} />
     </article>
   );
 }
 
 /** Corpo do resultado (resposta do agente + quadro, sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
-export function ConteudoQuadro({ quadro, alterados, resposta }: { quadro: Quadro; alterados: string[]; resposta?: string }) {
+export function ConteudoQuadro({
+  quadro,
+  alterados,
+  resposta,
+  onAtribuir,
+}: {
+  quadro: Quadro;
+  alterados: string[];
+  resposta?: string;
+  onAtribuir?: (cartao: Cartao) => void;
+}) {
   return (
     <>
       {resposta && <p className="summary">{resposta}</p>}
-      <QuadroBoard quadro={quadro} alterados={alterados} />
+      <QuadroBoard quadro={quadro} alterados={alterados} onAtribuir={onAtribuir} />
     </>
   );
 }
