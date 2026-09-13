@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   Chip,
   DataTable,
@@ -30,7 +30,7 @@ import {
 } from "@/components/ui";
 import { SENSIVEL } from "@/lib/sensivel";
 import type { Meta } from "@/lib/ai";
-import type { Analise } from "@/lib/types";
+import type { Analise, ItemEssencial } from "@/lib/types";
 import { PAPEIS } from "@/lib/types";
 
 const LIMITE_PDF = 10 * 1024 * 1024; // 10 MB
@@ -312,8 +312,56 @@ function textoRisco(nota: number, papel: string) {
   return `Risco baixo ${quem}. O contrato está relativamente equilibrado; confira os detalhes abaixo.`;
 }
 
+/** Nome do papel sem gênero (contratado/contratada, locador/locadora...), para comparar o papel escolhido pelo usuário com o texto livre gerado pela IA em `partes[].papel`. */
+function raizPapel(s: string) {
+  const n = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  return /[oa]$/.test(n) ? n.slice(0, -1) : n;
+}
+
+/** Sem saber o papel (papel="outro"), mantém todo mundo em "neutral" (não dá para dizer quem é a outra parte). */
+function ehParteDoUsuario(papelParte: string, papelUsuario: string): boolean {
+  if (papelUsuario === "outro") return true;
+  const a = raizPapel(papelParte);
+  const b = raizPapel(papelUsuario);
+  return a.startsWith(b) || b.startsWith(a);
+}
+
+function pontosParaNegociar(a: Analise): string {
+  const l: string[] = [`Pontos a negociar — ${a.tipo_contrato || "Contrato"}`, ""];
+  (a.clausulas_risco || []).forEach((c, i) => {
+    l.push(`${i + 1}. ${c.clausula}`);
+    l.push(`   Sugestão: ${c.sugestao_negociacao}`);
+    l.push(`   Por quê: ${c.risco}`);
+    l.push("");
+  });
+  return l.join("\n");
+}
+
+function emailOutraParte(a: Analise): { assunto: string; corpo: string } {
+  const assunto = `Pontos para revisão do contrato${a.tipo_contrato ? ` — ${a.tipo_contrato}` : ""}`;
+  const pontos = (a.clausulas_risco || []).map((c) => `- ${c.clausula}: ${c.sugestao_negociacao}`).join("\n");
+  const corpo = `Olá,\n\nAntes de seguirmos com a assinatura, gostaríamos de alinhar os pontos abaixo:\n\n${pontos}\n\nFicamos à disposição para conversar.`;
+  return { assunto, corpo };
+}
+
+function baixarTexto(nomeArquivo: string, conteudo: string) {
+  const blob = new Blob([conteudo], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nomeArquivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function analiseParaTexto(a: Analise, papel: string) {
-  const l: string[] = [a.tipo_contrato || "Contrato", `Análise do ponto de vista de quem é ${papel}`, "", a.resumo_executivo, "", "Cláusulas que merecem atenção:"];
+  const l: string[] = [a.tipo_contrato || "Contrato", `Análise do ponto de vista de quem é ${papel}`, "", a.resumo_executivo, "", "O essencial:"];
+  l.push(`- Valor mensal: ${a.essencial.valor_mensal.numero} — ${a.essencial.valor_mensal.detalhe}`);
+  l.push(`- Prazo: ${a.essencial.prazo.numero} — ${a.essencial.prazo.detalhe}`);
+  l.push(`- Multa: ${a.essencial.multa.numero} — ${a.essencial.multa.detalhe}`);
+  l.push("", "Cláusulas que merecem atenção:");
   (a.clausulas_risco || []).forEach((c) => l.push(`- ${c.clausula} (${c.severidade}): ${c.risco} Sugestão: ${c.sugestao_negociacao}`));
   l.push("", "Prazos críticos:");
   (a.prazos_criticos || []).forEach((p) => l.push(`- ${p.prazo}: ${p.evento}`));
@@ -348,23 +396,57 @@ export function Resultado({
           id={id}
           titulo={analise.tipo_contrato || "Contrato"}
           texto={() => analiseParaTexto(analise, papel)}
-          extras={onNovo ? [{ rotulo: "Analisar outro", onClick: onNovo }] : undefined}
+          extras={[
+            ...(onNovo ? [{ rotulo: "Analisar outro", onClick: onNovo }] : []),
+            { rotulo: "Baixar lista de pontos a negociar", onClick: () => baixarTexto("pontos-a-negociar.txt", pontosParaNegociar(analise)) },
+            {
+              rotulo: "E-mail para a outra parte",
+              onClick: () => {
+                const { assunto, corpo } = emailOutraParte(analise);
+                window.location.href = `mailto:?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
+              },
+            },
+          ]}
         />
       </ResultHead>
 
       <Origem meta={meta} />
 
-      <ConteudoAnalise analise={analise} papel={papel} />
-
-      {idContrato && <SecaoPerguntar idContrato={idContrato} />}
+      <ConteudoAnalise
+        analise={analise}
+        papel={papel}
+        slotAposEssencial={idContrato && <SecaoPerguntar idContrato={idContrato} sugestoes={(analise.perguntas_para_o_juridico || []).slice(0, 3)} />}
+      />
 
       <p className="text-muted text-[12.5px] border-t border-line pt-3">Apoio à leitura. Não substitui a análise do seu departamento jurídico.</p>
     </article>
   );
 }
 
-/** Corpo da análise (sem cabeçalho, Origem nem a caixa de perguntas), reaproveitado pela página de impressão. */
-export function ConteudoAnalise({ analise: a, papel }: { analise: Analise; papel: string }) {
+/** Um cartão de "O essencial": número em 22 px negrito e até duas linhas de apoio. */
+function CardEssencial({ rotulo, item }: { rotulo: string; item: ItemEssencial }) {
+  return (
+    <Item>
+      <div className="text-[22px] font-extrabold leading-none tracking-[-0.01em]">{item.numero}</div>
+      <div className="text-[13px] font-semibold text-muted mt-2">{rotulo}</div>
+      {item.detalhe && <p className="text-muted text-sm mt-1 line-clamp-2">{item.detalhe}</p>}
+    </Item>
+  );
+}
+
+/** Trecho literal do contrato: escondido atrás de "Ver trecho" para não competir com a cláusula e a sugestão. */
+function BlocoTrecho({ trecho }: { trecho: string }) {
+  const [aberto, setAberto] = useState(false);
+  if (!trecho) return null;
+  return (
+    <div className="mt-1">
+      {aberto ? <p className="italic text-muted text-[13px]">&ldquo;{trecho}&rdquo;</p> : <button type="button" className="btn-link text-[12.5px]" onClick={() => setAberto(true)}>Ver trecho</button>}
+    </div>
+  );
+}
+
+/** Corpo da análise (sem cabeçalho nem Origem), reaproveitado pela página de impressão; `slotAposEssencial` injeta a caixa de perguntas logo após "O essencial" no fluxo principal, sem entrar no PDF/impressão. */
+export function ConteudoAnalise({ analise: a, papel, slotAposEssencial }: { analise: Analise; papel: string; slotAposEssencial?: ReactNode }) {
   const nota = Math.max(0, Math.min(10, Number(a.nota_risco) || 0));
   const cls = classeRisco(nota);
   const tom = cls === "alto" ? "danger" : cls === "moderado" ? "warn" : "ok";
@@ -380,7 +462,7 @@ export function ConteudoAnalise({ analise: a, papel }: { analise: Analise; papel
           <ul className="flex flex-col gap-2.5">
             {(a.partes || []).map((p, i) => (
               <li key={i} className="flex items-center gap-2.5">
-                <Chip nivel="neutral">{p.papel}</Chip>
+                <Chip nivel={ehParteDoUsuario(p.papel, papel) ? "neutral" : "cinza"}>{p.papel}</Chip>
                 <strong className="text-sm">{p.nome}</strong>
               </li>
             ))}
@@ -389,12 +471,15 @@ export function ConteudoAnalise({ analise: a, papel }: { analise: Analise; papel
       </Section>
 
       <Section titulo="O essencial">
+        {a.objeto && <p className="text-sm text-muted mb-3.5">{a.objeto}</p>}
         <div className="grid grid-cols-3 max-md:grid-cols-1 gap-3.5">
-          <Item><h3 className="font-bold mb-1">Objeto</h3><p className="text-muted text-sm">{a.objeto}</p></Item>
-          <Item><h3 className="font-bold mb-1">Valor e pagamento</h3><p className="text-muted text-sm">{a.valor_e_pagamento}</p></Item>
-          <Item><h3 className="font-bold mb-1">Vigência e rescisão</h3><p className="text-muted text-sm">{a.vigencia_e_rescisao}</p></Item>
+          <CardEssencial rotulo="Valor mensal" item={a.essencial.valor_mensal} />
+          <CardEssencial rotulo="Prazo" item={a.essencial.prazo} />
+          <CardEssencial rotulo="Multa de rescisão" item={a.essencial.multa} />
         </div>
       </Section>
+
+      {slotAposEssencial}
 
       <Section titulo="Cláusulas que merecem atenção">
         <DataTable
@@ -407,13 +492,13 @@ export function ConteudoAnalise({ analise: a, papel }: { analise: Analise; papel
               render: (c) => (
                 <>
                   <strong>{c.clausula}</strong>
-                  {c.trecho && <p className="italic text-muted text-[13px] mt-1">&ldquo;{c.trecho}&rdquo;</p>}
+                  {c.trecho && <BlocoTrecho trecho={c.trecho} />}
                 </>
               ),
             },
+            { chave: "sugestao", titulo: "Sugestão de negociação", papel: "resumo", render: (c) => c.sugestao_negociacao },
+            { chave: "risco", titulo: "Risco para você", papel: "detalhe", render: (c) => c.risco },
             { chave: "severidade", titulo: "Severidade", papel: "chip", largura: "100px", render: (c) => <Chip nivel={c.severidade} /> },
-            { chave: "risco", titulo: "Risco para você", papel: "resumo", render: (c) => c.risco },
-            { chave: "sugestao", titulo: "Sugestão de negociação", papel: "detalhe", render: (c) => c.sugestao_negociacao },
           ]}
           linhas={a.clausulas_risco || []}
         />
@@ -460,31 +545,42 @@ export function ConteudoAnalise({ analise: a, papel }: { analise: Analise; papel
 type QA = { pergunta: string; resposta?: string; erro?: string; carregando: boolean };
 
 /** Caixa de perguntas ao contrato; só aparece quando o texto ainda está guardado em memória (1 hora), ver lib/estado.ts. */
-function SecaoPerguntar({ idContrato }: { idContrato: string }) {
+function SecaoPerguntar({ idContrato, sugestoes }: { idContrato: string; sugestoes: string[] }) {
   const [pergunta, setPergunta] = useState("");
   const [qas, setQas] = useState<QA[]>([]);
 
-  async function perguntar(e: FormEvent) {
-    e.preventDefault();
-    const p = pergunta.trim();
-    if (!p) return;
+  async function perguntarTexto(p: string) {
+    const texto = p.trim();
+    if (!texto) return;
     setPergunta("");
-    setQas((prev) => [...prev, { pergunta: p, carregando: true }]);
+    setQas((prev) => [...prev, { pergunta: texto, carregando: true }]);
     try {
-      const r = await fetch("/api/perguntar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: idContrato, pergunta: p }) });
+      const r = await fetch("/api/perguntar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: idContrato, pergunta: texto }) });
       const resposta = await r.json();
       if (!r.ok) throw new Error(resposta.error || "Não foi possível responder.");
-      setQas((prev) => prev.map((qa) => (qa.pergunta === p && qa.carregando ? { pergunta: p, resposta: resposta.resposta, carregando: false } : qa)));
+      setQas((prev) => prev.map((qa) => (qa.pergunta === texto && qa.carregando ? { pergunta: texto, resposta: resposta.resposta, carregando: false } : qa)));
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Não foi possível responder.";
-      setQas((prev) => prev.map((qa) => (qa.pergunta === p && qa.carregando ? { pergunta: p, erro: msg, carregando: false } : qa)));
+      setQas((prev) => prev.map((qa) => (qa.pergunta === texto && qa.carregando ? { pergunta: texto, erro: msg, carregando: false } : qa)));
     }
+  }
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    perguntarTexto(pergunta);
   }
 
   return (
     <Section titulo="Pergunte sobre este contrato">
       <Item>
-        <form onSubmit={perguntar} className="flex gap-2.5 mb-3.5">
+        {sugestoes.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3.5">
+            {sugestoes.map((s, i) => (
+              <button key={i} type="button" className="btn-ghost !w-auto !py-1.5 !px-2.5 text-[12.5px] text-left" onClick={() => perguntarTexto(s)}>{s}</button>
+            ))}
+          </div>
+        )}
+        <form onSubmit={onSubmit} className="flex gap-2.5 mb-3.5">
           <input
             className="input flex-1"
             placeholder="Ex.: Posso cancelar sem multa depois de 12 meses?"

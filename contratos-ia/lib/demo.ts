@@ -19,10 +19,11 @@ export function analiseDemo({ preocupacao = "" }: { papel?: string; preocupacao?
     ],
     objeto:
       'Desenvolvimento, evolução e sustentação da plataforma de comércio eletrônico da contratante, incluindo integrações com ERP e meios de pagamento. O escopo detalhado fica para ser definido "ao longo da execução".',
-    valor_e_pagamento:
-      "R$ 48.000,00 por mês, até o dia 5, contra nota fiscal. Horas fora do escopo a R$ 220,00 mediante aprovação por e-mail, sem teto. Reajuste anual pelo IGP-M ou por índice que a contratada indicar. Atraso: multa de 2%, juros de 1% ao mês e correção.",
-    vigencia_e_rescisao:
-      "24 meses com renovação automática por períodos iguais, salvo aviso com 90 dias de antecedência. Rescisão imotivada exige aviso prévio de 90 dias; se partir da contratante antes do fim, multa de 30% do valor remanescente. Código e dados só são entregues em até 60 dias após quitação das pendências.",
+    essencial: {
+      valor_mensal: { numero: "R$ 48.000/mês", detalhe: "Até o dia 5, contra nota fiscal. Reajuste anual pelo IGP-M ou índice que a contratada indicar." },
+      prazo: { numero: "24 meses", detalhe: "Renovação automática por períodos iguais, salvo aviso com 90 dias de antecedência." },
+      multa: { numero: "30% do saldo", detalhe: "Só para a contratante, se sair antes do fim. A fornecedora sai sem multa." },
+    },
     nota_risco: 7,
     prazos_criticos: [
       { evento: "Aviso para evitar a renovação automática por mais 24 meses", prazo: "90 dias antes do fim da vigência" },

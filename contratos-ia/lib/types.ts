@@ -28,6 +28,12 @@ export interface ClausulaRisco {
   sugestao_negociacao: string;
 }
 
+/** Um cartão de "O essencial": número curto em destaque (ex.: "R$ 48.000/mês", "24 meses", "30%") e até duas linhas de apoio. */
+export interface ItemEssencial {
+  numero: string;
+  detalhe: string;
+}
+
 /** Dados de entrada guardados no histórico (lib/historico.ts); o texto do contrato não é persistido, só fica em memória em lib/estado.ts. */
 export interface EntradaAnalise {
   papel: string;
@@ -39,8 +45,7 @@ export interface Analise {
   resumo_executivo: string;
   partes: Parte[];
   objeto: string;
-  valor_e_pagamento: string;
-  vigencia_e_rescisao: string;
+  essencial: { valor_mensal: ItemEssencial; prazo: ItemEssencial; multa: ItemEssencial };
   nota_risco: number;
   prazos_criticos: PrazoCritico[];
   clausulas_risco: ClausulaRisco[];

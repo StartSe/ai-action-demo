@@ -33,6 +33,7 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   .chip-media, .chip-neutro { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-[#fff4e0] text-warn; }
   .chip-baixa, .chip-positivo { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-[#e4f4ec] text-ok; }
   .chip-neutral { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-accent-soft text-accent-ink; }
+  .chip-cinza { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-[#eef0f2] text-muted; }
   .section-title { @apply text-[13px] font-bold text-accent mb-3 tracking-[0.01em]; }
   .summary { @apply text-[17px] max-md:text-[16px] leading-[1.5] font-medium tracking-[-0.01em] text-ink px-7 py-6 bg-surface rounded-card shadow-card mb-7; }
   .skeleton { @apply h-[14px] rounded-md bg-[linear-gradient(90deg,#e9ebf0_25%,#f4f5f7_50%,#e9ebf0_75%)] bg-[length:200%_100%] animate-[shimmer_1.4s_infinite]; }

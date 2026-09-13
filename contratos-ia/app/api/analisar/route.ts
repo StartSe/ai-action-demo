@@ -24,8 +24,11 @@ Formato de saída (JSON):
   "resumo_executivo": "3 frases: o que é, o que mais pesa contra o papel informado e o que fazer antes de assinar",
   "partes": [{"nome": "", "papel": ""}],
   "objeto": "1 a 2 frases",
-  "valor_e_pagamento": "valores, periodicidade, reajuste e penalidades por atraso",
-  "vigencia_e_rescisao": "prazo, renovação, aviso prévio e multas",
+  "essencial": {
+    "valor_mensal": {"numero": "curto, ex.: R$ 48.000/mês (ou 'Não especificado')", "detalhe": "até 2 linhas: periodicidade, reajuste e penalidade por atraso"},
+    "prazo": {"numero": "curto, ex.: 24 meses", "detalhe": "até 2 linhas: renovação e aviso prévio"},
+    "multa": {"numero": "curto, ex.: 30% do saldo (ou 'Não especificada')", "detalhe": "até 2 linhas: quando incide e para quem"}
+  },
   "nota_risco": 0,
   "prazos_criticos": [{"evento": "", "prazo": ""}],
   "clausulas_risco": [{"clausula": "", "trecho": "", "risco": "", "severidade": "alta|média|baixa", "sugestao_negociacao": ""}],
