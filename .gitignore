@@ -10,6 +10,8 @@ npm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 publico/
+# Capturas geradas pelo workflow de publicação (scripts/gerar-deploy.mjs as copia para publico/)
+/capturas/
 # Projeto separado (DecisionOS Pocket) copiado para esta pasta; não faz parte da suíte.
 automl-pocket/
 

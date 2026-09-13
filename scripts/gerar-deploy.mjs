@@ -163,6 +163,13 @@ writeFileSync(join(main, "render.yaml"), renderSuite());
 writeFileSync(join(main, "README.md"), readmePublico());
 writeFileSync(join(main, ".nojekyll"), "");
 copyFileSync(join(raiz, "site", "index.html"), join(main, "index.html"));
+
+// As capturas de tela (uma por app) são geradas pelo workflow de publicação em capturas/<id>.png,
+// na raiz do repositório; nem sempre existem (ex.: captura falhou, ou app ainda não foi capturado).
+// Só copiamos e preenchemos "captura" no catálogo publicado quando o arquivo existe de fato.
+const capturasOrigem = join(raiz, "capturas");
+const capturasDestino = join(main, "capturas");
+let capturasDestinoCriada = false;
 writeFileSync(
   join(main, "catalogo.json"),
   JSON.stringify(
@@ -171,13 +178,26 @@ writeFileSync(
       lead: cat.lead,
       repoPublico: repoPublicoUrl,
       publicarSuite: urlPublicarSuite,
-      apps: cat.apps.map((a) => ({
-        ...a,
-        imagem: imagem(a),
-        publicar: urlPublicar(a),
-        blueprint: `${repoPublicoUrl}/tree/${branchDeploy(a)}`,
-        docker: comandoDocker(a),
-      })),
+      apps: cat.apps.map((a) => {
+        const origem = join(capturasOrigem, `${a.id}.png`);
+        let captura = null;
+        if (existsSync(origem)) {
+          if (!capturasDestinoCriada) {
+            mkdirSync(capturasDestino, { recursive: true });
+            capturasDestinoCriada = true;
+          }
+          copyFileSync(origem, join(capturasDestino, `${a.id}.png`));
+          captura = a.captura;
+        }
+        return {
+          ...a,
+          captura,
+          imagem: imagem(a),
+          publicar: urlPublicar(a),
+          blueprint: `${repoPublicoUrl}/tree/${branchDeploy(a)}`,
+          docker: comandoDocker(a),
+        };
+      }),
     },
     null,
     2
