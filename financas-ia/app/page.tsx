@@ -80,6 +80,8 @@ export default function Page() {
   const [estado, setEstado] = useState<EstadoAnalise>({ fase: "vazio" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const [orcamento, setOrcamento] = useState<ItemOrcamento[]>([]);
+  const [fonteDados, setFonteDados] = useState<boolean | undefined>(undefined);
+  const [lendoFonte, setLendoFonte] = useState(false);
   const autoEnviado = useRef(false);
 
   useScrollToResult(estado.fase === "pronto");
@@ -91,6 +93,9 @@ export default function Page() {
   useEffect(() => { carregarHistorico(); }, []);
   useEffect(() => {
     fetch("/api/orcamento").then((r) => r.json()).then((d) => setOrcamento(d.itens || [])).catch(() => setOrcamento([]));
+  }, []);
+  useEffect(() => {
+    fetch("/api/fonte-dados").then((r) => r.json()).then((d) => setFonteDados(Boolean(d.configurada))).catch(() => setFonteDados(false));
   }, []);
 
   function apagarHistorico() {
@@ -182,6 +187,22 @@ export default function Page() {
     const amostra = registros.slice(0, 60).map(paraLinha);
     const todos = registros.map(paraLinha);
     await gerarLeitura(resumo, amostra, nomeArquivo, todos);
+  }
+
+  async function lerFonteConectada() {
+    setLendoFonte(true);
+    setErroArquivo(null);
+    try {
+      const r = await fetch("/api/fonte-dados", { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Não foi possível ler a fonte conectada.");
+      const resultado = processarTexto(d.csv, "fonte-conectada.csv");
+      if (resultado) await analisar(resultado.linhas, resultado.mapeamento, "fonte-conectada.csv");
+    } catch (e) {
+      setErroArquivo(e instanceof Error ? e.message : "Não foi possível ler a fonte conectada.");
+    } finally {
+      setLendoFonte(false);
+    }
   }
 
   async function usarExemplo() {
@@ -314,6 +335,16 @@ export default function Page() {
             <button type="button" className="btn-link" onClick={usarExemplo}>
               Usar dados de exemplo
             </button>
+            {fonteDados === true && (
+              <button type="button" className="btn-link" onClick={lerFonteConectada} disabled={lendoFonte}>
+                {lendoFonte ? "Lendo..." : "Ler da fonte conectada"}
+              </button>
+            )}
+            {fonteDados === false && (
+              <a className="btn-link" href="/setup#mcp-dados">
+                Conectar uma fonte de dados
+              </a>
+            )}
           </div>
           <Privacidade detalhe="Nada é enviado no upload. Só agregados (totais, médias, maiores lançamentos) e uma amostra de linhas são enviados à IA quando você pede uma leitura ou faz uma pergunta." />
 

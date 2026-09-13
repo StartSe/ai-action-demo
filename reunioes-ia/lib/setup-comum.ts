@@ -13,6 +13,8 @@ export type Campo = {
   ajuda?: string;
   placeholder?: string;
   opcional?: boolean;
+  /** Campo secundário: fica dentro de "Opções avançadas" no cartão, em vez do grupo principal. */
+  avancado?: boolean;
   padrao?: string;
   opcoes?: Opcao[];
   /** Opções carregadas da própria integração (ex.: quadros do Trello) quando as chaves anteriores já existem. */
@@ -245,6 +247,63 @@ export const MCP_EMPRESA: Integracao = {
       return { ok: true, mensagem: `Conectado. Consultas disponíveis: ${ferramentas.map((f) => f.nome).join(", ")}.` };
     } catch (err) {
       return { ok: false, mensagem: err instanceof Error ? err.message : "Não foi possível conectar ao sistema." };
+    }
+  },
+};
+
+/** Fonte de dados externa (uma planilha viva, um ERP, ou qualquer serviço que exponha um servidor MCP) para ler números sempre atualizados sem depender de exportação manual de CSV. */
+export const MCP_DADOS: Integracao = {
+  id: "mcp-dados",
+  titulo: "Fonte de dados (MCP)",
+  descricao: "Conecte a planilha viva ou o ERP onde seus dados já vivem (qualquer serviço que exponha um servidor MCP) para ler direto de lá, sem exportar CSV toda vez.",
+  obrigatoria: false,
+  campos: [
+    {
+      chave: "MCP_DADOS_URL",
+      rotulo: "Endereço da fonte",
+      tipo: "text",
+      placeholder: "https://sua-planilha.exemplo.com/mcp",
+      ajuda: "Copie do painel de integrações do seu ERP/planilha, ou do cartão \"Usar dentro do seu assistente\" de outro app desta suíte.",
+    },
+    {
+      chave: "MCP_DADOS_CODIGO",
+      rotulo: "Código de acesso",
+      tipo: "secret",
+      opcional: true,
+      ajuda: "Gerado no mesmo lugar do endereço, dentro da fonte conectada.",
+    },
+    {
+      chave: "MCP_DADOS_FERRAMENTA",
+      rotulo: "Nome da ferramenta de leitura",
+      tipo: "text",
+      opcional: true,
+      avancado: true,
+      placeholder: "ex.: ler_planilha",
+      ajuda: "Deixe em branco para o app tentar identificar sozinho pelo nome das ferramentas disponíveis.",
+    },
+    {
+      chave: "MCP_DADOS_ARGUMENTOS",
+      rotulo: "Argumentos da ferramenta (JSON)",
+      tipo: "text",
+      opcional: true,
+      avancado: true,
+      placeholder: '{"aba": "Despesas"}',
+      ajuda: "Só quando a ferramenta escolhida exigir parâmetros extras, como o nome de uma aba ou um período.",
+    },
+  ],
+  testar: async (config) => {
+    const url = config.MCP_DADOS_URL;
+    if (!url) return { ok: false, mensagem: "Informe o endereço da fonte antes de testar." };
+    try {
+      const ferramentas = await listarFerramentas(conectar(url, config.MCP_DADOS_CODIGO));
+      if (ferramentas.length === 0) return { ok: true, mensagem: "Conectado, mas a fonte não expõe nenhuma ferramenta de leitura ainda." };
+      const escolhida = config.MCP_DADOS_FERRAMENTA;
+      if (escolhida && !ferramentas.some((f) => f.nome === escolhida)) {
+        return { ok: false, mensagem: `Conectado, mas a ferramenta "${escolhida}" não existe nessa fonte. Ferramentas disponíveis: ${ferramentas.map((f) => f.nome).join(", ")}.` };
+      }
+      return { ok: true, mensagem: `Conectado. Ferramentas disponíveis: ${ferramentas.map((f) => f.nome).join(", ")}.` };
+    } catch (err) {
+      return { ok: false, mensagem: err instanceof Error ? err.message : "Não foi possível conectar à fonte." };
     }
   },
 };

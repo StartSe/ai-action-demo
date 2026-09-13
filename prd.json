@@ -1195,7 +1195,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 77,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

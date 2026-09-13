@@ -134,11 +134,22 @@ function CartaoIntegracao({ integracao: i, aoSalvar, destaque }: { integracao: I
 
   const chaveSecreta = i.campos.find((c) => c.tipo === "secret");
   const passos = i.oauth ? [] : passosSetup(i);
+  const aoMudarCampo = (chave: string) => (v: string) => setValores((s) => ({ ...s, [chave]: v }));
+  const camposPrincipais = i.campos.filter((c) => !c.avancado);
+  const camposAvancados = i.campos.filter((c) => c.avancado);
 
   const campos = (
     <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4 [&>*]:min-w-0">
-      {i.campos.map((c) => <CampoSetup key={c.chave} campo={c} valor={valores[c.chave] ?? ""} aoMudar={(v) => setValores((s) => ({ ...s, [c.chave]: v }))} />)}
+      {camposPrincipais.map((c) => <CampoSetup key={c.chave} campo={c} valor={valores[c.chave] ?? ""} aoMudar={aoMudarCampo(c.chave)} />)}
     </div>
+  );
+
+  const opcoesAvancadas = camposAvancados.length > 0 && (
+    <MaisDetalhes titulo="Opções avançadas">
+      <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4 [&>*]:min-w-0">
+        {camposAvancados.map((c) => <CampoSetup key={c.chave} campo={c} valor={valores[c.chave] ?? ""} aoMudar={aoMudarCampo(c.chave)} />)}
+      </div>
+    </MaisDetalhes>
   );
 
   const acoesSalvar = (
@@ -183,6 +194,7 @@ function CartaoIntegracao({ integracao: i, aoSalvar, destaque }: { integracao: I
             </ol>
           )}
           {campos}
+          {opcoesAvancadas}
           <div className="flex items-center gap-3 flex-wrap mt-4">
             <button type="button" className="btn-primary !w-auto" onClick={salvar} disabled={!alterado || salvando}>{salvando ? "Salvando" : "Salvar"}</button>
             {!alterado && <span className="text-muted text-sm">Preencha ao menos um campo para salvar</span>}
