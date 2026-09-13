@@ -27,7 +27,7 @@ import {
 import { AcoesResposta, Celular, horaAtual, type AoSalvarBase, type BolhaChat } from "@/components/Celular";
 import type { Meta } from "@/lib/ai";
 import type { ParBase } from "@/lib/base";
-import type { CanalOrigem, Config, Conversa } from "@/lib/types";
+import type { CanalOrigem, Config, Conversa, ItemRelatorioAtendimento } from "@/lib/types";
 
 const CONFIG_VAZIA: Config = { negocio: "", atendente: "", tom: "cordial", horario: "", baseConhecimento: "", naoSei: "humano" };
 
@@ -36,6 +36,8 @@ const SUGESTOES = ["Quanto custa o clareamento dental?", "Vocês atendem aos sá
 const ETAPAS_CARREGANDO = ["Abrindo as conversas...", "Quase pronto..."];
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
+
+type EstadoNotificacoes = { configurada: boolean; canal: "email" | "slack"; destino: string };
 
 /** Balão de conversa (estilo WhatsApp) com três pontos de "digitando", no lugar de um glifo genérico no estado vazio. */
 function IlustracaoConversa() {
@@ -67,6 +69,11 @@ export default function Page() {
   const [estadoConversas, setEstadoConversas] = useState<EstadoConversas>({ fase: "carregando" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const [base, setBase] = useState<ParBase[] | null>(null);
+  const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
+  const [relatorioId, setRelatorioId] = useState<string | null | undefined>(undefined);
+  const [criandoRelatorio, setCriandoRelatorio] = useState(false);
+  const [atenderNumero, setAtenderNumero] = useState<string | null>(null);
+  const [corrigirFocada, setCorrigirFocada] = useState(false);
   const autoEnviado = useRef(false);
   const configAlterada = JSON.stringify(config) !== JSON.stringify(configSalva);
   // Espelha o rascunho mais recente para o simulador, sem tornar `enviarSimulada` reativo a `config`
@@ -92,7 +99,56 @@ export default function Page() {
     if (new URLSearchParams(location.search).get("exemplo") !== "1") carregarConversas();
     fetch("/api/simular").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
     fetch("/api/base").then((r) => r.json()).then((r) => setBase(r.itens)).catch(() => setBase([]));
+
+    const numero = new URLSearchParams(location.search).get("atender");
+    if (numero) {
+      const corrigir = new URLSearchParams(location.search).get("corrigir") === "1";
+      setTimeout(() => {
+        setAtenderNumero(numero);
+        setCorrigirFocada(corrigir);
+      }, 0);
+    }
+
+    fetch("/api/setup")
+      .then((r) => r.json())
+      .then((d) => {
+        const notificacoesIntegracao = (d.integracoes || []).find((i: { id: string }) => i.id === "notificacoes");
+        const campos: { chave: string; valorVisivel?: string }[] = notificacoesIntegracao?.campos || [];
+        const canal = campos.find((c) => c.chave === "NOTIFICACOES_CANAL")?.valorVisivel === "slack" ? "slack" : "email";
+        const destino = campos.find((c) => c.chave === "NOTIFICACOES_DESTINO")?.valorVisivel || "";
+        setNotificacoes({ configurada: Boolean(notificacoesIntegracao?.configurada), canal, destino });
+      })
+      .catch(() => setNotificacoes({ configurada: false, canal: "email", destino: "" }));
+    fetch("/api/rotinas")
+      .then((r) => r.json())
+      .then((d) => setRelatorioId((d.itens || []).find((i: { tipo: string }) => i.tipo === "relatorio-atendimento")?.id ?? null))
+      .catch(() => setRelatorioId(null));
   }, []);
+
+  async function criarRelatorio() {
+    if (!notificacoes?.configurada) return;
+    setCriandoRelatorio(true);
+    try {
+      const r = await fetch("/api/rotinas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "relatorio-atendimento",
+          frequencia: "diaria",
+          hora: "08:00",
+          canal: notificacoes.canal,
+          destino: notificacoes.canal === "email" ? notificacoes.destino || undefined : undefined,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Não foi possível criar a rotina.");
+      setRelatorioId(d.id);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar a rotina.");
+    } finally {
+      setCriandoRelatorio(false);
+    }
+  }
 
   const salvarBase: AoSalvarBase = (pergunta, resposta) => {
     fetch("/api/base", {
@@ -191,6 +247,8 @@ export default function Page() {
 
   const conectado = Boolean(status?.integrations?.whatsapp);
   const carregando = estadoConversas.fase === "carregando";
+  // Link "Aprovar"/"Corrigir" do relatório diário chega com ?atender=<numero>: posiciona a tela nessa conversa.
+  const conversaSelecionada = atenderNumero && estadoConversas.fase === "pronto" ? estadoConversas.conversas.find((c) => c.numero === atenderNumero) : undefined;
 
   return (
     <>
@@ -293,6 +351,16 @@ export default function Page() {
             )}
           </MaisDetalhes>
 
+          {relatorioId === undefined || notificacoes === null ? null : relatorioId ? (
+            <p className="text-muted text-sm mt-3.5">Você já recebe o relatório do atendimento todo dia, às 8h.</p>
+          ) : notificacoes.configurada ? (
+            <button type="button" className="btn-ghost mt-3.5" onClick={criarRelatorio} disabled={criandoRelatorio}>
+              {criandoRelatorio ? "Criando..." : "Receber o relatório diário"}
+            </button>
+          ) : (
+            <a href="/setup#notificacoes" className="btn-ghost mt-3.5">Receber o relatório diário</a>
+          )}
+
           {(configAlterada || salvo) && (
             <div className="sticky bottom-0 -mx-7 max-md:-mx-[22px] -mb-7 max-md:-mb-[22px] mt-6 px-7 max-md:px-[22px] py-4 bg-surface border-t border-line rounded-b-card flex items-center justify-between gap-3">
               <span className="text-sm font-semibold text-accent-ink">{configAlterada ? "Alterações não salvas" : "Configuração salva"}</span>
@@ -304,6 +372,10 @@ export default function Page() {
         </Panel>
 
         <Stage>
+          {conversaSelecionada && (
+            <ConversaSelecionada conversa={conversaSelecionada} corrigirFocada={corrigirFocada} onAprovar={salvarBase} onCorrigir={salvarBase} />
+          )}
+
           <Celular
             nome={config.atendente}
             negocio={config.negocio}
@@ -361,6 +433,42 @@ export default function Page() {
         </Stage>
       </Workspace>
     </>
+  );
+}
+
+/** Destaca uma conversa específica, com as ações Aprovar/Corrigir prontas — para onde os links do relatório diário levam (?atender=<numero>&corrigir=1). */
+function ConversaSelecionada({
+  conversa,
+  corrigirFocada,
+  onAprovar,
+  onCorrigir,
+}: {
+  conversa: Conversa;
+  corrigirFocada: boolean;
+  onAprovar: AoSalvarBase;
+  onCorrigir: AoSalvarBase;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+  return (
+    <div ref={ref} className="card p-4 border-accent mb-6">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-accent-ink mb-1.5">Conversa selecionada</p>
+      <p className="font-semibold mb-1">{conversa.numero === "simulador" ? "Simulador" : conversa.numero}</p>
+      <p className="text-sm text-muted mb-2.5">{conversa.ultima_mensagem}</p>
+      {conversa.ultima_resposta ? (
+        <AcoesResposta
+          pergunta={conversa.ultima_mensagem}
+          resposta={conversa.ultima_resposta}
+          onAprovar={onAprovar}
+          onCorrigir={onCorrigir}
+          modoInicial={corrigirFocada ? "corrigindo" : "padrao"}
+        />
+      ) : (
+        <p className="text-sm text-muted">Nenhuma resposta registrada ainda para essa conversa.</p>
+      )}
+    </div>
   );
 }
 
@@ -456,6 +564,58 @@ export function ConteudoConversas({
     });
 
   return <DataTable colunas={colunas} linhas={conversas} />;
+}
+
+export function ResultadoRelatorio({ itens, meta, id }: { itens: ItemRelatorioAtendimento[]; meta: Meta; id?: string }) {
+  return (
+    <article className="reveal">
+      <ResultHead titulo="Relatório diário do atendimento">
+        <Entregar id={id} titulo="Relatório diário do atendimento" texto={() => relatorioParaTexto(itens)} />
+      </ResultHead>
+
+      <Origem meta={meta} />
+
+      <ConteudoRelatorio itens={itens} />
+    </article>
+  );
+}
+
+/** Corpo do relatório (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
+export function ConteudoRelatorio({ itens }: { itens: ItemRelatorioAtendimento[] }) {
+  if (itens.length === 0) {
+    return <p className="text-muted text-sm">Nenhuma pergunta frequente, sem resposta ou transferida para um humano. Base de conhecimento em dia.</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-4">
+      {itens.map((item, i) => (
+        <li key={i} className="card p-4">
+          <p className="font-semibold mb-1.5">{item.pergunta}</p>
+          <div className="flex gap-1.5 flex-wrap mb-2.5">
+            {item.transferida && <Chip nivel="media">Transferida</Chip>}
+            {item.frequencia > 1 && <Chip nivel="neutral">Perguntada {item.frequencia} vezes</Chip>}
+          </div>
+          <p className="text-sm text-muted mb-3">Resposta sugerida: {item.respostaSugerida}</p>
+          <div className="flex gap-4">
+            <a className="btn-link" href={`/?atender=${encodeURIComponent(item.numero)}`}>Aprovar</a>
+            <a className="btn-link" href={`/?atender=${encodeURIComponent(item.numero)}&corrigir=1`}>Corrigir</a>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function relatorioParaTexto(itens: ItemRelatorioAtendimento[]): string {
+  const l: string[] = ["Relatório diário do atendimento", ""];
+  if (itens.length === 0) {
+    l.push("Nenhuma pergunta frequente, sem resposta ou transferida para um humano. Base de conhecimento em dia.");
+    return l.join("\n");
+  }
+  itens.forEach((i) => {
+    l.push(`${i.pergunta}${i.transferida ? " (transferida)" : ""}${i.frequencia > 1 ? ` (${i.frequencia}x)` : ""}`);
+    l.push(`Resposta sugerida: ${i.respostaSugerida}`, "");
+  });
+  return l.join("\n").trim();
 }
 
 function rotuloOrigem(origem: CanalOrigem): string {

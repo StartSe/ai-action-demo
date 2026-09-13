@@ -942,7 +942,7 @@
         "Verify in browser using dev-browser skill: criar a rotina e usar 'Executar agora'"
       ],
       "priority": 60,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

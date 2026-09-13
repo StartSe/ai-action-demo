@@ -22,13 +22,16 @@ export function AcoesResposta({
   resposta,
   onAprovar,
   onCorrigir,
+  modoInicial = "padrao",
 }: {
   pergunta: string;
   resposta: string;
   onAprovar?: AoSalvarBase;
   onCorrigir?: AoSalvarBase;
+  /** Abre já em "corrigindo" quando a pessoa chega de um link "Corrigir" (ex.: relatório diário). */
+  modoInicial?: "padrao" | "corrigindo";
 }) {
-  const [modo, setModo] = useState<"padrao" | "corrigindo" | "salvo">("padrao");
+  const [modo, setModo] = useState<"padrao" | "corrigindo" | "salvo">(modoInicial);
   const [texto, setTexto] = useState(resposta);
 
   if (modo === "salvo") return <span className="text-[11px] font-semibold text-accent-ink px-1">Adicionado à base ✓</span>;

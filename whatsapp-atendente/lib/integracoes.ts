@@ -1,6 +1,6 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 import { randomBytes } from "node:crypto";
-import { OPENROUTER, type Integracao } from "./setup-comum";
+import { NOTIFICACOES, OPENROUTER, type Integracao } from "./setup-comum";
 import { getConfig, setConfig } from "./store";
 
 /**
@@ -56,4 +56,4 @@ export const WHATSAPP: Integracao = {
   },
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, WHATSAPP];
+export const INTEGRACOES: Integracao[] = [OPENROUTER, WHATSAPP, NOTIFICACOES];

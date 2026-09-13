@@ -3,7 +3,7 @@ import { aiEnabled, askText } from "./ai";
 import { baseAprovadaComoTexto } from "./base";
 import { esperar, respostaLocal } from "./demo";
 import { getConfig } from "./estado";
-import type { CanalOrigem, Config, Conversa, MensagemChat } from "./types";
+import type { CanalOrigem, Config, Conversa, ItemRelatorioAtendimento, MensagemChat } from "./types";
 
 const MAX_MENSAGENS = 20;
 
@@ -127,4 +127,57 @@ export function listarConversas(): Conversa[] {
 
 export function limparConversa(numero: string): void {
   conversas.delete(numero);
+}
+
+function normalizarPergunta(texto: string): string {
+  return texto.trim().toLowerCase().replace(/[?!.,;:]+$/g, "");
+}
+
+/**
+ * Perguntas que merecem atenção da equipe: as que se repetem entre números diferentes e as que
+ * terminaram transferidas para um humano (o atendente não soube responder). Cada conversa só guarda
+ * a última pergunta/resposta trocada (ver `listarConversas`), então "mais frequente" aqui é uma
+ * aproximação: quantos números diferentes tiveram essa mesma última pergunta, não o histórico
+ * completo de mensagens trocadas. Usada pelo relatório diário (lib/rotinas-do-app.ts).
+ */
+export function perguntasPendentes(): Omit<ItemRelatorioAtendimento, "respostaSugerida">[] {
+  const porTexto = new Map<string, Omit<ItemRelatorioAtendimento, "respostaSugerida">>();
+  for (const c of listarConversas()) {
+    if (!c.ultima_mensagem.trim()) continue;
+    const chave = normalizarPergunta(c.ultima_mensagem);
+    const existente = porTexto.get(chave);
+    if (existente) {
+      existente.frequencia++;
+      existente.transferida = existente.transferida || c.transferir;
+    } else {
+      porTexto.set(chave, { pergunta: c.ultima_mensagem, numero: c.numero, frequencia: 1, transferida: c.transferir });
+    }
+  }
+  return [...porTexto.values()]
+    .filter((p) => p.transferida || p.frequencia > 1)
+    .sort((a, b) => Number(b.transferida) - Number(a.transferida) || b.frequencia - a.frequencia);
+}
+
+function montarSystemPromptSugestao(config: Config): string {
+  return `Você ajuda a equipe da ${config.negocio} a preparar respostas para a base de conhecimento do atendente virtual (${config.atendente}), no tom ${descricaoTom(config.tom)}.
+Escreva a melhor resposta possível para a pergunta do cliente abaixo, usando somente a base de conhecimento informada. Se a base não tiver a informação exata, escreva a resposta mais provável e comece com "Sugestão, confira antes de aprovar: ".
+
+Base de conhecimento:
+"""
+${config.baseConhecimento}
+"""
+
+Regras: no máximo 2 a 3 frases, sem formatação markdown, sem falar em transferir para humano ou em inteligência artificial.`;
+}
+
+/**
+ * Resposta sugerida pela IA para uma pergunta pendente, usada no relatório diário: ao contrário de
+ * responder(), nunca escala para humano — sempre tenta uma resposta de verdade, mesmo que a base não
+ * tenha a informação exata (sinalizando isso no texto). Sem IA configurada, devolve um aviso em vez de
+ * inventar uma sugestão.
+ */
+export async function sugerirResposta(pergunta: string): Promise<string> {
+  if (!aiEnabled()) return 'Configure a chave da IA em /setup para receber uma sugestão automática. Por enquanto, use "Corrigir" para gravar a resposta certa.';
+  const config = comBaseAprovada(getConfig());
+  return (await askText({ system: montarSystemPromptSugestao(config), prompt: pergunta, maxTokens: 200 })).trim();
 }

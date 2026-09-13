@@ -38,3 +38,18 @@ export interface AtendimentoSaida {
   transferir: boolean;
   conversas: Conversa[];
 }
+
+/** Uma pergunta que merece atenção da equipe no relatório diário (lib/rotinas-do-app.ts). */
+export interface ItemRelatorioAtendimento {
+  pergunta: string;
+  /** Número da conversa mais recente com essa pergunta, para o link "abrir a conversa". */
+  numero: string;
+  frequencia: number;
+  transferida: boolean;
+  respostaSugerida: string;
+}
+
+/** Entrada/saída salvas em lib/historico.ts (tipo "relatorio-atendimento") pela rotina diária. */
+export interface RelatorioAtendimentoSaida {
+  itens: ItemRelatorioAtendimento[];
+}
