@@ -827,3 +827,13 @@ Started: Sat Sep 12 16:56:50 -03 2026
   - Ver as novas entradas no `whatsapp-atendente/CLAUDE.md` e na seção "Codebase Patterns" acima: o padrão "link do relatório volta para `/` com querystring, que resolve para o widget client-side certo" e o desenho de três estados do botão "Receber [rotina] todo dia" (com o gotcha do `destino` explícito) são reaproveitáveis por qualquer história futura de rotina com ação (US-064/065/066/069/076 etc.).
   - `listarConversas()` só guarda a última pergunta/resposta por número — "frequência" em `perguntasPendentes()` é uma aproximação (quantos números diferentes fizeram a mesma última pergunta), documentada no próprio código; não é o histórico completo de mensagens.
 ---
+
+## [2026-09-13 11:54] - US-061
+- Implementado "Alimentar a base por formulário" em whatsapp-atendente: nova seção "Sugestões da equipe" no painel principal, com um link interno permanente (/f/<código>) que a equipe usa para sugerir pares pergunta/resposta/categoria sem editar texto corrido. Respostas recebidas aparecem como pendentes até "Aprovar" (grava na base de respostas aprovadas via lib/base.ts) ou "Descartar".
+- Arquivos novos: whatsapp-atendente/lib/sugestoes.ts, whatsapp-atendente/app/api/sugestoes/route.ts (GET lista código+pendentes, POST cria o link uma única vez, PATCH aprova/descarta).
+- Arquivo alterado: whatsapp-atendente/app/page.tsx (estado, efeitos, funções e a seção "Sugestões da equipe" no painel, logo depois de "Base de respostas aprovadas").
+- Verificado com Playwright real (chromium do Homebrew): criar link → preencher /f/<código> → sugestão aparece pendente → Aprovar move para "Base de respostas aprovadas" e some da lista; em outro teste, Descartar remove sem gravar nada na base.
+- **Learnings for future iterations:**
+  - `lib/formularios.ts` (compartilhado, comparado byte a byte pelo scripts/verificar-padrao.sh) não tem conceito de "status" por resposta (só resultadoId, setado uma vez na criação). Para um fluxo com aprovação manual (não processar tudo no envio), a solução que não exige tocar no arquivo compartilhado é manter um Set de ids "tratados" à parte, em getConfig/setConfig do próprio app (chave própria, JSON de ids), e filtrar `listarRespostas(codigo)` contra esse Set para calcular a lista de pendentes. Reaproveitável em qualquer app futuro que precise de um formulário público com revisão humana antes de um efeito colateral (em vez do padrão "callback processa tudo no POST", já usado em agente-kanban/US-057).
+  - Um link de formulário interno "de uso único por instância" (não por visitante) é mais simples que a caixa de entrada do agente-kanban: basta getConfig/setConfig de um código global (sem cookie de visitante), já que este app não tem conceito de "dono" por sessão.
+---

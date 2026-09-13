@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Chip,
+  CopyButton,
   DataTable,
   Empty,
   Entregar,
@@ -27,6 +28,7 @@ import {
 import { AcoesResposta, Celular, horaAtual, type AoSalvarBase, type BolhaChat } from "@/components/Celular";
 import type { Meta } from "@/lib/ai";
 import type { ParBase } from "@/lib/base";
+import type { Sugestao } from "@/lib/sugestoes";
 import type { CanalOrigem, Config, Conversa, ItemRelatorioAtendimento } from "@/lib/types";
 
 const CONFIG_VAZIA: Config = { negocio: "", atendente: "", tom: "cordial", horario: "", baseConhecimento: "", naoSei: "humano" };
@@ -69,6 +71,10 @@ export default function Page() {
   const [estadoConversas, setEstadoConversas] = useState<EstadoConversas>({ fase: "carregando" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const [base, setBase] = useState<ParBase[] | null>(null);
+  const [sugestoesCodigo, setSugestoesCodigo] = useState<string | null | undefined>(undefined);
+  const [sugestoes, setSugestoes] = useState<Sugestao[] | null>(null);
+  const [criandoLinkSugestoes, setCriandoLinkSugestoes] = useState(false);
+  const [tratandoSugestao, setTratandoSugestao] = useState<string | null>(null);
   const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
   const [relatorioId, setRelatorioId] = useState<string | null | undefined>(undefined);
   const [criandoRelatorio, setCriandoRelatorio] = useState(false);
@@ -99,6 +105,16 @@ export default function Page() {
     if (new URLSearchParams(location.search).get("exemplo") !== "1") carregarConversas();
     fetch("/api/simular").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
     fetch("/api/base").then((r) => r.json()).then((r) => setBase(r.itens)).catch(() => setBase([]));
+    fetch("/api/sugestoes")
+      .then((r) => r.json())
+      .then((d) => {
+        setSugestoesCodigo(d.codigo ?? null);
+        setSugestoes(d.itens || []);
+      })
+      .catch(() => {
+        setSugestoesCodigo(null);
+        setSugestoes([]);
+      });
 
     const numero = new URLSearchParams(location.search).get("atender");
     if (numero) {
@@ -162,6 +178,41 @@ export default function Page() {
       })
       .catch(() => {});
   };
+
+  async function criarLinkSugestoes() {
+    setCriandoLinkSugestoes(true);
+    try {
+      const r = await fetch("/api/sugestoes", { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Não foi possível criar o link.");
+      setSugestoesCodigo(d.codigo);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar o link.");
+    } finally {
+      setCriandoLinkSugestoes(false);
+    }
+  }
+
+  async function tratarSugestao(id: string, acao: "aprovar" | "descartar") {
+    setTratandoSugestao(id);
+    try {
+      const r = await fetch("/api/sugestoes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, acao }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Não foi possível concluir a ação.");
+      setSugestoes(d.itens);
+      if (acao === "aprovar") {
+        fetch("/api/base").then((r2) => r2.json()).then((r2) => setBase(r2.itens)).catch(() => {});
+      }
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível concluir a ação.");
+    } finally {
+      setTratandoSugestao(null);
+    }
+  }
 
   function apagarHistorico() {
     if (!window.confirm("Apagar todos os resultados salvos? Essa ação não pode ser desfeita.")) return;
@@ -345,6 +396,47 @@ export default function Page() {
                   <li key={i} className="border-b border-line pb-2.5 last:border-0 last:pb-0">
                     <p className="font-semibold">{p.pergunta}</p>
                     <p className="text-muted">{p.resposta}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </MaisDetalhes>
+
+          <MaisDetalhes titulo="Sugestões da equipe">
+            {sugestoesCodigo === undefined ? (
+              <p className="text-muted text-sm mb-3.5">Carregando...</p>
+            ) : sugestoesCodigo ? (
+              <div className="card p-3.5 mb-3.5 flex items-center gap-2 flex-wrap">
+                <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[200px]">{`${location.origin}/f/${sugestoesCodigo}`}</code>
+                <CopyButton texto={() => `${location.origin}/f/${sugestoesCodigo}`} rotulo="Copiar link do formulário" />
+              </div>
+            ) : (
+              <button type="button" className="btn-ghost mb-3.5" onClick={criarLinkSugestoes} disabled={criandoLinkSugestoes}>
+                {criandoLinkSugestoes ? "Criando..." : "Alimentar a base por formulário"}
+              </button>
+            )}
+
+            {sugestoes === null ? (
+              <p className="text-muted text-sm">Carregando...</p>
+            ) : sugestoes.length === 0 ? (
+              <p className="text-muted text-sm">
+                Nenhuma sugestão recebida ainda. Compartilhe o link acima com a equipe para receber perguntas e respostas.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2.5 text-sm">
+                {sugestoes.map((s) => (
+                  <li key={s.id} className="border-b border-line pb-2.5 last:border-0 last:pb-0">
+                    <p className="font-semibold">{s.pergunta}</p>
+                    <p className="text-muted">{s.resposta}</p>
+                    {s.categoria && <p className="text-muted text-[12.5px] mt-0.5">Categoria: {s.categoria}</p>}
+                    <div className="flex gap-2 mt-2">
+                      <button type="button" className="btn-ghost" onClick={() => tratarSugestao(s.id, "aprovar")} disabled={tratandoSugestao === s.id}>
+                        Aprovar
+                      </button>
+                      <button type="button" className="btn-ghost" onClick={() => tratarSugestao(s.id, "descartar")} disabled={tratandoSugestao === s.id}>
+                        Descartar
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
