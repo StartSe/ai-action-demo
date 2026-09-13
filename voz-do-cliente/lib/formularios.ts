@@ -32,8 +32,10 @@ function abrir(): DatabaseSync {
   return db;
 }
 
-/** Um campo declarado pelo app: chave usada em `dados`, rótulo exibido e o tipo de controle na tela pública. */
-export type CampoFormulario = { chave: string; rotulo: string; tipo: "texto" | "textarea"; obrigatorio?: boolean };
+/** Um campo declarado pelo app: chave usada em `dados`, rótulo exibido e o tipo de controle na tela pública.
+ * "arquivo" lê o conteúdo do arquivo escolhido como texto (ex.: CSV) e guarda em `dados` como qualquer outro campo;
+ * `aceitar` vira o atributo `accept` do seletor de arquivo. */
+export type CampoFormulario = { chave: string; rotulo: string; tipo: "texto" | "textarea" | "arquivo"; obrigatorio?: boolean; aceitar?: string };
 
 /** Dados exibidos pela tela pública genérica (app/f/[token]/page.tsx), guardados dentro de `parametros`. */
 export type ParametrosPublicos = { marca: string; nome: string; titulo: string; descricao?: string };

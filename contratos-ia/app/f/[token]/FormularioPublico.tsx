@@ -10,11 +10,19 @@ type Fase = "preenchendo" | "enviando" | "enviado" | "erro";
 
 export function FormularioPublico({ token, marca, nome, titulo, descricao, campos }: Props) {
   const [dados, setDados] = useState<Record<string, string>>(() => Object.fromEntries(campos.map((c) => [c.chave, ""])));
+  const [nomesArquivo, setNomesArquivo] = useState<Record<string, string>>({});
   const [armadilha, setArmadilha] = useState("");
   const [fase, setFase] = useState<Fase>("preenchendo");
   const [mensagemErro, setMensagemErro] = useState("");
 
   const set = (chave: string) => (e: { target: { value: string } }) => setDados((d) => ({ ...d, [chave]: e.target.value }));
+
+  async function setArquivo(chave: string, arquivo: File | null) {
+    if (!arquivo) return;
+    const texto = await arquivo.text();
+    setDados((d) => ({ ...d, [chave]: texto }));
+    setNomesArquivo((n) => ({ ...n, [chave]: arquivo.name }));
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -57,7 +65,19 @@ export function FormularioPublico({ token, marca, nome, titulo, descricao, campo
             {campos.map((campo) => (
               <div className="flex flex-col gap-1.5 mb-4" key={campo.chave}>
                 <label htmlFor={campo.chave} className="text-[13px] font-semibold">{campo.rotulo}{!campo.obrigatorio && " (opcional)"}</label>
-                {campo.tipo === "textarea" ? (
+                {campo.tipo === "arquivo" ? (
+                  <>
+                    <input
+                      id={campo.chave}
+                      type="file"
+                      className="input"
+                      accept={campo.aceitar}
+                      required={campo.obrigatorio}
+                      onChange={(e) => setArquivo(campo.chave, e.target.files?.[0] ?? null)}
+                    />
+                    {nomesArquivo[campo.chave] && <p className="text-muted text-[12.5px]">Arquivo selecionado: {nomesArquivo[campo.chave]}</p>}
+                  </>
+                ) : campo.tipo === "textarea" ? (
                   <textarea id={campo.chave} className="input min-h-24 resize-y" required={campo.obrigatorio} maxLength={4000} value={dados[campo.chave]} onChange={set(campo.chave)} />
                 ) : (
                   <input id={campo.chave} className="input" required={campo.obrigatorio} maxLength={4000} value={dados[campo.chave]} onChange={set(campo.chave)} />

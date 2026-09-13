@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   Chip,
+  CopyButton,
   DataTable,
   Destaque,
   Dropzone,
@@ -405,8 +406,119 @@ export function Resultado({
 
       <ConteudoFinancas resumo={resumo} insights={insights} />
 
+      <AutomatizarProximosMeses />
+
       {amostra && <SecaoPerguntar resumo={resumo} insights={insights} amostra={amostra} />}
     </article>
+  );
+}
+
+type EstadoNotificacoes = { configurada: boolean; canal: "email" | "slack"; destino: string };
+
+/** Depois de uma leitura salva, oferece automatizar os próximos meses: uma rotina que entrega o resumo
+ * todo dia 1 às 8h e um link permanente para enviar a próxima planilha sem abrir o app. */
+function AutomatizarProximosMeses() {
+  const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
+  const [rotinaId, setRotinaId] = useState<string | null | undefined>(undefined);
+  const [criandoRotina, setCriandoRotina] = useState(false);
+  const [linkCodigo, setLinkCodigo] = useState<string | null | undefined>(undefined);
+  const [criandoLink, setCriandoLink] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/setup")
+      .then((r) => r.json())
+      .then((d) => {
+        const integracao = (d.integracoes || []).find((i: { id: string }) => i.id === "notificacoes");
+        const campos: { chave: string; valorVisivel?: string }[] = integracao?.campos || [];
+        const canal = campos.find((c) => c.chave === "NOTIFICACOES_CANAL")?.valorVisivel === "slack" ? "slack" : "email";
+        const destino = campos.find((c) => c.chave === "NOTIFICACOES_DESTINO")?.valorVisivel || "";
+        setNotificacoes({ configurada: Boolean(integracao?.configurada), canal, destino });
+      })
+      .catch(() => setNotificacoes({ configurada: false, canal: "email", destino: "" }));
+    fetch("/api/rotinas")
+      .then((r) => r.json())
+      .then((d) => setRotinaId((d.itens || []).find((i: { tipo: string }) => i.tipo === "resumo-mensal")?.id ?? null))
+      .catch(() => setRotinaId(null));
+    fetch("/api/planilha-mensal")
+      .then((r) => r.json())
+      .then((d) => setLinkCodigo(d.codigo ?? null))
+      .catch(() => setLinkCodigo(null));
+  }, []);
+
+  async function criarRotina() {
+    if (!notificacoes?.configurada) return;
+    setCriandoRotina(true);
+    try {
+      const r = await fetch("/api/rotinas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "resumo-mensal",
+          frequencia: "mensal",
+          diaMes: 1,
+          hora: "08:00",
+          canal: notificacoes.canal,
+          destino: notificacoes.canal === "email" ? notificacoes.destino || undefined : undefined,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Não foi possível criar a rotina.");
+      setRotinaId(d.id);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar a rotina.");
+    } finally {
+      setCriandoRotina(false);
+    }
+  }
+
+  async function criarLinkPlanilha() {
+    setCriandoLink(true);
+    try {
+      const r = await fetch("/api/planilha-mensal", { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Não foi possível criar o link.");
+      setLinkCodigo(d.codigo);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar o link.");
+    } finally {
+      setCriandoLink(false);
+    }
+  }
+
+  return (
+    <Section titulo="Automatize os próximos meses">
+      <div className="card shadow-none p-4 flex flex-col gap-5">
+        <div>
+          {rotinaId === undefined || notificacoes === null ? null : rotinaId ? (
+            <p className="text-muted text-sm">Você já recebe o resumo todo mês, no dia 1 às 8h.</p>
+          ) : notificacoes.configurada ? (
+            <button type="button" className="btn-ghost" onClick={criarRotina} disabled={criandoRotina}>
+              {criandoRotina ? "Criando..." : "Receber o resumo todo mês"}
+            </button>
+          ) : (
+            <a href="/setup#notificacoes" className="btn-ghost">Receber o resumo todo mês</a>
+          )}
+        </div>
+
+        <div>
+          <p className="text-muted text-[13px] mb-2.5 max-w-[520px]">
+            Envie este link para quem cuida da planilha: qualquer CSV enviado por ele vira o próximo resumo mensal. O arquivo é processado na hora e descartado — só os totais ficam guardados.
+          </p>
+          {linkCodigo === undefined ? null : linkCodigo ? (
+            <div className="flex items-center gap-3 flex-wrap">
+              <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[220px]">
+                {typeof window !== "undefined" ? `${window.location.origin}/f/${linkCodigo}` : `/f/${linkCodigo}`}
+              </code>
+              <CopyButton texto={() => `${window.location.origin}/f/${linkCodigo}`} rotulo="Copiar" />
+            </div>
+          ) : (
+            <button type="button" className="btn-ghost" onClick={criarLinkPlanilha} disabled={criandoLink}>
+              {criandoLink ? "Criando..." : "Enviar a planilha do mês por link"}
+            </button>
+          )}
+        </div>
+      </div>
+    </Section>
   );
 }
 

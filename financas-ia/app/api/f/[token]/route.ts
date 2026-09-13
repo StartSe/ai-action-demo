@@ -1,10 +1,16 @@
 // Recebe a resposta de um formulário público (app/f/[token]) e chama o callback que o app registrou
 // para esse tipo (lib/formularios.ts: registrarCallback/obterCallback), que pode gerar um resultado.
 // Ao contrário de lib/formularios.ts e app/f/[token]/page.tsx, este arquivo NÃO é copiado sem alterar:
-// cada app pode precisar importar seu próprio módulo (ex.: lib/pdi.ts) para garantir que o callback
-// já esteja registrado quando a rota carrega. Nenhum callback foi registrado ainda neste app.
+// cada app pode precisar importar seu próprio módulo para garantir que o callback já esteja
+// registrado quando a rota carrega — aqui, lib/csv-mensal.ts (US-066).
 import { NextResponse } from "next/server";
+import "@/lib/csv-mensal";
 import { obter, obterCallback, responder } from "@/lib/formularios";
+
+// Campos comuns (texto/textarea) ficam limitados a 4000 caracteres; um campo "arquivo" (ex.: CSV da
+// planilha mensal) precisa de bem mais espaço.
+const LIMITE_TEXTO = 4000;
+const LIMITE_ARQUIVO = 2_000_000;
 
 export async function POST(request: Request, { params }: RouteContext<"/api/f/[token]">) {
   const { token } = await params;
@@ -24,7 +30,7 @@ export async function POST(request: Request, { params }: RouteContext<"/api/f/[t
   const dados: Record<string, string> = {};
   for (const campo of formulario.campos) {
     const bruto = typeof body?.dados?.[campo.chave] === "string" ? body.dados[campo.chave] : "";
-    const valor = bruto.slice(0, 4000).trim();
+    const valor = bruto.slice(0, campo.tipo === "arquivo" ? LIMITE_ARQUIVO : LIMITE_TEXTO).trim();
     if (campo.obrigatorio && !valor) {
       return NextResponse.json({ error: `Preencha "${campo.rotulo}".` }, { status: 400, headers: { "Cache-Control": "no-store" } });
     }
