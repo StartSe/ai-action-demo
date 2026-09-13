@@ -1,6 +1,7 @@
 // Tipos e utilitários do setup inicial. Compartilhado por toda a suíte: copie sem alterar.
 // A lista de integrações de cada app fica em lib/integracoes.ts.
 import { getConfig, mascarar, origemConfig } from "./store";
+import { enviar, type Canal } from "./notificacoes";
 
 export type Opcao = { valor: string; rotulo: string };
 
@@ -110,5 +111,33 @@ export const OPENROUTER: Integracao = {
     const data = (await r.json()) as { data?: { label?: string; limit?: number | null; usage?: number } };
     const uso = data.data?.usage != null ? ` Uso até agora: US$ ${Number(data.data.usage).toFixed(2)}.` : "";
     return { ok: true, mensagem: `Conectado.${uso} Modelo: ${config.OPENROUTER_MODEL || "padrão gratuito"}.` };
+  },
+};
+
+/** Por onde o app avisa você quando um formulário chega ou uma rotina roda. */
+export const NOTIFICACOES: Integracao = {
+  id: "notificacoes",
+  titulo: "Notificações",
+  descricao: "Escolha por onde o app avisa você quando um formulário público chega ou uma rotina roda: e-mail ou Slack.",
+  obrigatoria: false,
+  link: { url: "https://resend.com/api-keys", rotulo: "Criar uma chave gratuita do Resend" },
+  campos: [
+    { chave: "NOTIFICACOES_CANAL", rotulo: "Canal", tipo: "select", padrao: "email", opcoes: [{ valor: "email", rotulo: "E-mail" }, { valor: "slack", rotulo: "Slack" }] },
+    { chave: "NOTIFICACOES_DESTINO", rotulo: "Destino", tipo: "text", opcional: true, placeholder: "voce@empresa.com", ajuda: "Para e-mail, o endereço que recebe. Para Slack, opcional (sobrepõe o canal padrão do webhook)." },
+    { chave: "NOTIFICACOES_RESEND_API_KEY", rotulo: "Chave do Resend", tipo: "secret", opcional: true, placeholder: "re_...", ajuda: "Para enviar e-mail sem servidor próprio. Alternativa: preencha os dados de SMTP abaixo." },
+    { chave: "NOTIFICACOES_SMTP_HOST", rotulo: "Servidor SMTP", tipo: "text", opcional: true, placeholder: "smtp.seudominio.com" },
+    { chave: "NOTIFICACOES_SMTP_PORTA", rotulo: "Porta SMTP", tipo: "text", opcional: true, placeholder: "587" },
+    { chave: "NOTIFICACOES_SMTP_USUARIO", rotulo: "Usuário SMTP", tipo: "text", opcional: true },
+    { chave: "NOTIFICACOES_SMTP_SENHA", rotulo: "Senha SMTP", tipo: "secret", opcional: true },
+    { chave: "NOTIFICACOES_SLACK_WEBHOOK", rotulo: "URL do webhook de entrada do Slack", tipo: "secret", opcional: true, placeholder: "https://hooks.slack.com/services/..." },
+  ],
+  testar: async (config) => {
+    const canal = (config.NOTIFICACOES_CANAL as Canal | undefined) || "email";
+    return enviar({
+      canal,
+      destino: config.NOTIFICACOES_DESTINO,
+      titulo: "Mensagem de teste",
+      texto: "Se você recebeu isto, as notificações deste app estão prontas para uso.",
+    });
   },
 };

@@ -837,7 +837,7 @@
         "Verify in browser using dev-browser skill: cartão do setup"
       ],
       "priority": 53,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
