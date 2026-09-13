@@ -19,6 +19,8 @@ const ETAPAS_CARREGANDO = ["Abrindo o quadro...", "Organizando as colunas...", "
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
 
+type EstadoNotificacoes = { configurada: boolean; canal: "email" | "slack"; destino: string };
+
 function novoId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 }
@@ -67,6 +69,9 @@ export default function Page() {
   const [planoPendente, setPlanoPendente] = useState<{ mensagem: string; historico: HistoricoItem[]; itens: Acao[] } | null>(null);
   const [desfazerPendente, setDesfazerPendente] = useState<Desfazer | null>(null);
   const [desfazendo, setDesfazendo] = useState(false);
+  const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
+  const [resumoMatinalId, setResumoMatinalId] = useState<string | null | undefined>(undefined);
+  const [criandoResumoMatinal, setCriandoResumoMatinal] = useState(false);
   const autoEnviado = useRef(false);
   const primeiraCarga = useRef(true);
   const desfazerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -116,6 +121,48 @@ export default function Page() {
   useEffect(() => {
     fetch("/api/agente").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
   }, []);
+
+  useEffect(() => {
+    fetch("/api/setup")
+      .then((r) => r.json())
+      .then((d) => {
+        const notificacoesIntegracao = (d.integracoes || []).find((i: { id: string }) => i.id === "notificacoes");
+        const campos: { chave: string; valorVisivel?: string }[] = notificacoesIntegracao?.campos || [];
+        const canal = campos.find((c) => c.chave === "NOTIFICACOES_CANAL")?.valorVisivel === "slack" ? "slack" : "email";
+        const destino = campos.find((c) => c.chave === "NOTIFICACOES_DESTINO")?.valorVisivel || "";
+        setNotificacoes({ configurada: Boolean(notificacoesIntegracao?.configurada), canal, destino });
+      })
+      .catch(() => setNotificacoes({ configurada: false, canal: "email", destino: "" }));
+    fetch("/api/rotinas")
+      .then((r) => r.json())
+      .then((d) => setResumoMatinalId((d.itens || []).find((i: { tipo: string }) => i.tipo === "resumo-quadro")?.id ?? null))
+      .catch(() => setResumoMatinalId(null));
+  }, []);
+
+  async function criarResumoMatinal() {
+    if (!notificacoes?.configurada) return;
+    setCriandoResumoMatinal(true);
+    try {
+      const r = await fetch("/api/rotinas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "resumo-quadro",
+          frequencia: "diaria",
+          hora: "08:00",
+          canal: notificacoes.canal,
+          destino: notificacoes.canal === "email" ? notificacoes.destino || undefined : undefined,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Não foi possível criar a rotina.");
+      setResumoMatinalId(d.id);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar a rotina.");
+    } finally {
+      setCriandoResumoMatinal(false);
+    }
+  }
 
   function apagarHistorico() {
     if (!window.confirm("Apagar todos os resultados salvos? Essa ação não pode ser desfeita.")) return;
@@ -287,6 +334,16 @@ export default function Page() {
             <button type="button" className="btn-ghost mt-3.5" onClick={reiniciarQuadro} disabled={reiniciando}>
               {reiniciando ? "Reiniciando..." : "Reiniciar quadro de exemplo"}
             </button>
+          )}
+
+          {resumoMatinalId === undefined || notificacoes === null ? null : resumoMatinalId ? (
+            <p className="text-muted text-sm mt-3.5">Você já recebe um resumo do quadro toda manhã, às 8h.</p>
+          ) : notificacoes.configurada ? (
+            <button type="button" className="btn-ghost mt-3.5" onClick={criarResumoMatinal} disabled={criandoResumoMatinal}>
+              {criandoResumoMatinal ? "Criando..." : "Receber um resumo do quadro toda manhã"}
+            </button>
+          ) : (
+            <a href="/setup#notificacoes" className="btn-ghost mt-3.5">Receber um resumo do quadro toda manhã</a>
           )}
 
           <MaisDetalhes titulo="Últimos resultados">

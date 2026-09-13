@@ -22,6 +22,13 @@ const LISTAS_INICIAIS: Lista[] = [
   { id: "lista-concluido", nome: "Concluído" },
 ];
 
+/** ISO de N dias atrás, usado para o cartão de exemplo já nascer com uma antiguidade plausível (relativo a "agora", nunca uma data fixa que envelheceria). */
+function diasAtras(dias: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - dias);
+  return d.toISOString();
+}
+
 function cartoesIniciais(): CartaoInterno[] {
   return [
     {
@@ -31,6 +38,7 @@ function cartoesIniciais(): CartaoInterno[] {
       listaId: "lista-a-fazer",
       responsavel: "Camila Duarte",
       vencimento: "2026-09-18",
+      atualizadoEm: diasAtras(2),
       arquivado: false,
       comentarios: [],
     },
@@ -41,6 +49,7 @@ function cartoesIniciais(): CartaoInterno[] {
       listaId: "lista-a-fazer",
       responsavel: "Camila Duarte",
       vencimento: "2026-09-22",
+      atualizadoEm: diasAtras(1),
       arquivado: false,
       comentarios: [],
     },
@@ -51,6 +60,7 @@ function cartoesIniciais(): CartaoInterno[] {
       listaId: "lista-a-fazer",
       responsavel: "Juliana Alves",
       vencimento: "2026-09-25",
+      atualizadoEm: diasAtras(7),
       arquivado: false,
       comentarios: [],
     },
@@ -61,6 +71,7 @@ function cartoesIniciais(): CartaoInterno[] {
       listaId: "lista-em-andamento",
       responsavel: "Rafael Ribeiro",
       vencimento: "2026-09-15",
+      atualizadoEm: diasAtras(6),
       arquivado: false,
       comentarios: [],
     },
@@ -71,6 +82,7 @@ function cartoesIniciais(): CartaoInterno[] {
       listaId: "lista-em-andamento",
       responsavel: "Juliana Alves",
       vencimento: "2026-09-20",
+      atualizadoEm: diasAtras(3),
       arquivado: false,
       comentarios: [],
     },
@@ -81,6 +93,7 @@ function cartoesIniciais(): CartaoInterno[] {
       listaId: "lista-em-andamento",
       responsavel: "Camila Duarte",
       vencimento: "2026-09-30",
+      atualizadoEm: diasAtras(1),
       arquivado: false,
       comentarios: [],
     },
@@ -91,6 +104,7 @@ function cartoesIniciais(): CartaoInterno[] {
       listaId: "lista-concluido",
       responsavel: "Juliana Alves",
       vencimento: "2026-09-01",
+      atualizadoEm: diasAtras(10),
       arquivado: false,
       comentarios: [],
     },
@@ -118,7 +132,16 @@ export function reiniciarQuadroDemo(visitanteId: string): void {
 }
 
 function cartaoPublico(c: CartaoInterno): Cartao {
-  return { id: c.id, nome: c.nome, descricao: c.descricao || "", responsavel: c.responsavel || "", vencimento: c.vencimento || null };
+  return { id: c.id, nome: c.nome, descricao: c.descricao || "", responsavel: c.responsavel || "", vencimento: c.vencimento || null, atualizadoEm: c.atualizadoEm };
+}
+
+/** Quadro de exemplo fixo (mesmos cartões iniciais), sem vínculo com nenhum visitante — usado por tarefas
+ * em segundo plano sem cookies de sessão (ex.: a rotina "resumo-quadro" quando o Trello não está conectado). */
+export function quadroExemploFixo(): Quadro {
+  const cartoes = cartoesIniciais();
+  return {
+    listas: LISTAS_INICIAIS.map((l) => ({ ...l, cartoes: cartoes.filter((c) => c.listaId === l.id).map(cartaoPublico) })),
+  };
 }
 
 /** Um ProvedorQuadro que opera só o quadro em memória deste visitante. */
@@ -152,6 +175,7 @@ export function quadroDemoPara(visitanteId: string): ProvedorQuadro {
       listaId: lista.id,
       responsavel: "",
       vencimento: vencimento || null,
+      atualizadoEm: new Date().toISOString(),
       arquivado: false,
       comentarios: [],
     };
@@ -166,6 +190,7 @@ export function quadroDemoPara(visitanteId: string): ProvedorQuadro {
     const lista = estado.listas.find((l) => l.id === listaId);
     if (!lista) throw new Error("Lista não encontrada.");
     cartao.listaId = lista.id;
+    cartao.atualizadoEm = new Date().toISOString();
     return cartaoPublico(cartao);
   }
 

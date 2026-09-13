@@ -50,6 +50,7 @@ interface CartaoTrello {
   idList: string;
   due?: string | null;
   idMembers?: string[];
+  dateLastActivity?: string;
 }
 
 interface MembroTrello {
@@ -77,7 +78,7 @@ async function listarListas(): Promise<Lista[]> {
 
 async function listarCartoesComLista(): Promise<(Cartao & { listaId: string })[]> {
   const [cartoes, membros] = await Promise.all([
-    chamar<CartaoTrello[]>("GET", `/boards/${boardId()}/cards`, { fields: "name,desc,idList,due,idMembers", filter: "open" }),
+    chamar<CartaoTrello[]>("GET", `/boards/${boardId()}/cards`, { fields: "name,desc,idList,due,idMembers,dateLastActivity", filter: "open" }),
     mapaMembros(),
   ]);
   return (cartoes || []).map((c) => ({
@@ -87,11 +88,15 @@ async function listarCartoesComLista(): Promise<(Cartao & { listaId: string })[]
     listaId: c.idList,
     responsavel: (c.idMembers || []).map((id) => membros[id]).filter(Boolean).join(", "),
     vencimento: c.due ? c.due.slice(0, 10) : null,
+    // Trello não expõe "quando o cartão entrou na lista atual" sem consultar o histórico de ações
+    // (chamada extra por cartão); dateLastActivity (qualquer atividade: edição, comentário, mover...)
+    // é a aproximação usada aqui para "cartão parado" (ver lib/rotinas-do-app.ts).
+    atualizadoEm: c.dateLastActivity || new Date().toISOString(),
   }));
 }
 
 function semLista(c: Cartao & { listaId: string }): Cartao {
-  return { id: c.id, nome: c.nome, descricao: c.descricao, responsavel: c.responsavel, vencimento: c.vencimento };
+  return { id: c.id, nome: c.nome, descricao: c.descricao, responsavel: c.responsavel, vencimento: c.vencimento, atualizadoEm: c.atualizadoEm };
 }
 
 async function listarCartoes(): Promise<Cartao[]> {
@@ -117,13 +122,13 @@ async function criarCartao({ nome, descricao = "", listaId, vencimento = null }:
     due: vencimento || undefined,
   });
   if (!cartao) throw new Error("O Trello não retornou o cartão criado.");
-  return { id: cartao.id, nome: cartao.name, descricao: cartao.desc || "", responsavel: "", vencimento: cartao.due ? cartao.due.slice(0, 10) : null };
+  return { id: cartao.id, nome: cartao.name, descricao: cartao.desc || "", responsavel: "", vencimento: cartao.due ? cartao.due.slice(0, 10) : null, atualizadoEm: cartao.dateLastActivity || new Date().toISOString() };
 }
 
 async function moverCartao({ cartaoId, listaId }: { cartaoId: string; listaId: string }): Promise<Cartao> {
   const cartao = await chamar<CartaoTrello>("PUT", `/cards/${cartaoId}`, { idList: listaId });
   if (!cartao) throw new Error("O Trello não retornou o cartão movido.");
-  return { id: cartao.id, nome: cartao.name, descricao: cartao.desc || "", responsavel: "", vencimento: cartao.due ? cartao.due.slice(0, 10) : null };
+  return { id: cartao.id, nome: cartao.name, descricao: cartao.desc || "", responsavel: "", vencimento: cartao.due ? cartao.due.slice(0, 10) : null, atualizadoEm: cartao.dateLastActivity || new Date().toISOString() };
 }
 
 // Encontra o membro do quadro cujo nome (completo ou de usuário) mais se aproxima do texto informado.
@@ -148,7 +153,7 @@ async function atribuir({ cartaoId, responsavel }: { cartaoId: string; responsav
   if (!cartao) throw new Error("O Trello não retornou o cartão atualizado.");
   const membros = await mapaMembros();
   const nomesResponsaveis = (cartao.idMembers || []).map((id) => membros[id]).filter(Boolean).join(", ");
-  return { id: cartao.id, nome: cartao.name, descricao: cartao.desc || "", responsavel: nomesResponsaveis, vencimento: cartao.due ? cartao.due.slice(0, 10) : null };
+  return { id: cartao.id, nome: cartao.name, descricao: cartao.desc || "", responsavel: nomesResponsaveis, vencimento: cartao.due ? cartao.due.slice(0, 10) : null, atualizadoEm: cartao.dateLastActivity || new Date().toISOString() };
 }
 
 async function comentar({ cartaoId, texto }: { cartaoId: string; texto: string }): Promise<{ ok: true; comentarioId: string }> {

@@ -15,6 +15,8 @@ export interface Cartao {
   descricao: string;
   responsavel: string;
   vencimento: string | null;
+  /** Data/hora (ISO) da última atualização do cartão (criação, mudança de lista...); usada para detectar cartões "parados". */
+  atualizadoEm: string;
 }
 
 export interface ListaComCartoes extends Lista {
