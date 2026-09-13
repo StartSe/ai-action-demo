@@ -1238,7 +1238,7 @@
         "Verify in browser using dev-browser skill: site/index.html servido localmente em desktop e celular, modo claro e escuro"
       ],
       "priority": 80,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

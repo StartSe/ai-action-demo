@@ -71,6 +71,11 @@
     border-radius: 14px; padding: 24px 24px 20px; display: flex; flex-direction: column; gap: 14px;
   }
   .card[hidden] { display: none; }
+  .previa { position: relative; aspect-ratio: 16 / 10; border-radius: 10px; overflow: hidden; background: var(--realce); display: flex; align-items: center; justify-content: center; }
+  .previa svg { width: 30%; height: 30%; color: var(--suave); opacity: .55; }
+  .previa img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+  .previa.tem-imagem svg { display: none; }
+  .previa.tem-imagem img { display: block; }
   .areas { display: flex; flex-wrap: wrap; gap: 6px; }
   .area { font-size: .82rem; font-weight: 600; color: var(--suave); background: var(--realce); padding: 3px 10px; border-radius: 999px; }
   .card h2 { font-size: 1.45rem; line-height: 1.15; letter-spacing: -0.015em; margin: 0; font-weight: 800; }
@@ -79,6 +84,11 @@
   dl div { display: grid; grid-template-columns: 7.5rem 1fr; gap: 10px; }
   dt { color: var(--suave); font-size: .92rem; }
   dd { margin: 0; font-size: .95rem; }
+  .capacidades { display: grid; gap: 8px; }
+  .capacidades p { margin: 0; font-size: .82rem; font-weight: 700; color: var(--suave); text-transform: uppercase; letter-spacing: .02em; }
+  .capacidades ul { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
+  .capacidades li { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; font-weight: 600; background: var(--realce); padding: 5px 10px; border-radius: 999px; }
+  .capacidades svg { width: 15px; height: 15px; flex: none; color: var(--acento); }
   .acoes { display: flex; flex-direction: column; gap: 10px; margin-top: auto; padding-top: 10px; }
   .dica { margin: 0; color: var(--suave); font-size: .88rem; text-align: center; }
 
@@ -201,6 +211,10 @@
 
 <template id="modeloCard">
   <article class="card">
+    <div class="previa">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M3 15l4.5-4 4 3 4-5L21 13"/><path d="M8 21h8"/></svg>
+      <img alt="" loading="lazy">
+    </div>
     <div class="areas"></div>
     <h2></h2>
     <p class="problema"></p>
@@ -208,6 +222,10 @@
       <div><dt>O que a IA faz</dt><dd class="ia"></dd></div>
       <div><dt>Conecta com</dt><dd class="integracoes"></dd></div>
     </dl>
+    <div class="capacidades" hidden>
+      <p>O que ele faz sozinho</p>
+      <ul></ul>
+    </div>
     <div class="acoes">
       <a class="btn btn-largo publicar" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
@@ -246,12 +264,26 @@
   $("#publicarSuite").href = dados.publicarSuite;
   document.title = dados.titulo;
 
+  const CAPACIDADES = {
+    artefato: { rotulo: "Leva o resultado pra fora (PDF, link, e-mail)", icone: '<path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 21h14"/>' },
+    mcp: { rotulo: "Funciona dentro do seu assistente de IA", icone: '<rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M9 3v2M15 3v2M9 19v2M15 19v2M3 9h2M3 15h2M19 9h2M19 15h2"/>' },
+    formulario: { rotulo: "Coleta respostas por um link", icone: '<path d="M8 4h6l3 3v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M9.5 12h5M9.5 15.5h5"/>' },
+    rotina: { rotulo: "Roda sozinho, num horário", icone: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>' },
+  };
+
   const grade = $("#apps");
   const modelo = $("#modeloCard");
   for (const app of dados.apps) {
     const el = modelo.content.firstElementChild.cloneNode(true);
     el.style.setProperty("--acento", app.acento);
     el.dataset.areas = app.areas.join("|");
+    const previa = $(".previa", el);
+    const img = $("img", previa);
+    img.alt = `Prévia da tela principal de ${app.nome}`;
+    if (app.captura) {
+      img.addEventListener("load", () => previa.classList.add("tem-imagem"));
+      img.src = app.captura;
+    }
     $(".areas", el).innerHTML = app.areas.map((a) => `<span class="area">${a}</span>`).join("");
     $("h2", el).textContent = app.nome;
     $(".problema", el).textContent = app.problema;
@@ -260,6 +292,14 @@
     $(".publicar", el).href = app.publicar;
     $(".publicar", el).setAttribute("aria-label", `Publicar ${app.nome}`);
     if (app.demo) { const d = $(".demo", el); d.href = app.demo; d.hidden = false; }
+    const capacidades = (app.capacidades || []).map((c) => CAPACIDADES[c]).filter(Boolean);
+    if (capacidades.length) {
+      const bloco = $(".capacidades", el);
+      bloco.hidden = false;
+      $("ul", bloco).innerHTML = capacidades
+        .map((c) => `<li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${c.icone}</svg>${c.rotulo}</li>`)
+        .join("");
+    }
     $("code", el).textContent = app.docker;
     $(".depois", el).textContent = `Depois abra http://localhost:${app.porta} e, para conectar a IA, http://localhost:${app.porta}/setup.`;
     $(".copiar", el).addEventListener("click", async (ev) => {

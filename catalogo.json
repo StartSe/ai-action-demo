@@ -17,6 +17,8 @@
       "integracoes": "Só a IA (OpenRouter).",
       "acento": "#2b5d8c",
       "porta": 3001,
+      "captura": "capturas/pdi-time.png",
+      "capacidades": ["artefato", "mcp", "formulario", "rotina"],
       "demo": null
     },
     {
@@ -31,6 +33,8 @@
       "integracoes": "Trello (chave e token). Adaptável a Jira, Notion ou monday.",
       "acento": "#1f5f5b",
       "porta": 3002,
+      "captura": "capturas/agente-kanban.png",
+      "capacidades": ["artefato", "mcp", "formulario", "rotina"],
       "demo": null
     },
     {
@@ -44,6 +48,8 @@
       "integracoes": "ElevenLabs (voz e ligação por agente conversacional).",
       "acento": "#5b3f9e",
       "porta": 3003,
+      "captura": "capturas/entrevista-ia.png",
+      "capacidades": ["artefato", "mcp", "formulario"],
       "demo": null
     },
     {
@@ -57,6 +63,8 @@
       "integracoes": "OpenAI Images para a imagem (trocável).",
       "acento": "#7a2e8e",
       "porta": 3004,
+      "captura": "capturas/posts-sociais.png",
+      "capacidades": ["artefato", "mcp", "formulario", "rotina"],
       "demo": null
     },
     {
@@ -70,6 +78,8 @@
       "integracoes": "Apollo (busca) e Bright Data (enriquecimento).",
       "acento": "#0f4c81",
       "porta": 3005,
+      "captura": "capturas/prospeccao-ia.png",
+      "capacidades": ["artefato", "mcp", "rotina"],
       "demo": null
     },
     {
@@ -84,6 +94,8 @@
       "integracoes": "WhatsApp Cloud API (Meta) via webhook.",
       "acento": "#128c7e",
       "porta": 3006,
+      "captura": "capturas/whatsapp-atendente.png",
+      "capacidades": ["artefato", "mcp", "formulario", "rotina"],
       "demo": null
     },
     {
@@ -97,6 +109,8 @@
       "integracoes": "Só a IA (texto extraído do PDF no servidor).",
       "acento": "#3b3f8f",
       "porta": 3007,
+      "captura": "capturas/contratos-ia.png",
+      "capacidades": ["artefato", "mcp", "rotina"],
       "demo": null
     },
     {
@@ -110,6 +124,8 @@
       "integracoes": "ElevenLabs Scribe ou OpenAI Whisper para transcrição.",
       "acento": "#8a5a00",
       "porta": 3008,
+      "captura": "capturas/reunioes-ia.png",
+      "capacidades": ["artefato", "mcp", "formulario", "rotina"],
       "demo": null
     },
     {
@@ -123,6 +139,8 @@
       "integracoes": "Só a IA. Os dados ficam no navegador; só agregados vão para o modelo.",
       "acento": "#0b6e4f",
       "porta": 3009,
+      "captura": "capturas/financas-ia.png",
+      "capacidades": ["artefato", "mcp", "formulario", "rotina"],
       "demo": null
     },
     {
@@ -137,6 +155,8 @@
       "integracoes": "Só a IA (OpenRouter).",
       "acento": "#a8324a",
       "porta": 3010,
+      "captura": "capturas/voz-do-cliente.png",
+      "capacidades": ["artefato", "mcp", "formulario", "rotina"],
       "demo": null
     }
   ]

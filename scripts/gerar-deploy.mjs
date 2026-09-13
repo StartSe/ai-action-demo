@@ -11,6 +11,24 @@ const raiz = join(dirname(fileURLToPath(import.meta.url)), "..");
 const cat = JSON.parse(readFileSync(join(raiz, "catalogo.json"), "utf8"));
 const repoPublicoUrl = `https://github.com/${cat.repoPublico}`;
 
+const CAPACIDADES_VALIDAS = ["artefato", "mcp", "formulario", "rotina"];
+for (const app of cat.apps) {
+  if (typeof app.captura !== "string" || !app.captura) {
+    throw new Error(`${app.id}: captura precisa ser um caminho relativo (string não vazia)`);
+  }
+  if (app.demo !== null && typeof app.demo !== "string") {
+    throw new Error(`${app.id}: demo precisa ser null ou uma URL (string)`);
+  }
+  if (!Array.isArray(app.capacidades) || app.capacidades.length === 0) {
+    throw new Error(`${app.id}: capacidades precisa ser uma lista com pelo menos um item`);
+  }
+  for (const c of app.capacidades) {
+    if (!CAPACIDADES_VALIDAS.includes(c)) {
+      throw new Error(`${app.id}: capacidade desconhecida "${c}" (válidas: ${CAPACIDADES_VALIDAS.join(", ")})`);
+    }
+  }
+}
+
 const imagem = (app) => `${cat.registro}/${app.id}:latest`;
 const branchDeploy = (app) => `deploy-${app.id}`;
 const urlPublicar = (app) => `https://render.com/deploy?repo=${repoPublicoUrl}/tree/${branchDeploy(app)}`;
