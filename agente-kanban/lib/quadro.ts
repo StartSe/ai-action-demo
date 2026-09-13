@@ -51,6 +51,12 @@ export interface ProvedorQuadro {
   /** Reverte um comentário criado por `comentar` (usado pelo "Desfazer"), identificado pelo `comentarioId` devolvido na hora da criação. */
   removerComentario(dados: { cartaoId: string; comentarioId: string }): Promise<{ ok: true }>;
   arquivarCartao(dados: { cartaoId: string }): Promise<{ ok: true }>;
+  /**
+   * Só implementado por provedores que podem não ter uma operação inversa disponível para um
+   * tipo de ação (ex.: quadro conectado por MCP genérico, US-072); ausente = sempre reversível
+   * (Trello, quadro de exemplo), mantendo o comportamento anterior a esta história.
+   */
+  suportaDesfazer?(tipo: "criar_cartao" | "mover_cartao" | "comentar_cartao"): boolean | Promise<boolean>;
 }
 
 /** Chave, token e quadro escolhido: o suficiente para operar um quadro real. Decidido a cada chamada (a configuração pode mudar em /setup sem reiniciar). */

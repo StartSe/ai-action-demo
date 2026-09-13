@@ -27,6 +27,8 @@ export interface ResultadoAgente {
   alterados: string[];
   /** Só quando a própria última ação é reversível (criar, mover ou comentar); null quando não há o que desfazer. */
   desfazer: Desfazer | null;
+  /** Só quando a última ação seria reversível, mas o provedor de quadro atual não oferece a operação inversa (ex.: MCP genérico, US-072); explica por que "Desfazer" não aparece. */
+  avisoDesfazer?: string | null;
 }
 
 /** Devolvido no lugar de `ResultadoAgente` quando o chamador pede só o plano (sem executar nada ainda). */
@@ -148,6 +150,17 @@ interface Rastro {
   alterados: string[];
   /** Última ação executada que pode ser desfeita (sobrescrita a cada ação; null quando a mais recente não é reversível). */
   desfazer: Desfazer | null;
+  /** Sobrescrita junto com `desfazer` a cada ação; só não-null quando a ação seria reversível, mas o provedor atual não oferece a operação inversa. */
+  avisoDesfazer: string | null;
+}
+
+const AVISO_DESFAZER_INDISPONIVEL = 'A ação foi feita, mas "Desfazer" não está disponível para o quadro conectado.';
+
+/** Decide se a ação recém-executada entra no `desfazer` (provedor com operação inversa) ou só num aviso (sem uma; ver ProvedorQuadro.suportaDesfazer). */
+async function aplicarDesfazer(provedor: ProvedorQuadro, rastro: Rastro, desfazer: Desfazer): Promise<void> {
+  const suportado = (await provedor.suportaDesfazer?.(desfazer.tipo)) ?? true;
+  rastro.desfazer = suportado ? desfazer : null;
+  rastro.avisoDesfazer = suportado ? null : AVISO_DESFAZER_INDISPONIVEL;
 }
 
 /** Nome de uma lista pelo id (usado para descrever um plano sem executar nada). */
@@ -191,7 +204,7 @@ async function executarFerramenta(nome: string, input: Record<string, unknown>, 
     });
     rastro.acoes.push({ tipo: "criar_cartao", descricao: `Criou o cartão "${cartao.nome}"` });
     rastro.alterados.push(cartao.id);
-    rastro.desfazer = { tipo: "criar_cartao", cartaoId: cartao.id, nome: cartao.nome };
+    await aplicarDesfazer(provedor, rastro, { tipo: "criar_cartao", cartaoId: cartao.id, nome: cartao.nome });
     return cartao;
   }
   if (nome === "mover_cartao") {
@@ -206,7 +219,12 @@ async function executarFerramenta(nome: string, input: Record<string, unknown>, 
     const cartao = await provedor.moverCartao({ cartaoId, listaId });
     rastro.acoes.push({ tipo: "mover_cartao", descricao: `Moveu o cartão "${cartao.nome}"` });
     rastro.alterados.push(cartao.id);
-    rastro.desfazer = listaOrigemId ? { tipo: "mover_cartao", cartaoId: cartao.id, nome: cartao.nome, listaOrigemId } : null;
+    if (listaOrigemId) {
+      await aplicarDesfazer(provedor, rastro, { tipo: "mover_cartao", cartaoId: cartao.id, nome: cartao.nome, listaOrigemId });
+    } else {
+      rastro.desfazer = null;
+      rastro.avisoDesfazer = null;
+    }
     return cartao;
   }
   if (nome === "atribuir_cartao") {
@@ -221,6 +239,7 @@ async function executarFerramenta(nome: string, input: Record<string, unknown>, 
     rastro.acoes.push({ tipo: "atribuir_cartao", descricao: `Atribuiu o cartão "${cartao.nome}" a ${cartao.responsavel}` });
     rastro.alterados.push(cartao.id);
     rastro.desfazer = null;
+    rastro.avisoDesfazer = null;
     return cartao;
   }
   if (nome === "comentar_cartao") {
@@ -235,7 +254,7 @@ async function executarFerramenta(nome: string, input: Record<string, unknown>, 
     const resultado = await provedor.comentar({ cartaoId, texto });
     rastro.acoes.push({ tipo: "comentar_cartao", descricao: `Comentou em um cartão: "${texto}"` });
     rastro.alterados.push(cartaoId);
-    rastro.desfazer = { tipo: "comentar_cartao", cartaoId, nome: nomeCartao, comentarioId: resultado.comentarioId };
+    await aplicarDesfazer(provedor, rastro, { tipo: "comentar_cartao", cartaoId, nome: nomeCartao, comentarioId: resultado.comentarioId });
     return resultado;
   }
   if (nome === "arquivar_cartao") {
@@ -249,6 +268,7 @@ async function executarFerramenta(nome: string, input: Record<string, unknown>, 
     rastro.acoes.push({ tipo: "arquivar_cartao", descricao: "Arquivou um cartão" });
     rastro.alterados.push(cartaoId);
     rastro.desfazer = null;
+    rastro.avisoDesfazer = null;
     return resultado;
   }
   throw new Error(`Ferramenta desconhecida: ${nome}`);
@@ -270,7 +290,7 @@ async function processarComIA({
   provedor: ProvedorQuadro;
   planejar: boolean;
 }): Promise<ResultadoAgente | PlanoAgente> {
-  const rastro: Rastro = { acoes: [], alterados: [], desfazer: null };
+  const rastro: Rastro = { acoes: [], alterados: [], desfazer: null, avisoDesfazer: null };
   const mensagens: ToolMessage[] = (historico || [])
     .filter((m) => m && m.content && (m.role === "user" || m.role === "assistant"))
     .map((m) => ({ role: m.role, content: m.content }));
@@ -294,7 +314,7 @@ async function processarComIA({
   });
 
   const quadro = await provedor.obterQuadro();
-  return { resposta: resposta.trim() || "Ação concluída.", acoes: rastro.acoes, quadro, alterados: rastro.alterados, desfazer: rastro.desfazer };
+  return { resposta: resposta.trim() || "Ação concluída.", acoes: rastro.acoes, quadro, alterados: rastro.alterados, desfazer: rastro.desfazer, avisoDesfazer: rastro.avisoDesfazer };
 }
 
 // --- modo sem IA: interpretador por palavras-chave ---
@@ -462,7 +482,7 @@ async function processarSemIA({
   provedor: ProvedorQuadro;
   planejar: boolean;
 }): Promise<ResultadoAgente | PlanoAgente> {
-  const rastro: Rastro = { acoes: [], alterados: [], desfazer: null };
+  const rastro: Rastro = { acoes: [], alterados: [], desfazer: null, avisoDesfazer: null };
   const respostas: string[] = [];
   const blocos = segmentar(mensagem);
   const listas = await provedor.listarListas();
@@ -497,7 +517,7 @@ async function processarSemIA({
       const cartao = await provedor.criarCartao({ nome, listaId: lista.id, vencimento });
       rastro.acoes.push({ tipo: "criar_cartao", descricao: `Criou o cartão "${cartao.nome}" em "${lista.nome}"` });
       rastro.alterados.push(cartao.id);
-      rastro.desfazer = { tipo: "criar_cartao", cartaoId: cartao.id, nome: cartao.nome };
+      await aplicarDesfazer(provedor, rastro, { tipo: "criar_cartao", cartaoId: cartao.id, nome: cartao.nome });
       respostas.push(
         `Criei o cartão "${cartao.nome}" em "${lista.nome}"${vencimento ? ` para ${formatarDataPtBr(vencimento)}` : ""}.`
       );
@@ -532,7 +552,12 @@ async function processarSemIA({
       const atualizado = await provedor.moverCartao({ cartaoId: cartao.id, listaId: listaDestino.id });
       rastro.acoes.push({ tipo: "mover_cartao", descricao: `Moveu o cartão "${atualizado.nome}" para "${listaDestino.nome}"` });
       rastro.alterados.push(atualizado.id);
-      rastro.desfazer = listaOrigemId ? { tipo: "mover_cartao", cartaoId: atualizado.id, nome: atualizado.nome, listaOrigemId } : null;
+      if (listaOrigemId) {
+        await aplicarDesfazer(provedor, rastro, { tipo: "mover_cartao", cartaoId: atualizado.id, nome: atualizado.nome, listaOrigemId });
+      } else {
+        rastro.desfazer = null;
+        rastro.avisoDesfazer = null;
+      }
       respostas.push(`Movi o cartão "${atualizado.nome}" para "${listaDestino.nome}".`);
       continue;
     }
@@ -565,6 +590,7 @@ async function processarSemIA({
       rastro.acoes.push({ tipo: "atribuir_cartao", descricao: `Atribuiu o cartão "${atualizado.nome}" a ${atualizado.responsavel}` });
       rastro.alterados.push(atualizado.id);
       rastro.desfazer = null;
+      rastro.avisoDesfazer = null;
       respostas.push(`Atribuí o cartão "${atualizado.nome}" a ${atualizado.responsavel}.`);
       continue;
     }
@@ -598,7 +624,7 @@ async function processarSemIA({
       const resultadoComentario = await provedor.comentar({ cartaoId: cartao.id, texto: comentarioTexto });
       rastro.acoes.push({ tipo: "comentar_cartao", descricao: `Comentou em "${cartao.nome}": "${comentarioTexto}"` });
       rastro.alterados.push(cartao.id);
-      rastro.desfazer = { tipo: "comentar_cartao", cartaoId: cartao.id, nome: cartao.nome, comentarioId: resultadoComentario.comentarioId };
+      await aplicarDesfazer(provedor, rastro, { tipo: "comentar_cartao", cartaoId: cartao.id, nome: cartao.nome, comentarioId: resultadoComentario.comentarioId });
       respostas.push(`Comentei em "${cartao.nome}".`);
       continue;
     }
@@ -623,6 +649,7 @@ async function processarSemIA({
       rastro.acoes.push({ tipo: "arquivar_cartao", descricao: `Arquivou "${cartao.nome}"` });
       rastro.alterados.push(cartao.id);
       rastro.desfazer = null;
+      rastro.avisoDesfazer = null;
       respostas.push(`Arquivei o cartão "${cartao.nome}".`);
       continue;
     }
@@ -644,7 +671,7 @@ async function processarSemIA({
   if (planejar) return { plano: rastro.acoes };
 
   const quadro = await provedor.obterQuadro();
-  return { resposta: respostas.join(" "), acoes: rastro.acoes, quadro, alterados: rastro.alterados, desfazer: rastro.desfazer };
+  return { resposta: respostas.join(" "), acoes: rastro.acoes, quadro, alterados: rastro.alterados, desfazer: rastro.desfazer, avisoDesfazer: rastro.avisoDesfazer };
 }
 
 export async function processarMensagem(args: { mensagem: string; historico?: HistoricoItem[]; provedor: ProvedorQuadro; planejar: true }): Promise<PlanoAgente>;

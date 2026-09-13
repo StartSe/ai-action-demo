@@ -216,7 +216,10 @@ export default function Page() {
   }, [estadoQuadro]);
 
   /** Aplica a resposta de uma execução real (direta em demo, ou após "Confirmar"): atualiza o chat, o quadro e o Desfazer. */
-  function aplicarResultadoExecutado(resposta: { resposta?: string; quadro?: Quadro; alterados?: string[]; meta: Meta; id?: string; quadroDemo?: boolean; desfazer?: Desfazer | null }, historicoBase: HistoricoItem[]) {
+  function aplicarResultadoExecutado(
+    resposta: { resposta?: string; quadro?: Quadro; alterados?: string[]; meta: Meta; id?: string; quadroDemo?: boolean; desfazer?: Desfazer | null; avisoDesfazer?: string | null },
+    historicoBase: HistoricoItem[]
+  ) {
     const textoResposta = resposta.resposta || "Ação concluída.";
     setMensagens((atual) => [...atual, { id: novoId(), papel: "assistente", texto: textoResposta }]);
     setHistoricoConversa([...historicoBase, { role: "assistant", content: textoResposta }]);
@@ -229,6 +232,9 @@ export default function Page() {
       desfazerTimeout.current = setTimeout(() => setDesfazerPendente(null), 30_000);
     } else {
       setDesfazerPendente(null);
+      if (resposta.avisoDesfazer) {
+        setMensagens((atual) => [...atual, { id: novoId(), papel: "assistente", texto: resposta.avisoDesfazer as string }]);
+      }
     }
     fetch("/api/agente").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
   }
@@ -250,7 +256,7 @@ export default function Page() {
       if (!r.ok) throw new Error(resposta.error || "Não consegui processar esse comando.");
       if (resposta.plano) {
         setPlanoPendente({ mensagem, historico: novoHistorico, itens: resposta.plano });
-        setMensagens((atual) => [...atual, { id: novoId(), papel: "assistente", texto: "Antes de mexer no seu Trello, veja o plano abaixo e confirme." }]);
+        setMensagens((atual) => [...atual, { id: novoId(), papel: "assistente", texto: "Antes de mexer no seu quadro, veja o plano abaixo e confirme." }]);
         return;
       }
       aplicarResultadoExecutado(resposta, novoHistorico);
@@ -329,7 +335,7 @@ export default function Page() {
         area="Gestão e RH"
         status={status}
         erro={erro}
-        resumo="Modo demonstração: sem IA conectada, o agente segue por palavras-chave; sem o Trello conectado, ele opera um quadro de exemplo só seu, que você pode reiniciar quando quiser."
+        resumo="Modo demonstração: sem IA conectada, o agente segue por palavras-chave; sem um quadro real conectado (Trello ou um quadro de tarefas por MCP), ele opera um quadro de exemplo só seu, que você pode reiniciar quando quiser."
       />
 
       <Workspace>
@@ -341,7 +347,7 @@ export default function Page() {
 
           {planoPendente && (
             <div className="card p-3.5 mt-3 border-accent">
-              <p className="text-[13px] font-bold mb-2">Antes de agir no seu Trello, vou:</p>
+              <p className="text-[13px] font-bold mb-2">Antes de agir no seu quadro, vou:</p>
               <ul className="text-sm flex flex-col gap-1 mb-3 list-disc pl-4">
                 {planoPendente.itens.map((a, i) => (
                   <li key={i}>{a.descricao}</li>

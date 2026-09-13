@@ -1,12 +1,14 @@
 import type { Desfazer } from "@/lib/agente";
 import { trelloConfigurado } from "@/lib/quadro";
 import { quadroDemoPara } from "@/lib/quadro-demo";
+import { mcpTarefasConfigurado, quadroMcp } from "@/lib/quadro-mcp";
 import { trello } from "@/lib/trello";
 import { visitanteId } from "@/lib/visitante";
 
 export const dynamic = "force-dynamic";
 
 function provedor(id: string) {
+  if (mcpTarefasConfigurado()) return quadroMcp;
   return trelloConfigurado() ? trello : quadroDemoPara(id);
 }
 

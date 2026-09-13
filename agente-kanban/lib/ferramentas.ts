@@ -4,14 +4,21 @@ import { processarMensagem } from "./agente";
 import type { Ferramenta } from "./mcp";
 import { trelloConfigurado, type ProvedorQuadro } from "./quadro";
 import { quadroDemoPara } from "./quadro-demo";
+import { mcpTarefasConfigurado, quadroMcp } from "./quadro-mcp";
 import { trello } from "./trello";
-import { visitanteId } from "./visitante";
 
 export const NOME_SERVIDOR = "agente-kanban";
 
+// Identidade fixa para o quadro de exemplo quando esta ferramenta é chamada via MCP (US-072): um
+// assistente de IA não mantém o cookie de visitante entre chamadas (diferente do navegador, que
+// usa lib/visitante.ts), então cada chamada veria um quadro de exemplo novo e vazio se usasse
+// visitanteId() aqui — com uma chave fixa, o mesmo quadro em memória persiste entre as chamadas.
+const VISITANTE_MCP = "mcp";
+
 async function provedorAtual(): Promise<ProvedorQuadro> {
-  const id = await visitanteId();
-  return trelloConfigurado() ? trello : quadroDemoPara(id);
+  if (mcpTarefasConfigurado()) return quadroMcp;
+  if (trelloConfigurado()) return trello;
+  return quadroDemoPara(VISITANTE_MCP);
 }
 
 export const FERRAMENTAS: Ferramenta[] = [

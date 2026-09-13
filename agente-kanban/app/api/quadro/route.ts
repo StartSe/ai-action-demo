@@ -1,12 +1,14 @@
 import { aiEnabled, meta } from "@/lib/ai";
 import { quadroDemoPara } from "@/lib/quadro-demo";
 import { trelloConfigurado } from "@/lib/quadro";
+import { mcpTarefasConfigurado, quadroMcp } from "@/lib/quadro-mcp";
 import { trello } from "@/lib/trello";
 import { visitanteId } from "@/lib/visitante";
 
 export const dynamic = "force-dynamic";
 
 async function provedor() {
+  if (mcpTarefasConfigurado()) return { p: quadroMcp, quadroDemo: false };
   if (trelloConfigurado()) return { p: trello, quadroDemo: false };
   return { p: quadroDemoPara(await visitanteId()), quadroDemo: true };
 }

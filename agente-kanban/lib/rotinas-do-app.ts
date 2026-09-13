@@ -6,6 +6,7 @@ import type { ResultadoAgente } from "./agente";
 import { salvar } from "./historico";
 import { quadroExemploFixo } from "./quadro-demo";
 import { trelloConfigurado, type Cartao, type Quadro } from "./quadro";
+import { mcpTarefasConfigurado, quadroMcp } from "./quadro-mcp";
 import { registrarExecutor } from "./rotinas";
 import { trello } from "./trello";
 
@@ -63,8 +64,8 @@ function montarTexto(atrasados: Cartao[], parados: Cartao[], sobrecarregados: { 
 }
 
 registrarExecutor("resumo-quadro", async () => {
-  const trelloConectado = trelloConfigurado();
-  const quadro = trelloConectado ? await trello.obterQuadro() : quadroExemploFixo();
+  const modoReal = mcpTarefasConfigurado() || trelloConfigurado();
+  const quadro = mcpTarefasConfigurado() ? await quadroMcp.obterQuadro() : trelloConfigurado() ? await trello.obterQuadro() : quadroExemploFixo();
 
   const ativos = cartoesAtivos(quadro);
   const hoje = new Date().toISOString().slice(0, 10);
@@ -77,7 +78,7 @@ registrarExecutor("resumo-quadro", async () => {
   const texto = montarTexto(atrasados, parados, sobrecarregados);
   // meta.demo aqui é sobre o quadro (Trello real x quadro de exemplo), não sobre IA: esta rotina nunca
   // chama IA, o que importa para quem lê o link é se o quadro mostrado é o de verdade ou um exemplo.
-  const metaGerada = meta({ demo: !trelloConectado, insumo: "o quadro atual" });
+  const metaGerada = meta({ demo: !modoReal, insumo: "o quadro atual" });
   const resultado: ResultadoAgente = { resposta: texto, acoes: [], quadro, alterados: [], desfazer: null };
   const resultadoId = salvar({ tipo: "agente-kanban", titulo, entrada: { mensagem: titulo }, saida: resultado, meta: metaGerada });
 

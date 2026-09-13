@@ -6,6 +6,7 @@ import { criar, listarRespostas, registrarCallback, type CampoFormulario, type P
 import { salvar } from "./historico";
 import { trelloConfigurado, type Etiqueta } from "./quadro";
 import { quadroDemoPara } from "./quadro-demo";
+import { mcpTarefasConfigurado, quadroMcp } from "./quadro-mcp";
 import { trello } from "./trello";
 
 export const TIPO_PEDIDO = "pedido-quadro";
@@ -21,6 +22,7 @@ const CAMPOS_PEDIDO: CampoFormulario[] = [
 type ParametrosPedido = ParametrosPublicos & { visitanteId: string };
 
 function provedorPara(visitanteId: string) {
+  if (mcpTarefasConfigurado()) return quadroMcp;
   return trelloConfigurado() ? trello : quadroDemoPara(visitanteId);
 }
 
