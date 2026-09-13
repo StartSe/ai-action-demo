@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Chat, type MensagemChat } from "@/components/Chat";
 import { Quadro as QuadroBoard } from "@/components/Quadro";
 import { Empty, ErrorBox, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Stage, Topbar, Workspace, data, Entregar, useStatus } from "@/components/ui";
-import type { HistoricoItem } from "@/lib/agente";
+import type { Acao, Desfazer, HistoricoItem } from "@/lib/agente";
 import type { Meta } from "@/lib/ai";
 import type { Cartao, Quadro } from "@/lib/quadro";
 
@@ -64,8 +64,14 @@ export default function Page() {
   const [estadoQuadro, setEstadoQuadro] = useState<EstadoQuadro>({ fase: "carregando" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const [reiniciando, setReiniciando] = useState(false);
+  const [planoPendente, setPlanoPendente] = useState<{ mensagem: string; historico: HistoricoItem[]; itens: Acao[] } | null>(null);
+  const [desfazerPendente, setDesfazerPendente] = useState<Desfazer | null>(null);
+  const [desfazendo, setDesfazendo] = useState(false);
   const autoEnviado = useRef(false);
   const primeiraCarga = useRef(true);
+  const desfazerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (desfazerTimeout.current) clearTimeout(desfazerTimeout.current); }, []);
 
   async function carregarQuadro() {
     try {
@@ -130,11 +136,30 @@ export default function Page() {
     document.getElementById("stage")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [estadoQuadro]);
 
+  /** Aplica a resposta de uma execução real (direta em demo, ou após "Confirmar"): atualiza o chat, o quadro e o Desfazer. */
+  function aplicarResultadoExecutado(resposta: { resposta?: string; quadro?: Quadro; alterados?: string[]; meta: Meta; id?: string; quadroDemo?: boolean; desfazer?: Desfazer | null }, historicoBase: HistoricoItem[]) {
+    const textoResposta = resposta.resposta || "Ação concluída.";
+    setMensagens((atual) => [...atual, { id: novoId(), papel: "assistente", texto: textoResposta }]);
+    setHistoricoConversa([...historicoBase, { role: "assistant", content: textoResposta }]);
+    if (resposta.quadro) {
+      setEstadoQuadro({ fase: "pronto", quadro: resposta.quadro, alterados: resposta.alterados || [], meta: resposta.meta, id: resposta.id, resposta: textoResposta, quadroDemo: Boolean(resposta.quadroDemo) });
+    }
+    if (desfazerTimeout.current) clearTimeout(desfazerTimeout.current);
+    if (resposta.desfazer) {
+      setDesfazerPendente(resposta.desfazer);
+      desfazerTimeout.current = setTimeout(() => setDesfazerPendente(null), 30_000);
+    } else {
+      setDesfazerPendente(null);
+    }
+    fetch("/api/agente").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
+  }
+
   async function enviarMensagem(mensagem: string) {
     setMensagens((atual) => [...atual, { id: novoId(), papel: "usuario", texto: mensagem }]);
     const novoHistorico = [...historicoConversa, { role: "user" as const, content: mensagem }];
     setHistoricoConversa(novoHistorico);
     setValor("");
+    setPlanoPendente(null);
     setCarregando(true);
     try {
       const r = await fetch("/api/agente", {
@@ -144,18 +169,66 @@ export default function Page() {
       });
       const resposta = await r.json();
       if (!r.ok) throw new Error(resposta.error || "Não consegui processar esse comando.");
-      const textoResposta = resposta.resposta || "Ação concluída.";
-      setMensagens((atual) => [...atual, { id: novoId(), papel: "assistente", texto: textoResposta }]);
-      setHistoricoConversa((h) => [...h, { role: "assistant", content: textoResposta }]);
-      if (resposta.quadro) {
-        setEstadoQuadro({ fase: "pronto", quadro: resposta.quadro as Quadro, alterados: resposta.alterados || [], meta: resposta.meta, id: resposta.id, resposta: textoResposta, quadroDemo: Boolean(resposta.quadroDemo) });
+      if (resposta.plano) {
+        setPlanoPendente({ mensagem, historico: novoHistorico, itens: resposta.plano });
+        setMensagens((atual) => [...atual, { id: novoId(), papel: "assistente", texto: "Antes de mexer no seu Trello, veja o plano abaixo e confirme." }]);
+        return;
       }
-      fetch("/api/agente").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
+      aplicarResultadoExecutado(resposta, novoHistorico);
     } catch (e) {
       const mensagemErro = e instanceof Error ? e.message : "Não consegui processar esse comando.";
       setMensagens((atual) => [...atual, { id: novoId(), papel: "erro", texto: mensagemErro }]);
     } finally {
       setCarregando(false);
+    }
+  }
+
+  async function confirmarPlano() {
+    if (!planoPendente) return;
+    const { mensagem, historico: historicoBase } = planoPendente;
+    setPlanoPendente(null);
+    setCarregando(true);
+    try {
+      const r = await fetch("/api/agente", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mensagem, historico: historicoBase, confirmar: true }),
+      });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Não consegui processar esse comando.");
+      aplicarResultadoExecutado(resposta, historicoBase);
+    } catch (e) {
+      const mensagemErro = e instanceof Error ? e.message : "Não consegui processar esse comando.";
+      setMensagens((atual) => [...atual, { id: novoId(), papel: "erro", texto: mensagemErro }]);
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  function cancelarPlano() {
+    setPlanoPendente(null);
+    setMensagens((atual) => [...atual, { id: novoId(), papel: "assistente", texto: "Tudo bem, não fiz nada." }]);
+  }
+
+  async function desfazerUltimaAcao() {
+    if (!desfazerPendente) return;
+    setDesfazendo(true);
+    try {
+      const r = await fetch("/api/agente/desfazer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ desfazer: desfazerPendente }),
+      });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Não foi possível desfazer agora.");
+      setEstadoQuadro((atual) => (atual.fase === "pronto" ? { ...atual, quadro: resposta.quadro as Quadro, alterados: [] } : atual));
+      setMensagens((atual) => [...atual, { id: novoId(), papel: "assistente", texto: "Desfeito." }]);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível desfazer agora.");
+    } finally {
+      setDesfazendo(false);
+      if (desfazerTimeout.current) clearTimeout(desfazerTimeout.current);
+      setDesfazerPendente(null);
     }
   }
 
@@ -186,7 +259,29 @@ export default function Page() {
           lead="Descreva em português o que precisa: criar, mover, atribuir, comentar ou arquivar um cartão. O agente opera o quadro por você."
         >
           <Chat mensagens={mensagens} carregando={carregando} valor={valor} onValorChange={setValor} onEnviar={enviarMensagem} />
+
+          {planoPendente && (
+            <div className="card p-3.5 mt-3 border-accent">
+              <p className="text-[13px] font-bold mb-2">Antes de agir no seu Trello, vou:</p>
+              <ul className="text-sm flex flex-col gap-1 mb-3 list-disc pl-4">
+                {planoPendente.itens.map((a, i) => (
+                  <li key={i}>{a.descricao}</li>
+                ))}
+              </ul>
+              <div className="flex gap-2">
+                <button type="button" className="btn-primary w-auto px-4" onClick={confirmarPlano} disabled={carregando}>Confirmar</button>
+                <button type="button" className="btn-ghost" onClick={cancelarPlano} disabled={carregando}>Cancelar</button>
+              </div>
+            </div>
+          )}
+
           <Privacidade detalhe="As ações ficam salvas neste app até você apagar em 'Últimos resultados'." />
+
+          {desfazerPendente && (
+            <button type="button" className="btn-ghost mt-3.5" onClick={desfazerUltimaAcao} disabled={desfazendo}>
+              {desfazendo ? "Desfazendo..." : "Desfazer última ação"}
+            </button>
+          )}
 
           {estadoQuadro.fase === "pronto" && estadoQuadro.quadroDemo && (
             <button type="button" className="btn-ghost mt-3.5" onClick={reiniciarQuadro} disabled={reiniciando}>

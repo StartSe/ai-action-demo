@@ -39,7 +39,9 @@ export interface ProvedorQuadro {
   criarCartao(dados: DadosNovoCartao): Promise<Cartao>;
   moverCartao(dados: { cartaoId: string; listaId: string }): Promise<Cartao>;
   atribuir(dados: { cartaoId: string; responsavel: string }): Promise<Cartao>;
-  comentar(dados: { cartaoId: string; texto: string }): Promise<{ ok: true }>;
+  comentar(dados: { cartaoId: string; texto: string }): Promise<{ ok: true; comentarioId: string }>;
+  /** Reverte um comentário criado por `comentar` (usado pelo "Desfazer"), identificado pelo `comentarioId` devolvido na hora da criação. */
+  removerComentario(dados: { cartaoId: string; comentarioId: string }): Promise<{ ok: true }>;
   arquivarCartao(dados: { cartaoId: string }): Promise<{ ok: true }>;
 }
 

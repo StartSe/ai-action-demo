@@ -14,11 +14,24 @@ export interface Acao {
   descricao: string;
 }
 
+/** O suficiente para reverter a última ação executada, usada pelo botão "Desfazer" (US-035). */
+export type Desfazer =
+  | { tipo: "criar_cartao"; cartaoId: string; nome: string }
+  | { tipo: "mover_cartao"; cartaoId: string; nome: string; listaOrigemId: string }
+  | { tipo: "comentar_cartao"; cartaoId: string; nome: string; comentarioId: string };
+
 export interface ResultadoAgente {
   resposta: string;
   acoes: Acao[];
   quadro: Quadro;
   alterados: string[];
+  /** Só quando a própria última ação é reversível (criar, mover ou comentar); null quando não há o que desfazer. */
+  desfazer: Desfazer | null;
+}
+
+/** Devolvido no lugar de `ResultadoAgente` quando o chamador pede só o plano (sem executar nada ainda). */
+export interface PlanoAgente {
+  plano: Acao[];
 }
 
 const SYSTEM = `Você é um agente de gestão que opera um quadro Kanban de Recursos Humanos por conta de um gestor.
@@ -133,49 +146,109 @@ function normalizar(s: string | undefined | null): string {
 interface Rastro {
   acoes: Acao[];
   alterados: string[];
+  /** Última ação executada que pode ser desfeita (sobrescrita a cada ação; null quando a mais recente não é reversível). */
+  desfazer: Desfazer | null;
 }
 
-async function executarFerramenta(nome: string, input: Record<string, unknown>, provedor: ProvedorQuadro, rastro: Rastro): Promise<unknown> {
+/** Nome de uma lista pelo id (usado para descrever um plano sem executar nada). */
+async function nomeDaLista(provedor: ProvedorQuadro, listaId: string): Promise<string> {
+  const listas = await provedor.listarListas();
+  return listas.find((l) => l.id === listaId)?.nome || listaId;
+}
+
+/** Nome de um cartão pelo id (usado para descrever um plano sem executar nada). */
+async function nomeDoCartao(provedor: ProvedorQuadro, cartaoId: string): Promise<string> {
+  const cartoes = await provedor.listarCartoes();
+  return cartoes.find((c) => c.id === cartaoId)?.nome || cartaoId;
+}
+
+/** Id da lista que hoje contém o cartão, para poder "mover de volta" no Desfazer. */
+async function listaAtualDoCartao(provedor: ProvedorQuadro, cartaoId: string): Promise<string | null> {
+  const quadro = await provedor.obterQuadro();
+  for (const lista of quadro.listas) {
+    if (lista.cartoes.some((c) => c.id === cartaoId)) return lista.id;
+  }
+  return null;
+}
+
+async function executarFerramenta(nome: string, input: Record<string, unknown>, provedor: ProvedorQuadro, rastro: Rastro, planejar: boolean): Promise<unknown> {
   if (nome === "listar_quadro") {
     return provedor.obterQuadro();
   }
   if (nome === "criar_cartao") {
+    const nomeCartao = String(input.nome || "");
+    const listaId = String(input.lista_id || "");
+    if (planejar) {
+      const listaNome = await nomeDaLista(provedor, listaId);
+      rastro.acoes.push({ tipo: "criar_cartao", descricao: `Criar o cartão "${nomeCartao}" em "${listaNome}"` });
+      return { id: "(planejado)", nome: nomeCartao, descricao: input.descricao ? String(input.descricao) : "", responsavel: "", vencimento: input.vencimento ? String(input.vencimento) : null };
+    }
     const cartao = await provedor.criarCartao({
-      nome: String(input.nome || ""),
+      nome: nomeCartao,
       descricao: input.descricao ? String(input.descricao) : "",
-      listaId: String(input.lista_id || ""),
+      listaId,
       vencimento: input.vencimento ? String(input.vencimento) : null,
     });
     rastro.acoes.push({ tipo: "criar_cartao", descricao: `Criou o cartão "${cartao.nome}"` });
     rastro.alterados.push(cartao.id);
+    rastro.desfazer = { tipo: "criar_cartao", cartaoId: cartao.id, nome: cartao.nome };
     return cartao;
   }
   if (nome === "mover_cartao") {
-    const cartao = await provedor.moverCartao({ cartaoId: String(input.cartao_id || ""), listaId: String(input.lista_id || "") });
+    const cartaoId = String(input.cartao_id || "");
+    const listaId = String(input.lista_id || "");
+    if (planejar) {
+      const [nomeCartao, nomeLista] = await Promise.all([nomeDoCartao(provedor, cartaoId), nomeDaLista(provedor, listaId)]);
+      rastro.acoes.push({ tipo: "mover_cartao", descricao: `Mover o cartão "${nomeCartao}" para "${nomeLista}"` });
+      return { id: cartaoId, nome: nomeCartao };
+    }
+    const listaOrigemId = await listaAtualDoCartao(provedor, cartaoId);
+    const cartao = await provedor.moverCartao({ cartaoId, listaId });
     rastro.acoes.push({ tipo: "mover_cartao", descricao: `Moveu o cartão "${cartao.nome}"` });
     rastro.alterados.push(cartao.id);
+    rastro.desfazer = listaOrigemId ? { tipo: "mover_cartao", cartaoId: cartao.id, nome: cartao.nome, listaOrigemId } : null;
     return cartao;
   }
   if (nome === "atribuir_cartao") {
     const cartaoId = String(input.cartao_id || "");
     const responsavel = String(input.responsavel || "");
+    if (planejar) {
+      const nomeCartao = await nomeDoCartao(provedor, cartaoId);
+      rastro.acoes.push({ tipo: "atribuir_cartao", descricao: `Atribuir o cartão "${nomeCartao}" a ${responsavel}` });
+      return { id: cartaoId, nome: nomeCartao, responsavel };
+    }
     const cartao = await provedor.atribuir({ cartaoId, responsavel });
     rastro.acoes.push({ tipo: "atribuir_cartao", descricao: `Atribuiu o cartão "${cartao.nome}" a ${cartao.responsavel}` });
     rastro.alterados.push(cartao.id);
+    rastro.desfazer = null;
     return cartao;
   }
   if (nome === "comentar_cartao") {
     const cartaoId = String(input.cartao_id || "");
-    const resultado = await provedor.comentar({ cartaoId, texto: String(input.texto || "") });
-    rastro.acoes.push({ tipo: "comentar_cartao", descricao: `Comentou em um cartão: "${String(input.texto || "")}"` });
+    const texto = String(input.texto || "");
+    if (planejar) {
+      const nomeCartao = await nomeDoCartao(provedor, cartaoId);
+      rastro.acoes.push({ tipo: "comentar_cartao", descricao: `Comentar em "${nomeCartao}": "${texto}"` });
+      return { ok: true };
+    }
+    const nomeCartao = await nomeDoCartao(provedor, cartaoId);
+    const resultado = await provedor.comentar({ cartaoId, texto });
+    rastro.acoes.push({ tipo: "comentar_cartao", descricao: `Comentou em um cartão: "${texto}"` });
     rastro.alterados.push(cartaoId);
+    rastro.desfazer = { tipo: "comentar_cartao", cartaoId, nome: nomeCartao, comentarioId: resultado.comentarioId };
     return resultado;
   }
   if (nome === "arquivar_cartao") {
     const cartaoId = String(input.cartao_id || "");
+    if (planejar) {
+      const nomeCartao = await nomeDoCartao(provedor, cartaoId);
+      rastro.acoes.push({ tipo: "arquivar_cartao", descricao: `Arquivar o cartão "${nomeCartao}"` });
+      return { ok: true };
+    }
     const resultado = await provedor.arquivarCartao({ cartaoId });
     rastro.acoes.push({ tipo: "arquivar_cartao", descricao: "Arquivou um cartão" });
     rastro.alterados.push(cartaoId);
+    rastro.desfazer = null;
     return resultado;
   }
   throw new Error(`Ferramenta desconhecida: ${nome}`);
@@ -183,22 +256,45 @@ async function executarFerramenta(nome: string, input: Record<string, unknown>, 
 
 // --- modo com IA (tool calling) ---
 
-async function processarComIA({ mensagem, historico, provedor }: { mensagem: string; historico?: HistoricoItem[]; provedor: ProvedorQuadro }): Promise<ResultadoAgente> {
-  const rastro: Rastro = { acoes: [], alterados: [] };
+const SYSTEM_PLANEJAR = `${SYSTEM}
+Importante: esta chamada é só um planejamento. As ferramentas que você chamar ainda NÃO acontecem de verdade (nenhuma mudança é salva); você está apenas descobrindo o que faria. Não invente cartões ou listas além do que o quadro e o pedido já trazem.`;
+
+async function processarComIA({
+  mensagem,
+  historico,
+  provedor,
+  planejar,
+}: {
+  mensagem: string;
+  historico?: HistoricoItem[];
+  provedor: ProvedorQuadro;
+  planejar: boolean;
+}): Promise<ResultadoAgente | PlanoAgente> {
+  const rastro: Rastro = { acoes: [], alterados: [], desfazer: null };
   const mensagens: ToolMessage[] = (historico || [])
     .filter((m) => m && m.content && (m.role === "user" || m.role === "assistant"))
     .map((m) => ({ role: m.role, content: m.content }));
   mensagens.push({ role: "user", content: mensagem });
 
+  if (planejar) {
+    await askWithTools({
+      system: SYSTEM_PLANEJAR,
+      messages: mensagens,
+      tools: TOOLS,
+      executeTool: (nome, args) => executarFerramenta(nome, args, provedor, rastro, true),
+    });
+    return { plano: rastro.acoes };
+  }
+
   const resposta = await askWithTools({
     system: SYSTEM,
     messages: mensagens,
     tools: TOOLS,
-    executeTool: (nome, args) => executarFerramenta(nome, args, provedor, rastro),
+    executeTool: (nome, args) => executarFerramenta(nome, args, provedor, rastro, false),
   });
 
   const quadro = await provedor.obterQuadro();
-  return { resposta: resposta.trim() || "Ação concluída.", acoes: rastro.acoes, quadro, alterados: rastro.alterados };
+  return { resposta: resposta.trim() || "Ação concluída.", acoes: rastro.acoes, quadro, alterados: rastro.alterados, desfazer: rastro.desfazer };
 }
 
 // --- modo sem IA: interpretador por palavras-chave ---
@@ -357,8 +453,16 @@ function segmentar(mensagem: string): Bloco[] {
   return blocos;
 }
 
-async function processarSemIA({ mensagem, provedor }: { mensagem: string; provedor: ProvedorQuadro }): Promise<ResultadoAgente> {
-  const rastro: Rastro = { acoes: [], alterados: [] };
+async function processarSemIA({
+  mensagem,
+  provedor,
+  planejar,
+}: {
+  mensagem: string;
+  provedor: ProvedorQuadro;
+  planejar: boolean;
+}): Promise<ResultadoAgente | PlanoAgente> {
+  const rastro: Rastro = { acoes: [], alterados: [], desfazer: null };
   const respostas: string[] = [];
   const blocos = segmentar(mensagem);
   const listas = await provedor.listarListas();
@@ -383,9 +487,17 @@ async function processarSemIA({ mensagem, provedor }: { mensagem: string; proved
         .replace(/\s+e\s*$/i, "");
       const nome = capitalizar(livre.replace(/\s+/g, " ").trim()) || "Novo cartão";
       const lista = listaEncontrada || listas[0];
+      if (planejar) {
+        rastro.acoes.push({
+          tipo: "criar_cartao",
+          descricao: `Criar o cartão "${nome}" em "${lista.nome}"${vencimento ? ` para ${formatarDataPtBr(vencimento)}` : ""}`,
+        });
+        continue;
+      }
       const cartao = await provedor.criarCartao({ nome, listaId: lista.id, vencimento });
       rastro.acoes.push({ tipo: "criar_cartao", descricao: `Criou o cartão "${cartao.nome}" em "${lista.nome}"` });
       rastro.alterados.push(cartao.id);
+      rastro.desfazer = { tipo: "criar_cartao", cartaoId: cartao.id, nome: cartao.nome };
       respostas.push(
         `Criei o cartão "${cartao.nome}" em "${lista.nome}"${vencimento ? ` para ${formatarDataPtBr(vencimento)}` : ""}.`
       );
@@ -412,9 +524,15 @@ async function processarSemIA({ mensagem, provedor }: { mensagem: string; proved
         respostas.push(`Há mais de um cartão parecido com "${limparConsulta(livre)}" (${(opcoes || []).map((o) => `"${o.nome}"`).join(", ")}). Qual deles devo mover?`);
         continue;
       }
+      if (planejar) {
+        rastro.acoes.push({ tipo: "mover_cartao", descricao: `Mover o cartão "${cartao.nome}" para "${listaDestino.nome}"` });
+        continue;
+      }
+      const listaOrigemId = await listaAtualDoCartao(provedor, cartao.id);
       const atualizado = await provedor.moverCartao({ cartaoId: cartao.id, listaId: listaDestino.id });
       rastro.acoes.push({ tipo: "mover_cartao", descricao: `Moveu o cartão "${atualizado.nome}" para "${listaDestino.nome}"` });
       rastro.alterados.push(atualizado.id);
+      rastro.desfazer = listaOrigemId ? { tipo: "mover_cartao", cartaoId: atualizado.id, nome: atualizado.nome, listaOrigemId } : null;
       respostas.push(`Movi o cartão "${atualizado.nome}" para "${listaDestino.nome}".`);
       continue;
     }
@@ -439,9 +557,14 @@ async function processarSemIA({ mensagem, provedor }: { mensagem: string; proved
         respostas.push(`Encontrei o cartão "${cartao.nome}", mas não entendi para quem atribuir. Pode dizer o nome da pessoa?`);
         continue;
       }
+      if (planejar) {
+        rastro.acoes.push({ tipo: "atribuir_cartao", descricao: `Atribuir o cartão "${cartao.nome}" a ${responsavel}` });
+        continue;
+      }
       const atualizado = await provedor.atribuir({ cartaoId: cartao.id, responsavel });
       rastro.acoes.push({ tipo: "atribuir_cartao", descricao: `Atribuiu o cartão "${atualizado.nome}" a ${atualizado.responsavel}` });
       rastro.alterados.push(atualizado.id);
+      rastro.desfazer = null;
       respostas.push(`Atribuí o cartão "${atualizado.nome}" a ${atualizado.responsavel}.`);
       continue;
     }
@@ -468,9 +591,14 @@ async function processarSemIA({ mensagem, provedor }: { mensagem: string; proved
         respostas.push(`Encontrei o cartão "${cartao.nome}", mas não entendi o que devo escrever no comentário.`);
         continue;
       }
-      await provedor.comentar({ cartaoId: cartao.id, texto: comentarioTexto });
+      if (planejar) {
+        rastro.acoes.push({ tipo: "comentar_cartao", descricao: `Comentar em "${cartao.nome}": "${comentarioTexto}"` });
+        continue;
+      }
+      const resultadoComentario = await provedor.comentar({ cartaoId: cartao.id, texto: comentarioTexto });
       rastro.acoes.push({ tipo: "comentar_cartao", descricao: `Comentou em "${cartao.nome}": "${comentarioTexto}"` });
       rastro.alterados.push(cartao.id);
+      rastro.desfazer = { tipo: "comentar_cartao", cartaoId: cartao.id, nome: cartao.nome, comentarioId: resultadoComentario.comentarioId };
       respostas.push(`Comentei em "${cartao.nome}".`);
       continue;
     }
@@ -487,14 +615,21 @@ async function processarSemIA({ mensagem, provedor }: { mensagem: string; proved
         respostas.push(`Há mais de um cartão parecido (${(opcoes || []).map((o) => `"${o.nome}"`).join(", ")}). Qual devo arquivar?`);
         continue;
       }
+      if (planejar) {
+        rastro.acoes.push({ tipo: "arquivar_cartao", descricao: `Arquivar o cartão "${cartao.nome}"` });
+        continue;
+      }
       await provedor.arquivarCartao({ cartaoId: cartao.id });
       rastro.acoes.push({ tipo: "arquivar_cartao", descricao: `Arquivou "${cartao.nome}"` });
       rastro.alterados.push(cartao.id);
+      rastro.desfazer = null;
       respostas.push(`Arquivei o cartão "${cartao.nome}".`);
       continue;
     }
 
     if (bloco.tipo === "listar" || bloco.tipo === null) {
+      // Consulta só de leitura: não entra no plano (nada a confirmar), só na resposta em modo execução.
+      if (planejar) continue;
       const quadroAtual = await provedor.obterQuadro();
       const resumo = quadroAtual.listas.map((l) => `${l.nome} (${l.cartoes.length})`).join(", ");
       respostas.push(
@@ -506,11 +641,25 @@ async function processarSemIA({ mensagem, provedor }: { mensagem: string; proved
     }
   }
 
+  if (planejar) return { plano: rastro.acoes };
+
   const quadro = await provedor.obterQuadro();
-  return { resposta: respostas.join(" "), acoes: rastro.acoes, quadro, alterados: rastro.alterados };
+  return { resposta: respostas.join(" "), acoes: rastro.acoes, quadro, alterados: rastro.alterados, desfazer: rastro.desfazer };
 }
 
-export async function processarMensagem({ mensagem, historico, provedor }: { mensagem: string; historico?: HistoricoItem[]; provedor: ProvedorQuadro }): Promise<ResultadoAgente> {
-  if (aiEnabled()) return processarComIA({ mensagem, historico, provedor });
-  return processarSemIA({ mensagem, provedor });
+export async function processarMensagem(args: { mensagem: string; historico?: HistoricoItem[]; provedor: ProvedorQuadro; planejar: true }): Promise<PlanoAgente>;
+export async function processarMensagem(args: { mensagem: string; historico?: HistoricoItem[]; provedor: ProvedorQuadro; planejar?: false }): Promise<ResultadoAgente>;
+export async function processarMensagem({
+  mensagem,
+  historico,
+  provedor,
+  planejar = false,
+}: {
+  mensagem: string;
+  historico?: HistoricoItem[];
+  provedor: ProvedorQuadro;
+  planejar?: boolean;
+}): Promise<ResultadoAgente | PlanoAgente> {
+  if (aiEnabled()) return processarComIA({ mensagem, historico, provedor, planejar });
+  return processarSemIA({ mensagem, provedor, planejar });
 }

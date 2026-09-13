@@ -8,7 +8,7 @@ import type { Cartao, DadosNovoCartao, Lista, ProvedorQuadro, Quadro } from "./q
 interface CartaoInterno extends Cartao {
   listaId: string;
   arquivado: boolean;
-  comentarios: { texto: string; data: string }[];
+  comentarios: { id: string; texto: string; data: string }[];
 }
 
 interface EstadoVisitante {
@@ -177,11 +177,20 @@ export function quadroDemoPara(visitanteId: string): ProvedorQuadro {
     return cartaoPublico(cartao);
   }
 
-  async function comentar({ cartaoId, texto }: { cartaoId: string; texto: string }): Promise<{ ok: true }> {
+  async function comentar({ cartaoId, texto }: { cartaoId: string; texto: string }): Promise<{ ok: true; comentarioId: string }> {
     const estado = estadoDe(visitanteId);
     const cartao = estado.cartoes.find((c) => c.id === cartaoId);
     if (!cartao) throw new Error("Cartão não encontrado.");
-    cartao.comentarios.push({ texto, data: new Date().toISOString() });
+    const comentario = { id: randomUUID(), texto, data: new Date().toISOString() };
+    cartao.comentarios.push(comentario);
+    return { ok: true, comentarioId: comentario.id };
+  }
+
+  async function removerComentario({ cartaoId, comentarioId }: { cartaoId: string; comentarioId: string }): Promise<{ ok: true }> {
+    const estado = estadoDe(visitanteId);
+    const cartao = estado.cartoes.find((c) => c.id === cartaoId);
+    if (!cartao) throw new Error("Cartão não encontrado.");
+    cartao.comentarios = cartao.comentarios.filter((c) => c.id !== comentarioId);
     return { ok: true };
   }
 
@@ -193,5 +202,5 @@ export function quadroDemoPara(visitanteId: string): ProvedorQuadro {
     return { ok: true };
   }
 
-  return { listarListas, listarCartoes, obterQuadro, criarCartao, moverCartao, atribuir, comentar, arquivarCartao };
+  return { listarListas, listarCartoes, obterQuadro, criarCartao, moverCartao, atribuir, comentar, removerComentario, arquivarCartao };
 }

@@ -18,17 +18,27 @@ function titulo(mensagem: string): string {
 }
 
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => ({}))) as { mensagem?: string; historico?: HistoricoItem[] };
-  const { mensagem, historico } = body;
+  const body = (await req.json().catch(() => ({}))) as { mensagem?: string; historico?: HistoricoItem[]; confirmar?: boolean };
+  const { mensagem, historico, confirmar } = body;
   if (!mensagem || !String(mensagem).trim()) {
     return Response.json({ error: 'Escreva um comando para o agente, como "crie um cartão...".' }, { status: 400 });
   }
   try {
     const idVisitante = await visitanteId();
-    const resultado = await processarMensagem({ mensagem, historico, provedor: provedor(idVisitante) });
+    const trelloConectado = trelloConfigurado();
+    const provedorAtual = provedor(idVisitante);
+
+    // Com o Trello real conectado, exige confirmação antes de agir (US-035); em modo demo (quadro de
+    // exemplo), executa direto, como antes. Uma consulta só de leitura (plano vazio) também segue direto.
+    if (trelloConectado && !confirmar) {
+      const { plano } = await processarMensagem({ mensagem, historico, provedor: provedorAtual, planejar: true });
+      if (plano.length > 0) return Response.json({ plano });
+    }
+
+    const resultado = await processarMensagem({ mensagem, historico, provedor: provedorAtual });
     const metaGerada = meta({ demo: !aiEnabled(), insumo: "o quadro e o comando enviado ao agente" });
     const id = salvar({ tipo: "agente-kanban", titulo: titulo(mensagem), entrada: { mensagem }, saida: resultado, meta: metaGerada });
-    return Response.json({ ...resultado, meta: metaGerada, id, quadroDemo: !trelloConfigurado() });
+    return Response.json({ ...resultado, meta: metaGerada, id, quadroDemo: !trelloConectado });
   } catch (err) {
     console.error(err);
     const mensagemErro = err instanceof Error ? err.message : "Não foi possível falar com o agente agora. Tente novamente.";

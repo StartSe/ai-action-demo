@@ -151,8 +151,13 @@ async function atribuir({ cartaoId, responsavel }: { cartaoId: string; responsav
   return { id: cartao.id, nome: cartao.name, descricao: cartao.desc || "", responsavel: nomesResponsaveis, vencimento: cartao.due ? cartao.due.slice(0, 10) : null };
 }
 
-async function comentar({ cartaoId, texto }: { cartaoId: string; texto: string }): Promise<{ ok: true }> {
-  await chamar("POST", `/cards/${cartaoId}/actions/comments`, { text: texto });
+async function comentar({ cartaoId, texto }: { cartaoId: string; texto: string }): Promise<{ ok: true; comentarioId: string }> {
+  const acao = await chamar<{ id: string }>("POST", `/cards/${cartaoId}/actions/comments`, { text: texto });
+  return { ok: true, comentarioId: acao?.id || "" };
+}
+
+async function removerComentario({ comentarioId }: { cartaoId: string; comentarioId: string }): Promise<{ ok: true }> {
+  await chamar("DELETE", `/actions/${comentarioId}/comments`);
   return { ok: true };
 }
 
@@ -169,5 +174,6 @@ export const trello: ProvedorQuadro = {
   moverCartao,
   atribuir,
   comentar,
+  removerComentario,
   arquivarCartao,
 };
