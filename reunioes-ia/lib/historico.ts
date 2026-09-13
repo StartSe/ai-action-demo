@@ -66,6 +66,12 @@ export function obter<E = unknown, S = unknown, M = unknown>(id: string): Result
   return linha ? linhaParaResultado<E, S, M>(linha) : null;
 }
 
+/** Sobrescreve a "saida" de um resultado já salvo (ex.: marcar uma ação como concluída); devolve false se o id não existir. */
+export function atualizarSaida(id: string, saida: unknown): boolean {
+  const { changes } = abrir().prepare("UPDATE resultados SET saida = ? WHERE id = ?").run(JSON.stringify(saida), id);
+  return Number(changes) > 0;
+}
+
 /** Lista os resultados mais recentes primeiro, sem os campos pesados (entrada/saida). */
 export function listar(limite = 10): Pick<Resultado, "id" | "tipo" | "titulo" | "criadoEm">[] {
   const linhas = abrir()

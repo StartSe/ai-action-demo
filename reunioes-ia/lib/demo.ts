@@ -45,11 +45,11 @@ export function ataDemo({ titulo }: { titulo?: string } = {}): Ata {
       },
     ],
     acoes: [
-      { acao: "Ajustar o orçamento de marketing do quarto trimestre com o corte de 10% em mídia paga e enviar para aprovação.", responsavel: "Marcelo Duarte", prazo: "18 de setembro" },
-      { acao: "Confirmar com a Bioempaque um plano de contingência de embalagem, a ser acionado se a Envoplast não confirmar entrega.", responsavel: "Thiago Almeida", prazo: "16 de setembro" },
-      { acao: "Publicar a vaga de gerente de contas da região Sul.", responsavel: "Patrícia Nunes", prazo: "18 de setembro" },
-      { acao: "Contratar o gerente de contas da região Sul.", responsavel: "Patrícia Nunes", prazo: "fim de outubro" },
-      { acao: "Dar retorno final sobre o orçamento ajustado para o fechamento do mês no sistema.", responsavel: "Renata Cavalcanti", prazo: "17 de setembro" },
+      { acao: "Ajustar o orçamento de marketing do quarto trimestre com o corte de 10% em mídia paga e enviar para aprovação.", responsavel: "Marcelo Duarte", prazo: "2026-09-18" },
+      { acao: "Confirmar com a Bioempaque um plano de contingência de embalagem, a ser acionado se a Envoplast não confirmar entrega.", responsavel: "Thiago Almeida", prazo: "2026-09-16" },
+      { acao: "Publicar a vaga de gerente de contas da região Sul.", responsavel: "Patrícia Nunes", prazo: "2026-09-18" },
+      { acao: "Contratar o gerente de contas da região Sul.", responsavel: "Patrícia Nunes", prazo: "2026-10-31" },
+      { acao: "Dar retorno final sobre o orçamento ajustado para o fechamento do mês no sistema.", responsavel: "Renata Cavalcanti", prazo: "2026-09-17" },
     ],
     riscos_e_bloqueios: [
       "Possível atraso de até duas semanas do fornecedor Envoplast na entrega do filme biodegradável, o que adiaria o lançamento de outubro.",

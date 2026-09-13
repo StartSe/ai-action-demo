@@ -14,6 +14,8 @@ export interface EntradaHandle {
 interface Props {
   texto: string;
   onChangeTexto: (v: string) => void;
+  /** Quando false, a aba "Gravar agora" avisa que a gravação vai gerar uma transcrição de exemplo (nenhuma chave de transcrição configurada). */
+  transcricaoConectada?: boolean;
 }
 
 const EXTENSOES_VALIDAS = [".mp3", ".m4a", ".wav", ".webm", ".ogg"];
@@ -51,7 +53,7 @@ function TabButton({ ativo, onClick, children }: { ativo: boolean; onClick: () =
   );
 }
 
-const EntradaTranscricao = forwardRef<EntradaHandle, Props>(function EntradaTranscricao({ texto, onChangeTexto }, ref) {
+const EntradaTranscricao = forwardRef<EntradaHandle, Props>(function EntradaTranscricao({ texto, onChangeTexto, transcricaoConectada = true }, ref) {
   const [aba, setAba] = useState<Aba>("texto");
   const [gravarSuportado, setGravarSuportado] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -242,6 +244,9 @@ const EntradaTranscricao = forwardRef<EntradaHandle, Props>(function EntradaTran
       {aba === "gravar" && gravarSuportado && (
         <div className="flex flex-col gap-1.5 mb-4">
           <span className="text-[13px] font-semibold">Gravação</span>
+          {!transcricaoConectada && (
+            <p className="text-[12.5px] font-semibold text-warn">A transcrição não está conectada; a gravação vai gerar um exemplo.</p>
+          )}
           <div className="flex items-center gap-3.5">
             <button type="button" className="btn-ghost" onClick={alternarGravacao}>{gravando ? "Parar" : "Gravar"}</button>
             <span className="tabular-nums font-bold text-accent-ink text-[15px]">{formatarTempo(segundos)}</span>

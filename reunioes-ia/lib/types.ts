@@ -6,7 +6,9 @@ export interface Decisao {
 export interface Acao {
   acao: string;
   responsavel: string;
+  /** Data completa no formato AAAA-MM-DD (nunca só dia da semana ou prazo vago), para exibir formatada e gerar o .ics de calendário. */
   prazo: string;
+  concluida?: boolean;
 }
 
 export interface EmailFollowup {

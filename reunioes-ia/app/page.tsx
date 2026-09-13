@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import {
+  Chip,
   CopyButton,
   DataTable,
   Destaque,
@@ -24,10 +25,11 @@ import {
   data,
   useScrollToResult,
   useStatus,
+  type Coluna,
 } from "@/components/ui";
 import EntradaTranscricao, { type EntradaHandle } from "@/components/EntradaTranscricao";
 import type { Meta } from "@/lib/ai";
-import type { Ata, DadosAta, FonteTranscricao } from "@/lib/types";
+import type { Acao, Ata, DadosAta, FonteTranscricao } from "@/lib/types";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
 
@@ -57,6 +59,73 @@ function IlustracaoAta() {
       <path d="M38 47l3.5 3.5L50 42" />
     </svg>
   );
+}
+
+const PRAZO_VALIDO = /^\d{4}-\d{2}-\d{2}$/;
+const PRAZO_PARTES = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** Formata um prazo AAAA-MM-DD sem risco de virar o dia anterior por fuso horário (evita `new Date("AAAA-MM-DD")`, que é meia-noite UTC). */
+function dataPrazo(prazo: string): string {
+  const m = PRAZO_PARTES.exec(prazo);
+  if (!m) return prazo;
+  return data(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+}
+
+function paraIcsData(iso: string): string {
+  return iso.replaceAll("-", "");
+}
+
+/** Dia seguinte ao prazo, em aritmética UTC pura (sem depender do fuso local): DTEND de um evento de dia inteiro é exclusivo. */
+function diaSeguinteIcs(iso: string): string {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  const proximo = new Date(Date.UTC(ano, mes - 1, dia + 1));
+  return `${proximo.getUTCFullYear()}${String(proximo.getUTCMonth() + 1).padStart(2, "0")}${String(proximo.getUTCDate()).padStart(2, "0")}`;
+}
+
+function escaparIcs(texto: string): string {
+  return texto.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+}
+
+/** Baixa um .ics de dia inteiro para a ação, com responsável e reunião na descrição. */
+function baixarIcsAcao(acaoItem: Acao, tituloReuniao: string) {
+  const dtStamp = `${new Date().toISOString().replace(/[-:]/g, "").split(".")[0]}Z`;
+  const uid = `acao-${Date.now()}-${Math.random().toString(36).slice(2)}@ia-para-executivos`;
+  const linhas = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//IA para Executivos//Ata Executiva//PT-BR",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `DTSTAMP:${dtStamp}`,
+    `DTSTART;VALUE=DATE:${paraIcsData(acaoItem.prazo)}`,
+    `DTEND;VALUE=DATE:${diaSeguinteIcs(acaoItem.prazo)}`,
+    `SUMMARY:${escaparIcs(acaoItem.acao)}`,
+    `DESCRIPTION:${escaparIcs(`Responsável: ${acaoItem.responsavel}. Reunião: ${tituloReuniao}`)}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ];
+  const blob = new Blob([linhas.join("\r\n")], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "acao.ics";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** mailto com os participantes informados (quando houver) e o assunto/corpo do e-mail de acompanhamento. */
+function linkEmailFollowup(ata: Ata, participantes?: string): string {
+  const destinatarios = (participantes || "")
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join(",");
+  const assunto = encodeURIComponent(ata.email_followup?.assunto || "");
+  const corpo = encodeURIComponent(ata.email_followup?.corpo || "");
+  return `mailto:${destinatarios}?subject=${assunto}&body=${corpo}`;
 }
 
 type Estado =
@@ -185,7 +254,12 @@ export default function Page() {
           lead="Cole a transcrição, envie o áudio ou grave a reunião agora, e a IA organiza decisões, ações e responsáveis."
         >
           <form onSubmit={onSubmit}>
-            <EntradaTranscricao ref={entradaRef} texto={textoTranscricao} onChangeTexto={setTextoTranscricao} />
+            <EntradaTranscricao
+              ref={entradaRef}
+              texto={textoTranscricao}
+              onChangeTexto={setTextoTranscricao}
+              transcricaoConectada={status ? Boolean(status.integrations?.transcricao) : true}
+            />
 
             <Field label="Título da reunião (opcional)" htmlFor="titulo">
               <input id="titulo" className="input" placeholder="Ex.: Reunião de diretoria — setembro" value={dados.titulo} onChange={set("titulo")} />
@@ -279,14 +353,86 @@ export function Resultado({
 
       <Origem meta={meta} />
 
-      <ConteudoAta ata={ata} transcricao={transcricao} fonteTranscricao={fonteTranscricao} />
+      <ConteudoAta ata={ata} transcricao={transcricao} fonteTranscricao={fonteTranscricao} id={id} participantes={participantes} />
     </article>
   );
 }
 
-/** Corpo da ata (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
-export function ConteudoAta({ ata, transcricao, fonteTranscricao }: { ata: Ata; transcricao?: string; fonteTranscricao?: FonteTranscricao | null }) {
+/** Corpo da ata (sem cabeçalho nem Origem), reaproveitado pela página de impressão. `id` presente = ata salva (habilita checkbox "Concluída" persistente). */
+export function ConteudoAta({
+  ata,
+  transcricao,
+  fonteTranscricao,
+  id,
+  participantes,
+}: {
+  ata: Ata;
+  transcricao?: string;
+  fonteTranscricao?: FonteTranscricao | null;
+  id?: string;
+  participantes?: string;
+}) {
   const [transcricaoAberta, setTranscricaoAberta] = useState(false);
+  const [acoes, setAcoes] = useState(ata.acoes || []);
+
+  async function alternarConcluida(indice: number) {
+    if (indice < 0) return;
+    const concluida = !acoes[indice]?.concluida;
+    setAcoes((prev) => prev.map((a, i) => (i === indice ? { ...a, concluida } : a)));
+    if (!id) return;
+    try {
+      await fetch(`/api/ata/${id}/acoes`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ indice, concluida }),
+      });
+    } catch {
+      /* mantém o estado local mesmo se a rede falhar; a próxima interação tenta salvar de novo */
+    }
+  }
+
+  const colunasAcoes: Coluna<Acao>[] = [];
+  if (id) {
+    colunasAcoes.push({
+      chave: "check",
+      titulo: "",
+      classe: "w-8",
+      render: (l) => (
+        <label className="inline-flex items-center gap-1.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!l.concluida}
+            onChange={() => alternarConcluida(acoes.indexOf(l))}
+            aria-label="Concluída"
+            className="w-4 h-4 accent-accent cursor-pointer"
+          />
+          <span className="text-[12.5px] text-muted md:hidden">Concluída</span>
+        </label>
+      ),
+    });
+  }
+  colunasAcoes.push(
+    { chave: "acao", titulo: "Ação", papel: "titulo", largura: "34%", render: (l) => <strong className={l.concluida ? "line-through text-muted" : undefined}>{l.acao}</strong> },
+    { chave: "responsavel", titulo: "Responsável", papel: "resumo", render: (l) => l.responsavel },
+    {
+      chave: "prazo",
+      titulo: "Prazo",
+      papel: "chip",
+      largura: "110px",
+      render: (l) => <span className="font-bold text-accent-ink">{PRAZO_VALIDO.test(l.prazo) ? dataPrazo(l.prazo) : l.prazo}</span>,
+    },
+    {
+      chave: "calendario",
+      titulo: "Calendário",
+      papel: "detalhe",
+      render: (l) =>
+        PRAZO_VALIDO.test(l.prazo) ? (
+          <button type="button" className="btn-link text-[12.5px]" onClick={() => baixarIcsAcao(l, ata.titulo)}>Adicionar ao calendário</button>
+        ) : (
+          <span className="text-muted text-[12.5px]">Prazo sem data definida</span>
+        ),
+    },
+  );
 
   return (
     <>
@@ -298,7 +444,7 @@ export function ConteudoAta({ ata, transcricao, fonteTranscricao }: { ata: Ata; 
         <div className="flex flex-col gap-3">
           {(ata.decisoes || []).length ? (
             ata.decisoes.map((d, i) => (
-              <Item key={i}>
+              <Item key={i} className="border-l-4 border-accent rounded-l-none rounded-r-card">
                 <h3 className="font-bold mb-1">{d.decisao}</h3>
                 <p className="text-muted text-sm">{d.contexto}</p>
               </Item>
@@ -310,28 +456,18 @@ export function ConteudoAta({ ata, transcricao, fonteTranscricao }: { ata: Ata; 
       </Section>
 
       <Section titulo="Ações">
-        <DataTable
-          colunas={[
-            {
-              chave: "check",
-              titulo: "",
-              render: () => <input type="checkbox" aria-label="Concluída" className="w-4 h-4 accent-accent cursor-pointer" />,
-              classe: "w-8",
-            },
-            { chave: "acao", titulo: "Ação", papel: "titulo", largura: "36%", render: (l) => <strong>{l.acao}</strong> },
-            { chave: "responsavel", titulo: "Responsável", papel: "resumo", render: (l) => l.responsavel },
-            { chave: "prazo", titulo: "Prazo", papel: "chip", largura: "120px", render: (l) => <span className="font-bold text-accent-ink">{l.prazo}</span> },
-          ]}
-          linhas={ata.acoes || []}
-        />
-        {!(ata.acoes || []).length && <p className="text-muted text-sm mt-2">Nenhuma ação identificada.</p>}
+        <DataTable colunas={colunasAcoes} linhas={acoes} />
+        {!acoes.length && <p className="text-muted text-sm mt-2">Nenhuma ação identificada.</p>}
       </Section>
 
       <Section titulo="Riscos e bloqueios">
         <div className="flex flex-col gap-3">
           {(ata.riscos_e_bloqueios || []).length ? (
             ata.riscos_e_bloqueios.map((r, i) => (
-              <Item key={i}><p>{r}</p></Item>
+              <Item key={i} className="flex items-start justify-between gap-3">
+                <p>{r}</p>
+                <Chip nivel="media">Risco</Chip>
+              </Item>
             ))
           ) : (
             <p className="text-muted text-sm">Nenhum risco relevante identificado.</p>
@@ -343,7 +479,10 @@ export function ConteudoAta({ ata, transcricao, fonteTranscricao }: { ata: Ata; 
         <div className="flex flex-col gap-3">
           {(ata.pendencias || []).length ? (
             ata.pendencias.map((p, i) => (
-              <Item key={i}><p>{p}</p></Item>
+              <Item key={i} className="flex items-start justify-between gap-3">
+                <p>{p}</p>
+                <Chip nivel="neutral">Pendente</Chip>
+              </Item>
             ))
           ) : (
             <p className="text-muted text-sm">Nenhuma pendência registrada.</p>
@@ -356,10 +495,13 @@ export function ConteudoAta({ ata, transcricao, fonteTranscricao }: { ata: Ata; 
         <Item className="flex flex-col gap-2.5">
           <div className="text-sm"><strong>Assunto:</strong> {ata.email_followup?.assunto}</div>
           <pre className="whitespace-pre-wrap font-sans text-sm text-ink m-0 bg-bg border border-line rounded-[8px] px-4 py-3.5">{ata.email_followup?.corpo}</pre>
-          <CopyButton
-            texto={() => `${ata.email_followup?.assunto || ""}\n\n${ata.email_followup?.corpo || ""}`}
-            rotulo="Copiar e-mail"
-          />
+          <div className="flex flex-wrap gap-2.5">
+            <CopyButton
+              texto={() => `${ata.email_followup?.assunto || ""}\n\n${ata.email_followup?.corpo || ""}`}
+              rotulo="Copiar e-mail"
+            />
+            <a className="btn-ghost" href={linkEmailFollowup(ata, participantes)}>Abrir no e-mail</a>
+          </div>
         </Item>
       </Section>
 
@@ -386,7 +528,7 @@ function ataParaTexto(ata: Ata, titulo?: string): string {
   const linhas: string[] = [ata.titulo || titulo || "Ata da reunião", "", ata.resumo_executivo, "", "Decisões:"];
   (ata.decisoes || []).forEach((d) => linhas.push(`- ${d.decisao} (${d.contexto})`));
   linhas.push("", "Ações:");
-  (ata.acoes || []).forEach((a) => linhas.push(`- ${a.acao} | Responsável: ${a.responsavel} | Prazo: ${a.prazo}`));
+  (ata.acoes || []).forEach((a) => linhas.push(`- ${a.acao} | Responsável: ${a.responsavel} | Prazo: ${PRAZO_VALIDO.test(a.prazo) ? dataPrazo(a.prazo) : a.prazo}`));
   linhas.push("", "Riscos e bloqueios:");
   (ata.riscos_e_bloqueios || []).forEach((r) => linhas.push(`- ${r}`));
   linhas.push("", "Ficou em aberto:");

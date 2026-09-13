@@ -21,7 +21,13 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
         <div className="text-muted text-sm">{data(new Date())}</div>
       </header>
 
-      <ConteudoAta ata={registro.saida} transcricao={registro.entrada.transcricao} fonteTranscricao={registro.entrada.fonteTranscricao} />
+      <ConteudoAta
+        ata={registro.saida}
+        transcricao={registro.entrada.transcricao}
+        fonteTranscricao={registro.entrada.fonteTranscricao}
+        id={id}
+        participantes={registro.entrada.participantes}
+      />
 
       <footer className="mt-8 pt-4 border-t border-line">
         <Origem meta={registro.meta} />
