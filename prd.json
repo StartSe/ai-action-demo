@@ -695,7 +695,7 @@
         "Verify in browser using dev-browser skill: conferir os dois gráficos em desktop e celular"
       ],
       "priority": 44,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

@@ -17,7 +17,7 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
       <ImprimirAoCarregar />
       <header className="mb-8 pb-4 border-b border-line">
         <div className="text-[13px] font-semibold text-muted">Analista Financeiro</div>
-        <h1 className="text-2xl font-extrabold tracking-[-0.01em]">Leitura da planilha</h1>
+        <h1 className="text-2xl font-extrabold tracking-[-0.01em]">Leitura de {registro.entrada.nomeArquivo}</h1>
         <div className="text-muted text-sm">{data(new Date())}</div>
       </header>
 

@@ -56,8 +56,17 @@ function IlustracaoBarras() {
 type EstadoAnalise =
   | { fase: "vazio" }
   | { fase: "carregando" }
-  | { fase: "erro"; mensagem: string; retomar?: { resumo: Resumo; amostra: LancamentoResumo[] } }
-  | { fase: "pronto"; id?: string; resumo: Resumo; insights: Insights; amostra: LancamentoResumo[]; meta: Meta };
+  | { fase: "erro"; mensagem: string; retomar?: { resumo: Resumo; amostra: LancamentoResumo[]; nomeArquivo: string; todos: LancamentoResumo[] } }
+  | {
+      fase: "pronto";
+      id?: string;
+      resumo: Resumo;
+      insights: Insights;
+      amostra: LancamentoResumo[];
+      meta: Meta;
+      nomeArquivo: string;
+      todos: LancamentoResumo[];
+    };
 
 export default function Page() {
   const { status, erro } = useStatus();
@@ -130,7 +139,7 @@ export default function Page() {
     handleFile(file);
   }
 
-  async function gerarLeitura(resumo: Resumo, amostra: LancamentoResumo[], nomeArquivo: string) {
+  async function gerarLeitura(resumo: Resumo, amostra: LancamentoResumo[], nomeArquivo: string, todos: LancamentoResumo[]) {
     setEstado({ fase: "carregando" });
     try {
       const r = await fetch("/api/insights", {
@@ -140,10 +149,10 @@ export default function Page() {
       });
       const respo = await r.json();
       if (!r.ok) throw new Error(respo.error || "Falha ao gerar a leitura.");
-      setEstado({ fase: "pronto", id: respo.id, resumo, insights: respo.insights, amostra, meta: respo.meta });
+      setEstado({ fase: "pronto", id: respo.id, resumo, insights: respo.insights, amostra, meta: respo.meta, nomeArquivo, todos });
       carregarHistorico();
     } catch (e) {
-      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado.", retomar: { resumo, amostra } });
+      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado.", retomar: { resumo, amostra, nomeArquivo, todos } });
     }
   }
 
@@ -158,13 +167,15 @@ export default function Page() {
       return;
     }
     const resumo = calcularResumo(registros);
-    const amostra: LancamentoResumo[] = registros.slice(0, 60).map((r) => ({
+    const paraLinha = (r: (typeof registros)[number]): LancamentoResumo => ({
       data: r.data.toISOString().slice(0, 10),
       categoria: r.categoria,
       descricao: r.descricao,
       valor: r.valor,
-    }));
-    await gerarLeitura(resumo, amostra, nomeArquivo);
+    });
+    const amostra = registros.slice(0, 60).map(paraLinha);
+    const todos = registros.map(paraLinha);
+    await gerarLeitura(resumo, amostra, nomeArquivo, todos);
   }
 
   async function usarExemplo() {
@@ -335,10 +346,24 @@ export default function Page() {
           {estado.fase === "erro" && (
             <ErrorBox
               mensagem={estado.mensagem}
-              onTentarNovamente={estado.retomar ? () => gerarLeitura(estado.retomar!.resumo, estado.retomar!.amostra, arquivo?.nome || "planilha.csv") : undefined}
+              onTentarNovamente={
+                estado.retomar
+                  ? () => gerarLeitura(estado.retomar!.resumo, estado.retomar!.amostra, estado.retomar!.nomeArquivo, estado.retomar!.todos)
+                  : undefined
+              }
             />
           )}
-          {estado.fase === "pronto" && <Resultado id={estado.id} resumo={estado.resumo} insights={estado.insights} amostra={estado.amostra} meta={estado.meta} />}
+          {estado.fase === "pronto" && (
+            <Resultado
+              id={estado.id}
+              resumo={estado.resumo}
+              insights={estado.insights}
+              amostra={estado.amostra}
+              meta={estado.meta}
+              nomeArquivo={estado.nomeArquivo}
+              todosLancamentos={estado.todos}
+            />
+          )}
         </Stage>
       </Workspace>
     </>
@@ -347,11 +372,33 @@ export default function Page() {
 
 type RespostaItem = { id: string; pergunta: string; carregando: boolean; resposta?: string; erro?: string };
 
-export function Resultado({ id, resumo, insights, amostra, meta }: { id?: string; resumo: Resumo; insights: Insights; amostra?: LancamentoResumo[]; meta: Meta }) {
+export function Resultado({
+  id,
+  resumo,
+  insights,
+  amostra,
+  meta,
+  nomeArquivo,
+  todosLancamentos,
+}: {
+  id?: string;
+  resumo: Resumo;
+  insights: Insights;
+  amostra?: LancamentoResumo[];
+  meta: Meta;
+  nomeArquivo: string;
+  todosLancamentos?: LancamentoResumo[];
+}) {
+  const titulo = `Leitura de ${nomeArquivo}`;
   return (
     <article className="reveal">
-      <ResultHead titulo="Leitura da planilha" subtitulo={`${resumo.periodo.inicio} a ${resumo.periodo.fim} · ${resumo.quantidade} lançamentos`}>
-        <Entregar id={id} titulo="Leitura da planilha" texto={() => resumoParaTexto(resumo, insights)} />
+      <ResultHead titulo={titulo} subtitulo={`${resumo.periodo.inicio} a ${resumo.periodo.fim} · ${resumo.quantidade} lançamentos`}>
+        <Entregar
+          id={id}
+          titulo={titulo}
+          texto={() => resumoParaTexto(resumo, insights, nomeArquivo)}
+          extras={todosLancamentos ? [{ rotulo: "Exportar planilha categorizada", onClick: () => exportarPlanilhaCategorizada(todosLancamentos, nomeArquivo) }] : undefined}
+        />
       </ResultHead>
 
       <Origem meta={meta} />
@@ -366,7 +413,7 @@ export function Resultado({ id, resumo, insights, amostra, meta }: { id?: string
 /** Corpo da leitura (sem cabeçalho, Origem nem a caixa de perguntas), reaproveitado pela página de impressão. */
 export function ConteudoFinancas({ resumo, insights }: { resumo: Resumo; insights: Insights }) {
   const ultimoMes = resumo.meses[resumo.meses.length - 1];
-  const maiorCategoria = resumo.categorias[0];
+  const maiorCrescimento = resumo.categoriasQueCresceram[0];
   const variacao = resumo.variacaoUltimoMes;
   const tomVariacao = variacao > 5 ? "warn" : variacao < -5 ? "ok" : "neutro";
 
@@ -391,21 +438,21 @@ export function ConteudoFinancas({ resumo, insights }: { resumo: Resumo; insight
           <p className="text-[19px] font-extrabold tracking-tight">{formatarMoeda(ultimoMes ? ultimoMes.total : 0)}</p>
         </Item>
         <Item>
-          <p className="text-muted text-[12.5px] font-semibold mb-1">Maior categoria</p>
-          <p className="text-[19px] font-extrabold tracking-tight">{maiorCategoria ? maiorCategoria.categoria : "-"}</p>
-          <p className="text-muted text-[13px]">{maiorCategoria ? formatarMoeda(maiorCategoria.total) : ""}</p>
+          <p className="text-muted text-[12.5px] font-semibold mb-1">Maior variação</p>
+          <p className="text-[19px] font-extrabold tracking-tight">{maiorCrescimento ? maiorCrescimento.categoria : "-"}</p>
+          <p className="text-muted text-[13px]">{maiorCrescimento ? percentual(maiorCrescimento.variacao) : ""}</p>
         </Item>
       </div>
 
       <Section titulo="Despesas por mês">
-        <div className="card shadow-none p-4 overflow-x-auto">
-          <GraficoMeses meses={resumo.meses} />
+        <div className="card shadow-none p-4">
+          <GraficoMeses meses={resumo.meses} variacao={variacao} tom={tomVariacao} />
         </div>
       </Section>
 
       <Section titulo="Despesas por categoria">
-        <div className="card shadow-none p-4 overflow-x-auto">
-          <GraficoCategorias categorias={resumo.categorias} />
+        <div className="card shadow-none p-4">
+          <GraficoCategorias categorias={resumo.categorias} maiorCrescimento={maiorCrescimento} />
         </div>
       </Section>
 
@@ -538,9 +585,29 @@ function rotuloTipo(tipo: TipoDestaque["tipo"]) {
   return "Observação";
 }
 
-function resumoParaTexto(resumo: Resumo, insights: Insights) {
+/** Exporta os lançamentos normalizados (data, categoria, descrição e valor) como CSV, um para reimportar já categorizado. */
+function exportarPlanilhaCategorizada(lancamentos: LancamentoResumo[], nomeArquivo: string) {
+  const cabecalho = ["Data", "Categoria", "Descrição", "Valor"];
+  const linhasCSV = [cabecalho.join(";")];
+  lancamentos.forEach((l) => {
+    const campos = [formatarDataCurta(l.data), l.categoria, l.descricao, l.valor.toFixed(2).replace(".", ",")];
+    linhasCSV.push(campos.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";"));
+  });
+  const csv = "﻿" + linhasCSV.join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${nomeArquivo.replace(/\.csv$/i, "")}-categorizado.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function resumoParaTexto(resumo: Resumo, insights: Insights, nomeArquivo: string) {
   const linhas: string[] = [
-    `Leitura da planilha (${resumo.periodo.inicio} a ${resumo.periodo.fim})`,
+    `Leitura de ${nomeArquivo} (${resumo.periodo.inicio} a ${resumo.periodo.fim})`,
     "",
     insights.leitura_geral,
     "",

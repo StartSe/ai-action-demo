@@ -14,7 +14,7 @@ export default async function Page({ params }: PageProps<"/r/[id]">) {
     <>
       <Topbar marca="F" nome="Analista Financeiro" area="Financeiro" status={{ ai: !registro.meta.demo, demo: registro.meta.demo, model: registro.meta.model }} />
       <main className="max-w-[860px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
-        <Resultado id={id} resumo={registro.saida.resumo} insights={registro.saida.insights} meta={registro.meta} />
+        <Resultado id={id} resumo={registro.saida.resumo} insights={registro.saida.insights} meta={registro.meta} nomeArquivo={registro.entrada.nomeArquivo} />
       </main>
     </>
   );
