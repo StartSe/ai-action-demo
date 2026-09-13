@@ -178,3 +178,38 @@ export const MCP_TAREFAS: Integracao = {
     }
   },
 };
+
+/** CRM externo (como o HubSpot, que expõe um servidor MCP dentro da própria conta) que recebe os leads e negócios gerados aqui. */
+export const MCP_CRM: Integracao = {
+  id: "mcp-crm",
+  titulo: "CRM (MCP)",
+  descricao: "Conecte o CRM onde o seu time trabalha (o HubSpot, por exemplo, expõe um servidor MCP nas configurações de integrações da conta) para mandar contatos e negócios direto daqui.",
+  obrigatoria: false,
+  campos: [
+    {
+      chave: "MCP_CRM_URL",
+      rotulo: "Endereço do CRM",
+      tipo: "text",
+      placeholder: "https://seu-crm.exemplo.com/mcp",
+      ajuda: "No HubSpot, fica em Configurações › Integrações › Conectar aplicativos privados/MCP. Copie o endereço mostrado lá.",
+    },
+    {
+      chave: "MCP_CRM_CODIGO",
+      rotulo: "Código de acesso",
+      tipo: "secret",
+      opcional: true,
+      ajuda: "Gerado no mesmo lugar do endereço, dentro do CRM.",
+    },
+  ],
+  testar: async (config) => {
+    const url = config.MCP_CRM_URL;
+    if (!url) return { ok: false, mensagem: "Informe o endereço do CRM antes de testar." };
+    try {
+      const ferramentas = await listarFerramentas(conectar(url, config.MCP_CRM_CODIGO));
+      if (ferramentas.length === 0) return { ok: true, mensagem: "Conectado, mas o CRM não expõe nenhuma ação ainda." };
+      return { ok: true, mensagem: `Conectado. Ações disponíveis: ${ferramentas.map((f) => f.nome).join(", ")}.` };
+    } catch (err) {
+      return { ok: false, mensagem: err instanceof Error ? err.message : "Não foi possível conectar ao CRM." };
+    }
+  },
+};

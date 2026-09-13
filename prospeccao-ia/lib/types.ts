@@ -22,6 +22,8 @@ export interface Lead {
   linkedin: string;
   site: string;
   sinal: string;
+  /** true depois de "Enviar para o CRM" ter criado o contato (e, quando identificado, o negócio) com sucesso. */
+  noCRM?: boolean;
 }
 
 export interface Abordagem {

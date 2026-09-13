@@ -89,6 +89,9 @@ export default function Page() {
   const [abordagens, setAbordagens] = useState<Record<string, { abordagem: Abordagem; meta: Meta }>>({});
   const [carregandoIds, setCarregandoIds] = useState<Set<string>>(new Set());
   const [erroLote, setErroLote] = useState<string | null>(null);
+  const [crmConfigurado, setCrmConfigurado] = useState<boolean | undefined>(undefined);
+  const [enviandoCRMIds, setEnviandoCRMIds] = useState<Set<string>>(new Set());
+  const [erroCRM, setErroCRM] = useState<string | null>(null);
   const autoAbrirPrimeiro = useRef(false);
   const autoEnviado = useRef(false);
 
@@ -104,6 +107,16 @@ export default function Page() {
   }
 
   useEffect(() => { carregarHistorico(); }, []);
+
+  useEffect(() => {
+    fetch("/api/setup")
+      .then((r) => r.json())
+      .then((d) => {
+        const integracao = (d.integracoes || []).find((i: { id: string }) => i.id === "mcp-crm");
+        setCrmConfigurado(Boolean(integracao?.configurada));
+      })
+      .catch(() => setCrmConfigurado(false));
+  }, []);
 
   function apagarHistorico() {
     if (!window.confirm("Apagar todas as buscas salvas? Essa ação não pode ser desfeita.")) return;
@@ -180,6 +193,35 @@ export default function Page() {
       }
     }
     if (falhas.length) setErroLote(`Não foi possível escrever para: ${falhas.join(", ")}.`);
+  }
+
+  async function enviarParaCRM(buscaId: string, selecionados: Lead[]) {
+    if (!selecionados.length) return;
+    const mensagemConfirmacao =
+      selecionados.length === 1 ? `Enviar ${selecionados[0].nome} para o CRM?` : `Enviar ${selecionados.length} leads selecionados para o CRM?`;
+    if (!window.confirm(mensagemConfirmacao)) return;
+    setErroCRM(null);
+    setEnviandoCRMIds((prev) => new Set([...prev, ...selecionados.map((l) => l.id)]));
+    try {
+      const r = await fetch(`/api/leads/${buscaId}/crm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selecionados.map((l) => l.id) }),
+      });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Não foi possível enviar para o CRM.");
+      setEstado((prev) => (prev.fase === "lista" || prev.fase === "abordagem" || prev.fase === "carregando-abordagem" || prev.fase === "erro-abordagem" ? { ...prev, leads: resposta.leads } : prev));
+      const falhas = (resposta.resultados || []).filter((res: { ok: boolean }) => !res.ok);
+      if (falhas.length) setErroCRM(`Não foi possível enviar: ${falhas.map((f: { nome: string }) => f.nome).join(", ")}.`);
+    } catch (e) {
+      setErroCRM(e instanceof Error ? e.message : "Não foi possível enviar para o CRM.");
+    } finally {
+      setEnviandoCRMIds((prev) => {
+        const novo = new Set(prev);
+        selecionados.forEach((l) => novo.delete(l.id));
+        return novo;
+      });
+    }
   }
 
   function onSubmit(e: FormEvent) {
@@ -308,6 +350,10 @@ export default function Page() {
               leadsProntos={new Set(Object.keys(abordagens))}
               carregandoIds={carregandoIds}
               erroLote={erroLote}
+              onEnviarCRM={estado.id ? (selecionados) => enviarParaCRM(estado.id!, selecionados) : undefined}
+              crmConfigurado={crmConfigurado}
+              enviandoCRMIds={enviandoCRMIds}
+              erroCRM={erroCRM}
             />
           )}
           {estado.fase === "carregando-abordagem" && <Loading etapas={etapasAbordagem(estado.lead.nome)} />}
@@ -335,6 +381,10 @@ export function Resultado({
   leadsProntos,
   carregandoIds,
   erroLote,
+  onEnviarCRM,
+  crmConfigurado,
+  enviandoCRMIds,
+  erroCRM,
 }: {
   dados: DadosBusca;
   fonte: Fonte;
@@ -346,6 +396,10 @@ export function Resultado({
   leadsProntos?: Set<string>;
   carregandoIds?: Set<string>;
   erroLote?: string | null;
+  onEnviarCRM?: (leads: Lead[]) => void;
+  crmConfigurado?: boolean;
+  enviandoCRMIds?: Set<string>;
+  erroCRM?: string | null;
 }) {
   return (
     <article className="reveal">
@@ -360,7 +414,19 @@ export function Resultado({
 
       <Origem meta={meta} />
 
-      <ConteudoLeads dados={dados} leads={leads} onEscrever={onEscrever} onEscreverLote={onEscreverLote} leadsProntos={leadsProntos} carregandoIds={carregandoIds} erroLote={erroLote} />
+      <ConteudoLeads
+        dados={dados}
+        leads={leads}
+        onEscrever={onEscrever}
+        onEscreverLote={onEscreverLote}
+        leadsProntos={leadsProntos}
+        carregandoIds={carregandoIds}
+        erroLote={erroLote}
+        onEnviarCRM={onEnviarCRM}
+        crmConfigurado={crmConfigurado}
+        enviandoCRMIds={enviandoCRMIds}
+        erroCRM={erroCRM}
+      />
 
       <ReceberLeadsSemanais dados={dados} />
     </article>
@@ -471,6 +537,10 @@ export function ConteudoLeads({
   leadsProntos = new Set(),
   carregandoIds = new Set(),
   erroLote,
+  onEnviarCRM,
+  crmConfigurado,
+  enviandoCRMIds = new Set(),
+  erroCRM,
 }: {
   dados: DadosBusca;
   leads: Lead[];
@@ -479,6 +549,10 @@ export function ConteudoLeads({
   leadsProntos?: Set<string>;
   carregandoIds?: Set<string>;
   erroLote?: string | null;
+  onEnviarCRM?: (leads: Lead[]) => void;
+  crmConfigurado?: boolean;
+  enviandoCRMIds?: Set<string>;
+  erroCRM?: string | null;
 }) {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const interativo = Boolean(onEscrever);
@@ -507,7 +581,12 @@ export function ConteudoLeads({
               {l.linkedin && <a href={l.linkedin} target="_blank" rel="noopener noreferrer" className="text-accent-ink hover:underline">LinkedIn</a>}
               {l.site && <a href={l.site} target="_blank" rel="noopener noreferrer" className="text-accent-ink hover:underline">Site</a>}
             </div>
-            {leadsProntos.has(l.id) && <span className="inline-block mt-1"><Chip nivel="positivo">Abordagem pronta</Chip></span>}
+            {(leadsProntos.has(l.id) || l.noCRM) && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {leadsProntos.has(l.id) && <Chip nivel="positivo">Abordagem pronta</Chip>}
+                {l.noCRM && <Chip nivel="positivo">No CRM</Chip>}
+              </div>
+            )}
           </div>
         </div>
       ),
@@ -534,26 +613,61 @@ export function ConteudoLeads({
       ),
     });
   }
+  if (onEnviarCRM) {
+    colunas.push({
+      chave: "crm",
+      titulo: "",
+      render: (l) =>
+        l.noCRM || crmConfigurado === undefined ? null : crmConfigurado ? (
+          <button
+            type="button"
+            className="btn-ghost !px-3.5 !py-2 !text-[13px] whitespace-nowrap"
+            disabled={enviandoCRMIds.has(l.id)}
+            onClick={() => onEnviarCRM([l])}
+          >
+            {enviandoCRMIds.has(l.id) ? "Enviando..." : "Enviar para o CRM"}
+          </button>
+        ) : (
+          <a href="/setup#mcp-crm" className="btn-ghost !px-3.5 !py-2 !text-[13px] whitespace-nowrap">Conectar CRM</a>
+        ),
+    });
+  }
 
   const leadsSelecionados = leads.filter((l) => selecionados.has(l.id));
+  const leadsSelecionadosSemCRM = leadsSelecionados.filter((l) => !l.noCRM);
 
   return (
     <>
       <p className="summary">{resumoBusca(dados, leads.length)}</p>
-      {onEscreverLote && selecionados.size > 0 && (
-        <div className="card shadow-none flex items-center justify-between gap-3 px-3.5 py-2.5 mb-3">
+      {(onEscreverLote || onEnviarCRM) && selecionados.size > 0 && (
+        <div className="card shadow-none flex items-center justify-between gap-3 px-3.5 py-2.5 mb-3 flex-wrap">
           <span className="text-sm text-muted">{selecionados.size} lead{selecionados.size === 1 ? "" : "s"} selecionado{selecionados.size === 1 ? "" : "s"}</span>
-          <button
-            type="button"
-            className="btn-primary !w-auto"
-            disabled={carregandoIds.size > 0}
-            onClick={() => onEscreverLote(leadsSelecionados)}
-          >
-            {carregandoIds.size > 0 ? "Escrevendo..." : "Escrever para os selecionados"}
-          </button>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {onEnviarCRM && crmConfigurado && leadsSelecionadosSemCRM.length > 0 && (
+              <button
+                type="button"
+                className="btn-ghost !w-auto"
+                disabled={enviandoCRMIds.size > 0}
+                onClick={() => onEnviarCRM(leadsSelecionadosSemCRM)}
+              >
+                {enviandoCRMIds.size > 0 ? "Enviando..." : "Enviar selecionados para o CRM"}
+              </button>
+            )}
+            {onEscreverLote && (
+              <button
+                type="button"
+                className="btn-primary !w-auto"
+                disabled={carregandoIds.size > 0}
+                onClick={() => onEscreverLote(leadsSelecionados)}
+              >
+                {carregandoIds.size > 0 ? "Escrevendo..." : "Escrever para os selecionados"}
+              </button>
+            )}
+          </div>
         </div>
       )}
       {erroLote && <p className="text-danger text-sm mb-3">{erroLote}</p>}
+      {erroCRM && <p className="text-danger text-sm mb-3">{erroCRM}</p>}
       <DataTable colunas={colunas} linhas={leads} />
     </>
   );

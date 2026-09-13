@@ -1,5 +1,5 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
-import { NOTIFICACOES, OPENROUTER, type Integracao } from "./setup-comum";
+import { MCP_CRM, NOTIFICACOES, OPENROUTER, type Integracao } from "./setup-comum";
 
 export const APOLLO: Integracao = {
   id: "apollo",
@@ -46,4 +46,4 @@ export const BRIGHTDATA: Integracao = {
   },
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, APOLLO, BRIGHTDATA, NOTIFICACOES];
+export const INTEGRACOES: Integracao[] = [OPENROUTER, APOLLO, BRIGHTDATA, NOTIFICACOES, MCP_CRM];
