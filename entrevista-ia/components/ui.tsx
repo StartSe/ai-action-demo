@@ -246,6 +246,17 @@ export type Coluna<T> = {
   largura?: string;
 };
 
+/** Texto de uma coluna "resumo": até 2 linhas, com "Ver mais" para expandir (tabela do desktop e cartão do celular). */
+function ResumoCelula({ children }: { children: ReactNode }) {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <div>
+      <div className={aberto ? "" : "line-clamp-2"}>{children}</div>
+      {!aberto && <button type="button" className="btn-link text-[12.5px] mt-1" onClick={() => setAberto(true)}>Ver mais</button>}
+    </div>
+  );
+}
+
 /** Tabela responsiva: linhas no desktop, cartões no celular (título + resumo + chip visíveis, detalhes atrás de "Ver mais"). */
 export function DataTable<T>({ colunas, linhas }: { colunas: Coluna<T>[]; linhas: T[] }) {
   const titulo = colunas.find((c) => c.papel === "titulo");
@@ -263,7 +274,7 @@ export function DataTable<T>({ colunas, linhas }: { colunas: Coluna<T>[]; linhas
         <tbody>
           {linhas.map((l, i) => (
             <tr key={i} className="[&:last-child>td]:border-b-0">
-              {colunas.map((c) => <td key={c.chave} style={c.largura ? { width: c.largura } : undefined} className={`px-3.5 py-[11px] border-b border-line align-top ${c.classe ?? ""}`}>{c.render(l)}</td>)}
+              {colunas.map((c) => <td key={c.chave} style={c.largura ? { width: c.largura } : undefined} className={`px-3.5 py-[11px] border-b border-line align-top ${c.classe ?? ""}`}>{c.papel === "resumo" ? <ResumoCelula>{c.render(l)}</ResumoCelula> : c.render(l)}</td>)}
             </tr>
           ))}
         </tbody>
@@ -277,7 +288,7 @@ export function DataTable<T>({ colunas, linhas }: { colunas: Coluna<T>[]; linhas
                 {chip && <div className="shrink-0">{chip.render(l)}</div>}
               </div>
             )}
-            {resumo && <div className="truncate text-muted">{resumo.render(l)}</div>}
+            {resumo && <div className="text-muted"><ResumoCelula>{resumo.render(l)}</ResumoCelula></div>}
             {semPapel.map((c) => (
               <div key={c.chave}>
                 <div className="text-[11.5px] font-bold text-muted">{c.titulo}</div>

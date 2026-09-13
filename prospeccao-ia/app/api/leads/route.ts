@@ -111,9 +111,9 @@ export async function POST(req: Request) {
   }
 }
 
-/** Últimas buscas salvas, para a lista "Últimos resultados" no painel. */
+/** Últimas buscas salvas, para a lista "Últimos resultados" no painel; remetenteNome/remetenteEmpresa pré-preenchem "Seu nome"/"Sua empresa". */
 export async function GET() {
-  return Response.json({ itens: listar(10) });
+  return Response.json({ itens: listar(10), remetenteNome: getConfig("REMETENTE_NOME"), remetenteEmpresa: getConfig("REMETENTE_EMPRESA") });
 }
 
 /** Apaga todo o histórico salvo (botão "Apagar tudo"). */

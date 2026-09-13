@@ -1,6 +1,6 @@
 import { aiEnabled, askJSON, meta } from "@/lib/ai";
 import { abordagemDemo, esperar } from "@/lib/demo";
-import { getConfig } from "@/lib/store";
+import { getConfig, setConfig } from "@/lib/store";
 import type { Abordagem, Lead } from "@/lib/types";
 
 function brightdataEnabled() {
@@ -43,7 +43,9 @@ Regras:
 - A mensagem de LinkedIn tem no máximo 300 caracteres (contando espaços).
 - A mensagem de WhatsApp é curta (2 a 4 frases), informal mas profissional, sem emojis em excesso (no máximo 1).
 - "proximo_passo" é uma orientação prática de 1 a 2 frases sobre a sequência de contato (quando usar cada canal e o que fazer se não houver resposta).
-- Não assine com nome de pessoa nem de empresa do remetente; use os marcadores [seu nome] e [sua empresa].
+- Escreva um gancho de abertura diferente para o e-mail, para o LinkedIn e para o WhatsApp: mesma informação (o sinal do lead), texto diferente em cada canal. Nunca repita a mesma frase nos três.
+- Reescreva o que o usuário vende com suas próprias palavras, adaptado ao tom de cada canal. Nunca cole o texto da proposta do usuário literalmente.
+- Assine o e-mail com o nome e a empresa do remetente informados abaixo; se nenhum dos dois for informado, assine apenas "Equipe comercial". No WhatsApp, se souber o nome ou a empresa do remetente, apresente-se com eles ("Aqui é [nome], da [empresa]"); senão, não se apresente. Nunca use os marcadores [seu nome] ou [sua empresa].
 Formato de saída (JSON):
 {
   "gancho": "1 frase que resume por que vale abordar este lead agora",
@@ -58,6 +60,8 @@ export async function POST(req: Request) {
   const lead: Partial<Lead> = body?.lead || {};
   const proposta = String(body?.proposta || "").trim();
   const segmento = String(body?.segmento || "").trim();
+  const remetenteNome = String(body?.remetenteNome || "").trim();
+  const remetenteEmpresa = String(body?.remetenteEmpresa || "").trim();
 
   if (!lead?.nome || !lead?.empresa) {
     return Response.json({ error: "Selecione um lead para escrever a abordagem." }, { status: 400 });
@@ -65,13 +69,15 @@ export async function POST(req: Request) {
   if (!proposta) {
     return Response.json({ error: "Descreva o que sua empresa vende e para quem." }, { status: 400 });
   }
+  if (remetenteNome) setConfig("REMETENTE_NOME", remetenteNome);
+  if (remetenteEmpresa) setConfig("REMETENTE_EMPRESA", remetenteEmpresa);
 
   const insumo = "dados do lead e a proposta enviada";
 
   try {
     if (!aiEnabled()) {
       await esperar(1100);
-      return Response.json({ demo: true, abordagem: abordagemDemo({ lead, proposta, segmento }), meta: meta({ demo: true, insumo }) });
+      return Response.json({ demo: true, abordagem: abordagemDemo({ lead, proposta, segmento, remetenteNome, remetenteEmpresa }), meta: meta({ demo: true, insumo }) });
     }
     let contexto = "";
     if (brightdataEnabled() && lead.site) {
@@ -89,7 +95,8 @@ Sinal sobre o lead ou a empresa: ${lead.sinal || "não informado"}
 O que a empresa do usuário vende e para quem:
 ${proposta}
 
-Segmento-alvo desta prospecção: ${segmento || "não informado"}${
+Segmento-alvo desta prospecção: ${segmento || "não informado"}
+Remetente: ${remetenteNome || "não informado"}${remetenteEmpresa ? `, da empresa ${remetenteEmpresa}` : ""}${
       contexto ? `\n\nTrecho do site da empresa do lead (contexto adicional; use só o que for relevante):\n"""\n${contexto}\n"""` : ""
     }`;
     const abordagem = await askJSON<Abordagem>({ system: SYSTEM_ABORDAGEM, prompt, maxTokens: 2000 });

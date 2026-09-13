@@ -16,9 +16,11 @@ const EXEMPLO: DadosBusca = {
   proposta:
     "Vendemos um sistema de gestão de manutenção industrial (CMMS) que reduz parada não programada de máquinas. Atendemos indústrias de médio porte que hoje controlam a manutenção em planilha, com implantação em 3 semanas e sem precisar trocar o ERP.",
   quantidade: "15",
+  remetenteNome: "Mariana Duarte",
+  remetenteEmpresa: "Zetta Manutenção Industrial",
 };
 
-const VAZIO: DadosBusca = { segmento: "", cargo: "", localizacao: "", porte: "51-200", proposta: "", quantidade: "10" };
+const VAZIO: DadosBusca = { segmento: "", cargo: "", localizacao: "", porte: "51-200", proposta: "", quantidade: "10", remetenteNome: "", remetenteEmpresa: "" };
 
 const ETAPAS_BUSCA = ["Lendo o perfil de cliente ideal informado...", "Cruzando com segmento, cargo e localização...", "Montando a lista de leads..."];
 
@@ -84,13 +86,21 @@ export default function Page() {
   const [dados, setDados] = useState<DadosBusca>(VAZIO);
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
+  const [abordagens, setAbordagens] = useState<Record<string, { abordagem: Abordagem; meta: Meta }>>({});
+  const [carregandoIds, setCarregandoIds] = useState<Set<string>>(new Set());
+  const [erroLote, setErroLote] = useState<string | null>(null);
   const autoAbrirPrimeiro = useRef(false);
   const autoEnviado = useRef(false);
 
   useScrollToResult(estado.fase === "lista" || estado.fase === "abordagem");
 
   function carregarHistorico() {
-    fetch("/api/leads").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
+    fetch("/api/leads").then((r) => r.json()).then((r) => {
+      setHistorico(r.itens);
+      if (r.remetenteNome || r.remetenteEmpresa) {
+        setDados((d) => ({ ...d, remetenteNome: d.remetenteNome || r.remetenteNome || "", remetenteEmpresa: d.remetenteEmpresa || r.remetenteEmpresa || "" }));
+      }
+    }).catch(() => setHistorico([]));
   }
 
   useEffect(() => { carregarHistorico(); }, []);
@@ -104,6 +114,9 @@ export default function Page() {
 
   async function buscarLeads(d: DadosBusca) {
     setEstado({ fase: "carregando" });
+    setAbordagens({});
+    setCarregandoIds(new Set());
+    setErroLote(null);
     try {
       const r = await fetch("/api/leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) });
       const resposta = await r.json();
@@ -119,20 +132,54 @@ export default function Page() {
     }
   }
 
+  async function gerarAbordagemParaLead(dadosBusca: DadosBusca, lead: Lead): Promise<{ abordagem: Abordagem; meta: Meta }> {
+    const r = await fetch("/api/abordagem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lead, proposta: dadosBusca.proposta, segmento: dadosBusca.segmento, remetenteNome: dadosBusca.remetenteNome, remetenteEmpresa: dadosBusca.remetenteEmpresa }),
+    });
+    const resposta = await r.json();
+    if (!r.ok) throw new Error(resposta.error || "Falha ao gerar a abordagem.");
+    return { abordagem: resposta.abordagem, meta: resposta.meta };
+  }
+
   async function buscarAbordagem(dadosBusca: DadosBusca, fonte: Fonte, leads: Lead[], metaLista: Meta, idLista: string | undefined, lead: Lead) {
+    const emCache = abordagens[lead.id];
+    if (emCache) {
+      setEstado({ fase: "abordagem", dados: dadosBusca, fonte, leads, meta: metaLista, id: idLista, lead, abordagem: emCache.abordagem, metaAbordagem: emCache.meta });
+      return;
+    }
     setEstado({ fase: "carregando-abordagem", dados: dadosBusca, fonte, leads, meta: metaLista, id: idLista, lead });
     try {
-      const r = await fetch("/api/abordagem", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lead, proposta: dadosBusca.proposta, segmento: dadosBusca.segmento }),
-      });
-      const resposta = await r.json();
-      if (!r.ok) throw new Error(resposta.error || "Falha ao gerar a abordagem.");
-      setEstado({ fase: "abordagem", dados: dadosBusca, fonte, leads, meta: metaLista, id: idLista, lead, abordagem: resposta.abordagem, metaAbordagem: resposta.meta });
+      const { abordagem, meta: metaAbordagem } = await gerarAbordagemParaLead(dadosBusca, lead);
+      setAbordagens((prev) => ({ ...prev, [lead.id]: { abordagem, meta: metaAbordagem } }));
+      setEstado({ fase: "abordagem", dados: dadosBusca, fonte, leads, meta: metaLista, id: idLista, lead, abordagem, metaAbordagem });
     } catch (e) {
       setEstado({ fase: "erro-abordagem", dados: dadosBusca, fonte, leads, meta: metaLista, id: idLista, mensagem: e instanceof Error ? e.message : "Erro inesperado." });
     }
+  }
+
+  async function escreverEmLote(dadosBusca: DadosBusca, selecionados: Lead[]) {
+    const pendentes = selecionados.filter((l) => !abordagens[l.id]);
+    if (!pendentes.length) return;
+    setErroLote(null);
+    setCarregandoIds((prev) => new Set([...prev, ...pendentes.map((l) => l.id)]));
+    const falhas: string[] = [];
+    for (const lead of pendentes) {
+      try {
+        const { abordagem, meta: metaAbordagem } = await gerarAbordagemParaLead(dadosBusca, lead);
+        setAbordagens((prev) => ({ ...prev, [lead.id]: { abordagem, meta: metaAbordagem } }));
+      } catch {
+        falhas.push(lead.nome);
+      } finally {
+        setCarregandoIds((prev) => {
+          const novo = new Set(prev);
+          novo.delete(lead.id);
+          return novo;
+        });
+      }
+    }
+    if (falhas.length) setErroLote(`Não foi possível escrever para: ${falhas.join(", ")}.`);
   }
 
   function onSubmit(e: FormEvent) {
@@ -166,7 +213,7 @@ export default function Page() {
 
   return (
     <>
-      <Topbar marca="P" nome="Prospecção com IA" area="Vendas" status={status} erro={erro} resumo="Modo demonstração: os leads e as abordagens exibidos são exemplos." />
+      <Topbar marca="P" nome="Prospecção com IA" area="Vendas" status={status} erro={erro} resumo="Modo demonstração: os leads exibidos são fictícios." />
 
       <Workspace>
         <Panel titulo="Sua lista de leads e a primeira abordagem, em minutos." lead="Descreva o cliente ideal. A IA monta a lista de leads e escreve uma abordagem personalizada para cada um.">
@@ -193,6 +240,14 @@ export default function Page() {
               />
             </Field>
             <MaisDetalhes>
+              <Row>
+                <Field label="Seu nome" htmlFor="remetenteNome" hint="Assina o e-mail e o WhatsApp, no lugar de um marcador genérico.">
+                  <input id="remetenteNome" className="input" placeholder="Seu nome" value={dados.remetenteNome ?? ""} onChange={set("remetenteNome")} />
+                </Field>
+                <Field label="Sua empresa" htmlFor="remetenteEmpresa">
+                  <input id="remetenteEmpresa" className="input" placeholder="Nome da sua empresa" value={dados.remetenteEmpresa ?? ""} onChange={set("remetenteEmpresa")} />
+                </Field>
+              </Row>
               <Field label="Porte da empresa (funcionários)" htmlFor="porte">
                 <select id="porte" className="input" value={dados.porte} onChange={set("porte")}>
                   <option value="11-50">11 a 50 funcionários</option>
@@ -242,7 +297,18 @@ export default function Page() {
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_BUSCA} />}
           {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} />}
           {estado.fase === "lista" && (
-            <Resultado dados={estado.dados} fonte={estado.fonte} leads={estado.leads} meta={estado.meta} id={estado.id} onEscrever={(lead) => buscarAbordagem(estado.dados, estado.fonte, estado.leads, estado.meta, estado.id, lead)} />
+            <Resultado
+              dados={estado.dados}
+              fonte={estado.fonte}
+              leads={estado.leads}
+              meta={estado.meta}
+              id={estado.id}
+              onEscrever={(lead) => buscarAbordagem(estado.dados, estado.fonte, estado.leads, estado.meta, estado.id, lead)}
+              onEscreverLote={(selecionados) => escreverEmLote(estado.dados, selecionados)}
+              leadsProntos={new Set(Object.keys(abordagens))}
+              carregandoIds={carregandoIds}
+              erroLote={erroLote}
+            />
           )}
           {estado.fase === "carregando-abordagem" && <Loading etapas={etapasAbordagem(estado.lead.nome)} />}
           {estado.fase === "erro-abordagem" && (
@@ -258,7 +324,29 @@ export default function Page() {
   );
 }
 
-export function Resultado({ dados, fonte, leads, meta, id, onEscrever }: { dados: DadosBusca; fonte: Fonte; leads: Lead[]; meta: Meta; id?: string; onEscrever?: (lead: Lead) => void }) {
+export function Resultado({
+  dados,
+  fonte,
+  leads,
+  meta,
+  id,
+  onEscrever,
+  onEscreverLote,
+  leadsProntos,
+  carregandoIds,
+  erroLote,
+}: {
+  dados: DadosBusca;
+  fonte: Fonte;
+  leads: Lead[];
+  meta: Meta;
+  id?: string;
+  onEscrever?: (lead: Lead) => void;
+  onEscreverLote?: (leads: Lead[]) => void;
+  leadsProntos?: Set<string>;
+  carregandoIds?: Set<string>;
+  erroLote?: string | null;
+}) {
   return (
     <article className="reveal">
       <ResultHead titulo="Leads encontrados" subtitulo={fonte === "demo" ? "Dados de exemplo" : "Buscado via Apollo.io"}>
@@ -272,15 +360,61 @@ export function Resultado({ dados, fonte, leads, meta, id, onEscrever }: { dados
 
       <Origem meta={meta} />
 
-      <ConteudoLeads dados={dados} leads={leads} onEscrever={onEscrever} />
+      <ConteudoLeads dados={dados} leads={leads} onEscrever={onEscrever} onEscreverLote={onEscreverLote} leadsProntos={leadsProntos} carregandoIds={carregandoIds} erroLote={erroLote} />
     </article>
   );
 }
 
 /** Resumo + tabela de leads (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
-export function ConteudoLeads({ dados, leads, onEscrever }: { dados: DadosBusca; leads: Lead[]; onEscrever?: (lead: Lead) => void }) {
+export function ConteudoLeads({
+  dados,
+  leads,
+  onEscrever,
+  onEscreverLote,
+  leadsProntos = new Set(),
+  carregandoIds = new Set(),
+  erroLote,
+}: {
+  dados: DadosBusca;
+  leads: Lead[];
+  onEscrever?: (lead: Lead) => void;
+  onEscreverLote?: (leads: Lead[]) => void;
+  leadsProntos?: Set<string>;
+  carregandoIds?: Set<string>;
+  erroLote?: string | null;
+}) {
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const interativo = Boolean(onEscrever);
+
+  function alternarSelecao(id: string) {
+    setSelecionados((prev) => {
+      const novo = new Set(prev);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  }
+
   const colunas: Coluna<Lead>[] = [
-    { chave: "nome", titulo: "Nome", papel: "titulo", largura: "18%", render: (l) => <strong>{l.nome}</strong> },
+    {
+      chave: "nome",
+      titulo: "Nome",
+      papel: "titulo",
+      largura: "20%",
+      render: (l) => (
+        <div className="flex items-start gap-2">
+          {interativo && <input type="checkbox" className="w-4 h-4 mt-0.5 shrink-0" checked={selecionados.has(l.id)} onChange={() => alternarSelecao(l.id)} aria-label={`Selecionar ${l.nome}`} />}
+          <div className="min-w-0">
+            <strong className="block">{l.nome}</strong>
+            <div className="flex flex-wrap gap-x-2 text-[12px] mt-0.5">
+              {l.linkedin && <a href={l.linkedin} target="_blank" rel="noopener noreferrer" className="text-accent-ink hover:underline">LinkedIn</a>}
+              {l.site && <a href={l.site} target="_blank" rel="noopener noreferrer" className="text-accent-ink hover:underline">Site</a>}
+            </div>
+            {leadsProntos.has(l.id) && <span className="inline-block mt-1"><Chip nivel="positivo">Abordagem pronta</Chip></span>}
+          </div>
+        </div>
+      ),
+    },
     { chave: "cargo", titulo: "Cargo", largura: "16%", render: (l) => l.cargo },
     { chave: "empresa", titulo: "Empresa", papel: "detalhe", render: (l) => l.empresa },
     { chave: "porte", titulo: "Porte", papel: "chip", largura: "130px", render: (l) => <Chip nivel="neutral">{l.porte}</Chip> },
@@ -292,16 +426,37 @@ export function ConteudoLeads({ dados, leads, onEscrever }: { dados: DadosBusca;
       chave: "acao",
       titulo: "",
       render: (l) => (
-        <button type="button" className="btn-ghost !px-3.5 !py-2 !text-[13px] whitespace-nowrap" onClick={() => onEscrever(l)}>
-          Escrever abordagem
+        <button
+          type="button"
+          className="btn-ghost !px-3.5 !py-2 !text-[13px] whitespace-nowrap"
+          disabled={carregandoIds.has(l.id)}
+          onClick={() => onEscrever(l)}
+        >
+          {carregandoIds.has(l.id) ? "Escrevendo..." : leadsProntos.has(l.id) ? "Ver abordagem" : "Escrever abordagem"}
         </button>
       ),
     });
   }
 
+  const leadsSelecionados = leads.filter((l) => selecionados.has(l.id));
+
   return (
     <>
       <p className="summary">{resumoBusca(dados, leads.length)}</p>
+      {onEscreverLote && selecionados.size > 0 && (
+        <div className="card shadow-none flex items-center justify-between gap-3 px-3.5 py-2.5 mb-3">
+          <span className="text-sm text-muted">{selecionados.size} lead{selecionados.size === 1 ? "" : "s"} selecionado{selecionados.size === 1 ? "" : "s"}</span>
+          <button
+            type="button"
+            className="btn-primary !w-auto"
+            disabled={carregandoIds.size > 0}
+            onClick={() => onEscreverLote(leadsSelecionados)}
+          >
+            {carregandoIds.size > 0 ? "Escrevendo..." : "Escrever para os selecionados"}
+          </button>
+        </div>
+      )}
+      {erroLote && <p className="text-danger text-sm mb-3">{erroLote}</p>}
       <DataTable colunas={colunas} linhas={leads} />
     </>
   );

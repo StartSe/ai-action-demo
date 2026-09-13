@@ -145,11 +145,13 @@ export function leadsDemo({
   });
 }
 
-// Primeira frase da proposta, curta, para caber nas mensagens.
-function resumirProposta(proposta: string) {
+// Primeira frase da proposta, sem o verbo comercial de abertura ("Vendemos", "Oferecemos"...) e sem citar o texto
+// original na íntegra: é uma reescrita curta em tom de benefício, não uma cópia literal da proposta do usuário.
+function reescreverProposta(proposta: string) {
   const primeira = String(proposta || "").split(/(?<=[.!?])\s+/)[0].trim().replace(/[.!?]$/, "");
-  const curta = primeira.length > 140 ? primeira.slice(0, 137).replace(/\s+\S*$/, "") + "..." : primeira;
-  return curta || "ajudar empresas como a sua a ganhar eficiência na operação";
+  const semAbertura = primeira.replace(/^(vendemos|oferecemos|temos|somos|fazemos|criamos|desenvolvemos|ajudamos)\s+/i, "");
+  const curta = semAbertura.length > 130 ? semAbertura.slice(0, 127).replace(/\s+\S*$/, "") + "..." : semAbertura;
+  return curta ? curta[0].toLowerCase() + curta.slice(1) : "ganhar mais eficiência na operação";
 }
 
 function sinalComoFrase(sinal?: string) {
@@ -157,36 +159,57 @@ function sinalComoFrase(sinal?: string) {
   return s ? s[0].toLowerCase() + s.slice(1) : "está em um momento de crescimento";
 }
 
-export function abordagemDemo({ lead = {} as Partial<Lead>, proposta = "", segmento = "" }: { lead?: Partial<Lead>; proposta?: string; segmento?: string } = {}): Abordagem {
+// Como o remetente se apresenta (WhatsApp/LinkedIn), a partir do que foi preenchido em "Seu nome"/"Sua empresa".
+// Sem nenhum dos dois preenchidos, a apresentação é omitida (nunca aparece um marcador tipo "[seu nome]").
+function aberturaRemetente(remetenteNome: string, remetenteEmpresa: string) {
+  if (remetenteNome && remetenteEmpresa) return `Aqui é ${remetenteNome}, da ${remetenteEmpresa}. `;
+  if (remetenteNome) return `Aqui é ${remetenteNome}. `;
+  if (remetenteEmpresa) return `Aqui é da ${remetenteEmpresa}. `;
+  return "";
+}
+
+export function abordagemDemo({
+  lead = {} as Partial<Lead>,
+  proposta = "",
+  segmento = "",
+  remetenteNome = "",
+  remetenteEmpresa = "",
+}: { lead?: Partial<Lead>; proposta?: string; segmento?: string; remetenteNome?: string; remetenteEmpresa?: string } = {}): Abordagem {
   const primeiro = String(lead.nome || "Ana").split(" ")[0];
   const empresa = lead.empresa || "sua empresa";
-  const oferta = resumirProposta(proposta);
+  const oferta = reescreverProposta(proposta);
   const sinal = sinalComoFrase(lead.sinal);
   const setor = (lead.setor || segmento || "seu setor").toLowerCase();
-  const gancho = `${primeiro}, vi que a ${empresa} ${sinal}. Em ${setor}, esse costuma ser o momento em que a operação sente mais a falta de previsibilidade.`;
+  const nome = String(remetenteNome || "").trim();
+  const empresaRemetente = String(remetenteEmpresa || "").trim();
+  const assinatura = [nome, empresaRemetente].filter(Boolean).join("\n") || "Equipe comercial";
+
+  // Um gancho de abertura por canal: mesma informação (o sinal do lead), texto diferente em cada um.
+  const ganchoEmail = `${primeiro}, vi que a ${empresa} ${sinal}. Em ${setor}, esse costuma ser o momento em que a operação sente mais a falta de previsibilidade.`;
+  const ganchoLinkedin = `Reparei que a ${empresa} ${sinal} — um sinal comum em ${setor} de que vale rever a operação.`;
+  const ganchoWhatsapp = `Vi que a ${empresa} ${sinal} e lembrei de um caso parecido em ${setor}.`;
 
   const email = {
     assunto: `${empresa}: uma ideia sobre ${setor}`,
     corpo: `Olá, ${primeiro}.
 
-${gancho}
+${ganchoEmail}
 
-Sobre nós: ${oferta} Em empresas do porte da ${empresa}, o resultado costuma aparecer nas primeiras semanas: menos retrabalho, decisões mais rápidas e o time focado no que gera receita.
+Ajudamos empresas como a ${empresa} a contar com ${oferta}. O resultado costuma aparecer nas primeiras semanas: menos retrabalho, decisões mais rápidas e o time focado no que gera receita.
 
 Faz sentido uma conversa de 20 minutos na próxima semana? Posso mostrar como fizemos isso em uma empresa parecida com a sua e você avalia se vale seguir.
 
 Abraço,
-[seu nome]
-[sua empresa]`,
+${assinatura}`,
   };
 
-  let linkedin = `Olá, ${primeiro}. Vi que a ${empresa} ${sinal}. Acompanho empresas de ${setor} nesse momento e gostaria de trocar ideias sobre como reduzir esse tipo de dor. Podemos nos conectar?`;
+  let linkedin = `${ganchoLinkedin} Posso te enviar uma ideia rápida sobre isso?`;
   if (linkedin.length > 300) linkedin = linkedin.slice(0, 297).replace(/\s+\S*$/, "") + "...";
 
-  const whatsapp = `Oi, ${primeiro}! Aqui é [seu nome], da [sua empresa]. Vi que a ${empresa} ${sinal} e lembrei de um caso parecido em ${setor}. Posso te mandar um resumo de 2 minutos por aqui?`;
+  const whatsapp = `Oi, ${primeiro}! ${aberturaRemetente(nome, empresaRemetente)}${ganchoWhatsapp} Posso te mandar um resumo de 2 minutos por aqui?`;
 
   return {
-    gancho,
+    gancho: ganchoEmail,
     email,
     linkedin,
     whatsapp,

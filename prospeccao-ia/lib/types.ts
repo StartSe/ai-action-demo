@@ -7,6 +7,8 @@ export interface DadosBusca {
   porte: string;
   proposta: string;
   quantidade: string;
+  remetenteNome?: string;
+  remetenteEmpresa?: string;
 }
 
 export interface Lead {
