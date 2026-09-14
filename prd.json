@@ -150,7 +150,7 @@
         "Testar via POST /api/rotinas/<id>/executar-agora e conferir o texto entregue; Verify in browser using dev-browser skill: criar a rotina pelo botão e ver o cartão Rotinas em /setup"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

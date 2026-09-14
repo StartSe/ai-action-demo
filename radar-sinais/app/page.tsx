@@ -197,7 +197,91 @@ export function Resultado({ radar, dados, meta, id }: { radar: Radar; dados: Dad
       <Origem meta={meta} />
 
       <ConteudoRadar radar={radar} />
+
+      <ReceberRadarSemanal dados={dados} />
     </article>
+  );
+}
+
+type EstadoNotificacoes = { configurada: boolean; canal: "email" | "slack"; destino: string };
+type RotinaRadar = { id: string; tipo: string; parametros: Partial<DadosRadar> };
+
+/** Mesma normalização de lib/rotinas-do-app.ts (chavePerfil), duplicada aqui porque aquele arquivo
+ * importa lib/historico.ts (node:sqlite) e não pode ser importado por um componente "use client". */
+function chavePerfil(temas: string[], setor?: string): string {
+  return [...temas.map((t) => t.trim().toLowerCase()).sort(), (setor || "").trim().toLowerCase()].join("|");
+}
+
+/** Depois de um radar, oferece uma rotina semanal para o mesmo perfil (temas+setor): toda segunda às 8h,
+ * comparando com o radar anterior desse perfil e avisando o que é novo e o que continua forte. */
+function ReceberRadarSemanal({ dados }: { dados: DadosRadar }) {
+  const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
+  const [rotinaId, setRotinaId] = useState<string | null | undefined>(undefined);
+  const [criando, setCriando] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/setup")
+      .then((r) => r.json())
+      .then((d) => {
+        const integracao = (d.integracoes || []).find((i: { id: string }) => i.id === "notificacoes");
+        const campos: { chave: string; valorVisivel?: string }[] = integracao?.campos || [];
+        const canal = campos.find((c) => c.chave === "NOTIFICACOES_CANAL")?.valorVisivel === "slack" ? "slack" : "email";
+        const destino = campos.find((c) => c.chave === "NOTIFICACOES_DESTINO")?.valorVisivel || "";
+        setNotificacoes({ configurada: Boolean(integracao?.configurada), canal, destino });
+      })
+      .catch(() => setNotificacoes({ configurada: false, canal: "email", destino: "" }));
+    const perfilAtual = chavePerfil(dados.temas, dados.setor);
+    fetch("/api/rotinas")
+      .then((r) => r.json())
+      .then((d) => {
+        const existente = (d.itens || []).find((i: RotinaRadar) => i.tipo === "radar-semanal" && chavePerfil(i.parametros.temas || [], i.parametros.setor) === perfilAtual);
+        setRotinaId(existente?.id ?? null);
+      })
+      .catch(() => setRotinaId(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function criar() {
+    if (!notificacoes?.configurada) return;
+    setCriando(true);
+    try {
+      const r = await fetch("/api/rotinas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "radar-semanal",
+          frequencia: "semanal",
+          diaSemana: 1,
+          hora: "08:00",
+          canal: notificacoes.canal,
+          destino: notificacoes.canal === "email" ? notificacoes.destino || undefined : undefined,
+          parametros: { temas: dados.temas, setor: dados.setor },
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Não foi possível criar a rotina.");
+      setRotinaId(d.id);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar a rotina.");
+    } finally {
+      setCriando(false);
+    }
+  }
+
+  if (rotinaId === undefined || notificacoes === null) return null;
+
+  return (
+    <Item className="mt-4">
+      {rotinaId ? (
+        <p className="text-muted text-sm">Você já recebe este radar toda semana para esses temas, toda segunda às 8h.</p>
+      ) : notificacoes.configurada ? (
+        <button type="button" className="btn-ghost !w-auto" onClick={criar} disabled={criando}>
+          {criando ? "Criando..." : "Receber este radar toda semana"}
+        </button>
+      ) : (
+        <a href="/setup#notificacoes" className="btn-ghost !w-auto">Receber este radar toda semana</a>
+      )}
+    </Item>
   );
 }
 
