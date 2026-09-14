@@ -254,7 +254,7 @@
         "Testar via curl um POST no webhook com assinatura válida (script descartável que calcula o HMAC) e um inválido (401); conferir que a conversa aparece no histórico"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

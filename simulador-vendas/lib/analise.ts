@@ -115,3 +115,18 @@ export async function gerarAnalise(dados: DadosAnalise): Promise<{ demo: boolean
   const id = salvar({ tipo: "conversa", titulo, entrada: conversa, saida: analise, meta: metaGerada, expiraEmDias: 90 });
   return { demo, conversa, analise, meta: metaGerada, id, titulo };
 }
+
+/**
+ * Ponto de entrada para uma conversa que já chega estruturada (nunca foi colada como texto): usado
+ * pelo aviso automático de pós-conversa da ElevenLabs (app/webhook/elevenlabs) e, futuramente, pela
+ * sala de simulação por texto/voz. Reaproveita a mesma análise e gravação no histórico de gerarAnalise.
+ */
+export async function salvarConversaAnalisada(conversa: Conversa, criterios: string[] = CRITERIOS_PADRAO): Promise<{ demo: boolean; analise: Analise; meta: Meta; id?: string; titulo: string }> {
+  const vendedor = conversa.vendedorId ? obterVendedor(conversa.vendedorId) : null;
+  const cenario = conversa.cenarioId ? obterCenario(conversa.cenarioId) : null;
+  const titulo = tituloResultado(vendedor, cenario);
+
+  const { demo, analise, meta: metaGerada } = await analisarConversa(conversa, criterios, cenario);
+  const id = salvar({ tipo: "conversa", titulo, entrada: conversa, saida: analise, meta: metaGerada, expiraEmDias: 90 });
+  return { demo, analise, meta: metaGerada, id, titulo };
+}
