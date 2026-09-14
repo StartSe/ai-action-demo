@@ -289,7 +289,7 @@
         "Verify in browser using dev-browser skill: painel com os dados do demo em desktop e celular"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

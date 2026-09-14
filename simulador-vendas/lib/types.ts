@@ -62,3 +62,42 @@ export interface DadosAnalise {
   cenarioId?: string;
   criterios?: string[];
 }
+
+/** Uma conversa já analisada de um vendedor, resumida para a lista "Ver conversas" do painel da equipe. */
+export interface ConversaResumoVendedor {
+  resultadoId: string;
+  titulo: string;
+  cenario?: string;
+  nota: number;
+  criadoEm: string;
+}
+
+export interface VendedorPainel {
+  vendedorId: string;
+  nome: string;
+  conversas: number;
+  notaMedia: number;
+  tendencia: "subindo" | "estavel" | "caindo";
+  criterioMaisFraco: string;
+  ultimaConversa: string | null;
+  conversasRecentes: ConversaResumoVendedor[];
+}
+
+export interface CriterioFraco {
+  nome: string;
+  notaMedia: number;
+}
+
+/** Painel da equipe: recalculado a cada clique de "Ver o painel da equipe" (US-017). */
+export interface PainelEquipe {
+  dias: number;
+  notaMedia: number;
+  notaMediaAnterior: number | null;
+  vendedores: VendedorPainel[];
+  criteriosFracos: CriterioFraco[];
+}
+
+/** Único parâmetro do painel: a janela de dias considerada (padrão 30). */
+export interface DadosPainel {
+  dias: number;
+}

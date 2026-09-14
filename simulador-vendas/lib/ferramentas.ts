@@ -1,6 +1,7 @@
 // Ferramentas expostas via app/mcp/route.ts para assistentes de IA (Claude, ChatGPT etc.).
 // Cada app da suíte declara as suas aqui, reaproveitando a mesma lógica das rotas normais.
 import { gerarAnalise } from "./analise";
+import { gerarPainelEquipe } from "./painel-equipe";
 import type { Ferramenta } from "./mcp";
 import type { DadosAnalise } from "./types";
 
@@ -28,6 +29,21 @@ export const FERRAMENTAS: Ferramenta[] = [
         cenarioId: args.cenario ? String(args.cenario) : undefined,
       };
       return gerarAnalise(dados);
+    },
+  },
+  {
+    nome: "painel_equipe",
+    descricao: "Monta o painel da equipe de vendas: nota média do período (com variação contra o período anterior), e para cada vendedor a quantidade de conversas, a nota média, a tendência (subindo/estável/caindo) e o critério de venda consultiva mais fraco.",
+    schema: {
+      type: "object",
+      properties: {
+        dias: { type: "number", description: "Tamanho da janela em dias considerada (padrão 30)" },
+      },
+    },
+    async executar(args) {
+      const diasBruto = Number(args.dias);
+      const dias = Number.isFinite(diasBruto) && diasBruto > 0 ? Math.round(diasBruto) : 30;
+      return gerarPainelEquipe(dias);
     },
   },
 ];

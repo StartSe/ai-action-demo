@@ -1,31 +1,52 @@
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 import { Origem } from "@/components/ui";
 import { data } from "@/lib/formato";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
-import type { Analise, Conversa } from "@/lib/types";
-import { ConteudoAnalise } from "../../page";
+import type { Analise, Conversa, DadosPainel, PainelEquipe } from "@/lib/types";
+import { ConteudoAnalise, ConteudoPainel } from "../../page";
 import { ImprimirAoCarregar } from "./ImprimirAoCarregar";
 
-export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
-  const { id } = await params;
-  const registro = obter<Conversa, Analise, Meta>(id);
-  if (!registro || registro.tipo !== "conversa") notFound();
-
+function Moldura({ titulo, meta, children }: { titulo: string; meta: Meta; children: ReactNode }) {
   return (
     <div className="print-sheet max-w-[860px] mx-auto px-8 py-10 max-md:px-4">
       <ImprimirAoCarregar />
       <header className="mb-8 pb-4 border-b border-line">
         <div className="text-[13px] font-semibold text-muted">Simulador de Vendas</div>
-        <h1 className="text-2xl font-extrabold tracking-[-0.01em]">{registro.titulo}</h1>
+        <h1 className="text-2xl font-extrabold tracking-[-0.01em]">{titulo}</h1>
         <div className="text-muted text-sm">{data(new Date())}</div>
       </header>
 
-      <ConteudoAnalise conversa={registro.entrada} analise={registro.saida} />
+      {children}
 
       <footer className="mt-8 pt-4 border-t border-line">
-        <Origem meta={registro.meta} />
+        <Origem meta={meta} />
       </footer>
     </div>
+  );
+}
+
+export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
+  const { id } = await params;
+  const tipagem = obter<unknown, unknown, Meta>(id);
+  if (!tipagem) notFound();
+
+  if (tipagem.tipo === "painel") {
+    const registro = obter<DadosPainel, PainelEquipe, Meta>(id)!;
+    return (
+      <Moldura titulo={registro.titulo} meta={registro.meta}>
+        <ConteudoPainel painel={registro.saida} />
+      </Moldura>
+    );
+  }
+
+  if (tipagem.tipo !== "conversa") notFound();
+  const registro = obter<Conversa, Analise, Meta>(id)!;
+
+  return (
+    <Moldura titulo={registro.titulo} meta={registro.meta}>
+      <ConteudoAnalise conversa={registro.entrada} analise={registro.saida} />
+    </Moldura>
   );
 }

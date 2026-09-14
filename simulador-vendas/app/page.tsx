@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Chip, CopyButton, DataTable, Empty, Entregar, ErrorBox, Field, Item, Loading, MaisDetalhes, Origem, Panel, Privacidade, Destaque, ResultHead, Row, Section, Stage, Topbar, Workspace, data, numero, useScrollToResult, useStatus } from "@/components/ui";
+import { GraficoCriteriosFracos } from "@/components/GraficoCriteriosFracos";
+import { VendedoresPainel } from "@/components/VendedoresPainel";
 import { CRITERIOS_PADRAO } from "@/lib/criterios";
 import type { Meta } from "@/lib/ai";
-import type { Analise, Cenario, Conversa, DadosAnalise, Vendedor } from "@/lib/types";
+import type { Analise, Cenario, Conversa, DadosAnalise, PainelEquipe, Vendedor } from "@/lib/types";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
 
@@ -42,7 +44,8 @@ type Estado =
   | { fase: "vazio" }
   | { fase: "carregando" }
   | { fase: "erro"; mensagem: string; dados: DadosAnalise }
-  | { fase: "pronto"; conversa: Conversa; analise: Analise; meta: Meta; id?: string; titulo: string; dados: DadosAnalise };
+  | { fase: "pronto"; conversa: Conversa; analise: Analise; meta: Meta; id?: string; titulo: string; dados: DadosAnalise }
+  | { fase: "painel"; painel: PainelEquipe; meta: Meta; id: string; titulo: string };
 
 export default function Page() {
   const { status, erro } = useStatus();
@@ -58,9 +61,11 @@ export default function Page() {
   const [salvandoVendedor, setSalvandoVendedor] = useState(false);
   const [criandoLinkTreino, setCriandoLinkTreino] = useState(false);
   const [linkTreino, setLinkTreino] = useState<string | null>(null);
+  const [gerandoPainel, setGerandoPainel] = useState(false);
+  const [erroPainel, setErroPainel] = useState<string | null>(null);
   const autoEnviado = useRef(false);
 
-  useScrollToResult(estado.fase === "pronto");
+  useScrollToResult(estado.fase === "pronto" || estado.fase === "painel");
 
   function carregarVendedores() {
     fetch("/api/vendedores").then((r) => r.json()).then((r) => setVendedores(r.itens)).catch(() => setVendedores([]));
@@ -118,6 +123,21 @@ export default function Page() {
       if (r.ok) setLinkTreino(resposta.url);
     } finally {
       setCriandoLinkTreino(false);
+    }
+  }
+
+  async function verPainelEquipe() {
+    setGerandoPainel(true);
+    setErroPainel(null);
+    try {
+      const r = await fetch("/api/painel-equipe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dias: 30 }) });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Não foi possível montar o painel da equipe.");
+      setEstado({ fase: "painel", painel: resposta.painel, meta: resposta.meta, id: resposta.id, titulo: resposta.titulo });
+    } catch (e) {
+      setErroPainel(e instanceof Error ? e.message : "Erro inesperado.");
+    } finally {
+      setGerandoPainel(false);
     }
   }
 
@@ -234,6 +254,14 @@ export default function Page() {
 
             <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Analisando" : "Analisar a conversa"}</button>
           </form>
+
+          <div className="card shadow-none px-4 py-4 mb-4">
+            <p className="font-bold text-[14.5px] mb-1">Painel da equipe</p>
+            <p className="text-[12.5px] text-muted mb-3">Veja como cada vendedor evolui e onde a equipe tropeça, a partir das conversas já analisadas.</p>
+            <button type="button" className="btn-ghost" disabled={gerandoPainel} onClick={verPainelEquipe}>{gerandoPainel ? "Montando..." : "Ver o painel da equipe"}</button>
+            {erroPainel && <p className="text-danger text-[12.5px] mt-2">{erroPainel}</p>}
+          </div>
+
           <Privacidade detalhe="A conversa e a análise ficam salvas neste app por 90 dias, até você apagar." />
 
           <MaisDetalhes titulo="Últimos resultados">
@@ -262,6 +290,7 @@ export default function Page() {
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
           {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={() => gerar(estado.dados)} />}
           {estado.fase === "pronto" && <Resultado conversa={estado.conversa} analise={estado.analise} meta={estado.meta} id={estado.id} titulo={estado.titulo} />}
+          {estado.fase === "painel" && <ResultadoPainel painel={estado.painel} meta={estado.meta} id={estado.id} titulo={estado.titulo} />}
         </Stage>
       </Workspace>
     </>
@@ -381,4 +410,99 @@ function analiseParaTexto(analise: Analise): string {
   l.push("", "Momentos-chave:");
   analise.momentos.forEach((m) => l.push(`- ${m}`));
   return l.join("\n");
+}
+
+function tomVariacaoPainel(variacao: number | null): "ok" | "warn" | "danger" | "neutro" {
+  if (variacao === null) return "neutro";
+  if (variacao > 0) return "ok";
+  if (variacao < 0) return "danger";
+  return "neutro";
+}
+
+function interpretacaoVariacaoPainel(variacao: number | null): string {
+  if (variacao === null) return "Sem conversas suficientes no período anterior para comparar.";
+  const sinal = variacao > 0 ? "+" : "";
+  return `${sinal}${numero(variacao, 1)} em relação aos 30 dias anteriores`;
+}
+
+export function ResultadoPainel({ painel, meta, id, titulo }: { painel: PainelEquipe; meta: Meta; id?: string; titulo: string }) {
+  return (
+    <article className="reveal">
+      <ResultHead titulo={titulo} subtitulo={`${painel.vendedores.length} vendedor${painel.vendedores.length === 1 ? "" : "es"} com conversas no período`}>
+        <Entregar id={id} titulo={titulo} texto={() => painelParaTexto(painel)} extras={[{ rotulo: "Baixar notas da equipe (CSV)", onClick: () => exportarNotasEquipeCSV(painel) }]} />
+      </ResultHead>
+
+      <Origem meta={meta} />
+
+      <ConteudoPainel painel={painel} />
+    </article>
+  );
+}
+
+/** Corpo do painel (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
+export function ConteudoPainel({ painel }: { painel: PainelEquipe }) {
+  const variacao = painel.notaMediaAnterior === null ? null : Math.round((painel.notaMedia - painel.notaMediaAnterior) * 10) / 10;
+  return (
+    <>
+      <Destaque
+        valor={numero(painel.notaMedia, 1)}
+        rotulo={`Nota média da equipe (últimos ${painel.dias} dias)`}
+        interpretacao={interpretacaoVariacaoPainel(variacao)}
+        tom={tomVariacaoPainel(variacao)}
+      />
+
+      <Section titulo="Vendedores">
+        <VendedoresPainel vendedores={painel.vendedores} />
+      </Section>
+
+      <Section titulo="Critérios mais fracos da equipe">
+        <Item>
+          <GraficoCriteriosFracos criterios={painel.criteriosFracos} />
+        </Item>
+      </Section>
+
+      <Section titulo="Em breve">
+        <div className="grid grid-cols-2 max-md:grid-cols-1 gap-3.5">
+          <Item className="opacity-60">
+            <div className="mb-2"><Chip nivel="neutral">Em breve</Chip></div>
+            <h3 className="font-bold mb-1">Analisar ligações reais do time</h3>
+            <p className="text-muted text-sm">Conecte as gravações de chamadas reais para a mesma análise por critérios, sem depender de conversas coladas.</p>
+          </Item>
+          <Item className="opacity-60">
+            <div className="mb-2"><Chip nivel="neutral">Em breve</Chip></div>
+            <h3 className="font-bold mb-1">Levar as notas para o CRM</h3>
+            <p className="text-muted text-sm">Envie a nota e os destaques de cada conversa direto para o registro do negócio no seu CRM.</p>
+          </Item>
+        </div>
+      </Section>
+    </>
+  );
+}
+
+function painelParaTexto(painel: PainelEquipe): string {
+  const l: string[] = [`Painel da equipe — últimos ${painel.dias} dias`, `Nota média: ${numero(painel.notaMedia, 1)}`, ""];
+  l.push("Vendedores:");
+  painel.vendedores.forEach((v) => l.push(`- ${v.nome}: ${numero(v.notaMedia, 1)} (${v.conversas} conversa${v.conversas === 1 ? "" : "s"}, tendência ${v.tendencia}, critério mais fraco: ${v.criterioMaisFraco})`));
+  l.push("", "Critérios mais fracos da equipe:");
+  painel.criteriosFracos.forEach((c) => l.push(`- ${c.nome}: ${numero(c.notaMedia, 1)}`));
+  return l.join("\n");
+}
+
+function exportarNotasEquipeCSV(painel: PainelEquipe) {
+  const cabecalho = ["Vendedor", "Conversas", "Nota média", "Tendência", "Critério mais fraco", "Última conversa"];
+  const linhas = [cabecalho.join(";")];
+  painel.vendedores.forEach((v) => {
+    const campos = [v.nome, String(v.conversas), numero(v.notaMedia, 1), v.tendencia, v.criterioMaisFraco, v.ultimaConversa ? data(v.ultimaConversa) : ""];
+    linhas.push(campos.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"));
+  });
+  const csv = "﻿" + linhas.join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "notas-equipe.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
