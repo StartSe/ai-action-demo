@@ -102,7 +102,7 @@
         "Verify in browser using dev-browser skill: abrir ?exemplo=1, clicar em um nó de tema e em um de sinal, conferir no celular"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

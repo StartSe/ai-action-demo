@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Chip, DataTable, Destaque, Empty, Entregar, ErrorBox, Field, Item, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
+import { Grafo, grafoParaJSON } from "@/components/Grafo";
 import type { Meta } from "@/lib/ai";
 import type { DadosRadar, Radar, Sinal } from "@/lib/types";
 
@@ -182,7 +183,15 @@ export function Resultado({ radar, dados, meta, id }: { radar: Radar; dados: Dad
   return (
     <article className="reveal">
       <ResultHead titulo="Radar de sinais" subtitulo={`Últimos ${radar.periodoDias} dias · ${dados.temas.join(", ")}`}>
-        <Entregar id={id} titulo="Radar de sinais" texto={() => radarParaTexto(radar)} />
+        <Entregar
+          id={id}
+          titulo="Radar de sinais"
+          texto={() => radarParaTexto(radar)}
+          extras={[
+            { rotulo: "Baixar grafo (JSON)", onClick: () => baixarGrafoJSON(radar) },
+            { rotulo: "Copiar sinais como lista", onClick: () => copiarSinaisComoLista(radar) },
+          ]}
+        />
       </ResultHead>
 
       <Origem meta={meta} />
@@ -206,6 +215,10 @@ export function ConteudoRadar({ radar }: { radar: Radar }) {
       />
 
       <p className="summary">{resumoRadar(radar)}</p>
+
+      <Section titulo="Mapa de conexões">
+        <Grafo nos={radar.nos} arestas={radar.arestas} sinais={radar.sinais} />
+      </Section>
 
       <Section titulo="Sinais">
         <DataTable
@@ -276,6 +289,24 @@ function interpretacaoDestaque(fortes: number): string {
   if (fortes >= 4) return "Vários sinais fortes ao mesmo tempo — vale revisar prioridades ainda esta semana.";
   if (fortes >= 1) return "Pelo menos um sinal forte pede uma atenção mais próxima.";
   return "Nenhum sinal forte neste período — bom momento para só monitorar.";
+}
+
+function baixarGrafoJSON(radar: Radar) {
+  const payload = grafoParaJSON(radar.nos, radar.arestas);
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "radar-grafo.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function copiarSinaisComoLista(radar: Radar) {
+  const texto = radar.sinais.map((s) => `- ${s.titulo} [força ${s.forca}, ${s.tendencia}]`).join("\n");
+  try { await navigator.clipboard.writeText(texto); } catch { alert(texto); }
 }
 
 function radarParaTexto(radar: Radar): string {
