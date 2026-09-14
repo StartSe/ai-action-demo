@@ -158,6 +158,22 @@
       "captura": "capturas/voz-do-cliente.png",
       "capacidades": ["artefato", "mcp", "formulario", "rotina"],
       "demo": null
+    },
+    {
+      "id": "radar-sinais",
+      "nome": "Radar de Sinais",
+      "areas": [
+        "Estratégia",
+        "Inovação"
+      ],
+      "problema": "Movimentos do mercado chegam tarde e dispersos.",
+      "ia": "Busca o que saiu no período sobre os temas acompanhados, agrupa em sinais e mostra as conexões.",
+      "integracoes": "Só a IA (OpenRouter). Busca em fontes reais chega numa próxima versão.",
+      "acento": "#0e7490",
+      "porta": 3011,
+      "captura": "capturas/radar-sinais.png",
+      "capacidades": ["artefato", "mcp", "rotina"],
+      "demo": null
     }
   ]
 }

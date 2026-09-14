@@ -84,7 +84,7 @@
         "Verify in browser using dev-browser skill: desktop vazio 1400x900 com botão primário visível, ?exemplo=1&captura=1 em desktop e celular 390px"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
