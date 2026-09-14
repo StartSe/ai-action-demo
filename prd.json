@@ -271,7 +271,7 @@
         "Verify in browser using dev-browser skill: abrir a sala sem integração em celular e desktop, conversar por texto e ver a análise"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

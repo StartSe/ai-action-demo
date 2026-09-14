@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { getConfig, setConfig } from "@/lib/store";
 import { salvarConversaAnalisada } from "@/lib/analise";
 import { CRITERIOS_PADRAO } from "@/lib/criterios";
+import { obter as obterSala, registrarResultado } from "@/lib/salas";
 import type { Conversa, LinhaTranscricao } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -65,21 +66,23 @@ async function processar(corpo: string): Promise<void> {
   if (transcricao.length === 0) return;
 
   const dynamicVars = evento.data?.dynamic_variables || {};
-  const vendedorId = dynamicVars.vendedor_id != null ? String(dynamicVars.vendedor_id) : undefined;
-  // dynamic_variables.sala_token identifica a sala de simulação pública (US-016, ainda não existe
-  // neste app); quando lib/salas.ts existir, usar o token para achar o cenário/vendedor da sessão.
+  const salaCodigo = dynamicVars.sala_token != null ? String(dynamicVars.sala_token) : undefined;
+  const sala = salaCodigo ? obterSala(salaCodigo) : null;
+  const vendedorId = dynamicVars.vendedor_id != null ? String(dynamicVars.vendedor_id) : sala?.vendedorId || undefined;
 
   const conversa: Conversa = {
     id: gerarId(),
     vendedorId,
+    cenarioId: sala?.cenarioId || undefined,
     origem: "voz",
     transcricao,
     duracaoSeg: typeof evento.data?.metadata?.call_duration_secs === "number" ? evento.data.metadata.call_duration_secs : undefined,
     criadoEm: new Date().toISOString(),
   };
 
-  await salvarConversaAnalisada(conversa, CRITERIOS_PADRAO);
+  const resultado = await salvarConversaAnalisada(conversa, CRITERIOS_PADRAO);
   setConfig("ELEVENLABS_ULTIMA_CONVERSA_EM", conversa.criadoEm);
+  if (sala && salaCodigo && resultado.id) registrarResultado(salaCodigo, resultado.id);
 }
 
 export async function POST(req: Request): Promise<Response> {

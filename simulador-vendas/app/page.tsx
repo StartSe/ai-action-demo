@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { Chip, DataTable, Empty, Entregar, ErrorBox, Field, Item, Loading, MaisDetalhes, Origem, Panel, Privacidade, Destaque, ResultHead, Row, Section, Stage, Topbar, Workspace, data, numero, useScrollToResult, useStatus } from "@/components/ui";
+import { Chip, CopyButton, DataTable, Empty, Entregar, ErrorBox, Field, Item, Loading, MaisDetalhes, Origem, Panel, Privacidade, Destaque, ResultHead, Row, Section, Stage, Topbar, Workspace, data, numero, useScrollToResult, useStatus } from "@/components/ui";
 import { CRITERIOS_PADRAO } from "@/lib/criterios";
 import type { Meta } from "@/lib/ai";
 import type { Analise, Cenario, Conversa, DadosAnalise, Vendedor } from "@/lib/types";
@@ -56,6 +56,8 @@ export default function Page() {
   const [novoEmail, setNovoEmail] = useState("");
   const [novaEquipe, setNovaEquipe] = useState("");
   const [salvandoVendedor, setSalvandoVendedor] = useState(false);
+  const [criandoLinkTreino, setCriandoLinkTreino] = useState(false);
+  const [linkTreino, setLinkTreino] = useState<string | null>(null);
   const autoEnviado = useRef(false);
 
   useScrollToResult(estado.fase === "pronto");
@@ -105,6 +107,17 @@ export default function Page() {
       }
     } finally {
       setSalvandoVendedor(false);
+    }
+  }
+
+  async function criarLinkTreino() {
+    setCriandoLinkTreino(true);
+    try {
+      const r = await fetch("/api/salas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vendedorId: dados.vendedorId, cenarioId: dados.cenarioId }) });
+      const resposta = await r.json();
+      if (r.ok) setLinkTreino(resposta.url);
+    } finally {
+      setCriandoLinkTreino(false);
     }
   }
 
@@ -187,6 +200,17 @@ export default function Page() {
                 {cenarios.map((c) => <option key={c.id} value={c.id}>{c.titulo}</option>)}
               </select>
             </Field>
+
+            <div className="mb-4">
+              <button type="button" className="btn-ghost" disabled={criandoLinkTreino} onClick={criarLinkTreino}>{criandoLinkTreino ? "Gerando..." : "Criar link de treino"}</button>
+              <p className="text-[12.5px] text-muted mt-1.5">O vendedor treina sozinho abrindo este link, sem precisar colar nada depois.</p>
+              {linkTreino && (
+                <div className="card shadow-none px-4 py-3 mt-2.5 flex items-center gap-3 flex-wrap">
+                  <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[220px]">{linkTreino}</code>
+                  <CopyButton texto={() => linkTreino} rotulo="Copiar link" />
+                </div>
+              )}
+            </div>
 
             <Field label="Colar uma conversa" htmlFor="conversaColada" hint='Uma fala por linha, começando com "Vendedor:" ou "Cliente:".'>
               <textarea
