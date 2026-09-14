@@ -31,6 +31,21 @@ export async function POST(request: Request, { params }: RouteContext<"/api/f/[t
     if (campo.tipo === "nota" && valor && (!/^\d+$/.test(valor) || Number(valor) < 0 || Number(valor) > 10)) {
       return NextResponse.json({ error: `Escolha uma nota entre 0 e 10 para "${campo.rotulo}".` }, { status: 400, headers: { "Cache-Control": "no-store" } });
     }
+    if (campo.tipo === "escala" && valor) {
+      const min = campo.min ?? 1;
+      const max = campo.max ?? 5;
+      const n = Number(valor);
+      if (!Number.isFinite(n) || n < min || n > max) {
+        return NextResponse.json({ error: `Escolha um valor entre ${min} e ${max} para "${campo.rotulo}".` }, { status: 400, headers: { "Cache-Control": "no-store" } });
+      }
+    }
+    if (campo.tipo === "escolha" && valor) {
+      const validos = new Set((campo.opcoes ?? []).map((o) => o.valor));
+      const escolhidos: string[] = campo.multipla ? valor.split(",") : [valor];
+      if (escolhidos.some((v) => !validos.has(v))) {
+        return NextResponse.json({ error: `Escolha uma opção válida para "${campo.rotulo}".` }, { status: 400, headers: { "Cache-Control": "no-store" } });
+      }
+    }
     dados[campo.chave] = valor;
   }
 

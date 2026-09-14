@@ -37,8 +37,26 @@ function abrir(): DatabaseSync {
  * `aceitar` vira o atributo `accept` do seletor de arquivo. "nota" é uma escala fixa de 0 a 10 (ex.: pergunta de NPS),
  * exibida como botões na tela pública; o valor guardado em `dados` é o número escolhido como string ("0" a "10").
  * "decisao" é uma escolha fixa entre aprovar, pedir ajuste ou descartar (ex.: aprovação de rascunhos por link),
- * exibida como três botões; o valor guardado em `dados` é "aprovar", "ajustar" ou "descartar". */
-export type CampoFormulario = { chave: string; rotulo: string; tipo: "texto" | "textarea" | "arquivo" | "nota" | "decisao"; obrigatorio?: boolean; aceitar?: string };
+ * exibida como três botões; o valor guardado em `dados` é "aprovar", "ajustar" ou "descartar".
+ * "escala" é uma escala configurável (`min`/`max`, padrão 1 a 5, com `rotuloMin`/`rotuloMax` nas pontas),
+ * exibida como botões em linha; o valor guardado é o número escolhido como string. "escolha" é uma lista de
+ * `opcoes` ({valor,rotulo}) exibida como rádio (uma resposta) ou caixas quando `multipla` (várias respostas,
+ * guardadas como os valores escolhidos separados por vírgula). `secao` agrupa perguntas visualmente sob um
+ * subtítulo na tela pública: aparece antes do campo sempre que o valor mudar em relação ao campo anterior. */
+export type CampoFormulario = {
+  chave: string;
+  rotulo: string;
+  tipo: "texto" | "textarea" | "arquivo" | "nota" | "decisao" | "escala" | "escolha";
+  obrigatorio?: boolean;
+  aceitar?: string;
+  secao?: string;
+  min?: number;
+  max?: number;
+  rotuloMin?: string;
+  rotuloMax?: string;
+  opcoes?: { valor: string; rotulo: string }[];
+  multipla?: boolean;
+};
 
 /** Dados exibidos pela tela pública genérica (app/f/[token]/page.tsx), guardados dentro de `parametros`. */
 export type ParametrosPublicos = { marca: string; nome: string; titulo: string; descricao?: string };

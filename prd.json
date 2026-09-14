@@ -17,7 +17,7 @@
         "Verify in browser using dev-browser skill: criar um formulário temporário no pdi-time com um campo de cada tipo, abrir /f/<token> em desktop e celular, enviar e conferir a validação; remover o temporário antes de encerrar"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
