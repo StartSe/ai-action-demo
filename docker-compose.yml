@@ -88,6 +88,13 @@ services:
     ports: ["3011:10000"]
     volumes: [radar-sinais-dados:/app/data]
 
+  bussola-ia:
+    <<: *app
+    build: ./bussola-ia
+    image: ghcr.io/startse/bussola-ia:latest
+    ports: ["3012:10000"]
+    volumes: [bussola-ia-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -100,3 +107,4 @@ volumes:
   financas-ia-dados:
   voz-do-cliente-dados:
   radar-sinais-dados:
+  bussola-ia-dados:

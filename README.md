@@ -1,6 +1,6 @@
 # IA para Executivos
 
-Onze apps independentes, cada um resolvendo um problema específico do dia a dia de uma empresa com IA em alguma etapa. Feitos para executivos abrirem, testarem em dois minutos e decidirem se vale conectar as ferramentas reais. Todos rodam sem login e sem nenhuma chave configurada (modo demonstração) e publicam no Render a partir de uma imagem Docker pública via Blueprint. Catálogo com botão de um clique: https://startse.github.io/ai-action-app-deploy/
+Doze apps independentes, cada um resolvendo um problema específico do dia a dia de uma empresa com IA em alguma etapa. Feitos para executivos abrirem, testarem em dois minutos e decidirem se vale conectar as ferramentas reais. Todos rodam sem login e sem nenhuma chave configurada (modo demonstração) e publicam no Render a partir de uma imagem Docker pública via Blueprint. Catálogo com botão de um clique: https://startse.github.io/ai-action-app-deploy/
 
 ## Mapa de ideias
 
@@ -17,6 +17,7 @@ Onze apps independentes, cada um resolvendo um problema específico do dia a dia
 | 9 | [Analista Financeiro](financas-ia/) | Financeiro | Planilha de despesas sem tempo de destrinchar | Lê o CSV, mostra os números que importam e responde perguntas | OpenRouter (dados ficam no navegador; só agregados vão para a IA) |
 | 10 | [Voz do Cliente](voz-do-cliente/) | CX e Marketing | Centenas de comentários que ninguém lê | Agrupa por tema, mede sentimento e NPS, prioriza ações | só OpenRouter |
 | 11 | [Radar de Sinais](radar-sinais/) | Estratégia e Inovação | Movimentos do mercado chegam tarde e dispersos | Junta o que saiu no período sobre os temas acompanhados, agrupa em sinais e mostra as conexões | só OpenRouter (busca em fontes reais chega numa próxima versão) |
+| 12 | [Bússola de IA](bussola-ia/) | Estratégia e Gestão | A empresa não sabe em que estágio de maturidade em IA está | Aplica um questionário de maturidade em 6 dimensões e devolve o estágio atual | só OpenRouter |
 
 Ideias mapeadas e deixadas para uma segunda rodada: copiloto de OKRs com check-in semanal, análise de concorrentes a partir de sites e redes, triagem de currículos contra a descrição da vaga, gerador de propostas comerciais a partir do CRM, resumo diário de e-mails e Slack para a diretoria.
 
@@ -35,7 +36,7 @@ Todos seguem o mesmo padrão (detalhes em [PADRAO.md](PADRAO.md)):
 ## Rodar a suíte inteira com Docker Compose
 
 ```bash
-docker compose up --build     # constrói e sobe os 11 apps; depois abra http://localhost:3001/setup (e assim por diante)
+docker compose up --build     # constrói e sobe os 12 apps; depois abra http://localhost:3001/setup (e assim por diante)
 ```
 
 Cada app guarda sua configuração em um volume Docker próprio, então as chaves sobrevivem a reinícios.
@@ -47,11 +48,11 @@ Cada app guarda sua configuração em um volume Docker próprio, então as chave
 | 3003 | entrevista-ia | | 3008 | reunioes-ia |
 | 3004 | posts-sociais | | 3009 | financas-ia |
 | 3005 | prospeccao-ia | | 3010 | voz-do-cliente |
-| 3011 | radar-sinais | | | |
+| 3011 | radar-sinais | | 3012 | bussola-ia |
 
 Um app só: `docker compose up --build pdi-time`, ou dentro da pasta do app `docker compose up --build`.
 
-Construir as onze imagens em paralelo consome vários gigabytes de cache. Em máquinas com pouco espaço, construa uma por vez:
+Construir as doze imagens em paralelo consome vários gigabytes de cache. Em máquinas com pouco espaço, construa uma por vez:
 
 ```bash
 COMPOSE_PARALLEL_LIMIT=1 docker compose build
@@ -72,10 +73,10 @@ Dica para demonstrações: abra `http://localhost:3000/?exemplo=1` e o app preen
 
 Tudo parte de um push na `main` deste repositório (privado, `StartSe/ai-action-demo`). O workflow `.github/workflows/publicar.yml`:
 
-1. Descobre quais pastas de app mudaram e constrói só essas imagens (rodar à mão com "Reconstruir todas" refaz as onze).
+1. Descobre quais pastas de app mudaram e constrói só essas imagens (rodar à mão com "Reconstruir todas" refaz as doze).
 2. Publica cada imagem em `ghcr.io/startse/<app>:latest` (e na tag do commit) usando o token do próprio Actions, sem segredo extra.
 3. Regenera o repositório **público** `StartSe/ai-action-app-deploy` a partir de `catalogo.json`: o branch `main` recebe a página do catálogo (GitHub Pages) e o Blueprint da suíte; cada app ganha um branch `deploy-<app>` com o seu Blueprint. Ninguém edita esse repositório à mão.
-4. Confere se as onze imagens estão públicas e avisa no resumo do job quando alguma ainda está privada.
+4. Confere se as doze imagens estão públicas e avisa no resumo do job quando alguma ainda está privada.
 
 Catálogo público: https://startse.github.io/ai-action-app-deploy/ (filtro por área, botão "Publicar no Render" por app, comando `docker run` copiável).
 
@@ -83,7 +84,7 @@ Catálogo público: https://startse.github.io/ai-action-app-deploy/ (filtro por 
 
 ### Uma vez, depois do primeiro build
 
-Pacotes criados a partir de repositório privado nascem privados, e o botão do Render só puxa imagem pública. Em https://github.com/orgs/StartSe/packages abra cada um dos onze pacotes, Package settings, Change visibility, Public. O resumo do job "Atualizar repositório público" lista os que ainda faltam.
+Pacotes criados a partir de repositório privado nascem privados, e o botão do Render só puxa imagem pública. Em https://github.com/orgs/StartSe/packages abra cada um dos doze pacotes, Package settings, Change visibility, Public. O resumo do job "Atualizar repositório público" lista os que ainda faltam.
 
 ### Segredos e variáveis do repositório
 
@@ -97,7 +98,7 @@ Pacotes criados a partir de repositório privado nascem privados, e o botão do 
 
 ```bash
 docker login ghcr.io                   # token do GitHub com escopo write:packages
-./build-and-push.sh                    # constrói e publica as onze imagens, uma por vez
+./build-and-push.sh                    # constrói e publica as doze imagens, uma por vez
 ```
 
 ## Deploy no Render
@@ -127,14 +128,14 @@ Os links abaixo aparecem também dentro de cada tela `/setup`, ao lado do campo 
 
 ```
 README.md              este arquivo
-PADRAO.md              padrão técnico e visual seguido pelos 11 apps
+PADRAO.md              padrão técnico e visual seguido pelos 12 apps
 catalogo.json          fonte única: apps, áreas, textos, cor, porta (alimenta render.yaml, página e branches de deploy)
 render.yaml            blueprint da suíte completa (gerado)
-docker-compose.yml     sobe os 11 apps localmente (portas 3001 a 3011); com `docker compose pull` usa as imagens do GHCR
+docker-compose.yml     sobe os 12 apps localmente (portas 3001 a 3012); com `docker compose pull` usa as imagens do GHCR
 site/index.html        página do catálogo publicada no GitHub Pages do repositório público
 scripts/               gerar-deploy.mjs (gera render.yaml e a pasta publico/) e publicar-publico.sh (envia ao repo público)
 .github/workflows/     publicar.yml: constrói as imagens alteradas e atualiza o repositório público
 .env.example           variáveis opcionais (o setup em /setup substitui todas)
-build-and-push.sh      fallback manual para construir e publicar as 11 imagens
+build-and-push.sh      fallback manual para construir e publicar as 12 imagens
 <app>/                 um projeto Next.js completo por pasta (código, Dockerfile, docker-compose.yml, render.yaml, README)
 ```
