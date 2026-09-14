@@ -183,6 +183,7 @@ function CartaoIntegracao({ integracao: i, aoSalvar, destaque }: { integracao: I
           </div>
           <MaisDetalhes titulo="Opções avançadas: colar uma chave">
             {campos}
+            {opcoesAvancadas}
             {acoesSalvar}
           </MaisDetalhes>
         </>

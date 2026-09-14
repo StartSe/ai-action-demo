@@ -1,4 +1,4 @@
-import { aiEnabled, modelName } from "@/lib/ai";
+import { aiEnabled, modelName, visionEnabled } from "@/lib/ai";
 import { INTEGRACOES } from "@/lib/integracoes";
 import { integracaoConfigurada } from "@/lib/setup-comum";
 import { getConfig } from "@/lib/store";
@@ -16,6 +16,7 @@ export async function GET() {
     ai: aiEnabled(),
     demo: !aiEnabled(),
     model: modelName(),
+    vision: visionEnabled(),
     integrations: { whatsapp: whatsappConectado() },
     setup: { pronto, url: "/setup" },
   });

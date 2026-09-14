@@ -1,4 +1,4 @@
-import { aiEnabled, modelName } from "@/lib/ai";
+import { aiEnabled, modelName, visionEnabled } from "@/lib/ai";
 import { INTEGRACOES } from "@/lib/integracoes";
 import { trelloAutorizado } from "@/lib/quadro";
 import { integracaoConfigurada } from "@/lib/setup-comum";
@@ -11,6 +11,7 @@ export async function GET() {
     ai: aiEnabled(),
     demo: !aiEnabled(),
     model: modelName(),
+    vision: visionEnabled(),
     integrations: { trello: trelloAutorizado() },
     setup: { pronto, url: "/setup" },
   });

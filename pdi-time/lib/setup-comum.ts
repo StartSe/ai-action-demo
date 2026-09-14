@@ -94,6 +94,13 @@ export const MODELOS_GRATUITOS: Opcao[] = [
   { valor: "openai/gpt-5-mini", rotulo: "GPT-5 mini (pago)" },
 ];
 
+/** Modelos com suporte a imagem no OpenRouter. Verificado em 2026-09-14 em openrouter.ai/models (filtro "image" em input modalities); primeiro gratuito. */
+export const MODELOS_VISAO: Opcao[] = [
+  { valor: "inclusionai/ling-3.0-flash-vl:free", rotulo: "Ling 3.0 Flash VL (gratuito, padrão)" },
+  { valor: "nex-agi/nex-n2.5-pro:free", rotulo: "Nex N2.5 Pro (gratuito)" },
+  { valor: "anthropic/claude-sonnet-4.5", rotulo: "Claude Sonnet 4.5 (pago, mais qualidade)" },
+];
+
 export const OPENROUTER: Integracao = {
   id: "openrouter",
   titulo: "Inteligência artificial",
@@ -104,6 +111,7 @@ export const OPENROUTER: Integracao = {
   campos: [
     { chave: "OPENROUTER_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk-or-v1-..." },
     { chave: "OPENROUTER_MODEL", rotulo: "Modelo", tipo: "select", opcional: true, padrao: "nvidia/nemotron-3-super-120b-a12b:free", opcoes: MODELOS_GRATUITOS, ajuda: "Comece com um gratuito. Troque por um pago quando quiser mais qualidade." },
+    { chave: "OPENROUTER_MODEL_VISAO", rotulo: "Modelo para imagens", tipo: "select", opcional: true, avancado: true, padrao: MODELOS_VISAO[0].valor, opcoes: MODELOS_VISAO, ajuda: "Modelo usado quando o app precisa ler uma imagem" },
   ],
   testar: async (config) => {
     const chave = config.OPENROUTER_API_KEY;

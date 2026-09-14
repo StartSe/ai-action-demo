@@ -1,4 +1,4 @@
-import { aiEnabled, modelName } from "@/lib/ai";
+import { aiEnabled, modelName, visionEnabled } from "@/lib/ai";
 import { INTEGRACOES } from "@/lib/integracoes";
 import { integracaoConfigurada } from "@/lib/setup-comum";
 import { transcricaoEnabled } from "@/lib/transcricao";
@@ -11,6 +11,7 @@ export async function GET() {
     ai: aiEnabled(),
     demo: !aiEnabled(),
     model: modelName(),
+    vision: visionEnabled(),
     integrations: { transcricao: transcricaoEnabled() },
     setup: { pronto, url: "/setup" },
   });

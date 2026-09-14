@@ -2,6 +2,7 @@
 // Sem OPENROUTER_API_KEY o app entra em modo demonstração (ver lib/demo.ts).
 
 import { getConfig } from "./store";
+import { MODELOS_VISAO } from "./setup-comum";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -20,6 +21,14 @@ export function aiEnabled(): boolean {
 
 export function modelName(): string {
   return getConfig("OPENROUTER_MODEL") || DEFAULT_MODEL;
+}
+
+export function visionEnabled(): boolean {
+  return aiEnabled();
+}
+
+export function visionModelName(): string {
+  return getConfig("OPENROUTER_MODEL_VISAO") || MODELOS_VISAO[0].valor;
 }
 
 // Informações de proveniência exibidas pelo componente Origem (components/ui.tsx).
@@ -54,6 +63,55 @@ export async function askText({ system, prompt, maxTokens = 4000, temperature = 
     const detalhe = await res.text().catch(() => "");
     if (res.status === 401) throw new Error("Chave do OpenRouter inválida. Confira em /setup.");
     if (res.status === 429) throw new Error("O modelo gratuito está com fila cheia agora. Tente de novo em alguns segundos ou escolha outro modelo em /setup.");
+    throw new Error(`A IA não respondeu (HTTP ${res.status}). ${detalhe.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  const texto = data?.choices?.[0]?.message?.content;
+  if (!texto) throw new Error("A IA devolveu uma resposta vazia. Tente novamente.");
+  return String(texto);
+}
+
+type VisionContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+type VisionMessage = { role: "system" | "user"; content: string | VisionContentPart[] };
+
+/** Manda uma imagem (data URL png ou jpeg) para o modelo de visão configurado. */
+export async function askVision({
+  system,
+  prompt,
+  imagem,
+  maxTokens = 2000,
+  temperature = 0.4,
+}: {
+  system: string;
+  prompt: string;
+  imagem: string;
+  maxTokens?: number;
+  temperature?: number;
+}): Promise<string> {
+  const messages: VisionMessage[] = [
+    { role: "system", content: system },
+    { role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: imagem } }] },
+  ];
+  const res = await fetch(OPENROUTER_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey()}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": getConfig("APP_URL") || "http://localhost:3000",
+      "X-Title": getConfig("APP_NAME") || "IA para Executivos",
+    },
+    body: JSON.stringify({
+      model: visionModelName(),
+      messages,
+      max_tokens: maxTokens,
+      temperature,
+    }),
+  });
+  if (!res.ok) {
+    const detalhe = await res.text().catch(() => "");
+    if (res.status === 401) throw new Error("Chave do OpenRouter inválida. Confira em /setup.");
+    if (res.status === 429) throw new Error("O modelo gratuito está com fila cheia agora. Tente de novo em alguns segundos ou escolha outro modelo em /setup.");
+    if (/image|modalit|multimodal|vision/i.test(detalhe)) throw new Error("O modelo configurado não lê imagens");
     throw new Error(`A IA não respondeu (HTTP ${res.status}). ${detalhe.slice(0, 200)}`);
   }
   const data = await res.json();

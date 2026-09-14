@@ -34,7 +34,7 @@
         "Testar via curl: GET /api/status devolve vision; /setup mostra o campo em Opções avançadas"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
