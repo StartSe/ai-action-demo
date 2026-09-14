@@ -6,7 +6,7 @@ set -euo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
 FONTE="pdi-time"
-APPS=(agente-kanban contratos-ia entrevista-ia financas-ia posts-sociais prospeccao-ia reunioes-ia voz-do-cliente whatsapp-atendente radar-sinais bussola-ia simulador-vendas)
+APPS=(agente-kanban contratos-ia entrevista-ia financas-ia posts-sociais prospeccao-ia reunioes-ia voz-do-cliente whatsapp-atendente radar-sinais bussola-ia simulador-vendas custos-ia)
 
 # Lista de arquivos/pastas comparados entre pdi-time e cada app. Estenda aqui quando um novo
 # arquivo compartilhado nascer em pdi-time e precisar ser replicado sem alteração nos outros.

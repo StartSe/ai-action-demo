@@ -102,6 +102,13 @@ services:
     ports: ["3013:10000"]
     volumes: [simulador-vendas-dados:/app/data]
 
+  custos-ia:
+    <<: *app
+    build: ./custos-ia
+    image: ghcr.io/startse/custos-ia:latest
+    ports: ["3014:10000"]
+    volumes: [custos-ia-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -116,3 +123,4 @@ volumes:
   radar-sinais-dados:
   bussola-ia-dados:
   simulador-vendas-dados:
+  custos-ia-dados:

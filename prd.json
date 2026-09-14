@@ -324,7 +324,7 @@
         "Verify in browser using dev-browser skill: desktop vazio, ?exemplo=1&captura=1 desktop e celular com atenção aos gráficos"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

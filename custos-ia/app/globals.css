@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+/* Tokens da suíte "IA para Executivos". Cada app troca só as três cores de acento. */
+@theme {
+  --color-accent: #7e22ce;
+  --color-accent-soft: #f1e6fa;
+  --color-accent-ink: #5b1a96;
+  --color-bg: #f4f5f7;
+  --color-surface: #ffffff;
+  --color-ink: #171a21;
+  --color-muted: #667085;
+  --color-line: #e3e6ec;
+  --color-ok: #1d7a4f;
+  --color-warn: #b7791f;
+  --color-danger: #b42318;
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --shadow-card: 0 1px 2px rgba(23, 26, 33, 0.04), 0 8px 24px -12px rgba(23, 26, 33, 0.12);
+  --radius-card: 12px;
+}
+
+html { -webkit-text-size-adjust: 100%; overflow-x: clip; }
+body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; }
+
+@layer components {
+  .card { @apply bg-surface border border-line rounded-card shadow-card; }
+  .input { @apply w-full px-[13px] py-[11px] border border-line rounded-[10px] bg-white text-ink outline-none transition-[border-color,box-shadow] focus:border-accent focus:ring-[3px] focus:ring-accent-soft disabled:opacity-60; }
+  .btn { @apply inline-flex items-center justify-center gap-2 px-[18px] py-3 rounded-[10px] border border-transparent font-bold text-[15px] cursor-pointer transition-colors active:translate-y-px focus-visible:outline-[3px] focus-visible:outline-accent-soft disabled:opacity-60 disabled:cursor-wait; }
+  .btn-primary { @apply inline-flex items-center justify-center gap-2 px-[18px] py-3 rounded-[10px] border border-transparent font-bold text-[15px] cursor-pointer transition-colors active:translate-y-px focus-visible:outline-[3px] focus-visible:outline-accent-soft disabled:opacity-60 disabled:cursor-wait whitespace-nowrap bg-accent text-white hover:bg-accent-ink w-full; }
+  .btn-ghost { @apply inline-flex items-center justify-center gap-2 px-[18px] py-3 rounded-[10px] border font-bold text-[15px] cursor-pointer transition-colors active:translate-y-px focus-visible:outline-[3px] focus-visible:outline-accent-soft disabled:opacity-60 disabled:cursor-wait whitespace-nowrap bg-surface border-line text-ink hover:bg-bg; }
+  .btn-link { @apply text-accent font-semibold cursor-pointer bg-transparent border-0 p-0 hover:underline; }
+  .chip { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold; }
+  .chip-alta, .chip-negativo { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-[#fde8e6] text-danger; }
+  .chip-media, .chip-neutro { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-[#fff4e0] text-warn; }
+  .chip-baixa, .chip-positivo { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-[#e4f4ec] text-ok; }
+  .chip-neutral { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-accent-soft text-accent-ink; }
+  .chip-cinza { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-[#eef0f2] text-muted; }
+  .section-title { @apply text-[13px] font-bold text-accent mb-3 tracking-[0.01em]; }
+  .summary { @apply text-[17px] max-md:text-[16px] leading-[1.5] font-medium tracking-[-0.01em] text-ink px-7 py-6 bg-surface rounded-card shadow-card mb-7; }
+  .skeleton { @apply h-[14px] rounded-md bg-[linear-gradient(90deg,#e9ebf0_25%,#f4f5f7_50%,#e9ebf0_75%)] bg-[length:200%_100%] animate-[shimmer_1.4s_infinite]; }
+}
+
+@keyframes shimmer { to { background-position: -200% 0; } }
+@keyframes reveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.reveal { animation: reveal 0.45s ease-out both; }
+@media (prefers-reduced-motion: reduce) { .reveal, .skeleton { animation: none; } }
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; }
+
+  /* Folha de impressão (/imprimir/[id]): A4, margem 18mm, sem sombra e sem cor de acento em fundos. */
+  @page folha-impressao { size: A4; margin: 18mm; }
+  .print-sheet { page: folha-impressao; }
+  .print-sheet .card,
+  .print-sheet .summary { box-shadow: none; break-inside: avoid; }
+  .print-sheet .chip-neutral { background: none; border: 1px solid currentColor; }
+}

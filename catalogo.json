@@ -200,6 +200,19 @@
       "captura": "capturas/simulador-vendas.png",
       "capacidades": ["artefato", "mcp", "rotina"],
       "demo": null
+    },
+    {
+      "id": "custos-ia",
+      "nome": "Custos de IA",
+      "areas": ["Financeiro", "TI"],
+      "problema": "O CFO não sabe quanto a empresa gasta com ferramentas de IA nem se está dentro do orçamento.",
+      "ia": "Lê faturas de ferramentas de IA, compara o gasto contra o orçamento planejado e mostra o que estourou.",
+      "integracoes": "Só a IA (OpenRouter). Câmbio manual para faturas em dólar ou euro.",
+      "acento": "#7e22ce",
+      "porta": 3014,
+      "captura": "capturas/custos-ia.png",
+      "capacidades": ["artefato", "mcp", "rotina"],
+      "demo": null
     }
   ]
 }
