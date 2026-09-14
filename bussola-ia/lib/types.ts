@@ -37,11 +37,24 @@ export interface MediaDimensao {
   media: number;
 }
 
+export interface LeituraDimensao {
+  dimensao: string;
+  leitura: string;
+}
+
 export interface Analise {
   resumo: string;
   nivelGeral: number;
   nomeEstagio: string;
   mediasPorDimensao: MediaDimensao[];
+  /** Desvio padrão das médias por dimensão: quanto maior, mais desigual é a maturidade entre as dimensões. */
+  dispersao: number;
+  leituraPorDimensao: LeituraDimensao[];
+  forcas: string[];
+  lacunas: string[];
+  proximosPassos: string[];
+  /** Só presente quando pelo menos 2 áreas diferentes responderam, e há divergência relevante entre elas. */
+  ondeDiscordam?: string[];
 }
 
 export interface Avaliacao {

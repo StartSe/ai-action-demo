@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Chip, CopyButton, DataTable, Destaque, Empty, Entregar, ErrorBox, Field, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
+import { Chip, CopyButton, DataTable, Destaque, Empty, Entregar, ErrorBox, Field, Item, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
 import { EditorPerguntas } from "@/components/EditorPerguntas";
 import { DialogoLinkAvaliacao } from "@/components/DialogoLinkAvaliacao";
+import { GraficoMaturidade } from "@/components/GraficoMaturidade";
 import { ESCALA_MODELO, QUESTIONARIO_MODELO } from "@/lib/modelo";
 import type { Meta } from "@/lib/ai";
 import type { Avaliacao, DadosAvaliacao, MediaDimensao, Questionario, Resposta } from "@/lib/types";
@@ -30,7 +31,8 @@ function IlustracaoBussola() {
   );
 }
 
-type Estado = { fase: "vazio" } | { fase: "carregando" } | { fase: "erro"; mensagem: string; dados: DadosAvaliacao } | { fase: "pronto"; avaliacao: Avaliacao; dados: DadosAvaliacao; meta: Meta; id?: string };
+type OrigemErro = { tipo: "gerar"; dados: DadosAvaliacao } | { tipo: "analisar"; codigo: string };
+type Estado = { fase: "vazio" } | { fase: "carregando" } | { fase: "erro"; mensagem: string; origem: OrigemErro } | { fase: "pronto"; avaliacao: Avaliacao; meta: Meta; id?: string };
 
 export default function Page() {
   const { status, erro } = useStatus();
@@ -145,11 +147,30 @@ export default function Page() {
       const r = await fetch("/api/bussola", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) });
       const resposta = await r.json();
       if (!r.ok) throw new Error(resposta.error || "Falha ao gerar a avaliação.");
-      setEstado({ fase: "pronto", avaliacao: resposta.avaliacao, dados: d, meta: resposta.meta, id: resposta.id });
+      setEstado({ fase: "pronto", avaliacao: resposta.avaliacao, meta: resposta.meta, id: resposta.id });
       fetch("/api/bussola").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
     } catch (e) {
-      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado.", dados: d });
+      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado.", origem: { tipo: "gerar", dados: d } });
     }
+  }
+
+  async function analisarClick(codigo: string) {
+    setEstado({ fase: "carregando" });
+    try {
+      const r = await fetch(`/api/bussola/link/${codigo}/analisar`, { method: "POST" });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Não foi possível analisar as respostas.");
+      setEstado({ fase: "pronto", avaliacao: resposta.avaliacao, meta: resposta.meta, id: resposta.id });
+      fetch("/api/bussola").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
+    } catch (e) {
+      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado.", origem: { tipo: "analisar", codigo } });
+    }
+  }
+
+  function tentarNovamente() {
+    if (estado.fase !== "erro") return;
+    if (estado.origem.tipo === "gerar") gerar(estado.origem.dados);
+    else analisarClick(estado.origem.codigo);
   }
 
   function onSubmit(e: FormEvent) {
@@ -261,9 +282,10 @@ export default function Page() {
                           {a.encerrada && " · Encerrada"}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
                         <CopyButton texto={() => `${location.origin}/f/${a.codigo}`} rotulo="Copiar link" />
                         <button type="button" className="btn-link" onClick={() => verResultadoClick(a.codigo)}>{a.codigo in respostasAbertas ? "Ocultar resultado" : "Ver resultado"}</button>
+                        <button type="button" className="btn-link disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline" disabled={a.totalRespostas === 0} title={a.totalRespostas === 0 ? "Ainda não há respostas para analisar." : undefined} onClick={() => analisarClick(a.codigo)}>Analisar respostas</button>
                         {!a.encerrada && <button type="button" className="btn-link" onClick={() => encerrarAvaliacaoClick(a.codigo)}>Encerrar</button>}
                       </div>
                     </div>
@@ -314,7 +336,7 @@ export default function Page() {
         <Stage>
           {estado.fase === "vazio" && <Empty ilustracao={<IlustracaoBussola />} titulo="A avaliação aparece aqui" descricao="O nível geral de maturidade em IA da empresa, com a média em cada uma das 6 dimensões." acao="Preencher com um exemplo" onAcao={preencherExemplo} />}
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
-          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={() => gerar(estado.dados)} />}
+          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={tentarNovamente} />}
           {estado.fase === "pronto" && <Resultado avaliacao={estado.avaliacao} meta={estado.meta} id={estado.id} />}
         </Stage>
       </Workspace>
@@ -332,11 +354,48 @@ export default function Page() {
   );
 }
 
+/** CSV das respostas recebidas, uma linha por respondente e uma coluna por pergunta do questionário. */
+function respostasParaCSV(avaliacao: Avaliacao): string {
+  const perguntas = avaliacao.questionario.perguntas;
+  const cabecalho = ["Área", "Cargo", "Respondido em", ...perguntas.map((p) => p.texto)];
+  const linha = (campos: string[]) => campos.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";");
+  const linhas = avaliacao.respostas.map((r) =>
+    linha([r.respondente?.area || "", r.respondente?.cargo || "", data(r.criadoEm), ...perguntas.map((p) => r.valores[p.id] || "")])
+  );
+  return "﻿" + [linha(cabecalho), ...linhas].join("\r\n");
+}
+
+function baixarRespostasCSV(avaliacao: Avaliacao) {
+  const blob = new Blob([respostasParaCSV(avaliacao)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "respostas-avaliacao.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function copiarProximosPassos(passos: string[]) {
+  const texto = passos.map((p, i) => `${i + 1}. ${p}`).join("\n");
+  try { await navigator.clipboard.writeText(texto); } catch { alert(texto); }
+}
+
 export function Resultado({ avaliacao, meta, id }: { avaliacao: Avaliacao; meta: Meta; id?: string }) {
+  const analise = avaliacao.analise;
   return (
     <article className="reveal">
       <ResultHead titulo={avaliacao.titulo} subtitulo={avaliacao.empresa}>
-        <Entregar id={id} titulo={avaliacao.titulo} texto={() => avaliacaoParaTexto(avaliacao)} />
+        <Entregar
+          id={id}
+          titulo={avaliacao.titulo}
+          texto={() => avaliacaoParaTexto(avaliacao)}
+          extras={[
+            { rotulo: "Baixar respostas (CSV)", onClick: () => baixarRespostasCSV(avaliacao) },
+            ...(analise?.proximosPassos.length ? [{ rotulo: "Copiar próximos passos", onClick: () => copiarProximosPassos(analise.proximosPassos) }] : []),
+          ]}
+        />
       </ResultHead>
 
       <Origem meta={meta} />
@@ -365,6 +424,12 @@ export function ConteudoAvaliacao({ avaliacao }: { avaliacao: Avaliacao }) {
 
       {analise && <p className="summary">{analise.resumo}</p>}
 
+      {analise && analise.leituraPorDimensao?.length > 0 && (
+        <Section titulo="Mapa de maturidade">
+          <GraficoMaturidade medias={analise.mediasPorDimensao} leituraPorDimensao={analise.leituraPorDimensao} />
+        </Section>
+      )}
+
       <Section titulo="Nível por dimensão">
         <DataTable
           colunas={[
@@ -374,6 +439,38 @@ export function ConteudoAvaliacao({ avaliacao }: { avaliacao: Avaliacao }) {
           linhas={analise?.mediasPorDimensao ?? []}
         />
       </Section>
+
+      {analise && analise.forcas?.length > 0 && (
+        <Section titulo="Forças">
+          <ul className="list-disc pl-5 flex flex-col gap-1.5">
+            {analise.forcas.map((f, i) => <li key={i}>{f}</li>)}
+          </ul>
+        </Section>
+      )}
+
+      {analise && analise.lacunas?.length > 0 && (
+        <Section titulo="Lacunas">
+          <ul className="list-disc pl-5 flex flex-col gap-1.5">
+            {analise.lacunas.map((f, i) => <li key={i}>{f}</li>)}
+          </ul>
+        </Section>
+      )}
+
+      {analise && analise.proximosPassos?.length > 0 && (
+        <Section titulo="Próximos passos">
+          <Item>
+            {analise.proximosPassos.map((p, i) => <p key={i} className="my-1.5">- {p}</p>)}
+          </Item>
+        </Section>
+      )}
+
+      {analise?.ondeDiscordam && analise.ondeDiscordam.length > 0 && (
+        <Section titulo="Onde discordam">
+          <ul className="list-disc pl-5 flex flex-col gap-1.5">
+            {analise.ondeDiscordam.map((f, i) => <li key={i}>{f}</li>)}
+          </ul>
+        </Section>
+      )}
 
       <Section titulo={`Respondentes (${avaliacao.respostas.length})`}>
         <DataTable
@@ -390,12 +487,17 @@ export function ConteudoAvaliacao({ avaliacao }: { avaliacao: Avaliacao }) {
 }
 
 function avaliacaoParaTexto(avaliacao: Avaliacao): string {
+  const analise = avaliacao.analise;
   const l: string[] = [`${avaliacao.titulo} — ${avaliacao.empresa}`, ""];
-  if (avaliacao.analise) {
-    l.push(`Nível geral: ${avaliacao.analise.nivelGeral} (${avaliacao.analise.nomeEstagio})`, "", avaliacao.analise.resumo, "");
+  if (analise) {
+    l.push(`Nível geral: ${analise.nivelGeral} (${analise.nomeEstagio})`, "", analise.resumo, "");
   }
   l.push("Nível por dimensão:");
-  (avaliacao.analise?.mediasPorDimensao ?? []).forEach((m: MediaDimensao) => l.push(`- ${m.dimensao}: ${m.media}`));
+  (analise?.mediasPorDimensao ?? []).forEach((m: MediaDimensao) => l.push(`- ${m.dimensao}: ${m.media}`));
+  if (analise?.forcas?.length) { l.push("", "Forças:"); analise.forcas.forEach((f) => l.push(`- ${f}`)); }
+  if (analise?.lacunas?.length) { l.push("", "Lacunas:"); analise.lacunas.forEach((f) => l.push(`- ${f}`)); }
+  if (analise?.proximosPassos?.length) { l.push("", "Próximos passos:"); analise.proximosPassos.forEach((p, i) => l.push(`${i + 1}. ${p}`)); }
+  if (analise?.ondeDiscordam?.length) { l.push("", "Onde discordam:"); analise.ondeDiscordam.forEach((f) => l.push(`- ${f}`)); }
   l.push("", `Respondentes (${avaliacao.respostas.length}):`);
   avaliacao.respostas.forEach((r) => l.push(`- ${r.respondente?.area || "Não informado"} · ${r.respondente?.cargo || "Não informado"}`));
   return l.join("\n");

@@ -1,6 +1,7 @@
 // Avaliação de exemplo usada quando não há uma avaliação real ainda (ver ?exemplo=1).
-import { DIMENSOES, QUESTIONARIO_MODELO } from "./modelo";
-import type { Avaliacao, MediaDimensao, Questionario, Resposta } from "./types";
+import { calcularDispersao, calcularMediasPorArea, calcularMediasPorDimensao, calcularNivelGeral, leituraSemIA } from "./analise-bussola";
+import { QUESTIONARIO_MODELO } from "./modelo";
+import type { Avaliacao, Questionario, Resposta } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
@@ -66,17 +67,6 @@ function gerarRespostas(): Resposta[] {
   });
 }
 
-const NOMES_ESTAGIO = ["", "Inicial", "Exploração", "Estruturação", "Escala", "Transformação"];
-
-function calcularMedias(respostas: Resposta[]): MediaDimensao[] {
-  return DIMENSOES.map((dim) => {
-    const perguntasDim = QUESTIONARIO_MODELO.perguntas.filter((p) => p.dimensao === dim.nome && p.tipo === "escala");
-    const notas = respostas.flatMap((r) => perguntasDim.map((p) => Number(r.valores[p.id])).filter((n) => !Number.isNaN(n)));
-    const media = notas.reduce((a, b) => a + b, 0) / notas.length;
-    return { dimensao: dim.nome, media: Math.round(media * 10) / 10 };
-  });
-}
-
 /** Duas perguntas de texto do questionário modelo, reescritas citando o setor informado (sem chave de IA). */
 export function questionarioAdaptadoDemo(setor: string): Questionario {
   const s = setor.trim() || "sua área";
@@ -94,19 +84,17 @@ export function questionarioAdaptadoDemo(setor: string): Questionario {
 
 export function avaliacaoDemo({ empresa, titulo }: { empresa?: string; titulo?: string } = {}): Avaliacao {
   const respostas = gerarRespostas();
-  const mediasPorDimensao = calcularMedias(respostas);
-  const nivelGeral = Math.round((mediasPorDimensao.reduce((a, m) => a + m.media, 0) / mediasPorDimensao.length) * 10) / 10;
-  const nomeEstagio = NOMES_ESTAGIO[Math.round(nivelGeral)] || "Exploração";
+  const questionario = QUESTIONARIO_MODELO;
+  const mediasPorDimensao = calcularMediasPorDimensao(questionario, respostas);
+  const { nivelGeral, nomeEstagio } = calcularNivelGeral(mediasPorDimensao);
+  const dispersao = calcularDispersao(mediasPorDimensao);
+  const mediasPorArea = calcularMediasPorArea(questionario, respostas);
+  const extra = leituraSemIA({ nivelGeral, nomeEstagio, totalRespostas: respostas.length, medias: mediasPorDimensao, mediasPorArea });
   return {
     empresa: empresa || "Nordeste Varejo",
     titulo: titulo || "Diagnóstico de maturidade em IA — 2026",
-    questionario: QUESTIONARIO_MODELO,
+    questionario,
     respostas,
-    analise: {
-      resumo: `A empresa está no estágio "${nomeEstagio}": já existem iniciativas isoladas de IA, mas faltam governança e um jeito de medir resultado antes de escalar.`,
-      nivelGeral,
-      nomeEstagio,
-      mediasPorDimensao,
-    },
+    analise: { nivelGeral, nomeEstagio, mediasPorDimensao, dispersao, ...extra },
   };
 }
