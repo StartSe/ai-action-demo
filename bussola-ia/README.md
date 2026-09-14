@@ -5,7 +5,7 @@ Avaliação da maturidade em IA da empresa em 6 dimensões, com o estágio atual
 ## O que resolve
 A empresa não sabe em que estágio de maturidade em IA está nem o que fazer a seguir. Este app aplica um questionário modelo (24 perguntas de escala + 2 de texto, em 6 dimensões) e devolve um diagnóstico com o nível geral, o nome do estágio (Inicial, Exploração, Estruturação, Escala ou Transformação) e a média por dimensão.
 
-Nesta primeira versão só existe o questionário modelo (leitura) e a avaliação de exemplo — o editor de perguntas, o link público de coleta de respostas e a análise real por IA chegam nas próximas histórias.
+Já é possível editar o questionário (perguntas por dimensão, tipos escala/escolha/texto), salvar questionários e criar um link público único para coletar respostas de verdade (com prazo e limite configuráveis) — a análise real a partir dessas respostas coletadas (nível geral, resumo) chega numa próxima história; até lá, a avaliação exibida na tela principal continua sendo o exemplo.
 
 ## Stack
 Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão.
@@ -81,9 +81,14 @@ lib/ai.ts                   cliente OpenRouter (askText, askJSON, askWithTools)
 lib/mcp.ts                  protocolo MCP (JSON-RPC 2.0), código de acesso e limite de chamadas
 lib/ferramentas.ts          ferramentas expostas via MCP (avaliar_respostas)
 lib/modelo.ts               questionário modelo (6 dimensões, 24 perguntas de escala + 2 de texto)
+lib/questionarios.ts        questionários editados e salvos (SQLite)
+lib/link-avaliacao.ts       cria o link público de coleta e registra o callback que grava as respostas
+lib/respostas.ts            respostas reais recebidas por um link (SQLite), ligadas ao questionário
 lib/bussola.ts              lógica de geração da avaliação, usada pela rota HTTP e pela ferramenta MCP
 lib/demo.ts                 avaliação de exemplo do modo demonstração
 lib/types.ts                tipos do domínio
+components/EditorPerguntas.tsx      editor das perguntas do questionário
+components/DialogoLinkAvaliacao.tsx diálogo "Criar link de avaliação" (prazo, limite, link e Copiar)
 Dockerfile                  build multi-stage com saída standalone
 docker-compose.yml          sobe este app isolado
 render.yaml                 blueprint do Render (runtime image)

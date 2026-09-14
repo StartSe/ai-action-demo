@@ -5,6 +5,7 @@
 // já esteja registrado quando a rota carrega.
 import { NextResponse } from "next/server";
 import { obter, obterCallback, responder } from "@/lib/formularios";
+import "@/lib/bussola"; // registra o callback "bussola" (US-012)
 
 export async function POST(request: Request, { params }: RouteContext<"/api/f/[token]">) {
   const { token } = await params;

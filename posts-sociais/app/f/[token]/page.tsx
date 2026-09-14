@@ -33,6 +33,6 @@ export default async function Page({ params }: PageProps<"/f/[token]">) {
     return <Indisponivel titulo="Este formulário não recebe mais respostas" descricao="O limite de respostas deste link já foi atingido." />;
   }
 
-  const { marca, nome, titulo, descricao } = formulario.parametros;
-  return <FormularioPublico token={token} marca={marca} nome={nome} titulo={titulo} descricao={descricao} campos={formulario.campos} />;
+  const { marca, nome, titulo, descricao, agradecimento } = formulario.parametros;
+  return <FormularioPublico token={token} marca={marca} nome={nome} titulo={titulo} descricao={descricao} agradecimento={agradecimento} campos={formulario.campos} />;
 }

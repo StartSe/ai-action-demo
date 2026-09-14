@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Chip, DataTable, Destaque, Empty, Entregar, ErrorBox, Field, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
+import { Chip, CopyButton, DataTable, Destaque, Empty, Entregar, ErrorBox, Field, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
 import { EditorPerguntas } from "@/components/EditorPerguntas";
+import { DialogoLinkAvaliacao } from "@/components/DialogoLinkAvaliacao";
 import { ESCALA_MODELO, QUESTIONARIO_MODELO } from "@/lib/modelo";
 import type { Meta } from "@/lib/ai";
-import type { Avaliacao, DadosAvaliacao, MediaDimensao, Questionario } from "@/lib/types";
+import type { Avaliacao, DadosAvaliacao, MediaDimensao, Questionario, Resposta } from "@/lib/types";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
 type ItemQuestionario = { id: string; titulo: string; criadoEm: string };
+type AvaliacaoEmAndamento = { codigo: string; titulo: string; empresa: string; totalRespostas: number; criadoEm: string; encerrada: boolean };
 
 const EXEMPLO: DadosAvaliacao = { empresa: "Nordeste Varejo", titulo: "Diagnóstico de maturidade em IA — 2026" };
 
@@ -43,6 +45,9 @@ export default function Page() {
   const [erroQuestionario, setErroQuestionario] = useState("");
   const [salvandoQuestionario, setSalvandoQuestionario] = useState(false);
   const [questionariosSalvos, setQuestionariosSalvos] = useState<ItemQuestionario[] | null>(null);
+  const [avaliacoesEmAndamento, setAvaliacoesEmAndamento] = useState<AvaliacaoEmAndamento[] | null>(null);
+  const [dialogoLinkAberto, setDialogoLinkAberto] = useState(false);
+  const [respostasAbertas, setRespostasAbertas] = useState<Record<string, Resposta[] | null>>({});
   const autoEnviado = useRef(false);
 
   useScrollToResult(estado.fase === "pronto");
@@ -55,7 +60,35 @@ export default function Page() {
     fetch("/api/bussola/questionarios").then((r) => r.json()).then((r) => setQuestionariosSalvos(r.itens)).catch(() => setQuestionariosSalvos([]));
   }
 
-  useEffect(() => { carregarHistorico(); carregarQuestionariosSalvos(); }, []);
+  function carregarAvaliacoesEmAndamento() {
+    fetch("/api/bussola/link").then((r) => r.json()).then((r) => setAvaliacoesEmAndamento(r.itens)).catch(() => setAvaliacoesEmAndamento([]));
+  }
+
+  useEffect(() => { carregarHistorico(); carregarQuestionariosSalvos(); carregarAvaliacoesEmAndamento(); }, []);
+
+  function abrirDialogoLink() {
+    if (!dados.empresa.trim()) { window.alert("Informe o nome da empresa antes de criar o link de avaliação."); return; }
+    if (!dados.titulo.trim()) { window.alert("Informe o título da avaliação antes de criar o link de avaliação."); return; }
+    setDialogoLinkAberto(true);
+  }
+
+  function encerrarAvaliacaoClick(codigo: string) {
+    if (!window.confirm("Encerrar esta avaliação? Ela deixa de aceitar novas respostas.")) return;
+    fetch(`/api/bussola/link/${codigo}/encerrar`, { method: "POST" }).then(carregarAvaliacoesEmAndamento);
+  }
+
+  function verResultadoClick(codigo: string) {
+    const jaAberto = codigo in respostasAbertas;
+    setRespostasAbertas((r) => {
+      if (!jaAberto) return { ...r, [codigo]: null };
+      const novo = { ...r };
+      delete novo[codigo];
+      return novo;
+    });
+    if (!jaAberto) {
+      fetch(`/api/bussola/link/${codigo}/respostas`).then((r) => r.json()).then((r) => setRespostasAbertas((s) => (codigo in s ? { ...s, [codigo]: r.respostas } : s)));
+    }
+  }
 
   async function gerarQuestionarioSetor() {
     if (!setorQuestionario.trim()) { setErroQuestionario("Informe o setor da empresa."); return; }
@@ -207,12 +240,55 @@ export default function Page() {
 
             <button type="button" className="btn-ghost mt-3" onClick={preencherExemplo}>Preencher com um exemplo</button>
 
-            <div className="mt-3">
-              <button type="button" className="btn-primary" disabled title="Disponível na próxima etapa">Criar link de avaliação</button>
-              <p className="text-muted text-[13px] mt-1.5">Disponível na próxima etapa.</p>
-            </div>
+            <button type="button" className="btn-primary mt-3" onClick={abrirDialogoLink}>Criar link de avaliação</button>
           </form>
           <Privacidade detalhe="A avaliação fica salva neste app até você apagar em 'Últimos resultados'." />
+
+          <MaisDetalhes titulo="Avaliações em andamento">
+            {avaliacoesEmAndamento === null ? (
+              <p className="text-muted text-sm">Carregando...</p>
+            ) : avaliacoesEmAndamento.length === 0 ? (
+              <p className="text-muted text-sm">Nenhuma avaliação criada ainda.</p>
+            ) : (
+              <ul className="flex flex-col gap-2.5 text-sm">
+                {avaliacoesEmAndamento.map((a) => (
+                  <li key={a.codigo} className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="min-w-0">
+                        <Link href={`/f/${a.codigo}`} target="_blank" className="text-accent-ink font-semibold hover:underline truncate">{a.titulo}</Link>
+                        <div className="text-muted text-[12.5px]">
+                          {a.empresa} · {a.totalRespostas} resposta{a.totalRespostas === 1 ? "" : "s"} recebida{a.totalRespostas === 1 ? "" : "s"}
+                          {a.encerrada && " · Encerrada"}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <CopyButton texto={() => `${location.origin}/f/${a.codigo}`} rotulo="Copiar link" />
+                        <button type="button" className="btn-link" onClick={() => verResultadoClick(a.codigo)}>{a.codigo in respostasAbertas ? "Ocultar resultado" : "Ver resultado"}</button>
+                        {!a.encerrada && <button type="button" className="btn-link" onClick={() => encerrarAvaliacaoClick(a.codigo)}>Encerrar</button>}
+                      </div>
+                    </div>
+
+                    {a.codigo in respostasAbertas && (
+                      respostasAbertas[a.codigo] === null ? (
+                        <p className="text-muted text-[12.5px]">Carregando respostas...</p>
+                      ) : respostasAbertas[a.codigo]!.length === 0 ? (
+                        <p className="text-muted text-[12.5px]">Nenhuma resposta recebida ainda.</p>
+                      ) : (
+                        <DataTable
+                          colunas={[
+                            { chave: "area", titulo: "Área", papel: "titulo", render: (r) => r.respondente?.area || "Não informado" },
+                            { chave: "cargo", titulo: "Cargo", render: (r) => r.respondente?.cargo || "Não informado" },
+                            { chave: "criadoEm", titulo: "Respondido em", largura: "160px", render: (r) => data(r.criadoEm) },
+                          ]}
+                          linhas={respostasAbertas[a.codigo]!}
+                        />
+                      )
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </MaisDetalhes>
 
           <MaisDetalhes titulo="Últimos resultados">
             {historico === null ? (
@@ -242,6 +318,16 @@ export default function Page() {
           {estado.fase === "pronto" && <Resultado avaliacao={estado.avaliacao} meta={estado.meta} id={estado.id} />}
         </Stage>
       </Workspace>
+
+      {dialogoLinkAberto && (
+        <DialogoLinkAvaliacao
+          onFechar={() => setDialogoLinkAberto(false)}
+          aoCriar={carregarAvaliacoesEmAndamento}
+          questionario={questionario}
+          titulo={dados.titulo}
+          empresa={dados.empresa}
+        />
+      )}
     </>
   );
 }

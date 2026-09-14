@@ -202,7 +202,7 @@
         "Testar via curl um envio válido, um fora da escala (400) e um após o limite (410); Verify in browser using dev-browser skill: tela pública em celular e desktop"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

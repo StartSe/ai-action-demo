@@ -58,8 +58,10 @@ export type CampoFormulario = {
   multipla?: boolean;
 };
 
-/** Dados exibidos pela tela pública genérica (app/f/[token]/page.tsx), guardados dentro de `parametros`. */
-export type ParametrosPublicos = { marca: string; nome: string; titulo: string; descricao?: string };
+/** Dados exibidos pela tela pública genérica (app/f/[token]/page.tsx), guardados dentro de `parametros`.
+ * `agradecimento`, quando presente, substitui o texto padrão de sucesso após o envio (ex.: confirmar em qual
+ * avaliação/pesquisa a resposta entrou); sem ele, a tela mostra "Obrigado, sua resposta foi enviada.". */
+export type ParametrosPublicos = { marca: string; nome: string; titulo: string; descricao?: string; agradecimento?: string };
 
 export type Formulario<P = unknown> = {
   token: string;

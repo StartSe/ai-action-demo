@@ -1,8 +1,9 @@
 // Lógica de geração da avaliação, compartilhada entre a rota HTTP (app/api/bussola/route.ts)
 // e a ferramenta MCP (lib/ferramentas.ts), para não duplicar a lógica nos dois lugares.
-// Nesta história a análise real (a partir de respostas coletadas por link) ainda não existe:
-// gerarAvaliacaoExemplo() sempre devolve a avaliação de exemplo, rotulada como tal. A análise
-// de respostas reais chega na US-013, quando o link de coleta (US-012) já existir.
+// gerarAvaliacaoExemplo() sempre devolve a avaliação de exemplo, rotulada como tal, mesmo já
+// existindo respostas reais coletadas (lib/respostas.ts, via lib/link-avaliacao.ts, US-012):
+// a análise a partir dessas respostas reais (nível geral, resumo) é a US-013.
+import "./link-avaliacao"; // registra o callback do formulário "bussola" (US-012)
 import { aiEnabled, askJSON, meta, type Meta } from "./ai";
 import { avaliacaoDemo, esperar, questionarioAdaptadoDemo } from "./demo";
 import { salvar } from "./historico";

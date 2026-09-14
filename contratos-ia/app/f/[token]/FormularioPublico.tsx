@@ -4,11 +4,11 @@
 import { useState, type FormEvent } from "react";
 import type { CampoFormulario } from "@/lib/formularios";
 
-type Props = { token: string; marca: string; nome: string; titulo: string; descricao?: string; campos: CampoFormulario[] };
+type Props = { token: string; marca: string; nome: string; titulo: string; descricao?: string; agradecimento?: string; campos: CampoFormulario[] };
 
 type Fase = "preenchendo" | "enviando" | "enviado" | "erro";
 
-export function FormularioPublico({ token, marca, nome, titulo, descricao, campos }: Props) {
+export function FormularioPublico({ token, marca, nome, titulo, descricao, agradecimento, campos }: Props) {
   const [dados, setDados] = useState<Record<string, string>>(() => Object.fromEntries(campos.map((c) => [c.chave, ""])));
   const [nomesArquivo, setNomesArquivo] = useState<Record<string, string>>({});
   const [armadilha, setArmadilha] = useState("");
@@ -72,7 +72,7 @@ export function FormularioPublico({ token, marca, nome, titulo, descricao, campo
 
       {fase === "enviado" ? (
         <div className="card p-7 max-md:p-[22px] text-center">
-          <h1 className="text-xl font-extrabold mb-1.5">Obrigado, sua resposta foi enviada.</h1>
+          <h1 className="text-xl font-extrabold mb-1.5">{agradecimento || "Obrigado, sua resposta foi enviada."}</h1>
           <p className="text-muted">Você já pode fechar esta página.</p>
         </div>
       ) : (
