@@ -435,7 +435,83 @@ export function ResultadoPainel({ painel, meta, id, titulo }: { painel: PainelEq
       <Origem meta={meta} />
 
       <ConteudoPainel painel={painel} />
+
+      <ReceberResumoEquipe />
     </article>
+  );
+}
+
+type EstadoNotificacoes = { configurada: boolean; canal: "email" | "slack"; destino: string };
+type RotinaResumoEquipe = { id: string; tipo: string };
+
+/** Depois de ver o painel, oferece uma rotina semanal (toda sexta às 17h) com o resumo da equipe: conversas
+ * da semana, nota média, quem mais evoluiu, quem não treinou e o critério mais fraco. Ao contrário da rotina
+ * semanal do Radar de Sinais, não tem parâmetro nenhum (é sempre a mesma equipe), então só existe uma. */
+function ReceberResumoEquipe() {
+  const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
+  const [rotinaId, setRotinaId] = useState<string | null | undefined>(undefined);
+  const [criando, setCriando] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/setup")
+      .then((r) => r.json())
+      .then((d) => {
+        const integracao = (d.integracoes || []).find((i: { id: string }) => i.id === "notificacoes");
+        const campos: { chave: string; valorVisivel?: string }[] = integracao?.campos || [];
+        const canal = campos.find((c) => c.chave === "NOTIFICACOES_CANAL")?.valorVisivel === "slack" ? "slack" : "email";
+        const destino = campos.find((c) => c.chave === "NOTIFICACOES_DESTINO")?.valorVisivel || "";
+        setNotificacoes({ configurada: Boolean(integracao?.configurada), canal, destino });
+      })
+      .catch(() => setNotificacoes({ configurada: false, canal: "email", destino: "" }));
+    fetch("/api/rotinas")
+      .then((r) => r.json())
+      .then((d) => {
+        const existente = (d.itens || []).find((i: RotinaResumoEquipe) => i.tipo === "resumo-equipe");
+        setRotinaId(existente?.id ?? null);
+      })
+      .catch(() => setRotinaId(null));
+  }, []);
+
+  async function criar() {
+    if (!notificacoes?.configurada) return;
+    setCriando(true);
+    try {
+      const r = await fetch("/api/rotinas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "resumo-equipe",
+          frequencia: "semanal",
+          diaSemana: 5,
+          hora: "17:00",
+          canal: notificacoes.canal,
+          destino: notificacoes.canal === "email" ? notificacoes.destino || undefined : undefined,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Não foi possível criar a rotina.");
+      setRotinaId(d.id);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar a rotina.");
+    } finally {
+      setCriando(false);
+    }
+  }
+
+  if (rotinaId === undefined || notificacoes === null) return null;
+
+  return (
+    <Item className="mt-4">
+      {rotinaId ? (
+        <p className="text-muted text-sm">Você já recebe o resumo da equipe toda sexta às 17h.</p>
+      ) : notificacoes.configurada ? (
+        <button type="button" className="btn-ghost !w-auto" onClick={criar} disabled={criando}>
+          {criando ? "Criando..." : "Receber o resumo toda semana"}
+        </button>
+      ) : (
+        <a href="/setup#notificacoes" className="btn-ghost !w-auto">Receber o resumo toda semana</a>
+      )}
+    </Item>
   );
 }
 

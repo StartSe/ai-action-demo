@@ -305,7 +305,7 @@
         "Testar via POST /api/rotinas/<id>/executar-agora e conferir o texto entregue"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

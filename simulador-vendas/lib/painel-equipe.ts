@@ -95,6 +95,7 @@ export function montarPainelEquipe(dias = 30): PainelEquipe {
       conversas: doVendedorJanela.length,
       notaMedia: notaMediaVendedor,
       tendencia: tendenciaDe(notaMediaVendedor, notaMediaVendedorAnterior),
+      variacao: notaMediaVendedorAnterior === null ? null : Math.round((notaMediaVendedor - notaMediaVendedorAnterior) * 10) / 10,
       criterioMaisFraco,
       ultimaConversa: ordenadas[0]?.criadoEm || null,
       conversasRecentes: ordenadas.slice(0, 20).map((r) => ({

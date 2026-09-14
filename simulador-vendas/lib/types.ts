@@ -78,6 +78,8 @@ export interface VendedorPainel {
   conversas: number;
   notaMedia: number;
   tendencia: "subindo" | "estavel" | "caindo";
+  /** notaMedia do vendedor menos a do período anterior; null quando não há conversas no período anterior. */
+  variacao: number | null;
   criterioMaisFraco: string;
   ultimaConversa: string | null;
   conversasRecentes: ConversaResumoVendedor[];
