@@ -95,6 +95,13 @@ services:
     ports: ["3012:10000"]
     volumes: [bussola-ia-dados:/app/data]
 
+  simulador-vendas:
+    <<: *app
+    build: ./simulador-vendas
+    image: ghcr.io/startse/simulador-vendas:latest
+    ports: ["3013:10000"]
+    volumes: [simulador-vendas-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -108,3 +115,4 @@ volumes:
   voz-do-cliente-dados:
   radar-sinais-dados:
   bussola-ia-dados:
+  simulador-vendas-dados:

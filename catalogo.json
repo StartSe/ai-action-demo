@@ -187,6 +187,19 @@
       "captura": "capturas/bussola-ia.png",
       "capacidades": ["artefato", "mcp", "formulario"],
       "demo": null
+    },
+    {
+      "id": "simulador-vendas",
+      "nome": "Simulador de Vendas",
+      "areas": ["Vendas"],
+      "problema": "O gestor de vendas não sabe como cada vendedor conduz uma conversa real, só o resultado final.",
+      "ia": "Avalia uma conversa de vendas colada contra 7 critérios de venda consultiva e devolve nota, evidências e como melhorar.",
+      "integracoes": "Só a IA (OpenRouter).",
+      "acento": "#3f6212",
+      "porta": 3013,
+      "captura": "capturas/simulador-vendas.png",
+      "capacidades": ["artefato", "mcp", "rotina"],
+      "demo": null
     }
   ]
 }
