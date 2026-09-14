@@ -4,44 +4,35 @@
 // cadastrada está vazia) — quando cai no demo, os dados de exemplo são tratados como se fossem os
 // dados reais do período pedido. Reaproveitada pela rota HTTP (app/api/leitura) e pela ferramenta
 // MCP (lib/ferramentas.ts), para não duplicar o cálculo. Todo agregado é calculado aqui, no
-// servidor — nunca delegado a IA (não há IA nesta história).
+// servidor — nunca delegado a IA, inclusive os alertas (lib/faturas.ts:calcularAlertas).
 import { meta, type Meta } from "./ai";
 import { esperar, faturasDemo, orcamentoDemo } from "./demo";
-import { existeAlguma, inicioPeriodo, listarUltimosMeses, mesesDoPeriodo } from "./faturas";
+import { calcularAlertas, chaveMes, existeAlguma, fimDoMes, inicioPeriodo, listarUltimosMeses, mesesDoPeriodo, MESES_SEM_FATURA_PARA_NOVA, rotuloMes } from "./faturas";
 import { salvar } from "./historico";
 import { listar as listarOrcamento, orcamentoDoItem, totalMensal } from "./orcamento";
 import type { DadosLeitura, Fatura, GastoPorFerramenta, GastoPorMes, Leitura, Orcamento, Periodo } from "./types";
-
-const MESES_PT = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
 function arredondar(v: number): number {
   return Math.round(v * 100) / 100;
 }
 
-function rotuloMes(aaaaMm: string): string {
-  const [ano, mes] = aaaaMm.split("-").map(Number);
-  return `${MESES_PT[mes - 1]} de ${ano}`;
-}
-
-/** Chave AAAA-MM do mês `offset` meses antes de `referencia` (0 = o próprio mês de referência). */
-function chaveMes(referencia: Date, offset: number): string {
-  const d = new Date(referencia.getFullYear(), referencia.getMonth() - offset, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
 export type SaidaLeitura = { leitura: Leitura; faturas: Fatura[] };
 
 /** Monta a Leitura de um período, salva no histórico (tipo "leitura") e devolve tudo o que a tela
- * precisa: o agregado, as faturas do período (para a tabela) e a proveniência (Origem). */
+ * precisa: o agregado, as faturas do período (para a tabela) e a proveniência (Origem). `referencia`
+ * define o mês mais recente do período: a tela usa hoje; o fechamento mensal (lib/rotinas-do-app.ts)
+ * passa o último dia do mês anterior, e faturas depois desse dia ficam de fora. */
 export async function gerarLeitura(periodo: Periodo, referencia = new Date()): Promise<{ demo: boolean; leitura: Leitura; faturas: Fatura[]; meta: Meta; id: string }> {
   const meses = mesesDoPeriodo(periodo);
-  const janela = meses + 1; // 1 mês extra só para calcular a variação do mês mais recente
+  // Meses extras antes do período: a variação do mês mais recente precisa de 1; "Assinatura nova" precisa de 3.
+  const janela = meses + MESES_SEM_FATURA_PARA_NOVA;
 
   const usouDemoFaturas = !existeAlguma();
   const desdeJanela = inicioPeriodo(janela, referencia);
-  const faturasJanela = usouDemoFaturas
-    ? faturasDemo(referencia).filter((f) => f.data >= desdeJanela)
-    : listarUltimosMeses(janela, referencia);
+  const ateJanela = fimDoMes(referencia);
+  const faturasJanela = (usouDemoFaturas ? faturasDemo(referencia).filter((f) => f.data >= desdeJanela) : listarUltimosMeses(janela, referencia)).filter(
+    (f) => f.data <= ateJanela
+  );
 
   const orcamentoReal = listarOrcamento();
   const usouDemoOrcamento = orcamentoReal.length === 0;
@@ -77,13 +68,24 @@ export async function gerarLeitura(periodo: Periodo, referencia = new Date()): P
   for (const f of faturasPeriodo) {
     porFerramentaMapa.set(f.ferramenta, arredondar((porFerramentaMapa.get(f.ferramenta) || 0) + f.valorBRL));
   }
+  // Gasto por ferramenta só no mês de referência e no anterior (janela inteira), para a "maior variação" do fechamento.
+  const somaNoMes = (ferramenta: string, mes: string) =>
+    arredondar(faturasJanela.filter((f) => f.ferramenta === ferramenta && f.data.slice(0, 7) === mes).reduce((s, f) => s + f.valorBRL, 0));
   const porFerramenta: GastoPorFerramenta[] = [...porFerramentaMapa.entries()]
     .map(([ferramenta, totalFerramenta]) => {
       const orcadoMensal = orcamentoDoItem(itensOrcamento, ferramenta);
       const orcadoPeriodo = orcadoMensal !== undefined ? orcadoMensal * meses : undefined;
-      return { ferramenta, totalBRL: totalFerramenta, acimaDoPlanejado: orcadoPeriodo !== undefined && totalFerramenta > orcadoPeriodo };
+      return {
+        ferramenta,
+        totalBRL: totalFerramenta,
+        acimaDoPlanejado: orcadoPeriodo !== undefined && totalFerramenta > orcadoPeriodo,
+        mesAtualBRL: somaNoMes(ferramenta, chaveAtual),
+        mesAnteriorBRL: somaNoMes(ferramenta, chaveAnterior),
+      };
     })
     .sort((a, b) => b.totalBRL - a.totalBRL);
+
+  const alertas = calcularAlertas({ faturas: faturasJanela, orcamento: itensOrcamento, meses, referencia });
 
   const leitura: Leitura = {
     mesAtual: rotuloMes(chaveAtual),
@@ -92,7 +94,7 @@ export async function gerarLeitura(periodo: Periodo, referencia = new Date()): P
     variacaoMesAnterior,
     porFerramenta,
     porMes,
-    alertas: [],
+    alertas,
   };
 
   const demoGeral = usouDemoFaturas || usouDemoOrcamento;

@@ -26,6 +26,15 @@ export function definir(itens: Orcamento[]): Orcamento[] {
   return validos;
 }
 
+/** Define (ou substitui) o valor mensal de um único item, mantendo os demais — usado pela ferramenta MCP
+ * definir_orcamento, que fala de um item por vez. Valor 0 remove o item. */
+export function definirItem(item: string, valorMensalBRL: number): Orcamento[] {
+  const nome = item.trim();
+  const valor = Math.max(Number(valorMensalBRL) || 0, 0);
+  const restantes = listar().filter((i) => i.item.trim().toLowerCase() !== nome.toLowerCase());
+  return definir(valor > 0 ? [...restantes, { item: nome, valorMensalBRL: valor }] : restantes);
+}
+
 export function apagar(): void {
   setConfig(CHAVE, null);
 }

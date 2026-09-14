@@ -373,7 +373,7 @@
         "Testar rotina via executar-agora e MCP via curl tools/list e tools/call; Verify in browser using dev-browser skill: seção de alertas com o demo"
       ],
       "priority": 22,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

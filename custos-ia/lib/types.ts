@@ -32,6 +32,10 @@ export interface GastoPorFerramenta {
   totalBRL: number;
   /** true quando existe um item de orçamento para esta ferramenta e o gasto do período o ultrapassa. */
   acimaDoPlanejado: boolean;
+  /** Gasto desta ferramenta só no mês de referência (o mais recente do período). */
+  mesAtualBRL: number;
+  /** Gasto desta ferramenta no mês anterior ao de referência — base da "maior variação" do fechamento mensal. */
+  mesAnteriorBRL: number;
 }
 
 export interface GastoPorMes {
@@ -42,10 +46,18 @@ export interface GastoPorMes {
   planejadoBRL: number;
 }
 
+/** Alerta calculado sem IA (lib/faturas.ts:calcularAlertas), sempre ancorado num mês e num alvo:
+ * "acima-do-planejado" aponta uma ferramenta; "assinatura-nova" aponta um fornecedor. A tabela de
+ * faturas usa `mes` + `alvo` para marcar a linha correspondente com um chip. */
 export interface Alerta {
-  titulo: string;
+  tipo: "acima-do-planejado" | "assinatura-nova";
+  titulo: "Acima do planejado" | "Assinatura nova";
   nivel: "alta" | "media" | "baixa";
   descricao: string;
+  /** Ferramenta (acima-do-planejado) ou fornecedor (assinatura-nova). */
+  alvo: string;
+  /** AAAA-MM do mês a que o alerta se refere. */
+  mes: string;
 }
 
 /** Leitura do gasto com IA de um período, comparado ao orçamento planejado. */

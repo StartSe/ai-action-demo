@@ -30,8 +30,9 @@ import { OrcamentoPlanejado } from "@/components/OrcamentoPlanejado";
 import { LancarManualmente } from "@/components/LancarManualmente";
 import { EnviarNotas, PreviaNotas, type ResultadoUpload } from "@/components/EnviarNotas";
 import { ResumoImportacao } from "@/components/ImportarEmail";
+import { ReceberFechamento } from "@/components/ReceberFechamento";
 import type { Meta } from "@/lib/ai";
-import type { Fatura, Leitura, Periodo, ResultadoImportacao } from "@/lib/types";
+import type { Alerta, Fatura, Leitura, Periodo, ResultadoImportacao } from "@/lib/types";
 
 const ETAPAS_CARREGANDO = ["Lendo as faturas do período...", "Comparando com o orçamento planejado...", "Montando o resultado..."];
 const ETAPAS_LENDO_NOTAS = ["Abrindo os arquivos...", "Reconhecendo fornecedor, valor e data...", "Montando a prévia..."];
@@ -228,12 +229,19 @@ export function Resultado({ leitura, faturas, meta, id }: { leitura: Leitura; fa
   return (
     <article className="reveal">
       <ResultHead titulo={`Gasto com IA de ${leitura.mesAtual}`}>
-        <Entregar id={id} titulo={`Gasto com IA de ${leitura.mesAtual}`} texto={() => leituraParaTexto(leitura, faturas)} />
+        <Entregar
+          id={id}
+          titulo={`Gasto com IA de ${leitura.mesAtual}`}
+          texto={() => leituraParaTexto(leitura, faturas)}
+          extras={[{ rotulo: "Baixar faturas (CSV)", onClick: () => exportarFaturasCSV(faturas, leitura.mesAtual) }]}
+        />
       </ResultHead>
 
       <Origem meta={meta} />
 
       <ConteudoLeitura leitura={leitura} faturas={faturas} />
+
+      <ReceberFechamento />
     </article>
   );
 }
@@ -250,6 +258,7 @@ export function ConteudoLeitura({ leitura, faturas }: { leitura: Leitura; fatura
         : `Exatamente dentro do planejado (R$ ${numero(leitura.planejadoBRL, 2)})`;
 
   const maxFerramenta = Math.max(...leitura.porFerramenta.map((f) => f.totalBRL), 1);
+  const alertas = leitura.alertas ?? [];
 
   return (
     <>
@@ -259,6 +268,21 @@ export function ConteudoLeitura({ leitura, faturas }: { leitura: Leitura; fatura
         {leitura.variacaoMesAnterior > 0 ? "Alta" : leitura.variacaoMesAnterior < 0 ? "Queda" : "Estabilidade"} de{" "}
         {numero(Math.abs(leitura.variacaoMesAnterior), 1)}% em relação ao mês anterior.
       </p>
+
+      <Section titulo="Alertas">
+        {alertas.length === 0 ? (
+          <p className="text-muted text-sm">Nenhum alerta no período: nenhuma ferramenta passou do planejado e nenhuma assinatura nova apareceu.</p>
+        ) : (
+          <ul className="flex flex-col gap-2.5 list-none p-0 m-0">
+            {alertas.map((a) => (
+              <li key={`${a.tipo}-${a.alvo}-${a.mes}`} className="flex items-start gap-2.5 flex-wrap">
+                <span className="shrink-0 pt-px"><Chip nivel={a.nivel}>{a.titulo}</Chip></span>
+                <span className="text-sm flex-1 min-w-[200px]">{a.descricao}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
 
       <Section titulo="Gasto contra o planejado, mês a mês">
         <GraficoGastoPlanejado meses={leitura.porMes} />
@@ -298,7 +322,21 @@ export function ConteudoLeitura({ leitura, faturas }: { leitura: Leitura; fatura
         ) : (
           <DataTable
             colunas={[
-              { chave: "fornecedor", titulo: "Fornecedor", papel: "titulo", largura: "24%", render: (f: Fatura) => <strong>{f.fornecedor}</strong> },
+              {
+                chave: "fornecedor",
+                titulo: "Fornecedor",
+                papel: "titulo",
+                largura: "24%",
+                render: (f: Fatura) => {
+                  const alerta = alertaDaFatura(alertas, f);
+                  return (
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <strong>{f.fornecedor}</strong>
+                      {alerta && <Chip nivel={alerta.nivel}>{alerta.titulo}</Chip>}
+                    </span>
+                  );
+                },
+              },
               { chave: "ferramenta", titulo: "Ferramenta", papel: "resumo", render: (f: Fatura) => `${f.ferramenta} · ${ROTULOS_PERIODICIDADE[f.periodicidade]}` },
               { chave: "valor", titulo: "Valor", papel: "chip", largura: "110px", render: (f: Fatura) => <span className="font-bold">R$ {numero(f.valorBRL, 2)}</span> },
               { chave: "data", titulo: "Data", papel: "detalhe", render: (f: Fatura) => data(new Date(`${f.data}T00:00:00`), { comAno: true }) },
@@ -309,6 +347,15 @@ export function ConteudoLeitura({ leitura, faturas }: { leitura: Leitura; fatura
         )}
       </Section>
     </>
+  );
+}
+
+/** Alerta que marca esta fatura: estouro da ferramenta no mês da fatura, ou fornecedor novo nesse mês. */
+function alertaDaFatura(alertas: Alerta[], f: Fatura): Alerta | undefined {
+  const mes = f.data.slice(0, 7);
+  return (
+    alertas.find((a) => a.mes === mes && a.tipo === "acima-do-planejado" && a.alvo === f.ferramenta) ??
+    alertas.find((a) => a.mes === mes && a.tipo === "assinatura-nova" && a.alvo === f.fornecedor)
   );
 }
 
@@ -323,7 +370,30 @@ function leituraParaTexto(leitura: Leitura, faturas: Fatura[]) {
     "Por ferramenta:",
   ];
   leitura.porFerramenta.forEach((f) => l.push(`- ${f.ferramenta}: R$ ${numero(f.totalBRL, 2)}${f.acimaDoPlanejado ? " (acima do planejado)" : ""}`));
+  l.push("", "Alertas:");
+  if ((leitura.alertas ?? []).length === 0) l.push("- Nenhum alerta no período");
+  (leitura.alertas ?? []).forEach((a) => l.push(`- ${a.titulo}: ${a.descricao}`));
   l.push("", "Faturas do período:");
   faturas.forEach((f) => l.push(`- ${f.data} · ${f.fornecedor} (${f.ferramenta}): R$ ${numero(f.valorBRL, 2)}`));
   return l.join("\n");
+}
+
+/** Baixa as faturas do período em CSV (separador ";" e BOM, para abrir direto no Excel em português). */
+function exportarFaturasCSV(faturas: Fatura[], mesAtual: string) {
+  const cabecalho = ["Data", "Fornecedor", "Ferramenta", "Categoria", "Valor", "Moeda", "Valor em reais", "Periodicidade", "Origem", "Referência"];
+  const linhas = [cabecalho.join(";")];
+  faturas.forEach((f) => {
+    const campos = [f.data, f.fornecedor, f.ferramenta, f.categoria, numero(f.valor, 2), f.moeda, numero(f.valorBRL, 2), ROTULOS_PERIODICIDADE[f.periodicidade], ROTULOS_ORIGEM[f.origem], f.referencia ?? ""];
+    linhas.push(campos.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"));
+  });
+  const csv = "\ufeff" + linhas.join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `faturas-ia-${mesAtual.replace(/\s+/g, "-")}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }

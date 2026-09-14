@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { Fatura, Periodo } from "./types";
+import type { Alerta, Fatura, Orcamento, Periodo } from "./types";
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 let db: DatabaseSync | null = null;
@@ -65,6 +65,118 @@ export function inicioPeriodo(meses: number, referencia = new Date()): string {
 
 export function mesesDoPeriodo(periodo: Periodo): number {
   return periodo === "mes" ? 1 : periodo === "3meses" ? 3 : 12;
+}
+
+/** Último dia (AAAA-MM-DD) do mês da data de referência — limite superior de uma leitura fechada
+ * (ex.: o fechamento mensal lê o mês anterior e não pode puxar faturas já lançadas no mês corrente). */
+export function fimDoMes(referencia = new Date()): string {
+  const d = new Date(referencia.getFullYear(), referencia.getMonth() + 1, 0);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Chave AAAA-MM do mês `offset` meses antes de `referencia` (0 = o próprio mês de referência). */
+export function chaveMes(referencia: Date, offset: number): string {
+  const d = new Date(referencia.getFullYear(), referencia.getMonth() - offset, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+const MESES_PT = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+
+/** "setembro de 2026" a partir de "2026-09". */
+export function rotuloMes(aaaaMm: string): string {
+  const [ano, mes] = aaaaMm.split("-").map(Number);
+  return `${MESES_PT[mes - 1]} de ${ano}`;
+}
+
+function arredondar(v: number): number {
+  return Math.round(v * 100) / 100;
+}
+
+function reais(v: number): string {
+  return `R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)}`;
+}
+
+/** Quantos meses antes de um mês um fornecedor precisa estar ausente para a fatura dele contar como "Assinatura nova". */
+export const MESES_SEM_FATURA_PARA_NOVA = 3;
+
+/** Alertas calculados sem IA, mês a mês dentro do período (os `meses` mais recentes até `referencia`):
+ * - "Acima do planejado": o gasto de uma ferramenta num mês passou do orçamento mensal daquele item;
+ * - "Assinatura nova": um fornecedor teve fatura num mês e nenhuma nos 3 meses anteriores — só quando
+ *   já havia alguma fatura (de qualquer fornecedor) nesses 3 meses, para o começo do histórico não
+ *   marcar todo mundo como novo.
+ * `faturas` precisa trazer os 3 meses anteriores ao período (lib/leitura.ts já carrega essa janela).
+ * Ordenado do mês mais recente para o mais antigo; dentro do mês, estouros (por valor) antes das novas. */
+export function calcularAlertas({ faturas, orcamento, meses, referencia = new Date() }: { faturas: Fatura[]; orcamento: Orcamento[]; meses: number; referencia?: Date }): Alerta[] {
+  const porMesFerramenta = new Map<string, number>();
+  const mesesPorFornecedor = new Map<string, Set<string>>();
+  const mesesComFatura = new Set<string>();
+  for (const f of faturas) {
+    const mes = f.data.slice(0, 7);
+    mesesComFatura.add(mes);
+    const chave = `${mes}|${f.ferramenta.trim().toLowerCase()}`;
+    porMesFerramenta.set(chave, (porMesFerramenta.get(chave) || 0) + f.valorBRL);
+    const fornecedor = f.fornecedor.trim().toLowerCase();
+    if (!mesesPorFornecedor.has(fornecedor)) mesesPorFornecedor.set(fornecedor, new Set());
+    mesesPorFornecedor.get(fornecedor)!.add(mes);
+  }
+
+  const orcado = new Map(orcamento.map((o) => [o.item.trim().toLowerCase(), o.valorMensalBRL] as const));
+  const alertas: Alerta[] = [];
+
+  for (let offset = 0; offset < meses; offset++) {
+    const mes = chaveMes(referencia, offset);
+    const rotulo = rotuloMes(mes);
+    const anteriores = Array.from({ length: MESES_SEM_FATURA_PARA_NOVA }, (_, i) => chaveMes(referencia, offset + i + 1));
+    const haHistoricoAntes = anteriores.some((m) => mesesComFatura.has(m));
+
+    const estouros: Alerta[] = [];
+    const novas: Alerta[] = [];
+    const ferramentasVistas = new Set<string>();
+    const fornecedoresVistos = new Set<string>();
+    for (const f of faturas) {
+      if (f.data.slice(0, 7) !== mes) continue;
+
+      const ferramenta = f.ferramenta.trim().toLowerCase();
+      if (!ferramentasVistas.has(ferramenta)) {
+        ferramentasVistas.add(ferramenta);
+        const limite = orcado.get(ferramenta);
+        const gasto = arredondar(porMesFerramenta.get(`${mes}|${ferramenta}`) || 0);
+        if (limite !== undefined && gasto > limite) {
+          estouros.push({
+            tipo: "acima-do-planejado",
+            titulo: "Acima do planejado",
+            nivel: "alta",
+            alvo: f.ferramenta,
+            mes,
+            descricao: `${f.ferramenta} gastou ${reais(gasto)} em ${rotulo}, ${reais(arredondar(gasto - limite))} acima do planejado (${reais(limite)} por mês).`,
+          });
+        }
+      }
+
+      const fornecedor = f.fornecedor.trim().toLowerCase();
+      if (!fornecedoresVistos.has(fornecedor)) {
+        fornecedoresVistos.add(fornecedor);
+        const mesesDoFornecedor = mesesPorFornecedor.get(fornecedor)!;
+        const semFaturaAntes = anteriores.every((m) => !mesesDoFornecedor.has(m));
+        if (haHistoricoAntes && semFaturaAntes) {
+          novas.push({
+            tipo: "assinatura-nova",
+            titulo: "Assinatura nova",
+            nivel: "media",
+            alvo: f.fornecedor,
+            mes,
+            descricao: `${f.fornecedor} (${f.ferramenta}) apareceu em ${rotulo} sem nenhuma fatura nos ${MESES_SEM_FATURA_PARA_NOVA} meses anteriores.`,
+          });
+        }
+      }
+    }
+
+    estouros.sort((a, b) => (porMesFerramenta.get(`${mes}|${b.alvo.trim().toLowerCase()}`) || 0) - (porMesFerramenta.get(`${mes}|${a.alvo.trim().toLowerCase()}`) || 0));
+    novas.sort((a, b) => a.alvo.localeCompare(b.alvo, "pt-BR"));
+    alertas.push(...estouros, ...novas);
+  }
+
+  return alertas;
 }
 
 /** Salva uma fatura; ignora silenciosamente (devolve a existente) quando já existe uma com o mesmo

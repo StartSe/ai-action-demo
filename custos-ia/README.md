@@ -49,7 +49,7 @@ Restrições do Google que valem saber antes de publicar:
 Como funciona a leitura (`lib/email.ts` + `app/api/faturas/importar/route.ts`): `users.messages.list` com `newer_than:<dias>d (fatura OR invoice OR recibo OR receipt OR "nota fiscal" OR has:attachment)`, paginado até 200 mensagens por clique; `messages.get` (`format=full`) para assunto, remetente e corpo (texto simples, ou HTML convertido em texto); `attachments.get` para até 3 anexos PDF de 5 MB por mensagem. Anexos são lidos primeiro (a nota costuma estar lá), o corpo só quando nenhum PDF rende fatura. Mensagens já importadas (mesma `referencia` = id da mensagem) são puladas sem gastar chamada ao modelo; a deduplicação por fornecedor + valor + data de `lib/faturas.ts` também vale aqui. Em `429`/`503` o cliente espera o `Retry-After` (ou recuo exponencial) e tenta de novo; em `401` renova o access token uma vez.
 
 ## Usar dentro de um assistente de IA (MCP)
-O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, para que assistentes como Claude ou ChatGPT chamem a ferramenta `gastos_ia(periodo)` diretamente. Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
+O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, para que assistentes como Claude ou ChatGPT chamem três ferramentas diretamente: `gastos_ia(periodo)` (a leitura do período, com alertas), `importar_notas(dias)` (lê as notas do Gmail conectado e lança as faturas — exige Gmail e IA configurados) e `definir_orcamento(item, valorMensal)` (define o planejado mensal de uma ferramenta; valor 0 remove o item). Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
 
 Decisão de implementação: protocolo implementado à mão em `lib/mcp.ts` (JSON-RPC 2.0: `initialize`, `tools/list`, `tools/call`), em vez do pacote `@modelcontextprotocol/sdk` — mesma decisão herdada de `pdi-time`. Rate limit de 60 chamadas por minuto por código, em memória (`lib/mcp.ts`); reinicia ao reiniciar o servidor ou ao gerar um novo código.
 
@@ -63,7 +63,12 @@ curl -X POST https://<seu-app>/mcp \
 ```bash
 npx @modelcontextprotocol/inspector
 ```
-Na interface que abre no navegador, escolha o transporte "Streamable HTTP", cole `http://localhost:3000/mcp` (ou o endereço do deploy) em URL e adicione o cabeçalho `Authorization: Bearer <código>` em "Custom Headers". Clique em "Connect": a aba "Tools" deve listar `gastos_ia`.
+Na interface que abre no navegador, escolha o transporte "Streamable HTTP", cole `http://localhost:3000/mcp` (ou o endereço do deploy) em URL e adicione o cabeçalho `Authorization: Bearer <código>` em "Custom Headers". Clique em "Connect": a aba "Tools" deve listar `gastos_ia`, `importar_notas` e `definir_orcamento`.
+
+## Alertas e fechamento mensal
+Os alertas são calculados sem IA (`lib/faturas.ts:calcularAlertas`), mês a mês dentro do período: **Acima do planejado** (o gasto de uma ferramenta no mês passou do orçamento mensal daquele item) e **Assinatura nova** (um fornecedor com fatura no mês e nenhuma nos 3 meses anteriores — só quando já havia histórico nesses meses, para uma instalação nova não marcar todo mundo como novo). Aparecem na seção "Alertas" do resultado e como chip na linha da fatura correspondente.
+
+O botão "Receber o fechamento todo mês" (no fim do resultado) cria a rotina `fechamento-mensal` (todo dia 1 às 8h, canal e destino das Notificações configuradas em `/setup`). Ao rodar, ela importa as notas dos últimos 90 dias do Gmail quando ele está conectado (e a IA ligada), gera a leitura do mês que acabou de fechar e entrega cinco linhas — total, contra o planejado, maior variação, novas assinaturas e alertas — com o link `/r/<id>` do resultado completo. Também pode ser criada e testada ("Executar agora") pelo cartão "Rotinas" em `/setup`.
 
 ## Variáveis de ambiente (todas opcionais)
 Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando definidas, têm prioridade sobre o que foi salvo.
@@ -84,7 +89,7 @@ app/api/leitura/route.ts  leitura agregada do gasto (lib/leitura.ts)
 app/api/orcamento/route.ts leitura/gravação do orçamento planejado (lista completa)
 app/api/faturas/route.ts  lançamento manual de uma fatura e confirmação da prévia do upload
 app/api/faturas/upload/route.ts   leitura de notas em PDF/imagem/texto (prévia, nada gravado)
-app/api/faturas/importar/route.ts leitura das notas do Gmail do período (grava com origem "email")
+app/api/faturas/importar/route.ts clique "Ler as notas do e-mail" (chama lib/importacao.ts)
 app/api/setup/oauth/google/       conexão do Gmail (OAuth PKCE) e callback que grava o código de renovação
 app/api/gmail/route.ts    estado da conexão do Gmail para o cartão de /setup e desconexão
 app/mcp/route.ts          endpoint MCP (JSON-RPC 2.0) para assistentes de IA
@@ -102,18 +107,21 @@ components/ImportarEmail.tsx resumo de uma importação do Gmail (lidas, reconhe
 components/GraficoGastoPlanejado.tsx barras pareadas (gasto x planejado) por mês, em HTML+CSS puro
 components/OrcamentoPlanejado.tsx  cartão do painel: orçamento mensal por ferramenta
 components/LancarManualmente.tsx   cartão do painel: lançamento manual de fatura
+components/ReceberFechamento.tsx   botão "Receber o fechamento todo mês" (cria a rotina fechamento-mensal)
 lib/store.ts               configuração em SQLite (node:sqlite), com variáveis de ambiente como prioridade
 lib/setup-comum.ts         tipos do setup e integração OpenRouter (compartilhado)
 lib/integracoes.ts         integrações que este app precisa (OpenRouter, Notificações, Câmbio, Gmail)
 lib/email.ts               cliente do Gmail: renovação do acesso, busca e leitura de mensagens e anexos PDF
 lib/leitor.ts              transforma o texto de um documento (PDF, e-mail, imagem transcrita) em Fatura via IA
+lib/importacao.ts          importação das notas do Gmail (uma lógica só para a rota, a rotina e o MCP)
+lib/rotinas-do-app.ts      rotinas deste app: resumo do mês e fechamento mensal (dia 1 às 8h)
 lib/ai.ts                  cliente OpenRouter (askText, askJSON, askWithTools) — sem uso de IA nesta história
 lib/mcp.ts                 protocolo MCP (JSON-RPC 2.0), código de acesso e limite de chamadas
-lib/ferramentas.ts         ferramentas expostas via MCP (gastos_ia)
-lib/faturas.ts             faturas em SQLite (salvar com deduplicação, listar por período)
+lib/ferramentas.ts         ferramentas expostas via MCP (gastos_ia, importar_notas, definir_orcamento)
+lib/faturas.ts             faturas em SQLite (salvar com deduplicação, listar por período) e alertas sem IA
 lib/orcamento.ts           orçamento planejado (JSON único via lib/store.ts)
 lib/leitura.ts             agrega faturas + orçamento num Leitura do período, usada pela rota HTTP e pelo MCP
-lib/demo.ts                doze meses de faturas de exemplo e um orçamento, com dois estouros
+lib/demo.ts                doze meses de faturas de exemplo e um orçamento, com dois estouros e uma assinatura nova
 lib/types.ts                tipos do domínio
 Dockerfile                 build multi-stage com saída standalone
 docker-compose.yml         sobe este app isolado
