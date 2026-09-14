@@ -1,6 +1,6 @@
 // Avaliação de exemplo usada quando não há uma avaliação real ainda (ver ?exemplo=1).
 import { DIMENSOES, QUESTIONARIO_MODELO } from "./modelo";
-import type { Avaliacao, MediaDimensao, Resposta } from "./types";
+import type { Avaliacao, MediaDimensao, Questionario, Resposta } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
@@ -75,6 +75,21 @@ function calcularMedias(respostas: Resposta[]): MediaDimensao[] {
     const media = notas.reduce((a, b) => a + b, 0) / notas.length;
     return { dimensao: dim.nome, media: Math.round(media * 10) / 10 };
   });
+}
+
+/** Duas perguntas de texto do questionário modelo, reescritas citando o setor informado (sem chave de IA). */
+export function questionarioAdaptadoDemo(setor: string): Questionario {
+  const s = setor.trim() || "sua área";
+  const perguntas = QUESTIONARIO_MODELO.perguntas.map((p) => {
+    if (p.texto === "Qual foi o resultado mais concreto que a empresa já teve com IA até hoje?") {
+      return { ...p, texto: `Qual foi o resultado mais concreto que uma empresa de ${s} já teve com IA até hoje?` };
+    }
+    if (p.texto === "Qual é o maior risco ou receio da empresa em relação ao uso de IA hoje?") {
+      return { ...p, texto: `Qual é o maior risco ou receio de uma empresa de ${s} em relação ao uso de IA hoje?` };
+    }
+    return p;
+  });
+  return { ...QUESTIONARIO_MODELO, titulo: `Diagnóstico de maturidade em IA — ${s}`, perguntas };
 }
 
 export function avaliacaoDemo({ empresa, titulo }: { empresa?: string; titulo?: string } = {}): Avaliacao {

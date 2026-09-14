@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Chip, DataTable, Destaque, Empty, Entregar, ErrorBox, Field, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
+import { EditorPerguntas } from "@/components/EditorPerguntas";
 import { ESCALA_MODELO, QUESTIONARIO_MODELO } from "@/lib/modelo";
 import type { Meta } from "@/lib/ai";
-import type { Avaliacao, DadosAvaliacao, MediaDimensao } from "@/lib/types";
+import type { Avaliacao, DadosAvaliacao, MediaDimensao, Questionario } from "@/lib/types";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
+type ItemQuestionario = { id: string; titulo: string; criadoEm: string };
 
 const EXEMPLO: DadosAvaliacao = { empresa: "Nordeste Varejo", titulo: "Diagnóstico de maturidade em IA — 2026" };
 
@@ -34,6 +36,13 @@ export default function Page() {
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const [questionarioVisivel, setQuestionarioVisivel] = useState(false);
+  const [questionario, setQuestionario] = useState<Questionario>(() => structuredClone(QUESTIONARIO_MODELO));
+  const [setorQuestionario, setSetorQuestionario] = useState("");
+  const [porteQuestionario, setPorteQuestionario] = useState("");
+  const [gerandoQuestionario, setGerandoQuestionario] = useState(false);
+  const [erroQuestionario, setErroQuestionario] = useState("");
+  const [salvandoQuestionario, setSalvandoQuestionario] = useState(false);
+  const [questionariosSalvos, setQuestionariosSalvos] = useState<ItemQuestionario[] | null>(null);
   const autoEnviado = useRef(false);
 
   useScrollToResult(estado.fase === "pronto");
@@ -42,7 +51,53 @@ export default function Page() {
     fetch("/api/bussola").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
   }
 
-  useEffect(() => { carregarHistorico(); }, []);
+  function carregarQuestionariosSalvos() {
+    fetch("/api/bussola/questionarios").then((r) => r.json()).then((r) => setQuestionariosSalvos(r.itens)).catch(() => setQuestionariosSalvos([]));
+  }
+
+  useEffect(() => { carregarHistorico(); carregarQuestionariosSalvos(); }, []);
+
+  async function gerarQuestionarioSetor() {
+    if (!setorQuestionario.trim()) { setErroQuestionario("Informe o setor da empresa."); return; }
+    setErroQuestionario("");
+    setGerandoQuestionario(true);
+    try {
+      const r = await fetch("/api/bussola/questionario", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ setor: setorQuestionario, porte: porteQuestionario }) });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Não foi possível gerar o questionário.");
+      setQuestionario(resposta.questionario);
+    } catch (e) {
+      setErroQuestionario(e instanceof Error ? e.message : "Erro inesperado.");
+    } finally {
+      setGerandoQuestionario(false);
+    }
+  }
+
+  async function salvarQuestionario() {
+    setSalvandoQuestionario(true);
+    try {
+      const r = await fetch("/api/bussola/questionarios", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ titulo: questionario.titulo, questionario }) });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Não foi possível salvar o questionário.");
+      carregarQuestionariosSalvos();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Erro inesperado.");
+    } finally {
+      setSalvandoQuestionario(false);
+    }
+  }
+
+  async function abrirQuestionarioSalvo(id: string) {
+    const r = await fetch(`/api/bussola/questionarios/${id}`);
+    if (!r.ok) return;
+    const salvo = await r.json();
+    setQuestionario(salvo.questionario);
+    setQuestionarioVisivel(true);
+  }
+
+  function apagarQuestionarioSalvo(id: string) {
+    fetch(`/api/bussola/questionarios/${id}`, { method: "DELETE" }).then(carregarQuestionariosSalvos);
+  }
 
   function apagarHistorico() {
     if (!window.confirm("Apagar todos os resultados salvos? Essa ação não pode ser desfeita.")) return;
@@ -95,7 +150,7 @@ export default function Page() {
             </Row>
 
             <button type="button" className="btn-ghost" onClick={() => setQuestionarioVisivel((v) => !v)}>
-              {questionarioVisivel ? "Ocultar o questionário modelo" : "Usar o questionário modelo"}
+              {questionarioVisivel ? "Ocultar o questionário" : "Editar o questionário"}
             </button>
 
             {questionarioVisivel && (
@@ -103,19 +158,50 @@ export default function Page() {
                 <p className="text-muted text-[13px]">
                   Perguntas de escala vão de {ESCALA_MODELO.min} ({ESCALA_MODELO.rotuloMin}) a {ESCALA_MODELO.max} ({ESCALA_MODELO.rotuloMax}).
                 </p>
-                {QUESTIONARIO_MODELO.dimensoes.map((dim) => (
-                  <div key={dim.id}>
-                    <h3 className="text-[13px] font-bold mb-1.5">{dim.nome}</h3>
-                    <ul className="text-sm flex flex-col gap-1">
-                      {QUESTIONARIO_MODELO.perguntas.filter((p) => p.dimensao === dim.nome).map((p) => (
-                        <li key={p.id} className="flex justify-between gap-3">
-                          <span>{p.texto}</span>
-                          <span className="text-muted shrink-0">{p.tipo === "escala" ? "Escala" : "Texto"}</span>
+
+                <MaisDetalhes titulo="Gerar um questionário para o meu setor">
+                  <Row>
+                    <Field label="Setor da empresa" htmlFor="setorQuestionario">
+                      <input id="setorQuestionario" className="input" placeholder="Varejo de moda" value={setorQuestionario} onChange={(e) => setSetorQuestionario(e.target.value)} />
+                    </Field>
+                    <Field label="Porte (opcional)" htmlFor="porteQuestionario">
+                      <input id="porteQuestionario" className="input" placeholder="Médio porte" value={porteQuestionario} onChange={(e) => setPorteQuestionario(e.target.value)} />
+                    </Field>
+                  </Row>
+                  {erroQuestionario && <p className="text-danger text-[13px] mb-2">{erroQuestionario}</p>}
+                  <button type="button" className="btn-ghost" disabled={gerandoQuestionario} onClick={gerarQuestionarioSetor}>
+                    {gerandoQuestionario ? "Gerando..." : "Gerar um questionário para o meu setor"}
+                  </button>
+                </MaisDetalhes>
+
+                <EditorPerguntas questionario={questionario} onChange={setQuestionario} />
+
+                <Field label="Título do questionário" htmlFor="tituloQuestionario">
+                  <input id="tituloQuestionario" className="input" value={questionario.titulo} onChange={(e) => setQuestionario((q) => ({ ...q, titulo: e.target.value }))} />
+                </Field>
+                <button type="button" className="btn-ghost self-start" disabled={salvandoQuestionario} onClick={salvarQuestionario}>
+                  {salvandoQuestionario ? "Salvando..." : "Salvar questionário"}
+                </button>
+
+                <MaisDetalhes titulo="Meus questionários">
+                  {questionariosSalvos === null ? (
+                    <p className="text-muted text-sm">Carregando...</p>
+                  ) : questionariosSalvos.length === 0 ? (
+                    <p className="text-muted text-sm">Nenhum questionário salvo ainda.</p>
+                  ) : (
+                    <ul className="flex flex-col gap-1.5 text-sm">
+                      {questionariosSalvos.map((q) => (
+                        <li key={q.id} className="flex justify-between items-center gap-3">
+                          <span className="truncate">{q.titulo}</span>
+                          <span className="flex gap-3 shrink-0">
+                            <button type="button" className="btn-link" onClick={() => abrirQuestionarioSalvo(q.id)}>Abrir</button>
+                            <button type="button" className="btn-link" onClick={() => apagarQuestionarioSalvo(q.id)}>Apagar</button>
+                          </span>
                         </li>
                       ))}
                     </ul>
-                  </div>
-                ))}
+                  )}
+                </MaisDetalhes>
               </div>
             )}
 
