@@ -340,7 +340,7 @@
         "Testar via curl com um PDF de exemplo e com um arquivo que não é nota (ignorado com motivo); Verify in browser using dev-browser skill: enviar dois PDFs e confirmar"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

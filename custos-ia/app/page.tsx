@@ -27,10 +27,12 @@ import {
 import { GraficoGastoPlanejado } from "@/components/GraficoGastoPlanejado";
 import { OrcamentoPlanejado } from "@/components/OrcamentoPlanejado";
 import { LancarManualmente } from "@/components/LancarManualmente";
+import { EnviarNotas, PreviaNotas, type ResultadoUpload } from "@/components/EnviarNotas";
 import type { Meta } from "@/lib/ai";
 import type { Fatura, Leitura, Periodo } from "@/lib/types";
 
 const ETAPAS_CARREGANDO = ["Lendo as faturas do período...", "Comparando com o orçamento planejado...", "Montando o resultado..."];
+const ETAPAS_LENDO_NOTAS = ["Abrindo os arquivos...", "Reconhecendo fornecedor, valor e data...", "Montando a prévia..."];
 
 const ROTULOS_PERIODICIDADE: Record<Fatura["periodicidade"], string> = { mensal: "Mensal", anual: "Anual", unica: "Única" };
 const ROTULOS_ORIGEM: Record<Fatura["origem"], string> = { email: "Lida do e-mail", upload: "Enviada por upload", manual: "Lançada manualmente" };
@@ -52,15 +54,18 @@ type Estado =
   | { fase: "vazio" }
   | { fase: "carregando" }
   | { fase: "erro"; mensagem: string }
+  | { fase: "lendo-notas" }
+  | { fase: "previa"; resultado: ResultadoUpload }
   | { fase: "pronto"; leitura: Leitura; faturas: Fatura[]; meta: Meta; id?: string };
 
 export default function Page() {
   const { status, erro } = useStatus();
   const [periodo, setPeriodo] = useState<Periodo>("mes");
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
+  const [enviarNotasAberto, setEnviarNotasAberto] = useState(false);
   const autoEnviado = useRef(false);
 
-  useScrollToResult(estado.fase === "pronto");
+  useScrollToResult(estado.fase === "pronto" || estado.fase === "previa");
 
   async function gerar(periodoEscolhido: Periodo) {
     setEstado({ fase: "carregando" });
@@ -113,11 +118,20 @@ export default function Page() {
                 <span className="text-[12.5px] text-muted">Conecte seu e-mail para ler as notas sozinho</span>
               </div>
               <div className="flex items-center gap-3 flex-wrap">
-                <button type="button" className="btn-ghost !w-auto" disabled title="Disponível na próxima etapa">
-                  Enviar notas em PDF
+                <button type="button" className="btn-ghost !w-auto" aria-expanded={enviarNotasAberto} aria-controls="enviar-notas" onClick={() => setEnviarNotasAberto((v) => !v)}>
+                  {enviarNotasAberto ? "Fechar envio de notas" : "Enviar notas em PDF"}
                 </button>
-                <span className="text-[12.5px] text-muted">Disponível na próxima etapa</span>
+                <span className="text-[12.5px] text-muted">Até 10 notas por vez; você confere antes de gravar</span>
               </div>
+              {enviarNotasAberto && (
+                <div id="enviar-notas" className="mt-1.5">
+                  <EnviarNotas
+                    onInicio={() => setEstado({ fase: "lendo-notas" })}
+                    onLido={(resultado) => setEstado({ fase: "previa", resultado })}
+                    onErro={(mensagem) => setEstado({ fase: "erro", mensagem })}
+                  />
+                </div>
+              )}
             </div>
 
             <button type="submit" className="btn-primary" disabled={carregando}>
@@ -146,6 +160,18 @@ export default function Page() {
             />
           )}
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
+          {estado.fase === "lendo-notas" && <Loading etapas={ETAPAS_LENDO_NOTAS} />}
+          {estado.fase === "previa" && (
+            <PreviaNotas
+              key={estado.resultado.reconhecidas.map((f) => f.id).join(",")}
+              resultado={estado.resultado}
+              onConfirmado={() => {
+                setEnviarNotasAberto(false);
+                gerar(periodo);
+              }}
+              onCancelar={() => setEstado({ fase: "vazio" })}
+            />
+          )}
           {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={() => gerar(periodo)} />}
           {estado.fase === "pronto" && <Resultado leitura={estado.leitura} faturas={estado.faturas} meta={estado.meta} id={estado.id} />}
         </Stage>
