@@ -7,6 +7,7 @@
 // real no formato AAAA-MM-DD, moeda conhecida, periodicidade conhecida. valorBRL é calculado aqui com
 // o câmbio salvo em /setup (lib/integracoes.ts), não pedido à IA.
 import crypto from "node:crypto";
+import { extractText } from "unpdf";
 import { aiEnabled, askJSON } from "./ai";
 import { esperar } from "./demo";
 import { converterParaBRL } from "./integracoes";
@@ -26,6 +27,15 @@ const PERIODICIDADES: Fatura["periodicidade"][] = ["mensal", "anual", "unica"];
 
 /** Limite de texto enviado ao modelo: uma nota cabe folgado; evita mandar um PDF de 200 páginas inteiro. */
 const LIMITE_TEXTO = 12_000;
+
+/** Abaixo disso o PDF provavelmente é uma imagem digitalizada sem camada de texto. */
+export const MINIMO_TEXTO = 40;
+
+/** Texto de um PDF (todas as páginas juntas), usado pelo upload e pelos anexos de e-mail. */
+export async function textoDoPdf(bytes: Uint8Array | ArrayBuffer): Promise<string> {
+  const { text } = await extractText(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes), { mergePages: true });
+  return String(text || "").trim();
+}
 
 const SYSTEM = `Você lê notas fiscais, faturas e recibos e extrai os dados de cobrança de FERRAMENTAS DE INTELIGÊNCIA ARTIFICIAL (assistentes como ChatGPT, Claude, Gemini, Copilot; geração de imagem, vídeo ou voz como Midjourney, Runway, ElevenLabs; créditos de API de modelos como OpenAI, Anthropic, OpenRouter; recursos de IA embutidos em outros produtos, como Notion AI ou Zapier AI, quando a cobrança é do recurso de IA).
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Chip,
@@ -28,11 +29,16 @@ import { GraficoGastoPlanejado } from "@/components/GraficoGastoPlanejado";
 import { OrcamentoPlanejado } from "@/components/OrcamentoPlanejado";
 import { LancarManualmente } from "@/components/LancarManualmente";
 import { EnviarNotas, PreviaNotas, type ResultadoUpload } from "@/components/EnviarNotas";
+import { ResumoImportacao } from "@/components/ImportarEmail";
 import type { Meta } from "@/lib/ai";
-import type { Fatura, Leitura, Periodo } from "@/lib/types";
+import type { Fatura, Leitura, Periodo, ResultadoImportacao } from "@/lib/types";
 
 const ETAPAS_CARREGANDO = ["Lendo as faturas do período...", "Comparando com o orçamento planejado...", "Montando o resultado..."];
 const ETAPAS_LENDO_NOTAS = ["Abrindo os arquivos...", "Reconhecendo fornecedor, valor e data...", "Montando a prévia..."];
+const ETAPAS_IMPORTANDO = ["Abrindo a caixa de e-mail...", "Procurando notas e recibos no período...", "Reconhecendo fornecedor, valor e data...", "Lançando as faturas..."];
+
+/** O botão "Ler as notas do e-mail" usa o mesmo período escolhido para o gasto. */
+const DIAS_DO_PERIODO: Record<Periodo, 30 | 90 | 365> = { mes: 30, "3meses": 90, ano: 365 };
 
 const ROTULOS_PERIODICIDADE: Record<Fatura["periodicidade"], string> = { mensal: "Mensal", anual: "Anual", unica: "Única" };
 const ROTULOS_ORIGEM: Record<Fatura["origem"], string> = { email: "Lida do e-mail", upload: "Enviada por upload", manual: "Lançada manualmente" };
@@ -56,6 +62,8 @@ type Estado =
   | { fase: "erro"; mensagem: string }
   | { fase: "lendo-notas" }
   | { fase: "previa"; resultado: ResultadoUpload }
+  | { fase: "importando" }
+  | { fase: "importado"; resultado: ResultadoImportacao }
   | { fase: "pronto"; leitura: Leitura; faturas: Fatura[]; meta: Meta; id?: string };
 
 export default function Page() {
@@ -65,7 +73,7 @@ export default function Page() {
   const [enviarNotasAberto, setEnviarNotasAberto] = useState(false);
   const autoEnviado = useRef(false);
 
-  useScrollToResult(estado.fase === "pronto" || estado.fase === "previa");
+  useScrollToResult(estado.fase === "pronto" || estado.fase === "previa" || estado.fase === "importado");
 
   async function gerar(periodoEscolhido: Periodo) {
     setEstado({ fase: "carregando" });
@@ -76,6 +84,18 @@ export default function Page() {
       setEstado({ fase: "pronto", leitura: resposta.leitura, faturas: resposta.faturas, meta: resposta.meta, id: resposta.id });
     } catch (e) {
       setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." });
+    }
+  }
+
+  async function importarEmail() {
+    setEstado({ fase: "importando" });
+    try {
+      const r = await fetch("/api/faturas/importar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dias: DIAS_DO_PERIODO[periodo] }) });
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Não foi possível ler as notas do e-mail.");
+      setEstado({ fase: "importado", resultado: resposta as ResultadoImportacao });
+    } catch (e) {
+      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado ao ler o e-mail." });
     }
   }
 
@@ -94,6 +114,16 @@ export default function Page() {
   }, []);
 
   const carregando = estado.fase === "carregando";
+  const importando = estado.fase === "importando";
+  const gmailConectado = Boolean(status?.integrations?.gmail);
+  const podeImportar = gmailConectado && Boolean(status?.ai);
+  const dicaEmail = !status
+    ? "Conecte seu e-mail para ler as notas sozinho"
+    : !gmailConectado
+      ? "Conecte seu e-mail para ler as notas sozinho"
+      : !status.ai
+        ? "Conecte a inteligência artificial para reconhecer as notas do e-mail"
+        : `Busca notas e recibos dos últimos ${DIAS_DO_PERIODO[periodo]} dias na caixa conectada e lança o que reconhecer`;
 
   return (
     <>
@@ -112,10 +142,16 @@ export default function Page() {
 
             <div className="flex flex-col gap-2.5 mb-4">
               <div className="flex items-center gap-3 flex-wrap">
-                <button type="button" className="btn-ghost !w-auto" disabled title="Conecte seu e-mail para ler as notas sozinho">
-                  Ler as notas do e-mail
+                <button type="button" className="btn-ghost !w-auto" disabled={!podeImportar || importando || carregando} onClick={importarEmail} title={podeImportar ? undefined : dicaEmail}>
+                  {importando ? "Lendo o e-mail" : "Ler as notas do e-mail"}
                 </button>
-                <span className="text-[12.5px] text-muted">Conecte seu e-mail para ler as notas sozinho</span>
+                {status && !gmailConectado ? (
+                  <Link href="/setup#gmail" className="text-[12.5px] text-muted underline">{dicaEmail}</Link>
+                ) : status && gmailConectado && !status.ai ? (
+                  <Link href="/setup#openrouter" className="text-[12.5px] text-muted underline">{dicaEmail}</Link>
+                ) : (
+                  <span className="text-[12.5px] text-muted">{dicaEmail}</span>
+                )}
               </div>
               <div className="flex items-center gap-3 flex-wrap">
                 <button type="button" className="btn-ghost !w-auto" aria-expanded={enviarNotasAberto} aria-controls="enviar-notas" onClick={() => setEnviarNotasAberto((v) => !v)}>
@@ -161,6 +197,8 @@ export default function Page() {
           )}
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
           {estado.fase === "lendo-notas" && <Loading etapas={ETAPAS_LENDO_NOTAS} />}
+          {estado.fase === "importando" && <Loading etapas={ETAPAS_IMPORTANDO} />}
+          {estado.fase === "importado" && <ResumoImportacao resultado={estado.resultado} onVerGasto={() => gerar(periodo)} />}
           {estado.fase === "previa" && (
             <PreviaNotas
               key={estado.resultado.reconhecidas.map((f) => f.id).join(",")}

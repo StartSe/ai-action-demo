@@ -357,7 +357,7 @@
         "Testar o fluxo OAuth com credenciais de teste em localhost se disponíveis; sem elas, testar via curl que /setup mostra o cartão e que /api/setup/oauth/google redireciona para accounts.google.com com code_challenge"
       ],
       "priority": 21,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

@@ -63,6 +63,19 @@ export interface Leitura {
 
 export type Periodo = "mes" | "3meses" | "ano";
 
+/** Resultado de uma importação das notas do Gmail (POST /api/faturas/importar): o que foi lido, o que
+ * virou fatura (já gravada, origem "email") e o que foi ignorado, com os motivos agrupados. */
+export interface ResultadoImportacao {
+  dias: number;
+  lidas: number;
+  reconhecidas: number;
+  ignoradas: number;
+  faturas: Fatura[];
+  motivos: { motivo: string; quantidade: number }[];
+  /** true quando havia mais mensagens no período do que o limite lido de uma vez. */
+  truncado: boolean;
+}
+
 export interface DadosLeitura {
   periodo: Periodo;
 }

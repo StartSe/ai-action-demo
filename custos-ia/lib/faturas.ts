@@ -113,6 +113,13 @@ export function listarUltimosMeses(n: number, referencia = new Date()): Fatura[]
   return linhas.map(linhaParaFatura);
 }
 
+/** Já existe fatura com esta origem e referência (ex.: id da mensagem do Gmail)? Evita reler — e gastar
+ * uma chamada ao modelo — em um e-mail que já virou fatura numa importação anterior. */
+export function existeReferencia(origem: Fatura["origem"], referencia: string): boolean {
+  const linha = abrir().prepare("SELECT 1 FROM faturas WHERE origem = ? AND referencia = ? LIMIT 1").get(origem, referencia);
+  return Boolean(linha);
+}
+
 /** Todas as faturas gravadas, sem filtro de período — usado só para decidir se o app tem dado real (senão cai no demo). */
 export function existeAlguma(): boolean {
   const linha = abrir().prepare("SELECT 1 FROM faturas LIMIT 1").get();

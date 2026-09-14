@@ -1,11 +1,16 @@
-import { INTEGRACOES } from "@/lib/integracoes";
+import { GMAIL, INTEGRACOES } from "@/lib/integracoes";
 import { statusIntegracoes } from "@/lib/setup-comum";
 import { setConfig } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
+/** O Gmail tem cartão próprio em /setup (components/ConectarGmail.tsx: mostra a conta conectada e as
+ * instruções para a equipe técnica, que o cartão genérico não suporta), por isso sai da lista genérica.
+ * Continua em INTEGRACOES para o PUT abaixo, o teste de conexão e o /api/status. */
+const GENERICAS = INTEGRACOES.filter((i) => i.id !== GMAIL.id);
+
 export async function GET() {
-  return Response.json(await statusIntegracoes(INTEGRACOES));
+  return Response.json(await statusIntegracoes(GENERICAS));
 }
 
 /** Salva valores. Chave com valor "" é ignorada (mantém o atual); null apaga. */
@@ -20,5 +25,5 @@ export async function PUT(req: Request) {
     setConfig(chave, valor);
     salvos++;
   }
-  return Response.json({ salvos, ...(await statusIntegracoes(INTEGRACOES)) });
+  return Response.json({ salvos, ...(await statusIntegracoes(GENERICAS)) });
 }

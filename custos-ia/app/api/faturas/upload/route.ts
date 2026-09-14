@@ -2,17 +2,14 @@
 // extrai o texto (unpdf para PDF; askVision para imagem quando há modelo com visão) e passa cada um por
 // lib/leitor.ts. Devolve as faturas reconhecidas (prévia editável na tela) e os arquivos ignorados com
 // o motivo. NADA é gravado aqui — quem grava é POST /api/faturas depois do "Confirmar tudo".
-import { extractText } from "unpdf";
 import { askVision, visionEnabled } from "@/lib/ai";
-import { lerDocumento } from "@/lib/leitor";
+import { lerDocumento, MINIMO_TEXTO, textoDoPdf } from "@/lib/leitor";
 import type { Fatura } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 const MAXIMO_ARQUIVOS = 10;
 const LIMITE_BYTES = 5 * 1024 * 1024; // 5 MB
-/** Abaixo disso o PDF provavelmente é uma imagem digitalizada sem camada de texto. */
-const MINIMO_TEXTO = 40;
 
 export type Ignorado = { arquivo: string; motivo: string };
 
@@ -28,11 +25,6 @@ function tipoImagem(arquivo: File): "image/png" | "image/jpeg" | null {
 
 function ehTexto(arquivo: File): boolean {
   return arquivo.type === "text/plain" || /\.txt$/i.test(arquivo.name || "");
-}
-
-async function textoDoPdf(arquivo: File): Promise<string> {
-  const { text } = await extractText(new Uint8Array(await arquivo.arrayBuffer()), { mergePages: true });
-  return String(text || "").trim();
 }
 
 /** Transcreve o documento fotografado/capturado com o modelo de visão; o texto segue para lib/leitor.ts como um PDF. */
@@ -56,7 +48,7 @@ async function processar(arquivo: File): Promise<{ fatura: Fatura } | { motivo: 
   const imagem = tipoImagem(arquivo);
   if (ehPdf(arquivo)) {
     try {
-      texto = await textoDoPdf(arquivo);
+      texto = await textoDoPdf(await arquivo.arrayBuffer());
     } catch (err) {
       console.error(`Falha ao ler o PDF ${arquivo.name}`, err);
       return { motivo: "Não foi possível abrir este PDF. Ele pode estar corrompido ou protegido por senha." };
