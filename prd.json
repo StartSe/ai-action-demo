@@ -66,7 +66,7 @@
         "Verify in browser using dev-browser skill: /setup do pdi-time com uma integracaoMCP temporária apontando para o servidor de teste, autorizar e ver Conectado; remover a temporária antes de encerrar"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

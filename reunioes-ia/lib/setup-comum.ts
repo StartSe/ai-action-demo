@@ -2,7 +2,8 @@
 // A lista de integrações de cada app fica em lib/integracoes.ts.
 import { getConfig, mascarar, origemConfig } from "./store";
 import { enviar, type Canal } from "./notificacoes";
-import { conectar, listarFerramentas } from "./mcp-cliente";
+import { conectar, listarFerramentas, type FerramentaMCP } from "./mcp-cliente";
+import { conexaoAutorizada } from "./mcp-oauth";
 
 export type Opcao = { valor: string; rotulo: string };
 
@@ -33,6 +34,8 @@ export type Integracao = {
   campos: Campo[];
   /** Valida as chaves salvas chamando a integração. */
   testar?: (config: Record<string, string | undefined>) => Promise<{ ok: boolean; mensagem: string }>;
+  /** Campo cujo valor define sozinho se a integração conta como conectada (chip "conectado", botão Autorizar/Conectado). Por padrão, usa todos os campos não opcionais. */
+  campoConectado?: string;
 };
 
 export type CampoStatus = Omit<Campo, "opcoesDinamicas"> & { definido: boolean; origem: "env" | "banco" | null; mascarado: string | null; valorVisivel?: string };
@@ -40,6 +43,7 @@ export type IntegracaoStatus = Omit<Integracao, "campos" | "testar"> & { campos:
 
 /** Chaves necessárias para a integração contar como configurada. */
 export function integracaoConfigurada(i: Integracao): boolean {
+  if (i.campoConectado) return Boolean(getConfig(i.campoConectado));
   return i.campos.filter((c) => !c.opcional).every((c) => Boolean(getConfig(c.chave)));
 }
 
@@ -153,133 +157,103 @@ export const NOTIFICACOES: Integracao = {
   },
 };
 
+/**
+ * Molde para uma integração MCP externa que a pessoa autoriza em um clique (botão "Autorizar",
+ * via lib/mcp-oauth.ts) em vez de precisar colar um código manualmente. O código manual continua
+ * disponível dentro de "Opções avançadas", para servidores que não suportam OAuth.
+ */
+export function integracaoMCP(opts: {
+  id: string;
+  titulo: string;
+  descricao: string;
+  ajudaUrl: string;
+  /** Endereço sugerido quando este serviço tem um único destino conhecido (ex.: outro app da própria suíte). */
+  urlPadrao?: string;
+  /** Palavra usada na mensagem do teste de conexão (ex.: "Ações", "Consultas", "Ferramentas"). */
+  rotuloFerramentas: string;
+  /** Campos próprios desta integração além de endereço e código (ex.: nome de uma ferramenta específica). Sempre em "Opções avançadas". */
+  camposExtras?: Campo[];
+  /** Validação extra depois de listar as ferramentas remotas (ex.: conferir se a ferramenta escolhida existe). */
+  testarExtra?: (ferramentas: FerramentaMCP[]) => { ok: boolean; mensagem: string } | undefined;
+}): Integracao {
+  const prefixo = opts.id.toUpperCase().replace(/-/g, "_");
+  return {
+    id: opts.id,
+    titulo: opts.titulo,
+    descricao: opts.descricao,
+    obrigatoria: false,
+    oauth: { tipo: "mcp", rotulo: "Autorizar", url: `/api/setup/oauth/mcp/${prefixo}` },
+    campoConectado: `${prefixo}_CODIGO`,
+    campos: [
+      {
+        chave: `${prefixo}_URL`,
+        rotulo: "Endereço",
+        tipo: "text",
+        placeholder: "https://seu-servico.exemplo.com/mcp",
+        ajuda: opts.ajudaUrl,
+        padrao: opts.urlPadrao,
+      },
+      {
+        chave: `${prefixo}_CODIGO`,
+        rotulo: "Código de acesso",
+        tipo: "secret",
+        opcional: true,
+        avancado: true,
+        ajuda: "Alternativa ao botão Autorizar: cole aqui um código de acesso gerado manualmente no serviço.",
+      },
+      ...(opts.camposExtras ?? []),
+    ],
+    testar: async () => {
+      const conexao = await conexaoAutorizada(prefixo);
+      if (!conexao) return { ok: false, mensagem: "Autorize com o botão acima ou informe o endereço e o código de acesso antes de testar." };
+      try {
+        const ferramentas = await listarFerramentas(conectar(conexao.url, conexao.token));
+        if (ferramentas.length === 0) return { ok: true, mensagem: `Conectado, mas o serviço ainda não expõe nenhuma ${opts.rotuloFerramentas.toLowerCase().replace(/s$/, "")}.` };
+        const extra = opts.testarExtra?.(ferramentas);
+        if (extra) return extra;
+        return { ok: true, mensagem: `Conectado. ${opts.rotuloFerramentas} disponíveis: ${ferramentas.map((f) => f.nome).join(", ")}.` };
+      } catch (err) {
+        return { ok: false, mensagem: err instanceof Error ? err.message : "Não foi possível conectar ao serviço." };
+      }
+    },
+  };
+}
+
 /** Quadro de tarefas externo (outro app da suíte, como o Agente de quadro, ou qualquer servidor MCP compatível) que recebe as ações geradas aqui como cartões. */
-export const MCP_TAREFAS: Integracao = {
+export const MCP_TAREFAS: Integracao = integracaoMCP({
   id: "mcp-tarefas",
   titulo: "Quadro de tarefas (MCP)",
-  descricao:
-    "Conecte um quadro de tarefas (como o Agente de quadro desta suíte) para transformar as ações desta conversa em cartões onde o seu time já trabalha.",
-  obrigatoria: false,
-  campos: [
-    {
-      chave: "MCP_TAREFAS_URL",
-      rotulo: "Endereço do quadro",
-      tipo: "text",
-      placeholder: "https://seu-quadro.exemplo.com/mcp",
-      ajuda: "Copie do cartão \"Usar dentro do seu assistente\", no setup do quadro de tarefas.",
-    },
-    {
-      chave: "MCP_TAREFAS_CODIGO",
-      rotulo: "Código de acesso",
-      tipo: "secret",
-      opcional: true,
-      ajuda: "Gerado no mesmo cartão do quadro de tarefas.",
-    },
-  ],
-  testar: async (config) => {
-    const url = config.MCP_TAREFAS_URL;
-    if (!url) return { ok: false, mensagem: "Informe o endereço do quadro antes de testar." };
-    try {
-      const ferramentas = await listarFerramentas(conectar(url, config.MCP_TAREFAS_CODIGO));
-      if (ferramentas.length === 0) return { ok: true, mensagem: "Conectado, mas o quadro não expõe nenhuma ação ainda." };
-      return { ok: true, mensagem: `Conectado. Ações disponíveis: ${ferramentas.map((f) => f.nome).join(", ")}.` };
-    } catch (err) {
-      return { ok: false, mensagem: err instanceof Error ? err.message : "Não foi possível conectar ao quadro." };
-    }
-  },
-};
+  descricao: "Conecte um quadro de tarefas (como o Agente de quadro desta suíte) para transformar as ações desta conversa em cartões onde o seu time já trabalha.",
+  ajudaUrl: "Copie do cartão \"Usar dentro do seu assistente\", no setup do quadro de tarefas.",
+  rotuloFerramentas: "Ações",
+});
 
 /** CRM ou sistema de atendimento externo (como HubSpot, Zendesk ou Intercom, que expõem um servidor MCP dentro da própria conta) que recebe os leads e negócios gerados aqui, ou de onde importamos tickets de atendimento. */
-export const MCP_CRM: Integracao = {
+export const MCP_CRM: Integracao = integracaoMCP({
   id: "mcp-crm",
   titulo: "CRM (MCP)",
   descricao: "Conecte o CRM ou sistema de atendimento onde o seu time trabalha (HubSpot, Zendesk e Intercom, por exemplo, expõem um servidor MCP nas configurações de integrações da conta) para mandar contatos e negócios ou importar tickets direto daqui.",
-  obrigatoria: false,
-  campos: [
-    {
-      chave: "MCP_CRM_URL",
-      rotulo: "Endereço do CRM",
-      tipo: "text",
-      placeholder: "https://seu-crm.exemplo.com/mcp",
-      ajuda: "No HubSpot, no Zendesk ou no Intercom, fica em Configurações › Integrações › Conectar aplicativos privados/MCP. Copie o endereço mostrado lá.",
-    },
-    {
-      chave: "MCP_CRM_CODIGO",
-      rotulo: "Código de acesso",
-      tipo: "secret",
-      opcional: true,
-      ajuda: "Gerado no mesmo lugar do endereço, dentro do CRM.",
-    },
-  ],
-  testar: async (config) => {
-    const url = config.MCP_CRM_URL;
-    if (!url) return { ok: false, mensagem: "Informe o endereço do CRM antes de testar." };
-    try {
-      const ferramentas = await listarFerramentas(conectar(url, config.MCP_CRM_CODIGO));
-      if (ferramentas.length === 0) return { ok: true, mensagem: "Conectado, mas o CRM não expõe nenhuma ação ainda." };
-      return { ok: true, mensagem: `Conectado. Ações disponíveis: ${ferramentas.map((f) => f.nome).join(", ")}.` };
-    } catch (err) {
-      return { ok: false, mensagem: err instanceof Error ? err.message : "Não foi possível conectar ao CRM." };
-    }
-  },
-};
+  ajudaUrl: "No HubSpot, no Zendesk ou no Intercom, fica em Configurações › Integrações › Conectar aplicativos privados/MCP. Copie o endereço mostrado lá.",
+  rotuloFerramentas: "Ações",
+});
 
 /** Sistemas internos da empresa (pedidos, estoque, ERP...) que um assistente pode consultar via MCP antes de responder. */
-export const MCP_EMPRESA: Integracao = {
+export const MCP_EMPRESA: Integracao = integracaoMCP({
   id: "mcp-empresa",
   titulo: "Sistemas da empresa (MCP)",
   descricao: "Conecte os sistemas onde ficam pedidos, estoque ou outros dados do seu negócio (um ERP, uma planilha compartilhada, um CRM — o que já expuser um servidor MCP) para o assistente consultar dados reais antes de responder.",
-  obrigatoria: false,
-  campos: [
-    {
-      chave: "MCP_EMPRESA_URL",
-      rotulo: "Endereço do sistema",
-      tipo: "text",
-      placeholder: "https://seu-sistema.exemplo.com/mcp",
-      ajuda: "Copie do painel de integrações do seu ERP/CRM, ou do cartão \"Usar dentro do seu assistente\" de outro app desta suíte.",
-    },
-    {
-      chave: "MCP_EMPRESA_CODIGO",
-      rotulo: "Código de acesso",
-      tipo: "secret",
-      opcional: true,
-      ajuda: "Gerado no mesmo lugar do endereço, dentro do sistema conectado.",
-    },
-  ],
-  testar: async (config) => {
-    const url = config.MCP_EMPRESA_URL;
-    if (!url) return { ok: false, mensagem: "Informe o endereço do sistema antes de testar." };
-    try {
-      const ferramentas = await listarFerramentas(conectar(url, config.MCP_EMPRESA_CODIGO));
-      if (ferramentas.length === 0) return { ok: true, mensagem: "Conectado, mas o sistema não expõe nenhuma consulta ainda." };
-      return { ok: true, mensagem: `Conectado. Consultas disponíveis: ${ferramentas.map((f) => f.nome).join(", ")}.` };
-    } catch (err) {
-      return { ok: false, mensagem: err instanceof Error ? err.message : "Não foi possível conectar ao sistema." };
-    }
-  },
-};
+  ajudaUrl: "Copie do painel de integrações do seu ERP/CRM, ou do cartão \"Usar dentro do seu assistente\" de outro app desta suíte.",
+  rotuloFerramentas: "Consultas",
+});
 
 /** Fonte de dados externa (uma planilha viva, um ERP, ou qualquer serviço que exponha um servidor MCP) para ler números sempre atualizados sem depender de exportação manual de CSV. */
-export const MCP_DADOS: Integracao = {
+export const MCP_DADOS: Integracao = integracaoMCP({
   id: "mcp-dados",
   titulo: "Fonte de dados (MCP)",
   descricao: "Conecte a planilha viva ou o ERP onde seus dados já vivem (qualquer serviço que exponha um servidor MCP) para ler direto de lá, sem exportar CSV toda vez.",
-  obrigatoria: false,
-  campos: [
-    {
-      chave: "MCP_DADOS_URL",
-      rotulo: "Endereço da fonte",
-      tipo: "text",
-      placeholder: "https://sua-planilha.exemplo.com/mcp",
-      ajuda: "Copie do painel de integrações do seu ERP/planilha, ou do cartão \"Usar dentro do seu assistente\" de outro app desta suíte.",
-    },
-    {
-      chave: "MCP_DADOS_CODIGO",
-      rotulo: "Código de acesso",
-      tipo: "secret",
-      opcional: true,
-      ajuda: "Gerado no mesmo lugar do endereço, dentro da fonte conectada.",
-    },
+  ajudaUrl: "Copie do painel de integrações do seu ERP/planilha, ou do cartão \"Usar dentro do seu assistente\" de outro app desta suíte.",
+  rotuloFerramentas: "Ferramentas",
+  camposExtras: [
     {
       chave: "MCP_DADOS_FERRAMENTA",
       rotulo: "Nome da ferramenta de leitura",
@@ -299,19 +273,11 @@ export const MCP_DADOS: Integracao = {
       ajuda: "Só quando a ferramenta escolhida exigir parâmetros extras, como o nome de uma aba ou um período.",
     },
   ],
-  testar: async (config) => {
-    const url = config.MCP_DADOS_URL;
-    if (!url) return { ok: false, mensagem: "Informe o endereço da fonte antes de testar." };
-    try {
-      const ferramentas = await listarFerramentas(conectar(url, config.MCP_DADOS_CODIGO));
-      if (ferramentas.length === 0) return { ok: true, mensagem: "Conectado, mas a fonte não expõe nenhuma ferramenta de leitura ainda." };
-      const escolhida = config.MCP_DADOS_FERRAMENTA;
-      if (escolhida && !ferramentas.some((f) => f.nome === escolhida)) {
-        return { ok: false, mensagem: `Conectado, mas a ferramenta "${escolhida}" não existe nessa fonte. Ferramentas disponíveis: ${ferramentas.map((f) => f.nome).join(", ")}.` };
-      }
-      return { ok: true, mensagem: `Conectado. Ferramentas disponíveis: ${ferramentas.map((f) => f.nome).join(", ")}.` };
-    } catch (err) {
-      return { ok: false, mensagem: err instanceof Error ? err.message : "Não foi possível conectar à fonte." };
+  testarExtra: (ferramentas) => {
+    const escolhida = getConfig("MCP_DADOS_FERRAMENTA");
+    if (escolhida && !ferramentas.some((f) => f.nome === escolhida)) {
+      return { ok: false, mensagem: `Conectado, mas a ferramenta "${escolhida}" não existe nessa fonte. Ferramentas disponíveis: ${ferramentas.map((f) => f.nome).join(", ")}.` };
     }
+    return undefined;
   },
-};
+});

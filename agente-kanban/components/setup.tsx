@@ -113,8 +113,9 @@ function CartaoIntegracao({ integracao: i, aoSalvar, destaque }: { integracao: I
   async function desconectar() {
     setDesconectando(true); setTeste(null);
     try {
-      const valoresNulos = Object.fromEntries(i.campos.map((c) => [c.chave, null]));
-      const r = await fetch("/api/setup", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ valores: valoresNulos }) });
+      const r = i.oauth?.tipo === "mcp"
+        ? await fetch(i.oauth.url, { method: "PUT" })
+        : await fetch("/api/setup", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ valores: Object.fromEntries(i.campos.map((c) => [c.chave, null])) }) });
       if (!r.ok) throw new Error("Falha ao desconectar.");
       setValores({});
       aoSalvar();
