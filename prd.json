@@ -1,1258 +1,587 @@
 {
   "project": "IA para Executivos (ai-action-demo)",
-  "branchName": "ralph/ui-ux-executivos",
-  "description": "Suíte IA para Executivos, versão profissional: acabamento executivo (Origem, Destaque, Entregar, setup em um clique, correções por app) e capacidades operacionais padronizadas (Artefato, MCP, Formulário, Rotina). Fonte: tasks/prd-ui-ux-executivos.md. Regras: mudanças transversais nascem em pdi-time e são copiadas sem alterar para os outros 9 apps; sem jargão técnico na tela principal; cada capacidade nova é um botão ou um cartão do /setup, nunca um menu. Verificação visual: capturas Chrome headless em desktop 1400x900 (vazio), 1400x1800 (?exemplo=1&captura=1) e celular 390 px, abertas e corrigidas, conforme PADRAO.md.",
+  "branchName": "ralph/novos-apps",
+  "description": "Sete apps novos na suíte IA para Executivos (Radar de Sinais, Bússola de IA, Simulador de Vendas, Custos de IA, Clone de Site, Prospecção no LinkedIn e Vídeos de Campanha) mais três mudanças transversais (campos escala/escolha nos formulários, askVision, cliente MCP com OAuth). Fonte: tasks/prd-novos-apps.md, seção 'Primeira rodada'. Regras: seguir PADRAO.md à letra; todo app nasce copiando pdi-time/ e mantém idênticos os caminhos de scripts/verificar-padrao.sh; mudanças transversais nascem em pdi-time e são replicadas na mesma história; tudo funciona sem chave em modo demonstração; ações pagas ou externas exigem confirmação e confirmar:true no MCP; sem Python, sem biblioteca de grafo, gráfico ou UI. Servidores MCP externos são testados com um servidor de teste local descartável fora do repositório.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Corrigir o atalho ?exemplo=1 em modo dev (pdi-time)",
-      "description": "As a pessoa que demonstra o app localmente, I want que ?exemplo=1 funcione em next dev so that a demonstração não dependa de build de produção.",
+      "title": "Formulários públicos: campos escala e escolha (pdi-time e replicação)",
+      "description": "As a pessoa que monta um questionário, I want perguntas de escala e de múltipla escolha so that o formulário público sirva para avaliações e não só para texto livre.",
       "acceptanceCriteria": [
-        "Em pdi-time/app/page.tsx o useEffect do atalho não marca autoEnviado.current antes de o timer disparar, ou não registra cleanup que cancele o timer no React Strict Mode",
-        "http://localhost:3001/?exemplo=1 preenche e envia o exemplo em next dev e no build standalone",
-        "O mesmo padrão corrigido é aplicado no app/page.tsx dos outros 9 apps",
-        "npm run lint sem erros em cada app alterado",
-        "Typecheck passes"
+        "pdi-time/lib/formularios.ts aceita os tipos de campo 'escala' ({min,max,rotuloMin,rotuloMax}, padrão 1 a 5) e 'escolha' ({opcoes:{valor,rotulo}[], multipla?}) além dos atuais, e o campo opcional 'secao' para agrupar perguntas sob um subtítulo",
+        "pdi-time/components/FormularioPublico.tsx renderiza 'escala' como botões em linha com os rótulos nas pontas (largura total no celular) e 'escolha' como rádio ou caixas quando multipla; renderiza o subtítulo de 'secao' quando muda",
+        "pdi-time/app/api/f/[token]/route.ts valida intervalo da escala e opções da escolha; valor inválido devolve 400 com mensagem em português",
+        "lib/formularios.ts, components/FormularioPublico.tsx e a validação em app/api/f/[token]/route.ts copiados para os outros 9 apps (só a parte compartilhada da rota; os imports de registro de cada app são mantidos)",
+        "scripts/verificar-padrao.sh passa; npm run lint e npm run build passam em pdi-time",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: criar um formulário temporário no pdi-time com um campo de cada tipo, abrir /f/<token> em desktop e celular, enviar e conferir a validação; remover o temporário antes de encerrar"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-002",
-      "title": "Ícone próprio por app gerado a partir do catalogo.json",
-      "description": "As a executivo com várias abas abertas, I want distinguir cada app pelo ícone so that eu encontre a aba certa sem ler o título.",
+      "title": "lib/ai.ts: askVision e modelo com visão configurável (pdi-time e replicação)",
+      "description": "As a pessoa que mantém a suíte, I want mandar uma imagem para a IA pela mesma biblioteca so that apps que leem capturas de tela não inventem outro cliente.",
       "acceptanceCriteria": [
-        "Novo scripts/gerar-icones.mjs lê catalogo.json e escreve <app>/app/icon.svg com a inicial do app em branco sobre a cor de acento, cantos arredondados, mesmo desenho para os 10",
-        "app/favicon.ico padrão do Next removido dos 10 apps",
-        "metadata.title de cada layout.tsx segue o formato 'Nome do app · IA para Executivos'",
-        "PADRAO.md cita o script na seção 'Novo app na suíte'",
+        "pdi-time/lib/ai.ts exporta askVision({system, prompt, imagem, maxTokens, temperature}) onde imagem é data URL png ou jpeg, montando content [{type:'text'},{type:'image_url',image_url:{url}}] no formato compatível com OpenAI e usando o modelo de visão",
+        "pdi-time/lib/ai.ts exporta visionEnabled() e visionModelName(); o modelo vem de getConfig('OPENROUTER_MODEL_VISAO') com padrão MODELOS_VISAO[0] de lib/setup-comum.ts (lista curta, primeiro gratuito quando existir; escolher verificando a lista atual do OpenRouter e registrar a escolha no progress.txt)",
+        "A integração OPENROUTER em lib/setup-comum.ts ganha o campo avançado OPENROUTER_MODEL_VISAO (select com MODELOS_VISAO, opcional, ajuda 'Modelo usado quando o app precisa ler uma imagem')",
+        "GET /api/status inclui vision: boolean; askVision falha com a mensagem 'O modelo configurado não lê imagens' quando o provedor devolver erro de modalidade",
+        "lib/ai.ts e lib/setup-comum.ts copiados para os outros 9 apps; scripts/verificar-padrao.sh passa; lint e build passam em pdi-time",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill: ícone e título corretos na aba de pelo menos 2 apps"
+        "Testar via curl: GET /api/status devolve vision; /setup mostra o campo em Opções avançadas"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Componente Origem e campo meta nas rotas de IA (pdi-time)",
-      "description": "As a executivo, I want saber de onde veio o resultado so that eu decida quanto confiar nele.",
+      "title": "lib/mcp-oauth.ts: autorização OAuth para servidores MCP remotos (pdi-time)",
+      "description": "As a executivo, I want conectar um serviço externo que pede login clicando em Autorizar so that eu não precise de chave nem de configuração técnica.",
       "acceptanceCriteria": [
-        "lib/ai.ts exporta meta({ demo, insumo }) devolvendo { demo, model, geradoEm, insumo } e a rota /api/pdi inclui meta na resposta",
-        "Novo componente Origem em components/ui.tsx recebe meta e renderiza uma linha em 13 px: 'Gerado com IA a partir de {insumo}, em {dd/mm/aaaa às hh:mm}' ou 'Exemplo ilustrativo a partir de {insumo}. Conecte a IA para analisar seus dados'",
-        "Nome do modelo aparece só no atributo title da linha, nunca em texto visível",
-        "Resultado do pdi-time renderiza Origem logo abaixo de ResultHead e o sufixo '(exemplo em modo demonstração)' sai do subtítulo",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Novo pdi-time/lib/mcp-oauth.ts: descobre endpoints em /.well-known/oauth-protected-resource e /.well-known/oauth-authorization-server (fallback <origem>/authorize e <origem>/token), faz registro dinâmico de cliente quando há registration_endpoint (client_id guardado em lib/store.ts por prefixo), inicia authorization code com PKCE S256 (verifier em cookie HttpOnly de 10 min, como o OpenRouter), troca o code no servidor e grava <PREFIXO>_CODIGO, <PREFIXO>_REFRESH e <PREFIXO>_EXPIRA via setConfig",
+        "Exporta conexaoAutorizada(prefixo) que renova o token com refresh_token quando faltar menos de 60 s e devolve {url, token} pronto para conectar() de lib/mcp-cliente.ts",
+        "Novas rotas compartilhadas pdi-time/app/api/setup/oauth/mcp/[prefixo]/route.ts (início) e .../callback/route.ts (retorno) com redirect_uri via baseUrl(req); prefixo validado contra INTEGRACOES de lib/integracoes.ts; erro do provedor volta a /setup como mensagem em português (query ?erro=)",
+        "Testado com um servidor MCP de teste local com OAuth mínimo (script descartável fora do repositório): início, retorno, renovação e revogação (PUT null)",
+        "lint e build passam em pdi-time",
+        "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Aviso de demonstração único e Topbar sem salto de layout (pdi-time)",
-      "description": "As a executivo, I want saber que estou no modo demonstração sem perder 60 px de tela so that o conteúdo apareça no lugar desde o primeiro render.",
+      "title": "integracaoMCP() com botão Autorizar e replicação do cliente OAuth nos 9 apps",
+      "description": "As a executivo, I want o cartão de um serviço MCP com login mostrar só o botão Autorizar so that o código manual fique escondido em Opções avançadas.",
       "acceptanceCriteria": [
-        "DemoNotice deixa de renderizar faixa de largura total; o chip 'Modo demonstração' da Topbar vira botão que abre um popover com a frase do app (prop resumo) e o link 'Conectar a IA em 1 minuto' para /setup",
-        "Topbar renderiza o chip com largura mínima fixa desde o estado 'Verificando', de modo que a altura da barra e a posição do conteúdo não mudam quando /api/status responde",
-        "Popover fecha com Esc e com clique fora; botão acessível por teclado",
-        "Nenhum outro aviso de demonstração na tela além do chip e da linha Origem",
+        "pdi-time/lib/setup-comum.ts exporta integracaoMCP({id, titulo, descricao, urlPadrao, oauth}) que devolve uma Integracao no padrão MCP_* (<PREFIXO>_URL com padrao, <PREFIXO>_CODIGO) com oauth: {tipo:'mcp', rotulo:'Autorizar', url:'/api/setup/oauth/mcp/<PREFIXO>'}, testar listando as ferramentas remotas via conexaoAutorizada e o código manual em Opções avançadas",
+        "components/setup.tsx mostra 'Conectado' e 'Desconectar' quando <PREFIXO>_CODIGO existe (reaproveitando o comportamento já existente para oauth)",
+        "lib/mcp-oauth.ts, lib/setup-comum.ts e app/api/setup/oauth/mcp/** copiados para os outros 9 apps; scripts/verificar-padrao.sh passa a comparar lib/mcp-oauth.ts e app/api/setup/oauth/mcp/** e sai com 0",
+        "lint e build passam em pdi-time",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill: recarregar a página e confirmar que nada salta"
+        "Verify in browser using dev-browser skill: /setup do pdi-time com uma integracaoMCP temporária apontando para o servidor de teste, autorizar e ver Conectado; remover a temporária antes de encerrar"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Componente Destaque e resumo em tamanho de corpo (pdi-time)",
-      "description": "As a executivo, I want ver o dado que decide antes de qualquer parágrafo so that eu leia o resultado na ordem certa.",
+      "title": "Radar de Sinais: esqueleto, tela, demo e histórico",
+      "description": "As a executivo de estratégia, I want abrir o app e ver um radar de exemplo so that eu entenda em dez segundos o que ele entrega.",
       "acceptanceCriteria": [
-        "Novo componente Destaque em components/ui.tsx com props { valor, rotulo, interpretacao?, tom?: 'ok' | 'warn' | 'danger' | 'neutro' }: número em 40 px, rótulo em 13 px, interpretação em uma linha",
-        ".summary em globals.css passa para 17 px (16 px no celular), peso 500, sem borda lateral de acento",
-        "Prompt do pdi-time e lib/demo.ts limitam o resumo a no máximo 45 palavras",
-        "Ordem no Resultado: ResultHead, Origem, Destaque (quando houver), .summary, seções",
+        "Pasta radar-sinais/ criada a partir de pdi-time/ com os 19 caminhos compartilhados intocados; entrada em catalogo.json (id radar-sinais, nome 'Radar de Sinais', areas Estratégia e Inovação, porta 3011, acento #0e7490, captura capturas/radar-sinais.png, capacidades ['artefato','mcp','rotina'], demo null); node scripts/gerar-icones.mjs e node scripts/gerar-deploy.mjs rodados; serviço no docker-compose.yml (3011:10000, volume nomeado); metadata.title 'Radar de Sinais · IA para Executivos'; acento em globals.css",
+        "lib/types.ts com Fonte, Sinal {id,titulo,resumo,forca,tendencia,temas,fontes,oQueFazer}, No {id,rotulo,tipo:'tema'|'sinal'|'ator'|'tecnologia',peso}, Aresta {origem,destino,relacao,peso}, Radar {periodoDias,sinais,nos,arestas,conexoes}",
+        "Panel: h1 'Saiba o que está mudando antes da concorrência', textarea 'Temas que você acompanha' (um por linha), select Período (7, 30, 90 dias; padrão 30), MaisDetalhes com 'Setor da empresa'; botão 'Montar o radar'; 'Preencher com um exemplo' e ?exemplo=1",
+        "Stage: ResultHead com Entregar, Origem, Destaque (sinais fortes e interpretação), .summary, DataTable Sinais (papéis titulo, resumo o que fazer, chip força, detalhe fontes com link) e seção 'Conexões que merecem atenção'; o grafo entra na próxima história",
+        "lib/demo.ts com um radar fictício completo (3 temas, 10 a 12 sinais, 20 a 30 nós, fontes com veículo e data no período); POST /api/radar devolve o demo quando !aiEnabled(); resultado salvo no histórico tipo 'radar'; /r/[id] e /imprimir/[id] adaptados; lib/integracoes.ts = [OPENROUTER, NOTIFICACOES]; lib/ferramentas.ts com NOME_SERVIDOR 'radar-sinais' e ferramenta montar_radar chamando a mesma função da rota",
+        "npm run lint, npm run build e node scripts/verificar-jargao.mjs radar-sinais passam; curl em /api/health, /api/status, /api/radar (demo e entrada inválida com 400)",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill: desktop vazio 1400x900 com botão primário visível, ?exemplo=1&captura=1 em desktop e celular 390px"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Chips com rótulo humano e helpers de formato pt-BR (pdi-time)",
-      "description": "As a executivo, I want ler 'Alta' e '7,4' em vez de 'alta' e '7.4' so that a tela pareça escrita por gente.",
+      "title": "Radar de Sinais: componente Grafo em SVG com layout de força próprio",
+      "description": "As a executivo, I want ver as conexões entre sinais, temas e atores em um grafo so that eu perceba o que está ligado a quê.",
       "acceptanceCriteria": [
-        "Chip recebe nivel (classe) e children opcional; sem children exibe o rótulo do mapa padrão em ui.tsx: alta→'Alta', media→'Média', baixa→'Baixa', positivo→'Positivo', neutro→'Neutro', negativo→'Negativo', neutral→sentence case do texto",
-        "Helpers numero(n, casas) e data(d, { comHora }) em ui.tsx usando Intl pt-BR; data inclui o ano quando fora do ano corrente",
-        "Opções dos selects do pdi-time começam com maiúscula",
+        "Novo radar-sinais/components/Grafo.tsx: SVG responsivo, layout de força próprio no cliente (repulsão, molas, atração ao centro, 300 iterações, sem dependência) para até 120 nós; sem física contínua após o layout",
+        "Nós 'tema' maiores com rótulo sempre visível; 'sinal' na cor de acento; 'ator' e 'tecnologia' em cinza com contorno e rótulo só ao focar; arestas em cinza com espessura por peso",
+        "Clicar ou focar um nó (teclado) destaca vizinhos, esmaece o resto a 30% e mostra o cartão do nó ao lado (título, resumo, fontes com link); Esc limpa a seleção; prefers-reduced-motion respeitado",
+        "Grafo entra no Stage entre .summary e a DataTable; no celular tem 360 px de altura e a lista fica abaixo; rótulos em px fixos",
+        "Entregar ganha o extra 'Baixar grafo (JSON)' com {nodes, edges, communities} (formato do Graphify) e 'Copiar sinais como lista'",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill: abrir ?exemplo=1, clicar em um nó de tema e em um de sinal, conferir no celular"
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Painel compacto e componente MaisDetalhes (pdi-time)",
-      "description": "As a executivo, I want ver o botão principal sem rolar o painel so that eu comece em segundos.",
+      "title": "Radar de Sinais: motor de busca com Hacker News, Reddit, GitHub e Exa",
+      "description": "As a executivo, I want que o radar consulte fontes reais do período so that os sinais não sejam opinião do modelo.",
       "acceptanceCriteria": [
-        "Panel renderiza o título em 26 px (24 px no celular) e o lead em uma frase; título do pdi-time cabe em duas linhas a 1400 px de largura de tela",
-        "Novo componente MaisDetalhes em ui.tsx: <details> com summary 'Mais detalhes' e o mesmo espaçamento dos Field",
-        "No pdi-time o campo 'Aspirações da pessoa' vai para MaisDetalhes",
-        "Em 1400x900 no estado vazio o botão 'Gerar PDI' está visível sem rolagem",
+        "Novo radar-sinais/lib/busca.ts: buscar({consulta, dias}): Promise<Achado[]> com Achado {titulo,url,trecho,veiculo,publicadoEm,pontuacao,fonte}; provedores com disponivel() e buscar(): hackernews (API Algolia, filtro por created_at_i), reddit (/search.json público, 1 requisição por segundo, User-Agent próprio), github (busca de repositórios por período, sem token) e exa (POST https://api.exa.ai/search com x-api-key, startPublishedDate, numResults, contents.highlights)",
+        "Deduplicação por URL normalizada e título quase igual; pontuação combina engajamento e recência; no máximo 60 achados por rodada; falha de um provedor registra console.error e não derruba a rodada; se nenhum responder, 502 com mensagem clara",
+        "lib/integracoes.ts ganha EXA (EXA_API_KEY opcional, descrição em linguagem de negócio, link para obter a chave, testar faz uma busca de 1 resultado e devolve ok:false com mensagem para chave falsa); GET /api/status lista integrations.exa",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Testar via curl POST /api/setup/testar para EXA com chave falsa e a função buscar com uma consulta real sem chave (só fontes públicas) em um script descartável"
       ],
       "priority": 7,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Empty com ilustração, Loading com etapas e ErrorBox com Tentar de novo (pdi-time)",
-      "description": "As a executivo, I want que cada estado da tela diga o que está acontecendo e o que fazer so that eu nunca fique parado sem saber.",
+      "title": "Radar de Sinais: síntese em grafo com fontes verificadas",
+      "description": "As a executivo, I want que a IA agrupe os achados em sinais com fontes reais so that eu confie em cada ponto do radar.",
       "acceptanceCriteria": [
-        "Empty aceita ilustracao: ReactNode (SVG inline de 64 px, traço 1,5 px, cor de acento) no lugar de glifo; pdi-time entrega um desenho de três blocos '30 60 90'",
-        "Loading aceita etapas: string[] e troca a frase a cada 1,2 s parando na última; prop texto continua aceita",
-        "ErrorBox aceita onTentarNovamente e renderiza o botão 'Tentar de novo'; no celular a página rola até o erro quando ele aparece",
-        "prefers-reduced-motion desliga a troca de etapas",
+        "Novo radar-sinais/lib/radar.ts com montarRadar(entrada): duas consultas fixas por tema (o tema e 'tema + setor') via lib/busca.ts, depois askJSON<Radar> sobre os achados para produzir sinais, nós, arestas e conexões citando só URLs presentes nos achados; sem loop de ferramentas nesta rodada",
+        "Pós-processamento no servidor: descarta fontes cuja URL não estava nos achados, remove nós sem arestas, limita a 120 nós e 12 sinais; forca deriva de quantidade e diversidade de fontes",
+        "POST /api/radar usa montarRadar quando aiEnabled(); Loading com etapas 'Buscando notícias e comunidades', 'Agrupando sinais', 'Montando o grafo'; Origem informa quantos achados e quais fontes entraram",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill: os três estados (vazio, carregando, erro forçado)"
+        "Testar com chave real do OpenRouter uma rodada de dois temas e conferir no navegador que cada sinal tem fontes clicáveis (dev-browser skill)"
       ],
       "priority": 8,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-009",
-      "title": "DataTable compacta no celular e larguras no desktop (pdi-time)",
-      "description": "As a executivo no celular, I want uma lista legível so that uma tabela de seis linhas não vire 1.800 px de rolagem.",
+      "title": "Radar de Sinais: rotina semanal com sinais novos",
+      "description": "As a executivo, I want receber toda semana só o que é novo so that eu acompanhe os temas sem abrir o app.",
       "acceptanceCriteria": [
-        "Coluna<T> ganha papel?: 'titulo' | 'resumo' | 'chip' | 'detalhe' e largura?: string",
-        "No celular cada linha vira um cartão: coluna titulo em negrito, coluna resumo em uma linha, chip à direita, colunas detalhe dentro de <details> 'Ver mais'",
-        "No desktop largura aplica width na coluna; sem largura o comportamento atual se mantém",
-        "A tabela 'Lacunas priorizadas' do pdi-time declara os papéis",
+        "Botão 'Receber este radar toda semana' no resultado cria a rotina 'radar-semanal' (semanal, segunda 8h, canal de Notificações) com temas e setor em parametros",
+        "lib/rotinas-do-app.ts registra o executor: monta o radar dos últimos 7 dias, compara títulos com o resultado anterior da mesma rotina e entrega 'Novos' e 'Continuam fortes' com o link /r/<id>; em demo entrega o radar de exemplo rotulado",
+        "TIPOS_ROTINA lista 'Radar semanal dos meus temas'",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Testar via POST /api/rotinas/<id>/executar-agora e conferir o texto entregue; Verify in browser using dev-browser skill: criar a rotina pelo botão e ver o cartão Rotinas em /setup"
       ],
       "priority": 9,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-010",
-      "title": "Componentes Dropzone e Privacidade compartilhados (pdi-time)",
-      "description": "As a pessoa que mantém a suíte, I want um só componente de upload e uma só frase de privacidade so that os apps não divirjam nesses detalhes.",
+      "title": "Bússola de IA: esqueleto, questionário modelo, demo e histórico",
+      "description": "As a executivo, I want partir de um questionário pronto so that a avaliação de maturidade comece em um minuto.",
       "acceptanceCriteria": [
-        "Novo componente Dropzone em ui.tsx: área tracejada, ícone, texto 'Arraste o arquivo aqui ou selecione', limite de tamanho e tipos aceitos como props, nome do arquivo escolhido exibido",
-        "Novo componente Privacidade em ui.tsx com texto padrão 'Seus dados ficam só neste app e você pode apagar quando quiser' e prop detalhe exibida em title",
-        "pdi-time usa Privacidade no lugar do parágrafo atual de rodapé",
+        "Pasta bussola-ia/ criada a partir de pdi-time/; entrada em catalogo.json (id bussola-ia, nome 'Bússola de IA', areas Estratégia e Gestão, porta 3012, acento #b8621b, capacidades ['artefato','mcp','formulario'], demo null); ícones, gerar-deploy, compose (3012:10000), metadata.title e acento no padrão",
+        "lib/types.ts com Dimensao, Pergunta {id,texto,dimensao,tipo:'escala'|'escolha'|'texto',opcoes?,peso}, Questionario, Resposta {id,respondente?:{area?,cargo?},valores,criadoEm}, Avaliacao {questionario,respostas,analise?}",
+        "lib/modelo.ts com o questionário modelo: 6 dimensões (Estratégia e liderança; Dados e infraestrutura; Pessoas e cultura; Processos e casos de uso; Governança e riscos; Resultados), 24 perguntas de escala 1 a 5 com rótulos 'Não existe' a 'Consolidado' e 2 perguntas de texto",
+        "Panel: h1 'Descubra em que estágio de IA sua empresa está', campos 'Nome da empresa' e 'Título da avaliação', botão 'Usar o questionário modelo' que mostra as perguntas por dimensão (leitura, sem editor ainda) e botão 'Criar link de avaliação' desabilitado com a frase 'Disponível na próxima etapa' (removida na história do link); ?exemplo=1 mostra a avaliação de exemplo",
+        "lib/demo.ts com uma avaliação fictícia completa (empresa, 8 respondentes de áreas diferentes, análise pronta) e Stage mostrando ResultHead, Origem, Destaque (nível geral com nome do estágio), .summary e DataTable por dimensão; o gráfico e a análise real entram depois",
+        "Resultado salvo no histórico tipo 'avaliacao'; /r/[id] e /imprimir/[id] adaptados; lib/integracoes.ts = [OPENROUTER, NOTIFICACOES]; lib/ferramentas.ts com NOME_SERVIDOR 'bussola-ia' e ferramenta stub avaliar_respostas devolvendo o demo",
+        "lint, build e verificar-jargao passam; curl em /api/health e /api/status",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill: desktop vazio, ?exemplo=1&captura=1 desktop e celular"
       ],
       "priority": 10,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-011",
-      "title": "lib/historico.ts e página de leitura /r/[id] (pdi-time)",
-      "description": "As a executivo, I want reabrir um resultado amanhã por um link so that o valor não evapore ao fechar a aba.",
+      "title": "Bússola de IA: editor de perguntas e questionários salvos",
+      "description": "As a executivo, I want adaptar as perguntas à minha empresa ou gerar um questionário para o meu setor so that a avaliação fale a nossa língua.",
       "acceptanceCriteria": [
-        "Novo lib/historico.ts usando lib/store.ts: tabela resultados(id TEXT PK, tipo TEXT, entrada TEXT, saida TEXT, meta TEXT, criadoEm TEXT, expiraEm TEXT NULL) com funções salvar, obter, listar(limite), apagar, apagarTodos, limparExpirados",
-        "id é token aleatório de 12 caracteres URL-safe gerado com crypto",
-        "A rota /api/pdi salva o resultado e devolve id; o cliente guarda id no estado",
-        "Nova rota app/r/[id]/page.tsx renderiza o resultado em modo leitura (Topbar, Origem, sem Panel) e uma mensagem amigável com status 404 quando o id não existe",
-        "limparExpirados() roda na inicialização do servidor (instrumentation ou primeiro acesso ao store)",
-        "curl GET /r/<id> devolve 200 e GET /r/inexistente devolve 404",
+        "Novo bussola-ia/components/EditorPerguntas.tsx: lista por dimensão com editar texto, trocar dimensão, mudar tipo (escala, escolha, texto), remover, adicionar e reordenar com botões Subir e Descer; contador 'N perguntas em M dimensões'; sem arrastar",
+        "Botão 'Gerar um questionário para o meu setor' em MaisDetalhes (setor e porte) chama askJSON e preenche o editor; em demo devolve o modelo com dois textos adaptados",
+        "lib/questionarios.ts em SQLite (salvar, obter, listar, apagar); 'Salvar questionário' e lista 'Meus questionários' em MaisDetalhes com Abrir e Apagar",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill: editar, reordenar, salvar e reabrir um questionário; conferir no celular"
       ],
       "priority": 11,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-012",
-      "title": "Folha de impressão /imprimir/[id] (pdi-time)",
-      "description": "As a executivo, I want um PDF limpo do resultado so that eu leve o plano para a reunião.",
+      "title": "Bússola de IA: link único de avaliação e coleta de respostas",
+      "description": "As a executivo, I want mandar um link para a liderança e as equipes responderem so that as respostas cheguem sem planilha.",
       "acceptanceCriteria": [
-        "Nova rota app/imprimir/[id]/page.tsx renderiza só o resultado com cabeçalho (nome do app, título, data) e rodapé com a linha Origem, e chama window.print() ao carregar",
-        "globals.css ganha @media print para essa página: A4, margem 18 mm, sem sombras, sem cor de acento em fundos, quebras de página evitadas dentro de cartões",
-        "404 amigável quando o id não existe",
+        "Botão 'Criar link de avaliação' gera formulário público via criar({tipo:'bussola', campos derivados das perguntas (escala, escolha, texto com secao = dimensão) mais 'Área' e 'Cargo' opcionais, parametros {questionarioId,titulo,empresa}, expiraEmDias 30 (opções 7, 30, 90), limite 50 (opções 10, 50, 200, sem limite)}); diálogo com o link e Copiar",
+        "Tela pública mostra marca, título, empresa, aviso 'Você pode responder sem se identificar', dimensões como seções e botão 'Enviar respostas'; agradecimento 'Sua resposta entrou na avaliação de {empresa}'",
+        "app/api/f/[token]/route.ts importa @/lib/bussola que registra o callback 'bussola': grava a resposta ligada ao questionário (lib/respostas.ts em SQLite) sem chamar a IA",
+        "MaisDetalhes lista 'Avaliações em andamento' com link, respostas recebidas, Encerrar e 'Ver resultado'",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill: pré-visualização de impressão em PDF sem elementos cortados"
+        "Testar via curl um envio válido, um fora da escala (400) e um após o limite (410); Verify in browser using dev-browser skill: tela pública em celular e desktop"
       ],
       "priority": 12,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-013",
-      "title": "Lista Últimos resultados e opt-in para apps sensíveis (pdi-time)",
-      "description": "As a executivo, I want ver meus últimos resultados e apagar quando quiser so that eu controle o que fica guardado.",
+      "title": "Bússola de IA: mapa de maturidade e leitura da IA",
+      "description": "As a executivo, I want ver o nível por dimensão e o que fazer a seguir so that eu leve um diagnóstico para a diretoria.",
       "acceptanceCriteria": [
-        "MaisDetalhes do painel ganha a lista 'Últimos resultados' (até 10, com título e data via helper data) e o botão 'Apagar tudo' com confirmação",
-        "lib/historico.ts exporta a constante SENSIVEL (false no pdi-time) e a função salvar aceita { expiraEmDias }; quando SENSIVEL é true a rota só salva se a requisição trouxer guardar: true e grava expiraEm em 30 dias",
-        "Componente OptInGuardar em ui.tsx: checkbox 'Guardar este resultado por 30 dias', renderizado no painel só quando SENSIVEL é true",
-        "Setup mostra, no rodapé 'Para a equipe técnica', a frase 'Neste plano de hospedagem, o histórico pode se perder ao reiniciar'",
+        "lib/bussola.ts com analisarAvaliacao(avaliacao): médias por dimensão (0 a 5), nível geral (1 Inicial, 2 Exploração, 3 Estruturação, 4 Escala, 5 Transformação) e dispersão calculados no servidor; askJSON recebe só agregados e respostas de texto e devolve {resumo, leituraPorDimensao, forcas, lacunas, proximosPassos (3), ondeDiscordam (só quando houver área informada)}",
+        "Novo components/GraficoMaturidade.tsx: radar em SVG puro com 6 eixos, anéis rotulados 1, 3 e 5, polígono da empresa em acento com preenchimento a 15%; rótulos em px fixos legíveis em 390 px; tabela de leitura sem cor abaixo",
+        "Botão 'Analisar respostas' na lista de avaliações roda a análise sobre as respostas recebidas e salva no histórico; Stage na ordem ResultHead, Origem, Destaque, .summary, GraficoMaturidade, DataTable por dimensão, Forças, Lacunas, Próximos passos, Onde discordam",
+        "Entregar com extras 'Baixar respostas (CSV)' e 'Copiar próximos passos'; lib/ferramentas.ts declara avaliar_respostas(respostas) e resultado_avaliacao(id) chamando as mesmas funções",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill: analisar a avaliação de exemplo e conferir o gráfico em desktop e celular"
       ],
       "priority": 13,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-014",
-      "title": "Bloco Entregar padrão (pdi-time)",
-      "description": "As a executivo, I want levar o resultado para onde eu trabalho do mesmo jeito em todos os apps so that eu não precise aprender cada tela.",
+      "title": "Simulador de Vendas: esqueleto, vendedores, cenários e análise de uma conversa colada",
+      "description": "As a gestor de vendas, I want cadastrar meu time e ver a análise de uma conversa so that eu entenda o que o app mede antes de conectar a voz.",
       "acceptanceCriteria": [
-        "Novo componente Entregar em ui.tsx com props { id?, titulo, texto: () => string, extras?: { rotulo, onClick }[] }",
-        "Renderiza botão primário 'Baixar PDF' (abre /imprimir/<id> em nova aba; sem id faz window.print() na própria tela) e menu 'Mais' com 'Copiar texto', 'Enviar por e-mail' (mailto: com subject e body), 'Copiar link' (baseUrl + /r/<id>, só quando id existe) e os extras",
-        "No celular o primário ocupa a largura e 'Mais' vira botão de ícone com aria-label",
-        "ResultHead do pdi-time usa Entregar no lugar dos botões avulsos; CopyButton continua exportado",
+        "Pasta simulador-vendas/ criada a partir de pdi-time/; entrada em catalogo.json (id simulador-vendas, nome 'Simulador de Vendas', area Vendas, porta 3013, acento #3f6212, capacidades ['artefato','mcp','rotina'], demo null); ícones, gerar-deploy, compose (3013:10000), metadata.title e acento no padrão",
+        "lib/types.ts com Vendedor, Cenario {id,titulo,cliente:{nome,cargo,empresa,contexto},objetivo,objecoes,tom}, Conversa {id,vendedorId,cenarioId,origem:'voz'|'texto'|'colada',transcricao:{papel,texto,segundo?}[],duracaoSeg?,criadoEm}, Analise {nota,criterios:{nome,nota,evidencia,comoMelhorar}[],pontosFortes,oQueMelhorar,momentos,resumo}",
+        "lib/vendedores.ts e lib/cenarios.ts em SQLite (criar, listar, obter, apagar); 3 cenários prontos carregados na primeira execução (lead frio, desconto, renovação)",
+        "Panel: h1 'Treine seu time de vendas com um cliente que responde', select Vendedor com 'Cadastrar vendedor' em linha (nome, e-mail, equipe), select Cenário, textarea 'Colar uma conversa' no formato 'Vendedor: ... / Cliente: ...', botão 'Analisar a conversa'; MaisDetalhes com os 7 critérios editáveis",
+        "lib/analise.ts com analisarConversa(conversa, criterios) via askJSON; nota geral é média dos critérios calculada no servidor com uma casa decimal e vírgula; Stage: ResultHead, Origem, Destaque (nota), .summary, DataTable de critérios, Momentos-chave, details 'Ver a conversa completa'",
+        "Resultado salvo no histórico tipo 'conversa' com expiraEmDias 90; lib/demo.ts com conversa e análise fictícias; lib/integracoes.ts = [OPENROUTER, NOTIFICACOES]; lib/ferramentas.ts com NOME_SERVIDOR 'simulador-vendas' e analisar_conversa(transcricao, vendedor?, cenario?)",
+        "lint, build e verificar-jargao passam; curl em /api/health, /api/status, POST /api/analisar (demo e 400)",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill: desktop vazio, ?exemplo=1&captura=1 desktop e celular"
       ],
       "priority": 14,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-015",
-      "title": "Script verificar-jargao.mjs",
-      "description": "As a pessoa que mantém a suíte, I want um teste que falhe quando jargão técnico entrar na tela principal so that o padrão não regrida.",
+      "title": "Simulador de Vendas: integração ElevenLabs e webhook de pós-conversa assinado",
+      "description": "As a gestor, I want que cada conversa por voz chegue ao app sozinha so that a análise não dependa de alguém colar a transcrição.",
       "acceptanceCriteria": [
-        "scripts/verificar-jargao.mjs varre <app>/app/page.tsx e <app>/components/*.tsx (exceto setup.tsx) procurando em strings JSX e literais os termos /setup, webhook, token, ' ID', OpenRouter, Nemotron, gpt-, API, endpoint, env",
-        "Aceita exceções por app em scripts/jargao-excecoes.json",
-        "Sai com código 1 e lista arquivo, linha e termo quando encontra; código 0 quando limpo",
-        "Roda limpo no pdi-time; PADRAO.md cita o script na seção 'Verificação obrigatória'",
-        "Typecheck passes"
+        "lib/integracoes.ts ganha ELEVENLABS_AGENTE: ELEVENLABS_API_KEY (secret), ELEVENLABS_AGENT_ID (select com opcoesDinamicas via GET /v1/convai/agents, como em entrevista-ia), ELEVENLABS_WEBHOOK_SECRET (secret, ajuda em 3 passos citando Configurações > Webhooks e o endereço mostrado no cartão); testar chama GET /v1/convai/agents/<id> e devolve ok:false com mensagem para chave falsa",
+        "Novo components/Webhook.tsx registrado em app/setup/page.tsx abaixo de SetupPage: mostra a URL ${baseUrl}/webhook/elevenlabs com Copiar e 'Última conversa recebida há N minutos' (GET /api/webhook-info)",
+        "Novo app/webhook/elevenlabs/route.ts (POST): lê o corpo cru com req.text(), valida ElevenLabs-Signature (t= e v0=, HMAC-SHA256 de '<t>.<corpo>' com o segredo, janela de 30 min, crypto.timingSafeEqual; aceita múltiplos v0=), devolve 200 antes de processar; aceita só type 'post_call_transcription'; lê data.transcript (role, message, time_in_call_secs), data.metadata.call_duration_secs e dynamic_variables (vendedor_id, sala_token); grava a Conversa com origem 'voz', roda analisarConversa e salva no histórico; assinatura inválida devolve 401",
+        "lint e build passam",
+        "Typecheck passes",
+        "Testar via curl um POST no webhook com assinatura válida (script descartável que calcula o HMAC) e um inválido (401); conferir que a conversa aparece no histórico"
       ],
       "priority": 15,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-016",
-      "title": "Script verificar-padrao.sh",
-      "description": "As a pessoa que mantém a suíte, I want saber quando um arquivo compartilhado divergiu do pdi-time so that a replicação seja confiável.",
+      "title": "Simulador de Vendas: sala de simulação pública por texto e por voz",
+      "description": "As a vendedor, I want abrir um link, conversar com o cliente simulado e ver minha análise so that eu treine sozinho quando quiser.",
       "acceptanceCriteria": [
-        "scripts/verificar-padrao.sh compara entre pdi-time e cada um dos outros 9 apps: components/ui.tsx, components/setup.tsx, lib/ai.ts, lib/store.ts, lib/setup-comum.ts, lib/historico.ts, app/api/setup/**, app/r/**, app/imprimir/** e app/globals.css até a linha '/* Específico deste app */'",
-        "Sai com código 1 listando o que diverge; código 0 quando tudo igual",
-        "Lista de arquivos comparados fica em um array no topo do script para ser estendida",
-        "PADRAO.md cita o script na seção 'Verificação obrigatória'",
-        "Typecheck passes"
+        "lib/salas.ts em SQLite: 'Criar link de treino' no painel (vendedor e cenário) gera token de 30 dias; nova página pública app/simular/[token]/page.tsx com a marca, o cenário em linguagem do vendedor ('Você vai ligar para {cliente}, {cargo} da {empresa}. Objetivo: ...') e 404 amigável",
+        "Sem ElevenLabs configurada: conversa por texto em que a IA faz o cliente (askText multi-turno com o cenário no system; em demo, roteiro fixo de 4 turnos), botão 'Encerrar e ver minha análise' que grava a Conversa (origem 'texto') e mostra o mesmo Resultado do app",
+        "Com ElevenLabs configurada: widget <elevenlabs-convai agent-id=... dynamic-variables='{vendedor_id, sala_token, cenario}'> carregado pelo script oficial (componente cliente que injeta o script uma vez); após o fim, a página consulta GET /api/salas/<token>/ultima a cada 5 s mostrando 'Analisando sua conversa' até a análise chegar",
+        "README do app explica que o agente precisa ser público com autenticação desligada e allowlist de domínio, e onde ligar o webhook",
+        "lint e build passam",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: abrir a sala sem integração em celular e desktop, conversar por texto e ver a análise"
       ],
       "priority": 16,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-017",
-      "title": "Replicar a fundação visual em agente-kanban",
-      "description": "As a executivo, I want a mesma qualidade no Agente de Kanban so that a experiência da suíte seja uma só.",
+      "title": "Simulador de Vendas: painel da equipe e bloco Em breve",
+      "description": "As a gestor de vendas, I want ver como cada vendedor evolui e onde a equipe tropeça so that eu direcione o treino.",
       "acceptanceCriteria": [
-        "ui.tsx, globals.css (parte compartilhada), lib/ai.ts, lib/historico.ts, app/r/** e app/imprimir/** copiados do pdi-time",
-        "Rotas devolvem meta e salvam no histórico; Resultado usa Origem, Entregar e Privacidade; Empty recebe ilustração própria (quadro com três colunas); Loading recebe etapas; chips e selects revisados; campos opcionais em MaisDetalhes",
-        "Em 1400x900 no estado vazio o botão primário está visível sem rolagem",
-        "scripts/verificar-padrao.sh e scripts/verificar-jargao.mjs passam para este app",
+        "Botão 'Ver o painel da equipe' no painel gera o resultado tipo 'painel' (recalculado a cada clique e salvo no histórico): Destaque com a nota média dos últimos 30 dias e variação contra os 30 anteriores; DataTable Vendedores (nome, conversas, nota média, tendência como chip Subindo/Estável/Caindo, critério mais fraco, última conversa, 'Ver conversas')",
+        "Seção 'Critérios mais fracos da equipe' em barras horizontais no padrão CSS do Analista Financeiro (GraficoCategorias), critério pior em warn",
+        "Clicar em 'Ver conversas' lista as conversas do vendedor com nota, cenário e Abrir; 'Criar link de treino' direto da linha",
+        "Bloco 'Em breve' no fim do painel com dois cartões a 60% de opacidade e chip neutro 'Em breve': 'Analisar ligações reais do time' e 'Levar as notas para o CRM'; sem botão",
+        "Entregar com extra 'Baixar notas da equipe (CSV)'; lib/ferramentas.ts ganha painel_equipe(dias?)",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill: painel com os dados do demo em desktop e celular"
       ],
       "priority": 17,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-018",
-      "title": "Replicar a fundação visual em entrevista-ia",
-      "description": "As a executivo, I want a mesma qualidade na Entrevistadora IA so that a experiência da suíte seja uma só.",
+      "title": "Simulador de Vendas: resumo semanal da equipe",
+      "description": "As a gestor, I want receber o resumo da semana so that eu acompanhe o treino sem abrir o app.",
       "acceptanceCriteria": [
-        "ui.tsx, globals.css (parte compartilhada), lib/ai.ts, lib/historico.ts, app/r/** e app/imprimir/** copiados do pdi-time",
-        "Rotas devolvem meta e salvam no histórico; Resultado usa Origem, Destaque (nota da entrevista), Entregar e Privacidade; Empty recebe ilustração própria (balões de conversa); Loading recebe etapas; chips e selects revisados; campos opcionais em MaisDetalhes",
-        "Em 1400x900 no estado vazio o botão primário está visível sem rolagem",
-        "scripts/verificar-padrao.sh e scripts/verificar-jargao.mjs passam para este app",
+        "Botão 'Receber o resumo toda semana' no painel cria a rotina 'resumo-equipe' (semanal, sexta 17h, canal de Notificações)",
+        "lib/rotinas-do-app.ts registra o executor: conversas da semana, nota média, quem mais evoluiu, quem não treinou, critério mais fraco e o link do painel; em demo entrega números do exemplo rotulados",
+        "TIPOS_ROTINA lista 'Resumo semanal da equipe'",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Testar via POST /api/rotinas/<id>/executar-agora e conferir o texto entregue"
       ],
       "priority": 18,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-019",
-      "title": "Replicar a fundação visual em posts-sociais",
-      "description": "As a executivo, I want a mesma qualidade em Posts em Minutos so that a experiência da suíte seja uma só.",
+      "title": "Custos de IA: esqueleto, faturas, orçamento, demo e gráfico gasto contra planejado",
+      "description": "As a CFO, I want ver o gasto com IA contra o planejado so that eu saiba se estamos dentro do orçamento.",
       "acceptanceCriteria": [
-        "ui.tsx, globals.css (parte compartilhada), lib/ai.ts, lib/historico.ts, app/r/** e app/imprimir/** copiados do pdi-time",
-        "Rotas devolvem meta e salvam no histórico; Resultado usa Origem, Entregar e Privacidade; Empty recebe ilustração própria (três cartões de post); Loading recebe etapas; chips e selects revisados; campos opcionais em MaisDetalhes",
-        "Em 1400x900 no estado vazio o botão primário está visível sem rolagem",
-        "scripts/verificar-padrao.sh e scripts/verificar-jargao.mjs passam para este app",
+        "Pasta custos-ia/ criada a partir de pdi-time/; entrada em catalogo.json (id custos-ia, nome 'Custos de IA', areas Financeiro e TI, porta 3014, acento #7e22ce, capacidades ['artefato','mcp','rotina'], demo null); ícones, gerar-deploy, compose (3014:10000), metadata.title e acento no padrão",
+        "lib/types.ts com Fatura {id,fornecedor,ferramenta,categoria,valor,moeda:'BRL'|'USD'|'EUR',valorBRL,data,periodicidade,origem:'email'|'upload'|'manual',referencia,criadoEm}, Orcamento {item,valorMensalBRL}, Leitura {mesAtual,totalBRL,planejadoBRL,variacaoMesAnterior,porFerramenta,porMes,alertas}",
+        "lib/faturas.ts em SQLite (salvar com deduplicação por fornecedor, valor e data; listar(periodo); apagar; apagarTodas; resumo(periodo)) e lib/orcamento.ts (definir, listar, apagar); câmbio manual em /setup (cartão CAMBIO com CAMBIO_USD_BRL e CAMBIO_EUR_BRL, padrões fixos editáveis)",
+        "Panel: h1 'Saiba quanto sua empresa gasta com IA', select Período (mês atual, últimos 3 meses, ano), botão 'Ler as notas do e-mail' desabilitado com a frase 'Conecte seu e-mail para ler as notas sozinho', botão 'Enviar notas em PDF' (habilitado na próxima história); MaisDetalhes com 'Orçamento planejado' (item e valor mensal) e 'Lançar manualmente' (fornecedor, ferramenta, valor, moeda, data)",
+        "Stage: ResultHead, Origem, Destaque (gasto do mês e diferença contra o planejado em ok/warn/danger), .summary, novo components/GraficoGastoPlanejado.tsx (barras pareadas por mês em CSS no padrão do Analista Financeiro, gasto em acento, planejado em cinza, rótulos em px fixos), barras por ferramenta com chip 'Acima do planejado', DataTable de faturas (titulo fornecedor, resumo ferramenta e periodicidade, chip valor, detalhe data e origem)",
+        "lib/demo.ts com 12 meses de faturas fictícias de ferramentas reais do mercado, um orçamento e dois estouros; GET /api/leitura?periodo devolve o demo quando não há faturas gravadas; resultado salvo no histórico tipo 'leitura'; lib/integracoes.ts = [OPENROUTER, NOTIFICACOES, CAMBIO]; lib/ferramentas.ts com NOME_SERVIDOR 'custos-ia' e gastos_ia(periodo)",
+        "lint, build e verificar-jargao passam; curl em /api/health, /api/status, /api/leitura",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill: desktop vazio, ?exemplo=1&captura=1 desktop e celular com atenção aos gráficos"
       ],
       "priority": 19,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-020",
-      "title": "Replicar a fundação visual em prospeccao-ia",
-      "description": "As a executivo, I want a mesma qualidade em Prospecção com IA so that a experiência da suíte seja uma só.",
+      "title": "Custos de IA: leitor de notas em PDF e texto com prévia de confirmação",
+      "description": "As a CFO, I want que o app entenda uma nota ou recibo de qualquer ferramenta so that eu não digite nada.",
       "acceptanceCriteria": [
-        "ui.tsx, globals.css (parte compartilhada), lib/ai.ts, lib/historico.ts, app/r/** e app/imprimir/** copiados do pdi-time",
-        "Rotas devolvem meta e salvam no histórico; Resultado usa Origem, Entregar (extra 'Exportar CSV') e Privacidade; Empty recebe ilustração própria (lista de contatos); Loading recebe etapas; chips e selects revisados; campos opcionais em MaisDetalhes; DataTable de leads declara papéis e larguras",
-        "Em 1400x900 no estado vazio o botão primário está visível sem rolagem",
-        "scripts/verificar-padrao.sh e scripts/verificar-jargao.mjs passam para este app",
+        "Novo lib/leitor.ts com lerDocumento({texto, nomeArquivo?, assunto?, remetente?}): Promise<Fatura|null> via askJSON, devolvendo null quando não for cobrança de ferramenta de IA; validação no servidor (valor > 0, data válida, moeda conhecida); em demo devolve uma fatura de exemplo por documento, rotulada",
+        "POST /api/faturas/upload recebe formData com até 10 PDFs de 5 MB (texto via unpdf) ou imagens (askVision quando visionEnabled(), senão mensagem 'Envie em PDF'); devolve reconhecidas e ignoradas com motivo; nada é gravado ainda",
+        "Tela: Dropzone habilitada, prévia do que foi reconhecido com 'Editar' por linha e 'Confirmar tudo' que chama POST /api/faturas (grava com origem 'upload') e recarrega a leitura",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Testar via curl com um PDF de exemplo e com um arquivo que não é nota (ignorado com motivo); Verify in browser using dev-browser skill: enviar dois PDFs e confirmar"
       ],
       "priority": 20,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-021",
-      "title": "Replicar a fundação visual em whatsapp-atendente",
-      "description": "As a executivo, I want a mesma qualidade no Atendente no WhatsApp so that a experiência da suíte seja uma só.",
+      "title": "Custos de IA: conectar Gmail e importar as notas do período",
+      "description": "As a CFO, I want conectar meu Gmail com um clique e importar as notas dos últimos meses so that o histórico se monte sozinho.",
       "acceptanceCriteria": [
-        "ui.tsx, globals.css (parte compartilhada), lib/ai.ts, lib/historico.ts, app/r/** e app/imprimir/** copiados do pdi-time",
-        "Rotas devolvem meta; Resultado (lista de conversas) usa Origem e Privacidade; Empty recebe ilustração própria (balão do WhatsApp); Loading recebe etapas; chips em sentence case ('Simulador', 'Transferida'); campos opcionais em MaisDetalhes",
-        "Em 1400x900 no estado vazio o botão primário está visível sem rolagem",
-        "scripts/verificar-padrao.sh passa para este app (verificar-jargao pode falhar até US-047; registrar exceção temporária em jargao-excecoes.json)",
+        "lib/integracoes.ts ganha GMAIL com oauth {tipo:'google', rotulo:'Conectar o Gmail', url:'/api/setup/oauth/google'}; rotas app/api/setup/oauth/google/route.ts e .../callback/route.ts no padrão PKCE do OpenRouter, escopo https://www.googleapis.com/auth/gmail.readonly, access_type=offline e prompt=consent, client_id e client_secret do app em GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET (env); grava GMAIL_REFRESH_TOKEN e GMAIL_CONTA; cartão mostra 'Conectado como {e-mail}' e Desconectar; sem as variáveis do app, o cartão explica em 'Para a equipe técnica' como criar as credenciais",
+        "Novo lib/email.ts: listarMensagens({dias, consulta}) e obterMensagem(id) via users.messages.list (q com newer_than e termos fatura, invoice, recibo, receipt, nota fiscal, has:attachment), messages.get e attachments.get; renovação do access token pelo refresh token; espera em 429",
+        "POST /api/faturas/importar (dias 30, 90 ou 365) percorre as mensagens, passa assunto, remetente, corpo e anexos PDF por lerDocumento, deduplica e grava com origem 'email' e referencia = id da mensagem; o corpo do e-mail nunca é gravado; devolve lidas, reconhecidas e ignoradas; botão 'Ler as notas do e-mail' habilita quando integrations.gmail é true e mostra etapas no Loading",
+        "README do app documenta a criação das credenciais e as restrições (app em teste: 100 usuários e acesso expira em 7 dias; escopo restrito exige verificação para uso público; Workspace interno dispensa)",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Testar o fluxo OAuth com credenciais de teste em localhost se disponíveis; sem elas, testar via curl que /setup mostra o cartão e que /api/setup/oauth/google redireciona para accounts.google.com com code_challenge"
       ],
       "priority": 21,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-022",
-      "title": "Replicar a fundação visual em contratos-ia",
-      "description": "As a executivo, I want a mesma qualidade em Leitura de Contratos so that a experiência da suíte seja uma só.",
+      "title": "Custos de IA: alertas, fechamento mensal e ferramentas MCP",
+      "description": "As a CFO, I want ser avisado quando uma ferramenta estourar o planejado e receber o fechamento todo mês so that o controle rode sem mim.",
       "acceptanceCriteria": [
-        "ui.tsx, globals.css (parte compartilhada), lib/ai.ts, lib/historico.ts, app/r/** e app/imprimir/** copiados do pdi-time; SENSIVEL = true e OptInGuardar no painel",
-        "Rotas devolvem meta; Resultado usa Origem, Destaque (nota de risco com interpretação), Entregar e Privacidade; Dropzone no upload de PDF; Empty recebe ilustração própria (documento com barra de risco); Loading recebe etapas; chips em sentence case; DataTable de cláusulas declara papéis",
-        "Em 1400x900 no estado vazio o botão primário está visível sem rolagem",
-        "scripts/verificar-padrao.sh e scripts/verificar-jargao.mjs passam para este app",
+        "Alertas em lib/faturas.ts sem IA: 'Acima do planejado' (gasto do mês maior que o orçamento do item) e 'Assinatura nova' (fornecedor sem fatura nos 3 meses anteriores); seção 'Alertas' no resultado e chips na tabela",
+        "Botão 'Receber o fechamento todo mês' cria a rotina 'fechamento-mensal' (mensal, dia 1 às 8h); executor roda a importação do Gmail quando conectado, gera a leitura do mês anterior e entrega 5 linhas (total, contra o planejado, maior variação, novas assinaturas, alertas) com o link /r/<id>; TIPOS_ROTINA lista 'Fechamento mensal de custos de IA'",
+        "lib/ferramentas.ts declara importar_notas(dias) e definir_orcamento(item, valorMensal) além de gastos_ia; Entregar com extra 'Baixar faturas (CSV)'",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Testar rotina via executar-agora e MCP via curl tools/list e tools/call; Verify in browser using dev-browser skill: seção de alertas com o demo"
       ],
       "priority": 22,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-023",
-      "title": "Replicar a fundação visual em reunioes-ia",
-      "description": "As a executivo, I want a mesma qualidade na Ata Executiva so that a experiência da suíte seja uma só.",
+      "title": "Clone de Site: esqueleto, geração de HTML a partir da captura e prévia",
+      "description": "As a executivo de marketing, I want subir a captura de uma página de referência e receber a minha versão em HTML so that eu tenha um ponto de partida em minutos.",
       "acceptanceCriteria": [
-        "ui.tsx, globals.css (parte compartilhada), lib/ai.ts, lib/historico.ts, app/r/** e app/imprimir/** copiados do pdi-time",
-        "Rotas devolvem meta e salvam no histórico; Resultado usa Origem, Destaque (contagem de decisões e ações), Entregar e Privacidade; Empty recebe ilustração própria (ata com marcações); Loading mantém as etapas existentes via prop etapas; chips em sentence case; DataTable de ações declara papéis",
-        "Em 1400x900 no estado vazio o botão primário está visível sem rolagem",
-        "scripts/verificar-padrao.sh e scripts/verificar-jargao.mjs passam para este app",
+        "Pasta clone-site/ criada a partir de pdi-time/; entrada em catalogo.json (id clone-site, nome 'Clone de Site', areas Marketing e Produto, porta 3015, acento #374151, capacidades ['artefato','mcp'], demo null); ícones, gerar-deploy, compose (3015:10000), metadata.title e acento no padrão; lib/integracoes.ts = [OPENROUTER]",
+        "lib/types.ts com Pedido {imagem, stack:'html-tailwind'|'html-css', instrucoes?, marca?:{nome,corPrimaria,corSecundaria?}}, Versao {n,html,instrucao,criadoEm}, Pagina {id,titulo,versoes,marca?}",
+        "Novo lib/gerador.ts com gerarPagina(pedido): prompt de sistema portado e traduzido do screenshot-to-code (arquivo HTML único, Tailwind pela CDN, Google Fonts, imagens substituídas por blocos na cor da marca com texto alternativo, sem scripts além do Tailwind, textos em português) enviado com a imagem via askVision; extrai <html>...</html> e valida abertura e fechamento; remove <script> de outras origens",
+        "Panel: h1 'Transforme uma referência em uma página sua', Dropzone para PNG ou JPG até 5 MB, select Formato (HTML com Tailwind, HTML com CSS), MaisDetalhes com Instruções e Marca (nome, cor principal, cor secundária); botão 'Gerar a página'",
+        "Stage: ResultHead, Origem, prévia em iframe sandbox='allow-same-origin' com srcDoc e alternância 'Computador' e 'Celular' (390 px), details 'Ver o código' com CopyButton, aviso em uma linha 'Use a referência pela estrutura. Textos, marcas e imagens de terceiros são protegidos; troque pelo conteúdo da sua empresa'",
+        "lib/demo.ts com uma landing fictícia completa em português devolvida quando !visionEnabled(); Loading com etapas; resultado salvo no histórico tipo 'pagina'; /r/[id] mostra a prévia; lib/ferramentas.ts com NOME_SERVIDOR 'clone-site' e gerar_pagina(imagem_url, instrucoes?, marca?) que baixa a imagem no servidor até 5 MB",
+        "lint, build e verificar-jargao passam; curl em /api/health, /api/status, POST /api/pagina (demo e 400 sem imagem)",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill: desktop vazio, ?exemplo=1&captura=1 desktop e celular; alternar a prévia para Celular"
       ],
       "priority": 23,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-024",
-      "title": "Replicar a fundação visual em financas-ia",
-      "description": "As a CFO, I want a mesma qualidade no Analista Financeiro so that a experiência da suíte seja uma só.",
+      "title": "Clone de Site: edições por instrução, troca de textos e versões",
+      "description": "As a executivo de marketing, I want pedir mudanças em português e voltar a uma versão anterior so that a página fique do meu jeito sem mexer em código.",
       "acceptanceCriteria": [
-        "ui.tsx, globals.css (parte compartilhada), lib/ai.ts, lib/historico.ts, app/r/** e app/imprimir/** copiados do pdi-time; SENSIVEL = true e OptInGuardar no painel",
-        "Rotas devolvem meta; Resultado usa Origem, Destaque (total do período com variação do último mês), Entregar e Privacidade; Dropzone compartilhado no upload; Empty recebe ilustração própria (barras); Loading recebe etapas; textos de privacidade duplicados (lead e dropzone) removidos",
-        "Em 1400x900 no estado vazio o botão primário está visível sem rolagem",
-        "scripts/verificar-padrao.sh e scripts/verificar-jargao.mjs passam para este app",
+        "Campo 'O que mudar' com botão 'Aplicar' abaixo da prévia: POST /api/pagina/<id>/editar envia a instrução e o HTML atual; gerarPagina em modo edição (prompt de atualização do screenshot-to-code: devolver o arquivo inteiro mudando só o pedido) grava uma Versao nova; lista 'Versões' (n, instrução, hora) com 'Voltar para esta'",
+        "Botão 'Trocar os textos pelos da minha empresa' abre um campo 'O que a empresa faz' e pede à IA para reescrever títulos, subtítulos e chamadas mantendo a estrutura (é uma edição por instrução pré-montada)",
+        "Em demo, as edições aplicam mudanças fixas visíveis (cor de fundo do cabeçalho e título) para mostrar o fluxo",
+        "lib/ferramentas.ts ganha editar_pagina(id, instrucao)",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill: três edições seguidas e uma volta de versão"
       ],
       "priority": 24,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-025",
-      "title": "Replicar a fundação visual em voz-do-cliente",
-      "description": "As a executivo de CX, I want a mesma qualidade em Voz do Cliente so that a experiência da suíte seja uma só.",
+      "title": "Clone de Site: publicar a página em um link e baixar",
+      "description": "As a executivo de marketing, I want publicar a página em um link so that o resultado saia do app.",
       "acceptanceCriteria": [
-        "ui.tsx, globals.css (parte compartilhada), lib/ai.ts, lib/historico.ts, app/r/** e app/imprimir/** copiados do pdi-time",
-        "Rotas devolvem meta e salvam no histórico; Resultado usa Origem, Destaque (NPS ou percentual positivo), Entregar (extra 'Exportar CSV') e Privacidade; Dropzone compartilhado substitui CampoArquivo; Empty recebe ilustração própria (balões com sentimento); Loading recebe etapas; chips em sentence case; DataTable de temas declara papéis",
-        "Em 1400x900 no estado vazio o botão primário está visível sem rolagem",
-        "scripts/verificar-padrao.sh e scripts/verificar-jargao.mjs passam para este app",
+        "Nova rota app/s/[id]/route.ts serve o HTML da versão atual como text/html com Content-Security-Policy restrita (default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src https://cdn.tailwindcss.com 'unsafe-inline'; img-src data: https:), X-Robots-Tag noindex e Cache-Control no-store; 404 amigável quando não existe",
+        "Entregar: primário 'Publicar link' mostra ${baseUrl}/s/<id> com Copiar; extras 'Baixar HTML' (download do arquivo) e 'Copiar código'",
+        "PADRAO.md ganha um parágrafo curto sobre páginas públicas geradas (CSP e noindex)",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Testar via curl GET /s/<id> (200 e cabeçalhos) e GET /s/inexistente (404); Verify in browser using dev-browser skill: abrir a página publicada em celular"
       ],
       "priority": 25,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-026",
-      "title": "Setup: chaves manuais em Opções avançadas quando existe OAuth (pdi-time)",
-      "description": "As a executivo, I want conectar a IA clicando em um botão so that eu nunca veja um campo de chave se não precisar.",
+      "title": "Prospecção no LinkedIn: esqueleto, perfil ideal, leads de exemplo e sequência de mensagens",
+      "description": "As a executivo de vendas, I want descrever meu cliente ideal e receber a lista com a sequência pronta so that eu veja o valor antes de conectar minha conta.",
       "acceptanceCriteria": [
-        "Em CartaoIntegracao (components/setup.tsx), quando integracao.oauth existe e a integração não está configurada, o botão de autorização é o único elemento abaixo da descrição; campos, 'Salvar' e o link 'Obter a chave' ficam dentro de <details> com summary 'Opções avançadas: colar uma chave'",
-        "Quando configurada, o cartão mostra 'Conectado' com a chave mascarada e o botão 'Desconectar' (PUT com null); 'Opções avançadas' continua disponível",
-        "Sem oauth, os campos aparecem direto, precedidos de um passo a passo numerado de até três passos gerado a partir de link e da ajuda do primeiro campo",
+        "Pasta prospeccao-linkedin/ criada a partir de pdi-time/; entrada em catalogo.json (id prospeccao-linkedin, nome 'Prospecção no LinkedIn', area Vendas, porta 3016, acento #0a66c2, capacidades ['artefato','mcp','rotina'], demo null); ícones, gerar-deploy, compose (3016:10000), metadata.title e acento no padrão; lib/integracoes.ts = [OPENROUTER, NOTIFICACOES] (Prospect Halo entra na próxima história)",
+        "lib/types.ts com Perfil {cargos,setores,sinais,proposta,remetente:{nome,empresa},tom}, Lead {id,nome,cargo,empresa,setor,linkedinUrl,sinal,pontuacao,origem:'prospecthalo'|'demo'}, Sequencia {leadId,conexao,acompanhamento1,acompanhamento2,email?}, Campanha {id,nome,leads,sequencias,estado,externoId?}",
+        "Panel: h1 'Prospecte no LinkedIn sem passar o dia nele', campos Cargos, Setores, Sinais de intenção (escolha múltipla: mudou de cargo, empresa contratando, publicou sobre o tema, levantou investimento), 'Sua proposta em uma frase'; MaisDetalhes com Seu nome, Sua empresa e Tom; botão 'Buscar leads'",
+        "Stage: ResultHead, Origem ('Os leads exibidos são fictícios' em demo), Destaque (leads e quantos com sinal forte), DataTable de leads (titulo nome e cargo, resumo empresa e sinal, chip pontuação, detalhe LinkedIn como link) com seleção múltipla e 'Escrever para os selecionados'; cartões por lead com conexão (até 300 caracteres), dois acompanhamentos e e-mail opcional, cada um com CopyButton",
+        "lib/sequencias.ts com escreverSequencia(lead, perfil) via askJSON, gancho diferente por mensagem, sem placeholders entre colchetes; lib/demo.ts com 10 leads fictícios rotulados e sequências prontas; resultado salvo no histórico tipo 'prospeccao'; lib/ferramentas.ts com NOME_SERVIDOR 'prospeccao-linkedin', buscar_leads_linkedin(perfil) e escrever_sequencia(lead, proposta)",
+        "lint, build e verificar-jargao passam; curl em /api/health, /api/status, POST /api/leads e POST /api/sequencias (demo e 400)",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill: /setup em desktop e celular, antes e depois de salvar uma chave falsa"
+        "Verify in browser using dev-browser skill: desktop vazio, ?exemplo=1&captura=1 desktop e celular; selecionar dois leads e escrever"
       ],
       "priority": 26,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-027",
-      "title": "Setup: linguagem sem jargão (pdi-time)",
-      "description": "As a executivo, I want configurar sem tradutor so that eu termine o setup sozinho.",
+      "title": "Prospecção no LinkedIn: Prospect Halo conectado com busca, aprovação e envio",
+      "description": "As a executivo de vendas, I want que a lista venha do meu Prospect Halo e que o envio aconteça só depois da minha aprovação so that eu ganhe tempo sem perder o controle.",
       "acceptanceCriteria": [
-        "Rótulo do OAuth da IA em lib/setup-comum.ts vira 'Conectar a IA'; o nome do provedor fica só na descrição",
-        "A frase sobre variáveis de ambiente sai do rodapé e vai para um <details> 'Para a equipe técnica' junto com a origem env/banco de cada campo",
-        "Botão 'Salvar' desabilitado exibe a frase de apoio 'Preencha ao menos um campo para salvar'",
-        "Placeholder de campo secret já salvo é sempre 'salvo: {mascarado}'",
+        "lib/integracoes.ts ganha PROSPECTHALO = integracaoMCP({id:'PROSPECTHALO', titulo:'Prospect Halo', descricao:'Busca leads no seu LinkedIn e envia as mensagens aprovadas', urlPadrao:'https://app.prospecthalo.ai/api/agent/v1/mcp', oauth:true}); INTEGRACOES = [OPENROUTER, PROSPECTHALO, NOTIFICACOES]",
+        "Novo lib/prospecthalo.ts no método de prospeccao-ia/lib/crm-mcp.ts: lista as ferramentas remotas e escolhe por palavras-chave (buscar: lead, prospect, search, find; campanha: campaign, agent, outreach, create; estado: status, performance); montarArgumentos(schema, candidatos) casa as propriedades do schema remoto com o perfil; campo avançado PROSPECTHALO_FERRAMENTAS guarda o mapeamento para correção manual",
+        "POST /api/leads usa o Prospect Halo quando configurado e normaliza a resposta em Lead[] (chaves leads, prospects, results, data); em falha mostra a mensagem em português e o botão 'Ver com dados de exemplo'",
+        "Botão 'Aprovar e enviar pelo Prospect Halo' abre diálogo com quantidade de leads, as três mensagens e o aviso 'As mensagens serão enviadas da sua conta do LinkedIn, respeitando os limites diários do Prospect Halo'; só após Confirmar cria a campanha remota e grava externoId; 'Ver andamento' consulta o estado; lib/ferramentas.ts ganha enviar_campanha(campanhaId, confirmar) que devolve o plano quando confirmar for falso",
+        "README documenta que os nomes reais das ferramentas são descobertos em tempo de execução",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Testar ponta a ponta com um servidor MCP de teste local com OAuth expondo search_leads, create_campaign e campaign_status (script descartável); Verify in browser using dev-browser skill: autorizar em /setup, buscar, aprovar e enviar"
       ],
       "priority": 27,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-028",
-      "title": "Setup: progresso e próximo passo (pdi-time)",
-      "description": "As a executivo, I want saber o que falta e voltar ao app sem procurar so that o setup termine em um minuto.",
+      "title": "Prospecção no LinkedIn: leads novos toda semana",
+      "description": "As a executivo de vendas, I want receber leads novos toda semana com as mensagens prontas so that a prospecção não pare quando eu estiver ocupado.",
       "acceptanceCriteria": [
-        "Cabeçalho do setup mostra '{n} de {total} conectados' e o primeiro cartão pendente obrigatório recebe borda de acento",
-        "Quando pronto === true aparece um cartão 'Tudo pronto' no topo com os botões 'Testar com um exemplo' (abre /?exemplo=1) e 'Ir para o app'",
+        "Botão 'Receber leads novos toda semana' no resultado cria a rotina 'leads-semanais' com o perfil em parametros",
+        "Executor busca pelo perfil, exclui leads já entregues (tabela leads_vistos por perfil), escreve as sequências e entrega a lista com o link do resultado; nunca envia mensagens; em demo entrega leads fictícios rotulados",
+        "TIPOS_ROTINA lista 'Leads novos toda semana'",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Testar via executar-agora duas vezes e conferir que a segunda entrega não repete leads"
       ],
       "priority": 28,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-029",
-      "title": "Replicar o setup nos outros 9 apps",
-      "description": "As a executivo, I want o mesmo setup em todos os apps so that eu configure qualquer um do mesmo jeito.",
+      "title": "Vídeos de Campanha: esqueleto, briefing, três conceitos e storyboard de exemplo",
+      "description": "As a executivo de marketing, I want descrever a campanha, subir a imagem do produto e escolher entre três conceitos so that eu decida o vídeo antes de gastar créditos.",
       "acceptanceCriteria": [
-        "components/setup.tsx e lib/setup-comum.ts copiados do pdi-time para os 9 apps",
-        "Todas as integrações sem OAuth em lib/integracoes.ts de cada app têm link e ajuda suficientes para o passo a passo de três passos",
-        "scripts/verificar-padrao.sh passa nos 10 apps",
+        "Pasta videos-campanha/ criada a partir de pdi-time/; entrada em catalogo.json (id videos-campanha, nome 'Vídeos de Campanha', area Marketing, porta 3017, acento #be185d, capacidades ['artefato','mcp'], demo null); ícones, gerar-deploy, compose (3017:10000), metadata.title e acento no padrão; lib/integracoes.ts = [OPENROUTER] (Higgsfield entra na próxima história)",
+        "lib/types.ts com Briefing {produto,publico,objetivo,tom,formato:'9:16'|'16:9'|'1:1',duracaoSeg:5|10|15,imagemDataUrl?}, Conceito {id,titulo,roteiro:{cena,segundos,textoNaTela}[],efeitoSugerido,chamada,legenda:{instagram,linkedin,tiktok}}, Video {id,conceitoId,estado,url?,custoCreditos?,externoId?,criadoEm}",
+        "Panel: h1 'Um vídeo curto para cada campanha, em minutos', campos Produto ou oferta, Para quem, Objetivo (select: lançamento, promoção, marca, evento), Tom, Formato, Duração, Dropzone para a imagem do produto (PNG ou JPG até 5 MB); botão 'Criar conceitos'",
+        "lib/conceitos.ts com criarConceitos(briefing) via askJSON devolvendo 3 conceitos cujas cenas somam a duração, com efeitoSugerido escolhido de uma lista interna em português (Zoom dramático, Giro do produto, Explosão de partículas, Câmera lenta, Antes e depois) e legendas por rede",
+        "Stage: ResultHead, Origem, três cartões de conceito (lado a lado no desktop, empilhados no celular) com novo components/Storyboard.tsx (quadros na proporção escolhida, imagem do produto ao fundo com sobreposição escura a 40%, texto na tela em Manrope 700, animação CSS discreta entre 3 cenas desligada por prefers-reduced-motion, rótulo fixo 'Prévia ilustrativa') e botão 'Gerar este vídeo' desabilitado com a frase 'Conecte o Higgsfield para gerar o vídeo de verdade'",
+        "lib/demo.ts com briefing e três conceitos fictícios; resultado salvo no histórico tipo 'campanha'; lib/ferramentas.ts com NOME_SERVIDOR 'videos-campanha' e criar_conceitos(briefing)",
+        "lint, build e verificar-jargao passam; curl em /api/health, /api/status, POST /api/conceitos (demo e 400)",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill: /setup de 3 apps com integrações diferentes (entrevista-ia, prospeccao-ia, reunioes-ia)"
+        "Verify in browser using dev-browser skill: desktop vazio, ?exemplo=1&captura=1 desktop e celular nos três formatos"
       ],
       "priority": 29,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-030",
-      "title": "Agente de Kanban: Trello só com Autorizar",
-      "description": "As a gestor, I want conectar o Trello com um clique so that eu não precise copiar chave de API.",
+      "title": "Vídeos de Campanha: Higgsfield via MCP com custo antes de gerar",
+      "description": "As a executivo de marketing, I want gerar o vídeo escolhido pelo Higgsfield vendo o custo antes so that eu use os créditos com consciência.",
       "acceptanceCriteria": [
-        "lib/integracoes.ts do agente-kanban embute a chave de API pública do app do Trello (constante TRELLO_API_KEY) e o fluxo /api/setup/oauth/trello usa essa chave quando o usuário não colou outra",
-        "Cartão do Trello mostra só 'Autorizar no Trello'; chave própria e token manual ficam em 'Opções avançadas'",
-        "Texto de ajuda não manda mais salvar a chave antes de autorizar",
+        "lib/integracoes.ts ganha HIGGSFIELD = integracaoMCP({id:'HIGGSFIELD', titulo:'Higgsfield', descricao:'Gera o vídeo a partir da imagem do produto com os efeitos da plataforma', urlPadrao:'https://mcp.higgsfield.ai', oauth:true}); INTEGRACOES = [OPENROUTER, HIGGSFIELD]",
+        "Novo lib/higgsfield.ts com listarEfeitos(), enviarImagem(dataUrl), gerarVideo({imagemId, efeitoId, formato, prompt}), estado(jobId) e saldo() sobre lib/mcp-cliente.ts, escolhendo as ferramentas por nome (presets_show, media_upload ou media_import_url, generate_video com o modelo de presets, job_status ou jobs_wait, show_generation_by_ids, balance) com fallback por palavra-chave; a lista de efeitos remota substitui a interna e é mapeada por nome para o efeitoSugerido",
+        "Diálogo de confirmação antes de gerar com efeito, formato, custo estimado em créditos (quando o provedor informar) e saldo atual; só após 'Confirmar e gerar' cria o job (POST /api/videos) e grava Video em SQLite (lib/videos.ts); um vídeo por vez",
+        "Acompanhamento: a tela consulta GET /api/videos/<id> a cada 5 s com etapas 'Enviando a imagem', 'Gerando o vídeo', 'Finalizando'; pronto mostra <video controls> com a URL, 'Baixar vídeo' e 'Gerar outro efeito'; falha mostra o motivo em português; GET /api/status lista integrations.higgsfield; saldo em MaisDetalhes quando conectado",
+        "lib/ferramentas.ts ganha gerar_video(conceitoId, efeito?, confirmar) que devolve custo e plano quando confirmar for falso, e estado_video(id)",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Testar ponta a ponta com um servidor MCP de teste local que simule as ferramentas (script descartável); Verify in browser using dev-browser skill: autorizar em /setup, confirmar e acompanhar até 'pronto' com o simulador"
       ],
       "priority": 30,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-031",
-      "title": "Atendente no WhatsApp: campos em português e token de verificação gerado pelo app",
-      "description": "As a executivo de atendimento, I want entender cada campo do WhatsApp e não inventar um token so that eu conecte o número sem ajuda técnica.",
+      "title": "Vídeos de Campanha: entregar vídeo, legendas e roteiro",
+      "description": "As a executivo de marketing, I want levar o vídeo e as legendas para as redes so that a campanha saia do app.",
       "acceptanceCriteria": [
-        "Campos em lib/integracoes.ts ganham rótulos 'Número de telefone (ID)' e 'Token de acesso permanente' com ajuda dizendo onde encontrar no painel da Meta",
-        "O token de verificação do webhook é gerado pelo app na primeira abertura do setup (crypto, 32 bytes), gravado via store e exibido no cartão com botão 'Copiar'",
-        "O cartão mostra a URL do webhook (baseUrl + /webhook) com botão 'Copiar URL'",
+        "Entregar com extras 'Baixar vídeo' (quando pronto), 'Copiar legenda do Instagram', 'Copiar legenda do LinkedIn', 'Copiar legenda do TikTok' e 'Baixar roteiro (texto)'",
+        "Folha de impressão (/imprimir/[id]) mostra o storyboard estático e o roteiro por cena",
+        "Aviso em uma linha abaixo do vídeo pronto: 'O link do vídeo vale por alguns dias. Baixe o arquivo para guardar'",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Verify in browser using dev-browser skill: abrir o resultado de exemplo e usar cada item de Entregar"
       ],
       "priority": 31,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-032",
-      "title": "Documento de investigação: autorização em um clique para mais integrações",
-      "description": "As a pessoa que mantém a suíte, I want saber quais integrações podem trocar chave por botão so that eu priorize as próximas.",
+      "title": "Suíte: catálogo, compose, scripts e PADRAO.md para dezessete apps",
+      "description": "As a pessoa que mantém a suíte, I want que catálogo, scripts e documentação reconheçam os sete apps novos so that publicar e verificar continue sendo um comando.",
       "acceptanceCriteria": [
-        "tasks/oauth-integracoes.md avalia viabilidade, pré-requisitos e esforço de: Meta Embedded Signup (WhatsApp Cloud API), HubSpot OAuth (Prospecção e Voz do Cliente), Google OAuth para Drive, Sheets e Calendar (Ata e Financeiro)",
-        "Registra que ElevenLabs, OpenAI, Apollo e Bright Data não oferecem OAuth para chaves de API e seguem com passo a passo",
-        "Termina com ordem recomendada de implementação",
+        "catalogo.json com dezessete entradas validado por node scripts/gerar-deploy.mjs; render.yaml da raiz e dos apps regenerados; docker-compose.yml com os sete serviços (3011 a 3017) e volumes nomeados",
+        "scripts/verificar-padrao.sh lê a lista de apps de catalogo.json (se ainda for lista fixa) e compara os dezesseis contra pdi-time incluindo lib/mcp-oauth.ts e app/api/setup/oauth/mcp/**; sai com 0",
+        "node scripts/verificar-jargao.mjs limpo nos dezessete; exceções, se houver, em scripts/jargao-excecoes.json com justificativa em comentário no progress.txt",
+        "PADRAO.md: 'Dez apps' vira 'Dezessete apps'; seções curtas para askVision e modelo de visão, campos escala e escolha, cliente MCP com OAuth (integracaoMCP e rotas), webhooks assinados (exemplo do Simulador)",
+        "README.md da raiz com a tabela de apps e portas atualizada; cada app novo tem README.md no formato do de referência com a tabela de variáveis e os links de onde obter cada chave",
+        "site/index.html: conferir que as áreas novas (Estratégia, Inovação, TI, Produto) aparecem no filtro; ajustar se o mapa de áreas for fixo",
+        "npm run lint e npm run build passam nos dezessete",
         "Typecheck passes"
       ],
       "priority": 32,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-033",
-      "title": "PDI do Time: datas reais e preparado por",
-      "description": "As a líder, I want um PDI com datas reais e apresentação impecável so that eu leve o plano direto para a conversa.",
+      "title": "Suíte: verificação final ponta a ponta dos sete apps novos",
+      "description": "As a pessoa que mantém a suíte, I want os sete apps verificados antes do push so that o workflow publique imagens que funcionam.",
       "acceptanceCriteria": [
-        "'Indicador' em posição fixa nos cartões de objetivo (coluna à direita no desktop, abaixo do título no celular)",
-        "Campo opcional 'Data da conversa' em MaisDetalhes; ações 30/60/90 exibem a data real no formato '30 dias · 12/10/2026'",
-        "Campo 'Seu nome' em MaisDetalhes (pré-preenchido do setup quando existir a chave NOME_USUARIO) aparece na folha de impressão como 'Preparado por'",
+        "Para cada app novo, o checklist 'Verificação obrigatória' do PADRAO.md executado por inteiro: build standalone, curl em /api/health, /api/status, /api/setup (GET, PUT com chave falsa, PUT com null), POST /api/setup/testar por integração (ok:false com mensagem clara), rotas principais em demo e entradas inválidas com 400",
+        "POST /mcp responde initialize, tools/list e tools/call nos sete, com e sem código",
+        "Capturas de cada app (vazio 1400x900, ?exemplo=1&captura=1 em 1400x1500 e celular 390 px) e de /setup abertas com a ferramenta Read e corrigidas até ficarem limpas; botão primário visível sem rolagem nos sete",
+        "CLAUDE.md de cada app novo com as notas específicas e progress.txt com os aprendizados",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Push na main e conferência do resumo do workflow: imagens publicadas, capturas geradas (ou aviso) e catálogo público com dezessete cartões"
       ],
       "priority": 33,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-034",
-      "title": "Agente de Kanban: quadro demo por visitante e sugestões como ações",
-      "description": "As a gestor, I want um quadro de exemplo só meu so that eu não veja o rastro de outros visitantes.",
+      "title": "Custos de IA: conectar Outlook (Microsoft 365)",
+      "description": "As a CFO que usa Outlook, I want conectar minha caixa com um clique so that o app leia as notas também no Microsoft 365.",
       "acceptanceCriteria": [
-        "Estado do quadro demo por visitante: cookie de sessão com id mapeado para um Map no servidor; botão 'Reiniciar quadro de exemplo' no painel",
-        "Sugestões viram botões btn-ghost pequenos abaixo do campo de comando, somem depois de usadas e não têm a cor da bolha da assistente",
-        "Cartão criado sem responsável mostra 'Atribuir a alguém' que preenche o comando",
-        "Aviso de demonstração em uma frase",
+        "lib/integracoes.ts ganha OUTLOOK com oauth {tipo:'microsoft', rotulo:'Conectar o Outlook', url:'/api/setup/oauth/microsoft'}; rotas app/api/setup/oauth/microsoft/route.ts e .../callback/route.ts contra login.microsoftonline.com/common/oauth2/v2.0 com PKCE, escopos Mail.Read offline_access User.Read, MICROSOFT_CLIENT_ID e MICROSOFT_CLIENT_SECRET (env); grava OUTLOOK_REFRESH_TOKEN e OUTLOOK_CONTA",
+        "lib/email.ts ganha o provedor outlook: /me/messages com $filter de data e $search, /me/messages/{id}/attachments (contentBytes); renovação do token; respeito a Retry-After em 429; POST /api/faturas/importar aceita provedor 'outlook'",
+        "GET /api/status lista integrations.outlook; o botão 'Ler as notas do e-mail' habilita com qualquer um dos dois e pergunta qual usar quando ambos estiverem conectados",
+        "README documenta a criação do registro de aplicativo no Entra ID e o aviso de editor não verificado em apps multi-tenant",
+        "lint e build passam",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill: executar o mesmo comando duas vezes em sessões diferentes e confirmar que não duplica"
+        "Testar via curl que /api/setup/oauth/microsoft redireciona para login.microsoftonline.com com code_challenge; fluxo completo se houver credenciais de teste"
       ],
       "priority": 34,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-035",
-      "title": "Agente de Kanban: confirmar antes de agir e desfazer",
-      "description": "As a gestor, I want que o agente confirme antes de mexer no meu Trello e permita desfazer so that eu confie nele com o quadro real.",
-      "acceptanceCriteria": [
-        "Com Trello conectado, o agente responde primeiro com a lista de ações planejadas e o botão 'Confirmar'; só executa após confirmação. Em demo executa direto",
-        "Após executar aparece 'Desfazer' por 30 s que reverte a última ação (mover de volta, arquivar o criado, apagar o comentário)",
-        "A rota do agente aceita { confirmar: boolean } e devolve { plano } quando false",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 35,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-036",
-      "title": "Entrevistadora IA: transcrição no scorecard, roteiro demo natural e controles",
-      "description": "As a gestor, I want ver a conversa que gerou as notas so that eu confie no scorecard.",
-      "acceptanceCriteria": [
-        "Scorecard inclui <details> 'Ver a conversa completa' com a transcrição; cada evidência da tabela de critérios linka (âncora) para a pergunta de origem",
-        "lib/demo.ts reescrito: perguntas naturais por requisito sem toLowerCase() sobre o texto do usuário e sem template repetido; evidências distintas por critério",
-        "Botão 'Encerrar entrevista' visível durante a conversa; 'Nova entrevista' preserva vaga e requisitos",
-        "Voz só toca após o primeiro gesto do usuário; indicador textual 'Falando' ao lado do avatar",
-        "Nota com vírgula ('7,4'); pontos fortes em lista quando forem 3 itens",
-        "Texto 'Conecte a ElevenLabs em /setup' vira botão 'Ativar ligação automática' que leva ao cartão certo do setup",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 36,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-037",
-      "title": "Posts em Minutos: cartaz provisório, abas por rede e agendar",
-      "description": "As a executivo de marketing, I want posts prontos para agendar so that o melhor horário vire ação.",
-      "acceptanceCriteria": [
-        "Cartaz local (sem gerador de imagens) rotulado 'Imagem provisória. Conecte um gerador de imagens para a versão final' e redesenhado com tipografia grande sobre a cor de acento, texto completo em até três linhas",
-        "Resultado em abas por rede no celular; no desktop três colunas de altura igual",
-        "'Patrocinado' removido da prévia do Instagram",
-        "Por post: 'Copiar' com opções 'com hashtags' e 'sem hashtags'; 'Agendar' baixa um .ics com o melhor horário sugerido e o texto na descrição",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 37,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-038",
-      "title": "Prospecção com IA: remetente, ganchos por canal e tabela legível",
-      "description": "As a executivo de vendas, I want abordagens que pareçam escritas por mim so that eu envie sem editar.",
-      "acceptanceCriteria": [
-        "Campos 'Seu nome' e 'Sua empresa' em MaisDetalhes (pré-preenchidos do setup quando existirem); placeholders '[seu nome]' e '[sua empresa]' eliminados do prompt e do demo",
-        "Prompt e lib/demo.ts geram gancho diferente por canal; a proposta do usuário é reescrita, não colada literalmente",
-        "Coluna 'Sinal' com papel resumo (duas linhas e 'Ver mais'); LinkedIn e site do lead como links na linha",
-        "Lead com abordagem escrita recebe chip 'Abordagem pronta' ao voltar à lista; seleção múltipla com 'Escrever para os selecionados'",
-        "Aviso de demonstração: 'Os leads exibidos são fictícios'",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 38,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-039",
-      "title": "Atendente no WhatsApp: tirar o bloco técnico da tela e ligar simulador ao rascunho",
-      "description": "As a executivo de atendimento, I want testar a base que estou editando sem ver webhooks so that a tela principal fale só de atendimento.",
-      "acceptanceCriteria": [
-        "Bloco 'Conectar ao WhatsApp de verdade' (webhook, token, URL) removido da tela principal; no lugar um link 'Conectar meu número' que abre o cartão do WhatsApp em /setup",
-        "Simulador envia o rascunho da base na requisição a /api/simular e responde com ele",
-        "Quando rascunho e configuração salva diferem, aparece 'Alterações não salvas' com botão 'Salvar' fixo no painel",
-        "scripts/verificar-jargao.mjs passa para whatsapp-atendente e a exceção temporária sai de jargao-excecoes.json",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 39,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-040",
-      "title": "Atendente no WhatsApp: demo que mostra a IA, boas-vindas e horas reais",
-      "description": "As a executivo de atendimento, I want ver o atendente respondendo como a IA responderia so that eu entenda o que ganho ao conectar.",
-      "acceptanceCriteria": [
-        "lib/demo.ts devolve resposta reformulada no tom configurado (não a cópia literal da base) e, quando não sabe, bolha com rótulo 'Encaminhado para uma pessoa'",
-        "Bolha de boas-vindas no simulador vazio",
-        "Hora real de cada mensagem gravada no envio, não no render",
-        "Lista de conversas com rótulos em sentence case; 'Limpar' vira 'Apagar conversas do simulador' com confirmação",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 40,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-041",
-      "title": "Atendente no WhatsApp: aprovar e corrigir respostas para alimentar a base",
-      "description": "As a executivo de atendimento, I want aprovar ou corrigir uma resposta do atendente so that a base melhore sem eu editar texto corrido.",
-      "acceptanceCriteria": [
-        "Cada resposta do atendente no simulador e na lista de conversas tem 'Aprovar' (grava o par pergunta/resposta na base) e 'Corrigir' (abre campo para a resposta certa e grava)",
-        "Rota PATCH /api/base aceita { pergunta, resposta } e persiste via store",
-        "Após aprovar ou corrigir, a base exibida no painel reflete a mudança sem recarregar",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 41,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-042",
-      "title": "Leitura de Contratos: nota primeiro, números em destaque, Q&A no alto",
-      "description": "As a executivo, I want a nota de risco e o que negociar antes de qualquer parágrafo so that eu decida em segundos se aciono o jurídico.",
-      "acceptanceCriteria": [
-        "Cards 'O essencial' com o número em 22 px negrito (valor mensal, prazo, multa) e texto de apoio em até duas linhas",
-        "Tabela de cláusulas na ordem Cláusula, Sugestão de negociação, Risco para você, Severidade; trecho do contrato em 'Ver trecho'",
-        "Bloco 'Pergunte sobre este contrato' logo abaixo de 'O essencial' com três perguntas sugeridas clicáveis",
-        "Entregar com extras 'Baixar lista de pontos a negociar' (texto) e 'E-mail para a outra parte' (rascunho via mailto: com os pontos)",
-        "Chip da parte do usuário em neutral (acento) e da outra parte em cinza",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 42,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-043",
-      "title": "Ata Executiva: decisões, riscos e ações distinguíveis, prazos para o calendário",
-      "description": "As a executivo, I want decisões, riscos e ações distinguíveis e prazos que vão para o calendário so that a reunião gere consequência.",
-      "acceptanceCriteria": [
-        "Checkboxes 'Concluída' só aparecem quando a ata está salva e persistem via PATCH /api/ata/[id]/acoes",
-        "Decisões em card com borda de acento; riscos com chip 'Risco' (warn); pendências com chip 'Pendente' (neutro)",
-        "Prazos normalizados para data completa no prompt e no demo; cada ação tem 'Adicionar ao calendário' que baixa um .ics",
-        "'Abrir no e-mail' (mailto: com participantes quando informados) ao lado de 'Copiar' no bloco do e-mail de follow-up",
-        "Aba 'Gravar agora' mostra o aviso 'A transcrição não está conectada; a gravação vai gerar um exemplo' antes de iniciar quando for o caso",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 43,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-044",
-      "title": "Analista Financeiro: gráficos legíveis e KPI de variação",
-      "description": "As a CFO, I want gráficos legíveis que destaquem o que mudou so that eu veja a variação sem ler a tabela.",
-      "acceptanceCriteria": [
-        "GraficoMeses: texto em px fixos (fora do viewBox escalado), eixo Y com três marcas e linha de base, último mês na cor de acento e os demais em cinza, rótulo de variação sobre o último mês",
-        "GraficoCategorias: 28 px por barra, rótulos de 13 px, categoria com maior crescimento sinalizada em warn com legenda",
-        "KPI 'Maior categoria' substituído por 'Maior variação' (categoria e percentual)",
-        "Título 'Leitura de {nome do arquivo}'; Entregar com extra 'Exportar planilha categorizada' (CSV)",
-        "Sem rolagem horizontal no celular (min-w removido)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill: conferir os dois gráficos em desktop e celular"
-      ],
-      "priority": 44,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-045",
-      "title": "Voz do Cliente: NPS no exemplo, barra sem depender de cor e temas clicáveis",
-      "description": "As a executivo de CX, I want o NPS calculado e uma tela que não dependa de cor so that eu apresente o resultado à diretoria.",
-      "acceptanceCriteria": [
-        "lib/demo.ts inclui notas de 0 a 10 e o NPS aparece calculado no Destaque",
-        "Barra de sentimento com percentuais dentro das faixas e textura (listras) no segmento neutro",
-        "Quadrante 'Comece por aqui' em ok (verde) em vez do acento",
-        "Coluna 'Menções' com barra proporcional; clicar no tema abre <details> com os comentários daquele tema",
-        "Subtítulo com o contexto em sentence case",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 45,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-046",
-      "title": "lib/mcp.ts, rota /mcp e cartão de acesso no setup (pdi-time)",
-      "description": "As a executivo que usa Claude ou ChatGPT, I want um endpoint MCP protegido por token so that meu assistente possa chamar o app.",
-      "acceptanceCriteria": [
-        "Novo lib/mcp.ts implementa JSON-RPC 2.0 sobre Streamable HTTP em app/mcp/route.ts: POST trata initialize, tools/list e tools/call; GET devolve 405; decisão entre implementação própria e @modelcontextprotocol/sdk registrada no README do pdi-time",
-        "Autenticação por Authorization: Bearer <token>; sem token ou token errado devolve 401 com mensagem clara",
-        "Rate limit em memória de 60 chamadas por minuto por token, resposta 429",
-        "Cartão 'Usar dentro do seu assistente' em /setup: botão 'Gerar acesso' cria o token (crypto 32 bytes) via store, exibe inteiro uma vez e mascarado depois, com 'Copiar' e 'Revogar'",
-        "lib/ferramentas.ts do pdi-time declara FERRAMENTAS: { nome, descricao, schema, executar }[] com gerar_pdi reutilizando a lógica de /api/pdi",
-        "curl: tools/list e tools/call funcionam com token e falham sem",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill: cartão do setup"
-      ],
-      "priority": 46,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-047",
-      "title": "Passo a passo de conexão do MCP e teste com o Inspector (pdi-time)",
-      "description": "As a executivo, I want um passo a passo de três passos para conectar o app ao Claude ou ao ChatGPT so that eu não precise de ajuda técnica.",
-      "acceptanceCriteria": [
-        "Cartão do setup mostra a URL <baseUrl>/mcp e dois passo a passo de três passos (Claude Desktop e ChatGPT) com botão 'Copiar configuração' que copia o JSON pronto com URL e token",
-        "README do pdi-time documenta o teste com o MCP Inspector (comando e resultado esperado)",
-        "PADRAO.md ganha a seção 'MCP' explicando lib/ferramentas.ts",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 47,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-048",
-      "title": "MCP em agente-kanban, entrevista-ia e posts-sociais",
-      "description": "As a executivo, I want esses três apps disponíveis no meu assistente so that a suíte trabalhe comigo de onde eu estiver.",
-      "acceptanceCriteria": [
-        "lib/mcp.ts, app/mcp/route.ts e o cartão do setup copiados do pdi-time para os três apps",
-        "lib/ferramentas.ts: agente-kanban operar_quadro(comando, confirmar) devolvendo o plano quando confirmar é false; entrevista-ia obter_scorecard(id_entrevista); posts-sociais escrever_posts(briefing, redes?)",
-        "scripts/verificar-padrao.sh inclui lib/mcp.ts e app/mcp/** e passa",
-        "curl tools/list responde nos três apps",
-        "Typecheck passes"
-      ],
-      "priority": 48,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-049",
-      "title": "MCP em prospeccao-ia, whatsapp-atendente e contratos-ia",
-      "description": "As a executivo, I want esses três apps disponíveis no meu assistente so that a suíte trabalhe comigo de onde eu estiver.",
-      "acceptanceCriteria": [
-        "lib/mcp.ts, app/mcp/route.ts e o cartão do setup copiados do pdi-time para os três apps",
-        "lib/ferramentas.ts: prospeccao-ia buscar_leads(perfil) e escrever_abordagem(lead, proposta); whatsapp-atendente responder_pergunta(pergunta); contratos-ia analisar_contrato(texto, papel, preocupacao?)",
-        "scripts/verificar-padrao.sh passa",
-        "curl tools/list responde nos três apps",
-        "Typecheck passes"
-      ],
-      "priority": 49,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-050",
-      "title": "MCP em reunioes-ia, financas-ia e voz-do-cliente",
-      "description": "As a executivo, I want esses três apps disponíveis no meu assistente so that a suíte trabalhe comigo de onde eu estiver.",
-      "acceptanceCriteria": [
-        "lib/mcp.ts, app/mcp/route.ts e o cartão do setup copiados do pdi-time para os três apps",
-        "lib/ferramentas.ts: reunioes-ia gerar_ata(transcricao, titulo?, participantes?); financas-ia ler_planilha(csv, colunas?) e perguntar(id_leitura, pergunta); voz-do-cliente analisar_comentarios(texto, contexto?)",
-        "scripts/verificar-padrao.sh passa nos 10 apps",
-        "curl tools/list responde nos três apps",
-        "Typecheck passes"
-      ],
-      "priority": 50,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-051",
-      "title": "lib/formularios.ts e página pública /f/[token] (pdi-time)",
-      "description": "As a executivo, I want que o app colete dados de outras pessoas por um link so that eu não precise repassar formulários por e-mail.",
-      "acceptanceCriteria": [
-        "Novo lib/formularios.ts usando store: tabelas formularios(token, tipo, campos, parametros, expiraEm, limite, criadoEm) e respostas(id, token, dados, resultadoId, criadoEm); funções criar, obter, responder, listarRespostas, apagar",
-        "Nova rota app/f/[token]/page.tsx: tela pública mínima (marca do app, título, campos declarados, botão 'Enviar'), sem Topbar completa; página 'Obrigado, sua resposta foi enviada'; 410 amigável quando expirado ou no limite",
-        "Honeypot contra bots e limite de 4.000 caracteres por campo; Cache-Control: no-store",
-        "Rota POST /api/f/[token] grava a resposta e chama um callback declarado pelo app (tipo → função) que pode gerar um resultado e devolver resultadoId",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill: formulário público em celular e desktop"
-      ],
-      "priority": 51,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-052",
-      "title": "PDI do Time: link de autoavaliação para o colaborador",
-      "description": "As a líder, I want mandar um link de autoavaliação para a pessoa do time so that eu chegue ao 1:1 com o PDI pré-montado.",
-      "acceptanceCriteria": [
-        "Botão 'Pedir autoavaliação por link' no painel abre diálogo com o link para copiar e expiração (7, 30 ou 90 dias; padrão 30)",
-        "Formulário do colaborador pede nome, cargo, tempo na função, entregas recentes e aspirações",
-        "Ao receber a resposta, o app gera o PDI com os objetivos da empresa informados pelo líder no momento de criar o link e salva no histórico",
-        "Lista 'Autoavaliações recebidas' em MaisDetalhes com nome, data e 'Abrir PDI'",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 52,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-053",
-      "title": "lib/notificacoes.ts e cartão Notificações no setup (pdi-time)",
-      "description": "As a executivo, I want escolher por onde o app me avisa so that as rotinas cheguem onde eu leio.",
-      "acceptanceCriteria": [
-        "Novo lib/notificacoes.ts com enviar({ canal, destino, titulo, texto, link }) para os canais e-mail (Resend por chave; SMTP por host, porta, usuário e senha usando nodemailer só se configurado) e Slack (URL de webhook de entrada)",
-        "Integração NOTIFICACOES em lib/setup-comum.ts (campos: canal select, destino, chave Resend ou dados SMTP, URL do Slack) aparece em /setup como cartão 'Notificações' com botão 'Enviar mensagem de teste'",
-        "POST /api/setup/testar para NOTIFICACOES envia a mensagem de teste e devolve { ok, mensagem }",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill: cartão do setup"
-      ],
-      "priority": 53,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-054",
-      "title": "lib/rotinas.ts, executor, gatilho externo e cartão Rotinas (pdi-time)",
-      "description": "As a executivo, I want que o app trabalhe sozinho num horário so that eu receba o resultado sem abrir a tela.",
-      "acceptanceCriteria": [
-        "Novo lib/rotinas.ts usando store: tabela rotinas(id, tipo, frequencia 'diaria'|'semanal'|'mensal'|'unica', hora, diaSemana, diaMes, dataUnica, canal, destino, parametros, ativa, ultimaExecucao, criadoEm); funções criar, listar, pausar, apagar, executarVencidas",
-        "Executor em setInterval de 60 s iniciado uma vez por processo que chama executarVencidas; cada tipo de rotina é registrado pelo app em lib/rotinas-do-app.ts (tipo → função que gera o resultado e devolve { titulo, texto, resultadoId })",
-        "POST /api/rotinas/executar com Authorization: Bearer <token de rotinas> executa as vencidas (gatilho externo); POST /api/rotinas/[id]/executar-agora executa uma",
-        "Cartão 'Rotinas' em /setup lista as rotinas com frequência, canal, última execução e botões 'Executar agora', 'Pausar', 'Apagar'; mostra o aviso 'No plano gratuito o app hiberna e a rotina só roda quando alguém acessa. Para rodar sozinho, use um plano pago ou chame esta URL de um agendador externo' com URL e token para copiar",
-        "Toda entrega via lib/notificacoes.ts inclui título, resumo e o link /r/<id>",
-        "curl do gatilho externo funciona com token e falha sem",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill: cartão do setup"
-      ],
-      "priority": 54,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-055",
-      "title": "Replicar formulários, notificações e rotinas nos outros 9 apps",
-      "description": "As a pessoa que mantém a suíte, I want as bibliotecas de capacidades em todos os apps so that as próximas histórias só precisem do botão de cada app.",
-      "acceptanceCriteria": [
-        "lib/formularios.ts, lib/notificacoes.ts, lib/rotinas.ts, app/f/**, app/api/f/**, app/api/rotinas/**, lib/setup-comum.ts e components/setup.tsx copiados do pdi-time para os 9 apps; lib/rotinas-do-app.ts vazio em cada app",
-        "scripts/verificar-padrao.sh inclui os novos arquivos compartilhados e passa nos 10",
-        "npm run build passa nos 10",
-        "Typecheck passes"
-      ],
-      "priority": 55,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-056",
-      "title": "Agente de Kanban: resumo matinal do quadro",
-      "description": "As a gestor, I want receber toda manhã um resumo do quadro so that eu saiba onde intervir antes da primeira reunião.",
-      "acceptanceCriteria": [
-        "Botão 'Receber um resumo do quadro toda manhã' no painel cria a rotina diária (hora padrão 8h) usando o canal do cartão Notificações; se Notificações não estiver configurado, leva ao cartão",
-        "lib/rotinas-do-app.ts registra 'resumo-quadro': atrasados, parados há mais de 5 dias e responsáveis com mais de 5 cartões, com texto em português e link do resultado salvo",
-        "Em demo a rotina usa o quadro de exemplo",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill: criar a rotina e usar 'Executar agora'"
-      ],
-      "priority": 56,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-057",
-      "title": "Agente de Kanban: caixa de entrada pública",
-      "description": "As a gestor, I want que qualquer pessoa da empresa peça algo por um link so that o pedido vire cartão na coluna certa sem passar por mim.",
-      "acceptanceCriteria": [
-        "Botão 'Criar caixa de entrada' no painel gera um formulário público (quem pede, o que precisa, urgência, prazo desejado) com link para copiar",
-        "Cada resposta passa pelo agente, que cria o cartão com título, descrição, etiqueta de urgência e coluna escolhida; em demo, no quadro de exemplo do criador",
-        "Lista 'Pedidos recebidos' em MaisDetalhes com o cartão criado",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 57,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-058",
-      "title": "Entrevistadora IA: link único por candidato",
-      "description": "As a gestor, I want mandar um link para cada candidato so that a triagem aconteça sem mim.",
-      "acceptanceCriteria": [
-        "'Criar link para candidatos' gera um formulário público cuja tela é a sala de entrevista (componente Sala reutilizado) com vaga e requisitos nos parametros",
-        "Cada entrevista concluída gera o scorecard no histórico ligado à vaga (campo tipo 'scorecard' e parametros.vaga)",
-        "Scorecards de candidatos salvos com expiraEm de 90 dias",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill: sala pública em celular"
-      ],
-      "priority": 58,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-059",
-      "title": "Entrevistadora IA: ranking dos candidatos da vaga",
-      "description": "As a gestor, I want comparar os scorecards da mesma vaga so that eu escolha quem avança.",
-      "acceptanceCriteria": [
-        "Bloco 'Candidatos desta vaga' no painel lista os scorecards com nota, recomendação e 'Abrir'",
-        "Botão 'Comparar' gera um ranking (tabela ordenada por nota com pontos fortes e de atenção em uma linha) salvo no histórico e com Entregar",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 59,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-060",
-      "title": "Atendente no WhatsApp: relatório diário do atendimento",
-      "description": "As a executivo de atendimento, I want saber todo dia o que o atendente não soube responder so that a base melhore sem eu ler as conversas.",
-      "acceptanceCriteria": [
-        "Botão 'Receber o relatório diário' no painel cria a rotina diária",
-        "lib/rotinas-do-app.ts registra 'relatorio-atendimento': perguntas mais frequentes, não respondidas ou transferidas, e para cada uma a resposta sugerida pela IA com links 'Aprovar' e 'Corrigir' que abrem o app posicionado na conversa",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill: criar a rotina e usar 'Executar agora'"
-      ],
-      "priority": 60,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-061",
-      "title": "Atendente no WhatsApp: alimentar a base por formulário",
-      "description": "As a executivo de atendimento, I want que a equipe alimente a base por formulário so that ninguém precise editar texto corrido.",
-      "acceptanceCriteria": [
-        "'Alimentar a base por formulário' gera um formulário interno (pergunta, resposta, categoria) com link para copiar",
-        "Respostas aparecem em 'Sugestões da equipe' no painel com 'Aprovar' (entra na base) e 'Descartar'",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 61,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-062",
-      "title": "Leitura de Contratos: política de contratos da empresa",
-      "description": "As a executivo, I want cadastrar uma vez o que a empresa aceita so that cada análise diga o que foge da nossa política.",
-      "acceptanceCriteria": [
-        "Cartão 'Política de contratos' em /setup com campos: multa máxima aceitável (%), prazo máximo (meses), aviso prévio mínimo (dias), foro preferido, exigências obrigatórias (SLA com penalidade, proteção de dados, propriedade progressiva do código) e texto livre",
-        "A análise recebe a política no prompt; nova seção 'Fora da política' lista cada cláusula que viola um item, citando o item; lib/demo.ts traz um exemplo",
-        "Sem política cadastrada a seção mostra em uma linha 'Cadastrar a política da empresa' com link para o setup",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 62,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-063",
-      "title": "Cliente MCP compartilhado e cartão Quadro de tarefas (MCP)",
-      "description": "As a executivo, I want conectar um servidor MCP de tarefas ao app so that as ações possam virar cartões onde meu time trabalha.",
-      "acceptanceCriteria": [
-        "Novo lib/mcp-cliente.ts (criado em pdi-time e copiado sem alterar para os 10 apps): conectar(url, token), listarFerramentas(), chamar(nome, args) via Streamable HTTP",
-        "Integração compartilhada MCP_TAREFAS em lib/setup-comum.ts (URL e token) com testar(config) que lista as ferramentas; aparece em /setup como cartão 'Quadro de tarefas (MCP)' nos apps que a declararem em lib/integracoes.ts (reunioes-ia e agente-kanban)",
-        "scripts/verificar-padrao.sh inclui lib/mcp-cliente.ts e passa nos 10",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill: cartão em reunioes-ia com 'Testar conexão' apontando para o /mcp de agente-kanban local"
-      ],
-      "priority": 63,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-064",
-      "title": "Ata Executiva: enviar ações para o quadro de tarefas",
-      "description": "As a executivo, I want que as ações da ata virem tarefas so that a reunião não termine no papel.",
-      "acceptanceCriteria": [
-        "Botão 'Enviar ações para o quadro' no resultado lista as ações e pede 'Confirmar'; após confirmar, chama operar_quadro (ou a ferramenta de criar tarefa do MCP configurado) uma vez por ação",
-        "Mostra o que foi criado (título e link quando o MCP devolver) e marca as ações com chip 'No quadro'",
-        "Sem MCP configurado o botão leva ao cartão 'Quadro de tarefas (MCP)'",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 64,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-065",
-      "title": "Ata Executiva: confirmação dos responsáveis por link",
-      "description": "As a executivo, I want que cada responsável confirme ou ajuste sua ação so that o status da ata reflita a realidade.",
-      "acceptanceCriteria": [
-        "'Pedir confirmação aos responsáveis' gera um formulário público por ação (confirmar, ajustar prazo, comentar) e mostra os links para copiar",
-        "Respostas atualizam o status e o prazo da ação na ata salva e aparecem como chip 'Confirmada' ou 'Prazo ajustado'",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 65,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-066",
-      "title": "Analista Financeiro: resumo mensal por rotina",
-      "description": "As a CFO, I want receber todo mês o resumo em cinco linhas so that eu não precise abrir a planilha.",
-      "acceptanceCriteria": [
-        "Após uma leitura, botão 'Receber o resumo todo mês' cria a rotina mensal (dia 1, 8h)",
-        "'Enviar a planilha do mês por link' gera um formulário público de upload de CSV; o arquivo é processado e descartado, só agregados vão para o histórico",
-        "lib/rotinas-do-app.ts registra 'resumo-mensal': cinco linhas com total, variação, maior variação por categoria, maior lançamento e alertas, a partir do último CSV recebido",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill: criar a rotina e usar 'Executar agora'"
-      ],
-      "priority": 66,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-067",
-      "title": "Analista Financeiro: orçamento por categoria",
-      "description": "As a CFO, I want cadastrar o orçamento por categoria so that eu seja avisado quando uma estourar.",
-      "acceptanceCriteria": [
-        "Cartão 'Orçamento por categoria' em /setup (linhas categoria e valor mensal, adicionar e remover)",
-        "Leituras marcam categorias acima do orçamento com chip 'Acima do orçamento' e o gráfico de categorias mostra a linha do orçamento por barra",
-        "O resumo mensal (US-066) lista os estouros",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 67,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-068",
-      "title": "Voz do Cliente: pesquisa NPS como link público",
-      "description": "As a executivo de CX, I want que o app colete as respostas dos clientes so that a análise não dependa de exportar comentários de outro sistema.",
-      "acceptanceCriteria": [
-        "'Criar pesquisa' gera um formulário público com nota de 0 a 10, comentário livre e até dois campos opcionais (segmento, produto); tela pública com a marca do app e tema claro fixo",
-        "Botão 'Analisar respostas recebidas' roda a análise sobre as respostas do período escolhido e mostra o total coletado na linha Origem",
-        "Lista 'Pesquisas ativas' em MaisDetalhes com link, número de respostas e 'Encerrar'",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill: pesquisa pública em celular"
-      ],
-      "priority": 68,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-069",
-      "title": "Prospecção com IA: leads novos toda semana",
-      "description": "As a executivo de vendas, I want receber toda semana novos leads com as abordagens prontas so that a prospecção ande sem eu abrir o app.",
-      "acceptanceCriteria": [
-        "Botão 'Receber leads novos toda semana' no resultado cria a rotina semanal com o perfil buscado e a quantidade (10, 20 ou 30)",
-        "lib/rotinas-do-app.ts registra 'leads-semanais': busca, exclui leads já entregues (tabela leads_vistos por perfil), escreve as abordagens, salva o resultado e entrega a lista com link",
-        "Em demo a rotina gera leads fictícios rotulados como tal",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill: criar a rotina e usar 'Executar agora'"
-      ],
-      "priority": 69,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-070",
-      "title": "PDI do Time: lembretes de check-in em 30, 60 e 90 dias",
-      "description": "As a líder, I want ser lembrado nos marcos so that o PDI não morra depois da conversa.",
-      "acceptanceCriteria": [
-        "Botão 'Lembrar dos check-ins' no resultado cria três rotinas do tipo unica nas datas dos marcos (a partir da data da conversa ou de hoje)",
-        "Cada lembrete traz as ações daquele marco e o link de um formulário 'O que avançou?' (texto livre e status por ação)",
-        "Respostas anexam ao PDI salvo uma seção 'Acompanhamento' com data e texto, visível em /r/<id>",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 70,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-071",
-      "title": "Posts em Minutos: temas do trimestre e rascunhos semanais com aprovação",
-      "description": "As a executivo de marketing, I want rascunhos toda semana a partir dos meus temas e aprovar pelo celular so that o conteúdo saia sem reunião.",
-      "acceptanceCriteria": [
-        "Cartão 'Temas do trimestre' em /setup (lista de temas e tom de voz)",
-        "Botão 'Receber rascunhos toda segunda' cria a rotina semanal; lib/rotinas-do-app.ts registra 'rascunhos-semanais': gera um post por rede para o próximo tema e entrega com link de formulário de aprovação (aprovar, pedir ajuste com comentário, descartar)",
-        "Posts aprovados aparecem em 'Aprovados' no painel com 'Copiar' e 'Agendar' (.ics)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill: formulário de aprovação em celular"
-      ],
-      "priority": 71,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-072",
-      "title": "Agente de Kanban: operar qualquer quadro via MCP",
-      "description": "As a gestor que usa Jira, Notion ou monday, I want conectar meu quadro so that o agente opere onde meu time já trabalha.",
-      "acceptanceCriteria": [
-        "Quando o cartão 'Quadro de tarefas (MCP)' está configurado, o agente mapeia criar, mover, comentar, arquivar e listar para as ferramentas do MCP conectado por nome e descrição; o mapeamento é exibido e editável em 'Opções avançadas' do cartão",
-        "Trello continua como caminho padrão quando nenhum MCP está configurado",
-        "Confirmação e 'Desfazer' funcionam quando o MCP oferece a operação inversa; caso contrário 'Desfazer' é omitido com aviso",
-        "Testado com o /mcp de outra instância do próprio agente-kanban como alvo",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 72,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-073",
-      "title": "Prospecção com IA: enviar leads para o CRM via MCP",
-      "description": "As a executivo de vendas, I want mandar leads e abordagens para o CRM em um clique so that o time trabalhe de lá.",
-      "acceptanceCriteria": [
-        "Integração compartilhada MCP_CRM em lib/setup-comum.ts (URL e token; HubSpot como exemplo no passo a passo), copiada para os 10 apps, declarada em prospeccao-ia e voz-do-cliente",
-        "Botão 'Enviar para o CRM' no lead e 'Enviar selecionados' na lista chamam as ferramentas de criar contato e negócio após confirmação e marcam o lead com chip 'No CRM'",
-        "scripts/verificar-padrao.sh passa",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 73,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-074",
-      "title": "Atendente no WhatsApp: consultar sistemas da empresa via MCP",
-      "description": "As a executivo de atendimento, I want que o atendente consulte pedidos e estoque so that responda com dados reais.",
-      "acceptanceCriteria": [
-        "Integração compartilhada MCP_EMPRESA em lib/setup-comum.ts ('Sistemas da empresa (MCP)': URL e token), copiada para os 10 apps, declarada em whatsapp-atendente",
-        "O atendente usa tool use com as ferramentas do MCP conectado, limitado a nomes que começam com listar, obter, consultar ou buscar, salvo liberação em 'Opções avançadas'",
-        "Resposta que usou uma ferramenta mostra 'Consultado em {nome da ferramenta}' na bolha do simulador e no relatório diário",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 74,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-075",
-      "title": "Leitura de Contratos: prazos extraídos e alertas 30 dias antes",
-      "description": "As a executivo, I want ser avisado 30 dias antes de renovação, reajuste ou rescisão so that eu negocie a tempo.",
-      "acceptanceCriteria": [
-        "Análise extrai prazos[] { tipo, data, descricao } (prompt e demo); nova seção 'Prazos' no resultado com 'Adicionar ao calendário' (.ics) por item",
-        "Botão 'Avisar 30 dias antes' (só com resultado salvo com opt-in) cria rotinas unica por prazo; a entrega cita contrato, cláusula e ação sugerida",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 75,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-076",
-      "title": "Ata Executiva: cobrar responsáveis na véspera do prazo",
-      "description": "As a executivo, I want que os responsáveis sejam lembrados na véspera so that eu não precise cobrar.",
-      "acceptanceCriteria": [
-        "Campo 'E-mails dos participantes' em MaisDetalhes do formulário da ata",
-        "Botão 'Cobrar na véspera' no resultado cria uma rotina unica por ação um dia antes do prazo para o e-mail do responsável, com a ação, o prazo e o link de confirmação (US-065)",
-        "Ações confirmadas como concluídas cancelam a cobrança",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 76,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-077",
-      "title": "Analista Financeiro: ler planilha ou ERP via MCP",
-      "description": "As a CFO, I want que o app leia a planilha viva ou o ERP so that ninguém exporte CSV todo mês.",
-      "acceptanceCriteria": [
-        "Integração compartilhada MCP_DADOS em lib/setup-comum.ts ('Fonte de dados (MCP)': URL, token, nome da ferramenta de leitura e argumentos em 'Opções avançadas'), copiada para os 10 apps, declarada em financas-ia",
-        "Botão 'Ler da fonte conectada' no painel chama a ferramenta e trata o retorno como CSV",
-        "A rotina mensal (US-066) usa a fonte quando configurada; só agregados vão para a IA e para o histórico",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 77,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-078",
-      "title": "Voz do Cliente: análise semanal com alerta de sentimento",
-      "description": "As a executivo de CX, I want um resumo semanal das respostas novas e um alerta quando o negativo crescer so that eu reaja antes do churn.",
-      "acceptanceCriteria": [
-        "Botão 'Receber a análise toda semana' no painel de uma pesquisa ativa cria a rotina semanal; lib/rotinas-do-app.ts registra 'analise-semanal': analisa os últimos 7 dias, compara sentimento e NPS com a semana anterior e entrega o resumo com link",
-        "Rotina diária 'alerta-sentimento' criada junto: avisa quando o percentual negativo sobe mais de N pontos em 7 dias (N configurável no cartão Rotinas, padrão 10)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 78,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-079",
-      "title": "Voz do Cliente: importar tickets de atendimento via MCP",
-      "description": "As a executivo de CX, I want analisar os tickets do suporte so that a voz do cliente inclua quem reclamou.",
-      "acceptanceCriteria": [
-        "voz-do-cliente declara MCP_CRM (US-073) com HubSpot, Zendesk e Intercom como exemplos no passo a passo",
-        "Botão 'Importar tickets do período' chama a ferramenta de listagem, converte para comentários e roda a análise",
-        "Origem de cada comentário (pesquisa, arquivo, ticket) aparece na lista de comentários por tema",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 79,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-080",
-      "title": "Catálogo: campos novos e cartões com prévia, demonstração e capacidades",
-      "description": "As a executivo visitando o catálogo, I want ver o app antes de publicar so that eu escolha com segurança.",
-      "acceptanceCriteria": [
-        "catalogo.json ganha por app captura (caminho relativo), demo (URL) e capacidades: array de 'artefato' | 'mcp' | 'formulario' | 'rotina'; scripts/gerar-deploy.mjs valida os campos",
-        "site/index.html: cartão mostra a prévia no topo (img com alt descritivo, placeholder neutro quando a imagem não existe), botão secundário 'Ver demonstração' quando demo existe e bloco 'O que ele faz sozinho' com ícones SVG e rótulos das capacidades",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill: site/index.html servido localmente em desktop e celular, modo claro e escuro"
-      ],
-      "priority": 80,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-081",
-      "title": "Workflow: capturas automáticas dos apps para o catálogo",
-      "description": "As a pessoa que mantém a suíte, I want que a publicação gere a prévia de cada app so that o catálogo mostre a tela real sem trabalho manual.",
-      "acceptanceCriteria": [
-        ".github/workflows/publicar.yml ganha um passo que, após construir a imagem, sobe o contêiner, espera /api/health, captura /?exemplo=1&captura=1 em 1200x800 com Chrome headless e grava publico/main/capturas/<app>.png",
-        "Falha na captura vira aviso no resumo do job e não bloqueia o deploy",
-        "scripts/gerar-deploy.mjs copia as capturas para a pasta publicada e preenche captura no catálogo gerado",
-        "Typecheck passes"
-      ],
-      "priority": 81,
-      "passes": true,
+      "passes": false,
       "notes": ""
     }
   ]

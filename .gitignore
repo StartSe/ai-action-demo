@@ -18,3 +18,4 @@ automl-pocket/
 # Estado local do Ralph
 scripts/ralph/.last-branch
 scripts/ralph/archive/
+/.last-branch
