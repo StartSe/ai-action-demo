@@ -118,7 +118,7 @@
         "Testar via curl POST /api/setup/testar para EXA com chave falsa e a função buscar com uma consulta real sem chave (só fontes públicas) em um script descartável"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
