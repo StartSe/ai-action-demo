@@ -134,7 +134,7 @@
         "Testar com chave real do OpenRouter uma rodada de dois temas e conferir no navegador que cada sinal tem fontes clicáveis (dev-browser skill)"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

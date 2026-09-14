@@ -19,7 +19,7 @@ const EXEMPLO: Formulario = {
 
 const VAZIO: Formulario = { temasTexto: "", periodoDias: 30, setor: "" };
 
-const ETAPAS_CARREGANDO = ["Juntando o que saiu sobre os temas...", "Agrupando em sinais...", "Montando as conexões..."];
+const ETAPAS_CARREGANDO = ["Buscando notícias e comunidades...", "Agrupando sinais...", "Montando o grafo..."];
 
 const TENDENCIA_LABEL: Record<Sinal["tendencia"], string> = { subindo: "↑ Subindo", estavel: "→ Estável", caindo: "↓ Perdendo força" };
 

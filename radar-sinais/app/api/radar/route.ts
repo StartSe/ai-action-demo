@@ -1,5 +1,5 @@
 import { apagarTodos, listar, salvar } from "@/lib/historico";
-import { montarRadar, PERIODOS_VALIDOS } from "@/lib/radar";
+import { ErroBusca, montarRadar, PERIODOS_VALIDOS } from "@/lib/radar";
 import type { DadosRadar } from "@/lib/types";
 
 export async function POST(req: Request) {
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error(err);
     const mensagem = err instanceof Error ? err.message : "Não foi possível montar o radar agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return Response.json({ error: mensagem }, { status: err instanceof ErroBusca ? 502 : 500 });
   }
 }
 
