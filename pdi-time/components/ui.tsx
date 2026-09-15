@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import type { Meta } from "@/lib/ai";
+import type { CodigoErroIA, Meta } from "@/lib/ai";
 import { numero, data } from "@/lib/formato";
 import { NAVEGACAO, type ItemNavegacao } from "@/lib/navegacao";
 import { ilustracaoDoSegmento, type Segmento } from "@/lib/ilustracao";
+import { MODELOS_GRATUITOS } from "@/lib/modelos";
 
 export type UsuarioTopbar = { nome: string; email: string };
 export type NotificacaoTopbar = { id: string; texto: string; url?: string };
@@ -291,16 +292,61 @@ export function Loading({ texto, etapas }: { texto?: string; etapas?: string[] }
   );
 }
 
-/** Rola até si mesma no celular ao aparecer (mesmo critério de useScrollToResult); onTentarNovamente exibe o botão "Tentar de novo". */
-export function ErrorBox({ mensagem, onTentarNovamente }: { mensagem: string; onTentarNovamente?: () => void }) {
+function tituloErro(codigo?: CodigoErroIA): string {
+  if (codigo === "sem_credito") return "A IA está sem crédito";
+  if (codigo === "limite_diario") return "Limite diário atingido";
+  if (codigo === "modelo_indisponivel") return "Modelo indisponível";
+  if (codigo === "chave_invalida") return "Entre de novo";
+  return "Não deu certo";
+}
+
+/** Rola até si mesma no celular ao aparecer (mesmo critério de useScrollToResult); onTentarNovamente exibe o botão "Tentar de novo". `codigo`/`acao` vêm de ErroIA (lib/ai.ts, ver respostaErro). */
+export function ErrorBox({ mensagem, codigo, acao, onTentarNovamente }: { mensagem: string; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string }; onTentarNovamente?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [trocandoModelo, setTrocandoModelo] = useState(false);
   useEffect(() => {
     if (podeRolarAutomaticamente()) ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
+
+  async function usarModeloGratuito() {
+    setTrocandoModelo(true);
+    try {
+      const status: { model?: string } = await fetch("/api/status").then((r) => r.json());
+      const gratuito = MODELOS_GRATUITOS.find((m) => m.valor.endsWith(":free") && m.valor !== status.model);
+      if (gratuito) {
+        await fetch("/api/setup", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ valores: { OPENROUTER_MODEL: gratuito.valor } }) });
+      }
+      onTentarNovamente?.();
+    } finally {
+      setTrocandoModelo(false);
+    }
+  }
+
+  const ofereceModeloGratuito = codigo === "sem_credito" || codigo === "limite_diario";
+
   return (
     <div ref={ref} className="bg-[#fde8e6] border border-[#f5c2bd] text-danger px-4 py-3.5 rounded-[10px]">
-      <strong>Não deu certo.</strong> {mensagem}
-      {onTentarNovamente && <div className="mt-3"><button type="button" className="btn-ghost" onClick={onTentarNovamente}>Tentar de novo</button></div>}
+      <strong>{tituloErro(codigo)}.</strong> {mensagem}
+      {(onTentarNovamente || acao || ofereceModeloGratuito) && (
+        <div className="mt-3 flex gap-2.5 flex-wrap">
+          {ofereceModeloGratuito && (
+            <button type="button" className="btn-primary !w-auto" onClick={usarModeloGratuito} disabled={trocandoModelo}>
+              {trocandoModelo ? "Trocando..." : "Usar um modelo gratuito"}
+            </button>
+          )}
+          {acao && (
+            <a
+              className="btn-primary !w-auto"
+              href={acao.url}
+              target={acao.url.startsWith("http") ? "_blank" : undefined}
+              rel={acao.url.startsWith("http") ? "noopener noreferrer" : undefined}
+            >
+              {acao.rotulo}
+            </a>
+          )}
+          {onTentarNovamente && <button type="button" className="btn-ghost" onClick={onTentarNovamente}>Tentar de novo</button>}
+        </div>
+      )}
     </div>
   );
 }

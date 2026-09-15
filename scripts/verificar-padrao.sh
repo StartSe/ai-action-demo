@@ -39,6 +39,7 @@ ARQUIVOS=(
   "lib/conta-comum.ts"
   "lib/navegacao.ts"
   "lib/ilustracao.ts"
+  "lib/modelos.ts"
   "lib/setup-comum.ts"
   "lib/historico.ts"
   "lib/mcp.ts"

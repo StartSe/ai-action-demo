@@ -4,8 +4,10 @@ import { getConfig, mascarar, origemConfig } from "./store";
 import { enviar, type Canal } from "./notificacoes";
 import { conectar, listarFerramentas, type FerramentaMCP } from "./mcp-cliente";
 import { conexaoAutorizada } from "./mcp-oauth";
+import { MODELOS_GRATUITOS, MODELOS_VISAO, type Opcao } from "./modelos";
 
-export type Opcao = { valor: string; rotulo: string };
+export type { Opcao };
+export { MODELOS_GRATUITOS, MODELOS_VISAO };
 
 export type Campo = {
   chave: string;
@@ -90,21 +92,6 @@ export function baseUrl(req: Request): string {
 }
 
 /** Integração de IA usada por todos os apps. */
-export const MODELOS_GRATUITOS: Opcao[] = [
-  { valor: "nvidia/nemotron-3-super-120b-a12b:free", rotulo: "Nemotron 3 Super 120B (gratuito, padrão)" },
-  { valor: "google/gemma-4-31b-it:free", rotulo: "Gemma 4 31B (gratuito)" },
-  { valor: "nvidia/nemotron-3-ultra-550b-a55b:free", rotulo: "Nemotron 3 Ultra 550B (gratuito)" },
-  { valor: "anthropic/claude-sonnet-4.5", rotulo: "Claude Sonnet 4.5 (pago, mais qualidade)" },
-  { valor: "openai/gpt-5-mini", rotulo: "GPT-5 mini (pago)" },
-];
-
-/** Modelos com suporte a imagem no OpenRouter. Verificado em 2026-09-14 em openrouter.ai/models (filtro "image" em input modalities); primeiro gratuito. */
-export const MODELOS_VISAO: Opcao[] = [
-  { valor: "inclusionai/ling-3.0-flash-vl:free", rotulo: "Ling 3.0 Flash VL (gratuito, padrão)" },
-  { valor: "nex-agi/nex-n2.5-pro:free", rotulo: "Nex N2.5 Pro (gratuito)" },
-  { valor: "anthropic/claude-sonnet-4.5", rotulo: "Claude Sonnet 4.5 (pago, mais qualidade)" },
-];
-
 export const OPENROUTER: Integracao = {
   id: "openrouter",
   titulo: "Inteligência artificial",

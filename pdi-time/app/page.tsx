@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Chip, DataTable, Empty, Entregar, ErrorBox, Field, Item, Loading, MaisDetalhes, OptInGuardar, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
 import { DialogoAutoavaliacao } from "@/components/DialogoAutoavaliacao";
 import { LembrarCheckins } from "@/components/LembrarCheckins";
 import { SENSIVEL } from "@/lib/sensivel";
-import type { Meta } from "@/lib/ai";
+import type { CodigoErroIA, Meta } from "@/lib/ai";
 import type { DadosPDI, PDI } from "@/lib/types";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
@@ -40,10 +41,15 @@ function IlustracaoPlano() {
   );
 }
 
-type Estado = { fase: "vazio" } | { fase: "carregando" } | { fase: "erro"; mensagem: string; dados: DadosPDI } | { fase: "pronto"; pdi: PDI; dados: DadosPDI; meta: Meta; id?: string };
+type Estado =
+  | { fase: "vazio" }
+  | { fase: "carregando" }
+  | { fase: "erro"; mensagem: string; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string }; dados: DadosPDI }
+  | { fase: "pronto"; pdi: PDI; dados: DadosPDI; meta: Meta; id?: string };
 
 export default function Page() {
   const { status, erro } = useStatus();
+  const router = useRouter();
   const [dados, setDados] = useState<DadosPDI>(VAZIO);
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
   const [guardar, setGuardar] = useState(false);
@@ -75,16 +81,24 @@ export default function Page() {
 
   const set = (campo: keyof DadosPDI) => (e: { target: { value: string } }) => setDados((d) => ({ ...d, [campo]: e.target.value }));
 
-  async function gerar(d: DadosPDI, guardarResultado: boolean) {
+  async function gerar(d: DadosPDI, guardarResultado: boolean, erroForcado?: string) {
     setEstado({ fase: "carregando" });
     try {
-      const r = await fetch("/api/pdi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...d, guardar: guardarResultado }) });
+      const url = erroForcado ? `/api/pdi?erro=${erroForcado}` : "/api/pdi";
+      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...d, guardar: guardarResultado }) });
       const resposta = await r.json();
-      if (!r.ok) throw new Error(resposta.error || "Falha ao gerar o PDI.");
+      if (!r.ok) {
+        if (r.status === 401 && resposta.codigo === "sem_sessao") {
+          router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
+          return;
+        }
+        throw { mensagem: resposta.error || "Falha ao gerar o PDI.", codigo: resposta.codigo, acao: resposta.acao };
+      }
       setEstado({ fase: "pronto", pdi: resposta.pdi, dados: d, meta: resposta.meta, id: resposta.id });
       fetch("/api/pdi").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
     } catch (e) {
-      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado.", dados: d });
+      const info = e as { mensagem?: string; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string } };
+      setEstado({ fase: "erro", mensagem: info.mensagem || "Erro inesperado.", codigo: info.codigo, acao: info.acao, dados: d });
     }
   }
 
@@ -98,13 +112,18 @@ export default function Page() {
     document.getElementById("nome")?.focus();
   }
 
-  // Atalho para demonstrações: /?exemplo=1 preenche e envia o formulário.
+  // Atalho para demonstrações: /?exemplo=1 preenche e envia o formulário; /?erro=sem_credito (só em dev) força o erro para capturar a tela.
   useEffect(() => {
     if (autoEnviado.current) return;
-    if (new URLSearchParams(location.search).get("exemplo") === "1") {
+    const params = new URLSearchParams(location.search);
+    if (params.get("exemplo") === "1") {
       autoEnviado.current = true;
       setTimeout(() => { setDados(EXEMPLO); gerar(EXEMPLO, false); }, 0);
+    } else if (process.env.NODE_ENV !== "production" && params.get("erro") === "sem_credito") {
+      autoEnviado.current = true;
+      setTimeout(() => { setDados(EXEMPLO); gerar(EXEMPLO, false, "sem_credito"); }, 0);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma única vez ao abrir a página
   }, []);
 
   const carregando = estado.fase === "carregando";
@@ -202,7 +221,7 @@ export default function Page() {
         <Stage>
           {estado.fase === "vazio" && <Empty ilustracao={<IlustracaoPlano />} titulo="O plano aparece aqui" descricao="Pontos fortes, lacunas priorizadas, três objetivos com ações em 30, 60 e 90 dias e perguntas para a conversa." acao="Preencher com um exemplo" onAcao={preencherExemplo} />}
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
-          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={() => gerar(estado.dados, guardar)} />}
+          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} codigo={estado.codigo} acao={estado.acao} onTentarNovamente={() => gerar(estado.dados, guardar)} />}
           {estado.fase === "pronto" && <Resultado pdi={estado.pdi} dados={estado.dados} meta={estado.meta} id={estado.id} />}
         </Stage>
       </Workspace>

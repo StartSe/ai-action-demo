@@ -1,4 +1,4 @@
-import { respostaErro } from "@/lib/ai";
+import { interpretarFalha, respostaErro } from "@/lib/ai";
 import { apagarTodos, listar } from "@/lib/historico";
 import { gerarPDI } from "@/lib/pdi";
 import { getConfig, setConfig } from "@/lib/store";
@@ -13,6 +13,10 @@ export async function POST(req: Request) {
   const dados: DadosPDI = { nome, cargo, tempo: tempo || "", entregas, objetivos, aspiracoes, dataConversa, preparadoPor };
   if (preparadoPor) setConfig("NOME_USUARIO", preparadoPor);
   try {
+    // Caso de demonstração local para capturar a tela do ErrorBox (só em dev, nunca em produção).
+    if (process.env.NODE_ENV !== "production" && new URL(req.url).searchParams.get("erro") === "sem_credito") {
+      throw interpretarFalha(new Response(null, { status: 402 }), "");
+    }
     const resultado = await gerarPDI(dados, { guardar });
     return Response.json(resultado);
   } catch (err) {

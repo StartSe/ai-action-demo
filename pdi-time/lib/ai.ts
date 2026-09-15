@@ -48,8 +48,8 @@ const ACAO_CONECTAR_IA = { rotulo: "Conectar a IA", url: "/setup#openrouter" };
 const ACAO_TROCAR_MODELO = { rotulo: "Trocar o modelo", url: "/setup#openrouter" };
 const ACAO_ADICIONAR_CREDITOS = { rotulo: "Adicionar créditos", url: "https://openrouter.ai/settings/credits" };
 
-/** Único ponto que traduz uma resposta HTTP não-ok do OpenRouter (ou uma falha de rede) em ErroIA. O detalhe técnico do provedor nunca chega à tela: só ao console.error. */
-function interpretarFalha(res: Response, detalheBruto: string): ErroIA {
+/** Único ponto que traduz uma resposta HTTP não-ok do OpenRouter (ou uma falha de rede) em ErroIA. O detalhe técnico do provedor nunca chega à tela: só ao console.error. Exportada só para o caso de demonstração local (?erro=<código> em dev) montar o mesmo ErroIA que uma falha real geraria. */
+export function interpretarFalha(res: Response, detalheBruto: string): ErroIA {
   console.error("Falha na chamada à IA:", res.status, detalheBruto.slice(0, 200));
 
   if (res.status === 401) {
