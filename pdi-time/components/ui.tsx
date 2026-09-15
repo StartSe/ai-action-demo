@@ -16,9 +16,19 @@ export type Status = { ai: boolean; demo: boolean; model: string; integrations?:
 export function useStatus() {
   const [status, setStatus] = useState<Status | null>(null);
   const [erro, setErro] = useState(false);
+  const router = useRouter();
   useEffect(() => {
-    fetch("/api/status").then((r) => r.json()).then(setStatus).catch(() => setErro(true));
-  }, []);
+    fetch("/api/status")
+      .then((r) => {
+        if (r.status === 401) {
+          router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
+          return null;
+        }
+        return r.json();
+      })
+      .then((d) => d && setStatus(d))
+      .catch(() => setErro(true));
+  }, [router]);
   return { status, erro };
 }
 
