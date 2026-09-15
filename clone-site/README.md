@@ -36,7 +36,7 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 ## Como a página é gerada
 1. O navegador lê a captura como data URL e envia em `POST /api/pagina` com `stack` (`html-tailwind` ou `html-css`), `instrucoes` e `marca` (`nome`, `corPrimaria`, `corSecundaria`, cores em `#RRGGBB`).
 2. `lib/gerador.ts` valida a imagem (PNG/JPG, até 5 MB), monta o prompt e chama o modelo de visão. Da resposta, recorta o trecho `<html>...</html>` (exige `<body>` aberto e fechado) e sanitiza: remove todo `<script>` que não seja o Tailwind pela CDN (no formato CSS, remove todos), `iframe`/`object`/`embed`/`base`, atributos `on*` e links `javascript:`.
-3. A página é salva no histórico (tipo `pagina`) sem a captura: só formato, instruções, marca e o tamanho da imagem. O resultado abre em `/r/<id>`.
+3. A página é salva no histórico (tipo `pagina`) sem a captura: só formato, instruções, marca e o tamanho da imagem. O resultado abre em `/r/<id>`; "Publicar link" mostra o endereço público `/s/<id>`, que serve a versão atual como HTML puro (sem indexação por buscadores, sem cache e com uma política de segurança de conteúdo que só libera Tailwind pela CDN, fontes do Google e imagens). "Mais" traz "Baixar HTML" e "Copiar código".
 
 A prévia é um `<iframe sandbox="allow-scripts" srcDoc=...>`: o HTML gerado roda numa origem opaca, sem acesso a cookies, armazenamento nem ao próprio app. `allow-scripts` é necessário porque o Tailwind pela CDN é um script; sem ele, o formato Tailwind apareceria sem estilo.
 
@@ -78,6 +78,7 @@ app/api/pagina/route.ts   gera a página (POST), lista as últimas (GET) e apaga
 app/api/pagina/[id]/editar/route.ts aplica uma instrução (ou a troca de textos) e grava uma versão nova
 app/api/pagina/[id]/voltar/route.ts copia uma versão anterior como versão nova ("Voltar para esta")
 app/r/[id]/page.tsx       prévia de uma página salva, por link
+app/s/[id]/route.ts       página publicada: a versão atual como HTML puro, em um link que sai do app
 app/mcp/route.ts          endpoint MCP (JSON-RPC 2.0) para assistentes de IA
 app/api/mcp/token/route.ts gera, consulta e revoga o código de acesso do endpoint MCP
 app/setup/page.tsx        configuração inicial (IA, acesso MCP)

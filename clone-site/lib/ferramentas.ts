@@ -42,7 +42,7 @@ export async function baixarImagem(url: string): Promise<string> {
 export const FERRAMENTAS: Ferramenta[] = [
   {
     nome: "gerar_pagina",
-    descricao: "Gera uma página web (arquivo HTML único, em português) a partir da captura de tela de uma página de referência, aplicando o nome e as cores da marca informada. Devolve o id, o título, o link para abrir a prévia e o HTML gerado.",
+    descricao: "Gera uma página web (arquivo HTML único, em português) a partir da captura de tela de uma página de referência, aplicando o nome e as cores da marca informada. Devolve o id, o título, o link para abrir a prévia, o link público da página publicada (/s/<id>, HTML puro) e o HTML gerado.",
     schema: {
       type: "object",
       properties: {
@@ -71,7 +71,7 @@ export const FERRAMENTAS: Ferramenta[] = [
       if (m.marca) pedido.marca = m.marca;
       const { pagina, meta, id } = await gerarPagina(pedido);
       const atual = pagina.versoes[pagina.versoes.length - 1];
-      return { id, titulo: pagina.titulo, link: `/r/${id}`, versao: atual.n, demo: meta.demo, html: atual.html };
+      return { id, titulo: pagina.titulo, link: `/r/${id}`, linkPublicado: `/s/${id}`, versao: atual.n, demo: meta.demo, html: atual.html };
     },
   },
   {
@@ -89,7 +89,7 @@ export const FERRAMENTAS: Ferramenta[] = [
       const { id, instrucao } = args as { id?: unknown; instrucao?: unknown };
       if (!id || typeof id !== "string") throw new Error("Informe o id da página (devolvido por gerar_pagina).");
       const { pagina, meta, versao } = await editarPagina(id.trim(), normalizarInstrucao(instrucao));
-      return { id: pagina.id, titulo: pagina.titulo, link: `/r/${pagina.id}`, versao: versao.n, totalVersoes: pagina.versoes.length, demo: meta.demo, html: versao.html };
+      return { id: pagina.id, titulo: pagina.titulo, link: `/r/${pagina.id}`, linkPublicado: `/s/${pagina.id}`, versao: versao.n, totalVersoes: pagina.versoes.length, demo: meta.demo, html: versao.html };
     },
   },
 ];

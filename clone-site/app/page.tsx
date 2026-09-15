@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Dropzone, Empty, ErrorBox, Field, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
 import { EditorPagina } from "@/components/EditorPagina";
+import { EntregarPagina } from "@/components/EntregarPagina";
 import { PreviaPagina } from "@/components/PreviaPagina";
 import type { Meta } from "@/lib/ai";
 import type { Marca, Pagina, Stack } from "@/lib/types";
@@ -241,7 +242,9 @@ export function Resultado({ pagina: inicial, meta: metaInicial, id }: { pagina: 
   const atual = pagina.versoes[pagina.versoes.length - 1];
   return (
     <article className="reveal" data-id={id} data-versao={atual.n}>
-      <ResultHead titulo={pagina.titulo} subtitulo={`Versão ${atual.n} · ${rotuloFormato(atual.html)}${pagina.marca?.nome ? ` · ${pagina.marca.nome}` : ""}`} />
+      <ResultHead titulo={pagina.titulo} subtitulo={`Versão ${atual.n} · ${rotuloFormato(atual.html)}${pagina.marca?.nome ? ` · ${pagina.marca.nome}` : ""}`}>
+        <EntregarPagina id={id} titulo={pagina.titulo} html={atual.html} versao={atual.n} />
+      </ResultHead>
       <Origem meta={meta} />
       <PreviaPagina key={atual.n} html={atual.html} titulo={pagina.titulo} />
       <EditorPagina pagina={pagina} onAtualizada={(nova, novaMeta) => { setPagina(nova); if (novaMeta) setMeta(novaMeta); }} />

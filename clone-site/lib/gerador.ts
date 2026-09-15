@@ -304,3 +304,9 @@ export function voltarParaVersao(id: string, n: unknown): { pagina: Pagina; vers
   const versao: Versao = { n: proximoNumero(pagina), html: alvo.html, instrucao: `Voltou para a versão ${alvo.n}`, criadoEm: new Date().toISOString() };
   return { pagina: gravarVersao(pagina, versao), versao };
 }
+
+/** A versão atual de uma página salva, para a página publicada (/s/[id]); lança PaginaNaoEncontrada quando o id não existe. */
+export function versaoAtual(id: string): { titulo: string; versao: Versao } {
+  const { pagina } = carregarPagina(id);
+  return { titulo: pagina.titulo, versao: pagina.versoes[pagina.versoes.length - 1] };
+}

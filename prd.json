@@ -425,7 +425,7 @@
         "Testar via curl GET /s/<id> (200 e cabeçalhos) e GET /s/inexistente (404); Verify in browser using dev-browser skill: abrir a página publicada em celular"
       ],
       "priority": 25,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
