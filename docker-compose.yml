@@ -116,6 +116,13 @@ services:
     ports: ["3015:10000"]
     volumes: [clone-site-dados:/app/data]
 
+  prospeccao-linkedin:
+    <<: *app
+    build: ./prospeccao-linkedin
+    image: ghcr.io/startse/prospeccao-linkedin:latest
+    ports: ["3016:10000"]
+    volumes: [prospeccao-linkedin-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -132,3 +139,4 @@ volumes:
   simulador-vendas-dados:
   custos-ia-dados:
   clone-site-dados:
+  prospeccao-linkedin-dados:

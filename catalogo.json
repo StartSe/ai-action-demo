@@ -18,7 +18,12 @@
       "acento": "#2b5d8c",
       "porta": 3001,
       "captura": "capturas/pdi-time.png",
-      "capacidades": ["artefato", "mcp", "formulario", "rotina"],
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "formulario",
+        "rotina"
+      ],
       "demo": null
     },
     {
@@ -34,7 +39,12 @@
       "acento": "#1f5f5b",
       "porta": 3002,
       "captura": "capturas/agente-kanban.png",
-      "capacidades": ["artefato", "mcp", "formulario", "rotina"],
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "formulario",
+        "rotina"
+      ],
       "demo": null
     },
     {
@@ -49,7 +59,11 @@
       "acento": "#5b3f9e",
       "porta": 3003,
       "captura": "capturas/entrevista-ia.png",
-      "capacidades": ["artefato", "mcp", "formulario"],
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "formulario"
+      ],
       "demo": null
     },
     {
@@ -64,7 +78,12 @@
       "acento": "#7a2e8e",
       "porta": 3004,
       "captura": "capturas/posts-sociais.png",
-      "capacidades": ["artefato", "mcp", "formulario", "rotina"],
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "formulario",
+        "rotina"
+      ],
       "demo": null
     },
     {
@@ -79,7 +98,11 @@
       "acento": "#0f4c81",
       "porta": 3005,
       "captura": "capturas/prospeccao-ia.png",
-      "capacidades": ["artefato", "mcp", "rotina"],
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "rotina"
+      ],
       "demo": null
     },
     {
@@ -95,7 +118,12 @@
       "acento": "#128c7e",
       "porta": 3006,
       "captura": "capturas/whatsapp-atendente.png",
-      "capacidades": ["artefato", "mcp", "formulario", "rotina"],
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "formulario",
+        "rotina"
+      ],
       "demo": null
     },
     {
@@ -110,7 +138,11 @@
       "acento": "#3b3f8f",
       "porta": 3007,
       "captura": "capturas/contratos-ia.png",
-      "capacidades": ["artefato", "mcp", "rotina"],
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "rotina"
+      ],
       "demo": null
     },
     {
@@ -125,7 +157,12 @@
       "acento": "#8a5a00",
       "porta": 3008,
       "captura": "capturas/reunioes-ia.png",
-      "capacidades": ["artefato", "mcp", "formulario", "rotina"],
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "formulario",
+        "rotina"
+      ],
       "demo": null
     },
     {
@@ -140,7 +177,12 @@
       "acento": "#0b6e4f",
       "porta": 3009,
       "captura": "capturas/financas-ia.png",
-      "capacidades": ["artefato", "mcp", "formulario", "rotina"],
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "formulario",
+        "rotina"
+      ],
       "demo": null
     },
     {
@@ -156,7 +198,12 @@
       "acento": "#a8324a",
       "porta": 3010,
       "captura": "capturas/voz-do-cliente.png",
-      "capacidades": ["artefato", "mcp", "formulario", "rotina"],
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "formulario",
+        "rotina"
+      ],
       "demo": null
     },
     {
@@ -172,59 +219,108 @@
       "acento": "#0e7490",
       "porta": 3011,
       "captura": "capturas/radar-sinais.png",
-      "capacidades": ["artefato", "mcp", "rotina"],
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "rotina"
+      ],
       "demo": null
     },
     {
       "id": "bussola-ia",
       "nome": "Bússola de IA",
-      "areas": ["Estratégia", "Gestão"],
+      "areas": [
+        "Estratégia",
+        "Gestão"
+      ],
       "problema": "A empresa não sabe em que estágio de maturidade em IA está nem o que fazer a seguir.",
       "ia": "Aplica um questionário de maturidade em 6 dimensões e devolve o estágio atual com o que fazer para evoluir.",
       "integracoes": "Só a IA (OpenRouter).",
       "acento": "#b8621b",
       "porta": 3012,
       "captura": "capturas/bussola-ia.png",
-      "capacidades": ["artefato", "mcp", "formulario"],
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "formulario"
+      ],
       "demo": null
     },
     {
       "id": "simulador-vendas",
       "nome": "Simulador de Vendas",
-      "areas": ["Vendas"],
+      "areas": [
+        "Vendas"
+      ],
       "problema": "O gestor de vendas não sabe como cada vendedor conduz uma conversa real, só o resultado final.",
       "ia": "Avalia uma conversa de vendas colada contra 7 critérios de venda consultiva e devolve nota, evidências e como melhorar.",
       "integracoes": "Só a IA (OpenRouter).",
       "acento": "#3f6212",
       "porta": 3013,
       "captura": "capturas/simulador-vendas.png",
-      "capacidades": ["artefato", "mcp", "rotina"],
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "rotina"
+      ],
       "demo": null
     },
     {
       "id": "custos-ia",
       "nome": "Custos de IA",
-      "areas": ["Financeiro", "TI"],
+      "areas": [
+        "Financeiro",
+        "TI"
+      ],
       "problema": "O CFO não sabe quanto a empresa gasta com ferramentas de IA nem se está dentro do orçamento.",
       "ia": "Lê faturas de ferramentas de IA, compara o gasto contra o orçamento planejado e mostra o que estourou.",
       "integracoes": "Só a IA (OpenRouter). Câmbio manual para faturas em dólar ou euro.",
       "acento": "#7e22ce",
       "porta": 3014,
       "captura": "capturas/custos-ia.png",
-      "capacidades": ["artefato", "mcp", "rotina"],
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "rotina"
+      ],
       "demo": null
     },
     {
       "id": "clone-site",
       "nome": "Clone de Site",
-      "areas": ["Marketing", "Produto"],
+      "areas": [
+        "Marketing",
+        "Produto"
+      ],
       "problema": "Montar uma página nova do zero leva semanas entre briefing, agência e ajustes.",
       "ia": "Lê a captura de uma página de referência e escreve a sua versão em HTML, em português, com o nome e as cores da sua marca.",
       "integracoes": "Só a IA (OpenRouter, modelo com visão).",
       "acento": "#374151",
       "porta": 3015,
       "captura": "capturas/clone-site.png",
-      "capacidades": ["artefato", "mcp"],
+      "capacidades": [
+        "artefato",
+        "mcp"
+      ],
+      "demo": null
+    },
+    {
+      "id": "prospeccao-linkedin",
+      "nome": "Prospecção no LinkedIn",
+      "areas": [
+        "Vendas"
+      ],
+      "problema": "Prospectar no LinkedIn consome horas por dia entre buscar perfis e escrever mensagem por mensagem.",
+      "ia": "A partir do cliente ideal, monta a lista de leads com sinal de intenção e escreve a sequência de mensagens de cada um.",
+      "integracoes": "Só a IA (OpenRouter) nesta versão. Prospect Halo (busca no LinkedIn e envio das mensagens aprovadas) na próxima.",
+      "acento": "#0a66c2",
+      "porta": 3016,
+      "captura": "capturas/prospeccao-linkedin.png",
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "rotina"
+      ],
       "demo": null
     }
   ]

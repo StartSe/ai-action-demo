@@ -1,4 +1,4 @@
-# Blueprint único da suíte IA para Executivos: publica os 15 apps de uma vez.
+# Blueprint único da suíte IA para Executivos: publica os 16 apps de uma vez.
 # Cada app também tem seu próprio Blueprint (branch deploy-<app> em https://github.com/StartSe/ai-action-app-deploy).
 # Imagens públicas publicadas pelo GitHub Actions em ghcr.io/startse/<app>:latest.
 # Nenhuma chave é necessária aqui: após publicar, abra /setup em cada app e conecte a IA.
@@ -247,6 +247,23 @@ services:
     runtime: image
     image:
       url: ghcr.io/startse/clone-site:latest
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "10000"
+    # Para manter a configuração feita em /setup entre deploys (exige plano pago):
+    # disk:
+    #   name: dados
+    #   mountPath: /app/data
+    #   sizeGB: 1
+
+  - type: web
+    name: prospeccao-linkedin
+    runtime: image
+    image:
+      url: ghcr.io/startse/prospeccao-linkedin:latest
     plan: free
     region: oregon
     healthCheckPath: /api/health
