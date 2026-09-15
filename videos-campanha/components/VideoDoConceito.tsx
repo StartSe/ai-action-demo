@@ -24,6 +24,7 @@ export function VideoDoConceito({ video, aviso, onOutroEfeito }: Props) {
           <a className="btn-primary !w-auto" href={video.url} download target="_blank" rel="noopener noreferrer">Baixar vídeo</a>
           {onOutroEfeito && <button type="button" className="btn-ghost" onClick={onOutroEfeito}>Gerar outro efeito</button>}
         </div>
+        <p className="text-[12.5px] text-muted">O link do vídeo vale por alguns dias. Baixe o arquivo para guardar.</p>
       </div>
     );
   }

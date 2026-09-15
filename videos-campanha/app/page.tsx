@@ -8,7 +8,7 @@ import { Storyboard } from "@/components/Storyboard";
 import { VideoDoConceito } from "@/components/VideoDoConceito";
 import type { Meta } from "@/lib/ai";
 import { BRIEFING_DEMO } from "@/lib/demo";
-import { roteiroEmTexto } from "@/lib/roteiro";
+import { legendaEmTexto, nomeDeArquivo, REDES, roteiroEmTexto } from "@/lib/roteiro";
 import { DURACOES, FORMATOS, OBJETIVOS, rotuloFormato, rotuloObjetivo, videoTerminou, type Briefing, type Campanha, type Conceito, type Duracao, type Formato, type Objetivo, type Saldo, type Video } from "@/lib/types";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
@@ -297,6 +297,37 @@ function CartaoConceito({ conceito, briefing, indice, video, conectado, bloquead
   );
 }
 
+/** Copia um texto para a área de transferência; quando o navegador não permite, mostra o texto para copiar à mão. */
+async function copiarTexto(texto: string) {
+  try { await navigator.clipboard.writeText(texto); } catch { alert(texto); }
+}
+
+/** Baixa um texto como arquivo .txt (mesmo padrão dos outros apps: Blob + link temporário). */
+function baixarTexto(nomeArquivo: string, conteudo: string) {
+  const blob = new Blob([conteudo], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nomeArquivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/** Abre o arquivo do vídeo pronto para baixar (o endereço é do provedor, então o navegador abre em outra aba quando não consegue salvar direto). */
+function baixarVideo(video: Video) {
+  if (!video.url) return;
+  const a = document.createElement("a");
+  a.href = video.url;
+  a.download = `${nomeDeArquivo(video.efeito)}-${video.formato.replace(":", "x")}.mp4`;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 /** Intervalo entre consultas do andamento de um vídeo no Higgsfield. */
 const INTERVALO_ACOMPANHAMENTO_MS = 5000;
 
@@ -317,6 +348,16 @@ export function Resultado({ campanha, meta, id, conectado = false, videosIniciai
   const [avisoVideo, setAvisoVideo] = useState<string | null>(null);
 
   const pendentes = Object.values(videos).filter((v) => !videoTerminou(v));
+  // O vídeo pronto mais recente define o "conceito escolhido": é dele que saem "Baixar vídeo" e as legendas.
+  const videoPronto = Object.values(videos)
+    .filter((v) => v.estado === "pronto" && v.url)
+    .sort((a, b) => b.atualizadoEm.localeCompare(a.atualizadoEm))[0];
+  const conceitoEscolhido = videoPronto ? campanha.conceitos.find((c) => c.id === videoPronto.conceitoId) : undefined;
+  const extras = [
+    ...(videoPronto ? [{ rotulo: "Baixar vídeo", onClick: () => baixarVideo(videoPronto) }] : []),
+    ...REDES.map(({ rede, rotulo }) => ({ rotulo: `Copiar legenda do ${rotulo}`, onClick: () => copiarTexto(legendaEmTexto(campanha, rede, conceitoEscolhido)) })),
+    { rotulo: "Baixar roteiro (texto)", onClick: () => baixarTexto(`${nomeDeArquivo(campanha.titulo)}-roteiro.txt`, roteiroEmTexto(campanha)) },
+  ];
 
   // Consulta o andamento dos vídeos pendentes a cada 5 s. `videos` muda a cada resposta, e reiniciar o intervalo
   // nesse momento mantém o ritmo de 5 s depois da última atualização.
@@ -350,7 +391,7 @@ export function Resultado({ campanha, meta, id, conectado = false, videosIniciai
   return (
     <article className="reveal" data-id={id}>
       <ResultHead titulo={campanha.titulo} subtitulo={`${rotuloFormato(b.formato)} · ${b.duracaoSeg} s · ${rotuloObjetivo(b.objetivo)}`}>
-        <Entregar id={id} titulo={campanha.titulo} texto={() => roteiroEmTexto(campanha)} />
+        <Entregar id={id} titulo={campanha.titulo} texto={() => roteiroEmTexto(campanha)} extras={extras} />
       </ResultHead>
       <Origem meta={meta} />
       <div className="grid gap-4 md:grid-cols-3 items-stretch">

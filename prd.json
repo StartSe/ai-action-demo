@@ -530,7 +530,7 @@
         "Verify in browser using dev-browser skill: abrir o resultado de exemplo e usar cada item de Entregar"
       ],
       "priority": 31,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

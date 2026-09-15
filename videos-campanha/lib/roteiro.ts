@@ -23,3 +23,32 @@ export function roteiroEmTexto(campanha: Campanha): string {
   ].join("\n");
   return [cabecalho, ...campanha.conceitos.map(conceitoEmTexto)].join("\n\n----------\n\n");
 }
+
+/** Redes para as quais existe legenda pronta em cada conceito. */
+export type Rede = keyof Conceito["legenda"];
+
+export const REDES: { rede: Rede; rotulo: string }[] = [
+  { rede: "instagram", rotulo: "Instagram" },
+  { rede: "linkedin", rotulo: "LinkedIn" },
+  { rede: "tiktok", rotulo: "TikTok" },
+];
+
+/**
+ * A legenda de uma rede para colar direto na publicação. Com um conceito escolhido (o que tem vídeo pronto), só a
+ * legenda dele; sem escolha ainda, as legendas dos três conceitos, uma por bloco, para comparar.
+ */
+export function legendaEmTexto(campanha: Campanha, rede: Rede, escolhido?: Conceito): string {
+  if (escolhido) return escolhido.legenda[rede];
+  return campanha.conceitos.map((c, i) => `Conceito ${i + 1}: ${c.titulo}\n${c.legenda[rede]}`).join("\n\n");
+}
+
+/** Nome de arquivo seguro a partir do título ("Lançamento do Fone X" → "lancamento-do-fone-x"). */
+export function nomeDeArquivo(titulo: string): string {
+  const base = titulo
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return base || "campanha";
+}
