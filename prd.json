@@ -496,8 +496,8 @@
         "Verify in browser using dev-browser skill: desktop vazio, ?exemplo=1&captura=1 desktop e celular nos três formatos"
       ],
       "priority": 29,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Concluída em 2026-09-15. Imagem de exemplo é JPEG (public/exemplo-produto.jpg) em vez de PNG para o data URL do demo ficar leve; a imagem do produto fica salva no histórico (saida.briefing.imagemDataUrl) porque /r/[id] e a geração do vídeo (US-030) precisam dela. Verificado no navegador com playwright-core (sem skill dev-browser): desktop vazio, ?exemplo=1&captura=1 desktop e celular (9:16) e formulário com 16:9 e 1:1 em desktop e celular."
     },
     {
       "id": "US-030",

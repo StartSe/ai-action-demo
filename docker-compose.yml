@@ -123,6 +123,13 @@ services:
     ports: ["3016:10000"]
     volumes: [prospeccao-linkedin-dados:/app/data]
 
+  videos-campanha:
+    <<: *app
+    build: ./videos-campanha
+    image: ghcr.io/startse/videos-campanha:latest
+    ports: ["3017:10000"]
+    volumes: [videos-campanha-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -140,3 +147,4 @@ volumes:
   custos-ia-dados:
   clone-site-dados:
   prospeccao-linkedin-dados:
+  videos-campanha-dados:
