@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from "rea
 import type { Meta } from "@/lib/ai";
 import { numero, data } from "@/lib/formato";
 import { NAVEGACAO, type ItemNavegacao } from "@/lib/navegacao";
+import { ilustracaoDoSegmento, type Segmento } from "@/lib/ilustracao";
 
 export type Status = { ai: boolean; demo: boolean; model: string; integrations?: Record<string, boolean>; setup?: { pronto: boolean; url: string } };
 
@@ -226,6 +227,26 @@ export function Empty({ ilustracao, titulo, descricao, acao, onAcao }: { ilustra
       <p className="max-w-[380px]">{descricao}</p>
       {acao && onAcao && <button type="button" className="btn-link mt-1" onClick={onAcao}>{acao}</button>}
     </div>
+  );
+}
+
+/**
+ * Ilustração de pessoa do segmento (ver lib/ilustracao.ts), decorativa e ausente no celular por design
+ * (o hero do celular não a mostra): sem `<source>` casando com a media abaixo de 768 px, o `<img>` sem
+ * `src` não baixa nada. Segmentos sem ilustração pronta (Estratégia, Gestão, Jurídico) não renderizam
+ * nada — o app fica só com `.blob-acento`.
+ */
+export function IlustracaoSegmento({ segmento, loading = "lazy", className }: { segmento: Segmento; loading?: "lazy" | "eager"; className?: string }) {
+  const ilustracao = ilustracaoDoSegmento(segmento);
+  if (!ilustracao) return null;
+  const { nome, variantes } = ilustracao;
+  const base = variantes[0];
+  const srcSet = variantes.map((v) => `/ilustracoes/${nome}-${v.largura}.webp ${v.largura}w`).join(", ");
+  return (
+    <picture>
+      <source media="(min-width: 768px)" srcSet={srcSet} type="image/webp" />
+      <img alt="" aria-hidden="true" width={base.largura} height={base.altura} loading={loading} className={className} />
+    </picture>
   );
 }
 

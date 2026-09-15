@@ -69,6 +69,11 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   .titulo-painel { @apply text-[28px] leading-[1.15] font-extrabold tracking-[-0.02em] text-ink md:text-[40px] md:leading-[44px]; }
   .sobretitulo { @apply text-xs font-bold uppercase tracking-[0.08em] text-accent; }
   .apoio { @apply text-[13px] text-ink-2; }
+
+  /* Mancha decorativa atrás da ilustração do segmento (ver lib/ilustracao.ts e components/ui.tsx,
+     IlustracaoSegmento): o blob deixou de fazer parte do PNG (era lilás, fixo) e virou CSS no acento de
+     cada app. Aplicar num contêiner com `position: relative`, como irmão anterior da ilustração. */
+  .blob-acento { @apply absolute -z-10 bg-accent-soft; inset: -10%; border-radius: 42% 58% 61% 39% / 46% 44% 56% 54%; }
 }
 
 @keyframes shimmer { to { background-position: -200% 0; } }

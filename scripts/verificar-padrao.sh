@@ -36,6 +36,7 @@ ARQUIVOS=(
   "lib/store.ts"
   "lib/conta.ts"
   "lib/navegacao.ts"
+  "lib/ilustracao.ts"
   "lib/setup-comum.ts"
   "lib/historico.ts"
   "lib/mcp.ts"
@@ -50,6 +51,7 @@ ARQUIVOS=(
   "app/api/setup"
   "app/globals.css"
   "proxy.ts"
+  "public/ilustracoes/icones"
 )
 
 # Estrutura que todo app precisa ter, mas cujo conteúdo é próprio de cada um (renderiza o domínio do
