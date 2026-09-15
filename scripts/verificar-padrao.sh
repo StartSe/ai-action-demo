@@ -35,6 +35,7 @@ ARQUIVOS=(
   "lib/ai.ts"
   "lib/store.ts"
   "lib/conta.ts"
+  "lib/navegacao.ts"
   "lib/setup-comum.ts"
   "lib/historico.ts"
   "lib/mcp.ts"

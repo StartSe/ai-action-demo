@@ -1,9 +1,11 @@
 "use client";
 // Componentes visuais compartilhados pela suíte. Copie este arquivo para cada app sem alterar.
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { Meta } from "@/lib/ai";
 import { numero, data } from "@/lib/formato";
+import { NAVEGACAO, type ItemNavegacao } from "@/lib/navegacao";
 
 export type Status = { ai: boolean; demo: boolean; model: string; integrations?: Record<string, boolean>; setup?: { pronto: boolean; url: string } };
 
@@ -16,20 +18,18 @@ export function useStatus() {
   return { status, erro };
 }
 
-/** Chip de status; quando em modo demonstração vira botão que abre um popover com o contexto do app. */
-export function Topbar({ marca, nome, area, status, erro, resumo }: { marca: string; nome: string; area: string; status: Status | null; erro?: boolean; resumo?: string }) {
-  const [aberto, setAberto] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const texto = erro ? "Servidor indisponível" : !status ? "Verificando IA" : status.ai ? "IA conectada" : "Modo demonstração";
-  const demo = status ? !status.ai : false;
+export type UsuarioTopbar = { nome: string; email: string };
+export type NotificacaoTopbar = { id: string; texto: string; url?: string };
 
+/** Fecha um popover/folha ao apertar Esc ou clicar fora dele; `setAberto` precisa ser um setState (identidade estável). */
+function useFecharAoClicarFora(aberto: boolean, ref: RefObject<HTMLElement | null>, setAberto: (v: boolean) => void) {
   useEffect(() => {
     if (!aberto) return;
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") setAberto(false);
     }
     function onClickFora(e: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) setAberto(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false);
     }
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("mousedown", onClickFora);
@@ -37,41 +37,138 @@ export function Topbar({ marca, nome, area, status, erro, resumo }: { marca: str
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("mousedown", onClickFora);
     };
-  }, [aberto]);
+  }, [aberto, ref, setAberto]);
+}
 
-  const badge = (
-    <span className={`inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full text-[13px] max-md:text-xs font-semibold whitespace-nowrap min-w-[142px] max-md:min-w-[110px] ${demo ? "bg-[#fff4e0] text-[#7a4d00]" : "bg-accent-soft text-accent-ink"}`}>
-      <span className={`w-2 h-2 rounded-full shrink-0 ${demo ? "bg-warn" : "bg-accent"}`} />
-      {texto}
-    </span>
-  );
+function iniciaisDe(nome: string) {
+  return nome.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
+}
+
+/** Cabeçalho da suíte: marca à esquerda, navegação ao centro (desktop) e chip de status + sino + conta à direita; no celular a navegação e a conta viram um botão "Menu" com uma folha. */
+export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notificacoes, navegacao = NAVEGACAO }: { marca: string; nome: string; area: string; status: Status | null; erro?: boolean; resumo?: string; usuario?: UsuarioTopbar | null; notificacoes?: NotificacaoTopbar[]; navegacao?: ItemNavegacao[] }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const sair = () => { fetch("/api/conta/sair", { method: "POST" }).then(() => router.push("/entrar")); };
+  const [popoverAberto, setPopoverAberto] = useState(false);
+  const [sinoAberto, setSinoAberto] = useState(false);
+  const [contaAberto, setContaAberto] = useState(false);
+  const [menuAberto, setMenuAberto] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const sinoRef = useRef<HTMLDivElement>(null);
+  const contaRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useFecharAoClicarFora(popoverAberto, popoverRef, setPopoverAberto);
+  useFecharAoClicarFora(sinoAberto, sinoRef, setSinoAberto);
+  useFecharAoClicarFora(contaAberto, contaRef, setContaAberto);
+  useFecharAoClicarFora(menuAberto, menuRef, setMenuAberto);
+
+  const texto = erro ? "Servidor indisponível" : !status ? "Verificando IA" : status.ai ? "IA conectada" : "Modo demonstração";
+  const demo = status ? !status.ai : false;
+  const estadoChip = erro || !status ? "pendente" : status.ai ? "conectado" : "demonstracao";
+  const badge = <span className={`chip-status chip-status-${estadoChip} min-w-[128px] justify-center max-md:min-w-0 max-md:px-2 max-md:text-[11px]`}>{texto}</span>;
+
+  function ativo(href: string) {
+    return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+  }
 
   return (
-    <header className="no-print flex items-center justify-between gap-4 px-8 py-3.5 max-md:px-4 max-md:py-3 bg-surface border-b border-line">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="shrink-0 w-[34px] h-[34px] max-md:w-[30px] max-md:h-[30px] rounded-[9px] bg-accent text-white grid place-items-center font-extrabold text-[15px] max-md:text-[13px] tracking-tight">{marca}</div>
-        <div className="min-w-0">
-          <div className="font-bold text-[15px] max-md:text-sm max-md:leading-tight">{nome}</div>
-          <div className="text-muted text-[13px] max-md:hidden">{area}</div>
+    <>
+      <header className="no-print flex items-center gap-4 max-md:gap-2 px-8 py-3.5 max-md:px-4 max-md:py-3 bg-surface border-b border-line">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="shrink-0 w-[34px] h-[34px] max-md:w-[30px] max-md:h-[30px] rounded-[9px] bg-accent text-white grid place-items-center font-extrabold text-[15px] max-md:text-[13px] tracking-tight">{marca}</div>
+          <div className="min-w-0">
+            <div className="font-bold text-[15px] max-md:text-sm max-md:leading-tight truncate">{nome}</div>
+            <div className="text-ink-2 text-[13px] max-md:hidden truncate">{area}</div>
+          </div>
         </div>
-      </div>
-      <div className="flex items-center gap-3 shrink-0">
-        {demo && resumo ? (
-          <div className="relative" ref={popoverRef}>
-            <button type="button" className="cursor-pointer" aria-haspopup="dialog" aria-expanded={aberto} onClick={() => setAberto((v) => !v)}>
-              {badge}
+
+        <nav className="hidden md:flex items-center gap-6 flex-1 justify-center min-w-0">
+          {navegacao.map((item) => (
+            <Link key={item.href} href={item.href} className={`text-[14px] font-semibold pb-1 border-b-2 ${ativo(item.href) ? "text-accent border-accent" : "text-ink-2 border-transparent hover:text-ink"}`}>
+              {item.rotulo}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-2 max-md:gap-1.5 shrink-0 min-w-0">
+          {demo && resumo ? (
+            <div className="relative" ref={popoverRef}>
+              <button type="button" className="cursor-pointer" aria-haspopup="dialog" aria-expanded={popoverAberto} onClick={() => setPopoverAberto((v) => !v)}>
+                {badge}
+              </button>
+              {popoverAberto && (
+                <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-72 max-md:w-64 card p-4 text-[13.5px] text-ink">
+                  <p className="mb-3">{resumo}</p>
+                  <Link href="/setup" className="font-bold text-accent underline underline-offset-2" onClick={() => setPopoverAberto(false)}>Conectar a IA em 1 minuto</Link>
+                </div>
+              )}
+            </div>
+          ) : badge}
+
+          {notificacoes && notificacoes.length > 0 && (
+            <div className="relative max-md:hidden" ref={sinoRef}>
+              <button type="button" className="relative w-8 h-8 grid place-items-center rounded-full hover:bg-bg cursor-pointer" aria-haspopup="dialog" aria-expanded={sinoAberto} aria-label={`${notificacoes.length} avisos`} onClick={() => setSinoAberto((v) => !v)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6Z" /><path d="M10 19a2 2 0 0 0 4 0" /></svg>
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold grid place-items-center">{notificacoes.length}</span>
+              </button>
+              {sinoAberto && (
+                <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-80 max-md:w-64 card p-1.5 text-[13.5px] text-ink">
+                  {notificacoes.map((n) =>
+                    n.url ? (
+                      <Link key={n.id} href={n.url} className="block px-3 py-2 rounded-md hover:bg-accent-soft" onClick={() => setSinoAberto(false)}>{n.texto}</Link>
+                    ) : (
+                      <p key={n.id} className="px-3 py-2">{n.texto}</p>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {usuario && (
+            <div className="relative max-md:hidden" ref={contaRef}>
+              <button type="button" className="w-8 h-8 rounded-full bg-accent text-white grid place-items-center font-bold text-[12.5px] cursor-pointer" aria-haspopup="dialog" aria-expanded={contaAberto} aria-label="Sua conta" onClick={() => setContaAberto((v) => !v)}>
+                {iniciaisDe(usuario.nome)}
+              </button>
+              {contaAberto && (
+                <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-64 card p-4 text-[13.5px]">
+                  <div className="font-bold text-ink">{usuario.nome}</div>
+                  <div className="text-ink-2 mb-3 truncate">{usuario.email}</div>
+                  <button type="button" className="btn-link" onClick={sair}>Sair</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <button type="button" className="md:hidden shrink-0 inline-flex items-center gap-1 h-[30px] px-2 rounded-field border border-line bg-surface text-ink text-[12px] font-semibold cursor-pointer" aria-haspopup="dialog" aria-expanded={menuAberto} onClick={() => setMenuAberto(true)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+            Menu
+          </button>
+        </div>
+      </header>
+
+      {menuAberto && (
+        <div className="md:hidden fixed inset-0 z-30">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setMenuAberto(false)} />
+          <div ref={menuRef} role="dialog" aria-label="Menu" className="absolute top-0 right-0 bottom-0 w-[80%] max-w-[300px] bg-surface p-5 flex flex-col gap-1 shadow-card overflow-y-auto">
+            <button type="button" className="self-end text-ink-2 mb-3 cursor-pointer" aria-label="Fechar menu" onClick={() => setMenuAberto(false)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19" /></svg>
             </button>
-            {aberto && (
-              <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-72 max-md:w-64 card p-4 text-[13.5px] text-ink">
-                <p className="mb-3">{resumo}</p>
-                <Link href="/setup" className="font-bold text-accent underline underline-offset-2" onClick={() => setAberto(false)}>Conectar a IA em 1 minuto</Link>
+            {navegacao.map((item) => (
+              <Link key={item.href} href={item.href} className={`px-3 py-2.5 rounded-md font-semibold ${ativo(item.href) ? "text-accent bg-accent-soft" : "text-ink"}`} onClick={() => setMenuAberto(false)}>{item.rotulo}</Link>
+            ))}
+            {usuario && (
+              <div className="mt-4 pt-4 border-t border-line">
+                <div className="font-bold text-ink px-3">{usuario.nome}</div>
+                <div className="text-ink-2 text-[13px] px-3 mb-3 truncate">{usuario.email}</div>
+                <button type="button" className="btn-link px-3" onClick={sair}>Sair</button>
               </div>
             )}
           </div>
-        ) : badge}
-        <Link href="/setup" className="text-[13px] font-semibold text-muted hover:text-ink max-md:hidden">Configurações</Link>
-      </div>
-    </header>
+        </div>
+      )}
+    </>
   );
 }
 
