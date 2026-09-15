@@ -1,12 +1,76 @@
 // Armazenamento local de configuração em SQLite (node:sqlite, sem dependências).
-// As chaves das integrações ficam aqui, gravadas pelo setup inicial (/setup).
+// As chaves das integrações ficam aqui, gravadas pelo setup inicial (/setup), sempre
+// cifradas em repouso (AES-256-GCM, node:crypto) — ver cifrar()/decifrar() abaixo.
 // Variáveis de ambiente continuam funcionando como alternativa e têm prioridade.
 import { DatabaseSync } from "node:sqlite";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 let db: DatabaseSync | null = null;
+
+const ALGORITMO = "aes-256-gcm";
+let chaveMestraCache: Buffer | null = null;
+
+/**
+ * Chave mestra da cifragem: `CHAVE_MESTRA` do ambiente (32 bytes em base64) quando
+ * existir; senão, gerada uma vez e guardada em `<DATA_DIR>/chave-mestra` (permissão
+ * 0600). Perder o arquivo (sem `CHAVE_MESTRA` no ambiente) torna as chaves salvas
+ * ilegíveis — decifrar() trata isso devolvendo undefined, nunca derrubando o app.
+ */
+function chaveMestra(): Buffer {
+  if (chaveMestraCache) return chaveMestraCache;
+  const env = process.env.CHAVE_MESTRA?.trim();
+  if (env) {
+    const buf = Buffer.from(env, "base64");
+    if (buf.length === 32) {
+      chaveMestraCache = buf;
+      return buf;
+    }
+    console.error("CHAVE_MESTRA inválida (precisa de 32 bytes em base64); gerando uma chave própria em DATA_DIR.");
+  }
+  const arquivo = path.join(DATA_DIR, "chave-mestra");
+  try {
+    const existente = fs.readFileSync(arquivo);
+    if (existente.length === 32) {
+      chaveMestraCache = existente;
+      return existente;
+    }
+  } catch {
+    // arquivo ainda não existe: gera abaixo
+  }
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const nova = crypto.randomBytes(32);
+  fs.writeFileSync(arquivo, nova, { mode: 0o600 });
+  chaveMestraCache = nova;
+  return nova;
+}
+
+/** Formato gravado no banco: `v1:<iv>:<tag>:<cifra>`, tudo em base64url. */
+function cifrar(valor: string): string {
+  const iv = crypto.randomBytes(12);
+  const cifra = crypto.createCipheriv(ALGORITMO, chaveMestra(), iv);
+  const dados = Buffer.concat([cifra.update(valor, "utf8"), cifra.final()]);
+  const tag = cifra.getAuthTag();
+  return `v1:${iv.toString("base64url")}:${tag.toString("base64url")}:${dados.toString("base64url")}`;
+}
+
+/** Devolve undefined (com console.error) quando o valor não tem o formato esperado ou a chave mestra não abre mais o segredo. */
+function decifrar(valorCifrado: string): string | undefined {
+  const partes = valorCifrado.split(":");
+  if (partes.length !== 4 || partes[0] !== "v1") return undefined;
+  try {
+    const [, ivB64, tagB64, dadosB64] = partes;
+    const decifra = crypto.createDecipheriv(ALGORITMO, chaveMestra(), Buffer.from(ivB64, "base64url"));
+    decifra.setAuthTag(Buffer.from(tagB64, "base64url"));
+    const texto = Buffer.concat([decifra.update(Buffer.from(dadosB64, "base64url")), decifra.final()]);
+    return texto.toString("utf8");
+  } catch (err) {
+    console.error("Falha ao decifrar uma configuração salva: a chave mestra mudou ou foi perdida.", err);
+    return undefined;
+  }
+}
 
 function abrir(): DatabaseSync {
   if (db) return db;
@@ -25,13 +89,17 @@ export function abrirBanco(): DatabaseSync {
   return abrir();
 }
 
-/** Lê uma configuração: variável de ambiente primeiro, depois o banco. */
+/** Lê uma configuração: variável de ambiente primeiro, depois o banco (cifrado). */
 export function getConfig(chave: string): string | undefined {
   const env = process.env[chave];
   if (env && env.trim()) return env.trim();
   try {
     const linha = abrir().prepare("SELECT valor FROM config WHERE chave = ?").get(chave) as { valor: string } | undefined;
-    return linha?.valor || undefined;
+    if (!linha?.valor) return undefined;
+    if (linha.valor.startsWith("v1:")) return decifrar(linha.valor);
+    // Valor antigo em texto plano (de antes da cifragem): devolve e regrava já cifrado.
+    setConfig(chave, linha.valor);
+    return linha.valor;
   } catch (err) {
     console.error("Falha ao ler configuração", chave, err);
     return undefined;
@@ -44,13 +112,15 @@ export function setConfig(chave: string, valor: string | null | undefined): void
     d.prepare("DELETE FROM config WHERE chave = ?").run(chave);
     return;
   }
+  const cifrado = cifrar(valor.trim());
   d.prepare(`INSERT INTO config (chave, valor, atualizado_em) VALUES (?, ?, datetime('now'))
-             ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = excluded.atualizado_em`).run(chave, valor.trim());
+             ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = excluded.atualizado_em`).run(chave, cifrado);
 }
 
 export function getAllConfig(): Record<string, string> {
   const linhas = abrir().prepare("SELECT chave, valor FROM config").all() as { chave: string; valor: string }[];
-  return Object.fromEntries(linhas.map((l) => [l.chave, l.valor]));
+  const pares = linhas.map((l) => [l.chave, l.valor.startsWith("v1:") ? decifrar(l.valor) : l.valor] as const);
+  return Object.fromEntries(pares.filter((par): par is [string, string] => par[1] !== undefined));
 }
 
 /** Indica de onde veio o valor, para a tela de setup mostrar "definido por variável de ambiente". */

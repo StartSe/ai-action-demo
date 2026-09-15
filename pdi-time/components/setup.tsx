@@ -8,10 +8,12 @@ import type { Segmento } from "@/lib/ilustracao";
 
 type Resposta = { integracoes: IntegracaoStatus[]; pronto: boolean };
 
-// Frase de privacidade verdadeira (ver US-011: a cifragem das chaves ainda não existe, então esta frase
-// não promete criptografia nem "nenhuma conexão externa" — o app chama OpenRouter e outros serviços de
-// propósito). Repetida na coluna de apoio e no rodapé: mesmo texto nos dois lugares, nunca reescrita.
-const FRASE_PRIVACIDADE = "As chaves ficam guardadas só neste app, nunca aparecem por inteiro depois de salvas, e você pode trocá-las quando quiser.";
+// Duas frases de privacidade, verdadeiras desde a US-011 (as chaves são cifradas em
+// repouso, ver lib/store.ts, mas o app continua chamando serviços externos de verdade
+// — nunca afirmar "nenhuma conexão externa"). Repetidas na coluna de apoio e no
+// rodapé: mesmo texto nos dois lugares, nunca reescritas.
+const FRASE_PRIVACIDADE = "As chaves ficam cifradas neste app, no seu servidor. Nunca aparecem por inteiro depois de salvas.";
+const FRASE_CONEXOES = "Seus dados não passam por nenhum servidor nosso: o app fala direto com os serviços que você conectar.";
 
 // Três garantias genéricas (nenhuma referência ao domínio de um app específico) mostradas na coluna de
 // apoio de /setup, ao lado da ilustração do segmento.
@@ -72,6 +74,7 @@ export function SetupPage({ marca, nome, area, segmento }: { marca: string; nome
               <p className="sobretitulo mb-1">{area}</p>
               <h1 className="titulo-painel mb-2">Configuração inicial</h1>
               <p className="apoio max-w-[280px]">{FRASE_PRIVACIDADE}</p>
+              <p className="apoio max-w-[280px] mt-2">{FRASE_CONEXOES}</p>
             </div>
             <ul className="flex flex-col gap-2.5">
               {ITENS_APOIO.map((item) => (
@@ -127,6 +130,7 @@ export function SetupPage({ marca, nome, area, segmento }: { marca: string; nome
 
             <footer className="mt-8 pt-6 border-t border-line">
               <p className="text-muted text-[13px] max-w-[560px]">{FRASE_PRIVACIDADE}</p>
+              <p className="text-muted text-[13px] max-w-[560px] mt-1">{FRASE_CONEXOES}</p>
               <div className="mt-4 flex gap-3 flex-wrap items-center">
                 <Link href="/" className="btn-primary !w-auto">Ir para o app</Link>
               </div>
