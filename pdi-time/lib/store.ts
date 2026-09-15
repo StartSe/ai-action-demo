@@ -20,6 +20,11 @@ function abrir(): DatabaseSync {
   return db;
 }
 
+/** Mesmo arquivo app.sqlite para todo o app: config, conta e sessões (lib/conta.ts). */
+export function abrirBanco(): DatabaseSync {
+  return abrir();
+}
+
 /** Lê uma configuração: variável de ambiente primeiro, depois o banco. */
 export function getConfig(chave: string): string | undefined {
   const env = process.env[chave];

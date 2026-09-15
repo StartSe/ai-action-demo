@@ -34,6 +34,7 @@ ARQUIVOS=(
   "components/setup.tsx"
   "lib/ai.ts"
   "lib/store.ts"
+  "lib/conta.ts"
   "lib/setup-comum.ts"
   "lib/historico.ts"
   "lib/mcp.ts"
