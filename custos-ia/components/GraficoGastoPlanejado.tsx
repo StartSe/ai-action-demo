@@ -4,7 +4,8 @@
 // a largura do cartão quando várias colunas têm texto). CSS Grid com minmax(0, 1fr) por coluna do mês
 // resolve os dois problemas; dentro de cada coluna, as duas barras (gasto/planejado) usam flex-1 no
 // próprio contêiner da coluna (sem texto, só cor) para ganhar uma altura definida onde a % de altura
-// de cada barra possa resolver.
+// de cada barra possa resolver. As barras têm largura máxima: com um mês só (o padrão "Mês atual"),
+// `w-1/2` sozinho daria duas barras da largura do cartão inteiro.
 import type { GastoPorMes } from "@/lib/types";
 
 const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -44,12 +45,12 @@ export function GraficoGastoPlanejado({ meses }: { meses: GastoPorMes[] }) {
               )}
               <div className="flex-1 w-full flex items-end justify-center gap-[3px]">
                 <div
-                  className={`w-1/2 rounded-t-[4px] ${estourou ? "bg-danger" : "bg-accent"}`}
+                  className={`w-1/2 max-w-14 rounded-t-[4px] ${estourou ? "bg-danger" : "bg-accent"}`}
                   style={{ height: `${alturaGasto}%` }}
                   title={`Gasto em ${m.rotulo}: ${moeda.format(m.gastoBRL)}`}
                 />
                 <div
-                  className="w-1/2 rounded-t-[4px] bg-[#ccd0d8]"
+                  className="w-1/2 max-w-14 rounded-t-[4px] bg-[#ccd0d8]"
                   style={{ height: `${alturaPlanejado}%` }}
                   title={`Planejado para ${m.rotulo}: ${moeda.format(m.planejadoBRL)}`}
                 />

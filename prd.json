@@ -564,8 +564,8 @@
         "Push na main e conferência do resumo do workflow: imagens publicadas, capturas geradas (ou aviso) e catálogo público com dezessete cartões"
       ],
       "priority": 33,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Verificação completa nos sete apps (build standalone, curl em todas as rotas, /mcp, capturas revisadas, typecheck/lint/build nos dezessete, verificar-jargao e verificar-padrao). Commit feito em ralph/novos-apps; o push na main e a conferência do resumo do workflow ficaram para o Rafael decidir, por publicarem imagens e o catálogo público."
     },
     {
       "id": "US-034",

@@ -10,12 +10,21 @@ import { data } from "@/lib/formato";
 const LARGURA = 1000;
 const ALTURA = 600;
 const ITERACOES = 300;
+/** Alcance da repulsão, em múltiplos da distância natural entre nós. */
+const ALCANCE_REPULSAO = 1.5;
+/** Margem livre ao redor do desenho, depois do reescalonamento final. */
+const MARGEM_X = 80;
+const MARGEM_Y = 60;
 
 type Ponto = { x: number; y: number };
 
-/** Layout de força (Fruchterman-Reingold simplificado): repulsão entre todos os pares de nós, atração
- * pelas arestas (molas) e um puxão leve para o centro, com resfriamento a cada iteração. Roda as 300
- * iterações de uma vez só; o resultado fica congelado (sem requestAnimationFrame nem re-simulação). */
+/** Layout de força (Fruchterman-Reingold simplificado): repulsão entre pares de nós próximos, atração
+ * pelas arestas (molas) e um puxão para o centro, com resfriamento a cada iteração. Roda as 300
+ * iterações de uma vez só; o resultado fica congelado (sem requestAnimationFrame nem re-simulação).
+ * A repulsão tem alcance limitado (`ALCANCE_REPULSAO`): o grafo do radar costuma ter um grupo por
+ * tema, sem nenhuma aresta entre eles, e uma repulsão de alcance infinito empurrava os grupos para
+ * longe até todo mundo encostar na moldura (o desenho virava um retângulo de pontos). No fim, as
+ * posições são reescaladas para preencher a área com margem, em vez de serem cortadas nas bordas. */
 function layoutForca(nos: No[], arestas: Aresta[]): Map<string, Ponto> {
   const posicoes = new Map<string, Ponto>();
   const n = nos.length;
@@ -28,6 +37,7 @@ function layoutForca(nos: No[], arestas: Aresta[]): Map<string, Ponto> {
   });
 
   const k = Math.sqrt((LARGURA * ALTURA) / n);
+  const alcance = k * ALCANCE_REPULSAO;
   let temperatura = LARGURA / 10;
 
   for (let iter = 0; iter < ITERACOES; iter++) {
@@ -40,6 +50,7 @@ function layoutForca(nos: No[], arestas: Aresta[]): Map<string, Ponto> {
         const pa = posicoes.get(a.id)!, pb = posicoes.get(b.id)!;
         const dx = pa.x - pb.x, dy = pa.y - pb.y;
         const dist = Math.max(0.01, Math.sqrt(dx * dx + dy * dy));
+        if (dist > alcance) continue;
         const forca = (k * k) / dist;
         const ux = dx / dist, uy = dy / dist;
         const da = deslocamentos.get(a.id)!, db = deslocamentos.get(b.id)!;
@@ -63,8 +74,8 @@ function layoutForca(nos: No[], arestas: Aresta[]): Map<string, Ponto> {
     nos.forEach((no) => {
       const p = posicoes.get(no.id)!;
       const d = deslocamentos.get(no.id)!;
-      d.x += (LARGURA / 2 - p.x) * 0.008;
-      d.y += (ALTURA / 2 - p.y) * 0.008;
+      d.x += (LARGURA / 2 - p.x) * 0.02;
+      d.y += (ALTURA / 2 - p.y) * 0.02;
     });
 
     nos.forEach((no) => {
@@ -72,13 +83,31 @@ function layoutForca(nos: No[], arestas: Aresta[]): Map<string, Ponto> {
       const d = deslocamentos.get(no.id)!;
       const dist = Math.max(0.01, Math.sqrt(d.x * d.x + d.y * d.y));
       const limitado = Math.min(dist, temperatura);
-      p.x = Math.min(LARGURA - 60, Math.max(60, p.x + (d.x / dist) * limitado));
-      p.y = Math.min(ALTURA - 40, Math.max(40, p.y + (d.y / dist) * limitado));
+      p.x += (d.x / dist) * limitado;
+      p.y += (d.y / dist) * limitado;
     });
 
     temperatura *= 0.985;
   }
 
+  return enquadrar(posicoes);
+}
+
+/** Reescala o desenho pronto para ocupar a área inteira com margem, cada eixo por si (o SVG já é
+ * esticado com `preserveAspectRatio="none"` e os nós são círculos de tamanho fixo em pixels, então
+ * esticar não deforma nada). Um eixo sem variação fica centralizado. */
+function enquadrar(posicoes: Map<string, Ponto>): Map<string, Ponto> {
+  const pontos = [...posicoes.values()];
+  if (pontos.length === 0) return posicoes;
+  const xs = pontos.map((p) => p.x), ys = pontos.map((p) => p.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const escalaX = maxX - minX < 1 ? 0 : (LARGURA - 2 * MARGEM_X) / (maxX - minX);
+  const escalaY = maxY - minY < 1 ? 0 : (ALTURA - 2 * MARGEM_Y) / (maxY - minY);
+  posicoes.forEach((p) => {
+    p.x = escalaX ? MARGEM_X + (p.x - minX) * escalaX : LARGURA / 2;
+    p.y = escalaY ? MARGEM_Y + (p.y - minY) * escalaY : ALTURA / 2;
+  });
   return posicoes;
 }
 

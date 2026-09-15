@@ -235,7 +235,7 @@ export default function Page() {
             <Field label="Colar uma conversa" htmlFor="conversaColada" hint='Uma fala por linha, começando com "Vendedor:" ou "Cliente:".'>
               <textarea
                 id="conversaColada"
-                className="input min-h-44 resize-y font-mono text-[13px]"
+                className="input min-h-28 resize-y font-mono text-[13px]"
                 required
                 placeholder={'Vendedor: Boa tarde! Como posso ajudar hoje?\nCliente: Oi, vi a proposta que vocês mandaram...\nVendedor: ...'}
                 value={dados.conversaColada}

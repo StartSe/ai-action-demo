@@ -48,7 +48,7 @@ export function AcessoMCP() {
 
   const configuracao = codigoNovo
     ? JSON.stringify(
-        { mcpServers: { "pdi-time": { url: endereco, headers: { Authorization: `Bearer ${codigoNovo}` } } } },
+        { mcpServers: { "bussola-ia": { url: endereco, headers: { Authorization: `Bearer ${codigoNovo}` } } } },
         null,
         2
       )
@@ -58,7 +58,7 @@ export function AcessoMCP() {
     <section className="card p-6 max-md:p-5">
       <h2 className="text-lg font-bold mb-1">Usar dentro do seu assistente</h2>
       <p className="text-muted text-sm mb-4 max-w-[640px]">
-        Gere um código de acesso para que um assistente de IA (Claude, ChatGPT e outros) monte PDIs diretamente pela conversa, sem precisar abrir o navegador.
+        Gere um código de acesso para que um assistente de IA (Claude, ChatGPT e outros) avalie a maturidade em IA da empresa diretamente pela conversa, sem precisar abrir o navegador.
       </p>
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3 flex-wrap">
@@ -97,7 +97,7 @@ export function AcessoMCP() {
           <ol className="text-[13px] text-muted list-decimal pl-5 space-y-1">
             <li>Abra Configurações → Conectores → &quot;Adicionar conector personalizado&quot; → &quot;Editar configuração&quot;.</li>
             <li>Clique em &quot;Copiar configuração&quot; abaixo e cole no arquivo que abrir.</li>
-            <li>Salve e reinicie o Claude Desktop: o PDI do Time aparece na lista de conectores.</li>
+            <li>Salve e reinicie o Claude Desktop: a Bússola de IA aparece na lista de conectores.</li>
           </ol>
         </div>
         <div>
@@ -105,7 +105,7 @@ export function AcessoMCP() {
           <ol className="text-[13px] text-muted list-decimal pl-5 space-y-1">
             <li>Abra Configurações → Conectores → &quot;Criar&quot; (conector personalizado).</li>
             <li>Cole o Endereço acima em &quot;URL&quot; e, em &quot;Autenticação&quot;, escolha &quot;Chave de acesso&quot; e cole o código gerado acima.</li>
-            <li>Salve: o PDI do Time aparece nas ferramentas disponíveis dentro da conversa.</li>
+            <li>Salve: a Bússola de IA aparece nas ferramentas disponíveis dentro da conversa.</li>
           </ol>
         </div>
       </div>

@@ -13,6 +13,9 @@ import { EFEITOS, type Duracao, type EfeitoRemoto, type Formato, type Saldo } fr
 /** Falha ao falar com o Higgsfield (conexão, ferramenta não reconhecida, resposta em formato desconhecido). As rotas respondem 502. */
 export class ErroHiggsfield extends Error {}
 
+/** Higgsfield ainda não conectado em /setup: é configuração faltando, não falha do provedor. As rotas respondem 400. */
+export class HiggsfieldNaoConectado extends ErroHiggsfield {}
+
 export type OperacaoHiggsfield = "efeitos" | "enviarArquivo" | "confirmarArquivo" | "importarUrl" | "gerar" | "estado" | "esperar" | "resultado" | "saldo";
 
 /** Nome conhecido de cada operação no Higgsfield e, quando ele não existir, as palavras que precisam aparecer no nome da ferramenta equivalente. */
@@ -57,7 +60,7 @@ async function conexaoAtual(): Promise<ConexaoMCP> {
   const config = lerConfig(HIGGSFIELD);
   const url = config[`${PREFIXO_HIGGSFIELD}_URL`];
   const codigo = config[`${PREFIXO_HIGGSFIELD}_CODIGO`];
-  if (!url || !codigo) throw new ErroHiggsfield("Conecte o Higgsfield em /setup antes de gerar o vídeo.");
+  if (!url || !codigo) throw new HiggsfieldNaoConectado("Conecte o Higgsfield em /setup antes de gerar o vídeo.");
   return conectar(url, codigo);
 }
 

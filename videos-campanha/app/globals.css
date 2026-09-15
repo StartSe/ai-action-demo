@@ -72,3 +72,9 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   .storyboard-cena, .storyboard-fundo { animation: none; }
   .storyboard[data-manual="nao"] .storyboard-cena[data-indice="0"] { opacity: 1; }
 }
+
+/* O briefing tem seis campos antes do botão: o respiro entre campos e a área de envio da imagem
+   (Dropzone, componente compartilhado) são menores só aqui, para "Criar conceitos" caber na tela
+   sem rolagem em um monitor de 900 px de altura. */
+.briefing > div, .briefing .grid > div { margin-bottom: 0.75rem; }
+.dropzone-curta > label { padding-block: 1rem; }

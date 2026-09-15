@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ErroDePedido } from "./conceitos";
 import { listarPorTipo, obter } from "./historico";
-import { abrirSessao, custoVideo, efeitoPorIdOuNome, enviarImagem, ErroHiggsfield, estado as estadoRemoto, gerarVideo, higgsfieldConfigurado, listarEfeitos, mapearEfeito, motivoEmPortugues, saldo as saldoRemoto, urlDoResultado, type SessaoHiggsfield } from "./higgsfield";
+import { abrirSessao, custoVideo, efeitoPorIdOuNome, enviarImagem, ErroHiggsfield, HiggsfieldNaoConectado, estado as estadoRemoto, gerarVideo, higgsfieldConfigurado, listarEfeitos, mapearEfeito, motivoEmPortugues, saldo as saldoRemoto, urlDoResultado, type SessaoHiggsfield } from "./higgsfield";
 import { videoTerminou, type Campanha, type Conceito, type Duracao, type EfeitoRemoto, type EstadoVideo, type Formato, type PlanoVideo, type Video } from "./types";
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
@@ -159,7 +159,7 @@ async function prepararPedido(pedido: Pedido): Promise<{ campanha: Campanha; con
   const campanha = obterCampanha(pedido.campanhaId);
   const conceito = conceitoDa(campanha, pedido.conceitoId);
   if (!campanha.briefing.imagemDataUrl) throw new ErroDePedido("Envie a imagem do produto e crie os conceitos de novo antes de gerar o vídeo.");
-  if (!higgsfieldConfigurado()) throw new ErroHiggsfield("Conecte o Higgsfield em /setup antes de gerar o vídeo.");
+  if (!higgsfieldConfigurado()) throw new HiggsfieldNaoConectado("Conecte o Higgsfield em /setup antes de gerar o vídeo.");
   const sessao = await abrirSessao();
   const efeitos = await listarEfeitos(sessao);
   let efeito: EfeitoRemoto | undefined;

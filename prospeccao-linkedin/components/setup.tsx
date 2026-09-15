@@ -210,12 +210,15 @@ function CartaoIntegracao({ integracao: i, aoSalvar, destaque }: { integracao: I
   );
 }
 
-/** Passo a passo de até três passos, gerado a partir do link para obter a chave e da ajuda do primeiro campo. */
+/** Passo a passo de até três passos, gerado a partir do link para obter a chave e da ajuda do primeiro campo.
+ * Uma integração sem nenhum campo secreto (ex.: as cotações de câmbio do custos-ia) não tem chave para colar:
+ * o último passo fala em preencher os campos. */
 function passosSetup(i: IntegracaoStatus): string[] {
   const passos: string[] = [];
+  const temChave = i.campos.some((c) => c.tipo === "secret");
   if (i.link) passos.push(`Abra "${i.link.rotulo}" e copie a chave.`);
   if (i.campos[0]?.ajuda) passos.push(i.campos[0].ajuda);
-  passos.push("Cole a chave abaixo e clique em Salvar.");
+  passos.push(temChave ? "Cole a chave abaixo e clique em Salvar." : "Preencha os campos abaixo e clique em Salvar.");
   return passos.slice(0, 3);
 }
 

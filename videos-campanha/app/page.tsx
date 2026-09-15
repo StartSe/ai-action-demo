@@ -153,12 +153,12 @@ export default function Page() {
       <Topbar marca="V" nome="Vídeos de Campanha" area="Marketing" status={status} erro={erro} resumo="Modo demonstração: os conceitos exibidos são um exemplo." />
 
       <Workspace>
-        <Panel titulo="Um vídeo curto para cada campanha, em minutos" lead="Descreva a campanha, envie a imagem do produto e escolha entre três conceitos com roteiro, efeito e legendas antes de gastar créditos.">
-          <form onSubmit={onSubmit}>
-            <Field label="Produto ou oferta" htmlFor="produto" hint="O que a campanha vende ou anuncia.">
+        <Panel titulo="Um vídeo curto para cada campanha, em minutos" lead="Descreva a campanha, envie a imagem do produto e escolha entre três conceitos antes de gastar créditos.">
+          <form onSubmit={onSubmit} className="briefing">
+            <Field label="Produto ou oferta" htmlFor="produto">
               <input id="produto" className="input" required placeholder="Ex.: Garrafa térmica Vela 750 ml" value={form.produto} onChange={set("produto")} />
             </Field>
-            <Field label="Para quem" htmlFor="publico" hint="Quem deve parar de rolar a tela para ver este vídeo.">
+            <Field label="Para quem" htmlFor="publico">
               <input id="publico" className="input" required placeholder="Ex.: pessoas que treinam cedo e passam o dia fora" value={form.publico} onChange={set("publico")} />
             </Field>
             <Row>
@@ -183,8 +183,8 @@ export default function Page() {
                 </select>
               </Field>
             </Row>
-            <Field label="Imagem do produto" htmlFor="imagem" hint="Uma foto do produto com fundo limpo funciona melhor. Ela é a base de todas as cenas.">
-              <Dropzone id="imagem" accept="image/png,image/jpeg" tiposLabel="PNG ou JPG" maxSizeMB={LIMITE_MB} arquivo={arquivo} onArquivo={escolherArquivo} />
+            <Field label="Imagem do produto" htmlFor="imagem" hint="Uma foto com fundo limpo funciona melhor.">
+              <div className="dropzone-curta"><Dropzone id="imagem" accept="image/png,image/jpeg" tiposLabel="PNG ou JPG" maxSizeMB={LIMITE_MB} arquivo={arquivo} onArquivo={escolherArquivo} /></div>
               {avisoArquivo && <p className="text-danger text-[13px] mt-2">{avisoArquivo}</p>}
             </Field>
 
