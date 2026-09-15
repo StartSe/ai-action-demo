@@ -189,12 +189,21 @@ export function ResultHead({ titulo, subtitulo, children }: { titulo: string; su
   );
 }
 
-/** Linha de proveniência do resultado: de onde veio e quando. O nome do modelo só aparece no title. */
-export function Origem({ meta }: { meta: Meta }) {
-  const texto = meta.demo
-    ? `Exemplo ilustrativo a partir de ${meta.insumo}. Conecte a IA para analisar seus dados`
-    : `Gerado com IA a partir de ${meta.insumo}, em ${data(meta.geradoEm, { comHora: true })}`;
-  return <p className="text-muted text-[13px] mb-4" title={meta.model}>{texto}</p>;
+/** Linha de proveniência do resultado: de onde veio e quando. O nome do modelo só aparece no title.
+ * `demoTexto` (frase por app) substitui a frase padrão quando o app ignora a entrada da pessoa em modo
+ * demonstração (ex.: sobe o próprio arquivo e recebe um exemplo fixo) — sem ele, mantém a frase padrão. */
+export function Origem({ meta, demoTexto }: { meta: Meta; demoTexto?: string }) {
+  if (!meta.demo) {
+    return <p className="text-muted text-[13px] mb-4" title={meta.model}>{`Gerado com IA a partir de ${meta.insumo}, em ${data(meta.geradoEm, { comHora: true })}`}</p>;
+  }
+  return (
+    <p className="text-muted text-[13px] mb-4" title={meta.model}>
+      {demoTexto ?? `Exemplo ilustrativo a partir de ${meta.insumo}.`}{" "}
+      <Link href="/setup#openrouter" className="font-semibold text-accent underline underline-offset-2">
+        {demoTexto ? "Conectar a IA" : "Conecte a IA para usar os seus dados"}
+      </Link>
+    </p>
+  );
 }
 
 const CORES_TOM: Record<string, string> = { ok: "text-ok", warn: "text-warn", danger: "text-danger", neutro: "text-accent-ink" };

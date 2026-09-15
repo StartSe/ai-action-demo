@@ -329,7 +329,7 @@ export function Resultado({ conversa, analise, meta, id, titulo }: { conversa: C
         <Entregar id={id} titulo={titulo} texto={() => analiseParaTexto(analise)} />
       </ResultHead>
 
-      <Origem meta={meta} />
+      <Origem meta={meta} demoTexto="Exemplo fixo: a conversa colada não foi analisada." />
 
       <ConteudoAnalise conversa={conversa} analise={analise} />
     </article>

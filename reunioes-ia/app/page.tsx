@@ -376,7 +376,7 @@ export function Resultado({
         <Entregar id={id} titulo={tituloAta} texto={() => ataParaTexto(ata, titulo)} />
       </ResultHead>
 
-      <Origem meta={meta} />
+      <Origem meta={meta} demoTexto="Exemplo fixo: a transcrição enviada não foi analisada." />
 
       <ConteudoAta ata={ata} transcricao={transcricao} fonteTranscricao={fonteTranscricao} id={id} participantes={participantes} />
     </article>

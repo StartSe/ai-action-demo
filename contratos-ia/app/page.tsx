@@ -475,7 +475,7 @@ export function Resultado({
         />
       </ResultHead>
 
-      <Origem meta={meta} />
+      <Origem meta={meta} demoTexto="Exemplo fixo: o contrato enviado não foi analisado." />
 
       <ConteudoAnalise
         analise={analise}

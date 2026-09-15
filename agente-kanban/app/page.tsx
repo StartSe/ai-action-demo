@@ -479,7 +479,7 @@ export function Resultado({
         <Entregar id={id} titulo="Quadro atualizado" texto={() => quadroParaTexto(quadro, resposta)} />
       </ResultHead>
 
-      <Origem meta={meta} />
+      <Origem meta={meta} demoTexto="Exemplo fixo: o pedido enviado não foi executado no quadro." />
 
       <ConteudoQuadro quadro={quadro} alterados={alterados} resposta={resposta} onAtribuir={onAtribuir} />
     </article>

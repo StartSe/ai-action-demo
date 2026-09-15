@@ -245,7 +245,7 @@ export function Resultado({ pagina: inicial, meta: metaInicial, id }: { pagina: 
       <ResultHead titulo={pagina.titulo} subtitulo={`Versão ${atual.n} · ${rotuloFormato(atual.html)}${pagina.marca?.nome ? ` · ${pagina.marca.nome}` : ""}`}>
         <EntregarPagina id={id} titulo={pagina.titulo} html={atual.html} versao={atual.n} />
       </ResultHead>
-      <Origem meta={meta} />
+      <Origem meta={meta} demoTexto="Exemplo fixo: a página enviada não foi clonada." />
       <PreviaPagina key={atual.n} html={atual.html} titulo={pagina.titulo} />
       <EditorPagina pagina={pagina} onAtualizada={(nova, novaMeta) => { setPagina(nova); if (novaMeta) setMeta(novaMeta); }} />
     </article>

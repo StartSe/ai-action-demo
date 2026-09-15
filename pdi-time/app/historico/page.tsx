@@ -58,6 +58,7 @@ export default function Page() {
             descricao="Os resultados que você gerar aparecem aqui, prontos para reabrir a qualquer momento."
             acao="Ir para o início"
             onAcao={() => router.push("/")}
+            acaoSecundaria={status?.demo ? { rotulo: "Conectar a IA", url: "/setup#openrouter" } : undefined}
           />
         ) : (
           <>

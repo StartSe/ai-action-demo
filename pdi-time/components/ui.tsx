@@ -75,10 +75,17 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
   useFecharAoClicarFora(contaAberto, contaRef, setContaAberto);
   useFecharAoClicarFora(menuAberto, menuRef, setMenuAberto);
 
-  const texto = erro ? "Servidor indisponível" : !status ? "Verificando IA" : status.ai ? "IA conectada" : "Modo demonstração";
+  const texto = erro ? "Servidor indisponível" : !status ? "Verificando IA" : status.ai ? "IA conectada" : "Modo demonstração · conectar";
   const demo = status ? !status.ai : false;
   const estadoChip = erro || !status ? "pendente" : status.ai ? "conectado" : "demonstracao";
-  const badge = <span className={`chip-status chip-status-${estadoChip} min-w-[128px] justify-center max-md:min-w-0 max-md:px-2 max-md:text-[11px]`}>{texto}</span>;
+  const badge = (
+    <span className={`chip-status chip-status-${estadoChip} min-w-[128px] justify-center max-md:min-w-0 max-md:px-2 max-md:text-[11px]`}>
+      {texto}
+      {estadoChip === "demonstracao" && (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" /></svg>
+      )}
+    </span>
+  );
   const proximos = status?.ai ? (status.proximos ?? []).slice(0, 3) : [];
 
   function ativo(href: string) {
@@ -117,6 +124,8 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
                 </div>
               )}
             </div>
+          ) : demo ? (
+            <Link href="/setup#openrouter" className="cursor-pointer">{badge}</Link>
           ) : proximos.length > 0 ? (
             <div className="relative" ref={popoverRef}>
               <button type="button" className="cursor-pointer" aria-haspopup="dialog" aria-expanded={popoverAberto} onClick={() => setPopoverAberto((v) => !v)}>
@@ -135,6 +144,10 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
               )}
             </div>
           ) : badge}
+
+          <Link href="/setup" aria-label="Configurações" className="md:hidden shrink-0 w-[30px] h-[30px] rounded-full grid place-items-center hover:bg-bg">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" /><path d="M19.4 13.5a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V19a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H4a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H10a1.65 1.65 0 0 0 1-1.51V4a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V10a1.65 1.65 0 0 0 1.51 1H20a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></svg>
+          </Link>
 
           {notificacoes && notificacoes.length > 0 && (
             <div className="relative max-md:hidden" ref={sinoRef}>
@@ -292,13 +305,14 @@ export function Stage({ children }: { children: ReactNode }) {
 }
 
 /** Ilustração (SVG inline, 64 px, traço 1,5 px) no lugar de um glifo genérico; cada app entrega a sua. */
-export function Empty({ ilustracao, titulo, descricao, acao, onAcao }: { ilustracao: ReactNode; titulo: string; descricao: string; acao?: string; onAcao?: () => void }) {
+export function Empty({ ilustracao, titulo, descricao, acao, onAcao, acaoSecundaria }: { ilustracao: ReactNode; titulo: string; descricao: string; acao?: string; onAcao?: () => void; acaoSecundaria?: { rotulo: string; url: string } }) {
   return (
     <div className="h-full min-h-[520px] max-md:min-h-[320px] flex flex-col items-center justify-center text-center text-muted p-10 max-md:px-4 max-md:py-7 border border-dashed border-line rounded-card">
       <div className="text-accent mb-[18px]">{ilustracao}</div>
       <h2 className="text-ink text-lg font-bold mb-1.5">{titulo}</h2>
       <p className="max-w-[380px]">{descricao}</p>
       {acao && onAcao && <button type="button" className="btn-link mt-1" onClick={onAcao}>{acao}</button>}
+      {acaoSecundaria && <Link href={acaoSecundaria.url} className="btn-link mt-1">{acaoSecundaria.rotulo}</Link>}
     </div>
   );
 }
@@ -425,12 +439,21 @@ export function ResultHead({ titulo, subtitulo, children }: { titulo: string; su
   );
 }
 
-/** Linha de proveniência do resultado: de onde veio e quando. O nome do modelo só aparece no title. */
-export function Origem({ meta }: { meta: Meta }) {
-  const texto = meta.demo
-    ? `Exemplo ilustrativo a partir de ${meta.insumo}. Conecte a IA para analisar seus dados`
-    : `Gerado com IA a partir de ${meta.insumo}, em ${data(meta.geradoEm, { comHora: true })}`;
-  return <p className="text-muted text-[13px] mb-4" title={meta.model}>{texto}</p>;
+/** Linha de proveniência do resultado: de onde veio e quando. O nome do modelo só aparece no title.
+ * `demoTexto` (frase por app) substitui a frase padrão quando o app ignora a entrada da pessoa em modo
+ * demonstração (ex.: sobe o próprio arquivo e recebe um exemplo fixo) — sem ele, mantém a frase padrão. */
+export function Origem({ meta, demoTexto }: { meta: Meta; demoTexto?: string }) {
+  if (!meta.demo) {
+    return <p className="text-muted text-[13px] mb-4" title={meta.model}>{`Gerado com IA a partir de ${meta.insumo}, em ${data(meta.geradoEm, { comHora: true })}`}</p>;
+  }
+  return (
+    <p className="text-muted text-[13px] mb-4" title={meta.model}>
+      {demoTexto ?? `Exemplo ilustrativo a partir de ${meta.insumo}.`}{" "}
+      <Link href="/setup#openrouter" className="font-semibold text-accent underline underline-offset-2">
+        {demoTexto ? "Conectar a IA" : "Conecte a IA para usar os seus dados"}
+      </Link>
+    </p>
+  );
 }
 
 /** Selo no rodapé do resultado: só diz "Gerado com Inteligência Artificial" quando a IA gerou de verdade;

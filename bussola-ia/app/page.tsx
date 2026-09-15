@@ -398,7 +398,7 @@ export function Resultado({ avaliacao, meta, id }: { avaliacao: Avaliacao; meta:
         />
       </ResultHead>
 
-      <Origem meta={meta} />
+      <Origem meta={meta} demoTexto="Sem IA conectada: a leitura desta avaliação é um modelo fixo." />
 
       <ConteudoAvaliacao avaliacao={avaliacao} />
     </article>
