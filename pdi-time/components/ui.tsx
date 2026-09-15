@@ -427,6 +427,82 @@ export function ErrorBox({ mensagem, codigo, acao, onTentarNovamente }: { mensag
   );
 }
 
+const TONS_AVISO: Record<"ok" | "warn" | "danger", string> = {
+  ok: "bg-[#e4f4ec] border-[#bfe3d0] text-ok",
+  warn: "bg-[#fff4e0] border-[#f0d999] text-warn",
+  danger: "bg-[#fde8e6] border-[#f5c2bd] text-danger",
+};
+
+/** Aviso inline (não é `window.alert`): aparece no lugar da tela onde o problema ocorreu, nunca num popup do navegador. `acao` é um link (`url`) ou um botão (`onClick`). */
+export function Aviso({ tom = "warn", children, acao }: { tom?: "ok" | "warn" | "danger"; children: ReactNode; acao?: { rotulo: string; url?: string; onClick?: () => void } }) {
+  return (
+    <div className={`px-4 py-3 rounded-[10px] text-sm border ${TONS_AVISO[tom]}`}>
+      {children}
+      {acao && (
+        <div className="mt-2.5">
+          {acao.url ? (
+            <a className="btn-link text-[13px]" href={acao.url}>{acao.rotulo}</a>
+          ) : (
+            <button type="button" className="btn-link text-[13px]" onClick={acao.onClick}>{acao.rotulo}</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type PedidoConfirmacao = { mensagem: string; confirmarRotulo: string; cancelarRotulo: string; resolver: (v: boolean) => void };
+
+/** Diálogo de confirmação da suíte, no lugar de `window.confirm` (reservado só para "Apagar tudo"). Renderize `Dialogo` uma vez na árvore do componente; `confirmar(mensagem)` devolve uma Promise<boolean>. */
+export function useConfirmacao() {
+  const [pedido, setPedido] = useState<PedidoConfirmacao | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  function confirmar(mensagem: string, opcoes?: { confirmarRotulo?: string; cancelarRotulo?: string }): Promise<boolean> {
+    return new Promise((resolver) => {
+      setPedido({ mensagem, confirmarRotulo: opcoes?.confirmarRotulo ?? "Confirmar", cancelarRotulo: opcoes?.cancelarRotulo ?? "Cancelar", resolver });
+    });
+  }
+
+  function responder(v: boolean) {
+    pedido?.resolver(v);
+    setPedido(null);
+  }
+
+  const Dialogo = pedido ? (
+    <div className="fixed inset-0 z-30 bg-black/40 grid place-items-center px-4" role="presentation">
+      <div ref={ref} role="alertdialog" aria-modal="true" className="card w-full max-w-[400px] p-6">
+        <p className="text-[15px] mb-5">{pedido.mensagem}</p>
+        <div className="flex gap-2.5 justify-end">
+          <button type="button" className="btn-ghost !w-auto" onClick={() => responder(false)}>{pedido.cancelarRotulo}</button>
+          <button type="button" className="btn-primary !w-auto" onClick={() => responder(true)}>{pedido.confirmarRotulo}</button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  return { confirmar, Dialogo };
+}
+
+export type ErroLido = { mensagem: string; codigo?: string; acao?: { rotulo: string; url: string } };
+
+/** Lê o erro de uma `Response` de `fetch` (tenta `{error,codigo,acao}` em JSON) ou de uma exceção de rede (o próprio `fetch` lançando). Nunca expõe status HTTP cru nem corpo do servidor na tela: qualquer falha de leitura cai num dos dois fallbacks fixos. */
+export async function lerErro(r: Response | unknown): Promise<ErroLido> {
+  if (r instanceof Response) {
+    try {
+      const corpo = await r.json();
+      if (corpo && typeof corpo.error === "string") {
+        return { mensagem: corpo.error, codigo: corpo.codigo, acao: corpo.acao };
+      }
+    } catch {
+      // corpo não é JSON (ex.: página de erro em HTML) — cai no fallback abaixo
+    }
+    return { mensagem: "O servidor não respondeu como esperado. Recarregue a página e tente de novo." };
+  }
+  console.error(r);
+  return { mensagem: "Não conseguimos falar com o app. Verifique a conexão e tente de novo." };
+}
+
 export function ResultHead({ titulo, subtitulo, children }: { titulo: string; subtitulo?: string; children?: ReactNode }) {
   return (
     <div className="flex justify-between items-start gap-4 mb-5 max-md:flex-wrap">
@@ -668,6 +744,7 @@ export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: s
   const [aberto, setAberto] = useState(false);
   const [copiadoTexto, setCopiadoTexto] = useState(false);
   const [copiadoLink, setCopiadoLink] = useState(false);
+  const [falhaCopia, setFalhaCopia] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -687,8 +764,14 @@ export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: s
   }, [aberto]);
 
   async function copiar(t: string, marcar: (v: boolean) => void) {
-    try { await navigator.clipboard.writeText(t); marcar(true); } catch { alert(t); }
-    setTimeout(() => marcar(false), 1800);
+    try {
+      await navigator.clipboard.writeText(t);
+      marcar(true);
+      setTimeout(() => marcar(false), 1800);
+    } catch {
+      setFalhaCopia(true);
+      setTimeout(() => setFalhaCopia(false), 4000);
+    }
     setAberto(false);
   }
 
@@ -696,36 +779,48 @@ export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: s
   const itemClasse = "w-full text-left px-3 py-2 rounded-md hover:bg-accent-soft cursor-pointer";
 
   return (
-    <div className="flex gap-2.5 max-md:w-full">
-      <button type="button" className="btn-primary !w-auto max-md:flex-1" onClick={() => (id ? window.open(`/imprimir/${id}`, "_blank") : window.print())}>Baixar PDF</button>
-      <div className="relative shrink-0" ref={menuRef}>
-        <button type="button" className="btn-ghost" aria-haspopup="menu" aria-expanded={aberto} aria-label="Mais opções para entregar este resultado" onClick={() => setAberto((v) => !v)}>
-          <span className="max-md:hidden">Mais</span>
-          <svg className="md:hidden" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
-        </button>
-        {aberto && (
-          <div role="menu" className="absolute right-0 top-[calc(100%+8px)] z-20 w-56 card p-1.5 text-[13.5px]">
-            <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(texto(), setCopiadoTexto)}>{copiadoTexto ? "Copiado" : "Copiar texto"}</button>
-            <a role="menuitem" className={`${itemClasse} block`} href={`mailto:?subject=${encodeURIComponent(titulo)}&body=${encodeURIComponent(texto())}`} onClick={() => setAberto(false)}>Enviar por e-mail</a>
-            {link && <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(link, setCopiadoLink)}>{copiadoLink ? "Copiado" : "Copiar link"}</button>}
-            {extras?.map((ex) => (
-              <button key={ex.rotulo} type="button" role="menuitem" className={itemClasse} onClick={() => { ex.onClick(); setAberto(false); }}>{ex.rotulo}</button>
-            ))}
-          </div>
-        )}
+    <div className="flex flex-col gap-2.5 max-md:w-full">
+      <div className="flex gap-2.5 max-md:w-full">
+        <button type="button" className="btn-primary !w-auto max-md:flex-1" onClick={() => (id ? window.open(`/imprimir/${id}`, "_blank") : window.print())}>Baixar PDF</button>
+        <div className="relative shrink-0" ref={menuRef}>
+          <button type="button" className="btn-ghost" aria-haspopup="menu" aria-expanded={aberto} aria-label="Mais opções para entregar este resultado" onClick={() => setAberto((v) => !v)}>
+            <span className="max-md:hidden">Mais</span>
+            <svg className="md:hidden" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
+          </button>
+          {aberto && (
+            <div role="menu" className="absolute right-0 top-[calc(100%+8px)] z-20 w-56 card p-1.5 text-[13.5px]">
+              <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(texto(), setCopiadoTexto)}>{copiadoTexto ? "Copiado" : "Copiar texto"}</button>
+              <a role="menuitem" className={`${itemClasse} block`} href={`mailto:?subject=${encodeURIComponent(titulo)}&body=${encodeURIComponent(texto())}`} onClick={() => setAberto(false)}>Enviar por e-mail</a>
+              {link && <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(link, setCopiadoLink)}>{copiadoLink ? "Copiado" : "Copiar link"}</button>}
+              {extras?.map((ex) => (
+                <button key={ex.rotulo} type="button" role="menuitem" className={itemClasse} onClick={() => { ex.onClick(); setAberto(false); }}>{ex.rotulo}</button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+      {falhaCopia && <Aviso tom="danger">Não foi possível copiar automaticamente. Selecione o texto e copie com Ctrl+C (ou Cmd+C no Mac).</Aviso>}
     </div>
   );
 }
 
 export function CopyButton({ texto, rotulo = "Copiar texto" }: { texto: () => string; rotulo?: string }) {
   const [ok, setOk] = useState(false);
+  const [falha, setFalha] = useState(false);
   return (
-    <button type="button" className="btn-ghost" onClick={async () => {
-      const t = texto();
-      try { await navigator.clipboard.writeText(t); setOk(true); } catch { alert(t); }
-      setTimeout(() => setOk(false), 1800);
-    }}>{ok ? "Copiado" : rotulo}</button>
+    <div className="inline-flex flex-col gap-2 items-start">
+      <button type="button" className="btn-ghost" onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(texto());
+          setOk(true);
+          setTimeout(() => setOk(false), 1800);
+        } catch {
+          setFalha(true);
+          setTimeout(() => setFalha(false), 4000);
+        }
+      }}>{ok ? "Copiado" : rotulo}</button>
+      {falha && <Aviso tom="danger">Não foi possível copiar automaticamente. Selecione o texto e copie com Ctrl+C (ou Cmd+C no Mac).</Aviso>}
+    </div>
   );
 }
 

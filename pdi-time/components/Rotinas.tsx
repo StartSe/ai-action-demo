@@ -4,7 +4,7 @@
 // executar agora, pausar e apagar, e mostra o código de acesso do gatilho externo.
 import { useEffect, useState, type FormEvent } from "react";
 import { data } from "@/lib/formato";
-import { CopyButton, DataTable } from "./ui";
+import { Aviso, CopyButton, DataTable, useConfirmacao } from "./ui";
 import type { Coluna } from "./ui";
 
 type Frequencia = "diaria" | "semanal" | "mensal" | "unica";
@@ -59,6 +59,7 @@ export function Rotinas() {
   const [destino, setDestino] = useState("");
   const [criando, setCriando] = useState(false);
   const [erro, setErro] = useState("");
+  const { confirmar, Dialogo } = useConfirmacao();
 
   function carregar() {
     fetch("/api/rotinas")
@@ -132,7 +133,7 @@ export function Rotinas() {
   }
 
   async function apagar(id: string) {
-    if (!window.confirm("Apagar esta rotina?")) return;
+    if (!(await confirmar("Apagar esta rotina?", { confirmarRotulo: "Apagar" }))) return;
     await fetch(`/api/rotinas/${id}`, { method: "DELETE" });
     carregar();
   }
@@ -177,8 +178,8 @@ export function Rotinas() {
       <p className="text-muted text-sm mb-4 max-w-[640px]">Agende o app para gerar e entregar um resultado sozinho, em um horário fixo, sem que ninguém precise abrir a tela.</p>
 
       {enderecoDesconhecido && (
-        <div className="mb-4 px-4 py-3 rounded-[10px] text-sm border bg-[#fff4e0] border-[#f0d999] text-warn">
-          Endereço público desconhecido: o aviso da próxima rotina sai sem o link do resultado. Abra o app pelo endereço publicado uma vez, ou informe em &quot;Para a equipe técnica&quot;.
+        <div className="mb-4">
+          <Aviso tom="warn">Endereço público desconhecido: o aviso da próxima rotina sai sem o link do resultado. Abra o app pelo endereço publicado uma vez, ou informe em &quot;Para a equipe técnica&quot;.</Aviso>
         </div>
       )}
 
@@ -259,7 +260,7 @@ export function Rotinas() {
                 />
               </label>
             </div>
-            {erro && <p className="text-danger text-sm">{erro}</p>}
+            {erro && <Aviso tom="danger">{erro}</Aviso>}
             <button type="submit" className="btn-primary !w-auto self-start" disabled={criando}>{criando ? "Criando" : "Criar rotina"}</button>
           </form>
         )}
@@ -267,8 +268,8 @@ export function Rotinas() {
 
       <div className="mt-6 pt-5 border-t border-line">
         <h3 className="text-sm font-semibold mb-2">Rodar sozinho, sem abrir o app</h3>
-        <div className="mb-4 px-4 py-3 rounded-[10px] text-sm border bg-[#fff4e0] border-[#f0d999] text-warn">
-          No plano gratuito o app hiberna e a rotina só roda quando alguém acessa. Para rodar sozinho, use um plano pago ou chame esta URL de um agendador externo.
+        <div className="mb-4">
+          <Aviso tom="warn">No plano gratuito o app hiberna e a rotina só roda quando alguém acessa. Para rodar sozinho, use um plano pago ou chame esta URL de um agendador externo.</Aviso>
         </div>
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-3 flex-wrap">
@@ -296,6 +297,7 @@ export function Rotinas() {
           {codigoNovo && <p className="text-[12.5px] text-muted">Guarde este código agora: por segurança, ele não aparece de novo depois desta tela.</p>}
         </div>
       </div>
+      {Dialogo}
     </section>
   );
 }

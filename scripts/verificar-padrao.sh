@@ -60,6 +60,7 @@ ARQUIVOS=(
   "app/globals.css"
   "proxy.ts"
   "public/ilustracoes/icones"
+  "eslint.config.mjs"
 )
 
 # Estrutura que todo app precisa ter, mas cujo conteúdo é próprio de cada um (renderiza o domínio do
