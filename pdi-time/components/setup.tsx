@@ -52,6 +52,7 @@ export function SetupPage({ marca, nome, area, segmento }: { marca: string; nome
   const conectadas = dados?.integracoes.filter((i) => i.configurada).length ?? 0;
   const total = dados?.integracoes.length ?? 0;
   const progresso = total > 0 ? Math.round((conectadas / total) * 100) : 0;
+  const opcionaisFaltando = dados?.integracoes.filter((i) => !i.obrigatoria && !i.configurada) ?? [];
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -93,11 +94,13 @@ export function SetupPage({ marca, nome, area, segmento }: { marca: string; nome
           <div>
             {dados && (
               <div className="mb-6">
-                <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
-                  <span className="text-sm font-semibold">{conectadas} de {total} conectados</span>
-                  <span className={`text-sm font-semibold ${dados.pronto ? "text-ok" : "text-warn"}`}>
-                    {dados.pronto ? "Tudo pronto para usar com IA de verdade." : "Falta conectar a inteligência artificial para sair do modo demonstração."}
+                <div className="flex flex-col gap-0.5 mb-2">
+                  <span className="text-sm font-semibold">
+                    Para rodar: <span className={dados.pronto ? "text-ok" : "text-warn"}>{dados.pronto ? "IA conectada" : "falta conectar a IA"}</span>
                   </span>
+                  {opcionaisFaltando.length > 0 && (
+                    <span className="text-sm text-ink-2">Faz mais com: {opcionaisFaltando.map((i) => i.titulo).join(", ")}</span>
+                  )}
                 </div>
                 <div className="h-2 rounded-full bg-line overflow-hidden">
                   <div className="h-full rounded-full bg-[image:var(--gradiente-acento)] transition-[width]" style={{ width: `${progresso}%` }} />
@@ -119,6 +122,19 @@ export function SetupPage({ marca, nome, area, segmento }: { marca: string; nome
                   <Link href="/?exemplo=1" className="btn-primary !w-auto">Testar com um exemplo</Link>
                   <Link href="/" className="btn-ghost">Ir para o app</Link>
                 </div>
+                {opcionaisFaltando.length > 0 && (
+                  <div className="mt-5 pt-5 border-t border-line">
+                    <h3 className="text-sm font-bold mb-2">Quer ir além?</h3>
+                    <ul className="flex flex-col gap-1.5">
+                      {opcionaisFaltando.map((i) => (
+                        <li key={i.id} className="text-sm">
+                          <a href={`#${i.id}`} className="font-semibold text-accent underline underline-offset-2">{i.titulo}</a>
+                          <span className="text-ink-2"> — {i.beneficio || i.descricao}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </section>
             )}
 

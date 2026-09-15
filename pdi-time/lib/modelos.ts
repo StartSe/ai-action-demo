@@ -2,6 +2,13 @@
 // (Client, em ErrorBox: "Usar um modelo gratuito"). Sem nenhum import node:*, mesmo padrão de lib/conta-comum.ts.
 export type Opcao = { valor: string; rotulo: string; /** Agrupamento do <select> em lib/setup-comum.ts/components/setup.tsx (só usado por MODELOS_GRATUITOS). */ grupo?: "recomendado" | "gratuito" | "pago" };
 
+/** Um próximo passo sugerido (integração ainda não configurada): usado pelo popover "Faz mais com..." da
+ * Topbar (components/ui.tsx) e pelo cartão "Tudo pronto" de /setup. Mora aqui (não em lib/setup-comum.ts,
+ * o dono natural) porque o caminho desse módulo contém "/setup", que scripts/verificar-jargao.mjs trata
+ * como jargão técnico ao ser importado por um componente varrido pelo script (ui.tsx não é isento, ao
+ * contrário de setup.tsx). */
+export type ProximoPasso = { id: string; titulo: string; beneficio: string; url: string };
+
 export const MODELOS_GRATUITOS: Opcao[] = [
   { valor: "nvidia/nemotron-3-super-120b-a12b:free", rotulo: "Nemotron 3 Super 120B (gratuito, padrão)", grupo: "recomendado" },
   { valor: "google/gemma-4-31b-it:free", rotulo: "Gemma 4 31B (gratuito)", grupo: "gratuito" },

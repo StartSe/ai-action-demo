@@ -4,10 +4,10 @@ import { getConfig, mascarar, origemConfig } from "./store";
 import { enviar, type Canal } from "./notificacoes";
 import { conectar, listarFerramentas, type FerramentaMCP } from "./mcp-cliente";
 import { conexaoAutorizada } from "./mcp-oauth";
-import { MODELOS_GRATUITOS, MODELOS_VISAO, type Opcao } from "./modelos";
+import { MODELOS_GRATUITOS, MODELOS_VISAO, type Opcao, type ProximoPasso } from "./modelos";
 import { interpretarFalha } from "./ai";
 
-export type { Opcao };
+export type { Opcao, ProximoPasso };
 export { MODELOS_GRATUITOS, MODELOS_VISAO };
 
 export type Campo = {
@@ -53,6 +53,15 @@ export type IntegracaoStatus = Omit<Integracao, "campos" | "testar"> & { campos:
 export function integracaoConfigurada(i: Integracao): boolean {
   if (i.campoConectado) return Boolean(getConfig(i.campoConectado));
   return i.campos.filter((c) => !c.opcional).every((c) => Boolean(getConfig(c.chave)));
+}
+
+/** Integrações ainda não configuradas, obrigatória primeiro, em linguagem de negócio para "o que mais dá
+ * para conectar" (popover da Topbar, cartão "Tudo pronto" de /setup). */
+export function calcularProximos(lista: Integracao[]): ProximoPasso[] {
+  return lista
+    .filter((i) => !integracaoConfigurada(i))
+    .sort((a, b) => Number(b.obrigatoria) - Number(a.obrigatoria))
+    .map((i) => ({ id: i.id, titulo: i.titulo, beneficio: i.beneficio ?? i.descricao, url: `/setup#${i.id}` }));
 }
 
 export function lerConfig(i: Integracao): Record<string, string | undefined> {

@@ -7,12 +7,12 @@ import type { CodigoErroIA, Meta } from "@/lib/ai";
 import { numero, data } from "@/lib/formato";
 import { NAVEGACAO, type ItemNavegacao } from "@/lib/navegacao";
 import { ilustracaoDoSegmento, type Segmento } from "@/lib/ilustracao";
-import { MODELOS_GRATUITOS } from "@/lib/modelos";
+import { MODELOS_GRATUITOS, type ProximoPasso } from "@/lib/modelos";
 
 export type UsuarioTopbar = { nome: string; email: string };
 export type NotificacaoTopbar = { id: string; texto: string; url?: string };
 
-export type Status = { ai: boolean; demo: boolean; model: string; integrations?: Record<string, boolean>; setup?: { pronto: boolean; url: string }; usuario?: UsuarioTopbar | null };
+export type Status = { ai: boolean; demo: boolean; model: string; integrations?: Record<string, boolean>; setup?: { pronto: boolean; url: string }; usuario?: UsuarioTopbar | null; proximos?: ProximoPasso[] };
 
 export function useStatus() {
   const [status, setStatus] = useState<Status | null>(null);
@@ -79,6 +79,7 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
   const demo = status ? !status.ai : false;
   const estadoChip = erro || !status ? "pendente" : status.ai ? "conectado" : "demonstracao";
   const badge = <span className={`chip-status chip-status-${estadoChip} min-w-[128px] justify-center max-md:min-w-0 max-md:px-2 max-md:text-[11px]`}>{texto}</span>;
+  const proximos = status?.ai ? (status.proximos ?? []).slice(0, 3) : [];
 
   function ativo(href: string) {
     return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
@@ -113,6 +114,23 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
                 <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-72 max-md:w-64 card p-4 text-[13.5px] text-ink">
                   <p className="mb-3">{resumo}</p>
                   <Link href="/setup" className="font-bold text-accent underline underline-offset-2" onClick={() => setPopoverAberto(false)}>Conectar a IA em 1 minuto</Link>
+                </div>
+              )}
+            </div>
+          ) : proximos.length > 0 ? (
+            <div className="relative" ref={popoverRef}>
+              <button type="button" className="cursor-pointer" aria-haspopup="dialog" aria-expanded={popoverAberto} onClick={() => setPopoverAberto((v) => !v)}>
+                {badge}
+              </button>
+              {popoverAberto && (
+                <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-72 max-md:w-64 card p-1.5 text-[13.5px] text-ink">
+                  <p className="font-bold px-3 pt-2 pb-1">Faz mais com...</p>
+                  {proximos.map((p) => (
+                    <Link key={p.id} href={p.url} className="block px-3 py-2 rounded-md hover:bg-accent-soft" onClick={() => setPopoverAberto(false)}>
+                      <span className="block font-semibold text-ink">{p.titulo}</span>
+                      <span className="block text-ink-2 text-[12.5px]">{p.beneficio}</span>
+                    </Link>
+                  ))}
                 </div>
               )}
             </div>
