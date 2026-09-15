@@ -213,6 +213,19 @@
       "captura": "capturas/custos-ia.png",
       "capacidades": ["artefato", "mcp", "rotina"],
       "demo": null
+    },
+    {
+      "id": "clone-site",
+      "nome": "Clone de Site",
+      "areas": ["Marketing", "Produto"],
+      "problema": "Montar uma página nova do zero leva semanas entre briefing, agência e ajustes.",
+      "ia": "Lê a captura de uma página de referência e escreve a sua versão em HTML, em português, com o nome e as cores da sua marca.",
+      "integracoes": "Só a IA (OpenRouter, modelo com visão).",
+      "acento": "#374151",
+      "porta": 3015,
+      "captura": "capturas/clone-site.png",
+      "capacidades": ["artefato", "mcp"],
+      "demo": null
     }
   ]
 }

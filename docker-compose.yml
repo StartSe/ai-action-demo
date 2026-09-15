@@ -109,6 +109,13 @@ services:
     ports: ["3014:10000"]
     volumes: [custos-ia-dados:/app/data]
 
+  clone-site:
+    <<: *app
+    build: ./clone-site
+    image: ghcr.io/startse/clone-site:latest
+    ports: ["3015:10000"]
+    volumes: [clone-site-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -124,3 +131,4 @@ volumes:
   bussola-ia-dados:
   simulador-vendas-dados:
   custos-ia-dados:
+  clone-site-dados:

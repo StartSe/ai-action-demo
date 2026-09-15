@@ -392,8 +392,8 @@
         "Verify in browser using dev-browser skill: desktop vazio, ?exemplo=1&captura=1 desktop e celular; alternar a prévia para Celular"
       ],
       "priority": 23,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Prévia usa sandbox='allow-scripts' (origem opaca) em vez de 'allow-same-origin': o Tailwind pela CDN é um script e, sem allow-scripts, o formato Tailwind apareceria sem estilo. Verificado no navegador com playwright-core (sem o skill dev-browser)."
     },
     {
       "id": "US-024",
