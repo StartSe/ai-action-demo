@@ -2,13 +2,13 @@
 // Ao contrário de lib/rotinas.ts, este arquivo NÃO é copiado sem alterar entre apps — cada app registra
 // aqui o que faz sentido rodar sozinho (ver padrão em app/api/f/[token]/route.ts com lib/pdi.ts).
 import { listar as listarHistorico } from "./historico";
-import { registrarExecutor, type Rotina } from "./rotinas";
+import { registrarExecutor, type Rotina, type TipoRotina } from "./rotinas";
 // Registra o executor "checkin-pdi" (lembretes de 30/60/90 dias); não entra em TIPOS_ROTINA porque
 // é criado por um botão próprio do resultado (parametros vêm do PDI), não pelo formulário genérico.
 import "./checkins";
 
 /** Tipos de rotina disponíveis neste app, para o cartão de /setup listar num seletor. */
-export const TIPOS_ROTINA: { tipo: string; rotulo: string }[] = [{ tipo: "resumo-pdi-time", rotulo: "Resumo dos PDIs gerados" }];
+export const TIPOS_ROTINA: TipoRotina[] = [{ tipo: "resumo-pdi-time", rotulo: "Resumo dos PDIs gerados" }];
 
 registrarExecutor("resumo-pdi-time", async (rotina: Rotina) => {
   const desde = rotina.ultimaExecucao ? new Date(rotina.ultimaExecucao) : new Date(0);

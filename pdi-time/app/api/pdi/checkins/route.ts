@@ -2,6 +2,7 @@
 // check-ins" no Resultado). Não é copiado entre apps: a lógica mora em lib/checkins.ts.
 import { criarLembretesCheckin, listarLembretesCheckin } from "@/lib/checkins";
 import { obter } from "@/lib/historico";
+import { motivoCanalIndisponivel } from "@/lib/rotinas";
 import { registrarEnderecoPublico } from "@/lib/setup-comum";
 import { getConfig } from "@/lib/store";
 import type { DadosPDI, PDI } from "@/lib/types";
@@ -29,6 +30,8 @@ export async function POST(req: Request) {
   if (canal === "email" && !destino) {
     return Response.json({ error: "Configure um e-mail de destino em Notificações para receber os lembretes.", motivo: "notificacoes" }, { status: 400 });
   }
+  const motivoCanal = motivoCanalIndisponivel(canal);
+  if (motivoCanal) return Response.json({ error: motivoCanal, motivo: "notificacoes" }, { status: 400 });
 
   const itens = criarLembretesCheckin({ resultadoId, nome: registro.entrada.nome, pdi: registro.saida, desde: registro.entrada.dataConversa, canal, destino });
   return Response.json({ itens });

@@ -8,6 +8,7 @@ type ItemCheckin = { id: string; marco: 30 | 60 | 90; dataUnica: string; executa
 
 export function LembrarCheckins({ resultadoId }: { resultadoId: string }) {
   const [itens, setItens] = useState<ItemCheckin[] | null>(null);
+  const [notificacoesConfiguradas, setNotificacoesConfiguradas] = useState<boolean | null>(null);
   const [criando, setCriando] = useState(false);
   const [erro, setErro] = useState("");
   const [motivoErro, setMotivoErro] = useState("");
@@ -17,6 +18,10 @@ export function LembrarCheckins({ resultadoId }: { resultadoId: string }) {
       .then((r) => r.json())
       .then((d) => setItens(d.itens))
       .catch(() => setItens([]));
+    fetch("/api/status")
+      .then((r) => r.json())
+      .then((d) => setNotificacoesConfiguradas(Boolean(d.integrations?.notificacoes)))
+      .catch(() => setNotificacoesConfiguradas(false));
   }, [resultadoId]);
 
   async function criar() {
@@ -38,7 +43,7 @@ export function LembrarCheckins({ resultadoId }: { resultadoId: string }) {
     }
   }
 
-  if (itens === null) return null;
+  if (itens === null || notificacoesConfiguradas === null) return null;
 
   if (itens.length > 0) {
     // new Date(`${aaaa-mm-dd}T00:00:00`) fixa meia-noite local antes de formatar: passar a string
@@ -47,6 +52,14 @@ export function LembrarCheckins({ resultadoId }: { resultadoId: string }) {
       <p className="text-[13px] text-muted mt-3">
         Check-ins agendados: {itens.map((i) => `${i.marco} dias (${data(new Date(`${i.dataUnica}T00:00:00`), { comAno: true })})`).join(" · ")}.
       </p>
+    );
+  }
+
+  if (!notificacoesConfiguradas) {
+    return (
+      <div className="mt-3">
+        <a href="/setup#notificacoes" className="btn-ghost">Lembrar dos check-ins (precisa de e-mail ou Slack configurado)</a>
+      </div>
     );
   }
 
