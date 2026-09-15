@@ -259,14 +259,17 @@ export default function Page() {
               ) : (
                 <>
                   <ul className="flex flex-col gap-1.5 text-sm mb-3">
-                    {historico.map((h) => (
+                    {historico.slice(0, 3).map((h) => (
                       <li key={h.id} className="flex justify-between gap-3">
                         <Link href={`/r/${h.id}`} className="text-accent-ink font-semibold hover:underline truncate">{h.titulo}</Link>
                         <span className="text-muted shrink-0">{data(h.criadoEm)}</span>
                       </li>
                     ))}
                   </ul>
-                  <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
+                  <div className="flex items-center gap-4">
+                    <Link href="/historico" className="btn-link text-[13px]">Ver todos</Link>
+                    <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
+                  </div>
                 </>
               )}
             </MaisDetalhes>

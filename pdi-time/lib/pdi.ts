@@ -27,7 +27,7 @@ Formato de saída (JSON):
 /** Quando o app é sensível, só salva com opt-in explícito e por 30 dias; pdi-time não é sensível, então sempre salva sem prazo. */
 function idSalvo({ nome, dados, saida, metaGerada, guardar }: { nome: string; dados: DadosPDI; saida: PDI; metaGerada: Meta; guardar?: boolean }) {
   if (SENSIVEL && !guardar) return undefined;
-  return salvar({ tipo: "pdi", titulo: `PDI de ${nome}`, entrada: dados, saida, meta: metaGerada, expiraEmDias: SENSIVEL ? 30 : undefined });
+  return salvar({ tipo: "pdi", titulo: `PDI de ${nome}`, resumo: saida.resumo, entrada: dados, saida, meta: metaGerada, expiraEmDias: SENSIVEL ? 30 : undefined });
 }
 
 export async function gerarPDI(dados: DadosPDI, opts: { guardar?: boolean } = {}): Promise<{ demo: boolean; pdi: PDI; meta: Meta; id?: string }> {
