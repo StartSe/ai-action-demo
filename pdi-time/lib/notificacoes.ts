@@ -18,6 +18,15 @@ export async function enviar(n: Notificacao): Promise<{ ok: boolean; mensagem: s
   return { ok: false, mensagem: "Canal de notificação desconhecido." };
 }
 
+/** Traduz uma falha HTTP de um provedor de envio numa mensagem sem código cru nem corpo do provedor (o detalhe vai só para console.error). */
+function mensagemFalhaEnvio(servico: string, status: number, corpo: string): string {
+  console.error(`Falha ao enviar por ${servico}:`, status, corpo.slice(0, 200));
+  if (status === 401 || status === 403) return `${servico} recusou a credencial salva. Confira a chave ou a URL.`;
+  if (status === 404) return `${servico} não encontrou o destino configurado. Confira o endereço salvo.`;
+  if (status === 429) return `${servico} está limitando o envio agora. Tente de novo em alguns minutos.`;
+  return `Não foi possível enviar pelo ${servico} agora. Tente novamente.`;
+}
+
 async function enviarPorSlack({ destino, titulo, texto, link }: Notificacao): Promise<{ ok: boolean; mensagem: string }> {
   const webhook = getConfig("NOTIFICACOES_SLACK_WEBHOOK");
   if (!webhook) return { ok: false, mensagem: "Cole a URL do webhook do Slack para enviar por esse canal." };
@@ -30,7 +39,7 @@ async function enviarPorSlack({ destino, titulo, texto, link }: Notificacao): Pr
   } catch {
     return { ok: false, mensagem: "Não foi possível conectar ao Slack." };
   }
-  if (!resposta.ok) return { ok: false, mensagem: `Slack respondeu HTTP ${resposta.status}.` };
+  if (!resposta.ok) return { ok: false, mensagem: mensagemFalhaEnvio("Slack", resposta.status, await resposta.text().catch(() => "")) };
   return { ok: true, mensagem: "Mensagem enviada no Slack." };
 }
 
@@ -56,8 +65,7 @@ async function enviarPorResend(chave: string, destino: string, titulo: string, h
     return { ok: false, mensagem: "Não foi possível conectar ao Resend." };
   }
   if (!resposta.ok) {
-    const corpo = await resposta.text().catch(() => "");
-    return { ok: false, mensagem: `Resend respondeu HTTP ${resposta.status}.${corpo ? ` ${corpo.slice(0, 200)}` : ""}` };
+    return { ok: false, mensagem: mensagemFalhaEnvio("Resend", resposta.status, await resposta.text().catch(() => "")) };
   }
   return { ok: true, mensagem: `E-mail enviado para ${destino} pelo Resend.` };
 }
@@ -77,6 +85,7 @@ async function enviarPorSmtp(host: string, destino: string, titulo: string, html
     await transportador.sendMail({ from: usuario || host, to: destino, subject: titulo, html });
     return { ok: true, mensagem: `E-mail enviado para ${destino} pelo SMTP.` };
   } catch (err) {
-    return { ok: false, mensagem: err instanceof Error ? err.message : "Falha ao enviar pelo SMTP." };
+    console.error("Falha ao enviar por SMTP:", err);
+    return { ok: false, mensagem: "Não foi possível enviar pelo SMTP agora. Confira o servidor, a porta e as credenciais salvas." };
   }
 }

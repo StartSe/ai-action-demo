@@ -5,6 +5,7 @@ import { enviar, type Canal } from "./notificacoes";
 import { conectar, listarFerramentas, type FerramentaMCP } from "./mcp-cliente";
 import { conexaoAutorizada } from "./mcp-oauth";
 import { MODELOS_GRATUITOS, MODELOS_VISAO, type Opcao } from "./modelos";
+import { interpretarFalha } from "./ai";
 
 export type { Opcao };
 export { MODELOS_GRATUITOS, MODELOS_VISAO };
@@ -36,6 +37,8 @@ export type Integracao = {
   link?: { url: string; rotulo: string };
   /** Fluxo de conexão em um clique. "openrouter" é genérico; outros são tratados pelo app. */
   oauth?: { tipo: string; rotulo: string; url: string };
+  /** Nota curta mostrada abaixo do botão de conexão em um clique, antes de conectar. */
+  notaConexao?: string;
   campos: Campo[];
   /** Valida as chaves salvas chamando a integração. */
   testar?: (config: Record<string, string | undefined>) => Promise<{ ok: boolean; mensagem: string }>;
@@ -94,6 +97,27 @@ export function baseUrl(req: Request): string {
   return `${proto}://${host}`;
 }
 
+// Modelos gratuitos vivos do catálogo do OpenRouter, além dos fixos de lib/modelos.ts. Cache de 1 hora em
+// memória: a lista completa do catálogo não varia por usuário, então uma única cópia por processo basta.
+const CACHE_MODELOS_MS = 60 * 60 * 1000;
+let cacheModelosDinamicos: { expiraEm: number; modelos: Opcao[] } | null = null;
+
+async function modelosGratuitosDinamicos(chave: string): Promise<Opcao[]> {
+  if (cacheModelosDinamicos && cacheModelosDinamicos.expiraEm > Date.now()) return cacheModelosDinamicos.modelos;
+  const r = await fetch("https://openrouter.ai/api/v1/models", { headers: { Authorization: `Bearer ${chave}` } });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const data = (await r.json()) as { data?: { id: string; name?: string; context_length?: number }[] };
+  const existentes = new Set(MODELOS_GRATUITOS.map((m) => m.valor));
+  const extras: Opcao[] = (data.data ?? [])
+    .filter((m) => m.id.endsWith(":free") && !existentes.has(m.id))
+    .sort((a, b) => (b.context_length ?? 0) - (a.context_length ?? 0))
+    .slice(0, 8)
+    .map((m) => ({ valor: m.id, rotulo: m.name || m.id, grupo: "gratuito" }));
+  const modelos = [...MODELOS_GRATUITOS, ...extras];
+  cacheModelosDinamicos = { expiraEm: Date.now() + CACHE_MODELOS_MS, modelos };
+  return modelos;
+}
+
 /** Integração de IA usada por todos os apps. */
 export const OPENROUTER: Integracao = {
   id: "openrouter",
@@ -103,20 +127,58 @@ export const OPENROUTER: Integracao = {
   obrigatoria: true,
   link: { url: "https://openrouter.ai/keys", rotulo: "Criar uma chave gratuita" },
   oauth: { tipo: "openrouter", rotulo: "Conectar a IA", url: "/api/setup/oauth/openrouter" },
+  notaConexao: "Conta gratuita do OpenRouter basta. Os modelos gratuitos têm limite diário; créditos ampliam o limite e liberam modelos melhores.",
   campos: [
     { chave: "OPENROUTER_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk-or-v1-..." },
-    { chave: "OPENROUTER_MODEL", rotulo: "Modelo", tipo: "select", opcional: true, padrao: "nvidia/nemotron-3-super-120b-a12b:free", opcoes: MODELOS_GRATUITOS, ajuda: "Comece com um gratuito. Troque por um pago quando quiser mais qualidade." },
+    {
+      chave: "OPENROUTER_MODEL",
+      rotulo: "Modelo de IA",
+      tipo: "select",
+      opcional: true,
+      padrao: "nvidia/nemotron-3-super-120b-a12b:free",
+      opcoes: MODELOS_GRATUITOS,
+      ajuda: 'Comece pelo recomendado. Se aparecer "sem crédito" ou "limite diário", troque por outro gratuito ou adicione créditos.',
+      opcoesDinamicas: async (config) => {
+        const chave = config.OPENROUTER_API_KEY;
+        if (!chave) return MODELOS_GRATUITOS;
+        try {
+          return await modelosGratuitosDinamicos(chave);
+        } catch {
+          return MODELOS_GRATUITOS;
+        }
+      },
+    },
     { chave: "OPENROUTER_MODEL_VISAO", rotulo: "Modelo para imagens", tipo: "select", opcional: true, avancado: true, padrao: MODELOS_VISAO[0].valor, opcoes: MODELOS_VISAO, ajuda: "Modelo usado quando o app precisa ler uma imagem" },
   ],
   testar: async (config) => {
     const chave = config.OPENROUTER_API_KEY;
     if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
     const r = await fetch("https://openrouter.ai/api/v1/auth/key", { headers: { Authorization: `Bearer ${chave}` } });
-    if (r.status === 401) return { ok: false, mensagem: "Chave inválida ou revogada." };
-    if (!r.ok) return { ok: false, mensagem: `OpenRouter respondeu HTTP ${r.status}.` };
-    const data = (await r.json()) as { data?: { label?: string; limit?: number | null; usage?: number } };
-    const uso = data.data?.usage != null ? ` Uso até agora: US$ ${Number(data.data.usage).toFixed(2)}.` : "";
-    return { ok: true, mensagem: `Conectado.${uso} Modelo: ${config.OPENROUTER_MODEL || "padrão gratuito"}.` };
+    if (!r.ok) {
+      const detalhe = await r.text().catch(() => "");
+      return { ok: false, mensagem: interpretarFalha(r, detalhe).message };
+    }
+    const data = (await r.json()) as { data?: { limit?: number | null; usage?: number; is_free_tier?: boolean } };
+
+    const modelo = config.OPENROUTER_MODEL || "nvidia/nemotron-3-super-120b-a12b:free";
+    const resposta = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${chave}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: 'Responda só "ok".' }], max_tokens: 5 }),
+    });
+    if (!resposta.ok) {
+      const detalhe = await resposta.text().catch(() => "");
+      return { ok: false, mensagem: interpretarFalha(resposta, detalhe).message };
+    }
+
+    const limite = data.data?.limit;
+    const restantes = limite != null ? Math.max(0, limite - (data.data?.usage ?? 0)) : null;
+    const plano = data.data?.is_free_tier
+      ? "Plano gratuito: fique nos modelos gratuitos ou adicione créditos."
+      : restantes != null
+        ? `Créditos: US$ ${restantes.toFixed(2)} restantes.`
+        : `Uso até agora: US$ ${Number(data.data?.usage ?? 0).toFixed(2)}.`;
+    return { ok: true, mensagem: `Conectado e testado com sucesso. ${plano}` };
   },
 };
 

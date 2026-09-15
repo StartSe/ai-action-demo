@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { IlustracaoSegmento, MaisDetalhes, Topbar, useStatus } from "./ui";
-import type { CampoStatus, IntegracaoStatus } from "@/lib/setup-comum";
+import type { CampoStatus, IntegracaoStatus, Opcao } from "@/lib/setup-comum";
 import type { Segmento } from "@/lib/ilustracao";
 
 type Resposta = { integracoes: IntegracaoStatus[]; pronto: boolean };
@@ -260,6 +260,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque }: { integ
               <a href={i.oauth.url} className="btn-primary !w-auto max-md:!w-full">{i.oauth.rotulo}</a>
             )}
           </div>
+          {!i.configurada && i.notaConexao && <p className="text-[12.5px] text-muted -mt-2 mb-4">{i.notaConexao}</p>}
           <MaisDetalhes titulo="Opções avançadas: colar uma chave">
             {campos}
             {opcoesAvancadas}
@@ -305,6 +306,13 @@ function passosSetup(i: IntegracaoStatus): string[] {
  * `select`s com mais opções (ex.: modelo de IA) continuam como `select`. */
 const LIMITE_BOTOES = 3;
 
+// Ordem fixa dos grupos de um <select> com Opcao.grupo definido (hoje só o modelo de IA).
+const GRUPOS_OPCAO: { chave: NonNullable<Opcao["grupo"]>; rotulo: string }[] = [
+  { chave: "recomendado", rotulo: "Recomendado (gratuito)" },
+  { chave: "gratuito", rotulo: "Outros gratuitos" },
+  { chave: "pago", rotulo: "Pagos (mais qualidade)" },
+];
+
 function CampoSetup({ campo: c, valor, aoMudar }: { campo: CampoStatus; valor: string; aoMudar: (v: string) => void }) {
   const id = `campo-${c.chave}`;
   const rotulo = `${c.rotulo}${c.opcional ? " (opcional)" : ""}`;
@@ -339,7 +347,17 @@ function CampoSetup({ campo: c, valor, aoMudar }: { campo: CampoStatus; valor: s
       <label htmlFor={id} className="text-[13px] font-semibold">{rotulo}</label>
       {c.tipo === "select" ? (
         <select id={id} className="input" value={atual} onChange={(e) => aoMudar(e.target.value)}>
-          {opcoes.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+          {opcoes.some((o) => o.grupo)
+            ? GRUPOS_OPCAO.map((g) => {
+                const doGrupo = opcoes.filter((o) => o.grupo === g.chave);
+                if (doGrupo.length === 0) return null;
+                return (
+                  <optgroup key={g.chave} label={g.rotulo}>
+                    {doGrupo.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+                  </optgroup>
+                );
+              })
+            : opcoes.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
           {c.valorVisivel && !opcoes.some((o) => o.valor === c.valorVisivel) && <option value={c.valorVisivel}>{c.valorVisivel}</option>}
         </select>
       ) : (

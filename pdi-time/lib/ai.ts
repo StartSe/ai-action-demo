@@ -2,7 +2,7 @@
 // Sem OPENROUTER_API_KEY o app entra em modo demonstração (ver lib/demo.ts).
 
 import { getConfig } from "./store";
-import { MODELOS_VISAO } from "./setup-comum";
+import { MODELOS_VISAO } from "./modelos";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 

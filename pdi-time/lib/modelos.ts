@@ -1,13 +1,13 @@
 // Lista de modelos do OpenRouter usada tanto por lib/setup-comum.ts (Server) quanto por components/ui.tsx
 // (Client, em ErrorBox: "Usar um modelo gratuito"). Sem nenhum import node:*, mesmo padrão de lib/conta-comum.ts.
-export type Opcao = { valor: string; rotulo: string };
+export type Opcao = { valor: string; rotulo: string; /** Agrupamento do <select> em lib/setup-comum.ts/components/setup.tsx (só usado por MODELOS_GRATUITOS). */ grupo?: "recomendado" | "gratuito" | "pago" };
 
 export const MODELOS_GRATUITOS: Opcao[] = [
-  { valor: "nvidia/nemotron-3-super-120b-a12b:free", rotulo: "Nemotron 3 Super 120B (gratuito, padrão)" },
-  { valor: "google/gemma-4-31b-it:free", rotulo: "Gemma 4 31B (gratuito)" },
-  { valor: "nvidia/nemotron-3-ultra-550b-a55b:free", rotulo: "Nemotron 3 Ultra 550B (gratuito)" },
-  { valor: "anthropic/claude-sonnet-4.5", rotulo: "Claude Sonnet 4.5 (pago, mais qualidade)" },
-  { valor: "openai/gpt-5-mini", rotulo: "GPT-5 mini (pago)" },
+  { valor: "nvidia/nemotron-3-super-120b-a12b:free", rotulo: "Nemotron 3 Super 120B (gratuito, padrão)", grupo: "recomendado" },
+  { valor: "google/gemma-4-31b-it:free", rotulo: "Gemma 4 31B (gratuito)", grupo: "gratuito" },
+  { valor: "nvidia/nemotron-3-ultra-550b-a55b:free", rotulo: "Nemotron 3 Ultra 550B (gratuito)", grupo: "gratuito" },
+  { valor: "anthropic/claude-sonnet-4.5", rotulo: "Claude Sonnet 4.5 (pago, mais qualidade)", grupo: "pago" },
+  { valor: "openai/gpt-5-mini", rotulo: "GPT-5 mini (pago)", grupo: "pago" },
 ];
 
 /** Modelos com suporte a imagem no OpenRouter. Verificado em 2026-09-14 em openrouter.ai/models (filtro "image" em input modalities); primeiro gratuito. */
