@@ -28,6 +28,9 @@ export type Integracao = {
   id: string;
   titulo: string;
   descricao: string;
+  /** Descrição curta (uma linha, em linguagem de negócio) usada no lugar de `descricao` no cartão do
+   * cabeçalho, ex.: "Liga a IA que gera o plano". Opcional: quando ausente, o cartão usa `descricao`. */
+  beneficio?: string;
   obrigatoria: boolean;
   /** Onde a pessoa obtém a chave. */
   link?: { url: string; rotulo: string };
@@ -96,6 +99,7 @@ export const OPENROUTER: Integracao = {
   id: "openrouter",
   titulo: "Inteligência artificial",
   descricao: "Uma conta gratuita no OpenRouter dá acesso a dezenas de modelos, vários sem custo. Conecte em um clique ou cole uma chave.",
+  beneficio: "Liga a IA que gera o plano de desenvolvimento",
   obrigatoria: true,
   link: { url: "https://openrouter.ai/keys", rotulo: "Criar uma chave gratuita" },
   oauth: { tipo: "openrouter", rotulo: "Conectar a IA", url: "/api/setup/oauth/openrouter" },
@@ -121,6 +125,7 @@ export const NOTIFICACOES: Integracao = {
   id: "notificacoes",
   titulo: "Notificações",
   descricao: "Escolha por onde o app avisa você quando um formulário público chega ou uma rotina roda: e-mail ou Slack.",
+  beneficio: "Avisa você quando um formulário ou rotina precisar de atenção",
   obrigatoria: false,
   link: { url: "https://resend.com/api-keys", rotulo: "Criar uma chave gratuita do Resend" },
   campos: [
