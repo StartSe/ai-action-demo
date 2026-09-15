@@ -67,7 +67,14 @@ async function enviarPorResend(chave: string, destino: string, titulo: string, h
     return { ok: false, mensagem: "Não foi possível conectar ao Resend agora. Confira a conexão do servidor e tente de novo." };
   }
   if (!resposta.ok) {
-    return { ok: false, mensagem: mensagemFalhaEnvio("Resend", resposta.status, await resposta.text().catch(() => "")) };
+    const corpo = await resposta.text().catch(() => "");
+    // Conta gratuita do Resend sem domínio verificado: só envia para o e-mail dono da chave. Diagnóstico
+    // pelo texto porque o Resend devolve 403 (o mesmo status de chave recusada) para os dois casos.
+    if (resposta.status === 403 && /own email address|verify a domain/i.test(corpo)) {
+      console.error("Falha ao enviar por Resend (domínio não verificado):", resposta.status, corpo.slice(0, 200));
+      return { ok: false, mensagem: "O Resend só envia para o seu próprio e-mail até você verificar um domínio; use o e-mail da conta ou verifique o domínio em resend.com/domains." };
+    }
+    return { ok: false, mensagem: mensagemFalhaEnvio("Resend", resposta.status, corpo) };
   }
   return { ok: true, mensagem: `E-mail enviado para ${destino} pelo Resend.` };
 }

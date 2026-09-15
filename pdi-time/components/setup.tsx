@@ -218,10 +218,14 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque }: { integ
   }
 
   const chaveSecreta = i.campos.find((c) => c.tipo === "secret");
-  const passos = i.oauth ? [] : passosSetup(i);
   const aoMudarCampo = (chave: string) => (v: string) => setValores((s) => ({ ...s, [chave]: v }));
-  const camposPrincipais = i.campos.filter((c) => !c.avancado);
-  const camposAvancados = i.campos.filter((c) => c.avancado);
+  // Valor efetivo de cada campo agora (edição ainda não salva > salvo > padrão), usado para decidir
+  // `visivelQuando` sem depender de um novo PUT — trocar o canal já mostra o campo certo na hora.
+  const valoresAtuais = Object.fromEntries(i.campos.map((c) => [c.chave, valores[c.chave] || c.valorVisivel || c.padrao || ""]));
+  const campoVisivel = (c: CampoStatus) => !c.visivelQuando || c.visivelQuando.valores.includes(valoresAtuais[c.visivelQuando.campo] ?? "");
+  const passos = i.oauth ? [] : passosSetup(i, valoresAtuais);
+  const camposPrincipais = i.campos.filter((c) => !c.avancado && campoVisivel(c));
+  const camposAvancados = i.campos.filter((c) => c.avancado && campoVisivel(c));
 
   const campos = (
     <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4 [&>*]:min-w-0">
@@ -305,14 +309,21 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque }: { integ
   );
 }
 
-/** Passo a passo de até três passos, gerado a partir do link para obter a chave e da ajuda do primeiro campo.
+/** Passo a passo de até três passos, gerado a partir do link para obter a chave. A ajuda do primeiro
+ * campo não entra aqui: ela já aparece sob o próprio campo (`CampoSetup`), repeti-la duplicaria o texto.
  * Uma integração sem nenhum campo secreto (ex.: as cotações de câmbio do custos-ia) não tem chave para colar:
- * o último passo fala em preencher os campos. */
-function passosSetup(i: IntegracaoStatus): string[] {
+ * o último passo fala em preencher os campos. Notificações tem um passo a passo próprio por canal, porque
+ * o caminho (Resend/SMTP para e-mail, webhook para Slack) muda por completo conforme a escolha. */
+function passosSetup(i: IntegracaoStatus, valoresAtuais: Record<string, string>): string[] {
+  if (i.id === "notificacoes") {
+    const canal = valoresAtuais.NOTIFICACOES_CANAL || "email";
+    return canal === "slack"
+      ? ["No Slack, crie um webhook de entrada em Aplicativos › Incoming Webhooks e cole a URL abaixo."]
+      : ["Crie uma chave gratuita no Resend e cole abaixo; ou preencha o SMTP em Opções avançadas."];
+  }
   const passos: string[] = [];
   const temChave = i.campos.some((c) => c.tipo === "secret");
   if (i.link) passos.push(`Abra "${i.link.rotulo}" e copie a chave.`);
-  if (i.campos[0]?.ajuda) passos.push(i.campos[0].ajuda);
   passos.push(temChave ? "Cole a chave abaixo e clique em Salvar." : "Preencha os campos abaixo e clique em Salvar.");
   return passos.slice(0, 3);
 }

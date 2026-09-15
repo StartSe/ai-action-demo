@@ -19,6 +19,9 @@ export type Campo = {
   opcional?: boolean;
   /** Campo secundário: fica dentro de "Opções avançadas" no cartão, em vez do grupo principal. */
   avancado?: boolean;
+  /** Mostra o campo só quando outro campo do mesmo cartão (`campo`) já tiver um dos `valores` indicados
+   * (salvo ou ainda não salvo). Ex.: mostrar o webhook do Slack só quando o canal escolhido for "slack". */
+  visivelQuando?: { campo: string; valores: string[] };
   padrao?: string;
   opcoes?: Opcao[];
   /** Opções carregadas da própria integração (ex.: quadros do Trello) quando as chaves anteriores já existem. */
@@ -202,12 +205,12 @@ export const NOTIFICACOES: Integracao = {
   campos: [
     { chave: "NOTIFICACOES_CANAL", rotulo: "Canal", tipo: "select", padrao: "email", opcoes: [{ valor: "email", rotulo: "E-mail" }, { valor: "slack", rotulo: "Slack" }] },
     { chave: "NOTIFICACOES_DESTINO", rotulo: "Destino", tipo: "text", opcional: true, placeholder: "voce@empresa.com", ajuda: "Para e-mail, o endereço que recebe. Para Slack, opcional (sobrepõe o canal padrão do webhook)." },
-    { chave: "NOTIFICACOES_RESEND_API_KEY", rotulo: "Chave do Resend", tipo: "secret", opcional: true, placeholder: "re_...", ajuda: "Para enviar e-mail sem servidor próprio. Alternativa: preencha os dados de SMTP abaixo." },
-    { chave: "NOTIFICACOES_SMTP_HOST", rotulo: "Servidor SMTP", tipo: "text", opcional: true, placeholder: "smtp.seudominio.com" },
-    { chave: "NOTIFICACOES_SMTP_PORTA", rotulo: "Porta SMTP", tipo: "text", opcional: true, placeholder: "587" },
-    { chave: "NOTIFICACOES_SMTP_USUARIO", rotulo: "Usuário SMTP", tipo: "text", opcional: true },
-    { chave: "NOTIFICACOES_SMTP_SENHA", rotulo: "Senha SMTP", tipo: "secret", opcional: true },
-    { chave: "NOTIFICACOES_SLACK_WEBHOOK", rotulo: "URL do webhook de entrada do Slack", tipo: "secret", opcional: true, placeholder: "https://hooks.slack.com/services/..." },
+    { chave: "NOTIFICACOES_RESEND_API_KEY", rotulo: "Chave do Resend", tipo: "secret", opcional: true, placeholder: "re_...", ajuda: "Para enviar e-mail sem servidor próprio. Alternativa: preencha os dados de SMTP em Opções avançadas.", visivelQuando: { campo: "NOTIFICACOES_CANAL", valores: ["email"] } },
+    { chave: "NOTIFICACOES_SLACK_WEBHOOK", rotulo: "URL do webhook de entrada do Slack", tipo: "secret", opcional: true, placeholder: "https://hooks.slack.com/services/...", visivelQuando: { campo: "NOTIFICACOES_CANAL", valores: ["slack"] } },
+    { chave: "NOTIFICACOES_SMTP_HOST", rotulo: "Servidor SMTP", tipo: "text", opcional: true, avancado: true, placeholder: "smtp.seudominio.com" },
+    { chave: "NOTIFICACOES_SMTP_PORTA", rotulo: "Porta SMTP", tipo: "text", opcional: true, avancado: true, placeholder: "587" },
+    { chave: "NOTIFICACOES_SMTP_USUARIO", rotulo: "Usuário SMTP", tipo: "text", opcional: true, avancado: true },
+    { chave: "NOTIFICACOES_SMTP_SENHA", rotulo: "Senha SMTP", tipo: "secret", opcional: true, avancado: true },
   ],
   testar: async (config) => {
     const canal = (config.NOTIFICACOES_CANAL as Canal | undefined) || "email";
