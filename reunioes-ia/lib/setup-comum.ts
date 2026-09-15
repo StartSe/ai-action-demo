@@ -127,29 +127,36 @@ export const MODELOS_VISAO: Opcao[] = [
   { valor: "anthropic/claude-sonnet-4.5", rotulo: "Claude Sonnet 4.5 (pago, mais qualidade)" },
 ];
 
-export const OPENROUTER: Integracao = {
-  id: "openrouter",
-  titulo: "Inteligência artificial",
-  descricao: "Uma conta gratuita no OpenRouter dá acesso a dezenas de modelos, vários sem custo. Conecte em um clique ou cole uma chave.",
-  obrigatoria: true,
-  link: { url: "https://openrouter.ai/keys", rotulo: "Criar uma chave gratuita" },
-  oauth: { tipo: "openrouter", rotulo: "Conectar a IA", url: "/api/setup/oauth/openrouter" },
-  campos: [
-    { chave: "OPENROUTER_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk-or-v1-..." },
-    { chave: "OPENROUTER_MODEL", rotulo: "Modelo", tipo: "select", opcional: true, padrao: "nvidia/nemotron-3-super-120b-a12b:free", opcoes: MODELOS_GRATUITOS, ajuda: "Comece com um gratuito. Troque por um pago quando quiser mais qualidade." },
-    { chave: "OPENROUTER_MODEL_VISAO", rotulo: "Modelo para imagens", tipo: "select", opcional: true, avancado: true, padrao: MODELOS_VISAO[0].valor, opcoes: MODELOS_VISAO, ajuda: "Modelo usado quando o app precisa ler uma imagem" },
-  ],
-  testar: async (config) => {
-    const chave = config.OPENROUTER_API_KEY;
-    if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
-    const r = await fetch("https://openrouter.ai/api/v1/auth/key", { headers: { Authorization: `Bearer ${chave}` } });
-    if (r.status === 401) return { ok: false, mensagem: "Chave inválida ou revogada." };
-    if (!r.ok) return { ok: false, mensagem: `OpenRouter respondeu HTTP ${r.status}.` };
-    const data = (await r.json()) as { data?: { label?: string; limit?: number | null; usage?: number } };
-    const uso = data.data?.usage != null ? ` Uso até agora: US$ ${Number(data.data.usage).toFixed(2)}.` : "";
-    return { ok: true, mensagem: `Conectado.${uso} Modelo: ${config.OPENROUTER_MODEL || "padrão gratuito"}.` };
-  },
-};
+/** Integração de IA usada por todos os apps. Passe `visao: true` só nos apps que realmente leem
+ * imagem (hoje `clone-site` e `custos-ia`) — os demais não ganham o campo "Modelo para imagens". */
+export function openrouter({ visao = false }: { visao?: boolean } = {}): Integracao {
+  const camposVisao: Campo[] = visao
+    ? [{ chave: "OPENROUTER_MODEL_VISAO", rotulo: "Modelo para imagens", tipo: "select", opcional: true, avancado: true, padrao: MODELOS_VISAO[0].valor, opcoes: MODELOS_VISAO, ajuda: "Modelo usado quando o app precisa ler uma imagem" }]
+    : [];
+  return {
+    id: "openrouter",
+    titulo: "Inteligência artificial",
+    descricao: "Uma conta gratuita no OpenRouter dá acesso a dezenas de modelos, vários sem custo. Conecte em um clique ou cole uma chave.",
+    obrigatoria: true,
+    link: { url: "https://openrouter.ai/keys", rotulo: "Criar uma chave gratuita" },
+    oauth: { tipo: "openrouter", rotulo: "Conectar a IA", url: "/api/setup/oauth/openrouter" },
+    campos: [
+      { chave: "OPENROUTER_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk-or-v1-..." },
+      { chave: "OPENROUTER_MODEL", rotulo: "Modelo", tipo: "select", opcional: true, padrao: "nvidia/nemotron-3-super-120b-a12b:free", opcoes: MODELOS_GRATUITOS, ajuda: "Comece com um gratuito. Troque por um pago quando quiser mais qualidade." },
+      ...camposVisao,
+    ],
+    testar: async (config) => {
+      const chave = config.OPENROUTER_API_KEY;
+      if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
+      const r = await fetch("https://openrouter.ai/api/v1/auth/key", { headers: { Authorization: `Bearer ${chave}` } });
+      if (r.status === 401) return { ok: false, mensagem: "Chave inválida ou revogada." };
+      if (!r.ok) return { ok: false, mensagem: `OpenRouter respondeu HTTP ${r.status}.` };
+      const data = (await r.json()) as { data?: { label?: string; limit?: number | null; usage?: number } };
+      const uso = data.data?.usage != null ? ` Uso até agora: US$ ${Number(data.data.usage).toFixed(2)}.` : "";
+      return { ok: true, mensagem: `Conectado.${uso} Modelo: ${config.OPENROUTER_MODEL || "padrão gratuito"}.` };
+    },
+  };
+}
 
 /** Por onde o app avisa você quando um formulário chega ou uma rotina roda. */
 export const NOTIFICACOES: Integracao = {

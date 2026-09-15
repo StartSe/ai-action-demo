@@ -1,5 +1,7 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
-import { OPENROUTER, NOTIFICACOES, type Integracao } from "./setup-comum";
+import { openrouter, NOTIFICACOES, type Integracao } from "./setup-comum";
+
+const OPENROUTER = openrouter();
 
 export const EXA: Integracao = {
   id: "exa",

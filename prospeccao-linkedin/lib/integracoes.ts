@@ -1,6 +1,8 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
-import { integracaoMCP, NOTIFICACOES, OPENROUTER, type Integracao } from "./setup-comum";
+import { integracaoMCP, NOTIFICACOES, openrouter, type Integracao } from "./setup-comum";
 import { getConfig } from "./store";
+
+const OPENROUTER = openrouter();
 
 /** Prefixo das chaves salvas (PROSPECTHALO_URL, PROSPECTHALO_CODIGO, PROSPECTHALO_FERRAMENTAS...). */
 export const PREFIXO_PROSPECTHALO = "PROSPECTHALO";

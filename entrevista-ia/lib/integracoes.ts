@@ -1,6 +1,8 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 import { getConfig } from "./store";
-import { OPENROUTER, type Integracao, type Opcao } from "./setup-comum";
+import { openrouter, type Integracao, type Opcao } from "./setup-comum";
+
+const OPENROUTER = openrouter();
 
 const VOICE_ID_PADRAO = "EXAVITQu4vr4xnSDxMaL";
 

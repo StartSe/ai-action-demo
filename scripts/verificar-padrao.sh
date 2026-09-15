@@ -55,6 +55,7 @@ ARQUIVOS=(
   "app/historico"
   "app/api/rotinas"
   "app/api/setup"
+  "app/api/status"
   "app/api/conta"
   "app/api/historico"
   "app/globals.css"

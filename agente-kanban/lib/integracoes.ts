@@ -1,5 +1,7 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
-import { OPENROUTER, NOTIFICACOES, MCP_TAREFAS, type Integracao } from "./setup-comum";
+import { openrouter, NOTIFICACOES, MCP_TAREFAS, type Integracao } from "./setup-comum";
+
+const OPENROUTER = openrouter();
 
 /**
  * Chave de API do app desta suíte, cadastrada em https://trello.com/power-ups/admin.

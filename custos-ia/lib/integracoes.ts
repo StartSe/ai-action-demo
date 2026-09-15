@@ -1,7 +1,9 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
-import { OPENROUTER, NOTIFICACOES, type Integracao } from "./setup-comum";
+import { openrouter, NOTIFICACOES, type Integracao } from "./setup-comum";
 import { getConfig } from "./store";
 import { credenciaisDoApp, listarMensagens, obterPerfil, obterPerfilOutlook, provedorConectado, type ProvedorEmail } from "./email";
+
+const OPENROUTER = openrouter({ visao: true });
 
 /** Padrões de 2026-09-14: cotações plausíveis de referência, editáveis a qualquer momento em /setup.
  * Usadas só para converter faturas em moeda estrangeira (lançamento manual e leituras futuras de

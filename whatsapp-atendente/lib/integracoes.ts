@@ -1,7 +1,9 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 import { randomBytes } from "node:crypto";
-import { MCP_EMPRESA, NOTIFICACOES, OPENROUTER, type Integracao } from "./setup-comum";
+import { MCP_EMPRESA, NOTIFICACOES, openrouter, type Integracao } from "./setup-comum";
 import { getConfig, setConfig } from "./store";
+
+const OPENROUTER = openrouter();
 
 /**
  * O verify token do webhook precisa existir antes da pessoa abrir /setup, para ela só copiar.

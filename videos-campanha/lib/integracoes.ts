@@ -1,6 +1,8 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 // A IA (OpenRouter) escreve os conceitos; o Higgsfield (servidor MCP com OAuth) gera o vídeo de verdade.
-import { integracaoMCP, OPENROUTER, type Integracao } from "./setup-comum";
+import { integracaoMCP, openrouter, type Integracao } from "./setup-comum";
+
+const OPENROUTER = openrouter();
 
 /** Prefixo das chaves salvas (HIGGSFIELD_URL, HIGGSFIELD_CODIGO, HIGGSFIELD_REFRESH...). */
 export const PREFIXO_HIGGSFIELD = "HIGGSFIELD";

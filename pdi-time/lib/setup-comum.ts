@@ -161,69 +161,75 @@ async function modelosGratuitosDinamicos(chave: string): Promise<Opcao[]> {
   return modelos;
 }
 
-/** Integração de IA usada por todos os apps. */
-export const OPENROUTER: Integracao = {
-  id: "openrouter",
-  titulo: "Inteligência artificial",
-  descricao: "Uma conta gratuita no OpenRouter dá acesso a dezenas de modelos, vários sem custo. Conecte em um clique ou cole uma chave.",
-  beneficio: "Liga a IA que gera o plano de desenvolvimento",
-  obrigatoria: true,
-  link: { url: "https://openrouter.ai/keys", rotulo: "Criar uma chave gratuita" },
-  oauth: { tipo: "openrouter", rotulo: "Conectar a IA", url: "/api/setup/oauth/openrouter" },
-  notaConexao: "Conta gratuita do OpenRouter basta. Os modelos gratuitos têm limite diário; créditos ampliam o limite e liberam modelos melhores.",
-  campos: [
-    { chave: "OPENROUTER_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk-or-v1-..." },
-    {
-      chave: "OPENROUTER_MODEL",
-      rotulo: "Modelo de IA",
-      tipo: "select",
-      opcional: true,
-      padrao: "nvidia/nemotron-3-super-120b-a12b:free",
-      opcoes: MODELOS_GRATUITOS,
-      ajuda: 'Comece pelo recomendado. Se aparecer "sem crédito" ou "limite diário", troque por outro gratuito ou adicione créditos.',
-      opcoesDinamicas: async (config) => {
-        const chave = config.OPENROUTER_API_KEY;
-        if (!chave) return MODELOS_GRATUITOS;
-        try {
-          return await modelosGratuitosDinamicos(chave);
-        } catch {
-          return MODELOS_GRATUITOS;
-        }
+/** Integração de IA usada por todos os apps. Passe `visao: true` só nos apps que realmente leem
+ * imagem (hoje `clone-site` e `custos-ia`) — os demais não ganham o campo "Modelo para imagens". */
+export function openrouter({ visao = false }: { visao?: boolean } = {}): Integracao {
+  const camposVisao: Campo[] = visao
+    ? [{ chave: "OPENROUTER_MODEL_VISAO", rotulo: "Modelo para imagens", tipo: "select", opcional: true, avancado: true, padrao: MODELOS_VISAO[0].valor, opcoes: MODELOS_VISAO, ajuda: "Modelo usado quando o app precisa ler uma imagem" }]
+    : [];
+  return {
+    id: "openrouter",
+    titulo: "Inteligência artificial",
+    descricao: "Uma conta gratuita no OpenRouter dá acesso a dezenas de modelos, vários sem custo. Conecte em um clique ou cole uma chave.",
+    beneficio: "Liga a IA que gera o plano de desenvolvimento",
+    obrigatoria: true,
+    link: { url: "https://openrouter.ai/keys", rotulo: "Criar uma chave gratuita" },
+    oauth: { tipo: "openrouter", rotulo: "Conectar a IA", url: "/api/setup/oauth/openrouter" },
+    notaConexao: "Conta gratuita do OpenRouter basta. Os modelos gratuitos têm limite diário; créditos ampliam o limite e liberam modelos melhores.",
+    campos: [
+      { chave: "OPENROUTER_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk-or-v1-..." },
+      {
+        chave: "OPENROUTER_MODEL",
+        rotulo: "Modelo de IA",
+        tipo: "select",
+        opcional: true,
+        padrao: "nvidia/nemotron-3-super-120b-a12b:free",
+        opcoes: MODELOS_GRATUITOS,
+        ajuda: 'Comece pelo recomendado. Se aparecer "sem crédito" ou "limite diário", troque por outro gratuito ou adicione créditos.',
+        opcoesDinamicas: async (config) => {
+          const chave = config.OPENROUTER_API_KEY;
+          if (!chave) return MODELOS_GRATUITOS;
+          try {
+            return await modelosGratuitosDinamicos(chave);
+          } catch {
+            return MODELOS_GRATUITOS;
+          }
+        },
       },
+      ...camposVisao,
+    ],
+    testar: async (config) => {
+      const chave = config.OPENROUTER_API_KEY;
+      if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
+      const r = await fetch("https://openrouter.ai/api/v1/auth/key", { headers: { Authorization: `Bearer ${chave}` } });
+      if (!r.ok) {
+        const detalhe = await r.text().catch(() => "");
+        return { ok: false, mensagem: interpretarFalha(r, detalhe).message };
+      }
+      const data = (await r.json()) as { data?: { limit?: number | null; usage?: number; is_free_tier?: boolean } };
+
+      const modelo = config.OPENROUTER_MODEL || "nvidia/nemotron-3-super-120b-a12b:free";
+      const resposta = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${chave}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: 'Responda só "ok".' }], max_tokens: 5 }),
+      });
+      if (!resposta.ok) {
+        const detalhe = await resposta.text().catch(() => "");
+        return { ok: false, mensagem: interpretarFalha(resposta, detalhe).message };
+      }
+
+      const limite = data.data?.limit;
+      const restantes = limite != null ? Math.max(0, limite - (data.data?.usage ?? 0)) : null;
+      const plano = data.data?.is_free_tier
+        ? "Plano gratuito: fique nos modelos gratuitos ou adicione créditos."
+        : restantes != null
+          ? `Créditos: US$ ${restantes.toFixed(2)} restantes.`
+          : `Uso até agora: US$ ${Number(data.data?.usage ?? 0).toFixed(2)}.`;
+      return { ok: true, mensagem: `Conectado e testado com sucesso. ${plano}` };
     },
-    { chave: "OPENROUTER_MODEL_VISAO", rotulo: "Modelo para imagens", tipo: "select", opcional: true, avancado: true, padrao: MODELOS_VISAO[0].valor, opcoes: MODELOS_VISAO, ajuda: "Modelo usado quando o app precisa ler uma imagem" },
-  ],
-  testar: async (config) => {
-    const chave = config.OPENROUTER_API_KEY;
-    if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
-    const r = await fetch("https://openrouter.ai/api/v1/auth/key", { headers: { Authorization: `Bearer ${chave}` } });
-    if (!r.ok) {
-      const detalhe = await r.text().catch(() => "");
-      return { ok: false, mensagem: interpretarFalha(r, detalhe).message };
-    }
-    const data = (await r.json()) as { data?: { limit?: number | null; usage?: number; is_free_tier?: boolean } };
-
-    const modelo = config.OPENROUTER_MODEL || "nvidia/nemotron-3-super-120b-a12b:free";
-    const resposta = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${chave}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: 'Responda só "ok".' }], max_tokens: 5 }),
-    });
-    if (!resposta.ok) {
-      const detalhe = await resposta.text().catch(() => "");
-      return { ok: false, mensagem: interpretarFalha(resposta, detalhe).message };
-    }
-
-    const limite = data.data?.limit;
-    const restantes = limite != null ? Math.max(0, limite - (data.data?.usage ?? 0)) : null;
-    const plano = data.data?.is_free_tier
-      ? "Plano gratuito: fique nos modelos gratuitos ou adicione créditos."
-      : restantes != null
-        ? `Créditos: US$ ${restantes.toFixed(2)} restantes.`
-        : `Uso até agora: US$ ${Number(data.data?.usage ?? 0).toFixed(2)}.`;
-    return { ok: true, mensagem: `Conectado e testado com sucesso. ${plano}` };
-  },
-};
+  };
+}
 
 /** Por onde o app avisa você quando um formulário chega ou uma rotina roda. */
 export const NOTIFICACOES: Integracao = {

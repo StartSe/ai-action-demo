@@ -1,5 +1,7 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
-import { OPENROUTER, NOTIFICACOES, type Integracao, type Opcao } from "./setup-comum";
+import { openrouter, NOTIFICACOES, type Integracao, type Opcao } from "./setup-comum";
+
+const OPENROUTER = openrouter();
 
 /** Cliente simulado por voz: um agente conversacional da ElevenLabs que liga para o vendedor treinar,
  * mais o segredo usado para validar o aviso automático de pós-conversa (app/webhook/elevenlabs). */
