@@ -11,6 +11,9 @@ Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com mod
 ## Configuração inicial (sem variáveis de ambiente)
 Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave, escolhe o modelo e testa a conexão. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar, o app roda em modo demonstração com uma conversa e uma análise de exemplo.
 
+## Primeiro acesso
+Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
+
 ## Rodar localmente
 ```bash
 npm install
@@ -64,6 +67,7 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | Variável | Descrição |
 |---|---|
 | `DATA_DIR` | Pasta do banco SQLite. Padrão `./data` (Docker: `/app/data`). |
+| `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
 | `ELEVENLABS_API_KEY` | Opcional. Chave da ElevenLabs para a sala de treino por voz. Obtenha em https://elevenlabs.io/app/settings/api-keys. |

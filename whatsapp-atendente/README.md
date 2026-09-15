@@ -22,6 +22,9 @@ Nenhuma variável de ambiente é obrigatória. Abra `/setup` no navegador para c
 
 Documentação oficial: https://developers.facebook.com/docs/whatsapp/cloud-api/get-started
 
+## Primeiro acesso
+Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
+
 ## Rodar localmente
 ```bash
 npm install
@@ -49,6 +52,7 @@ Nenhuma é obrigatória — tudo pode ser configurado em `/setup`. Variáveis de
 | Variável | Descrição |
 |---|---|
 | `DATA_DIR` | Onde fica o banco `app.sqlite`. Padrão `./data` (`/app/data` no Docker). |
+| `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa à conexão em `/setup`. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Modelo padrão `nvidia/nemotron-3-super-120b-a12b:free` (gratuito). |
 | `WHATSAPP_TOKEN` | Alternativa à conexão em `/setup`. Obtenha em https://developers.facebook.com/apps (produto WhatsApp). |

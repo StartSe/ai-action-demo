@@ -16,6 +16,9 @@
 // - `/_next/*`, `/icon.svg`       assets do framework
 //
 // A geração do código de acesso em `/api/mcp/token` NÃO está nessa lista: continua exigindo sessão.
+//
+// `CONTA_DESLIGADA=1` trata toda rota como pública (usado só pelo contêiner efêmero que captura a
+// prévia do app para o catálogo; nunca definida em Blueprint nem em instância real).
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { existeConta, sessaoAtual } from "@/lib/conta";
@@ -46,6 +49,7 @@ export function proxy(request: NextRequest) {
     return response;
   }
 
+  if (process.env.CONTA_DESLIGADA === "1") return permitir();
   if (rotaPublica(pathname, request.method)) return permitir();
   if (sessaoAtual(request)) return permitir();
 

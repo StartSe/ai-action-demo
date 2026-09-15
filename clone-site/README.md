@@ -13,6 +13,9 @@ Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com um 
 ## Configuração inicial (sem variáveis de ambiente)
 Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave, escolhe o modelo com visão e testa a conexão. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar um modelo com visão, o app roda em modo demonstração.
 
+## Primeiro acesso
+Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
+
 ## Rodar localmente
 ```bash
 npm install
@@ -67,6 +70,7 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | Variável | Descrição |
 |---|---|
 | `DATA_DIR` | Pasta do banco SQLite. Padrão `./data` (Docker: `/app/data`). |
+| `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Modelo de texto (usado nas edições por instrução). Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
 | `OPENROUTER_MODEL_VISAO` | Alternativa ao setup ("Modelo para imagens", em Opções avançadas). Modelo com visão que lê a captura; padrão `inclusionai/ling-3.0-flash-vl:free`. Lista em https://openrouter.ai/models?modality=image-%3Etext. |

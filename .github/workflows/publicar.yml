@@ -92,7 +92,9 @@ jobs:
         run: |
           set -e
           mkdir -p /tmp/captura-saida
-          docker run -d --name captura -p 3900:10000 "${{ env.REGISTRO }}/${{ matrix.app }}:${{ github.sha }}"
+          # CONTA_DESLIGADA=1 só neste contêiner efêmero de captura: sem ela, toda rota exigiria
+          # login e a captura em modo demonstração (`?exemplo=1&captura=1`) cairia em /entrar.
+          docker run -d --name captura -e CONTA_DESLIGADA=1 -p 3900:10000 "${{ env.REGISTRO }}/${{ matrix.app }}:${{ github.sha }}"
           ok=""
           for i in $(seq 1 30); do
             if curl -fsS http://localhost:3900/api/health > /dev/null 2>&1; then ok=1; break; fi

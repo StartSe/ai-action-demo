@@ -11,6 +11,9 @@ Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. Todo o cálculo (total, v
 ## Configuração inicial (sem variáveis de ambiente)
 Abra `/setup` no navegador. Lá você cadastra a cotação manual de dólar e euro (cartão "Câmbio", usados só para converter faturas em moeda estrangeira para reais), conecta a IA (OpenRouter, usada pelas próximas histórias) e configura notificações. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Sem nenhuma fatura lançada nem orçamento cadastrado, o app mostra doze meses de dados de exemplo (seis ferramentas reais do mercado, com dois meses que estouram o orçamento).
 
+## Primeiro acesso
+Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
+
 ## Rodar localmente
 ```bash
 npm install
@@ -92,6 +95,7 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | Variável | Descrição |
 |---|---|
 | `DATA_DIR` | Pasta do banco SQLite. Padrão `./data` (Docker: `/app/data`). |
+| `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
 | `CAMBIO_USD_BRL` / `CAMBIO_EUR_BRL` | Cotação manual de dólar e euro em reais (cartão "Câmbio" em `/setup`), usadas só para converter faturas em moeda estrangeira. |

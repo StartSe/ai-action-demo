@@ -1,6 +1,6 @@
 # IA para Executivos
 
-Dezessete apps independentes, cada um resolvendo um problema específico do dia a dia de uma empresa com IA em alguma etapa. Feitos para executivos abrirem, testarem em dois minutos e decidirem se vale conectar as ferramentas reais. Todos rodam sem login e sem nenhuma chave configurada (modo demonstração) e publicam no Render a partir de uma imagem Docker pública via Blueprint. Catálogo com botão de um clique: https://startse.github.io/ai-action-app-deploy/
+Dezessete apps independentes, cada um resolvendo um problema específico do dia a dia de uma empresa com IA em alguma etapa. Feitos para executivos: crie sua conta em 30 segundos, teste com dados de exemplo sem nenhuma chave e publique com um clique, na sua própria conta no Render, a partir de uma imagem Docker pública via Blueprint. Catálogo com botão de um clique: https://startse.github.io/ai-action-app-deploy/
 
 ## Mapa de ideias
 
@@ -36,7 +36,7 @@ Todos seguem o mesmo padrão (detalhes em [PADRAO.md](PADRAO.md)):
 - Até conectar, o app roda em modo demonstração com respostas de exemplo. Sem chave de integração externa, usa um fallback local. Nada quebra ao abrir.
 - Rotas fixas: `GET /api/health` para o Render e `GET /api/status` para o frontend saber o que está conectado.
 - Mesma linguagem visual (fonte Manrope, painel de entrada à esquerda, resultado à direita) com uma cor de acento por app.
-- Nada é salvo em banco. Estado vive em memória e some ao reiniciar. É o básico para abrir e testar; login e persistência são o próximo passo.
+- Uma conta de administrador por instância: a primeira pessoa a abrir o app cria a conta (nome, e-mail e senha) em `/conta`; as visitas seguintes entram em `/entrar`. Histórico, chaves e configurações ficam salvos em SQLite dentro do app, atrás dessa conta.
 
 ## Rodar a suíte inteira com Docker Compose
 
