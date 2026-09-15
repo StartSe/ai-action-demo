@@ -461,7 +461,7 @@
         "Testar ponta a ponta com um servidor MCP de teste local com OAuth expondo search_leads, create_campaign e campaign_status (script descartável); Verify in browser using dev-browser skill: autorizar em /setup, buscar, aprovar e enviar"
       ],
       "priority": 27,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

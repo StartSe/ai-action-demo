@@ -1,11 +1,12 @@
 // Busca de leads e ciclo de vida da campanha, compartilhados entre app/api/leads/route.ts e lib/ferramentas.ts (MCP).
-// Nesta versão a busca ainda não consulta o LinkedIn: devolve a lista fictícia de lib/demo.ts rotulada como "demo".
-// O Prospect Halo (busca real e envio) entra na próxima versão, mantendo a mesma assinatura de buscarLeads.
+// Com o Prospect Halo conectado (/setup), a busca consulta o LinkedIn do usuário (lib/prospecthalo.ts);
+// sem ele, ou quando a pessoa pede "dados de exemplo", devolve a lista fictícia de lib/demo.ts rotulada como "demo".
 import { aiEnabled, meta, type Meta } from "./ai";
 import { esperar, leadsDemo, separar } from "./demo";
 import { atualizarSaida, obter, salvar } from "./historico";
+import { buscarLeadsProspectHalo, prospectHaloConfigurado } from "./prospecthalo";
 import { getConfig } from "./store";
-import { SINAIS_INTENCAO, TONS, type Campanha, type Perfil, type SinalIntencao, type Tom } from "./types";
+import { SINAIS_INTENCAO, TONS, type Campanha, type Lead, type Perfil, type SinalIntencao, type Tom } from "./types";
 
 /** Erro de entrada do usuário: as rotas respondem 400 (em vez de 500) quando o pegam. */
 export class ErroDePedido extends Error {}
@@ -61,11 +62,20 @@ export function nomeCampanha(perfil: Perfil) {
   return `Prospecção: ${c} em ${s}`;
 }
 
-/** Busca os leads que combinam com o perfil e salva a campanha (estado "rascunho") no histórico. */
-export async function buscarLeads(perfil: Perfil): Promise<{ campanha: Campanha; meta: Meta }> {
-  // Os leads são sempre fictícios nesta versão; a meta reflete se as sequências sairão da IA ou do exemplo.
-  await esperar(900);
-  const leads = leadsDemo(perfil).sort((a, b) => b.pontuacao - a.pontuacao);
+/**
+ * Busca os leads que combinam com o perfil e salva a campanha (estado "rascunho") no histórico.
+ * Com o Prospect Halo conectado a lista vem dele (origem "prospecthalo"; lança ErroProspectHalo em falha);
+ * sem ele, ou com `exemplo: true`, vem a lista fictícia (origem "demo"). A meta reflete a IA (de onde saem as sequências).
+ */
+export async function buscarLeads(perfil: Perfil, opcoes: { exemplo?: boolean } = {}): Promise<{ campanha: Campanha; meta: Meta }> {
+  let leads: Lead[];
+  if (!opcoes.exemplo && prospectHaloConfigurado()) {
+    leads = await buscarLeadsProspectHalo(perfil);
+  } else {
+    await esperar(900);
+    leads = leadsDemo(perfil);
+  }
+  leads.sort((a, b) => b.pontuacao - a.pontuacao);
   const metaGerada = meta({ demo: !aiEnabled(), insumo: INSUMO });
   const nome = nomeCampanha(perfil);
   const id = salvar({ tipo: TIPO_HISTORICO, titulo: nome, entrada: perfil, saida: { id: "", nome, leads, sequencias: [], estado: "rascunho" }, meta: metaGerada });

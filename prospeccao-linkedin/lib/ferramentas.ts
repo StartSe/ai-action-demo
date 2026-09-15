@@ -1,5 +1,6 @@
 // Ferramentas expostas via app/mcp/route.ts para assistentes de IA (Claude, ChatGPT etc.).
 // Cada app da suíte declara as suas aqui, reaproveitando a mesma lógica das rotas normais.
+import { enviarCampanha, planoEnvio } from "./envio";
 import { buscarLeads, completarRemetente, validarPerfil } from "./leads";
 import type { Ferramenta } from "./mcp";
 import { escreverSequencia } from "./sequencias";
@@ -20,11 +21,30 @@ export const FERRAMENTAS: Ferramenta[] = [
   {
     nome: "buscar_leads_linkedin",
     descricao:
-      "Busca leads no LinkedIn que combinam com o perfil de cliente ideal (cargos, setores, sinais de intenção e proposta) e cria uma campanha em rascunho com a lista pontuada. Devolve a campanha (id, leads com nome, cargo, empresa, sinal, pontuação e link do LinkedIn).",
-    schema: { type: "object", properties: PROPRIEDADES_PERFIL, required: ["cargos", "setores", "proposta"] },
+      "Busca leads no LinkedIn que combinam com o perfil de cliente ideal (cargos, setores, sinais de intenção e proposta) e cria uma campanha em rascunho com a lista pontuada. Com o Prospect Halo conectado a lista é real (origem 'prospecthalo'); sem ele, ou com exemplo=true, é fictícia (origem 'demo'). Devolve a campanha (id, leads com nome, cargo, empresa, sinal, pontuação e link do LinkedIn).",
+    schema: { type: "object", properties: { ...PROPRIEDADES_PERFIL, exemplo: { type: "boolean", description: "true para usar a lista fictícia mesmo com o Prospect Halo conectado (opcional)" } }, required: ["cargos", "setores", "proposta"] },
     async executar(args) {
       const perfil = completarRemetente(validarPerfil(args));
-      return buscarLeads(perfil);
+      return buscarLeads(perfil, { exemplo: args.exemplo === true });
+    },
+  },
+  {
+    nome: "enviar_campanha",
+    descricao:
+      "Envia pelo Prospect Halo as mensagens já escritas de uma campanha (criada por buscar_leads_linkedin e com sequências de escrever_sequencia ou da tela). Com confirmar=false (padrão) NÃO envia: devolve o plano (quantos leads, as três mensagens e o aviso) para a pessoa aprovar. Só com confirmar=true cria a campanha no Prospect Halo, que manda as mensagens da conta do LinkedIn da pessoa respeitando os limites diários. Sempre mostre o plano e peça a aprovação explícita antes de chamar com confirmar=true.",
+    schema: {
+      type: "object",
+      properties: {
+        campanhaId: { type: "string", description: "Id da campanha (devolvido por buscar_leads_linkedin)" },
+        confirmar: { type: "boolean", description: "false (padrão) devolve o plano sem enviar; true envia de verdade, só depois da aprovação da pessoa" },
+      },
+      required: ["campanhaId"],
+    },
+    async executar(args) {
+      const campanhaId = String(args.campanhaId || "").trim();
+      if (!campanhaId) throw new Error("Informe o id da campanha.");
+      if (args.confirmar === true) return enviarCampanha(campanhaId);
+      return { enviado: false, plano: planoEnvio(campanhaId), proximoPasso: "Mostre o plano à pessoa e, se ela aprovar, chame enviar_campanha de novo com confirmar=true." };
     },
   },
   {

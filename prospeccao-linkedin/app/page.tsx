@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { DialogoEnvio } from "@/components/DialogoEnvio";
 import { Chip, CopyButton, DataTable, Destaque, Empty, Entregar, ErrorBox, Field, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
 import type { Meta } from "@/lib/ai";
 import { LIMITE_CONEXAO, PONTUACAO_FORTE, SINAIS_INTENCAO, TONS, type Campanha, type Lead, type Perfil, type Sequencia, type SinalIntencao, type Tom } from "@/lib/types";
@@ -40,7 +41,7 @@ function IlustracaoLista() {
   );
 }
 
-type Estado = { fase: "vazio" } | { fase: "carregando" } | { fase: "erro"; mensagem: string; perfil: Perfil } | { fase: "pronto"; campanha: Campanha; perfil: Perfil; meta: Meta };
+type Estado = { fase: "vazio" } | { fase: "carregando" } | { fase: "erro"; mensagem: string; perfil: Perfil; exemploDisponivel: boolean } | { fase: "pronto"; campanha: Campanha; perfil: Perfil; meta: Meta };
 
 export default function Page() {
   const { status, erro } = useStatus();
@@ -72,16 +73,19 @@ export default function Page() {
     setPerfil((p) => ({ ...p, sinais: p.sinais.includes(valor) ? p.sinais.filter((s) => s !== valor) : [...p.sinais, valor] }));
   }
 
-  async function gerar(p: Perfil) {
+  /** Busca os leads; com `exemplo`, pede a lista fictícia mesmo com o Prospect Halo conectado (botão "Ver com dados de exemplo"). */
+  async function gerar(p: Perfil, exemplo = false) {
     setEstado({ fase: "carregando" });
+    let exemploDisponivel = false;
     try {
-      const r = await fetch("/api/leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) });
+      const r = await fetch("/api/leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(exemplo ? { ...p, exemplo: true } : p) });
       const resposta = await r.json();
+      exemploDisponivel = Boolean(resposta.exemploDisponivel);
       if (!r.ok) throw new Error(resposta.error || "Falha ao buscar os leads.");
       setEstado({ fase: "pronto", campanha: resposta.campanha, perfil: p, meta: resposta.meta });
       fetch("/api/leads").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
     } catch (e) {
-      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado.", perfil: p });
+      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado.", perfil: p, exemploDisponivel });
     }
   }
 
@@ -190,8 +194,27 @@ export default function Page() {
         <Stage>
           {estado.fase === "vazio" && <Empty ilustracao={<IlustracaoLista />} titulo="A lista aparece aqui" descricao="Leads que combinam com o seu cliente ideal, com o sinal de intenção, a pontuação e a sequência de mensagens pronta para copiar." acao="Preencher com um exemplo" onAcao={preencherExemplo} />}
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
-          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={() => gerar(estado.perfil)} />}
-          {estado.fase === "pronto" && <Resultado campanha={estado.campanha} perfil={estado.perfil} meta={estado.meta} onEscrever={(ids) => escrever(estado.campanha.id, ids)} />}
+          {estado.fase === "erro" && (
+            <>
+              <ErrorBox mensagem={estado.mensagem} onTentarNovamente={() => gerar(estado.perfil)} />
+              {estado.exemploDisponivel && (
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button type="button" className="btn-ghost" onClick={() => gerar(estado.perfil, true)}>Ver com dados de exemplo</button>
+                  <span className="text-muted text-sm">Mostra o formato da lista com leads fictícios enquanto o Prospect Halo não responde.</span>
+                </div>
+              )}
+            </>
+          )}
+          {estado.fase === "pronto" && (
+            <Resultado
+              campanha={estado.campanha}
+              perfil={estado.perfil}
+              meta={estado.meta}
+              onEscrever={(ids) => escrever(estado.campanha.id, ids)}
+              prospectHalo={Boolean(status?.integrations?.prospecthalo)}
+              onAtualizar={(campanha) => setEstado((e) => (e.fase === "pronto" ? { ...e, campanha } : e))}
+            />
+          )}
         </Stage>
       </Workspace>
     </>
@@ -206,14 +229,20 @@ function contarFortes(leads: Lead[]) {
   return leads.filter((l) => l.pontuacao >= PONTUACAO_FORTE).length;
 }
 
-/** Resultado completo na tela e em /r/[id]. Sem onEscrever (página server-rendered), a tabela sai sem seleção e sem o botão. */
-export function Resultado({ campanha, perfil, meta, onEscrever }: { campanha: Campanha; perfil: Perfil; meta: Meta; onEscrever?: (leadIds: string[]) => Promise<string | null> }) {
+/**
+ * Resultado completo na tela e em /r/[id]. Sem onEscrever (página server-rendered), a tabela sai sem seleção e sem os botões.
+ * `prospectHalo` (integração conectada) libera "Aprovar e enviar pelo Prospect Halo" quando há mensagens escritas para leads reais.
+ */
+export function Resultado({ campanha, perfil, meta, onEscrever, prospectHalo = false, onAtualizar }: { campanha: Campanha; perfil: Perfil; meta: Meta; onEscrever?: (leadIds: string[]) => Promise<string | null>; prospectHalo?: boolean; onAtualizar?: (campanha: Campanha) => void }) {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [escrevendo, setEscrevendo] = useState(false);
   const [erroEscrita, setErroEscrita] = useState<string | null>(null);
+  const [dialogoEnvio, setDialogoEnvio] = useState(false);
+  const [mensagemEnvio, setMensagemEnvio] = useState<string | null>(null);
   const interativo = Boolean(onEscrever);
   const fortes = contarFortes(campanha.leads);
   const leadsDemo = campanha.leads.some((l) => l.origem === "demo");
+  const podeEnviar = interativo && prospectHalo && !leadsDemo && campanha.estado !== "enviada" && campanha.sequencias.length > 0;
 
   function alternar(id: string) {
     setSelecionados((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -241,6 +270,7 @@ export function Resultado({ campanha, perfil, meta, onEscrever }: { campanha: Ca
 
       <Origem meta={meta} />
       {leadsDemo && <p className="text-muted text-[13px] -mt-3 mb-4">Os leads exibidos são fictícios: servem para mostrar o formato da lista e das mensagens antes de conectar a sua conta.</p>}
+      {campanha.estado === "enviada" && <EstadoEnvio campanha={campanha} mensagem={mensagemEnvio} />}
 
       <Destaque valor={String(campanha.leads.length)} rotulo="leads que combinam com o perfil" interpretacao={`${fortes} com sinal forte (pontuação a partir de ${PONTUACAO_FORTE})`} tom={fortes > 0 ? "ok" : "neutro"} />
 
@@ -259,7 +289,60 @@ export function Resultado({ campanha, perfil, meta, onEscrever }: { campanha: Ca
       </Section>
 
       <CartoesSequencias campanha={campanha} comCopiar />
+
+      {podeEnviar && (
+        <div className="mt-1 flex flex-wrap items-center gap-2.5">
+          <button type="button" className="btn-primary !w-auto" onClick={() => setDialogoEnvio(true)}>Aprovar e enviar pelo Prospect Halo</button>
+          <span className="text-muted text-sm">Você revisa a quantidade e as mensagens antes de confirmar.</span>
+        </div>
+      )}
+      {dialogoEnvio && (
+        <DialogoEnvio
+          campanhaId={campanha.id}
+          onFechar={() => setDialogoEnvio(false)}
+          aoEnviar={(atualizada, mensagem) => {
+            setDialogoEnvio(false);
+            setMensagemEnvio(mensagem);
+            onAtualizar?.(atualizada);
+          }}
+        />
+      )}
     </article>
+  );
+}
+
+/** Linha de estado de uma campanha enviada pelo Prospect Halo, com "Ver andamento" consultando o serviço. */
+function EstadoEnvio({ campanha, mensagem }: { campanha: Campanha; mensagem: string | null }) {
+  const [andamento, setAndamento] = useState<{ fase: "parado" } | { fase: "consultando" } | { fase: "pronto"; texto: string } | { fase: "erro"; mensagem: string }>({ fase: "parado" });
+
+  async function verAndamento() {
+    setAndamento({ fase: "consultando" });
+    try {
+      const r = await fetch(`/api/envio?campanhaId=${encodeURIComponent(campanha.id)}`);
+      const resposta = await r.json();
+      if (!r.ok) throw new Error(resposta.error || "Não foi possível consultar o andamento.");
+      setAndamento({ fase: "pronto", texto: resposta.texto });
+    } catch (e) {
+      setAndamento({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." });
+    }
+  }
+
+  return (
+    <div className="card shadow-none px-[22px] py-4 mb-5 border-l-4 border-l-accent" role="status">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-bold">Enviada pelo Prospect Halo{campanha.externoId ? <span className="text-muted font-normal text-sm"> · campanha {campanha.externoId}</span> : null}</p>
+          <p className="text-muted text-sm">{mensagem ?? "As mensagens saem da sua conta do LinkedIn, dentro dos limites diários do Prospect Halo."}</p>
+        </div>
+        {campanha.externoId && (
+          <button type="button" className="btn-ghost" disabled={andamento.fase === "consultando"} onClick={verAndamento}>
+            {andamento.fase === "consultando" ? "Consultando..." : "Ver andamento"}
+          </button>
+        )}
+      </div>
+      {andamento.fase === "pronto" && <pre className="text-sm whitespace-pre-wrap font-sans mt-3 pt-3 border-t border-line">{andamento.texto}</pre>}
+      {andamento.fase === "erro" && <p className="text-danger text-sm mt-3">{andamento.mensagem}</p>}
+    </div>
   );
 }
 

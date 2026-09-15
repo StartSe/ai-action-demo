@@ -312,7 +312,7 @@
       ],
       "problema": "Prospectar no LinkedIn consome horas por dia entre buscar perfis e escrever mensagem por mensagem.",
       "ia": "A partir do cliente ideal, monta a lista de leads com sinal de intenção e escreve a sequência de mensagens de cada um.",
-      "integracoes": "Só a IA (OpenRouter) nesta versão. Prospect Halo (busca no LinkedIn e envio das mensagens aprovadas) na próxima.",
+      "integracoes": "IA (OpenRouter) para as mensagens; Prospect Halo (servidor MCP com OAuth) para buscar leads no LinkedIn e enviar as mensagens aprovadas. Sem ele, lista de exemplo.",
       "acento": "#0a66c2",
       "porta": 3016,
       "captura": "capturas/prospeccao-linkedin.png",
