@@ -64,7 +64,8 @@ ESTRUTURA=(
 MARCADOR="/* Específico deste app */"
 
 # Devolve o conteúdo comparável de um arquivo: em app/globals.css, tira o trecho específico do app e as
-# três cores de acento (a única personalização permitida no @theme, ver PADRAO.md).
+# quatro cores de acento (a única personalização permitida no @theme, ver PADRAO.md e
+# tasks/paleta-segmentos.json).
 conteudo_comparavel() {
   local arquivo="$1"
   if [ ! -e "$arquivo" ]; then
@@ -74,7 +75,7 @@ conteudo_comparavel() {
     awk -v m="$MARCADOR" 'index($0, m) { exit } { print }' "$arquivo"
   else
     cat "$arquivo"
-  fi | grep -v -E '^[[:space:]]*--color-accent(-soft|-ink)?:' || true
+  fi | grep -v -E '^[[:space:]]*--color-accent(-2|-soft|-ink)?:' || true
 }
 
 # Lista "app<TAB>caminho<TAB>motivo" das exceções registradas.
@@ -158,5 +159,10 @@ for app in "${APPS[@]}"; do
   done
   [ "$algum" = "0" ] && echo "  ok"
 done
+
+echo "== paleta =="
+if ! node "$RAIZ/scripts/verificar-paleta.mjs"; then
+  divergiu=1
+fi
 
 exit $divergiu
