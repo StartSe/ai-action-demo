@@ -1,0 +1,588 @@
+{
+  "project": "IA para Executivos (ai-action-demo)",
+  "branchName": "ralph/novos-apps",
+  "description": "Sete apps novos na suíte IA para Executivos (Radar de Sinais, Bússola de IA, Simulador de Vendas, Custos de IA, Clone de Site, Prospecção no LinkedIn e Vídeos de Campanha) mais três mudanças transversais (campos escala/escolha nos formulários, askVision, cliente MCP com OAuth). Fonte: tasks/prd-novos-apps.md, seção 'Primeira rodada'. Regras: seguir PADRAO.md à letra; todo app nasce copiando pdi-time/ e mantém idênticos os caminhos de scripts/verificar-padrao.sh; mudanças transversais nascem em pdi-time e são replicadas na mesma história; tudo funciona sem chave em modo demonstração; ações pagas ou externas exigem confirmação e confirmar:true no MCP; sem Python, sem biblioteca de grafo, gráfico ou UI. Servidores MCP externos são testados com um servidor de teste local descartável fora do repositório.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Formulários públicos: campos escala e escolha (pdi-time e replicação)",
+      "description": "As a pessoa que monta um questionário, I want perguntas de escala e de múltipla escolha so that o formulário público sirva para avaliações e não só para texto livre.",
+      "acceptanceCriteria": [
+        "pdi-time/lib/formularios.ts aceita os tipos de campo 'escala' ({min,max,rotuloMin,rotuloMax}, padrão 1 a 5) e 'escolha' ({opcoes:{valor,rotulo}[], multipla?}) além dos atuais, e o campo opcional 'secao' para agrupar perguntas sob um subtítulo",
+        "pdi-time/components/FormularioPublico.tsx renderiza 'escala' como botões em linha com os rótulos nas pontas (largura total no celular) e 'escolha' como rádio ou caixas quando multipla; renderiza o subtítulo de 'secao' quando muda",
+        "pdi-time/app/api/f/[token]/route.ts valida intervalo da escala e opções da escolha; valor inválido devolve 400 com mensagem em português",
+        "lib/formularios.ts, components/FormularioPublico.tsx e a validação em app/api/f/[token]/route.ts copiados para os outros 9 apps (só a parte compartilhada da rota; os imports de registro de cada app são mantidos)",
+        "scripts/verificar-padrao.sh passa; npm run lint e npm run build passam em pdi-time",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: criar um formulário temporário no pdi-time com um campo de cada tipo, abrir /f/<token> em desktop e celular, enviar e conferir a validação; remover o temporário antes de encerrar"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "lib/ai.ts: askVision e modelo com visão configurável (pdi-time e replicação)",
+      "description": "As a pessoa que mantém a suíte, I want mandar uma imagem para a IA pela mesma biblioteca so that apps que leem capturas de tela não inventem outro cliente.",
+      "acceptanceCriteria": [
+        "pdi-time/lib/ai.ts exporta askVision({system, prompt, imagem, maxTokens, temperature}) onde imagem é data URL png ou jpeg, montando content [{type:'text'},{type:'image_url',image_url:{url}}] no formato compatível com OpenAI e usando o modelo de visão",
+        "pdi-time/lib/ai.ts exporta visionEnabled() e visionModelName(); o modelo vem de getConfig('OPENROUTER_MODEL_VISAO') com padrão MODELOS_VISAO[0] de lib/setup-comum.ts (lista curta, primeiro gratuito quando existir; escolher verificando a lista atual do OpenRouter e registrar a escolha no progress.txt)",
+        "A integração OPENROUTER em lib/setup-comum.ts ganha o campo avançado OPENROUTER_MODEL_VISAO (select com MODELOS_VISAO, opcional, ajuda 'Modelo usado quando o app precisa ler uma imagem')",
+        "GET /api/status inclui vision: boolean; askVision falha com a mensagem 'O modelo configurado não lê imagens' quando o provedor devolver erro de modalidade",
+        "lib/ai.ts e lib/setup-comum.ts copiados para os outros 9 apps; scripts/verificar-padrao.sh passa; lint e build passam em pdi-time",
+        "Typecheck passes",
+        "Testar via curl: GET /api/status devolve vision; /setup mostra o campo em Opções avançadas"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "lib/mcp-oauth.ts: autorização OAuth para servidores MCP remotos (pdi-time)",
+      "description": "As a executivo, I want conectar um serviço externo que pede login clicando em Autorizar so that eu não precise de chave nem de configuração técnica.",
+      "acceptanceCriteria": [
+        "Novo pdi-time/lib/mcp-oauth.ts: descobre endpoints em /.well-known/oauth-protected-resource e /.well-known/oauth-authorization-server (fallback <origem>/authorize e <origem>/token), faz registro dinâmico de cliente quando há registration_endpoint (client_id guardado em lib/store.ts por prefixo), inicia authorization code com PKCE S256 (verifier em cookie HttpOnly de 10 min, como o OpenRouter), troca o code no servidor e grava <PREFIXO>_CODIGO, <PREFIXO>_REFRESH e <PREFIXO>_EXPIRA via setConfig",
+        "Exporta conexaoAutorizada(prefixo) que renova o token com refresh_token quando faltar menos de 60 s e devolve {url, token} pronto para conectar() de lib/mcp-cliente.ts",
+        "Novas rotas compartilhadas pdi-time/app/api/setup/oauth/mcp/[prefixo]/route.ts (início) e .../callback/route.ts (retorno) com redirect_uri via baseUrl(req); prefixo validado contra INTEGRACOES de lib/integracoes.ts; erro do provedor volta a /setup como mensagem em português (query ?erro=)",
+        "Testado com um servidor MCP de teste local com OAuth mínimo (script descartável fora do repositório): início, retorno, renovação e revogação (PUT null)",
+        "lint e build passam em pdi-time",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "integracaoMCP() com botão Autorizar e replicação do cliente OAuth nos 9 apps",
+      "description": "As a executivo, I want o cartão de um serviço MCP com login mostrar só o botão Autorizar so that o código manual fique escondido em Opções avançadas.",
+      "acceptanceCriteria": [
+        "pdi-time/lib/setup-comum.ts exporta integracaoMCP({id, titulo, descricao, urlPadrao, oauth}) que devolve uma Integracao no padrão MCP_* (<PREFIXO>_URL com padrao, <PREFIXO>_CODIGO) com oauth: {tipo:'mcp', rotulo:'Autorizar', url:'/api/setup/oauth/mcp/<PREFIXO>'}, testar listando as ferramentas remotas via conexaoAutorizada e o código manual em Opções avançadas",
+        "components/setup.tsx mostra 'Conectado' e 'Desconectar' quando <PREFIXO>_CODIGO existe (reaproveitando o comportamento já existente para oauth)",
+        "lib/mcp-oauth.ts, lib/setup-comum.ts e app/api/setup/oauth/mcp/** copiados para os outros 9 apps; scripts/verificar-padrao.sh passa a comparar lib/mcp-oauth.ts e app/api/setup/oauth/mcp/** e sai com 0",
+        "lint e build passam em pdi-time",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: /setup do pdi-time com uma integracaoMCP temporária apontando para o servidor de teste, autorizar e ver Conectado; remover a temporária antes de encerrar"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Radar de Sinais: esqueleto, tela, demo e histórico",
+      "description": "As a executivo de estratégia, I want abrir o app e ver um radar de exemplo so that eu entenda em dez segundos o que ele entrega.",
+      "acceptanceCriteria": [
+        "Pasta radar-sinais/ criada a partir de pdi-time/ com os 19 caminhos compartilhados intocados; entrada em catalogo.json (id radar-sinais, nome 'Radar de Sinais', areas Estratégia e Inovação, porta 3011, acento #0e7490, captura capturas/radar-sinais.png, capacidades ['artefato','mcp','rotina'], demo null); node scripts/gerar-icones.mjs e node scripts/gerar-deploy.mjs rodados; serviço no docker-compose.yml (3011:10000, volume nomeado); metadata.title 'Radar de Sinais · IA para Executivos'; acento em globals.css",
+        "lib/types.ts com Fonte, Sinal {id,titulo,resumo,forca,tendencia,temas,fontes,oQueFazer}, No {id,rotulo,tipo:'tema'|'sinal'|'ator'|'tecnologia',peso}, Aresta {origem,destino,relacao,peso}, Radar {periodoDias,sinais,nos,arestas,conexoes}",
+        "Panel: h1 'Saiba o que está mudando antes da concorrência', textarea 'Temas que você acompanha' (um por linha), select Período (7, 30, 90 dias; padrão 30), MaisDetalhes com 'Setor da empresa'; botão 'Montar o radar'; 'Preencher com um exemplo' e ?exemplo=1",
+        "Stage: ResultHead com Entregar, Origem, Destaque (sinais fortes e interpretação), .summary, DataTable Sinais (papéis titulo, resumo o que fazer, chip força, detalhe fontes com link) e seção 'Conexões que merecem atenção'; o grafo entra na próxima história",
+        "lib/demo.ts com um radar fictício completo (3 temas, 10 a 12 sinais, 20 a 30 nós, fontes com veículo e data no período); POST /api/radar devolve o demo quando !aiEnabled(); resultado salvo no histórico tipo 'radar'; /r/[id] e /imprimir/[id] adaptados; lib/integracoes.ts = [OPENROUTER, NOTIFICACOES]; lib/ferramentas.ts com NOME_SERVIDOR 'radar-sinais' e ferramenta montar_radar chamando a mesma função da rota",
+        "npm run lint, npm run build e node scripts/verificar-jargao.mjs radar-sinais passam; curl em /api/health, /api/status, /api/radar (demo e entrada inválida com 400)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: desktop vazio 1400x900 com botão primário visível, ?exemplo=1&captura=1 em desktop e celular 390px"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Radar de Sinais: componente Grafo em SVG com layout de força próprio",
+      "description": "As a executivo, I want ver as conexões entre sinais, temas e atores em um grafo so that eu perceba o que está ligado a quê.",
+      "acceptanceCriteria": [
+        "Novo radar-sinais/components/Grafo.tsx: SVG responsivo, layout de força próprio no cliente (repulsão, molas, atração ao centro, 300 iterações, sem dependência) para até 120 nós; sem física contínua após o layout",
+        "Nós 'tema' maiores com rótulo sempre visível; 'sinal' na cor de acento; 'ator' e 'tecnologia' em cinza com contorno e rótulo só ao focar; arestas em cinza com espessura por peso",
+        "Clicar ou focar um nó (teclado) destaca vizinhos, esmaece o resto a 30% e mostra o cartão do nó ao lado (título, resumo, fontes com link); Esc limpa a seleção; prefers-reduced-motion respeitado",
+        "Grafo entra no Stage entre .summary e a DataTable; no celular tem 360 px de altura e a lista fica abaixo; rótulos em px fixos",
+        "Entregar ganha o extra 'Baixar grafo (JSON)' com {nodes, edges, communities} (formato do Graphify) e 'Copiar sinais como lista'",
+        "lint e build passam",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: abrir ?exemplo=1, clicar em um nó de tema e em um de sinal, conferir no celular"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Radar de Sinais: motor de busca com Hacker News, Reddit, GitHub e Exa",
+      "description": "As a executivo, I want que o radar consulte fontes reais do período so that os sinais não sejam opinião do modelo.",
+      "acceptanceCriteria": [
+        "Novo radar-sinais/lib/busca.ts: buscar({consulta, dias}): Promise<Achado[]> com Achado {titulo,url,trecho,veiculo,publicadoEm,pontuacao,fonte}; provedores com disponivel() e buscar(): hackernews (API Algolia, filtro por created_at_i), reddit (/search.json público, 1 requisição por segundo, User-Agent próprio), github (busca de repositórios por período, sem token) e exa (POST https://api.exa.ai/search com x-api-key, startPublishedDate, numResults, contents.highlights)",
+        "Deduplicação por URL normalizada e título quase igual; pontuação combina engajamento e recência; no máximo 60 achados por rodada; falha de um provedor registra console.error e não derruba a rodada; se nenhum responder, 502 com mensagem clara",
+        "lib/integracoes.ts ganha EXA (EXA_API_KEY opcional, descrição em linguagem de negócio, link para obter a chave, testar faz uma busca de 1 resultado e devolve ok:false com mensagem para chave falsa); GET /api/status lista integrations.exa",
+        "lint e build passam",
+        "Typecheck passes",
+        "Testar via curl POST /api/setup/testar para EXA com chave falsa e a função buscar com uma consulta real sem chave (só fontes públicas) em um script descartável"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Radar de Sinais: síntese em grafo com fontes verificadas",
+      "description": "As a executivo, I want que a IA agrupe os achados em sinais com fontes reais so that eu confie em cada ponto do radar.",
+      "acceptanceCriteria": [
+        "Novo radar-sinais/lib/radar.ts com montarRadar(entrada): duas consultas fixas por tema (o tema e 'tema + setor') via lib/busca.ts, depois askJSON<Radar> sobre os achados para produzir sinais, nós, arestas e conexões citando só URLs presentes nos achados; sem loop de ferramentas nesta rodada",
+        "Pós-processamento no servidor: descarta fontes cuja URL não estava nos achados, remove nós sem arestas, limita a 120 nós e 12 sinais; forca deriva de quantidade e diversidade de fontes",
+        "POST /api/radar usa montarRadar quando aiEnabled(); Loading com etapas 'Buscando notícias e comunidades', 'Agrupando sinais', 'Montando o grafo'; Origem informa quantos achados e quais fontes entraram",
+        "lint e build passam",
+        "Typecheck passes",
+        "Testar com chave real do OpenRouter uma rodada de dois temas e conferir no navegador que cada sinal tem fontes clicáveis (dev-browser skill)"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Radar de Sinais: rotina semanal com sinais novos",
+      "description": "As a executivo, I want receber toda semana só o que é novo so that eu acompanhe os temas sem abrir o app.",
+      "acceptanceCriteria": [
+        "Botão 'Receber este radar toda semana' no resultado cria a rotina 'radar-semanal' (semanal, segunda 8h, canal de Notificações) com temas e setor em parametros",
+        "lib/rotinas-do-app.ts registra o executor: monta o radar dos últimos 7 dias, compara títulos com o resultado anterior da mesma rotina e entrega 'Novos' e 'Continuam fortes' com o link /r/<id>; em demo entrega o radar de exemplo rotulado",
+        "TIPOS_ROTINA lista 'Radar semanal dos meus temas'",
+        "lint e build passam",
+        "Typecheck passes",
+        "Testar via POST /api/rotinas/<id>/executar-agora e conferir o texto entregue; Verify in browser using dev-browser skill: criar a rotina pelo botão e ver o cartão Rotinas em /setup"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Bússola de IA: esqueleto, questionário modelo, demo e histórico",
+      "description": "As a executivo, I want partir de um questionário pronto so that a avaliação de maturidade comece em um minuto.",
+      "acceptanceCriteria": [
+        "Pasta bussola-ia/ criada a partir de pdi-time/; entrada em catalogo.json (id bussola-ia, nome 'Bússola de IA', areas Estratégia e Gestão, porta 3012, acento #b8621b, capacidades ['artefato','mcp','formulario'], demo null); ícones, gerar-deploy, compose (3012:10000), metadata.title e acento no padrão",
+        "lib/types.ts com Dimensao, Pergunta {id,texto,dimensao,tipo:'escala'|'escolha'|'texto',opcoes?,peso}, Questionario, Resposta {id,respondente?:{area?,cargo?},valores,criadoEm}, Avaliacao {questionario,respostas,analise?}",
+        "lib/modelo.ts com o questionário modelo: 6 dimensões (Estratégia e liderança; Dados e infraestrutura; Pessoas e cultura; Processos e casos de uso; Governança e riscos; Resultados), 24 perguntas de escala 1 a 5 com rótulos 'Não existe' a 'Consolidado' e 2 perguntas de texto",
+        "Panel: h1 'Descubra em que estágio de IA sua empresa está', campos 'Nome da empresa' e 'Título da avaliação', botão 'Usar o questionário modelo' que mostra as perguntas por dimensão (leitura, sem editor ainda) e botão 'Criar link de avaliação' desabilitado com a frase 'Disponível na próxima etapa' (removida na história do link); ?exemplo=1 mostra a avaliação de exemplo",
+        "lib/demo.ts com uma avaliação fictícia completa (empresa, 8 respondentes de áreas diferentes, análise pronta) e Stage mostrando ResultHead, Origem, Destaque (nível geral com nome do estágio), .summary e DataTable por dimensão; o gráfico e a análise real entram depois",
+        "Resultado salvo no histórico tipo 'avaliacao'; /r/[id] e /imprimir/[id] adaptados; lib/integracoes.ts = [OPENROUTER, NOTIFICACOES]; lib/ferramentas.ts com NOME_SERVIDOR 'bussola-ia' e ferramenta stub avaliar_respostas devolvendo o demo",
+        "lint, build e verificar-jargao passam; curl em /api/health e /api/status",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: desktop vazio, ?exemplo=1&captura=1 desktop e celular"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Bússola de IA: editor de perguntas e questionários salvos",
+      "description": "As a executivo, I want adaptar as perguntas à minha empresa ou gerar um questionário para o meu setor so that a avaliação fale a nossa língua.",
+      "acceptanceCriteria": [
+        "Novo bussola-ia/components/EditorPerguntas.tsx: lista por dimensão com editar texto, trocar dimensão, mudar tipo (escala, escolha, texto), remover, adicionar e reordenar com botões Subir e Descer; contador 'N perguntas em M dimensões'; sem arrastar",
+        "Botão 'Gerar um questionário para o meu setor' em MaisDetalhes (setor e porte) chama askJSON e preenche o editor; em demo devolve o modelo com dois textos adaptados",
+        "lib/questionarios.ts em SQLite (salvar, obter, listar, apagar); 'Salvar questionário' e lista 'Meus questionários' em MaisDetalhes com Abrir e Apagar",
+        "lint e build passam",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: editar, reordenar, salvar e reabrir um questionário; conferir no celular"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Bússola de IA: link único de avaliação e coleta de respostas",
+      "description": "As a executivo, I want mandar um link para a liderança e as equipes responderem so that as respostas cheguem sem planilha.",
+      "acceptanceCriteria": [
+        "Botão 'Criar link de avaliação' gera formulário público via criar({tipo:'bussola', campos derivados das perguntas (escala, escolha, texto com secao = dimensão) mais 'Área' e 'Cargo' opcionais, parametros {questionarioId,titulo,empresa}, expiraEmDias 30 (opções 7, 30, 90), limite 50 (opções 10, 50, 200, sem limite)}); diálogo com o link e Copiar",
+        "Tela pública mostra marca, título, empresa, aviso 'Você pode responder sem se identificar', dimensões como seções e botão 'Enviar respostas'; agradecimento 'Sua resposta entrou na avaliação de {empresa}'",
+        "app/api/f/[token]/route.ts importa @/lib/bussola que registra o callback 'bussola': grava a resposta ligada ao questionário (lib/respostas.ts em SQLite) sem chamar a IA",
+        "MaisDetalhes lista 'Avaliações em andamento' com link, respostas recebidas, Encerrar e 'Ver resultado'",
+        "lint e build passam",
+        "Typecheck passes",
+        "Testar via curl um envio válido, um fora da escala (400) e um após o limite (410); Verify in browser using dev-browser skill: tela pública em celular e desktop"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Bússola de IA: mapa de maturidade e leitura da IA",
+      "description": "As a executivo, I want ver o nível por dimensão e o que fazer a seguir so that eu leve um diagnóstico para a diretoria.",
+      "acceptanceCriteria": [
+        "lib/bussola.ts com analisarAvaliacao(avaliacao): médias por dimensão (0 a 5), nível geral (1 Inicial, 2 Exploração, 3 Estruturação, 4 Escala, 5 Transformação) e dispersão calculados no servidor; askJSON recebe só agregados e respostas de texto e devolve {resumo, leituraPorDimensao, forcas, lacunas, proximosPassos (3), ondeDiscordam (só quando houver área informada)}",
+        "Novo components/GraficoMaturidade.tsx: radar em SVG puro com 6 eixos, anéis rotulados 1, 3 e 5, polígono da empresa em acento com preenchimento a 15%; rótulos em px fixos legíveis em 390 px; tabela de leitura sem cor abaixo",
+        "Botão 'Analisar respostas' na lista de avaliações roda a análise sobre as respostas recebidas e salva no histórico; Stage na ordem ResultHead, Origem, Destaque, .summary, GraficoMaturidade, DataTable por dimensão, Forças, Lacunas, Próximos passos, Onde discordam",
+        "Entregar com extras 'Baixar respostas (CSV)' e 'Copiar próximos passos'; lib/ferramentas.ts declara avaliar_respostas(respostas) e resultado_avaliacao(id) chamando as mesmas funções",
+        "lint e build passam",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: analisar a avaliação de exemplo e conferir o gráfico em desktop e celular"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Simulador de Vendas: esqueleto, vendedores, cenários e análise de uma conversa colada",
+      "description": "As a gestor de vendas, I want cadastrar meu time e ver a análise de uma conversa so that eu entenda o que o app mede antes de conectar a voz.",
+      "acceptanceCriteria": [
+        "Pasta simulador-vendas/ criada a partir de pdi-time/; entrada em catalogo.json (id simulador-vendas, nome 'Simulador de Vendas', area Vendas, porta 3013, acento #3f6212, capacidades ['artefato','mcp','rotina'], demo null); ícones, gerar-deploy, compose (3013:10000), metadata.title e acento no padrão",
+        "lib/types.ts com Vendedor, Cenario {id,titulo,cliente:{nome,cargo,empresa,contexto},objetivo,objecoes,tom}, Conversa {id,vendedorId,cenarioId,origem:'voz'|'texto'|'colada',transcricao:{papel,texto,segundo?}[],duracaoSeg?,criadoEm}, Analise {nota,criterios:{nome,nota,evidencia,comoMelhorar}[],pontosFortes,oQueMelhorar,momentos,resumo}",
+        "lib/vendedores.ts e lib/cenarios.ts em SQLite (criar, listar, obter, apagar); 3 cenários prontos carregados na primeira execução (lead frio, desconto, renovação)",
+        "Panel: h1 'Treine seu time de vendas com um cliente que responde', select Vendedor com 'Cadastrar vendedor' em linha (nome, e-mail, equipe), select Cenário, textarea 'Colar uma conversa' no formato 'Vendedor: ... / Cliente: ...', botão 'Analisar a conversa'; MaisDetalhes com os 7 critérios editáveis",
+        "lib/analise.ts com analisarConversa(conversa, criterios) via askJSON; nota geral é média dos critérios calculada no servidor com uma casa decimal e vírgula; Stage: ResultHead, Origem, Destaque (nota), .summary, DataTable de critérios, Momentos-chave, details 'Ver a conversa completa'",
+        "Resultado salvo no histórico tipo 'conversa' com expiraEmDias 90; lib/demo.ts com conversa e análise fictícias; lib/integracoes.ts = [OPENROUTER, NOTIFICACOES]; lib/ferramentas.ts com NOME_SERVIDOR 'simulador-vendas' e analisar_conversa(transcricao, vendedor?, cenario?)",
+        "lint, build e verificar-jargao passam; curl em /api/health, /api/status, POST /api/analisar (demo e 400)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: desktop vazio, ?exemplo=1&captura=1 desktop e celular"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Simulador de Vendas: integração ElevenLabs e webhook de pós-conversa assinado",
+      "description": "As a gestor, I want que cada conversa por voz chegue ao app sozinha so that a análise não dependa de alguém colar a transcrição.",
+      "acceptanceCriteria": [
+        "lib/integracoes.ts ganha ELEVENLABS_AGENTE: ELEVENLABS_API_KEY (secret), ELEVENLABS_AGENT_ID (select com opcoesDinamicas via GET /v1/convai/agents, como em entrevista-ia), ELEVENLABS_WEBHOOK_SECRET (secret, ajuda em 3 passos citando Configurações > Webhooks e o endereço mostrado no cartão); testar chama GET /v1/convai/agents/<id> e devolve ok:false com mensagem para chave falsa",
+        "Novo components/Webhook.tsx registrado em app/setup/page.tsx abaixo de SetupPage: mostra a URL ${baseUrl}/webhook/elevenlabs com Copiar e 'Última conversa recebida há N minutos' (GET /api/webhook-info)",
+        "Novo app/webhook/elevenlabs/route.ts (POST): lê o corpo cru com req.text(), valida ElevenLabs-Signature (t= e v0=, HMAC-SHA256 de '<t>.<corpo>' com o segredo, janela de 30 min, crypto.timingSafeEqual; aceita múltiplos v0=), devolve 200 antes de processar; aceita só type 'post_call_transcription'; lê data.transcript (role, message, time_in_call_secs), data.metadata.call_duration_secs e dynamic_variables (vendedor_id, sala_token); grava a Conversa com origem 'voz', roda analisarConversa e salva no histórico; assinatura inválida devolve 401",
+        "lint e build passam",
+        "Typecheck passes",
+        "Testar via curl um POST no webhook com assinatura válida (script descartável que calcula o HMAC) e um inválido (401); conferir que a conversa aparece no histórico"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Simulador de Vendas: sala de simulação pública por texto e por voz",
+      "description": "As a vendedor, I want abrir um link, conversar com o cliente simulado e ver minha análise so that eu treine sozinho quando quiser.",
+      "acceptanceCriteria": [
+        "lib/salas.ts em SQLite: 'Criar link de treino' no painel (vendedor e cenário) gera token de 30 dias; nova página pública app/simular/[token]/page.tsx com a marca, o cenário em linguagem do vendedor ('Você vai ligar para {cliente}, {cargo} da {empresa}. Objetivo: ...') e 404 amigável",
+        "Sem ElevenLabs configurada: conversa por texto em que a IA faz o cliente (askText multi-turno com o cenário no system; em demo, roteiro fixo de 4 turnos), botão 'Encerrar e ver minha análise' que grava a Conversa (origem 'texto') e mostra o mesmo Resultado do app",
+        "Com ElevenLabs configurada: widget <elevenlabs-convai agent-id=... dynamic-variables='{vendedor_id, sala_token, cenario}'> carregado pelo script oficial (componente cliente que injeta o script uma vez); após o fim, a página consulta GET /api/salas/<token>/ultima a cada 5 s mostrando 'Analisando sua conversa' até a análise chegar",
+        "README do app explica que o agente precisa ser público com autenticação desligada e allowlist de domínio, e onde ligar o webhook",
+        "lint e build passam",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: abrir a sala sem integração em celular e desktop, conversar por texto e ver a análise"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Simulador de Vendas: painel da equipe e bloco Em breve",
+      "description": "As a gestor de vendas, I want ver como cada vendedor evolui e onde a equipe tropeça so that eu direcione o treino.",
+      "acceptanceCriteria": [
+        "Botão 'Ver o painel da equipe' no painel gera o resultado tipo 'painel' (recalculado a cada clique e salvo no histórico): Destaque com a nota média dos últimos 30 dias e variação contra os 30 anteriores; DataTable Vendedores (nome, conversas, nota média, tendência como chip Subindo/Estável/Caindo, critério mais fraco, última conversa, 'Ver conversas')",
+        "Seção 'Critérios mais fracos da equipe' em barras horizontais no padrão CSS do Analista Financeiro (GraficoCategorias), critério pior em warn",
+        "Clicar em 'Ver conversas' lista as conversas do vendedor com nota, cenário e Abrir; 'Criar link de treino' direto da linha",
+        "Bloco 'Em breve' no fim do painel com dois cartões a 60% de opacidade e chip neutro 'Em breve': 'Analisar ligações reais do time' e 'Levar as notas para o CRM'; sem botão",
+        "Entregar com extra 'Baixar notas da equipe (CSV)'; lib/ferramentas.ts ganha painel_equipe(dias?)",
+        "lint e build passam",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: painel com os dados do demo em desktop e celular"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Simulador de Vendas: resumo semanal da equipe",
+      "description": "As a gestor, I want receber o resumo da semana so that eu acompanhe o treino sem abrir o app.",
+      "acceptanceCriteria": [
+        "Botão 'Receber o resumo toda semana' no painel cria a rotina 'resumo-equipe' (semanal, sexta 17h, canal de Notificações)",
+        "lib/rotinas-do-app.ts registra o executor: conversas da semana, nota média, quem mais evoluiu, quem não treinou, critério mais fraco e o link do painel; em demo entrega números do exemplo rotulados",
+        "TIPOS_ROTINA lista 'Resumo semanal da equipe'",
+        "lint e build passam",
+        "Typecheck passes",
+        "Testar via POST /api/rotinas/<id>/executar-agora e conferir o texto entregue"
+      ],
+      "priority": 18,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Custos de IA: esqueleto, faturas, orçamento, demo e gráfico gasto contra planejado",
+      "description": "As a CFO, I want ver o gasto com IA contra o planejado so that eu saiba se estamos dentro do orçamento.",
+      "acceptanceCriteria": [
+        "Pasta custos-ia/ criada a partir de pdi-time/; entrada em catalogo.json (id custos-ia, nome 'Custos de IA', areas Financeiro e TI, porta 3014, acento #7e22ce, capacidades ['artefato','mcp','rotina'], demo null); ícones, gerar-deploy, compose (3014:10000), metadata.title e acento no padrão",
+        "lib/types.ts com Fatura {id,fornecedor,ferramenta,categoria,valor,moeda:'BRL'|'USD'|'EUR',valorBRL,data,periodicidade,origem:'email'|'upload'|'manual',referencia,criadoEm}, Orcamento {item,valorMensalBRL}, Leitura {mesAtual,totalBRL,planejadoBRL,variacaoMesAnterior,porFerramenta,porMes,alertas}",
+        "lib/faturas.ts em SQLite (salvar com deduplicação por fornecedor, valor e data; listar(periodo); apagar; apagarTodas; resumo(periodo)) e lib/orcamento.ts (definir, listar, apagar); câmbio manual em /setup (cartão CAMBIO com CAMBIO_USD_BRL e CAMBIO_EUR_BRL, padrões fixos editáveis)",
+        "Panel: h1 'Saiba quanto sua empresa gasta com IA', select Período (mês atual, últimos 3 meses, ano), botão 'Ler as notas do e-mail' desabilitado com a frase 'Conecte seu e-mail para ler as notas sozinho', botão 'Enviar notas em PDF' (habilitado na próxima história); MaisDetalhes com 'Orçamento planejado' (item e valor mensal) e 'Lançar manualmente' (fornecedor, ferramenta, valor, moeda, data)",
+        "Stage: ResultHead, Origem, Destaque (gasto do mês e diferença contra o planejado em ok/warn/danger), .summary, novo components/GraficoGastoPlanejado.tsx (barras pareadas por mês em CSS no padrão do Analista Financeiro, gasto em acento, planejado em cinza, rótulos em px fixos), barras por ferramenta com chip 'Acima do planejado', DataTable de faturas (titulo fornecedor, resumo ferramenta e periodicidade, chip valor, detalhe data e origem)",
+        "lib/demo.ts com 12 meses de faturas fictícias de ferramentas reais do mercado, um orçamento e dois estouros; GET /api/leitura?periodo devolve o demo quando não há faturas gravadas; resultado salvo no histórico tipo 'leitura'; lib/integracoes.ts = [OPENROUTER, NOTIFICACOES, CAMBIO]; lib/ferramentas.ts com NOME_SERVIDOR 'custos-ia' e gastos_ia(periodo)",
+        "lint, build e verificar-jargao passam; curl em /api/health, /api/status, /api/leitura",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: desktop vazio, ?exemplo=1&captura=1 desktop e celular com atenção aos gráficos"
+      ],
+      "priority": 19,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Custos de IA: leitor de notas em PDF e texto com prévia de confirmação",
+      "description": "As a CFO, I want que o app entenda uma nota ou recibo de qualquer ferramenta so that eu não digite nada.",
+      "acceptanceCriteria": [
+        "Novo lib/leitor.ts com lerDocumento({texto, nomeArquivo?, assunto?, remetente?}): Promise<Fatura|null> via askJSON, devolvendo null quando não for cobrança de ferramenta de IA; validação no servidor (valor > 0, data válida, moeda conhecida); em demo devolve uma fatura de exemplo por documento, rotulada",
+        "POST /api/faturas/upload recebe formData com até 10 PDFs de 5 MB (texto via unpdf) ou imagens (askVision quando visionEnabled(), senão mensagem 'Envie em PDF'); devolve reconhecidas e ignoradas com motivo; nada é gravado ainda",
+        "Tela: Dropzone habilitada, prévia do que foi reconhecido com 'Editar' por linha e 'Confirmar tudo' que chama POST /api/faturas (grava com origem 'upload') e recarrega a leitura",
+        "lint e build passam",
+        "Typecheck passes",
+        "Testar via curl com um PDF de exemplo e com um arquivo que não é nota (ignorado com motivo); Verify in browser using dev-browser skill: enviar dois PDFs e confirmar"
+      ],
+      "priority": 20,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Custos de IA: conectar Gmail e importar as notas do período",
+      "description": "As a CFO, I want conectar meu Gmail com um clique e importar as notas dos últimos meses so that o histórico se monte sozinho.",
+      "acceptanceCriteria": [
+        "lib/integracoes.ts ganha GMAIL com oauth {tipo:'google', rotulo:'Conectar o Gmail', url:'/api/setup/oauth/google'}; rotas app/api/setup/oauth/google/route.ts e .../callback/route.ts no padrão PKCE do OpenRouter, escopo https://www.googleapis.com/auth/gmail.readonly, access_type=offline e prompt=consent, client_id e client_secret do app em GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET (env); grava GMAIL_REFRESH_TOKEN e GMAIL_CONTA; cartão mostra 'Conectado como {e-mail}' e Desconectar; sem as variáveis do app, o cartão explica em 'Para a equipe técnica' como criar as credenciais",
+        "Novo lib/email.ts: listarMensagens({dias, consulta}) e obterMensagem(id) via users.messages.list (q com newer_than e termos fatura, invoice, recibo, receipt, nota fiscal, has:attachment), messages.get e attachments.get; renovação do access token pelo refresh token; espera em 429",
+        "POST /api/faturas/importar (dias 30, 90 ou 365) percorre as mensagens, passa assunto, remetente, corpo e anexos PDF por lerDocumento, deduplica e grava com origem 'email' e referencia = id da mensagem; o corpo do e-mail nunca é gravado; devolve lidas, reconhecidas e ignoradas; botão 'Ler as notas do e-mail' habilita quando integrations.gmail é true e mostra etapas no Loading",
+        "README do app documenta a criação das credenciais e as restrições (app em teste: 100 usuários e acesso expira em 7 dias; escopo restrito exige verificação para uso público; Workspace interno dispensa)",
+        "lint e build passam",
+        "Typecheck passes",
+        "Testar o fluxo OAuth com credenciais de teste em localhost se disponíveis; sem elas, testar via curl que /setup mostra o cartão e que /api/setup/oauth/google redireciona para accounts.google.com com code_challenge"
+      ],
+      "priority": 21,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Custos de IA: alertas, fechamento mensal e ferramentas MCP",
+      "description": "As a CFO, I want ser avisado quando uma ferramenta estourar o planejado e receber o fechamento todo mês so that o controle rode sem mim.",
+      "acceptanceCriteria": [
+        "Alertas em lib/faturas.ts sem IA: 'Acima do planejado' (gasto do mês maior que o orçamento do item) e 'Assinatura nova' (fornecedor sem fatura nos 3 meses anteriores); seção 'Alertas' no resultado e chips na tabela",
+        "Botão 'Receber o fechamento todo mês' cria a rotina 'fechamento-mensal' (mensal, dia 1 às 8h); executor roda a importação do Gmail quando conectado, gera a leitura do mês anterior e entrega 5 linhas (total, contra o planejado, maior variação, novas assinaturas, alertas) com o link /r/<id>; TIPOS_ROTINA lista 'Fechamento mensal de custos de IA'",
+        "lib/ferramentas.ts declara importar_notas(dias) e definir_orcamento(item, valorMensal) além de gastos_ia; Entregar com extra 'Baixar faturas (CSV)'",
+        "lint e build passam",
+        "Typecheck passes",
+        "Testar rotina via executar-agora e MCP via curl tools/list e tools/call; Verify in browser using dev-browser skill: seção de alertas com o demo"
+      ],
+      "priority": 22,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Clone de Site: esqueleto, geração de HTML a partir da captura e prévia",
+      "description": "As a executivo de marketing, I want subir a captura de uma página de referência e receber a minha versão em HTML so that eu tenha um ponto de partida em minutos.",
+      "acceptanceCriteria": [
+        "Pasta clone-site/ criada a partir de pdi-time/; entrada em catalogo.json (id clone-site, nome 'Clone de Site', areas Marketing e Produto, porta 3015, acento #374151, capacidades ['artefato','mcp'], demo null); ícones, gerar-deploy, compose (3015:10000), metadata.title e acento no padrão; lib/integracoes.ts = [OPENROUTER]",
+        "lib/types.ts com Pedido {imagem, stack:'html-tailwind'|'html-css', instrucoes?, marca?:{nome,corPrimaria,corSecundaria?}}, Versao {n,html,instrucao,criadoEm}, Pagina {id,titulo,versoes,marca?}",
+        "Novo lib/gerador.ts com gerarPagina(pedido): prompt de sistema portado e traduzido do screenshot-to-code (arquivo HTML único, Tailwind pela CDN, Google Fonts, imagens substituídas por blocos na cor da marca com texto alternativo, sem scripts além do Tailwind, textos em português) enviado com a imagem via askVision; extrai <html>...</html> e valida abertura e fechamento; remove <script> de outras origens",
+        "Panel: h1 'Transforme uma referência em uma página sua', Dropzone para PNG ou JPG até 5 MB, select Formato (HTML com Tailwind, HTML com CSS), MaisDetalhes com Instruções e Marca (nome, cor principal, cor secundária); botão 'Gerar a página'",
+        "Stage: ResultHead, Origem, prévia em iframe sandbox='allow-same-origin' com srcDoc e alternância 'Computador' e 'Celular' (390 px), details 'Ver o código' com CopyButton, aviso em uma linha 'Use a referência pela estrutura. Textos, marcas e imagens de terceiros são protegidos; troque pelo conteúdo da sua empresa'",
+        "lib/demo.ts com uma landing fictícia completa em português devolvida quando !visionEnabled(); Loading com etapas; resultado salvo no histórico tipo 'pagina'; /r/[id] mostra a prévia; lib/ferramentas.ts com NOME_SERVIDOR 'clone-site' e gerar_pagina(imagem_url, instrucoes?, marca?) que baixa a imagem no servidor até 5 MB",
+        "lint, build e verificar-jargao passam; curl em /api/health, /api/status, POST /api/pagina (demo e 400 sem imagem)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: desktop vazio, ?exemplo=1&captura=1 desktop e celular; alternar a prévia para Celular"
+      ],
+      "priority": 23,
+      "passes": true,
+      "notes": "Prévia usa sandbox='allow-scripts' (origem opaca) em vez de 'allow-same-origin': o Tailwind pela CDN é um script e, sem allow-scripts, o formato Tailwind apareceria sem estilo. Verificado no navegador com playwright-core (sem o skill dev-browser)."
+    },
+    {
+      "id": "US-024",
+      "title": "Clone de Site: edições por instrução, troca de textos e versões",
+      "description": "As a executivo de marketing, I want pedir mudanças em português e voltar a uma versão anterior so that a página fique do meu jeito sem mexer em código.",
+      "acceptanceCriteria": [
+        "Campo 'O que mudar' com botão 'Aplicar' abaixo da prévia: POST /api/pagina/<id>/editar envia a instrução e o HTML atual; gerarPagina em modo edição (prompt de atualização do screenshot-to-code: devolver o arquivo inteiro mudando só o pedido) grava uma Versao nova; lista 'Versões' (n, instrução, hora) com 'Voltar para esta'",
+        "Botão 'Trocar os textos pelos da minha empresa' abre um campo 'O que a empresa faz' e pede à IA para reescrever títulos, subtítulos e chamadas mantendo a estrutura (é uma edição por instrução pré-montada)",
+        "Em demo, as edições aplicam mudanças fixas visíveis (cor de fundo do cabeçalho e título) para mostrar o fluxo",
+        "lib/ferramentas.ts ganha editar_pagina(id, instrucao)",
+        "lint e build passam",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: três edições seguidas e uma volta de versão"
+      ],
+      "priority": 24,
+      "passes": true,
+      "notes": "Implementado em demo e com IA (askText, prompt de atualização do screenshot-to-code). \"Voltar para esta\" copia a versão escolhida como versão nova (a lista só cresce; nada é apagado). A rota /editar aceita também { empresa } para a troca de textos (instrução montada no servidor; a lista \"Versões\" mostra só o rótulo curto) e { html } opcional com o HTML que a tela exibe. Verificado em navegador (playwright-core): três edições seguidas (v2, v3, troca de textos v4), volta para a versão 1 (v5), lista de versões, /r/[id] com editor, celular 390 px; curls 404/400 e tools/list com editar_pagina."
+    },
+    {
+      "id": "US-025",
+      "title": "Clone de Site: publicar a página em um link e baixar",
+      "description": "As a executivo de marketing, I want publicar a página em um link so that o resultado saia do app.",
+      "acceptanceCriteria": [
+        "Nova rota app/s/[id]/route.ts serve o HTML da versão atual como text/html com Content-Security-Policy restrita (default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src https://cdn.tailwindcss.com 'unsafe-inline'; img-src data: https:), X-Robots-Tag noindex e Cache-Control no-store; 404 amigável quando não existe",
+        "Entregar: primário 'Publicar link' mostra ${baseUrl}/s/<id> com Copiar; extras 'Baixar HTML' (download do arquivo) e 'Copiar código'",
+        "PADRAO.md ganha um parágrafo curto sobre páginas públicas geradas (CSP e noindex)",
+        "lint e build passam",
+        "Typecheck passes",
+        "Testar via curl GET /s/<id> (200 e cabeçalhos) e GET /s/inexistente (404); Verify in browser using dev-browser skill: abrir a página publicada em celular"
+      ],
+      "priority": 25,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Prospecção no LinkedIn: esqueleto, perfil ideal, leads de exemplo e sequência de mensagens",
+      "description": "As a executivo de vendas, I want descrever meu cliente ideal e receber a lista com a sequência pronta so that eu veja o valor antes de conectar minha conta.",
+      "acceptanceCriteria": [
+        "Pasta prospeccao-linkedin/ criada a partir de pdi-time/; entrada em catalogo.json (id prospeccao-linkedin, nome 'Prospecção no LinkedIn', area Vendas, porta 3016, acento #0a66c2, capacidades ['artefato','mcp','rotina'], demo null); ícones, gerar-deploy, compose (3016:10000), metadata.title e acento no padrão; lib/integracoes.ts = [OPENROUTER, NOTIFICACOES] (Prospect Halo entra na próxima história)",
+        "lib/types.ts com Perfil {cargos,setores,sinais,proposta,remetente:{nome,empresa},tom}, Lead {id,nome,cargo,empresa,setor,linkedinUrl,sinal,pontuacao,origem:'prospecthalo'|'demo'}, Sequencia {leadId,conexao,acompanhamento1,acompanhamento2,email?}, Campanha {id,nome,leads,sequencias,estado,externoId?}",
+        "Panel: h1 'Prospecte no LinkedIn sem passar o dia nele', campos Cargos, Setores, Sinais de intenção (escolha múltipla: mudou de cargo, empresa contratando, publicou sobre o tema, levantou investimento), 'Sua proposta em uma frase'; MaisDetalhes com Seu nome, Sua empresa e Tom; botão 'Buscar leads'",
+        "Stage: ResultHead, Origem ('Os leads exibidos são fictícios' em demo), Destaque (leads e quantos com sinal forte), DataTable de leads (titulo nome e cargo, resumo empresa e sinal, chip pontuação, detalhe LinkedIn como link) com seleção múltipla e 'Escrever para os selecionados'; cartões por lead com conexão (até 300 caracteres), dois acompanhamentos e e-mail opcional, cada um com CopyButton",
+        "lib/sequencias.ts com escreverSequencia(lead, perfil) via askJSON, gancho diferente por mensagem, sem placeholders entre colchetes; lib/demo.ts com 10 leads fictícios rotulados e sequências prontas; resultado salvo no histórico tipo 'prospeccao'; lib/ferramentas.ts com NOME_SERVIDOR 'prospeccao-linkedin', buscar_leads_linkedin(perfil) e escrever_sequencia(lead, proposta)",
+        "lint, build e verificar-jargao passam; curl em /api/health, /api/status, POST /api/leads e POST /api/sequencias (demo e 400)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: desktop vazio, ?exemplo=1&captura=1 desktop e celular; selecionar dois leads e escrever"
+      ],
+      "priority": 26,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Prospecção no LinkedIn: Prospect Halo conectado com busca, aprovação e envio",
+      "description": "As a executivo de vendas, I want que a lista venha do meu Prospect Halo e que o envio aconteça só depois da minha aprovação so that eu ganhe tempo sem perder o controle.",
+      "acceptanceCriteria": [
+        "lib/integracoes.ts ganha PROSPECTHALO = integracaoMCP({id:'PROSPECTHALO', titulo:'Prospect Halo', descricao:'Busca leads no seu LinkedIn e envia as mensagens aprovadas', urlPadrao:'https://app.prospecthalo.ai/api/agent/v1/mcp', oauth:true}); INTEGRACOES = [OPENROUTER, PROSPECTHALO, NOTIFICACOES]",
+        "Novo lib/prospecthalo.ts no método de prospeccao-ia/lib/crm-mcp.ts: lista as ferramentas remotas e escolhe por palavras-chave (buscar: lead, prospect, search, find; campanha: campaign, agent, outreach, create; estado: status, performance); montarArgumentos(schema, candidatos) casa as propriedades do schema remoto com o perfil; campo avançado PROSPECTHALO_FERRAMENTAS guarda o mapeamento para correção manual",
+        "POST /api/leads usa o Prospect Halo quando configurado e normaliza a resposta em Lead[] (chaves leads, prospects, results, data); em falha mostra a mensagem em português e o botão 'Ver com dados de exemplo'",
+        "Botão 'Aprovar e enviar pelo Prospect Halo' abre diálogo com quantidade de leads, as três mensagens e o aviso 'As mensagens serão enviadas da sua conta do LinkedIn, respeitando os limites diários do Prospect Halo'; só após Confirmar cria a campanha remota e grava externoId; 'Ver andamento' consulta o estado; lib/ferramentas.ts ganha enviar_campanha(campanhaId, confirmar) que devolve o plano quando confirmar for falso",
+        "README documenta que os nomes reais das ferramentas são descobertos em tempo de execução",
+        "lint e build passam",
+        "Typecheck passes",
+        "Testar ponta a ponta com um servidor MCP de teste local com OAuth expondo search_leads, create_campaign e campaign_status (script descartável); Verify in browser using dev-browser skill: autorizar em /setup, buscar, aprovar e enviar"
+      ],
+      "priority": 27,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Prospecção no LinkedIn: leads novos toda semana",
+      "description": "As a executivo de vendas, I want receber leads novos toda semana com as mensagens prontas so that a prospecção não pare quando eu estiver ocupado.",
+      "acceptanceCriteria": [
+        "Botão 'Receber leads novos toda semana' no resultado cria a rotina 'leads-semanais' com o perfil em parametros",
+        "Executor busca pelo perfil, exclui leads já entregues (tabela leads_vistos por perfil), escreve as sequências e entrega a lista com o link do resultado; nunca envia mensagens; em demo entrega leads fictícios rotulados",
+        "TIPOS_ROTINA lista 'Leads novos toda semana'",
+        "lint e build passam",
+        "Typecheck passes",
+        "Testar via executar-agora duas vezes e conferir que a segunda entrega não repete leads"
+      ],
+      "priority": 28,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Vídeos de Campanha: esqueleto, briefing, três conceitos e storyboard de exemplo",
+      "description": "As a executivo de marketing, I want descrever a campanha, subir a imagem do produto e escolher entre três conceitos so that eu decida o vídeo antes de gastar créditos.",
+      "acceptanceCriteria": [
+        "Pasta videos-campanha/ criada a partir de pdi-time/; entrada em catalogo.json (id videos-campanha, nome 'Vídeos de Campanha', area Marketing, porta 3017, acento #be185d, capacidades ['artefato','mcp'], demo null); ícones, gerar-deploy, compose (3017:10000), metadata.title e acento no padrão; lib/integracoes.ts = [OPENROUTER] (Higgsfield entra na próxima história)",
+        "lib/types.ts com Briefing {produto,publico,objetivo,tom,formato:'9:16'|'16:9'|'1:1',duracaoSeg:5|10|15,imagemDataUrl?}, Conceito {id,titulo,roteiro:{cena,segundos,textoNaTela}[],efeitoSugerido,chamada,legenda:{instagram,linkedin,tiktok}}, Video {id,conceitoId,estado,url?,custoCreditos?,externoId?,criadoEm}",
+        "Panel: h1 'Um vídeo curto para cada campanha, em minutos', campos Produto ou oferta, Para quem, Objetivo (select: lançamento, promoção, marca, evento), Tom, Formato, Duração, Dropzone para a imagem do produto (PNG ou JPG até 5 MB); botão 'Criar conceitos'",
+        "lib/conceitos.ts com criarConceitos(briefing) via askJSON devolvendo 3 conceitos cujas cenas somam a duração, com efeitoSugerido escolhido de uma lista interna em português (Zoom dramático, Giro do produto, Explosão de partículas, Câmera lenta, Antes e depois) e legendas por rede",
+        "Stage: ResultHead, Origem, três cartões de conceito (lado a lado no desktop, empilhados no celular) com novo components/Storyboard.tsx (quadros na proporção escolhida, imagem do produto ao fundo com sobreposição escura a 40%, texto na tela em Manrope 700, animação CSS discreta entre 3 cenas desligada por prefers-reduced-motion, rótulo fixo 'Prévia ilustrativa') e botão 'Gerar este vídeo' desabilitado com a frase 'Conecte o Higgsfield para gerar o vídeo de verdade'",
+        "lib/demo.ts com briefing e três conceitos fictícios; resultado salvo no histórico tipo 'campanha'; lib/ferramentas.ts com NOME_SERVIDOR 'videos-campanha' e criar_conceitos(briefing)",
+        "lint, build e verificar-jargao passam; curl em /api/health, /api/status, POST /api/conceitos (demo e 400)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: desktop vazio, ?exemplo=1&captura=1 desktop e celular nos três formatos"
+      ],
+      "priority": 29,
+      "passes": true,
+      "notes": "Concluída em 2026-09-15. Imagem de exemplo é JPEG (public/exemplo-produto.jpg) em vez de PNG para o data URL do demo ficar leve; a imagem do produto fica salva no histórico (saida.briefing.imagemDataUrl) porque /r/[id] e a geração do vídeo (US-030) precisam dela. Verificado no navegador com playwright-core (sem skill dev-browser): desktop vazio, ?exemplo=1&captura=1 desktop e celular (9:16) e formulário com 16:9 e 1:1 em desktop e celular."
+    },
+    {
+      "id": "US-030",
+      "title": "Vídeos de Campanha: Higgsfield via MCP com custo antes de gerar",
+      "description": "As a executivo de marketing, I want gerar o vídeo escolhido pelo Higgsfield vendo o custo antes so that eu use os créditos com consciência.",
+      "acceptanceCriteria": [
+        "lib/integracoes.ts ganha HIGGSFIELD = integracaoMCP({id:'HIGGSFIELD', titulo:'Higgsfield', descricao:'Gera o vídeo a partir da imagem do produto com os efeitos da plataforma', urlPadrao:'https://mcp.higgsfield.ai', oauth:true}); INTEGRACOES = [OPENROUTER, HIGGSFIELD]",
+        "Novo lib/higgsfield.ts com listarEfeitos(), enviarImagem(dataUrl), gerarVideo({imagemId, efeitoId, formato, prompt}), estado(jobId) e saldo() sobre lib/mcp-cliente.ts, escolhendo as ferramentas por nome (presets_show, media_upload ou media_import_url, generate_video com o modelo de presets, job_status ou jobs_wait, show_generation_by_ids, balance) com fallback por palavra-chave; a lista de efeitos remota substitui a interna e é mapeada por nome para o efeitoSugerido",
+        "Diálogo de confirmação antes de gerar com efeito, formato, custo estimado em créditos (quando o provedor informar) e saldo atual; só após 'Confirmar e gerar' cria o job (POST /api/videos) e grava Video em SQLite (lib/videos.ts); um vídeo por vez",
+        "Acompanhamento: a tela consulta GET /api/videos/<id> a cada 5 s com etapas 'Enviando a imagem', 'Gerando o vídeo', 'Finalizando'; pronto mostra <video controls> com a URL, 'Baixar vídeo' e 'Gerar outro efeito'; falha mostra o motivo em português; GET /api/status lista integrations.higgsfield; saldo em MaisDetalhes quando conectado",
+        "lib/ferramentas.ts ganha gerar_video(conceitoId, efeito?, confirmar) que devolve custo e plano quando confirmar for falso, e estado_video(id)",
+        "lint e build passam",
+        "Typecheck passes",
+        "Testar ponta a ponta com um servidor MCP de teste local que simule as ferramentas (script descartável); Verify in browser using dev-browser skill: autorizar em /setup, confirmar e acompanhar até 'pronto' com o simulador"
+      ],
+      "priority": 30,
+      "passes": true,
+      "notes": "Concluída em 2026-09-15. Higgsfield via integracaoMCP (id 'higgsfield', prefixo HIGGSFIELD_*, urlPadrao https://mcp.higgsfield.ai — o molde sempre gera OAuth; a URL real responde OAuth com registro dinâmico via clerk.higgsfield.ai). lib/higgsfield.ts escolhe ferramentas pelo nome conhecido com fallback por palavra-chave e lê respostas em variantes comuns; lib/videos.ts grava em SQLite (tabela videos), cria o vídeo em segundo plano (202) e acompanha via GET /api/videos/<id>. Testado ponta a ponta com servidor MCP+OAuth de teste local descartável (curl e Playwright: autorizar em /setup, diálogo com efeito/custo/saldo, cancelar sem criar, confirmar, enviando → gerando → finalizando → pronto, falha em português, /r/[id] no celular, um vídeo por vez, ferramentas MCP gerar_video/estado_video)."
+    },
+    {
+      "id": "US-031",
+      "title": "Vídeos de Campanha: entregar vídeo, legendas e roteiro",
+      "description": "As a executivo de marketing, I want levar o vídeo e as legendas para as redes so that a campanha saia do app.",
+      "acceptanceCriteria": [
+        "Entregar com extras 'Baixar vídeo' (quando pronto), 'Copiar legenda do Instagram', 'Copiar legenda do LinkedIn', 'Copiar legenda do TikTok' e 'Baixar roteiro (texto)'",
+        "Folha de impressão (/imprimir/[id]) mostra o storyboard estático e o roteiro por cena",
+        "Aviso em uma linha abaixo do vídeo pronto: 'O link do vídeo vale por alguns dias. Baixe o arquivo para guardar'",
+        "lint e build passam",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: abrir o resultado de exemplo e usar cada item de Entregar"
+      ],
+      "priority": 31,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-032",
+      "title": "Suíte: catálogo, compose, scripts e PADRAO.md para dezessete apps",
+      "description": "As a pessoa que mantém a suíte, I want que catálogo, scripts e documentação reconheçam os sete apps novos so that publicar e verificar continue sendo um comando.",
+      "acceptanceCriteria": [
+        "catalogo.json com dezessete entradas validado por node scripts/gerar-deploy.mjs; render.yaml da raiz e dos apps regenerados; docker-compose.yml com os sete serviços (3011 a 3017) e volumes nomeados",
+        "scripts/verificar-padrao.sh lê a lista de apps de catalogo.json (se ainda for lista fixa) e compara os dezesseis contra pdi-time incluindo lib/mcp-oauth.ts e app/api/setup/oauth/mcp/**; sai com 0",
+        "node scripts/verificar-jargao.mjs limpo nos dezessete; exceções, se houver, em scripts/jargao-excecoes.json com justificativa em comentário no progress.txt",
+        "PADRAO.md: 'Dez apps' vira 'Dezessete apps'; seções curtas para askVision e modelo de visão, campos escala e escolha, cliente MCP com OAuth (integracaoMCP e rotas), webhooks assinados (exemplo do Simulador)",
+        "README.md da raiz com a tabela de apps e portas atualizada; cada app novo tem README.md no formato do de referência com a tabela de variáveis e os links de onde obter cada chave",
+        "site/index.html: conferir que as áreas novas (Estratégia, Inovação, TI, Produto) aparecem no filtro; ajustar se o mapa de áreas for fixo",
+        "npm run lint e npm run build passam nos dezessete",
+        "Typecheck passes"
+      ],
+      "priority": 32,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-033",
+      "title": "Suíte: verificação final ponta a ponta dos sete apps novos",
+      "description": "As a pessoa que mantém a suíte, I want os sete apps verificados antes do push so that o workflow publique imagens que funcionam.",
+      "acceptanceCriteria": [
+        "Para cada app novo, o checklist 'Verificação obrigatória' do PADRAO.md executado por inteiro: build standalone, curl em /api/health, /api/status, /api/setup (GET, PUT com chave falsa, PUT com null), POST /api/setup/testar por integração (ok:false com mensagem clara), rotas principais em demo e entradas inválidas com 400",
+        "POST /mcp responde initialize, tools/list e tools/call nos sete, com e sem código",
+        "Capturas de cada app (vazio 1400x900, ?exemplo=1&captura=1 em 1400x1500 e celular 390 px) e de /setup abertas com a ferramenta Read e corrigidas até ficarem limpas; botão primário visível sem rolagem nos sete",
+        "CLAUDE.md de cada app novo com as notas específicas e progress.txt com os aprendizados",
+        "Typecheck passes",
+        "Push na main e conferência do resumo do workflow: imagens publicadas, capturas geradas (ou aviso) e catálogo público com dezessete cartões"
+      ],
+      "priority": 33,
+      "passes": true,
+      "notes": "Verificação completa nos sete apps (build standalone, curl em todas as rotas, /mcp, capturas revisadas, typecheck/lint/build nos dezessete, verificar-jargao e verificar-padrao). Commit feito em ralph/novos-apps; o push na main e a conferência do resumo do workflow ficaram para o Rafael decidir, por publicarem imagens e o catálogo público."
+    },
+    {
+      "id": "US-034",
+      "title": "Custos de IA: conectar Outlook (Microsoft 365)",
+      "description": "As a CFO que usa Outlook, I want conectar minha caixa com um clique so that o app leia as notas também no Microsoft 365.",
+      "acceptanceCriteria": [
+        "lib/integracoes.ts ganha OUTLOOK com oauth {tipo:'microsoft', rotulo:'Conectar o Outlook', url:'/api/setup/oauth/microsoft'}; rotas app/api/setup/oauth/microsoft/route.ts e .../callback/route.ts contra login.microsoftonline.com/common/oauth2/v2.0 com PKCE, escopos Mail.Read offline_access User.Read, MICROSOFT_CLIENT_ID e MICROSOFT_CLIENT_SECRET (env); grava OUTLOOK_REFRESH_TOKEN e OUTLOOK_CONTA",
+        "lib/email.ts ganha o provedor outlook: /me/messages com $filter de data e $search, /me/messages/{id}/attachments (contentBytes); renovação do token; respeito a Retry-After em 429; POST /api/faturas/importar aceita provedor 'outlook'",
+        "GET /api/status lista integrations.outlook; o botão 'Ler as notas do e-mail' habilita com qualquer um dos dois e pergunta qual usar quando ambos estiverem conectados",
+        "README documenta a criação do registro de aplicativo no Entra ID e o aviso de editor não verificado em apps multi-tenant",
+        "lint e build passam",
+        "Typecheck passes",
+        "Testar via curl que /api/setup/oauth/microsoft redireciona para login.microsoftonline.com com code_challenge; fluxo completo se houver credenciais de teste"
+      ],
+      "priority": 34,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}
