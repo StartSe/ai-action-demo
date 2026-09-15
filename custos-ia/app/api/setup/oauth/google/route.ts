@@ -10,7 +10,7 @@ const AUTORIZACAO_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
 export async function GET(req: Request) {
   const base = baseUrl(req);
-  const credenciais = credenciaisDoApp();
+  const credenciais = credenciaisDoApp("gmail");
   if (!credenciais) {
     const erro = "Este app ainda não tem as credenciais do Google. Peça à equipe técnica para defini-las (veja \"Para a equipe técnica\" no cartão do Gmail).";
     return new Response(null, { status: 302, headers: { Location: `${base}/setup?erro=${encodeURIComponent(erro)}` } });

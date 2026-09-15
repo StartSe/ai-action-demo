@@ -1,5 +1,5 @@
 import { aiEnabled, modelName, visionEnabled } from "@/lib/ai";
-import { CAMBIO, GMAIL, INTEGRACOES } from "@/lib/integracoes";
+import { CAMBIO, GMAIL, INTEGRACOES, OUTLOOK } from "@/lib/integracoes";
 import { integracaoConfigurada, NOTIFICACOES, OPENROUTER } from "@/lib/setup-comum";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export async function GET() {
     demo: !aiEnabled(),
     model: modelName(),
     vision: visionEnabled(),
-    integrations: { openrouter: integracaoConfigurada(OPENROUTER), notificacoes: integracaoConfigurada(NOTIFICACOES), cambio: integracaoConfigurada(CAMBIO), gmail: integracaoConfigurada(GMAIL) },
+    integrations: { openrouter: integracaoConfigurada(OPENROUTER), notificacoes: integracaoConfigurada(NOTIFICACOES), cambio: integracaoConfigurada(CAMBIO), gmail: integracaoConfigurada(GMAIL), outlook: integracaoConfigurada(OUTLOOK) },
     setup: { pronto, url: "/setup" },
   });
 }

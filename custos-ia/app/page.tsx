@@ -32,7 +32,7 @@ import { EnviarNotas, PreviaNotas, type ResultadoUpload } from "@/components/Env
 import { ResumoImportacao } from "@/components/ImportarEmail";
 import { ReceberFechamento } from "@/components/ReceberFechamento";
 import type { Meta } from "@/lib/ai";
-import type { Alerta, Fatura, Leitura, Periodo, ResultadoImportacao } from "@/lib/types";
+import { NOME_PROVEDOR, PROVEDORES_EMAIL, type Alerta, type Fatura, type Leitura, type Periodo, type ProvedorEmail, type ResultadoImportacao } from "@/lib/types";
 
 const ETAPAS_CARREGANDO = ["Lendo as faturas do período...", "Comparando com o orçamento planejado...", "Montando o resultado..."];
 const ETAPAS_LENDO_NOTAS = ["Abrindo os arquivos...", "Reconhecendo fornecedor, valor e data...", "Montando a prévia..."];
@@ -72,6 +72,8 @@ export default function Page() {
   const [periodo, setPeriodo] = useState<Periodo>("mes");
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
   const [enviarNotasAberto, setEnviarNotasAberto] = useState(false);
+  /** Aberto quando Gmail e Outlook estão conectados e a pessoa precisa dizer qual caixa ler. */
+  const [escolhendoCaixa, setEscolhendoCaixa] = useState(false);
   const autoEnviado = useRef(false);
 
   useScrollToResult(estado.fase === "pronto" || estado.fase === "previa" || estado.fase === "importado");
@@ -88,10 +90,12 @@ export default function Page() {
     }
   }
 
-  async function importarEmail() {
+  /** Sem `provedor`, o servidor lê todas as caixas conectadas. */
+  async function importarEmail(provedor?: ProvedorEmail) {
+    setEscolhendoCaixa(false);
     setEstado({ fase: "importando" });
     try {
-      const r = await fetch("/api/faturas/importar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dias: DIAS_DO_PERIODO[periodo] }) });
+      const r = await fetch("/api/faturas/importar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dias: DIAS_DO_PERIODO[periodo], provedor }) });
       const resposta = await r.json();
       if (!r.ok) throw new Error(resposta.error || "Não foi possível ler as notas do e-mail.");
       setEstado({ fase: "importado", resultado: resposta as ResultadoImportacao });
@@ -116,15 +120,25 @@ export default function Page() {
 
   const carregando = estado.fase === "carregando";
   const importando = estado.fase === "importando";
-  const gmailConectado = Boolean(status?.integrations?.gmail);
-  const podeImportar = gmailConectado && Boolean(status?.ai);
+  /** Caixas conectadas em /setup (Gmail e/ou Outlook): o botão habilita com qualquer uma. */
+  const caixas = PROVEDORES_EMAIL.filter((p) => Boolean(status?.integrations?.[p]));
+  const emailConectado = caixas.length > 0;
+  const podeImportar = emailConectado && Boolean(status?.ai);
   const dicaEmail = !status
     ? "Conecte seu e-mail para ler as notas sozinho"
-    : !gmailConectado
-      ? "Conecte seu e-mail para ler as notas sozinho"
+    : !emailConectado
+      ? "Conecte seu e-mail (Gmail ou Outlook) para ler as notas sozinho"
       : !status.ai
         ? "Conecte a inteligência artificial para reconhecer as notas do e-mail"
-        : `Busca notas e recibos dos últimos ${DIAS_DO_PERIODO[periodo]} dias na caixa conectada e lança o que reconhecer`;
+        : caixas.length > 1
+          ? `Busca notas e recibos dos últimos ${DIAS_DO_PERIODO[periodo]} dias no Gmail e no Outlook e lança o que reconhecer`
+          : `Busca notas e recibos dos últimos ${DIAS_DO_PERIODO[periodo]} dias no ${NOME_PROVEDOR[caixas[0]]} e lança o que reconhecer`;
+
+  /** Com uma caixa só, lê direto; com as duas, pergunta qual usar antes. */
+  function clicarLerEmail() {
+    if (caixas.length > 1) setEscolhendoCaixa((v) => !v);
+    else importarEmail(caixas[0]);
+  }
 
   return (
     <>
@@ -143,17 +157,26 @@ export default function Page() {
 
             <div className="flex flex-col gap-2.5 mb-4">
               <div className="flex items-center gap-3 flex-wrap">
-                <button type="button" className="btn-ghost !w-auto" disabled={!podeImportar || importando || carregando} onClick={importarEmail} title={podeImportar ? undefined : dicaEmail}>
+                <button type="button" className="btn-ghost !w-auto" disabled={!podeImportar || importando || carregando} onClick={clicarLerEmail} aria-expanded={caixas.length > 1 ? escolhendoCaixa : undefined} aria-controls={caixas.length > 1 ? "escolher-caixa" : undefined} title={podeImportar ? undefined : dicaEmail}>
                   {importando ? "Lendo o e-mail" : "Ler as notas do e-mail"}
                 </button>
-                {status && !gmailConectado ? (
+                {status && !emailConectado ? (
                   <Link href="/setup#gmail" className="text-[12.5px] text-muted underline">{dicaEmail}</Link>
-                ) : status && gmailConectado && !status.ai ? (
+                ) : status && emailConectado && !status.ai ? (
                   <Link href="/setup#openrouter" className="text-[12.5px] text-muted underline">{dicaEmail}</Link>
                 ) : (
                   <span className="text-[12.5px] text-muted">{dicaEmail}</span>
                 )}
               </div>
+              {escolhendoCaixa && caixas.length > 1 && (
+                <div id="escolher-caixa" role="group" aria-label="Qual caixa ler?" className="flex items-center gap-2 flex-wrap rounded-[10px] border border-line bg-bg px-3 py-2.5">
+                  <span className="text-[12.5px] font-semibold text-ink mr-1">Qual caixa ler?</span>
+                  {caixas.map((c) => (
+                    <button key={c} type="button" className="btn-ghost !w-auto" onClick={() => importarEmail(c)}>{NOME_PROVEDOR[c]}</button>
+                  ))}
+                  <button type="button" className="btn-ghost !w-auto" onClick={() => importarEmail()}>As duas</button>
+                </div>
+              )}
               <div className="flex items-center gap-3 flex-wrap">
                 <button type="button" className="btn-ghost !w-auto" aria-expanded={enviarNotasAberto} aria-controls="enviar-notas" onClick={() => setEnviarNotasAberto((v) => !v)}>
                   {enviarNotasAberto ? "Fechar envio de notas" : "Enviar notas em PDF"}

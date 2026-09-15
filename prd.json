@@ -581,7 +581,7 @@
         "Testar via curl que /api/setup/oauth/microsoft redireciona para login.microsoftonline.com com code_challenge; fluxo completo se houver credenciais de teste"
       ],
       "priority": 34,
-      "passes": false,
+      "passes": true,
       "notes": ""
     }
   ]

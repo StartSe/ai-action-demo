@@ -3,6 +3,11 @@
 
 export type Moeda = "BRL" | "USD" | "EUR";
 
+/** Caixas de e-mail que o app sabe ler (lib/email.ts). Aqui, sem imports node:*, para app/page.tsx também usar. */
+export type ProvedorEmail = "gmail" | "outlook";
+export const PROVEDORES_EMAIL: readonly ProvedorEmail[] = ["gmail", "outlook"] as const;
+export const NOME_PROVEDOR: Record<ProvedorEmail, string> = { gmail: "Gmail", outlook: "Outlook" };
+
 /** Uma nota/fatura de uma ferramenta de IA, lançada manualmente (US-019) ou lida por e-mail/PDF (histórias futuras). */
 export interface Fatura {
   id: string;
@@ -75,10 +80,12 @@ export interface Leitura {
 
 export type Periodo = "mes" | "3meses" | "ano";
 
-/** Resultado de uma importação das notas do Gmail (POST /api/faturas/importar): o que foi lido, o que
+/** Resultado de uma importação das notas do e-mail (POST /api/faturas/importar): o que foi lido, o que
  * virou fatura (já gravada, origem "email") e o que foi ignorado, com os motivos agrupados. */
 export interface ResultadoImportacao {
   dias: number;
+  /** Caixas lidas nesta importação (uma, ou as duas quando ambas estão conectadas e nenhuma foi escolhida). */
+  caixas: ProvedorEmail[];
   lidas: number;
   reconhecidas: number;
   ignoradas: number;

@@ -30,18 +30,19 @@ export const FERRAMENTAS: Ferramenta[] = [
   },
   {
     nome: "importar_notas",
-    descricao: "Lê as notas e recibos de ferramentas de IA na caixa de e-mail conectada (Gmail) dos últimos N dias e lança as faturas reconhecidas. Exige o Gmail conectado e a inteligência artificial ligada em /setup. Devolve quantas mensagens foram lidas, quantas viraram fatura e os motivos das ignoradas.",
+    descricao: "Lê as notas e recibos de ferramentas de IA nas caixas de e-mail conectadas (Gmail e/ou Outlook) dos últimos N dias e lança as faturas reconhecidas. Exige ao menos uma caixa conectada e a inteligência artificial ligada em /setup. Devolve quantas mensagens foram lidas, quantas viraram fatura e os motivos das ignoradas.",
     schema: {
       type: "object",
       properties: {
         dias: { type: "integer", enum: [...DIAS_PERMITIDOS], description: "Quantos dias para trás procurar: 30, 90 ou 365. Padrão: 30." },
+        provedor: { type: "string", enum: ["gmail", "outlook"], description: "Qual caixa ler. Sem informar, lê todas as conectadas." },
       },
       required: [],
     },
     async executar(args) {
-      const { dias } = args as { dias?: number };
-      // ErroImportacao/ErroGmail sobem como erro da chamada (lib/mcp.ts devolve a mensagem ao assistente).
-      return importarNotas(dias ?? 30);
+      const { dias, provedor } = args as { dias?: number; provedor?: string };
+      // ErroImportacao/ErroEmail sobem como erro da chamada (lib/mcp.ts devolve a mensagem ao assistente).
+      return importarNotas(dias ?? 30, provedor);
     },
   },
   {

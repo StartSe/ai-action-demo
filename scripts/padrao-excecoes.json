@@ -1,5 +1,5 @@
 {
   "custos-ia": {
-    "app/api/setup/route.ts": "o Gmail tem cartão próprio em /setup (components/ConectarGmail.tsx) e sai da lista genérica devolvida pelo GET; continua em INTEGRACOES para o PUT, o teste e o /api/status"
+    "app/api/setup/route.ts": "Gmail e Outlook têm cartão próprio em /setup (components/ConectarEmail.tsx) e saem da lista genérica devolvida pelo GET; continuam em INTEGRACOES para o PUT, o teste e o /api/status"
   }
 }

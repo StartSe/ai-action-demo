@@ -2,7 +2,7 @@
 // Ao contrário de lib/rotinas.ts, este arquivo NÃO é copiado sem alterar entre apps — cada app registra
 // aqui o que faz sentido rodar sozinho (ver padrão em app/api/f/[token]/route.ts com lib/leitura.ts).
 import { aiEnabled } from "./ai";
-import { gmailConectado } from "./email";
+import { provedoresConectados } from "./email";
 import { numero } from "./formato";
 import { ErroImportacao, importarNotas } from "./importacao";
 import { gerarLeitura } from "./leitura";
@@ -32,7 +32,7 @@ registrarExecutor("resumo-custos-ia", async () => {
   return { titulo, texto, resultadoId: id };
 });
 
-/** Fechamento do mês anterior, todo dia 1 às 8h: quando o Gmail está conectado (e a IA ligada), importa
+/** Fechamento do mês anterior, todo dia 1 às 8h: quando há uma caixa de e-mail conectada (e a IA ligada), importa
  * antes as notas dos últimos 90 dias (a dedup por referência ignora o que já entrou); depois gera a leitura
  * do mês que acabou de fechar e entrega cinco linhas — total, contra o planejado, maior variação, novas
  * assinaturas e alertas — com o link /r/<id> do resultado completo. Nada aqui usa IA além do leitor de notas. */
@@ -41,13 +41,13 @@ registrarExecutor("fechamento-mensal", async () => {
   const ultimoDiaMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
 
   let notaImportacao = "";
-  if (gmailConectado() && aiEnabled()) {
+  if (provedoresConectados().length > 0 && aiEnabled()) {
     try {
       const importacao = await importarNotas(90);
       notaImportacao = ` Notas lidas do e-mail antes de fechar: ${importacao.reconhecidas} nova${importacao.reconhecidas === 1 ? "" : "s"} de ${importacao.lidas} mensagem${importacao.lidas === 1 ? "" : "ns"}.`;
     } catch (err) {
-      // A importação é um extra do fechamento: se o Gmail falhar, o fechamento sai mesmo assim, avisando.
-      console.error("Fechamento mensal: falha ao importar as notas do Gmail", err);
+      // A importação é um extra do fechamento: se o e-mail falhar, o fechamento sai mesmo assim, avisando.
+      console.error("Fechamento mensal: falha ao importar as notas do e-mail", err);
       notaImportacao = err instanceof ErroImportacao ? ` ${err.message}` : " Não foi possível ler as notas do e-mail desta vez; o fechamento usa só as faturas já lançadas.";
     }
   }

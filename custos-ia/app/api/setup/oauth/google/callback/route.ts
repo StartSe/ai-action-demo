@@ -35,7 +35,7 @@ export async function GET(req: Request) {
     return voltar("A conexão com o Gmail expirou. Tente de novo.");
   }
 
-  const credenciais = credenciaisDoApp();
+  const credenciais = credenciaisDoApp("gmail");
   if (!credenciais) return voltar("As credenciais do Google deste app não estão definidas.");
 
   try {
@@ -61,7 +61,7 @@ export async function GET(req: Request) {
     }
 
     const perfil = await obterPerfilComToken(dados.access_token);
-    limparCache();
+    limparCache("gmail");
     setConfig("GMAIL_REFRESH_TOKEN", dados.refresh_token);
     setConfig("GMAIL_CONTA", perfil.emailAddress);
     return voltar();

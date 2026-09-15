@@ -1,10 +1,10 @@
 "use client";
-// Resumo de uma importação das notas do Gmail (US-021), mostrado no Stage depois que POST
+// Resumo de uma importação das notas do e-mail (Gmail/Outlook, US-021/US-034), mostrado no Stage depois que POST
 // /api/faturas/importar termina: quantas mensagens foram lidas, quantas viraram fatura (já gravadas,
 // origem "email") e por que as outras foram ignoradas. O disparo fica em app/page.tsx (botão "Ler as
 // notas do e-mail", que usa o mesmo período escolhido para o gasto).
 import { Chip, Section, numero } from "@/components/ui";
-import type { Fatura, ResultadoImportacao } from "@/lib/types";
+import { NOME_PROVEDOR, type Fatura, type ResultadoImportacao } from "@/lib/types";
 
 const SIMBOLO: Record<Fatura["moeda"], string> = { BRL: "R$", USD: "US$", EUR: "€" };
 
@@ -20,6 +20,8 @@ function Contador({ valor, rotulo }: { valor: number; rotulo: string }) {
 export function ResumoImportacao({ resultado, onVerGasto }: { resultado: ResultadoImportacao; onVerGasto: () => void }) {
   const r = resultado;
   const periodo = r.dias === 30 ? "últimos 30 dias" : r.dias === 90 ? "últimos 90 dias" : "último ano";
+  const caixas = (r.caixas ?? []).map((c) => NOME_PROVEDOR[c]).join(" e ");
+  const onde = caixas ? ` no ${caixas}` : "";
 
   return (
     <article className="reveal">
@@ -27,10 +29,10 @@ export function ResumoImportacao({ resultado, onVerGasto }: { resultado: Resulta
         <h2 className="text-[22px] font-bold text-ink leading-tight">Notas lidas do e-mail</h2>
         <p className="text-muted text-sm mt-1">
           {r.lidas === 0
-            ? `Nenhuma mensagem com jeito de cobrança nos ${periodo}.`
+            ? `Nenhuma mensagem com jeito de cobrança${onde} nos ${periodo}.`
             : r.reconhecidas === 0
               ? `Nenhuma das ${r.lidas} mensagens era uma nota de ferramenta de IA.`
-              : `${r.reconhecidas} ${r.reconhecidas === 1 ? "nota lançada" : "notas lançadas"} a partir dos ${periodo}. As faturas já entraram no gasto do período.`}
+              : `${r.reconhecidas} ${r.reconhecidas === 1 ? "nota lançada" : "notas lançadas"} a partir dos ${periodo}${onde}. As faturas já entraram no gasto do período.`}
         </p>
         {r.truncado && <p className="text-warn text-[12.5px] mt-1">Havia mais mensagens do que dá para ler de uma vez. Clique de novo em Ler as notas do e-mail para continuar de onde parou.</p>}
       </header>
