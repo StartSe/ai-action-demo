@@ -76,8 +76,12 @@ export async function buscarLeads(perfil: Perfil, opcoes: { exemplo?: boolean } 
     leads = leadsDemo(perfil);
   }
   leads.sort((a, b) => b.pontuacao - a.pontuacao);
+  return salvarNovaCampanha(perfil, leads, nomeCampanha(perfil));
+}
+
+/** Grava uma campanha nova (estado "rascunho") no histórico e devolve com o id gerado. A meta reflete a IA (de onde saem as sequências). */
+export function salvarNovaCampanha(perfil: Perfil, leads: Lead[], nome: string): { campanha: Campanha; meta: Meta } {
   const metaGerada = meta({ demo: !aiEnabled(), insumo: INSUMO });
-  const nome = nomeCampanha(perfil);
   const id = salvar({ tipo: TIPO_HISTORICO, titulo: nome, entrada: perfil, saida: { id: "", nome, leads, sequencias: [], estado: "rascunho" }, meta: metaGerada });
   const campanha: Campanha = { id, nome, leads, sequencias: [], estado: "rascunho" };
   atualizarSaida(id, campanha);

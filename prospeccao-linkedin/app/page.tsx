@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { DialogoEnvio } from "@/components/DialogoEnvio";
-import { Chip, CopyButton, DataTable, Destaque, Empty, Entregar, ErrorBox, Field, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
+import { Chip, CopyButton, DataTable, Destaque, Empty, Entregar, ErrorBox, Field, Item, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
 import type { Meta } from "@/lib/ai";
-import { LIMITE_CONEXAO, PONTUACAO_FORTE, SINAIS_INTENCAO, TONS, type Campanha, type Lead, type Perfil, type Sequencia, type SinalIntencao, type Tom } from "@/lib/types";
+import { chavePerfil, LEADS_POR_SEMANA, LIMITE_CONEXAO, PONTUACAO_FORTE, SINAIS_INTENCAO, TONS, type Campanha, type Lead, type Perfil, type Sequencia, type SinalIntencao, type Tom } from "@/lib/types";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
 
@@ -286,6 +286,7 @@ export function Resultado({ campanha, perfil, meta, onEscrever, prospectHalo = f
           </div>
         )}
         {erroEscrita && <p className="text-danger text-sm mt-2">{erroEscrita}</p>}
+        {interativo && <ReceberLeadsSemanais perfil={perfil} />}
       </Section>
 
       <CartoesSequencias campanha={campanha} comCopiar />
@@ -308,6 +309,89 @@ export function Resultado({ campanha, perfil, meta, onEscrever, prospectHalo = f
         />
       )}
     </article>
+  );
+}
+
+type EstadoNotificacoes = { configurada: boolean; canal: "email" | "slack"; destino: string };
+type RotinaLeads = { id: string; tipo: string; parametros: unknown };
+
+/**
+ * Depois de uma busca, oferece automatizar a prospecção: uma rotina semanal (segunda, 8h) que busca leads novos
+ * para o mesmo perfil, exclui quem já foi entregue e escreve a sequência de cada um. Nunca envia mensagens.
+ * Três estados: carregando (nada), rotina já existente para este perfil (frase), botão (ou link para /setup sem Notificações).
+ */
+function ReceberLeadsSemanais({ perfil }: { perfil: Perfil }) {
+  const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
+  const [rotinaId, setRotinaId] = useState<string | null | undefined>(undefined);
+  const [criando, setCriando] = useState(false);
+  const chave = chavePerfil(perfil);
+
+  useEffect(() => {
+    fetch("/api/setup")
+      .then((r) => r.json())
+      .then((d) => {
+        const integracao = (d.integracoes || []).find((i: { id: string }) => i.id === "notificacoes");
+        const campos: { chave: string; valorVisivel?: string }[] = integracao?.campos || [];
+        const canal = campos.find((c) => c.chave === "NOTIFICACOES_CANAL")?.valorVisivel === "slack" ? "slack" : "email";
+        const destino = campos.find((c) => c.chave === "NOTIFICACOES_DESTINO")?.valorVisivel || "";
+        setNotificacoes({ configurada: Boolean(integracao?.configurada), canal, destino });
+      })
+      .catch(() => setNotificacoes({ configurada: false, canal: "email", destino: "" }));
+    fetch("/api/rotinas")
+      .then((r) => r.json())
+      .then((d) => {
+        const existente = (d.itens || []).find((i: RotinaLeads) => i.tipo === "leads-semanais" && chavePerfil((i.parametros || {}) as Perfil) === chave);
+        setRotinaId(existente?.id ?? null);
+      })
+      .catch(() => setRotinaId(null));
+  }, [chave]);
+
+  async function criar() {
+    if (!notificacoes?.configurada) return;
+    setCriando(true);
+    try {
+      const r = await fetch("/api/rotinas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "leads-semanais",
+          frequencia: "semanal",
+          diaSemana: 1,
+          hora: "08:00",
+          canal: notificacoes.canal,
+          destino: notificacoes.canal === "email" ? notificacoes.destino || undefined : undefined,
+          parametros: { ...perfil, quantidade: LEADS_POR_SEMANA },
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Não foi possível criar a rotina.");
+      setRotinaId(d.id);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar a rotina.");
+    } finally {
+      setCriando(false);
+    }
+  }
+
+  if (rotinaId === undefined || notificacoes === null) return null;
+
+  return (
+    <Item className="mt-4">
+      {rotinaId ? (
+        <p className="text-muted text-sm">Você já recebe leads novos toda semana para esse perfil, toda segunda às 8h, com as mensagens prontas. Nada é enviado sem a sua aprovação.</p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2.5">
+          {notificacoes.configurada ? (
+            <button type="button" className="btn-ghost !w-auto" onClick={criar} disabled={criando}>
+              {criando ? "Criando..." : "Receber leads novos toda semana"}
+            </button>
+          ) : (
+            <a href="/setup#notificacoes" className="btn-ghost !w-auto">Receber leads novos toda semana</a>
+          )}
+          <span className="text-muted text-sm">Toda segunda, às 8h: só quem ainda não apareceu, já com a sequência escrita. Você continua aprovando cada envio.</span>
+        </div>
+      )}
+    </Item>
   );
 }
 

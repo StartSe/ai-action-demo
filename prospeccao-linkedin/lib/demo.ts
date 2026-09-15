@@ -18,7 +18,32 @@ const PESSOAS: { nome: string; genero: "f" | "m"; empresa: string; pontuacao: nu
   { nome: "Leandro Pimentel", genero: "m", empresa: "Pindorama", pontuacao: 63 },
   { nome: "Simone Tavares", genero: "f", empresa: "Quaresmeira", pontuacao: 57 },
   { nome: "Henrique Dutra", genero: "m", empresa: "Sabiá", pontuacao: 51 },
+  // Daqui para baixo só a rotina "leads novos toda semana" usa (lib/leads-vistos.ts): cada semana entrega
+  // quem ainda não foi entregue, então o pool precisa ser maior do que uma única busca.
+  { nome: "Patrícia Amorim", genero: "f", empresa: "Araucária", pontuacao: 90 },
+  { nome: "Rodrigo Valente", genero: "m", empresa: "Mangueiral", pontuacao: 86 },
+  { nome: "Camila Estrela", genero: "f", empresa: "Pau-Brasil", pontuacao: 83 },
+  { nome: "Marcelo Fontoura", genero: "m", empresa: "Guaporé", pontuacao: 79 },
+  { nome: "Renata Sobral", genero: "f", empresa: "Aroeira", pontuacao: 74 },
+  { nome: "Thiago Peixoto", genero: "m", empresa: "Ipanema Norte", pontuacao: 70 },
+  { nome: "Juliana Castelo", genero: "f", empresa: "Tamboril", pontuacao: 66 },
+  { nome: "André Siqueira", genero: "m", empresa: "Cerrado Vivo", pontuacao: 61 },
+  { nome: "Vanessa Prado", genero: "f", empresa: "Imbuia", pontuacao: 55 },
+  { nome: "Gustavo Meireles", genero: "m", empresa: "Buriti", pontuacao: 50 },
+  { nome: "Fernanda Quintana", genero: "f", empresa: "Palmeira Real", pontuacao: 89 },
+  { nome: "Ricardo Albuquerque", genero: "m", empresa: "Canela Preta", pontuacao: 84 },
+  { nome: "Tatiana Werneck", genero: "f", empresa: "Jatobá", pontuacao: 80 },
+  { nome: "Paulo Bittencourt", genero: "m", empresa: "Pequi", pontuacao: 77 },
+  { nome: "Aline Godoy", genero: "f", empresa: "Ingá", pontuacao: 71 },
+  { nome: "Eduardo Marinho", genero: "m", empresa: "Copaíba", pontuacao: 67 },
+  { nome: "Beatriz Lemos", genero: "f", empresa: "Guabiroba", pontuacao: 62 },
+  { nome: "Felipe Nogueira", genero: "m", empresa: "Angico", pontuacao: 58 },
+  { nome: "Mariana Cordeiro", genero: "f", empresa: "Cajueiro", pontuacao: 53 },
+  { nome: "Sérgio Paiva", genero: "m", empresa: "Umbuzeiro", pontuacao: 49 },
 ];
+
+/** Quantos leads fictícios uma busca comum devolve (os primeiros do pool). */
+export const LEADS_POR_BUSCA = 10;
 
 // Um texto de sinal por tipo. {empresa}, {cargo} e {setor} são substituídos.
 const TEXTOS_SINAL: Record<SinalIntencao, string[]> = {
@@ -65,35 +90,46 @@ export function separar(lista: string): string[] {
   return String(lista || "").split(/[,;\n]/).map((s) => s.trim()).filter(Boolean);
 }
 
-/** 10 leads fictícios que combinam com o perfil: cargos e setores vêm do que o usuário digitou, os sinais dos tipos marcados. */
-export function leadsDemo(perfil: Perfil): Lead[] {
+function leadDemo(perfil: Perfil, i: number): Lead {
+  const p = PESSOAS[i];
   const cargos = separar(perfil.cargos);
   const setores = separar(perfil.setores);
   const tipos: SinalIntencao[] = perfil.sinais.length > 0 ? perfil.sinais : SINAIS_INTENCAO.map((s) => s.valor);
-  return PESSOAS.map((p, i) => {
-    const cargoBase = cargos[i % Math.max(1, cargos.length)] || "Diretor de Operações";
-    const setor = capitalizar(setores[i % Math.max(1, setores.length)] || "Indústria");
-    const tipo = tipos[i % tipos.length];
-    const textos = TEXTOS_SINAL[tipo];
-    const cargo = flexionarCargo(cargoBase, p.genero);
-    const empresa = `${p.empresa} ${sufixoEmpresa(setor)}`;
-    const sinal = textos[Math.floor(i / tipos.length) % textos.length]
-      .replace("{empresa}", empresa)
-      .replace("{cargo}", cargo)
-      .replace("{setor}", setor.toLowerCase())
-      .replace("(a)", p.genero === "f" ? "a" : "");
-    return {
-      id: `demo-${i + 1}`,
-      nome: p.nome,
-      cargo,
-      empresa,
-      setor,
-      linkedinUrl: `https://www.linkedin.com/in/${slug(p.nome)}-exemplo`,
-      sinal,
-      pontuacao: p.pontuacao,
-      origem: "demo",
-    };
-  });
+  const cargoBase = cargos[i % Math.max(1, cargos.length)] || "Diretor de Operações";
+  const setor = capitalizar(setores[i % Math.max(1, setores.length)] || "Indústria");
+  const tipo = tipos[i % tipos.length];
+  const textos = TEXTOS_SINAL[tipo];
+  const cargo = flexionarCargo(cargoBase, p.genero);
+  const empresa = `${p.empresa} ${sufixoEmpresa(setor)}`;
+  const sinal = textos[Math.floor(i / tipos.length) % textos.length]
+    .replace("{empresa}", empresa)
+    .replace("{cargo}", cargo)
+    .replace("{setor}", setor.toLowerCase())
+    .replace("(a)", p.genero === "f" ? "a" : "");
+  return {
+    id: `demo-${i + 1}`,
+    nome: p.nome,
+    cargo,
+    empresa,
+    setor,
+    linkedinUrl: `https://www.linkedin.com/in/${slug(p.nome)}-exemplo`,
+    sinal,
+    pontuacao: p.pontuacao,
+    origem: "demo",
+  };
+}
+
+/** 10 leads fictícios que combinam com o perfil: cargos e setores vêm do que o usuário digitou, os sinais dos tipos marcados. */
+export function leadsDemo(perfil: Perfil): Lead[] {
+  return PESSOAS.slice(0, LEADS_POR_BUSCA).map((_, i) => leadDemo(perfil, i));
+}
+
+/**
+ * Leads fictícios para a rotina semanal: percorre o pool inteiro (30 pessoas) e devolve os que ainda não foram
+ * entregues (`vistos` guarda a chave de cada lead já entregue, ver lib/leads-vistos.ts). Esgotado o pool, devolve vazio.
+ */
+export function leadsDemoNovos(perfil: Perfil, vistos: Set<string>, chave: (lead: Lead) => string): Lead[] {
+  return PESSOAS.map((_, i) => leadDemo(perfil, i)).filter((l) => !vistos.has(chave(l)));
 }
 
 /** Primeira frase da proposta, sem ponto final e com a inicial minúscula, para entrar no meio de uma frase. */

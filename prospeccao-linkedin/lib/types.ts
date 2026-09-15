@@ -71,6 +71,18 @@ export interface Campanha {
   externoId?: string;
 }
 
+/**
+ * Chave estável do perfil (cargos + setores + sinais, sem diferenciar maiúsculas/espaços), para a rotina
+ * "leads novos toda semana" separar os leads já entregues por perfil e a tela reconhecer uma rotina existente.
+ */
+export function chavePerfil(perfil: Pick<Perfil, "cargos" | "setores" | "sinais">): string {
+  const lista = (v: string) => String(v || "").split(/[,;\n]/).map((x) => x.trim().toLowerCase()).filter(Boolean).sort().join(",");
+  return [lista(perfil.cargos), lista(perfil.setores), [...(perfil.sinais || [])].sort().join(",")].join("|");
+}
+
+/** Quantos leads novos a rotina semanal entrega por vez. */
+export const LEADS_POR_SEMANA = 10;
+
 /** A partir desta pontuação o sinal é considerado forte (Destaque e chip verde). */
 export const PONTUACAO_FORTE = 80;
 /** Limite de caracteres do pedido de conexão no LinkedIn. */

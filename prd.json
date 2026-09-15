@@ -477,7 +477,7 @@
         "Testar via executar-agora duas vezes e conferir que a segunda entrega não repete leads"
       ],
       "priority": 28,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
