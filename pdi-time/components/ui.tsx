@@ -188,6 +188,50 @@ export function Workspace({ children }: { children: ReactNode }) {
   return <main className="grid grid-cols-[minmax(320px,420px)_1fr] max-md:grid-cols-1 gap-7 px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">{children}</main>;
 }
 
+/** Topo da tela principal (referência visual de 15/09/2026): sobretítulo no acento, título de duas linhas,
+ * frase de apoio e a ilustração do segmento à direita. Os textos são sempre passados pelo app (constante
+ * `PROMESSA`), nunca fixos aqui. Sem ilustração no celular (breakpoint já resolvido em `IlustracaoSegmento`). */
+export function Hero({ sobretitulo, titulo, apoio, segmento, children }: { sobretitulo: string; titulo: string; apoio: string; segmento: Segmento; children?: ReactNode }) {
+  return (
+    <section className="no-print px-8 pt-6 max-md:px-4 max-md:pt-5 max-w-[1400px] mx-auto">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] max-md:grid-cols-1 gap-8 items-center">
+        <div>
+          <p className="sobretitulo mb-1">{sobretitulo}</p>
+          <h1 className="titulo-painel max-w-[560px] mb-2">{titulo}</h1>
+          <p className="text-[15px] text-ink-2 leading-snug max-w-[520px] mb-3">{apoio}</p>
+          {children}
+        </div>
+        <div className="relative w-[130px] shrink-0 max-md:hidden">
+          <div className="blob-acento" />
+          <IlustracaoSegmento segmento={segmento} loading="eager" className="relative w-full h-auto" />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export type PassoIndicador = { titulo: string; apoio: string };
+
+/** Indicador de progresso (referência visual de 15/09/2026): três etapas numeradas, a atual no acento e as
+ * demais em cinza. É só indicador — nunca navegação, não recebe clique. Rola na horizontal no celular. */
+export function Passos({ passos, atual }: { passos: PassoIndicador[]; atual: number }) {
+  return (
+    <ol className="no-print flex gap-7 max-md:gap-5 max-md:overflow-x-auto max-md:pb-1">
+      {passos.map((p, i) => {
+        const numero = i + 1;
+        const ativo = numero === atual;
+        return (
+          <li key={p.titulo} className={`flex items-baseline gap-1.5 shrink-0 ${ativo ? "text-accent" : "text-ink-2"}`}>
+            <span className="font-extrabold text-[13px]">{numero}</span>
+            <span className={`text-[13px] ${ativo ? "font-bold" : ""}`}>{p.titulo}</span>
+            <span className="text-[12px] max-md:hidden">· {p.apoio}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 export function Panel({ titulo, lead, children }: { titulo: string; lead: string; children: ReactNode }) {
   return (
     <section className="no-print card p-7 max-md:p-[22px] self-start md:sticky md:top-6 md:max-h-[calc(100vh-48px)] md:overflow-y-auto">
@@ -369,6 +413,16 @@ export function Origem({ meta }: { meta: Meta }) {
     ? `Exemplo ilustrativo a partir de ${meta.insumo}. Conecte a IA para analisar seus dados`
     : `Gerado com IA a partir de ${meta.insumo}, em ${data(meta.geradoEm, { comHora: true })}`;
   return <p className="text-muted text-[13px] mb-4" title={meta.model}>{texto}</p>;
+}
+
+/** Selo no rodapé do resultado: só diz "Gerado com Inteligência Artificial" quando a IA gerou de verdade;
+ * em modo demonstração o selo avisa que é exemplo, para nunca sugerir que uma IA rodou sem estar conectada. */
+export function SeloIA({ demo }: { demo: boolean }) {
+  return (
+    <p className="text-center mt-6">
+      <span className={demo ? "chip-cinza" : "chip-neutral"}>{demo ? "Exemplo, sem usar IA" : "Gerado com Inteligência Artificial"}</span>
+    </p>
+  );
 }
 
 const CORES_TOM: Record<string, string> = { ok: "text-ok", warn: "text-warn", danger: "text-danger", neutro: "text-accent-ink" };

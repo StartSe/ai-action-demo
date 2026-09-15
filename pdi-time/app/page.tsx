@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Chip, DataTable, Empty, Entregar, ErrorBox, Field, Item, Loading, MaisDetalhes, OptInGuardar, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Chip, DataTable, Entregar, ErrorBox, Field, Hero, Item, Loading, MaisDetalhes, OptInGuardar, Origem, Passos, Privacidade, ResultHead, Row, SeloIA, Section, Stage, Topbar, data, useScrollToResult, useStatus, type PassoIndicador } from "@/components/ui";
 import { DialogoAutoavaliacao } from "@/components/DialogoAutoavaliacao";
 import { LembrarCheckins } from "@/components/LembrarCheckins";
 import { SENSIVEL } from "@/lib/sensivel";
@@ -26,18 +26,80 @@ const VAZIO: DadosPDI = { nome: "", cargo: "", tempo: "1 a 3 anos", entregas: ""
 
 const ETAPAS_CARREGANDO = ["Lendo as entregas recentes...", "Cruzando com os objetivos da empresa...", "Montando o plano de 30, 60 e 90 dias..."];
 
-/** Desenho de três blocos crescentes rotulados 30/60/90, no lugar de um glifo genérico no estado vazio. */
-function IlustracaoPlano() {
+// Textos do hero (economia de texto: título ≤ 8 palavras, apoio ≤ 20, itens ≤ 5 de até 6 palavras cada — ver CLAUDE.md).
+const PROMESSA = {
+  sobretitulo: "Recursos Humanos",
+  titulo: "Um PDI pronto em três minutos",
+  apoio: "Descreva as entregas recentes e os objetivos da empresa: a IA devolve um plano de 90 dias.",
+  itens: [
+    "Pontos fortes e lacunas priorizadas",
+    "Ações para 30/60/90 dias",
+    "Indicadores para medir o progresso",
+    "Perguntas prontas para a conversa",
+    "Pronto para imprimir ou enviar",
+  ],
+};
+
+const PASSOS: PassoIndicador[] = [
+  { titulo: "Colaborador", apoio: "Informe os dados" },
+  { titulo: "Contexto", apoio: "Entregas e objetivos" },
+  { titulo: "PDI", apoio: "Plano em 30, 60 e 90 dias" },
+];
+
+function IconePessoa() {
   return (
-    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 48h56" />
-      <rect x="6" y="33" width="14" height="15" rx="3" />
-      <rect x="25" y="24" width="14" height="24" rx="3" />
-      <rect x="44" y="14" width="14" height="34" rx="3" />
-      <text x="13" y="43" textAnchor="middle" fontSize="7" stroke="none" fill="currentColor">30</text>
-      <text x="32" y="38" textAnchor="middle" fontSize="7" stroke="none" fill="currentColor">60</text>
-      <text x="51" y="33" textAnchor="middle" fontSize="7" stroke="none" fill="currentColor">90</text>
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M4.5 20c1.4-3.6 4.2-5.5 7.5-5.5s6.1 1.9 7.5 5.5" />
     </svg>
+  );
+}
+
+function IconeContexto() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 3.5h6a1 1 0 0 1 1 1V6H8V4.5a1 1 0 0 1 1-1Z" />
+      <path d="M8.5 12h7M8.5 16h7" />
+    </svg>
+  );
+}
+
+function IconeItem() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0 mt-0.5" aria-hidden="true">
+      <path d="M5 12.5 9.5 17 19 7" />
+    </svg>
+  );
+}
+
+/** Cartão de entrada com ícone circular e título, no lugar da coluna única de campos crus. */
+function CartaoEntrada({ icone, titulo, children }: { icone: ReactNode; titulo: string; children: ReactNode }) {
+  return (
+    <div className="card p-5 mb-3">
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className="w-9 h-9 rounded-full bg-accent-soft text-accent grid place-items-center shrink-0">{icone}</div>
+        <h2 className="font-bold text-[15px]">{titulo}</h2>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Prévia de "o que você vai receber", exibida no lugar do resultado antes de gerar o primeiro PDI. */
+function Previa({ itens }: { itens: string[] }) {
+  return (
+    <div className="card p-7 max-md:p-5 h-full min-h-[420px] max-md:min-h-0 flex flex-col justify-center">
+      <h2 className="font-bold text-[15px] mb-4">O que você vai receber</h2>
+      <ul className="flex flex-col gap-3">
+        {itens.map((it) => (
+          <li key={it} className="flex items-start gap-2.5 text-sm text-ink-2">
+            <IconeItem />
+            <span>{it}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -127,104 +189,121 @@ export default function Page() {
   }, []);
 
   const carregando = estado.fase === "carregando";
+  const passoAtual = estado.fase === "pronto" ? 3 : dados.entregas || dados.objetivos ? 2 : 1;
 
   return (
     <>
       <Topbar marca="P" nome="PDI do Time" area="Recursos Humanos" status={status} erro={erro} resumo="Modo demonstração: o plano exibido é um exemplo." usuario={status?.usuario} />
 
-      <Workspace>
-        <Panel titulo="Um plano de desenvolvimento em três minutos." lead="Descreva o que a pessoa entregou e o que a empresa precisa para receber um PDI de 90 dias pronto para a conversa de feedback.">
+      <Hero sobretitulo={PROMESSA.sobretitulo} titulo={PROMESSA.titulo} apoio={PROMESSA.apoio} segmento="RH">
+        <Passos passos={PASSOS} atual={passoAtual} />
+      </Hero>
+
+      <main className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">
+        <div>
           <form ref={formRef} onSubmit={onSubmit}>
-            <Row>
-              <Field label="Nome" htmlFor="nome"><input id="nome" className="input" required placeholder="Marina Costa" value={dados.nome} onChange={set("nome")} /></Field>
-              <Field label="Cargo" htmlFor="cargo"><input id="cargo" className="input" required placeholder="Coordenadora de Marketing" value={dados.cargo} onChange={set("cargo")} /></Field>
-            </Row>
-            <Field label="Tempo na função" htmlFor="tempo">
-              <select id="tempo" className="input" value={dados.tempo} onChange={set("tempo")}>
-                <option>Menos de 1 ano</option><option>1 a 3 anos</option><option>3 a 5 anos</option><option>Mais de 5 anos</option>
-              </select>
-            </Field>
-            <Field label="Entregas e atividades recentes" htmlFor="entregas" hint="Cole itens do kanban, do 1:1 ou da avaliação. Quanto mais concreto, melhor.">
-              <textarea id="entregas" className="input min-h-24 resize-y" required placeholder="Ex.: liderou o lançamento da campanha X, reduziu custo por lead em 18%, assumiu a relação com a agência..." value={dados.entregas} onChange={set("entregas")} />
-            </Field>
-            <Field label="Objetivos da empresa para o período" htmlFor="objetivos">
-              <textarea id="objetivos" className="input min-h-24 resize-y" required placeholder="Ex.: crescer 30% em receita recorrente, abrir o mercado corporativo, reduzir churn para 2%..." value={dados.objetivos} onChange={set("objetivos")} />
-            </Field>
-            <MaisDetalhes>
-              <Field label="Aspirações da pessoa (opcional)" htmlFor="aspiracoes">
-                <input id="aspiracoes" className="input" placeholder="Ex.: assumir a gerência da área em 2 anos" value={dados.aspiracoes} onChange={set("aspiracoes")} />
-              </Field>
-              <Row>
-                <Field label="Data da conversa (opcional)" htmlFor="dataConversa" hint="Usada para calcular as datas reais das ações de 30, 60 e 90 dias.">
-                  <input id="dataConversa" type="date" className="input" value={dados.dataConversa ?? ""} onChange={set("dataConversa")} />
+            <CartaoEntrada icone={<IconePessoa />} titulo="Sobre o colaborador">
+              <div className="grid grid-cols-3 max-md:grid-cols-1 gap-3 [&>*]:min-w-0">
+                <Field label="Nome" htmlFor="nome"><input id="nome" className="input" required placeholder="Marina Costa" value={dados.nome} onChange={set("nome")} /></Field>
+                <Field label="Cargo" htmlFor="cargo"><input id="cargo" className="input" required placeholder="Coordenadora de Marketing" value={dados.cargo} onChange={set("cargo")} /></Field>
+                <Field label="Tempo na função" htmlFor="tempo">
+                  <select id="tempo" className="input" value={dados.tempo} onChange={set("tempo")}>
+                    <option>Menos de 1 ano</option><option>1 a 3 anos</option><option>3 a 5 anos</option><option>Mais de 5 anos</option>
+                  </select>
                 </Field>
-                <Field label="Seu nome (opcional)" htmlFor="preparadoPor" hint="Aparece como 'Preparado por' na folha de impressão.">
-                  <input id="preparadoPor" className="input" placeholder="Seu nome" value={dados.preparadoPor ?? ""} onChange={set("preparadoPor")} />
+              </div>
+            </CartaoEntrada>
+
+            <CartaoEntrada icone={<IconeContexto />} titulo="Contexto profissional">
+              <Row>
+                <Field label="Entregas e atividades recentes" htmlFor="entregas">
+                  <textarea id="entregas" className="input min-h-20 resize-y" required placeholder="Ex.: liderou o lançamento da campanha X, reduziu custo por lead em 18%..." value={dados.entregas} onChange={set("entregas")} />
+                </Field>
+                <Field label="Objetivos da empresa para o período" htmlFor="objetivos">
+                  <textarea id="objetivos" className="input min-h-20 resize-y" required placeholder="Ex.: crescer 30% em receita recorrente, abrir o mercado corporativo..." value={dados.objetivos} onChange={set("objetivos")} />
                 </Field>
               </Row>
-            </MaisDetalhes>
-            {SENSIVEL && <OptInGuardar checked={guardar} onChange={setGuardar} />}
+              <MaisDetalhes>
+                <Field label="Aspirações da pessoa (opcional)" htmlFor="aspiracoes">
+                  <input id="aspiracoes" className="input" placeholder="Ex.: assumir a gerência da área em 2 anos" value={dados.aspiracoes} onChange={set("aspiracoes")} />
+                </Field>
+                <Row>
+                  <Field label="Data da conversa (opcional)" htmlFor="dataConversa" hint="Usada para calcular as datas reais das ações de 30, 60 e 90 dias.">
+                    <input id="dataConversa" type="date" className="input" value={dados.dataConversa ?? ""} onChange={set("dataConversa")} />
+                  </Field>
+                  <Field label="Seu nome (opcional)" htmlFor="preparadoPor" hint="Aparece como 'Preparado por' na folha de impressão.">
+                    <input id="preparadoPor" className="input" placeholder="Seu nome" value={dados.preparadoPor ?? ""} onChange={set("preparadoPor")} />
+                  </Field>
+                </Row>
+              </MaisDetalhes>
+              {SENSIVEL && <OptInGuardar checked={guardar} onChange={setGuardar} />}
+            </CartaoEntrada>
+
             <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Gerando plano" : "Gerar PDI"}</button>
+            <button type="button" className="btn-secundario mt-2" disabled={carregando} onClick={preencherExemplo}>Usar colaborador de exemplo</button>
           </form>
-          <Privacidade detalhe="O plano fica salvo neste app até você apagar em 'Últimos resultados'." />
 
-          <div className="mt-5 pt-5 border-t border-line">
-            <p className="text-[13px] font-semibold mb-2">Prefere que a própria pessoa preencha?</p>
-            <button type="button" className="btn-ghost" onClick={() => setAutoavaliacaoAberta(true)}>Pedir autoavaliação por link</button>
-          </div>
+          <div className="card p-5 mt-4">
+            <Privacidade detalhe="O plano fica salvo neste app até você apagar em 'Últimos resultados'." />
 
-          <MaisDetalhes titulo="Últimos resultados">
-            {historico === null ? (
-              <p className="text-muted text-sm">Carregando...</p>
-            ) : historico.length === 0 ? (
-              <p className="text-muted text-sm">Nenhum resultado salvo ainda.</p>
-            ) : (
-              <>
-                <ul className="flex flex-col gap-1.5 text-sm mb-3">
-                  {historico.map((h) => (
-                    <li key={h.id} className="flex justify-between gap-3">
-                      <Link href={`/r/${h.id}`} className="text-accent-ink font-semibold hover:underline truncate">{h.titulo}</Link>
-                      <span className="text-muted shrink-0">{data(h.criadoEm)}</span>
+            <div className="mt-5 pt-5 border-t border-line">
+              <p className="text-[13px] font-semibold mb-2">Prefere que a própria pessoa preencha?</p>
+              <button type="button" className="btn-ghost" onClick={() => setAutoavaliacaoAberta(true)}>Pedir autoavaliação por link</button>
+            </div>
+
+            <MaisDetalhes titulo="Últimos resultados">
+              {historico === null ? (
+                <p className="text-muted text-sm">Carregando...</p>
+              ) : historico.length === 0 ? (
+                <p className="text-muted text-sm">Nenhum resultado salvo ainda.</p>
+              ) : (
+                <>
+                  <ul className="flex flex-col gap-1.5 text-sm mb-3">
+                    {historico.map((h) => (
+                      <li key={h.id} className="flex justify-between gap-3">
+                        <Link href={`/r/${h.id}`} className="text-accent-ink font-semibold hover:underline truncate">{h.titulo}</Link>
+                        <span className="text-muted shrink-0">{data(h.criadoEm)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
+                </>
+              )}
+            </MaisDetalhes>
+
+            <MaisDetalhes titulo="Autoavaliações recebidas">
+              {autoavaliacoes === null ? (
+                <p className="text-muted text-sm">Carregando...</p>
+              ) : autoavaliacoes.length === 0 ? (
+                <p className="text-muted text-sm">Nenhuma resposta recebida ainda.</p>
+              ) : (
+                <ul className="flex flex-col gap-1.5 text-sm">
+                  {autoavaliacoes.map((a) => (
+                    <li key={a.id} className="flex justify-between gap-3">
+                      <span className="truncate">{a.nome}</span>
+                      <span className="flex items-center gap-3 shrink-0">
+                        <span className="text-muted">{data(a.criadoEm)}</span>
+                        {a.resultadoId ? (
+                          <Link href={`/r/${a.resultadoId}`} className="text-accent-ink font-semibold hover:underline">Abrir PDI</Link>
+                        ) : (
+                          <span className="text-muted">Falha ao gerar</span>
+                        )}
+                      </span>
                     </li>
                   ))}
                 </ul>
-                <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
-              </>
-            )}
-          </MaisDetalhes>
-
-          <MaisDetalhes titulo="Autoavaliações recebidas">
-            {autoavaliacoes === null ? (
-              <p className="text-muted text-sm">Carregando...</p>
-            ) : autoavaliacoes.length === 0 ? (
-              <p className="text-muted text-sm">Nenhuma resposta recebida ainda.</p>
-            ) : (
-              <ul className="flex flex-col gap-1.5 text-sm">
-                {autoavaliacoes.map((a) => (
-                  <li key={a.id} className="flex justify-between gap-3">
-                    <span className="truncate">{a.nome}</span>
-                    <span className="flex items-center gap-3 shrink-0">
-                      <span className="text-muted">{data(a.criadoEm)}</span>
-                      {a.resultadoId ? (
-                        <Link href={`/r/${a.resultadoId}`} className="text-accent-ink font-semibold hover:underline">Abrir PDI</Link>
-                      ) : (
-                        <span className="text-muted">Falha ao gerar</span>
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </MaisDetalhes>
-        </Panel>
+              )}
+            </MaisDetalhes>
+          </div>
+        </div>
 
         <Stage>
-          {estado.fase === "vazio" && <Empty ilustracao={<IlustracaoPlano />} titulo="O plano aparece aqui" descricao="Pontos fortes, lacunas priorizadas, três objetivos com ações em 30, 60 e 90 dias e perguntas para a conversa." acao="Preencher com um exemplo" onAcao={preencherExemplo} />}
+          {estado.fase === "vazio" && <Previa itens={PROMESSA.itens} />}
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
           {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} codigo={estado.codigo} acao={estado.acao} onTentarNovamente={() => gerar(estado.dados, guardar)} />}
           {estado.fase === "pronto" && <Resultado pdi={estado.pdi} dados={estado.dados} meta={estado.meta} id={estado.id} />}
         </Stage>
-      </Workspace>
+      </main>
 
       {autoavaliacaoAberta && (
         <DialogoAutoavaliacao
@@ -247,6 +326,8 @@ export function Resultado({ pdi, dados, meta, id }: { pdi: PDI; dados: DadosPDI;
       {id && <LembrarCheckins resultadoId={id} />}
 
       <ConteudoPDI pdi={pdi} dataConversa={dados.dataConversa} />
+
+      <SeloIA demo={meta.demo} />
     </article>
   );
 }
