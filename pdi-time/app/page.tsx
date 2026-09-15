@@ -111,7 +111,7 @@ export default function Page() {
 
   return (
     <>
-      <Topbar marca="P" nome="PDI do Time" area="Recursos Humanos" status={status} erro={erro} resumo="Modo demonstração: o plano exibido é um exemplo." />
+      <Topbar marca="P" nome="PDI do Time" area="Recursos Humanos" status={status} erro={erro} resumo="Modo demonstração: o plano exibido é um exemplo." usuario={status?.usuario} />
 
       <Workspace>
         <Panel titulo="Um plano de desenvolvimento em três minutos." lead="Descreva o que a pessoa entregou e o que a empresa precisa para receber um PDI de 90 dias pronto para a conversa de feedback.">

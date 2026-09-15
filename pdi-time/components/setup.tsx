@@ -28,7 +28,7 @@ export function SetupPage({ marca, nome, area }: { marca: string; nome: string; 
 
   return (
     <>
-      <Topbar marca={marca} nome={nome} area={area} status={status} erro={erro} />
+      <Topbar marca={marca} nome={nome} area={area} status={status} erro={erro} usuario={status?.usuario} />
       <main className="max-w-[860px] mx-auto px-8 max-md:px-4 pt-8 pb-16">
         <div className="mb-7">
           <h1 className="text-[30px] max-md:text-[26px] leading-[1.15] font-extrabold tracking-[-0.025em] mb-2.5">Configuração inicial</h1>

@@ -8,7 +8,10 @@ import { numero, data } from "@/lib/formato";
 import { NAVEGACAO, type ItemNavegacao } from "@/lib/navegacao";
 import { ilustracaoDoSegmento, type Segmento } from "@/lib/ilustracao";
 
-export type Status = { ai: boolean; demo: boolean; model: string; integrations?: Record<string, boolean>; setup?: { pronto: boolean; url: string } };
+export type UsuarioTopbar = { nome: string; email: string };
+export type NotificacaoTopbar = { id: string; texto: string; url?: string };
+
+export type Status = { ai: boolean; demo: boolean; model: string; integrations?: Record<string, boolean>; setup?: { pronto: boolean; url: string }; usuario?: UsuarioTopbar | null };
 
 export function useStatus() {
   const [status, setStatus] = useState<Status | null>(null);
@@ -18,9 +21,6 @@ export function useStatus() {
   }, []);
   return { status, erro };
 }
-
-export type UsuarioTopbar = { nome: string; email: string };
-export type NotificacaoTopbar = { id: string; texto: string; url?: string };
 
 /** Fecha um popover/folha ao apertar Esc ou clicar fora dele; `setAberto` precisa ser um setState (identidade estável). */
 function useFecharAoClicarFora(aberto: boolean, ref: RefObject<HTMLElement | null>, setAberto: (v: boolean) => void) {
