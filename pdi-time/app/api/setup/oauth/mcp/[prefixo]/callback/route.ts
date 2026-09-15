@@ -22,7 +22,10 @@ export async function GET(req: Request, { params }: RouteContext<"/api/setup/oau
   if (!integracao) return voltar("Integração desconhecida.");
 
   const erroProvedor = url.searchParams.get("error_description") || url.searchParams.get("error");
-  if (erroProvedor) return voltar(`O provedor recusou a conexão: ${erroProvedor}`);
+  if (erroProvedor) {
+    console.error(`O provedor recusou a conexão com "${integracao.titulo}":`, erroProvedor);
+    return voltar(`O provedor recusou a conexão com "${integracao.titulo}". Tente autorizar de novo.`);
+  }
 
   const code = url.searchParams.get("code");
   const cookie = req.headers.get("cookie") || "";

@@ -108,7 +108,10 @@ export async function trocarCode(prefixo: string, code: string, verifier: string
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
     body: corpo.toString(),
   });
-  if (!resposta.ok) throw new Error(`O servidor não devolveu o código de acesso (HTTP ${resposta.status}).`);
+  if (!resposta.ok) {
+    console.error("O servidor não devolveu o código de acesso:", resposta.status, await resposta.text().catch(() => ""));
+    throw new Error("O servidor não concluiu a conexão. Tente autorizar de novo; se repetir, cole o código de acesso manualmente em Opções avançadas.");
+  }
   const dados = (await resposta.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
   if (!dados.access_token) throw new Error("O servidor não devolveu um código de acesso.");
   gravarToken(prefixo, dados);

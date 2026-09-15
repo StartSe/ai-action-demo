@@ -36,8 +36,9 @@ async function enviarPorSlack({ destino, titulo, texto, link }: Notificacao): Pr
   let resposta: Response;
   try {
     resposta = await fetch(webhook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
-  } catch {
-    return { ok: false, mensagem: "Não foi possível conectar ao Slack." };
+  } catch (err) {
+    console.error("Não foi possível conectar ao Slack:", err);
+    return { ok: false, mensagem: "Não foi possível conectar ao Slack. Confira o endereço do webhook e tente de novo." };
   }
   if (!resposta.ok) return { ok: false, mensagem: mensagemFalhaEnvio("Slack", resposta.status, await resposta.text().catch(() => "")) };
   return { ok: true, mensagem: "Mensagem enviada no Slack." };
@@ -61,8 +62,9 @@ async function enviarPorResend(chave: string, destino: string, titulo: string, h
       headers: { Authorization: `Bearer ${chave}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: "IA para Executivos <onboarding@resend.dev>", to: [destino], subject: titulo, html }),
     });
-  } catch {
-    return { ok: false, mensagem: "Não foi possível conectar ao Resend." };
+  } catch (err) {
+    console.error("Não foi possível conectar ao Resend:", err);
+    return { ok: false, mensagem: "Não foi possível conectar ao Resend agora. Confira a conexão do servidor e tente de novo." };
   }
   if (!resposta.ok) {
     return { ok: false, mensagem: mensagemFalhaEnvio("Resend", resposta.status, await resposta.text().catch(() => "")) };

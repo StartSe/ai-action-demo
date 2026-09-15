@@ -197,7 +197,9 @@ async function executar(r: Rotina): Promise<{ id: string; ok: boolean; mensagem:
     return { id: r.id, ok: envio.ok, mensagem: envio.mensagem };
   } catch (err) {
     marcarExecutada(r.id, new Date().toISOString());
-    return { id: r.id, ok: false, mensagem: err instanceof Error ? err.message : "Falha ao executar a rotina." };
+    console.error(`Falha ao executar a rotina "${r.tipo}":`, err);
+    const mensagem = err instanceof Error && err.message ? err.message : "Não foi possível concluir esta rotina agora. Tente executar de novo em Configurações.";
+    return { id: r.id, ok: false, mensagem };
   }
 }
 
