@@ -1,5 +1,5 @@
 import { aiEnabled, modelName, visionEnabled } from "@/lib/ai";
-import { INTEGRACOES } from "@/lib/integracoes";
+import { HIGGSFIELD, INTEGRACOES } from "@/lib/integracoes";
 import { integracaoConfigurada, OPENROUTER } from "@/lib/setup-comum";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export async function GET() {
     demo: !aiEnabled(),
     model: modelName(),
     vision: visionEnabled(),
-    integrations: { openrouter: integracaoConfigurada(OPENROUTER) },
+    integrations: { openrouter: integracaoConfigurada(OPENROUTER), higgsfield: integracaoConfigurada(HIGGSFIELD) },
     setup: { pronto, url: "/setup" },
   });
 }

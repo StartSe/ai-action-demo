@@ -33,17 +33,70 @@ export interface Conceito {
   legenda: { instagram: string; linkedin: string; tiktok: string };
 }
 
-/** Etapas de um vídeo pedido ao provedor (a geração de verdade chega na próxima história). */
-export type EstadoVideo = "aguardando" | "enviando" | "gerando" | "finalizando" | "pronto" | "falhou";
+/** Etapas de um vídeo pedido ao Higgsfield: enviando a imagem, gerando, finalizando (pronto no provedor, buscando o arquivo), pronto ou falhou. */
+export type EstadoVideo = "enviando" | "gerando" | "finalizando" | "pronto" | "falhou";
 
+/** Um vídeo pedido ao provedor a partir de um conceito. Gravado em SQLite (lib/videos.ts). */
 export interface Video {
   id: string;
+  campanhaId: string;
   conceitoId: string;
   estado: EstadoVideo;
+  /** Nome do efeito escolhido (da lista remota do Higgsfield). */
+  efeito: string;
+  /** Identificador do efeito no Higgsfield. */
+  efeitoId?: string;
+  formato: Formato;
+  duracaoSeg: Duracao;
   url?: string;
   custoCreditos?: number;
+  /** Identificador do trabalho no Higgsfield. */
   externoId?: string;
+  /** Motivo da falha, em português, quando estado = "falhou". */
+  erro?: string;
   criadoEm: string;
+  atualizadoEm: string;
+}
+
+/** Um efeito da lista remota do Higgsfield (presets_show). */
+export interface EfeitoRemoto {
+  id: string;
+  nome: string;
+  descricao?: string;
+  previewUrl?: string;
+}
+
+/** Créditos e plano da conta no Higgsfield. */
+export interface Saldo {
+  creditos: number;
+  plano?: string;
+}
+
+/** O que a pessoa vê antes de confirmar a geração: efeito, formato, custo (quando o provedor informa) e saldo. */
+export interface PlanoVideo {
+  campanhaId: string;
+  conceitoId: string;
+  conceitoTitulo: string;
+  efeito: EfeitoRemoto;
+  efeitos: EfeitoRemoto[];
+  formato: Formato;
+  duracaoSeg: Duracao;
+  custoCreditos: number | null;
+  saldo: Saldo | null;
+  /** Já existe um vídeo sendo gerado (um por vez). */
+  emAndamento: boolean;
+  aviso: string;
+}
+
+/** As etapas mostradas no acompanhamento, na ordem. */
+export const ETAPAS_VIDEO: { estado: EstadoVideo; rotulo: string }[] = [
+  { estado: "enviando", rotulo: "Enviando a imagem" },
+  { estado: "gerando", rotulo: "Gerando o vídeo" },
+  { estado: "finalizando", rotulo: "Finalizando" },
+];
+
+export function videoTerminou(v: Pick<Video, "estado">): boolean {
+  return v.estado === "pronto" || v.estado === "falhou";
 }
 
 /** O resultado salvo no histórico (tipo "campanha"): o briefing e os três conceitos. */

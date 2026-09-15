@@ -514,8 +514,8 @@
         "Testar ponta a ponta com um servidor MCP de teste local que simule as ferramentas (script descartável); Verify in browser using dev-browser skill: autorizar em /setup, confirmar e acompanhar até 'pronto' com o simulador"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Concluída em 2026-09-15. Higgsfield via integracaoMCP (id 'higgsfield', prefixo HIGGSFIELD_*, urlPadrao https://mcp.higgsfield.ai — o molde sempre gera OAuth; a URL real responde OAuth com registro dinâmico via clerk.higgsfield.ai). lib/higgsfield.ts escolhe ferramentas pelo nome conhecido com fallback por palavra-chave e lê respostas em variantes comuns; lib/videos.ts grava em SQLite (tabela videos), cria o vídeo em segundo plano (202) e acompanha via GET /api/videos/<id>. Testado ponta a ponta com servidor MCP+OAuth de teste local descartável (curl e Playwright: autorizar em /setup, diálogo com efeito/custo/saldo, cancelar sem criar, confirmar, enviando → gerando → finalizando → pronto, falha em português, /r/[id] no celular, um vídeo por vez, ferramentas MCP gerar_video/estado_video)."
     },
     {
       "id": "US-031",

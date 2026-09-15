@@ -3,6 +3,7 @@
 import { gerarCampanha, LIMITE_IMAGEM_BYTES, normalizarBriefing } from "./conceitos";
 import type { Ferramenta } from "./mcp";
 import { DURACOES, FORMATOS, OBJETIVOS } from "./types";
+import { atualizarEstado, campanhaDoConceito, iniciarVideo, planoVideo } from "./videos";
 
 export const NOME_SERVIDOR = "videos-campanha";
 
@@ -74,6 +75,51 @@ export const FERRAMENTAS: Ferramenta[] = [
         duracaoSeg: briefing.duracaoSeg,
         conceitos: campanha.conceitos,
       };
+    },
+  },
+  {
+    nome: "gerar_video",
+    descricao: "Gera pelo Higgsfield o vídeo de um conceito criado por criar_conceitos, a partir da imagem do produto. Com confirmar em falso (padrão) não gasta nada: devolve o plano com o efeito escolhido, o formato, o custo estimado em créditos (quando o Higgsfield informa) e o saldo atual, para a pessoa aprovar. Só com confirmar igual a true cria o vídeo (um por vez) e devolve o id para acompanhar em estado_video. Exige o Higgsfield conectado no setup do app.",
+    schema: {
+      type: "object",
+      properties: {
+        conceitoId: { type: "string", description: "Id do conceito (vem em criar_conceitos)" },
+        efeito: { type: "string", description: "Nome ou id de um efeito do Higgsfield (opcional; sem ele, o app escolhe o mais parecido com o efeito sugerido do conceito)" },
+        confirmar: { type: "boolean", description: "false (padrão) só devolve custo e plano; true gera o vídeo e debita os créditos" },
+      },
+      required: ["conceitoId"],
+    },
+    async executar(args) {
+      const a = (args ?? {}) as { conceitoId?: unknown; efeito?: unknown; confirmar?: unknown };
+      const conceitoId = String(a.conceitoId || "").trim();
+      if (!conceitoId) throw new Error("Informe o conceitoId devolvido por criar_conceitos.");
+      const efeito = typeof a.efeito === "string" && a.efeito.trim() ? a.efeito.trim() : undefined;
+      const { campanha } = campanhaDoConceito(conceitoId);
+      if (a.confirmar !== true) {
+        const plano = await planoVideo({ campanhaId: campanha.id, conceitoId, efeito });
+        return {
+          confirmado: false,
+          mensagem: "Nada foi gerado nem cobrado. Para gerar, chame de novo com confirmar: true (e, se quiser, um efeito da lista).",
+          plano: { ...plano, efeitos: plano.efeitos.map((e) => ({ id: e.id, nome: e.nome })) },
+        };
+      }
+      const origem = process.env.APP_URL?.trim();
+      const video = await iniciarVideo({ campanhaId: campanha.id, conceitoId, efeito, origemPublica: origem && origem.startsWith("https://") ? origem : undefined });
+      return { confirmado: true, video, link: `/r/${campanha.id}`, mensagem: "Vídeo em geração. Consulte estado_video com esse id até o estado ficar pronto ou falhou." };
+    },
+  },
+  {
+    nome: "estado_video",
+    descricao: "Andamento de um vídeo pedido por gerar_video: estado (enviando, gerando, finalizando, pronto ou falhou), endereço do arquivo quando pronto, custo em créditos e motivo da falha quando houver.",
+    schema: {
+      type: "object",
+      properties: { id: { type: "string", description: "Id do vídeo devolvido por gerar_video" } },
+      required: ["id"],
+    },
+    async executar(args) {
+      const id = String((args as { id?: unknown })?.id || "").trim();
+      if (!id) throw new Error("Informe o id do vídeo.");
+      return { video: await atualizarEstado(id) };
     },
   },
 ];

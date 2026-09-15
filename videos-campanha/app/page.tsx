@@ -3,13 +3,16 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Chip, Dropzone, Empty, Entregar, ErrorBox, Field, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
+import { DialogoGerar } from "@/components/DialogoGerar";
 import { Storyboard } from "@/components/Storyboard";
+import { VideoDoConceito } from "@/components/VideoDoConceito";
 import type { Meta } from "@/lib/ai";
 import { BRIEFING_DEMO } from "@/lib/demo";
 import { roteiroEmTexto } from "@/lib/roteiro";
-import { DURACOES, FORMATOS, OBJETIVOS, rotuloFormato, rotuloObjetivo, type Briefing, type Campanha, type Conceito, type Duracao, type Formato, type Objetivo } from "@/lib/types";
+import { DURACOES, FORMATOS, OBJETIVOS, rotuloFormato, rotuloObjetivo, videoTerminou, type Briefing, type Campanha, type Conceito, type Duracao, type Formato, type Objetivo, type Saldo, type Video } from "@/lib/types";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
+type ContaHiggsfield = { conectado: boolean; saldo: Saldo | null; efeitos: number; erro?: string };
 
 type Formulario = Omit<Briefing, "imagemDataUrl">;
 
@@ -58,13 +61,21 @@ export default function Page() {
   const [avisoArquivo, setAvisoArquivo] = useState<string | null>(null);
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
+  const [conta, setConta] = useState<ContaHiggsfield | null>(null);
   const autoEnviado = useRef(false);
+  const higgsfieldConectado = Boolean(status?.integrations?.higgsfield);
 
   useScrollToResult(estado.fase === "pronto");
 
   useEffect(() => {
     fetch("/api/conceitos").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
   }, []);
+
+  // Saldo do Higgsfield para "Mais detalhes", só quando a integração está conectada.
+  useEffect(() => {
+    if (!higgsfieldConectado) return;
+    fetch("/api/higgsfield").then((r) => r.json()).then(setConta).catch(() => setConta({ conectado: true, saldo: null, efeitos: 0, erro: "Não foi possível consultar o saldo." }));
+  }, [higgsfieldConectado]);
 
   function apagarHistorico() {
     if (!window.confirm("Apagar todas as campanhas salvas? Essa ação não pode ser desfeita.")) return;
@@ -181,6 +192,22 @@ export default function Page() {
           </form>
           <Privacidade detalhe="A imagem do produto e os conceitos ficam salvos neste app até você apagar em 'Últimas campanhas'. Nenhum vídeo é gerado nem crédito é gasto sem a sua confirmação." />
 
+          <MaisDetalhes titulo="Mais detalhes">
+            {higgsfieldConectado ? (
+              <dl className="text-sm flex flex-col gap-1.5">
+                <div className="flex justify-between gap-3"><dt className="text-muted">Higgsfield</dt><dd className="font-semibold">Conectado</dd></div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted">Saldo</dt>
+                  <dd className="font-semibold" data-saldo>{conta === null ? "Consultando..." : conta.saldo ? `${conta.saldo.creditos.toLocaleString("pt-BR")} créditos${conta.saldo.plano ? ` · plano ${conta.saldo.plano}` : ""}` : "não informado"}</dd>
+                </div>
+                {conta && conta.efeitos > 0 && <div className="flex justify-between gap-3"><dt className="text-muted">Efeitos disponíveis</dt><dd className="font-semibold">{conta.efeitos}</dd></div>}
+                {conta?.erro && <p className="text-danger text-[12.5px]">{conta.erro}</p>}
+              </dl>
+            ) : (
+              <p className="text-muted text-sm">Os conceitos saem sem gastar nada. Para gerar o vídeo de verdade, conecte o Higgsfield em <Link href="/setup" className="text-accent-ink font-semibold hover:underline">Configuração</Link>: o custo em créditos aparece antes de cada geração.</p>
+            )}
+          </MaisDetalhes>
+
           <MaisDetalhes titulo="Últimas campanhas">
             {historico === null ? (
               <p className="text-muted text-sm">Carregando...</p>
@@ -206,15 +233,26 @@ export default function Page() {
           {estado.fase === "vazio" && <Empty ilustracao={<IlustracaoClaquete />} titulo="Os três conceitos aparecem aqui" descricao="Cada um com a prévia na proporção escolhida, o roteiro por cena, o efeito sugerido e as legendas para Instagram, LinkedIn e TikTok." acao="Preencher com um exemplo" onAcao={preencherExemplo} />}
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
           {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={estado.tentativa ? () => gerar(estado.tentativa!.arquivo, estado.tentativa!.form) : undefined} />}
-          {estado.fase === "pronto" && <Resultado key={estado.id} campanha={estado.campanha} meta={estado.meta} id={estado.id} />}
+          {estado.fase === "pronto" && <Resultado key={estado.id} campanha={estado.campanha} meta={estado.meta} id={estado.id} conectado={higgsfieldConectado} />}
         </Stage>
       </Workspace>
     </>
   );
 }
 
-/** Um conceito: título, efeito, prévia animada, roteiro por cena, chamada, legendas e o botão de gerar (na próxima etapa). */
-function CartaoConceito({ conceito, briefing, indice }: { conceito: Conceito; briefing: Briefing; indice: number }) {
+/** Um conceito: título, efeito, prévia animada, roteiro por cena, chamada, legendas e a geração do vídeo pelo Higgsfield. */
+function CartaoConceito({ conceito, briefing, indice, video, conectado, bloqueado, avisoVideo, onGerar }: {
+  conceito: Conceito;
+  briefing: Briefing;
+  indice: number;
+  video?: Video;
+  conectado: boolean;
+  /** Outro vídeo está sendo gerado (um por vez). */
+  bloqueado: boolean;
+  avisoVideo?: string | null;
+  onGerar: (conceito: Conceito) => void;
+}) {
+  const motivo = !conectado ? "Conecte o Higgsfield para gerar o vídeo de verdade" : !briefing.imagemDataUrl ? "Envie a imagem do produto para gerar o vídeo de verdade" : bloqueado ? "Espere o vídeo em andamento terminar" : null;
   return (
     <section className="card p-4 flex flex-col gap-3.5" aria-labelledby={`conceito-${conceito.id}`}>
       <header>
@@ -246,16 +284,69 @@ function CartaoConceito({ conceito, briefing, indice }: { conceito: Conceito; br
       </MaisDetalhes>
 
       <div className="mt-auto pt-1">
-        <button type="button" className="btn-primary" disabled title="Conecte o Higgsfield para gerar o vídeo de verdade">Gerar este vídeo</button>
-        <p className="text-muted text-[13px] mt-2 text-center">Conecte o Higgsfield para gerar o vídeo de verdade</p>
+        {video ? (
+          <VideoDoConceito video={video} aviso={avisoVideo} onOutroEfeito={videoTerminou(video) && !motivo ? () => onGerar(conceito) : undefined} />
+        ) : (
+          <>
+            <button type="button" className="btn-primary" disabled={motivo !== null} title={motivo ?? undefined} onClick={() => onGerar(conceito)}>Gerar este vídeo</button>
+            {motivo && <p className="text-muted text-[13px] mt-2 text-center">{motivo}</p>}
+          </>
+        )}
       </div>
     </section>
   );
 }
 
-/** Resultado completo (cabeçalho, proveniência e os três conceitos), reaproveitado pela página /r/[id]. */
-export function Resultado({ campanha, meta, id }: { campanha: Campanha; meta: Meta; id: string }) {
+/** Intervalo entre consultas do andamento de um vídeo no Higgsfield. */
+const INTERVALO_ACOMPANHAMENTO_MS = 5000;
+
+/**
+ * Resultado completo (cabeçalho, proveniência e os três conceitos), reaproveitado pela página /r/[id]. Também cuida da
+ * geração dos vídeos: abre o diálogo de confirmação, guarda o vídeo mais recente de cada conceito e consulta o andamento
+ * dos pendentes a cada 5 s. `conectado` diz se o Higgsfield está autorizado; `videosIniciais` vêm do banco em /r/[id].
+ */
+export function Resultado({ campanha, meta, id, conectado = false, videosIniciais = [] }: { campanha: Campanha; meta: Meta; id: string; conectado?: boolean; videosIniciais?: Video[] }) {
   const b = campanha.briefing;
+  const [videos, setVideos] = useState<Record<string, Video>>(() => {
+    const porConceito: Record<string, Video> = {};
+    // Mais recentes primeiro: o primeiro de cada conceito vence.
+    for (const v of videosIniciais) if (!porConceito[v.conceitoId]) porConceito[v.conceitoId] = v;
+    return porConceito;
+  });
+  const [dialogo, setDialogo] = useState<Conceito | null>(null);
+  const [avisoVideo, setAvisoVideo] = useState<string | null>(null);
+
+  const pendentes = Object.values(videos).filter((v) => !videoTerminou(v));
+
+  // Consulta o andamento dos vídeos pendentes a cada 5 s. `videos` muda a cada resposta, e reiniciar o intervalo
+  // nesse momento mantém o ritmo de 5 s depois da última atualização.
+  useEffect(() => {
+    const ids = Object.values(videos).filter((v) => !videoTerminou(v)).map((v) => v.id);
+    if (ids.length === 0) return;
+    const timer = setInterval(() => {
+      for (const videoId of ids) {
+        fetch(`/api/videos/${videoId}`)
+          .then(async (r) => {
+            const resposta = await r.json();
+            if (r.ok && resposta.video) {
+              setAvisoVideo(null);
+              setVideos((atual) => ({ ...atual, [resposta.video.conceitoId]: resposta.video }));
+            } else {
+              setAvisoVideo(resposta.error || "Não foi possível consultar o andamento. Tentando de novo em instantes.");
+            }
+          })
+          .catch(() => setAvisoVideo("Sem resposta do servidor. Tentando de novo em instantes."));
+      }
+    }, INTERVALO_ACOMPANHAMENTO_MS);
+    return () => clearInterval(timer);
+  }, [videos]);
+
+  function iniciado(video: Video) {
+    setDialogo(null);
+    setAvisoVideo(null);
+    setVideos((atual) => ({ ...atual, [video.conceitoId]: video }));
+  }
+
   return (
     <article className="reveal" data-id={id}>
       <ResultHead titulo={campanha.titulo} subtitulo={`${rotuloFormato(b.formato)} · ${b.duracaoSeg} s · ${rotuloObjetivo(b.objetivo)}`}>
@@ -263,8 +354,21 @@ export function Resultado({ campanha, meta, id }: { campanha: Campanha; meta: Me
       </ResultHead>
       <Origem meta={meta} />
       <div className="grid gap-4 md:grid-cols-3 items-stretch">
-        {campanha.conceitos.map((c, i) => <CartaoConceito key={c.id} conceito={c} briefing={b} indice={i} />)}
+        {campanha.conceitos.map((c, i) => (
+          <CartaoConceito
+            key={c.id}
+            conceito={c}
+            briefing={b}
+            indice={i}
+            video={videos[c.id]}
+            conectado={conectado}
+            bloqueado={pendentes.length > 0}
+            avisoVideo={videos[c.id] && !videoTerminou(videos[c.id]) ? avisoVideo : null}
+            onGerar={setDialogo}
+          />
+        ))}
       </div>
+      {dialogo && <DialogoGerar campanhaId={id} conceito={dialogo} onFechar={() => setDialogo(null)} aoIniciar={iniciado} />}
     </article>
   );
 }
