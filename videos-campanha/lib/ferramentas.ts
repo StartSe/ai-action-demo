@@ -2,6 +2,7 @@
 // Cada app da suíte declara as suas aqui, reaproveitando a mesma lógica das rotas normais (lib/conceitos.ts).
 import { gerarCampanha, LIMITE_IMAGEM_BYTES, normalizarBriefing } from "./conceitos";
 import type { Ferramenta } from "./mcp";
+import { enderecoPublico } from "./setup-comum";
 import { DURACOES, FORMATOS, OBJETIVOS } from "./types";
 import { atualizarEstado, campanhaDoConceito, iniciarVideo, planoVideo } from "./videos";
 
@@ -103,7 +104,7 @@ export const FERRAMENTAS: Ferramenta[] = [
           plano: { ...plano, efeitos: plano.efeitos.map((e) => ({ id: e.id, nome: e.nome })) },
         };
       }
-      const origem = process.env.APP_URL?.trim();
+      const origem = enderecoPublico();
       const video = await iniciarVideo({ campanhaId: campanha.id, conceitoId, efeito, origemPublica: origem && origem.startsWith("https://") ? origem : undefined });
       return { confirmado: true, video, link: `/r/${campanha.id}`, mensagem: "Vídeo em geração. Consulte estado_video com esse id até o estado ficar pronto ou falhou." };
     },

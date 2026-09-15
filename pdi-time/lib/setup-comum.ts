@@ -1,6 +1,6 @@
 // Tipos e utilitários do setup inicial. Compartilhado por toda a suíte: copie sem alterar.
 // A lista de integrações de cada app fica em lib/integracoes.ts.
-import { getConfig, mascarar, origemConfig } from "./store";
+import { getConfig, mascarar, origemConfig, setConfig } from "./store";
 import { enviar, type Canal } from "./notificacoes";
 import { conectar, listarFerramentas, type FerramentaMCP } from "./mcp-cliente";
 import { conexaoAutorizada } from "./mcp-oauth";
@@ -71,7 +71,15 @@ export function lerConfig(i: Integracao): Record<string, string | undefined> {
   return Object.fromEntries(i.campos.map((c) => [c.chave, getConfig(c.chave) ?? c.padrao]));
 }
 
-export async function statusIntegracoes(lista: Integracao[]): Promise<{ integracoes: IntegracaoStatus[]; pronto: boolean }> {
+export type StatusEnderecoPublico = { valor: string | null; origem: "env" | "banco" | null };
+
+/** Valor de `APP_URL` para o campo "Endereço público do app" em /setup ("Para a equipe técnica"). */
+export function statusEnderecoPublico(): StatusEnderecoPublico {
+  const valor = getConfig("APP_URL") ?? null;
+  return { valor, origem: valor ? origemConfig("APP_URL") : null };
+}
+
+export async function statusIntegracoes(lista: Integracao[]): Promise<{ integracoes: IntegracaoStatus[]; pronto: boolean; enderecoPublico: StatusEnderecoPublico }> {
   const integracoes: IntegracaoStatus[] = [];
   for (const i of lista) {
     const config = lerConfig(i);
@@ -98,7 +106,7 @@ export async function statusIntegracoes(lista: Integracao[]): Promise<{ integrac
     integracoes.push({ ...cabecalho, campos, configurada: integracaoConfigurada(i) });
   }
   const pronto = lista.filter((i) => i.obrigatoria).every(integracaoConfigurada);
-  return { integracoes, pronto };
+  return { integracoes, pronto, enderecoPublico: statusEnderecoPublico() };
 }
 
 /** URL pública do app, respeitando proxies (Render, Docker). */
@@ -107,6 +115,29 @@ export function baseUrl(req: Request): string {
   const host = h.get("x-forwarded-host") || h.get("host") || new URL(req.url).host;
   const proto = h.get("x-forwarded-proto") || (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
   return `${proto}://${host}`;
+}
+
+/** Endereço público usado para montar links absolutos em e-mail/Slack (rotinas, lembretes, formulários,
+ * pedidos). Nunca "localhost" fora de desenvolvimento: sem `APP_URL` configurada em produção, devolve
+ * `undefined` e quem monta o link deve tratar (ex.: enviar sem link, ou avisar "endereço público
+ * desconhecido"). Ver `registrarEnderecoPublico`, que preenche `APP_URL` sozinho a partir da primeira
+ * requisição real que chegar numa rota que cria algo com link. */
+export function enderecoPublico(): string | undefined {
+  const valor = getConfig("APP_URL");
+  if (valor) return valor;
+  if (process.env.NODE_ENV !== "production") return `http://localhost:${process.env.PORT || 3000}`;
+  return undefined;
+}
+
+/** Grava `APP_URL` a partir do host real da requisição, para toda rota que cria uma rotina, um
+ * lembrete, um formulário ou um pedido que vai gerar um link em e-mail/Slack mais tarde (quando não há
+ * `req` disponível, como no executor de 60s). Nunca sobrescreve um valor vindo de variável de ambiente,
+ * e só regrava quando o host muda (nova publicação, domínio próprio). */
+export function registrarEnderecoPublico(req: Request): void {
+  if (origemConfig("APP_URL") === "env") return;
+  const atual = baseUrl(req);
+  if (getConfig("APP_URL") === atual) return;
+  setConfig("APP_URL", atual);
 }
 
 // Modelos gratuitos vivos do catálogo do OpenRouter, além dos fixos de lib/modelos.ts. Cache de 1 hora em

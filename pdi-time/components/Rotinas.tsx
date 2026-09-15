@@ -47,6 +47,7 @@ export function Rotinas() {
   const [codigoNovo, setCodigoNovo] = useState<string | null>(null);
   const [endereco, setEndereco] = useState("/api/rotinas/executar");
   const [gerando, setGerando] = useState(false);
+  const [enderecoDesconhecido, setEnderecoDesconhecido] = useState(false);
 
   const [tipo, setTipo] = useState("");
   const [frequencia, setFrequencia] = useState<Frequencia>("diaria");
@@ -67,6 +68,7 @@ export function Rotinas() {
         setTipos(d.tipos);
         setDestinoPadrao(d.destinoPadrao || "");
         setTipo((t) => t || d.tipos[0]?.tipo || "");
+        setEnderecoDesconhecido(Boolean(d.enderecoPublicoDesconhecido));
       })
       .catch(() => setItens([]));
   }
@@ -173,6 +175,12 @@ export function Rotinas() {
     <section className="card p-6 max-md:p-5">
       <h2 className="text-lg font-bold mb-1">Rotinas</h2>
       <p className="text-muted text-sm mb-4 max-w-[640px]">Agende o app para gerar e entregar um resultado sozinho, em um horário fixo, sem que ninguém precise abrir a tela.</p>
+
+      {enderecoDesconhecido && (
+        <div className="mb-4 px-4 py-3 rounded-[10px] text-sm border bg-[#fff4e0] border-[#f0d999] text-warn">
+          Endereço público desconhecido: o aviso da próxima rotina sai sem o link do resultado. Abra o app pelo endereço publicado uma vez, ou informe em &quot;Para a equipe técnica&quot;.
+        </div>
+      )}
 
       {itens === null ? (
         <p className="text-muted text-sm">Carregando...</p>

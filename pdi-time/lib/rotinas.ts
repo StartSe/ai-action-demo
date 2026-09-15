@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { enviar, type Canal } from "./notificacoes";
 import { getConfig, mascarar, setConfig } from "./store";
+import { enderecoPublico } from "./setup-comum";
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 let db: DatabaseSync | null = null;
@@ -186,13 +187,14 @@ async function executar(r: Rotina): Promise<{ id: string; ok: boolean; mensagem:
     const resultado = await executor(r);
     marcarExecutada(r.id, new Date().toISOString());
     if (resultado.enviar === false) return { id: r.id, ok: true, mensagem: "Nada para avisar desta vez." };
-    const base = getConfig("APP_URL") || "http://localhost:3000";
+    const base = enderecoPublico();
+    if (!base && resultado.resultadoId) console.error(`Rotina "${r.tipo}": endereço público desconhecido, link omitido do aviso.`);
     const envio = await enviar({
       canal: r.canal,
       destino: r.destino ?? undefined,
       titulo: resultado.titulo,
       texto: resultado.texto,
-      link: resultado.resultadoId ? `${base}/r/${resultado.resultadoId}` : undefined,
+      link: base && resultado.resultadoId ? `${base}/r/${resultado.resultadoId}` : undefined,
     });
     return { id: r.id, ok: envio.ok, mensagem: envio.mensagem };
   } catch (err) {

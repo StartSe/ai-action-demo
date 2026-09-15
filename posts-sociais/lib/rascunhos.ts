@@ -8,7 +8,7 @@ import { criar, registrarCallback, type CampoFormulario } from "./formularios";
 import { atualizarSaida, obter } from "./historico";
 import { gerarPosts, REDES } from "./posts";
 import { registrarExecutor } from "./rotinas";
-import { getConfig } from "./store";
+import { enderecoPublico } from "./setup-comum";
 import { proximoTema } from "./temas";
 import type { Aprovacao, DadosPosts, Rede, ResultadoPosts } from "./types";
 
@@ -43,9 +43,11 @@ registrarExecutor("rascunhos-semanais", async () => {
   const tokenAprovacao = criarFormularioAprovacao(id, tema.tema);
   atualizarSaida(id, { ...resultado, aprovacao: { status: "pendente" } });
 
-  const base = getConfig("APP_URL") || "http://localhost:3000";
+  const base = enderecoPublico();
+  if (!base) console.error("Rascunhos semanais de posts: endereço público desconhecido, link omitido do aviso.");
   const redesTexto = resultado.posts.map((p) => REDES[p.rede] || p.rede).join(", ");
-  const texto = `${resultado.posts.length} rascunho${resultado.posts.length === 1 ? "" : "s"} para o tema "${tema.tema}" (${redesTexto}). Aprove, peça ajuste ou descarte pelo link: ${base}/f/${tokenAprovacao}`;
+  const acao = base ? `Aprove, peça ajuste ou descarte pelo link: ${base}/f/${tokenAprovacao}` : "Abra o app para aprovar, pedir ajuste ou descartar (endereço público ainda não configurado).";
+  const texto = `${resultado.posts.length} rascunho${resultado.posts.length === 1 ? "" : "s"} para o tema "${tema.tema}" (${redesTexto}). ${acao}`;
 
   return { titulo: `Rascunhos da semana: ${tema.tema}`, texto, resultadoId: id };
 });

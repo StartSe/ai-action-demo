@@ -1,6 +1,6 @@
 // Tipos e utilitários do setup inicial. Compartilhado por toda a suíte: copie sem alterar.
 // A lista de integrações de cada app fica em lib/integracoes.ts.
-import { getConfig, mascarar, origemConfig } from "./store";
+import { getConfig, mascarar, origemConfig, setConfig } from "./store";
 import { enviar, type Canal } from "./notificacoes";
 import { conectar, listarFerramentas, type FerramentaMCP } from "./mcp-cliente";
 import { conexaoAutorizada } from "./mcp-oauth";
@@ -87,6 +87,28 @@ export function baseUrl(req: Request): string {
   const host = h.get("x-forwarded-host") || h.get("host") || new URL(req.url).host;
   const proto = h.get("x-forwarded-proto") || (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
   return `${proto}://${host}`;
+}
+
+/** Endereço público usado para montar links absolutos em e-mail/Slack (rotinas, lembretes,
+ * formulários, pedidos). Nunca "localhost" fora de desenvolvimento: sem `APP_URL` configurada em
+ * produção, devolve `undefined` e quem monta o link deve tratar (ex.: enviar sem link, avisar
+ * "endereço público desconhecido"). Ver `registrarEnderecoPublico`, que preenche `APP_URL` sozinho a
+ * partir da primeira requisição real que chegar numa rota que cria algo com link. */
+export function enderecoPublico(): string | undefined {
+  const valor = getConfig("APP_URL");
+  if (valor) return valor;
+  if (process.env.NODE_ENV !== "production") return `http://localhost:${process.env.PORT || 3000}`;
+  return undefined;
+}
+
+/** Grava `APP_URL` a partir do host real da requisição, para toda rota que cria uma rotina, um
+ * lembrete, um formulário ou um pedido que vai gerar um link em e-mail/Slack mais tarde. Nunca
+ * sobrescreve um valor vindo de variável de ambiente, e só regrava quando o host muda. */
+export function registrarEnderecoPublico(req: Request): void {
+  if (origemConfig("APP_URL") === "env") return;
+  const atual = baseUrl(req);
+  if (getConfig("APP_URL") === atual) return;
+  setConfig("APP_URL", atual);
 }
 
 /** Integração de IA usada por todos os apps. */

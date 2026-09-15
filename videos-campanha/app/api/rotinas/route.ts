@@ -1,5 +1,6 @@
 import { criar, listar, type Frequencia } from "@/lib/rotinas";
 import { TIPOS_ROTINA } from "@/lib/rotinas-do-app";
+import { enderecoPublico, registrarEnderecoPublico } from "@/lib/setup-comum";
 import { getConfig } from "@/lib/store";
 
 const FREQUENCIAS: Frequencia[] = ["diaria", "semanal", "mensal", "unica"];
@@ -11,10 +12,12 @@ export async function GET() {
     itens: listar(),
     tipos: TIPOS_ROTINA,
     destinoPadrao: getConfig("NOTIFICACOES_DESTINO") || "",
+    enderecoPublicoDesconhecido: !enderecoPublico(),
   });
 }
 
 export async function POST(req: Request) {
+  registrarEnderecoPublico(req);
   const corpo = await req.json().catch(() => null);
   const tipo = typeof corpo?.tipo === "string" ? corpo.tipo : "";
   const frequencia = corpo?.frequencia as Frequencia;

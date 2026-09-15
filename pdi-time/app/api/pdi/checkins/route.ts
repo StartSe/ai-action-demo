@@ -2,6 +2,7 @@
 // check-ins" no Resultado). Não é copiado entre apps: a lógica mora em lib/checkins.ts.
 import { criarLembretesCheckin, listarLembretesCheckin } from "@/lib/checkins";
 import { obter } from "@/lib/historico";
+import { registrarEnderecoPublico } from "@/lib/setup-comum";
 import { getConfig } from "@/lib/store";
 import type { DadosPDI, PDI } from "@/lib/types";
 
@@ -11,6 +12,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  registrarEnderecoPublico(req);
   const corpo = await req.json().catch(() => null);
   const resultadoId = typeof corpo?.resultadoId === "string" ? corpo.resultadoId : "";
   if (!resultadoId) return Response.json({ error: "Resultado inválido." }, { status: 400 });

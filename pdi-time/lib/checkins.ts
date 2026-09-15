@@ -6,7 +6,7 @@ import { criar as criarFormulario, registrarCallback, type CampoFormulario, type
 import { atualizarSaida, obter } from "./historico";
 import type { Canal } from "./notificacoes";
 import { criar as criarRotina, listar as listarRotinas, registrarExecutor, type Rotina } from "./rotinas";
-import { getConfig } from "./store";
+import { enderecoPublico } from "./setup-comum";
 import type { DadosPDI, EntradaAcompanhamento, PDI } from "./types";
 
 export type Marco = 30 | 60 | 90;
@@ -71,12 +71,13 @@ registrarExecutor("checkin-pdi", async (rotina: Rotina) => {
     acoes,
   };
   const token = criarFormulario({ tipo: "checkin-pdi", campos: camposCheckin(acoes), parametros, expiraEmDias: 30, limite: 1 });
-  const base = getConfig("APP_URL") || "http://localhost:3000";
-  const link = `${base}/f/${token}`;
+  const base = enderecoPublico();
   const listaAcoes = acoes.length ? acoes.map((a) => `- ${a.objetivo}: ${a.acao}`).join("\n") : "Nenhuma ação prevista para este marco.";
+  if (!base) console.error(`Check-in de ${marco} dias (PDI de ${nome}): endereço público desconhecido, link omitido do aviso.`);
+  const registrar = base ? `Registre o que avançou: ${base}/f/${token}` : "Abra o app para registrar o que avançou (endereço público ainda não configurado).";
   return {
     titulo: `Check-in de ${marco} dias: PDI de ${nome}`,
-    texto: `Chegou a hora do check-in de ${marco} dias do PDI de ${nome}.\n\nAções deste marco:\n${listaAcoes}\n\nRegistre o que avançou: ${link}`,
+    texto: `Chegou a hora do check-in de ${marco} dias do PDI de ${nome}.\n\nAções deste marco:\n${listaAcoes}\n\n${registrar}`,
   };
 });
 

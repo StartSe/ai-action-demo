@@ -7,7 +7,7 @@ import type { Meta } from "./ai";
 import { criarLinkConfirmacao } from "./confirmacoes";
 import { atualizarSaida, obter } from "./historico";
 import { apagar as apagarRotina, criar as criarRotina, registrarExecutor, type Rotina } from "./rotinas";
-import { getConfig } from "./store";
+import { enderecoPublico } from "./setup-comum";
 import type { Acao, Ata, EntradaAta } from "./types";
 
 export const TIPO_COBRANCA = "cobranca-vespera-acao";
@@ -122,8 +122,9 @@ registrarExecutor(TIPO_COBRANCA, async (rotina: Rotina) => {
   if (!registro || !acao) {
     return { titulo: "Ação não encontrada", texto: "A ação referente a esta cobrança não foi encontrada (pode ter sido removida)." };
   }
-  const base = getConfig("APP_URL") || "http://localhost:3000";
-  const linkConfirmacao = acao.tokenConfirmacao ? `${base}/f/${acao.tokenConfirmacao}` : undefined;
+  const base = enderecoPublico();
+  if (!base) console.error(`Cobrança da ação "${acao.acao}": endereço público desconhecido, link de confirmação omitido do aviso.`);
+  const linkConfirmacao = base && acao.tokenConfirmacao ? `${base}/f/${acao.tokenConfirmacao}` : undefined;
   return {
     titulo: `Lembrete: "${acao.acao}" vence amanhã`,
     texto: `A ação "${acao.acao}" tem prazo para ${acao.prazo}.${linkConfirmacao ? ` Confirme por este link: ${linkConfirmacao}` : ""}`,

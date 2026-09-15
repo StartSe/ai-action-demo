@@ -54,6 +54,17 @@ function arquivosParaVarrer(appId) {
   return arquivos;
 }
 
+// lib/ai.ts usa "http://localhost:3000" de propósito, como reserva do cabeçalho HTTP-Referer (nunca
+// vira link mostrado a alguém) — todo o resto de lib/*.ts que monta link de e-mail/Slack/formulário
+// deve usar lib/setup-comum.ts:enderecoPublico() (ver US-019 do prd.json), nunca essa string crua.
+function arquivosLibParaVarrer(appId) {
+  const libDir = join(raiz, appId, "lib");
+  if (!existsSync(libDir)) return [];
+  return readdirSync(libDir)
+    .filter((nome) => nome.endsWith(".ts") && nome !== "ai.ts")
+    .map((nome) => join(libDir, nome));
+}
+
 const alvo = process.argv[2];
 const apps = alvo ? cat.apps.filter((a) => a.id === alvo) : cat.apps;
 
@@ -68,6 +79,14 @@ for (const app of apps) {
         if (regex.test(linha)) {
           achados.push({ arquivo: arquivo.slice(raiz.length + 1), linha: i + 1, termo });
         }
+      }
+    });
+  }
+  for (const arquivo of arquivosLibParaVarrer(app.id)) {
+    const linhas = readFileSync(arquivo, "utf8").split("\n");
+    linhas.forEach((linha, i) => {
+      if (linha.includes("http://localhost:3000")) {
+        achados.push({ arquivo: arquivo.slice(raiz.length + 1), linha: i + 1, termo: "http://localhost:3000" });
       }
     });
   }

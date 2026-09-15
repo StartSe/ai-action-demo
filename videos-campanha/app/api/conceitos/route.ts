@@ -2,11 +2,13 @@
 // A lógica de criação vive em lib/conceitos.ts, compartilhada com a ferramenta MCP (lib/ferramentas.ts).
 import { ErroDePedido, gerarCampanha, normalizarBriefing } from "@/lib/conceitos";
 import { apagarTodos, listar } from "@/lib/historico";
+import { registrarEnderecoPublico } from "@/lib/setup-comum";
 import type { Briefing } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  registrarEnderecoPublico(req);
   const corpo = await req.json().catch(() => null);
   if (!corpo || typeof corpo !== "object") return Response.json({ error: "Envie o briefing da campanha." }, { status: 400 });
 

@@ -1,13 +1,14 @@
 // Geração do vídeo pelo Higgsfield: POST com { campanhaId, conceitoId, efeito?, confirmar } devolve o plano
 // (custo e saldo) quando confirmar não é true, e cria o vídeo quando é; GET ?campanhaId= lista os vídeos da campanha.
 // A lógica vive em lib/videos.ts, compartilhada com as ferramentas MCP gerar_video e estado_video.
-import { baseUrl } from "@/lib/setup-comum";
+import { baseUrl, registrarEnderecoPublico } from "@/lib/setup-comum";
 import { iniciarVideo, listarPorCampanha, planoVideo } from "@/lib/videos";
 import { responderErro } from "./erros";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  registrarEnderecoPublico(req);
   const corpo = (await req.json().catch(() => ({}))) as { campanhaId?: unknown; conceitoId?: unknown; efeito?: unknown; confirmar?: unknown };
   const campanhaId = String(corpo.campanhaId || "").trim();
   const conceitoId = String(corpo.conceitoId || "").trim();
