@@ -321,7 +321,7 @@ export function ConteudoRadar({ radar }: { radar: Radar }) {
             },
             { chave: "forca", titulo: "Força", papel: "chip", largura: "100px", render: (s) => <Chip nivel={s.forca} /> },
             { chave: "tendencia", titulo: "Tendência", largura: "130px", render: (s) => TENDENCIA_LABEL[s.tendencia] },
-            { chave: "oQueFazer", titulo: "O que fazer", papel: "resumo", render: (s) => s.oQueFazer },
+            { chave: "oQueFazer", titulo: "O que fazer", papel: "resumo", linhas: 4, render: (s) => s.oQueFazer },
             {
               chave: "fontes",
               titulo: "Fontes",

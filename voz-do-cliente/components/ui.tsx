@@ -203,7 +203,7 @@ const CORES_TOM: Record<string, string> = { ok: "text-ok", warn: "text-warn", da
 export function Destaque({ valor, rotulo, interpretacao, tom = "neutro" }: { valor: string; rotulo: string; interpretacao?: string; tom?: "ok" | "warn" | "danger" | "neutro" }) {
   return (
     <div className="mb-6">
-      <div className={`text-[40px] leading-none font-extrabold tracking-[-0.02em] ${CORES_TOM[tom]}`}>{valor}</div>
+      <div className={`text-[40px] max-sm:text-[32px] leading-none font-extrabold tracking-[-0.02em] text-balance ${CORES_TOM[tom]}`}>{valor}</div>
       <div className="text-[13px] font-semibold text-muted mt-2">{rotulo}</div>
       {interpretacao && <div className="text-sm text-muted mt-1">{interpretacao}</div>}
     </div>
@@ -240,19 +240,82 @@ export type Coluna<T> = {
   titulo: string;
   render: (linha: T) => ReactNode;
   classe?: string;
-  /** No celular: "titulo" (negrito, cabeçalho do cartão), "resumo" (uma linha, logo abaixo), "chip" (à direita do título) ou "detalhe" (dentro de "Ver mais"). Sem papel, mantém o rótulo acima do valor. */
+  /** No celular: "titulo" (negrito, cabeçalho do cartão), "resumo" (algumas linhas, logo abaixo), "chip" (à direita do título) ou "detalhe" (dentro de "Ver mais"). Sem papel, mantém o rótulo acima do valor. */
   papel?: "titulo" | "resumo" | "chip" | "detalhe";
+  /** Só para papel "resumo": quantas linhas mostrar antes de cortar (padrão 2). */
+  linhas?: number;
   /** No desktop, aplica width fixa à coluna (ex.: "20%", "120px"). */
   largura?: string;
 };
 
-/** Texto de uma coluna "resumo": até 2 linhas, com "Ver mais" para expandir (tabela do desktop e cartão do celular). */
-function ResumoCelula({ children }: { children: ReactNode }) {
-  const [aberto, setAberto] = useState(false);
+/** Texto de uma coluna "resumo": até `linhas` linhas (padrão 2), com "Ver mais" só quando o texto realmente estoura o limite (medido por scrollHeight/clientHeight, não decorativo). Passando `aberto`/`onEstouro` de fora (cartão do celular), o botão próprio some (`semBotao`) e quem decide abrir/fechar é o chamador — assim resumo e detalhes abrem juntos, atrás de um único "Ver mais". */
+function ResumoCelula({ children, linhas = 2, aberto: abertoControlado, onEstouro, semBotao = false }: { children: ReactNode; linhas?: number; aberto?: boolean; onEstouro?: (estourou: boolean) => void; semBotao?: boolean }) {
+  const [abertoProprio, setAbertoProprio] = useState(false);
+  const [estourou, setEstourou] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const aberto = abertoControlado ?? abertoProprio;
+
+  useEffect(() => {
+    if (aberto) return;
+    const el = ref.current;
+    if (!el) return;
+    const estoura = el.scrollHeight > el.clientHeight + 1;
+    setEstourou(estoura);
+    onEstouro?.(estoura);
+  }, [children, linhas, aberto, onEstouro]);
+
   return (
     <div>
-      <div className={aberto ? "" : "line-clamp-2"}>{children}</div>
-      {!aberto && <button type="button" className="btn-link text-[12.5px] mt-1" onClick={() => setAberto(true)}>Ver mais</button>}
+      <div ref={ref} className={aberto ? "" : "overflow-hidden"} style={aberto ? undefined : { display: "-webkit-box", WebkitLineClamp: linhas, WebkitBoxOrient: "vertical" }}>
+        {children}
+      </div>
+      {!semBotao && estourou && !aberto && (
+        <button type="button" className="btn-link text-[12.5px] mt-1" onClick={() => setAbertoProprio(true)}>Ver mais</button>
+      )}
+    </div>
+  );
+}
+
+/** Um cartão do `DataTable` no celular: resumo (quando estoura) e detalhes atrás de um único "Ver mais" — nunca dois botões separados no mesmo cartão. */
+function CartaoLinha<T>({ linha, titulo, resumo, chip, semPapel, detalhes }: { linha: T; titulo?: Coluna<T>; resumo?: Coluna<T>; chip?: Coluna<T>; semPapel: Coluna<T>[]; detalhes: Coluna<T>[] }) {
+  const [aberto, setAberto] = useState(false);
+  const [resumoEstourou, setResumoEstourou] = useState(false);
+  const temMais = resumoEstourou || detalhes.length > 0;
+
+  return (
+    <div className="px-3.5 py-2.5 flex flex-col gap-1.5">
+      {(titulo || chip) && (
+        <div className="flex items-start justify-between gap-2">
+          {titulo && <div className="font-bold">{titulo.render(linha)}</div>}
+          {chip && <div className="shrink-0">{chip.render(linha)}</div>}
+        </div>
+      )}
+      {resumo && (
+        <div className="text-muted">
+          <ResumoCelula linhas={resumo.linhas} aberto={aberto} onEstouro={setResumoEstourou} semBotao>{resumo.render(linha)}</ResumoCelula>
+        </div>
+      )}
+      {semPapel.map((c) => (
+        <div key={c.chave}>
+          <div className="text-[11.5px] font-bold text-muted">{c.titulo}</div>
+          <div>{c.render(linha)}</div>
+        </div>
+      ))}
+      {aberto && detalhes.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {detalhes.map((c) => (
+            <div key={c.chave}>
+              <div className="text-[11.5px] font-bold text-muted">{c.titulo}</div>
+              <div>{c.render(linha)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {temMais && (
+        <button type="button" className="text-[13px] font-bold text-accent-ink text-left" onClick={() => setAberto((v) => !v)}>
+          {aberto ? "Ver menos" : "Ver mais"}
+        </button>
+      )}
     </div>
   );
 }
@@ -274,41 +337,14 @@ export function DataTable<T>({ colunas, linhas }: { colunas: Coluna<T>[]; linhas
         <tbody>
           {linhas.map((l, i) => (
             <tr key={i} className="[&:last-child>td]:border-b-0">
-              {colunas.map((c) => <td key={c.chave} style={c.largura ? { width: c.largura } : undefined} className={`px-3.5 py-[11px] border-b border-line align-top ${c.classe ?? ""}`}>{c.papel === "resumo" ? <ResumoCelula>{c.render(l)}</ResumoCelula> : c.render(l)}</td>)}
+              {colunas.map((c) => <td key={c.chave} style={c.largura ? { width: c.largura } : undefined} className={`px-3.5 py-[11px] border-b border-line align-top ${c.classe ?? ""}`}>{c.papel === "resumo" ? <ResumoCelula linhas={c.linhas}>{c.render(l)}</ResumoCelula> : c.render(l)}</td>)}
             </tr>
           ))}
         </tbody>
       </table>
       <div className="md:hidden card shadow-none divide-y divide-line text-sm">
         {linhas.map((l, i) => (
-          <div key={i} className="px-3.5 py-2.5 flex flex-col gap-1.5">
-            {(titulo || chip) && (
-              <div className="flex items-start justify-between gap-2">
-                {titulo && <div className="font-bold">{titulo.render(l)}</div>}
-                {chip && <div className="shrink-0">{chip.render(l)}</div>}
-              </div>
-            )}
-            {resumo && <div className="text-muted"><ResumoCelula>{resumo.render(l)}</ResumoCelula></div>}
-            {semPapel.map((c) => (
-              <div key={c.chave}>
-                <div className="text-[11.5px] font-bold text-muted">{c.titulo}</div>
-                <div>{c.render(l)}</div>
-              </div>
-            ))}
-            {detalhes.length > 0 && (
-              <details className="group mt-1">
-                <summary className="text-[13px] font-bold text-accent-ink cursor-pointer marker:content-none">Ver mais</summary>
-                <div className="mt-1.5 flex flex-col gap-1.5">
-                  {detalhes.map((c) => (
-                    <div key={c.chave}>
-                      <div className="text-[11.5px] font-bold text-muted">{c.titulo}</div>
-                      <div>{c.render(l)}</div>
-                    </div>
-                  ))}
-                </div>
-              </details>
-            )}
-          </div>
+          <CartaoLinha key={i} linha={l} titulo={titulo} resumo={resumo} chip={chip} semPapel={semPapel} detalhes={detalhes} />
         ))}
       </div>
     </>
