@@ -75,6 +75,14 @@ jobs:
           context: ./${{ matrix.app }}
           platforms: ${{ env.PLATAFORMAS }}
           push: true
+          # Credenciais OAuth da suíte (US-024, envio de avisos pelo Gmail/Outlook da própria pessoa):
+          # só o pdi-time declara esses ARGs no Dockerfile por enquanto; os outros apps ignoram o
+          # build-arg sem erro (aviso "was not consumed") até a própria história de replicação.
+          build-args: |
+            GOOGLE_CLIENT_ID_APP=${{ secrets.GOOGLE_CLIENT_ID_APP }}
+            GOOGLE_CLIENT_SECRET_APP=${{ secrets.GOOGLE_CLIENT_SECRET_APP }}
+            MICROSOFT_CLIENT_ID_APP=${{ secrets.MICROSOFT_CLIENT_ID_APP }}
+            MICROSOFT_CLIENT_SECRET_APP=${{ secrets.MICROSOFT_CLIENT_SECRET_APP }}
           tags: |
             ${{ env.REGISTRO }}/${{ matrix.app }}:latest
             ${{ env.REGISTRO }}/${{ matrix.app }}:${{ github.sha }}

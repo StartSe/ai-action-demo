@@ -1,5 +1,6 @@
 // Canais de notificação (e-mail e Slack) usados pelos formulários e rotinas do app. Copie sem alterar.
 import { getConfig } from "./store";
+import { contaConectada, enviarPorGmail, enviarPorOutlook, ErroEnvioEmail, provedorDeEnvio } from "./email-envio";
 
 export type Canal = "email" | "slack";
 
@@ -47,11 +48,29 @@ async function enviarPorSlack({ destino, titulo, texto, link }: Notificacao): Pr
 async function enviarPorEmail({ destino, titulo, texto, link }: Notificacao): Promise<{ ok: boolean; mensagem: string }> {
   if (!destino) return { ok: false, mensagem: "Informe um e-mail de destino." };
   const html = `<p>${texto.replace(/\n/g, "<br/>")}</p>${link ? `<p><a href="${link}">${link}</a></p>` : ""}`;
+  const provedor = provedorDeEnvio();
+  if (provedor === "gmail" || provedor === "outlook") return enviarPorCaixaPropria(provedor, destino, titulo, html);
   const chaveResend = getConfig("NOTIFICACOES_RESEND_API_KEY");
   if (chaveResend) return enviarPorResend(chaveResend, destino, titulo, html);
   const host = getConfig("NOTIFICACOES_SMTP_HOST");
   if (host) return enviarPorSmtp(host, destino, titulo, html);
-  return { ok: false, mensagem: "Configure o Resend ou o SMTP para enviar por e-mail." };
+  return { ok: false, mensagem: "Conecte o Gmail ou o Outlook, ou configure o Resend ou o SMTP, para enviar por e-mail." };
+}
+
+/** Envia pela caixa própria da pessoa (Gmail ou Outlook, conectada em /setup): o remetente é a conta dela
+ * mesma, não um endereço genérico do app. */
+async function enviarPorCaixaPropria(provedor: "gmail" | "outlook", destino: string, titulo: string, html: string): Promise<{ ok: boolean; mensagem: string }> {
+  const nome = provedor === "gmail" ? "Gmail" : "Outlook";
+  try {
+    if (provedor === "gmail") await enviarPorGmail(destino, titulo, html);
+    else await enviarPorOutlook(destino, titulo, html);
+    const conta = contaConectada(provedor);
+    return { ok: true, mensagem: `Enviado do seu ${nome}${conta ? ` (${conta})` : ""} para ${destino}.` };
+  } catch (err) {
+    if (err instanceof ErroEnvioEmail) return { ok: false, mensagem: err.message };
+    console.error(`Falha ao enviar pelo ${nome}:`, err);
+    return { ok: false, mensagem: `Não foi possível enviar pelo ${nome} agora. Tente novamente.` };
+  }
 }
 
 async function enviarPorResend(chave: string, destino: string, titulo: string, html: string): Promise<{ ok: boolean; mensagem: string }> {

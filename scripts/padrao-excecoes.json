@@ -1,5 +1,9 @@
 {
   "custos-ia": {
-    "app/api/setup/route.ts": "Gmail e Outlook têm cartão próprio em /setup (components/ConectarEmail.tsx) e saem da lista genérica devolvida pelo GET; continuam em INTEGRACOES para o PUT, o teste e o /api/status"
+    "app/api/setup/route.ts": "Gmail e Outlook têm cartão próprio em /setup (components/ConectarEmail.tsx) e saem da lista genérica devolvida pelo GET; continuam em INTEGRACOES para o PUT, o teste e o /api/status",
+    "app/api/setup/oauth/google/route.ts": "Já tem seu próprio fluxo de LEITURA da caixa (gmail.readonly, US-021, lib/email.ts) para importar notas fiscais — não é o fluxo de ENVIO de avisos (gmail.send, lib/email-envio.ts) desta história",
+    "app/api/setup/oauth/google/callback/route.ts": "idem",
+    "app/api/setup/oauth/microsoft/route.ts": "Já tem seu próprio fluxo de LEITURA da caixa (Mail.Read, US-034, lib/email.ts) para importar notas fiscais — não é o fluxo de ENVIO de avisos (Mail.Send, lib/email-envio.ts) desta história",
+    "app/api/setup/oauth/microsoft/callback/route.ts": "idem"
   }
 }

@@ -47,6 +47,7 @@ ARQUIVOS=(
   "lib/mcp-oauth.ts"
   "lib/formularios.ts"
   "lib/notificacoes.ts"
+  "lib/email-envio.ts"
   "lib/rotinas.ts"
   "app/mcp"
   "app/f"

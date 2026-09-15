@@ -6,6 +6,7 @@ import { conectar, listarFerramentas, type FerramentaMCP } from "./mcp-cliente";
 import { conexaoAutorizada } from "./mcp-oauth";
 import { MODELOS_GRATUITOS, MODELOS_VISAO, type Opcao, type ProximoPasso } from "./modelos";
 import { interpretarFalha } from "./ai";
+import { contaConectada, credenciaisDoApp as credenciaisAppEmail } from "./email-envio";
 
 export type { Opcao, ProximoPasso };
 export { MODELOS_GRATUITOS, MODELOS_VISAO };
@@ -79,7 +80,20 @@ export function statusEnderecoPublico(): StatusEnderecoPublico {
   return { valor, origem: valor ? origemConfig("APP_URL") : null };
 }
 
-export async function statusIntegracoes(lista: Integracao[]): Promise<{ integracoes: IntegracaoStatus[]; pronto: boolean; enderecoPublico: StatusEnderecoPublico }> {
+export type StatusCaixaEmail = { disponivel: boolean; conta?: string };
+export type StatusCaixasEmail = { gmail: StatusCaixaEmail; outlook: StatusCaixaEmail };
+
+/** Disponibilidade (credenciais do app definidas pela equipe técnica) e conta conectada de cada caixa
+ * própria de e-mail (US-024), para o cartão "Notificações" mostrar os botões "Conectar meu Gmail"/
+ * "Conectar meu Outlook" só quando fizer sentido. */
+export function statusCaixasEmail(): StatusCaixasEmail {
+  return {
+    gmail: { disponivel: Boolean(credenciaisAppEmail("gmail")), conta: contaConectada("gmail") },
+    outlook: { disponivel: Boolean(credenciaisAppEmail("outlook")), conta: contaConectada("outlook") },
+  };
+}
+
+export async function statusIntegracoes(lista: Integracao[]): Promise<{ integracoes: IntegracaoStatus[]; pronto: boolean; enderecoPublico: StatusEnderecoPublico; caixasEmail: StatusCaixasEmail }> {
   const integracoes: IntegracaoStatus[] = [];
   for (const i of lista) {
     const config = lerConfig(i);
@@ -106,7 +120,7 @@ export async function statusIntegracoes(lista: Integracao[]): Promise<{ integrac
     integracoes.push({ ...cabecalho, campos, configurada: integracaoConfigurada(i) });
   }
   const pronto = lista.filter((i) => i.obrigatoria).every(integracaoConfigurada);
-  return { integracoes, pronto, enderecoPublico: statusEnderecoPublico() };
+  return { integracoes, pronto, enderecoPublico: statusEnderecoPublico(), caixasEmail: statusCaixasEmail() };
 }
 
 /** URL pública do app, respeitando proxies (Render, Docker). */
@@ -242,7 +256,7 @@ export const NOTIFICACOES: Integracao = {
   campos: [
     { chave: "NOTIFICACOES_CANAL", rotulo: "Canal", tipo: "select", padrao: "email", opcoes: [{ valor: "email", rotulo: "E-mail" }, { valor: "slack", rotulo: "Slack" }] },
     { chave: "NOTIFICACOES_DESTINO", rotulo: "Destino", tipo: "text", opcional: true, placeholder: "voce@empresa.com", ajuda: "Para e-mail, o endereço que recebe. Para Slack, opcional (sobrepõe o canal padrão do webhook)." },
-    { chave: "NOTIFICACOES_RESEND_API_KEY", rotulo: "Chave do Resend", tipo: "secret", opcional: true, placeholder: "re_...", ajuda: "Para enviar e-mail sem servidor próprio. Alternativa: preencha os dados de SMTP em Opções avançadas.", visivelQuando: { campo: "NOTIFICACOES_CANAL", valores: ["email"] } },
+    { chave: "NOTIFICACOES_RESEND_API_KEY", rotulo: "Chave do Resend", tipo: "secret", opcional: true, avancado: true, placeholder: "re_...", ajuda: "Alternativa a conectar o Gmail/Outlook acima, ou ao SMTP abaixo.", visivelQuando: { campo: "NOTIFICACOES_CANAL", valores: ["email"] } },
     { chave: "NOTIFICACOES_SLACK_WEBHOOK", rotulo: "URL do webhook de entrada do Slack", tipo: "secret", opcional: true, placeholder: "https://hooks.slack.com/services/...", visivelQuando: { campo: "NOTIFICACOES_CANAL", valores: ["slack"] } },
     { chave: "NOTIFICACOES_SMTP_HOST", rotulo: "Servidor SMTP", tipo: "text", opcional: true, avancado: true, placeholder: "smtp.seudominio.com" },
     { chave: "NOTIFICACOES_SMTP_PORTA", rotulo: "Porta SMTP", tipo: "text", opcional: true, avancado: true, placeholder: "587" },

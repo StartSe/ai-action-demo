@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { IlustracaoSegmento, MaisDetalhes, Topbar, useStatus } from "./ui";
-import type { CampoStatus, IntegracaoStatus, Opcao, StatusEnderecoPublico } from "@/lib/setup-comum";
+import type { CampoStatus, IntegracaoStatus, Opcao, StatusCaixasEmail, StatusEnderecoPublico } from "@/lib/setup-comum";
 import type { Segmento } from "@/lib/ilustracao";
 
-type Resposta = { integracoes: IntegracaoStatus[]; pronto: boolean; enderecoPublico: StatusEnderecoPublico };
+type Resposta = { integracoes: IntegracaoStatus[]; pronto: boolean; enderecoPublico: StatusEnderecoPublico; caixasEmail: StatusCaixasEmail };
 
 // Duas frases de privacidade, verdadeiras desde a US-011 (as chaves são cifradas em
 // repouso, ver lib/store.ts, mas o app continua chamando serviços externos de verdade
@@ -140,7 +140,14 @@ export function SetupPage({ marca, nome, area, segmento }: { marca: string; nome
 
             <div className="flex flex-col gap-5">
               {dados?.integracoes.map((i, indice) => (
-                <CartaoIntegracao key={i.id} integracao={i} numero={indice + 1} aoSalvar={carregar} destaque={i.id === primeiroPendenteId} />
+                <CartaoIntegracao
+                  key={i.id}
+                  integracao={i}
+                  numero={indice + 1}
+                  aoSalvar={carregar}
+                  destaque={i.id === primeiroPendenteId}
+                  caixasEmail={i.id === "notificacoes" ? dados.caixasEmail : undefined}
+                />
               ))}
             </div>
 
@@ -211,7 +218,7 @@ function CampoEnderecoPublico({ status, aoSalvar }: { status: StatusEnderecoPubl
   );
 }
 
-function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean }) {
+function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEmail }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean; caixasEmail?: StatusCaixasEmail }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   const [desconectando, setDesconectando] = useState(false);
@@ -331,6 +338,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque }: { integ
               {passos.map((p) => <li key={p}>{p}</li>)}
             </ol>
           )}
+          {caixasEmail && <ConectarCaixasEmail status={caixasEmail} aoMudar={aoSalvar} />}
           {campos}
           {opcoesAvancadas}
           <div className="flex items-center gap-3 flex-wrap justify-end max-md:flex-col max-md:items-stretch mt-4">
@@ -346,6 +354,43 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque }: { integ
   );
 }
 
+/** Botões "Conectar meu Gmail"/"Conectar meu Outlook" do cartão "Notificações" (US-024): envia os avisos
+ * pela própria caixa da pessoa em vez do Resend/SMTP genérico. Some por completo quando a equipe técnica
+ * não definiu as credenciais do app daquele provedor — nunca mostra um botão que vai falhar. */
+function ConectarCaixasEmail({ status, aoMudar }: { status: StatusCaixasEmail; aoMudar: () => void }) {
+  if (!status.gmail.disponivel && !status.outlook.disponivel) return null;
+  return (
+    <div className="flex flex-col gap-2 mb-4">
+      {status.gmail.disponivel && <CaixaEmail nome="Gmail" url="/api/setup/oauth/google" status={status.gmail} aoMudar={aoMudar} />}
+      {status.outlook.disponivel && <CaixaEmail nome="Outlook" url="/api/setup/oauth/microsoft" status={status.outlook} aoMudar={aoMudar} />}
+    </div>
+  );
+}
+
+function CaixaEmail({ nome, url, status, aoMudar }: { nome: string; url: string; status: { conta?: string }; aoMudar: () => void }) {
+  const [desconectando, setDesconectando] = useState(false);
+
+  async function desconectar() {
+    setDesconectando(true);
+    try {
+      await fetch(url, { method: "PUT" });
+      aoMudar();
+    } finally {
+      setDesconectando(false);
+    }
+  }
+
+  if (status.conta) {
+    return (
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="chip-positivo">Conectado como {status.conta}</span>
+        <button type="button" className="btn-ghost !w-auto" onClick={desconectar} disabled={desconectando}>{desconectando ? "Desconectando" : "Desconectar"}</button>
+      </div>
+    );
+  }
+  return <a href={url} className="btn-secundario !w-auto">Conectar meu {nome}</a>;
+}
+
 /** Passo a passo de até três passos, gerado a partir do link para obter a chave. A ajuda do primeiro
  * campo não entra aqui: ela já aparece sob o próprio campo (`CampoSetup`), repeti-la duplicaria o texto.
  * Uma integração sem nenhum campo secreto (ex.: as cotações de câmbio do custos-ia) não tem chave para colar:
@@ -356,7 +401,7 @@ function passosSetup(i: IntegracaoStatus, valoresAtuais: Record<string, string>)
     const canal = valoresAtuais.NOTIFICACOES_CANAL || "email";
     return canal === "slack"
       ? ["No Slack, crie um webhook de entrada em Aplicativos › Incoming Webhooks e cole a URL abaixo."]
-      : ["Crie uma chave gratuita no Resend e cole abaixo; ou preencha o SMTP em Opções avançadas."];
+      : ["Conecte seu Gmail ou Outlook acima; sem isso, crie uma chave gratuita do Resend ou preencha o SMTP em Opções avançadas."];
   }
   const passos: string[] = [];
   const temChave = i.campos.some((c) => c.tipo === "secret");

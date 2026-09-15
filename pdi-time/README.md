@@ -61,6 +61,8 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
+| `GOOGLE_CLIENT_ID_APP` / `GOOGLE_CLIENT_SECRET_APP` | Credenciais OAuth da suíte (não da pessoa) para o botão "Conectar meu Gmail" em Notificações. Embutidas na imagem publicada pela equipe técnica; sem elas o botão não aparece. |
+| `MICROSOFT_CLIENT_ID_APP` / `MICROSOFT_CLIENT_SECRET_APP` | Idem, para "Conectar meu Outlook". |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
 
 ## Estrutura
