@@ -409,8 +409,8 @@
         "Verify in browser using dev-browser skill: três edições seguidas e uma volta de versão"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implementado em demo e com IA (askText, prompt de atualização do screenshot-to-code). \"Voltar para esta\" copia a versão escolhida como versão nova (a lista só cresce; nada é apagado). A rota /editar aceita também { empresa } para a troca de textos (instrução montada no servidor; a lista \"Versões\" mostra só o rótulo curto) e { html } opcional com o HTML que a tela exibe. Verificado em navegador (playwright-core): três edições seguidas (v2, v3, troca de textos v4), volta para a versão 1 (v5), lista de versões, /r/[id] com editor, celular 390 px; curls 404/400 e tools/list com editar_pagina."
     },
     {
       "id": "US-025",

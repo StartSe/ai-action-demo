@@ -394,3 +394,28 @@ export function paginaDemo(pedido: Pick<Pedido, "stack" | "marca">): string {
   const stack: Stack = pedido.stack === "html-css" ? "html-css" : "html-tailwind";
   return stack === "html-css" ? landingCss(marca) : landingTailwind(marca);
 }
+
+// Em modo demonstração, cada edição aplica mudanças fixas e visíveis, para mostrar o fluxo de versões:
+// a cor de fundo do cabeçalho muda e o título principal é reescrito. Tons claros para o texto continuar legível.
+const CORES_CABECALHO_DEMO = ["#fef3c7", "#dcfce7", "#dbeafe", "#fce7f3", "#ede9fe", "#ffedd5"];
+const TITULOS_DEMO = [
+  "Seu caixa em dia, sem planilha e sem susto.",
+  "Controle financeiro simples para quem toca a empresa.",
+  "Veja hoje quanto vai sobrar no fim do mês.",
+  "Menos planilha, mais decisão.",
+  "O dinheiro da empresa organizado em um só lugar.",
+];
+
+/** Aplica a edição de demonstração de número n (a versão que vai nascer) sobre o HTML atual. */
+export function edicaoDemo(html: string, n: number): string {
+  const cor = CORES_CABECALHO_DEMO[(n - 1) % CORES_CABECALHO_DEMO.length];
+  const titulo = TITULOS_DEMO[(n - 1) % TITULOS_DEMO.length];
+  let saida = html;
+  const cabecalho = /<header\b([^>]*)>/i.exec(saida);
+  if (cabecalho) {
+    const atributos = cabecalho[1].replace(/\s+style\s*=\s*(?:"[^"]*"|'[^']*')/i, "");
+    saida = saida.replace(cabecalho[0], `<header${atributos} style="background-color:${cor}">`);
+  }
+  saida = saida.replace(/(<h1\b[^>]*>)[\s\S]*?(<\/h1>)/i, `$1${escaparHtml(titulo)}$2`);
+  return saida;
+}

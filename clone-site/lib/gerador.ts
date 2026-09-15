@@ -1,11 +1,11 @@
-// Geração da página a partir da captura, compartilhada entre a rota HTTP (app/api/pagina/route.ts)
+// Geração e edição da página a partir da captura, compartilhadas entre a rota HTTP (app/api/pagina/route.ts)
 // e a ferramenta MCP (lib/ferramentas.ts), para não duplicar o prompt nem a gravação no histórico.
-// O prompt de sistema é portado e traduzido do projeto aberto screenshot-to-code (abi/screenshot-to-code),
-// adaptado para um único arquivo HTML em português e com as imagens de terceiros substituídas por blocos
-// na cor da marca.
-import { askVision, meta, visionEnabled, visionModelName, type Meta } from "./ai";
-import { esperar, paginaDemo } from "./demo";
-import { atualizarSaida, salvar } from "./historico";
+// Os prompts de sistema (geração e atualização) são portados e traduzidos do projeto aberto screenshot-to-code
+// (abi/screenshot-to-code), adaptados para um único arquivo HTML em português e com as imagens de terceiros
+// substituídas por blocos na cor da marca.
+import { aiEnabled, askText, askVision, meta, visionEnabled, visionModelName, type Meta } from "./ai";
+import { edicaoDemo, esperar, paginaDemo } from "./demo";
+import { atualizarSaida, obter, salvar } from "./historico";
 import type { EntradaPagina, Marca, Pagina, Pedido, Stack, Versao } from "./types";
 
 export const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -173,4 +173,134 @@ export async function gerarPagina(pedido: Pedido): Promise<{ demo: boolean; pagi
   const metaGerada: Meta = { ...meta({ demo: false, insumo: INSUMO }), model: visionModelName() };
   const pagina = salvarPagina(pedido, imagem.tamanho, html, metaGerada);
   return { demo: false, pagina, meta: metaGerada, id: pagina.id };
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Edição por instrução e versões
+// ---------------------------------------------------------------------------------------------------------
+
+export const LIMITE_INSTRUCAO = 4000;
+export const INSUMO_EDICAO = "a versão anterior da página e a instrução de mudança";
+
+const REGRAS_EDICAO = `- Aplique SOMENTE o que foi pedido. Tudo o que não foi citado (estrutura, classes, textos, cores, ordem das seções, fontes) deve continuar exatamente como está.
+- Devolva o arquivo INTEIRO atualizado, começando em <html> e terminando em </html>, sem markdown, sem \`\`\` e sem explicações antes ou depois. Nunca devolva só o trecho alterado nem escreva comentários como "<!-- resto igual -->".
+- Escreva os textos novos em português do Brasil, com tamanho parecido com o dos textos que substituem, para o layout não quebrar.
+- Continue sem copiar fotos, logotipos ou textos de outras empresas: imagens seguem como blocos na cor da marca com role="img" e aria-label em português.
+- Não inclua nenhum <script> além do permitido para o formato, nem atributos de evento, nem conteúdo de outras origens além do Google Fonts e do Tailwind.`;
+
+export const SYSTEM_EDICAO_TAILWIND = `Você é um desenvolvedor front-end especialista em Tailwind CSS.
+Você recebe o código HTML completo de uma página (um único arquivo, estilizado com Tailwind pela CDN) e uma instrução de mudança escrita por alguém que não programa. Sua tarefa é atualizar a página conforme a instrução.
+
+Regras:
+- Mantenha a linha <script src="https://cdn.tailwindcss.com"></script> no <head>; esse continua sendo o único <script> permitido.
+${REGRAS_EDICAO}`;
+
+export const SYSTEM_EDICAO_CSS = `Você é um desenvolvedor front-end especialista em HTML e CSS.
+Você recebe o código HTML completo de uma página (um único arquivo, com todo o CSS em uma tag <style> no <head>, sem nenhum <script>) e uma instrução de mudança escrita por alguém que não programa. Sua tarefa é atualizar a página conforme a instrução.
+
+Regras:
+- Nenhum <script> é permitido neste formato.
+${REGRAS_EDICAO}`;
+
+/** Bloco do usuário para a edição: a instrução, a marca (para as cores certas) e o HTML atual. */
+export function montarPromptEdicao(html: string, instrucao: string, marca?: Marca): string {
+  const linhas = [`Instrução de mudança:\n${instrucao.trim()}`];
+  if (marca?.nome || marca?.corPrimaria) {
+    linhas.push(`Marca da página: ${marca.nome || "não informada"}. Cor principal: ${marca.corPrimaria}.${marca.corSecundaria ? ` Cor secundária: ${marca.corSecundaria}.` : ""}`);
+  }
+  linhas.push(`Código atual da página:\n${html}`);
+  return linhas.join("\n\n");
+}
+
+/** Instrução pré-montada do botão "Trocar os textos pelos da minha empresa". */
+export function instrucaoTrocarTextos(oQueAEmpresaFaz: string): string {
+  return `Troque todos os textos da página pelos de uma empresa que faz o seguinte: ${oQueAEmpresaFaz.trim()}
+
+Reescreva títulos, subtítulos, chamadas dos botões, descrições de benefícios, passos, depoimentos, planos e perguntas frequentes para essa empresa, em português do Brasil, com tamanhos parecidos com os textos atuais. Mantenha a estrutura, as classes, as cores, as imagens e a ordem das seções exatamente como estão.`;
+}
+
+/** Valida a instrução vinda do formulário ou do assistente. */
+export function normalizarInstrucao(valor: unknown, vazio = "Escreva o que mudar na página."): string {
+  const texto = typeof valor === "string" ? valor.trim() : "";
+  if (!texto) throw new ErroDePedido(vazio);
+  return texto.slice(0, LIMITE_INSTRUCAO);
+}
+
+/** Erro de entrada inválida (vira 400 na rota HTTP). */
+export class ErroDePedido extends Error {}
+/** Página inexistente (vira 404 na rota HTTP). */
+export class PaginaNaoEncontrada extends Error {
+  constructor() {
+    super("Essa página não existe mais. Gere uma nova.");
+  }
+}
+
+/** Formato do HTML quando o registro não guarda o formato (páginas antigas): detecta pela CDN do Tailwind. */
+export function stackDoHtml(html: string): Stack {
+  return /cdn\.tailwindcss\.com/i.test(html) ? "html-tailwind" : "html-css";
+}
+
+function carregarPagina(id: string): { pagina: Pagina; stack: Stack } {
+  const registro = obter<EntradaPagina, Pagina, Meta>(id);
+  if (!registro || registro.tipo !== "pagina" || !Array.isArray(registro.saida?.versoes) || registro.saida.versoes.length === 0) {
+    throw new PaginaNaoEncontrada();
+  }
+  const pagina: Pagina = { ...registro.saida, id: registro.id };
+  const atual = pagina.versoes[pagina.versoes.length - 1];
+  const stack = registro.entrada?.stack === "html-css" || registro.entrada?.stack === "html-tailwind" ? registro.entrada.stack : stackDoHtml(atual.html);
+  return { pagina, stack };
+}
+
+function proximoNumero(pagina: Pagina): number {
+  return pagina.versoes.reduce((maior, v) => Math.max(maior, v.n), 0) + 1;
+}
+
+function gravarVersao(pagina: Pagina, versao: Versao): Pagina {
+  const nova: Pagina = { ...pagina, titulo: tituloDaPagina(versao.html, pagina.marca), versoes: [...pagina.versoes, versao] };
+  atualizarSaida(pagina.id, nova);
+  return nova;
+}
+
+/**
+ * Aplica uma instrução de mudança sobre a versão atual (ou sobre o HTML enviado, quando a tela está mostrando
+ * outra versão) e grava uma versão nova. Em modo demonstração, aplica mudanças fixas visíveis (ver lib/demo.ts).
+ * `rotulo` é o texto curto que fica na lista "Versões" quando a instrução enviada à IA é longa (ex.: troca de textos).
+ */
+export async function editarPagina(id: string, instrucao: string, htmlBase?: string, rotulo?: string): Promise<{ demo: boolean; pagina: Pagina; meta: Meta; versao: Versao }> {
+  const { pagina, stack } = carregarPagina(id);
+  const atual = pagina.versoes[pagina.versoes.length - 1];
+  const base = htmlBase?.trim() ? sanitizarHtml(extrairHtml(htmlBase), stack) : atual.html;
+  const n = proximoNumero(pagina);
+
+  let html: string;
+  let metaGerada: Meta;
+  if (!aiEnabled()) {
+    await esperar(900);
+    html = edicaoDemo(base, n);
+    metaGerada = meta({ demo: true, insumo: INSUMO_EDICAO });
+  } else {
+    const resposta = await askText({
+      system: stack === "html-css" ? SYSTEM_EDICAO_CSS : SYSTEM_EDICAO_TAILWIND,
+      prompt: montarPromptEdicao(base, instrucao, pagina.marca),
+      maxTokens: 12000,
+      temperature: 0.2,
+    });
+    html = sanitizarHtml(extrairHtml(resposta), stack);
+    metaGerada = meta({ demo: false, insumo: INSUMO_EDICAO });
+  }
+
+  const versao: Versao = { n, html, instrucao: (rotulo || instrucao).trim().slice(0, 300), criadoEm: new Date().toISOString() };
+  const nova = gravarVersao(pagina, versao);
+  return { demo: metaGerada.demo, pagina: nova, meta: metaGerada, versao };
+}
+
+/** "Voltar para esta": copia o HTML da versão n como uma versão nova, sem apagar as intermediárias. */
+export function voltarParaVersao(id: string, n: unknown): { pagina: Pagina; versao: Versao } {
+  const { pagina } = carregarPagina(id);
+  const alvo = pagina.versoes.find((v) => v.n === Number(n));
+  if (!alvo) throw new ErroDePedido("Essa versão não existe.");
+  const atual = pagina.versoes[pagina.versoes.length - 1];
+  if (alvo.n === atual.n) return { pagina, versao: atual };
+  const versao: Versao = { n: proximoNumero(pagina), html: alvo.html, instrucao: `Voltou para a versão ${alvo.n}`, criadoEm: new Date().toISOString() };
+  return { pagina: gravarVersao(pagina, versao), versao };
 }

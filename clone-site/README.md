@@ -40,8 +40,13 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 
 A prévia é um `<iframe sandbox="allow-scripts" srcDoc=...>`: o HTML gerado roda numa origem opaca, sem acesso a cookies, armazenamento nem ao próprio app. `allow-scripts` é necessário porque o Tailwind pela CDN é um script; sem ele, o formato Tailwind apareceria sem estilo.
 
+## Edições por instrução e versões
+Abaixo da prévia, o campo "O que mudar" envia a instrução (e o HTML que a tela está mostrando) em `POST /api/pagina/<id>/editar`. `lib/gerador.ts:editarPagina` usa o prompt de atualização do screenshot-to-code (devolver o arquivo inteiro mudando só o que foi pedido), passa a resposta pela mesma extração e sanitização da geração e grava uma `Versao` nova na página; a prévia mostra sempre a última versão. O botão "Trocar os textos pelos da minha empresa" abre o campo "O que a empresa faz" e envia `{ empresa }`: o servidor monta a instrução pré-pronta (`instrucaoTrocarTextos`) e grava na versão só o rótulo curto "Textos trocados pelos da empresa: ...".
+
+A lista "Versões" (número, instrução e hora) tem "Voltar para esta" em cada versão anterior: `POST /api/pagina/<id>/voltar` com `{ n }` copia o HTML daquela versão como uma versão nova ("Voltou para a versão n"), sem apagar as intermediárias. Em modo demonstração (sem chave do OpenRouter), cada edição aplica mudanças fixas visíveis: a cor de fundo do cabeçalho e o título principal mudam a cada versão (`lib/demo.ts:edicaoDemo`).
+
 ## Usar dentro de um assistente de IA (MCP)
-O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, com a ferramenta `gerar_pagina(imagem_url, instrucoes?, marca?, formato?)`: o servidor baixa a captura no endereço público informado (só http/https, sem endereços internos da rede, PNG ou JPG reconhecidos pelos primeiros bytes, até 5 MB) e devolve id, título, link `/r/<id>` e o HTML. Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
+O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, com as ferramentas `gerar_pagina(imagem_url, instrucoes?, marca?, formato?)` (o servidor baixa a captura no endereço público informado, só http/https, sem endereços internos da rede, PNG ou JPG reconhecidos pelos primeiros bytes, até 5 MB, e devolve id, título, link `/r/<id>` e o HTML) e `editar_pagina(id, instrucao)` (aplica a mudança sobre a última versão e devolve o número da versão nova e o HTML inteiro). Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
 
 Decisão de implementação: protocolo implementado à mão em `lib/mcp.ts` (JSON-RPC 2.0: `initialize`, `tools/list`, `tools/call`), em vez do pacote `@modelcontextprotocol/sdk` — mesma decisão herdada de `pdi-time`. Rate limit de 60 chamadas por minuto por código, em memória.
 
@@ -55,7 +60,7 @@ curl -X POST https://<seu-app>/mcp \
 ```bash
 npx @modelcontextprotocol/inspector
 ```
-Na interface que abre no navegador, escolha o transporte "Streamable HTTP", cole `http://localhost:3000/mcp` (ou o endereço do deploy) em URL e adicione o cabeçalho `Authorization: Bearer <código>` em "Custom Headers". Clique em "Connect": a aba "Tools" deve listar `gerar_pagina`.
+Na interface que abre no navegador, escolha o transporte "Streamable HTTP", cole `http://localhost:3000/mcp` (ou o endereço do deploy) em URL e adicione o cabeçalho `Authorization: Bearer <código>` em "Custom Headers". Clique em "Connect": a aba "Tools" deve listar `gerar_pagina` e `editar_pagina`.
 
 ## Variáveis de ambiente (todas opcionais)
 Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando definidas, têm prioridade sobre o que foi salvo.
@@ -70,6 +75,8 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 ```
 app/page.tsx              tela única (captura + formato + marca → prévia)
 app/api/pagina/route.ts   gera a página (POST), lista as últimas (GET) e apaga o histórico (DELETE)
+app/api/pagina/[id]/editar/route.ts aplica uma instrução (ou a troca de textos) e grava uma versão nova
+app/api/pagina/[id]/voltar/route.ts copia uma versão anterior como versão nova ("Voltar para esta")
 app/r/[id]/page.tsx       prévia de uma página salva, por link
 app/mcp/route.ts          endpoint MCP (JSON-RPC 2.0) para assistentes de IA
 app/api/mcp/token/route.ts gera, consulta e revoga o código de acesso do endpoint MCP
@@ -81,9 +88,10 @@ components/ui.tsx         componentes visuais compartilhados pela suíte
 components/setup.tsx      tela de setup genérica, gerada a partir de lib/integracoes.ts
 components/AcessoMCP.tsx  cartão do /setup para gerar/revogar o acesso MCP
 components/PreviaPagina.tsx prévia em iframe (Computador/Celular), "Ver o código" e aviso de terceiros
-lib/gerador.ts            prompt de sistema, extração e sanitização do HTML, gravação no histórico
-lib/ferramentas.ts        ferramenta MCP gerar_pagina (baixa a imagem no servidor)
-lib/demo.ts               landing fictícia completa devolvida sem modelo de visão
+components/EditorPagina.tsx "O que mudar", "Trocar os textos pelos da minha empresa" e lista "Versões"
+lib/gerador.ts            prompts de geração e de edição, extração e sanitização do HTML, versões no histórico
+lib/ferramentas.ts        ferramentas MCP gerar_pagina (baixa a imagem no servidor) e editar_pagina
+lib/demo.ts               landing fictícia completa e edição de demonstração (cabeçalho e título fixos)
 lib/types.ts              Pedido, Versao, Pagina, Marca
 lib/ai.ts                 cliente OpenRouter (askText, askVision, askJSON, askWithTools)
 lib/store.ts              configuração em SQLite (node:sqlite), com variáveis de ambiente como prioridade

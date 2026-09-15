@@ -1,6 +1,6 @@
 // Ferramentas expostas via app/mcp/route.ts para assistentes de IA (Claude, ChatGPT etc.).
 // Cada app da suíte declara as suas aqui, reaproveitando a mesma lógica das rotas normais (lib/gerador.ts).
-import { gerarPagina, LIMITE_IMAGEM_BYTES, normalizarMarca, normalizarStack } from "./gerador";
+import { editarPagina, gerarPagina, LIMITE_IMAGEM_BYTES, normalizarInstrucao, normalizarMarca, normalizarStack } from "./gerador";
 import type { Ferramenta } from "./mcp";
 import type { Pedido } from "./types";
 
@@ -72,6 +72,24 @@ export const FERRAMENTAS: Ferramenta[] = [
       const { pagina, meta, id } = await gerarPagina(pedido);
       const atual = pagina.versoes[pagina.versoes.length - 1];
       return { id, titulo: pagina.titulo, link: `/r/${id}`, versao: atual.n, demo: meta.demo, html: atual.html };
+    },
+  },
+  {
+    nome: "editar_pagina",
+    descricao: "Aplica uma mudança, descrita em português, sobre uma página já gerada (ex.: 'deixe o cabeçalho escuro', 'troque o formulário por um botão de WhatsApp', 'reescreva os textos para uma clínica odontológica'). Devolve o arquivo inteiro atualizado como uma versão nova, mantendo as anteriores.",
+    schema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Id da página, devolvido por gerar_pagina" },
+        instrucao: { type: "string", description: "O que mudar na página, em português" },
+      },
+      required: ["id", "instrucao"],
+    },
+    async executar(args) {
+      const { id, instrucao } = args as { id?: unknown; instrucao?: unknown };
+      if (!id || typeof id !== "string") throw new Error("Informe o id da página (devolvido por gerar_pagina).");
+      const { pagina, meta, versao } = await editarPagina(id.trim(), normalizarInstrucao(instrucao));
+      return { id: pagina.id, titulo: pagina.titulo, link: `/r/${pagina.id}`, versao: versao.n, totalVersoes: pagina.versoes.length, demo: meta.demo, html: versao.html };
     },
   },
 ];

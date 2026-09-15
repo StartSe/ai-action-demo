@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Dropzone, Empty, ErrorBox, Field, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Stage, Topbar, Workspace, data, useScrollToResult, useStatus } from "@/components/ui";
+import { EditorPagina } from "@/components/EditorPagina";
 import { PreviaPagina } from "@/components/PreviaPagina";
 import type { Meta } from "@/lib/ai";
 import type { Marca, Pagina, Stack } from "@/lib/types";
@@ -221,7 +222,7 @@ export default function Page() {
           {estado.fase === "vazio" && <Empty ilustracao={<IlustracaoPagina />} titulo="A página aparece aqui" descricao="Uma prévia navegável da sua versão, em tamanho de computador e de celular, com o código pronto para copiar." acao="Preencher com um exemplo" onAcao={preencherExemplo} />}
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
           {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={estado.tentativa ? () => gerar(estado.tentativa!.arquivo, estado.tentativa!.form) : undefined} />}
-          {estado.fase === "pronto" && <Resultado pagina={estado.pagina} meta={estado.meta} id={estado.id} />}
+          {estado.fase === "pronto" && <Resultado key={estado.id} pagina={estado.pagina} meta={estado.meta} id={estado.id} />}
         </Stage>
       </Workspace>
     </>
@@ -232,14 +233,18 @@ function rotuloFormato(html: string): string {
   return /cdn\.tailwindcss\.com/.test(html) ? "HTML com Tailwind" : "HTML com CSS";
 }
 
-/** Resultado completo (cabeçalho, proveniência e prévia), reaproveitado pela página /r/[id]. */
-export function Resultado({ pagina, meta, id }: { pagina: Pagina; meta: Meta; id: string }) {
+/** Resultado completo (cabeçalho, proveniência, prévia e editor de versões), reaproveitado pela página /r/[id]. */
+export function Resultado({ pagina: inicial, meta: metaInicial, id }: { pagina: Pagina; meta: Meta; id: string }) {
+  // A página muda a cada edição/volta de versão sem sair da tela; a proveniência exibida passa a ser a da última mudança.
+  const [pagina, setPagina] = useState<Pagina>(inicial);
+  const [meta, setMeta] = useState<Meta>(metaInicial);
   const atual = pagina.versoes[pagina.versoes.length - 1];
   return (
-    <article className="reveal" data-id={id}>
+    <article className="reveal" data-id={id} data-versao={atual.n}>
       <ResultHead titulo={pagina.titulo} subtitulo={`Versão ${atual.n} · ${rotuloFormato(atual.html)}${pagina.marca?.nome ? ` · ${pagina.marca.nome}` : ""}`} />
       <Origem meta={meta} />
-      <PreviaPagina html={atual.html} titulo={pagina.titulo} />
+      <PreviaPagina key={atual.n} html={atual.html} titulo={pagina.titulo} />
+      <EditorPagina pagina={pagina} onAtualizada={(nova, novaMeta) => { setPagina(nova); if (novaMeta) setMeta(novaMeta); }} />
     </article>
   );
 }
