@@ -1,3 +1,4 @@
+import { respostaErro } from "@/lib/ai";
 import { apagarTodos, listar } from "@/lib/historico";
 import { gerarPDI } from "@/lib/pdi";
 import { getConfig, setConfig } from "@/lib/store";
@@ -15,9 +16,7 @@ export async function POST(req: Request) {
     const resultado = await gerarPDI(dados, { guardar });
     return Response.json(resultado);
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível gerar o PDI agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return respostaErro(err);
   }
 }
 
