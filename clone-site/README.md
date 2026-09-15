@@ -68,7 +68,8 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 |---|---|
 | `DATA_DIR` | Pasta do banco SQLite. Padrão `./data` (Docker: `/app/data`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
-| `OPENROUTER_MODEL` | Alternativa ao setup. Precisa ser um modelo com visão para sair do modo demonstração. |
+| `OPENROUTER_MODEL` | Alternativa ao setup. Modelo de texto (usado nas edições por instrução). Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
+| `OPENROUTER_MODEL_VISAO` | Alternativa ao setup ("Modelo para imagens", em Opções avançadas). Modelo com visão que lê a captura; padrão `inclusionai/ling-3.0-flash-vl:free`. Lista em https://openrouter.ai/models?modality=image-%3Etext. |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
 
 ## Estrutura

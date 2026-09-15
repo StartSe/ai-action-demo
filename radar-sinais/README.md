@@ -5,7 +5,7 @@ Radar de sinais de mercado gerado por IA a partir dos temas que você acompanha,
 ## O que resolve
 Movimentos do mercado chegam tarde e dispersos. Este app junta o que saiu no período sobre os temas acompanhados, agrupa em sinais (com força, tendência e o que fazer em cada um) e mostra as conexões entre eles.
 
-Decisão de escopo desta versão: o motor de busca real (Exa/Tavily e as fontes sem chave — Hacker News, Reddit, GitHub) e o agente de pesquisa em várias rodadas chegam em histórias seguintes. Até lá, sem IA conectada o radar é um exemplo (`lib/demo.ts`); com IA conectada, o radar é gerado em "melhor esforço" a partir do conhecimento geral do modelo sobre os temas informados — o prompt deixa isso explícito para não prometer uma busca que ainda não existe. O componente visual de grafo (nós e arestas) também é uma história futura; os tipos `No`/`Aresta` já existem em `lib/types.ts` para o `Radar` fazer sentido como estrutura de dados.
+Como funciona: o motor de busca (`lib/busca.ts`) consulta em paralelo as fontes sem chave (Hacker News, Reddit e GitHub) e, quando a chave da Exa está conectada, também notícias e conteúdo geral da web. Cada fonte é isolada: uma que falhar (o Reddit, por exemplo, bloqueia endereços de nuvem) não derruba a rodada. A IA agrupa o que foi encontrado em sinais com força, tendência e o que fazer, e só cita fontes que de fato vieram da busca. Sem IA conectada, o radar é um exemplo (`lib/demo.ts`). O grafo de nós e arestas é desenhado em SVG por `components/Grafo.tsx`, com layout de força próprio, sem biblioteca externa. A rotina semanal (cartão "Rotinas" em `/setup`) reenvia só os sinais novos em relação à última execução.
 
 ## Stack
 Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão.
@@ -59,6 +59,7 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `DATA_DIR` | Pasta do banco SQLite. Padrão `./data` (Docker: `/app/data`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
+| `EXA_API_KEY` | Opcional. Amplia a busca para notícias e a web em geral. Obtenha em https://dashboard.exa.ai/api-keys. Sem ela, o radar usa só Hacker News, Reddit e GitHub. |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
 
 ## Estrutura
@@ -81,6 +82,8 @@ lib/ai.ts               cliente OpenRouter (askText, askJSON, askWithTools)
 lib/mcp.ts              protocolo MCP (JSON-RPC 2.0), código de acesso e limite de chamadas
 lib/ferramentas.ts      ferramentas expostas via MCP (montar_radar)
 lib/radar.ts            lógica de geração do radar, usada pela rota HTTP e pela ferramenta MCP
+lib/busca.ts            busca em Hacker News, Reddit, GitHub e Exa (fontes isoladas entre si)
+components/Grafo.tsx    grafo de sinais em SVG com layout de força próprio
 lib/demo.ts             radar de exemplo do modo demonstração
 lib/types.ts            tipos do domínio (Sinal, No, Aresta, Radar)
 Dockerfile              build multi-stage com saída standalone

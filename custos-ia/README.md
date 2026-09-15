@@ -77,6 +77,7 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `DATA_DIR` | Pasta do banco SQLite. Padrão `./data` (Docker: `/app/data`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
+| `CAMBIO_USD_BRL` / `CAMBIO_EUR_BRL` | Cotação manual de dólar e euro em reais (cartão "Câmbio" em `/setup`), usadas só para converter faturas em moeda estrangeira. |
 | `GOOGLE_CLIENT_ID` | Cliente OAuth do app no Google Cloud, para o botão "Conectar o Gmail" (ver seção acima). Alternativa: colar em `/setup`. |
 | `GOOGLE_CLIENT_SECRET` | Segredo do cliente OAuth acima. |
 | `GMAIL_REFRESH_TOKEN` / `GMAIL_CONTA` | Gravados pelo próprio fluxo de conexão; só defina à mão para reaproveitar uma conexão existente. |

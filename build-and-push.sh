@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fallback manual: constrói e publica as imagens dos 10 apps no GHCR a partir desta máquina.
+# Fallback manual: constrói e publica as imagens dos apps listados em catalogo.json no GHCR a partir desta máquina.
 # No dia a dia isso é feito pelo GitHub Actions (.github/workflows/publicar.yml) a cada push na main.
 # Uso: ./build-and-push.sh [registro] [tag]      ex.: ./build-and-push.sh ghcr.io/startse latest
 # Requer: docker login ghcr.io (token do GitHub com escopo write:packages).
