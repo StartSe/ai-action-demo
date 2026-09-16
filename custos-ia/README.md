@@ -9,7 +9,7 @@ O CFO não sabe quanto a empresa gasta com ferramentas de IA (ChatGPT, Claude, C
 Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. Todo o cálculo (total, variação, gasto por ferramenta/mês) é feito no servidor, sem IA — não há geração por modelo de linguagem nesta história.
 
 ## Configuração inicial (sem variáveis de ambiente)
-Abra `/setup` no navegador. Lá você cadastra a cotação manual de dólar e euro (cartão "Câmbio", usados só para converter faturas em moeda estrangeira para reais), conecta a IA (OpenRouter, usada pelas próximas histórias) e configura notificações. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Sem nenhuma fatura lançada nem orçamento cadastrado, o app mostra doze meses de dados de exemplo (seis ferramentas reais do mercado, com dois meses que estouram o orçamento).
+Abra `/setup` no navegador. Lá você conecta a caixa de e-mail que recebe as notas (Gmail ou Outlook, em um clique), conecta a IA (OpenRouter) e configura as notificações. O câmbio é automático (cotação de fechamento do Banco Central, buscada uma vez por dia; o cartão "Câmbio (automático)" só deixa fixar uma cotação à mão em "Opções avançadas"). Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Sem nenhuma fatura lançada nem orçamento cadastrado, o app mostra doze meses de dados de exemplo (seis ferramentas reais do mercado, com dois meses que estouram o orçamento).
 
 ## Primeiro acesso
 Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
@@ -34,15 +34,27 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 - Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
 - O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração se perde a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
 
-## Ler as notas do Gmail
-O cartão "Gmail" em `/setup` conecta a caixa em um clique (OAuth 2.0 Authorization Code com PKCE, escopo somente leitura `https://www.googleapis.com/auth/gmail.readonly`, `access_type=offline` e `prompt=consent`). O app guarda só o código de renovação (`GMAIL_REFRESH_TOKEN`) e o e-mail conectado (`GMAIL_CONTA`); o access token vive em memória e é renovado sozinho. "Desconectar" apaga os dois e pede a revogação ao Google.
+## Credenciais OAuth da suíte (Google e Microsoft)
+Quem publica a suíte cria **um** registro no Google Cloud e **um** no Microsoft Entra, uma vez só, e os embute na imagem publicada — exatamente como `TRELLO_API_KEY_APP` no `agente-kanban`. Com eles definidos, o cartão do Gmail/Outlook em `/setup` mostra apenas o botão "Conectar o Gmail"/"Conectar o Outlook": o executivo não cria projeto no Google Cloud nem registro no Entra, e não vê nenhum campo de credencial.
 
-O botão precisa de um cliente OAuth do **próprio app** no Google Cloud (o executivo não cria nada — é tarefa de quem publica a suíte, uma vez só):
+| Variável | O que é |
+| --- | --- |
+| `GOOGLE_CLIENT_ID_APP` / `GOOGLE_CLIENT_SECRET_APP` | Cliente OAuth da suíte no Google Cloud. Redirect a cadastrar: `https://<seu-app>/api/setup/oauth/google/callback` (um por app da suíte que conecte o Gmail). |
+| `MICROSOFT_CLIENT_ID_APP` / `MICROSOFT_CLIENT_SECRET_APP` | Registro de aplicativo da suíte no Entra. Redirect a cadastrar: `https://<seu-app>/api/setup/oauth/microsoft/callback`. |
+
+As quatro entram na imagem por `ARG`→`ENV` no `Dockerfile` e por `build-args` em `.github/workflows/publicar.yml`, a partir dos secrets `GOOGLE_CLIENT_ID_APP`, `GOOGLE_CLIENT_SECRET_APP`, `MICROSOFT_CLIENT_ID_APP` e `MICROSOFT_CLIENT_SECRET_APP` do repositório. Como o pacote publicado é público, o valor é extraível de quem baixar a imagem: é uma decisão aceita da suíte (o mesmo vale para `TRELLO_API_KEY_APP`), não um descuido — o registro OAuth só serve para pedir consentimento, e nenhum dado da pessoa passa por ele.
+
+Sem essas variáveis o app continua funcionando: o cartão mostra o passo a passo abaixo em "Para a equipe técnica" e aceita um registro próprio da empresa (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, `MICROSOFT_CLIENT_ID`/`MICROSOFT_CLIENT_SECRET`, por ambiente ou colados no cartão).
+
+## Ler as notas do Gmail
+O cartão "Gmail" em `/setup` conecta a caixa em um clique (OAuth 2.0 Authorization Code com PKCE, escopos `https://www.googleapis.com/auth/gmail.readonly` e `https://www.googleapis.com/auth/gmail.send`, `access_type=offline` e `prompt=consent`). A leitura acha as notas; o envio existe porque a **mesma** conexão é usada para mandar o fechamento mensal pela caixa da pessoa (`lib/email-envio.ts`, compartilhado, lê as mesmas chaves) — conectar o Gmail duas vezes na mesma tela seria pior. Nenhum escopo permite apagar ou alterar mensagens. O app guarda só o código de renovação (`GMAIL_REFRESH_TOKEN`) e o e-mail conectado (`GMAIL_CONTA`); o access token vive em memória e é renovado sozinho. "Desconectar" apaga os dois e pede a revogação ao Google.
+
+Para usar o registro da **própria empresa** em vez do da suíte (uma vez só):
 
 1. Em https://console.cloud.google.com crie um projeto e, em "APIs e serviços › Biblioteca", ative a **Gmail API**.
-2. Em "Tela de permissão OAuth", cadastre o app (tipo **Externo**, ou **Interno** se a empresa usa Google Workspace) e adicione o escopo `.../auth/gmail.readonly`.
+2. Em "Tela de permissão OAuth", cadastre o app (tipo **Externo**, ou **Interno** se a empresa usa Google Workspace) e adicione os escopos `.../auth/gmail.readonly` e `.../auth/gmail.send`.
 3. Em "Credenciais", crie um **ID do cliente OAuth** do tipo "Aplicativo da Web" e cadastre em "URIs de redirecionamento autorizados" o endereço de retorno: `https://<seu-app>/api/setup/oauth/google/callback` (em desenvolvimento, `http://localhost:3000/api/setup/oauth/google/callback`). O cartão mostra esse endereço pronto para copiar.
-4. Defina `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` no ambiente onde o app roda — ou cole os dois valores no próprio cartão, em "Para a equipe técnica" (ficam no SQLite, como as demais chaves; a variável de ambiente tem prioridade).
+4. Defina `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` no ambiente onde o app roda — ou cole os dois valores no próprio cartão, em "Para a equipe técnica" (ficam no SQLite, como as demais chaves; `GOOGLE_CLIENT_ID_APP`/`GOOGLE_CLIENT_SECRET_APP` da suíte têm prioridade sobre os dois).
 
 Restrições do Google que valem saber antes de publicar:
 - **App "Em teste"** (padrão para tipo Externo): só até 100 usuários cadastrados como testadores na tela de permissão, e cada autorização **expira em 7 dias** — a pessoa precisa clicar em Conectar o Gmail de novo.
@@ -52,15 +64,15 @@ Restrições do Google que valem saber antes de publicar:
 Como funciona a leitura (`lib/email.ts` + `app/api/faturas/importar/route.ts`): `users.messages.list` com `newer_than:<dias>d (fatura OR invoice OR recibo OR receipt OR "nota fiscal" OR has:attachment)`, paginado até 200 mensagens por clique; `messages.get` (`format=full`) para assunto, remetente e corpo (texto simples, ou HTML convertido em texto); `attachments.get` para até 3 anexos PDF de 5 MB por mensagem. Anexos são lidos primeiro (a nota costuma estar lá), o corpo só quando nenhum PDF rende fatura. Mensagens já importadas (mesma `referencia` = id da mensagem) são puladas sem gastar chamada ao modelo; a deduplicação por fornecedor + valor + data de `lib/faturas.ts` também vale aqui. Em `429`/`503` o cliente espera o `Retry-After` (ou recuo exponencial) e tenta de novo; em `401` renova o access token uma vez.
 
 ## Ler as notas do Outlook (Microsoft 365)
-O cartão "Outlook (Microsoft 365)" em `/setup` segue o mesmo desenho do Gmail: OAuth 2.0 Authorization Code com PKCE contra `https://login.microsoftonline.com/common/oauth2/v2.0` (o tenant `common` aceita contas corporativas de qualquer organização e contas pessoais), escopos delegados `Mail.Read offline_access User.Read` (só leitura da caixa, código de renovação e a conta conectada). O app guarda só o código de renovação (`OUTLOOK_REFRESH_TOKEN`) e o e-mail conectado (`OUTLOOK_CONTA`); o access token vive em memória e é renovado sozinho pelo Microsoft Graph (que devolve um código de renovação novo a cada renovação — o app grava o novo no lugar do antigo). A leitura usa `GET /me/messages` com `$search` (a consulta inclui a data, porque o Graph não aceita `$search` junto com `$filter`; se a busca for rejeitada, o app cai para `$filter=receivedDateTime ge ...` e filtra o assunto/prévia localmente), `GET /me/messages/{id}` com o corpo já em texto e `GET /me/messages/{id}/attachments/{id}` (`contentBytes`) para os PDFs; respeita `Retry-After` em 429/503.
+O cartão "Outlook (Microsoft 365)" em `/setup` segue o mesmo desenho do Gmail: OAuth 2.0 Authorization Code com PKCE contra `https://login.microsoftonline.com/common/oauth2/v2.0` (o tenant `common` aceita contas corporativas de qualquer organização e contas pessoais), escopos delegados `Mail.Read Mail.Send offline_access User.Read` (ler as notas, enviar o fechamento pela mesma conexão, código de renovação e a conta conectada — nada que apague ou altere mensagens). O app guarda só o código de renovação (`OUTLOOK_REFRESH_TOKEN`) e o e-mail conectado (`OUTLOOK_CONTA`); o access token vive em memória e é renovado sozinho pelo Microsoft Graph (que devolve um código de renovação novo a cada renovação — o app grava o novo no lugar do antigo). A leitura usa `GET /me/messages` com `$search` (a consulta inclui a data, porque o Graph não aceita `$search` junto com `$filter`; se a busca for rejeitada, o app cai para `$filter=receivedDateTime ge ...` e filtra o assunto/prévia localmente), `GET /me/messages/{id}` com o corpo já em texto e `GET /me/messages/{id}/attachments/{id}` (`contentBytes`) para os PDFs; respeita `Retry-After` em 429/503.
 
 O botão precisa de um **registro de aplicativo** do próprio app no Microsoft Entra ID (o antigo Azure AD), criado uma vez só por quem publica a suíte:
 
 1. Em https://entra.microsoft.com (ou https://portal.azure.com), abra "Identidade › Aplicativos › Registros de aplicativo" e clique em **Novo registro**. Em "Tipos de conta com suporte" escolha **"Contas em qualquer diretório organizacional (qualquer locatário do Microsoft Entra ID — multilocatário) e contas pessoais da Microsoft"** — é o que permite conectar caixas de qualquer empresa pelo tenant `common`. Se o app for usado só dentro da sua própria organização, "Somente contas neste diretório organizacional" também funciona (troque `common` pelo id do tenant em `lib/email.ts`, `app/api/setup/oauth/microsoft/route.ts` e `callback/route.ts`).
 2. Em **Autenticação**, adicione a plataforma **Web** e cadastre o URI de redirecionamento: `https://<seu-app>/api/setup/oauth/microsoft/callback` (em desenvolvimento, `http://localhost:3000/api/setup/oauth/microsoft/callback`). O cartão em `/setup` mostra esse endereço pronto para copiar. Não marque "tokens de acesso"/"tokens de ID" (fluxo implícito): o app usa Authorization Code com PKCE.
-3. Em **Permissões de API**, adicione as permissões **delegadas** do Microsoft Graph `Mail.Read`, `offline_access` e `User.Read`. Nenhuma delas exige consentimento de administrador por padrão.
+3. Em **Permissões de API**, adicione as permissões **delegadas** do Microsoft Graph `Mail.Read`, `Mail.Send`, `offline_access` e `User.Read`. Nenhuma delas exige consentimento de administrador por padrão.
 4. Em **Certificados e segredos**, crie um **segredo do cliente** e copie o **valor** na hora (ele não é mostrado de novo; não confunda com o "id do segredo"). Segredos vencem em até 24 meses — anote a data.
-5. Defina `MICROSOFT_CLIENT_ID` (o "ID do aplicativo (cliente)" da visão geral do registro) e `MICROSOFT_CLIENT_SECRET` no ambiente onde o app roda — ou cole os dois valores no cartão, em "Para a equipe técnica".
+5. Defina `MICROSOFT_CLIENT_ID` (o "ID do aplicativo (cliente)" da visão geral do registro) e `MICROSOFT_CLIENT_SECRET` no ambiente onde o app roda — ou cole os dois valores no cartão, em "Para a equipe técnica" (`MICROSOFT_CLIENT_ID_APP`/`MICROSOFT_CLIENT_SECRET_APP` da suíte têm prioridade).
 
 Avisos que valem saber antes de publicar:
 - **Editor não verificado.** Em apps multilocatário, a tela de consentimento da Microsoft mostra o aviso "não verificado" ao lado do nome do app até que a organização que o publica conclua a **verificação de editor** (exige uma conta no Microsoft Partner Center associada ao tenant do registro e um domínio verificado). O aviso não impede a conexão, mas assusta o CFO — e alguns tenants bloqueiam consentimento a apps não verificados. Para uso interno numa única organização (registro de tenant único), o aviso não aparece.
@@ -98,8 +110,10 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
-| `CAMBIO_USD_BRL` / `CAMBIO_EUR_BRL` | Cotação manual de dólar e euro em reais (cartão "Câmbio" em `/setup`), usadas só para converter faturas em moeda estrangeira. |
-| `GOOGLE_CLIENT_ID` | Cliente OAuth do app no Google Cloud, para o botão "Conectar o Gmail" (ver seção acima). Alternativa: colar em `/setup`. |
+| `CAMBIO_USD_BRL` / `CAMBIO_EUR_BRL` | Cotação fixada à mão (cartão "Câmbio (automático)" em `/setup`, "Opções avançadas"). Vazias, valem as cotações do Banco Central buscadas por `lib/cambio.ts` (`CAMBIO_AUTO_*`). |
+| `GOOGLE_CLIENT_ID_APP` / `GOOGLE_CLIENT_SECRET_APP` | Cliente OAuth **da suíte** no Google Cloud (ver seção acima). Têm prioridade sobre o par abaixo. |
+| `MICROSOFT_CLIENT_ID_APP` / `MICROSOFT_CLIENT_SECRET_APP` | Registro de aplicativo **da suíte** no Entra (ver seção acima). Têm prioridade sobre o par abaixo. |
+| `GOOGLE_CLIENT_ID` | Cliente OAuth da própria empresa no Google Cloud, para o botão "Conectar o Gmail". Alternativa: colar em `/setup`. |
 | `GOOGLE_CLIENT_SECRET` | Segredo do cliente OAuth acima. |
 | `GMAIL_REFRESH_TOKEN` / `GMAIL_CONTA` | Gravados pelo próprio fluxo de conexão; só defina à mão para reaproveitar uma conexão existente. |
 | `MICROSOFT_CLIENT_ID` | Registro de aplicativo no Entra ID, para o botão "Conectar o Outlook" (ver seção acima). Alternativa: colar em `/setup`. |
@@ -137,6 +151,7 @@ components/ReceberFechamento.tsx   botão "Receber o fechamento todo mês" (cria
 lib/store.ts               configuração em SQLite (node:sqlite), com variáveis de ambiente como prioridade
 lib/setup-comum.ts         tipos do setup e integração OpenRouter (compartilhado)
 lib/integracoes.ts         integrações que este app precisa (OpenRouter, Notificações, Câmbio, Gmail, Outlook)
+lib/cambio.ts              cotação PTAX do Banco Central (uma busca por dia, guardada em lib/store.ts)
 lib/email.ts               clientes do Gmail e do Outlook (Microsoft Graph): renovação do acesso, busca e leitura de mensagens e anexos PDF
 lib/leitor.ts              transforma o texto de um documento (PDF, e-mail, imagem transcrita) em Fatura via IA
 lib/importacao.ts          importação das notas do e-mail, Gmail e/ou Outlook (uma lógica só para a rota, a rotina e o MCP)

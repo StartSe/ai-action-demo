@@ -6,6 +6,7 @@
 // MCP (lib/ferramentas.ts), para não duplicar o cálculo. Todo agregado é calculado aqui, no
 // servidor — nunca delegado a IA, inclusive os alertas (lib/faturas.ts:calcularAlertas).
 import { meta, type Meta } from "./ai";
+import { atualizarCambio } from "./cambio";
 import { esperar, faturasDemo, orcamentoDemo } from "./demo";
 import { calcularAlertas, chaveMes, existeAlguma, fimDoMes, inicioPeriodo, listarUltimosMeses, mesesDoPeriodo, MESES_SEM_FATURA_PARA_NOVA, rotuloMes } from "./faturas";
 import { salvar } from "./historico";
@@ -18,14 +19,25 @@ function arredondar(v: number): number {
 
 export type SaidaLeitura = { leitura: Leitura; faturas: Fatura[] };
 
+/** Quantos meses o gráfico "mês a mês" sempre mostra, mesmo no período "Mês atual": com uma barra só,
+ * 80% do cartão fica em branco e não dá para ver tendência nenhuma. Os meses sem fatura entram
+ * rotulados e com a barra vazia — dizem "não havia gasto", que é uma informação de verdade. */
+export const MESES_NO_GRAFICO = 6;
+
 /** Monta a Leitura de um período, salva no histórico (tipo "leitura") e devolve tudo o que a tela
  * precisa: o agregado, as faturas do período (para a tabela) e a proveniência (Origem). `referencia`
  * define o mês mais recente do período: a tela usa hoje; o fechamento mensal (lib/rotinas-do-app.ts)
  * passa o último dia do mês anterior, e faturas depois desse dia ficam de fora. */
 export async function gerarLeitura(periodo: Periodo, referencia = new Date()): Promise<{ demo: boolean; leitura: Leitura; faturas: Fatura[]; meta: Meta; id: string }> {
+  // Cotação do dia antes de qualquer conta: uma fatura em dólar convertida por um número velho
+  // faz o total inteiro mentir. Nunca lança — câmbio fora do ar mantém a cotação anterior.
+  await atualizarCambio(referencia);
+
   const meses = mesesDoPeriodo(periodo);
+  // O gráfico mostra sempre MESES_NO_GRAFICO meses, mesmo quando o período pedido é menor.
+  const mesesDoGrafico = Math.max(meses, MESES_NO_GRAFICO);
   // Meses extras antes do período: a variação do mês mais recente precisa de 1; "Assinatura nova" precisa de 3.
-  const janela = meses + MESES_SEM_FATURA_PARA_NOVA;
+  const janela = mesesDoGrafico + MESES_SEM_FATURA_PARA_NOVA;
 
   const usouDemoFaturas = !existeAlguma();
   const desdeJanela = inicioPeriodo(janela, referencia);
@@ -53,7 +65,7 @@ export async function gerarLeitura(periodo: Periodo, referencia = new Date()): P
   }
 
   const porMes: GastoPorMes[] = [];
-  for (let i = meses - 1; i >= 0; i--) {
+  for (let i = mesesDoGrafico - 1; i >= 0; i--) {
     const chave = chaveMes(referencia, i);
     porMes.push({ mes: chave, rotulo: rotuloMes(chave), gastoBRL: porMesMapa.get(chave) || 0, planejadoBRL: arredondar(planejadoMensal) });
   }
@@ -95,6 +107,10 @@ export async function gerarLeitura(periodo: Periodo, referencia = new Date()): P
     porFerramenta,
     porMes,
     alertas,
+    origemDados: {
+      faturas: usouDemoFaturas ? "exemplo" : "reais",
+      orcamento: usouDemoOrcamento ? "exemplo" : "reais",
+    },
   };
 
   const demoGeral = usouDemoFaturas || usouDemoOrcamento;

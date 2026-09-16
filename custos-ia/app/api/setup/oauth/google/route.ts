@@ -1,7 +1,9 @@
 // Início da conexão com o Gmail (US-021): OAuth 2.0 Authorization Code com PKCE, no mesmo molde de
 // app/api/setup/oauth/openrouter. Gera verificador e state, guarda em cookie e redireciona para o Google
-// pedindo só leitura (gmail.readonly), acesso offline (código de renovação) e consentimento explícito
-// (prompt=consent garante que o código de renovação venha mesmo em reconexões).
+// pedindo leitura das notas e envio do fechamento (ESCOPO_GMAIL, em lib/email.ts), acesso offline
+// (código de renovação) e consentimento explícito (prompt=consent garante que o código de renovação
+// venha mesmo em reconexões). As credenciais vêm de credenciaisDoApp: as da suíte primeiro
+// (GOOGLE_CLIENT_ID_APP/GOOGLE_CLIENT_SECRET_APP), depois um registro próprio da empresa.
 import { createHash, randomBytes } from "node:crypto";
 import { credenciaisDoApp, ESCOPO_GMAIL } from "@/lib/email";
 import { baseUrl } from "@/lib/setup-comum";

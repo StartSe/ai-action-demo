@@ -10,6 +10,7 @@ import crypto from "node:crypto";
 import { extractText } from "unpdf";
 import { aiEnabled, askJSON } from "./ai";
 import { esperar } from "./demo";
+import { atualizarCambio } from "./cambio";
 import { converterParaBRL } from "./integracoes";
 import type { Fatura, Moeda } from "./types";
 
@@ -171,6 +172,10 @@ export function pareceCobranca(texto: string): boolean {
 export async function lerDocumento(entrada: EntradaDocumento): Promise<Fatura | null> {
   const texto = String(entrada.texto || "").trim();
   if (!texto) return null;
+
+  // Uma nota em dólar só vira reais corretos com a cotação do dia (lib/cambio.ts, no máximo uma
+  // busca por dia). Fica antes do caminho de demonstração para o exemplo usar a mesma régua.
+  await atualizarCambio();
 
   if (!aiEnabled()) {
     await esperar(400);

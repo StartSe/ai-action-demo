@@ -12,6 +12,8 @@ type Estado = {
   conectado: boolean;
   conta: string | null;
   credenciaisDoApp: boolean;
+  /** As credenciais vieram da suíte (embutidas na imagem): não há registro nenhum a criar. */
+  credenciaisDaSuite: boolean;
   credenciaisNoAmbiente: boolean;
   redirectUri: string;
   /** Endereço que inicia a conexão (vem da rota, para o componente não repetir os caminhos). */
@@ -23,6 +25,8 @@ type Texto = {
   nome: string;
   empresa: string;
   descricao: string;
+  /** Uma linha extra, menor: o que o app faz e o que nunca faz com a caixa (não cabe na descrição). */
+  privacidade: string;
   botao: string;
   contaGenerica: string;
   chaveId: string;
@@ -41,7 +45,8 @@ const TEXTOS: Record<ProvedorEmail, Texto> = {
     titulo: "Gmail",
     nome: "Gmail",
     empresa: "do Google",
-    descricao: "Conecte a caixa que recebe as notas e recibos das ferramentas de IA. O app só lê (nunca envia nem apaga), busca apenas mensagens com jeito de cobrança e não guarda o conteúdo dos e-mails — só a fatura reconhecida.",
+    descricao: "Lê as notas das ferramentas de IA direto da sua caixa.",
+    privacidade: "O app procura só mensagens com jeito de cobrança, nunca apaga nada e não guarda o conteúdo dos e-mails — apenas a fatura reconhecida. A mesma conexão envia para você o fechamento do mês, quando você pedir.",
     botao: "Conectar o Gmail",
     contaGenerica: "conta do Google",
     chaveId: "GOOGLE_CLIENT_ID",
@@ -53,7 +58,7 @@ const TEXTOS: Record<ProvedorEmail, Texto> = {
     introducao: "O botão Conectar o Gmail usa um cliente OAuth do próprio app no Google Cloud. Como criar (uma vez só):",
     passos: [
       "Em console.cloud.google.com, crie um projeto e ative o serviço Gmail em \"Biblioteca\".",
-      "Em \"Tela de permissão OAuth\", cadastre o app (tipo Externo, ou Interno se a empresa usa Google Workspace) e adicione o escopo de leitura do Gmail (gmail.readonly).",
+      "Em \"Tela de permissão OAuth\", cadastre o app (tipo Externo, ou Interno se a empresa usa Google Workspace) e adicione os escopos gmail.readonly e gmail.send.",
       "Em \"Credenciais\", crie um cliente OAuth do tipo \"Aplicativo da Web\" e cadastre o endereço de retorno abaixo em \"URIs de redirecionamento autorizados\".",
       "Defina GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET no ambiente onde o app roda, ou cole os dois valores aqui embaixo.",
     ],
@@ -67,7 +72,8 @@ const TEXTOS: Record<ProvedorEmail, Texto> = {
     titulo: "Outlook (Microsoft 365)",
     nome: "Outlook",
     empresa: "da Microsoft",
-    descricao: "Conecte a caixa do Outlook que recebe as notas e recibos das ferramentas de IA. O app só lê (nunca envia nem apaga), busca apenas mensagens com jeito de cobrança e não guarda o conteúdo dos e-mails — só a fatura reconhecida.",
+    descricao: "Lê as notas das ferramentas de IA direto da sua caixa do Outlook.",
+    privacidade: "O app procura só mensagens com jeito de cobrança, nunca apaga nada e não guarda o conteúdo dos e-mails — apenas a fatura reconhecida. A mesma conexão envia para você o fechamento do mês, quando você pedir.",
     botao: "Conectar o Outlook",
     contaGenerica: "conta Microsoft",
     chaveId: "MICROSOFT_CLIENT_ID",
@@ -80,7 +86,7 @@ const TEXTOS: Record<ProvedorEmail, Texto> = {
     passos: [
       "Em entra.microsoft.com (ou portal.azure.com), abra \"Registros de aplicativo\" e clique em \"Novo registro\". Em \"Tipos de conta com suporte\", escolha \"Contas em qualquer diretório organizacional e contas pessoais da Microsoft\" — é isso que permite conectar caixas de qualquer empresa.",
       "Em \"Autenticação\", adicione a plataforma \"Web\" e cadastre o endereço de retorno abaixo como URI de redirecionamento.",
-      "Em \"Permissões\", adicione as permissões delegadas do Microsoft Graph: Mail.Read, offline_access e User.Read (nenhuma exige consentimento de administrador).",
+      "Em \"Permissões\", adicione as permissões delegadas do Microsoft Graph: Mail.Read, Mail.Send, offline_access e User.Read (nenhuma exige consentimento de administrador).",
       "Em \"Certificados e segredos\", crie um segredo do cliente e copie o valor na hora (ele não aparece de novo). Defina MICROSOFT_CLIENT_ID (o \"ID do aplicativo (cliente)\" da visão geral) e MICROSOFT_CLIENT_SECRET no ambiente onde o app roda, ou cole os dois valores aqui embaixo.",
     ],
     restricoes: [
@@ -154,7 +160,8 @@ export function ConectarEmail({ provedor }: { provedor: ProvedorEmail }) {
         <h2 className="text-lg font-bold">{t.titulo}</h2>
         <span className={chip}>{estado?.conectado ? "conectado" : "opcional"}</span>
       </div>
-      <p className="text-muted text-sm mb-4 max-w-[640px]">{t.descricao}</p>
+      <p className="text-ink-2 text-sm mb-1.5 max-w-[640px]">{t.descricao}</p>
+      <p className="text-muted text-[12.5px] mb-4 max-w-[640px]">{t.privacidade}</p>
 
       {!estado && <p className="text-muted text-sm">Carregando...</p>}
 
@@ -169,19 +176,33 @@ export function ConectarEmail({ provedor }: { provedor: ProvedorEmail }) {
       {estado && !estado.conectado && estado.credenciaisDoApp && (
         <div className="flex items-center gap-3 flex-wrap mb-4">
           <a href={estado.oauthUrl} className="btn-primary !w-auto">{t.botao}</a>
-          <span className="text-muted text-sm">Você escolhe a conta e autoriza só a leitura na tela {t.empresa}.</span>
+          <span className="text-muted text-sm">Você escolhe a conta e autoriza na tela {t.empresa}.</span>
         </div>
       )}
 
       {estado && !estado.conectado && !estado.credenciaisDoApp && (
         <div className="mb-4 px-4 py-3 rounded-[10px] text-sm border bg-[#fff4e0] border-[#f4d7a0] text-warn">
-          Este app ainda não tem as credenciais {t.empresa}. Peça à equipe técnica para criá-las seguindo o passo a passo abaixo; depois o botão {t.botao} aparece aqui.
+          Este app ainda não tem as credenciais {t.empresa}. Peça à equipe técnica para defini-las seguindo o passo a passo abaixo; depois o botão {t.botao} aparece aqui.
         </div>
       )}
 
       {aviso && <p className={`mb-3 text-sm font-semibold ${aviso.ok ? "text-ok" : "text-danger"}`}>{aviso.mensagem}</p>}
 
-      {estado && (
+      {estado?.credenciaisDaSuite && (
+        <MaisDetalhes titulo="Para a equipe técnica">
+          <p className="text-muted text-[13px]">
+            As credenciais {t.empresa} já vêm com o app ({t.chaveId}_APP e {t.chaveSegredo}_APP). Para usar o registro da própria empresa,
+            defina {t.chaveId} e {t.chaveSegredo} no ambiente e cadastre o endereço de retorno abaixo.
+          </p>
+          <div className="flex items-center gap-3 flex-wrap mt-3">
+            <span className="text-[13px] font-semibold w-[150px] shrink-0">Endereço de retorno</span>
+            <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[220px]">{estado.redirectUri}</code>
+            <CopyButton texto={() => estado.redirectUri} rotulo="Copiar" />
+          </div>
+        </MaisDetalhes>
+      )}
+
+      {estado && !estado.credenciaisDaSuite && (
         <MaisDetalhes titulo="Para a equipe técnica">
           <p className="text-muted text-[13px] mb-2">{t.introducao}</p>
           <ol className="list-decimal list-inside flex flex-col gap-1 text-[13px] text-muted mb-3">

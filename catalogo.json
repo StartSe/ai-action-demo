@@ -275,8 +275,8 @@
       ],
       "problema": "O CFO não sabe quanto a empresa gasta com ferramentas de IA nem se está dentro do orçamento.",
       "ia": "Lê faturas de ferramentas de IA, compara o gasto contra o orçamento planejado e mostra o que estourou.",
-      "integracoes": "IA (OpenRouter) para ler as notas. Gmail (opcional, um clique) para importar as notas do período. Câmbio manual para faturas em dólar ou euro.",
-      "acento": "#7e22ce",
+      "integracoes": "IA (OpenRouter) para reconhecer fornecedor, valor e data de cada nota. Gmail ou Outlook (um clique, sem criar projeto no Google Cloud) para ler as notas da caixa e enviar o fechamento. Câmbio automático pela cotação do Banco Central. Notificações (e-mail ou Slack) para o fechamento mensal.",
+      "acento": "#1f8441",
       "porta": 3014,
       "captura": "capturas/custos-ia.png",
       "capacidades": [

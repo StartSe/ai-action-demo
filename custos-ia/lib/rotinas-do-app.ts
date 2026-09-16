@@ -75,10 +75,15 @@ registrarExecutor("fechamento-mensal", async () => {
   const linhaNovas = novas.length > 0 ? `${novas.join(", ")}.` : "Nenhuma.";
 
   const estouros = leitura.alertas.filter((a) => a.tipo === "acima-do-planejado");
+  const duplicadas = leitura.alertas.filter((a) => a.tipo === "assinatura-duplicada");
+  const detalhes = [
+    estouros.length > 0 ? `acima do planejado: ${estouros.map((a) => a.alvo).join(", ")}` : "",
+    duplicadas.length > 0 ? `pagas duas vezes: ${duplicadas.map((a) => a.alvo).join(", ")}` : "",
+  ].filter(Boolean);
   const linhaAlertas =
     leitura.alertas.length === 0
       ? "Nenhum alerta neste mês."
-      : `${leitura.alertas.length} no total` + (estouros.length > 0 ? ` — acima do planejado: ${estouros.map((a) => a.alvo).join(", ")}.` : ".");
+      : `${leitura.alertas.length} no total` + (detalhes.length > 0 ? ` — ${detalhes.join("; ")}.` : ".");
 
   const texto = [
     `Total de ${leitura.mesAtual}: ${reais(leitura.totalBRL)}.`,

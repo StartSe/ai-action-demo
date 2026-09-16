@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Item } from "@/components/ui";
+import { Aviso, Item } from "@/components/ui";
 
 type EstadoNotificacoes = { configurada: boolean; canal: "email" | "slack"; destino: string };
 type RotinaResumida = { id: string; tipo: string };
@@ -17,6 +17,8 @@ export function ReceberFechamento() {
   const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
   const [rotinaId, setRotinaId] = useState<string | null | undefined>(undefined);
   const [criando, setCriando] = useState(false);
+  /** Falha ao criar a rotina: aviso inline junto do botão, nunca um window.alert. */
+  const [falha, setFalha] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/setup")
@@ -41,6 +43,7 @@ export function ReceberFechamento() {
   async function criar() {
     if (!notificacoes?.configurada) return;
     setCriando(true);
+    setFalha(null);
     try {
       const r = await fetch("/api/rotinas", {
         method: "POST",
@@ -58,7 +61,7 @@ export function ReceberFechamento() {
       if (!r.ok) throw new Error(d.error || "Não foi possível criar a rotina.");
       setRotinaId(d.id);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Não foi possível criar a rotina.");
+      setFalha(e instanceof Error ? e.message : "Não foi possível agendar o fechamento agora. Tente de novo.");
     } finally {
       setCriando(false);
     }
@@ -82,6 +85,7 @@ export function ReceberFechamento() {
           <span className="text-[12.5px] text-muted">Todo dia 1 às 8h: total, contra o planejado, maior variação, novas assinaturas e alertas do mês que fechou</span>
         </div>
       )}
+      {falha && <div className="mt-3"><Aviso tom="danger">{falha}</Aviso></div>}
     </Item>
   );
 }

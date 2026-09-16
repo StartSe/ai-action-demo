@@ -1,8 +1,9 @@
 // Estado da conexão de uma caixa de e-mail (gmail | outlook) para os cartões próprios de /setup
-// (components/ConectarEmail.tsx): GET informa conta conectada, se as credenciais do app existem e o
-// endereço de retorno que a equipe técnica precisa cadastrar (Google Cloud ou Entra ID); DELETE
+// (components/ConectarEmail.tsx): GET informa conta conectada, se as credenciais do app existem (e se
+// vieram da suíte, caso em que não há nada a criar) e o endereço de retorno que a equipe técnica
+// precisa cadastrar no registro da própria empresa (Google Cloud ou Entra ID); DELETE
 // desconecta (apaga o código de renovação e a conta; no Google, pede também a revogação).
-import { chavesDoProvedor, contaConectada, credenciaisDoApp, desconectar, provedorConectado, provedorValido } from "@/lib/email";
+import { chavesDoProvedor, contaConectada, credenciaisDaSuite, credenciaisDoApp, desconectar, provedorConectado, provedorValido } from "@/lib/email";
 import { baseUrl } from "@/lib/setup-comum";
 import { origemConfig } from "@/lib/store";
 
@@ -20,6 +21,9 @@ export async function GET(req: Request, { params }: Params) {
     conectado: provedorConectado(provedor),
     conta: contaConectada(provedor) ?? null,
     credenciaisDoApp: Boolean(credenciaisDoApp(provedor)),
+    // Com as credenciais da suíte embutidas na imagem, ninguém precisa criar registro nenhum: o cartão
+    // esconde o passo a passo e mostra só o botão de conectar.
+    credenciaisDaSuite: Boolean(credenciaisDaSuite(provedor)),
     credenciaisNoAmbiente: origemConfig(chavesDoProvedor(provedor).clientId) === "env",
     redirectUri: `${baseUrl(req)}/api/setup/oauth/${ROTA_OAUTH[provedor]}/callback`,
     oauthUrl: `/api/setup/oauth/${ROTA_OAUTH[provedor]}`,

@@ -1,7 +1,9 @@
 // Início da conexão com o Outlook / Microsoft 365 (US-034): OAuth 2.0 Authorization Code com PKCE contra
 // o Entra ID (login.microsoftonline.com/common — qualquer conta corporativa ou pessoal Microsoft), no
 // mesmo molde de app/api/setup/oauth/google. Gera verificador e state, guarda em cookie e redireciona
-// pedindo só leitura da caixa (Mail.Read), código de renovação (offline_access) e a conta (User.Read).
+// pedindo leitura das notas e envio do fechamento (ESCOPO_OUTLOOK, em lib/email.ts), código de
+// renovação (offline_access) e a conta (User.Read). As credenciais vêm de credenciaisDoApp: as da
+// suíte primeiro (MICROSOFT_CLIENT_ID_APP/MICROSOFT_CLIENT_SECRET_APP), depois um registro próprio.
 import { createHash, randomBytes } from "node:crypto";
 import { credenciaisDoApp, ESCOPO_OUTLOOK } from "@/lib/email";
 import { baseUrl } from "@/lib/setup-comum";

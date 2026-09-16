@@ -4,6 +4,7 @@
 // Leituras automáticas de e-mail (US-021) gravam direto pela lib, sem passar por aqui.
 // A deduplicação (fornecedor + valor + data) é feita por lib/faturas.ts: enviar a mesma nota duas vezes
 // não cria fatura nova, só devolve a existente.
+import { atualizarCambio } from "@/lib/cambio";
 import { converterParaBRL } from "@/lib/integracoes";
 import { salvar } from "@/lib/faturas";
 import { dataValida, interpretarValor } from "@/lib/leitor";
@@ -54,6 +55,9 @@ function validar(body: Entrada, origemPadrao: Fatura["origem"]): { erro: string 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as Entrada | null;
   if (!body || typeof body !== "object") return Response.json({ error: "Envie os dados da fatura." }, { status: 400 });
+
+  // Uma nota em dólar lançada à mão precisa da cotação do dia tanto quanto uma lida do e-mail.
+  await atualizarCambio();
 
   // Várias de uma vez (prévia do upload).
   if (Array.isArray(body.faturas)) {

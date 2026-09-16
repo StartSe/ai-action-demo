@@ -2,7 +2,7 @@
 // extrai o texto (unpdf para PDF; askVision para imagem quando há modelo com visão) e passa cada um por
 // lib/leitor.ts. Devolve as faturas reconhecidas (prévia editável na tela) e os arquivos ignorados com
 // o motivo. NADA é gravado aqui — quem grava é POST /api/faturas depois do "Confirmar tudo".
-import { askVision, visionEnabled } from "@/lib/ai";
+import { askVision, ErroIA, visionEnabled } from "@/lib/ai";
 import { lerDocumento, MINIMO_TEXTO, textoDoPdf } from "@/lib/leitor";
 import type { Fatura } from "@/lib/types";
 
@@ -62,7 +62,8 @@ async function processar(arquivo: File): Promise<{ fatura: Fatura } | { motivo: 
       texto = await textoDaImagem(arquivo, imagem);
     } catch (err) {
       console.error(`Falha ao transcrever a imagem ${arquivo.name}`, err);
-      return { motivo: err instanceof Error ? err.message : "Não foi possível ler esta imagem. Envie em PDF." };
+      // Só a frase de ErroIA já vem curada (lib/ai.ts); qualquer outra exceção vira texto fixo.
+      return { motivo: err instanceof ErroIA ? err.message : "Não foi possível ler esta imagem. Envie em PDF." };
     }
     if (texto.length < MINIMO_TEXTO) return { motivo: "Não encontramos texto legível nesta imagem. Envie em PDF." };
   } else if (ehTexto(arquivo)) {
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
       else ignoradas.push({ arquivo: arquivo.name, motivo: resultado.motivo });
     } catch (err) {
       console.error(`Falha ao processar ${arquivo.name}`, err);
-      ignoradas.push({ arquivo: arquivo.name, motivo: err instanceof Error ? err.message : "Falha inesperada ao ler o arquivo." });
+      ignoradas.push({ arquivo: arquivo.name, motivo: err instanceof ErroIA ? err.message : "Não foi possível ler este arquivo agora. Tente de novo." });
     }
   }
 

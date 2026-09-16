@@ -1,7 +1,8 @@
 // Dados de exemplo usados quando não há nenhuma fatura gravada (lib/faturas.ts vazio). Doze meses de
 // faturas fictícias de ferramentas de IA reais do mercado, terminando no mês atual, com um orçamento
 // planejado, dois meses que estouram esse orçamento (ver FERRAMENTAS_DEMO, mês -1 e mês 0 abaixo) e uma
-// assinatura que só aparece no mês atual (alerta "Assinatura nova").
+// assinatura que só aparece no mês atual (alerta "Assinatura nova") e uma ferramenta cobrada por dois
+// fornecedores ao mesmo tempo nos dois últimos meses (alerta "Assinatura duplicada").
 import { CAMBIO_EUR_BRL_PADRAO, CAMBIO_USD_BRL_PADRAO } from "./integracoes";
 import type { Fatura, Orcamento } from "./types";
 
@@ -37,6 +38,9 @@ const FERRAMENTAS_DEMO: FerramentaDemo[] = [
   { fornecedor: "Notion", ferramenta: "Notion AI", categoria: "Produtividade", moeda: "BRL", base: 850 },
   // Sem item no orçamento e só no mês atual: rende o alerta "Assinatura nova" do exemplo.
   { fornecedor: "Anysphere", ferramenta: "Cursor Business", categoria: "Código", moeda: "USD", base: 320, mesInicio: 0 },
+  // A MESMA ferramenta do primeiro item, cobrada também por uma revenda nos dois últimos meses: é o que
+  // rende o alerta "Assinatura duplicada" do exemplo (dois fornecedores para um contrato só).
+  { fornecedor: "Softline Brasil", ferramenta: "ChatGPT Enterprise", categoria: "Assistente de texto", moeda: "BRL", base: 1180, mesInicio: 1 },
 ];
 
 /** Orçamento planejado de exemplo (mostrado só quando não há orçamento cadastrado de verdade). */
@@ -69,7 +73,8 @@ export function faturasDemo(referencia = new Date()): Fatura[] {
       const variacao = 1 + (((indiceMes * 7 + f.ferramenta.length) % 5) - 2) * 0.02;
       const valor = f.mesEstouro === indiceMes && f.valorEstouro ? f.valorEstouro : arredondar(f.base * variacao);
       faturas.push({
-        id: `demo-${f.ferramenta}-${aaaaMm}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-"),
+        // O fornecedor entra no id porque duas assinaturas da mesma ferramenta podem coexistir no mesmo mês.
+        id: `demo-${f.fornecedor}-${f.ferramenta}-${aaaaMm}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-"),
         fornecedor: f.fornecedor,
         ferramenta: f.ferramenta,
         categoria: f.categoria,

@@ -1,5 +1,6 @@
 import { gerarLeitura } from "@/lib/leitura";
 import type { Periodo } from "@/lib/types";
+import { responderErro } from "../erros";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,6 @@ export async function GET(request: Request) {
     const { leitura, faturas, meta, id } = await gerarLeitura(periodo);
     return Response.json({ leitura, faturas, meta, id });
   } catch (err) {
-    console.error("Falha ao gerar a leitura de gasto com IA", err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível ler o gasto com IA agora.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return responderErro(err, "Não foi possível ler o gasto agora. Tente de novo em instantes.");
   }
 }

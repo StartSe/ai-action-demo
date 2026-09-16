@@ -52,11 +52,12 @@ export interface GastoPorMes {
 }
 
 /** Alerta calculado sem IA (lib/faturas.ts:calcularAlertas), sempre ancorado num mês e num alvo:
- * "acima-do-planejado" aponta uma ferramenta; "assinatura-nova" aponta um fornecedor. A tabela de
- * faturas usa `mes` + `alvo` para marcar a linha correspondente com um chip. */
+ * "acima-do-planejado" aponta uma ferramenta; "assinatura-nova" aponta um fornecedor;
+ * "assinatura-duplicada" aponta a ferramenta paga duas vezes no mesmo mês (dois fornecedores, ou dois
+ * planos do mesmo fornecedor). A tabela de faturas usa `mes` + `alvo` para marcar a linha com um chip. */
 export interface Alerta {
-  tipo: "acima-do-planejado" | "assinatura-nova";
-  titulo: "Acima do planejado" | "Assinatura nova";
+  tipo: "acima-do-planejado" | "assinatura-nova" | "assinatura-duplicada";
+  titulo: "Acima do planejado" | "Assinatura nova" | "Assinatura duplicada";
   nivel: "alta" | "media" | "baixa";
   descricao: string;
   /** Ferramenta (acima-do-planejado) ou fornecedor (assinatura-nova). */
@@ -76,6 +77,10 @@ export interface Leitura {
   porFerramenta: GastoPorFerramenta[];
   porMes: GastoPorMes[];
   alertas: Alerta[];
+  /** De onde veio cada metade do resultado. `meta.demo` é um booleano só (true quando QUALQUER lado
+   * caiu no exemplo), e com ele a tela não consegue dizer a verdade no caso comum de "faturas minhas,
+   * orçamento de exemplo". Opcional: leituras salvas antes deste campo continuam abrindo. */
+  origemDados?: { faturas: "reais" | "exemplo"; orcamento: "reais" | "exemplo" };
 }
 
 export type Periodo = "mes" | "3meses" | "ano";

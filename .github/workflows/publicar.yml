@@ -75,9 +75,10 @@ jobs:
           context: ./${{ matrix.app }}
           platforms: ${{ env.PLATAFORMAS }}
           push: true
-          # Credenciais OAuth da suíte (US-024, envio de avisos pelo Gmail/Outlook da própria pessoa):
-          # só o pdi-time declara esses ARGs no Dockerfile por enquanto; os outros apps ignoram o
-          # build-arg sem erro (aviso "was not consumed") até a própria história de replicação.
+          # Credenciais OAuth da suíte (US-024, envio de avisos pelo Gmail/Outlook da própria pessoa;
+          # US-036, leitura das notas no custos-ia): só os apps que declaram esses ARGs no Dockerfile
+          # (hoje pdi-time e custos-ia) os consomem; os demais ignoram o build-arg sem erro (aviso
+          # "was not consumed") até a própria história de replicação.
           build-args: |
             GOOGLE_CLIENT_ID_APP=${{ secrets.GOOGLE_CLIENT_ID_APP }}
             GOOGLE_CLIENT_SECRET_APP=${{ secrets.GOOGLE_CLIENT_SECRET_APP }}

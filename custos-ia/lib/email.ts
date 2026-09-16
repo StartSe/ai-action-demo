@@ -4,8 +4,10 @@
 // leitura (gmail.readonly / Mail.Read); nada aqui grava fatura nem guarda o corpo dos e-mails — quem
 // grava é lib/faturas.ts, e só a Fatura.
 //
-// Credenciais do app: GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET (Google Cloud) e MICROSOFT_CLIENT_ID/
-// MICROSOFT_CLIENT_SECRET (Entra ID), do ambiente ou de /setup via lib/store.ts. O código de renovação
+// Credenciais do app: primeiro as da suíte inteira (GOOGLE_CLIENT_ID_APP/GOOGLE_CLIENT_SECRET_APP e
+// MICROSOFT_CLIENT_ID_APP/MICROSOFT_CLIENT_SECRET_APP, embutidas na imagem publicada, como em
+// lib/email-envio.ts); na falta delas, um par próprio (GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET,
+// MICROSOFT_CLIENT_ID/MICROSOFT_CLIENT_SECRET) do ambiente ou de /setup via lib/store.ts. O código de renovação
 // da pessoa (GMAIL_REFRESH_TOKEN / OUTLOOK_REFRESH_TOKEN) e a conta conectada (GMAIL_CONTA /
 // OUTLOOK_CONTA) são gravados pelos callbacks OAuth em app/api/setup/oauth/{google,microsoft}/callback.
 //
@@ -48,8 +50,29 @@ export function provedorValido(valor: unknown): valor is ProvedorEmail {
   return PROVEDORES_EMAIL.includes(valor as ProvedorEmail);
 }
 
-/** client_id/client_secret do app naquele provedor, ou null quando a equipe técnica ainda não os definiu. */
+/** Chaves de ambiente das credenciais da SUÍTE (GOOGLE_CLIENT_ID_APP etc.), embutidas na imagem
+ * publicada pela equipe técnica — mesmo espírito de TRELLO_API_KEY_APP em agente-kanban e das
+ * credenciais de envio em lib/email-envio.ts. Quando existem, o executivo só vê "Conectar o Gmail". */
+const CHAVES_DA_SUITE: Record<ProvedorEmail, { clientId: string; clientSecret: string }> = {
+  gmail: { clientId: "GOOGLE_CLIENT_ID_APP", clientSecret: "GOOGLE_CLIENT_SECRET_APP" },
+  outlook: { clientId: "MICROSOFT_CLIENT_ID_APP", clientSecret: "MICROSOFT_CLIENT_SECRET_APP" },
+};
+
+/** Credenciais da suíte no provedor, quando a equipe técnica as embutiu na imagem publicada. */
+export function credenciaisDaSuite(provedor: ProvedorEmail): CredenciaisApp | null {
+  const clientId = process.env[CHAVES_DA_SUITE[provedor].clientId]?.trim();
+  const clientSecret = process.env[CHAVES_DA_SUITE[provedor].clientSecret]?.trim();
+  if (!clientId || !clientSecret) return null;
+  return { clientId, clientSecret };
+}
+
+/** client_id/client_secret do app naquele provedor, ou null quando ninguém os definiu ainda. As
+ * credenciais da suíte vêm primeiro: com elas, quem publica o app não precisa criar projeto no Google
+ * Cloud nem registro no Entra. O par próprio (GOOGLE_CLIENT_ID/..., do ambiente ou de /setup) fica
+ * como saída para quem quer usar o registro da própria empresa. */
 export function credenciaisDoApp(provedor: ProvedorEmail): CredenciaisApp | null {
+  const daSuite = credenciaisDaSuite(provedor);
+  if (daSuite) return daSuite;
   const clientId = getConfig(CHAVES[provedor].clientId);
   const clientSecret = getConfig(CHAVES[provedor].clientSecret);
   if (!clientId || !clientSecret) return null;
@@ -122,10 +145,15 @@ const TOKEN_URL: Record<ProvedorEmail, string> = {
   outlook: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
 };
 
-/** Escopo pedido na autorização do Google: leitura da caixa, nada de envio ou exclusão. */
-export const ESCOPO_GMAIL = "https://www.googleapis.com/auth/gmail.readonly";
-/** Escopos pedidos na autorização da Microsoft: ler a caixa, código de renovação e a conta conectada. */
-export const ESCOPO_OUTLOOK = "Mail.Read offline_access User.Read";
+/** Escopos pedidos na autorização do Google. Leitura (gmail.readonly) para achar as notas, e envio
+ * (gmail.send) porque a mesma conexão é a que manda o fechamento mensal pela caixa da pessoa
+ * (lib/email-envio.ts, compartilhado, que lê as MESMAS chaves GMAIL_REFRESH_TOKEN/GMAIL_CONTA).
+ * Pedir os dois de uma vez evita conectar o Gmail duas vezes na mesma tela de configuração — e nunca
+ * inclui apagar nem modificar mensagens. */
+export const ESCOPO_GMAIL = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send";
+/** Escopos pedidos na autorização da Microsoft, pelo mesmo motivo: ler a caixa, enviar o fechamento,
+ * código de renovação e a conta conectada. */
+export const ESCOPO_OUTLOOK = "Mail.Read Mail.Send offline_access User.Read";
 
 const ESCOPO: Record<ProvedorEmail, string> = { gmail: ESCOPO_GMAIL, outlook: ESCOPO_OUTLOOK };
 

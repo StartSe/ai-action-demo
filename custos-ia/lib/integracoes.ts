@@ -1,34 +1,80 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
+import { cotacaoAutomatica, dataDaCotacao, type EstadoCambio } from "./cambio";
 import { openrouter, NOTIFICACOES, type Integracao } from "./setup-comum";
 import { getConfig } from "./store";
 import { credenciaisDoApp, listarMensagens, obterPerfil, obterPerfilOutlook, provedorConectado, type ProvedorEmail } from "./email";
 
-const OPENROUTER = openrouter({ visao: true });
+const OPENROUTER = openrouter({ visao: true, beneficio: "Lê fornecedor, valor e data de cada nota fiscal" });
 
-/** Padrões de 2026-09-14: cotações plausíveis de referência, editáveis a qualquer momento em /setup.
- * Usadas só para converter faturas em moeda estrangeira (lançamento manual e leituras futuras de
- * e-mail/PDF) para reais — não são atualizadas automaticamente, por isso o card pede para revisar
- * de tempos em tempos. */
+const AVISOS: Integracao = { ...NOTIFICACOES, beneficio: "Manda o fechamento do mês para você e para o time" };
+
+/** Referência embutida (2026-09-14), usada só enquanto a cotação do Banco Central não chegou: converter
+ * uma fatura em dólar por um número qualquer seria pior do que por um número plausível. Assim que
+ * atualizarCambio() roda (lib/cambio.ts), a PTAX do dia toma o lugar destes valores. */
 export const CAMBIO_USD_BRL_PADRAO = 5.3;
 export const CAMBIO_EUR_BRL_PADRAO = 6.1;
 
-/** Câmbio manual (não há chave de mercado nesta história): quanto vale 1 dólar e 1 euro em reais. */
+const PADRAO: Record<"USD" | "EUR", number> = { USD: CAMBIO_USD_BRL_PADRAO, EUR: CAMBIO_EUR_BRL_PADRAO };
+const CHAVE_MANUAL: Record<"USD" | "EUR", string> = { USD: "CAMBIO_USD_BRL", EUR: "CAMBIO_EUR_BRL" };
+
+function reais(valor: number): string {
+  return `R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor)}`;
+}
+
+/** "2026-09-15" -> "15/09/2026" (a data vem da API do Banco Central, sempre nesse formato). */
+function dataBrasileira(iso?: string): string {
+  const partes = (iso ?? "").split("-");
+  return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : "hoje";
+}
+
+/** Cotação digitada à mão em /setup, quando existir (tem prioridade sobre a do Banco Central). */
+function cotacaoManual(moeda: "USD" | "EUR"): number | undefined {
+  const bruto = getConfig(CHAVE_MANUAL[moeda]);
+  if (!bruto) return undefined;
+  const valor = Number(String(bruto).replace(",", "."));
+  return Number.isFinite(valor) && valor > 0 ? valor : undefined;
+}
+
+/** Cotação em vigor de uma moeda: manual > Banco Central > referência embutida. */
+export function cotacaoEmVigor(moeda: "USD" | "EUR"): number {
+  return cotacaoManual(moeda) ?? cotacaoAutomatica(moeda) ?? PADRAO[moeda];
+}
+
+/** As duas cotações em vigor e de onde elas vêm, para a tela dizer a verdade sobre o número. */
+export function estadoCambio(): EstadoCambio {
+  const manual = cotacaoManual("USD") !== undefined || cotacaoManual("EUR") !== undefined;
+  const automatica = cotacaoAutomatica("USD") !== undefined || cotacaoAutomatica("EUR") !== undefined;
+  return {
+    usd: cotacaoEmVigor("USD"),
+    eur: cotacaoEmVigor("EUR"),
+    fonte: manual ? "manual" : automatica ? "automatica" : "padrao",
+    cotadoEm: dataDaCotacao(),
+  };
+}
+
+/** Câmbio: buscado sozinho na PTAX do Banco Central (lib/cambio.ts), com os campos manuais em
+ * "Opções avançadas" para quem quer fixar a cotação do próprio contrato. */
 export const CAMBIO: Integracao = {
   id: "cambio",
-  titulo: "Câmbio",
-  descricao: "Cotações usadas para converter faturas em dólar ou euro para reais. Atualize de vez em quando — não são buscadas automaticamente.",
+  titulo: "Câmbio (automático)",
+  beneficio: "Converte faturas em dólar e euro pela cotação do dia",
+  descricao: "As faturas em dólar e euro são convertidas para reais pela cotação de fechamento do Banco Central, buscada uma vez por dia. Não precisa configurar nada.",
   obrigatoria: false,
   campos: [
-    { chave: "CAMBIO_USD_BRL", rotulo: "Dólar (USD) em reais", tipo: "text", padrao: String(CAMBIO_USD_BRL_PADRAO), placeholder: "5,30" },
-    { chave: "CAMBIO_EUR_BRL", rotulo: "Euro (EUR) em reais", tipo: "text", padrao: String(CAMBIO_EUR_BRL_PADRAO), placeholder: "6,10" },
+    { chave: "CAMBIO_USD_BRL", rotulo: "Fixar o dólar (USD) em reais", tipo: "text", opcional: true, avancado: true, placeholder: "5,30", ajuda: "Preenchido, substitui a cotação do Banco Central. Deixe vazio para usar a do dia." },
+    { chave: "CAMBIO_EUR_BRL", rotulo: "Fixar o euro (EUR) em reais", tipo: "text", opcional: true, avancado: true, placeholder: "6,10", ajuda: "Preenchido, substitui a cotação do Banco Central. Deixe vazio para usar a do dia." },
   ],
-  testar: async (config) => {
-    const usd = Number(String(config.CAMBIO_USD_BRL || CAMBIO_USD_BRL_PADRAO).replace(",", "."));
-    const eur = Number(String(config.CAMBIO_EUR_BRL || CAMBIO_EUR_BRL_PADRAO).replace(",", "."));
-    if (!Number.isFinite(usd) || usd <= 0 || !Number.isFinite(eur) || eur <= 0) {
-      return { ok: false, mensagem: "Informe valores numéricos maiores que zero para as duas cotações." };
+  testar: async () => {
+    const usd = cotacaoManual("USD");
+    const eur = cotacaoManual("EUR");
+    if ((getConfig(CHAVE_MANUAL.USD) && usd === undefined) || (getConfig(CHAVE_MANUAL.EUR) && eur === undefined)) {
+      return { ok: false, mensagem: "As cotações fixadas precisam ser números maiores que zero. Apague o campo para voltar à cotação do dia." };
     }
-    return { ok: true, mensagem: `Cotações salvas. Dólar: R$ ${usd.toFixed(2)}. Euro: R$ ${eur.toFixed(2)}.` };
+    const { atualizarCambio } = await import("./cambio");
+    await atualizarCambio();
+    const estado = estadoCambio();
+    const de = estado.fonte === "manual" ? "fixadas por você" : estado.fonte === "automatica" ? `do Banco Central, de ${dataBrasileira(estado.cotadoEm)}` : "de referência (o Banco Central ainda não respondeu)";
+    return { ok: true, mensagem: `Cotações ${de}. Dólar: ${reais(estado.usd)}. Euro: ${reais(estado.eur)}.` };
   },
 };
 
@@ -60,7 +106,8 @@ function testarCaixa(provedor: ProvedorEmail, nome: string, empresa: string) {
 export const GMAIL: Integracao = {
   id: "gmail",
   titulo: "Gmail",
-  descricao: "Conecte a caixa que recebe as notas e recibos das ferramentas de IA. O app só lê (nunca envia nem apaga), busca apenas mensagens com jeito de cobrança e não guarda o conteúdo dos e-mails — só a fatura reconhecida.",
+  beneficio: "Lê as notas das ferramentas de IA direto da sua caixa",
+  descricao: "Conecte a caixa que recebe as notas e recibos das ferramentas de IA. O app busca apenas mensagens com jeito de cobrança, nunca apaga nada e não guarda o conteúdo dos e-mails — só a fatura reconhecida. A mesma conexão envia para você o fechamento do mês, quando você pedir.",
   obrigatoria: false,
   oauth: { tipo: "google", rotulo: "Conectar o Gmail", url: "/api/setup/oauth/google" },
   campoConectado: "GMAIL_REFRESH_TOKEN",
@@ -82,7 +129,8 @@ export const GMAIL: Integracao = {
 export const OUTLOOK: Integracao = {
   id: "outlook",
   titulo: "Outlook (Microsoft 365)",
-  descricao: "Conecte a caixa do Outlook que recebe as notas e recibos das ferramentas de IA. O app só lê (nunca envia nem apaga), busca apenas mensagens com jeito de cobrança e não guarda o conteúdo dos e-mails — só a fatura reconhecida.",
+  beneficio: "Lê as notas das ferramentas de IA direto da sua caixa",
+  descricao: "Conecte a caixa do Outlook que recebe as notas e recibos das ferramentas de IA. O app busca apenas mensagens com jeito de cobrança, nunca apaga nada e não guarda o conteúdo dos e-mails — só a fatura reconhecida. A mesma conexão envia para você o fechamento do mês, quando você pedir.",
   obrigatoria: false,
   oauth: { tipo: "microsoft", rotulo: "Conectar o Outlook", url: "/api/setup/oauth/microsoft" },
   campoConectado: "OUTLOOK_REFRESH_TOKEN",
@@ -98,13 +146,10 @@ export const OUTLOOK: Integracao = {
 /** Integrações com cartão próprio em /setup (components/ConectarEmail.tsx): saem da lista genérica do GET /api/setup. */
 export const COM_CARTAO_PROPRIO: Integracao[] = [GMAIL, OUTLOOK];
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, NOTIFICACOES, CAMBIO, GMAIL, OUTLOOK];
+export const INTEGRACOES: Integracao[] = [OPENROUTER, AVISOS, CAMBIO, GMAIL, OUTLOOK];
 
-/** Converte um valor para reais na cotação salva (BRL passa direto). */
+/** Converte um valor para reais na cotação em vigor (BRL passa direto). */
 export function converterParaBRL(valor: number, moeda: "BRL" | "USD" | "EUR"): number {
   if (moeda === "BRL") return valor;
-  const chave = moeda === "USD" ? "CAMBIO_USD_BRL" : "CAMBIO_EUR_BRL";
-  const padrao = moeda === "USD" ? CAMBIO_USD_BRL_PADRAO : CAMBIO_EUR_BRL_PADRAO;
-  const cotacao = Number(String(getConfig(chave) || padrao).replace(",", ".")) || padrao;
-  return Math.round(valor * cotacao * 100) / 100;
+  return Math.round(valor * cotacaoEmVigor(moeda) * 100) / 100;
 }

@@ -103,7 +103,10 @@ export const MESES_SEM_FATURA_PARA_NOVA = 3;
  * - "Acima do planejado": o gasto de uma ferramenta num mês passou do orçamento mensal daquele item;
  * - "Assinatura nova": um fornecedor teve fatura num mês e nenhuma nos 3 meses anteriores — só quando
  *   já havia alguma fatura (de qualquer fornecedor) nesses 3 meses, para o começo do histórico não
- *   marcar todo mundo como novo.
+ *   marcar todo mundo como novo;
+ * - "Assinatura duplicada": a mesma ferramenta foi paga duas vezes no mesmo mês, seja em dois
+ *   fornecedores diferentes (contrato direto e revenda), seja em dois planos do mesmo fornecedor.
+ *   Cobrança recorrente é mensal por definição, então a segunda fatura do mês é sempre suspeita.
  * `faturas` precisa trazer os 3 meses anteriores ao período (lib/leitura.ts já carrega essa janela).
  * Ordenado do mês mais recente para o mais antigo; dentro do mês, estouros (por valor) antes das novas. */
 export function calcularAlertas({ faturas, orcamento, meses, referencia = new Date() }: { faturas: Fatura[]; orcamento: Orcamento[]; meses: number; referencia?: Date }): Alerta[] {
@@ -173,10 +176,46 @@ export function calcularAlertas({ faturas, orcamento, meses, referencia = new Da
 
     estouros.sort((a, b) => (porMesFerramenta.get(`${mes}|${b.alvo.trim().toLowerCase()}`) || 0) - (porMesFerramenta.get(`${mes}|${a.alvo.trim().toLowerCase()}`) || 0));
     novas.sort((a, b) => a.alvo.localeCompare(b.alvo, "pt-BR"));
-    alertas.push(...estouros, ...novas);
+    alertas.push(...estouros, ...duplicadasDoMes(faturas, mes, rotulo), ...novas);
   }
 
   return alertas;
+}
+
+/** "Assinatura duplicada" de um mês: ferramentas com mais de uma cobrança no mês, agrupadas por
+ * fornecedor. Duas ou mais faturas da mesma ferramenta no mesmo mês significam ou contrato em dois
+ * fornecedores, ou dois planos no mesmo fornecedor — a descrição diz qual dos dois é o caso e quanto
+ * daria para economizar cancelando a menor. Faturas idênticas (mesmo fornecedor, valor e data) não
+ * chegam aqui: lib/faturas.ts:salvar já as descarta. */
+function duplicadasDoMes(faturas: Fatura[], mes: string, rotulo: string): Alerta[] {
+  const porFerramenta = new Map<string, Fatura[]>();
+  for (const f of faturas) {
+    if (f.data.slice(0, 7) !== mes) continue;
+    const chave = f.ferramenta.trim().toLowerCase();
+    if (!porFerramenta.has(chave)) porFerramenta.set(chave, []);
+    porFerramenta.get(chave)!.push(f);
+  }
+
+  const alertas: Alerta[] = [];
+  for (const cobrancas of porFerramenta.values()) {
+    if (cobrancas.length < 2) continue;
+    const fornecedores = [...new Set(cobrancas.map((f) => f.fornecedor.trim()))];
+    const total = arredondar(cobrancas.reduce((s, f) => s + f.valorBRL, 0));
+    const menor = arredondar(Math.min(...cobrancas.map((f) => f.valorBRL)));
+    const onde =
+      fornecedores.length > 1
+        ? `em ${fornecedores.length} fornecedores (${fornecedores.join(" e ")})`
+        : `em ${cobrancas.length} cobranças do mesmo fornecedor (${fornecedores[0]})`;
+    alertas.push({
+      tipo: "assinatura-duplicada",
+      titulo: "Assinatura duplicada",
+      nivel: "alta",
+      alvo: cobrancas[0].ferramenta,
+      mes,
+      descricao: `${cobrancas[0].ferramenta} foi paga ${onde} em ${rotulo}, ${reais(total)} no total. Cancelar a menor economiza ${reais(menor)} por mês.`,
+    });
+  }
+  return alertas.sort((a, b) => a.alvo.localeCompare(b.alvo, "pt-BR"));
 }
 
 /** Salva uma fatura; ignora silenciosamente (devolve a existente) quando já existe uma com o mesmo

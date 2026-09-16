@@ -413,6 +413,10 @@ function passosSetup(i: IntegracaoStatus, valoresAtuais: Record<string, string>)
       ? ["No Slack, crie um webhook de entrada em Aplicativos › Incoming Webhooks e cole a URL abaixo."]
       : ["Conecte seu Gmail ou Outlook acima; sem isso, crie uma chave gratuita do Resend ou preencha o SMTP em Opções avançadas."];
   }
+  // Integração que já funciona sozinha (todos os campos são `avancado`, ex.: o câmbio automático do
+  // custos-ia) não tem nada a preencher: mandar "Preencha os campos abaixo" com a grade vazia logo
+  // embaixo seria uma instrução falsa.
+  if (i.campos.every((c) => c.avancado)) return [];
   const passos: string[] = [];
   const temChave = i.campos.some((c) => c.tipo === "secret");
   if (i.link) passos.push(`Abra "${i.link.rotulo}" e copie a chave.`);

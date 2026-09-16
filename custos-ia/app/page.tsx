@@ -1,29 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
+  Aviso,
   Chip,
   DataTable,
   Destaque,
-  Empty,
   Entregar,
   ErrorBox,
   Field,
+  Hero,
   Loading,
   MaisDetalhes,
   Origem,
-  Panel,
+  Passos,
   Privacidade,
   ResultHead,
   Section,
+  SeloIA,
   Stage,
   Topbar,
-  Workspace,
   data,
+  lerErro,
   numero,
   useScrollToResult,
   useStatus,
+  type PassoIndicador,
 } from "@/components/ui";
 import { GraficoGastoPlanejado } from "@/components/GraficoGastoPlanejado";
 import { OrcamentoPlanejado } from "@/components/OrcamentoPlanejado";
@@ -31,7 +35,7 @@ import { LancarManualmente } from "@/components/LancarManualmente";
 import { EnviarNotas, PreviaNotas, type ResultadoUpload } from "@/components/EnviarNotas";
 import { ResumoImportacao } from "@/components/ImportarEmail";
 import { ReceberFechamento } from "@/components/ReceberFechamento";
-import type { Meta } from "@/lib/ai";
+import type { CodigoErroIA, Meta } from "@/lib/ai";
 import { NOME_PROVEDOR, PROVEDORES_EMAIL, type Alerta, type Fatura, type Leitura, type Periodo, type ProvedorEmail, type ResultadoImportacao } from "@/lib/types";
 
 const ETAPAS_CARREGANDO = ["Lendo as faturas do período...", "Comparando com o orçamento planejado...", "Montando o resultado..."];
@@ -44,23 +48,86 @@ const DIAS_DO_PERIODO: Record<Periodo, 30 | 90 | 365> = { mes: 30, "3meses": 90,
 const ROTULOS_PERIODICIDADE: Record<Fatura["periodicidade"], string> = { mensal: "Mensal", anual: "Anual", unica: "Única" };
 const ROTULOS_ORIGEM: Record<Fatura["origem"], string> = { email: "Lida do e-mail", upload: "Enviada por upload", manual: "Lançada manualmente" };
 
-/** Ilustração de barras crescentes com um "R$" no lugar de um glifo genérico no estado vazio. */
-function IlustracaoGasto() {
+// Textos do topo (economia de texto: título ≤ 8 palavras, apoio ≤ 20, itens ≤ 5 de até 6 palavras — ver CLAUDE.md).
+const PROMESSA = {
+  sobretitulo: "Financeiro",
+  titulo: "Quanto sua empresa gasta com IA",
+  apoio: "As notas saem da sua caixa de e-mail e viram o gasto do período, comparado ao planejado.",
+  itens: [
+    "Total do período em reais",
+    "Variação contra o mês anterior",
+    "Gasto por ferramenta contra o planejado",
+    "Alertas de estouro e duplicidade",
+    "Lista de faturas para baixar",
+  ],
+};
+
+const PASSOS: PassoIndicador[] = [
+  { titulo: "Notas", apoio: "Do e-mail ou em PDF" },
+  { titulo: "Período", apoio: "Mês, trimestre ou ano" },
+  { titulo: "Gasto", apoio: "Comparado ao planejado" },
+];
+
+function IconePeriodo() {
   return (
-    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 54h48" />
-      <rect x="14" y="34" width="9" height="20" />
-      <rect x="28" y="22" width="9" height="32" />
-      <rect x="42" y="12" width="9" height="42" />
-      <text x="46" y="10" textAnchor="middle" fontSize="9" stroke="none" fill="currentColor">R$</text>
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3.5" y="5" width="17" height="15" rx="2.5" />
+      <path d="M3.5 10h17M8 3.5v3M16 3.5v3" />
     </svg>
+  );
+}
+
+function IconeNotas() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 3.5h9l4 4v13H6z" />
+      <path d="M15 3.5v4h4M9 12h7M9 16h5" />
+    </svg>
+  );
+}
+
+function IconeItem() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0 mt-0.5" aria-hidden="true">
+      <path d="M5 12.5 9.5 17 19 7" />
+    </svg>
+  );
+}
+
+/** Cartão de entrada com ícone circular e título, no lugar da coluna única de campos crus. */
+function CartaoEntrada({ icone, titulo, children }: { icone: ReactNode; titulo: string; children: ReactNode }) {
+  return (
+    <div className="card p-5 mb-3 [&>details:last-child]:mb-0">
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className="w-9 h-9 rounded-full bg-accent-soft text-accent grid place-items-center shrink-0">{icone}</div>
+        <h2 className="font-bold text-[15px]">{titulo}</h2>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Prévia de "o que você vai receber", exibida no lugar do resultado antes da primeira leitura. */
+function Previa({ itens }: { itens: string[] }) {
+  return (
+    <div className="card p-7 max-md:p-5 h-full min-h-[420px] max-md:min-h-0 flex flex-col justify-center">
+      <h2 className="font-bold text-[15px] mb-4">O que você vai receber</h2>
+      <ul className="flex flex-col gap-3">
+        {itens.map((it) => (
+          <li key={it} className="flex items-start gap-2.5 text-sm text-ink-2">
+            <IconeItem />
+            <span>{it}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
 type Estado =
   | { fase: "vazio" }
   | { fase: "carregando" }
-  | { fase: "erro"; mensagem: string }
+  | { fase: "erro"; mensagem: string; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string } }
   | { fase: "lendo-notas" }
   | { fase: "previa"; resultado: ResultadoUpload }
   | { fase: "importando" }
@@ -69,38 +136,66 @@ type Estado =
 
 export default function Page() {
   const { status, erro } = useStatus();
+  const router = useRouter();
   const [periodo, setPeriodo] = useState<Periodo>("mes");
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
   const [enviarNotasAberto, setEnviarNotasAberto] = useState(false);
   /** Aberto quando Gmail e Outlook estão conectados e a pessoa precisa dizer qual caixa ler. */
   const [escolhendoCaixa, setEscolhendoCaixa] = useState(false);
+  /** Falha do "Ler as notas do e-mail": aviso junto do botão, sem derrubar o resultado que já está na tela. */
+  const [avisoEmail, setAvisoEmail] = useState<{ mensagem: string; acao?: { rotulo: string; url: string } } | null>(null);
   const autoEnviado = useRef(false);
 
   useScrollToResult(estado.fase === "pronto" || estado.fase === "previa" || estado.fase === "importado");
 
+  /** 401 sem sessão (proxy.ts) manda para a tela de entrar guardando o destino. */
+  function semSessao(codigo?: string): boolean {
+    if (codigo !== "sem_sessao") return false;
+    router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
+    return true;
+  }
+
   async function gerar(periodoEscolhido: Periodo) {
     setEstado({ fase: "carregando" });
+    setAvisoEmail(null);
     try {
       const r = await fetch(`/api/leitura?periodo=${periodoEscolhido}`);
+      if (!r.ok) {
+        // lerErro lê { error, codigo, acao } da rota (respostaErro/responderErro): nunca status cru na tela.
+        const info = await lerErro(r);
+        if (r.status === 401 && semSessao(info.codigo)) return;
+        setEstado({ fase: "erro", mensagem: info.mensagem, codigo: info.codigo as CodigoErroIA | undefined, acao: info.acao });
+        return;
+      }
       const resposta = await r.json();
-      if (!r.ok) throw new Error(resposta.error || "Falha ao ler o gasto com IA.");
       setEstado({ fase: "pronto", leitura: resposta.leitura, faturas: resposta.faturas, meta: resposta.meta, id: resposta.id });
     } catch (e) {
-      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." });
+      const info = await lerErro(e);
+      setEstado({ fase: "erro", mensagem: info.mensagem });
     }
   }
 
   /** Sem `provedor`, o servidor lê todas as caixas conectadas. */
   async function importarEmail(provedor?: ProvedorEmail) {
     setEscolhendoCaixa(false);
+    setAvisoEmail(null);
+    const anterior = estado;
     setEstado({ fase: "importando" });
     try {
       const r = await fetch("/api/faturas/importar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dias: DIAS_DO_PERIODO[periodo], provedor }) });
-      const resposta = await r.json();
-      if (!r.ok) throw new Error(resposta.error || "Não foi possível ler as notas do e-mail.");
-      setEstado({ fase: "importado", resultado: resposta as ResultadoImportacao });
+      if (!r.ok) {
+        const info = await lerErro(r);
+        if (r.status === 401 && semSessao(info.codigo)) return;
+        // Ler a caixa é uma ação lateral: a falha vira aviso junto do botão e o palco volta ao que era.
+        setAvisoEmail({ mensagem: info.mensagem, acao: info.acao });
+        setEstado(anterior);
+        return;
+      }
+      setEstado({ fase: "importado", resultado: (await r.json()) as ResultadoImportacao });
     } catch (e) {
-      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado ao ler o e-mail." });
+      const info = await lerErro(e);
+      setAvisoEmail({ mensagem: info.mensagem });
+      setEstado(anterior);
     }
   }
 
@@ -116,10 +211,12 @@ export default function Page() {
       autoEnviado.current = true;
       setTimeout(() => gerar("mes"), 0);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma única vez ao abrir a página
   }, []);
 
   const carregando = estado.fase === "carregando";
   const importando = estado.fase === "importando";
+  const passoAtual = estado.fase === "pronto" ? 3 : 2;
   /** Caixas conectadas em /setup (Gmail e/ou Outlook): o botão habilita com qualquer uma. */
   const caixas = PROVEDORES_EMAIL.filter((p) => Boolean(status?.integrations?.[p]));
   const emailConectado = caixas.length > 0;
@@ -131,8 +228,8 @@ export default function Page() {
       : !status.ai
         ? "Conecte a inteligência artificial para reconhecer as notas do e-mail"
         : caixas.length > 1
-          ? `Busca notas e recibos dos últimos ${DIAS_DO_PERIODO[periodo]} dias no Gmail e no Outlook e lança o que reconhecer`
-          : `Busca notas e recibos dos últimos ${DIAS_DO_PERIODO[periodo]} dias no ${NOME_PROVEDOR[caixas[0]]} e lança o que reconhecer`;
+          ? `Busca notas dos últimos ${DIAS_DO_PERIODO[periodo]} dias no Gmail e no Outlook`
+          : `Busca notas dos últimos ${DIAS_DO_PERIODO[periodo]} dias no ${NOME_PROVEDOR[caixas[0]]}`;
 
   /** Com uma caixa só, lê direto; com as duas, pergunta qual usar antes. */
   function clicarLerEmail() {
@@ -142,83 +239,89 @@ export default function Page() {
 
   return (
     <>
-      <Topbar marca="C" nome="Custos de IA" area="Financeiro" status={status} erro={erro} resumo="Modo demonstração: o gasto exibido é um exemplo com dados fictícios." />
+      <Topbar marca="C" nome="Custos de IA" area="Financeiro" status={status} erro={erro} resumo="Modo demonstração: o gasto exibido é um exemplo com dados fictícios." usuario={status?.usuario} />
 
-      <Workspace>
-        <Panel titulo="Saiba quanto sua empresa gasta com IA" lead="Escolha o período e veja o gasto total com ferramentas de IA comparado ao orçamento planejado.">
-          <form onSubmit={onSubmit}>
-            <Field label="Período" htmlFor="periodo">
-              <select id="periodo" className="input" value={periodo} onChange={(e) => setPeriodo(e.target.value as Periodo)}>
-                <option value="mes">Mês atual</option>
-                <option value="3meses">Últimos 3 meses</option>
-                <option value="ano">Último ano</option>
-              </select>
-            </Field>
+      <Hero sobretitulo={PROMESSA.sobretitulo} titulo={PROMESSA.titulo} apoio={PROMESSA.apoio} segmento="Financeiro">
+        <Passos passos={PASSOS} atual={passoAtual} />
+      </Hero>
 
-            <div className="flex flex-col gap-2.5 mb-4">
-              <div className="flex items-center gap-3 flex-wrap">
-                <button type="button" className="btn-ghost !w-auto" disabled={!podeImportar || importando || carregando} onClick={clicarLerEmail} aria-expanded={caixas.length > 1 ? escolhendoCaixa : undefined} aria-controls={caixas.length > 1 ? "escolher-caixa" : undefined} title={podeImportar ? undefined : dicaEmail}>
-                  {importando ? "Lendo o e-mail" : "Ler as notas do e-mail"}
-                </button>
-                {status && !emailConectado ? (
-                  <Link href="/setup#gmail" className="text-[12.5px] text-muted underline">{dicaEmail}</Link>
-                ) : status && emailConectado && !status.ai ? (
-                  <Link href="/setup#openrouter" className="text-[12.5px] text-muted underline">{dicaEmail}</Link>
-                ) : (
-                  <span className="text-[12.5px] text-muted">{dicaEmail}</span>
+      <main className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">
+        <div>
+          <form onSubmit={onSubmit} className="entrada">
+            <CartaoEntrada icone={<IconeNotas />} titulo="As notas">
+              <div className="flex flex-col gap-2.5 mb-4">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button type="button" className="btn-ghost !w-auto" disabled={!podeImportar || importando || carregando} onClick={clicarLerEmail} aria-expanded={caixas.length > 1 ? escolhendoCaixa : undefined} aria-controls={caixas.length > 1 ? "escolher-caixa" : undefined}>
+                    {importando ? "Lendo o e-mail" : "Ler as notas do e-mail"}
+                  </button>
+                  {status && !emailConectado ? (
+                    <Link href="/setup#gmail" className="text-[12.5px] text-muted underline">{dicaEmail}</Link>
+                  ) : status && emailConectado && !status.ai ? (
+                    <Link href="/setup#openrouter" className="text-[12.5px] text-muted underline">{dicaEmail}</Link>
+                  ) : (
+                    <span className="text-[12.5px] text-muted">{dicaEmail}</span>
+                  )}
+                </div>
+                {escolhendoCaixa && caixas.length > 1 && (
+                  <div id="escolher-caixa" role="group" aria-label="Qual caixa ler?" className="flex items-center gap-2 flex-wrap rounded-[10px] border border-line bg-bg px-3 py-2.5">
+                    <span className="text-[12.5px] font-semibold text-ink mr-1">Qual caixa ler?</span>
+                    {caixas.map((c) => (
+                      <button key={c} type="button" className="btn-ghost !w-auto" onClick={() => importarEmail(c)}>{NOME_PROVEDOR[c]}</button>
+                    ))}
+                    <button type="button" className="btn-ghost !w-auto" onClick={() => importarEmail()}>As duas</button>
+                  </div>
+                )}
+                {avisoEmail && <Aviso tom="danger" acao={avisoEmail.acao}>{avisoEmail.mensagem}</Aviso>}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button type="button" className="btn-ghost !w-auto" aria-expanded={enviarNotasAberto} aria-controls="enviar-notas" onClick={() => setEnviarNotasAberto((v) => !v)}>
+                    {enviarNotasAberto ? "Fechar envio de notas" : "Enviar notas em PDF"}
+                  </button>
+                  <span className="text-[12.5px] text-muted">Até 10 por vez; você confere antes de gravar</span>
+                </div>
+                {enviarNotasAberto && (
+                  <div id="enviar-notas" className="mt-1.5">
+                    <EnviarNotas
+                      onInicio={() => setEstado({ fase: "lendo-notas" })}
+                      onLido={(resultado) => setEstado({ fase: "previa", resultado })}
+                      onErro={(mensagem) => setEstado({ fase: "erro", mensagem })}
+                    />
+                  </div>
                 )}
               </div>
-              {escolhendoCaixa && caixas.length > 1 && (
-                <div id="escolher-caixa" role="group" aria-label="Qual caixa ler?" className="flex items-center gap-2 flex-wrap rounded-[10px] border border-line bg-bg px-3 py-2.5">
-                  <span className="text-[12.5px] font-semibold text-ink mr-1">Qual caixa ler?</span>
-                  {caixas.map((c) => (
-                    <button key={c} type="button" className="btn-ghost !w-auto" onClick={() => importarEmail(c)}>{NOME_PROVEDOR[c]}</button>
-                  ))}
-                  <button type="button" className="btn-ghost !w-auto" onClick={() => importarEmail()}>As duas</button>
-                </div>
-              )}
-              <div className="flex items-center gap-3 flex-wrap">
-                <button type="button" className="btn-ghost !w-auto" aria-expanded={enviarNotasAberto} aria-controls="enviar-notas" onClick={() => setEnviarNotasAberto((v) => !v)}>
-                  {enviarNotasAberto ? "Fechar envio de notas" : "Enviar notas em PDF"}
-                </button>
-                <span className="text-[12.5px] text-muted">Até 10 notas por vez; você confere antes de gravar</span>
-              </div>
-              {enviarNotasAberto && (
-                <div id="enviar-notas" className="mt-1.5">
-                  <EnviarNotas
-                    onInicio={() => setEstado({ fase: "lendo-notas" })}
-                    onLido={(resultado) => setEstado({ fase: "previa", resultado })}
-                    onErro={(mensagem) => setEstado({ fase: "erro", mensagem })}
-                  />
-                </div>
-              )}
-            </div>
+            </CartaoEntrada>
+
+            <CartaoEntrada icone={<IconePeriodo />} titulo="O período">
+              <Field label="Ver o gasto de" htmlFor="periodo">
+                <select id="periodo" className="input" value={periodo} onChange={(e) => setPeriodo(e.target.value as Periodo)}>
+                  <option value="mes">Mês atual</option>
+                  <option value="3meses">Últimos 3 meses</option>
+                  <option value="ano">Último ano</option>
+                </select>
+              </Field>
+            </CartaoEntrada>
 
             <button type="submit" className="btn-primary" disabled={carregando}>
               {carregando ? "Lendo o período" : "Ver gasto do período"}
             </button>
           </form>
-          <Privacidade detalhe="As faturas lançadas ficam só neste app; apague quando quiser." />
 
-          <MaisDetalhes titulo="Orçamento planejado">
-            <OrcamentoPlanejado onSalvo={() => gerar(periodo)} />
-          </MaisDetalhes>
-
-          <MaisDetalhes titulo="Lançar manualmente">
-            <LancarManualmente onLancado={() => gerar(periodo)} />
-          </MaisDetalhes>
-        </Panel>
+          {/* Orçamento e lançamento manual têm `<form>` próprio: ficam FORA do formulário principal
+              (um <form> dentro de outro é HTML inválido e quebra a hidratação do React). */}
+          <div className="card p-5 mt-4">
+            <div id="orcamento">
+              <MaisDetalhes titulo="Orçamento planejado">
+                <OrcamentoPlanejado onSalvo={() => gerar(periodo)} />
+              </MaisDetalhes>
+            </div>
+            <MaisDetalhes titulo="Lançar uma nota à mão">
+              <LancarManualmente onLancado={() => gerar(periodo)} />
+            </MaisDetalhes>
+            <Privacidade detalhe="As faturas lançadas ficam só neste app; apague quando quiser." />
+          </div>
+        </div>
 
         <Stage>
-          {estado.fase === "vazio" && (
-            <Empty
-              ilustracao={<IlustracaoGasto />}
-              titulo="O gasto aparece aqui"
-              descricao="Total do período, variação contra o mês anterior, gasto por ferramenta contra o orçamento planejado e a lista de faturas."
-              acao="Ver um exemplo"
-              onAcao={() => gerar(periodo)}
-            />
-          )}
+          {estado.fase === "vazio" && <Previa itens={PROMESSA.itens} />}
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
           {estado.fase === "lendo-notas" && <Loading etapas={ETAPAS_LENDO_NOTAS} />}
           {estado.fase === "importando" && <Loading etapas={ETAPAS_IMPORTANDO} />}
@@ -234,11 +337,44 @@ export default function Page() {
               onCancelar={() => setEstado({ fase: "vazio" })}
             />
           )}
-          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={() => gerar(periodo)} />}
+          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} codigo={estado.codigo} acao={estado.acao} onTentarNovamente={() => gerar(periodo)} />}
           {estado.fase === "pronto" && <Resultado leitura={estado.leitura} faturas={estado.faturas} meta={estado.meta} id={estado.id} />}
         </Stage>
-      </Workspace>
+      </main>
     </>
+  );
+}
+/** Abre a dobra "Orçamento planejado" do painel e rola até ela (o convite da linha de proveniência
+ * aponta para um <details> fechado na mesma tela, não para outra página). */
+function abrirOrcamento() {
+  const dobra = document.querySelector<HTMLDetailsElement>("#orcamento details");
+  if (!dobra) return;
+  dobra.open = true;
+  dobra.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+/** Linha de proveniência própria deste app. `Origem` (compartilhado) só sabe convidar a conectar a IA,
+ * mas aqui o que falta é o DADO, não o modelo — e `meta.demo` é um booleano só, que não distingue
+ * "tudo de exemplo" de "minhas faturas contra um orçamento de exemplo". Dizer "faturas fictícias" sobre
+ * faturas reais seria uma frase falsa na tela. */
+function OrigemDoGasto({ leitura, model }: { leitura: Leitura; model: string }) {
+  const origem = leitura.origemDados ?? { faturas: "exemplo" as const, orcamento: "exemplo" as const };
+  const mes = leitura.mesAtual.replace(/ de \d{4}$/, "");
+  if (origem.faturas === "reais" && origem.orcamento === "exemplo") {
+    return (
+      <p className="text-muted text-[13px] mb-4" title={model}>
+        As faturas são suas; o orçamento comparado é um exemplo. Cadastre o seu para a comparação valer.{" "}
+        <button type="button" className="font-semibold text-accent underline underline-offset-2 bg-transparent border-0 p-0 cursor-pointer" onClick={abrirOrcamento}>
+          Cadastrar o meu orçamento
+        </button>
+      </p>
+    );
+  }
+  return (
+    <p className="text-muted text-[13px] mb-4" title={model}>
+      Exemplo ilustrativo com faturas fictícias de {mes}; conecte o e-mail ou envie notas em PDF para ver o seu gasto.{" "}
+      <Link href="/setup#gmail" className="font-semibold text-accent underline underline-offset-2">Conectar o e-mail</Link>
+    </p>
   );
 }
 
@@ -260,11 +396,13 @@ export function Resultado({ leitura, faturas, meta, id }: { leitura: Leitura; fa
         />
       </ResultHead>
 
-      <Origem meta={meta} />
+      {meta.demo ? <OrigemDoGasto leitura={leitura} model={meta.model} /> : <Origem meta={meta} />}
 
       <ConteudoLeitura leitura={leitura} faturas={faturas} />
 
       <ReceberFechamento />
+
+      <SeloIA demo={meta.demo} />
     </article>
   );
 }
@@ -294,7 +432,7 @@ export function ConteudoLeitura({ leitura, faturas }: { leitura: Leitura; fatura
 
       <Section titulo="Alertas">
         {alertas.length === 0 ? (
-          <p className="text-muted text-sm">Nenhum alerta no período: nenhuma ferramenta passou do planejado e nenhuma assinatura nova apareceu.</p>
+          <p className="text-muted text-sm">Nenhum alerta no período: ninguém passou do planejado, nenhuma assinatura nova apareceu e nada foi pago duas vezes.</p>
         ) : (
           <ul className="flex flex-col gap-2.5 list-none p-0 m-0">
             {alertas.map((a) => (
@@ -360,10 +498,22 @@ export function ConteudoLeitura({ leitura, faturas }: { leitura: Leitura; fatura
                   );
                 },
               },
-              { chave: "ferramenta", titulo: "Ferramenta", papel: "resumo", render: (f: Fatura) => `${f.ferramenta} · ${ROTULOS_PERIODICIDADE[f.periodicidade]}` },
-              { chave: "valor", titulo: "Valor", papel: "chip", largura: "110px", render: (f: Fatura) => <span className="font-bold">R$ {numero(f.valorBRL, 2)}</span> },
-              { chave: "data", titulo: "Data", papel: "detalhe", render: (f: Fatura) => data(new Date(`${f.data}T00:00:00`), { comAno: true }) },
-              { chave: "origem", titulo: "Origem", papel: "detalhe", render: (f: Fatura) => ROTULOS_ORIGEM[f.origem] },
+              // Uma coluna de resumo só (a ferramenta) com largura explícita e 3 linhas: com o palco na
+              // metade da tela, "ferramenta · periodicidade" em 2 linhas punha um "Ver mais" em todas as
+              // linhas. Periodicidade e origem viraram uma única coluna de detalhe, ao lado da data.
+              { chave: "ferramenta", titulo: "Ferramenta", papel: "resumo", linhas: 3, largura: "34%", render: (f: Fatura) => f.ferramenta },
+              { chave: "valor", titulo: "Valor", papel: "chip", largura: "108px", render: (f: Fatura) => <span className="font-bold">R$ {numero(f.valorBRL, 2)}</span> },
+              {
+                chave: "data",
+                titulo: "Data",
+                papel: "detalhe",
+                render: (f: Fatura) => (
+                  <>
+                    {data(new Date(`${f.data}T00:00:00`), { comAno: true })}
+                    <span className="block text-[12.5px] text-muted">{ROTULOS_PERIODICIDADE[f.periodicidade]} · {ROTULOS_ORIGEM[f.origem]}</span>
+                  </>
+                ),
+              },
             ]}
             linhas={faturas}
           />
@@ -373,10 +523,12 @@ export function ConteudoLeitura({ leitura, faturas }: { leitura: Leitura; fatura
   );
 }
 
-/** Alerta que marca esta fatura: estouro da ferramenta no mês da fatura, ou fornecedor novo nesse mês. */
+/** Alerta que marca esta fatura: ferramenta paga duas vezes no mês, estouro dela no mês, ou fornecedor
+ * novo nesse mês — nessa ordem, porque a duplicidade é a que rende economia imediata. */
 function alertaDaFatura(alertas: Alerta[], f: Fatura): Alerta | undefined {
   const mes = f.data.slice(0, 7);
   return (
+    alertas.find((a) => a.mes === mes && a.tipo === "assinatura-duplicada" && a.alvo === f.ferramenta) ??
     alertas.find((a) => a.mes === mes && a.tipo === "acima-do-planejado" && a.alvo === f.ferramenta) ??
     alertas.find((a) => a.mes === mes && a.tipo === "assinatura-nova" && a.alvo === f.fornecedor)
   );
