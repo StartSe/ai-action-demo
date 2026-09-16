@@ -1,27 +1,70 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
+// A busca na web (Exa ou Tavily) é usada só por este app, por isso mora aqui e não em lib/setup-comum.ts.
 import { openrouter, NOTIFICACOES, type Integracao } from "./setup-comum";
 
-const OPENROUTER = openrouter();
+const OPENROUTER = openrouter({ beneficio: "Liga a IA que agrupa os achados em sinais" });
 
-export const EXA: Integracao = {
+/** Mensagem do teste de conexão de uma fonte com chave, sem status HTTP cru na tela. */
+async function testarFonte(nome: string, pedido: () => Promise<Response>): Promise<{ ok: boolean; mensagem: string }> {
+  let r: Response;
+  try {
+    r = await pedido();
+  } catch (err) {
+    console.error(`Teste de conexão com a ${nome} falhou na rede:`, err);
+    return { ok: false, mensagem: `Não foi possível falar com a ${nome}. Confira a conexão do servidor e tente de novo.` };
+  }
+  if (r.status === 401 || r.status === 403) return { ok: false, mensagem: `A ${nome} recusou a chave. Confira se copiou a chave inteira.` };
+  if (!r.ok) {
+    console.error(`Teste de conexão com a ${nome}:`, r.status, (await r.text().catch(() => "")).slice(0, 200));
+    return { ok: false, mensagem: `A ${nome} não respondeu como esperado. Tente de novo em um minuto.` };
+  }
+  return { ok: true, mensagem: `Conectado à ${nome}.` };
+}
+
+/** Cartão único com duas chaves alternativas: basta uma para o radar ganhar notícias em português e páginas da web. O id continua "exa" para /setup#exa. */
+export const BUSCA_WEB: Integracao = {
   id: "exa",
-  titulo: "Busca de sinais na web (Exa)",
-  descricao: "Amplia a busca de sinais além de Hacker News, Reddit e GitHub (que já funcionam sem chave) para notícias e conteúdo geral da web, com trechos relevantes de cada página. Opcional: sem ela, o radar usa só as três fontes públicas.",
+  titulo: "Notícias em português e web (Exa ou Tavily)",
+  beneficio: "Traz notícias em português e páginas da web para o radar",
+  descricao: "Sem chave, o radar já consulta Hacker News, Reddit, GitHub e Google Notícias. Uma chave da Exa ou da Tavily acrescenta notícias em português e páginas da web com trechos relevantes. Basta uma das duas.",
   obrigatoria: false,
   link: { url: "https://dashboard.exa.ai/api-keys", rotulo: "Obter uma chave da Exa" },
-  campos: [{ chave: "EXA_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "•••••••••••••••••", ajuda: "Fica em API Keys, dentro do painel da Exa." }],
+  campos: [
+    { chave: "EXA_API_KEY", rotulo: "Chave da Exa", tipo: "secret", opcional: true, placeholder: "•••••••••••••••••", ajuda: "Fica em API Keys, no painel da Exa (dashboard.exa.ai)." },
+    { chave: "TAVILY_API_KEY", rotulo: "Chave da Tavily", tipo: "secret", opcional: true, placeholder: "tvly-...", ajuda: "Alternativa à Exa; fica em API Keys, no painel da Tavily (app.tavily.com)." },
+  ],
+  campoConectado: ["EXA_API_KEY", "TAVILY_API_KEY"],
   testar: async (config) => {
-    const chave = config.EXA_API_KEY;
-    if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
-    const r = await fetch("https://api.exa.ai/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": chave },
-      body: JSON.stringify({ query: "teste de conexão", numResults: 1 }),
-    });
-    if (r.status === 401 || r.status === 403) return { ok: false, mensagem: "Chave inválida." };
-    if (!r.ok) return { ok: false, mensagem: `A Exa respondeu HTTP ${r.status}.` };
-    return { ok: true, mensagem: "Conectado à Exa." };
+    const exa = config.EXA_API_KEY;
+    const tavily = config.TAVILY_API_KEY;
+    if (!exa && !tavily) return { ok: false, mensagem: "Nenhuma chave salva ainda. Cole a chave da Exa ou da Tavily." };
+    const resultados: { ok: boolean; mensagem: string }[] = [];
+    if (exa) {
+      resultados.push(
+        await testarFonte("Exa", () =>
+          fetch("https://api.exa.ai/search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-api-key": exa },
+            body: JSON.stringify({ query: "teste de conexão", numResults: 1 }),
+            signal: AbortSignal.timeout(10_000),
+          })
+        )
+      );
+    }
+    if (tavily) {
+      resultados.push(
+        await testarFonte("Tavily", () =>
+          fetch("https://api.tavily.com/search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${tavily}` },
+            body: JSON.stringify({ query: "teste de conexão", max_results: 1 }),
+            signal: AbortSignal.timeout(10_000),
+          })
+        )
+      );
+    }
+    return { ok: resultados.some((r) => r.ok), mensagem: resultados.map((r) => r.mensagem).join(" ") };
   },
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, NOTIFICACOES, EXA];
+export const INTEGRACOES: Integracao[] = [OPENROUTER, NOTIFICACOES, BUSCA_WEB];

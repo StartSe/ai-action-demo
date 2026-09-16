@@ -5,7 +5,7 @@ Radar de sinais de mercado gerado por IA a partir dos temas que você acompanha,
 ## O que resolve
 Movimentos do mercado chegam tarde e dispersos. Este app junta o que saiu no período sobre os temas acompanhados, agrupa em sinais (com força, tendência e o que fazer em cada um) e mostra as conexões entre eles.
 
-Como funciona: o motor de busca (`lib/busca.ts`) consulta em paralelo as fontes sem chave (Hacker News, Reddit e GitHub) e, quando a chave da Exa está conectada, também notícias e conteúdo geral da web. Cada fonte é isolada: uma que falhar (o Reddit, por exemplo, bloqueia endereços de nuvem) não derruba a rodada. A IA agrupa o que foi encontrado em sinais com força, tendência e o que fazer, e só cita fontes que de fato vieram da busca. Sem IA conectada, o radar é um exemplo (`lib/demo.ts`). O grafo de nós e arestas é desenhado em SVG por `components/Grafo.tsx`, com layout de força próprio, sem biblioteca externa. A rotina semanal (cartão "Rotinas" em `/setup`) reenvia só os sinais novos em relação à última execução.
+Como funciona: o motor de busca (`lib/busca.ts`) consulta em paralelo as fontes sem chave (Hacker News, Reddit, GitHub e Google Notícias, este em português do Brasil) e, quando uma chave da Exa ou da Tavily está conectada, também notícias em português e conteúdo geral da web. Cada fonte é isolada: uma que falhar (o Reddit, por exemplo, bloqueia endereços de nuvem) não derruba a rodada, e a tela diz quais fontes entraram ("Hacker News, GitHub, Google Notícias; Reddit indisponível") antes e depois de montar o radar. A IA agrupa o que foi encontrado em sinais com força, tendência e o que fazer, e só cita fontes que de fato vieram da busca; quando nenhum achado sustenta um sinal, o radar sai vazio e explica o motivo. Sem IA conectada, o radar é um exemplo (`lib/demo.ts`) com fontes marcadas como "(exemplo)" e links para a página de cada veículo. O grafo de nós e arestas é desenhado em SVG por `components/Grafo.tsx`, com layout de força próprio, sem biblioteca externa. A rotina semanal (botão "Receber este radar toda semana" no resultado) reenvia só os sinais novos em relação à última execução.
 
 ## Stack
 Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão.
@@ -63,13 +63,18 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
-| `EXA_API_KEY` | Opcional. Amplia a busca para notícias e a web em geral. Obtenha em https://dashboard.exa.ai/api-keys. Sem ela, o radar usa só Hacker News, Reddit e GitHub. |
+| `EXA_API_KEY` | Opcional. Amplia a busca para notícias em português e a web em geral. Obtenha em https://dashboard.exa.ai/api-keys. Sem ela (e sem Tavily), o radar usa só Hacker News, Reddit, GitHub e Google Notícias. |
+| `TAVILY_API_KEY` | Opcional, alternativa à Exa (basta uma das duas). Obtenha em https://app.tavily.com (API Keys). |
+| `NOTIFICACOES_*` | Opcionais, configuradas em `/setup` (cartão Notificações): canal, destino e credencial do Resend/SMTP/Slack, ou Gmail/Outlook conectados em um clique. Necessárias para a rotina semanal. |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
 
 ## Estrutura
 ```
 app/page.tsx            tela única (formulário + resultado)
-app/api/radar/route.ts  geração do radar
+app/api/radar/route.ts  geração do radar (POST), últimos radares com temas (GET) e apagar tudo (DELETE)
+app/api/radar/fontes/route.ts    situação das fontes de busca antes de montar (linha "Fontes desta rodada")
+app/api/radar/andamento/route.ts fontes que já responderam numa rodada em andamento (Loading)
+app/api/radar/semanal/route.ts   cria a rotina "Radar semanal dos meus temas" a partir do botão do resultado
 app/mcp/route.ts        endpoint MCP (JSON-RPC 2.0) para assistentes de IA
 app/api/mcp/token/route.ts  gera, consulta e revoga o código de acesso do endpoint MCP
 app/setup/page.tsx      configuração inicial (chaves, OAuth, teste de conexão, acesso MCP)
@@ -86,7 +91,10 @@ lib/ai.ts               cliente OpenRouter (askText, askJSON, askWithTools)
 lib/mcp.ts              protocolo MCP (JSON-RPC 2.0), código de acesso e limite de chamadas
 lib/ferramentas.ts      ferramentas expostas via MCP (montar_radar)
 lib/radar.ts            lógica de geração do radar, usada pela rota HTTP e pela ferramenta MCP
-lib/busca.ts            busca em Hacker News, Reddit, GitHub e Exa (fontes isoladas entre si)
+lib/busca.ts            busca em Hacker News, Reddit, GitHub, Google Notícias, Exa e Tavily (fontes isoladas entre si)
+lib/fontes.ts           nomes das fontes e a frase "X, Y; Z indisponível" (puro, usado na tela e no servidor)
+lib/andamento.ts        andamento de uma rodada em memória (quais fontes já responderam)
+lib/perfil.ts           chave do perfil acompanhado (temas + setor), usada pela rotina semanal e pela tela
 components/Grafo.tsx    grafo de sinais em SVG com layout de força próprio
 lib/demo.ts             radar de exemplo do modo demonstração
 lib/types.ts            tipos do domínio (Sinal, No, Aresta, Radar)

@@ -1,5 +1,5 @@
 // Radar de exemplo usado quando não há chave de IA configurada (ou pelo atalho ?exemplo=1).
-import type { Aresta, No, Radar, Sinal } from "./types";
+import type { Aresta, Fonte, No, Radar, Sinal } from "./types";
 
 export function esperar(ms = 1300) {
   return new Promise((r) => setTimeout(r, ms));
@@ -15,7 +15,31 @@ function dataNoPeriodo(periodoDias: number, fracaoDoPeriodo: number): string {
   return d.toISOString();
 }
 
-/** Radar fictício, mas completo e coerente: 3 temas, 11 sinais, 27 nós, fontes plausíveis dentro do período. */
+/** Página pública estável de cada veículo citado no exemplo: os títulos são fictícios, então o link leva à casa do veículo e a fonte é marcada como exemplo. */
+const URL_VEICULO: Record<string, string> = {
+  "Valor Econômico": "https://valor.globo.com/",
+  "TechCrunch": "https://techcrunch.com/",
+  "Consultor Jurídico (Conjur)": "https://www.conjur.com.br/",
+  "Agência Senado": "https://www12.senado.leg.br/noticias",
+  "Bloomberg Línea": "https://www.bloomberglinea.com.br/",
+  "Brazil Journal": "https://braziljournal.com/",
+  "Época Negócios": "https://epocanegocios.globo.com/",
+  "Reddit r/artificial": "https://www.reddit.com/r/artificial/",
+  "Reuters": "https://www.reuters.com/",
+  "The Information": "https://www.theinformation.com/",
+  "InfoMoney": "https://www.infomoney.com.br/",
+  "Exame": "https://exame.com/",
+  "Agência Brasil": "https://agenciabrasil.ebc.com.br/",
+  "GitHub": "https://github.com/",
+  "Hacker News": "https://news.ycombinator.com/",
+  "Reddit r/technology": "https://www.reddit.com/r/technology/",
+};
+
+function fonte(titulo: string, veiculo: string, publicadoEm: string): Fonte {
+  return { titulo, url: URL_VEICULO[veiculo], veiculo, publicadoEm, exemplo: true };
+}
+
+/** Radar fictício, mas completo e coerente: 3 temas, 11 sinais, 27 nós, fontes plausíveis dentro do período (com link para o veículo, marcadas como exemplo). */
 export function radarDemo(periodoDias = 30): Radar {
   const dia = (f: number) => dataNoPeriodo(periodoDias, f);
 
@@ -28,8 +52,8 @@ export function radarDemo(periodoDias = 30): Radar {
       tendencia: "subindo",
       temas: [TEMAS[0]],
       fontes: [
-        { titulo: "Fintechs escalam atendimento com agentes de IA no lugar de humanos", url: "", veiculo: "Valor Econômico", publicadoEm: dia(0.06) },
-        { titulo: "Como bancos digitais estão automatizando o suporte com IA generativa", url: "", veiculo: "TechCrunch", publicadoEm: dia(0.18) },
+        fonte("Fintechs escalam atendimento com agentes de IA no lugar de humanos", "Valor Econômico", dia(0.06)),
+        fonte("Como bancos digitais estão automatizando o suporte com IA generativa", "TechCrunch", dia(0.18)),
       ],
       oQueFazer: "Mapear onde um agente de IA já resolveria boa parte dos atendimentos de hoje e desenhar um piloto de 90 dias num canal de baixo risco.",
     },
@@ -41,8 +65,8 @@ export function radarDemo(periodoDias = 30): Radar {
       tendencia: "subindo",
       temas: [TEMAS[1]],
       fontes: [
-        { titulo: "Comissão retoma discussão do marco regulatório de IA", url: "", veiculo: "Consultor Jurídico (Conjur)", publicadoEm: dia(0.1) },
-        { titulo: "Senado pauta votação de projeto sobre inteligência artificial", url: "", veiculo: "Agência Senado", publicadoEm: dia(0.22) },
+        fonte("Comissão retoma discussão do marco regulatório de IA", "Consultor Jurídico (Conjur)", dia(0.1)),
+        fonte("Senado pauta votação de projeto sobre inteligência artificial", "Agência Senado", dia(0.22)),
       ],
       oQueFazer: "Levar o texto para o jurídico avaliar o impacto nos usos de IA já em produção antes da votação.",
     },
@@ -54,8 +78,8 @@ export function radarDemo(periodoDias = 30): Radar {
       tendencia: "subindo",
       temas: [TEMAS[2]],
       fontes: [
-        { titulo: "Gigante asiática de pagamentos confirma chegada ao Brasil", url: "", veiculo: "Bloomberg Línea", publicadoEm: dia(0.08) },
-        { titulo: "Nova concorrente mira pequenos varejistas com taxas menores", url: "", veiculo: "Brazil Journal", publicadoEm: dia(0.3) },
+        fonte("Gigante asiática de pagamentos confirma chegada ao Brasil", "Bloomberg Línea", dia(0.08)),
+        fonte("Nova concorrente mira pequenos varejistas com taxas menores", "Brazil Journal", dia(0.3)),
       ],
       oQueFazer: "Simular o efeito de uma guerra de tarifas na margem do produto de pagamentos antes de o concorrente ganhar tração.",
     },
@@ -67,8 +91,8 @@ export function radarDemo(periodoDias = 30): Radar {
       tendencia: "subindo",
       temas: [TEMAS[0]],
       fontes: [
-        { titulo: "Centrais de atendimento testam triagem por voz com IA", url: "", veiculo: "Época Negócios", publicadoEm: dia(0.14) },
-        { titulo: "Discussão sobre agentes de voz em produção ganha tração", url: "", veiculo: "Reddit r/artificial", publicadoEm: dia(0.35) },
+        fonte("Centrais de atendimento testam triagem por voz com IA", "Época Negócios", dia(0.14)),
+        fonte("Discussão sobre agentes de voz em produção ganha tração", "Reddit r/artificial", dia(0.35)),
       ],
       oQueFazer: "Testar um piloto de atendimento por voz num fluxo simples (ex.: agendamento) antes de escalar para casos complexos.",
     },
@@ -80,8 +104,8 @@ export function radarDemo(periodoDias = 30): Radar {
       tendencia: "estavel",
       temas: [TEMAS[1]],
       fontes: [
-        { titulo: "Bruxelas publica orientação sobre IA de alto risco", url: "", veiculo: "Reuters", publicadoEm: dia(0.2) },
-        { titulo: "O que muda com o detalhamento das regras europeias de IA", url: "", veiculo: "The Information", publicadoEm: dia(0.42) },
+        fonte("Bruxelas publica orientação sobre IA de alto risco", "Reuters", dia(0.2)),
+        fonte("O que muda com o detalhamento das regras europeias de IA", "The Information", dia(0.42)),
       ],
       oQueFazer: "Conferir se algum uso interno de IA se enquadraria como 'alto risco' pelo critério europeu, mesmo operando só no Brasil.",
     },
@@ -93,8 +117,8 @@ export function radarDemo(periodoDias = 30): Radar {
       tendencia: "subindo",
       temas: [TEMAS[2]],
       fontes: [
-        { titulo: "Carteira digital chinesa oferece cashback de até 15% em SP", url: "", veiculo: "InfoMoney", publicadoEm: dia(0.12) },
-        { titulo: "Disputa por usuários de carteiras digitais esquenta em São Paulo", url: "", veiculo: "Brazil Journal", publicadoEm: dia(0.28) },
+        fonte("Carteira digital chinesa oferece cashback de até 15% em SP", "InfoMoney", dia(0.12)),
+        fonte("Disputa por usuários de carteiras digitais esquenta em São Paulo", "Brazil Journal", dia(0.28)),
       ],
       oQueFazer: "Medir a sensibilidade a preço da base de clientes mais jovem antes de reagir com desconto.",
     },
@@ -106,8 +130,8 @@ export function radarDemo(periodoDias = 30): Radar {
       tendencia: "subindo",
       temas: [TEMAS[0]],
       fontes: [
-        { titulo: "Startup de agentes de atendimento levanta rodada robusta", url: "", veiculo: "TechCrunch", publicadoEm: dia(0.16) },
-        { titulo: "Investidores apostam alto em IA para atendimento ao cliente", url: "", veiculo: "Exame", publicadoEm: dia(0.38) },
+        fonte("Startup de agentes de atendimento levanta rodada robusta", "TechCrunch", dia(0.16)),
+        fonte("Investidores apostam alto em IA para atendimento ao cliente", "Exame", dia(0.38)),
       ],
       oQueFazer: "Avaliar dois ou três fornecedores dessa nova geração antes do próximo ciclo de orçamento, mesmo sem decisão de compra.",
     },
@@ -119,8 +143,8 @@ export function radarDemo(periodoDias = 30): Radar {
       tendencia: "estavel",
       temas: [TEMAS[1]],
       fontes: [
-        { titulo: "Autoridade de dados abre consulta sobre IA e privacidade", url: "", veiculo: "Agência Brasil", publicadoEm: dia(0.24) },
-        { titulo: "Empresas têm prazo para comentar regras de dados e IA", url: "", veiculo: "Consultor Jurídico (Conjur)", publicadoEm: dia(0.5) },
+        fonte("Autoridade de dados abre consulta sobre IA e privacidade", "Agência Brasil", dia(0.24)),
+        fonte("Empresas têm prazo para comentar regras de dados e IA", "Consultor Jurídico (Conjur)", dia(0.5)),
       ],
       oQueFazer: "Registrar a data limite da consulta e decidir se vale a empresa contribuir formalmente.",
     },
@@ -132,8 +156,8 @@ export function radarDemo(periodoDias = 30): Radar {
       tendencia: "subindo",
       temas: [TEMAS[2]],
       fontes: [
-        { titulo: "Varejista nacional unifica pagamentos num só aplicativo", url: "", veiculo: "Exame", publicadoEm: dia(0.2) },
-        { titulo: "Super-apps de varejo avançam sobre o espaço das fintechs", url: "", veiculo: "Brazil Journal", publicadoEm: dia(0.44) },
+        fonte("Varejista nacional unifica pagamentos num só aplicativo", "Exame", dia(0.2)),
+        fonte("Super-apps de varejo avançam sobre o espaço das fintechs", "Brazil Journal", dia(0.44)),
       ],
       oQueFazer: "Olhar se algum parceiro de varejo relevante para o negócio está caminhando na mesma direção.",
     },
@@ -145,8 +169,8 @@ export function radarDemo(periodoDias = 30): Radar {
       tendencia: "subindo",
       temas: [TEMAS[0]],
       fontes: [
-        { titulo: "Clientes ainda reclamam de bots que não resolvem o problema", url: "", veiculo: "Época Negócios", publicadoEm: dia(0.26) },
-        { titulo: "Discussão sobre limites dos bots de atendimento ganha força", url: "", veiculo: "Reddit r/technology", publicadoEm: dia(0.46) },
+        fonte("Clientes ainda reclamam de bots que não resolvem o problema", "Época Negócios", dia(0.26)),
+        fonte("Discussão sobre limites dos bots de atendimento ganha força", "Reddit r/technology", dia(0.46)),
       ],
       oQueFazer: "Comparar a nota de satisfação do atendimento por IA com o humano antes de ampliar o escopo do bot.",
     },
@@ -158,8 +182,8 @@ export function radarDemo(periodoDias = 30): Radar {
       tendencia: "subindo",
       temas: [TEMAS[0]],
       fontes: [
-        { titulo: "Repositório de referência para agentes de atendimento passa de 10 mil estrelas", url: "", veiculo: "GitHub", publicadoEm: dia(0.09) },
-        { titulo: "Discussão técnica sobre pacotes prontos de agentes de IA viraliza", url: "", veiculo: "Hacker News", publicadoEm: dia(0.32) },
+        fonte("Repositório de referência para agentes de atendimento passa de 10 mil estrelas", "GitHub", dia(0.09)),
+        fonte("Discussão técnica sobre pacotes prontos de agentes de IA viraliza", "Hacker News", dia(0.32)),
       ],
       oQueFazer: "Pedir para o time técnico avaliar se um pacote pronto reduz o tempo do piloto interno de atendimento.",
     },

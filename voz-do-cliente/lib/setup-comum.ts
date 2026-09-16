@@ -46,8 +46,8 @@ export type Integracao = {
   campos: Campo[];
   /** Valida as chaves salvas chamando a integração. */
   testar?: (config: Record<string, string | undefined>) => Promise<{ ok: boolean; mensagem: string }>;
-  /** Campo cujo valor define sozinho se a integração conta como conectada (chip "conectado", botão Autorizar/Conectado). Por padrão, usa todos os campos não opcionais. */
-  campoConectado?: string;
+  /** Campo cujo valor define sozinho se a integração conta como conectada (chip "conectado", botão Autorizar/Conectado). Uma lista significa "qualquer um destes" (ex.: duas chaves alternativas no mesmo cartão). Por padrão, usa todos os campos não opcionais. */
+  campoConectado?: string | string[];
 };
 
 export type CampoStatus = Omit<Campo, "opcoesDinamicas"> & { definido: boolean; origem: "env" | "banco" | null; mascarado: string | null; valorVisivel?: string };
@@ -55,7 +55,10 @@ export type IntegracaoStatus = Omit<Integracao, "campos" | "testar"> & { campos:
 
 /** Chaves necessárias para a integração contar como configurada. */
 export function integracaoConfigurada(i: Integracao): boolean {
-  if (i.campoConectado) return Boolean(getConfig(i.campoConectado));
+  if (i.campoConectado) {
+    const chaves = Array.isArray(i.campoConectado) ? i.campoConectado : [i.campoConectado];
+    return chaves.some((chave) => Boolean(getConfig(chave)));
+  }
   return i.campos.filter((c) => !c.opcional).every((c) => Boolean(getConfig(c.chave)));
 }
 

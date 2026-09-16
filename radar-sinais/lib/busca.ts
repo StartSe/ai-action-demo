@@ -1,7 +1,9 @@
-// Motor de busca em fontes reais para o radar de sinais: Hacker News, Reddit e GitHub (públicos,
-// sem chave) e Exa (com chave, mais qualidade de conteúdo). Reaproveitado por lib/radar.ts (US-008)
-// para substituir o "melhor esforço" da IA por achados reais.
+// Motor de busca em fontes reais para o radar de sinais. Sem chave: Hacker News, Reddit, GitHub e Google Notícias
+// (consulta em português do Brasil). Com chave: Exa ou Tavily (notícias em português e web em geral, com trechos).
+// Reaproveitado por lib/radar.ts, que substitui o "melhor esforço" da IA por achados reais.
+import { NOMES_FONTE } from "./fontes";
 import { getConfig } from "./store";
+import type { EstadoFonte, IdFonteBusca } from "./types";
 
 export interface Achado {
   titulo: string;
@@ -12,19 +14,25 @@ export interface Achado {
   publicadoEm: string;
   /** Combina engajamento (pontos, comentários, estrelas...) e recência; maior é mais relevante. */
   pontuacao: number;
-  fonte: "hackernews" | "reddit" | "github" | "exa";
+  fonte: IdFonteBusca;
 }
 
-/** Lançado quando nenhum provedor conseguiu responder, para a rota HTTP que chamar buscar() devolver 502 em vez de 500. */
+/** Lançado quando nenhum provedor conseguiu responder, para a rota HTTP que chamar buscar() devolver 502 em vez de 500. A mensagem já é a frase da tela. */
 export class ErroBusca extends Error {}
 
+/** Um provedor com chave recusou a chave (401/403): vira aviso na tela, nunca falha silenciosa. */
+class ChaveRecusada extends Error {}
+
 interface Provedor {
-  nome: Achado["fonte"];
+  id: IdFonteBusca;
+  /** Precisa de uma chave em /setup (Exa, Tavily). */
+  comChave: boolean;
   disponivel(): boolean;
   buscar(consulta: string, dias: number): Promise<Achado[]>;
 }
 
 const USER_AGENT = "radar-sinais/1.0 (app interno de radar de mercado)";
+const TEMPO_LIMITE_MS = 12_000;
 
 /** Pontuação simples: engajamento normalizado (log para não deixar um outlier dominar) menos uma penalidade por idade. */
 function pontuar(engajamento: number, publicadoEm: string, diasDoPeriodo: number): number {
@@ -39,14 +47,20 @@ function cortarTrecho(texto: string | undefined | null, tamanho = 280): string {
   return limpo.length > tamanho ? `${limpo.slice(0, tamanho)}…` : limpo;
 }
 
+/** Erro interno de um provedor: só vai ao console.error (a tela nunca vê status HTTP cru). */
+function falhaHttp(provedor: IdFonteBusca, r: Response): Error {
+  return new Error(`${NOMES_FONTE[provedor]} não respondeu (status ${r.status})`);
+}
+
 const HACKERNEWS: Provedor = {
-  nome: "hackernews",
+  id: "hackernews",
+  comChave: false,
   disponivel: () => true,
   async buscar(consulta, dias) {
     const desde = Math.floor((Date.now() - dias * 86_400_000) / 1000);
     const url = `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(consulta)}&tags=story&numericFilters=created_at_i%3E${desde}&hitsPerPage=30`;
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`Hacker News respondeu HTTP ${r.status}`);
+    const r = await fetch(url, { signal: AbortSignal.timeout(TEMPO_LIMITE_MS) });
+    if (!r.ok) throw falhaHttp("hackernews", r);
     const data = (await r.json()) as { hits?: { title?: string; url?: string; story_text?: string; points?: number; num_comments?: number; created_at?: string; objectID: string }[] };
     return (data.hits || [])
       .filter((h) => h.title)
@@ -76,13 +90,14 @@ async function respeitarLimiteReddit(): Promise<void> {
 }
 
 const REDDIT: Provedor = {
-  nome: "reddit",
+  id: "reddit",
+  comChave: false,
   disponivel: () => true,
   async buscar(consulta, dias) {
     await respeitarLimiteReddit();
     const url = `https://www.reddit.com/search.json?q=${encodeURIComponent(consulta)}&sort=new&limit=30&t=${dias <= 7 ? "week" : dias <= 30 ? "month" : "year"}`;
-    const r = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
-    if (!r.ok) throw new Error(`Reddit respondeu HTTP ${r.status}`);
+    const r = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(TEMPO_LIMITE_MS) });
+    if (!r.ok) throw falhaHttp("reddit", r);
     const data = (await r.json()) as { data?: { children?: { data: { title: string; selftext?: string; url?: string; permalink: string; subreddit: string; created_utc: number; score?: number; num_comments?: number } }[] } };
     const corte = Date.now() - dias * 86_400_000;
     return (data.data?.children || [])
@@ -105,13 +120,14 @@ const REDDIT: Provedor = {
 };
 
 const GITHUB: Provedor = {
-  nome: "github",
+  id: "github",
+  comChave: false,
   disponivel: () => true,
   async buscar(consulta, dias) {
     const desde = new Date(Date.now() - dias * 86_400_000).toISOString().slice(0, 10);
     const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(consulta)}+created:>=${desde}&sort=stars&order=desc&per_page=30`;
-    const r = await fetch(url, { headers: { Accept: "application/vnd.github+json", "User-Agent": USER_AGENT } });
-    if (!r.ok) throw new Error(`GitHub respondeu HTTP ${r.status}`);
+    const r = await fetch(url, { headers: { Accept: "application/vnd.github+json", "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(TEMPO_LIMITE_MS) });
+    if (!r.ok) throw falhaHttp("github", r);
     const data = (await r.json()) as { items?: { full_name: string; html_url: string; description?: string; created_at: string; stargazers_count?: number }[] };
     return (data.items || []).map((i) => ({
       titulo: i.full_name,
@@ -125,39 +141,105 @@ const GITHUB: Provedor = {
   },
 };
 
+/** Lê um campo simples de um <item> de RSS (com ou sem CDATA), sem biblioteca de XML. */
+function campoRss(item: string, nome: string): string {
+  const m = item.match(new RegExp(`<${nome}(?:\\s[^>]*)?>([\\s\\S]*?)</${nome}>`, "i"));
+  if (!m) return "";
+  return m[1].replace(/^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/, "$1").trim();
+}
+
+function decodificarHtml(texto: string): string {
+  return texto
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&nbsp;/g, " ");
+}
+
+/** Google Notícias (RSS público, consulta em português do Brasil): a fonte de notícias em português que funciona sem chave. */
+const GOOGLENEWS: Provedor = {
+  id: "googlenews",
+  comChave: false,
+  disponivel: () => true,
+  async buscar(consulta, dias) {
+    const q = encodeURIComponent(`${consulta} when:${dias}d`);
+    const url = `https://news.google.com/rss/search?q=${q}&hl=pt-BR&gl=BR&ceid=BR:pt-419`;
+    const r = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(TEMPO_LIMITE_MS) });
+    if (!r.ok) throw falhaHttp("googlenews", r);
+    const xml = await r.text();
+    const itens = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+    const corte = Date.now() - dias * 86_400_000;
+    return itens
+      .map((item) => {
+        const veiculo = decodificarHtml(campoRss(item, "source")) || "Google Notícias";
+        const tituloBruto = decodificarHtml(campoRss(item, "title"));
+        // O título do RSS vem como "Manchete - Veículo": tira o sufixo quando bate com a fonte.
+        const titulo = tituloBruto.endsWith(` - ${veiculo}`) ? tituloBruto.slice(0, -(veiculo.length + 3)).trim() : tituloBruto;
+        const link = campoRss(item, "link");
+        const publicadoEm = new Date(campoRss(item, "pubDate") || Date.now()).toISOString();
+        return { titulo, link, veiculo, publicadoEm, descricao: decodificarHtml(campoRss(item, "description")) };
+      })
+      .filter((i) => i.titulo && i.link && new Date(i.publicadoEm).getTime() >= corte)
+      .slice(0, 30)
+      .map((i) => ({
+        titulo: i.titulo,
+        url: i.link,
+        trecho: cortarTrecho(i.descricao === i.titulo ? "" : i.descricao),
+        veiculo: i.veiculo,
+        publicadoEm: i.publicadoEm,
+        // O RSS não traz engajamento: uma base fixa deixa a recência decidir entre as notícias.
+        pontuacao: pontuar(3, i.publicadoEm, dias),
+        fonte: "googlenews" as const,
+      }));
+  },
+};
+
 function exaApiKey(): string | undefined {
   return getConfig("EXA_API_KEY");
 }
 
-export function exaEnabled(): boolean {
-  return Boolean(exaApiKey());
+function tavilyApiKey(): string | undefined {
+  return getConfig("TAVILY_API_KEY");
+}
+
+/** Alguma fonte com chave (Exa ou Tavily) está conectada. */
+export function buscaWebConectada(): boolean {
+  return Boolean(exaApiKey() || tavilyApiKey());
+}
+
+function veiculoDaUrl(url: string, padrao: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return padrao;
+  }
 }
 
 const EXA: Provedor = {
-  nome: "exa",
-  disponivel: exaEnabled,
+  id: "exa",
+  comChave: true,
+  disponivel: () => Boolean(exaApiKey()),
   async buscar(consulta, dias) {
     const startPublishedDate = new Date(Date.now() - dias * 86_400_000).toISOString();
     const r = await fetch("https://api.exa.ai/search", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": exaApiKey()! },
       body: JSON.stringify({ query: consulta, startPublishedDate, numResults: 20, contents: { highlights: {} } }),
+      signal: AbortSignal.timeout(TEMPO_LIMITE_MS),
     });
-    if (!r.ok) throw new Error(`Exa respondeu HTTP ${r.status}`);
+    if (r.status === 401 || r.status === 403) throw new ChaveRecusada("A Exa recusou a chave.");
+    if (!r.ok) throw falhaHttp("exa", r);
     const data = (await r.json()) as { results?: { title?: string; url: string; publishedDate?: string; score?: number; highlights?: string[] }[] };
     return (data.results || []).map((res) => {
       const publicadoEm = res.publishedDate || new Date().toISOString();
-      let veiculo = "Exa";
-      try {
-        veiculo = new URL(res.url).hostname.replace(/^www\./, "");
-      } catch {
-        // mantém "Exa" quando a URL vier malformada
-      }
       return {
         titulo: res.title || res.url,
         url: res.url,
         trecho: cortarTrecho(res.highlights?.join(" ")),
-        veiculo,
+        veiculo: veiculoDaUrl(res.url, "Exa"),
         publicadoEm,
         pontuacao: pontuar((res.score ?? 0) * 100, publicadoEm, dias),
         fonte: "exa" as const,
@@ -166,7 +248,38 @@ const EXA: Provedor = {
   },
 };
 
-const PROVEDORES: Provedor[] = [HACKERNEWS, REDDIT, GITHUB, EXA];
+/** Tavily: alternativa à Exa (mesmo cartão em /setup), busca de notícias com trecho por página. */
+const TAVILY: Provedor = {
+  id: "tavily",
+  comChave: true,
+  disponivel: () => Boolean(tavilyApiKey()),
+  async buscar(consulta, dias) {
+    const r = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${tavilyApiKey()!}` },
+      body: JSON.stringify({ query: consulta, topic: "news", days: dias, max_results: 20, search_depth: "basic" }),
+      signal: AbortSignal.timeout(TEMPO_LIMITE_MS),
+    });
+    if (r.status === 401 || r.status === 403) throw new ChaveRecusada("A Tavily recusou a chave.");
+    if (!r.ok) throw falhaHttp("tavily", r);
+    const data = (await r.json()) as { results?: { title?: string; url: string; content?: string; score?: number; published_date?: string }[] };
+    return (data.results || []).map((res) => {
+      const publicadoEm = res.published_date ? new Date(res.published_date).toISOString() : new Date().toISOString();
+      return {
+        titulo: res.title || res.url,
+        url: res.url,
+        trecho: cortarTrecho(res.content),
+        veiculo: veiculoDaUrl(res.url, "Tavily"),
+        publicadoEm,
+        pontuacao: pontuar((res.score ?? 0) * 100, publicadoEm, dias),
+        fonte: "tavily" as const,
+      };
+    });
+  },
+};
+
+/** Ordem de consulta e de exibição. Fontes sem chave primeiro; as com chave só entram quando conectadas. */
+const PROVEDORES: Provedor[] = [HACKERNEWS, REDDIT, GITHUB, GOOGLENEWS, EXA, TAVILY];
 
 /** URL "normalizada" para deduplicar: sem protocolo, sem www, sem barra final, sem querystring/hash. */
 function normalizarUrl(url: string): string {
@@ -205,25 +318,74 @@ function deduplicar(achados: Achado[]): Achado[] {
 
 const MAXIMO_ACHADOS = 60;
 
-/** Busca em todas as fontes disponíveis, deduplica e devolve até 60 achados ordenados por relevância. */
-export async function buscar({ consulta, dias }: { consulta: string; dias: number }): Promise<Achado[]> {
-  const disponiveis = PROVEDORES.filter((p) => p.disponivel());
-  const resultados = await Promise.allSettled(disponiveis.map((p) => p.buscar(consulta, dias)));
+/** Último resultado conhecido de cada provedor neste processo (alimenta a linha "Fontes desta rodada" antes da primeira busca). */
+const ultimoEstado = new Map<IdFonteBusca, { estado: EstadoFonte["estado"]; em: number }>();
+const VALIDADE_SONDAGEM_MS = 15 * 60_000;
 
-  let algumRespondeu = false;
+function estadoDe(p: Provedor, estado: EstadoFonte["estado"]): EstadoFonte {
+  return { id: p.id, nome: NOMES_FONTE[p.id], estado };
+}
+
+export type ResultadoBusca = { achados: Achado[]; fontes: EstadoFonte[] };
+
+/**
+ * Busca em todas as fontes disponíveis, deduplica e devolve até 60 achados ordenados por relevância, mais a
+ * situação de cada fonte nesta consulta. `aoResponder` é chamado com o nome de cada fonte assim que ela responde
+ * (a tela mostra "já responderam: ..." enquanto espera). Cada provedor roda isolado: uma falha só gera console.error.
+ */
+export async function buscarDetalhado({ consulta, dias, aoResponder }: { consulta: string; dias: number; aoResponder?: (fonte: string) => void }): Promise<ResultadoBusca> {
+  const disponiveis = PROVEDORES.filter((p) => p.disponivel());
+  const resultados = await Promise.allSettled(
+    disponiveis.map(async (p) => {
+      const achados = await p.buscar(consulta, dias);
+      aoResponder?.(NOMES_FONTE[p.id]);
+      return achados;
+    })
+  );
+
   const achados: Achado[] = [];
-  resultados.forEach((res, i) => {
+  const fontes: EstadoFonte[] = resultados.map((res, i) => {
+    const p = disponiveis[i];
     if (res.status === "fulfilled") {
-      algumRespondeu = true;
       achados.push(...res.value);
-    } else {
-      console.error(`Provedor de busca "${disponiveis[i].nome}" falhou:`, res.reason);
+      ultimoEstado.set(p.id, { estado: "ok", em: Date.now() });
+      return estadoDe(p, "ok");
     }
+    console.error(`Provedor de busca "${p.id}" falhou:`, res.reason);
+    const estado: EstadoFonte["estado"] = res.reason instanceof ChaveRecusada ? "chave_recusada" : "indisponivel";
+    ultimoEstado.set(p.id, { estado, em: Date.now() });
+    return estadoDe(p, estado);
   });
 
-  if (!algumRespondeu && disponiveis.length > 0) {
+  if (!fontes.some((f) => f.estado === "ok") && disponiveis.length > 0) {
     throw new ErroBusca("Nenhuma fonte de busca respondeu agora. Tente novamente em alguns minutos.");
   }
 
-  return deduplicar(achados).slice(0, MAXIMO_ACHADOS);
+  return { achados: deduplicar(achados).slice(0, MAXIMO_ACHADOS), fontes };
+}
+
+/** Só os achados (compatível com quem não precisa da situação das fontes). */
+export async function buscar(args: { consulta: string; dias: number }): Promise<Achado[]> {
+  return (await buscarDetalhado(args)).achados;
+}
+
+/**
+ * Situação das fontes para a tela antes de montar um radar: fontes sem chave são sondadas com uma consulta curta
+ * (uma vez a cada 15 minutos por processo) para a linha "Fontes desta rodada" já dizer, por exemplo, que o Reddit
+ * está indisponível; fontes com chave só dizem se a chave existe (a recusa aparece na rodada de verdade).
+ */
+export async function estadoDasFontes(): Promise<EstadoFonte[]> {
+  const agora = Date.now();
+  const sondar = PROVEDORES.filter((p) => !p.comChave && (!ultimoEstado.has(p.id) || agora - ultimoEstado.get(p.id)!.em > VALIDADE_SONDAGEM_MS));
+  if (sondar.length > 0) {
+    const resultados = await Promise.allSettled(sondar.map((p) => p.buscar("inteligência artificial", 7)));
+    resultados.forEach((res, i) => {
+      if (res.status === "rejected") console.error(`Sondagem da fonte "${sondar[i].id}" falhou:`, res.reason);
+      ultimoEstado.set(sondar[i].id, { estado: res.status === "fulfilled" ? "ok" : "indisponivel", em: Date.now() });
+    });
+  }
+  return PROVEDORES.map((p) => {
+    if (p.comChave) return estadoDe(p, p.disponivel() ? (ultimoEstado.get(p.id)?.estado ?? "ok") : "sem_chave");
+    return estadoDe(p, ultimoEstado.get(p.id)?.estado ?? "ok");
+  });
 }

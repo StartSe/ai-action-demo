@@ -2,15 +2,25 @@
 // Ao contrário de lib/rotinas.ts, este arquivo NÃO é copiado sem alterar entre apps — cada app registra
 // aqui o que faz sentido rodar sozinho.
 import { listar as listarHistorico, listarPorTipo, salvar } from "./historico";
+import { chavePerfil } from "./perfil";
 import { montarRadar } from "./radar";
-import { registrarExecutor, type Rotina } from "./rotinas";
+import { registrarExecutor, type Rotina, type TipoRotina } from "./rotinas";
 import type { DadosRadar, Radar, Sinal } from "./types";
 
+/** Rotina semanal: precisa dos temas, então só nasce pelo botão "Receber este radar toda semana" no resultado
+ * (POST /api/radar/semanal). Continua em TIPOS_ROTINA para o cartão "Rotinas" de /setup mostrar o rótulo certo,
+ * mas `validar` recusa a criação pelo formulário genérico (que não tem campo de temas) com a orientação. */
+export const TIPO_RADAR_SEMANAL: TipoRotina<Partial<DadosRadar>> = {
+  tipo: "radar-semanal",
+  rotulo: "Radar semanal dos meus temas",
+  validar: (parametros) => {
+    const temas = Array.isArray(parametros?.temas) ? parametros.temas.filter((t) => String(t).trim()) : [];
+    return temas.length > 0 ? undefined : "O radar semanal precisa dos temas: monte um radar na tela inicial e clique em 'Receber este radar toda semana'.";
+  },
+};
+
 /** Tipos de rotina disponíveis neste app, para o cartão de /setup listar num seletor. */
-export const TIPOS_ROTINA: { tipo: string; rotulo: string }[] = [
-  { tipo: "resumo-radar-sinais", rotulo: "Resumo dos radares gerados" },
-  { tipo: "radar-semanal", rotulo: "Radar semanal dos meus temas" },
-];
+export const TIPOS_ROTINA: TipoRotina[] = [{ tipo: "resumo-radar-sinais", rotulo: "Resumo dos radares gerados" }, TIPO_RADAR_SEMANAL as TipoRotina];
 
 registrarExecutor("resumo-radar-sinais", async (rotina: Rotina) => {
   const desde = rotina.ultimaExecucao ? new Date(rotina.ultimaExecucao) : new Date(0);
@@ -21,16 +31,11 @@ registrarExecutor("resumo-radar-sinais", async (rotina: Rotina) => {
   return { titulo, texto, resultadoId: recentes[0].id };
 });
 
-/** Normaliza temas+setor para reconhecer duas execuções (ou um radar manual) como o mesmo perfil acompanhado. Mesmo espírito de chavePerfil em prospeccao-ia/lib/leads-vistos.ts. */
-function chavePerfil(temas: string[], setor?: string): string {
-  return [...temas.map((t) => t.trim().toLowerCase()).sort(), (setor || "").trim().toLowerCase()].join("|");
-}
-
 function tituloNormalizado(s: Sinal): string {
   return s.titulo.trim().toLowerCase();
 }
 
-registrarExecutor("radar-semanal", async (rotina: Rotina) => {
+registrarExecutor(TIPO_RADAR_SEMANAL.tipo, async (rotina: Rotina) => {
   const titulo = "Radar semanal dos seus temas";
   const parametros = rotina.parametros as Partial<DadosRadar> | undefined;
   const temas = Array.isArray(parametros?.temas) ? parametros.temas.map((t) => String(t).trim()).filter(Boolean) : [];

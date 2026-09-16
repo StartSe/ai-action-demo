@@ -1,35 +1,47 @@
 "use client";
 // Componentes visuais compartilhados pela suíte. Copie este arquivo para cada app sem alterar.
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { Meta } from "@/lib/ai";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import type { CodigoErroIA, Meta } from "@/lib/ai";
 import { numero, data } from "@/lib/formato";
+import { NAVEGACAO, type ItemNavegacao } from "@/lib/navegacao";
+import { ilustracaoDoSegmento, type Segmento } from "@/lib/ilustracao";
+import { MODELOS_GRATUITOS, type ProximoPasso } from "@/lib/modelos";
 
-export type Status = { ai: boolean; demo: boolean; model: string; integrations?: Record<string, boolean>; setup?: { pronto: boolean; url: string } };
+export type UsuarioTopbar = { nome: string; email: string };
+export type NotificacaoTopbar = { id: string; texto: string; url?: string };
+
+export type Status = { ai: boolean; demo: boolean; model: string; integrations?: Record<string, boolean>; setup?: { pronto: boolean; url: string }; usuario?: UsuarioTopbar | null; proximos?: ProximoPasso[] };
 
 export function useStatus() {
   const [status, setStatus] = useState<Status | null>(null);
   const [erro, setErro] = useState(false);
+  const router = useRouter();
   useEffect(() => {
-    fetch("/api/status").then((r) => r.json()).then(setStatus).catch(() => setErro(true));
-  }, []);
+    fetch("/api/status")
+      .then((r) => {
+        if (r.status === 401) {
+          router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
+          return null;
+        }
+        return r.json();
+      })
+      .then((d) => d && setStatus(d))
+      .catch(() => setErro(true));
+  }, [router]);
   return { status, erro };
 }
 
-/** Chip de status; quando em modo demonstração vira botão que abre um popover com o contexto do app. */
-export function Topbar({ marca, nome, area, status, erro, resumo }: { marca: string; nome: string; area: string; status: Status | null; erro?: boolean; resumo?: string }) {
-  const [aberto, setAberto] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const texto = erro ? "Servidor indisponível" : !status ? "Verificando IA" : status.ai ? "IA conectada" : "Modo demonstração";
-  const demo = status ? !status.ai : false;
-
+/** Fecha um popover/folha ao apertar Esc ou clicar fora dele; `setAberto` precisa ser um setState (identidade estável). */
+function useFecharAoClicarFora(aberto: boolean, ref: RefObject<HTMLElement | null>, setAberto: (v: boolean) => void) {
   useEffect(() => {
     if (!aberto) return;
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") setAberto(false);
     }
     function onClickFora(e: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) setAberto(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false);
     }
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("mousedown", onClickFora);
@@ -37,46 +49,218 @@ export function Topbar({ marca, nome, area, status, erro, resumo }: { marca: str
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("mousedown", onClickFora);
     };
-  }, [aberto]);
+  }, [aberto, ref, setAberto]);
+}
 
+function iniciaisDe(nome: string) {
+  return nome.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
+}
+
+/** Cabeçalho da suíte: marca à esquerda, navegação ao centro (desktop) e chip de status + sino + conta à direita; no celular a navegação e a conta viram um botão "Menu" com uma folha. */
+export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notificacoes, navegacao = NAVEGACAO }: { marca: string; nome: string; area: string; status: Status | null; erro?: boolean; resumo?: string; usuario?: UsuarioTopbar | null; notificacoes?: NotificacaoTopbar[]; navegacao?: ItemNavegacao[] }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const sair = () => { fetch("/api/conta/sair", { method: "POST" }).then(() => router.push("/entrar")); };
+  const [popoverAberto, setPopoverAberto] = useState(false);
+  const [sinoAberto, setSinoAberto] = useState(false);
+  const [contaAberto, setContaAberto] = useState(false);
+  const [menuAberto, setMenuAberto] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const sinoRef = useRef<HTMLDivElement>(null);
+  const contaRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useFecharAoClicarFora(popoverAberto, popoverRef, setPopoverAberto);
+  useFecharAoClicarFora(sinoAberto, sinoRef, setSinoAberto);
+  useFecharAoClicarFora(contaAberto, contaRef, setContaAberto);
+  useFecharAoClicarFora(menuAberto, menuRef, setMenuAberto);
+
+  const texto = erro ? "Servidor indisponível" : !status ? "Verificando IA" : status.ai ? "IA conectada" : "Modo demonstração · conectar";
+  const demo = status ? !status.ai : false;
+  const estadoChip = erro || !status ? "pendente" : status.ai ? "conectado" : "demonstracao";
   const badge = (
-    <span className={`inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full text-[13px] max-md:text-xs font-semibold whitespace-nowrap min-w-[142px] max-md:min-w-[110px] ${demo ? "bg-[#fff4e0] text-[#7a4d00]" : "bg-accent-soft text-accent-ink"}`}>
-      <span className={`w-2 h-2 rounded-full shrink-0 ${demo ? "bg-warn" : "bg-accent"}`} />
+    <span className={`chip-status chip-status-${estadoChip} min-w-[128px] justify-center max-md:min-w-0 max-md:px-2 max-md:text-[11px]`}>
       {texto}
+      {estadoChip === "demonstracao" && (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" /></svg>
+      )}
     </span>
   );
+  const proximos = status?.ai ? (status.proximos ?? []).slice(0, 3) : [];
+
+  function ativo(href: string) {
+    return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+  }
 
   return (
-    <header className="no-print flex items-center justify-between gap-4 px-8 py-3.5 max-md:px-4 max-md:py-3 bg-surface border-b border-line">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="shrink-0 w-[34px] h-[34px] max-md:w-[30px] max-md:h-[30px] rounded-[9px] bg-accent text-white grid place-items-center font-extrabold text-[15px] max-md:text-[13px] tracking-tight">{marca}</div>
-        <div className="min-w-0">
-          <div className="font-bold text-[15px] max-md:text-sm max-md:leading-tight">{nome}</div>
-          <div className="text-muted text-[13px] max-md:hidden">{area}</div>
+    <>
+      <header className="no-print flex items-center gap-4 max-md:gap-2 px-8 py-3.5 max-md:px-4 max-md:py-3 bg-surface border-b border-line">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="shrink-0 w-[34px] h-[34px] max-md:w-[30px] max-md:h-[30px] rounded-[9px] bg-accent text-white grid place-items-center font-extrabold text-[15px] max-md:text-[13px] tracking-tight">{marca}</div>
+          <div className="min-w-0">
+            <div className="font-bold text-[15px] max-md:text-sm max-md:leading-tight truncate">{nome}</div>
+            <div className="text-ink-2 text-[13px] max-md:hidden truncate">{area}</div>
+          </div>
         </div>
-      </div>
-      <div className="flex items-center gap-3 shrink-0">
-        {demo && resumo ? (
-          <div className="relative" ref={popoverRef}>
-            <button type="button" className="cursor-pointer" aria-haspopup="dialog" aria-expanded={aberto} onClick={() => setAberto((v) => !v)}>
-              {badge}
+
+        <nav className="hidden md:flex items-center gap-6 flex-1 justify-center min-w-0">
+          {navegacao.map((item) => (
+            <Link key={item.href} href={item.href} className={`text-[14px] font-semibold pb-1 border-b-2 ${ativo(item.href) ? "text-accent border-accent" : "text-ink-2 border-transparent hover:text-ink"}`}>
+              {item.rotulo}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-2 max-md:gap-1.5 shrink-0 min-w-0">
+          {demo && resumo ? (
+            <div className="relative" ref={popoverRef}>
+              <button type="button" className="cursor-pointer" aria-haspopup="dialog" aria-expanded={popoverAberto} onClick={() => setPopoverAberto((v) => !v)}>
+                {badge}
+              </button>
+              {popoverAberto && (
+                <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-72 max-md:w-64 card p-4 text-[13.5px] text-ink">
+                  <p className="mb-3">{resumo}</p>
+                  <Link href="/setup" className="font-bold text-accent underline underline-offset-2" onClick={() => setPopoverAberto(false)}>Conectar a IA em 1 minuto</Link>
+                </div>
+              )}
+            </div>
+          ) : demo ? (
+            <Link href="/setup#openrouter" className="cursor-pointer">{badge}</Link>
+          ) : proximos.length > 0 ? (
+            <div className="relative" ref={popoverRef}>
+              <button type="button" className="cursor-pointer" aria-haspopup="dialog" aria-expanded={popoverAberto} onClick={() => setPopoverAberto((v) => !v)}>
+                {badge}
+              </button>
+              {popoverAberto && (
+                <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-72 max-md:w-64 card p-1.5 text-[13.5px] text-ink">
+                  <p className="font-bold px-3 pt-2 pb-1">Faz mais com...</p>
+                  {proximos.map((p) => (
+                    <Link key={p.id} href={p.url} className="block px-3 py-2 rounded-md hover:bg-accent-soft" onClick={() => setPopoverAberto(false)}>
+                      <span className="block font-semibold text-ink">{p.titulo}</span>
+                      <span className="block text-ink-2 text-[12.5px]">{p.beneficio}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : badge}
+
+          <Link href="/setup" aria-label="Configurações" className="md:hidden shrink-0 w-[30px] h-[30px] rounded-full grid place-items-center hover:bg-bg">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" /><path d="M19.4 13.5a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V19a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H4a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H10a1.65 1.65 0 0 0 1-1.51V4a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V10a1.65 1.65 0 0 0 1.51 1H20a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></svg>
+          </Link>
+
+          {notificacoes && notificacoes.length > 0 && (
+            <div className="relative max-md:hidden" ref={sinoRef}>
+              <button type="button" className="relative w-8 h-8 grid place-items-center rounded-full hover:bg-bg cursor-pointer" aria-haspopup="dialog" aria-expanded={sinoAberto} aria-label={`${notificacoes.length} avisos`} onClick={() => setSinoAberto((v) => !v)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6Z" /><path d="M10 19a2 2 0 0 0 4 0" /></svg>
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold grid place-items-center">{notificacoes.length}</span>
+              </button>
+              {sinoAberto && (
+                <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-80 max-md:w-64 card p-1.5 text-[13.5px] text-ink">
+                  {notificacoes.map((n) =>
+                    n.url ? (
+                      <Link key={n.id} href={n.url} className="block px-3 py-2 rounded-md hover:bg-accent-soft" onClick={() => setSinoAberto(false)}>{n.texto}</Link>
+                    ) : (
+                      <p key={n.id} className="px-3 py-2">{n.texto}</p>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {usuario && (
+            <div className="relative max-md:hidden" ref={contaRef}>
+              <button type="button" className="w-8 h-8 rounded-full bg-accent text-white grid place-items-center font-bold text-[12.5px] cursor-pointer" aria-haspopup="dialog" aria-expanded={contaAberto} aria-label="Sua conta" onClick={() => setContaAberto((v) => !v)}>
+                {iniciaisDe(usuario.nome)}
+              </button>
+              {contaAberto && (
+                <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-64 card p-4 text-[13.5px]">
+                  <div className="font-bold text-ink">{usuario.nome}</div>
+                  <div className="text-ink-2 mb-3 truncate">{usuario.email}</div>
+                  <button type="button" className="btn-link" onClick={sair}>Sair</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <button type="button" className="md:hidden shrink-0 inline-flex items-center gap-1 h-[30px] px-2 rounded-field border border-line bg-surface text-ink text-[12px] font-semibold cursor-pointer" aria-haspopup="dialog" aria-expanded={menuAberto} onClick={() => setMenuAberto(true)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+            Menu
+          </button>
+        </div>
+      </header>
+
+      {menuAberto && (
+        <div className="md:hidden fixed inset-0 z-30">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setMenuAberto(false)} />
+          <div ref={menuRef} role="dialog" aria-label="Menu" className="absolute top-0 right-0 bottom-0 w-[80%] max-w-[300px] bg-surface p-5 flex flex-col gap-1 shadow-card overflow-y-auto">
+            <button type="button" className="self-end text-ink-2 mb-3 cursor-pointer" aria-label="Fechar menu" onClick={() => setMenuAberto(false)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19" /></svg>
             </button>
-            {aberto && (
-              <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-72 max-md:w-64 card p-4 text-[13.5px] text-ink">
-                <p className="mb-3">{resumo}</p>
-                <Link href="/setup" className="font-bold text-accent underline underline-offset-2" onClick={() => setAberto(false)}>Conectar a IA em 1 minuto</Link>
+            {navegacao.map((item) => (
+              <Link key={item.href} href={item.href} className={`px-3 py-2.5 rounded-md font-semibold ${ativo(item.href) ? "text-accent bg-accent-soft" : "text-ink"}`} onClick={() => setMenuAberto(false)}>{item.rotulo}</Link>
+            ))}
+            {usuario && (
+              <div className="mt-4 pt-4 border-t border-line">
+                <div className="font-bold text-ink px-3">{usuario.nome}</div>
+                <div className="text-ink-2 text-[13px] px-3 mb-3 truncate">{usuario.email}</div>
+                <button type="button" className="btn-link px-3" onClick={sair}>Sair</button>
               </div>
             )}
           </div>
-        ) : badge}
-        <Link href="/setup" className="text-[13px] font-semibold text-muted hover:text-ink max-md:hidden">Configurações</Link>
-      </div>
-    </header>
+        </div>
+      )}
+    </>
   );
 }
 
 export function Workspace({ children }: { children: ReactNode }) {
   return <main className="grid grid-cols-[minmax(320px,420px)_1fr] max-md:grid-cols-1 gap-7 px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">{children}</main>;
+}
+
+/** Topo da tela principal (referência visual de 15/09/2026): sobretítulo no acento, título de duas linhas,
+ * frase de apoio e a ilustração do segmento à direita. Os textos são sempre passados pelo app (constante
+ * `PROMESSA`), nunca fixos aqui. Sem ilustração no celular (breakpoint já resolvido em `IlustracaoSegmento`). */
+export function Hero({ sobretitulo, titulo, apoio, segmento, children }: { sobretitulo: string; titulo: string; apoio: string; segmento: Segmento; children?: ReactNode }) {
+  return (
+    <section className="no-print px-8 pt-6 max-md:px-4 max-md:pt-5 max-w-[1400px] mx-auto">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] max-md:grid-cols-1 gap-8 items-center">
+        <div>
+          <p className="sobretitulo mb-1">{sobretitulo}</p>
+          <h1 className="titulo-painel max-w-[560px] mb-2">{titulo}</h1>
+          <p className="text-[15px] text-ink-2 leading-snug max-w-[520px] mb-3">{apoio}</p>
+          {children}
+        </div>
+        <div className="relative w-[130px] shrink-0 max-md:hidden">
+          <div className="blob-acento" />
+          <IlustracaoSegmento segmento={segmento} loading="eager" className="relative w-full h-auto" />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export type PassoIndicador = { titulo: string; apoio: string };
+
+/** Indicador de progresso (referência visual de 15/09/2026): três etapas numeradas, a atual no acento e as
+ * demais em cinza. É só indicador — nunca navegação, não recebe clique. Rola na horizontal no celular. */
+export function Passos({ passos, atual }: { passos: PassoIndicador[]; atual: number }) {
+  return (
+    <ol className="no-print flex gap-7 max-md:gap-5 max-md:overflow-x-auto max-md:pb-1">
+      {passos.map((p, i) => {
+        const numero = i + 1;
+        const ativo = numero === atual;
+        return (
+          <li key={p.titulo} className={`flex items-baseline gap-1.5 shrink-0 ${ativo ? "text-accent" : "text-ink-2"}`}>
+            <span className="font-extrabold text-[13px]">{numero}</span>
+            <span className={`text-[13px] ${ativo ? "font-bold" : ""}`}>{p.titulo}</span>
+            <span className="text-[12px] max-md:hidden">· {p.apoio}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
 }
 
 export function Panel({ titulo, lead, children }: { titulo: string; lead: string; children: ReactNode }) {
@@ -121,14 +305,35 @@ export function Stage({ children }: { children: ReactNode }) {
 }
 
 /** Ilustração (SVG inline, 64 px, traço 1,5 px) no lugar de um glifo genérico; cada app entrega a sua. */
-export function Empty({ ilustracao, titulo, descricao, acao, onAcao }: { ilustracao: ReactNode; titulo: string; descricao: string; acao?: string; onAcao?: () => void }) {
+export function Empty({ ilustracao, titulo, descricao, acao, onAcao, acaoSecundaria }: { ilustracao: ReactNode; titulo: string; descricao: string; acao?: string; onAcao?: () => void; acaoSecundaria?: { rotulo: string; url: string } }) {
   return (
     <div className="h-full min-h-[520px] max-md:min-h-[320px] flex flex-col items-center justify-center text-center text-muted p-10 max-md:px-4 max-md:py-7 border border-dashed border-line rounded-card">
       <div className="text-accent mb-[18px]">{ilustracao}</div>
       <h2 className="text-ink text-lg font-bold mb-1.5">{titulo}</h2>
       <p className="max-w-[380px]">{descricao}</p>
       {acao && onAcao && <button type="button" className="btn-link mt-1" onClick={onAcao}>{acao}</button>}
+      {acaoSecundaria && <Link href={acaoSecundaria.url} className="btn-link mt-1">{acaoSecundaria.rotulo}</Link>}
     </div>
+  );
+}
+
+/**
+ * Ilustração de pessoa do segmento (ver lib/ilustracao.ts), decorativa e ausente no celular por design
+ * (o hero do celular não a mostra): sem `<source>` casando com a media abaixo de 768 px, o `<img>` sem
+ * `src` não baixa nada. Segmentos sem ilustração pronta (Estratégia, Gestão, Jurídico) não renderizam
+ * nada — o app fica só com `.blob-acento`.
+ */
+export function IlustracaoSegmento({ segmento, loading = "lazy", className }: { segmento: Segmento; loading?: "lazy" | "eager"; className?: string }) {
+  const ilustracao = ilustracaoDoSegmento(segmento);
+  if (!ilustracao) return null;
+  const { nome, variantes } = ilustracao;
+  const base = variantes[0];
+  const srcSet = variantes.map((v) => `/ilustracoes/${nome}-${v.largura}.webp ${v.largura}w`).join(", ");
+  return (
+    <picture>
+      <source media="(min-width: 768px)" srcSet={srcSet} type="image/webp" />
+      <img alt="" aria-hidden="true" width={base.largura} height={base.altura} loading={loading} className={className} />
+    </picture>
   );
 }
 
@@ -163,18 +368,139 @@ export function Loading({ texto, etapas }: { texto?: string; etapas?: string[] }
   );
 }
 
-/** Rola até si mesma no celular ao aparecer (mesmo critério de useScrollToResult); onTentarNovamente exibe o botão "Tentar de novo". */
-export function ErrorBox({ mensagem, onTentarNovamente }: { mensagem: string; onTentarNovamente?: () => void }) {
+function tituloErro(codigo?: CodigoErroIA): string {
+  if (codigo === "sem_credito") return "A IA está sem crédito";
+  if (codigo === "limite_diario") return "Limite diário atingido";
+  if (codigo === "modelo_indisponivel") return "Modelo indisponível";
+  if (codigo === "chave_invalida") return "Entre de novo";
+  return "Não deu certo";
+}
+
+/** Rola até si mesma no celular ao aparecer (mesmo critério de useScrollToResult); onTentarNovamente exibe o botão "Tentar de novo". `codigo`/`acao` vêm de ErroIA (lib/ai.ts, ver respostaErro). */
+export function ErrorBox({ mensagem, codigo, acao, onTentarNovamente }: { mensagem: string; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string }; onTentarNovamente?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [trocandoModelo, setTrocandoModelo] = useState(false);
   useEffect(() => {
     if (podeRolarAutomaticamente()) ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
+
+  async function usarModeloGratuito() {
+    setTrocandoModelo(true);
+    try {
+      const status: { model?: string } = await fetch("/api/status").then((r) => r.json());
+      const gratuito = MODELOS_GRATUITOS.find((m) => m.valor.endsWith(":free") && m.valor !== status.model);
+      if (gratuito) {
+        await fetch("/api/setup", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ valores: { OPENROUTER_MODEL: gratuito.valor } }) });
+      }
+      onTentarNovamente?.();
+    } finally {
+      setTrocandoModelo(false);
+    }
+  }
+
+  const ofereceModeloGratuito = codigo === "sem_credito" || codigo === "limite_diario";
+
   return (
     <div ref={ref} className="bg-[#fde8e6] border border-[#f5c2bd] text-danger px-4 py-3.5 rounded-[10px]">
-      <strong>Não deu certo.</strong> {mensagem}
-      {onTentarNovamente && <div className="mt-3"><button type="button" className="btn-ghost" onClick={onTentarNovamente}>Tentar de novo</button></div>}
+      <strong>{tituloErro(codigo)}.</strong> {mensagem}
+      {(onTentarNovamente || acao || ofereceModeloGratuito) && (
+        <div className="mt-3 flex gap-2.5 flex-wrap">
+          {ofereceModeloGratuito && (
+            <button type="button" className="btn-primary !w-auto" onClick={usarModeloGratuito} disabled={trocandoModelo}>
+              {trocandoModelo ? "Trocando..." : "Usar um modelo gratuito"}
+            </button>
+          )}
+          {acao && (
+            <a
+              className="btn-primary !w-auto"
+              href={acao.url}
+              target={acao.url.startsWith("http") ? "_blank" : undefined}
+              rel={acao.url.startsWith("http") ? "noopener noreferrer" : undefined}
+            >
+              {acao.rotulo}
+            </a>
+          )}
+          {onTentarNovamente && <button type="button" className="btn-ghost" onClick={onTentarNovamente}>Tentar de novo</button>}
+        </div>
+      )}
     </div>
   );
+}
+
+const TONS_AVISO: Record<"ok" | "warn" | "danger", string> = {
+  ok: "bg-[#e4f4ec] border-[#bfe3d0] text-ok",
+  warn: "bg-[#fff4e0] border-[#f0d999] text-warn",
+  danger: "bg-[#fde8e6] border-[#f5c2bd] text-danger",
+};
+
+/** Aviso inline (não é `window.alert`): aparece no lugar da tela onde o problema ocorreu, nunca num popup do navegador. `acao` é um link (`url`) ou um botão (`onClick`). */
+export function Aviso({ tom = "warn", children, acao }: { tom?: "ok" | "warn" | "danger"; children: ReactNode; acao?: { rotulo: string; url?: string; onClick?: () => void } }) {
+  return (
+    <div className={`px-4 py-3 rounded-[10px] text-sm border ${TONS_AVISO[tom]}`}>
+      {children}
+      {acao && (
+        <div className="mt-2.5">
+          {acao.url ? (
+            <a className="btn-link text-[13px]" href={acao.url}>{acao.rotulo}</a>
+          ) : (
+            <button type="button" className="btn-link text-[13px]" onClick={acao.onClick}>{acao.rotulo}</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type PedidoConfirmacao = { mensagem: string; confirmarRotulo: string; cancelarRotulo: string; resolver: (v: boolean) => void };
+
+/** Diálogo de confirmação da suíte, no lugar de `window.confirm` (reservado só para "Apagar tudo"). Renderize `Dialogo` uma vez na árvore do componente; `confirmar(mensagem)` devolve uma Promise<boolean>. */
+export function useConfirmacao() {
+  const [pedido, setPedido] = useState<PedidoConfirmacao | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  function confirmar(mensagem: string, opcoes?: { confirmarRotulo?: string; cancelarRotulo?: string }): Promise<boolean> {
+    return new Promise((resolver) => {
+      setPedido({ mensagem, confirmarRotulo: opcoes?.confirmarRotulo ?? "Confirmar", cancelarRotulo: opcoes?.cancelarRotulo ?? "Cancelar", resolver });
+    });
+  }
+
+  function responder(v: boolean) {
+    pedido?.resolver(v);
+    setPedido(null);
+  }
+
+  const Dialogo = pedido ? (
+    <div className="fixed inset-0 z-30 bg-black/40 grid place-items-center px-4" role="presentation">
+      <div ref={ref} role="alertdialog" aria-modal="true" className="card w-full max-w-[400px] p-6">
+        <p className="text-[15px] mb-5">{pedido.mensagem}</p>
+        <div className="flex gap-2.5 justify-end">
+          <button type="button" className="btn-ghost !w-auto" onClick={() => responder(false)}>{pedido.cancelarRotulo}</button>
+          <button type="button" className="btn-primary !w-auto" onClick={() => responder(true)}>{pedido.confirmarRotulo}</button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  return { confirmar, Dialogo };
+}
+
+export type ErroLido = { mensagem: string; codigo?: string; acao?: { rotulo: string; url: string } };
+
+/** Lê o erro de uma `Response` de `fetch` (tenta `{error,codigo,acao}` em JSON) ou de uma exceção de rede (o próprio `fetch` lançando). Nunca expõe status HTTP cru nem corpo do servidor na tela: qualquer falha de leitura cai num dos dois fallbacks fixos. */
+export async function lerErro(r: Response | unknown): Promise<ErroLido> {
+  if (r instanceof Response) {
+    try {
+      const corpo = await r.json();
+      if (corpo && typeof corpo.error === "string") {
+        return { mensagem: corpo.error, codigo: corpo.codigo, acao: corpo.acao };
+      }
+    } catch {
+      // corpo não é JSON (ex.: página de erro em HTML) — cai no fallback abaixo
+    }
+    return { mensagem: "O servidor não respondeu como esperado. Recarregue a página e tente de novo." };
+  }
+  console.error(r);
+  return { mensagem: "Não conseguimos falar com o app. Verifique a conexão e tente de novo." };
 }
 
 export function ResultHead({ titulo, subtitulo, children }: { titulo: string; subtitulo?: string; children?: ReactNode }) {
@@ -189,12 +515,31 @@ export function ResultHead({ titulo, subtitulo, children }: { titulo: string; su
   );
 }
 
-/** Linha de proveniência do resultado: de onde veio e quando. O nome do modelo só aparece no title. */
-export function Origem({ meta }: { meta: Meta }) {
-  const texto = meta.demo
-    ? `Exemplo ilustrativo a partir de ${meta.insumo}. Conecte a IA para analisar seus dados`
-    : `Gerado com IA a partir de ${meta.insumo}, em ${data(meta.geradoEm, { comHora: true })}`;
-  return <p className="text-muted text-[13px] mb-4" title={meta.model}>{texto}</p>;
+/** Linha de proveniência do resultado: de onde veio e quando. O nome do modelo só aparece no title.
+ * `demoTexto` (frase por app) substitui a frase padrão quando o app ignora a entrada da pessoa em modo
+ * demonstração (ex.: sobe o próprio arquivo e recebe um exemplo fixo) — sem ele, mantém a frase padrão. */
+export function Origem({ meta, demoTexto }: { meta: Meta; demoTexto?: string }) {
+  if (!meta.demo) {
+    return <p className="text-muted text-[13px] mb-4" title={meta.model}>{`Gerado com IA a partir de ${meta.insumo}, em ${data(meta.geradoEm, { comHora: true })}`}</p>;
+  }
+  return (
+    <p className="text-muted text-[13px] mb-4" title={meta.model}>
+      {demoTexto ?? `Exemplo ilustrativo a partir de ${meta.insumo}.`}{" "}
+      <Link href="/setup#openrouter" className="font-semibold text-accent underline underline-offset-2">
+        {demoTexto ? "Conectar a IA" : "Conecte a IA para usar os seus dados"}
+      </Link>
+    </p>
+  );
+}
+
+/** Selo no rodapé do resultado: só diz "Gerado com Inteligência Artificial" quando a IA gerou de verdade;
+ * em modo demonstração o selo avisa que é exemplo, para nunca sugerir que uma IA rodou sem estar conectada. */
+export function SeloIA({ demo }: { demo: boolean }) {
+  return (
+    <p className="text-center mt-6">
+      <span className={demo ? "chip-cinza" : "chip-neutral"}>{demo ? "Exemplo, sem usar IA" : "Gerado com Inteligência Artificial"}</span>
+    </p>
+  );
 }
 
 const CORES_TOM: Record<string, string> = { ok: "text-ok", warn: "text-warn", danger: "text-danger", neutro: "text-accent-ink" };
@@ -399,6 +744,7 @@ export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: s
   const [aberto, setAberto] = useState(false);
   const [copiadoTexto, setCopiadoTexto] = useState(false);
   const [copiadoLink, setCopiadoLink] = useState(false);
+  const [falhaCopia, setFalhaCopia] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -418,8 +764,14 @@ export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: s
   }, [aberto]);
 
   async function copiar(t: string, marcar: (v: boolean) => void) {
-    try { await navigator.clipboard.writeText(t); marcar(true); } catch { alert(t); }
-    setTimeout(() => marcar(false), 1800);
+    try {
+      await navigator.clipboard.writeText(t);
+      marcar(true);
+      setTimeout(() => marcar(false), 1800);
+    } catch {
+      setFalhaCopia(true);
+      setTimeout(() => setFalhaCopia(false), 4000);
+    }
     setAberto(false);
   }
 
@@ -427,36 +779,48 @@ export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: s
   const itemClasse = "w-full text-left px-3 py-2 rounded-md hover:bg-accent-soft cursor-pointer";
 
   return (
-    <div className="flex gap-2.5 max-md:w-full">
-      <button type="button" className="btn-primary !w-auto max-md:flex-1" onClick={() => (id ? window.open(`/imprimir/${id}`, "_blank") : window.print())}>Baixar PDF</button>
-      <div className="relative shrink-0" ref={menuRef}>
-        <button type="button" className="btn-ghost" aria-haspopup="menu" aria-expanded={aberto} aria-label="Mais opções para entregar este resultado" onClick={() => setAberto((v) => !v)}>
-          <span className="max-md:hidden">Mais</span>
-          <svg className="md:hidden" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
-        </button>
-        {aberto && (
-          <div role="menu" className="absolute right-0 top-[calc(100%+8px)] z-20 w-56 card p-1.5 text-[13.5px]">
-            <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(texto(), setCopiadoTexto)}>{copiadoTexto ? "Copiado" : "Copiar texto"}</button>
-            <a role="menuitem" className={`${itemClasse} block`} href={`mailto:?subject=${encodeURIComponent(titulo)}&body=${encodeURIComponent(texto())}`} onClick={() => setAberto(false)}>Enviar por e-mail</a>
-            {link && <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(link, setCopiadoLink)}>{copiadoLink ? "Copiado" : "Copiar link"}</button>}
-            {extras?.map((ex) => (
-              <button key={ex.rotulo} type="button" role="menuitem" className={itemClasse} onClick={() => { ex.onClick(); setAberto(false); }}>{ex.rotulo}</button>
-            ))}
-          </div>
-        )}
+    <div className="flex flex-col gap-2.5 max-md:w-full">
+      <div className="flex gap-2.5 max-md:w-full">
+        <button type="button" className="btn-primary !w-auto max-md:flex-1" onClick={() => (id ? window.open(`/imprimir/${id}`, "_blank") : window.print())}>Baixar PDF</button>
+        <div className="relative shrink-0" ref={menuRef}>
+          <button type="button" className="btn-ghost" aria-haspopup="menu" aria-expanded={aberto} aria-label="Mais opções para entregar este resultado" onClick={() => setAberto((v) => !v)}>
+            <span className="max-md:hidden">Mais</span>
+            <svg className="md:hidden" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
+          </button>
+          {aberto && (
+            <div role="menu" className="absolute right-0 top-[calc(100%+8px)] z-20 w-56 card p-1.5 text-[13.5px]">
+              <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(texto(), setCopiadoTexto)}>{copiadoTexto ? "Copiado" : "Copiar texto"}</button>
+              <a role="menuitem" className={`${itemClasse} block`} href={`mailto:?subject=${encodeURIComponent(titulo)}&body=${encodeURIComponent(texto())}`} onClick={() => setAberto(false)}>Enviar por e-mail</a>
+              {link && <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(link, setCopiadoLink)}>{copiadoLink ? "Copiado" : "Copiar link"}</button>}
+              {extras?.map((ex) => (
+                <button key={ex.rotulo} type="button" role="menuitem" className={itemClasse} onClick={() => { ex.onClick(); setAberto(false); }}>{ex.rotulo}</button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+      {falhaCopia && <Aviso tom="danger">Não foi possível copiar automaticamente. Selecione o texto e copie com Ctrl+C (ou Cmd+C no Mac).</Aviso>}
     </div>
   );
 }
 
 export function CopyButton({ texto, rotulo = "Copiar texto" }: { texto: () => string; rotulo?: string }) {
   const [ok, setOk] = useState(false);
+  const [falha, setFalha] = useState(false);
   return (
-    <button type="button" className="btn-ghost" onClick={async () => {
-      const t = texto();
-      try { await navigator.clipboard.writeText(t); setOk(true); } catch { alert(t); }
-      setTimeout(() => setOk(false), 1800);
-    }}>{ok ? "Copiado" : rotulo}</button>
+    <div className="inline-flex flex-col gap-2 items-start">
+      <button type="button" className="btn-ghost" onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(texto());
+          setOk(true);
+          setTimeout(() => setOk(false), 1800);
+        } catch {
+          setFalha(true);
+          setTimeout(() => setFalha(false), 4000);
+        }
+      }}>{ok ? "Copiado" : rotulo}</button>
+      {falha && <Aviso tom="danger">Não foi possível copiar automaticamente. Selecione o texto e copie com Ctrl+C (ou Cmd+C no Mac).</Aviso>}
+    </div>
   );
 }
 

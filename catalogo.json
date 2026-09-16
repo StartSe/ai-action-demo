@@ -214,9 +214,9 @@
         "Inovação"
       ],
       "problema": "Movimentos do mercado chegam tarde e dispersos.",
-      "ia": "Busca o que saiu no período sobre os temas acompanhados em Hacker News, Reddit, GitHub e na web, agrupa em sinais com fontes verificadas e mostra as conexões.",
-      "integracoes": "IA (OpenRouter). Hacker News, Reddit e GitHub sem chave; Exa (opcional) amplia a busca para notícias e a web em geral.",
-      "acento": "#0e7490",
+      "ia": "Busca o que saiu no período sobre os temas acompanhados em Hacker News, Reddit, GitHub, Google Notícias e na web, agrupa em sinais com fontes verificadas e mostra as conexões.",
+      "integracoes": "IA (OpenRouter). Hacker News, Reddit, GitHub e Google Notícias sem chave; Exa ou Tavily (opcional) ampliam para notícias em português e a web em geral.",
+      "acento": "#0a707f",
       "porta": 3011,
       "captura": "capturas/radar-sinais.png",
       "capacidades": [

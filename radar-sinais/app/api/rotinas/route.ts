@@ -1,5 +1,6 @@
-import { criar, listar, type Frequencia } from "@/lib/rotinas";
+import { criar, listar, motivoCanalIndisponivel, validarParametrosTipo, type Frequencia } from "@/lib/rotinas";
 import { TIPOS_ROTINA } from "@/lib/rotinas-do-app";
+import { enderecoPublico, registrarEnderecoPublico } from "@/lib/setup-comum";
 import { getConfig } from "@/lib/store";
 
 const FREQUENCIAS: Frequencia[] = ["diaria", "semanal", "mensal", "unica"];
@@ -11,10 +12,12 @@ export async function GET() {
     itens: listar(),
     tipos: TIPOS_ROTINA,
     destinoPadrao: getConfig("NOTIFICACOES_DESTINO") || "",
+    enderecoPublicoDesconhecido: !enderecoPublico(),
   });
 }
 
 export async function POST(req: Request) {
+  registrarEnderecoPublico(req);
   const corpo = await req.json().catch(() => null);
   const tipo = typeof corpo?.tipo === "string" ? corpo.tipo : "";
   const frequencia = corpo?.frequencia as Frequencia;
@@ -51,6 +54,11 @@ export async function POST(req: Request) {
   // enviados por um botão próprio do app; a maioria dos tipos não precisa e omite o campo.
   const parametrosBrutos = corpo?.parametros;
   const parametros = parametrosBrutos && typeof parametrosBrutos === "object" && !Array.isArray(parametrosBrutos) ? parametrosBrutos : {};
+
+  const motivoCanal = motivoCanalIndisponivel(canal);
+  if (motivoCanal) return Response.json({ error: motivoCanal, motivo: "notificacoes" }, { status: 400 });
+  const motivoParametros = validarParametrosTipo(tipo, parametros, TIPOS_ROTINA);
+  if (motivoParametros) return Response.json({ error: motivoParametros }, { status: 400 });
 
   const id = criar({ tipo, frequencia, hora, diaSemana, diaMes, dataUnica, canal, destino, parametros });
   return Response.json({ id });
