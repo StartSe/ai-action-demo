@@ -1,41 +1,48 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  Aviso,
   Chip,
   CopyButton,
   DataTable,
   Destaque,
   Dropzone,
-  Empty,
   Entregar,
   ErrorBox,
   Field,
+  Hero,
   Item,
   Loading,
   MaisDetalhes,
   OptInGuardar,
   Origem,
-  Panel,
+  Passos,
   Privacidade,
   ResultHead,
   Row,
   Section,
   Stage,
   Topbar,
-  Workspace,
   data,
+  lerErro,
+  useConfirmacao,
   useScrollToResult,
   useStatus,
+  type ErroLido,
+  type PassoIndicador,
 } from "@/components/ui";
 import { SENSIVEL } from "@/lib/sensivel";
-import type { Meta } from "@/lib/ai";
+import type { CodigoErroIA, Meta } from "@/lib/ai";
 import { parseCSV, sugerirMapeamento } from "@/lib/csv";
 import { calcularResumo, formatarMoeda, normalizarRegistros } from "@/lib/analise";
 import { GraficoCategorias } from "@/components/GraficoCategorias";
 import { GraficoMeses } from "@/components/GraficoMeses";
-import type { ItemOrcamento } from "@/lib/orcamento-calculo";
+import { orcamentoDaCategoria, type ItemOrcamento } from "@/lib/orcamento-calculo";
+import { ACAO_NOTIFICACOES } from "@/lib/acoes";
+import { baixarPlanilhaPorCategoria } from "@/lib/exportar-planilha";
 import type { Destaque as TipoDestaque, Insights, LancamentoResumo, Mapeamento, Resumo } from "@/lib/types";
 
 type ArquivoState = { nome: string; cabecalho: string[]; linhas: string[][] };
@@ -43,22 +50,90 @@ type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: strin
 
 const ETAPAS_CARREGANDO = ["Lendo os lançamentos...", "Cruzando meses e categorias...", "Montando a leitura..."];
 
-/** Desenho de um gráfico de barras, no lugar de um glifo genérico no estado vazio. */
-function IlustracaoBarras() {
+// Textos do hero (economia de texto: título ate 8 palavras, apoio ate 20, itens ate 5 de ate 6 palavras — ver CLAUDE.md).
+const PROMESSA = {
+  sobretitulo: "Financeiro",
+  titulo: "Sua planilha de despesas lida em minutos",
+  apoio: "Envie o CSV do financeiro: a leitura mostra totais, variações e o que merece atenção.",
+  itens: [
+    "Total do período e variação",
+    "Despesas por mês e categoria",
+    "Categorias que estouraram o orçamento",
+    "Cinco maiores lançamentos",
+    "Perguntas sobre os seus números",
+  ],
+};
+
+const PASSOS: PassoIndicador[] = [
+  { titulo: "Planilha", apoio: "O CSV do financeiro" },
+  { titulo: "Colunas", apoio: "Data, categoria e valor" },
+  { titulo: "Leitura", apoio: "Totais, gráficos e alertas" },
+];
+
+function IconePlanilha() {
   return (
-    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 54h48" />
-      <rect x="14" y="34" width="9" height="20" />
-      <rect x="28" y="22" width="9" height="32" />
-      <rect x="42" y="12" width="9" height="42" />
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <path d="M4 10h16M10 10v10" />
     </svg>
   );
 }
 
+function IconeColunas() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 20V9M12 20V4M19 20v-7" />
+    </svg>
+  );
+}
+
+function IconeItem() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0 mt-0.5" aria-hidden="true">
+      <path d="M5 12.5 9.5 17 19 7" />
+    </svg>
+  );
+}
+
+/** Cartão de entrada com ícone circular e título, no lugar da coluna única de campos crus. */
+function CartaoEntrada({ icone, titulo, children }: { icone: ReactNode; titulo: string; children: ReactNode }) {
+  return (
+    <div className="card p-5 mb-3">
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className="w-9 h-9 rounded-full bg-accent-soft text-accent grid place-items-center shrink-0">{icone}</div>
+        <h2 className="font-bold text-[15px]">{titulo}</h2>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Prévia de "o que você vai receber", exibida no lugar da leitura antes da primeira análise. */
+function Previa({ itens, onExemplo, carregando }: { itens: string[]; onExemplo: () => void; carregando: boolean }) {
+  return (
+    <div className="card p-7 max-md:p-5 h-full min-h-[420px] max-md:min-h-0 flex flex-col justify-center">
+      <h2 className="font-bold text-[15px] mb-4">O que você vai receber</h2>
+      <ul className="flex flex-col gap-3 mb-6">
+        {itens.map((it) => (
+          <li key={it} className="flex items-start gap-2.5 text-sm text-ink-2">
+            <IconeItem />
+            <span>{it}</span>
+          </li>
+        ))}
+      </ul>
+      <button type="button" className="btn-ghost !w-auto self-start" onClick={onExemplo} disabled={carregando}>
+        Usar dados de exemplo
+      </button>
+    </div>
+  );
+}
+
+type Retomar = { resumo: Resumo; amostra: LancamentoResumo[]; nomeArquivo: string; todos: LancamentoResumo[] };
+
 type EstadoAnalise =
   | { fase: "vazio" }
   | { fase: "carregando" }
-  | { fase: "erro"; mensagem: string; retomar?: { resumo: Resumo; amostra: LancamentoResumo[]; nomeArquivo: string; todos: LancamentoResumo[] } }
+  | { fase: "erro"; mensagem: string; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string }; retomar?: Retomar }
   | {
       fase: "pronto";
       id?: string;
@@ -72,19 +147,25 @@ type EstadoAnalise =
 
 export default function Page() {
   const { status, erro } = useStatus();
+  const router = useRouter();
+  const { confirmar, Dialogo } = useConfirmacao();
   const [arquivoBruto, setArquivoBruto] = useState<File | null>(null);
   const [arquivo, setArquivo] = useState<ArquivoState | null>(null);
   const [mapeamento, setMapeamento] = useState<Mapeamento | null>(null);
   const [erroArquivo, setErroArquivo] = useState<string | null>(null);
+  const [avisoFonte, setAvisoFonte] = useState<ErroLido | null>(null);
   const [guardar, setGuardar] = useState(false);
   const [estado, setEstado] = useState<EstadoAnalise>({ fase: "vazio" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const [orcamento, setOrcamento] = useState<ItemOrcamento[]>([]);
-  const [fonteDados, setFonteDados] = useState<boolean | undefined>(undefined);
   const [lendoFonte, setLendoFonte] = useState(false);
   const autoEnviado = useRef(false);
 
   useScrollToResult(estado.fase === "pronto");
+
+  // "Fonte de dados conectada?" vem de /api/status (lib/status-do-app.ts, chave mcpDados): a tela não
+  // consulta a configuração por resultado. `undefined` enquanto o status ainda está carregando.
+  const fonteDados = status ? Boolean(status.integrations?.mcpDados) : undefined;
 
   function carregarHistorico() {
     fetch("/api/insights").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
@@ -94,12 +175,17 @@ export default function Page() {
   useEffect(() => {
     fetch("/api/orcamento").then((r) => r.json()).then((d) => setOrcamento(d.itens || [])).catch(() => setOrcamento([]));
   }, []);
-  useEffect(() => {
-    fetch("/api/fonte-dados").then((r) => r.json()).then((d) => setFonteDados(Boolean(d.configurada))).catch(() => setFonteDados(false));
-  }, []);
 
-  function apagarHistorico() {
-    if (!window.confirm("Apagar todos os resultados salvos? Essa ação não pode ser desfeita.")) return;
+  /** 401 com codigo "sem_sessao" significa sessão expirada: a tela de entrar resolve, o ErrorBox não. */
+  function sessaoExpirada(r: Response, info: ErroLido) {
+    if (r.status !== 401 || info.codigo !== "sem_sessao") return false;
+    router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
+    return true;
+  }
+
+  async function apagarHistorico() {
+    const ok = await confirmar("Apagar todos os resultados salvos? Essa ação não pode ser desfeita.", { confirmarRotulo: "Apagar tudo" });
+    if (!ok) return;
     fetch("/api/insights", { method: "DELETE" }).then(carregarHistorico);
   }
 
@@ -158,12 +244,18 @@ export default function Page() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resumo, nomeArquivo, guardar }),
       });
+      if (!r.ok) {
+        const info = await lerErro(r);
+        if (sessaoExpirada(r, info)) return;
+        setEstado({ fase: "erro", ...info, codigo: info.codigo as CodigoErroIA | undefined, retomar: { resumo, amostra, nomeArquivo, todos } });
+        return;
+      }
       const respo = await r.json();
-      if (!r.ok) throw new Error(respo.error || "Falha ao gerar a leitura.");
       setEstado({ fase: "pronto", id: respo.id, resumo, insights: respo.insights, amostra, meta: respo.meta, nomeArquivo, todos });
       carregarHistorico();
     } catch (e) {
-      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado.", retomar: { resumo, amostra, nomeArquivo, todos } });
+      const info = await lerErro(e);
+      setEstado({ fase: "erro", ...info, codigo: info.codigo as CodigoErroIA | undefined, retomar: { resumo, amostra, nomeArquivo, todos } });
     }
   }
 
@@ -173,7 +265,7 @@ export default function Page() {
       setEstado({
         fase: "erro",
         mensagem:
-          "Não deu para ler os lançamentos. Confira se as colunas de data e valor foram mapeadas corretamente (datas em dd/mm/aaaa ou aaaa-mm-dd, valores como 1.234,56 ou 1234.56).",
+          "Não deu para ler os lançamentos. Confira se as colunas de data e valor foram escolhidas corretamente (datas em dd/mm/aaaa ou aaaa-mm-dd, valores como 1.234,56 ou 1234.56).",
       });
       return;
     }
@@ -192,14 +284,20 @@ export default function Page() {
   async function lerFonteConectada() {
     setLendoFonte(true);
     setErroArquivo(null);
+    setAvisoFonte(null);
     try {
       const r = await fetch("/api/fonte-dados", { method: "POST" });
+      if (!r.ok) {
+        const info = await lerErro(r);
+        if (sessaoExpirada(r, info)) return;
+        setAvisoFonte(info);
+        return;
+      }
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Não foi possível ler a fonte conectada.");
       const resultado = processarTexto(d.csv, "fonte-conectada.csv");
       if (resultado) await analisar(resultado.linhas, resultado.mapeamento, "fonte-conectada.csv");
     } catch (e) {
-      setErroArquivo(e instanceof Error ? e.message : "Não foi possível ler a fonte conectada.");
+      setAvisoFonte(await lerErro(e));
     } finally {
       setLendoFonte(false);
     }
@@ -226,10 +324,11 @@ export default function Page() {
         usarExemplo();
       }, 0);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma única vez ao abrir a página
   }, []);
 
   const carregando = estado.fase === "carregando";
+  const passoAtual = estado.fase === "pronto" ? 3 : arquivo ? 2 : 1;
 
   return (
     <>
@@ -239,27 +338,53 @@ export default function Page() {
         area="Financeiro"
         status={status}
         erro={erro}
+        usuario={status?.usuario}
         resumo="Modo demonstração: a leitura e as respostas exibidas são exemplos calculados com os números da sua planilha."
       />
 
-      <Workspace>
-        <Panel
-          titulo="Entenda sua planilha de despesas em minutos."
-          lead="Solte o CSV do financeiro aqui e confira as colunas antes de analisar."
-        >
-          <div className="mb-4">
-            <Dropzone id="csv" accept=".csv,text/csv" tiposLabel="CSV" maxSizeMB={5} arquivo={arquivoBruto} onArquivo={onArquivoSelecionado} />
-          </div>
+      <Hero sobretitulo={PROMESSA.sobretitulo} titulo={PROMESSA.titulo} apoio={PROMESSA.apoio} segmento="Financeiro">
+        <Passos passos={PASSOS} atual={passoAtual} />
+      </Hero>
 
-          {(arquivo || erroArquivo) && (
-            <p className="text-[13px] text-muted -mt-1.5 mb-3.5 break-words">
-              {erroArquivo ? <span className="text-danger font-semibold">{erroArquivo}</span> : `${arquivo!.nome} · ${arquivo!.linhas.length} linhas`}
-            </p>
-          )}
+      <main className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">
+        <div>
+          <CartaoEntrada icone={<IconePlanilha />} titulo="A planilha de despesas">
+            <Dropzone id="csv" accept=".csv,text/csv" tiposLabel="CSV" maxSizeMB={5} arquivo={arquivoBruto} onArquivo={onArquivoSelecionado} />
+
+            {(arquivo || erroArquivo) && (
+              <p className="text-[13px] text-muted mt-2.5 break-words">
+                {erroArquivo ? <span className="text-danger font-semibold">{erroArquivo}</span> : `${arquivo!.nome} · ${arquivo!.linhas.length} linhas`}
+              </p>
+            )}
+
+            <div className="flex items-center gap-4 flex-wrap mt-3">
+              <a className="btn-link text-[13px]" href="/exemplo-despesas.csv" download="exemplo-despesas.csv">
+                Baixar CSV de exemplo
+              </a>
+              {fonteDados === true && (
+                <button type="button" className="btn-link text-[13px]" onClick={lerFonteConectada} disabled={lendoFonte}>
+                  {lendoFonte ? "Lendo..." : "Ler da fonte conectada"}
+                </button>
+              )}
+              {fonteDados === false && (
+                <a className="btn-link text-[13px]" href="/setup#mcp-dados">
+                  Conectar uma fonte de dados
+                </a>
+              )}
+            </div>
+            {fonteDados === false && (
+              <p className="text-[12.5px] text-muted mt-1.5">Leia direto da planilha compartilhada ou do ERP, sem exportar CSV toda vez.</p>
+            )}
+            {avisoFonte && (
+              <div className="mt-3">
+                <Aviso tom="danger" acao={avisoFonte.acao}>{avisoFonte.mensagem}</Aviso>
+              </div>
+            )}
+          </CartaoEntrada>
 
           {arquivo && mapeamento && (
-            <div className="mb-4">
-              <p className="text-muted text-[13px] mb-2.5">Confirme as colunas antes de analisar. Já tentamos adivinhar pelo conteúdo do arquivo.</p>
+            <CartaoEntrada icone={<IconeColunas />} titulo="As colunas do arquivo">
+              <p className="text-muted text-[13px] mb-3">Confirme antes de analisar. Já tentamos adivinhar pelo conteúdo.</p>
               <Row>
                 <Field label="Coluna de data" htmlFor="col-data">
                   <select
@@ -322,67 +447,48 @@ export default function Page() {
                 </Field>
               </Row>
               {SENSIVEL && <OptInGuardar checked={guardar} onChange={setGuardar} />}
-              <button type="button" className="btn-primary mt-1.5" disabled={carregando} onClick={() => analisar(arquivo.linhas, mapeamento, arquivo.nome)}>
+              <button type="button" className="btn-primary" disabled={carregando} onClick={() => analisar(arquivo.linhas, mapeamento, arquivo.nome)}>
                 {carregando ? "Analisando" : "Analisar"}
               </button>
-            </div>
+            </CartaoEntrada>
           )}
 
-          <div className="flex items-center gap-4 flex-wrap mt-1">
-            <a className="btn-link" href="/exemplo-despesas.csv" download="exemplo-despesas.csv">
-              Baixar CSV de exemplo
-            </a>
-            <button type="button" className="btn-link" onClick={usarExemplo}>
-              Usar dados de exemplo
-            </button>
-            {fonteDados === true && (
-              <button type="button" className="btn-link" onClick={lerFonteConectada} disabled={lendoFonte}>
-                {lendoFonte ? "Lendo..." : "Ler da fonte conectada"}
-              </button>
-            )}
-            {fonteDados === false && (
-              <a className="btn-link" href="/setup#mcp-dados">
-                Conectar uma fonte de dados
-              </a>
-            )}
-          </div>
-          <Privacidade detalhe="Nada é enviado no upload. Só agregados (totais, médias, maiores lançamentos) e uma amostra de linhas são enviados à IA quando você pede uma leitura ou faz uma pergunta." />
+          <div className="card p-5">
+            <Privacidade detalhe="Nada é enviado no upload. Só agregados (totais, médias, maiores lançamentos) e uma amostra de linhas são enviados à IA quando você pede uma leitura ou faz uma pergunta." />
 
-          <MaisDetalhes titulo="Últimos resultados">
-            {historico === null ? (
-              <p className="text-muted text-sm">Carregando...</p>
-            ) : historico.length === 0 ? (
-              <p className="text-muted text-sm">Nenhum resultado salvo ainda.</p>
-            ) : (
-              <>
-                <ul className="flex flex-col gap-1.5 text-sm mb-3">
-                  {historico.map((h) => (
-                    <li key={h.id} className="flex justify-between gap-3">
-                      <Link href={`/r/${h.id}`} className="text-accent-ink font-semibold hover:underline truncate">{h.titulo}</Link>
-                      <span className="text-muted shrink-0">{data(h.criadoEm)}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
-              </>
-            )}
-          </MaisDetalhes>
-        </Panel>
+            <MaisDetalhes titulo="Últimos resultados">
+              {historico === null ? (
+                <p className="text-muted text-sm">Carregando...</p>
+              ) : historico.length === 0 ? (
+                <p className="text-muted text-sm">Nenhum resultado salvo ainda.</p>
+              ) : (
+                <>
+                  <ul className="flex flex-col gap-1.5 text-sm mb-3">
+                    {historico.slice(0, 3).map((h) => (
+                      <li key={h.id} className="flex justify-between gap-3">
+                        <Link href={`/r/${h.id}`} className="text-accent-ink font-semibold hover:underline truncate">{h.titulo}</Link>
+                        <span className="text-muted shrink-0">{data(h.criadoEm)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex items-center gap-4">
+                    <Link href="/historico" className="btn-link text-[13px]">Ver todos</Link>
+                    <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
+                  </div>
+                </>
+              )}
+            </MaisDetalhes>
+          </div>
+        </div>
 
         <Stage>
-          {estado.fase === "vazio" && (
-            <Empty
-              ilustracao={<IlustracaoBarras />}
-              titulo="A leitura da sua planilha aparece aqui"
-              descricao="Totais, variação do mês, maiores categorias e lançamentos, gráficos e um espaço para perguntar o que quiser sobre os números."
-              acao="Preencher com um exemplo"
-              onAcao={usarExemplo}
-            />
-          )}
+          {estado.fase === "vazio" && <Previa itens={PROMESSA.itens} onExemplo={usarExemplo} carregando={carregando} />}
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
           {estado.fase === "erro" && (
             <ErrorBox
               mensagem={estado.mensagem}
+              codigo={estado.codigo}
+              acao={estado.acao}
               onTentarNovamente={
                 estado.retomar
                   ? () => gerarLeitura(estado.retomar!.resumo, estado.retomar!.amostra, estado.retomar!.nomeArquivo, estado.retomar!.todos)
@@ -403,12 +509,14 @@ export default function Page() {
             />
           )}
         </Stage>
-      </Workspace>
+      </main>
+
+      {Dialogo}
     </>
   );
 }
 
-type RespostaItem = { id: string; pergunta: string; carregando: boolean; resposta?: string; erro?: string };
+type RespostaItem = { id: string; pergunta: string; carregando: boolean; resposta?: string; erro?: ErroLido };
 
 export function Resultado({
   id,
@@ -437,7 +545,11 @@ export function Resultado({
           id={id}
           titulo={titulo}
           texto={() => resumoParaTexto(resumo, insights, nomeArquivo)}
-          extras={todosLancamentos ? [{ rotulo: "Exportar planilha categorizada", onClick: () => exportarPlanilhaCategorizada(todosLancamentos, nomeArquivo) }] : undefined}
+          extras={
+            todosLancamentos
+              ? [{ rotulo: "Exportar planilha por categoria", onClick: () => baixarPlanilhaPorCategoria(todosLancamentos, nomeArquivo, orcamento, resumo.meses.length) }]
+              : undefined
+          }
         />
       </ResultHead>
 
@@ -452,16 +564,23 @@ export function Resultado({
   );
 }
 
-type EstadoNotificacoes = { configurada: boolean; canal: "email" | "slack"; destino: string };
+type EstadoNotificacoes = { canal: "email" | "slack"; destino: string };
 
 /** Depois de uma leitura salva, oferece automatizar os próximos meses: uma rotina que entrega o resumo
  * todo dia 1 às 8h e um link permanente para enviar a próxima planilha sem abrir o app. */
 function AutomatizarProximosMeses() {
+  const { status } = useStatus();
   const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
   const [rotinaId, setRotinaId] = useState<string | null | undefined>(undefined);
   const [criandoRotina, setCriandoRotina] = useState(false);
   const [linkCodigo, setLinkCodigo] = useState<string | null | undefined>(undefined);
   const [criandoLink, setCriandoLink] = useState(false);
+  const [aviso, setAviso] = useState<ErroLido | null>(null);
+
+  // "Dá para entregar o resumo?" vem de /api/status (chave notificacoes de lib/status-do-app.ts, que
+  // exige canal com credencial E destino). O GET de /api/setup entra só para saber PARA ONDE enviar:
+  // sem `canal`/`destino` no corpo, a rota de rotinas assume e-mail e recusa quem escolheu Slack.
+  const prontas = status ? Boolean(status.integrations?.notificacoes) : undefined;
 
   useEffect(() => {
     fetch("/api/setup")
@@ -471,9 +590,9 @@ function AutomatizarProximosMeses() {
         const campos: { chave: string; valorVisivel?: string }[] = integracao?.campos || [];
         const canal = campos.find((c) => c.chave === "NOTIFICACOES_CANAL")?.valorVisivel === "slack" ? "slack" : "email";
         const destino = campos.find((c) => c.chave === "NOTIFICACOES_DESTINO")?.valorVisivel || "";
-        setNotificacoes({ configurada: Boolean(integracao?.configurada), canal, destino });
+        setNotificacoes({ canal, destino });
       })
-      .catch(() => setNotificacoes({ configurada: false, canal: "email", destino: "" }));
+      .catch(() => setNotificacoes({ canal: "email", destino: "" }));
     fetch("/api/rotinas")
       .then((r) => r.json())
       .then((d) => setRotinaId((d.itens || []).find((i: { tipo: string }) => i.tipo === "resumo-mensal")?.id ?? null))
@@ -485,8 +604,9 @@ function AutomatizarProximosMeses() {
   }, []);
 
   async function criarRotina() {
-    if (!notificacoes?.configurada) return;
+    if (!notificacoes) return;
     setCriandoRotina(true);
+    setAviso(null);
     try {
       const r = await fetch("/api/rotinas", {
         method: "POST",
@@ -500,11 +620,14 @@ function AutomatizarProximosMeses() {
           destino: notificacoes.canal === "email" ? notificacoes.destino || undefined : undefined,
         }),
       });
+      if (!r.ok) {
+        setAviso(await lerErro(r));
+        return;
+      }
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Não foi possível criar a rotina.");
       setRotinaId(d.id);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Não foi possível criar a rotina.");
+      setAviso(await lerErro(e));
     } finally {
       setCriandoRotina(false);
     }
@@ -512,13 +635,17 @@ function AutomatizarProximosMeses() {
 
   async function criarLinkPlanilha() {
     setCriandoLink(true);
+    setAviso(null);
     try {
       const r = await fetch("/api/planilha-mensal", { method: "POST" });
+      if (!r.ok) {
+        setAviso(await lerErro(r));
+        return;
+      }
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Não foi possível criar o link.");
       setLinkCodigo(d.codigo);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Não foi possível criar o link.");
+      setAviso(await lerErro(e));
     } finally {
       setCriandoLink(false);
     }
@@ -528,14 +655,16 @@ function AutomatizarProximosMeses() {
     <Section titulo="Automatize os próximos meses">
       <div className="card shadow-none p-4 flex flex-col gap-5">
         <div>
-          {rotinaId === undefined || notificacoes === null ? null : rotinaId ? (
+          {rotinaId === undefined || prontas === undefined ? null : rotinaId ? (
             <p className="text-muted text-sm">Você já recebe o resumo todo mês, no dia 1 às 8h.</p>
-          ) : notificacoes.configurada ? (
+          ) : prontas ? (
             <button type="button" className="btn-ghost" onClick={criarRotina} disabled={criandoRotina}>
               {criandoRotina ? "Criando..." : "Receber o resumo todo mês"}
             </button>
           ) : (
-            <a href="/setup#notificacoes" className="btn-ghost">Receber o resumo todo mês</a>
+            <Aviso acao={ACAO_NOTIFICACOES}>
+              Para receber o resumo todo mês, escolha antes por onde avisamos (e-mail ou Slack) e para quem.
+            </Aviso>
           )}
         </div>
 
@@ -556,6 +685,8 @@ function AutomatizarProximosMeses() {
             </button>
           )}
         </div>
+
+        {aviso && <Aviso tom="danger" acao={aviso.acao}>{aviso.mensagem}</Aviso>}
       </div>
     </Section>
   );
@@ -574,20 +705,23 @@ export function ConteudoFinancas({
   const ultimoMes = resumo.meses[resumo.meses.length - 1];
   const maiorCrescimento = resumo.categoriasQueCresceram[0];
   const variacao = resumo.variacaoUltimoMes;
+  const anoAnterior = resumo.comparacaoAnoAnterior;
+  const desvio = desvioDoOrcamento(resumo, orcamento);
   const tomVariacao = variacao > 5 ? "warn" : variacao < -5 ? "ok" : "neutro";
+  const tom = desvio && desvio.valor > 0 ? "danger" : tomVariacao;
 
   return (
     <>
       <Destaque
         valor={formatarMoeda(resumo.total)}
         rotulo="Total do período"
-        interpretacao={`${percentual(variacao)} em relação ao mês anterior`}
-        tom={tomVariacao}
+        interpretacao={`${percentual(variacao)} em relação ao mês anterior${desvio ? ` · ${frasedoDesvio(desvio)}` : ""}`}
+        tom={tom}
       />
 
       <p className="summary">{insights.leitura_geral}</p>
 
-      <div className="grid grid-cols-3 max-md:grid-cols-1 gap-3.5 mb-7">
+      <div className={`grid ${anoAnterior ? "grid-cols-2" : "grid-cols-3"} max-md:grid-cols-1 gap-3.5 mb-7`}>
         <Item>
           <p className="text-muted text-[12.5px] font-semibold mb-1">Média mensal</p>
           <p className="text-[19px] font-extrabold tracking-tight">{formatarMoeda(resumo.mediaMensal)}</p>
@@ -596,6 +730,15 @@ export function ConteudoFinancas({
           <p className="text-muted text-[12.5px] font-semibold mb-1">Último mês ({ultimoMes ? ultimoMes.rotulo : "-"})</p>
           <p className="text-[19px] font-extrabold tracking-tight">{formatarMoeda(ultimoMes ? ultimoMes.total : 0)}</p>
         </Item>
+        {anoAnterior && (
+          <Item>
+            <p className="text-muted text-[12.5px] font-semibold mb-1">Mesmo mês do ano anterior</p>
+            <p className="text-[19px] font-extrabold tracking-tight">{formatarMoeda(anoAnterior.totalAnterior)}</p>
+            <p className="text-muted text-[13px]">
+              {anoAnterior.rotuloAnterior} · {percentual(anoAnterior.variacao)}
+            </p>
+          </Item>
+        )}
         <Item>
           <p className="text-muted text-[12.5px] font-semibold mb-1">Maior variação</p>
           <p className="text-[19px] font-extrabold tracking-tight">{maiorCrescimento ? maiorCrescimento.categoria : "-"}</p>
@@ -665,11 +808,16 @@ function SecaoPerguntar({ resumo, insights, amostra }: { resumo: Resumo; insight
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resumo, amostra, pergunta: texto }),
       });
+      if (!r2.ok) {
+        const info = await lerErro(r2);
+        setRespostas((r) => r.map((x) => (x.id === id ? { ...x, carregando: false, erro: info } : x)));
+        return;
+      }
       const respo = await r2.json();
-      if (!r2.ok) throw new Error(respo.error || "Não foi possível responder agora.");
       setRespostas((r) => r.map((x) => (x.id === id ? { ...x, carregando: false, resposta: respo.resposta } : x)));
     } catch (e) {
-      setRespostas((r) => r.map((x) => (x.id === id ? { ...x, carregando: false, erro: e instanceof Error ? e.message : "Erro inesperado." } : x)));
+      const info = await lerErro(e);
+      setRespostas((r) => r.map((x) => (x.id === id ? { ...x, carregando: false, erro: info } : x)));
     }
   }
 
@@ -706,7 +854,7 @@ function SecaoPerguntar({ resumo, insights, amostra }: { resumo: Resumo; insight
           <button
             key={i}
             type="button"
-            className="bg-accent-soft text-accent-ink rounded-full px-3.5 py-[7px] text-[13px] font-semibold text-left hover:bg-[#d3ecdf]"
+            className="bg-accent-soft text-accent-ink rounded-full px-3.5 py-[7px] text-[13px] font-semibold text-left hover:brightness-95"
             onClick={() => perguntar(p)}
           >
             {p}
@@ -719,12 +867,40 @@ function SecaoPerguntar({ resumo, insights, amostra }: { resumo: Resumo; insight
             <p className="font-bold mb-1.5">{r.pergunta}</p>
             {r.carregando && <p className="text-muted text-sm">Calculando a resposta...</p>}
             {r.resposta && <p className="whitespace-pre-line">{r.resposta}</p>}
-            {r.erro && <p className="text-danger">{r.erro}</p>}
+            {r.erro && <Aviso tom="danger" acao={r.erro.acao}>{r.erro.mensagem}</Aviso>}
           </Item>
         ))}
       </div>
     </Section>
   );
+}
+
+type DesvioOrcamento = { valor: number; categorias: number };
+
+/** Gasto contra orçamento apenas nas categorias que TÊM orçamento cadastrado: somar o gasto de
+ * categorias sem orçamento inflaria o desvio e a frase mentiria. O valor cadastrado é mensal, então é
+ * multiplicado pelo número de meses do período (mesma conversão de lib/rotinas-do-app.ts). */
+function desvioDoOrcamento(resumo: Resumo, orcamento?: ItemOrcamento[]): DesvioOrcamento | undefined {
+  if (!orcamento || orcamento.length === 0) return undefined;
+  const meses = Math.max(resumo.meses.length, 1);
+  let gasto = 0;
+  let orcado = 0;
+  let categorias = 0;
+  for (const c of resumo.categorias) {
+    const mensal = orcamentoDaCategoria(orcamento, c.categoria);
+    if (mensal === undefined) continue;
+    gasto += c.total;
+    orcado += mensal * meses;
+    categorias++;
+  }
+  if (categorias === 0) return undefined;
+  return { valor: gasto - orcado, categorias };
+}
+
+function frasedoDesvio({ valor, categorias }: DesvioOrcamento) {
+  const onde = categorias === 1 ? "1 categoria com orçamento" : `${categorias} categorias com orçamento`;
+  if (Math.abs(valor) < 1) return `no valor do orçamento em ${onde}`;
+  return `${formatarMoeda(Math.abs(valor))} ${valor > 0 ? "acima" : "abaixo"} do orçamento em ${onde}`;
 }
 
 function percentual(v: number) {
@@ -749,26 +925,6 @@ function rotuloTipo(tipo: TipoDestaque["tipo"]) {
   return "Observação";
 }
 
-/** Exporta os lançamentos normalizados (data, categoria, descrição e valor) como CSV, um para reimportar já categorizado. */
-function exportarPlanilhaCategorizada(lancamentos: LancamentoResumo[], nomeArquivo: string) {
-  const cabecalho = ["Data", "Categoria", "Descrição", "Valor"];
-  const linhasCSV = [cabecalho.join(";")];
-  lancamentos.forEach((l) => {
-    const campos = [formatarDataCurta(l.data), l.categoria, l.descricao, l.valor.toFixed(2).replace(".", ",")];
-    linhasCSV.push(campos.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";"));
-  });
-  const csv = "﻿" + linhasCSV.join("\r\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${nomeArquivo.replace(/\.csv$/i, "")}-categorizado.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
 function resumoParaTexto(resumo: Resumo, insights: Insights, nomeArquivo: string) {
   const linhas: string[] = [
     `Leitura de ${nomeArquivo} (${resumo.periodo.inicio} a ${resumo.periodo.fim})`,
@@ -777,9 +933,12 @@ function resumoParaTexto(resumo: Resumo, insights: Insights, nomeArquivo: string
     "",
     `Total do período: ${formatarMoeda(resumo.total)}`,
     `Média mensal: ${formatarMoeda(resumo.mediaMensal)}`,
-    "",
-    "Despesas por mês:",
   ];
+  if (resumo.comparacaoAnoAnterior) {
+    const c = resumo.comparacaoAnoAnterior;
+    linhas.push(`${c.rotuloAtual} contra ${c.rotuloAnterior}: ${formatarMoeda(c.totalAtual)} contra ${formatarMoeda(c.totalAnterior)} (${percentual(c.variacao)})`);
+  }
+  linhas.push("", "Despesas por mês:");
   resumo.meses.forEach((m) => linhas.push(`- ${m.rotulo}: ${formatarMoeda(m.total)}`));
   linhas.push("", "Despesas por categoria:");
   resumo.categorias.forEach((c) => linhas.push(`- ${c.categoria}: ${formatarMoeda(c.total)}`));

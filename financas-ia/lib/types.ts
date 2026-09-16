@@ -16,6 +16,9 @@ export type MesResumo = { mes: string; rotulo: string; total: number };
 export type CategoriaResumo = { categoria: string; total: number };
 export type LancamentoResumo = { data: string; categoria: string; descricao: string; valor: number };
 export type CategoriaCrescimento = { categoria: string; anterior: number; atual: number; variacao: number };
+/** Último mês contra o mesmo mês do ano anterior. Só existe quando a planilha cobre 13 meses ou mais e o
+ * mês equivalente do ano anterior tem lançamentos — por isso é opcional também nos resumos já salvos. */
+export type ComparacaoAno = { rotuloAtual: string; rotuloAnterior: string; totalAtual: number; totalAnterior: number; variacao: number };
 
 export type Resumo = {
   quantidade: number;
@@ -26,6 +29,7 @@ export type Resumo = {
   variacaoUltimoMes: number;
   maioresLancamentos: LancamentoResumo[];
   categoriasQueCresceram: CategoriaCrescimento[];
+  comparacaoAnoAnterior?: ComparacaoAno;
   periodo: { inicio: string; fim: string };
 };
 

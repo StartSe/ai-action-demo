@@ -1,4 +1,5 @@
 import { responderPergunta } from "@/lib/perguntar";
+import { responderErro } from "../erros";
 import type { LancamentoResumo, Resumo } from "@/lib/types";
 
 export async function POST(req: Request) {
@@ -11,8 +12,6 @@ export async function POST(req: Request) {
     const { demo, resposta } = await responderPergunta({ resumo, amostra: amostra || [], pergunta });
     return Response.json({ demo, resposta });
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível responder agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return responderErro(err, "Não foi possível responder agora. Tente de novo em um minuto.");
   }
 }

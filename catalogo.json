@@ -174,7 +174,7 @@
       "problema": "A planilha de despesas chega e não há tempo de destrinchar.",
       "ia": "Lê o CSV, mostra os números que importam e responde perguntas em linguagem natural.",
       "integracoes": "Só a IA. Os dados ficam no navegador; só agregados vão para o modelo.",
-      "acento": "#0b6e4f",
+      "acento": "#0f6b3d",
       "porta": 3009,
       "captura": "capturas/financas-ia.png",
       "capacidades": [

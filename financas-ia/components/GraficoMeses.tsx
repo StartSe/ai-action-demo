@@ -8,7 +8,22 @@ const moedaCompacta = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 1,
 });
 
+/** O formato compacto do Intl usa espaço NÃO separável ("R$ 105 mil"), que não quebra linha e estoura
+ * coluna estreita: trocado por espaço comum antes de ir para a tela (ver CLAUDE.md). */
+function compacto(v: number) {
+  return moedaCompacta.format(v).replace(/[\u00a0\u202f]/g, " ");
+}
+
+const MESES_CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
 const CORES_TOM: Record<string, string> = { ok: "text-ok", warn: "text-warn", danger: "text-danger", neutro: "text-muted" };
+
+/** "2026-04" -> "abr/26": rótulo curto para o celular, onde a coluna tem ~44 px e o nome completo
+ * seria cortado pelo `truncate`. O nome completo continua no `title` e no desktop. */
+function rotuloCurto(mes: string) {
+  const [ano, m] = mes.split("-");
+  return `${MESES_CURTOS[Number(m) - 1] ?? m}/${ano.slice(2)}`;
+}
 
 function percentual(v: number) {
   const sinal = v > 0 ? "+" : "";
@@ -33,15 +48,17 @@ export function GraficoMeses({
   const max = Math.max(...meses.map((m) => m.total), 1);
   // `minmax(0, 1fr)` (em vez de só `1fr`) impede que o conteúdo de uma coluna (ex.: o rótulo
   // de variação do último mês) force a grade inteira a ficar mais larga que o cartão.
-  const colunas = `44px repeat(${meses.length}, minmax(0, 1fr))`;
+  // `max-content` (e não uma largura fixa) na coluna do eixo: o rótulo compacto cresce com a ordem de
+  // grandeza do valor ("R$ 9,9 mil" contra "R$ 105 mil") e, fixo em 44 px, estourava a coluna.
+  const colunas = `max-content repeat(${meses.length}, minmax(0, 1fr))`;
 
   return (
     <div>
       <div className="grid gap-2.5 border-b-2 border-ink/50" style={{ gridTemplateColumns: colunas, height: CHART_H }}>
         <div className="flex flex-col justify-between text-right">
-          <span className="text-[11px] leading-none text-muted">{moedaCompacta.format(max)}</span>
-          <span className="text-[11px] leading-none text-muted">{moedaCompacta.format(max / 2)}</span>
-          <span className="text-[11px] leading-none text-muted">{moedaCompacta.format(0)}</span>
+          <span className="text-[11px] leading-none text-muted">{compacto(max)}</span>
+          <span className="text-[11px] leading-none text-muted">{compacto(max / 2)}</span>
+          <span className="text-[11px] leading-none text-muted">{compacto(0)}</span>
         </div>
         {meses.map((m, i) => {
           const ultimo = i === meses.length - 1;
@@ -53,7 +70,7 @@ export function GraficoMeses({
                   {variacao !== undefined && (
                     <span className={`text-[11px] font-bold leading-none text-center mb-1 ${CORES_TOM[tom]}`}>{percentual(variacao)}</span>
                   )}
-                  <span className="text-[11px] font-bold leading-none text-center text-ink mb-1">{moedaCompacta.format(m.total)}</span>
+                  <span className="text-[11px] font-bold leading-none text-center text-ink mb-1">{compacto(m.total)}</span>
                 </>
               )}
               <div
@@ -68,8 +85,9 @@ export function GraficoMeses({
       <div className="grid gap-2.5 mt-2" style={{ gridTemplateColumns: colunas }}>
         <div />
         {meses.map((m) => (
-          <span key={m.mes} className="min-w-0 text-center text-[11px] text-muted truncate">
-            {m.rotulo}
+          <span key={m.mes} className="min-w-0 text-center text-[11px] text-muted truncate" title={m.rotulo}>
+            <span className="max-md:hidden">{m.rotulo}</span>
+            <span className="md:hidden">{rotuloCurto(m.mes)}</span>
           </span>
         ))}
       </div>

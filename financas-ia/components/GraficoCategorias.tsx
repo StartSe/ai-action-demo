@@ -10,6 +10,12 @@ const moedaCompacta = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 1,
 });
 
+/** O formato compacto do Intl usa espaço NÃO separável ("R$ 105 mil"), que não quebra linha e estoura
+ * coluna estreita: trocado por espaço comum antes de ir para a tela (ver CLAUDE.md). */
+function compacto(v: number) {
+  return moedaCompacta.format(v).replace(/[\u00a0\u202f]/g, " ");
+}
+
 function percentual(v: number) {
   const sinal = v > 0 ? "+" : "";
   return `${sinal}${(v || 0).toFixed(1).replace(".", ",")}%`;
@@ -61,7 +67,7 @@ export function GraficoCategorias({
                   />
                 )}
               </div>
-              <span className="w-20 shrink-0 text-[13px] font-bold text-ink">{moedaCompacta.format(c.total)}</span>
+              <span className="min-w-[80px] shrink-0 text-[13px] font-bold text-ink">{compacto(c.total)}</span>
               {estourou && <Chip nivel="alta">Acima do orçamento</Chip>}
             </div>
           );

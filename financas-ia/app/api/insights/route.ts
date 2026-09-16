@@ -1,4 +1,5 @@
 import { meta } from "@/lib/ai";
+import { responderErro } from "../erros";
 import { gerarInsights } from "@/lib/insights";
 import { apagarTodos, listar, salvar, SENSIVEL } from "@/lib/historico";
 import type { EntradaInsights, Insights, Resumo, SaidaInsights } from "@/lib/types";
@@ -29,9 +30,7 @@ export async function POST(req: Request) {
     const id = idSalvo({ resumo, insights, nomeArquivo, metaGerada, guardar });
     return Response.json({ demo, insights, meta: metaGerada, id });
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível gerar a leitura agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return responderErro(err, "Não foi possível gerar a leitura agora. Tente de novo em um minuto.");
   }
 }
 

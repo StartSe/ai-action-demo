@@ -1,7 +1,7 @@
 // Cálculos sobre os lançamentos, feitos inteiramente no navegador.
 // Recebe registros já normalizados: { data: Date, categoria: string, valor: number, descricao: string }
 import { parseData, parseNumero } from "./csv";
-import type { Mapeamento, Registro, Resumo } from "./types";
+import type { ComparacaoAno, Mapeamento, Registro, Resumo } from "./types";
 
 const formatoMoeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const formatoMes = new Intl.DateTimeFormat("pt-BR", { month: "short", year: "numeric" });
@@ -108,6 +108,25 @@ export function calcularResumo(registros: Registro[]): Resumo {
       .slice(0, 3);
   }
 
+  // Mesmo mês do ano anterior: só faz sentido quando a planilha cobre pelo menos 13 meses (senão não há
+  // um ano inteiro para trás) E o mês equivalente tem lançamentos — um mês vazio não entra em `meses`.
+  let comparacaoAnoAnterior: ComparacaoAno | undefined;
+  if (meses.length >= 13) {
+    const atual = meses[meses.length - 1];
+    const [ano, mes] = atual.mes.split("-").map(Number);
+    const chaveAnterior = `${ano - 1}-${String(mes).padStart(2, "0")}`;
+    const totalAnterior = porMesMapa.get(chaveAnterior);
+    if (totalAnterior !== undefined && totalAnterior > 0) {
+      comparacaoAnoAnterior = {
+        rotuloAtual: atual.rotulo,
+        rotuloAnterior: rotuloDoMes(chaveAnterior),
+        totalAtual: atual.total,
+        totalAnterior,
+        variacao: ((atual.total - totalAnterior) / totalAnterior) * 100,
+      };
+    }
+  }
+
   return {
     quantidade: registros.length,
     total,
@@ -117,6 +136,7 @@ export function calcularResumo(registros: Registro[]): Resumo {
     variacaoUltimoMes,
     maioresLancamentos,
     categoriasQueCresceram,
+    comparacaoAnoAnterior,
     periodo:
       registros.length > 0
         ? {

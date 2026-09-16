@@ -42,6 +42,8 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
+| `APP_URL` | Endereço público do app, usado nos links enviados por aviso (rotina mensal). |
+| `GOOGLE_CLIENT_ID_APP`, `GOOGLE_CLIENT_SECRET_APP`, `MICROSOFT_CLIENT_ID_APP`, `MICROSOFT_CLIENT_SECRET_APP` | Credenciais da suíte (equipe técnica, embutidas na imagem por `ARG`→`ENV` no `Dockerfile`) que liberam "Conectar meu Gmail"/"Conectar meu Outlook" no cartão Notificações. Sem elas, os botões não aparecem e o cartão segue por Slack, Resend ou SMTP. |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
 
 ## Privacidade dos dados
@@ -58,6 +60,9 @@ app/setup/page.tsx         configuração inicial (chaves, OAuth, teste de conex
 app/api/setup/             leitura/gravação da configuração, teste e OAuth do OpenRouter
 app/api/status/route.ts    informa ao frontend se a IA está conectada
 app/api/health/route.ts    health check
+app/api/erros.ts           resposta de erro única das rotas próprias (IA e fonte de dados)
+lib/planilha-xlsx.ts       gera o .xlsx (zip + XML) da exportação, sem dependência nova
+lib/exportar-planilha.ts   monta as abas (uma por categoria) e dispara o download
 components/ui.tsx          componentes visuais compartilhados pela suíte
 components/setup.tsx       tela de setup genérica, gerada a partir de lib/integracoes.ts
 components/GraficoMeses.tsx       gráfico SVG de despesas por mês

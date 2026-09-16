@@ -3,7 +3,7 @@
 // aqui o que faz sentido rodar sozinho, chamando registrarExecutor (ver pdi-time/lib/rotinas-do-app.ts).
 import { calcularResumo, formatarMoeda, normalizarRegistros } from "./analise";
 import { parseCSV, sugerirMapeamento } from "./csv";
-import { fonteDadosConfigurada, lerFonteDados } from "./fonte-dados-mcp";
+import { ErroFonte, fonteDadosConfigurada, lerFonteDados } from "./fonte-dados-mcp";
 import { listar as listarHistorico, obter, salvar } from "./historico";
 import { gerarInsights } from "./insights";
 import { getOrcamento, orcamentoDaCategoria } from "./orcamento";
@@ -16,11 +16,11 @@ export const TIPOS_ROTINA: { tipo: string; rotulo: string }[] = [{ tipo: "resumo
 async function lerResumoDaFonteConectada(): Promise<{ resumo: Resumo; resultadoId?: string }> {
   const csv = await lerFonteDados();
   const { cabecalho, linhas } = parseCSV(csv);
-  if (!cabecalho.length || !linhas.length) throw new Error("a fonte conectada não devolveu linhas");
+  if (!cabecalho.length || !linhas.length) throw new ErroFonte("sem_planilha", "A fonte conectada não devolveu nenhuma linha. Confira em Configurações qual leitura usar.", 502);
   const mapeamento = sugerirMapeamento(cabecalho, linhas);
-  if (mapeamento.data < 0 || mapeamento.valor < 0) throw new Error("não identificamos as colunas de data e valor na fonte conectada");
+  if (mapeamento.data < 0 || mapeamento.valor < 0) throw new ErroFonte("sem_planilha", "Não identificamos as colunas de data e valor na fonte conectada. Confira em Configurações qual leitura usar.", 502);
   const registros = normalizarRegistros(linhas, mapeamento);
-  if (!registros.length) throw new Error("nenhum lançamento válido na fonte conectada");
+  if (!registros.length) throw new ErroFonte("sem_planilha", "A fonte conectada não trouxe nenhum lançamento com data e valor. Confira em Configurações qual leitura usar.", 502);
 
   const resumo = calcularResumo(registros);
   const { insights, meta: metaGerada } = await gerarInsights(resumo);
@@ -45,8 +45,11 @@ registrarExecutor("resumo-mensal", async () => {
     try {
       ({ resumo, resultadoId } = await lerResumoDaFonteConectada());
     } catch (err) {
-      const motivo = err instanceof Error ? err.message : "erro desconhecido";
-      return { titulo, texto: `Não foi possível ler a fonte de dados conectada: ${motivo}.` };
+      // A frase de ErroFonte já é a frase certa para quem lê o aviso (lib/fonte-dados-mcp.ts); embrulhá-la
+      // em outra repetiria "a fonte de dados" duas vezes na mesma linha. O que não é ErroFonte não chega à tela.
+      if (err instanceof ErroFonte) return { titulo, texto: err.message };
+      console.error("Falha ao ler a fonte de dados na rotina mensal:", err);
+      return { titulo, texto: "Não foi possível ler a fonte de dados conectada neste mês. Confira o endereço em Configurações." };
     }
   } else {
     const ultima = listarHistorico(50).find((r) => r.tipo === "financas");

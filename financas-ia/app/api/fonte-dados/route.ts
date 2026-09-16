@@ -1,4 +1,5 @@
 import { fonteDadosConfigurada, lerFonteDados } from "@/lib/fonte-dados-mcp";
+import { responderErro } from "../erros";
 
 /** Se a integração "Fonte de dados (MCP)" está conectada, para o botão "Ler da fonte conectada" no painel. */
 export async function GET() {
@@ -11,7 +12,6 @@ export async function POST() {
     const csv = await lerFonteDados();
     return Response.json({ csv });
   } catch (err) {
-    const mensagem = err instanceof Error ? err.message : "Não foi possível ler a fonte conectada.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return responderErro(err, "Não foi possível ler a fonte conectada agora. Tente de novo em um minuto.");
   }
 }
