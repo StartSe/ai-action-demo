@@ -1,6 +1,7 @@
 "use client";
-// Lista de todos os resultados salvos (qualquer tipo), com busca por texto. Rota compartilhada:
-// copie sem alterar (marca/nome/area continuam próprios de cada app, como em app/conta e app/entrar).
+// Lista de todos os resultados salvos (qualquer tipo), com busca por texto. Copie do pdi-time trocando só
+// marca/nome/area do Topbar (próprios de cada app, como em app/conta e app/entrar; por isso este arquivo
+// está em ESTRUTURA, não em ARQUIVOS, no scripts/verificar-padrao.sh).
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";

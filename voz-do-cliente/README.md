@@ -44,12 +44,21 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
+| `NOTIFICACOES_*` | Alternativa ao cartão "Notificações" (canal, destino, chave do Resend ou SMTP) para a análise semanal e o alerta de detratores. |
+| `MCP_CRM_URL` / `MCP_CRM_CODIGO` | Alternativa ao cartão "CRM (MCP)": endereço e código de acesso do HubSpot, Zendesk ou Intercom para importar tickets. |
+| `MCP_DADOS_URL` / `MCP_DADOS_CODIGO` | Alternativa ao cartão "Fonte de dados (MCP)": planilha viva de onde o app lê as notas de NPS. `MCP_DADOS_FERRAMENTA` e `MCP_DADOS_ARGUMENTOS` (JSON) escolhem a leitura e a aba. |
+| `GOOGLE_CLIENT_ID_APP`, `GOOGLE_CLIENT_SECRET_APP`, `MICROSOFT_CLIENT_ID_APP`, `MICROSOFT_CLIENT_SECRET_APP` | Credenciais da suíte (equipe técnica, embutidas na imagem) que liberam "Conectar meu Gmail"/"Conectar meu Outlook" no cartão Notificações. |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
 
 ## Estrutura
 ```
 app/page.tsx                    tela única (formulário + resultado)
 app/api/analisar/route.ts       análise de comentários (com classificação em lotes acima de 120 comentários)
+app/api/pesquisas/              pesquisa NPS por link público (criar, listar, encerrar, analisar respostas)
+app/api/tickets/importar/       importa tickets do CRM conectado (HubSpot, Zendesk, Intercom) para a análise
+app/api/planilha/importar/      lê as notas de NPS da planilha viva conectada para a análise
+app/conta, app/entrar           criar a conta de administrador e entrar (uma conta por instância)
+app/historico/page.tsx          todos os resultados salvos, com busca
 app/setup/page.tsx              configuração inicial (chaves, OAuth, teste de conexão)
 app/api/setup/                  leitura/gravação da configuração, teste e OAuth do OpenRouter
 app/api/status/route.ts         informa ao frontend se a IA está conectada
@@ -59,12 +68,17 @@ components/setup.tsx            tela de setup genérica, gerada a partir de lib/
 components/CampoArquivo.tsx     upload de CSV/TXT com seleção de coluna
 components/BarraSentimento.tsx  barra de sentimento e bloco de NPS
 components/MatrizPrioridade.tsx matriz de prioridade (impacto x esforço)
-components/ResultadoAnalise.tsx montagem do resultado da análise
+components/AcessoMCP.tsx        cartão "Usar dentro do seu assistente" (código de acesso do MCP)
 lib/store.ts                    configuração em SQLite (node:sqlite), com variáveis de ambiente como prioridade
 lib/setup-comum.ts              tipos do setup e integração OpenRouter (compartilhado)
 lib/integracoes.ts              integrações que este app precisa
 lib/ai.ts                       cliente OpenRouter (askText, askJSON)
 lib/demo.ts                     análise de exemplo do modo demonstração; COMENTARIOS_EXEMPLO tem os 45 comentários (com nota NPS) do botão de exemplo
+lib/analise-salva.ts            monta o resultado salvo e a resposta JSON, igual para as quatro fontes
+lib/erro-fonte.ts               erros de fonte externa (CRM, planilha) com frase pronta e ação; 400 "vazio" vira aviso inline
+lib/tickets-mcp.ts              importa tickets do CRM conectado (MCP) como comentários
+lib/planilha-mcp.ts             lê a planilha de NPS conectada (MCP) como comentários com nota
+lib/conta.ts                    conta de administrador e sessão (node:crypto + node:sqlite)
 lib/parse.ts                    leitura de CSV/TXT no navegador
 lib/types.ts                    tipos do domínio
 Dockerfile                      build multi-stage com saída standalone

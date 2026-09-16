@@ -3,9 +3,13 @@
 // voz do cliente usada pelo fluxo manual. Mesmo método de identificar a ferramenta certa por
 // nome/descrição já usado em prospeccao-ia/lib/crm-mcp.ts, mas para a direção de leitura
 // (listar) em vez de escrita.
+import { ErroFonte } from "./erro-fonte";
 import { chamar, conectar, listarFerramentas, type ConexaoMCP, type FerramentaMCP } from "./mcp-cliente";
 import { integracaoConfigurada, lerConfig, MCP_CRM } from "./setup-comum";
 import type { Comentario } from "./types";
+
+/** Ação oferecida em todo erro desta fonte: abrir o cartão do CRM em Configurações. */
+export const ACAO_CRM = { rotulo: "Abrir Configurações", url: "/setup#mcp-crm" };
 
 const PALAVRAS_LISTAGEM = ["list", "listar", "search", "buscar"];
 const PALAVRAS_TICKET = ["ticket", "chamado", "conversa", "conversation", "case", "atendimento"];
@@ -15,6 +19,9 @@ export function importacaoTicketsConfigurada(): boolean {
 }
 
 function conexaoAtual(): ConexaoMCP {
+  if (!importacaoTicketsConfigurada()) {
+    throw new ErroFonte(400, "Conecte um CRM em Configurações antes de importar tickets.", ACAO_CRM);
+  }
   const config = lerConfig(MCP_CRM);
   return conectar(config.MCP_CRM_URL!, config.MCP_CRM_CODIGO);
 }
@@ -85,15 +92,26 @@ function ticketsDoResultado(resultado: unknown): Record<string, unknown>[] {
   return [];
 }
 
-/** Lista os tickets dos últimos `dias` no CRM/helpdesk conectado e converte cada um num comentário (origem "ticket") para a mesma análise de voz do cliente. */
+/** Lista os tickets dos últimos `dias` no CRM/helpdesk conectado e converte cada um num comentário (origem "ticket") para a
+ * mesma análise de voz do cliente. Lança ErroFonte (400 sem CRM/sem listagem, 502 quando o CRM não responde) — nunca HTTP cru. */
 export async function importarTickets(dias: number): Promise<Comentario[]> {
   const conexao = conexaoAtual();
-  const ferramentas = await listarFerramentas(conexao);
+  let ferramentas: FerramentaMCP[];
+  try {
+    ferramentas = await listarFerramentas(conexao);
+  } catch (err) {
+    throw ErroFonte.deServico(err, ACAO_CRM);
+  }
   const ferramenta = ferramentaDeListagem(ferramentas);
   if (!ferramenta) {
-    throw new Error("O CRM conectado não expõe uma ferramenta reconhecível para listar tickets.");
+    throw new ErroFonte(400, "O CRM conectado não oferece listar tickets; confira ou conecte outro em Configurações.", ACAO_CRM);
   }
-  const resultado = await chamar(conexao, ferramenta.nome, montarArgumentosPeriodo(ferramenta.schema, dias));
+  let resultado: unknown;
+  try {
+    resultado = await chamar(conexao, ferramenta.nome, montarArgumentosPeriodo(ferramenta.schema, dias));
+  } catch (err) {
+    throw ErroFonte.deServico(err, ACAO_CRM);
+  }
   return ticketsDoResultado(resultado)
     .map((t) => ({ texto: textoDoTicket(t), nota: notaDoTicket(t), origem: "ticket" as const }))
     .filter((c) => c.texto);

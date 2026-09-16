@@ -1,6 +1,7 @@
 "use client";
-// Lista de todos os resultados salvos (qualquer tipo), com busca por texto. Rota compartilhada:
-// copie sem alterar (marca/nome/area continuam próprios de cada app, como em app/conta e app/entrar).
+// Lista de todos os resultados salvos (qualquer tipo), com busca por texto. Copie do pdi-time trocando só
+// marca/nome/area do Topbar (próprios de cada app, como em app/conta e app/entrar; por isso este arquivo
+// está em ESTRUTURA, não em ARQUIVOS, no scripts/verificar-padrao.sh).
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -43,7 +44,7 @@ export default function Page() {
 
   return (
     <>
-      <Topbar marca="P" nome="PDI do Time" area="Recursos Humanos" status={status} erro={erro} usuario={status?.usuario} />
+      <Topbar marca="A" nome="Ata Executiva" area="Gestão" status={status} erro={erro} usuario={status?.usuario} />
 
       <main className="max-w-[860px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
         <h1 className="titulo-painel mb-1.5">Histórico</h1>

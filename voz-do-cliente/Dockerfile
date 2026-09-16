@@ -13,8 +13,17 @@ RUN npm run build
 
 FROM node:22-alpine AS runner
 WORKDIR /app
+# Credenciais OAuth da suíte para o envio de avisos pelo Gmail/Outlook da própria pessoa (US-024):
+# embutidas na imagem pela equipe técnica, mesmo espírito de TRELLO_API_KEY_APP (agente-kanban). Sem
+# elas, os botões "Conectar meu Gmail"/"Conectar meu Outlook" simplesmente não aparecem em /setup.
+ARG GOOGLE_CLIENT_ID_APP
+ARG GOOGLE_CLIENT_SECRET_APP
+ARG MICROSOFT_CLIENT_ID_APP
+ARG MICROSOFT_CLIENT_SECRET_APP
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=10000 HOSTNAME=0.0.0.0 \
-    DATA_DIR=/app/data NODE_OPTIONS=--disable-warning=ExperimentalWarning
+    DATA_DIR=/app/data NODE_OPTIONS=--disable-warning=ExperimentalWarning \
+    GOOGLE_CLIENT_ID_APP=${GOOGLE_CLIENT_ID_APP} GOOGLE_CLIENT_SECRET_APP=${GOOGLE_CLIENT_SECRET_APP} \
+    MICROSOFT_CLIENT_ID_APP=${MICROSOFT_CLIENT_ID_APP} MICROSOFT_CLIENT_SECRET_APP=${MICROSOFT_CLIENT_SECRET_APP}
 RUN addgroup -S app && adduser -S app -G app && mkdir -p /app/data && chown app:app /app/data
 COPY --from=build /app/public ./public
 COPY --from=build /app/.next/standalone ./

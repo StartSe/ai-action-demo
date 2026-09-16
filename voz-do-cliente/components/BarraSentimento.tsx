@@ -37,7 +37,7 @@ export function BarraSentimento({ sentimento, nps }: { sentimento: ContagemSenti
           </div>
         </div>
       ) : (
-        <p className="text-muted text-[13px] mt-3">Nenhuma nota NPS foi enviada, por isso o score não aparece aqui.</p>
+        <p className="text-muted text-[13px] mt-3">Sem notas de 0 a 10, o NPS não é calculado. Para vê-lo, envie um CSV com uma coluna de nota ou colete respostas pela Pesquisa NPS por link.</p>
       )}
     </div>
   );

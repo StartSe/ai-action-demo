@@ -4,7 +4,7 @@
 // executar agora, pausar e apagar, e mostra o código de acesso do gatilho externo.
 import { useEffect, useState, type FormEvent } from "react";
 import { data } from "@/lib/formato";
-import { CopyButton, DataTable } from "./ui";
+import { Aviso, CopyButton, DataTable, MaisDetalhes, useConfirmacao } from "./ui";
 import type { Coluna } from "./ui";
 
 type Frequencia = "diaria" | "semanal" | "mensal" | "unica";
@@ -22,6 +22,7 @@ type Rotina = {
   destino: string | null;
   ativa: boolean;
   ultimaExecucao: string | null;
+  ultimaFalha: string | null;
   criadoEm: string;
 };
 
@@ -47,6 +48,7 @@ export function Rotinas() {
   const [codigoNovo, setCodigoNovo] = useState<string | null>(null);
   const [endereco, setEndereco] = useState("/api/rotinas/executar");
   const [gerando, setGerando] = useState(false);
+  const [enderecoDesconhecido, setEnderecoDesconhecido] = useState(false);
 
   const [tipo, setTipo] = useState("");
   const [frequencia, setFrequencia] = useState<Frequencia>("diaria");
@@ -58,6 +60,8 @@ export function Rotinas() {
   const [destino, setDestino] = useState("");
   const [criando, setCriando] = useState(false);
   const [erro, setErro] = useState("");
+  const [erroMotivo, setErroMotivo] = useState("");
+  const { confirmar, Dialogo } = useConfirmacao();
 
   function carregar() {
     fetch("/api/rotinas")
@@ -67,6 +71,7 @@ export function Rotinas() {
         setTipos(d.tipos);
         setDestinoPadrao(d.destinoPadrao || "");
         setTipo((t) => t || d.tipos[0]?.tipo || "");
+        setEnderecoDesconhecido(Boolean(d.enderecoPublicoDesconhecido));
       })
       .catch(() => setItens([]));
   }
@@ -97,6 +102,7 @@ export function Rotinas() {
   async function criar(e: FormEvent) {
     e.preventDefault();
     setErro("");
+    setErroMotivo("");
     setCriando(true);
     try {
       const r = await fetch("/api/rotinas", {
@@ -114,7 +120,10 @@ export function Rotinas() {
         }),
       });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Não foi possível criar a rotina.");
+      if (!r.ok) {
+        setErroMotivo(d.motivo || "");
+        throw new Error(d.error || "Não foi possível criar a rotina.");
+      }
       setDestino("");
       carregar();
     } catch (err) {
@@ -130,7 +139,7 @@ export function Rotinas() {
   }
 
   async function apagar(id: string) {
-    if (!window.confirm("Apagar esta rotina?")) return;
+    if (!(await confirmar("Apagar esta rotina?", { confirmarRotulo: "Apagar" }))) return;
     await fetch(`/api/rotinas/${id}`, { method: "DELETE" });
     carregar();
   }
@@ -149,7 +158,20 @@ export function Rotinas() {
     { chave: "tipo", titulo: "Rotina", papel: "titulo", render: (r) => tipos.find((t) => t.tipo === r.tipo)?.rotulo || r.tipo },
     { chave: "agenda", titulo: "Quando", papel: "resumo", render: (r) => `${descreverAgenda(r)}${r.ativa ? "" : " · Pausada"}` },
     { chave: "canal", titulo: "Canal", papel: "chip", render: (r) => <span className="chip-neutral">{r.canal === "email" ? "E-mail" : "Slack"}</span> },
-    { chave: "ultima", titulo: "Última execução", render: (r) => (r.ultimaExecucao ? data(r.ultimaExecucao, { comHora: true }) : "Nunca rodou") },
+    {
+      chave: "ultima",
+      titulo: "Última execução",
+      render: (r) =>
+        r.ultimaFalha ? (
+          <span className="text-danger">
+            Falhou: {r.ultimaFalha} · <a className="btn-link text-[12.5px]" href="/setup#notificacoes">Configurar notificações</a>
+          </span>
+        ) : r.ultimaExecucao ? (
+          data(r.ultimaExecucao, { comHora: true })
+        ) : (
+          "Nunca rodou"
+        ),
+    },
     {
       chave: "acoes",
       titulo: "Ações",
@@ -173,6 +195,12 @@ export function Rotinas() {
     <section className="card p-6 max-md:p-5">
       <h2 className="text-lg font-bold mb-1">Rotinas</h2>
       <p className="text-muted text-sm mb-4 max-w-[640px]">Agende o app para gerar e entregar um resultado sozinho, em um horário fixo, sem que ninguém precise abrir a tela.</p>
+
+      {enderecoDesconhecido && (
+        <div className="mb-4">
+          <Aviso tom="warn">Endereço público desconhecido: o aviso da próxima rotina sai sem o link do resultado. Abra o app pelo endereço publicado uma vez, ou informe em &quot;Para a equipe técnica&quot;.</Aviso>
+        </div>
+      )}
 
       {itens === null ? (
         <p className="text-muted text-sm">Carregando...</p>
@@ -251,43 +279,56 @@ export function Rotinas() {
                 />
               </label>
             </div>
-            {erro && <p className="text-danger text-sm">{erro}</p>}
+            {erro && (
+              <Aviso tom="danger">
+                {erro}
+                {erroMotivo === "notificacoes" && (
+                  <>
+                    {" "}
+                    <a className="btn-link text-[12.5px]" href="/setup#notificacoes">Configurar notificações</a>
+                  </>
+                )}
+              </Aviso>
+            )}
             <button type="submit" className="btn-primary !w-auto self-start" disabled={criando}>{criando ? "Criando" : "Criar rotina"}</button>
           </form>
         )}
       </div>
 
       <div className="mt-6 pt-5 border-t border-line">
-        <h3 className="text-sm font-semibold mb-2">Rodar sozinho, sem abrir o app</h3>
-        <div className="mb-4 px-4 py-3 rounded-[10px] text-sm border bg-[#fff4e0] border-[#f0d999] text-warn">
-          No plano gratuito o app hiberna e a rotina só roda quando alguém acessa. Para rodar sozinho, use um plano pago ou chame esta URL de um agendador externo.
-        </div>
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-[13px] font-semibold w-[130px] shrink-0">Endereço</span>
-            <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[220px]">{endereco}</code>
-            <CopyButton texto={() => endereco} rotulo="Copiar" />
+        <MaisDetalhes titulo="Opções avançadas">
+          <h3 className="text-sm font-semibold mb-2">Rodar sozinho, sem abrir o app</h3>
+          <div className="mb-4">
+            <Aviso tom="warn">No plano gratuito o app hiberna e a rotina só roda quando alguém acessa. Para rodar sozinho, use um plano pago ou chame esta URL de um agendador externo.</Aviso>
           </div>
-          {codigoNovo ? (
+          <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3 flex-wrap">
-              <span className="text-[13px] font-semibold w-[130px] shrink-0">Código (só agora)</span>
-              <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[220px]">{codigoNovo}</code>
-              <CopyButton texto={() => codigoNovo} rotulo="Copiar" />
+              <span className="text-[13px] font-semibold w-[130px] shrink-0">Endereço</span>
+              <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[220px]">{endereco}</code>
+              <CopyButton texto={() => endereco} rotulo="Copiar" />
             </div>
-          ) : status?.ativo && status.mascarado ? (
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className="text-[13px] font-semibold w-[130px] shrink-0">Código</span>
-              <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px]">{status.mascarado}</code>
+            {codigoNovo ? (
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-[13px] font-semibold w-[130px] shrink-0">Código (só agora)</span>
+                <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[220px]">{codigoNovo}</code>
+                <CopyButton texto={() => codigoNovo} rotulo="Copiar" />
+              </div>
+            ) : status?.ativo && status.mascarado ? (
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-[13px] font-semibold w-[130px] shrink-0">Código</span>
+                <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px]">{status.mascarado}</code>
+              </div>
+            ) : null}
+            <div className="flex items-center gap-3 flex-wrap mt-1">
+              <button type="button" className="btn-primary !w-auto" onClick={gerarCodigo} disabled={gerando}>
+                {gerando ? "Gerando" : status?.ativo ? "Gerar novo código" : "Gerar código"}
+              </button>
             </div>
-          ) : null}
-          <div className="flex items-center gap-3 flex-wrap mt-1">
-            <button type="button" className="btn-primary !w-auto" onClick={gerarCodigo} disabled={gerando}>
-              {gerando ? "Gerando" : status?.ativo ? "Gerar novo código" : "Gerar código"}
-            </button>
+            {codigoNovo && <p className="text-[12.5px] text-muted">Guarde este código agora: por segurança, ele não aparece de novo depois desta tela.</p>}
           </div>
-          {codigoNovo && <p className="text-[12.5px] text-muted">Guarde este código agora: por segurança, ele não aparece de novo depois desta tela.</p>}
-        </div>
+        </MaisDetalhes>
       </div>
+      {Dialogo}
     </section>
   );
 }

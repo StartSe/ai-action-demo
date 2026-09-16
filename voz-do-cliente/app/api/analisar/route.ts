@@ -1,7 +1,7 @@
-import { meta } from "@/lib/ai";
-import { analisarComentarios } from "@/lib/analise";
-import { apagarTodos, listar, salvar } from "@/lib/historico";
-import type { Comentario, EntradaAnalise, SaidaAnalise } from "@/lib/types";
+import { respostaErro } from "@/lib/ai";
+import { analisarESalvar, plural } from "@/lib/analise-salva";
+import { apagarTodos, listar } from "@/lib/historico";
+import type { Comentario } from "@/lib/types";
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
@@ -13,9 +13,10 @@ export async function POST(req: Request) {
   }
 
   const comentarios: Comentario[] = comentariosRecebidos
-    .map((c: { texto?: unknown; nota?: unknown }) => ({
+    .map((c: { texto?: unknown; nota?: unknown; origem?: unknown }) => ({
       texto: String(c?.texto ?? "").trim(),
       nota: typeof c?.nota === "number" && Number.isFinite(c.nota) ? c.nota : undefined,
+      origem: c?.origem === "arquivo" ? ("arquivo" as const) : undefined,
     }))
     .filter((c: Comentario) => c.texto.length > 0);
 
@@ -24,32 +25,15 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { demo, analise, totalEnviado, totalAnalisado, truncado } = await analisarComentarios({ comentarios, contexto });
-
-    const insumo = "comentários enviados e o contexto informado";
-    const metaGerada = meta({ demo, insumo });
-    const titulo = `Análise de ${totalAnalisado} comentário${totalAnalisado === 1 ? "" : "s"}${contexto ? ` sobre ${contexto}` : ""}`;
-    const id = salvar({
-      tipo: "voz-do-cliente",
-      titulo,
-      entrada: { contexto } satisfies EntradaAnalise,
-      saida: { analise, totalEnviado, totalAnalisado, truncado } satisfies SaidaAnalise,
-      meta: metaGerada,
+    const resposta = await analisarESalvar({
+      comentarios,
+      contexto,
+      insumo: () => "comentários enviados e o contexto informado",
+      titulo: (n) => `Análise de ${plural(n, "comentário", "comentários")}${contexto ? ` sobre ${contexto}` : ""}`,
     });
-
-    return Response.json({
-      demo,
-      truncado,
-      total_enviado: totalEnviado,
-      total_analisado: totalAnalisado,
-      analise,
-      meta: metaGerada,
-      id,
-    });
+    return Response.json(resposta);
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível analisar os comentários agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return respostaErro(err);
   }
 }
 

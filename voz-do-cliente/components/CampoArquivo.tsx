@@ -1,4 +1,5 @@
-// Upload de arquivo CSV/TXT (Dropzone compartilhado) com seleção de coluna quando é CSV, processado no navegador.
+// Upload de arquivo CSV/TXT (Dropzone compartilhado, compactado pela classe .dropzone-compacta de globals.css) com
+// seleção de coluna quando é CSV, processado no navegador.
 import { Dropzone } from "@/components/ui";
 
 export function CampoArquivo({
@@ -19,7 +20,7 @@ export function CampoArquivo({
   onColNota: (idx: number) => void;
 }) {
   return (
-    <div className="mb-4">
+    <div className="dropzone-compacta">
       <Dropzone id="arquivo-comentarios" accept=".csv,.txt,text/csv,text/plain" tiposLabel="CSV ou TXT" maxSizeMB={5} arquivo={arquivo} onArquivo={onArquivo} />
 
       {headers && headers.length > 0 && (
@@ -30,7 +31,7 @@ export function CampoArquivo({
               <option key={i} value={i}>{h || `Coluna ${i + 1}`}</option>
             ))}
           </select>
-          <label htmlFor="colNota" className="text-[13px] font-semibold mt-2">Coluna com a nota NPS (opcional, 0 a 10)</label>
+          <label htmlFor="colNota" className="text-[13px] font-semibold mt-2">Coluna com a nota de 0 a 10 (opcional)</label>
           <select id="colNota" className="input" value={idxNota} onChange={(e) => onColNota(Number(e.target.value))}>
             <option value={-1}>Nenhuma</option>
             {headers.map((h, i) => (

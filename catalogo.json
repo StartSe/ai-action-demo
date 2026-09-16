@@ -194,8 +194,8 @@
       ],
       "problema": "Centenas de comentários de clientes que ninguém consegue ler.",
       "ia": "Agrupa por tema, mede o sentimento e o NPS e prioriza o que fazer.",
-      "integracoes": "Só a IA (OpenRouter).",
-      "acento": "#a8324a",
+      "integracoes": "IA (OpenRouter) para a análise. Opcionais: Notificações (e-mail ou Slack) para a análise semanal e o alerta de detratores; CRM (HubSpot, Zendesk, Intercom) para importar tickets; planilha viva para ler as notas de NPS.",
+      "acento": "#ab36ab",
       "porta": 3010,
       "captura": "capturas/voz-do-cliente.png",
       "capacidades": [

@@ -56,6 +56,15 @@ export const COMENTARIOS_EXEMPLO: Comentario[] = [
   { texto: "Adoro a transparência do extrato detalhado, dá para entender cada cobrança.", nota: 9 },
 ];
 
+/** NPS das notas enviadas (promotor >= 9, detrator <= 6), só para o resumo citar o mesmo número do Destaque; null sem notas. */
+function npsDoExemplo(comentarios: Comentario[]): number | null {
+  const notas = comentarios.map((c) => c.nota).filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+  if (!notas.length) return null;
+  const promotores = notas.filter((n) => n >= 9).length;
+  const detratores = notas.filter((n) => n <= 6).length;
+  return Math.round(((promotores - detratores) / notas.length) * 100);
+}
+
 export function analiseDemo({ comentarios = [], contexto = "" }: { comentarios?: Comentario[]; contexto?: string } = {}): AnaliseBruta {
   const total = Math.max(comentarios.length, 1);
   const tema = (contexto || "o produto").trim() || "o produto";
@@ -64,8 +73,13 @@ export function analiseDemo({ comentarios = [], contexto = "" }: { comentarios?:
   const negativo = Math.max(1, Math.round(total * 0.37));
   const neutro = Math.max(0, total - positivo - negativo);
 
+  // O resumo precisa bater com os números que a tela mostra (Destaque com o NPS calculado das notas, barra de
+  // sentimento com 38% negativos no exemplo): elogios convivem com um bloco pesado de detratores.
+  const pctNegativo = Math.round((negativo / total) * 100);
+  const nps = npsDoExemplo(comentarios);
+
   return {
-    resumo_executivo: `A maior parte dos comentários sobre ${tema} é positiva, puxada pela facilidade de uso do dia a dia, mas um grupo relevante reclama de estabilidade e de demora no suporte. O time de produto já tem sinal suficiente para priorizar: corrigir travamentos recorrentes e dar mais transparência a prazos. Sem isso, a base de detratores tende a crescer mesmo com elogios ao design.`,
+    resumo_executivo: `Os elogios a ${tema} são consistentes (facilidade de uso, abertura de conta sem burocracia, avisos em tempo real), mas não compensam o bloco pesado de detratores: ${pctNegativo}% dos comentários reclamam${nps === null ? "" : ` e o NPS fechou em ${nps}`}, concentrados em travamentos e em um suporte que não resolve. O time de produto já tem sinal suficiente para priorizar: corrigir os travamentos recorrentes e dar prazo e transparência ao atendimento. Sem isso, a base de detratores tende a crescer mesmo com o design bem avaliado.`,
     sentimento: { positivo, neutro, negativo },
     temas: [
       {

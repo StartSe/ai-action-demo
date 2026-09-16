@@ -1,8 +1,7 @@
-import { meta } from "@/lib/ai";
-import { analisarComentarios } from "@/lib/analise";
-import { salvar } from "@/lib/historico";
+import { analisarESalvar, plural } from "@/lib/analise-salva";
+import { respostaErro } from "@/lib/ai";
+import { respostaVazia } from "@/lib/erro-fonte";
 import { comentariosDoPeriodo } from "@/lib/pesquisas";
-import type { EntradaAnalise, SaidaAnalise } from "@/lib/types";
 
 const PERIODOS_VALIDOS = [7, 30, 90];
 
@@ -13,37 +12,22 @@ export async function POST(req: Request) {
 
   const { comentarios, total } = comentariosDoPeriodo(diasAtras);
   if (!total) {
-    return Response.json({ error: "Nenhuma resposta encontrada no período escolhido." }, { status: 400 });
+    return respostaVazia(
+      diasAtras
+        ? `Nenhuma resposta nos últimos ${diasAtras} dias. Copie o link da pesquisa e envie aos clientes, ou amplie o período.`
+        : "Nenhuma resposta recebida ainda. Copie o link da pesquisa e envie aos clientes."
+    );
   }
 
   try {
-    const { demo, analise, totalEnviado, totalAnalisado, truncado } = await analisarComentarios({ comentarios, contexto: "" });
-
-    const contexto = diasAtras ? `respostas da pesquisa pública dos últimos ${diasAtras} dias` : "respostas da pesquisa pública (todo o período)";
-    const insumo = `${totalEnviado} resposta${totalEnviado === 1 ? "" : "s"} coletada${totalEnviado === 1 ? "" : "s"} na pesquisa pública`;
-    const metaGerada = meta({ demo, insumo });
-    const titulo = `Análise da pesquisa NPS (${totalAnalisado} resposta${totalAnalisado === 1 ? "" : "s"})`;
-    const id = salvar({
-      tipo: "voz-do-cliente",
-      titulo,
-      entrada: { contexto } satisfies EntradaAnalise,
-      saida: { analise, totalEnviado, totalAnalisado, truncado } satisfies SaidaAnalise,
-      meta: metaGerada,
+    const resposta = await analisarESalvar({
+      comentarios,
+      contexto: diasAtras ? `respostas da pesquisa pública dos últimos ${diasAtras} dias` : "respostas da pesquisa pública (todo o período)",
+      insumo: (n) => `${plural(n, "resposta coletada", "respostas coletadas")} na pesquisa pública`,
+      titulo: (n) => `Análise da pesquisa NPS (${plural(n, "resposta", "respostas")})`,
     });
-
-    return Response.json({
-      demo,
-      truncado,
-      total_enviado: totalEnviado,
-      total_analisado: totalAnalisado,
-      analise,
-      meta: metaGerada,
-      id,
-      contexto,
-    });
+    return Response.json(resposta);
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível analisar as respostas agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return respostaErro(err);
   }
 }

@@ -1,8 +1,8 @@
 export type Sentimento = "positivo" | "neutro" | "negativo";
 export type Nivel = "alto" | "médio" | "baixo";
 
-/** De onde veio o comentário: pesquisa NPS pública, arquivo enviado ou ticket importado de um CRM/helpdesk via MCP. Sem essa marca (colar texto direto na tela), não aparece rótulo nenhum. */
-export type OrigemComentario = "pesquisa" | "arquivo" | "ticket";
+/** De onde veio o comentário: pesquisa NPS pública, arquivo enviado, ticket importado do CRM ou linha lida da planilha conectada. Sem essa marca (colar texto direto na tela), não aparece rótulo nenhum. */
+export type OrigemComentario = "pesquisa" | "arquivo" | "ticket" | "planilha";
 
 export interface Comentario {
   texto: string;
