@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IA para Executivos</title>
-<meta name="description" content="Dez apps de IA para o dia a dia de uma empresa. Escolha um, clique em Publicar e em poucos minutos ele está no ar na sua conta.">
+<meta name="description" content="Dezessete apps de IA para o dia a dia de uma empresa. Escolha um, clique em Publicar e em poucos minutos ele está no ar na sua conta.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -160,7 +160,7 @@
 
   <main>
     <section class="hero">
-      <h1 id="titulo">Dez apps de IA para o dia a dia de uma empresa.</h1>
+      <h1 id="titulo">Dezessete apps de IA para o dia a dia de uma empresa.</h1>
       <p class="lead" id="lead"></p>
       <div class="filtro" id="filtro" role="group" aria-label="Filtrar por área"></div>
       <p class="contagem" id="contagem" aria-live="polite"></p>
@@ -180,11 +180,11 @@
     </section>
 
     <section class="suite">
-      <h2>Publicar os dez de uma vez</h2>
-      <p>Um único clique cria os dez apps na sua conta. Depois, abra cada um e conecte a IA em Configurações.</p>
+      <h2 id="tituloSuite">Publicar os dezessete de uma vez</h2>
+      <p id="apoioSuite">Um único clique cria os dezessete apps na sua conta. Depois, abra cada um e conecte a IA em Configurações.</p>
       <a class="btn" id="publicarSuite" href="#" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
-        Publicar os dez apps
+        <span id="rotuloSuite">Publicar os dezessete apps</span>
       </a>
     </section>
 
@@ -264,6 +264,18 @@
   $("#linkRepo").href = dados.repoPublico;
   $("#publicarSuite").href = dados.publicarSuite;
   document.title = dados.titulo;
+
+  // O número de apps vem do catálogo: o texto escrito no HTML é só o que aparece antes do
+  // catálogo carregar, e nunca fica velho quando um app novo entra na suíte.
+  const POR_EXTENSO = ["nenhum", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez",
+    "onze", "doze", "treze", "catorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove", "vinte"];
+  const total = dados.apps.length;
+  const quantos = POR_EXTENSO[total] || String(total);
+  const Quantos = quantos.charAt(0).toUpperCase() + quantos.slice(1);
+  $("#titulo").textContent = `${Quantos} apps de IA para o dia a dia de uma empresa.`;
+  $("#tituloSuite").textContent = `Publicar os ${quantos} de uma vez`;
+  $("#apoioSuite").textContent = `Um único clique cria os ${quantos} apps na sua conta. Depois, abra cada um e conecte a IA em Configurações.`;
+  $("#rotuloSuite").textContent = `Publicar os ${quantos} apps`;
 
   const CAPACIDADES = {
     artefato: { rotulo: "Leva o resultado pra fora (PDF, link, e-mail)", icone: '<path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 21h14"/>' },
