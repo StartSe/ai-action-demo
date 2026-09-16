@@ -19,6 +19,10 @@ export interface Acao {
   comentarioResponsavel?: string;
   /** Id da rotina de cobrança na véspera do prazo (US-076), enquanto ela ainda não foi cancelada. */
   cobrancaRotinaId?: string;
+  /** Motivo da última falha de entrega da cobrança. Calculado a partir da rotina ao devolver a ata para a tela (lib/cobranca.ts: anexarEstadoCobranca), nunca gravado. */
+  cobrancaFalha?: string;
+  /** true quando a cobrança já foi entregue. Calculado como `cobrancaFalha`, nunca gravado. */
+  cobrancaEnviada?: boolean;
 }
 
 export interface EmailFollowup {
@@ -39,9 +43,11 @@ export interface Ata {
 
 export interface DadosAta {
   titulo: string;
+  /** "AAAA-MM-DD" (campo type="date"); referência para os prazos relativos ("até sexta") da transcrição. Padrão: hoje. */
+  dataReuniao: string;
   participantes: string;
   contexto: string;
-  /** Uma pessoa por linha, "Nome: e-mail" (US-076), usado para cobrar cada responsável na véspera do prazo. */
+  /** Uma pessoa por linha, "Nome: e-mail" (US-076), usado para cobrar cada responsável na véspera do prazo e como destinatários do e-mail de acompanhamento. */
   emailsParticipantes: string;
 }
 
@@ -50,6 +56,8 @@ export type FonteTranscricao = "elevenlabs" | "openai" | "demo";
 /** Formato salvo em lib/historico.ts (tipo "ata"): reunioes-ia não é sensível, então a transcrição inteira é guardada. */
 export interface EntradaAta {
   titulo: string;
+  /** Ausente nas atas salvas antes do campo existir. */
+  dataReuniao?: string;
   participantes: string;
   contexto: string;
   emailsParticipantes: string;

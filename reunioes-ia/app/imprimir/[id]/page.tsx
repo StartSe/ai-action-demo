@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Origem } from "@/components/ui";
 import { data } from "@/lib/formato";
+import { anexarEstadoCobranca } from "@/lib/cobranca";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
 import type { Ata, EntradaAta } from "@/lib/types";
@@ -22,11 +23,11 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
       </header>
 
       <ConteudoAta
-        ata={registro.saida}
+        ata={anexarEstadoCobranca(registro.saida)}
         transcricao={registro.entrada.transcricao}
         fonteTranscricao={registro.entrada.fonteTranscricao}
         id={id}
-        participantes={registro.entrada.participantes}
+        emailsParticipantes={registro.entrada.emailsParticipantes}
       />
 
       <footer className="mt-8 pt-4 border-t border-line">

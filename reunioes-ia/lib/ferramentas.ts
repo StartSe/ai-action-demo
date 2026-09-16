@@ -15,6 +15,7 @@ export const FERRAMENTAS: Ferramenta[] = [
       properties: {
         transcricao: { type: "string", description: "Transcrição ou notas da reunião" },
         titulo: { type: "string", description: "Título da reunião (opcional)" },
+        dataReuniao: { type: "string", description: "Data da reunião no formato AAAA-MM-DD, referência para prazos relativos como 'até sexta' (opcional; padrão hoje)" },
         participantes: { type: "string", description: "Participantes da reunião (opcional)" },
       },
       required: ["transcricao"],
@@ -24,7 +25,8 @@ export const FERRAMENTAS: Ferramenta[] = [
       if (!transcricao) throw new Error("Envie a transcrição da reunião.");
       const titulo = args.titulo ? String(args.titulo).trim() : undefined;
       const participantes = args.participantes ? String(args.participantes).trim() : undefined;
-      const { ata } = await gerarAta({ transcricao, titulo, participantes });
+      const dataReuniao = args.dataReuniao ? String(args.dataReuniao).trim() : undefined;
+      const { ata } = await gerarAta({ transcricao, titulo, dataReuniao, participantes });
       return ata;
     },
   },

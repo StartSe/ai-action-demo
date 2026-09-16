@@ -1,43 +1,41 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 import { openrouter, MCP_TAREFAS, NOTIFICACOES, type Integracao } from "./setup-comum";
+import { testarTranscricao } from "./transcricao";
 
-const OPENROUTER = openrouter();
+const OPENROUTER = openrouter({ beneficio: "Liga a IA que escreve a ata a partir da transcrição" });
 
-export const TRANSCRICAO_ELEVENLABS: Integracao = {
-  id: "elevenlabs",
-  titulo: "Transcrição de áudio (ElevenLabs Scribe)",
+/** Um único cartão para a capacidade "transformar áudio em texto": a pessoa escolhe o serviço e cola
+ * uma chave. Sem ele, só a aba "Colar transcrição" gera atas reais (áudio devolve o exemplo). */
+export const TRANSCRICAO: Integracao = {
+  id: "transcricao",
+  titulo: "Transcrição de áudio",
+  beneficio: "Transforma o áudio da reunião em texto para a ata",
   descricao:
-    "É a opção preferida para transformar áudio de reunião em texto: reconhece vários falantes e funciona bem com sotaques e reuniões em português. Sem ela (nem a alternativa da OpenAI abaixo), só a aba \"Colar transcrição\" gera atas reais; enviar ou gravar áudio devolve uma transcrição de exemplo.",
+    "Transforma o áudio enviado ou gravado em texto antes de gerar a ata. Sem esta conexão, só a aba \"Colar transcrição\" gera atas reais; enviar ou gravar áudio devolve uma transcrição de exemplo.",
   obrigatoria: false,
   link: { url: "https://elevenlabs.io/app/settings/api-keys", rotulo: "Criar uma chave na ElevenLabs" },
-  campos: [{ chave: "ELEVENLABS_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk_...", ajuda: "Fica em Settings › API Keys, dentro da sua conta da ElevenLabs." }],
-  testar: async (config) => {
-    const chave = config.ELEVENLABS_API_KEY;
-    if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
-    const r = await fetch("https://api.elevenlabs.io/v1/user", { headers: { "xi-api-key": chave } });
-    if (r.status === 401) return { ok: false, mensagem: "Chave inválida ou revogada." };
-    if (!r.ok) return { ok: false, mensagem: `A ElevenLabs respondeu HTTP ${r.status}.` };
-    const data = (await r.json()) as { subscription?: { tier?: string } };
-    return { ok: true, mensagem: `Conectado. Plano: ${data.subscription?.tier || "desconhecido"}.` };
-  },
+  campoConectado: "TRANSCRICAO_API_KEY",
+  campos: [
+    {
+      chave: "TRANSCRICAO_SERVICO",
+      rotulo: "Serviço",
+      tipo: "select",
+      padrao: "elevenlabs",
+      opcoes: [
+        { valor: "elevenlabs", rotulo: "ElevenLabs" },
+        { valor: "openai", rotulo: "OpenAI" },
+      ],
+      ajuda: "A ElevenLabs reconhece vários falantes e vai bem com português; a OpenAI serve se você já tem conta lá.",
+    },
+    {
+      chave: "TRANSCRICAO_API_KEY",
+      rotulo: "Chave do serviço escolhido",
+      tipo: "secret",
+      placeholder: "sk_...",
+      ajuda: "ElevenLabs: Settings › API Keys. OpenAI: platform.openai.com › API keys.",
+    },
+  ],
+  testar: testarTranscricao,
 };
 
-export const TRANSCRICAO_OPENAI: Integracao = {
-  id: "openai",
-  titulo: "Transcrição de áudio (OpenAI Whisper), alternativa",
-  descricao:
-    "Alternativa à ElevenLabs para transformar áudio de reunião em texto, usada quando a ElevenLabs não está conectada. Sem nenhuma das duas, só a aba \"Colar transcrição\" gera atas reais.",
-  obrigatoria: false,
-  link: { url: "https://platform.openai.com/api-keys", rotulo: "Criar uma chave na OpenAI" },
-  campos: [{ chave: "OPENAI_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk-...", ajuda: "Fica em API keys, dentro do painel da OpenAI." }],
-  testar: async (config) => {
-    const chave = config.OPENAI_API_KEY;
-    if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
-    const r = await fetch("https://api.openai.com/v1/models/whisper-1", { headers: { Authorization: `Bearer ${chave}` } });
-    if (r.status === 401) return { ok: false, mensagem: "Chave inválida ou revogada." };
-    if (!r.ok) return { ok: false, mensagem: `A OpenAI respondeu HTTP ${r.status}.` };
-    return { ok: true, mensagem: "Conectado. O modelo whisper-1 está disponível para esta chave." };
-  },
-};
-
-export const INTEGRACOES: Integracao[] = [OPENROUTER, TRANSCRICAO_ELEVENLABS, TRANSCRICAO_OPENAI, MCP_TAREFAS, NOTIFICACOES];
+export const INTEGRACOES: Integracao[] = [OPENROUTER, MCP_TAREFAS, TRANSCRICAO, NOTIFICACOES];

@@ -6,8 +6,9 @@ import { DatabaseSync } from "node:sqlite";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { caixaConectada } from "./email-envio";
 import { enviar, type Canal } from "./notificacoes";
-import { getConfig, mascarar, setConfig } from "./store";
+import { getAllConfig, getConfig, mascarar, setConfig } from "./store";
 import { enderecoPublico } from "./setup-comum";
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
@@ -32,6 +33,9 @@ function abrir(): DatabaseSync {
     ultimaExecucao TEXT NULL,
     criadoEm TEXT NOT NULL
   )`);
+  // Bancos criados antes da US-023 não têm estas colunas; ALTER TABLE falha silenciosamente quando já existem.
+  try { db.exec(`ALTER TABLE rotinas ADD COLUMN ultimaFalha TEXT NULL`); } catch { /* coluna já existe */ }
+  try { db.exec(`ALTER TABLE rotinas ADD COLUMN falhasSeguidas INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
   return db;
 }
 
@@ -54,6 +58,10 @@ export type Rotina<P = unknown> = {
   parametros: P;
   ativa: boolean;
   ultimaExecucao: string | null;
+  /** Motivo da última falha (ex.: canal de notificação não configurado); null quando a última execução deu certo ou a rotina nunca rodou. */
+  ultimaFalha: string | null;
+  /** Falhas seguidas desde o último sucesso; ao chegar a 3, a rotina é pausada automaticamente. */
+  falhasSeguidas: number;
   criadoEm: string;
 };
 
@@ -61,7 +69,7 @@ type Linha = {
   id: string; tipo: string; frequencia: string; hora: string;
   diaSemana: number | null; diaMes: number | null; dataUnica: string | null;
   canal: string; destino: string | null; parametros: string;
-  ativa: number; ultimaExecucao: string | null; criadoEm: string;
+  ativa: number; ultimaExecucao: string | null; ultimaFalha: string | null; falhasSeguidas: number; criadoEm: string;
 };
 
 function linhaParaRotina<P>(l: Linha): Rotina<P> {
@@ -78,6 +86,8 @@ function linhaParaRotina<P>(l: Linha): Rotina<P> {
     parametros: JSON.parse(l.parametros),
     ativa: Boolean(l.ativa),
     ultimaExecucao: l.ultimaExecucao,
+    ultimaFalha: l.ultimaFalha,
+    falhasSeguidas: l.falhasSeguidas,
     criadoEm: l.criadoEm,
   };
 }
@@ -120,8 +130,41 @@ export function apagar(id: string): void {
   abrir().prepare("DELETE FROM rotinas WHERE id = ?").run(id);
 }
 
-function marcarExecutada(id: string, quando: string): void {
-  abrir().prepare("UPDATE rotinas SET ultimaExecucao = ? WHERE id = ?").run(quando, id);
+/** Execução bem-sucedida (ou sem nada a avisar): limpa a sequência de falhas. */
+function marcarSucesso(id: string, quando: string): void {
+  abrir().prepare("UPDATE rotinas SET ultimaExecucao = ?, ultimaFalha = NULL, falhasSeguidas = 0 WHERE id = ?").run(quando, id);
+}
+
+/** Execução falhou: registra o motivo e, na 3ª falha seguida, pausa a rotina (o agendador ignora rotinas pausadas). */
+function marcarFalha(id: string, quando: string, motivo: string): void {
+  const linha = abrir().prepare("SELECT falhasSeguidas FROM rotinas WHERE id = ?").get(id) as { falhasSeguidas: number } | undefined;
+  const falhasSeguidas = (linha?.falhasSeguidas ?? 0) + 1;
+  abrir().prepare("UPDATE rotinas SET ultimaExecucao = ?, ultimaFalha = ?, falhasSeguidas = ? WHERE id = ?").run(quando, motivo, falhasSeguidas, id);
+  if (falhasSeguidas >= 3) pausar(id, false);
+}
+
+/** Tipo de rotina disponível para um app criar (ver lib/rotinas-do-app.ts, arquivo próprio de cada app, para a lista real). */
+export type TipoRotina<P = unknown> = {
+  tipo: string;
+  rotulo: string;
+  /** Confere os parâmetros específicos desta rotina (ex.: temas, empresa) antes de criar; devolve a mensagem de erro, ou undefined quando pode criar. */
+  validar?: (parametros: P, config: Record<string, string | undefined>) => string | undefined;
+};
+
+/** Motivo pelo qual o canal escolhido ainda não consegue entregar (nenhuma credencial configurada para ele), ou undefined quando pode enviar. */
+export function motivoCanalIndisponivel(canal: Canal): string | undefined {
+  if (canal === "slack") {
+    return getConfig("NOTIFICACOES_SLACK_WEBHOOK") ? undefined : "Configure o webhook do Slack em Notificações antes de criar uma rotina por esse canal.";
+  }
+  // Uma caixa própria conectada (Gmail/Outlook, US-024) também entrega por e-mail, não só Resend/SMTP.
+  const temEmail = Boolean(caixaConectada("gmail") || caixaConectada("outlook") || getConfig("NOTIFICACOES_RESEND_API_KEY") || getConfig("NOTIFICACOES_SMTP_HOST"));
+  return temEmail ? undefined : "Conecte seu Gmail ou Outlook, ou configure o Resend ou o SMTP, em Notificações antes de criar uma rotina por e-mail.";
+}
+
+/** Roda o `validar` do tipo escolhido (quando existe) contra os parâmetros recebidos. */
+export function validarParametrosTipo(tipo: string, parametros: unknown, tipos: TipoRotina[]): string | undefined {
+  const def = tipos.find((t) => t.tipo === tipo);
+  return def?.validar ? def.validar(parametros, getAllConfig()) : undefined;
 }
 
 /** O que um `tipo` de rotina devolve ao rodar; vira a notificação enviada (titulo, texto e, quando houver, o link /r/<resultadoId>). enviar: false (ex.: uma rotina de alerta que só deve falar quando algo mudou) pula o envio desta execução, sem deixar de marcar a rotina como executada. */
@@ -181,12 +224,19 @@ function devida(r: Rotina, agora: Date): boolean {
 }
 
 async function executar(r: Rotina): Promise<{ id: string; ok: boolean; mensagem: string }> {
+  const agora = new Date().toISOString();
   const executor = executores.get(r.tipo);
-  if (!executor) return { id: r.id, ok: false, mensagem: `Nenhuma ação registrada para o tipo "${r.tipo}".` };
+  if (!executor) {
+    const mensagem = `Nenhuma ação registrada para o tipo "${r.tipo}".`;
+    marcarFalha(r.id, agora, mensagem);
+    return { id: r.id, ok: false, mensagem };
+  }
   try {
     const resultado = await executor(r);
-    marcarExecutada(r.id, new Date().toISOString());
-    if (resultado.enviar === false) return { id: r.id, ok: true, mensagem: "Nada para avisar desta vez." };
+    if (resultado.enviar === false) {
+      marcarSucesso(r.id, agora);
+      return { id: r.id, ok: true, mensagem: "Nada para avisar desta vez." };
+    }
     const base = enderecoPublico();
     if (!base && resultado.resultadoId) console.error(`Rotina "${r.tipo}": endereço público desconhecido, link omitido do aviso.`);
     const envio = await enviar({
@@ -196,10 +246,14 @@ async function executar(r: Rotina): Promise<{ id: string; ok: boolean; mensagem:
       texto: resultado.texto,
       link: base && resultado.resultadoId ? `${base}/r/${resultado.resultadoId}` : undefined,
     });
+    if (envio.ok) marcarSucesso(r.id, agora);
+    else marcarFalha(r.id, agora, envio.mensagem);
     return { id: r.id, ok: envio.ok, mensagem: envio.mensagem };
   } catch (err) {
-    marcarExecutada(r.id, new Date().toISOString());
-    return { id: r.id, ok: false, mensagem: err instanceof Error ? err.message : "Falha ao executar a rotina." };
+    console.error(`Falha ao executar a rotina "${r.tipo}":`, err);
+    const mensagem = err instanceof Error && err.message ? err.message : "Não foi possível concluir esta rotina agora. Tente executar de novo em Configurações.";
+    marcarFalha(r.id, agora, mensagem);
+    return { id: r.id, ok: false, mensagem };
   }
 }
 

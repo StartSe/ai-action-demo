@@ -1,18 +1,24 @@
-// "Cobrar na véspera do prazo" (US-076): uma rotina "unica" por ação, um dia antes do prazo, avisando
-// por e-mail o responsável daquela ação (endereço buscado em "E-mails dos participantes") com a ação,
-// o prazo e o link de confirmação (US-065, reaproveitado de lib/confirmacoes.ts). Arquivo próprio deste
-// app (não copiado sem alterar entre os 10 apps): nenhum outro tem "ações com responsável por nome" que
-// precise resolver um e-mail a partir de um texto livre de participantes.
+// "Cobrar na véspera do prazo" (US-076, revisado na US-025): uma rotina "unica" por ação, um dia antes
+// do prazo, avisando o responsável daquela ação (e-mail buscado em "E-mails dos participantes", ou o
+// canal do Slack quando esse é o canal escolhido em Notificações) com a ação, o prazo e o link de
+// confirmação (US-065, reaproveitado de lib/confirmacoes.ts). Arquivo próprio deste app: nenhum outro
+// tem "ações com responsável por nome" que precise resolver um e-mail a partir de um texto livre.
 import type { Meta } from "./ai";
 import { criarLinkConfirmacao } from "./confirmacoes";
+import { data } from "./formato";
 import { atualizarSaida, obter } from "./historico";
-import { apagar as apagarRotina, criar as criarRotina, registrarExecutor, type Rotina } from "./rotinas";
+import type { Canal } from "./notificacoes";
+import { emailDoResponsavel } from "./participantes";
+import { apagar as apagarRotina, criar as criarRotina, obter as obterRotina, registrarExecutor, type Rotina } from "./rotinas";
 import { enderecoPublico } from "./setup-comum";
 import type { Acao, Ata, EntradaAta } from "./types";
+
+export { emailDoResponsavel, emailsPorNome } from "./participantes";
 
 export const TIPO_COBRANCA = "cobranca-vespera-acao";
 
 const PRAZO_VALIDO = /^\d{4}-\d{2}-\d{2}$/;
+const PRAZO_PARTES = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /** "AAAA-MM-DD" a partir das partes locais do Date (nunca `toISOString()`: ver gotcha de fuso em pdi-time/CLAUDE.md, US-070). */
 function paraDataLocal(d: Date): string {
@@ -25,40 +31,21 @@ function vesperaDoPrazo(prazoIso: string): string {
   return paraDataLocal(d);
 }
 
-function normalizarNome(nome: string): string {
-  return nome.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+/** "AAAA-MM-DD" -> "dd/mm/aaaa" sem passar por `new Date("AAAA-MM-DD")` (meia-noite UTC, viraria o dia anterior). */
+function prazoLegivel(prazo: string): string {
+  const m = PRAZO_PARTES.exec(prazo);
+  if (!m) return prazo;
+  return data(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])), { comAno: true });
 }
 
-/** Lê "E-mails dos participantes" (uma pessoa por linha, "Nome: e-mail") num mapa nome normalizado -> e-mail. */
-export function emailsPorNome(texto?: string): Record<string, string> {
-  const mapa: Record<string, string> = {};
-  for (const linha of (texto || "").split("\n")) {
-    const indice = linha.indexOf(":");
-    if (indice < 0) continue;
-    const nome = linha.slice(0, indice).trim();
-    const email = linha.slice(indice + 1).trim();
-    if (!nome || !email) continue;
-    mapa[normalizarNome(nome)] = email;
-  }
-  return mapa;
-}
-
-/** E-mail do responsável por uma ação: casa pelo nome completo e, se não achar, por um nome que contenha o outro (ex.: "Renata" casa com "Renata Cavalcanti"). */
-export function emailDoResponsavel(emailsParticipantes: string | undefined, responsavel: string): string | undefined {
-  const alvo = normalizarNome(responsavel || "");
-  if (!alvo) return undefined;
-  const mapa = emailsPorNome(emailsParticipantes);
-  if (mapa[alvo]) return mapa[alvo];
-  const chave = Object.keys(mapa).find((k) => k.includes(alvo) || alvo.includes(k));
-  return chave ? mapa[chave] : undefined;
-}
-
-type ParametrosCobranca = { ataId: string; indice: number };
+/** `base` é o endereço público visto na requisição que agendou (baseUrl(req)), guardado aqui porque no
+ * executor de 60s não há requisição para consultar; `enderecoPublico()` fica só como reserva. */
+type ParametrosCobranca = { ataId: string; indice: number; base?: string };
 
 export type ResultadoCobranca = { indice: number; acao: string; ok: boolean; mensagem: string };
 
 /** Cria (uma única vez por ação ainda pendente e com prazo válido) a rotina de cobrança na véspera. */
-export function criarCobrancasVespera(ataId: string): { ata: Ata; resultados: ResultadoCobranca[] } | null {
+export function criarCobrancasVespera(ataId: string, { canal, base }: { canal: Canal; base: string }): { ata: Ata; resultados: ResultadoCobranca[] } | null {
   const registro = obter<EntradaAta, Ata, Meta>(ataId);
   if (!registro || registro.tipo !== "ata") return null;
 
@@ -80,30 +67,36 @@ export function criarCobrancasVespera(ataId: string): { ata: Ata; resultados: Re
       resultados.push({ indice, acao: acao.acao, ok: false, mensagem: "Prazo sem data definida." });
       return;
     }
-    const email = emailDoResponsavel(emailsTexto, acao.responsavel);
-    if (!email) {
-      resultados.push({ indice, acao: acao.acao, ok: false, mensagem: `Sem e-mail cadastrado para "${acao.responsavel || "o responsável"}".` });
+    // Por e-mail, cada responsável recebe no próprio endereço; pelo Slack, o aviso vai para o canal do webhook.
+    const email = canal === "email" ? emailDoResponsavel(emailsTexto, acao.responsavel) : undefined;
+    if (canal === "email" && !email) {
+      resultados.push({ indice, acao: acao.acao, ok: false, mensagem: `Sem e-mail cadastrado para "${acao.responsavel || "o responsável"}". Preencha "E-mails dos participantes".` });
       return;
     }
 
     const token = acao.tokenConfirmacao || criarLinkConfirmacao(ataId, indice, acao);
-    const parametros: ParametrosCobranca = { ataId, indice };
+    const parametros: ParametrosCobranca = { ataId, indice, base };
     const rotinaId = criarRotina({
       tipo: TIPO_COBRANCA,
       frequencia: "unica",
       hora: "08:00",
       dataUnica: vesperaDoPrazo(acao.prazo),
-      canal: "email",
+      canal,
       destino: email,
       parametros,
     });
     acoesAtualizadas[indice] = { ...acao, tokenConfirmacao: token, cobrancaRotinaId: rotinaId };
-    resultados.push({ indice, acao: acao.acao, ok: true, mensagem: `Cobrança agendada para ${email}.` });
+    resultados.push({
+      indice,
+      acao: acao.acao,
+      ok: true,
+      mensagem: canal === "email" ? `Cobrança agendada para ${email} em ${prazoLegivel(vesperaDoPrazo(acao.prazo))}.` : `Cobrança agendada no Slack para ${prazoLegivel(vesperaDoPrazo(acao.prazo))}.`,
+    });
   });
 
   const saida: Ata = { ...registro.saida, acoes: acoesAtualizadas };
   atualizarSaida(ataId, saida);
-  return { ata: saida, resultados };
+  return { ata: anexarEstadoCobranca(saida), resultados };
 }
 
 /** Cancela a cobrança agendada de uma ação (chamada quando ela é marcada como concluída). */
@@ -115,19 +108,37 @@ export function cancelarCobranca(acao: Acao): Acao {
   return resto;
 }
 
+/** Completa cada ação com o estado atual da sua cobrança (`cobrancaFalha`/`cobrancaEnviada`), lido da
+ * rotina em vez de gravado na ata: assim a tela mostra "Cobrança não enviada: motivo" sem que a ata
+ * precise ser reescrita a cada execução. Use ao devolver a ata para a tela (nunca antes de gravar). */
+export function anexarEstadoCobranca(ata: Ata): Ata {
+  const acoes = (ata.acoes || []).map((acao) => {
+    if (!acao.cobrancaRotinaId) return acao;
+    const rotina = obterRotina(acao.cobrancaRotinaId);
+    if (!rotina) return acao;
+    const { cobrancaFalha: _f, cobrancaEnviada: _e, ...limpa } = acao;
+    void _f; void _e;
+    if (rotina.ultimaFalha) return { ...limpa, cobrancaFalha: rotina.ultimaFalha };
+    if (rotina.ultimaExecucao) return { ...limpa, cobrancaEnviada: true };
+    return limpa;
+  });
+  return { ...ata, acoes };
+}
+
 registrarExecutor(TIPO_COBRANCA, async (rotina: Rotina) => {
-  const { ataId, indice } = (rotina as Rotina<ParametrosCobranca>).parametros;
+  const { ataId, indice, base: baseGuardada } = (rotina as Rotina<ParametrosCobranca>).parametros;
   const registro = obter<EntradaAta, Ata, Meta>(ataId);
   const acao = registro?.saida.acoes?.[indice];
   if (!registro || !acao) {
     return { titulo: "Ação não encontrada", texto: "A ação referente a esta cobrança não foi encontrada (pode ter sido removida)." };
   }
-  const base = enderecoPublico();
+  const base = baseGuardada || enderecoPublico();
   if (!base) console.error(`Cobrança da ação "${acao.acao}": endereço público desconhecido, link de confirmação omitido do aviso.`);
   const linkConfirmacao = base && acao.tokenConfirmacao ? `${base}/f/${acao.tokenConfirmacao}` : undefined;
+  const responsavel = acao.responsavel ? ` (${acao.responsavel})` : "";
   return {
     titulo: `Lembrete: "${acao.acao}" vence amanhã`,
-    texto: `A ação "${acao.acao}" tem prazo para ${acao.prazo}.${linkConfirmacao ? ` Confirme por este link: ${linkConfirmacao}` : ""}`,
+    texto: `A ação "${acao.acao}"${responsavel} tem prazo para ${prazoLegivel(acao.prazo)}.${linkConfirmacao ? ` Confirme ou ajuste o prazo por este link: ${linkConfirmacao}` : ""}`,
     resultadoId: ataId,
   };
 });

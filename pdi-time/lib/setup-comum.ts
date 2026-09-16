@@ -176,8 +176,10 @@ async function modelosGratuitosDinamicos(chave: string): Promise<Opcao[]> {
 }
 
 /** Integração de IA usada por todos os apps. Passe `visao: true` só nos apps que realmente leem
- * imagem (hoje `clone-site` e `custos-ia`) — os demais não ganham o campo "Modelo para imagens". */
-export function openrouter({ visao = false }: { visao?: boolean } = {}): Integracao {
+ * imagem (hoje `clone-site` e `custos-ia`) — os demais não ganham o campo "Modelo para imagens".
+ * `beneficio` é a frase de uma linha do cartão, em linguagem de negócio e própria de cada app
+ * (ex.: "Liga a IA que gera o plano de desenvolvimento"). */
+export function openrouter({ visao = false, beneficio = "Liga a IA que gera o resultado deste app" }: { visao?: boolean; beneficio?: string } = {}): Integracao {
   const camposVisao: Campo[] = visao
     ? [{ chave: "OPENROUTER_MODEL_VISAO", rotulo: "Modelo para imagens", tipo: "select", opcional: true, avancado: true, padrao: MODELOS_VISAO[0].valor, opcoes: MODELOS_VISAO, ajuda: "Modelo usado quando o app precisa ler uma imagem" }]
     : [];
@@ -185,7 +187,7 @@ export function openrouter({ visao = false }: { visao?: boolean } = {}): Integra
     id: "openrouter",
     titulo: "Inteligência artificial",
     descricao: "Uma conta gratuita no OpenRouter dá acesso a dezenas de modelos, vários sem custo. Conecte em um clique ou cole uma chave.",
-    beneficio: "Liga a IA que gera o plano de desenvolvimento",
+    beneficio,
     obrigatoria: true,
     link: { url: "https://openrouter.ai/keys", rotulo: "Criar uma chave gratuita" },
     oauth: { tipo: "openrouter", rotulo: "Conectar a IA", url: "/api/setup/oauth/openrouter" },

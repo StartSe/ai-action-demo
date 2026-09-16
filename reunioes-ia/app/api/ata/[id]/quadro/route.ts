@@ -48,13 +48,14 @@ export async function POST(_req: Request, { params }: RouteContext<"/api/ata/[id
   for (let indice = 0; indice < acoes.length; indice++) {
     const acao = acoes[indice];
     if (acao.noQuadro) continue;
-    const comando = `Crie um cartão para ${acao.acao} Responsável: ${acao.responsavel || "a definir"}. Prazo: ${acao.prazo}.`;
+    const comando = `Crie o cartão "${acao.acao}" para ${acao.responsavel || "a definir"} até ${acao.prazo}`;
     try {
       const resultado = await chamar(conexao, "operar_quadro", { comando, confirmar: true });
       resultados.push({ indice, acao: acao.acao, ok: true, mensagem: extrairMensagem(resultado, acao), link: extrairLink(resultado) });
       acoesAtualizadas[indice] = { ...acao, noQuadro: true };
     } catch (err) {
-      resultados.push({ indice, acao: acao.acao, ok: false, mensagem: err instanceof Error ? err.message : "Falha ao enviar para o quadro." });
+      // lib/mcp-cliente.ts já lança mensagens curadas (sem status HTTP nem corpo do servidor remoto).
+      resultados.push({ indice, acao: acao.acao, ok: false, mensagem: err instanceof Error ? err.message : "Não foi possível enviar esta ação para o quadro agora." });
     }
   }
 

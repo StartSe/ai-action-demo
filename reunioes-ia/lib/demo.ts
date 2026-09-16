@@ -1,5 +1,31 @@
 // Respostas de exemplo usadas quando não há chave de IA (ou de transcrição) configurada.
+// As datas do exemplo são relativas à data da reunião (padrão hoje), para a ata de demonstração nunca
+// mostrar prazos já vencidos meses depois de escrita.
 import type { Ata } from "./types";
+
+/** "AAAA-MM-DD" a partir das partes locais do Date. */
+function paraDataLocal(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Data base + `dias`, em "AAAA-MM-DD". */
+function maisDias(base: Date, dias: number): string {
+  const d = new Date(base);
+  d.setDate(d.getDate() + dias);
+  return paraDataLocal(d);
+}
+
+/** "AAAA-MM-DD" -> "dd/mm" (o e-mail de exemplo cita os prazos assim). */
+function ddmm(iso: string): string {
+  const [, m, d] = iso.split("-");
+  return `${d}/${m}`;
+}
+
+/** "AAAA-MM-DD" -> "dd/mm/aaaa". */
+function ddmmaaaa(iso: string): string {
+  const [a, m, d] = iso.split("-");
+  return `${d}/${m}/${a}`;
+}
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
@@ -25,9 +51,17 @@ export function transcricaoDemo(): string {
   return TRANSCRICAO_EXEMPLO;
 }
 
-export function ataDemo({ titulo }: { titulo?: string } = {}): Ata {
+export function ataDemo({ titulo, dataReuniao }: { titulo?: string; dataReuniao?: string } = {}): Ata {
+  // Prazos do exemplo, contados a partir da data da reunião: a confirmação da embalagem sai em 6 dias, o
+  // retorno do orçamento em 7, o ajuste do orçamento e a vaga publicada em 8, a contratação em 51 (fim do mês seguinte).
+  const base = dataReuniao && /^\d{4}-\d{2}-\d{2}$/.test(dataReuniao) ? new Date(`${dataReuniao}T00:00:00`) : new Date();
+  const prazoEmbalagem = maisDias(base, 6);
+  const prazoRetorno = maisDias(base, 7);
+  const prazoOrcamento = maisDias(base, 8);
+  const prazoVaga = maisDias(base, 8);
+  const prazoContratacao = maisDias(base, 51);
   return {
-    titulo: titulo || "Reunião de diretoria — Vetta Alimentos (setembro/2026)",
+    titulo: titulo || "Reunião de diretoria — Vetta Alimentos",
     resumo_executivo:
       "A diretoria fechou o terceiro trimestre com receita 6% acima do orçado, mas decidiu cortar 10% do orçamento de mídia paga do quarto trimestre para recompor o caixa consumido pelo estoque do lançamento de outubro. O lançamento da linha de snacks saudáveis segue confirmado para 15 de outubro, com plano de contingência para o risco de atraso na embalagem. Foi aprovada uma exceção ao congelamento de contratações para preencher a vaga de gerente de contas da região Sul, parada desde julho. A proposta de política de trabalho remoto ficou pendente para a próxima reunião.",
     decisoes: [
@@ -45,11 +79,11 @@ export function ataDemo({ titulo }: { titulo?: string } = {}): Ata {
       },
     ],
     acoes: [
-      { acao: "Ajustar o orçamento de marketing do quarto trimestre com o corte de 10% em mídia paga e enviar para aprovação.", responsavel: "Marcelo Duarte", prazo: "2026-09-18" },
-      { acao: "Confirmar com a Bioempaque um plano de contingência de embalagem, a ser acionado se a Envoplast não confirmar entrega.", responsavel: "Thiago Almeida", prazo: "2026-09-16" },
-      { acao: "Publicar a vaga de gerente de contas da região Sul.", responsavel: "Patrícia Nunes", prazo: "2026-09-18" },
-      { acao: "Contratar o gerente de contas da região Sul.", responsavel: "Patrícia Nunes", prazo: "2026-10-31" },
-      { acao: "Dar retorno final sobre o orçamento ajustado para o fechamento do mês no sistema.", responsavel: "Renata Cavalcanti", prazo: "2026-09-17" },
+      { acao: "Ajustar o orçamento de marketing do quarto trimestre com o corte de 10% em mídia paga e enviar para aprovação.", responsavel: "Marcelo Duarte", prazo: prazoOrcamento },
+      { acao: "Confirmar com a Bioempaque um plano de contingência de embalagem, a ser acionado se a Envoplast não confirmar entrega.", responsavel: "Thiago Almeida", prazo: prazoEmbalagem },
+      { acao: "Publicar a vaga de gerente de contas da região Sul.", responsavel: "Patrícia Nunes", prazo: prazoVaga },
+      { acao: "Contratar o gerente de contas da região Sul.", responsavel: "Patrícia Nunes", prazo: prazoContratacao },
+      { acao: "Dar retorno final sobre o orçamento ajustado para o fechamento do mês no sistema.", responsavel: "Renata Cavalcanti", prazo: prazoRetorno },
     ],
     riscos_e_bloqueios: [
       "Possível atraso de até duas semanas do fornecedor Envoplast na entrega do filme biodegradável, o que adiaria o lançamento de outubro.",
@@ -58,11 +92,11 @@ export function ataDemo({ titulo }: { titulo?: string } = {}): Ata {
     ],
     pendencias: ["Proposta de política de trabalho remoto, a ser apresentada por Patrícia Nunes na próxima reunião."],
     proximos_passos:
-      "A diretoria confirma o fornecedor de embalagem definitivo após o dia 16 de setembro e retoma a discussão da política de trabalho remoto assim que a proposta da Patrícia estiver pronta.",
+      `A diretoria confirma o fornecedor de embalagem definitivo após ${ddmmaaaa(prazoEmbalagem)} e retoma a discussão da política de trabalho remoto assim que a proposta da Patrícia estiver pronta.`,
     email_followup: {
-      assunto: "Ata da reunião de diretoria — decisões e ações (setembro/2026)",
+      assunto: `Ata da reunião de diretoria de ${ddmmaaaa(paraDataLocal(base))} — decisões e ações`,
       corpo:
-        "Olá a todos,\n\nSegue o resumo das decisões e ações combinadas na reunião de diretoria de 10 de setembro:\n\n- Corte de 10% no orçamento de mídia paga do quarto trimestre, mantendo o investimento em ponto de venda (Marcelo, até 18/09).\n- Lançamento da linha de snacks saudáveis mantido para 15 de outubro, com plano de contingência de embalagem via Bioempaque (Thiago, confirmação até 16/09).\n- Abertura de exceção ao congelamento de contratações para a vaga de gerente de contas da região Sul (Patrícia, vaga publicada até 18/09 e contratação prevista para o fim de outubro).\n- Política de trabalho remoto segue pendente e volta à pauta na próxima reunião.\n\nQualquer dúvida, me procurem.\n\nAbraços,\nRenata",
+        `Olá a todos,\n\nSegue o resumo das decisões e ações combinadas na reunião de diretoria de ${ddmmaaaa(paraDataLocal(base))}:\n\n- Corte de 10% no orçamento de mídia paga do quarto trimestre, mantendo o investimento em ponto de venda (Marcelo, até ${ddmm(prazoOrcamento)}).\n- Lançamento da linha de snacks saudáveis mantido para 15 de outubro, com plano de contingência de embalagem via Bioempaque (Thiago, confirmação até ${ddmm(prazoEmbalagem)}).\n- Abertura de exceção ao congelamento de contratações para a vaga de gerente de contas da região Sul (Patrícia, vaga publicada até ${ddmm(prazoVaga)} e contratação até ${ddmm(prazoContratacao)}).\n- Política de trabalho remoto segue pendente e volta à pauta na próxima reunião.\n\nQualquer dúvida, me procurem.\n\nAbraços,\nRenata`,
     },
   };
 }

@@ -6,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { caixaConectada } from "./email-envio";
 import { enviar, type Canal } from "./notificacoes";
 import { getAllConfig, getConfig, mascarar, setConfig } from "./store";
 import { enderecoPublico } from "./setup-comum";
@@ -155,8 +156,9 @@ export function motivoCanalIndisponivel(canal: Canal): string | undefined {
   if (canal === "slack") {
     return getConfig("NOTIFICACOES_SLACK_WEBHOOK") ? undefined : "Configure o webhook do Slack em Notificações antes de criar uma rotina por esse canal.";
   }
-  const temEmail = Boolean(getConfig("NOTIFICACOES_RESEND_API_KEY") || getConfig("NOTIFICACOES_SMTP_HOST"));
-  return temEmail ? undefined : "Configure o Resend ou o SMTP em Notificações antes de criar uma rotina por e-mail.";
+  // Uma caixa própria conectada (Gmail/Outlook, US-024) também entrega por e-mail, não só Resend/SMTP.
+  const temEmail = Boolean(caixaConectada("gmail") || caixaConectada("outlook") || getConfig("NOTIFICACOES_RESEND_API_KEY") || getConfig("NOTIFICACOES_SMTP_HOST"));
+  return temEmail ? undefined : "Conecte seu Gmail ou Outlook, ou configure o Resend ou o SMTP, em Notificações antes de criar uma rotina por e-mail.";
 }
 
 /** Roda o `validar` do tipo escolhido (quando existe) contra os parâmetros recebidos. */

@@ -1,4 +1,5 @@
-import { transcrever } from "@/lib/transcricao";
+import { respostaErro } from "@/lib/ai";
+import { ErroTranscricao, transcrever } from "@/lib/transcricao";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +19,10 @@ export async function POST(req: Request) {
     const { transcricao, fonte } = await transcrever({ buffer, filename: audio.name, mimetype: audio.type });
     return Response.json({ transcricao, fonte });
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível transcrever o áudio agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    // Erros do serviço de transcrição já vêm traduzidos (lib/transcricao.ts); o resto segue o padrão da IA.
+    if (err instanceof ErroTranscricao) {
+      return Response.json({ error: err.message, acao: err.acao }, { status: err.status });
+    }
+    return respostaErro(err);
   }
 }

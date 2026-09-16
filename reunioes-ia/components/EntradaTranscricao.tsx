@@ -14,7 +14,7 @@ export interface EntradaHandle {
 interface Props {
   texto: string;
   onChangeTexto: (v: string) => void;
-  /** Quando false, a aba "Gravar agora" avisa que a gravação vai gerar uma transcrição de exemplo (nenhuma chave de transcrição configurada). */
+  /** Quando false, as abas "Enviar áudio" e "Gravar agora" avisam que o áudio vai gerar uma transcrição de exemplo (nenhuma chave de transcrição configurada). */
   transcricaoConectada?: boolean;
 }
 
@@ -46,10 +46,20 @@ function TabButton({ ativo, onClick, children }: { ativo: boolean; onClick: () =
       role="tab"
       aria-selected={ativo}
       onClick={onClick}
-      className={`bg-transparent border-0 border-b-2 cursor-pointer pt-2 pb-2.5 px-1 mr-3.5 font-semibold text-[13.5px] ${ativo ? "text-accent-ink border-accent" : "text-muted border-transparent"}`}
+      className={`bg-transparent border-0 border-b-2 cursor-pointer pt-2 pb-2.5 px-1 mr-3.5 font-semibold text-[13.5px] whitespace-nowrap shrink-0 ${ativo ? "text-accent-ink border-accent" : "text-muted border-transparent"}`}
     >
       {children}
     </button>
+  );
+}
+
+/** Mesmo aviso nas duas abas de áudio: sem serviço de transcrição conectado, o áudio vira uma transcrição de exemplo. */
+function AvisoTranscricao() {
+  return (
+    <p className="text-[12.5px] font-semibold text-warn">
+      A transcrição de áudio não está conectada; o áudio vai gerar um exemplo.{" "}
+      <a href="/setup#transcricao" className="underline">Conectar</a>
+    </p>
   );
 }
 
@@ -157,7 +167,7 @@ const EntradaTranscricao = forwardRef<EntradaHandle, Props>(function EntradaTran
 
   return (
     <div>
-      <div className="flex gap-1.5 mb-[18px] border-b border-line" role="tablist">
+      <div className="flex gap-1.5 mb-3 border-b border-line overflow-x-auto" role="tablist">
         <TabButton ativo={aba === "texto"} onClick={() => setAba("texto")}>Colar transcrição</TabButton>
         <TabButton ativo={aba === "audio"} onClick={() => setAba("audio")}>Enviar áudio</TabButton>
         {gravarSuportado && (
@@ -166,11 +176,11 @@ const EntradaTranscricao = forwardRef<EntradaHandle, Props>(function EntradaTran
       </div>
 
       {aba === "texto" && (
-        <div className="flex flex-col gap-1.5 mb-4">
+        <div className="flex flex-col gap-1.5">
           <label htmlFor="transcricaoTexto" className="text-[13px] font-semibold">Transcrição da reunião</label>
           <textarea
             id="transcricaoTexto"
-            className="input min-h-40 resize-y"
+            className="input min-h-24 resize-y"
             placeholder="Cole aqui a transcrição, as anotações ou a ata rascunho da reunião..."
             value={texto}
             onChange={(e) => onChangeTexto(e.target.value)}
@@ -181,6 +191,7 @@ const EntradaTranscricao = forwardRef<EntradaHandle, Props>(function EntradaTran
       {aba === "audio" && (
         <div className="flex flex-col gap-1.5 mb-4">
           <span className="text-[13px] font-semibold">Arquivo de áudio</span>
+          {!transcricaoConectada && <AvisoTranscricao />}
           <div
             tabIndex={0}
             onClick={() => fileInputRef.current?.click()}
@@ -244,9 +255,7 @@ const EntradaTranscricao = forwardRef<EntradaHandle, Props>(function EntradaTran
       {aba === "gravar" && gravarSuportado && (
         <div className="flex flex-col gap-1.5 mb-4">
           <span className="text-[13px] font-semibold">Gravação</span>
-          {!transcricaoConectada && (
-            <p className="text-[12.5px] font-semibold text-warn">A transcrição não está conectada; a gravação vai gerar um exemplo.</p>
-          )}
+          {!transcricaoConectada && <AvisoTranscricao />}
           <div className="flex items-center gap-3.5">
             <button type="button" className="btn-ghost" onClick={alternarGravacao}>{gravando ? "Parar" : "Gravar"}</button>
             <span className="tabular-nums font-bold text-accent-ink text-[15px]">{formatarTempo(segundos)}</span>

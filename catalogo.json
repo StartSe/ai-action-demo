@@ -153,8 +153,8 @@
       ],
       "problema": "A reunião acaba sem decisões e responsáveis registrados.",
       "ia": "Transcreve o áudio e gera a ata com ações, prazos e o e-mail de follow-up.",
-      "integracoes": "ElevenLabs Scribe ou OpenAI Whisper para transcrição.",
-      "acento": "#8a5a00",
+      "integracoes": "ElevenLabs ou OpenAI para transcrição de áudio; quadro de tarefas e avisos por e-mail ou Slack.",
+      "acento": "#465f9b",
       "porta": 3008,
       "captura": "capturas/reunioes-ia.png",
       "capacidades": [

@@ -1,4 +1,4 @@
-import { cancelarCobranca } from "@/lib/cobranca";
+import { anexarEstadoCobranca, cancelarCobranca } from "@/lib/cobranca";
 import { atualizarSaida, obter } from "@/lib/historico";
 import type { Ata } from "@/lib/types";
 
@@ -32,5 +32,5 @@ export async function PATCH(req: Request, { params }: RouteContext<"/api/ata/[id
     }),
   };
   atualizarSaida(id, saida);
-  return Response.json({ ata: saida });
+  return Response.json({ ata: anexarEstadoCobranca(saida) });
 }

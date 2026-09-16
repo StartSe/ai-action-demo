@@ -42,15 +42,16 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
-| `ELEVENLABS_API_KEY` | Alternativa ao setup. Transcreve áudio via ElevenLabs Scribe (opção preferida). Obtenha em https://elevenlabs.io/app/settings/api-keys |
-| `OPENAI_API_KEY` | Alternativa ao setup. Transcreve áudio via OpenAI Whisper, usada se a ElevenLabs não estiver conectada. Obtenha em https://platform.openai.com/api-keys |
+| `TRANSCRICAO_SERVICO` | Alternativa ao setup. Serviço de transcrição de áudio: `elevenlabs` (padrão) ou `openai`. |
+| `TRANSCRICAO_API_KEY` | Alternativa ao setup. Chave do serviço escolhido (ElevenLabs: https://elevenlabs.io/app/settings/api-keys; OpenAI: https://platform.openai.com/api-keys). |
+| `ELEVENLABS_API_KEY`, `OPENAI_API_KEY` | Nomes antigos, ainda aceitos quando `TRANSCRICAO_API_KEY` não está definida (ElevenLabs tem prioridade). |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
 
 ## Estrutura
 ```
 app/page.tsx                       tela única (formulário + resultado)
 app/api/ata/route.ts               geração da ata (OpenRouter ou demo)
-app/api/transcrever/route.ts       transcrição de áudio: ElevenLabs -> OpenAI -> demo
+app/api/transcrever/route.ts       transcrição de áudio pelo serviço escolhido em /setup (ou demo)
 app/setup/page.tsx                 configuração inicial (chaves, OAuth, teste de conexão)
 app/api/setup/                     leitura/gravação da configuração, teste e OAuth do OpenRouter
 app/api/status/route.ts            informa ao frontend o que está conectado

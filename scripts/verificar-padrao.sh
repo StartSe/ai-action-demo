@@ -51,8 +51,6 @@ ARQUIVOS=(
   "lib/rotinas.ts"
   "app/mcp"
   "app/f"
-  "app/conta"
-  "app/entrar"
   "app/historico"
   "app/api/rotinas"
   "app/api/setup"
@@ -66,8 +64,11 @@ ARQUIVOS=(
 )
 
 # Estrutura que todo app precisa ter, mas cujo conteúdo é próprio de cada um (renderiza o domínio do
-# app: tipo do registro, componente de resultado, título da impressão). Só a existência é conferida.
+# app: tipo do registro, componente de resultado, título da impressão; em app/conta e app/entrar, a marca
+# e o nome do app passados a TelaCriarConta/TelaEntrar de components/conta.tsx). Só a existência é conferida.
 ESTRUTURA=(
+  "app/conta/page.tsx"
+  "app/entrar/page.tsx"
   "app/r/[id]/page.tsx"
   "app/r/[id]/not-found.tsx"
   "app/imprimir/[id]/page.tsx"
