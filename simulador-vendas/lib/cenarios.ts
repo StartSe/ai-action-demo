@@ -60,7 +60,7 @@ const CENARIOS_MODELO: Cenario[] = [
     },
     objetivo: "Conseguir o melhor desconto possível sem abrir mão do prazo de fechamento que já negociou internamente.",
     objecoes: ["O concorrente X cobra 20% menos pelo mesmo pacote.", "Só fecho se vocês baterem esse preço.", "Preciso levar isso para o financeiro aprovar de novo se o valor não mudar."],
-    tom: "Direto e um pouco impaciente, testa o quanto o vendedor está dispost a ceder, mas responde bem a argumentos de valor concretos (não só a desconto).",
+    tom: "Direto e um pouco impaciente, testa o quanto o vendedor está disposto a ceder, mas responde bem a argumentos de valor concretos (não só a desconto).",
   },
   {
     id: "renovacao",

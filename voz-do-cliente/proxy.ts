@@ -7,6 +7,8 @@
 // - `/f/*`, `/api/f/*`            formulário público por link (o token já está na própria URL)
 // - `/s/*`                        página estática gerada e servida ao público (ex.: clone-site)
 // - `/webhook/*`                  chamado por um serviço externo, validado por assinatura própria
+// - `/simular/*`, `/api/salas/*`  sala de treino aberta por link (o token já está na própria URL):
+//                                 quem treina é o vendedor, que não tem conta de administrador
 // - `/mcp`, só `POST`             JSON-RPC do MCP, validado por código de acesso (Bearer)
 // - `/api/rotinas/executar`       gatilho externo de rotina, validado por código de acesso próprio
 // - `/api/setup/oauth/*/callback` callback de um provedor OAuth externo
@@ -33,6 +35,7 @@ function rotaPublica(pathname: string, metodo: string): boolean {
   if (pathname.startsWith("/f/") || pathname.startsWith("/api/f/")) return true;
   if (pathname.startsWith("/s/")) return true;
   if (pathname.startsWith("/webhook/")) return true;
+  if (pathname.startsWith("/simular/") || pathname.startsWith("/api/salas/")) return true;
   if (pathname === "/api/conta" || pathname.startsWith("/api/conta/")) return true;
   if (pathname.startsWith("/_next/")) return true;
   if (/^\/api\/setup\/oauth\/[^/]+\/callback$/.test(pathname)) return true;

@@ -3,6 +3,7 @@
 import crypto from "node:crypto";
 import { obter as obterSala, expirou, registrarResultado } from "@/lib/salas";
 import { salvarConversaAnalisada } from "@/lib/analise";
+import { ErroIA } from "@/lib/ai";
 import { CRITERIOS_PADRAO } from "@/lib/criterios";
 import type { Conversa, LinhaTranscricao } from "@/lib/types";
 
@@ -37,8 +38,7 @@ export async function POST(req: Request, { params }: RouteContext<"/api/salas/[t
     if (resultado.id) registrarResultado(token, resultado.id);
     return Response.json({ ...resultado, conversa });
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível gerar sua análise agora.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    console.error("Sala de treino: a análise falhou", err instanceof ErroIA ? err.codigo : err);
+    return Response.json({ error: "Não foi possível montar a sua análise agora. Avise quem enviou este link e tente de novo mais tarde." }, { status: 502 });
   }
 }

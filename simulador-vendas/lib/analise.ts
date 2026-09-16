@@ -28,6 +28,9 @@ Formato de saída (JSON):
   "resumo": "2 a 3 frases sobre como foi a conversa, em no máximo 45 palavras"
 }`;
 
+/** Cenário a que pertence a conversa de exemplo de lib/demo.ts (a renovação em risco da Beatriz). */
+export const CENARIO_DEMO = "renovacao";
+
 function transcricaoParaTexto(transcricao: LinhaTranscricao[]): string {
   return transcricao.map((l) => `${l.papel === "vendedor" ? "Vendedor" : "Cliente"}: ${l.texto}`).join("\n");
 }
@@ -46,7 +49,7 @@ function media(criterios: CriterioAnalise[]): number {
 
 /** Analisa uma conversa já estruturada contra a lista de critérios; nunca confia a nota geral à IA. */
 export async function analisarConversa(conversa: Conversa, criterios: string[] = CRITERIOS_PADRAO, cenario: Cenario | null = null): Promise<{ demo: boolean; analise: Analise; meta: Meta }> {
-  const insumo = "conversas coladas e critérios de avaliação";
+  const insumo = "conversas coladas ou enviadas e critérios de avaliação";
   if (!aiEnabled()) {
     await esperar(1200);
     const analise = analiseDemo(criterios);
@@ -98,21 +101,25 @@ function tituloResultado(vendedor: Vendedor | null, cenario: Cenario | null): st
 export async function gerarAnalise(dados: DadosAnalise): Promise<{ demo: boolean; conversa: Conversa; analise: Analise; meta: Meta; id?: string; titulo: string }> {
   const criterios = dados.criterios && dados.criterios.length > 0 ? dados.criterios : CRITERIOS_PADRAO;
   const vendedor = dados.vendedorId ? obterVendedor(dados.vendedorId) : null;
-  const cenario = dados.cenarioId ? obterCenario(dados.cenarioId) : null;
+  // Em modo demonstração a análise exibida é sempre a da conversa de exemplo (a renovação em risco da
+  // Beatriz, lib/demo.ts), então o cenário mostrado tem de ser o dela: sem isso, o título e o cenário
+  // no alto da tela falam de uma conversa que não é a que aparece em "Ver a conversa completa".
+  const cenarioId = aiEnabled() ? dados.cenarioId : CENARIO_DEMO;
+  const cenario = cenarioId ? obterCenario(cenarioId) : null;
   const titulo = tituloResultado(vendedor, cenario);
 
   const transcricao = !aiEnabled() ? conversaDemo() : parseConversaColada(dados.conversaColada);
   const conversa: Conversa = {
     id: gerarId(),
     vendedorId: dados.vendedorId,
-    cenarioId: dados.cenarioId,
+    cenarioId,
     origem: "colada",
     transcricao,
     criadoEm: new Date().toISOString(),
   };
 
   const { demo, analise, meta: metaGerada } = await analisarConversa(conversa, criterios, cenario);
-  const id = salvar({ tipo: "conversa", titulo, entrada: conversa, saida: analise, meta: metaGerada, expiraEmDias: 90 });
+  const id = salvar({ tipo: "conversa", titulo, resumo: analise.resumo, entrada: conversa, saida: analise, meta: metaGerada, expiraEmDias: 90 });
   return { demo, conversa, analise, meta: metaGerada, id, titulo };
 }
 
@@ -127,6 +134,6 @@ export async function salvarConversaAnalisada(conversa: Conversa, criterios: str
   const titulo = tituloResultado(vendedor, cenario);
 
   const { demo, analise, meta: metaGerada } = await analisarConversa(conversa, criterios, cenario);
-  const id = salvar({ tipo: "conversa", titulo, entrada: conversa, saida: analise, meta: metaGerada, expiraEmDias: 90 });
+  const id = salvar({ tipo: "conversa", titulo, resumo: analise.resumo, entrada: conversa, saida: analise, meta: metaGerada, expiraEmDias: 90 });
   return { demo, analise, meta: metaGerada, id, titulo };
 }

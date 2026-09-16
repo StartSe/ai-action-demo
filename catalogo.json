@@ -254,9 +254,9 @@
         "Vendas"
       ],
       "problema": "O gestor de vendas não sabe como cada vendedor conduz uma conversa real, só o resultado final.",
-      "ia": "Avalia uma conversa de vendas colada contra 7 critérios de venda consultiva e devolve nota, evidências e como melhorar.",
-      "integracoes": "IA (OpenRouter) para a análise. ElevenLabs (opcional) para a sala de treino por voz, com o aviso de pós-conversa assinado.",
-      "acento": "#3f6212",
+      "ia": "Avalia uma conversa de vendas colada (ou enviada em .txt, .vtt e .srt) contra 7 critérios de venda consultiva e devolve nota, evidências e como melhorar.",
+      "integracoes": "IA (OpenRouter) para a análise. ElevenLabs (opcional) para a sala de treino por voz. CRM por MCP (opcional) para registrar a nota no cliente. Notificações para mandar a análise ao vendedor.",
+      "acento": "#3e68cc",
       "porta": 3013,
       "captura": "capturas/simulador-vendas.png",
       "capacidades": [

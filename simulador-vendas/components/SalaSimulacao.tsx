@@ -6,10 +6,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Resultado } from "@/app/page";
+import { Aviso, lerErro } from "@/components/ui";
 import type { Analise, Cenario, Conversa, LinhaTranscricao } from "@/lib/types";
 import type { Meta } from "@/lib/ai";
 
 const SCRIPT_ID = "elevenlabs-convai-script";
+/** Quanto a sala espera a análise da ligação por voz antes de assumir que ela não vem (90 s). */
+const ESPERA_MAXIMA_MS = 90_000;
 const SCRIPT_SRC = "https://unpkg.com/@elevenlabs/convai-widget-embed";
 
 type Props = {
@@ -40,7 +43,7 @@ export function SalaSimulacao({ codigo, marca, nome, cenario, vendedorId, comVoz
       </div>
 
       {resultado ? (
-        <Resultado conversa={resultado.conversa} analise={resultado.analise} meta={resultado.meta} id={resultado.id} titulo={resultado.titulo} />
+        <Resultado conversa={resultado.conversa} analise={resultado.analise} meta={resultado.meta} id={resultado.id} titulo={resultado.titulo} demoTexto="Exemplo fixo: a avaliação abaixo não é sobre a conversa que você acabou de ter." />
       ) : (
         <>
           <p className="text-muted mb-5">{briefing(cenario)}</p>
@@ -77,12 +80,16 @@ function SalaTexto({ codigo, onConcluir }: { codigo: string; onConcluir: (r: Res
     setFase("enviando");
     try {
       const r = await fetch(`/api/salas/${codigo}/conversar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transcricao: nova }) });
+      if (!r.ok) {
+        setMensagemErro((await lerErro(r)).mensagem);
+        setFase("erro");
+        return;
+      }
       const resposta = await r.json();
-      if (!r.ok) throw new Error(resposta.error || "Não foi possível continuar a conversa.");
       setTranscricao((t) => [...t, { papel: "cliente", texto: resposta.texto }]);
       setFase("conversando");
     } catch (err) {
-      setMensagemErro(err instanceof Error ? err.message : "Erro inesperado.");
+      setMensagemErro((await lerErro(err)).mensagem);
       setFase("erro");
     }
   }
@@ -91,11 +98,14 @@ function SalaTexto({ codigo, onConcluir }: { codigo: string; onConcluir: (r: Res
     setFase("analisando");
     try {
       const r = await fetch(`/api/salas/${codigo}/analisar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transcricao }) });
-      const resposta = await r.json();
-      if (!r.ok) throw new Error(resposta.error || "Não foi possível gerar sua análise.");
-      onConcluir(resposta);
+      if (!r.ok) {
+        setMensagemErro((await lerErro(r)).mensagem);
+        setFase("erro");
+        return;
+      }
+      onConcluir(await r.json());
     } catch (err) {
-      setMensagemErro(err instanceof Error ? err.message : "Erro inesperado.");
+      setMensagemErro((await lerErro(err)).mensagem);
       setFase("erro");
     }
   }
@@ -119,7 +129,7 @@ function SalaTexto({ codigo, onConcluir }: { codigo: string; onConcluir: (r: Res
         <div ref={fimRef} />
       </div>
 
-      {fase === "erro" && <p className="text-danger text-sm">{mensagemErro}</p>}
+      {fase === "erro" && <Aviso tom="danger">{mensagemErro}</Aviso>}
 
       <div className="flex gap-2.5">
         <input
@@ -159,6 +169,7 @@ function SalaVoz({
 }) {
   const [scriptPronto, setScriptPronto] = useState(false);
   const [aguardando, setAguardando] = useState(false);
+  const [demorou, setDemorou] = useState(false);
   const baselineRef = useRef<string | null>(null);
   const router = useRouter();
 
@@ -202,8 +213,20 @@ function SalaVoz({
         // tenta de novo na próxima rodada
       }
     }, 5000);
-    return () => clearInterval(intervalo);
+    // Sem o aviso de pós-conversa configurado do outro lado, a análise nunca chega: depois de
+    // ESPERA_MAXIMA_MS a sala para de dizer "aguarde" e explica o que fazer, em vez de girar para sempre.
+    const prazo = setTimeout(() => setDemorou(true), ESPERA_MAXIMA_MS);
+    return () => {
+      clearInterval(intervalo);
+      clearTimeout(prazo);
+    };
   }, [aguardando, codigo, router]);
+
+  /** Registra a ligação no app antes de começar a esperar: assim ela existe mesmo que o aviso nunca chegue. */
+  function encerrar() {
+    setAguardando(true);
+    fetch(`/api/salas/${codigo}/ligacao`, { method: "POST" }).catch(() => {});
+  }
 
   const variaveis = JSON.stringify({ vendedor_id: vendedorId || "", sala_token: codigo, cenario: cenario?.titulo || "" });
 
@@ -215,9 +238,13 @@ function SalaVoz({
         <p className="text-muted text-sm">Carregando o assistente de voz...</p>
       )}
       {aguardando ? (
-        <p className="text-muted text-sm">Analisando sua conversa. Isso pode levar alguns segundos...</p>
+        demorou ? (
+          <Aviso tom="warn">A análise ainda não chegou; peça ao gestor para conferir a conexão com a ElevenLabs. A sua ligação ficou registrada.</Aviso>
+        ) : (
+          <p className="text-muted text-sm">Analisando sua conversa. Isso pode levar alguns segundos...</p>
+        )
       ) : (
-        <button type="button" className="btn-ghost self-start" onClick={() => setAguardando(true)}>
+        <button type="button" className="btn-ghost self-start" onClick={encerrar}>
           Já terminei, ver minha análise
         </button>
       )}

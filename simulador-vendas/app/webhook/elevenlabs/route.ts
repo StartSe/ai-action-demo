@@ -2,7 +2,8 @@
 // transcrição completa assim que uma ligação por voz termina, sem precisar de ninguém colar nada.
 // Corpo lido cru (req.text()) porque a assinatura é calculada sobre os bytes exatos recebidos.
 import crypto from "node:crypto";
-import { getConfig, setConfig } from "@/lib/store";
+import { getConfig } from "@/lib/store";
+import { registrarConversaRecebida, registrarRecusa } from "@/lib/aviso-pos-conversa";
 import { salvarConversaAnalisada } from "@/lib/analise";
 import { CRITERIOS_PADRAO } from "@/lib/criterios";
 import { obter as obterSala, registrarResultado } from "@/lib/salas";
@@ -81,7 +82,7 @@ async function processar(corpo: string): Promise<void> {
   };
 
   const resultado = await salvarConversaAnalisada(conversa, CRITERIOS_PADRAO);
-  setConfig("ELEVENLABS_ULTIMA_CONVERSA_EM", conversa.criadoEm);
+  registrarConversaRecebida(conversa.criadoEm);
   if (sala && salaCodigo && resultado.id) registrarResultado(salaCodigo, resultado.id);
 }
 
@@ -89,10 +90,18 @@ export async function POST(req: Request): Promise<Response> {
   const corpo = await req.text();
   const segredo = getConfig("ELEVENLABS_WEBHOOK_SECRET");
   const cabecalho = req.headers.get("elevenlabs-signature");
-  if (!segredo || !assinaturaValida(corpo, cabecalho, segredo)) {
+  if (!segredo) {
+    registrarRecusa("O segredo de verificação ainda não foi salvo em Configurações.");
+    return new Response("Assinatura inválida", { status: 401 });
+  }
+  if (!assinaturaValida(corpo, cabecalho, segredo)) {
+    registrarRecusa(cabecalho ? "A assinatura não confere com o segredo salvo (ou a conversa chegou muito atrasada)." : "A conversa chegou sem assinatura.");
     return new Response("Assinatura inválida", { status: 401 });
   }
 
-  processar(corpo).catch((err) => console.error("Erro ao processar conversa recebida da ElevenLabs:", err));
+  processar(corpo).catch((err) => {
+    console.error("Erro ao processar conversa recebida da ElevenLabs:", err);
+    registrarRecusa("A conversa chegou, mas a análise falhou. Confira a conexão com a IA em Configurações.");
+  });
   return new Response("OK", { status: 200 });
 }

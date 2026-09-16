@@ -1,9 +1,12 @@
 # Simulador de Vendas
 
-Cadastre seu time, escolha um cenário de cliente simulado e cole uma conversa de vendas para ver a análise: nota geral, nota e evidência de cada critério de venda consultiva, pontos fortes, o que melhorar e os momentos-chave. Área: Vendas.
+Cole uma conversa de vendas (ou envie a transcrição em `.txt`, `.vtt` ou `.srt`) e veja a análise: nota geral, nota e evidência de cada critério de venda consultiva, pontos fortes, o que melhorar e os momentos-chave. Área: Vendas.
 
 ## O que resolve
-Antes de conectar a voz (a próxima etapa da suíte), o gestor de vendas já consegue ver o que o app mede: cola uma conversa (colada de uma ligação transcrita, de um chat ou digitada à mão) e recebe uma análise objetiva contra 7 critérios de venda consultiva, com evidências específicas da conversa, não conselhos genéricos.
+O gestor de vendas só enxerga o resultado final de cada negócio, nunca como a conversa foi conduzida. Aqui ele cola (ou envia) a conversa e recebe uma avaliação objetiva contra 7 critérios de venda consultiva, com evidências da própria conversa, não conselhos genéricos — e um painel com a evolução de cada vendedor ao longo do tempo.
+
+## Formatos aceitos na conversa
+Uma fala por linha, começando com quem falou: `Vendedor:` ou `Cliente:`. Também são reconhecidos `Vendedora`, `Eu`, `Atendente`, `Consultor(a)`, `Representante` e `Falante 1`/`Speaker 1` (todos como vendedor); `Comprador(a)`, `Prospecto` e `Falante 2`/`Speaker 2` (como cliente). Carimbos de tempo antes do nome (`[00:12] Vendedor:`, `00:12:45 Cliente:`, `(1:03) Vendedor:`) são descartados. O botão "Enviar arquivo" aceita `.txt`, `.vtt` e `.srt` (até 2 MB): a conversão roda no servidor (`lib/legendas.ts`) e o texto convertido cai no campo para você conferir antes de analisar. Quando nenhuma linha é reconhecida, o app avisa antes de gastar uma chamada de IA.
 
 ## Stack
 Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão.
@@ -41,7 +44,15 @@ No painel, "Criar link de treino" gera um link (`/simular/<código>`, válido po
 - **Com a integração conectada:** a sala carrega o widget oficial de voz da ElevenLabs (`<elevenlabs-convai>`) no lugar do texto. Para isso funcionar de verdade:
   1. No agente conversacional (ElevenLabs › Conversational AI › Agents › seu agente › aba Security), desligue a exigência de autenticação (o link é público, sem login) e adicione o domínio onde este app está publicado à lista de domínios permitidos, para nenhum outro site poder embutir o mesmo agente.
   2. Configure o aviso automático de pós-conversa (evento `post_call_transcription`) apontando para o endereço mostrado no cartão "Dados para a equipe técnica" em `/setup#elevenlabs-agente`, como já descrito acima em "Segredo de verificação" — é assim que a análise da ligação chega de volta.
-  3. O widget manda `sala_token` como variável dinâmica; é assim que o aviso automático liga a conversa recebida à sala certa (mesmo agente pode ser usado por várias salas ao mesmo tempo), sem precisar de nenhuma outra configuração.
+  3. O widget manda três variáveis dinâmicas para o agente: `sala_token` (liga a conversa recebida à sala certa — o mesmo agente pode atender várias salas ao mesmo tempo), `vendedor_id` (quem está treinando, quando escolhido no painel) e `cenario` (o título do cenário). Declare as três em Agent › Dynamic variables; `sala_token` é a única obrigatória para a análise voltar.
+  4. Prompt-modelo do agente (o mesmo que o cartão "Dados para a equipe técnica" deixa pronto para copiar):
+
+     ```
+     Você é {{cenario}}, um cliente em uma ligação de vendas. Nunca saia do personagem e nunca dê dicas de vendas.
+     Responda em português do Brasil, em falas curtas, reagindo de forma realista ao que o vendedor disser.
+     Levante suas objeções quando fizer sentido e deixe o vendedor conduzir: quem encerra a ligação é ele.
+     ```
+  5. Se a análise não chegar em 90 segundos, a sala avisa o vendedor ("A análise ainda não chegou; peça ao gestor para conferir a conexão com a ElevenLabs") e registra a ligação mesmo assim. O cartão "Dados para a equipe técnica" em `/setup` mostra quantas ligações ficaram sem análise e qual foi o motivo da última tentativa recusada (assinatura ausente, segredo não salvo, análise falhou).
 
 ## Usar dentro de um assistente de IA (MCP)
 O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, para que assistentes como Claude ou ChatGPT chamem a ferramenta `analisar_conversa` diretamente. Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
@@ -85,6 +96,11 @@ app/api/salas/route.ts    cria o link de treino ("Criar link de treino")
 app/api/salas/[token]/conversar/route.ts próxima fala do cliente simulado (sala por texto)
 app/api/salas/[token]/analisar/route.ts  encerra a conversa por texto e gera a análise
 app/api/salas/[token]/ultima/route.ts    sondado pela sala por voz até a análise chegar
+app/api/salas/[token]/ligacao/route.ts   registra que a ligação por voz terminou
+app/api/analisar/arquivo/route.ts        converte .txt/.vtt/.srt no servidor para o campo da conversa
+app/api/crm/route.ts      leva a nota e os pontos a melhorar para o CRM conectado
+app/api/enviar-analise/route.ts envia a análise para o e-mail do vendedor
+app/api/webhook-info/route.ts   dados do aviso de pós-conversa para o cartão da equipe técnica
 app/simular/[token]/page.tsx sala de simulação pública (texto ou widget de voz)
 components/SalaSimulacao.tsx tela da sala pública (conversa por texto e widget de voz)
 app/webhook/elevenlabs/route.ts aviso automático de pós-conversa (ligação por voz)
@@ -109,6 +125,10 @@ lib/vendedores.ts           CRUD do time de vendas (SQLite)
 lib/cenarios.ts             CRUD dos cenários de cliente simulado, com seed idempotente de 3 modelos
 lib/criterios.ts            lista padrão dos 7 critérios de venda consultiva
 lib/conversa.ts             conversão do texto colado em transcrição estruturada
+lib/legendas.ts             conversão de .txt/.vtt/.srt para o formato colado
+lib/crm.ts                  anotação no CRM conectado (MCP) com a nota e os pontos a melhorar
+lib/envio-analise.ts        envio da análise ao e-mail do vendedor
+lib/aviso-pos-conversa.ts   estado do aviso de pós-conversa (última conversa e última recusa)
 lib/salas.ts                salas de simulação pública (SQLite): link de treino de 30 dias
 lib/simulacao.ts             próxima fala do cliente simulado (sala por texto), com roteiro fixo em demo
 lib/elevenlabs-convai.d.ts   tipo do elemento <elevenlabs-convai> do widget oficial de voz

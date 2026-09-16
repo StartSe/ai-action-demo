@@ -23,6 +23,13 @@ function abrir(): DatabaseSync {
     ultimoResultadoEm TEXT NULL,
     criadoEm TEXT NOT NULL
   )`);
+  // Coluna acrescentada depois (US-032): bancos criados antes desta versão ganham a coluna aqui, sem
+  // script de migração separado — mesmo padrão de `resumo` em lib/historico.ts.
+  try {
+    db.exec("ALTER TABLE salas ADD COLUMN ultimaLigacaoEm TEXT NULL");
+  } catch {
+    // a coluna já existe
+  }
   return db;
 }
 
@@ -33,6 +40,8 @@ export type Sala = {
   expiraEm: string;
   ultimoResultadoId: string | null;
   ultimoResultadoEm: string | null;
+  /** Quando o vendedor encerrou uma ligação por voz nesta sala; gravado mesmo que a análise nunca chegue. */
+  ultimaLigacaoEm: string | null;
   criadoEm: string;
 };
 
@@ -69,6 +78,21 @@ export function expirou(sala: Pick<Sala, "expiraEm">): boolean {
  * (GET /api/salas/<código>/ultima) enquanto a análise da ligação por voz ainda está sendo gerada. */
 export function registrarResultado(codigo: string, resultadoId: string): void {
   abrir().prepare("UPDATE salas SET ultimoResultadoId = ?, ultimoResultadoEm = ? WHERE codigo = ?").run(resultadoId, new Date().toISOString(), codigo);
+}
+
+/** Marca que uma ligação por voz terminou nesta sala. Chamado pela própria sala (o vendedor clica em
+ * "Já terminei"), para a ligação ficar registrada mesmo quando o aviso de pós-conversa da ElevenLabs
+ * nunca chega — é o que alimenta "ligações sem análise" no cartão da equipe técnica. */
+export function registrarLigacao(codigo: string): void {
+  abrir().prepare("UPDATE salas SET ultimaLigacaoEm = ? WHERE codigo = ?").run(new Date().toISOString(), codigo);
+}
+
+/** Quantas ligações registradas ainda não receberam a análise correspondente (o aviso não chegou). */
+export function ligacoesSemAnalise(): number {
+  const linha = abrir()
+    .prepare("SELECT COUNT(*) AS total FROM salas WHERE ultimaLigacaoEm IS NOT NULL AND (ultimoResultadoEm IS NULL OR ultimoResultadoEm < ultimaLigacaoEm)")
+    .get() as { total: number } | undefined;
+  return linha?.total ?? 0;
 }
 
 /** Remove salas expiradas; roda na inicialização do servidor (ver instrumentation.ts). */

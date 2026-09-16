@@ -1,6 +1,7 @@
 // Ferramentas expostas via app/mcp/route.ts para assistentes de IA (Claude, ChatGPT etc.).
 // Cada app da suíte declara as suas aqui, reaproveitando a mesma lógica das rotas normais.
 import { gerarAnalise } from "./analise";
+import { AVISO_SEM_FALAS, parseConversaColada } from "./conversa";
 import { gerarPainelEquipe } from "./painel-equipe";
 import type { Ferramenta } from "./mcp";
 import type { DadosAnalise } from "./types";
@@ -23,6 +24,9 @@ export const FERRAMENTAS: Ferramenta[] = [
     async executar(args) {
       const transcricao = String(args.transcricao || "").trim();
       if (!transcricao) throw new Error("Cole a transcrição da conversa (uma fala por linha, com 'Vendedor:' ou 'Cliente:').");
+      // Mesma validação de POST /api/analisar: sem nenhuma fala reconhecida a IA receberia uma
+      // transcrição vazia e devolveria notas baixas sem explicação.
+      if (parseConversaColada(transcricao).length === 0) throw new Error(AVISO_SEM_FALAS);
       const dados: DadosAnalise = {
         conversaColada: transcricao,
         vendedorId: args.vendedor ? String(args.vendedor) : undefined,
