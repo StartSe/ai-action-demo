@@ -3,8 +3,19 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { MensagemChat } from "@/lib/types";
 
-/** `hora` é gravada no momento em que a mensagem é enviada/recebida, não recalculada a cada render. */
-export type BolhaChat = MensagemChat & { transferido?: boolean; erro?: boolean; pendente?: boolean; hora?: string; ferramentaUsada?: string };
+/**
+ * `hora` é gravada no momento em que a mensagem é enviada/recebida, não recalculada a cada render.
+ * `erro` (falha de rede/servidor) é diferente de `transferido` (o atendente escalou para uma pessoa):
+ * só o primeiro traz `acao`, o "o que fazer agora" que veio junto do erro na resposta da rota.
+ */
+export type BolhaChat = MensagemChat & {
+  transferido?: boolean;
+  erro?: boolean;
+  acao?: { rotulo: string; url: string };
+  pendente?: boolean;
+  hora?: string;
+  ferramentaUsada?: string;
+};
 
 /** Aprova ou corrige a resposta do atendente para o par {pergunta, resposta} entrar na base. */
 export type AoSalvarBase = (pergunta: string, resposta: string) => void;
@@ -23,6 +34,7 @@ export function AcoesResposta({
   onAprovar,
   onCorrigir,
   modoInicial = "padrao",
+  rotuloCorrigir = "Corrigir",
 }: {
   pergunta: string;
   resposta: string;
@@ -30,6 +42,8 @@ export function AcoesResposta({
   onCorrigir?: AoSalvarBase;
   /** Abre já em "corrigindo" quando a pessoa chega de um link "Corrigir" (ex.: relatório diário). */
   modoInicial?: "padrao" | "corrigindo";
+  /** "Corrigir" não descreve o caso de uma pergunta que nunca teve resposta boa ("Escrever a resposta"). */
+  rotuloCorrigir?: string;
 }) {
   const [modo, setModo] = useState<"padrao" | "corrigindo" | "salvo">(modoInicial);
   const [texto, setTexto] = useState(resposta);
@@ -81,7 +95,7 @@ export function AcoesResposta({
       )}
       {onCorrigir && (
         <button type="button" className="text-[11px] font-semibold text-muted hover:underline" onClick={() => setModo("corrigindo")}>
-          Corrigir
+          {rotuloCorrigir}
         </button>
       )}
     </div>
@@ -170,8 +184,13 @@ export function Celular({
                   {m.texto}
                   {m.hora && <span className="absolute right-3 bottom-1 text-[10px] text-muted">{m.hora}</span>}
                 </div>
+                {m.erro && m.acao && (
+                  <a className="text-[11px] font-semibold text-danger underline px-1" href={m.acao.url}>
+                    {m.acao.rotulo}
+                  </a>
+                )}
                 {m.ferramentaUsada && (
-                  <span className="text-[11px] text-muted px-1" title={`Ferramenta MCP: ${m.ferramentaUsada}`}>
+                  <span className="text-[11px] text-muted px-1" title={`Ferramenta consultada: ${m.ferramentaUsada}`}>
                     Consultado em {m.ferramentaUsada}
                   </span>
                 )}

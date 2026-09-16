@@ -35,7 +35,7 @@ registrarExecutor("relatorio-atendimento", async () => {
       ? "Nenhuma pergunta frequente, sem resposta ou transferida para um humano. Base de conhecimento em dia."
       : `${itens.length} ${itens.length > 1 ? "perguntas merecem" : "pergunta merece"} atenção: ${itens.map((i) => i.pergunta).join("; ")}.`;
 
-  const metaGerada = meta({ demo: !aiEnabled(), insumo: "as conversas recebidas pelo simulador e pelo WhatsApp" });
+  const metaGerada = meta({ demo: !aiEnabled(), insumo: "conversas recebidas pelo simulador e pelo WhatsApp" });
   const resultadoId = salvar({ tipo: "relatorio-atendimento", titulo, entrada: {}, saida: { itens }, meta: metaGerada });
 
   return { titulo, texto, resultadoId };

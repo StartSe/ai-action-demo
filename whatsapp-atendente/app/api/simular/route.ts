@@ -1,3 +1,4 @@
+import { responderErro } from "@/app/api/erros";
 import { aiEnabled, meta } from "@/lib/ai";
 import { listarConversas, responder } from "@/lib/atendente";
 import { getConfig } from "@/lib/estado";
@@ -28,9 +29,7 @@ export async function POST(req: Request) {
     });
     return Response.json({ resposta, transferir, ferramentaUsada, conversas, meta: metaGerada, id });
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível gerar a resposta agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return responderErro(err, "Não foi possível gerar a resposta agora. Tente de novo.");
   }
 }
 

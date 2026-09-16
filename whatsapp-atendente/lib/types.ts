@@ -39,13 +39,20 @@ export interface AtendimentoSaida {
   conversas: Conversa[];
 }
 
-/** Uma pergunta que merece atenção da equipe no relatório diário (lib/rotinas-do-app.ts). */
-export interface ItemRelatorioAtendimento {
+/** Uma pergunta que merece atenção da equipe: sem resposta boa, repetida ou transferida para um humano. */
+export interface PerguntaPendente {
   pergunta: string;
   /** Número da conversa mais recente com essa pergunta, para o link "abrir a conversa". */
   numero: string;
   frequencia: number;
   transferida: boolean;
+  /** Última resposta que o atendente deu a essa pergunta, ponto de partida para a correção.
+   * Opcional: relatórios salvos antes desta história não têm o campo e precisam continuar abrindo. */
+  ultimaResposta?: string;
+}
+
+/** Uma pergunta pendente com a sugestão de resposta escrita pela IA, no relatório diário (lib/rotinas-do-app.ts). */
+export interface ItemRelatorioAtendimento extends PerguntaPendente {
   respostaSugerida: string;
   /** Nome da ferramenta dos sistemas da empresa (MCP) consultada para montar a resposta sugerida, se alguma foi usada. */
   ferramentaUsada?: string;

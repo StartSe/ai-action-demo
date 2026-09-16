@@ -115,7 +115,7 @@
       "problema": "Perguntas repetidas chegam fora do horário e ficam sem resposta.",
       "ia": "Responde com base no conhecimento da empresa e transfere para uma pessoa quando não sabe.",
       "integracoes": "WhatsApp Cloud API (Meta) via webhook.",
-      "acento": "#128c7e",
+      "acento": "#0e7c6a",
       "porta": 3006,
       "captura": "capturas/whatsapp-atendente.png",
       "capacidades": [

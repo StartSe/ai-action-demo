@@ -1,6 +1,9 @@
 // Webhook da WhatsApp Cloud API (Meta): verificação (GET) e recebimento de mensagens (POST).
+// Rota pública em proxy.ts: quem chama é a Meta, sem cookie de sessão; a autenticação é o valor de
+// verificação gerado por este app e cadastrado no painel da Meta.
 import { responder } from "@/lib/atendente";
 import { getConfig } from "@/lib/store";
+import { enviarMensagem, ErroWhatsApp, registrarFalhaEnvio, registrarRecebida } from "@/lib/whatsapp";
 
 export const dynamic = "force-dynamic";
 
@@ -51,31 +54,20 @@ async function processarWebhook(body: CorpoWebhook) {
         const de = msg.from;
         const texto = msg.text?.body || "";
         if (!de || !texto) continue;
+        // Registrado antes de qualquer processamento: "chegou mensagem do número real" é o que o
+        // cartão de diagnóstico precisa saber, mesmo que a resposta falhe logo depois.
+        registrarRecebida(de);
         const { resposta } = await responder({ numero: de, texto, origem: "whatsapp" });
-        await enviarMensagemWhatsApp(de, resposta);
+        try {
+          await enviarMensagem(de, resposta);
+        } catch (err) {
+          // A Meta já recebeu o 200; aqui só sobra registrar o motivo em linguagem de negócio, para
+          // "Dados para a equipe técnica" conseguir explicar por que o cliente não recebeu resposta.
+          const mensagem = err instanceof ErroWhatsApp ? err.message : "Não foi possível enviar a resposta pelo número da empresa.";
+          if (!(err instanceof ErroWhatsApp)) console.error("Falha inesperada ao responder pelo WhatsApp:", err);
+          registrarFalhaEnvio(mensagem);
+        }
       }
     }
-  }
-}
-
-async function enviarMensagemWhatsApp(to: string, body: string) {
-  const token = getConfig("WHATSAPP_TOKEN");
-  const phoneNumberId = getConfig("WHATSAPP_PHONE_NUMBER_ID");
-  if (!token || !phoneNumberId) return;
-  try {
-    const url = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ messaging_product: "whatsapp", to, type: "text", text: { body } }),
-    });
-    if (!resp.ok) {
-      console.error("Falha ao enviar mensagem no WhatsApp:", resp.status, await resp.text());
-    }
-  } catch (err) {
-    console.error("Erro ao chamar a WhatsApp Cloud API:", err);
   }
 }

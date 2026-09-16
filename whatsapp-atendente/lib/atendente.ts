@@ -4,7 +4,7 @@ import { baseAprovadaComoTexto } from "./base";
 import { esperar, respostaLocal } from "./demo";
 import { toolsParaAtendente } from "./empresa-mcp";
 import { getConfig } from "./estado";
-import type { CanalOrigem, Config, Conversa, ItemRelatorioAtendimento, MensagemChat } from "./types";
+import type { CanalOrigem, Config, Conversa, MensagemChat, PerguntaPendente } from "./types";
 
 const MAX_MENSAGENS = 20;
 
@@ -164,19 +164,26 @@ function normalizarPergunta(texto: string): string {
  * terminaram transferidas para um humano (o atendente não soube responder). Cada conversa só guarda
  * a última pergunta/resposta trocada (ver `listarConversas`), então "mais frequente" aqui é uma
  * aproximação: quantos números diferentes tiveram essa mesma última pergunta, não o histórico
- * completo de mensagens trocadas. Usada pelo relatório diário (lib/rotinas-do-app.ts).
+ * completo de mensagens trocadas. Usada pelo relatório diário (lib/rotinas-do-app.ts) e, com
+ * `desdeDias`, pela lista "Perguntas sem resposta da semana" do painel.
  */
-export function perguntasPendentes(): Omit<ItemRelatorioAtendimento, "respostaSugerida">[] {
-  const porTexto = new Map<string, Omit<ItemRelatorioAtendimento, "respostaSugerida">>();
-  for (const c of listarConversas()) {
+export function perguntasPendentes({ desdeDias }: { desdeDias?: number } = {}): PerguntaPendente[] {
+  const limite = desdeDias ? Date.now() - desdeDias * 24 * 60 * 60 * 1000 : 0;
+  const porTexto = new Map<string, PerguntaPendente>();
+  // Da conversa mais recente para a mais antiga: o `numero` guardado é sempre o da última pessoa a
+  // fazer aquela pergunta, que é para onde o link "Aprovar"/"Corrigir" do relatório leva.
+  const recentes = [...conversas.entries()].sort((a, b) => b[1].atualizadoEm - a[1].atualizadoEm);
+  for (const [numero, c] of recentes) {
     if (!c.ultima_mensagem.trim()) continue;
+    if (c.atualizadoEm < limite) continue;
+    const ultimaResposta = [...c.mensagens].reverse().find((m) => m.papel === "atendente")?.texto ?? "";
     const chave = normalizarPergunta(c.ultima_mensagem);
     const existente = porTexto.get(chave);
     if (existente) {
       existente.frequencia++;
       existente.transferida = existente.transferida || c.transferir;
     } else {
-      porTexto.set(chave, { pergunta: c.ultima_mensagem, numero: c.numero, frequencia: 1, transferida: c.transferir });
+      porTexto.set(chave, { pergunta: c.ultima_mensagem, numero, frequencia: 1, transferida: c.transferir, ultimaResposta });
     }
   }
   return [...porTexto.values()]
