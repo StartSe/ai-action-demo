@@ -26,8 +26,11 @@ export interface DadosPosts {
   publico?: string;
 }
 
-/** Imagem associada a um post: `demo` indica se veio do cartaz local (sem gerador de imagens configurado). */
+/** Imagem associada a um post: `demo` indica se veio do cartaz local (sem gerador de imagens configurado, ou
+ * porque a OpenAI falhou por falta de crédito — nesse caso `aviso`/`acao` explicam e apontam o que fazer). */
 export interface ImagemGerada {
   url: string;
   demo: boolean;
+  aviso?: string;
+  acao?: { rotulo: string; url: string };
 }

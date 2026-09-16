@@ -6,7 +6,7 @@ import { TemasTrimestre } from "@/components/TemasTrimestre";
 export default function Page() {
   return (
     <>
-      <SetupPage marca="S" nome="Posts em Minutos" area="Marketing" />
+      <SetupPage marca="S" nome="Posts em Minutos" area="Marketing" segmento="Marketing" />
       <div className="max-w-[860px] mx-auto px-8 max-md:px-4 pb-16 flex flex-col gap-6">
         <TemasTrimestre />
         <AcessoMCP />

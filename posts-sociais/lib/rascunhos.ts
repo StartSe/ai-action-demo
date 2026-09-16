@@ -7,9 +7,9 @@ import type { Meta } from "./ai";
 import { criar, registrarCallback, type CampoFormulario } from "./formularios";
 import { atualizarSaida, obter } from "./historico";
 import { gerarPosts, REDES } from "./posts";
-import { registrarExecutor } from "./rotinas";
+import { registrarExecutor, type TipoRotina } from "./rotinas";
 import { enderecoPublico } from "./setup-comum";
-import { proximoTema } from "./temas";
+import { empresaDaRotina, getTemas, proximoTema } from "./temas";
 import type { Aprovacao, DadosPosts, Rede, ResultadoPosts } from "./types";
 
 const TIPO_APROVACAO = "aprovacao-posts";
@@ -29,15 +29,28 @@ function criarFormularioAprovacao(resultadoId: string, tema: string): string {
   return criar({ tipo: TIPO_APROVACAO, campos, parametros, expiraEmDias: 14 });
 }
 
+/** Pré-requisitos da rotina, conferidos ao criar (TIPOS_ROTINA.validar) e de novo a cada execução. */
+export function motivoRotinaIndisponivel(): string | undefined {
+  if (getTemas().length === 0) return "Cadastre e salve pelo menos um tema em Temas do trimestre (Configurações) antes de receber rascunhos toda semana.";
+  if (!empresaDaRotina()) return "Informe o nome da empresa em Temas do trimestre (Configurações), ou gere posts uma vez na tela principal, para a rotina saber de quem falar.";
+  return undefined;
+}
+
+export const TIPO_RASCUNHOS: TipoRotina = {
+  tipo: "rascunhos-semanais",
+  rotulo: "Rascunhos semanais de posts",
+  validar: () => motivoRotinaIndisponivel(),
+};
+
 registrarExecutor("rascunhos-semanais", async () => {
   const titulo = "Rascunhos semanais de posts";
-  const tema = proximoTema();
-  if (!tema) {
-    return { titulo, texto: "Cadastre pelo menos um tema em 'Temas do trimestre' (/setup) para começar a receber rascunhos toda semana." };
-  }
+  const motivo = motivoRotinaIndisponivel();
+  if (motivo) return { titulo, texto: motivo };
+  const tema = proximoTema()!;
+  const empresa = empresaDaRotina();
 
   const redes: Rede[] = ["linkedin", "instagram", "x"];
-  const dados: DadosPosts = { empresa: "", tema: tema.tema, objetivo: "fortalecer marca", tom: tema.tom, redes };
+  const dados: DadosPosts = { empresa, tema: tema.tema, objetivo: "fortalecer marca", tom: tema.tom, redes };
   const { resultado, id } = await gerarPosts(dados);
 
   const tokenAprovacao = criarFormularioAprovacao(id, tema.tema);
@@ -47,7 +60,7 @@ registrarExecutor("rascunhos-semanais", async () => {
   if (!base) console.error("Rascunhos semanais de posts: endereço público desconhecido, link omitido do aviso.");
   const redesTexto = resultado.posts.map((p) => REDES[p.rede] || p.rede).join(", ");
   const acao = base ? `Aprove, peça ajuste ou descarte pelo link: ${base}/f/${tokenAprovacao}` : "Abra o app para aprovar, pedir ajuste ou descartar (endereço público ainda não configurado).";
-  const texto = `${resultado.posts.length} rascunho${resultado.posts.length === 1 ? "" : "s"} para o tema "${tema.tema}" (${redesTexto}). ${acao}`;
+  const texto = `${resultado.posts.length} rascunho${resultado.posts.length === 1 ? "" : "s"} da ${empresa} para o tema "${tema.tema}" (${redesTexto}). ${acao}`;
 
   return { titulo: `Rascunhos da semana: ${tema.tema}`, texto, resultadoId: id };
 });

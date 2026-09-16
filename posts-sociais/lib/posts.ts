@@ -1,11 +1,13 @@
-// Lógica de geração de posts, compartilhada entre a rota HTTP (app/api/posts/route.ts)
-// e a ferramenta MCP (lib/ferramentas.ts), para não duplicar o prompt nem a gravação no histórico.
-import { aiEnabled, askJSON, meta, type Meta } from "./ai";
-import { esperar, postsDemo } from "./demo";
-import { salvar } from "./historico";
+// Lógica de geração e reescrita de posts, compartilhada entre as rotas HTTP (app/api/posts, app/api/reescrever),
+// a ferramenta MCP (lib/ferramentas.ts) e a rotina semanal (lib/rascunhos.ts), para não duplicar prompt nem gravação.
+import { aiEnabled, askJSON, askText, meta, type Meta } from "./ai";
+import { esperar, postsDemo, reescreverDemo } from "./demo";
+import { atualizarSaida, obter, salvar } from "./historico";
+import { registrarUltimaEmpresa } from "./temas";
 import type { DadosPosts, Post, Rede, ResultadoPosts } from "./types";
 
 export const REDES: Record<Rede, string> = { linkedin: "LinkedIn", instagram: "Instagram", x: "X" };
+export const LIMITES: Record<Rede, number> = { linkedin: 1300, instagram: 2200, x: 280 };
 
 export const SYSTEM_POSTS = `Você é um redator sênior de conteúdo para redes sociais que atende empresas brasileiras.
 Sua tarefa é transformar um briefing curto em posts prontos para publicar, um por rede solicitada, com uma sugestão de imagem para cada um.
@@ -30,8 +32,9 @@ Formato de saída (JSON):
 export async function gerarPosts(dados: DadosPosts): Promise<{ resultado: ResultadoPosts; meta: Meta; id: string }> {
   const { empresa, tema, objetivo, tom, redes, publico } = dados;
   const lista = (Array.isArray(redes) ? redes : []).filter((r) => REDES[r as Rede]) as Rede[];
-  const insumo = "dados da empresa, o tema e o público-alvo informados";
+  const insumo = "o briefing informado";
   const titulo = `Posts de ${empresa?.trim() || "sua empresa"}`;
+  if (empresa?.trim()) registrarUltimaEmpresa(empresa);
 
   if (!aiEnabled()) {
     await esperar(1300);
@@ -46,4 +49,33 @@ export async function gerarPosts(dados: DadosPosts): Promise<{ resultado: Result
   const metaGerada = meta({ demo: false, insumo });
   const id = salvar({ tipo: "posts", titulo, entrada: dados, saida: resultado, meta: metaGerada });
   return { resultado, meta: metaGerada, id };
+}
+
+/** Reescreve o texto de um post seguindo uma instrução (mais curto, caber no limite, comentário de quem aprova). */
+export async function reescreverPost({ texto, rede, instrucao }: { texto: string; rede?: Rede; instrucao?: string }): Promise<{ demo: boolean; texto: string }> {
+  const redeValida: Rede = rede && REDES[rede] ? rede : "linkedin";
+  if (!aiEnabled()) {
+    await esperar(900);
+    return { demo: true, texto: reescreverDemo({ texto, rede: redeValida }) };
+  }
+  const limite = LIMITES[redeValida];
+  const system = `Você reescreve posts de redes sociais em português do Brasil mantendo a mensagem, o tom e as quebras de linha adequadas à rede ${REDES[redeValida]} (limite de ${limite} caracteres). Responda somente com o novo texto, sem título, sem aspas e sem comentários.`;
+  const novo = await askText({ system, prompt: `Instrução: ${instrucao || "Reescreva mais curto, com cerca de metade do tamanho."}\n\nTexto atual:\n${texto}`, maxTokens: 1500 });
+  return { demo: false, texto: novo.trim() };
+}
+
+/** Reescreve todos os posts de um rascunho salvo com o comentário de quem pediu ajuste e regrava o resultado
+ * aguardando nova aprovação (o link de aprovação continua válido). Devolve null quando o id não existe. */
+export async function reescreverRascunhos(id: string, comentario: string): Promise<ResultadoPosts | null> {
+  const registro = obter<DadosPosts, ResultadoPosts, Meta>(id);
+  if (!registro || registro.tipo !== "posts") return null;
+  const instrucao = `Ajuste pedido por quem aprova os posts: "${comentario.trim()}". Reescreva atendendo a esse pedido, mantendo a ideia central e o chamado para ação.`;
+  const posts: Post[] = [];
+  for (const p of registro.saida.posts) {
+    const { texto } = await reescreverPost({ texto: p.texto, rede: p.rede, instrucao });
+    posts.push({ ...p, texto });
+  }
+  const saida: ResultadoPosts = { ...registro.saida, posts, aprovacao: { status: "pendente", comentario: comentario.trim() || undefined } };
+  atualizarSaida(id, saida);
+  return saida;
 }

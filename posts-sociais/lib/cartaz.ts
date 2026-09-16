@@ -1,8 +1,39 @@
 // Cartaz SVG gerado localmente quando não há provedor de imagens configurado.
 // Fundo em duas cores derivadas do acento, formas geométricas simples e a ideia central em tipografia grande.
+// O acento nunca é um hex fixo daqui: vem do CSS da própria tela (--color-accent, enviado pelo navegador em
+// POST /api/imagem) ou, no servidor, do catalogo.json da suíte (acentoDoApp), com a paleta de Marketing
+// (tasks/paleta-segmentos.json) só como último recurso quando nenhum dos dois está disponível.
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Rede } from "./types";
 
-const ACENTO = "#7a2e8e";
+const ACENTO_PALETA_MARKETING = "#a5185a";
+const HEX = /^#[0-9a-f]{6}$/i;
+
+let acentoCatalogo: string | null | undefined;
+
+/** Acento deste app lido de ../catalogo.json (raiz da suíte, presente em desenvolvimento); null quando o arquivo não existe (imagem publicada). */
+function acentoDoCatalogo(): string | null {
+  if (acentoCatalogo !== undefined) return acentoCatalogo;
+  acentoCatalogo = null;
+  try {
+    const caminho = join(process.cwd(), "..", "catalogo.json");
+    if (existsSync(caminho)) {
+      const cat = JSON.parse(readFileSync(caminho, "utf8")) as { apps?: { id: string; acento?: string }[] };
+      const app = cat.apps?.find((a) => a.id === "posts-sociais");
+      if (app?.acento && HEX.test(app.acento)) acentoCatalogo = app.acento;
+    }
+  } catch (err) {
+    console.error("Cartaz: não foi possível ler o acento do catálogo", err);
+  }
+  return acentoCatalogo;
+}
+
+/** Acento a usar no cartaz: o do CSS da tela (quando o navegador enviou um hex válido), senão o do catálogo, senão a paleta de Marketing. */
+export function acentoDoApp(doCss?: string): string {
+  if (doCss && HEX.test(doCss.trim())) return doCss.trim();
+  return acentoDoCatalogo() || ACENTO_PALETA_MARKETING;
+}
 
 type HSL = { h: number; s: number; l: number };
 
@@ -61,7 +92,8 @@ function quebrar(texto: string, larguraMax: number, fontSize: number): string[] 
   return linhas;
 }
 
-export function gerarCartaz({ texto = "", rede = "linkedin", marca = "" }: { texto?: string; rede?: Rede; marca?: string } = {}): string {
+export function gerarCartaz({ texto = "", rede = "linkedin", marca = "", acento }: { texto?: string; rede?: Rede; marca?: string; acento?: string } = {}): string {
+  const ACENTO = acentoDoApp(acento);
   const quadrado = rede === "instagram";
   const W = quadrado ? 1080 : 1536;
   const H = quadrado ? 1080 : 1024;

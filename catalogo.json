@@ -74,8 +74,8 @@
       ],
       "problema": "Há o que dizer, mas não há tempo de escrever para cada rede.",
       "ia": "Escreve o post para LinkedIn, Instagram e X a partir de um briefing curto e gera a imagem.",
-      "integracoes": "OpenAI Images para a imagem (trocável).",
-      "acento": "#7a2e8e",
+      "integracoes": "IA (OpenRouter). Opcionais: OpenAI para as imagens, e-mail ou Slack para os rascunhos semanais com link de aprovação, e Zapier ou Make para programar a publicação.",
+      "acento": "#a5185a",
       "porta": 3004,
       "captura": "capturas/posts-sociais.png",
       "capacidades": [

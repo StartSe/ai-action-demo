@@ -1,43 +1,41 @@
 import { gerarCartaz } from "@/lib/cartaz";
 import { esperar } from "@/lib/demo";
-import { getConfig } from "@/lib/store";
+import { ErroImagem, gerarImagemOpenAI, imagensEnabled } from "@/lib/imagens";
 import type { Rede } from "@/lib/types";
 
-const imagensEnabled = () => Boolean(getConfig("OPENAI_API_KEY"));
+const REDES: Rede[] = ["linkedin", "instagram", "x"];
 
-// Gera a imagem do post. Com OPENAI_API_KEY usa gpt-image-1; sem ela, um cartaz SVG local.
-// Para trocar de provedor (ex.: Higgsfield), basta alterar esta rota mantendo a resposta { url }.
+// Gera a imagem do post. Com OPENAI_API_KEY usa gpt-image-1 (ou o modelo escolhido); sem ela, ou com
+// `cartaz: true` no corpo (prévia rápida e offline do ?exemplo=1), um cartaz SVG local no acento do app.
+// Resposta: { demo, url, aviso?, acao? } — `demo: true` marca o cartaz provisório; `aviso`/`acao` aparecem
+// quando a OpenAI falhou por falta de crédito e o app caiu no cartaz sozinho.
+// Para trocar de provedor (ex.: Higgsfield), basta alterar lib/imagens.ts mantendo a resposta { url }.
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => ({}))) as { prompt?: string; rede?: Rede; texto?: string; marca?: string };
-  const { prompt, rede, texto, marca } = body;
+  const body = (await req.json().catch(() => ({}))) as { prompt?: string; rede?: Rede; texto?: string; marca?: string; acento?: string; cartaz?: boolean };
+  const { prompt, texto, marca, acento } = body;
+  const rede: Rede = REDES.includes(body.rede as Rede) ? (body.rede as Rede) : "linkedin";
   if (!prompt && !texto) {
     return Response.json({ error: "Envie a descrição da imagem." }, { status: 400 });
   }
+  const cartaz = () => gerarCartaz({ texto: texto || prompt, rede, marca, acento });
   try {
+    if (body.cartaz === true) {
+      return Response.json({ demo: true, url: cartaz() });
+    }
     if (!imagensEnabled()) {
       await esperar(900);
-      return Response.json({ demo: true, url: gerarCartaz({ texto: texto || prompt, rede, marca }) });
+      return Response.json({ demo: true, url: cartaz() });
     }
-    const r = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getConfig("OPENAI_API_KEY")}` },
-      body: JSON.stringify({ model: getConfig("OPENAI_IMAGE_MODEL") || "gpt-image-1", prompt, size: rede === "instagram" ? "1024x1024" : "1536x1024", n: 1 }),
-    });
-    if (r.status === 401) {
-      return Response.json({ error: "A chave da OpenAI é inválida. Confira em /setup." }, { status: 502 });
-    }
-    if (!r.ok) {
-      const detalhe = await r.text().catch(() => "");
-      console.error("OpenAI images", r.status, detalhe);
-      return Response.json({ error: "O provedor de imagens não respondeu. Verifique a chave em /setup e tente novamente." }, { status: 502 });
-    }
-    const data = await r.json();
-    const b64 = data?.data?.[0]?.b64_json;
-    if (!b64) throw new Error("O provedor de imagens devolveu uma resposta vazia.");
-    return Response.json({ demo: false, url: `data:image/png;base64,${b64}` });
+    const url = await gerarImagemOpenAI({ prompt: prompt || String(texto), rede });
+    return Response.json({ demo: false, url });
   } catch (err) {
+    if (err instanceof ErroImagem) {
+      if (err.usarCartaz) {
+        return Response.json({ demo: true, url: cartaz(), aviso: err.message, codigo: err.codigo, acao: err.acao });
+      }
+      return Response.json({ error: err.message, codigo: err.codigo, acao: err.acao }, { status: err.status });
+    }
     console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível gerar a imagem agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return Response.json({ error: "Não foi possível gerar a imagem agora. Tente novamente." }, { status: 500 });
   }
 }

@@ -1,29 +1,38 @@
 "use client";
-// Cartão adicional do /setup: os temas do trimestre (lista de tema + tom de voz) que alimentam a rotina
+// Cartão adicional do /setup: a empresa e os temas do trimestre (tema + tom de voz) que alimentam a rotina
 // semanal de rascunhos, um tema por vez, em ordem. Segue o mesmo padrão de lista editável de
 // financas-ia/components/OrcamentoCategorias.tsx (não usa components/setup.tsx, que não suporta linhas dinâmicas).
 import { useEffect, useState } from "react";
+import { Aviso, lerErro, useStatus } from "@/components/ui";
 
 type Tema = { tema: string; tom: string };
-type EstadoNotificacoes = { configurada: boolean; canal: "email" | "slack"; destino: string };
 type RotinaExistente = { id: string; tipo: string };
+type CanalNotificacoes = { canal: "email" | "slack"; destino: string };
 
 export function TemasTrimestre() {
+  const { status } = useStatus();
+  const [empresa, setEmpresa] = useState("");
   const [itens, setItens] = useState<Tema[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
-  const [salvo, setSalvo] = useState(false);
+  const [avisoSalvar, setAvisoSalvar] = useState<{ tom: "ok" | "danger"; texto: string } | null>(null);
 
-  const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
   const [rotinaId, setRotinaId] = useState<string | null | undefined>(undefined);
+  const [canalNotificacoes, setCanalNotificacoes] = useState<CanalNotificacoes>({ canal: "email", destino: "" });
   const [criando, setCriando] = useState(false);
+  const [erroRotina, setErroRotina] = useState<{ mensagem: string; motivo?: string } | null>(null);
 
   useEffect(() => {
     fetch("/api/temas")
       .then((r) => r.json())
-      .then((d) => setItens(d.itens || []))
+      .then((d) => {
+        setItens(d.itens || []);
+        setEmpresa(d.empresa || "");
+      })
+      .catch(() => setAvisoSalvar({ tom: "danger", texto: "Não foi possível carregar os temas salvos. Recarregue a página." }))
       .finally(() => setCarregando(false));
 
+    // Canal e destino escolhidos em Notificações: a rotina é criada com eles (sem isso, a rota assume e-mail sem destino).
     fetch("/api/setup")
       .then((r) => r.json())
       .then((d) => {
@@ -31,9 +40,9 @@ export function TemasTrimestre() {
         const campos: { chave: string; valorVisivel?: string }[] = integracao?.campos || [];
         const canal = campos.find((c) => c.chave === "NOTIFICACOES_CANAL")?.valorVisivel === "slack" ? "slack" : "email";
         const destino = campos.find((c) => c.chave === "NOTIFICACOES_DESTINO")?.valorVisivel || "";
-        setNotificacoes({ configurada: Boolean(integracao?.configurada), canal, destino });
+        setCanalNotificacoes({ canal, destino });
       })
-      .catch(() => setNotificacoes({ configurada: false, canal: "email", destino: "" }));
+      .catch(() => undefined);
 
     fetch("/api/rotinas")
       .then((r) => r.json())
@@ -45,41 +54,49 @@ export function TemasTrimestre() {
   }, []);
 
   function atualizar(i: number, campo: keyof Tema, valor: string) {
-    setSalvo(false);
+    setAvisoSalvar(null);
     setItens((lista) => lista.map((item, idx) => (idx !== i ? item : { ...item, [campo]: valor })));
   }
 
   function adicionar() {
-    setSalvo(false);
+    setAvisoSalvar(null);
     setItens((lista) => [...lista, { tema: "", tom: "executivo" }]);
   }
 
   function remover(i: number) {
-    setSalvo(false);
+    setAvisoSalvar(null);
     setItens((lista) => lista.filter((_, idx) => idx !== i));
   }
 
+  /** Salva empresa e temas. Em caso de falha, a lista digitada fica como está e o motivo aparece aqui. */
   async function salvar() {
     setSalvando(true);
-    setSalvo(false);
+    setAvisoSalvar(null);
     try {
       const itensValidos = itens.filter((i) => i.tema.trim());
       const r = await fetch("/api/temas", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itens: itensValidos }),
+        body: JSON.stringify({ itens: itensValidos, empresa }),
       });
+      if (!r.ok) {
+        setAvisoSalvar({ tom: "danger", texto: `${(await lerErro(r)).mensagem} A lista digitada foi mantida.` });
+        return;
+      }
       const d = await r.json();
       setItens(d.itens || []);
-      setSalvo(true);
+      setEmpresa(d.empresa || "");
+      setAvisoSalvar({ tom: "ok", texto: "Empresa e temas salvos." });
+    } catch (e) {
+      setAvisoSalvar({ tom: "danger", texto: `${(await lerErro(e)).mensagem} A lista digitada foi mantida.` });
     } finally {
       setSalvando(false);
     }
   }
 
   async function criarRotina() {
-    if (!notificacoes?.configurada) return;
     setCriando(true);
+    setErroRotina(null);
     try {
       const r = await fetch("/api/rotinas", {
         method: "POST",
@@ -89,34 +106,52 @@ export function TemasTrimestre() {
           frequencia: "semanal",
           diaSemana: 1,
           hora: "08:00",
-          canal: notificacoes.canal,
-          destino: notificacoes.canal === "email" ? notificacoes.destino || undefined : undefined,
+          canal: canalNotificacoes.canal,
+          destino: canalNotificacoes.canal === "email" ? canalNotificacoes.destino || undefined : undefined,
         }),
       });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Não foi possível criar a rotina.");
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setErroRotina({ mensagem: typeof d.error === "string" ? d.error : "Não foi possível criar a rotina. Tente de novo.", motivo: d.motivo });
+        return;
+      }
       setRotinaId(d.id);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Não foi possível criar a rotina.");
+      setErroRotina({ mensagem: (await lerErro(e)).mensagem });
     } finally {
       setCriando(false);
     }
   }
 
-  const temTemaSalvo = itens.some((i) => i.tema.trim());
+  const temTema = itens.some((i) => i.tema.trim());
+  const notificacoesProntas = status ? Boolean(status.integrations?.notificacoes) : undefined;
 
   return (
     <section id="temas-do-trimestre" className="card p-6 max-md:p-5">
       <h2 className="text-lg font-bold mb-1">Temas do trimestre</h2>
       <p className="text-muted text-sm mb-4 max-w-[640px]">
-        Cadastre os temas e o tom de voz que a IA deve usar nos rascunhos. A rotina semanal usa um tema por vez, na ordem
-        da lista, e volta ao início depois do último.
+        Cadastre a empresa, os temas e o tom de voz dos rascunhos semanais. A rotina usa um tema por vez, na ordem da lista, e volta ao início depois do último.
       </p>
 
       {carregando ? (
         <p className="text-muted text-sm">Carregando...</p>
       ) : (
         <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5 max-w-[420px]">
+            <label htmlFor="temas-empresa" className="text-[13px] font-semibold">Empresa ou marca</label>
+            <input
+              id="temas-empresa"
+              className="input"
+              placeholder="Nome que aparece nos posts"
+              value={empresa}
+              onChange={(e) => {
+                setAvisoSalvar(null);
+                setEmpresa(e.target.value);
+              }}
+            />
+            <span className="text-[12.5px] text-muted">Sem este nome, a rotina usa a última empresa para a qual você gerou posts.</span>
+          </div>
+
           <div className="flex flex-col gap-2.5">
             {itens.map((item, i) => (
               <div key={i} className="flex items-center gap-2.5 max-md:flex-col max-md:items-stretch">
@@ -145,23 +180,34 @@ export function TemasTrimestre() {
               Adicionar tema
             </button>
             <button type="button" className="btn-primary !w-auto" onClick={salvar} disabled={salvando}>
-              {salvando ? "Salvando" : "Salvar temas"}
+              {salvando ? "Salvando" : "Salvar empresa e temas"}
             </button>
-            {salvo && <span className="text-ok text-sm font-semibold">Temas salvos.</span>}
           </div>
+          {avisoSalvar && <Aviso tom={avisoSalvar.tom}>{avisoSalvar.texto}</Aviso>}
 
-          {rotinaId !== undefined && notificacoes !== null && (
-            <div className="pt-4 border-t border-line">
+          {rotinaId !== undefined && notificacoesProntas !== undefined && (
+            <div className="pt-4 border-t border-line flex flex-col gap-3">
               {rotinaId ? (
                 <p className="text-muted text-sm">Você já recebe rascunhos novos toda segunda às 8h, com link para aprovar pelo celular.</p>
-              ) : !temTemaSalvo ? (
+              ) : !temTema ? (
                 <p className="text-muted text-sm">Cadastre e salve ao menos um tema para poder receber rascunhos toda semana.</p>
-              ) : notificacoes.configurada ? (
+              ) : notificacoesProntas ? (
                 <button type="button" className="btn-ghost !w-auto" onClick={criarRotina} disabled={criando}>
                   {criando ? "Criando..." : "Receber rascunhos toda segunda"}
                 </button>
               ) : (
                 <a href="/setup#notificacoes" className="btn-ghost !w-auto">Receber rascunhos toda segunda</a>
+              )}
+              {erroRotina && (
+                <Aviso tom="danger">
+                  {erroRotina.mensagem}
+                  {erroRotina.motivo === "notificacoes" && (
+                    <>
+                      {" "}
+                      <a className="btn-link text-[13px]" href="/setup#notificacoes">Configurar notificações</a>
+                    </>
+                  )}
+                </Aviso>
               )}
             </div>
           )}

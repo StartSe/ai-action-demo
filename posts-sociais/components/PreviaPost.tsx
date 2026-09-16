@@ -1,6 +1,10 @@
 "use client";
+// Prévia de um post no layout da rede, com as ações por cartão: "Copiar" fixo, "Reescrever para caber em N"
+// quando o texto estoura o limite, e o menu "Mais" (Copiar sem hashtags, Baixar imagem, Reescrever mais curto,
+// Lembrete no calendário, Programar publicação). O estado das imagens mora em useImagensPosts, compartilhado por
+// app/page.tsx (Resultado) e app/imprimir/[id]/ConteudoImpresso.tsx.
 import { useEffect, useRef, useState } from "react";
-import { Chip } from "@/components/ui";
+import { Aviso, Chip, lerErro, type ErroLido } from "@/components/ui";
 import { baixarArquivo, gerarIcsPost } from "@/lib/agenda";
 import type { ImagemGerada, Post, Rede } from "@/lib/types";
 
@@ -13,6 +17,69 @@ export const REDES: Record<Rede, { nome: string; limite: number; proporcao: stri
 export function textoDoPost(p: Post) {
   const tags = (p.hashtags || []).map((h) => (h.startsWith("#") ? h : "#" + h)).join(" ");
   return tags ? `${p.texto}\n\n${tags}` : p.texto;
+}
+
+/** Instrução de reescrita usada quando o texto passa do limite da rede. */
+export function instrucaoParaCaber(rede: Rede, tamanhoAtual: number) {
+  const info = REDES[rede];
+  return `Reescreva para caber em até ${info.limite} caracteres (hoje tem ${tamanhoAtual}), mantendo a ideia, o tom e o chamado para ação. Não ultrapasse o limite.`;
+}
+
+/** Acento do app lido do CSS da própria tela, para o cartaz provisório sair na cor certa (lib/cartaz.ts). */
+function acentoDaTela(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const valor = getComputedStyle(document.documentElement).getPropertyValue("--color-accent").trim();
+  return valor || undefined;
+}
+
+export type EstadoImagens = {
+  imagens: Record<number, ImagemGerada>;
+  gerando: Record<number, boolean>;
+  erros: Record<number, ErroLido | undefined>;
+  algumaGerando: boolean;
+  gerar: (i: number, opcoes?: { cartaz?: boolean }) => Promise<void>;
+  gerarTodas: (opcoes?: { cartaz?: boolean }) => Promise<void>;
+};
+
+/** Estado das imagens de uma lista de posts (uma por índice). `cartaz: true` pede o cartaz local imediato
+ * (prévia do ?exemplo=1, rápida e sem chamar a OpenAI). */
+export function useImagensPosts({ posts, empresa, ideiaCentral }: { posts: Post[]; empresa: string; ideiaCentral: string }): EstadoImagens {
+  const [imagens, setImagens] = useState<Record<number, ImagemGerada>>({});
+  const [gerando, setGerando] = useState<Record<number, boolean>>({});
+  const [erros, setErros] = useState<Record<number, ErroLido | undefined>>({});
+
+  async function gerar(i: number, opcoes?: { cartaz?: boolean }) {
+    const post = posts[i];
+    if (!post) return;
+    const rede: Rede = REDES[post.rede] ? post.rede : "linkedin";
+    setGerando((g) => ({ ...g, [i]: true }));
+    setErros((e) => ({ ...e, [i]: undefined }));
+    try {
+      const r = await fetch("/api/imagem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: post.prompt_imagem, rede, texto: ideiaCentral || post.texto.split("\n")[0], marca: empresa, acento: acentoDaTela(), cartaz: Boolean(opcoes?.cartaz) }),
+      });
+      if (!r.ok) {
+        const info = await lerErro(r);
+        setErros((e) => ({ ...e, [i]: info }));
+        return;
+      }
+      const d = (await r.json()) as { url: string; demo?: boolean; aviso?: string; acao?: { rotulo: string; url: string } };
+      setImagens((m) => ({ ...m, [i]: { url: d.url, demo: Boolean(d.demo), aviso: d.aviso, acao: d.acao } }));
+    } catch (e) {
+      const info = await lerErro(e);
+      setErros((er) => ({ ...er, [i]: info }));
+    } finally {
+      setGerando((g) => ({ ...g, [i]: false }));
+    }
+  }
+
+  async function gerarTodas(opcoes?: { cartaz?: boolean }) {
+    await Promise.all(posts.map((_, i) => gerar(i, opcoes)));
+  }
+
+  return { imagens, gerando, erros, algumaGerando: Object.values(gerando).some(Boolean), gerar, gerarTodas };
 }
 
 function handle(nome: string) {
@@ -72,7 +139,14 @@ function Midia({ rede, imagem, carregando, onGerar }: { rede: Rede; imagem?: Ima
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={imagem.url} alt="Imagem gerada para o post" className="w-full h-full object-cover block" />
         </div>
-        {imagem.demo && <p className="text-muted text-[12.5px] mt-1.5">Imagem provisória. Conecte um gerador de imagens para a versão final.</p>}
+        {imagem.demo && imagem.aviso && (
+          <div className="mt-2"><Aviso tom="warn" acao={imagem.acao}>Imagem provisória. {imagem.aviso}</Aviso></div>
+        )}
+        {imagem.demo && !imagem.aviso && (
+          <p className="text-muted text-[12.5px] mt-1.5">
+            Imagem provisória. <a className="font-semibold text-accent underline underline-offset-2" href="/setup#openai">Conecte um gerador de imagens</a> para a versão final.
+          </p>
+        )}
       </div>
     );
   }
@@ -84,10 +158,11 @@ function Midia({ rede, imagem, carregando, onGerar }: { rede: Rede; imagem?: Ima
   );
 }
 
-/** Botão "Copiar" com opções "com hashtags"/"sem hashtags", mesmo padrão de popover do "Mais" em Entregar (ui.tsx). */
-function CopiarBotao({ post }: { post: Post }) {
+type ItemMenu = { rotulo: string; onClick?: () => void; href?: string; download?: string; desabilitado?: boolean; dica?: string };
+
+/** Menu "Mais" do cartão de post, mesmo padrão de popover do "Mais" em Entregar (ui.tsx). */
+function MenuMais({ itens }: { itens: ItemMenu[] }) {
   const [aberto, setAberto] = useState(false);
-  const [copiado, setCopiado] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -106,29 +181,37 @@ function CopiarBotao({ post }: { post: Post }) {
     };
   }, [aberto]);
 
-  async function copiar(comHashtags: boolean) {
-    const texto = comHashtags ? textoDoPost(post) : post.texto;
-    try {
-      await navigator.clipboard.writeText(texto);
-      setCopiado(true);
-    } catch {
-      alert(texto);
-    }
-    setAberto(false);
-    setTimeout(() => setCopiado(false), 1800);
-  }
-
-  const itemClasse = "w-full text-left px-3 py-2 rounded-md hover:bg-accent-soft cursor-pointer";
+  const itemClasse = "w-full text-left px-3 py-2 rounded-md hover:bg-accent-soft cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent";
 
   return (
-    <div className="relative shrink-0" ref={menuRef}>
-      <button type="button" className="btn-ghost !px-3.5 !py-2.5 text-[13.5px]" aria-haspopup="menu" aria-expanded={aberto} onClick={() => setAberto((v) => !v)}>
-        {copiado ? "Copiado" : "Copiar"}
+    <div className="relative" ref={menuRef}>
+      <button type="button" className="btn-ghost !px-3.5 !py-2.5 text-[13.5px]" aria-haspopup="menu" aria-expanded={aberto} aria-label="Mais ações para este post" onClick={() => setAberto((v) => !v)}>
+        Mais
       </button>
       {aberto && (
-        <div role="menu" className="absolute left-0 top-[calc(100%+6px)] z-20 w-52 card p-1.5 text-[13.5px]">
-          <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(true)}>Com hashtags</button>
-          <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(false)}>Sem hashtags</button>
+        <div role="menu" className="absolute left-0 top-[calc(100%+6px)] z-20 w-60 card p-1.5 text-[13.5px]">
+          {itens.map((item) =>
+            item.href && !item.desabilitado ? (
+              <a key={item.rotulo} role="menuitem" className={`${itemClasse} block no-underline text-ink`} href={item.href} download={item.download} onClick={() => setAberto(false)}>
+                {item.rotulo}
+              </a>
+            ) : (
+              <button
+                key={item.rotulo}
+                type="button"
+                role="menuitem"
+                className={itemClasse}
+                disabled={item.desabilitado}
+                title={item.desabilitado ? item.dica : undefined}
+                onClick={() => {
+                  item.onClick?.();
+                  setAberto(false);
+                }}
+              >
+                {item.rotulo}
+              </button>
+            )
+          )}
         </div>
       )}
     </div>
@@ -138,65 +221,68 @@ function CopiarBotao({ post }: { post: Post }) {
 export function PreviaPost({
   post,
   empresa,
-  ideiaCentral,
   imagem,
-  onImagemGerada,
+  gerandoImagem,
+  erroImagem,
+  onGerarImagem,
   onTextoAtualizado,
+  publicacaoAtiva,
 }: {
   post: Post;
   empresa: string;
-  ideiaCentral: string;
   imagem?: ImagemGerada;
-  onImagemGerada: (imagem: ImagemGerada) => void;
+  gerandoImagem: boolean;
+  erroImagem?: ErroLido;
+  onGerarImagem: () => void;
   onTextoAtualizado: (texto: string) => void;
+  publicacaoAtiva?: boolean;
 }) {
   const rede: Rede = REDES[post.rede] ? post.rede : "linkedin";
   const info = REDES[rede];
   const n = (post.texto || "").length;
-  const [gerandoImagem, setGerandoImagem] = useState(false);
-  const [erroImagem, setErroImagem] = useState<string | null>(null);
+  const estourou = n > info.limite;
+  const [copiado, setCopiado] = useState(false);
+  const [falhaCopia, setFalhaCopia] = useState(false);
   const [reescrevendo, setReescrevendo] = useState(false);
-  const [erroReescrever, setErroReescrever] = useState<string | null>(null);
+  const [erroReescrever, setErroReescrever] = useState<ErroLido | null>(null);
+  const [programando, setProgramando] = useState(false);
+  const [avisoPublicacao, setAvisoPublicacao] = useState<{ tom: "ok" | "danger"; texto: string; acao?: { rotulo: string; url: string } } | null>(null);
 
-  async function gerarImagem() {
-    setGerandoImagem(true);
-    setErroImagem(null);
+  async function copiar(comHashtags: boolean) {
+    const texto = comHashtags ? textoDoPost(post) : post.texto;
     try {
-      const r = await fetch("/api/imagem", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: post.prompt_imagem, rede, texto: ideiaCentral || post.texto.split("\n")[0], marca: empresa }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || "Falha ao gerar a imagem.");
-      onImagemGerada({ url: data.url, demo: Boolean(data.demo) });
-    } catch (e) {
-      setErroImagem(e instanceof Error ? e.message : "Erro inesperado.");
-    } finally {
-      setGerandoImagem(false);
+      await navigator.clipboard.writeText(texto);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 1800);
+    } catch {
+      setFalhaCopia(true);
+      setTimeout(() => setFalhaCopia(false), 4000);
     }
   }
 
-  async function reescrever() {
+  async function reescrever(instrucao: string) {
     setReescrevendo(true);
     setErroReescrever(null);
     try {
       const r = await fetch("/api/reescrever", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texto: post.texto, rede, instrucao: "Reescreva mais curto, com cerca de metade do tamanho, mantendo a ideia e o chamado para ação." }),
+        body: JSON.stringify({ texto: post.texto, rede, instrucao }),
       });
+      if (!r.ok) {
+        setErroReescrever(await lerErro(r));
+        return;
+      }
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error || "Falha ao reescrever o post.");
       onTextoAtualizado(data.texto);
     } catch (e) {
-      setErroReescrever(e instanceof Error ? e.message : "Erro inesperado.");
+      setErroReescrever(await lerErro(e));
     } finally {
       setReescrevendo(false);
     }
   }
 
-  function agendar() {
+  function lembrete() {
     const conteudo = gerarIcsPost({
       titulo: `Publicar no ${info.nome} — ${empresa || "sua empresa"}`,
       descricao: textoDoPost(post),
@@ -205,7 +291,39 @@ export function PreviaPost({
     baixarArquivo(`post-${rede}.ics`, conteudo, "text/calendar;charset=utf-8");
   }
 
+  async function programar() {
+    setProgramando(true);
+    setAvisoPublicacao(null);
+    try {
+      const r = await fetch("/api/publicar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rede, texto: post.texto, hashtags: post.hashtags || [], horario: post.melhor_horario || "", imagem: imagem?.url ?? null }),
+      });
+      if (!r.ok) {
+        const info = await lerErro(r);
+        setAvisoPublicacao({ tom: "danger", texto: info.mensagem, acao: info.acao });
+        return;
+      }
+      setAvisoPublicacao({ tom: "ok", texto: `Post enviado para programar a publicação no ${info.nome}.` });
+    } catch (e) {
+      setAvisoPublicacao({ tom: "danger", texto: (await lerErro(e)).mensagem });
+    } finally {
+      setProgramando(false);
+    }
+  }
+
   const ext = imagem?.url.startsWith("data:image/svg") ? "svg" : "png";
+  const itensMais: ItemMenu[] = [
+    { rotulo: "Copiar sem hashtags", onClick: () => copiar(false) },
+    imagem
+      ? { rotulo: "Baixar imagem", href: imagem.url, download: `post-${rede}.${ext}` }
+      : { rotulo: "Baixar imagem", desabilitado: true, dica: "Gere a imagem primeiro" },
+    ...(estourou ? [] : [{ rotulo: reescrevendo ? "Reescrevendo..." : "Reescrever mais curto", desabilitado: reescrevendo, onClick: () => reescrever("Reescreva mais curto, com cerca de metade do tamanho, mantendo a ideia e o chamado para ação.") }]),
+    { rotulo: "Lembrete no calendário", onClick: lembrete },
+    ...(publicacaoAtiva ? [{ rotulo: programando ? "Enviando..." : "Programar publicação", desabilitado: programando, onClick: programar }] : []),
+  ];
+
   const corpo = (
     <>
       <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-ink text-sm leading-[1.55]">{post.texto}</p>
@@ -214,13 +332,13 @@ export function PreviaPost({
       )}
     </>
   );
-  const midia = <Midia rede={rede} imagem={imagem} carregando={gerandoImagem} onGerar={gerarImagem} />;
+  const midia = <Midia rede={rede} imagem={imagem} carregando={gerandoImagem} onGerar={onGerarImagem} />;
 
   return (
     <article className="card p-4 pb-[18px] h-full">
       <div className="flex justify-between items-center gap-2.5 mb-3">
         <Chip nivel="neutral">{info.nome}</Chip>
-        <span className={`text-[12.5px] ${n > info.limite ? "text-danger font-bold" : "text-muted"}`}>{n} / {info.limite} caracteres</span>
+        <span className={`text-[12.5px] ${estourou ? "text-danger font-bold" : "text-muted"}`}>{n} / {info.limite} caracteres</span>
       </div>
       <div className="border border-line rounded-[10px] px-4 pt-3.5 pb-4 bg-white">
         <Cabecalho rede={rede} empresa={empresa} />
@@ -236,38 +354,40 @@ export function PreviaPost({
           </>
         )}
       </div>
-      {erroImagem && <div className="bg-[#fde8e6] border border-[#f5c2bd] text-danger px-3.5 py-2.5 rounded-[10px] text-sm mt-2.5"><strong>Não deu certo.</strong> {erroImagem}</div>}
+      {erroImagem && (
+        <div className="mt-2.5"><Aviso tom="danger" acao={erroImagem.acao}>{erroImagem.mensagem}</Aviso></div>
+      )}
       <p className="text-muted text-[13px] my-3">Melhor horário para publicar: <strong className="text-ink">{post.melhor_horario || "a definir"}</strong></p>
-      <div className="flex gap-2.5 flex-wrap">
-        <CopiarBotao post={post} />
-        {imagem ? (
-          <a className="btn-ghost !px-3.5 !py-2.5 text-[13.5px] no-underline" href={imagem.url} download={`post-${rede}.${ext}`}>Baixar imagem</a>
-        ) : (
-          <button type="button" className="btn-ghost !px-3.5 !py-2.5 text-[13.5px]" disabled title="Gere a imagem primeiro">Baixar imagem</button>
+      <div className="flex gap-2.5 flex-wrap items-center min-w-0">
+        <button type="button" className="btn-ghost !px-3.5 !py-2.5 text-[13.5px]" onClick={() => copiar(true)}>{copiado ? "Copiado" : "Copiar"}</button>
+        {estourou && (
+          <button type="button" className="btn-ghost !px-3.5 !py-2.5 text-[13.5px] border-danger text-danger" onClick={() => reescrever(instrucaoParaCaber(rede, n))} disabled={reescrevendo}>
+            {reescrevendo ? "Reescrevendo..." : `Reescrever para caber em ${info.limite}`}
+          </button>
         )}
-        <button type="button" className="btn-ghost !px-3.5 !py-2.5 text-[13.5px]" onClick={reescrever} disabled={reescrevendo}>{reescrevendo ? "Reescrevendo" : "Reescrever mais curto"}</button>
-        <button type="button" className="btn-ghost !px-3.5 !py-2.5 text-[13.5px]" onClick={agendar} title="Baixa um convite .ics com o melhor horário sugerido">Agendar</button>
+        <MenuMais itens={itensMais} />
       </div>
-      {erroReescrever && <div className="bg-[#fde8e6] border border-[#f5c2bd] text-danger px-3.5 py-2.5 rounded-[10px] text-sm mt-2.5"><strong>Não deu certo.</strong> {erroReescrever}</div>}
+      {falhaCopia && <div className="mt-2.5"><Aviso tom="danger">Não foi possível copiar automaticamente. Selecione o texto e copie com Ctrl+C (ou Cmd+C no Mac).</Aviso></div>}
+      {erroReescrever && <div className="mt-2.5"><Aviso tom="danger" acao={erroReescrever.acao}>{erroReescrever.mensagem}</Aviso></div>}
+      {avisoPublicacao && <div className="mt-2.5"><Aviso tom={avisoPublicacao.tom} acao={avisoPublicacao.acao}>{avisoPublicacao.texto}</Aviso></div>}
     </article>
   );
 }
 
-/** Prévia por rede: abas no celular (uma por vez), três colunas de altura igual no desktop. */
+/** Prévia por rede: abas no celular (uma por vez); no desktop, duas colunas de altura igual — o último
+ * cartão sozinho na linha (3 redes) ocupa a largura toda. */
 export function GradePosts({
   posts,
   empresa,
-  ideiaCentral,
-  imagens,
-  onImagemGerada,
+  estado,
   onTextoAtualizado,
+  publicacaoAtiva,
 }: {
   posts: Post[];
   empresa: string;
-  ideiaCentral: string;
-  imagens: Record<number, ImagemGerada>;
-  onImagemGerada: (i: number, imagem: ImagemGerada) => void;
+  estado: EstadoImagens;
   onTextoAtualizado: (i: number, texto: string) => void;
+  publicacaoAtiva?: boolean;
 }) {
   const [abaAtiva, setAbaAtiva] = useState(0);
   const indiceAtivo = abaAtiva < posts.length ? abaAtiva : 0;
@@ -290,16 +410,18 @@ export function GradePosts({
           ))}
         </div>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-[18px] md:items-stretch">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-[18px] md:items-stretch md:[&>*:last-child:nth-child(odd)]:col-span-2 [&>*]:min-w-0">
         {posts.map((p, i) => (
           <div key={p.rede} className={i === indiceAtivo ? "" : "max-md:hidden"}>
             <PreviaPost
               post={p}
               empresa={empresa}
-              ideiaCentral={ideiaCentral}
-              imagem={imagens[i]}
-              onImagemGerada={(imagem) => onImagemGerada(i, imagem)}
+              imagem={estado.imagens[i]}
+              gerandoImagem={Boolean(estado.gerando[i])}
+              erroImagem={estado.erros[i]}
+              onGerarImagem={() => estado.gerar(i)}
               onTextoAtualizado={(texto) => onTextoAtualizado(i, texto)}
+              publicacaoAtiva={publicacaoAtiva}
             />
           </div>
         ))}
