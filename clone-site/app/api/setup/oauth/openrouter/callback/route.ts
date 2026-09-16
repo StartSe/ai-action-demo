@@ -14,9 +14,12 @@ export async function GET(req: Request) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code, code_verifier: verifier, code_challenge_method: "S256" }),
     });
-    if (!r.ok) return voltar(`O OpenRouter não devolveu a chave (HTTP ${r.status}).`);
+    if (!r.ok) {
+      console.error("O OpenRouter não devolveu a chave:", r.status, await r.text().catch(() => ""));
+      return voltar("O OpenRouter não concluiu a conexão. Tente de novo; se repetir, cole a chave manualmente em Opções avançadas.");
+    }
     const data = (await r.json()) as { key?: string };
-    if (!data.key) return voltar("O OpenRouter não devolveu a chave.");
+    if (!data.key) return voltar("O OpenRouter não concluiu a conexão. Tente de novo; se repetir, cole a chave manualmente em Opções avançadas.");
     setConfig("OPENROUTER_API_KEY", data.key);
     return voltar();
   } catch (err) {

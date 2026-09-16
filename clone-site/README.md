@@ -11,7 +11,7 @@ Aviso mostrado abaixo de toda prévia: use a referência pela estrutura. Textos,
 Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com um modelo de visão (a captura é enviada junto com o prompt por `askVision`, em `lib/ai.ts`). O prompt de sistema (`lib/gerador.ts`) foi portado e traduzido do projeto aberto screenshot-to-code, adaptado para um arquivo HTML único, textos em português e imagens substituídas por blocos.
 
 ## Configuração inicial (sem variáveis de ambiente)
-Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave, escolhe o modelo com visão e testa a conexão. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar um modelo com visão, o app roda em modo demonstração.
+Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave. O modelo que lê a captura tem cartão próprio, "Qualidade da página gerada", com o botão "Testar leitura de imagem" (manda um PNG mínimo ao modelo escolhido e mostra o que ele respondeu). O cartão opcional "Captura por endereço" guarda a chave de um serviço de captura (ScreenshotOne), que permite colar o endereço de um site em vez de enviar a imagem. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar um modelo com visão, o app roda em modo demonstração.
 
 ## Primeiro acesso
 Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
@@ -49,7 +49,7 @@ Abaixo da prévia, o campo "O que mudar" envia a instrução (e o HTML que a tel
 A lista "Versões" (número, instrução e hora) tem "Voltar para esta" em cada versão anterior: `POST /api/pagina/<id>/voltar` com `{ n }` copia o HTML daquela versão como uma versão nova ("Voltou para a versão n"), sem apagar as intermediárias. Em modo demonstração (sem chave do OpenRouter), cada edição aplica mudanças fixas visíveis: a cor de fundo do cabeçalho e o título principal mudam a cada versão (`lib/demo.ts:edicaoDemo`).
 
 ## Usar dentro de um assistente de IA (MCP)
-O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, com as ferramentas `gerar_pagina(imagem_url, instrucoes?, marca?, formato?)` (o servidor baixa a captura no endereço público informado, só http/https, sem endereços internos da rede, PNG ou JPG reconhecidos pelos primeiros bytes, até 5 MB, e devolve id, título, link `/r/<id>` e o HTML) e `editar_pagina(id, instrucao)` (aplica a mudança sobre a última versão e devolve o número da versão nova e o HTML inteiro). Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
+O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, com as ferramentas `gerar_pagina(imagem_url, instrucoes?, marca?, formato?)` (endereço terminado em `.png`/`.jpg` é baixado direto; qualquer outro é o site a fotografar pelo serviço de captura configurado. Só http/https, sem endereços internos da rede, PNG ou JPG reconhecidos pelos primeiros bytes, até 5 MB; devolve id, título, link `/r/<id>` e o HTML) e `editar_pagina(id, instrucao)` (aplica a mudança sobre a última versão e devolve o número da versão nova e o HTML inteiro). Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
 
 Decisão de implementação: protocolo implementado à mão em `lib/mcp.ts` (JSON-RPC 2.0: `initialize`, `tools/list`, `tools/call`), em vez do pacote `@modelcontextprotocol/sdk` — mesma decisão herdada de `pdi-time`. Rate limit de 60 chamadas por minuto por código, em memória.
 
@@ -73,7 +73,8 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Modelo de texto (usado nas edições por instrução). Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
-| `OPENROUTER_MODEL_VISAO` | Alternativa ao setup ("Modelo para imagens", em Opções avançadas). Modelo com visão que lê a captura; padrão `inclusionai/ling-3.0-flash-vl:free`. Lista em https://openrouter.ai/models?modality=image-%3Etext. |
+| `OPENROUTER_MODEL_VISAO` | Alternativa ao cartão "Qualidade da página gerada" do setup. Modelo com visão que lê a captura; padrão `inclusionai/ling-3.0-flash-vl:free`. Lista em https://openrouter.ai/models?modality=image-%3Etext. |
+| `SCREENSHOTONE_ACCESS_KEY` | Opcional, alternativa ao setup. Chave do serviço que fotografa a página de referência a partir do endereço do site. |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
 
 ## Estrutura
@@ -86,13 +87,16 @@ app/r/[id]/page.tsx       prévia de uma página salva, por link
 app/s/[id]/route.ts       página publicada: a versão atual como HTML puro, em um link que sai do app
 app/mcp/route.ts          endpoint MCP (JSON-RPC 2.0) para assistentes de IA
 app/api/mcp/token/route.ts gera, consulta e revoga o código de acesso do endpoint MCP
-app/setup/page.tsx        configuração inicial (IA, acesso MCP)
+app/setup/page.tsx        configuração inicial (IA, captura por endereço, modelo que lê a captura, acesso MCP)
+app/api/captura/route.ts  traz a captura a partir de um endereço (imagem publicada ou site fotografado)
+app/api/visao/route.ts    lê, grava e testa o modelo que lê a captura
 app/api/setup/            leitura/gravação da configuração, teste e OAuth do OpenRouter
 app/api/status/route.ts   informa ao frontend se a IA (com visão) está conectada
 app/api/health/route.ts   health check
 components/ui.tsx         componentes visuais compartilhados pela suíte
 components/setup.tsx      tela de setup genérica, gerada a partir de lib/integracoes.ts
 components/AcessoMCP.tsx  cartão do /setup para gerar/revogar o acesso MCP
+components/QualidadePagina.tsx cartão do /setup: modelo que lê a captura e "Testar leitura de imagem"
 components/PreviaPagina.tsx prévia em iframe (Computador/Celular), "Ver o código" e aviso de terceiros
 components/EditorPagina.tsx "O que mudar", "Trocar os textos pelos da minha empresa" e lista "Versões"
 lib/gerador.ts            prompts de geração e de edição, extração e sanitização do HTML, versões no histórico
@@ -102,7 +106,9 @@ lib/types.ts              Pedido, Versao, Pagina, Marca
 lib/ai.ts                 cliente OpenRouter (askText, askVision, askJSON, askWithTools)
 lib/store.ts              configuração em SQLite (node:sqlite), com variáveis de ambiente como prioridade
 lib/setup-comum.ts        tipos do setup e integração OpenRouter (compartilhado)
-lib/integracoes.ts        integrações que este app precisa (só OpenRouter)
+lib/integracoes.ts        integrações que este app precisa (OpenRouter e, opcional, o serviço de captura)
+lib/captura.ts            baixa a captura de um endereço e fotografa o site pelo serviço configurado
+lib/teste-visao.ts        PNG mínimo montado em código e teste "Testar leitura de imagem"
 lib/mcp.ts                protocolo MCP (JSON-RPC 2.0), código de acesso e limite de chamadas
 public/exemplo-referencia.png captura de exemplo usada por "Preencher com um exemplo" e /?exemplo=1
 Dockerfile                build multi-stage com saída standalone

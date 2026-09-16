@@ -4,6 +4,7 @@
 // Abrir) e o menu "Mais" traz "Baixar HTML" (arquivo .html) e "Copiar código". O endereço público é montado
 // só no clique (location.origin não existe no servidor; ver notas em CLAUDE.md sobre hydration).
 import { useEffect, useRef, useState } from "react";
+import { Aviso } from "./ui";
 
 /** Nome de arquivo seguro a partir do título da página: sem acentos, minúsculas, hifens. */
 export function nomeDoArquivo(titulo: string, versao: number): string {
@@ -22,6 +23,7 @@ export function EntregarPagina({ id, titulo, html, versao }: { id: string; titul
   const [menuAberto, setMenuAberto] = useState(false);
   const [copiadoLink, setCopiadoLink] = useState(false);
   const [copiadoCodigo, setCopiadoCodigo] = useState(false);
+  const [falhaCopia, setFalhaCopia] = useState(false);
   const raizRef = useRef<HTMLDivElement>(null);
   const linkRef = useRef<HTMLInputElement>(null);
 
@@ -40,9 +42,18 @@ export function EntregarPagina({ id, titulo, html, versao }: { id: string; titul
     };
   }, [aberto]);
 
+  // Nunca despejar o arquivo inteiro num popup do navegador quando a cópia falha: um aviso inline explica
+  // o caminho alternativo (o código está logo abaixo, em "Ver o código", e o arquivo em "Baixar HTML").
   async function copiar(texto: string, marcar: (v: boolean) => void) {
-    try { await navigator.clipboard.writeText(texto); marcar(true); } catch { alert(texto); }
-    setTimeout(() => marcar(false), 1800);
+    setFalhaCopia(false);
+    try {
+      await navigator.clipboard.writeText(texto);
+      marcar(true);
+      setTimeout(() => marcar(false), 1800);
+    } catch {
+      setFalhaCopia(true);
+      setTimeout(() => setFalhaCopia(false), 6000);
+    }
   }
 
   function publicar() {
@@ -87,11 +98,21 @@ export function EntregarPagina({ id, titulo, html, versao }: { id: string; titul
         <div id="link-publicado" role="dialog" aria-label="Link público da página" className="absolute right-0 top-[calc(100%+8px)] z-20 w-[380px] max-w-[calc(100vw-32px)] max-md:left-0 max-md:w-auto card p-4 text-[13.5px]">
           <p className="font-bold mb-1">A página está no ar</p>
           <p className="text-muted mb-3">Quem abrir este link vê a versão {versao}. Novas edições atualizam o mesmo endereço.</p>
+          <p className="text-muted mb-3">O link funciona enquanto este app estiver no ar. Para ficar com uma cópia sua, baixe o arquivo.</p>
           <div className="flex gap-2 max-md:flex-col">
             <input ref={linkRef} readOnly aria-label="Endereço público da página" className="input flex-1 min-w-0 font-mono text-[12.5px]" value={link} onFocus={(e) => e.currentTarget.select()} />
             <button type="button" className="btn-primary !w-auto shrink-0 max-md:!w-full" onClick={() => copiar(link, setCopiadoLink)}>{copiadoLink ? "Copiado" : "Copiar"}</button>
           </div>
-          <a href={link} target="_blank" rel="noopener noreferrer" className="inline-block mt-3 text-accent-ink font-semibold hover:underline">Abrir em uma nova aba</a>
+          <div className="flex items-center gap-4 mt-3">
+            <a href={link} target="_blank" rel="noopener noreferrer" className="text-accent-ink font-semibold hover:underline">Abrir em uma nova aba</a>
+            <button type="button" className="btn-link text-[13.5px]" onClick={baixarHtml}>Baixar o arquivo</button>
+          </div>
+        </div>
+      )}
+
+      {falhaCopia && (
+        <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[380px] max-w-[calc(100vw-32px)] max-md:left-0 max-md:w-auto">
+          <Aviso tom="danger">O navegador não deixou copiar. Use &ldquo;Baixar HTML&rdquo; no menu ou copie de &ldquo;Ver o código&rdquo;, logo abaixo da prévia.</Aviso>
         </div>
       )}
     </div>

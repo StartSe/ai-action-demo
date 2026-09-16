@@ -1,6 +1,7 @@
 // Aplica uma instrução de mudança sobre a página salva e grava uma versão nova.
 // Corpo: { instrucao } ou { empresa } (o que a empresa faz, para o botão "Trocar os textos pelos da minha empresa"),
 // e opcionalmente { html } com o HTML que a tela está mostrando (quando difere da última versão salva).
+import { respostaErro } from "@/lib/ai";
 import { ErroDePedido, PaginaNaoEncontrada, editarPagina, instrucaoTrocarTextos, normalizarInstrucao } from "@/lib/gerador";
 
 export const dynamic = "force-dynamic";
@@ -20,8 +21,6 @@ export async function POST(req: Request, { params }: RouteContext<"/api/pagina/[
   } catch (err) {
     if (err instanceof PaginaNaoEncontrada) return Response.json({ error: err.message }, { status: 404 });
     if (err instanceof ErroDePedido) return Response.json({ error: err.message }, { status: 400 });
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível aplicar a mudança agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return respostaErro(err);
   }
 }

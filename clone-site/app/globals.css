@@ -1,21 +1,37 @@
 @import "tailwindcss";
 
-/* Tokens da suíte "IA para Executivos". Cada app troca só as três cores de acento. */
+/* Tokens da suíte "IA para Executivos". Cada app troca só as quatro cores de acento (--color-accent,
+   --color-accent-2, --color-accent-soft, --color-accent-ink), sempre lidas de
+   tasks/paleta-segmentos.json (ver scripts/verificar-paleta.mjs). O resto (fundo, superfícies, texto,
+   linha, raios, sombra) é igual nos dezessete apps. */
 @theme {
-  --color-accent: #374151;
-  --color-accent-soft: #e8eaee;
-  --color-accent-ink: #1f2937;
-  --color-bg: #f4f5f7;
+  --color-accent: #792a3f;
+  --color-accent-2: #bc342f;
+  --color-accent-soft: #f7e8ec;
+  --color-accent-ink: #511525;
+  --color-bg: #f7f7fb;
   --color-surface: #ffffff;
-  --color-ink: #171a21;
-  --color-muted: #667085;
-  --color-line: #e3e6ec;
+  --color-surface-2: #fbfaff;
+  --color-ink: #151530;
+  --color-ink-2: #6b7280;
+  --color-muted: #6b7280;
+  --color-line: #ececf5;
   --color-ok: #1d7a4f;
   --color-warn: #b7791f;
   --color-danger: #b42318;
   --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
-  --shadow-card: 0 1px 2px rgba(23, 26, 33, 0.04), 0 8px 24px -12px rgba(23, 26, 33, 0.12);
-  --radius-card: 12px;
+  --shadow-card: 0 1px 2px rgba(20, 20, 50, 0.04), 0 8px 24px rgba(20, 20, 50, 0.05);
+  --radius-card: 18px;
+  --radius-field: 12px;
+  --radius-chip: 999px;
+}
+
+/* Gradiente do botão primário e dos ícones circulares: extremidade clara (--color-accent-2) mede
+   contraste 3,59:1 contra branco (abaixo de 4,5:1, acima do mínimo 3:1 de componente de UI/texto
+   grande) — ver nota de contraste no CLAUDE.md antes de usar texto branco solto sobre --color-accent-2
+   puro fora de um botão preenchido. */
+:root {
+  --gradiente-acento: linear-gradient(135deg, var(--color-accent), var(--color-accent-2));
 }
 
 html { -webkit-text-size-adjust: 100%; overflow-x: clip; }
@@ -23,10 +39,11 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
 
 @layer components {
   .card { @apply bg-surface border border-line rounded-card shadow-card; }
-  .input { @apply w-full px-[13px] py-[11px] border border-line rounded-[10px] bg-white text-ink outline-none transition-[border-color,box-shadow] focus:border-accent focus:ring-[3px] focus:ring-accent-soft disabled:opacity-60; }
-  .btn { @apply inline-flex items-center justify-center gap-2 px-[18px] py-3 rounded-[10px] border border-transparent font-bold text-[15px] cursor-pointer transition-colors active:translate-y-px focus-visible:outline-[3px] focus-visible:outline-accent-soft disabled:opacity-60 disabled:cursor-wait; }
-  .btn-primary { @apply inline-flex items-center justify-center gap-2 px-[18px] py-3 rounded-[10px] border border-transparent font-bold text-[15px] cursor-pointer transition-colors active:translate-y-px focus-visible:outline-[3px] focus-visible:outline-accent-soft disabled:opacity-60 disabled:cursor-wait whitespace-nowrap bg-accent text-white hover:bg-accent-ink w-full; }
-  .btn-ghost { @apply inline-flex items-center justify-center gap-2 px-[18px] py-3 rounded-[10px] border font-bold text-[15px] cursor-pointer transition-colors active:translate-y-px focus-visible:outline-[3px] focus-visible:outline-accent-soft disabled:opacity-60 disabled:cursor-wait whitespace-nowrap bg-surface border-line text-ink hover:bg-bg; }
+  .input { @apply w-full px-[13px] py-[11px] border border-line rounded-field bg-white text-ink outline-none transition-[border-color,box-shadow] focus:border-accent focus:ring-[3px] focus:ring-accent-soft disabled:opacity-60; }
+  .btn { @apply inline-flex items-center justify-center gap-2 px-[18px] py-3 rounded-field border border-transparent font-bold text-[15px] cursor-pointer transition-colors active:translate-y-px focus-visible:outline-[3px] focus-visible:outline-accent-soft disabled:opacity-60 disabled:cursor-wait; }
+  .btn-primary { @apply inline-flex items-center justify-center gap-2 px-[18px] h-12 rounded-field border border-transparent font-semibold text-[15px] cursor-pointer transition-[filter] active:translate-y-px focus-visible:outline-[3px] focus-visible:outline-accent-soft disabled:opacity-60 disabled:cursor-wait whitespace-nowrap text-white w-full bg-[image:var(--gradiente-acento)] hover:brightness-95; }
+  .btn-secundario { @apply inline-flex items-center justify-center gap-2 px-[18px] h-12 rounded-field border border-line font-semibold text-[15px] cursor-pointer transition-colors active:translate-y-px focus-visible:outline-[3px] focus-visible:outline-accent-soft disabled:opacity-60 disabled:cursor-wait whitespace-nowrap bg-surface text-ink hover:bg-bg w-full; }
+  .btn-ghost { @apply inline-flex items-center justify-center gap-2 px-[18px] py-3 rounded-field border font-bold text-[15px] cursor-pointer transition-colors active:translate-y-px focus-visible:outline-[3px] focus-visible:outline-accent-soft disabled:opacity-60 disabled:cursor-wait whitespace-nowrap bg-surface border-line text-ink hover:bg-bg; }
   .btn-link { @apply text-accent font-semibold cursor-pointer bg-transparent border-0 p-0 hover:underline; }
   .chip { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold; }
   .chip-alta, .chip-negativo { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-[#fde8e6] text-danger; }
@@ -34,9 +51,29 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   .chip-baixa, .chip-positivo { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-[#e4f4ec] text-ok; }
   .chip-neutral { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-accent-soft text-accent-ink; }
   .chip-cinza { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-[#eef0f2] text-muted; }
+  /* Três variantes do chip de status do cabeçalho (referência visual de 15/09/2026): pendente e
+     demonstração usam a mesma cor (âmbar), diferindo só pelo ponto extra da segunda; conectado é
+     verde. Contraste de texto conferido: pendente/demonstração 6,67:1, conectado 4,67:1 (ambos AA). */
+  .chip-status { @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-chip text-[13px] font-semibold whitespace-nowrap; }
+  .chip-status-pendente { @apply bg-[#fff4e0] text-[#7a4d00]; }
+  .chip-status-conectado { @apply bg-[#e4f4ec] text-ok; }
+  .chip-status-demonstracao { @apply bg-[#fff4e0] text-[#7a4d00]; }
+  .chip-status-demonstracao::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 999px; background: #b7791f; }
   .section-title { @apply text-[13px] font-bold text-accent mb-3 tracking-[0.01em]; }
   .summary { @apply text-[17px] max-md:text-[16px] leading-[1.5] font-medium tracking-[-0.01em] text-ink px-7 py-6 bg-surface rounded-card shadow-card mb-7; }
   .skeleton { @apply h-[14px] rounded-md bg-[linear-gradient(90deg,#e9ebf0_25%,#f4f5f7_50%,#e9ebf0_75%)] bg-[length:200%_100%] animate-[shimmer_1.4s_infinite]; }
+
+  /* Tipografia do desenho novo (referência de 15/09/2026). Corpo (15px) e apoio (13px) já são cobertos
+     por classes existentes (body e text-[13px]/text-muted, respectivamente); estas três são as que não
+     tinham classe própria ainda. */
+  .titulo-painel { @apply text-[28px] leading-[1.15] font-extrabold tracking-[-0.02em] text-ink md:text-[40px] md:leading-[44px]; }
+  .sobretitulo { @apply text-xs font-bold uppercase tracking-[0.08em] text-accent; }
+  .apoio { @apply text-[13px] text-ink-2; }
+
+  /* Mancha decorativa atrás da ilustração do segmento (ver lib/ilustracao.ts e components/ui.tsx,
+     IlustracaoSegmento): o blob deixou de fazer parte do PNG (era lilás, fixo) e virou CSS no acento de
+     cada app. Aplicar num contêiner com `position: relative`, como irmão anterior da ilustração. */
+  .blob-acento { @apply absolute -z-10 bg-accent-soft; inset: -10%; border-radius: 42% 58% 61% 39% / 46% 44% 56% 54%; }
 }
 
 @keyframes shimmer { to { background-position: -200% 0; } }
@@ -54,4 +91,10 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   .print-sheet .card,
   .print-sheet .summary { box-shadow: none; break-inside: avoid; }
   .print-sheet .chip-neutral { background: none; border: 1px solid currentColor; }
+}
+/* Específico deste app */
+/* A captura é o primeiro campo da tela e a zona de arraste padrão (py-9) empurra "Gerar a página" para
+   baixo da dobra em 1400x900; aqui ela fica um pouco mais baixa, sem mexer em components/ui.tsx. */
+.dropzone-baixa > label {
+  @apply py-6;
 }

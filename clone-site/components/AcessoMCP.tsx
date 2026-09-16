@@ -2,7 +2,7 @@
 // Cartão adicional do /setup: gera o código de acesso para um assistente de IA (Claude, ChatGPT
 // etc.) usar este app diretamente, via app/mcp/route.ts.
 import { useEffect, useState } from "react";
-import { CopyButton } from "./ui";
+import { Aviso, CopyButton, lerErro } from "./ui";
 
 type Status = { ativo: boolean; mascarado: string | null };
 
@@ -12,6 +12,7 @@ export function AcessoMCP() {
   const [gerando, setGerando] = useState(false);
   const [revogando, setRevogando] = useState(false);
   const [endereco, setEndereco] = useState("/mcp");
+  const [erro, setErro] = useState("");
 
   useEffect(() => {
     fetch("/api/mcp/token")
@@ -25,11 +26,19 @@ export function AcessoMCP() {
 
   async function gerar() {
     setGerando(true);
+    setErro("");
     try {
       const r = await fetch("/api/mcp/token", { method: "POST" });
+      // Sem conferir r.ok, uma sessão expirada deixava o cartão em silêncio e sem código nenhum.
+      if (!r.ok) {
+        setErro((await lerErro(r)).mensagem);
+        return;
+      }
       const d = await r.json();
       setCodigoNovo(d.codigo);
       setStatus({ ativo: true, mascarado: null });
+    } catch (e) {
+      setErro((await lerErro(e)).mensagem);
     } finally {
       setGerando(false);
     }
@@ -37,10 +46,17 @@ export function AcessoMCP() {
 
   async function revogar() {
     setRevogando(true);
+    setErro("");
     try {
-      await fetch("/api/mcp/token", { method: "DELETE" });
+      const r = await fetch("/api/mcp/token", { method: "DELETE" });
+      if (!r.ok) {
+        setErro((await lerErro(r)).mensagem);
+        return;
+      }
       setCodigoNovo(null);
       setStatus({ ativo: false, mascarado: null });
+    } catch (e) {
+      setErro((await lerErro(e)).mensagem);
     } finally {
       setRevogando(false);
     }
@@ -56,7 +72,15 @@ export function AcessoMCP() {
 
   return (
     <section className="card p-6 max-md:p-5">
-      <h2 className="text-lg font-bold mb-1">Usar dentro do seu assistente</h2>
+      <details className="group">
+        <summary className="cursor-pointer select-none marker:content-none flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold mb-1">Usar dentro do seu assistente</h2>
+            <p className="text-muted text-sm">Para quem usa Claude ou ChatGPT</p>
+          </div>
+          <span className="text-muted transition-transform group-open:rotate-90 mt-1">›</span>
+        </summary>
+        <div className="mt-4">
       <p className="text-muted text-sm mb-4 max-w-[640px]">
         Gere um código de acesso para que um assistente de IA (Claude, ChatGPT e outros) gere páginas a partir de uma captura diretamente pela conversa, sem precisar abrir o navegador.
       </p>
@@ -89,6 +113,7 @@ export function AcessoMCP() {
           )}
         </div>
         {codigoNovo && <p className="text-[12.5px] text-muted">Guarde este código agora: por segurança, ele não aparece de novo depois desta tela.</p>}
+        {erro && <Aviso tom="danger">{erro}</Aviso>}
       </div>
 
       <div className="grid grid-cols-2 gap-6 max-md:grid-cols-1 mt-6">
@@ -123,6 +148,8 @@ export function AcessoMCP() {
           <p className="text-[12.5px] text-muted">Gere um acesso acima para liberar a configuração pronta, já com o código incluído.</p>
         )}
       </div>
+        </div>
+      </details>
     </section>
   );
 }

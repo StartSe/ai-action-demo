@@ -3,14 +3,14 @@
 // textos pelos da minha empresa" (uma edição por instrução pré-montada no servidor) e a lista "Versões" com
 // "Voltar para esta". Toda mudança vira uma versão nova gravada no histórico; a prévia mostra sempre a última.
 import { useState, type FormEvent } from "react";
-import { Field } from "./ui";
+import { Aviso, Field } from "./ui";
 import { data } from "@/lib/formato";
 import type { Meta } from "@/lib/ai";
 import type { Pagina, Versao } from "@/lib/types";
 
 type Ocupado = null | "aplicar" | "trocar" | number;
 
-export function EditorPagina({ pagina, onAtualizada }: { pagina: Pagina; onAtualizada: (pagina: Pagina, meta?: Meta) => void }) {
+export function EditorPagina({ pagina, demo = false, onAtualizada }: { pagina: Pagina; demo?: boolean; onAtualizada: (pagina: Pagina, meta?: Meta) => void }) {
   const [instrucao, setInstrucao] = useState("");
   const [trocarAberto, setTrocarAberto] = useState(false);
   const [empresa, setEmpresa] = useState("");
@@ -59,6 +59,14 @@ export function EditorPagina({ pagina, onAtualizada }: { pagina: Pagina; onAtual
 
   return (
     <section className="mt-6 flex flex-col gap-5" aria-label="Editar a página">
+      {/* Em demonstração a mudança é fixa (lib/demo.ts), não vem da instrução: dizer isso antes do clique
+          evita a pessoa concluir que a IA ignorou o que ela escreveu. */}
+      {demo && (
+        <Aviso>
+          Sem a inteligência artificial conectada, a mudança aplicada é só ilustrativa: ela mostra como funcionam as versões, mas não segue o que você escrever.{" "}
+          <a className="btn-link text-[13px]" href="/setup#openrouter">Conectar a inteligência artificial</a>
+        </Aviso>
+      )}
       <form onSubmit={aplicar} className="bg-surface border border-line rounded-card p-4">
         <Field label="O que mudar" htmlFor="instrucao-edicao" hint="Descreva a mudança em português. A página inteira é reescrita mantendo o que você não citou.">
           <textarea

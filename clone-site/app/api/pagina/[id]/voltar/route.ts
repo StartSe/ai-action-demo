@@ -13,6 +13,6 @@ export async function POST(req: Request, { params }: RouteContext<"/api/pagina/[
     if (err instanceof PaginaNaoEncontrada) return Response.json({ error: err.message }, { status: 404 });
     if (err instanceof ErroDePedido) return Response.json({ error: err.message }, { status: 400 });
     console.error(err);
-    return Response.json({ error: "Não foi possível voltar para essa versão agora." }, { status: 500 });
+    return Response.json({ error: "Não foi possível voltar para essa versão agora. Tente de novo." }, { status: 500 });
   }
 }

@@ -1,5 +1,6 @@
 // Gera a página a partir da captura (POST), lista as últimas páginas salvas (GET) e apaga o histórico (DELETE).
 // A lógica de geração vive em lib/gerador.ts, compartilhada com a ferramenta MCP (lib/ferramentas.ts).
+import { respostaErro } from "@/lib/ai";
 import { gerarPagina, normalizarMarca, normalizarStack, validarImagem } from "@/lib/gerador";
 import { apagarTodos, listar } from "@/lib/historico";
 import type { Pedido } from "@/lib/types";
@@ -22,9 +23,7 @@ export async function POST(req: Request) {
     const { pagina, meta, id, demo } = await gerarPagina(pedido);
     return Response.json({ pagina, meta, id, demo });
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível gerar a página agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return respostaErro(err);
   }
 }
 

@@ -1,7 +1,8 @@
 "use client";
 // Prévia da página gerada: iframe isolado (sandbox só com scripts, origem opaca — o HTML gerado não enxerga
-// este app, nem cookies, nem o armazenamento local), alternância entre computador e celular (390 px),
-// o código-fonte em <details> com botão de copiar e o aviso sobre conteúdo de terceiros.
+// este app, nem cookies, nem o armazenamento local), alternância entre computador e celular (390 px, oculta
+// no celular, onde não faz sentido), a miniatura da referência ao lado, o código-fonte em <details> com
+// botão de copiar e o aviso sobre conteúdo de terceiros.
 import { useState } from "react";
 import { CopyButton } from "./ui";
 
@@ -9,7 +10,7 @@ type Modo = "computador" | "celular";
 
 export const LARGURA_CELULAR = 390;
 
-export function PreviaPagina({ html, titulo, alturaComputador = 680, alturaCelular = 760 }: { html: string; titulo: string; alturaComputador?: number; alturaCelular?: number }) {
+export function PreviaPagina({ html, titulo, referencia, alturaComputador = 680, alturaCelular = 760 }: { html: string; titulo: string; referencia?: string; alturaComputador?: number; alturaCelular?: number }) {
   const [modo, setModo] = useState<Modo>("computador");
   const celular = modo === "celular";
   const botao = (valor: Modo, rotulo: string) => (
@@ -26,12 +27,23 @@ export function PreviaPagina({ html, titulo, alturaComputador = 680, alturaCelul
 
   return (
     <div>
-      <div className="no-print flex items-center justify-between gap-3 mb-3 max-md:flex-wrap">
-        <div role="radiogroup" aria-label="Tamanho da prévia" className="inline-flex gap-1 p-1 border border-line rounded-[10px] bg-surface">
+      <div className="no-print flex items-end justify-between gap-3 mb-3">
+        {/* O alternador não aparece no celular: lá a prévia já ocupa a largura do aparelho. */}
+        <div role="radiogroup" aria-label="Tamanho da prévia" className="max-md:hidden inline-flex gap-1 p-1 border border-line rounded-[10px] bg-surface">
           {botao("computador", "Computador")}
           {botao("celular", "Celular")}
         </div>
-        <span className="text-muted text-[12.5px]">{celular ? `Largura de ${LARGURA_CELULAR} px` : "Largura da tela"}</span>
+        {referencia && (
+          <figure className="m-0 shrink-0 max-md:ml-auto">
+            <div
+              role="img"
+              aria-label="Captura da página de referência"
+              className="w-[88px] h-[58px] rounded-[7px] border border-line bg-white bg-top bg-cover"
+              style={{ backgroundImage: `url("${referencia}")` }}
+            />
+            <figcaption className="text-muted text-[11.5px] text-center mt-1">Referência</figcaption>
+          </figure>
+        )}
       </div>
 
       <div className={`bg-bg border border-line rounded-card p-3 ${celular ? "flex justify-center" : ""}`}>

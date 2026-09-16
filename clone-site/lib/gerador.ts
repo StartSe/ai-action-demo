@@ -3,12 +3,14 @@
 // Os prompts de sistema (geração e atualização) são portados e traduzidos do projeto aberto screenshot-to-code
 // (abi/screenshot-to-code), adaptados para um único arquivo HTML em português e com as imagens de terceiros
 // substituídas por blocos na cor da marca.
-import { aiEnabled, askText, askVision, meta, visionEnabled, visionModelName, type Meta } from "./ai";
+import { aiEnabled, askText, askVision, ErroIA, meta, visionEnabled, visionModelName, type Meta } from "./ai";
+import { LIMITE_IMAGEM_BYTES } from "./captura";
 import { edicaoDemo, esperar, paginaDemo } from "./demo";
 import { atualizarSaida, obter, salvar } from "./historico";
 import type { EntradaPagina, Marca, Pagina, Pedido, Stack, Versao } from "./types";
 
-export const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024; // 5 MB
+// O limite mora em lib/captura.ts (dono das entradas por endereço), reexportado aqui por conveniência.
+export { LIMITE_IMAGEM_BYTES };
 export const STACKS: { valor: Stack; rotulo: string }[] = [
   { valor: "html-tailwind", rotulo: "HTML com Tailwind" },
   { valor: "html-css", rotulo: "HTML com CSS" },
@@ -55,17 +57,22 @@ export function montarPrompt(pedido: Pick<Pedido, "instrucoes" | "marca" | "stac
   return linhas.join("\n\n");
 }
 
+/** Todo erro deste app que se resolve trocando o modelo que lê a captura aponta para o cartão próprio de /setup. */
+export const ACAO_ESCOLHER_MODELO = { rotulo: "Escolher o modelo", url: "/setup#qualidade-da-pagina" };
+
 /** Recorta a resposta da IA para o trecho <html>...</html> e garante que abre e fecha. */
 export function extrairHtml(texto: string): string {
   const t = String(texto).replace(/```(?:html)?/gi, "").trim();
   const inicio = t.search(/<html[\s>]/i);
   const fimIdx = t.toLowerCase().lastIndexOf("</html>");
   if (inicio < 0 || fimIdx < 0 || fimIdx < inicio) {
-    throw new Error("A IA não devolveu uma página completa. Tente de novo ou envie uma captura mais nítida.");
+    // Quase sempre a resposta foi cortada por chegar ao limite de tamanho do modelo: a referência tem mais
+    // conteúdo do que cabe em uma resposta só. Nitidez da captura não tem nada a ver com esse caso.
+    throw new ErroIA("resposta_invalida", "A página veio pela metade: essa referência tem mais conteúdo do que cabe em uma resposta. Envie a captura de um trecho menor ou escolha um modelo mais forte.", 502, ACAO_ESCOLHER_MODELO);
   }
   const html = t.slice(inicio, fimIdx + "</html>".length);
   if (!/<body[\s>]/i.test(html) || !/<\/body>/i.test(html)) {
-    throw new Error("A IA devolveu uma página sem corpo. Tente de novo.");
+    throw new ErroIA("resposta_invalida", "A página veio incompleta desta vez. Tente de novo; se repetir, escolha outro modelo.", 502, ACAO_ESCOLHER_MODELO);
   }
   return `<!DOCTYPE html>\n${html}`;
 }
@@ -147,7 +154,24 @@ function salvarPagina(pedido: Pedido, tamanhoImagem: number, html: string, metaG
   return pagina;
 }
 
-export const INSUMO = "uma captura da página de referência";
+// Sem artigo inicial: o texto de `Origem` (components/ui.tsx) é "a partir de ${insumo}".
+export const INSUMO = "captura de referência e cores da marca";
+
+/**
+ * Toda leitura de imagem deste app passa por aqui: `askVision` avisa genericamente que "o modelo
+ * configurado não lê imagens", e neste app isso é *a* falha a explicar — o app inteiro depende de visão.
+ * A frase é trocada por uma que diz o que fazer, com o botão para o cartão certo de Configurações.
+ */
+export async function lerCaptura(opcoes: { system: string; prompt: string; imagem: string; maxTokens?: number }): Promise<string> {
+  try {
+    return await askVision({ ...opcoes, temperature: 0.2 });
+  } catch (err) {
+    if (err instanceof ErroIA && err.codigo === "sem_visao") {
+      throw new ErroIA("sem_visao", "O modelo escolhido não lê imagens: escolha um modelo com visão em Configurações.", 400, ACAO_ESCOLHER_MODELO);
+    }
+    throw err;
+  }
+}
 
 /** Gera a página a partir do pedido (captura + formato + marca + instruções), salva e devolve com a proveniência. */
 export async function gerarPagina(pedido: Pedido): Promise<{ demo: boolean; pagina: Pagina; meta: Meta; id: string }> {
@@ -162,12 +186,11 @@ export async function gerarPagina(pedido: Pedido): Promise<{ demo: boolean; pagi
     return { demo: true, pagina, meta: metaGerada, id: pagina.id };
   }
 
-  const resposta = await askVision({
+  const resposta = await lerCaptura({
     system: pedido.stack === "html-css" ? SYSTEM_CSS : SYSTEM_TAILWIND,
     prompt: montarPrompt(pedido),
     imagem: pedido.imagem,
     maxTokens: 12000,
-    temperature: 0.2,
   });
   const html = sanitizarHtml(extrairHtml(resposta), pedido.stack);
   const metaGerada: Meta = { ...meta({ demo: false, insumo: INSUMO }), model: visionModelName() };
@@ -180,7 +203,7 @@ export async function gerarPagina(pedido: Pedido): Promise<{ demo: boolean; pagi
 // ---------------------------------------------------------------------------------------------------------
 
 export const LIMITE_INSTRUCAO = 4000;
-export const INSUMO_EDICAO = "a versão anterior da página e a instrução de mudança";
+export const INSUMO_EDICAO = "versão anterior da página e instrução de mudança";
 
 const REGRAS_EDICAO = `- Aplique SOMENTE o que foi pedido. Tudo o que não foi citado (estrutura, classes, textos, cores, ordem das seções, fontes) deve continuar exatamente como está.
 - Devolva o arquivo INTEIRO atualizado, começando em <html> e terminando em </html>, sem markdown, sem \`\`\` e sem explicações antes ou depois. Nunca devolva só o trecho alterado nem escreva comentários como "<!-- resto igual -->".
