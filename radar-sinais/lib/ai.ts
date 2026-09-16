@@ -71,7 +71,7 @@ export function interpretarFalha(res: Response, detalheBruto: string): ErroIA {
         429
       );
     }
-    return new ErroIA("fila_cheia", "O modelo gratuito está com fila cheia agora. Tente de novo em alguns segundos ou escolha outro modelo em /setup.", 429);
+    return new ErroIA("fila_cheia", "O modelo gratuito está com fila cheia agora. Tente de novo em alguns segundos ou troque de modelo em Configurações.", 429);
   }
   if (res.status === 404 || /No endpoints found|not a valid model/i.test(detalheBruto)) {
     return new ErroIA("modelo_indisponivel", "O modelo escolhido não está disponível agora. Escolha outro em Configurações.", 404, ACAO_TROCAR_MODELO);

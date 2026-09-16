@@ -1,3 +1,4 @@
+import { respostaErro } from "@/lib/ai";
 import { apagarTodos, listar } from "@/lib/historico";
 import { buscarLeads, ErroDePedido, validarPerfil } from "@/lib/leads";
 import { ErroProspectHalo } from "@/lib/prospecthalo";
@@ -6,7 +7,8 @@ import { getConfig, setConfig } from "@/lib/store";
 /**
  * Busca os leads do perfil informado e cria a campanha em rascunho. Devolve { campanha, meta, id }.
  * `exemplo: true` no corpo força a lista fictícia mesmo com o Prospect Halo conectado (botão "Ver com dados de exemplo").
- * Falha do Prospect Halo responde 502 com { error, exemploDisponivel: true }.
+ * Falha do Prospect Halo responde com o status da situação (400 sem conexão, 401 autorização vencida, 404 sem
+ * leads, 502/503/504 serviço) e { error, acao, exemploDisponivel: true }; o resto passa por respostaErro.
  */
 export async function POST(req: Request) {
   const corpo = await req.json().catch(() => ({}));
@@ -24,11 +26,9 @@ export async function POST(req: Request) {
     const { campanha, meta } = await buscarLeads(perfil, { exemplo });
     return Response.json({ campanha, meta, id: campanha.id });
   } catch (err) {
-    console.error(err);
     if (err instanceof ErroDePedido) return Response.json({ error: err.message }, { status: 400 });
-    if (err instanceof ErroProspectHalo) return Response.json({ error: err.message, exemploDisponivel: true }, { status: 502 });
-    const mensagem = err instanceof Error ? err.message : "Não foi possível buscar os leads agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    if (err instanceof ErroProspectHalo) return Response.json({ error: err.message, acao: err.acao, exemploDisponivel: true }, { status: err.status });
+    return respostaErro(err);
   }
 }
 

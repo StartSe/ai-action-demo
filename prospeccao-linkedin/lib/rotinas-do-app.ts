@@ -1,17 +1,36 @@
 // Tipos de rotina deste app: cada um sabe gerar o resultado entregue por notificação (lib/rotinas.ts).
 // Ao contrário de lib/rotinas.ts, este arquivo NÃO é copiado sem alterar entre apps — cada app registra
 // aqui o que faz sentido rodar sozinho.
+import { ErroIA } from "./ai";
 import { listar as listarHistorico } from "./historico";
 import { completarRemetente, ErroDePedido, salvarCampanha, salvarNovaCampanha, TIPO_HISTORICO, validarPerfil } from "./leads";
 import { buscarLeadsNovos } from "./leads-vistos";
-import { registrarExecutor, type Rotina } from "./rotinas";
+import { registrarExecutor, type Rotina, type TipoRotina } from "./rotinas";
 import { escreverSequencia, MAXIMO_POR_CHAMADA } from "./sequencias";
-import { LEADS_POR_SEMANA, type Perfil, type Sequencia } from "./types";
+import { LEADS_POR_SEMANA, type Lead, type Perfil, type Sequencia } from "./types";
 import { separar } from "./demo";
 
-/** Tipos de rotina disponíveis neste app, para o cartão de /setup listar num seletor. */
-export const TIPOS_ROTINA: { tipo: string; rotulo: string }[] = [
-  { tipo: "leads-semanais", rotulo: "Leads novos toda semana" },
+const SEM_PERFIL = "Esta rotina precisa do perfil de cliente ideal: crie-a pelo botão 'Receber leads novos toda semana', na tela de resultado de uma busca de leads.";
+
+/** Lê o perfil guardado em `parametros`; devolve a mensagem do que falta em vez do perfil quando ele não está lá. */
+function perfilDaRotina(parametros: unknown): Perfil | string {
+  const bruto = (parametros && typeof parametros === "object" ? parametros : {}) as Record<string, unknown>;
+  try {
+    return completarRemetente(validarPerfil(bruto));
+  } catch (err) {
+    if (err instanceof ErroDePedido) return SEM_PERFIL;
+    throw err;
+  }
+}
+
+/** Tipos de rotina disponíveis neste app, para o cartão de /setup listar num seletor. O `validar` de "Leads
+ * novos toda semana" recusa criar a rotina sem o perfil (o formulário genérico de /setup não sabe pedi-lo). */
+export const TIPOS_ROTINA: TipoRotina[] = [
+  {
+    tipo: "leads-semanais",
+    rotulo: "Leads novos toda semana",
+    validar: (parametros) => (typeof perfilDaRotina(parametros) === "string" ? SEM_PERFIL : undefined),
+  },
   { tipo: "resumo-prospeccao-linkedin", rotulo: "Resumo das prospecções geradas" },
 ];
 
@@ -25,16 +44,12 @@ function tituloLeadsNovos(perfil: Pick<Perfil, "cargos" | "setores">) {
  * Leads novos toda semana: busca pelo perfil salvo em `parametros` (botão "Receber leads novos toda semana" no resultado),
  * exclui quem já foi entregue para esse perfil (lib/leads-vistos.ts), escreve a sequência de cada lead e entrega a lista
  * com o link do resultado. Nunca envia mensagem nenhuma: a pessoa revisa e copia (ou aprova o envio) pelo link.
+ * Uma falha da IA num lead não derruba a rotina: a campanha sai com as sequências que deram certo e o aviso diz quantas faltaram.
  */
 registrarExecutor("leads-semanais", async (rotina: Rotina) => {
+  const perfil = perfilDaRotina(rotina.parametros);
+  if (typeof perfil === "string") return { titulo: "Leads novos toda semana", texto: perfil };
   const bruto = (rotina.parametros && typeof rotina.parametros === "object" ? rotina.parametros : {}) as Record<string, unknown>;
-  let perfil: Perfil;
-  try {
-    perfil = completarRemetente(validarPerfil(bruto));
-  } catch (err) {
-    if (!(err instanceof ErroDePedido)) throw err;
-    return { titulo: "Leads novos toda semana", texto: "Esta rotina precisa do perfil de cliente ideal: crie-a pelo botão 'Receber leads novos toda semana', na tela de resultado de uma busca de leads." };
-  }
   const titulo = tituloLeadsNovos(perfil);
   const pedida = Number(bruto.quantidade);
   const quantidade = Number.isInteger(pedida) && pedida > 0 ? Math.min(pedida, MAXIMO_POR_CHAMADA) : LEADS_POR_SEMANA;
@@ -45,15 +60,29 @@ registrarExecutor("leads-semanais", async (rotina: Rotina) => {
   }
 
   const { campanha } = salvarNovaCampanha(perfil, leads, titulo);
-  // Uma sequência por lead, uma chamada por vez (mesmo espírito de escreverParaCampanha: não sobrecarregar a IA).
+  // Uma sequência por lead, uma chamada por vez (não sobrecarregar a IA); quem falhar fica registrado e a rotina segue.
   const sequencias: Sequencia[] = [];
-  for (const lead of leads) sequencias.push((await escreverSequencia(lead, perfil)).sequencia);
+  const semMensagem: Lead[] = [];
+  let motivoFalha: string | undefined;
+  for (const lead of leads) {
+    try {
+      sequencias.push((await escreverSequencia(lead, perfil)).sequencia);
+    } catch (err) {
+      semMensagem.push(lead);
+      motivoFalha = motivoFalha ?? (err instanceof ErroIA ? err.message : undefined);
+      console.error("Rotina leads-semanais: falha ao escrever para", lead.nome, err);
+    }
+  }
+  if (sequencias.length === 0) {
+    throw new Error(motivoFalha ?? "A IA não conseguiu escrever nenhuma mensagem nesta execução. Tente de novo mais tarde ou confira a IA em Configurações.");
+  }
   salvarCampanha({ ...campanha, sequencias, estado: "pronta" });
 
   const demo = leads.some((l) => l.origem === "demo");
   const plural = leads.length > 1;
   const texto = [
     `${leads.length} lead${plural ? "s" : ""} novo${plural ? "s" : ""} para ${perfil.cargos} em ${perfil.setores}, com a sequência de mensagens pronta para cada um: ${leads.map((l) => l.nome).join(", ")}.`,
+    semMensagem.length > 0 ? `A IA não conseguiu escrever para ${semMensagem.map((l) => l.nome).join(", ")}${motivoFalha ? ` (${motivoFalha})` : ""}: abra o resultado e clique em Escrever de novo.` : "",
     demo ? "Os leads são fictícios: o Prospect Halo não está conectado, então a lista mostra o formato da entrega." : "",
     "Nada foi enviado: revise e copie as mensagens pelo link do resultado.",
   ].filter(Boolean).join(" ");

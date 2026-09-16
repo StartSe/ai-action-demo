@@ -87,3 +87,6 @@ export const LEADS_POR_SEMANA = 10;
 export const PONTUACAO_FORTE = 80;
 /** Limite de caracteres do pedido de conexão no LinkedIn. */
 export const LIMITE_CONEXAO = 300;
+
+/** Um lead cuja sequência não pôde ser escrita nesta rodada (a IA falhou só para ele); a tela oferece "Escrever de novo". */
+export type FalhaSequencia = { leadId: string; nome: string; mensagem: string };

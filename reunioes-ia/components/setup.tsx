@@ -321,7 +321,12 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
                 <button type="button" className="btn-secundario !w-auto max-md:!w-full" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>
               </>
             ) : (
-              <a href={i.oauth.url} className="btn-primary !w-auto max-md:!w-full">{i.oauth.rotulo}</a>
+              // Quem ainda não tem conta no serviço precisa criá-la ANTES de autorizar: o link fica
+              // visível ao lado do botão, não dentro de "Opções avançadas" (onde ele também aparece).
+              <>
+                {i.link && <a className="btn-link text-sm max-md:self-start" href={i.link.url} target="_blank" rel="noreferrer">{i.link.rotulo}</a>}
+                <a href={i.oauth.url} className="btn-primary !w-auto max-md:!w-full">{i.oauth.rotulo}</a>
+              </>
             )}
           </div>
           {!i.configurada && i.notaConexao && <p className="text-[12.5px] text-muted -mt-2 mb-4">{i.notaConexao}</p>}

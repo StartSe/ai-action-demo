@@ -2,19 +2,35 @@
 // busca leads no LinkedIn do usuário, cria a campanha de envio e consulta o andamento. Os nomes
 // reais das ferramentas do lado de lá não são conhecidos de antemão: são listados em tempo de
 // execução e escolhidos por palavras-chave no nome/descrição (mesmo método de
-// prospeccao-ia/lib/crm-mcp.ts), com um mapeamento manual opcional no campo avançado
-// PROSPECTHALO_FERRAMENTAS para corrigir uma escolha errada.
+// prospeccao-ia/lib/crm-mcp.ts); as três listas em "Opções avançadas" do cartão (uma por operação,
+// lib/integracoes.ts) permitem corrigir uma escolha errada sem editar JSON.
 import { separar } from "./demo";
-import { CAMPO_FERRAMENTAS, mapeamentoManual, PREFIXO_PROSPECTHALO, PROSPECTHALO } from "./integracoes";
+import { mapeamentoManual, PREFIXO_PROSPECTHALO, PROSPECTHALO, type OperacaoProspectHalo } from "./integracoes";
 import { chamar, conectar, listarFerramentas, type ConexaoMCP, type FerramentaMCP } from "./mcp-cliente";
 import { conexaoAutorizada } from "./mcp-oauth";
 import { integracaoConfigurada, lerConfig } from "./setup-comum";
 import { SINAIS_INTENCAO, type Campanha, type Lead, type Perfil, type Sequencia } from "./types";
 
-/** Falha ao falar com o Prospect Halo (conexão, ferramenta não reconhecida, resposta em formato desconhecido). As rotas respondem 502. */
-export class ErroProspectHalo extends Error {}
+export type { OperacaoProspectHalo };
 
-export type OperacaoProspectHalo = "buscar" | "campanha" | "estado";
+/** Ação padrão das falhas que a pessoa resolve no cartão do Prospect Halo em /setup. */
+export const ACAO_PROSPECTHALO = { rotulo: "Abrir o Prospect Halo em Configurações", url: "/setup#prospecthalo" };
+
+/**
+ * Falha ao falar com o Prospect Halo. `status` diz de quem é a vez: 400 (falta conectar ou escolher a
+ * ferramenta), 401 (autorização vencida ou revogada), 404 (nenhum lead), 502/503/504 (serviço remoto).
+ * As rotas respondem com esse status e { error, acao }, nunca com o corpo cru do serviço.
+ */
+export class ErroProspectHalo extends Error {
+  status: number;
+  acao?: { rotulo: string; url: string };
+  constructor(mensagem: string, opcoes: { status?: number; acao?: { rotulo: string; url: string } } = {}) {
+    super(mensagem);
+    this.name = "ErroProspectHalo";
+    this.status = opcoes.status ?? 502;
+    this.acao = opcoes.acao;
+  }
+}
 
 /** Palavras procuradas no nome + descrição de cada ferramenta remota para identificar o papel dela. */
 export const PALAVRAS_CHAVE: Record<OperacaoProspectHalo, string[]> = {
@@ -28,6 +44,44 @@ const ROTULO_OPERACAO: Record<OperacaoProspectHalo, string> = {
   campanha: "criar a campanha",
   estado: "consultar o andamento",
 };
+
+/** Quanto esperar por uma resposta do Prospect Halo antes de avisar que ele demorou demais (o cliente MCP compartilhado não tem limite próprio). */
+export const TEMPO_LIMITE_MS = 45_000;
+
+async function comTempoLimite<T>(promessa: Promise<T>, op: OperacaoProspectHalo): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limite = new Promise<never>((_, rejeitar) => {
+    timer = setTimeout(() => rejeitar(new ErroProspectHalo(`O Prospect Halo demorou demais para ${ROTULO_OPERACAO[op]}. Tente de novo em um minuto.`, { status: 504 })), TEMPO_LIMITE_MS);
+  });
+  try {
+    return await Promise.race([promessa, limite]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Traduz a falha genérica do cliente MCP compartilhado (lib/mcp-cliente.ts, que fala de "serviço" e
+ * "código de acesso") para a situação do Prospect Halo, com o status e a ação certos. O cliente não
+ * expõe o status HTTP: uma resposta 401/403 chega como "não respondeu corretamente"/"formato esperado"
+ * (corpo fora do JSON-RPC), e um erro JSON-RPC (ferramenta recusou os argumentos) como "recusou a chamada".
+ */
+export function traduzirFalha(err: unknown, op: OperacaoProspectHalo): ErroProspectHalo {
+  if (err instanceof ErroProspectHalo) return err;
+  const mensagem = err instanceof Error ? err.message : "";
+  const rotulo = ROTULO_OPERACAO[op];
+  if (/Não foi possível falar com o serviço/.test(mensagem)) {
+    return new ErroProspectHalo("Não foi possível falar com o Prospect Halo agora. Confira a conexão do servidor e tente de novo em um minuto.", { status: 503 });
+  }
+  if (/não respondeu corretamente|formato esperado/.test(mensagem)) {
+    return new ErroProspectHalo("O Prospect Halo não aceitou a autorização deste app: ela pode ter expirado ou sido revogada. Autorize de novo em Configurações.", { status: 401, acao: ACAO_PROSPECTHALO });
+  }
+  if (/recusou a chamada/.test(mensagem)) {
+    return new ErroProspectHalo(`O Prospect Halo recusou o pedido para ${rotulo}. Tente de novo; se continuar, escolha a ferramenta certa em Opções avançadas do cartão Prospect Halo.`, { status: 502, acao: ACAO_PROSPECTHALO });
+  }
+  console.error(`Prospect Halo (${op}):`, err);
+  return new ErroProspectHalo(`O Prospect Halo não conseguiu ${rotulo} agora. Tente de novo em um minuto.`, { status: 502 });
+}
 
 /** Quantos leads pedir ao Prospect Halo por busca. */
 export const LIMITE_LEADS = 20;
@@ -43,7 +97,7 @@ async function conexaoAtual(): Promise<ConexaoMCP> {
   const config = lerConfig(PROSPECTHALO);
   const url = config[`${PREFIXO_PROSPECTHALO}_URL`];
   const codigo = config[`${PREFIXO_PROSPECTHALO}_CODIGO`];
-  if (!url || !codigo) throw new ErroProspectHalo("Conecte o Prospect Halo em /setup antes de buscar leads.");
+  if (!url || !codigo) throw new ErroProspectHalo("Conecte o Prospect Halo em Configurações para buscar no seu LinkedIn e enviar as mensagens aprovadas.", { status: 400, acao: ACAO_PROSPECTHALO });
   return conectar(url, codigo);
 }
 
@@ -53,16 +107,16 @@ function pontuar(f: FerramentaMCP, op: OperacaoProspectHalo): number {
 }
 
 /**
- * Escolhe, entre as ferramentas remotas, a que cumpre a operação: primeiro o mapeamento manual
- * (campo avançado), depois a que junta mais palavras-chave no nome/descrição. Exportada para testes
+ * Escolhe, entre as ferramentas remotas, a que cumpre a operação: primeiro a escolha manual (lista em
+ * "Opções avançadas"), depois a que junta mais palavras-chave no nome/descrição. Exportada para testes
  * e para o teste de conexão.
  */
-export function escolherFerramenta(op: OperacaoProspectHalo, ferramentas: FerramentaMCP[], manual: Record<string, string> = mapeamentoManual()): FerramentaMCP | null {
+export function escolherFerramenta(op: OperacaoProspectHalo, ferramentas: FerramentaMCP[], manual: Partial<Record<OperacaoProspectHalo, string>> = mapeamentoManual()): FerramentaMCP | null {
   const nomeManual = manual[op];
   if (nomeManual) {
     const f = ferramentas.find((x) => x.nome === nomeManual);
     if (f) return f;
-    throw new ErroProspectHalo(`A ferramenta "${nomeManual}" (${op}) do mapeamento manual não existe no Prospect Halo. Corrija o campo "${CAMPO_FERRAMENTAS}" em /setup. Ferramentas disponíveis: ${ferramentas.map((x) => x.nome).join(", ")}.`);
+    throw new ErroProspectHalo(`A ferramenta escolhida para ${ROTULO_OPERACAO[op]} não existe mais no Prospect Halo. Volte para "Identificar sozinho" ou escolha outra em Opções avançadas do cartão Prospect Halo.`, { status: 400, acao: ACAO_PROSPECTHALO });
   }
   let melhor: FerramentaMCP | null = null;
   let melhorPontos = 0;
@@ -79,13 +133,13 @@ export function escolherFerramenta(op: OperacaoProspectHalo, ferramentas: Ferram
 async function ferramentaPara(op: OperacaoProspectHalo, conexao: ConexaoMCP): Promise<FerramentaMCP> {
   let ferramentas: FerramentaMCP[];
   try {
-    ferramentas = await listarFerramentas(conexao);
+    ferramentas = await comTempoLimite(listarFerramentas(conexao), op);
   } catch (err) {
-    throw new ErroProspectHalo(`Não foi possível falar com o Prospect Halo: ${err instanceof Error ? err.message : "erro de conexão"}. Confira a conexão em /setup.`);
+    throw traduzirFalha(err, op);
   }
   const f = escolherFerramenta(op, ferramentas);
   if (!f) {
-    throw new ErroProspectHalo(`O Prospect Halo não expõe uma ferramenta reconhecível para ${ROTULO_OPERACAO[op]}. Informe o nome certo no campo "${CAMPO_FERRAMENTAS}" em /setup. Ferramentas disponíveis: ${ferramentas.map((x) => x.nome).join(", ") || "nenhuma"}.`);
+    throw new ErroProspectHalo(`O Prospect Halo não oferece uma ferramenta reconhecível para ${ROTULO_OPERACAO[op]}. Escolha a ferramenta certa em Opções avançadas do cartão Prospect Halo.`, { status: 400, acao: ACAO_PROSPECTHALO });
   }
   return f;
 }
@@ -189,7 +243,7 @@ function encontrarLista(resposta: unknown): unknown[] | null {
 /** Converte a resposta do Prospect Halo (formato do servidor remoto, não padronizado) em Lead[] deste app. */
 export function normalizarLeads(resposta: unknown): Lead[] {
   const lista = encontrarLista(resposta);
-  if (!lista) throw new ErroProspectHalo("O Prospect Halo respondeu num formato que este app não reconhece (esperava uma lista em leads, prospects, results ou data).");
+  if (!lista) throw new ErroProspectHalo("O Prospect Halo respondeu num formato que este app não reconhece. Escolha a ferramenta certa para buscar leads em Opções avançadas do cartão Prospect Halo.", { status: 502, acao: ACAO_PROSPECTHALO });
   const leads: Lead[] = [];
   lista.forEach((bruto, i) => {
     if (!ehObjeto(bruto)) return;
@@ -229,12 +283,12 @@ export async function buscarLeadsProspectHalo(perfil: Perfil): Promise<Lead[]> {
   });
   let resposta: unknown;
   try {
-    resposta = await chamar(conexao, ferramenta.nome, args);
+    resposta = await comTempoLimite(chamar(conexao, ferramenta.nome, args), "buscar");
   } catch (err) {
-    throw new ErroProspectHalo(`O Prospect Halo não conseguiu buscar os leads: ${err instanceof Error ? err.message : "erro desconhecido"}.`);
+    throw traduzirFalha(err, "buscar");
   }
   const leads = normalizarLeads(resposta);
-  if (leads.length === 0) throw new ErroProspectHalo("O Prospect Halo não encontrou leads para esse perfil. Amplie os cargos ou os setores e tente de novo.");
+  if (leads.length === 0) throw new ErroProspectHalo("O Prospect Halo não encontrou leads para esse perfil. Amplie os cargos ou os setores e tente de novo.", { status: 404 });
   return leads;
 }
 
@@ -294,9 +348,9 @@ export async function criarCampanhaProspectHalo(campanha: Campanha, perfil: Perf
   });
   let resposta: unknown;
   try {
-    resposta = await chamar(conexao, ferramenta.nome, args);
+    resposta = await comTempoLimite(chamar(conexao, ferramenta.nome, args), "campanha");
   } catch (err) {
-    throw new ErroProspectHalo(`O Prospect Halo não conseguiu criar a campanha: ${err instanceof Error ? err.message : "erro desconhecido"}.`);
+    throw traduzirFalha(err, "campanha");
   }
   return { externoId: encontrarId(resposta), ferramenta: ferramenta.nome };
 }
@@ -324,9 +378,9 @@ export async function consultarEstadoProspectHalo(externoId: string): Promise<{ 
   const ferramenta = await ferramentaPara("estado", conexao);
   const args = montarArgumentos(ferramenta.schema, { "campaign_?id|agent_?id|^id$|campaign|agent": externoId });
   try {
-    const bruto = await chamar(conexao, ferramenta.nome, args);
+    const bruto = await comTempoLimite(chamar(conexao, ferramenta.nome, args), "estado");
     return { texto: resumirEstado(bruto), bruto };
   } catch (err) {
-    throw new ErroProspectHalo(`O Prospect Halo não conseguiu informar o andamento: ${err instanceof Error ? err.message : "erro desconhecido"}.`);
+    throw traduzirFalha(err, "estado");
   }
 }

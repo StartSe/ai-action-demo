@@ -3,7 +3,7 @@
 Descreva o seu cliente ideal e receba a lista de leads com sinal de intenção e a sequência de mensagens pronta para cada um. Área: Vendas.
 
 ## O que resolve
-Prospectar no LinkedIn consome horas por dia entre buscar perfis e escrever mensagem por mensagem. Este app recebe o perfil de cliente ideal (cargos, setores, sinais de intenção e a proposta em uma frase) e devolve uma campanha: a lista de leads pontuada (quem combina mais com o perfil e mostrou o sinal mais forte aparece primeiro) e, para os leads que você marcar, a sequência completa de mensagens: pedido de conexão com até 300 caracteres, dois acompanhamentos e um e-mail opcional, cada um com botão "Copiar".
+Prospectar no LinkedIn consome horas por dia entre buscar perfis e escrever mensagem por mensagem. Este app recebe o perfil de cliente ideal (cargos, setores, sinais de intenção e a proposta em uma frase) e devolve uma campanha: a lista de leads pontuada (quem combina mais com o perfil e mostrou o sinal mais forte aparece primeiro) e, para os leads que você marcar, a sequência completa de mensagens: pedido de conexão com até 300 caracteres, dois acompanhamentos e um e-mail opcional, cada um com botão "Copiar". Os leads com pontuação a partir de 80 já vêm marcados; "Copiar lista (CSV)" (menu "Mais") leva a lista inteira para uma planilha.
 
 Com o **Prospect Halo** conectado em `/setup` (servidor MCP remoto, autorizado com um clique), a lista vem do LinkedIn do usuário e as mensagens aprovadas são enviadas da conta dele, dentro dos limites diários do serviço. **Nada é enviado sem aprovação explícita**: o botão "Aprovar e enviar pelo Prospect Halo" abre um diálogo com a quantidade de leads, as três mensagens e o aviso de envio, e só "Confirmar" cria a campanha remota.
 
@@ -13,7 +13,7 @@ Sem o Prospect Halo, os leads são fictícios (10 pessoas e empresas inventadas,
 Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter (`askJSON`, em `lib/ai.ts`). Prospect Halo via MCP (`lib/mcp-cliente.ts` + OAuth em `lib/mcp-oauth.ts`). Sem banco externo: histórico e configuração em SQLite (`node:sqlite`).
 
 ## Configuração inicial (sem variáveis de ambiente)
-Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave, escolhe o modelo, autoriza o Prospect Halo (botão "Autorizar", fluxo OAuth; o endereço `https://app.prospecthalo.ai/api/agent/v1/mcp` já vem preenchido), configura as notificações (e-mail ou Slack, para as rotinas) e testa cada conexão. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Sem chave de IA, o app roda em modo demonstração.
+Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave, escolhe o modelo, autoriza o Prospect Halo (botão "Autorizar", fluxo OAuth; o endereço `https://app.prospecthalo.ai/api/agent/v1/mcp` já vem preenchido), conecta o CRM do time (servidor MCP, para o botão "Enviar para o CRM" da lista), configura as notificações (e-mail ou Slack, para as rotinas) e testa cada conexão. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Sem chave de IA, o app roda em modo demonstração.
 
 ## Primeiro acesso
 Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
@@ -23,7 +23,7 @@ Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em 
 npm install
 npm run dev             # http://localhost:3000 e depois http://localhost:3000/setup
 ```
-Abra `/?exemplo=1` para preencher o perfil de exemplo e buscar os leads sozinho.
+Abra `/?exemplo=1` para preencher o perfil de exemplo, buscar os leads e já escrever as mensagens dos três melhores — a demonstração termina em "Mensagens prontas", não numa lista sem mensagem nenhuma.
 
 ## Rodar com Docker
 ```bash

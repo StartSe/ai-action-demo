@@ -1,9 +1,9 @@
 // Escrita da sequência de mensagens (conexão, dois acompanhamentos e e-mail) para um lead,
 // compartilhada entre app/api/sequencias/route.ts e lib/ferramentas.ts (MCP).
-import { aiEnabled, askJSON, meta, type Meta } from "./ai";
+import { aiEnabled, askJSON, ErroIA, meta, type Meta } from "./ai";
 import { esperar, limitarConexao, sequenciaDemo } from "./demo";
 import { ErroDePedido, INSUMO, obterCampanha, salvarCampanha } from "./leads";
-import { LIMITE_CONEXAO, TONS, type Campanha, type Lead, type Perfil, type Sequencia } from "./types";
+import { LIMITE_CONEXAO, TONS, type Campanha, type FalhaSequencia, type Lead, type Perfil, type Sequencia } from "./types";
 
 /** Quantos leads uma única chamada pode escrever de uma vez (cada um é uma chamada ao modelo). */
 export const MAXIMO_POR_CHAMADA = 20;
@@ -75,17 +75,41 @@ export async function escreverSequencia(lead: Lead, perfil: Perfil): Promise<{ d
   return { demo: false, sequencia, meta: meta({ demo: false, insumo: INSUMO }) };
 }
 
-/** Escreve as sequências dos leads escolhidos de uma campanha salva e grava o resultado nela. */
-export async function escreverParaCampanha(campanhaId: string, leadIds: string[]): Promise<{ campanha: Campanha; meta: Meta }> {
+/** Mensagem curada de uma falha por lead: o texto de ErroIA já é de tela; qualquer outra coisa vira uma frase fixa (o detalhe vai só ao console). */
+function mensagemDaFalha(err: unknown): string {
+  if (err instanceof ErroIA) return err.message;
+  console.error("Falha ao escrever a sequência de um lead:", err);
+  return "Não foi possível escrever esta sequência agora.";
+}
+
+/**
+ * Escreve as sequências dos leads escolhidos de uma campanha salva e grava o resultado nela. Cada lead é
+ * uma chamada ao modelo, em paralelo: uma falha isolada (429 num deles, por exemplo) não derruba as
+ * outras — as que deram certo são gravadas e as que falharam voltam em `falhas` para a tela oferecer
+ * "Escrever de novo". Só quando NENHUMA dá certo o erro sobe (ErroIA → respostaErro na rota).
+ */
+export async function escreverParaCampanha(campanhaId: string, leadIds: string[]): Promise<{ campanha: Campanha; meta: Meta; escritas: number; falhas: FalhaSequencia[] }> {
   const { campanha, perfil } = obterCampanha(campanhaId);
   const ids = Array.from(new Set(leadIds.map((x) => String(x))));
-  if (ids.length === 0) throw new ErroDePedido("Selecione ao menos um lead para escrever as mensagens.");
+  if (ids.length === 0) throw new ErroDePedido("Marque ao menos um lead para escrever as mensagens.");
   if (ids.length > MAXIMO_POR_CHAMADA) throw new ErroDePedido(`Escolha até ${MAXIMO_POR_CHAMADA} leads por vez.`);
   const leads = ids.map((id) => campanha.leads.find((l) => l.id === id));
   if (leads.some((l) => !l)) throw new ErroDePedido("Um dos leads escolhidos não está nesta campanha.");
 
-  const resultados = await Promise.all((leads as Lead[]).map((lead) => escreverSequencia(lead, perfil)));
-  const novas = new Map(resultados.map((r) => [r.sequencia.leadId, r.sequencia]));
+  const resultados = await Promise.allSettled((leads as Lead[]).map((lead) => escreverSequencia(lead, perfil)));
+  const certas: { sequencia: Sequencia; meta: Meta }[] = [];
+  const falhas: FalhaSequencia[] = [];
+  resultados.forEach((r, i) => {
+    const lead = (leads as Lead[])[i];
+    if (r.status === "fulfilled") certas.push(r.value);
+    else falhas.push({ leadId: lead.id, nome: lead.nome, mensagem: mensagemDaFalha(r.reason) });
+  });
+  if (certas.length === 0) {
+    const primeira = resultados.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
+    throw primeira?.reason ?? new Error("Não foi possível escrever as mensagens agora. Tente novamente.");
+  }
+
+  const novas = new Map(certas.map((r) => [r.sequencia.leadId, r.sequencia]));
   // Reescrever para um lead substitui a sequência anterior dele; as dos outros leads ficam como estavam.
   const sequencias = [...campanha.sequencias.filter((s) => !novas.has(s.leadId)), ...novas.values()];
   const ordem = new Map(campanha.leads.map((l, i) => [l.id, i]));
@@ -93,5 +117,5 @@ export async function escreverParaCampanha(campanhaId: string, leadIds: string[]
 
   const atualizada: Campanha = { ...campanha, sequencias, estado: campanha.estado === "enviada" ? "enviada" : "pronta" };
   salvarCampanha(atualizada);
-  return { campanha: atualizada, meta: resultados[0].meta };
+  return { campanha: atualizada, meta: certas[0].meta, escritas: certas.length, falhas };
 }

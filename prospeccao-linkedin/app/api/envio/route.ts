@@ -1,13 +1,13 @@
+import { respostaErro } from "@/lib/ai";
 import { andamentoCampanha, enviarCampanha, planoEnvio } from "@/lib/envio";
 import { CampanhaNaoEncontrada, ErroDePedido } from "@/lib/leads";
 import { ErroProspectHalo } from "@/lib/prospecthalo";
 
-function responderErro(err: unknown, padrao: string) {
+function responderErro(err: unknown) {
   if (err instanceof ErroDePedido) return Response.json({ error: err.message }, { status: 400 });
   if (err instanceof CampanhaNaoEncontrada) return Response.json({ error: err.message }, { status: 404 });
-  if (err instanceof ErroProspectHalo) return Response.json({ error: err.message }, { status: 502 });
-  console.error(err);
-  return Response.json({ error: err instanceof Error ? err.message : padrao }, { status: 500 });
+  if (err instanceof ErroProspectHalo) return Response.json({ error: err.message, acao: err.acao }, { status: err.status });
+  return respostaErro(err);
 }
 
 /**
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     }
     return Response.json({ plano: planoEnvio(campanhaId) });
   } catch (err) {
-    return responderErro(err, "Não foi possível enviar a campanha agora. Tente novamente.");
+    return responderErro(err);
   }
 }
 
@@ -36,6 +36,6 @@ export async function GET(req: Request) {
   try {
     return Response.json(await andamentoCampanha(campanhaId));
   } catch (err) {
-    return responderErro(err, "Não foi possível consultar o andamento agora. Tente novamente.");
+    return responderErro(err);
   }
 }

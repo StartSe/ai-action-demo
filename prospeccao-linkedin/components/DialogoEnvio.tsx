@@ -3,12 +3,14 @@
 // mensagens e o aviso) e só cria a campanha remota depois de "Confirmar". Montado só enquanto
 // aberto (ver app/page.tsx), para o estado nascer limpo a cada abertura.
 import { useEffect, useRef, useState } from "react";
+import { lerErro } from "@/components/ui";
 import type { PlanoEnvio } from "@/lib/envio";
 import type { Campanha } from "@/lib/types";
 
 type Props = { campanhaId: string; onFechar: () => void; aoEnviar: (campanha: Campanha, mensagem: string) => void };
 
-type Fase = { nome: "carregando" } | { nome: "plano"; plano: PlanoEnvio } | { nome: "enviando"; plano: PlanoEnvio } | { nome: "erro"; mensagem: string; plano?: PlanoEnvio };
+type Acao = { rotulo: string; url: string };
+type Fase = { nome: "carregando" } | { nome: "plano"; plano: PlanoEnvio } | { nome: "enviando"; plano: PlanoEnvio } | { nome: "erro"; mensagem: string; acao?: Acao; plano?: PlanoEnvio };
 
 export function DialogoEnvio({ campanhaId, onFechar, aoEnviar }: Props) {
   const [fase, setFase] = useState<Fase>({ nome: "carregando" });
@@ -18,11 +20,15 @@ export function DialogoEnvio({ campanhaId, onFechar, aoEnviar }: Props) {
     let ativo = true;
     fetch("/api/envio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ campanhaId, confirmar: false }) })
       .then(async (r) => {
+        if (!r.ok) {
+          const info = await lerErro(r);
+          if (ativo) setFase({ nome: "erro", mensagem: info.mensagem, acao: info.acao });
+          return;
+        }
         const resposta = await r.json();
-        if (!r.ok) throw new Error(resposta.error || "Não foi possível montar o plano de envio.");
         if (ativo) setFase({ nome: "plano", plano: resposta.plano });
       })
-      .catch((e) => { if (ativo) setFase({ nome: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." }); });
+      .catch(async (e) => { if (ativo) setFase({ nome: "erro", mensagem: (await lerErro(e)).mensagem }); });
     return () => { ativo = false; };
   }, [campanhaId]);
 
@@ -45,11 +51,15 @@ export function DialogoEnvio({ campanhaId, onFechar, aoEnviar }: Props) {
     setFase({ nome: "enviando", plano });
     try {
       const r = await fetch("/api/envio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ campanhaId, confirmar: true }) });
+      if (!r.ok) {
+        const info = await lerErro(r);
+        setFase({ nome: "erro", mensagem: info.mensagem, acao: info.acao, plano });
+        return;
+      }
       const resposta = await r.json();
-      if (!r.ok) throw new Error(resposta.error || "Não foi possível enviar a campanha.");
       aoEnviar(resposta.campanha, resposta.mensagem);
     } catch (e) {
-      setFase({ nome: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado.", plano });
+      setFase({ nome: "erro", mensagem: (await lerErro(e)).mensagem, plano });
     }
   }
 
@@ -80,7 +90,12 @@ export function DialogoEnvio({ campanhaId, onFechar, aoEnviar }: Props) {
           </>
         )}
 
-        {fase.nome === "erro" && <p className="text-danger text-sm mb-4" role="alert">{fase.mensagem}</p>}
+        {fase.nome === "erro" && (
+          <p className="text-danger text-sm mb-4" role="alert">
+            {fase.mensagem}
+            {fase.acao && <> <a className="btn-link text-[13px]" href={fase.acao.url}>{fase.acao.rotulo}</a></>}
+          </p>
+        )}
 
         <div className="flex flex-wrap items-center gap-2.5">
           {plano && (
