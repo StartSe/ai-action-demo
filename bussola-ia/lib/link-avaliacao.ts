@@ -2,9 +2,9 @@
 // partir de um questionário salvo (lib/questionarios.ts) e grava cada resposta recebida em
 // lib/respostas.ts, sem chamar a IA. lib/bussola.ts importa este módulo por efeito colateral para
 // registrar o callback "bussola" antes de app/api/f/[token]/route.ts atender qualquer requisição.
-// A análise das respostas reais (nível geral, resumo) é a US-013.
+// A análise das respostas reais (nível geral, resumo) mora em lib/bussola.ts:analisarLink.
 import { contarRespostas, criar, encerrar, expirou, listarPorTipo, obter as obterFormulario, registrarCallback, type CampoFormulario, type ParametrosPublicos } from "./formularios";
-import { obter as obterQuestionario } from "./questionarios";
+import { atualizar as atualizarQuestionario, obter as obterQuestionario, obterPorTitulo, salvar as salvarQuestionario } from "./questionarios";
 import { listarPorCodigo, salvar as salvarResposta } from "./respostas";
 import { ESCALA_MODELO } from "./modelo";
 import type { Questionario, Resposta } from "./types";
@@ -52,7 +52,19 @@ export function criarLinkAvaliacao({ questionarioId, titulo, empresa, expiraEmDi
   return criar({ tipo: TIPO_LINK_AVALIACAO, campos: camposDoQuestionario(salvo.questionario), parametros, expiraEmDias: prazo, limite: teto });
 }
 
-export type AvaliacaoEmAndamento = { codigo: string; titulo: string; empresa: string; totalRespostas: number; criadoEm: string; encerrada: boolean };
+export type AvaliacaoEmAndamento = {
+  codigo: string;
+  titulo: string;
+  empresa: string;
+  questionarioId: string;
+  totalRespostas: number;
+  /** Teto de respostas do link (null = sem limite). */
+  limite: number | null;
+  /** Quando o link deixa de aceitar respostas (null = sem prazo). */
+  expiraEm: string | null;
+  criadoEm: string;
+  encerrada: boolean;
+};
 
 /** "Avaliações em andamento" no painel: todo link criado por este app, mais recente primeiro. */
 export function listarAvaliacoesEmAndamento(limite = 50): AvaliacaoEmAndamento[] {
@@ -60,10 +72,55 @@ export function listarAvaliacoesEmAndamento(limite = 50): AvaliacaoEmAndamento[]
     codigo: f.token,
     titulo: f.parametros.titulo,
     empresa: f.parametros.empresa,
+    questionarioId: f.parametros.questionarioId,
     totalRespostas: contarRespostas(f.token),
+    limite: f.limite,
+    expiraEm: f.expiraEm,
     criadoEm: f.criadoEm,
     encerrada: expirou(f),
   }));
+}
+
+/** Avaliação ainda aberta (aceitando respostas) que usa este questionário salvo, ou null. Impede apagar
+ * ou reescrever um questionário enquanto há respostas chegando para ele. */
+export function questionarioEmUso(questionarioId: string): AvaliacaoEmAndamento | null {
+  return listarAvaliacoesEmAndamento(200).find((a) => a.questionarioId === questionarioId && !a.encerrada) ?? null;
+}
+
+function mesmoConteudo(a: Questionario, b: Questionario): boolean {
+  return JSON.stringify({ d: a.dimensoes, p: a.perguntas }) === JSON.stringify({ d: b.dimensoes, p: b.perguntas });
+}
+
+/** "Salvar questionário" e "Criar link" passam por aqui: o mesmo título atualiza o salvo em vez de duplicar (US-029).
+ * Exceção: se o salvo está em uso por uma avaliação aberta e o conteúdo mudou, a versão nova entra como cópia
+ * (as respostas já recebidas apontam para as perguntas antigas pelo id). */
+export function guardarQuestionario({ titulo, questionario }: { titulo: string; questionario: Questionario }): { id: string; atualizado: boolean } {
+  const tituloLimpo = titulo.trim();
+  const existente = obterPorTitulo(tituloLimpo);
+  if (!existente) return { id: salvarQuestionario({ titulo: tituloLimpo, questionario }), atualizado: false };
+  if (mesmoConteudo(existente.questionario, questionario)) return { id: existente.id, atualizado: true };
+  if (questionarioEmUso(existente.id)) return { id: salvarQuestionario({ titulo: tituloLimpo, questionario }), atualizado: false };
+  atualizarQuestionario(existente.id, { titulo: tituloLimpo, questionario });
+  return { id: existente.id, atualizado: true };
+}
+
+/** Dias inteiros até o link expirar (0 quando expira hoje; negativo quando já expirou; null sem prazo). */
+export function diasAteExpirar(expiraEm: string | null, agora = new Date()): number | null {
+  if (!expiraEm) return null;
+  return Math.ceil((new Date(expiraEm).getTime() - agora.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+/** Uma linha por avaliação aberta: "N respostas, faltam X, prazo em Y dias" — usada pela rotina "Resumo da coleta". */
+export function resumoDaColeta(agora = new Date()): { abertas: AvaliacaoEmAndamento[]; linhas: string[] } {
+  const abertas = listarAvaliacoesEmAndamento(200).filter((a) => !a.encerrada);
+  const linhas = abertas.map((a) => {
+    const respostas = `${a.totalRespostas} ${a.totalRespostas === 1 ? "resposta" : "respostas"}`;
+    const faltam = a.limite !== null ? `, faltam ${Math.max(0, a.limite - a.totalRespostas)} para o limite` : "";
+    const dias = diasAteExpirar(a.expiraEm, agora);
+    const prazo = dias === null ? "sem prazo" : dias <= 0 ? "o prazo termina hoje" : `prazo em ${dias} ${dias === 1 ? "dia" : "dias"}`;
+    return `${a.titulo} (${a.empresa}): ${respostas}${faltam}, ${prazo}.`;
+  });
+  return { abertas, linhas };
 }
 
 /** Encerra o link (para de aceitar respostas); devolve false se o código não for de uma avaliação deste app. */

@@ -3,15 +3,17 @@
 Avaliação da maturidade em IA da empresa em 6 dimensões, com o estágio atual e o que fazer para evoluir. Área: Estratégia e Gestão.
 
 ## O que resolve
-A empresa não sabe em que estágio de maturidade em IA está nem o que fazer a seguir. Este app aplica um questionário modelo (24 perguntas de escala + 2 de texto, em 6 dimensões) e devolve um diagnóstico com o nível geral, o nome do estágio (Inicial, Exploração, Estruturação, Escala ou Transformação) e a média por dimensão.
+A empresa não sabe em que estágio de maturidade em IA está nem o que fazer a seguir. Este app aplica um questionário modelo (24 perguntas de escala + 2 de texto, em 6 dimensões), coleta as respostas do time por um link público e devolve um diagnóstico real: nível geral, nome do estágio (Inicial, Exploração, Estruturação, Escala ou Transformação), média por dimensão, forças, lacunas, próximos passos e onde as áreas discordam.
 
-Já é possível editar o questionário (perguntas por dimensão, tipos escala/escolha/texto), salvar questionários e criar um link público único para coletar respostas de verdade (com prazo e limite configuráveis) — a análise real a partir dessas respostas coletadas (nível geral, resumo) chega numa próxima história; até lá, a avaliação exibida na tela principal continua sendo o exemplo.
+O fluxo tem três etapas, narradas na própria tela: ajustar o questionário (ou usar o modelo, ou gerar um para o setor), criar o link e enviar ao time, e analisar as respostas quando chegarem. As médias são sempre calculadas no servidor; a IA só escreve a leitura. Sem IA conectada (ou quando ela falha por crédito, fila ou instabilidade) a leitura sai automática, com aviso na tela — o diagnóstico continua real, nunca rotulado como exemplo. "Ver um diagnóstico de exemplo" é o único caminho que mostra dados fictícios.
+
+Opcionais: um quadro de tarefas conectado via MCP recebe os próximos passos como cartões; e-mail ou Slack recebem a rotina "Resumo da coleta" (respostas recebidas, quantas faltam e o prazo de cada avaliação aberta).
 
 ## Stack
 Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão.
 
 ## Configuração inicial (sem variáveis de ambiente)
-Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave, escolhe o modelo e testa a conexão. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar, o app roda em modo demonstração com uma avaliação de exemplo.
+Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave, escolhe o modelo e testa a conexão. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar, o app roda em modo demonstração: a leitura do diagnóstico sai automática (sem IA) e o exemplo continua disponível.
 
 ## Primeiro acesso
 Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
@@ -37,7 +39,7 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 - O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração se perde a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
 
 ## Usar dentro de um assistente de IA (MCP)
-O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, para que assistentes como Claude ou ChatGPT chamem a ferramenta `avaliar_respostas` diretamente (nesta versão, sempre devolve a avaliação de exemplo). Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
+O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, para que assistentes como Claude ou ChatGPT chamem as ferramentas `avaliar_respostas` (calcula o diagnóstico a partir de respostas já coletadas) e `resultado_avaliacao` diretamente. Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
 
 Decisão de implementação: protocolo implementado à mão em `lib/mcp.ts` (JSON-RPC 2.0: `initialize`, `tools/list`, `tools/call`), em vez do pacote `@modelcontextprotocol/sdk`. O app só precisa desses três métodos, sem `resources`, `prompts` nem streaming de progresso — a mesma filosofia de `lib/store.ts` (SQLite sem dependências externas) evita adicionar uma dependência pesada para um uso pequeno. Rate limit de 60 chamadas por minuto por código, em memória (`lib/mcp.ts`); reinicia ao reiniciar o servidor ou ao gerar um novo código.
 
@@ -68,7 +70,7 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 ## Estrutura
 ```
 app/page.tsx                tela única (formulário + resultado)
-app/api/bussola/route.ts    geração da avaliação (demo nesta versão)
+app/api/bussola/route.ts    diagnóstico de exemplo (dados fictícios); a análise real é app/api/bussola/link/[codigo]/analisar
 app/mcp/route.ts            endpoint MCP (JSON-RPC 2.0) para assistentes de IA
 app/api/mcp/token/route.ts  gera, consulta e revoga o código de acesso do endpoint MCP
 app/setup/page.tsx          configuração inicial (chaves, OAuth, teste de conexão, acesso MCP)

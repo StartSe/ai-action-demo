@@ -55,6 +55,13 @@ export interface Analise {
   proximosPassos: string[];
   /** Só presente quando pelo menos 2 áreas diferentes responderam, e há divergência relevante entre elas. */
   ondeDiscordam?: string[];
+  /** Quem escreveu a leitura (resumo, forças, lacunas, passos): a IA, ou a leitura automática (sem IA) quando não há
+   * chave ou a IA falhou. Ausente em registros antigos: vale "ia" quando meta.demo é false. */
+  origemLeitura?: "ia" | "automatica";
+  /** Só quando a IA falhou (402, 429, 5xx) e a leitura caiu na automática: frase curada para a tela avisar, com o motivo. */
+  avisoIA?: string;
+  /** Índices (em proximosPassos) já enviados ao quadro de tarefas conectado. */
+  passosNoQuadro?: number[];
 }
 
 export interface Avaliacao {

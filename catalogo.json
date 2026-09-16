@@ -234,15 +234,16 @@
         "Gestão"
       ],
       "problema": "A empresa não sabe em que estágio de maturidade em IA está nem o que fazer a seguir.",
-      "ia": "Aplica um questionário de maturidade em 6 dimensões e devolve o estágio atual com o que fazer para evoluir.",
-      "integracoes": "Só a IA (OpenRouter).",
-      "acento": "#b8621b",
+      "ia": "Coleta as respostas do time por um link, calcula o nível em 6 dimensões e escreve o diagnóstico com forças, lacunas e próximos passos.",
+      "integracoes": "IA (OpenRouter). Opcional: quadro de tarefas via MCP para os próximos passos e e-mail ou Slack para o resumo da coleta.",
+      "acento": "#1a6d93",
       "porta": 3012,
       "captura": "capturas/bussola-ia.png",
       "capacidades": [
         "artefato",
         "mcp",
-        "formulario"
+        "formulario",
+        "rotina"
       ],
       "demo": null
     },

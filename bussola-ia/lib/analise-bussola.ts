@@ -72,16 +72,60 @@ export function respostasTextoPorPergunta(questionario: Questionario, respostas:
     .filter((g) => g.respostas.length > 0);
 }
 
-const FAIXAS_LEITURA = [
-  { ate: 1.5, texto: `Praticamente inexistente ("${ESCALA_MODELO.rotuloMin}"): ainda não há prática estabelecida nesta dimensão.` },
-  { ate: 2.5, texto: "Iniciativas isoladas, sem padronização nem responsável claro." },
-  { ate: 3.5, texto: "Em estruturação: já existe prática recorrente, mas falta consistência." },
-  { ate: 4.5, texto: "Bem estabelecida, funcionando na maior parte dos casos." },
-  { ate: Infinity, texto: `Consolidada ("${ESCALA_MODELO.rotuloMax}"), com prática madura e monitorada.` },
+/** Duas ou três variantes por faixa, escolhidas pela posição da dimensão: quatro dimensões na mesma faixa
+ * não saem com a mesma frase repetida (diagnóstico da US-029). */
+const FAIXAS_LEITURA: { ate: number; variantes: string[] }[] = [
+  {
+    ate: 1.5,
+    variantes: [
+      `Praticamente inexistente ("${ESCALA_MODELO.rotuloMin}"): ainda não há prática estabelecida.`,
+      "Ainda não começou: ninguém responde por isso e não há iniciativa em andamento.",
+      "Ponto de partida: a empresa ainda não deu o primeiro passo nesta dimensão.",
+    ],
+  },
+  {
+    ate: 2.5,
+    variantes: [
+      "Iniciativas isoladas, sem padronização nem responsável claro.",
+      "Alguns times já tentaram, mas cada um do seu jeito e sem continuidade.",
+      "Existe intenção e um ou outro teste, ainda longe de virar rotina.",
+    ],
+  },
+  {
+    ate: 3.5,
+    variantes: [
+      "Em estruturação: já existe prática recorrente, mas falta consistência.",
+      "Funciona em parte da empresa; o desafio agora é padronizar e ampliar.",
+      "Há método e responsável, mas os resultados ainda variam de área para área.",
+    ],
+  },
+  {
+    ate: 4.5,
+    variantes: [
+      "Bem estabelecida, funcionando na maior parte dos casos.",
+      "Prática madura no dia a dia; falta pouco para ser referência interna.",
+      "Consistente entre as áreas, com pequenos ajustes a fazer.",
+    ],
+  },
+  {
+    ate: Infinity,
+    variantes: [
+      `Consolidada ("${ESCALA_MODELO.rotuloMax}"), com prática madura e monitorada.`,
+      "Referência da empresa: funciona, é medida e melhora com o tempo.",
+    ],
+  },
 ];
 
-function leituraFaixa(nota: number): string {
-  return (FAIXAS_LEITURA.find((f) => nota <= f.ate) ?? FAIXAS_LEITURA[FAIXAS_LEITURA.length - 1]).texto;
+/** Faixa (0 a 4) de uma média de 1 a 5, usada para colorir e para escolher a leitura. */
+export function faixaDaMedia(nota: number): number {
+  const i = FAIXAS_LEITURA.findIndex((f) => nota <= f.ate);
+  return i === -1 ? FAIXAS_LEITURA.length - 1 : i;
+}
+
+/** Leitura de uma dimensão: a variante muda conforme a posição da dimensão, para duas dimensões na mesma faixa não repetirem a frase. */
+function leituraFaixa(nota: number, posicao: number): string {
+  const variantes = FAIXAS_LEITURA[faixaDaMedia(nota)].variantes;
+  return variantes[posicao % variantes.length];
 }
 
 /** Onde as áreas mais discordam: maior diferença entre a maior e a menor média de cada dimensão, só quando relevante (>= 1 ponto). */
@@ -104,12 +148,29 @@ function calcularOndeDiscordam(mediasPorArea: MediaPorArea[]): string[] | undefi
   return relevantes.map((d) => `${d.dimensao}: ${d.maior.area} avalia em ${d.maior.media}, enquanto ${d.menor.area} avalia em ${d.menor.media}.`);
 }
 
+/** Resumo que não repete o Destaque (nível e estágio já aparecem em número grande): cita a dimensão mais
+ * forte, a mais fraca e o que a distância entre elas diz sobre o próximo passo. */
+function resumoSemIA({ nomeEstagio, ordenadas, totalRespostas }: { nomeEstagio: string; ordenadas: MediaDimensao[]; totalRespostas: number }): string {
+  if (!ordenadas.length) return "Nenhuma pergunta de escala foi respondida, então não há médias por dimensão para ler.";
+  const maisForte = ordenadas[0];
+  const maisFraca = ordenadas[ordenadas.length - 1];
+  if (ordenadas.length === 1) {
+    return `Só "${maisForte.dimensao}" tem notas (média ${maisForte.media}): ${totalRespostas === 1 ? "a única resposta" : `as ${totalRespostas} respostas`} não cobrem as outras dimensões.`;
+  }
+  const distancia = arredondar(maisForte.media - maisFraca.media);
+  const frase1 = `"${maisForte.dimensao}" é a dimensão mais madura (média ${maisForte.media}) e "${maisFraca.dimensao}" a mais frágil (média ${maisFraca.media}).`;
+  let frase2: string;
+  if (distancia >= 1.5) frase2 = `A distância de ${distancia} ponto${distancia === 1 ? "" : "s"} entre elas indica evolução desigual: o avanço do estágio "${nomeEstagio}" passa por puxar a dimensão mais frágil, não por reforçar a mais forte.`;
+  else if (distancia >= 0.7) frase2 = `A diferença de ${distancia} ponto${distancia === 1 ? "" : "s"} mostra uma evolução razoavelmente equilibrada, com espaço para concentrar esforço na dimensão mais frágil.`;
+  else frase2 = `As dimensões estão próximas entre si (diferença de ${distancia} ponto${distancia === 1 ? "" : "s"}): a empresa evolui de forma uniforme e o próximo estágio depende de avançar em bloco.`;
+  return `${frase1} ${frase2}`;
+}
+
 export type LeituraSemIA = { resumo: string; leituraPorDimensao: LeituraDimensao[]; forcas: string[]; lacunas: string[]; proximosPassos: string[]; ondeDiscordam?: string[] };
 
 /** Leitura determinística (sem IA): usada em modo demonstração e sempre que a chave de IA não estiver configurada,
  * para "Analisar respostas" nunca ficar sem resultado por falta de chave. */
 export function leituraSemIA({
-  nivelGeral,
   nomeEstagio,
   totalRespostas,
   medias,
@@ -122,7 +183,14 @@ export function leituraSemIA({
   mediasPorArea: MediaPorArea[];
 }): LeituraSemIA {
   const ordenadas = [...medias].sort((a, b) => b.media - a.media);
-  const leituraPorDimensao = medias.map((m) => ({ dimensao: m.dimensao, leitura: leituraFaixa(m.media) }));
+  // Posição dentro da própria faixa: a 1ª dimensão de uma faixa usa a variante 0, a 2ª a variante 1, e assim por diante.
+  const vistasPorFaixa = new Map<number, number>();
+  const leituraPorDimensao = medias.map((m) => {
+    const faixa = faixaDaMedia(m.media);
+    const posicao = vistasPorFaixa.get(faixa) ?? 0;
+    vistasPorFaixa.set(faixa, posicao + 1);
+    return { dimensao: m.dimensao, leitura: leituraFaixa(m.media, posicao) };
+  });
   const forcas = ordenadas.slice(0, 2).map((m) => `${m.dimensao} (média ${m.media})`);
   const lacunas = [...ordenadas].reverse().slice(0, 2).map((m) => `${m.dimensao} (média ${m.media})`);
   const maisFraca = ordenadas[ordenadas.length - 1];
@@ -133,9 +201,8 @@ export function leituraSemIA({
         `Escolher um caso de uso piloto que force evolução em "${maisFraca.dimensao}" e medir o resultado.`,
       ]
     : [];
-  const respostaPalavra = totalRespostas === 1 ? "resposta" : "respostas";
   return {
-    resumo: `A empresa está no estágio "${nomeEstagio}" (nível ${nivelGeral} de 5), com base em ${totalRespostas} ${respostaPalavra}.`,
+    resumo: resumoSemIA({ nomeEstagio, ordenadas, totalRespostas }),
     leituraPorDimensao,
     forcas,
     lacunas,

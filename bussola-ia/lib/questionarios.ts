@@ -1,6 +1,9 @@
 // Questionários salvos pelo editor (components/EditorPerguntas.tsx): uma cópia editável do
 // questionário modelo (ou de um gerado para um setor), guardada para reabrir depois.
 // Usa o mesmo arquivo SQLite de lib/store.ts/lib/historico.ts, em uma tabela própria.
+// "Salvar" com o mesmo título atualiza a linha existente (US-029) em vez de duplicar — a decisão de
+// quando atualizar e quando inserir mora em lib/link-avaliacao.ts:guardarQuestionario, que sabe se
+// o questionário salvo está em uso por uma avaliação aberta.
 import { DatabaseSync } from "node:sqlite";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -35,7 +38,7 @@ function gerarId(): string {
   return crypto.randomBytes(9).toString("base64url");
 }
 
-/** Salva uma cópia do questionário (nova entrada a cada chamada) e devolve o id gerado. */
+/** Insere uma cópia nova do questionário e devolve o id gerado. */
 export function salvar({ titulo, questionario }: { titulo: string; questionario: Questionario }): string {
   const id = gerarId();
   const criadoEm = new Date().toISOString();
@@ -45,8 +48,24 @@ export function salvar({ titulo, questionario }: { titulo: string; questionario:
   return id;
 }
 
+/** Regrava o conteúdo (e o título) de um questionário já salvo; a data passa a ser a de agora, para ele subir na lista. */
+export function atualizar(id: string, { titulo, questionario }: { titulo: string; questionario: Questionario }): boolean {
+  const r = abrir()
+    .prepare("UPDATE questionarios SET titulo = ?, questionario = ?, criadoEm = ? WHERE id = ?")
+    .run(titulo, JSON.stringify(questionario), new Date().toISOString(), id);
+  return Number(r.changes) > 0;
+}
+
 export function obter(id: string): QuestionarioSalvo | null {
   const linha = abrir().prepare("SELECT * FROM questionarios WHERE id = ?").get(id) as Linha | undefined;
+  return linha ? linhaParaSalvo(linha) : null;
+}
+
+/** Questionário salvo com este título (comparação sem diferenciar maiúsculas nem espaços nas pontas), o mais recente. */
+export function obterPorTitulo(titulo: string): QuestionarioSalvo | null {
+  const linha = abrir()
+    .prepare("SELECT * FROM questionarios WHERE lower(trim(titulo)) = lower(trim(?)) ORDER BY criadoEm DESC LIMIT 1")
+    .get(titulo) as Linha | undefined;
   return linha ? linhaParaSalvo(linha) : null;
 }
 

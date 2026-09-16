@@ -1,7 +1,9 @@
+import { respostaErro } from "@/lib/ai";
 import { apagarTodos, listar } from "@/lib/historico";
 import { gerarAvaliacaoExemplo } from "@/lib/bussola";
 import type { DadosAvaliacao } from "@/lib/types";
 
+/** "Ver um diagnóstico de exemplo": sempre a avaliação fictícia de lib/demo.ts, rotulada como exemplo. */
 export async function POST(req: Request) {
   const corpo = (await req.json().catch(() => ({}))) as Partial<DadosAvaliacao>;
   const dados: DadosAvaliacao = { empresa: corpo.empresa || "", titulo: corpo.titulo || "" };
@@ -9,9 +11,7 @@ export async function POST(req: Request) {
     const resultado = await gerarAvaliacaoExemplo(dados);
     return Response.json(resultado);
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível gerar a avaliação agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return respostaErro(err);
   }
 }
 

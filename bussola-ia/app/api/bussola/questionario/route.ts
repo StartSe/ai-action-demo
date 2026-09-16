@@ -1,6 +1,8 @@
+import { respostaErro } from "@/lib/ai";
 import { gerarQuestionarioParaSetor } from "@/lib/bussola";
 
-/** Gera um questionário adaptado a um setor (e porte), para preencher o editor. Nada é salvo aqui. */
+/** Gera um questionário adaptado a um setor (e porte), para preencher o editor. Nada é salvo aqui.
+ * Erros da IA saem com causa/código/ação (respostaErro); a tela deixa seguir com o questionário modelo. */
 export async function POST(req: Request) {
   const corpo = (await req.json().catch(() => ({}))) as { setor?: string; porte?: string };
   if (!corpo.setor || !corpo.setor.trim()) return Response.json({ error: "Informe o setor da empresa." }, { status: 400 });
@@ -8,7 +10,6 @@ export async function POST(req: Request) {
     const resultado = await gerarQuestionarioParaSetor({ setor: corpo.setor, porte: corpo.porte });
     return Response.json(resultado);
   } catch (err) {
-    console.error(err);
-    return Response.json({ error: "Não foi possível gerar o questionário agora. Tente novamente." }, { status: 500 });
+    return respostaErro(err);
   }
 }

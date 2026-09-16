@@ -1,11 +1,12 @@
 // Lógica de geração da avaliação, compartilhada entre a rota HTTP (app/api/bussola/route.ts)
 // e a ferramenta MCP (lib/ferramentas.ts), para não duplicar a lógica nos dois lugares.
-// gerarAvaliacaoExemplo() sempre devolve a avaliação de exemplo, rotulada como tal — é o atalho
-// "Preencher com um exemplo" do painel, sem nenhuma ligação com respostas reais.
-// analisarAvaliacao() (US-013) é quem lê respostas de verdade coletadas por um link (lib/respostas.ts,
-// via lib/link-avaliacao.ts, US-012) e calcula o diagnóstico (nível geral, resumo, leitura por dimensão).
+// gerarAvaliacaoExemplo() sempre devolve a avaliação de exemplo, rotulada como tal (meta.demo: true) — é o
+// atalho "Ver um diagnóstico de exemplo" do painel, sem nenhuma ligação com respostas reais.
+// analisarAvaliacao() lê respostas de verdade coletadas por um link (lib/respostas.ts, via lib/link-avaliacao.ts)
+// e calcula o diagnóstico; o resultado é sempre real (meta.demo: false), mesmo quando a leitura escrita sai
+// da leitura automática (sem IA) por falta de chave ou por falha da IA — "exemplo" é só o que vem de lib/demo.ts.
 import { TIPO_LINK_AVALIACAO } from "./link-avaliacao";
-import { aiEnabled, askJSON, meta, type Meta } from "./ai";
+import { aiEnabled, askJSON, ErroIA, meta, type Meta } from "./ai";
 import { calcularDispersao, calcularMediasPorArea, calcularMediasPorDimensao, calcularNivelGeral, leituraSemIA, respostasTextoPorPergunta } from "./analise-bussola";
 import { avaliacaoDemo, esperar, questionarioAdaptadoDemo } from "./demo";
 import { obter as obterFormulario } from "./formularios";
@@ -15,10 +16,12 @@ import { obter as obterQuestionario } from "./questionarios";
 import { listarPorCodigo } from "./respostas";
 import type { Analise, Avaliacao, DadosAvaliacao, LeituraDimensao, Questionario, Resposta } from "./types";
 
+export const INSUMO_EXEMPLO = "8 respostas fictícias; para um diagnóstico real, crie o link de avaliação";
+
 export async function gerarAvaliacaoExemplo(dados: DadosAvaliacao): Promise<{ avaliacao: Avaliacao; meta: Meta; id?: string }> {
   await esperar(900);
   const avaliacao = avaliacaoDemo(dados);
-  const metaGerada = meta({ demo: true, insumo: "respostas de exemplo de 8 pessoas de áreas diferentes" });
+  const metaGerada = meta({ demo: true, insumo: INSUMO_EXEMPLO });
   const id = salvar({ tipo: "avaliacao", titulo: avaliacao.titulo, entrada: dados, saida: avaliacao, meta: metaGerada });
   return { avaliacao, meta: metaGerada, id };
 }
@@ -29,7 +32,8 @@ Mantenha exatamente as mesmas 6 dimensões e a mesma quantidade de perguntas do 
 pergunta para citar exemplos e vocabulário do setor informado (e do porte, quando informado). Nunca troque uma pergunta de tipo "escala"
 por "escolha" ou "texto" (e vice-versa); nunca invente uma pergunta de tipo "escolha" aqui.`;
 
-/** Gera (ou adapta, em demo) o questionário para um setor/porte, para preencher o editor. Não salva nada sozinho. */
+/** Gera (ou adapta, em demo) o questionário para um setor/porte, para preencher o editor. Não salva nada sozinho.
+ * Erros da IA (ErroIA) sobem inteiros: a rota responde com respostaErro e a tela oferece seguir com o modelo. */
 export async function gerarQuestionarioParaSetor({ setor, porte }: { setor: string; porte?: string }): Promise<{ questionario: Questionario; meta: Meta }> {
   const s = setor.trim() || "geral";
   if (!aiEnabled()) {
@@ -45,19 +49,42 @@ const SYSTEM_ANALISE = `Você é um consultor que interpreta o diagnóstico de m
 calculados: médias por dimensão numa escala de 1 (não existe) a 5 (consolidado), nível geral, dispersão entre dimensões e, quando houver,
 médias por área e respostas de texto dos respondentes. Nunca invente números: use só os que estiverem no JSON de entrada. Responda só com
 JSON no formato {"resumo":string,"leituraPorDimensao":[{"dimensao":string,"leitura":string}],
-"forcas":string[],"lacunas":string[],"proximosPassos":string[],"ondeDiscordam":string[]|null}. "resumo" tem 2 a 3 frases citando o nível
-geral e o estágio. "leituraPorDimensao" tem uma frase curta por dimensão recebida em "mediasPorDimensao", citando a dimensão pelo nome.
-"forcas" e "lacunas" citam 2 a 3 dimensões cada, com a média entre parênteses. "proximosPassos" tem exatamente 3 ações concretas,
-priorizando as dimensões mais fracas. "ondeDiscordam" só quando o JSON de entrada trouxer "mediasPorArea": liste onde a diferença entre
-áreas é maior que 1 ponto numa dimensão, citando as duas áreas e as médias; devolva null quando não houver "mediasPorArea" no JSON de
-entrada ou nenhuma divergência relevante.`;
+"forcas":string[],"lacunas":string[],"proximosPassos":string[],"ondeDiscordam":string[]|null}. "resumo" tem 2 a 3 frases: cite a dimensão
+mais forte e a mais fraca pelo nome (com as médias) e o que a distância entre elas diz; não repita o nível geral nem o nome do estágio,
+que já aparecem em destaque na tela. "leituraPorDimensao" tem uma frase curta por dimensão recebida em "mediasPorDimensao", citando a
+dimensão pelo nome e sem repetir a mesma frase em dimensões diferentes. "forcas" e "lacunas" citam 2 a 3 dimensões cada, com a média
+entre parênteses. "proximosPassos" tem exatamente 3 ações concretas, priorizando as dimensões mais fracas. "ondeDiscordam" só quando o
+JSON de entrada trouxer "mediasPorArea": liste onde a diferença entre áreas é maior que 1 ponto numa dimensão, citando as duas áreas e as
+médias; devolva null quando não houver "mediasPorArea" no JSON de entrada ou nenhuma divergência relevante.`;
 
 type RespostaAnaliseIA = { resumo: string; leituraPorDimensao: LeituraDimensao[]; forcas: string[]; lacunas: string[]; proximosPassos: string[]; ondeDiscordam?: string[] | null };
 
+/** Falhas da IA em que vale cair na leitura automática em vez de mostrar erro: crédito (402), fila/limite (429),
+ * provedor fora (5xx), rede e resposta vazia/inválida. Chave recusada (401) e entrada recusada (400) continuam
+ * subindo como erro, porque só a pessoa resolve. */
+function podeCairNaLeituraAutomatica(err: unknown): err is ErroIA {
+  return err instanceof ErroIA && err.status !== 400 && err.status !== 401;
+}
+
+/** Motivo curto, em linguagem da tela, para o aviso "a IA não respondeu (motivo)". */
+function motivoCurto(err: ErroIA): string {
+  const por: Partial<Record<ErroIA["codigo"], string>> = {
+    sem_credito: "conta sem crédito",
+    limite_diario: "limite diário dos modelos gratuitos atingido",
+    fila_cheia: "fila do modelo cheia",
+    modelo_indisponivel: "modelo indisponível",
+    provedor_fora: "serviço instável",
+    rede: "sem conexão com o serviço",
+    resposta_vazia: "resposta vazia",
+    resposta_invalida: "resposta fora do formato",
+  };
+  return por[err.codigo] ?? "serviço indisponível";
+}
+
 /** Calcula o diagnóstico de maturidade a partir de respostas reais: médias/nível geral/dispersão sempre no
  * servidor (nunca confiados à IA); com IA conectada, askJSON só recebe os agregados e as respostas de texto
- * para escrever a leitura; sem IA (ou em demo), a leitura vem de leituraSemIA (lib/analise-bussola.ts), para
- * "Analisar respostas" nunca ficar sem resultado por falta de chave. */
+ * para escrever a leitura; sem IA, ou quando a IA falha por crédito/fila/instabilidade, a leitura vem de
+ * leituraSemIA (lib/analise-bussola.ts) — o diagnóstico continua real (meta.demo: false), só a leitura é automática. */
 export async function analisarAvaliacao({ empresa, titulo, questionario, respostas }: { empresa: string; titulo: string; questionario: Questionario; respostas: Resposta[] }): Promise<{ avaliacao: Avaliacao; meta: Meta; id?: string }> {
   if (!respostas.length) throw new Error("Ainda não há respostas para analisar.");
 
@@ -65,35 +92,53 @@ export async function analisarAvaliacao({ empresa, titulo, questionario, respost
   const { nivelGeral, nomeEstagio } = calcularNivelGeral(mediasPorDimensao);
   const dispersao = calcularDispersao(mediasPorDimensao);
   const mediasPorArea = calcularMediasPorArea(questionario, respostas);
+  const automatica = () => leituraSemIA({ nivelGeral, nomeEstagio, totalRespostas: respostas.length, medias: mediasPorDimensao, mediasPorArea });
 
   let extra: RespostaAnaliseIA;
-  const demo = !aiEnabled();
-  if (demo) {
-    extra = leituraSemIA({ nivelGeral, nomeEstagio, totalRespostas: respostas.length, medias: mediasPorDimensao, mediasPorArea });
+  let origemLeitura: Analise["origemLeitura"] = "ia";
+  let avisoIA: string | undefined;
+  if (!aiEnabled()) {
+    extra = automatica();
+    origemLeitura = "automatica";
   } else {
     const respostasTexto = respostasTextoPorPergunta(questionario, respostas);
     const entrada = { empresa, nivelGeral, nomeEstagio, dispersao, mediasPorDimensao, ...(mediasPorArea.length >= 2 ? { mediasPorArea } : {}), respostasTexto };
-    extra = await askJSON<RespostaAnaliseIA>({ system: SYSTEM_ANALISE, prompt: JSON.stringify(entrada) });
+    try {
+      extra = await askJSON<RespostaAnaliseIA>({ system: SYSTEM_ANALISE, prompt: JSON.stringify(entrada) });
+    } catch (err) {
+      if (!podeCairNaLeituraAutomatica(err)) throw err;
+      extra = automatica();
+      origemLeitura = "automatica";
+      avisoIA = `Leitura automática: a IA não respondeu (${motivoCurto(err)}). Tente de novo para a leitura escrita.`;
+    }
   }
 
   // Nunca confia cegamente na IA: "onde discordam" só existe quando há de fato pelo menos 2 áreas informadas.
   const ondeDiscordam = mediasPorArea.length >= 2 ? (extra.ondeDiscordam ?? undefined) : undefined;
 
-  const analise: Analise = { resumo: extra.resumo, nivelGeral, nomeEstagio, mediasPorDimensao, dispersao, leituraPorDimensao: extra.leituraPorDimensao, forcas: extra.forcas, lacunas: extra.lacunas, proximosPassos: extra.proximosPassos, ondeDiscordam };
+  const analise: Analise = { resumo: extra.resumo, nivelGeral, nomeEstagio, mediasPorDimensao, dispersao, leituraPorDimensao: extra.leituraPorDimensao, forcas: extra.forcas, lacunas: extra.lacunas, proximosPassos: extra.proximosPassos, ondeDiscordam, origemLeitura, avisoIA };
   const avaliacao: Avaliacao = { empresa, titulo, questionario, respostas, analise };
-  const metaGerada = meta({ demo, insumo: `${respostas.length} ${respostas.length === 1 ? "resposta recebida" : "respostas recebidas"}` });
+  const n = respostas.length;
+  const insumo = `${n} ${n === 1 ? "resposta recebida" : "respostas recebidas"}${origemLeitura === "automatica" ? " (leitura automática, sem IA)" : ""}`;
+  const metaGerada = meta({ demo: false, insumo });
   const id = salvar({ tipo: "avaliacao", titulo, entrada: { empresa, titulo } satisfies DadosAvaliacao, saida: avaliacao, meta: metaGerada });
   return { avaliacao, meta: metaGerada, id };
+}
+
+/** Respostas e contexto de um link de avaliação; null quando o código não é de uma avaliação deste app. */
+export function contextoDoLink(codigo: string): { empresa: string; titulo: string; questionario: Questionario; respostas: Resposta[] } | null {
+  const formulario = obterFormulario(codigo);
+  if (!formulario || formulario.tipo !== TIPO_LINK_AVALIACAO) return null;
+  const { questionarioId, empresa, titulo } = formulario.parametros as { questionarioId: string; empresa: string; titulo: string };
+  const salvo = obterQuestionario(questionarioId);
+  if (!salvo) throw new Error("O questionário desta avaliação não foi encontrado. Ele pode ter sido apagado em 'Meus questionários'.");
+  return { empresa, titulo, questionario: salvo.questionario, respostas: listarPorCodigo(codigo) };
 }
 
 /** Analisa as respostas já recebidas por um link de avaliação (lib/link-avaliacao.ts), a partir do código do
  * link; null quando o código não é de uma avaliação deste app (mesmo contrato de respostasDoLink). */
 export async function analisarLink(codigo: string): Promise<{ avaliacao: Avaliacao; meta: Meta; id?: string } | null> {
-  const formulario = obterFormulario(codigo);
-  if (!formulario || formulario.tipo !== TIPO_LINK_AVALIACAO) return null;
-  const { questionarioId, empresa, titulo } = formulario.parametros as { questionarioId: string; empresa: string; titulo: string };
-  const salvo = obterQuestionario(questionarioId);
-  if (!salvo) throw new Error("Questionário desta avaliação não foi encontrado.");
-  const respostas = listarPorCodigo(codigo);
-  return analisarAvaliacao({ empresa, titulo, questionario: salvo.questionario, respostas });
+  const contexto = contextoDoLink(codigo);
+  if (!contexto) return null;
+  return analisarAvaliacao(contexto);
 }

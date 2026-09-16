@@ -1,4 +1,5 @@
-// Avaliação de exemplo usada quando não há uma avaliação real ainda (ver ?exemplo=1).
+// Avaliação de exemplo (8 respostas fictícias) para "Ver um diagnóstico de exemplo" e ?exemplo=1. É a única
+// origem de meta.demo: true neste app — respostas reais analisadas sem IA continuam sendo diagnóstico real.
 import { calcularDispersao, calcularMediasPorArea, calcularMediasPorDimensao, calcularNivelGeral, leituraSemIA } from "./analise-bussola";
 import { QUESTIONARIO_MODELO } from "./modelo";
 import type { Avaliacao, Questionario, Resposta } from "./types";
@@ -95,6 +96,6 @@ export function avaliacaoDemo({ empresa, titulo }: { empresa?: string; titulo?: 
     titulo: titulo || "Diagnóstico de maturidade em IA — 2026",
     questionario,
     respostas,
-    analise: { nivelGeral, nomeEstagio, mediasPorDimensao, dispersao, ...extra },
+    analise: { nivelGeral, nomeEstagio, mediasPorDimensao, dispersao, ...extra, origemLeitura: "automatica" },
   };
 }

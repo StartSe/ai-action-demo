@@ -1,16 +1,29 @@
 "use client";
-// Diálogo do painel (US-012): cria o link público de coleta de respostas a partir do questionário
-// em edição, com prazo e limite de respostas configuráveis, e mostra o link pronto para copiar.
+// Diálogo do painel: cria o link público de coleta de respostas a partir do questionário em edição,
+// com prazo e limite de respostas configuráveis, e mostra o link pronto para copiar. Antes de criar,
+// avisa sobre o endereço (o link circula fora do app) e sobre o disco efêmero do plano gratuito (US-029).
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { CopyButton } from "./ui";
+import { Aviso, CopyButton, lerErro } from "./ui";
 import type { Questionario } from "@/lib/types";
 
-type Props = { onFechar: () => void; aoCriar: () => void; questionario: Questionario; titulo: string; empresa: string };
+type Props = {
+  onFechar: () => void;
+  aoCriar: () => void;
+  questionario: Questionario;
+  titulo: string;
+  empresa: string;
+  /** Render sem disco persistente: as respostas se perdem quando o app reinicia (GET /api/bussola/link). */
+  discoEfemero: boolean;
+};
 
 type Fase = "form" | "gerando" | "pronto" | "erro";
 
+function enderecoLocal(): boolean {
+  return /^(localhost|127\.)/.test(location.hostname);
+}
+
 /** Só é montado enquanto o diálogo está aberto (ver app/page.tsx), para o estado nascer limpo a cada abertura. */
-export function DialogoLinkAvaliacao({ onFechar, aoCriar, questionario, titulo, empresa }: Props) {
+export function DialogoLinkAvaliacao({ onFechar, aoCriar, questionario, titulo, empresa, discoEfemero }: Props) {
   const [expiraEmDias, setExpiraEmDias] = useState("30");
   const [limite, setLimite] = useState("50");
   const [fase, setFase] = useState<Fase>("form");
@@ -39,22 +52,27 @@ export function DialogoLinkAvaliacao({ onFechar, aoCriar, questionario, titulo, 
     try {
       const corpo = { questionario, titulo, empresa, expiraEmDias: Number(expiraEmDias), limite: limite === "sem-limite" ? null : Number(limite) };
       const r = await fetch("/api/bussola/link", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
-      const resposta = await r.json();
-      if (!r.ok) throw new Error(resposta.error || "Não foi possível criar o link.");
-      setLink(`${location.origin}/f/${resposta.codigo}`);
+      if (!r.ok) {
+        setMensagemErro((await lerErro(r)).mensagem);
+        setFase("erro");
+        return;
+      }
+      const resposta = (await r.json()) as { codigo: string; url?: string };
+      // O servidor monta o endereço a partir do pedido (baseUrl), o mesmo que rotinas e e-mails vão usar.
+      setLink(resposta.url || `${location.origin}/f/${resposta.codigo}`);
       setFase("pronto");
       aoCriar();
     } catch (err) {
-      setMensagemErro(err instanceof Error ? err.message : "Erro inesperado.");
+      setMensagemErro((await lerErro(err)).mensagem);
       setFase("erro");
     }
   }
 
   return (
     <div className="fixed inset-0 z-30 bg-black/40 grid place-items-center px-4" role="presentation">
-      <div ref={caixaRef} role="dialog" aria-modal="true" aria-labelledby="titulo-link-avaliacao" className="card w-full max-w-[480px] p-7 max-md:p-5">
+      <div ref={caixaRef} role="dialog" aria-modal="true" aria-labelledby="titulo-link-avaliacao" className="card w-full max-w-[480px] p-7 max-md:p-5 max-h-[92vh] overflow-y-auto">
         <h2 id="titulo-link-avaliacao" className="text-xl font-extrabold mb-1.5">Criar link de avaliação</h2>
-        <p className="text-muted text-sm mb-5">Qualquer pessoa que abrir o link responde ao questionário sem precisar de login; as respostas chegam direto para você.</p>
+        <p className="text-muted text-sm mb-5">Quem abrir o link responde sem precisar entrar no app. As respostas chegam aqui, em &ldquo;Avaliações em andamento&rdquo;.</p>
 
         {fase === "pronto" ? (
           <div className="flex flex-col gap-4">
@@ -62,6 +80,11 @@ export function DialogoLinkAvaliacao({ onFechar, aoCriar, questionario, titulo, 
               <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[220px]">{link}</code>
               <CopyButton texto={() => link} rotulo="Copiar link" />
             </div>
+            {enderecoLocal() ? (
+              <Aviso tom="warn">Este endereço só abre neste computador. Para o time responder, publique o app e crie o link pelo endereço publicado.</Aviso>
+            ) : (
+              <p className="text-muted text-[12.5px]">O link usa o endereço pelo qual você abriu o app. Envie por e-mail ou mensagem ao time.</p>
+            )}
             <button type="button" className="btn-ghost !w-auto self-start" onClick={onFechar}>Fechar</button>
           </div>
         ) : (
@@ -74,7 +97,7 @@ export function DialogoLinkAvaliacao({ onFechar, aoCriar, questionario, titulo, 
                 <option value="90">90 dias</option>
               </select>
             </div>
-            <div className="flex flex-col gap-1.5 mb-5">
+            <div className="flex flex-col gap-1.5 mb-4">
               <label htmlFor="limiteLinkAvaliacao" className="text-[13px] font-semibold">Limite de respostas</label>
               <select id="limiteLinkAvaliacao" className="input" value={limite} onChange={(e) => setLimite(e.target.value)}>
                 <option value="10">10 respostas</option>
@@ -83,7 +106,14 @@ export function DialogoLinkAvaliacao({ onFechar, aoCriar, questionario, titulo, 
                 <option value="sem-limite">Sem limite</option>
               </select>
             </div>
-            {fase === "erro" && <p className="text-danger text-sm mb-4">{mensagemErro}</p>}
+
+            {discoEfemero && (
+              <div className="mb-4">
+                <Aviso tom="warn">No plano gratuito sem disco, as respostas se perdem quando o app reinicia. Analise assim que chegarem ou peça à equipe técnica um disco em &ldquo;/app/data&rdquo;.</Aviso>
+              </div>
+            )}
+
+            {fase === "erro" && <div className="mb-4"><Aviso tom="danger">{mensagemErro}</Aviso></div>}
             <div className="flex gap-2.5">
               <button type="submit" className="btn-primary !w-auto flex-1" disabled={fase === "gerando"}>{fase === "gerando" ? "Gerando" : "Gerar link"}</button>
               <button type="button" className="btn-ghost" onClick={onFechar}>Cancelar</button>
