@@ -2,7 +2,7 @@
 // avisando o executivo com o contrato, o prazo e a cláusula/ação sugerida (já em prazo.descricao).
 // Arquivo próprio deste app (não copiado sem alterar entre os 10 apps).
 import type { Canal } from "./notificacoes";
-import { criar as criarRotina, listar as listarRotinas, registrarExecutor, type Rotina } from "./rotinas";
+import { apagar as apagarRotina, criar as criarRotina, listar as listarRotinas, registrarExecutor, type Rotina } from "./rotinas";
 import type { Prazo } from "./types";
 
 type ParametrosAvisoPrazo = { resultadoId: string; tipoContrato: string; prazo: Prazo };
@@ -30,11 +30,18 @@ export function criarAvisosPrazo({ resultadoId, tipoContrato, prazos, canal, des
   });
 }
 
-/** Avisos já agendados para um contrato salvo (para o botão saber se já foi criado). */
-export function listarAvisosPrazo(resultadoId: string): { id: string; tipo: string; dataAviso: string; executado: boolean }[] {
+export type AvisoPrazo = { id: string; tipo: string; dataAviso: string; executado: boolean; falha: string | null };
+
+/** Avisos já agendados para um contrato salvo (para o botão saber se já foi criado e mostrar falhas). */
+export function listarAvisosPrazo(resultadoId: string): AvisoPrazo[] {
   return listarRotinas<ParametrosAvisoPrazo>()
     .filter((r) => r.tipo === "aviso-prazo-contrato" && r.parametros.resultadoId === resultadoId)
-    .map((r) => ({ id: r.id, tipo: r.parametros.prazo.tipo, dataAviso: r.dataUnica ?? "", executado: Boolean(r.ultimaExecucao) }));
+    .map((r) => ({ id: r.id, tipo: r.parametros.prazo.tipo, dataAviso: r.dataUnica ?? "", executado: Boolean(r.ultimaExecucao), falha: r.ultimaFalha }));
+}
+
+/** Apaga os avisos deste contrato (botão "Cancelar avisos"), inclusive os que já falharam. */
+export function cancelarAvisosPrazo(resultadoId: string): void {
+  for (const aviso of listarAvisosPrazo(resultadoId)) apagarRotina(aviso.id);
 }
 
 registrarExecutor("aviso-prazo-contrato", async (rotina: Rotina) => {

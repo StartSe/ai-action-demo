@@ -64,4 +64,8 @@ export interface Analise {
   pontos_ausentes: string[];
   perguntas_para_o_juridico: string[];
   fora_da_politica: ItemForaDaPolitica[];
+  /** Acrescentado pelo app (não vem da IA) quando o contrato passou do limite do modelo e só o começo foi lido. */
+  avisoTamanho?: string;
+  /** Índices de `clausulas_risco` já enviados ao quadro de tarefas (lib/quadro.ts), para não duplicar cartões. */
+  pontosNoQuadro?: number[];
 }

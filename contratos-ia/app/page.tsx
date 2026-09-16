@@ -1,36 +1,41 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
+  Aviso,
   Chip,
   DataTable,
   Destaque,
   Dropzone,
-  Empty,
   Entregar,
   ErrorBox,
   Field,
+  Hero,
   Item,
   Loading,
   MaisDetalhes,
   OptInGuardar,
   Origem,
-  Panel,
+  Passos,
   Privacidade,
   ResultHead,
+  Row,
   Section,
+  SeloIA,
   Stage,
   Topbar,
-  Workspace,
   data,
+  lerErro,
   numero,
   useScrollToResult,
   useStatus,
+  type PassoIndicador,
 } from "@/components/ui";
 import { AvisarPrazos } from "@/components/AvisarPrazos";
 import { SENSIVEL } from "@/lib/sensivel";
-import type { Meta } from "@/lib/ai";
+import type { CodigoErroIA, Meta } from "@/lib/ai";
 import type { Analise, ItemEssencial, Prazo } from "@/lib/types";
 import { PAPEIS } from "@/lib/types";
 
@@ -42,16 +47,81 @@ type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: strin
 
 const ETAPAS_CARREGANDO = ["Lendo o contrato...", "Identificando partes, prazos e obrigações...", "Calculando o nível de risco..."];
 
-/** Desenho de um documento com uma barra de risco, no lugar de um glifo genérico no estado vazio. */
-function IlustracaoContrato() {
+// Textos do hero (economia de texto: título ≤ 8 palavras, apoio ≤ 20, itens ≤ 5 de até 6 palavras — ver CLAUDE.md).
+const PROMESSA = {
+  sobretitulo: "Jurídico",
+  titulo: "Saiba o que negociar antes de assinar",
+  apoio: "Envie o contrato e diga qual é o seu papel: a IA aponta riscos, prazos e o que falta.",
+  itens: [
+    "Nível de risco do seu lado",
+    "Cláusulas que merecem atenção",
+    "Prazos com data no calendário",
+    "O que falta no contrato",
+    "Perguntas para levar ao jurídico",
+  ],
+};
+
+const PASSOS: PassoIndicador[] = [
+  { titulo: "Contrato", apoio: "PDF ou texto colado" },
+  { titulo: "Seu papel", apoio: "De que lado você assina" },
+  { titulo: "Análise", apoio: "Riscos, prazos e ausências" },
+];
+
+function IconeDocumento() {
   return (
-    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 6h22l10 10v42a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" />
-      <path d="M38 6v10h10" />
-      <path d="M21 30h22M21 37h22M21 44h14" />
-      <rect x="19" y="52" width="26" height="4" rx="2" fill="currentColor" stroke="none" opacity="0.18" />
-      <rect x="19" y="52" width="17" height="4" rx="2" fill="currentColor" stroke="none" />
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 3h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M14 3v4h4" />
+      <path d="M8.5 12h7M8.5 16h4.5" />
     </svg>
+  );
+}
+
+function IconeBalanca() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 4v16M7 20h10M5 8h14M12 8 8 8l-2.5 6a3 3 0 0 0 5 0L12 8Zm0 0 4 0 2.5 6a3 3 0 0 1-5 0L12 8Z" />
+      <circle cx="12" cy="4.5" r="1.3" />
+    </svg>
+  );
+}
+
+function IconeItem() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0 mt-0.5" aria-hidden="true">
+      <path d="M5 12.5 9.5 17 19 7" />
+    </svg>
+  );
+}
+
+/** Cartão de entrada com ícone circular e título, no lugar da coluna única de campos crus. */
+function CartaoEntrada({ icone, titulo, children }: { icone: ReactNode; titulo: string; children: ReactNode }) {
+  return (
+    <div className="card p-5 mb-3">
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className="w-9 h-9 rounded-full bg-accent-soft text-accent grid place-items-center shrink-0">{icone}</div>
+        <h2 className="font-bold text-[15px]">{titulo}</h2>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Prévia de "o que você vai receber", exibida no lugar do resultado antes da primeira análise. */
+function Previa({ itens, onExemplo, carregando }: { itens: string[]; onExemplo: () => void; carregando: boolean }) {
+  return (
+    <div className="card p-7 max-md:p-5 h-full min-h-[420px] max-md:min-h-0 flex flex-col justify-center">
+      <h2 className="font-bold text-[15px] mb-4">O que você vai receber</h2>
+      <ul className="flex flex-col gap-3 mb-6">
+        {itens.map((it) => (
+          <li key={it} className="flex items-start gap-2.5 text-sm text-ink-2">
+            <IconeItem />
+            <span>{it}</span>
+          </li>
+        ))}
+      </ul>
+      <button type="button" className="btn-ghost !w-auto self-start" onClick={onExemplo} disabled={carregando}>Usar contrato de exemplo</button>
+    </div>
   );
 }
 
@@ -59,11 +129,12 @@ type Aba = "pdf" | "texto";
 type Estado =
   | { fase: "vazio" }
   | { fase: "carregando" }
-  | { fase: "erro"; mensagem: string; fd: FormData }
+  | { fase: "erro"; mensagem: string; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string }; fd: FormData }
   | { fase: "pronto"; idContrato: string; id?: string; analise: Analise; papel: string; meta: Meta };
 
 export default function Page() {
   const { status, erro } = useStatus();
+  const router = useRouter();
   const [aba, setAba] = useState<Aba>("pdf");
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [texto, setTexto] = useState("");
@@ -79,7 +150,7 @@ export default function Page() {
   useScrollToResult(estado.fase === "pronto");
 
   useEffect(() => {
-    fetch("/api/politica").then((r) => r.json()).then((p) => setPoliticaCadastrada(Boolean(p.cadastrada))).catch(() => {});
+    fetch("/api/politica").then((r) => (r.ok ? r.json() : null)).then((p) => setPoliticaCadastrada(Boolean(p?.cadastrada))).catch(() => {});
   }, []);
 
   function carregarHistorico() {
@@ -102,21 +173,39 @@ export default function Page() {
 
   function selecionarArquivo(f: File | null) {
     setArquivo(f);
-    if (f) setErroForm(validarArquivo(f));
-    else setErroForm("");
+    setErroForm(f ? validarArquivo(f) : "");
   }
 
   async function analisar(fd: FormData) {
     setEstado({ fase: "carregando" });
     try {
       const r = await fetch("/api/analisar", { method: "POST", body: fd });
+      if (!r.ok) {
+        // lerErro lê { error, codigo, acao } da rota (respostaErro) e nunca deixa status HTTP cru chegar à tela.
+        const info = await lerErro(r);
+        if (r.status === 401 && info.codigo === "sem_sessao") {
+          router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
+          return;
+        }
+        setEstado({ fase: "erro", mensagem: info.mensagem, codigo: info.codigo as CodigoErroIA | undefined, acao: info.acao, fd });
+        return;
+      }
       const resposta = await r.json();
-      if (!r.ok) throw new Error(resposta.error || "Falha ao analisar o contrato.");
       setEstado({ fase: "pronto", idContrato: resposta.idContrato, id: resposta.id, analise: resposta.analise, papel: String(fd.get("papel") || papel), meta: resposta.meta });
-      fetch("/api/analisar").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
+      carregarHistorico();
     } catch (e) {
-      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado.", fd });
+      const info = await lerErro(e);
+      setEstado({ fase: "erro", mensagem: info.mensagem, fd });
     }
+  }
+
+  function montarFormData({ conteudo, papelEnviado, preocupacaoEnviada }: { conteudo: string; papelEnviado: string; preocupacaoEnviada: string }) {
+    const fd = new FormData();
+    fd.append("texto", conteudo);
+    fd.append("papel", papelEnviado);
+    fd.append("preocupacao", preocupacaoEnviada);
+    fd.append("guardar", String(guardar));
+    return fd;
   }
 
   function onSubmit(e: FormEvent) {
@@ -138,24 +227,30 @@ export default function Page() {
     analisar(fd);
   }
 
-  async function preencherExemplo() {
+  /** "Usar contrato de exemplo" preenche E analisa: quem quer ver o resultado não precisa rolar até o botão. */
+  async function usarExemplo() {
+    setErroForm("");
+    let conteudo: string;
     try {
       const r = await fetch("/exemplo-contrato.txt");
-      setTexto(await r.text());
+      if (!r.ok) throw r;
+      conteudo = await r.text();
     } catch {
-      setErroForm("Não foi possível carregar o contrato de exemplo.");
+      setErroForm("Não foi possível carregar o contrato de exemplo. Cole o texto do contrato na outra aba.");
+      return;
     }
+    setAba("texto");
+    setTexto(conteudo);
     setPapel(PAPEL_PADRAO);
     setPreocupacao(PREOCUPACAO_EXEMPLO);
-    setAba("texto");
+    analisar(montarFormData({ conteudo, papelEnviado: PAPEL_PADRAO, preocupacaoEnviada: PREOCUPACAO_EXEMPLO }));
   }
 
+  /** "Analisar outro" limpa só o contrato: o papel e a preocupação quase sempre são os mesmos do próximo. */
   function analisarOutro() {
     setEstado({ fase: "vazio" });
     setArquivo(null);
     setTexto("");
-    setPapel(PAPEL_PADRAO);
-    setPreocupacao("");
     setAba("pdf");
     setErroForm("");
     window.scrollTo({ top: 0 });
@@ -166,25 +261,13 @@ export default function Page() {
     if (autoEnviado.current) return;
     if (new URLSearchParams(location.search).get("exemplo") === "1") {
       autoEnviado.current = true;
-      setTimeout(async () => {
-        setAba("texto");
-        setPapel(PAPEL_PADRAO);
-        setPreocupacao(PREOCUPACAO_EXEMPLO);
-        const r = await fetch("/exemplo-contrato.txt");
-        const conteudo = await r.text();
-        setTexto(conteudo);
-        const fd = new FormData();
-        fd.append("texto", conteudo);
-        fd.append("papel", PAPEL_PADRAO);
-        fd.append("preocupacao", PREOCUPACAO_EXEMPLO);
-        fd.append("guardar", "false");
-        analisar(fd);
-      }, 0);
+      setTimeout(usarExemplo, 0);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma única vez ao abrir a página
   }, []);
 
   const carregando = estado.fase === "carregando";
+  const passoAtual = estado.fase === "pronto" ? 3 : arquivo || texto.trim() ? 2 : 1;
 
   return (
     <>
@@ -194,113 +277,131 @@ export default function Page() {
         area="Jurídico"
         status={status}
         erro={erro}
-        resumo="Modo demonstração: a análise exibida é um exemplo de contrato de prestação de serviços de tecnologia, seja qual for o arquivo enviado."
+        resumo="Modo demonstração: a análise exibida é um exemplo de contrato de tecnologia, seja qual for o arquivo enviado."
+        usuario={status?.usuario}
       />
 
-      <Workspace>
-        <Panel titulo="Saiba o que negociar antes de mandar ao jurídico." lead="Envie o contrato e diga qual é o seu papel. A IA aponta riscos, prazos e o que está faltando, em linguagem de negócio.">
-          <form onSubmit={onSubmit}>
-            <div className="flex gap-1 bg-bg p-1 rounded-[10px] mb-4">
-              <button
-                type="button"
-                onClick={() => { setAba("pdf"); setErroForm(""); }}
-                className={`flex-1 px-2.5 py-2 rounded-lg text-[13.5px] font-bold transition-colors ${aba === "pdf" ? "bg-surface text-ink shadow-card" : "text-muted"}`}
-              >
-                Enviar PDF
-              </button>
-              <button
-                type="button"
-                onClick={() => { setAba("texto"); setErroForm(""); }}
-                className={`flex-1 px-2.5 py-2 rounded-lg text-[13.5px] font-bold transition-colors ${aba === "texto" ? "bg-surface text-ink shadow-card" : "text-muted"}`}
-              >
-                Colar texto
-              </button>
-            </div>
+      <Hero sobretitulo={PROMESSA.sobretitulo} titulo={PROMESSA.titulo} apoio={PROMESSA.apoio} segmento="Jurídico">
+        <Passos passos={PASSOS} atual={passoAtual} />
+      </Hero>
 
-            {aba === "pdf" && (
-              <div className="mb-4">
-                <Dropzone id="arquivo" accept="application/pdf,.pdf" tiposLabel="Somente PDF" maxSizeMB={10} arquivo={arquivo} onArquivo={selecionarArquivo} />
+      <main className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">
+        <div>
+          <form onSubmit={onSubmit} className="form-contrato">
+            <CartaoEntrada icone={<IconeDocumento />} titulo="O contrato">
+              <div className="flex gap-1 bg-bg p-1 rounded-[10px] mb-4">
+                <button
+                  type="button"
+                  onClick={() => { setAba("pdf"); setErroForm(""); }}
+                  className={`flex-1 px-2.5 py-2 rounded-lg text-[13.5px] font-bold transition-colors ${aba === "pdf" ? "bg-surface text-ink shadow-card" : "text-muted"}`}
+                >
+                  Enviar PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAba("texto"); setErroForm(""); }}
+                  className={`flex-1 px-2.5 py-2 rounded-lg text-[13.5px] font-bold transition-colors ${aba === "texto" ? "bg-surface text-ink shadow-card" : "text-muted"}`}
+                >
+                  Colar texto
+                </button>
               </div>
-            )}
 
-            {aba === "texto" && (
-              <Field label="Texto do contrato" htmlFor="texto" hint="Quanto mais completo o texto, melhor a leitura.">
-                <textarea
-                  id="texto"
-                  className="input min-h-32 resize-y"
-                  placeholder="Cole aqui o texto integral do contrato, com as cláusulas numeradas se possível."
-                  value={texto}
-                  onChange={(e) => setTexto(e.target.value)}
-                />
-              </Field>
-            )}
+              {aba === "pdf" ? (
+                <Dropzone id="arquivo" accept="application/pdf,.pdf" tiposLabel="Somente PDF" maxSizeMB={10} arquivo={arquivo} onArquivo={selecionarArquivo} />
+              ) : (
+                <Field label="Texto do contrato" htmlFor="texto">
+                  <textarea
+                    id="texto"
+                    className="input min-h-28 resize-y"
+                    placeholder="Cole aqui o texto integral do contrato, com as cláusulas numeradas se possível."
+                    value={texto}
+                    onChange={(e) => setTexto(e.target.value)}
+                  />
+                </Field>
+              )}
+            </CartaoEntrada>
 
-            <Field label="Qual é o seu papel neste contrato?" htmlFor="papel">
-              <select id="papel" className="input" value={papel} onChange={(e) => setPapel(e.target.value)}>
-                {PAPEIS.map((p) => (
-                  <option key={p.valor} value={p.valor}>{p.rotulo}</option>
-                ))}
-              </select>
-            </Field>
+            <CartaoEntrada icone={<IconeBalanca />} titulo="Seu lado na mesa">
+              <Row>
+                <Field label="Qual é o seu papel?" htmlFor="papel">
+                  <select id="papel" className="input" value={papel} onChange={(e) => setPapel(e.target.value)}>
+                    {PAPEIS.map((p) => (
+                      <option key={p.valor} value={p.valor}>{p.rotulo}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="O que mais te preocupa? (opcional)" htmlFor="preocupacao">
+                  <input
+                    id="preocupacao"
+                    className="input"
+                    placeholder="Ex.: multa por cancelamento, quem fica com o código"
+                    value={preocupacao}
+                    onChange={(e) => setPreocupacao(e.target.value)}
+                  />
+                </Field>
+              </Row>
 
-            <MaisDetalhes>
-              <Field label="O que mais te preocupa? (opcional)" htmlFor="preocupacao">
-                <input
-                  id="preocupacao"
-                  className="input"
-                  placeholder="Ex.: multa por cancelamento, prazo de pagamento, quem fica com o código"
-                  value={preocupacao}
-                  onChange={(e) => setPreocupacao(e.target.value)}
-                />
-              </Field>
-            </MaisDetalhes>
+              {SENSIVEL && (
+                <>
+                  <OptInGuardar checked={guardar} onChange={setGuardar} />
+                  <p className="text-muted text-[12.5px] -mt-3 mb-4">Necessário para link compartilhável, PDF formatado e avisos de prazo.</p>
+                </>
+              )}
+            </CartaoEntrada>
 
             {erroForm && <p className="text-danger text-[13px] mb-3">{erroForm}</p>}
 
-            {SENSIVEL && <OptInGuardar checked={guardar} onChange={setGuardar} />}
             <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Analisando" : "Analisar contrato"}</button>
+            <button type="button" className="btn-secundario mt-2" disabled={carregando} onClick={usarExemplo}>Usar contrato de exemplo</button>
           </form>
-          <p className="mt-3.5 text-muted text-[12.5px] border-t border-line pt-3">Apoio à leitura. Não substitui a análise do seu departamento jurídico.</p>
-          <Privacidade detalhe="Sem marcar 'Guardar', nada fica salvo: o contrato existe só nesta tela por 1 hora, para responder às suas perguntas, e depois é descartado." />
 
-          <MaisDetalhes titulo="Últimos resultados">
-            {historico === null ? (
-              <p className="text-muted text-sm">Carregando...</p>
-            ) : historico.length === 0 ? (
-              <p className="text-muted text-sm">Nenhum resultado salvo ainda.</p>
-            ) : (
-              <>
-                <ul className="flex flex-col gap-1.5 text-sm mb-3">
-                  {historico.map((h) => (
-                    <li key={h.id} className="flex justify-between gap-3">
-                      <Link href={`/r/${h.id}`} className="text-accent-ink font-semibold hover:underline truncate">{h.titulo}</Link>
-                      <span className="text-muted shrink-0">{data(h.criadoEm)}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
-              </>
-            )}
-          </MaisDetalhes>
-        </Panel>
+          <div className="card p-5 mt-4">
+            <p className="text-muted text-[12.5px]">Apoio à leitura. Não substitui a análise do seu departamento jurídico.</p>
+            <Privacidade detalhe="Sem marcar 'Guardar', nada fica salvo: o contrato existe só nesta tela por 1 hora, para responder às suas perguntas, e depois é descartado." />
+
+            <MaisDetalhes titulo="Últimos resultados">
+              {historico === null ? (
+                <p className="text-muted text-sm">Carregando...</p>
+              ) : historico.length === 0 ? (
+                <p className="text-muted text-sm">Nenhum resultado salvo ainda.</p>
+              ) : (
+                <>
+                  <ul className="flex flex-col gap-1.5 text-sm mb-3">
+                    {historico.slice(0, 3).map((h) => (
+                      <li key={h.id} className="flex justify-between gap-3">
+                        <Link href={`/r/${h.id}`} className="text-accent-ink font-semibold hover:underline truncate">{h.titulo}</Link>
+                        <span className="text-muted shrink-0">{data(h.criadoEm)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex items-center gap-4">
+                    <Link href="/historico" className="btn-link text-[13px]">Ver todos</Link>
+                    <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
+                  </div>
+                </>
+              )}
+            </MaisDetalhes>
+          </div>
+        </div>
 
         <Stage>
-          {estado.fase === "vazio" && (
-            <Empty
-              ilustracao={<IlustracaoContrato />}
-              titulo="A análise aparece aqui"
-              descricao="Resumo executivo, nível de risco, cláusulas que merecem atenção, prazos críticos, o que falta no contrato e perguntas para levar ao jurídico."
-              acao="Usar contrato de exemplo"
-              onAcao={preencherExemplo}
+          {estado.fase === "vazio" && <Previa itens={PROMESSA.itens} onExemplo={usarExemplo} carregando={carregando} />}
+          {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
+          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} codigo={estado.codigo} acao={estado.acao} onTentarNovamente={() => analisar(estado.fd)} />}
+          {estado.fase === "pronto" && (
+            <Resultado
+              id={estado.id}
+              idContrato={estado.idContrato}
+              analise={estado.analise}
+              papel={estado.papel}
+              meta={estado.meta}
+              politicaCadastrada={politicaCadastrada}
+              quadroConectado={status ? Boolean(status.integrations?.mcpTarefas) : null}
+              onNovo={analisarOutro}
             />
           )}
-          {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
-          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} onTentarNovamente={() => analisar(estado.fd)} />}
-          {estado.fase === "pronto" && (
-            <Resultado id={estado.id} idContrato={estado.idContrato} analise={estado.analise} papel={estado.papel} meta={estado.meta} politicaCadastrada={politicaCadastrada} onNovo={analisarOutro} />
-          )}
         </Stage>
-      </Workspace>
+      </main>
     </>
   );
 }
@@ -311,11 +412,24 @@ function classeRisco(nota: number) {
   return "baixo";
 }
 
-function textoRisco(nota: number, papel: string) {
+/** "3 alto, 3 médio, 1 baixo" a partir das severidades das cláusulas, para a interpretação do Destaque. */
+function contagemSeveridades(a: Analise): string {
+  const contas = { alta: 0, "média": 0, baixa: 0 } as Record<string, number>;
+  for (const c of a.clausulas_risco || []) if (c.severidade in contas) contas[c.severidade]++;
+  const partes: string[] = [];
+  if (contas.alta) partes.push(`${contas.alta} alto`);
+  if (contas["média"]) partes.push(`${contas["média"]} médio`);
+  if (contas.baixa) partes.push(`${contas.baixa} baixo`);
+  return partes.join(", ");
+}
+
+function textoRisco(nota: number, papel: string, a: Analise) {
   const quem = papel === "outro" ? "para você" : `para você como ${papel}`;
-  if (nota >= 7) return `Risco alto ${quem}. Há cláusulas que pesam claramente contra a sua posição: negocie antes de assinar.`;
-  if (nota >= 4) return `Risco moderado ${quem}. Vale negociar os pontos destacados abaixo antes de assinar.`;
-  return `Risco baixo ${quem}. O contrato está relativamente equilibrado; confira os detalhes abaixo.`;
+  const contagem = contagemSeveridades(a);
+  const detalhe = contagem ? ` Cláusulas por gravidade: ${contagem}.` : "";
+  if (nota >= 7) return `Risco alto ${quem}. Há cláusulas que pesam claramente contra a sua posição: negocie antes de assinar.${detalhe}`;
+  if (nota >= 4) return `Risco moderado ${quem}. Vale negociar os pontos destacados abaixo antes de assinar.${detalhe}`;
+  return `Risco baixo ${quem}. O contrato está relativamente equilibrado; confira os detalhes abaixo.${detalhe}`;
 }
 
 /** Nome do papel sem gênero (contratado/contratada, locador/locadora...), para comparar o papel escolhido pelo usuário com o texto livre gerado pela IA em `partes[].papel`. */
@@ -350,15 +464,15 @@ function emailOutraParte(a: Analise): { assunto: string; corpo: string } {
   return { assunto, corpo };
 }
 
-function baixarTexto(nomeArquivo: string, conteudo: string) {
-  const blob = new Blob([conteudo], { type: "text/plain;charset=utf-8" });
+function baixarArquivo(nomeArquivo: string, conteudo: string, tipo: string) {
+  const blob = new Blob([conteudo], { type: tipo });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = nomeArquivo;
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
+  a.remove();
   URL.revokeObjectURL(url);
 }
 
@@ -386,14 +500,10 @@ function escaparIcs(texto: string): string {
   return texto.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
 }
 
-/** Baixa um .ics de dia inteiro para o prazo, com a cláusula/ação sugerida na descrição. */
-function baixarIcsPrazo(prazo: Prazo, tituloContrato: string) {
+function eventoIcs(prazo: Prazo, tituloContrato: string): string[] {
   const dtStamp = `${new Date().toISOString().replace(/[-:]/g, "").split(".")[0]}Z`;
   const uid = `prazo-${Date.now()}-${Math.random().toString(36).slice(2)}@ia-para-executivos`;
-  const linhas = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//IA para Executivos//Leitura de Contratos//PT-BR",
+  return [
     "BEGIN:VEVENT",
     `UID:${uid}`,
     `DTSTAMP:${dtStamp}`,
@@ -402,17 +512,19 @@ function baixarIcsPrazo(prazo: Prazo, tituloContrato: string) {
     `SUMMARY:${escaparIcs(`${prazo.tipo} — ${tituloContrato || "Contrato"}`)}`,
     `DESCRIPTION:${escaparIcs(prazo.descricao)}`,
     "END:VEVENT",
+  ];
+}
+
+/** Baixa um .ics de dia inteiro com um evento por prazo recebido (um prazo ou todos de uma vez). */
+function baixarIcs(prazos: Prazo[], tituloContrato: string, nomeArquivo: string) {
+  const linhas = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//IA para Executivos//Leitura de Contratos//PT-BR",
+    ...prazos.flatMap((p) => eventoIcs(p, tituloContrato)),
     "END:VCALENDAR",
   ];
-  const blob = new Blob([linhas.join("\r\n")], { type: "text/calendar;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "prazo.ics";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  baixarArquivo(nomeArquivo, linhas.join("\r\n"), "text/calendar;charset=utf-8");
 }
 
 function analiseParaTexto(a: Analise, papel: string) {
@@ -444,6 +556,7 @@ export function Resultado({
   papel,
   meta,
   politicaCadastrada,
+  quadroConectado,
   onNovo,
 }: {
   id?: string;
@@ -452,30 +565,73 @@ export function Resultado({
   papel: string;
   meta: Meta;
   politicaCadastrada?: boolean;
+  quadroConectado?: boolean | null;
   onNovo?: () => void;
 }) {
+  const [enviandoQuadro, setEnviandoQuadro] = useState(false);
+  const [avisoQuadro, setAvisoQuadro] = useState<{ tom: "ok" | "danger"; texto: string; acao?: { rotulo: string; url: string } } | null>(null);
+
+  /** "Enviar pontos a negociar como tarefas": um cartão por cláusula de risco no quadro conectado. */
+  async function enviarAoQuadro() {
+    if (!id) return;
+    setEnviandoQuadro(true);
+    setAvisoQuadro(null);
+    try {
+      const r = await fetch("/api/quadro", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      if (!r.ok) {
+        const info = await lerErro(r);
+        setAvisoQuadro({ tom: "danger", texto: info.mensagem, acao: info.acao });
+        return;
+      }
+      const d = await r.json();
+      // `pontosNoQuadro` fica só no servidor: ele já não duplica cartão, e a tela não mostra esse estado.
+      const enviados = (d.resultados as { ok: boolean }[]).filter((x) => x.ok).length;
+      const falhas = (d.resultados as { ok: boolean; mensagem: string }[]).filter((x) => !x.ok);
+      if (falhas.length > 0) {
+        setAvisoQuadro({ tom: "danger", texto: `Enviamos ${enviados} de ${enviados + falhas.length} pontos. ${falhas[0].mensagem}` });
+      } else {
+        setAvisoQuadro({ tom: "ok", texto: enviados === 0 ? "Todos os pontos já estavam no quadro." : `${enviados} ${enviados === 1 ? "ponto enviado" : "pontos enviados"} para o quadro.` });
+      }
+    } catch (e) {
+      setAvisoQuadro({ tom: "danger", texto: (await lerErro(e)).mensagem });
+    } finally {
+      setEnviandoQuadro(false);
+    }
+  }
+
+  const extras = [
+    ...(onNovo ? [{ rotulo: "Analisar outro", onClick: onNovo }] : []),
+    { rotulo: "Baixar lista de pontos a negociar", onClick: () => baixarArquivo("pontos-a-negociar.txt", pontosParaNegociar(analise), "text/plain;charset=utf-8") },
+    {
+      rotulo: "E-mail para a outra parte",
+      onClick: () => {
+        const { assunto, corpo } = emailOutraParte(analise);
+        window.location.href = `mailto:?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
+      },
+    },
+    ...(id && (analise.clausulas_risco || []).length > 0
+      ? [{ rotulo: enviandoQuadro ? "Enviando ao quadro" : "Enviar pontos a negociar como tarefas", onClick: enviarAoQuadro }]
+      : []),
+  ];
+
   return (
     <article className="reveal">
       <ResultHead titulo={analise.tipo_contrato || "Contrato"} subtitulo={`Análise do ponto de vista de quem é ${papel}`}>
-        <Entregar
-          id={id}
-          titulo={analise.tipo_contrato || "Contrato"}
-          texto={() => analiseParaTexto(analise, papel)}
-          extras={[
-            ...(onNovo ? [{ rotulo: "Analisar outro", onClick: onNovo }] : []),
-            { rotulo: "Baixar lista de pontos a negociar", onClick: () => baixarTexto("pontos-a-negociar.txt", pontosParaNegociar(analise)) },
-            {
-              rotulo: "E-mail para a outra parte",
-              onClick: () => {
-                const { assunto, corpo } = emailOutraParte(analise);
-                window.location.href = `mailto:?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
-              },
-            },
-          ]}
-        />
+        <Entregar id={id} titulo={analise.tipo_contrato || "Contrato"} texto={() => analiseParaTexto(analise, papel)} extras={extras} />
       </ResultHead>
 
       <Origem meta={meta} demoTexto="Exemplo fixo: o contrato enviado não foi analisado." />
+
+      {analise.avisoTamanho && <div className="mb-4"><Aviso>{analise.avisoTamanho}</Aviso></div>}
+      {avisoQuadro && <div className="mb-4"><Aviso tom={avisoQuadro.tom} acao={avisoQuadro.acao}>{avisoQuadro.texto}</Aviso></div>}
+      {id && quadroConectado === false && (analise.clausulas_risco || []).length > 0 && (
+        <div className="mb-4">
+          <Aviso>
+            Conecte um quadro de tarefas para mandar os pontos a negociar direto ao time.
+            <div className="mt-2.5"><a className="btn-link text-[13px]" href="/setup#mcp-tarefas">Conectar o quadro</a></div>
+          </Aviso>
+        </div>
+      )}
 
       <ConteudoAnalise
         analise={analise}
@@ -486,6 +642,8 @@ export function Resultado({
       />
 
       <p className="text-muted text-[12.5px] border-t border-line pt-3">Apoio à leitura. Não substitui a análise do seu departamento jurídico.</p>
+
+      <SeloIA demo={meta.demo} />
     </article>
   );
 }
@@ -517,10 +675,11 @@ export function ConteudoAnalise({ analise: a, papel, politicaCadastrada, slotApo
   const nota = Math.max(0, Math.min(10, Number(a.nota_risco) || 0));
   const cls = classeRisco(nota);
   const tom = cls === "alto" ? "danger" : cls === "moderado" ? "warn" : "ok";
+  const prazos = a.prazos || [];
 
   return (
     <>
-      <Destaque valor={`${numero(nota, 1)}/10`} rotulo="Nível de risco" interpretacao={textoRisco(nota, papel)} tom={tom} />
+      <Destaque valor={`${numero(nota, 1)}/10`} rotulo="Nível de risco" interpretacao={textoRisco(nota, papel, a)} tom={tom} />
 
       <p className="summary">{a.resumo_executivo}</p>
 
@@ -555,7 +714,7 @@ export function ConteudoAnalise({ analise: a, papel, politicaCadastrada, slotApo
               chave: "clausula",
               titulo: "Cláusula",
               papel: "titulo",
-              largura: "22%",
+              largura: "20%",
               render: (c) => (
                 <>
                   <strong>{c.clausula}</strong>
@@ -563,9 +722,11 @@ export function ConteudoAnalise({ analise: a, papel, politicaCadastrada, slotApo
                 </>
               ),
             },
-            { chave: "sugestao", titulo: "Sugestão de negociação", papel: "resumo", render: (c) => c.sugestao_negociacao },
-            { chave: "risco", titulo: "Risco para você", papel: "detalhe", render: (c) => c.risco },
-            { chave: "severidade", titulo: "Severidade", papel: "chip", largura: "100px", render: (c) => <Chip nivel={c.severidade} /> },
+            // O risco é o que decide se vale ler o resto: fica no resumo; a sugestão vem depois, no detalhe.
+            // linhas: 4 — o risco cabe inteiro na coluna estreita e some o "Ver mais" de toda linha (US-020).
+            { chave: "risco", titulo: "Risco para você", papel: "resumo", linhas: 5, largura: "38%", render: (c) => c.risco },
+            { chave: "sugestao", titulo: "Sugestão de negociação", papel: "detalhe", render: (c) => c.sugestao_negociacao },
+            { chave: "severidade", titulo: "Severidade", papel: "chip", largura: "92px", render: (c) => <Chip nivel={c.severidade} /> },
           ]}
           linhas={a.clausulas_risco || []}
         />
@@ -592,16 +753,23 @@ export function ConteudoAnalise({ analise: a, papel, politicaCadastrada, slotApo
       </Section>
 
       <Section titulo="Prazos">
-        {resultadoId && <AvisarPrazos resultadoId={resultadoId} prazos={a.prazos || []} />}
+        {resultadoId && <AvisarPrazos resultadoId={resultadoId} prazos={prazos} />}
+        {prazos.length > 1 && (
+          <div className="mb-3.5">
+            <button type="button" className="btn-ghost" onClick={() => baixarIcs(prazos, a.tipo_contrato, "prazos-do-contrato.ics")}>
+              Adicionar todos ao calendário
+            </button>
+          </div>
+        )}
         <div className="flex flex-col gap-2.5">
-          {(a.prazos || []).map((p, i) => (
+          {prazos.map((p, i) => (
             <div key={i} className="card shadow-none flex max-md:flex-col items-baseline gap-3.5 px-3.5 py-3 text-sm">
               <span className="font-extrabold text-accent-ink whitespace-nowrap shrink-0">{dataPrazo(p.data)}</span>
               <div className="flex-1">
                 <strong>{p.tipo}</strong>
                 <p className="text-muted mt-0.5">{p.descricao}</p>
               </div>
-              <button type="button" className="btn-link text-[12.5px] shrink-0" onClick={() => baixarIcsPrazo(p, a.tipo_contrato)}>Adicionar ao calendário</button>
+              <button type="button" className="btn-link text-[12.5px] shrink-0" onClick={() => baixarIcs([p], a.tipo_contrato, "prazo.ics")}>Adicionar ao calendário</button>
             </div>
           ))}
         </div>
@@ -634,7 +802,7 @@ export function ConteudoAnalise({ analise: a, papel, politicaCadastrada, slotApo
   );
 }
 
-type QA = { pergunta: string; resposta?: string; erro?: string; carregando: boolean };
+type QA = { pergunta: string; resposta?: string; erro?: string; acao?: { rotulo: string; url: string }; carregando: boolean };
 
 /** Caixa de perguntas ao contrato; só aparece quando o texto ainda está guardado em memória (1 hora), ver lib/estado.ts. */
 function SecaoPerguntar({ idContrato, sugestoes }: { idContrato: string; sugestoes: string[] }) {
@@ -646,14 +814,19 @@ function SecaoPerguntar({ idContrato, sugestoes }: { idContrato: string; sugesto
     if (!texto) return;
     setPergunta("");
     setQas((prev) => [...prev, { pergunta: texto, carregando: true }]);
+    const concluir = (dados: Partial<QA>) =>
+      setQas((prev) => prev.map((qa) => (qa.pergunta === texto && qa.carregando ? { pergunta: texto, carregando: false, ...dados } : qa)));
     try {
       const r = await fetch("/api/perguntar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: idContrato, pergunta: texto }) });
+      if (!r.ok) {
+        const info = await lerErro(r);
+        concluir({ erro: info.mensagem, acao: info.acao });
+        return;
+      }
       const resposta = await r.json();
-      if (!r.ok) throw new Error(resposta.error || "Não foi possível responder.");
-      setQas((prev) => prev.map((qa) => (qa.pergunta === texto && qa.carregando ? { pergunta: texto, resposta: resposta.resposta, carregando: false } : qa)));
+      concluir({ resposta: resposta.resposta });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Não foi possível responder.";
-      setQas((prev) => prev.map((qa) => (qa.pergunta === texto && qa.carregando ? { pergunta: texto, erro: msg, carregando: false } : qa)));
+      concluir({ erro: (await lerErro(err)).mensagem });
     }
   }
 
@@ -667,8 +840,10 @@ function SecaoPerguntar({ idContrato, sugestoes }: { idContrato: string; sugesto
       <Item>
         {sugestoes.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3.5">
+            {/* max-w-full + whitespace-normal: sem os dois, o `!w-auto` e o `nowrap` de .btn-ghost
+                deixam a pergunta longa estourar a largura da tela no celular (medido: 492 px em 390). */}
             {sugestoes.map((s, i) => (
-              <button key={i} type="button" className="btn-ghost !w-auto !py-1.5 !px-2.5 text-[12.5px] text-left" onClick={() => perguntarTexto(s)}>{s}</button>
+              <button key={i} type="button" className="btn-ghost !w-auto max-w-full whitespace-normal !py-1.5 !px-2.5 text-[12.5px] text-left" onClick={() => perguntarTexto(s)}>{s}</button>
             ))}
           </div>
         )}
@@ -688,7 +863,7 @@ function SecaoPerguntar({ idContrato, sugestoes }: { idContrato: string; sugesto
               <div key={i} className="pb-3.5 mb-3.5 border-b border-line last:border-b-0 last:mb-0 last:pb-0">
                 <p className="font-bold mb-1.5 text-sm">{qa.pergunta}</p>
                 {qa.carregando && <p className="text-muted text-sm">Lendo o contrato para responder...</p>}
-                {qa.erro && <p className="text-danger text-sm">{qa.erro}</p>}
+                {qa.erro && <Aviso tom="danger" acao={qa.acao}>{qa.erro}</Aviso>}
                 {qa.resposta && qa.resposta.split(/\n{2,}/).map((par, j) => (
                   <p key={j} className="text-muted text-sm mb-2 last:mb-0">{par}</p>
                 ))}

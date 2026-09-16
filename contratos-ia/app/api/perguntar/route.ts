@@ -1,4 +1,5 @@
-import { aiEnabled, askText } from "@/lib/ai";
+import { aiEnabled, askText, respostaErro } from "@/lib/ai";
+import { limitarTexto } from "@/lib/contratos";
 import { esperar, respostaDemo } from "@/lib/demo";
 import { obterContrato } from "@/lib/estado";
 
@@ -29,12 +30,13 @@ export async function POST(req: Request) {
       await esperar(1000);
       return Response.json({ demo: true, resposta: respostaDemo(pergunta) });
     }
-    const prompt = `Contrato (texto integral):\n"""\n${contrato.texto}\n"""\n\nPapel do usuário neste contrato: ${contrato.papel}.\n\nPergunta: ${pergunta}`;
+    // Mesmo corte da análise: um contrato longo não pode estourar a janela do modelo aqui tampouco.
+    const { texto, aviso } = limitarTexto(contrato.paginas);
+    const cabecalho = aviso ? "Contrato (trecho inicial; o documento continua além do que foi enviado)" : "Contrato (texto integral)";
+    const prompt = `${cabecalho}:\n"""\n${texto}\n"""\n\nPapel do usuário neste contrato: ${contrato.papel}.\n\nPergunta: ${pergunta}`;
     const resposta = await askText({ system: SYSTEM_PERGUNTA, prompt, maxTokens: 1500 });
     return Response.json({ demo: false, resposta: resposta.trim() });
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível responder agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return respostaErro(err);
   }
 }

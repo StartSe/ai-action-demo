@@ -1,5 +1,5 @@
 import { extractText } from "unpdf";
-import { meta } from "@/lib/ai";
+import { meta, respostaErro } from "@/lib/ai";
 import { analisarContrato, VALORES_PAPEL } from "@/lib/contratos";
 import { guardarContrato } from "@/lib/estado";
 import { apagarTodos, listar, salvar, SENSIVEL } from "@/lib/historico";
@@ -34,7 +34,9 @@ export async function POST(req: Request) {
   const preocupacao = String(form.get("preocupacao") || "").trim();
   const guardar = String(form.get("guardar") || "") === "true";
 
-  let texto: string;
+  // Uma entrada por página do PDF; texto colado vira uma entrada só. lib/contratos.ts usa essa divisão
+  // para cortar no limite do modelo e dizer, sem mentir, quantas páginas foram lidas.
+  let paginas: string[];
 
   if (arquivo instanceof File && arquivo.size > 0) {
     const ehPdf = arquivo.type === "application/pdf" || /\.pdf$/i.test(arquivo.name || "");
@@ -45,31 +47,33 @@ export async function POST(req: Request) {
       return Response.json({ error: "O PDF passa de 10 MB. Reduza o arquivo ou cole o texto do contrato." }, { status: 400 });
     }
     try {
-      const { text } = await extractText(new Uint8Array(await arquivo.arrayBuffer()), { mergePages: true });
-      texto = String(text || "").trim();
+      // Sem mergePages: `text` vem como uma string por página do PDF.
+      const { text } = await extractText(new Uint8Array(await arquivo.arrayBuffer()));
+      paginas = text.map((p) => String(p || "").trim());
     } catch (err) {
       console.error(err);
       return Response.json({ error: "Não foi possível ler este PDF. Ele pode estar corrompido ou protegido; tente colar o texto do contrato." }, { status: 400 });
     }
-    if (texto.length < 100) {
+    if (paginas.join("").length < 100) {
       return Response.json({ error: "Não encontramos texto legível neste PDF (pode ser um documento digitalizado como imagem). Cole o texto do contrato na outra aba." }, { status: 400 });
     }
   } else {
-    texto = String(form.get("texto") || "").trim();
+    const texto = String(form.get("texto") || "").trim();
     if (texto.length < 200) {
       return Response.json({ error: "Envie um PDF ou cole o texto do contrato (pelo menos algumas cláusulas)." }, { status: 400 });
     }
+    paginas = [texto];
   }
 
   try {
-    const { analise, meta: metaGerada } = await analisarContrato({ texto, papel, preocupacao });
-    const idContrato = guardarContrato({ texto, papel, preocupacao });
+    const { analise, meta: metaGerada } = await analisarContrato({ paginas, papel, preocupacao });
+    const idContrato = guardarContrato({ paginas, papel, preocupacao });
     const id = idSalvo({ analise, papel, preocupacao, metaGerada, guardar });
     return Response.json({ idContrato, id, analise, meta: metaGerada });
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível analisar o contrato agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    // respostaErro traduz ErroIA em { error, codigo, acao } com o status certo (Fase 0): a tela
+    // nunca recebe status HTTP cru nem o corpo do provedor.
+    return respostaErro(err);
   }
 }
 

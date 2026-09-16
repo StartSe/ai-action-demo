@@ -5,7 +5,10 @@ Análise de contratos por IA: riscos, prazos críticos, obrigações e o que est
 ## O que resolve
 O executivo recebe um contrato de 30 páginas e precisa decidir rápido o que negociar antes de mandar para o jurídico. Este app lê o contrato (PDF ou texto colado), identifica as partes, resume o essencial, dá uma nota de risco para o papel informado, aponta as cláusulas que merecem atenção com sugestão de negociação, lista prazos críticos e o que não está no contrato, e ainda responde perguntas sobre o documento.
 
-Limites: PDF de até 10 MB. PDFs digitalizados (imagem sem camada de texto) podem ter leitura limitada; nesse caso, cole o texto do contrato. O contrato fica em memória por 1 hora (para as perguntas) e nunca é gravado em disco.
+Limites: PDF de até 10 MB. Contratos muito longos são cortados em ~120 mil caracteres antes de ir para a IA, e o resultado avisa quantas páginas foram lidas. PDFs digitalizados (imagem sem camada de texto) podem ter leitura limitada; nesse caso, cole o texto do contrato. O contrato fica em memória por 1 hora (para as perguntas) e nunca é gravado em disco.
+
+## Integrações
+Obrigatória: IA (OpenRouter). Opcionais: Notificações (e-mail ou Slack) para os avisos de 30 dias antes de cada prazo, e Quadro de tarefas (MCP) para mandar os pontos a negociar como cartões ao time.
 
 ## Stack
 Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão. Extração de texto de PDF com `unpdf`.

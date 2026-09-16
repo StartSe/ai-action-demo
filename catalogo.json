@@ -134,8 +134,8 @@
       ],
       "problema": "Decidir o que negociar antes de acionar o jurídico.",
       "ia": "Lê o PDF, pontua o risco e lista cláusulas críticas, prazos e o que está faltando.",
-      "integracoes": "Só a IA (texto extraído do PDF no servidor).",
-      "acento": "#3b3f8f",
+      "integracoes": "IA (OpenRouter) para a leitura do contrato. Opcional: quadro de tarefas via MCP para os pontos a negociar e e-mail ou Slack para os avisos de prazo.",
+      "acento": "#473b91",
       "porta": 3007,
       "captura": "capturas/contratos-ia.png",
       "capacidades": [

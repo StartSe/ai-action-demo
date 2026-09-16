@@ -86,10 +86,10 @@ function foraDaPoliticaDemo(politica?: PoliticaContratos): ItemForaDaPolitica[] 
 
 export function analiseDemo({ preocupacao = "", politica }: { papel?: string; preocupacao?: string; politica?: PoliticaContratos } = {}): Analise {
   const foco = preocupacao
-    ? ` Sobre a sua preocupação ("${preocupacao}"), veja as cláusulas destacadas abaixo e a caixa de perguntas ao final.`
+    ? ` Sobre a sua preocupação ("${preocupacao}"), veja as cláusulas destacadas e use a caixa de perguntas, logo abaixo.`
     : "";
   return {
-    tipo_contrato: "Contrato de prestação de serviços de tecnologia (desenvolvimento e sustentação de plataforma)",
+    tipo_contrato: "Contrato de prestação de serviços de tecnologia",
     resumo_executivo: `Contrato de 24 meses, com R$ 48 mil mensais, para desenvolvimento e sustentação da plataforma de e-commerce da Grupo Aurora pela TechNova. Os pontos que mais pesam contra a contratante são a propriedade do código só após a quitação final, a multa de 30% sobre o saldo em caso de saída antecipada e a responsabilidade da fornecedora limitada a uma mensalidade. Antes de assinar, negocie a cessão progressiva do código, um SLA com penalidades e uma cláusula de proteção de dados de verdade.${foco}`,
     partes: [
       { nome: "Grupo Aurora Varejo S.A.", papel: "Contratante" },

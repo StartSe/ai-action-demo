@@ -2,7 +2,8 @@
 // Some ao reiniciar o servidor; nada é gravado em disco.
 
 interface Contrato {
-  texto: string;
+  /** Uma entrada por página do PDF (texto colado vira uma só): a caixa de perguntas reaproveita o mesmo corte de lib/contratos.ts. */
+  paginas: string[];
   papel: string;
   preocupacao: string;
   expira: number;
@@ -16,7 +17,7 @@ function limpar() {
   for (const [id, c] of contratos) if (c.expira < agora) contratos.delete(id);
 }
 
-export function guardarContrato(dados: { texto: string; papel: string; preocupacao: string }): string {
+export function guardarContrato(dados: { paginas: string[]; papel: string; preocupacao: string }): string {
   limpar();
   const id = crypto.randomUUID();
   contratos.set(id, { ...dados, expira: Date.now() + UMA_HORA });

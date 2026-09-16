@@ -2,6 +2,7 @@
 // Cartão adicional do /setup: a política de contratos da empresa, cadastrada uma vez e usada por
 // lib/contratos.ts para apontar, em cada análise, o que foge do que a empresa aceita.
 import { useEffect, useState } from "react";
+import { Aviso, lerErro } from "@/components/ui";
 import type { PoliticaContratos as Politica } from "@/lib/politica";
 
 const PADRAO: Politica = {
@@ -18,21 +19,37 @@ export function PoliticaContratos() {
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
+  const [erro, setErro] = useState("");
+  // Falha ao carregar esconde o formulário (não há o que editar); falha ao salvar mantém o que a pessoa digitou.
+  const [erroCarregar, setErroCarregar] = useState("");
 
-  useEffect(() => {
+  const carregar = () =>
     fetch("/api/politica")
-      .then((r) => r.json())
-      .then((p) => setPolitica(p))
+      .then(async (r) => {
+        if (!r.ok) throw r;
+        setPolitica(await r.json());
+        setErroCarregar("");
+      })
+      .catch(async (e) => setErroCarregar((await lerErro(e)).mensagem))
       .finally(() => setCarregando(false));
-  }, []);
+
+  useEffect(() => { carregar(); }, []);
 
   async function salvar() {
     setSalvando(true);
     setSalvo(false);
+    setErro("");
     try {
       const r = await fetch("/api/politica", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(politica) });
+      // Sem conferir r.ok, uma sessão expirada devolvia a tela de erro em JSON e o cartão dizia "Política salva".
+      if (!r.ok) {
+        setErro((await lerErro(r)).mensagem);
+        return;
+      }
       setPolitica(await r.json());
       setSalvo(true);
+    } catch (e) {
+      setErro((await lerErro(e)).mensagem);
     } finally {
       setSalvando(false);
     }
@@ -53,6 +70,11 @@ export function PoliticaContratos() {
 
       {carregando ? (
         <p className="text-muted text-sm">Carregando...</p>
+      ) : erroCarregar ? (
+        <div className="flex flex-col gap-4">
+          <Aviso tom="danger">{erroCarregar}</Aviso>
+          <button type="button" className="btn-ghost" onClick={() => { setCarregando(true); carregar(); }}>Tentar de novo</button>
+        </div>
       ) : (
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-3 max-md:grid-cols-1 gap-4">
@@ -153,6 +175,7 @@ export function PoliticaContratos() {
           <div className="flex items-center gap-3 flex-wrap">
             <button type="button" className="btn-primary !w-auto" onClick={salvar} disabled={salvando}>{salvando ? "Salvando" : "Salvar política"}</button>
             {salvo && <span className="text-ok text-sm font-semibold">Política salva.</span>}
+            {erro && <span className="text-danger text-sm">{erro}</span>}
           </div>
         </div>
       )}

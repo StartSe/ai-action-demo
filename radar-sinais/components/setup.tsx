@@ -1,7 +1,7 @@
 "use client";
 // Tela de configuração inicial, gerada a partir de lib/integracoes.ts. Compartilhada pela suíte: copie sem alterar.
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { IlustracaoSegmento, MaisDetalhes, Topbar, useStatus } from "./ui";
 import type { CampoStatus, IntegracaoStatus, Opcao, StatusCaixasEmail, StatusEnderecoPublico } from "@/lib/setup-comum";
 import type { Segmento } from "@/lib/ilustracao";
@@ -42,7 +42,10 @@ function IconeApoio() {
   );
 }
 
-export function SetupPage({ marca, nome, area, segmento }: { marca: string; nome: string; area: string; segmento: Segmento }) {
+/** `children`: cartões próprios do app (política, webhook...) que precisam aparecer ANTES do rodapé "Ir
+ * para o app" — quem entra em /setup não deve ser convidado a sair antes de ver o que ainda falta
+ * configurar. Cartões secundários (como "Usar dentro do seu assistente") continuam depois da tela. */
+export function SetupPage({ marca, nome, area, segmento, children }: { marca: string; nome: string; area: string; segmento: Segmento; children?: ReactNode }) {
   const { status, erro } = useStatus();
   const [dados, setDados] = useState<Resposta | null>(null);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
@@ -150,6 +153,8 @@ export function SetupPage({ marca, nome, area, segmento }: { marca: string; nome
                 />
               ))}
             </div>
+
+            {children && <div className="flex flex-col gap-5 mt-5">{children}</div>}
 
             <footer className="mt-8 pt-6 border-t border-line">
               <p className="text-muted text-[13px] max-w-[560px]">{FRASE_PRIVACIDADE}</p>

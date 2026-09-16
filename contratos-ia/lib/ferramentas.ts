@@ -25,7 +25,7 @@ export const FERRAMENTAS: Ferramenta[] = [
       const papelInformado = String(args.papel || "").trim().toLowerCase();
       const papel = VALORES_PAPEL.includes(papelInformado) ? papelInformado : "outro";
       const preocupacao = String(args.preocupacao || "").trim();
-      const { analise } = await analisarContrato({ texto, papel, preocupacao });
+      const { analise } = await analisarContrato({ paginas: [texto], papel, preocupacao });
       return analise;
     },
   },
