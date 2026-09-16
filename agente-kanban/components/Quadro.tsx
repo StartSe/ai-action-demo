@@ -9,6 +9,8 @@ function formatarDataPtBr(iso: string | null): string {
   return `${dia}/${mes}/${ano}`;
 }
 
+// As colunas encolhem até 205 px para que um quadro de três listas caiba no palco de meia tela da
+// tela principal sem rolagem lateral; com mais listas (ou em telas menores) a rolagem continua.
 export function Quadro({
   quadro,
   alterados = [],
@@ -23,7 +25,7 @@ export function Quadro({
   return (
     <div className="flex max-md:flex-col gap-4 items-start overflow-x-auto pb-1.5">
       {quadro.listas.map((lista) => (
-        <div key={lista.id} className="card min-w-[270px] max-md:min-w-0 flex-1 basis-[270px] p-4">
+        <div key={lista.id} className="card min-w-[205px] max-md:min-w-0 flex-1 basis-[205px] p-4">
           <div className="flex items-center justify-between mb-3.5">
             <h3 className="text-sm font-bold">{lista.nome}</h3>
             <span className="bg-accent-soft text-accent-ink rounded-full px-[9px] py-0.5 text-xs font-bold">{lista.cartoes.length}</span>

@@ -1,4 +1,5 @@
 import { aiEnabled, meta } from "@/lib/ai";
+import { responderErro } from "@/app/api/erros";
 import { quadroDemoPara } from "@/lib/quadro-demo";
 import { trelloConfigurado } from "@/lib/quadro";
 import { mcpTarefasConfigurado, quadroMcp } from "@/lib/quadro-mcp";
@@ -18,11 +19,10 @@ export async function GET() {
   try {
     const { p, quadroDemo } = await provedor();
     const quadro = await p.obterQuadro();
-    const metaGerada = meta({ demo: !aiEnabled(), insumo: "o quadro atual" });
-    return Response.json({ ...quadro, meta: metaGerada, quadroDemo });
+    const metaGerada = meta({ demo: !aiEnabled(), insumo: "quadro atual" });
+    const quadroNome = p.nomeDoQuadro ? await p.nomeDoQuadro() : null;
+    return Response.json({ ...quadro, meta: metaGerada, quadroDemo, quadroNome });
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível carregar o quadro agora.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return responderErro(err, "Não foi possível carregar o quadro agora. Tente de novo em um minuto.");
   }
 }

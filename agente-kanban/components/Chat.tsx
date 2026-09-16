@@ -7,11 +7,7 @@ export interface MensagemChat {
   texto: string;
 }
 
-const SUGESTOES = [
-  { rotulo: "Criar cartão de entrevista", mensagem: "Crie um cartão para entrevistar a candidata Paula na quinta em A fazer" },
-  { rotulo: "Mover onboarding do Pedro", mensagem: "Mova o onboarding do Pedro para concluído" },
-  { rotulo: "Ver resumo do quadro", mensagem: "Como está o quadro?" },
-];
+export type Sugestao = { rotulo: string; mensagem: string };
 
 const BOLHA_BASE = "px-3.5 py-2.5 rounded-xl text-sm leading-relaxed max-w-[94%]";
 const BOLHA_POR_PAPEL: Record<MensagemChat["papel"], string> = {
@@ -24,12 +20,15 @@ export function Chat({
   mensagens,
   carregando,
   valor,
+  sugestoes,
   onValorChange,
   onEnviar,
 }: {
   mensagens: MensagemChat[];
   carregando: boolean;
   valor: string;
+  /** Atalhos mostrados abaixo do campo; a ordem vem da página (com um quadro real conectado, "Resumo do quadro" vem primeiro). */
+  sugestoes: Sugestao[];
   onValorChange: (v: string) => void;
   onEnviar: (mensagem: string) => void;
 }) {
@@ -54,12 +53,12 @@ export function Chat({
     }
   }
 
-  function usarSugestao(s: (typeof SUGESTOES)[number]) {
+  function usarSugestao(s: Sugestao) {
     setUsadas((atual) => new Set(atual).add(s.rotulo));
     onEnviar(s.mensagem);
   }
 
-  const sugestoesDisponiveis = SUGESTOES.filter((s) => !usadas.has(s.rotulo));
+  const sugestoesDisponiveis = sugestoes.filter((s) => !usadas.has(s.rotulo));
 
   return (
     <>

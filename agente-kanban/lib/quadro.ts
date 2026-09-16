@@ -4,6 +4,26 @@
 import { TRELLO_API_KEY } from "./integracoes";
 import { getConfig } from "./store";
 
+export type CodigoErroQuadro = "autorizacao" | "limite" | "nao_encontrado" | "indisponivel" | "membro" | "nao_conectado" | "sem_suporte";
+
+/**
+ * Falha do quadro (Trello ou quadro conectado por outra ferramenta) já traduzida para a tela, no
+ * mesmo formato de `ErroIA` (lib/ai.ts): frase em linguagem de negócio, código e "o que fazer
+ * agora". Nenhum código de resposta, corpo do provedor ou "fetch failed" chega à tela — esse
+ * detalhe vai só para `console.error`. Quem monta a resposta HTTP é app/api/erros.ts.
+ */
+export class ErroQuadro extends Error {
+  constructor(
+    readonly codigo: CodigoErroQuadro,
+    mensagem: string,
+    readonly status: number,
+    readonly acao?: { rotulo: string; url: string }
+  ) {
+    super(mensagem);
+    this.name = "ErroQuadro";
+  }
+}
+
 export interface Lista {
   id: string;
   nome: string;
@@ -57,6 +77,12 @@ export interface ProvedorQuadro {
    * (Trello, quadro de exemplo), mantendo o comportamento anterior a esta história.
    */
   suportaDesfazer?(tipo: "criar_cartao" | "mover_cartao" | "comentar_cartao"): boolean | Promise<boolean>;
+  /**
+   * Nome do quadro conectado, mostrado no cabeçalho do resultado ("Quadro: Recrutamento 2026").
+   * Só o Trello implementa: o quadro de exemplo não tem nome próprio e uma ferramenta remota
+   * genérica (MCP) não expõe um. Nunca lança — sem nome, o cabeçalho simplesmente não o mostra.
+   */
+  nomeDoQuadro?(): Promise<string | null>;
 }
 
 /** Chave, token e quadro escolhido: o suficiente para operar um quadro real. Decidido a cada chamada (a configuração pode mudar em /setup sem reiniciar). */

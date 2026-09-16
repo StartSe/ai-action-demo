@@ -4,11 +4,27 @@
 //
 // Para trocar por outra ferramenta (Jira, Notion, monday.com, ou um servidor MCP dela),
 // escreva um módulo com as mesmas sete funções chamando a API daquela ferramenta.
+import { ACAO_AUTORIZAR_TRELLO, ACAO_TRELLO } from "./acoes";
 import { TRELLO_API_KEY } from "./integracoes";
-import type { Cartao, DadosNovoCartao, Etiqueta, Lista, ProvedorQuadro, Quadro } from "./quadro";
+import { ErroQuadro, type Cartao, type DadosNovoCartao, type Etiqueta, type Lista, type ProvedorQuadro, type Quadro } from "./quadro";
 import { getConfig } from "./store";
 
 const BASE = "https://api.trello.com/1";
+
+/** Traduz uma resposta do Trello para a frase que a pessoa lê. O detalhe técnico fica no log. */
+export function interpretarFalhaTrello(status: number, detalhe: string): ErroQuadro {
+  console.error("Trello", status, detalhe.slice(0, 200));
+  if (status === 401 || status === 403) {
+    return new ErroQuadro("autorizacao", "A autorização do Trello expirou ou foi revogada. Clique em Autorizar no Trello de novo.", 401, ACAO_AUTORIZAR_TRELLO);
+  }
+  if (status === 429) {
+    return new ErroQuadro("limite", "O Trello está limitando as chamadas; espere um minuto e peça de novo.", 429, undefined);
+  }
+  if (status === 404) {
+    return new ErroQuadro("nao_encontrado", "O quadro ou a lista não existe mais; escolha outro quadro em Configurações.", 404, ACAO_TRELLO);
+  }
+  return new ErroQuadro("indisponivel", "O Trello não respondeu agora. Tente de novo em um minuto.", 502, undefined);
+}
 
 // Lidas a cada chamada (nunca em módulo): a configuração pode mudar em /setup sem reiniciar o app.
 // Sem chave própria salva, usa a chave pública embutida no app (ver lib/integracoes.ts).
@@ -28,10 +44,17 @@ async function chamar<T>(metodo: string, caminho: string, params: ParametrosCham
   for (const [k, v] of Object.entries(qs)) {
     if (v !== undefined && v !== null) url.searchParams.set(k, v);
   }
-  const res = await fetch(url, { method: metodo });
+  let res: Response;
+  try {
+    res = await fetch(url, { method: metodo });
+  } catch (err) {
+    // Sem este try/catch, a falha de rede chega à tela como "fetch failed".
+    console.error("Trello", caminho, err);
+    throw new ErroQuadro("indisponivel", "O Trello não respondeu agora. Tente de novo em um minuto.", 502, undefined);
+  }
   if (!res.ok) {
     const texto = await res.text().catch(() => "");
-    throw new Error(`Trello respondeu ${res.status} ao chamar ${caminho}: ${texto || res.statusText}`);
+    throw interpretarFalhaTrello(res.status, `${caminho}: ${texto || res.statusText}`);
   }
   const contentType = res.headers.get("content-type") || "";
   if (contentType.includes("application/json")) return (await res.json()) as T;
@@ -145,14 +168,14 @@ async function criarCartao({ nome, descricao = "", listaId, vencimento = null, e
     desc: comEtiqueta(descricao, etiqueta),
     due: vencimento || undefined,
   });
-  if (!cartao) throw new Error("O Trello não retornou o cartão criado.");
+  if (!cartao) throw new ErroQuadro("indisponivel", "O Trello não confirmou o cartão criado. Abra o quadro e confira antes de pedir de novo.", 502, ACAO_TRELLO);
   const extraido = extrairEtiqueta(cartao.desc);
   return { id: cartao.id, nome: cartao.name, descricao: extraido.descricao, responsavel: "", vencimento: cartao.due ? cartao.due.slice(0, 10) : null, atualizadoEm: cartao.dateLastActivity || new Date().toISOString(), etiqueta: extraido.etiqueta };
 }
 
 async function moverCartao({ cartaoId, listaId }: { cartaoId: string; listaId: string }): Promise<Cartao> {
   const cartao = await chamar<CartaoTrello>("PUT", `/cards/${cartaoId}`, { idList: listaId });
-  if (!cartao) throw new Error("O Trello não retornou o cartão movido.");
+  if (!cartao) throw new ErroQuadro("indisponivel", "O Trello não confirmou o cartão movido. Abra o quadro e confira antes de pedir de novo.", 502, ACAO_TRELLO);
   const extraido = extrairEtiqueta(cartao.desc);
   return { id: cartao.id, nome: cartao.name, descricao: extraido.descricao, responsavel: "", vencimento: cartao.due ? cartao.due.slice(0, 10) : null, atualizadoEm: cartao.dateLastActivity || new Date().toISOString(), etiqueta: extraido.etiqueta };
 }
@@ -174,9 +197,9 @@ async function encontrarMembroId(nome: string): Promise<string | null> {
 
 async function atribuir({ cartaoId, responsavel }: { cartaoId: string; responsavel: string }): Promise<Cartao> {
   const membroId = await encontrarMembroId(responsavel);
-  if (!membroId) throw new Error(`Não encontrei ninguém chamado "${responsavel}" entre os membros deste quadro do Trello.`);
+  if (!membroId) throw new ErroQuadro("membro", `Ninguém com o nome "${responsavel}" participa deste quadro. Confira o nome ou convide a pessoa no Trello.`, 400, undefined);
   const cartao = await chamar<CartaoTrello>("PUT", `/cards/${cartaoId}`, { idMembers: membroId });
-  if (!cartao) throw new Error("O Trello não retornou o cartão atualizado.");
+  if (!cartao) throw new ErroQuadro("indisponivel", "O Trello não confirmou a mudança no cartão. Abra o quadro e confira antes de pedir de novo.", 502, ACAO_TRELLO);
   const membros = await mapaMembros();
   const nomesResponsaveis = (cartao.idMembers || []).map((id) => membros[id]).filter(Boolean).join(", ");
   const extraido = extrairEtiqueta(cartao.desc);
@@ -198,7 +221,26 @@ async function arquivarCartao({ cartaoId }: { cartaoId: string }): Promise<{ ok:
   return { ok: true };
 }
 
+let nomeCache: { boardId: string; nome: string } | null = null;
+
+/** Nome do quadro conectado, para o cabeçalho do resultado ("Quadro: Recrutamento 2026"). Nunca lança: um nome ausente só some do cabeçalho. */
+async function nomeDoQuadro(): Promise<string | null> {
+  const id = boardId();
+  if (!id) return null;
+  if (nomeCache?.boardId === id) return nomeCache.nome;
+  try {
+    const quadro = await chamar<{ name?: string }>("GET", `/boards/${id}`, { fields: "name" });
+    const nome = quadro?.name || null;
+    if (nome) nomeCache = { boardId: id, nome };
+    return nome;
+  } catch (err) {
+    console.error("Trello nomeDoQuadro", err);
+    return null;
+  }
+}
+
 export const trello: ProvedorQuadro = {
+  nomeDoQuadro,
   listarListas,
   listarCartoes,
   obterQuadro,

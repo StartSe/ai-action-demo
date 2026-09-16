@@ -1,7 +1,8 @@
 import { aiEnabled, meta } from "@/lib/ai";
+import { responderErro } from "@/app/api/erros";
 import { processarMensagem, type HistoricoItem } from "@/lib/agente";
 import { apagarTodos, listar, salvar } from "@/lib/historico";
-import { trelloConfigurado } from "@/lib/quadro";
+import { trelloConfigurado, type ProvedorQuadro } from "@/lib/quadro";
 import { quadroDemoPara } from "@/lib/quadro-demo";
 import { mcpTarefasConfigurado, quadroMcp } from "@/lib/quadro-mcp";
 import { trello } from "@/lib/trello";
@@ -14,6 +15,11 @@ export const dynamic = "force-dynamic";
 function provedor(id: string) {
   if (mcpTarefasConfigurado()) return quadroMcp;
   return trelloConfigurado() ? trello : quadroDemoPara(id);
+}
+
+/** Nome do quadro conectado, para o cabeçalho do resultado. Só existe quando o provedor sabe informá-lo (Trello). */
+async function nomeDoQuadro(p: ProvedorQuadro): Promise<string | null> {
+  return p.nomeDoQuadro ? await p.nomeDoQuadro() : null;
 }
 
 /** Título curto para a lista "Últimos resultados": a própria mensagem, cortada. */
@@ -41,13 +47,11 @@ export async function POST(req: Request) {
     }
 
     const resultado = await processarMensagem({ mensagem, historico, provedor: provedorAtual });
-    const metaGerada = meta({ demo: !aiEnabled(), insumo: "o quadro e o comando enviado ao agente" });
+    const metaGerada = meta({ demo: !aiEnabled(), insumo: "quadro atual e comando enviado ao agente" });
     const id = salvar({ tipo: "agente-kanban", titulo: titulo(mensagem), entrada: { mensagem }, saida: resultado, meta: metaGerada });
-    return Response.json({ ...resultado, meta: metaGerada, id, quadroDemo: !modoReal });
+    return Response.json({ ...resultado, meta: metaGerada, id, quadroDemo: !modoReal, quadroNome: await nomeDoQuadro(provedorAtual) });
   } catch (err) {
-    console.error(err);
-    const mensagemErro = err instanceof Error ? err.message : "Não foi possível falar com o agente agora. Tente novamente.";
-    return Response.json({ error: mensagemErro }, { status: 500 });
+    return responderErro(err, "Não foi possível falar com o agente agora. Tente de novo em um minuto.");
   }
 }
 

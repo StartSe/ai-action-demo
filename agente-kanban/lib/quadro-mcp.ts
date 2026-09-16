@@ -4,7 +4,8 @@
 // sem conhecer de antemão os nomes das ferramentas do lado de lá: mapeia as cinco operações do
 // agente (criar, mover, comentar, arquivar, listar) para uma ferramenta remota por aproximação de
 // nome/descrição, com o resultado ajustável em Opções avançadas (ver components/MapeamentoMCP.tsx).
-import type { Cartao, DadosNovoCartao, Lista, ProvedorQuadro, Quadro } from "./quadro";
+import { ErroQuadro, type Cartao, type DadosNovoCartao, type Lista, type ProvedorQuadro, type Quadro } from "./quadro";
+import { ACAO_QUADRO_CONECTADO } from "./acoes";
 import { chamar, conectar, listarFerramentas, type ConexaoMCP, type FerramentaMCP } from "./mcp-cliente";
 import { getConfig, setConfig } from "./store";
 
@@ -120,13 +121,16 @@ function montarArgumentos(schema: unknown, comando: string): Record<string, unkn
 
 async function chamarOperacao(op: OperacaoQuadro, comando: string): Promise<unknown> {
   const conexao = conexaoAtual();
-  if (!conexao) throw new Error("O quadro de tarefas (MCP) não está configurado. Conecte-o em /setup.");
+  if (!conexao) throw new ErroQuadro("nao_conectado", "Nenhum quadro de tarefas está conectado. Conecte o seu em Configurações.", 400, ACAO_QUADRO_CONECTADO);
   const ferramentas = await ferramentasDisponiveis();
   const mapa = await mapeamentoAtual(ferramentas);
   const nome = mapa[op];
   if (!nome) {
-    throw new Error(
-      `Nenhuma ferramenta do quadro conectado foi identificada para "${ROTULOS_OPERACAO[op]}". Ajuste o mapeamento em Opções avançadas, no cartão "Quadro de tarefas (MCP)".`
+    throw new ErroQuadro(
+      "sem_suporte",
+      `O quadro conectado não informou como fazer "${ROTULOS_OPERACAO[op]}". Escolha a ação certa em Configurações, no cartão do quadro de tarefas.`,
+      400,
+      ACAO_QUADRO_CONECTADO
     );
   }
   const schema = ferramentas.find((f) => f.nome === nome)?.schema;
@@ -152,7 +156,7 @@ function extrairQuadro(resultado: unknown): Quadro {
   const r = comoRespostaGenerica(resultado);
   if (pareceQuadro(r.quadro)) return r.quadro;
   if (pareceQuadro(resultado)) return resultado;
-  throw new Error("O quadro conectado não devolveu uma lista de cartões reconhecível para esta ação.");
+  throw new ErroQuadro("sem_suporte", "O quadro conectado não devolveu os cartões em um formato que este app entenda. Confira a escolha das ações em Configurações.", 502, ACAO_QUADRO_CONECTADO);
 }
 
 function extrairCartao(resultado: unknown, cartaoIdConhecido?: string): Cartao {
@@ -179,7 +183,7 @@ function extrairCartao(resultado: unknown, cartaoIdConhecido?: string): Cartao {
   if (cartaoIdConhecido) {
     return { id: cartaoIdConhecido, nome: cartaoIdConhecido, descricao: "", responsavel: "", vencimento: null, atualizadoEm: new Date().toISOString(), etiqueta: null };
   }
-  throw new Error("O quadro conectado não devolveu o cartão esperado por esta ação.");
+  throw new ErroQuadro("sem_suporte", "O quadro conectado não devolveu o cartão desta ação. Confira a escolha das ações em Configurações.", 502, ACAO_QUADRO_CONECTADO);
 }
 
 // Cache curto (memória do processo) do último "listar" bem-sucedido: uma única ação do agente
@@ -248,7 +252,7 @@ async function moverCartao({ cartaoId, listaId }: { cartaoId: string; listaId: s
 }
 
 async function atribuir(): Promise<Cartao> {
-  throw new Error("Atribuir responsável ainda não está disponível para um quadro conectado por MCP.");
+  throw new ErroQuadro("sem_suporte", "Definir responsável ainda não funciona no quadro conectado. Faça isso direto na ferramenta do quadro.", 400, undefined);
 }
 
 async function comentar({ cartaoId, texto }: { cartaoId: string; texto: string }): Promise<{ ok: true; comentarioId: string }> {
@@ -261,7 +265,7 @@ async function comentar({ cartaoId, texto }: { cartaoId: string; texto: string }
 }
 
 async function removerComentario(): Promise<{ ok: true }> {
-  throw new Error("Este quadro conectado por MCP não oferece uma forma de remover comentário.");
+  throw new ErroQuadro("sem_suporte", "O quadro conectado não permite apagar um comentário. Apague direto na ferramenta do quadro.", 400, undefined);
 }
 
 async function arquivarCartao({ cartaoId }: { cartaoId: string }): Promise<{ ok: true }> {

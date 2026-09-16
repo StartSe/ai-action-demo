@@ -1,3 +1,4 @@
+import { responderErro } from "@/app/api/erros";
 import type { Desfazer } from "@/lib/agente";
 import { trelloConfigurado } from "@/lib/quadro";
 import { quadroDemoPara } from "@/lib/quadro-demo";
@@ -32,8 +33,6 @@ export async function POST(req: Request) {
     const quadro = await p.obterQuadro();
     return Response.json({ ok: true, quadro });
   } catch (err) {
-    console.error(err);
-    const mensagemErro = err instanceof Error ? err.message : "Não foi possível desfazer agora.";
-    return Response.json({ error: mensagemErro }, { status: 500 });
+    return responderErro(err, "Não foi possível desfazer agora. Tente de novo em um minuto.");
   }
 }

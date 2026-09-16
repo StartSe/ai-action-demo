@@ -35,8 +35,8 @@
       ],
       "problema": "Operar o quadro de tarefas toma tempo do gestor.",
       "ia": "Um agente com ferramentas cria, move, comenta e arquiva cartões a partir de comandos em português.",
-      "integracoes": "Trello (chave e token). Adaptável a Jira, Notion ou monday.",
-      "acento": "#1f5f5b",
+      "integracoes": "IA (OpenRouter) para entender o pedido e operar o quadro. Quadro do Trello para o agente mexer no quadro real do time em vez do de exemplo. Notificações (e-mail ou Slack) para o resumo do quadro toda manhã. Quadro de tarefas (MCP) para operar um quadro fora do Trello (Jira, Notion, monday).",
+      "acento": "#2e3b7a",
       "porta": 3002,
       "captura": "capturas/agente-kanban.png",
       "capacidades": [

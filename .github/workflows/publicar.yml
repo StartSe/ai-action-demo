@@ -75,16 +75,19 @@ jobs:
           context: ./${{ matrix.app }}
           platforms: ${{ env.PLATAFORMAS }}
           push: true
-          # Credenciais OAuth da suíte (US-024, envio de avisos pelo Gmail/Outlook da própria pessoa;
-          # US-036, leitura das notas no custos-ia): só os apps que declaram esses ARGs no Dockerfile
-          # (os já migrados para a fundação nova, entre eles pdi-time, custos-ia e prospeccao-ia) os
+          # Credenciais da suíte (US-024, envio de avisos pelo Gmail/Outlook da própria pessoa;
+          # US-036, leitura das notas no custos-ia; US-038, chave do app no Trello para o
+          # agente-kanban): só os apps que declaram esses ARGs no Dockerfile (os já migrados para a
+          # fundação nova, entre eles pdi-time, custos-ia, prospeccao-ia e agente-kanban) os
           # consomem; os demais ignoram o build-arg sem erro (aviso "was not consumed") até a própria
-          # história de replicação.
+          # história de replicação. Sem o segredo cadastrado, o valor chega vazio e o app avisa na
+          # tela que a equipe técnica ainda precisa cadastrá-lo.
           build-args: |
             GOOGLE_CLIENT_ID_APP=${{ secrets.GOOGLE_CLIENT_ID_APP }}
             GOOGLE_CLIENT_SECRET_APP=${{ secrets.GOOGLE_CLIENT_SECRET_APP }}
             MICROSOFT_CLIENT_ID_APP=${{ secrets.MICROSOFT_CLIENT_ID_APP }}
             MICROSOFT_CLIENT_SECRET_APP=${{ secrets.MICROSOFT_CLIENT_SECRET_APP }}
+            TRELLO_API_KEY_APP=${{ secrets.TRELLO_API_KEY_APP }}
           tags: |
             ${{ env.REGISTRO }}/${{ matrix.app }}:latest
             ${{ env.REGISTRO }}/${{ matrix.app }}:${{ github.sha }}

@@ -1,7 +1,7 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 import { openrouter, NOTIFICACOES, MCP_TAREFAS, type Integracao } from "./setup-comum";
 
-const OPENROUTER = openrouter();
+const OPENROUTER = openrouter({ beneficio: "Liga a IA que entende o seu pedido e opera o quadro" });
 
 /**
  * Chave de API do app desta suíte, cadastrada em https://trello.com/power-ups/admin.
@@ -13,14 +13,25 @@ const OPENROUTER = openrouter();
  */
 export const TRELLO_API_KEY = process.env.TRELLO_API_KEY_APP || "";
 
+/**
+ * Sem `TRELLO_API_KEY_APP` no ambiente (a chave que identifica ESTE app no Trello, cadastrada pela
+ * equipe técnica ao publicar), o botão "Autorizar no Trello" só funciona para quem colar uma chave
+ * própria. Antes desta história o botão devolvia um aviso depois do clique; agora o cartão diz isso
+ * na tela, em linguagem de negócio, antes de alguém tentar.
+ */
+const NOTA_SEM_CHAVE_DO_APP =
+  "A equipe técnica ainda não cadastrou este app no Trello. Até lá, o botão só funciona para quem colar uma chave própria em \"Opções avançadas\".";
+
 const TRELLO: Integracao = {
   id: "trello",
   titulo: "Quadro do Trello",
   descricao:
     "Conecte o quadro do Trello que o agente vai operar de verdade: criar, mover, comentar e arquivar cartões. Sem ela, o agente faz tudo isso em um quadro de exemplo em memória, só para teste.",
+  beneficio: "Faz o agente operar o quadro real do seu time, não um de exemplo",
   obrigatoria: false,
   link: { url: "https://trello.com/power-ups/admin", rotulo: "Obter uma chave própria de API do Trello" },
   oauth: { tipo: "trello", rotulo: "Autorizar no Trello", url: "/api/setup/oauth/trello" },
+  notaConexao: TRELLO_API_KEY ? undefined : NOTA_SEM_CHAVE_DO_APP,
   campos: [
     {
       chave: "TRELLO_API_KEY",
@@ -65,7 +76,10 @@ const TRELLO: Integracao = {
     if (!key || !token) return { ok: false, mensagem: "Salve a chave e o token do Trello antes de testar." };
     const r = await fetch(`https://api.trello.com/1/members/me?key=${encodeURIComponent(key)}&token=${encodeURIComponent(token)}`);
     if (r.status === 401) return { ok: false, mensagem: "Chave ou token do Trello inválidos." };
-    if (!r.ok) return { ok: false, mensagem: `O Trello respondeu HTTP ${r.status}.` };
+    if (!r.ok) {
+      console.error("Trello: teste de conexão recusado", r.status);
+      return { ok: false, mensagem: "O Trello não respondeu agora; tente de novo em um minuto." };
+    }
     const membro = (await r.json()) as { fullName?: string; username?: string };
     const nome = membro.fullName || membro.username || "sua conta";
     const boardId = config.TRELLO_BOARD_ID;
@@ -73,10 +87,16 @@ const TRELLO: Integracao = {
     const rb = await fetch(
       `https://api.trello.com/1/boards/${encodeURIComponent(boardId)}?fields=name&key=${encodeURIComponent(key)}&token=${encodeURIComponent(token)}`
     );
-    if (!rb.ok) return { ok: true, mensagem: `Conectado como ${nome}. Não foi possível carregar o quadro (HTTP ${rb.status}).` };
+    if (!rb.ok) {
+      console.error("Trello: quadro não carregado no teste de conexão", rb.status);
+      return { ok: true, mensagem: `Conectado como ${nome}. Não foi possível abrir o quadro escolhido; escolha outro acima.` };
+    }
     const quadro = (await rb.json()) as { name?: string };
     return { ok: true, mensagem: `Conectado como ${nome}. Quadro: ${quadro.name || boardId}.` };
   },
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, TRELLO, NOTIFICACOES, MCP_TAREFAS];
+const NOTIFICACOES_DO_APP: Integracao = { ...NOTIFICACOES, beneficio: "Manda o resumo do quadro para você toda manhã" };
+const MCP_TAREFAS_DO_APP: Integracao = { ...MCP_TAREFAS, beneficio: "Deixa o agente operar um quadro fora do Trello" };
+
+export const INTEGRACOES: Integracao[] = [OPENROUTER, TRELLO, NOTIFICACOES_DO_APP, MCP_TAREFAS_DO_APP];
