@@ -14,8 +14,8 @@
       ],
       "problema": "O líder chega à conversa de feedback sem um plano de desenvolvimento pronto.",
       "ia": "Cruza as entregas da pessoa com os objetivos da empresa e gera um PDI de 90 dias.",
-      "integracoes": "Só a IA (OpenRouter).",
-      "acento": "#2b5d8c",
+      "integracoes": "IA (OpenRouter); quadro de tarefas e avisos por e-mail ou Slack são opcionais.",
+      "acento": "#692bd4",
       "porta": 3001,
       "captura": "capturas/pdi-time.png",
       "capacidades": [

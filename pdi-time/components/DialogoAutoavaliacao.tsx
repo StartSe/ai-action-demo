@@ -2,7 +2,7 @@
 // Diálogo do painel: gera o link público de autoavaliação (app/f/[código]) para o colaborador
 // preencher sozinho. Os objetivos da empresa vêm daqui (não são pedidos ao colaborador).
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { CopyButton } from "./ui";
+import { CopyButton, lerErro } from "./ui";
 
 type Props = { onFechar: () => void; objetivosIniciais: string };
 
@@ -41,12 +41,16 @@ export function DialogoAutoavaliacao({ onFechar, objetivosIniciais }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ objetivos, expiraEmDias }),
       });
+      if (!r.ok) {
+        setMensagemErro((await lerErro(r)).mensagem);
+        setFase("erro");
+        return;
+      }
       const resposta = await r.json();
-      if (!r.ok) throw new Error(resposta.error || "Não foi possível gerar o link.");
       setLink(`${location.origin}/f/${resposta.codigo}`);
       setFase("pronto");
     } catch (err) {
-      setMensagemErro(err instanceof Error ? err.message : "Erro inesperado.");
+      setMensagemErro((await lerErro(err)).mensagem);
       setFase("erro");
     }
   }

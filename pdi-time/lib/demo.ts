@@ -61,5 +61,7 @@ export function pdiDemo({ nome = "Marina Costa" }: { nome?: string; cargo?: stri
       "O que você faz hoje que ninguém mais no time saberia fazer?",
       "Em quais momentos as prioridades mudaram sem que você fosse consultada?",
     ],
+    // Por regra, não por IA: no demo a versão para a pessoa nasce do próprio resumo, reescrito em segunda pessoa.
+    mensagem_pessoa: `${primeiro}, você entrega com consistência e já influencia decisões fora da sua área. Seu próximo salto é sair da execução impecável para a liderança de resultados: definir metas, delegar e negociar prioridades com outras áreas. Este plano de 90 dias foi montado para isso.`,
   };
 }

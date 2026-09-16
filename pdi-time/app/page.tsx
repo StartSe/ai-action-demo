@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Chip, DataTable, Entregar, ErrorBox, Field, Hero, Item, Loading, MaisDetalhes, OptInGuardar, Origem, Passos, Privacidade, ResultHead, Row, SeloIA, Section, Stage, Topbar, data, useScrollToResult, useStatus, type PassoIndicador } from "@/components/ui";
+import { Aviso, Chip, DataTable, Entregar, ErrorBox, Field, Hero, Item, Loading, MaisDetalhes, OptInGuardar, Origem, Passos, Privacidade, ResultHead, Row, SeloIA, Section, Stage, Topbar, data, lerErro, useScrollToResult, useStatus, type ErroLido, type PassoIndicador } from "@/components/ui";
+import { BuscarEntregas } from "@/components/BuscarEntregas";
 import { DialogoAutoavaliacao } from "@/components/DialogoAutoavaliacao";
 import { LembrarCheckins } from "@/components/LembrarCheckins";
 import { SENSIVEL } from "@/lib/sensivel";
@@ -11,7 +12,7 @@ import type { CodigoErroIA, Meta } from "@/lib/ai";
 import type { DadosPDI, PDI } from "@/lib/types";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
-type ItemAutoavaliacao = { id: string; nome: string; criadoEm: string; resultadoId: string | null };
+type ItemAutoavaliacao = { id: string; nome: string; criadoEm: string; resultadoId: string | null; erroGeracao: ErroLido | null };
 
 const EXEMPLO: DadosPDI = {
   nome: "Marina Costa",
@@ -118,6 +119,8 @@ export default function Page() {
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const [autoavaliacaoAberta, setAutoavaliacaoAberta] = useState(false);
   const [autoavaliacoes, setAutoavaliacoes] = useState<ItemAutoavaliacao[] | null>(null);
+  const [gerandoAutoavaliacao, setGerandoAutoavaliacao] = useState<string | null>(null);
+  const [erroAutoavaliacao, setErroAutoavaliacao] = useState<(ErroLido & { id: string }) | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const autoEnviado = useRef(false);
 
@@ -148,19 +151,22 @@ export default function Page() {
     try {
       const url = erroForcado ? `/api/pdi?erro=${erroForcado}` : "/api/pdi";
       const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...d, guardar: guardarResultado }) });
-      const resposta = await r.json();
       if (!r.ok) {
-        if (r.status === 401 && resposta.codigo === "sem_sessao") {
+        // lerErro lê { error, codigo, acao } da rota (respostaErro) e nunca deixa status HTTP cru chegar à tela.
+        const info = await lerErro(r);
+        if (r.status === 401 && info.codigo === "sem_sessao") {
           router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
           return;
         }
-        throw { mensagem: resposta.error || "Falha ao gerar o PDI.", codigo: resposta.codigo, acao: resposta.acao };
+        setEstado({ fase: "erro", mensagem: info.mensagem, codigo: info.codigo as CodigoErroIA | undefined, acao: info.acao, dados: d });
+        return;
       }
+      const resposta = await r.json();
       setEstado({ fase: "pronto", pdi: resposta.pdi, dados: d, meta: resposta.meta, id: resposta.id });
       fetch("/api/pdi").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
     } catch (e) {
-      const info = e as { mensagem?: string; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string } };
-      setEstado({ fase: "erro", mensagem: info.mensagem || "Erro inesperado.", codigo: info.codigo, acao: info.acao, dados: d });
+      const info = await lerErro(e);
+      setEstado({ fase: "erro", mensagem: info.mensagem, dados: d });
     }
   }
 
@@ -169,9 +175,35 @@ export default function Page() {
     gerar(dados, guardar);
   }
 
+  /** "Usar colaborador de exemplo" preenche E gera: quem quer ver o resultado não precisa rolar até o botão. */
   function preencherExemplo() {
     setDados(EXEMPLO);
-    document.getElementById("nome")?.focus();
+    gerar(EXEMPLO, guardar);
+  }
+
+  /** "Gerar PDI agora" numa autoavaliação recebida cuja IA falhou na hora (app/api/pdi/autoavaliacao/[id]/gerar). */
+  async function gerarDaAutoavaliacao(id: string) {
+    setGerandoAutoavaliacao(id);
+    setErroAutoavaliacao(null);
+    try {
+      const r = await fetch(`/api/pdi/autoavaliacao/${id}/gerar`, { method: "POST" });
+      if (!r.ok) {
+        const info = await lerErro(r);
+        if (r.status === 401 && info.codigo === "sem_sessao") {
+          router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
+          return;
+        }
+        setErroAutoavaliacao({ id, ...info });
+        return;
+      }
+      const d = await r.json();
+      setAutoavaliacoes((lista) => (lista ?? []).map((a) => (a.id === id ? { ...a, resultadoId: d.resultadoId, erroGeracao: null } : a)));
+      router.push(`/r/${d.resultadoId}`);
+    } catch (e) {
+      setErroAutoavaliacao({ id, ...(await lerErro(e)) });
+    } finally {
+      setGerandoAutoavaliacao(null);
+    }
   }
 
   // Atalho para demonstrações: /?exemplo=1 preenche e envia o formulário; /?erro=sem_credito (só em dev) força o erro para capturar a tela.
@@ -203,30 +235,37 @@ export default function Page() {
         <div>
           <form ref={formRef} onSubmit={onSubmit}>
             <CartaoEntrada icone={<IconePessoa />} titulo="Sobre o colaborador">
-              <div className="grid grid-cols-3 max-md:grid-cols-1 gap-3 [&>*]:min-w-0">
+              <Row>
                 <Field label="Nome" htmlFor="nome"><input id="nome" className="input" required placeholder="Marina Costa" value={dados.nome} onChange={set("nome")} /></Field>
                 <Field label="Cargo" htmlFor="cargo"><input id="cargo" className="input" required placeholder="Coordenadora de Marketing" value={dados.cargo} onChange={set("cargo")} /></Field>
-                <Field label="Tempo na função" htmlFor="tempo">
-                  <select id="tempo" className="input" value={dados.tempo} onChange={set("tempo")}>
-                    <option>Menos de 1 ano</option><option>1 a 3 anos</option><option>3 a 5 anos</option><option>Mais de 5 anos</option>
-                  </select>
-                </Field>
-              </div>
+              </Row>
             </CartaoEntrada>
 
             <CartaoEntrada icone={<IconeContexto />} titulo="Contexto profissional">
               <Row>
                 <Field label="Entregas e atividades recentes" htmlFor="entregas">
                   <textarea id="entregas" className="input min-h-20 resize-y" required placeholder="Ex.: liderou o lançamento da campanha X, reduziu custo por lead em 18%..." value={dados.entregas} onChange={set("entregas")} />
+                  <BuscarEntregas
+                    nome={dados.nome}
+                    conectado={status ? Boolean(status.integrations?.mcpTarefas) : null}
+                    onEntregas={(texto) => setDados((d) => ({ ...d, entregas: d.entregas.trim() ? `${d.entregas.trim()}\n${texto}` : texto }))}
+                  />
                 </Field>
                 <Field label="Objetivos da empresa para o período" htmlFor="objetivos">
                   <textarea id="objetivos" className="input min-h-20 resize-y" required placeholder="Ex.: crescer 30% em receita recorrente, abrir o mercado corporativo..." value={dados.objetivos} onChange={set("objetivos")} />
                 </Field>
               </Row>
               <MaisDetalhes>
-                <Field label="Aspirações da pessoa (opcional)" htmlFor="aspiracoes">
-                  <input id="aspiracoes" className="input" placeholder="Ex.: assumir a gerência da área em 2 anos" value={dados.aspiracoes} onChange={set("aspiracoes")} />
-                </Field>
+                <Row>
+                  <Field label="Tempo na função" htmlFor="tempo">
+                    <select id="tempo" className="input" value={dados.tempo} onChange={set("tempo")}>
+                      <option>Menos de 1 ano</option><option>1 a 3 anos</option><option>3 a 5 anos</option><option>Mais de 5 anos</option>
+                    </select>
+                  </Field>
+                  <Field label="Aspirações da pessoa (opcional)" htmlFor="aspiracoes">
+                    <input id="aspiracoes" className="input" placeholder="Ex.: assumir a gerência da área em 2 anos" value={dados.aspiracoes} onChange={set("aspiracoes")} />
+                  </Field>
+                </Row>
                 <Row>
                   <Field label="Data da conversa (opcional)" htmlFor="dataConversa" hint="Usada para calcular as datas reais das ações de 30, 60 e 90 dias.">
                     <input id="dataConversa" type="date" className="input" value={dados.dataConversa ?? ""} onChange={set("dataConversa")} />
@@ -280,18 +319,28 @@ export default function Page() {
               ) : autoavaliacoes.length === 0 ? (
                 <p className="text-muted text-sm">Nenhuma resposta recebida ainda.</p>
               ) : (
-                <ul className="flex flex-col gap-1.5 text-sm">
+                <ul className="flex flex-col gap-2 text-sm">
                   {autoavaliacoes.map((a) => (
-                    <li key={a.id} className="flex justify-between gap-3">
-                      <span className="truncate">{a.nome}</span>
-                      <span className="flex items-center gap-3 shrink-0">
-                        <span className="text-muted">{data(a.criadoEm)}</span>
-                        {a.resultadoId ? (
-                          <Link href={`/r/${a.resultadoId}`} className="text-accent-ink font-semibold hover:underline">Abrir PDI</Link>
-                        ) : (
-                          <span className="text-muted">Falha ao gerar</span>
-                        )}
-                      </span>
+                    <li key={a.id} className="flex flex-col gap-1.5">
+                      <div className="flex justify-between gap-3">
+                        <span className="truncate">{a.nome}</span>
+                        <span className="flex items-center gap-3 shrink-0">
+                          <span className="text-muted">{data(a.criadoEm)}</span>
+                          {a.resultadoId ? (
+                            <Link href={`/r/${a.resultadoId}`} className="text-accent-ink font-semibold hover:underline">Abrir PDI</Link>
+                          ) : (
+                            <button type="button" className="btn-link text-sm" disabled={gerandoAutoavaliacao === a.id} onClick={() => gerarDaAutoavaliacao(a.id)}>
+                              {gerandoAutoavaliacao === a.id ? "Gerando" : "Gerar PDI agora"}
+                            </button>
+                          )}
+                        </span>
+                      </div>
+                      {!a.resultadoId && erroAutoavaliacao?.id !== a.id && (
+                        <p className="text-[13px] text-danger">{a.erroGeracao?.mensagem ?? "A IA não conseguiu gerar o PDI quando a resposta chegou."}</p>
+                      )}
+                      {erroAutoavaliacao?.id === a.id && (
+                        <Aviso tom="danger" acao={erroAutoavaliacao.acao}>{erroAutoavaliacao.mensagem}</Aviso>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -319,16 +368,31 @@ export default function Page() {
 }
 
 export function Resultado({ pdi, dados, meta, id }: { pdi: PDI; dados: DadosPDI; meta: Meta; id?: string }) {
+  const [avisoCopia, setAvisoCopia] = useState<"ok" | "falha" | null>(null);
+  const primeiroNome = dados.nome.trim().split(/\s+/)[0] || dados.nome;
+
+  async function copiarVersaoPessoa() {
+    try {
+      await navigator.clipboard.writeText(versaoParaPessoa(pdi, dados));
+      setAvisoCopia("ok");
+    } catch {
+      setAvisoCopia("falha");
+    }
+    setTimeout(() => setAvisoCopia(null), 4000);
+  }
+
   return (
     <article className="reveal">
       <ResultHead titulo={`PDI de ${dados.nome}`} subtitulo={`${dados.cargo}, ${dados.tempo} na função`}>
-        <Entregar id={id} titulo={`PDI de ${dados.nome}`} texto={() => pdiParaTexto(pdi, dados)} />
+        <Entregar id={id} titulo={`PDI de ${dados.nome}`} texto={() => pdiParaTexto(pdi, dados)} extras={[{ rotulo: "Copiar versão para enviar à pessoa", onClick: copiarVersaoPessoa }]} />
       </ResultHead>
+      {avisoCopia === "ok" && <div className="mb-4"><Aviso tom="ok">Versão para {primeiroNome} copiada, em segunda pessoa. Cole no e-mail ou na mensagem.</Aviso></div>}
+      {avisoCopia === "falha" && <div className="mb-4"><Aviso tom="danger">Não foi possível copiar automaticamente. Use &ldquo;Copiar texto&rdquo; no menu Mais e ajuste o tom.</Aviso></div>}
 
       <Origem meta={meta} />
-      {id && <LembrarCheckins resultadoId={id} />}
 
-      <ConteudoPDI pdi={pdi} dataConversa={dados.dataConversa} />
+      {/* "Lembrar dos check-ins" fica no fim do plano, junto de Acompanhamento: primeiro a pessoa lê o PDI, depois decide acompanhar. */}
+      <ConteudoPDI pdi={pdi} dataConversa={dados.dataConversa} acompanhamentoExtra={id ? <LembrarCheckins resultadoId={id} /> : undefined} />
 
       <SeloIA demo={meta.demo} />
     </article>
@@ -345,8 +409,9 @@ function prazoComData(prazo: string, dataConversa?: string) {
   return `${prazo} · ${data(data_, { comAno: true })}`;
 }
 
-/** Corpo do PDI (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
-export function ConteudoPDI({ pdi, dataConversa }: { pdi: PDI; dataConversa?: string }) {
+/** Corpo do PDI (sem cabeçalho nem Origem), reaproveitado pela página de impressão. `acompanhamentoExtra` (o bloco
+ * "Lembrar dos check-ins") entra no topo da seção Acompanhamento e faz a seção aparecer mesmo sem check-in respondido. */
+export function ConteudoPDI({ pdi, dataConversa, acompanhamentoExtra }: { pdi: PDI; dataConversa?: string; acompanhamentoExtra?: ReactNode }) {
   return (
     <>
       <p className="summary">{pdi.resumo}</p>
@@ -373,7 +438,7 @@ export function ConteudoPDI({ pdi, dataConversa }: { pdi: PDI; dataConversa?: st
           <div key={o.titulo} className="card shadow-none px-[22px] py-5 mb-3.5">
             <header className="flex justify-between gap-4 mb-3 max-md:flex-col">
               <div><h3 className="font-bold">{o.titulo}</h3><p className="text-muted text-sm">{o.resultado_esperado}</p></div>
-              <div className="text-[13px] text-muted md:w-40 md:shrink-0 md:text-right">Indicador<br /><strong className="text-ink">{o.indicador}</strong></div>
+              <div className="text-[13px] text-muted md:w-56 md:shrink-0 md:text-right">Indicador<br /><strong className="text-ink">{o.indicador}</strong></div>
             </header>
             <div className="border-t border-line divide-y divide-line text-sm">
               {o.acoes.map((a) => (
@@ -394,10 +459,11 @@ export function ConteudoPDI({ pdi, dataConversa }: { pdi: PDI; dataConversa?: st
         <Item>{pdi.conversa_sugerida.map((q) => <p key={q} className="my-1.5">“{q}”</p>)}</Item>
       </Section>
 
-      {pdi.acompanhamento && pdi.acompanhamento.length > 0 && (
+      {((pdi.acompanhamento && pdi.acompanhamento.length > 0) || acompanhamentoExtra) && (
         <Section titulo="Acompanhamento">
           <div className="flex flex-col gap-3">
-            {pdi.acompanhamento.map((a, i) => (
+            {acompanhamentoExtra}
+            {(pdi.acompanhamento ?? []).map((a, i) => (
               <div key={i} className="card shadow-none px-[22px] py-4">
                 <p className="text-[13px] text-muted mb-1.5">Check-in de {a.marco} dias · {data(a.data, { comHora: true })}</p>
                 <p className="mb-2">{a.texto}</p>
@@ -413,6 +479,23 @@ export function ConteudoPDI({ pdi, dataConversa }: { pdi: PDI; dataConversa?: st
       )}
     </>
   );
+}
+
+/** "Copiar versão para enviar à pessoa": abertura em segunda pessoa (mensagem_pessoa, gerada pela IA ou por regra no
+ * demo) seguida do plano em forma de mensagem — sem as perguntas do líder para a conversa, que são só dele. */
+function versaoParaPessoa(pdi: PDI, d: DadosPDI) {
+  const primeiro = d.nome.trim().split(/\s+/)[0] || d.nome;
+  const abertura = pdi.mensagem_pessoa?.trim() || `${primeiro}, este é o seu plano de desenvolvimento para os próximos 90 dias, montado a partir das suas entregas recentes e dos objetivos da empresa.`;
+  const l: string[] = [`Olá, ${primeiro}!`, "", abertura, "", "Seus pontos fortes:"];
+  pdi.pontos_fortes.forEach((f) => l.push(`- ${f.titulo}: ${f.evidencia}`));
+  l.push("", "Onde você pode crescer:");
+  pdi.lacunas.forEach((x) => l.push(`- ${x.competencia}: ${x.impacto}`));
+  l.push("", "Seus objetivos para os próximos 90 dias:");
+  pdi.objetivos.forEach((o) => { l.push(`- ${o.titulo}: ${o.resultado_esperado} (como vamos medir: ${o.indicador})`); o.acoes.forEach((a) => l.push(`    ${a.prazo}: ${a.acao}`)); });
+  l.push("", "Recursos de apoio para você:");
+  pdi.recursos.forEach((r) => l.push(`- ${r.tipo}: ${r.nome} (${r.motivo})`));
+  l.push("", "Vamos conversar sobre este plano e ajustar o que fizer sentido. Conte comigo.");
+  return l.join("\n");
 }
 
 function pdiParaTexto(pdi: PDI, d: DadosPDI) {

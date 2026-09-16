@@ -12,6 +12,8 @@ export interface PDI {
   }[];
   recursos: { tipo: string; nome: string; motivo: string }[];
   conversa_sugerida: string[];
+  /** Duas ou três frases dirigidas à própria pessoa (segunda pessoa), abertura da "versão para enviar à pessoa" no menu Mais. */
+  mensagem_pessoa?: string;
   /** Respostas dos lembretes de check-in de 30/60/90 dias (US-070), anexadas depois de o PDI já estar salvo. */
   acompanhamento?: EntradaAcompanhamento[];
 }

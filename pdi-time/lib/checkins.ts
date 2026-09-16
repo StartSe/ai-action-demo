@@ -14,7 +14,9 @@ const MARCOS: Marco[] = [30, 60, 90];
 
 type AcaoMarco = { objetivo: string; acao: string };
 
-type ParametrosRotinaCheckin = { resultadoId: string; nome: string; marco: Marco; acoes: AcaoMarco[] };
+/** `base` é o endereço público do app no momento em que o líder pediu os lembretes (baseUrl(req)); serve de reserva
+ * para o link do e-mail quando APP_URL não estiver mais gravada na hora de rodar (nunca "localhost" em produção). */
+type ParametrosRotinaCheckin = { resultadoId: string; nome: string; marco: Marco; acoes: AcaoMarco[]; base?: string };
 type ParametrosFormularioCheckin = ParametrosPublicos & { resultadoId: string; marco: Marco; acoes: AcaoMarco[] };
 
 /** As ações de todos os objetivos cujo prazo é o marco pedido (ex.: todas as ações "30 dias"). */
@@ -37,15 +39,15 @@ function paraDataLocal(d: Date): string {
 }
 
 /** Cria as 3 rotinas (30/60/90 dias a partir de `desde`, ou de hoje) para o líder ser lembrado do check-in. */
-export function criarLembretesCheckin({ resultadoId, nome, pdi, desde, canal, destino }: {
-  resultadoId: string; nome: string; pdi: PDI; desde?: string; canal: Canal; destino?: string;
+export function criarLembretesCheckin({ resultadoId, nome, pdi, desde, canal, destino, base }: {
+  resultadoId: string; nome: string; pdi: PDI; desde?: string; canal: Canal; destino?: string; base?: string;
 }): { id: string; marco: Marco; dataUnica: string }[] {
-  const base = desde ? new Date(`${desde}T00:00:00`) : new Date();
+  const inicio = desde ? new Date(`${desde}T00:00:00`) : new Date();
   return MARCOS.map((marco) => {
-    const alvo = new Date(base);
+    const alvo = new Date(inicio);
     alvo.setDate(alvo.getDate() + marco);
     const dataUnica = paraDataLocal(alvo);
-    const parametros: ParametrosRotinaCheckin = { resultadoId, nome, marco, acoes: acoesDoMarco(pdi, marco) };
+    const parametros: ParametrosRotinaCheckin = { resultadoId, nome, marco, acoes: acoesDoMarco(pdi, marco), base };
     const id = criarRotina({ tipo: "checkin-pdi", frequencia: "unica", hora: "09:00", dataUnica, canal, destino, parametros });
     return { id, marco, dataUnica };
   });
@@ -60,7 +62,7 @@ export function listarLembretesCheckin(resultadoId: string): { id: string; marco
 }
 
 registrarExecutor("checkin-pdi", async (rotina: Rotina) => {
-  const { resultadoId, nome, marco, acoes } = (rotina as Rotina<ParametrosRotinaCheckin>).parametros;
+  const { resultadoId, nome, marco, acoes, base: baseGravada } = (rotina as Rotina<ParametrosRotinaCheckin>).parametros;
   const parametros: ParametrosFormularioCheckin = {
     marca: "P",
     nome: "PDI do Time",
@@ -71,7 +73,8 @@ registrarExecutor("checkin-pdi", async (rotina: Rotina) => {
     acoes,
   };
   const token = criarFormulario({ tipo: "checkin-pdi", campos: camposCheckin(acoes), parametros, expiraEmDias: 30, limite: 1 });
-  const base = enderecoPublico();
+  // APP_URL (registrada na criação por registrarEnderecoPublico) manda; a base gravada nos parâmetros é a reserva.
+  const base = enderecoPublico() ?? baseGravada;
   const listaAcoes = acoes.length ? acoes.map((a) => `- ${a.objetivo}: ${a.acao}`).join("\n") : "Nenhuma ação prevista para este marco.";
   if (!base) console.error(`Check-in de ${marco} dias (PDI de ${nome}): endereço público desconhecido, link omitido do aviso.`);
   const registrar = base ? `Registre o que avançou: ${base}/f/${token}` : "Abra o app para registrar o que avançou (endereço público ainda não configurado).";

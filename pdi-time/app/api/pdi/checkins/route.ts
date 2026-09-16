@@ -2,14 +2,15 @@
 // check-ins" no Resultado). Não é copiado entre apps: a lógica mora em lib/checkins.ts.
 import { criarLembretesCheckin, listarLembretesCheckin } from "@/lib/checkins";
 import { obter } from "@/lib/historico";
-import { motivoCanalIndisponivel } from "@/lib/rotinas";
-import { registrarEnderecoPublico } from "@/lib/setup-comum";
-import { getConfig } from "@/lib/store";
+import { canalDoLider } from "@/lib/notificacoes-do-app";
+import { baseUrl, registrarEnderecoPublico } from "@/lib/setup-comum";
 import type { DadosPDI, PDI } from "@/lib/types";
 
+/** Lembretes já agendados e se as notificações já entregam (o botão explica antes do clique o que vai acontecer). */
 export async function GET(req: Request) {
   const resultadoId = new URL(req.url).searchParams.get("resultadoId") || "";
-  return Response.json({ itens: resultadoId ? listarLembretesCheckin(resultadoId) : [] });
+  const { canal, motivo } = canalDoLider();
+  return Response.json({ itens: resultadoId ? listarLembretesCheckin(resultadoId) : [], notificacoes: { prontas: !motivo, canal } });
 }
 
 export async function POST(req: Request) {
@@ -25,14 +26,10 @@ export async function POST(req: Request) {
     return Response.json({ error: "Os check-ins deste PDI já foram agendados." }, { status: 409 });
   }
 
-  const canal = getConfig("NOTIFICACOES_CANAL") === "slack" ? "slack" : "email";
-  const destino = getConfig("NOTIFICACOES_DESTINO") || undefined;
-  if (canal === "email" && !destino) {
-    return Response.json({ error: "Configure um e-mail de destino em Notificações para receber os lembretes.", motivo: "notificacoes" }, { status: 400 });
-  }
-  const motivoCanal = motivoCanalIndisponivel(canal);
-  if (motivoCanal) return Response.json({ error: motivoCanal, motivo: "notificacoes" }, { status: 400 });
+  // Canal Slack sem webhook, ou e-mail sem destino/credencial: 400 com motivo "notificacoes" (a tela leva a /setup#notificacoes).
+  const { canal, destino, motivo } = canalDoLider();
+  if (motivo) return Response.json({ error: motivo, motivo: "notificacoes" }, { status: 400 });
 
-  const itens = criarLembretesCheckin({ resultadoId, nome: registro.entrada.nome, pdi: registro.saida, desde: registro.entrada.dataConversa, canal, destino });
+  const itens = criarLembretesCheckin({ resultadoId, nome: registro.entrada.nome, pdi: registro.saida, desde: registro.entrada.dataConversa, canal, destino, base: baseUrl(req) });
   return Response.json({ itens });
 }
