@@ -1,3 +1,5 @@
+import { responderErro } from "@/app/api/erros";
+import { ACAO_LIGACAO } from "@/lib/acoes";
 import { ligacaoEnabled, ligar } from "@/lib/voz";
 
 export async function POST(req: Request) {
@@ -10,19 +12,17 @@ export async function POST(req: Request) {
   };
   if (!ligacaoEnabled()) {
     return Response.json(
-      { error: "Ligação telefônica não configurada. Conecte a ElevenLabs em /setup." },
-      { status: 503 }
+      { error: "A ligação telefônica automática ainda não foi conectada.", codigo: "ligacao_desligada", acao: ACAO_LIGACAO },
+      { status: 400 }
     );
   }
   if (!telefone) {
-    return Response.json({ error: "Informe o telefone do candidato." }, { status: 400 });
+    return Response.json({ error: "Informe o telefone do candidato, com o código do país." }, { status: 400 });
   }
   try {
     const resultado = await ligar({ telefone, vaga, requisitos, candidato });
     return Response.json({ ok: true, resultado });
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível iniciar a ligação agora.";
-    return Response.json({ error: mensagem }, { status: 502 });
+    return responderErro(err, "Não foi possível iniciar a ligação agora. Tente de novo em um minuto.");
   }
 }

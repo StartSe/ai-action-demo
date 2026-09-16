@@ -34,6 +34,23 @@ export function DialogoLinkCandidato({ onFechar, vagaInicial }: Props) {
     };
   }, [onFechar]);
 
+  /** Convite pronto para colar num e-mail ou mensagem, com o link dentro. Evita que cada pessoa
+   * escreva o seu — e que o link chegue ao candidato sem nenhuma explicação. */
+  function convite() {
+    const nome = vaga.candidato.trim() || "Olá";
+    return [
+      `${nome}, tudo bem?`,
+      "",
+      `Damos sequência ao processo para a vaga de ${vaga.titulo.trim() || "nossa vaga"} com uma conversa inicial conduzida por uma entrevistadora de IA. São poucos minutos, por voz ou por texto, no horário que for melhor para você.`,
+      "",
+      `É só abrir este link: ${link}`,
+      "",
+      `O link vale por ${expiraEmDias} dias e pode ser usado uma vez.`,
+      "",
+      "Qualquer dúvida, é só responder esta mensagem.",
+    ].join("\n");
+  }
+
   const set = (campo: "titulo" | "requisitos" | "candidato") => (e: { target: { value: string } }) =>
     setVaga((v) => ({ ...v, [campo]: e.target.value }));
 
@@ -67,6 +84,10 @@ export function DialogoLinkCandidato({ onFechar, vagaInicial }: Props) {
             <div className="flex items-center gap-2 flex-wrap">
               <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[220px]">{link}</code>
               <CopyButton texto={() => link} rotulo="Copiar link" />
+            </div>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <CopyButton texto={convite} rotulo="Copiar convite para o candidato" />
+              <span className="text-muted text-[12.5px]">Mensagem pronta, com o link e o prazo.</span>
             </div>
             <button type="button" className="btn-ghost !w-auto self-start" onClick={onFechar}>Fechar</button>
           </div>

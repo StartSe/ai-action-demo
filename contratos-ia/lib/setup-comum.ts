@@ -41,7 +41,8 @@ export type Integracao = {
   link?: { url: string; rotulo: string };
   /** Fluxo de conexão em um clique. "openrouter" é genérico; outros são tratados pelo app. */
   oauth?: { tipo: string; rotulo: string; url: string };
-  /** Nota curta mostrada abaixo do botão de conexão em um clique, antes de conectar. */
+  /** Nota curta em linguagem de negócio mostrada antes de conectar (o que a integração exige, o que a
+   * equipe técnica ainda precisa fazer). Some quando a integração já está conectada. */
   notaConexao?: string;
   campos: Campo[];
   /** Valida as chaves salvas chamando a integração. */

@@ -1,3 +1,4 @@
+import { responderErro } from "@/app/api/erros";
 import { gerarScorecard, normalizarHistorico } from "@/lib/entrevista";
 import { apagarTodos, listar } from "@/lib/historico";
 import type { Vaga } from "@/lib/types";
@@ -16,9 +17,7 @@ export async function POST(req: Request) {
     const { scorecard, meta, id } = await gerarScorecard(vaga, hist);
     return Response.json({ scorecard, meta, id });
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível gerar o scorecard agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return responderErro(err, "Não foi possível montar o scorecard agora. A conversa continua salva: tente de novo.");
   }
 }
 

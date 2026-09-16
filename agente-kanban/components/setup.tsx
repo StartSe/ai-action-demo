@@ -343,6 +343,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
         </>
       ) : (
         <>
+          {!i.configurada && i.notaConexao && <p className="text-[12.5px] text-muted mb-4">{i.notaConexao}</p>}
           {passos.length > 0 && (
             <ol className="list-decimal list-inside flex flex-col gap-1 text-sm text-muted mb-4">
               {passos.map((p) => <li key={p}>{p}</li>)}

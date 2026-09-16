@@ -27,7 +27,7 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
           <div className="text-muted text-sm">{data(new Date())}</div>
         </header>
 
-        <ConteudoRanking ranking={registro.saida} />
+        <ConteudoRanking ranking={registro.saida} comparavel={false} />
 
         <footer className="mt-8 pt-4 border-t border-line">
           <Origem meta={registro.meta} />

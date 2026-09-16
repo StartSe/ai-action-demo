@@ -56,7 +56,7 @@
       "problema": "A triagem inicial de candidatos consome horas da equipe.",
       "ia": "Conduz a entrevista por voz e texto e entrega um scorecard para o gestor.",
       "integracoes": "ElevenLabs (voz e ligação por agente conversacional).",
-      "acento": "#5b3f9e",
+      "acento": "#6e3597",
       "porta": 3003,
       "captura": "capturas/entrevista-ia.png",
       "capacidades": [

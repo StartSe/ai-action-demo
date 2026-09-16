@@ -12,8 +12,8 @@ Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com mod
 Abra `/setup` no navegador. Lá você conecta cada integração colando uma chave (ou, no caso da IA, com um clique em "Conectar com OpenRouter") e testa a conexão antes de usar:
 
 - **Inteligência artificial (OpenRouter)** — obrigatória para sair do modo demonstração. Gera as perguntas da entrevista e o scorecard final.
-- **Voz da entrevistadora (ElevenLabs)** — opcional. Com a chave salva, escolha a voz em uma lista carregada da própria conta; sem ela, a voz usa o sintetizador do navegador do candidato.
-- **Ligação telefônica automática (ElevenLabs + Twilio)** — opcional. Depois de salvar a chave da ElevenLabs, o setup lista os agentes conversacionais e os números de telefone já cadastrados na conta para você selecionar; com os dois selecionados, a seção "Ligar para o candidato" do scorecard passa a funcionar.
+- **Voz da entrevistadora** (ElevenLabs) — opcional. Com a chave salva, escolha a voz em uma lista carregada da própria conta; sem ela, a voz é a do próprio navegador do candidato e a sala avisa isso na tela. Se a ElevenLabs recusar a chamada no meio da conversa (chave recusada, conta sem créditos, serviço fora do ar), a entrevista continua por texto e o aviso explica o motivo em uma frase — nunca com código de resposta nem texto do provedor.
+- **Ligação telefônica automática** (ElevenLabs + Twilio) — opcional. Exige a chave da ElevenLabs salva acima, um agente conversacional criado na conta e um número de telefone da Twilio ligado a ele; os dois são escolhidos em "Opções avançadas" do cartão. Com os dois selecionados, a seção "Ligar para o candidato" do scorecard passa a funcionar.
 
 Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Variáveis de ambiente, quando existem, têm prioridade sobre o que foi salvo no setup. Até conectar a IA, o app roda em modo demonstração com perguntas roteirizadas e um scorecard de exemplo.
 
@@ -59,7 +59,10 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 app/page.tsx                        tela única (formulário + sala de entrevista + scorecard)
 app/api/entrevista/proxima/route.ts próxima pergunta da entrevista
 app/api/entrevista/avaliar/route.ts geração do scorecard
-app/api/tts/route.ts                voz da entrevistadora (ElevenLabs)
+app/api/tts/route.ts                voz da entrevistadora, na sala do gestor (ElevenLabs)
+app/api/erros.ts                    resposta de erro única das rotas próprias (ErroVoz + respostaErro)
+app/entrevista/[token]/page.tsx     sala pública do candidato, aberta pelo link gerado no painel
+app/api/entrevista/candidato/       rotas públicas do link do candidato (próxima pergunta, voz, conclusão)
 app/api/ligar/route.ts              ligação telefônica (ElevenLabs Conversational AI + Twilio)
 app/api/status/route.ts             informa ao frontend se a IA e as integrações de voz estão conectadas
 app/api/health/route.ts             health check
@@ -72,7 +75,8 @@ lib/store.ts                        configuração em SQLite (node:sqlite), com 
 lib/setup-comum.ts                  tipos do setup e integração OpenRouter (compartilhado)
 lib/integracoes.ts                  integrações que este app precisa (OpenRouter, voz e ligação da ElevenLabs)
 lib/ai.ts                           cliente OpenRouter (askText, askJSON)
-lib/voz.ts                          integração opcional com a ElevenLabs (voz e ligação telefônica)
+lib/voz.ts                          integração opcional com a ElevenLabs (voz, ligação e tradução das falhas)
+lib/acoes.ts                        "o que fazer agora" de cada aviso, compartilhado entre tela e servidor
 lib/demo.ts                         perguntas roteirizadas e scorecard de exemplo do modo demonstração
 lib/types.ts                        tipos do domínio
 Dockerfile                          build multi-stage com saída standalone

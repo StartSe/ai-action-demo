@@ -5,6 +5,7 @@
 import type { ParametrosCandidato } from "@/lib/entrevista";
 import { expirou, listarRespostas, obter } from "@/lib/formularios";
 import { EntrevistaCandidato } from "@/components/EntrevistaCandidato";
+import { ttsEnabled } from "@/lib/voz";
 
 export const dynamic = "force-dynamic";
 
@@ -35,5 +36,7 @@ export default async function Page({ params }: PageProps<"/entrevista/[token]">)
   }
 
   const { marca, nome, vaga } = formulario.parametros;
-  return <EntrevistaCandidato codigo={token} marca={marca} nome={nome} vaga={vaga} />;
+  // A tela do candidato não consulta /api/status (rota privada): quem diz se a voz natural está
+  // ligada é o próprio servidor, aqui.
+  return <EntrevistaCandidato codigo={token} marca={marca} nome={nome} vaga={vaga} vozLigada={ttsEnabled()} />;
 }

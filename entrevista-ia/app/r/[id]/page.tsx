@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Topbar } from "@/components/ui";
 import { obter } from "@/lib/historico";
+import { ligacaoEnabled } from "@/lib/voz";
 import type { Meta } from "@/lib/ai";
 import type { Ranking, Scorecard, Troca, Vaga } from "@/lib/types";
 import { Resultado, ResultadoRanking } from "../../page";
@@ -32,7 +33,7 @@ export default async function Page({ params }: PageProps<"/r/[id]">) {
     <>
       <Topbar marca="E" nome="Entrevistadora IA" area="Recursos Humanos" status={{ ai: !registro.meta.demo, demo: registro.meta.demo, model: registro.meta.model }} />
       <main className="max-w-[860px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
-        <Resultado vaga={registro.entrada.vaga} scorecard={registro.saida} meta={registro.meta} historico={registro.entrada.historico} id={id} status={null} />
+        <Resultado vaga={registro.entrada.vaga} scorecard={registro.saida} meta={registro.meta} historico={registro.entrada.historico} id={id} ligacaoLigada={ligacaoEnabled()} />
       </main>
     </>
   );

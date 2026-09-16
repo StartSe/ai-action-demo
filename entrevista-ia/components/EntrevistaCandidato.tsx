@@ -5,13 +5,11 @@
 // gestor vê, em /r/[id]) e mostra uma tela de agradecimento para o candidato.
 import { useState } from "react";
 import { Sala } from "./Sala";
-import { useStatus } from "./ui";
 import type { Troca, Vaga } from "@/lib/types";
 
 type Fase = "entrevista" | "enviando" | "concluida" | "erro";
 
-export function EntrevistaCandidato({ codigo, marca, nome, vaga }: { codigo: string; marca: string; nome: string; vaga: Vaga }) {
-  const { status } = useStatus();
+export function EntrevistaCandidato({ codigo, marca, nome, vaga, vozLigada }: { codigo: string; marca: string; nome: string; vaga: Vaga; vozLigada: boolean }) {
   const [fase, setFase] = useState<Fase>("entrevista");
   const [mensagemErro, setMensagemErro] = useState("");
 
@@ -26,11 +24,6 @@ export function EntrevistaCandidato({ codigo, marca, nome, vaga }: { codigo: str
       setMensagemErro(err instanceof Error ? err.message : "Erro inesperado.");
       setFase("erro");
     }
-  }
-
-  function onErro(mensagem: string) {
-    setMensagemErro(mensagem);
-    setFase("erro");
   }
 
   return (
@@ -51,7 +44,7 @@ export function EntrevistaCandidato({ codigo, marca, nome, vaga }: { codigo: str
           <p className="text-muted">{mensagemErro}</p>
         </div>
       ) : (
-        <Sala vaga={vaga} status={status} modoExemplo={false} onFinalizar={onFinalizar} onErro={onErro} />
+        <Sala vaga={vaga} rotas={{ proxima: `/api/entrevista/candidato/${codigo}/proxima`, voz: `/api/entrevista/candidato/${codigo}/voz` }} vozLigada={vozLigada} modoExemplo={false} onFinalizar={onFinalizar} />
       )}
 
       {fase === "enviando" && <p className="text-muted text-sm text-center mt-4">Enviando suas respostas...</p>}
