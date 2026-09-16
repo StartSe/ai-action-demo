@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { Origem } from "@/components/ui";
 import { data } from "@/lib/formato";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
@@ -24,7 +23,11 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
       <ConteudoLeads dados={registro.entrada} leads={registro.saida.leads} leadsProntos={new Set(Object.keys(registro.saida.abordagens || {}))} />
 
       <footer className="mt-8 pt-4 border-t border-line">
-        <Origem meta={registro.meta} />
+        <p className="text-muted text-[13px]">
+          {registro.saida.fonte === "demo"
+            ? `Lista de exemplo a partir de ${registro.meta.insumo}.`
+            : `Leads buscados na base da Apollo a partir de ${registro.meta.insumo}, em ${data(registro.meta.geradoEm, { comHora: true })}.`}
+        </p>
       </footer>
     </div>
   );

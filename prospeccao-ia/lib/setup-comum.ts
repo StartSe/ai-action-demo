@@ -1,11 +1,15 @@
 // Tipos e utilitários do setup inicial. Compartilhado por toda a suíte: copie sem alterar.
 // A lista de integrações de cada app fica em lib/integracoes.ts.
-import { getConfig, mascarar, origemConfig } from "./store";
+import { getConfig, mascarar, origemConfig, setConfig } from "./store";
 import { enviar, type Canal } from "./notificacoes";
 import { conectar, listarFerramentas, type FerramentaMCP } from "./mcp-cliente";
 import { conexaoAutorizada } from "./mcp-oauth";
+import { MODELOS_GRATUITOS, MODELOS_VISAO, type Opcao, type ProximoPasso } from "./modelos";
+import { interpretarFalha } from "./ai";
+import { contaConectada, credenciaisDoApp as credenciaisAppEmail } from "./email-envio";
 
-export type Opcao = { valor: string; rotulo: string };
+export type { Opcao, ProximoPasso };
+export { MODELOS_GRATUITOS, MODELOS_VISAO };
 
 export type Campo = {
   chave: string;
@@ -16,6 +20,9 @@ export type Campo = {
   opcional?: boolean;
   /** Campo secundário: fica dentro de "Opções avançadas" no cartão, em vez do grupo principal. */
   avancado?: boolean;
+  /** Mostra o campo só quando outro campo do mesmo cartão (`campo`) já tiver um dos `valores` indicados
+   * (salvo ou ainda não salvo). Ex.: mostrar o webhook do Slack só quando o canal escolhido for "slack". */
+  visivelQuando?: { campo: string; valores: string[] };
   padrao?: string;
   opcoes?: Opcao[];
   /** Opções carregadas da própria integração (ex.: quadros do Trello) quando as chaves anteriores já existem. */
@@ -26,16 +33,21 @@ export type Integracao = {
   id: string;
   titulo: string;
   descricao: string;
+  /** Descrição curta (uma linha, em linguagem de negócio) usada no lugar de `descricao` no cartão do
+   * cabeçalho, ex.: "Liga a IA que gera o plano". Opcional: quando ausente, o cartão usa `descricao`. */
+  beneficio?: string;
   obrigatoria: boolean;
   /** Onde a pessoa obtém a chave. */
   link?: { url: string; rotulo: string };
   /** Fluxo de conexão em um clique. "openrouter" é genérico; outros são tratados pelo app. */
   oauth?: { tipo: string; rotulo: string; url: string };
+  /** Nota curta mostrada abaixo do botão de conexão em um clique, antes de conectar. */
+  notaConexao?: string;
   campos: Campo[];
   /** Valida as chaves salvas chamando a integração. */
   testar?: (config: Record<string, string | undefined>) => Promise<{ ok: boolean; mensagem: string }>;
-  /** Campo cujo valor define sozinho se a integração conta como conectada (chip "conectado", botão Autorizar/Conectado). Por padrão, usa todos os campos não opcionais. */
-  campoConectado?: string;
+  /** Campo cujo valor define sozinho se a integração conta como conectada (chip "conectado", botão Autorizar/Conectado). Uma lista significa "qualquer um destes" (ex.: duas chaves alternativas no mesmo cartão). Por padrão, usa todos os campos não opcionais. */
+  campoConectado?: string | string[];
 };
 
 export type CampoStatus = Omit<Campo, "opcoesDinamicas"> & { definido: boolean; origem: "env" | "banco" | null; mascarado: string | null; valorVisivel?: string };
@@ -43,15 +55,48 @@ export type IntegracaoStatus = Omit<Integracao, "campos" | "testar"> & { campos:
 
 /** Chaves necessárias para a integração contar como configurada. */
 export function integracaoConfigurada(i: Integracao): boolean {
-  if (i.campoConectado) return Boolean(getConfig(i.campoConectado));
+  if (i.campoConectado) {
+    const chaves = Array.isArray(i.campoConectado) ? i.campoConectado : [i.campoConectado];
+    return chaves.some((chave) => Boolean(getConfig(chave)));
+  }
   return i.campos.filter((c) => !c.opcional).every((c) => Boolean(getConfig(c.chave)));
+}
+
+/** Integrações ainda não configuradas, obrigatória primeiro, em linguagem de negócio para "o que mais dá
+ * para conectar" (popover da Topbar, cartão "Tudo pronto" de /setup). */
+export function calcularProximos(lista: Integracao[]): ProximoPasso[] {
+  return lista
+    .filter((i) => !integracaoConfigurada(i))
+    .sort((a, b) => Number(b.obrigatoria) - Number(a.obrigatoria))
+    .map((i) => ({ id: i.id, titulo: i.titulo, beneficio: i.beneficio ?? i.descricao, url: `/setup#${i.id}` }));
 }
 
 export function lerConfig(i: Integracao): Record<string, string | undefined> {
   return Object.fromEntries(i.campos.map((c) => [c.chave, getConfig(c.chave) ?? c.padrao]));
 }
 
-export async function statusIntegracoes(lista: Integracao[]): Promise<{ integracoes: IntegracaoStatus[]; pronto: boolean }> {
+export type StatusEnderecoPublico = { valor: string | null; origem: "env" | "banco" | null };
+
+/** Valor de `APP_URL` para o campo "Endereço público do app" em /setup ("Para a equipe técnica"). */
+export function statusEnderecoPublico(): StatusEnderecoPublico {
+  const valor = getConfig("APP_URL") ?? null;
+  return { valor, origem: valor ? origemConfig("APP_URL") : null };
+}
+
+export type StatusCaixaEmail = { disponivel: boolean; conta?: string };
+export type StatusCaixasEmail = { gmail: StatusCaixaEmail; outlook: StatusCaixaEmail };
+
+/** Disponibilidade (credenciais do app definidas pela equipe técnica) e conta conectada de cada caixa
+ * própria de e-mail (US-024), para o cartão "Notificações" mostrar os botões "Conectar meu Gmail"/
+ * "Conectar meu Outlook" só quando fizer sentido. */
+export function statusCaixasEmail(): StatusCaixasEmail {
+  return {
+    gmail: { disponivel: Boolean(credenciaisAppEmail("gmail")), conta: contaConectada("gmail") },
+    outlook: { disponivel: Boolean(credenciaisAppEmail("outlook")), conta: contaConectada("outlook") },
+  };
+}
+
+export async function statusIntegracoes(lista: Integracao[]): Promise<{ integracoes: IntegracaoStatus[]; pronto: boolean; enderecoPublico: StatusEnderecoPublico; caixasEmail: StatusCaixasEmail }> {
   const integracoes: IntegracaoStatus[] = [];
   for (const i of lista) {
     const config = lerConfig(i);
@@ -78,7 +123,7 @@ export async function statusIntegracoes(lista: Integracao[]): Promise<{ integrac
     integracoes.push({ ...cabecalho, campos, configurada: integracaoConfigurada(i) });
   }
   const pronto = lista.filter((i) => i.obrigatoria).every(integracaoConfigurada);
-  return { integracoes, pronto };
+  return { integracoes, pronto, enderecoPublico: statusEnderecoPublico(), caixasEmail: statusCaixasEmail() };
 }
 
 /** URL pública do app, respeitando proxies (Render, Docker). */
@@ -89,25 +134,55 @@ export function baseUrl(req: Request): string {
   return `${proto}://${host}`;
 }
 
-/** Integração de IA usada por todos os apps. */
-export const MODELOS_GRATUITOS: Opcao[] = [
-  { valor: "nvidia/nemotron-3-super-120b-a12b:free", rotulo: "Nemotron 3 Super 120B (gratuito, padrão)" },
-  { valor: "google/gemma-4-31b-it:free", rotulo: "Gemma 4 31B (gratuito)" },
-  { valor: "nvidia/nemotron-3-ultra-550b-a55b:free", rotulo: "Nemotron 3 Ultra 550B (gratuito)" },
-  { valor: "anthropic/claude-sonnet-4.5", rotulo: "Claude Sonnet 4.5 (pago, mais qualidade)" },
-  { valor: "openai/gpt-5-mini", rotulo: "GPT-5 mini (pago)" },
-];
+/** Endereço público usado para montar links absolutos em e-mail/Slack (rotinas, lembretes, formulários,
+ * pedidos). Nunca "localhost" fora de desenvolvimento: sem `APP_URL` configurada em produção, devolve
+ * `undefined` e quem monta o link deve tratar (ex.: enviar sem link, ou avisar "endereço público
+ * desconhecido"). Ver `registrarEnderecoPublico`, que preenche `APP_URL` sozinho a partir da primeira
+ * requisição real que chegar numa rota que cria algo com link. */
+export function enderecoPublico(): string | undefined {
+  const valor = getConfig("APP_URL");
+  if (valor) return valor;
+  if (process.env.NODE_ENV !== "production") return `http://localhost:${process.env.PORT || 3000}`;
+  return undefined;
+}
 
-/** Modelos com suporte a imagem no OpenRouter. Verificado em 2026-09-14 em openrouter.ai/models (filtro "image" em input modalities); primeiro gratuito. */
-export const MODELOS_VISAO: Opcao[] = [
-  { valor: "inclusionai/ling-3.0-flash-vl:free", rotulo: "Ling 3.0 Flash VL (gratuito, padrão)" },
-  { valor: "nex-agi/nex-n2.5-pro:free", rotulo: "Nex N2.5 Pro (gratuito)" },
-  { valor: "anthropic/claude-sonnet-4.5", rotulo: "Claude Sonnet 4.5 (pago, mais qualidade)" },
-];
+/** Grava `APP_URL` a partir do host real da requisição, para toda rota que cria uma rotina, um
+ * lembrete, um formulário ou um pedido que vai gerar um link em e-mail/Slack mais tarde (quando não há
+ * `req` disponível, como no executor de 60s). Nunca sobrescreve um valor vindo de variável de ambiente,
+ * e só regrava quando o host muda (nova publicação, domínio próprio). */
+export function registrarEnderecoPublico(req: Request): void {
+  if (origemConfig("APP_URL") === "env") return;
+  const atual = baseUrl(req);
+  if (getConfig("APP_URL") === atual) return;
+  setConfig("APP_URL", atual);
+}
+
+// Modelos gratuitos vivos do catálogo do OpenRouter, além dos fixos de lib/modelos.ts. Cache de 1 hora em
+// memória: a lista completa do catálogo não varia por usuário, então uma única cópia por processo basta.
+const CACHE_MODELOS_MS = 60 * 60 * 1000;
+let cacheModelosDinamicos: { expiraEm: number; modelos: Opcao[] } | null = null;
+
+async function modelosGratuitosDinamicos(chave: string): Promise<Opcao[]> {
+  if (cacheModelosDinamicos && cacheModelosDinamicos.expiraEm > Date.now()) return cacheModelosDinamicos.modelos;
+  const r = await fetch("https://openrouter.ai/api/v1/models", { headers: { Authorization: `Bearer ${chave}` } });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const data = (await r.json()) as { data?: { id: string; name?: string; context_length?: number }[] };
+  const existentes = new Set(MODELOS_GRATUITOS.map((m) => m.valor));
+  const extras: Opcao[] = (data.data ?? [])
+    .filter((m) => m.id.endsWith(":free") && !existentes.has(m.id))
+    .sort((a, b) => (b.context_length ?? 0) - (a.context_length ?? 0))
+    .slice(0, 8)
+    .map((m) => ({ valor: m.id, rotulo: m.name || m.id, grupo: "gratuito" }));
+  const modelos = [...MODELOS_GRATUITOS, ...extras];
+  cacheModelosDinamicos = { expiraEm: Date.now() + CACHE_MODELOS_MS, modelos };
+  return modelos;
+}
 
 /** Integração de IA usada por todos os apps. Passe `visao: true` só nos apps que realmente leem
- * imagem (hoje `clone-site` e `custos-ia`) — os demais não ganham o campo "Modelo para imagens". */
-export function openrouter({ visao = false }: { visao?: boolean } = {}): Integracao {
+ * imagem (hoje `clone-site` e `custos-ia`) — os demais não ganham o campo "Modelo para imagens".
+ * `beneficio` é a frase de uma linha do cartão, em linguagem de negócio e própria de cada app
+ * (ex.: "Liga a IA que gera o plano de desenvolvimento"). */
+export function openrouter({ visao = false, beneficio = "Liga a IA que gera o resultado deste app" }: { visao?: boolean; beneficio?: string } = {}): Integracao {
   const camposVisao: Campo[] = visao
     ? [{ chave: "OPENROUTER_MODEL_VISAO", rotulo: "Modelo para imagens", tipo: "select", opcional: true, avancado: true, padrao: MODELOS_VISAO[0].valor, opcoes: MODELOS_VISAO, ajuda: "Modelo usado quando o app precisa ler uma imagem" }]
     : [];
@@ -115,23 +190,62 @@ export function openrouter({ visao = false }: { visao?: boolean } = {}): Integra
     id: "openrouter",
     titulo: "Inteligência artificial",
     descricao: "Uma conta gratuita no OpenRouter dá acesso a dezenas de modelos, vários sem custo. Conecte em um clique ou cole uma chave.",
+    beneficio,
     obrigatoria: true,
     link: { url: "https://openrouter.ai/keys", rotulo: "Criar uma chave gratuita" },
     oauth: { tipo: "openrouter", rotulo: "Conectar a IA", url: "/api/setup/oauth/openrouter" },
+    notaConexao: "Conta gratuita do OpenRouter basta. Os modelos gratuitos têm limite diário; créditos ampliam o limite e liberam modelos melhores.",
     campos: [
       { chave: "OPENROUTER_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk-or-v1-..." },
-      { chave: "OPENROUTER_MODEL", rotulo: "Modelo", tipo: "select", opcional: true, padrao: "nvidia/nemotron-3-super-120b-a12b:free", opcoes: MODELOS_GRATUITOS, ajuda: "Comece com um gratuito. Troque por um pago quando quiser mais qualidade." },
+      {
+        chave: "OPENROUTER_MODEL",
+        rotulo: "Modelo de IA",
+        tipo: "select",
+        opcional: true,
+        padrao: "nvidia/nemotron-3-super-120b-a12b:free",
+        opcoes: MODELOS_GRATUITOS,
+        ajuda: 'Comece pelo recomendado. Se aparecer "sem crédito" ou "limite diário", troque por outro gratuito ou adicione créditos.',
+        opcoesDinamicas: async (config) => {
+          const chave = config.OPENROUTER_API_KEY;
+          if (!chave) return MODELOS_GRATUITOS;
+          try {
+            return await modelosGratuitosDinamicos(chave);
+          } catch {
+            return MODELOS_GRATUITOS;
+          }
+        },
+      },
       ...camposVisao,
     ],
     testar: async (config) => {
       const chave = config.OPENROUTER_API_KEY;
       if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
       const r = await fetch("https://openrouter.ai/api/v1/auth/key", { headers: { Authorization: `Bearer ${chave}` } });
-      if (r.status === 401) return { ok: false, mensagem: "Chave inválida ou revogada." };
-      if (!r.ok) return { ok: false, mensagem: `OpenRouter respondeu HTTP ${r.status}.` };
-      const data = (await r.json()) as { data?: { label?: string; limit?: number | null; usage?: number } };
-      const uso = data.data?.usage != null ? ` Uso até agora: US$ ${Number(data.data.usage).toFixed(2)}.` : "";
-      return { ok: true, mensagem: `Conectado.${uso} Modelo: ${config.OPENROUTER_MODEL || "padrão gratuito"}.` };
+      if (!r.ok) {
+        const detalhe = await r.text().catch(() => "");
+        return { ok: false, mensagem: interpretarFalha(r, detalhe).message };
+      }
+      const data = (await r.json()) as { data?: { limit?: number | null; usage?: number; is_free_tier?: boolean } };
+
+      const modelo = config.OPENROUTER_MODEL || "nvidia/nemotron-3-super-120b-a12b:free";
+      const resposta = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${chave}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: modelo, messages: [{ role: "user", content: 'Responda só "ok".' }], max_tokens: 5 }),
+      });
+      if (!resposta.ok) {
+        const detalhe = await resposta.text().catch(() => "");
+        return { ok: false, mensagem: interpretarFalha(resposta, detalhe).message };
+      }
+
+      const limite = data.data?.limit;
+      const restantes = limite != null ? Math.max(0, limite - (data.data?.usage ?? 0)) : null;
+      const plano = data.data?.is_free_tier
+        ? "Plano gratuito: fique nos modelos gratuitos ou adicione créditos."
+        : restantes != null
+          ? `Créditos: US$ ${restantes.toFixed(2)} restantes.`
+          : `Uso até agora: US$ ${Number(data.data?.usage ?? 0).toFixed(2)}.`;
+      return { ok: true, mensagem: `Conectado e testado com sucesso. ${plano}` };
     },
   };
 }
@@ -141,17 +255,18 @@ export const NOTIFICACOES: Integracao = {
   id: "notificacoes",
   titulo: "Notificações",
   descricao: "Escolha por onde o app avisa você quando um formulário público chega ou uma rotina roda: e-mail ou Slack.",
+  beneficio: "Avisa você quando um formulário ou rotina precisar de atenção",
   obrigatoria: false,
   link: { url: "https://resend.com/api-keys", rotulo: "Criar uma chave gratuita do Resend" },
   campos: [
     { chave: "NOTIFICACOES_CANAL", rotulo: "Canal", tipo: "select", padrao: "email", opcoes: [{ valor: "email", rotulo: "E-mail" }, { valor: "slack", rotulo: "Slack" }] },
     { chave: "NOTIFICACOES_DESTINO", rotulo: "Destino", tipo: "text", opcional: true, placeholder: "voce@empresa.com", ajuda: "Para e-mail, o endereço que recebe. Para Slack, opcional (sobrepõe o canal padrão do webhook)." },
-    { chave: "NOTIFICACOES_RESEND_API_KEY", rotulo: "Chave do Resend", tipo: "secret", opcional: true, placeholder: "re_...", ajuda: "Para enviar e-mail sem servidor próprio. Alternativa: preencha os dados de SMTP abaixo." },
-    { chave: "NOTIFICACOES_SMTP_HOST", rotulo: "Servidor SMTP", tipo: "text", opcional: true, placeholder: "smtp.seudominio.com" },
-    { chave: "NOTIFICACOES_SMTP_PORTA", rotulo: "Porta SMTP", tipo: "text", opcional: true, placeholder: "587" },
-    { chave: "NOTIFICACOES_SMTP_USUARIO", rotulo: "Usuário SMTP", tipo: "text", opcional: true },
-    { chave: "NOTIFICACOES_SMTP_SENHA", rotulo: "Senha SMTP", tipo: "secret", opcional: true },
-    { chave: "NOTIFICACOES_SLACK_WEBHOOK", rotulo: "URL do webhook de entrada do Slack", tipo: "secret", opcional: true, placeholder: "https://hooks.slack.com/services/..." },
+    { chave: "NOTIFICACOES_RESEND_API_KEY", rotulo: "Chave do Resend", tipo: "secret", opcional: true, avancado: true, placeholder: "re_...", ajuda: "Alternativa a conectar o Gmail/Outlook acima, ou ao SMTP abaixo.", visivelQuando: { campo: "NOTIFICACOES_CANAL", valores: ["email"] } },
+    { chave: "NOTIFICACOES_SLACK_WEBHOOK", rotulo: "URL do webhook de entrada do Slack", tipo: "secret", opcional: true, placeholder: "https://hooks.slack.com/services/...", visivelQuando: { campo: "NOTIFICACOES_CANAL", valores: ["slack"] } },
+    { chave: "NOTIFICACOES_SMTP_HOST", rotulo: "Servidor SMTP", tipo: "text", opcional: true, avancado: true, placeholder: "smtp.seudominio.com" },
+    { chave: "NOTIFICACOES_SMTP_PORTA", rotulo: "Porta SMTP", tipo: "text", opcional: true, avancado: true, placeholder: "587" },
+    { chave: "NOTIFICACOES_SMTP_USUARIO", rotulo: "Usuário SMTP", tipo: "text", opcional: true, avancado: true },
+    { chave: "NOTIFICACOES_SMTP_SENHA", rotulo: "Senha SMTP", tipo: "secret", opcional: true, avancado: true },
   ],
   testar: async (config) => {
     const canal = (config.NOTIFICACOES_CANAL as Canal | undefined) || "email";

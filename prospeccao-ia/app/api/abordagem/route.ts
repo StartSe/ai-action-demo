@@ -1,3 +1,4 @@
+import { responderErro } from "@/app/api/erros";
 import { escreverAbordagem } from "@/lib/abordagem";
 import { setConfig } from "@/lib/store";
 import type { Lead } from "@/lib/types";
@@ -23,8 +24,6 @@ export async function POST(req: Request) {
     const resultado = await escreverAbordagem({ lead, proposta, segmento, remetenteNome, remetenteEmpresa });
     return Response.json(resultado);
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível montar a abordagem agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    return responderErro(err, "Não foi possível escrever a abordagem agora. Tente de novo em um minuto.");
   }
 }

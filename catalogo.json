@@ -94,8 +94,8 @@
       ],
       "problema": "Montar a lista de leads e escrever a primeira abordagem é lento.",
       "ia": "Monta a lista pelo perfil de cliente ideal e escreve e-mail, LinkedIn e WhatsApp para cada lead.",
-      "integracoes": "Apollo (busca) e Bright Data (enriquecimento).",
-      "acento": "#0f4c81",
+      "integracoes": "IA (OpenRouter) para escrever a abordagem de cada lead. Busca de leads (Apollo) para trazer contatos reais em vez dos de exemplo. Enriquecimento com o site do lead (Bright Data), opcional. Notificações (e-mail ou Slack) para os leads novos da semana. CRM (MCP) para receber os leads aprovados.",
+      "acento": "#0b5789",
       "porta": 3005,
       "captura": "capturas/prospeccao-ia.png",
       "capacidades": [

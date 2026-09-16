@@ -1,5 +1,6 @@
+import { responderErro } from "@/app/api/erros";
+import { ACAO_CRM, crmConfigurado, enviarLeadParaCRM, ErroCRM } from "@/lib/crm-mcp";
 import { atualizarSaida, obter } from "@/lib/historico";
-import { crmConfigurado, enviarLeadParaCRM } from "@/lib/crm-mcp";
 import type { DadosBusca, Lead, ResultadoBusca } from "@/lib/types";
 
 interface ResultadoEnvio {
@@ -14,15 +15,15 @@ export async function POST(req: Request, { params }: RouteContext<"/api/leads/[i
   const { id } = await params;
   const registro = obter<DadosBusca, ResultadoBusca, unknown>(id);
   if (!registro || registro.tipo !== "leads") {
-    return Response.json({ error: "Busca de leads não encontrada." }, { status: 404 });
+    return Response.json({ error: "Esta busca de leads não está mais salva. Busque de novo para continuar." }, { status: 404 });
   }
   if (!crmConfigurado()) {
-    return Response.json({ error: "Conecte um CRM em /setup antes de enviar leads.", integracao: "mcp-crm" }, { status: 400 });
+    return Response.json({ error: "Conecte o CRM em Configurações antes de enviar os leads.", codigo: "pre_requisito", acao: ACAO_CRM }, { status: 400 });
   }
 
   const body = await req.json().catch(() => ({}));
   const ids: string[] = Array.isArray(body?.ids) ? body.ids.map(String) : [];
-  if (!ids.length) return Response.json({ error: "Selecione ao menos um lead." }, { status: 400 });
+  if (!ids.length) return Response.json({ error: "Marque os leads que devem ir para o CRM." }, { status: 400 });
 
   const leads = registro.saida.leads || [];
   const leadsAtualizados: Lead[] = [...leads];
@@ -38,7 +39,10 @@ export async function POST(req: Request, { params }: RouteContext<"/api/leads/[i
       leadsAtualizados[indice] = { ...lead, noCRM: true };
       resultados.push({ id: lead.id, nome: lead.nome, ok: true, mensagem });
     } catch (err) {
-      resultados.push({ id: lead.id, nome: lead.nome, ok: false, mensagem: err instanceof Error ? err.message : "Falha ao enviar para o CRM." });
+      // Uma pré-condição (conexão perdida no meio) vale para todos: para o lote e devolve a ação.
+      if (err instanceof ErroCRM && err.status === 400) return responderErro(err, "Não foi possível enviar para o CRM agora.");
+      console.error("CRM: lead recusado", lead.nome, err);
+      resultados.push({ id: lead.id, nome: lead.nome, ok: false, mensagem: err instanceof ErroCRM ? err.message : "O CRM não aceitou este contato." });
     }
   }
 

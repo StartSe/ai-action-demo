@@ -1,6 +1,8 @@
+import { responderErro } from "@/app/api/erros";
 import { apagarTodos, listar, salvar } from "@/lib/historico";
-import { buscarLeads, ErroApollo, QUANTIDADES_VALIDAS } from "@/lib/leads";
-import { getConfig } from "@/lib/store";
+import { buscarLeads, QUANTIDADES_VALIDAS } from "@/lib/leads";
+import { getConfig, setConfig } from "@/lib/store";
+import { guardarUltimaBusca } from "@/lib/ultima-busca";
 import type { DadosBusca } from "@/lib/types";
 
 export async function POST(req: Request) {
@@ -15,18 +17,22 @@ export async function POST(req: Request) {
   if (!segmento || !cargo || !localizacao || !proposta) {
     return Response.json({ error: "Preencha segmento, cargo-alvo, localização e o que sua empresa vende." }, { status: 400 });
   }
-  const dados: DadosBusca = { segmento, cargo, localizacao, porte, proposta, quantidade: String(quantidade) };
+  const remetenteNome = String(body?.remetenteNome || "").trim();
+  const remetenteEmpresa = String(body?.remetenteEmpresa || "").trim();
+  if (remetenteNome) setConfig("REMETENTE_NOME", remetenteNome);
+  if (remetenteEmpresa) setConfig("REMETENTE_EMPRESA", remetenteEmpresa);
+
+  const dados: DadosBusca = { segmento, cargo, localizacao, porte, proposta, quantidade: String(quantidade), remetenteNome, remetenteEmpresa };
   const titulo = `Leads: ${cargo} em ${segmento}`;
+  // Guardado para a rotina semanal criada pelo cartão genérico de /setup nascer com este perfil.
+  guardarUltimaBusca(dados);
 
   try {
     const { fonte, leads, meta: metaGerada } = await buscarLeads(dados);
     const id = salvar({ tipo: "leads", titulo, entrada: dados, saida: { fonte, leads }, meta: metaGerada });
     return Response.json({ fonte, leads, meta: metaGerada, id });
   } catch (err) {
-    console.error(err);
-    const status = err instanceof ErroApollo ? 502 : 500;
-    const mensagem = err instanceof Error ? err.message : "Não foi possível buscar os leads agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status });
+    return responderErro(err, "Não foi possível buscar os leads agora. Tente de novo em um minuto.");
   }
 }
 

@@ -1,4 +1,5 @@
 // Busca de leads (Apollo.io real ou fallback de demonstração), reaproveitada por app/api/leads/route.ts e lib/ferramentas.ts (MCP).
+import { ACAO_BUSCA_DE_LEADS } from "./acoes";
 import { meta } from "./ai";
 import { esperar, leadsDemo } from "./demo";
 import { getConfig } from "./store";
@@ -10,8 +11,40 @@ export function apolloEnabled(): boolean {
   return Boolean(getConfig("APOLLO_API_KEY"));
 }
 
-/** Lançado quando a Apollo responde com erro, para a rota HTTP devolver 502 em vez de 500. */
-export class ErroApollo extends Error {}
+
+
+export type CodigoErroBusca = "chave_recusada" | "limite_do_plano" | "servico_fora";
+
+/**
+ * Falha da busca de leads (Apollo) já traduzida para a tela: mensagem em linguagem de negócio, sem
+ * nome de variável, status HTTP do provedor nem corpo da resposta (esses vão só para o console).
+ * Mesmo formato de ErroIA (lib/ai.ts), para `respostaErro` devolver codigo e acao sem caso especial.
+ */
+export class ErroApollo extends Error {
+  codigo: CodigoErroBusca;
+  status: number;
+  acao?: { rotulo: string; url: string };
+
+  constructor(codigo: CodigoErroBusca, mensagem: string, status: number, acao?: { rotulo: string; url: string }) {
+    super(mensagem);
+    this.name = "ErroApollo";
+    this.codigo = codigo;
+    this.status = status;
+    this.acao = acao;
+  }
+}
+
+/** Único ponto que traduz uma resposta não-ok da Apollo em ErroApollo. O detalhe técnico nunca chega à tela. */
+export function interpretarFalhaApollo(status: number, detalheBruto: string): ErroApollo {
+  console.error("Falha na busca de leads:", status, detalheBruto.slice(0, 200));
+  if (status === 401 || status === 403) {
+    return new ErroApollo("chave_recusada", "A busca de leads recusou a chave. Confira em Configurações › Busca de leads.", 401, ACAO_BUSCA_DE_LEADS);
+  }
+  if (status === 402 || status === 429) {
+    return new ErroApollo("limite_do_plano", "A conta da Apollo atingiu o limite de créditos do plano.", 429, ACAO_BUSCA_DE_LEADS);
+  }
+  return new ErroApollo("servico_fora", "A busca de leads não respondeu; tente de novo em um minuto.", 502);
+}
 
 function capitalizar(s: string) {
   const t = String(s || "").trim();
@@ -41,7 +74,7 @@ function sinalApollo(org: ApolloOrg) {
   if (org.founded_year) partes.push(`fundada em ${org.founded_year}`);
   if (org.industry) partes.push(`atua em ${org.industry}`);
   if (org.estimated_num_employees) partes.push(`cerca de ${org.estimated_num_employees} funcionários`);
-  return partes.length ? `${capitalizar(partes.join(", "))}.` : "Empresa identificada via Apollo.io.";
+  return partes.length ? `${capitalizar(partes.join(", "))}.` : "Empresa encontrada na busca de leads, sem dados públicos de porte ou setor.";
 }
 
 function mapApolloPessoa(p: ApolloPessoa, i: number, segmento: string): Lead {
@@ -78,21 +111,25 @@ export async function buscarLeads(dados: DadosBusca): Promise<ResultadoBusca & {
     return { fonte: "demo", leads, meta: meta({ demo: true, insumo }) };
   }
 
-  const r = await fetch("https://api.apollo.io/api/v1/mixed_people/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": getConfig("APOLLO_API_KEY") || "" },
-    body: JSON.stringify({
-      person_titles: [cargo],
-      person_locations: [localizacao],
-      organization_num_employees_ranges: [intervalo],
-      q_organization_keyword_tags: [segmento],
-      per_page: quantidade,
-    }),
-  });
+  let r: Response;
+  try {
+    r = await fetch("https://api.apollo.io/api/v1/mixed_people/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": getConfig("APOLLO_API_KEY") || "" },
+      body: JSON.stringify({
+        person_titles: [cargo],
+        person_locations: [localizacao],
+        organization_num_employees_ranges: [intervalo],
+        q_organization_keyword_tags: [segmento],
+        per_page: quantidade,
+      }),
+    });
+  } catch (err) {
+    console.error("Falha de rede na busca de leads:", err);
+    throw new ErroApollo("servico_fora", "A busca de leads não respondeu; tente de novo em um minuto.", 502);
+  }
   if (!r.ok) {
-    const detalhe = await r.text().catch(() => "");
-    console.error("Apollo", r.status, detalhe);
-    throw new ErroApollo("A Apollo não respondeu. Verifique a APOLLO_API_KEY e tente novamente.");
+    throw interpretarFalhaApollo(r.status, await r.text().catch(() => ""));
   }
   const data = await r.json();
   const pessoas: ApolloPessoa[] = Array.isArray(data?.people) ? data.people : [];

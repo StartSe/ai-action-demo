@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Chip, CopyButton, DataTable, Empty, Entregar, ErrorBox, Field, Item, Loading, MaisDetalhes, Origem, Panel, Privacidade, ResultHead, Row, Section, Stage, Topbar, Workspace, data, useScrollToResult, useStatus, type Coluna } from "@/components/ui";
-import type { Meta } from "@/lib/ai";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Aviso, Chip, CopyButton, DataTable, Entregar, ErrorBox, Field, Hero, Item, Loading, MaisDetalhes, Origem, Passos, Privacidade, ResultHead, Row, Section, SeloIA, Stage, Topbar, data, lerErro, useConfirmacao, useScrollToResult, useStatus, type Coluna, type PassoIndicador } from "@/components/ui";
+import { ACAO_BUSCA_DE_LEADS, ACAO_CONFERIR_CRM, ACAO_NOTIFICACOES } from "@/lib/acoes";
+import type { CodigoErroIA, Meta } from "@/lib/ai";
 import type { Abordagem, DadosBusca, Fonte, Lead } from "@/lib/types";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
@@ -24,14 +26,67 @@ const VAZIO: DadosBusca = { segmento: "", cargo: "", localizacao: "", porte: "51
 
 const ETAPAS_BUSCA = ["Lendo o perfil de cliente ideal informado...", "Cruzando com segmento, cargo e localização...", "Montando a lista de leads..."];
 
+/** Quantos leads a demonstração (`?exemplo=1` e "Ver leads de exemplo") já entrega com a abordagem escrita. */
+const LEADS_DA_DEMONSTRACAO = 1;
+
+/** Quantos leads entram no atalho "Escrever para os N melhores". */
+const MELHORES = 5;
+
+// Textos do topo (economia de texto: título ≤ 8 palavras, apoio ≤ 20, itens ≤ 5 de até 6 palavras — ver CLAUDE.md).
+const PROMESSA = {
+  sobretitulo: "Vendas",
+  titulo: "Sua lista de leads com a abordagem pronta",
+  apoio: "Descreva o cliente ideal: a IA monta a lista e escreve a primeira abordagem de cada lead.",
+  itens: [
+    "Leads com nome e cargo",
+    "Empresa, porte e cidade",
+    "Um sinal para abrir a conversa",
+    "E-mail, LinkedIn e WhatsApp",
+    "Lista pronta para o CRM",
+  ],
+};
+
+const PASSOS: PassoIndicador[] = [
+  { titulo: "Cliente ideal", apoio: "Segmento e cargo" },
+  { titulo: "Leads", apoio: "Com um sinal cada" },
+  { titulo: "Abordagem", apoio: "Nos três canais" },
+];
+
 function etapasAbordagem(nome: string) {
   return ["Lendo o sinal e o perfil do lead...", "Conectando com o que sua empresa vende...", `Escrevendo a abordagem para ${nome}...`];
 }
 
-/** Desenho de três contatos (avatar + linhas), no lugar de um glifo genérico no estado vazio. */
+function IconeAlvo() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2" />
+    </svg>
+  );
+}
+
+function IconeProposta() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 5.5h16M4 10h16M4 14.5h11" />
+      <path d="M15.5 19.5 18 17l3.5 3.5" />
+    </svg>
+  );
+}
+
+function IconeItem() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0 mt-0.5" aria-hidden="true">
+      <path d="M5 12.5 9.5 17 19 7" />
+    </svg>
+  );
+}
+
+/** Desenho de três contatos (avatar + linhas), no lugar de um glifo genérico. */
 function IlustracaoLeads() {
   return (
-    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="12" cy="16" r="5" />
       <path d="M22 14h30M22 19h18" />
       <circle cx="12" cy="32" r="5" />
@@ -42,14 +97,86 @@ function IlustracaoLeads() {
   );
 }
 
+/** Cartão de entrada com ícone circular e título. */
+function CartaoEntrada({ icone, titulo, children }: { icone: ReactNode; titulo: string; children: ReactNode }) {
+  return (
+    <div className="card p-5 mb-2.5">
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className="w-9 h-9 rounded-full bg-accent-soft text-accent grid place-items-center shrink-0">{icone}</div>
+        <h2 className="font-bold text-[15px]">{titulo}</h2>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Prévia de "o que você vai receber", no lugar do resultado antes da primeira busca. */
+function Previa({ itens, onExemplo, carregando }: { itens: string[]; onExemplo: () => void; carregando: boolean }) {
+  return (
+    <div className="card p-7 max-md:p-5 h-full min-h-[420px] max-md:min-h-0 flex flex-col justify-center">
+      <div className="text-accent mb-4">
+        <IlustracaoLeads />
+      </div>
+      <h2 className="font-bold text-[15px] mb-4">O que você vai receber</h2>
+      <ul className="flex flex-col gap-3 mb-6">
+        {itens.map((it) => (
+          <li key={it} className="flex items-start gap-2.5 text-sm text-ink-2">
+            <IconeItem />
+            <span>{it}</span>
+          </li>
+        ))}
+      </ul>
+      <button type="button" className="btn-secundario !w-auto self-start" onClick={onExemplo} disabled={carregando}>Ver leads de exemplo</button>
+    </div>
+  );
+}
+
+/**
+ * Leads com mais material para personalizar a abordagem primeiro (sinal com fatos, LinkedIn, site, cargo):
+ * é o que "os N melhores" quer dizer aqui — a busca não devolve pontuação, e ordenar por dado aproveitável
+ * é a única leitura verdadeira de "melhor" nesta lista.
+ */
+function maisMaterial(leads: Lead[], quantos: number): Lead[] {
+  const forca = (l: Lead) => (l.sinal ? Math.min(3, Math.ceil(l.sinal.length / 40)) : 0) + (l.linkedin ? 2 : 0) + (l.site ? 1 : 0) + (l.cargo ? 1 : 0);
+  return [...leads].sort((a, b) => forca(b) - forca(a)).slice(0, quantos);
+}
+
 type Estado =
   | { fase: "vazio" }
   | { fase: "carregando" }
-  | { fase: "erro"; mensagem: string }
+  | { fase: "erro"; mensagem: string; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string }; dados: DadosBusca }
   | { fase: "lista"; dados: DadosBusca; fonte: Fonte; leads: Lead[]; meta: Meta; id?: string }
   | { fase: "carregando-abordagem"; dados: DadosBusca; fonte: Fonte; leads: Lead[]; meta: Meta; id?: string; lead: Lead }
-  | { fase: "erro-abordagem"; dados: DadosBusca; fonte: Fonte; leads: Lead[]; meta: Meta; id?: string; mensagem: string }
+  | { fase: "erro-abordagem"; dados: DadosBusca; fonte: Fonte; leads: Lead[]; meta: Meta; id?: string; mensagem: string; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string } }
   | { fase: "abordagem"; dados: DadosBusca; fonte: Fonte; leads: Lead[]; meta: Meta; id?: string; lead: Lead; abordagem: Abordagem; metaAbordagem: Meta };
+
+/**
+ * Proveniência da LISTA de leads. A `Origem` compartilhada não serve aqui: ela lê `meta.demo` e escreve
+ * "Gerado com IA..." (a lista é buscada numa base, nenhuma IA escreve nada) ou "Conecte a IA para usar os
+ * seus dados" (falso quando a IA já está ligada e o que falta é a busca de leads). A abordagem por lead
+ * continua usando a `Origem` compartilhada, porque ali a IA escreve de verdade.
+ */
+function OrigemLeads({ fonte, meta, mostrarLink }: { fonte: Fonte; meta: Meta; mostrarLink: boolean }) {
+  if (fonte !== "demo") {
+    return <p className="text-muted text-[13px] mb-4">{`Leads buscados na base da Apollo a partir de ${meta.insumo}, em ${data(meta.geradoEm, { comHora: true })}`}</p>;
+  }
+  return (
+    <p className="text-muted text-[13px] mb-4">
+      {`Lista de exemplo a partir de ${meta.insumo}.`}
+      {mostrarLink && (
+        <>
+          {" "}
+          <Link href="/setup#apollo" className="font-semibold text-accent underline underline-offset-2">Conectar a busca de leads</Link>
+        </>
+      )}
+    </p>
+  );
+}
+
+/** "120 funcionários" -> "120 func.": o chip da coluna Porte tem menos de 100px no palco de meia tela. */
+function porteCurto(porte: string) {
+  return String(porte || "").replace(/\s*funcion[áa]rios?$/i, " func.");
+}
 
 function resumoBusca(dados: DadosBusca, total: number) {
   const cidade = String(dados.localizacao || "").split(",")[0].trim();
@@ -83,17 +210,18 @@ function exportarCSV(leads: Lead[]) {
 
 export default function Page() {
   const { status, erro } = useStatus();
+  const router = useRouter();
   const [dados, setDados] = useState<DadosBusca>(VAZIO);
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const [abordagens, setAbordagens] = useState<Record<string, { abordagem: Abordagem; meta: Meta }>>({});
   const [carregandoIds, setCarregandoIds] = useState<Set<string>>(new Set());
   const [erroLote, setErroLote] = useState<string | null>(null);
-  const [crmConfigurado, setCrmConfigurado] = useState<boolean | undefined>(undefined);
   const [enviandoCRMIds, setEnviandoCRMIds] = useState<Set<string>>(new Set());
   const [erroCRM, setErroCRM] = useState<string | null>(null);
-  const autoAbrirPrimeiro = useRef(false);
+  const [avisoCRM, setAvisoCRM] = useState<string | null>(null);
   const autoEnviado = useRef(false);
+  const { confirmar, Dialogo } = useConfirmacao();
 
   useScrollToResult(estado.fase === "lista" || estado.fase === "abordagem");
 
@@ -108,40 +236,45 @@ export default function Page() {
 
   useEffect(() => { carregarHistorico(); }, []);
 
-  useEffect(() => {
-    fetch("/api/setup")
-      .then((r) => r.json())
-      .then((d) => {
-        const integracao = (d.integracoes || []).find((i: { id: string }) => i.id === "mcp-crm");
-        setCrmConfigurado(Boolean(integracao?.configurada));
-      })
-      .catch(() => setCrmConfigurado(false));
-  }, []);
-
-  function apagarHistorico() {
-    if (!window.confirm("Apagar todas as buscas salvas? Essa ação não pode ser desfeita.")) return;
+  async function apagarHistorico() {
+    if (!(await confirmar("Apagar todas as buscas salvas? Essa ação não pode ser desfeita.", { confirmarRotulo: "Apagar" }))) return;
     fetch("/api/leads", { method: "DELETE" }).then(carregarHistorico);
   }
 
   const set = (campo: keyof DadosBusca) => (e: { target: { value: string } }) => setDados((d) => ({ ...d, [campo]: e.target.value }));
 
-  async function buscarLeads(d: DadosBusca) {
+  /** Sessão expirada em qualquer chamada: volta para a tela de entrar e retorna para cá depois. */
+  function sessaoExpirou(r: Response, codigo?: string): boolean {
+    if (r.status === 401 && codigo === "sem_sessao") {
+      router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
+      return true;
+    }
+    return false;
+  }
+
+  async function buscarLeads(d: DadosBusca, escreverPrimeiros = 0) {
     setEstado({ fase: "carregando" });
     setAbordagens({});
     setCarregandoIds(new Set());
     setErroLote(null);
+    setErroCRM(null);
+    setAvisoCRM(null);
     try {
       const r = await fetch("/api/leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) });
+      if (!r.ok) {
+        const info = await lerErro(r);
+        if (sessaoExpirou(r, info.codigo)) return;
+        setEstado({ fase: "erro", mensagem: info.mensagem, codigo: info.codigo as CodigoErroIA | undefined, acao: info.acao, dados: d });
+        return;
+      }
       const resposta = await r.json();
-      if (!r.ok) throw new Error(resposta.error || "Falha ao buscar leads.");
       setEstado({ fase: "lista", dados: d, fonte: resposta.fonte, leads: resposta.leads, meta: resposta.meta, id: resposta.id });
       carregarHistorico();
-      if (autoAbrirPrimeiro.current && resposta.leads?.length) {
-        autoAbrirPrimeiro.current = false;
-        buscarAbordagem(d, resposta.fonte, resposta.leads, resposta.meta, resposta.id, resposta.leads[0]);
+      if (escreverPrimeiros > 0 && resposta.leads?.length) {
+        escreverEmLote(d, maisMaterial(resposta.leads as Lead[], escreverPrimeiros));
       }
     } catch (e) {
-      setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." });
+      setEstado({ fase: "erro", mensagem: (await lerErro(e)).mensagem, dados: d });
     }
   }
 
@@ -151,8 +284,12 @@ export default function Page() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ lead, proposta: dadosBusca.proposta, segmento: dadosBusca.segmento, remetenteNome: dadosBusca.remetenteNome, remetenteEmpresa: dadosBusca.remetenteEmpresa }),
     });
+    if (!r.ok) {
+      const info = await lerErro(r);
+      if (sessaoExpirou(r, info.codigo)) throw new ErroTratado(info.mensagem, info.codigo, info.acao);
+      throw new ErroTratado(info.mensagem, info.codigo, info.acao);
+    }
     const resposta = await r.json();
-    if (!r.ok) throw new Error(resposta.error || "Falha ao gerar a abordagem.");
     return { abordagem: resposta.abordagem, meta: resposta.meta };
   }
 
@@ -168,7 +305,8 @@ export default function Page() {
       setAbordagens((prev) => ({ ...prev, [lead.id]: { abordagem, meta: metaAbordagem } }));
       setEstado({ fase: "abordagem", dados: dadosBusca, fonte, leads, meta: metaLista, id: idLista, lead, abordagem, metaAbordagem });
     } catch (e) {
-      setEstado({ fase: "erro-abordagem", dados: dadosBusca, fonte, leads, meta: metaLista, id: idLista, mensagem: e instanceof Error ? e.message : "Erro inesperado." });
+      const info = e instanceof ErroTratado ? e : await lerErro(e);
+      setEstado({ fase: "erro-abordagem", dados: dadosBusca, fonte, leads, meta: metaLista, id: idLista, mensagem: info.mensagem, codigo: info.codigo as CodigoErroIA | undefined, acao: info.acao });
     }
   }
 
@@ -178,12 +316,14 @@ export default function Page() {
     setErroLote(null);
     setCarregandoIds((prev) => new Set([...prev, ...pendentes.map((l) => l.id)]));
     const falhas: string[] = [];
+    let motivo = "";
     for (const lead of pendentes) {
       try {
         const { abordagem, meta: metaAbordagem } = await gerarAbordagemParaLead(dadosBusca, lead);
         setAbordagens((prev) => ({ ...prev, [lead.id]: { abordagem, meta: metaAbordagem } }));
-      } catch {
+      } catch (e) {
         falhas.push(lead.nome);
+        if (!motivo && e instanceof ErroTratado) motivo = e.mensagem;
       } finally {
         setCarregandoIds((prev) => {
           const novo = new Set(prev);
@@ -192,15 +332,16 @@ export default function Page() {
         });
       }
     }
-    if (falhas.length) setErroLote(`Não foi possível escrever para: ${falhas.join(", ")}.`);
+    if (falhas.length) setErroLote(`Não foi possível escrever para: ${falhas.join(", ")}.${motivo ? ` ${motivo}` : ""}`);
   }
 
   async function enviarParaCRM(buscaId: string, selecionados: Lead[]) {
     if (!selecionados.length) return;
     const mensagemConfirmacao =
-      selecionados.length === 1 ? `Enviar ${selecionados[0].nome} para o CRM?` : `Enviar ${selecionados.length} leads selecionados para o CRM?`;
-    if (!window.confirm(mensagemConfirmacao)) return;
+      selecionados.length === 1 ? `Enviar ${selecionados[0].nome} para o CRM como contato?` : `Enviar ${selecionados.length} leads para o CRM como contatos?`;
+    if (!(await confirmar(mensagemConfirmacao, { confirmarRotulo: "Enviar" }))) return;
     setErroCRM(null);
+    setAvisoCRM(null);
     setEnviandoCRMIds((prev) => new Set([...prev, ...selecionados.map((l) => l.id)]));
     try {
       const r = await fetch(`/api/leads/${buscaId}/crm`, {
@@ -208,13 +349,19 @@ export default function Page() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: selecionados.map((l) => l.id) }),
       });
+      if (!r.ok) {
+        const info = await lerErro(r);
+        if (sessaoExpirou(r, info.codigo)) return;
+        setErroCRM(info.mensagem);
+        return;
+      }
       const resposta = await r.json();
-      if (!r.ok) throw new Error(resposta.error || "Não foi possível enviar para o CRM.");
       setEstado((prev) => (prev.fase === "lista" || prev.fase === "abordagem" || prev.fase === "carregando-abordagem" || prev.fase === "erro-abordagem" ? { ...prev, leads: resposta.leads } : prev));
       const falhas = (resposta.resultados || []).filter((res: { ok: boolean }) => !res.ok);
-      if (falhas.length) setErroCRM(`Não foi possível enviar: ${falhas.map((f: { nome: string }) => f.nome).join(", ")}.`);
+      if (falhas.length) setErroCRM(`Não entraram no CRM: ${falhas.map((f: { nome: string }) => f.nome).join(", ")}. Tente de novo; se continuar, confira a conexão em Configurações.`);
+      else setAvisoCRM(selecionados.length === 1 ? `${selecionados[0].nome} entrou no CRM.` : `${selecionados.length} leads entraram no CRM.`);
     } catch (e) {
-      setErroCRM(e instanceof Error ? e.message : "Não foi possível enviar para o CRM.");
+      setErroCRM((await lerErro(e)).mensagem);
     } finally {
       setEnviandoCRMIds((prev) => {
         const novo = new Set(prev);
@@ -229,23 +376,28 @@ export default function Page() {
     buscarLeads(dados);
   }
 
-  function preencherExemplo() {
+  /** "Ver leads de exemplo" preenche, busca e já escreve a abordagem do lead com mais material. */
+  function verExemplo() {
     setDados(EXEMPLO);
-    document.getElementById("segmento")?.focus();
+    buscarLeads(EXEMPLO, LEADS_DA_DEMONSTRACAO);
   }
 
-  // Atalho para demonstrações: /?exemplo=1 preenche, busca os leads e abre a abordagem do primeiro.
+  function tentarNovamente() {
+    if (estado.fase === "erro") buscarLeads(estado.dados);
+  }
+
+  // Atalho para demonstrações: /?exemplo=1 preenche, busca os leads e escreve a primeira abordagem.
   useEffect(() => {
     if (autoEnviado.current) return;
     if (new URLSearchParams(location.search).get("exemplo") === "1") {
       autoEnviado.current = true;
-      autoAbrirPrimeiro.current = true;
-      setTimeout(() => { setDados(EXEMPLO); buscarLeads(EXEMPLO); }, 0);
+      setTimeout(verExemplo, 0);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma única vez ao abrir a página
   }, []);
 
   const carregando = estado.fase === "carregando";
+  const passoAtual = estado.fase === "abordagem" ? 3 : estado.fase === "vazio" || estado.fase === "carregando" || estado.fase === "erro" ? 1 : 2;
 
   function voltarALista() {
     if (estado.fase === "abordagem" || estado.fase === "erro-abordagem" || estado.fase === "carregando-abordagem") {
@@ -255,89 +407,108 @@ export default function Page() {
 
   return (
     <>
-      <Topbar marca="P" nome="Prospecção com IA" area="Vendas" status={status} erro={erro} resumo="Modo demonstração: os leads exibidos são fictícios." />
+      <Topbar marca="P" nome="Prospecção com IA" area="Vendas" status={status} erro={erro} resumo="Modo demonstração: os leads exibidos são fictícios." usuario={status?.usuario} />
 
-      <Workspace>
-        <Panel titulo="Sua lista de leads e a primeira abordagem, em minutos." lead="Descreva o cliente ideal. A IA monta a lista de leads e escreve uma abordagem personalizada para cada um.">
+      <Hero sobretitulo={PROMESSA.sobretitulo} titulo={PROMESSA.titulo} apoio={PROMESSA.apoio} segmento="Vendas">
+        <Passos passos={PASSOS} atual={passoAtual} />
+      </Hero>
+
+      <main className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">
+        <div>
           <form onSubmit={onSubmit}>
-            <Field label="Segmento" htmlFor="segmento">
-              <input id="segmento" className="input" required placeholder="Indústria de alimentos" value={dados.segmento} onChange={set("segmento")} />
-            </Field>
-            <Row>
-              <Field label="Cargo-alvo" htmlFor="cargo">
-                <input id="cargo" className="input" required placeholder="Diretor de Operações" value={dados.cargo} onChange={set("cargo")} />
+            <CartaoEntrada icone={<IconeAlvo />} titulo="O cliente ideal">
+              <Field label="Segmento" htmlFor="segmento">
+                <input id="segmento" className="input" required placeholder="Indústria de alimentos" value={dados.segmento} onChange={set("segmento")} />
               </Field>
-              <Field label="Localização" htmlFor="localizacao">
-                <input id="localizacao" className="input" required placeholder="São Paulo, Brasil" value={dados.localizacao} onChange={set("localizacao")} />
-              </Field>
-            </Row>
-            <Field label="O que sua empresa vende e para quem" htmlFor="proposta" hint="Quanto mais concreto, melhor o gancho da abordagem.">
-              <textarea
-                id="proposta"
-                className="input min-h-24 resize-y"
-                required
-                placeholder="Ex.: vendemos um sistema de gestão de manutenção industrial para indústrias de médio porte, que reduz parada não programada de máquinas..."
-                value={dados.proposta}
-                onChange={set("proposta")}
-              />
-            </Field>
-            <MaisDetalhes>
               <Row>
-                <Field label="Seu nome" htmlFor="remetenteNome" hint="Assina o e-mail e o WhatsApp, no lugar de um marcador genérico.">
-                  <input id="remetenteNome" className="input" placeholder="Seu nome" value={dados.remetenteNome ?? ""} onChange={set("remetenteNome")} />
+                <Field label="Cargo-alvo" htmlFor="cargo">
+                  <input id="cargo" className="input" required placeholder="Diretor de Operações" value={dados.cargo} onChange={set("cargo")} />
                 </Field>
-                <Field label="Sua empresa" htmlFor="remetenteEmpresa">
-                  <input id="remetenteEmpresa" className="input" placeholder="Nome da sua empresa" value={dados.remetenteEmpresa ?? ""} onChange={set("remetenteEmpresa")} />
+                <Field label="Localização" htmlFor="localizacao">
+                  <input id="localizacao" className="input" required placeholder="São Paulo, Brasil" value={dados.localizacao} onChange={set("localizacao")} />
                 </Field>
               </Row>
-              <Field label="Porte da empresa (funcionários)" htmlFor="porte">
-                <select id="porte" className="input" value={dados.porte} onChange={set("porte")}>
-                  <option value="11-50">11 a 50 funcionários</option>
-                  <option value="51-200">51 a 200 funcionários</option>
-                  <option value="201-500">201 a 500 funcionários</option>
-                  <option value="501-1000">501 a 1.000 funcionários</option>
-                  <option value="1001-5000">1.001 a 5.000 funcionários</option>
-                </select>
-              </Field>
-              <Field label="Quantidade de leads" htmlFor="quantidade">
-                <select id="quantidade" className="input" value={dados.quantidade} onChange={set("quantidade")}>
-                  <option value="5">5 leads</option>
-                  <option value="10">10 leads</option>
-                  <option value="15">15 leads</option>
-                </select>
-              </Field>
-            </MaisDetalhes>
-            <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Buscando leads" : "Buscar leads"}</button>
-          </form>
-          <Privacidade detalhe="A lista de leads fica salva neste app até você apagar em 'Últimos resultados'." />
+            </CartaoEntrada>
 
-          <MaisDetalhes titulo="Últimos resultados">
-            {historico === null ? (
-              <p className="text-muted text-sm">Carregando...</p>
-            ) : historico.length === 0 ? (
-              <p className="text-muted text-sm">Nenhum resultado salvo ainda.</p>
-            ) : (
-              <>
-                <ul className="flex flex-col gap-1.5 text-sm mb-3">
-                  {historico.map((h) => (
-                    <li key={h.id} className="flex justify-between gap-3">
-                      <Link href={`/r/${h.id}`} className="text-accent-ink font-semibold hover:underline truncate">{h.titulo}</Link>
-                      <span className="text-muted shrink-0">{data(h.criadoEm)}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
-              </>
-            )}
-          </MaisDetalhes>
-        </Panel>
+            <CartaoEntrada icone={<IconeProposta />} titulo="O que você vende">
+              <Field label="O que sua empresa vende e para quem" htmlFor="proposta">
+                <textarea
+                  id="proposta"
+                  className="input min-h-20 resize-y"
+                  required
+                  placeholder="Quanto mais concreto, melhor o gancho. Ex.: vendemos um sistema de manutenção industrial para indústrias de médio porte, que reduz parada de máquina..."
+                  value={dados.proposta}
+                  onChange={set("proposta")}
+                />
+              </Field>
+              <div className="[&>details]:mb-0">
+                <MaisDetalhes titulo="Assinatura, porte e quantidade">
+                  <Row>
+                    <Field label="Seu nome" htmlFor="remetenteNome" hint="Assina o e-mail e o WhatsApp.">
+                      <input id="remetenteNome" className="input" placeholder="Seu nome" value={dados.remetenteNome ?? ""} onChange={set("remetenteNome")} />
+                    </Field>
+                    <Field label="Sua empresa" htmlFor="remetenteEmpresa">
+                      <input id="remetenteEmpresa" className="input" placeholder="Nome da sua empresa" value={dados.remetenteEmpresa ?? ""} onChange={set("remetenteEmpresa")} />
+                    </Field>
+                  </Row>
+                  <Row>
+                    <Field label="Porte da empresa" htmlFor="porte">
+                      <select id="porte" className="input" value={dados.porte} onChange={set("porte")}>
+                        <option value="11-50">11 a 50 funcionários</option>
+                        <option value="51-200">51 a 200 funcionários</option>
+                        <option value="201-500">201 a 500 funcionários</option>
+                        <option value="501-1000">501 a 1.000 funcionários</option>
+                        <option value="1001-5000">1.001 a 5.000 funcionários</option>
+                      </select>
+                    </Field>
+                    <Field label="Quantidade de leads" htmlFor="quantidade">
+                      <select id="quantidade" className="input" value={dados.quantidade} onChange={set("quantidade")}>
+                        <option value="5">5 leads</option>
+                        <option value="10">10 leads</option>
+                        <option value="15">15 leads</option>
+                      </select>
+                    </Field>
+                  </Row>
+                </MaisDetalhes>
+              </div>
+            </CartaoEntrada>
+
+            <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Buscando leads" : "Buscar leads"}</button>
+            <button type="button" className="btn-secundario mt-2" disabled={carregando} onClick={verExemplo}>Ver leads de exemplo</button>
+          </form>
+
+          <div className="card p-5 mt-4">
+            <Privacidade detalhe="As listas ficam salvas neste app até você apagar. Nenhuma mensagem é enviada sem você aprovar." />
+
+            <MaisDetalhes titulo="Últimos resultados">
+              {historico === null ? (
+                <p className="text-muted text-sm">Carregando...</p>
+              ) : historico.length === 0 ? (
+                <p className="text-muted text-sm">Nenhum resultado salvo ainda.</p>
+              ) : (
+                <>
+                  <ul className="flex flex-col gap-1.5 text-sm mb-3">
+                    {historico.slice(0, 3).map((h) => (
+                      <li key={h.id} className="flex justify-between gap-3">
+                        <Link href={`/r/${h.id}`} className="text-accent-ink font-semibold hover:underline truncate">{h.titulo}</Link>
+                        <span className="text-muted shrink-0">{data(h.criadoEm)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex items-center gap-4">
+                    <Link href="/historico" className="btn-link text-[13px]">Ver todos</Link>
+                    <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
+                  </div>
+                </>
+              )}
+            </MaisDetalhes>
+          </div>
+        </div>
 
         <Stage>
-          {estado.fase === "vazio" && (
-            <Empty ilustracao={<IlustracaoLeads />} titulo="A lista de leads aparece aqui" descricao="Nome, cargo, empresa, porte, cidade e um sinal de prospecção para cada lead, com abordagem pronta em um clique." acao="Preencher com um exemplo" onAcao={preencherExemplo} />
-          )}
+          {estado.fase === "vazio" && <Previa itens={PROMESSA.itens} onExemplo={verExemplo} carregando={carregando} />}
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_BUSCA} />}
-          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} />}
+          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} codigo={estado.codigo} acao={estado.acao} onTentarNovamente={tentarNovamente} />}
           {estado.fase === "lista" && (
             <Resultado
               dados={estado.dados}
@@ -351,23 +522,41 @@ export default function Page() {
               carregandoIds={carregandoIds}
               erroLote={erroLote}
               onEnviarCRM={estado.id ? (selecionados) => enviarParaCRM(estado.id!, selecionados) : undefined}
-              crmConfigurado={crmConfigurado}
+              crmConfigurado={status?.integrations?.["mcp-crm"]}
               enviandoCRMIds={enviandoCRMIds}
               erroCRM={erroCRM}
+              avisoCRM={avisoCRM}
+              iaLigada={Boolean(status?.ai)}
             />
           )}
           {estado.fase === "carregando-abordagem" && <Loading etapas={etapasAbordagem(estado.lead.nome)} />}
           {estado.fase === "erro-abordagem" && (
             <div>
-              <ErrorBox mensagem={estado.mensagem} />
+              <ErrorBox mensagem={estado.mensagem} codigo={estado.codigo} acao={estado.acao} />
               <button type="button" className="btn-ghost mt-3.5" onClick={voltarALista}>Voltar à lista</button>
             </div>
           )}
           {estado.fase === "abordagem" && <AbordagemView lead={estado.lead} abordagem={estado.abordagem} meta={estado.metaAbordagem} onVoltar={voltarALista} />}
         </Stage>
-      </Workspace>
+      </main>
+      {Dialogo}
     </>
   );
+}
+
+/** Erro já traduzido por `lerErro` (mensagem, código e ação), para atravessar um `throw` sem virar texto cru. */
+class ErroTratado extends Error {
+  codigo?: string;
+  acao?: { rotulo: string; url: string };
+  constructor(mensagem: string, codigo?: string, acao?: { rotulo: string; url: string }) {
+    super(mensagem);
+    this.name = "ErroTratado";
+    this.codigo = codigo;
+    this.acao = acao;
+  }
+  get mensagem() {
+    return this.message;
+  }
 }
 
 export function Resultado({
@@ -385,6 +574,9 @@ export function Resultado({
   crmConfigurado,
   enviandoCRMIds,
   erroCRM,
+  avisoCRM,
+  iaLigada = false,
+  abordagensSalvas,
 }: {
   dados: DadosBusca;
   fonte: Fonte;
@@ -400,19 +592,33 @@ export function Resultado({
   crmConfigurado?: boolean;
   enviandoCRMIds?: Set<string>;
   erroCRM?: string | null;
+  avisoCRM?: string | null;
+  iaLigada?: boolean;
+  /** Abordagens já escritas e salvas com o resultado (rotina semanal): exibidas abertas em /r/[id], que não tem como gerar de novo. */
+  abordagensSalvas?: Record<string, Abordagem>;
 }) {
+  const salvas = abordagensSalvas ? leads.filter((l) => abordagensSalvas[l.id]) : [];
   return (
     <article className="reveal">
-      <ResultHead titulo="Leads encontrados" subtitulo={fonte === "demo" ? "Dados de exemplo" : "Buscado via Apollo.io"}>
+      <ResultHead titulo="Leads encontrados" subtitulo={fonte === "demo" ? "Dados de exemplo" : "Leads reais"}>
         <Entregar
           id={id}
           titulo={`Leads: ${dados.cargo} em ${dados.segmento}`}
           texto={() => leadsParaTexto(dados, leads)}
-          extras={[{ rotulo: "Exportar CSV", onClick: () => exportarCSV(leads) }]}
+          extras={[{ rotulo: "Copiar lista (CSV)", onClick: () => exportarCSV(leads) }]}
         />
       </ResultHead>
 
-      <Origem meta={meta} />
+      <OrigemLeads fonte={fonte} meta={meta} mostrarLink={fonte === "demo" && !iaLigada} />
+
+      {/* A IA já escreve de verdade, mas os leads continuam fictícios enquanto a busca não estiver conectada. */}
+      {fonte === "demo" && iaLigada && (
+        <div className="mb-4">
+          <Aviso tom="warn" acao={ACAO_BUSCA_DE_LEADS}>
+            Estes leads são fictícios: conecte a busca de leads em Configurações para trazer contatos reais.
+          </Aviso>
+        </div>
+      )}
 
       <ConteudoLeads
         dados={dados}
@@ -426,9 +632,20 @@ export function Resultado({
         crmConfigurado={crmConfigurado}
         enviandoCRMIds={enviandoCRMIds}
         erroCRM={erroCRM}
+        avisoCRM={avisoCRM}
       />
 
-      <ReceberLeadsSemanais dados={dados} />
+      {salvas.length > 0 && abordagensSalvas && (
+        <Section titulo="Abordagens escritas">
+          {salvas.map((l) => (
+            <MaisDetalhes key={l.id} titulo={`${l.nome} — ${l.empresa}`}>
+              <AbordagemSalva abordagem={abordagensSalvas[l.id]} />
+            </MaisDetalhes>
+          ))}
+        </Section>
+      )}
+
+      {onEscrever && <ReceberLeadsSemanais dados={dados} />}
     </article>
   );
 }
@@ -449,16 +666,22 @@ function ReceberLeadsSemanais({ dados }: { dados: DadosBusca }) {
   const [rotinaId, setRotinaId] = useState<string | null | undefined>(undefined);
   const [quantidade, setQuantidade] = useState("10");
   const [criando, setCriando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/setup")
+    fetch("/api/status")
       .then((r) => r.json())
       .then((d) => {
-        const integracao = (d.integracoes || []).find((i: { id: string }) => i.id === "notificacoes");
-        const campos: { chave: string; valorVisivel?: string }[] = integracao?.campos || [];
-        const canal = campos.find((c) => c.chave === "NOTIFICACOES_CANAL")?.valorVisivel === "slack" ? "slack" : "email";
-        const destino = campos.find((c) => c.chave === "NOTIFICACOES_DESTINO")?.valorVisivel || "";
-        setNotificacoes({ configurada: Boolean(integracao?.configurada), canal, destino });
+        const configurada = Boolean(d.integrations?.notificacoes);
+        return fetch("/api/setup")
+          .then((r) => r.json())
+          .then((s) => {
+            const integracao = (s.integracoes || []).find((i: { id: string }) => i.id === "notificacoes");
+            const campos: { chave: string; valorVisivel?: string }[] = integracao?.campos || [];
+            const canal = campos.find((c) => c.chave === "NOTIFICACOES_CANAL")?.valorVisivel === "slack" ? "slack" : "email";
+            const destino = campos.find((c) => c.chave === "NOTIFICACOES_DESTINO")?.valorVisivel || "";
+            setNotificacoes({ configurada, canal, destino });
+          });
       })
       .catch(() => setNotificacoes({ configurada: false, canal: "email", destino: "" }));
     const perfilAtual = chavePerfil(dados);
@@ -469,12 +692,13 @@ function ReceberLeadsSemanais({ dados }: { dados: DadosBusca }) {
         setRotinaId(existente?.id ?? null);
       })
       .catch(() => setRotinaId(null));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma única vez por resultado
   }, []);
 
   async function criar() {
     if (!notificacoes?.configurada) return;
     setCriando(true);
+    setErro(null);
     try {
       const r = await fetch("/api/rotinas", {
         method: "POST",
@@ -489,11 +713,14 @@ function ReceberLeadsSemanais({ dados }: { dados: DadosBusca }) {
           parametros: { ...dados, quantidade },
         }),
       });
+      if (!r.ok) {
+        setErro((await lerErro(r)).mensagem);
+        return;
+      }
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Não foi possível criar a rotina.");
       setRotinaId(d.id);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Não foi possível criar a rotina.");
+      setErro((await lerErro(e)).mensagem);
     } finally {
       setCriando(false);
     }
@@ -506,23 +733,30 @@ function ReceberLeadsSemanais({ dados }: { dados: DadosBusca }) {
       {rotinaId ? (
         <p className="text-muted text-sm">Você já recebe leads novos toda semana para esse perfil, toda segunda às 8h.</p>
       ) : (
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <label className="flex items-center gap-1.5 text-[13px] font-semibold">
-            Quantidade
-            <select className="input !w-auto" value={quantidade} onChange={(e) => setQuantidade(e.target.value)}>
-              <option value="10">10 leads</option>
-              <option value="20">20 leads</option>
-              <option value="30">30 leads</option>
-            </select>
-          </label>
-          {notificacoes.configurada ? (
-            <button type="button" className="btn-ghost !w-auto" onClick={criar} disabled={criando}>
-              {criando ? "Criando..." : "Receber leads novos toda semana"}
-            </button>
-          ) : (
-            <a href="/setup#notificacoes" className="btn-ghost !w-auto">Receber leads novos toda semana</a>
+        <>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <label className="flex items-center gap-1.5 text-[13px] font-semibold">
+              Quantidade
+              <select className="input !w-auto" value={quantidade} onChange={(e) => setQuantidade(e.target.value)}>
+                <option value="10">10 leads</option>
+                <option value="20">20 leads</option>
+                <option value="30">30 leads</option>
+              </select>
+            </label>
+            {notificacoes.configurada ? (
+              <button type="button" className="btn-ghost !w-auto" onClick={criar} disabled={criando}>
+                {criando ? "Criando..." : "Receber leads novos toda semana"}
+              </button>
+            ) : (
+              <a href="/setup#notificacoes" className="btn-ghost !w-auto">Receber leads novos toda semana</a>
+            )}
+          </div>
+          {erro && (
+            <div className="mt-3">
+              <Aviso tom="danger" acao={ACAO_NOTIFICACOES}>{erro}</Aviso>
+            </div>
           )}
-        </div>
+        </>
       )}
     </Item>
   );
@@ -541,6 +775,7 @@ export function ConteudoLeads({
   crmConfigurado,
   enviandoCRMIds = new Set(),
   erroCRM,
+  avisoCRM,
 }: {
   dados: DadosBusca;
   leads: Lead[];
@@ -553,6 +788,7 @@ export function ConteudoLeads({
   crmConfigurado?: boolean;
   enviandoCRMIds?: Set<string>;
   erroCRM?: string | null;
+  avisoCRM?: string | null;
 }) {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const interativo = Boolean(onEscrever);
@@ -566,17 +802,21 @@ export function ConteudoLeads({
     });
   }
 
+  // Palco na metade da tela: empresa e cidade moram dentro da célula do nome (uma coluna própria para
+  // cada uma espremia o sinal a duas palavras por linha e enchia a tabela de "Ver mais").
   const colunas: Coluna<Lead>[] = [
     {
       chave: "nome",
-      titulo: "Nome",
+      titulo: "Lead",
       papel: "titulo",
-      largura: "20%",
+      largura: "31%",
       render: (l) => (
         <div className="flex items-start gap-2">
-          {interativo && <input type="checkbox" className="w-4 h-4 mt-0.5 shrink-0" checked={selecionados.has(l.id)} onChange={() => alternarSelecao(l.id)} aria-label={`Selecionar ${l.nome}`} />}
+          {interativo && <input type="checkbox" className="w-4 h-4 mt-0.5 shrink-0 accent-accent" checked={selecionados.has(l.id)} onChange={() => alternarSelecao(l.id)} aria-label={`Selecionar ${l.nome}`} />}
           <div className="min-w-0">
             <strong className="block">{l.nome}</strong>
+            <div className="text-[12.5px] text-muted">{l.cargo}</div>
+            <div className="text-[12.5px] text-muted">{[l.empresa, l.cidade].filter(Boolean).join(" · ")}</div>
             <div className="flex flex-wrap gap-x-2 text-[12px] mt-0.5">
               {l.linkedin && <a href={l.linkedin} target="_blank" rel="noopener noreferrer" className="text-accent-ink hover:underline">LinkedIn</a>}
               {l.site && <a href={l.site} target="_blank" rel="noopener noreferrer" className="text-accent-ink hover:underline">Site</a>}
@@ -591,54 +831,72 @@ export function ConteudoLeads({
         </div>
       ),
     },
-    { chave: "cargo", titulo: "Cargo", largura: "16%", render: (l) => l.cargo },
-    { chave: "empresa", titulo: "Empresa", papel: "detalhe", render: (l) => l.empresa },
-    { chave: "porte", titulo: "Porte", papel: "chip", largura: "130px", render: (l) => <Chip nivel="neutral">{l.porte}</Chip> },
-    { chave: "cidade", titulo: "Cidade", papel: "detalhe", render: (l) => l.cidade },
-    { chave: "sinal", titulo: "Sinal", papel: "resumo", render: (l) => l.sinal },
+    { chave: "porte", titulo: "Porte", papel: "chip", largura: "96px", render: (l) => <Chip nivel="neutral">{porteCurto(l.porte)}</Chip> },
+    { chave: "sinal", titulo: "Sinal", papel: "resumo", linhas: 5, render: (l) => l.sinal },
   ];
   if (onEscrever) {
     colunas.push({
       chave: "acao",
       titulo: "",
+      largura: "132px",
       render: (l) => (
-        <button
-          type="button"
-          className="btn-ghost !px-3.5 !py-2 !text-[13px] whitespace-nowrap"
-          disabled={carregandoIds.has(l.id)}
-          onClick={() => onEscrever(l)}
-        >
-          {carregandoIds.has(l.id) ? "Escrevendo..." : leadsProntos.has(l.id) ? "Ver abordagem" : "Escrever abordagem"}
-        </button>
-      ),
-    });
-  }
-  if (onEnviarCRM) {
-    colunas.push({
-      chave: "crm",
-      titulo: "",
-      render: (l) =>
-        l.noCRM || crmConfigurado === undefined ? null : crmConfigurado ? (
+        <div className="flex flex-col gap-1.5 items-stretch">
           <button
             type="button"
-            className="btn-ghost !px-3.5 !py-2 !text-[13px] whitespace-nowrap"
-            disabled={enviandoCRMIds.has(l.id)}
-            onClick={() => onEnviarCRM([l])}
+            className="btn-ghost !px-2.5 !py-2 !text-[13px]"
+            disabled={carregandoIds.has(l.id)}
+            onClick={() => onEscrever(l)}
           >
-            {enviandoCRMIds.has(l.id) ? "Enviando..." : "Enviar para o CRM"}
+            {carregandoIds.has(l.id) ? "Escrevendo..." : leadsProntos.has(l.id) ? "Ver abordagem" : "Escrever abordagem"}
           </button>
-        ) : (
-          <a href="/setup#mcp-crm" className="btn-ghost !px-3.5 !py-2 !text-[13px] whitespace-nowrap">Conectar CRM</a>
-        ),
+          {onEnviarCRM && !l.noCRM && crmConfigurado !== undefined && (
+            crmConfigurado ? (
+              <button
+                type="button"
+                className="btn-ghost !px-2.5 !py-2 !text-[13px]"
+                disabled={enviandoCRMIds.has(l.id)}
+                onClick={() => onEnviarCRM([l])}
+              >
+                {enviandoCRMIds.has(l.id) ? "Enviando..." : "Enviar ao CRM"}
+              </button>
+            ) : (
+              <a href="/setup#mcp-crm" className="btn-ghost !px-2.5 !py-2 !text-[13px] text-center">Conectar CRM</a>
+            )
+          )}
+        </div>
+      ),
     });
   }
 
   const leadsSelecionados = leads.filter((l) => selecionados.has(l.id));
+  const leadsSemCRM = leads.filter((l) => !l.noCRM);
   const leadsSelecionadosSemCRM = leadsSelecionados.filter((l) => !l.noCRM);
+  const melhoresPendentes = maisMaterial(leads, MELHORES).filter((l) => !leadsProntos.has(l.id));
+  const escrevendo = carregandoIds.size > 0;
+  const enviando = enviandoCRMIds.size > 0;
 
   return (
     <>
       <p className="summary">{resumoBusca(dados, leads.length)}</p>
+
+      {(onEscreverLote || onEnviarCRM) && selecionados.size === 0 && (
+        <div className="flex items-center gap-2.5 flex-wrap mb-3">
+          {onEscreverLote && melhoresPendentes.length > 0 && (
+            <button type="button" className="btn-primary !w-auto" disabled={escrevendo} onClick={() => onEscreverLote(melhoresPendentes)}>
+              {escrevendo ? "Escrevendo..." : `Escrever para os ${melhoresPendentes.length} melhores`}
+            </button>
+          )}
+          {onEnviarCRM && crmConfigurado && leadsSemCRM.length > 0 && (
+            <button type="button" className="btn-ghost !w-auto" disabled={enviando} onClick={() => onEnviarCRM(leadsSemCRM)}>
+              {enviando ? "Enviando..." : "Enviar todos para o CRM"}
+            </button>
+          )}
+          {onEscreverLote && melhoresPendentes.length > 0 && (
+            <span className="text-muted text-[12.5px] basis-full">Os leads com mais dados para personalizar a abordagem.</span>
+          )}
+        </div>
+      )}
+
       {(onEscreverLote || onEnviarCRM) && selecionados.size > 0 && (
         <div className="card shadow-none flex items-center justify-between gap-3 px-3.5 py-2.5 mb-3 flex-wrap">
           <span className="text-sm text-muted">{selecionados.size} lead{selecionados.size === 1 ? "" : "s"} selecionado{selecionados.size === 1 ? "" : "s"}</span>
@@ -647,29 +905,62 @@ export function ConteudoLeads({
               <button
                 type="button"
                 className="btn-ghost !w-auto"
-                disabled={enviandoCRMIds.size > 0}
+                disabled={enviando}
                 onClick={() => onEnviarCRM(leadsSelecionadosSemCRM)}
               >
-                {enviandoCRMIds.size > 0 ? "Enviando..." : "Enviar selecionados para o CRM"}
+                {enviando ? "Enviando..." : "Enviar selecionados para o CRM"}
               </button>
             )}
             {onEscreverLote && (
               <button
                 type="button"
                 className="btn-primary !w-auto"
-                disabled={carregandoIds.size > 0}
+                disabled={escrevendo}
                 onClick={() => onEscreverLote(leadsSelecionados)}
               >
-                {carregandoIds.size > 0 ? "Escrevendo..." : "Escrever para os selecionados"}
+                {escrevendo ? "Escrevendo..." : "Escrever para os selecionados"}
               </button>
             )}
           </div>
         </div>
       )}
-      {erroLote && <p className="text-danger text-sm mb-3">{erroLote}</p>}
-      {erroCRM && <p className="text-danger text-sm mb-3">{erroCRM}</p>}
+      {erroLote && <div className="mb-3"><Aviso tom="danger">{erroLote}</Aviso></div>}
+      {erroCRM && <div className="mb-3"><Aviso tom="danger" acao={ACAO_CONFERIR_CRM}>{erroCRM}</Aviso></div>}
+      {avisoCRM && <div className="mb-3"><Aviso tom="ok">{avisoCRM}</Aviso></div>}
       <DataTable colunas={colunas} linhas={leads} />
     </>
+  );
+}
+
+/** Os quatro blocos da abordagem, sem cabeçalho nem proveniência: usado nas dobras de /r/[id]. */
+function AbordagemSalva({ abordagem }: { abordagem: Abordagem }) {
+  const email = abordagem.email || { assunto: "", corpo: "" };
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="summary m-0">{abordagem.gancho}</p>
+      <Item>
+        <div className="flex items-center justify-between gap-3 mb-2.5">
+          <strong className="text-sm">{email.assunto}</strong>
+          <CopyButton texto={() => `Assunto: ${email.assunto}\n\n${email.corpo}`} rotulo="Copiar" />
+        </div>
+        <p className="whitespace-pre-wrap text-ink text-sm m-0">{email.corpo}</p>
+      </Item>
+      <Item>
+        <div className="flex items-center justify-between gap-3 mb-2.5">
+          <span className="text-muted text-[12.5px]">LinkedIn</span>
+          <CopyButton texto={() => abordagem.linkedin || ""} rotulo="Copiar" />
+        </div>
+        <p className="whitespace-pre-wrap text-ink text-sm m-0">{abordagem.linkedin}</p>
+      </Item>
+      <Item>
+        <div className="flex items-center justify-between gap-3 mb-2.5">
+          <span className="text-muted text-[12.5px]">WhatsApp</span>
+          <CopyButton texto={() => abordagem.whatsapp || ""} rotulo="Copiar" />
+        </div>
+        <p className="whitespace-pre-wrap text-ink text-sm m-0">{abordagem.whatsapp}</p>
+      </Item>
+      <p className="text-sm m-0"><strong>Próximo passo:</strong> {abordagem.proximo_passo}</p>
+    </div>
   );
 }
 
@@ -719,6 +1010,8 @@ function AbordagemView({ lead, abordagem, meta, onVoltar }: { lead: Lead; aborda
       <Section titulo="Próximo passo">
         <Item><p className="m-0">{abordagem.proximo_passo}</p></Item>
       </Section>
+
+      <SeloIA demo={meta.demo} />
     </article>
   );
 }

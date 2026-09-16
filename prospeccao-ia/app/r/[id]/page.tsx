@@ -21,6 +21,7 @@ export default async function Page({ params }: PageProps<"/r/[id]">) {
           meta={registro.meta}
           id={id}
           leadsProntos={new Set(Object.keys(registro.saida.abordagens || {}))}
+          abordagensSalvas={registro.saida.abordagens}
         />
       </main>
     </>
