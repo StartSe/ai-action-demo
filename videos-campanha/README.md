@@ -5,7 +5,7 @@ Descreva a campanha, envie a imagem do produto e escolha entre três conceitos d
 ## O que resolve
 Produzir um vídeo curto para cada campanha leva semanas entre agência, aprovação e ajustes, e gerar vídeo por IA sem saber o que vai sair custa créditos. Este app recebe um briefing (produto ou oferta, para quem, objetivo, tom, formato e duração) e a imagem do produto (PNG ou JPG, até 5 MB) e devolve três conceitos diferentes, cada um com roteiro por cena (o que aparece, quantos segundos, texto na tela), efeito visual sugerido, chamada e legendas prontas para Instagram, LinkedIn e TikTok. A prévia ilustrativa de cada conceito é um storyboard na proporção escolhida, com a imagem do produto ao fundo e as cenas alternando. Sem chave de IA, o app devolve três conceitos fictícios rotulados como demonstração.
 
-A geração do vídeo de verdade (Higgsfield, via MCP, com o custo em créditos exibido antes de confirmar) chega na próxima etapa. Até lá, o botão "Gerar este vídeo" fica desabilitado com a frase "Conecte o Higgsfield para gerar o vídeo de verdade".
+Com o Higgsfield conectado (servidor MCP com OAuth), cada conceito vira um vídeo de verdade a partir da imagem do produto: o custo em créditos e o saldo aparecem antes de confirmar, um vídeo é gerado por vez e o app avisa por e-mail ou Slack quando fica pronto (a geração leva minutos). Sem o Higgsfield, o resultado mostra uma vez a frase "conecte o Higgsfield" com o link da configuração e os botões de geração ficam desabilitados.
 
 ## Stack
 Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter (`askJSON`, em `lib/ai.ts`). Storyboard e animação em HTML e CSS puros (sem biblioteca de vídeo, animação ou UI).

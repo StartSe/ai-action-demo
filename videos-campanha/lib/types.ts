@@ -82,6 +82,8 @@ export interface PlanoVideo {
   formato: Formato;
   duracaoSeg: Duracao;
   custoCreditos: number | null;
+  /** Por que o custo não veio (provedor fora, efeito sem tabela de preço), quando `custoCreditos` é null. */
+  motivoSemCusto?: string;
   saldo: Saldo | null;
   /** Já existe um vídeo sendo gerado (um por vez). */
   emAndamento: boolean;

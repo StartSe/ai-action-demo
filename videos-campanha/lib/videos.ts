@@ -5,8 +5,10 @@ import { DatabaseSync } from "node:sqlite";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { ErroDePedido } from "./conceitos";
-import { listarPorTipo, obter } from "./historico";
+import { ErroDePedido, validarImagem } from "./conceitos";
+import { atualizarSaida, listarPorTipo, obter } from "./historico";
+import { avisar } from "./notificacoes-do-app";
+import { enderecoPublico } from "./setup-comum";
 import { abrirSessao, custoVideo, efeitoPorIdOuNome, enviarImagem, ErroHiggsfield, HiggsfieldNaoConectado, estado as estadoRemoto, gerarVideo, higgsfieldConfigurado, listarEfeitos, mapearEfeito, motivoEmPortugues, saldo as saldoRemoto, urlDoResultado, type SessaoHiggsfield } from "./higgsfield";
 import { videoTerminou, type Campanha, type Conceito, type Duracao, type EfeitoRemoto, type EstadoVideo, type Formato, type PlanoVideo, type Video } from "./types";
 
@@ -122,6 +124,23 @@ export function obterCampanha(campanhaId: string): Campanha {
   return { ...registro.saida, id: registro.id };
 }
 
+/**
+ * Anexa a imagem do produto a uma campanha já criada. Esquecer a imagem no briefing não pode obrigar a
+ * recriar os conceitos: a tela mostra a área de envio junto do resultado e chama PATCH /api/conceitos/<id>,
+ * que cai aqui. A imagem mora em `saida.briefing.imagemDataUrl`, o mesmo lugar de quem enviou antes.
+ */
+export function guardarImagemDaCampanha(campanhaId: string, imagemDataUrl: unknown): Campanha {
+  const campanha = obterCampanha(campanhaId);
+  const imagem = validarImagem(imagemDataUrl);
+  if (!imagem.ok) throw new ErroDePedido(imagem.erro);
+  if (videoEmAndamento()?.campanhaId === campanhaId) {
+    throw new VideoEmAndamento("Espere o vídeo em andamento terminar para trocar a imagem do produto.");
+  }
+  const atualizada: Campanha = { ...campanha, briefing: { ...campanha.briefing, imagemDataUrl: imagemDataUrl as string } };
+  atualizarSaida(campanhaId, atualizada);
+  return atualizada;
+}
+
 /** Localiza a campanha que contém o conceito (varre as campanhas salvas; o conceito tem id único). */
 export function campanhaDoConceito(conceitoId: string): { campanha: Campanha; conceito: Conceito } {
   for (const r of listarPorTipo<unknown, Campanha>("campanha", 500)) {
@@ -158,7 +177,9 @@ type Pedido = { campanhaId: string; conceitoId: string; efeito?: string };
 async function prepararPedido(pedido: Pedido): Promise<{ campanha: Campanha; conceito: Conceito; sessao: SessaoHiggsfield; efeitos: EfeitoRemoto[]; efeito: EfeitoRemoto }> {
   const campanha = obterCampanha(pedido.campanhaId);
   const conceito = conceitoDa(campanha, pedido.conceitoId);
-  if (!campanha.briefing.imagemDataUrl) throw new ErroDePedido("Envie a imagem do produto e crie os conceitos de novo antes de gerar o vídeo.");
+  // Sem a imagem, a campanha continua valendo: a tela oferece a área de envio junto do resultado
+  // (PATCH /api/conceitos/<id>), e ninguém precisa recriar os conceitos por causa disso.
+  if (!campanha.briefing.imagemDataUrl) throw new ErroDePedido("Envie a imagem do produto no resultado desta campanha para gerar o vídeo.");
   if (!higgsfieldConfigurado()) throw new HiggsfieldNaoConectado("Conecte o Higgsfield em /setup antes de gerar o vídeo.");
   const sessao = await abrirSessao();
   const efeitos = await listarEfeitos(sessao);
@@ -188,7 +209,8 @@ export async function planoVideo(pedido: Pedido): Promise<PlanoVideo> {
     efeitos,
     formato: b.formato,
     duracaoSeg: b.duracaoSeg,
-    custoCreditos: custo ?? null,
+    custoCreditos: custo.creditos ?? null,
+    motivoSemCusto: custo.motivo,
     saldo,
     emAndamento: videoEmAndamento() !== null,
     aviso: AVISO_CREDITOS,
@@ -263,8 +285,30 @@ export async function atualizarEstado(id: string): Promise<Video> {
   }
   if (remoto.estado === "pronto") {
     const url = remoto.url ?? (await urlDoResultado(sessao, video.externoId).catch(() => undefined));
-    if (url) return atualizar(id, { estado: "pronto", url });
+    if (url) {
+      const pronto = atualizar(id, { estado: "pronto", url });
+      // A geração leva minutos: quem fechou a aba precisa saber por fora que acabou. Em segundo plano
+      // (void) para a consulta de andamento não esperar pelo e-mail/Slack.
+      void avisarVideoPronto(pronto);
+      return pronto;
+    }
     return video.estado === "finalizando" ? video : atualizar(id, { estado: "finalizando" });
   }
   return video;
+}
+
+/** Aviso de "o vídeo ficou pronto" pelo canal de /setup#notificacoes, com o link do resultado da campanha. */
+async function avisarVideoPronto(video: Video): Promise<void> {
+  let titulo = "O vídeo da campanha ficou pronto";
+  try {
+    titulo = `Vídeo pronto: ${obterCampanha(video.campanhaId).titulo}`;
+  } catch {
+    // Campanha apagada entre o pedido e a entrega: o aviso vale mesmo sem o título.
+  }
+  const base = enderecoPublico();
+  await avisar({
+    titulo,
+    texto: `O vídeo com o efeito ${video.efeito} (${video.formato}, ${video.duracaoSeg} s) terminou de ser gerado. Abra a campanha para assistir e baixar o arquivo.`,
+    link: base ? `${base.replace(/\/$/, "")}/r/${video.campanhaId}` : undefined,
+  }).catch((err) => console.error("Falha ao avisar que o vídeo ficou pronto", err));
 }

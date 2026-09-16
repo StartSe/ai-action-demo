@@ -60,7 +60,7 @@ async function conexaoAtual(): Promise<ConexaoMCP> {
   const config = lerConfig(HIGGSFIELD);
   const url = config[`${PREFIXO_HIGGSFIELD}_URL`];
   const codigo = config[`${PREFIXO_HIGGSFIELD}_CODIGO`];
-  if (!url || !codigo) throw new HiggsfieldNaoConectado("Conecte o Higgsfield em /setup antes de gerar o vídeo.");
+  if (!url || !codigo) throw new HiggsfieldNaoConectado("Conecte o Higgsfield em Configurações antes de gerar o vídeo.");
   return conectar(url, codigo);
 }
 
@@ -69,7 +69,10 @@ export async function abrirSessao(): Promise<SessaoHiggsfield> {
   try {
     return { conexao, ferramentas: await listarFerramentas(conexao) };
   } catch (err) {
-    throw new ErroHiggsfield(`Não foi possível falar com o Higgsfield: ${err instanceof Error ? err.message : "erro de conexão"}. Confira a conexão em /setup.`);
+    // A frase de lib/mcp-cliente.ts já é genérica ("o serviço", "o endereço"): repeti-la aqui produzia
+    // duas frases seguidas dizendo a mesma coisa. O detalhe técnico fica no log.
+    console.error("Falha ao abrir a sessão no Higgsfield", err);
+    throw new ErroHiggsfield("Não foi possível falar com o Higgsfield. Autorize de novo em Configurações e tente outra vez.");
   }
 }
 
@@ -134,7 +137,9 @@ async function chamarOperacao(sessao: SessaoHiggsfield, op: OperacaoHiggsfield, 
   const ferramenta = escolherFerramenta(op, sessao.ferramentas);
   if (!ferramenta) {
     if (opcional) return undefined;
-    throw new ErroHiggsfield(`O Higgsfield não expõe uma ferramenta reconhecível para ${ROTULO_OPERACAO[op]}. Ferramentas disponíveis: ${sessao.ferramentas.map((f) => f.nome).join(", ") || "nenhuma"}.`);
+    // A lista de ferramentas do servidor remoto é informação da equipe técnica: vai para o log, nunca para a tela.
+    console.error(`Higgsfield sem ferramenta para "${op}". Ferramentas expostas: ${sessao.ferramentas.map((f) => f.nome).join(", ") || "nenhuma"}.`);
+    throw new ErroHiggsfield(`Esta conta do Higgsfield não oferece ${ROTULO_OPERACAO[op]}. Confira o plano dela e autorize de novo em Configurações.`);
   }
   let resposta: unknown;
   try {
@@ -157,11 +162,13 @@ export function motivoEmPortugues(texto: string): string {
   if (!t) return "o serviço não explicou o motivo.";
   if (/insufficient|not enough|no credits|balance/i.test(t)) return "créditos insuficientes na sua conta do Higgsfield.";
   if (/nsfw|safety|moderat|policy|prohibited/i.test(t)) return "o Higgsfield recusou o conteúdo pela política de uso da plataforma.";
-  if (/unauthori|forbidden|invalid.*token|expired|401|403/i.test(t)) return "a autorização do Higgsfield expirou. Autorize de novo em /setup.";
+  if (/unauthori|forbidden|invalid.*token|expired|401|403/i.test(t)) return "a autorização do Higgsfield expirou. Autorize de novo em Configurações.";
   if (/timeout|timed out/i.test(t)) return "o Higgsfield demorou demais para responder.";
   if (/not found|404/i.test(t)) return "o Higgsfield não encontrou o que foi pedido.";
   if (/rate limit|too many/i.test(t)) return "o Higgsfield recebeu pedidos demais em pouco tempo. Espere um minuto.";
-  return `o serviço informou "${t.slice(0, 200)}".`;
+  // O texto cru do provedor (em inglês, às vezes com dados do trabalho) fica só no log.
+  console.error("Motivo não reconhecido do Higgsfield:", t.slice(0, 200));
+  return "o Higgsfield não explicou o motivo. Tente de novo com outro efeito.";
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -359,9 +366,14 @@ export async function enviarImagem(sessao: SessaoHiggsfield, dataUrl: string, ur
     try {
       envio = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": mime }, body: new Uint8Array(bytes), signal: AbortSignal.timeout(60_000) });
     } catch (err) {
-      throw new ErroHiggsfield(`Não foi possível enviar a imagem ao Higgsfield: ${err instanceof Error ? err.message : "erro de rede"}.`);
+      // "fetch failed" e o status HTTP são detalhe da equipe técnica: log, nunca tela (ver PADRAO.md).
+      console.error("Falha de rede ao enviar a imagem ao Higgsfield", err);
+      throw new ErroHiggsfield("Não foi possível enviar a imagem ao Higgsfield. Confira a conexão do servidor e tente de novo.");
     }
-    if (!envio.ok) throw new ErroHiggsfield(`O Higgsfield recusou a imagem (HTTP ${envio.status}).`);
+    if (!envio.ok) {
+      console.error("O Higgsfield recusou a imagem:", envio.status, (await envio.text().catch(() => "")).slice(0, 200));
+      throw new ErroHiggsfield("O Higgsfield recusou a imagem do produto. Tente com outra imagem, em PNG ou JPG.");
+    }
     const confirmacao = await chamarOperacao(sessao, "confirmarArquivo", (schema) =>
       montarArgumentos(schema, [
         { padrao: /media_?ids|^ids$/i, nomePadrao: "media_ids", valor: mediaId ? [mediaId] : undefined },
@@ -374,7 +386,7 @@ export async function enviarImagem(sessao: SessaoHiggsfield, dataUrl: string, ur
 
   if (temImportacao) {
     if (!urlPublica || !/^https:\/\//.test(urlPublica)) {
-      throw new ErroHiggsfield("Este servidor do Higgsfield só importa imagens por endereço público (https), e este app não está publicado num endereço assim.");
+      throw new ErroHiggsfield("Este servidor do Higgsfield só busca a imagem por um endereço público. Publique este app num endereço https e informe esse endereço em Configurações, na área da equipe técnica.");
     }
     const resposta = await chamarOperacao(sessao, "importarUrl", (schema) =>
       montarArgumentos(schema, [
@@ -387,7 +399,8 @@ export async function enviarImagem(sessao: SessaoHiggsfield, dataUrl: string, ur
     return mediaId;
   }
 
-  throw new ErroHiggsfield(`O Higgsfield não expõe uma ferramenta para receber a imagem. Ferramentas disponíveis: ${sessao.ferramentas.map((f) => f.nome).join(", ") || "nenhuma"}.`);
+  console.error(`Higgsfield sem ferramenta de envio de imagem. Ferramentas expostas: ${sessao.ferramentas.map((f) => f.nome).join(", ") || "nenhuma"}.`);
+  throw new ErroHiggsfield("Esta conta do Higgsfield não aceita receber a imagem do produto. Confira o plano dela e autorize de novo em Configurações.");
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -424,12 +437,22 @@ export function encontrarCusto(resposta: unknown): number | undefined {
 }
 
 /** Só o custo, sem criar trabalho (get_cost). Devolve undefined quando o provedor não informa. */
-export async function custoVideo(sessao: SessaoHiggsfield, pedido: PedidoVideo): Promise<number | undefined> {
+/**
+ * Custo estimado em créditos, pedido sem criar trabalho (get_cost). Quando o Higgsfield não responde ou não
+ * traz o número, devolve o motivo em português: sem ele o diálogo só dizia "não informado" e a pessoa
+ * confirmava sem saber se o problema era dela ou do provedor.
+ */
+export async function custoVideo(sessao: SessaoHiggsfield, pedido: PedidoVideo): Promise<{ creditos?: number; motivo?: string }> {
   try {
     const resposta = await chamarOperacao(sessao, "gerar", () => ({ params: parametrosGeracao(pedido, true) }));
-    return encontrarCusto(resposta);
-  } catch {
-    return undefined;
+    const creditos = encontrarCusto(resposta);
+    if (creditos === undefined) return { motivo: "O Higgsfield não informou o custo deste efeito antes de gerar." };
+    return { creditos };
+  } catch (err) {
+    // A frase de chamarOperacao fala em "gerar o vídeo" (a operação é a mesma, com get_cost): usada aqui
+    // ela diria que a geração falhou, o que não aconteceu. O detalhe técnico fica no log.
+    console.error("Falha ao consultar o custo no Higgsfield", err);
+    return { motivo: "O Higgsfield não respondeu à consulta de custo agora." };
   }
 }
 

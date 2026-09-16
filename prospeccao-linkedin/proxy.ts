@@ -6,6 +6,9 @@
 // cookie de sessão:
 // - `/f/*`, `/api/f/*`            formulário público por link (o token já está na própria URL)
 // - `/s/*`                        página estática gerada e servida ao público (ex.: clone-site)
+// - `/api/videos/imagem/*`        imagem que o provedor de vídeo busca por endereço quando não aceita
+//                                 upload direto (ex.: videos-campanha): quem chama é o servidor do
+//                                 provedor, sem cookie nenhum; o id da campanha já está na própria URL
 // - `/webhook/*`                  chamado por um serviço externo, validado por assinatura própria
 // - `/simular/*`, `/api/salas/*`  sala de treino aberta por link (o token já está na própria URL):
 //                                 quem treina é o vendedor, que não tem conta de administrador
@@ -34,6 +37,7 @@ function rotaPublica(pathname: string, metodo: string): boolean {
   if (pathname === "/icon.svg") return true;
   if (pathname.startsWith("/f/") || pathname.startsWith("/api/f/")) return true;
   if (pathname.startsWith("/s/")) return true;
+  if (pathname.startsWith("/api/videos/imagem/")) return true;
   if (pathname.startsWith("/webhook/")) return true;
   if (pathname.startsWith("/simular/") || pathname.startsWith("/api/salas/")) return true;
   if (pathname === "/api/conta" || pathname.startsWith("/api/conta/")) return true;

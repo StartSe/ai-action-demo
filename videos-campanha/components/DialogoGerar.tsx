@@ -109,7 +109,17 @@ export function DialogoGerar({ campanhaId, conceito, onFechar, aoIniciar }: Prop
 
             <dt className="font-bold text-muted">Custo estimado</dt>
             <dd>
-              {fase.nome === "plano" && fase.atualizando ? <span className="text-muted">Atualizando...</span> : plano.custoCreditos !== null ? <strong>{creditos(plano.custoCreditos)}</strong> : <span className="text-muted">O Higgsfield não informou o custo antes de gerar.</span>}
+              {fase.nome === "plano" && fase.atualizando ? (
+                <span className="text-muted">Atualizando...</span>
+              ) : plano.custoCreditos !== null ? (
+                <strong>{creditos(plano.custoCreditos)}</strong>
+              ) : (
+                <>
+                  <span className="text-muted">Não foi possível estimar.</span>
+                  {/* Sem o motivo, "não informado" parecia erro de quem está na tela. */}
+                  <p className="text-muted text-[12.5px] mt-1">{plano.motivoSemCusto ?? "O Higgsfield não informou o custo antes de gerar."} O valor será debitado da sua conta assim que o vídeo for gerado.</p>
+                </>
+              )}
             </dd>
 
             <dt className="font-bold text-muted">Saldo atual</dt>

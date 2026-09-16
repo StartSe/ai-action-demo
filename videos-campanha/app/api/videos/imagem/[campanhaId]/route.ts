@@ -1,5 +1,10 @@
 // A imagem do produto de uma campanha, como arquivo: usada pelo Higgsfield quando o servidor dele só importa
-// mídia por endereço público (media_import_url). Mesma exposição do link /r/<id>, que já mostra a imagem.
+// mídia por endereço público (media_import_url).
+//
+// Esta é a única rota pública deste app (está na lista de `proxy.ts`): quem busca a imagem é o servidor do
+// Higgsfield, que não tem o cookie de sessão. A proteção é o id da campanha na própria URL — 12 caracteres
+// aleatórios gerados por `lib/historico.ts`, mesma classe de segredo de `/f/<token>` e `/s/<id>`. Nada além
+// da imagem enviada no briefing é servido aqui; conceitos, roteiro e legendas continuam exigindo sessão.
 import { obter } from "@/lib/historico";
 import { decodificarImagem } from "@/lib/higgsfield";
 import type { Campanha } from "@/lib/types";

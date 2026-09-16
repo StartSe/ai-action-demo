@@ -1,5 +1,6 @@
 // Cria os três conceitos a partir do briefing (POST), lista as últimas campanhas salvas (GET) e apaga o histórico (DELETE).
 // A lógica de criação vive em lib/conceitos.ts, compartilhada com a ferramenta MCP (lib/ferramentas.ts).
+import { respostaErro } from "@/lib/ai";
 import { ErroDePedido, gerarCampanha, normalizarBriefing } from "@/lib/conceitos";
 import { apagarTodos, listar } from "@/lib/historico";
 import { registrarEnderecoPublico } from "@/lib/setup-comum";
@@ -24,9 +25,8 @@ export async function POST(req: Request) {
     const { campanha, meta, id, demo } = await gerarCampanha(briefing);
     return Response.json({ campanha, meta, id, demo });
   } catch (err) {
-    console.error(err);
-    const mensagem = err instanceof Error ? err.message : "Não foi possível criar os conceitos agora. Tente novamente.";
-    return Response.json({ error: mensagem }, { status: 500 });
+    // respostaErro leva código e ação (Conectar a IA, Trocar o modelo) até o ErrorBox da tela.
+    return respostaErro(err);
   }
 }
 

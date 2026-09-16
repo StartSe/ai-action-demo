@@ -4,13 +4,13 @@
 // GET /api/videos/<id> a cada 5 s é o Resultado (app/page.tsx), para todos os vídeos pendentes de uma vez.
 import { ETAPAS_VIDEO, proporcao, videoTerminou, type Video } from "@/lib/types";
 
-type Props = { video: Video; aviso?: string | null; onOutroEfeito?: () => void };
+type Props = { video: Video; aviso?: string | null; onRefazer?: () => void };
 
 function creditos(n: number): string {
   return `${n.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ${n === 1 ? "crédito" : "créditos"}`;
 }
 
-export function VideoDoConceito({ video, aviso, onOutroEfeito }: Props) {
+export function VideoDoConceito({ video, aviso, onRefazer }: Props) {
   const indiceAtual = ETAPAS_VIDEO.findIndex((e) => e.estado === video.estado);
 
   if (video.estado === "pronto" && video.url) {
@@ -22,9 +22,10 @@ export function VideoDoConceito({ video, aviso, onOutroEfeito }: Props) {
         </p>
         <div className="flex flex-wrap gap-2">
           <a className="btn-primary !w-auto" href={video.url} download target="_blank" rel="noopener noreferrer">Baixar vídeo</a>
-          {onOutroEfeito && <button type="button" className="btn-ghost" onClick={onOutroEfeito}>Gerar outro efeito</button>}
+          {onRefazer && <button type="button" className="btn-ghost" onClick={onRefazer}>Refazer este conceito</button>}
         </div>
-        <p className="text-[12.5px] text-muted">O link do vídeo vale por alguns dias. Baixe o arquivo para guardar.</p>
+        <p className="text-[12.5px] text-muted">O endereço do vídeo vale por alguns dias: baixe o arquivo para guardar.</p>
+        {onRefazer && <p className="text-[12.5px] text-muted">Refazer gera um vídeo novo com outro efeito, e o custo aparece antes.</p>}
       </div>
     );
   }
@@ -33,7 +34,7 @@ export function VideoDoConceito({ video, aviso, onOutroEfeito }: Props) {
     return (
       <div className="flex flex-col gap-2.5" data-video={video.id} data-estado="falhou">
         <p className="text-danger text-sm" role="alert">{video.erro || "O vídeo não pôde ser gerado."}</p>
-        {onOutroEfeito && <button type="button" className="btn-ghost" onClick={onOutroEfeito}>Tentar de novo</button>}
+        {onRefazer && <button type="button" className="btn-ghost" onClick={onRefazer}>Tentar de novo</button>}
       </div>
     );
   }

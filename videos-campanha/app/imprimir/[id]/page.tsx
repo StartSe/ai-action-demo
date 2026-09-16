@@ -11,7 +11,7 @@ function QuadroEstatico({ cena, formato, imagem }: { cena: Cena; formato: Format
   return (
     <div
       className="relative overflow-hidden rounded-[10px] bg-[#1c1530] text-white bg-cover bg-center"
-      style={{ aspectRatio: proporcao(formato), backgroundImage: imagem ? `url("${imagem}")` : "radial-gradient(circle at 50% 40%, #be185d 0%, #4a1942 55%, #1c1530 100%)" }}
+      style={{ aspectRatio: proporcao(formato), backgroundImage: imagem ? `url("${imagem}")` : "radial-gradient(circle at 50% 40%, var(--color-accent) 0%, var(--color-accent-ink) 55%, #1c1530 100%)" }}
     >
       <div className="absolute inset-0 bg-black/40" />
       <div className="absolute inset-0 flex items-center justify-center p-3 text-center">

@@ -9,15 +9,36 @@ export type FerramentaMCP = { nome: string; descricao?: string; schema?: unknown
 async function chamarRpc(conexao: ConexaoMCP, method: string, params?: Record<string, unknown>): Promise<unknown> {
   const cabecalhos: Record<string, string> = { "Content-Type": "application/json" };
   if (conexao.token) cabecalhos.Authorization = `Bearer ${conexao.token}`;
-  const r = await fetch(conexao.url, {
-    method: "POST",
-    headers: cabecalhos,
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params: params ?? {} }),
-  });
-  const corpo = (await r.json().catch(() => null)) as { result?: unknown; error?: { message: string } } | null;
-  if (!corpo) throw new Error(`O quadro respondeu HTTP ${r.status}.`);
-  if (corpo.error) throw new Error(corpo.error.message || "O quadro recusou a chamada.");
-  if (!r.ok) throw new Error(`O quadro respondeu HTTP ${r.status}.`);
+  let r: Response;
+  try {
+    r = await fetch(conexao.url, {
+      method: "POST",
+      headers: cabecalhos,
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params: params ?? {} }),
+    });
+  } catch (err) {
+    console.error("Não foi possível conectar ao serviço MCP:", err);
+    throw new Error("Não foi possível falar com o serviço. Confira o endereço e tente de novo.");
+  }
+  const texto = await r.text();
+  let corpo: { result?: unknown; error?: { message: string } } | null;
+  try {
+    corpo = JSON.parse(texto);
+  } catch {
+    corpo = null;
+  }
+  if (!corpo) {
+    console.error("O serviço MCP respondeu fora do formato esperado:", r.status, texto.slice(0, 200));
+    throw new Error("O serviço não respondeu no formato esperado. Confira o endereço e tente de novo.");
+  }
+  if (corpo.error) {
+    console.error("O serviço MCP recusou a chamada:", corpo.error.message);
+    throw new Error("O serviço recusou a chamada. Confira o endereço e o código de acesso.");
+  }
+  if (!r.ok) {
+    console.error("O serviço MCP respondeu com falha:", r.status, texto.slice(0, 200));
+    throw new Error("O serviço não respondeu corretamente. Confira o endereço e o código de acesso.");
+  }
   return corpo.result;
 }
 

@@ -1,7 +1,7 @@
 // Criação dos três conceitos a partir do briefing, compartilhada entre a rota HTTP (app/api/conceitos/route.ts)
 // e a ferramenta MCP (lib/ferramentas.ts), para não duplicar o prompt nem a gravação no histórico.
 import { randomBytes } from "node:crypto";
-import { aiEnabled, askJSON, meta, type Meta } from "./ai";
+import { aiEnabled, askJSON, ErroIA, meta, type Meta } from "./ai";
 import { conceitosDemo, distribuirSegundos, esperar } from "./demo";
 import { atualizarSaida, salvar } from "./historico";
 import { DURACOES, EFEITOS, FORMATOS, OBJETIVOS, type Briefing, type Campanha, type Cena, type Conceito, type Duracao, type EntradaCampanha, type Formato, type Objetivo } from "./types";
@@ -147,7 +147,11 @@ export function ajustarRoteiro(bruto: unknown, duracaoSeg: number, fechamento: s
 export function normalizarConceitos(bruto: unknown, briefing: Briefing): Conceito[] {
   const raiz = (bruto && typeof bruto === "object" && !Array.isArray(bruto) ? (bruto as Record<string, unknown>).conceitos : bruto) ?? [];
   const lista = Array.isArray(raiz) ? raiz : [];
-  if (lista.length < 3) throw new Error("A IA devolveu menos de três conceitos. Tente de novo.");
+  // Modelo pequeno demais costuma devolver um conceito só ou cortar o JSON no meio: a saída útil é trocar
+  // o modelo, não tentar de novo com o mesmo.
+  if (lista.length < 3) {
+    throw new ErroIA("resposta_invalida", "O modelo devolveu menos de três conceitos. Escolha um modelo maior em Configurações e tente de novo.", 502, { rotulo: "Trocar o modelo", url: "/setup#openrouter" });
+  }
 
   return lista.slice(0, 3).map((item, i) => {
     const c = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
