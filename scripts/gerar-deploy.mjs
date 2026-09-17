@@ -20,6 +20,11 @@ const pago = (app) => plano(app) !== "free";
 // O que o disco daquele app guarda, em uma expressão que cabe no meio de uma frase ("... para guardar
 // X"). Cada app pago diz o seu em `discoGuarda`; sem isso, o texto genérico serve.
 const discoGuarda = (app) => app.discoGuarda ?? "os dados do app";
+// Nome do disco. O Render exige um nome único dentro do Blueprint, então ele carrega o id do app: com
+// "dados" fixo, publicar um segundo app com disco pelo mesmo Blueprint dava conflito. `discoNome` no
+// catálogo permite manter o nome antigo num app já publicado — renomear o disco de um serviço no ar faz
+// o Render criar um disco NOVO e vazio, sem o conteúdo do anterior.
+const discoNome = (app) => app.discoNome ?? `${app.id}-dados`;
 for (const app of cat.apps) {
   if (!PLANOS_VALIDOS.includes(plano(app))) {
     throw new Error(`${app.id}: plano desconhecido "${app.plano}" (válidos: ${PLANOS_VALIDOS.join(", ")})`);
@@ -32,6 +37,9 @@ for (const app of cat.apps) {
   }
   if (app.variaveisGeradas !== undefined && !(Array.isArray(app.variaveisGeradas) && app.variaveisGeradas.every((v) => /^[A-Z][A-Z0-9_]*$/.test(v)))) {
     throw new Error(`${app.id}: variaveisGeradas precisa ser uma lista de nomes de variável (MAIÚSCULAS_COM_SUBLINHADO)`);
+  }
+  if (app.discoNome !== undefined && !/^[a-z0-9-]+$/.test(app.discoNome ?? "")) {
+    throw new Error(`${app.id}: discoNome precisa ser um texto com letras minúsculas, números e hífens`);
   }
   if (app.discoGuarda !== undefined && typeof app.discoGuarda !== "string") {
     throw new Error(`${app.id}: discoGuarda precisa ser um texto`);
@@ -83,13 +91,13 @@ function servico(app) {
   const disco = app.discoGB
     ? `    # ${app.discoGuarda ? app.discoGuarda[0].toUpperCase() + app.discoGuarda.slice(1) : "Os dados do app"} ficam em /app/data e sobrevivem a deploys.
     disk:
-      name: dados
+      name: ${discoNome(app)}
       mountPath: /app/data
       sizeGB: ${app.discoGB}
 `
     : `    # Para manter a configuração feita em /setup entre deploys (exige plano pago):
     # disk:
-    #   name: dados
+    #   name: ${discoNome(app)}
     #   mountPath: /app/data
     #   sizeGB: 1
 `;

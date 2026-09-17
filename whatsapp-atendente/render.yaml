@@ -16,6 +16,6 @@ services:
         value: "10000"
     # A configuração, as conversas e a conta ficam em /app/data e sobrevivem a deploys.
     disk:
-      name: dados
+      name: whatsapp-atendente-dados
       mountPath: /app/data
       sizeGB: 1

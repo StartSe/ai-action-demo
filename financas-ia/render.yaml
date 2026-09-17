@@ -16,6 +16,6 @@ services:
         value: "10000"
     # Para manter a configuração feita em /setup entre deploys (exige plano pago):
     # disk:
-    #   name: dados
+    #   name: financas-ia-dados
     #   mountPath: /app/data
     #   sizeGB: 1

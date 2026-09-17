@@ -18,6 +18,6 @@ services:
         generateValue: true
     # Planilhas, modelos e a conta ficam em /app/data e sobrevivem a deploys.
     disk:
-      name: dados
+      name: automl-pocket-dados
       mountPath: /app/data
       sizeGB: 1
