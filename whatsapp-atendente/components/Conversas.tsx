@@ -7,8 +7,10 @@
 // O conteúdo fica neste componente, e não em `app/conversas/page.tsx`, porque `scripts/verificar-jargao.mjs`
 // varre `components/*.tsx` mas não as telas em `app/<rota>/page.tsx` (ver CLAUDE.md).
 //
-// A coluna do meio é a conversa aberta (`components/ConversaAberta.tsx`, US-013); a da direita, o
-// painel do contato, ainda é uma marcação de lugar (US-014).
+// A coluna do meio é a conversa aberta (`components/ConversaAberta.tsx`, US-013), que traz junto o
+// painel do contato da US-014: a grade daqui tem duas colunas (lista e conversa), e é a conversa
+// aberta que se divide em duas a partir de 1100 px. O painel mostra a mesma conversa que ela já
+// carregou, então esta tela não consulta nada a mais para desenhá-lo.
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConversaAberta } from "./ConversaAberta";
@@ -95,13 +97,12 @@ function LinhasFalsas() {
   );
 }
 
-/** Marcação de lugar do painel do contato, que ainda não existe (US-014), e da coluna do meio sem
- * conversa escolhida. */
-function EmConstrucao({ titulo, descricao }: { titulo: string; descricao: string }) {
+/** O que ocupa a coluna do meio enquanto ninguém escolheu uma conversa na lista. */
+function SemConversa() {
   return (
     <div className="h-full min-h-[200px] flex flex-col items-center justify-center text-center text-muted p-8 border border-dashed border-line rounded-card">
-      <p className="text-ink font-bold mb-1">{titulo}</p>
-      <p className="text-[13px] max-w-[280px]">{descricao}</p>
+      <p className="text-ink font-bold mb-1">Escolha uma conversa</p>
+      <p className="text-[13px] max-w-[280px]">A conversa escolhida na lista ao lado aparece aqui, com os dados de quem está do outro lado.</p>
     </div>
   );
 }
@@ -276,8 +277,8 @@ export function Conversas() {
             onAcao={() => router.push("/assistente?passo=2")}
           />
         ) : (
-          <div className="grid gap-5 grid-cols-1 min-[768px]:grid-cols-[320px_minmax(0,1fr)] min-[1100px]:grid-cols-[360px_minmax(0,1fr)_300px] items-start">
-            <div className={`min-[768px]:col-span-2 min-[1100px]:col-span-3 flex items-center gap-1 border-b border-line overflow-x-auto ${numero ? "max-md:hidden" : ""}`}>
+          <div className="grid gap-5 grid-cols-1 min-[768px]:grid-cols-[320px_minmax(0,1fr)] min-[1100px]:grid-cols-[360px_minmax(0,1fr)] items-start">
+            <div className={`min-[768px]:col-span-2 flex items-center gap-1 border-b border-line overflow-x-auto ${numero ? "max-md:hidden" : ""}`}>
               {ABAS.map((a) => (
                 <button
                   key={a.id}
@@ -315,12 +316,8 @@ export function Conversas() {
                   onMudou={carregar}
                 />
               ) : (
-                <EmConstrucao titulo="Escolha uma conversa" descricao="A conversa escolhida na lista ao lado aparece aqui." />
+                <SemConversa />
               )}
-            </section>
-
-            <section className="max-[1099px]:hidden" aria-label="Contato">
-              <EmConstrucao titulo="Sobre o contato" descricao="Os dados de quem está do outro lado aparecem aqui." />
             </section>
           </div>
         )}

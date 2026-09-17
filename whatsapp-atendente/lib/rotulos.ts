@@ -86,6 +86,12 @@ export function rotuloNumero(numero: string): string {
   return NUMEROS_INTERNOS[numero] ?? formatarTelefone(numero);
 }
 
+/** `true` quando o "número" da conversa é um nome fixo interno (o celular de teste, o assistente de
+ * IA) em vez de um telefone de verdade: quem mostra uma linha "Telefone" precisa saber a diferença. */
+export function numeroInterno(numero: string): boolean {
+  return numero in NUMEROS_INTERNOS;
+}
+
 /** Uma escolha do formulário do Assistente: o que o cartão diz em cima e a linha de apoio embaixo. */
 export type Escolha = { titulo: string; apoio: string };
 
