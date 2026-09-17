@@ -49,6 +49,33 @@ export function agora(): string {
   return new Date().toISOString();
 }
 
+function tabelaExiste(d: DatabaseSync, nome: string): boolean {
+  const linha = d.prepare("SELECT 1 AS existe FROM sqlite_master WHERE type = 'table' AND name = ?").get(nome);
+  return Boolean(linha);
+}
+
+function colunaExiste(d: DatabaseSync, tabela: string, coluna: string): boolean {
+  const linhas = d.prepare(`SELECT name FROM pragma_table_info('${tabela}')`).all() as { name: string }[];
+  return linhas.some((l) => l.name === coluna);
+}
+
+/**
+ * Instalação que rodou a versão anterior deste ciclo **sem ninguém ter feito login** ficou com a
+ * tabela de treino chamada `sessoes` — o nome que pertence ao login (lib/conta.ts). Renomear é
+ * obrigatório antes de criar `sessoes_treino`, senão a instalação nasce com as duas e o treino já
+ * gravado (participante, persona, transcrição) some da tela sem aviso.
+ *
+ * As três conferências são a mesma pergunta por três ângulos, e nenhuma pode sair: só renomeia se
+ * `sessoes` existir, se `sessoes_treino` ainda não existir e se a `sessoes` encontrada for mesmo a
+ * de treino (tem `simulacaoCodigo`) — a do login nunca pode ser tocada.
+ */
+function renomearSessoesDeTreino(d: DatabaseSync): void {
+  if (!tabelaExiste(d, "sessoes")) return;
+  if (tabelaExiste(d, "sessoes_treino")) return;
+  if (!colunaExiste(d, "sessoes", "simulacaoCodigo")) return;
+  d.exec("ALTER TABLE sessoes RENAME TO sessoes_treino");
+}
+
 function criarTabelas(d: DatabaseSync): void {
   // WAL: leitor não bloqueia escritor. Persistente no próprio arquivo, então basta pedir uma vez, de
   // qualquer conexão — vale também para as tabelas antigas, que têm conexões próprias.
@@ -57,6 +84,8 @@ function criarTabelas(d: DatabaseSync): void {
   } catch (err) {
     console.error("Não foi possível ligar o modo WAL do banco; seguindo no modo padrão.", err);
   }
+
+  renomearSessoesDeTreino(d);
 
   d.exec(`CREATE TABLE IF NOT EXISTS produtos (
     id TEXT PRIMARY KEY,
@@ -112,7 +141,11 @@ function criarTabelas(d: DatabaseSync): void {
     criadoEm TEXT NOT NULL
   )`);
 
-  d.exec(`CREATE TABLE IF NOT EXISTS sessoes (
+  // `sessoes` é da tabela de LOGIN (lib/conta.ts, infraestrutura byte a byte nos 17 apps). O treino
+  // usa `sessoes_treino`: as duas moram no mesmo app.sqlite e, com o nome repetido, quem criasse
+  // primeiro vencia o `IF NOT EXISTS` da outra — na prática o login sempre, e aí `banco()` inteiro
+  // lançava "no such column: simulacaoCodigo" na primeira tela de produto.
+  d.exec(`CREATE TABLE IF NOT EXISTS sessoes_treino (
     id TEXT PRIMARY KEY,
     simulacaoCodigo TEXT NOT NULL,
     participanteId TEXT NOT NULL,
@@ -125,8 +158,10 @@ function criarTabelas(d: DatabaseSync): void {
     resultadoId TEXT NULL,
     criadoEm TEXT NOT NULL
   )`);
-  d.exec("CREATE INDEX IF NOT EXISTS idx_sessoes_simulacao ON sessoes (simulacaoCodigo)");
-  d.exec("CREATE INDEX IF NOT EXISTS idx_sessoes_participante ON sessoes (participanteId)");
+  // Os índices mantêm o nome antigo de propósito: o ALTER TABLE acima leva os índices existentes
+  // junto, e um nome novo aqui criaria um segundo índice igual ao que já veio.
+  d.exec("CREATE INDEX IF NOT EXISTS idx_sessoes_simulacao ON sessoes_treino (simulacaoCodigo)");
+  d.exec("CREATE INDEX IF NOT EXISTS idx_sessoes_participante ON sessoes_treino (participanteId)");
 
   d.exec(`CREATE TABLE IF NOT EXISTS mensagens_sessao (
     id TEXT PRIMARY KEY,
@@ -160,11 +195,6 @@ type CenarioAntigo = {
 /** Um cenário que pede mais do vendedor vira uma simulação difícil; o resto fica no meio da régua. */
 function dificuldadeDoCenario(c: CenarioAntigo): "facil" | "realista" | "dificil" {
   return (c.objecoes?.length ?? 0) >= 3 ? "dificil" : "realista";
-}
-
-function tabelaExiste(d: DatabaseSync, nome: string): boolean {
-  const linha = d.prepare("SELECT 1 AS existe FROM sqlite_master WHERE type = 'table' AND name = ?").get(nome);
-  return Boolean(linha);
 }
 
 /**

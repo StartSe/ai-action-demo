@@ -147,7 +147,7 @@
       ],
       "priority": 8,
       "notes": "Fase 2: Personas",
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-009",

@@ -5,6 +5,8 @@
 // A transcrição mora aqui, no servidor (`mensagens_sessao`), não no navegador: a partir da US-015 a
 // sala manda só a última fala a cada turno, em vez de reenviar a conversa inteira como hoje.
 import { agora, banco, gerarId } from "./banco";
+import { escolherPersona } from "./atribuicao";
+import { obter as obterSimulacao } from "./simulacoes";
 
 export type ModoSessao = "voz-agente" | "voz-navegador" | "texto";
 export type StatusSessao = "preparando" | "em_andamento" | "encerrada" | "avaliada" | "abandonada";
@@ -80,10 +82,31 @@ function linhaParaMensagem(l: LinhaMensagem): MensagemSessao {
  */
 function marcarAbandonadas(): void {
   const limite = new Date(Date.now() - MINUTOS_ATE_ABANDONAR * 60 * 1000).toISOString();
-  banco().prepare("UPDATE sessoes SET status = 'abandonada' WHERE status = 'preparando' AND criadoEm < ?").run(limite);
+  banco().prepare("UPDATE sessoes_treino SET status = 'abandonada' WHERE status = 'preparando' AND criadoEm < ?").run(limite);
 }
 
-/** Abre a sessão do vendedor que acabou de se identificar. A persona já vem escolhida (US-008). */
+/**
+ * As personas que este participante já pegou nesta simulação, uma entrada por sessão. A atribuição
+ * (US-008) usa isto para não repetir o mesmo cliente com quem volta ao link.
+ */
+export function personasUsadasPor(simulacaoCodigo: string, participanteId: string): string[] {
+  const linhas = banco()
+    .prepare("SELECT personaId FROM sessoes_treino WHERE simulacaoCodigo = ? AND participanteId = ?")
+    .all(simulacaoCodigo, participanteId) as { personaId: string }[];
+  return linhas.map((l) => l.personaId);
+}
+
+/**
+ * Abre a sessão do vendedor que acabou de se identificar.
+ *
+ * **A persona é escolhida aqui, na abertura, nunca na criação do link** (D8): o link é da simulação
+ * e vale para o time inteiro, então na hora de criá-lo ainda não existe sessão nenhuma para contar.
+ * Quem chama passa só a simulação e a pessoa; `personaId` é para semear demonstração e teste.
+ *
+ * As três consultas (contagem geral, histórico da pessoa, INSERT) rodam **na mesma chamada**, sem
+ * nenhum `await` no meio e sobre a conexão única de lib/banco.ts. É o que mantém a contagem honesta
+ * com trinta vendedores abrindo o mesmo link ao mesmo tempo: em Node nada intercala aqui dentro.
+ */
 export function abrir({
   simulacaoCodigo,
   participanteId,
@@ -92,31 +115,38 @@ export function abrir({
 }: {
   simulacaoCodigo: string;
   participanteId: string;
-  personaId: string;
+  personaId?: string;
   modo: ModoSessao;
 }): Sessao {
+  const escolhida =
+    personaId ??
+    escolherPersona({
+      simulacao: obterSimulacao(simulacaoCodigo) ?? { modoPersona: "aleatoria", personas: [] },
+      contagem: contarPorPersona(simulacaoCodigo),
+      jaUsadas: personasUsadasPor(simulacaoCodigo, participanteId),
+    });
   const id = gerarId();
   const criadoEm = agora();
   banco()
     .prepare(
-      `INSERT INTO sessoes (id, simulacaoCodigo, participanteId, personaId, modo, status, iniciadaEm, encerradaEm, duracaoSeg, resultadoId, criadoEm)
+      `INSERT INTO sessoes_treino (id, simulacaoCodigo, participanteId, personaId, modo, status, iniciadaEm, encerradaEm, duracaoSeg, resultadoId, criadoEm)
        VALUES (?, ?, ?, ?, ?, 'preparando', NULL, NULL, NULL, NULL, ?)`,
     )
-    .run(id, simulacaoCodigo, participanteId, personaId, modo, criadoEm);
-  return { id, simulacaoCodigo, participanteId, personaId, modo, status: "preparando", criadoEm };
+    .run(id, simulacaoCodigo, participanteId, escolhida, modo, criadoEm);
+  return { id, simulacaoCodigo, participanteId, personaId: escolhida, modo, status: "preparando", criadoEm };
 }
 
 export function obter(id: string): Sessao | null {
   marcarAbandonadas();
-  const linha = banco().prepare("SELECT * FROM sessoes WHERE id = ?").get(id) as LinhaSessao | undefined;
+  const linha = banco().prepare("SELECT * FROM sessoes_treino WHERE id = ?").get(id) as LinhaSessao | undefined;
   return linha ? linhaParaSessao(linha) : null;
 }
 
 /** O vendedor clicou em "Começar conversa": a sessão sai de "preparando" e o cronômetro começa. */
 export function iniciar(id: string, modo?: ModoSessao): Sessao | null {
   const d = banco();
-  if (modo) d.prepare("UPDATE sessoes SET modo = ? WHERE id = ?").run(modo, id);
-  d.prepare("UPDATE sessoes SET status = 'em_andamento', iniciadaEm = ? WHERE id = ? AND iniciadaEm IS NULL").run(agora(), id);
+  if (modo) d.prepare("UPDATE sessoes_treino SET modo = ? WHERE id = ?").run(modo, id);
+  d.prepare("UPDATE sessoes_treino SET status = 'em_andamento', iniciadaEm = ? WHERE id = ? AND iniciadaEm IS NULL").run(agora(), id);
   return obter(id);
 }
 
@@ -161,19 +191,19 @@ export function encerrar(id: string, { status = "encerrada" }: { status?: Status
   const fim = agora();
   const inicio = sessao.iniciadaEm ?? sessao.criadoEm;
   const duracaoSeg = Math.max(0, Math.round((new Date(fim).getTime() - new Date(inicio).getTime()) / 1000));
-  banco().prepare("UPDATE sessoes SET status = ?, encerradaEm = ?, duracaoSeg = ? WHERE id = ?").run(status, fim, duracaoSeg, id);
+  banco().prepare("UPDATE sessoes_treino SET status = ?, encerradaEm = ?, duracaoSeg = ? WHERE id = ?").run(status, fim, duracaoSeg, id);
   return obter(id);
 }
 
 /** Chamado quando a avaliação termina (US-018): liga a sessão ao resultado que virou o link /r/<id>. */
 export function registrarResultado(id: string, resultadoId: string): void {
-  banco().prepare("UPDATE sessoes SET resultadoId = ?, status = 'avaliada' WHERE id = ?").run(resultadoId, id);
+  banco().prepare("UPDATE sessoes_treino SET resultadoId = ?, status = 'avaliada' WHERE id = ?").run(resultadoId, id);
 }
 
 export function listarPorSimulacao(simulacaoCodigo: string, limite = 500): Sessao[] {
   marcarAbandonadas();
   const linhas = banco()
-    .prepare("SELECT * FROM sessoes WHERE simulacaoCodigo = ? ORDER BY criadoEm DESC LIMIT ?")
+    .prepare("SELECT * FROM sessoes_treino WHERE simulacaoCodigo = ? ORDER BY criadoEm DESC LIMIT ?")
     .all(simulacaoCodigo, limite) as LinhaSessao[];
   return linhas.map(linhaParaSessao);
 }
@@ -181,7 +211,7 @@ export function listarPorSimulacao(simulacaoCodigo: string, limite = 500): Sessa
 export function listarPorParticipante(participanteId: string, limite = 500): Sessao[] {
   marcarAbandonadas();
   const linhas = banco()
-    .prepare("SELECT * FROM sessoes WHERE participanteId = ? ORDER BY criadoEm DESC LIMIT ?")
+    .prepare("SELECT * FROM sessoes_treino WHERE participanteId = ? ORDER BY criadoEm DESC LIMIT ?")
     .all(participanteId, limite) as LinhaSessao[];
   return linhas.map(linhaParaSessao);
 }
@@ -193,7 +223,7 @@ export function listarPorParticipante(participanteId: string, limite = 500): Ses
  */
 export function contarPorPersona(simulacaoCodigo: string): Record<string, number> {
   const linhas = banco()
-    .prepare("SELECT personaId, COUNT(*) AS total FROM sessoes WHERE simulacaoCodigo = ? GROUP BY personaId")
+    .prepare("SELECT personaId, COUNT(*) AS total FROM sessoes_treino WHERE simulacaoCodigo = ? GROUP BY personaId")
     .all(simulacaoCodigo) as { personaId: string; total: number }[];
   return Object.fromEntries(linhas.map((l) => [l.personaId, l.total]));
 }
@@ -205,7 +235,7 @@ export function contarPorPersona(simulacaoCodigo: string): Record<string, number
 export function tentativasDe(simulacaoCodigo: string, participanteId: string): number {
   marcarAbandonadas();
   const linha = banco()
-    .prepare("SELECT COUNT(*) AS total FROM sessoes WHERE simulacaoCodigo = ? AND participanteId = ? AND status <> 'abandonada'")
+    .prepare("SELECT COUNT(*) AS total FROM sessoes_treino WHERE simulacaoCodigo = ? AND participanteId = ? AND status <> 'abandonada'")
     .get(simulacaoCodigo, participanteId) as { total: number } | undefined;
   return linha?.total ?? 0;
 }
@@ -213,7 +243,7 @@ export function tentativasDe(simulacaoCodigo: string, participanteId: string): n
 /** Resumo por simulação para as listas do gestor, sem uma consulta por cartão. */
 export function resumoPorSimulacao(): Record<string, { sessoes: number; participantes: number }> {
   const linhas = banco()
-    .prepare("SELECT simulacaoCodigo, COUNT(*) AS sessoes, COUNT(DISTINCT participanteId) AS participantes FROM sessoes GROUP BY simulacaoCodigo")
+    .prepare("SELECT simulacaoCodigo, COUNT(*) AS sessoes, COUNT(DISTINCT participanteId) AS participantes FROM sessoes_treino GROUP BY simulacaoCodigo")
     .all() as { simulacaoCodigo: string; sessoes: number; participantes: number }[];
   return Object.fromEntries(linhas.map((l) => [l.simulacaoCodigo, { sessoes: l.sessoes, participantes: l.participantes }]));
 }

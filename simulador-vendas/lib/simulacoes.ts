@@ -187,8 +187,8 @@ export function mudarStatus(codigo: string, status: StatusSimulacao): Simulacao 
 /** Apaga a simulação e as sessões dela (com as mensagens). Os resultados no histórico continuam. */
 export function apagar(codigo: string): void {
   const d = banco();
-  d.prepare("DELETE FROM mensagens_sessao WHERE sessaoId IN (SELECT id FROM sessoes WHERE simulacaoCodigo = ?)").run(codigo);
-  d.prepare("DELETE FROM sessoes WHERE simulacaoCodigo = ?").run(codigo);
+  d.prepare("DELETE FROM mensagens_sessao WHERE sessaoId IN (SELECT id FROM sessoes_treino WHERE simulacaoCodigo = ?)").run(codigo);
+  d.prepare("DELETE FROM sessoes_treino WHERE simulacaoCodigo = ?").run(codigo);
   d.prepare("DELETE FROM simulacoes WHERE codigo = ?").run(codigo);
 }
 
