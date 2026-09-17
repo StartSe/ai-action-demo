@@ -1,0 +1,14 @@
+node_modules/
+.next/
+.env
+*.log
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+uploads/
+data/
+apps/worker/uv.lock
+.last-branch
+.ralph-session

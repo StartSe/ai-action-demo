@@ -1,0 +1,404 @@
+{
+  "project": "AutoML Pocket — versão individual (SQLite, conta única, deploy em 1 clique no Render)",
+  "branchName": "ralph/pocket",
+  "description": "Reduzir o AutoML ao núcleo para uma pessoa: login → projeto → upload → Preparar → Predição (treino + relatório) → Publicar (Web App/API/MCP), sem IA, sem multiusuário, sem serviços externos além do Redis. Três ondas, cada uma terminando com o produto rodando de ponta a ponta: (1) Remoções ainda em Postgres — home, Explore, IA restante, CTAs/enterprise/bug report, notificações/e-mail, cota de predições, onboarding, Google/2FA/cadastro, convites/políticas, conta única por env, Configurações enxutas, checkpoint (US-001..012); (2) SQLite — schema Drizzle com @libsql/client, SQL cru reescrito, worker em sqlite3 stdlib, concorrência WAL, checkpoint go/no-go com Plano B Postgres (US-013..017); (3) Empacotamento — Dockerfile único web+worker com start.sh, docker-compose.yml de dev, render.yaml Blueprint, README (US-018..021). Decisões fechadas: manter Redis+BullMQ; conta única via POCKET_EMAIL/POCKET_PASSWORD/POCKET_NAME; remover TODA IA; MFA sai; 1 dataset de exemplo (Credit_Card_Fraud_Example.csv); sem CI (.github sai); origin novo; marca continua 'AutoML' com selo Beta (nunca 'Pocket' na UI); 1 único container no Render porque disco não é compartilhável entre serviços. PRD completa em tasks/prd-versao-pocket.md — ler 'Decisões de produto', 'Decisão de arquitetura para o Render', o inventário 'Considerações técnicas' e o 'Mapeamento de tipos Postgres → SQLite' antes de cada story. Regras do projeto: apps/web/CLAUDE.md e apps/worker/CLAUDE.md; prettier --check nos arquivos tocados antes do commit; caminhos absolutos no Bash (o cd persiste). Depois de apagar pages, `npx next typegen` para o typecheck voltar a passar.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Onda 1 · Remover a home pública e redirecionar / (PRD US-001)",
+      "description": "Como usuária do Pocket, ao abrir a raiz do site quero cair direto no login (ou em /projects se já logada), sem página de marketing.",
+      "acceptanceCriteria": [
+        "Apagados: apps/web/src/app/(marketing)/ (layout, page, actions), apps/web/src/components/marketing/ inteiro, apps/web/src/lib/marketing/ inteiro, apps/web/scripts/og-image.mts e apps/web/scripts/screenshot.mjs (e seus scripts em package.json, se existirem)",
+        "apps/web/src/proxy.ts: a rota / deixa de ser caso especial público — sem sessão redireciona para /login, com sessão para /projects (um redirect server-side em apps/web/src/app/page.tsx ou no proxy, um só lugar)",
+        "getOptionalSession em lib/session.ts removido se ficar sem uso",
+        "apps/web/src/app/layout.tsx: metadata da home (OG image, descrição de marketing, JSON-LD) reduzida a title 'AutoML' + description curta; arquivos estáticos de OG em public/ removidos",
+        "Dependência motion removida do package.json somente se nenhum arquivo fora de components/marketing e onboarding-confetti.tsx a importar (o confetti sai na US-007; se ainda estiver lá, deixar a remoção da dep para a US-007)",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill: / deslogado → /login; / logado → /projects"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Como docs/politica-de-uso/politica-de-privacidade sobrevivem até US-006/US-009 e usavam PublicPageShell (components/marketing), foi criado src/components/public-page-shell.tsx (mínimo, sem marketing) para elas continuarem de pé. Verificação de '/' logado -> /projects feita por leitura de código + teste de proxy (sem Postgres local disponível nesta iteração para montar sessão real)."
+    },
+    {
+      "id": "US-002",
+      "title": "Onda 1 · Remover a aba Explorar e o sandbox e2b (PRD US-002)",
+      "description": "Como usuária do Pocket, não quero ver a aba 'Explorar' nem nenhum resquício do chat de dados.",
+      "acceptanceCriteria": [
+        "Apagados: apps/web/src/app/(project)/projects/[projectId]/explore/, apps/web/src/app/api/explore/, apps/web/src/lib/explore/, apps/web/src/lib/sandbox.ts e os testes correspondentes em lib/__tests__ e lib/explore",
+        "Aba 'Explorar' removida de tabs em apps/web/src/app/(project)/projects/[projectId]/layout.tsx (ícone Search sai do import); a navbar fica Preparar · Predição · Publicar",
+        "Tabelas explore_chats e explore_messages e enums explore_message_role/explore_message_status removidos de apps/web/src/db/schema.ts; migration Drizzle gerada (npm run db:generate) com os DROPs e aplicada no Postgres local",
+        "proxy.ts/app-origin.ts/rate-limit-policy.ts: entradas específicas do Explore removidas (política de origem e rate limit do chat); EXPLORE_OFFTOPIC_MODE, EXPLORE_MODEL, E2B_API_KEY, E2B_TEMPLATE removidos de .env.example, docker-compose.yml e README",
+        "Deps @e2b/code-interpreter, plotly.js-dist-min e react-markdown removidas do package.json (só o Explore as importa)",
+        "apps/web/CLAUDE.md: parágrafo 'CSV gerado no client' deixa de citar explore/result-panel.tsx (mantém a referência a forecast-sections.tsx)",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass (npm test em apps/web)",
+        "Verify in browser using dev-browser skill: navbar do projeto com 3 abas; /projects/<id>/explore → 404"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Também removidos (não listados na AC, mas dead code direto do Explore): coluna datasets.exploreSuggestions + tipo ExploreSuggestions, e o e2b/plotly.js-dist-min/react-markdown do package.json e sandbox.ts/plotly-dist.d.ts. llmFeatureEnum manteve os valores 'explore'/'explore_suggestions' (removido só na US-003). Migration 0031_remove-explore.sql gerada e aplicada num Postgres local recriado (container antigo automl-postgres-1 não existia mais nesta máquina; subido via docker compose up -d postgres, nome automl-pocket-postgres-1)."
+    },
+    {
+      "id": "US-003",
+      "title": "Onda 1 · Remover o restante da IA — Insights da IA, Guia do problema, cotas de LLM (PRD US-003)",
+      "description": "Como usuária do Pocket, quero o relatório do modelo e a tela de fonte de dados sem nenhuma função que dependa de LLM.",
+      "acceptanceCriteria": [
+        "Relatório: apagados predict/ai-insight-section.tsx, predict/insight-actions.ts, lib/model-insight.ts; predict/page.tsx e model-report.tsx deixam de montar a seção; coluna models.ai_insight removida do schema",
+        "Guia do problema: apagados app/(project)/projects/[projectId]/guia/, app/(app)/projects/brief-actions.ts, lib/problem-brief.ts, lib/problem-brief-template.ts, components/project/problem-brief-card.tsx, components/project/data-help-cta-card.tsx, rota app/api/projects/[projectId]/template/; coluna projects.problem_brief removida. FICA o card 'Problema de negócio' (problem-description-card.tsx, coluna projects.problem_description) — texto livre, sem IA",
+        "FICA a planilha modelo genérica: lib/spreadsheet-template.ts, lib/template-links.ts, components/app/template-download-links.tsx, rota app/api/templates/planilha-modelo/ (e a dep exceljs)",
+        "Apagados lib/llm.ts, lib/llm-metered.ts, lib/llm-quota.ts, lib/llm-usage.ts, lib/llm-pricing.ts e testes; tabela llm_usage e enum llm_feature removidos do schema; migration gerada e aplicada",
+        "Card 'IA' em Configurações (app/(app)/settings/page.tsx, bloco 'Uso e limites') removido",
+        "Envs removidas de .env.example, docker-compose.yml, README: OPENROUTER_API_KEY, LLM_PRICING_JSON, LLM_BUDGET_MODE, DAILY_LLM_CALLS_LIMIT, MONTHLY_LLM_CALLS_LIMIT, DAILY_LLM_BUDGET_USD",
+        "Eventos de auditoria llm.* deixam de existir no código (lib/audit.ts — união de ações atualizada)",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass (npm test em apps/web)",
+        "Verify in browser using dev-browser skill: relatório de um modelo treinado sem seção de IA; tela de fonte de dados sem card de ajuda; link 'Baixar planilha modelo' continua funcionando"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Removidos: relatório (ai-insight-section.tsx, insight-actions.ts, lib/model-insight.ts, models.ai_insight); Guia do problema inteiro (guia/, brief-actions.ts, problem-brief.ts, problem-brief-template.ts, problem-brief-card.tsx, data-help-cta-card.tsx, api/projects/[id]/template/, projects.problem_brief) — ficou só o card problem-description-card.tsx (problem_description), agora montado na tela \"Escolha uma fonte de dados\" no lugar do DataHelpCtaCard; lib/llm*.ts (llm/llm-metered/llm-quota/llm-usage/llm-pricing) e tabela llm_usage + enum llm_feature; card IA em Configuracoes. Migration 0032_remove-ai-features.sql aplicada no Postgres local. FICOU (fora do escopo desta story): docker-compose.prod.yml ainda tem OPENROUTER_API_KEY/EXPLORE_MODEL/LLM_* (sai por inteiro na US-019) e docs/metricas-uso.md ainda documenta llm_usage (histórico, não afeta build)."
+    },
+    {
+      "id": "US-004",
+      "title": "Onda 1 · Remover CTAs de consultoria/enterprise e 'Reportar bug' (PRD US-004)",
+      "description": "Como usuária do Pocket, não quero ver convites para contratar consultoria nem botão de reportar bug em nenhuma tela.",
+      "acceptanceCriteria": [
+        "Enterprise/consultoria apagados: app/(app)/enterprise/, components/app/enterprise-inline-cta.tsx, request-enterprise-dialog.tsx, settings-enterprise-card.tsx, sidebar-enterprise-card.tsx, components/project/production-cta-banner.tsx, lib/production-cta.ts, lib/contact.ts, lib/enterprise-lead.ts, lib/enterprise-lead-request.ts e testes; tabela enterprise_leads removida; grep -ri 'consultoria\\|enterprise\\|AutoML' em apps/web/src sem ocorrências fora de comentários históricos",
+        "Problem reports apagados: components/app/problem-report-button.tsx, problem-report-collector.tsx, lib/problem-report/ inteiro, app/api/problem-reports/; tabela problem_reports removida; ProblemReportCollector sai de app/(app)/layout.tsx e de app/(project)/projects/[projectId]/layout.tsx; entradas do proxy.ts/origem/rate limit correspondentes removidas",
+        "Dep modern-screenshot removida do package.json",
+        "app-sidebar.tsx sem ProblemReportButton nem SidebarEnterpriseCard; rodapé da sidebar (menu do usuário) continua alinhado com a sidebar recolhida e expandida",
+        "Migration gerada com os DROPs e aplicada",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass (npm test em apps/web)",
+        "Verify in browser using dev-browser skill: sidebar, Configurações, tela do projeto, relatório e telas de Publicar sem CTAs"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Removidos enterprise/consultoria (app/(app)/enterprise/actions.ts, enterprise-inline-cta.tsx, request-enterprise-dialog.tsx, settings-enterprise-card.tsx, sidebar-enterprise-card.tsx, production-cta-banner.tsx, lib/production-cta.ts, lib/enterprise-lead.ts, lib/enterprise-lead-request.ts + testes) e problem reports (problem-report-button.tsx, problem-report-collector.tsx, lib/problem-report/, api/problem-reports/ + teste). Tabelas enterprise_leads/problem_reports e os 3 enums enterprise_* removidos do schema (migration 0033_remove-enterprise-and-problem-reports.sql). Consumidores ajustados: dataset-picker.tsx e predict-view.tsx perderam o errorCode/QuotaLimitCode que so existia para acionar o EnterpriseInlineCta (o aviso de quota continua, sem CTA); predict/page.tsx, predict/jobs/[jobId]/page.tsx e training-progress.tsx perderam productionCta/resultMetrics/modelName (e a largura extra max-w-2xl da tela de sucesso, que so existia para o banner); app-sidebar.tsx, project-navbar.tsx e os dois layouts perderam os pontos de montagem dos componentes apagados; settings/page.tsx perdeu o card. rate-limit-policy.ts perdeu ENTERPRISE_LEAD_RATE_LIMIT e o HOMEPAGE_LEAD_RATE_LIMIT (ja orfao desde a remocao da home na US-001). modern-screenshot removida do package.json. CLAUDE.md: secao \"Leads de ambiente exclusivo\" removida por inteiro; 2 mencoes pontuais a ProblemReportButton/problem-reports ajustadas."
+    },
+    {
+      "id": "US-005",
+      "title": "Onda 1 · Remover notificações, e-mail e a rota interna web↔worker (PRD US-005)",
+      "description": "Como usuária do Pocket (uma pessoa só, olhando a tela), não preciso de sino de notificações nem de e-mail 'modelo pronto'.",
+      "acceptanceCriteria": [
+        "Web apagados: components/app/notifications-bell.tsx, notification-dialog.tsx, notifications-actions.ts, lib/notifications.ts, lib/notifications-server.ts, lib/notification-copy.ts, lib/notification-email.ts, lib/internal-api.ts, lib/email.ts, lib/email-templates.ts, app/api/internal/; tabela notifications removida; migration gerada e aplicada",
+        "app/(app)/layout.tsx, app/(project)/projects/[projectId]/layout.tsx e components/project/project-navbar.tsx: countUnread/initialUnread/NotificationsBell removidos; o header do projeto mantém voltar + nome editável + abas",
+        "Worker apagados: apps/worker/jobs/notifications_email.py e apps/worker/jobs/notification_copy.py; model_train.py deixa de gravar notificação e de chamar a rota interna (a UI de progresso continua por polling); o fixture JSON de copy compartilhado em src/lib/__fixtures__ e a referência web-fixtures/additional_contexts no Dockerfile/compose do worker são removidos se ficarem sem uso",
+        "Sem toast de 'modelo pronto' vindo do sino — o redirecionamento automático da tela de progresso para o relatório, que já existe, é o feedback",
+        "Dep resend removida; envs RESEND_API_KEY, EMAIL_FROM, INTERNAL_API_TOKEN, WEB_INTERNAL_URL removidas de .env.example, docker-compose.yml, README",
+        "O e-mail 'Sua senha foi alterada' de lib/password-change-audit.ts deixa de ser enviado (a auditoria auth.password_changed fica)",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass (npm test em apps/web e pytest do worker no container)",
+        "Verify in browser using dev-browser skill: header sem sino; treinar um modelo até o fim e conferir o redirecionamento para o relatório"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Onda 1 · Remover a cota de predições e a página /docs (PRD US-006)",
+      "description": "Como usuária do Pocket, quero prever quantas linhas quiser pelo Web App, API e MCP sem contador mensal.",
+      "acceptanceCriteria": [
+        "Apagados lib/inference-quota.ts e testes; tabela inference_usage removida; migration gerada e aplicada",
+        "Chamadas removidas em app/api/v1/predict/route.ts, app/api/mcp/route.ts, app/app/[slug]/actions.ts, app/app/[slug]/batch/route.ts, app/(project)/projects/[projectId]/predict/actions.ts e predict/page.tsx — sem checagem nem contagem; nenhum texto 'limite mensal'/'predições restantes' no app",
+        "MONTHLY_INFERENCE_LIMIT removida de .env.example, docker-compose.yml, README. FICAM API_PREDICT_MAX_ROWS (limite por chamada) e o limite de 1 MB de body",
+        "Card 'Predições' em Configurações removido; o card 'Uso e limites' passa a mostrar só 'Armazenamento' e é renomeado para 'Armazenamento'",
+        "app/docs/ apagado; links para /docs (telas de Publicar/API, README) removidos ou trocados pelo bloco de exemplo curl que já existe na tela deploy/api",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass (npm test em apps/web)",
+        "Verify in browser using dev-browser skill: Web App publicado prevendo em lote; tela deploy/api sem link quebrado; /docs → 404"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Retomada de trabalho deixado pronto (sem commit) por uma iteração anterior no working tree: lib/inference-quota.ts + teste apagados, tabela inference_usage removida do schema, chamadas de checkQuota/recordUsage removidas de api-predict.ts/mcp-predict.ts e dos 4 pontos de chamada (api/v1/predict, api/mcp, app/[slug]/actions.ts, app/[slug]/batch/route.ts), predict/page.tsx e predict-view.tsx sem InferenceQuotaWarning, settings/page.tsx com card único 'Armazenamento', app/docs/ apagado, onboarding ajustado (passo 'use' fecha só com endpoint publicado, sem inferenceCount). Completado nesta iteração: migration 0034_remove-inference-usage.sql gerada e aplicada; MONTHLY_INFERENCE_LIMIT removida de docker-compose.yml/README.md; /docs removida de PUBLIC_PATHS (proxy.ts) e do sitemap.ts; DEPRECATION_LINK ('</docs>; rel=\"deprecation\"') removida de http-headers.ts — withDeprecation manda só o header Deprecation: true, sem Link (não há mais página de documentação própria para apontar); comentários residuais a /docs em layout.tsx/public-page-shell.tsx/CLAUDE.md atualizados; testes de api-predict.test.ts/mcp-predict.test.ts/http-headers.test.ts ajustados (sem checkQuota/recordUsage/DEPRECATION_LINK)."
+    },
+    {
+      "id": "US-007",
+      "title": "Onda 1 · Remover onboarding — boas-vindas, checklist, confetti, sugestão de MFA (PRD US-007)",
+      "description": "Como usuária do Pocket, quero a lista de projetos limpa, sem painel de boas-vindas nem checklist.",
+      "acceptanceCriteria": [
+        "Apagados: components/app/welcome-panel.tsx, onboarding-checklist.tsx, onboarding-confetti.tsx, components/project/onboarding-step-banner.tsx, lib/onboarding.ts, lib/onboarding-copy.ts, lib/onboarding-server.ts, lib/mfa-suggestion.ts, lib/mfa-suggestion-server.ts, app/(app)/projects/onboarding-actions.ts e testes",
+        "app/(app)/projects/page.tsx e projects-view.tsx sem getOnboardingState/maybeCreateMfaSuggestionOncePerHour; estado vazio da lista de projetos vira um card simples 'Crie seu primeiro projeto' com o botão que já existe",
+        "Colunas users.onboarding_welcome_seen_at, onboarding_dismissed_at, onboarding_completed_at, mfa_prompt_dismissed_at, mfa_prompt_snoozed_until removidas; migration gerada e aplicada",
+        "Banner de 'passo do onboarding' removido das telas de Preparar/Predição onde OnboardingStepBanner era montado",
+        "Dep motion removida do package.json (último consumidor era o confetti)",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass (npm test em apps/web)",
+        "Verify in browser using dev-browser skill: /projects com 0 projetos e com 2 projetos; Preparar sem banner"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Onda 1 · Autenticação — remover Google, 2FA, cadastro e fluxos de e-mail (PRD US-008)",
+      "description": "Como usuária do Pocket, quero uma tela de login com apenas e-mail e senha.",
+      "acceptanceCriteria": [
+        "lib/auth.ts: socialProviders removido; plugin twoFactor removido; emailAndPassword.requireEmailVerification: false; sendVerificationEmail/sendResetPassword removidos; loginAuditPlugin reduzido a auth.login (email) + troca de senha (auth.password_changed/password_change_failed) — caminhos de 2FA/OAuth saem do matcher",
+        "Apagados: app/signup/, app/verify-email/, app/forgot-password/, app/reset-password/, app/2fa/, components/auth/google-icon.tsx, components/app/two-factor-*.tsx, components/app/security-card.tsx (ou reduzido a 'Trocar senha' se for o container do botão), lib/two-factor-*.ts, lib/two-factor-login.ts, lib/verify-email.ts, lib/signup-ref.ts, lib/auth-email-rate-limit.ts e testes",
+        "app/login/page.tsx: só e-mail + senha + botão 'Entrar'; sem 'Entrar com Google', sem 'Criar conta', sem 'Esqueci minha senha'; texto de apoio: 'Use o e-mail e a senha definidos na configuração do Pocket.'",
+        "Tabela two_factors e coluna users.two_factor_enabled removidas; migration gerada e aplicada; deps qrcode e @types/qrcode removidas",
+        "lib/auth-client.ts sem plugin de 2FA; GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET removidas de .env.example, docker-compose.yml, README",
+        "proxy.ts: PUBLIC_PATHS fica com /login, /app (Web App público) e as rotas de API públicas já existentes (/api/v1, /api/mcp, /api/auth)",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass (npm test em apps/web)",
+        "Verify in browser using dev-browser skill: login com e-mail/senha; /signup, /2fa, /forgot-password → 404; Configurações → trocar senha funciona"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "Trabalho encontrado em andamento no working tree (não commitado) por outra(s) iteração(ões) rodando em paralelo nesta mesma sessão de máquina (confirmado via `ps aux`: múltiplos processos `ralph --tool claude`/`claude --print` ativos simultaneamente sobre o mesmo repo) — mesmo padrão de retomada das US-005/US-006, mas desta vez com edições concorrentes durante a própria revisão (Edit reportou 'file has been modified since read' três vezes; resolvido sempre re-lendo antes de escrever). Cobria a maior parte da AC: auth.ts (twoFactor/socialProviders/sendResetPassword/sendVerificationEmail/requireEmailVerification removidos, loginAuditPlugin reduzido, hook de signup sem cookies/ref do OAuth), schema.ts (twoFactors/two_factor_enabled), auth-client.ts, session.ts, login/page.tsx, security-card.tsx (reduzido a só 'Alterar senha'), settings/page.tsx, invite-cookie.ts (sem o trecho exclusivo do cookie de OAuth), rate-limit-policy.ts (constantes de reset/verify/2FA), e apagados app/{signup,verify-email,forgot-password,reset-password,2fa}/, components/auth/google-icon.tsx, components/auth/password-strength.tsx (+teste, só usado no /signup), components/app/two-factor-*.tsx, lib/{signup-ref,two-factor-*,verify-email,auth-email-rate-limit}.ts + testes, package.json (qrcode/@types/qrcode já fora). Completado nesta iteração: migration 0036_remove-two-factor.sql gerada e aplicada no Postgres local; proxy.ts (PUBLIC_PATHS sem /signup,/forgot-password,/reset-password,/verify-email,/2fa) e robots.ts (DISALLOWED idem); dep `resend` removida do package.json e lib/email.ts + lib/email-templates.ts + teste apagados (ficaram órfãos assim que forgot-password/verify-email saíram — item da AC da US-005 que tinha sido deliberadamente adiado para esta story); RESEND_API_KEY/EMAIL_FROM removidas de .env.example/docker-compose.yml/README.md (GOOGLE_CLIENT_ID/SECRET já tinham saído); seção inteira 'Segundo fator (plugin twoFactor do Better Auth)' (171 linhas, 3 subseções) removida do apps/web/CLAUDE.md."
+    },
+    {
+      "id": "US-009",
+      "title": "Onda 1 · Remover convites/waitlist, aceite de políticas e gates de sessão (PRD US-009)",
+      "description": "Como usuária do Pocket, quero entrar e usar, sem tela de aceite de política nem código de convite.",
+      "acceptanceCriteria": [
+        "Apagados: app/waitlist/, app/aceite-politica/, app/politica-de-privacidade/, app/politica-de-uso/, lib/invites.ts, lib/invite-cookie.ts, lib/policy.ts, lib/policy-acceptance.ts e testes",
+        "Tabelas invite_codes, invite_redemptions, policy_acceptances e coluna users.approved_at removidas; migration gerada e aplicada",
+        "lib/session.ts (requireSession): sem gate de aprovação do beta e sem gate de aceite de política — só 'tem sessão? senão /login'",
+        "lib/auth.ts: hooks de redeemInvite, recordPolicyAcceptance e cookies de signup removidos; seedExampleDatasets sai do hook de cadastro (volta na US-010, chamado pelo bootstrap)",
+        "Rodapé/links para políticas removidos do login e de Configurações",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass (npm test em apps/web)",
+        "Verify in browser using dev-browser skill: login → /projects direto, sem tela intermediária"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Apagados app/{waitlist,aceite-politica,politica-de-privacidade,politica-de-uso}/, lib/{invites,invite-cookie,policy,policy-acceptance}.ts e os 3 testes correspondentes. Achado além da AC literal: components/public-page-shell.tsx (usado só pelas 2 páginas de política, já documentava no próprio comentário 'saem na US-009') também apagado. db/schema.ts sem as tabelas invite_codes/invite_redemptions/policy_acceptances e sem users.approvedAt (migration 0037_remove-invites-and-policy.sql, aplicada — Postgres local volta a 13 tabelas, o número-alvo da US-012). lib/session.ts reescrito: requireSession() sem parâmetros, sem cache()/autoRedeemInviteFromUrl/hasAcceptedPolicy, só 'tem sessão? senão /login'; getApiUser() sem o 403 de waitlist (só 401 sem sessão); WAITLIST_API_MESSAGE removida. lib/auth.ts: hook user.create.after reduzido a só gravar auth.signup — saíram seedExampleDatasets (volta chamado pelo bootstrap na US-010), o resgate de invite (body.invite) e o registro de policyAccepted/resolveLocation; auth.additionalFields perdeu approvedAt; imports de lib/example-datasets, lib/invites e lib/policy-acceptance removidos. proxy.ts: PUBLIC_PATHS sem /politica-de-uso/politica-de-privacidade (páginas apagadas) e sem a lógica de reescrever x-beta-invite (import de invite-cookie.ts removido); comentário atualizado. robots.ts (DISALLOWED sem /waitlist,/aceite-politica) e sitemap.ts (PUBLIC_ROUTES só com '/') ajustados. components/auth/auth-shell.tsx: rodapé do login perdeu os links 'Política de Uso'/'Política de Privacidade' (Configurações não tinha esses links — nada a remover lá). rate-limit-policy.ts sem INVITE_REDEEM_RATE_LIMIT (único consumidor era waitlist/actions.ts, apagado). Achado extra: app/page.tsx tinha um mecanismo inteiro (projectsHrefWith) só para preservar `?invite=X` no redirect de '/' para '/projects' — virou dead code com o convite removido; simplificado para redirect('/projects') direto. Ajustes de teste: dataset-layout.test.ts (fixture SessionUser sem approvedAt) e proxy-public-paths.test.ts (exemplos de query string trocados de ?invite= para ?ref=, já que não sobrou nenhuma lógica específica de invite no proxy para os testes exercitarem). Verificação: npm run typecheck/lint/test (32 arquivos, 419 testes — eram 35/449; a queda de 30 bate com os 3 arquivos de teste apagados) e npx prettier --check nos arquivos tocados (limpo). Depois de apagar as pages, typecheck só voltou a passar com npx next typegen + subir next dev uma vez (padrão já registrado). Verificação funcional com Postgres local + Redis avulso + dev server + fixture de org/user/sessão via psql (sem approved_at nem policy_acceptances — tabelas não existem mais) + cookie assinado na mão: '/' com sessão → 307 direto para /projects (sem passar por /aceite-politica nem /waitlist); /waitlist, /aceite-politica, /politica-de-uso, /politica-de-privacidade com sessão → 404 (rotas removidas de verdade); /login sem sessão → sem 'Política de Uso'/'Política de Privacidade' no HTML. Dados fictícios apagados no fim. Nota de processo: HEAD conferido antes e depois de cada etapa (git log) para garantir que nenhuma outra iteração paralela do loop Ralph (ver aviso na nota da US-008) comitasse a mesma story enquanto eu trabalhava."
+    },
+    {
+      "id": "US-010",
+      "title": "Onda 1 · Conta única provisionada por variáveis de ambiente + 1 dataset de exemplo (PRD US-010)",
+      "description": "Como dona do Pocket, quero definir e-mail e senha nas variáveis de ambiente e, no primeiro boot, já ter minha conta criada com o dataset de exemplo.",
+      "acceptanceCriteria": [
+        "Novo apps/web/scripts/bootstrap.mjs (executado pelo CMD do Dockerfile do web DEPOIS de migrate.mjs e antes do server.js): se a tabela users estiver vazia, cria a organização e o usuário via API server-side do Better Auth (auth.api.signUpEmail, bcrypt 12 rounds) com POCKET_EMAIL, POCKET_PASSWORD (mínimo PASSWORD_MIN_LENGTH), POCKET_NAME (default 'Você'), emailVerified = true, e grava auth.bootstrap em audit_logs",
+        "apps/web/seed-assets/ fica só com Credit_Card_Fraud_Example.csv; Projects_Example.xlsx e Sales_Example.xlsx apagados; EXAMPLE_DATASET_FILES em lib/example-datasets.ts reduzido a essa entrada (testes ajustados); Dockerfile/compose do worker conferidos para não referenciar os arquivos removidos",
+        "Depois de criar o usuário, o bootstrap chama seedExampleDatasets(orgId) (o exemplo entra na fila datasets como hoje); se o Redis estiver indisponível, loga aviso e segue — o seed é idempotente por nome e roda de novo no próximo boot enquanto não houver dataset de exemplo",
+        "Idempotente: com usuário já existente não faz nada (não sobrescreve senha). Com users vazia e envs ausentes/inválidas, sai com código ≠ 0 e mensagem em pt-BR dizendo quais envs faltam",
+        "O bootstrap reutiliza getDb()/auth do build (seguir o mesmo padrão de empacotamento do migrate.mjs no Dockerfile do web); apps/web/src/instrumentation.ts ajustado para não conflitar com o bootstrap",
+        ".env.example documenta POCKET_EMAIL, POCKET_PASSWORD, POCKET_NAME; docker-compose.yml repassa ao web",
+        "Teste unitário para a função pura que valida as envs (mensagens de erro) em lib/__tests__",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass (npm test em apps/web)",
+        "Verify: banco zerado + docker compose up → login com as credenciais das envs → /datasets mostra o exemplo processado"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Onda 1 · Configurações, sidebar e layouts enxutos + varredura de código morto (PRD US-011)",
+      "description": "Como usuária do Pocket, quero uma tela de Configurações com só o que faz sentido para uma pessoa.",
+      "acceptanceCriteria": [
+        "app/(app)/settings/page.tsx com três cards: Conta (nome, e-mail, botão 'Trocar senha' com o change-password-dialog.tsx atual), Armazenamento (usado/cota, como hoje), Sessão (botão 'Sair'). Nada de enterprise, IA, predições, 2FA, políticas",
+        "components/app/app-sidebar.tsx: itens Projetos e Datasets; rodapé com nome/e-mail, link Configurações e Sair; nenhum card promocional; selo 'Beta' mantido",
+        "app/(app)/layout.tsx e app/(project)/projects/[projectId]/layout.tsx sem imports mortos (countUnread, ProblemReportCollector, NotificationsBell)",
+        "Varredura de código morto: npx knip (ou ts-prune) executado uma vez em apps/web e todos os exports/arquivos sem uso listados removidos ou justificados no progress.txt; package.json sem deps órfãs (comparar com o inventário da PRD)",
+        "lib/audit.ts: união de ações contém só eventos que ainda são emitidos (grep de cada action: no código)",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass (npm test em apps/web)",
+        "Verify in browser using dev-browser skill: Configurações em 1280 px e 375 px; sidebar recolhida/expandida"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Onda 1 · Checkpoint — fluxo completo ainda em Postgres (PRD US-012)",
+      "description": "Como time, queremos provar que as remoções não quebraram o núcleo antes de trocar o banco.",
+      "acceptanceCriteria": [
+        "docker compose up --build (compose atual, ainda com postgres) sobe os 4 serviços saudáveis; migrations aplicadas em banco zerado sem erro",
+        "Roteiro executado e registrado no progress.txt: login com a conta única → criar projeto → enviar CSV (~500 linhas, alvo categórico) → Preparar mostra grade + distribuições → aplicar uma limpeza (nova versão) → Predição modo Rápido → progresso → relatório com acurácia/matriz/campos → Publicar Web App e prever 1 linha e em lote → publicar API e chamar /api/v1/predict via curl → publicar MCP e listar a tool",
+        "Repetir treino em regressão e forecasting (até o relatório)",
+        "npm run typecheck && npm run lint && npm test verdes; pytest do worker verde",
+        "Contagem de tabelas no schema = 13: organizations, users, sessions, accounts, verifications, projects, datasets, dataset_versions, dataset_columns, training_jobs, models, deployments, audit_logs",
+        "Nenhuma env da lista 'Removidas' da PRD aparece em apps/, docker-compose.yml, .env.example ou README (grep -rn vazio)",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "Checkpoint executado em 2026-09-11 via docker compose up --build real: fluxo completo (classificação/regressão/forecasting) validado ponta a ponta. Detalhes no progress.txt."
+    },
+    {
+      "id": "US-013",
+      "title": "Onda 2 · Schema Drizzle em SQLite, driver libsql e migrations do zero (PRD US-013)",
+      "description": "Como desenvolvedora, quero o web falando com um arquivo SQLite via Drizzle, com uma única migration inicial.",
+      "acceptanceCriteria": [
+        "apps/web/src/db/schema.ts reescrito com sqliteTable seguindo o mapeamento da PRD: pgEnum → text({ enum: [...] }); uuid().defaultRandom() → text().$defaultFn(() => crypto.randomUUID()); jsonb → text({ mode: 'json' }).$type<...>(); timestamp withTimezone → integer({ mode: 'timestamp_ms' }) (Date no TS, epoch ms no banco); bigint → integer; numeric → real; boolean → integer({ mode: 'boolean' }); índices únicos parciais (where) mantidos onde o SQLite suporta",
+        "apps/web/src/db/index.ts: drizzle-orm/libsql + @libsql/client (createClient({ url: 'file:' + SQLITE_PATH })), singleton em globalThis como hoje; ao abrir executa PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL",
+        "Comentário no db/index.ts explicando libsql e não better-sqlite3: as db.transaction(async …) restantes ((app)/datasets/actions.ts, prepare/actions.ts) exigem driver assíncrono",
+        "drizzle.config.ts: dialect 'sqlite', dbCredentials.url = 'file:' + (SQLITE_PATH ?? './data/pocket.db')",
+        "Pasta apps/web/drizzle/ apagada e regenerada: UMA migration 0000_pocket.sql + meta/; scripts/migrate.mjs sem advisory lock, usando o migrator do libsql",
+        "Better Auth: drizzleAdapter(db, { provider: 'sqlite', schema }); tabelas users/sessions/accounts/verifications com os tipos que o adapter espera",
+        "Deps: + @libsql/client, - pg, - @types/pg; DATABASE_URL substituída por SQLITE_PATH em todo o web (default ./data/pocket.db; a pasta é criada se não existir); .gitignore inclui data/",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass (npm test em apps/web)",
+        "Verify: npm run db:migrate em pasta vazia cria data/pocket.db com as 13 tabelas (sqlite3 data/pocket.db .tables)"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Onda 2 · Reescrever o SQL cru e os idiomas Postgres do web (PRD US-014)",
+      "description": "Como desenvolvedora, quero que toda consulta que usava operadores/funções do Postgres funcione no SQLite.",
+      "acceptanceCriteria": [
+        "lib/training-eta.ts: jsonb_typeof(metadata->'durationSeconds') = 'number' → json_type(metadata, '$.durationSeconds') IN ('integer','real'); metadata->>'datasetId' → json_extract(metadata, '$.datasetId'); ::text removido; testes existentes continuam verdes",
+        "lib/mcp-predict.ts, lib/deployment-last-used.ts, lib/api-key-rotation.ts, lib/storage-quota.ts, lib/datasets.ts, lib/deployments.ts, lib/predictions.ts, lib/audit.ts: todo sql`...` revisado — now() → new Date() como parâmetro; ON CONFLICT … DO UPDATE mantido; count/sum com cast(... as integer) onde o Drizzle devolver string",
+        "Comparações de data em where usam Date (o driver converte para epoch ms) — nenhuma string ISO literal em SQL; ilike (se houver) → like com lower() dos dois lados",
+        "grep -rn 'jsonb\\|::uuid\\|::text\\|now()\\|ilike\\|FOR UPDATE\\|pg_' apps/web/src vazio (fora de comentários)",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass (npm test em apps/web)",
+        "Verify in browser using dev-browser skill: upload → Preparar → treino Rápido → relatório contra o SQLite, com estimativa de tempo de treino exibida na tela de progresso (exercita o training-eta)"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Onda 2 · Worker Python em SQLite (PRD US-015)",
+      "description": "Como desenvolvedora, quero o worker lendo e gravando no mesmo arquivo SQLite, sem psycopg.",
+      "acceptanceCriteria": [
+        "apps/worker/jobs/db.py: connect() abre sqlite3.connect(SQLITE_PATH, timeout=5, isolation_level=None) com PRAGMA journal_mode=WAL; busy_timeout=5000; foreign_keys=ON, row_factory = sqlite3.Row; helpers now_ms() (epoch ms UTC), new_id() (str(uuid4())), json_dump/json_load substituem Jsonb",
+        "Em dataset_parse.py, dataset_profile.py, dataset_transform.py, model_train.py, model_predict.py, model_predict_batch.py: placeholders %s → ?; casts ::uuid/::int removidos; now() → ? com now_ms(); Jsonb(x) → json_dump(x); leituras de colunas JSON passam por json_load; booleanos gravados como 0/1; RETURNING e ON CONFLICT mantidos",
+        "Ids gerados no Python onde o Postgres gerava via default (conferir cada INSERT sem id); timestamps lidos do banco convertidos de epoch ms; nenhum datetime com tz enviado direto ao driver",
+        "Transações explícitas (BEGIN IMMEDIATE … COMMIT) nos blocos que hoje usam with conn.transaction(), com retry e backoff (3 tentativas) em sqlite3.OperationalError 'database is locked' nas gravações de progresso de treino",
+        "pyproject.toml: - psycopg[binary]; SQLITE_PATH documentada no apps/worker/CLAUDE.md (substituindo DATABASE_URL)",
+        "Testes do worker: os que mockam db.connect/cursor ajustados; um teste novo grava e lê um dataset em um SQLite temporário aplicando a 0000_pocket.sql do web (fixture lê o arquivo de apps/web/drizzle/)",
+        "Tests pass (pytest do worker)",
+        "Typecheck passes",
+        "Verify: docker compose up com web e worker apontando para o mesmo arquivo via volume → upload processado, treino concluído"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Onda 2 · Concorrência e defaults do Pocket (PRD US-016)",
+      "description": "Como usuária, quero que treinos e uploads simultâneos não travem o banco nem corrompam o arquivo.",
+      "acceptanceCriteria": [
+        "TRAINING_CONCURRENCY default 2 no Pocket (web e worker leem o mesmo default; a estimativa de espera na tela de progresso usa o valor); MODEL_N_JOBS default 2 mantido",
+        "Teste de estresse manual registrado no progress.txt: 3 uploads + 2 treinos disparados em <10 s → todos concluem; grep 'database is locked' nos logs sem falhas definitivas (retries podem aparecer)",
+        "Nenhum processo além de web e worker abre o arquivo; documentado que o worker só inicia após migrate+bootstrap terminarem (contrato para o start.sh da US-018)",
+        "PRAGMA wal_checkpoint(TRUNCATE) executado pelo worker ao ficar ocioso por 5 min — ou justificativa escrita no progress.txt de por que o checkpoint automático basta",
+        "Typecheck passes",
+        "Tests pass (pytest do worker)"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Onda 2 · Checkpoint go/no-go do SQLite (PRD US-017)",
+      "description": "Como owner, quero uma decisão explícita e documentada: SQLite fica, ou voltamos ao Postgres.",
+      "acceptanceCriteria": [
+        "Roteiro completo da US-012 repetido em SQLite (classificação, regressão, forecasting; Web App, API, MCP) e registrado no progress.txt",
+        "Critérios de GO (todos verdadeiros): (1) roteiro passa sem erro; (2) nenhum 'database is locked' definitivo no estresse da US-016; (3) parse de um CSV de 50k linhas ≤ 2× o tempo medido em Postgres na mesma máquina (medir os dois e registrar); (4) npm test + pytest verdes; (5) pocket.db após o roteiro < 200 MB",
+        "Se NO-GO: motivo registrado e o Plano B da PRD (Postgres no Render, imagem única mantida) vira uma story nova no prd.json; as Ondas 1 e 3 não dependem disso",
+        "Decisão escrita no topo da seção 'Banco de dados' do README.md",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Onda 3 · Dockerfile único (web + worker), start.sh e /api/health (PRD US-018)",
+      "description": "Como dona do Pocket, quero uma única imagem que sobe o app inteiro, para caber num serviço do Render com um disco.",
+      "acceptanceCriteria": [
+        "Novo Dockerfile na RAIZ, multi-stage: (a) node:22-bookworm-slim — npm ci + next build (standalone) do apps/web (não usar alpine: o binário nativo do libsql precisa de glibc igual ao runtime); (b) ghcr.io/astral-sh/uv:python3.12-bookworm-slim — uv sync --frozen --no-dev do apps/worker; (c) runner python:3.12-slim-bookworm com o binário node copiado de (a) (/usr/local/bin/node), .next/standalone, public, .next/static, scripts/migrate.mjs, scripts/bootstrap.mjs, drizzle/, seed-assets/, o .venv e o código do worker",
+        "start.sh (raiz, ENTRYPOINT): set -e; mkdir -p \"$DATA_DIR/uploads\"; exporta SQLITE_PATH=\"$DATA_DIR/pocket.db\" e UPLOAD_DIR=\"$DATA_DIR/uploads\" se não definidos; roda node scripts/migrate.mjs → node scripts/bootstrap.mjs; então node server.js & e python main.py &; wait -n — se qualquer um morrer, mata o outro (trap) e sai com o mesmo código",
+        "Usuário não-root (app) dono de /data; EXPOSE 3000; HEALTHCHECK chamando /api/health",
+        "Nova rota apps/web/src/app/api/health/route.ts: GET → 200 { ok: true } se SELECT 1 no SQLite e PING no Redis respondem; 503 com { ok: false, db, redis } caso contrário; pública no proxy.ts",
+        "apps/web/next.config.*: output 'standalone' confirmado e serverExternalPackages inclui @libsql/client se o build reclamar do binário",
+        "Variáveis lidas pela imagem documentadas no topo do Dockerfile: DATA_DIR (default /data), REDIS_URL, AUTH_SECRET, BETTER_AUTH_URL, POCKET_EMAIL, POCKET_PASSWORD, POCKET_NAME, MAX_UPLOAD_MB, STORAGE_QUOTA_MB, TRAINING_CONCURRENCY, MODEL_N_JOBS, TRAINING_MAX_ROWS, API_PREDICT_MAX_ROWS, LAYOUT_REVIEW_ENABLED, INTERNAL_ORIGIN_MODE, API_AUTH_FAIL_MODE",
+        "docker build -t pocket . conclui; docker run com Redis externo sobe, /api/health → 200, imagem final < 1,5 GB (registrar o tamanho no progress.txt)",
+        "apps/web/Dockerfile e apps/worker/Dockerfile removidos (um só ponto de verdade)",
+        "Typecheck passes",
+        "Lint passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Onda 3 · docker-compose.yml de desenvolvimento e .env.example final (PRD US-019)",
+      "description": "Como desenvolvedora, quero docker compose up subindo o Pocket inteiro localmente igual ao Render.",
+      "acceptanceCriteria": [
+        "docker-compose.yml reescrito com 2 serviços: app (build ., porta 3000:3000, volume nomeado data:/data, env_file: .env, depends_on redis healthy) e redis (redis:7 com --maxmemory-policy noeviction e healthcheck); volumes data e redis",
+        "docker-compose.prod.yml removido",
+        ".env.example reescrito com APENAS as envs da US-018, comentário de uma linha cada e valores de dev prontos (POCKET_EMAIL=voce@exemplo.com, POCKET_PASSWORD=troque-esta-senha, AUTH_SECRET= com instrução openssl rand -base64 32, BETTER_AUTH_URL=http://localhost:3000, REDIS_URL=redis://redis:6379)",
+        "Seção 'Desenvolvimento nativo (hot reload)' no README: redis via compose (docker compose up redis), npm run dev em apps/web com SQLITE_PATH=../../data/pocket.db REDIS_URL=redis://localhost:6379, uv run python main.py em apps/worker com os mesmos valores — os dois processos apontam para o mesmo arquivo e a mesma pasta uploads",
+        "Typecheck passes",
+        "Verify: clone limpo → cp .env.example .env → docker compose up --build → login → dataset de exemplo processado → treino Rápido até o relatório (registrar no progress.txt)"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Onda 3 · render.yaml (Blueprint) para deploy em 1 clique (PRD US-020)",
+      "description": "Como dona do Pocket, quero clicar em 'Deploy to Render', informar e-mail e senha, e ter o app no ar.",
+      "acceptanceCriteria": [
+        "Pré-requisito: repositório novo no GitHub criado e git remote set-url origin <novo> feito (o origin atual aponta para rprrafa/automl) — se ainda não existir, registrar no progress.txt e usar um placeholder <URL do repositório> no README",
+        "render.yaml na raiz com: type web, name automl-pocket, runtime docker, dockerfilePath ./Dockerfile, plan starter, region documentada em comentário (sem região no Brasil — ohio ou oregon), healthCheckPath /api/health, disk { name: data, mountPath: /data, sizeGB: 5 }, autoDeploy true",
+        "Serviço type keyvalue, name automl-pocket-redis, plan free, ipAllowList [] (só rede interna), maxmemoryPolicy noeviction (exigido pelo BullMQ)",
+        "envVars do web: REDIS_URL via fromService { type: keyvalue, name: automl-pocket-redis, property: connectionString }; AUTH_SECRET com generateValue true; POCKET_EMAIL, POCKET_PASSWORD, POCKET_NAME com sync false; DATA_DIR=/data; TRAINING_CONCURRENCY=2; MAX_UPLOAD_MB=25; STORAGE_QUOTA_MB=2000",
+        "BETTER_AUTH_URL com fallback: helper único publicBaseUrl() em lib/app-origin.ts devolve process.env.BETTER_AUTH_URL ?? process.env.RENDER_EXTERNAL_URL, usado em lib/auth.ts e onde mais a URL pública for lida; sem nenhuma das duas o app falha no boot com mensagem clara em pt-BR",
+        "Botão no README: [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=<URL do repositório>) com a URL real do repo novo",
+        "Seção 'Deploy no Render' no README: pré-requisitos, o que o Blueprint cria, custo estimado (starter ≈ US$ 7/mês + disco 5 GB ≈ US$ 1,25/mês; Key Value free), aviso de que o Key Value free é efêmero (rejogar o treino se a fila zerar) e como trocar a senha depois (Configurações → Trocar senha; as envs só valem no primeiro boot)",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify: Blueprint aplicado em uma conta Render de teste → serviço healthy → login → upload → treino → relatório → Web App público acessível pela URL onrender.com; registrar URL, tempo de build e observações no progress.txt (se não houver conta Render disponível na iteração, validar o render.yaml com o schema oficial e deixar a verificação manual anotada em notes)"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Onda 3 · README, CLAUDE.md e limpeza final do repositório (PRD US-021)",
+      "description": "Como quem chega no repositório, quero entender em 2 minutos o que é o Pocket, como rodar e como publicar.",
+      "acceptanceCriteria": [
+        "README.md reescrito: o que é (3 linhas), arquitetura (tabela com app = web+worker, redis, disco /data), 'Rodar localmente' (compose e nativo), 'Deploy no Render', 'Variáveis de ambiente' (tabela única com as envs da US-018), 'Banco de dados' (SQLite, onde fica o arquivo, backup: copiar /data ou sqlite3 pocket.db '.backup x.db'), 'Diferenças para o AutoML completo' (lista do que saiu), 'Checks locais' (npm run typecheck && npm run lint && npm test; uv run pytest)",
+        "SECURITY.md substituído por uma seção curta 'Segurança' no README (conta única, HTTPS pelo Render, chaves de API dos deployments, INTERNAL_ORIGIN_MODE/API_AUTH_FAIL_MODE); docs/metricas-uso.md removido",
+        "Pasta .github/ removida por completo (decisão: sem CI)",
+        "PRDs antigos de tasks/ (todos exceto prd-versao-pocket.md) e runbook movidos para tasks/legado/; prd.json/progress.txt da rodada anterior já estão em archive/ (não mexer)",
+        "apps/web/CLAUDE.md e apps/worker/CLAUDE.md atualizados: SQLite/libsql no lugar de Postgres/psycopg, regras de timestamp (epoch ms) e JSON (text), sem menções a Explore, notificações, e-mail, LLM",
+        "package.json do web: name 'automl-pocket-web'; scripts db:* apontando para o config sqlite; script seed:examples mantido",
+        "grep -rni 'postgres\\|psycopg\\|openrouter\\|resend\\|e2b\\|google' --exclude-dir=node_modules --exclude-dir=tasks --exclude-dir=archive . vazio",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify: seguir o README do zero (clone limpo → compose) e chegar ao relatório do modelo; registrar no progress.txt"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

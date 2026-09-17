@@ -1,0 +1,160 @@
+{
+  "project": "AutoML Pocket — primeiro acesso pela interface e limpeza de variáveis de ambiente",
+  "branchName": "ralph/pocket-primeiro-acesso",
+  "description": "Trocar o bootstrap da conta única por variáveis de ambiente (POCKET_EMAIL/POCKET_PASSWORD/POCKET_NAME, scripts/bootstrap.ts) por uma tela de primeiro acesso em /setup: com a tabela users vazia, qualquer visita cai nela; a pessoa define nome, e-mail, senha (medidor fraca/média/forte por regras locais, envio bloqueado abaixo de média) e confirmação; a Server Action cria a conta via Better Auth, audita auth.setup_completed, dispara o seed do dataset de exemplo sem bloquear e o client entra logado. Depois da primeira conta, /setup redireciona e POST /api/auth/sign-up/email responde 403 (hook before + guarda em databaseHooks). Em seguida, remover todo o bootstrap por env e deixar .env.example, docker-compose.yml e README com EXATAMENTE as 17 envs que o código lê (web: SQLITE_PATH, REDIS_URL, AUTH_SECRET, BETTER_AUTH_URL, UPLOAD_DIR, MAX_UPLOAD_MB, STORAGE_QUOTA_MB, TRAINING_CONCURRENCY, TRAINING_MAX_ROWS, API_PREDICT_MAX_ROWS, INTERNAL_ORIGIN_MODE, API_AUTH_FAIL_MODE, LAYOUT_REVIEW_ENABLED, SEED_ASSETS_DIR, SEED_EXAMPLES_ON_BOOT; worker: SQLITE_PATH, REDIS_URL, UPLOAD_DIR, TRAINING_CONCURRENCY, MODEL_N_JOBS, OMP_NUM_THREADS, LAYOUT_REVIEW_ENABLED), sem Postgres nem envs de recursos removidos. O banco JÁ é SQLite (US-013..016 da rodada ralph/pocket, arquivada em archive/2026-09-11-pocket/ com US-017..021 pendentes — não mexer nelas; a PRD nova tem uma seção 'Emendas ao PRD Pocket' que a US-008 copia para tasks/prd-versao-pocket.md). Decisões fechadas: força da senha por regras locais sem dependência nova; nome/e-mail NÃO editáveis depois (só senha, em Configurações); seed do dataset de exemplo ao concluir o setup, com o backfill de instrumentation.ts como rede de segurança; a decisão 'há conta?' fica em server components e nos hooks do Better Auth, nunca no proxy edge (que não abre SQLite). PRD completa em tasks/prd-primeiro-acesso-e-envs.md — ler 'Estado atual relevante', 'Decisões de produto' e 'Technical Considerations' antes de cada story. Regras do projeto: apps/web/CLAUDE.md e apps/worker/CLAUDE.md; sem setState síncrono em useEffect (lint); copy pt-BR em constantes client-safe travadas por teste; prettier --check nos arquivos tocados antes do commit; caminhos absolutos no Bash (o cd persiste); marca 'AutoML', nunca 'Pocket' na UI.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Módulo puro de força da senha e schema do primeiro acesso (PRD US-001)",
+      "description": "Como desenvolvedora, quero as regras de nome/e-mail/senha e a régua de força num módulo puro e testado, para o formulário e o servidor validarem exatamente igual.",
+      "acceptanceCriteria": [
+        "Novo apps/web/src/lib/password-strength.ts (client-safe: sem @/db, sem server-only) exportando PASSWORD_MAX_LENGTH = 72 com comentário de uma linha (bcrypt ignora bytes além de 72 — sem teto a senha seria truncada em silêncio)",
+        "password-strength.ts exporta passwordCriteria(password) → lista ORDENADA de { code, label, met } com os 5 códigos: min_length ('Pelo menos 8 caracteres', usa PASSWORD_MIN_LENGTH de lib/password-change.ts), long ('12 caracteres ou mais'), mixed_case ('Letras maiúsculas e minúsculas'), digit ('Pelo menos um número'), symbol ('Pelo menos um símbolo, ex.: ! ? # @')",
+        "password-strength.ts exporta passwordStrength(password) → 'fraca' | 'media' | 'forte': fraca se min_length não atendido OU ≤ 2 critérios atendidos; media com exatamente 3; forte com 4 ou 5",
+        "password-strength.ts exporta PASSWORD_STRENGTH_LABELS = { fraca: 'Fraca', media: 'Média', forte: 'Forte' } e MIN_ACCEPTED_STRENGTH = 'media'",
+        "Novo apps/web/src/lib/setup.ts (client-safe) exportando SETUP_NAME_MAX_LENGTH = 80 e setupSchema (zod): name trim 1–80; email trim + lowercase + .email(); password 8–72 E passwordStrength(password) !== 'fraca' (refine com SETUP_MESSAGES.weakPassword); confirm igual a password (refine anexado ao campo confirm com SETUP_MESSAGES.mismatch)",
+        "setup.ts exporta SETUP_MESSAGES com: nameRequired, nameTooLong, invalidEmail, weakPassword = 'Escolha uma senha pelo menos média.', mismatch = 'As senhas não coincidem.', alreadyConfigured = 'Esta instância do AutoML já tem uma conta. Entre com ela.', generic = 'Não foi possível criar a conta. Tente novamente.'",
+        "Testes vitest src/lib/__tests__/password-strength.test.ts: 'abcdefgh' → fraca; 'abcdefghijkl' → fraca; 'Abcdefgh1' → media; 'Abcdefgh1!' → forte; 'Abcdefghijkl1' → forte; senha com 73 caracteres rejeitada pelo schema; cada critério de passwordCriteria com met correto",
+        "Testes vitest src/lib/__tests__/setup.test.ts: cada refine do setupSchema falha com a mensagem exata de SETUP_MESSAGES (nome vazio, nome com 81 chars, e-mail inválido, senha fraca, confirmação diferente) e um caso válido passa com email normalizado em lowercase",
+        "lib/auth.ts: emailAndPassword.maxPasswordLength: PASSWORD_MAX_LENGTH (mesma constante importada de password-strength.ts)",
+        "Lint passes e npm test passes (apps/web)",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Server Action completeSetup e bloqueio do cadastro público no Better Auth (PRD US-002)",
+      "description": "Como dona do Pocket, quero que a conta seja criada por uma ação do servidor que só funciona enquanto não existe usuário, e que nenhum outro caminho consiga criar uma segunda conta.",
+      "acceptanceCriteria": [
+        "Novo apps/web/src/lib/setup-state.ts (import 'server-only') exportando hasAccount(): Promise<boolean> = select id from users limit 1 via getDb(); sem cache entre requisições",
+        "Nova Server Action apps/web/src/app/setup/actions.ts → completeSetup(input): (1) valida com setupSchema; erro devolve { ok: false, fieldErrors } por campo; (2) serializa execuções concorrentes com um lock por promise chain em globalThis e, DENTRO do lock, chama hasAccount() — se já existe conta devolve { ok: false, code: 'already_configured' }; (3) cria o usuário via getAuth().api.signUpEmail({ body: { name, email, password } }) (o databaseHooks.user.create.before já cria a organização); (4) marca users.emailVerified = true e grava audit_logs { action: 'auth.setup_completed', orgId, userId, metadata: { email }, ip, userAgent } usando requestMeta(await headers()); (5) dispara seedExampleDatasets(orgId) SEM await bloqueante (void promise.catch(console.warn)) com timeout de 15 s igual ao antigo bootstrap.ts; (6) devolve { ok: true } — o login acontece no client (US-004)",
+        "lib/auth.ts hooks.before: se ctx.path === '/sign-up/email' e await hasAccount() → throw new APIError('FORBIDDEN', { message: 'Cadastro desativado.' }); o signUpEmail server-side da action continua funcionando porque roda antes de existir usuário",
+        "lib/auth.ts databaseHooks.user.create.before: última linha de defesa — se users não está vazia, lança APIError('FORBIDDEN') ANTES de inserir a organização",
+        "União de ações de auditoria (onde 'auth.bootstrap' está declarada — localizar com grep -rn 'auth.bootstrap' apps/web/src): adicionar 'auth.setup_completed' e remover 'auth.bootstrap' (bootstrap.ts pode quebrar no typecheck aqui — se quebrar, trocar a string nele por 'auth.setup_completed' provisoriamente; ele é apagado na US-005)",
+        "Verify por curl contra next dev com SQLite vazio (receita de servidor local no Codebase Patterns): POST /api/auth/sign-up/email com JSON válido → 200/201 (cria); repetir com OUTRO e-mail → 403; sqlite3 <SQLITE_PATH> 'select count(*) from users' → 1. Comandos e saídas registrados no progress.txt",
+        "Lint passes e npm test passes (apps/web)",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Roteamento: tudo leva a /setup enquanto não há conta, e nunca depois (PRD US-003)",
+      "description": "Como pessoa abrindo o Pocket pela primeira vez, quero cair direto na tela de primeiro acesso, e depois de configurar quero que essa tela não exista mais.",
+      "acceptanceCriteria": [
+        "proxy.ts: '/setup' adicionado a PUBLIC_PATHS, com o comentário do array atualizado (tela de primeiro acesso; a decisão 'há conta?' fica no servidor porque o proxy edge não abre o SQLite)",
+        "app/login/page.tsx vira server component: if (!(await hasAccount())) redirect('/setup'); o formulário atual (client) é movido sem mudança de comportamento para app/login/login-form.tsx ('use client')",
+        "Copy do login-form: 'Use o e-mail e a senha definidos na configuração do Pocket.' → 'Use o e-mail e a senha definidos no primeiro acesso.'",
+        "app/setup/page.tsx (server component): se getAuth().api.getSession({ headers }) devolve sessão → redirect('/projects'); senão se await hasAccount() → redirect('/login'); senão renderiza um placeholder <SetupForm /> mínimo em app/setup/setup-form.tsx (só o AuthShell com título 'Primeiro acesso' — o formulário completo é a US-004)",
+        "app/setup/layout.tsx com export const metadata = { title: 'Primeiro acesso' } (mesmo padrão de app/login/layout.tsx)",
+        "Verify in browser using dev-browser skill: com SQLite vazio, http://localhost:3000/ termina em /setup; /login → /setup; /projects → /login → /setup. Com um usuário criado via curl (receita da US-002): /setup → /login sem cookie; /setup → /projects com sessão",
+        "Lint passes (apps/web)",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Tela de primeiro acesso: formulário, medidor de força e login automático (PRD US-004)",
+      "description": "Como pessoa configurando o Pocket, quero definir nome, e-mail e senha numa tela clara, ver a força da senha enquanto digito e entrar logada ao concluir.",
+      "acceptanceCriteria": [
+        "app/setup/setup-form.tsx ('use client') dentro de AuthShell com Logo, título 'Primeiro acesso' e subtítulo 'Crie a conta única desta instância do AutoML. Guarde bem a senha: não há recuperação por e-mail.'",
+        "Campos nesta ordem, cada um com <label htmlFor> e autoComplete: Nome (Input, name, maxLength 80), E-mail (Input type=email, email), Senha (PasswordInput, new-password), Confirmar senha (PasswordInput, new-password)",
+        "Sob 'Senha': medidor de força com 3 segmentos e role='meter', aria-valuemin=0, aria-valuemax=3, aria-valuenow 1–3, aria-valuetext com o rótulo; fraca = 1 segmento bg-destructive, média = 2 bg-amber-500, forte = 3 bg-emerald-500; rótulo textual ao lado (PASSWORD_STRENGTH_LABELS); campo vazio → segmentos bg-muted, aria-valuenow=0 e sem rótulo",
+        "Sob o medidor: checklist dos 5 itens de passwordCriteria no padrão visual do ChangePasswordDialog (ícones Check/X de lucide, texto text-muted-foreground até atender)",
+        "Sob 'Confirmar senha': SETUP_MESSAGES.mismatch em text-destructive SOMENTE quando o campo de confirmação tem conteúdo e difere da senha",
+        "Botão 'Criar conta e entrar' (w-full) desabilitado enquanto setupSchema.safeParse falhar ou a requisição estiver pendente; pendente mostra 'Criando conta…' com Loader2 animate-spin",
+        "Envio: await completeSetup(values) → em ok, await authClient.signIn.email({ email, password }) → router.push('/projects') + router.refresh(); fieldErrors do servidor vão para o campo correspondente; code 'already_configured' mostra SETUP_MESSAGES.alreadyConfigured com um link 'Ir para o login' (href /login); falha de rede/500 mostra SETUP_MESSAGES.generic em <p role='alert' className='text-sm text-destructive'>",
+        "Força, critérios e mismatch são DERIVADOS do estado no render — nenhum useEffect com setState síncrono (react-hooks/set-state-in-effect)",
+        "Nenhuma string de mensagem literal no JSX que já exista em SETUP_MESSAGES/PASSWORD_STRENGTH_LABELS",
+        "Verify in browser using dev-browser skill, com SQLite vazio: (1) 'abcdefgh' → rótulo 'Fraca', botão desabilitado; 'Abcdefgh1' → 'Média'; 'Abcdefgh1!' → 'Forte'; botão habilita quando a confirmação bate; (2) confirmação diferente → mensagem de mismatch; (3) concluir → cai em /projects logado e o card do dataset de exemplo aparece (processando ou pronto) em até 30 s com Redis+worker de pé; (4) Configurações mostra o nome e o e-mail informados; (5) viewport 375 px: painel esquerdo oculto, sem scroll horizontal",
+        "Lint passes e npm test passes (apps/web)",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Remover o bootstrap por variáveis de ambiente (PRD US-005)",
+      "description": "Como desenvolvedora, quero que nada no repositório dependa de POCKET_*, para não haver dois jeitos de criar a conta.",
+      "acceptanceCriteria": [
+        "Apagados: apps/web/scripts/bootstrap.ts, apps/web/scripts/bootstrap.mjs (artefato gerado), apps/web/src/lib/bootstrap-env.ts, apps/web/src/lib/__tests__/bootstrap-env.test.ts",
+        "apps/web/package.json: scripts 'bootstrap' e 'build:bootstrap' removidos; devDependency esbuild removida SE nada mais a usar (grep -rn esbuild apps/web --exclude-dir=node_modules vazio depois) — package-lock.json atualizado com npm install",
+        "apps/web/Dockerfile: linha RUN npm run build:bootstrap e o COPY de scripts/bootstrap.mjs removidos; CMD [\"sh\", \"-c\", \"node scripts/migrate.mjs && node server.js\"]; comentários que descreviam o bootstrap atualizados",
+        ".env.example e docker-compose.yml: linhas POCKET_EMAIL/POCKET_PASSWORD/POCKET_NAME e seus comentários removidos (a reescrita completa desses arquivos é a US-006 — aqui só as POCKET_*)",
+        "README.md, SECURITY.md, apps/web/CLAUDE.md, apps/web/AGENTS.md: toda menção a POCKET_* e ao bootstrap por env removida; onde dizia que a conta é criada no primeiro boot a partir das envs, passa a dizer que é criada na tela de primeiro acesso (/setup) na primeira visita",
+        "Comentários de código que citam bootstrap.ts/US-010 (instrumentation.ts, lib/auth.ts, lib/example-datasets.ts, lib/session.ts e onde mais grep -rn 'bootstrap' apps/web/src encontrar) atualizados para o fluxo /setup",
+        "grep -rn 'POCKET_' --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=archive --exclude-dir=tasks --exclude=progress.txt --exclude=prd.json . → vazio",
+        "docker build -f apps/web/Dockerfile apps/web conclui; docker run da imagem com SQLITE_PATH/REDIS_URL/AUTH_SECRET/BETTER_AUTH_URL (sem POCKET_*) sobe e GET / redireciona até /setup (registrar no progress.txt)",
+        "Lint passes e npm test passes (apps/web)",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": ".env.example e docker-compose.yml só com as 17 envs que o código lê; compose sem Postgres (PRD US-006, parte 1)",
+      "description": "Como quem instala o Pocket, quero abrir o .env.example e ver só o que existe, com valores de desenvolvimento prontos, e subir tudo com docker compose up.",
+      "acceptanceCriteria": [
+        "Antes de editar, confirmar a lista de envs lidas com grep -rhoE 'process\\.env\\.[A-Z0-9_]+' apps/web/src apps/web/scripts (excluindo bootstrap.mjs, já apagado) e grep -rhoE \"environ\\.get\\(['\\\"][A-Z0-9_]+|getenv\\(['\\\"][A-Z0-9_]+\" apps/worker --include='*.py' — desconsiderar as internas de libs (DEBUG, NODE_ENV, LIBC, PREBUILDS_ONLY, etc.); registrar a lista final no progress.txt",
+        ".env.example reescrito com EXATAMENTE as 17 variáveis, uma linha de comentário cada, em 5 grupos: Obrigatórias (AUTH_SECRET vazio com instrução 'openssl rand -base64 32', BETTER_AUTH_URL=http://localhost:3000, REDIS_URL=redis://redis:6379); Armazenamento (SQLITE_PATH=/data/pocket.db, UPLOAD_DIR=/data/uploads, MAX_UPLOAD_MB=25, STORAGE_QUOTA_MB=2000); Treino (TRAINING_CONCURRENCY=2, MODEL_N_JOBS=2, OMP_NUM_THREADS=2, TRAINING_MAX_ROWS com o default atual do código); API/segurança (API_PREDICT_MAX_ROWS=500, INTERNAL_ORIGIN_MODE=report, API_AUTH_FAIL_MODE=report); Avançado (LAYOUT_REVIEW_ENABLED=false, SEED_ASSETS_DIR comentado com o default do código, SEED_EXAMPLES_ON_BOOT=1)",
+        ".env.example não contém POSTGRES_*, DATABASE_URL, POCKET_*, OPENROUTER_*, EXPLORE_*, E2B_*, LLM_*, DAILY_*, MONTHLY_*, RESEND_*, EMAIL_FROM, INTERNAL_API_TOKEN, WEB_INTERNAL_URL, GOOGLE_CLIENT_*",
+        "docker-compose.yml: serviço postgres e seu volume removidos; serviços web e worker com env_file: .env, volume nomeado compartilhado data:/data (SQLite + uploads), depends_on redis com condition: service_healthy; worker também com depends_on web condition: service_healthy, e healthcheck no web (ex.: wget -qO- http://localhost:3000/login) para o migrate.mjs terminar antes do worker abrir o arquivo; nenhuma env injetada fora da lista das 17; redis com --maxmemory-policy noeviction e healthcheck",
+        "docker-compose.prod.yml removido (100% Postgres, sem uso — antecipa o critério da US-019 do PRD Pocket)",
+        "apps/worker/scripts/load_test_training.py removido (importa psycopg/DATABASE_URL, não roda desde a US-015); comentário em apps/worker/tests/test_model_predict.py que cita DATABASE_URL reescrito sem a env",
+        "Verify: em pasta limpa, cp .env.example .env → preencher só AUTH_SECRET → docker compose up --build → http://localhost:3000 abre /setup; concluir o setup → dataset de exemplo fica ready (worker processou pelo volume compartilhado). Tempos e observações no progress.txt; se aparecer SQLITE_CORRUPT ou 'database is locked' definitivo nos logs, registrar em destaque",
+        "uv run pytest passes (apps/worker, receita do CLAUDE.md) e npm test passes (apps/web)",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "README e SECURITY sem Postgres e sem envs mortas; varredura final por menções (PRD US-006, parte 2)",
+      "description": "Como quem lê a documentação do repositório, quero que ela descreva o produto como ele é hoje: SQLite, primeiro acesso em /setup e só as envs que existem.",
+      "acceptanceCriteria": [
+        "README.md: tabela de variáveis de ambiente reescrita com as mesmas 17 envs e os mesmos 5 grupos do .env.example (US-006), com default e uma frase por linha",
+        "README.md: seções que descrevem Postgres, DATABASE_URL, POSTGRES_HOST_PORT, psql ou o container postgres reescritas para SQLite (arquivo em SQLITE_PATH, backup = copiar a pasta /data ou sqlite3 pocket.db '.backup x.db'); nova subseção 'Primeiro acesso' (3–5 linhas) na seção de instalação explicando /setup e que não há recuperação de senha",
+        "SECURITY.md: menções a Postgres e às envs removidas ajustadas; parágrafo sobre a conta única passa a descrever /setup e o bloqueio do cadastro após a primeira conta (a reescrita completa do SECURITY.md fica para a US-021 do PRD Pocket)",
+        "apps/web/CLAUDE.md e apps/worker/CLAUDE.md: nenhuma instrução operacional que dependa de Postgres/psql/DATABASE_URL (podem citar Postgres em UMA frase como 'o que era antes')",
+        "grep -rniE 'POSTGRES|DATABASE_URL|OPENROUTER|E2B_|RESEND|EMAIL_FROM|INTERNAL_API_TOKEN|WEB_INTERNAL_URL|GOOGLE_CLIENT|LLM_|MONTHLY_INFERENCE|psycopg' --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=archive --exclude-dir=tasks --exclude=progress.txt --exclude=prd.json . → vazio, exceto a frase histórica permitida nos dois CLAUDE.md (listar as ocorrências restantes no progress.txt)",
+        "npx prettier --check nos arquivos .md tocados (em apps/web) limpo",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Checkpoint: fluxo completo do zero, segurança conferida e emendas registradas no PRD Pocket (PRD US-007)",
+      "description": "Como owner, quero a prova de que alguém sem contexto sobe o Pocket e chega ao relatório sem tocar em nada além de AUTH_SECRET, e quero as consequências para a Onda 3 anotadas.",
+      "acceptanceCriteria": [
+        "Roteiro registrado no progress.txt com tempos por etapa: docker compose up --build em pasta limpa → /setup → conta criada → dataset de exemplo ready → treino Rápido → relatório → Web App publicado acessível por /app/<slug> → logout → login com as credenciais criadas → Configurações → Alterar senha → logout → login com a senha nova",
+        "Segurança conferida e registrada: após o setup, POST /api/auth/sign-up/email → 403; GET /setup sem cookie → redirect para /login; GET /setup com sessão → redirect para /projects; audit_logs contém, nesta ordem, auth.signup, auth.setup_completed, auth.login (consulta sqlite3 registrada)",
+        "Concorrência: duas requisições completeSetup simultâneas (curl em paralelo via protocolo de Server Action do Codebase Patterns, ou dois POST /api/auth/sign-up/email em paralelo com e-mails diferentes) → select count(*) from users = 1",
+        "docker compose restart web não recria nem altera a conta (count(*) continua 1; login com a mesma senha funciona)",
+        "Seção 'Emendas ao PRD Pocket' de tasks/prd-primeiro-acesso-e-envs.md copiada para o topo de tasks/prd-versao-pocket.md, logo após o cabeçalho, num bloco '## Emendas em 2026-09-11 — ver prd-primeiro-acesso-e-envs.md'",
+        "Nota no progress.txt para a próxima rodada: restaurar archive/2026-09-11-pocket/prd.json com as US-017..021 e aplicar as emendas nos acceptanceCriteria de US-018, US-019 e US-020 antes de rodar",
+        "npm run typecheck && npm run lint && npm test (apps/web) e uv run pytest (apps/worker) verdes na branch final",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

@@ -1,0 +1,467 @@
+{
+  "project": "AutoML — Servidor MCP simplificado, central de notificações, MFA sugerido, primeiros passos e revisão da Home",
+  "branchName": "ralph/ux-mcp-home-tour-notificacoes",
+  "description": "Cinco frentes de UX: (A) tela Servidor MCP com cabeçalho fixo e disclosure por estado (rascunho só configura; publicado só conecta); (B/C) central de notificações in-app (tabela `notifications`, sino no canto superior direito, popover resumido, modal de detalhe, polling 30 s, toast) alimentada pelo worker quando o treino termina, com e-mail via rota interna; (D) sugestão de MFA por notificação, uma vez, 24 h após o cadastro ou após o primeiro modelo, com snooze e dismiss; (E) painel de boas-vindas único + checklist 'Primeiros passos' auto-completável com estado no servidor; (F) home pública com scroll spy, 'Entrar' no header mobile, barra de CTA móvel, FAQ com JSON-LD, footer em 3 colunas e remoção de 'Empresas que confiam'. PRD completa em tasks/prd-ux-mcp-home-tour-notificacoes.md — ler 'Decisões de produto' e 'Considerações técnicas' antes de cada story. Regras do projeto: apps/web/CLAUDE.md (setState nunca síncrono em useEffect; estado de URL via pushState/replaceState; copy em constantes travadas por teste; prettier --check antes do commit).",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Onda 1 · MCP — cabeçalho fixo com a ação primária sempre visível (PRD US-001)",
+      "description": "Como usuário, quero ver e clicar em 'Publicar' (ou 'Salvar alterações') sem rolar, em qualquer tamanho de tela.",
+      "acceptanceCriteria": [
+        "Novo componente client apps/web/src/components/app/deployment-page-header.tsx: à esquerda link '← Publicar' para /projects/{id}/deploy, título 'Servidor MCP' e Badge de status (Publicado / Não publicado); à direita a ação primária e um DropdownMenu 'Mais ações' (ícone MoreHorizontal); container `sticky top-0 z-20 bg-background/95 backdrop-blur border-b`; props genéricas (title, statusBadge, primaryAction {label, icon, onClick, disabled, pending, disabledReason}, menuItems) para reaproveitar na tela da API depois",
+        "Em apps/web/src/app/(project)/projects/[projectId]/deploy/mcp/mcp-config.tsx o header antigo (linha com ArrowLeft + h1 + Badge) e o bloco de botões do fim da sidebar são substituídos pelo novo cabeçalho: rascunho → primária 'Publicar' (ícone Globe) e item de menu 'Salvar rascunho'; publicado → primária 'Salvar alterações' (ícone Check, disabled sem `dirty`) e itens de menu 'Rotacionar chave', 'Revogar chave', 'Despublicar' reutilizando os diálogos de confirmação de DeploymentKeyActions em apps/web/src/components/app/deployment-key-controls.tsx (refatorar para exportar os diálogos com trigger controlado por `open`/`onOpenChange`, sem duplicar texto); a mecânica de handlePublish/handleSave/handleRotate/handleRevoke/handleUnpublish não muda",
+        "Estado pendente mostra Loader2 na ação primária (como hoje); com `canSubmit` falso a ação fica disabled e o botão tem `title` com o motivo ('Informe um nome para o servidor.' ou 'Selecione pelo menos um campo.'), as mensagens continuam junto dos campos",
+        "Abaixo de 640 px (`sm`) o cabeçalho mantém título/status no topo e a ação primária vai para uma barra inferior `fixed bottom-0 inset-x-0` com `pb-[env(safe-area-inset-bottom)]`; o conteúdo da página ganha `pb-24` nesse breakpoint para nada ficar coberto",
+        "Em 1366×768 com um modelo de 20 campos, 'Publicar' está visível sem rolagem",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill: 1366×768, 1280×720 e 375×812, em rascunho e publicado; menu 'Mais ações' abre os diálogos de rotacionar/revogar/despublicar"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Onda 1 · MCP — rascunho mostra só o passo Configurar, com as integrações visíveis (PRD US-002)",
+      "description": "Como usuário que ainda não publicou, quero uma tela curta com o que preciso preencher, mas já sabendo com quais agentes vou poder conectar.",
+      "acceptanceCriteria": [
+        "Em mcp-config.tsx a faixa `<ol>` de 3 cards (STEPS) vira um stepper de uma linha '1 Configurar · 2 Conectar · 3 Usar' com os ícones atuais em 16 px, passo atual em `text-primary` com `aria-current=\"step\"`, demais em `text-muted-foreground`; passo atual = 1 em rascunho, 2 em publicado",
+        "Quando `status === \"draft\"`, o layout de duas colunas (aside + section) é substituído por uma coluna única `mx-auto max-w-2xl` contendo apenas: Nome do servidor, Descrição e fieldset 'Selecionar campos' (mesma lista e 'Selecionar todos', `max-h-[40vh]`, mais um contador 'N de M campos selecionados' abaixo da legenda)",
+        "Abaixo dos campos, faixa 'Depois de publicar, conecte a:' com 4 chips não clicáveis (ícone + nome, ícone `aria-hidden`) para os ids em nova constante `FEATURED_AGENT_IDS = [\"claude\", \"chatgpt\", \"cursor\", \"vscode\"]` ao lado de AGENTS, e um quinto chip 'e outros' envolto em Tooltip (components/ui/tooltip.tsx) listando os nomes dos demais agentes de AGENTS; sem campo de busca, sem URL, sem placeholder SUA_CHAVE_API, sem cards de agente clicáveis",
+        "'Tool predict' (lista de parâmetros) e DeploymentSecurityPractices ficam em `<details>` nativos fechados por padrão no fim da coluna, com `<summary>` 'Tool predict — N parâmetros' e 'Boas práticas de segurança — 4 itens' e ícone ChevronDown que gira via `group-open:rotate-180`",
+        "O aviso âmbar 'Publique o servidor primeiro…' e o bloco 'Endpoint MCP' com URL+token deixam de ser renderizados em rascunho",
+        "Nenhuma mudança em deploy/mcp/actions.ts, no payload das actions nem na lógica de `dirty`/`canSubmit`/`savedSnapshot`",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill: deployment em rascunho em 1280 px e 375 px; tooltip do chip 'e outros'; details abrem/fecham por teclado"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Onda 1 · MCP — publicado vira a tela 'Conectar', com configuração recolhida (PRD US-003)",
+      "description": "Como usuário com o servidor publicado, quero ir direto às instruções de conexão do meu agente e mexer na configuração só quando precisar.",
+      "acceptanceCriteria": [
+        "Quando `status === \"published\"`, coluna única `mx-auto max-w-3xl` na ordem: (1) bloco DeploymentKeyStatus — com `revealedKey` presente, o container ganha `border-primary` e o aviso 'Copie a chave agora — ela não será exibida de novo' em destaque; (2) seção 'Escolha seu agente de IA' com busca e grade de cards (4 colunas em lg, 3 em sm, 2 abaixo) sempre habilitada; (3) `<details>` 'Configuração do servidor'; (4) `<details>` 'Tool predict' e 'Boas práticas de segurança' (da US-002)",
+        "Ao selecionar um agente, o bloco de instruções ('Conectar ao {agente}') renderiza logo abaixo da grade de cards e recebe `scrollIntoView({ block: \"nearest\", behavior })` com behavior 'smooth' só quando `matchMedia('(prefers-reduced-motion: reduce)')` é falso; desmarcar o agente esconde o bloco",
+        "O bloco 'Endpoint MCP' do topo é removido: a URL aparece só dentro das instruções (buildInstructions já a inclui); link discreto 'Ver URL e header genéricos' abaixo da grade seleciona o agente 'other'",
+        "`<details>` 'Configuração do servidor' tem summary com resumo '{título} · {n} campos' e, aberto, mostra Nome, Descrição e a lista de campos (mesmos inputs de hoje); quando `dirty` é true, o summary mostra Badge 'Alterações não salvas' e a ação primária 'Salvar alterações' (US-001) fica habilitada; após salvar o badge some",
+        "Ao despublicar, a tela volta ao layout de rascunho (US-002) e `agentId` é limpo (comportamento atual de handleUnpublish)",
+        "Sem agente selecionado, a tela publicada tem no máximo 14 elementos interativos visíveis (cabeçalho 3, chave 2, busca 1, 7 cards, 1 summary) — verificar contando no browser",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill: publicar → chave revelada em destaque → escolher Claude → instruções aparecem abaixo → copiar → recarregar (prefixo, sem chave) → abrir configuração → alterar campo → badge 'Alterações não salvas' → salvar → despublicar volta ao rascunho"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Implementada 2026-09-05. Contagem real de interativos sem agente: 15 (16 com a chave revelada) — o AC soma 14 mas omite o link 'Ver URL e header genéricos' e os dois <details> da US-002 que o próprio AC exige; todos os elementos são os mandatados."
+    },
+    {
+      "id": "US-004",
+      "title": "Onda 2 · Notificações — tabela `notifications`, tipos, copy compartilhada e helpers puros (PRD US-004 parte 1, US-017 coluna)",
+      "description": "Como desenvolvedor, preciso de um lugar durável e tipado para notificações in-app, com desduplicação, para que web e worker gravem do mesmo jeito.",
+      "acceptanceCriteria": [
+        "apps/web/src/db/schema.ts ganha `notifications`: id uuid pk defaultRandom, user_id uuid not null references users (onDelete cascade), org_id uuid not null references organizations, type text not null, title text not null, body text, href text, dedupe_key text, metadata jsonb, read_at timestamptz, emailed_at timestamptz, ...timestamps; índice `notifications_user_read_created_idx (user_id, read_at, created_at desc)`; unique parcial `notifications_user_dedupe_key_uidx (user_id, dedupe_key) where dedupe_key is not null` (adicionar o `where` à mão no SQL gerado se o drizzle-kit não o emitir)",
+        "Migration gerada com `npx drizzle-kit generate --name notifications` (deve sair como 0028_notifications.sql) e aplicada com `npm run db:migrate` no banco local",
+        "Módulo puro client-safe apps/web/src/lib/notifications.ts: `NOTIFICATION_TYPES = [\"training.succeeded\", \"training.failed\", \"security.mfa_suggestion\"] as const`, tipo `NotificationType`, `notificationIcon(type)` (CheckCircle2 / AlertCircle / ShieldCheck do lucide), `notificationActionLabel(type)` ('Ver relatório do modelo' / 'Ver detalhes do treinamento' / 'Ativar agora'), `formatNotificationTime(createdAtIso, nowMs)` reusando formatRelativeAgo de apps/web/src/lib/deployment-key-format.ts, `MAX_UNREAD_BADGE = 9` e `unreadBadgeLabel(n)` ('' para 0, '9+' acima de 9)",
+        "Fixture apps/web/src/lib/__fixtures__/notification-copy.json com os templates de treino (chaves `trainingSucceeded.title/body`, `trainingFailed.title/body`, placeholders `{projectName}`, `{duration}`, `{metricLabel}`, `{metricValue}`, `{reason}`): sucesso 'Modelo de {projectName} pronto' / 'Treinamento concluído em {duration}. {metricLabel}: {metricValue}. Veja o relatório.'; falha em tom neutro 'Treinamento de {projectName} não concluído' / 'Não foi possível terminar o treinamento: {reason}. Você pode tentar de novo.'",
+        "apps/web/src/lib/notification-copy.ts importa o fixture e expõe `trainingSucceededNotification({ projectName, duration, metricLabel, metricValue })`, `trainingFailedNotification({ projectName, reason })` e `MFA_SUGGESTION_NOTIFICATION = { title: 'Proteja sua conta com verificação em duas etapas', body: 'Você entra com email e senha. Ative o código do app autenticador em Configurações → Segurança; leva 2 minutos.', href: '/settings?ativar-2fa=1' }`",
+        "Testes Vitest em apps/web/src/lib/__tests__/notifications.test.ts: unreadBadgeLabel (0, 1, 9, 10), notificationActionLabel para os 3 tipos, templates substituem todos os placeholders e não deixam `{` sobrando",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Onda 2 · Notificações — módulo server-only e server actions de leitura/escrita (PRD US-004 parte 2)",
+      "description": "Como desenvolvedor, preciso de funções únicas para criar, listar, contar e marcar notificações, usadas pela UI, pelo login e pelas rotas.",
+      "acceptanceCriteria": [
+        "apps/web/src/lib/notifications-server.ts (`import \"server-only\"`): `createNotification({ userId, orgId, type, title, body, href, dedupeKey, metadata, replaceIfRead? })` — insert com `onConflictDoNothing` no índice único; com `replaceIfRead: true`, se já existir uma linha lida com a mesma dedupe_key, apaga-a antes de inserir (transação); devolve `{ id } | null`; `listNotifications(userId, { limit = 20, before?: { createdAt, id } })` ordenado por created_at desc, id desc; `countUnread(userId)`; `markRead(userId, ids)`; `markAllRead(userId)` (grava `notification.read_all` em audit_logs via logAudit com `{ count }`); `resolveByDedupeKey(userId, key)` (marca lida se não lida); `pollSince(userId, sinceId)` → `{ unread, items }` com itens de id mais novo que sinceId (comparar por created_at do sinceId)",
+        "Server actions em apps/web/src/components/app/notifications-actions.ts (`\"use server\"`), todas com requireSession e escopo pelo user.id da sessão (nunca aceitar userId do client): `pollNotifications(sinceId: string | null)`, `loadNotifications(before)`, `markNotificationRead(id)`, `markAllNotificationsRead()`; retornam objetos serializáveis (datas em ISO)",
+        "Testes Vitest em apps/web/src/lib/__tests__/notifications-server.test.ts usando o helper de banco de teste já usado pelos testes de deployments (procurar em src/lib/__tests__ como os testes de `findPublished*` obtêm conexão): segundo createNotification com mesma dedupe_key não cria; replaceIfRead substitui só quando a existente está lida; listNotifications pagina por `before`; markAllRead zera countUnread",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Onda 2 · Notificações — sino no canto superior direito com popover resumido (PRD US-005 parte 1)",
+      "description": "Como usuário, quero ver no canto superior direito quantas notificações novas tenho e passar o olho na lista resumida.",
+      "acceptanceCriteria": [
+        "Adicionar `Popover` do shadcn em apps/web/src/components/ui/popover.tsx (npx shadcn add popover, ajustando ao padrão dos demais componentes de ui/)",
+        "Componente client apps/web/src/components/app/notifications-bell.tsx com props `variant: \"app\" | \"navbar\"` e `initialUnread: number`: botão 36 px com ícone Bell 16 px, `aria-label` 'Notificações' ou 'Notificações, {n} não lidas', badge 18 px `bg-primary text-white text-[10px]` em `-top-1 -right-1` com unreadBadgeLabel (oculta em 0); `variant=\"navbar\"` copia as classes do ProblemReportButton variant navbar (fundo escuro); `variant=\"app\"` usa Button variant ghost",
+        "Posicionamento: apps/web/src/app/(app)/layout.tsx envolve `<main>` em um `div.relative.flex-1.min-w-0` e renderiza `<NotificationsBell variant=\"app\" initialUnread={await countUnread(user.id)} />` em `absolute top-4 right-6 z-30`; o bloco da direita do cabeçalho em (app)/projects/projects-view.tsx (busca + Novo projeto), (app)/datasets/datasets-view.tsx e (app)/settings/page.tsx ganha `pr-12` para não ficar sob o sino; apps/web/src/components/project/project-navbar.tsx recebe prop `initialUnread` do layout (project)/projects/[projectId]/layout.tsx e renderiza `<NotificationsBell variant=\"navbar\" />` à esquerda do ProblemReportButton; AppSidebar não muda",
+        "Popover alinhado à direita, `w-[380px] max-w-[calc(100vw-2rem)]`: cabeçalho 'Notificações' + botão de texto 'Marcar todas como lidas' (só quando unread > 0, chama markAllNotificationsRead e zera o badge); lista carregada ao abrir via loadNotifications (20 itens), cada item: ícone do tipo (notificationIcon), título `font-medium truncate`, corpo `line-clamp-1 text-muted-foreground`, tempo relativo (formatNotificationTime com relógio de useClientClock); não lidas com ponto `bg-primary` à esquerda e `bg-muted/40`; lidas com título em `text-muted-foreground`; rodapé 'Carregar mais' enquanto a última página vier cheia",
+        "Estado vazio: ícone BellOff em círculo `bg-muted` e texto 'Nenhuma notificação por enquanto. Avisamos aqui quando um treinamento terminar.' (constante em apps/web/src/lib/notification-copy.ts)",
+        "Clicar num item, nesta story, marca como lida (markNotificationRead) e navega para `href` com router.push (o modal entra na US-007)",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill: /projects (sino não colide com 'Novo projeto'), /datasets, /settings, navbar de um projeto; popover vazio; com linhas inseridas via SQL, lista com lidas/não lidas, 'Marcar todas como lidas', 'Carregar mais' com 25 linhas; 375 px"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Onda 2 · Notificações — modal de detalhe ao clicar numa notificação (PRD US-005 parte 2)",
+      "description": "Como usuário, quero abrir uma notificação e ver o conteúdo completo com a ação principal, sem sair da tela onde estou.",
+      "acceptanceCriteria": [
+        "Componente client apps/web/src/components/app/notification-dialog.tsx: Dialog (components/ui/dialog.tsx) `max-w-md` com ícone do tipo em círculo `bg-primary/10 text-primary` (âmbar `bg-amber-100 text-amber-700` para training.failed), título, linha 'há X min · DD/MM/AAAA HH:MM' (pt-BR), corpo completo, bloco de detalhes por tipo lido de `metadata` (treino: projeto, duração formatada com formatApproxDuration de lib/training-eta-format.ts, métrica e valor quando presentes; MFA: nenhum detalhe extra nesta story) e rodapé com botão primário `notificationActionLabel(type)` que faz router.push(href) e fecha",
+        "No NotificationsBell, clicar num item da lista fecha o popover e abre o modal com aquele item; abrir o modal chama markNotificationRead (se não lida) e atualiza a lista e o badge na hora (estado local, sem esperar polling); fechar o modal não reabre o popover",
+        "Prop opcional `openNotificationId` controlada externamente (usada pelo toast na US-008) para abrir o modal de um item já carregado ou carregá-lo por id via nova server action `getNotification(id)` em notifications-actions.ts (escopo pela sessão)",
+        "Foco e Esc gerenciados pelo Radix; `DialogDescription` presente (pode ser o corpo) para não disparar warning de acessibilidade",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill: abrir item não lido → modal → badge cai → botão primário navega; item de treino falho mostra ícone âmbar; 375 px"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Onda 2 · Notificações — polling de 30 s, toast para treino e anúncio acessível (PRD US-005 parte 3)",
+      "description": "Como usuário, quero que o sino se atualize sozinho e que um aviso de treino apareça mesmo se eu estiver em outra tela.",
+      "acceptanceCriteria": [
+        "NotificationsBell faz polling com `setInterval` de 30 s chamando pollNotifications(lastSeenId) dentro de um useEffect; todo setState acontece no callback assíncrono (nunca síncrono no corpo do effect — regra do React Compiler do projeto); o intervalo é pausado quando `document.hidden` e retomado em `visibilitychange` (limpeza correta no unmount)",
+        "Itens novos que chegam pelo polling entram no topo da lista (se carregada) e incrementam o badge; `lastSeenId` avança para o id mais novo",
+        "Para cada item novo com `type` começando em 'training.' e não lido, dispara `toast(title, { description: body, action: { label: 'Abrir', onClick: abre o modal da US-007 } })` (sonner), exceto quando `usePathname()` casa com `/projects/{projectId}/predict/jobs/{jobId}` e `metadata.trainingJobId === jobId` (a tela do job já mostra o resultado)",
+        "Região `sr-only` com `aria-live=\"polite\"` anuncia 'Você tem {n} notificações não lidas' sempre que o contador aumenta (não anuncia ao diminuir)",
+        "Teste Vitest puro em apps/web/src/lib/__tests__/notifications.test.ts para o helper `shouldToastNotification({ type, readAt, pathname, trainingJobId })` extraído para lib/notifications.ts: treino não lido fora da página do job → true; na página do mesmo job → false; tipo MFA → false; lido → false",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill: com a página /projects aberta, inserir uma notificação training.succeeded via SQL para o usuário → em até 30 s o badge sobe e o toast aparece → 'Abrir' abre o modal"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Onda 2 · Treino — worker grava a notificação na mesma transação do status (PRD US-006)",
+      "description": "Como usuário, quero ser avisado quando o treino terminar (ou não concluir), mesmo que eu tenha saído da tela.",
+      "acceptanceCriteria": [
+        "apps/worker/jobs/notification_copy.py carrega apps/web/src/lib/__fixtures__/notification-copy.json (caminho resolvido a partir da raiz do repo; se o arquivo não existir, usa um dicionário embutido idêntico) e expõe `training_succeeded(project_name, duration_seconds, metric_name, metric_value)` e `training_failed(project_name, reason)` devolvendo `(title, body)`; duração formatada em pt-BR ('2 min', '1 h 05 min'); métrica no formato já usado pela UI (F1 com 2–3 casas, RMSE 2 casas, MAPE em %)",
+        "apps/worker/Dockerfile copia o fixture JSON para o caminho que notification_copy.py procura dentro da imagem",
+        "Em apps/worker/jobs/model_train.py, novo `_notify_training_outcome(conn, *, org_id, training_job_id, project_id, project_name, outcome, title, body, metadata)` que faz `INSERT INTO notifications (user_id, org_id, type, title, body, href, dedupe_key, metadata) SELECT u.id, %s, ... FROM users u WHERE u.org_id = %s ON CONFLICT (user_id, dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING RETURNING id`, com `dedupe_key = 'training:<job_id>'`, e devolve a lista de ids criados",
+        "Chamado ANTES do `conn.commit()` no caminho de sucesso (junto de `_log_training_event(action=\"training.succeeded\")`, com href `/projects/{project_id}/predict`, metadata `{trainingJobId, modelId, durationSeconds, metricName, metricValue}`) e no caminho de falha (junto de `training.failed`, href `/projects/{project_id}/predict/jobs/{job_id}`, metadata `{trainingJobId}`, `reason` = primeira frase da error_message já sanitizada, ≤ 140 chars); os ids retornados são guardados numa variável para a US-012 (por enquanto só logados em nível debug)",
+        "Nunca colocar dados do dataset em title/body/metadata",
+        "Testes pytest em apps/worker/tests: sucesso e falha criam exatamente uma notificação por usuário da org; rodar o mesmo job duas vezes não duplica; title/body batem com o fixture; testes existentes de model_train continuam passando",
+        "Typecheck passes",
+        "Tests pass (pytest do worker no container, conforme CLAUDE.md do worker)"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Onda 2 · Treino — tela do job sem redirect automático e notificação resolvida ao ver o resultado (PRD US-007)",
+      "description": "Como usuário, quero que o aviso de 'Treinamento concluído' na própria tela e a notificação contem a mesma história, sem me tirar da tela sem querer.",
+      "acceptanceCriteria": [
+        "Em apps/web/src/app/(project)/projects/[projectId]/predict/jobs/[jobId]/training-progress.tsx o useEffect que faz `router.replace('/projects/{id}/predict')` após succeeded é removido; no lugar, o estado succeeded mostra botão primário 'Ver relatório do modelo' (Link para /projects/{id}/predict) e link secundário 'Voltar aos projetos' (/projects), mantendo o ProductionCtaBanner e as métricas atuais",
+        "apps/web/src/app/(project)/projects/[projectId]/predict/jobs/[jobId]/page.tsx chama `resolveByDedupeKey(user.id, 'training:<jobId>')` quando o status carregado é succeeded ou failed (server, antes de renderizar), para o badge não contar um resultado que o usuário já está vendo",
+        "Textos novos como constantes (procurar onde ficam os textos atuais da tela de treino e seguir o padrão)",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill: iniciar um treino, navegar para /projects, ver o sino contar e o toast aparecer ao concluir; abrir o job → notificação marcada lida (badge cai) e sem redirect automático"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Onda 2 · E-mail — template e rota interna que envia o e-mail de treino (PRD US-017 parte 1)",
+      "description": "Como usuário que fechou a plataforma enquanto o modelo treinava, quero receber um e-mail quando terminar, com link direto para o resultado.",
+      "acceptanceCriteria": [
+        "apps/web/src/lib/email-templates.ts ganha `buildTrainingOutcomeEmail({ title, body, actionLabel, actionUrl })` seguindo o layout dos e-mails de senha existentes (título, um parágrafo, botão com link absoluto, rodapé), assunto = title; teste Vitest de snapshot leve (contém título, corpo, URL e nenhum `{` de placeholder)",
+        "Rota apps/web/src/app/api/internal/notifications/email/route.ts (POST): exige header `X-Internal-Token` igual a `process.env.INTERNAL_API_TOKEN` comparado com `crypto.timingSafeEqual` (tamanhos diferentes → 401 sem comparar); sem env configurada responde 503 e faz `console.error` uma vez por processo; body `{ notificationId: uuid }` validado com zod; carrega a notificação com o e-mail do usuário; se `type` começa com 'training.' e `emailed_at` é nulo, envia via `sendEmail` de lib/email.ts com o template e `actionUrl = appOrigin() + href`, depois `UPDATE notifications SET emailed_at = now() WHERE id = $1 AND emailed_at IS NULL` (se 0 linhas atualizadas, não envia — checar antes com `UPDATE ... RETURNING` para garantir idempotência); outros tipos ou já enviada → 204; erro do Resend → 502 com mensagem fixa (sem detalhes)",
+        "apps/web/src/proxy.ts ganha allowlist `INTERNAL_PATHS = ['/api/internal/']` tratada antes da checagem de sessão: a rota não exige sessão e NÃO entra em PUBLIC_PATHS; teste do proxy existente ganha caso para /api/internal/notifications/email (não redireciona para /login)",
+        "Testes Vitest da rota: sem token → 401; token errado → 401; token certo com notificação training → envia uma vez (mock de EmailClient) e grava emailed_at; segunda chamada → 204 sem enviar; tipo security.mfa_suggestion → 204 sem enviar",
+        "`.env.example` (web) documenta `INTERNAL_API_TOKEN`; SECURITY.md ganha parágrafo sobre a rota interna e o token (server-to-server, sem sessão, comparação em tempo constante)",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "Handler em src/lib/notification-email.ts (deps injetáveis) + route.ts só com wiring; claim de emailed_at ANTES do envio (UPDATE ... RETURNING) e release em falha do provedor (502). /api/internal/ entrou em EXCLUDED_PREFIXES do teste anti-CORS (server-to-server por token). INTERNAL_API_TOKEN documentado no .env.example da raiz (apps/web não tem .env.example)."
+    },
+    {
+      "id": "US-012",
+      "title": "Onda 2 · E-mail — worker chama a rota interna depois do commit (PRD US-017 parte 2)",
+      "description": "Como operador, quero que o e-mail de treino saia automaticamente após o commit, sem que uma falha no envio afete o job.",
+      "acceptanceCriteria": [
+        "apps/worker/jobs/notifications_email.py: `dispatch_notification_emails(notification_ids)` faz POST `{WEB_INTERNAL_URL}/api/internal/notifications/email` para cada id com header `X-Internal-Token: {INTERNAL_API_TOKEN}`, timeout 5 s, 1 retry com 2 s de espera em erro de rede/5xx; qualquer falha só faz `logger.warning` com o id (nunca lança); sem `WEB_INTERNAL_URL` ou token configurados, loga uma vez e não chama",
+        "Em model_train.py, os ids devolvidos por `_notify_training_outcome` (US-009) são passados para `dispatch_notification_emails` DEPOIS do `conn.commit()` de sucesso e de falha (nunca antes)",
+        "docker-compose.yml e docker-compose.prod.yml passam `INTERNAL_API_TOKEN` para web e worker e `WEB_INTERNAL_URL` para o worker (URL interna do serviço web na rede do compose, ex.: http://web:3000); apps/worker/README.md e o `.env.example` do worker documentam as duas variáveis",
+        "Testes pytest: POST mockado (responses/httpx mock) chamado com header e body corretos; erro de rede não propaga; sem env não chama; teste de model_train garante que o dispatch acontece após o commit (mock do commit registra ordem)",
+        "Typecheck passes",
+        "Tests pass (pytest do worker no container)",
+        "Verify in browser using dev-browser skill: com RESEND_API_KEY ausente (dev loga o e-mail no console), rodar um treino e confirmar no log do web o e-mail 'Modelo de {projeto} pronto' e `emailed_at` preenchido no banco"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Onda 3 · MFA — colunas de snooze/dismiss e regra pura de elegibilidade (PRD US-008 parte 1)",
+      "description": "Como desenvolvedor, preciso de uma regra única e testada que diga quando sugerir a verificação em duas etapas.",
+      "acceptanceCriteria": [
+        "schema.ts: `users.mfa_prompt_dismissed_at timestamptz` e `users.mfa_prompt_snoozed_until timestamptz` (nulos por padrão); migration gerada com `npx drizzle-kit generate --name users-mfa-prompt` e aplicada",
+        "Módulo puro apps/web/src/lib/mfa-suggestion.ts: `MFA_SNOOZE_DAYS = 30`, `MFA_SUGGESTION_MIN_ACCOUNT_AGE_MS = 24 h`, `shouldSuggestMfa({ hasPasswordAccount, twoFactorEnabled, createdAt, now, dismissedAt, snoozedUntil, hasTrainedModel })` → true só se hasPasswordAccount && !twoFactorEnabled && !dismissedAt && (!snoozedUntil || snoozedUntil <= now) && (now - createdAt >= 24 h || hasTrainedModel); `snoozeUntil(now)` devolve now + 30 dias",
+        "Testes Vitest apps/web/src/lib/__tests__/mfa-suggestion.test.ts cobrindo: conta Google → false; 2FA ativo → false; conta com 1 h e sem modelo → false; conta com 1 h e com modelo → true; conta com 25 h → true; dismissed → false; snooze no futuro → false; snooze expirado → true",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Onda 3 · MFA — criação da sugestão no login e após o primeiro modelo, e resolução ao ativar (PRD US-008 parte 2)",
+      "description": "Como usuário que entra com senha, quero ser convidado a ativar a verificação em duas etapas num momento que não atrapalhe meu começo.",
+      "acceptanceCriteria": [
+        "apps/web/src/lib/mfa-suggestion-server.ts (`server-only`): `maybeCreateMfaSuggestion(userId)` carrega users (created_at, two_factor_enabled, mfa_prompt_*), existência de accounts provider_id='credential' e `exists(models where org_id = user.org_id)`, aplica shouldSuggestMfa e, se true, chama createNotification com type 'security.mfa_suggestion', MFA_SUGGESTION_NOTIFICATION, `dedupeKey: 'mfa-suggestion'`, `replaceIfRead: true`; quando cria, grava `security.mfa_suggested` em audit_logs via logAudit",
+        "Gatilho 1: no plugin de auditoria de login em apps/web/src/lib/auth.ts, no mesmo after hook que grava `auth.login` com método email (não Google), chamar `maybeCreateMfaSuggestion(userId)` após o logAudit, embrulhado em try/catch que só loga (nunca quebra o login)",
+        "Gatilho 2: a server action pollNotifications (US-005) chama maybeCreateMfaSuggestion no máximo uma vez por hora por usuário, usando um cookie httpOnly `mfa-suggestion-checked` com maxAge 3600 como memo (sem cache global); a página (app)/projects/page.tsx faz o mesmo no server antes de countUnread",
+        "Ao ativar o 2FA: no hook de auditoria que grava `auth.2fa_enabled` (twoFactorManageAuditAction em auth.ts), chamar `resolveByDedupeKey(userId, 'mfa-suggestion')`",
+        "docs/metricas-uso.md ganha a consulta 'Funil MFA: security.mfa_suggested → auth.2fa_enabled em 30 dias'",
+        "Teste Vitest de integração leve para maybeCreateMfaSuggestion com o helper de banco de teste: usuário elegível cria 1 notificação; chamar de novo não duplica; usuário Google não cria",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill: conta email/senha com `created_at` ajustado via SQL para −25 h → sair e entrar → sino mostra 1 com 'Proteja sua conta…'; conta só Google → nada"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Onda 3 · MFA — ações 'Ativar agora / Lembrar depois / Não sugerir de novo' no modal e abertura direta do diálogo de 2FA (PRD US-009)",
+      "description": "Como usuário, quero decidir 'agora', 'depois' ou 'nunca' direto na notificação e, se escolher agora, cair no passo de ativação.",
+      "acceptanceCriteria": [
+        "Server actions em notifications-actions.ts: `snoozeMfaSuggestion()` grava users.mfa_prompt_snoozed_until = snoozeUntil(now) e marca a notificação lida; `dismissMfaSuggestion()` grava users.mfa_prompt_dismissed_at = now() e marca lida; ambas escopadas pela sessão",
+        "No NotificationDialog (US-007), itens `security.mfa_suggestion` mostram três ações no rodapé: 'Ativar agora' (primário, router.push(href)), 'Lembrar depois' (snooze, fecha o modal, toast 'Vamos lembrar você em 30 dias'), 'Não sugerir de novo' (dismiss, fecha, toast 'Você pode ativar quando quiser em Configurações → Segurança'); textos em notification-copy.ts; no popover o item mostra só o resumo",
+        "apps/web/src/app/(app)/settings/page.tsx lê `searchParams['ativar-2fa']` e passa `autoOpenEnable` para SecurityCard (apps/web/src/components/app/security-card.tsx), que abre o TwoFactorEnableDialog na montagem quando true; ao fechar o diálogo, `window.history.replaceState` remove o param (padrão do CLAUDE.md, estado derivado da prop e não duplicado); se a conta não tem senha ou já tem 2FA, o param é ignorado e a página rola até o card (`id=\"seguranca\"`, `scrollIntoView` num effect)",
+        "Snooze expirado + ainda elegível → a próxima maybeCreateMfaSuggestion cria de novo (garantido por replaceIfRead da US-005); teste Vitest cobre o cenário com o helper de banco",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill: abrir a notificação → 'Ativar agora' abre /settings com o diálogo de QR; repetir com 'Lembrar depois' e 'Não sugerir de novo' e conferir colunas no banco; /settings?ativar-2fa=1 numa conta Google só rola até Segurança"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Onda 4 · Primeiros passos — colunas de onboarding com backfill e cálculo puro do progresso (PRD US-010 parte 1)",
+      "description": "Como desenvolvedor, preciso saber o que o usuário já fez e o que ele dispensou, para o checklist nunca se repetir.",
+      "acceptanceCriteria": [
+        "schema.ts: `users.onboarding_welcome_seen_at`, `users.onboarding_dismissed_at`, `users.onboarding_completed_at` (timestamptz, nulos); migration `npx drizzle-kit generate --name users-onboarding` + SQL manual no fim do arquivo gerado: `UPDATE users u SET onboarding_dismissed_at = now() WHERE EXISTS (SELECT 1 FROM models m WHERE m.org_id = u.org_id)`; aplicada localmente",
+        "Módulo puro client-safe apps/web/src/lib/onboarding.ts: `ONBOARDING_STEPS` com 4 passos `{ key: 'project' | 'dataset' | 'model' | 'use', title, description, ctaLabel }`; `computeOnboarding({ projectsCount, projectsWithDataset, modelsCount, inferenceCount, publishedDeployments, welcomeSeenAt, dismissedAt, completedAt })` → `{ steps: [{ key, done }], doneCount, showWelcome, showChecklist, justCompleted }` com: project done = projectsCount ≥ 1; dataset done = projectsWithDataset ≥ 1; model done = modelsCount ≥ 1; use done = inferenceCount > 0 || publishedDeployments > 0; showWelcome = !welcomeSeenAt && !dismissedAt && !completedAt; showChecklist = !dismissedAt && !completedAt && doneCount < 4; justCompleted = doneCount === 4 && !completedAt && !dismissedAt",
+        "Copy dos passos e dos textos do painel/checklist em apps/web/src/lib/onboarding-copy.ts (títulos, descrições, CTAs, 'Bem-vindo(a) ao AutoML, {nome}', 'Transforme uma planilha em previsões em 4 passos:', 'Criar meu primeiro projeto', 'Explorar por conta própria', 'Primeiros passos', 'Tudo pronto! Você já domina o fluxo.', toast de ocultar)",
+        "Testes Vitest apps/web/src/lib/__tests__/onboarding.test.ts: usuário novo (showWelcome e showChecklist true, 0 de 4); cada passo em sequência; dispensado (tudo false); completado; justCompleted uma vez; usuário com backfill",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Onda 4 · Primeiros passos — consulta agregada e server actions de estado (PRD US-010 parte 2)",
+      "description": "Como desenvolvedor, preciso ler o estado de onboarding numa consulta só e gravar as marcações do usuário.",
+      "acceptanceCriteria": [
+        "apps/web/src/lib/onboarding-server.ts (`server-only`): `getOnboardingState(user)` faz uma consulta agregada por org_id (count de projects não arquivados, count de projects com dataset_id não nulo, count de models, count de deployments status='published', sum/count em inference_usage do usuário) mais as três colunas do usuário, e devolve `computeOnboarding(...)` junto com `nextProjectId` (projeto mais recente sem dataset, ou mais recente com dataset e sem modelo, conforme o primeiro passo pendente) para os CTAs",
+        "Server actions em apps/web/src/app/(app)/projects/onboarding-actions.ts (`\"use server\"`): `markWelcomeSeen()`, `dismissOnboarding()` (grava `onboarding.dismissed` em audit_logs), `markOnboardingCompleted()` (grava `onboarding.completed`); todas escopadas pela sessão e idempotentes (só preenchem se nulo)",
+        "Teste Vitest com o helper de banco: usuário sem nada → 0 de 4 e showWelcome; após inserir projeto+dataset → 2 de 4 e nextProjectId aponta para ele; dismissOnboarding esconde tudo",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Onda 4 · Primeiros passos — painel de boas-vindas exibido uma vez (PRD US-011 parte 1)",
+      "description": "Como usuário novo, quero entender em 10 segundos por onde começar, sem ser interrompido de novo depois.",
+      "acceptanceCriteria": [
+        "apps/web/src/app/(app)/projects/page.tsx chama getOnboardingState(user) e passa `onboarding` para ProjectsView; nada muda para quem tem showWelcome e showChecklist falsos",
+        "Componente client apps/web/src/components/app/welcome-panel.tsx: Dialog aberto na montagem quando `showWelcome` (estado inicial derivado da prop); título 'Bem-vindo(a) ao AutoML, {primeiro nome}'; frase 'Transforme uma planilha em previsões em 4 passos:'; os 4 passos em grade (ícones FolderPlus, FileUp, BarChart3, Plug; título + uma frase de onboarding-copy.ts); rodapé com 'Criar meu primeiro projeto' (fecha e chama `onCreateProject`, que abre o CreateProjectDialog existente em ProjectsView) e 'Explorar por conta própria' (fecha)",
+        "Fechar por qualquer caminho (botões, X, Esc, clique fora) chama `markWelcomeSeen()` exatamente uma vez; recarregar a página não reabre; abrir em outro navegador logado com o mesmo usuário não reabre",
+        "Em 375 px os 4 passos empilham e o diálogo rola internamente sem cortar o rodapé",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill: usuário novo (colunas nulas via SQL) → dialog → 'Criar meu primeiro projeto' abre o CreateProjectDialog → recarregar → não reabre; 375 px"
+      ],
+      "priority": 18,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Onda 4 · Primeiros passos — card checklist auto-completável com 'Ocultar' e conclusão (PRD US-011 parte 2)",
+      "description": "Como usuário novo, quero acompanhar meu progresso nos 4 passos e ir direto para a próxima ação, e que o card suma quando eu terminar ou pedir.",
+      "acceptanceCriteria": [
+        "Componente client apps/web/src/components/app/onboarding-checklist.tsx renderizado em ProjectsView acima das Tabs Desenvolvimento/Arquivados quando `showChecklist`: Card `max-w-6xl` com título 'Primeiros passos', barra `role=\"progressbar\"` '{n} de 4', 4 linhas com CheckCircle2 `text-primary` (feito) ou Circle `text-muted-foreground` (pendente), título + descrição; o primeiro passo pendente mostra o botão de CTA: 'Criar projeto' (abre CreateProjectDialog), 'Enviar dados' (Link para /projects/{nextProjectId}), 'Treinar modelo' (Link para /projects/{nextProjectId}/predict), 'Usar predições' (Link para /projects/{nextProjectId}/predict com texto de apoio 'Faça uma predição ou publique um endpoint')",
+        "Botão X 'Ocultar' (`aria-label`) chama dismissOnboarding(), remove o card na hora e mostra toast 'Ok, não mostramos mais. Se precisar, a documentação está em /docs.'; recarregar não traz o card de volta",
+        "Quando `justCompleted`: o card renderiza 'Tudo pronto! Você já domina o fluxo.' com 3 confetes SVG animados via `motion` (≤ 600 ms, respeitando prefers-reduced-motion: sem animação) e chama markOnboardingCompleted() num effect (a chamada é assíncrona, sem setState síncrono); no próximo carregamento o card não existe",
+        "Em mobile as 4 linhas empilham; o card não desloca a barra de busca nem 'Novo projeto' (fica abaixo do cabeçalho da página, acima das abas)",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill: 0 de 4 → criar projeto → 1 de 4 com CTA 'Enviar dados' → ocultar → recarregar → nada; outro usuário com 4 de 4 e completed_at nulo → 'Tudo pronto' uma vez"
+      ],
+      "priority": 19,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Onda 4 · Primeiros passos — banner do passo 2 no projeto novo e placeholder do primeiro projeto (PRD US-012)",
+      "description": "Como usuário novo, quero que criar o primeiro projeto e enviar dados sejam um caminho contínuo, sem voltar a /projects no meio.",
+      "acceptanceCriteria": [
+        "apps/web/src/app/(project)/projects/[projectId]/page.tsx (tela 'Escolha uma fonte de dados') consulta getOnboardingState e, quando `showChecklist` e o passo 'dataset' está pendente, renderiza acima do título um banner discreto (client, apps/web/src/components/project/onboarding-step-banner.tsx) 'Passo 2 de 4 — Envie uma planilha para começar' com link 'Baixar planilha de exemplo' reutilizando template-download-links.tsx e botão X que esconde o banner só nesta visita (estado em memória)",
+        "apps/web/src/app/(app)/projects/create-project-dialog.tsx recebe prop `isFirstProject` e usa placeholder 'Meu primeiro projeto' no input quando true (placeholder, não valor); ProjectsView passa `projects.length === 0`",
+        "Textos em onboarding-copy.ts",
+        "Typecheck passes",
+        "Lint passes",
+        "Verify in browser using dev-browser skill: criar o primeiro projeto → tela de fonte de dados com o banner → X esconde → recarregar mostra de novo (é por visita); usuário com checklist oculto não vê banner"
+      ],
+      "priority": 20,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Onda 5 · Home — scroll spy na navegação e skip link (PRD US-013 parte 1)",
+      "description": "Como visitante, quero saber em que parte da página estou e pular direto para o conteúdo pelo teclado.",
+      "acceptanceCriteria": [
+        "apps/web/src/components/marketing/site-header.tsx: hook `useActiveSection(sectionIds)` com IntersectionObserver (rootMargin compensando `--marketing-header-height`, threshold que elege a seção mais visível) que marca o NavLink correspondente com `aria-current=\"location\"`, `text-foreground` e sublinhado de 2 px `bg-primary` (transição 150 ms, `motion-reduce:transition-none`); todo setState acontece no callback do observer; clicar numa âncora atualiza o destaque imediatamente; sem IntersectionObserver (SSR/teste) nenhum item fica ativo; só no variant `full`",
+        "apps/web/src/components/marketing/nav-link.tsx aceita `active` e renderiza o estado visual acima sem quebrar o uso atual",
+        "apps/web/src/app/(marketing)/layout.tsx ganha como primeiro elemento focável um link 'Ir para o conteúdo' (`sr-only focus:not-sr-only` posicionado no topo) apontando para `#inicio`; texto em lib/marketing/copy.ts",
+        "Orçamento: o JS de primeiro carregamento da home não cresce mais de 3 kB gzip (comparar `next build` antes/depois e registrar no progress.txt)",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass (testes de copy atualizados)",
+        "Verify in browser using dev-browser skill: 1280 px rolando por todas as seções, o destaque acompanha; Tab a partir do topo mostra o skip link e Enter leva ao hero"
+      ],
+      "priority": 21,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Onda 5 · Home — 'Entrar' no header mobile e barra de CTA móvel após o hero (PRD US-013 parte 2)",
+      "description": "Como visitante no celular, quero entrar ou me cadastrar sem abrir o menu.",
+      "acceptanceCriteria": [
+        "Em site-header.tsx (variant full, < md): o header mostra Logo, botão 'Entrar' (ghost, size sm, marketingAuthHref('/login'), prefetch false) e o botão de menu; em apps/web/src/components/marketing/site-header-menu.tsx o Sheet passa a ter 'Começar grátis' como botão primário de largura total no topo, seguido das âncoras; comportamento atual de fechar ao escolher âncora e devolver foco é mantido",
+        "Novo client component apps/web/src/components/marketing/mobile-cta-bar.tsx renderizado na page da home: visível só < md e só quando `#inicio` saiu da viewport e `#comecar` ainda não entrou (IntersectionObserver nos dois elementos; setState só em callbacks); barra `fixed bottom-0 inset-x-0 z-30 border-t bg-background/95 backdrop-blur pb-[env(safe-area-inset-bottom)]` com 'Começar grátis' (Link, prefetch false, `ref=home-mobile-bar` via marketingAuthHref com novo SignupRef permitido em lib/signup-ref.ts) e 'Falar com nosso time' (ContactDialog variant outline); enquanto visível, o `main` recebe `pb-20` via atributo `data-mobile-cta` para não cobrir o footer",
+        "Textos em copy.ts; `ref=home-mobile-bar` aceito pela validação de signup-ref e coberto por teste",
+        "Lighthouse mobile ≥ 90 em Performance e Acessibilidade (registrar valores no progress.txt); orçamento de JS +3 kB gzip no máximo somando US-021 e US-022",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill: 375 px — 'Entrar' visível no header; menu com 'Começar grátis' no topo; barra aparece ao rolar além do hero e some no CTA final; 1280 px — barra nunca aparece"
+      ],
+      "priority": 22,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Onda 5 · Home — seção 'Perguntas frequentes' com JSON-LD FAQPage (PRD US-014)",
+      "description": "Como executivo avaliando a plataforma, quero respostas rápidas sobre beta, dados, segurança e custo antes de criar conta.",
+      "acceptanceCriteria": [
+        "copy.ts: `SECTION_IDS.perguntas = 'perguntas'`, item `{ href: '#perguntas', label: 'Perguntas' }` em HEADER_NAV antes de 'Docs', `FAQ_LABEL`, `FAQ_TITLE` e `FAQ_ITEMS` com 6 pares pergunta/resposta: (1) 'Preciso saber programar ou ter cientista de dados?'; (2) 'Que tipo de planilha funciona?'; (3) 'Meus dados ficam seguros? Quem acessa?' — organização isolada, chaves de API rotacionáveis, verificação em duas etapas, link para /politica-de-privacidade; (4) 'Quanto custa?' — beta gratuito, sem cartão, ambiente exclusivo para empresas via 'Falar com nosso time'; (5) 'Como funciona o beta e a lista de espera?'; (6) 'Como uso as previsões no dia a dia?' — web app, API e agentes de IA (MCP), link para /docs; respostas em texto simples com marcação mínima de links (`{ text, links?: [{ label, href }] }`)",
+        "Novo apps/web/src/components/marketing/faq.tsx (Server Component; só o título entra com Reveal): seção `id={SECTION_IDS.perguntas}`, acordeão com `<details>/<summary>` nativo, ícone ChevronDown girando via CSS em `[open]`, summary `text-base font-medium` com foco visível; inserido em (marketing)/page.tsx entre Features e FinalCta; comentário de ordem das seções atualizado",
+        "apps/web/src/lib/marketing/seo.ts ganha `homeFaqJsonLd()` (schema.org FAQPage com mainEntity a partir de FAQ_ITEMS, respostas sem markup) renderizado na page num segundo `<script type=\"application/ld+json\">` via serializeJsonLd",
+        "Teste Vitest: FAQ_ITEMS tem 6 itens sem texto vazio; homeFaqJsonLd tem 6 Question; HEADER_NAV contém '#perguntas' antes de '/docs'; testes de copy existentes atualizados",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill: 1280 px e 375 px; abrir/fechar itens por teclado; âncora 'Perguntas' do header rola até a seção com o header fixo não cobrindo o título"
+      ],
+      "priority": 23,
+      "passes": true,
+      "notes": "Verificado via CDP em 1280/375 (âncora do header rola até top=64 com o header não cobrindo o título; Enter/Espaço/Tab no acordeão; JSON-LD FAQPage com 6 Question). Efeito colateral corrigido: com 6 âncoras, a barra do header estourava a largura em 768 px (814 px de conteúdo para 720 úteis) — o corte barra completa/menu passou de md para lg (1024 px); MobileCtaBar segue em md."
+    },
+    {
+      "id": "US-024",
+      "title": "Onda 5 · Home — footer em 3 colunas com âncoras absolutas nas páginas compactas (PRD US-015)",
+      "description": "Como visitante, quero um rodapé que me ajude a navegar e mostre quem está por trás do produto.",
+      "acceptanceCriteria": [
+        "apps/web/src/components/marketing/site-footer.tsx em 3 colunas a partir de md (empilhadas abaixo), cada uma com `<nav aria-label>`: 'Produto' (Casos de uso, Como funciona, Agente, Recursos, Perguntas — âncoras; Docs), 'Conta' ('Entrar' e 'Começar grátis' via marketingAuthHref com prefetch false; 'Falar com nosso time' abrindo o ContactDialog — o footer vira client só nesse botão, extraído em componente pequeno), 'Legal' (Política de Uso, Política de Privacidade, Contato mailto atual)",
+        "Linha inferior: Logo + footerCopyright(ano) + 'Um produto AutoML.' (constante `FOOTER_TAGLINE` em copy.ts; sem logotipo de terceiros)",
+        "Prop `anchorsAbsolute` (ou detecção via variant do header) faz as âncoras virarem `/#secao` em /docs e nas políticas (que usam o header compact); na home continuam `#secao`",
+        "Contraste AA nos links (`text-muted-foreground` sobre `bg-background`) e `FOOTER_LINKS` reorganizado em `FOOTER_COLUMNS` com teste atualizado",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill: home em 1280 px e 375 px; /docs com âncoras absolutas levando às seções da home"
+      ],
+      "priority": 24,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Onda 5 · Home — remover 'Empresas que confiam' e fechar o vão do hero (PRD US-016 parte 1)",
+      "description": "Como visitante, não quero ver uma faixa de logos vazia nem um vão em branco entre o hero e os casos de uso.",
+      "acceptanceCriteria": [
+        "Apagar apps/web/src/components/marketing/trusted-by.tsx, os SVGs em apps/web/public/marketing/logos/ e as constantes TRUSTED_BY_LABEL, TRUSTED_LOGO_HEIGHT e TRUSTED_LOGOS (e tipos associados) de copy.ts; remover `<TrustedBy />` e o import de (marketing)/page.tsx; atualizar o comentário de ordem das seções (Hero → UseCases → HowItWorks → AgentShowcase → Features → FAQ → FinalCta) e qualquer teste/JSON-LD que cite a seção",
+        "`grep -ri \"trusted\" apps/web/src apps/web/public` não devolve nada",
+        "apps/web/src/components/marketing/hero.tsx fecha com `pb-12 sm:pb-16` (hoje `pb-16 lg:pb-24`) para 'Casos de uso' entrar sem vão; `scroll-margin-top` da seção #casos-de-uso continua correto ao navegar pela âncora",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill: 1280 px e 375 px — transição hero → casos de uso sem faixa vazia; âncora 'Casos de uso' alinha sob o header"
+      ],
+      "priority": 25,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Onda 5 · Home — SectionHeading compartilhado, espaçamento único, links 'Ver detalhes' e aviso de beta no CTA final (PRD US-016 parte 2)",
+      "description": "Como visitante, quero uma leitura mais fluida da página, com ritmo visual consistente e sem promessas de acesso imediato no fim.",
+      "acceptanceCriteria": [
+        "Classe utilitária `marketing-section` em apps/web/src/app/globals.css (`py-16 sm:py-24` via @apply ou CSS equivalente) aplicada a UseCases, HowItWorks, AgentShowcase, Features, FAQ e FinalCta, removendo os paddings verticais divergentes de cada seção",
+        "Novo apps/web/src/components/marketing/section-heading.tsx (server) com props `label`, `title`, `subtitle?`, `align?` rendendo 'rótulo pequeno em text-primary + H2 + subtítulo' e usado por UseCases, HowItWorks, AgentShowcase, Features e FAQ (remover as versões locais); aparência final idêntica à atual",
+        "apps/web/src/components/marketing/how-it-works.tsx: passo 2 ganha link discreto 'Ver detalhes' → #agente e passo 4 → #recursos (constante `HOW_IT_WORKS_DETAIL_LINKS` em copy.ts); passos sem seção não ganham link",
+        "apps/web/src/components/marketing/final-cta.tsx: subtítulo passa a incluir HERO_BETA_NOTICE em linha própria (`FINAL_CTA_BETA_NOTICE = HERO_BETA_NOTICE` em copy.ts)",
+        "Nenhum texto novo fora de copy.ts; testes de copy atualizados; Lighthouse mobile ≥ 90 mantido (registrar no progress.txt)",
+        "Typecheck passes",
+        "Lint passes",
+        "Tests pass",
+        "Verify in browser using dev-browser skill: rolagem completa em 1280 px e 375 px comparando ritmo entre seções; links 'Ver detalhes' rolam para as seções certas; CTA final mostra a linha do beta"
+      ],
+      "priority": 26,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

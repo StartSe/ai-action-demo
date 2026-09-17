@@ -1,0 +1,82 @@
+# Compose de desenvolvimento do Pocket: redis + web (Next standalone) + worker
+# (Python). Toda a configuração vem do .env (cp .env.example .env e preencha
+# AUTH_SECRET) — nenhum serviço injeta variável fora das 16 do .env.example.
+# web e worker compartilham o volume "data": o arquivo SQLite (SQLITE_PATH) e
+# os uploads/modelos (UPLOAD_DIR) vivem nele; backup = copiar /data.
+
+services:
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    # noeviction: a fila BullMQ nunca pode perder chaves por pressão de memória
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--maxmemory-policy",
+        "noeviction",
+      ]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: ./apps/web
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - data:/data
+    ports:
+      - "3000:3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    # Só fica saudável com o servidor respondendo — ou seja, depois que o CMD
+    # rodou o migrate.mjs; o worker espera por isso antes de abrir o SQLite.
+    # 127.0.0.1, não localhost: no Alpine "localhost" resolve para ::1 e o
+    # Next standalone (HOSTNAME=0.0.0.0) só escuta IPv4
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:3000/login >/dev/null || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  worker:
+    build: ./apps/worker
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/app/.venv/bin/python",
+          "-c",
+          "import os, redis; redis.Redis.from_url(os.environ['REDIS_URL']).ping()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  redis_data:
+  data:

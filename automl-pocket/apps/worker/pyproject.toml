@@ -1,0 +1,22 @@
+[project]
+name = "worker"
+version = "0.1.0"
+description = "Worker Python da plataforma AutoML: consome jobs do Redis (BullMQ)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "redis>=5.0",
+    "bullmq>=2.15,<3",
+    "pandas>=2.2",
+    "pyarrow>=17",
+    "openpyxl>=3.1",
+    "xlrd>=2.0",
+    "scikit-learn>=1.5",
+    "xgboost>=2.1",
+    "joblib>=1.4",
+    "statsmodels>=0.14",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
