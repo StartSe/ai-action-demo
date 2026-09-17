@@ -74,12 +74,19 @@ function BlocoLista({
   );
 }
 
+/**
+ * `acaoConectar` chega como prop em vez de o componente escrever o endereço das configurações: o
+ * `scripts/verificar-jargao.mjs` proíbe a string "/setup" em `components/*.tsx` fora de um atributo
+ * `href` (ele só limpa atributos técnicos antes de varrer), e um componente reaproveitável não deve
+ * mesmo conhecer as rotas do app. Quem passa é a tela.
+ */
 export function FichaProduto({
   conhecimento,
   metaIA,
   gerando,
   salvando,
   erro,
+  acaoConectar,
   onMudar,
   onGerar,
   onSalvar,
@@ -89,6 +96,7 @@ export function FichaProduto({
   gerando: boolean;
   salvando: boolean;
   erro: ErroLido | null;
+  acaoConectar: { rotulo: string; url: string };
   onMudar: (c: Conhecimento) => void;
   onGerar: () => void;
   onSalvar: () => void;
@@ -118,7 +126,7 @@ export function FichaProduto({
 
       {metaIA?.demo && (
         <div className="mt-3.5">
-          <Aviso tom="warn" acao={{ rotulo: "Conectar a IA", url: "/setup#openrouter" }}>
+          <Aviso tom="warn" acao={acaoConectar}>
             Esta ficha é um exemplo. Conecte a IA para ela ler os seus materiais.
           </Aviso>
         </div>

@@ -396,6 +396,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                 gerando={gerandoFicha}
                 salvando={salvandoFicha}
                 erro={erroFicha}
+                acaoConectar={{ rotulo: "Conectar a IA", url: "/setup#openrouter" }}
                 onMudar={setFicha}
                 onGerar={gerarFicha}
                 onSalvar={salvarFicha}
