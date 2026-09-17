@@ -822,12 +822,13 @@ export function OptInGuardar({ checked, onChange }: { checked: boolean; onChange
   );
 }
 
-/** Bloco de entrega padrão: baixar PDF (abre /imprimir/<id>; sem id imprime a própria tela) e um menu "Mais" com copiar texto, e-mail, link e extras do app. */
-export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: string; texto: () => string; extras?: { rotulo: string; onClick: () => void }[] }) {
+/**
+ * Um menu que abre a partir de um botão: fecha com Escape e com um clique fora. O `ref` volta para
+ * ser posto no bloco que embrulha o botão E o painel — o clique dentro dele não fecha o menu.
+ * Usado por `Entregar` e pelo menu "Exportar" de Relatórios.
+ */
+export function useMenuSuspenso() {
   const [aberto, setAberto] = useState(false);
-  const [copiadoTexto, setCopiadoTexto] = useState(false);
-  const [copiadoLink, setCopiadoLink] = useState(false);
-  const [falhaCopia, setFalhaCopia] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -846,6 +847,19 @@ export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: s
     };
   }, [aberto]);
 
+  return { aberto, setAberto, menuRef };
+}
+
+/** Classe de um item de menu suspenso (a mesma em `Entregar` e no menu "Exportar" de Relatórios). */
+export const ITEM_DE_MENU = "w-full text-left px-3 py-2 rounded-md hover:bg-accent-soft cursor-pointer";
+
+/** Bloco de entrega padrão: baixar PDF (abre /imprimir/<id>; sem id imprime a própria tela) e um menu "Mais" com copiar texto, e-mail, link e extras do app. */
+export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: string; texto: () => string; extras?: { rotulo: string; onClick: () => void }[] }) {
+  const { aberto, setAberto, menuRef } = useMenuSuspenso();
+  const [copiadoTexto, setCopiadoTexto] = useState(false);
+  const [copiadoLink, setCopiadoLink] = useState(false);
+  const [falhaCopia, setFalhaCopia] = useState(false);
+
   async function copiar(t: string, marcar: (v: boolean) => void) {
     try {
       await navigator.clipboard.writeText(t);
@@ -859,7 +873,7 @@ export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: s
   }
 
   const link = id && typeof window !== "undefined" ? `${location.origin}/r/${id}` : undefined;
-  const itemClasse = "w-full text-left px-3 py-2 rounded-md hover:bg-accent-soft cursor-pointer";
+  const itemClasse = ITEM_DE_MENU;
 
   return (
     <div className="flex flex-col gap-2.5 max-md:w-full">

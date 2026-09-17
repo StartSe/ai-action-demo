@@ -10,14 +10,12 @@
 //
 // O conteúdo fica neste componente, e não em `app/relatorios/page.tsx`, porque é `components/*.tsx`
 // que `scripts/verificar-jargao.mjs` varre (ver CLAUDE.md).
-//
-// O botão "Exportar" não existe ainda: ele é a US-018, e um botão que não faria nada não fica
-// desligado na tela — ele sai. O mesmo vale para o cartão do relatório diário por e-mail.
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Avatar } from "./ContatoVisual";
+import { MenuExportar, RelatorioDiario } from "./ExportarRelatorio";
 import { GraficoLinhas } from "./GraficoLinhas";
-import { Indicadores } from "./Indicadores";
+import { Indicadores, numerosEmTexto } from "./Indicadores";
 import { Aviso, ErrorBox, lerErro, Topbar, useStatus, type ErroLido } from "./ui";
 import { ACAO_CONECTAR_NUMERO, AVISO_CONVERSAS_EXEMPLO, soConversasDeExemplo } from "@/lib/demo";
 import { numero as formatarNumero } from "@/lib/formato";
@@ -51,6 +49,20 @@ function principaisAssuntos(assuntos: AssuntoMetricas[]): AssuntoMetricas[] {
   const topo = nomeados.slice(0, cabem);
   const sobra = semAssunto + nomeados.slice(cabem).reduce((soma, a) => soma + a.total, 0);
   return sobra > 0 ? [...topo, { assunto: OUTROS, total: sobra }] : topo;
+}
+
+/**
+ * O que o "Copiar resumo" cola: os quatro números do período e os assuntos, exatamente como a tela
+ * mostra (os mesmos rótulos dos indicadores e as mesmas cinco barras).
+ */
+function resumoEmTexto(metricas: Metricas | null, periodo: PeriodoMetricas): string {
+  if (!metricas) return "";
+  const assuntos = principaisAssuntos(metricas.assuntos);
+  const linhas = [`Desempenho do seu atendente — ${rotuloPeriodo(periodo)}`, "", ...numerosEmTexto(metricas)];
+  if (assuntos.length > 0 && !assuntos.every((a) => a.assunto === OUTROS)) {
+    linhas.push("", "Principais assuntos", ...assuntos.map((a) => `${a.assunto}: ${formatarNumero(a.total)}`));
+  }
+  return linhas.join("\n");
 }
 
 /** Uma barra horizontal por assunto, em CSS: o rótulo e o total em cima, a barra embaixo. */
@@ -192,7 +204,7 @@ export function Relatorios() {
             <h1 className="titulo-painel mb-1.5">Desempenho do seu atendente</h1>
             <p className="apoio">Acompanhe como seu atendente está atendendo e resolvendo dúvidas.</p>
           </div>
-          <div className="shrink-0">
+          <div className="shrink-0 flex items-center gap-2.5 max-md:flex-col max-md:items-stretch">
             <label className="sr-only" htmlFor="periodo-relatorios">Período</label>
             <select
               id="periodo-relatorios"
@@ -204,6 +216,8 @@ export function Relatorios() {
                 <option key={p} value={p}>{rotuloPeriodo(p)}</option>
               ))}
             </select>
+            {/* Só depois que os números chegam: exportar uma tela ainda em branco não levaria nada. */}
+            {metricas && <MenuExportar periodo={periodo} resumo={() => resumoEmTexto(metricas, periodo)} />}
           </div>
         </div>
 
@@ -266,6 +280,10 @@ export function Relatorios() {
               <ListaDeAtencao conversas={atencao} />
             )}
           </section>
+
+          <div className="min-[1100px]:col-span-2">
+            <RelatorioDiario />
+          </div>
         </div>
       </main>
     </>

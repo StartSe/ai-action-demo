@@ -24,8 +24,8 @@
  * Tudo é consultado no banco a cada chamada, sem memória entre chamadas: as telas se atualizam
  * sozinhas e um número guardado ficaria velho na primeira mensagem que chegasse.
  */
-import { bancoDeConversas, listarConversas, paraTextoDeBanco } from "./conversas";
-import type { AssuntoMetricas, DiaMetricas, Metricas, PeriodoMetricas, VariacaoMetricas } from "./types";
+import { bancoDeConversas, isoDeBanco, listarConversas, paraTextoDeBanco } from "./conversas";
+import type { AssuntoMetricas, CanalOrigem, DiaMetricas, Metricas, PeriodoMetricas, StatusConversa, VariacaoMetricas } from "./types";
 
 /** Quantos dias inteiros cada período cobre, contando o de hoje. */
 const DIAS: Record<PeriodoMetricas, number> = { hoje: 1, "7d": 7, "30d": 30 };
@@ -192,4 +192,78 @@ export function calcular(periodo: PeriodoMetricas): Metricas {
     assuntos: assuntos(atual),
     atencao: listarConversas({ status: "atencao" }),
   };
+}
+
+// --- Exportação em planilha -------------------------------------------------------------------
+//
+// Uma linha por conversa do período, para quem quer olhar conversa a conversa fora do app. O recorte
+// é a CONVERSA inteira, e não só o trecho dela dentro do período: quem abre a planilha quer saber
+// quando aquela conversa começou, quantas mensagens ela teve e quanto o atendente levou para
+// responder nela — não a fatia de sete dias. Por isso o "tempo médio de resposta" de uma linha pode
+// não bater com o indicador do topo da tela, que é a média das respostas gravadas no período.
+
+/** Uma conversa do período como a planilha a descreve (app/api/metricas/exportar). */
+export interface LinhaExportacao {
+  numero: string;
+  nome: string;
+  origem: CanalOrigem;
+  status: StatusConversa;
+  assunto: string | null;
+  /** Primeira e última mensagem da conversa, em ISO; nulas numa conversa ainda sem mensagem. */
+  primeiraMensagem: string | null;
+  ultimaMensagem: string | null;
+  totalMensagens: number;
+  resolvidaIA: boolean;
+  /** Média das respostas medidas nesta conversa, em milissegundos; 0 quando nenhuma foi medida. */
+  tempoMedioMs: number;
+}
+
+type LinhaAgregada = {
+  numero: string;
+  primeira: string | null;
+  ultima: string | null;
+  mensagens: number;
+  tempo: number | null;
+  resolvida: number;
+};
+
+/**
+ * As conversas do período, da mais recente para a mais antiga. O status, o nome e a origem vêm de
+ * `listarConversas` (lib/conversas.ts continua sendo o dono do formato, inclusive do status que é
+ * calculado na leitura); daqui saem só os números de cada conversa.
+ */
+export function linhasParaExportar(periodo: PeriodoMetricas): LinhaExportacao[] {
+  const { atual } = janelas(periodo);
+  const agregadas = bancoDeConversas()
+    .prepare(
+      `SELECT c.numero,
+              (SELECT MIN(m.criado_em) FROM mensagens m WHERE m.numero = c.numero) AS primeira,
+              (SELECT MAX(m.criado_em) FROM mensagens m WHERE m.numero = c.numero) AS ultima,
+              (SELECT COUNT(*) FROM mensagens m WHERE m.numero = c.numero) AS mensagens,
+              (SELECT AVG(m.tempo_resposta_ms) FROM mensagens m
+                WHERE m.numero = c.numero AND m.papel IN ('atendente', 'humano') AND m.tempo_resposta_ms IS NOT NULL) AS tempo,
+              CASE WHEN ${RESOLVIDA_PELA_IA} THEN 1 ELSE 0 END AS resolvida
+         FROM conversas c
+        WHERE ${NO_PERIODO}`
+    )
+    .all(paraTextoDeBanco(atual.inicio), paraTextoDeBanco(atual.fim)) as LinhaAgregada[];
+
+  const porNumero = new Map(agregadas.map((l) => [l.numero, l]));
+  return listarConversas()
+    .filter((c) => porNumero.has(c.numero))
+    .map((c) => {
+      const a = porNumero.get(c.numero) as LinhaAgregada;
+      return {
+        numero: c.numero,
+        nome: c.nome,
+        origem: c.origem,
+        status: c.status,
+        assunto: c.assunto,
+        primeiraMensagem: a.primeira ? isoDeBanco(a.primeira) : null,
+        ultimaMensagem: a.ultima ? isoDeBanco(a.ultima) : null,
+        totalMensagens: Number(a.mensagens ?? 0),
+        resolvidaIA: Boolean(a.resolvida),
+        tempoMedioMs: Math.round(Number(a.tempo ?? 0)),
+      } satisfies LinhaExportacao;
+    });
 }

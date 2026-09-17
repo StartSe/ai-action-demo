@@ -9,6 +9,27 @@ import { tempoDeResposta } from "@/lib/rotulos";
 import { numero } from "@/lib/formato";
 import type { Metricas } from "@/lib/types";
 
+/**
+ * O rótulo de cada número, num lugar só: os cartões e o resumo em texto do "Exportar" (US-018) dizem
+ * exatamente a mesma coisa, e quem renomear um indicador renomeia os dois de uma vez.
+ */
+const ROTULOS = {
+  conversas: "Conversas",
+  resolvidasIA: "Resolvidas pela IA",
+  passadasPessoa: "Passadas para uma pessoa",
+  tempoMedioMs: "Tempo médio de resposta",
+};
+
+/** Os quatro números em linhas de texto, como o "Copiar resumo" de Relatórios os cola. */
+export function numerosEmTexto(metricas: Metricas): string[] {
+  return [
+    `${ROTULOS.conversas}: ${numero(metricas.conversas)}`,
+    `${ROTULOS.resolvidasIA}: ${numero(metricas.resolvidasIA)}`,
+    `${ROTULOS.passadasPessoa}: ${numero(metricas.passadasPessoa)}`,
+    `${ROTULOS.tempoMedioMs}: ${tempoDeResposta(metricas.tempoMedioMs)}`,
+  ];
+}
+
 /** Enquanto os números não chegam, os quatro cartões já ocupam o lugar deles, sem a tela saltar. */
 function Esqueleto() {
   return (
@@ -28,7 +49,7 @@ function Esqueleto() {
  * `contexto` é a frase da comparação, por extenso ("em relação a ontem"). `rotuloConversas` muda entre
  * "Conversas hoje" (Início) e "Conversas" (Relatórios, que já tem o período escrito no seletor).
  */
-export function Indicadores({ metricas, contexto, rotuloConversas = "Conversas" }: { metricas: Metricas | null; contexto: string; rotuloConversas?: string }) {
+export function Indicadores({ metricas, contexto, rotuloConversas = ROTULOS.conversas }: { metricas: Metricas | null; contexto: string; rotuloConversas?: string }) {
   return (
     <div className="grid gap-4 grid-cols-2 min-[1240px]:grid-cols-4">
       {metricas === null ? (
@@ -48,7 +69,7 @@ export function Indicadores({ metricas, contexto, rotuloConversas = "Conversas" 
               semMargem
               tom="ok"
               valor={numero(metricas.resolvidasIA)}
-              rotulo="Resolvidas pela IA"
+              rotulo={ROTULOS.resolvidasIA}
               variacao={{ percentual: metricas.variacao.resolvidasIA, contexto }}
             />
           </div>
@@ -56,7 +77,7 @@ export function Indicadores({ metricas, contexto, rotuloConversas = "Conversas" 
             <Destaque
               semMargem
               valor={numero(metricas.passadasPessoa)}
-              rotulo="Passadas para uma pessoa"
+              rotulo={ROTULOS.passadasPessoa}
               variacao={{ percentual: metricas.variacao.passadasPessoa, contexto }}
             />
           </div>
@@ -64,7 +85,7 @@ export function Indicadores({ metricas, contexto, rotuloConversas = "Conversas" 
             <Destaque
               semMargem
               valor={tempoDeResposta(metricas.tempoMedioMs)}
-              rotulo="Tempo médio de resposta"
+              rotulo={ROTULOS.tempoMedioMs}
               // Aqui cair é bom: uma queda no tempo de resposta é verde, não vermelha.
               variacao={{ percentual: metricas.variacao.tempoMedioMs, contexto, cairEhBom: true }}
             />

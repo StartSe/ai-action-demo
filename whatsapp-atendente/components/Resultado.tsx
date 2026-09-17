@@ -192,12 +192,30 @@ export function ResultadoRelatorio({ itens, meta, id }: { itens: ItemRelatorioAt
   );
 }
 
-/** Corpo do relatório (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
+/**
+ * Corpo do relatório (sem cabeçalho nem Origem), reaproveitado pela página de impressão.
+ *
+ * Os links levam de volta para as telas de produto: o painel completo em Relatórios e cada pergunta
+ * na conversa em que ela foi feita (`?corrigir=1` abre a correção já aberta). Quem lê este relatório
+ * costuma estar na caixa de e-mail, longe do app — o caminho de volta faz parte do relatório.
+ */
 export function ConteudoRelatorio({ itens }: { itens: ItemRelatorioAtendimento[] }) {
+  const painel = (
+    <p className="mb-4 no-print">
+      <a className="btn-link" href="/relatorios?periodo=7d">Ver o painel completo</a>
+    </p>
+  );
   if (itens.length === 0) {
-    return <p className="text-muted text-sm">Nenhuma pergunta frequente, sem resposta ou transferida para um humano. Base de conhecimento em dia.</p>;
+    return (
+      <>
+        {painel}
+        <p className="text-muted text-sm">Nenhuma pergunta frequente, sem resposta ou transferida para um humano. Base de conhecimento em dia.</p>
+      </>
+    );
   }
   return (
+    <>
+    {painel}
     <ul className="flex flex-col gap-4">
       {itens.map((item, i) => (
         <li key={i} className="card p-4">
@@ -215,12 +233,13 @@ export function ConteudoRelatorio({ itens }: { itens: ItemRelatorioAtendimento[]
             )}
           </div>
           <div className="flex gap-4">
-            <a className="btn-link" href={`/?atender=${encodeURIComponent(item.numero)}`}>Aprovar</a>
-            <a className="btn-link" href={`/?atender=${encodeURIComponent(item.numero)}&corrigir=1`}>Corrigir</a>
+            <a className="btn-link" href={`/conversas?numero=${encodeURIComponent(item.numero)}`}>Aprovar</a>
+            <a className="btn-link" href={`/conversas?numero=${encodeURIComponent(item.numero)}&corrigir=1`}>Corrigir</a>
           </div>
         </li>
       ))}
     </ul>
+    </>
   );
 }
 

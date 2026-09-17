@@ -119,6 +119,15 @@ function paraIso(texto: string): string {
   return paraData(texto).toISOString();
 }
 
+/**
+ * A data como o banco a guarda ("2026-09-17 14:03:00", em UTC) lida de volta em ISO. Exportada para
+ * lib/metricas.ts, que também lê as duas tabelas: a conversão entre o formato do banco e o das telas
+ * mora aqui, junto do formato dos dados.
+ */
+export function isoDeBanco(texto: string): string {
+  return paraIso(texto);
+}
+
 // --- Leitura -------------------------------------------------------------
 
 function statusEfetivo(status: string, ultimaDoCliente: string | null, atualizadoEm: string): StatusConversa {
