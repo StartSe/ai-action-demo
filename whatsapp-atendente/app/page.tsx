@@ -817,7 +817,8 @@ export function ConteudoConversas({
       largura: "20%",
       render: (c) => (
         <>
-          <strong>{rotuloContato(c.numero, c.nome)}</strong>
+          {/* Nome pode quebrar em duas linhas; número, não — "+55 11 91234-" / "5678" não se lê. */}
+          <strong className={c.nome?.trim() ? undefined : "whitespace-nowrap"}>{rotuloContato(c.numero, c.nome)}</strong>
           <span className="block text-[12px] text-muted font-normal">{c.hora}</span>
         </>
       ),

@@ -7,6 +7,7 @@
 // As falhas da z-api e as chamadas dela ficam em lib/zapi.ts; ErroWhatsApp e os códigos, em
 // lib/erro-whatsapp.ts (re-exportados aqui para quem já importava deste arquivo).
 import { ACAO_NUMERO, ErroWhatsApp, type CodigoErroWhatsApp } from "./erro-whatsapp";
+import { formatarTelefone } from "./telefone";
 import { credenciais as credenciaisZapi, enviarTexto as enviarTextoZapi, lerConexao, statusInstancia } from "./zapi";
 import { getConfig, setConfig } from "./store";
 
@@ -157,7 +158,7 @@ async function conferirNumeroZapi(): Promise<{ ok: boolean; mensagem: string }> 
   if (estado.erro) return { ok: false, mensagem: estado.erro };
   if (!estado.conectado) return { ok: false, mensagem: "O número ainda não está conectado. Escaneie o QR Code em Configurações." };
   const conexao = lerConexao();
-  const quem = conexao?.numero ? ` Número: ${conexao.numero}.` : "";
+  const quem = conexao?.numero ? ` Número: ${formatarTelefone(conexao.numero)}.` : "";
   if (!estado.celularConectado) {
     return { ok: true, mensagem: `Número conectado, mas o celular da empresa está sem internet agora — enquanto isso as respostas podem atrasar.${quem}` };
   }

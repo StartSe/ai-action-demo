@@ -4,6 +4,7 @@
  * Components. Ao somar um valor novo a `CanalOrigem` ou a `StatusConversa`, acrescente-o ao mapa daqui
  * — o `Record` completo faz o TypeScript cobrar o rótulo — em vez de escrever um ternário na tela.
  */
+import { formatarTelefone } from "./telefone";
 import type { CanalOrigem, StatusConversa } from "./types";
 
 const ROTULOS_ORIGEM: Record<CanalOrigem, string> = {
@@ -34,12 +35,12 @@ const NUMEROS_INTERNOS: Record<string, string> = {
   "assistente-ia": "Assistente de IA",
 };
 
-/** Nome do contato quando existir; senão o rótulo do número interno; senão o próprio número. */
+/** Nome do contato quando existir; senão o rótulo do número interno; senão o número formatado. */
 export function rotuloContato(numero: string, nome?: string): string {
   if (nome?.trim()) return nome.trim();
-  return NUMEROS_INTERNOS[numero] ?? numero;
+  return rotuloNumero(numero);
 }
 
 export function rotuloNumero(numero: string): string {
-  return NUMEROS_INTERNOS[numero] ?? numero;
+  return NUMEROS_INTERNOS[numero] ?? formatarTelefone(numero);
 }
