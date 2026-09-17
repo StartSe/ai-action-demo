@@ -1,6 +1,6 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 import { randomBytes } from "node:crypto";
-import { MCP_EMPRESA, NOTIFICACOES, openrouter, type Integracao } from "./setup-comum";
+import { NOTIFICACOES, openrouter, type Integracao } from "./setup-comum";
 import { getConfig, setConfig } from "./store";
 import { conferirNumero } from "./whatsapp";
 
@@ -73,22 +73,8 @@ export const WHATSAPP: Integracao = {
   testar: conferirNumero,
 };
 
-/**
- * Texto de negócio por cima da integração compartilhada (padrão da suíte: nunca editar
- * lib/setup-comum.ts para um app só). O título genérico carrega a sigla do protocolo, que não diz
- * nada para quem vai conectar — aqui o cartão fala do que o atendente ganha com a conexão.
- */
-const SISTEMAS_DA_EMPRESA: Integracao = {
-  ...MCP_EMPRESA,
-  titulo: "Sistemas da empresa",
-  beneficio: "Deixa o atendente consultar pedidos e estoque antes de responder",
-  descricao:
-    "Conecte o sistema onde ficam pedidos, estoque ou cadastro de clientes (um ERP, um CRM, uma planilha compartilhada) para o atendente consultar dados reais em vez de responder só pela base de conhecimento.",
-  campos: MCP_EMPRESA.campos.map((c) =>
-    c.chave === "MCP_EMPRESA_URL"
-      ? { ...c, ajuda: "A equipe que cuida do seu ERP ou CRM tem esse endereço. Se o sistema for outro app desta suíte, ele aparece no cartão \"Usar dentro do seu assistente\" de lá." }
-      : c
-  ),
-};
-
-export const INTEGRACOES: Integracao[] = [OPENROUTER, WHATSAPP, NOTIFICACOES, SISTEMAS_DA_EMPRESA];
+// "Sistemas da empresa (MCP)" saiu de Configurações: conectar um ERP/CRM por MCP confundia quem só
+// quer o atendente respondendo no WhatsApp, e o cartão ficava entre dois outros que falam de conexão.
+// A capacidade continua em lib/empresa-mcp.ts e é ligada por variável de ambiente (MCP_EMPRESA_URL e
+// MCP_EMPRESA_CODIGO, lidas por getConfig), sem aparecer na tela.
+export const INTEGRACOES: Integracao[] = [OPENROUTER, WHATSAPP, NOTIFICACOES];

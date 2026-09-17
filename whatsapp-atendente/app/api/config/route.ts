@@ -1,4 +1,4 @@
-import { getConfig, setConfig } from "@/lib/estado";
+import { getConfig, setConfig, temConfigSalva } from "@/lib/estado";
 import type { Config } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -7,8 +7,11 @@ const OBJETIVOS: Config["objetivo"][] = ["atendimento", "vendas", "agendamentos"
 const TONS: Config["tom"][] = ["profissional", "amigavel", "personalizado"];
 const NAO_SEI: Config["naoSei"][] = ["humano", "contato", "site"];
 
+// `salvo` acompanha a configuração (e não substitui nada dela): as telas que só mostram os dados
+// continuam recebendo a empresa de exemplo quando ninguém configurou, e só o Assistente usa o campo
+// para abrir com o modelo da base no lugar do exemplo.
 export async function GET() {
-  return Response.json(getConfig());
+  return Response.json({ ...getConfig(), salvo: temConfigSalva() });
 }
 
 export async function PUT(req: Request) {

@@ -27,6 +27,7 @@ import { ConexaoWhatsApp } from "./ConexaoWhatsApp";
 import { formatarTelefone } from "@/lib/telefone";
 import type { RespostaConexao } from "@/app/api/whatsapp/conexao/route";
 import type { ParBase } from "@/lib/base";
+import { ehModeloDeBase, modeloDeBase } from "@/lib/base-modelo";
 import { SUGESTOES, configExemplo } from "@/lib/demo";
 import { OBJETIVOS, TONS, rotuloObjetivo, rotuloTom } from "@/lib/rotulos";
 import type { Sugestao } from "@/lib/sugestoes";
@@ -39,6 +40,12 @@ const PASSOS: PassoIndicador[] = [
 ];
 
 const CONFIG_VAZIA: Config = { negocio: "", atendente: "", objetivo: "atendimento", tom: "profissional", horario: "", baseConhecimento: "", naoSei: "humano" };
+
+/** Primeira vez no passo 1: os campos do negócio começam vazios e a base já vem com o modelo do objetivo
+ * padrão (lib/base-modelo.ts), para a pessoa trocar os marcadores em vez de encarar um campo em branco.
+ * `GET /api/config` devolve a empresa de exemplo quando nada foi salvo (é ela que enche o resto do app na
+ * demonstração), então quem decide entre uma coisa e outra é o campo `salvo` da mesma resposta. */
+const CONFIG_INICIAL: Config = { ...CONFIG_VAZIA, baseConhecimento: modeloDeBase("atendimento") };
 
 /** O mesmo teto que o campo aceita e que o contador mostra: um texto maior que isso não cabe no prompt
  * sem encarecer cada resposta, e a pessoa precisa ver quanto já usou antes de bater no limite. */
@@ -147,6 +154,16 @@ export function Assistente() {
 
   function setCampo<K extends keyof Config>(campo: K, valor: Config[K]) {
     setConfig((c) => ({ ...c, [campo]: valor }));
+  }
+
+  /** Trocar o objetivo troca o modelo da base — mas só enquanto ele estiver intocado. Qualquer edição da
+   * pessoa (ou um texto que ela mesma colou) congela o campo onde está: o modelo nunca apaga trabalho. */
+  function escolherObjetivo(objetivo: Config["objetivo"]) {
+    setConfig((c) => ({
+      ...c,
+      objetivo,
+      baseConhecimento: ehModeloDeBase(c.baseConhecimento) ? modeloDeBase(objetivo) : c.baseConhecimento,
+    }));
   }
 
   /** 401 com codigo "sem_sessao" significa sessão expirada: a tela de entrar resolve, o ErrorBox não. */
@@ -328,9 +345,11 @@ export function Assistente() {
         return;
       }
       try {
-        setConfig(await fetch("/api/config").then((r) => r.json()));
+        const salva = (await fetch("/api/config").then((r) => r.json())) as Config & { salvo?: boolean };
+        setConfig(salva.salvo ? salva : CONFIG_INICIAL);
       } catch {
-        // Sem resposta, o formulário abre vazio e a pessoa preenche do zero.
+        // Sem resposta, o formulário abre com o modelo e a pessoa preenche por cima.
+        setConfig(CONFIG_INICIAL);
       } finally {
         setCarregando(false);
       }
@@ -554,7 +573,7 @@ export function Assistente() {
                       titulo={rotuloObjetivo(o).titulo}
                       apoio={rotuloObjetivo(o).apoio}
                       selecionado={config.objetivo === o}
-                      onEscolher={() => setCampo("objetivo", o)}
+                      onEscolher={() => escolherObjetivo(o)}
                     />
                   ))}
                 </Grupo>
@@ -575,7 +594,11 @@ export function Assistente() {
                     página é um Client Component e o passo 1 só existe depois da carga, então quem rola
                     até aqui é o efeito de `hash` abaixo, não o navegador. */}
                 <span id="conhecimento" className="block scroll-mt-24" />
-                <Field label="O que ele precisa saber?" htmlFor="baseConhecimento" hint="O atendente não inventa nada fora daqui.">
+                <Field
+                  label="O que ele precisa saber?"
+                  htmlFor="baseConhecimento"
+                  hint="O atendente não inventa nada fora daqui. Troque o que está entre colchetes pelos dados da sua empresa e apague o que não usar."
+                >
                   <textarea
                     id="baseConhecimento"
                     className="input min-h-[190px] resize-y"

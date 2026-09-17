@@ -43,6 +43,16 @@ export function migrarConfig(salvo: Partial<Config> & { tom?: string }): Config 
   };
 }
 
+/**
+ * Já existe uma configuração salva por alguém? `getConfig()` nunca devolve vazio (sem nada salvo ele cai
+ * na empresa de exemplo, que é o que faz o app abrir cheio na demonstração), então quem precisa
+ * distinguir "ainda não configurou" de "configurou assim" pergunta aqui — hoje o passo 1 do Assistente,
+ * que abre com o modelo da base em vez do exemplo.
+ */
+export function temConfigSalva(): boolean {
+  return Boolean(getStoreConfig(CHAVE));
+}
+
 export function getConfig(): Config {
   const bruto = getStoreConfig(CHAVE);
   if (!bruto) return { ...configExemplo };

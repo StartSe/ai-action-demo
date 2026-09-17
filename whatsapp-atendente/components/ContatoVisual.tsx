@@ -34,6 +34,26 @@ export function Avatar({ nome, tamanho = 40 }: { nome?: string; tamanho?: number
   );
 }
 
+/**
+ * Avatar do atendente virtual, ao lado das respostas dele na conversa aberta. É um desenho fixo (e não
+ * as iniciais do nome) de propósito: ele marca, numa olhada, qual bolha foi escrita pela IA e qual foi
+ * escrita por uma pessoa da equipe — que continua aparecendo com o avatar de iniciais.
+ */
+export function AvatarAtendente({ tamanho = 28 }: { tamanho?: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="shrink-0 rounded-full bg-accent-soft text-accent-ink grid place-items-center"
+      style={{ width: tamanho, height: tamanho }}
+    >
+      <svg width={Math.round(tamanho * 0.6)} height={Math.round(tamanho * 0.6)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="8" width="16" height="11" rx="3" />
+        <path d="M12 4.5V8M9 13h.01M15 13h.01M9.5 16.2h5" />
+      </svg>
+    </span>
+  );
+}
+
 /** Desenho de cada canal, 16 px, sem rótulo ao lado: na largura da lista não cabe a palavra. O verde da
  * marca do WhatsApp entra só aqui — nunca como acento da tela. */
 const DESENHOS_ORIGEM: Record<CanalOrigem, ReactNode> = {

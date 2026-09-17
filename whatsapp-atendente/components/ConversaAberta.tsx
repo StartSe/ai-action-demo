@@ -16,7 +16,7 @@
 // caminho literal em qualquer componente.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AcoesResposta, type AoSalvarBase } from "./Celular";
-import { Avatar, DesenhoOrigem } from "./ContatoVisual";
+import { Avatar, AvatarAtendente, DesenhoOrigem } from "./ContatoVisual";
 import { ContatoRecolhido, PainelContato, type DadosDoContato } from "./PainelContato";
 import { Aviso, ErrorBox, lerErro, useConfirmacao, type ErroLido } from "./ui";
 import { classeStatus, rotuloContato, rotuloNumero, rotuloStatus } from "@/lib/rotulos";
@@ -43,10 +43,36 @@ function assinaturaDe(c: ConversaCompleta): string {
   return `${c.status}|${c.atualizadoEm}|${c.mensagens.length}|${c.naoLidas}`;
 }
 
+/**
+ * Marca de envio da bolha, ao lado da hora. Um tique só, e nunca os dois: o app sabe que a mensagem foi
+ * aceita para envio pelo número da empresa, e NÃO sabe se ela chegou ao aparelho do cliente nem se foi
+ * lida (nem a z-api nem a Meta avisam isso por aqui). Dois tiques azuis, como no WhatsApp, diriam algo
+ * que ninguém conferiu. Quando o envio falha, quem conta a história é o aviso vermelho abaixo da bolha.
+ */
+function MarcaEnvio({ claro }: { claro: boolean }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={claro ? "text-white/75" : "text-muted"}
+      role="img"
+      aria-label="Enviada pelo número da empresa"
+    >
+      <path d="m5 13 4 4 10-10" />
+    </svg>
+  );
+}
+
 function Bolha({
   mensagem,
   pergunta,
-  rotulo,
+  autor,
   naoEntregue,
   corrigindo,
   onSalvarBase,
@@ -54,26 +80,38 @@ function Bolha({
   mensagem: MensagemDaConversa;
   /** Pergunta do cliente logo antes desta resposta; sem ela não há par para aprovar. */
   pergunta?: string;
-  rotulo?: string;
+  /** Nome de quem escreveu, mostrado dentro da bolha (o atendente virtual ou a pessoa da equipe). */
+  autor?: string;
   naoEntregue: boolean;
   corrigindo: boolean;
   onSalvarBase: AoSalvarBase;
 }) {
   const doCliente = mensagem.papel === "cliente";
-  const fundo = doCliente
-    ? "bg-white border border-line"
-    : mensagem.papel === "humano"
-      ? "bg-accent text-white"
-      : "bg-accent-soft text-ink";
+  const daIA = mensagem.papel === "atendente";
+  const doHumano = mensagem.papel === "humano";
+  // As três cores repetem a conversa que a pessoa já conhece do WhatsApp: a mensagem que chegou é
+  // branca à esquerda, a que saiu é verde à direita. O verde escuro separa o que uma pessoa escreveu
+  // do que a IA respondeu — as duas saem pelo mesmo número, e confundi-las é o erro caro aqui.
+  const fundo = doCliente ? "bg-white" : doHumano ? "bg-accent text-white" : "bg-accent-soft text-ink";
+  const rabicho = doCliente
+    ? "rounded-tl-sm"
+    : "rounded-tr-sm";
   return (
     <div className={`flex flex-col gap-1 max-w-[76%] max-md:max-w-[88%] ${doCliente ? "self-start items-start" : "self-end items-end"}`}>
-      {rotulo && <span className="text-[11px] font-semibold text-muted px-1">{rotulo}</span>}
       <div
-        className={`px-3.5 pt-2.5 pb-[20px] rounded-xl text-[14px] leading-snug relative break-words whitespace-pre-wrap ${fundo} ${naoEntregue ? "border border-danger" : ""}`}
+        className={`px-3 pt-2 pb-[22px] rounded-xl ${rabicho} text-[14px] leading-snug relative break-words whitespace-pre-wrap shadow-[0_1px_1px_rgba(20,20,50,0.08)] ${fundo} ${naoEntregue ? "border border-danger" : ""}`}
       >
+        {autor && (
+          <span className={`flex items-center gap-1.5 mb-1 text-[11.5px] font-bold ${doHumano ? "text-white/85" : "text-accent-ink"}`}>
+            {daIA && <AvatarAtendente tamanho={20} />}
+            {autor}
+            {daIA && <span className="font-semibold text-muted">Assistente de IA</span>}
+          </span>
+        )}
         {mensagem.texto}
-        <span className={`absolute right-3 bottom-1 text-[10px] ${mensagem.papel === "humano" ? "text-white/75" : "text-muted"}`}>
+        <span className={`absolute right-2.5 bottom-1 flex items-center gap-1 text-[10px] ${doHumano ? "text-white/75" : "text-muted"}`}>
           {horaBolha(mensagem.criadoEm)}
+          {!doCliente && !naoEntregue && <MarcaEnvio claro={doHumano} />}
         </span>
       </div>
       {naoEntregue && <span className="text-[11px] font-semibold text-danger px-1">Esta mensagem não chegou ao cliente.</span>}
@@ -114,6 +152,11 @@ export function ConversaAberta({
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [agindo, setAgindo] = useState(false);
+  // Como a pessoa quer escrever esta resposta: pedindo um rascunho à IA (e revisando antes de enviar) ou
+  // do zero. A escolha é só da tela — quem envia é sempre a pessoa, pelos dois caminhos, e nada sai do
+  // app sem ela clicar em "Enviar".
+  const [modoResposta, setModoResposta] = useState<"ia" | "manual">("ia");
+  const [sugerindo, setSugerindo] = useState(false);
   /** Ids das mensagens que foram gravadas mas não saíram pelo número da empresa. */
   const [naoEntregues, setNaoEntregues] = useState<number[]>([]);
   const { confirmar, Dialogo } = useConfirmacao();
@@ -232,6 +275,26 @@ export function ConversaAberta({
     }
   }
 
+  /** "Responder como IA": traz um rascunho para o campo. Ele NÃO é enviado — a pessoa lê, ajusta e envia. */
+  async function pedirSugestao() {
+    if (sugerindo) return;
+    setSugerindo(true);
+    try {
+      const r = await fetch(`/api/conversas/${encodeURIComponent(numero)}/sugerir`, { method: "POST" });
+      if (!r.ok) throw r;
+      const { sugestao } = (await r.json()) as { sugestao?: string };
+      if (sugestao) {
+        setTexto(sugestao);
+        setErro(null);
+        campoRef.current?.focus();
+      }
+    } catch (e) {
+      setErro(await lerErro(e));
+    } finally {
+      setSugerindo(false);
+    }
+  }
+
   async function enviar() {
     const limpo = texto.trim();
     if (!limpo || enviando) return;
@@ -335,7 +398,7 @@ export function ConversaAberta({
 
         <div
           ref={corpoRef}
-          className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 bg-bg max-h-[calc(100vh-360px)] min-h-[260px] max-md:max-h-[60vh]"
+          className="fundo-conversa flex-1 overflow-y-auto p-4 flex flex-col gap-3 max-h-[calc(100vh-360px)] min-h-[260px] max-md:max-h-[60vh]"
         >
           {conversa.mensagens.length === 0 ? (
             <p className="m-auto text-[13px] text-muted text-center">Nenhuma mensagem nesta conversa ainda.</p>
@@ -348,7 +411,7 @@ export function ConversaAberta({
                   key={m.id}
                   mensagem={m}
                   pergunta={daIA && anterior?.papel === "cliente" ? anterior.texto : undefined}
-                  rotulo={daIA ? `${atendente.trim() || "Seu atendente"} · Assistente de IA` : m.papel === "humano" ? "Você" : undefined}
+                  autor={daIA ? atendente.trim() || "Seu atendente" : m.papel === "humano" ? "Você" : undefined}
                   naoEntregue={naoEntregues.includes(m.id)}
                   corrigindo={corrigirUltima && m.id === idUltimaIA}
                   onSalvarBase={salvarBase}
@@ -365,6 +428,34 @@ export function ConversaAberta({
         )}
 
         <div className="border-t border-line p-3">
+          {/* As duas abas ficam sempre visíveis, mesmo antes de assumir: elas dizem quais são os dois
+              caminhos de resposta. O que está desligado enquanto a IA cuida da conversa é o campo. */}
+          <div className="flex gap-1 mb-2.5" role="tablist" aria-label="Como responder">
+            {([["ia", "Responder como IA"], ["manual", "Responder manualmente"]] as const).map(([valor, rotulo]) => (
+              <button
+                key={valor}
+                type="button"
+                role="tab"
+                aria-selected={modoResposta === valor}
+                className={`px-3 py-1.5 rounded-field text-[13px] font-semibold transition-colors ${
+                  modoResposta === valor ? "bg-accent-soft text-accent-ink" : "text-muted hover:bg-bg"
+                }`}
+                onClick={() => setModoResposta(valor)}
+              >
+                {rotulo}
+              </button>
+            ))}
+          </div>
+
+          {modoResposta === "ia" && (
+            <div className="flex items-center gap-3 flex-wrap mb-2.5">
+              <button type="button" className="btn-ghost !w-auto !py-2 !text-[13px]" onClick={pedirSugestao} disabled={!emAtendimento || sugerindo}>
+                {sugerindo ? "Escrevendo..." : "Escrever com a IA"}
+              </button>
+              <span className="text-[12.5px] text-muted">O rascunho aparece no campo abaixo. Nada é enviado antes de você conferir.</span>
+            </div>
+          )}
+
           <div className="flex items-end gap-2">
             <div className="relative flex-1 min-w-0">
               <textarea
@@ -374,7 +465,9 @@ export function ConversaAberta({
                 value={emAtendimento ? texto : ""}
                 disabled={!emAtendimento}
                 aria-label={emAtendimento ? "Escreva a resposta" : "Assuma o atendimento para responder"}
-                placeholder={emAtendimento ? "Escreva a resposta" : "Assuma o atendimento para responder"}
+                /* Campo desligado não leva `placeholder`: a mesma frase já é desenhada por cima dele (o span
+                   abaixo), e os dois juntos aparecem sobrepostos nos navegadores que desenham o placeholder. */
+                placeholder={emAtendimento ? "Escreva a resposta" : ""}
                 onChange={(e) => {
                   setTexto(e.target.value);
                   const el = e.target;
