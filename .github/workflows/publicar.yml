@@ -139,7 +139,10 @@ jobs:
     name: Atualizar repositório público
     needs: [mudancas, imagens]
     # Não divulga botões que apontam para imagens que falharam na construção.
-    if: needs.mudancas.result == 'success' && (needs.imagens.result == 'success' || needs.imagens.result == 'skipped')
+    # !cancelled() é obrigatório: sem uma função de status, o Actions pula este job sempre que
+    # "imagens" é pulado (push que só muda catálogo, página ou README), e o repositório público
+    # ficava desatualizado.
+    if: ${{ !cancelled() && needs.mudancas.result == 'success' && (needs.imagens.result == 'success' || needs.imagens.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
