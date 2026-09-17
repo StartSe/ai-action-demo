@@ -35,14 +35,12 @@ import {
 import { AcoesResposta, Celular, horaAtual, type AoSalvarBase, type BolhaChat } from "@/components/Celular";
 import type { Meta } from "@/lib/ai";
 import type { ParBase } from "@/lib/base";
-import { ACAO_CONECTAR_NUMERO, AVISO_CONVERSAS_EXEMPLO, soConversasDeExemplo } from "@/lib/demo";
+import { ACAO_CONECTAR_NUMERO, AVISO_CONVERSAS_EXEMPLO, SUGESTOES, soConversasDeExemplo } from "@/lib/demo";
 import type { Sugestao } from "@/lib/sugestoes";
 import { rotuloContato, rotuloOrigem } from "@/lib/rotulos";
 import type { Config, Conversa, ItemRelatorioAtendimento, PerguntaPendente } from "@/lib/types";
 
 const CONFIG_VAZIA: Config = { negocio: "", atendente: "", objetivo: "atendimento", tom: "profissional", horario: "", baseConhecimento: "", naoSei: "humano" };
-
-const SUGESTOES = ["Quanto custa o clareamento dental?", "Vocês atendem aos sábados?", "Fazem cirurgia cardíaca?"];
 
 const ETAPAS_CARREGANDO = ["Abrindo as conversas...", "Quase pronto..."];
 

@@ -244,22 +244,49 @@ export function Hero({ sobretitulo, titulo, apoio, segmento, children }: { sobre
 export type PassoIndicador = { titulo: string; apoio: string };
 
 /** Indicador de progresso (referência visual de 15/09/2026): três etapas numeradas, a atual no acento e as
- * demais em cinza. É só indicador — nunca navegação, não recebe clique. Rola na horizontal no celular. */
-export function Passos({ passos, atual }: { passos: PassoIndicador[]; atual: number }) {
+ * demais em cinza. Rola na horizontal no celular. Sem `onIr` é só indicador e não recebe clique; com `onIr`
+ * (US-009), as etapas já concluídas viram botões de voltar — uma etapa à frente nunca é clicável, porque a
+ * pessoa ainda não passou por ela. */
+export function Passos({ passos, atual, onIr }: { passos: PassoIndicador[]; atual: number; onIr?: (numero: number) => void }) {
   return (
     <ol className="no-print flex gap-7 max-md:gap-5 max-md:overflow-x-auto max-md:pb-1">
       {passos.map((p, i) => {
         const numero = i + 1;
         const ativo = numero === atual;
-        return (
-          <li key={p.titulo} className={`flex items-baseline gap-1.5 shrink-0 ${ativo ? "text-accent" : "text-ink-2"}`}>
+        const conteudo = (
+          <>
             <span className="font-extrabold text-[13px]">{numero}</span>
             <span className={`text-[13px] ${ativo ? "font-bold" : ""}`}>{p.titulo}</span>
             <span className="text-[12px] max-md:hidden">· {p.apoio}</span>
+          </>
+        );
+        return (
+          <li key={p.titulo} className={`flex items-baseline gap-1.5 shrink-0 ${ativo ? "text-accent" : "text-ink-2"}`}>
+            {onIr && numero < atual ? (
+              <button type="button" className="flex items-baseline gap-1.5 bg-transparent border-0 p-0 cursor-pointer text-left text-inherit hover:underline" onClick={() => onIr(numero)}>
+                {conteudo}
+              </button>
+            ) : (
+              conteudo
+            )}
           </li>
         );
       })}
     </ol>
+  );
+}
+
+/** Orientação curta ao lado de uma prévia ou de um formulário: diz o que vem depois, sem cara de alerta
+ * (o `Aviso` é para o que deu ou pode dar errado). */
+export function Dica({ children }: { children: ReactNode }) {
+  return (
+    <p className="flex items-start gap-2.5 text-[13px] text-ink-2 bg-accent-soft rounded-card px-3.5 py-3">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-accent shrink-0 mt-[3px]">
+        <path d="M9 18h6M10 21h4" />
+        <path d="M12 3a6 6 0 0 0-3.5 10.9c.4.3.6.8.6 1.3v.8h5.8v-.8c0-.5.2-1 .6-1.3A6 6 0 0 0 12 3Z" />
+      </svg>
+      <span>{children}</span>
+    </p>
   );
 }
 

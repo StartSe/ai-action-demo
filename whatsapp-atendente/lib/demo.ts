@@ -114,6 +114,14 @@ export function respostaLocal(texto: string, config: Config): { resposta: string
   return { resposta: reformular(melhor, config.tom), transferir: false };
 }
 
+/**
+ * Perguntas de cliente que o app oferece como atalho: uma que a base responde (preço), uma sobre
+ * horário e uma de propósito fora do que a clínica faz, para mostrar o que acontece quando o
+ * atendente não sabe. Ficam aqui, e não na tela, porque o Assistente usa a primeira na prévia do
+ * passo 1 e as três como botões no passo 2.
+ */
+export const SUGESTOES = ["Quanto custa o clareamento dental?", "Vocês atendem aos sábados?", "Fazem cirurgia cardíaca?"];
+
 export const configExemplo: Config = {
   negocio: "Sorriso Pleno Odontologia",
   atendente: "Bia",

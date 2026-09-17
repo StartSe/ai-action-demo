@@ -102,7 +102,10 @@ export function AcoesResposta({
   );
 }
 
-function saudacaoPadrao(nome: string, negocio: string): string {
+/** Primeira bolha do atendente, tanto no simulador quanto na prévia do Assistente. Sem artigo antes do
+ * nome ("Eu sou Bia", não "Eu sou a Bia"): o nome do atendente é escrito pela pessoa e pode ser de
+ * qualquer gênero. */
+export function saudacaoPadrao(nome: string, negocio: string): string {
   const quem = nome.trim() || "o atendente";
   const sufixoEmpresa = negocio.trim() ? ` da ${negocio.trim()}` : "";
   return `Olá! Eu sou ${quem}${sufixoEmpresa}. Como posso ajudar?`;
@@ -113,22 +116,26 @@ export function Celular({
   nome,
   negocio,
   mensagens,
-  valor,
+  valor = "",
   onValorChange,
   onEnviar,
-  enviando,
+  enviando = false,
   onAprovar,
   onCorrigir,
+  previa = false,
 }: {
   nome: string;
   negocio: string;
   mensagens: BolhaChat[];
-  valor: string;
-  onValorChange: (v: string) => void;
-  onEnviar: (texto: string) => void;
-  enviando: boolean;
+  valor?: string;
+  onValorChange?: (v: string) => void;
+  onEnviar?: (texto: string) => void;
+  enviando?: boolean;
   onAprovar?: AoSalvarBase;
   onCorrigir?: AoSalvarBase;
+  /** Prévia (passo 1 do Assistente): o celular só ilustra como o atendente aparece para o cliente, então
+   * fica sem campo de escrever e mais baixo. Quem conversa de verdade é o simulador do passo 2. */
+  previa?: boolean;
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -141,13 +148,13 @@ export function Celular({
     e.preventDefault();
     const texto = valor.trim();
     if (!texto) return;
-    onValorChange("");
-    onEnviar(texto);
+    onValorChange?.("");
+    onEnviar?.(texto);
   }
 
   return (
     <div className="flex justify-center mb-5">
-      <div className="w-[360px] max-w-full h-[560px] bg-[#e5ddd5] rounded-[28px] border-[10px] border-[#1f2937] shadow-card overflow-hidden flex flex-col">
+      <div className={`w-[360px] max-w-full ${previa ? "h-[420px]" : "h-[560px]"} bg-[#e5ddd5] rounded-[28px] border-[10px] border-[#1f2937] shadow-card overflow-hidden flex flex-col`}>
         <div className="bg-accent text-white px-4 py-3.5 flex items-center gap-3 shrink-0">
           <div className="w-9 h-9 rounded-full bg-white/20 grid place-items-center font-extrabold text-[15px] shrink-0">
             {(nome || "A").trim().charAt(0).toUpperCase()}
@@ -202,19 +209,21 @@ export function Celular({
           })}
         </div>
 
+        {previa ? null : (
         <form onSubmit={submit} className="flex gap-2 p-2.5 bg-[#f0f0f0] border-t border-line shrink-0">
           <input
             className="flex-1 min-w-0 rounded-full border border-line px-3.5 py-2.5 bg-white outline-none focus:border-accent focus:ring-[3px] focus:ring-accent-soft"
             placeholder="Digite uma pergunta do cliente..."
             autoComplete="off"
             value={valor}
-            onChange={(e) => onValorChange(e.target.value)}
+            onChange={(e) => onValorChange?.(e.target.value)}
             disabled={enviando}
           />
           <button type="submit" className="btn-primary w-auto rounded-full px-[18px] whitespace-nowrap" disabled={enviando}>
             Enviar
           </button>
         </form>
+        )}
       </div>
     </div>
   );
