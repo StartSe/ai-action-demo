@@ -2,15 +2,33 @@
 // de salvar as três credenciais da z-api, este app cadastra sozinho, na instância, o endereço por onde
 // a z-api avisa que chegou mensagem ou que o número conectou/caiu. Sem isso a pessoa teria que copiar
 // um endereço à mão no painel da z-api — exatamente o que esta rodada tirou do caminho dela.
-import { INTEGRACOES } from "@/lib/integracoes";
-import { baseUrl, statusIntegracoes } from "@/lib/setup-comum";
+import { COM_CARTAO_PROPRIO, GENERICAS, INTEGRACOES } from "@/lib/integracoes";
+import { baseUrl, integracaoConfigurada, statusIntegracoes } from "@/lib/setup-comum";
 import { setConfig } from "@/lib/store";
 import { configurarWebhooks, credenciais } from "@/lib/zapi";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * A resposta desta rota, para o GET e para o PUT. O cartão do WhatsApp sai de `integracoes` (a lista que
+ * `components/setup.tsx` desenha) e vai para `comCartaoProprio`, porque quem o desenha é
+ * `components/ConexaoWhatsApp.tsx` — que lê os campos daqui para não importar nada de `lib/setup-comum`
+ * (um componente varrido por scripts/verificar-jargao.mjs não pode importar de um caminho com "setup" no
+ * nome, ver CLAUDE.md/US-007). `pronto` continua sendo calculado sobre TODAS as integrações, para não
+ * divergir do selo que o `/api/status` mostra no cabeçalho.
+ */
+async function respostaSetup() {
+  const genericas = await statusIntegracoes(GENERICAS);
+  const proprias = await statusIntegracoes(COM_CARTAO_PROPRIO);
+  return {
+    ...genericas,
+    comCartaoProprio: proprias.integracoes,
+    pronto: INTEGRACOES.filter((i) => i.obrigatoria).every(integracaoConfigurada),
+  };
+}
+
 export async function GET() {
-  return Response.json(await statusIntegracoes(INTEGRACOES));
+  return Response.json(await respostaSetup());
 }
 
 /** Salva valores. Chave com valor "" é ignorada (mantém o atual); null apaga. */
@@ -41,5 +59,5 @@ export async function PUT(req: Request) {
     }
   }
 
-  return Response.json({ salvos, avisoConexao, ...(await statusIntegracoes(INTEGRACOES)) });
+  return Response.json({ salvos, avisoConexao, ...(await respostaSetup()) });
 }

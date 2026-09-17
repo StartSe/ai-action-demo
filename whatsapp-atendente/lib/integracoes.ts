@@ -73,8 +73,21 @@ export const WHATSAPP: Integracao = {
   testar: conferirNumero,
 };
 
+/**
+ * Integrações com cartão próprio em /setup: saem da lista genérica devolvida pelo `GET /api/setup` e
+ * continuam em `INTEGRACOES` para o `PUT`, para o botão de testar e para o `/api/status` (mesmo desenho
+ * que `custos-ia` usa com Gmail e Outlook). O WhatsApp está aqui porque `components/ConexaoWhatsApp.tsx`
+ * faz tudo o que o cartão genérico fazia — e mais: QR Code, estado da conexão, número conectado,
+ * "Desconectar" e o bloco da equipe técnica. Com os dois na tela, a mesma pessoa era convidada a colar
+ * as mesmas três credenciais duas vezes seguidas (achado aberto da US-020).
+ */
+export const COM_CARTAO_PROPRIO: Integracao[] = [WHATSAPP];
+
 // "Sistemas da empresa (MCP)" saiu de Configurações: conectar um ERP/CRM por MCP confundia quem só
 // quer o atendente respondendo no WhatsApp, e o cartão ficava entre dois outros que falam de conexão.
 // A capacidade continua em lib/empresa-mcp.ts e é ligada por variável de ambiente (MCP_EMPRESA_URL e
 // MCP_EMPRESA_CODIGO, lidas por getConfig), sem aparecer na tela.
 export const INTEGRACOES: Integracao[] = [OPENROUTER, WHATSAPP, NOTIFICACOES];
+
+/** O que o cartão genérico de /setup desenha: tudo menos quem tem cartão próprio. */
+export const GENERICAS: Integracao[] = INTEGRACOES.filter((i) => !COM_CARTAO_PROPRIO.some((p) => p.id === i.id));

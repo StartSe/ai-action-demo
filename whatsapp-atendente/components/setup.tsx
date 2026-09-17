@@ -7,7 +7,17 @@ import { IlustracaoSegmento, MaisDetalhes, Topbar, useStatus } from "./ui";
 import type { CampoStatus, IntegracaoStatus, Opcao, StatusCaixasEmail, StatusEnderecoPublico } from "@/lib/setup-comum";
 import type { Segmento } from "@/lib/ilustracao";
 
-type Resposta = { integracoes: IntegracaoStatus[]; pronto: boolean; enderecoPublico: StatusEnderecoPublico; caixasEmail: StatusCaixasEmail };
+// `comCartaoProprio` são as integrações que esta tela NÃO desenha, porque um componente próprio do app
+// (passado em `children`) já cuida delas por inteiro — hoje o WhatsApp, em components/ConexaoWhatsApp.tsx.
+// Elas continuam contando no progresso, no "Faz mais com" e na lista de chaves do rodapé: para quem lê a
+// tela, elas estão configuradas ali do mesmo jeito, só que num cartão mais completo.
+type Resposta = {
+  integracoes: IntegracaoStatus[];
+  comCartaoProprio?: IntegracaoStatus[];
+  pronto: boolean;
+  enderecoPublico: StatusEnderecoPublico;
+  caixasEmail: StatusCaixasEmail;
+};
 
 // Duas frases de privacidade, verdadeiras desde a US-011 (as chaves são cifradas em
 // repouso, ver lib/store.ts, mas o app continua chamando serviços externos de verdade
@@ -53,10 +63,11 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
 
   const carregar = () => fetch("/api/setup").then((r) => r.json()).then(setDados).catch(() => setAviso({ tipo: "erro", texto: "Não foi possível carregar a configuração." }));
   const primeiroPendenteId = dados?.integracoes.find((i) => i.obrigatoria && !i.configurada)?.id;
-  const conectadas = dados?.integracoes.filter((i) => i.configurada).length ?? 0;
-  const total = dados?.integracoes.length ?? 0;
+  const todas = [...(dados?.integracoes ?? []), ...(dados?.comCartaoProprio ?? [])];
+  const conectadas = todas.filter((i) => i.configurada).length;
+  const total = todas.length;
   const progresso = total > 0 ? Math.round((conectadas / total) * 100) : 0;
-  const opcionaisFaltando = dados?.integracoes.filter((i) => !i.obrigatoria && !i.configurada) ?? [];
+  const opcionaisFaltando = todas.filter((i) => !i.obrigatoria && !i.configurada);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -175,7 +186,7 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
               {dados && <CampoEnderecoPublico status={dados.enderecoPublico} aoSalvar={carregar} />}
               {dados && (
                 <ul className="mt-2 flex flex-col gap-1 text-[13px] text-muted">
-                  {dados.integracoes.flatMap((i) =>
+                  {todas.flatMap((i) =>
                     i.campos.filter((c) => c.definido).map((c) => (
                       <li key={c.chave}>
                         <code>{c.chave}</code>: {c.origem === "env" ? "variável de ambiente (tem prioridade sobre o valor salvo aqui)" : "salvo neste app"}

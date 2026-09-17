@@ -7,6 +7,6 @@
     "app/api/setup/oauth/microsoft/callback/route.ts": "idem"
   },
   "whatsapp-atendente": {
-    "app/api/setup/route.ts": "Depois de salvar as três credenciais da z-api, cadastra sozinho na instância o endereço dos avisos (lib/zapi.ts:configurarWebhooks) — é o que tira do caminho da pessoa copiar esse endereço à mão no painel da z-api"
+    "app/api/setup/route.ts": "Duas divergências de propósito: (1) depois de salvar as três credenciais da z-api, cadastra sozinho na instância o endereço dos avisos (lib/zapi.ts:configurarWebhooks), tirando do caminho da pessoa copiar esse endereço à mão no painel da z-api; (2) o WhatsApp sai da lista genérica do GET e vai em comCartaoProprio, porque components/ConexaoWhatsApp.tsx já desenha o cartão dele inteiro (QR Code, estado, desconectar) — mesmo desenho que custos-ia usa com Gmail e Outlook"
   }
 }

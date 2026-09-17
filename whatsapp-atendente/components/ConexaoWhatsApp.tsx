@@ -99,8 +99,10 @@ export function ConexaoWhatsApp({
   const carregarCampos = useCallback(async () => {
     try {
       const r = await fetch("/api/setup");
-      const dados = (await r.json()) as { integracoes: { id: string; campos: CampoConexao[] }[] };
-      const whats = dados.integracoes.find((i) => i.id === "whatsapp");
+      // O WhatsApp vem em `comCartaoProprio`: ele saiu da lista genérica justamente porque este cartão faz
+      // o trabalho inteiro (ver app/api/setup/route.ts). O formato dos campos continua o mesmo.
+      const dados = (await r.json()) as { comCartaoProprio?: { id: string; campos: CampoConexao[] }[] };
+      const whats = dados.comCartaoProprio?.find((i) => i.id === "whatsapp");
       setCampos(whats ? whats.campos.filter((c) => !c.avancado) : []);
     } catch {
       setCampos([]);
