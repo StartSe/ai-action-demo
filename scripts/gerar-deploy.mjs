@@ -53,9 +53,13 @@ const imagem = (app) => `${cat.registro}/${app.id}:latest`;
 const branchDeploy = (app) => `deploy-${app.id}`;
 const urlPublicar = (app) => `https://render.com/deploy?repo=${repoPublicoUrl}/tree/${branchDeploy(app)}`;
 const urlPublicarSuite = `https://render.com/deploy?repo=${repoPublicoUrl}`;
-// O botão da suíte continua gratuito: apps pagos só têm o botão próprio.
-const appsSuite = cat.apps.filter((a) => !pago(a));
+// O Blueprint da suíte publica todos os apps; os pagos são citados por nome com o plano.
+const appsSuite = cat.apps;
 const appsPagos = cat.apps.filter(pago);
+const notaPagos = (prefixo = "") =>
+  appsPagos.length
+    ? `${prefixo}${appsPagos.map((a) => `${a.nome} exige o plano ${plano(a)} (pago)`).join("; ")}; os outros ${cat.apps.length - appsPagos.length} são gratuitos.`
+    : "";
 const aposPublicar = (app) =>
   app.aposPublicar ?? "Depois de publicar, abra o app e clique em Configurações (`/setup`) para conectar a IA.";
 const comandoDocker = (app) =>
@@ -96,7 +100,7 @@ const cabecalho = (texto) => `# ${texto.split("\n").join("\n# ")}\n`;
 
 function renderApp(app) {
   const nota = pago(app)
-    ? `Este app exige o plano ${plano(app)} (pago) e cria um disco de ${app.discoGB ?? 1} GB em /app/data: por isso fica fora do Blueprint da suíte.
+    ? `Este app exige o plano ${plano(app)} (pago) e cria um disco de ${app.discoGB ?? 1} GB em /app/data, onde ficam planilhas, modelos e a conta.
 ${app.aposPublicar ?? "Nenhuma chave é necessária aqui."}`
     : `Nenhuma chave é necessária aqui: após publicar, abra /setup no app e conecte a IA.
 As chaves ficam em SQLite em /app/data. No plano free o disco é efêmero e a configuração se perde a cada deploy.`;
@@ -112,12 +116,9 @@ ${nota}`
 }
 
 function renderSuite() {
-  const foraDaSuite = appsPagos.length
-    ? `\nFicam de fora, por exigirem plano pago: ${appsPagos.map((a) => `${a.nome} (branch ${branchDeploy(a)})`).join(", ")}.`
-    : "";
   return (
     cabecalho(
-      `Blueprint único da suíte ${cat.titulo}: publica os ${appsSuite.length} apps gratuitos de uma vez.${foraDaSuite}
+      `Blueprint único da suíte ${cat.titulo}: publica os ${appsSuite.length} apps de uma vez.${notaPagos("\n")}
 Cada app também tem seu próprio Blueprint (branch deploy-<app> em ${repoPublicoUrl}).
 Imagens públicas publicadas pelo GitHub Actions em ${cat.registro}/<app>:latest.
 Nenhuma chave é necessária aqui: após publicar, abra /setup em cada app e conecte a IA.
@@ -136,7 +137,7 @@ function readmePublico() {
     )
     .join("\n");
   const avisoPagos = appsPagos.length
-    ? `\n- ${appsPagos.map((a) => `**${a.nome}** é a exceção: exige o plano ${plano(a)} (pago) e cria um disco de ${a.discoGB ?? 1} GB para guardar planilhas e modelos. Por isso fica fora do botão da suíte e tem só o botão próprio.`).join("\n- ")}`
+    ? `\n- ${appsPagos.map((a) => `**${a.nome}** é a exceção: exige o plano ${plano(a)} (pago) e cria um disco de ${a.discoGB ?? 1} GB para guardar planilhas e modelos. Ao publicar a suíte inteira, o serviço de hospedagem pede um cartão só por causa dele; os demais continuam gratuitos.`).join("\n- ")}`
     : "";
   return `# ${cat.titulo}
 
@@ -146,9 +147,10 @@ Catálogo com filtro por área: **${cat.paginaPublica}**
 
 Este repositório guarda só os arquivos de publicação (um Blueprint por app, um da suíte e a página do catálogo). Ele é gerado automaticamente a partir do repositório privado \`${cat.repoPrivado}\`; nada aqui é editado à mão.
 
-## Publicar os ${appsSuite.length} apps gratuitos de uma vez
+## Publicar os ${appsSuite.length} apps de uma vez
 
 [![Publicar os ${appsSuite.length} apps](https://img.shields.io/badge/Publicar%20os%20${appsSuite.length}%20apps-1f4fd8?style=for-the-badge)](${urlPublicarSuite})
+${notaPagos()}
 
 ## Publicar um app de cada vez
 
@@ -224,7 +226,7 @@ writeFileSync(
       lead: cat.lead,
       repoPublico: repoPublicoUrl,
       publicarSuite: urlPublicarSuite,
-      // Só os gratuitos entram no botão da suíte; a página usa esta lista para o texto do botão.
+      // Todos entram no botão da suíte; a página usa esta lista para o texto do botão.
       appsNaSuite: appsSuite.map((a) => a.id),
       apps: cat.apps.map((a) => {
         const origem = join(capturasOrigem, `${a.id}.png`);

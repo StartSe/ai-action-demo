@@ -91,7 +91,7 @@ Catálogo público: https://startse.github.io/ai-action-app-deploy/ (filtro por 
 
 `catalogo.json` é a fonte única: nome, áreas, textos, cor de acento, porta e URL de demonstração de cada app. Depois de alterar, rode `node scripts/gerar-deploy.mjs` para atualizar os `render.yaml` versionados aqui (o workflow faz o mesmo antes de publicar).
 
-Campos opcionais para um app que não cabe no plano gratuito: `plano` (`free`, `starter`, `standard` ou `pro`; ausente = `free`), `discoGB` (disco persistente em `/app/data`, só com plano pago), `variaveisGeradas` (segredos que o Render gera no deploy, com `generateValue`), `aposPublicar` (texto que substitui "abra /setup e conecte a IA") e `padrao: "proprio"` (o app não segue o padrão de `pdi-time` e sai de `verificar-padrao.sh` e `verificar-jargao.mjs`). Um app pago fica fora do Blueprint da suíte e ganha aviso de plano pago na página e nos READMEs.
+Campos opcionais para um app que não cabe no plano gratuito: `plano` (`free`, `starter`, `standard` ou `pro`; ausente = `free`), `discoGB` (disco persistente em `/app/data`, só com plano pago), `variaveisGeradas` (segredos que o Render gera no deploy, com `generateValue`), `aposPublicar` (texto que substitui "abra /setup e conecte a IA") e `padrao: "proprio"` (o app não segue o padrão de `pdi-time` e sai de `verificar-padrao.sh`, `verificar-jargao.mjs` e `verificar-paleta.mjs`). Um app pago entra no Blueprint da suíte com o seu plano e ganha aviso de plano pago na página e nos READMEs.
 
 ### Uma vez, depois do primeiro build
 
@@ -116,7 +116,7 @@ docker login ghcr.io                   # token do GitHub com escopo write:packag
 
 Botão por app e da suíte inteira no catálogo público, ou direto:
 
-- Suíte (só os apps gratuitos): `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy`
+- Suíte (os 18; o AutoML é o único pago): `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy`
 - Um app: `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-<app>`
 
 Depois do deploy, abra `https://<nome>.onrender.com/setup` e conecte a IA e as integrações. O plano `free` hiberna após inatividade e tem disco efêmero: a configuração feita em `/setup` se perde a cada deploy. Para persistir, use um plano pago e descomente o bloco `disk` no Blueprint.

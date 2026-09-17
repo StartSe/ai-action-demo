@@ -99,7 +99,8 @@ function deltaE(hex1, hex2) {
 }
 
 // Regra 1: catálogo <-> paleta.
-const idsCatalogo = catalogo.apps.map((a) => a.id).sort();
+// Apps com "padrao": "proprio" (ex.: automl-pocket) têm interface própria e não entram na paleta por segmento.
+const idsCatalogo = catalogo.apps.filter((a) => a.padrao !== "proprio").map((a) => a.id).sort();
 const idsPaleta = Object.keys(paleta).sort();
 for (const id of idsCatalogo) {
   if (!paleta[id]) problemas.push(`${id}: sem entrada em tasks/paleta-segmentos.json`);
