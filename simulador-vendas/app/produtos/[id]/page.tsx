@@ -47,6 +47,11 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const [categoria, setCategoria] = useState("");
   const [descricao, setDescricao] = useState("");
 
+  const [endereco, setEndereco] = useState("");
+  const [importando, setImportando] = useState(false);
+  const [erroMaterial, setErroMaterial] = useState<ErroLido | null>(null);
+  const [importado, setImportado] = useState<string | null>(null);
+
   // Busca em forma de corrente (`fetch().then()`) em vez de `await carregar()`: a regra
   // `react-hooks/set-state-in-effect` do eslint-plugin-react-hooks@7 acusa qualquer chamada direta a
   // uma função que mexe em estado dentro do corpo de um efeito, mesmo sendo assíncrona. Mesmo padrão
@@ -87,6 +92,51 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
       setErroTela(await lerErro(e));
     } finally {
       setSalvando(false);
+    }
+  }
+
+  /** Recarrega só os materiais e o estado do produto (importar/remover pode voltar para "rascunho"). */
+  async function recarregarMateriais() {
+    const r = await fetch(`/api/produtos/${id}`);
+    if (!r.ok) return;
+    const corpo = await r.json();
+    setProduto(corpo.produto);
+    setFontes(corpo.fontes ?? []);
+  }
+
+  async function importarPagina(e: FormEvent) {
+    e.preventDefault();
+    if (!endereco.trim() || importando) return;
+    setImportando(true);
+    setErroMaterial(null);
+    setImportado(null);
+    try {
+      const r = await fetch(`/api/produtos/${id}/fontes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: "landing", url: endereco.trim() }),
+      });
+      if (!r.ok) throw r;
+      const corpo = await r.json();
+      setEndereco("");
+      setImportado(corpo.titulo || "Conteúdo importado.");
+      await recarregarMateriais();
+    } catch (e) {
+      setErroMaterial(await lerErro(e));
+    } finally {
+      setImportando(false);
+    }
+  }
+
+  async function removerMaterial(f: Fonte) {
+    if (!(await confirmar(`Remover “${f.origem}” dos materiais deste produto?`, { confirmarRotulo: "Remover" }))) return;
+    setErroMaterial(null);
+    try {
+      const r = await fetch(`/api/produtos/${id}/fontes/${f.id}`, { method: "DELETE" });
+      if (!r.ok) throw r;
+      await recarregarMateriais();
+    } catch (e) {
+      setErroMaterial(await lerErro(e));
     }
   }
 
@@ -150,10 +200,32 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
               </div>
             </form>
 
-            <Section titulo="Materiais">
+            <Section titulo="Ensine a IA sobre o produto">
+              <form className="card p-5 mb-4" onSubmit={importarPagina}>
+                <Field label="Endereço da página" htmlFor="produto-endereco" hint="A página do produto no seu site. Lemos o texto dela para você.">
+                  <div className="flex gap-2.5 max-md:flex-col">
+                    <input
+                      id="produto-endereco"
+                      type="url"
+                      className="input"
+                      value={endereco}
+                      onChange={(e) => { setEndereco(e.target.value); setImportado(null); }}
+                      placeholder="https://suaempresa.com/produto"
+                    />
+                    <button type="submit" className="btn-primary !w-auto shrink-0 max-md:!w-full" disabled={!endereco.trim() || importando}>
+                      {importando ? "Lendo..." : "Importar conteúdo"}
+                    </button>
+                  </div>
+                </Field>
+                {importado && <p className="text-[13px] text-ok font-semibold mt-3">Pronto: {importado}</p>}
+              </form>
+
+              {erroMaterial && <div className="mb-4"><ErrorBox mensagem={erroMaterial.mensagem} /></div>}
+
+              <h3 className="font-bold text-[14px] mb-2.5">Materiais ({fontes.length})</h3>
               {fontes.length === 0 ? (
                 <Aviso tom="warn">
-                  Este produto ainda não tem material. Em breve você vai poder importar a página do produto e enviar a apresentação comercial aqui.
+                  Este produto ainda não tem material. Importe a página acima — sem isso, o cliente simulado improvisa e a avaliação julga no vácuo.
                 </Aviso>
               ) : (
                 <div className="flex flex-col gap-2">
@@ -163,6 +235,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                         <p className="font-semibold text-sm truncate">{f.origem}</p>
                         <p className="text-[12.5px] text-muted">{ROTULO_FONTE[f.tipo]} · {palavras(f.conteudo)} · {data(f.criadoEm)}</p>
                       </div>
+                      <button type="button" className="btn-link !text-danger shrink-0" onClick={() => removerMaterial(f)}>Remover</button>
                     </div>
                   ))}
                 </div>
