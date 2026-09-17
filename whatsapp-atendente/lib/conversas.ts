@@ -10,7 +10,7 @@
  */
 import { conversasExemplo } from "./demo";
 import { abrirBanco, getConfig, setConfig } from "./store";
-import type { CanalOrigem, Conversa, MensagemChat, PapelMensagem, Periodo, StatusConversa } from "./types";
+import type { CanalOrigem, Conversa, ConversaCompleta, MensagemChat, MensagemDaConversa, PapelMensagem, Periodo, StatusConversa } from "./types";
 
 /** Quantas mensagens da conversa vão para a IA como memória de curto prazo. */
 export const MAX_HISTORICO = 20;
@@ -44,28 +44,14 @@ type LinhaMensagem = {
   tempo_resposta_ms: number | null;
 };
 
-/** Uma conversa como ela está no banco, sem o resumo das mensagens (para isso, veja `listarConversas`). */
-export interface ConversaRegistro {
-  numero: string;
-  nome: string;
-  origem: CanalOrigem;
-  /** Status já calculado na leitura (ver HORAS_ATE_RESOLVER), não necessariamente o gravado. */
-  status: StatusConversa;
-  assunto: string | null;
-  exemplo: boolean;
-  naoLidas: number;
-  criadoEm: string;
-  atualizadoEm: string;
-}
+// Os dois tipos que saem deste arquivo moram em lib/types.ts (arquivo client-safe, sem node:sqlite):
+// a conversa aberta é desenhada por um Client Component, e uma definição só evita que o formato do
+// banco e o formato da tela andem em ritmos diferentes.
 
-export interface MensagemRegistro extends MensagemChat {
-  id: number;
-  criadoEm: string;
-  /** Nome da ferramenta dos sistemas da empresa consultada para escrever esta resposta, se alguma foi. */
-  ferramentaUsada?: string;
-  /** Quanto o atendente levou entre receber a pergunta e gravar esta resposta. */
-  tempoRespostaMs?: number;
-}
+/** Uma conversa como ela está no banco, sem as mensagens (para isso, veja `obterConversa`). */
+export type ConversaRegistro = Omit<ConversaCompleta, "mensagens">;
+
+export type MensagemRegistro = MensagemDaConversa;
 
 let criado = false;
 
@@ -165,7 +151,7 @@ function paraMensagem(l: LinhaMensagem): MensagemRegistro {
 }
 
 /** A conversa inteira, da mensagem mais antiga para a mais recente; null quando o número não existe. */
-export function obterConversa(numero: string): (ConversaRegistro & { mensagens: MensagemRegistro[] }) | null {
+export function obterConversa(numero: string): ConversaCompleta | null {
   const registro = obterRegistro(numero);
   if (!registro) return null;
   const linhas = banco().prepare("SELECT * FROM mensagens WHERE numero = ? ORDER BY id").all(numero) as LinhaMensagem[];
@@ -331,10 +317,11 @@ function inserirMensagem({
   criadoEm?: string;
   ferramentaUsada?: string;
   tempoRespostaMs?: number;
-}): void {
-  banco()
+}): number {
+  const gravada = banco()
     .prepare("INSERT INTO mensagens (numero, papel, texto, criado_em, ferramenta_usada, tempo_resposta_ms) VALUES (?, ?, ?, ?, ?, ?)")
     .run(numero, papel, texto, criadoEm ?? paraTextoDeBanco(), ferramentaUsada ?? null, tempoRespostaMs ?? null);
+  return Number(gravada.lastInsertRowid);
 }
 
 /** Cria a conversa se ela ainda não existir e devolve o registro atual. */
@@ -423,12 +410,24 @@ export function registrarResposta({
   inserirMensagem({ numero, papel: "atendente", texto, criadoEm: quando, ferramentaUsada, tempoRespostaMs });
 }
 
-/** Grava a resposta escrita por uma pessoa: a conversa fica (ou passa a ficar) em atendimento humano. */
-export function registrarMensagemHumana(numero: string, texto: string): void {
+/**
+ * Grava a resposta escrita por uma pessoa: a conversa fica (ou passa a ficar) em atendimento humano.
+ * Devolve o id da mensagem gravada — a tela precisa dele para marcar a bolha quando o envio pelo
+ * número real falha depois da gravação (a mensagem existe, mas o cliente não a recebeu).
+ */
+export function registrarMensagemHumana(numero: string, texto: string): number {
   garantirConversa({ numero });
   const quando = paraTextoDeBanco();
   banco().prepare("UPDATE conversas SET status = 'humano', nao_lidas = 0, atualizado_em = ? WHERE numero = ?").run(quando, numero);
-  inserirMensagem({ numero, papel: "humano", texto, criadoEm: quando });
+  return inserirMensagem({ numero, papel: "humano", texto, criadoEm: quando });
+}
+
+/**
+ * Zera as mensagens não lidas (alguém abriu a conversa na tela). Não encosta em `atualizado_em`: ler
+ * uma conversa não é novidade nela, e mexer na data a faria pular para o topo da lista a cada leitura.
+ */
+export function marcarLido(numero: string): void {
+  banco().prepare("UPDATE conversas SET nao_lidas = 0 WHERE numero = ?").run(numero);
 }
 
 function mudarStatus(numero: string, status: StatusConversa, { zerarNaoLidas = false } = {}): void {

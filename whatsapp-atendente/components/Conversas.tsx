@@ -7,15 +7,17 @@
 // O conteúdo fica neste componente, e não em `app/conversas/page.tsx`, porque `scripts/verificar-jargao.mjs`
 // varre `components/*.tsx` mas não as telas em `app/<rota>/page.tsx` (ver CLAUDE.md).
 //
-// A coluna do meio (a conversa aberta) é a US-013 e a da direita (o contato) é a US-014: as duas ainda
-// são marcações de lugar.
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+// A coluna do meio é a conversa aberta (`components/ConversaAberta.tsx`, US-013); a da direita, o
+// painel do contato, ainda é uma marcação de lugar (US-014).
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ConversaAberta } from "./ConversaAberta";
+import { Avatar, DesenhoOrigem } from "./ContatoVisual";
 import { Aviso, Empty, ErrorBox, IlustracaoConversa, Topbar, lerErro, useStatus, type ErroLido } from "./ui";
 import { ACAO_CONECTAR_NUMERO, AVISO_CONVERSAS_EXEMPLO, soConversasDeExemplo } from "@/lib/demo";
 import { navegacaoComContador } from "@/lib/navegacao";
-import { PERIODOS, PERIODO_PADRAO, classeStatus, lerPeriodo, rotuloContato, rotuloOrigem, rotuloPeriodo, rotuloStatus } from "@/lib/rotulos";
-import type { CanalOrigem, Conversa, Periodo } from "@/lib/types";
+import { PERIODOS, PERIODO_PADRAO, classeStatus, lerPeriodo, rotuloContato, rotuloPeriodo, rotuloStatus } from "@/lib/rotulos";
+import type { Conversa, Periodo } from "@/lib/types";
 
 /** As três abas da lista; "todas" não filtra nada, as outras duas valem um status da conversa. */
 type Aba = "todas" | "humano" | "atencao";
@@ -45,66 +47,6 @@ function quando(iso: string): string {
     : data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
-/** Até duas iniciais do nome do contato; vazio quando só há o número (aí o avatar mostra o desenho). */
-function iniciais(conversa: Conversa): string {
-  const nome = conversa.nome?.trim();
-  if (!nome) return "";
-  return nome.split(/\s+/).slice(0, 2).map((parte) => parte[0]?.toUpperCase() ?? "").join("");
-}
-
-function Avatar({ conversa, tamanho = 40 }: { conversa: Conversa; tamanho?: number }) {
-  const letras = iniciais(conversa);
-  return (
-    <span
-      aria-hidden="true"
-      className="shrink-0 rounded-full bg-accent-soft text-accent-ink grid place-items-center font-bold"
-      style={{ width: tamanho, height: tamanho, fontSize: Math.round(tamanho * 0.36) }}
-    >
-      {letras || (
-        <svg width={Math.round(tamanho * 0.5)} height={Math.round(tamanho * 0.5)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
-          <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
-        </svg>
-      )}
-    </span>
-  );
-}
-
-/** Desenho de cada canal, 16 px, sem rótulo ao lado: na largura da lista não cabe a palavra. O verde da
- * marca do WhatsApp entra só aqui — nunca como acento da tela. */
-const DESENHOS_ORIGEM: Record<CanalOrigem, ReactNode> = {
-  whatsapp: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366">
-      <path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.7 4.8-1.3A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1a12 12 0 0 1-5.5-4.6c-.4-.6-.9-1.5-.9-2.4 0-.9.5-1.4.7-1.6.2-.2.4-.3.6-.3h.5c.2 0 .4 0 .5.4l.7 1.7c.1.2 0 .4-.1.5l-.3.4c-.1.1-.3.3-.1.6a8 8 0 0 0 3.5 2.9c.3.1.5.1.6 0l.8-1c.2-.2.3-.2.6-.1l1.6.8c.3.1.4.2.5.3 0 .1 0 .6-.2 1.2Z" />
-    </svg>
-  ),
-  simulador: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
-      <rect x="6.5" y="2.5" width="11" height="19" rx="2.5" />
-      <path d="M10.5 18.5h3" />
-    </svg>
-  ),
-  mcp: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
-      <path d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3Z" />
-      <path d="m18 16 .8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" />
-    </svg>
-  ),
-  exemplo: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
-      <path d="M8 3h8M9.5 3v6.2L5 18.4A2 2 0 0 0 6.8 21h10.4a2 2 0 0 0 1.8-2.6L14.5 9.2V3" />
-    </svg>
-  ),
-};
-
-function DesenhoOrigem({ origem }: { origem: CanalOrigem }) {
-  return (
-    <span className="shrink-0 grid place-items-center" role="img" aria-label={rotuloOrigem(origem)} title={rotuloOrigem(origem)}>
-      {DESENHOS_ORIGEM[origem] ?? DESENHOS_ORIGEM.simulador}
-    </span>
-  );
-}
-
 function LinhaConversa({ conversa, selecionada, onEscolher }: { conversa: Conversa; selecionada: boolean; onEscolher: () => void }) {
   const primeiraLinha = (conversa.ultima_mensagem || "").split("\n")[0];
   return (
@@ -115,7 +57,7 @@ function LinhaConversa({ conversa, selecionada, onEscolher }: { conversa: Conver
         aria-current={selecionada ? "true" : undefined}
         className={`w-full text-left flex items-start gap-3 px-4 py-3.5 border-b border-line cursor-pointer transition-colors ${selecionada ? "bg-accent-soft" : "hover:bg-bg"}`}
       >
-        <Avatar conversa={conversa} />
+        <Avatar nome={conversa.nome} />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
             <strong className="min-w-0 flex-1 truncate text-[14.5px]">{rotuloContato(conversa.numero, conversa.nome)}</strong>
@@ -153,7 +95,8 @@ function LinhasFalsas() {
   );
 }
 
-/** Marcação de lugar das duas colunas que ainda não existem (a conversa é a US-013, o contato a US-014). */
+/** Marcação de lugar do painel do contato, que ainda não existe (US-014), e da coluna do meio sem
+ * conversa escolhida. */
 function EmConstrucao({ titulo, descricao }: { titulo: string; descricao: string }) {
   return (
     <div className="h-full min-h-[200px] flex flex-col items-center justify-center text-center text-muted p-8 border border-dashed border-line rounded-card">
@@ -174,6 +117,10 @@ export function Conversas() {
   const [busca, setBusca] = useState("");
   const [digitado, setDigitado] = useState("");
   const [numero, setNumero] = useState<string | null>(null);
+  // `?corrigir=1` vem dos links "Corrigir" do relatório diário: a última resposta da IA da conversa
+  // escolhida abre já em edição. Ele fica no endereço (não some ao trocar de conversa) porque é a
+  // barra de endereço que manda nesta tela.
+  const [corrigir, setCorrigir] = useState(false);
   const [itens, setItens] = useState<Conversa[] | null>(null);
   const [contadores, setContadores] = useState<Contadores>(SEM_CONVERSAS);
   const [erroLista, setErroLista] = useState<ErroLido | null>(null);
@@ -221,6 +168,7 @@ export function Conversas() {
       setBusca(termo);
       setDigitado(termo);
       setNumero(params.get("numero"));
+      setCorrigir(params.get("corrigir") === "1");
       setPronto(true);
     }, 0);
   }, []);
@@ -235,6 +183,7 @@ export function Conversas() {
       setBusca(termo);
       setDigitado(termo);
       setNumero(params.get("numero"));
+      setCorrigir(params.get("corrigir") === "1");
     }
     window.addEventListener("popstate", aoNavegar);
     return () => window.removeEventListener("popstate", aoNavegar);
@@ -256,7 +205,6 @@ export function Conversas() {
   }, [pronto, carregar]);
 
   const lista = itens ?? [];
-  const selecionada = numero ? lista.find((c) => c.numero === numero) ?? null : null;
   const vazioDeVerdade = pronto && itens !== null && contadores.todas === 0 && !busca;
 
   return (
@@ -358,21 +306,14 @@ export function Conversas() {
             </section>
 
             <section className={`min-w-0 ${numero ? "" : "max-md:hidden"}`} aria-label="Conversa">
-              {selecionada ? (
-                <div className="card p-5">
-                  <div className="flex items-center gap-3 mb-4">
-                    <button type="button" className="btn-link min-[768px]:hidden" onClick={() => irPara({ numero: null })}>Voltar</button>
-                    <Avatar conversa={selecionada} tamanho={44} />
-                    <div className="min-w-0">
-                      <p className="font-bold truncate">{rotuloContato(selecionada.numero, selecionada.nome)}</p>
-                      <p className="text-[13px] text-muted flex items-center gap-1.5">
-                        <span className={classeStatus(selecionada.status)}>{rotuloStatus(selecionada.status)}</span>
-                        <DesenhoOrigem origem={selecionada.origem} />
-                      </p>
-                    </div>
-                  </div>
-                  <EmConstrucao titulo="Esta parte ainda está sendo montada" descricao="Ler a conversa inteira e responder você mesmo é a próxima etapa desta tela." />
-                </div>
+              {numero ? (
+                <ConversaAberta
+                  key={numero}
+                  numero={numero}
+                  corrigirUltima={corrigir}
+                  onVoltar={() => irPara({ numero: null })}
+                  onMudou={carregar}
+                />
               ) : (
                 <EmConstrucao titulo="Escolha uma conversa" descricao="A conversa escolhida na lista ao lado aparece aqui." />
               )}

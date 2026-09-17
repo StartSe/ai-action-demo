@@ -54,6 +54,36 @@ export interface MensagemChat {
   texto: string;
 }
 
+/** Uma mensagem já gravada, como a conversa aberta e a IA a leem (datas sempre em ISO). */
+export interface MensagemDaConversa extends MensagemChat {
+  id: number;
+  criadoEm: string;
+  /** Nome da ferramenta dos sistemas da empresa consultada para escrever esta resposta, se alguma foi. */
+  ferramentaUsada?: string;
+  /** Quanto o atendente levou entre receber a pergunta e gravar esta resposta. */
+  tempoRespostaMs?: number;
+}
+
+/**
+ * A conversa inteira, com as mensagens: o que `GET /api/conversas/[numero]` devolve e o que a coluna
+ * do meio de Conversas desenha. Os campos sem `mensagens` são o registro da tabela `conversas`
+ * (lib/conversas.ts:ConversaRegistro), com o status JÁ calculado na leitura.
+ */
+export interface ConversaCompleta {
+  numero: string;
+  /** Nome do contato quando o canal informa um; string vazia quando só há o número. */
+  nome: string;
+  origem: CanalOrigem;
+  status: StatusConversa;
+  /** Assunto da conversa; nulo até a US-019 classificar. */
+  assunto: string | null;
+  exemplo: boolean;
+  naoLidas: number;
+  criadoEm: string;
+  atualizadoEm: string;
+  mensagens: MensagemDaConversa[];
+}
+
 /** Entrada/saída de registros antigos do tipo "atendimento" em lib/historico.ts. Desde a US-003 as
  * conversas vivem no banco (lib/conversas.ts) e nada novo é salvo assim; o tipo continua porque
  * `/r/[id]` e `/imprimir/[id]` precisam abrir os registros já gerados. */
