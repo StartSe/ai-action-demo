@@ -1,5 +1,5 @@
 # Sobe a suíte inteira: docker compose up --build   (ou docker compose pull && docker compose up, sem construir nada)
-# Cada app fica em uma porta: 3001 a 3018 (veja a tabela no README).
+# Cada app fica em uma porta: 3001 a 3023 (veja a tabela no README).
 # Nenhuma variável é obrigatória: abra http://localhost:30XX/setup em cada app para conectar a IA e as integrações.
 # As chaves ficam em SQLite dentro do volume de cada app e sobrevivem a reinícios.
 # Um .env na raiz é opcional (copie de .env.example); variáveis de ambiente têm prioridade sobre o setup.
@@ -116,6 +116,13 @@ services:
     ports: ["3015:10000"]
     volumes: [clone-site-dados:/app/data]
 
+  validador-regras-negocio:
+    <<: *app
+    build: ./validador-regras-negocio
+    image: ghcr.io/startse/validador-regras-negocio:latest
+    ports: ["3016:10000"]
+    volumes: [validador-regras-negocio-dados:/app/data]
+
   videos-campanha:
     <<: *app
     build: ./videos-campanha
@@ -180,6 +187,7 @@ volumes:
   custos-ia-dados:
   clone-site-dados:
   videos-campanha-dados:
+  validador-regras-negocio-dados:
   automl-pocket-dados:
   build-agentflows-dados:
   daily-second-brain-dados:

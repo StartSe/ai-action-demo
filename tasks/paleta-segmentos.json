@@ -207,6 +207,19 @@
   ],
   "contrasteBranco": 5.46
  },
+ "validador-regras-negocio": {
+  "segmento": "Gestão",
+  "acento": "#29279b",
+  "acento2": "#642cdd",
+  "soft": "#e7e7f9",
+  "ink": "#100f57",
+  "hsl": [
+   241,
+   60,
+   38
+  ],
+  "contrasteBranco": 11.3
+ },
  "build-agentflows": {
   "segmento": "Gestão",
   "acento": "#163669",
