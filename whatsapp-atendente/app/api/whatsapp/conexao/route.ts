@@ -10,7 +10,8 @@
 //   problema        → a z-api recusou ou não respondeu; `mensagem` é a frase de negócio já traduzida
 import { ErroWhatsApp } from "@/lib/erro-whatsapp";
 import { provedorAtivo, ultimaRecebida, type UltimaRecebida } from "@/lib/whatsapp";
-import { desconectar, lerConexao, qrCode, statusInstancia } from "@/lib/zapi";
+import { desconectar, garantirWebhooks, lerConexao, qrCode, statusInstancia } from "@/lib/zapi";
+import { baseUrl } from "@/lib/setup-comum";
 import { responderErro } from "@/app/api/erros";
 
 export const dynamic = "force-dynamic";
@@ -70,6 +71,10 @@ async function estadoAtual(comQr: boolean): Promise<RespostaConexao> {
 
 export async function GET(req: Request) {
   const comQr = new URL(req.url).searchParams.has("qr");
+  // O cartão de conexão é a única tela que fica consultando a z-api, então é daqui que sai a conferência
+  // de que a instância está mesmo avisando este app (ver garantirWebhooks): ela só chama a z-api quando o
+  // endereço dos avisos mudou, e não segura a resposta — quem espera o QR Code não pode esperar por isso.
+  garantirWebhooks(baseUrl(req)).catch((err) => console.error("Falha ao conferir os avisos da z-api:", err));
   try {
     return Response.json(await estadoAtual(comQr));
   } catch (err) {

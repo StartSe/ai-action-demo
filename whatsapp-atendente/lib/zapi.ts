@@ -241,4 +241,32 @@ export async function configurarWebhooks(urlBase: string): Promise<void> {
   for (const caminho of ["update-webhook-received", "update-webhook-connected", "update-webhook-disconnected"]) {
     await chamar(caminho, { metodo: "PUT", corpo: { value } });
   }
+  setConfig(CHAVE_AVISOS_CADASTRADOS, value);
+}
+
+/** Último endereço de avisos que este app cadastrou na instância — a memória de `garantirWebhooks`. */
+const CHAVE_AVISOS_CADASTRADOS = "ZAPI_AVISOS_CADASTRADOS";
+
+/**
+ * Garante que a instância está avisando ESTE app, no endereço de agora. Existe porque `configurarWebhooks`
+ * só roda no `PUT /api/setup`, e há três caminhos que deixam a instância apontando para o lugar errado
+ * sem ninguém perceber:
+ *   - as credenciais vieram por variável de ambiente (ninguém salvou nada em Configurações);
+ *   - o app mudou de endereço público (domínio novo, outro serviço);
+ *   - a chave da URL dos avisos foi gerada de novo (o banco é apagado a cada reinício quando não há
+ *     disco, como no plano gratuito do Render) — a z-api continua chamando com a chave velha, e a rota
+ *     responde 401 em silêncio, por desenho.
+ * Só fala com a z-api quando o endereço mudou, então pode ser chamada em toda leitura do estado da
+ * conexão. Nunca derruba quem chamou: falhar aqui só escreve no log.
+ */
+export async function garantirWebhooks(urlBase: string): Promise<void> {
+  if (!credenciais()) return;
+  const desejado = enderecoAvisos(urlBase);
+  if (getConfig(CHAVE_AVISOS_CADASTRADOS) === desejado) return;
+  try {
+    await configurarWebhooks(urlBase);
+    console.log("Avisos da z-api cadastrados para", desejado.split("?")[0]);
+  } catch (err) {
+    console.error("Falha ao cadastrar os avisos da z-api:", err);
+  }
 }

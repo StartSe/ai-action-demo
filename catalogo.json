@@ -125,7 +125,11 @@
         "rotina"
       ],
       "demo": null,
-      "independente": true
+      "independente": true,
+      "plano": "starter",
+      "discoGB": 1,
+      "discoGuarda": "a configuração, as conversas e a conta",
+      "aposPublicar": "Depois de publicar, abra o app e clique em Configurações (`/setup`) para conectar a IA e o número de WhatsApp da empresa. O disco é o que faz a conexão e as conversas continuarem lá depois de cada publicação."
     },
     {
       "id": "contratos-ia",
@@ -369,7 +373,8 @@
         "AUTH_SECRET"
       ],
       "aposPublicar": "Abra o app e crie sua conta (nome, e-mail e senha). Não há IA para conectar: a planilha de exemplo já aparece pronta em Datasets e o treino roda dentro do próprio app.",
-      "padrao": "proprio"
+      "padrao": "proprio",
+      "discoGuarda": "planilhas, modelos e a conta"
     }
   ]
 }

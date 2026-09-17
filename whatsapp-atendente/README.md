@@ -52,7 +52,9 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 - Publicar com um clique: https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-whatsapp-atendente (o `render.yaml` desta pasta é gerado a partir do `catalogo.json` da raiz; não edite à mão).
 - Rodar no seu computador sem construir: `docker run --rm -p 3006:10000 -v whatsapp-atendente-dados:/app/data ghcr.io/startse/whatsapp-atendente:latest` e abra http://localhost:3006.
 - Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA e o número.
-- O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração e as conversas se perdem a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
+- O health check responde em `/api/health`.
+- **Este app é publicado no plano `starter` (pago), com um disco de 1 GB em `/app/data`** (já no `render.yaml`). Sem disco, cada reinício do serviço apaga o SQLite: a conexão do número, as conversas e a conta se perdem, o app volta ao modo demonstração e a chave da URL dos avisos da z-api muda — a z-api continua chamando a URL antiga e as mensagens deixam de chegar, sem erro na tela. Para publicar assim mesmo no plano gratuito, defina as chaves como variáveis de ambiente (a tabela abaixo): elas têm prioridade sobre o banco e sobrevivem a qualquer reinício. As conversas, essas, só o disco preserva.
+- Os três avisos da z-api (mensagem recebida, número conectado, número desconectado) são cadastrados sozinhos: ao salvar as credenciais em `/setup` e, depois disso, sempre que o endereço público ou a chave da URL mudar (`garantirWebhooks`, conferido a cada leitura do estado da conexão). Nunca é preciso colar endereço no painel da z-api.
 
 ## Variáveis de ambiente (opcionais)
 Nenhuma é obrigatória — tudo pode ser configurado em `/setup`. Variáveis de ambiente, quando definidas, têm prioridade sobre o que foi salvo no setup.
