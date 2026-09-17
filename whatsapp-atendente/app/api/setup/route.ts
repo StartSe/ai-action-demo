@@ -2,7 +2,7 @@
 // de salvar as três credenciais da z-api, este app cadastra sozinho, na instância, o endereço por onde
 // a z-api avisa que chegou mensagem ou que o número conectou/caiu. Sem isso a pessoa teria que copiar
 // um endereço à mão no painel da z-api — exatamente o que esta rodada tirou do caminho dela.
-import { COM_CARTAO_PROPRIO, GENERICAS, INTEGRACOES } from "@/lib/integracoes";
+import { COM_CARTAO_PROPRIO, GENERICAS, INTEGRACOES, SECUNDARIAS } from "@/lib/integracoes";
 import { baseUrl, integracaoConfigurada, statusIntegracoes } from "@/lib/setup-comum";
 import { setConfig } from "@/lib/store";
 import { configurarWebhooks, credenciais } from "@/lib/zapi";
@@ -20,9 +20,11 @@ export const dynamic = "force-dynamic";
 async function respostaSetup() {
   const genericas = await statusIntegracoes(GENERICAS);
   const proprias = await statusIntegracoes(COM_CARTAO_PROPRIO);
+  const secundarias = await statusIntegracoes(SECUNDARIAS);
   return {
     ...genericas,
     comCartaoProprio: proprias.integracoes,
+    secundarias: secundarias.integracoes,
     pronto: INTEGRACOES.filter((i) => i.obrigatoria).every(integracaoConfigurada),
   };
 }

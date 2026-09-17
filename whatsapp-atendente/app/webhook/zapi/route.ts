@@ -12,7 +12,9 @@
 //   ConnectedCallback    { instanceId, type, connected, phone, momment }
 //   DisconnectedCallback { instanceId, type, disconnected, error, momment }
 import { timingSafeEqual } from "node:crypto";
+import { aiEnabled } from "@/lib/ai";
 import { classificarEmSegundoPlano, responder } from "@/lib/atendente";
+import { limparTestesSeConfigurado } from "@/lib/conversas";
 import { getConfig } from "@/lib/store";
 import { enviarMensagem, ErroWhatsApp, registrarFalhaEnvio, registrarRecebida } from "@/lib/whatsapp";
 import { gravarConexao } from "@/lib/zapi";
@@ -71,6 +73,9 @@ async function processarAviso(aviso: AvisoZapi) {
 
   if (aviso.type === "ConnectedCallback") {
     gravarConexao({ conectado: true, em, numero: aviso.phone });
+    // O número acabou de entrar no ar: o que era teste (conversas de exemplo e a conversa do simulador)
+    // não tem mais função e sai de cena uma única vez, para a tela mostrar só atendimento de verdade.
+    limparTestesSeConfigurado({ iaConectada: aiEnabled(), numeroConectado: true });
     return;
   }
   if (aviso.type === "DisconnectedCallback") {

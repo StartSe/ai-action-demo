@@ -89,5 +89,15 @@ export const COM_CARTAO_PROPRIO: Integracao[] = [WHATSAPP];
 // MCP_EMPRESA_CODIGO, lidas por getConfig), sem aparecer na tela.
 export const INTEGRACOES: Integracao[] = [OPENROUTER, WHATSAPP, NOTIFICACOES];
 
-/** O que o cartão genérico de /setup desenha: tudo menos quem tem cartão próprio. */
-export const GENERICAS: Integracao[] = INTEGRACOES.filter((i) => !COM_CARTAO_PROPRIO.some((p) => p.id === i.id));
+/**
+ * Integrações que saem dos cartões numerados de /setup e vão para um bloco recolhido no fim da página.
+ * Elas continuam inteiras (mesmo cartão, mesmos campos, mesmo "Salvar") — só deixam de disputar a
+ * atenção de quem chegou para fazer uma coisa: pôr o atendente no ar. Avisos por e-mail ou Slack são um
+ * ajuste de quem já está rodando, não um passo da configuração inicial.
+ */
+export const SECUNDARIAS: Integracao[] = [NOTIFICACOES];
+
+/** O que o cartão genérico de /setup desenha em destaque: tudo menos quem tem cartão próprio ou é secundária. */
+export const GENERICAS: Integracao[] = INTEGRACOES.filter(
+  (i) => !COM_CARTAO_PROPRIO.some((p) => p.id === i.id) && !SECUNDARIAS.some((p) => p.id === i.id)
+);

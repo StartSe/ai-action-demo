@@ -14,7 +14,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AvisoConversasExemplo } from "./AvisoExemplo";
 import { Avatar } from "./ContatoVisual";
-import { MenuExportar, RelatorioDiario } from "./ExportarRelatorio";
+import { MenuExportar } from "./ExportarRelatorio";
 import { GraficoLinhas } from "./GraficoLinhas";
 import { Indicadores, numerosEmTexto } from "./Indicadores";
 import { ErrorBox, lerErro, Topbar, useStatus, type ErroLido } from "./ui";
@@ -289,9 +289,6 @@ export function Relatorios() {
             )}
           </section>
 
-          <div className="min-[1100px]:col-span-2">
-            <RelatorioDiario />
-          </div>
         </div>
       </main>
     </>

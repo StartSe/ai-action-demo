@@ -8,6 +8,8 @@
 //   aguardando      → instância viva, número ainda não conectado (é a hora do QR Code)
 //   conectado       → número respondendo pelo WhatsApp da empresa
 //   problema        → a z-api recusou ou não respondeu; `mensagem` é a frase de negócio já traduzida
+import { aiEnabled } from "@/lib/ai";
+import { limparTestesSeConfigurado } from "@/lib/conversas";
 import { ErroWhatsApp } from "@/lib/erro-whatsapp";
 import { provedorAtivo, ultimaRecebida, type UltimaRecebida } from "@/lib/whatsapp";
 import { desconectar, garantirWebhooks, lerConexao, qrCode, statusInstancia } from "@/lib/zapi";
@@ -41,6 +43,10 @@ async function estadoAtual(comQr: boolean): Promise<RespostaConexao> {
 
   const estado = await statusInstancia();
   if (estado.conectado) {
+    // Rede de segurança do mesmo gesto que o aviso de conexão faz (app/webhook/zapi/route.ts): quando o
+    // app já está configurado, as conversas de teste saem de cena uma única vez. Aqui cobre quem conectou
+    // o número sem o aviso chegar (endereço ainda não cadastrado, app fora do ar naquele instante).
+    limparTestesSeConfigurado({ iaConectada: aiEnabled(), numeroConectado: true });
     const conexao = lerConexao();
     return {
       provedor: "zapi",

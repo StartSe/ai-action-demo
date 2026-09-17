@@ -571,6 +571,31 @@ export function apagarExemplos(): number {
   return quantas;
 }
 
+/**
+ * Limpa de uma vez o que era só teste — as conversas de exemplo e a conversa do simulador — quando o app
+ * termina de ser configurado (IA conectada E número conectado). Roda UMA única vez: quem testa no
+ * simulador depois de conectar não pode ver a conversa sumir nas costas dele.
+ *
+ * Os dois sinais chegam de fora (`lib/ai.ts` e `lib/whatsapp.ts`) em vez de serem lidos aqui, pelo mesmo
+ * motivo de `semearExemplosSeVazio`: este arquivo é o dono das tabelas de conversa e não depende das
+ * outras camadas do app.
+ */
+export function limparTestesSeConfigurado({ iaConectada, numeroConectado }: { iaConectada: boolean; numeroConectado: boolean }): number {
+  if (!iaConectada || !numeroConectado) return 0;
+  if (getConfig(CHAVE_TESTES_LIMPOS)) return 0;
+  const quantas = contarExemplos() + (obterRegistro(NUMERO_SIMULADOR) ? 1 : 0);
+  apagarExemplos();
+  apagarConversa(NUMERO_SIMULADOR);
+  setConfig(CHAVE_TESTES_LIMPOS, new Date().toISOString());
+  if (quantas > 0) console.log(`App configurado: ${quantas} conversas de teste apagadas (exemplos e simulador).`);
+  return quantas;
+}
+
+const CHAVE_TESTES_LIMPOS = "CONVERSAS_TESTE_LIMPAS";
+
+/** O número fixo que `POST /api/simular` usa: é uma conversa de teste, não um telefone (ver lib/rotulos.ts). */
+const NUMERO_SIMULADOR = "simulador";
+
 function apagarExemplosNaPrimeiraReal(): void {
   const quantas = contarExemplos();
   if (quantas === 0) return;

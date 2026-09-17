@@ -93,8 +93,12 @@ function CartaoAcao({ href, titulo, apoio, destacado = false }: { href: string; 
  * frases é deliberada: sem número conectado nada do que aparece na tela é real, então conectar vem
  * antes de "precisam de você" — o número de conversas esperando já está no cabeçalho, em Conversas.
  */
-function CartaoSituacao({ conectado, atencao }: { conectado: boolean; atencao: number }) {
-  const situacao = !conectado
+function CartaoSituacao({ conectado, assistenteCriado, atencao }: { conectado: boolean; assistenteCriado: boolean; atencao: number }) {
+  // A ordem é a da jornada: criar o atendente vem antes de conectar o número, e conectar vem antes de
+  // qualquer número de conversa — nada do que a tela mostra é real enquanto esses dois passos faltarem.
+  const situacao = !assistenteCriado
+    ? { titulo: "Falta criar seu atendente", apoio: "Diga o que ele precisa saber e teste as respostas.", url: "/assistente" }
+    : !conectado
     ? { titulo: "Falta conectar o WhatsApp", apoio: "Leia o código com o celular da empresa.", url: "/assistente?passo=3" }
     : atencao > 0
       ? {
@@ -185,6 +189,7 @@ export function Inicio() {
   }, [mostrar, carregar]);
 
   const conectado = status?.integrations?.whatsapp === true;
+  const assistenteCriado = status?.integrations?.assistente === true;
   const atencao = metricas?.atencao.length ?? 0;
   const primeiroNome = (status?.usuario?.nome ?? "").trim().split(/\s+/)[0] ?? "";
   const atendente = config?.atendente || "sua atendente";
@@ -192,7 +197,9 @@ export function Inicio() {
     ? `A ${atendente} está atendendo seus clientes no WhatsApp.`
     : status && !status.ai
       ? "Você está vendo uma demonstração com dados de exemplo."
-      : `A ${atendente} está pronta. Falta conectar o número da empresa.`;
+      : status && !assistenteCriado
+        ? "Falta criar seu atendente: é ele que responde os clientes."
+        : `A ${atendente} está pronta. Falta conectar o número da empresa.`;
   const recentes = (conversas ?? []).slice(0, RECENTES);
 
   return (
@@ -214,7 +221,7 @@ export function Inicio() {
             <h1 className="titulo-painel mb-1.5">{primeiroNome ? `${saudacao()}, ${primeiroNome}!` : `${saudacao()}!`}</h1>
             <p className="apoio">{frase}</p>
           </div>
-          <CartaoSituacao conectado={conectado} atencao={atencao} />
+          <CartaoSituacao conectado={conectado} assistenteCriado={assistenteCriado} atencao={atencao} />
         </div>
 
         {mostrar && (
@@ -227,7 +234,9 @@ export function Inicio() {
               <CartaoAcao destacado href="/conversas" titulo="Ver conversas" apoio="Acompanhe e intervenha quando necessário" />
               <CartaoAcao href="/assistente" titulo="Editar atendente" apoio="Ajuste informações, comportamento e respostas" />
               <CartaoAcao href="/assistente#conhecimento" titulo="Adicionar conhecimento" apoio="Envie arquivos ou textos" />
-              {conectado ? (
+              {!assistenteCriado ? (
+                <CartaoAcao href="/assistente" titulo="Criar meu atendente" apoio="O primeiro passo: quem ele é e o que sabe" />
+              ) : conectado ? (
                 <CartaoAcao href="/setup" titulo="Configurações" apoio="Conexões com outros sistemas e relatório diário" />
               ) : (
                 <CartaoAcao href="/assistente?passo=3" titulo="Conectar o WhatsApp" apoio="Leia o código com o celular da empresa" />

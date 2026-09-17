@@ -141,7 +141,7 @@ export function Assistente() {
   const [conexao, setConexao] = useState<RespostaConexao | null>(null);
 
   const autoEnviado = useRef(false);
-  // "Salvar e sair" e "Continuar para teste" submetem o mesmo formulário (para o navegador cobrar os
+  // "Salvar e sair" e "Salvar e testar o atendente" submetem o mesmo formulário (para o navegador cobrar os
   // campos obrigatórios nos dois); qual dos dois foi clicado é o que muda o destino depois de salvar.
   const destino = useRef<"inicio" | "teste">("teste");
 
@@ -415,9 +415,16 @@ export function Assistente() {
               <div className="card p-5 border-accent">
                 <h2 className="font-bold text-[15px] mb-1">Tudo pronto</h2>
                 <p className="text-sm text-muted mb-4">{fraseRespondendo(config.atendente, conexao?.numero)}</p>
-                <button type="button" className="btn-primary !w-auto max-md:!w-full" onClick={() => router.push("/")}>
-                  Ir para o Início
-                </button>
+                {/* Quem acabou de conectar quer ver o atendimento acontecendo, não um painel de números:
+                    o caminho primário é a lista de conversas, e o Início fica como segunda opção. */}
+                <div className="flex items-center gap-3 flex-wrap max-md:flex-col max-md:items-stretch">
+                  <button type="button" className="btn-primary !w-auto max-md:!w-full" onClick={() => router.push("/conversas")}>
+                    Ver as conversas
+                  </button>
+                  <button type="button" className="btn-ghost !w-auto max-md:!w-full" onClick={() => router.push("/")}>
+                    Ir para o Início
+                  </button>
+                </div>
               </div>
             )}
 
@@ -547,7 +554,7 @@ export function Assistente() {
                 Voltar e ajustar
               </button>
               <button type="button" className="btn-primary !w-auto" onClick={() => irPara(3)}>
-                Continuar para conectar
+                Colocar no WhatsApp
               </button>
             </div>
           </div>
@@ -667,7 +674,7 @@ export function Assistente() {
                   Salvar e sair
                 </button>
                 <button type="submit" className="btn-primary !w-auto" disabled={salvando || carregando} onClick={() => (destino.current = "teste")}>
-                  {salvando ? "Salvando" : "Continuar para teste"}
+                  {salvando ? "Salvando" : "Salvar e testar o atendente"}
                 </button>
               </div>
             </form>

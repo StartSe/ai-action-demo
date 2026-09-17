@@ -14,6 +14,8 @@ import type { Segmento } from "@/lib/ilustracao";
 type Resposta = {
   integracoes: IntegracaoStatus[];
   comCartaoProprio?: IntegracaoStatus[];
+  /** Integrações que descem para o bloco recolhido do fim da página (ver lib/integracoes.ts: SECUNDARIAS). */
+  secundarias?: IntegracaoStatus[];
   pronto: boolean;
   enderecoPublico: StatusEnderecoPublico;
   caixasEmail: StatusCaixasEmail;
@@ -63,7 +65,7 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
 
   const carregar = () => fetch("/api/setup").then((r) => r.json()).then(setDados).catch(() => setAviso({ tipo: "erro", texto: "Não foi possível carregar a configuração." }));
   const primeiroPendenteId = dados?.integracoes.find((i) => i.obrigatoria && !i.configurada)?.id;
-  const todas = [...(dados?.integracoes ?? []), ...(dados?.comCartaoProprio ?? [])];
+  const todas = [...(dados?.integracoes ?? []), ...(dados?.comCartaoProprio ?? []), ...(dados?.secundarias ?? [])];
   const conectadas = todas.filter((i) => i.configurada).length;
   const total = todas.length;
   const progresso = total > 0 ? Math.round((conectadas / total) * 100) : 0;
@@ -129,29 +131,7 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
 
             {!dados && !aviso && <p className="text-muted">Carregando...</p>}
 
-            {dados?.pronto && (
-              <section className="card border-accent p-6 max-md:p-5 mb-5">
-                <h2 className="text-lg font-bold mb-1">Tudo pronto</h2>
-                <p className="text-muted text-sm mb-4">Já dá para usar o app com IA de verdade.</p>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <Link href="/?exemplo=1" className="btn-primary !w-auto">Testar com um exemplo</Link>
-                  <Link href="/" className="btn-ghost">Ir para o app</Link>
-                </div>
-                {opcionaisFaltando.length > 0 && (
-                  <div className="mt-5 pt-5 border-t border-line">
-                    <h3 className="text-sm font-bold mb-2">Quer ir além?</h3>
-                    <ul className="flex flex-col gap-1.5">
-                      {opcionaisFaltando.map((i) => (
-                        <li key={i.id} className="text-sm">
-                          <a href={`#${i.id}`} className="font-semibold text-accent underline underline-offset-2">{i.titulo}</a>
-                          <span className="text-ink-2"> — {i.beneficio || i.descricao}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </section>
-            )}
+            {dados && <ProximoPasso pronto={dados.pronto} integracoes={status?.integrations} />}
 
             <div className="flex flex-col gap-5">
               {dados?.integracoes.map((i, indice) => (
@@ -168,6 +148,21 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
 
             {children && <div className="flex flex-col gap-5 mt-5">{children}</div>}
 
+            {dados?.secundarias && dados.secundarias.length > 0 && (
+              <div className="mt-5">
+                <MaisDetalhes titulo="Avisos por e-mail ou Slack (opcional)">
+                  <p className="text-muted text-[13px] mb-3">
+                    Só para receber o relatório diário e os avisos das rotinas fora do app. O atendente responde clientes sem isto.
+                  </p>
+                  <div className="flex flex-col gap-5">
+                    {dados.secundarias.map((i) => (
+                      <CartaoIntegracao key={i.id} integracao={i} aoSalvar={carregar} caixasEmail={i.id === "notificacoes" ? dados.caixasEmail : undefined} />
+                    ))}
+                  </div>
+                </MaisDetalhes>
+              </div>
+            )}
+
             <footer className="mt-8 pt-6 border-t border-line">
               <p className="text-muted text-[13px] max-w-[560px]">{FRASE_PRIVACIDADE}</p>
               <p className="text-muted text-[13px] max-w-[560px] mt-1">{FRASE_CONEXOES}</p>
@@ -182,7 +177,7 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
                 em especial o endereço público, que alimenta os links de e-mail e Slack das rotinas. */}
             <MaisDetalhes titulo="Ajustes do servidor">
               <p className="text-muted text-[13px]">Variáveis de ambiente, quando existirem, têm prioridade sobre o que é salvo aqui.</p>
-              <p className="text-muted text-[13px]">Neste plano de hospedagem, o histórico pode se perder ao reiniciar.</p>
+              <p className="text-muted text-[13px]">A configuração, as conversas e o histórico ficam guardados no disco deste servidor.</p>
               {dados && <CampoEnderecoPublico status={dados.enderecoPublico} aoSalvar={carregar} />}
               {dados && (
                 <ul className="mt-2 flex flex-col gap-1 text-[13px] text-muted">
@@ -245,7 +240,55 @@ const NOTA_AVANCADA: Record<string, string> = {
   whatsapp: "Já usa a WhatsApp Cloud API da Meta? Preencha aqui e deixe os campos da z-api em branco.",
 };
 
-function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEmail }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean; caixasEmail?: StatusCaixasEmail }) {
+/**
+ * O que fazer agora, em um cartão só. A jornada deste app tem três marcos — conectar a IA, criar o
+ * atendente e conectar o número da empresa — e antes disso a pessoa precisava descobrir sozinha que,
+ * depois de salvar as chaves aqui, o trabalho continuava em outra tela. O cartão sempre aponta um único
+ * passo, o primeiro que falta, e some do caminho quando não há mais nenhum: aí ele vira o atalho para as
+ * conversas, que é onde o trabalho acontece de verdade.
+ *
+ * Os três sinais vêm de `GET /api/status` (`ai`, `integrations.assistente`, `integrations.whatsapp`), a
+ * mesma fonte do chip do cabeçalho — nunca recalculados aqui.
+ */
+function ProximoPasso({ pronto, integracoes }: { pronto: boolean; integracoes?: Record<string, boolean> }) {
+  // Sem a IA conectada o cartão não aparece: o passo 1 está logo abaixo, destacado, e repetir o mesmo
+  // pedido duas vezes na mesma tela é o que esta rodada veio desfazer.
+  if (!pronto || !integracoes) return null;
+
+  const passo = !integracoes.assistente
+    ? {
+        titulo: "Agora crie seu atendente",
+        apoio: "Diga o que ele precisa saber, escolha o tom e teste as respostas antes de falar com clientes.",
+        rotulo: "Criar meu atendente",
+        href: "/assistente",
+      }
+    : !integracoes.whatsapp
+      ? {
+          titulo: "Falta conectar o número da empresa",
+          apoio: "Escaneie o código com o celular da empresa e o atendente começa a responder clientes de verdade.",
+          rotulo: "Conectar o WhatsApp",
+          href: "#conexao",
+        }
+      : {
+          titulo: "Seu atendente está atendendo",
+          apoio: "Tudo configurado. Acompanhe as conversas e assuma quando alguém precisar de você.",
+          rotulo: "Ver as conversas",
+          href: "/conversas",
+        };
+
+  return (
+    <section className="card border-accent p-6 max-md:p-5 mb-5">
+      <p className="sobretitulo mb-1">Próximo passo</p>
+      <h2 className="text-lg font-bold mb-1">{passo.titulo}</h2>
+      <p className="text-muted text-sm mb-4">{passo.apoio}</p>
+      <Link href={passo.href} className="btn-primary !w-auto max-md:!w-full">{passo.rotulo}</Link>
+    </section>
+  );
+}
+
+// `numero` é opcional: os cartões do bloco recolhido (SECUNDARIAS) não fazem parte da contagem de passos
+// da configuração inicial, então não levam o círculo numerado.
+function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEmail }: { integracao: IntegracaoStatus; numero?: number; aoSalvar: () => void; destaque?: boolean; caixasEmail?: StatusCaixasEmail }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   const [desconectando, setDesconectando] = useState(false);
@@ -325,7 +368,9 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
     <section id={i.id} className={`card p-6 max-md:p-5 ${destaque ? "border-accent border-2" : ""}`}>
       <div className="flex items-start gap-3.5 mb-4">
         <div className="relative shrink-0">
-          <span className="absolute -left-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-[11px] font-bold text-white">{numero}</span>
+          {numero !== undefined && (
+            <span className="absolute -left-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-[11px] font-bold text-white">{numero}</span>
+          )}
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft overflow-hidden">
             <img src={`/ilustracoes/icones/${iconeIntegracao(i.id)}.webp`} alt="" aria-hidden="true" width={32} height={32} className="h-8 w-8 object-contain" />
           </div>
