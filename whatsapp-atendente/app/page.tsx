@@ -36,7 +36,8 @@ import { AcoesResposta, Celular, horaAtual, type AoSalvarBase, type BolhaChat } 
 import type { Meta } from "@/lib/ai";
 import type { ParBase } from "@/lib/base";
 import type { Sugestao } from "@/lib/sugestoes";
-import type { CanalOrigem, Config, Conversa, ItemRelatorioAtendimento, PerguntaPendente } from "@/lib/types";
+import { rotuloNumero, rotuloOrigem } from "@/lib/rotulos";
+import type { Config, Conversa, ItemRelatorioAtendimento, PerguntaPendente } from "@/lib/types";
 
 const CONFIG_VAZIA: Config = { negocio: "", atendente: "", tom: "cordial", horario: "", baseConhecimento: "", naoSei: "humano" };
 
@@ -371,11 +372,13 @@ export default function Page() {
         return;
       }
       const resposta = await r.json();
-      setMensagens((m) => [
-        ...m.filter((x) => !x.pendente),
-        { papel: "atendente", texto: resposta.resposta, transferido: resposta.transferir, ferramentaUsada: resposta.ferramentaUsada, hora: horaAtual() },
-      ]);
-      setEstadoConversas({ fase: "pronto", conversas: resposta.conversas, meta: resposta.meta, id: resposta.id });
+      setMensagens((m) => {
+        const semPendente = m.filter((x) => !x.pendente);
+        // Sem resposta: a conversa foi assumida por uma pessoa e a IA não responde por ela.
+        if (!resposta.resposta) return semPendente;
+        return [...semPendente, { papel: "atendente", texto: resposta.resposta, transferido: resposta.transferir, ferramentaUsada: resposta.ferramentaUsada, hora: horaAtual() }];
+      });
+      setEstadoConversas({ fase: "pronto", conversas: resposta.conversas, meta: resposta.meta });
       fetch("/api/simular").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
       carregarPendentes();
     } catch (err) {
@@ -912,19 +915,6 @@ function relatorioParaTexto(itens: ItemRelatorioAtendimento[]): string {
     l.push("");
   });
   return l.join("\n").trim();
-}
-
-/** "simulador"/"assistente-ia" são números fixos internos: nunca mostrar o valor cru em minúsculas. */
-function rotuloNumero(numero: string): string {
-  if (numero === "simulador") return "Simulador";
-  if (numero === "assistente-ia") return "Assistente de IA";
-  return numero;
-}
-
-function rotuloOrigem(origem: CanalOrigem): string {
-  if (origem === "whatsapp") return "WhatsApp";
-  if (origem === "mcp") return "Assistente de IA";
-  return "Simulador";
 }
 
 function conversasParaTexto(conversas: Conversa[]): string {

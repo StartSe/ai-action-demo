@@ -1,5 +1,5 @@
 import { aiEnabled, meta } from "@/lib/ai";
-import { listarConversas } from "@/lib/atendente";
+import { listarConversas } from "@/lib/conversas";
 
 export const dynamic = "force-dynamic";
 

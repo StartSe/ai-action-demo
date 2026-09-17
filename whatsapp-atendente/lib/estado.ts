@@ -1,5 +1,5 @@
 // Configuração do negócio (nome, atendente, tom, horário, base de conhecimento, regra de fallback),
-// persistida em SQLite em uma chave só, para sobreviver a reinícios. As conversas continuam em memória (lib/atendente.ts).
+// persistida em SQLite em uma chave só, para sobreviver a reinícios. As conversas ficam em tabelas próprias (lib/conversas.ts).
 import { configExemplo } from "./demo";
 import { getConfig as getStoreConfig, setConfig as setStoreConfig } from "./store";
 import type { Config } from "./types";

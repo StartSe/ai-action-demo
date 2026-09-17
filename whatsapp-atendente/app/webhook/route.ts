@@ -58,6 +58,8 @@ async function processarWebhook(body: CorpoWebhook) {
         // cartão de diagnóstico precisa saber, mesmo que a resposta falhe logo depois.
         registrarRecebida(de);
         const { resposta } = await responder({ numero: de, texto, origem: "whatsapp" });
+        // Conversa assumida por uma pessoa: a mensagem foi guardada, mas quem responde é ela.
+        if (!resposta) continue;
         try {
           await enviarMensagem(de, resposta);
         } catch (err) {
