@@ -124,7 +124,8 @@
         "formulario",
         "rotina"
       ],
-      "demo": null
+      "demo": null,
+      "independente": true
     },
     {
       "id": "contratos-ia",
