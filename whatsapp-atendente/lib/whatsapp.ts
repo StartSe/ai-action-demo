@@ -1,38 +1,17 @@
-// Conversa com o número real da empresa pela WhatsApp Cloud API (Meta): envio, tradução das falhas
-// para linguagem de negócio e o registro do que aconteceu por último (para "Dados para a equipe
-// técnica" em Configurações conseguir dizer se as mensagens estão mesmo chegando).
+// Despachante da conversa com o número real da empresa: decide entre a z-api (conexão por QR Code,
+// o caminho normal) e a WhatsApp Cloud API da Meta (opção avançada, credenciais coladas à mão), manda
+// as mensagens pelo provedor ativo, traduz as falhas da Meta para linguagem de negócio e registra o
+// que aconteceu por último (para "Para a equipe técnica" em Configurações conseguir dizer se as
+// mensagens estão mesmo chegando).
 //
-// Regra da suíte (ver ../progress.txt): nenhuma mensagem exibida pode conter código de resposta cru
-// nem o corpo devolvido pela Meta — o detalhe técnico vai só para console.error, e a frase que chega
-// à tela sempre diz o que fazer e para onde ir.
+// As falhas da z-api e as chamadas dela ficam em lib/zapi.ts; ErroWhatsApp e os códigos, em
+// lib/erro-whatsapp.ts (re-exportados aqui para quem já importava deste arquivo).
+import { ACAO_NUMERO, ErroWhatsApp, type CodigoErroWhatsApp } from "./erro-whatsapp";
+import { credenciais as credenciaisZapi, enviarTexto as enviarTextoZapi, lerConexao, statusInstancia } from "./zapi";
 import { getConfig, setConfig } from "./store";
 
-export const ACAO_NUMERO = { rotulo: "Revisar a conexão do número", url: "/setup#whatsapp" };
-
-export type CodigoErroWhatsApp =
-  | "sem_numero"
-  | "autorizacao"
-  | "numero_nao_verificado"
-  | "destino_nao_liberado"
-  | "janela_24h"
-  | "limite"
-  | "servico"
-  | "rede";
-
-/** Mesmo formato de ErroIA (lib/ai.ts): mensagem curada, código e ação para o cartão certo de Configurações. */
-export class ErroWhatsApp extends Error {
-  codigo: CodigoErroWhatsApp;
-  status: number;
-  acao: { rotulo: string; url: string };
-
-  constructor(codigo: CodigoErroWhatsApp, mensagem: string, status: number) {
-    super(mensagem);
-    this.name = "ErroWhatsApp";
-    this.codigo = codigo;
-    this.status = status;
-    this.acao = ACAO_NUMERO;
-  }
-}
+export { ACAO_NUMERO, ErroWhatsApp };
+export type { CodigoErroWhatsApp };
 
 /**
  * Traduz a resposta da Meta para uma frase de negócio. A Cloud API devolve o motivo real dentro do
@@ -117,19 +96,39 @@ export function ultimaFalhaEnvio(): UltimaFalha | null {
   return lerJson<UltimaFalha>(CHAVE_FALHA);
 }
 
+// --- Provedor ativo --------------------------------------------------------------------------
+
+export type ProvedorWhatsApp = "zapi" | "meta";
+
+/**
+ * Qual caminho está configurado para falar com o número real. A z-api (as três credenciais coladas em
+ * Configurações, conexão por QR Code) tem preferência; a Meta só entra quando é a única preenchida.
+ */
+export function provedorAtivo(): ProvedorWhatsApp | null {
+  if (credenciaisZapi()) return "zapi";
+  if (getConfig("WHATSAPP_TOKEN") && getConfig("WHATSAPP_PHONE_NUMBER_ID")) return "meta";
+  return null;
+}
+
 // --- Envio -----------------------------------------------------------------------------------
 
 /**
- * Manda a resposta do atendente de volta pelo número real. Lança ErroWhatsApp já traduzido; quem
- * chama decide se mostra na tela (simulador) ou só registra (webhook, que responde à Meta na hora).
+ * Manda a resposta do atendente de volta pelo número real, pelo provedor configurado. Lança
+ * ErroWhatsApp já traduzido; quem chama decide se mostra na tela (simulador) ou só registra (webhook,
+ * que responde ao provedor na hora).
  */
 export async function enviarMensagem(para: string, texto: string): Promise<void> {
-  const codigo = getConfig("WHATSAPP_TOKEN");
-  const numeroId = getConfig("WHATSAPP_PHONE_NUMBER_ID");
-  if (!codigo || !numeroId) {
+  const provedor = provedorAtivo();
+  if (!provedor) {
     throw new ErroWhatsApp("sem_numero", "O número da empresa ainda não está conectado. Conecte o WhatsApp em Configurações para responder clientes de verdade.", 400);
   }
+  if (provedor === "zapi") return enviarTextoZapi(para, texto);
+  return enviarPelaMeta(para, texto);
+}
 
+async function enviarPelaMeta(para: string, texto: string): Promise<void> {
+  const codigo = getConfig("WHATSAPP_TOKEN");
+  const numeroId = getConfig("WHATSAPP_PHONE_NUMBER_ID");
   let resposta: Response;
   try {
     resposta = await fetch(`https://graph.facebook.com/v21.0/${numeroId}/messages`, {
@@ -149,9 +148,26 @@ export async function enviarMensagem(para: string, texto: string): Promise<void>
 
 /** Confere se o número responde, para o botão "Testar conexão" do cartão de Configurações. */
 export async function conferirNumero(config: Record<string, string | undefined>): Promise<{ ok: boolean; mensagem: string }> {
+  if (config.ZAPI_INSTANCE_ID && config.ZAPI_TOKEN && config.ZAPI_CLIENT_TOKEN) return conferirNumeroZapi();
+  return conferirNumeroMeta(config);
+}
+
+async function conferirNumeroZapi(): Promise<{ ok: boolean; mensagem: string }> {
+  const estado = await statusInstancia();
+  if (estado.erro) return { ok: false, mensagem: estado.erro };
+  if (!estado.conectado) return { ok: false, mensagem: "O número ainda não está conectado. Escaneie o QR Code em Configurações." };
+  const conexao = lerConexao();
+  const quem = conexao?.numero ? ` Número: ${conexao.numero}.` : "";
+  if (!estado.celularConectado) {
+    return { ok: true, mensagem: `Número conectado, mas o celular da empresa está sem internet agora — enquanto isso as respostas podem atrasar.${quem}` };
+  }
+  return { ok: true, mensagem: `Número conectado e pronto para responder clientes.${quem}` };
+}
+
+async function conferirNumeroMeta(config: Record<string, string | undefined>): Promise<{ ok: boolean; mensagem: string }> {
   const codigo = config.WHATSAPP_TOKEN;
   const numeroId = config.WHATSAPP_PHONE_NUMBER_ID;
-  if (!codigo || !numeroId) return { ok: false, mensagem: "Salve o código de acesso e o identificador do número antes de testar." };
+  if (!codigo || !numeroId) return { ok: false, mensagem: "Cole a identificação e as duas chaves da instância e salve antes de testar." };
   try {
     const r = await fetch(`https://graph.facebook.com/v21.0/${numeroId}?fields=display_phone_number,verified_name`, {
       headers: { Authorization: `Bearer ${codigo}` },
@@ -166,4 +182,27 @@ export async function conferirNumero(config: Record<string, string | undefined>)
     console.error("Erro de rede ao testar o número na Meta:", err);
     return { ok: false, mensagem: "Não foi possível falar com o WhatsApp da Meta agora. Tente de novo em alguns minutos." };
   }
+}
+
+// --- "O número está conectado de verdade?" -----------------------------------------------------
+// O chip de /api/status precisa de uma resposta imediata (a rota é síncrona e é chamada em toda tela),
+// mas a verdade mora na z-api. A conciliação é um cache de 30 s: a leitura devolve o último estado
+// conhecido (o mesmo que os avisos da z-api gravam, ver lib/zapi.ts) e, quando ele está velho, dispara
+// uma consulta em segundo plano que atualiza o banco para a próxima leitura.
+
+const VALIDADE_CACHE_MS = 30_000;
+let consultadoEm = 0;
+
+export function numeroConectado(): boolean {
+  const provedor = provedorAtivo();
+  if (!provedor) return false;
+  // Na Meta não há sessão para cair: ter as credenciais é o que dá para saber sem gastar uma chamada.
+  if (provedor === "meta") return true;
+
+  const agora = Date.now();
+  if (agora - consultadoEm > VALIDADE_CACHE_MS) {
+    consultadoEm = agora;
+    statusInstancia().catch((err) => console.error("Falha ao atualizar o estado da conexão do WhatsApp:", err));
+  }
+  return lerConexao()?.conectado === true;
 }

@@ -223,6 +223,12 @@ function CampoEnderecoPublico({ status, aoSalvar }: { status: StatusEnderecoPubl
   );
 }
 
+// Frase que abre "Opções avançadas" de um cartão, quando os campos de lá são um caminho alternativo
+// inteiro (e não só ajustes finos do principal).
+const NOTA_AVANCADA: Record<string, string> = {
+  whatsapp: "Já usa a WhatsApp Cloud API da Meta? Preencha aqui e deixe os campos da z-api em branco.",
+};
+
 function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEmail }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean; caixasEmail?: StatusCaixasEmail }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
@@ -284,6 +290,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
 
   const opcoesAvancadas = camposAvancados.length > 0 && (
     <MaisDetalhes titulo="Opções avançadas">
+      {NOTA_AVANCADA[i.id] && <p className="text-[12.5px] text-muted mb-4">{NOTA_AVANCADA[i.id]}</p>}
       <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4 [&>*]:min-w-0">
         {camposAvancados.map((c) => <CampoSetup key={c.chave} campo={c} valor={valores[c.chave] ?? ""} aoMudar={aoMudarCampo(c.chave)} />)}
       </div>
@@ -408,6 +415,10 @@ function CaixaEmail({ nome, url, status, aoMudar }: { nome: string; url: string;
  * o último passo fala em preencher os campos. Notificações tem um passo a passo próprio por canal, porque
  * o caminho (Resend/SMTP para e-mail, webhook para Slack) muda por completo conforme a escolha. */
 function passosSetup(i: IntegracaoStatus, valoresAtuais: Record<string, string>): string[] {
+  // Conectar o número não é "copie uma chave": são três valores, e depois disso ainda vem o QR Code.
+  if (i.id === "whatsapp") {
+    return ["Crie a conta e uma instância no painel da z-api.", "Copie os três valores da instância.", "Cole aqui e clique em Salvar."];
+  }
   if (i.id === "notificacoes") {
     const canal = valoresAtuais.NOTIFICACOES_CANAL || "email";
     return canal === "slack"
