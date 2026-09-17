@@ -30,6 +30,7 @@ type LinhaConversa = {
   assunto: string | null;
   exemplo: number;
   nao_lidas: number;
+  passou_por_pessoa: number;
   criado_em: string;
   atualizado_em: string;
 };
@@ -66,6 +67,7 @@ function banco() {
       assunto TEXT NULL,
       exemplo INTEGER NOT NULL DEFAULT 0,
       nao_lidas INTEGER NOT NULL DEFAULT 0,
+      passou_por_pessoa INTEGER NOT NULL DEFAULT 0,
       criado_em TEXT NOT NULL DEFAULT (datetime('now')),
       atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
@@ -79,9 +81,27 @@ function banco() {
       tempo_resposta_ms INTEGER NULL
     )`);
     d.exec(`CREATE INDEX IF NOT EXISTS mensagens_por_conversa ON mensagens (numero, id)`);
+    // Bancos criados antes da US-015 não têm a coluna; ALTER TABLE falha de propósito quando ela já existe.
+    // A primeira vez recupera o passado pelo que dá para saber: o status atual e as respostas escritas por
+    // uma pessoa (padrão de lib/rotinas.ts).
+    try {
+      d.exec(`ALTER TABLE conversas ADD COLUMN passou_por_pessoa INTEGER NOT NULL DEFAULT 0`);
+      d.exec(`UPDATE conversas SET passou_por_pessoa = 1
+        WHERE status IN ('atencao', 'humano')
+           OR EXISTS (SELECT 1 FROM mensagens m WHERE m.numero = conversas.numero AND m.papel = 'humano')`);
+    } catch { /* coluna já existe */ }
     criado = true;
   }
   return d;
+}
+
+/**
+ * O mesmo banco, com as duas tabelas garantidas. Existe para lib/metricas.ts, o único outro arquivo
+ * que lê `conversas`/`mensagens` por SQL — e só lê: criar tabela, migrar coluna e toda escrita
+ * continuam morando aqui, para o formato dos dados ter um dono só.
+ */
+export function bancoDeConversas() {
+  return banco();
 }
 
 // --- Datas ---------------------------------------------------------------
@@ -303,6 +323,20 @@ export function perguntasDoCliente({ desdeDias }: { desdeDias?: number } = {}): 
 
 // --- Escrita -------------------------------------------------------------
 
+/**
+ * Os dois status que querem uma pessoa na conversa. Passar por um deles, mesmo que a conversa volte
+ * para a IA depois, fica gravado na coluna `passou_por_pessoa` — é o que lib/metricas.ts conta como
+ * "passada para uma pessoa", que o status de agora sozinho não contaria.
+ */
+function precisouDePessoa(status: StatusConversa): boolean {
+  return status === "atencao" || status === "humano";
+}
+
+/** Trecho de SQL que soma a marca de "passou por uma pessoa" a um UPDATE de status, quando for o caso. */
+function marcaDePessoa(status: StatusConversa): string {
+  return precisouDePessoa(status) ? ", passou_por_pessoa = 1" : "";
+}
+
 function inserirMensagem({
   numero,
   papel,
@@ -347,8 +381,11 @@ export function garantirConversa({
   if (!existente) {
     const quando = paraTextoDeBanco(em);
     banco()
-      .prepare("INSERT INTO conversas (numero, nome, origem, status, assunto, exemplo, nao_lidas, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)")
-      .run(numero, nome, origem, status, assunto, exemplo ? 1 : 0, quando, quando);
+      .prepare(
+        `INSERT INTO conversas (numero, nome, origem, status, assunto, exemplo, nao_lidas, passou_por_pessoa, criado_em, atualizado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`
+      )
+      .run(numero, nome, origem, status, assunto, exemplo ? 1 : 0, precisouDePessoa(status) ? 1 : 0, quando, quando);
   } else if (nome && !existente.nome) {
     banco().prepare("UPDATE conversas SET nome = ? WHERE numero = ?").run(nome, numero);
   }
@@ -406,7 +443,8 @@ export function registrarResposta({
   em?: Date;
 }): void {
   const quando = paraTextoDeBanco(em);
-  banco().prepare("UPDATE conversas SET status = ?, atualizado_em = ? WHERE numero = ?").run(transferir ? "atencao" : "ia", quando, numero);
+  const status: StatusConversa = transferir ? "atencao" : "ia";
+  banco().prepare(`UPDATE conversas SET status = ?, atualizado_em = ?${marcaDePessoa(status)} WHERE numero = ?`).run(status, quando, numero);
   inserirMensagem({ numero, papel: "atendente", texto, criadoEm: quando, ferramentaUsada, tempoRespostaMs });
 }
 
@@ -418,7 +456,7 @@ export function registrarResposta({
 export function registrarMensagemHumana(numero: string, texto: string): number {
   garantirConversa({ numero });
   const quando = paraTextoDeBanco();
-  banco().prepare("UPDATE conversas SET status = 'humano', nao_lidas = 0, atualizado_em = ? WHERE numero = ?").run(quando, numero);
+  banco().prepare("UPDATE conversas SET status = 'humano', nao_lidas = 0, passou_por_pessoa = 1, atualizado_em = ? WHERE numero = ?").run(quando, numero);
   return inserirMensagem({ numero, papel: "humano", texto, criadoEm: quando });
 }
 
@@ -433,7 +471,11 @@ export function marcarLido(numero: string): void {
 function mudarStatus(numero: string, status: StatusConversa, { zerarNaoLidas = false } = {}): void {
   const d = banco();
   if (!linha(numero)) return;
-  d.prepare(`UPDATE conversas SET status = ?, atualizado_em = ?${zerarNaoLidas ? ", nao_lidas = 0" : ""} WHERE numero = ?`).run(status, paraTextoDeBanco(), numero);
+  d.prepare(`UPDATE conversas SET status = ?, atualizado_em = ?${zerarNaoLidas ? ", nao_lidas = 0" : ""}${marcaDePessoa(status)} WHERE numero = ?`).run(
+    status,
+    paraTextoDeBanco(),
+    numero
+  );
 }
 
 /** Uma pessoa assumiu a conversa: a IA para de responder e as não lidas zeram. */
@@ -485,7 +527,13 @@ export function semearExemplosSeVazio({ numeroConectado }: { numeroConectado: bo
     const fim = new Date(agora - (c.mensagens[c.mensagens.length - 1]?.atras ?? 0) * 60 * 1000);
     garantirConversa({ numero: c.numero, nome: c.nome, origem: "exemplo", exemplo: true, assunto: c.assunto, status: c.status, em: inicio });
     for (const m of c.mensagens) {
-      inserirMensagem({ numero: c.numero, papel: m.papel, texto: m.texto, criadoEm: paraTextoDeBanco(new Date(agora - m.atras * 60 * 1000)) });
+      inserirMensagem({
+        numero: c.numero,
+        papel: m.papel,
+        texto: m.texto,
+        criadoEm: paraTextoDeBanco(new Date(agora - m.atras * 60 * 1000)),
+        tempoRespostaMs: m.respostaMs,
+      });
     }
     banco()
       .prepare("UPDATE conversas SET nao_lidas = ?, atualizado_em = ? WHERE numero = ?")

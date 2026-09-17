@@ -14,6 +14,56 @@ export type Periodo = "hoje" | "7d" | "30d" | "tudo";
 /** Quem escreveu a mensagem: o cliente, o atendente virtual ou a pessoa que assumiu a conversa. */
 export type PapelMensagem = "cliente" | "atendente" | "humano";
 
+/**
+ * Os períodos que os números de Início e Relatórios aceitam (lib/metricas.ts). "Tudo" fica de fora:
+ * todo número desta tela vem com a comparação com o período anterior de mesmo tamanho, e "tudo" não
+ * tem anterior.
+ */
+export type PeriodoMetricas = Exclude<Periodo, "tudo">;
+
+/**
+ * Quanto cada número cresceu ou caiu em relação ao período anterior de mesmo tamanho, em pontos
+ * percentuais arredondados. `null` quando o período anterior não teve nada: sem base, não há
+ * porcentagem para mostrar (e não é "0%").
+ */
+export interface VariacaoMetricas {
+  conversas: number | null;
+  resolvidasIA: number | null;
+  passadasPessoa: number | null;
+  tempoMedioMs: number | null;
+}
+
+/** Um dia do gráfico de Relatórios. `dia` é a data local em "AAAA-MM-DD". */
+export interface DiaMetricas {
+  dia: string;
+  conversas: number;
+  resolvidasIA: number;
+}
+
+/** Um assunto e quantas conversas do período trataram dele. */
+export interface AssuntoMetricas {
+  assunto: string;
+  total: number;
+}
+
+/**
+ * Os números do atendimento em um período, do jeito que Início e Relatórios desenham. Fonte única:
+ * lib/metricas.ts, com as definições de cada número documentadas no topo daquele arquivo.
+ */
+export interface Metricas {
+  conversas: number;
+  resolvidasIA: number;
+  passadasPessoa: number;
+  /** Média de tempo até a resposta, em milissegundos; 0 quando ninguém respondeu no período. */
+  tempoMedioMs: number;
+  variacao: VariacaoMetricas;
+  /** Todos os dias do período, inclusive os sem conversa nenhuma, para o gráfico não ter buracos. */
+  porDia: DiaMetricas[];
+  assuntos: AssuntoMetricas[];
+  /** As conversas paradas esperando uma pessoa AGORA; não é filtrada pelo período (veja lib/metricas.ts). */
+  atencao: Conversa[];
+}
+
 export interface Config {
   negocio: string;
   atendente: string;

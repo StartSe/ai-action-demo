@@ -174,6 +174,13 @@ export interface MensagemExemplo {
   texto: string;
   /** Quantos minutos antes de "agora" a mensagem chegou: é o que espalha as conversas pelos últimos 7 dias. */
   atras: number;
+  /**
+   * Quanto o atendente levou para escrever esta resposta, em milissegundos (só nas respostas). É o que
+   * alimenta o "tempo médio de resposta" de lib/metricas.ts no modo demonstração: `atras` é contado em
+   * minutos e não daria para expressar os poucos segundos que a IA leva. A resposta escrita por uma
+   * pessoa leva minutos, de propósito.
+   */
+  respostaMs?: number;
 }
 
 export interface ConversaExemplo {
@@ -204,9 +211,9 @@ export function conversasExemplo(): ConversaExemplo[] {
       assunto: "Agendamentos",
       mensagens: [
         { papel: "cliente", texto: "Oi! Vocês têm horário para limpeza esta semana?", atras: 50 },
-        { papel: "atendente", texto: "Claro! Temos quinta às 9h e sexta às 14h. Qual fica melhor para você?", atras: 49 },
+        { papel: "atendente", texto: "Claro! Temos quinta às 9h e sexta às 14h. Qual fica melhor para você?", atras: 49, respostaMs: 2400 },
         { papel: "cliente", texto: "Quinta às 9h está ótimo.", atras: 46 },
-        { papel: "atendente", texto: "Perfeito, Mariana. Anotei quinta às 9h para a limpeza. Se precisar mudar, avise com pelo menos 4 horas de antecedência.", atras: 45 },
+        { papel: "atendente", texto: "Perfeito, Mariana. Anotei quinta às 9h para a limpeza. Se precisar mudar, avise com pelo menos 4 horas de antecedência.", atras: 45, respostaMs: 3100 },
       ],
     },
     {
@@ -217,9 +224,9 @@ export function conversasExemplo(): ConversaExemplo[] {
       naoLidas: 1,
       mensagens: [
         { papel: "cliente", texto: "Fiz um implante em outra clínica e está doendo. Vocês avaliam?", atras: 1 * DIA + 2 * HORA },
-        { papel: "atendente", texto: "Sinto muito, Ana Paula. Avaliamos sim: a consulta de avaliação custa R$ 120 e fica gratuita para quem fechar tratamento.", atras: 1 * DIA + 2 * HORA - 1 },
+        { papel: "atendente", texto: "Sinto muito, Ana Paula. Avaliamos sim: a consulta de avaliação custa R$ 120 e fica gratuita para quem fechar tratamento.", atras: 1 * DIA + 2 * HORA - 1, respostaMs: 4200 },
         { papel: "cliente", texto: "Consigo hoje? A dor aumentou à noite.", atras: 4 * HORA },
-        { papel: "humano", texto: "Oi, Ana Paula, aqui é a recepção. Consigo te encaixar hoje às 17h30 com a Dra. Helena.", atras: 3 * HORA },
+        { papel: "humano", texto: "Oi, Ana Paula, aqui é a recepção. Consigo te encaixar hoje às 17h30 com a Dra. Helena.", atras: 3 * HORA, respostaMs: 480000 },
         { papel: "cliente", texto: "Perfeito, obrigada! Vou levar a radiografia que fiz na outra clínica.", atras: 2 * HORA },
       ],
     },
@@ -230,12 +237,13 @@ export function conversasExemplo(): ConversaExemplo[] {
       assunto: "Preços",
       mensagens: [
         { papel: "cliente", texto: "Bom dia! Quanto custa o clareamento?", atras: 3 * DIA },
-        { papel: "atendente", texto: "Bom dia! O clareamento dental a laser sai por R$ 900, em 3 sessões.", atras: 3 * DIA - 1 },
+        { papel: "atendente", texto: "Bom dia! O clareamento dental a laser sai por R$ 900, em 3 sessões.", atras: 3 * DIA - 1, respostaMs: 2800 },
         { papel: "cliente", texto: "E dá para parcelar em 10 vezes no boleto?", atras: 3 * HORA + 10 },
         {
           papel: "atendente",
           texto: "Essa pergunta é melhor respondida por alguém da equipe. Já vou encaminhar para um atendente humano falar com você (segunda a sexta, das 8h às 18h).",
           atras: 3 * HORA,
+          respostaMs: 5200,
         },
       ],
     },
@@ -246,7 +254,7 @@ export function conversasExemplo(): ConversaExemplo[] {
       assunto: "Horário de atendimento",
       mensagens: [
         { papel: "cliente", texto: "Vocês abrem no sábado?", atras: 6 * HORA + 2 },
-        { papel: "atendente", texto: "Sim! Aos sábados atendemos das 8h ao meio-dia.", atras: 6 * HORA },
+        { papel: "atendente", texto: "Sim! Aos sábados atendemos das 8h ao meio-dia.", atras: 6 * HORA, respostaMs: 3500 },
       ],
     },
     {
@@ -256,9 +264,9 @@ export function conversasExemplo(): ConversaExemplo[] {
       assunto: "Agendamentos",
       mensagens: [
         { papel: "cliente", texto: "Oi, preciso remarcar minha consulta de terça.", atras: 5 * DIA },
-        { papel: "atendente", texto: "Sem problema, Fernanda. Consigo remarcar para quinta às 10h ou sexta às 16h.", atras: 5 * DIA - 2 },
+        { papel: "atendente", texto: "Sem problema, Fernanda. Consigo remarcar para quinta às 10h ou sexta às 16h.", atras: 5 * DIA - 2, respostaMs: 2600 },
         { papel: "cliente", texto: "Pode ser sexta às 16h.", atras: 13 * HORA },
-        { papel: "atendente", texto: "Combinado. Sua consulta ficou para sexta às 16h.", atras: 12 * HORA },
+        { papel: "atendente", texto: "Combinado. Sua consulta ficou para sexta às 16h.", atras: 12 * HORA, respostaMs: 4800 },
       ],
     },
     {
@@ -268,9 +276,9 @@ export function conversasExemplo(): ConversaExemplo[] {
       assunto: "Preços",
       mensagens: [
         { papel: "cliente", texto: "Quanto fica o aparelho invisível?", atras: 20 * HORA + 6 },
-        { papel: "atendente", texto: "O aparelho invisível começa em R$ 6.500, parcelado em até 12x sem juros.", atras: 20 * HORA + 5 },
+        { papel: "atendente", texto: "O aparelho invisível começa em R$ 6.500, parcelado em até 12x sem juros.", atras: 20 * HORA + 5, respostaMs: 3900 },
         { papel: "cliente", texto: "Precisa de avaliação antes?", atras: 20 * HORA + 1 },
-        { papel: "atendente", texto: "Precisa sim: a avaliação inicial custa R$ 120 e fica gratuita para quem fechar tratamento.", atras: 20 * HORA },
+        { papel: "atendente", texto: "Precisa sim: a avaliação inicial custa R$ 120 e fica gratuita para quem fechar tratamento.", atras: 20 * HORA, respostaMs: 3300 },
       ],
     },
     {
@@ -280,7 +288,7 @@ export function conversasExemplo(): ConversaExemplo[] {
       assunto: "Outros",
       mensagens: [
         { papel: "cliente", texto: "Tem estacionamento aí?", atras: 22 * HORA + 3 },
-        { papel: "atendente", texto: "Tem sim: no prédio ao lado, conveniado, com desconto para pacientes.", atras: 22 * HORA },
+        { papel: "atendente", texto: "Tem sim: no prédio ao lado, conveniado, com desconto para pacientes.", atras: 22 * HORA, respostaMs: 2400 },
       ],
     },
     {
@@ -290,12 +298,13 @@ export function conversasExemplo(): ConversaExemplo[] {
       assunto: "Tratamentos",
       mensagens: [
         { papel: "cliente", texto: "Faço clareamento tendo restauração na frente?", atras: 2 * DIA + 5 * HORA },
-        { papel: "atendente", texto: "Depende do caso: isso é avaliado na consulta inicial.", atras: 2 * DIA + 5 * HORA - 1 },
+        { papel: "atendente", texto: "Depende do caso: isso é avaliado na consulta inicial.", atras: 2 * DIA + 5 * HORA - 1, respostaMs: 3100 },
         { papel: "cliente", texto: "E se a restauração for de porcelana? Meu dentista antigo disse que mancha.", atras: 2 * DIA + 3 * HORA },
         {
           papel: "atendente",
           texto: "Essa pergunta é melhor respondida por alguém da equipe. Já vou encaminhar para um atendente humano falar com você (segunda a sexta, das 8h às 18h).",
           atras: 2 * DIA + 3 * HORA - 1,
+          respostaMs: 4200,
         },
       ],
     },
@@ -306,11 +315,11 @@ export function conversasExemplo(): ConversaExemplo[] {
       assunto: "Agendamentos",
       mensagens: [
         { papel: "cliente", texto: "Boa tarde! Meu filho tem 4 anos, vocês atendem crianças?", atras: 6 * DIA },
-        { papel: "atendente", texto: "Boa tarde! Atendemos odontopediatria a partir dos 2 anos de idade.", atras: 6 * DIA - 2 },
+        { papel: "atendente", texto: "Boa tarde! Atendemos odontopediatria a partir dos 2 anos de idade.", atras: 6 * DIA - 2, respostaMs: 2800 },
         { papel: "cliente", texto: "Ótimo. Consigo marcar para a terça da semana que vem?", atras: 3 * DIA + 40 },
-        { papel: "atendente", texto: "Consigo sim: terça às 15h com a odontopediatra. Posso confirmar?", atras: 3 * DIA + 39 },
+        { papel: "atendente", texto: "Consigo sim: terça às 15h com a odontopediatra. Posso confirmar?", atras: 3 * DIA + 39, respostaMs: 5200 },
         { papel: "cliente", texto: "Obrigado pelo atendimento!", atras: 3 * DIA + 35 },
-        { papel: "atendente", texto: "Nós que agradecemos, Camila. Até terça!", atras: 3 * DIA + 34 },
+        { papel: "atendente", texto: "Nós que agradecemos, Camila. Até terça!", atras: 3 * DIA + 34, respostaMs: 3500 },
       ],
     },
   ];

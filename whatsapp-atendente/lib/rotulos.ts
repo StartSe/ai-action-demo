@@ -5,7 +5,7 @@
  * — o `Record` completo faz o TypeScript cobrar o rótulo — em vez de escrever um ternário na tela.
  */
 import { formatarTelefone } from "./telefone";
-import type { CanalOrigem, Objetivo, Periodo, StatusConversa, Tom } from "./types";
+import type { CanalOrigem, Objetivo, Periodo, PeriodoMetricas, StatusConversa, Tom } from "./types";
 
 const ROTULOS_ORIGEM: Record<CanalOrigem, string> = {
   simulador: "Simulador",
@@ -52,7 +52,9 @@ export function classeStatus(status: StatusConversa): string {
 /** Os quatro períodos, na ordem em que aparecem no seletor; "7d" é o padrão das telas. */
 export const PERIODOS: Periodo[] = ["hoje", "7d", "30d", "tudo"];
 
-export const PERIODO_PADRAO: Periodo = "7d";
+/** Anotado como `PeriodoMetricas` (o conjunto menor) para servir de padrão às duas leituras sem que
+ * um dia o padrão da lista e o dos números possam divergir. Onde se espera `Periodo`, ele cabe. */
+export const PERIODO_PADRAO: PeriodoMetricas = "7d";
 
 const ROTULOS_PERIODO: Record<Periodo, string> = {
   hoje: "Hoje",
@@ -68,6 +70,15 @@ export function rotuloPeriodo(periodo: Periodo): string {
 /** O período escrito na barra de endereço, já conferido; o padrão cobre ausente e desconhecido. */
 export function lerPeriodo(valor: string | null | undefined): Periodo {
   return PERIODOS.includes(valor as Periodo) ? (valor as Periodo) : PERIODO_PADRAO;
+}
+
+/** Os três períodos dos números de Início e Relatórios, na ordem do seletor ("tudo" não entra: sem
+ * período anterior de mesmo tamanho, não haveria com o que comparar — ver lib/metricas.ts). */
+export const PERIODOS_METRICAS: PeriodoMetricas[] = ["hoje", "7d", "30d"];
+
+/** O período dos números, vindo da barra de endereço; "tudo" e qualquer desconhecido caem no padrão. */
+export function lerPeriodoMetricas(valor: string | null | undefined): PeriodoMetricas {
+  return PERIODOS_METRICAS.includes(valor as PeriodoMetricas) ? (valor as PeriodoMetricas) : PERIODO_PADRAO;
 }
 
 /** "simulador"/"assistente-ia" são números fixos internos: nunca mostrar o valor cru em minúsculas. */
