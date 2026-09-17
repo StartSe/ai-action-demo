@@ -217,7 +217,7 @@
       ],
       "priority": 12,
       "notes": "Fase 3: Simulações",
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-013",

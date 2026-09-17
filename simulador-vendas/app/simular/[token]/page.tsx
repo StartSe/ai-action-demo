@@ -2,6 +2,7 @@
 // Sem a ElevenLabs conectada, mostra a conversa por texto (components/SalaSimulacao); com ela conectada,
 // mostra o widget oficial de voz. Reaproveita lib/salas.ts (token, prazo de 30 dias, sem limite de usos).
 import { obter as obterSala, expirou } from "@/lib/salas";
+import { obter as obterSimulacao } from "@/lib/simulacoes";
 import { obter as obterVendedor } from "@/lib/vendedores";
 import { obter as obterCenario } from "@/lib/cenarios";
 import { getConfig } from "@/lib/store";
@@ -22,6 +23,19 @@ function Indisponivel({ titulo, descricao }: { titulo: string; descricao: string
 
 export default async function Page({ params }: PageProps<"/simular/[token]">) {
   const { token } = await params;
+
+  // O treino pausado ou encerrado tem que dizer isso a quem abriu o link (US-012), e não "este link
+  // não existe": quem recebeu o endereço no grupo do time precisa saber se espera ou se pede outro.
+  // A simulação é consultada antes da sala porque toda sala migrada (US-002) virou uma simulação com
+  // o mesmo código — inclusive as que já tinham vencido, que nasceram `encerrada`.
+  const simulacao = obterSimulacao(token);
+  if (simulacao?.status === "pausada") {
+    return <Indisponivel titulo="Este treino está pausado" descricao="Fale com quem enviou o link: quando ele for reativado, este mesmo endereço volta a abrir." />;
+  }
+  if (simulacao?.status === "encerrada") {
+    return <Indisponivel titulo="Este treino foi encerrado" descricao="Fale com quem enviou o link para saber se vai haver uma nova rodada." />;
+  }
+
   const sala = obterSala(token);
 
   if (!sala) {

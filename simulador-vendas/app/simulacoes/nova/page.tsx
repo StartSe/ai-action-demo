@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import { Aviso, CopyButton, Empty, ErrorBox, Field, Passos, Topbar, lerErro, useStatus, type ErroLido } from "@/components/ui";
 import { CRITERIOS_MAX, CRITERIOS_MIN, METODOLOGIAS, METODOLOGIAS_LISTA, agruparCriterios, type Metodologia } from "@/lib/metodologias";
 import { PERSONAS, rotulo } from "@/lib/personas";
-import type { Dificuldade, ModoPersona } from "@/lib/simulacoes";
+import type { Dificuldade, ModoPersona, Simulacao } from "@/lib/simulacoes";
 
 type ProdutoLista = {
   id: string;
@@ -149,6 +149,7 @@ export default function Page() {
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);
   const [criando, setCriando] = useState(false);
   const [link, setLink] = useState<string | null>(null);
+  const [copiaDe, setCopiaDe] = useState<string | null>(null);
 
   const [produtoId, setProdutoId] = useState("");
   const [nome, setNome] = useState("");
@@ -165,6 +166,28 @@ export default function Page() {
   const [permiteTexto, setPermiteTexto] = useState(true);
   const [duracaoMin, setDuracaoMin] = useState(10);
 
+  /** Copia um treino existente para o formulário, sem o que é da simulação antiga (código e sessões). */
+  function preencherCom(s: Simulacao, lista: ProdutoLista[]) {
+    // O produto de exemplo fica escondido da biblioteca assim que existe um produto de verdade, então
+    // duplicar um treino de exemplo cai no primeiro produto da lista em vez de ficar sem produto.
+    setProdutoId((lista.find((p) => p.id === s.produtoId) ?? lista[0])?.id ?? "");
+    setNome(`${s.nome} (cópia)`);
+    setNomeEditado(true);
+    setObjetivo(s.objetivo ?? "");
+    setMetodologia(s.metodologia);
+    if (s.criteriosPersonalizados?.length) setCriterios(s.criteriosPersonalizados);
+    setDificuldade(s.dificuldade);
+    setModoPersona(s.modoPersona);
+    if (s.personas.length) setPersonas(s.personas);
+    setTentativas(s.maxTentativas === null ? "sem-limite" : String(s.maxTentativas));
+    setMostrarFeedback(s.mostrarFeedback);
+    setPermiteVoz(s.permiteVoz);
+    setPermiteTexto(s.permiteTexto);
+    setDuracaoMin(s.duracaoMin);
+    setCopiaDe(s.nome);
+    setPasso(2);
+  }
+
   // Busca inicial em forma de corrente (`fetch().then()`), nunca `await carregar()` dentro do efeito:
   // `react-hooks/set-state-in-effect` acusa chamada direta a função que mexe em estado no corpo dele.
   // O produto vem pré-escolhido quando a ação "Criar treino" de um cartão de Produtos trouxe o gestor
@@ -173,9 +196,21 @@ export default function Page() {
     fetch("/api/produtos")
       .then((r) => (r.ok ? r.json() : Promise.reject(r)))
       .then((corpo: { itens: ProdutoLista[] }) => {
-        const pedido = new URLSearchParams(window.location.search).get("produto");
-        const escolhido = corpo.itens.find((p) => p.id === pedido) ?? corpo.itens[0];
+        const parametros = new URLSearchParams(window.location.search);
         setProdutos(corpo.itens);
+
+        // "Duplicar" (US-012): o treino de origem preenche o passo 2 inteiro — tudo menos o código e
+        // as sessões, que são da simulação antiga. A cópia só vira um treino de verdade quando o
+        // gestor confirma, como qualquer outro: até lá nada foi gravado.
+        const duplicar = parametros.get("duplicar");
+        if (duplicar) {
+          return fetch(`/api/simulacoes/${duplicar}`)
+            .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+            .then(({ simulacao }: { simulacao: Simulacao }) => preencherCom(simulacao, corpo.itens));
+        }
+
+        const pedido = parametros.get("produto");
+        const escolhido = corpo.itens.find((p) => p.id === pedido) ?? corpo.itens[0];
         if (escolhido) setProdutoId(escolhido.id);
       })
       .catch(async (e) => {
@@ -250,8 +285,8 @@ export default function Page() {
 
       <main className="max-w-[860px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
         <Link href="/simulacoes" className="btn-link text-[13px] mb-3 inline-block">&larr; Simulações</Link>
-        <h1 className="titulo-painel mb-1.5">Novo treino</h1>
-        <p className="apoio mb-6">Produto, desafio e o link para mandar ao time.</p>
+        <h1 className="titulo-painel mb-1.5">{copiaDe ? "Duplicar treino" : "Novo treino"}</h1>
+        <p className="apoio mb-6">{copiaDe ? `Cópia de "${copiaDe}": mude o que quiser e gere um link novo.` : "Produto, desafio e o link para mandar ao time."}</p>
 
         <div className="mb-7">
           <Passos passos={PASSOS} atual={passo} />

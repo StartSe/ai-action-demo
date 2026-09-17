@@ -1,11 +1,12 @@
-// Criar simulação (US-009): a única gravação dos três passos de "Novo treino". Os passos 1 e 2 vivem
-// inteiros no navegador — nada é salvo enquanto o gestor volta e mexe — e o passo 3 só existe depois
-// que esta rota devolve o link.
+// Criar simulação (US-009) e listar as simulações do gestor (US-012). Os passos 1 e 2 de "Novo treino"
+// vivem inteiros no navegador — nada é salvo enquanto o gestor volta e mexe — e o passo 3 só existe
+// depois que o POST devolve o link.
 import { CRITERIOS_MIN, METODOLOGIAS_IDS, limparCriteriosPersonalizados, type Metodologia } from "@/lib/metodologias";
 import { PERSONAS_IDS } from "@/lib/personas";
-import { obter as obterProduto } from "@/lib/produtos";
+import { listarTodos as listarTodosProdutos, obter as obterProduto } from "@/lib/produtos";
+import { notaMediaPorSimulacao, resumoPorSimulacao } from "@/lib/sessoes";
 import { baseUrl, registrarEnderecoPublico } from "@/lib/setup-comum";
-import { criar, type Dificuldade, type ModoPersona } from "@/lib/simulacoes";
+import { criar, listar, type Dificuldade, type ModoPersona } from "@/lib/simulacoes";
 
 const DIFICULDADES: Dificuldade[] = ["facil", "realista", "dificil"];
 const MODOS_PERSONA: ModoPersona[] = ["aleatoria", "escolhidas"];
@@ -29,6 +30,33 @@ function personasEscolhidas(valor: unknown): string[] {
   if (!Array.isArray(valor)) return PERSONAS_IDS;
   const escolhidas = PERSONAS_IDS.filter((id) => valor.includes(id));
   return escolhidas.length ? escolhidas : PERSONAS_IDS;
+}
+
+/**
+ * A lista de treinos do gestor (US-012). Cada cartão mostra o produto, o que o treino já rendeu e a
+ * nota média — as três contagens saem de **uma consulta agregada cada**, nunca de uma por cartão.
+ *
+ * O link absoluto vem daqui, e não montado no navegador: é o mesmo endereço que o POST devolveu ao
+ * criar o treino, e é o que o gestor cola no grupo do time pelo menu "Copiar link".
+ */
+export async function GET(req: Request) {
+  // `listarTodos` (e não `listar`) porque o produto de exemplo fica escondido da biblioteca assim que
+  // existe um produto de verdade, mas as simulações migradas das salas antigas continuam apontando
+  // para ele — sem isso os treinos do exemplo ficariam sem nome de produto.
+  const nomes = new Map(listarTodosProdutos(500).map((p) => [p.id, p.nome]));
+  const resumo = resumoPorSimulacao();
+  const notas = notaMediaPorSimulacao();
+  const base = baseUrl(req);
+
+  const itens = listar().map((s) => ({
+    ...s,
+    produtoNome: nomes.get(s.produtoId) ?? "Produto apagado",
+    participantes: resumo[s.codigo]?.participantes ?? 0,
+    sessoes: resumo[s.codigo]?.sessoes ?? 0,
+    notaMedia: notas[s.codigo]?.nota ?? null,
+    url: `${base}/simular/${s.codigo}`,
+  }));
+  return Response.json({ itens });
 }
 
 export async function POST(req: Request) {

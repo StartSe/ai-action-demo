@@ -247,3 +247,54 @@ export function resumoPorSimulacao(): Record<string, { sessoes: number; particip
     .all() as { simulacaoCodigo: string; sessoes: number; participantes: number }[];
   return Object.fromEntries(linhas.map((l) => [l.simulacaoCodigo, { sessoes: l.sessoes, participantes: l.participantes }]));
 }
+
+/**
+ * Nota média por simulação, só das sessões já avaliadas.
+ *
+ * A nota não mora aqui: ela é parte do resultado gravado em `lib/historico.ts` (o mesmo registro que
+ * vira o link /r/<id>), que é infraestrutura comparada byte a byte entre os apps e por isso não pode
+ * ganhar uma função nova. Como as duas tabelas vivem no **mesmo `app.sqlite`**, a junção é feita em
+ * SQL, numa consulta só — e não com uma leitura por sessão avaliada, que numa lista de dez treinos
+ * de trinta vendedores seriam centenas de consultas por carregamento de tela.
+ *
+ * `resultados` pode ainda não existir num banco recém-criado, e `prepare` sobre tabela inexistente
+ * lança na hora (não na execução): a conferência vem antes.
+ */
+export function notaMediaPorSimulacao(): Record<string, { nota: number; avaliadas: number }> {
+  const d = banco();
+  const existe = d.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'resultados'").get();
+  if (!existe) return {};
+
+  const linhas = d
+    .prepare(
+      `SELECT s.simulacaoCodigo AS codigo, r.saida AS saida
+         FROM sessoes_treino s
+         JOIN resultados r ON r.id = s.resultadoId
+        WHERE s.resultadoId IS NOT NULL`,
+    )
+    .all() as { codigo: string; saida: string }[];
+
+  const somas: Record<string, { soma: number; avaliadas: number }> = {};
+  for (const l of linhas) {
+    const nota = notaDoResultado(l.saida);
+    if (nota === null) continue;
+    const atual = somas[l.codigo] ?? { soma: 0, avaliadas: 0 };
+    somas[l.codigo] = { soma: atual.soma + nota, avaliadas: atual.avaliadas + 1 };
+  }
+
+  return Object.fromEntries(
+    Object.entries(somas).map(([codigo, s]) => [codigo, { nota: Math.round((s.soma / s.avaliadas) * 10) / 10, avaliadas: s.avaliadas }]),
+  );
+}
+
+/** A nota geral de uma análise salva; resultado de outro formato (ou JSON torto) simplesmente não conta. */
+function notaDoResultado(saida: string): number | null {
+  try {
+    const lido: unknown = JSON.parse(saida);
+    const nota = (lido as { nota?: unknown } | null)?.nota;
+    return typeof nota === "number" && Number.isFinite(nota) ? nota : null;
+  } catch (err) {
+    console.error("Resultado com saída mal formada; fora da média.", err);
+    return null;
+  }
+}
