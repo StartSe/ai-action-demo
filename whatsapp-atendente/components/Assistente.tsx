@@ -10,7 +10,6 @@ import {
   CopyButton,
   Dica,
   Dropzone,
-  Empty,
   ErrorBox,
   Field,
   MaisDetalhes,
@@ -24,6 +23,9 @@ import {
   type PassoIndicador,
 } from "./ui";
 import { Celular, horaAtual, saudacaoPadrao, type AoSalvarBase, type BolhaChat } from "./Celular";
+import { ConexaoWhatsApp } from "./ConexaoWhatsApp";
+import { formatarTelefone } from "@/lib/telefone";
+import type { RespostaConexao } from "@/app/api/whatsapp/conexao/route";
 import type { ParBase } from "@/lib/base";
 import { SUGESTOES, configExemplo } from "@/lib/demo";
 import { OBJETIVOS, TONS, rotuloObjetivo, rotuloTom } from "@/lib/rotulos";
@@ -52,16 +54,14 @@ Clareamento dental a laser: R$ 900 em 3 sessões
 
 Atendemos de segunda a sexta, das 8h às 18h, e aos sábados das 8h ao meio-dia.`;
 
-function IconeEmMontagem() {
-  return (
-    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="17" cy="15" r="5" />
-      <circle cx="17" cy="32" r="5" />
-      <circle cx="17" cy="49" r="5" />
-      <path d="M17 20v7M17 37v7" />
-      <path d="M28 15h24M28 32h18M28 49h21" />
-    </svg>
-  );
+/**
+ * Frase do cartão "Tudo pronto". O nome do atendente é escrito pela pessoa e pode não estar preenchido;
+ * o número só chega no aviso de conexão da z-api, então logo depois de ler o código ele ainda não existe.
+ */
+function fraseRespondendo(atendente: string, numero?: string | null): string {
+  const quem = atendente.trim() ? `A ${atendente.trim()}` : "Seu atendente";
+  const onde = numero ? `no número ${formatarTelefone(numero)}` : "no número da empresa";
+  return `${quem} já está respondendo ${onde}.`;
 }
 
 /** Cartão selecionável (objetivo, tom): um rádio de verdade por trás, para o teclado e o leitor de tela
@@ -127,6 +127,10 @@ export function Assistente() {
   const [tratandoSugestao, setTratandoSugestao] = useState<string | null>(null);
   const [avisoTeste, setAvisoTeste] = useState<ErroLido | null>(null);
   const carregouBase = useRef(false);
+
+  // Passo 3: o estado da conexão do número vem do próprio cartão (ele já consulta de 5 em 5 segundos),
+  // para o cartão "Tudo pronto" aparecer no instante em que o celular da empresa lê o código.
+  const [conexao, setConexao] = useState<RespostaConexao | null>(null);
 
   const autoEnviado = useRef(false);
   // "Salvar e sair" e "Continuar para teste" submetem o mesmo formulário (para o navegador cobrar os
@@ -355,6 +359,8 @@ export function Assistente() {
       .catch(() => { setSugestoesCodigo(null); setSugestoes([]); });
   }, [passo]);
 
+  const conectado = conexao?.estado === "conectado";
+
   const previa: BolhaChat[] = [
     { papel: "atendente", texto: saudacaoPadrao(config.atendente, config.negocio) },
     { papel: "cliente", texto: SUGESTOES[0] },
@@ -373,13 +379,34 @@ export function Assistente() {
         <p className="apoio mb-6">Em poucos minutos você terá um atendente pronto para atender seus clientes no WhatsApp.</p>
 
         {passo === 3 ? (
-          <Empty
-            ilustracao={<IconeEmMontagem />}
-            titulo="Este passo ainda está sendo montado"
-            descricao="Enquanto ele não fica pronto, o número da empresa continua sendo conectado pelas configurações."
-            acao="Ir para o início"
-            onAcao={() => router.push("/")}
-          />
+          <div className="flex flex-col gap-3 max-w-[900px]">
+            {conectado && (
+              <div className="card p-5 border-accent">
+                <h2 className="font-bold text-[15px] mb-1">Tudo pronto</h2>
+                <p className="text-sm text-muted mb-4">{fraseRespondendo(config.atendente, conexao?.numero)}</p>
+                <button type="button" className="btn-primary !w-auto max-md:!w-full" onClick={() => router.push("/")}>
+                  Ir para o Início
+                </button>
+              </div>
+            )}
+
+            <ConexaoWhatsApp
+              titulo="Conecte seu WhatsApp"
+              apoio="Escaneie o código com o celular da empresa e o atendente começa a responder."
+              onEstado={setConexao}
+            />
+
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <button type="button" className="btn-link text-[14px]" onClick={() => irPara(2)}>
+                Voltar ao teste
+              </button>
+              {!conectado && (
+                <button type="button" className="btn-link text-[13px]" onClick={() => router.push("/")}>
+                  Fazer isso depois
+                </button>
+              )}
+            </div>
+          </div>
         ) : passo === 2 ? (
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-6 [&>*]:min-w-0">
             <div>

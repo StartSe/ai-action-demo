@@ -1,6 +1,6 @@
 "use client";
-// Esqueleto da tela de Conversas (US-002): por enquanto só o cabeçalho e um Empty que leva
-// para a lista que já existe no início. A lista com abas, período e busca chega na US-012.
+// Esqueleto da tela de Conversas (US-002): por enquanto só o cabeçalho e um Empty que leva ao teste
+// do Assistente. A lista com abas, período e busca chega na US-012.
 import { useRouter } from "next/navigation";
 import { Empty, Topbar, useStatus } from "@/components/ui";
 
@@ -29,9 +29,9 @@ export default function Page() {
         <Empty
           ilustracao={<IconeConversas />}
           titulo="Esta tela ainda está sendo montada"
-          descricao="Enquanto ela não fica pronta, as conversas recebidas continuam no início, logo abaixo do celular de teste."
-          acao="Ver as conversas no início"
-          onAcao={() => router.push("/")}
+          descricao="Enquanto ela não fica pronta, converse com o seu atendente pelo celular de teste do Assistente."
+          acao="Testar com uma pergunta"
+          onAcao={() => router.push("/assistente?passo=2")}
         />
       </main>
     </>

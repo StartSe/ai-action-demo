@@ -4,7 +4,7 @@ import { data } from "@/lib/formato";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
 import type { AtendimentoSaida, RelatorioAtendimentoSaida } from "@/lib/types";
-import { ConteudoConversas, ConteudoRelatorio } from "../../page";
+import { ConteudoConversas, ConteudoRelatorio } from "@/components/Resultado";
 import { ImprimirAoCarregar } from "./ImprimirAoCarregar";
 
 const TIPOS_VALIDOS = ["atendimento", "relatorio-atendimento"];

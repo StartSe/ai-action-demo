@@ -20,7 +20,7 @@
 // caminho com "setup" no nome derruba `scripts/verificar-jargao.mjs` (que varre este arquivo e não
 // aquele), e desenhar um rótulo com um campo de texto é mais barato do que abrir uma exceção no
 // verificador. O formato dos campos vem do próprio app, em JSON, sem tipo importado.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Aviso, CopyButton, data, MaisDetalhes, useConfirmacao } from "./ui";
 import { formatarTelefone } from "@/lib/telefone";
 import type { RespostaConexao } from "@/app/api/whatsapp/conexao/route";
@@ -59,9 +59,12 @@ const PASSOS = [
 export function ConexaoWhatsApp({
   titulo = "Conectar o WhatsApp",
   apoio = "Conecte o número da empresa para o atendente responder clientes de verdade. Leva um minuto e não precisa de ninguém técnico.",
+  onEstado,
 }: {
   titulo?: string;
   apoio?: string;
+  /** Avisa a tela de fora a cada leitura do estado (o passo 3 do Assistente usa para mostrar "Tudo pronto"). */
+  onEstado?: (conexao: RespostaConexao) => void;
 }) {
   const [conexao, setConexao] = useState<RespostaConexao | null>(null);
   const [campos, setCampos] = useState<CampoConexao[]>([]);
@@ -74,12 +77,20 @@ export function ConexaoWhatsApp({
   const [aviso, setAviso] = useState<string | null>(null);
   const { confirmar, Dialogo } = useConfirmacao();
 
+  // O aviso para fora vai por `ref`: assim `carregar` continua sem dependências e a tela de fora pode
+  // passar uma função nova a cada renderização sem reiniciar as consultas de 5 s e 20 s.
+  const avisar = useRef(onEstado);
+  useEffect(() => {
+    avisar.current = onEstado;
+  }, [onEstado]);
+
   const carregar = useCallback(async (comCodigo: boolean) => {
     try {
       const r = await fetch(comCodigo ? "/api/whatsapp/conexao?qr=1" : "/api/whatsapp/conexao");
       const nova = (await r.json()) as RespostaConexao;
       // A consulta de 5 s não pede imagem: sem isso, o QR Code sumiria da tela entre uma troca e outra.
       setConexao((antes) => (nova.estado === "aguardando" && !nova.qr && antes?.qr ? { ...nova, qr: antes.qr } : nova));
+      avisar.current?.(nova);
     } catch {
       /* a próxima consulta tenta de novo; o estado anterior continua na tela */
     }
@@ -157,6 +168,7 @@ export function ConexaoWhatsApp({
         return;
       }
       setConexao(resposta as RespostaConexao);
+      avisar.current?.(resposta as RespostaConexao);
     } catch {
       setAviso("Não foi possível desconectar agora. Tente de novo em alguns minutos.");
     } finally {
