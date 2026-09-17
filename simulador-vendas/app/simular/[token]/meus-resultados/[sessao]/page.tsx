@@ -11,29 +11,20 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { obter as obterResultado } from "@/lib/historico";
 import { obter as obterParticipante } from "@/lib/participantes";
-import { persona, rotulo } from "@/lib/personas";
+import { obter as obterProduto } from "@/lib/produtos";
+import { montarPersonagem } from "@/lib/cliente-simulado";
+import { adjetivosDoCliente, frasePerfil, persona, personasDe, rotulo } from "@/lib/personas";
+import { balancoDeTentativas } from "@/lib/sala-do-vendedor";
 import { obter as obterSessao } from "@/lib/sessoes";
 import { lerSessaoVendedor } from "@/lib/sessao-vendedor";
 import { obter as obterSimulacao } from "@/lib/simulacoes";
 import type { Meta } from "@/lib/ai";
 import type { Conversa } from "@/lib/types";
 import type { AvaliacaoSessao } from "@/lib/avaliacao";
-import { ResultadoSessao } from "@/app/page";
-import { Cartao, Moldura } from "../../Moldura";
+import { ConversaRegistrada, FeedbackVendedor } from "@/components/FeedbackVendedor";
+import { Moldura } from "../../Moldura";
 
 export const dynamic = "force-dynamic";
-
-function Recado({ titulo, descricao, token }: { titulo: string; descricao: string; token: string }) {
-  return (
-    <Cartao>
-      <h1 className="text-[22px] leading-[1.2] font-extrabold tracking-[-0.02em] mb-2">{titulo}</h1>
-      <p className="text-muted mb-5">{descricao}</p>
-      <a className="btn-link text-[13.5px]" href={`/simular/${token}/meus-resultados`}>
-        Ver minhas conversas
-      </a>
-    </Cartao>
-  );
-}
 
 export default async function Page({ params }: PageProps<"/simular/[token]/meus-resultados/[sessao]">) {
   const { token, sessao: sessaoId } = await params;
@@ -41,10 +32,12 @@ export default async function Page({ params }: PageProps<"/simular/[token]/meus-
   const simulacao = obterSimulacao(token);
   if (!simulacao) {
     return (
-      <Cartao>
-        <h1 className="text-[22px] leading-[1.2] font-extrabold tracking-[-0.02em] mb-2">Este link não existe</h1>
-        <p className="text-muted">Confira se o endereço foi copiado corretamente, ou peça um novo link de treino a quem enviou este convite.</p>
-      </Cartao>
+      <Moldura>
+        <div className="card p-7 max-md:p-[22px]">
+          <h1 className="text-[22px] leading-[1.2] font-extrabold tracking-[-0.02em] mb-2">Este link não existe</h1>
+          <p className="text-muted">Confira se o endereço foi copiado corretamente, ou peça um novo link de treino a quem enviou este convite.</p>
+        </div>
+      </Moldura>
     );
   }
 
@@ -52,16 +45,25 @@ export default async function Page({ params }: PageProps<"/simular/[token]/meus-
   const participante = sessaoVendedor ? obterParticipante(sessaoVendedor.participanteId) : null;
   if (!participante) redirect(`/simular/${token}`);
 
+  // Quantas conversas ele já teve neste treino e se ainda pode ter outra: é o que decide se "Treinar
+  // novamente" aparece, e vale para todas as saídas desta tela, inclusive as de recado.
+  const tentativas = balancoDeTentativas(simulacao, participante.id);
+  const recado = (titulo: string, descricao: string) => (
+    <Moldura>
+      <ConversaRegistrada codigo={token} titulo={titulo} descricao={descricao} tentativas={tentativas} />
+    </Moldura>
+  );
+
   // O dono da conversa é reconferido no banco, nunca deduzido do endereço: sem isto, trocar o id na
   // barra abriria o feedback de um colega, com a conversa inteira dele dentro.
   const sessao = obterSessao(sessaoId);
   if (!sessao || sessao.participanteId !== participante.id || sessao.simulacaoCodigo !== token) {
-    return <Recado token={token} titulo="Esta conversa não está aqui" descricao="O endereço pode ter sido copiado pela metade, ou esta conversa é de outra pessoa." />;
+    return recado("Esta conversa não está aqui", "O endereço pode ter sido copiado pela metade, ou esta conversa é de outra pessoa.");
   }
 
   // O gestor pode ter desligado o feedback ao criar o treino (US-011): a avaliação existe e é dele.
   if (!simulacao.mostrarFeedback) {
-    return <Recado token={token} titulo="Conversa registrada" descricao="Neste treino a avaliação vai para quem enviou o link. Seu gestor vai comentar com você." />;
+    return recado("Conversa registrada", "Seu gestor vai comentar com você.");
   }
 
   // O tipo tem de ser `"sessao"` (US-018). Os treinos avaliados antes dela ficaram gravados no formato
@@ -69,42 +71,43 @@ export default async function Page({ params }: PageProps<"/simular/[token]/meus-
   // avaliação pela metade, a tela avisa — a conversa em si continua no histórico do vendedor.
   const registro = sessao.resultadoId ? obterResultado<Conversa, AvaliacaoSessao, Meta>(sessao.resultadoId) : null;
   if (!registro || registro.tipo !== "sessao") {
-    return (
-      <Recado
-        token={token}
-        titulo="Esta conversa ainda não tem avaliação"
-        descricao="Ela ficou registrada e você pode treinar de novo. Se isso se repetir, avise quem enviou o link."
-      />
+    return recado(
+      "Esta conversa ainda não tem avaliação",
+      "Ela ficou registrada e você pode treinar de novo. Se isso se repetir, avise quem enviou o link.",
     );
   }
 
+  // O personagem é remontado com a **mesma semente** da conversa (o id da sessão), então o nome que
+  // aparece na revelação é o mesmo com quem ele falou — remontar é mais barato que gravar o
+  // personagem inteiro na sessão, e não deixa os dois desencontrarem.
   const tipoDeCliente = persona(sessao.personaId);
+  const produto = obterProduto(simulacao.produtoId);
+  const personagem = tipoDeCliente
+    ? montarPersonagem({
+        persona: personasDe([sessao.personaId])[0],
+        dificuldade: simulacao.dificuldade,
+        produto: produto ?? { nome: simulacao.nome, conhecimento: undefined },
+        semente: sessao.id,
+      })
+    : null;
 
   return (
     <Moldura largo>
-      {tipoDeCliente && (
-        <div className="card p-5 max-md:p-4 mb-5">
-          <div className="text-muted text-[12.5px] font-semibold uppercase tracking-[0.04em] mb-1">O cliente com quem você falou</div>
-          <div className="text-[17px] font-extrabold tracking-[-0.01em]">{rotulo(tipoDeCliente)}</div>
-          <p className="text-muted text-[13.5px] mt-1">{tipoDeCliente.comportamento}</p>
-        </div>
-      )}
-
-      <ResultadoSessao
-        conversa={registro.entrada}
-        avaliacao={registro.saida}
-        meta={registro.meta}
-        id={registro.id}
-        titulo={registro.titulo}
-        entregar={false}
+      <FeedbackVendedor
+        codigo={token}
+        cliente={
+          tipoDeCliente
+            ? {
+                tipoDeCliente: rotulo(tipoDeCliente),
+                comportamento: tipoDeCliente.comportamento,
+                perfil: personagem ? frasePerfil(personagem.nome, adjetivosDoCliente(tipoDeCliente, simulacao.dificuldade)) : undefined,
+              }
+            : null
+        }
+        resultado={{ conversa: registro.entrada, avaliacao: registro.saida, meta: registro.meta, id: registro.id, titulo: registro.titulo }}
+        tentativas={tentativas}
         demoTexto="Exemplo fixo: as notas abaixo não são um julgamento da conversa que você teve."
       />
-
-      <p className="mt-6">
-        <a className="btn-link text-[13.5px]" href={`/simular/${token}/meus-resultados`}>
-          Ver minhas conversas
-        </a>
-      </p>
     </Moldura>
   );
 }

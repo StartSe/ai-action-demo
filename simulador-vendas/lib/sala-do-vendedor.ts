@@ -6,7 +6,7 @@
 // (lib/sessao-vendedor.ts), mas o dono dela é sempre reconferido no banco.
 import { obter as obterParticipante, type Participante } from "./participantes";
 import { lerSessaoVendedor } from "./sessao-vendedor";
-import { emAndamento, obter as obterSessao, ultimaDe, type Sessao } from "./sessoes";
+import { emAndamento, emPreparacao, obter as obterSessao, tentativasDe, ultimaDe, type Sessao } from "./sessoes";
 import { obter as obterSimulacao, type Simulacao } from "./simulacoes";
 
 export type ConversaAberta = { simulacao: Simulacao; participante: Participante; sessao: Sessao };
@@ -58,4 +58,23 @@ export function restanteSeg(sessao: Sessao, duracaoMin: number): number {
   const total = Math.max(1, duracaoMin) * 60;
   const passados = Math.floor((Date.now() - inicio) / 1000);
   return Math.max(0, total - passados);
+}
+
+/**
+ * Quantas conversas esta pessoa já teve neste treino e se ainda pode ter outra — o balanço que o
+ * feedback (US-019) mostra ao lado de "Treinar novamente".
+ *
+ * Uma conversa **em aberto** não fecha a porta para o dono dela: `tentativasDe` já a conta desde que
+ * nasceu, então quem tem uma conversa aberta continua podendo voltar para ela — é para lá que o botão
+ * leva. O limite só vale quando não há nenhuma aberta, a mesma regra da tela do treino.
+ */
+export function balancoDeTentativas(simulacao: Simulacao, participanteId: string): { podeTreinar: boolean; tentativas: number; maxTentativas: number | null } {
+  const tentativas = tentativasDe(simulacao.codigo, participanteId);
+  const aberta = emPreparacao(simulacao.codigo, participanteId) ?? emAndamento(simulacao.codigo, participanteId);
+  const dentroDoLimite = simulacao.maxTentativas === null || tentativas < simulacao.maxTentativas;
+  return {
+    podeTreinar: simulacao.status === "ativa" && (Boolean(aberta) || dentroDoLimite),
+    tentativas,
+    maxTentativas: simulacao.maxTentativas,
+  };
 }

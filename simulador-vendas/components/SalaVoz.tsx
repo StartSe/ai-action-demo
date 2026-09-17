@@ -16,8 +16,9 @@
 // termina em algo que o **vendedor** pode fazer: digitar, tentar de novo, ou encerrar e ver o
 // resultado. Ele não configura nada e não recebe recado de gestor.
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ResultadoSessao } from "@/app/page";
+import { ConversaRegistrada, FeedbackVendedor, type Tentativas } from "@/components/FeedbackVendedor";
 import { Aviso, lerErro } from "@/components/ui";
+import { frasePerfil } from "@/lib/personas";
 import type { Conversa } from "@/lib/types";
 import type { AvaliacaoSessao } from "@/lib/avaliacao";
 import type { Meta } from "@/lib/ai";
@@ -54,9 +55,13 @@ type Resposta = {
   /** Emoji + nome do tipo de cliente, revelado só agora que a conversa acabou (US-017). */
   tipoDeCliente?: string;
   comportamento?: string;
+  /** Os adjetivos do perfil ("apressado e exigente"), que viram a linha da revelação com o nome daqui. */
+  perfil?: string;
+  /** Quantas conversas ele já teve neste treino e se ainda pode ter outra (US-019). */
+  tentativas?: Tentativas;
   sessaoId?: string;
 };
-type Fim = { resultado?: Resposta; semConversa?: boolean; semFeedback?: boolean };
+type Fim = { resultado?: Resposta; semConversa?: boolean; semFeedback?: boolean; tentativas?: Tentativas };
 
 export type PropsSalaVoz = {
   codigo: string;
@@ -299,9 +304,9 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
       const r = await fetch(`/api/salas/${codigo}/encerrar`, { method: "POST" });
       const corpo = (await r.json()) as Resposta & { error?: string; semConversa?: boolean; semFeedback?: boolean };
       if (!r.ok) throw new Error(corpo.error || "Não foi possível fechar a sua conversa agora.");
-      if (corpo.semConversa) setFim({ semConversa: true });
-      else if (corpo.semFeedback) setFim({ semFeedback: true });
-      else setFim({ resultado: corpo });
+      if (corpo.semConversa) setFim({ semConversa: true, tentativas: corpo.tentativas });
+      else if (corpo.semFeedback) setFim({ semFeedback: true, tentativas: corpo.tentativas });
+      else setFim({ resultado: corpo, tentativas: corpo.tentativas });
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Não foi possível fechar a sua conversa agora.");
       setEncerrando(false);
@@ -529,48 +534,43 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
   // ---------------------------------------------------------------------------
 
   if (fim) {
+    // Enquanto o balanço não chega (uma resposta antiga em cache, um erro de leitura), o caminho
+    // seguro é deixar "Treinar novamente" à mão: a tela do treino confere o limite de novo antes de
+    // abrir qualquer conversa, então o pior caso é um clique que explica por que não dá.
+    const tentativas: Tentativas = fim.tentativas ?? { podeTreinar: true, tentativas: 0, maxTentativas: null };
     return (
       <Moldura marca={marca} nome={nome} largo={Boolean(fim.resultado)}>
         {fim.resultado ? (
-          <>
-            {/* Quem era o cliente: a revelação só acontece aqui, depois da conversa. Antes dela, nem a
-                tela nem as rotas dizem com que tipo de pessoa o vendedor ia falar. */}
-            {fim.resultado.tipoDeCliente && (
-              <div className="card p-5 max-md:p-4 mb-5">
-                <div className="text-muted text-[12.5px] font-semibold uppercase tracking-[0.04em] mb-1">O cliente com quem você falou</div>
-                <div className="text-[17px] font-extrabold tracking-[-0.01em]">{fim.resultado.tipoDeCliente}</div>
-                {fim.resultado.comportamento && <p className="text-muted text-[13.5px] mt-1">{fim.resultado.comportamento}</p>}
-              </div>
-            )}
-
-            <ResultadoSessao
-              conversa={fim.resultado.conversa}
-              avaliacao={fim.resultado.avaliacao}
-              meta={fim.resultado.meta}
-              id={fim.resultado.id}
-              titulo={fim.resultado.titulo}
-              entregar={false}
-              demoTexto="Exemplo fixo: as notas abaixo não são um julgamento da conversa que você acabou de ter."
-            />
-
-            <p className="mt-6 text-center">
-              <a className="btn-link text-[13.5px]" href={`/simular/${codigo}/meus-resultados`}>
-                Ver minhas conversas
-              </a>
-            </p>
-          </>
+          <FeedbackVendedor
+            codigo={codigo}
+            // Quem era o cliente: a revelação só acontece aqui, depois da conversa. Antes dela, nem a
+            // tela nem as rotas dizem com que tipo de pessoa o vendedor ia falar.
+            cliente={
+              fim.resultado.tipoDeCliente
+                ? {
+                    tipoDeCliente: fim.resultado.tipoDeCliente,
+                    comportamento: fim.resultado.comportamento,
+                    // O nome do personagem é daqui, não da rota: esta tela acabou de mostrá-lo durante
+                    // a conversa inteira.
+                    perfil: fim.resultado.perfil ? frasePerfil(cliente.nome, fim.resultado.perfil) : undefined,
+                  }
+                : null
+            }
+            resultado={fim.resultado}
+            tentativas={tentativas}
+            demoTexto="Exemplo fixo: as notas abaixo não são um julgamento da conversa que você acabou de ter."
+          />
         ) : (
-          <div className="card p-7 max-md:p-[22px]">
-            <h1 className="text-[22px] leading-[1.2] font-extrabold tracking-[-0.02em] mb-2">Conversa registrada</h1>
-            <p className="text-muted mb-5">
-              {fim.semConversa
+          <ConversaRegistrada
+            codigo={codigo}
+            titulo="Conversa registrada"
+            descricao={
+              fim.semConversa
                 ? "Você encerrou antes de falar com o cliente, então não há o que avaliar desta vez."
-                : "Seu gestor vai comentar com você."}
-            </p>
-            <a className="btn-link text-[13.5px]" href={`/simular/${codigo}/meus-resultados`}>
-              Ver minhas conversas
-            </a>
-          </div>
+                : "Seu gestor vai comentar com você."
+            }
+            tentativas={tentativas}
+          />
         )}
       </Moldura>
     );

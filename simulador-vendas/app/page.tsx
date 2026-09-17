@@ -640,7 +640,7 @@ export function leituraDaNota(nota: number): string {
  * oportunidade. Reaproveitada pela tela do gestor (/r), pela impressão e pela sala do vendedor —
  * um treino avaliado é a mesma coisa nos três lugares, só a moldura em volta muda.
  */
-export function ConteudoSessao({ conversa, avaliacao }: { conversa: Conversa; avaliacao: AvaliacaoSessao }) {
+export function ConteudoSessao({ conversa, avaliacao, copiarFrase = false }: { conversa: Conversa; avaliacao: AvaliacaoSessao; copiarFrase?: boolean }) {
   const c = avaliacao.contexto;
   return (
     <>
@@ -684,6 +684,14 @@ export function ConteudoSessao({ conversa, avaliacao }: { conversa: Conversa; av
               <>
                 <div className="text-muted text-[12.5px] font-semibold uppercase tracking-[0.04em] mb-1">Experimente dizer</div>
                 <p className="text-sm italic">{`“${avaliacao.oportunidade.fraseSugerida}”`}</p>
+                {/* O botão de copiar existe na tela de quem treina (US-019): a frase é para levar para a
+                    próxima conversa, e no celular selecionar um texto em itálico é trabalhoso. Na tela do
+                    gestor e na impressão ele não aparece — lá a entrega inteira já tem "Copiar texto". */}
+                {copiarFrase && (
+                  <div className="mt-3">
+                    <CopyButton texto={() => avaliacao.oportunidade?.fraseSugerida ?? ""} rotulo="Copiar frase" />
+                  </div>
+                )}
               </>
             )}
           </Item>
@@ -749,7 +757,7 @@ function sessaoParaTexto(avaliacao: AvaliacaoSessao): string {
  * `/r/<id>`, que são rotas privadas (ver `proxy.ts`) e jogariam na tela de entrar quem abriu o app por
  * um link de treino, sem conta nenhuma. Quem tem conta é o gestor, e é na tela dele que elas aparecem.
  */
-export function ResultadoSessao({ conversa, avaliacao, meta, id, titulo, entregar = true, demoTexto = "Exemplo fixo: as notas abaixo não são um julgamento desta conversa." }: { conversa: Conversa; avaliacao: AvaliacaoSessao; meta: Meta; id?: string; titulo: string; entregar?: boolean; demoTexto?: string }) {
+export function ResultadoSessao({ conversa, avaliacao, meta, id, titulo, entregar = true, copiarFrase = false, demoTexto = "Exemplo fixo: as notas abaixo não são um julgamento desta conversa." }: { conversa: Conversa; avaliacao: AvaliacaoSessao; meta: Meta; id?: string; titulo: string; entregar?: boolean; copiarFrase?: boolean; demoTexto?: string }) {
   return (
     <article className="reveal">
       <ResultHead titulo={titulo} subtitulo={`${conversa.transcricao.length} falas · ${data(conversa.criadoEm)}`}>
@@ -758,7 +766,7 @@ export function ResultadoSessao({ conversa, avaliacao, meta, id, titulo, entrega
 
       <Origem meta={meta} demoTexto={demoTexto} />
 
-      <ConteudoSessao conversa={conversa} avaliacao={avaliacao} />
+      <ConteudoSessao conversa={conversa} avaliacao={avaliacao} copiarFrase={copiarFrase} />
 
       <SeloIA demo={meta.demo} />
     </article>
