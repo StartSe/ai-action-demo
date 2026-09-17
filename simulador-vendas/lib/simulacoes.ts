@@ -6,8 +6,12 @@
 // infraestrutura comparada byte a byte nos 17 apps e já lista esses dois prefixos como públicos.
 // A entidade se chama Simulação em todo lugar; só o prefixo da URL continua dizendo "salas".
 import { agora, banco, gerarCodigo } from "./banco";
+import { METODOLOGIAS_IDS, type Metodologia } from "./metodologias";
 
-export type Metodologia = "spin" | "consultiva" | "personalizada";
+// A metodologia mora em `lib/metodologias.ts` (US-010), junto com os critérios que ela manda para o
+// avaliador; aqui ela é só a coluna gravada. O tipo continua sendo exportado deste módulo porque é por
+// aqui que as telas e as rotas leem uma simulação.
+export type { Metodologia };
 export type Dificuldade = "facil" | "realista" | "dificil";
 export type ModoPersona = "aleatoria" | "escolhidas";
 export type StatusSimulacao = "ativa" | "pausada" | "encerrada";
@@ -83,7 +87,7 @@ function linhaParaSimulacao(l: Linha): Simulacao {
     produtoId: l.produtoId,
     nome: l.nome,
     objetivo: l.objetivo ?? undefined,
-    metodologia: umDe(l.metodologia, ["spin", "consultiva", "personalizada"] as const, "consultiva"),
+    metodologia: umDe(l.metodologia, METODOLOGIAS_IDS, "consultiva"),
     criteriosPersonalizados: criterios.length ? criterios : undefined,
     dificuldade: umDe(l.dificuldade, ["facil", "realista", "dificil"] as const, "realista"),
     modoPersona: umDe(l.modoPersona, ["aleatoria", "escolhidas"] as const, "aleatoria"),

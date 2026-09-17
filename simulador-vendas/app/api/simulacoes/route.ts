@@ -1,12 +1,12 @@
 // Criar simulação (US-009): a única gravação dos três passos de "Novo treino". Os passos 1 e 2 vivem
 // inteiros no navegador — nada é salvo enquanto o gestor volta e mexe — e o passo 3 só existe depois
 // que esta rota devolve o link.
+import { CRITERIOS_MIN, METODOLOGIAS_IDS, limparCriteriosPersonalizados, type Metodologia } from "@/lib/metodologias";
 import { PERSONAS_IDS } from "@/lib/personas";
 import { obter as obterProduto } from "@/lib/produtos";
 import { baseUrl, registrarEnderecoPublico } from "@/lib/setup-comum";
-import { criar, type Dificuldade, type Metodologia, type ModoPersona } from "@/lib/simulacoes";
+import { criar, type Dificuldade, type ModoPersona } from "@/lib/simulacoes";
 
-const METODOLOGIAS: Metodologia[] = ["spin", "consultiva", "personalizada"];
 const DIFICULDADES: Dificuldade[] = ["facil", "realista", "dificil"];
 const MODOS_PERSONA: ModoPersona[] = ["aleatoria", "escolhidas"];
 
@@ -31,13 +31,6 @@ function personasEscolhidas(valor: unknown): string[] {
   return escolhidas.length ? escolhidas : PERSONAS_IDS;
 }
 
-/** Critérios da metodologia personalizada: de 3 a 10 linhas com texto, sem repetidos. */
-function criteriosPersonalizados(valor: unknown): string[] {
-  if (!Array.isArray(valor)) return [];
-  const limpos = valor.map((c) => String(c ?? "").trim()).filter(Boolean);
-  return [...new Set(limpos)].slice(0, 10);
-}
-
 export async function POST(req: Request) {
   const corpo = await req.json().catch(() => ({}));
 
@@ -50,9 +43,11 @@ export async function POST(req: Request) {
     );
   }
 
-  const metodologia = umDe<Metodologia>(corpo?.metodologia, METODOLOGIAS, "consultiva");
-  const criterios = metodologia === "personalizada" ? criteriosPersonalizados(corpo?.criteriosPersonalizados) : [];
-  if (metodologia === "personalizada" && criterios.length < 3) {
+  const metodologia = umDe<Metodologia>(corpo?.metodologia, METODOLOGIAS_IDS, "consultiva");
+  // Critérios da metodologia personalizada: de 3 a 10 linhas com texto, sem repetidos — a limpeza mora
+  // em `lib/metodologias.ts`, o mesmo módulo que define o teto, para a regra não existir em dois lugares.
+  const criterios = metodologia === "personalizada" ? limparCriteriosPersonalizados(corpo?.criteriosPersonalizados) : [];
+  if (metodologia === "personalizada" && criterios.length < CRITERIOS_MIN) {
     return Response.json({ error: "Escreva pelo menos três critérios para a avaliação personalizada." }, { status: 400 });
   }
 

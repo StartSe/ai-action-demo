@@ -8,8 +8,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Aviso, CopyButton, Empty, ErrorBox, Field, Passos, Topbar, lerErro, useStatus, type ErroLido } from "@/components/ui";
+import { CRITERIOS_MAX, CRITERIOS_MIN, METODOLOGIAS, METODOLOGIAS_LISTA, agruparCriterios, type Metodologia } from "@/lib/metodologias";
 import { PERSONAS, rotulo } from "@/lib/personas";
-import type { Dificuldade, Metodologia, ModoPersona } from "@/lib/simulacoes";
+import type { Dificuldade, ModoPersona } from "@/lib/simulacoes";
 
 type ProdutoLista = {
   id: string;
@@ -24,12 +25,6 @@ const PASSOS = [
   { titulo: "Produto", apoio: "o que o time vende" },
   { titulo: "Desafio", apoio: "como vai ser o treino" },
   { titulo: "Compartilhar", apoio: "o link para o time" },
-];
-
-const METODOLOGIAS: { id: Metodologia; nome: string; linha: string }[] = [
-  { id: "spin", nome: "SPIN Selling", linha: "Perguntas de situação, problema, implicação e ganho, até o cliente enxergar o valor sozinho." },
-  { id: "consultiva", nome: "Venda consultiva", linha: "Escutar, entender o problema e ligar a proposta ao que o cliente contou." },
-  { id: "personalizada", nome: "Personalizada", linha: "Você escreve os critérios que o seu time usa para avaliar uma boa conversa." },
 ];
 
 const DIFICULDADES: { id: Dificuldade; nome: string; linha: string }[] = [
@@ -60,6 +55,35 @@ function estadoDoConhecimento(p: ProdutoLista): string {
   if (p.landings > 0) partes.push(p.landings === 1 ? "página importada" : `${p.landings} páginas importadas`);
   partes.push(p.status === "pronto" ? "ficha pronta" : "ficha ainda não gerada");
   return partes.join(" · ");
+}
+
+/** O que a avaliação vai olhar no método escolhido, agrupado nos quatro momentos da conversa (US-010).
+ * Fica fechado por padrão: o gestor decide o método pela linha do cartão, e só quem quer conferir a
+ * régua abre — mas ela precisa estar visível antes de o link ir para o time. */
+function CriteriosDoMetodo({ metodologia }: { metodologia: Metodologia }) {
+  const grupos = agruparCriterios(METODOLOGIAS[metodologia].criterios);
+  const total = METODOLOGIAS[metodologia].criterios.length;
+  return (
+    <details className="card p-4">
+      <summary className="cursor-pointer text-[13px] font-semibold">{`O que a avaliação vai olhar (${total} critérios)`}</summary>
+      <div className="mt-3.5 flex flex-col gap-3.5">
+        {grupos.map((g) => (
+          <div key={g.grupo}>
+            <p className="text-[12px] font-bold uppercase tracking-wide text-muted mb-1.5">{g.grupo}</p>
+            <ul className="flex flex-col gap-1.5">
+              {g.criterios.map((c) => (
+                <li key={c.id} className="text-[12.5px]">
+                  <span className="font-semibold">{c.nome}</span>
+                  <span className="text-muted">{` — ${c.descricao}`}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <p className="text-[12px] text-muted mt-3.5">O vendedor recebe uma nota por momento da conversa, não a lista inteira.</p>
+    </details>
+  );
 }
 
 /** Escolha em cartões: o rádio fica invisível mas continua sendo o rádio (teclado e leitor de tela). */
@@ -106,7 +130,7 @@ export default function Page() {
   const [nomeEditado, setNomeEditado] = useState(false);
   const [objetivo, setObjetivo] = useState("");
   const [metodologia, setMetodologia] = useState<Metodologia>("consultiva");
-  const [criterios, setCriterios] = useState(["", "", ""]);
+  const [criterios, setCriterios] = useState<string[]>(Array(CRITERIOS_MIN).fill(""));
   const [dificuldade, setDificuldade] = useState<Dificuldade>("realista");
   const [modoPersona, setModoPersona] = useState<ModoPersona>("aleatoria");
   const [personas, setPersonas] = useState<string[]>(PERSONAS.map((p) => p.id));
@@ -131,10 +155,10 @@ export default function Page() {
   }, []);
 
   const produto = produtos?.find((p) => p.id === produtoId) ?? null;
-  const nomeSugerido = produto ? `${METODOLOGIAS.find((m) => m.id === metodologia)?.nome} — ${produto.nome}` : "";
+  const nomeSugerido = produto ? `${METODOLOGIAS[metodologia].nome} — ${produto.nome}` : "";
   const nomeFinal = nomeEditado ? nome : nomeSugerido;
   const criteriosPreenchidos = criterios.map((c) => c.trim()).filter(Boolean);
-  const faltamCriterios = metodologia === "personalizada" && criteriosPreenchidos.length < 3;
+  const faltamCriterios = metodologia === "personalizada" && criteriosPreenchidos.length < CRITERIOS_MIN;
   const semPerfil = modoPersona === "escolhidas" && personas.length === 0;
 
   function alternarPersona(id: string) {
@@ -254,18 +278,24 @@ export default function Page() {
 
             <p className="text-[13px] font-semibold mb-2">Método de venda</p>
             <div className="mb-4">
-              <Escolha nome="metodologia" opcoes={METODOLOGIAS} valor={metodologia} onEscolher={setMetodologia} />
+              <Escolha nome="metodologia" opcoes={METODOLOGIAS_LISTA} valor={metodologia} onEscolher={setMetodologia} />
             </div>
+
+            {metodologia !== "personalizada" && (
+              <div className="mb-4">
+                <CriteriosDoMetodo metodologia={metodologia} />
+              </div>
+            )}
 
             {metodologia === "personalizada" && (
               <div className="border-l-2 border-accent-soft pl-3.5 mb-4">
-                <p className="text-[12.5px] text-muted mb-3">Escreva de 3 a 10 critérios. A avaliação de cada conversa sai na ordem daqui.</p>
+                <p className="text-[12.5px] text-muted mb-3">{`Escreva de ${CRITERIOS_MIN} a ${CRITERIOS_MAX} critérios. A avaliação de cada conversa sai na ordem daqui.`}</p>
                 {criterios.map((c, i) => (
                   <Field key={i} label={`Critério ${i + 1}`} htmlFor={`criterio-${i}`}>
                     <input id={`criterio-${i}`} className="input" value={c} onChange={(e) => mudarCriterio(i, e.target.value)} placeholder="Ex.: entendeu o problema antes de falar de preço" />
                   </Field>
                 ))}
-                {criterios.length < 10 && (
+                {criterios.length < CRITERIOS_MAX && (
                   <button type="button" className="btn-link text-[13px]" onClick={() => setCriterios((a) => [...a, ""])}>
                     + Mais um critério
                   </button>
