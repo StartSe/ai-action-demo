@@ -18,6 +18,7 @@
 import { aiEnabled, askJSON, meta, type Meta } from "./ai";
 import { salvarResultado } from "./analise";
 import { avaliacaoDemo, esperar } from "./demo";
+import { enviarFeedbackDaSessao } from "./envio-analise";
 import { agruparCriterios, criteriosDe, GRUPOS, metodologia, type Criterio, type Grupo } from "./metodologias";
 import { obter as obterParticipante } from "./participantes";
 import { persona as obterPersona, rotulo } from "./personas";
@@ -391,6 +392,12 @@ export async function avaliarSessao(sessaoId: string): Promise<SessaoAvaliada | 
 
   const id = salvarResultado({ tipo: "sessao", titulo, resumo: avaliacao.resumo, conversa, saida: avaliacao, meta: metaGerada });
   registrarResultado(sessao.id, id);
+
+  // O e-mail do feedback (US-020) sai daqui, e não das rotas, porque quatro portas chegam à avaliação
+  // (o fim da conversa na sala, o aviso de pós-conversa do agente, a retomada e o "Tentar de novo" do
+  // gestor) e o vendedor tem de receber o mesmo e-mail por todas elas. `enviarFeedbackDaSessao` nunca
+  // lança: uma conta de e-mail mal configurada não pode transformar uma avaliação pronta em falha.
+  await enviarFeedbackDaSessao(sessao.id);
 
   return { demo, conversa, avaliacao, meta: metaGerada, id, titulo };
 }

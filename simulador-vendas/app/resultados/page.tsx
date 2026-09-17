@@ -5,6 +5,10 @@
 // Desde a US-018 é também onde as **avaliações pendentes** aparecem: conversa que terminou e cuja
 // avaliação a IA não conseguiu entregar. A conversa está gravada; "Tentar de novo" roda o avaliador
 // sobre ela. Quando o painel por simulação chegar, esta lista se muda para lá.
+//
+// E desde a US-020, os **feedbacks que não chegaram por e-mail**. As duas listas estão aqui pelo mesmo
+// motivo: falharam longe de quem pode consertá-las. O vendedor leu o feedback na tela e seguiu em
+// frente; sem uma linha nesta tela, o gestor não saberia que a conta de e-mail parou de entregar.
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Aviso, Empty, ErrorBox, Item, Topbar, data, lerErro, useStatus, type ErroLido } from "@/components/ui";
@@ -99,6 +103,47 @@ function Pendentes() {
   );
 }
 
+type FalhaEnvio = { id: string; simulacao: string; vendedor: string; email: string; quando: string; motivo: string };
+
+/** Os feedbacks que não chegaram ao e-mail do vendedor (US-020). */
+function EnviosQueFalharam() {
+  const [itens, setItens] = useState<FalhaEnvio[]>([]);
+
+  useEffect(() => {
+    fetch("/api/sessoes/envios")
+      .then((r) => (r.ok ? r.json() : { itens: [] }))
+      .then((c: { itens?: FalhaEnvio[] }) => setItens(c.itens ?? []))
+      .catch(() => setItens([]));
+  }, []);
+
+  if (itens.length === 0) return null;
+
+  return (
+    <section className="mb-7">
+      <h2 className="section-title">Não conseguimos enviar por e-mail</h2>
+      <p className="apoio mb-3">
+        Estes vendedores viram o feedback na tela, mas ele não chegou na caixa de entrada deles. Confira a conta de e-mail em Notificações.
+      </p>
+      <div className="flex flex-col gap-2.5">
+        {itens.map((f) => (
+          <Item key={f.id}>
+            <div className="flex items-center justify-between gap-4 max-md:flex-wrap">
+              <div className="min-w-0">
+                <div className="font-bold truncate">{f.email ? `${f.vendedor} · ${f.email}` : f.vendedor}</div>
+                <div className="text-muted text-[13px]">{`${f.simulacao} · ${data(f.quando)}`}</div>
+                {f.motivo && <div className="text-muted text-[13px] mt-1">{f.motivo}</div>}
+              </div>
+              <Link className="btn-ghost !w-auto text-[13px] shrink-0" href="/setup#notificacoes">
+                Abrir Configurações
+              </Link>
+            </div>
+          </Item>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function Page() {
   const { status, erro } = useStatus();
 
@@ -111,6 +156,7 @@ export default function Page() {
         <p className="apoio mb-6">Como o time vende, por pessoa e por tipo de cliente.</p>
 
         <Pendentes />
+        <EnviosQueFalharam />
 
         <Empty
           ilustracao={<IconeResultados />}

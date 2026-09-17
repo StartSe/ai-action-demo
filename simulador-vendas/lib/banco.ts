@@ -59,6 +59,13 @@ function colunaExiste(d: DatabaseSync, tabela: string, coluna: string): boolean 
   return linhas.some((l) => l.name === coluna);
 }
 
+/** Acrescenta uma coluna TEXT NULL que nasceu depois da tabela. Sem `IF NOT EXISTS` em SQLite, a
+ * conferência vem antes — e rodar de novo não faz nada, como toda migração daqui. */
+function garantirColuna(d: DatabaseSync, tabela: string, coluna: string): void {
+  if (colunaExiste(d, tabela, coluna)) return;
+  d.exec(`ALTER TABLE ${tabela} ADD COLUMN ${coluna} TEXT NULL`);
+}
+
 /**
  * Instalação que rodou a versão anterior deste ciclo **sem ninguém ter feito login** ficou com a
  * tabela de treino chamada `sessoes` — o nome que pertence ao login (lib/conta.ts). Renomear é
@@ -156,12 +163,18 @@ function criarTabelas(d: DatabaseSync): void {
     encerradaEm TEXT NULL,
     duracaoSeg INTEGER NULL,
     resultadoId TEXT NULL,
+    envioEmail TEXT NULL,
+    envioEmailMotivo TEXT NULL,
     criadoEm TEXT NOT NULL
   )`);
   // Os índices mantêm o nome antigo de propósito: o ALTER TABLE acima leva os índices existentes
   // junto, e um nome novo aqui criaria um segundo índice igual ao que já veio.
   d.exec("CREATE INDEX IF NOT EXISTS idx_sessoes_simulacao ON sessoes_treino (simulacaoCodigo)");
   d.exec("CREATE INDEX IF NOT EXISTS idx_sessoes_participante ON sessoes_treino (participanteId)");
+  // O envio do feedback por e-mail (US-020) nasceu depois da tabela: instalação que já rodava precisa
+  // das duas colunas por ALTER TABLE, senão a primeira avaliação lança "no such column: envioEmail".
+  garantirColuna(d, "sessoes_treino", "envioEmail");
+  garantirColuna(d, "sessoes_treino", "envioEmailMotivo");
 
   d.exec(`CREATE TABLE IF NOT EXISTS mensagens_sessao (
     id TEXT PRIMARY KEY,

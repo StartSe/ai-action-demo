@@ -11,6 +11,10 @@ import { obter as obterSimulacao } from "./simulacoes";
 export type ModoSessao = "voz-agente" | "voz-navegador" | "texto";
 export type StatusSessao = "preparando" | "em_andamento" | "encerrada" | "avaliada" | "abandonada";
 export type PapelMensagem = "vendedor" | "cliente";
+/** Só os dois desfechos que o gestor precisa ver. "Não havia o que enviar" não é um deles: nada é
+ * gravado quando o participante não tem e-mail, quando o canal não está configurado ou quando o
+ * gestor desligou o envio — silêncio esperado não é falha. */
+export type StatusEnvioEmail = "enviado" | "falhou";
 
 export type Sessao = {
   id: string;
@@ -24,6 +28,10 @@ export type Sessao = {
   duracaoSeg?: number;
   /** Id do registro em lib/historico.ts (o link /r/<id>), preenchido quando a avaliação termina. */
   resultadoId?: string;
+  /** Como terminou o envio do feedback por e-mail (US-020). Ausente quando não havia envio a fazer. */
+  envioEmail?: StatusEnvioEmail;
+  /** A frase de negócio da falha de envio, para o gestor saber o que consertar. */
+  envioEmailMotivo?: string;
   criadoEm: string;
 };
 
@@ -47,6 +55,8 @@ type LinhaSessao = {
   encerradaEm: string | null;
   duracaoSeg: number | null;
   resultadoId: string | null;
+  envioEmail: string | null;
+  envioEmailMotivo: string | null;
   criadoEm: string;
 };
 
@@ -67,6 +77,8 @@ function linhaParaSessao(l: LinhaSessao): Sessao {
     encerradaEm: l.encerradaEm ?? undefined,
     duracaoSeg: l.duracaoSeg ?? undefined,
     resultadoId: l.resultadoId ?? undefined,
+    envioEmail: l.envioEmail === "enviado" || l.envioEmail === "falhou" ? l.envioEmail : undefined,
+    envioEmailMotivo: l.envioEmailMotivo ?? undefined,
     criadoEm: l.criadoEm,
   };
 }
@@ -245,6 +257,32 @@ export function encerrar(id: string, { status = "encerrada", duracaoSeg }: { sta
 /** Chamado quando a avaliação termina (US-018): liga a sessão ao resultado que virou o link /r/<id>. */
 export function registrarResultado(id: string, resultadoId: string): void {
   banco().prepare("UPDATE sessoes_treino SET resultadoId = ?, status = 'avaliada' WHERE id = ?").run(resultadoId, id);
+}
+
+/**
+ * Grava como terminou o envio do feedback por e-mail (US-020).
+ *
+ * Fica na sessão, e não num registro de envios à parte, porque é sempre a resposta de uma pergunta
+ * sobre **aquela conversa**: "o vendedor recebeu o feedback dela?". É também o que torna o envio
+ * idempotente sem flag de processo — quem for enviar pergunta antes ao banco, como a migração faz.
+ */
+export function registrarEnvioEmail(id: string, status: StatusEnvioEmail, motivo?: string): void {
+  banco().prepare("UPDATE sessoes_treino SET envioEmail = ?, envioEmailMotivo = ? WHERE id = ?").run(status, motivo ?? null, id);
+}
+
+/**
+ * As conversas cujo feedback não chegou ao e-mail do vendedor — a lista que o gestor vê em
+ * `/resultados` (US-020).
+ *
+ * Existe pelo mesmo motivo de `pendentesDeAvaliacao`: a falha acontece longe de quem pode consertá-la.
+ * O vendedor viu o feedback na tela e seguiu em frente; sem esta lista, o gestor nunca saberia que a
+ * conta de e-mail parou de entregar.
+ */
+export function falhasDeEnvioEmail(limite = 20): Sessao[] {
+  const linhas = banco()
+    .prepare("SELECT * FROM sessoes_treino WHERE envioEmail = 'falhou' ORDER BY encerradaEm DESC LIMIT ?")
+    .all(limite) as LinhaSessao[];
+  return linhas.map(linhaParaSessao);
 }
 
 export function listarPorSimulacao(simulacaoCodigo: string, limite = 500): Sessao[] {
