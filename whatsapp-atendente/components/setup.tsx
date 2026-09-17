@@ -1,5 +1,6 @@
 "use client";
-// Tela de configuração inicial, gerada a partir de lib/integracoes.ts. Compartilhada pela suíte: copie sem alterar.
+// Tela de configuração inicial, gerada a partir de lib/integracoes.ts. PRÓPRIA deste app desde a US-001
+// (ver CLAUDE.md): não é mais cópia literal do pdi-time, e o que muda aqui não é replicado nos outros apps.
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { IlustracaoSegmento, MaisDetalhes, Topbar, useStatus } from "./ui";
@@ -164,7 +165,11 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
               </div>
             </footer>
 
-            <MaisDetalhes titulo="Para a equipe técnica">
+            {/* (US-007) Este bloco chamava-se "Para a equipe técnica" e foi renomeado: o cartão "Conectar o
+                WhatsApp", logo acima, passou a ter um bloco com esse nome, e dois iguais na mesma página
+                confundem. O conteúdo continua aqui porque é do app inteiro, não da conexão do número —
+                em especial o endereço público, que alimenta os links de e-mail e Slack das rotinas. */}
+            <MaisDetalhes titulo="Ajustes do servidor">
               <p className="text-muted text-[13px]">Variáveis de ambiente, quando existirem, têm prioridade sobre o que é salvo aqui.</p>
               <p className="text-muted text-[13px]">Neste plano de hospedagem, o histórico pode se perder ao reiniciar.</p>
               {dados && <CampoEnderecoPublico status={dados.enderecoPublico} aoSalvar={carregar} />}
@@ -222,6 +227,12 @@ function CampoEnderecoPublico({ status, aoSalvar }: { status: StatusEnderecoPubl
     </div>
   );
 }
+
+// Frase que abre "Opções avançadas" de um cartão, quando os campos de lá são um caminho alternativo
+// inteiro (e não só ajustes finos do principal).
+const NOTA_AVANCADA: Record<string, string> = {
+  whatsapp: "Já usa a WhatsApp Cloud API da Meta? Preencha aqui e deixe os campos da z-api em branco.",
+};
 
 function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEmail }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean; caixasEmail?: StatusCaixasEmail }) {
   const [valores, setValores] = useState<Record<string, string>>({});
@@ -284,6 +295,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
 
   const opcoesAvancadas = camposAvancados.length > 0 && (
     <MaisDetalhes titulo="Opções avançadas">
+      {NOTA_AVANCADA[i.id] && <p className="text-[12.5px] text-muted mb-4">{NOTA_AVANCADA[i.id]}</p>}
       <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4 [&>*]:min-w-0">
         {camposAvancados.map((c) => <CampoSetup key={c.chave} campo={c} valor={valores[c.chave] ?? ""} aoMudar={aoMudarCampo(c.chave)} />)}
       </div>
@@ -408,6 +420,10 @@ function CaixaEmail({ nome, url, status, aoMudar }: { nome: string; url: string;
  * o último passo fala em preencher os campos. Notificações tem um passo a passo próprio por canal, porque
  * o caminho (Resend/SMTP para e-mail, webhook para Slack) muda por completo conforme a escolha. */
 function passosSetup(i: IntegracaoStatus, valoresAtuais: Record<string, string>): string[] {
+  // Conectar o número não é "copie uma chave": são três valores, e depois disso ainda vem o QR Code.
+  if (i.id === "whatsapp") {
+    return ["Crie a conta e uma instância no painel da z-api.", "Copie os três valores da instância.", "Cole aqui e clique em Salvar."];
+  }
   if (i.id === "notificacoes") {
     const canal = valoresAtuais.NOTIFICACOES_CANAL || "email";
     return canal === "slack"

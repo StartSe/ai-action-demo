@@ -1,6 +1,11 @@
+// Divergência de propósito em relação a pdi-time (registrada em scripts/padrao-excecoes.json): depois
+// de salvar as três credenciais da z-api, este app cadastra sozinho, na instância, o endereço por onde
+// a z-api avisa que chegou mensagem ou que o número conectou/caiu. Sem isso a pessoa teria que copiar
+// um endereço à mão no painel da z-api — exatamente o que esta rodada tirou do caminho dela.
 import { INTEGRACOES } from "@/lib/integracoes";
-import { statusIntegracoes } from "@/lib/setup-comum";
+import { baseUrl, statusIntegracoes } from "@/lib/setup-comum";
 import { setConfig } from "@/lib/store";
+import { configurarWebhooks, credenciais } from "@/lib/zapi";
 
 export const dynamic = "force-dynamic";
 
@@ -21,5 +26,20 @@ export async function PUT(req: Request) {
     setConfig(chave, valor);
     salvos++;
   }
-  return Response.json({ salvos, ...(await statusIntegracoes(INTEGRACOES)) });
+
+  // Só quando as três credenciais já existem depois de salvar, e só quando este PUT mexeu em alguma
+  // delas (salvar outro cartão não precisa falar com a z-api).
+  const mexeuNaZapi = ["ZAPI_INSTANCE_ID", "ZAPI_TOKEN", "ZAPI_CLIENT_TOKEN"].some((c) => c in valores);
+  let avisoConexao: string | undefined;
+  if (mexeuNaZapi && credenciais()) {
+    try {
+      await configurarWebhooks(baseUrl(req));
+    } catch (err) {
+      console.error("Falha ao cadastrar os avisos da z-api:", err);
+      avisoConexao =
+        "Os valores foram salvos, mas não foi possível avisar a z-api sobre este app. A equipe técnica pode cadastrar o endereço à mão em \"Para a equipe técnica\", logo abaixo.";
+    }
+  }
+
+  return Response.json({ salvos, avisoConexao, ...(await statusIntegracoes(INTEGRACOES)) });
 }

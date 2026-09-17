@@ -56,6 +56,12 @@ function iniciaisDe(nome: string) {
   return nome.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 }
 
+/** Número de pendências ao lado de um item do cabeçalho (ver lib/navegacao.ts): some quando é zero. */
+function ContadorNavegacao({ valor }: { valor?: number }) {
+  if (!valor) return null;
+  return <span className="inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-white text-[11px] font-bold leading-none">{valor}</span>;
+}
+
 /** Cabeçalho da suíte: marca à esquerda, navegação ao centro (desktop) e chip de status + sino + conta à direita; no celular a navegação e a conta viram um botão "Menu" com uma folha. */
 export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notificacoes, navegacao = NAVEGACAO }: { marca: string; nome: string; area: string; status: Status | null; erro?: boolean; resumo?: string; usuario?: UsuarioTopbar | null; notificacoes?: NotificacaoTopbar[]; navegacao?: ItemNavegacao[] }) {
   const pathname = usePathname();
@@ -105,8 +111,9 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
 
         <nav className="hidden md:flex items-center gap-6 flex-1 justify-center min-w-0">
           {navegacao.map((item) => (
-            <Link key={item.href} href={item.href} className={`text-[14px] font-semibold pb-1 border-b-2 ${ativo(item.href) ? "text-accent border-accent" : "text-ink-2 border-transparent hover:text-ink"}`}>
+            <Link key={item.href} href={item.href} className={`inline-flex items-center gap-1.5 text-[14px] font-semibold pb-1 border-b-2 ${ativo(item.href) ? "text-accent border-accent" : "text-ink-2 border-transparent hover:text-ink"}`}>
               {item.rotulo}
+              <ContadorNavegacao valor={item.contador} />
             </Link>
           ))}
         </nav>
@@ -199,7 +206,10 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19" /></svg>
             </button>
             {navegacao.map((item) => (
-              <Link key={item.href} href={item.href} className={`px-3 py-2.5 rounded-md font-semibold ${ativo(item.href) ? "text-accent bg-accent-soft" : "text-ink"}`} onClick={() => setMenuAberto(false)}>{item.rotulo}</Link>
+              <Link key={item.href} href={item.href} className={`flex items-center gap-1.5 px-3 py-2.5 rounded-md font-semibold ${ativo(item.href) ? "text-accent bg-accent-soft" : "text-ink"}`} onClick={() => setMenuAberto(false)}>
+                {item.rotulo}
+                <ContadorNavegacao valor={item.contador} />
+              </Link>
             ))}
             {usuario && (
               <div className="mt-4 pt-4 border-t border-line">
@@ -244,22 +254,49 @@ export function Hero({ sobretitulo, titulo, apoio, segmento, children }: { sobre
 export type PassoIndicador = { titulo: string; apoio: string };
 
 /** Indicador de progresso (referência visual de 15/09/2026): três etapas numeradas, a atual no acento e as
- * demais em cinza. É só indicador — nunca navegação, não recebe clique. Rola na horizontal no celular. */
-export function Passos({ passos, atual }: { passos: PassoIndicador[]; atual: number }) {
+ * demais em cinza. Rola na horizontal no celular. Sem `onIr` é só indicador e não recebe clique; com `onIr`
+ * (US-009), as etapas já concluídas viram botões de voltar — uma etapa à frente nunca é clicável, porque a
+ * pessoa ainda não passou por ela. */
+export function Passos({ passos, atual, onIr }: { passos: PassoIndicador[]; atual: number; onIr?: (numero: number) => void }) {
   return (
     <ol className="no-print flex gap-7 max-md:gap-5 max-md:overflow-x-auto max-md:pb-1">
       {passos.map((p, i) => {
         const numero = i + 1;
         const ativo = numero === atual;
-        return (
-          <li key={p.titulo} className={`flex items-baseline gap-1.5 shrink-0 ${ativo ? "text-accent" : "text-ink-2"}`}>
+        const conteudo = (
+          <>
             <span className="font-extrabold text-[13px]">{numero}</span>
             <span className={`text-[13px] ${ativo ? "font-bold" : ""}`}>{p.titulo}</span>
             <span className="text-[12px] max-md:hidden">· {p.apoio}</span>
+          </>
+        );
+        return (
+          <li key={p.titulo} className={`flex items-baseline gap-1.5 shrink-0 ${ativo ? "text-accent" : "text-ink-2"}`}>
+            {onIr && numero < atual ? (
+              <button type="button" className="flex items-baseline gap-1.5 bg-transparent border-0 p-0 cursor-pointer text-left text-inherit hover:underline" onClick={() => onIr(numero)}>
+                {conteudo}
+              </button>
+            ) : (
+              conteudo
+            )}
           </li>
         );
       })}
     </ol>
+  );
+}
+
+/** Orientação curta ao lado de uma prévia ou de um formulário: diz o que vem depois, sem cara de alerta
+ * (o `Aviso` é para o que deu ou pode dar errado). */
+export function Dica({ children }: { children: ReactNode }) {
+  return (
+    <p className="flex items-start gap-2.5 text-[13px] text-ink-2 bg-accent-soft rounded-card px-3.5 py-3">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-accent shrink-0 mt-[3px]">
+        <path d="M9 18h6M10 21h4" />
+        <path d="M12 3a6 6 0 0 0-3.5 10.9c.4.3.6.8.6 1.3v.8h5.8v-.8c0-.5.2-1 .6-1.3A6 6 0 0 0 12 3Z" />
+      </svg>
+      <span>{children}</span>
+    </p>
   );
 }
 
@@ -302,6 +339,19 @@ export function Row({ children }: { children: ReactNode }) {
 
 export function Stage({ children }: { children: ReactNode }) {
   return <section id="stage" className="min-h-[520px] max-md:min-h-0">{children}</section>;
+}
+
+/** Balão de conversa com três pontos de "digitando": a ilustração de vazio deste app (Início e Conversas). */
+export function IlustracaoConversa() {
+  return (
+    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="7" y="9" width="50" height="34" rx="8" />
+      <path d="M20 43l-4 10 12-10" />
+      <circle cx="22" cy="26" r="1.8" fill="currentColor" stroke="none" />
+      <circle cx="32" cy="26" r="1.8" fill="currentColor" stroke="none" />
+      <circle cx="42" cy="26" r="1.8" fill="currentColor" stroke="none" />
+    </svg>
+  );
 }
 
 /** Ilustração (SVG inline, 64 px, traço 1,5 px) no lugar de um glifo genérico; cada app entrega a sua. */
@@ -544,13 +594,41 @@ export function SeloIA({ demo }: { demo: boolean }) {
 
 const CORES_TOM: Record<string, string> = { ok: "text-ok", warn: "text-warn", danger: "text-danger", neutro: "text-accent-ink" };
 
-/** Dado que decide, exibido antes do resumo: um número grande com rótulo e interpretação. */
-export function Destaque({ valor, rotulo, interpretacao, tom = "neutro" }: { valor: string; rotulo: string; interpretacao?: string; tom?: "ok" | "warn" | "danger" | "neutro" }) {
+/** Quanto o indicador andou em relação ao período anterior de mesmo tamanho (ver lib/metricas.ts). */
+export type VariacaoDestaque = {
+  /** Percentual já calculado; `null` quando o período anterior não teve nada com que comparar. */
+  percentual: number | null;
+  /** Contra o que a comparação é feita, escrito por extenso: "em relação a ontem". */
+  contexto: string;
+  /** Para tempo de resposta, cair é bom: inverte a cor sem inverter o sinal da seta. */
+  cairEhBom?: boolean;
+};
+
+function Variacao({ percentual, contexto, cairEhBom = false }: VariacaoDestaque) {
+  if (percentual === null) return <div className="text-[12.5px] text-muted mt-2">Sem base de comparação</div>;
+  if (percentual === 0) return <div className="text-[12.5px] text-muted mt-2">Sem mudança {contexto}</div>;
+  const subiu = percentual > 0;
+  const bom = cairEhBom ? !subiu : subiu;
   return (
-    <div className="mb-6">
+    <div className="text-[12.5px] text-muted mt-2">
+      <span className={`font-bold ${bom ? "text-ok" : "text-danger"}`}>
+        {subiu ? "↑" : "↓"} {Math.abs(percentual)}%
+      </span>{" "}
+      {contexto}
+    </div>
+  );
+}
+
+/** Dado que decide, exibido antes do resumo: um número grande com rótulo e interpretação. Com `variacao`,
+ * ganha embaixo a comparação com o período anterior (o indicador de Início e Relatórios); `semMargem`
+ * tira o espaço de baixo para ele caber dentro de um cartão. */
+export function Destaque({ valor, rotulo, interpretacao, tom = "neutro", variacao, semMargem = false }: { valor: string; rotulo: string; interpretacao?: string; tom?: "ok" | "warn" | "danger" | "neutro"; variacao?: VariacaoDestaque; semMargem?: boolean }) {
+  return (
+    <div className={semMargem ? "" : "mb-6"}>
       <div className={`text-[40px] max-sm:text-[32px] leading-none font-extrabold tracking-[-0.02em] text-balance ${CORES_TOM[tom]}`}>{valor}</div>
       <div className="text-[13px] font-semibold text-muted mt-2">{rotulo}</div>
       {interpretacao && <div className="text-sm text-muted mt-1">{interpretacao}</div>}
+      {variacao && <Variacao {...variacao} />}
     </div>
   );
 }
@@ -621,14 +699,14 @@ function ResumoCelula({ children, linhas = 2, aberto: abertoControlado, onEstour
   );
 }
 
-/** Um cartão do `DataTable` no celular: resumo (quando estoura) e detalhes atrás de um único "Ver mais" — nunca dois botões separados no mesmo cartão. */
-function CartaoLinha<T>({ linha, titulo, resumo, chip, semPapel, detalhes }: { linha: T; titulo?: Coluna<T>; resumo?: Coluna<T>; chip?: Coluna<T>; semPapel: Coluna<T>[]; detalhes: Coluna<T>[] }) {
+/** Um cartão do `DataTable` no celular: resumo (quando estoura) e detalhes atrás de um único "Ver mais" — nunca dois botões separados no mesmo cartão. Com `onAbrir`, o cartão inteiro leva ao destino da linha (o "Ver mais" continua só abrindo o cartão). */
+function CartaoLinha<T>({ linha, titulo, resumo, chip, semPapel, detalhes, onAbrir }: { linha: T; titulo?: Coluna<T>; resumo?: Coluna<T>; chip?: Coluna<T>; semPapel: Coluna<T>[]; detalhes: Coluna<T>[]; onAbrir?: () => void }) {
   const [aberto, setAberto] = useState(false);
   const [resumoEstourou, setResumoEstourou] = useState(false);
   const temMais = resumoEstourou || detalhes.length > 0;
 
   return (
-    <div className="px-3.5 py-2.5 flex flex-col gap-1.5">
+    <div className={`px-3.5 py-2.5 flex flex-col gap-1.5 ${onAbrir ? "cursor-pointer active:bg-bg" : ""}`} onClick={onAbrir}>
       {(titulo || chip) && (
         <div className="flex items-start justify-between gap-2">
           {titulo && <div className="font-bold">{titulo.render(linha)}</div>}
@@ -657,7 +735,7 @@ function CartaoLinha<T>({ linha, titulo, resumo, chip, semPapel, detalhes }: { l
         </div>
       )}
       {temMais && (
-        <button type="button" className="text-[13px] font-bold text-accent-ink text-left" onClick={() => setAberto((v) => !v)}>
+        <button type="button" className="text-[13px] font-bold text-accent-ink text-left" onClick={(e) => { e.stopPropagation(); setAberto((v) => !v); }}>
           {aberto ? "Ver menos" : "Ver mais"}
         </button>
       )}
@@ -665,8 +743,13 @@ function CartaoLinha<T>({ linha, titulo, resumo, chip, semPapel, detalhes }: { l
   );
 }
 
-/** Tabela responsiva: linhas no desktop, cartões no celular (título + resumo + chip visíveis, detalhes atrás de "Ver mais"). */
-export function DataTable<T>({ colunas, linhas }: { colunas: Coluna<T>[]; linhas: T[] }) {
+/**
+ * Tabela responsiva: linhas no desktop, cartões no celular (título + resumo + chip visíveis, detalhes
+ * atrás de "Ver mais"). Com `link`, a linha inteira leva ao destino dela — o clique é do mouse; o
+ * caminho de teclado é o próprio link que a coluna de título desenha, e não a linha.
+ */
+export function DataTable<T>({ colunas, linhas, link }: { colunas: Coluna<T>[]; linhas: T[]; link?: (linha: T) => string }) {
+  const router = useRouter();
   const titulo = colunas.find((c) => c.papel === "titulo");
   const resumo = colunas.find((c) => c.papel === "resumo");
   const chip = colunas.find((c) => c.papel === "chip");
@@ -681,7 +764,7 @@ export function DataTable<T>({ colunas, linhas }: { colunas: Coluna<T>[]; linhas
         </thead>
         <tbody>
           {linhas.map((l, i) => (
-            <tr key={i} className="[&:last-child>td]:border-b-0">
+            <tr key={i} onClick={link ? () => router.push(link(l)) : undefined} className={`[&:last-child>td]:border-b-0 ${link ? "cursor-pointer hover:bg-bg" : ""}`}>
               {colunas.map((c) => <td key={c.chave} style={c.largura ? { width: c.largura } : undefined} className={`px-3.5 py-[11px] border-b border-line align-top ${c.classe ?? ""}`}>{c.papel === "resumo" ? <ResumoCelula linhas={c.linhas}>{c.render(l)}</ResumoCelula> : c.render(l)}</td>)}
             </tr>
           ))}
@@ -689,7 +772,7 @@ export function DataTable<T>({ colunas, linhas }: { colunas: Coluna<T>[]; linhas
       </table>
       <div className="md:hidden card shadow-none divide-y divide-line text-sm">
         {linhas.map((l, i) => (
-          <CartaoLinha key={i} linha={l} titulo={titulo} resumo={resumo} chip={chip} semPapel={semPapel} detalhes={detalhes} />
+          <CartaoLinha key={i} linha={l} titulo={titulo} resumo={resumo} chip={chip} semPapel={semPapel} detalhes={detalhes} onAbrir={link ? () => router.push(link(l)) : undefined} />
         ))}
       </div>
     </>
@@ -739,12 +822,13 @@ export function OptInGuardar({ checked, onChange }: { checked: boolean; onChange
   );
 }
 
-/** Bloco de entrega padrão: baixar PDF (abre /imprimir/<id>; sem id imprime a própria tela) e um menu "Mais" com copiar texto, e-mail, link e extras do app. */
-export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: string; texto: () => string; extras?: { rotulo: string; onClick: () => void }[] }) {
+/**
+ * Um menu que abre a partir de um botão: fecha com Escape e com um clique fora. O `ref` volta para
+ * ser posto no bloco que embrulha o botão E o painel — o clique dentro dele não fecha o menu.
+ * Usado por `Entregar` e pelo menu "Exportar" de Relatórios.
+ */
+export function useMenuSuspenso() {
   const [aberto, setAberto] = useState(false);
-  const [copiadoTexto, setCopiadoTexto] = useState(false);
-  const [copiadoLink, setCopiadoLink] = useState(false);
-  const [falhaCopia, setFalhaCopia] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -763,6 +847,19 @@ export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: s
     };
   }, [aberto]);
 
+  return { aberto, setAberto, menuRef };
+}
+
+/** Classe de um item de menu suspenso (a mesma em `Entregar` e no menu "Exportar" de Relatórios). */
+export const ITEM_DE_MENU = "w-full text-left px-3 py-2 rounded-md hover:bg-accent-soft cursor-pointer";
+
+/** Bloco de entrega padrão: baixar PDF (abre /imprimir/<id>; sem id imprime a própria tela) e um menu "Mais" com copiar texto, e-mail, link e extras do app. */
+export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: string; texto: () => string; extras?: { rotulo: string; onClick: () => void }[] }) {
+  const { aberto, setAberto, menuRef } = useMenuSuspenso();
+  const [copiadoTexto, setCopiadoTexto] = useState(false);
+  const [copiadoLink, setCopiadoLink] = useState(false);
+  const [falhaCopia, setFalhaCopia] = useState(false);
+
   async function copiar(t: string, marcar: (v: boolean) => void) {
     try {
       await navigator.clipboard.writeText(t);
@@ -776,7 +873,7 @@ export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: s
   }
 
   const link = id && typeof window !== "undefined" ? `${location.origin}/r/${id}` : undefined;
-  const itemClasse = "w-full text-left px-3 py-2 rounded-md hover:bg-accent-soft cursor-pointer";
+  const itemClasse = ITEM_DE_MENU;
 
   return (
     <div className="flex flex-col gap-2.5 max-md:w-full">

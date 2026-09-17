@@ -1,26 +1,34 @@
 # Atendente no WhatsApp
 
-Atendente de IA que responde clientes no WhatsApp com base no que a empresa informa, e passa para um humano quando não sabe. Área: Atendimento e Vendas.
+Atendente de IA que responde clientes no WhatsApp com base no que a empresa informa, e passa para uma pessoa quando não sabe. Área: Atendimento e Vendas.
 
 ## O que resolve
-Clientes perguntam as mesmas coisas no WhatsApp fora do horário de atendimento. Este app configura um atendente virtual que responde só com base na sua base de conhecimento (produtos, preços, prazos, políticas e perguntas frequentes) e, quando não sabe a resposta, aplica a regra que você escolher (avisar que um humano vai responder, pedir e-mail e telefone, ou indicar o site).
+Clientes perguntam as mesmas coisas no WhatsApp fora do horário de atendimento. Este app configura um atendente virtual que responde só com base na sua base de conhecimento (produtos, preços, prazos, políticas e perguntas frequentes) e, quando não sabe a resposta, aplica a regra que você escolher (avisar que uma pessoa vai responder, pedir e-mail e telefone, ou indicar o site). Quem cuida do atendimento acompanha tudo em cinco telas: Início (o dia de hoje), Conversas (assumir e responder pelo número real), Assistente (configurar, testar e conectar), Relatórios e Configurações.
 
 ## Stack
-Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão.
+Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão. Conversas e mensagens em SQLite (`node:sqlite`).
 
 ## Configuração inicial
-Nenhuma variável de ambiente é obrigatória. Abra `/setup` no navegador para conectar tudo; as chaves ficam salvas em SQLite (`DATA_DIR/app.sqlite`, padrão `./data`) e sobrevivem a reinícios.
+Nenhuma variável de ambiente é obrigatória. Abra `/setup` no navegador para conectar tudo; as chaves ficam salvas em SQLite (`DATA_DIR/app.sqlite`, padrão `./data`) e sobrevivem a reinícios. Antes de conectar qualquer coisa, o app já abre em **modo demonstração**, com nove conversas de exemplo de uma clínica: dá para percorrer as cinco telas sem configurar nada.
 
 1. Abra `/setup` e conecte a **inteligência artificial (OpenRouter)** — em um clique ou colando uma chave gerada em [openrouter.ai/keys](https://openrouter.ai/keys). Sem isso, o atendente responde com um buscador local na base de conhecimento.
-2. Para receber mensagens de WhatsApp de verdade (opcional; o simulador na tela inicial funciona sem isso):
-   - Na home do app, veja o bloco **Conectar ao WhatsApp de verdade**: ele mostra a **URL do webhook** e o **verify token** (gerado automaticamente na primeira vez que o app roda).
-   - Crie um app em [developers.facebook.com/apps](https://developers.facebook.com/apps) e adicione o produto **WhatsApp**.
-   - Copie o **token de acesso** (temporário para testes, ou gere um permanente com um usuário do sistema) e o **Phone number ID** do número.
-   - Em `/setup`, cole o token e o phone number ID na integração "Número do WhatsApp (Meta Cloud API)" e salve.
-   - Na Meta, em **Configuração da API do WhatsApp Business > Webhooks**, cole a URL do webhook mostrada na home, informe o mesmo verify token mostrado na home, salve e assine o campo **messages**.
-   - Envie uma mensagem para o número pelo WhatsApp: o atendente responde usando a base de conhecimento configurada no app.
+2. Abra `/assistente` e configure o atendente: nome, objetivo, tom, o que ele precisa saber e o que fazer quando não souber. O passo "Testar" conversa com ele no celular da tela antes de qualquer número real entrar no ar.
+3. Para responder clientes de verdade, conecte o número da empresa pela **z-api** ([z-api.io](https://z-api.io)):
+   - Crie uma conta na z-api e crie uma **instância** lá (a z-api cobra um valor mensal por instância, direto com eles).
+   - No painel da z-api, em **Instâncias**, edite a instância e copie o **ID** e o **Token**. Em **Segurança**, copie o token de segurança da conta.
+   - Em `/setup`, no cartão "Número de WhatsApp da empresa", cole os três valores e salve. Ao salvar, o app cadastra sozinho na z-api o endereço por onde ela avisa este app.
+   - No cartão "Conectar o WhatsApp" (ainda em `/setup`, ou no passo "Conectar" do `/assistente`), aponte a câmera do WhatsApp da empresa para o **QR Code** que aparece na tela: em **Aparelhos conectados › Conectar um aparelho**.
+   - Assim que o número conecta, o cartão passa a mostrar o número e a data da conexão, e as conversas de exemplo somem na primeira mensagem real.
 
-Documentação oficial: https://developers.facebook.com/docs/whatsapp/cloud-api/get-started
+Documentação da z-api: https://developer.z-api.io
+
+### Já usa a Cloud API da Meta?
+Quem já tem um número aprovado na WhatsApp Cloud API pode continuar nela: em `/setup`, abra **Opções avançadas** no mesmo cartão e preencha o **código de acesso permanente** e o **identificador do número**. Nesse caminho não há QR Code — a conexão é feita no painel da Meta:
+
+- Copie em "Para a equipe técnica" o **endereço de avisos** e o **valor de verificação** (gerado sozinho na primeira execução).
+- No painel da Meta, em **Configuração da API do WhatsApp Business › Webhooks**, cole o endereço, informe o mesmo valor de verificação, salve e assine o campo **messages**.
+
+A z-api tem prioridade: se as duas estiverem preenchidas, o app usa a z-api. Documentação oficial da Meta: https://developers.facebook.com/docs/whatsapp/cloud-api/get-started
 
 ## Primeiro acesso
 Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
@@ -30,64 +38,101 @@ Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em 
 npm install
 npm run dev              # http://localhost:3000
 ```
-Abra `/setup` para conectar a IA e o WhatsApp (opcional). Sem `OPENROUTER_API_KEY`, o atendente responde com um buscador local que escolhe o trecho da base de conhecimento mais relacionado à pergunta. Sem as chaves do WhatsApp, o app funciona só com o simulador (celular na tela). Abra `/?exemplo=1` para preencher e executar um exemplo sozinho.
+Abra `/assistente` para configurar o atendente e `/setup` para conectar a IA e o número (opcional). Sem `OPENROUTER_API_KEY`, o atendente responde com um buscador local que escolhe o trecho da base de conhecimento mais relacionado à pergunta. Sem o número conectado, as cinco telas funcionam com as nove conversas de exemplo, marcadas com o selo "Exemplo".
 
 ## Rodar com Docker
 ```bash
 docker compose up --build   # http://localhost:3006
 ```
-As chaves configuradas em `/setup` ficam no volume `dados`, montado em `/app/data`.
+As chaves configuradas em `/setup` e as conversas ficam no volume `dados`, montado em `/app/data`.
 
 ## Imagem pública e deploy no Render
 A imagem é construída e publicada pelo GitHub Actions do repositório da suíte a cada push na `main`: `ghcr.io/startse/whatsapp-atendente:latest`. Não é preciso construir nem publicar à mão.
 
 - Publicar com um clique: https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-whatsapp-atendente (o `render.yaml` desta pasta é gerado a partir do `catalogo.json` da raiz; não edite à mão).
 - Rodar no seu computador sem construir: `docker run --rm -p 3006:10000 -v whatsapp-atendente-dados:/app/data ghcr.io/startse/whatsapp-atendente:latest` e abra http://localhost:3006.
-- Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
-- O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração se perde a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
+- Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA e o número.
+- O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração e as conversas se perdem a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
 
 ## Variáveis de ambiente (opcionais)
 Nenhuma é obrigatória — tudo pode ser configurado em `/setup`. Variáveis de ambiente, quando definidas, têm prioridade sobre o que foi salvo no setup.
 
 | Variável | Descrição |
 |---|---|
-| `DATA_DIR` | Onde fica o banco `app.sqlite`. Padrão `./data` (`/app/data` no Docker). |
+| `DATA_DIR` | Onde fica o banco `app.sqlite` (configuração, conversas e mensagens). Padrão `./data` (`/app/data` no Docker). |
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa à conexão em `/setup`. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Modelo padrão `nvidia/nemotron-3-super-120b-a12b:free` (gratuito). |
-| `WHATSAPP_TOKEN` | Alternativa à conexão em `/setup`. Obtenha em https://developers.facebook.com/apps (produto WhatsApp). |
-| `WHATSAPP_PHONE_NUMBER_ID` | Alternativa à conexão em `/setup`. |
-| `WHATSAPP_VERIFY_TOKEN` | Alternativa à conexão em `/setup`. Sem ela, um valor é gerado e salvo automaticamente na primeira execução. |
+| `ZAPI_INSTANCE_ID` | Identificação da instância na z-api. Alternativa à conexão em `/setup`. |
+| `ZAPI_TOKEN` | Chave da instância na z-api. Alternativa à conexão em `/setup`. |
+| `ZAPI_CLIENT_TOKEN` | Chave de segurança da conta na z-api (vale para todas as instâncias). |
+| `WHATSAPP_WEBHOOK_CHAVE` | Chave secreta que vai na URL por onde a z-api avisa este app (`/webhook/zapi?chave=...`). Sem ela, um valor de 32 bytes é gerado e salvo na primeira execução. |
+| `WHATSAPP_TOKEN` | Cloud API da Meta (caminho avançado): código de acesso permanente. Alternativa à conexão em `/setup`. |
+| `WHATSAPP_PHONE_NUMBER_ID` | Cloud API da Meta (caminho avançado): identificador do número. |
+| `WHATSAPP_VERIFY_TOKEN` | Cloud API da Meta (caminho avançado): valor de verificação do webhook. Sem ela, um valor é gerado e salvo automaticamente na primeira execução. |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
 
 ## Estrutura
 ```
-app/page.tsx                              tela única: configuração, celular simulado e conversas recebidas
-app/setup/page.tsx                        tela de configuração inicial (IA e WhatsApp)
-app/api/config/route.ts                   GET/PUT da configuração do negócio (persistida em SQLite)
-app/api/simular/route.ts                  simulador de conversa (celular na tela)
-app/api/conversas/route.ts                lista de conversas recebidas
-app/api/conversas/[numero]/route.ts       limpar uma conversa
+app/page.tsx                              Início: o dia de hoje (invólucro de components/Inicio.tsx)
+app/conversas/page.tsx                    Conversas: lista, conversa aberta e painel do contato
+app/assistente/page.tsx                   Assistente: Configurar → Testar → Conectar (?passo=1|2|3)
+app/relatorios/page.tsx                   Relatórios: indicadores, gráfico, assuntos e exportação
+app/setup/page.tsx                        Configurações: integrações e o cartão "Conectar o WhatsApp"
+app/historico/page.tsx                    relatórios anteriores (fora do cabeçalho; link em Relatórios)
+app/api/config/route.ts                   GET/PUT da configuração do atendente (objetivo, tom, base)
+app/api/conversas/route.ts                lista de conversas, com abas, período e busca
+app/api/conversas/[numero]/route.ts       GET uma conversa (zera as não lidas) / DELETE apagar
+app/api/conversas/[numero]/mensagens/**   responder pelo número real da empresa
+app/api/conversas/[numero]/assumir/**     assumir o atendimento (a IA para de responder)
+app/api/conversas/[numero]/devolver/**    devolver o atendimento para a IA
+app/api/conversas/[numero]/resolver/**    marcar a conversa como resolvida
+app/api/conversas/exemplos/route.ts       apagar de uma vez as conversas de exemplo
+app/api/metricas/route.ts                 números de Início e Relatórios, por período
+app/api/metricas/exportar/route.ts        planilha do período (CSV para o Excel em português)
+app/api/relatorio-diario/route.ts         agenda (ou consulta) a rotina do relatório das 8h
+app/api/whatsapp/conexao/route.ts         estado da conexão do número e QR Code (?qr=1)
+app/api/whatsapp/webhook-info/route.ts    valores técnicos da conexão, para "Para a equipe técnica"
+app/api/simular/route.ts                  simulador de conversa (celular do passo "Testar")
+app/api/base/route.ts                     base de respostas aprovadas pela equipe
+app/api/pendentes/route.ts                perguntas sem resposta boa nos últimos dias
+app/api/sugestoes/route.ts                link e fila de sugestões de resposta da equipe
 app/api/status/route.ts                   informa ao frontend se a IA e o WhatsApp estão conectados
 app/api/health/route.ts                   health check
 app/api/setup/route.ts                    GET status das integrações / PUT salvar chaves
 app/api/setup/testar/route.ts             testa a conexão de uma integração
 app/api/setup/oauth/openrouter/**         conexão do OpenRouter em um clique (PKCE)
-app/api/whatsapp/webhook-info/route.ts    URL do webhook e verify token, para a home mostrar o passo a passo
-app/webhook/route.ts                      webhook da WhatsApp Cloud API (Meta): verificação e recebimento de mensagens
-components/ui.tsx                         componentes visuais compartilhados pela suíte
-components/setup.tsx                      tela de configuração inicial, compartilhada pela suíte
-components/Celular.tsx                    mockup de celular com a conversa simulada
-components/Conversas.tsx                  lista de conversas recebidas
-components/ConectarWhatsApp.tsx           passo a passo para ligar o número de verdade
+app/webhook/zapi/route.ts                 avisos da z-api: mensagem recebida, número conectado e caído
+app/webhook/route.ts                      webhook da WhatsApp Cloud API (Meta): verificação e mensagens
+components/Inicio.tsx                     tela de Início
+components/Conversas.tsx                  lista de conversas (abas, período, busca)
+components/ConversaAberta.tsx             conversa aberta: assumir, responder e devolver
+components/PainelContato.tsx              painel do contato ao lado da conversa
+components/Assistente.tsx                 os três passos do Assistente
+components/Relatorios.tsx                 tela de Relatórios
+components/Indicadores.tsx                os quatro números, compartilhados por Início e Relatórios
+components/GraficoLinhas.tsx              gráfico em SVG desenhado à mão (sem biblioteca)
+components/ExportarRelatorio.tsx          menu "Exportar" e cartão do relatório diário
+components/ConexaoWhatsApp.tsx            cartão "Conectar o WhatsApp": QR Code e estado ao vivo
+components/Celular.tsx                    celular da tela, com as bolhas da conversa de teste
+components/ui.tsx                         componentes visuais deste app (camada de produto própria)
+components/setup.tsx                      tela de configuração inicial (camada de produto própria)
 lib/ai.ts                                 cliente OpenRouter (askText, askJSON), chave via lib/store
-lib/atendente.ts                          pipeline de resposta: memória de conversa, IA ou buscador local, regra de transferência
-lib/estado.ts                             configuração do negócio, persistida em SQLite (lib/store)
-lib/demo.ts                               configuração de exemplo (clínica odontológica) e utilitário de espera
+lib/atendente.ts                          pipeline de resposta: IA ou buscador local, regra de transferência
+lib/conversas.ts                          dono das tabelas `conversas` e `mensagens` (node:sqlite)
+lib/metricas.ts                           fonte única dos números de Início e Relatórios
+lib/zapi.ts                               cliente da z-api: estado, QR Code, envio e cadastro dos avisos
+lib/whatsapp.ts                           despacha entre z-api e Meta, e traduz as falhas da Meta
+lib/erro-whatsapp.ts                      o tipo de erro do WhatsApp (arquivo folha, quebra ciclo de import)
+lib/telefone.ts                           formata número de telefone para a tela
+lib/assuntos.ts                           lista de assuntos por objetivo (classificação das conversas)
+lib/rotulos.ts                            rótulos de tela dos valores do banco e formatos de data
+lib/estado.ts                             configuração do atendente, persistida em SQLite (lib/store)
+lib/demo.ts                               modo demonstração: conversas de exemplo e resposta sem IA
+lib/base.ts                               base de respostas aprovadas pela equipe
 lib/types.ts                              tipos do domínio
 lib/store.ts                              armazenamento de configuração em SQLite (node:sqlite)
-lib/setup-comum.ts                        tipos e utilitários do setup inicial (compartilhado pela suíte)
-lib/integracoes.ts                        integrações deste app: OpenRouter e WhatsApp (Meta Cloud API)
+lib/integracoes.ts                        integrações deste app: OpenRouter, WhatsApp e MCP da empresa
 Dockerfile                                build multi-stage com saída standalone
 docker-compose.yml                        sobe este app isolado, com volume para os dados
 render.yaml                               blueprint do Render (runtime image)

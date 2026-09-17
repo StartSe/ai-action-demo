@@ -3,7 +3,8 @@ import type { Config } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const TONS: Config["tom"][] = ["cordial", "direto", "descontraido"];
+const OBJETIVOS: Config["objetivo"][] = ["atendimento", "vendas", "agendamentos", "outro"];
+const TONS: Config["tom"][] = ["profissional", "amigavel", "personalizado"];
 const NAO_SEI: Config["naoSei"][] = ["humano", "contato", "site"];
 
 export async function GET() {
@@ -12,14 +13,31 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   const body = (await req.json().catch(() => ({}))) as Partial<Config>;
-  const { negocio, atendente, tom, horario, baseConhecimento, naoSei } = body;
+  const { negocio, atendente, objetivo, objetivoTexto, tom, tomTexto, horario, baseConhecimento, naoSei } = body;
   if (!negocio || !String(negocio).trim() || !atendente || !String(atendente).trim() || !baseConhecimento || !String(baseConhecimento).trim()) {
     return Response.json({ error: "Preencha ao menos o nome do negócio, o nome do atendente e a base de conhecimento." }, { status: 400 });
   }
+  // Objetivo e tom ausentes valem como o padrão (configuração antiga ou tela que ainda não pergunta);
+  // um valor que não está na lista é erro, para nunca salvar em silêncio algo que a IA não entende.
+  if (objetivo !== undefined && !OBJETIVOS.includes(objetivo)) {
+    return Response.json({ error: "Escolha o que o atendente deve fazer: atendimento, vendas, agendamentos ou outro." }, { status: 400 });
+  }
+  if (tom !== undefined && !TONS.includes(tom)) {
+    return Response.json({ error: "Escolha o tom de resposta: profissional, amigável ou personalizado." }, { status: 400 });
+  }
+  if (objetivo === "outro" && !String(objetivoTexto || "").trim()) {
+    return Response.json({ error: "Escreva em uma linha o que o atendente deve fazer." }, { status: 400 });
+  }
+  const objetivoEscolhido = objetivo ?? "atendimento";
+  const tomEscolhido = tom ?? "profissional";
+  const textoTom = String(tomTexto || "").trim();
   const novo: Config = {
     negocio: String(negocio).trim(),
     atendente: String(atendente).trim(),
-    tom: TONS.includes(tom as Config["tom"]) ? (tom as Config["tom"]) : "cordial",
+    objetivo: objetivoEscolhido,
+    ...(objetivoEscolhido === "outro" ? { objetivoTexto: String(objetivoTexto).trim() } : {}),
+    tom: tomEscolhido,
+    ...(tomEscolhido === "personalizado" && textoTom ? { tomTexto: textoTom } : {}),
     horario: String(horario || "").trim(),
     baseConhecimento: String(baseConhecimento).trim(),
     naoSei: NAO_SEI.includes(naoSei as Config["naoSei"]) ? (naoSei as Config["naoSei"]) : "humano",

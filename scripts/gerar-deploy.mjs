@@ -33,6 +33,11 @@ for (const app of cat.apps) {
   if (app.aposPublicar !== undefined && typeof app.aposPublicar !== "string") {
     throw new Error(`${app.id}: aposPublicar precisa ser um texto`);
   }
+  // "independente" só diz a scripts/verificar-padrao.sh que a camada de produto do app é dele (ver a
+  // seção "Apps independentes" do PADRAO.md); não muda nada no render.yaml nem na página pública.
+  if (app.independente !== undefined && typeof app.independente !== "boolean") {
+    throw new Error(`${app.id}: independente precisa ser true ou false`);
+  }
   if (typeof app.captura !== "string" || !app.captura) {
     throw new Error(`${app.id}: captura precisa ser um caminho relativo (string não vazia)`);
   }

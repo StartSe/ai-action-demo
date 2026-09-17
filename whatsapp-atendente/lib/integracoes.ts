@@ -24,16 +24,39 @@ export const WHATSAPP: Integracao = {
   beneficio: "Faz o atendente responder clientes no número real da empresa",
   descricao:
     "Conecte o número real da empresa para o atendente responder clientes de verdade. Sem isso, o simulador (o celular na tela) continua funcionando normalmente para testar o atendente.",
-  // Resumo de negócio antes dos campos: o que a empresa precisa ter e quanto tempo isso costuma levar.
+  // Resumo de negócio antes dos campos: o que a empresa precisa ter antes de colar os valores.
   notaConexao:
-    "Você precisa de uma conta Meta Business com o WhatsApp Cloud API ativado e o número da empresa já verificado. Com a conta pronta, a equipe técnica leva cerca de 30 minutos para ligar o número a este app, usando os dados de \"Ligar o número na Meta\" logo abaixo.",
+    "A empresa precisa de uma conta na z-api e de uma instância criada lá (a z-api cobra um valor mensal por instância, direto com eles). Com a instância criada, conectar o número aqui é só colar os três valores abaixo e escanear um QR Code com o celular da empresa.",
   obrigatoria: false,
-  link: { url: "https://business.facebook.com/", rotulo: "Abrir a conta Meta Business" },
+  link: { url: "https://app.z-api.io", rotulo: "Abrir o painel da z-api" },
+  // Dois caminhos no mesmo cartão: a z-api (principal) e a Cloud API da Meta (avançado). Por isso a
+  // conexão não pode ser "todos os campos preenchidos" — basta a chave de um dos dois provedores.
+  campoConectado: ["ZAPI_TOKEN", "WHATSAPP_TOKEN"],
   campos: [
+    {
+      chave: "ZAPI_INSTANCE_ID",
+      rotulo: "Identificação da instância",
+      tipo: "text",
+      placeholder: "3D1A2B...",
+      ajuda: "No painel da z-api, em Instâncias, clique em editar a instância e copie o valor de \"ID\".",
+    },
+    {
+      chave: "ZAPI_TOKEN",
+      rotulo: "Chave da instância",
+      tipo: "secret",
+      ajuda: "Na mesma tela da instância no painel da z-api, logo abaixo, copie o valor de \"Token\".",
+    },
+    {
+      chave: "ZAPI_CLIENT_TOKEN",
+      rotulo: "Chave de segurança da conta",
+      tipo: "secret",
+      ajuda: "No painel da z-api, em Segurança, copie o token de segurança da conta (vale para todas as instâncias).",
+    },
     {
       chave: "WHATSAPP_TOKEN",
       rotulo: "Código de acesso permanente",
       tipo: "secret",
+      opcional: true,
       avancado: true,
       ajuda: "No painel da Meta, em Configurações do app › Usuários do sistema, gere um código permanente (que não expira) para o usuário de sistema com acesso ao WhatsApp.",
     },
@@ -41,6 +64,7 @@ export const WHATSAPP: Integracao = {
       chave: "WHATSAPP_PHONE_NUMBER_ID",
       rotulo: "Identificador do número",
       tipo: "text",
+      opcional: true,
       avancado: true,
       placeholder: "1234567890",
       ajuda: "No painel da Meta, em WhatsApp › Configuração da API, copie o número que aparece no bloco \"De\".",
