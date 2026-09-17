@@ -287,17 +287,23 @@ function migrarSalas(d: DatabaseSync): void {
     criadoEm: string;
   }[];
 
+  if (!linhas.length) return;
+
   const inserir = d.prepare(
     `INSERT OR IGNORE INTO simulacoes
        (codigo, produtoId, nome, objetivo, metodologia, criteriosPersonalizados, dificuldade, modoPersona,
         personas, maxTentativas, mostrarFeedback, permiteTexto, permiteVoz, duracaoMin, status, exemplo, criadoEm)
      VALUES (?, ?, ?, NULL, 'consultiva', NULL, 'realista', 'aleatoria', ?, 3, 1, 1, 1, 10, ?, 0, ?)`,
   );
-  const nomeDoCenario = d.prepare("SELECT titulo FROM cenarios WHERE id = ?");
+  // O `prepare` tem que ficar DEPOIS da checagem da tabela: em SQLite, preparar uma consulta sobre
+  // tabela inexistente já lança. Numa instalação nova a tabela `salas` existe (instrumentation.ts a
+  // cria ao limpar os links vencidos) mas `cenarios` só nasce na primeira leitura de lib/cenarios.ts —
+  // preparar às cegas derrubava a migração inteira, inclusive o produto de exemplo.
+  const nomeDoCenario = tabelaExiste(d, "cenarios") ? d.prepare("SELECT titulo FROM cenarios WHERE id = ?") : null;
 
   for (const l of linhas) {
     let nome = "Treino de vendas";
-    if (l.cenarioId && tabelaExiste(d, "cenarios")) {
+    if (l.cenarioId && nomeDoCenario) {
       const c = nomeDoCenario.get(l.cenarioId) as { titulo: string } | undefined;
       if (c?.titulo) nome = c.titulo;
     }

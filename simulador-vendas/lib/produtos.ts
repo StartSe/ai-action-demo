@@ -108,8 +108,23 @@ export function criar({
   return { id, nome: nome.trim(), descricao, categoria, status: "rascunho", exemplo, criadoEm: momento, atualizadoEm: momento };
 }
 
-/** Produtos reais primeiro, exemplo por último: o de exemplo nunca deve roubar a primeira posição. */
+/**
+ * A biblioteca do gestor: produtos reais primeiro, exemplo por último.
+ *
+ * O produto de exemplo **some da lista assim que existe um produto real** (P2 do PRD: dado de exemplo
+ * sai de cena quando o primeiro dado real do mesmo tipo aparece). Ele é escondido, não apagado: as
+ * simulações migradas das salas antigas apontam para ele, e apagá-lo deixaria um link que o gestor já
+ * mandou para o time sem produto nenhum. `todos: true` devolve a lista inteira para quem precisa
+ * resolver o nome de um produto a partir de uma simulação.
+ */
 export function listar(limite = 100): Produto[] {
+  const todos = listarTodos(limite);
+  const temReal = todos.some((p) => !p.exemplo);
+  return temReal ? todos.filter((p) => !p.exemplo) : todos;
+}
+
+/** Inclui os de exemplo mesmo quando já existe produto real. */
+export function listarTodos(limite = 100): Produto[] {
   const linhas = banco()
     .prepare("SELECT * FROM produtos ORDER BY exemplo ASC, criadoEm DESC LIMIT ?")
     .all(limite) as LinhaProduto[];
