@@ -1,12 +1,11 @@
 "use client";
 // O que restou da tela única antiga (formulário + celular + conversas recebidas, aposentada na US-011):
 // a lista de conversas e o relatório diário de um resultado já salvo. Quem usa: `/r/[id]` (um registro
-// do histórico aberto de novo), `/imprimir/[id]` (o mesmo conteúdo sem cabeçalho, para o PDF) e a
-// conversa destacada para onde os links "Aprovar"/"Corrigir" do relatório diário levam.
+// do histórico aberto de novo) e `/imprimir/[id]` (o mesmo conteúdo sem cabeçalho, para o PDF).
+// Nada aqui é tela de produto: as cinco telas de hoje não passam por este arquivo.
 //
 // Este arquivo é varrido por `scripts/verificar-jargao.mjs` (varre `components/*.tsx`), então nada aqui
 // pode importar de um caminho com "setup" no nome — ver CLAUDE.md.
-import { useEffect, useRef } from "react";
 import {
   Aviso,
   Chip,
@@ -22,46 +21,6 @@ import type { Meta } from "@/lib/ai";
 import { ACAO_CONECTAR_NUMERO, AVISO_CONVERSAS_EXEMPLO, soConversasDeExemplo } from "@/lib/demo";
 import { rotuloContato, rotuloOrigem } from "@/lib/rotulos";
 import type { Conversa, ItemRelatorioAtendimento } from "@/lib/types";
-
-/**
- * Destaca uma conversa específica, com as ações Aprovar/Corrigir prontas — para onde os links
- * "Aprovar"/"Corrigir" do relatório diário levam. Desde a US-011 eles chegam por `/conversas?numero=`
- * (o `/?atender=` antigo redireciona para lá); a conversa aberta que vai usar este cartão é a US-013.
- */
-export function ConversaSelecionada({
-  conversa,
-  corrigirFocada,
-  onAprovar,
-  onCorrigir,
-}: {
-  conversa: Conversa;
-  corrigirFocada: boolean;
-  onAprovar: AoSalvarBase;
-  onCorrigir: AoSalvarBase;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
-  return (
-    <div ref={ref} className="card p-4 border-accent mb-6">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-accent-ink mb-1.5">Conversa selecionada</p>
-      <p className="font-semibold mb-1">{rotuloContato(conversa.numero, conversa.nome)}</p>
-      <p className="text-sm text-muted mb-2.5">{conversa.ultima_mensagem}</p>
-      {conversa.ultima_resposta ? (
-        <AcoesResposta
-          pergunta={conversa.ultima_mensagem}
-          resposta={conversa.ultima_resposta}
-          onAprovar={onAprovar}
-          onCorrigir={onCorrigir}
-          modoInicial={corrigirFocada ? "corrigindo" : "padrao"}
-        />
-      ) : (
-        <p className="text-sm text-muted">Nenhuma resposta registrada ainda para essa conversa.</p>
-      )}
-    </div>
-  );
-}
 
 export function Resultado({
   conversas,
