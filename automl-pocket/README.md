@@ -103,6 +103,17 @@ O banco é um único arquivo SQLite em `SQLITE_PATH`, aberto pelo `web` (`@libsq
 
   Restaurar é o caminho inverso: parar os serviços, repor o arquivo (sem `-wal`/`-shm` antigos) e a pasta `uploads`, subir de novo.
 
+## Imagem única (Render e catálogo IA para Executivos)
+
+O `Dockerfile` da raiz empacota Redis, web e worker num só contêiner, orquestrados por `start.sh`: sobe o Redis local em `/app/data/redis`, roda `scripts/migrate.mjs`, inicia `server.js` e `main.py` e, se qualquer um dos três morrer, encerra os demais e sai com erro para o orquestrador reiniciar tudo. Convenções da suíte: porta `10000`, estado em `/app/data` (`DATA_DIR`), `GET /api/health` público. Sem `AUTH_SECRET` no ambiente, `start.sh` gera um e o guarda em `/app/data/auth-secret`; sem `BETTER_AUTH_URL`, usa `RENDER_EXTERNAL_URL` (Render) ou `http://localhost:$PORT`. Um Redis externo continua possível: basta `REDIS_URL` apontar para fora do contêiner e o local não é iniciado.
+
+```bash
+docker build -t automl-pocket .
+docker run --rm -p 3018:10000 -v automl-pocket-dados:/app/data automl-pocket   # http://localhost:3018
+```
+
+O Blueprint do Render (`render.yaml`, gerado pelo repositório da suíte) usa `plan: standard`, disco de 1 GB em `/app/data` e `AUTH_SECRET` com `generateValue`. A imagem fixa `TRAINING_CONCURRENCY=1`, `MODEL_N_JOBS=1` e `OMP_NUM_THREADS=1` (1 vCPU); sobrescreva por variável de ambiente se houver mais núcleos.
+
 ## Deploy em servidor próprio
 
 O mesmo `docker-compose.yml` serve para produção atrás de um proxy reverso com TLS (Coolify/Traefik, Caddy, nginx):

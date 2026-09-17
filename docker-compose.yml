@@ -1,5 +1,5 @@
 # Sobe a suíte inteira: docker compose up --build   (ou docker compose pull && docker compose up, sem construir nada)
-# Cada app fica em uma porta: 3001 a 3011 (veja a tabela no README).
+# Cada app fica em uma porta: 3001 a 3018 (veja a tabela no README).
 # Nenhuma variável é obrigatória: abra http://localhost:30XX/setup em cada app para conectar a IA e as integrações.
 # As chaves ficam em SQLite dentro do volume de cada app e sobrevivem a reinícios.
 # Um .env na raiz é opcional (copie de .env.example); variáveis de ambiente têm prioridade sobre o setup.
@@ -130,6 +130,15 @@ services:
     ports: ["3017:10000"]
     volumes: [videos-campanha-dados:/app/data]
 
+  # AutoML: imagem única (Redis + web + worker Python) construída pelo Dockerfile da raiz da pasta.
+  # Para desenvolvimento com os serviços separados, use automl-pocket/docker-compose.yml.
+  automl-pocket:
+    <<: *app
+    build: ./automl-pocket
+    image: ghcr.io/startse/automl-pocket:latest
+    ports: ["3018:10000"]
+    volumes: [automl-pocket-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -148,3 +157,4 @@ volumes:
   clone-site-dados:
   prospeccao-linkedin-dados:
   videos-campanha-dados:
+  automl-pocket-dados:

@@ -1,0 +1,23 @@
+# Blueprint de publicação de AutoML (especificação: https://render.com/docs/blueprint-spec)
+# Imagem pública publicada pelo GitHub Actions em ghcr.io/startse/automl-pocket:latest.
+# Este app exige o plano standard (pago) e cria um disco de 1 GB em /app/data: por isso fica fora do Blueprint da suíte.
+# Abra o app e crie sua conta (nome, e-mail e senha). Não há IA para conectar: a planilha de exemplo já aparece pronta em Datasets e o treino roda dentro do próprio app.
+services:
+  - type: web
+    name: automl-pocket
+    runtime: image
+    image:
+      url: ghcr.io/startse/automl-pocket:latest
+    plan: standard
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: AUTH_SECRET
+        generateValue: true
+    # Planilhas, modelos e a conta ficam em /app/data e sobrevivem a deploys.
+    disk:
+      name: dados
+      mountPath: /app/data
+      sizeGB: 1

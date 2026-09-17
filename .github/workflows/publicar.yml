@@ -2,7 +2,7 @@ name: Publicar imagens e catálogo
 
 # A cada push na main: constrói só as imagens dos apps cuja pasta mudou, publica em ghcr.io/startse/<app>
 # e regenera o repositório público (Blueprints do Render + página do catálogo).
-# Rodar à mão com "Reconstruir todas" marcado reconstrói as imagens dos 17 apps do catálogo.
+# Rodar à mão com "Reconstruir todas" marcado reconstrói as imagens dos 18 apps do catálogo.
 
 on:
   push:

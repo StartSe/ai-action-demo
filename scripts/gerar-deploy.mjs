@@ -12,7 +12,27 @@ const cat = JSON.parse(readFileSync(join(raiz, "catalogo.json"), "utf8"));
 const repoPublicoUrl = `https://github.com/${cat.repoPublico}`;
 
 const CAPACIDADES_VALIDAS = ["artefato", "mcp", "formulario", "rotina"];
+// Planos do Render aceitos em "plano" (ausente = free). Qualquer coisa além de free vira "app pago":
+// sai do Blueprint da suíte e ganha aviso na página e nos READMEs.
+const PLANOS_VALIDOS = ["free", "starter", "standard", "pro"];
+const plano = (app) => app.plano ?? "free";
+const pago = (app) => plano(app) !== "free";
 for (const app of cat.apps) {
+  if (!PLANOS_VALIDOS.includes(plano(app))) {
+    throw new Error(`${app.id}: plano desconhecido "${app.plano}" (válidos: ${PLANOS_VALIDOS.join(", ")})`);
+  }
+  if (app.discoGB !== undefined && !(Number.isInteger(app.discoGB) && app.discoGB >= 1)) {
+    throw new Error(`${app.id}: discoGB precisa ser um inteiro >= 1`);
+  }
+  if (app.discoGB && !pago(app)) {
+    throw new Error(`${app.id}: disco persistente exige plano pago (o Render não oferece disco no plano free)`);
+  }
+  if (app.variaveisGeradas !== undefined && !(Array.isArray(app.variaveisGeradas) && app.variaveisGeradas.every((v) => /^[A-Z][A-Z0-9_]*$/.test(v)))) {
+    throw new Error(`${app.id}: variaveisGeradas precisa ser uma lista de nomes de variável (MAIÚSCULAS_COM_SUBLINHADO)`);
+  }
+  if (app.aposPublicar !== undefined && typeof app.aposPublicar !== "string") {
+    throw new Error(`${app.id}: aposPublicar precisa ser um texto`);
+  }
   if (typeof app.captura !== "string" || !app.captura) {
     throw new Error(`${app.id}: captura precisa ser um caminho relativo (string não vazia)`);
   }
@@ -33,38 +53,58 @@ const imagem = (app) => `${cat.registro}/${app.id}:latest`;
 const branchDeploy = (app) => `deploy-${app.id}`;
 const urlPublicar = (app) => `https://render.com/deploy?repo=${repoPublicoUrl}/tree/${branchDeploy(app)}`;
 const urlPublicarSuite = `https://render.com/deploy?repo=${repoPublicoUrl}`;
+// O botão da suíte continua gratuito: apps pagos só têm o botão próprio.
+const appsSuite = cat.apps.filter((a) => !pago(a));
+const appsPagos = cat.apps.filter(pago);
+const aposPublicar = (app) =>
+  app.aposPublicar ?? "Depois de publicar, abra o app e clique em Configurações (`/setup`) para conectar a IA.";
 const comandoDocker = (app) =>
   `docker run --rm -p ${app.porta}:10000 -v ${app.id}-dados:/app/data ${imagem(app)}`;
 
 function servico(app) {
-  return `  - type: web
-    name: ${app.id}
-    runtime: image
-    image:
-      url: ${imagem(app)}
-    plan: free
-    region: oregon
-    healthCheckPath: /api/health
-    envVars:
-      - key: PORT
-        value: "10000"
-    # Para manter a configuração feita em /setup entre deploys (exige plano pago):
+  const geradas = (app.variaveisGeradas ?? [])
+    .map((v) => `      - key: ${v}\n        generateValue: true\n`)
+    .join("");
+  const disco = app.discoGB
+    ? `    # Planilhas, modelos e a conta ficam em /app/data e sobrevivem a deploys.
+    disk:
+      name: dados
+      mountPath: /app/data
+      sizeGB: ${app.discoGB}
+`
+    : `    # Para manter a configuração feita em /setup entre deploys (exige plano pago):
     # disk:
     #   name: dados
     #   mountPath: /app/data
     #   sizeGB: 1
 `;
+  return `  - type: web
+    name: ${app.id}
+    runtime: image
+    image:
+      url: ${imagem(app)}
+    plan: ${plano(app)}
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "10000"
+${geradas}${disco}`;
 }
 
 const cabecalho = (texto) => `# ${texto.split("\n").join("\n# ")}\n`;
 
 function renderApp(app) {
+  const nota = pago(app)
+    ? `Este app exige o plano ${plano(app)} (pago) e cria um disco de ${app.discoGB ?? 1} GB em /app/data: por isso fica fora do Blueprint da suíte.
+${app.aposPublicar ?? "Nenhuma chave é necessária aqui."}`
+    : `Nenhuma chave é necessária aqui: após publicar, abra /setup no app e conecte a IA.
+As chaves ficam em SQLite em /app/data. No plano free o disco é efêmero e a configuração se perde a cada deploy.`;
   return (
     cabecalho(
       `Blueprint de publicação de ${app.nome} (especificação: https://render.com/docs/blueprint-spec)
 Imagem pública publicada pelo GitHub Actions em ${imagem(app)}.
-Nenhuma chave é necessária aqui: após publicar, abra /setup no app e conecte a IA.
-As chaves ficam em SQLite em /app/data. No plano free o disco é efêmero e a configuração se perde a cada deploy.`
+${nota}`
     ) +
     "services:\n" +
     servico(app)
@@ -72,16 +112,19 @@ As chaves ficam em SQLite em /app/data. No plano free o disco é efêmero e a co
 }
 
 function renderSuite() {
+  const foraDaSuite = appsPagos.length
+    ? `\nFicam de fora, por exigirem plano pago: ${appsPagos.map((a) => `${a.nome} (branch ${branchDeploy(a)})`).join(", ")}.`
+    : "";
   return (
     cabecalho(
-      `Blueprint único da suíte ${cat.titulo}: publica os ${cat.apps.length} apps de uma vez.
+      `Blueprint único da suíte ${cat.titulo}: publica os ${appsSuite.length} apps gratuitos de uma vez.${foraDaSuite}
 Cada app também tem seu próprio Blueprint (branch deploy-<app> em ${repoPublicoUrl}).
 Imagens públicas publicadas pelo GitHub Actions em ${cat.registro}/<app>:latest.
 Nenhuma chave é necessária aqui: após publicar, abra /setup em cada app e conecte a IA.
 Gerado por scripts/gerar-deploy.mjs a partir de catalogo.json. Não edite à mão.`
     ) +
     "services:\n" +
-    cat.apps.map(servico).join("\n")
+    appsSuite.map(servico).join("\n")
   );
 }
 
@@ -89,9 +132,12 @@ function readmePublico() {
   const linhas = cat.apps
     .map(
       (a) =>
-        `| [${a.nome}](${repoPublicoUrl}/tree/${branchDeploy(a)}) | ${a.areas.join(", ")} | ${a.problema} | [Publicar este app](${urlPublicar(a)}) |`
+        `| [${a.nome}](${repoPublicoUrl}/tree/${branchDeploy(a)}) | ${a.areas.join(", ")} | ${a.problema}${pago(a) ? ` **Exige plano pago (${plano(a)}).**` : ""} | [Publicar este app](${urlPublicar(a)}) |`
     )
     .join("\n");
+  const avisoPagos = appsPagos.length
+    ? `\n- ${appsPagos.map((a) => `**${a.nome}** é a exceção: exige o plano ${plano(a)} (pago) e cria um disco de ${a.discoGB ?? 1} GB para guardar planilhas e modelos. Por isso fica fora do botão da suíte e tem só o botão próprio.`).join("\n- ")}`
+    : "";
   return `# ${cat.titulo}
 
 ${cat.lead}
@@ -100,9 +146,9 @@ Catálogo com filtro por área: **${cat.paginaPublica}**
 
 Este repositório guarda só os arquivos de publicação (um Blueprint por app, um da suíte e a página do catálogo). Ele é gerado automaticamente a partir do repositório privado \`${cat.repoPrivado}\`; nada aqui é editado à mão.
 
-## Publicar os ${cat.apps.length} apps de uma vez
+## Publicar os ${appsSuite.length} apps gratuitos de uma vez
 
-[![Publicar os ${cat.apps.length} apps](https://img.shields.io/badge/Publicar%20os%20${cat.apps.length}%20apps-1f4fd8?style=for-the-badge)](${urlPublicarSuite})
+[![Publicar os ${appsSuite.length} apps](https://img.shields.io/badge/Publicar%20os%20${appsSuite.length}%20apps-1f4fd8?style=for-the-badge)](${urlPublicarSuite})
 
 ## Publicar um app de cada vez
 
@@ -123,7 +169,7 @@ ${comandoDocker(cat.apps[0])}
 
 - Ao clicar em Publicar, você entra (ou cria uma conta gratuita) no serviço de hospedagem e confirma. O app é criado na sua conta, não na nossa.
 - Nenhuma chave é pedida na publicação. Depois, abra o app, clique em Configurações (\`/setup\`) e conecte a IA e as integrações em um minuto.
-- No plano gratuito o app adormece após um tempo sem uso e a configuração feita em Configurações pode se perder quando ele for atualizado. Um plano pago mantém tudo salvo (descomente o bloco \`disk\` do Blueprint).
+- No plano gratuito o app adormece após um tempo sem uso e a configuração feita em Configurações pode se perder quando ele for atualizado. Um plano pago mantém tudo salvo (descomente o bloco \`disk\` do Blueprint).${avisoPagos}
 `;
 }
 
@@ -133,7 +179,7 @@ function readmeBranch(app) {
 ${app.problema} ${app.ia}
 
 [![Publicar este app](https://img.shields.io/badge/Publicar%20este%20app-1f4fd8?style=for-the-badge)](${urlPublicar(app)})
-
+${pago(app) ? `\n**Exige plano pago no serviço de hospedagem** (${plano(app)}) e cria um disco de ${app.discoGB ?? 1} GB em \`/app/data\`, onde ficam planilhas, modelos e a conta. Não usa IA externa nem pede chave.\n` : ""}
 Imagem: \`${imagem(app)}\`
 
 Opção avançada, rodar no seu computador (requer Docker):
@@ -143,7 +189,7 @@ ${comandoDocker(app)}
 # depois abra http://localhost:${app.porta}
 \`\`\`
 
-Depois de publicar, abra o app e clique em Configurações (\`/setup\`) para conectar a IA. Catálogo completo: ${cat.paginaPublica}
+${aposPublicar(app)} Catálogo completo: ${cat.paginaPublica}
 `;
 }
 
@@ -178,6 +224,8 @@ writeFileSync(
       lead: cat.lead,
       repoPublico: repoPublicoUrl,
       publicarSuite: urlPublicarSuite,
+      // Só os gratuitos entram no botão da suíte; a página usa esta lista para o texto do botão.
+      appsNaSuite: appsSuite.map((a) => a.id),
       apps: cat.apps.map((a) => {
         const origem = join(capturasOrigem, `${a.id}.png`);
         let captura = null;
@@ -191,6 +239,7 @@ writeFileSync(
         }
         return {
           ...a,
+          plano: plano(a),
           captura,
           imagem: imagem(a),
           publicar: urlPublicar(a),

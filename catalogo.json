@@ -341,6 +341,34 @@
         "mcp"
       ],
       "demo": null
+    },
+    {
+      "id": "automl-pocket",
+      "nome": "AutoML",
+      "areas": [
+        "Dados",
+        "Financeiro",
+        "Vendas"
+      ],
+      "problema": "A empresa tem planilhas com histórico de clientes, vendas ou fraudes, mas prever o que vem pela frente depende de um cientista de dados que não existe.",
+      "ia": "Lê a planilha, treina sozinho modelos de classificação, regressão e previsão de séries, escolhe o melhor e explica em português quais campos pesam no resultado.",
+      "integracoes": "Nenhuma chave nem IA externa: os modelos são treinados dentro do próprio app. As previsões também ficam disponíveis dentro do seu assistente de IA (servidor MCP) e por um link público para a equipe enviar planilhas.",
+      "acento": "#0f766e",
+      "porta": 3018,
+      "captura": "capturas/automl-pocket.png",
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "formulario"
+      ],
+      "demo": null,
+      "plano": "standard",
+      "discoGB": 1,
+      "variaveisGeradas": [
+        "AUTH_SECRET"
+      ],
+      "aposPublicar": "Abra o app e crie sua conta (nome, e-mail e senha). Não há IA para conectar: a planilha de exemplo já aparece pronta em Datasets e o treino roda dentro do próprio app.",
+      "padrao": "proprio"
     }
   ]
 }

@@ -17,7 +17,8 @@ RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
 FONTE="pdi-time"
 EXCECOES="$RAIZ/scripts/padrao-excecoes.json"
 
-APPS=($(node -e 'console.log(require(process.argv[1]).apps.map((a) => a.id).filter((id) => id !== process.argv[2]).join("\n"))' "$RAIZ/catalogo.json" "$FONTE"))
+# Apps com "padrao": "proprio" no catálogo (ex.: automl-pocket, web + worker Python) não seguem o padrão e ficam de fora.
+APPS=($(node -e 'console.log(require(process.argv[1]).apps.filter((a) => a.padrao !== "proprio").map((a) => a.id).filter((id) => id !== process.argv[2]).join("\n"))' "$RAIZ/catalogo.json" "$FONTE"))
 if [ "${1:-}" != "" ]; then
   APPS=("$1")
 fi

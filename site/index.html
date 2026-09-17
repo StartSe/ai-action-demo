@@ -78,6 +78,7 @@
   .previa.tem-imagem img { display: block; }
   .areas { display: flex; flex-wrap: wrap; gap: 6px; }
   .area { font-size: .82rem; font-weight: 600; color: var(--suave); background: var(--realce); padding: 3px 10px; border-radius: 999px; }
+  .area.pago { color: var(--acento); border: 1px solid var(--acento); background: transparent; }
   .card h2 { font-size: 1.45rem; line-height: 1.15; letter-spacing: -0.015em; margin: 0; font-weight: 800; }
   .problema { margin: 0; font-size: 1.02rem; }
   dl { margin: 0; display: grid; gap: 10px; padding-top: 8px; border-top: 1px solid var(--linha); }
@@ -195,6 +196,7 @@
         <li>No plano gratuito o app adormece após um tempo sem uso e leva alguns segundos para acordar no próximo acesso.</li>
         <li>Também no plano gratuito, a conexão com a IA pode se perder quando o app for atualizado. Basta refazê-la em Configurações. Um plano pago mantém tudo salvo.</li>
         <li>Os apps usam dados de exemplo e servem para aprendizado e testes. Não coloque dados sensíveis da sua empresa.</li>
+        <li id="avisoPago" hidden></li>
       </ul>
       <details class="avancado">
         <summary>Para a equipe técnica</summary>
@@ -273,9 +275,24 @@
   const quantos = POR_EXTENSO[total] || String(total);
   const Quantos = quantos.charAt(0).toUpperCase() + quantos.slice(1);
   $("#titulo").textContent = `${Quantos} apps de IA para o dia a dia de uma empresa.`;
-  $("#tituloSuite").textContent = `Publicar os ${quantos} de uma vez`;
-  $("#apoioSuite").textContent = `Um único clique cria os ${quantos} apps na sua conta. Depois, abra cada um e conecte a IA em Configurações.`;
-  $("#rotuloSuite").textContent = `Publicar os ${quantos} apps`;
+  // O botão da suíte só publica os gratuitos (lista appsNaSuite do catálogo); apps com plano pago
+  // têm só o botão próprio e são citados por nome.
+  const naSuite = new Set(dados.appsNaSuite || dados.apps.map((a) => a.id));
+  const pagos = dados.apps.filter((a) => !naSuite.has(a.id));
+  const nSuite = naSuite.size;
+  const quantosSuite = POR_EXTENSO[nSuite] || String(nSuite);
+  const ePago = (app) => (app.plano || "free") !== "free";
+  $("#tituloSuite").textContent = pagos.length ? `Publicar os ${quantosSuite} gratuitos de uma vez` : `Publicar os ${quantosSuite} de uma vez`;
+  $("#apoioSuite").textContent = `Um único clique cria os ${quantosSuite} apps na sua conta. Depois, abra cada um e conecte a IA em Configurações.` +
+    (pagos.length ? ` ${pagos.map((a) => a.nome).join(", ")} fica de fora porque exige plano pago; publique pelo botão do próprio app.` : "");
+  $("#rotuloSuite").textContent = `Publicar os ${quantosSuite} apps`;
+  if (pagos.length) {
+    const aviso = $("#avisoPago");
+    aviso.hidden = false;
+    aviso.textContent = pagos
+      .map((a) => `${a.nome} é a exceção: exige um plano pago no serviço de hospedagem (${a.plano}) e guarda planilhas e modelos em um disco próprio, então nada se perde entre atualizações.`)
+      .join(" ");
+  }
 
   const CAPACIDADES = {
     artefato: { rotulo: "Leva o resultado pra fora (PDF, link, e-mail)", icone: '<path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 21h14"/>' },
@@ -297,7 +314,8 @@
       img.addEventListener("load", () => previa.classList.add("tem-imagem"));
       img.src = app.captura;
     }
-    $(".areas", el).innerHTML = app.areas.map((a) => `<span class="area">${a}</span>`).join("");
+    $(".areas", el).innerHTML = app.areas.map((a) => `<span class="area">${a}</span>`).join("") +
+      (ePago(app) ? `<span class="area pago">Plano pago</span>` : "");
     $("h2", el).textContent = app.nome;
     $(".problema", el).textContent = app.problema;
     $(".ia", el).textContent = app.ia;
@@ -305,6 +323,9 @@
     $(".publicar", el).href = app.publicar;
     $(".publicar", el).setAttribute("aria-label", `Publicar ${app.nome}`);
     if (app.demo) { const d = $(".demo", el); d.href = app.demo; d.hidden = false; }
+    if (ePago(app)) {
+      $(".dica", el).textContent = `Plano pago (${app.plano})${app.discoGB ? ` com disco de ${app.discoGB} GB` : ""}. Abre em uma nova aba, na sua conta.`;
+    }
     const capacidades = (app.capacidades || []).map((c) => CAPACIDADES[c]).filter(Boolean);
     if (capacidades.length) {
       const bloco = $(".capacidades", el);
@@ -314,7 +335,9 @@
         .join("");
     }
     $("code", el).textContent = app.docker;
-    $(".depois", el).textContent = `Depois abra http://localhost:${app.porta} e, para conectar a IA, http://localhost:${app.porta}/setup.`;
+    $(".depois", el).textContent = app.aposPublicar
+      ? `Depois abra http://localhost:${app.porta}. ${app.aposPublicar}`
+      : `Depois abra http://localhost:${app.porta} e, para conectar a IA, http://localhost:${app.porta}/setup.`;
     $(".copiar", el).addEventListener("click", async (ev) => {
       const b = ev.currentTarget;
       try { await navigator.clipboard.writeText(app.docker); b.textContent = "Copiado"; }

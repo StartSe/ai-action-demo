@@ -66,7 +66,8 @@ function arquivosLibParaVarrer(appId) {
 }
 
 const alvo = process.argv[2];
-const apps = alvo ? cat.apps.filter((a) => a.id === alvo) : cat.apps;
+// Apps com "padrao": "proprio" (estrutura diferente de app/, components/ e lib/) ficam de fora.
+const apps = alvo ? cat.apps.filter((a) => a.id === alvo) : cat.apps.filter((a) => a.padrao !== "proprio");
 
 const achados = [];
 for (const app of apps) {

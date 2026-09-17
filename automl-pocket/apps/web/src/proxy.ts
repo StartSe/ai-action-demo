@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // Rotas acessíveis sem sessão (/setup = tela de primeiro acesso, que cria a
 // conta única do Pocket; /app = página pública do Web App publicado;
 // /api/v1 e /api/mcp = endpoints de deployment autenticados por chave de API;
+// /api/health = verificação de saúde do Render/Docker, sem dados;
 // /robots.txt e /sitemap.xml = metadata routes de SEO, que os crawlers leem
 // sem sessão). Sem Google/2FA/cadastro no Pocket (PRD US-008) e sem
 // convites/waitlist/aceite de política (PRD US-009): só e-mail e senha na
@@ -12,6 +13,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // server components de app/login e app/setup, nunca aqui: o proxy roda no
 // runtime edge e não abre o SQLite.
 const PUBLIC_PATHS = [
+  "/api/health",
   "/setup",
   "/login",
   "/app",
