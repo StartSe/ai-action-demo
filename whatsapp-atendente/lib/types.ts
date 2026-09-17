@@ -1,4 +1,6 @@
-export type Tom = "cordial" | "direto" | "descontraido";
+export type Tom = "profissional" | "amigavel" | "personalizado";
+/** O que o atendente foi criado para fazer; vira uma frase do prompt em lib/atendente.ts. */
+export type Objetivo = "atendimento" | "vendas" | "agendamentos" | "outro";
 export type NaoSei = "humano" | "contato" | "site";
 // Renomeado de "Origem" para não colidir com o componente Origem de components/ui.tsx (linha de proveniência do resultado).
 export type CanalOrigem = "simulador" | "whatsapp" | "mcp" | "exemplo";
@@ -12,7 +14,12 @@ export type PapelMensagem = "cliente" | "atendente" | "humano";
 export interface Config {
   negocio: string;
   atendente: string;
+  objetivo: Objetivo;
+  /** O que o atendente deve fazer, escrito pela pessoa; só existe quando `objetivo === "outro"`. */
+  objetivoTexto?: string;
   tom: Tom;
+  /** Estilo de resposta escrito pela pessoa; só existe quando `tom === "personalizado"`. */
+  tomTexto?: string;
   horario: string;
   baseConhecimento: string;
   naoSei: NaoSei;

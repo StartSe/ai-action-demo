@@ -40,7 +40,7 @@ import type { Sugestao } from "@/lib/sugestoes";
 import { rotuloContato, rotuloOrigem } from "@/lib/rotulos";
 import type { Config, Conversa, ItemRelatorioAtendimento, PerguntaPendente } from "@/lib/types";
 
-const CONFIG_VAZIA: Config = { negocio: "", atendente: "", tom: "cordial", horario: "", baseConhecimento: "", naoSei: "humano" };
+const CONFIG_VAZIA: Config = { negocio: "", atendente: "", objetivo: "atendimento", tom: "profissional", horario: "", baseConhecimento: "", naoSei: "humano" };
 
 const SUGESTOES = ["Quanto custa o clareamento dental?", "Vocês atendem aos sábados?", "Fazem cirurgia cardíaca?"];
 
@@ -495,9 +495,9 @@ export default function Page() {
                 <Row>
                   <Field label="Tom de voz" htmlFor="tom">
                     <select id="tom" className="input" value={config.tom} onChange={(e) => setCampo("tom", e.target.value as Config["tom"])}>
-                      <option value="cordial">Cordial</option>
-                      <option value="direto">Direto</option>
-                      <option value="descontraido">Descontraído</option>
+                      <option value="profissional">Profissional</option>
+                      <option value="amigavel">Amigável</option>
+                      <option value="personalizado">Personalizado</option>
                     </select>
                   </Field>
                   <Field label="Horário de atendimento humano" htmlFor="horario">

@@ -8,20 +8,36 @@ import { toolsParaAtendente } from "./empresa-mcp";
 import { getConfig } from "./estado";
 import type { CanalOrigem, Config, PerguntaPendente } from "./types";
 
-function descricaoTom(tom: Config["tom"]): string {
-  switch (tom) {
-    case "direto":
-      return "direto e objetivo, frases curtas, sem rodeios";
-    case "descontraido":
-      return "descontraído e simpático, próximo, mas sempre profissional";
+/** O tom escolhido, escrito como instrução para a IA; no tom personalizado, o texto é o da pessoa. */
+function descricaoTom(config: Config): string {
+  switch (config.tom) {
+    case "profissional":
+      return "profissional, claro e objetivo, frases curtas, sem rodeios";
+    case "personalizado":
+      return config.tomTexto?.trim() || "educado e profissional, no estilo da empresa";
     default:
-      return "cordial e acolhedor, educado e atencioso";
+      return "amigável e acolhedor, próximo e atencioso";
+  }
+}
+
+/** O objetivo escolhido, em uma frase; no objetivo "outro", o texto é o da pessoa. */
+function descricaoObjetivo(config: Config): string {
+  switch (config.objetivo) {
+    case "vendas":
+      return "entender a necessidade, apresentar a opção certa e convidar a fechar";
+    case "agendamentos":
+      return "coletar dia e horário preferidos e confirmar que uma pessoa vai marcar";
+    case "outro":
+      return config.objetivoTexto?.trim() || "tirar dúvidas e informar";
+    default:
+      return "tirar dúvidas e informar";
   }
 }
 
 function montarSystemPrompt(config: Config): string {
   return `Você é ${config.atendente}, atendente virtual da ${config.negocio}, respondendo clientes pelo WhatsApp.
-Tom de voz: ${descricaoTom(config.tom)}.
+Seu objetivo em cada conversa: ${descricaoObjetivo(config)}.
+Tom de voz: ${descricaoTom(config)}.
 
 Responda somente com base nas informações abaixo. Nunca invente preços, prazos, serviços ou políticas que não estejam aqui.
 
@@ -154,7 +170,7 @@ export function perguntasPendentes({ desdeDias }: { desdeDias?: number } = {}): 
 }
 
 function montarSystemPromptSugestao(config: Config): string {
-  return `Você ajuda a equipe da ${config.negocio} a preparar respostas para a base de conhecimento do atendente virtual (${config.atendente}), no tom ${descricaoTom(config.tom)}.
+  return `Você ajuda a equipe da ${config.negocio} a preparar respostas para a base de conhecimento do atendente virtual (${config.atendente}), no tom ${descricaoTom(config)}.
 Escreva a melhor resposta possível para a pergunta do cliente abaixo, usando somente a base de conhecimento informada. Se a base não tiver a informação exata, escreva a resposta mais provável e comece com "Sugestão, confira antes de aprovar: ".
 
 Base de conhecimento:

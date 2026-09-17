@@ -49,9 +49,9 @@ function trechos(base: string): string[] {
 
 function prefixoTom(tom: Tom): string {
   switch (tom) {
-    case "direto":
+    case "profissional":
       return "";
-    case "descontraido":
+    case "personalizado":
       return "Boa pergunta! ";
     default:
       return "Claro! ";
@@ -117,7 +117,8 @@ export function respostaLocal(texto: string, config: Config): { resposta: string
 export const configExemplo: Config = {
   negocio: "Sorriso Pleno Odontologia",
   atendente: "Bia",
-  tom: "cordial",
+  objetivo: "atendimento",
+  tom: "profissional",
   horario: "segunda a sexta, das 8h às 18h, e aos sábados das 8h ao meio-dia",
   naoSei: "humano",
   baseConhecimento: `Sobre a clínica: a Sorriso Pleno Odontologia fica na Rua das Flores, 120, no Jardim América, em São Paulo. Atendemos há 12 anos com foco em odontologia geral, estética e ortodontia.
