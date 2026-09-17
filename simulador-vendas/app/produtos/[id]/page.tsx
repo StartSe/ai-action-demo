@@ -1,13 +1,16 @@
 "use client";
 // Um produto: os dados básicos, os materiais que ensinam a IA e a ficha ("Entendemos seu produto").
 //
-// Nesta história (US-003) só os dados básicos e a lista de materiais existem. A importação da página
-// (US-004), o envio de documentos e o texto livre (US-005) e a ficha gerada pela IA (US-006) entram
-// nos blocos já reservados abaixo, sem mudar o desenho da tela.
+// Três caminhos para ensinar o produto, todos terminando em texto guardado em `fontes_produto`:
+// importar a página (US-004), enviar um arquivo e colar texto (US-005). O envio e o texto ficam lado a
+// lado de propósito — enquanto não lemos PDF nem apresentação (Q1 das Open Questions do PRD), colar é
+// o caminho garantido e precisa estar à vista, não escondido atrás de um "mais opções".
+//
+// A ficha gerada pela IA (US-006) entra abaixo dos materiais, sem mudar o desenho da tela.
 import Link from "next/link";
 import { use, useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Aviso, Chip, ErrorBox, Field, Section, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
+import { Aviso, Chip, Dropzone, ErrorBox, Field, Section, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
 
 type Produto = {
   id: string;
@@ -51,6 +54,12 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const [importando, setImportando] = useState(false);
   const [erroMaterial, setErroMaterial] = useState<ErroLido | null>(null);
   const [importado, setImportado] = useState<string | null>(null);
+
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [texto, setTexto] = useState("");
+  const [tituloTexto, setTituloTexto] = useState("");
+  const [salvandoTexto, setSalvandoTexto] = useState(false);
 
   // Busca em forma de corrente (`fetch().then()`) em vez de `await carregar()`: a regra
   // `react-hooks/set-state-in-effect` do eslint-plugin-react-hooks@7 acusa qualquer chamada direta a
@@ -125,6 +134,52 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
       setErroMaterial(await lerErro(e));
     } finally {
       setImportando(false);
+    }
+  }
+
+  async function enviarArquivo(f: File | null) {
+    setArquivo(f);
+    if (!f || enviando) return;
+    setEnviando(true);
+    setErroMaterial(null);
+    setImportado(null);
+    try {
+      const form = new FormData();
+      form.append("arquivo", f);
+      const r = await fetch(`/api/produtos/${id}/fontes`, { method: "POST", body: form });
+      if (!r.ok) throw r;
+      setArquivo(null);
+      setImportado(f.name);
+      await recarregarMateriais();
+    } catch (e) {
+      setErroMaterial(await lerErro(e));
+      setArquivo(null);
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  async function salvarTexto(e: FormEvent) {
+    e.preventDefault();
+    if (!texto.trim() || salvandoTexto) return;
+    setSalvandoTexto(true);
+    setErroMaterial(null);
+    setImportado(null);
+    try {
+      const r = await fetch(`/api/produtos/${id}/fontes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: "texto", texto: texto.trim(), titulo: tituloTexto.trim() || undefined }),
+      });
+      if (!r.ok) throw r;
+      setTexto("");
+      setTituloTexto("");
+      setImportado("Texto salvo.");
+      await recarregarMateriais();
+    } catch (e) {
+      setErroMaterial(await lerErro(e));
+    } finally {
+      setSalvandoTexto(false);
     }
   }
 
@@ -219,6 +274,50 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                 </Field>
                 {importado && <p className="text-[13px] text-ok font-semibold mt-3">Pronto: {importado}</p>}
               </form>
+
+              {/* Enviar arquivo e colar texto lado a lado de propósito: enquanto não lemos PDF e
+                  apresentação (Q1 do PRD), "Texto" é o caminho garantido e precisa estar à vista. */}
+              <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4 mb-4 [&>*]:min-w-0">
+                <div className="card p-5">
+                  <h3 className="font-bold text-[14px] mb-1">Enviar um material</h3>
+                  <p className="text-muted text-[13px] mb-3">Hoje lemos .txt, .md, .vtt e .srt. Para PDF ou apresentação, copie o conteúdo e cole ao lado.</p>
+                  <Dropzone
+                    id="produto-material"
+                    accept=".txt,.md,.vtt,.srt,text/plain,text/markdown"
+                    tiposLabel=".txt, .md, .vtt e .srt"
+                    maxSizeMB={2}
+                    arquivo={enviando ? arquivo : null}
+                    onArquivo={enviarArquivo}
+                  />
+                  {enviando && <p className="text-[13px] text-muted mt-2">Lendo o arquivo...</p>}
+                </div>
+
+                <form className="card p-5" onSubmit={salvarTexto}>
+                  <h3 className="font-bold text-[14px] mb-1">Texto</h3>
+                  <p className="text-muted text-[13px] mb-3">Proposta de valor, diferenciais, objeções que você já ouviu.</p>
+                  <Field label="Título" htmlFor="produto-texto-titulo">
+                    <input id="produto-texto-titulo" className="input" value={tituloTexto} onChange={(e) => setTituloTexto(e.target.value)} placeholder="Ex.: Argumentos de venda" />
+                  </Field>
+                  <div className="mt-3">
+                    <Field label="Conteúdo" htmlFor="produto-texto">
+                      <textarea
+                        id="produto-texto"
+                        className="input min-h-28"
+                        maxLength={20000}
+                        value={texto}
+                        onChange={(e) => setTexto(e.target.value)}
+                        placeholder="Cole aqui o que seu time fala para vender este produto."
+                      />
+                    </Field>
+                  </div>
+                  <div className="flex items-center gap-3 mt-3">
+                    <button type="submit" className="btn-primary !w-auto" disabled={!texto.trim() || salvandoTexto}>
+                      {salvandoTexto ? "Salvando..." : "Salvar texto"}
+                    </button>
+                    <span className="text-[12.5px] text-muted">{texto.length.toLocaleString("pt-BR")} / 20.000</span>
+                  </div>
+                </form>
+              </div>
 
               {erroMaterial && <div className="mb-4"><ErrorBox mensagem={erroMaterial.mensagem} /></div>}
 

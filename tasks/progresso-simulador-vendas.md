@@ -9,7 +9,7 @@ Uma história por sessão de trabalho, na ordem do PRD. Marque aqui ao terminar 
 - [x] US-002 — Produto, Simulação, Sessão e Participante no banco
 - [x] US-003 — Biblioteca de produtos
 - [x] US-004 — Ensinar o produto pela landing page
-- [ ] US-005 — Ensinar o produto por documentos e por texto
+- [x] US-005 — Ensinar o produto por documentos e por texto
 - [ ] US-006 — A ficha do produto
 - [ ] US-007 — Catálogo de personas
 - [ ] US-008 — Atribuição equilibrada da persona
