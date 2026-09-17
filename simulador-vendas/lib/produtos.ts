@@ -202,10 +202,23 @@ export function removerFonte(id: string): void {
   banco().prepare("DELETE FROM fontes_produto WHERE id = ?").run(id);
 }
 
-/** Quantos materiais cada produto tem, para a lista de produtos não fazer uma consulta por cartão. */
-export function contarFontes(): Record<string, number> {
+/** O material de cada produto, por tipo. */
+export type ContagemFontes = { total: number } & Record<TipoFonte, number>;
+
+/**
+ * Quantos materiais cada produto tem, por tipo, para a lista de produtos e o passo 1 de "Novo treino"
+ * não fazerem uma consulta por cartão. O tipo importa na tela: "página importada" é uma frase que o
+ * gestor reconhece, "1 material" não diz de onde ele veio.
+ */
+export function contarFontes(): Record<string, ContagemFontes> {
   const linhas = banco()
-    .prepare("SELECT produtoId, COUNT(*) AS total FROM fontes_produto GROUP BY produtoId")
-    .all() as { produtoId: string; total: number }[];
-  return Object.fromEntries(linhas.map((l) => [l.produtoId, l.total]));
+    .prepare("SELECT produtoId, tipo, COUNT(*) AS total FROM fontes_produto GROUP BY produtoId, tipo")
+    .all() as { produtoId: string; tipo: string; total: number }[];
+  const porProduto: Record<string, ContagemFontes> = {};
+  for (const l of linhas) {
+    const atual = (porProduto[l.produtoId] ??= { total: 0, landing: 0, documento: 0, texto: 0 });
+    atual.total += l.total;
+    if (l.tipo === "landing" || l.tipo === "documento" || l.tipo === "texto") atual[l.tipo] += l.total;
+  }
+  return porProduto;
 }

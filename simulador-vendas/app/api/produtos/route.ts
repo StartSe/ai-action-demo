@@ -3,16 +3,18 @@
 import { contarFontes, criar, listar } from "@/lib/produtos";
 import { contarPorProduto } from "@/lib/simulacoes";
 
+const SEM_FONTE = { total: 0, landing: 0, documento: 0, texto: 0 };
+
 export async function GET() {
   const produtos = listar();
-  const materiais = contarFontes();
+  const fontes = contarFontes();
   // A lista mostra "N materiais · N simulações" em cada cartão: as duas contagens saem de uma consulta
-  // agregada cada, nunca de uma consulta por cartão.
-  const itens = produtos.map((p) => ({
-    ...p,
-    materiais: materiais[p.id] ?? 0,
-    simulacoes: contarPorProduto(p.id).total,
-  }));
+  // agregada cada, nunca de uma consulta por cartão. `landings` é o que o passo 1 de "Novo treino"
+  // usa para dizer "página importada" (US-009) sem pedir as fontes de cada produto.
+  const itens = produtos.map((p) => {
+    const f = fontes[p.id] ?? SEM_FONTE;
+    return { ...p, materiais: f.total, landings: f.landing, simulacoes: contarPorProduto(p.id).total };
+  });
   return Response.json({ itens });
 }
 
