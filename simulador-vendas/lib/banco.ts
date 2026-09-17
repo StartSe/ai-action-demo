@@ -18,6 +18,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import crypto from "node:crypto";
 import { abrirBanco } from "./store";
+import { PERSONAS_IDS } from "./personas";
 
 let preparado = false;
 
@@ -145,12 +146,6 @@ function criarTabelas(d: DatabaseSync): void {
 /** Id fixo do produto de exemplo: a migração e lib/demo.ts (US-030) precisam falar do mesmo produto. */
 export const PRODUTO_EXEMPLO = "produto-exemplo";
 
-/**
- * As sete personas do catálogo (D2 do PRD). A lista definitiva, com os atributos de cada uma, nasce em
- * lib/personas.ts na US-007; aqui só os ids são necessários, para as simulações migradas já saírem
- * com o conjunto completo habilitado. Ao implementar a US-007, trocar por um import de lib/personas.ts.
- */
-const PERSONAS_PADRAO = ["amigavel", "apressado", "direto", "cetico", "preco", "especialista", "resistente"];
 
 /** Um cenário antigo (lib/cenarios.ts) tal como está gravado: o JSON da coluna `cenario` mais o id. */
 type CenarioAntigo = {
@@ -252,7 +247,7 @@ function migrarCenarios(d: DatabaseSync): void {
       cenario.titulo || "Treino de exemplo",
       cenario.objetivo ?? null,
       dificuldadeDoCenario(cenario),
-      JSON.stringify(PERSONAS_PADRAO),
+      JSON.stringify(PERSONAS_IDS),
       linha.criadoEm || agora(),
     );
   }
@@ -310,6 +305,6 @@ function migrarSalas(d: DatabaseSync): void {
     // A sala expirava em 30 dias; a simulação não expira. Uma sala cujo prazo já passou não deve
     // voltar à vida: nasce encerrada, e o link mostra a tela amigável em vez de abrir o treino.
     const expirada = l.expiraEm ? new Date(l.expiraEm).getTime() < Date.now() : false;
-    inserir.run(l.codigo, PRODUTO_EXEMPLO, nome, JSON.stringify(PERSONAS_PADRAO), expirada ? "encerrada" : "ativa", l.criadoEm || agora());
+    inserir.run(l.codigo, PRODUTO_EXEMPLO, nome, JSON.stringify(PERSONAS_IDS), expirada ? "encerrada" : "ativa", l.criadoEm || agora());
   }
 }

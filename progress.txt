@@ -79,3 +79,16 @@ Branch: ralph/simulador-vendas-produto-simulacao-sessoes
   - **`lista()` não completa para chegar ao mínimo.** Inventar item para bater contagem é o que o prompt proíbe; o mínimo de 3 serve só para `fichaMagra()` avisar na tela. Lista vazia é resposta correta.
   - **Gerar não marca "pronto"; salvar marca.** A ficha é a verdade da empresa e só vale depois que uma pessoa olhou.
 ---
+
+## 2026-09-17 - US-007
+- `lib/personas.ts` (novo, puro): as sete personas com atributos compostos (`conhecimento`, `paciencia`, `abertura`, `precoSensivel` em 0..2, `comportamento`, `secundaria`, `frasesTipicas`), mais `persona(id)`, `personasDe(ids)` e `rotulo()` — emoji + nome é a única forma de mostrar persona na tela (D2).
+- `lib/cliente-simulado.ts` (novo, puro): `montarPersonagem({ persona, dificuldade, produto, semente })` devolve `{ nome, cargo, empresa, contexto, instrucoes }`. Cargo e empresa saem de listas fixas por segmento (indústria, tecnologia, varejo, saúde, serviços e um de reserva), com o segmento deduzido da ficha do produto. `atributosDe()` soma os deltas da dificuldade com `clamp(0,2)`.
+- `lib/banco.ts`: a dívida da US-002 foi paga — `PERSONAS_PADRAO` local virou `import { PERSONAS_IDS } from "./personas"`.
+- Verificado: 9 testes por `node --test` (catálogo; 7 personagens × 3 dificuldades × com e sem ficha gerando prompt não vazio; nenhum vazamento de nome nem de id de persona no contexto; as cinco regras invioláveis frase por frase; clamp nos extremos; 1 objeção no fácil e 3–4 no difícil com exigência de prova; objeções vindas da ficha e das de reserva; mesma semente = mesmo personagem; segmento deduzido do produto). Mais um teste de banco em `/tmp`: os 3 cenários antigos migram e nascem com as 7 personas. Lint, `tsc --noEmit`, build, `verificar-padrao`, `verificar-paleta` e `verificar-jargao` em 0.
+- História sem tela: nada a verificar em navegador (a persona aparece na interface a partir da US-009).
+- **Learnings for future iterations:**
+  - **`montarPersonagem` precisa de `semente` e quem chama deve passar o id da sessão.** A sessão grava só o `personaId`, então o personagem é remontado a cada turno da conversa (US-015) — sem semente o cliente trocaria de nome no meio da ligação. Sorteio determinístico por FNV-1a com um sal por campo.
+  - **O `contexto` é o único campo que o vendedor lê antes de conversar, então ele não pode citar o nome da persona.** "Cético", "Direto" e "Especialista" são palavras comuns: o motivo de cada persona ter aceitado a conversa foi escrito evitando os sete rótulos, e há teste que varre os sete contextos procurando nome e id.
+  - **Cargos neutros em gênero nas listas fixas** ("Gerente de…", "Head de…"): o nome é sorteado de outra lista, e "Diretor Camila Duarte" quebraria a ilusão na primeira fala.
+  - Um banco recém-criado **não** tem a tabela `cenarios` (ela nasce na primeira leitura de `lib/cenarios.ts`), então zero simulações de exemplo ali é o resultado correto, não defeito. Para exercitar a migração de cenários num teste, importar `lib/cenarios.ts` e chamar `listar()` **antes** do primeiro `banco()`.
+---

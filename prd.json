@@ -130,7 +130,7 @@
       ],
       "priority": 7,
       "notes": "Fase 2: Personas",
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-008",

@@ -17,3 +17,4 @@ publico/
 scripts/ralph/.last-branch
 scripts/ralph/archive/
 /.last-branch
+.ralph-session
