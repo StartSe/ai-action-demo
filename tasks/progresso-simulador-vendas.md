@@ -6,7 +6,7 @@ Uma história por sessão de trabalho, na ordem do PRD. Marque aqui ao terminar 
 ## Estado
 
 - [x] US-001 — App independente e os seis destinos
-- [ ] US-002 — Produto, Simulação, Sessão e Participante no banco
+- [x] US-002 — Produto, Simulação, Sessão e Participante no banco
 - [ ] US-003 — Biblioteca de produtos
 - [ ] US-004 — Ensinar o produto pela landing page
 - [ ] US-005 — Ensinar o produto por documentos e por texto
@@ -42,3 +42,5 @@ Uma história por sessão de trabalho, na ordem do PRD. Marque aqui ao terminar 
 (registre aqui toda premissa do PRD que não se confirmou no código)
 
 - **US-001 / `scripts/verificar-padrao.sh`.** A AC dizia "o modelo já existe desde o `whatsapp-atendente`, nenhuma mudança no script". Não existia: o script só conhecia `"padrao": "proprio"` (automl-pocket), que tira o app inteiro da conferência — forte demais, porque levaria junto a infraestrutura. A antiga lista `ARQUIVOS` foi separada em `INFRA` (conferida em todo app, sempre) e `CAMADA_PRODUTO` (`components/ui.tsx`, `components/setup.tsx`, `components/conta.tsx`, `lib/navegacao.ts`, `lib/ilustracao.ts`, `app/globals.css`), pulada só nos apps com `"independente": true`. Saída idêntica à anterior para os 16 outros apps.
+- **US-002 / `lib/vendedores.ts`.** A AC manda substituir por `lib/participantes.ts` e parar de ler a tabela antiga. Feito como casca fina (mesma assinatura, dados vindos de `participantes`) em vez de reescrever os sete chamadores no meio do PRD. **A US-026 apaga a casca** e leva os chamadores para `participantes` de uma vez.
+- **US-002 / personas.** A migração precisa dos ids das 7 personas antes da US-007 existir. Estão numa constante local em `lib/banco.ts` (`PERSONAS_PADRAO`), com comentário pedindo a troca por um import de `lib/personas.ts` **ao implementar a US-007**.

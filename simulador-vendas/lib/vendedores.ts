@@ -1,57 +1,36 @@
-// Time de vendas cadastrado no painel ("Cadastrar vendedor"), para escolher quem está treinando.
-// Usa o mesmo arquivo SQLite de lib/store.ts/lib/historico.ts, em uma tabela própria.
-import { DatabaseSync } from "node:sqlite";
-import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
+// Casca de compatibilidade por cima de lib/participantes.ts (US-002).
+//
+// "Vendedor" e "participante" viraram a mesma coisa quando o app passou a receber gente que abre um
+// link sem nunca ter sido cadastrada. A tabela `vendedores` **não é mais lida**: a migração copiou
+// cada linha dela para `participantes` mantendo o mesmo id (então todo `Conversa.vendedorId` já
+// gravado no histórico continua apontando para a pessoa certa) e a tabela antiga ficou onde estava,
+// sem DROP — a suíte nunca apaga dado de banco existente.
+//
+// Este arquivo existe para que as telas e rotas anteriores (app/page.tsx, /api/vendedores,
+// lib/analise.ts, lib/painel-equipe.ts, lib/crm.ts, lib/envio-analise.ts, lib/rotinas-do-app.ts,
+// app/simular/[token]) continuem funcionando sem alteração enquanto o PRD avança. A US-026, que
+// reescreve a tela de Equipe em cima de participantes, é quem apaga esta casca.
+import { criar as criarParticipante, listar as listarParticipantes, obter as obterParticipante, apagar as apagarParticipante } from "./participantes";
+import type { Participante } from "./participantes";
 import type { Vendedor } from "./types";
 
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
-let db: DatabaseSync | null = null;
-
-function abrir(): DatabaseSync {
-  if (db) return db;
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  db = new DatabaseSync(path.join(DATA_DIR, "app.sqlite"));
-  db.exec(`CREATE TABLE IF NOT EXISTS vendedores (
-    id TEXT PRIMARY KEY,
-    nome TEXT NOT NULL,
-    email TEXT,
-    equipe TEXT,
-    criadoEm TEXT NOT NULL
-  )`);
-  return db;
-}
-
-type Linha = { id: string; nome: string; email: string | null; equipe: string | null; criadoEm: string };
-
-function linhaParaVendedor(l: Linha): Vendedor {
-  return { id: l.id, nome: l.nome, email: l.email ?? undefined, equipe: l.equipe ?? undefined, criadoEm: l.criadoEm };
-}
-
-function gerarId(): string {
-  return crypto.randomBytes(9).toString("base64url");
+function participanteParaVendedor(p: Participante): Vendedor {
+  return { id: p.id, nome: p.nome, email: p.email, equipe: p.equipe, criadoEm: p.criadoEm };
 }
 
 export function criar({ nome, email, equipe }: { nome: string; email?: string; equipe?: string }): Vendedor {
-  const id = gerarId();
-  const criadoEm = new Date().toISOString();
-  abrir()
-    .prepare("INSERT INTO vendedores (id, nome, email, equipe, criadoEm) VALUES (?, ?, ?, ?, ?)")
-    .run(id, nome, email || null, equipe || null, criadoEm);
-  return { id, nome, email, equipe, criadoEm };
+  return participanteParaVendedor(criarParticipante({ nome, email, equipe, origem: "cadastro" }));
 }
 
 export function listar(limite = 100): Vendedor[] {
-  const linhas = abrir().prepare("SELECT * FROM vendedores ORDER BY nome ASC LIMIT ?").all(limite) as Linha[];
-  return linhas.map(linhaParaVendedor);
+  return listarParticipantes(limite).map(participanteParaVendedor);
 }
 
 export function obter(id: string): Vendedor | null {
-  const linha = abrir().prepare("SELECT * FROM vendedores WHERE id = ?").get(id) as Linha | undefined;
-  return linha ? linhaParaVendedor(linha) : null;
+  const p = obterParticipante(id);
+  return p ? participanteParaVendedor(p) : null;
 }
 
 export function apagar(id: string): void {
-  abrir().prepare("DELETE FROM vendedores WHERE id = ?").run(id);
+  apagarParticipante(id);
 }
