@@ -38,6 +38,18 @@ const MODOS_PERSONA: { id: ModoPersona; nome: string; linha: string }[] = [
   { id: "escolhidas", nome: "Escolher os perfis", linha: "O treino usa só os perfis de cliente que você marcar abaixo." },
 ];
 
+// As regras do treino (US-011). Tentativas e tempo são poucas opções fechadas: uma caixa de número
+// convidaria "30 tentativas" e "90 minutos", que não é treino nenhum. "Sem limite" é o valor `null`
+// que `lib/simulacoes.ts` grava — por isso a opção viaja como texto e é convertida na hora de enviar.
+const TENTATIVAS: { valor: string; rotulo: string }[] = [
+  { valor: "1", rotulo: "1 tentativa" },
+  { valor: "3", rotulo: "3 tentativas" },
+  { valor: "5", rotulo: "5 tentativas" },
+  { valor: "sem-limite", rotulo: "Sem limite" },
+];
+
+const DURACOES = [5, 10, 15];
+
 function IconeSimulacao() {
   return (
     <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -116,6 +128,19 @@ function Escolha<T extends string>({
   );
 }
 
+/** Uma regra de liga/desliga com a linha que explica o que muda para o time. */
+function Regra({ id, titulo, linha, marcado, onMudar }: { id: string; titulo: string; linha: string; marcado: boolean; onMudar: (v: boolean) => void }) {
+  return (
+    <label htmlFor={id} className="flex gap-2.5 cursor-pointer py-1.5">
+      <input id={id} type="checkbox" className="mt-[3px]" checked={marcado} onChange={(e) => onMudar(e.target.checked)} />
+      <span className="min-w-0">
+        <span className="block text-[13px] font-semibold">{titulo}</span>
+        <span className="block text-[12.5px] text-muted">{linha}</span>
+      </span>
+    </label>
+  );
+}
+
 export default function Page() {
   const { status, erro } = useStatus();
 
@@ -134,6 +159,11 @@ export default function Page() {
   const [dificuldade, setDificuldade] = useState<Dificuldade>("realista");
   const [modoPersona, setModoPersona] = useState<ModoPersona>("aleatoria");
   const [personas, setPersonas] = useState<string[]>(PERSONAS.map((p) => p.id));
+  const [tentativas, setTentativas] = useState("3");
+  const [mostrarFeedback, setMostrarFeedback] = useState(true);
+  const [permiteVoz, setPermiteVoz] = useState(true);
+  const [permiteTexto, setPermiteTexto] = useState(true);
+  const [duracaoMin, setDuracaoMin] = useState(10);
 
   // Busca inicial em forma de corrente (`fetch().then()`), nunca `await carregar()` dentro do efeito:
   // `react-hooks/set-state-in-effect` acusa chamada direta a função que mexe em estado no corpo dele.
@@ -160,6 +190,16 @@ export default function Page() {
   const criteriosPreenchidos = criterios.map((c) => c.trim()).filter(Boolean);
   const faltamCriterios = metodologia === "personalizada" && criteriosPreenchidos.length < CRITERIOS_MIN;
   const semPerfil = modoPersona === "escolhidas" && personas.length === 0;
+  // Sem voz e sem texto não sobra jeito de conversar: o treino abriria numa tela vazia. A tela impede
+  // antes de enviar, com a frase do que fazer; o 400 da rota é só rede de segurança.
+  const semJeitoDeTreinar = !permiteVoz && !permiteTexto;
+  // A confirmação do passo 3: o gestor manda o link sem voltar para conferir o que combinou.
+  const resumoDasRegras = [
+    tentativas === "sem-limite" ? "tentativas sem limite" : tentativas === "1" ? "1 tentativa por vendedor" : `${tentativas} tentativas por vendedor`,
+    `${duracaoMin} minutos de conversa`,
+    permiteVoz && permiteTexto ? "por voz ou por texto" : permiteVoz ? "só por voz" : "só por texto",
+    mostrarFeedback ? "com feedback para o vendedor" : "sem feedback para o vendedor",
+  ].join(" · ");
 
   function alternarPersona(id: string) {
     setPersonas((atuais) => (atuais.includes(id) ? atuais.filter((p) => p !== id) : [...atuais, id]));
@@ -170,7 +210,7 @@ export default function Page() {
   }
 
   async function criarTreino() {
-    if (criando || !produto || !nomeFinal.trim() || faltamCriterios || semPerfil) return;
+    if (criando || !produto || !nomeFinal.trim() || faltamCriterios || semPerfil || semJeitoDeTreinar) return;
     setCriando(true);
     setErroTela(null);
     try {
@@ -186,6 +226,11 @@ export default function Page() {
           dificuldade,
           modoPersona,
           personas: modoPersona === "escolhidas" ? personas : undefined,
+          maxTentativas: tentativas === "sem-limite" ? null : Number(tentativas),
+          mostrarFeedback,
+          permiteVoz,
+          permiteTexto,
+          duracaoMin,
         }),
       });
       if (!r.ok) throw r;
@@ -330,12 +375,63 @@ export default function Page() {
               </div>
             )}
 
+            <p className="text-[13px] font-semibold mb-2">Regras do treino</p>
+            <div className="card p-4 mb-4">
+              <div className="grid grid-cols-2 gap-x-5 max-md:grid-cols-1">
+                <Field label="Tentativas por vendedor" htmlFor="treino-tentativas" hint="Quantas vezes cada pessoa pode refazer a conversa.">
+                  <select id="treino-tentativas" className="input" value={tentativas} onChange={(e) => setTentativas(e.target.value)}>
+                    {TENTATIVAS.map((t) => (
+                      <option key={t.valor} value={t.valor}>{t.rotulo}</option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Tempo da conversa" htmlFor="treino-duracao" hint="A conversa termina sozinha quando o tempo acaba.">
+                  <select id="treino-duracao" className="input" value={duracaoMin} onChange={(e) => setDuracaoMin(Number(e.target.value))}>
+                    {DURACOES.map((d) => (
+                      <option key={d} value={d}>{`${d} minutos`}</option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+
+              <div className="flex flex-col gap-0.5 [&>*:first-child]:pt-0">
+                <Regra
+                  id="regra-feedback"
+                  titulo="Mostrar feedback ao finalizar"
+                  linha="Desligue quando a rodada for uma avaliação: você continua vendo o resultado, o vendedor não."
+                  marcado={mostrarFeedback}
+                  onMudar={setMostrarFeedback}
+                />
+                <Regra
+                  id="regra-voz"
+                  titulo="Permitir voz"
+                  linha="O vendedor fala com o cliente pelo microfone, como numa ligação."
+                  marcado={permiteVoz}
+                  onMudar={setPermiteVoz}
+                />
+                <Regra
+                  id="regra-texto"
+                  titulo="Permitir texto"
+                  linha="A saída de quem está sem microfone ou num lugar barulhento."
+                  marcado={permiteTexto}
+                  onMudar={setPermiteTexto}
+                />
+              </div>
+
+              {semJeitoDeTreinar && (
+                <div className="mt-3">
+                  <Aviso tom="warn">Deixe pelo menos um jeito de treinar: por voz ou por texto.</Aviso>
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-2.5 mt-6 max-md:flex-col-reverse">
               <button type="button" className="btn-ghost" onClick={() => setPasso(1)}>Voltar</button>
               <button
                 type="button"
                 className="btn-primary !w-auto max-md:!w-full"
-                disabled={criando || !nomeFinal.trim() || faltamCriterios || semPerfil}
+                disabled={criando || !nomeFinal.trim() || faltamCriterios || semPerfil || semJeitoDeTreinar}
                 onClick={criarTreino}
               >
                 {criando ? "Criando..." : "Criar treino e gerar o link"}
@@ -354,15 +450,21 @@ export default function Page() {
             <p className="font-mono text-[13px] break-all bg-bg border border-line rounded-field px-[13px] py-[11px] mb-3">{link}</p>
             <CopyButton texto={() => link} rotulo="Copiar link" />
 
-            <h3 className="font-bold text-[15px] mt-7 mb-2.5">Como funciona</h3>
-            <ol className="text-sm text-muted list-decimal pl-5 flex flex-col gap-1">
-              <li>O vendedor acessa o link.</li>
-              <li>Informa os dados dele.</li>
-              <li>Recebe um cliente virtual.</li>
-              <li>Realiza a venda.</li>
-              <li>Recebe o feedback.</li>
-              <li>O resultado aparece para você.</li>
-            </ol>
+            <p className="text-[12.5px] text-muted mt-2.5">{resumoDasRegras}</p>
+
+            {/* O que o gestor precisa ver é o link; os seis passos ficam a um clique, para quem vai
+                explicar o treino no grupo do time. */}
+            <details className="card p-4 mt-7">
+              <summary className="cursor-pointer text-[13px] font-semibold">Como funciona</summary>
+              <ol className="text-sm text-muted list-decimal pl-5 flex flex-col gap-1 mt-3.5">
+                <li>O vendedor acessa o link.</li>
+                <li>Informa os dados dele.</li>
+                <li>Recebe um cliente virtual.</li>
+                <li>Realiza a venda.</li>
+                <li>Recebe o feedback.</li>
+                <li>O resultado aparece para você.</li>
+              </ol>
+            </details>
 
             <div className="flex gap-4 flex-wrap mt-7">
               <Link href="/simulacoes" className="btn-link">Ver meus treinos</Link>
