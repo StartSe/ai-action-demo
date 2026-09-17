@@ -1,5 +1,6 @@
 "use client";
-// Tela de configuração inicial, gerada a partir de lib/integracoes.ts. Compartilhada pela suíte: copie sem alterar.
+// Tela de configuração inicial, gerada a partir de lib/integracoes.ts. PRÓPRIA deste app desde a US-001
+// (ver CLAUDE.md): não é mais cópia literal do pdi-time, e o que muda aqui não é replicado nos outros apps.
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { IlustracaoSegmento, MaisDetalhes, Topbar, useStatus } from "./ui";
@@ -164,7 +165,11 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
               </div>
             </footer>
 
-            <MaisDetalhes titulo="Para a equipe técnica">
+            {/* (US-007) Este bloco chamava-se "Para a equipe técnica" e foi renomeado: o cartão "Conectar o
+                WhatsApp", logo acima, passou a ter um bloco com esse nome, e dois iguais na mesma página
+                confundem. O conteúdo continua aqui porque é do app inteiro, não da conexão do número —
+                em especial o endereço público, que alimenta os links de e-mail e Slack das rotinas. */}
+            <MaisDetalhes titulo="Ajustes do servidor">
               <p className="text-muted text-[13px]">Variáveis de ambiente, quando existirem, têm prioridade sobre o que é salvo aqui.</p>
               <p className="text-muted text-[13px]">Neste plano de hospedagem, o histórico pode se perder ao reiniciar.</p>
               {dados && <CampoEnderecoPublico status={dados.enderecoPublico} aoSalvar={carregar} />}

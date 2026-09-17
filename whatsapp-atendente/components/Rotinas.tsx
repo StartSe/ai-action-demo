@@ -198,7 +198,7 @@ export function Rotinas() {
 
       {enderecoDesconhecido && (
         <div className="mb-4">
-          <Aviso tom="warn">Endereço público desconhecido: o aviso da próxima rotina sai sem o link do resultado. Abra o app pelo endereço publicado uma vez, ou informe em &quot;Para a equipe técnica&quot;.</Aviso>
+          <Aviso tom="warn">Endereço público desconhecido: o aviso da próxima rotina sai sem o link do resultado. Abra o app pelo endereço publicado uma vez, ou informe em &quot;Ajustes do servidor&quot;.</Aviso>
         </div>
       )}
 

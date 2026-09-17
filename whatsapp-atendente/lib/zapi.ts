@@ -19,7 +19,7 @@
 // A documentação atual não tem mais `restore-session` (o nome citado na PRD desta rodada): o endereço
 // equivalente hoje é `restart`, e é ele que `reiniciarSessao()` chama.
 import { randomBytes } from "node:crypto";
-import { ErroWhatsApp } from "./erro-whatsapp";
+import { ErroWhatsApp, type CodigoErroWhatsApp } from "./erro-whatsapp";
 import { getConfig, setConfig } from "./store";
 
 /** Base da z-api. A variável só existe para os testes locais apontarem para uma z-api falsa. */
@@ -151,8 +151,12 @@ async function chamar(caminho: string, opcoes: { metodo?: "GET" | "POST" | "PUT"
   return dados;
 }
 
-/** Estado da instância: se o número está ligado à z-api e se o celular da empresa está com internet. */
-export async function statusInstancia(): Promise<{ conectado: boolean; celularConectado: boolean; erro?: string }> {
+/**
+ * Estado da instância: se o número está ligado à z-api e se o celular da empresa está com internet.
+ * O `codigo` acompanha o `erro` porque quem desenha a tela precisa separar "ainda não escanearam o
+ * QR Code" (`sem_sessao`, espera normal) de "as credenciais estão erradas" (`credenciais`, problema).
+ */
+export async function statusInstancia(): Promise<{ conectado: boolean; celularConectado: boolean; erro?: string; codigo?: CodigoErroWhatsApp }> {
   try {
     const dados = await chamar("status");
     const conectado = dados.connected === true;
@@ -162,10 +166,10 @@ export async function statusInstancia(): Promise<{ conectado: boolean; celularCo
   } catch (err) {
     if (err instanceof ErroWhatsApp) {
       if (err.codigo === "sem_sessao") gravarConexao({ conectado: false, em: new Date().toISOString() });
-      return { conectado: false, celularConectado: false, erro: err.message };
+      return { conectado: false, celularConectado: false, erro: err.message, codigo: err.codigo };
     }
     console.error("Falha inesperada ao consultar a z-api:", err);
-    return { conectado: false, celularConectado: false, erro: "A z-api não está respondendo agora." };
+    return { conectado: false, celularConectado: false, erro: "A z-api não está respondendo agora.", codigo: "servico" };
   }
 }
 
