@@ -12,7 +12,7 @@ import { obter as obterSala, expirou } from "@/lib/salas";
 import { obter as obterSimulacao } from "@/lib/simulacoes";
 import { obter as obterProduto } from "@/lib/produtos";
 import { obter as obterParticipante } from "@/lib/participantes";
-import { melhorSessaoDe, tentativasDe } from "@/lib/sessoes";
+import { emAndamento, emPreparacao, melhorSessaoDe, tentativasDe } from "@/lib/sessoes";
 import { lerSessaoVendedor } from "@/lib/sessao-vendedor";
 import { nomeDoProvedor, provedoresDisponiveis } from "@/lib/entrar-vendedor";
 import { obter as obterVendedor } from "@/lib/vendedores";
@@ -23,6 +23,7 @@ import { ELEVENLABS_AGENTE } from "@/lib/integracoes";
 import { SalaSimulacao } from "@/components/SalaSimulacao";
 import { numero } from "@/lib/formato";
 import { Identificacao } from "./Identificacao";
+import { Preparacao } from "./Preparacao";
 
 export const dynamic = "force-dynamic";
 
@@ -89,8 +90,9 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
   const sessaoVendedor = lerSessaoVendedor((await headers()).get("cookie"));
   const participante = sessaoVendedor ? obterParticipante(sessaoVendedor.participanteId) : null;
 
+  const produto = obterProduto(simulacao.produtoId);
+
   if (!participante || !confirmou) {
-    const produto = obterProduto(simulacao.produtoId);
     return (
       <Identificacao
         codigo={token}
@@ -106,10 +108,15 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
     );
   }
 
+  // A conversa que esta pessoa já abriu e ainda não terminou. Ela é lida **antes** do limite de
+  // tentativas porque já foi contada quando nasceu: sem isto, um treino de uma tentativa só barraria
+  // o vendedor na própria vez, entre a preparação e o "Começar conversa".
+  const aberta = emPreparacao(token, participante.id) ?? emAndamento(token, participante.id);
+
   // Limite de tentativas (US-011): quem já usou todas não abre outra conversa — vê quantas fez e o
   // feedback da melhor delas, que é o que ele voltou aqui para reler.
   const tentativas = tentativasDe(token, participante.id);
-  if (simulacao.maxTentativas !== null && tentativas >= simulacao.maxTentativas) {
+  if (!aberta && simulacao.maxTentativas !== null && tentativas >= simulacao.maxTentativas) {
     const melhor = melhorSessaoDe(token, participante.id);
     return (
       <Cartao>
@@ -133,20 +140,26 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
     );
   }
 
-  // PENDÊNCIA DE SEQUÊNCIA (PRD): a preparação ("Seu cliente") é a US-014 e a conversa com o cliente
-  // simulado é a US-015. Enquanto elas não chegam, um link migrado abre a sala de hoje (já identificada,
-  // o que é a melhoria desta história) e um treino criado no modelo novo mostra o que vem a seguir.
+  // Link migrado das salas antigas: a conversa continua sendo a de hoje, com o cenário que já estava
+  // gravado nele. Nada de preparação aqui — o personagem desta história nasce da ficha do produto e do
+  // tipo de cliente, e apresentar um cliente para entregar a conversa de outro seria pior que não
+  // apresentar nenhum. A sala nova (US-015) unifica os dois caminhos.
   if (sala) {
     return <SalaSimulacao codigo={token} marca={MARCA} nome={NOME_APP} cenario={cenario} vendedorId={participante.id} comVoz={comVoz} agentId={agentId || undefined} />;
   }
 
-  return (
-    <Cartao>
-      <h1 className="text-[22px] leading-[1.2] font-extrabold tracking-[-0.02em] mb-2">{`Tudo pronto, ${participante.nome.split(" ")[0]}`}</h1>
-      <p className="text-muted mb-4">
-        {`Você entrou em "${simulacao.nome}". O próximo passo é conhecer o cliente que vai atender e começar a conversa.`}
-      </p>
-      <p className="text-muted">Esta parte do treino ainda está sendo preparada. Volte por este mesmo link em instantes.</p>
-    </Cartao>
-  );
+  // PENDÊNCIA DE SEQUÊNCIA (PRD): a conversa por voz é a US-015 e vai ocupar exatamente este lugar —
+  // a sessão já está aberta, com o cliente sorteado e o cronômetro correndo.
+  if (aberta?.status === "em_andamento") {
+    return (
+      <Cartao>
+        <h1 className="text-[22px] leading-[1.2] font-extrabold tracking-[-0.02em] mb-2">Sua conversa está aberta</h1>
+        <p className="text-muted">
+          {`O cliente já está esperando você em "${simulacao.nome}". Esta parte do treino ainda está sendo preparada: volte por este mesmo link em instantes.`}
+        </p>
+      </Cartao>
+    );
+  }
+
+  return <Preparacao codigo={token} marca={MARCA} nome={NOME_APP} titulo={simulacao.nome} produto={produto?.nome ?? "Treino de vendas"} />;
 }

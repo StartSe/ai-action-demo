@@ -136,6 +136,30 @@ export function abrir({
   return { id, simulacaoCodigo, participanteId, personaId: escolhida, modo, status: "preparando", criadoEm };
 }
 
+/**
+ * A sessão que este participante abriu nesta simulação e ainda não começou (US-014).
+ *
+ * Existe para que recarregar a tela de preparação **não** abra uma conversa nova: sem isto, cada
+ * atualização de página gastaria uma tentativa do vendedor e sortearia outro cliente, e o efeito de
+ * montagem do React em desenvolvimento (que roda duas vezes) criaria sozinho duas sessões.
+ */
+export function emPreparacao(simulacaoCodigo: string, participanteId: string): Sessao | null {
+  marcarAbandonadas();
+  const linha = banco()
+    .prepare("SELECT * FROM sessoes_treino WHERE simulacaoCodigo = ? AND participanteId = ? AND status = 'preparando' ORDER BY criadoEm DESC LIMIT 1")
+    .get(simulacaoCodigo, participanteId) as LinhaSessao | undefined;
+  return linha ? linhaParaSessao(linha) : null;
+}
+
+/** A conversa deste participante que já começou e ainda não foi encerrada — a retomada é a US-017. */
+export function emAndamento(simulacaoCodigo: string, participanteId: string): Sessao | null {
+  marcarAbandonadas();
+  const linha = banco()
+    .prepare("SELECT * FROM sessoes_treino WHERE simulacaoCodigo = ? AND participanteId = ? AND status = 'em_andamento' ORDER BY criadoEm DESC LIMIT 1")
+    .get(simulacaoCodigo, participanteId) as LinhaSessao | undefined;
+  return linha ? linhaParaSessao(linha) : null;
+}
+
 export function obter(id: string): Sessao | null {
   marcarAbandonadas();
   const linha = banco().prepare("SELECT * FROM sessoes_treino WHERE id = ?").get(id) as LinhaSessao | undefined;
