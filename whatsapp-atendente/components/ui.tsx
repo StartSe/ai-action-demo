@@ -56,6 +56,12 @@ function iniciaisDe(nome: string) {
   return nome.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 }
 
+/** Número de pendências ao lado de um item do cabeçalho (ver lib/navegacao.ts): some quando é zero. */
+function ContadorNavegacao({ valor }: { valor?: number }) {
+  if (!valor) return null;
+  return <span className="inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-white text-[11px] font-bold leading-none">{valor}</span>;
+}
+
 /** Cabeçalho da suíte: marca à esquerda, navegação ao centro (desktop) e chip de status + sino + conta à direita; no celular a navegação e a conta viram um botão "Menu" com uma folha. */
 export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notificacoes, navegacao = NAVEGACAO }: { marca: string; nome: string; area: string; status: Status | null; erro?: boolean; resumo?: string; usuario?: UsuarioTopbar | null; notificacoes?: NotificacaoTopbar[]; navegacao?: ItemNavegacao[] }) {
   const pathname = usePathname();
@@ -105,8 +111,9 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
 
         <nav className="hidden md:flex items-center gap-6 flex-1 justify-center min-w-0">
           {navegacao.map((item) => (
-            <Link key={item.href} href={item.href} className={`text-[14px] font-semibold pb-1 border-b-2 ${ativo(item.href) ? "text-accent border-accent" : "text-ink-2 border-transparent hover:text-ink"}`}>
+            <Link key={item.href} href={item.href} className={`inline-flex items-center gap-1.5 text-[14px] font-semibold pb-1 border-b-2 ${ativo(item.href) ? "text-accent border-accent" : "text-ink-2 border-transparent hover:text-ink"}`}>
               {item.rotulo}
+              <ContadorNavegacao valor={item.contador} />
             </Link>
           ))}
         </nav>
@@ -199,7 +206,10 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19" /></svg>
             </button>
             {navegacao.map((item) => (
-              <Link key={item.href} href={item.href} className={`px-3 py-2.5 rounded-md font-semibold ${ativo(item.href) ? "text-accent bg-accent-soft" : "text-ink"}`} onClick={() => setMenuAberto(false)}>{item.rotulo}</Link>
+              <Link key={item.href} href={item.href} className={`flex items-center gap-1.5 px-3 py-2.5 rounded-md font-semibold ${ativo(item.href) ? "text-accent bg-accent-soft" : "text-ink"}`} onClick={() => setMenuAberto(false)}>
+                {item.rotulo}
+                <ContadorNavegacao valor={item.contador} />
+              </Link>
             ))}
             {usuario && (
               <div className="mt-4 pt-4 border-t border-line">
@@ -329,6 +339,19 @@ export function Row({ children }: { children: ReactNode }) {
 
 export function Stage({ children }: { children: ReactNode }) {
   return <section id="stage" className="min-h-[520px] max-md:min-h-0">{children}</section>;
+}
+
+/** Balão de conversa com três pontos de "digitando": a ilustração de vazio deste app (Início e Conversas). */
+export function IlustracaoConversa() {
+  return (
+    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="7" y="9" width="50" height="34" rx="8" />
+      <path d="M20 43l-4 10 12-10" />
+      <circle cx="22" cy="26" r="1.8" fill="currentColor" stroke="none" />
+      <circle cx="32" cy="26" r="1.8" fill="currentColor" stroke="none" />
+      <circle cx="42" cy="26" r="1.8" fill="currentColor" stroke="none" />
+    </svg>
+  );
 }
 
 /** Ilustração (SVG inline, 64 px, traço 1,5 px) no lugar de um glifo genérico; cada app entrega a sua. */

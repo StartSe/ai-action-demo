@@ -10,7 +10,7 @@
  */
 import { conversasExemplo } from "./demo";
 import { abrirBanco, getConfig, setConfig } from "./store";
-import type { CanalOrigem, Conversa, MensagemChat, PapelMensagem, StatusConversa } from "./types";
+import type { CanalOrigem, Conversa, MensagemChat, PapelMensagem, Periodo, StatusConversa } from "./types";
 
 /** Quantas mensagens da conversa vão para a IA como memória de curto prazo. */
 export const MAX_HISTORICO = 20;
@@ -190,9 +190,24 @@ type LinhaLista = LinhaConversa & {
   ultima_resposta: string | null;
 };
 
+/**
+ * Momento a partir do qual as conversas entram na lista; `null` em "tudo". "Hoje" é desde a meia-noite
+ * (e não 24 h para trás), que é o que alguém entende ao escolher o período pela manhã.
+ */
+export function inicioDoPeriodo(periodo: Periodo): Date | null {
+  if (periodo === "tudo") return null;
+  if (periodo === "hoje") {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  const dias = periodo === "7d" ? 7 : 30;
+  return new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
+}
+
 export interface FiltroConversas {
-  /** Quantos dias para trás entram na lista; sem ele, todas as conversas. */
-  periodo?: number;
+  /** A conversa entra na lista quando a última mensagem dela é desta data em diante; sem ele, todas. */
+  desde?: Date | null;
   /** Status já calculado na leitura (uma conversa `ia` parada há mais de 24 h aparece em "resolvida"). */
   status?: StatusConversa;
   /** Casa com o número, o nome do contato ou o texto de qualquer mensagem da conversa. */
@@ -200,12 +215,12 @@ export interface FiltroConversas {
 }
 
 /** As conversas da mais recente para a mais antiga, com a última pergunta e a última resposta de cada. */
-export function listarConversas({ periodo, status, busca }: FiltroConversas = {}): Conversa[] {
+export function listarConversas({ desde, status, busca }: FiltroConversas = {}): Conversa[] {
   const condicoes: string[] = [];
   const valores: (string | number)[] = [];
-  if (periodo) {
+  if (desde) {
     condicoes.push("c.atualizado_em >= ?");
-    valores.push(paraTextoDeBanco(new Date(Date.now() - periodo * 24 * 60 * 60 * 1000)));
+    valores.push(paraTextoDeBanco(desde));
   }
   const termo = busca?.trim().toLowerCase();
   if (termo) {

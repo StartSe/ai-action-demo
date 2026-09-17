@@ -8,20 +8,7 @@
 // preservando o resto da barra de endereço (`&corrigir=1`, por exemplo).
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Empty, Topbar, useStatus } from "@/components/ui";
-
-/** Balão de conversa (estilo WhatsApp) com três pontos de "digitando", no lugar de um glifo genérico. */
-function IlustracaoConversa() {
-  return (
-    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="7" y="9" width="50" height="34" rx="8" />
-      <path d="M20 43l-4 10 12-10" />
-      <circle cx="22" cy="26" r="1.8" fill="currentColor" stroke="none" />
-      <circle cx="32" cy="26" r="1.8" fill="currentColor" stroke="none" />
-      <circle cx="42" cy="26" r="1.8" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
+import { Empty, IlustracaoConversa, Topbar, useStatus } from "@/components/ui";
 
 export default function Page() {
   const { status, erro } = useStatus();

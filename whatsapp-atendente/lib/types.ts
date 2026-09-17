@@ -8,6 +8,9 @@ export type CanalOrigem = "simulador" | "whatsapp" | "mcp" | "exemplo";
 /** Em que ponto do atendimento a conversa está (lib/conversas.ts); os rótulos ficam em lib/rotulos.ts. */
 export type StatusConversa = "ia" | "atencao" | "humano" | "resolvida";
 
+/** Janela de tempo dos filtros de Conversas e Relatórios; os rótulos ficam em lib/rotulos.ts. */
+export type Periodo = "hoje" | "7d" | "30d" | "tudo";
+
 /** Quem escreveu a mensagem: o cliente, o atendente virtual ou a pessoa que assumiu a conversa. */
 export type PapelMensagem = "cliente" | "atendente" | "humano";
 

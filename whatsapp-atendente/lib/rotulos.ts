@@ -5,7 +5,7 @@
  * — o `Record` completo faz o TypeScript cobrar o rótulo — em vez de escrever um ternário na tela.
  */
 import { formatarTelefone } from "./telefone";
-import type { CanalOrigem, Objetivo, StatusConversa, Tom } from "./types";
+import type { CanalOrigem, Objetivo, Periodo, StatusConversa, Tom } from "./types";
 
 const ROTULOS_ORIGEM: Record<CanalOrigem, string> = {
   simulador: "Simulador",
@@ -27,6 +27,47 @@ const ROTULOS_STATUS: Record<StatusConversa, string> = {
 
 export function rotuloStatus(status: StatusConversa): string {
   return ROTULOS_STATUS[status] ?? ROTULOS_STATUS.ia;
+}
+
+/** Os quatro status, na ordem do atendimento. */
+export const STATUS: StatusConversa[] = ["ia", "atencao", "humano", "resolvida"];
+
+/** O status escrito na barra de endereço; `undefined` (sem filtro) para ausente ou desconhecido. */
+export function lerStatus(valor: string | null | undefined): StatusConversa | undefined {
+  return STATUS.includes(valor as StatusConversa) ? (valor as StatusConversa) : undefined;
+}
+
+/** Classe do chip de cada status (globals.css). O azul de "Em atendimento humano" é próprio deste app. */
+const CLASSES_STATUS: Record<StatusConversa, string> = {
+  ia: "chip-positivo",
+  atencao: "chip-media",
+  humano: "chip-humano",
+  resolvida: "chip-cinza",
+};
+
+export function classeStatus(status: StatusConversa): string {
+  return CLASSES_STATUS[status] ?? CLASSES_STATUS.ia;
+}
+
+/** Os quatro períodos, na ordem em que aparecem no seletor; "7d" é o padrão das telas. */
+export const PERIODOS: Periodo[] = ["hoje", "7d", "30d", "tudo"];
+
+export const PERIODO_PADRAO: Periodo = "7d";
+
+const ROTULOS_PERIODO: Record<Periodo, string> = {
+  hoje: "Hoje",
+  "7d": "Últimos 7 dias",
+  "30d": "Últimos 30 dias",
+  tudo: "Tudo",
+};
+
+export function rotuloPeriodo(periodo: Periodo): string {
+  return ROTULOS_PERIODO[periodo] ?? ROTULOS_PERIODO[PERIODO_PADRAO];
+}
+
+/** O período escrito na barra de endereço, já conferido; o padrão cobre ausente e desconhecido. */
+export function lerPeriodo(valor: string | null | undefined): Periodo {
+  return PERIODOS.includes(valor as Periodo) ? (valor as Periodo) : PERIODO_PADRAO;
 }
 
 /** "simulador"/"assistente-ia" são números fixos internos: nunca mostrar o valor cru em minúsculas. */
