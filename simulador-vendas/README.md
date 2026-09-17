@@ -79,7 +79,8 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `DATA_DIR` | Pasta do banco SQLite. Padrão `./data` (Docker: `/app/data`). |
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
-| `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
+| `OPENROUTER_MODEL` | Alternativa ao setup. Modelo usado no dia a dia do app. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
+| `OPENROUTER_MODEL_AVALIACAO` | Alternativa ao setup. Modelo usado só na avaliação da conversa; sem ele vale o de `OPENROUTER_MODEL`. |
 | `ELEVENLABS_API_KEY` | Opcional. Chave da ElevenLabs para a sala de treino por voz. Obtenha em https://elevenlabs.io/app/settings/api-keys. |
 | `ELEVENLABS_AGENT_ID` | Opcional. Agente conversacional que faz o papel do cliente. Crie em https://elevenlabs.io/app/conversational-ai; em `/setup` a lista é carregada da própria conta. |
 | `ELEVENLABS_WEBHOOK_SECRET` | Opcional. Segredo de verificação do aviso de pós-conversa (Configurações › Webhooks na ElevenLabs), usado para validar a assinatura em `app/webhook/elevenlabs/route.ts`. |

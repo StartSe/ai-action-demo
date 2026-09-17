@@ -60,7 +60,7 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `DATA_DIR` | Pasta do banco SQLite. Padrão `./data` (Docker: `/app/data`). |
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
-| `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
+| `OPENROUTER_MODEL` | Alternativa ao setup. Modelo usado no dia a dia do app. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
 | `MCP_TAREFAS_URL` / `MCP_TAREFAS_CODIGO` | Alternativa ao setup: quadro de tarefas (servidor MCP, ex.: o Agente de quadro desta suíte) usado por "Buscar entregas no quadro do time". Copie do cartão "Usar dentro do seu assistente" do quadro. |
 | `NOTIFICACOES_CANAL` / `NOTIFICACOES_DESTINO` / `NOTIFICACOES_RESEND_API_KEY` | Alternativa ao setup: por onde chegam os lembretes de check-in (30/60/90 dias) e o aviso de autoavaliação recebida. Chave do Resend em https://resend.com/api-keys. |
 | `GOOGLE_CLIENT_ID_APP` / `GOOGLE_CLIENT_SECRET_APP` | Credenciais OAuth da suíte (não da pessoa) para o botão "Conectar meu Gmail" em Notificações. Embutidas na imagem publicada pela equipe técnica; sem elas o botão não aparece. |

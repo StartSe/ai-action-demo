@@ -15,7 +15,7 @@
 // Duas portas chegam até aqui e as duas têm de produzir o mesmo resultado: a conversa que termina na
 // própria tela (US-015, nível 2) e a que chega de fora pelo aviso de pós-conversa do agente
 // conversacional (US-016, nível 1). A terceira é o "Tentar de novo" do gestor, quando a IA falhou.
-import { aiEnabled, askJSON, meta, type Meta } from "./ai";
+import { aiEnabled, askJSON, meta, modelName, type Meta } from "./ai";
 import { salvarResultado } from "./analise";
 import { avaliacaoDemo, esperar } from "./demo";
 import { enviarFeedbackDaSessao } from "./envio-analise";
@@ -374,20 +374,27 @@ export async function avaliarSessao(sessaoId: string): Promise<SessaoAvaliada | 
 
   let bruta: AvaliacaoBruta;
   let demo: boolean;
+  /** O modelo que de fato respondeu, para a proveniência mostrada na tela não mentir. */
+  let modelo: string | undefined;
   if (!aiEnabled()) {
     await esperar(1200);
     bruta = avaliacaoDemo(criterios.map((c) => c.nome), conversa.transcricao);
     demo = true;
   } else {
+    // A avaliação é a tarefa que vira nota: usa o modelo que o gestor escolheu para avaliar em
+    // /setup, que pode ser mais capaz (e mais caro) que o do cliente simulado, porque acontece uma
+    // vez por conversa e não a cada fala. Em "Automático" é o mesmo modelo da simulação.
+    modelo = modelName("avaliacao");
     bruta = await askJSON<AvaliacaoBruta>({
       system: SYSTEM_AVALIACAO,
       prompt: montarPrompt({ criterios, contexto, ficha: fichaDoProduto(produto?.nome ?? "o produto do treino", produto?.conhecimento), falas: conversa.transcricao }),
+      model: modelo,
     });
     demo = false;
   }
 
   const avaliacao = montarAvaliacao({ criterios, bruta, falas: conversa.transcricao, contexto });
-  const metaGerada = meta({ demo, insumo: INSUMO });
+  const metaGerada = meta({ demo, insumo: INSUMO, model: modelo });
   const titulo = `Conversa de ${contexto.vendedor} · ${simulacao.nome}`;
 
   const id = salvarResultado({ tipo: "sessao", titulo, resumo: avaliacao.resumo, conversa, saida: avaliacao, meta: metaGerada });

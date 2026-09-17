@@ -382,7 +382,7 @@
       ],
       "priority": 21,
       "notes": "Fase 5: avaliação e feedback",
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-022",
