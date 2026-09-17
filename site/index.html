@@ -275,16 +275,17 @@
   const quantos = POR_EXTENSO[total] || String(total);
   const Quantos = quantos.charAt(0).toUpperCase() + quantos.slice(1);
   $("#titulo").textContent = `${Quantos} apps de IA para o dia a dia de uma empresa.`;
-  // O botão da suíte só publica os gratuitos (lista appsNaSuite do catálogo); apps com plano pago
-  // têm só o botão próprio e são citados por nome.
+  // O botão da suíte publica a lista appsNaSuite do catálogo (hoje, todos). Apps com plano pago
+  // são citados por nome: o serviço de hospedagem pede um cartão só por causa deles.
   const naSuite = new Set(dados.appsNaSuite || dados.apps.map((a) => a.id));
-  const pagos = dados.apps.filter((a) => !naSuite.has(a.id));
+  const ePago = (app) => (app.plano || "free") !== "free";
+  const pagos = dados.apps.filter((a) => naSuite.has(a.id) && ePago(a));
   const nSuite = naSuite.size;
   const quantosSuite = POR_EXTENSO[nSuite] || String(nSuite);
-  const ePago = (app) => (app.plano || "free") !== "free";
-  $("#tituloSuite").textContent = pagos.length ? `Publicar os ${quantosSuite} gratuitos de uma vez` : `Publicar os ${quantosSuite} de uma vez`;
+  const nGratis = nSuite - pagos.length;
+  $("#tituloSuite").textContent = `Publicar os ${quantosSuite} de uma vez`;
   $("#apoioSuite").textContent = `Um único clique cria os ${quantosSuite} apps na sua conta. Depois, abra cada um e conecte a IA em Configurações.` +
-    (pagos.length ? ` ${pagos.map((a) => a.nome).join(", ")} fica de fora porque exige plano pago; publique pelo botão do próprio app.` : "");
+    (pagos.length ? ` ${pagos.map((a) => `${a.nome} exige plano pago (${a.plano})`).join("; ")}; os outros ${POR_EXTENSO[nGratis] || nGratis} são gratuitos.` : "");
   $("#rotuloSuite").textContent = `Publicar os ${quantosSuite} apps`;
   if (pagos.length) {
     const aviso = $("#avisoPago");

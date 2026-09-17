@@ -1,5 +1,5 @@
-# Blueprint único da suíte IA para Executivos: publica os 17 apps gratuitos de uma vez.
-# Ficam de fora, por exigirem plano pago: AutoML (branch deploy-automl-pocket).
+# Blueprint único da suíte IA para Executivos: publica os 18 apps de uma vez.
+# AutoML exige o plano standard (pago); os outros 17 são gratuitos.
 # Cada app também tem seu próprio Blueprint (branch deploy-<app> em https://github.com/StartSe/ai-action-app-deploy).
 # Imagens públicas publicadas pelo GitHub Actions em ghcr.io/startse/<app>:latest.
 # Nenhuma chave é necessária aqui: após publicar, abra /setup em cada app e conecte a IA.
@@ -293,3 +293,22 @@ services:
     #   name: dados
     #   mountPath: /app/data
     #   sizeGB: 1
+
+  - type: web
+    name: automl-pocket
+    runtime: image
+    image:
+      url: ghcr.io/startse/automl-pocket:latest
+    plan: standard
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: AUTH_SECRET
+        generateValue: true
+    # Planilhas, modelos e a conta ficam em /app/data e sobrevivem a deploys.
+    disk:
+      name: dados
+      mountPath: /app/data
+      sizeGB: 1
