@@ -127,6 +127,7 @@ export function Assistente() {
   const [tratandoSugestao, setTratandoSugestao] = useState<string | null>(null);
   const [avisoTeste, setAvisoTeste] = useState<ErroLido | null>(null);
   const carregouBase = useRef(false);
+  const rolouParaConhecimento = useRef(false);
 
   // Passo 3: o estado da conexão do número vem do próprio cartão (ele já consulta de 5 em 5 segundos),
   // para o cartão "Tudo pronto" aparecer no instante em que o celular da empresa lê o código.
@@ -347,6 +348,17 @@ export function Assistente() {
     return () => window.removeEventListener("popstate", aoNavegar);
   }, []);
 
+  // `/assistente#conhecimento`, o atalho "Adicionar conhecimento" do Início: o navegador procura a
+  // âncora antes de a configuração chegar, quando o campo ainda não existe na tela. Quem rola até ele
+  // e o põe em foco é este efeito, uma única vez, depois da carga.
+  useEffect(() => {
+    if (carregando || passo !== 1 || rolouParaConhecimento.current) return;
+    if (location.hash !== "#conhecimento") return;
+    rolouParaConhecimento.current = true;
+    document.getElementById("conhecimento")?.scrollIntoView();
+    (document.getElementById("baseConhecimento") as HTMLTextAreaElement | null)?.focus({ preventScroll: true });
+  }, [carregando, passo]);
+
   // A base aprovada e as sugestões da equipe só aparecem no passo 2: são buscadas quando a pessoa
   // chega nele, uma única vez, e não na abertura da tela (quem está no passo 1 nunca as vê).
   useEffect(() => {
@@ -559,6 +571,10 @@ export function Assistente() {
                   </Field>
                 )}
 
+                {/* `#conhecimento` é a âncora do atalho "Adicionar conhecimento" do Início (US-016): a
+                    página é um Client Component e o passo 1 só existe depois da carga, então quem rola
+                    até aqui é o efeito de `hash` abaixo, não o navegador. */}
+                <span id="conhecimento" className="block scroll-mt-24" />
                 <Field label="O que ele precisa saber?" htmlFor="baseConhecimento" hint="O atendente não inventa nada fora daqui.">
                   <textarea
                     id="baseConhecimento"

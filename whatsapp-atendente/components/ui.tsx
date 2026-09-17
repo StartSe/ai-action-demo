@@ -594,13 +594,41 @@ export function SeloIA({ demo }: { demo: boolean }) {
 
 const CORES_TOM: Record<string, string> = { ok: "text-ok", warn: "text-warn", danger: "text-danger", neutro: "text-accent-ink" };
 
-/** Dado que decide, exibido antes do resumo: um número grande com rótulo e interpretação. */
-export function Destaque({ valor, rotulo, interpretacao, tom = "neutro" }: { valor: string; rotulo: string; interpretacao?: string; tom?: "ok" | "warn" | "danger" | "neutro" }) {
+/** Quanto o indicador andou em relação ao período anterior de mesmo tamanho (ver lib/metricas.ts). */
+export type VariacaoDestaque = {
+  /** Percentual já calculado; `null` quando o período anterior não teve nada com que comparar. */
+  percentual: number | null;
+  /** Contra o que a comparação é feita, escrito por extenso: "em relação a ontem". */
+  contexto: string;
+  /** Para tempo de resposta, cair é bom: inverte a cor sem inverter o sinal da seta. */
+  cairEhBom?: boolean;
+};
+
+function Variacao({ percentual, contexto, cairEhBom = false }: VariacaoDestaque) {
+  if (percentual === null) return <div className="text-[12.5px] text-muted mt-2">Sem base de comparação</div>;
+  if (percentual === 0) return <div className="text-[12.5px] text-muted mt-2">Sem mudança {contexto}</div>;
+  const subiu = percentual > 0;
+  const bom = cairEhBom ? !subiu : subiu;
   return (
-    <div className="mb-6">
+    <div className="text-[12.5px] text-muted mt-2">
+      <span className={`font-bold ${bom ? "text-ok" : "text-danger"}`}>
+        {subiu ? "↑" : "↓"} {Math.abs(percentual)}%
+      </span>{" "}
+      {contexto}
+    </div>
+  );
+}
+
+/** Dado que decide, exibido antes do resumo: um número grande com rótulo e interpretação. Com `variacao`,
+ * ganha embaixo a comparação com o período anterior (o indicador de Início e Relatórios); `semMargem`
+ * tira o espaço de baixo para ele caber dentro de um cartão. */
+export function Destaque({ valor, rotulo, interpretacao, tom = "neutro", variacao, semMargem = false }: { valor: string; rotulo: string; interpretacao?: string; tom?: "ok" | "warn" | "danger" | "neutro"; variacao?: VariacaoDestaque; semMargem?: boolean }) {
+  return (
+    <div className={semMargem ? "" : "mb-6"}>
       <div className={`text-[40px] max-sm:text-[32px] leading-none font-extrabold tracking-[-0.02em] text-balance ${CORES_TOM[tom]}`}>{valor}</div>
       <div className="text-[13px] font-semibold text-muted mt-2">{rotulo}</div>
       {interpretacao && <div className="text-sm text-muted mt-1">{interpretacao}</div>}
+      {variacao && <Variacao {...variacao} />}
     </div>
   );
 }
@@ -671,14 +699,14 @@ function ResumoCelula({ children, linhas = 2, aberto: abertoControlado, onEstour
   );
 }
 
-/** Um cartão do `DataTable` no celular: resumo (quando estoura) e detalhes atrás de um único "Ver mais" — nunca dois botões separados no mesmo cartão. */
-function CartaoLinha<T>({ linha, titulo, resumo, chip, semPapel, detalhes }: { linha: T; titulo?: Coluna<T>; resumo?: Coluna<T>; chip?: Coluna<T>; semPapel: Coluna<T>[]; detalhes: Coluna<T>[] }) {
+/** Um cartão do `DataTable` no celular: resumo (quando estoura) e detalhes atrás de um único "Ver mais" — nunca dois botões separados no mesmo cartão. Com `onAbrir`, o cartão inteiro leva ao destino da linha (o "Ver mais" continua só abrindo o cartão). */
+function CartaoLinha<T>({ linha, titulo, resumo, chip, semPapel, detalhes, onAbrir }: { linha: T; titulo?: Coluna<T>; resumo?: Coluna<T>; chip?: Coluna<T>; semPapel: Coluna<T>[]; detalhes: Coluna<T>[]; onAbrir?: () => void }) {
   const [aberto, setAberto] = useState(false);
   const [resumoEstourou, setResumoEstourou] = useState(false);
   const temMais = resumoEstourou || detalhes.length > 0;
 
   return (
-    <div className="px-3.5 py-2.5 flex flex-col gap-1.5">
+    <div className={`px-3.5 py-2.5 flex flex-col gap-1.5 ${onAbrir ? "cursor-pointer active:bg-bg" : ""}`} onClick={onAbrir}>
       {(titulo || chip) && (
         <div className="flex items-start justify-between gap-2">
           {titulo && <div className="font-bold">{titulo.render(linha)}</div>}
@@ -707,7 +735,7 @@ function CartaoLinha<T>({ linha, titulo, resumo, chip, semPapel, detalhes }: { l
         </div>
       )}
       {temMais && (
-        <button type="button" className="text-[13px] font-bold text-accent-ink text-left" onClick={() => setAberto((v) => !v)}>
+        <button type="button" className="text-[13px] font-bold text-accent-ink text-left" onClick={(e) => { e.stopPropagation(); setAberto((v) => !v); }}>
           {aberto ? "Ver menos" : "Ver mais"}
         </button>
       )}
@@ -715,8 +743,13 @@ function CartaoLinha<T>({ linha, titulo, resumo, chip, semPapel, detalhes }: { l
   );
 }
 
-/** Tabela responsiva: linhas no desktop, cartões no celular (título + resumo + chip visíveis, detalhes atrás de "Ver mais"). */
-export function DataTable<T>({ colunas, linhas }: { colunas: Coluna<T>[]; linhas: T[] }) {
+/**
+ * Tabela responsiva: linhas no desktop, cartões no celular (título + resumo + chip visíveis, detalhes
+ * atrás de "Ver mais"). Com `link`, a linha inteira leva ao destino dela — o clique é do mouse; o
+ * caminho de teclado é o próprio link que a coluna de título desenha, e não a linha.
+ */
+export function DataTable<T>({ colunas, linhas, link }: { colunas: Coluna<T>[]; linhas: T[]; link?: (linha: T) => string }) {
+  const router = useRouter();
   const titulo = colunas.find((c) => c.papel === "titulo");
   const resumo = colunas.find((c) => c.papel === "resumo");
   const chip = colunas.find((c) => c.papel === "chip");
@@ -731,7 +764,7 @@ export function DataTable<T>({ colunas, linhas }: { colunas: Coluna<T>[]; linhas
         </thead>
         <tbody>
           {linhas.map((l, i) => (
-            <tr key={i} className="[&:last-child>td]:border-b-0">
+            <tr key={i} onClick={link ? () => router.push(link(l)) : undefined} className={`[&:last-child>td]:border-b-0 ${link ? "cursor-pointer hover:bg-bg" : ""}`}>
               {colunas.map((c) => <td key={c.chave} style={c.largura ? { width: c.largura } : undefined} className={`px-3.5 py-[11px] border-b border-line align-top ${c.classe ?? ""}`}>{c.papel === "resumo" ? <ResumoCelula linhas={c.linhas}>{c.render(l)}</ResumoCelula> : c.render(l)}</td>)}
             </tr>
           ))}
@@ -739,7 +772,7 @@ export function DataTable<T>({ colunas, linhas }: { colunas: Coluna<T>[]; linhas
       </table>
       <div className="md:hidden card shadow-none divide-y divide-line text-sm">
         {linhas.map((l, i) => (
-          <CartaoLinha key={i} linha={l} titulo={titulo} resumo={resumo} chip={chip} semPapel={semPapel} detalhes={detalhes} />
+          <CartaoLinha key={i} linha={l} titulo={titulo} resumo={resumo} chip={chip} semPapel={semPapel} detalhes={detalhes} onAbrir={link ? () => router.push(link(l)) : undefined} />
         ))}
       </div>
     </>

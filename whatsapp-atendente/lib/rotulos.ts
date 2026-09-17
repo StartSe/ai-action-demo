@@ -4,6 +4,7 @@
  * Components. Ao somar um valor novo a `CanalOrigem` ou a `StatusConversa`, acrescente-o ao mapa daqui
  * — o `Record` completo faz o TypeScript cobrar o rótulo — em vez de escrever um ternário na tela.
  */
+import { numero } from "./formato";
 import { formatarTelefone } from "./telefone";
 import type { CanalOrigem, Objetivo, Periodo, PeriodoMetricas, StatusConversa, Tom } from "./types";
 
@@ -131,4 +132,62 @@ const ROTULOS_TOM: Record<Tom, Escolha> = {
 
 export function rotuloTom(tom: Tom): Escolha {
   return ROTULOS_TOM[tom] ?? ROTULOS_TOM.profissional;
+}
+
+// --- Datas e durações como a tela de Início e a de Relatórios as escrevem ---------------------------
+// Ficam aqui, e não em lib/formato.ts, porque lib/formato.ts é igual nos 17 apps da suíte: um texto
+// próprio deste app não deve fazê-lo divergir (ver PADRAO.md, "Apps independentes").
+
+/** "Quarta-feira, 17 de setembro" — a data por extenso do cabeçalho do Início, com a inicial maiúscula. */
+export function dataPorExtenso(d: Date = new Date()): string {
+  const texto = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long" }).format(d);
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+/** "Bom dia" até o meio-dia, "Boa tarde" até as 18h, "Boa noite" depois. */
+export function saudacao(d: Date = new Date()): string {
+  const hora = d.getHours();
+  if (hora < 12) return "Bom dia";
+  if (hora < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+/** Quantos dias inteiros separam a data de hoje (0 = hoje, 1 = ontem), pela virada da meia-noite. */
+function diasAtras(d: Date): number {
+  const meiaNoite = (base: Date) => new Date(base.getFullYear(), base.getMonth(), base.getDate()).getTime();
+  return Math.round((meiaNoite(new Date()) - meiaNoite(d)) / 86_400_000);
+}
+
+/**
+ * Há quanto tempo foi, curto o bastante para uma coluna de tabela: "Agora", "Há 3 min", "Há 1 hora",
+ * "Ontem", "Há 4 dias" e, mais para trás, a data. Os minutos vêm do relógio (uma mensagem das 23h50
+ * lida às 0h10 é "Há 20 min", não "Ontem") e os dias, da virada da meia-noite.
+ */
+export function haQuantoTempo(iso: string): string {
+  const data = new Date(iso);
+  if (Number.isNaN(data.getTime())) return "";
+  const minutos = Math.floor((Date.now() - data.getTime()) / 60_000);
+  if (minutos < 1) return "Agora";
+  if (minutos < 60) return `Há ${minutos} min`;
+  const dias = diasAtras(data);
+  if (dias === 0) {
+    const horas = Math.floor(minutos / 60);
+    return `Há ${horas} ${horas === 1 ? "hora" : "horas"}`;
+  }
+  if (dias === 1) return "Ontem";
+  if (dias < 7) return `Há ${dias} dias`;
+  return data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
+/**
+ * Tempo médio de resposta como indicador: segundos até um minuto, minutos daí para cima. Sem nenhuma
+ * resposta medida no período, o indicador mostra um travessão em vez de "0 s" — não houve resposta,
+ * e não uma resposta instantânea.
+ */
+export function tempoDeResposta(ms: number): string {
+  if (!ms || ms <= 0) return "—";
+  const segundos = Math.round(ms / 1000);
+  if (segundos < 60) return `${segundos} s`;
+  const minutos = segundos / 60;
+  return `${numero(minutos, minutos < 10 ? 1 : 0)} min`;
 }
