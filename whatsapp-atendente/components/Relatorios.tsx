@@ -12,13 +12,14 @@
 // que `scripts/verificar-jargao.mjs` varre (ver CLAUDE.md).
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { AvisoConversasExemplo } from "./AvisoExemplo";
 import { Avatar } from "./ContatoVisual";
 import { MenuExportar, RelatorioDiario } from "./ExportarRelatorio";
 import { GraficoLinhas } from "./GraficoLinhas";
 import { Indicadores, numerosEmTexto } from "./Indicadores";
-import { Aviso, ErrorBox, lerErro, Topbar, useStatus, type ErroLido } from "./ui";
+import { ErrorBox, lerErro, Topbar, useStatus, type ErroLido } from "./ui";
 import { ASSUNTO_OUTROS } from "@/lib/assuntos";
-import { ACAO_CONECTAR_NUMERO, AVISO_CONVERSAS_EXEMPLO, soConversasDeExemplo } from "@/lib/demo";
+import { soConversasDeExemplo } from "@/lib/demo";
 import { numero as formatarNumero } from "@/lib/formato";
 import { navegacaoComContador } from "@/lib/navegacao";
 import { contextoComparacao, horaOuDia, lerPeriodoMetricas, PERIODOS_METRICAS, PERIODO_PADRAO, rotuloContato, rotuloPeriodo } from "@/lib/rotulos";
@@ -230,7 +231,13 @@ export function Relatorios() {
 
         {soConversasDeExemplo(conversas ?? []) && (
           <div className="mb-4">
-            <Aviso acao={ACAO_CONECTAR_NUMERO}>{AVISO_CONVERSAS_EXEMPLO}</Aviso>
+            <AvisoConversasExemplo
+              conectado={status?.integrations?.whatsapp === true}
+              aoApagar={() => {
+                setConversas([]);
+                carregar();
+              }}
+            />
           </div>
         )}
 

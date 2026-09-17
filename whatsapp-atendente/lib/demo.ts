@@ -224,8 +224,20 @@ Perguntas frequentes:
 
 export const AVISO_CONVERSAS_EXEMPLO = "Você está vendo conversas de exemplo. Conecte o número da empresa para ver as reais.";
 
+/**
+ * Mesmo aviso depois que o número já está conectado: a demonstração continua na tela até o primeiro
+ * cliente escrever (é a primeira mensagem real que apaga os exemplos, ver semearExemplosSeVazio), e sem
+ * esta frase o app parecia não ter saído da demonstração mesmo com o número ligado.
+ */
+export const AVISO_CONVERSAS_EXEMPLO_CONECTADO =
+  "O número da empresa já está conectado. Estas conversas ainda são de exemplo: elas somem sozinhas quando o primeiro cliente escrever, ou você pode apagá-las agora.";
+
 /** Ação dos avisos de modo demonstração: onde a pessoa conecta o número da empresa. */
 export const ACAO_CONECTAR_NUMERO = { rotulo: "Conectar o número da empresa", url: "/setup#whatsapp" };
+
+/** Rótulo e pergunta de confirmação de quem apaga a demonstração pela própria tela (o mesmo que o link do cartão do WhatsApp em Configurações faz). */
+export const ROTULO_APAGAR_EXEMPLOS = "Apagar as conversas de exemplo";
+export const CONFIRMAR_APAGAR_EXEMPLOS = "Apagar as conversas de exemplo? Elas não voltam, e as telas ficam vazias até o primeiro cliente escrever.";
 
 export interface MensagemExemplo {
   papel: PapelMensagem;

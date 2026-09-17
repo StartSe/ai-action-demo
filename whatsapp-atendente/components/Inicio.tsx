@@ -16,13 +16,14 @@
 // atalho nenhum: sem configuração salva o app já abre com a clínica de exemplo, e as nove conversas de
 // exemplo nascem na primeira leitura das rotas. `captura=1` existe para desligar rolagem automática, e
 // esta tela não tem nenhuma — ela abre inteira no topo.
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AvisoConversasExemplo } from "./AvisoExemplo";
 import { Avatar } from "./ContatoVisual";
 import { Indicadores } from "./Indicadores";
-import { Aviso, DataTable, IlustracaoSegmento, Topbar, useStatus, type Coluna } from "./ui";
-import { ACAO_CONECTAR_NUMERO, AVISO_CONVERSAS_EXEMPLO, soConversasDeExemplo } from "@/lib/demo";
+import { DataTable, IlustracaoSegmento, Topbar, useStatus, type Coluna } from "./ui";
+import { soConversasDeExemplo } from "@/lib/demo";
 import { navegacaoComContador } from "@/lib/navegacao";
 import { classeStatus, dataPorExtenso, haQuantoTempo, rotuloContato, rotuloStatus, saudacao } from "@/lib/rotulos";
 import type { Config, Conversa, Metricas } from "@/lib/types";
@@ -172,12 +173,16 @@ export function Inicio() {
   // As três consultas saem juntas e cada parte da tela aparece quando a sua chega: um número que
   // demore não segura a tabela, e uma falha de rede deixa a tela com o que já foi lido em vez de
   // quebrar o painel inteiro (o erro de servidor indisponível já aparece no cabeçalho).
-  useEffect(() => {
-    if (!mostrar) return;
+  const carregar = useCallback(() => {
     fetch("/api/config").then((r) => r.json()).then(setConfig).catch(() => {});
     fetch("/api/metricas?periodo=hoje").then((r) => r.json()).then(setMetricas).catch(() => {});
     fetch("/api/conversas?periodo=tudo").then((r) => r.json()).then((d) => setConversas(d.itens ?? [])).catch(() => setConversas([]));
-  }, [mostrar]);
+  }, []);
+
+  useEffect(() => {
+    if (!mostrar) return;
+    carregar();
+  }, [mostrar, carregar]);
 
   const conectado = status?.integrations?.whatsapp === true;
   const atencao = metricas?.atencao.length ?? 0;
@@ -238,7 +243,7 @@ export function Inicio() {
 
                 {soConversasDeExemplo(conversas ?? []) && (
                   <div className="mb-4">
-                    <Aviso acao={ACAO_CONECTAR_NUMERO}>{AVISO_CONVERSAS_EXEMPLO}</Aviso>
+                    <AvisoConversasExemplo conectado={conectado} aoApagar={carregar} />
                   </div>
                 )}
 

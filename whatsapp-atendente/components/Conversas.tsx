@@ -13,10 +13,11 @@
 // carregou, então esta tela não consulta nada a mais para desenhá-lo.
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AvisoConversasExemplo } from "./AvisoExemplo";
 import { ConversaAberta } from "./ConversaAberta";
 import { Avatar, DesenhoOrigem } from "./ContatoVisual";
-import { Aviso, Empty, ErrorBox, IlustracaoConversa, Topbar, lerErro, useStatus, type ErroLido } from "./ui";
-import { ACAO_CONECTAR_NUMERO, AVISO_CONVERSAS_EXEMPLO, soConversasDeExemplo } from "@/lib/demo";
+import { Empty, ErrorBox, IlustracaoConversa, Topbar, lerErro, useStatus, type ErroLido } from "./ui";
+import { soConversasDeExemplo } from "@/lib/demo";
 import { navegacaoComContador } from "@/lib/navegacao";
 import { PERIODOS, PERIODO_PADRAO, classeStatus, horaOuDia, lerPeriodo, rotuloContato, rotuloPeriodo, rotuloStatus } from "@/lib/rotulos";
 import type { Conversa, Periodo } from "@/lib/types";
@@ -253,7 +254,14 @@ export function Conversas() {
 
         {soConversasDeExemplo(lista) && (
           <div className="mb-4">
-            <Aviso acao={ACAO_CONECTAR_NUMERO}>{AVISO_CONVERSAS_EXEMPLO}</Aviso>
+            {/* Apagar a demonstração fecha a conversa aberta: ela é uma das que acabaram de sair. */}
+            <AvisoConversasExemplo
+              conectado={status?.integrations?.whatsapp === true}
+              aoApagar={() => {
+                irPara({ numero: null });
+                carregar();
+              }}
+            />
           </div>
         )}
 
