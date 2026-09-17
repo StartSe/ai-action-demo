@@ -11,12 +11,15 @@ import Link from "next/link";
 import { use, useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Aviso, Chip, Dropzone, ErrorBox, Field, Section, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
+import { CONHECIMENTO_VAZIO, FichaProduto, type Conhecimento } from "@/components/FichaProduto";
+import type { Meta } from "@/lib/ai";
 
 type Produto = {
   id: string;
   nome: string;
   descricao?: string;
   categoria?: string;
+  conhecimento?: Conhecimento;
   status: "rascunho" | "pronto";
   exemplo: boolean;
   criadoEm: string;
@@ -61,6 +64,12 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const [tituloTexto, setTituloTexto] = useState("");
   const [salvandoTexto, setSalvandoTexto] = useState(false);
 
+  const [ficha, setFicha] = useState<Conhecimento>(CONHECIMENTO_VAZIO);
+  const [metaIA, setMetaIA] = useState<Meta | null>(null);
+  const [gerandoFicha, setGerandoFicha] = useState(false);
+  const [salvandoFicha, setSalvandoFicha] = useState(false);
+  const [erroFicha, setErroFicha] = useState<ErroLido | null>(null);
+
   // Busca em forma de corrente (`fetch().then()`) em vez de `await carregar()`: a regra
   // `react-hooks/set-state-in-effect` do eslint-plugin-react-hooks@7 acusa qualquer chamada direta a
   // uma função que mexe em estado dentro do corpo de um efeito, mesmo sendo assíncrona. Mesmo padrão
@@ -74,6 +83,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
         setNome(corpo.produto.nome);
         setCategoria(corpo.produto.categoria ?? "");
         setDescricao(corpo.produto.descricao ?? "");
+        if (corpo.produto.conhecimento) setFicha({ ...CONHECIMENTO_VAZIO, ...corpo.produto.conhecimento });
         setCarregando(false);
       })
       .catch(async (e) => {
@@ -180,6 +190,44 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
       setErroMaterial(await lerErro(e));
     } finally {
       setSalvandoTexto(false);
+    }
+  }
+
+  async function gerarFicha() {
+    if (gerandoFicha) return;
+    setGerandoFicha(true);
+    setErroFicha(null);
+    try {
+      const r = await fetch(`/api/produtos/${id}/conhecimento`, { method: "POST" });
+      if (!r.ok) throw r;
+      const corpo = await r.json();
+      setFicha({ ...CONHECIMENTO_VAZIO, ...corpo.conhecimento });
+      setMetaIA(corpo.meta);
+    } catch (e) {
+      setErroFicha(await lerErro(e));
+    } finally {
+      setGerandoFicha(false);
+    }
+  }
+
+  async function salvarFicha() {
+    if (salvandoFicha) return;
+    setSalvandoFicha(true);
+    setErroFicha(null);
+    try {
+      const r = await fetch(`/api/produtos/${id}/conhecimento`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conhecimento: ficha }),
+      });
+      if (!r.ok) throw r;
+      const corpo = await r.json();
+      setProduto(corpo.produto);
+      if (corpo.produto?.conhecimento) setFicha({ ...CONHECIMENTO_VAZIO, ...corpo.produto.conhecimento });
+    } catch (e) {
+      setErroFicha(await lerErro(e));
+    } finally {
+      setSalvandoFicha(false);
     }
   }
 
@@ -340,6 +388,19 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                 </div>
               )}
             </Section>
+
+            <div className="mt-6">
+              <FichaProduto
+                conhecimento={ficha}
+                metaIA={metaIA}
+                gerando={gerandoFicha}
+                salvando={salvandoFicha}
+                erro={erroFicha}
+                onMudar={setFicha}
+                onGerar={gerarFicha}
+                onSalvar={salvarFicha}
+              />
+            </div>
 
             <div className="mt-8 pt-5 border-t border-line flex items-center gap-4 flex-wrap">
               <Link href={`/simulacoes/nova?produto=${produto.id}`} className="btn-link">Criar treino com este produto</Link>
