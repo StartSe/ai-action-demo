@@ -259,6 +259,7 @@
       "acento": "#3e68cc",
       "porta": 3013,
       "captura": "capturas/simulador-vendas.png",
+      "independente": true,
       "capacidades": [
         "artefato",
         "mcp",

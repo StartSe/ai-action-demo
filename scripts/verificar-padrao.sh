@@ -11,6 +11,15 @@
 # custos-ia, app/api/setup/oauth/trello no agente-kanban) são acréscimos próprios do app e não contam.
 # Divergências que um app precisa ter de propósito ficam registradas, com o motivo, em
 # scripts/padrao-excecoes.json ({ "<app>": { "<caminho>": "<motivo>" } }) e são listadas como aceitas.
+#
+# Dois níveis de comparação, porque nem todo arquivo compartilhado é infraestrutura:
+#   INFRA           conta, banco, IA, MCP, rotinas, formulários, proxy, assets. Vale para TODO app,
+#                   sempre, inclusive os independentes: é o que mantém a suíte consertável em um lugar só.
+#   CAMADA_PRODUTO  a camada visual e de navegação (components/ui.tsx, components/setup.tsx,
+#                   components/conta.tsx, lib/navegacao.ts, lib/ilustracao.ts, app/globals.css). Um app
+#                   com "independente": true no catalogo.json passa a ser dono dela — telas próprias
+#                   demais para caber no molde de tela única do pdi-time — e estes arquivos deixam de
+#                   ser comparados NELE (continuam comparados em todos os outros).
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
@@ -23,6 +32,13 @@ if [ "${1:-}" != "" ]; then
   APPS=("$1")
 fi
 
+# Apps com "independente": true no catálogo: donos da própria camada visual (ver o cabeçalho).
+INDEPENDENTES=" $(node -e 'console.log(require(process.argv[1]).apps.filter((a) => a.independente).map((a) => a.id).join(" "))' "$RAIZ/catalogo.json") "
+
+e_independente() {
+  case "$INDEPENDENTES" in *" $1 "*) return 0 ;; *) return 1 ;; esac
+}
+
 # Lista de arquivos/pastas comparados entre pdi-time e cada app (pastas são percorridas arquivo a
 # arquivo). Estenda aqui quando um novo arquivo compartilhado nascer em pdi-time e precisar ser
 # replicado sem alteração nos outros. app/api/setup cobre também app/api/setup/oauth/mcp/** (início e
@@ -30,16 +46,11 @@ fi
 # app/api/f/[token]/route.ts fica de fora de propósito: por design (ver o comentário no topo do
 # próprio arquivo) cada app pode precisar importar seu próprio módulo ali, então ele nunca é
 # idêntico entre todos os apps — só lib/formularios.ts e app/f/** (a UI pública) são compartilhados.
-ARQUIVOS=(
-  "components/ui.tsx"
-  "components/setup.tsx"
-  "components/conta.tsx"
+INFRA=(
   "lib/ai.ts"
   "lib/store.ts"
   "lib/conta.ts"
   "lib/conta-comum.ts"
-  "lib/navegacao.ts"
-  "lib/ilustracao.ts"
   "lib/modelos.ts"
   "lib/setup-comum.ts"
   "lib/historico.ts"
@@ -57,10 +68,19 @@ ARQUIVOS=(
   "app/api/status"
   "app/api/conta"
   "app/api/historico"
-  "app/globals.css"
   "proxy.ts"
   "public/ilustracoes/icones"
   "eslint.config.mjs"
+)
+
+# A camada visual e de navegação: comparada em todo app, menos nos independentes (ver o cabeçalho).
+CAMADA_PRODUTO=(
+  "components/ui.tsx"
+  "components/setup.tsx"
+  "components/conta.tsx"
+  "lib/navegacao.ts"
+  "lib/ilustracao.ts"
+  "app/globals.css"
 )
 
 # Estrutura que todo app precisa ter, mas cujo conteúdo é próprio de cada um (renderiza o domínio do
@@ -150,10 +170,16 @@ divergiu=0
 for app in "${APPS[@]}"; do
   echo "== $app =="
   algum=0
-  for relativo in "${ARQUIVOS[@]}"; do
+  comparados=("${INFRA[@]}")
+  if e_independente "$app"; then
+    echo "  independente: camada visual própria (components/ui.tsx, components/setup.tsx, components/conta.tsx, lib/navegacao.ts, lib/ilustracao.ts, app/globals.css não são comparados); INFRA e ESTRUTURA conferidas normalmente"
+  else
+    comparados+=("${CAMADA_PRODUTO[@]}")
+  fi
+  for relativo in "${comparados[@]}"; do
     origem="$RAIZ/$FONTE/$relativo"
     if [ ! -e "$origem" ]; then
-      echo "  não existe em $FONTE (corrija a lista ARQUIVOS): $relativo"
+      echo "  não existe em $FONTE (corrija a lista INFRA/CAMADA_PRODUTO): $relativo"
       divergiu=1
       algum=1
       continue
