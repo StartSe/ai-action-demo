@@ -1,10 +1,12 @@
 "use client";
-// Resultados (US-022 em diante): o painel por simulação. Nasce aqui na US-001 como destino real do
-// cabeçalho e já é o lugar de onde se chega ao histórico — que saiu da navegação nesta história.
+// Resultados: a lista dos treinos que já têm conversa, com a porta para o painel de cada um
+// (US-022). É também o lugar de onde se chega ao histórico — que saiu da navegação na US-001.
 //
 // Desde a US-018 é também onde as **avaliações pendentes** aparecem: conversa que terminou e cuja
 // avaliação a IA não conseguiu entregar. A conversa está gravada; "Tentar de novo" roda o avaliador
-// sobre ela. Quando o painel por simulação chegar, esta lista se muda para lá.
+// sobre ela. Ela continua aqui, e não dentro do painel de um treino: uma avaliação que não ficou pronta
+// é uma pendência do gestor, não um número do treino — e ele não tem por que adivinhar em qual dos
+// treinos ela caiu para encontrá-la.
 //
 // E desde a US-020, os **feedbacks que não chegaram por e-mail**. As duas listas estão aqui pelo mesmo
 // motivo: falharam longe de quem pode consertá-las. O vendedor leu o feedback na tela e seguiu em
@@ -144,6 +146,81 @@ function EnviosQueFalharam() {
   );
 }
 
+type TreinoComResultado = {
+  codigo: string;
+  nome: string;
+  produtoNome: string;
+  participantes: number;
+  sessoes: number;
+  notaMedia: number | null;
+  ultimaSessao: string | null;
+  criadoEm: string;
+};
+
+/** "3 sessões" / "1 sessão": plural resolvido aqui, não no meio do JSX. */
+function contagem(n: number, singular: string, plural: string) {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
+/**
+ * Os treinos que já têm conversa — a porta de entrada para o painel de cada um (US-022).
+ *
+ * A ordem é por movimento (a conversa mais recente primeiro), não por data de criação: o gestor volta
+ * aqui para ver o treino que o time está usando esta semana, que raramente é o último que ele criou.
+ * Treino sem nenhuma conversa fica de fora: ele não tem resultado nenhum para mostrar, e o lugar de
+ * cuidar dele (copiar o link, pausar, encerrar) é a tela de Simulações.
+ */
+function TreinosComResultado() {
+  const [itens, setItens] = useState<TreinoComResultado[] | null>(null);
+
+  useEffect(() => {
+    fetch("/api/simulacoes")
+      .then((r) => (r.ok ? r.json() : { itens: [] }))
+      .then((c: { itens?: TreinoComResultado[] }) => setItens(c.itens ?? []))
+      .catch(() => setItens([]));
+  }, []);
+
+  if (itens === null) return <p className="text-muted text-sm">Carregando...</p>;
+
+  const comResultado = itens
+    .filter((s) => s.sessoes > 0)
+    .sort((a, b) => (b.ultimaSessao ?? b.criadoEm).localeCompare(a.ultimaSessao ?? a.criadoEm));
+
+  if (comResultado.length === 0) {
+    return (
+      <Empty
+        ilustracao={<IconeResultados />}
+        titulo="Nenhum treino tem conversa ainda"
+        descricao="Assim que alguém do time abrir o link de um treino e conversar, o painel dele aparece aqui: nota do time, evolução e onde ele trava."
+        acaoSecundaria={{ rotulo: "Ver meus treinos", url: "/simulacoes" }}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      {comResultado.map((s) => (
+        <Item key={s.codigo}>
+          <div className="flex items-center justify-between gap-4 max-md:flex-wrap">
+            <div className="min-w-0">
+              <div className="font-bold truncate">{s.nome}</div>
+              <div className="text-muted text-[13px] truncate">
+                {`${s.produtoNome} · ${contagem(s.sessoes, "sessão", "sessões")} · ${contagem(s.participantes, "vendedor", "vendedores")} · ${
+                  s.notaMedia === null ? "sem nota ainda" : `nota média ${s.notaMedia.toFixed(1).replace(".", ",")}`
+                }`}
+              </div>
+              {s.ultimaSessao && <div className="text-muted text-[13px] mt-1">{`Última conversa em ${data(s.ultimaSessao)}`}</div>}
+            </div>
+            <Link className="btn-ghost !w-auto text-[13px] shrink-0" href={`/resultados/${s.codigo}`}>
+              Abrir painel
+            </Link>
+          </div>
+        </Item>
+      ))}
+    </div>
+  );
+}
+
 export default function Page() {
   const { status, erro } = useStatus();
 
@@ -158,12 +235,10 @@ export default function Page() {
         <Pendentes />
         <EnviosQueFalharam />
 
-        <Empty
-          ilustracao={<IconeResultados />}
-          titulo="Ainda em construção"
-          descricao="Aqui vai ficar o painel de cada treino: nota do time, evolução e onde ele trava. Por enquanto, os resultados já gerados ficam no histórico."
-          acaoSecundaria={{ rotulo: "Abrir o histórico", url: "/historico" }}
-        />
+        <section className="mb-7">
+          <h2 className="section-title">Treinos com conversa</h2>
+          <TreinosComResultado />
+        </section>
 
         <p className="text-muted text-[13px] mt-4">
           Tudo o que você já gerou continua em <Link href="/historico" className="btn-link">Histórico</Link>.

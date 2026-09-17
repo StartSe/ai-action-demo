@@ -53,6 +53,7 @@ export async function GET(req: Request) {
     produtoNome: nomes.get(s.produtoId) ?? "Produto apagado",
     participantes: resumo[s.codigo]?.participantes ?? 0,
     sessoes: resumo[s.codigo]?.sessoes ?? 0,
+    ultimaSessao: resumo[s.codigo]?.ultimaSessao ?? null,
     notaMedia: notas[s.codigo]?.nota ?? null,
     url: `${base}/simular/${s.codigo}`,
   }));

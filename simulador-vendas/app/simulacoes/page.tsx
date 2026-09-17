@@ -272,7 +272,7 @@ export default function Page() {
                 </p>
 
                 <div className="flex items-center gap-4 flex-wrap">
-                  <Link href={`/resultados?simulacao=${s.codigo}`} className="btn-link">Ver resultados</Link>
+                  <Link href={`/resultados/${s.codigo}`} className="btn-link">Ver resultados</Link>
                   <MenuAcoes
                     rotulo={`Mais ações do treino ${s.nome}`}
                     itens={[

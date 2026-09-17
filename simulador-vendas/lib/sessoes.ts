@@ -356,12 +356,22 @@ export function pendentesDeAvaliacao(limite = 50): Sessao[] {
   return linhas.map(linhaParaSessao);
 }
 
-/** Resumo por simulação para as listas do gestor, sem uma consulta por cartão. */
-export function resumoPorSimulacao(): Record<string, { sessoes: number; participantes: number }> {
+/**
+ * Resumo por simulação para as listas do gestor, sem uma consulta por cartão.
+ *
+ * `ultimaSessao` existe para `/resultados` (US-022) ordenar os treinos por movimento e não por data de
+ * criação: o gestor volta ao que o time está usando esta semana, que raramente é o último que ele criou.
+ */
+export function resumoPorSimulacao(): Record<string, { sessoes: number; participantes: number; ultimaSessao: string | null }> {
   const linhas = banco()
-    .prepare("SELECT simulacaoCodigo, COUNT(*) AS sessoes, COUNT(DISTINCT participanteId) AS participantes FROM sessoes_treino GROUP BY simulacaoCodigo")
-    .all() as { simulacaoCodigo: string; sessoes: number; participantes: number }[];
-  return Object.fromEntries(linhas.map((l) => [l.simulacaoCodigo, { sessoes: l.sessoes, participantes: l.participantes }]));
+    .prepare(
+      `SELECT simulacaoCodigo, COUNT(*) AS sessoes, COUNT(DISTINCT participanteId) AS participantes, MAX(criadoEm) AS ultimaSessao
+         FROM sessoes_treino GROUP BY simulacaoCodigo`,
+    )
+    .all() as { simulacaoCodigo: string; sessoes: number; participantes: number; ultimaSessao: string | null }[];
+  return Object.fromEntries(
+    linhas.map((l) => [l.simulacaoCodigo, { sessoes: l.sessoes, participantes: l.participantes, ultimaSessao: l.ultimaSessao }]),
+  );
 }
 
 /**
@@ -488,4 +498,33 @@ export function historicoDe(simulacaoCodigo: string, participanteId: string): Se
     )
     .all(simulacaoCodigo, participanteId) as (LinhaSessao & { saida: string | null })[];
   return linhas.map((l) => ({ ...linhaParaSessao(l), nota: l.saida ? notaDoResultado(l.saida) : null }));
+}
+
+/**
+ * As conversas já avaliadas desta simulação, com a saída crua do resultado — é o insumo do painel do
+ * gestor (US-022).
+ *
+ * Devolve a saída como texto, sem interpretá-la, pelo mesmo motivo de `notaDoResultado` existir aqui:
+ * este módulo é o que sabe falar com o banco, e quem sabe o **formato** da avaliação é
+ * `lib/avaliacao.ts`. Interpretar aqui criaria uma dependência circular (a avaliação já lê as sessões)
+ * e espalharia o formato por dois arquivos.
+ *
+ * Mesma junção em SQL de `notaMediaPorSimulacao`: uma consulta, não uma leitura por sessão avaliada —
+ * um treino de trinta vendedores com três tentativas cada seriam noventa consultas por carregamento.
+ */
+export function avaliacoesDaSimulacao(simulacaoCodigo: string): { sessao: Sessao; saida: string }[] {
+  const d = banco();
+  const existe = d.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'resultados'").get();
+  if (!existe) return [];
+
+  const linhas = d
+    .prepare(
+      `SELECT s.*, r.saida AS saida
+         FROM sessoes_treino s
+         JOIN resultados r ON r.id = s.resultadoId
+        WHERE s.simulacaoCodigo = ? AND s.resultadoId IS NOT NULL
+        ORDER BY s.criadoEm ASC`,
+    )
+    .all(simulacaoCodigo) as (LinhaSessao & { saida: string })[];
+  return linhas.map((l) => ({ sessao: linhaParaSessao(l), saida: l.saida }));
 }
