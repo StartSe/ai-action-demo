@@ -18,7 +18,7 @@ import { Avatar, DesenhoOrigem } from "./ContatoVisual";
 import { Aviso, Empty, ErrorBox, IlustracaoConversa, Topbar, lerErro, useStatus, type ErroLido } from "./ui";
 import { ACAO_CONECTAR_NUMERO, AVISO_CONVERSAS_EXEMPLO, soConversasDeExemplo } from "@/lib/demo";
 import { navegacaoComContador } from "@/lib/navegacao";
-import { PERIODOS, PERIODO_PADRAO, classeStatus, lerPeriodo, rotuloContato, rotuloPeriodo, rotuloStatus } from "@/lib/rotulos";
+import { PERIODOS, PERIODO_PADRAO, classeStatus, horaOuDia, lerPeriodo, rotuloContato, rotuloPeriodo, rotuloStatus } from "@/lib/rotulos";
 import type { Conversa, Periodo } from "@/lib/types";
 
 /** As três abas da lista; "todas" não filtra nada, as outras duas valem um status da conversa. */
@@ -38,17 +38,6 @@ function lerAba(valor: string | null): Aba {
   return ABAS.some((a) => a.id === valor) ? (valor as Aba) : "todas";
 }
 
-/** Hora quando a conversa é de hoje, dia e mês quando é mais antiga: o formato de uma lista de mensagens. */
-function quando(iso: string): string {
-  const data = new Date(iso);
-  if (Number.isNaN(data.getTime())) return "";
-  const hoje = new Date();
-  const mesmoDia = data.toDateString() === hoje.toDateString();
-  return mesmoDia
-    ? data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-    : data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-}
-
 function LinhaConversa({ conversa, selecionada, onEscolher }: { conversa: Conversa; selecionada: boolean; onEscolher: () => void }) {
   const primeiraLinha = (conversa.ultima_mensagem || "").split("\n")[0];
   return (
@@ -63,7 +52,7 @@ function LinhaConversa({ conversa, selecionada, onEscolher }: { conversa: Conver
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
             <strong className="min-w-0 flex-1 truncate text-[14.5px]">{rotuloContato(conversa.numero, conversa.nome)}</strong>
-            <span className="shrink-0 text-[12px] text-muted">{quando(conversa.atualizado_em)}</span>
+            <span className="shrink-0 text-[12px] text-muted">{horaOuDia(conversa.atualizado_em)}</span>
           </span>
           <span className="block truncate text-[13px] text-ink-2 mt-0.5">{primeiraLinha || "Sem mensagem ainda"}</span>
           <span className="flex items-center gap-2 mt-1.5">

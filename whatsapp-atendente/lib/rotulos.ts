@@ -191,3 +191,49 @@ export function tempoDeResposta(ms: number): string {
   const minutos = segundos / 60;
   return `${numero(minutos, minutos < 10 ? 1 : 0)} min`;
 }
+
+/** Hora quando a mensagem é de hoje, dia e mês quando é mais antiga: o formato de uma lista de
+ * conversas (a lista de Conversas e o cartão "precisam de atenção" de Relatórios usam o mesmo). */
+export function horaOuDia(iso: string): string {
+  const data = new Date(iso);
+  if (Number.isNaN(data.getTime())) return "";
+  const mesmoDia = data.toDateString() === new Date().toDateString();
+  return mesmoDia
+    ? data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    : data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
+// Um dia do gráfico de Relatórios chega como "AAAA-MM-DD" (lib/metricas.ts). Ele é lido pedaço a
+// pedaço, e nunca por `new Date("2026-09-10")`: essa forma é interpretada como UTC e, no fuso do
+// Brasil, voltaria o dia anterior — o eixo inteiro do gráfico sairia um dia atrasado.
+const MESES_CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+function diaParaData(dia: string): Date | null {
+  const [ano, mes, numeroDoDia] = String(dia).split("-").map(Number);
+  if (!ano || !mes || !numeroDoDia) return null;
+  return new Date(ano, mes - 1, numeroDoDia);
+}
+
+/** "10 set": o rótulo de um dia no eixo do gráfico. */
+export function diaAbreviado(dia: string): string {
+  const data = diaParaData(dia);
+  return data ? `${data.getDate()} ${MESES_CURTOS[data.getMonth()]}` : "";
+}
+
+/** "10 de setembro": o mesmo dia escrito por extenso, para a tabela que só o leitor de tela vê. */
+export function diaLongo(dia: string): string {
+  const data = diaParaData(dia);
+  return data ? new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long" }).format(data) : "";
+}
+
+/** Contra o que a comparação de cada indicador é feita, escrita por extenso (ver components/ui.tsx,
+ * `Variacao`): o período anterior tem sempre o mesmo tamanho do escolhido (ver lib/metricas.ts). */
+const CONTEXTO_COMPARACAO: Record<PeriodoMetricas, string> = {
+  hoje: "em relação a ontem",
+  "7d": "em relação aos 7 dias anteriores",
+  "30d": "em relação aos 30 dias anteriores",
+};
+
+export function contextoComparacao(periodo: PeriodoMetricas): string {
+  return CONTEXTO_COMPARACAO[periodo] ?? CONTEXTO_COMPARACAO[PERIODO_PADRAO];
+}
