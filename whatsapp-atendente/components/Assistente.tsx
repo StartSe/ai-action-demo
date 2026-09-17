@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { useRouter } from "next/navigation";
 import {
   Aviso,
+  CopyButton,
   Dica,
   Dropzone,
   Empty,
@@ -17,13 +18,16 @@ import {
   Row,
   Topbar,
   lerErro,
+  useConfirmacao,
   useStatus,
   type ErroLido,
   type PassoIndicador,
 } from "./ui";
-import { Celular, saudacaoPadrao, type BolhaChat } from "./Celular";
+import { Celular, horaAtual, saudacaoPadrao, type AoSalvarBase, type BolhaChat } from "./Celular";
+import type { ParBase } from "@/lib/base";
 import { SUGESTOES, configExemplo } from "@/lib/demo";
 import { OBJETIVOS, TONS, rotuloObjetivo, rotuloTom } from "@/lib/rotulos";
+import type { Sugestao } from "@/lib/sugestoes";
 import type { Config } from "@/lib/types";
 
 const PASSOS: PassoIndicador[] = [
@@ -102,6 +106,7 @@ function Grupo({ titulo, colunas = 2, children }: { titulo: string; colunas?: 2 
 export function Assistente() {
   const { status, erro } = useStatus();
   const router = useRouter();
+  const { confirmar, Dialogo } = useConfirmacao();
 
   const [passo, setPasso] = useState(1);
   const [config, setConfig] = useState<Config>(CONFIG_VAZIA);
@@ -110,6 +115,19 @@ export function Assistente() {
   const [erroConfig, setErroConfig] = useState<ErroLido | null>(null);
   const [importando, setImportando] = useState(false);
   const [avisoImportacao, setAvisoImportacao] = useState<{ tom: "ok" | "danger"; texto: string } | null>(null);
+
+  // Passo 2: a conversa de teste (o celular interativo) e a base de respostas que ela alimenta.
+  const [mensagens, setMensagens] = useState<BolhaChat[]>([]);
+  const [valor, setValor] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [base, setBase] = useState<ParBase[] | null>(null);
+  const [sugestoes, setSugestoes] = useState<Sugestao[] | null>(null);
+  const [sugestoesCodigo, setSugestoesCodigo] = useState<string | null | undefined>(undefined);
+  const [criandoLinkSugestoes, setCriandoLinkSugestoes] = useState(false);
+  const [tratandoSugestao, setTratandoSugestao] = useState<string | null>(null);
+  const [avisoTeste, setAvisoTeste] = useState<ErroLido | null>(null);
+  const carregouBase = useRef(false);
+
   const autoEnviado = useRef(false);
   // "Salvar e sair" e "Continuar para teste" submetem o mesmo formulário (para o navegador cobrar os
   // campos obrigatórios nos dois); qual dos dois foi clicado é o que muda o destino depois de salvar.
@@ -126,6 +144,13 @@ export function Assistente() {
     setConfig((c) => ({ ...c, [campo]: valor }));
   }
 
+  /** 401 com codigo "sem_sessao" significa sessão expirada: a tela de entrar resolve, o ErrorBox não. */
+  function sessaoExpirada(r: Response, info: ErroLido) {
+    if (r.status !== 401 || info.codigo !== "sem_sessao") return false;
+    router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
+    return true;
+  }
+
   async function salvar(valores: Config): Promise<boolean> {
     setSalvando(true);
     setErroConfig(null);
@@ -133,11 +158,7 @@ export function Assistente() {
       const r = await fetch("/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(valores) });
       if (!r.ok) {
         const info = await lerErro(r);
-        // 401 com codigo "sem_sessao" significa sessão expirada: a tela de entrar resolve, o ErrorBox não.
-        if (r.status === 401 && info.codigo === "sem_sessao") {
-          router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
-          return false;
-        }
+        if (sessaoExpirada(r, info)) return false;
         setErroConfig(info);
         return false;
       }
@@ -192,6 +213,97 @@ export function Assistente() {
     }
   }
 
+  /**
+   * Manda uma pergunta de cliente para o atendente. A conversa é a `simulador` do banco (ela aparece
+   * na lista de Conversas com o rótulo Simulador), e o corpo NÃO leva a configuração: o passo 1 salva
+   * antes de trazer a pessoa para cá, então o que está sendo testado é o atendente de verdade.
+   */
+  async function enviarTeste(textoBruto: string) {
+    const texto = textoBruto.trim();
+    if (!texto) return;
+    setMensagens((m) => [...m, { papel: "cliente", texto, hora: horaAtual() }, { papel: "atendente", texto: "digitando...", pendente: true }]);
+    setEnviando(true);
+    try {
+      const r = await fetch("/api/simular", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ de: "simulador", texto }) });
+      if (!r.ok) {
+        const info = await lerErro(r);
+        if (sessaoExpirada(r, info)) return;
+        setMensagens((m) => [...m.filter((x) => !x.pendente), { papel: "atendente", texto: info.mensagem, erro: true, acao: info.acao, hora: horaAtual() }]);
+        return;
+      }
+      const resposta = await r.json();
+      setMensagens((m) => {
+        const semPendente = m.filter((x) => !x.pendente);
+        // Sem resposta: a conversa foi assumida por uma pessoa e a IA não responde por ela.
+        if (!resposta.resposta) return semPendente;
+        return [...semPendente, { papel: "atendente", texto: resposta.resposta, transferido: resposta.transferir, ferramentaUsada: resposta.ferramentaUsada, hora: horaAtual() }];
+      });
+    } catch (err) {
+      const info = await lerErro(err);
+      setMensagens((m) => [...m.filter((x) => !x.pendente), { papel: "atendente", texto: info.mensagem, erro: true, acao: info.acao, hora: horaAtual() }]);
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  /** "Aprovar" e "Corrigir" de uma resposta: o par pergunta/resposta entra na base do atendente. */
+  const salvarBase: AoSalvarBase = (pergunta, resposta) => {
+    fetch("/api/base", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pergunta, resposta }) })
+      .then((r) => r.json())
+      .then((r) => { if (r.itens) setBase(r.itens); })
+      .catch(() => {});
+  };
+
+  async function limparTeste() {
+    const ok = await confirmar("Apagar a conversa de teste? Essa ação não pode ser desfeita.", { confirmarRotulo: "Apagar" });
+    if (!ok) return;
+    setMensagens([]);
+    try {
+      await fetch("/api/conversas/simulador", { method: "DELETE" });
+    } catch {
+      // A tela já está limpa; a conversa some do banco no próximo pedido que der certo.
+    }
+  }
+
+  async function criarLinkSugestoes() {
+    setCriandoLinkSugestoes(true);
+    setAvisoTeste(null);
+    try {
+      const r = await fetch("/api/sugestoes", { method: "POST" });
+      if (!r.ok) {
+        const info = await lerErro(r);
+        if (sessaoExpirada(r, info)) return;
+        setAvisoTeste(info);
+        return;
+      }
+      setSugestoesCodigo((await r.json()).codigo);
+    } catch (e) {
+      setAvisoTeste(await lerErro(e));
+    } finally {
+      setCriandoLinkSugestoes(false);
+    }
+  }
+
+  async function tratarSugestao(id: string, acao: "aprovar" | "descartar") {
+    setTratandoSugestao(id);
+    setAvisoTeste(null);
+    try {
+      const r = await fetch("/api/sugestoes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, acao }) });
+      if (!r.ok) {
+        const info = await lerErro(r);
+        if (sessaoExpirada(r, info)) return;
+        setAvisoTeste(info);
+        return;
+      }
+      setSugestoes((await r.json()).itens);
+      if (acao === "aprovar") fetch("/api/base").then((r2) => r2.json()).then((r2) => setBase(r2.itens)).catch(() => {});
+    } catch (e) {
+      setAvisoTeste(await lerErro(e));
+    } finally {
+      setTratandoSugestao(null);
+    }
+  }
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const pedido = Number(params.get("passo"));
@@ -204,7 +316,10 @@ export function Assistente() {
         autoEnviado.current = true;
         setConfig(configExemplo);
         setCarregando(false);
-        if (await salvar(configExemplo)) irPara(2);
+        if (await salvar(configExemplo)) {
+          irPara(2);
+          await enviarTeste(SUGESTOES[0]);
+        }
         return;
       }
       try {
@@ -228,6 +343,18 @@ export function Assistente() {
     return () => window.removeEventListener("popstate", aoNavegar);
   }, []);
 
+  // A base aprovada e as sugestões da equipe só aparecem no passo 2: são buscadas quando a pessoa
+  // chega nele, uma única vez, e não na abertura da tela (quem está no passo 1 nunca as vê).
+  useEffect(() => {
+    if (passo !== 2 || carregouBase.current) return;
+    carregouBase.current = true;
+    fetch("/api/base").then((r) => r.json()).then((r) => setBase(r.itens)).catch(() => setBase([]));
+    fetch("/api/sugestoes")
+      .then((r) => r.json())
+      .then((d) => { setSugestoesCodigo(d.codigo ?? null); setSugestoes(d.itens || []); })
+      .catch(() => { setSugestoesCodigo(null); setSugestoes([]); });
+  }, [passo]);
+
   const previa: BolhaChat[] = [
     { papel: "atendente", texto: saudacaoPadrao(config.atendente, config.negocio) },
     { papel: "cliente", texto: SUGESTOES[0] },
@@ -245,14 +372,127 @@ export function Assistente() {
         <h1 className="titulo-painel mb-1.5">Vamos criar seu atendente de IA?</h1>
         <p className="apoio mb-6">Em poucos minutos você terá um atendente pronto para atender seus clientes no WhatsApp.</p>
 
-        {passo !== 1 ? (
+        {passo === 3 ? (
           <Empty
             ilustracao={<IconeEmMontagem />}
             titulo="Este passo ainda está sendo montado"
-            descricao="Enquanto ele não fica pronto, o atendente continua sendo testado e conectado pelo início."
+            descricao="Enquanto ele não fica pronto, o número da empresa continua sendo conectado pelas configurações."
             acao="Ir para o início"
             onAcao={() => router.push("/")}
           />
+        ) : passo === 2 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-6 [&>*]:min-w-0">
+            <div>
+              <div className="card p-5 mb-3">
+                <Celular
+                  nome={config.atendente}
+                  negocio={config.negocio}
+                  mensagens={mensagens}
+                  valor={valor}
+                  onValorChange={setValor}
+                  onEnviar={enviarTeste}
+                  enviando={enviando}
+                  onAprovar={salvarBase}
+                  onCorrigir={salvarBase}
+                />
+                <p className="text-center -mt-2">
+                  <button type="button" className="btn-link text-[13px]" onClick={limparTeste}>
+                    Limpar a conversa de teste
+                  </button>
+                </p>
+              </div>
+
+              <div className="card p-5 mb-3">
+                <MaisDetalhes titulo={`Respostas aprovadas pela equipe${base?.length ? ` (${base.length})` : ""}`}>
+                  {base === null ? (
+                    <p className="text-muted text-sm">Carregando...</p>
+                  ) : base.length === 0 ? (
+                    <p className="text-muted text-sm">
+                      Nenhuma resposta aprovada ainda. Use &quot;Aprovar&quot; ou &quot;Corrigir&quot; nas respostas do teste para o atendente guardar a resposta certa.
+                    </p>
+                  ) : (
+                    <ul className="flex flex-col gap-2.5 text-sm">
+                      {base.map((p, i) => (
+                        <li key={i} className="border-b border-line pb-2.5 last:border-0 last:pb-0">
+                          <p className="font-semibold">{p.pergunta}</p>
+                          <p className="text-muted">{p.resposta}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <p className="text-[13px] font-semibold mt-5 mb-2">Sugestões da equipe</p>
+                  {sugestoesCodigo === undefined ? (
+                    <p className="text-muted text-sm mb-3.5">Carregando...</p>
+                  ) : sugestoesCodigo ? (
+                    <div className="card p-3.5 mb-3.5 flex items-center gap-2 flex-wrap">
+                      <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[200px]">{`${location.origin}/f/${sugestoesCodigo}`}</code>
+                      <CopyButton texto={() => `${location.origin}/f/${sugestoesCodigo}`} rotulo="Copiar link do formulário" />
+                    </div>
+                  ) : (
+                    <button type="button" className="btn-ghost mb-3.5" onClick={criarLinkSugestoes} disabled={criandoLinkSugestoes}>
+                      {criandoLinkSugestoes ? "Criando..." : "Receber respostas da equipe por formulário"}
+                    </button>
+                  )}
+
+                  {sugestoes === null ? (
+                    <p className="text-muted text-sm">Carregando...</p>
+                  ) : sugestoes.length === 0 ? (
+                    <p className="text-muted text-sm">Nenhuma sugestão recebida ainda. Compartilhe o link acima com a equipe para receber perguntas e respostas.</p>
+                  ) : (
+                    <ul className="flex flex-col gap-2.5 text-sm">
+                      {sugestoes.map((s) => (
+                        <li key={s.id} className="border-b border-line pb-2.5 last:border-0 last:pb-0">
+                          <p className="font-semibold">{s.pergunta}</p>
+                          <p className="text-muted">{s.resposta}</p>
+                          {s.categoria && <p className="text-muted text-[12.5px] mt-0.5">Categoria: {s.categoria}</p>}
+                          <div className="flex gap-2 mt-2">
+                            <button type="button" className="btn-ghost" onClick={() => tratarSugestao(s.id, "aprovar")} disabled={tratandoSugestao === s.id}>Aprovar</button>
+                            <button type="button" className="btn-ghost" onClick={() => tratarSugestao(s.id, "descartar")} disabled={tratandoSugestao === s.id}>Descartar</button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {avisoTeste && <div className="mt-3.5"><Aviso tom="danger" acao={avisoTeste.acao}>{avisoTeste.mensagem}</Aviso></div>}
+                </MaisDetalhes>
+              </div>
+            </div>
+
+            <aside className="lg:sticky lg:top-6 self-start">
+              <div className="card p-5">
+                <h2 className="font-bold text-[15px] mb-3">O que testar</h2>
+                <div className="flex flex-col gap-2 items-start">
+                  {SUGESTOES.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      className="bg-accent-soft text-accent-ink rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-left cursor-pointer border-0 hover:bg-accent-soft/70 transition-colors disabled:opacity-60"
+                      onClick={() => enviarTeste(s)}
+                      disabled={enviando}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-muted text-[12.5px] mt-3.5">
+                  Não gostou de uma resposta? Clique em Corrigir e a resposta certa entra na base do atendente.
+                </p>
+              </div>
+            </aside>
+
+            {/* Terceiro item da grade: no desktop cai sozinho na linha de baixo da primeira coluna; no
+                celular fica depois do cartão "O que testar", que é o que faz o teste andar. */}
+            <div className="flex items-center justify-between gap-3 flex-wrap lg:col-start-1">
+              <button type="button" className="btn-link text-[14px]" onClick={() => irPara(1)}>
+                Voltar e ajustar
+              </button>
+              <button type="button" className="btn-primary !w-auto" onClick={() => irPara(3)}>
+                Continuar para conectar
+              </button>
+            </div>
+          </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-6 [&>*]:min-w-0">
             <form onSubmit={aoEnviar}>
@@ -378,6 +618,7 @@ export function Assistente() {
           </div>
         )}
       </main>
+      {Dialogo}
     </>
   );
 }
