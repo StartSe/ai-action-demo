@@ -1,6 +1,6 @@
 import { responderErro } from "@/app/api/erros";
 import { aiEnabled, meta } from "@/lib/ai";
-import { responder } from "@/lib/atendente";
+import { classificarEmSegundoPlano, responder } from "@/lib/atendente";
 import { listarConversas } from "@/lib/conversas";
 import { getConfig } from "@/lib/estado";
 import { apagarTodos, listar } from "@/lib/historico";
@@ -19,6 +19,8 @@ export async function POST(req: Request) {
   const configRascunho: Config | undefined = config ? { ...getConfig(), ...config } : undefined;
   try {
     const { resposta, transferir, ferramentaUsada, atendimentoHumano } = await responder({ numero, texto: textoLimpo, origem: "simulador", config: configRascunho });
+    // Com a resposta pronta, o assunto da conversa (para os relatórios), sem segurar esta resposta.
+    classificarEmSegundoPlano(numero);
     const metaGerada = meta({ demo: !aiEnabled(), insumo: "mensagens do cliente e a base de conhecimento configurada" });
     // As conversas agora vivem no banco (lib/conversas.ts) e sobrevivem a um reinício: não há mais
     // snapshot da lista salvo no histórico a cada mensagem. A lista atualizada volta junto da resposta

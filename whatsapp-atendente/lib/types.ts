@@ -91,7 +91,7 @@ export interface Conversa {
   transferir: boolean;
   origem: CanalOrigem;
   status: StatusConversa;
-  /** Assunto da conversa; nulo até a US-019 classificar. */
+  /** Assunto da conversa (lib/assuntos.ts); nulo até a primeira resposta do atendente classificá-la. */
   assunto: string | null;
   exemplo: boolean;
   nao_lidas: number;
@@ -125,7 +125,7 @@ export interface ConversaCompleta {
   nome: string;
   origem: CanalOrigem;
   status: StatusConversa;
-  /** Assunto da conversa; nulo até a US-019 classificar. */
+  /** Assunto da conversa (lib/assuntos.ts); nulo até a primeira resposta do atendente classificá-la. */
   assunto: string | null;
   exemplo: boolean;
   naoLidas: number;

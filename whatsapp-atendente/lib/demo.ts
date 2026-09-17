@@ -1,7 +1,8 @@
 // Configuração de exemplo (para o app já funcionar ao abrir, sem nenhuma chave configurada) e
 // resposta local sem IA: uma busca simples na base de conhecimento, reformulada no tom configurado
 // em vez de devolver o trecho da base copiado ao pé da letra.
-import type { Config, PapelMensagem, StatusConversa, Tom } from "./types";
+import { ASSUNTO_OUTROS, assuntosDoObjetivo, semAcento } from "./assuntos";
+import type { Config, Objetivo, PapelMensagem, StatusConversa, Tom } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
@@ -18,10 +19,7 @@ const STOPWORDS = new Set(
 );
 
 function normalizar(texto: string): string[] {
-  return String(texto || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
+  return semAcento(texto)
     .replace(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
     .filter((t) => t.length > 2 && !STOPWORDS.has(t));
@@ -112,6 +110,66 @@ export function respostaLocal(texto: string, config: Config): { resposta: string
     return { resposta: mensagemNaoSei(config), transferir: true };
   }
   return { resposta: reformular(melhor, config.tom), transferir: false };
+}
+
+// --- Assunto da conversa sem IA ---------------------------------------------------------------
+// A mesma ideia da resposta local: com a chave da IA configurada quem separa por assunto é
+// lib/atendente.ts:classificarConversa; sem ela, estas palavras. A lista de assuntos vem de
+// lib/assuntos.ts, derivada do objetivo escolhido em Configurações.
+
+/**
+ * O que costuma aparecer na mensagem de quem está falando de cada assunto, sem acento e em
+ * minúsculas (é assim que o texto do cliente chega para a comparação). Cada palavra é procurada no
+ * COMEÇO de uma palavra da mensagem, e o fim dela fica solto de propósito: "parcel" cobre parcelar,
+ * parcelado e parcelamento, e "marcar" não casa dentro de "remarcar". Assuntos de objetivos
+ * diferentes convivem aqui; só entram na conta os que estiverem na lista do objetivo escolhido.
+ */
+const PALAVRAS_DO_ASSUNTO: Record<string, string[]> = {
+  Preços: ["preco", "quanto custa", "quanto fica", "quanto sai", "quanto voces cobram", "cobram", "custa", "custo", "valor", "orcamento", "reais"],
+  "Horário de atendimento": [
+    "horario de atendimento",
+    "horario de funcionamento",
+    "que horas",
+    "abre",
+    "abrem",
+    "fecha",
+    "fecham",
+    "aberto",
+    "funcionam",
+    "sabado",
+    "domingo",
+    "feriado",
+    "plantao",
+  ],
+  "Produtos e serviços": ["servico", "produto", "voces fazem", "fazem ", "faz ", "oferecem", "vendem", "trabalham com", "tratamento", "modelo", "tamanho", "como funciona"],
+  "Localização e contato": ["endereco", "onde fica", "onde voces", "localiza", "como chego", "como chegar", "estacionamento", "bairro", "rua ", "telefone", "mail", "mapa"],
+  Reclamações: ["reclama", "problema", "defeito", "insatisfeit", "pessimo", "nao funciona", "nao chegou", "atraso", "demora", "quero meu dinheiro", "doendo", "mal atendid"],
+  "Formas de pagamento": ["pagamento", "pagar", "parcel", "cartao", "pix", "boleto", "dinheiro", "convenio", "debito", "credito", "a vista", "juros"],
+  Promoções: ["promoc", "desconto", "oferta", "cupom", "liquidacao", "black friday", "combo", "condicao especial"],
+  Agendamentos: ["agendar", "agendamento", "marcar", "tem horario", "horario para", "disponibilidade", "encaixe", "vaga", "reservar"],
+  Remarcações: ["remarcar", "remarcac", "desmarcar", "adiar", "mudar o horario", "trocar o horario", "cancelar a consulta", "cancelar o horario"],
+};
+
+/**
+ * O assunto da conversa sem IA: ganha o assunto cujas palavras mais aparecem nas mensagens do
+ * cliente, e só quem não tem nenhuma palavra em comum cai em "Outros". Empate fica com o primeiro
+ * da lista, que é o assunto mais comum.
+ */
+export function classificarLocal(textos: string[], objetivo: Objetivo): string {
+  // Pontuação vira espaço e a frase inteira ganha espaço nas pontas: assim procurar " marcar"
+  // encontra a palavra no começo dela, e não no meio de "remarcar".
+  const texto = ` ${semAcento(textos.join(" ")).replace(/[^a-z0-9]+/g, " ")} `;
+  let melhor = ASSUNTO_OUTROS;
+  let melhorScore = 0;
+  for (const assunto of assuntosDoObjetivo(objetivo)) {
+    let score = 0;
+    for (const palavra of PALAVRAS_DO_ASSUNTO[assunto] ?? []) if (texto.includes(` ${palavra}`)) score++;
+    if (score > melhorScore) {
+      melhorScore = score;
+      melhor = assunto;
+    }
+  }
+  return melhor;
 }
 
 /**

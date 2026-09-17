@@ -17,6 +17,7 @@ import { MenuExportar, RelatorioDiario } from "./ExportarRelatorio";
 import { GraficoLinhas } from "./GraficoLinhas";
 import { Indicadores, numerosEmTexto } from "./Indicadores";
 import { Aviso, ErrorBox, lerErro, Topbar, useStatus, type ErroLido } from "./ui";
+import { ASSUNTO_OUTROS } from "@/lib/assuntos";
 import { ACAO_CONECTAR_NUMERO, AVISO_CONVERSAS_EXEMPLO, soConversasDeExemplo } from "@/lib/demo";
 import { numero as formatarNumero } from "@/lib/formato";
 import { navegacaoComContador } from "@/lib/navegacao";
@@ -30,7 +31,7 @@ const MAXIMO_ASSUNTOS = 5;
 const MAXIMO_ATENCAO = 5;
 
 /** O rótulo das conversas ainda sem assunto; o mesmo que lib/metricas.ts já devolve. */
-const OUTROS = "Outros";
+const OUTROS = ASSUNTO_OUTROS;
 
 function conversaLink(numeroDaConversa: string): string {
   return `/conversas?numero=${encodeURIComponent(numeroDaConversa)}`;

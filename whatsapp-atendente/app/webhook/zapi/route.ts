@@ -12,7 +12,7 @@
 //   ConnectedCallback    { instanceId, type, connected, phone, momment }
 //   DisconnectedCallback { instanceId, type, disconnected, error, momment }
 import { timingSafeEqual } from "node:crypto";
-import { responder } from "@/lib/atendente";
+import { classificarEmSegundoPlano, responder } from "@/lib/atendente";
 import { getConfig } from "@/lib/store";
 import { enviarMensagem, ErroWhatsApp, registrarFalhaEnvio, registrarRecebida } from "@/lib/whatsapp";
 import { gravarConexao } from "@/lib/zapi";
@@ -111,4 +111,7 @@ async function processarMensagem(aviso: AvisoZapi) {
     if (!(err instanceof ErroWhatsApp)) console.error("Falha inesperada ao responder pelo WhatsApp:", err);
     registrarFalhaEnvio(mensagem);
   }
+  // Depois de a resposta sair: o assunto da conversa, para os relatórios. Só na primeira resposta de
+  // cada conversa, e sem ninguém esperar por ela (lib/atendente.ts).
+  classificarEmSegundoPlano(de);
 }

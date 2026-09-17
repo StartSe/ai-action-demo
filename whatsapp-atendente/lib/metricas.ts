@@ -24,14 +24,15 @@
  * Tudo é consultado no banco a cada chamada, sem memória entre chamadas: as telas se atualizam
  * sozinhas e um número guardado ficaria velho na primeira mensagem que chegasse.
  */
+import { ASSUNTO_OUTROS } from "./assuntos";
 import { bancoDeConversas, isoDeBanco, listarConversas, paraTextoDeBanco } from "./conversas";
 import type { AssuntoMetricas, CanalOrigem, DiaMetricas, Metricas, PeriodoMetricas, StatusConversa, VariacaoMetricas } from "./types";
 
 /** Quantos dias inteiros cada período cobre, contando o de hoje. */
 const DIAS: Record<PeriodoMetricas, number> = { hoje: 1, "7d": 7, "30d": 30 };
 
-/** Conversas sem assunto entram aqui, o mesmo rótulo que as conversas de exemplo já usam. */
-const SEM_ASSUNTO = "Outros";
+/** Conversas ainda sem assunto entram no mesmo "Outros" da lista de lib/assuntos.ts. */
+const SEM_ASSUNTO = ASSUNTO_OUTROS;
 
 interface Janela {
   inicio: Date;

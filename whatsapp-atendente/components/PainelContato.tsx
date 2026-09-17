@@ -64,6 +64,9 @@ function Conteudo({ conversa, agindo, onResolver, onApagar }: DadosDoContato) {
             linha "Origem" logo abaixo já diz de onde ela veio. */}
         {!numeroInterno(conversa.numero) && <Linha rotulo="Telefone">{numeroFormatado}</Linha>}
         <Linha rotulo="Origem">{rotuloOrigem(conversa.origem)}</Linha>
+        {/* Sobre o que é a conversa (lib/assuntos.ts). Fica em branco enquanto o atendente não
+            respondeu nenhuma vez — a classificação acontece depois da primeira resposta. */}
+        <Linha rotulo="Assunto">{conversa.assunto ?? "Sem classificação ainda"}</Linha>
         <Linha rotulo="Primeiro contato">{data(conversa.criadoEm, { comHora: true })}</Linha>
         <Linha rotulo="Última mensagem">{ultima ? data(ultima.criadoEm, { comHora: true }) : "Nenhuma ainda"}</Linha>
         <Linha rotulo="Total de mensagens">{formatarNumero(conversa.mensagens.length)}</Linha>

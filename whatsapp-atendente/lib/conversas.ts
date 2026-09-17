@@ -470,6 +470,15 @@ export function registrarMensagemHumana(numero: string, texto: string): number {
 }
 
 /**
+ * Grava o assunto da conversa (lib/atendente.ts:classificarConversa). Como `marcarLido`, não encosta
+ * em `atualizado_em`: separar por assunto não é novidade na conversa e não deve fazê-la pular para o
+ * topo da lista.
+ */
+export function definirAssunto(numero: string, assunto: string): void {
+  banco().prepare("UPDATE conversas SET assunto = ? WHERE numero = ?").run(assunto, numero);
+}
+
+/**
  * Zera as mensagens não lidas (alguém abriu a conversa na tela). Não encosta em `atualizado_em`: ler
  * uma conversa não é novidade nela, e mexer na data a faria pular para o topo da lista a cada leitura.
  */

@@ -1,9 +1,10 @@
 // Pipeline de resposta do atendente: memória de conversa por número (lib/conversas.ts, em SQLite)
 // + IA (com fallback local sem chave).
-import { aiEnabled, askText, askWithTools, type ToolMessage } from "./ai";
+import { aiEnabled, askJSON, askText, askWithTools, type ToolMessage } from "./ai";
+import { ASSUNTO_OUTROS, assuntosDoObjetivo, normalizarAssunto } from "./assuntos";
 import { baseAprovadaComoTexto } from "./base";
-import { historicoRecente, MAX_HISTORICO, perguntasDoCliente, registrarMensagemCliente, registrarResposta } from "./conversas";
-import { esperar, respostaLocal } from "./demo";
+import { definirAssunto, historicoRecente, MAX_HISTORICO, obterConversa, obterRegistro, perguntasDoCliente, registrarMensagemCliente, registrarResposta } from "./conversas";
+import { classificarLocal, esperar, respostaLocal } from "./demo";
 import { toolsParaAtendente } from "./empresa-mcp";
 import { getConfig } from "./estado";
 import type { CanalOrigem, Config, PerguntaPendente } from "./types";
@@ -134,6 +135,68 @@ export async function responder({
   registrarResposta({ numero, texto: resposta, transferir, ferramentaUsada, tempoRespostaMs: Date.now() - comecouEm });
 
   return { resposta, transferir, ferramentaUsada };
+}
+
+// --- Assunto da conversa -----------------------------------------------------------------------
+// Os relatórios mostram sobre o que os clientes mais perguntam, e para isso cada conversa recebe um
+// assunto da lista do objetivo (lib/assuntos.ts). A classificação acontece DEPOIS de a resposta sair
+// para o cliente, sem ninguém esperar por ela: é uma pergunta curta à IA, e falhar nela nunca pode
+// custar uma resposta.
+
+/** Quantas mensagens do cliente vão para a classificação: o assunto se decide no começo da conversa. */
+const MAX_MENSAGENS_ASSUNTO = 6;
+
+function montarSystemPromptAssunto(config: Config): string {
+  const lista = assuntosDoObjetivo(config.objetivo);
+  return `Você separa por assunto as conversas de clientes da ${config.negocio}, para um relatório.
+Escolha UM assunto desta lista, copiado exatamente como está escrito:
+${lista.map((a) => `- ${a}`).join("\n")}
+
+Regras: use "${ASSUNTO_OUTROS}" somente quando nenhum dos outros servir, e responda no formato {"assunto": "..."}.`;
+}
+
+/**
+ * Decide o assunto de uma conversa e o grava. Com a IA configurada, uma pergunta curta (a lista e as
+ * primeiras mensagens do cliente); sem ela, as palavras de lib/demo.ts:classificarLocal. Devolve o
+ * assunto gravado, ou null quando não havia o que classificar.
+ *
+ * Conversa de exemplo fica de fora: o assunto dela faz parte da demonstração (lib/demo.ts) e
+ * reescrevê-lo mudaria os relatórios que a pessoa está vendo para conhecer o app.
+ */
+export async function classificarConversa(numero: string): Promise<string | null> {
+  const conversa = obterConversa(numero);
+  if (!conversa || conversa.exemplo) return null;
+  const textos = conversa.mensagens
+    .filter((m) => m.papel === "cliente")
+    .slice(0, MAX_MENSAGENS_ASSUNTO)
+    .map((m) => m.texto);
+  if (textos.length === 0) return null;
+
+  const config = getConfig();
+  let assunto: string;
+  if (aiEnabled()) {
+    const resposta = await askJSON<{ assunto?: string }>({
+      system: montarSystemPromptAssunto(config),
+      prompt: textos.map((t) => `Cliente: ${t}`).join("\n"),
+      maxTokens: 30,
+    });
+    assunto = normalizarAssunto(resposta?.assunto, config.objetivo);
+  } else {
+    assunto = classificarLocal(textos, config.objetivo);
+  }
+  definirAssunto(numero, assunto);
+  return assunto;
+}
+
+/**
+ * Classifica sem segurar quem chamou: a resposta ao cliente já saiu, e o assunto aparece na tela na
+ * próxima leitura. Por padrão só classifica conversa que ainda não tem assunto (a primeira resposta
+ * da IA); `refazer` é para quando a conversa termina e o assunto pode ter mudado no caminho.
+ */
+export function classificarEmSegundoPlano(numero: string, { refazer = false } = {}): void {
+  const registro = obterRegistro(numero);
+  if (!registro || (registro.assunto && !refazer)) return;
+  classificarConversa(numero).catch((err) => console.error(`Não foi possível separar por assunto a conversa ${numero}:`, err));
 }
 
 function normalizarPergunta(texto: string): string {
