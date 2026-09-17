@@ -1,8 +1,13 @@
 "use client";
 // Resultados (US-022 em diante): o painel por simulação. Nasce aqui na US-001 como destino real do
 // cabeçalho e já é o lugar de onde se chega ao histórico — que saiu da navegação nesta história.
+//
+// Desde a US-018 é também onde as **avaliações pendentes** aparecem: conversa que terminou e cuja
+// avaliação a IA não conseguiu entregar. A conversa está gravada; "Tentar de novo" roda o avaliador
+// sobre ela. Quando o painel por simulação chegar, esta lista se muda para lá.
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Empty, Topbar, useStatus } from "@/components/ui";
+import { Aviso, Empty, ErrorBox, Item, Topbar, data, lerErro, useStatus, type ErroLido } from "@/components/ui";
 
 function IconeResultados() {
   return (
@@ -10,6 +15,87 @@ function IconeResultados() {
       <path d="M10 52h44" />
       <path d="M18 52V34M31 52V18M44 52V26" />
     </svg>
+  );
+}
+
+type Pendente = { id: string; simulacao: string; vendedor: string; encerradaEm: string };
+
+function Pendentes() {
+  const [itens, setItens] = useState<Pendente[]>([]);
+  const [avaliando, setAvaliando] = useState("");
+  const [falha, setFalha] = useState<ErroLido | null>(null);
+  const [pronta, setPronta] = useState("");
+
+  // A busca inicial vai em forma de corrente, não com uma função chamada do efeito: a regra
+  // react-hooks/set-state-in-effect acusa a chamada direta mesmo quando o estado só muda depois do await.
+  useEffect(() => {
+    fetch("/api/sessoes/pendentes")
+      .then((r) => (r.ok ? r.json() : { itens: [] }))
+      .then((c: { itens?: Pendente[] }) => setItens(c.itens ?? []))
+      .catch(() => setItens([]));
+  }, []);
+
+  const recarregar = useCallback(async () => {
+    const r = await fetch("/api/sessoes/pendentes");
+    const corpo = (await r.json()) as { itens?: Pendente[] };
+    setItens(corpo.itens ?? []);
+  }, []);
+
+  async function avaliar(sessao: Pendente) {
+    setAvaliando(sessao.id);
+    setFalha(null);
+    setPronta("");
+    try {
+      const r = await fetch(`/api/sessoes/${sessao.id}/avaliar`, { method: "POST" });
+      if (!r.ok) {
+        setFalha(await lerErro(r));
+        return;
+      }
+      setPronta(`A conversa de ${sessao.vendedor} foi avaliada.`);
+      await recarregar();
+    } catch (e) {
+      setFalha(await lerErro(e));
+    } finally {
+      setAvaliando("");
+    }
+  }
+
+  if (itens.length === 0 && !pronta) return null;
+
+  return (
+    <section className="mb-7">
+      <h2 className="section-title">Avaliações pendentes</h2>
+      {pronta && (
+        <div className="mb-3">
+          <Aviso tom="ok">{pronta}</Aviso>
+        </div>
+      )}
+      {falha && (
+        <div className="mb-3">
+          <ErrorBox mensagem={falha.mensagem} codigo={falha.codigo as never} acao={falha.acao} />
+        </div>
+      )}
+      {itens.length > 0 && (
+        <>
+          <p className="apoio mb-3">Estas conversas ficaram gravadas, mas a avaliação não ficou pronta. Nada se perdeu: dá para gerá-la agora.</p>
+          <div className="flex flex-col gap-2.5">
+            {itens.map((p) => (
+              <Item key={p.id}>
+                <div className="flex items-center justify-between gap-4 max-md:flex-wrap">
+                  <div className="min-w-0">
+                    <div className="font-bold truncate">{p.vendedor}</div>
+                    <div className="text-muted text-[13px] truncate">{`${p.simulacao} · ${data(p.encerradaEm)}`}</div>
+                  </div>
+                  <button type="button" className="btn-ghost !w-auto text-[13px] shrink-0" disabled={Boolean(avaliando)} onClick={() => void avaliar(p)}>
+                    {avaliando === p.id ? "Avaliando…" : "Tentar de novo"}
+                  </button>
+                </div>
+              </Item>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -23,6 +109,8 @@ export default function Page() {
       <main className="max-w-[980px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
         <h1 className="titulo-painel mb-1.5">Resultados</h1>
         <p className="apoio mb-6">Como o time vende, por pessoa e por tipo de cliente.</p>
+
+        <Pendentes />
 
         <Empty
           ilustracao={<IconeResultados />}

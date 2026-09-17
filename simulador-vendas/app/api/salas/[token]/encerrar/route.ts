@@ -1,15 +1,14 @@
 // Fim da conversa de treino (US-015): fecha a sessão e devolve o resultado que a sala mostra na hora.
 //
-// A avaliação em si mora em lib/avaliacao-sessao.ts, porque a conversa do agente conversacional
-// (US-016) chega pelo aviso de pós-conversa, sem passar por esta rota, e as duas têm de dar o mesmo
-// resultado. A avaliação por rubrica é a US-018/US-019.
+// A avaliação em si mora em lib/avaliacao.ts, porque a conversa do agente conversacional (US-016)
+// chega pelo aviso de pós-conversa, sem passar por esta rota, e as duas têm de dar o mesmo resultado.
 import { obter as obterResultado } from "@/lib/historico";
-import { avaliarSessao } from "@/lib/avaliacao-sessao";
+import { avaliarSessao, type AvaliacaoSessao } from "@/lib/avaliacao";
 import { persona, rotulo } from "@/lib/personas";
 import { conversaAberta } from "@/lib/sala-do-vendedor";
 import { encerrar, transcricao } from "@/lib/sessoes";
 import { ErroIA } from "@/lib/ai";
-import type { Analise, Conversa } from "@/lib/types";
+import type { Conversa } from "@/lib/types";
 import type { Meta } from "@/lib/ai";
 
 export async function POST(req: Request, { params }: RouteContext<"/api/salas/[token]/encerrar">) {
@@ -28,12 +27,12 @@ export async function POST(req: Request, { params }: RouteContext<"/api/salas/[t
   // vezes em encerrar) volta a ver a sua avaliação — refazê-la gastaria o modelo de novo e daria duas
   // notas diferentes para a mesma conversa.
   if (sessao.resultadoId) {
-    const guardado = obterResultado<Conversa, Analise, Meta>(sessao.resultadoId);
+    const guardado = obterResultado<Conversa, AvaliacaoSessao, Meta>(sessao.resultadoId);
     if (guardado) {
       if (!simulacao.mostrarFeedback) return Response.json({ semFeedback: true });
       return Response.json({
         demo: guardado.meta?.demo === true,
-        analise: guardado.saida,
+        avaliacao: guardado.saida,
         meta: guardado.meta,
         id: guardado.id,
         titulo: guardado.titulo,
@@ -58,7 +57,7 @@ export async function POST(req: Request, { params }: RouteContext<"/api/salas/[t
   const fechada = (sessao.status === "em_andamento" ? encerrar(sessao.id) : sessao) ?? sessao;
 
   try {
-    const avaliada = await avaliarSessao(fechada);
+    const avaliada = await avaliarSessao(fechada.id);
     if (!avaliada) return Response.json({ semConversa: true });
     // O gestor pode ter desligado o feedback ao finalizar (US-011): a avaliação é gerada e guardada
     // do mesmo jeito — é dela que o painel dele vive —, mas nada dela volta para esta tela.

@@ -11,7 +11,7 @@
 // é melhor receber o feedback do pedaço que aconteceu do que perder o treino inteiro. Abaixo disso não
 // há o que avaliar, e a sessão vira `abandonada`: dar nota a duas frases seria inventar um resultado,
 // e uma abandonada **não gasta tentativa** (lib/sessoes.ts), então quem mal começou não é penalizado.
-import { avaliarSessao } from "./avaliacao-sessao";
+import { avaliarSessao } from "./avaliacao";
 import { encerrar, transcricao, type Sessao } from "./sessoes";
 
 /** Parado por menos que isto, o vendedor volta para a mesma conversa. */
@@ -50,7 +50,7 @@ export async function retomarOuFechar(sessao: Sessao): Promise<Retomada> {
   const fechada = encerrar(sessao.id);
   if (!fechada) return "abandonada";
   try {
-    await avaliarSessao(fechada);
+    await avaliarSessao(fechada.id);
   } catch (err) {
     // A conversa está fechada e gravada de qualquer jeito: o gestor a vê no painel e o vendedor a vê
     // no histórico, sem nota. Quem voltou ao link não pediu esta avaliação e não pode ser barrado por

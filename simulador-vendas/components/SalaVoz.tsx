@@ -16,9 +16,10 @@
 // termina em algo que o **vendedor** pode fazer: digitar, tentar de novo, ou encerrar e ver o
 // resultado. Ele não configura nada e não recebe recado de gestor.
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Resultado } from "@/app/page";
+import { ResultadoSessao } from "@/app/page";
 import { Aviso, lerErro } from "@/components/ui";
-import type { Analise, Conversa } from "@/lib/types";
+import type { Conversa } from "@/lib/types";
+import type { AvaliacaoSessao } from "@/lib/avaliacao";
 import type { Meta } from "@/lib/ai";
 
 /** Silêncio que encerra o turno no modo mãos livres. */
@@ -46,7 +47,7 @@ type ModoEscuta = "segurar" | "livre";
 type Resposta = {
   demo: boolean;
   conversa: Conversa;
-  analise: Analise;
+  avaliacao: AvaliacaoSessao;
   meta: Meta;
   id?: string;
   titulo: string;
@@ -542,13 +543,14 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
               </div>
             )}
 
-            <Resultado
+            <ResultadoSessao
               conversa={fim.resultado.conversa}
-              analise={fim.resultado.analise}
+              avaliacao={fim.resultado.avaliacao}
               meta={fim.resultado.meta}
               id={fim.resultado.id}
               titulo={fim.resultado.titulo}
-              demoTexto="Exemplo fixo: a avaliação abaixo não é sobre a conversa que você acabou de ter."
+              entregar={false}
+              demoTexto="Exemplo fixo: as notas abaixo não são um julgamento da conversa que você acabou de ter."
             />
 
             <p className="mt-6 text-center">

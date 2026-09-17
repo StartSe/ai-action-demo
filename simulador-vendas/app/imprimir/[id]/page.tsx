@@ -5,7 +5,8 @@ import { data } from "@/lib/formato";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
 import type { Analise, Conversa, DadosPainel, PainelEquipe } from "@/lib/types";
-import { ConteudoAnalise, ConteudoPainel } from "../../page";
+import type { AvaliacaoSessao } from "@/lib/avaliacao";
+import { ConteudoAnalise, ConteudoPainel, ConteudoSessao } from "../../page";
 import { ImprimirAoCarregar } from "./ImprimirAoCarregar";
 
 function Moldura({ titulo, meta, children }: { titulo: string; meta: Meta; children: ReactNode }) {
@@ -37,6 +38,15 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
     return (
       <Moldura titulo={registro.titulo} meta={registro.meta}>
         <ConteudoPainel painel={registro.saida} />
+      </Moldura>
+    );
+  }
+
+  if (tipagem.tipo === "sessao") {
+    const registro = obter<Conversa, AvaliacaoSessao, Meta>(id)!;
+    return (
+      <Moldura titulo={registro.titulo} meta={registro.meta}>
+        <ConteudoSessao conversa={registro.entrada} avaliacao={registro.saida} />
       </Moldura>
     );
   }

@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import { getConfig } from "@/lib/store";
 import { registrarConversaRecebida, registrarRecusa } from "@/lib/aviso-pos-conversa";
 import { salvarConversaAnalisada } from "@/lib/analise";
-import { avaliarSessao } from "@/lib/avaliacao-sessao";
+import { avaliarSessao } from "@/lib/avaliacao";
 import { CRITERIOS_PADRAO } from "@/lib/criterios";
 import { obter as obterSala, registrarResultado } from "@/lib/salas";
 import { encerrar, obter as obterSessao, registrarMensagem, transcricao as transcricaoDaSessao } from "@/lib/sessoes";
@@ -75,8 +75,10 @@ async function processarSessao(sessaoId: string, transcricao: LinhaTranscricao[]
     }
   }
 
-  const fechada = (sessao.status === "em_andamento" || sessao.status === "preparando" ? encerrar(sessao.id) : sessao) ?? sessao;
-  await avaliarSessao({ ...fechada, duracaoSeg: fechada.duracaoSeg ?? duracaoSeg });
+  // A duração vem do aviso, não do relógio do app: a ligação já acabou quando ele chega, e medir daqui
+  // contaria o tempo de entrega como tempo de conversa.
+  if (sessao.status === "em_andamento" || sessao.status === "preparando") encerrar(sessao.id, { duracaoSeg });
+  await avaliarSessao(sessao.id);
   return true;
 }
 

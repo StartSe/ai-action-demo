@@ -9,6 +9,7 @@ import { VendedoresPainel } from "@/components/VendedoresPainel";
 import { CRITERIOS_PADRAO } from "@/lib/criterios";
 import type { CodigoErroIA, Meta } from "@/lib/ai";
 import type { Analise, Cenario, Conversa, DadosAnalise, PainelEquipe, Vendedor } from "@/lib/types";
+import type { AvaliacaoSessao, CriterioAvaliado } from "@/lib/avaliacao";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
 
@@ -618,6 +619,150 @@ function analiseParaTexto(analise: Analise): string {
   l.push("", "Momentos-chave:");
   analise.momentos.forEach((m) => l.push(`- ${m}`));
   return l.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// A avaliação de uma sessão de treino (US-018)
+// ---------------------------------------------------------------------------
+
+const DIFICULDADES_ROTULO: Record<string, string> = { facil: "Cliente fácil", realista: "Cliente realista", dificil: "Cliente difícil" };
+
+/** A frase que traduz a nota, em vez de deixar o número sozinho. */
+export function leituraDaNota(nota: number): string {
+  if (nota >= 8.5) return "Conversa muito bem conduzida.";
+  if (nota >= 7) return "Bom desempenho, com pontos claros para evoluir.";
+  if (nota >= 5) return "Conversa razoável: dá para melhorar bastante na próxima.";
+  return "Esta conversa pede treino antes de falar com um cliente de verdade.";
+}
+
+/**
+ * A avaliação de um treino: os quatro momentos, a régua inteira, o que foi bem e a principal
+ * oportunidade. Reaproveitada pela tela do gestor (/r), pela impressão e pela sala do vendedor —
+ * um treino avaliado é a mesma coisa nos três lugares, só a moldura em volta muda.
+ */
+export function ConteudoSessao({ conversa, avaliacao }: { conversa: Conversa; avaliacao: AvaliacaoSessao }) {
+  const c = avaliacao.contexto;
+  return (
+    <>
+      <Destaque valor={numero(avaliacao.notaGeral, 1)} rotulo="Nota geral" interpretacao={leituraDaNota(avaliacao.notaGeral)} tom={tomDestaque(avaliacao.notaGeral)} />
+      {avaliacao.resumo && <p className="summary">{avaliacao.resumo}</p>}
+
+      <p className="text-muted text-[13px] mb-6">
+        {[c.produto, c.metodologia, DIFICULDADES_ROTULO[c.dificuldade] ?? c.dificuldade, c.tipoDeCliente?.nome].filter(Boolean).join(" · ")}
+      </p>
+
+      {avaliacao.grupos.length > 0 && (
+        <Section titulo="Como foi cada momento da conversa">
+          <div className="grid grid-cols-4 max-md:grid-cols-2 gap-3 [&>*]:min-w-0">
+            {avaliacao.grupos.map((g) => (
+              <Item key={g.grupo}>
+                <div className={`text-[26px] leading-none font-extrabold tracking-[-0.02em] ${g.nota >= 7.5 ? "text-ok" : g.nota >= 5 ? "text-warn" : "text-danger"}`}>{numero(g.nota, 1)}</div>
+                <div className="text-[12.5px] font-semibold text-muted mt-1.5">{g.grupo}</div>
+              </Item>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {avaliacao.pontosFortes.length > 0 && (
+        <Section titulo="O que você fez bem">
+          <Item>
+            <ul className="text-sm flex flex-col gap-1.5">
+              {avaliacao.pontosFortes.map((ponto, i) => <li key={i}>{ponto}</li>)}
+            </ul>
+          </Item>
+        </Section>
+      )}
+
+      {avaliacao.oportunidade && (
+        <Section titulo="Principal oportunidade">
+          <Item>
+            <div className="text-[13px] font-bold text-accent-ink mb-2">{avaliacao.oportunidade.criterio}</div>
+            <p className="text-sm mb-2">{avaliacao.oportunidade.oQueAconteceu}</p>
+            <p className="text-sm mb-3">{avaliacao.oportunidade.oQueFazer}</p>
+            {avaliacao.oportunidade.fraseSugerida && (
+              <>
+                <div className="text-muted text-[12.5px] font-semibold uppercase tracking-[0.04em] mb-1">Experimente dizer</div>
+                <p className="text-sm italic">{`“${avaliacao.oportunidade.fraseSugerida}”`}</p>
+              </>
+            )}
+          </Item>
+        </Section>
+      )}
+
+      <Section titulo="Critérios de avaliação">
+        <DataTable
+          colunas={[
+            { chave: "nome", titulo: "Critério", papel: "titulo", largura: "22%", render: (l: CriterioAvaliado) => <strong>{l.nome}</strong> },
+            { chave: "nota", titulo: "Nota", papel: "chip", largura: "70px", render: (l: CriterioAvaliado) => <Chip nivel={tomChip(l.nota)}>{numero(l.nota, 1)}</Chip> },
+            {
+              chave: "evidencia",
+              titulo: "Na conversa",
+              papel: "resumo",
+              render: (l: CriterioAvaliado) => (l.semEvidencia ? <span className="text-muted">Sem trecho da conversa para citar aqui.</span> : l.evidencia),
+            },
+            { chave: "comoMelhorar", titulo: "Como melhorar", papel: "detalhe", render: (l: CriterioAvaliado) => l.comoMelhorar },
+          ]}
+          linhas={avaliacao.criterios}
+        />
+      </Section>
+
+      <details className="group">
+        <summary className="text-[13px] font-bold text-accent-ink cursor-pointer marker:content-none flex items-center gap-1.5">
+          <span className="transition-transform group-open:rotate-90">›</span>
+          Ver a conversa
+        </summary>
+        <div className="mt-3 card shadow-none divide-y divide-line text-sm">
+          {conversa.transcricao.map((l, i) => {
+            const tempo = formatarSegundo(l.segundo);
+            return (
+              <div key={i} className="px-4 py-2.5">
+                <span className="font-bold">{l.papel === "vendedor" ? "Vendedor" : "Cliente"}</span>
+                {tempo && <span className="text-muted text-[12px]"> · {tempo}</span>}
+                <p className="mt-0.5">{l.texto}</p>
+              </div>
+            );
+          })}
+        </div>
+      </details>
+    </>
+  );
+}
+
+function sessaoParaTexto(avaliacao: AvaliacaoSessao): string {
+  const l: string[] = [`Nota geral: ${numero(avaliacao.notaGeral, 1)}`, "", avaliacao.resumo, ""];
+  l.push(`Momentos: ${avaliacao.grupos.map((g) => `${g.grupo} ${numero(g.nota, 1)}`).join(" · ")}`, "", "Critérios:");
+  avaliacao.criterios.forEach((c) => l.push(`- ${c.nome} (${numero(c.nota, 1)}): ${c.evidencia || "sem trecho citado"} | Como melhorar: ${c.comoMelhorar}`));
+  l.push("", "O que foi bem:");
+  avaliacao.pontosFortes.forEach((p) => l.push(`- ${p}`));
+  if (avaliacao.oportunidade) {
+    l.push("", `Principal oportunidade — ${avaliacao.oportunidade.criterio}:`, avaliacao.oportunidade.oQueAconteceu, avaliacao.oportunidade.oQueFazer);
+    if (avaliacao.oportunidade.fraseSugerida) l.push(`Experimente dizer: "${avaliacao.oportunidade.fraseSugerida}"`);
+  }
+  return l.join("\n");
+}
+
+/**
+ * A avaliação com cabeçalho, origem e selo — o molde de `Resultado`, aplicado ao treino.
+ *
+ * `entregar` sai desligado nas telas do **vendedor**: as ações de entrega levam a `/imprimir/<id>` e a
+ * `/r/<id>`, que são rotas privadas (ver `proxy.ts`) e jogariam na tela de entrar quem abriu o app por
+ * um link de treino, sem conta nenhuma. Quem tem conta é o gestor, e é na tela dele que elas aparecem.
+ */
+export function ResultadoSessao({ conversa, avaliacao, meta, id, titulo, entregar = true, demoTexto = "Exemplo fixo: as notas abaixo não são um julgamento desta conversa." }: { conversa: Conversa; avaliacao: AvaliacaoSessao; meta: Meta; id?: string; titulo: string; entregar?: boolean; demoTexto?: string }) {
+  return (
+    <article className="reveal">
+      <ResultHead titulo={titulo} subtitulo={`${conversa.transcricao.length} falas · ${data(conversa.criadoEm)}`}>
+        {entregar ? <Entregar id={id} titulo={titulo} texto={() => sessaoParaTexto(avaliacao)} /> : undefined}
+      </ResultHead>
+
+      <Origem meta={meta} demoTexto={demoTexto} />
+
+      <ConteudoSessao conversa={conversa} avaliacao={avaliacao} />
+
+      <SeloIA demo={meta.demo} />
+    </article>
+  );
 }
 
 function tomVariacaoPainel(variacao: number | null): "ok" | "warn" | "danger" | "neutro" {

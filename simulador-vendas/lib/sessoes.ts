@@ -226,13 +226,19 @@ export function ultimasMensagens(sessaoId: string, quantas: number): MensagemSes
   return linhas.reverse().map(linhaParaMensagem);
 }
 
-export function encerrar(id: string, { status = "encerrada" }: { status?: StatusSessao } = {}): Sessao | null {
+/**
+ * Fecha a sessão. A duração é o tempo de relógio entre o começo e agora, exceto quando quem chama sabe
+ * melhor: na conversa com o agente conversacional (US-016) a ligação já acabou quando o aviso chega, e
+ * a duração de verdade é a que vem no aviso — sem isso a conversa ficaria com o tempo que ela levou
+ * para ser entregue ao app, não com o tempo que o vendedor falou.
+ */
+export function encerrar(id: string, { status = "encerrada", duracaoSeg }: { status?: StatusSessao; duracaoSeg?: number } = {}): Sessao | null {
   const sessao = obter(id);
   if (!sessao) return null;
   const fim = agora();
   const inicio = sessao.iniciadaEm ?? sessao.criadoEm;
-  const duracaoSeg = Math.max(0, Math.round((new Date(fim).getTime() - new Date(inicio).getTime()) / 1000));
-  banco().prepare("UPDATE sessoes_treino SET status = ?, encerradaEm = ?, duracaoSeg = ? WHERE id = ?").run(status, fim, duracaoSeg, id);
+  const medida = Math.max(0, Math.round((new Date(fim).getTime() - new Date(inicio).getTime()) / 1000));
+  banco().prepare("UPDATE sessoes_treino SET status = ?, encerradaEm = ?, duracaoSeg = ? WHERE id = ?").run(status, fim, duracaoSeg ?? medida, id);
   return obter(id);
 }
 
@@ -296,6 +302,22 @@ export function conversasSemAvaliacao(): number {
   return linha?.total ?? 0;
 }
 
+/**
+ * As conversas que terminaram e não têm avaliação — é a lista de "Avaliação pendente" do gestor
+ * (US-018), com o "Tentar de novo" que roda o avaliador de novo sobre a transcrição já gravada.
+ *
+ * Uma conversa cai aqui quando a IA falhou no fim do treino (fila cheia, chave sem crédito) ou quando
+ * o aviso de pós-conversa do agente nunca chegou. Nos dois casos a conversa está gravada e não se
+ * perde: o que falta é o julgamento dela.
+ */
+export function pendentesDeAvaliacao(limite = 50): Sessao[] {
+  marcarAbandonadas();
+  const linhas = banco()
+    .prepare("SELECT * FROM sessoes_treino WHERE status = 'encerrada' AND resultadoId IS NULL ORDER BY encerradaEm DESC LIMIT ?")
+    .all(limite) as LinhaSessao[];
+  return linhas.map(linhaParaSessao);
+}
+
 /** Resumo por simulação para as listas do gestor, sem uma consulta por cartão. */
 export function resumoPorSimulacao(): Record<string, { sessoes: number; participantes: number }> {
   const linhas = banco()
@@ -343,11 +365,19 @@ export function notaMediaPorSimulacao(): Record<string, { nota: number; avaliada
   );
 }
 
-/** A nota geral de uma análise salva; resultado de outro formato (ou JSON torto) simplesmente não conta. */
+/**
+ * A nota geral de um resultado salvo; resultado de outro formato (ou JSON torto) simplesmente não conta.
+ *
+ * Dois nomes, porque são dois formatos: `nota` é a análise de uma conversa real colada no painel
+ * (`lib/analise.ts`) e `notaGeral` é a avaliação de um treino (`lib/avaliacao.ts`, US-018). As duas
+ * são a média dos critérios com uma casa decimal, calculada no código, então somam na mesma conta.
+ * **Ao criar uma saída nova com nota, ou ela usa um destes dois nomes, ou esta função ganha o terceiro**
+ * — senão a nota simplesmente some das listas, sem erro em lugar nenhum.
+ */
 function notaDoResultado(saida: string): number | null {
   try {
-    const lido: unknown = JSON.parse(saida);
-    const nota = (lido as { nota?: unknown } | null)?.nota;
+    const lido = JSON.parse(saida) as { nota?: unknown; notaGeral?: unknown } | null;
+    const nota = lido?.nota ?? lido?.notaGeral;
     return typeof nota === "number" && Number.isFinite(nota) ? nota : null;
   } catch (err) {
     console.error("Resultado com saída mal formada; fora da média.", err);

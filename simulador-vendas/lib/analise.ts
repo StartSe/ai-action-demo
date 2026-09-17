@@ -119,14 +119,26 @@ export async function gerarAnalise(dados: DadosAnalise): Promise<{ demo: boolean
   };
 
   const { demo, analise, meta: metaGerada } = await analisarConversa(conversa, criterios, cenario);
-  const id = salvar({ tipo: "conversa", titulo, resumo: analise.resumo, entrada: conversa, saida: analise, meta: metaGerada, expiraEmDias: 90 });
+  const id = salvarResultado({ tipo: "conversa", titulo, resumo: analise.resumo, conversa, saida: analise, meta: metaGerada });
   return { demo, conversa, analise, meta: metaGerada, id, titulo };
 }
 
 /**
+ * A gravação no histórico de uma conversa já julgada, num lugar só.
+ *
+ * Os dois julgamentos que o app faz gravam o mesmo registro — entrada é a conversa, saída é o que se
+ * concluiu dela, prazo de 90 dias — e só o `tipo` muda: `"conversa"` para a conversa real colada no
+ * painel (D11) e `"sessao"` para a avaliação de um treino (lib/avaliacao.ts, US-018). Ter isto aqui
+ * é o que evita a segunda cópia da chamada a `salvar`, com outro prazo e outra ordem de campos.
+ */
+export function salvarResultado({ tipo, titulo, resumo, conversa, saida, meta: metaGerada }: { tipo: "conversa" | "sessao"; titulo: string; resumo: string; conversa: Conversa; saida: unknown; meta: Meta }): string {
+  return salvar({ tipo, titulo, resumo, entrada: conversa, saida, meta: metaGerada, expiraEmDias: 90 });
+}
+
+/**
  * Ponto de entrada para uma conversa que já chega estruturada (nunca foi colada como texto): usado
- * pelo aviso automático de pós-conversa da ElevenLabs (app/webhook/elevenlabs) e, futuramente, pela
- * sala de simulação por texto/voz. Reaproveita a mesma análise e gravação no histórico de gerarAnalise.
+ * pelo aviso automático de pós-conversa da ElevenLabs (app/webhook/elevenlabs) nas salas criadas antes
+ * da US-002. Reaproveita a mesma análise e gravação no histórico de gerarAnalise.
  */
 export async function salvarConversaAnalisada(conversa: Conversa, criterios: string[] = CRITERIOS_PADRAO): Promise<{ demo: boolean; analise: Analise; meta: Meta; id?: string; titulo: string }> {
   const vendedor = conversa.vendedorId ? obterVendedor(conversa.vendedorId) : null;
@@ -134,6 +146,6 @@ export async function salvarConversaAnalisada(conversa: Conversa, criterios: str
   const titulo = tituloResultado(vendedor, cenario);
 
   const { demo, analise, meta: metaGerada } = await analisarConversa(conversa, criterios, cenario);
-  const id = salvar({ tipo: "conversa", titulo, resumo: analise.resumo, entrada: conversa, saida: analise, meta: metaGerada, expiraEmDias: 90 });
+  const id = salvarResultado({ tipo: "conversa", titulo, resumo: analise.resumo, conversa, saida: analise, meta: metaGerada });
   return { demo, analise, meta: metaGerada, id, titulo };
 }

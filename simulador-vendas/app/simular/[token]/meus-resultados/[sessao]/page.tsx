@@ -16,8 +16,9 @@ import { obter as obterSessao } from "@/lib/sessoes";
 import { lerSessaoVendedor } from "@/lib/sessao-vendedor";
 import { obter as obterSimulacao } from "@/lib/simulacoes";
 import type { Meta } from "@/lib/ai";
-import type { Analise, Conversa } from "@/lib/types";
-import { Resultado } from "@/app/page";
+import type { Conversa } from "@/lib/types";
+import type { AvaliacaoSessao } from "@/lib/avaliacao";
+import { ResultadoSessao } from "@/app/page";
 import { Cartao, Moldura } from "../../Moldura";
 
 export const dynamic = "force-dynamic";
@@ -63,8 +64,11 @@ export default async function Page({ params }: PageProps<"/simular/[token]/meus-
     return <Recado token={token} titulo="Conversa registrada" descricao="Neste treino a avaliação vai para quem enviou o link. Seu gestor vai comentar com você." />;
   }
 
-  const registro = sessao.resultadoId ? obterResultado<Conversa, Analise, Meta>(sessao.resultadoId) : null;
-  if (!registro || registro.tipo !== "conversa") {
+  // O tipo tem de ser `"sessao"` (US-018). Os treinos avaliados antes dela ficaram gravados no formato
+  // da análise de conversa colada, sem os quatro momentos nem a oportunidade: em vez de mostrar uma
+  // avaliação pela metade, a tela avisa — a conversa em si continua no histórico do vendedor.
+  const registro = sessao.resultadoId ? obterResultado<Conversa, AvaliacaoSessao, Meta>(sessao.resultadoId) : null;
+  if (!registro || registro.tipo !== "sessao") {
     return (
       <Recado
         token={token}
@@ -86,13 +90,14 @@ export default async function Page({ params }: PageProps<"/simular/[token]/meus-
         </div>
       )}
 
-      <Resultado
+      <ResultadoSessao
         conversa={registro.entrada}
-        analise={registro.saida}
+        avaliacao={registro.saida}
         meta={registro.meta}
         id={registro.id}
         titulo={registro.titulo}
-        demoTexto="Exemplo fixo: a avaliação abaixo não é sobre a conversa que você teve."
+        entregar={false}
+        demoTexto="Exemplo fixo: as notas abaixo não são um julgamento da conversa que você teve."
       />
 
       <p className="mt-6">
