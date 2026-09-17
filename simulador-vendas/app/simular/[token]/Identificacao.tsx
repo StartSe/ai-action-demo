@@ -12,6 +12,18 @@ import { useRouter } from "next/navigation";
 
 export type ProvedorBotao = { id: string; rotulo: string };
 
+/** O balanço de quem volta ao link com conversas já feitas e nenhuma em aberto (US-017). */
+export type JaTreinou = {
+  tentativas: number;
+  /** `null` é "sem limite": a frase perde o "de N" e o treino continua aberto. */
+  maxTentativas: number | null;
+  podeTreinar: boolean;
+  /** Quantas conversas existem no histórico — abaixo de duas não vale oferecer a lista. */
+  conversas: number;
+  /** Endereço do feedback mais recente, ou `null` quando ainda não há avaliação para reler. */
+  ultimoFeedback: string | null;
+};
+
 type Props = {
   codigo: string;
   marca: string;
@@ -22,10 +34,11 @@ type Props = {
   provedores: ProvedorBotao[];
   /** Quem já treinou neste navegador: a tela oferece "Continuar como <nome>". */
   conhecido: string | null;
+  jaTreinou?: JaTreinou | null;
   erroInicial?: string;
 };
 
-export function Identificacao({ codigo, marca, nome, titulo, produto, contexto, provedores, conhecido, erroInicial }: Props) {
+export function Identificacao({ codigo, marca, nome, titulo, produto, contexto, provedores, conhecido, jaTreinou = null, erroInicial }: Props) {
   const router = useRouter();
   const [meuNome, setMeuNome] = useState("");
   const [email, setEmail] = useState("");
@@ -82,11 +95,42 @@ export function Identificacao({ codigo, marca, nome, titulo, produto, contexto, 
 
         {mostrarConhecido ? (
           <>
+            {/* Quem já treinou vê primeiro onde está: "Você já treinou 2 de 3 vezes". É a resposta da
+                pergunta que faz alguém voltar ao link — e ela vem antes de qualquer botão. */}
+            {jaTreinou && (
+              <p className="mb-5 text-[15px]">
+                {jaTreinou.maxTentativas === null
+                  ? `${conhecido}, você já treinou ${jaTreinou.tentativas} ${jaTreinou.tentativas === 1 ? "vez" : "vezes"} neste treino.`
+                  : `${conhecido}, você já treinou ${jaTreinou.tentativas} de ${jaTreinou.maxTentativas} ${jaTreinou.maxTentativas === 1 ? "vez" : "vezes"}.`}
+              </p>
+            )}
+
             {/* `?pronto=1` é a confirmação desta visita: sem ele, quem volta ao link cai de novo em
                 "Continuar como <nome>" em vez de entrar direto numa conversa que não pediu. */}
-            <a className="btn-primary" href={`/simular/${codigo}?pronto=1`}>
-              Continuar como {conhecido}
-            </a>
+            {(!jaTreinou || jaTreinou.podeTreinar) && (
+              <a className="btn-primary" href={`/simular/${codigo}?pronto=1`}>
+                {jaTreinou ? "Treinar novamente" : `Continuar como ${conhecido}`}
+              </a>
+            )}
+
+            {jaTreinou?.ultimoFeedback && (
+              <a className={jaTreinou.podeTreinar ? "btn-secundario mt-2.5" : "btn-primary"} href={jaTreinou.ultimoFeedback}>
+                Ver meu último resultado
+              </a>
+            )}
+
+            {jaTreinou && !jaTreinou.podeTreinar && !jaTreinou.ultimoFeedback && (
+              <p className="text-muted">Você já usou todas as suas conversas neste treino. Fale com quem enviou o link se precisar de mais uma chance.</p>
+            )}
+
+            {jaTreinou && jaTreinou.conversas > 1 && (
+              <p className="text-center mt-3">
+                <a className="btn-link text-[13.5px]" href={`/simular/${codigo}/meus-resultados`}>
+                  Ver minhas conversas
+                </a>
+              </p>
+            )}
+
             <p className="text-center mt-3">
               <button type="button" className="btn-link text-[13.5px]" disabled={enviando} onClick={naoSouEu}>
                 Não sou eu

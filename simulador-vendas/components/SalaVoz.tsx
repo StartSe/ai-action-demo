@@ -43,7 +43,18 @@ type Papel = "vendedor" | "cliente";
 export type Fala = { papel: Papel; texto: string };
 type EstadoConversa = "parado" | "ouvindo" | "pensando" | "falando";
 type ModoEscuta = "segurar" | "livre";
-type Resposta = { demo: boolean; conversa: Conversa; analise: Analise; meta: Meta; id?: string; titulo: string };
+type Resposta = {
+  demo: boolean;
+  conversa: Conversa;
+  analise: Analise;
+  meta: Meta;
+  id?: string;
+  titulo: string;
+  /** Emoji + nome do tipo de cliente, revelado só agora que a conversa acabou (US-017). */
+  tipoDeCliente?: string;
+  comportamento?: string;
+  sessaoId?: string;
+};
 type Fim = { resultado?: Resposta; semConversa?: boolean; semFeedback?: boolean };
 
 export type PropsSalaVoz = {
@@ -520,22 +531,43 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     return (
       <Moldura marca={marca} nome={nome} largo={Boolean(fim.resultado)}>
         {fim.resultado ? (
-          <Resultado
-            conversa={fim.resultado.conversa}
-            analise={fim.resultado.analise}
-            meta={fim.resultado.meta}
-            id={fim.resultado.id}
-            titulo={fim.resultado.titulo}
-            demoTexto="Exemplo fixo: a avaliação abaixo não é sobre a conversa que você acabou de ter."
-          />
+          <>
+            {/* Quem era o cliente: a revelação só acontece aqui, depois da conversa. Antes dela, nem a
+                tela nem as rotas dizem com que tipo de pessoa o vendedor ia falar. */}
+            {fim.resultado.tipoDeCliente && (
+              <div className="card p-5 max-md:p-4 mb-5">
+                <div className="text-muted text-[12.5px] font-semibold uppercase tracking-[0.04em] mb-1">O cliente com quem você falou</div>
+                <div className="text-[17px] font-extrabold tracking-[-0.01em]">{fim.resultado.tipoDeCliente}</div>
+                {fim.resultado.comportamento && <p className="text-muted text-[13.5px] mt-1">{fim.resultado.comportamento}</p>}
+              </div>
+            )}
+
+            <Resultado
+              conversa={fim.resultado.conversa}
+              analise={fim.resultado.analise}
+              meta={fim.resultado.meta}
+              id={fim.resultado.id}
+              titulo={fim.resultado.titulo}
+              demoTexto="Exemplo fixo: a avaliação abaixo não é sobre a conversa que você acabou de ter."
+            />
+
+            <p className="mt-6 text-center">
+              <a className="btn-link text-[13.5px]" href={`/simular/${codigo}/meus-resultados`}>
+                Ver minhas conversas
+              </a>
+            </p>
+          </>
         ) : (
           <div className="card p-7 max-md:p-[22px]">
             <h1 className="text-[22px] leading-[1.2] font-extrabold tracking-[-0.02em] mb-2">Conversa registrada</h1>
-            <p className="text-muted">
+            <p className="text-muted mb-5">
               {fim.semConversa
                 ? "Você encerrou antes de falar com o cliente, então não há o que avaliar desta vez."
                 : "Seu gestor vai comentar com você."}
             </p>
+            <a className="btn-link text-[13.5px]" href={`/simular/${codigo}/meus-resultados`}>
+              Ver minhas conversas
+            </a>
           </div>
         )}
       </Moldura>

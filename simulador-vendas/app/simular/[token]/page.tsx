@@ -12,7 +12,8 @@ import { obter as obterSala, expirou } from "@/lib/salas";
 import { obter as obterSimulacao } from "@/lib/simulacoes";
 import { obter as obterProduto } from "@/lib/produtos";
 import { obter as obterParticipante } from "@/lib/participantes";
-import { emAndamento, emPreparacao, melhorSessaoDe, tentativasDe, transcricao } from "@/lib/sessoes";
+import { emAndamento, emPreparacao, historicoDe, melhorSessaoDe, tentativasDe, transcricao } from "@/lib/sessoes";
+import { retomarOuFechar } from "@/lib/retomada";
 import { montarPersonagem } from "@/lib/cliente-simulado";
 import { personasDe } from "@/lib/personas";
 import { lerSessaoVendedor } from "@/lib/sessao-vendedor";
@@ -27,12 +28,10 @@ import { SalaAgente } from "@/components/SalaAgente";
 import { SalaVoz, type PropsSalaVoz } from "@/components/SalaVoz";
 import { numero } from "@/lib/formato";
 import { Identificacao } from "./Identificacao";
+import { Cartao, MARCA, NOME_APP } from "./Moldura";
 import { Preparacao } from "./Preparacao";
 
 export const dynamic = "force-dynamic";
-
-const MARCA = "S";
-const NOME_APP = "Simulador de Vendas";
 
 /** Mesmo texto de app/api/salas/[token]/sessao: o que o vendedor combina quando o gestor não escreveu nada. */
 const OBJETIVO_PADRAO = "Entender a situação do cliente e sair da conversa com um próximo passo combinado.";
@@ -43,19 +42,6 @@ function Indisponivel({ titulo, descricao }: { titulo: string; descricao: string
       <h1 className="text-2xl font-extrabold">{titulo}</h1>
       <p className="text-muted max-w-[420px]">{descricao}</p>
     </main>
-  );
-}
-
-/** Molde das telas que o vendedor vê depois de se identificar: mesma marca, mesmo cartão, sem menu. */
-function Cartao({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="max-w-[520px] mx-auto px-8 py-12 max-md:px-4 max-md:py-8" style={{ colorScheme: "light" }}>
-      <div className="flex items-center gap-3 mb-7">
-        <div className="shrink-0 w-[34px] h-[34px] rounded-[9px] bg-accent text-white grid place-items-center font-extrabold text-[15px] tracking-tight">{MARCA}</div>
-        <div className="font-bold text-[15px]">{NOME_APP}</div>
-      </div>
-      <div className="card p-7 max-md:p-[22px]">{children}</div>
-    </div>
   );
 }
 
@@ -99,7 +85,45 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
 
   const produto = obterProduto(simulacao.produtoId);
 
-  if (!participante || !confirmou) {
+  const identificacao = (
+    <Identificacao
+      codigo={token}
+      marca={MARCA}
+      nome={NOME_APP}
+      titulo={simulacao.nome}
+      produto={produto?.nome ?? "Treino de vendas"}
+      contexto={`Você vai conversar com um cliente virtual por cerca de ${simulacao.duracaoMin} minutos e, no fim, recebe o que foi bem e o que dá para melhorar.`}
+      provedores={provedoresDisponiveis().map((p) => ({ id: p, rotulo: `Entrar com ${nomeDoProvedor(p)}` }))}
+      conhecido={participante?.nome ?? null}
+      erroInicial={erro}
+    />
+  );
+
+  if (!participante) return identificacao;
+
+  // A conversa que esta pessoa já abriu e ainda não terminou. Ela é lida **antes** do limite de
+  // tentativas porque já foi contada quando nasceu: sem isto, um treino de uma tentativa só barraria
+  // o vendedor na própria vez, entre a preparação e o "Começar conversa".
+  const pendente = emPreparacao(token, participante.id) ?? emAndamento(token, participante.id);
+
+  // A conversa deixada no meio (US-017): quem voltou logo continua nela; quem sumiu tem a conversa
+  // fechada agora — e avaliada, se houver conversa para avaliar. Fechada, ela deixa de valer como
+  // aberta e a pessoa segue para a próxima tentativa, que é o que ela voltou aqui para fazer.
+  const retomada = pendente?.status === "em_andamento" ? await retomarOuFechar(pendente) : "retomada";
+  const aberta = retomada === "retomada" ? pendente : null;
+
+  // Limite de tentativas (US-011): quem já usou todas não abre outra conversa — vê quantas fez e o
+  // feedback da melhor delas, que é o que ele voltou aqui para reler.
+  const tentativas = tentativasDe(token, participante.id);
+  const esgotou = !aberta && simulacao.maxTentativas !== null && tentativas >= simulacao.maxTentativas;
+
+  // Reabrir o link com conversa nenhuma em aberto: a tela de identificação vira o balanço do treino
+  // ("Você já treinou 2 de 3 vezes"), com os dois caminhos que fazem sentido ali — treinar de novo e
+  // reler o último feedback. Quem nunca treinou continua vendo só "Continuar como <nome>".
+  if (!confirmou) {
+    if (aberta || tentativas === 0) return identificacao;
+    const conversas = historicoDe(token, participante.id);
+    const ultimoComFeedback = conversas.find((c) => c.resultadoId);
     return (
       <Identificacao
         codigo={token}
@@ -109,21 +133,20 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
         produto={produto?.nome ?? "Treino de vendas"}
         contexto={`Você vai conversar com um cliente virtual por cerca de ${simulacao.duracaoMin} minutos e, no fim, recebe o que foi bem e o que dá para melhorar.`}
         provedores={provedoresDisponiveis().map((p) => ({ id: p, rotulo: `Entrar com ${nomeDoProvedor(p)}` }))}
-        conhecido={participante?.nome ?? null}
+        conhecido={participante.nome}
         erroInicial={erro}
+        jaTreinou={{
+          tentativas,
+          maxTentativas: simulacao.maxTentativas,
+          podeTreinar: !esgotou,
+          conversas: conversas.length,
+          ultimoFeedback: ultimoComFeedback && simulacao.mostrarFeedback ? `/simular/${token}/meus-resultados/${ultimoComFeedback.id}` : null,
+        }}
       />
     );
   }
 
-  // A conversa que esta pessoa já abriu e ainda não terminou. Ela é lida **antes** do limite de
-  // tentativas porque já foi contada quando nasceu: sem isto, um treino de uma tentativa só barraria
-  // o vendedor na própria vez, entre a preparação e o "Começar conversa".
-  const aberta = emPreparacao(token, participante.id) ?? emAndamento(token, participante.id);
-
-  // Limite de tentativas (US-011): quem já usou todas não abre outra conversa — vê quantas fez e o
-  // feedback da melhor delas, que é o que ele voltou aqui para reler.
-  const tentativas = tentativasDe(token, participante.id);
-  if (!aberta && simulacao.maxTentativas !== null && tentativas >= simulacao.maxTentativas) {
+  if (esgotou) {
     const melhor = melhorSessaoDe(token, participante.id);
     return (
       <Cartao>
@@ -136,13 +159,20 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
             <p className="mb-4">
               Sua melhor conversa teve nota <strong>{numero(melhor.nota, 1)}</strong>.
             </p>
-            <a className="btn-primary" href={`/r/${melhor.resultadoId}`}>
+            {/* O feedback do vendedor mora dentro do link do treino, nunca em `/r/<id>`: aquela tela é
+                do gestor e exige conta, então mandá-lo para lá o jogaria na tela de entrar. */}
+            <a className="btn-primary" href={`/simular/${token}/meus-resultados/${melhor.sessaoId}`}>
               Ver meu feedback
             </a>
           </>
         ) : (
           <p className="text-muted">Assim que a avaliação das suas conversas ficar pronta, ela aparece por aqui.</p>
         )}
+        <p className="text-center mt-3">
+          <a className="btn-link text-[13.5px]" href={`/simular/${token}/meus-resultados`}>
+            Ver minhas conversas
+          </a>
+        </p>
       </Cartao>
     );
   }

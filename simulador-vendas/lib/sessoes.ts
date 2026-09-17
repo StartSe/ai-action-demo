@@ -385,3 +385,39 @@ export function melhorSessaoDe(simulacaoCodigo: string, participanteId: string):
   }
   return melhor;
 }
+
+/** Uma conversa do histórico do vendedor (US-017): a sessão com a nota já resolvida. */
+export type SessaoComNota = Sessao & { nota: number | null };
+
+/**
+ * As conversas desta pessoa nesta simulação, da mais recente para a mais antiga — é o que ela vê em
+ * `/simular/<código>/meus-resultados` e o que responde "como fui das outras vezes?".
+ *
+ * Fica de fora o que não é conversa: a sessão que ainda está em preparação (o vendedor nem começou) e
+ * a abandonada (abriu o link e fechou a aba). Listar qualquer uma das duas seria mostrar como treino
+ * algo que nunca aconteceu — e a abandonada nem gasta tentativa.
+ *
+ * A nota vem de `resultados` pela mesma junção em SQL de `notaMediaPorSimulacao`, e pelo mesmo motivo:
+ * ela é parte do resultado gravado em lib/historico.ts, infraestrutura que não pode ganhar função
+ * nova. `prepare` sobre tabela inexistente lança na hora, então a conferência vem antes.
+ */
+export function historicoDe(simulacaoCodigo: string, participanteId: string): SessaoComNota[] {
+  marcarAbandonadas();
+  const d = banco();
+  const comResultados = Boolean(d.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'resultados'").get());
+  const linhas = d
+    .prepare(
+      comResultados
+        ? `SELECT s.*, r.saida AS saida
+             FROM sessoes_treino s
+             LEFT JOIN resultados r ON r.id = s.resultadoId
+            WHERE s.simulacaoCodigo = ? AND s.participanteId = ? AND s.status NOT IN ('preparando', 'abandonada')
+            ORDER BY s.criadoEm DESC`
+        : `SELECT s.*, NULL AS saida
+             FROM sessoes_treino s
+            WHERE s.simulacaoCodigo = ? AND s.participanteId = ? AND s.status NOT IN ('preparando', 'abandonada')
+            ORDER BY s.criadoEm DESC`,
+    )
+    .all(simulacaoCodigo, participanteId) as (LinhaSessao & { saida: string | null })[];
+  return linhas.map((l) => ({ ...linhaParaSessao(l), nota: l.saida ? notaDoResultado(l.saida) : null }));
+}

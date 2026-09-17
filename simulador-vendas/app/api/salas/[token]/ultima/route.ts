@@ -23,7 +23,10 @@ export async function GET(req: Request, { params }: RouteContext<"/api/salas/[to
       const daPessoa = doCookie && doCookie.participanteId === participante.id && doCookie.simulacaoCodigo === token ? doCookie : null;
       const sessao = daPessoa ?? ultimaDe(token, participante.id);
       const id = sessao?.resultadoId ?? null;
-      return Response.json({ pronto: Boolean(id), id });
+      // `sessao` acompanha o resultado porque o feedback do vendedor mora dentro do link do treino
+      // (`/simular/<código>/meus-resultados/<conversa>`, US-017), não em `/r/<id>`, que é a tela do
+      // gestor e exige conta: mandá-lo para lá o jogaria na tela de entrar ao fim da conversa.
+      return Response.json({ pronto: Boolean(id), id, sessao: sessao?.id ?? null });
     }
   }
 

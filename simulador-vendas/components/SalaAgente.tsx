@@ -107,10 +107,13 @@ export function SalaAgente({ agente, variaveis, navegador }: Props) {
     const intervalo = setInterval(async () => {
       try {
         const r = await fetch(`/api/salas/${codigo}/ultima`);
-        const d = (await r.json()) as { pronto?: boolean; id?: string | null };
+        const d = (await r.json()) as { pronto?: boolean; id?: string | null; sessao?: string | null };
         if (d.pronto && d.id) {
           clearInterval(intervalo);
-          router.push(`/r/${d.id}`);
+          // O feedback de quem treina mora dentro do link do treino; `/r/<id>` é a tela do gestor e
+          // pediria uma conta que o vendedor não tem. Sem conversa própria (link de antes do modelo de
+          // hoje), o caminho antigo continua valendo.
+          router.push(d.sessao ? `/simular/${codigo}/meus-resultados/${d.sessao}` : `/r/${d.id}`);
         }
       } catch (err) {
         console.error("A avaliação ainda não pôde ser consultada", err);

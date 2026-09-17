@@ -5,6 +5,7 @@
 // resultado. A avaliação por rubrica é a US-018/US-019.
 import { obter as obterResultado } from "@/lib/historico";
 import { avaliarSessao } from "@/lib/avaliacao-sessao";
+import { persona, rotulo } from "@/lib/personas";
 import { conversaAberta } from "@/lib/sala-do-vendedor";
 import { encerrar, transcricao } from "@/lib/sessoes";
 import { ErroIA } from "@/lib/ai";
@@ -16,6 +17,12 @@ export async function POST(req: Request, { params }: RouteContext<"/api/salas/[t
   const lido = conversaAberta(req, token, { aceitaEncerrada: true });
   if (lido instanceof Response) return lido;
   const { simulacao, sessao } = lido;
+
+  // A conversa acabou: só agora o tipo de cliente é revelado (US-017). Antes disso ele não sai do
+  // servidor em rota nenhuma — saber que o cliente é "o Cético" antes de falar com ele transformaria
+  // o treino em decoreba (D2). Depois, é o que explica por que ele reagiu daquele jeito.
+  const tipoDeCliente = persona(sessao.personaId);
+  const revelacao = tipoDeCliente ? { tipoDeCliente: rotulo(tipoDeCliente), comportamento: tipoDeCliente.comportamento } : undefined;
 
   // Conversa já avaliada: devolve o que está gravado. Quem recarrega a tela do feedback (ou clica duas
   // vezes em encerrar) volta a ver a sua avaliação — refazê-la gastaria o modelo de novo e daria duas
@@ -31,6 +38,8 @@ export async function POST(req: Request, { params }: RouteContext<"/api/salas/[t
         id: guardado.id,
         titulo: guardado.titulo,
         conversa: guardado.entrada,
+        ...revelacao,
+        sessaoId: sessao.id,
       });
     }
   }
@@ -54,7 +63,7 @@ export async function POST(req: Request, { params }: RouteContext<"/api/salas/[t
     // O gestor pode ter desligado o feedback ao finalizar (US-011): a avaliação é gerada e guardada
     // do mesmo jeito — é dela que o painel dele vive —, mas nada dela volta para esta tela.
     if (!simulacao.mostrarFeedback) return Response.json({ semFeedback: true });
-    return Response.json(avaliada);
+    return Response.json({ ...avaliada, ...revelacao, sessaoId: sessao.id });
   } catch (err) {
     // A conversa já está fechada e gravada: o que falhou foi a avaliação. A frase diz isso, sem
     // pedir a quem treina uma ação que ele não tem como executar.
