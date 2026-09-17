@@ -35,8 +35,9 @@ import {
 import { AcoesResposta, Celular, horaAtual, type AoSalvarBase, type BolhaChat } from "@/components/Celular";
 import type { Meta } from "@/lib/ai";
 import type { ParBase } from "@/lib/base";
+import { ACAO_CONECTAR_NUMERO, AVISO_CONVERSAS_EXEMPLO, soConversasDeExemplo } from "@/lib/demo";
 import type { Sugestao } from "@/lib/sugestoes";
-import { rotuloNumero, rotuloOrigem } from "@/lib/rotulos";
+import { rotuloContato, rotuloOrigem } from "@/lib/rotulos";
 import type { Config, Conversa, ItemRelatorioAtendimento, PerguntaPendente } from "@/lib/types";
 
 const CONFIG_VAZIA: Config = { negocio: "", atendente: "", tom: "cordial", horario: "", baseConhecimento: "", naoSei: "humano" };
@@ -425,12 +426,13 @@ export default function Page() {
   const passoAtual = mensagens.length > 0 ? 3 : config.baseConhecimento.trim() ? 2 : 1;
   // Link "Aprovar"/"Corrigir" do relatório diário chega com ?atender=<numero>: posiciona a tela nessa conversa.
   const conversaSelecionada = atenderNumero && estadoConversas.fase === "pronto" ? estadoConversas.conversas.find((c) => c.numero === atenderNumero) : undefined;
-  // Respostas já dadas que ninguém conferiu ainda: a base aprovada é a fila de "conferido".
+  // Respostas já dadas que ninguém conferiu ainda: a base aprovada é a fila de "conferido". As
+  // conversas de exemplo ficam de fora — nada do que a demonstração respondeu precisa de conferência.
   const aprovadas = new Set((base ?? []).map((p) => p.pergunta.trim().toLowerCase()));
   const aguardandoAprovacao =
     base === null || estadoConversas.fase !== "pronto"
       ? 0
-      : estadoConversas.conversas.filter((c) => c.ultima_resposta && !aprovadas.has(c.ultima_mensagem.trim().toLowerCase())).length;
+      : estadoConversas.conversas.filter((c) => !c.exemplo && c.ultima_resposta && !aprovadas.has(c.ultima_mensagem.trim().toLowerCase())).length;
 
   return (
     <>
@@ -731,7 +733,7 @@ function ConversaSelecionada({
   return (
     <div ref={ref} className="card p-4 border-accent mb-6">
       <p className="text-[11px] font-bold uppercase tracking-wide text-accent-ink mb-1.5">Conversa selecionada</p>
-      <p className="font-semibold mb-1">{rotuloNumero(conversa.numero)}</p>
+      <p className="font-semibold mb-1">{rotuloContato(conversa.numero, conversa.nome)}</p>
       <p className="text-sm text-muted mb-2.5">{conversa.ultima_mensagem}</p>
       {conversa.ultima_resposta ? (
         <AcoesResposta
@@ -780,6 +782,12 @@ export function Resultado({
 
       <Origem meta={meta} />
 
+      {soConversasDeExemplo(conversas) && (
+        <div className="mb-4">
+          <Aviso acao={ACAO_CONECTAR_NUMERO}>{AVISO_CONVERSAS_EXEMPLO}</Aviso>
+        </div>
+      )}
+
       <ConteudoConversas conversas={conversas} onLimpar={onLimpar} onAprovar={onAprovar} onCorrigir={onCorrigir} />
 
       <SeloIA demo={meta.demo} />
@@ -809,7 +817,7 @@ export function ConteudoConversas({
       largura: "20%",
       render: (c) => (
         <>
-          <strong>{rotuloNumero(c.numero)}</strong>
+          <strong>{rotuloContato(c.numero, c.nome)}</strong>
           <span className="block text-[12px] text-muted font-normal">{c.hora}</span>
         </>
       ),
@@ -919,6 +927,6 @@ function relatorioParaTexto(itens: ItemRelatorioAtendimento[]): string {
 
 function conversasParaTexto(conversas: Conversa[]): string {
   const l: string[] = ["Conversas recebidas", ""];
-  conversas.forEach((c) => l.push(`${rotuloNumero(c.numero)} (${rotuloOrigem(c.origem)}${c.transferir ? ", transferida" : ""}): ${c.ultima_mensagem} — ${c.hora}`));
+  conversas.forEach((c) => l.push(`${rotuloContato(c.numero, c.nome)} (${rotuloOrigem(c.origem)}${c.transferir ? ", transferida" : ""}): ${c.ultima_mensagem} — ${c.hora}`));
   return l.join("\n");
 }

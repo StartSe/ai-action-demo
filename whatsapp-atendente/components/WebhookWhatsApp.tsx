@@ -4,7 +4,7 @@
 // última falha de envio). Sem esse diagnóstico, "conectei e não sei se está funcionando" não tem
 // resposta dentro do app.
 import { useEffect, useState } from "react";
-import { Aviso, CopyButton, data } from "./ui";
+import { Aviso, CopyButton, data, useConfirmacao } from "./ui";
 
 type Dados = {
   url: string;
@@ -25,10 +25,28 @@ function Linha({ rotulo, valor, rotuloCopiar }: { rotulo: string; valor: string 
 
 export function WebhookWhatsApp() {
   const [dados, setDados] = useState<Dados | null>(null);
+  const [exemplos, setExemplos] = useState(0);
+  const { confirmar, Dialogo } = useConfirmacao();
+
+  const contarExemplos = () =>
+    fetch("/api/conversas/exemplos")
+      .then((r) => r.json())
+      .then((r: { quantas: number }) => setExemplos(r.quantas))
+      .catch(() => {});
 
   useEffect(() => {
     fetch("/api/whatsapp/webhook-info").then((r) => r.json()).then(setDados).catch(() => {});
+    contarExemplos();
   }, []);
+
+  async function apagarExemplos() {
+    const ok = await confirmar("Apagar as conversas de exemplo? O app fica sem nenhuma conversa até a primeira mensagem de verdade chegar.", {
+      confirmarRotulo: "Apagar",
+    });
+    if (!ok) return;
+    await fetch("/api/conversas/exemplos", { method: "DELETE" }).catch(() => {});
+    contarExemplos();
+  }
 
   return (
     <section className="card p-6 max-md:p-5">
@@ -54,6 +72,12 @@ export function WebhookWhatsApp() {
             Nenhuma mensagem do número real chegou até agora. Mande uma mensagem para o número da empresa pelo seu próprio celular: ela deve aparecer aqui em segundos.
           </p>
         )}
+        {exemplos > 0 && (
+          <p className="text-sm text-muted mt-3">
+            Enquanto o número não estiver conectado, o app mostra {exemplos} conversas de exemplo.{" "}
+            <button type="button" className="btn-link" onClick={apagarExemplos}>Apagar as conversas de exemplo</button>
+          </p>
+        )}
         {dados?.ultimaFalha && (
           <div className="mt-3">
             <Aviso tom="danger">
@@ -62,6 +86,7 @@ export function WebhookWhatsApp() {
           </div>
         )}
       </div>
+      {Dialogo}
     </section>
   );
 }

@@ -8,7 +8,8 @@
  * `datetime('now')`), o que deixa comparar e ordenar por texto. Para fora deste arquivo elas sempre
  * saem em ISO.
  */
-import { abrirBanco } from "./store";
+import { conversasExemplo } from "./demo";
+import { abrirBanco, getConfig, setConfig } from "./store";
 import type { CanalOrigem, Conversa, MensagemChat, PapelMensagem, StatusConversa } from "./types";
 
 /** Quantas mensagens da conversa vão para a IA como memória de curto prazo. */
@@ -370,6 +371,8 @@ export function registrarMensagemCliente({
   nome?: string;
   em?: Date;
 }): ConversaRegistro {
+  // A primeira conversa real do WhatsApp aposenta a demonstração, antes de qualquer gravação.
+  if (origem === "whatsapp") apagarExemplosNaPrimeiraReal();
   const atual = garantirConversa({ numero, origem, nome, em });
   const gravado = (linha(numero) as LinhaConversa).status as StatusConversa;
   const status: StatusConversa = gravado === "resolvida" ? "ia" : gravado;
@@ -436,4 +439,61 @@ export function apagarConversa(numero: string): void {
   const d = banco();
   d.prepare("DELETE FROM mensagens WHERE numero = ?").run(numero);
   d.prepare("DELETE FROM conversas WHERE numero = ?").run(numero);
+}
+
+// --- Conversas de exemplo ------------------------------------------------
+// Ver lib/demo.ts:conversasExemplo(). Elas são gravadas uma única vez, para as telas terem o que
+// mostrar antes de o número da empresa estar conectado, e somem na primeira conversa real.
+
+/** Marca que a demonstração já nasceu (ou já foi apagada): sem ela, as conversas de exemplo voltariam. */
+const CHAVE_EXEMPLOS = "CONVERSAS_EXEMPLO_SEMEADAS";
+
+export function contarExemplos(): number {
+  const linha = banco().prepare("SELECT COUNT(*) AS total FROM conversas WHERE exemplo = 1").get() as { total: number };
+  return Number(linha.total);
+}
+
+function totalConversas(): number {
+  const linha = banco().prepare("SELECT COUNT(*) AS total FROM conversas").get() as { total: number };
+  return Number(linha.total);
+}
+
+/**
+ * Grava as conversas de exemplo quando o app ainda não tem conversa nenhuma e o número da empresa
+ * não está conectado. Devolve quantas gravou (0 quando não era o caso). Só acontece uma vez: depois
+ * disso, apagar as conversas de exemplo deixa o app vazio de verdade.
+ */
+export function semearExemplosSeVazio({ numeroConectado }: { numeroConectado: boolean }): number {
+  if (numeroConectado || getConfig(CHAVE_EXEMPLOS) || totalConversas() > 0) return 0;
+  const agora = Date.now();
+  for (const c of conversasExemplo()) {
+    const inicio = new Date(agora - (c.mensagens[0]?.atras ?? 0) * 60 * 1000);
+    const fim = new Date(agora - (c.mensagens[c.mensagens.length - 1]?.atras ?? 0) * 60 * 1000);
+    garantirConversa({ numero: c.numero, nome: c.nome, origem: "exemplo", exemplo: true, assunto: c.assunto, status: c.status, em: inicio });
+    for (const m of c.mensagens) {
+      inserirMensagem({ numero: c.numero, papel: m.papel, texto: m.texto, criadoEm: paraTextoDeBanco(new Date(agora - m.atras * 60 * 1000)) });
+    }
+    banco()
+      .prepare("UPDATE conversas SET nao_lidas = ?, atualizado_em = ? WHERE numero = ?")
+      .run(c.naoLidas ?? 0, paraTextoDeBanco(fim), c.numero);
+  }
+  setConfig(CHAVE_EXEMPLOS, new Date().toISOString());
+  return conversasExemplo().length;
+}
+
+/** Apaga as conversas de exemplo e deixa o app no estado inicial vazio (elas não voltam depois disso). */
+export function apagarExemplos(): number {
+  const d = banco();
+  const quantas = contarExemplos();
+  d.prepare("DELETE FROM mensagens WHERE numero IN (SELECT numero FROM conversas WHERE exemplo = 1)").run();
+  d.prepare("DELETE FROM conversas WHERE exemplo = 1").run();
+  setConfig(CHAVE_EXEMPLOS, new Date().toISOString());
+  return quantas;
+}
+
+function apagarExemplosNaPrimeiraReal(): void {
+  const quantas = contarExemplos();
+  if (quantas === 0) return;
+  apagarExemplos();
+  console.log(`Primeira conversa real do WhatsApp: ${quantas} conversas de exemplo apagadas.`);
 }
