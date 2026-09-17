@@ -194,7 +194,8 @@ ${comandoDocker(cat.apps[0])}
 
 - Ao clicar em Publicar, você entra (ou cria uma conta gratuita) no serviço de hospedagem e confirma. O app é criado na sua conta, não na nossa.
 - Nenhuma chave é pedida na publicação. Depois, abra o app, clique em Configurações (\`/setup\`) e conecte a IA e as integrações em um minuto.
-- No plano gratuito o app adormece após um tempo sem uso e a configuração feita em Configurações pode se perder quando ele for atualizado. Um plano pago mantém tudo salvo (descomente o bloco \`disk\` do Blueprint).${avisoPagos}
+- No plano gratuito o app adormece após um tempo sem uso e a configuração feita em Configurações pode se perder quando ele for atualizado. Um plano pago mantém tudo salvo (descomente o bloco \`disk\` do Blueprint).
+- Se você já publicou este app antes, o serviço de hospedagem pergunta entre associar ao serviço existente ou criar tudo de novo. Associar é o normal: ele atualiza o que já está no ar e mantém o mesmo endereço. Criar de novo faz uma segunda instalação, com outro endereço.${avisoPagos}
 `;
 }
 
