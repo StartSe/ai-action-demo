@@ -1,0 +1,81 @@
+# Ralph Progress Log
+Started: Thu Sep 17 16:01:00 -03 2026
+PRD: tasks/prd-simulador-vendas-produto-simulacao-sessoes.md (31 histórias, 7 fases)
+Branch: ralph/simulador-vendas-produto-simulacao-sessoes
+---
+
+## Codebase Patterns
+
+- **`scripts/verificar-padrao.sh` agora tem dois níveis.** A antiga lista `ARQUIVOS` virou `INFRA` (conta, banco, IA, MCP, rotinas, formulários, `proxy.ts`, assets — conferida em **todo** app, sempre) e `CAMADA_PRODUTO` (`components/ui.tsx`, `components/setup.tsx`, `components/conta.tsx`, `lib/navegacao.ts`, `lib/ilustracao.ts`, `app/globals.css`), pulada só nos apps com `"independente": true` no `catalogo.json`. Um arquivo compartilhado novo que nasce no `pdi-time` precisa entrar na lista certa: se é infraestrutura, em `INFRA`; se é camada visual, em `CAMADA_PRODUTO`. `"padrao": "proprio"` continua existindo e é outra coisa — tira o app **inteiro** da conferência (só o `automl-pocket`).
+- **Independência é da camada de produto, nunca da infraestrutura.** Um app independente continua com `lib/store.ts`, `lib/conta.ts`, `lib/historico.ts`, `lib/mcp*.ts`, `lib/rotinas.ts`, `proxy.ts` e `app/api/{setup,status,conta,rotinas,historico}` byte a byte iguais aos do `pdi-time`. Toda melhoria de infraestrutura continua nascendo no `pdi-time` e sendo replicada.
+- **Rodar `lib/*.ts` fora do Next exige um resolvedor.** Os imports relativos do projeto omitem a extensão (`./store`) e o Node não resolve isso. O jeito mais barato — e melhor que o gotcha antigo de replicar `CREATE TABLE` num `.mjs` — é um gancho `register()` de ~15 linhas que acrescenta `.ts`/`.tsx` a especificador relativo sem extensão e resolve o atalho `@/`. Assim o teste exercita o código de verdade, não uma cópia dele.
+- **O Node só sabe APAGAR tipos, não transformá-los.** Propriedade de parâmetro (`constructor(readonly x: T)`), `enum`, `namespace` e decorator quebram com `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` ao rodar um `.ts` direto pelo Node, mesmo compilando bem no Next. Em `lib/*.ts` que pode ser exercitado por teste, declarar o campo e atribuir no corpo.
+- **`prepare()` do `node:sqlite` sobre tabela inexistente lança NA HORA, não na execução.** Qualquer migração que consulte uma tabela antiga precisa do `prepare` **depois** da checagem de existência. E toda migração tem que ser testada com o **banco vazio**, não só com o banco antigo cheio: o caminho real é "algumas tabelas antigas existem, outras não" (o `instrumentation.ts` cria umas poucas ao limpar links vencidos), e é justamente o que os dois testes óbvios não cobrem.
+- **Migração idempotente por construção, não por flag:** todo `INSERT` usa `INSERT OR IGNORE` com id/código **já conhecido e derivado** (nunca sorteado). Rodar de novo, em qualquer processo, não duplica — mesmo princípio da semeadura de `lib/cenarios.ts`. Nenhum `DROP TABLE`: a suíte não apaga dado de banco existente.
+- **`react-hooks/set-state-in-effect` (eslint-plugin-react-hooks@7) acusa chamada direta a função que mexe em estado no corpo de um efeito, mesmo sendo assíncrona** — ela não distingue "setState depois de um await". Busca inicial de tela vai sempre em forma de corrente (`fetch().then()`); um `carregar()` em `useCallback` continua servindo para recarregar depois de salvar/apagar, chamado de handler.
+- **`scripts/verificar-jargao.mjs` só limpa ATRIBUTOS técnicos antes de varrer** (`href=`, `src=`, `className=`…). Por isso `<Link href="/setup">` passa e `acao={{ url: "/setup#openrouter" }}` não passa, dentro de `components/*.tsx`. A correção certa não é uma exceção em `scripts/jargao-excecoes.json` (vazio em toda a suíte): é receber a ação como prop — um componente reaproveitável não deve conhecer as rotas do app. Telas fora de `app/page.tsx` não são varridas.
+- **Verificação em navegador sem Playwright instalado:** `npm i playwright` num diretório descartável e `chromium.launch({ channel: "chrome" })` usa o Chrome já instalado na máquina, sem baixar navegador. Subir o app com `next build` + `next start` (não `next dev`) é mais estável para isso. **Nunca canalizar a saída do servidor por `head`**: quando o `head` termina, o SIGPIPE derruba o servidor no meio da verificação.
+---
+
+## 2026-09-17 - US-001
+- `catalogo.json`: a entrada de `simulador-vendas` ganhou `"independente": true`.
+- `scripts/verificar-padrao.sh`: a lista `ARQUIVOS` virou `INFRA` + `CAMADA_PRODUTO`, com `e_independente()` lendo a flag do catálogo. **A AC dizia que esse modelo "já existe desde o `whatsapp-atendente`, nenhuma mudança no script" — não existia.** O script só conhecia `"padrao": "proprio"`, que tira o app inteiro da conferência (forte demais: levaria junto a infraestrutura), e o `whatsapp-atendente` nunca teve flag nenhuma. A saída do verificador é idêntica à anterior para os 16 outros apps.
+- `simulador-vendas/lib/navegacao.ts` (agora próprio do app): Início, Produtos, Simulações, Equipe, Resultados, Configurações. "Histórico" saiu do cabeçalho e passou a ser linkado de Resultados.
+- `app/produtos`, `app/simulacoes`, `app/equipe`, `app/resultados`: telas reais com `Topbar` + `Empty` apontando para o que já funciona. `proxy.ts` não mudou (as telas novas nascem privadas por não estarem na lista pública; `/simular/*` e `/api/salas/*` continuam públicas, D13).
+- Verificado: lint, build, `verificar-padrao`, `verificar-paleta` e `verificar-jargao` em 0; navegador em 1400x1000 e 390 nas seis telas, com o item ativo correto, os seis destinos na folha do celular e sem rolagem horizontal.
+- **Learnings for future iterations:**
+  - Confira a premissa de uma AC antes de confiar nela. Duas ACs desta história descreviam como já existente um mecanismo que não existia (`independente` no script) e um PRD irmão que não está no repositório (`tasks/prd-whatsapp-atendente-telas.md`).
+  - O `Topbar` compartilhado já calcula o item ativo (`ativo(href)`, com `startsWith` para subrotas): acrescentar destino é só editar `lib/navegacao.ts`, sem tocar no componente.
+---
+
+## 2026-09-17 - US-002
+- `lib/banco.ts` (novo): esquema das cinco tabelas (`produtos`, `fontes_produto`, `simulacoes`, `participantes`, `sessoes`, `mensagens_sessao`) + a migração, sobre a conexão de `lib/store.ts` (`abrirBanco()`), com WAL ligado.
+- `lib/produtos.ts`, `lib/simulacoes.ts`, `lib/participantes.ts`, `lib/sessoes.ts` (novos): o comportamento de cada entidade.
+- `lib/vendedores.ts` virou casca fina sobre `lib/participantes.ts`: a tabela antiga deixou de ser lida sem que nenhum dos sete módulos que a importam precisasse mudar. **A US-026 apaga a casca.**
+- Migração: cenários → simulações de exemplo de um "Produto de demonstração"; vendedores → participantes com o **mesmo id** (o `Conversa.vendedorId` do histórico continua apontando para a pessoa certa); salas → simulações com o **mesmo código** (links já enviados continuam abrindo), e sala vencida nasce `encerrada`.
+- Verificado com um `app.sqlite` no formato antigo em `/tmp`: 41 conferências em dois processos (migração, criação de produto + simulação + quatro sessões de três participantes, reinício, `contarPorPersona`, `tentativasDe`, e a migração rodando de novo sem duplicar nada). `/api/vendedores`, a home e um link de sala antigo continuam respondendo 200.
+- **Learnings for future iterations:**
+  - **Uma conexão, não cinco.** Trinta vendedores no mesmo link são trinta sessões simultâneas; `banco()` devolve a conexão única de `lib/store.ts` e serializa as escritas no processo. As tabelas antigas continuam com as conexões próprias delas — não é preciso mexer.
+  - **WAL é persistente no arquivo do banco**, então pedir `PRAGMA journal_mode = WAL` uma vez de qualquer conexão vale para o arquivo inteiro. Foi pedido em `lib/banco.ts` porque `lib/store.ts` é INFRA comparada byte a byte.
+  - Em SQLite, **vários `NULL` convivem numa coluna `UNIQUE`** — é o que permite trazer, sem inventar endereço, quem foi cadastrado só com o nome.
+  - `contarPorPersona` conta **toda** sessão (quem desistiu já consumiu a persona da rodada); `tentativasDe` **ignora as abandonadas** (fechar a aba sem conversar não gasta uma chance). Perguntas diferentes, não unificar.
+  - **Dívida registrada:** os ids das 7 personas estão numa constante local em `lib/banco.ts` (`PERSONAS_PADRAO`) porque a migração precisa deles antes da US-007 existir. **Ao implementar a US-007, trocar por um import de `lib/personas.ts`.**
+---
+
+## 2026-09-17 - US-003
+- `/produtos` (lista + cadastro inline, sem modal), `/produtos/[id]` (dados e materiais), `GET/POST /api/produtos` e `GET/PUT/DELETE /api/produtos/[id]`. `/simulacoes/nova` nasceu como destino real de "Criar treino" (a US-009 substitui), para nenhuma ação levar a 404.
+- Produto com simulação **ativa** não é apagado (409, com a frase do que fazer e link para Simulações). Pausada ou encerrada não bloqueia.
+- **Corrigido um bug achado no teste com banco vazio:** `migrarSalas` preparava `SELECT titulo FROM cenarios` antes de conferir se a tabela existia; numa instalação nova `salas` existe (o `instrumentation.ts` a cria ao limpar links vencidos) mas `cenarios` não, então a migração inteira caía no `ROLLBACK` — e o produto de exemplo sumia sem qualquer aviso na tela.
+- Verificado: 11 conferências na API (nome vazio, criação, o exemplo sumindo e voltando, edição, detalhe, 404, remoção), a guarda de treino ativo, e navegador em 1400x1000 e 390 nas três telas.
+- **Learnings for future iterations:**
+  - **O produto de exemplo é escondido, nunca apagado** (`listar()` filtra quando existe produto real; `listarTodos()` é a saída para resolver o nome do produto de uma simulação). Apagar seria mais simples e está errado: as simulações migradas das salas antigas apontam para ele, e apagá-lo deixaria sem produto um link que o gestor já mandou para o time.
+---
+
+## 2026-09-17 - US-004
+- `lib/extrair-pagina.ts` (novo, server-only, sem dependência nova) + `POST/GET /api/produtos/[id]/fontes` e `DELETE .../fontes/[fonteId]`.
+- Bloqueio de endereço interno por esquema, por nome **e pelo IP resolvido**, refeito a cada redirecionamento (seguidos na mão, no máximo 3). Limites de 2 MB, 15 s, 40.000 caracteres; `Content-Type` precisa ser `text/html` ou `text/plain`; menos de 200 caracteres úteis é recusado.
+- Cada falha tem frase de negócio terminando no caminho garantido (colar o texto); o código técnico só vai para o `console.error`.
+- Verificado: 21 conferências de normalização e de recusa de endereço (inclusive redirecionamento para o metadata da nuvem), leitura real da Wikipédia em português (18 mil caracteres, acentos preservados), as três respostas da rota, navegador em 1400x1000 e 390.
+- **Learnings for future iterations:**
+  - **O endereço vem de quem usa o app, então toda busca é uma requisição que um estranho manda o nosso servidor fazer.** Só olhar o texto do endereço não pega um domínio público que resolve para `127.0.0.1` ou `169.254.169.254`: é preciso `dns.lookup(..., { all: true })` e recusar se **qualquer** endereço resolvido for interno. E `redirect: "manual"`, porque o `fetch` seguindo sozinho pularia a conferência — o primeiro endereço é público e o segundo é que seria interno.
+  - **Decodifique entidades acentuadas por composição, não por tabela:** `&aacute;` é "a" + `́` e `.normalize("NFC")` junta. Sete linhas cobrem o português inteiro em vez das ~60 entidades do HTML. Um teste só com HTML em inglês nunca acharia isso.
+  - **Nem toda página deixa ler:** site com proteção contra robô responde 403 ao nosso `User-Agent` (conferido: `anthropic.com` responde 403). Não é defeito a consertar — é por isso que toda frase de erro termina mandando colar o texto à mão.
+---
+
+## 2026-09-17 - US-005
+- A mesma rota `POST /api/produtos/[id]/fontes` passou a atender os três caminhos, decidindo pelo `Content-Type`: `multipart/form-data` é arquivo, JSON é `{tipo:"landing"}` ou `{tipo:"texto"}`. Uma rota só porque o destino é o mesmo (texto normalizado em `fontes_produto`) e as regras comuns (teto de 10 materiais, voltar para "rascunho") valem para os três.
+- `lib/legendas.ts` ganhou `EXTENSOES_MATERIAL` (`.txt`, `.md`, `.vtt`, `.srt`), ao lado de `EXTENSOES_ACEITAS`. `.pdf`/`.docx`/`.pptx` ficam de fora enquanto a **Q1 das Open Questions** não for respondida; a tela diz em uma linha o que lê hoje e põe "Texto" **ao lado** do envio.
+- Verificado: `.vtt` convertido (falas seguidas juntadas), `.md`, `.xlsx` recusado, texto salvo e texto vazio recusado, o teto de 10 materiais, a volta para "rascunho"; navegador em 1400x1000 e 390, com o envio de arquivo feito também no celular.
+- **Learnings for future iterations:**
+  - `EXTENSOES_ACEITAS` e `EXTENSOES_MATERIAL` respondem a perguntas diferentes ("de onde sai uma conversa para analisar" x "de onde sai o que a empresa vende") e devem continuar separadas. `textoDoArquivo` já trata `.md` corretamente (extensão desconhecida volta como texto puro, sem BOM).
+---
+
+## 2026-09-17 - US-006
+- `lib/conhecimento.ts` (novo, server-only), `POST/PUT /api/produtos/[id]/conhecimento` e `components/FichaProduto.tsx` (novo): a ficha em blocos editáveis, com "Gerar de novo" e salvamento explícito.
+- Verificado: recusa de gerar sem material, geração em modo demonstração, salvamento marcando "pronto", recusa sem resumo, e os tetos conferidos com resumo de 900 caracteres, 9 itens, item de 200 e repetidos; navegador em 1400x1000 e 390.
+- **Learnings for future iterations:**
+  - **REGRA PARA AS HISTÓRIAS SEGUINTES (D12):** a ficha é a **única** coisa que o cliente simulado (US-007/US-015) e o avaliador (US-018) recebem sobre o produto. `fontes_produto` guarda o material bruto **só** para gerar a ficha de novo; nenhuma fonte crua pode entrar em prompt de simulação ou avaliação. É por isso que a ficha tem tamanho fechado: ela vai inteira em **todo turno de conversa**.
+  - **Tetos são aplicados no código, depois da resposta, nos dois caminhos** — na geração e no `PUT` da tela. Um campo editado à mão também entra em todo turno, e o prompt não pode crescer porque alguém colou três páginas num campo.
+  - **`lista()` não completa para chegar ao mínimo.** Inventar item para bater contagem é o que o prompt proíbe; o mínimo de 3 serve só para `fichaMagra()` avisar na tela. Lista vazia é resposta correta.
+  - **Gerar não marca "pronto"; salvar marca.** A ficha é a verdade da empresa e só vale depois que uma pessoa olhou.
+---

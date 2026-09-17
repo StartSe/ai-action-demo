@@ -1,0 +1,561 @@
+{
+  "project": "IA para Executivos (ai-action-demo)",
+  "branchName": "ralph/simulador-vendas-produto-simulacao-sessoes",
+  "description": "Simulador de Vendas reorganizado em torno de Produto → Simulação → Sessão: o gestor cadastra o produto uma vez, cria simulações com metodologia, dificuldade e personas, e manda UM link para o time inteiro; cada vendedor gera a própria sessão, treina por voz no navegador (sem exigir chave de voz) e recebe um feedback que ensina, enquanto o gestor acompanha por vendedor, por persona e ao longo do tempo. Escopo: só simulador-vendas/ (mais a entrada dele em catalogo.json e a US-021, que nasce no pdi-time e é replicada). Fonte: tasks/prd-simulador-vendas-produto-simulacao-sessoes.md.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "O app vira independente e ganha os seis destinos",
+      "description": "As a gestor comercial, I want ver no cabeçalho os seis lugares do app so that eu saiba onde cadastrar produto, criar simulação e ver resultado, mesmo antes das telas ficarem prontas.",
+      "acceptanceCriteria": [
+        "`catalogo.json`: a entrada de `simulador-vendas` ganha `\"independente\": true`; `scripts/verificar-padrao.sh` passa a conferir só `INFRA` e `ESTRUTURA` para este app (o modelo já existe desde o `whatsapp-atendente`, nenhuma mudança no script)",
+        "`simulador-vendas/CLAUDE.md` registra a data (17/09/2026) e o commit a partir do qual `components/ui.tsx`, `components/setup.tsx`, `components/conta.tsx`, `lib/navegacao.ts`, `lib/ilustracao.ts` e `app/globals.css` passam a ser próprios do app",
+        "`lib/navegacao.ts` (agora próprio) exporta Início `/`, Produtos `/produtos`, Simulações `/simulacoes`, Equipe `/equipe`, Resultados `/resultados`, Configurações `/setup`; \"Histórico\" sai do cabeçalho e passa a ser linkado só de Resultados",
+        "`app/produtos/page.tsx`, `app/simulacoes/page.tsx`, `app/equipe/page.tsx`, `app/resultados/page.tsx` existem, usam o mesmo `Topbar` e mostram um `Empty` com a ação que leva ao que já funciona enquanto a história de cada uma não chega — nenhuma rota devolve 404",
+        "`proxy.ts` não muda: as quatro páginas nascem privadas; `/simular/*` e `/api/salas/*` continuam públicas (D13)",
+        "O item ativo do cabeçalho reflete a rota atual nas seis páginas; lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 1,
+      "notes": "Fase 0: fundação (independência, navegação e modelo de dados)",
+      "passes": true
+    },
+    {
+      "id": "US-002",
+      "title": "Produto, Simulação, Sessão e Participante no banco",
+      "description": "As a app, I want guardar produto, simulação, sessão, participante e avaliação em tabelas próprias so that trinta vendedores no mesmo link gerem trinta históricos independentes sem nada se misturar.",
+      "acceptanceCriteria": [
+        "`lib/produtos.ts`: tabela `produtos` (`id`, `nome`, `descricao`, `categoria`, `conhecimento` JSON — a ficha da US-006 —, `status` `rascunho|pronto`, `exemplo` 0/1, `criadoEm`, `atualizadoEm`) e `fontes_produto` (`id`, `produtoId`, `tipo` `landing|documento|texto`, `origem` (URL ou nome do arquivo), `conteudo` texto normalizado, `criadoEm`), com `criar`/`listar`/`obter`/`atualizar`/`apagar`/`adicionarFonte`/`listarFontes`/`removerFonte`",
+        "`lib/simulacoes.ts`: tabela `simulacoes` (`codigo` chave — o mesmo formato base64url de 12 bytes de `lib/salas.ts` —, `produtoId`, `nome`, `objetivo`, `metodologia` `spin|consultiva|personalizada`, `criteriosPersonalizados` JSON nulo, `dificuldade` `facil|realista|dificil`, `modoPersona` `aleatoria|escolhidas`, `personas` JSON (lista de ids), `maxTentativas`, `mostrarFeedback` 0/1, `permiteTexto` 0/1, `permiteVoz` 0/1, `duracaoMin`, `status` `ativa|pausada|encerrada`, `exemplo` 0/1, `criadoEm`), com `criar`/`listar`/`obter`/`atualizar`/`mudarStatus`/`apagar`",
+        "`lib/participantes.ts`: tabela `participantes` (`id`, `nome`, `email` único e normalizado em minúsculas, `origem` `link|cadastro|google|microsoft`, `criadoEm`), com `garantir({nome,email,origem})` (cria ou devolve o existente pelo e-mail, atualizando o nome só quando o salvo estiver vazio)",
+        "`lib/sessoes.ts`: tabela `sessoes` (`id`, `simulacaoCodigo`, `participanteId`, `personaId`, `modo` `voz-agente|voz-navegador|texto`, `status` `preparando|em_andamento|encerrada|avaliada|abandonada`, `iniciadaEm`, `encerradaEm`, `duracaoSeg`, `resultadoId` do histórico, `criadoEm`) e `mensagens_sessao` (`id`, `sessaoId`, `papel` `vendedor|cliente`, `texto`, `segundo`, `criadoEm`), com `abrir`, `registrarMensagem`, `transcricao(sessaoId)`, `encerrar`, `listarPorSimulacao`, `listarPorParticipante`, `contarPorPersona(simulacaoCodigo)`, `tentativasDe(simulacaoCodigo, participanteId)`",
+        "`lib/vendedores.ts` é **substituído** por `lib/participantes.ts`: a migração copia cada vendedor existente (nome, e-mail, `origem: \"cadastro\"`) e a tabela antiga deixa de ser lida (nenhum `DROP TABLE` — o padrão da suíte é nunca apagar dado de banco existente)",
+        "Migração das salas e cenários (D3): na primeira leitura após a atualização, cada `sala` vira uma `simulacao` do produto de exemplo, preservando o `codigo` (links já enviados continuam abrindo), e cada resultado de tipo `conversa` já salvo em `lib/historico.ts` continua acessível em `/r/<id>` sem mudança",
+        "Todo `id` novo usa `crypto.randomBytes(9).toString(\"base64url\")`, mesmo gerador do resto do app; toda tabela nova mora no mesmo `app.sqlite` de `lib/store.ts`",
+        "Teste com servidor standalone e `DATA_DIR` em `/tmp`: criar produto, simulação e três sessões de participantes diferentes, reiniciar o servidor, conferir que tudo volta e que `contarPorPersona` soma certo",
+        "Lint e build passam",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 2,
+      "notes": "Fase 0: fundação (independência, navegação e modelo de dados)",
+      "passes": true
+    },
+    {
+      "id": "US-003",
+      "title": "Biblioteca de produtos",
+      "description": "As a gestor, I want ver e organizar os produtos que minha empresa vende so that eu crie vários treinos do mesmo produto sem recarregar material nenhuma vez.",
+      "acceptanceCriteria": [
+        "`/produtos` lista cartões grandes (nome, categoria, \"N materiais\", \"N simulações\", ações \"Editar\" e \"Criar treino\"), com `+ Novo produto` como ação primária no topo",
+        "`Empty` quando não há produto: título, uma frase e a ação \"Cadastrar meu primeiro produto\"",
+        "`GET/POST /api/produtos` e `GET/PUT/DELETE /api/produtos/[id]`; apagar pede confirmação (`useConfirmacao`) e avisa quantas simulações dependem do produto; um produto com simulação ativa **não** é apagado (a mensagem diz o que fazer)",
+        "O produto de exemplo aparece com o chip \"Exemplo\" e some quando o primeiro produto real é criado",
+        "Lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 3,
+      "notes": "Fase 1: Produtos",
+      "passes": true
+    },
+    {
+      "id": "US-004",
+      "title": "Ensinar o produto pela landing page",
+      "description": "As a gestor, I want colar o endereço da página do meu produto so that a IA aprenda o que vendemos sem eu digitar nada.",
+      "acceptanceCriteria": [
+        "Campo \"Endereço da página\" + botão \"Importar conteúdo\" no cadastro do produto; `POST /api/produtos/[id]/fontes` com `{ tipo: \"landing\", url }`",
+        "Extração no servidor, sem dependência nova: `fetch` com `User-Agent` próprio, limite de 2 MB e 15 s, `Content-Type` precisa ser `text/html` ou `text/plain`; o HTML é normalizado removendo `<script>`, `<style>`, `<nav>`, `<footer>`, comentários e atributos, convertendo `<h1>`–`<h3>`, `<li>` e `<p>` em linhas, colapsando espaços em branco e cortando em 40.000 caracteres",
+        "Endereço inválido, página que não responde, resposta não-HTML, conteúdo com menos de 200 caracteres úteis: cada caso tem sua frase de negócio (\"Não conseguimos ler essa página. Cole o texto principal em 'Texto' que funciona igual.\"), nunca o erro técnico — o código vai para o `console.error`",
+        "Bloqueio de endereços internos (`localhost`, `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `::1`, esquemas fora de `http`/`https`) antes do `fetch` e de novo a cada redirecionamento (máximo 3), com o motivo só no log",
+        "A fonte importada aparece na lista de materiais do produto com o endereço, a data e \"Remover\"",
+        "Lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 4,
+      "notes": "Fase 1: Produtos",
+      "passes": true
+    },
+    {
+      "id": "US-005",
+      "title": "Ensinar o produto por documentos e por texto",
+      "description": "As a gestor, I want enviar a apresentação comercial e colar informações extras so that o cliente simulado conheça o produto como um cliente real conheceria.",
+      "acceptanceCriteria": [
+        "`Dropzone` (componente que já existe) aceitando `.txt`, `.md`, `.vtt` e `.srt` até 2 MB por arquivo, até 10 materiais por produto; conversão no servidor reaproveitando `lib/legendas.ts` para os dois formatos de legenda",
+        "`.pdf`, `.docx` e `.pptx` aparecem na área de envio como **aceitos ou não** conforme a resposta da Q1 (Open Questions); enquanto a resposta não vier, a área diz em uma linha quais formatos aceita hoje e o campo \"Texto\" fica ao lado como caminho garantido — a história é dada como pronta sem eles",
+        "Campo \"Texto\" (área livre, até 20.000 caracteres) grava uma fonte `tipo: \"texto\"`",
+        "Cada material da lista mostra nome, tipo, tamanho do texto extraído (\"~3.200 palavras\") e \"Remover\"; remover material marca o produto como `rascunho` de novo se a ficha tiver sido gerada a partir dele",
+        "Nenhum arquivo é guardado em disco: só o texto normalizado vai para `fontes_produto` (o app não tem storage e não precisa de um)",
+        "Lint e build passam; verificar no navegador (envio no celular também)",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 5,
+      "notes": "Fase 1: Produtos",
+      "passes": true
+    },
+    {
+      "id": "US-006",
+      "title": "A ficha do produto (\"Entendemos seu produto\")",
+      "description": "As a gestor, I want ver o que a IA entendeu do meu produto e corrigir so that o cliente simulado e a avaliação usem a verdade da minha empresa, não uma invenção.",
+      "acceptanceCriteria": [
+        "`lib/conhecimento.ts` (server-only): `gerarConhecimento(fontes)` chama `askJSON` e devolve `{ resumo, publico, beneficios[], diferenciais[], objecoes[], precoFaixa?, concorrentes[] }`, com limites por campo (resumo ≤ 600 caracteres, listas com 3 a 6 itens de ≤ 120 caracteres) aplicados **no código** depois da resposta, nunca só pedidos no prompt",
+        "O prompt recebe as fontes concatenadas com um corte de 40.000 caracteres no total (as mais recentes primeiro) e a instrução de **não inventar**: o que não estiver no material volta como lista vazia",
+        "A tela mostra a ficha em blocos editáveis (o mesmo desenho do mockup: Público, Principais benefícios, Diferenciais, Objeções prováveis), com \"Gerar de novo\" e salvamento explícito; editar a ficha marca o produto como `pronto`",
+        "Sem IA conectada, a ficha de exemplo (produto de demonstração) aparece com `SeloIA demo` e o aviso de uma frase com link para `/setup`",
+        "A ficha é a **única** coisa que o cliente simulado e o avaliador recebem sobre o produto (D12); as fontes brutas nunca entram em prompt de simulação",
+        "`ErroIA` da geração vira `ErrorBox` com código e ação, como no resto do app",
+        "Lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 6,
+      "notes": "Fase 1: Produtos",
+      "passes": true
+    },
+    {
+      "id": "US-007",
+      "title": "Catálogo de personas com atributos compostos",
+      "description": "As a gestor, I want escolher que tipos de cliente meu time vai encontrar so that o treino cubra o cliente fácil e o difícil, sem eu descrever ninguém.",
+      "acceptanceCriteria": [
+        "`lib/personas.ts` (puro, sem `node:*`, importável do cliente e do servidor) exporta `PERSONAS: Persona[]` com sete entradas: `amigavel` 🙂, `apressado` ⚡, `direto` 🎯, `cetico` 🤨, `preco` 💰, `especialista` 🧠, `resistente` 🧱",
+        "Cada persona tem `{ id, nome, emoji, comportamento, secundaria?, conhecimento: 0..2, paciencia: 0..2, abertura: 0..2, precoSensivel: 0..2, frasesTipicas[] }` — a tela mostra só emoji + nome (D2)",
+        "`lib/cliente-simulado.ts`: `montarPersonagem({ persona, dificuldade, produto })` devolve `{ nome, cargo, empresa, contexto, instrucoes }` — nome, cargo e empresa sorteados de listas fixas por segmento, contexto escrito a partir do produto e da persona, `instrucoes` é o system prompt",
+        "A dificuldade soma ao personagem (D7): `facil` (+1 abertura, +1 paciência, no máximo 1 objeção), `realista` (atributos da persona), `dificil` (−1 abertura, −1 paciência, 3 a 4 objeções, exige prova antes de aceitar argumento) — os deltas são aplicados com `clamp(0,2)` no código",
+        "O system prompt sempre contém: nunca sair do personagem, nunca dar dica de vendas, nunca revelar a persona, falas de 1 a 3 frases em português do Brasil, quem encerra é o vendedor",
+        "Teste de unidade por `node --test` ou script equivalente: os sete personagens geram prompt não vazio nas três dificuldades e nenhum vazamento do nome da persona no texto do contexto",
+        "Lint e build passam",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "notes": "Fase 2: Personas",
+      "passes": false
+    },
+    {
+      "id": "US-008",
+      "title": "Atribuição equilibrada da persona",
+      "description": "As a gestor, I want que meus vendedores peguem clientes diferentes so that o painel mostre como o time vende para cada perfil, e não 70% do mesmo perfil.",
+      "acceptanceCriteria": [
+        "`lib/atribuicao.ts`: `escolherPersona({ simulacao, contagem })` devolve a persona menos usada entre as habilitadas na simulação; empate é desfeito aleatoriamente",
+        "A atribuição acontece **na abertura da sessão** (`sessoes.abrir`), nunca na criação do link (D8)",
+        "Quando o mesmo participante repete a simulação, a persona que ele já pegou é evitada enquanto houver outra disponível (ele treina perfis diferentes; o equilíbrio geral continua valendo)",
+        "Modo `escolhidas` com uma única persona: todo mundo pega aquela, sem erro",
+        "Teste: 50 sessões numa simulação com 5 personas distribuem 10 ± 2 por persona",
+        "Lint e build passam",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "notes": "Fase 2: Personas",
+      "passes": false
+    },
+    {
+      "id": "US-009",
+      "title": "Criar simulação em três passos",
+      "description": "As a gestor, I want criar um treino em três passos so that eu saia da tela com o link pronto para mandar no grupo do time.",
+      "acceptanceCriteria": [
+        "`/simulacoes/nova` com o componente `Passos` (que já existe): **1 Produto → 2 Desafio → 3 Compartilhar**",
+        "Passo 1: select de produto mostrando o estado do conhecimento (\"3 materiais\", \"página importada\", \"ficha pronta\"); produto em rascunho avisa e oferece \"Terminar o cadastro\" sem bloquear",
+        "Passo 2: nome (sugerido automaticamente como \"<metodologia> — <produto>\"), objetivo (área livre, opcional), metodologia (3 opções, US-010), dificuldade (3 opções), personas (aleatórias ou escolhidas, US-007) e as regras da US-011",
+        "Passo 3: tela de confirmação com o link, \"Copiar link\" e o passo a passo de seis linhas (\"vendedor acessa → informa seus dados → recebe um cliente virtual → realiza a venda → recebe feedback → resultado aparece para você\")",
+        "Voltar entre passos preserva o que já foi preenchido; nada é salvo até o passo 3 (uma única chamada `POST /api/simulacoes`)",
+        "Sem nenhum produto cadastrado, o passo 1 leva para `/produtos` com a frase \"Primeiro cadastre o que seu time vende\"",
+        "Lint e build passam; verificar no navegador (desktop e celular)",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 9,
+      "notes": "Fase 3: Simulações",
+      "passes": false
+    },
+    {
+      "id": "US-010",
+      "title": "Metodologias e rubricas",
+      "description": "As a gestor, I want escolher o método de venda que meu time usa so that a avaliação cobre o que eu ensino, não uma régua genérica.",
+      "acceptanceCriteria": [
+        "`lib/metodologias.ts` (puro): `spin` (Perguntas de situação, Perguntas de problema, Perguntas de implicação, Need-payoff, Escuta ativa, Proposta de valor, Tratamento de objeções, Descoberta, Próximo passo), `consultiva` (os 7 de `lib/criterios.ts`, reaproveitados sem redigitar) e `personalizada` (critérios escritos pelo gestor, mínimo 3, máximo 10)",
+        "Cada critério tem `{ id, nome, descricao, grupo }`, com `grupo` em Descoberta / Proposta de valor / Objeções / Fechamento — é o agrupamento que o vendedor vê (4 números, US-020)",
+        "`lib/criterios.ts` continua existindo e exportando `CRITERIOS_PADRAO` (usado pela análise de conversa real, D11), agora derivado de `metodologias.consultiva` para não haver duas listas",
+        "A tela mostra as três opções com uma linha cada; \"Personalizada\" abre os campos de critério inline (sem modal)",
+        "Lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 10,
+      "notes": "Fase 3: Simulações",
+      "passes": false
+    },
+    {
+      "id": "US-011",
+      "title": "Regras da simulação e o link",
+      "description": "As a gestor, I want definir quantas tentativas cada vendedor tem e se ele vê o feedback so that o treino sirva tanto para praticar quanto para avaliar.",
+      "acceptanceCriteria": [
+        "Regras no passo 2: \"Tentativas por vendedor\" (1, 3, 5, sem limite; padrão 3), \"Mostrar feedback ao finalizar\" (padrão sim), \"Permitir voz\" (padrão sim), \"Permitir texto\" (padrão sim), \"Tempo da conversa\" (5, 10, 15 minutos; padrão 10)",
+        "Desmarcar voz e texto ao mesmo tempo é impedido na tela com uma frase, não com erro de servidor",
+        "`POST /api/simulacoes` gera o `codigo` e devolve o link absoluto (`baseUrl(req)` + `/simular/<código>`); o link não expira enquanto a simulação estiver `ativa` (diferente das salas de hoje, que expiram em 30 dias — a migração da US-002 converte `expiraEm` em `status: \"encerrada\"` quando já passou)",
+        "Botão \"Copiar link\" com confirmação visível, e um `<details>` \"Como funciona\" com os seis passos",
+        "Lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 11,
+      "notes": "Fase 3: Simulações",
+      "passes": false
+    },
+    {
+      "id": "US-012",
+      "title": "Lista de simulações",
+      "description": "As a gestor, I want ver minhas simulações e o que cada uma está rendendo so that eu saiba qual continuar, pausar ou encerrar.",
+      "acceptanceCriteria": [
+        "`/simulacoes` lista cartões (nome, produto, chips de metodologia e dificuldade, \"N participantes · N sessões\", nota média, status) com \"Ver resultados\" e um menu com \"Copiar link\", \"Pausar\"/\"Reativar\", \"Duplicar\" e \"Encerrar\"",
+        "\"Duplicar\" copia tudo menos o código e as sessões, abrindo o passo 2 preenchido",
+        "Simulação pausada: o link abre uma tela amigável (\"Este treino está pausado. Fale com quem enviou o link.\"), sem 404 — mesmo padrão de `app/f/[token]`",
+        "Filtro por status (Todas / Ativas / Encerradas) e busca por nome, ambos sem recarregar a página",
+        "Lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 12,
+      "notes": "Fase 3: Simulações",
+      "passes": false
+    },
+    {
+      "id": "US-013",
+      "title": "Identificação do vendedor em um toque",
+      "description": "As a vendedor, I want entrar no treino com a conta que já uso no trabalho so that eu comece a conversa sem preencher formulário nem criar senha.",
+      "acceptanceCriteria": [
+        "`/simular/<código>` abre a tela de identificação: nome da simulação, produto, uma frase de contexto e os dois botões \"Entrar com Google\" e \"Entrar com Microsoft\" quando as credenciais do app existirem (`GOOGLE_CLIENT_ID_APP` / `MICROSOFT_CLIENT_ID_APP`), sempre com \"ou informe seu nome e e-mail\" logo abaixo (D5)",
+        "`GET /api/salas/[token]/entrar/google` e `.../microsoft`: mesmo molde PKCE de `app/api/setup/oauth/google/route.ts`, escopo `openid email profile` (nunca `gmail.send`), `state` com o código da simulação, cookie `HttpOnly` de 10 minutos; o callback lê nome e e-mail do `id_token` (verificando `aud`, `iss` e `exp`), chama `participantes.garantir` e redireciona para a preparação",
+        "Nenhum token do vendedor é guardado: o app usa a identificação e descarta o acesso — o cookie de sessão do vendedor é próprio do app (`sv_sessao`, `HttpOnly`, `SameSite=Lax`, 12 h, só o id da sessão e o do participante)",
+        "Caminho manual: nome (obrigatório) e e-mail (obrigatório, validado), `participantes.garantir({ origem: \"link\" })`",
+        "O vendedor que já treinou nesse navegador vê \"Continuar como Ana Souza\" com a opção \"Não sou eu\"",
+        "Limite de tentativas da simulação: quando o participante já usou todas, a tela diz quantas fez e mostra o feedback da melhor sessão em vez de abrir outra",
+        "A tela **nunca** mostra menu do app, cabeçalho de gestor nem link para `/setup`",
+        "Lint e build passam; verificar no navegador (celular primeiro)",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 13,
+      "notes": "Fase 4: a sessão do vendedor (voz)",
+      "passes": false
+    },
+    {
+      "id": "US-014",
+      "title": "Preparação — \"Seu cliente\"",
+      "description": "As a vendedor, I want saber com quem vou falar e qual é meu objetivo so that eu entre na conversa como entraria numa reunião de verdade.",
+      "acceptanceCriteria": [
+        "Depois da identificação, `POST /api/salas/[token]/sessao` abre a sessão (`status: \"preparando\"`), atribui a persona (US-008) e devolve o personagem (`montarPersonagem`)",
+        "A tela mostra nome, cargo, empresa, contexto (2 a 3 frases), o tempo aproximado, o objetivo do vendedor e um único botão \"Começar conversa\"",
+        "A persona **não** é revelada em lugar nenhum: nem no texto, nem no HTML, nem em resposta de API que o navegador do vendedor receba (a resposta devolve o personagem, não o `personaId`) — verificado olhando a resposta da rota, não só a tela",
+        "Um aviso de uma linha sobre o microfone aparece antes de começar (\"Vamos pedir o microfone para você falar com o cliente\"), para a permissão não pegar ninguém de surpresa",
+        "Sessão aberta e não iniciada por mais de 30 minutos vira `abandonada` na leitura seguinte (cálculo na leitura, sem tarefa agendada)",
+        "Lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 14,
+      "notes": "Fase 4: a sessão do vendedor (voz)",
+      "passes": false
+    },
+    {
+      "id": "US-015",
+      "title": "A sala por voz do navegador (nível 2 — o padrão)",
+      "description": "As a vendedor, I want falar com o cliente simulado abrindo só o link so that eu treine vendendo de boca, sem o gestor precisar configurar nada de voz.",
+      "acceptanceCriteria": [
+        "`components/SalaVoz.tsx` (novo; usa `codigo`, nunca `token`, por causa de `scripts/verificar-jargao.mjs`): cabeçalho com nome e cargo do cliente, cronômetro regressivo, estado da conversa (\"Ouvindo…\", \"Pensando…\", \"Falando…\"), a última fala do cliente em texto grande e o botão de microfone central",
+        "Escuta: `SpeechRecognition`/`webkitSpeechRecognition` com `lang=\"pt-BR\"`, `interimResults` para mostrar o que está sendo entendido, dois modos — **segurar para falar** (padrão no celular) e **mãos livres** com fim de turno por 2 s de silêncio (padrão no desktop) — e um alternador visível entre eles",
+        "Resposta: `POST /api/salas/[token]/conversar` recebe a fala transcrita, grava em `mensagens_sessao`, monta o prompt com a ficha do produto + personagem + últimas 20 falas e devolve a próxima fala do cliente (`askText`, 1 a 3 frases) — a transcrição fica **no servidor** (diferente de hoje, em que o cliente manda a conversa inteira a cada turno)",
+        "Fala: quando `ELEVENLABS_API_KEY` existe, `POST /api/salas/[token]/voz` gera o áudio no servidor (texto-para-voz da ElevenLabs, modelo de baixa latência, voz da persona pela US-028) e devolve o áudio — a chave nunca vai para o navegador; sem a chave, `speechSynthesis` com uma voz `pt-BR` do próprio navegador",
+        "Navegador sem `SpeechRecognition` (Firefox) ou microfone negado: a sala troca para texto na hora, com uma frase explicando e o convite a abrir no Chrome; a conversa já começada continua de onde parou",
+        "\"Prefiro digitar\" está sempre visível e alterna para o campo de texto sem perder a conversa; \"Encerrar e ver meu resultado\" encerra a sessão a qualquer momento",
+        "O tempo acaba: aviso aos 2 minutos restantes, e no zero o cliente se despede em uma fala e a sessão encerra sozinha",
+        "Modo demonstração (sem IA conectada): roteiro fixo de 6 falas, a sala funciona inteira por voz do navegador e o resultado sai com `SeloIA demo`",
+        "Erro da IA no meio da conversa fala com o **vendedor**, não com o gestor (\"O cliente não conseguiu responder agora. Tente falar de novo.\" + botão \"Tentar de novo\"), com o código técnico só no `console.error` — regra já registrada no `CLAUDE.md` deste app",
+        "Verificar no navegador em celular 390 (Chrome) e desktop 1400x1000; a conversa inteira precisa caber sem rolagem no celular",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 15,
+      "notes": "Fase 4: a sessão do vendedor (voz)",
+      "passes": false
+    },
+    {
+      "id": "US-016",
+      "title": "A sala com o agente conversacional (nível 1)",
+      "description": "As a vendedor, I want conversar com o cliente como numa ligação, podendo interromper so that o treino se pareça com uma reunião de verdade.",
+      "acceptanceCriteria": [
+        "Quando `ELEVENLABS_AGENTE` está conectada (`integracaoConfigurada`, decidido no servidor como hoje), a sala carrega o widget `<elevenlabs-convai>` com as variáveis dinâmicas da **sessão**, não mais da sala: `sessao_id`, `simulacao`, `produto`, `persona_instrucoes` (o system prompt do personagem), `participante` e `duracao_minutos`",
+        "`app/webhook/elevenlabs/route.ts` passa a casar o evento de pós-conversa por `sessao_id` (mantendo o `sala_token` antigo como alternativa, para links já em uso), grava a transcrição em `mensagens_sessao`, encerra a sessão e dispara a avaliação (US-019)",
+        "O cartão \"Dados para a equipe técnica\" em `/setup` é atualizado: novo prompt-modelo (o agente recebe as instruções por variável dinâmica, então o prompt fixo passa a ser só \"Siga `{{persona_instrucoes}}`\"), as seis variáveis e a contagem de conversas sem avaliação",
+        "Se o widget não carregar em 10 s, a sala cai para o nível 2 sozinha, sem o vendedor precisar fazer nada, e registra o motivo no log",
+        "`ESPERA_MAXIMA_MS` (90 s) e o aviso de avaliação não recebida continuam valendo, agora por sessão",
+        "Verificação possível sem conta real: leitura de código + `tsc`/lint/build + teste ponta a ponta por `curl` do evento assinado, como foi feito na US-015/US-016 antigas (mesmo HMAC)",
+        "Lint e build passam",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "notes": "Fase 4: a sessão do vendedor (voz)",
+      "passes": false
+    },
+    {
+      "id": "US-017",
+      "title": "Tentativas, retomada e histórico do vendedor",
+      "description": "As a vendedor, I want poder treinar de novo e ver como fui das outras vezes so that eu perceba se estou melhorando.",
+      "acceptanceCriteria": [
+        "Ao reabrir o link já identificado: \"Você já treinou 2 de 3 vezes\" com \"Treinar novamente\" e \"Ver meu último resultado\"",
+        "Sessão encerrada sem avaliação (o vendedor fechou a aba): ao voltar, a sessão é retomada se tiver menos de 10 minutos de idade, senão é encerrada e avaliada com o que houver (mínimo de 4 falas; abaixo disso vira `abandonada` sem avaliação)",
+        "`/simular/<código>/meus-resultados` lista as sessões daquele participante naquela simulação (data, nota, persona revelada **depois** da conversa, link para o feedback)",
+        "A persona só é revelada ao vendedor na tela de feedback, nunca antes",
+        "Lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 17,
+      "notes": "Fase 4: a sessão do vendedor (voz)",
+      "passes": false
+    },
+    {
+      "id": "US-018",
+      "title": "Agente avaliador",
+      "description": "As a gestor, I want que cada conversa seja avaliada com o mesmo critério so that eu possa comparar vendedores sem depender do meu humor no dia.",
+      "acceptanceCriteria": [
+        "`lib/avaliacao.ts` (server-only): `avaliarSessao(sessaoId)` recebe ficha do produto + metodologia e rubrica + persona e dificuldade + transcrição completa, e devolve `{ notaGeral, criterios: [{ id, nota, evidencia, comoMelhorar }], pontosFortes[], oportunidade: { criterio, oQueAconteceu, oQueFazer, fraseSugerida } }`",
+        "A **nota geral nunca vem da IA**: é a média dos critérios arredondada a 1 casa, como já é regra em `lib/analise.ts` — e a média por grupo (Descoberta, Proposta de valor, Objeções, Fechamento) também é calculada no código",
+        "Toda `evidencia` é um trecho **da própria conversa**; o prompt exige citação e o código descarta (nota mantida, evidência vazia com aviso) qualquer critério cuja evidência não apareça na transcrição",
+        "A avaliação roda logo depois do encerramento, grava em `historico` (`tipo: \"sessao\"`) e preenche `sessoes.resultadoId`/`status: \"avaliada\"`; falha de IA deixa a sessão como `encerrada` e o gestor vê \"Avaliação pendente\" com \"Tentar de novo\"",
+        "Reaproveita `salvarConversaAnalisada` onde já couber, sem duplicar a lógica de gravação no histórico",
+        "`/r/<id>` e `/imprimir/<id>` aceitam o terceiro tipo (`\"sessao\"`, ao lado de `\"conversa\"` e `\"painel\"`), no mesmo molde já usado",
+        "Teste com transcrição de exemplo em modo demonstração e com IA real (quando houver chave), conferindo que a nota geral bate com a média",
+        "Lint e build passam",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "notes": "Fase 5: avaliação e feedback",
+      "passes": false
+    },
+    {
+      "id": "US-019",
+      "title": "Feedback que ensina",
+      "description": "As a vendedor, I want entender o que fazer diferente na próxima conversa so that o treino melhore minha venda, não só me dê uma nota.",
+      "acceptanceCriteria": [
+        "Tela de feedback (pública, dentro da sala): nota grande com uma frase de leitura (\"Muito bom desempenho\"), quatro números por grupo, \"O que você fez bem\" (3 itens), \"Principal oportunidade\" (o que aconteceu + o que fazer) e \"Experimente dizer\" (a frase sugerida, com botão de copiar)",
+        "A persona é revelada aqui, com uma linha explicando o perfil (\"Carlos era um cliente apressado e cético\")",
+        "Ações: \"Treinar novamente\" (respeitando as tentativas) e \"Ver minhas outras conversas\"",
+        "`mostrarFeedback: false` na simulação: o vendedor vê só \"Conversa registrada. Seu gestor vai comentar com você.\" e nenhuma nota",
+        "A conversa completa fica num `<details>` \"Ver a conversa\" com as falas em ordem",
+        "Nenhuma ação de gestor aparece aqui (`acoesDoGestor` continua `false` na sala, como já é hoje)",
+        "Lint e build passam; verificar no navegador (celular primeiro)",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 19,
+      "notes": "Fase 5: avaliação e feedback",
+      "passes": false
+    },
+    {
+      "id": "US-020",
+      "title": "E-mail do resultado para o vendedor",
+      "description": "As a vendedor, I want receber meu feedback por e-mail so that eu revise antes da próxima conversa com um cliente real.",
+      "acceptanceCriteria": [
+        "Quando o participante tem e-mail e as notificações estão configuradas, o feedback é enviado logo após a avaliação, reaproveitando `lib/envio-analise.ts` e `lib/notificacoes.ts` (nenhum canal novo)",
+        "O e-mail traz nota, os três pontos fortes, a principal oportunidade, a frase sugerida e o link do resultado; nunca traz a rubrica inteira",
+        "Falha de envio não quebra a tela nem a avaliação: fica registrada e aparece para o gestor em Resultados como \"Não conseguimos enviar por e-mail\"",
+        "O gestor pode desligar o envio em Configurações, em uma linha",
+        "Lint e build passam",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "notes": "Fase 5: avaliação e feedback",
+      "passes": false
+    },
+    {
+      "id": "US-021",
+      "title": "Modelo de IA por tarefa (infraestrutura, nasce no `pdi-time`)",
+      "description": "As a mantenedor da suíte, I want usar um modelo rápido para conversar e um modelo mais capaz para avaliar so that a simulação fique fluida e a avaliação, confiável, sem pagar caro nas duas pontas.",
+      "acceptanceCriteria": [
+        "`lib/ai.ts` (INFRA) ganha `model?: string` em `askText`/`askJSON` e `modelName(tarefa?: \"padrao\" | \"avaliacao\")`, lendo `OPENROUTER_MODEL_AVALIACAO` com queda para `OPENROUTER_MODEL` — mesmo desenho já existente para `visionModelName()`/`OPENROUTER_MODEL_VISAO`, sem inventar padrão novo",
+        "A mudança nasce no `pdi-time` e é replicada byte a byte para os 17 apps do padrão (`scripts/verificar-padrao.sh` sai 0 antes e depois), como manda `PADRAO.md` para melhoria de infraestrutura",
+        "`/setup` ganha, no cartão da IA, \"Modelo para simulação\" e \"Modelo para avaliação\", cada um com \"Automático\" (padrão) ou escolha manual; a lista vem do OpenRouter em tempo real (`GET /api/v1/models`, já usado pela suíte), agrupada em Gratuitos e Pagos, **nunca fixa no código**",
+        "`lib/avaliacao.ts` chama a IA com a tarefa `avaliacao`; a simulação continua no modelo padrão",
+        "Lint e build passam nos apps tocados",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "notes": "Fase 5: avaliação e feedback",
+      "passes": false
+    },
+    {
+      "id": "US-022",
+      "title": "Painel da simulação — Visão geral",
+      "description": "As a gestor, I want abrir uma simulação e entender em dez segundos como o time está so that eu saiba se preciso agir.",
+      "acceptanceCriteria": [
+        "`/resultados/[codigo]` com cabeçalho (nome, status, \"N sessões · N vendedores · nota média\") e três abas: **Visão geral | Equipe | Personas**",
+        "Visão geral: quatro `Destaque` (Nota média, Participantes, Sessões, Evolução vs. período anterior), competências em barras horizontais (SVG próprio) e um bloco \"Principal oportunidade do time\" com uma frase acionável",
+        "A frase da oportunidade é escrita pela IA a partir dos agregados (uma chamada, cacheada por 1 hora ou até chegar sessão nova), com um texto de reserva calculado no código quando a IA não estiver disponível",
+        "Toda agregação é cálculo puro sobre as sessões avaliadas, no molde de `lib/painel-equipe.ts` (que continua servindo a análise de conversa real)",
+        "Período comparado: janela atual contra a imediatamente anterior, não sobreposta — mesma regra já usada no app",
+        "`/resultados` (sem código) lista as simulações com resultado, mais recentes primeiro",
+        "Lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 22,
+      "notes": "Fase 6: resultados do gestor",
+      "passes": false
+    },
+    {
+      "id": "US-023",
+      "title": "Aba Equipe",
+      "description": "As a gestor, I want ver vendedor por vendedor so that eu saiba com quem conversar esta semana.",
+      "acceptanceCriteria": [
+        "Tabela (`DataTable`) com vendedor, nota, tendência (↑ → ↓, limiar de ±0,3 como já é usado), sessões e data da última",
+        "Expandir a linha mostra: nota, quantas simulações fez, melhor desempenho (persona e nota), maior desafio (persona e nota) e link para a última conversa",
+        "Ordenação por nota e por tendência; busca por nome",
+        "Exportar para planilha (CSV) com uma linha por sessão — reaproveitando o padrão de exportação que a suíte já tem",
+        "Lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 23,
+      "notes": "Fase 6: resultados do gestor",
+      "passes": false
+    },
+    {
+      "id": "US-024",
+      "title": "Aba Personas — como o time vende para cada cliente",
+      "description": "As a gestor, I want ver em que tipo de cliente meu time trava so that o próximo treino ataque o problema certo.",
+      "acceptanceCriteria": [
+        "Lista das personas usadas na simulação com emoji, nome, nota média e quantas sessões, ordenada da maior para a menor nota (o desenho do mockup: número grande, barra, sem gráfico complexo)",
+        "Abaixo, um parágrafo escrito pela IA explicando a maior dificuldade do time com a persona de menor nota, citando o padrão observado — mesma regra de cache e de texto de reserva da US-022",
+        "Persona com menos de 3 sessões aparece com \"poucos dados\" em vez de nota, para não induzir conclusão errada",
+        "Lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 24,
+      "notes": "Fase 6: resultados do gestor",
+      "passes": false
+    },
+    {
+      "id": "US-025",
+      "title": "Evolução ao longo do tempo",
+      "description": "As a gestor, I want ver a evolução de cada vendedor e de cada competência so that eu tenha motivo para manter o time treinando todo mês.",
+      "acceptanceCriteria": [
+        "No detalhe do vendedor: uma linha por mês (SVG próprio) com a nota média e os pontos marcados, cobrindo até 12 meses",
+        "Evolução por competência: a sequência de médias por mês nos quatro grupos, em texto compacto (\"Objeções 6,1 → 6,7 → 7,2 → 8,0\")",
+        "A evolução atravessa simulações: é do participante no app inteiro, não só dentro de um link",
+        "Menos de dois meses de dado: a área mostra \"Ainda sem histórico suficiente\" em vez de uma linha de um ponto só",
+        "Lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 25,
+      "notes": "Fase 6: resultados do gestor",
+      "passes": false
+    },
+    {
+      "id": "US-026",
+      "title": "Equipe (tela) e a conversa real",
+      "description": "As a gestor, I want ver todo mundo que já treinou e também avaliar uma conversa que aconteceu de verdade so that o app cubra o treino e o acompanhamento no mesmo lugar.",
+      "acceptanceCriteria": [
+        "`/equipe` lista os participantes (nome, e-mail, sessões, nota média, última atividade), com \"Cadastrar pessoa\" (nome e e-mail) e \"Convidar\" (copia o link da simulação escolhida)",
+        "\"Analisar uma conversa real\" (D11) leva ao fluxo que já existe hoje (colar/enviar `.txt`/`.vtt`/`.srt`), agora vinculando a análise a um participante da lista; a rota, o MCP e o formato do resultado não mudam",
+        "O detalhe do participante junta sessões simuladas e conversas reais numa linha do tempo única",
+        "Apagar um participante pede confirmação e explica o que acontece com as sessões dele (ficam, anônimas)",
+        "Lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 26,
+      "notes": "Fase 6: resultados do gestor",
+      "passes": false
+    },
+    {
+      "id": "US-027",
+      "title": "Home",
+      "description": "As a gestor, I want abrir o app e saber o que está acontecendo e o que fazer a seguir so that eu não precise procurar nada.",
+      "acceptanceCriteria": [
+        "Hero no formato do mockup: sobretítulo, título \"Treine seu time para qualquer cenário de venda\" (7 palavras), apoio de até 20 palavras, \"+ Criar simulação\" como ação primária e \"Ver como funciona\" como secundária (abre o `<details>` dos seis passos, sem vídeo)",
+        "Quatro indicadores com variação vs. mês anterior: Simulações realizadas, Nota média do time, Vendedores treinados, Sessões realizadas",
+        "\"Simulações ativas\": até três cartões grandes (produto, nome, chips de metodologia e dificuldade, participantes, sessões, nota média, \"Ver resultados\") e \"Ver todas\"",
+        "Coluna da direita: \"Comece em 3 passos\" (cadastre o produto → crie a simulação → compartilhe o link), com o passo concluído marcado de verdade a partir do estado do banco, e \"Dica da semana\" (texto fixo rotativo, sem IA)",
+        "Instalação nova, sem nada cadastrado: o hero fica, os indicadores somem e \"Comece em 3 passos\" ocupa o lugar dos cartões",
+        "A ilustração do hero segue a fundação visual do segmento (`IlustracaoSegmento`), não uma foto de banco de imagens",
+        "Lint e build passam; verificar no navegador (desktop e celular)",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 27,
+      "notes": "Fase 7: Home, voz por persona e fechamento",
+      "passes": false
+    },
+    {
+      "id": "US-028",
+      "title": "Voz por persona e Configurações › Voz",
+      "description": "As a gestor, I want que cada tipo de cliente soe diferente so that o treino pareça com pessoas diferentes, não com o mesmo robô.",
+      "acceptanceCriteria": [
+        "`lib/vozes.ts`: mapa persona → características de voz (velocidade, estabilidade, tom) e, quando a ElevenLabs está conectada, uma voz por persona escolhida da lista real da conta (`GET /v1/voices`, conferido na documentação), com queda para uma voz padrão",
+        "Sem ElevenLabs: o mesmo mapa ajusta `rate`/`pitch` de `speechSynthesis`, para apressado soar mais rápido e cético mais sério",
+        "Cartão \"Voz\" em `/setup`: estado da conexão, \"Voz automática por persona\" (ligado por padrão) e um botão \"Ouvir uma amostra\" por persona",
+        "O cartão deixa claro em uma linha que **sem conectar nada a simulação já é por voz**, e que a ElevenLabs melhora a naturalidade — o benefício, não a tecnologia",
+        "Lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 28,
+      "notes": "Fase 7: Home, voz por persona e fechamento",
+      "passes": false
+    },
+    {
+      "id": "US-029",
+      "title": "MCP, rotina, artefato e formulário no modelo novo",
+      "description": "As a gestor, I want que o app continue funcionando dentro do meu assistente e me avisando sozinho so that ele opere sem eu abrir a tela todo dia.",
+      "acceptanceCriteria": [
+        "`/mcp` ganha, além de `analisar_conversa` (inalterada), `criar_simulacao` (produto + metodologia + dificuldade → link) e `resultados_da_simulacao` (código → agregados), no mesmo `lib/mcp.ts` escrito à mão",
+        "A rotina `resumo-simulador-vendas` passa a resumir **sessões** desde a última execução (quem treinou, nota média, maior dificuldade do time) e continua salvando um painel no histórico para a notificação apontar",
+        "Artefato: o feedback e o painel da simulação continuam imprimíveis (`/imprimir/<id>`) e compartilháveis por link (`/r/<id>`)",
+        "Formulário público (`/f/<token>`, infraestrutura hoje sem uso): registra o tipo \"Convite para treinar\", que coleta nome e e-mail e devolve o link da simulação — é o caminho para quem quer divulgar o treino sem mandar o link direto",
+        "Lint e build passam",
+        "Typecheck passes"
+      ],
+      "priority": 29,
+      "notes": "Fase 7: Home, voz por persona e fechamento",
+      "passes": false
+    },
+    {
+      "id": "US-030",
+      "title": "Modo demonstração completo e primeira impressão",
+      "description": "As a executivo avaliando o app, I want ver o app cheio e conseguir fazer uma simulação de ponta a ponta sem configurar nada so that eu entenda o valor antes de decidir conectar a IA.",
+      "acceptanceCriteria": [
+        "`lib/demo.ts` passa a semear (uma vez, só quando o banco está vazio e sem IA conectada): 1 produto de exemplo com ficha pronta, 2 simulações de exemplo (uma SPIN realista, uma consultiva difícil), 3 participantes e 6 sessões avaliadas com notas entre 6,4 e 9,1, distribuídas em 5 personas e espalhadas em 4 meses (para a evolução ter forma)",
+        "Tudo de exemplo tem o chip \"Exemplo\" onde aparece; o conjunto some quando o primeiro dado real do mesmo tipo é criado (produto real apaga produto de exemplo; sessão real apaga sessões de exemplo)",
+        "O link de exemplo abre e permite uma conversa por voz inteira com o roteiro fixo, terminando num feedback de exemplo",
+        "Um `Aviso` de uma frase, com link para `/setup`, aparece em cada tela que mostra dado de exemplo",
+        "Lint e build passam; verificar no navegador",
+        "Typecheck passes",
+        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+      ],
+      "priority": 30,
+      "notes": "Fase 7: Home, voz por persona e fechamento",
+      "passes": false
+    },
+    {
+      "id": "US-031",
+      "title": "Fechamento — textos, verificações e documentação",
+      "description": "As a mantenedor, I want o app conferido e documentado so that a próxima pessoa (ou a próxima sessão) saiba o que foi decidido e por quê.",
+      "acceptanceCriteria": [
+        "`scripts/verificar-jargao.mjs` sai 0: nenhuma tela usa \"persona\" sem apoio, \"token\", \"webhook\", \"API\", \"prompt\", \"LLM\" ou \"rubrica\" em texto visível — o vendedor lê \"tipo de cliente\", \"link\", \"critérios de avaliação\"",
+        "`scripts/verificar-paleta.mjs` e `scripts/verificar-padrao.sh` saem 0 (o segundo já conferindo só `INFRA` para este app)",
+        "Contagem de texto registrada: título do hero ≤ 8 palavras, apoio ≤ 20, uma linha de ajuda por campo; posição do botão primário medida em 1400x900",
+        "Capturas de desktop e celular das seis telas mais a sala do vendedor, conferidas e corrigidas",
+        "`README.md` reescrito em torno de Produto → Simulação → Sessão, com a seção de voz explicando os três níveis em linguagem de negócio; `CLAUDE.md` registra as decisões D1–D13 e os gotchas encontrados",
+        "`catalogo.json`: `problema`, `ia` e `integracoes` atualizados (a IA agora simula o cliente e avalia; a ElevenLabs vira \"melhora a voz\", não \"habilita a voz\")",
+        "Lint e build passam",
+        "Typecheck passes"
+      ],
+      "priority": 31,
+      "notes": "Fase 7: Home, voz por persona e fechamento",
+      "passes": false
+    }
+  ]
+}
