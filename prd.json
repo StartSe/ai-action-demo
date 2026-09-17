@@ -237,7 +237,7 @@
       ],
       "priority": 13,
       "notes": "Fase 4: a sessão do vendedor (voz)",
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-014",

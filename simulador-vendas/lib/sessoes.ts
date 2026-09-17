@@ -298,3 +298,34 @@ function notaDoResultado(saida: string): number | null {
     return null;
   }
 }
+
+/**
+ * A melhor sessão avaliada desta pessoa nesta simulação — é o que a tela mostra para quem já gastou
+ * todas as tentativas (US-013), em vez de abrir uma conversa que não vai contar.
+ *
+ * Mesma junção em SQL de `notaMediaPorSimulacao`, e pelo mesmo motivo: a nota é parte do resultado
+ * gravado em `lib/historico.ts`, infraestrutura que não pode ganhar função nova. `resultados` pode
+ * não existir num banco recém-criado e `prepare` sobre tabela inexistente lança na hora.
+ */
+export function melhorSessaoDe(simulacaoCodigo: string, participanteId: string): { sessaoId: string; resultadoId: string; nota: number } | null {
+  const d = banco();
+  const existe = d.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'resultados'").get();
+  if (!existe) return null;
+
+  const linhas = d
+    .prepare(
+      `SELECT s.id AS sessaoId, s.resultadoId AS resultadoId, r.saida AS saida
+         FROM sessoes_treino s
+         JOIN resultados r ON r.id = s.resultadoId
+        WHERE s.simulacaoCodigo = ? AND s.participanteId = ? AND s.resultadoId IS NOT NULL`,
+    )
+    .all(simulacaoCodigo, participanteId) as { sessaoId: string; resultadoId: string; saida: string }[];
+
+  let melhor: { sessaoId: string; resultadoId: string; nota: number } | null = null;
+  for (const l of linhas) {
+    const nota = notaDoResultado(l.saida);
+    if (nota === null) continue;
+    if (!melhor || nota > melhor.nota) melhor = { sessaoId: l.sessaoId, resultadoId: l.resultadoId, nota };
+  }
+  return melhor;
+}
