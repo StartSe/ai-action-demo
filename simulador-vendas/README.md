@@ -44,15 +44,14 @@ No painel, "Criar link de treino" gera um link (`/simular/<código>`, válido po
 - **Com a integração conectada:** a sala carrega o widget oficial de voz da ElevenLabs (`<elevenlabs-convai>`) no lugar do texto. Para isso funcionar de verdade:
   1. No agente conversacional (ElevenLabs › Conversational AI › Agents › seu agente › aba Security), desligue a exigência de autenticação (o link é público, sem login) e adicione o domínio onde este app está publicado à lista de domínios permitidos, para nenhum outro site poder embutir o mesmo agente.
   2. Configure o aviso automático de pós-conversa (evento `post_call_transcription`) apontando para o endereço mostrado no cartão "Dados para a equipe técnica" em `/setup#elevenlabs-agente`, como já descrito acima em "Segredo de verificação" — é assim que a análise da ligação chega de volta.
-  3. O widget manda três variáveis dinâmicas para o agente: `sala_token` (liga a conversa recebida à sala certa — o mesmo agente pode atender várias salas ao mesmo tempo), `vendedor_id` (quem está treinando, quando escolhido no painel) e `cenario` (o título do cenário). Declare as três em Agent › Dynamic variables; `sala_token` é a única obrigatória para a análise voltar.
-  4. Prompt-modelo do agente (o mesmo que o cartão "Dados para a equipe técnica" deixa pronto para copiar):
+  3. O widget manda seis variáveis dinâmicas para o agente, todas da **sessão** daquele vendedor (o mesmo agente atende o time inteiro ao mesmo tempo): `sessao_id` (liga a conversa recebida à sessão certa — é a única obrigatória para a avaliação voltar), `simulacao`, `produto`, `persona_instrucoes` (quem é o cliente daquela conversa: comportamento, objeções e dificuldade), `participante` e `duracao_minutos`. Declare as seis em Agent › Dynamic variables. `sala_token` e `vendedor_id`, do modelo antigo, continuam aceitos pelo aviso de pós-conversa para os agentes já configurados assim.
+  4. Prompt-modelo do agente (o mesmo que o cartão "Dados para a equipe técnica" deixa pronto para copiar). Ele é uma linha só porque o personagem inteiro é montado pelo app a cada conversa e entregue em `persona_instrucoes`:
 
      ```
-     Você é {{cenario}}, um cliente em uma ligação de vendas. Nunca saia do personagem e nunca dê dicas de vendas.
-     Responda em português do Brasil, em falas curtas, reagindo de forma realista ao que o vendedor disser.
-     Levante suas objeções quando fizer sentido e deixe o vendedor conduzir: quem encerra a ligação é ele.
+     Siga {{persona_instrucoes}}
      ```
-  5. Se a análise não chegar em 90 segundos, a sala avisa o vendedor ("A análise ainda não chegou; peça ao gestor para conferir a conexão com a ElevenLabs") e registra a ligação mesmo assim. O cartão "Dados para a equipe técnica" em `/setup` mostra quantas ligações ficaram sem análise e qual foi o motivo da última tentativa recusada (assinatura ausente, segredo não salvo, análise falhou).
+  5. Se a avaliação não chegar em 90 segundos, a sala avisa o vendedor ("Sua conversa foi registrada, mas a avaliação ainda não chegou. Avise quem enviou o link") e a conversa fica registrada mesmo assim. O cartão "Dados para a equipe técnica" em `/setup` mostra quantas conversas ficaram sem avaliação e qual foi o motivo da última tentativa recusada (assinatura ausente, segredo não salvo, análise falhou).
+  6. Se o widget não carregar em 10 segundos, a sala troca sozinha para a conversa por voz do próprio navegador, sem o vendedor precisar fazer nada. Ele também pode pedir a troca a qualquer momento ("Prefiro conversar por aqui"), que é a saída para o caso de o agente carregar e mesmo assim não conectar.
 
 ## Usar dentro de um assistente de IA (MCP)
 O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, para que assistentes como Claude ou ChatGPT chamem a ferramenta `analisar_conversa` diretamente. Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.

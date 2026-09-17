@@ -281,6 +281,21 @@ export function tentativasDe(simulacaoCodigo: string, participanteId: string): n
   return linha?.total ?? 0;
 }
 
+/**
+ * Conversas do agente conversacional que terminaram e nunca receberam avaliação (US-016).
+ *
+ * No nível 1 a transcrição não passa pelo app: ela chega depois, pelo aviso de pós-conversa. Quando
+ * esse aviso não está configurado do outro lado — ou o segredo não confere —, a sessão fica fechada e
+ * sem resultado para sempre, e ninguém descobre por quê. Esta contagem é o que o cartão "Dados para a
+ * equipe técnica" mostra ao gestor para essa falha ter um número em vez de um silêncio.
+ */
+export function conversasSemAvaliacao(): number {
+  const linha = banco()
+    .prepare("SELECT COUNT(*) AS total FROM sessoes_treino WHERE modo = 'voz-agente' AND status = 'encerrada' AND resultadoId IS NULL")
+    .get() as { total: number } | undefined;
+  return linha?.total ?? 0;
+}
+
 /** Resumo por simulação para as listas do gestor, sem uma consulta por cartão. */
 export function resumoPorSimulacao(): Record<string, { sessoes: number; participantes: number }> {
   const linhas = banco()

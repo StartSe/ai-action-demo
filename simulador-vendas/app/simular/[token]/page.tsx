@@ -23,7 +23,8 @@ import { getConfig } from "@/lib/store";
 import { integracaoConfigurada } from "@/lib/setup-comum";
 import { ELEVENLABS_AGENTE } from "@/lib/integracoes";
 import { SalaSimulacao } from "@/components/SalaSimulacao";
-import { SalaVoz } from "@/components/SalaVoz";
+import { SalaAgente } from "@/components/SalaAgente";
+import { SalaVoz, type PropsSalaVoz } from "@/components/SalaVoz";
 import { numero } from "@/lib/formato";
 import { Identificacao } from "./Identificacao";
 import { Preparacao } from "./Preparacao";
@@ -163,25 +164,50 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
       produto: produto ?? { nome: simulacao.nome, conhecimento: undefined },
       semente: aberta.id,
     });
-    return (
-      <SalaVoz
-        codigo={token}
-        marca={MARCA}
-        nome={NOME_APP}
-        titulo={simulacao.nome}
-        cliente={{ nome: personagem.nome, cargo: personagem.cargo, empresa: personagem.empresa }}
-        objetivo={simulacao.objetivo?.trim() || OBJETIVO_PADRAO}
-        duracaoMin={simulacao.duracaoMin}
-        iniciadaEm={aberta.iniciadaEm ?? aberta.criadoEm}
-        // Recarregar a página no meio do treino não apaga a conversa: ela vem do servidor, de onde parou.
-        falasIniciais={transcricao(aberta.id).map((m) => ({ papel: m.papel, texto: m.texto }))}
-        porVoz={simulacao.permiteVoz}
-        porTexto={simulacao.permiteTexto}
-        // A chave da voz nunca vem para cá: a tela só precisa saber se existe uma para pedir o áudio
-        // ao servidor, ou se a fala do cliente sai do próprio navegador.
-        vozDoServidor={Boolean(getConfig("ELEVENLABS_API_KEY"))}
-      />
-    );
+    const objetivo = simulacao.objetivo?.trim() || OBJETIVO_PADRAO;
+    const nivel2: PropsSalaVoz = {
+      codigo: token,
+      marca: MARCA,
+      nome: NOME_APP,
+      titulo: simulacao.nome,
+      cliente: { nome: personagem.nome, cargo: personagem.cargo, empresa: personagem.empresa },
+      objetivo,
+      duracaoMin: simulacao.duracaoMin,
+      iniciadaEm: aberta.iniciadaEm ?? aberta.criadoEm,
+      // Recarregar a página no meio do treino não apaga a conversa: ela vem do servidor, de onde parou.
+      falasIniciais: transcricao(aberta.id).map((m) => ({ papel: m.papel, texto: m.texto })),
+      porVoz: simulacao.permiteVoz,
+      porTexto: simulacao.permiteTexto,
+      // A chave da voz nunca vem para cá: a tela só precisa saber se existe uma para pedir o áudio
+      // ao servidor, ou se a fala do cliente sai do próprio navegador.
+      vozDoServidor: Boolean(getConfig("ELEVENLABS_API_KEY")),
+    };
+
+    // Nível 1 (US-016): com o agente conversacional conectado, quem conduz a conversa é ele, e as
+    // variáveis que ele recebe são as da **sessão** — cada vendedor no mesmo link tem a sua.
+    //
+    // `persona_instrucoes` é o único lugar do app em que o system prompt do personagem atravessa para
+    // o navegador, e não há como ser diferente: o widget roda ali e é ele quem fala com o agente. A
+    // regra de esconder as instruções (D2) continua valendo em toda rota — a preparação, o turno da
+    // conversa e o resultado seguem devolvendo só o personagem visível.
+    if (comVoz && agentId && simulacao.permiteVoz) {
+      return (
+        <SalaAgente
+          agente={agentId}
+          variaveis={{
+            sessao_id: aberta.id,
+            simulacao: simulacao.nome,
+            produto: produto?.nome ?? simulacao.nome,
+            persona_instrucoes: personagem.instrucoes,
+            participante: participante.nome,
+            duracao_minutos: String(simulacao.duracaoMin),
+          }}
+          navegador={nivel2}
+        />
+      );
+    }
+
+    return <SalaVoz {...nivel2} />;
   }
 
   return <Preparacao codigo={token} marca={MARCA} nome={NOME_APP} titulo={simulacao.nome} produto={produto?.nome ?? "Treino de vendas"} />;

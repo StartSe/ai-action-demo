@@ -46,7 +46,7 @@ type ModoEscuta = "segurar" | "livre";
 type Resposta = { demo: boolean; conversa: Conversa; analise: Analise; meta: Meta; id?: string; titulo: string };
 type Fim = { resultado?: Resposta; semConversa?: boolean; semFeedback?: boolean };
 
-type Props = {
+export type PropsSalaVoz = {
   codigo: string;
   marca: string;
   nome: string;
@@ -104,7 +104,7 @@ function vozPortuguesa(): SpeechSynthesisVoice | null {
   return vozes.find((v) => v.lang?.toLowerCase().startsWith("pt-br")) ?? vozes.find((v) => v.lang?.toLowerCase().startsWith("pt")) ?? null;
 }
 
-export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duracaoMin, iniciadaEm, falasIniciais, porVoz, porTexto, vozDoServidor }: Props) {
+export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duracaoMin, iniciadaEm, falasIniciais, porVoz, porTexto, vozDoServidor }: PropsSalaVoz) {
   const totalSeg = Math.max(1, duracaoMin) * 60;
   /** Segundo da conversa em que a fala aconteceu — é o que a avaliação usa para citar momentos. */
   const decorrido = useCallback(() => Math.floor((Date.now() - new Date(iniciadaEm).getTime()) / 1000), [iniciadaEm]);
