@@ -12,7 +12,9 @@ import { obter as obterSala, expirou } from "@/lib/salas";
 import { obter as obterSimulacao } from "@/lib/simulacoes";
 import { obter as obterProduto } from "@/lib/produtos";
 import { obter as obterParticipante } from "@/lib/participantes";
-import { emAndamento, emPreparacao, melhorSessaoDe, tentativasDe } from "@/lib/sessoes";
+import { emAndamento, emPreparacao, melhorSessaoDe, tentativasDe, transcricao } from "@/lib/sessoes";
+import { montarPersonagem } from "@/lib/cliente-simulado";
+import { personasDe } from "@/lib/personas";
 import { lerSessaoVendedor } from "@/lib/sessao-vendedor";
 import { nomeDoProvedor, provedoresDisponiveis } from "@/lib/entrar-vendedor";
 import { obter as obterVendedor } from "@/lib/vendedores";
@@ -21,6 +23,7 @@ import { getConfig } from "@/lib/store";
 import { integracaoConfigurada } from "@/lib/setup-comum";
 import { ELEVENLABS_AGENTE } from "@/lib/integracoes";
 import { SalaSimulacao } from "@/components/SalaSimulacao";
+import { SalaVoz } from "@/components/SalaVoz";
 import { numero } from "@/lib/formato";
 import { Identificacao } from "./Identificacao";
 import { Preparacao } from "./Preparacao";
@@ -29,6 +32,9 @@ export const dynamic = "force-dynamic";
 
 const MARCA = "S";
 const NOME_APP = "Simulador de Vendas";
+
+/** Mesmo texto de app/api/salas/[token]/sessao: o que o vendedor combina quando o gestor não escreveu nada. */
+const OBJETIVO_PADRAO = "Entender a situação do cliente e sair da conversa com um próximo passo combinado.";
 
 function Indisponivel({ titulo, descricao }: { titulo: string; descricao: string }) {
   return (
@@ -140,24 +146,41 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
     );
   }
 
-  // Link migrado das salas antigas: a conversa continua sendo a de hoje, com o cenário que já estava
-  // gravado nele. Nada de preparação aqui — o personagem desta história nasce da ficha do produto e do
-  // tipo de cliente, e apresentar um cliente para entregar a conversa de outro seria pior que não
-  // apresentar nenhum. A sala nova (US-015) unifica os dois caminhos.
-  if (sala) {
-    return <SalaSimulacao codigo={token} marca={MARCA} nome={NOME_APP} cenario={cenario} vendedorId={participante.id} comVoz={comVoz} agentId={agentId || undefined} />;
-  }
+  // Link migrado das salas antigas (US-002): daqui para frente ele segue o **mesmo** caminho de um
+  // treino novo — preparação e depois a conversa. É a unificação que a US-014 deixou anunciada: com o
+  // participante identificado e uma sessão própria, manter uma segunda sala só para esses links
+  // significaria manter duas conversas, duas transcrições e duas avaliações vivas ao mesmo tempo. O
+  // cenário gravado na sala antiga deixa de ser usado; o cliente passa a nascer da ficha do produto e
+  // do tipo de cliente, como em qualquer outro treino.
 
-  // PENDÊNCIA DE SEQUÊNCIA (PRD): a conversa por voz é a US-015 e vai ocupar exatamente este lugar —
-  // a sessão já está aberta, com o cliente sorteado e o cronômetro correndo.
+  // A conversa (US-015). O personagem é remontado aqui com a **mesma semente** da preparação (o id da
+  // sessão), então é o mesmo cliente que o vendedor acabou de conhecer. Só nome, cargo e empresa
+  // atravessam para o navegador: `instrucoes` e `personaId` ficam no servidor (D2).
   if (aberta?.status === "em_andamento") {
+    const personagem = montarPersonagem({
+      persona: personasDe([aberta.personaId])[0],
+      dificuldade: simulacao.dificuldade,
+      produto: produto ?? { nome: simulacao.nome, conhecimento: undefined },
+      semente: aberta.id,
+    });
     return (
-      <Cartao>
-        <h1 className="text-[22px] leading-[1.2] font-extrabold tracking-[-0.02em] mb-2">Sua conversa está aberta</h1>
-        <p className="text-muted">
-          {`O cliente já está esperando você em "${simulacao.nome}". Esta parte do treino ainda está sendo preparada: volte por este mesmo link em instantes.`}
-        </p>
-      </Cartao>
+      <SalaVoz
+        codigo={token}
+        marca={MARCA}
+        nome={NOME_APP}
+        titulo={simulacao.nome}
+        cliente={{ nome: personagem.nome, cargo: personagem.cargo, empresa: personagem.empresa }}
+        objetivo={simulacao.objetivo?.trim() || OBJETIVO_PADRAO}
+        duracaoMin={simulacao.duracaoMin}
+        iniciadaEm={aberta.iniciadaEm ?? aberta.criadoEm}
+        // Recarregar a página no meio do treino não apaga a conversa: ela vem do servidor, de onde parou.
+        falasIniciais={transcricao(aberta.id).map((m) => ({ papel: m.papel, texto: m.texto }))}
+        porVoz={simulacao.permiteVoz}
+        porTexto={simulacao.permiteTexto}
+        // A chave da voz nunca vem para cá: a tela só precisa saber se existe uma para pedir o áudio
+        // ao servidor, ou se a fala do cliente sai do próprio navegador.
+        vozDoServidor={Boolean(getConfig("ELEVENLABS_API_KEY"))}
+      />
     );
   }
 

@@ -160,6 +160,23 @@ export function emAndamento(simulacaoCodigo: string, participanteId: string): Se
   return linha ? linhaParaSessao(linha) : null;
 }
 
+/**
+ * A última conversa que este participante abriu nesta simulação, em qualquer estado.
+ *
+ * Existe para o pedido do resultado (US-015): quando o tempo acaba, o turno da despedida já fecha a
+ * sessão, e o pedido do feedback chega em seguida — `emAndamento` já não a encontra. Sem isto, quem
+ * treinou até o fim do cronômetro **perderia justamente o feedback da conversa que completou**, e só
+ * não perdia quando o navegador ainda tinha o id da sessão no cookie (que a tela recarregada não
+ * renova). Quem chama decide quais estados aceita.
+ */
+export function ultimaDe(simulacaoCodigo: string, participanteId: string): Sessao | null {
+  marcarAbandonadas();
+  const linha = banco()
+    .prepare("SELECT * FROM sessoes_treino WHERE simulacaoCodigo = ? AND participanteId = ? ORDER BY criadoEm DESC LIMIT 1")
+    .get(simulacaoCodigo, participanteId) as LinhaSessao | undefined;
+  return linha ? linhaParaSessao(linha) : null;
+}
+
 export function obter(id: string): Sessao | null {
   marcarAbandonadas();
   const linha = banco().prepare("SELECT * FROM sessoes_treino WHERE id = ?").get(id) as LinhaSessao | undefined;
