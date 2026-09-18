@@ -1,4 +1,5 @@
 // Respostas de exemplo usadas quando não há chave de IA configurada.
+import type { Cultura } from "./cultura";
 import type { Scorecard, Troca, Vaga } from "./types";
 
 export function esperar(ms = 900) {
@@ -101,5 +102,30 @@ export function scorecardDemo({ vaga, historico = [] }: { vaga?: Vaga; historico
       "Validar pretensão salarial e disponibilidade de início.",
       "Confirmar referências com o último gestor direto.",
     ],
+  };
+}
+
+/**
+ * A cultura de uma empresa de serviços B2B qualquer, usada enquanto ninguém cadastrou a da própria
+ * empresa (lib/cultura.ts) e como resposta de "Gerar a partir de um texto" no modo demonstração.
+ * Existe para que a entrevistadora tenha sempre o que avaliar em cultura — quem vê a tela precisa
+ * entender o que esse cadastro faz antes de decidir preenchê-lo.
+ *
+ * `atualizadoEm` vazio de propósito: nada disso foi salvo por ninguém, e a tela não pode dizer
+ * "atualizado em" sobre um exemplo.
+ */
+export function culturaDemo(): Cultura {
+  return {
+    valores: [
+      { id: "cliente-no-centro", nome: "Cliente no centro", descricao: "Toda decisão começa pela pergunta do que muda para quem contrata a gente." },
+      { id: "dono-do-resultado", nome: "Dono do resultado", descricao: "Quem pega um problema leva até o fim, mesmo quando depende de outra área." },
+      { id: "clareza-antes-da-pressa", nome: "Clareza antes da pressa", descricao: "Combinar por escrito o que se espera antes de sair executando." },
+      { id: "melhora-continua", nome: "Melhora contínua", descricao: "Cada entrega deixa um aprendizado registrado para a próxima sair melhor." },
+    ],
+    comportamentos:
+      "As pessoas aqui trazem o problema junto com uma proposta, avisam cedo quando um prazo vai escorregar e escrevem o que combinaram. Discordar em reunião é esperado; sair da reunião sem uma decisão, não. Quem atende cliente tem autonomia para resolver na hora e responder depois pelo que decidiu.",
+    naoCombina:
+      "Não funciona aqui quem precisa de aprovação para cada passo, quem entrega no prazo escondendo um problema conhecido ou quem trata o time de entrega como fornecedor interno. Também não combina disputar crédito por resultado que foi de várias pessoas.",
+    atualizadoEm: "",
   };
 }

@@ -35,7 +35,7 @@ import {
 } from "@/components/ui";
 import { Sala } from "@/components/Sala";
 import { DialogoLinkCandidato } from "@/components/DialogoLinkCandidato";
-import { ACAO_VOZ } from "@/lib/acoes";
+import { ACAO_CULTURA, ACAO_VOZ } from "@/lib/acoes";
 import type { CodigoErroIA, Meta } from "@/lib/ai";
 import type { CandidatoRanking, Ranking, Recomendacao, Scorecard, Troca, Vaga } from "@/lib/types";
 
@@ -263,6 +263,13 @@ export default function Page() {
 
       <main className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">
         <div>
+          {status && status.integrations?.cultura === false && (
+            <div className="mb-4">
+              <Aviso tom="warn" acao={ACAO_CULTURA}>
+                Ninguém cadastrou ainda o que a sua empresa valoriza. Até lá, a entrevistadora avalia cultura por um exemplo.
+              </Aviso>
+            </div>
+          )}
           <CartaoEntrada icone={<IconeVaga />} titulo="A vaga">
             <form onSubmit={onSubmit}>
               <Row>
