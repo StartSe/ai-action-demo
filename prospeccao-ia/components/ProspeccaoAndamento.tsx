@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Aviso, Topbar, useStatus, lerErro } from "@/components/ui";
+import { Aviso, Topbar, useConfirmacao, useStatus, lerErro } from "@/components/ui";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 import { ROTULO_MODO } from "@/lib/rotulos";
 import { ETAPAS_PROSPECCAO } from "@/lib/execucao-etapas";
@@ -27,10 +27,14 @@ const INTERVALO_POLL_MS = 2000;
 export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) {
   const { status, erro } = useStatus();
   const router = useRouter();
+  const { confirmar, Dialogo } = useConfirmacao();
   const [andamento, setAndamento] = useState<Andamento | null>(null);
   const [naoEncontrada, setNaoEncontrada] = useState(false);
   const [repetindo, setRepetindo] = useState(false);
   const [erroRepetir, setErroRepetir] = useState<string | null>(null);
+  const [cancelando, setCancelando] = useState(false);
+  const [erroCancelar, setErroCancelar] = useState<string | null>(null);
+  const [apagando, setApagando] = useState(false);
 
   const carregar = useCallback(() => {
     fetch(`/api/prospeccoes/${prospeccaoId}/andamento`)
@@ -87,6 +91,36 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
     }
   }
 
+  async function cancelar() {
+    if (cancelando) return;
+    setCancelando(true);
+    setErroCancelar(null);
+    try {
+      const r = await fetch(`/api/prospeccoes/${prospeccaoId}/cancelar`, { method: "POST" });
+      if (!r.ok) {
+        const lido = await lerErro(r);
+        setErroCancelar(lido.mensagem);
+        setCancelando(false);
+        return;
+      }
+      const atualizada = (await r.json()) as Prospeccao;
+      setAndamento((a) => (a ? { ...a, prospeccao: atualizada } : a));
+    } catch (e) {
+      const lido = await lerErro(e);
+      setErroCancelar(lido.mensagem);
+    } finally {
+      setCancelando(false);
+    }
+  }
+
+  async function apagar() {
+    const ok = await confirmar("Apagar esta prospecção? As empresas, pessoas e abordagens encontradas aqui somem junto.", { confirmarRotulo: "Apagar" });
+    if (!ok) return;
+    setApagando(true);
+    await fetch(`/api/prospeccoes/${prospeccaoId}`, { method: "DELETE" });
+    router.push("/prospeccoes");
+  }
+
   const indiceEtapaAtual = andamento ? ETAPAS_PROSPECCAO.findIndex((e) => e.chave === andamento.prospeccao.etapa) : -1;
 
   return (
@@ -106,7 +140,12 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
           </div>
         ) : (
           <>
-            <h1 className="titulo-painel mb-1.5">Nova prospecção</h1>
+            <div className="flex items-baseline justify-between gap-4 flex-wrap mb-1.5">
+              <h1 className="titulo-painel !mb-0">Nova prospecção</h1>
+              <button type="button" className="btn-link text-[13px] text-danger" onClick={apagar} disabled={apagando}>
+                {apagando ? "Apagando…" : "Apagar"}
+              </button>
+            </div>
             <p className="apoio mb-6">
               {andamento.produtoNome} · {andamento.icpNome} · {ROTULO_MODO[andamento.prospeccao.modo]}
             </p>
@@ -139,6 +178,15 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
               </div>
             )}
 
+            {andamento.prospeccao.estado === "executando" && (
+              <div className="flex flex-col gap-3">
+                <button type="button" className="btn-ghost self-start !w-auto" onClick={cancelar} disabled={cancelando}>
+                  {cancelando ? "Cancelando…" : "Cancelar"}
+                </button>
+                {erroCancelar && <Aviso tom="danger">{erroCancelar}</Aviso>}
+              </div>
+            )}
+
             {andamento.prospeccao.estado === "pronta" && (
               <div className="flex flex-col gap-3">
                 <p className="font-semibold text-[15px]">Prospecção concluída</p>
@@ -146,7 +194,13 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                 <p className="text-[13px] text-muted">
                   {andamento.contasEncontradas} empresas e {andamento.leadsEncontrados} pessoas encontradas.
                 </p>
-                <Link href="/leads" className="btn-link text-[13px] self-start">Ver leads</Link>
+                <div className="flex items-center gap-3.5">
+                  <Link href="/leads" className="btn-link text-[13px]">Ver leads</Link>
+                  <button type="button" className="btn-link text-[13px]" onClick={repetir} disabled={repetindo}>
+                    {repetindo ? "Repetindo…" : "Repetir prospecção"}
+                  </button>
+                </div>
+                {erroRepetir && <Aviso tom="danger">{erroRepetir}</Aviso>}
               </div>
             )}
 
@@ -165,6 +219,8 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
           </>
         )}
       </main>
+
+      {Dialogo}
     </>
   );
 }

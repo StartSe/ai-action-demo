@@ -299,9 +299,14 @@ export function criarConta(dados: NovaConta, em?: Date): Conta {
 }
 
 export function listarContas(prospeccaoId?: string): Conta[] {
+  // ORDER BY criado_em DESC, rowid DESC (não só criado_em): o pipeline (lib/execucao-prospeccao.ts)
+  // cria as 3 contas de uma prospecção no mesmo tick, com timestamps que empatam no milissegundo —
+  // sem o tiebreak por rowid (ordem real de inserção), o SQLite pode devolver ordens diferentes em
+  // execuções diferentes para o mesmo empate, e etapaEncontrarPessoas usa essa ordem para associar
+  // pessoa-índice a empresa; ordem instável quebrava a deduplicação de "Repetir prospecção" (US-014).
   const linhas = (prospeccaoId
-    ? banco().prepare("SELECT * FROM contas WHERE prospeccao_id = ? ORDER BY criado_em DESC").all(prospeccaoId)
-    : banco().prepare("SELECT * FROM contas ORDER BY criado_em DESC").all()) as LinhaConta[];
+    ? banco().prepare("SELECT * FROM contas WHERE prospeccao_id = ? ORDER BY criado_em DESC, rowid DESC").all(prospeccaoId)
+    : banco().prepare("SELECT * FROM contas ORDER BY criado_em DESC, rowid DESC").all()) as LinhaConta[];
   return linhas.map(linhaParaConta);
 }
 
@@ -378,6 +383,14 @@ export function atualizarLead(id: string, dados: Partial<NovoLeadProspeccao>, em
 export function apagarLead(id: string): void {
   banco().prepare("DELETE FROM abordagens WHERE lead_id = ?").run(id);
   banco().prepare("DELETE FROM leads WHERE id = ?").run(id);
+}
+
+/** Todo lead já encontrado para o produto (em qualquer prospecção dele), para o pipeline (US-014) reconhecer quem já foi visto ao repetir uma busca. */
+export function leadsDoProduto(produtoId: string): LeadProspeccao[] {
+  const linhas = banco()
+    .prepare("SELECT leads.* FROM leads JOIN prospeccoes ON prospeccoes.id = leads.prospeccao_id WHERE prospeccoes.produto_id = ?")
+    .all(produtoId) as LinhaLead[];
+  return linhas.map(linhaParaLead);
 }
 
 // --- Abordagens --------------------------------------------------------------
