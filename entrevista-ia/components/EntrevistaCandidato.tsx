@@ -1,17 +1,42 @@
 "use client";
 // Tela pública do link de candidato (app/entrevista/[token]): em vez do formulário genérico de
 // campos texto/textarea (app/f/[token]), reaproveita a própria sala de entrevista (components/Sala.tsx),
-// já que a conversa é o formulário. Ao concluir, envia a transcrição para gerar o scorecard (que só o
-// gestor vê, em /r/[id]) e mostra uma tela de agradecimento para o candidato.
+// já que a conversa é o formulário. Ao concluir, envia a transcrição para gerar o parecer (que só o
+// gestor vê) e mostra uma tela de agradecimento para o candidato.
+//
+// A ordem é: boas-vindas (components/BoasVindas.tsx, com o teste de microfone) → sala → agradecimento.
+// Quem recarregou a página no meio da conversa entra direto na sala: as boas-vindas são o convite, e
+// quem já aceitou não precisa aceitar de novo.
 import { useState } from "react";
+import { BoasVindas } from "./BoasVindas";
 import { Sala } from "./Sala";
 import type { Troca, Vaga } from "@/lib/types";
 
-type Fase = "entrevista" | "enviando" | "concluida" | "erro";
+type Fase = "boas-vindas" | "entrevista" | "enviando" | "concluida" | "erro";
 
-export function EntrevistaCandidato({ codigo, marca, nome, vaga, vozLigada }: { codigo: string; marca: string; nome: string; vaga: Vaga; vozLigada: boolean }) {
-  const [fase, setFase] = useState<Fase>("entrevista");
+export function EntrevistaCandidato({
+  codigo,
+  marca,
+  nome,
+  vaga,
+  duracaoMin,
+  vozLigada,
+  retomando = false,
+}: {
+  codigo: string;
+  marca: string;
+  nome: string;
+  vaga: Vaga;
+  duracaoMin: number;
+  vozLigada: boolean;
+  /** Este aparelho já começou esta conversa: entra direto na sala. */
+  retomando?: boolean;
+}) {
+  const [fase, setFase] = useState<Fase>(retomando ? "entrevista" : "boas-vindas");
   const [mensagemErro, setMensagemErro] = useState("");
+  // O toque em "Começar a entrevista" é o gesto que libera o áudio deste navegador; sem ele a sala
+  // esperaria um segundo gesto para falar a primeira pergunta, e a tela ficaria muda.
+  const [audioLiberado, setAudioLiberado] = useState(false);
 
   async function onFinalizar(historico: Troca[]) {
     setFase("enviando");
@@ -24,6 +49,23 @@ export function EntrevistaCandidato({ codigo, marca, nome, vaga, vozLigada }: { 
       setMensagemErro(err instanceof Error ? err.message : "Erro inesperado.");
       setFase("erro");
     }
+  }
+
+  if (fase === "boas-vindas") {
+    return (
+      <BoasVindas
+        codigo={codigo}
+        marca={marca}
+        nome={nome}
+        primeiroNome={vaga.candidato.trim().split(/\s+/)[0] || vaga.candidato}
+        cargo={vaga.titulo}
+        duracaoMin={duracaoMin}
+        onPronto={() => {
+          setAudioLiberado(true);
+          setFase("entrevista");
+        }}
+      />
+    );
   }
 
   return (
@@ -44,7 +86,14 @@ export function EntrevistaCandidato({ codigo, marca, nome, vaga, vozLigada }: { 
           <p className="text-muted">{mensagemErro}</p>
         </div>
       ) : (
-        <Sala vaga={vaga} rotas={{ proxima: `/api/entrevista/candidato/${codigo}/proxima`, voz: `/api/entrevista/candidato/${codigo}/voz` }} vozLigada={vozLigada} modoExemplo={false} onFinalizar={onFinalizar} />
+        <Sala
+          vaga={vaga}
+          rotas={{ proxima: `/api/entrevista/candidato/${codigo}/proxima`, voz: `/api/entrevista/candidato/${codigo}/voz` }}
+          vozLigada={vozLigada}
+          audioLiberado={audioLiberado}
+          modoExemplo={false}
+          onFinalizar={onFinalizar}
+        />
       )}
 
       {fase === "enviando" && <p className="text-muted text-sm text-center mt-4">Enviando suas respostas...</p>}

@@ -6,9 +6,13 @@
 // Dois tipos de link convivem aqui: `entrevista` (o convite de hoje, que sabe de qual vaga e de qual
 // pessoa é) e `scorecard` (os links criados antes desta história). Quem conhece os dois é
 // `resolverConvite()` — ver lib/convite.ts e a nota de remoção do tipo antigo no CLAUDE.md.
-import { FECHADO, resolverConvite } from "@/lib/convite";
-import { mudarStatus, obter as obterEntrevista } from "@/lib/entrevistas";
+//
+// A conferência (link válido, entrevista aberta, qual aparelho está conversando) e a decisão do nível
+// de voz (D3) são do servidor, em lib/sala-do-candidato.ts: esta tela não consulta /api/status, que é
+// rota privada, e quem abre o link não configura nada.
+import { headers } from "next/headers";
 import { EntrevistaCandidato } from "@/components/EntrevistaCandidato";
+import { abrirSala } from "@/lib/sala-do-candidato";
 import { ttsEnabled } from "@/lib/voz";
 
 export const dynamic = "force-dynamic";
@@ -24,21 +28,24 @@ function Indisponivel({ titulo, descricao }: { titulo: string; descricao: string
 
 export default async function Page({ params }: PageProps<"/entrevista/[token]">) {
   const { token } = await params;
-  const resolucao = resolverConvite(token);
-
-  if (!resolucao.ok) {
-    const { titulo, descricao } = FECHADO[resolucao.motivo];
-    return <Indisponivel titulo={titulo} descricao={descricao} />;
-  }
-
   // O candidato abriu o convite: quem acompanha o processo vê "Link aberto" em vez de continuar
   // esperando. Só na primeira vez — recarregar a página não reescreve a linha do tempo.
-  const { marca, nome, vaga, entrevistaId } = resolucao.sala;
-  if (entrevistaId && obterEntrevista(entrevistaId)?.status === "convidada") {
-    mudarStatus(entrevistaId, "aberta");
+  const resultado = abrirSala(token, (await headers()).get("cookie"));
+
+  if (!resultado.ok) {
+    return <Indisponivel titulo={resultado.titulo} descricao={resultado.descricao} />;
   }
 
-  // A tela do candidato não consulta /api/status (rota privada): quem diz se a voz natural está
-  // ligada é o próprio servidor, aqui.
-  return <EntrevistaCandidato codigo={token} marca={marca} nome={nome} vaga={vaga} vozLigada={ttsEnabled()} />;
+  const { marca, nome, vaga, duracaoMin } = resultado.sala;
+  return (
+    <EntrevistaCandidato
+      codigo={token}
+      marca={marca}
+      nome={nome}
+      vaga={vaga}
+      duracaoMin={duracaoMin}
+      vozLigada={ttsEnabled()}
+      retomando={resultado.entrevista?.status === "em_andamento"}
+    />
+  );
 }

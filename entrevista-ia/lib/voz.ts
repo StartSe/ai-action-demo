@@ -119,6 +119,17 @@ export function ttsEnabled(): boolean {
   return Boolean(getConfig("ELEVENLABS_API_KEY"));
 }
 
+/**
+ * O agente conversacional da ElevenLabs está conectado?
+ *
+ * É o nível 1 da conversa (D3): o candidato fala naturalmente e pode até interromper. Ele NÃO exige o
+ * número de telefone — só a ligação (`ligacaoEnabled`) exige. Por isso as duas perguntas são
+ * diferentes: a sala do navegador só precisa da chave e do agente.
+ */
+export function agenteEnabled(): boolean {
+  return Boolean(getConfig("ELEVENLABS_API_KEY") && getConfig("ELEVENLABS_AGENT_ID"));
+}
+
 export function ligacaoEnabled(): boolean {
   return Boolean(getConfig("ELEVENLABS_API_KEY") && getConfig("ELEVENLABS_AGENT_ID") && getConfig("ELEVENLABS_PHONE_NUMBER_ID"));
 }

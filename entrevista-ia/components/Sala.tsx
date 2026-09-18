@@ -5,28 +5,8 @@ import { Aviso, ErrorBox, lerErro, type ErroLido } from "./ui";
 import type { CodigoErroIA } from "@/lib/ai";
 import type { Troca, Vaga } from "@/lib/types";
 
-// Tipagem mínima da Web Speech API (não coberta pelo lib.dom.d.ts do TypeScript).
-interface SpeechRecognitionResultLike {
-  0: { transcript: string };
-}
-interface SpeechRecognitionEventLike extends Event {
-  results: { 0: SpeechRecognitionResultLike };
-}
-interface SpeechRecognitionLike extends EventTarget {
-  lang: string;
-  interimResults: boolean;
-  onresult: ((ev: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((ev: Event) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-}
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
-declare global {
-  interface Window {
-    SpeechRecognition?: SpeechRecognitionCtor;
-    webkitSpeechRecognition?: SpeechRecognitionCtor;
-  }
-}
+// A tipagem da escuta do navegador (`SpeechRecognition`) mora em lib/fala.d.ts, no escopo global:
+// as boas-vindas (components/BoasVindas.tsx) usam a mesma, e duas declarações locais não convivem.
 
 const RESPOSTAS_EXEMPLO = [
   "Trabalho há quatro anos com atendimento a clientes B2B e hoje lidero o time de suporte sênior em uma empresa de SaaS de médio porte. Me candidatei porque quero atuar mais perto do sucesso do cliente, não só do suporte reativo.",
@@ -46,6 +26,7 @@ export function Sala({
   corpoExtra,
   vozLigada,
   acaoVoz,
+  audioLiberado = false,
   modoExemplo,
   onFinalizar,
 }: {
@@ -59,6 +40,9 @@ export function Sala({
   vozLigada: boolean;
   /** "O que fazer agora" quando a voz está desligada. Só quem administra o app recebe (o candidato não configura nada). */
   acaoVoz?: { rotulo: string; url: string };
+  /** O áudio deste navegador já foi liberado por um gesto FORA da sala (o "Começar a entrevista" das
+   * boas-vindas): a primeira pergunta pode ser falada sem esperar um segundo clique. */
+  audioLiberado?: boolean;
   modoExemplo: boolean;
   onFinalizar: (historico: Troca[]) => void;
 }) {
@@ -88,7 +72,7 @@ export function Sala({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mudoRef = useRef(false);
   const iniciouRef = useRef(false);
-  const gestoRef = useRef(false);
+  const gestoRef = useRef(audioLiberado);
   const pendenteRef = useRef<string | null>(null);
   // A voz natural desistiu nesta conversa: não adianta pedir de novo a cada pergunta.
   const vozDesistiuRef = useRef(false);

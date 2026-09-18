@@ -242,9 +242,14 @@ export type SalaPublica = {
   nome: string;
   /** A vaga no formato que `components/Sala.tsx` já conhece. */
   vaga: VagaDaSala;
+  /** Quanto tempo a conversa costuma levar — o "cerca de N minutos" das boas-vindas (US-016). */
+  duracaoMin: number;
   /** Só nos convites novos: os links antigos não têm entrevista no banco. */
   entrevistaId?: string;
 };
+
+/** Quanto dura a conversa de um link antigo (`scorecard`), que não tem vaga cadastrada por trás. */
+export const DURACAO_PADRAO = 15;
 
 export type ResolucaoConvite = { ok: true; sala: SalaPublica } | { ok: false; motivo: MotivoFechado };
 
@@ -271,7 +276,7 @@ export function resolverConvite(codigo: string): ResolucaoConvite {
     if (formulario.limite !== null && contarRespostas(codigo) >= formulario.limite) return { ok: false, motivo: "usado" };
     const { marca, nome, vaga } = formulario.parametros;
     if (!vaga) return { ok: false, motivo: "invalido" };
-    return { ok: true, sala: { marca, nome, vaga } };
+    return { ok: true, sala: { marca, nome, vaga, duracaoMin: DURACAO_PADRAO } };
   }
 
   if (formulario.tipo !== TIPO_CONVITE) return { ok: false, motivo: "invalido" };
@@ -298,6 +303,7 @@ export function resolverConvite(codigo: string): ResolucaoConvite {
         tom: vaga.tom,
         numero_perguntas: vaga.numeroPerguntas,
       },
+      duracaoMin: vaga.duracaoMin,
       entrevistaId: entrevista.id,
     },
   };
