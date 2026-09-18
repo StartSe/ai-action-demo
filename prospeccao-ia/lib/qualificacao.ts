@@ -4,24 +4,67 @@
 // fronteira documentada em lib/execucao-prospeccao.ts). "Critério sem dado NUNCA conta como atendido"
 // (prd.json > regras): um termo não encontrado no texto vira "nao_verificavel", nunca "nao_atende" —
 // não dá para afirmar com segurança que uma página institucional NÃO atende um critério só porque o
-// termo não apareceu nela.
+// termo não apareceu nela. ÚNICA exceção (US-024): "Porte" é comparável numericamente (faixa do ICP x
+// nº de funcionários extraído do texto), a única forma objetiva de recusar um critério aqui — ver
+// avaliarPorte. Avaliação de critério INTERPRETATIVO por IA (o texto livre "outros critérios"/"contexto"
+// do ICP) mora em `lib/qualificacao-ia.ts`, SEPARADO deste arquivo: este módulo é importado por Client
+// Components (sinalAntigo, em ProspeccaoAndamento.tsx/ExploracaoEmpresa.tsx) e não pode puxar lib/ai.ts
+// (que importa lib/store.ts, com node:sqlite) para dentro do bundle do navegador.
 import type { Evidencia, Fit, Papel, SinalProspeccao } from "./types";
 
 function normalizar(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
-function contemTermo(conteudo: string, termo: string): boolean {
+/** Exportada para `lib/qualificacao-ia.ts` (fallback sem IA configurada) reaproveitar a mesma comparação
+ * de termo, em vez de reimplementar a normalização de acentos. */
+export function contemTermo(conteudo: string, termo: string): boolean {
   const t = termo.trim();
   if (!t) return false;
   return normalizar(conteudo).includes(normalizar(t));
+}
+
+const FAIXA_PORTE = /(\d[\d.,]*)\s*(?:a|-|até)\s*(\d[\d.,]*)/i;
+const PISO_PORTE = /(?:mais de|acima de|\+)\s*(\d[\d.,]*)/i;
+const NUMERO_FUNCIONARIOS = /(\d[\d.,]*)\s*(?:funcion[aá]rios|colaboradores|empregados)/i;
+
+function numeroDe(s: string): number {
+  return Number(s.replace(/\./g, "").replace(",", "."));
+}
+
+/** Faixa numérica (nº de funcionários) a partir de um texto livre do ICP ("51-200 funcionários", "mais de
+ * 500 colaboradores"): sem um padrão reconhecível, devolve null e o critério cai no term-match comum — não
+ * dá pra comparar numericamente um texto como "Startup enxuta". */
+function faixaDePorte(valor: string): { min: number; max: number } | null {
+  const faixa = valor.match(FAIXA_PORTE);
+  if (faixa) return { min: numeroDe(faixa[1]), max: numeroDe(faixa[2]) };
+  const piso = valor.match(PISO_PORTE);
+  if (piso) return { min: numeroDe(piso[1]), max: Infinity };
+  return null;
+}
+
+/** "Porte" é o único critério com comparação NUMÉRICA determinística (US-024, prd.json > regras: "a regra
+ * é determinística onde o dado é objetivo"): quando o ICP pede uma faixa reconhecível e a página cita um
+ * número de funcionários fora dela, o critério realmente "não atende" — a única forma seguramente
+ * objetiva de recusar um critério nesta camada, sem inferir negação de texto livre (ver comentário de topo
+ * do arquivo). Sem faixa OU sem número extraível de um dos dois lados, cai no term-match de sempre. */
+function avaliarPorte(conteudo: string, valor: string): Evidencia["resultado"] {
+  const faixaAlvo = faixaDePorte(valor);
+  const encontrado = conteudo.match(NUMERO_FUNCIONARIOS);
+  if (!faixaAlvo || !encontrado) return contemTermo(conteudo, valor) ? "atende" : "nao_verificavel";
+  const numero = numeroDe(encontrado[1]);
+  return numero >= faixaAlvo.min && numero <= faixaAlvo.max ? "atende" : "nao_atende";
 }
 
 /** Uma Evidencia por critério que tinha valor para checar (campo vazio não vira evidência nenhuma). */
 export function avaliarCriterios(conteudo: string, criterios: { criterio: string; valor: string }[]): Evidencia[] {
   return criterios
     .filter((c) => c.valor.trim())
-    .map((c): Evidencia => ({ criterio: c.criterio, valor: c.valor, resultado: contemTermo(conteudo, c.valor) ? "atende" : "nao_verificavel" }));
+    .map((c): Evidencia => ({
+      criterio: c.criterio,
+      valor: c.valor,
+      resultado: c.criterio === "Porte" ? avaliarPorte(conteudo, c.valor) : contemTermo(conteudo, c.valor) ? "atende" : "nao_verificavel",
+    }));
 }
 
 /** Nenhum critério verificável → "media" (não há base para julgar); todos atendem → "alta"; nenhum atende → "baixa"; caso misto → "media". */

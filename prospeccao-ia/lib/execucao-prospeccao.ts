@@ -10,13 +10,29 @@
 // `erro` preenchido, nunca `"falhou"` (esse estado é só para a recuperação na inicialização — processo
 // reiniciado no meio, ver recuperarProspeccoesTravadas em lib/workspace.ts).
 //
-// Fronteira exata para US-024/025/026 substituírem sem reler este arquivo inteiro: todo modo/jornada faz
+// Fronteira exata para US-025/026 substituírem sem reler este arquivo inteiro: todo modo/jornada faz
 // descoberta de verdade desde a US-021 — "empresas" (US-017), "empresa_unica" (US-018), "pessoas" em B2B
 // (US-019), "oportunidades" nas duas jornadas (US-020) e "pessoas" em B2C (US-021, a última a sair do
 // fictício). Sinais de intenção do ICP/critérios ainda são lidos e filtrados na etapa 3
 // (`analisarSinais`), mas ela não persiste nada — cada modo real já extrai e persiste seu próprio
 // SinalProspeccao dentro das etapas 2/4 (lib/qualificacao.ts:sinaisEncontrados), então essa função hoje
 // não faz diferença para nenhum modo (mantida simples, sem uso prático).
+//
+// US-024 apertou a qualificação por evidências (fit/evidencias já existiam desde a US-017): "Porte" ganhou
+// comparação NUMÉRICA determinística (lib/qualificacao.ts:avaliarPorte, pode devolver "nao_atende" de
+// verdade agora) e "Outros critérios" (ICP B2B, texto livre) e "Contexto" (critério de busca B2C, texto
+// livre) ganharam avaliação INTERPRETATIVA por IA (lib/qualificacao-ia.ts, `avaliarComOutros` para contas),
+// só nas Contas de `buscarContasReais`/`buscarContaUnicaReal` e nos Leads de `buscarPessoasB2C` — os demais
+// call-sites de `avaliarCriterios` (contaPara em buscarPessoasReais, buscarOportunidadesEmpresas,
+// buscarPessoasOportunidadesB2C) continuam só com os critérios objetivos de sempre, fronteira documentada
+// para não reler o arquivo inteiro achando "esquecimento". "Lead sem nenhuma evidência verificável não
+// entra na lista" (AC da US-024) foi aplicada só em `buscarPessoasB2C` (onde a evidência é da PRÓPRIA
+// pessoa, contra os critérios do perfil) — não em `buscarPessoasChaveUnica`/`buscarPessoasReais`/
+// `buscarPessoasOportunidadesEmpresas`, cujo lead herda `conta.evidencias` (a evidência é da EMPRESA, não
+// da pessoa): aplicar o mesmo filtro ali esconderia toda pessoa de uma conta sem site encontrado,
+// contradizendo a AC da US-018 ("nenhuma pessoa é adicionada sem seleção explícita" pressupõe que ela
+// aparece na lista para poder ser selecionada) e derrubaria o modo "pessoas" B2B inteiro em demonstração
+// (a busca pública nunca qualifica a conta, `contaPara` é chamada com `site: null`).
 //
 // "empresa_unica" (US-018) tem uma particularidade: as pessoas encontradas nascem com status "novo"
 // (não "pesquisado"), então a etapa 5 (que só promove "pesquisado" → "qualificado") NÃO as promove — elas
@@ -30,6 +46,7 @@ import type { ResultadoBuscaWeb } from "./descoberta";
 import { data } from "./formato";
 import { apolloEnabled, buscarLeads, buscarPessoasDaEmpresa } from "./leads";
 import { avaliarCriterios, calcularFit, dominioDe, inferirPapel, resumoDaPagina, sinaisEncontrados, sinalAntigo } from "./qualificacao";
+import { avaliarCriterioInterpretativo } from "./qualificacao-ia";
 import { QUANTIDADES_EMPRESAS } from "./rotulos";
 import { atualizarConta, atualizarLead, atualizarProspeccao, criarConta, criarLead, leadsDoProduto, listarContas, listarLeads, obterICP, obterProduto, obterProspeccao } from "./workspace";
 import type { Conta, Evidencia, ICP, Jornada, ModoProspeccao, SinalProspeccao } from "./types";
@@ -54,6 +71,16 @@ function propagarTeto(err: unknown): void {
 function textoCriterio(criterios: Record<string, unknown>, chave: string): string {
   const v = criterios[chave];
   return typeof v === "string" ? v.trim() : "";
+}
+
+/** Evidências de uma CONTA (US-024): os critérios objetivos de sempre (`avaliarCriterios`, determinístico)
+ * mais "Outros critérios" — o texto livre do ICP (`criterios.outros`, B2B), interpretativo, avaliado por
+ * IA (`lib/qualificacao-ia.ts`) só quando o ICP preencheu esse campo. Sem ele (a maioria dos ICPs hoje),
+ * o comportamento é idêntico ao de antes desta história. */
+async function avaliarComOutros(conteudo: string, criteriosObjetivos: { criterio: string; valor: string }[], icp: ICP | null): Promise<Evidencia[]> {
+  const base = avaliarCriterios(conteudo, criteriosObjetivos);
+  const outros = await avaliarCriterioInterpretativo(conteudo, "Outros critérios", icp?.criterios.outros);
+  return outros ? [...base, outros] : base;
 }
 
 function nomeEmpresaFicticia(segmento: string, indice: number): string {
@@ -166,11 +193,11 @@ async function buscarContasReais(prospeccaoId: string, criterios: Record<string,
       continue;
     }
     const conteudo = buscaDemo ? conteudoDemoDaCandidata(indice, segmento, porte, localizacao, sinaisAlvo[0]) : pagina.conteudo || candidata.resumo;
-    const evidencias = avaliarCriterios(conteudo, [
+    const evidencias = await avaliarComOutros(conteudo, [
       { criterio: "Segmento", valor: segmento },
       { criterio: "Porte", valor: porte },
       { criterio: "Localização", valor: localizacao },
-    ]);
+    ], icp);
     criarConta({
       prospeccaoId,
       nome: buscaDemo ? nomeEmpresaFicticia(segmento, indice) : nomeDaEmpresa(candidata),
@@ -353,11 +380,11 @@ async function buscarContaUnicaReal(prospeccaoId: string, criterios: Record<stri
 
   const demo = buscaDemo || pagina.demo;
   const conteudo = demo ? conteudoDemoDaEmpresaUnica(nome, segmento, porte, localizacao, sinaisAlvo[0]) : pagina.conteudo;
-  const evidencias = avaliarCriterios(conteudo, [
+  const evidencias = await avaliarComOutros(conteudo, [
     { criterio: "Segmento", valor: segmento },
     { criterio: "Porte", valor: porte },
     { criterio: "Localização", valor: localizacao },
-  ]);
+  ], icp);
   return criarConta({
     ...base,
     site,
@@ -625,18 +652,20 @@ function conteudoDemoDaPessoaB2C(indice: number, ocupacao: string, localizacao: 
   return `Perfil de demonstração. ${partes.join(" ")}`;
 }
 
-/** Etapa 4, modo "pessoas" em B2C (US-021, a última combinação modo/jornada a sair do fictício): pessoas
- * físicas encontradas por localização, ocupação e interesses públicos (critérios da US-006) — nunca uma
- * `Conta` (a jornada B2C usa a pessoa como unidade). Mesma técnica de busca pública
+/** Etapa 4, modo "pessoas" em B2C (US-021 trouxe a descoberta real; US-024 apertou a qualificação):
+ * pessoas físicas encontradas por localização, ocupação, interesses e contexto públicos (critérios da
+ * US-006) — nunca uma `Conta` (a jornada B2C usa a pessoa como unidade). Mesma técnica de busca pública
  * `site:linkedin.com/in` + leitura por `perfilDePessoa` de `buscarPessoasOportunidadesB2C` (US-020), mas
- * os termos comparados são os do PERFIL, não sinais de intenção: por isso, diferente de "oportunidades",
- * uma pessoa sem nenhuma evidência ainda entra na lista (fit "media", mesma regra de `calcularFit`) — este
- * modo promete "combina com o perfil ideal", não "sinal de que este é o momento certo". Sinais do ICP
- * ainda são extraídos quando aparecem no texto (alimentam a coluna "Sinal" da lista), mas não são
- * condição de entrada. Papel sempre "desconhecido" (B2C não classifica papel de decisão). */
+ * os termos comparados são os do PERFIL, não sinais de intenção. Até a US-024, uma pessoa sem nenhuma
+ * evidência ainda entrava na lista (fit "media"); a AC "um lead sem nenhuma evidência verificável não
+ * entra na lista" substitui essa decisão — agora ela é descartada, igual a "oportunidades" (US-020), só
+ * que a condição de entrada é evidência (fit), não sinal. Sinais do ICP ainda são extraídos quando
+ * aparecem no texto (alimentam a coluna "Sinal" da lista), mas continuam sem ser condição de entrada.
+ * Papel sempre "desconhecido" (B2C não classifica papel de decisão). */
 async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null, produtoId: string): Promise<void> {
   const localizacao = textoCriterio(criterios, "localizacao");
   const ocupacao = textoCriterio(criterios, "ocupacao");
+  const contexto = textoCriterio(criterios, "contexto");
   const interesses = Array.isArray(criterios.interesses) ? criterios.interesses.filter((s): s is string => typeof s === "string") : [];
   const sinaisAlvo = icp?.sinais ?? [];
   const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
@@ -687,11 +716,17 @@ async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, 
     }
 
     jaVistos.add(chave);
-    const evidencias = avaliarCriterios(conteudo, [
+    const evidenciasBase = avaliarCriterios(conteudo, [
       { criterio: "Localização", valor: localizacao },
       { criterio: "Ocupação", valor: ocupacao },
       { criterio: "Interesses", valor: interesses.join(", ") },
     ]);
+    const evidenciaContexto = await avaliarCriterioInterpretativo(conteudo, "Contexto", contexto);
+    const evidencias = evidenciaContexto ? [...evidenciasBase, evidenciaContexto] : evidenciasBase;
+    // US-024: sem nenhuma evidência verificável (nem determinística, nem interpretativa), a pessoa não
+    // entra na lista — mesmo critério de "sem sinal nenhum não é uma oportunidade" (US-020), aplicado aqui
+    // a evidência em vez de sinal.
+    if (!evidencias.some((e) => e.resultado !== "nao_verificavel")) continue;
     const sinais = sinaisEncontrados(conteudo, sinaisAlvo, origem, consultadoEm);
     criarLead({
       prospeccaoId, contaId: null, nome: candidato.nome, cargo: candidato.cargo, empresa: null,

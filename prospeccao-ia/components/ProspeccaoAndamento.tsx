@@ -12,9 +12,9 @@ import { Aviso, Chip, Topbar, data, useConfirmacao, useStatus, lerErro } from "@
 import { ExploracaoEmpresa } from "@/components/ExploracaoEmpresa";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 import { sinalAntigo } from "@/lib/qualificacao";
-import { ROTULO_MODO, ROTULO_PAPEL, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
+import { NIVEL_CHIP_EVIDENCIA, ROTULO_FIT, ROTULO_MODO, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
 import { ETAPAS_PROSPECCAO } from "@/lib/execucao-etapas";
-import type { Conta, Jornada, LeadProspeccao, Prospeccao, SinalProspeccao } from "@/lib/types";
+import type { Conta, Evidencia, Jornada, LeadProspeccao, Prospeccao, SinalProspeccao } from "@/lib/types";
 
 /** Chip de um sinal de intenção (US-020): descrição + data, em cinza e com "· Antigo" quando passou dos
  * 90 dias (lib/qualificacao.ts:sinalAntigo) — sinal sem essa marca é recente e continua em verde
@@ -26,6 +26,26 @@ function ChipSinal({ sinal }: { sinal: SinalProspeccao }) {
       {sinal.descricao} · {data(sinal.data, { comAno: true })}
       {antigo ? " · Antigo" : ""}
     </Chip>
+  );
+}
+
+/** Evidências item a item (US-024, prd.json > regras: "com o valor encontrado e o resultado"): um chip
+ * por critério (atende/não atende/não foi possível verificar) e, quando a IA citou um trecho (critério
+ * interpretativo, ver lib/qualificacao-ia.ts), a frase literal que embasou a resposta. */
+function EvidenciasLista({ evidencias }: { evidencias: Evidencia[] }) {
+  if (evidencias.length === 0) return null;
+  return (
+    <ul className="flex flex-col gap-1">
+      {evidencias.map((e, i) => (
+        <li key={i} className="flex items-start gap-1.5 flex-wrap text-[12px] text-muted">
+          <Chip nivel={NIVEL_CHIP_EVIDENCIA[e.resultado]}>{ROTULO_RESULTADO_EVIDENCIA[e.resultado]}</Chip>
+          <span>
+            {e.criterio}: {e.valor}
+            {e.trecho && <span className="italic"> · “{e.trecho}”</span>}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -274,7 +294,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                                 {[conta.cidade, conta.porte].filter(Boolean).join(" · ") || "Cidade e porte não identificados"}
                               </p>
                             </div>
-                            {conta.fit && <Chip nivel={conta.fit} />}
+                            {conta.fit && <Chip nivel={conta.fit}>{ROTULO_FIT[conta.fit]}</Chip>}
                           </div>
                           {conta.sinais.length > 0 && (
                             <div className="flex flex-wrap gap-1.5">
@@ -283,6 +303,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                               ))}
                             </div>
                           )}
+                          <EvidenciasLista evidencias={conta.evidencias} />
                           <button
                             type="button"
                             className="btn-link text-[13px] self-start"
@@ -314,7 +335,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                               </p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
-                              {lead.fit && <Chip nivel={lead.fit} />}
+                              {lead.fit && <Chip nivel={lead.fit}>{ROTULO_FIT[lead.fit]}</Chip>}
                               <Chip nivel="neutral">{ROTULO_STATUS_LEAD[lead.status]}</Chip>
                             </div>
                           </div>
@@ -328,14 +349,10 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                           {lead.evidencias.length > 0 && (
                             <div className="text-[12px] text-muted">
                               <p className="font-semibold text-ink text-[12px] mb-0.5">Como este dado chegou aqui</p>
-                              <ul className="flex flex-col gap-0.5">
-                                {lead.evidencias.map((ev, i) => (
-                                  <li key={i}>
-                                    {ev.criterio}: {ev.valor}
-                                    {lead.fonte ? ` · ${lead.fonte}` : ""} · {data(lead.criadoEm, { comAno: true })}
-                                  </li>
-                                ))}
-                              </ul>
+                              <EvidenciasLista evidencias={lead.evidencias} />
+                              <p className="mt-0.5">
+                                {lead.fonte || "Fonte não identificada"} · {data(lead.criadoEm, { comAno: true })}
+                              </p>
                             </div>
                           )}
                           <div className="flex items-center gap-3 flex-wrap">
@@ -378,8 +395,9 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                                   {[lead.cargo, lead.empresa, lead.cidade].filter(Boolean).join(" · ") || "Dados não identificados"}
                                 </p>
                               </div>
-                              {lead.fit && <Chip nivel={lead.fit} />}
+                              {lead.fit && <Chip nivel={lead.fit}>{ROTULO_FIT[lead.fit]}</Chip>}
                             </div>
+                            <EvidenciasLista evidencias={lead.evidencias} />
                             <div className="flex items-center gap-3 flex-wrap">
                               {lead.linkedin && (
                                 <a href={lead.linkedin} target="_blank" rel="noopener noreferrer" className="text-[12px] text-accent-ink hover:underline">
@@ -421,13 +439,14 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                                 <p className="font-semibold text-[14px]">{conta.nome}</p>
                                 <p className="text-[13px] text-muted">{conta.setor || "Segmento não identificado"}</p>
                               </div>
-                              {conta.fit && <Chip nivel={conta.fit} />}
+                              {conta.fit && <Chip nivel={conta.fit}>{ROTULO_FIT[conta.fit]}</Chip>}
                             </div>
                             <div className="flex flex-wrap gap-1.5">
                               {conta.sinais.map((sinal, i) => (
                                 <ChipSinal key={i} sinal={sinal} />
                               ))}
                             </div>
+                            <EvidenciasLista evidencias={conta.evidencias} />
                           </div>
                         ))}
                         {andamento.leads.map((lead) => (
@@ -439,13 +458,14 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                                   {[lead.cargo, lead.empresa, lead.cidade].filter(Boolean).join(" · ") || "Dados não identificados"}
                                 </p>
                               </div>
-                              {lead.fit && <Chip nivel={lead.fit} />}
+                              {lead.fit && <Chip nivel={lead.fit}>{ROTULO_FIT[lead.fit]}</Chip>}
                             </div>
                             <div className="flex flex-wrap gap-1.5">
                               {lead.sinais.map((sinal, i) => (
                                 <ChipSinal key={i} sinal={sinal} />
                               ))}
                             </div>
+                            <EvidenciasLista evidencias={lead.evidencias} />
                             {lead.linkedin && (
                               <a href={lead.linkedin} target="_blank" rel="noopener noreferrer" className="text-[12px] text-accent-ink hover:underline self-start">
                                 Ver perfil

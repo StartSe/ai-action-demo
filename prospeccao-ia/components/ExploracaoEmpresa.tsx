@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { Aviso, Chip, data } from "@/components/ui";
 import { sinalAntigo } from "@/lib/qualificacao";
-import { ROTULO_PAPEL } from "@/lib/rotulos";
+import { NIVEL_CHIP_EVIDENCIA, ROTULO_FIT, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA } from "@/lib/rotulos";
 import type { Conta, LeadProspeccao } from "@/lib/types";
 
 const STATUS_JA_NA_PROSPECCAO = new Set(["selecionado", "qualificado", "abordado", "respondeu"]);
@@ -84,7 +84,7 @@ export function ExploracaoEmpresa({
               {[conta.cidade, conta.porte].filter(Boolean).join(" · ") || "Cidade e porte não identificados"}
             </p>
           </div>
-          {conta.fit && <Chip nivel={conta.fit} />}
+          {conta.fit && <Chip nivel={conta.fit}>{ROTULO_FIT[conta.fit]}</Chip>}
         </div>
         {conta.resumo && (
           <div>
@@ -194,8 +194,9 @@ export function ExploracaoEmpresa({
                     <li key={i} className="flex items-center gap-2 flex-wrap">
                       <span>
                         <span className="text-muted">{e.criterio}:</span> {e.valor}
+                        {e.trecho && <span className="text-muted italic"> · “{e.trecho}”</span>}
                       </span>
-                      {e.resultado === "atende" ? <Chip nivel="positivo">Atende</Chip> : <Chip nivel="cinza">Não foi possível verificar</Chip>}
+                      <Chip nivel={NIVEL_CHIP_EVIDENCIA[e.resultado]}>{ROTULO_RESULTADO_EVIDENCIA[e.resultado]}</Chip>
                     </li>
                   ))}
                 </ul>

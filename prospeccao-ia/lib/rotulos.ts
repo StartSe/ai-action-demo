@@ -1,6 +1,6 @@
 // Rótulos de valores guardados no banco, num Record completo (nunca um ternário na tela):
 // somar um valor ao union vira erro de compilação aqui em vez de um rótulo faltando na tela.
-import type { Jornada, ModoProspeccao, Papel, StatusLead } from "./types";
+import type { Evidencia, Fit, Jornada, ModoProspeccao, Papel, StatusLead } from "./types";
 
 export const ROTULO_JORNADA: Record<Jornada, string> = {
   b2b: "Empresas e decisores",
@@ -59,6 +59,30 @@ export const ROTULO_PAPEL: Record<Papel, string | null> = {
   influenciador: "Influenciador",
   champion: "Champion potencial",
   desconhecido: null,
+};
+
+// Aderência ao ICP (US-017/024): rótulo do chip em sentence case ("Alta aderência", prd.json > regras)
+// — `Chip nivel={fit}` decide a cor (.chip-alta|media|baixa); este Record decide o texto, nunca o nível
+// sozinho (que sem children mostraria só "Alta"/"Média"/"Baixa", ver components/ui.tsx:Chip).
+export const ROTULO_FIT: Record<Fit, string> = {
+  alta: "Alta aderência",
+  media: "Média aderência",
+  baixa: "Baixa aderência",
+};
+
+// Resultado de uma evidência item a item (US-024): rótulo e nível do chip por critério avaliado.
+// "negativo" (vermelho, mesma classe de "alta"/perigo — ver app/globals.css) marca um critério que a
+// página/perfil contradisse de verdade; "cinza" é reservado a "não foi possível verificar".
+export const ROTULO_RESULTADO_EVIDENCIA: Record<Evidencia["resultado"], string> = {
+  atende: "Atende",
+  nao_atende: "Não atende",
+  nao_verificavel: "Não foi possível verificar",
+};
+
+export const NIVEL_CHIP_EVIDENCIA: Record<Evidencia["resultado"], string> = {
+  atende: "positivo",
+  nao_atende: "negativo",
+  nao_verificavel: "cinza",
 };
 
 // Status de um lead na lista (US-021, jornada B2C: coluna "Status" da lista "Pessoa | Fit | Sinal |

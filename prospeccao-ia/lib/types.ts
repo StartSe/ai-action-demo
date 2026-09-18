@@ -53,11 +53,14 @@ export type EstadoProspeccao = "rascunho" | "executando" | "pronta" | "falhou" |
 export type Papel = "decisor" | "influenciador" | "champion" | "desconhecido";
 export type StatusLead = "novo" | "pesquisado" | "qualificado" | "selecionado" | "abordado" | "respondeu" | "descartado";
 
-/** Um critério do ICP avaliado para um lead/conta específico: valor encontrado e o resultado da checagem. */
+/** Um critério do ICP avaliado para um lead/conta específico: valor encontrado e o resultado da checagem.
+ * `trecho` só existe em critérios interpretativos avaliados por IA (US-024): a cópia literal do texto que
+ * embasou a resposta — nunca preenchido pela comparação determinística de termo. */
 export interface Evidencia {
   criterio: string;
   valor: string;
   resultado: "atende" | "nao_atende" | "nao_verificavel";
+  trecho?: string;
 }
 
 /** Sinal de intenção com origem e data, nunca aceito sem as duas (ver lib/workspace.ts). */
