@@ -52,7 +52,9 @@ export type Integracao = {
 };
 
 export type CampoStatus = Omit<Campo, "opcoesDinamicas"> & { definido: boolean; origem: "env" | "banco" | null; mascarado: string | null; valorVisivel?: string };
-export type IntegracaoStatus = Omit<Integracao, "campos" | "testar"> & { campos: CampoStatus[]; configurada: boolean };
+/** `testavel`: a integração tem verificação automática (`testar`); sem ela, /setup não mostra "Testar conexão"
+ * (um botão que só diria "não tem teste automático" não ajuda ninguém). */
+export type IntegracaoStatus = Omit<Integracao, "campos" | "testar"> & { campos: CampoStatus[]; configurada: boolean; testavel: boolean };
 
 /** Chaves necessárias para a integração contar como configurada. */
 export function integracaoConfigurada(i: Integracao): boolean {
@@ -121,7 +123,7 @@ export async function statusIntegracoes(lista: Integracao[]): Promise<{ integrac
     }
     const { campos: _c, testar: _t, ...cabecalho } = i;
     void _c; void _t;
-    integracoes.push({ ...cabecalho, campos, configurada: integracaoConfigurada(i) });
+    integracoes.push({ ...cabecalho, campos, configurada: integracaoConfigurada(i), testavel: Boolean(i.testar) });
   }
   const pronto = lista.filter((i) => i.obrigatoria).every(integracaoConfigurada);
   return { integracoes, pronto, enderecoPublico: statusEnderecoPublico(), caixasEmail: statusCaixasEmail() };
