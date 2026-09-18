@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { Meta } from "@/lib/ai";
-import { Aviso, Chip, CopyButton, Origem, Topbar, useStatus } from "@/components/ui";
+import { Aviso, Chip, Entregar, Origem, Topbar, useStatus } from "@/components/ui";
 import { data } from "@/lib/formato";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 import { ORDEM_DIRECOES_REGENERACAO, ROTULO_CAMPO_ESTRATEGIA, ROTULO_DIRECAO_REGENERACAO, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
@@ -189,6 +189,8 @@ export function AbordagemLead({ leadId }: { leadId: string }) {
   const [regenerando, setRegenerando] = useState(false);
   const [erroRegenerar, setErroRegenerar] = useState<string | null>(null);
   const [anterior, setAnterior] = useState<{ canal: Canal; valor: string | AbordagemRegistro["email"] } | null>(null);
+  const [enviandoCRM, setEnviandoCRM] = useState(false);
+  const [erroCRM, setErroCRM] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/leads/${leadId}/abordagem`)
@@ -277,6 +279,28 @@ export function AbordagemLead({ leadId }: { leadId: string }) {
     }
   }
 
+  /** "Enviar para o CRM" (US-032, dentro do bloco `Entregar`): reaproveita a rota que já existia para o
+   * modelo antigo (POST /api/leads/[id]/crm), que agora reconhece este id como um LeadProspeccao ANTES de
+   * cair no comportamento antigo — ver a mesma decisão documentada em app/api/leads/[id]/crm/route.ts. Só
+   * entra em `extras` (abaixo) quando o CRM está configurado e o lead ainda não foi enviado ("botão que não
+   * faria nada naquele estado não fica desligado, ele sai"). */
+  async function enviarParaCRM() {
+    if (!lead) return;
+    setErroCRM(null);
+    setEnviandoCRM(true);
+    try {
+      const r = await fetch(`/api/leads/${lead.id}/crm`, { method: "POST" });
+      const corpo = await r.json().catch(() => null);
+      if (!r.ok) { setErroCRM(corpo?.error || "Não foi possível enviar para o CRM."); return; }
+      setLead(corpo as LeadProspeccao);
+    } catch {
+      setErroCRM("Não foi possível enviar para o CRM.");
+    } finally {
+      setEnviandoCRM(false);
+    }
+  }
+
+  const crmConfigurado = status?.integrations?.["mcp-crm"];
   const origemMeta: Meta | null = abordagem ? { demo: abordagem.demo, model: "", geradoEm: abordagem.criadoEm, insumo: "estratégia definida acima" } : null;
 
   return (
@@ -325,13 +349,26 @@ export function AbordagemLead({ leadId }: { leadId: string }) {
 
                 <div className="card">
                   <p className="whitespace-pre-wrap text-[14px] text-ink mb-4">{textoDoCanal(abordagem, canal)}</p>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <CopyButton texto={() => textoDoCanal(abordagem, canal)} />
-                    <MenuRegenerar lead={lead} desabilitado={regenerando} onEscolher={regenerar} />
-                    {anterior?.canal === canal && (
-                      <button type="button" className="btn-link text-[13px]" disabled={regenerando} onClick={voltarVersaoAnterior}>Voltar à versão anterior</button>
-                    )}
+                  <div className="flex flex-col gap-3">
+                    <Entregar
+                      id={lead?.id}
+                      titulo={lead ? `Abordagem para ${lead.nome}` : "Abordagem"}
+                      texto={() => textoDoCanal(abordagem, canal)}
+                      extras={
+                        crmConfigurado && lead && !lead.noCRM
+                          ? [{ rotulo: enviandoCRM ? "Enviando para o CRM…" : "Enviar para o CRM", onClick: enviarParaCRM }]
+                          : undefined
+                      }
+                    />
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {lead?.noCRM && <Chip nivel="positivo">No CRM</Chip>}
+                      <MenuRegenerar lead={lead} desabilitado={regenerando} onEscolher={regenerar} />
+                      {anterior?.canal === canal && (
+                        <button type="button" className="btn-link text-[13px]" disabled={regenerando} onClick={voltarVersaoAnterior}>Voltar à versão anterior</button>
+                      )}
+                    </div>
                   </div>
+                  {erroCRM && <div className="mt-3"><Aviso tom="danger">{erroCRM}</Aviso></div>}
                   {erroRegenerar && <div className="mt-3"><Aviso tom="danger">{erroRegenerar}</Aviso></div>}
                 </div>
 

@@ -3,11 +3,44 @@ import { data } from "@/lib/formato";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
 import type { DadosBusca, ResultadoBusca } from "@/lib/types";
+import { FichaLeadCompartilhada } from "@/components/FichaLeadCompartilhada";
+import { listarAbordagens, obterConta, obterLead } from "@/lib/workspace";
 import { ConteudoLeads } from "../../page";
 import { ImprimirAoCarregar } from "./ImprimirAoCarregar";
 
 export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
   const { id } = await params;
+
+  // Modelo novo (workspace, US-032): mesma ordem de tentativa (novo antes do antigo) de app/r/[id]/page.tsx.
+  const lead = obterLead(id);
+  if (lead) {
+    const conta = lead.contaId ? obterConta(lead.contaId) : null;
+    const abordagem = listarAbordagens(id)[0] ?? null;
+    return (
+      <div className="print-sheet max-w-[1080px] mx-auto px-8 py-10 max-md:px-4">
+        <ImprimirAoCarregar />
+        <header className="mb-8 pb-4 border-b border-line">
+          <div className="text-[13px] font-semibold text-muted">Prospecção com IA</div>
+          <h1 className="text-2xl font-extrabold tracking-[-0.01em]">{`Abordagem para ${lead.nome}`}</h1>
+          <div className="text-muted text-sm">{data(new Date())}</div>
+        </header>
+
+        <FichaLeadCompartilhada lead={lead} conta={conta} abordagem={abordagem} />
+
+        <footer className="mt-8 pt-4 border-t border-line">
+          <p className="text-muted text-[13px]">
+            {abordagem
+              ? abordagem.demo
+                ? "Estratégia de exemplo, sem usar IA."
+                : `Estratégia gerada a partir da qualificação desta pessoa, em ${data(abordagem.criadoEm, { comHora: true })}.`
+              : "Ainda não há uma estratégia de abordagem para esta pessoa."}
+          </p>
+        </footer>
+      </div>
+    );
+  }
+
+  // Modelo antigo (busca de leads, lib/historico.ts) — comportamento preservado.
   const registro = obter<DadosBusca, ResultadoBusca, Meta>(id);
   if (!registro || registro.tipo !== "leads") notFound();
 
