@@ -38,3 +38,11 @@ export const DESCRICAO_MODO: Record<Jornada, Partial<Record<ModoProspeccao, stri
     oportunidades: "Pessoas com um sinal recente de que este é o momento certo para elas.",
   },
 };
+
+// Passo 4 do assistente (US-012): o botão primário diz o que a busca vai fazer, em vez de "Continuar".
+export const ROTULO_ACAO_MODO: Record<ModoProspeccao, string> = {
+  empresas: "Buscar empresas",
+  pessoas: "Buscar pessoas",
+  empresa_unica: "Explorar empresa",
+  oportunidades: "Buscar oportunidades",
+};

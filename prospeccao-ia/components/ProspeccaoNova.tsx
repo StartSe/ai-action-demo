@@ -1,19 +1,20 @@
 "use client";
-// Assistente de nova prospecção, 4 passos: produto/perfil ideal (US-009), jornada (US-010) e tipo de
-// busca (US-011). O passo atual mora na barra de endereço (`?passo=1..4`), no mesmo padrão
-// `history.pushState` + `popstate` já usado por components/Relatorios.tsx (whatsapp-atendente) — nunca
-// `useSearchParams`, que obrigaria a embrulhar a página num `Suspense`. O passo 4 (US-012) ainda não
-// existe: avançar além do passo 3 mostra um resumo do que foi escolhido e um "Em breve", igual às
-// cascas de tela da US-002.
-import { useEffect, useState } from "react";
+// Assistente de nova prospecção, 4 passos: produto/perfil ideal (US-009), jornada (US-010), tipo de
+// busca (US-011) e critérios (US-012). O passo atual mora na barra de endereço (`?passo=1..4`), no
+// mesmo padrão `history.pushState` + `popstate` já usado por components/Relatorios.tsx
+// (whatsapp-atendente) — nunca `useSearchParams`, que obrigaria a embrulhar a página num `Suspense`.
+// O passo 4 é o último do assistente: seu botão primário já diz o que a busca vai fazer
+// (ROTULO_ACAO_MODO) em vez de "Continuar", mas ainda não dispara nada de verdade — criar a
+// `Prospeccao` de fato (POST /api/prospeccoes) é a US-013, que ainda não existe.
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Aviso, Chip, Field, Topbar, useStatus } from "@/components/ui";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
-import { DESCRICAO_JORNADA, DESCRICAO_MODO, MODOS_POR_JORNADA, ROTULO_JORNADA, ROTULO_MODO } from "@/lib/rotulos";
+import { CriteriosProspeccaoForm, criteriosIniciais, type CriteriosBusca } from "@/components/CriteriosProspeccao";
+import { DESCRICAO_JORNADA, DESCRICAO_MODO, MODOS_POR_JORNADA, ROTULO_ACAO_MODO, ROTULO_JORNADA, ROTULO_MODO } from "@/lib/rotulos";
 import { ProdutoForm } from "@/components/ProdutoForm";
 import type { ICP, Jornada, ModoProspeccao, Produto } from "@/lib/types";
 
-const ULTIMO_PASSO_PRONTO = 3;
 const TOTAL_PASSOS = 4;
 const VOLTAR_PARA_AQUI = "/prospeccoes/nova";
 const JORNADAS = ["b2b", "b2c"] as const;
@@ -21,6 +22,7 @@ const SUBTITULO_PASSO: Partial<Record<number, string>> = {
   1: "Produto e perfil ideal",
   2: "Quem você quer encontrar",
   3: "Como encontrar oportunidades",
+  4: "Critérios da busca",
 };
 
 type ProdutoComICPs = Produto & { icps: ICP[] };
@@ -46,6 +48,9 @@ export function ProspeccaoNova() {
   const [icpId, setIcpId] = useState<string | null>(null);
   const [jornada, setJornada] = useState<Jornada | null>(null);
   const [modo, setModo] = useState<ModoProspeccao | null>(null);
+  const [criterios, setCriterios] = useState<CriteriosBusca | null>(null);
+  const [buscaIniciada, setBuscaIniciada] = useState(false);
+  const chaveCriteriosRef = useRef<string | null>(null);
 
   useEffect(() => {
     fetch("/api/produtos")
@@ -92,8 +97,24 @@ export function ProspeccaoNova() {
   const podeContinuarPasso1 = Boolean(produtoSelecionado && icpEfetivo);
   const podeContinuarPasso2 = podeContinuarPasso1 && jornadaEfetiva !== null;
   const podeContinuarPasso3 = podeContinuarPasso2 && modoEfetivo !== null;
-  const podeContinuar = passo === 3 ? podeContinuarPasso3 : passo === 2 ? podeContinuarPasso2 : podeContinuarPasso1;
+  const podeContinuarPasso4 =
+    podeContinuarPasso3 && criterios !== null && (modoEfetivo !== "empresa_unica" || criterios.empresaNome.trim().length > 0);
+  const podeContinuar = passo === 4 ? podeContinuarPasso4 : passo === 3 ? podeContinuarPasso3 : passo === 2 ? podeContinuarPasso2 : podeContinuarPasso1;
   const linkCriarComIA = `/produtos/novo?ia=1&voltar=${encodeURIComponent(VOLTAR_PARA_AQUI)}`;
+
+  // Critérios do passo 4 nascem dos valores do ICP só uma vez por combinação (perfil, modo): trocar o
+  // perfil ou o tipo de busca nos passos anteriores gera um novo conjunto de valores iniciais, mas
+  // editar um campo aqui não é sobrescrito enquanto a combinação não mudar.
+  useEffect(() => {
+    if (!icpEfetivo || !modoEfetivo) return;
+    const chave = `${icpEfetivo.id}:${modoEfetivo}`;
+    if (chaveCriteriosRef.current === chave) return;
+    chaveCriteriosRef.current = chave;
+    const t = setTimeout(() => {
+      setCriterios(criteriosIniciais(icpEfetivo, modoEfetivo, jornadaEfetiva ?? icpEfetivo.jornada));
+    }, 0);
+    return () => clearTimeout(t);
+  }, [icpEfetivo, modoEfetivo, jornadaEfetiva]);
 
   return (
     <>
@@ -103,16 +124,23 @@ export function ProspeccaoNova() {
         <h1 className="titulo-painel mb-1.5">Nova prospecção</h1>
         <p className="apoio mb-6">Passo {passo} de {TOTAL_PASSOS}{SUBTITULO_PASSO[passo] ? ` · ${SUBTITULO_PASSO[passo]}` : ""}</p>
 
-        {passo > ULTIMO_PASSO_PRONTO ? (
-          <div className="card p-6">
-            <p className="text-[13px] text-muted mb-4">
-              Produto: <strong className="text-ink">{produtoSelecionado?.nome}</strong> · Perfil: <strong className="text-ink">{icpEfetivo?.nome}</strong>
-              {jornadaEfetiva && <> · {ROTULO_JORNADA[jornadaEfetiva]}</>}
-              {modoEfetivo && <> · {ROTULO_MODO[modoEfetivo]}</>}
-            </p>
-            <p className="apoio mb-4">Em breve: o passo {passo} deste assistente.</p>
-            <button type="button" className="btn-link text-[13px]" onClick={() => irParaPasso(1)}>Voltar</button>
-          </div>
+        {passo === 4 ? (
+          !produtoSelecionado || !icpEfetivo || !modoEfetivo ? (
+            <Aviso tom="warn" acao={{ rotulo: "Escolher tipo de busca", onClick: () => irParaPasso(!produtoSelecionado || !icpEfetivo ? 1 : 3) }}>
+              Escolha o produto, o perfil e o tipo de busca antes de continuar.
+            </Aviso>
+          ) : !criterios ? (
+            <div className="card p-6 flex flex-col gap-4" aria-hidden="true">
+              {[0, 1, 2].map((i) => (
+                <span key={i} className="skeleton block w-full h-11" />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <CriteriosProspeccaoForm modo={modoEfetivo} jornada={jornadaEfetiva ?? icpEfetivo.jornada} icp={icpEfetivo} valor={criterios} onChange={setCriterios} />
+              {buscaIniciada && <Aviso tom="ok">Em breve: a busca com estes critérios.</Aviso>}
+            </div>
+          )
         ) : passo === 2 ? (
           !produtoSelecionado || !icpEfetivo ? (
             <Aviso tom="warn" acao={{ rotulo: "Escolher produto e perfil", onClick: () => irParaPasso(1) }}>
@@ -231,14 +259,19 @@ export function ProspeccaoNova() {
           </div>
         )}
 
-        {passo <= ULTIMO_PASSO_PRONTO && (
-          <div className="mt-6 flex items-center gap-4">
-            {passo > 1 && (
-              <button type="button" className="btn-link text-[13px]" onClick={() => irParaPasso(passo - 1)}>Voltar</button>
-            )}
-            <button type="button" className="btn-primary !w-auto max-md:!w-full" disabled={!podeContinuar} onClick={() => irParaPasso(passo + 1)}>Continuar</button>
-          </div>
-        )}
+        <div className="mt-6 flex items-center gap-4">
+          {passo > 1 && (
+            <button type="button" className="btn-link text-[13px]" onClick={() => irParaPasso(passo - 1)}>Voltar</button>
+          )}
+          <button
+            type="button"
+            className="btn-primary !w-auto max-md:!w-full"
+            disabled={!podeContinuar}
+            onClick={() => (passo < TOTAL_PASSOS ? irParaPasso(passo + 1) : setBuscaIniciada(true))}
+          >
+            {passo < TOTAL_PASSOS ? "Continuar" : modoEfetivo ? ROTULO_ACAO_MODO[modoEfetivo] : "Continuar"}
+          </button>
+        </div>
       </main>
     </>
   );
