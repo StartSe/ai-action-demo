@@ -1,8 +1,7 @@
 import { gerarEstrategia, gerarMensagens } from "@/lib/estrategia";
 import type { EstrategiaAbordagem, LeadProspeccao, StatusLead } from "@/lib/types";
-import { atualizarLead, criarAbordagem, listarAbordagens, obterConta, obterICP, obterLead, obterProduto, obterProspeccao, atualizarAbordagem } from "@/lib/workspace";
-
-const CAMPOS_ESTRATEGIA: (keyof EstrategiaAbordagem)[] = ["objetivo", "gancho", "dorProvavel", "tom", "cta"];
+import { atualizarLead, criarAbordagem, listarAbordagens, atualizarAbordagem } from "@/lib/workspace";
+import { contextoDoLead, estrategiaValida } from "./comum";
 
 /** "A abordagem é salva... e o lead passa a status: 'selecionado'" (AC da US-030): só promove para a
  * frente (novo/pesquisado/qualificado → selecionado), nunca reverte um lead que já foi abordado ou
@@ -14,25 +13,6 @@ function promoverParaSelecionado(lead: LeadProspeccao): LeadProspeccao {
   const alvo = ORDEM_STATUS.indexOf("selecionado");
   if (atual === -1 || atual >= alvo) return lead;
   return atualizarLead(lead.id, { status: "selecionado" }) ?? lead;
-}
-
-function estrategiaValida(v: unknown): v is EstrategiaAbordagem {
-  if (!v || typeof v !== "object") return false;
-  return CAMPOS_ESTRATEGIA.every((campo) => typeof (v as Record<string, unknown>)[campo] === "string" && (v as Record<string, unknown>)[campo] !== "");
-}
-
-/** Contexto necessário para gerar a estratégia/mensagens de um lead: a própria pessoa, a conta vinculada
- * (nula em B2C ou "explorar uma empresa" sem site) e o produto da prospecção. 404 quando o lead, a
- * prospecção ou o produto não existem mais (mesma regra de "Esta pessoa não existe mais." de FichaLead). */
-function contextoDoLead(leadId: string) {
-  const lead = obterLead(leadId);
-  if (!lead) return null;
-  const prospeccao = obterProspeccao(lead.prospeccaoId);
-  const produto = prospeccao ? obterProduto(prospeccao.produtoId) : null;
-  if (!produto) return null;
-  const icp = prospeccao ? obterICP(prospeccao.icpId) : null;
-  const conta = lead.contaId ? obterConta(lead.contaId) : null;
-  return { lead, produto, icp, conta };
 }
 
 /** "A tela de abordagem abre com o bloco Estratégia..." (US-029): a primeira visita já gera e SALVA a

@@ -8,9 +8,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { Meta } from "@/lib/ai";
 import { Aviso, Chip, CopyButton, Origem, Topbar, useStatus } from "@/components/ui";
+import { data } from "@/lib/formato";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
-import { ROTULO_CAMPO_ESTRATEGIA, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
-import type { AbordagemRegistro, EstrategiaAbordagem, LeadProspeccao } from "@/lib/types";
+import { ORDEM_DIRECOES_REGENERACAO, ROTULO_CAMPO_ESTRATEGIA, ROTULO_DIRECAO_REGENERACAO, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
+import type { AbordagemRegistro, DirecaoRegeneracao, EstrategiaAbordagem, LeadProspeccao } from "@/lib/types";
 
 const CAMPOS: (keyof EstrategiaAbordagem)[] = ["objetivo", "gancho", "dorProvavel", "tom", "cta"];
 
@@ -41,6 +42,76 @@ function textoDoCanal(abordagem: AbordagemRegistro, canal: Canal) {
   if (canal === "linkedin") return abordagem.linkedin;
   if (canal === "whatsapp") return abordagem.whatsapp;
   return `Assunto: ${abordagem.email.assunto}\n\n${abordagem.email.corpo}`;
+}
+
+/** Valor CRU do canal (não o texto combinado de `textoDoCanal`): é isso que "Voltar à versão anterior"
+ * precisa guardar e devolver, no mesmo formato que a rota espera de volta (string ou {assunto,corpo}). */
+function valorDoCanal(abordagem: AbordagemRegistro, canal: Canal) {
+  if (canal === "linkedin") return abordagem.linkedin;
+  if (canal === "whatsapp") return abordagem.whatsapp;
+  return abordagem.email;
+}
+
+/** Menu "Regenerar" (US-031): mesmo padrão de menu suspenso já usado por `Entregar` (components/ui.tsx,
+ * INFRA) — click fora/Escape fecham —, reimplementado local porque `Entregar` não é compartilhável para um
+ * menu com itens totalmente diferentes. "Usar outro sinal" abre uma segunda lista (os sinais do próprio
+ * lead) em vez de regenerar direto; some da lista quando o lead não tem nenhum sinal ("botão que não faria
+ * nada naquele estado não fica desligado, ele sai"). */
+function MenuRegenerar({ lead, desabilitado, onEscolher }: { lead: LeadProspeccao | null; desabilitado: boolean; onEscolher: (direcao: DirecaoRegeneracao, sinalIndice?: number) => void }) {
+  const [aberto, setAberto] = useState(false);
+  const [sinaisAbertos, setSinaisAbertos] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!aberto) return;
+    function onKeyDown(e: KeyboardEvent) { if (e.key === "Escape") { setAberto(false); setSinaisAbertos(false); } }
+    function onClickFora(e: MouseEvent) { if (menuRef.current && !menuRef.current.contains(e.target as Node)) { setAberto(false); setSinaisAbertos(false); } }
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("mousedown", onClickFora);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("mousedown", onClickFora);
+    };
+  }, [aberto]);
+
+  const temSinais = (lead?.sinais.length ?? 0) > 0;
+  const itemClasse = "w-full text-left px-3 py-2 rounded-md hover:bg-accent-soft cursor-pointer";
+
+  function escolher(direcao: DirecaoRegeneracao, sinalIndice?: number) {
+    setAberto(false);
+    setSinaisAbertos(false);
+    onEscolher(direcao, sinalIndice);
+  }
+
+  return (
+    <div className="relative shrink-0" ref={menuRef}>
+      <button type="button" className="btn-ghost" disabled={desabilitado} aria-haspopup="menu" aria-expanded={aberto} onClick={() => { setAberto((v) => !v); setSinaisAbertos(false); }}>
+        Regenerar
+      </button>
+      {aberto && (
+        <div role="menu" className="absolute right-0 top-[calc(100%+8px)] z-20 w-64 max-w-[80vw] card p-1.5 text-[13.5px]">
+          {!sinaisAbertos ? (
+            ORDEM_DIRECOES_REGENERACAO.filter((d) => d !== "outro_sinal" || temSinais).map((d) =>
+              d === "outro_sinal" ? (
+                <button key={d} type="button" role="menuitem" className={itemClasse} onClick={() => setSinaisAbertos(true)}>{ROTULO_DIRECAO_REGENERACAO[d]}</button>
+              ) : (
+                <button key={d} type="button" role="menuitem" className={itemClasse} onClick={() => escolher(d)}>{ROTULO_DIRECAO_REGENERACAO[d]}</button>
+              )
+            )
+          ) : (
+            <>
+              <button type="button" className={`${itemClasse} font-semibold text-muted`} onClick={() => setSinaisAbertos(false)}>‹ Voltar</button>
+              {lead?.sinais.map((s, i) => (
+                <button key={i} type="button" role="menuitem" className={itemClasse} onClick={() => escolher("outro_sinal", i)}>
+                  {s.descricao} <span className="text-muted">({data(s.data, { comAno: true })})</span>
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function LinhaEstrategia({
@@ -115,6 +186,9 @@ export function AbordagemLead({ leadId }: { leadId: string }) {
   const [canal, setCanal] = useState<Canal>("linkedin");
   const [marcando, setMarcando] = useState(false);
   const [erroMarcar, setErroMarcar] = useState<string | null>(null);
+  const [regenerando, setRegenerando] = useState(false);
+  const [erroRegenerar, setErroRegenerar] = useState<string | null>(null);
+  const [anterior, setAnterior] = useState<{ canal: Canal; valor: string | AbordagemRegistro["email"] } | null>(null);
 
   useEffect(() => {
     fetch(`/api/leads/${leadId}/abordagem`)
@@ -157,6 +231,49 @@ export function AbordagemLead({ leadId }: { leadId: string }) {
       setErroMarcar("Não foi possível marcar como abordado.");
     } finally {
       setMarcando(false);
+    }
+  }
+
+  async function regenerar(direcao: DirecaoRegeneracao, sinalIndice?: number) {
+    if (!abordagem) return;
+    setErroRegenerar(null);
+    setRegenerando(true);
+    const valorAntes = valorDoCanal(abordagem, canal);
+    try {
+      const r = await fetch(`/api/leads/${leadId}/abordagem/regenerar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ canal, direcao, ...(sinalIndice !== undefined ? { sinalIndice } : {}) }),
+      });
+      const corpo = await r.json().catch(() => null);
+      if (!r.ok) { setErroRegenerar(corpo?.error || "Não foi possível regenerar esta mensagem."); return; }
+      setAbordagem(corpo as AbordagemRegistro);
+      setAnterior({ canal, valor: valorAntes });
+    } catch {
+      setErroRegenerar("Não foi possível regenerar esta mensagem.");
+    } finally {
+      setRegenerando(false);
+    }
+  }
+
+  async function voltarVersaoAnterior() {
+    if (!anterior) return;
+    setErroRegenerar(null);
+    setRegenerando(true);
+    try {
+      const r = await fetch(`/api/leads/${leadId}/abordagem/regenerar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ canal: anterior.canal, restaurar: anterior.valor }),
+      });
+      const corpo = await r.json().catch(() => null);
+      if (!r.ok) { setErroRegenerar(corpo?.error || "Não foi possível voltar à versão anterior."); return; }
+      setAbordagem(corpo as AbordagemRegistro);
+      setAnterior(null);
+    } catch {
+      setErroRegenerar("Não foi possível voltar à versão anterior.");
+    } finally {
+      setRegenerando(false);
     }
   }
 
@@ -208,7 +325,14 @@ export function AbordagemLead({ leadId }: { leadId: string }) {
 
                 <div className="card">
                   <p className="whitespace-pre-wrap text-[14px] text-ink mb-4">{textoDoCanal(abordagem, canal)}</p>
-                  <CopyButton texto={() => textoDoCanal(abordagem, canal)} />
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <CopyButton texto={() => textoDoCanal(abordagem, canal)} />
+                    <MenuRegenerar lead={lead} desabilitado={regenerando} onEscolher={regenerar} />
+                    {anterior?.canal === canal && (
+                      <button type="button" className="btn-link text-[13px]" disabled={regenerando} onClick={voltarVersaoAnterior}>Voltar à versão anterior</button>
+                    )}
+                  </div>
+                  {erroRegenerar && <div className="mt-3"><Aviso tom="danger">{erroRegenerar}</Aviso></div>}
                 </div>
 
                 <div className="mt-5 flex items-center gap-3">

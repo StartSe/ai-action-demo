@@ -14,7 +14,7 @@ import { esperar } from "./demo";
 import { data } from "./formato";
 import { ROTULO_FIT, ROTULO_PAPEL } from "./rotulos";
 import { getConfig } from "./store";
-import type { Conta, EstrategiaAbordagem, ICP, LeadProspeccao, Produto } from "./types";
+import type { Conta, DirecaoRegeneracao, EstrategiaAbordagem, ICP, LeadProspeccao, NovaAbordagemRegistro, Produto, SinalProspeccao } from "./types";
 
 function primeiroNome(nome: string) {
   return nome.split(" ")[0];
@@ -96,7 +96,18 @@ Regras:
 - Assine o e-mail com o nome e a empresa do remetente informados; se nenhum dos dois for informado, assine apenas "Equipe comercial". Nunca use os marcadores [seu nome] ou [sua empresa].
 Formato de saída (JSON): { "email": {"assunto": "", "corpo": ""}, "linkedin": "até 300 caracteres", "whatsapp": "" }`;
 
-type Mensagens = { email: { assunto: string; corpo: string }; linkedin: string; whatsapp: string };
+export type Mensagens = { email: { assunto: string; corpo: string }; linkedin: string; whatsapp: string };
+export type CampoMensagem = keyof Mensagens;
+export const CAMPOS_MENSAGEM: CampoMensagem[] = ["email", "linkedin", "whatsapp"];
+
+/** Monta o `Partial<NovaAbordagemRegistro>` de UM canal só (o resto da abordagem não muda) — usado tanto
+ * por uma regeneração nova quanto por "Voltar à versão anterior" (que grava de volta o valor de antes, sem
+ * chamar IA de novo). */
+export function partialParaCanal(canal: CampoMensagem, valor: Mensagens[CampoMensagem]): Partial<NovaAbordagemRegistro> {
+  if (canal === "email") return { email: valor as Mensagens["email"] };
+  if (canal === "linkedin") return { linkedin: valor as Mensagens["linkedin"] };
+  return { whatsapp: valor as Mensagens["whatsapp"] };
+}
 
 function mensagensDemo(lead: LeadProspeccao, produto: Produto, estrategia: EstrategiaAbordagem, remetenteNome: string, remetenteEmpresa: string): Mensagens {
   const nome = primeiroNome(lead.nome);
@@ -146,5 +157,129 @@ Remetente: ${remetenteNome || "não informado"}${remetenteEmpresa ? `, da empres
   } catch (err) {
     console.error("Falha ao gerar mensagens da abordagem:", err instanceof Error ? err.message : err);
     return mensagensDemo(lead, produto, estrategia, remetenteNome, remetenteEmpresa);
+  }
+}
+
+// --- Regenerar com direção (US-031) ---------------------------------------------------------------------
+// "Regenerar" reescreve só o CANAL aberto na tela, nunca os outros dois nem a estratégia acima — por isso é
+// uma função à parte de `gerarMensagens` (que sempre escreve os três juntos, a partir de uma estratégia
+// recém decidida/editada). "outro_sinal" não é uma instrução de tom: troca o gancho efetivo pelo sinal que
+// o vendedor escolheu na tela, mantendo o resto da estratégia (dor, tom, CTA) como está.
+
+const ROTULO_CANAL_MENSAGEM: Record<CampoMensagem, string> = { email: "e-mail", linkedin: "LinkedIn", whatsapp: "WhatsApp" };
+
+const INSTRUCAO_DIRECAO: Record<DirecaoRegeneracao, string> = {
+  mais_curto: "Deixe a mensagem BEM mais curta que uma versão normal — só o essencial, sem enfeite.",
+  mais_executivo: "Tom mais executivo: direto, sem rodeios, frases curtas.",
+  mais_consultivo: "Tom mais consultivo: focado em entender o problema da pessoa antes de propor algo.",
+  sem_pitch: "Não mencione o produto nem a proposta de valor — só o gancho e o convite para conversar.",
+  outro_sinal: "Mantenha a mesma direção de sempre; o gancho abaixo já foi trocado pelo sinal escolhido pelo vendedor.",
+  outra_abordagem: "Escreva um ângulo de abertura diferente do de costume — mesma estratégia (gancho, dor, CTA), outra forma de dizer.",
+};
+
+function regrasCanalMensagem(canal: CampoMensagem): string {
+  if (canal === "email") return '- O e-mail tem no máximo 2 parágrafos curtos além da saudação e do fechamento.\n- Assine com o nome e a empresa do remetente informados; sem nenhum dos dois, assine "Equipe comercial". Nunca use os marcadores [seu nome]/[sua empresa].';
+  if (canal === "linkedin") return "- No máximo 300 caracteres (contando espaços).";
+  return "- Curta (2 a 4 frases), informal mas profissional, no máximo 1 emoji.";
+}
+
+function formatoCanalMensagem(canal: CampoMensagem): string {
+  return canal === "email" ? '{ "assunto": "", "corpo": "" }' : '{ "texto": "" }';
+}
+
+function mensagemDemoCanal(
+  lead: LeadProspeccao,
+  produto: Produto,
+  estrategia: EstrategiaAbordagem,
+  canal: CampoMensagem,
+  direcao: DirecaoRegeneracao,
+  gancho: string,
+  remetenteNome: string,
+  remetenteEmpresa: string,
+): Mensagens[CampoMensagem] {
+  const nome = primeiroNome(lead.nome);
+  const assinatura = remetenteNome ? `${remetenteNome}${remetenteEmpresa ? `, da ${remetenteEmpresa}` : ""}` : "Equipe comercial";
+  const cta = estrategia.cta;
+
+  if (canal === "email") {
+    const assunto = `${lead.empresa || nome}: ${estrategia.objetivo.toLowerCase()}`;
+    const fechamento = `Abraço,\n${assinatura}`;
+    if (direcao === "mais_curto") return { assunto, corpo: `Olá, ${nome}.\n\n${gancho}. ${cta}?\n\n${fechamento}` };
+    if (direcao === "mais_executivo") return { assunto, corpo: `${nome}, direto ao ponto: ${gancho.toLowerCase()}. ${estrategia.dorProvavel}\n\n${cta}?\n\n${fechamento}` };
+    if (direcao === "mais_consultivo") return { assunto, corpo: `Olá, ${nome}.\n\nTenho visto isso de perto: ${gancho.toLowerCase()}. Como vocês têm lidado com ${estrategia.dorProvavel.toLowerCase()}?\n\n${cta}?\n\n${fechamento}` };
+    if (direcao === "sem_pitch") return { assunto, corpo: `Olá, ${nome}.\n\n${gancho}. ${estrategia.dorProvavel}\n\n${cta}?\n\n${fechamento}` };
+    if (direcao === "outra_abordagem") return { assunto, corpo: `Oi, ${nome}. ${cta}? Pergunto porque ${gancho.toLowerCase()}, e ${produto.propostaValor.split(".")[0].toLowerCase()}.\n\n${fechamento}` };
+    return { assunto, corpo: `Olá, ${nome}.\n\n${gancho}. ${estrategia.dorProvavel}\n\n${produto.propostaValor.split(".")[0]}. ${cta}?\n\n${fechamento}` };
+  }
+
+  if (canal === "linkedin") {
+    if (direcao === "mais_curto") return `${gancho.split(".")[0]}. ${cta}?`.slice(0, 130);
+    if (direcao === "mais_executivo") return `Direto ao ponto: ${gancho}. ${cta}?`.slice(0, 300);
+    if (direcao === "mais_consultivo") return `Reparei que ${gancho.toLowerCase()}. Faz sentido trocarmos uma ideia sobre isso?`.slice(0, 300);
+    if (direcao === "sem_pitch") return `${gancho}. Podemos conversar 15 minutos?`.slice(0, 300);
+    if (direcao === "outra_abordagem") return `${cta}? Pergunto porque ${gancho.toLowerCase()}.`.slice(0, 300);
+    return `${gancho} — ${cta.toLowerCase()}?`.slice(0, 300);
+  }
+
+  if (direcao === "mais_curto") return `${nome}, ${gancho.toLowerCase()}. ${cta}?`;
+  if (direcao === "mais_executivo") return `${nome}, direto: ${gancho.toLowerCase()}. ${cta}?`;
+  if (direcao === "mais_consultivo") return `Oi, ${nome}! Como vocês têm lidado com isso: ${gancho.toLowerCase()}? ${cta}?`;
+  if (direcao === "sem_pitch") return `Oi, ${nome}! ${gancho}. Podemos conversar rapidinho?`;
+  if (direcao === "outra_abordagem") return `${nome}, ${cta.toLowerCase()}? Vi que ${gancho.toLowerCase()}.`;
+  return `Oi, ${nome}! ${gancho}. ${cta}?`;
+}
+
+/** Regenera só o CANAL indicado (aba aberta na tela), a partir da estratégia JÁ salva e de uma direção
+ * pedida pelo vendedor (US-031) — nunca chama `gerarEstrategia`/`gerarMensagens` (que reescreveriam os três
+ * canais). Sem IA configurada, cai numa variação determinística que já muda de tamanho/tom de verdade,
+ * mantendo "modo demonstração sempre funciona" também para o menu "Regenerar". */
+export async function regenerarMensagem(
+  lead: LeadProspeccao,
+  produto: Produto,
+  estrategia: EstrategiaAbordagem,
+  canal: CampoMensagem,
+  direcao: DirecaoRegeneracao,
+  sinalEscolhido?: SinalProspeccao,
+): Promise<Mensagens[CampoMensagem]> {
+  const remetenteNome = getConfig("REMETENTE_NOME") || "";
+  const remetenteEmpresa = getConfig("REMETENTE_EMPRESA") || "";
+  const gancho = direcao === "outro_sinal" && sinalEscolhido ? sinalEscolhido.descricao : estrategia.gancho;
+
+  if (!aiEnabled()) {
+    await esperar(500);
+    return mensagemDemoCanal(lead, produto, estrategia, canal, direcao, gancho, remetenteNome, remetenteEmpresa);
+  }
+
+  try {
+    const system = `Você é um SDR sênior reescrevendo só a mensagem de ${ROTULO_CANAL_MENSAGEM[canal]} de uma abordagem, a partir da estratégia já decidida e de uma direção pedida pelo vendedor.
+Regras:
+- Português do Brasil, direto, sem clichê de vendas ("prezado", "venho por meio desta", "solução inovadora").
+- Direção pedida: ${INSTRUCAO_DIRECAO[direcao]}
+- Use o gancho abaixo como abertura real.
+${regrasCanalMensagem(canal)}
+Formato de saída (JSON): ${formatoCanalMensagem(canal)}`;
+    const prompt = `Estratégia decidida:
+Objetivo: ${estrategia.objetivo}
+Gancho: ${gancho}
+Dor provável: ${estrategia.dorProvavel}
+Tom: ${estrategia.tom}
+CTA: ${estrategia.cta}
+
+Lead: ${lead.nome}${lead.cargo ? `, ${lead.cargo}` : ""}${lead.empresa ? ` na ${lead.empresa}` : ""}
+
+O que a empresa do usuário vende:
+${produto.propostaValor}
+
+Remetente: ${remetenteNome || "não informado"}${remetenteEmpresa ? `, da empresa ${remetenteEmpresa}` : ""}`;
+    const resposta = await askJSON<{ assunto?: string; corpo?: string; texto?: string }>({ system, prompt, maxTokens: 500 });
+    if (canal === "email") {
+      if (!resposta.assunto || !resposta.corpo) throw new Error("resposta incompleta");
+      return { assunto: resposta.assunto, corpo: resposta.corpo };
+    }
+    if (!resposta.texto) throw new Error("resposta incompleta");
+    return resposta.texto;
+  } catch (err) {
+    console.error("Falha ao regenerar mensagem da abordagem:", err instanceof Error ? err.message : err);
+    return mensagemDemoCanal(lead, produto, estrategia, canal, direcao, gancho, remetenteNome, remetenteEmpresa);
   }
 }

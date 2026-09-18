@@ -52,6 +52,8 @@ export type ModoProspeccao = "empresas" | "pessoas" | "empresa_unica" | "oportun
 export type EstadoProspeccao = "rascunho" | "executando" | "pronta" | "falhou" | "cancelada";
 export type Papel = "decisor" | "influenciador" | "champion" | "desconhecido";
 export type StatusLead = "novo" | "pesquisado" | "qualificado" | "selecionado" | "abordado" | "respondeu" | "descartado";
+/** Direção de "Regenerar" (US-031): reescreve só a mensagem do canal aberto na tela, nunca a estratégia. */
+export type DirecaoRegeneracao = "mais_curto" | "mais_executivo" | "mais_consultivo" | "sem_pitch" | "outro_sinal" | "outra_abordagem";
 
 /** Um critério do ICP avaliado para um lead/conta específico: valor encontrado e o resultado da checagem.
  * `trecho` só existe em critérios interpretativos avaliados por IA (US-024): a cópia literal do texto que
