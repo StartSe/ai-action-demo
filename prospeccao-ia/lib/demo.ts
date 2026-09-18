@@ -1,6 +1,6 @@
 // Leads e abordagens de exemplo usados quando não há APOLLO_API_KEY (leads) ou OPENROUTER_API_KEY (abordagem).
 import { getConfig, setConfig } from "./store";
-import { criarAbordagem, criarConta, criarICP, criarLead, criarProduto, criarProspeccao, obterProspeccao } from "./workspace";
+import { apagarICP, apagarProduto, apagarProspeccao, criarAbordagem, criarConta, criarICP, criarLead, criarProduto, criarProspeccao, obterProspeccao } from "./workspace";
 import type { Abordagem, Lead, Papel, StatusLead } from "./types";
 
 export function esperar(ms = 900) {
@@ -220,10 +220,12 @@ ${assinatura}`,
 }
 
 // --- Prospecção de exemplo do workspace (US-003/US-008) ---------------------
-// "Ver uma prospecção de exemplo" precisa de dados reais nas tabelas do workspace (lib/workspace.ts) para o
-// Início ter o que mostrar sem nenhuma chave configurada. Esta é uma versão inicial (1 produto, 1 ICP, 3
-// contas, 6 pessoas, 1 abordagem) com o mesmo exemplo do CMMS da Zetta Manutenção Industrial já usado pela
-// busca de leads antiga; a US-008 (Demonstração completa do workspace) deve ampliá-la e marcar `demo: true`.
+// "Ver uma prospecção de exemplo" semeia, no banco do workspace (lib/workspace.ts), 1 produto (CMMS da Zetta
+// Manutenção Industrial) + 1 ICP B2B + 1 prospecção concluída + 3 contas + 6 pessoas + 1 abordagem — tudo
+// marcado com demo: true, para toda tela que lista essas entidades poder mostrar um Chip "Exemplo" (US-008).
+// A chave de controle (CHAVE_PROSPECCAO_EXEMPLO) é gravada ao semear e apagada por limparProspeccaoExemplo(),
+// para o exemplo não renascer sozinho: uma nova chamada a criarProspeccaoExemplo() só semeia de novo se a
+// chave estiver ausente (nunca renasce só de a tela ser recarregada).
 const CHAVE_PROSPECCAO_EXEMPLO = "PROSPECCAO_EXEMPLO_ID";
 
 function diasAtras(n: number): Date {
@@ -259,6 +261,7 @@ export function criarProspeccaoExemplo(): string {
     site: "https://zettamanutencao.com.br",
     propostaValor:
       "Reduz parada não programada de máquinas em indústrias de médio porte que hoje controlam a manutenção em planilha, com implantação em 3 semanas e sem precisar trocar o ERP.",
+    demo: true,
   });
 
   const icp = criarICP({
@@ -269,10 +272,11 @@ export function criarProspeccaoExemplo(): string {
     personas: ["Diretor de Operações", "Gerente de Manutenção"],
     dores: ["Parada não programada de máquinas", "Manutenção controlada em planilha", "Falta de previsibilidade na produção"],
     sinais: ["Abriu vaga para Gerente de Manutenção", "Comentou sobre parada de linha em post público"],
+    demo: true,
   });
 
   const prospeccao = criarProspeccao(
-    { produtoId: produto.id, icpId: icp.id, modo: "pessoas", criterios: {}, estado: "pronta", etapa: null, erro: null, concluidoEm: new Date().toISOString() },
+    { produtoId: produto.id, icpId: icp.id, modo: "pessoas", criterios: {}, estado: "pronta", etapa: null, erro: null, concluidoEm: new Date().toISOString(), demo: true },
     diasAtras(2),
   );
 
@@ -293,6 +297,7 @@ export function criarProspeccaoExemplo(): string {
         ],
         sinais: [{ descricao: "Abriu vaga para Gerente de Manutenção", data: diasAtras(12 + i * 5).toISOString(), tipo: "vaga", origem: `https://${dominio}/carreiras` }],
         resumo: `Indústria de alimentos em ${c.cidade}, controla a manutenção em planilha.`,
+        demo: true,
       },
       diasAtras(2),
     );
@@ -319,6 +324,7 @@ export function criarProspeccaoExemplo(): string {
         hipotese: qualificado ? `A vaga aberta para Gerente de Manutenção sugere dificuldade em manter a operação hoje, controlada em planilha.` : null,
         status: p.status,
         noCRM: false,
+        demo: true,
       },
       diasAtras(6 - i),
     );
@@ -342,10 +348,29 @@ export function criarProspeccaoExemplo(): string {
       linkedin: "Reparei que a Serra Azul Alimentos abriu vaga para Gerente de Manutenção — um sinal comum de que vale rever a manutenção. Posso te enviar uma ideia rápida sobre isso?",
       whatsapp: "Oi, Camila! Vi que a Serra Azul Alimentos abriu vaga para Gerente de Manutenção e lembrei de um caso parecido. Posso te mandar um resumo de 2 minutos por aqui?",
       variacao: null,
+      demo: true,
     },
     diasAtras(1),
   );
 
   setConfig(CHAVE_PROSPECCAO_EXEMPLO, prospeccao.id);
   return prospeccao.id;
+}
+
+/** "Limpar exemplo" (US-008): remove tudo que criarProspeccaoExemplo() semeou (o produto, o ICP, a
+ * prospecção e — em cascata, por apagarProspeccao — as contas, os leads e a abordagem) e apaga a chave de
+ * controle, para o exemplo não renascer sozinho na próxima leitura. Não toca em nenhum produto/ICP/prospecção
+ * que a própria pessoa tenha criado (só mexe nos ids gravados por CHAVE_PROSPECCAO_EXEMPLO). Sem exemplo
+ * semeado (chave ausente, ou já apagado antes), não faz nada. */
+export function limparProspeccaoExemplo(): void {
+  const prospeccaoId = getConfig(CHAVE_PROSPECCAO_EXEMPLO);
+  if (prospeccaoId) {
+    const prospeccao = obterProspeccao(prospeccaoId);
+    if (prospeccao) {
+      apagarProspeccao(prospeccaoId);
+      apagarICP(prospeccao.icpId);
+      apagarProduto(prospeccao.produtoId);
+    }
+  }
+  setConfig(CHAVE_PROSPECCAO_EXEMPLO, "");
 }

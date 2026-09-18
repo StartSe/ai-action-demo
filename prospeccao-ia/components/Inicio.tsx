@@ -1,13 +1,19 @@
 "use client";
 // Tela de Início: o que já está rodando e um botão para começar (US-003). Os quatro números e a lista de
 // prospecções recentes vêm de GET /api/inicio (lib/workspace.ts é a fonte única); esta tela não calcula nada.
-import { useCallback, useEffect, useState } from "react";
+//
+// `?exemplo=1` semeia a prospecção de exemplo automaticamente (mesmo caminho do botão "Ver uma prospecção de
+// exemplo"), dentro de um `useEffect` com `setTimeout(…, 0)` e guarda `useRef` (padrão de PADRAO.md, sem
+// `clearTimeout` no cleanup — o Strict Mode de `next dev` mataria o atalho em desenvolvimento). No celular,
+// o painel rola até a lista (`id="stage"`, `useScrollToResult`, compartilhado) só depois de semear o
+// exemplo, nunca num carregamento normal da página — `?captura=1` desliga essa rolagem (ui.tsx).
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Hero, Topbar, data, useStatus } from "@/components/ui";
+import { Chip, Hero, Topbar, data, useConfirmacao, useScrollToResult, useStatus } from "@/components/ui";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 
-type ProspeccaoRecente = { id: string; nome: string; produto: string; criadoEm: string; encontrados: number; qualificados: number; abordagens: number };
-type ResumoInicio = { prospeccoes: number; leadsEncontrados: number; qualificados: number; respostas: number; recentes: ProspeccaoRecente[] };
+type ProspeccaoRecente = { id: string; nome: string; produto: string; demo: boolean; criadoEm: string; encontrados: number; qualificados: number; abordagens: number };
+type ResumoInicio = { prospeccoes: number; leadsEncontrados: number; qualificados: number; respostas: number; recentes: ProspeccaoRecente[]; temExemplo: boolean };
 
 function CartaoNumero({ valor, rotulo }: { valor: number; rotulo: string }) {
   return (
@@ -25,29 +31,52 @@ function funilResumido(r: ProspeccaoRecente) {
 
 export function Inicio() {
   const { status, erro } = useStatus();
+  const { confirmar, Dialogo } = useConfirmacao();
   const [resumo, setResumo] = useState<ResumoInicio | null>(null);
   const [criandoExemplo, setCriandoExemplo] = useState(false);
+  const [exemploCriado, setExemploCriado] = useState(false);
+  const autoIniciado = useRef(false);
 
   const carregar = useCallback(() => {
     fetch("/api/inicio")
       .then((r) => r.json())
       .then(setResumo)
-      .catch(() => setResumo({ prospeccoes: 0, leadsEncontrados: 0, qualificados: 0, respostas: 0, recentes: [] }));
+      .catch(() => setResumo({ prospeccoes: 0, leadsEncontrados: 0, qualificados: 0, respostas: 0, recentes: [], temExemplo: false }));
   }, []);
 
   useEffect(() => {
     carregar();
   }, [carregar]);
 
-  async function verExemplo() {
+  const verExemplo = useCallback(async () => {
     setCriandoExemplo(true);
     try {
       await fetch("/api/inicio/exemplo", { method: "POST" });
       carregar();
+      setExemploCriado(true);
     } finally {
       setCriandoExemplo(false);
     }
+  }, [carregar]);
+
+  async function limparExemplo() {
+    const ok = await confirmar("Remover os dados de exemplo? O que você já cadastrou continua intacto.", { confirmarRotulo: "Limpar exemplo" });
+    if (!ok) return;
+    await fetch("/api/inicio/exemplo", { method: "DELETE" });
+    carregar();
   }
+
+  // Atalho para demonstrações: /?exemplo=1 semeia a prospecção de exemplo sozinho.
+  useEffect(() => {
+    if (autoIniciado.current) return;
+    if (new URLSearchParams(location.search).get("exemplo") === "1") {
+      autoIniciado.current = true;
+      setTimeout(verExemplo, 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma única vez ao abrir a página
+  }, []);
+
+  useScrollToResult(exemploCriado);
 
   const vazio = resumo !== null && resumo.prospeccoes === 0;
 
@@ -72,10 +101,13 @@ export function Inicio() {
           <CartaoNumero valor={resumo?.respostas ?? 0} rotulo="Respostas" />
         </div>
 
-        <section aria-label="Prospecções recentes">
-          <div className="flex items-baseline justify-between gap-4 mb-3">
+        <section id="stage" aria-label="Prospecções recentes">
+          <div className="flex items-baseline justify-between gap-4 flex-wrap mb-3">
             <h2 className="section-title !mb-0">Prospecções recentes</h2>
-            {resumo && resumo.recentes.length > 0 && <Link href="/prospeccoes" className="btn-link text-[13px]">Ver todas</Link>}
+            <div className="flex items-baseline gap-3.5">
+              {resumo?.temExemplo && <button type="button" className="btn-link text-[13px] text-danger" onClick={limparExemplo}>Limpar exemplo</button>}
+              {resumo && resumo.recentes.length > 0 && <Link href="/prospeccoes" className="btn-link text-[13px]">Ver todas</Link>}
+            </div>
           </div>
 
           {resumo === null ? (
@@ -98,8 +130,11 @@ export function Inicio() {
                 <li key={r.id} className="card px-5 py-4">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div className="min-w-0">
-                      <strong className="block truncate">{r.nome}</strong>
-                      <span className="text-[13px] text-muted">{r.produto}</span>
+                      <strong className="inline-flex items-center gap-2 max-w-full">
+                        <span className="truncate">{r.nome}</span>
+                        {r.demo && <Chip nivel="neutral">Exemplo</Chip>}
+                      </strong>
+                      <span className="text-[13px] text-muted block">{r.produto}</span>
                     </div>
                     <span className="text-muted text-[12.5px] shrink-0">{data(r.criadoEm)}</span>
                   </div>
@@ -110,6 +145,8 @@ export function Inicio() {
           )}
         </section>
       </main>
+
+      {Dialogo}
     </>
   );
 }

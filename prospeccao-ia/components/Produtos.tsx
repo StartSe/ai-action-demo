@@ -84,7 +84,10 @@ export function Produtos() {
             {produtos.map((produto) => (
               <div key={produto.id} className="card p-5 flex flex-col gap-3">
                 <div>
-                  <h2 className="font-bold text-[15px] mb-1">{produto.nome}</h2>
+                  <h2 className="font-bold text-[15px] mb-1 inline-flex items-center gap-2 max-w-full">
+                    <span className="truncate">{produto.nome}</span>
+                    {produto.demo && <Chip nivel="neutral">Exemplo</Chip>}
+                  </h2>
                   <p className="text-muted text-sm line-clamp-1">{produto.descricao}</p>
                 </div>
 

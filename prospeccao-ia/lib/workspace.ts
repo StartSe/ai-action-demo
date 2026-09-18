@@ -28,6 +28,7 @@ function banco(): DatabaseSync {
     criado_em TEXT NOT NULL
   )`);
   try { d.exec(`ALTER TABLE produtos ADD COLUMN apagado_em TEXT`); } catch { /* coluna já existe */ }
+  try { d.exec(`ALTER TABLE produtos ADD COLUMN demo INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
   d.exec(`CREATE TABLE IF NOT EXISTS icps (
     id TEXT PRIMARY KEY,
     produto_id TEXT NOT NULL,
@@ -39,6 +40,7 @@ function banco(): DatabaseSync {
     sinais TEXT NOT NULL DEFAULT '[]',
     criado_em TEXT NOT NULL
   )`);
+  try { d.exec(`ALTER TABLE icps ADD COLUMN demo INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
   d.exec(`CREATE INDEX IF NOT EXISTS idx_icps_produto ON icps (produto_id)`);
   d.exec(`CREATE TABLE IF NOT EXISTS prospeccoes (
     id TEXT PRIMARY KEY,
@@ -52,6 +54,7 @@ function banco(): DatabaseSync {
     criado_em TEXT NOT NULL,
     concluido_em TEXT
   )`);
+  try { d.exec(`ALTER TABLE prospeccoes ADD COLUMN demo INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
   d.exec(`CREATE INDEX IF NOT EXISTS idx_prospeccoes_produto ON prospeccoes (produto_id)`);
   d.exec(`CREATE TABLE IF NOT EXISTS contas (
     id TEXT PRIMARY KEY,
@@ -68,6 +71,7 @@ function banco(): DatabaseSync {
     criado_em TEXT NOT NULL,
     atualizado_em TEXT NOT NULL
   )`);
+  try { d.exec(`ALTER TABLE contas ADD COLUMN demo INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
   d.exec(`CREATE INDEX IF NOT EXISTS idx_contas_prospeccao ON contas (prospeccao_id)`);
   d.exec(`CREATE TABLE IF NOT EXISTS leads (
     id TEXT PRIMARY KEY,
@@ -89,6 +93,7 @@ function banco(): DatabaseSync {
     criado_em TEXT NOT NULL,
     atualizado_em TEXT NOT NULL
   )`);
+  try { d.exec(`ALTER TABLE leads ADD COLUMN demo INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
   d.exec(`CREATE INDEX IF NOT EXISTS idx_leads_prospeccao ON leads (prospeccao_id)`);
   d.exec(`CREATE INDEX IF NOT EXISTS idx_leads_conta ON leads (conta_id)`);
   d.exec(`CREATE TABLE IF NOT EXISTS abordagens (
@@ -101,6 +106,7 @@ function banco(): DatabaseSync {
     variacao TEXT,
     criado_em TEXT NOT NULL
   )`);
+  try { d.exec(`ALTER TABLE abordagens ADD COLUMN demo INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
   d.exec(`CREATE INDEX IF NOT EXISTS idx_abordagens_lead ON abordagens (lead_id)`);
   criado = true;
   return d;
@@ -118,18 +124,19 @@ function montarSet(campos: Record<string, SQLInputValue | undefined>): { set: st
 
 // --- Produtos --------------------------------------------------------------
 
-type LinhaProduto = { id: string; nome: string; descricao: string; site: string | null; proposta_valor: string; criado_em: string };
+type LinhaProduto = { id: string; nome: string; descricao: string; site: string | null; proposta_valor: string; demo: number; criado_em: string };
 
 function linhaParaProduto(l: LinhaProduto): Produto {
-  return { id: l.id, nome: l.nome, descricao: l.descricao, site: l.site, propostaValor: l.proposta_valor, criadoEm: l.criado_em };
+  return { id: l.id, nome: l.nome, descricao: l.descricao, site: l.site, propostaValor: l.proposta_valor, demo: l.demo === 1, criadoEm: l.criado_em };
 }
 
 export function criarProduto(dados: NovoProduto, em?: Date): Produto {
   const id = gerarId();
   const criadoEm = (em ?? new Date()).toISOString();
-  banco().prepare("INSERT INTO produtos (id, nome, descricao, site, proposta_valor, criado_em) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(id, dados.nome, dados.descricao, dados.site, dados.propostaValor, criadoEm);
-  return { id, criadoEm, ...dados };
+  const demo = dados.demo ?? false;
+  banco().prepare("INSERT INTO produtos (id, nome, descricao, site, proposta_valor, demo, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run(id, dados.nome, dados.descricao, dados.site, dados.propostaValor, demo ? 1 : 0, criadoEm);
+  return { id, criadoEm, ...dados, demo };
 }
 
 /** Só produtos ativos (nunca os apagados) — quem precisa achar o nome de um produto apagado para uma prospecção antiga usa obterProduto, que não filtra. */
@@ -156,22 +163,23 @@ export function apagarProduto(id: string, em?: Date): void {
 
 // --- ICPs --------------------------------------------------------------
 
-type LinhaICP = { id: string; produto_id: string; nome: string; jornada: string; criterios: string; personas: string; dores: string; sinais: string; criado_em: string };
+type LinhaICP = { id: string; produto_id: string; nome: string; jornada: string; criterios: string; personas: string; dores: string; sinais: string; demo: number; criado_em: string };
 
 function linhaParaICP(l: LinhaICP): ICP {
   return {
     id: l.id, produtoId: l.produto_id, nome: l.nome, jornada: l.jornada as ICP["jornada"],
     criterios: JSON.parse(l.criterios) as CriteriosICP, personas: JSON.parse(l.personas), dores: JSON.parse(l.dores), sinais: JSON.parse(l.sinais),
-    criadoEm: l.criado_em,
+    demo: l.demo === 1, criadoEm: l.criado_em,
   };
 }
 
 export function criarICP(dados: NovoICP, em?: Date): ICP {
   const id = gerarId();
   const criadoEm = (em ?? new Date()).toISOString();
-  banco().prepare("INSERT INTO icps (id, produto_id, nome, jornada, criterios, personas, dores, sinais, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(id, dados.produtoId, dados.nome, dados.jornada, JSON.stringify(dados.criterios), JSON.stringify(dados.personas), JSON.stringify(dados.dores), JSON.stringify(dados.sinais), criadoEm);
-  return { id, criadoEm, ...dados };
+  const demo = dados.demo ?? false;
+  banco().prepare("INSERT INTO icps (id, produto_id, nome, jornada, criterios, personas, dores, sinais, demo, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, dados.produtoId, dados.nome, dados.jornada, JSON.stringify(dados.criterios), JSON.stringify(dados.personas), JSON.stringify(dados.dores), JSON.stringify(dados.sinais), demo ? 1 : 0, criadoEm);
+  return { id, criadoEm, ...dados, demo };
 }
 
 export function listarICPs(produtoId?: string): ICP[] {
@@ -204,13 +212,13 @@ export function apagarICP(id: string): void {
 
 // --- Prospecções --------------------------------------------------------------
 
-type LinhaProspeccao = { id: string; produto_id: string; icp_id: string; modo: string; criterios: string; estado: string; etapa: string | null; erro: string | null; criado_em: string; concluido_em: string | null };
+type LinhaProspeccao = { id: string; produto_id: string; icp_id: string; modo: string; criterios: string; estado: string; etapa: string | null; erro: string | null; demo: number; criado_em: string; concluido_em: string | null };
 
 function linhaParaProspeccao(l: LinhaProspeccao): Prospeccao {
   return {
     id: l.id, produtoId: l.produto_id, icpId: l.icp_id, modo: l.modo as Prospeccao["modo"],
     criterios: JSON.parse(l.criterios), estado: l.estado as Prospeccao["estado"], etapa: l.etapa, erro: l.erro,
-    criadoEm: l.criado_em, concluidoEm: l.concluido_em,
+    demo: l.demo === 1, criadoEm: l.criado_em, concluidoEm: l.concluido_em,
   };
 }
 
@@ -218,9 +226,10 @@ export function criarProspeccao(dados: NovaProspeccao, em?: Date): Prospeccao {
   const id = gerarId();
   const criadoEm = (em ?? new Date()).toISOString();
   const concluidoEm = dados.concluidoEm ?? null;
-  banco().prepare("INSERT INTO prospeccoes (id, produto_id, icp_id, modo, criterios, estado, etapa, erro, criado_em, concluido_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(id, dados.produtoId, dados.icpId, dados.modo, JSON.stringify(dados.criterios), dados.estado, dados.etapa, dados.erro, criadoEm, concluidoEm);
-  return { id, criadoEm, ...dados, concluidoEm };
+  const demo = dados.demo ?? false;
+  banco().prepare("INSERT INTO prospeccoes (id, produto_id, icp_id, modo, criterios, estado, etapa, erro, demo, criado_em, concluido_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, dados.produtoId, dados.icpId, dados.modo, JSON.stringify(dados.criterios), dados.estado, dados.etapa, dados.erro, demo ? 1 : 0, criadoEm, concluidoEm);
+  return { id, criadoEm, ...dados, demo, concluidoEm };
 }
 
 export function listarProspeccoes(produtoId?: string): Prospeccao[] {
@@ -253,22 +262,23 @@ export function apagarProspeccao(id: string): void {
 
 // --- Contas (empresas) --------------------------------------------------------------
 
-type LinhaConta = { id: string; prospeccao_id: string; nome: string; site: string | null; setor: string | null; porte: string | null; cidade: string | null; fit: string | null; evidencias: string; sinais: string; resumo: string; criado_em: string; atualizado_em: string };
+type LinhaConta = { id: string; prospeccao_id: string; nome: string; site: string | null; setor: string | null; porte: string | null; cidade: string | null; fit: string | null; evidencias: string; sinais: string; resumo: string; demo: number; criado_em: string; atualizado_em: string };
 
 function linhaParaConta(l: LinhaConta): Conta {
   return {
     id: l.id, prospeccaoId: l.prospeccao_id, nome: l.nome, site: l.site, setor: l.setor, porte: l.porte, cidade: l.cidade,
     fit: l.fit as Conta["fit"], evidencias: JSON.parse(l.evidencias) as Evidencia[], sinais: JSON.parse(l.sinais) as SinalProspeccao[],
-    resumo: l.resumo, criadoEm: l.criado_em, atualizadoEm: l.atualizado_em,
+    resumo: l.resumo, demo: l.demo === 1, criadoEm: l.criado_em, atualizadoEm: l.atualizado_em,
   };
 }
 
 export function criarConta(dados: NovaConta, em?: Date): Conta {
   const id = gerarId();
   const agora = (em ?? new Date()).toISOString();
-  banco().prepare("INSERT INTO contas (id, prospeccao_id, nome, site, setor, porte, cidade, fit, evidencias, sinais, resumo, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(id, dados.prospeccaoId, dados.nome, dados.site, dados.setor, dados.porte, dados.cidade, dados.fit, JSON.stringify(dados.evidencias), JSON.stringify(dados.sinais), dados.resumo, agora, agora);
-  return { id, criadoEm: agora, atualizadoEm: agora, ...dados };
+  const demo = dados.demo ?? false;
+  banco().prepare("INSERT INTO contas (id, prospeccao_id, nome, site, setor, porte, cidade, fit, evidencias, sinais, resumo, demo, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, dados.prospeccaoId, dados.nome, dados.site, dados.setor, dados.porte, dados.cidade, dados.fit, JSON.stringify(dados.evidencias), JSON.stringify(dados.sinais), dados.resumo, demo ? 1 : 0, agora, agora);
+  return { id, criadoEm: agora, atualizadoEm: agora, ...dados, demo };
 }
 
 export function listarContas(prospeccaoId?: string): Conta[] {
@@ -302,7 +312,7 @@ export function apagarConta(id: string): void {
 type LinhaLead = {
   id: string; prospeccao_id: string; conta_id: string | null; nome: string; cargo: string | null; empresa: string | null; cidade: string | null;
   linkedin: string | null; fonte: string | null; papel: string; fit: string | null; evidencias: string; sinais: string; hipotese: string | null;
-  status: string; no_crm: number; criado_em: string; atualizado_em: string;
+  status: string; no_crm: number; demo: number; criado_em: string; atualizado_em: string;
 };
 
 function linhaParaLead(l: LinhaLead): LeadProspeccao {
@@ -310,18 +320,19 @@ function linhaParaLead(l: LinhaLead): LeadProspeccao {
     id: l.id, prospeccaoId: l.prospeccao_id, contaId: l.conta_id, nome: l.nome, cargo: l.cargo, empresa: l.empresa, cidade: l.cidade,
     linkedin: l.linkedin, fonte: l.fonte, papel: l.papel as LeadProspeccao["papel"], fit: l.fit as LeadProspeccao["fit"],
     evidencias: JSON.parse(l.evidencias) as Evidencia[], sinais: JSON.parse(l.sinais) as SinalProspeccao[], hipotese: l.hipotese,
-    status: l.status as LeadProspeccao["status"], noCRM: l.no_crm === 1, criadoEm: l.criado_em, atualizadoEm: l.atualizado_em,
+    status: l.status as LeadProspeccao["status"], noCRM: l.no_crm === 1, demo: l.demo === 1, criadoEm: l.criado_em, atualizadoEm: l.atualizado_em,
   };
 }
 
 export function criarLead(dados: NovoLeadProspeccao, em?: Date): LeadProspeccao {
   const id = gerarId();
   const agora = (em ?? new Date()).toISOString();
-  banco().prepare(`INSERT INTO leads (id, prospeccao_id, conta_id, nome, cargo, empresa, cidade, linkedin, fonte, papel, fit, evidencias, sinais, hipotese, status, no_crm, criado_em, atualizado_em)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+  const demo = dados.demo ?? false;
+  banco().prepare(`INSERT INTO leads (id, prospeccao_id, conta_id, nome, cargo, empresa, cidade, linkedin, fonte, papel, fit, evidencias, sinais, hipotese, status, no_crm, demo, criado_em, atualizado_em)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, dados.prospeccaoId, dados.contaId, dados.nome, dados.cargo, dados.empresa, dados.cidade, dados.linkedin, dados.fonte, dados.papel, dados.fit,
-      JSON.stringify(dados.evidencias), JSON.stringify(dados.sinais), dados.hipotese, dados.status, dados.noCRM ? 1 : 0, agora, agora);
-  return { id, criadoEm: agora, atualizadoEm: agora, ...dados };
+      JSON.stringify(dados.evidencias), JSON.stringify(dados.sinais), dados.hipotese, dados.status, dados.noCRM ? 1 : 0, demo ? 1 : 0, agora, agora);
+  return { id, criadoEm: agora, atualizadoEm: agora, ...dados, demo };
 }
 
 export function listarLeads(prospeccaoId?: string): LeadProspeccao[] {
@@ -354,21 +365,22 @@ export function apagarLead(id: string): void {
 
 // --- Abordagens --------------------------------------------------------------
 
-type LinhaAbordagem = { id: string; lead_id: string; estrategia: string; email: string; linkedin: string; whatsapp: string; variacao: string | null; criado_em: string };
+type LinhaAbordagem = { id: string; lead_id: string; estrategia: string; email: string; linkedin: string; whatsapp: string; variacao: string | null; demo: number; criado_em: string };
 
 function linhaParaAbordagem(l: LinhaAbordagem): AbordagemRegistro {
   return {
     id: l.id, leadId: l.lead_id, estrategia: JSON.parse(l.estrategia) as EstrategiaAbordagem, email: JSON.parse(l.email),
-    linkedin: l.linkedin, whatsapp: l.whatsapp, variacao: l.variacao, criadoEm: l.criado_em,
+    linkedin: l.linkedin, whatsapp: l.whatsapp, variacao: l.variacao, demo: l.demo === 1, criadoEm: l.criado_em,
   };
 }
 
 export function criarAbordagem(dados: NovaAbordagemRegistro, em?: Date): AbordagemRegistro {
   const id = gerarId();
   const criadoEm = (em ?? new Date()).toISOString();
-  banco().prepare("INSERT INTO abordagens (id, lead_id, estrategia, email, linkedin, whatsapp, variacao, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(id, dados.leadId, JSON.stringify(dados.estrategia), JSON.stringify(dados.email), dados.linkedin, dados.whatsapp, dados.variacao, criadoEm);
-  return { id, criadoEm, ...dados };
+  const demo = dados.demo ?? false;
+  banco().prepare("INSERT INTO abordagens (id, lead_id, estrategia, email, linkedin, whatsapp, variacao, demo, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, dados.leadId, JSON.stringify(dados.estrategia), JSON.stringify(dados.email), dados.linkedin, dados.whatsapp, dados.variacao, demo ? 1 : 0, criadoEm);
+  return { id, criadoEm, ...dados, demo };
 }
 
 export function listarAbordagens(leadId?: string): AbordagemRegistro[] {

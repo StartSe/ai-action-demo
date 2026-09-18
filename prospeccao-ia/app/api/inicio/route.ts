@@ -24,6 +24,7 @@ export async function GET() {
       nome: icpPorId.get(p.icpId)?.nome || "Prospecção",
       // obterProduto (ao contrário de listarProdutos) não filtra apagado_em: o nome continua correto mesmo depois de o produto ser apagado.
       produto: obterProduto(p.produtoId)?.nome || "Produto",
+      demo: p.demo,
       criadoEm: p.criadoEm,
       encontrados: leadsDaProspeccao.length,
       qualificados: leadsDaProspeccao.filter((l) => QUALIFICADOS_OU_DEPOIS.includes(l.status)).length,
@@ -31,5 +32,8 @@ export async function GET() {
     };
   });
 
-  return Response.json({ prospeccoes: prospeccoes.length, leadsEncontrados: leads.length, qualificados, respostas, recentes });
+  // "Limpar exemplo" só aparece na tela quando a prospecção de exemplo ainda existe (US-008).
+  const temExemplo = prospeccoes.some((p) => p.demo);
+
+  return Response.json({ prospeccoes: prospeccoes.length, leadsEncontrados: leads.length, qualificados, respostas, recentes, temExemplo });
 }

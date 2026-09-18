@@ -86,9 +86,11 @@ export interface Produto {
   descricao: string;
   site: string | null;
   propostaValor: string;
+  /** true só nos dados semeados por "Ver uma prospecção de exemplo" (US-008); nunca marcado por quem cadastra um produto de verdade. */
+  demo: boolean;
   criadoEm: string;
 }
-export type NovoProduto = Omit<Produto, "id" | "criadoEm">;
+export type NovoProduto = Omit<Produto, "id" | "criadoEm" | "demo"> & { demo?: boolean };
 
 export interface ICP {
   id: string;
@@ -99,9 +101,10 @@ export interface ICP {
   personas: string[];
   dores: string[];
   sinais: string[];
+  demo: boolean;
   criadoEm: string;
 }
-export type NovoICP = Omit<ICP, "id" | "criadoEm">;
+export type NovoICP = Omit<ICP, "id" | "criadoEm" | "demo"> & { demo?: boolean };
 
 /** Sugestão de produto + ICP a partir do site (US-007): nunca salva direto, sempre editada em ProdutoComIA antes de virar Produto/ICP de verdade. */
 export interface SugestaoProduto {
@@ -126,10 +129,11 @@ export interface Prospeccao {
   estado: EstadoProspeccao;
   etapa: string | null;
   erro: string | null;
+  demo: boolean;
   criadoEm: string;
   concluidoEm: string | null;
 }
-export type NovaProspeccao = Omit<Prospeccao, "id" | "criadoEm" | "concluidoEm"> & { concluidoEm?: string | null };
+export type NovaProspeccao = Omit<Prospeccao, "id" | "criadoEm" | "concluidoEm" | "demo"> & { concluidoEm?: string | null; demo?: boolean };
 
 /** Conta = empresa descoberta numa prospecção B2B (nome próprio para não colidir com a conta de administrador de lib/conta.ts). */
 export interface Conta {
@@ -144,10 +148,11 @@ export interface Conta {
   evidencias: Evidencia[];
   sinais: SinalProspeccao[];
   resumo: string;
+  demo: boolean;
   criadoEm: string;
   atualizadoEm: string;
 }
-export type NovaConta = Omit<Conta, "id" | "criadoEm" | "atualizadoEm">;
+export type NovaConta = Omit<Conta, "id" | "criadoEm" | "atualizadoEm" | "demo"> & { demo?: boolean };
 
 /** Pessoa descoberta numa prospecção (nome próprio para não colidir com o Lead de lib/types.ts usado pelas rotas antigas). */
 export interface LeadProspeccao {
@@ -167,10 +172,11 @@ export interface LeadProspeccao {
   hipotese: string | null;
   status: StatusLead;
   noCRM: boolean;
+  demo: boolean;
   criadoEm: string;
   atualizadoEm: string;
 }
-export type NovoLeadProspeccao = Omit<LeadProspeccao, "id" | "criadoEm" | "atualizadoEm">;
+export type NovoLeadProspeccao = Omit<LeadProspeccao, "id" | "criadoEm" | "atualizadoEm" | "demo"> & { demo?: boolean };
 
 export interface EstrategiaAbordagem {
   objetivo: string;
@@ -189,6 +195,7 @@ export interface AbordagemRegistro {
   linkedin: string;
   whatsapp: string;
   variacao: string | null;
+  demo: boolean;
   criadoEm: string;
 }
-export type NovaAbordagemRegistro = Omit<AbordagemRegistro, "id" | "criadoEm">;
+export type NovaAbordagemRegistro = Omit<AbordagemRegistro, "id" | "criadoEm" | "demo"> & { demo?: boolean };
