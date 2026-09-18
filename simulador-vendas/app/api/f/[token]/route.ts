@@ -3,10 +3,11 @@
 // Ao contrário de lib/formularios.ts e app/f/[token]/page.tsx, este arquivo NÃO é copiado sem alterar:
 // cada app pode precisar importar seu próprio módulo (ex.: lib/pdi.ts) para garantir que o callback
 // já esteja registrado quando a rota carrega.
-// Nenhum tipo de formulário público é registrado ainda neste app (sem registrarCallback): a
-// capacidade "formulario" não está declarada em catalogo.json para simulador-vendas.
+// O tipo registrado aqui é o "Convite para treinar" (US-029): o import de efeito colateral abaixo é
+// o que garante que o callback de lib/convite.ts já esteja registrado quando esta rota carrega.
 import { NextResponse } from "next/server";
 import { obter, obterCallback, responder } from "@/lib/formularios";
+import "@/lib/convite";
 
 export async function POST(request: Request, { params }: RouteContext<"/api/f/[token]">) {
   const { token } = await params;

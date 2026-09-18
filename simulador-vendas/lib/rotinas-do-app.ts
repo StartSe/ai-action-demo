@@ -3,24 +3,63 @@
 // aqui o que faz sentido rodar sozinho (ver padrão em app/api/f/[token]/route.ts com lib/analise.ts).
 import { aiEnabled } from "./ai";
 import { numero } from "./formato";
-import { listar as listarHistorico } from "./historico";
 import { gerarPainelEquipe } from "./painel-equipe";
+import { gerarPainelSimulacao } from "./painel-simulacao";
+import { resumoDeTreinos } from "./resumo-treinos";
 import { registrarExecutor, type Rotina } from "./rotinas";
 import { listar as listarParticipantes } from "./participantes";
 
 /** Tipos de rotina disponíveis neste app, para o cartão de /setup listar num seletor. */
 export const TIPOS_ROTINA: { tipo: string; rotulo: string }[] = [
-  { tipo: "resumo-simulador-vendas", rotulo: "Resumo das conversas analisadas" },
+  { tipo: "resumo-simulador-vendas", rotulo: "Resumo dos treinos do time" },
   { tipo: "resumo-equipe", rotulo: "Resumo semanal da equipe" },
 ];
 
+/** Quantos nomes cabem na frase de "quem treinou" antes de ela virar uma lista que ninguém lê. */
+const NOMES_NA_FRASE = 5;
+
+/**
+ * "Resumo dos treinos do time" (US-029): o que aconteceu nos links do gestor desde a última execução.
+ *
+ * Antes desta história a rotina resumia as **conversas reais coladas** no painel, que é o caminho
+ * antigo do app (e continua existindo, em `/equipe/analisar`). O que o gestor precisa saber sem abrir
+ * a tela, porém, é do treino: quem praticou, quanto o time tirou e onde ele travou — o mesmo trio que
+ * ele iria procurar no painel. A conversa real colada segue coberta pelo "Resumo semanal da equipe".
+ *
+ * O painel do treino que mais rodou no período é gravado no histórico e vira o destino da notificação:
+ * a mensagem cabe em três linhas, e quem quiser o detalhe clica e encontra os números daquele momento,
+ * não os de quando abriu o link.
+ */
 registrarExecutor("resumo-simulador-vendas", async (rotina: Rotina) => {
-  const desde = rotina.ultimaExecucao ? new Date(rotina.ultimaExecucao) : new Date(0);
-  const recentes = listarHistorico(50).filter((r) => r.tipo === "conversa" && new Date(r.criadoEm) > desde);
-  const titulo = "Resumo do Simulador de Vendas";
-  if (recentes.length === 0) return { titulo, texto: "Nenhuma conversa nova foi analisada desde a última rotina.", enviar: false };
-  const texto = `${recentes.length} conversa${recentes.length > 1 ? "s" : ""} analisada${recentes.length > 1 ? "s" : ""} desde a última rotina: ${recentes.map((r) => r.titulo).join(", ")}.`;
-  return { titulo, texto, resultadoId: recentes[0].id };
+  const desde = rotina.ultimaExecucao ?? new Date(0).toISOString();
+  const resumo = resumoDeTreinos(desde);
+  const titulo = "Resumo dos treinos do time";
+
+  if (resumo.sessoes === 0) {
+    return { titulo, texto: "Ninguém treinou desde a última rotina.", enviar: false };
+  }
+
+  // O painel é gravado antes do texto porque a notificação precisa de um destino; sem treino no
+  // período (impossível aqui, já que houve sessão) ou com o treino apagado no meio, segue sem link.
+  const foto = resumo.treinoMaisMovimentado ? gerarPainelSimulacao(resumo.treinoMaisMovimentado.codigo) : null;
+
+  const partes = [
+    `${resumo.sessoes} conversa${resumo.sessoes > 1 ? "s" : ""} de ${resumo.participantes} pessoa${resumo.participantes > 1 ? "s" : ""} desde a última rotina.`,
+  ];
+  partes.push(
+    resumo.notaMedia === null
+      ? "Nenhuma delas tinha avaliação pronta na hora deste resumo."
+      : `Nota média do time: ${numero(resumo.notaMedia, 1)} em ${resumo.avaliadas} conversa${resumo.avaliadas > 1 ? "s" : ""} avaliada${resumo.avaliadas > 1 ? "s" : ""}.`,
+  );
+
+  const nomes = resumo.quemTreinou.slice(0, NOMES_NA_FRASE).map((q) => `${q.nome} (${q.sessoes})`);
+  const sobrando = resumo.quemTreinou.length - nomes.length;
+  partes.push(`Quem treinou: ${nomes.join(", ")}${sobrando > 0 ? ` e mais ${sobrando}` : ""}.`);
+
+  if (resumo.dificuldade) partes.push(`Maior dificuldade do time: ${resumo.dificuldade.nome} (${numero(resumo.dificuldade.nota, 1)}).`);
+  if (resumo.treinoMaisMovimentado) partes.push(`Treino mais praticado: ${resumo.treinoMaisMovimentado.nome}.`);
+
+  return { titulo, texto: partes.join(" "), resultadoId: foto?.id };
 });
 
 /** Números fixos usados só em modo demonstração (sem OpenRouter configurado), para o resumo semanal nunca

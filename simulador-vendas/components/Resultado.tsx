@@ -11,6 +11,8 @@
 //   - `Resultado`/`ConteudoAnalise`   → `tipo: "conversa"` (uma conversa real analisada, `lib/analise.ts`)
 //   - `ResultadoSessao`/`ConteudoSessao` → `tipo: "sessao"` (um treino avaliado, `lib/avaliacao.ts`)
 //   - `ResultadoPainel`/`ConteudoPainel` → `tipo: "painel"` (o resumo da equipe, `lib/painel-equipe.ts`)
+//   - `ResultadoPainelSimulacao`/`ConteudoPainelSimulacao` → `tipo: "painel-simulacao"` (a fotografia do
+//     painel de um treino, `lib/painel-simulacao.ts`)
 import { useEffect, useState } from "react";
 import { Aviso, Chip, CopyButton, DataTable, Destaque, Entregar, Item, Origem, ResultHead, Section, SeloIA, data, lerErro, numero } from "@/components/ui";
 import { GraficoCriteriosFracos } from "@/components/GraficoCriteriosFracos";
@@ -18,6 +20,7 @@ import { VendedoresPainel } from "@/components/VendedoresPainel";
 import type { Meta } from "@/lib/ai";
 import type { Analise, Conversa, PainelEquipe } from "@/lib/types";
 import type { AvaliacaoSessao, CriterioAvaliado } from "@/lib/avaliacao";
+import type { PainelSimulacao } from "@/lib/painel-simulacao";
 
 function tomDestaque(nota: number): "ok" | "warn" | "danger" {
   if (nota >= 7.5) return "ok";
@@ -483,4 +486,134 @@ function exportarNotasEquipeCSV(painel: PainelEquipe) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
+// A fotografia do painel de um treino (`tipo: "painel-simulacao"`, US-029)
+// ---------------------------------------------------------------------------
+
+/** "3 sessões" / "1 sessão": plural resolvido aqui, não no meio do JSX. */
+function contagemPainel(n: number, singular: string, plural: string) {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
+function variacaoEscrita(painel: PainelSimulacao): string {
+  if (painel.variacao === null) return `Faltam conversas nos ${painel.dias} dias anteriores para comparar`;
+  const sinal = painel.variacao > 0 ? "+" : painel.variacao < 0 ? "−" : "";
+  return `${sinal}${numero(Math.abs(painel.variacao), 1)} contra os ${painel.dias} dias anteriores`;
+}
+
+/**
+ * Corpo da fotografia do painel de um treino, reaproveitado pela folha de impressão.
+ *
+ * É um retrato para levar a uma reunião, não a tela de trabalho: sai o que exige clique (as abas, o
+ * detalhe de cada pessoa, a linha da evolução) e fica o que se lê de uma vez — os números do topo, as
+ * competências da mais fraca para a mais forte, o time e os tipos de cliente.
+ */
+export function ConteudoPainelSimulacao({ painel }: { painel: PainelSimulacao }) {
+  return (
+    <>
+      <Destaque
+        valor={painel.notaMedia === null ? "—" : numero(painel.notaMedia, 1)}
+        rotulo="Nota média do treino"
+        tom={painel.notaMedia === null ? "neutro" : tomDestaque(painel.notaMedia)}
+        interpretacao={
+          painel.avaliadas === 0
+            ? "Nenhuma conversa avaliada ainda"
+            : `Em ${contagemPainel(painel.avaliadas, "conversa avaliada", "conversas avaliadas")} · ${variacaoEscrita(painel)}`
+        }
+      />
+
+      <Section titulo="O treino">
+        <Item>
+          <p className="text-sm">
+            {painel.produto} · {painel.metodologia} · {contagemPainel(painel.participantes, "participante", "participantes")} ·{" "}
+            {contagemPainel(painel.sessoes, "sessão", "sessões")}
+          </p>
+          {painel.objetivo && <p className="text-muted text-[13px] mt-1">{painel.objetivo}</p>}
+        </Item>
+      </Section>
+
+      {painel.competencias.length > 0 && (
+        <Section titulo="Competências do time">
+          <Item>
+            <GraficoCriteriosFracos criterios={painel.competencias.map((c) => ({ nome: c.nome, notaMedia: c.nota }))} />
+          </Item>
+        </Section>
+      )}
+
+      {painel.equipe.length > 0 && (
+        <Section titulo="Quem treinou">
+          <DataTable
+            colunas={[
+              { chave: "nome", titulo: "Vendedor", papel: "titulo", render: (l) => l.nome },
+              { chave: "sessoes", titulo: "Conversas", render: (l) => String(l.sessoes) },
+              { chave: "nota", titulo: "Nota média", papel: "chip", render: (l) => (l.nota === null ? <span className="text-muted text-sm">—</span> : <Chip nivel={tomChip(l.nota)}>{numero(l.nota, 1)}</Chip>) },
+            ]}
+            linhas={painel.equipe}
+          />
+        </Section>
+      )}
+
+      {painel.personas.length > 0 && (
+        <Section titulo="Por tipo de cliente">
+          <Item>
+            <ul className="flex flex-col gap-2 list-none">
+              {painel.personas.map((p) => (
+                <li key={p.id} className="flex items-baseline justify-between gap-3 text-sm">
+                  <span className="min-w-0 truncate">
+                    {p.emoji} {p.nome}
+                  </span>
+                  <span className="shrink-0 text-muted text-[13px]">
+                    {p.nota === null
+                      ? `${contagemPainel(p.avaliadas, "conversa avaliada", "conversas avaliadas")} — ainda sem base`
+                      : `${numero(p.nota, 1)} em ${contagemPainel(p.avaliadas, "conversa", "conversas")}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Item>
+        </Section>
+      )}
+    </>
+  );
+}
+
+function painelSimulacaoParaTexto(painel: PainelSimulacao): string {
+  const l: string[] = [
+    `Painel do treino — ${painel.nome}`,
+    `${painel.produto} · ${painel.metodologia} · últimos ${painel.dias} dias`,
+    `Nota média: ${painel.notaMedia === null ? "sem conversa avaliada" : numero(painel.notaMedia, 1)}`,
+    `${painel.participantes} participante(s), ${painel.sessoes} sessão(ões), ${painel.avaliadas} avaliada(s)`,
+    "",
+  ];
+  if (painel.competencias.length) {
+    l.push("Competências (da mais fraca para a mais forte):");
+    painel.competencias.forEach((c) => l.push(`- ${c.nome}: ${numero(c.nota, 1)} (${c.avaliacoes} conversa(s))`));
+    l.push("");
+  }
+  if (painel.equipe.length) {
+    l.push("Quem treinou:");
+    painel.equipe.forEach((v) => l.push(`- ${v.nome}: ${v.nota === null ? "sem nota" : numero(v.nota, 1)} (${v.sessoes} conversa(s))`));
+    l.push("");
+  }
+  if (painel.personas.length) {
+    l.push("Por tipo de cliente:");
+    painel.personas.forEach((p) => l.push(`- ${p.nome}: ${p.nota === null ? "ainda sem base" : numero(p.nota, 1)} (${p.avaliadas} avaliada(s))`));
+  }
+  return l.join("\n");
+}
+
+export function ResultadoPainelSimulacao({ painel, meta, id, titulo }: { painel: PainelSimulacao; meta: Meta; id?: string; titulo: string }) {
+  return (
+    <article className="reveal">
+      <ResultHead titulo={titulo} subtitulo={`${painel.produto} · ${contagemPainel(painel.sessoes, "sessão", "sessões")} · ${contagemPainel(painel.participantes, "participante", "participantes")}`}>
+        <Entregar id={id} titulo={titulo} texto={() => painelSimulacaoParaTexto(painel)} />
+      </ResultHead>
+
+      <Origem meta={meta} />
+
+      <ConteudoPainelSimulacao painel={painel} />
+    </article>
+  );
 }

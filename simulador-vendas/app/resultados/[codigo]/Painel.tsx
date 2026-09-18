@@ -57,6 +57,59 @@ function BarraCompetencia({ competencia }: { competencia: CompetenciaAgregada })
   );
 }
 
+/**
+ * "Guardar e compartilhar" (US-029): congela os números desta tela num resultado com endereço próprio
+ * (`/r/<id>`) e folha de impressão (`/imprimir/<id>`).
+ *
+ * O painel é recalculado a cada abertura, e é assim que ele tem de ser — mas o que se manda por e-mail
+ * antes de uma reunião não pode mudar sozinho até a reunião acontecer. Por isso a foto é um registro à
+ * parte, e por isso o botão diz "Guardar": quem clica está criando alguma coisa, não abrindo uma tela.
+ */
+function GuardarPainel({ codigo }: { codigo: string }) {
+  const [salvando, setSalvando] = useState(false);
+  const [salvo, setSalvo] = useState<{ id: string } | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function guardar() {
+    setSalvando(true);
+    setErro(null);
+    try {
+      const r = await fetch(`/api/resultados/${codigo}`, { method: "POST" });
+      if (!r.ok) throw r;
+      const corpo: { id: string } = await r.json();
+      setSalvo({ id: corpo.id });
+    } catch (e) {
+      setErro((await lerErro(e)).mensagem);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="mb-6">
+      {salvo ? (
+        <p className="text-[13px]">
+          <span className="font-semibold text-ok">Painel guardado.</span>{" "}
+          <Link href={`/r/${salvo.id}`} className="btn-link">
+            Abrir para compartilhar
+          </Link>
+          {" · "}
+          <Link href={`/imprimir/${salvo.id}`} className="btn-link">
+            Imprimir
+          </Link>
+        </p>
+      ) : (
+        <button type="button" className="btn-ghost !w-auto" onClick={guardar} disabled={salvando}>
+          {salvando ? "Guardando..." : "Guardar e compartilhar este painel"}
+        </button>
+      )}
+      {erro && (
+        <p className="text-[13px] text-danger mt-2">{erro}</p>
+      )}
+    </div>
+  );
+}
+
 function VisaoGeral({ painel, oportunidade }: Resposta) {
   const variacao = painel.variacao;
   return (
@@ -158,6 +211,8 @@ export default function Painel({ codigo }: { codigo: string }) {
                     painel.notaMedia === null ? "sem nota ainda" : `nota média ${nota(painel.notaMedia)}`
                   }${painel.ultimaSessao ? ` · última em ${data(painel.ultimaSessao)}` : ""}`}
             </p>
+
+            {painel.sessoes > 0 && <GuardarPainel codigo={codigo} />}
 
             <div role="tablist" aria-label="Seções do painel" className="flex gap-1.5 border-b border-line mb-6 overflow-x-auto">
               {ABAS.map((a) => (

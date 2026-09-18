@@ -124,7 +124,7 @@ export default function Page() {
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [busca, setBusca] = useState("");
-  const [copiado, setCopiado] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState<{ codigo: string; texto: string } | null>(null);
   const [falhaCopia, setFalhaCopia] = useState(false);
 
   const carregar = useCallback(async () => {
@@ -170,15 +170,34 @@ export default function Page() {
     }
   }
 
-  async function copiarLink(s: SimulacaoLista) {
+  async function copiar(codigo: string, endereco: string, confirmacao: string) {
     try {
-      await navigator.clipboard.writeText(s.url);
+      await navigator.clipboard.writeText(endereco);
       setFalhaCopia(false);
-      setCopiado(s.codigo);
-      setTimeout(() => setCopiado(null), 2500);
+      setCopiado({ codigo, texto: confirmacao });
+      setTimeout(() => setCopiado(null), 4000);
     } catch {
       setFalhaCopia(true);
       setTimeout(() => setFalhaCopia(false), 4000);
+    }
+  }
+
+  /**
+   * O convite (US-029) é o caminho de quem prefere **divulgar** o treino a mandar o link direto: quem
+   * recebe informa nome e e-mail, entra na lista da equipe e só então recebe o endereço do treino.
+   *
+   * Um treino tem um convite só — a rota devolve o mesmo endereço em toda chamada seguinte —, então
+   * clicar de novo copia o mesmo link em vez de criar outro.
+   */
+  async function copiarConvite(s: SimulacaoLista) {
+    setErroTela(null);
+    try {
+      const r = await fetch(`/api/simulacoes/${s.codigo}/convite`, { method: "POST" });
+      if (!r.ok) throw r;
+      const corpo: { convite: { url: string } } = await r.json();
+      await copiar(s.codigo, corpo.convite.url, "Convite copiado — quem abrir informa nome e e-mail antes de ver o treino");
+    } catch (e) {
+      setErroTela(await lerErro(e));
     }
   }
 
@@ -276,14 +295,15 @@ export default function Page() {
                   <MenuAcoes
                     rotulo={`Mais ações do treino ${s.nome}`}
                     itens={[
-                      { rotulo: "Copiar link", onClick: () => copiarLink(s) },
+                      { rotulo: "Copiar link", onClick: () => copiar(s.codigo, s.url, "Link copiado") },
+                      { rotulo: "Copiar convite", onClick: () => copiarConvite(s) },
                       ...(s.status === "ativa" ? [{ rotulo: "Pausar", onClick: () => mudarStatus(s, "pausada") }] : []),
                       ...(s.status === "pausada" ? [{ rotulo: "Reativar", onClick: () => mudarStatus(s, "ativa") }] : []),
                       { rotulo: "Duplicar", onClick: () => router.push(`/simulacoes/nova?duplicar=${s.codigo}`) },
                       ...(s.status === "encerrada" ? [] : [{ rotulo: "Encerrar", onClick: () => mudarStatus(s, "encerrada"), perigo: true }]),
                     ]}
                   />
-                  {copiado === s.codigo && <span className="text-[13px] font-semibold text-ok">Link copiado</span>}
+                  {copiado?.codigo === s.codigo && <span className="text-[13px] font-semibold text-ok">{copiado.texto}</span>}
                 </div>
               </article>
             ))}

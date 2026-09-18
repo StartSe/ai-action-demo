@@ -6,7 +6,9 @@ import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
 import type { Analise, Conversa, DadosPainel, PainelEquipe } from "@/lib/types";
 import type { AvaliacaoSessao } from "@/lib/avaliacao";
-import { ConteudoAnalise, ConteudoPainel, ConteudoSessao } from "@/components/Resultado";
+import type { DadosPainelSimulacao, PainelSimulacao } from "@/lib/painel-simulacao";
+import { TIPO_PAINEL_SIMULACAO } from "@/lib/painel-simulacao";
+import { ConteudoAnalise, ConteudoPainel, ConteudoPainelSimulacao, ConteudoSessao } from "@/components/Resultado";
 import { ImprimirAoCarregar } from "./ImprimirAoCarregar";
 
 function Moldura({ titulo, meta, children }: { titulo: string; meta: Meta; children: ReactNode }) {
@@ -38,6 +40,15 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
     return (
       <Moldura titulo={registro.titulo} meta={registro.meta}>
         <ConteudoPainel painel={registro.saida} />
+      </Moldura>
+    );
+  }
+
+  if (tipagem.tipo === TIPO_PAINEL_SIMULACAO) {
+    const registro = obter<DadosPainelSimulacao, PainelSimulacao, Meta>(id)!;
+    return (
+      <Moldura titulo={registro.titulo} meta={registro.meta}>
+        <ConteudoPainelSimulacao painel={registro.saida} />
       </Moldura>
     );
   }

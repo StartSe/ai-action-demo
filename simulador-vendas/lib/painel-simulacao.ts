@@ -10,7 +10,8 @@
 // dificuldade com um tipo de cliente (US-024) —, e as duas são escritas a partir dos números já
 // calculados, nunca das conversas. Sem IA (ou quando ela falha) cada uma sai do código: o painel nunca
 // fica sem a linha que diz o que fazer.
-import { aiEnabled, askJSON, modelName } from "./ai";
+import { aiEnabled, askJSON, meta, modelName, type Meta } from "./ai";
+import { salvar } from "./historico";
 import { GRUPOS, criteriosDe, metodologia, type Grupo } from "./metodologias";
 import { obter as obterParticipante } from "./participantes";
 import { persona, rotulo } from "./personas";
@@ -746,4 +747,38 @@ export async function dificuldadeComPersona(painel: PainelSimulacao): Promise<Op
 
   cachePersona.set(painel.codigo, { chave, expiraEm: Date.now() + VALIDADE_FRASE_MS, valor });
   return valor;
+}
+
+/** O tipo com que o painel de um treino é gravado no histórico — o quarto deste app, ao lado de
+ * `conversa` (a conversa real colada pelo gestor), `sessao` (o feedback de um treino) e `painel` (o
+ * resumo da equipe). Toda tela que lê um resultado precisa decidir o que faz com ele. */
+export const TIPO_PAINEL_SIMULACAO = "painel-do-treino";
+
+/** O que fica gravado como entrada do artefato: o bastante para saber de que treino e de que janela a
+ * folha impressa fala, meses depois de ela ter sido tirada. */
+export type DadosPainelSimulacao = { codigo: string; dias: number };
+
+/**
+ * Tira uma **fotografia** do painel e a guarda no histórico, para ela ganhar um endereço (`/r/<id>`) e
+ * uma folha (`/imprimir/<id>`).
+ *
+ * A tela `/resultados/<código>` continua sendo recalculada a cada abertura — é lá que o gestor olha o
+ * treino de hoje. O que se compartilha e o que se imprime, porém, tem de continuar dizendo a mesma
+ * coisa quando alguém abrir na semana seguinte: um link que recalculasse mostraria números diferentes
+ * dos que foram discutidos na reunião. Por isso aqui o painel é copiado inteiro, não referenciado.
+ *
+ * Devolve `null` quando o treino não existe mais.
+ */
+export function gerarPainelSimulacao(codigo: string, dias = 30): { painel: PainelSimulacao; meta: Meta; id: string; titulo: string } | null {
+  const painel = montarPainelSimulacao(codigo, dias);
+  if (!painel) return null;
+
+  const titulo = `Painel do treino — ${painel.nome}`;
+  // `demo` é da instalação, não do cálculo: os números são sempre reais (contas sobre o que está
+  // gravado), mas sem IA conectada as conversas que os alimentaram foram avaliadas por exemplo.
+  const metaGerada = meta({ demo: !aiEnabled(), insumo: "conversas avaliadas deste treino" });
+  const entrada: DadosPainelSimulacao = { codigo, dias };
+  const resumo = painel.notaMedia === null ? "Sem conversa avaliada ainda" : `Nota média ${painel.notaMedia.toFixed(1).replace(".", ",")} em ${painel.avaliadas} conversa${painel.avaliadas === 1 ? "" : "s"}`;
+  const id = salvar({ tipo: TIPO_PAINEL_SIMULACAO, titulo, resumo, entrada, saida: painel, meta: metaGerada });
+  return { painel, meta: metaGerada, id, titulo };
 }

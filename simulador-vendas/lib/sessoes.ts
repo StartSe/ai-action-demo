@@ -729,3 +729,38 @@ export function movimentoEntre(desde: string, ate: string): MovimentoDoPeriodo {
   if (total === 0) return movimento;
   return { ...movimento, notaMedia: Math.round((soma / total) * 10) / 10, avaliadas: total };
 }
+
+/**
+ * As conversas abertas a partir de uma data, com a avaliação delas quando já existe.
+ *
+ * É o que a rotina de resumo (US-029) precisa para dizer quem treinou desde a última execução: uma
+ * consulta para o período inteiro, não uma por pessoa nem uma por treino — a rotina roda sozinha e um
+ * resumo semanal de trinta vendedores não pode custar centenas de leituras.
+ *
+ * Fica de fora o que nunca aconteceu (`preparando`, `abandonada`), a mesma exclusão de
+ * `resumoPorParticipante`: quem abriu o link e fechou a aba não treinou.
+ *
+ * `saida` volta como texto, sem interpretação, pelo mesmo motivo de `avaliacoesDaSimulacao`: quem sabe
+ * falar com o banco é este módulo, e quem sabe o formato da avaliação é `lib/avaliacao.ts`.
+ */
+export function sessoesDesde(desde: string): { sessao: Sessao; saida: string | null }[] {
+  marcarAbandonadas();
+  const d = banco();
+
+  // `resultados` (lib/historico.ts) pode não existir num banco recém-criado, e `prepare` sobre tabela
+  // inexistente lança na hora, não na execução: a conferência vem antes e decide a consulta.
+  const comResultados = Boolean(d.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'resultados'").get());
+  const consulta = comResultados
+    ? `SELECT s.*, r.saida AS saida
+         FROM sessoes_treino s
+         LEFT JOIN resultados r ON r.id = s.resultadoId
+        WHERE s.status NOT IN ('preparando', 'abandonada') AND s.criadoEm >= ?
+        ORDER BY s.criadoEm ASC`
+    : `SELECT s.*, NULL AS saida
+         FROM sessoes_treino s
+        WHERE s.status NOT IN ('preparando', 'abandonada') AND s.criadoEm >= ?
+        ORDER BY s.criadoEm ASC`;
+
+  const linhas = d.prepare(consulta).all(desde) as (LinhaSessao & { saida: string | null })[];
+  return linhas.map((l) => ({ sessao: linhaParaSessao(l), saida: l.saida }));
+}
