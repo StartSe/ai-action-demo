@@ -44,8 +44,12 @@ function IconeApoio() {
 
 /** `children`: cartões próprios do app (política, webhook...) que precisam aparecer ANTES do rodapé "Ir
  * para o app" — quem entra em /setup não deve ser convidado a sair antes de ver o que ainda falta
- * configurar. Cartões secundários (como "Usar dentro do seu assistente") continuam depois da tela. */
-export function SetupPage({ marca, nome, area, segmento, children }: { marca: string; nome: string; area: string; segmento: Segmento; children?: ReactNode }) {
+ * configurar. Cartões secundários (como "Usar dentro do seu assistente") continuam depois da tela.
+ *
+ * `extras`: um pedaço de tela próprio do app DENTRO do cartão de uma integração, por id dela (ex.:
+ * "Apagar os dados de exemplo" no cartão do OpenRouter). Existe porque há assuntos que só fazem
+ * sentido ao lado daquela conexão — num cartão separado, ninguém liga um ao outro. */
+export function SetupPage({ marca, nome, area, segmento, children, extras }: { marca: string; nome: string; area: string; segmento: Segmento; children?: ReactNode; extras?: Record<string, ReactNode> }) {
   const { status, erro } = useStatus();
   const [dados, setDados] = useState<Resposta | null>(null);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
@@ -150,6 +154,7 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
                   aoSalvar={carregar}
                   destaque={i.id === primeiroPendenteId}
                   caixasEmail={i.id === "notificacoes" ? dados.caixasEmail : undefined}
+                  extra={extras?.[i.id]}
                 />
               ))}
             </div>
@@ -223,7 +228,7 @@ function CampoEnderecoPublico({ status, aoSalvar }: { status: StatusEnderecoPubl
   );
 }
 
-function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEmail }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean; caixasEmail?: StatusCaixasEmail }) {
+function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEmail, extra }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean; caixasEmail?: StatusCaixasEmail; extra?: ReactNode }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   const [desconectando, setDesconectando] = useState(false);
@@ -361,6 +366,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
         </>
       )}
       {teste && <p className={`mt-3 text-sm font-semibold ${teste.ok ? "text-ok" : "text-danger"}`}>{teste.mensagem}</p>}
+      {extra && <div className="mt-5 pt-5 border-t border-line">{extra}</div>}
     </section>
   );
 }

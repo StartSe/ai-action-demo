@@ -5,6 +5,8 @@
 // dois primeiros são os campos mais pesados do banco e por isso **nunca entram numa listagem** — ver
 // `COLUNAS_LEVES` abaixo.
 import { agora, banco, gerarId } from "./banco";
+import { removerCandidatosDeExemplo } from "./exemplos";
+import { semearDemonstracao } from "./semear-demo";
 
 export type PesquisaStatus = "nao_pedida" | "pendente" | "em_andamento" | "concluida" | "sem_resultado" | "falhou";
 export type TipoFonteCandidato = "cv" | "linkedin" | "busca" | "pagina";
@@ -151,6 +153,11 @@ export type CamposCandidato = Partial<
 };
 
 export function criar(campos: CamposCandidato & { nome: string; exemplo?: boolean }): Candidato {
+  // O primeiro candidato de verdade tira os de exemplo de cena (ver lib/exemplos.ts). A vaga de
+  // exemplo pode sobreviver a isto: é para ela que o candidato novo costuma ser convidado enquanto
+  // ninguém abriu a própria.
+  if (!campos.exemplo) removerCandidatosDeExemplo();
+
   const id = gerarId();
   const momento = agora();
   banco()
@@ -192,6 +199,7 @@ export function obter(id: string): Candidato | null {
 
 /** Busca por parte do nome (sem distinção de caixa), mais recentes primeiro. */
 export function listar({ busca, limite = 100 }: { busca?: string; limite?: number } = {}): Candidato[] {
+  semearDemonstracao();
   const termo = busca?.trim();
   const d = banco();
   const linhas = termo

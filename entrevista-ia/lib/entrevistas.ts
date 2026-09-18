@@ -8,6 +8,7 @@
 // Distinga de `lib/entrevista.ts` (singular), que continua sendo a lógica de IA da conversa e do
 // scorecard. Este módulo só guarda estado.
 import { agora, banco, gerarId } from "./banco";
+import { semearDemonstracao } from "./semear-demo";
 
 export type StatusEntrevista = "convidada" | "aberta" | "em_andamento" | "concluida" | "avaliada" | "expirada" | "cancelada";
 /** Os três níveis da conversa (D3): agente da ElevenLabs, voz do navegador, texto. Nulo até a sala abrir. */
@@ -200,6 +201,7 @@ export type FiltroEntrevistas = {
 };
 
 export function listar({ vagaId, candidatoId, status, periodo, limite = 200 }: FiltroEntrevistas = {}): Entrevista[] {
+  semearDemonstracao();
   expirarVencidas();
   const condicoes: string[] = [];
   const valores: (string | number)[] = [];

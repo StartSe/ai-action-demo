@@ -4,6 +4,8 @@
 // dependia de todo mundo escrever o mesmo texto. Agora ela tem id, e é dela que a entrevistadora tira
 // o que perguntar (requisitos, desafios, competências culturais) e o que avaliar.
 import { agora, banco, gerarId } from "./banco";
+import { removerVagasDeExemplo } from "./exemplos";
+import { semearDemonstracao } from "./semear-demo";
 
 export type Senioridade = "estagio" | "junior" | "pleno" | "senior" | "lideranca";
 export type ModeloTrabalho = "presencial" | "hibrido" | "remoto";
@@ -122,6 +124,10 @@ function linhaParaVaga(l: LinhaVaga): Vaga {
 export type CamposVaga = Partial<Omit<Vaga, "id" | "criadoEm" | "atualizadoEm" | "exemplo" | "status">>;
 
 export function criar(campos: CamposVaga & { cargo: string; exemplo?: boolean }): Vaga {
+  // A primeira vaga de verdade tira o exemplo de cena, aqui e não na rota: a regra vale igual para a
+  // tela, para o assistente (MCP) e para qualquer porta que venha depois.
+  if (!campos.exemplo) removerVagasDeExemplo();
+
   const id = gerarId();
   const momento = agora();
   const salarioACombinar = campos.salarioACombinar ?? false;
@@ -165,6 +171,7 @@ export function obter(id: string): Vaga | null {
 
 /** Vagas mais recentes primeiro; `status` filtra abertas ou encerradas. */
 export function listar({ status, limite = 100 }: { status?: StatusVaga; limite?: number } = {}): Vaga[] {
+  semearDemonstracao();
   const d = banco();
   const linhas = status
     ? (d.prepare("SELECT * FROM vagas WHERE status = ? ORDER BY criadoEm DESC LIMIT ?").all(status, limite) as LinhaVaga[])

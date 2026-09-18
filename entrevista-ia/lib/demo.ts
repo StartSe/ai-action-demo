@@ -1,6 +1,6 @@
 // Respostas de exemplo usadas quando não há chave de IA configurada.
 import type { Cultura } from "./cultura";
-import type { Scorecard, Troca, Vaga } from "./types";
+import type { AderenciaRequisito, CriterioCultural, CriterioTecnico, ItemConsistencia, Parecer, Recomendacao, Scorecard, SituacaoRequisito, Troca, Vaga } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
@@ -128,4 +128,185 @@ export function culturaDemo(): Cultura {
       "Não funciona aqui quem precisa de aprovação para cada passo, quem entrega no prazo escondendo um problema conhecido ou quem trata o time de entrega como fornecedor interno. Também não combina disputar crédito por resultado que foi de várias pessoas.",
     atualizadoEm: "",
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// O parecer de exemplo (US-004, formato da US-019 da PRD)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * O que o parecer de exemplo precisa saber para ser sobre ESTA conversa.
+ *
+ * Quem chama informa a vaga, a pessoa e a conversa; o texto é derivado daí, como `scorecardDemo` já
+ * faz hoje. As poucas coisas que a conversa não revela — a nota alvo, a pretensão dita, o que bate e
+ * o que não bate com o currículo — entram como parâmetro, porque é justamente o que a IA de verdade
+ * traria de fora da transcrição.
+ */
+export type ContextoParecer = {
+  cargo: string;
+  candidato: string;
+  /** Um requisito por linha, como está gravado na vaga. */
+  requisitos: string;
+  /** As competências culturais avaliadas nesta vaga, na ordem em que a vaga as lista. */
+  competencias: string[];
+  transcricao: Troca[];
+  /** Nota alvo de 0 a 10; a média dos critérios técnicos fecha nela. */
+  notaGeral: number;
+  /** Quando ausente, sai da nota: a partir de 8 avança, a partir de 6,5 vai ao gestor. */
+  recomendacao?: Recomendacao;
+  /** Competências que a conversa não chegou a tocar: entram sem nota, como "não abordado". */
+  semEvidenciaCultural?: string[];
+  /** Requisitos que a conversa não sustentou, pelo texto do requisito. */
+  requisitosFracos?: string[];
+  consistencia?: ItemConsistencia[];
+  pretensao?: { valor?: number; dentroDaFaixa?: boolean };
+  parcial?: boolean;
+};
+
+/** Desvios em torno da nota alvo, para os critérios não saírem todos com o mesmo número — a tela
+ * ordena do mais fraco ao mais forte e precisa de diferença para dizer alguma coisa. */
+const DESVIOS_PARECER = [-0.6, 0.5, -0.3, 0.7, -0.4];
+
+function umaCasa(n: number): number {
+  return Math.round(Math.min(10, Math.max(0, n)) * 10) / 10;
+}
+
+/** `quantos` notas cuja média é exatamente a nota alvo: a última absorve a sobra. A nota geral do
+ * parecer e a média da tabela não podem discordar, nem no exemplo. */
+function notasComMedia(alvo: number, quantos: number): number[] {
+  const notas: number[] = [];
+  for (let i = 0; i < quantos - 1; i++) notas.push(umaCasa(alvo + DESVIOS_PARECER[i % DESVIOS_PARECER.length]));
+  const soma = notas.reduce((a, b) => a + b, 0);
+  notas.push(umaCasa(alvo * quantos - soma));
+  return notas;
+}
+
+function recomendacaoPorNota(nota: number): Recomendacao {
+  if (nota >= 8) return "avançar";
+  if (nota >= 6.5) return "avaliar com o gestor";
+  return "não avançar";
+}
+
+const CRITERIOS_TECNICOS = [
+  "Experiência na função",
+  "Clareza na comunicação",
+  "Resolução de problemas",
+  "Resultado com números",
+];
+
+/**
+ * Um parecer plausível a partir da conversa: cada evidência é um trecho literal do que o candidato
+ * respondeu, e o número da pergunta de origem acompanha, como no parecer de verdade. Nada aqui é
+ * inventado sobre a pessoa — o que a conversa não disser vira "não abordado".
+ */
+export function parecerDemo(ctx: ContextoParecer): Parecer {
+  const pares = paresPerguntaResposta(ctx.transcricao);
+  const daAbertura = pares.slice(1).length ? pares.slice(1) : pares;
+  const citar = (i: number) => daAbertura[i % Math.max(1, daAbertura.length)];
+
+  const itens = parseRequisitos(ctx.requisitos);
+  const fracos = new Set(ctx.requisitosFracos ?? []);
+  const semEvidencia = new Set(ctx.semEvidenciaCultural ?? []);
+  const recomendacao = ctx.recomendacao ?? recomendacaoPorNota(ctx.notaGeral);
+  const primeiroNome = ctx.candidato.split(" ")[0] || ctx.candidato;
+
+  const aderencia: AderenciaRequisito[] = itens.map((requisito, i) => {
+    const par = citar(i);
+    // "Parcial" é o que sobra de uma conversa mediana; quem fechou a entrevista com nota alta não
+    // ganha um requisito meio atendido só para a tela ficar variada.
+    const situacao: SituacaoRequisito = !par
+      ? "nao_abordado"
+      : fracos.has(requisito)
+        ? "nao_atende"
+        : ctx.notaGeral < 8 && i % 3 === 1
+          ? "parcial"
+          : "atende";
+    return {
+      requisito,
+      situacao,
+      evidencia: par
+        ? `Sobre ${minuscula(requisito)}, respondeu: "${trecho(par.resposta)}"`
+        : "A conversa terminou antes de chegar neste ponto.",
+      pergunta: par?.pergunta,
+    };
+  });
+
+  const notas = notasComMedia(ctx.notaGeral, CRITERIOS_TECNICOS.length);
+  const tecnico: CriterioTecnico[] = CRITERIOS_TECNICOS.map((criterio, i) => {
+    const par = citar(i);
+    return {
+      criterio,
+      nota: notas[i],
+      evidencia: par ? `"${trecho(par.resposta)}"` : "Sem trecho da conversa que sustente este critério.",
+      pergunta: par?.pergunta,
+    };
+  });
+
+  // Nota cultural só com evidência comportamental: sem ela, `nota: null` e a frase que diz por quê.
+  const cultura: CriterioCultural[] = ctx.competencias.map((competencia, i) => {
+    if (semEvidencia.has(competencia)) {
+      return { competencia, nota: null, evidencia: "Não apareceu nenhuma situação concreta na conversa que permitisse avaliar isto." };
+    }
+    const par = citar(i + 1);
+    return {
+      competencia,
+      nota: umaCasa(ctx.notaGeral + DESVIOS_PARECER[(i + 2) % DESVIOS_PARECER.length]),
+      evidencia: par ? `"${trecho(par.resposta)}"` : "Sem trecho da conversa que sustente esta competência.",
+      pergunta: par?.pergunta,
+    };
+  });
+
+  const maisFraco = tecnico.reduce((pior, c) => (c.nota < pior.nota ? c : pior), tecnico[0]);
+  // O ponto que o gestor precisa perguntar na próxima etapa é o mais grave, não o primeiro da lista.
+  const requisitoAberto =
+    aderencia.find((a) => a.situacao === "nao_atende") ??
+    aderencia.find((a) => a.situacao === "nao_abordado") ??
+    aderencia.find((a) => a.situacao === "parcial");
+  const divergente = (ctx.consistencia ?? []).find((c) => c.situacao === "divergente");
+
+  const resumo = [
+    `${primeiroNome} conversou sobre a vaga de ${ctx.cargo} e sustentou a maior parte das respostas com exemplos do próprio dia a dia.`,
+    requisitoAberto
+      ? `O ponto que ficou aberto foi ${minuscula(requisitoAberto.requisito)}, onde a resposta não chegou ao detalhe que a vaga pede.`
+      : `Todos os requisitos apareceram na conversa com um exemplo concreto por trás.`,
+    divergente
+      ? `Há uma divergência entre o que foi dito e o que está registrado: ${divergente.detalhe}`
+      : `Nada do que foi dito contradiz o currículo ou o perfil público.`,
+  ].join(" ");
+
+  return {
+    notaGeral: umaCasa(ctx.notaGeral),
+    recomendacao,
+    resumo,
+    aderencia,
+    tecnico,
+    cultura,
+    consistencia: ctx.consistencia ?? [],
+    pontosFortes: [
+      "Respondeu com situações reais, e não com descrição de função.",
+      "Comunicação direta, sem rodeio para chegar ao ponto.",
+      `Demonstrou entender o que a área de ${ctx.cargo.split(" ").slice(-1)[0] || "destino"} precisa resolver no dia a dia.`,
+    ],
+    pontosAtencao: [
+      `${maisFraco.criterio.toLowerCase()} foi o critério mais fraco da conversa.`,
+      requisitoAberto ? `Falta confirmar ${minuscula(requisitoAberto.requisito)} com uma pergunta direta.` : "Vale confirmar disponibilidade de início.",
+    ],
+    proximaEtapa: {
+      perguntas: [
+        `Me conta um caso em que ${minuscula(requisitoAberto?.requisito ?? itens[0] ?? "o dia a dia da vaga")} deu errado e o que você fez.`,
+        "Que número você acompanhava toda semana e o que fazia quando ele caía?",
+        "Como você lidou com a última vez em que discordou do seu gestor?",
+      ],
+      foco: requisitoAberto
+        ? `Aprofundar ${minuscula(requisitoAberto.requisito)} com o gestor da área, antes de qualquer proposta.`
+        : "Confirmar pretensão, disponibilidade e referências do último gestor direto.",
+    },
+    pretensao: ctx.pretensao ?? {},
+    parcial: ctx.parcial ?? false,
+  };
+}
+
+/** Primeira letra em minúscula, para o requisito caber no meio de uma frase. */
+function minuscula(texto: string): string {
+  return texto ? texto.charAt(0).toLowerCase() + texto.slice(1) : texto;
 }
