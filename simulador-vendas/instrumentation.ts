@@ -7,6 +7,12 @@ export async function register() {
     const { limparExpirados: limparSalasExpiradas } = await import("@/lib/salas");
     limparSalasExpiradas();
 
+    // A demonstração (US-030) é semeada na subida do servidor, e não na primeira leitura de uma tela:
+    // é uma vez por instalação, e o painel e a evolução precisam estar prontos antes da primeira
+    // abertura. `semearDemonstracao` confere sozinha se pode semear e nunca lança.
+    const { semearDemonstracao } = await import("@/lib/semear-demo");
+    semearDemonstracao();
+
     await import("@/lib/rotinas-do-app");
     const { executarVencidas } = await import("@/lib/rotinas");
     setInterval(() => {

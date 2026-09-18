@@ -3,6 +3,7 @@
 // técnica" e explicar por que uma análise não chegou.
 import { baseUrl, registrarEnderecoPublico } from "@/lib/setup-comum";
 import { ligacoesSemAnalise } from "@/lib/salas";
+import { conversasSemAvaliacao } from "@/lib/sessoes";
 import { ultimaConversaEm, ultimaRecusa } from "@/lib/aviso-pos-conversa";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,8 @@ export async function GET(req: Request) {
     url: `${baseUrl(req)}/webhook/elevenlabs`,
     ultimaConversaEm: ultimaConversaEm(),
     ultimaRecusa: ultimaRecusa(),
-    ligacoesSemAnalise: ligacoesSemAnalise(),
+    // As duas contagens somam porque a pergunta do gestor é uma só ("alguma conversa por voz ficou
+    // sem avaliação?"): `sessoes_treino` responde pelos treinos de hoje e `salas` pelos links antigos.
+    conversasSemAvaliacao: conversasSemAvaliacao() + ligacoesSemAnalise(),
   });
 }

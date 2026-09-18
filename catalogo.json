@@ -258,14 +258,16 @@
       "areas": [
         "Vendas"
       ],
-      "problema": "O gestor de vendas não sabe como cada vendedor conduz uma conversa real, só o resultado final.",
-      "ia": "Avalia uma conversa de vendas colada (ou enviada em .txt, .vtt e .srt) contra 7 critérios de venda consultiva e devolve nota, evidências e como melhorar.",
-      "integracoes": "IA (OpenRouter) para a análise. ElevenLabs (opcional) para a sala de treino por voz. CRM por MCP (opcional) para registrar a nota no cliente. Notificações para mandar a análise ao vendedor.",
+      "problema": "O time só aprende a vender na conversa real, com o cliente de verdade na frente.",
+      "ia": "Faz o papel do cliente numa conversa por voz e depois avalia o vendedor pela metodologia do time, com nota por critério e o trecho da conversa que justifica cada uma.",
+      "integracoes": "IA (OpenRouter) para simular o cliente e avaliar a conversa. ElevenLabs (opcional) melhora a voz do cliente — o treino já acontece por voz sem ela, pelo próprio navegador. Google e Microsoft (opcionais) para o vendedor se identificar no link em um toque. CRM por MCP (opcional) para registrar a nota no cliente. Notificações para mandar o feedback ao vendedor.",
       "acento": "#3e68cc",
       "porta": 3013,
       "captura": "capturas/simulador-vendas.png",
+      "independente": true,
       "capacidades": [
         "artefato",
+        "formulario",
         "mcp",
         "rotina"
       ],

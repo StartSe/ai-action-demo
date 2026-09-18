@@ -5,8 +5,10 @@ import crypto from "node:crypto";
 import { getConfig } from "@/lib/store";
 import { registrarConversaRecebida, registrarRecusa } from "@/lib/aviso-pos-conversa";
 import { salvarConversaAnalisada } from "@/lib/analise";
+import { avaliarSessao } from "@/lib/avaliacao";
 import { CRITERIOS_PADRAO } from "@/lib/criterios";
 import { obter as obterSala, registrarResultado } from "@/lib/salas";
+import { encerrar, obter as obterSessao, registrarMensagem, transcricao as transcricaoDaSessao } from "@/lib/sessoes";
 import type { Conversa, LinhaTranscricao } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +52,36 @@ type EventoPosConversa = {
   };
 };
 
+/**
+ * O caminho de hoje (US-016): a conversa pertence à **sessão** de um vendedor dentro de uma simulação.
+ * O `sessao_id` é uma das variáveis dinâmicas que a sala manda ao agente, e é por ele que a
+ * transcrição encontra de volta quem treinou, em que treino e com que cliente.
+ *
+ * Gravar a transcrição, fechar a sessão e avaliar acontecem aqui porque no nível 1 nada disso passa
+ * pelo app: quem conduziu a conversa foi o agente, e o vendedor já saiu da ligação quando ela chega.
+ *
+ * A entrega de um aviso automático pode se repetir (a ElevenLabs reenvia o que não recebeu 200), então
+ * as duas gravações são condicionadas ao que já existe: sessão já avaliada não é reavaliada, e
+ * transcrição já gravada não é gravada de novo — senão a mesma conversa apareceria em dobro.
+ */
+async function processarSessao(sessaoId: string, transcricao: LinhaTranscricao[], duracaoSeg?: number): Promise<boolean> {
+  const sessao = obterSessao(sessaoId);
+  if (!sessao) return false;
+  if (sessao.resultadoId) return true;
+
+  if (transcricaoDaSessao(sessao.id).length === 0) {
+    for (const linha of transcricao) {
+      registrarMensagem({ sessaoId: sessao.id, papel: linha.papel, texto: linha.texto, segundo: linha.segundo });
+    }
+  }
+
+  // A duração vem do aviso, não do relógio do app: a ligação já acabou quando ele chega, e medir daqui
+  // contaria o tempo de entrega como tempo de conversa.
+  if (sessao.status === "em_andamento" || sessao.status === "preparando") encerrar(sessao.id, { duracaoSeg });
+  await avaliarSessao(sessao.id);
+  return true;
+}
+
 /** Roda depois de já ter respondido 200 à ElevenLabs: monta a Conversa e reaproveita a mesma
  * análise/gravação da conversa colada (lib/analise.ts), sem duplicar lógica. */
 async function processar(corpo: string): Promise<void> {
@@ -67,6 +99,16 @@ async function processar(corpo: string): Promise<void> {
   if (transcricao.length === 0) return;
 
   const dynamicVars = evento.data?.dynamic_variables || {};
+  const duracaoSeg = typeof evento.data?.metadata?.call_duration_secs === "number" ? evento.data.metadata.call_duration_secs : undefined;
+
+  // Sessão primeiro (US-016); `sala_token` continua atendido logo abaixo porque os agentes já
+  // configurados com a variável antiga não deixam de funcionar quando o app é atualizado.
+  const sessaoId = dynamicVars.sessao_id != null ? String(dynamicVars.sessao_id) : undefined;
+  if (sessaoId && (await processarSessao(sessaoId, transcricao, duracaoSeg))) {
+    registrarConversaRecebida(new Date().toISOString());
+    return;
+  }
+
   const salaCodigo = dynamicVars.sala_token != null ? String(dynamicVars.sala_token) : undefined;
   const sala = salaCodigo ? obterSala(salaCodigo) : null;
   const vendedorId = dynamicVars.vendedor_id != null ? String(dynamicVars.vendedor_id) : sala?.vendedorId || undefined;
@@ -77,7 +119,7 @@ async function processar(corpo: string): Promise<void> {
     cenarioId: sala?.cenarioId || undefined,
     origem: "voz",
     transcricao,
-    duracaoSeg: typeof evento.data?.metadata?.call_duration_secs === "number" ? evento.data.metadata.call_duration_secs : undefined,
+    duracaoSeg,
     criadoEm: new Date().toISOString(),
   };
 

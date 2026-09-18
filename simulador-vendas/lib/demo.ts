@@ -72,3 +72,65 @@ export function analiseDemo(criterios: string[]): Analise {
     resumo: "Conversa de renovação em risco bem conduzida: o vendedor investigou a causa real da queda de uso antes de reagir à objeção de orçamento, e converteu isso em uma proposta concreta de baixo risco. O ponto a melhorar é amarrar mais firmemente o próximo passo a um prazo e a números de resultado.",
   };
 }
+
+// ---------------------------------------------------------------------------
+// A avaliação de exemplo de uma sessão de treino (US-018)
+// ---------------------------------------------------------------------------
+
+/** O maior pedaço de uma fala que cabe numa citação, cortado em palavra inteira. */
+function trechoCitavel(texto: string, limite = 140): string {
+  const limpo = texto.trim().replace(/\s+/g, " ");
+  if (limpo.length <= limite) return limpo;
+  const corte = limpo.slice(0, limite);
+  const ultimo = corte.lastIndexOf(" ");
+  return ultimo > 40 ? corte.slice(0, ultimo) : corte;
+}
+
+const NOTAS_DEMO = [7, 8, 6.5, 7.5, 8, 7, 6];
+
+const PONTOS_FORTES_DEMO = [
+  "Conduziu a conversa até o fim, sem deixar o cliente sem resposta em nenhum momento.",
+  "Reagiu às objeções em vez de passar por cima delas.",
+  "Saiu da conversa com um próximo passo em vez de deixá-la em aberto.",
+];
+
+/**
+ * A avaliação de exemplo de um treino, no formato cru que `lib/avaliacao.ts` recebe da IA — a mesma
+ * aritmética e a mesma conferência de evidência valem para os dois caminhos.
+ *
+ * As evidências são **trechos literais da conversa que acabou de acontecer**, não de uma conversa de
+ * mentira: é o que faz a conferência de evidência ser exercitada de ponta a ponta em modo demonstração
+ * e o que mostra ao gestor como a tela vai ficar. O julgamento em si é de exemplo, e a tela diz isso
+ * com o selo de demonstração e a linha "a avaliação abaixo não é sobre a conversa que você teve".
+ */
+export function avaliacaoDemo(criterios: string[], transcricao: LinhaTranscricao[]): {
+  criterios: { nota: number; evidencia: string; comoMelhorar: string }[];
+  pontosFortes: string[];
+  oportunidade: { criterio: string; oQueAconteceu: string; oQueFazer: string; fraseSugerida: string };
+  resumo: string;
+} {
+  const falasDoVendedor = transcricao.filter((l) => l.papel === "vendedor").map((l) => trechoCitavel(l.texto));
+
+  const resposta = criterios.map((nome, i) => {
+    const fala = falasDoVendedor.length ? falasDoVendedor[i % falasDoVendedor.length] : "";
+    return {
+      nota: NOTAS_DEMO[i % NOTAS_DEMO.length],
+      evidencia: fala ? `"${fala}"` : "",
+      comoMelhorar: `Conecte a IA em Configurações para receber uma leitura real de ${nome.toLowerCase()} nesta conversa.`,
+    };
+  });
+
+  const maisFraco = resposta.reduce((pior, c, i) => (c.nota < resposta[pior].nota ? i : pior), 0);
+
+  return {
+    criterios: resposta,
+    pontosFortes: PONTOS_FORTES_DEMO,
+    oportunidade: {
+      criterio: criterios[maisFraco] ?? "",
+      oQueAconteceu: "No exemplo, o vendedor apresentou a proposta antes de o cliente dizer, com as palavras dele, o que hoje não funciona.",
+      oQueFazer: "Segure a proposta até o cliente descrever o problema e o tamanho dele. Quem descreve o problema aceita melhor a solução.",
+      fraseSugerida: "Antes de eu te mostrar como resolvemos isso: o que acontece hoje quando esse problema aparece na sua rotina?",
+    },
+    resumo: "Avaliação de exemplo, com trechos da sua conversa e notas fictícias. Conecte a IA em Configurações para receber a avaliação real deste treino.",
+  };
+}

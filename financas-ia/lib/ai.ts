@@ -2,7 +2,7 @@
 // Sem OPENROUTER_API_KEY o app entra em modo demonstração (ver lib/demo.ts).
 
 import { getConfig } from "./store";
-import { MODELOS_VISAO } from "./modelos";
+import { MODELO_AUTOMATICO, MODELOS_VISAO } from "./modelos";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -124,8 +124,22 @@ export function aiEnabled(): boolean {
   return Boolean(apiKey());
 }
 
-export function modelName(): string {
-  return getConfig("OPENROUTER_MODEL") || DEFAULT_MODEL;
+/** As tarefas que podem usar modelos diferentes. "padrao" é tudo o que o app gera no dia a dia;
+ * "avaliacao" é o que julga um trabalho e vira nota — vale pagar um modelo mais capaz só nela. */
+export type TarefaIA = "padrao" | "avaliacao";
+
+/** Modelo escolhido à mão em /setup, ou nada quando o campo está em "Automático". */
+function escolhido(chave: string): string | undefined {
+  const valor = getConfig(chave);
+  return valor && valor !== MODELO_AUTOMATICO ? valor : undefined;
+}
+
+/** Modelo da tarefa. `avaliacao` cai para o modelo da tarefa padrão quando ninguém escolheu um
+ * específico — mesmo desenho de visionModelName()/OPENROUTER_MODEL_VISAO. */
+export function modelName(tarefa: TarefaIA = "padrao"): string {
+  const padrao = escolhido("OPENROUTER_MODEL") || DEFAULT_MODEL;
+  if (tarefa === "avaliacao") return escolhido("OPENROUTER_MODEL_AVALIACAO") || padrao;
+  return padrao;
 }
 
 export function visionEnabled(): boolean {
@@ -133,24 +147,28 @@ export function visionEnabled(): boolean {
 }
 
 export function visionModelName(): string {
-  return getConfig("OPENROUTER_MODEL_VISAO") || MODELOS_VISAO[0].valor;
+  return escolhido("OPENROUTER_MODEL_VISAO") || MODELOS_VISAO[0].valor;
 }
 
 // Informações de proveniência exibidas pelo componente Origem (components/ui.tsx).
 export type Meta = { demo: boolean; model: string; geradoEm: string; insumo: string };
 
-export function meta({ demo, insumo }: { demo: boolean; insumo: string }): Meta {
-  return { demo, model: modelName(), geradoEm: new Date().toISOString(), insumo };
+/** `model` só é informado quando a chamada usou um modelo diferente do padrão (ex.: a tarefa de
+ * avaliação): a proveniência mostrada na tela tem de ser a do modelo que realmente respondeu. */
+export function meta({ demo, insumo, model }: { demo: boolean; insumo: string; model?: string }): Meta {
+  return { demo, model: model || modelName(), geradoEm: new Date().toISOString(), insumo };
 }
 
 type Message = { role: "system" | "user" | "assistant"; content: string };
 
-export async function askText({ system, prompt, maxTokens = 4000, temperature = 0.4 }: { system: string; prompt: string; maxTokens?: number; temperature?: number }): Promise<string> {
+/** `model` troca o modelo só desta chamada (ex.: modelName("avaliacao")); sem ele vale o modelo padrão. */
+export async function askText({ system, prompt, maxTokens = 4000, temperature = 0.4, model }: { system: string; prompt: string; maxTokens?: number; temperature?: number; model?: string }): Promise<string> {
   const messages: Message[] = [{ role: "system", content: system }, { role: "user", content: prompt }];
+  const escolha = model || modelName();
   const fallbacks = (getConfig("OPENROUTER_FALLBACK_MODELS") || FALLBACK_MODELS.join(",")).split(",").map((m) => m.trim()).filter(Boolean);
   const res = await chamarOpenRouter({
-    model: modelName(),
-    models: [modelName(), ...fallbacks],
+    model: escolha,
+    models: [escolha, ...fallbacks],
     messages,
     max_tokens: maxTokens,
     temperature,
@@ -204,7 +222,7 @@ export async function askVision({
 }
 
 /** Modelos gratuitos erram o formato JSON com frequência: uma segunda tentativa antes de desistir evita jogar fora uma resposta boa por causa de um erro isolado. */
-export async function askJSON<T = unknown>(opts: { system: string; prompt: string; maxTokens?: number }): Promise<T> {
+export async function askJSON<T = unknown>(opts: { system: string; prompt: string; maxTokens?: number; model?: string }): Promise<T> {
   const system = `${opts.system}\n\nResponda somente com JSON válido, sem comentários e sem blocos de código markdown.`;
   const texto = await askText({ ...opts, system, temperature: 0.2 });
   try {

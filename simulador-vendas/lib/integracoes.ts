@@ -1,7 +1,14 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 import { openrouter, MCP_CRM, NOTIFICACOES, type Integracao, type Opcao } from "./setup-comum";
 
-const OPENROUTER = openrouter({ beneficio: "Liga a IA que avalia a conversa e dá a nota do vendedor" });
+/** Duas pontas com exigências diferentes (US-021): o cliente simulado responde a cada fala do vendedor e
+ * precisa ser rápido; a avaliação acontece uma vez por conversa e vira nota, então vale um modelo mais
+ * capaz. Por isso o cartão da IA traz dois seletores em vez de um. */
+const OPENROUTER = openrouter({
+  avaliacao: true,
+  rotuloModelo: "Modelo para simulação",
+  beneficio: "Liga a IA que faz o papel do cliente e avalia a conversa do vendedor",
+});
 
 /** CRM conectado: as notas da conversa viram uma anotação no registro do cliente. */
 export const CRM: Integracao = {

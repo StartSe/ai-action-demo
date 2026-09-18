@@ -543,8 +543,12 @@ function CampoSetup({ campo: c, valor, aoMudar }: { campo: CampoStatus; valor: s
       <label htmlFor={id} className="text-[13px] font-semibold">{rotulo}</label>
       {c.tipo === "select" ? (
         <select id={id} className="input" value={atual} onChange={(e) => aoMudar(e.target.value)}>
-          {opcoes.some((o) => o.grupo)
-            ? GRUPOS_OPCAO.map((g) => {
+          {opcoes.some((o) => o.grupo) ? (
+            <>
+              {/* Sem grupo vem antes de qualquer optgroup (ex.: "Automático" no modelo de IA): fora do
+                  <optgroup> a opção continua aparecendo, e no topo, que é onde ela é escolhida. */}
+              {opcoes.filter((o) => !o.grupo).map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+              {GRUPOS_OPCAO.map((g) => {
                 const doGrupo = opcoes.filter((o) => o.grupo === g.chave);
                 if (doGrupo.length === 0) return null;
                 return (
@@ -552,8 +556,11 @@ function CampoSetup({ campo: c, valor, aoMudar }: { campo: CampoStatus; valor: s
                     {doGrupo.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
                   </optgroup>
                 );
-              })
-            : opcoes.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+              })}
+            </>
+          ) : (
+            opcoes.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)
+          )}
           {c.valorVisivel && !opcoes.some((o) => o.valor === c.valorVisivel) && <option value={c.valorVisivel}>{c.valorVisivel}</option>}
         </select>
       ) : (

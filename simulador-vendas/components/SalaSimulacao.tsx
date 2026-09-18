@@ -2,10 +2,10 @@
 // Sala de simulação pública (app/simular/[código]): sem a ElevenLabs conectada, conversa por texto com
 // a IA fazendo o papel do cliente (lib/simulacao.ts, askText multi-turno; em demo, um roteiro fixo);
 // com a ElevenLabs conectada, mostra o widget oficial de voz. Ao final dos dois caminhos, mostra o
-// mesmo Resultado do painel principal (app/page.tsx).
+// mesmo Resultado das telas de resultado (components/Resultado.tsx).
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Resultado } from "@/app/page";
+import { Resultado } from "@/components/Resultado";
 import { Aviso, lerErro } from "@/components/ui";
 import type { Analise, Cenario, Conversa, LinhaTranscricao } from "@/lib/types";
 import type { Meta } from "@/lib/ai";

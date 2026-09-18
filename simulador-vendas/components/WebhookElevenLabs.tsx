@@ -5,9 +5,10 @@
 import { useEffect, useState } from "react";
 import { Aviso, CopyButton } from "./ui";
 
-const PROMPT_MODELO = `Você é {{cenario}}, um cliente em uma ligação de vendas. Nunca saia do personagem e nunca dê dicas de vendas.
-Responda em português do Brasil, em falas curtas, reagindo de forma realista ao que o vendedor disser.
-Levante suas objeções quando fizer sentido e deixe o vendedor conduzir: quem encerra a ligação é ele.`;
+// O personagem inteiro (quem é o cliente, como se comporta, o que sabe do produto e quais objeções
+// tem) é montado pelo app a cada conversa e entregue em `persona_instrucoes`. Por isso o prompt fixo
+// do agente é uma linha: qualquer coisa escrita aqui brigaria com o cliente daquele treino.
+const PROMPT_MODELO = `Siga {{persona_instrucoes}}`;
 
 function haQuanto(minutos: number): string {
   if (minutos < 1) return "agora mesmo";
@@ -23,14 +24,14 @@ type Dados = {
   url: string;
   ultima: string | null;
   recusa: { quando: string; motivo: string } | null;
-  ligacoesSemAnalise: number;
+  semAvaliacao: number;
 };
 
 type Resposta = {
   url: string;
   ultimaConversaEm: string | null;
   ultimaRecusa: { em: string; motivo: string } | null;
-  ligacoesSemAnalise: number;
+  conversasSemAvaliacao: number;
 };
 
 function Linha({ rotulo, valor, rotuloCopiar }: { rotulo: string; valor: string; rotuloCopiar: string }) {
@@ -52,7 +53,7 @@ export function WebhookElevenLabs() {
       .then((d: Resposta) => {
         const ultima = d.ultimaConversaEm ? haQuanto(Math.round((Date.now() - new Date(d.ultimaConversaEm).getTime()) / 60000)) : null;
         const recusa = d.ultimaRecusa ? { quando: haQuanto(Math.round((Date.now() - new Date(d.ultimaRecusa.em).getTime()) / 60000)), motivo: d.ultimaRecusa.motivo } : null;
-        setDados({ url: d.url, ultima, recusa, ligacoesSemAnalise: d.ligacoesSemAnalise ?? 0 });
+        setDados({ url: d.url, ultima, recusa, semAvaliacao: d.conversasSemAvaliacao ?? 0 });
       })
       .catch(() => {});
   }, []);
@@ -65,14 +66,14 @@ export function WebhookElevenLabs() {
       </p>
 
       <Linha rotulo="Endereço" valor={dados?.url ?? "carregando..."} rotuloCopiar="Copiar endereço" />
-      <Linha rotulo="Variáveis" valor="sala_token, vendedor_id, cenario" rotuloCopiar="Copiar variáveis" />
+      <Linha rotulo="Variáveis" valor="sessao_id, simulacao, produto, persona_instrucoes, participante, duracao_minutos" rotuloCopiar="Copiar variáveis" />
 
       <details className="group mt-4">
         <summary className="text-[13px] font-bold text-accent-ink cursor-pointer marker:content-none flex items-center gap-1.5">
           <span className="transition-transform group-open:rotate-90">›</span>
           Prompt-modelo do cliente simulado
         </summary>
-        <p className="text-muted text-[12.5px] mt-2 mb-2">Cole no campo de instruções do agente. As variáveis acima são preenchidas pelo app a cada ligação.</p>
+        <p className="text-muted text-[12.5px] mt-2 mb-2">Cole no campo de instruções do agente. As variáveis acima são preenchidas pelo app a cada conversa, com o cliente e o vendedor daquele treino.</p>
         <pre className="bg-bg border border-line px-3 py-2.5 rounded-md text-[12.5px] whitespace-pre-wrap">{PROMPT_MODELO}</pre>
         <div className="mt-2">
           <CopyButton texto={() => PROMPT_MODELO} rotulo="Copiar prompt-modelo" />
@@ -88,10 +89,10 @@ export function WebhookElevenLabs() {
           </Aviso>
         </div>
       )}
-      {dados && dados.ligacoesSemAnalise > 0 && (
+      {dados && dados.semAvaliacao > 0 && (
         <div className="mt-3">
           <Aviso tom="warn">
-            {dados.ligacoesSemAnalise === 1 ? "1 ligação por voz ficou" : `${dados.ligacoesSemAnalise} ligações por voz ficaram`} sem análise. Confira o endereço e o segredo de verificação acima.
+            {dados.semAvaliacao === 1 ? "1 conversa por voz ficou" : `${dados.semAvaliacao} conversas por voz ficaram`} sem avaliação. Confira o endereço e o segredo de verificação acima.
           </Aviso>
         </div>
       )}
