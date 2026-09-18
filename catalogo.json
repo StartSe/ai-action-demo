@@ -59,6 +59,7 @@
       "acento": "#6e3597",
       "porta": 3003,
       "captura": "capturas/entrevista-ia.png",
+      "independente": true,
       "capacidades": [
         "artefato",
         "mcp",
