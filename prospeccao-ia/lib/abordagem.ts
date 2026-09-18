@@ -1,35 +1,19 @@
 // Geração de abordagens personalizadas (e-mail, LinkedIn, WhatsApp) para um lead, reaproveitada por
 // app/api/abordagem/route.ts e lib/ferramentas.ts (MCP).
 import { aiEnabled, askJSON, meta } from "./ai";
+import { lerPagina } from "./descoberta";
 import { abordagemDemo, esperar } from "./demo";
-import { getConfig } from "./store";
 import type { Abordagem, Lead } from "./types";
 
-function brightdataEnabled() {
-  return Boolean(getConfig("BRIGHTDATA_API_KEY") && getConfig("BRIGHTDATA_ZONE"));
-}
-
-// Busca o texto do site do lead via Bright Data (Web Unlocker) para dar contexto extra à abordagem.
-// Falha silenciosamente (retorna string vazia): enriquecimento é opcional e não deve travar a geração da abordagem.
+// Busca o texto do site do lead via lib/descoberta.ts (Web Unlocker) para dar contexto extra à
+// abordagem. Falha silenciosamente (retorna string vazia): enriquecimento é opcional e não deve
+// travar a geração da abordagem. Um resultado de DEMONSTRAÇÃO também vira "" aqui — não faz sentido
+// misturar contexto fictício numa abordagem gerada com IA de verdade.
 async function enriquecerSite(url: string) {
   try {
-    const r = await fetch("https://api.brightdata.com/request", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getConfig("BRIGHTDATA_API_KEY")}` },
-      body: JSON.stringify({ zone: getConfig("BRIGHTDATA_ZONE"), url, format: "raw" }),
-    });
-    if (!r.ok) {
-      console.error("Bright Data", r.status);
-      return "";
-    }
-    const html = await r.text();
-    return html
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<[^>]*>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 3000);
+    const pagina = await lerPagina(url);
+    if (pagina.demo) return "";
+    return pagina.conteudo.slice(0, 3000);
   } catch (err) {
     console.error("Bright Data", err instanceof Error ? err.message : err);
     return "";
@@ -81,7 +65,7 @@ export async function escreverAbordagem({
     };
   }
   let contexto = "";
-  if (brightdataEnabled() && lead.site) {
+  if (lead.site) {
     contexto = await enriquecerSite(lead.site);
   }
   const prompt = `Lead:

@@ -2,36 +2,9 @@
 // POST /api/produtos/analisar. O resultado nunca é salvo direto: components/ProdutoComIA.tsx sempre
 // abre o formulário de edição com a sugestão pré-preenchida.
 import { aiEnabled, askJSON, meta } from "./ai";
+import { lerPagina } from "./descoberta";
 import { esperar } from "./demo";
-import { getConfig } from "./store";
 import type { SugestaoProduto } from "./types";
-
-function brightdataEnabled() {
-  return Boolean(getConfig("BRIGHTDATA_API_KEY") && getConfig("BRIGHTDATA_ZONE"));
-}
-
-// Mesma chamada (Bright Data Web Unlocker) já usada por lib/abordagem.ts para enriquecer uma
-// abordagem com o site do lead; aqui o texto lido vira insumo da análise de produto. A US-015
-// (camada única de descoberta) deve unificar as duas em lib/descoberta.ts.
-async function lerPaginaSimples(url: string): Promise<string> {
-  const r = await fetch("https://api.brightdata.com/request", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${getConfig("BRIGHTDATA_API_KEY")}` },
-    body: JSON.stringify({ zone: getConfig("BRIGHTDATA_ZONE"), url, format: "raw" }),
-  });
-  if (!r.ok) {
-    console.error("Bright Data", r.status);
-    throw new Error("leitura_falhou");
-  }
-  const html = await r.text();
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 6000);
-}
 
 function pareceEndereco(entrada: string) {
   const t = entrada.trim();
@@ -85,15 +58,16 @@ export async function sugerirProdutoDoSite(entradaBruta: string): Promise<{
   let contexto = entrada;
 
   if (ehEndereco) {
-    if (brightdataEnabled()) {
-      try {
-        contexto = await lerPaginaSimples(normalizarEndereco(entrada));
-      } catch {
-        avisoLeitura = "Não foi possível ler o site agora; a sugestão usou só o endereço informado.";
-        contexto = entrada;
+    try {
+      const pagina = await lerPagina(normalizarEndereco(entrada));
+      if (pagina.demo) {
+        avisoLeitura = "A leitura de páginas não está conectada; a sugestão usou só o endereço informado.";
+      } else {
+        contexto = pagina.conteudo.slice(0, 6000);
       }
-    } else {
-      avisoLeitura = "A leitura de páginas não está conectada; a sugestão usou só o endereço informado.";
+    } catch {
+      avisoLeitura = "Não foi possível ler o site agora; a sugestão usou só o endereço informado.";
+      contexto = entrada;
     }
   }
 

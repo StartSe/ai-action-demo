@@ -1,10 +1,46 @@
-// Leads e abordagens de exemplo usados quando não há APOLLO_API_KEY (leads) ou OPENROUTER_API_KEY (abordagem).
+// Leads e abordagens de exemplo usados quando não há APOLLO_API_KEY (leads) ou OPENROUTER_API_KEY
+// (abordagem); resultadosBuscaDemo/conteudoPaginaDemo/perfilPessoaDemo são o mesmo papel para
+// lib/descoberta.ts (sem BRIGHTDATA_API_KEY ou sem a zona correspondente).
 import { getConfig, setConfig } from "./store";
 import { apagarICP, apagarProduto, apagarProspeccao, criarAbordagem, criarConta, criarICP, criarLead, criarProduto, criarProspeccao, obterProspeccao } from "./workspace";
 import type { Abordagem, Lead, Papel, StatusLead } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+// --- Demonstração da camada de descoberta (lib/descoberta.ts) ----------------------------------
+
+/** Resultados de busca de demonstração: plausíveis para qualquer consulta, sem depender de um tema fixo. */
+export function resultadosBuscaDemo(consulta: string): { titulo: string; url: string; resumo: string }[] {
+  const termo = consulta.trim() || "sua busca";
+  return [
+    {
+      titulo: `Página institucional sobre ${termo}`,
+      url: "https://www.exemplo.com.br/sobre",
+      resumo: `Resultado de demonstração para "${termo}". Conecte a pesquisa de mercado e sinais em Configurações para buscar de verdade.`,
+    },
+    {
+      titulo: `Notícia recente relacionada a ${termo}`,
+      url: "https://www.exemplo.com.br/noticias/expansao",
+      resumo: "Conteúdo de demonstração, sem fonte real.",
+    },
+    {
+      titulo: `Perfil de empresa que cita ${termo}`,
+      url: "https://www.exemplo.com.br/empresa",
+      resumo: "Conteúdo de demonstração, sem fonte real.",
+    },
+  ];
+}
+
+/** Texto de página de demonstração (o que `lerPagina` devolveria em markdown, sem chave configurada). */
+export function conteudoPaginaDemo(url: string): string {
+  return `# Conteúdo de demonstração\n\nEste é um texto de exemplo no lugar do conteúdo real de ${url}.\n\nConecte a pesquisa de mercado e sinais em Configurações para ler páginas públicas de verdade.`;
+}
+
+/** Perfil de pessoa de demonstração (o que `perfilDePessoa` devolveria em markdown, sem chave configurada). */
+export function perfilPessoaDemo(url: string): string {
+  return `# Perfil de demonstração\n\nCargo: Gerente de Operações\nEmpresa: Empresa de exemplo\n\nEste é um perfil de exemplo no lugar do conteúdo real de ${url}.\n\nConecte a pesquisa de mercado e sinais em Configurações para ler perfis públicos de verdade.`;
 }
 
 // Pessoas fictícias. O gênero serve só para flexionar o cargo ("Diretor" -> "Diretora").

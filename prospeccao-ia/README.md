@@ -43,8 +43,11 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Ativa a IA que escreve as abordagens. Obtenha em https://openrouter.ai/keys |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
 | `APOLLO_API_KEY` | Alternativa ao setup. Ativa a busca de leads reais na Apollo.io. Obtenha em https://app.apollo.io/#/settings/integrations/api |
-| `BRIGHTDATA_API_KEY` | Alternativa ao setup. Enriquecimento opcional: lê o site da empresa do lead para dar mais contexto à abordagem. Obtenha em https://brightdata.com/cp/zones |
-| `BRIGHTDATA_ZONE` | Alternativa ao setup. Nome da zona Web Unlocker configurada na Bright Data. Padrão `web_unlocker1`. |
+| `BRIGHTDATA_API_KEY` | Alternativa ao setup. Ativa a pesquisa de mercado e sinais (busca na web, leitura de página, perfil de pessoa) usada pelo workspace de prospecção, e o enriquecimento do site do lead na abordagem. Obtenha em https://brightdata.com/cp/zones |
+| `BRIGHTDATA_ZONE` | Alternativa ao setup. Nome da zona Web Unlocker (leitura de página) configurada na Bright Data. Padrão `web_unlocker1`. |
+| `BRIGHTDATA_ZONE_LEITURA` | Ainda sem campo em `/setup` (chega numa história futura); quando definida, tem prioridade sobre `BRIGHTDATA_ZONE` para leitura de página e perfil de pessoa. |
+| `BRIGHTDATA_ZONE_BUSCA` | Ainda sem campo em `/setup` (chega numa história futura). Nome da zona SERP usada pela busca na web do workspace de prospecção. |
+| `BRIGHTDATA_BASE_URL` | Só para testes locais: substitui `https://api.brightdata.com` por um fornecedor falso. Não aparece em `/setup`. |
 | `MCP_CRM_URL` / `MCP_CRM_CODIGO` | Alternativa ao setup. CRM (HubSpot, Zendesk, Intercom...) que recebe os leads aprovados como contatos e negócios. |
 | `GOOGLE_CLIENT_ID_APP`, `GOOGLE_CLIENT_SECRET_APP`, `MICROSOFT_CLIENT_ID_APP`, `MICROSOFT_CLIENT_SECRET_APP` | Credenciais da suíte (equipe técnica, embutidas na imagem por `ARG`→`ENV` no `Dockerfile`) que liberam "Conectar meu Gmail"/"Conectar meu Outlook" no cartão Notificações. Sem elas, os botões não aparecem e o cartão segue por Slack, Resend ou SMTP. |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
