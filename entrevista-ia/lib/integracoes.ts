@@ -1,6 +1,6 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 import { getConfig } from "./store";
-import { openrouter, type Integracao, type Opcao } from "./setup-comum";
+import { NOTIFICACOES, openrouter, type Integracao, type Opcao } from "./setup-comum";
 import { testarPesquisa, URL_MCP_PADRAO } from "./pesquisa-cliente";
 
 const OPENROUTER = openrouter({ beneficio: "Liga a IA que conduz a entrevista e escreve o scorecard" });
@@ -180,4 +180,14 @@ const ELEVENLABS_AGENTE: Integracao = {
   },
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, BRIGHTDATA, ELEVENLABS_VOZ, ELEVENLABS_AGENTE];
+// Notificações fecham dois caminhos que o app já prometia e não tinha onde configurar: o envio do
+// convite por e-mail (US-014, `emailConectado()` em lib/convite.ts lê estas mesmas chaves) e a
+// entrega do resumo semanal (US-027). Sem o cartão, "Enviar por e-mail" nunca aparecia no diálogo do
+// convite e nenhuma rotina podia ser criada — o canal era recusado por uma configuração sem tela.
+export const INTEGRACOES: Integracao[] = [
+  OPENROUTER,
+  BRIGHTDATA,
+  ELEVENLABS_VOZ,
+  ELEVENLABS_AGENTE,
+  { ...NOTIFICACOES, beneficio: "Manda o convite ao candidato e o resumo semanal do processo" },
+];

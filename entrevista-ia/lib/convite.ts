@@ -13,6 +13,7 @@ import { obter as obterCandidato } from "./candidatos";
 import { caixaConectada } from "./email-envio";
 import {
   cancelar,
+  criar as criarEntrevista,
   definirCodigo,
   entrevistaViva,
   mudarStatus,
@@ -223,6 +224,46 @@ export function convidar({
   const atualizada = obterEntrevista(entrevista.id);
   if (!atualizada) return { ok: false, erro: "Essa entrevista não existe mais.", status: 404 };
   return montar(atualizada, codigo, origem, remetente);
+}
+
+export type ResultadoAtribuicao = { ok: true; entrevista: Entrevista; convite: Convite } | { ok: false; erro: string; status: number };
+
+/**
+ * Atribui um candidato a uma vaga e já cria o convite (US-014).
+ *
+ * Atribuir e convidar são **um passo só**: uma entrevista sem link é uma linha que não faz nada, e
+ * quem atribuiu teria de lembrar de um segundo clique para o candidato existir do lado de fora.
+ *
+ * Mora aqui, e não na rota, porque a mesma decisão vale para a tela, para o assistente de IA (a
+ * ferramenta `criar_convite` em `lib/ferramentas.ts`, US-027) e para qualquer porta que venha depois:
+ * duas cópias das regras de "esta vaga aceita mais alguém?" viram duas respostas diferentes para a
+ * mesma pergunta. Convidar duas vezes o mesmo par não cria dois históricos — `criar()` devolve a
+ * entrevista que já vale e o convite mantém o mesmo link enquanto ele não foi usado.
+ */
+export function atribuirEConvidar({
+  vagaId,
+  candidatoId,
+  expiraEmDias,
+  origem,
+  remetente,
+}: {
+  vagaId: string;
+  candidatoId: string;
+  expiraEmDias?: unknown;
+  origem: string;
+  remetente?: string;
+}): ResultadoAtribuicao {
+  const vaga = obterVaga(vagaId);
+  if (!vaga) return { ok: false, erro: "Essa vaga não existe mais.", status: 404 };
+  if (vaga.status === "encerrada") {
+    return { ok: false, erro: "Esta vaga está encerrada. Reabra a vaga para chamar mais candidatos.", status: 400 };
+  }
+  if (!obterCandidato(candidatoId)) return { ok: false, erro: "Esse candidato não existe mais.", status: 404 };
+
+  const entrevista = criarEntrevista({ vagaId, candidatoId });
+  const resultado = convidar({ entrevistaId: entrevista.id, expiraEmDias, origem, remetente });
+  if (!resultado.ok) return resultado;
+  return { ok: true, entrevista, convite: resultado.convite };
 }
 
 /** Cancela a entrevista e encerra o link: quem abrir o endereço depois disso lê que o convite foi

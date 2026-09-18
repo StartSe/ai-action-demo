@@ -54,8 +54,8 @@
         "RH"
       ],
       "problema": "A triagem inicial de candidatos consome horas da equipe.",
-      "ia": "Conduz a entrevista por voz e entrega um parecer técnico e cultural para o gestor.",
-      "integracoes": "ElevenLabs (voz e ligação por agente conversacional).",
+      "ia": "Entrevista o candidato por voz a partir da vaga e entrega um parecer técnico e cultural para o gestor decidir.",
+      "integracoes": "IA (OpenRouter) para conduzir a entrevista e escrever o parecer. ElevenLabs para a voz natural, o agente conversacional e a ligação telefônica, opcional. Pesquisa na web (Bright Data) para achar o perfil público do candidato, opcional. Notificações (e-mail ou Slack) para enviar os convites e o resumo semanal do processo.",
       "acento": "#6e3597",
       "porta": 3003,
       "captura": "capturas/entrevista-ia.png",
@@ -63,7 +63,8 @@
       "capacidades": [
         "artefato",
         "mcp",
-        "formulario"
+        "formulario",
+        "rotina"
       ],
       "demo": null
     },

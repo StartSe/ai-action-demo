@@ -486,7 +486,7 @@
         "Typecheck passes"
       ],
       "priority": 27,
-      "passes": false,
+      "passes": true,
       "notes": "Fase 5: relatórios, integrações e fechamento · PRD US-024"
     },
     {
