@@ -1,25 +1,26 @@
 "use client";
-// Passo 1 de 4 do assistente de nova prospecção (US-009): escolher o produto e o perfil ideal de
-// cliente (ICP). O passo atual mora na barra de endereço (`?passo=1..4`), no mesmo padrão
+// Assistente de nova prospecção, 4 passos: produto/perfil ideal (US-009), jornada (US-010) e tipo de
+// busca (US-011). O passo atual mora na barra de endereço (`?passo=1..4`), no mesmo padrão
 // `history.pushState` + `popstate` já usado por components/Relatorios.tsx (whatsapp-atendente) — nunca
-// `useSearchParams`, que obrigaria a embrulhar a página num `Suspense`. Os passos 3 e 4 (US-011 e
-// US-012) ainda não existem: avançar além do passo 2 mostra um resumo do que foi escolhido e um
-// "Em breve", igual às cascas de tela da US-002.
+// `useSearchParams`, que obrigaria a embrulhar a página num `Suspense`. O passo 4 (US-012) ainda não
+// existe: avançar além do passo 3 mostra um resumo do que foi escolhido e um "Em breve", igual às
+// cascas de tela da US-002.
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Aviso, Chip, Field, Topbar, useStatus } from "@/components/ui";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
-import { DESCRICAO_JORNADA, ROTULO_JORNADA } from "@/lib/rotulos";
+import { DESCRICAO_JORNADA, DESCRICAO_MODO, MODOS_POR_JORNADA, ROTULO_JORNADA, ROTULO_MODO } from "@/lib/rotulos";
 import { ProdutoForm } from "@/components/ProdutoForm";
-import type { ICP, Jornada, Produto } from "@/lib/types";
+import type { ICP, Jornada, ModoProspeccao, Produto } from "@/lib/types";
 
-const ULTIMO_PASSO_PRONTO = 2;
+const ULTIMO_PASSO_PRONTO = 3;
 const TOTAL_PASSOS = 4;
 const VOLTAR_PARA_AQUI = "/prospeccoes/nova";
 const JORNADAS = ["b2b", "b2c"] as const;
 const SUBTITULO_PASSO: Partial<Record<number, string>> = {
   1: "Produto e perfil ideal",
   2: "Quem você quer encontrar",
+  3: "Como encontrar oportunidades",
 };
 
 type ProdutoComICPs = Produto & { icps: ICP[] };
@@ -44,6 +45,7 @@ export function ProspeccaoNova() {
   const [produtoId, setProdutoId] = useState<string | null>(null);
   const [icpId, setIcpId] = useState<string | null>(null);
   const [jornada, setJornada] = useState<Jornada | null>(null);
+  const [modo, setModo] = useState<ModoProspeccao | null>(null);
 
   useEffect(() => {
     fetch("/api/produtos")
@@ -85,9 +87,12 @@ export function ProspeccaoNova() {
   const padraoIcp = icpsDoProduto.length > 0 ? icpsDoProduto.reduce((a, b) => (a.criadoEm <= b.criadoEm ? a : b)) : null;
   const icpEfetivo = icpsDoProduto.find((i) => i.id === icpId) ?? padraoIcp;
   const jornadaEfetiva = jornada ?? icpEfetivo?.jornada ?? null;
+  const modosDisponiveis = MODOS_POR_JORNADA[jornadaEfetiva ?? "b2b"];
+  const modoEfetivo = modo && modosDisponiveis.includes(modo) ? modo : null;
   const podeContinuarPasso1 = Boolean(produtoSelecionado && icpEfetivo);
   const podeContinuarPasso2 = podeContinuarPasso1 && jornadaEfetiva !== null;
-  const podeContinuar = passo === 2 ? podeContinuarPasso2 : podeContinuarPasso1;
+  const podeContinuarPasso3 = podeContinuarPasso2 && modoEfetivo !== null;
+  const podeContinuar = passo === 3 ? podeContinuarPasso3 : passo === 2 ? podeContinuarPasso2 : podeContinuarPasso1;
   const linkCriarComIA = `/produtos/novo?ia=1&voltar=${encodeURIComponent(VOLTAR_PARA_AQUI)}`;
 
   return (
@@ -103,6 +108,7 @@ export function ProspeccaoNova() {
             <p className="text-[13px] text-muted mb-4">
               Produto: <strong className="text-ink">{produtoSelecionado?.nome}</strong> · Perfil: <strong className="text-ink">{icpEfetivo?.nome}</strong>
               {jornadaEfetiva && <> · {ROTULO_JORNADA[jornadaEfetiva]}</>}
+              {modoEfetivo && <> · {ROTULO_MODO[modoEfetivo]}</>}
             </p>
             <p className="apoio mb-4">Em breve: o passo {passo} deste assistente.</p>
             <button type="button" className="btn-link text-[13px]" onClick={() => irParaPasso(1)}>Voltar</button>
@@ -135,6 +141,28 @@ export function ProspeccaoNova() {
                   Os critérios do perfil &quot;{icpEfetivo.nome}&quot; são de {ROTULO_JORNADA[icpEfetivo.jornada]} e não se aplicam aqui.
                 </Aviso>
               )}
+            </div>
+          )
+        ) : passo === 3 ? (
+          !produtoSelecionado || !icpEfetivo ? (
+            <Aviso tom="warn" acao={{ rotulo: "Escolher produto e perfil", onClick: () => irParaPasso(1) }}>
+              Escolha um produto e um perfil ideal antes de continuar.
+            </Aviso>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1" role="radiogroup" aria-label="Como você quer buscar">
+              {modosDisponiveis.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={modoEfetivo === m}
+                  className={`card p-5 text-left transition-colors ${modoEfetivo === m ? "border-accent bg-accent-soft" : "hover:bg-bg"}`}
+                  onClick={() => setModo(m)}
+                >
+                  <p className="font-semibold text-[15px] mb-1">{ROTULO_MODO[m]}</p>
+                  <p className="text-[13px] text-muted">{DESCRICAO_MODO[jornadaEfetiva ?? "b2b"][m]}</p>
+                </button>
+              ))}
             </div>
           )
         ) : produtos === null ? (
