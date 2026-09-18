@@ -6,8 +6,9 @@
 // com node:sqlite) e só pode ser chamado por código de SERVIDOR (lib/execucao-prospeccao.ts) — nunca por
 // um Client Component, que importaria node:sqlite para dentro do bundle do navegador.
 import { aiEnabled, askJSON } from "./ai";
+import { data } from "./formato";
 import { contemTermo } from "./qualificacao";
-import type { Evidencia } from "./types";
+import type { Evidencia, SinalProspeccao } from "./types";
 
 const SYSTEM_QUALIFICACAO_IA = `Você decide se um critério de perfil de cliente ideal (ICP) é atendido, a partir só do texto informado (uma página institucional ou um perfil público).
 Regras:
@@ -39,5 +40,46 @@ export async function avaliarCriterioInterpretativo(conteudo: string, criterio: 
   } catch (err) {
     console.error("Falha ao avaliar critério interpretativo por IA:", criterio, err instanceof Error ? err.message : err);
     return { criterio, valor: v, resultado: "nao_verificavel" };
+  }
+}
+
+const SYSTEM_HIPOTESE_DOR = `Você é um vendedor B2B experiente escrevendo uma hipótese de dor sobre UM lead, a partir só dos sinais públicos informados e das dores típicas do perfil de cliente ideal (ICP).
+Regras:
+- Baseie-se SÓ nos sinais informados; nunca afirme como fato algo que eles não sustentam. Não invente cargo, contexto ou problema que não esteja nos sinais.
+- A frase é sempre condicional: use "pode estar", "provavelmente", "talvez" ou construção equivalente — nunca uma afirmação categórica.
+- Cite ao menos um dos sinais informados dentro da frase (pode citar a data dele).
+- 1 a 2 frases curtas, português do Brasil, sem clichê de vendas.
+Formato de saída (JSON): { "hipotese": string }`;
+
+/** Hipótese de dor de um lead (US-025), gerada a partir dos SINAIS que ele já tem (nunca das evidências,
+ * que ficam num bloco separado — "a ficha nunca mistura hipótese e evidência no mesmo bloco") e das dores
+ * do ICP. Sem nenhum sinal, não há do que partir: devolve `null` direto, sem chamar a IA (a tela mostra
+ * "Ainda sem sinais públicos suficientes para uma hipótese" nesse caso). Sem IA configurada, cai numa
+ * frase-modelo determinística que já respeita as mesmas regras (condicional, cita o sinal mais recente com
+ * data) — é o que mantém a demonstração funcionando sem nenhuma chave. */
+export async function gerarHipoteseDor(sinais: SinalProspeccao[], dores: string[]): Promise<string | null> {
+  if (sinais.length === 0) return null;
+  const sinalPrincipal = [...sinais].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())[0];
+  const dataSinal = data(sinalPrincipal.data, { comAno: true });
+
+  if (!aiEnabled()) {
+    const dor = dores[0];
+    return dor
+      ? `Pode estar enfrentando ${dor.charAt(0).toLowerCase()}${dor.slice(1)}, a julgar por “${sinalPrincipal.descricao}” (${dataSinal}).`
+      : `“${sinalPrincipal.descricao}” (${dataSinal}) talvez seja um bom momento para essa conversa.`;
+  }
+
+  try {
+    const sinaisTexto = sinais.map((s) => `- ${s.descricao} (${data(s.data, { comAno: true })})`).join("\n");
+    const doresTexto = dores.length > 0 ? dores.join("; ") : "não informadas";
+    const resposta = await askJSON<{ hipotese?: string }>({
+      system: SYSTEM_HIPOTESE_DOR,
+      prompt: `Sinais públicos encontrados sobre o lead:\n${sinaisTexto}\n\nDores típicas do perfil de cliente ideal: ${doresTexto}`,
+      maxTokens: 200,
+    });
+    return resposta.hipotese?.trim() || null;
+  } catch (err) {
+    console.error("Falha ao gerar hipótese de dor:", err instanceof Error ? err.message : err);
+    return null;
   }
 }

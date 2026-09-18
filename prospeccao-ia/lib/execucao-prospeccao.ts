@@ -10,7 +10,7 @@
 // `erro` preenchido, nunca `"falhou"` (esse estado é só para a recuperação na inicialização — processo
 // reiniciado no meio, ver recuperarProspeccoesTravadas em lib/workspace.ts).
 //
-// Fronteira exata para US-025/026 substituírem sem reler este arquivo inteiro: todo modo/jornada faz
+// Fronteira exata para US-026 substituir sem reler este arquivo inteiro: todo modo/jornada faz
 // descoberta de verdade desde a US-021 — "empresas" (US-017), "empresa_unica" (US-018), "pessoas" em B2B
 // (US-019), "oportunidades" nas duas jornadas (US-020) e "pessoas" em B2C (US-021, a última a sair do
 // fictício). Sinais de intenção do ICP/critérios ainda são lidos e filtrados na etapa 3
@@ -39,14 +39,16 @@
 // só entram de fato na prospecção quando a pessoa marca a caixa de seleção e confirma "Adicionar à
 // prospecção" (POST /api/prospeccoes/[id]/selecionar-pessoas, status "novo" → "selecionado"). "Nenhuma
 // pessoa é adicionada sem seleção explícita" (AC da US-018) é isso: a tela nunca esconde quem foi
-// encontrado, só não considera ninguém parte da prospecção até a escolha.
+// encontrado, só não considera ninguém parte da prospecção até a escolha. A etapa 5 GERA A HIPÓTESE DE
+// DOR (US-025) de TODO lead, independente do status — inclusive os "novo" de "empresa_unica", que ela não
+// promove: é por isso que o laço da etapa 5 não filtra por status antes de chamar `gerarHipoteseDor`.
 import { ETAPAS_PROSPECCAO } from "./execucao-etapas";
 import { buscarNaWeb, lerPagina, perfilDePessoa, TetoConsultasAtingido } from "./descoberta";
 import type { ResultadoBuscaWeb } from "./descoberta";
 import { data } from "./formato";
 import { apolloEnabled, buscarLeads, buscarPessoasDaEmpresa } from "./leads";
 import { avaliarCriterios, calcularFit, dominioDe, inferirPapel, resumoDaPagina, sinaisEncontrados, sinalAntigo } from "./qualificacao";
-import { avaliarCriterioInterpretativo } from "./qualificacao-ia";
+import { avaliarCriterioInterpretativo, gerarHipoteseDor } from "./qualificacao-ia";
 import { QUANTIDADES_EMPRESAS } from "./rotulos";
 import { atualizarConta, atualizarLead, atualizarProspeccao, criarConta, criarLead, leadsDoProduto, listarContas, listarLeads, obterICP, obterProduto, obterProspeccao } from "./workspace";
 import type { Conta, Evidencia, ICP, Jornada, ModoProspeccao, SinalProspeccao } from "./types";
@@ -871,11 +873,18 @@ async function etapaEncontrarPessoas(prospeccaoId: string, modo: ModoProspeccao,
   else await buscarPessoasOportunidadesB2C(prospeccaoId, criterios, icp, produtoId);
 }
 
-/** Etapa 5: único efeito real desta história — promove os leads recém-criados de "pesquisado" para
- * "qualificado" (sem calcular fit/evidências, que é da US-024). */
-function etapaQualificar(prospeccaoId: string): void {
+/** Etapa 5: promove os leads recém-criados de "pesquisado" para "qualificado" (fit/evidências já vêm
+ * calculados desde a criação, US-024) e gera a hipótese de dor de CADA lead da prospecção (US-025) — um
+ * ponto central único, em vez de espalhar a chamada pelos ~6 lugares que criam um LeadProspeccao, porque
+ * todo lead (inclusive os "novo" de "Explorar uma empresa", que esta etapa não promove) passa por aqui. A
+ * hipótese usa os SINAIS que o próprio lead já tem (nunca as evidências, que ficam em bloco separado) e as
+ * dores do ICP da prospecção — sem nenhum sinal, `gerarHipoteseDor` devolve `null` sem chamar a IA. */
+async function etapaQualificar(prospeccaoId: string, icp: ICP | null): Promise<void> {
+  const dores = icp?.dores ?? [];
   for (const lead of listarLeads(prospeccaoId)) {
-    if (lead.status === "pesquisado") atualizarLead(lead.id, { status: "qualificado" });
+    const hipotese = await gerarHipoteseDor(lead.sinais, dores);
+    const status = lead.status === "pesquisado" ? "qualificado" : lead.status;
+    atualizarLead(lead.id, { status, hipotese });
   }
 }
 
@@ -929,7 +938,7 @@ async function executarPipeline(prospeccaoId: string): Promise<void> {
     if (foiCancelada(prospeccaoId)) return;
     rotuloEtapaAtual = ETAPAS_PROSPECCAO[4].rotulo;
     atualizarProspeccao(prospeccaoId, { etapa: ETAPAS_PROSPECCAO[4].chave });
-    etapaQualificar(prospeccaoId);
+    await etapaQualificar(prospeccaoId, icp);
 
     if (foiCancelada(prospeccaoId)) return;
     atualizarProspeccao(prospeccaoId, { estado: "pronta", erro: null, concluidoEm: new Date().toISOString() });

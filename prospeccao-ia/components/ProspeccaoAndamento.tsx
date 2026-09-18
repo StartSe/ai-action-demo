@@ -49,6 +49,25 @@ function EvidenciasLista({ evidencias }: { evidencias: Evidencia[] }) {
   );
 }
 
+/** Hipótese de dor (US-025): bloco separado de `EvidenciasLista` de propósito ("a ficha nunca mistura
+ * hipótese e evidência no mesmo bloco") — texto condicional citando um sinal, gerado por
+ * `lib/qualificacao-ia.ts:gerarHipoteseDor` na etapa 5 do pipeline. Sem nenhum sinal público, o lead nunca
+ * teve de onde partir (`hipotese` fica `null` sem nem chamar a IA): mostra a frase fixa em vez de nada. */
+function HipoteseDor({ hipotese, semSinal }: { hipotese: string | null; semSinal: boolean }) {
+  if (!hipotese && !semSinal) return null;
+  return (
+    <div className="text-[12px] text-ink">
+      <p className="font-semibold text-[12px] mb-0.5 flex items-center gap-1">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.4.3.6.8.6 1.3V16h5.8v-.8c0-.5.2-1 .6-1.3A6 6 0 0 0 12 3Z" />
+        </svg>
+        Hipótese de dor
+      </p>
+      <p className={hipotese ? "italic" : "text-muted"}>{hipotese || "Ainda sem sinais públicos suficientes para uma hipótese."}</p>
+    </div>
+  );
+}
+
 type Andamento = {
   prospeccao: Prospeccao;
   produtoNome: string;
@@ -355,6 +374,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                               </p>
                             </div>
                           )}
+                          <HipoteseDor hipotese={lead.hipotese} semSinal={lead.sinais.length === 0} />
                           <div className="flex items-center gap-3 flex-wrap">
                             {lead.linkedin && (
                               <a href={lead.linkedin} target="_blank" rel="noopener noreferrer" className="text-[12px] text-accent-ink hover:underline">
@@ -398,6 +418,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                               {lead.fit && <Chip nivel={lead.fit}>{ROTULO_FIT[lead.fit]}</Chip>}
                             </div>
                             <EvidenciasLista evidencias={lead.evidencias} />
+                            <HipoteseDor hipotese={lead.hipotese} semSinal={lead.sinais.length === 0} />
                             <div className="flex items-center gap-3 flex-wrap">
                               {lead.linkedin && (
                                 <a href={lead.linkedin} target="_blank" rel="noopener noreferrer" className="text-[12px] text-accent-ink hover:underline">
@@ -466,6 +487,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                               ))}
                             </div>
                             <EvidenciasLista evidencias={lead.evidencias} />
+                            <HipoteseDor hipotese={lead.hipotese} semSinal={lead.sinais.length === 0} />
                             {lead.linkedin && (
                               <a href={lead.linkedin} target="_blank" rel="noopener noreferrer" className="text-[12px] text-accent-ink hover:underline self-start">
                                 Ver perfil

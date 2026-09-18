@@ -216,6 +216,17 @@ export function ExploracaoEmpresa({
                 </ul>
               )}
             </div>
+            <div>
+              <p className="font-semibold text-[13px] mb-1.5 flex items-center gap-1">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.4.3.6.8.6 1.3V16h5.8v-.8c0-.5.2-1 .6-1.3A6 6 0 0 0 12 3Z" />
+                </svg>
+                Hipótese de dor
+              </p>
+              <p className={`text-[13px] ${painelLead.hipotese ? "italic text-ink" : "text-muted"}`}>
+                {painelLead.hipotese || "Ainda sem sinais públicos suficientes para uma hipótese."}
+              </p>
+            </div>
           </div>
         </div>
       )}
