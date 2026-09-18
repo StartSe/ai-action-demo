@@ -4,8 +4,11 @@
 // **A condução da conversa saiu daqui na US-016**: `SYSTEM_PERGUNTA`, `proximaPergunta()` e
 // `numeroDePerguntas()` foram substituídos por `lib/roteiro.ts`, que conhece a vaga inteira, a
 // cultura e a ficha do candidato — e não só um título e uma lista de requisitos digitada num
-// formulário. O que sobrou aqui é a avaliação, que a US-022 (o parecer agêntico) substitui por
-// inteiro; até lá, ela é o que os dois caminhos de scorecard ainda usam.
+// formulário. **A avaliação de uma entrevista saiu daqui na US-022**: o parecer de hoje é
+// `lib/avaliacao.ts` (três passos, cruzando a conversa com a vaga, a cultura e a ficha do
+// candidato). `gerarScorecard` continua de pé só para os caminhos que não têm entrevista no banco —
+// a prévia do gestor (`POST /api/entrevista/avaliar`) e os links `scorecard` criados antes da
+// US-014, que podem ser removidos a partir de 17/12/2026 junto com o resto daquele tipo.
 import { aiEnabled, askJSON, meta, type Meta } from "./ai";
 import { esperar, scorecardDemo } from "./demo";
 import { listar, obter, salvar } from "./historico";

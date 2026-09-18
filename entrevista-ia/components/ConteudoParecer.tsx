@@ -139,7 +139,9 @@ export function ConteudoParecer({ parecer }: { parecer: Parecer }) {
           <Item>
             <p>
               {`R$ ${parecer.pretensao.valor.toLocaleString("pt-BR")}`}
-              {parecer.pretensao.dentroDaFaixa === undefined ? "" : parecer.pretensao.dentroDaFaixa ? " — dentro da faixa da vaga." : " — acima da faixa da vaga."}
+              {/* "Fora", e não "acima": a comparação (lib/avaliacao.ts) responde falso para os dois
+                  lados da faixa, e uma pretensão abaixo do mínimo existe. */}
+              {parecer.pretensao.dentroDaFaixa === undefined ? "" : parecer.pretensao.dentroDaFaixa ? " — dentro da faixa da vaga." : " — fora da faixa da vaga."}
             </p>
           </Item>
         </Section>
