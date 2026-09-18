@@ -74,3 +74,16 @@ export function agradecimentoTitulo(nome?: string): string {
   const primeiro = nome?.trim().split(/\s+/)[0];
   return primeiro ? `Obrigado, ${primeiro}. Sua entrevista foi enviada.` : "Obrigado, sua entrevista foi enviada.";
 }
+
+/**
+ * Quanto tempo a conversa durou: "12 min", "1 min", "40 s".
+ *
+ * Mora aqui pela mesma razão de `faixaSalarial`: a tela do parecer (US-023) e o texto que sai dela
+ * para o e-mail dizem a mesma coisa sobre a mesma entrevista, e o texto é montado fora do navegador.
+ * Abaixo de um minuto o valor em minutos seria sempre "0 min", que parece defeito.
+ */
+export function duracao(segundos: number): string {
+  if (!Number.isFinite(segundos) || segundos <= 0) return "—";
+  if (segundos < 60) return `${Math.round(segundos)} s`;
+  return `${numero(Math.round(segundos / 60))} min`;
+}

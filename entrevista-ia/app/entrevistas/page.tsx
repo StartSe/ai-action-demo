@@ -214,7 +214,7 @@ export default function Page() {
       titulo: "Ações",
       render: (l) => {
         const acoes = [
-          l.resultadoId ? <Link key="parecer" href={`/r/${l.resultadoId}`} className="btn-link">Abrir parecer</Link> : null,
+          l.resultadoId ? <Link key="parecer" href={`/entrevistas/${l.id}`} className="btn-link">Abrir parecer</Link> : null,
           l.status === "concluida" && l.parecerStatus === "falhou" ? (
             <button key="avaliar" type="button" className="btn-link" onClick={() => void prepararParecer(l)}>
               Preparar o parecer de novo

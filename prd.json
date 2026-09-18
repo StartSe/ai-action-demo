@@ -420,7 +420,7 @@
         "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
       ],
       "priority": 23,
-      "passes": false,
+      "passes": true,
       "notes": "Fase 4: análise para o gestor · PRD US-020"
     },
     {

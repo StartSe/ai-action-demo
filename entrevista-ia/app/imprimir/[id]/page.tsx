@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { ConteudoParecer } from "@/components/ConteudoParecer";
 import { Origem } from "@/components/ui";
+import { transcricao } from "@/lib/entrevistas";
 import { data } from "@/lib/formato";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
@@ -49,7 +50,10 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
           <div className="text-muted text-sm">{data(new Date())}</div>
         </header>
 
-        <ConteudoParecer parecer={registro.saida} />
+        <ConteudoParecer
+          parecer={registro.saida}
+          conversa={(registro.entrada.entrevistaId ? transcricao(registro.entrada.entrevistaId) : []).map((m) => ({ papel: m.papel, texto: m.texto }))}
+        />
 
         <footer className="mt-8 pt-4 border-t border-line">
           <Origem meta={registro.meta} />

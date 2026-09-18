@@ -252,7 +252,7 @@ export default function Page() {
       render: (e) => {
         // Uma coluna sem conteúdo devolve um traço: no celular o rótulo "Ações" sozinho parece defeito.
         const acoes = [
-          e.resultadoId ? <Link key="parecer" href={`/r/${e.resultadoId}`} className="btn-link">Ver parecer</Link> : null,
+          e.resultadoId ? <Link key="parecer" href={`/entrevistas/${e.id}`} className="btn-link">Ver parecer</Link> : null,
           PODE_CONVIDAR.includes(e.status) ? (
             <button key="convite" type="button" className="btn-link" onClick={() => setConvite({ entrevistaId: e.id, reenviar: true })}>
               {rotuloConvite(e)}

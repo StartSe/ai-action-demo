@@ -180,7 +180,7 @@ export default function Page() {
         // Uma entrevista cancelada ou vencida não tem o que fazer: um traço diz isso melhor que uma
         // célula vazia, e no celular o rótulo "Ações" sozinho parecia defeito.
         const acoes = [
-          l.resultadoId ? <Link key="parecer" href={`/r/${l.resultadoId}`} className="btn-link">Ver parecer</Link> : null,
+          l.resultadoId ? <Link key="parecer" href={`/entrevistas/${l.id}`} className="btn-link">Ver parecer</Link> : null,
           PODE_CONVIDAR.includes(l.status) ? (
             <button key="convite" type="button" className="btn-link" onClick={() => setConvite({ entrevistaId: l.id, reenviar: true })}>
               {rotuloConvite(l)}

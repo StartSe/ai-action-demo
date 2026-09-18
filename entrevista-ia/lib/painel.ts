@@ -7,9 +7,19 @@
 // primeiro módulo de entidade que precisasse de entrevista fecharia ciclo. Aqui em cima ninguém
 // importa de volta.
 import { listar as listarCandidatos, obter as obterCandidato, resumoDaFicha, type Candidato, type ResumoFicha } from "./candidatos";
-import { contarPorCandidato, contarEntrevistas, listar as listarEntrevistas, type Entrevista, type FiltroEntrevistas } from "./entrevistas";
+import {
+  contarPorCandidato,
+  contarEntrevistas,
+  listar as listarEntrevistas,
+  obter as obterEntrevista,
+  transcricao,
+  type Entrevista,
+  type FiltroEntrevistas,
+  type PapelMensagem,
+} from "./entrevistas";
 import { obter as obterResultado } from "./historico";
 import { obter as obterVaga } from "./vagas";
+import type { Meta } from "./ai";
 import type { Parecer, Recomendacao } from "./types";
 
 /** Uma entrevista com o contexto que a tela mostra na mesma linha. */
@@ -156,5 +166,61 @@ export function painelDeEntrevistas({
     itens: faixa ? todas.filter((e) => faixaDaEntrevista(e) === faixa) : todas,
     contagens,
     total: contarEntrevistas(),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// A tela de uma entrevista (US-023): o parecer com tudo o que o gestor precisa para decidir sem
+// abrir outra aba — quem é a pessoa, de que vaga se trata, como a conversa aconteceu e o que foi
+// dito, palavra por palavra.
+// ---------------------------------------------------------------------------------------------
+
+/** Uma fala da conversa como a tela a mostra: sem o id nem o carimbo, que ninguém lê. */
+export type FalaNaTela = { papel: PapelMensagem; texto: string; segundo?: number };
+
+export type EntrevistaNaTela = EntrevistaNoPainel & {
+  /** O parecer inteiro (lib/historico.ts), quando a avaliação já terminou. */
+  parecer?: Parecer;
+  meta?: Meta;
+  conversa: FalaNaTela[];
+  /** Quanto durou a conversa, em segundos; ausente enquanto não há como saber. */
+  duracaoSegundos?: number;
+};
+
+/**
+ * Quanto durou a conversa.
+ *
+ * O relógio da entrevista (`iniciadaEm` → `concluidaEm`) vale mais que os carimbos das falas: o
+ * agente da ElevenLabs manda `time_in_call_secs` de cada turno, mas a sala do navegador nem sempre
+ * mede, e uma conversa inteira apareceria como "0 s". O último `segundo` é a reserva para quando a
+ * entrevista foi concluída por um caminho que não carimbou o início (uma conversa vinda do webhook,
+ * por exemplo).
+ */
+function duracaoDaConversa(entrevista: Entrevista, conversa: FalaNaTela[]): number | undefined {
+  if (entrevista.iniciadaEm && entrevista.concluidaEm) {
+    const segundos = Math.round((new Date(entrevista.concluidaEm).getTime() - new Date(entrevista.iniciadaEm).getTime()) / 1000);
+    if (segundos > 0) return segundos;
+  }
+  const ultimo = conversa.reduce((maior, fala) => Math.max(maior, fala.segundo ?? 0), 0);
+  return ultimo || undefined;
+}
+
+/** Uma entrevista com candidato, vaga, parecer e a conversa inteira — o que a tela dela precisa. */
+export function entrevistaNaTela(id: string): EntrevistaNaTela | null {
+  const entrevista = obterEntrevista(id);
+  if (!entrevista) return null;
+
+  const registro = entrevista.resultadoId ? obterResultado<unknown, Parecer, Meta>(entrevista.resultadoId) : null;
+  const conversa: FalaNaTela[] = transcricao(id).map((m) => ({ papel: m.papel, texto: m.texto, segundo: m.segundo }));
+
+  return {
+    ...entrevista,
+    candidatoNome: obterCandidato(entrevista.candidatoId)?.nome ?? "Candidato removido",
+    vagaCargo: obterVaga(entrevista.vagaId)?.cargo ?? "Vaga removida",
+    ...resumoDoParecer(entrevista.resultadoId),
+    parecer: registro?.saida,
+    meta: registro?.meta,
+    conversa,
+    duracaoSegundos: duracaoDaConversa(entrevista, conversa),
   };
 }

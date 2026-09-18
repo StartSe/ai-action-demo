@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ConteudoParecer } from "@/components/ConteudoParecer";
-import { Aviso, Origem, ResultHead, Topbar } from "@/components/ui";
+import { Origem, ResultHead, Topbar } from "@/components/ui";
+import { transcricao } from "@/lib/entrevistas";
 import { obter } from "@/lib/historico";
 import { ligacaoEnabled } from "@/lib/voz";
 import type { Meta } from "@/lib/ai";
@@ -28,22 +30,23 @@ export default async function Page({ params }: PageProps<"/r/[id]">) {
     );
   }
 
-  // Leitura provisória do parecer (US-004): a tela completa, com a decisão do gestor e a conversa
-  // numerada, é da US-020 da PRD. Aqui ele só precisa ABRIR — o Histórico já o lista.
+  // O parecer por um link já copiado (o Histórico, um endereço guardado). A tela de trabalho é
+  // `/entrevistas/<entrevistaId>` (US-023), com o cabeçalho, a decisão e as ações — aqui fica a
+  // leitura, e o caminho para lá fica à vista.
   if (tipagem.tipo === "parecer") {
     const registro = obter<EntradaParecer, Parecer, Meta>(id)!;
+    const conversa = registro.entrada.entrevistaId ? transcricao(registro.entrada.entrevistaId) : [];
     return (
       <>
         <Topbar marca="E" nome="Entrevistadora IA" area="Recursos Humanos" status={{ ai: !registro.meta.demo, demo: registro.meta.demo, model: registro.meta.model }} />
         <main className="max-w-[860px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
           <article className="card p-7 max-md:p-5">
-            <ResultHead titulo={registro.titulo} subtitulo="Parecer da entrevista" />
-            {registro.saida.parcial && (
-              <div className="mb-5">
-                <Aviso tom="warn">Entrevista encerrada antes do fim: o parecer cobre só o que foi conversado.</Aviso>
-              </div>
-            )}
-            <ConteudoParecer parecer={registro.saida} />
+            <ResultHead titulo={registro.titulo} subtitulo="Parecer da entrevista">
+              {registro.entrada.entrevistaId && (
+                <Link href={`/entrevistas/${registro.entrada.entrevistaId}`} className="btn-ghost">Abrir a entrevista</Link>
+              )}
+            </ResultHead>
+            <ConteudoParecer parecer={registro.saida} conversa={conversa.map((m) => ({ papel: m.papel, texto: m.texto }))} />
             <Origem meta={registro.meta} />
           </article>
         </main>
