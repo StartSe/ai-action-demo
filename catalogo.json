@@ -357,8 +357,8 @@
         "Financeiro",
         "Vendas"
       ],
-      "problema": "A empresa tem planilhas com histórico de clientes, vendas ou fraudes, mas prever o que vem pela frente depende de um cientista de dados que não existe.",
-      "ia": "Lê a planilha, treina sozinho modelos de classificação, regressão e previsão de séries, escolhe o melhor e explica em português quais campos pesam no resultado.",
+      "problema": "A empresa tem histórico de vendas, clientes e pagamentos em planilha, mas prever o que vem pela frente depende de um cientista de dados que ela não tem.",
+      "ia": "Lê a planilha, treina sozinho modelos de classificação, regressão e previsão de séries, escolhe o melhor e explica em português o que pesa no resultado — de quanto esperar de vendas e demanda a quem está prestes a cancelar e quais contas têm risco de atraso.",
       "integracoes": "Nenhuma chave nem IA externa: os modelos são treinados dentro do próprio app. As previsões também ficam disponíveis dentro do seu assistente de IA (servidor MCP) e por um link público para a equipe enviar planilhas.",
       "acento": "#0f766e",
       "porta": 3018,
