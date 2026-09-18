@@ -101,7 +101,7 @@ export function Produtos() {
 
                 <div className="flex items-center gap-3.5 flex-wrap mt-auto pt-1">
                   <Link href={`/produtos/${produto.id}`} className="btn-link text-[13px]">Editar</Link>
-                  <Link href={`/prospeccoes/novo?produtoId=${produto.id}`} className="btn-link text-[13px]">Nova prospecção com este produto</Link>
+                  <Link href={`/prospeccoes/nova?produtoId=${produto.id}`} className="btn-link text-[13px]">Nova prospecção com este produto</Link>
                   <button type="button" className="btn-link text-[13px] text-danger" onClick={() => apagar(produto)}>Apagar</button>
                 </div>
               </div>

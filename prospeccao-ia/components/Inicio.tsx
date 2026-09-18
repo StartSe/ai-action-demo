@@ -90,7 +90,7 @@ export function Inicio() {
         apoio="Descreva o que você vende: a IA busca contas e pessoas, qualifica com evidências e sugere a abordagem."
         segmento="Vendas"
       >
-        <Link href="/prospeccoes/novo" className="btn-primary !w-auto">Nova prospecção</Link>
+        <Link href="/prospeccoes/nova" className="btn-primary !w-auto">Nova prospecção</Link>
       </Hero>
 
       <main className="max-w-[1400px] mx-auto px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">

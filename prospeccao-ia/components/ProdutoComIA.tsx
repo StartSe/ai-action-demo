@@ -3,7 +3,11 @@
 // site (ou um parágrafo colado), roda a análise em POST /api/produtos/analisar e abre o resultado no
 // formulário de edição, editável campo a campo — nunca salvo direto. Salvar cria o produto e, em
 // seguida, o ICP sugerido (dois POSTs, mesmo padrão de app/api/produtos e app/api/icps).
-import { useRef, useState, type FormEvent } from "react";
+// `?voltar=<rota>` (US-009, ver components/ProspeccaoNova.tsx) troca o destino de "Salvar" para
+// `<rota>?produtoId=<id>&icpId=<id>` em vez de /produtos — é como o passo 1 da nova prospecção volta
+// para o fluxo depois de criar produto+perfil via IA. "Preencher manualmente" e "Cancelar" propagam o
+// mesmo `voltar` para o formulário manual (ProdutoForm) continuar a cadeia.
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Aviso, Field, Origem } from "@/components/ui";
@@ -34,7 +38,20 @@ export function ProdutoComIA() {
 
   const [salvando, setSalvando] = useState(false);
   const [erroSalvar, setErroSalvar] = useState<string | null>(null);
+  const [manualPara, setManualPara] = useState("/produtos/novo");
+  const [cancelarPara, setCancelarPara] = useState("/produtos");
   const entradaEraEndereco = useRef(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const voltar = new URLSearchParams(location.search).get("voltar");
+      if (voltar) {
+        setManualPara(`/produtos/novo?voltar=${encodeURIComponent(voltar)}`);
+        setCancelarPara(voltar);
+      }
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
 
   async function analisar(e: FormEvent) {
     e.preventDefault();
@@ -94,11 +111,17 @@ export function ProdutoComIA() {
         setSalvando(false);
         return;
       }
-      await fetch("/api/icps", {
+      const respostaICP = await fetch("/api/icps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ produtoId: produto.id, nome: icpNome, jornada: "b2b", criterios, personas, dores, sinais }),
       });
+      const icp = await respostaICP.json().catch(() => null);
+      const voltar = new URLSearchParams(location.search).get("voltar");
+      if (voltar) {
+        router.push(`${voltar}${voltar.includes("?") ? "&" : "?"}produtoId=${produto.id}${icp?.id ? `&icpId=${icp.id}` : ""}`);
+        return;
+      }
       router.push("/produtos");
     } catch {
       setErroSalvar("Não foi possível salvar o produto agora. Tente de novo.");
@@ -125,7 +148,7 @@ export function ProdutoComIA() {
         </Field>
         <div className="flex items-center gap-4 mt-2">
           <button type="submit" className="btn-primary !w-auto max-md:!w-full" disabled={analisando}>{analisando ? "Analisando..." : "Analisar com IA"}</button>
-          <Link href="/produtos/novo" className="btn-link text-[13px]">Preencher manualmente</Link>
+          <Link href={manualPara} className="btn-link text-[13px]">Preencher manualmente</Link>
         </div>
       </form>
     );
@@ -181,7 +204,7 @@ export function ProdutoComIA() {
 
       <div className="flex items-center gap-4 mt-2">
         <button type="submit" className="btn-primary !w-auto max-md:!w-full" disabled={salvando}>{salvando ? "Salvando..." : "Salvar"}</button>
-        <Link href="/produtos" className="btn-link text-[13px]">Cancelar</Link>
+        <Link href={cancelarPara} className="btn-link text-[13px]">Cancelar</Link>
       </div>
     </form>
   );

@@ -3,6 +3,9 @@
 // sem icpId, cria; com icpId, busca o ICP em GET /api/icps/[id] e edita. Critérios mudam conforme a
 // jornada (B2B: setor/porte/localização/outros; B2C: localização/faixa etária/ocupação/interesses/contexto);
 // personas, dores e sinais são chips adicionados e removidos um a um, nunca textarea livre.
+// `?voltar=<rota>` (US-009, ver components/ProspeccaoNova.tsx) troca o destino de "Salvar" para
+// `<rota>?produtoId=<id>&icpId=<id>` em vez de /produtos/[produtoId] — é como o passo 1 da nova
+// prospecção volta para o fluxo depois de criar um perfil para um produto sem nenhum ainda.
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -24,7 +27,16 @@ export function ICPForm({ produtoId, icpId }: { produtoId: string; icpId?: strin
   const [carregando, setCarregando] = useState(Boolean(icpId));
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [cancelarPara, setCancelarPara] = useState(`/produtos/${produtoId}`);
   const carregouRef = useRef(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const voltar = new URLSearchParams(location.search).get("voltar");
+      if (voltar) setCancelarPara(voltar);
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (!icpId || carregouRef.current) return;
@@ -60,6 +72,12 @@ export function ICPForm({ produtoId, icpId }: { produtoId: string; icpId?: strin
         const corpo = await resposta.json().catch(() => null);
         setErro(corpo?.error || "Não foi possível salvar o perfil agora. Tente de novo.");
         setSalvando(false);
+        return;
+      }
+      const icp = await resposta.json();
+      const voltar = new URLSearchParams(location.search).get("voltar");
+      if (voltar) {
+        router.push(`${voltar}${voltar.includes("?") ? "&" : "?"}produtoId=${produtoId}&icpId=${icp.id}`);
         return;
       }
       router.push(`/produtos/${produtoId}`);
@@ -161,7 +179,7 @@ export function ICPForm({ produtoId, icpId }: { produtoId: string; icpId?: strin
 
       <div className="flex items-center gap-4 mt-2">
         <button type="submit" className="btn-primary !w-auto max-md:!w-full" disabled={salvando}>{salvando ? "Salvando..." : "Salvar"}</button>
-        <Link href={`/produtos/${produtoId}`} className="btn-link text-[13px]">Cancelar</Link>
+        <Link href={cancelarPara} className="btn-link text-[13px]">Cancelar</Link>
       </div>
     </form>
   );

@@ -3,12 +3,16 @@
 // produtoId, busca o produto em GET /api/produtos/[id] e edita. O caminho de IA a partir do site
 // (?ia=1, ver components/Produtos.tsx) é outra tela (components/ProdutoComIA.tsx, US-007), escolhida
 // por components/ProdutoNovo.tsx antes deste formulário nascer — ele nunca lê o parâmetro sozinho.
+// `aoSalvar` (US-009) é usado só quando o formulário nasce EMBUTIDO fora de /produtos/novo (o passo 1
+// da nova prospecção, quando ainda não há produto cadastrado): recebe o produto criado e assume o
+// controle da navegação; sem essa prop, o comportamento padrão (redirecionar a /produtos) continua.
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Aviso, Field } from "@/components/ui";
+import type { Produto } from "@/lib/types";
 
-export function ProdutoForm({ produtoId }: { produtoId?: string }) {
+export function ProdutoForm({ produtoId, aoSalvar }: { produtoId?: string; aoSalvar?: (produto: Produto) => void }) {
   const router = useRouter();
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -17,7 +21,16 @@ export function ProdutoForm({ produtoId }: { produtoId?: string }) {
   const [carregando, setCarregando] = useState(Boolean(produtoId));
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [cancelarPara, setCancelarPara] = useState("/produtos");
   const carregouRef = useRef(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const voltar = new URLSearchParams(location.search).get("voltar");
+      if (voltar) setCancelarPara(voltar);
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (!produtoId || carregouRef.current) return;
@@ -47,6 +60,16 @@ export function ProdutoForm({ produtoId }: { produtoId?: string }) {
         const corpo = await resposta.json().catch(() => null);
         setErro(corpo?.error || "Não foi possível salvar o produto agora. Tente de novo.");
         setSalvando(false);
+        return;
+      }
+      const produto: Produto = await resposta.json();
+      if (aoSalvar) {
+        aoSalvar(produto);
+        return;
+      }
+      const voltar = new URLSearchParams(location.search).get("voltar");
+      if (voltar) {
+        router.push(`${voltar}${voltar.includes("?") ? "&" : "?"}produtoId=${produto.id}`);
         return;
       }
       router.push("/produtos");
@@ -92,7 +115,7 @@ export function ProdutoForm({ produtoId }: { produtoId?: string }) {
 
       <div className="flex items-center gap-4 mt-2">
         <button type="submit" className="btn-primary !w-auto max-md:!w-full" disabled={salvando}>{salvando ? "Salvando..." : "Salvar"}</button>
-        <Link href="/produtos" className="btn-link text-[13px]">Cancelar</Link>
+        <Link href={cancelarPara} className="btn-link text-[13px]">Cancelar</Link>
       </div>
     </form>
   );
