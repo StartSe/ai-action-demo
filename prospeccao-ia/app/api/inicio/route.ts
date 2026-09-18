@@ -1,4 +1,4 @@
-import { listarICPs, listarLeads, listarProdutos, listarProspeccoes } from "@/lib/workspace";
+import { listarICPs, listarLeads, listarProspeccoes, obterProduto } from "@/lib/workspace";
 import type { StatusLead } from "@/lib/types";
 
 /** Quantas prospecções o painel do Início mostra na lista "recentes". */
@@ -10,10 +10,8 @@ const QUALIFICADOS_OU_DEPOIS: StatusLead[] = ["qualificado", "selecionado", "abo
 export async function GET() {
   const prospeccoes = listarProspeccoes();
   const leads = listarLeads();
-  const produtos = listarProdutos();
   const icps = listarICPs();
 
-  const produtoPorId = new Map(produtos.map((p) => [p.id, p]));
   const icpPorId = new Map(icps.map((i) => [i.id, i]));
 
   const qualificados = leads.filter((l) => QUALIFICADOS_OU_DEPOIS.includes(l.status)).length;
@@ -24,7 +22,8 @@ export async function GET() {
     return {
       id: p.id,
       nome: icpPorId.get(p.icpId)?.nome || "Prospecção",
-      produto: produtoPorId.get(p.produtoId)?.nome || "Produto",
+      // obterProduto (ao contrário de listarProdutos) não filtra apagado_em: o nome continua correto mesmo depois de o produto ser apagado.
+      produto: obterProduto(p.produtoId)?.nome || "Produto",
       criadoEm: p.criadoEm,
       encontrados: leadsDaProspeccao.length,
       qualificados: leadsDaProspeccao.filter((l) => QUALIFICADOS_OU_DEPOIS.includes(l.status)).length,

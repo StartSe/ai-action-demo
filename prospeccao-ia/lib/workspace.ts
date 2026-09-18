@@ -27,6 +27,7 @@ function banco(): DatabaseSync {
     proposta_valor TEXT NOT NULL DEFAULT '',
     criado_em TEXT NOT NULL
   )`);
+  try { d.exec(`ALTER TABLE produtos ADD COLUMN apagado_em TEXT`); } catch { /* coluna já existe */ }
   d.exec(`CREATE TABLE IF NOT EXISTS icps (
     id TEXT PRIMARY KEY,
     produto_id TEXT NOT NULL,
@@ -131,8 +132,9 @@ export function criarProduto(dados: NovoProduto, em?: Date): Produto {
   return { id, criadoEm, ...dados };
 }
 
+/** Só produtos ativos (nunca os apagados) — quem precisa achar o nome de um produto apagado para uma prospecção antiga usa obterProduto, que não filtra. */
 export function listarProdutos(): Produto[] {
-  const linhas = banco().prepare("SELECT * FROM produtos ORDER BY criado_em DESC").all() as LinhaProduto[];
+  const linhas = banco().prepare("SELECT * FROM produtos WHERE apagado_em IS NULL ORDER BY criado_em DESC").all() as LinhaProduto[];
   return linhas.map(linhaParaProduto);
 }
 
@@ -147,8 +149,9 @@ export function atualizarProduto(id: string, dados: Partial<NovoProduto>): Produ
   return obterProduto(id);
 }
 
-export function apagarProduto(id: string): void {
-  banco().prepare("DELETE FROM produtos WHERE id = ?").run(id);
+/** Apaga só da lista ativa (nunca em cascata): prospecções e ICPs já criados continuam intactos e resolvem o nome do produto por obterProduto, que ignora apagado_em. */
+export function apagarProduto(id: string, em?: Date): void {
+  banco().prepare("UPDATE produtos SET apagado_em = ? WHERE id = ?").run((em ?? new Date()).toISOString(), id);
 }
 
 // --- ICPs --------------------------------------------------------------
