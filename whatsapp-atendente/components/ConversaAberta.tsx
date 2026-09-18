@@ -157,6 +157,8 @@ export function ConversaAberta({
   // app sem ela clicar em "Enviar".
   const [modoResposta, setModoResposta] = useState<"ia" | "manual">("ia");
   const [sugerindo, setSugerindo] = useState(false);
+  /** Acabou de clicar em "Assumir atendimento": o campo, que só existe com a conversa assumida, recebe o foco ao aparecer. */
+  const focarAoAssumirRef = useRef(false);
   /** Ids das mensagens que foram gravadas mas não saíram pelo número da empresa. */
   const [naoEntregues, setNaoEntregues] = useState<number[]>([]);
   const { confirmar, Dialogo } = useConfirmacao();
@@ -226,6 +228,15 @@ export function ConversaAberta({
     if (el) el.scrollTop = el.scrollHeight;
   }, [quantasMensagens, numero]);
 
+  // O campo de resposta é montado só quando a conversa está em atendimento humano: o foco pedido pelo
+  // "Assumir atendimento" precisa esperar essa montagem, e por isso mora aqui, não dentro de `agir`.
+  const status = conversa?.status;
+  useEffect(() => {
+    if (!focarAoAssumirRef.current || status !== "humano") return;
+    focarAoAssumirRef.current = false;
+    campoRef.current?.focus();
+  }, [status]);
+
   const salvarBase: AoSalvarBase = (pergunta, resposta) => {
     fetch("/api/base", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pergunta, resposta }) }).catch((e) =>
       console.error("Falha ao gravar a resposta na base", e)
@@ -240,7 +251,7 @@ export function ConversaAberta({
       const dados = await r.json();
       aplicar(dados.conversa);
       setErro(null);
-      if (acao === "assumir") campoRef.current?.focus();
+      if (acao === "assumir") focarAoAssumirRef.current = true;
     } catch (e) {
       setErro(await lerErro(e));
     } finally {
@@ -371,13 +382,8 @@ export function ConversaAberta({
               <span className={classeStatus(conversa.status)}>{rotuloStatus(conversa.status)}</span>
             </p>
           </div>
-          {/* Em atendimento humano o botão sairia do lugar: quem já assumiu tem, logo abaixo, "Devolver
-              para a IA" e "Marcar como resolvida". Na faixa âmbar ele aparece dentro do próprio aviso. */}
-          {!emAtendimento && !precisaDeAtencao && (
-            <button type="button" className="btn-ghost !w-auto shrink-0 max-md:hidden" onClick={() => agir("assumir")} disabled={agindo}>
-              Assumir atendimento
-            </button>
-          )}
+          {/* "Assumir atendimento" não fica aqui: ele mora no rodapé, no lugar do campo de resposta, que é
+              onde a pessoa procura quando quer escrever (e na faixa âmbar, dentro do próprio aviso). */}
         </div>
 
         {precisaDeAtencao && (
@@ -385,14 +391,6 @@ export function ConversaAberta({
             <Aviso acao={{ rotulo: "Assumir atendimento", onClick: () => agir("assumir") }}>
               <strong>Intervir na conversa</strong> · O atendente passou esta conversa para uma pessoa.
             </Aviso>
-          </div>
-        )}
-
-        {!emAtendimento && !precisaDeAtencao && (
-          <div className="px-4 pt-4 min-[768px]:hidden">
-            <button type="button" className="btn-ghost" onClick={() => agir("assumir")} disabled={agindo}>
-              Assumir atendimento
-            </button>
           </div>
         )}
 
@@ -428,88 +426,84 @@ export function ConversaAberta({
         )}
 
         <div className="border-t border-line p-3">
-          {/* As duas abas ficam sempre visíveis, mesmo antes de assumir: elas dizem quais são os dois
-              caminhos de resposta. O que está desligado enquanto a IA cuida da conversa é o campo. */}
-          <div className="flex gap-1 mb-2.5" role="tablist" aria-label="Como responder">
-            {([["ia", "Responder como IA"], ["manual", "Responder manualmente"]] as const).map(([valor, rotulo]) => (
-              <button
-                key={valor}
-                type="button"
-                role="tab"
-                aria-selected={modoResposta === valor}
-                className={`px-3 py-1.5 rounded-field text-[13px] font-semibold transition-colors ${
-                  modoResposta === valor ? "bg-accent-soft text-accent-ink" : "text-muted hover:bg-bg"
-                }`}
-                onClick={() => setModoResposta(valor)}
-              >
-                {rotulo}
+          {!emAtendimento ? (
+            /* Enquanto a IA cuida da conversa não há o que digitar: em vez de abas e um campo desligados
+               (que pareciam um jeito de responder que "não funcionava"), o rodapé diz o que falta e
+               oferece o próprio botão de assumir, no lugar em que a pessoa procura para escrever. */
+            <div className="flex items-center gap-3 flex-wrap">
+              <p className="flex-1 min-w-[200px] text-[13px] text-muted">
+                {precisaDeAtencao
+                  ? "O atendente passou esta conversa para uma pessoa. Assuma o atendimento para responder."
+                  : "O atendente virtual está cuidando desta conversa. Assuma o atendimento para responder você mesmo, com ou sem a ajuda da IA."}
+              </p>
+              <button type="button" className="btn-primary !w-auto shrink-0" onClick={() => agir("assumir")} disabled={agindo}>
+                {agindo ? "Assumindo..." : "Assumir atendimento"}
               </button>
-            ))}
-          </div>
-
-          {modoResposta === "ia" && (
-            <div className="flex items-center gap-3 flex-wrap mb-2.5">
-              <button type="button" className="btn-ghost !w-auto !py-2 !text-[13px]" onClick={pedirSugestao} disabled={!emAtendimento || sugerindo}>
-                {sugerindo ? "Escrevendo..." : "Escrever com a IA"}
-              </button>
-              <span className="text-[12.5px] text-muted">O rascunho aparece no campo abaixo. Nada é enviado antes de você conferir.</span>
             </div>
-          )}
+          ) : (
+            <>
+              {/* As duas abas escolhem só COMO a resposta é escrita (rascunho da IA ou do zero); quem envia é
+                  sempre a pessoa. Elas só existem com a conversa assumida, junto com o campo. */}
+              <div className="flex gap-1 mb-2.5" role="tablist" aria-label="Como responder">
+                {([["ia", "Responder como IA"], ["manual", "Responder manualmente"]] as const).map(([valor, rotulo]) => (
+                  <button
+                    key={valor}
+                    type="button"
+                    role="tab"
+                    aria-selected={modoResposta === valor}
+                    className={`px-3 py-1.5 rounded-field text-[13px] font-semibold transition-colors ${
+                      modoResposta === valor ? "bg-accent-soft text-accent-ink" : "text-muted hover:bg-bg"
+                    }`}
+                    onClick={() => setModoResposta(valor)}
+                  >
+                    {rotulo}
+                  </button>
+                ))}
+              </div>
 
-          <div className="flex items-end gap-2">
-            <div className="relative flex-1 min-w-0">
-              <textarea
-                ref={campoRef}
-                rows={1}
-                className="input !py-2.5 text-[14px] resize-none min-h-[44px] leading-snug"
-                value={emAtendimento ? texto : ""}
-                disabled={!emAtendimento}
-                aria-label={emAtendimento ? "Escreva a resposta" : "Assuma o atendimento para responder"}
-                /* Campo desligado não leva `placeholder`: a mesma frase já é desenhada por cima dele (o span
-                   abaixo), e os dois juntos aparecem sobrepostos nos navegadores que desenham o placeholder. */
-                placeholder={emAtendimento ? "Escreva a resposta" : ""}
-                onChange={(e) => {
-                  setTexto(e.target.value);
-                  const el = e.target;
-                  el.style.height = "auto";
-                  el.style.height = `${Math.min(el.scrollHeight, ALTURA_MAXIMA_CAMPO)}px`;
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    enviar();
-                  }
-                }}
-              />
-              {/* O texto de apoio de um campo vazio é desenhado aqui, e não só no `placeholder`: ele não
-                  aparece em toda captura de tela (ver CLAUDE.md), e é ele que explica por que o campo
-                  está desligado. */}
-              {!emAtendimento && (
-                <span
-                  aria-hidden="true"
-                  className="absolute left-3.5 right-3 top-1/2 -translate-y-1/2 text-[13px] text-muted pointer-events-none whitespace-nowrap overflow-hidden text-ellipsis"
-                >
-                  Assuma o atendimento para responder
-                </span>
+              {modoResposta === "ia" && (
+                <div className="flex items-center gap-3 flex-wrap mb-2.5">
+                  <button type="button" className="btn-ghost !w-auto !py-2 !text-[13px]" onClick={pedirSugestao} disabled={sugerindo}>
+                    {sugerindo ? "Escrevendo..." : "Escrever com a IA"}
+                  </button>
+                  <span className="text-[12.5px] text-muted">O rascunho aparece no campo abaixo. Nada é enviado antes de você conferir.</span>
+                </div>
               )}
-            </div>
-            {/* Sem a conversa assumida não há o que enviar: o botão sai da linha em vez de ficar ali
-                desligado — e é o que dá ao campo a largura inteira para caber a frase no celular. */}
-            {emAtendimento && (
-              <button type="button" className="btn-primary !w-auto shrink-0" onClick={enviar} disabled={enviando || !texto.trim()}>
-                {enviando ? "Enviando..." : "Enviar"}
-              </button>
-            )}
-          </div>
-          {emAtendimento && (
-            <div className="flex gap-4 flex-wrap mt-2.5 px-1">
-              <button type="button" className="btn-link" onClick={() => agir("devolver")} disabled={agindo}>
-                Devolver para a IA
-              </button>
-              <button type="button" className="btn-link" onClick={() => agir("resolver")} disabled={agindo}>
-                Marcar como resolvida
-              </button>
-            </div>
+
+              <div className="flex items-end gap-2">
+                <textarea
+                  ref={campoRef}
+                  rows={1}
+                  className="input !py-2.5 text-[14px] resize-none min-h-[44px] leading-snug flex-1 min-w-0"
+                  value={texto}
+                  aria-label="Escreva a resposta"
+                  placeholder="Escreva a resposta"
+                  onChange={(e) => {
+                    setTexto(e.target.value);
+                    const el = e.target;
+                    el.style.height = "auto";
+                    el.style.height = `${Math.min(el.scrollHeight, ALTURA_MAXIMA_CAMPO)}px`;
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      enviar();
+                    }
+                  }}
+                />
+                <button type="button" className="btn-primary !w-auto shrink-0" onClick={enviar} disabled={enviando || !texto.trim()}>
+                  {enviando ? "Enviando..." : "Enviar"}
+                </button>
+              </div>
+              <div className="flex gap-4 flex-wrap mt-2.5 px-1">
+                <button type="button" className="btn-link" onClick={() => agir("devolver")} disabled={agindo}>
+                  Devolver para a IA
+                </button>
+                <button type="button" className="btn-link" onClick={() => agir("resolver")} disabled={agindo}>
+                  Marcar como resolvida
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>
