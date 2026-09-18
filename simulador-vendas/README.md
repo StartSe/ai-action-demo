@@ -88,9 +88,12 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 
 ## Estrutura
 ```
-app/page.tsx              tela única (painel + análise)
+app/page.tsx              Início (treinar e acompanhar, mais os componentes de resultado que as outras telas reaproveitam)
+app/equipe/page.tsx       Equipe: quem já treinou, cadastro de pessoa, convite e a linha do tempo de cada um
+app/equipe/analisar/page.tsx  analisar uma conversa real (colar ou enviar .txt/.vtt/.srt)
 app/api/analisar/route.ts análise de uma conversa (POST) e histórico (GET/DELETE)
-app/api/vendedores/route.ts cadastro e lista do time de vendas
+app/api/equipe/route.ts   lista da equipe (GET) e cadastro de pessoa (POST)
+app/api/equipe/[id]/route.ts  linha do tempo de uma pessoa (GET) e remoção dela da lista (DELETE)
 app/api/cenarios/route.ts lista dos cenários de cliente simulado (semeados na primeira leitura)
 app/api/salas/route.ts    cria o link de treino ("Criar link de treino")
 app/api/salas/[token]/conversar/route.ts próxima fala do cliente simulado (sala por texto)

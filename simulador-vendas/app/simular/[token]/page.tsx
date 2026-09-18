@@ -18,7 +18,6 @@ import { montarPersonagem } from "@/lib/cliente-simulado";
 import { personasDe } from "@/lib/personas";
 import { lerSessaoVendedor } from "@/lib/sessao-vendedor";
 import { nomeDoProvedor, provedoresDisponiveis } from "@/lib/entrar-vendedor";
-import { obter as obterVendedor } from "@/lib/vendedores";
 import { obter as obterCenario } from "@/lib/cenarios";
 import { getConfig } from "@/lib/store";
 import { integracaoConfigurada } from "@/lib/setup-comum";
@@ -76,7 +75,7 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
   // Link antigo sem simulação (instalação onde a migração ainda não rodou): segue o caminho de antes,
   // sem identificação, para ninguém ficar de fora de um treino que já estava no ar.
   if (!simulacao) {
-    const vendedor = sala?.vendedorId ? obterVendedor(sala.vendedorId) : null;
+    const vendedor = sala?.vendedorId ? obterParticipante(sala.vendedorId) : null;
     return <SalaSimulacao codigo={token} marca={MARCA} nome={NOME_APP} cenario={cenario} vendedorId={vendedor?.id} comVoz={comVoz} agentId={agentId || undefined} />;
   }
 

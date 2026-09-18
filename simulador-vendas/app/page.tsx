@@ -1,43 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Aviso, Chip, CopyButton, DataTable, Destaque, Entregar, ErrorBox, Field, Hero, Item, Loading, MaisDetalhes, Origem, Passos, Privacidade, ResultHead, Row, Section, SeloIA, Stage, Topbar, data, lerErro, numero, useScrollToResult, useStatus, type PassoIndicador } from "@/components/ui";
+import { Aviso, Chip, CopyButton, DataTable, Destaque, Entregar, Hero, Item, Origem, Passos, ResultHead, Section, SeloIA, Stage, Topbar, data, lerErro, numero, useScrollToResult, useStatus, type PassoIndicador } from "@/components/ui";
 import { GraficoCriteriosFracos } from "@/components/GraficoCriteriosFracos";
 import { VendedoresPainel } from "@/components/VendedoresPainel";
-import { CRITERIOS_PADRAO } from "@/lib/criterios";
-import type { CodigoErroIA, Meta } from "@/lib/ai";
-import type { Analise, Cenario, Conversa, DadosAnalise, PainelEquipe, Vendedor } from "@/lib/types";
+import type { Meta } from "@/lib/ai";
+import type { Analise, Conversa, PainelEquipe } from "@/lib/types";
 import type { AvaliacaoSessao, CriterioAvaliado } from "@/lib/avaliacao";
-
-type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
-
-/** A mesma conversa que a demonstração analisa (lib/demo.ts): título, cenário e resumo batem com ela. */
-const EXEMPLO: DadosAnalise = {
-  conversaColada: `Vendedor: Boa tarde, Beatriz! Obrigado por topar essa conversa. Antes de falarmos da renovação, queria entender: como o time tem usado a plataforma nos últimos meses?
-Cliente: Boa tarde. Olha, para ser sincera, o uso caiu bastante. Ficou complicado no dia a dia e parte do time simplesmente parou de entrar no sistema.
-Vendedor: Entendi. Quando você diz "complicado", é mais sobre não achar o que precisam ou sobre o fluxo de trabalho em si?
-Cliente: Mais o fluxo. A gente configurou do jeito que veio, nunca ajustamos para a nossa rotina. E ninguém teve tempo de treinar o time direito.
-Vendedor: Faz sentido, e isso é comum quando a implantação inicial não teve um acompanhamento próximo. Posso te mostrar rapidamente como dois clientes parecidos com vocês resolveram isso?
-Cliente: Pode, mas já te aviso: preciso justificar esse gasto de novo para a diretoria, e hoje eu não tenho argumento forte para isso.
-Vendedor: Justo. Então deixa eu propor o seguinte: incluo, sem custo adicional, quatro sessões de acompanhamento com seu time nas próximas seis semanas, focadas só no fluxo que vocês realmente usam. Se depois disso o uso não voltar, conversamos sobre outras opções. Funciona como primeiro passo?
-Cliente: Isso ajuda bastante. Se o time reencontrar valor nisso, fica mais fácil eu defender a renovação lá dentro.
-Vendedor: Perfeito. Vou te mandar hoje ainda um plano com as datas propostas e um resumo por escrito que você pode levar para a diretoria. Podemos marcar a primeira sessão para a semana que vem?
-Cliente: Pode ser. Me manda as opções de horário que eu confirmo com o time.`,
-  cenarioId: "renovacao",
-  criterios: [...CRITERIOS_PADRAO],
-};
-
-const VAZIO: DadosAnalise = { conversaColada: "", vendedorId: undefined, cenarioId: undefined, criterios: [...CRITERIOS_PADRAO] };
-
-const ETAPAS_CARREGANDO = ["Lendo a conversa...", "Comparando com os critérios de avaliação...", "Calculando a nota e os destaques..."];
 
 // Textos do hero (economia de texto: título ≤ 8 palavras, apoio ≤ 20, itens ≤ 5 de até 6 palavras — ver CLAUDE.md).
 const PROMESSA = {
   sobretitulo: "Vendas",
   titulo: "Saiba como cada vendedor conduz a conversa",
-  apoio: "Cole uma conversa de vendas: a IA dá a nota, as evidências e o que melhorar.",
+  apoio: "O time treina por voz com clientes simulados e você vê a nota, a evidência e o que melhorar.",
   itens: [
     "Nota geral da conversa",
     "Nota e evidência por critério",
@@ -48,19 +25,10 @@ const PROMESSA = {
 };
 
 const PASSOS: PassoIndicador[] = [
-  { titulo: "Conversa", apoio: "Cole ou envie" },
+  { titulo: "Conversa", apoio: "Treino ou real" },
   { titulo: "Análise", apoio: "Nota por critério" },
   { titulo: "Evolução", apoio: "Painel da equipe" },
 ];
-
-function IconeConversa() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 5h12v7H8l-4 4v-4H3z" />
-      <path d="M11 12h10v7h-6l-3 3v-3h-1z" />
-    </svg>
-  );
-}
 
 function IconeItem() {
   return (
@@ -82,21 +50,8 @@ function IlustracaoConversa() {
   );
 }
 
-/** Cartão de entrada com ícone circular e título. */
-function CartaoEntrada({ icone, titulo, children }: { icone: ReactNode; titulo: string; children: ReactNode }) {
-  return (
-    <div className="card p-5 mb-3">
-      <div className="flex items-center gap-2.5 mb-3">
-        <div className="w-9 h-9 rounded-full bg-accent-soft text-accent grid place-items-center shrink-0">{icone}</div>
-        <h2 className="font-bold text-[15px]">{titulo}</h2>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-/** Prévia de "o que você vai receber", no lugar do resultado antes da primeira análise. */
-function Previa({ itens, onExemplo, carregando }: { itens: string[]; onExemplo: () => void; carregando: boolean }) {
+/** Prévia de "o que você vai receber", no lugar do resultado antes de o gestor pedir alguma coisa. */
+function Previa({ itens }: { itens: string[] }) {
   return (
     <div className="card p-7 max-md:p-5 h-full min-h-[420px] max-md:min-h-0 flex flex-col justify-center">
       <div className="text-accent mb-4">
@@ -111,53 +66,36 @@ function Previa({ itens, onExemplo, carregando }: { itens: string[]; onExemplo: 
           </li>
         ))}
       </ul>
-      <button type="button" className="btn-secundario !w-auto self-start" onClick={onExemplo} disabled={carregando}>Ver a análise de exemplo</button>
+      <Link href="/equipe/analisar?exemplo=1" className="btn-secundario !w-auto self-start">Ver a análise de exemplo</Link>
     </div>
   );
 }
 
-type Estado =
-  | { fase: "vazio" }
-  | { fase: "carregando" }
-  | { fase: "erro"; mensagem: string; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string }; dados: DadosAnalise }
-  | { fase: "pronto"; conversa: Conversa; analise: Analise; meta: Meta; id?: string; titulo: string; dados: DadosAnalise }
-  | { fase: "painel"; painel: PainelEquipe; meta: Meta; id: string; titulo: string };
-
 export default function Page() {
   const { status, erro } = useStatus();
   const router = useRouter();
-  const [dados, setDados] = useState<DadosAnalise>(VAZIO);
-  const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
-  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
-  const [cenarios, setCenarios] = useState<Cenario[]>([]);
-  const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
-  const [novoVendedorAberto, setNovoVendedorAberto] = useState(false);
-  const [novoNome, setNovoNome] = useState("");
-  const [novoEmail, setNovoEmail] = useState("");
-  const [novaEquipe, setNovaEquipe] = useState("");
-  const [salvandoVendedor, setSalvandoVendedor] = useState(false);
-  const [erroVendedor, setErroVendedor] = useState<string | null>(null);
-  const [enviandoArquivo, setEnviandoArquivo] = useState(false);
-  const [avisoArquivo, setAvisoArquivo] = useState<{ tom: "ok" | "danger"; texto: string } | null>(null);
   const [criandoLinkTreino, setCriandoLinkTreino] = useState(false);
   const [linkTreino, setLinkTreino] = useState<string | null>(null);
   const [erroLinkTreino, setErroLinkTreino] = useState<string | null>(null);
   const [gerandoPainel, setGerandoPainel] = useState(false);
   const [erroPainel, setErroPainel] = useState<string | null>(null);
-  const autoEnviado = useRef(false);
+  const [painel, setPainel] = useState<{ painel: PainelEquipe; meta: Meta; id: string; titulo: string } | null>(null);
+  const redirecionado = useRef(false);
 
-  useScrollToResult(estado.fase === "pronto" || estado.fase === "painel");
+  useScrollToResult(Boolean(painel));
 
+  // O atalho `/?exemplo=1` da suíte (o botão "Testar com um exemplo" de /setup e a captura do
+  // catálogo) continua valendo: desde a US-026 quem analisa uma conversa é /equipe/analisar, então o
+  // Início repassa os parâmetros para lá em vez de deixar o atalho sem efeito.
   useEffect(() => {
-    fetch("/api/vendedores").then((r) => r.json()).then((r) => setVendedores(r.itens)).catch(() => setVendedores([]));
-    fetch("/api/cenarios").then((r) => r.json()).then((r) => setCenarios(r.itens)).catch(() => setCenarios([]));
-    fetch("/api/analisar").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
+    if (redirecionado.current) return;
+    const busca = new URLSearchParams(location.search);
+    if (busca.get("exemplo") === "1") {
+      redirecionado.current = true;
+      router.replace(`/equipe/analisar?${busca.toString()}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma única vez ao abrir a página
   }, []);
-
-  function apagarHistorico() {
-    if (!window.confirm("Apagar todos os resultados salvos? Essa ação não pode ser desfeita.")) return;
-    fetch("/api/analisar", { method: "DELETE" }).then(() => fetch("/api/analisar")).then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
-  }
 
   /** Sessão expirada em qualquer chamada: volta para a tela de entrar e retorna para cá depois. */
   function sessaoExpirou(r: Response, codigo?: string): boolean {
@@ -168,66 +106,11 @@ export default function Page() {
     return false;
   }
 
-  const set = (campo: "conversaColada") => (e: { target: { value: string } }) => setDados((d) => ({ ...d, [campo]: e.target.value }));
-
-  function setCriterio(i: number, valor: string) {
-    setDados((d) => ({ ...d, criterios: (d.criterios || CRITERIOS_PADRAO).map((c, j) => (j === i ? valor : c)) }));
-  }
-
-  async function enviarArquivo(arquivo: File) {
-    setEnviandoArquivo(true);
-    setAvisoArquivo(null);
-    try {
-      const corpo = new FormData();
-      corpo.append("arquivo", arquivo);
-      const r = await fetch("/api/analisar/arquivo", { method: "POST", body: corpo });
-      if (!r.ok) {
-        const info = await lerErro(r);
-        if (sessaoExpirou(r, info.codigo)) return;
-        setAvisoArquivo({ tom: "danger", texto: info.mensagem });
-        return;
-      }
-      const resposta = (await r.json()) as { texto: string; falas: number; aviso?: string };
-      setDados((d) => ({ ...d, conversaColada: resposta.texto }));
-      setAvisoArquivo(resposta.aviso ? { tom: "danger", texto: resposta.aviso } : { tom: "ok", texto: `${resposta.falas} falas reconhecidas. Confira o texto antes de analisar.` });
-    } catch (e) {
-      setAvisoArquivo({ tom: "danger", texto: (await lerErro(e)).mensagem });
-    } finally {
-      setEnviandoArquivo(false);
-    }
-  }
-
-  async function salvarVendedor() {
-    if (!novoNome.trim()) return;
-    setSalvandoVendedor(true);
-    setErroVendedor(null);
-    try {
-      const r = await fetch("/api/vendedores", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: novoNome.trim(), email: novoEmail.trim() || undefined, equipe: novaEquipe.trim() || undefined }) });
-      if (!r.ok) {
-        const info = await lerErro(r);
-        if (sessaoExpirou(r, info.codigo)) return;
-        setErroVendedor(info.mensagem);
-        return;
-      }
-      const novo = (await r.json()) as Vendedor;
-      setVendedores((v) => [...v, novo].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")));
-      setDados((d) => ({ ...d, vendedorId: novo.id }));
-      setNovoVendedorAberto(false);
-      setNovoNome("");
-      setNovoEmail("");
-      setNovaEquipe("");
-    } catch (e) {
-      setErroVendedor((await lerErro(e)).mensagem);
-    } finally {
-      setSalvandoVendedor(false);
-    }
-  }
-
   async function criarLinkTreino() {
     setCriandoLinkTreino(true);
     setErroLinkTreino(null);
     try {
-      const r = await fetch("/api/salas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vendedorId: dados.vendedorId, cenarioId: dados.cenarioId }) });
+      const r = await fetch("/api/salas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
       if (!r.ok) {
         const info = await lerErro(r);
         if (sessaoExpirou(r, info.codigo)) return;
@@ -255,7 +138,7 @@ export default function Page() {
         return;
       }
       const resposta = await r.json();
-      setEstado({ fase: "painel", painel: resposta.painel, meta: resposta.meta, id: resposta.id, titulo: resposta.titulo });
+      setPainel({ painel: resposta.painel, meta: resposta.meta, id: resposta.id, titulo: resposta.titulo });
     } catch (e) {
       setErroPainel((await lerErro(e)).mensagem);
     } finally {
@@ -263,49 +146,6 @@ export default function Page() {
     }
   }
 
-  async function gerar(d: DadosAnalise) {
-    setEstado({ fase: "carregando" });
-    try {
-      const r = await fetch("/api/analisar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) });
-      if (!r.ok) {
-        const info = await lerErro(r);
-        if (sessaoExpirou(r, info.codigo)) return;
-        setEstado({ fase: "erro", mensagem: info.mensagem, codigo: info.codigo as CodigoErroIA | undefined, acao: info.acao, dados: d });
-        return;
-      }
-      const resposta = await r.json();
-      setEstado({ fase: "pronto", conversa: resposta.conversa, analise: resposta.analise, meta: resposta.meta, id: resposta.id, titulo: resposta.titulo, dados: d });
-      fetch("/api/analisar").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
-    } catch (e) {
-      setEstado({ fase: "erro", mensagem: (await lerErro(e)).mensagem, dados: d });
-    }
-  }
-
-  function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    gerar(dados);
-  }
-
-  /** "Ver a análise de exemplo" preenche o campo com a conversa que a demonstração analisa e já envia. */
-  function verExemplo() {
-    setDados(EXEMPLO);
-    setAvisoArquivo(null);
-    gerar(EXEMPLO);
-  }
-
-  // Atalho para demonstrações: /?exemplo=1 preenche e envia o formulário.
-  useEffect(() => {
-    if (autoEnviado.current) return;
-    if (new URLSearchParams(location.search).get("exemplo") === "1") {
-      autoEnviado.current = true;
-      setTimeout(verExemplo, 0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma única vez ao abrir a página
-  }, []);
-
-  const carregando = estado.fase === "carregando";
-  const criterios = dados.criterios || CRITERIOS_PADRAO;
-  const passoAtual = estado.fase === "pronto" || estado.fase === "painel" ? 3 : carregando ? 2 : 1;
   const comVoz = Boolean(status?.integrations?.["elevenlabs-agente"]);
 
   return (
@@ -313,100 +153,12 @@ export default function Page() {
       <Topbar marca="S" nome="Simulador de Vendas" area="Vendas" status={status} erro={erro} resumo="Modo demonstração: a conversa e a análise exibidas são um exemplo." usuario={status?.usuario} />
 
       <Hero sobretitulo={PROMESSA.sobretitulo} titulo={PROMESSA.titulo} apoio={PROMESSA.apoio} segmento="Vendas">
-        <Passos passos={PASSOS} atual={passoAtual} />
+        <Passos passos={PASSOS} atual={painel ? 3 : 1} />
       </Hero>
 
       <main className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">
         <div>
-          <form onSubmit={onSubmit}>
-            <CartaoEntrada icone={<IconeConversa />} titulo="A conversa">
-              <Field label="Cole a conversa" htmlFor="conversaColada" hint='Uma fala por linha, começando com "Vendedor:" ou "Cliente:".'>
-                <textarea
-                  id="conversaColada"
-                  className="input min-h-28 resize-y font-mono text-[13px]"
-                  required
-                  placeholder={"Vendedor: Boa tarde! Como posso ajudar hoje?\nCliente: Oi, vi a proposta que vocês mandaram...\nVendedor: ..."}
-                  value={dados.conversaColada}
-                  onChange={set("conversaColada")}
-                />
-              </Field>
-
-              <div className="flex items-center gap-2.5 flex-wrap mb-4">
-                <label className="btn-ghost cursor-pointer" aria-disabled={enviandoArquivo}>
-                  {enviandoArquivo ? "Lendo..." : "Enviar arquivo"}
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept=".txt,.vtt,.srt"
-                    disabled={enviandoArquivo}
-                    onChange={(e) => {
-                      const arquivo = e.target.files?.[0];
-                      e.target.value = "";
-                      if (arquivo) enviarArquivo(arquivo);
-                    }}
-                  />
-                </label>
-                <span className="text-[12.5px] text-muted">Transcrição em .txt, .vtt ou .srt</span>
-              </div>
-              {avisoArquivo && <div className="mb-4"><Aviso tom={avisoArquivo.tom}>{avisoArquivo.texto}</Aviso></div>}
-
-              <Row>
-                <Field label="Vendedor" htmlFor="vendedor">
-                  <select
-                    id="vendedor"
-                    className="input"
-                    value={novoVendedorAberto ? "__novo__" : dados.vendedorId || ""}
-                    onChange={(e) => {
-                      if (e.target.value === "__novo__") { setNovoVendedorAberto(true); return; }
-                      setNovoVendedorAberto(false);
-                      setDados((d) => ({ ...d, vendedorId: e.target.value || undefined }));
-                    }}
-                  >
-                    <option value="">Sem vendedor escolhido</option>
-                    {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
-                    <option value="__novo__">Cadastrar vendedor</option>
-                  </select>
-                </Field>
-                <Field label="Cenário" htmlFor="cenario">
-                  <select id="cenario" className="input" value={dados.cenarioId || ""} onChange={(e) => setDados((d) => ({ ...d, cenarioId: e.target.value || undefined }))}>
-                    <option value="">Sem cenário escolhido</option>
-                    {cenarios.map((c) => <option key={c.id} value={c.id}>{c.titulo}</option>)}
-                  </select>
-                </Field>
-              </Row>
-
-              {novoVendedorAberto && (
-                <div className="border-l-2 border-accent-soft pl-3.5 mb-1">
-                  <Row>
-                    <Field label="Nome" htmlFor="novoNome"><input id="novoNome" className="input" value={novoNome} onChange={(e) => setNovoNome(e.target.value)} placeholder="Nome do vendedor" /></Field>
-                    <Field label="E-mail" htmlFor="novoEmail" hint="Recebe a análise quando você enviar."><input id="novoEmail" type="email" className="input" value={novoEmail} onChange={(e) => setNovoEmail(e.target.value)} placeholder="nome@empresa.com" /></Field>
-                  </Row>
-                  <Field label="Equipe" htmlFor="novaEquipe"><input id="novaEquipe" className="input" value={novaEquipe} onChange={(e) => setNovaEquipe(e.target.value)} placeholder="Ex.: Vendas Corporativo" /></Field>
-                  {erroVendedor && <div className="mb-3"><Aviso tom="danger">{erroVendedor}</Aviso></div>}
-                  <div className="flex gap-2.5 mb-1">
-                    <button type="button" className="btn-primary !w-auto" disabled={!novoNome.trim() || salvandoVendedor} onClick={salvarVendedor}>{salvandoVendedor ? "Salvando" : "Salvar vendedor"}</button>
-                    <button type="button" className="btn-ghost" onClick={() => { setNovoVendedorAberto(false); setErroVendedor(null); }}>Cancelar</button>
-                  </div>
-                </div>
-              )}
-
-              <div className="[&>details]:mb-0">
-                <MaisDetalhes titulo="Critérios de avaliação">
-                  <p className="text-[12.5px] text-muted mb-3">A ordem aqui é a mesma da tabela de resultado.</p>
-                  {criterios.map((c, i) => (
-                    <Field key={i} label={`Critério ${i + 1}`} htmlFor={`criterio-${i}`}>
-                      <input id={`criterio-${i}`} className="input" value={c} onChange={(e) => setCriterio(i, e.target.value)} />
-                    </Field>
-                  ))}
-                </MaisDetalhes>
-              </div>
-            </CartaoEntrada>
-
-            <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Analisando" : "Analisar a conversa"}</button>
-            <button type="button" className="btn-secundario mt-2" disabled={carregando} onClick={verExemplo}>Ver a análise de exemplo</button>
-          </form>
-
-          <div className="card p-5 mt-4">
+          <div className="card p-5 mb-3">
             <h2 className="font-bold text-[15px] mb-3">Treinar e acompanhar</h2>
             <div className="flex gap-2.5 flex-wrap mb-1.5">
               <button type="button" className="btn-ghost" disabled={criandoLinkTreino} onClick={criarLinkTreino}>{criandoLinkTreino ? "Gerando..." : "Criar link de treino"}</button>
@@ -415,7 +167,7 @@ export default function Page() {
             <p className="text-[12.5px] text-muted">
               {comVoz
                 ? "O vendedor abre o link e treina por voz com o cliente simulado."
-                : <>Hoje o treino é por texto. Conecte a ElevenLabs para o vendedor treinar por voz. <Link href="/setup#elevenlabs-agente" className="btn-link">Conectar a ElevenLabs</Link></>}
+                : <>Hoje o treino é por voz do navegador. Conecte a ElevenLabs para a voz ficar mais natural. <Link href="/setup#elevenlabs-agente" className="btn-link">Conectar a ElevenLabs</Link></>}
             </p>
             {erroLinkTreino && <div className="mt-2.5"><Aviso tom="danger">{erroLinkTreino}</Aviso></div>}
             {erroPainel && <div className="mt-2.5"><Aviso tom="danger">{erroPainel}</Aviso></div>}
@@ -427,40 +179,18 @@ export default function Page() {
             )}
           </div>
 
-          <div className="card p-5 mt-4">
-            <Privacidade detalhe="A conversa e a análise ficam salvas neste app por 90 dias, até você apagar." />
-
-            <MaisDetalhes titulo="Últimos resultados">
-              {historico === null ? (
-                <p className="text-muted text-sm">Carregando...</p>
-              ) : historico.length === 0 ? (
-                <p className="text-muted text-sm">Nenhum resultado salvo ainda.</p>
-              ) : (
-                <>
-                  <ul className="flex flex-col gap-1.5 text-sm mb-3">
-                    {historico.slice(0, 3).map((h) => (
-                      <li key={h.id} className="flex justify-between gap-3">
-                        <Link href={`/r/${h.id}`} className="text-accent-ink font-semibold hover:underline truncate">{h.titulo}</Link>
-                        <span className="text-muted shrink-0">{data(h.criadoEm)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="flex items-center gap-4">
-                    <Link href="/historico" className="btn-link text-[13px]">Ver todos</Link>
-                    <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
-                  </div>
-                </>
-              )}
-            </MaisDetalhes>
+          <div className="card p-5">
+            <h2 className="font-bold text-[15px] mb-2">Uma conversa que já aconteceu</h2>
+            <p className="text-[13px] text-muted mb-3.5">Cole ou envie a transcrição de uma conversa com um cliente de verdade e receba a mesma análise do treino.</p>
+            <div className="flex gap-2.5 flex-wrap">
+              <Link href="/equipe/analisar" className="btn-primary !w-auto">Analisar uma conversa real</Link>
+              <Link href="/equipe" className="btn-ghost">Ver a equipe</Link>
+            </div>
           </div>
         </div>
 
         <Stage>
-          {estado.fase === "vazio" && <Previa itens={PROMESSA.itens} onExemplo={verExemplo} carregando={carregando} />}
-          {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
-          {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} codigo={estado.codigo} acao={estado.acao} onTentarNovamente={() => gerar(estado.dados)} />}
-          {estado.fase === "pronto" && <Resultado conversa={estado.conversa} analise={estado.analise} meta={estado.meta} id={estado.id} titulo={estado.titulo} acoesDoGestor />}
-          {estado.fase === "painel" && <ResultadoPainel painel={estado.painel} meta={estado.meta} id={estado.id} titulo={estado.titulo} />}
+          {painel ? <ResultadoPainel painel={painel.painel} meta={painel.meta} id={painel.id} titulo={painel.titulo} /> : <Previa itens={PROMESSA.itens} />}
         </Stage>
       </main>
     </>

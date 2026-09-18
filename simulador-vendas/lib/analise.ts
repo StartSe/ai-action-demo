@@ -6,7 +6,7 @@ import { esperar, analiseDemo, conversaDemo } from "./demo";
 import { parseConversaColada } from "./conversa";
 import { CRITERIOS_PADRAO } from "./criterios";
 import { obter as obterCenario } from "./cenarios";
-import { obter as obterVendedor } from "./vendedores";
+import { obter as obterParticipante } from "./participantes";
 import { salvar } from "./historico";
 import type { Analise, Cenario, Conversa, CriterioAnalise, DadosAnalise, LinhaTranscricao, Vendedor } from "./types";
 
@@ -100,7 +100,7 @@ function tituloResultado(vendedor: Vendedor | null, cenario: Cenario | null): st
  */
 export async function gerarAnalise(dados: DadosAnalise): Promise<{ demo: boolean; conversa: Conversa; analise: Analise; meta: Meta; id?: string; titulo: string }> {
   const criterios = dados.criterios && dados.criterios.length > 0 ? dados.criterios : CRITERIOS_PADRAO;
-  const vendedor = dados.vendedorId ? obterVendedor(dados.vendedorId) : null;
+  const vendedor = dados.vendedorId ? obterParticipante(dados.vendedorId) : null;
   // Em modo demonstração a análise exibida é sempre a da conversa de exemplo (a renovação em risco da
   // Beatriz, lib/demo.ts), então o cenário mostrado tem de ser o dela: sem isso, o título e o cenário
   // no alto da tela falam de uma conversa que não é a que aparece em "Ver a conversa completa".
@@ -141,7 +141,7 @@ export function salvarResultado({ tipo, titulo, resumo, conversa, saida, meta: m
  * da US-002. Reaproveita a mesma análise e gravação no histórico de gerarAnalise.
  */
 export async function salvarConversaAnalisada(conversa: Conversa, criterios: string[] = CRITERIOS_PADRAO): Promise<{ demo: boolean; analise: Analise; meta: Meta; id?: string; titulo: string }> {
-  const vendedor = conversa.vendedorId ? obterVendedor(conversa.vendedorId) : null;
+  const vendedor = conversa.vendedorId ? obterParticipante(conversa.vendedorId) : null;
   const cenario = conversa.cenarioId ? obterCenario(conversa.cenarioId) : null;
   const titulo = tituloResultado(vendedor, cenario);
 

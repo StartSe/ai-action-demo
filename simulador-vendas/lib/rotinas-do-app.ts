@@ -6,7 +6,7 @@ import { numero } from "./formato";
 import { listar as listarHistorico } from "./historico";
 import { gerarPainelEquipe } from "./painel-equipe";
 import { registrarExecutor, type Rotina } from "./rotinas";
-import { listar as listarVendedores } from "./vendedores";
+import { listar as listarParticipantes } from "./participantes";
 
 /** Tipos de rotina disponíveis neste app, para o cartão de /setup listar num seletor. */
 export const TIPOS_ROTINA: { tipo: string; rotulo: string }[] = [
@@ -41,7 +41,7 @@ registrarExecutor("resumo-equipe", async () => {
 
   const maisEvoluiu = [...painel.vendedores].filter((v) => v.variacao !== null && v.variacao > 0).sort((a, b) => (b.variacao as number) - (a.variacao as number))[0];
   const idsComConversa = new Set(painel.vendedores.map((v) => v.vendedorId));
-  const naoTreinaram = listarVendedores(500).filter((v) => !idsComConversa.has(v.id));
+  const naoTreinaram = listarParticipantes(500).filter((v) => !idsComConversa.has(v.id));
   const criterioMaisFraco = painel.criteriosFracos[0];
 
   const partes = [

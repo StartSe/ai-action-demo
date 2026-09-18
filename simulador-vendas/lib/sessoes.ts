@@ -579,3 +579,85 @@ export function avaliacoesDosParticipantes(participanteIds: string[], desde: str
     )
     .all(...participanteIds, desde) as { participanteId: string; quando: string; saida: string }[];
 }
+
+/**
+ * Resumo por participante para a tela de Equipe (US-026): o que cada pessoa já fez no app inteiro.
+ *
+ * "Sessão" aqui é conversa que aconteceu: fica de fora a que está em preparação (o vendedor abriu o
+ * link e ainda não começou) e a abandonada (abriu e fechou a aba) — as mesmas duas exclusões de
+ * `historicoDe`, e pelo mesmo motivo: mostrar como treino algo que nunca aconteceu.
+ *
+ * Duas consultas agregadas para a tela toda, não uma por linha: trinta pessoas dariam sessenta
+ * consultas por carregamento. `resultados` pode não existir num banco recém-criado e `prepare` sobre
+ * tabela inexistente lança na hora (não na execução), então a conferência vem antes.
+ */
+export function resumoPorParticipante(): Record<string, { sessoes: number; ultima: string | null; nota: number | null; avaliadas: number }> {
+  marcarAbandonadas();
+  const d = banco();
+
+  const linhas = d
+    .prepare(
+      `SELECT participanteId, COUNT(*) AS sessoes, MAX(COALESCE(encerradaEm, criadoEm)) AS ultima
+         FROM sessoes_treino
+        WHERE status NOT IN ('preparando', 'abandonada')
+        GROUP BY participanteId`,
+    )
+    .all() as { participanteId: string; sessoes: number; ultima: string | null }[];
+
+  const resumo: Record<string, { sessoes: number; ultima: string | null; nota: number | null; avaliadas: number }> = {};
+  for (const l of linhas) resumo[l.participanteId] = { sessoes: l.sessoes, ultima: l.ultima, nota: null, avaliadas: 0 };
+
+  const comResultados = Boolean(d.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'resultados'").get());
+  if (!comResultados) return resumo;
+
+  const avaliadas = d
+    .prepare(
+      `SELECT s.participanteId AS participanteId, r.saida AS saida
+         FROM sessoes_treino s
+         JOIN resultados r ON r.id = s.resultadoId
+        WHERE s.resultadoId IS NOT NULL AND s.status NOT IN ('preparando', 'abandonada')`,
+    )
+    .all() as { participanteId: string; saida: string }[];
+
+  const somas: Record<string, { soma: number; total: number }> = {};
+  for (const a of avaliadas) {
+    const nota = notaDoResultado(a.saida);
+    if (nota === null) continue;
+    const atual = somas[a.participanteId] ?? { soma: 0, total: 0 };
+    somas[a.participanteId] = { soma: atual.soma + nota, total: atual.total + 1 };
+  }
+  for (const [participanteId, s] of Object.entries(somas)) {
+    const linha = resumo[participanteId] ?? { sessoes: 0, ultima: null, nota: null, avaliadas: 0 };
+    resumo[participanteId] = { ...linha, nota: Math.round((s.soma / s.total) * 10) / 10, avaliadas: s.total };
+  }
+  return resumo;
+}
+
+/**
+ * As conversas desta pessoa em **qualquer** treino, da mais recente para a mais antiga — metade da
+ * linha do tempo do detalhe dela na tela de Equipe (a outra metade são as conversas reais analisadas,
+ * que moram no histórico e não têm sessão; quem junta as duas é `lib/equipe.ts`).
+ *
+ * Mesmas exclusões e mesma junção em SQL de `historicoDe`, sem o filtro por simulação: aqui a pergunta
+ * é "o que esta pessoa já fez", não "como ela foi neste link".
+ */
+export function sessoesComNotaDe(participanteId: string, limite = 200): SessaoComNota[] {
+  marcarAbandonadas();
+  const d = banco();
+  const comResultados = Boolean(d.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'resultados'").get());
+  const linhas = d
+    .prepare(
+      comResultados
+        ? `SELECT s.*, r.saida AS saida
+             FROM sessoes_treino s
+             LEFT JOIN resultados r ON r.id = s.resultadoId
+            WHERE s.participanteId = ? AND s.status NOT IN ('preparando', 'abandonada')
+            ORDER BY COALESCE(s.encerradaEm, s.criadoEm) DESC LIMIT ?`
+        : `SELECT s.*, NULL AS saida
+             FROM sessoes_treino s
+            WHERE s.participanteId = ? AND s.status NOT IN ('preparando', 'abandonada')
+            ORDER BY COALESCE(s.encerradaEm, s.criadoEm) DESC LIMIT ?`,
+    )
+    .all(participanteId, limite) as (LinhaSessao & { saida: string | null })[];
+  return linhas.map((l) => ({ ...linhaParaSessao(l), nota: l.saida ? notaDoResultado(l.saida) : null }));
+}

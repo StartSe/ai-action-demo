@@ -19,7 +19,6 @@ import { obter as obterSessao, registrarEnvioEmail } from "./sessoes";
 import { obter as obterSimulacao } from "./simulacoes";
 import { enderecoPublico } from "./setup-comum";
 import { getConfig, setConfig } from "./store";
-import { obter as obterVendedor } from "./vendedores";
 import type { AvaliacaoSessao } from "./avaliacao";
 import type { Meta } from "./ai";
 import type { Analise, Conversa } from "./types";
@@ -45,7 +44,7 @@ export async function enviarAnaliseAoVendedor(resultadoId: string): Promise<{ me
     throw new ErroEnvioAnalise("Não encontrei esta conversa. Analise de novo e tente outra vez.", 400);
   }
 
-  const vendedor = resultado.entrada.vendedorId ? obterVendedor(resultado.entrada.vendedorId) : null;
+  const vendedor = resultado.entrada.vendedorId ? obterParticipante(resultado.entrada.vendedorId) : null;
   if (!vendedor) throw new ErroEnvioAnalise("Escolha o vendedor desta conversa antes de enviar a análise.", 400);
   if (!vendedor.email) {
     throw new ErroEnvioAnalise(`${vendedor.nome} ainda não tem e-mail cadastrado. Cadastre o endereço e tente de novo.`, 400);

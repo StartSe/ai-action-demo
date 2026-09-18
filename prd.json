@@ -468,7 +468,7 @@
       ],
       "priority": 26,
       "notes": "Fase 6: resultados do gestor",
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-027",
