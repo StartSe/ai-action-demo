@@ -316,3 +316,173 @@ export function listarFontes(candidatoId: string): FonteCandidato[] {
     .all(candidatoId) as LinhaFonte[];
   return linhas.map(linhaParaFonte);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Validação do que uma pessoa digitou (US-008)
+// ---------------------------------------------------------------------------------------------
+// Mesma separação já adotada na vaga (lib/vagas.ts): `validarCandidato` fala com quem preencheu o
+// formulário e RECUSA o que está fora (`{ ok: false, erro }` → 400 com a frase pronta), enquanto
+// `criar`/`atualizar` CORTAM em silêncio o que vem da IA ou do assistente. Uma pessoa que colou um
+// nome de 300 caracteres precisa saber onde está o limite; um modelo, não.
+
+export const LIMITE_NOME = 120;
+export const LIMITE_EMAIL = 160;
+export const LIMITE_TELEFONE = 40;
+export const LIMITE_CIDADE = 80;
+export const LIMITE_LINKEDIN = 300;
+export const LIMITE_TERMO_BUSCA = 120;
+
+/** O cadastro completo (`POST`): o nome sempre volta preenchido. */
+export type ValidacaoCandidato = { ok: true; campos: CamposCandidato & { nome: string } } | { ok: false; erro: string };
+/** A edição (`PATCH`): só o que veio no corpo, e o nome pode nem ter vindo. */
+export type ValidacaoMudancas = { ok: true; campos: CamposCandidato } | { ok: false; erro: string };
+
+function texto(valor: unknown): string {
+  return typeof valor === "string" ? valor.trim() : "";
+}
+
+/** Uma linha só: quebras viram espaço, para um nome colado de um currículo não virar parágrafo. */
+function umaLinha(valor: unknown): string {
+  return texto(valor).replace(/\s+/g, " ");
+}
+
+/**
+ * O endereço do perfil, pronto para virar link.
+ *
+ * Quem copia o perfil da barra do navegador traz `https://`; quem digita de cabeça escreve
+ * `linkedin.com/in/fulano`. Os dois são a mesma pessoa, e recusar o segundo seria implicância —
+ * então o esquema entra aqui. `"invalido"` fica para o que nem com esquema vira endereço.
+ */
+function lerEndereco(valor: unknown): string | "invalido" {
+  const bruto = umaLinha(valor);
+  if (!bruto) return "";
+  const comEsquema = /^https?:\/\//i.test(bruto) ? bruto : `https://${bruto}`;
+  try {
+    const url = new URL(comEsquema);
+    if (!url.hostname.includes(".")) return "invalido";
+    return url.toString();
+  } catch {
+    return "invalido";
+  }
+}
+
+/**
+ * Valida o cadastro de um candidato.
+ *
+ * `parcial` é para a edição (`PATCH`): só os campos que vieram no corpo entram no resultado, e o que
+ * não veio fica `undefined` — "não mexa" (e não "apague"), como todo tipo de atualização deste app.
+ */
+function validar(bruto: unknown, parcial: boolean): ValidacaoMudancas {
+  const dados = (bruto ?? {}) as Record<string, unknown>;
+  const campos: CamposCandidato = {};
+  const veio = (chave: string) => dados[chave] !== undefined;
+
+  if (!parcial || veio("nome")) {
+    const nome = umaLinha(dados.nome);
+    if (!nome) return { ok: false, erro: "Diga o nome completo do candidato para continuar." };
+    if (nome.length > LIMITE_NOME) return { ok: false, erro: `O nome pode ter até ${LIMITE_NOME} caracteres.` };
+    campos.nome = nome;
+  }
+
+  if (!parcial || veio("email")) {
+    const email = umaLinha(dados.email).toLowerCase();
+    if (email.length > LIMITE_EMAIL) return { ok: false, erro: `O e-mail pode ter até ${LIMITE_EMAIL} caracteres.` };
+    // Sem regra fina de endereço: só o que denuncia erro de digitação de verdade. Quem tem um e-mail
+    // estranho e válido não pode ficar de fora do cadastro por causa da nossa expressão regular.
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return { ok: false, erro: "Esse e-mail não parece completo. Confira o endereço ou deixe o campo em branco." };
+    }
+    campos.email = email;
+  }
+
+  if (!parcial || veio("telefone")) {
+    const telefone = umaLinha(dados.telefone);
+    if (telefone.length > LIMITE_TELEFONE) return { ok: false, erro: `O telefone pode ter até ${LIMITE_TELEFONE} caracteres.` };
+    campos.telefone = telefone;
+  }
+
+  if (!parcial || veio("cidade")) {
+    const cidade = umaLinha(dados.cidade);
+    if (cidade.length > LIMITE_CIDADE) return { ok: false, erro: `A cidade pode ter até ${LIMITE_CIDADE} caracteres.` };
+    campos.cidade = cidade;
+  }
+
+  if (!parcial || veio("linkedinUrl")) {
+    const endereco = lerEndereco(dados.linkedinUrl);
+    if (endereco === "invalido") {
+      return { ok: false, erro: "Cole o endereço completo do perfil, como linkedin.com/in/nome-da-pessoa." };
+    }
+    if (endereco.length > LIMITE_LINKEDIN) return { ok: false, erro: `O endereço do perfil pode ter até ${LIMITE_LINKEDIN} caracteres.` };
+    campos.linkedinUrl = endereco;
+  }
+
+  if (!parcial || veio("termoBusca")) {
+    const termoBusca = umaLinha(dados.termoBusca);
+    if (termoBusca.length > LIMITE_TERMO_BUSCA) {
+      return { ok: false, erro: `O termo de busca pode ter até ${LIMITE_TERMO_BUSCA} caracteres. Empresa, cargo ou cidade bastam.` };
+    }
+    campos.termoBusca = termoBusca;
+  }
+
+  if (veio("cvTexto")) campos.cvTexto = texto(dados.cvTexto) || null;
+
+  return { ok: true, campos };
+}
+
+/** O cadastro inteiro. O nome é obrigatório aqui, e por isso o resultado já o promete a quem chama. */
+export function validarCandidato(bruto: unknown): ValidacaoCandidato {
+  return validar(bruto, false) as ValidacaoCandidato;
+}
+
+/** Só o que veio no corpo, para a edição: campo ausente é "não mexa", nunca "apague". */
+export function validarMudancasCandidato(bruto: unknown): ValidacaoMudancas {
+  return validar(bruto, true);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Leitura da ficha pelas listas
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * O pouco da ficha que uma LISTA mostra: o cargo atual e de onde a ficha veio.
+ *
+ * A ficha inteira — com o tipo de cada campo e as regras de mesclagem — é de `lib/ficha.ts`
+ * (US-009). Este leitor é de propósito tolerante: ele atravessa um JSON que pode ter sido gravado
+ * por uma versão anterior e, no pior caso, devolve uma lista vazia de origens. Uma tela de lista não
+ * pode quebrar porque um campo mudou de formato.
+ */
+export type ResumoFicha = { cargoAtual?: string; empresaAtual?: string; origens: ("cv" | "web")[] };
+
+function origemDoCampo(valor: unknown): "cv" | "web" | "gestor" | null {
+  if (!valor || typeof valor !== "object") return null;
+  const origem = (valor as { origem?: unknown }).origem;
+  return origem === "cv" || origem === "web" || origem === "gestor" ? origem : null;
+}
+
+function valorDoCampo(valor: unknown): string {
+  if (!valor || typeof valor !== "object") return "";
+  const conteudo = (valor as { valor?: unknown }).valor;
+  return typeof conteudo === "string" ? conteudo : "";
+}
+
+export function resumoDaFicha(ficha?: FichaCandidato): ResumoFicha {
+  if (!ficha) return { origens: [] };
+  const origens = new Set<"cv" | "web">();
+
+  for (const [chave, valor] of Object.entries(ficha)) {
+    // `divergencias` guarda o conflito entre currículo e web (US-012), não um campo da ficha: contá-la
+    // como origem faria toda ficha com uma divergência parecer ter as duas fontes.
+    if (chave === "divergencias") continue;
+    for (const item of Array.isArray(valor) ? valor : [valor]) {
+      const origem = origemDoCampo(item);
+      if (origem === "cv" || origem === "web") origens.add(origem);
+    }
+  }
+
+  return {
+    cargoAtual: valorDoCampo(ficha.cargoAtual) || undefined,
+    empresaAtual: valorDoCampo(ficha.empresaAtual) || undefined,
+    // "CV" antes de "Web": é a ordem de prioridade da D5, e é assim que os chips aparecem na lista.
+    origens: (["cv", "web"] as const).filter((o) => origens.has(o)),
+  };
+}

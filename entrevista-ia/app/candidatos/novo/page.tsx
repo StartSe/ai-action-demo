@@ -1,24 +1,91 @@
 "use client";
-// Cadastrar um candidato (US-008). Nasce aqui na US-007, que é onde o diálogo "Adicionar candidato"
-// da vaga oferece esse caminho — o endereço com `?vaga=<id>` já é o definitivo, e quem chega por ele
-// volta para a vaga certa. O formulário com currículo é da US-008.
+// Cadastrar um candidato (US-008).
+//
+// A tela é fina de propósito: quem sabe o que é um candidato é `components/FormularioCandidato.tsx`
+// e `lib/candidatos.ts` (que valida); quem sabe ler um currículo é `lib/curriculo.ts`. Aqui ficam o
+// estado, a chamada e para onde ir depois de salvar.
+//
+// Com `?vaga=<id>` — o caminho que vem do diálogo "Adicionar candidato" da vaga — o candidato salvo
+// já é atribuído à vaga e a tela volta para lá com o recado. O convite em si (o link e a mensagem
+// pronta) é da US-014.
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
-import { Empty, Topbar, useStatus } from "@/components/ui";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import {
+  FormularioCandidato,
+  corpoDoCandidato,
+  dadosVaziosCandidato,
+  type DadosCandidato,
+} from "@/components/FormularioCandidato";
+import { Aviso, Topbar, lerErro, useStatus } from "@/components/ui";
 
-function IconeCandidato() {
-  return (
-    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="32" cy="22" r="10" />
-      <path d="M14 52c0-9.4 8-15 18-15s18 5.6 18 15" />
-    </svg>
-  );
-}
+/** Depois de salvar: o candidato está criado e só falta o texto do currículo que o arquivo não deu. */
+type Salvo = { id: string; nome: string; aviso: string };
 
 function Conteudo() {
   const { status, erro } = useStatus();
+  const router = useRouter();
   const vaga = useSearchParams().get("vaga");
+
+  const [dados, setDados] = useState<DadosCandidato>(dadosVaziosCandidato);
+  const [curriculo, setCurriculo] = useState<File | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [falha, setFalha] = useState("");
+  const [salvo, setSalvo] = useState<Salvo | null>(null);
+  const [textoColado, setTextoColado] = useState("");
+
+  const destino = vaga ? `/vagas/${vaga}` : "/candidatos";
+
+  async function salvar() {
+    setSalvando(true);
+    setFalha("");
+    try {
+      const r = await fetch("/api/candidatos", { method: "POST", body: corpoDoCandidato(dados, curriculo) });
+      if (!r.ok) throw r;
+      const { candidato, aviso } = await r.json();
+
+      // A atribuição passa pela mesma rota do diálogo da vaga (`POST /api/entrevistas`), que é quem
+      // sabe recusar uma vaga encerrada. Se ela falhar, o candidato continua cadastrado e a mensagem
+      // diz o que aconteceu — refazer o cadastro inteiro por causa disso seria pior.
+      if (vaga) {
+        const atribuicao = await fetch("/api/entrevistas", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ vagaId: vaga, candidatoId: candidato.id }),
+        });
+        if (!atribuicao.ok) throw atribuicao;
+      }
+
+      if (aviso) {
+        setSalvo({ id: candidato.id, nome: candidato.nome, aviso });
+        setSalvando(false);
+        return;
+      }
+      router.push(destino);
+    } catch (e) {
+      setFalha((await lerErro(e)).mensagem);
+      setSalvando(false);
+    }
+  }
+
+  /** O texto que a pessoa colou entra no mesmo lugar do que sairia do arquivo: `cvTexto`. */
+  async function salvarTexto() {
+    if (!salvo || !textoColado.trim()) return;
+    setSalvando(true);
+    setFalha("");
+    try {
+      const r = await fetch(`/api/candidatos/${salvo.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cvTexto: textoColado }),
+      });
+      if (!r.ok) throw r;
+      router.push(destino);
+    } catch (e) {
+      setFalha((await lerErro(e)).mensagem);
+      setSalvando(false);
+    }
+  }
 
   return (
     <>
@@ -31,12 +98,54 @@ function Conteudo() {
         <h1 className="titulo-painel mt-3 mb-1.5">Cadastrar candidato</h1>
         <p className="apoio mb-6">O nome, o currículo e o que a pesquisa na web precisa saber para achar a pessoa certa.</p>
 
-        <Empty
-          ilustracao={<IconeCandidato />}
-          titulo="Ainda em construção"
-          descricao="Aqui você vai enviar o currículo e a ficha aparece preenchida, com a origem de cada informação. Por enquanto, o candidato entra pelo nome no início."
-          acaoSecundaria={vaga ? { rotulo: "Voltar para a vaga", url: `/vagas/${vaga}` } : { rotulo: "Ir para o início", url: "/" }}
-        />
+        {salvo ? (
+          <section className="card p-6 max-md:p-5">
+            <h2 className="font-bold text-[16px] mb-1.5">{salvo.nome} está cadastrado</h2>
+            <p className="text-muted text-sm mb-4">O arquivo do currículo ficou guardado e você pode abri-lo quando quiser.</p>
+
+            <div className="mb-4">
+              <Aviso tom="warn">{salvo.aviso}</Aviso>
+            </div>
+
+            <div className="flex flex-col gap-1.5 mb-4">
+              <label htmlFor="candidato-cv-texto" className="text-[13px] font-semibold">Texto do currículo</label>
+              <textarea
+                id="candidato-cv-texto"
+                className="input min-h-40 resize-y"
+                value={textoColado}
+                placeholder="Cole aqui o texto do currículo, do jeito que estiver."
+                onChange={(e) => setTextoColado(e.target.value)}
+              />
+            </div>
+
+            {falha && (
+              <div className="mb-4">
+                <Aviso tom="danger">{falha}</Aviso>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <button type="button" className="btn-primary !w-auto max-md:!w-full" disabled={salvando || !textoColado.trim()} onClick={() => void salvarTexto()}>
+                {salvando ? "Salvando..." : "Salvar o texto"}
+              </button>
+              <button type="button" className="btn-ghost !w-auto max-md:!w-full" onClick={() => router.push(destino)}>
+                Continuar sem o texto
+              </button>
+            </div>
+          </section>
+        ) : (
+          <FormularioCandidato
+            dados={dados}
+            onMudar={setDados}
+            curriculo={curriculo}
+            onCurriculo={setCurriculo}
+            onSalvar={() => void salvar()}
+            onCancelar={() => router.push(destino)}
+            salvando={salvando}
+            erro={falha}
+            rotuloSalvar={vaga ? "Cadastrar e adicionar à vaga" : "Cadastrar candidato"}
+          />
+        )}
       </main>
     </>
   );

@@ -347,3 +347,35 @@ export function contarPorVaga(): Record<string, ContagemVaga> {
   }
   return contagens;
 }
+
+/** Quantas entrevistas cada candidato tem e qual foi a última vaga dele. */
+export type ContagemCandidato = { total: number; ultimaVagaId: string };
+
+/**
+ * A contagem por candidato de TODOS os candidatos, em uma consulta agregada só — mesmo motivo de
+ * `contarPorVaga()`: a lista de candidatos (US-008) mostra "2 entrevistas · Analista de Customer
+ * Success" em cada linha, e uma consulta por linha faria trinta consultas para mostrar números
+ * pequenos.
+ *
+ * Cancelada e expirada ficam de fora, como lá: um convite que não vale mais não é uma entrevista a
+ * mais no histórico da pessoa. A "última vaga" é a da entrevista mais recente que sobrou.
+ */
+export function contarPorCandidato(): Record<string, ContagemCandidato> {
+  expirarVencidas();
+  // `MAX(criadoEm)` escolhe a linha; o `vagaId` que vem junto é o dessa mesma linha (o SQLite garante
+  // isso para uma agregação com um único MAX/MIN na lista de seleção).
+  const linhas = banco()
+    .prepare(
+      `SELECT candidatoId, COUNT(*) AS total, vagaId, MAX(criadoEm) AS ultima
+         FROM entrevistas
+        WHERE status NOT IN ('cancelada', 'expirada')
+        GROUP BY candidatoId`,
+    )
+    .all() as { candidatoId: string; total: number; vagaId: string; ultima: string }[];
+
+  const contagens: Record<string, ContagemCandidato> = {};
+  for (const linha of linhas) {
+    contagens[linha.candidatoId] = { total: Number(linha.total), ultimaVagaId: linha.vagaId };
+  }
+  return contagens;
+}

@@ -144,7 +144,7 @@
         "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Fase 2: Candidatos · PRD US-008"
     },
     {

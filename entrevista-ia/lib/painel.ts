@@ -6,8 +6,8 @@
 // estado e só depende de `lib/banco.ts`. Se ele passasse a importar vaga, candidato e histórico, o
 // primeiro módulo de entidade que precisasse de entrevista fecharia ciclo. Aqui em cima ninguém
 // importa de volta.
-import { obter as obterCandidato } from "./candidatos";
-import { listar as listarEntrevistas, type Entrevista, type FiltroEntrevistas } from "./entrevistas";
+import { listar as listarCandidatos, obter as obterCandidato, resumoDaFicha, type Candidato, type ResumoFicha } from "./candidatos";
+import { contarPorCandidato, listar as listarEntrevistas, type Entrevista, type FiltroEntrevistas } from "./entrevistas";
 import { obter as obterResultado } from "./historico";
 import { obter as obterVaga } from "./vagas";
 import type { Parecer, Recomendacao } from "./types";
@@ -54,6 +54,43 @@ export function listarEntrevistasNoPainel(filtro: FiltroEntrevistas = {}): Entre
       candidatoNome: nomes.get(entrevista.candidatoId) as string,
       vagaCargo: cargos.get(entrevista.vagaId) as string,
       ...resumoDoParecer(entrevista.resultadoId),
+    };
+  });
+}
+
+/** Um candidato como a lista dele o mostra: a ficha já resumida e o processo em que ele está. */
+export type CandidatoNoPainel = Candidato & {
+  /** Da ficha (US-009): o cargo atual e de onde cada parte dela veio ("CV", "Web"). */
+  cargoAtual?: string;
+  origens: ResumoFicha["origens"];
+  entrevistas: number;
+  ultimaVaga?: string;
+};
+
+/**
+ * A lista de candidatos com o contexto que a tela mostra na mesma linha (US-008).
+ *
+ * Mesma razão de `listarEntrevistasNoPainel` para estar aqui e não em `lib/candidatos.ts`: aquele
+ * módulo guarda estado e não pode importar entrevista nem vaga. A contagem vem de UMA consulta
+ * agregada (`contarPorCandidato`), e o cargo de cada vaga de um cache de id — trinta candidatos da
+ * mesma vaga não podem virar trinta leituras dela.
+ */
+export function listarCandidatosNoPainel({ busca }: { busca?: string } = {}): CandidatoNoPainel[] {
+  const contagens = contarPorCandidato();
+  const cargos = new Map<string, string | undefined>();
+
+  return listarCandidatos({ busca }).map((candidato) => {
+    const contagem = contagens[candidato.id];
+    if (contagem && !cargos.has(contagem.ultimaVagaId)) {
+      cargos.set(contagem.ultimaVagaId, obterVaga(contagem.ultimaVagaId)?.cargo);
+    }
+    const { cargoAtual, origens } = resumoDaFicha(candidato.ficha);
+    return {
+      ...candidato,
+      cargoAtual,
+      origens,
+      entrevistas: contagem?.total ?? 0,
+      ultimaVaga: contagem ? cargos.get(contagem.ultimaVagaId) : undefined,
     };
   });
 }
