@@ -54,8 +54,9 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `BRIGHTDATA_MODO_PRO` | Alternativa ao setup. `1` liga o modo avançado (ferramentas de perfil do LinkedIn e de conjunto de dados); padrão `0`. |
 | `ELEVENLABS_API_KEY` | Alternativa ao setup. Ativa a voz da entrevistadora. Obtenha em [elevenlabs.io/app/settings/api-keys](https://elevenlabs.io/app/settings/api-keys). |
 | `ELEVENLABS_VOICE_ID` | Alternativa ao setup. Voz usada no text-to-speech. Padrão `EXAVITQu4vr4xnSDxMaL`. |
-| `ELEVENLABS_AGENT_ID` | Alternativa ao setup. Id do agente conversacional usado na ligação telefônica. |
-| `ELEVENLABS_PHONE_NUMBER_ID` | Alternativa ao setup. Id do número Twilio vinculado ao agente. |
+| `ELEVENLABS_AGENT_ID` | Alternativa ao setup. Id do agente conversacional que conduz a entrevista por voz (e a ligação telefônica). |
+| `ELEVENLABS_PHONE_NUMBER_ID` | Alternativa ao setup. Id do número Twilio vinculado ao agente (só para a ligação). |
+| `ELEVENLABS_WEBHOOK_SECRET` | Alternativa ao setup. Segredo que valida o aviso de pós-conversa da ElevenLabs. |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
 
 ## Estrutura

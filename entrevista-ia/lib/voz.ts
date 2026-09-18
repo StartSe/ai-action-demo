@@ -130,6 +130,16 @@ export function agenteEnabled(): boolean {
   return Boolean(getConfig("ELEVENLABS_API_KEY") && getConfig("ELEVENLABS_AGENT_ID"));
 }
 
+/**
+ * O identificador do agente conversacional escolhido em Configurações, ou vazio quando não há.
+ *
+ * Ele é o único dado da ElevenLabs que chega ao navegador do candidato: o widget precisa dele para
+ * abrir a conversa. A chave da conta continua só no servidor.
+ */
+export function agenteConfigurado(): string {
+  return getConfig("ELEVENLABS_AGENT_ID") ?? "";
+}
+
 export function ligacaoEnabled(): boolean {
   return Boolean(getConfig("ELEVENLABS_API_KEY") && getConfig("ELEVENLABS_AGENT_ID") && getConfig("ELEVENLABS_PHONE_NUMBER_ID"));
 }

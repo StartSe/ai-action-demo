@@ -565,7 +565,7 @@ function SecaoLigar({ vaga, habilitado }: { vaga: Vaga; habilitado: boolean }) {
     return (
       <p className="text-muted text-[12.5px] mb-8">
         A entrevistadora também pode ligar para o candidato.{" "}
-        <a href="/setup#elevenlabs-ligacao" className="btn-link">Ativar a ligação automática</a>
+        <a href="/setup#elevenlabs-agente" className="btn-link">Ativar a ligação automática</a>
       </p>
     );
   }

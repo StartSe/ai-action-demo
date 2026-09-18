@@ -12,7 +12,8 @@
 import { FECHADO, type MotivoFechado, type SalaPublica, resolverConvite } from "./convite";
 import { type Entrevista, mudarStatus, obter as obterEntrevista } from "./entrevistas";
 import { cookieSessaoCandidato, lerSessaoCandidato } from "./sessao-candidato";
-import { agenteEnabled } from "./voz";
+import { montarContexto, roteiroDaEntrevista, roteiroEmTexto } from "./roteiro";
+import { agenteConfigurado, agenteEnabled } from "./voz";
 import type { NivelVoz } from "./entrevistas";
 
 /** Por que a sala não abre. Aos motivos do link soma-se o aparelho que chegou depois. */
@@ -100,4 +101,55 @@ export function cookieDaSala(sala: SalaAberta, codigo: string, seguro: boolean):
  */
 export function nivelDeVoz(): NivelVoz {
   return agenteEnabled() ? "agente" : "navegador";
+}
+
+/** O que o widget do agente conversacional precisa para abrir a conversa desta entrevista. */
+export type AgenteDaSala = {
+  /** O identificador do agente escolhido em Configurações. */
+  id: string;
+  /** As variáveis desta entrevista, entregues ao agente no começo da conversa. */
+  variaveis: Record<string, string>;
+};
+
+/**
+ * O agente conversacional desta entrevista, ou `null` quando ele não serve a ela.
+ *
+ * Devolver `null` NÃO é erro: é a sala caindo para o nível 2, que funciona sem nada configurado. Isso
+ * acontece quando o agente não está conectado, quando o link é antigo (sem entrevista no banco) e
+ * também quando o roteiro não pôde ser planejado — sem roteiro o agente conversaria sobre nada, e a
+ * sala do navegador sabe planejar no primeiro turno e explicar a falha dentro da tela.
+ *
+ * O roteiro é planejado (uma chamada de modelo) e GRAVADO na abertura da página. É a mesma chamada
+ * que o nível 2 faria no primeiro turno, só que mais cedo: quem abre o link duas vezes lê o plano
+ * guardado.
+ *
+ * `empresa` é o nome público do convite — o que o candidato lê no alto da página. O app não tem um
+ * cadastro de razão social, e inventar um aqui seria dar ao agente um nome que ninguém digitou.
+ */
+export async function agenteDaSala(sala: SalaAberta): Promise<AgenteDaSala | null> {
+  const id = agenteConfigurado();
+  if (!id || !sala.entrevista) return null;
+
+  const ctx = montarContexto(sala.entrevista.id);
+  if (!ctx) return null;
+
+  let roteiro: string;
+  try {
+    roteiro = roteiroEmTexto(await roteiroDaEntrevista(sala.entrevista.id, ctx));
+  } catch (err) {
+    console.error("O roteiro do agente conversacional não pôde ser planejado; a conversa segue pelo navegador.", err);
+    return null;
+  }
+
+  return {
+    id,
+    variaveis: {
+      entrevista_id: sala.entrevista.id,
+      candidato: ctx.candidato.primeiroNome,
+      cargo: ctx.cargo,
+      empresa: sala.sala.nome,
+      roteiro,
+      duracao_minutos: String(ctx.duracaoMin),
+    },
+  };
 }

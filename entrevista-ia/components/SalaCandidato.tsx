@@ -76,16 +76,12 @@ function vozPortuguesa(): SpeechSynthesisVoice | null {
   return vozes.find((v) => v.lang?.toLowerCase().startsWith("pt-br")) ?? vozes.find((v) => v.lang?.toLowerCase().startsWith("pt")) ?? null;
 }
 
-export function SalaCandidato({
-  codigo,
-  cargo,
-  primeiroNome,
-  vozLigada,
-  porVoz,
-  audioLiberado,
-  conversaNoNavegador = false,
-  onFinalizar,
-}: {
+/**
+ * Tudo o que esta sala precisa. Exportado porque a sala do agente conversacional
+ * (components/SalaAgenteCandidato.tsx) o carrega inteiro: a queda para o nível 2 tem de ser imediata,
+ * sem uma segunda volta ao servidor para descobrir com o que continuar a conversa.
+ */
+export type PropsSalaCandidato = {
   /** O código do link público: é ele que identifica esta conversa nas rotas. */
   codigo: string;
   cargo: string;
@@ -99,7 +95,18 @@ export function SalaCandidato({
   /** Link antigo, sem entrevista guardada: a conversa viaja no corpo de cada turno. */
   conversaNoNavegador?: boolean;
   onFinalizar: (falas: Troca[]) => void;
-}) {
+};
+
+export function SalaCandidato({
+  codigo,
+  cargo,
+  primeiroNome,
+  vozLigada,
+  porVoz,
+  audioLiberado,
+  conversaNoNavegador = false,
+  onFinalizar,
+}: PropsSalaCandidato) {
   const [falas, setFalas] = useState<Troca[]>([]);
   const [estado, setEstado] = useState<EstadoConversa>("pensando");
   const [modo, setModo] = useState<"voz" | "texto">(porVoz ? "voz" : "texto");

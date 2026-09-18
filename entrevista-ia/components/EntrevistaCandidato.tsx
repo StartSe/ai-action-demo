@@ -3,12 +3,17 @@
 // campos texto/textarea (app/f/[token]), a conversa é o formulário. Ao concluir, envia a transcrição
 // para gerar o parecer (que só o gestor vê) e mostra uma tela de agradecimento para o candidato.
 //
-// A ordem é: boas-vindas (components/BoasVindas.tsx, com o teste de microfone) → sala
-// (components/SalaCandidato.tsx) → agradecimento. Quem recarregou a página no meio da conversa entra
-// direto na sala: as boas-vindas são o convite, e quem já aceitou não precisa aceitar de novo.
+// A ordem é: boas-vindas (components/BoasVindas.tsx, com o teste de microfone) → sala → agradecimento.
+// Quem recarregou a página no meio da conversa entra direto na sala: as boas-vindas são o convite, e
+// quem já aceitou não precisa aceitar de novo.
+//
+// Qual sala é decisão do SERVIDOR (lib/sala-do-candidato.ts): com o agente conversacional conectado,
+// a do nível 1 (components/SalaAgenteCandidato.tsx), que cai sozinha para a do nível 2 quando o widget
+// não carrega; sem ele, a do nível 2 (components/SalaCandidato.tsx) direto.
 import { useState } from "react";
 import { BoasVindas } from "./BoasVindas";
-import { SalaCandidato } from "./SalaCandidato";
+import { SalaAgenteCandidato } from "./SalaAgenteCandidato";
+import { SalaCandidato, type PropsSalaCandidato } from "./SalaCandidato";
 import type { Troca, Vaga } from "@/lib/types";
 
 type Fase = "boas-vindas" | "entrevista" | "enviando" | "concluida" | "erro";
@@ -22,6 +27,7 @@ export function EntrevistaCandidato({
   vozLigada,
   retomando = false,
   conversaNoNavegador = false,
+  agente = null,
 }: {
   codigo: string;
   marca: string;
@@ -33,6 +39,8 @@ export function EntrevistaCandidato({
   retomando?: boolean;
   /** Link antigo, sem entrevista guardada: a conversa viaja no corpo de cada turno. */
   conversaNoNavegador?: boolean;
+  /** O agente conversacional desta entrevista (nível 1). Nulo quando a empresa não o conectou. */
+  agente?: { id: string; variaveis: Record<string, string> } | null;
 }) {
   const [fase, setFase] = useState<Fase>(retomando ? "entrevista" : "boas-vindas");
   const [mensagemErro, setMensagemErro] = useState("");
@@ -56,6 +64,19 @@ export function EntrevistaCandidato({
       setFase("erro");
     }
   }
+
+  // As mesmas props servem às duas salas: a do agente carrega a do navegador inteira, para a queda
+  // para o nível 2 não precisar de uma segunda volta ao servidor.
+  const propsDaSala: PropsSalaCandidato = {
+    codigo,
+    cargo: vaga.titulo,
+    primeiroNome: vaga.candidato.trim().split(/\s+/)[0] || vaga.candidato,
+    vozLigada,
+    porVoz,
+    audioLiberado,
+    conversaNoNavegador,
+    onFinalizar,
+  };
 
   if (fase === "boas-vindas") {
     return (
@@ -92,17 +113,10 @@ export function EntrevistaCandidato({
           <h1 className="text-xl font-extrabold mb-1.5">Não foi possível continuar</h1>
           <p className="text-muted">{mensagemErro}</p>
         </div>
+      ) : agente ? (
+        <SalaAgenteCandidato agente={agente.id} variaveis={agente.variaveis} navegador={propsDaSala} onConcluida={() => setFase("concluida")} />
       ) : (
-        <SalaCandidato
-          codigo={codigo}
-          cargo={vaga.titulo}
-          primeiroNome={vaga.candidato.trim().split(/\s+/)[0] || vaga.candidato}
-          vozLigada={vozLigada}
-          porVoz={porVoz}
-          audioLiberado={audioLiberado}
-          conversaNoNavegador={conversaNoNavegador}
-          onFinalizar={onFinalizar}
-        />
+        <SalaCandidato {...propsDaSala} />
       )}
 
       {fase === "enviando" && <p className="text-muted text-sm text-center mt-4">Enviando suas respostas...</p>}

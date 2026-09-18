@@ -102,14 +102,18 @@ const ELEVENLABS_VOZ: Integracao = {
   },
 };
 
-const ELEVENLABS_LIGACAO: Integracao = {
-  id: "elevenlabs-ligacao",
-  titulo: "Ligação telefônica automática",
-  beneficio: "A entrevistadora liga para o candidato e conduz a triagem por telefone",
+// O agente conversacional da ElevenLabs: o nível 1 da conversa (D3). É opcional de verdade — sem ele
+// a entrevista já acontece por voz, pelo próprio navegador do candidato. O número de telefone e o
+// segredo do aviso automático ficam em Opções avançadas: são da ligação e do retorno da conversa,
+// não da sala no navegador.
+const ELEVENLABS_AGENTE: Integracao = {
+  id: "elevenlabs-agente",
+  titulo: "Agente conversacional da ElevenLabs",
+  beneficio: "Sem isso a entrevista já é por voz; com ele a conversa fica mais natural e o candidato pode interromper",
   descricao:
-    "Liga automaticamente para o candidato e conduz a triagem por telefone, com um agente conversacional da ElevenLabs conectado a um número da Twilio.",
+    "Um agente da ElevenLabs conduz a entrevista falando com o candidato como numa ligação de verdade: ele pode interromper, retomar e responder no ritmo dele. Sem isso a entrevista já acontece por voz, pelo navegador do candidato.",
   notaConexao:
-    "Exige a chave da ElevenLabs salva acima, um agente conversacional criado na conta e um número de telefone da Twilio ligado a ele. Escolha os dois em Opções avançadas.",
+    "Passo a passo: crie um agente conversacional na sua conta da ElevenLabs, escreva as instruções dele usando as variáveis que este app envia a cada entrevista (entrevista_id, candidato, cargo, empresa, roteiro, duracao_minutos) e escolha o agente abaixo. Salve antes a chave da voz da entrevistadora, no cartão acima.",
   obrigatoria: false,
   link: { url: "https://elevenlabs.io/app/conversational-ai", rotulo: "Criar um agente conversacional" },
   campos: [
@@ -117,8 +121,7 @@ const ELEVENLABS_LIGACAO: Integracao = {
       chave: "ELEVENLABS_AGENT_ID",
       rotulo: "Agente conversacional",
       tipo: "select",
-      avancado: true,
-      ajuda: "Salve a chave da ElevenLabs acima para listar",
+      ajuda: "Salve a chave da ElevenLabs acima para a lista carregar. O app envia a cada entrevista: entrevista_id, candidato, cargo, empresa, roteiro, duracao_minutos.",
       opcoes: [],
       opcoesDinamicas: async (): Promise<Opcao[]> => {
         const chave = getConfig("ELEVENLABS_API_KEY");
@@ -137,8 +140,9 @@ const ELEVENLABS_LIGACAO: Integracao = {
       chave: "ELEVENLABS_PHONE_NUMBER_ID",
       rotulo: "Número de telefone",
       tipo: "select",
+      opcional: true,
       avancado: true,
-      ajuda: "Salve a chave da ElevenLabs acima para listar",
+      ajuda: "Só para a entrevistadora ligar para o candidato. Exige um número da Twilio ligado ao agente.",
       opcoes: [],
       opcoesDinamicas: async (): Promise<Opcao[]> => {
         const chave = getConfig("ELEVENLABS_API_KEY");
@@ -153,19 +157,27 @@ const ELEVENLABS_LIGACAO: Integracao = {
         }
       },
     },
+    {
+      chave: "ELEVENLABS_WEBHOOK_SECRET",
+      rotulo: "Segredo de verificação",
+      tipo: "secret",
+      opcional: true,
+      avancado: true,
+      ajuda: "Na ElevenLabs, aponte o aviso de pós-conversa para o endereço do cartão \"Dados para a equipe técnica\" e cole aqui o segredo gerado.",
+    },
   ],
   testar: async (config) => {
     const chave = getConfig("ELEVENLABS_API_KEY");
     if (!chave) return { ok: false, mensagem: "Salve a chave da voz da entrevistadora acima antes de testar." };
     const agentId = config.ELEVENLABS_AGENT_ID;
-    const phoneId = config.ELEVENLABS_PHONE_NUMBER_ID;
-    if (!agentId || !phoneId) return { ok: false, mensagem: "Escolha o agente conversacional e o número de telefone em Opções avançadas." };
+    if (!agentId) return { ok: false, mensagem: "Escolha o agente conversacional." };
     const r = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, { headers: { "xi-api-key": chave } });
-    if (r.status === 401) return { ok: false, mensagem: "A chave da ElevenLabs foi recusada. Salve a chave acima de novo." };
-    if (r.status === 404) return { ok: false, mensagem: "O agente conversacional escolhido não existe mais. Escolha outro em Opções avançadas." };
-    if (!r.ok) { console.error("Teste da ligação na ElevenLabs:", r.status); return { ok: false, mensagem: "A ElevenLabs não respondeu agora. Tente de novo em um minuto." }; }
-    return { ok: true, mensagem: "Conectado. Agente e número de telefone confirmados." };
+    if (r.status === 401 || r.status === 403) return { ok: false, mensagem: "A chave da ElevenLabs foi recusada. Salve a chave acima de novo." };
+    if (r.status === 404) return { ok: false, mensagem: "O agente conversacional escolhido não existe mais. Escolha outro." };
+    if (!r.ok) { console.error("Teste do agente conversacional na ElevenLabs:", r.status); return { ok: false, mensagem: "A ElevenLabs não respondeu agora. Tente de novo em um minuto." }; }
+    if (config.ELEVENLABS_PHONE_NUMBER_ID) return { ok: true, mensagem: "Conectado. Agente conversacional e número de telefone confirmados." };
+    return { ok: true, mensagem: "Conectado. Agente conversacional confirmado." };
   },
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, BRIGHTDATA, ELEVENLABS_VOZ, ELEVENLABS_LIGACAO];
+export const INTEGRACOES: Integracao[] = [OPENROUTER, BRIGHTDATA, ELEVENLABS_VOZ, ELEVENLABS_AGENTE];
