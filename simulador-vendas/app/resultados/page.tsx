@@ -13,7 +13,8 @@
 // frente; sem uma linha nesta tela, o gestor não saberia que a conta de e-mail parou de entregar.
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Aviso, Empty, ErrorBox, Item, Topbar, data, lerErro, useStatus, type ErroLido } from "@/components/ui";
+import { AvisoExemplo } from "@/components/AvisoExemplo";
+import { Aviso, Chip, Empty, ErrorBox, Item, Topbar, data, lerErro, useStatus, type ErroLido } from "@/components/ui";
 
 function IconeResultados() {
   return (
@@ -150,6 +151,7 @@ type TreinoComResultado = {
   codigo: string;
   nome: string;
   produtoNome: string;
+  exemplo: boolean;
   participantes: number;
   sessoes: number;
   notaMedia: number | null;
@@ -198,12 +200,21 @@ function TreinosComResultado() {
   }
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <>
+      {comResultado.some((s) => s.exemplo) && (
+        <AvisoExemplo>
+          Os painéis marcados como exemplo trazem conversas semeadas, para você ver como a tela fica com o time inteiro treinando.
+        </AvisoExemplo>
+      )}
+      <div className="flex flex-col gap-2.5">
       {comResultado.map((s) => (
         <Item key={s.codigo}>
           <div className="flex items-center justify-between gap-4 max-md:flex-wrap">
             <div className="min-w-0">
-              <div className="font-bold truncate">{s.nome}</div>
+              <div className="font-bold truncate flex items-center gap-1.5">
+                <span className="truncate">{s.nome}</span>
+                {s.exemplo && <Chip nivel="neutral">Exemplo</Chip>}
+              </div>
               <div className="text-muted text-[13px] truncate">
                 {`${s.produtoNome} · ${contagem(s.sessoes, "sessão", "sessões")} · ${contagem(s.participantes, "vendedor", "vendedores")} · ${
                   s.notaMedia === null ? "sem nota ainda" : `nota média ${s.notaMedia.toFixed(1).replace(".", ",")}`
@@ -217,7 +228,8 @@ function TreinosComResultado() {
           </div>
         </Item>
       ))}
-    </div>
+      </div>
+    </>
   );
 }
 

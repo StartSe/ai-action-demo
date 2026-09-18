@@ -27,6 +27,8 @@ export type PessoaDaEquipe = {
   email: string;
   /** Como a pessoa entrou na lista: pelo link do treino, pelo cadastro do gestor ou por Google/Microsoft. */
   origem: string;
+  /** Uma das pessoas da demonstração (US-030): a linha ganha o chip "Exemplo". */
+  exemplo: boolean;
   /** Conversas de treino que aconteceram (sem as que ficaram em preparação ou abandonadas). */
   sessoes: number;
   /** Conversas reais analisadas e ligadas a esta pessoa. */
@@ -111,6 +113,7 @@ export function montarEquipe(): PessoaDaEquipe[] {
       nome: p.nome.trim() || "Sem nome",
       email: p.email ?? "",
       origem: p.origem,
+      exemplo: p.exemplo,
       sessoes: doTreino.sessoes,
       conversasReais: reais.total,
       treinos: treinos[p.id] ?? 0,

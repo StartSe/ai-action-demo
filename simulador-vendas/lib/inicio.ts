@@ -34,6 +34,7 @@ export type SimulacaoAtivaInicio = {
   codigo: string;
   nome: string;
   produtoNome: string;
+  exemplo: boolean;
   metodologia: Metodologia;
   dificuldade: Dificuldade;
   participantes: number;
@@ -56,6 +57,12 @@ export type Inicio = {
    * "Comece em 3 passos" ocupa o lugar dos cartões.
    */
   vazio: boolean;
+  /**
+   * A tela está mostrando dado de exemplo (US-030). Medido pelos treinos, que são o que os cartões
+   * listam e de onde vêm as conversas dos indicadores — um exemplo em cena é sempre um treino de
+   * exemplo, porque o produto semeado nasce com os dois treinos em cima dele.
+   */
+  exemplo: boolean;
   /** Quantos dias cada período dos indicadores cobre, para a tela escrever a legenda da comparação. */
   dias: number;
   indicadores: IndicadorInicio[];
@@ -145,6 +152,7 @@ export function montarInicio(quando = new Date()): Inicio {
       codigo: s.codigo,
       nome: s.nome,
       produtoNome: nomes.get(s.produtoId) ?? "Produto apagado",
+      exemplo: s.exemplo,
       metodologia: s.metodologia,
       dificuldade: s.dificuldade,
       participantes: resumo[s.codigo]?.participantes ?? 0,
@@ -192,6 +200,7 @@ export function montarInicio(quando = new Date()): Inicio {
     // Ninguém treinou ainda: os quatro números seriam quatro zeros, que não dizem nada e ainda ocupam o
     // lugar do que importa nesse momento, que é o caminho até a primeira conversa.
     vazio: sessoesDeSempre === 0,
+    exemplo: simulacoes.some((s) => s.exemplo),
     dias: DIAS_DO_PERIODO,
     indicadores: quatro,
     // `ultimaSessao`/`criadoEm` servem à ordenação acima e não vão para a tela: o cartão fala do que o
@@ -200,6 +209,7 @@ export function montarInicio(quando = new Date()): Inicio {
       codigo: s.codigo,
       nome: s.nome,
       produtoNome: s.produtoNome,
+      exemplo: s.exemplo,
       metodologia: s.metodologia,
       dificuldade: s.dificuldade,
       participantes: s.participantes,

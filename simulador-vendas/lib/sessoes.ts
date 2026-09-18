@@ -6,6 +6,7 @@
 // sala manda só a última fala a cada turno, em vez de reenviar a conversa inteira como hoje.
 import { agora, banco, gerarId } from "./banco";
 import { escolherPersona } from "./atribuicao";
+import { removerSessoesDeExemplo, temSessoesDeExemplo } from "./exemplos";
 import { obter as obterSimulacao } from "./simulacoes";
 
 export type ModoSessao = "voz-agente" | "voz-navegador" | "texto";
@@ -195,9 +196,20 @@ export function obter(id: string): Sessao | null {
   return linha ? linhaParaSessao(linha) : null;
 }
 
-/** O vendedor clicou em "Começar conversa": a sessão sai de "preparando" e o cronômetro começa. */
+/**
+ * O vendedor clicou em "Começar conversa": a sessão sai de "preparando" e o cronômetro começa.
+ *
+ * É aqui — e não em `abrir` — que as conversas de exemplo (US-030) saem de cena: quem abre o link, vê
+ * quem é o cliente e fecha a aba não conversou, e apagar o exemplo nesse momento deixaria o painel
+ * vazio sem nada real para pôr no lugar. A pergunta ao banco vem antes da remoção para a sessão aberta
+ * do dia a dia não pagar uma varredura depois que o exemplo já foi embora.
+ */
 export function iniciar(id: string, modo?: ModoSessao): Sessao | null {
   const d = banco();
+  if (temSessoesDeExemplo()) {
+    const propria = d.prepare("SELECT exemplo FROM sessoes_treino WHERE id = ?").get(id) as { exemplo: number } | undefined;
+    if (propria && propria.exemplo !== 1) removerSessoesDeExemplo();
+  }
   if (modo) d.prepare("UPDATE sessoes_treino SET modo = ? WHERE id = ?").run(modo, id);
   d.prepare("UPDATE sessoes_treino SET status = 'em_andamento', iniciadaEm = ? WHERE id = ? AND iniciadaEm IS NULL").run(agora(), id);
   return obter(id);

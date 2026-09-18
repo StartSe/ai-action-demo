@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AvisoExemplo } from "@/components/AvisoExemplo";
 import { Aviso, Chip, Empty, ErrorBox, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
 import { METODOLOGIAS } from "@/lib/metodologias";
 import type { Dificuldade, Metodologia, StatusSimulacao } from "@/lib/simulacoes";
@@ -227,6 +228,12 @@ export default function Page() {
 
         {erroTela && <div className="mb-5"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao} /></div>}
         {falhaCopia && <div className="mb-5"><Aviso tom="danger">Não foi possível copiar automaticamente. Abra o treino e copie o link de lá.</Aviso></div>}
+
+        {(itens ?? []).some((s) => s.exemplo) && (
+          <AvisoExemplo>
+            Os treinos marcados como exemplo já vêm prontos para você experimentar o link; eles somem quando o seu time tiver a primeira conversa.
+          </AvisoExemplo>
+        )}
 
         {itens !== null && itens.length > 0 && (
           <div className="flex items-center justify-between gap-3 mb-5 max-md:flex-col max-md:items-stretch">

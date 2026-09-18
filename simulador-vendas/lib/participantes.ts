@@ -15,10 +15,12 @@ export type Participante = {
   origem: OrigemParticipante;
   /** Herdado de `vendedores.equipe` na migração; nada escreve neste campo hoje. */
   equipe?: string;
+  /** Uma das três pessoas da demonstração (US-030): ganha o chip "Exemplo" onde aparece. */
+  exemplo: boolean;
   criadoEm: string;
 };
 
-type Linha = { id: string; nome: string; email: string | null; origem: string; equipe: string | null; criadoEm: string };
+type Linha = { id: string; nome: string; email: string | null; origem: string; equipe: string | null; exemplo: number; criadoEm: string };
 
 function linhaParaParticipante(l: Linha): Participante {
   return {
@@ -27,6 +29,7 @@ function linhaParaParticipante(l: Linha): Participante {
     email: l.email ?? undefined,
     origem: (["link", "cadastro", "google", "microsoft"].includes(l.origem) ? l.origem : "link") as OrigemParticipante,
     equipe: l.equipe ?? undefined,
+    exemplo: l.exemplo === 1,
     criadoEm: l.criadoEm,
   };
 }
@@ -65,7 +68,7 @@ export function garantir({ nome, email, origem = "link" }: { nome: string; email
     origem,
     criadoEm,
   );
-  return { id, nome: nomeLimpo, email: emailNormalizado, origem, criadoEm };
+  return { id, nome: nomeLimpo, email: emailNormalizado, origem, exemplo: false, criadoEm };
 }
 
 /** Cadastro feito pelo gestor, onde o e-mail é opcional (a pessoa ainda não treinou). */
@@ -83,7 +86,7 @@ export function criar({ nome, email, origem = "cadastro", equipe }: { nome: stri
   banco()
     .prepare("INSERT INTO participantes (id, nome, email, origem, equipe, criadoEm) VALUES (?, ?, NULL, ?, ?, ?)")
     .run(id, nome.trim(), origem, equipe?.trim() || null, criadoEm);
-  return { id, nome: nome.trim(), origem, equipe: equipe?.trim() || undefined, criadoEm };
+  return { id, nome: nome.trim(), origem, equipe: equipe?.trim() || undefined, exemplo: false, criadoEm };
 }
 
 export function listar(limite = 500): Participante[] {

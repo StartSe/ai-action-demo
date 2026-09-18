@@ -330,7 +330,9 @@ function conversaDaSessao(sessao: { id: string; participanteId: string; modo: st
   };
 }
 
-function contextoDe({ simulacao, produtoNome, personaId, vendedor }: { simulacao: Simulacao; produtoNome: string; personaId: string; vendedor: string }): ContextoAvaliacao {
+/** Exportada para a semeadura da demonstração (`lib/semear-demo.ts`) montar o mesmo contexto que uma
+ * avaliação de verdade grava: dois formatos de contexto seriam dois jeitos de ler a mesma tela. */
+export function contextoDe({ simulacao, produtoNome, personaId, vendedor }: { simulacao: Simulacao; produtoNome: string; personaId: string; vendedor: string }): ContextoAvaliacao {
   const p = obterPersona(personaId);
   return {
     simulacao: simulacao.nome,

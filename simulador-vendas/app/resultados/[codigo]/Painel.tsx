@@ -6,6 +6,7 @@
 // (quem é cada pessoa, como o time vai com cada tipo de cliente) mora nas outras duas abas.
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { AvisoExemplo } from "@/components/AvisoExemplo";
 import { Chip, Destaque, Empty, ErrorBox, Topbar, data, lerErro, useStatus, type ErroLido } from "@/components/ui";
 import type { CompetenciaAgregada, PainelSimulacao } from "@/lib/painel-simulacao";
 import { contagem, nota, tomDaNota } from "./apresentacao";
@@ -211,6 +212,12 @@ export default function Painel({ codigo }: { codigo: string }) {
                     painel.notaMedia === null ? "sem nota ainda" : `nota média ${nota(painel.notaMedia)}`
                   }${painel.ultimaSessao ? ` · última em ${data(painel.ultimaSessao)}` : ""}`}
             </p>
+
+            {painel.exemplo && (
+              <AvisoExemplo>
+                As conversas deste painel são um exemplo, para você ver a tela cheia; mande o link para o time e os números passam a ser dele.
+              </AvisoExemplo>
+            )}
 
             {painel.sessoes > 0 && <GuardarPainel codigo={codigo} />}
 

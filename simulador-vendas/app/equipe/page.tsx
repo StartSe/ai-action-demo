@@ -10,6 +10,7 @@
 // linha do tempo, e quem calcula tudo é `lib/equipe.ts`: nenhum número é montado nesta tela.
 import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { AvisoExemplo } from "@/components/AvisoExemplo";
 import { Aviso, Chip, CopyButton, DataTable, Empty, ErrorBox, Field, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
 
 type PessoaDaEquipe = {
@@ -17,6 +18,7 @@ type PessoaDaEquipe = {
   nome: string;
   email: string;
   origem: string;
+  exemplo: boolean;
   sessoes: number;
   conversasReais: number;
   treinos: number;
@@ -327,6 +329,12 @@ export default function Page() {
           </form>
         )}
 
+        {itens !== null && itens.some((p) => p.exemplo) && (
+          <AvisoExemplo>
+            As pessoas marcadas como exemplo são de demonstração, para a lista não abrir vazia; elas somem na primeira conversa de verdade.
+          </AvisoExemplo>
+        )}
+
         {itens === null ? (
           <p className="text-muted text-sm">Carregando...</p>
         ) : itens.length === 0 ? (
@@ -341,6 +349,12 @@ export default function Page() {
           <DataTable
             colunas={[
               { chave: "nome", titulo: "Pessoa", papel: "titulo", render: (p: PessoaDaEquipe) => <strong>{p.nome}</strong> },
+              // O chip do exemplo é coluna própria (papel "chip") em vez de vir junto do nome: no
+              // celular o `DataTable` põe o que tem papel "chip" à direita do título do cartão, que é
+              // onde ele precisa estar — dentro do nome ele empurraria o nome para fora da linha.
+              ...(itens.some((p) => p.exemplo)
+                ? [{ chave: "exemplo", titulo: "Origem", papel: "chip" as const, render: (p: PessoaDaEquipe) => (p.exemplo ? <Chip nivel="neutral">Exemplo</Chip> : null) }]
+                : []),
               { chave: "email", titulo: "E-mail", render: (p: PessoaDaEquipe) => p.email || "—" },
               {
                 chave: "sessoes",

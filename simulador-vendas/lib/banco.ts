@@ -59,11 +59,13 @@ function colunaExiste(d: DatabaseSync, tabela: string, coluna: string): boolean 
   return linhas.some((l) => l.name === coluna);
 }
 
-/** Acrescenta uma coluna TEXT NULL que nasceu depois da tabela. Sem `IF NOT EXISTS` em SQLite, a
- * conferência vem antes — e rodar de novo não faz nada, como toda migração daqui. */
-function garantirColuna(d: DatabaseSync, tabela: string, coluna: string): void {
+/** Acrescenta uma coluna que nasceu depois da tabela. Sem `ADD COLUMN IF NOT EXISTS` em SQLite, a
+ * conferência vem antes — e rodar de novo não faz nada, como toda migração daqui. O tipo é parâmetro
+ * porque nem toda coluna nova é texto: `exemplo` é um sinalizador com valor padrão, e uma instalação
+ * que já rodava precisa nascer com ele preenchido, não nulo. */
+function garantirColuna(d: DatabaseSync, tabela: string, coluna: string, definicao = "TEXT NULL"): void {
   if (colunaExiste(d, tabela, coluna)) return;
-  d.exec(`ALTER TABLE ${tabela} ADD COLUMN ${coluna} TEXT NULL`);
+  d.exec(`ALTER TABLE ${tabela} ADD COLUMN ${coluna} ${definicao}`);
 }
 
 /**
@@ -145,8 +147,12 @@ function criarTabelas(d: DatabaseSync): void {
     email TEXT NULL UNIQUE,
     origem TEXT NOT NULL DEFAULT 'link',
     equipe TEXT NULL,
+    exemplo INTEGER NOT NULL DEFAULT 0,
     criadoEm TEXT NOT NULL
   )`);
+  // As três pessoas da demonstração (US-030) são as únicas com `exemplo = 1`: é por esta coluna que
+  // elas ganham o chip "Exemplo" na Equipe e saem de cena quando o primeiro dado real aparece.
+  garantirColuna(d, "participantes", "exemplo", "INTEGER NOT NULL DEFAULT 0");
 
   // `sessoes` é da tabela de LOGIN (lib/conta.ts, infraestrutura byte a byte nos 17 apps). O treino
   // usa `sessoes_treino`: as duas moram no mesmo app.sqlite e, com o nome repetido, quem criasse
@@ -165,6 +171,7 @@ function criarTabelas(d: DatabaseSync): void {
     resultadoId TEXT NULL,
     envioEmail TEXT NULL,
     envioEmailMotivo TEXT NULL,
+    exemplo INTEGER NOT NULL DEFAULT 0,
     criadoEm TEXT NOT NULL
   )`);
   // Os índices mantêm o nome antigo de propósito: o ALTER TABLE acima leva os índices existentes
@@ -175,6 +182,11 @@ function criarTabelas(d: DatabaseSync): void {
   // das duas colunas por ALTER TABLE, senão a primeira avaliação lança "no such column: envioEmail".
   garantirColuna(d, "sessoes_treino", "envioEmail");
   garantirColuna(d, "sessoes_treino", "envioEmailMotivo");
+  // A conversa de exemplo (US-030) é marcada na sessão, e não deduzida da simulação: o link de
+  // exemplo é feito para ser usado, e a conversa que alguém de verdade tem nele é real mesmo estando
+  // dentro de um treino de exemplo. Sem esta coluna, a primeira conversa de verdade apagaria a si
+  // mesma junto com as seis semeadas.
+  garantirColuna(d, "sessoes_treino", "exemplo", "INTEGER NOT NULL DEFAULT 0");
 
   d.exec(`CREATE TABLE IF NOT EXISTS mensagens_sessao (
     id TEXT PRIMARY KEY,
@@ -244,7 +256,23 @@ function migrar(d: DatabaseSync): void {
   }
 }
 
+/** Quantas linhas uma tabela antiga ainda tem para migrar; tabela que não existe conta como zero. */
+function linhasDe(d: DatabaseSync, tabela: string): number {
+  if (!tabelaExiste(d, tabela)) return 0;
+  return Number((d.prepare(`SELECT COUNT(*) AS total FROM ${tabela}`).get() as { total: number }).total);
+}
+
+/**
+ * Garante o produto de exemplo, que é a casa das simulações migradas e da demonstração (US-030).
+ *
+ * Ele **não volta à vida** numa instalação que já tem produto de verdade e nada a migrar: desde a
+ * US-030 o primeiro produto de verdade apaga o de exemplo (`lib/exemplos.ts`), e recriá-lo na subida
+ * seguinte desfaria essa remoção a cada reinício do servidor.
+ */
 function garantirProdutoExemplo(d: DatabaseSync): void {
+  const temReal = Number((d.prepare("SELECT COUNT(*) AS total FROM produtos WHERE exemplo = 0").get() as { total: number }).total) > 0;
+  if (temReal && linhasDe(d, "cenarios") === 0 && linhasDe(d, "salas") === 0) return;
+
   const momento = agora();
   d.prepare(
     `INSERT OR IGNORE INTO produtos (id, nome, descricao, categoria, conhecimento, status, exemplo, criadoEm, atualizadoEm)

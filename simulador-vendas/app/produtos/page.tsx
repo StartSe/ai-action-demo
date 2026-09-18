@@ -7,7 +7,8 @@
 // chega nas US-004/US-005/US-006; até lá "Editar" leva para o detalhe com o que já existe.
 import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Aviso, Chip, Empty, ErrorBox, Field, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
+import { AvisoExemplo } from "@/components/AvisoExemplo";
+import { Chip, Empty, ErrorBox, Field, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
 
 type ProdutoLista = {
   id: string;
@@ -161,11 +162,9 @@ export default function Page() {
         )}
 
         {temExemplo && (
-          <div className="mb-5">
-            <Aviso tom="warn" acao={{ rotulo: "Conectar a IA", url: "/setup#openrouter" }}>
-              O produto abaixo é um exemplo, para você ver o app funcionando. Ele some quando você cadastrar o primeiro produto de verdade.
-            </Aviso>
-          </div>
+          <AvisoExemplo>
+            O produto abaixo é um exemplo, com a ficha já pronta; ele some quando você cadastrar o primeiro produto de verdade.
+          </AvisoExemplo>
         )}
 
         {itens === null ? (

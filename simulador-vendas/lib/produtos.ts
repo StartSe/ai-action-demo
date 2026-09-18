@@ -6,6 +6,7 @@
 // coisa sobre o produto que entra no prompt do cliente simulado e do avaliador (D12 do PRD: sem RAG
 // no MVP). As fontes brutas (`fontes_produto`) ficam guardadas só para gerar a ficha de novo.
 import { agora, banco, gerarId } from "./banco";
+import { removerConjuntoDeExemplo } from "./exemplos";
 
 export type StatusProduto = "rascunho" | "pronto";
 export type TipoFonte = "landing" | "documento" | "texto";
@@ -105,6 +106,10 @@ export function criar({
        VALUES (?, ?, ?, ?, NULL, 'rascunho', ?, ?, ?)`,
     )
     .run(id, nome.trim(), descricao?.trim() || null, categoria?.trim() || null, exemplo ? 1 : 0, momento, momento);
+  // O primeiro produto de verdade tira a demonstração de cena (US-030), e isso mora aqui, no módulo
+  // que grava, não na rota: a regra tem de valer igual para a tela, para o assistente e para qualquer
+  // porta que venha depois. Quem removeria o próprio conjunto (a semeadura) passa `exemplo: true`.
+  if (!exemplo) removerConjuntoDeExemplo();
   return { id, nome: nome.trim(), descricao, categoria, status: "rascunho", exemplo, criadoEm: momento, atualizadoEm: momento };
 }
 

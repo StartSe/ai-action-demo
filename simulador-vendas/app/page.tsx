@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AvisoExemplo } from "@/components/AvisoExemplo";
 import { Chip, Hero, Item, Topbar, numero, useStatus } from "@/components/ui";
 import { METODOLOGIAS } from "@/lib/metodologias";
 import type { Inicio } from "@/lib/inicio";
@@ -148,6 +149,7 @@ function SimulacoesAtivas({ ativas, total }: { ativas: Inicio["ativas"]; total: 
                   <p className="text-muted text-sm mt-0.5 truncate">{s.produtoNome}</p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                  {s.exemplo && <Chip nivel="neutral">Exemplo</Chip>}
                   <Chip nivel="cinza">{METODOLOGIAS[s.metodologia].nome}</Chip>
                   <Chip nivel="cinza">{DIFICULDADES[s.dificuldade]}</Chip>
                 </div>
@@ -215,6 +217,12 @@ export default function Page() {
             <p className="text-muted text-sm">Carregando...</p>
           ) : (
             <>
+              {inicio.exemplo && (
+                <AvisoExemplo>
+                  Os números e os treinos abaixo são um exemplo, para você ver o app cheio; eles somem quando o seu time treinar de verdade.
+                </AvisoExemplo>
+              )}
+
               {!vazio && (
                 <section>
                   <h2 className="section-title">Últimos {inicio.dias} dias</h2>
