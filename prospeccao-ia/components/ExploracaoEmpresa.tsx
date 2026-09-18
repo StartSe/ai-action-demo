@@ -4,20 +4,18 @@
 // verdade (lib/execucao-prospeccao.ts:buscarContaUnicaReal); as pessoas (lib/execucao-prospeccao.ts:
 // buscarPessoasChaveUnica) nascem com `status: "novo"` e só passam a fazer parte da prospecção quando a
 // pessoa marca a caixa e confirma "Adicionar à prospecção" — "nenhuma pessoa é adicionada sem seleção
-// explícita" (AC). O painel lateral ("Entender por que essa pessoa") é local a este componente: se uma
-// história futura (US-027, ficha do lead) precisar do mesmo painel em outro lugar, é aqui que ele deve
-// ser extraído para um componente compartilhado.
+// explícita" (AC). O painel lateral ("Entender por que essa pessoa") usa components/PainelLateral.tsx
+// (moldura) + components/FichaLead.tsx (conteúdo, US-027) — antes era um painel local com sua própria
+// cópia de critérios/sinais/hipótese/edição de papel; a US-027 é quem trouxe a extração já prevista aqui.
 import { useState } from "react";
-import { Aviso, Chip, data } from "@/components/ui";
-import { motivoPapel, sinalAntigo } from "@/lib/qualificacao";
-import { NIVEL_CHIP_EVIDENCIA, ROTULO_FIT, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA } from "@/lib/rotulos";
-import type { Conta, LeadProspeccao, Papel } from "@/lib/types";
+import { PainelLateral } from "@/components/PainelLateral";
+import { FichaLead } from "@/components/FichaLead";
+import { Aviso, Chip } from "@/components/ui";
+import { motivoPapel } from "@/lib/qualificacao";
+import { ROTULO_FIT, ROTULO_PAPEL } from "@/lib/rotulos";
+import type { Conta, LeadProspeccao } from "@/lib/types";
 
 const STATUS_JA_NA_PROSPECCAO = new Set(["selecionado", "qualificado", "abordado", "respondeu"]);
-
-// Todo valor de Papel, na ordem mostrada no editor da "ficha" (US-026) — "desconhecido" por último,
-// como "sem papel identificado" (ROTULO_PAPEL não tem rótulo para ele, só o editor precisa de um texto).
-const PAPEIS: Papel[] = ["decisor", "influenciador", "champion", "desconhecido"];
 
 export function ExploracaoEmpresa({
   conta,
@@ -37,24 +35,9 @@ export function ExploracaoEmpresa({
   const [erro, setErro] = useState<string | null>(null);
   const [confirmadas, setConfirmadas] = useState(false);
   const [painelLeadId, setPainelLeadId] = useState<string | null>(null);
-  const [salvandoPapel, setSalvandoPapel] = useState(false);
 
-  /** Papel editado à mão (US-026, AC "editável pelo vendedor na ficha"): este painel lateral é a única
-   * "ficha" de um lead que já existe no app — antes da US-027 trazer `/leads/[id]`, é aqui que a edição
-   * mora; a US-027 é quem deve mover este controle para a tela nova, não duplicar. A escrita não é
-   * sobrescrita por uma nova execução da prospecção porque "Repetir" cria uma prospecção nova, e o
-   * dedup por produto (lib/execucao-prospeccao.ts:chaveLead) nunca recria este mesmo registro. */
-  async function alterarPapel(leadId: string, papel: Papel) {
-    setSalvandoPapel(true);
-    try {
-      const r = await fetch(`/api/leads/${leadId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ papel }) });
-      if (r.ok) {
-        const atualizado = (await r.json()) as LeadProspeccao;
-        onLeadsAtualizados(leads.map((l) => (l.id === leadId ? atualizado : l)));
-      }
-    } finally {
-      setSalvandoPapel(false);
-    }
+  function aoFichaAtualizada(leadAtualizado: LeadProspeccao) {
+    onLeadsAtualizados(leads.map((l) => (l.id === leadAtualizado.id ? leadAtualizado : l)));
   }
 
   function alternarSelecao(id: string) {
@@ -96,8 +79,6 @@ export function ExploracaoEmpresa({
     ...conta.evidencias.filter((e) => e.resultado === "atende").map((e) => `${e.criterio}: ${e.valor}`),
     ...conta.sinais.map((s) => s.descricao),
   ].slice(0, 5);
-
-  const painelLead = leads.find((l) => l.id === painelLeadId) ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -195,89 +176,10 @@ export function ExploracaoEmpresa({
         )}
       </div>
 
-      {painelLead && (
-        <div className="fixed inset-0 z-40">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setPainelLeadId(null)} />
-          <div
-            role="dialog"
-            aria-label={`Por que ${painelLead.nome}`}
-            className="absolute top-0 right-0 bottom-0 w-[90%] max-w-[380px] bg-surface p-5 flex flex-col gap-4 shadow-card overflow-y-auto"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-semibold text-[15px]">{painelLead.nome}</p>
-                <p className="text-[13px] text-muted">{painelLead.cargo || "Cargo não identificado"}</p>
-              </div>
-              <button type="button" className="text-ink-2 shrink-0 cursor-pointer" aria-label="Fechar" onClick={() => setPainelLeadId(null)}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-                  <path d="M5 5l14 14M19 5 5 19" />
-                </svg>
-              </button>
-            </div>
-            <div>
-              <p className="font-semibold text-[13px] mb-1.5">Papel no processo de decisão</p>
-              <select
-                className="text-[13px] border border-line rounded-md px-2 py-1.5 w-full"
-                value={painelLead.papel}
-                disabled={salvandoPapel}
-                onChange={(e) => alterarPapel(painelLead.id, e.target.value as Papel)}
-                aria-label="Papel desta pessoa no processo de decisão"
-              >
-                {PAPEIS.map((p) => (
-                  <option key={p} value={p}>{ROTULO_PAPEL[p] ?? "Sem papel identificado"}</option>
-                ))}
-              </select>
-              <p className="text-[12px] text-muted mt-1">
-                {painelLead.papelManual
-                  ? "Definido manualmente pelo vendedor."
-                  : motivoPapel(painelLead.papel, painelLead.cargo, icpPersonas) ?? "Escolha o papel quando o cargo não deixar claro."}
-              </p>
-            </div>
-            <div>
-              <p className="font-semibold text-[13px] mb-1.5">Critérios atendidos</p>
-              {painelLead.evidencias.length === 0 ? (
-                <p className="text-[13px] text-muted">Não foi possível verificar critérios para esta pessoa.</p>
-              ) : (
-                <ul className="flex flex-col gap-2 text-[13px] text-ink">
-                  {painelLead.evidencias.map((e, i) => (
-                    <li key={i} className="flex items-center gap-2 flex-wrap">
-                      <span>
-                        <span className="text-muted">{e.criterio}:</span> {e.valor}
-                        {e.trecho && <span className="text-muted italic"> · “{e.trecho}”</span>}
-                      </span>
-                      <Chip nivel={NIVEL_CHIP_EVIDENCIA[e.resultado]}>{ROTULO_RESULTADO_EVIDENCIA[e.resultado]}</Chip>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div>
-              <p className="font-semibold text-[13px] mb-1.5">Sinais</p>
-              {painelLead.sinais.length === 0 ? (
-                <p className="text-[13px] text-muted">Nenhum sinal público encontrado ainda.</p>
-              ) : (
-                <ul className="flex flex-col gap-1.5 text-[13px] text-ink list-disc pl-4">
-                  {painelLead.sinais.map((sinal, i) => (
-                    <li key={i}>
-                      {sinal.descricao} <span className="text-muted">· {data(sinal.data, { comAno: true })}{sinalAntigo(sinal) ? " · Antigo" : ""}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div>
-              <p className="font-semibold text-[13px] mb-1.5 flex items-center gap-1">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.4.3.6.8.6 1.3V16h5.8v-.8c0-.5.2-1 .6-1.3A6 6 0 0 0 12 3Z" />
-                </svg>
-                Hipótese de dor
-              </p>
-              <p className={`text-[13px] ${painelLead.hipotese ? "italic text-ink" : "text-muted"}`}>
-                {painelLead.hipotese || "Ainda sem sinais públicos suficientes para uma hipótese."}
-              </p>
-            </div>
-          </div>
-        </div>
+      {painelLeadId && (
+        <PainelLateral ariaLabel="Ficha da pessoa selecionada" aoFechar={() => setPainelLeadId(null)}>
+          <FichaLead leadId={painelLeadId} onLeadAtualizado={aoFichaAtualizada} />
+        </PainelLateral>
       )}
     </div>
   );
