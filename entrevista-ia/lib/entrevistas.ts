@@ -379,3 +379,15 @@ export function contarPorCandidato(): Record<string, ContagemCandidato> {
   }
   return contagens;
 }
+
+/**
+ * Quantas entrevistas existem, sem filtro nenhum.
+ *
+ * É o que separa "ainda não há nada aqui" (a tela de boas-vindas da US-015, com o caminho para abrir
+ * uma vaga) de "nada com estes filtros" (uma linha de texto e os filtros de volta): as duas telas
+ * pedem palavras diferentes, e a lista filtrada sozinha não sabe distinguir os dois casos.
+ */
+export function contarEntrevistas(): number {
+  const linha = banco().prepare("SELECT COUNT(*) AS total FROM entrevistas").get() as { total: number };
+  return Number(linha.total);
+}

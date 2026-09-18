@@ -8,6 +8,7 @@ import { Chip } from "./ui";
 
 export type StatusEntrevista = "convidada" | "aberta" | "em_andamento" | "concluida" | "avaliada" | "expirada" | "cancelada";
 export type Decisao = "avancar" | "aguardar" | "reprovar";
+export type NivelVoz = "agente" | "navegador" | "texto";
 
 /** A entrevista como as tabelas do painel a recebem (`listarEntrevistasNoPainel`, lib/painel.ts). */
 export type EntrevistaNaTabela = {
@@ -18,6 +19,7 @@ export type EntrevistaNaTabela = {
   vagaCargo: string;
   status: StatusEntrevista;
   codigo?: string;
+  nivelVoz?: NivelVoz;
   decisao?: Decisao;
   notaGeral?: number;
   recomendacao?: string;
@@ -41,6 +43,21 @@ export function rotuloConvite(e: { status: StatusEntrevista; codigo?: string }):
 }
 
 export const ROTULO_DECISAO: Record<Decisao, string> = { avancar: "Avançar", aguardar: "Aguardar", reprovar: "Não avançar" };
+
+/** As três decisões na ordem em que a tela as oferece, com a frase que diz o que cada uma significa. */
+export const DECISOES: { valor: Decisao; rotulo: string; apoio: string }[] = [
+  { valor: "avancar", rotulo: "Avançar", apoio: "Segue para a próxima etapa do processo." },
+  { valor: "aguardar", rotulo: "Aguardar", apoio: "Fica em espera até você decidir." },
+  { valor: "reprovar", rotulo: "Não avançar", apoio: "Encerra o processo deste candidato nesta vaga." },
+];
+
+/** Como a conversa aconteceu (D3). Só faz sentido depois que a sala abriu: até lá o nível é nulo,
+ * porque é o navegador do candidato que decide o que dá para usar. */
+export const ROTULO_NIVEL_VOZ: Record<NivelVoz, string> = {
+  agente: "Voz natural",
+  navegador: "Voz do navegador",
+  texto: "Texto",
+};
 
 /**
  * A situação na linguagem de quem acompanha o processo, não na do banco.

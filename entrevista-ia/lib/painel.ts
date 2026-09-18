@@ -7,7 +7,7 @@
 // primeiro módulo de entidade que precisasse de entrevista fecharia ciclo. Aqui em cima ninguém
 // importa de volta.
 import { listar as listarCandidatos, obter as obterCandidato, resumoDaFicha, type Candidato, type ResumoFicha } from "./candidatos";
-import { contarPorCandidato, listar as listarEntrevistas, type Entrevista, type FiltroEntrevistas } from "./entrevistas";
+import { contarPorCandidato, contarEntrevistas, listar as listarEntrevistas, type Entrevista, type FiltroEntrevistas } from "./entrevistas";
 import { obter as obterResultado } from "./historico";
 import { obter as obterVaga } from "./vagas";
 import type { Parecer, Recomendacao } from "./types";
@@ -93,4 +93,68 @@ export function listarCandidatosNoPainel({ busca }: { busca?: string } = {}): Ca
       ultimaVaga: contagem ? cargos.get(contagem.ultimaVagaId) : undefined,
     };
   });
+}
+
+/**
+ * As cinco abas da tela Entrevistas (US-015). Não são os sete status do banco: quem acompanha o
+ * processo pergunta "quem ainda não respondeu", "o que falta decidir" — e `concluida` e `avaliada`
+ * são a mesma espera para quem olha (o parecer chega sozinho), enquanto uma entrevista já decidida
+ * sai da fila mesmo estando `avaliada`.
+ */
+export type FaixaEntrevista = "aguardando" | "andamento" | "concluidas" | "decididas" | "encerradas";
+
+export const FAIXAS: FaixaEntrevista[] = ["aguardando", "andamento", "concluidas", "decididas", "encerradas"];
+
+export function faixaDaEntrevista(e: { status: Entrevista["status"]; decisao?: Entrevista["decisao"] }): FaixaEntrevista {
+  switch (e.status) {
+    case "convidada":
+    case "aberta":
+      return "aguardando";
+    case "em_andamento":
+      return "andamento";
+    case "concluida":
+    case "avaliada":
+      return e.decisao ? "decididas" : "concluidas";
+    default:
+      return "encerradas";
+  }
+}
+
+export type PainelEntrevistas = {
+  itens: EntrevistaNoPainel[];
+  /** Quantas entrevistas cada aba tem **com os filtros atuais** — o número ao lado do nome da aba. */
+  contagens: Record<FaixaEntrevista, number>;
+  /** Quantas entrevistas existem no total, sem filtro nenhum: é o que separa "nada aqui ainda" de
+   * "nada com esses filtros", que pedem telas diferentes. */
+  total: number;
+};
+
+/**
+ * A tela Entrevistas: uma aba, os filtros de vaga, nome e período, e a contagem de todas as abas.
+ *
+ * A contagem vem da MESMA leitura que a lista: as abas mostram o efeito dos filtros escolhidos, e
+ * cinco consultas para escrever cinco números seria a tela inteira lida cinco vezes. O nome do
+ * candidato só existe depois da junção, então a busca por nome é filtrada aqui e não em SQL.
+ */
+export function painelDeEntrevistas({
+  faixa,
+  vagaId,
+  busca,
+  dias,
+}: { faixa?: FaixaEntrevista; vagaId?: string; busca?: string; dias?: number } = {}): PainelEntrevistas {
+  const periodo = dias ? { de: new Date(Date.now() - dias * 86_400_000).toISOString() } : undefined;
+  const termo = busca?.trim().toLowerCase();
+
+  const todas = listarEntrevistasNoPainel({ vagaId, periodo, limite: 500 }).filter(
+    (e) => !termo || e.candidatoNome.toLowerCase().includes(termo),
+  );
+
+  const contagens = Object.fromEntries(FAIXAS.map((f) => [f, 0])) as Record<FaixaEntrevista, number>;
+  for (const entrevista of todas) contagens[faixaDaEntrevista(entrevista)] += 1;
+
+  return {
+    itens: faixa ? todas.filter((e) => faixaDaEntrevista(e) === faixa) : todas,
+    contagens,
+    total: contarEntrevistas(),
+  };
 }

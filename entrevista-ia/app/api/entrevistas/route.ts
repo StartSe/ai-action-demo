@@ -1,4 +1,5 @@
-// Atribuir um candidato a uma vaga e já criar o convite (US-007 e US-014).
+// A lista de entrevistas (US-015) e a atribuição de um candidato a uma vaga com o convite junto
+// (US-007 e US-014).
 //
 // Atribuir e convidar são um passo só: uma entrevista sem link é uma linha que não faz nada, e a
 // pessoa de RH teria de lembrar de um segundo clique para o candidato existir do lado de fora.
@@ -8,10 +9,35 @@ import { obter as obterCandidato } from "@/lib/candidatos";
 import { sessaoAtual } from "@/lib/conta";
 import { convidar } from "@/lib/convite";
 import { criar } from "@/lib/entrevistas";
+import { FAIXAS, painelDeEntrevistas, type FaixaEntrevista } from "@/lib/painel";
 import { baseUrl, registrarEnderecoPublico } from "@/lib/setup-comum";
 import { obter as obterVaga } from "@/lib/vagas";
 
 export const dynamic = "force-dynamic";
+
+/** Os períodos que a tela oferece; qualquer outro valor (inclusive "tudo") não filtra nada. */
+const DIAS: Record<string, number> = { "7": 7, "30": 30, "90": 90 };
+
+/**
+ * A tela Entrevistas: uma aba, os filtros e a contagem de todas as abas.
+ *
+ * `expirarVencidas()` roda dentro da leitura (lib/entrevistas.ts), então abrir esta lista é o que faz
+ * um convite vencido aparecer como vencido — o app não tem agendador próprio.
+ */
+export async function GET(req: Request) {
+  const params = new URL(req.url).searchParams;
+  const pedida = params.get("faixa");
+  const faixa = FAIXAS.includes(pedida as FaixaEntrevista) ? (pedida as FaixaEntrevista) : undefined;
+
+  return Response.json(
+    painelDeEntrevistas({
+      faixa,
+      vagaId: params.get("vagaId") || undefined,
+      busca: params.get("busca") || undefined,
+      dias: DIAS[params.get("dias") ?? ""],
+    }),
+  );
+}
 
 export async function POST(req: Request) {
   const corpo = await req.json().catch(() => ({}));

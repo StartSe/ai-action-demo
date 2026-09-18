@@ -24,3 +24,21 @@ export function data(d: Date | string, { comHora = false, comAno = false }: { co
 export function moeda(valor: number) {
   return `R$ ${numero(Math.round(valor))}`;
 }
+
+/**
+ * Há quanto tempo, em dias: "hoje", "ontem", "há 5 dias".
+ *
+ * A tela Entrevistas (US-015) acompanha espera, não agenda: quem olha a lista quer saber quantos dias
+ * um convite está parado, e "18/09" obriga a fazer essa conta de cabeça. A data exata continua ao
+ * lado, no atributo `title` de quem mostra isto.
+ */
+export function haDias(d: Date | string) {
+  const dt = typeof d === "string" ? new Date(d) : d;
+  if (Number.isNaN(dt.getTime())) return "—";
+  // Pela virada do dia, não por 24 horas: ontem às 23h é "ontem", não "hoje".
+  const inicio = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const dias = Math.round((inicio(new Date()) - inicio(dt)) / 86_400_000);
+  if (dias <= 0) return "hoje";
+  if (dias === 1) return "ontem";
+  return `há ${numero(dias)} dias`;
+}
