@@ -12,7 +12,7 @@
 import { aiEnabled, askJSON, meta, type Meta } from "./ai";
 import { esperar, scorecardDemo } from "./demo";
 import { listar, obter, salvar } from "./historico";
-import type { CandidatoRanking, Ranking, Recomendacao, Scorecard, Troca, Vaga } from "./types";
+import type { Recomendacao, Scorecard, Troca, Vaga } from "./types";
 
 const SYSTEM_AVALIAR = `Você é uma especialista em recrutamento e seleção que avalia a transcrição de uma entrevista de triagem conduzida por uma IA, para apoiar a decisão do gestor de contratação.
 Regras:
@@ -118,24 +118,4 @@ export function listarCandidatosDaVaga(tituloVaga: string): CandidatoDaVaga[] {
     recomendacao: r.saida.recomendacao,
     criadoEm: r.criadoEm,
   }));
-}
-
-/** Gera e salva o ranking dos candidatos desta vaga, ordenado por nota (maior primeiro); null se houver menos de 2 candidatos avaliados. */
-export function gerarRanking(tituloVaga: string): { ranking: Ranking; meta: Meta; id: string } | null {
-  const registros = registrosDaVaga(tituloVaga);
-  if (registros.length < 2) return null;
-  const candidatos: CandidatoRanking[] = registros
-    .map((r) => ({
-      id: r.id,
-      candidato: r.entrada.vaga.candidato,
-      nota_geral: r.saida.nota_geral,
-      recomendacao: r.saida.recomendacao,
-      pontos_fortes: r.saida.pontos_fortes,
-      pontos_atencao: r.saida.pontos_atencao,
-    }))
-    .sort((a, b) => b.nota_geral - a.nota_geral);
-  const ranking: Ranking = { vagaTitulo: tituloVaga.trim(), candidatos };
-  const metaGerada = meta({ demo: !aiEnabled(), insumo: "toda a lista de scorecards desta vaga" });
-  const id = salvar({ tipo: "ranking", titulo: `Ranking de ${ranking.vagaTitulo}`, entrada: { vagaTitulo: ranking.vagaTitulo }, saida: ranking, meta: metaGerada });
-  return { ranking, meta: metaGerada, id };
 }

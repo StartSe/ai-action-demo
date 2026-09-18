@@ -6,7 +6,8 @@ import { data } from "@/lib/formato";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
 import type { Parecer, Ranking, Scorecard, Troca, Vaga } from "@/lib/types";
-import { ConteudoRanking, ConteudoScorecard } from "../../page";
+import { RankingSalvo } from "@/components/RankingSalvo";
+import { ConteudoScorecard } from "../../page";
 import { ImprimirAoCarregar } from "./ImprimirAoCarregar";
 
 type EntradaEntrevista = { vaga: Vaga; historico: Troca[] };
@@ -30,7 +31,7 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
           <div className="text-muted text-sm">{data(new Date())}</div>
         </header>
 
-        <ConteudoRanking ranking={registro.saida} comparavel={false} />
+        <RankingSalvo ranking={registro.saida} />
 
         <footer className="mt-8 pt-4 border-t border-line">
           <Origem meta={registro.meta} />

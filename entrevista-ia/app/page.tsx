@@ -36,7 +36,7 @@ import {
 import { Sala } from "@/components/Sala";
 import { ACAO_CULTURA, ACAO_VOZ } from "@/lib/acoes";
 import type { CodigoErroIA, Meta } from "@/lib/ai";
-import type { CandidatoRanking, Ranking, Recomendacao, Scorecard, Troca, Vaga } from "@/lib/types";
+import type { Recomendacao, Scorecard, Troca, Vaga } from "@/lib/types";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
 type CandidatoDaVaga = { id: string; candidato: string; nota_geral: number; recomendacao: Recomendacao; criadoEm: string };
@@ -111,8 +111,7 @@ type Estado =
   | { fase: "carregando" }
   // A conversa fica guardada junto do erro: "Tentar de novo" refaz só o scorecard, sem perder nada.
   | { fase: "erro"; erro: ErroLido; historico?: Troca[] }
-  | { fase: "pronto"; scorecard: Scorecard; meta: Meta; historico: Troca[]; id?: string }
-  | { fase: "ranking"; ranking: Ranking; meta: Meta; id: string };
+  | { fase: "pronto"; scorecard: Scorecard; meta: Meta; historico: Troca[]; id?: string };
 
 export default function Page() {
   const { status, erro } = useStatus();
@@ -121,7 +120,6 @@ export default function Page() {
   const [modoExemplo, setModoExemplo] = useState(false);
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const [candidatosVaga, setCandidatosVaga] = useState<CandidatoDaVaga[] | null>(null);
-  const [comparando, setComparando] = useState(false);
   const autoIniciado = useRef(false);
   const router = useRouter();
   const { confirmar, Dialogo } = useConfirmacao();
@@ -133,7 +131,7 @@ export default function Page() {
     return true;
   }
 
-  useScrollToResult(estado.fase === "pronto" || estado.fase === "ranking");
+  useScrollToResult(estado.fase === "pronto");
 
   function carregarHistorico() {
     fetch("/api/entrevista/avaliar").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
@@ -163,30 +161,6 @@ export default function Page() {
     const t = setTimeout(() => carregarCandidatosVaga(vaga.titulo), 400);
     return () => clearTimeout(t);
   }, [vaga.titulo]);
-
-  async function comparar() {
-    setComparando(true);
-    try {
-      const r = await fetch("/api/entrevista/ranking", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vagaTitulo: vaga.titulo }),
-      });
-      if (!r.ok) {
-        const info = await lerErro(r);
-        if (sessaoVencida(r, info)) return;
-        setEstado({ fase: "erro", erro: info });
-        return;
-      }
-      const resposta = await r.json();
-      setEstado({ fase: "ranking", ranking: resposta.ranking, meta: resposta.meta, id: resposta.id });
-      carregarHistorico();
-    } catch (e) {
-      setEstado({ fase: "erro", erro: await lerErro(e) });
-    } finally {
-      setComparando(false);
-    }
-  }
 
   const set = (campo: "titulo" | "requisitos" | "candidato" | "tom") => (e: { target: { value: string } }) =>
     setVaga((v) => ({ ...v, [campo]: e.target.value }));
@@ -240,7 +214,7 @@ export default function Page() {
   }, []);
 
   const emAndamento = estado.fase === "entrevista" || estado.fase === "carregando";
-  const passoAtual = estado.fase === "pronto" || estado.fase === "ranking" ? 3 : emAndamento ? 2 : 1;
+  const passoAtual = estado.fase === "pronto" ? 3 : emAndamento ? 2 : 1;
   const erroHistorico = estado.fase === "erro" ? estado.historico : undefined;
 
   return (
@@ -348,13 +322,12 @@ export default function Page() {
                         </li>
                       ))}
                     </ul>
-                    {candidatosVaga.length < 2 ? (
-                      <p className="text-muted text-[12.5px]">Avalie ao menos dois candidatos para comparar.</p>
-                    ) : (
-                      <button type="button" className="btn-ghost !w-auto max-w-full whitespace-normal" onClick={comparar} disabled={comparando}>
-                        {comparando ? "Comparando..." : "Comparar candidatos"}
-                      </button>
-                    )}
+                    {/* Comparar candidatos passou a ser uma leitura da página da vaga
+                        (`/vagas/[id]/comparar`, US-024), com os requisitos e a cultura da vaga —
+                        aqui não há um id de vaga, só o título digitado. */}
+                    <p className="text-muted text-[12.5px]">
+                      Para comparar candidatos lado a lado, abra a vaga em <Link href="/vagas" className="btn-link">Vagas</Link>.
+                    </p>
                   </>
                 )}
               </MaisDetalhes>
@@ -425,7 +398,6 @@ export default function Page() {
               aoNovaEntrevista={() => setEstado({ fase: "vazio" })}
             />
           )}
-          {estado.fase === "ranking" && <ResultadoRanking ranking={estado.ranking} meta={estado.meta} id={estado.id} />}
         </Stage>
       </main>
 
@@ -629,113 +601,5 @@ function scorecardParaTexto(sc: Scorecard, vaga: Vaga) {
   sc.pontos_atencao.forEach((p) => linhas.push(`- ${p}`));
   linhas.push("", "Próximos passos:");
   sc.proximos_passos.forEach((p) => linhas.push(`- ${p}`));
-  return linhas.join("\n");
-}
-
-export function ResultadoRanking({ ranking, meta, id }: { ranking: Ranking; meta: Meta; id?: string }) {
-  return (
-    <article className="reveal">
-      <ResultHead titulo="Ranking dos candidatos" subtitulo={ranking.vagaTitulo}>
-        <Entregar id={id} titulo={`Ranking de ${ranking.vagaTitulo}`} texto={() => rankingParaTexto(ranking)} />
-      </ResultHead>
-
-      <Origem meta={meta} />
-
-      <ConteudoRanking ranking={ranking} />
-    </article>
-  );
-}
-
-/** Corpo do ranking (sem cabeçalho nem Origem), reaproveitado pela página de impressão — que passa
- * `comparavel={false}` para não imprimir caixas de seleção. */
-export function ConteudoRanking({ ranking, comparavel = true }: { ranking: Ranking; comparavel?: boolean }) {
-  const [escolhidos, setEscolhidos] = useState<string[]>([]);
-
-  // Sempre no máximo dois: marcar um terceiro descarta o mais antigo, para o botão nunca ficar mudo.
-  function alternar(idCandidato: string) {
-    setEscolhidos((atual) =>
-      atual.includes(idCandidato) ? atual.filter((x) => x !== idCandidato) : [...atual, idCandidato].slice(-2)
-    );
-  }
-
-  const parDeCandidatos = escolhidos
-    .map((idCandidato) => ranking.candidatos.find((c) => c.id === idCandidato))
-    .filter((c): c is CandidatoRanking => Boolean(c));
-
-  return (
-    <>
-      <Section titulo="Candidatos ordenados por nota">
-        <DataTable
-          colunas={[
-            {
-              chave: "candidato",
-              titulo: "Candidato",
-              papel: "titulo",
-              render: (c) => (
-                <span className="flex items-center gap-2">
-                  {comparavel && (
-                    <input
-                      type="checkbox"
-                      className="shrink-0"
-                      aria-label={`Comparar ${c.candidato}`}
-                      checked={escolhidos.includes(c.id)}
-                      onChange={() => alternar(c.id)}
-                    />
-                  )}
-                  <Link href={`/r/${c.id}`} className="hover:underline">{c.candidato}</Link>
-                </span>
-              ),
-            },
-            { chave: "nota", titulo: "Nota", papel: "chip", largura: "70px", render: (c) => `${numero(c.nota_geral, 1)}/10` },
-            { chave: "recomendacao", titulo: "Recomendação", render: (c) => <Chip nivel={nivelRecomendacao(c.recomendacao)}>{c.recomendacao}</Chip> },
-            { chave: "resumo", titulo: "Pontos fortes e de atenção", papel: "resumo", render: (c) => resumoCandidatoRanking(c) },
-          ]}
-          linhas={ranking.candidatos}
-        />
-        {comparavel && parDeCandidatos.length < 2 && (
-          <p className="text-muted text-[12.5px] mt-2.5">Marque dois candidatos para vê-los lado a lado.</p>
-        )}
-      </Section>
-
-      {comparavel && parDeCandidatos.length === 2 && (
-        <Section titulo="Lado a lado">
-          <div className="grid grid-cols-2 max-md:grid-cols-1 gap-3.5">
-            {parDeCandidatos.map((c) => (
-              <Item key={c.id}>
-                <p className="font-bold text-[15px] mb-1">{c.candidato}</p>
-                <p className="text-muted text-[12.5px] flex items-center gap-1.5 mb-2.5">
-                  <span>{numero(c.nota_geral, 1)}/10</span>
-                  <Chip nivel={nivelRecomendacao(c.recomendacao)}>{c.recomendacao}</Chip>
-                </p>
-                <p className="text-[13px] font-semibold mb-1">Pontos fortes</p>
-                <ul className="list-disc pl-5 flex flex-col gap-1 text-sm mb-3">
-                  {c.pontos_fortes.length ? c.pontos_fortes.map((p, i) => <li key={i}>{p}</li>) : <li className="text-muted">Nenhum registrado.</li>}
-                </ul>
-                <p className="text-[13px] font-semibold mb-1">Pontos de atenção</p>
-                <ul className="list-disc pl-5 flex flex-col gap-1 text-sm">
-                  {c.pontos_atencao.length ? c.pontos_atencao.map((p, i) => <li key={i}>{p}</li>) : <li className="text-muted">Nenhum registrado.</li>}
-                </ul>
-              </Item>
-            ))}
-          </div>
-        </Section>
-      )}
-    </>
-  );
-}
-
-function resumoCandidatoRanking(c: CandidatoRanking) {
-  const fortes = c.pontos_fortes.slice(0, 2).join("; ") || "—";
-  const atencao = c.pontos_atencao.slice(0, 2).join("; ") || "—";
-  return `Fortes: ${fortes} · Atenção: ${atencao}`;
-}
-
-function rankingParaTexto(ranking: Ranking) {
-  const linhas: string[] = [`Ranking de candidatos — ${ranking.vagaTitulo}`, ""];
-  ranking.candidatos.forEach((c, i) => {
-    linhas.push(`${i + 1}. ${c.candidato} — ${numero(c.nota_geral, 1)}/10 (${c.recomendacao})`);
-    linhas.push(`   Pontos fortes: ${c.pontos_fortes.join(", ") || "—"}`);
-    linhas.push(`   Pontos de atenção: ${c.pontos_atencao.join(", ") || "—"}`);
-  });
   return linhas.join("\n");
 }

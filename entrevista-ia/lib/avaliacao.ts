@@ -410,8 +410,11 @@ function situacaoConsistencia(valor: unknown): SituacaoConsistencia {
 }
 
 /** Casa o que o modelo devolveu com a lista que a vaga tem, pelo texto normalizado; a posição é a
- * reserva. Sem isso, um requisito reescrito pelo modelo viraria uma linha que não é de ninguém. */
-function chave(nome: string): string {
+ * reserva. Sem isso, um requisito reescrito pelo modelo viraria uma linha que não é de ninguém.
+ * Exportada porque a comparação de candidatos (lib/comparacao.ts) alinha os pareceres já salvos
+ * contra o cadastro da vaga com a MESMA regra — duas normalizações diferentes sobre o mesmo texto
+ * fariam a mesma linha casar num lugar e não casar no outro. */
+export function chaveDoItem(nome: string): string {
   return nome
     .trim()
     .toLowerCase()
@@ -467,7 +470,7 @@ Faça o cruzamento.`;
     const item = (r ?? {}) as { requisito?: unknown; situacao?: unknown; evidencia?: unknown; pergunta?: unknown };
     const nome = texto(item.requisito, 200);
     if (!nome) continue;
-    porRequisito.set(chave(nome), {
+    porRequisito.set(chaveDoItem(nome), {
       requisito: nome,
       situacao: situacaoRequisito(item.situacao),
       evidencia: texto(item.evidencia, 400),
@@ -480,7 +483,7 @@ Faça o cruzamento.`;
     const item = (c ?? {}) as { competencia?: unknown; evidencia?: unknown; pergunta?: unknown; comportamental?: unknown };
     const nome = texto(item.competencia, 120);
     if (!nome) continue;
-    porCompetencia.set(chave(nome), {
+    porCompetencia.set(chaveDoItem(nome), {
       competencia: nome,
       evidencia: texto(item.evidencia, 400),
       pergunta: perguntaValida(item.pergunta, ctx.perguntasFeitas),
@@ -492,14 +495,14 @@ Faça o cruzamento.`;
   // como "não abordado", nunca some da tela. Um parecer com menos linhas do que a vaga tem exigências
   // é um parecer que o gestor lê achando que respondeu tudo.
   const requisitos: RequisitoCruzado[] = ctx.requisitos.map((requisito, i) => {
-    const achado = porRequisito.get(chave(requisito)) ?? [...porRequisito.values()][i];
+    const achado = porRequisito.get(chaveDoItem(requisito)) ?? [...porRequisito.values()][i];
     return achado
       ? { ...achado, requisito }
       : { requisito, situacao: "nao_abordado", evidencia: "A conversa não chegou a este ponto." };
   });
 
   const competencias: CompetenciaCruzada[] = ctx.competencias.map((competencia, i) => {
-    const achado = porCompetencia.get(chave(competencia.nome)) ?? [...porCompetencia.values()][i];
+    const achado = porCompetencia.get(chaveDoItem(competencia.nome)) ?? [...porCompetencia.values()][i];
     return achado
       ? { ...achado, competencia: competencia.nome }
       : { competencia: competencia.nome, evidencia: "", pergunta: undefined, comportamental: false };
@@ -633,11 +636,11 @@ export function montarParecer(ctx: ContextoAvaliacao, extracao: Extracao, cruzam
 
   // Nota cultural só com evidência comportamental: a decisão é do cruzamento (quem viu a conversa),
   // não da nota que o modelo escreveu depois.
-  const notaPorCompetencia = new Map(julgamento.cultura.map((c) => [chave(c.competencia), c.nota]));
+  const notaPorCompetencia = new Map(julgamento.cultura.map((c) => [chaveDoItem(c.competencia), c.nota]));
   const cultura: CriterioCultural[] = cruzamento.competencias.map((c) => {
     const temEvidencia = c.comportamental && Boolean(c.evidencia);
     if (!temEvidencia) return { competencia: c.competencia, nota: null, evidencia: SEM_EVIDENCIA_CULTURAL };
-    return { competencia: c.competencia, nota: notaPorCompetencia.get(chave(c.competencia)) ?? null, evidencia: c.evidencia, pergunta: c.pergunta };
+    return { competencia: c.competencia, nota: notaPorCompetencia.get(chaveDoItem(c.competencia)) ?? null, evidencia: c.evidencia, pergunta: c.pergunta };
   });
 
   const recomendacao = aplicarGuardas(julgamento.recomendacao ?? recomendacaoPorNota(notaGeral), aderencia);
