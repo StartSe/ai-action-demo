@@ -8,12 +8,26 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Aviso, Chip, Topbar, useConfirmacao, useStatus, lerErro } from "@/components/ui";
+import { Aviso, Chip, Topbar, data, useConfirmacao, useStatus, lerErro } from "@/components/ui";
 import { ExploracaoEmpresa } from "@/components/ExploracaoEmpresa";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
+import { sinalAntigo } from "@/lib/qualificacao";
 import { ROTULO_MODO, ROTULO_PAPEL } from "@/lib/rotulos";
 import { ETAPAS_PROSPECCAO } from "@/lib/execucao-etapas";
-import type { Conta, LeadProspeccao, Prospeccao } from "@/lib/types";
+import type { Conta, LeadProspeccao, Prospeccao, SinalProspeccao } from "@/lib/types";
+
+/** Chip de um sinal de intenção (US-020): descrição + data, em cinza e com "· Antigo" quando passou dos
+ * 90 dias (lib/qualificacao.ts:sinalAntigo) — sinal sem essa marca é recente e continua em verde
+ * (`positivo`), mesmo tom já usado para sinal nas contas do modo "empresas". */
+function ChipSinal({ sinal }: { sinal: SinalProspeccao }) {
+  const antigo = sinalAntigo(sinal);
+  return (
+    <Chip nivel={antigo ? "cinza" : "positivo"}>
+      {sinal.descricao} · {data(sinal.data, { comAno: true })}
+      {antigo ? " · Antigo" : ""}
+    </Chip>
+  );
+}
 
 type Andamento = {
   prospeccao: Prospeccao;
@@ -252,7 +266,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                           {conta.sinais.length > 0 && (
                             <div className="flex flex-wrap gap-1.5">
                               {conta.sinais.slice(0, 3).map((sinal, i) => (
-                                <Chip key={i} nivel="positivo">{sinal.descricao}</Chip>
+                                <ChipSinal key={i} sinal={sinal} />
                               ))}
                             </div>
                           )}
@@ -318,6 +332,56 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                       onLeadsAtualizados={(leads) => setAndamento((a) => (a ? { ...a, leads } : a))}
                     />
                   )
+                )}
+
+                {andamento.prospeccao.modo === "oportunidades" && (
+                  <div className="flex flex-col gap-2.5 mb-1">
+                    {andamento.contas.length === 0 && andamento.leads.length === 0 ? (
+                      <Aviso tom="warn">Nenhuma oportunidade encontrada com esses critérios.</Aviso>
+                    ) : (
+                      <>
+                        {andamento.contas.map((conta) => (
+                          <div key={conta.id} className="card p-4 flex flex-col gap-2">
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                              <div>
+                                <p className="font-semibold text-[14px]">{conta.nome}</p>
+                                <p className="text-[13px] text-muted">{conta.setor || "Segmento não identificado"}</p>
+                              </div>
+                              {conta.fit && <Chip nivel={conta.fit} />}
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {conta.sinais.map((sinal, i) => (
+                                <ChipSinal key={i} sinal={sinal} />
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        {andamento.leads.map((lead) => (
+                          <div key={lead.id} className="card p-4 flex flex-col gap-2">
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                              <div>
+                                <p className="font-semibold text-[14px]">{lead.nome}</p>
+                                <p className="text-[13px] text-muted">
+                                  {[lead.cargo, lead.empresa, lead.cidade].filter(Boolean).join(" · ") || "Dados não identificados"}
+                                </p>
+                              </div>
+                              {lead.fit && <Chip nivel={lead.fit} />}
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {lead.sinais.map((sinal, i) => (
+                                <ChipSinal key={i} sinal={sinal} />
+                              ))}
+                            </div>
+                            {lead.linkedin && (
+                              <a href={lead.linkedin} target="_blank" rel="noopener noreferrer" className="text-[12px] text-accent-ink hover:underline self-start">
+                                Ver perfil
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
                 )}
 
                 <div className="flex items-center gap-3.5">

@@ -8,7 +8,8 @@
 // história futura (US-027, ficha do lead) precisar do mesmo painel em outro lugar, é aqui que ele deve
 // ser extraído para um componente compartilhado.
 import { useState } from "react";
-import { Aviso, Chip } from "@/components/ui";
+import { Aviso, Chip, data } from "@/components/ui";
+import { sinalAntigo } from "@/lib/qualificacao";
 import { ROTULO_PAPEL } from "@/lib/rotulos";
 import type { Conta, LeadProspeccao } from "@/lib/types";
 
@@ -201,7 +202,9 @@ export function ExploracaoEmpresa({
               ) : (
                 <ul className="flex flex-col gap-1.5 text-[13px] text-ink list-disc pl-4">
                   {painelLead.sinais.map((sinal, i) => (
-                    <li key={i}>{sinal.descricao}</li>
+                    <li key={i}>
+                      {sinal.descricao} <span className="text-muted">· {data(sinal.data, { comAno: true })}{sinalAntigo(sinal) ? " · Antigo" : ""}</span>
+                    </li>
                   ))}
                 </ul>
               )}

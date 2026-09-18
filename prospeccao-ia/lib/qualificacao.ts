@@ -33,9 +33,36 @@ export function calcularFit(evidencias: Evidencia[]): Fit {
   return "media";
 }
 
-/** Sinal sem fonte é descartado: só entra aqui quem já tem origem (a página lida) e data (a consulta de agora). */
+const DATA_BR = /\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/;
+
+/** Data de um sinal (US-020): procura uma data no formato brasileiro perto do termo encontrado no
+ * conteúdo (ex.: "Vaga publicada em 12/05/2026") — sem nenhuma data reconhecível ali perto, ou com uma
+ * data no futuro (não confiável, provavelmente outra coisa no texto), cai na data da própria consulta. */
+function dataDoSinal(conteudo: string, termo: string, consultadoEm: string): string {
+  const idx = normalizar(conteudo).indexOf(normalizar(termo));
+  if (idx === -1) return consultadoEm;
+  const janela = conteudo.slice(Math.max(0, idx - 120), idx + termo.length + 120);
+  const m = janela.match(DATA_BR);
+  if (!m) return consultadoEm;
+  const ano = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+  const encontrada = new Date(ano, Number(m[2]) - 1, Number(m[1]));
+  if (Number.isNaN(encontrada.getTime()) || encontrada.getTime() > Date.now()) return consultadoEm;
+  return encontrada.toISOString();
+}
+
+/** Sinal sem fonte é descartado: só entra aqui quem já tem origem (a página lida) e data (a data do
+ * próprio sinal no texto quando existe; senão, a da consulta de agora, ver dataDoSinal). */
 export function sinaisEncontrados(conteudo: string, sinaisAlvo: string[], origem: string, consultadoEm: string): SinalProspeccao[] {
-  return sinaisAlvo.filter((s) => contemTermo(conteudo, s)).map((s) => ({ descricao: s, data: consultadoEm, tipo: "sinal", origem }));
+  return sinaisAlvo.filter((s) => contemTermo(conteudo, s)).map((s) => ({ descricao: s, data: dataDoSinal(conteudo, s, consultadoEm), tipo: "sinal", origem }));
+}
+
+// Sinal com mais de 90 dias é "antigo" (US-020, prd.json > regras: "sinal com mais de 90 dias é marcado
+// como antigo"). Calculado na LEITURA, nunca gravado (mesmo padrão de todo status derivado do tempo).
+export const DIAS_SINAL_ANTIGO = 90;
+
+export function sinalAntigo(sinal: SinalProspeccao): boolean {
+  const dias = (Date.now() - new Date(sinal.data).getTime()) / (24 * 60 * 60 * 1000);
+  return dias > DIAS_SINAL_ANTIGO;
 }
 
 /** Resumo de até ~2 linhas a partir do markdown lido: primeira linha "de conteúdo" (sem título/marcação, com um tamanho mínimo para não pegar um item de menu). */

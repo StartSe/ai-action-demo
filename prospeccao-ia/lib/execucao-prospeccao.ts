@@ -10,15 +10,14 @@
 // `erro` preenchido, nunca `"falhou"` (esse estado é só para a recuperação na inicialização — processo
 // reiniciado no meio, ver recuperarProspeccoesTravadas em lib/workspace.ts).
 //
-// Escopo desta história (fronteira exata para US-020/021/024-026 substituírem sem reler este arquivo
-// inteiro): "empresas" (US-017), "empresa_unica" (US-018) e "pessoas" em B2B (US-019) fazem descoberta
-// de verdade — busca na web, leitura de página e qualificação por evidências (lib/qualificacao.ts).
-// "pessoas" em B2C e "oportunidades" continuam fictícios: toda conta/lead nasce com fit:null,
-// evidencias:[], sinais:[] e papel:"desconhecido" (derivação completa de papel a partir das personas do
-// ICP, e edição manual preservada entre execuções, são da US-026). Sinais de intenção do ICP/critérios
-// são lidos e filtrados na etapa 3 para os modos fictícios, mas NUNCA persistidos como SinalProspeccao
-// ali (exigiria origem real, que só a US-020 vai trazer para "oportunidades") — "sinal sem fonte é
-// descartado".
+// Escopo desta história (fronteira exata para US-021/024-026 substituírem sem reler este arquivo
+// inteiro): "empresas" (US-017), "empresa_unica" (US-018), "pessoas" em B2B (US-019) e "oportunidades"
+// nas duas jornadas (US-020) fazem descoberta de verdade — busca na web, leitura de página/perfil e
+// qualificação por evidências (lib/qualificacao.ts). Só "pessoas" em B2C continua fictício: toda pessoa
+// nasce com fit:null, evidencias:[], sinais:[] e papel:"desconhecido" (a jornada B2C completa, com
+// critérios e retenção próprios, é da US-021). Sinais de intenção do ICP/critérios são lidos e filtrados
+// na etapa 3 para o modo fictício, mas NUNCA persistidos como SinalProspeccao ali (exigiria origem real)
+// — "sinal sem fonte é descartado".
 //
 // "empresa_unica" (US-018) tem uma particularidade: as pessoas encontradas nascem com status "novo"
 // (não "pesquisado"), então a etapa 5 (que só promove "pesquisado" → "qualificado") NÃO as promove — elas
@@ -27,11 +26,11 @@
 // pessoa é adicionada sem seleção explícita" (AC da US-018) é isso: a tela nunca esconde quem foi
 // encontrado, só não considera ninguém parte da prospecção até a escolha.
 import { ETAPAS_PROSPECCAO } from "./execucao-etapas";
-import { buscarNaWeb, lerPagina } from "./descoberta";
+import { buscarNaWeb, lerPagina, perfilDePessoa } from "./descoberta";
 import type { ResultadoBuscaWeb } from "./descoberta";
 import { data } from "./formato";
 import { apolloEnabled, buscarLeads } from "./leads";
-import { avaliarCriterios, calcularFit, dominioDe, inferirPapel, resumoDaPagina, sinaisEncontrados } from "./qualificacao";
+import { avaliarCriterios, calcularFit, dominioDe, inferirPapel, resumoDaPagina, sinaisEncontrados, sinalAntigo } from "./qualificacao";
 import { QUANTIDADES_EMPRESAS } from "./rotulos";
 import { atualizarLead, atualizarProspeccao, criarConta, criarLead, leadsDoProduto, listarContas, listarLeads, obterICP, obterProduto, obterProspeccao } from "./workspace";
 import type { Conta, Evidencia, ICP, Jornada, ModoProspeccao, SinalProspeccao } from "./types";
@@ -180,17 +179,105 @@ async function buscarContasReais(prospeccaoId: string, criterios: Record<string,
   }
 }
 
-/** Etapa 2, modos "pessoas"/"oportunidades": continuam fictícias (fit/evidências/sinais vazios) até
- * ganharem descoberta real na sua própria história (US-019/020). */
-function criarContasFicticias(prospeccaoId: string, criterios: Record<string, unknown>): void {
-  const base = { prospeccaoId, site: null, fit: null, evidencias: [], sinais: [], resumo: "", demo: false as const };
-  const segmento = textoCriterio(criterios, "segmento") || textoCriterio(criterios, "recorte");
-  const localizacao = textoCriterio(criterios, "localizacao");
-  const porte = textoCriterio(criterios, "porte");
-  for (let i = 0; i < 3; i++) {
-    criarConta({ ...base, nome: nomeEmpresaFicticia(segmento, i), setor: segmento || null, porte: porte || null, cidade: localizacao || null });
+function diasAtras(n: number): Date {
+  return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+}
+
+/** "Incluir apenas quem tem sinais recentes" (US-012): com a chave ligada, um sinal com mais de 90 dias
+ * (lib/qualificacao.ts:sinalAntigo) não é só marcado como antigo na tela — ele é descartado aqui, antes
+ * de a conta/pessoa nascer ("não entram", AC da US-020). Sem a chave, todo sinal encontrado entra (a
+ * tela é quem mostra o selo "Antigo" nesse caso). */
+function filtrarSinaisRecentes(sinais: SinalProspeccao[], somenteRecentes: boolean): SinalProspeccao[] {
+  return somenteRecentes ? sinais.filter((s) => !sinalAntigo(s)) : sinais;
+}
+
+/** Sinais e critérios comuns às duas jornadas do modo "oportunidades" (US-020): sinais do ICP e dos
+ * critérios da busca, unificados e sem repetição; "recorte" é segmento em B2B e localização em B2C
+ * (mesmo campo único do passo 4, `components/CriteriosProspeccao.tsx`). */
+function sinaisERecorte(criterios: Record<string, unknown>, icp: ICP | null): { sinaisAlvo: string[]; recorte: string; somenteRecentes: boolean } {
+  const sinaisDoCriterio = Array.isArray(criterios.sinais) ? criterios.sinais.filter((s): s is string => typeof s === "string") : [];
+  return {
+    sinaisAlvo: Array.from(new Set([...sinaisDoCriterio, ...(icp?.sinais ?? [])])),
+    recorte: textoCriterio(criterios, "recorte"),
+    somenteRecentes: Boolean(criterios.somenteRecentes),
+  };
+}
+
+/** Dias de afastamento de um sinal de demonstração por índice: a busca de demonstração (`resultadosBuscaDemo`,
+ * `lib/demo.ts`) sempre devolve as MESMAS 3 candidatas fixas — para as 3 exercitarem os três resultados
+ * possíveis de "oportunidades" mesmo sendo só 3, o índice 0 é recente, o 1 é "antigo" (mais de
+ * DIAS_SINAL_ANTIGO) e o 2 não tem sinal nenhum (descartado). */
+function diasDemoOportunidade(indice: number): number | null {
+  if (indice === 0) return 15;
+  if (indice === 1) return 115;
+  return null;
+}
+
+/** Conteúdo institucional de demonstração PRÓPRIO do modo "oportunidades" (mesmo motivo do
+ * `conteudoDemoDaCandidata` do modo "empresas": precisa citar um sinal de verdade, com uma data no
+ * texto, para `sinaisEncontrados`/`dataDoSinal` (lib/qualificacao.ts) terem o que achar). A data é
+ * relativa a HOJE (nunca fixa, AC da US-020), nunca um texto solto. */
+function conteudoDemoDaOportunidade(indice: number, recorte: string, sinal: string): string {
+  const dias = diasDemoOportunidade(indice);
+  if (dias === null) return "Empresa de demonstração, sem sinais públicos recentes.";
+  const dataTexto = data(diasAtras(dias), { comAno: true });
+  return `Empresa de demonstração${recorte ? ` do segmento ${recorte}` : ""}. ${sinal} em ${dataTexto}.`;
+}
+
+/** Mesma ideia de `conteudoDemoDaOportunidade`, para o perfil de uma pessoa física (B2C). */
+function conteudoDemoDaPessoaOportunidade(indice: number, recorte: string, sinal: string): string {
+  const dias = diasDemoOportunidade(indice);
+  if (dias === null) return "Perfil de demonstração, sem sinais públicos recentes.";
+  const dataTexto = data(diasAtras(dias), { comAno: true });
+  return `Perfil de demonstração${recorte ? ` em ${recorte}` : ""}. ${sinal} em ${dataTexto}.`;
+}
+
+/** Etapa 2, modo "oportunidades" em B2B (US-020): mesma busca paginada + leitura institucional de
+ * `buscarContasReais` (US-017), mas a consulta é montada a partir dos SINAIS de intenção do ICP/critérios
+ * ("empresas... que os apresentem", AC), não de segmento/porte em geral. Uma candidata só vira `Conta`
+ * quando sobra pelo menos um sinal depois do filtro "somente recentes" — sem isso ela não é uma
+ * oportunidade, é só mais uma empresa do segmento (isso já é o modo "empresas"). */
+async function buscarOportunidadesEmpresas(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null): Promise<void> {
+  const { sinaisAlvo, recorte, somenteRecentes } = sinaisERecorte(criterios, icp);
+  if (sinaisAlvo.length === 0) return; // sem nenhum sinal de intenção, não há o que procurar neste modo
+
+  const consulta = ["empresas", recorte, ...sinaisAlvo].filter(Boolean).join(" ");
+  const { itens: candidatas, demo: buscaDemo } = await buscarCandidatasDeduplicadas(consulta, quantidadeAlvo(criterios));
+
+  for (const [indice, candidata] of candidatas.entries()) {
+    let pagina;
+    try {
+      pagina = await lerPagina(candidata.url);
+    } catch (err) {
+      console.error("Falha ao ler página institucional de uma candidata a oportunidade:", candidata.url, err instanceof Error ? err.message : err);
+      continue;
+    }
+    const sinalPrincipal = sinaisAlvo[indice % sinaisAlvo.length];
+    const conteudo = buscaDemo ? conteudoDemoDaOportunidade(indice, recorte, sinalPrincipal) : pagina.conteudo || candidata.resumo;
+    const sinais = filtrarSinaisRecentes(sinaisEncontrados(conteudo, sinaisAlvo, pagina.origem, pagina.consultadoEm), somenteRecentes);
+    if (sinais.length === 0) continue; // sem sinal nenhum (ou só antigo, com o filtro ligado): não é uma oportunidade
+
+    const evidencias = avaliarCriterios(conteudo, [{ criterio: "Segmento", valor: recorte }]);
+    criarConta({
+      prospeccaoId,
+      nome: buscaDemo ? nomeEmpresaFicticia(recorte, indice) : nomeDaEmpresa(candidata),
+      site: candidata.url,
+      setor: recorte || null,
+      porte: null,
+      cidade: null,
+      fit: calcularFit(evidencias),
+      evidencias,
+      sinais,
+      resumo: resumoDaPagina(conteudo),
+      demo: pagina.demo,
+    });
   }
 }
+
+// Modo "oportunidades" (US-020): teto de CONTAS cujas pessoas-chave também são buscadas — não de
+// pessoas em si. Sem ele, uma "quantidade alvo" de 50 empresas multiplicaria em até 250 buscas de
+// pessoa numa única prospecção (sem orçamento ainda, US-023 é quem deve trazer um limite de verdade).
+const TETO_CONTAS_PESSOAS_OPORTUNIDADE = 5;
 
 /** Conteúdo institucional de demonstração PRÓPRIO do modo "Explorar uma empresa" (mesmo motivo do
  * `conteudoDemoDaCandidata` do modo "empresas": o `conteudoPaginaDemo` genérico de `lib/descoberta.ts`
@@ -276,12 +363,19 @@ async function etapaProcurarEmpresas(prospeccaoId: string, modo: ModoProspeccao,
     await buscarContaUnicaReal(prospeccaoId, criterios, icp);
     return;
   }
-  if (modo === "pessoas") return; // B2B: a conta de cada pessoa nasce sob demanda na etapa 4 (buscarPessoasReais)
-  criarContasFicticias(prospeccaoId, criterios);
+  if (modo === "oportunidades") {
+    await buscarOportunidadesEmpresas(prospeccaoId, criterios, icp);
+    return;
+  }
+  // modo === "pessoas" (só chega aqui em B2B, por deveCriarContas): a conta de cada pessoa nasce sob
+  // demanda na etapa 4 (buscarPessoasReais).
 }
 
-/** Etapa 3: trabalho real = ler e filtrar os sinais de intenção do ICP e dos critérios recebidos — só para
- * uso do pipeline; NUNCA persiste um SinalProspeccao aqui (exigiria origem real, que é da US-020). */
+/** Etapa 3: trabalho real = ler e filtrar os sinais de intenção do ICP e dos critérios recebidos — só
+ * para uso do pipeline dos modos que ainda não leem sinal nenhum de verdade (hoje, só "pessoas" em B2C);
+ * os modos com descoberta real (empresas/empresa_unica/pessoas-B2B/oportunidades) já extraem e persistem
+ * SinalProspeccao dentro das próprias etapas 2/4 (lib/qualificacao.ts:sinaisEncontrados), então esta
+ * função não faz diferença para eles — mantida simples e sem persistência aqui. */
 function analisarSinais(criterios: Record<string, unknown>, icp: ICP | null): string[] {
   const doCriterio = Array.isArray(criterios.sinais) ? criterios.sinais.filter((s): s is string => typeof s === "string") : [];
   const doICP = icp?.sinais ?? [];
@@ -396,9 +490,127 @@ async function buscarPessoasChaveUnica(prospeccaoId: string, conta: Conta, produ
   }
 }
 
+/** Etapa 4, modo "oportunidades" em B2B (US-020): pessoas-chave de cada conta encontrada por
+ * `buscarOportunidadesEmpresas` — mesma busca `site:linkedin.com/in` de `buscarPessoasChaveUnica`
+ * (US-018), aplicada a VÁRIAS empresas (até `TETO_CONTAS_PESSOAS_OPORTUNIDADE`) em vez de uma só. Não
+ * reaproveita `buscarPessoasChaveUnica` diretamente por duas diferenças de propósito: aqui a pessoa
+ * nasce `status: "pesquisado"` (a etapa 5 promove a "qualificado" como em qualquer outro modo automático
+ * — "Explorar uma empresa" é uma busca manual e pontual, cujo `"novo"` exige seleção explícita antes de
+ * contar como lead da prospecção; "oportunidades" não tem essa tela intermediária), e o "já visto"
+ * (`jaVistos`) é compartilhado por TODAS as contas do laço, não reiniciado a cada uma. */
+async function buscarPessoasOportunidadesEmpresas(prospeccaoId: string, produtoId: string): Promise<void> {
+  const contas = listarContas(prospeccaoId).slice(0, TETO_CONTAS_PESSOAS_OPORTUNIDADE);
+  const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
+
+  for (const conta of contas) {
+    let candidatos: { nome: string; cargo: string | null; linkedin: string | null }[];
+    let demo = conta.demo;
+    if (conta.demo) {
+      candidatos = pessoasChaveDemo();
+    } else {
+      try {
+        const resultado = await buscarNaWeb(`site:linkedin.com/in "${conta.nome}" (diretor OR gerente OR head OR coordenador)`);
+        demo = resultado.demo;
+        candidatos = resultado.demo ? pessoasChaveDemo() : resultado.itens.map((item) => ({ ...pessoaDoResultado(item), linkedin: item.url }));
+      } catch (err) {
+        console.error("Falha ao buscar pessoas-chave de uma oportunidade:", conta.nome, err instanceof Error ? err.message : err);
+        candidatos = [];
+      }
+    }
+
+    let criadosNaConta = 0;
+    for (const candidato of candidatos) {
+      if (criadosNaConta >= TETO_PESSOAS_CHAVE || !candidato.nome) continue;
+      const chave = chaveLead(candidato.nome, conta.nome, candidato.linkedin ?? null);
+      if (jaVistos.has(chave)) continue;
+      jaVistos.add(chave);
+      criarLead({
+        prospeccaoId, contaId: conta.id, nome: candidato.nome, cargo: candidato.cargo, empresa: conta.nome, cidade: conta.cidade,
+        linkedin: candidato.linkedin ?? null, fonte: demo ? null : "busca pública", papel: inferirPapel(candidato.cargo),
+        fit: conta.fit, evidencias: conta.evidencias, sinais: conta.sinais, hipotese: null,
+        status: "pesquisado", noCRM: false, demo,
+      });
+      criadosNaConta++;
+    }
+  }
+}
+
 // Teto de pessoas do modo "pessoas" (US-019) — mesmo espírito do TETO_PESSOAS_CHAVE da US-018, um pouco
-// maior porque aqui a busca não é focada numa única empresa.
+// maior porque aqui a busca não é focada numa única empresa. Reaproveitado pelo modo "oportunidades" em
+// B2C (US-020), que busca pessoas soltas do mesmo jeito (sem conta).
 const TETO_PESSOAS_MODO = 10;
+
+/** Etapa 4, modo "oportunidades" em B2C (US-020): pessoas físicas com um sinal de intenção público, sem
+ * conta (a jornada B2C não tem empresa como unidade) — mesma busca pública `site:linkedin.com/in` de
+ * `buscarPessoasReais` (US-019), mas os termos citados/comparados são os SINAIS do ICP/critérios, não
+ * cargo. Primeiro uso de `perfilDePessoa` (lib/descoberta.ts) no app: até aqui toda leitura de página
+ * (institucional ou de perfil) passava por `lerPagina`, porque nenhum modo anterior lia o perfil de uma
+ * pessoa isoladamente, sem conta. Só vira `LeadProspeccao` quem sobra com pelo menos um sinal depois do
+ * filtro "somente recentes" — mesma regra de `buscarOportunidadesEmpresas`. Papel sempre "desconhecido"
+ * (B2C não classifica papel de decisão; a qualificação completa desta jornada é da US-021). */
+async function buscarPessoasOportunidadesB2C(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null, produtoId: string): Promise<void> {
+  const { sinaisAlvo, recorte, somenteRecentes } = sinaisERecorte(criterios, icp);
+  if (sinaisAlvo.length === 0) return;
+  const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
+
+  const consulta = ["site:linkedin.com/in", recorte, ...sinaisAlvo].filter(Boolean).join(" ");
+  let resultado;
+  try {
+    resultado = await buscarNaWeb(consulta);
+  } catch (err) {
+    console.error("Falha na busca pública de oportunidades (B2C):", err instanceof Error ? err.message : err);
+    return;
+  }
+  const candidatos = resultado.demo
+    ? pessoasChaveDemo().map((p, i) => ({ ...p, empresa: null as string | null, linkedin: `https://www.linkedin.com/in/perfil-exemplo-${i + 1}` }))
+    : resultado.itens.map((item) => ({ ...pessoaDoResultado(item), linkedin: item.url }));
+
+  let criados = 0;
+  for (const [indice, candidato] of candidatos.entries()) {
+    if (criados >= TETO_PESSOAS_MODO || !candidato.nome) continue;
+    const chave = chaveLead(candidato.nome, null, candidato.linkedin);
+    if (jaVistos.has(chave)) continue;
+
+    const sinalPrincipal = sinaisAlvo[indice % sinaisAlvo.length];
+    let conteudo: string;
+    let origem: string;
+    let consultadoEm: string;
+    let demoFinal: boolean;
+    if (resultado.demo) {
+      conteudo = conteudoDemoDaPessoaOportunidade(indice, recorte, sinalPrincipal);
+      origem = candidato.linkedin;
+      consultadoEm = resultado.consultadoEm;
+      demoFinal = true;
+    } else {
+      let perfil;
+      try {
+        perfil = await perfilDePessoa(candidato.linkedin);
+      } catch (err) {
+        console.error("Falha ao ler perfil público de uma pessoa (oportunidades B2C):", candidato.linkedin, err instanceof Error ? err.message : err);
+        continue;
+      }
+      // Um perfil de demonstração não pode vazar para dentro de uma busca já real: substitui pelo
+      // conteúdo demo PRÓPRIO deste modo (com sinal e data), nunca `perfil.conteudo` genérico.
+      conteudo = perfil.demo ? conteudoDemoDaPessoaOportunidade(indice, recorte, sinalPrincipal) : perfil.conteudo;
+      origem = perfil.origem;
+      consultadoEm = perfil.consultadoEm;
+      demoFinal = perfil.demo;
+    }
+
+    const sinais = filtrarSinaisRecentes(sinaisEncontrados(conteudo, sinaisAlvo, origem, consultadoEm), somenteRecentes);
+    if (sinais.length === 0) continue;
+    jaVistos.add(chave);
+    const evidencias = avaliarCriterios(conteudo, [{ criterio: "Localização", valor: recorte }]);
+    criarLead({
+      prospeccaoId, contaId: null, nome: candidato.nome, cargo: candidato.cargo, empresa: null,
+      cidade: recorte || null, linkedin: candidato.linkedin,
+      fonte: demoFinal ? null : origemPessoa(dominioDe(candidato.linkedin), consultadoEm, false),
+      papel: "desconhecido", fit: calcularFit(evidencias), evidencias, sinais, hipotese: null,
+      status: "pesquisado", noCRM: false, demo: demoFinal,
+    });
+    criados++;
+  }
+}
 
 /** Origem formatada para a ficha de uma pessoa (AC da US-019: "encontrado em <domínio>, em dd/mm/aaaa").
  * Sem domínio (ex.: contato só por Apollo, sem site da empresa) cai numa frase mais simples — nunca
@@ -522,7 +734,12 @@ async function etapaEncontrarPessoas(prospeccaoId: string, modo: ModoProspeccao,
     await buscarPessoasReais(prospeccaoId, criterios, icp, produtoId);
     return;
   }
-  criarPessoasFicticias(prospeccaoId, criterios, produtoId);
+  if (modo === "oportunidades") {
+    if (jornada === "b2b") await buscarPessoasOportunidadesEmpresas(prospeccaoId, produtoId);
+    else await buscarPessoasOportunidadesB2C(prospeccaoId, criterios, icp, produtoId);
+    return;
+  }
+  criarPessoasFicticias(prospeccaoId, criterios, produtoId); // só "pessoas" em B2C continua fictício (US-021)
 }
 
 /** Etapa 5: único efeito real desta história — promove os leads recém-criados de "pesquisado" para
