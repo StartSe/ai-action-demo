@@ -59,6 +59,9 @@ Branch: ralph/simulador-vendas-produto-simulacao-sessoes
 - **Número de painel é cálculo, frase de painel é IA — nunca o contrário.** Toda média, contagem e comparação de período sai de função pura sobre o que já está gravado; ao modelo se pede no máximo a **frase** que interpreta esses números, e ela recebe os números prontos, nunca os dados crus. Duas aberturas da mesma tela têm de concordar entre si, e uma frase da IA precisa de um texto de reserva calculado no código — senão a tela fica sem a linha que diz o que fazer.
 - **Chamada de IA numa tela que o gestor reabre o dia inteiro precisa de cache com chave de estado**, não de tempo só: a chave montada do que mudaria a resposta (quantas conversas, qual a última) invalida sozinha quando chega dado novo, e o prazo cobre o resto.
 - **A instalação aceita UMA conta de administrador: `POST /api/conta` devolve 409 na segunda execução do mesmo teste.** Teste de rota com conta de gestor precisa recriar o `DATA_DIR` a cada execução (ou entrar em vez de cadastrar) — senão a segunda rodada falha em cascata, do cadastro para baixo, e parece defeito novo.
+- **`next build` recria o diretório do servidor autônomo e apaga os estáticos copiados para dentro dele.** O sintoma é uma tela que fica em "Carregando..." para sempre — o JS do navegador responde 404 e a busca inicial nunca roda —, sem nenhum erro no log do servidor. Depois de **todo** build, recopiar `.next/static` e `public` antes de subir o servidor de teste.
+- **Entrar por formulário no Playwright corre com a hidratação.** `fill` + `click` logo depois do `goto` dispara o envio nativo do formulário e recarrega a própria tela de entrar com os campos na barra de endereço. Quando o alvo da conferência é outra tela, entrar por `fetch` na rota e `context.addCookies` com o cookie devolvido é o caminho estável.
+- **Número que a tabela mostra é o agregado da linha, não o de um item dela.** A coluna traz a média da pessoa; a nota de cada conversa vive no detalhe e na planilha. Um teste que procure na tabela o número de um item específico falha sem que haja defeito.
 ---
 
 ## 2026-09-17 - US-001
@@ -378,4 +381,18 @@ Branch: ralph/simulador-vendas-produto-simulacao-sessoes
   - **A avaliação de demonstração dá notas iguais em conversas iguais**, então a evolução entre duas janelas sai 0,0 num teste com as mesmas falas. Para exercitar a comparação, envelheci duas sessões no banco (`encerradaEm` para 40 dias atrás) com `node:sqlite` sobre o mesmo arquivo do servidor — a diferença continua sendo conferida como `variacao === notaJanela - notaAnterior`, não como um número fixo.
   - **Teste de rota com conta de gestor precisa de `DATA_DIR` novo a cada execução:** a instalação aceita uma conta só e o segundo `POST /api/conta` devolve 409, derrubando tudo o que vem depois.
   - A rota pública `POST /api/produtos` devolve o produto **cru** (`{ id, nome, ... }`), não `{ produto }` — conferir o formato da resposta antes de escrever o roteiro.
+---
+
+## 2026-09-17 - US-023
+- `lib/painel-simulacao.ts`: `montarEquipe` (pessoa por pessoa, dentro do mesmo `montarPainelSimulacao`) com nota, tendência (limiar de 0,3, as mesmas duas janelas da US-022), sessões, última, melhor tipo de cliente, maior desafio, quantos treinos já fez e a lista de conversas — o insumo do detalhe e da planilha.
+- `lib/sessoes.ts`: `treinosPorParticipante()` (uma consulta agregada, `COUNT(DISTINCT simulacaoCodigo)`), porque "quantas simulações fez" é uma pergunta que atravessa treinos.
+- `app/resultados/[codigo]/Equipe.tsx` (novo): `DataTable` com vendedor, nota, tendência (↑ → ↓), sessões e data da última; "Ver detalhes" abre a linha com nota, quantas vezes treinou, quantos treinos já fez, melhor desempenho, maior desafio e o link da última conversa. Ordenação por maior nota e por "quem está caindo", busca por nome (sem acento e sem caixa) e "Baixar planilha" com **uma linha por sessão**.
+- `app/resultados/[codigo]/apresentacao.ts` (novo): `nota`, `contagem`, `tomDaNota`, `PREENCHIMENTO` e `normalizar`, importados pela visão geral e pela aba Equipe — a régua de cor tem de ser a mesma nas duas.
+- Verificado: build, `tsc --noEmit`, lint, `verificar-padrao`, `verificar-paleta` e `verificar-jargao` em 0; 64 conferências de rota em servidor de verdade (`DATA_DIR` em `/tmp`, quatro conversas de três vendedores, uma envelhecida em 40 dias e duas notas trocadas no banco) e 56 em navegador (1400x1000 e 390 com toque), com a planilha baixada e lida linha a linha.
+- **Learnings for future iterations:**
+  - **`npm run build` apaga o `static`/`public` que tinham sido copiados para `.next/standalone`.** Perdi uma volta com a tela parada em "Carregando..." e o servidor sem nenhum erro no log: o JS do navegador respondia 404. Recopiar depois de todo build.
+  - **Entrar pelo formulário de `/entrar` no Playwright é instável** (o clique corre com a hidratação e vira envio nativo do formulário). `POST /api/conta/entrar` por `fetch` + `context.addCookies` resolve, e a conferência fica focada na tela que interessa.
+  - **A avaliação de demonstração dá notas idênticas**, então ordenação, tendência e "maior desafio" não se exercitam sozinhas: troquei a `notaGeral` gravada de duas conversas direto no `resultados` (mesma conexão `node:sqlite`) — mexer no dado gravado, nunca no cálculo.
+  - **A soma das linhas da aba tem de bater com o número do cabeçalho**, e isso vira conferência: contar só as conversas avaliadas esconderia quem abriu o link e nunca terminou.
+  - Uma porta do servidor ocupada por um servidor de teste esquecido dá um erro que não aparece no que se está conferindo: o `EADDRINUSE` fica no log e quem responde é a instância antiga, com o banco antigo. O roteiro de subida agora mata quem está na porta antes de começar.
 ---

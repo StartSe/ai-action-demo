@@ -375,6 +375,21 @@ export function resumoPorSimulacao(): Record<string, { sessoes: number; particip
 }
 
 /**
+ * Quantos treinos diferentes cada pessoa já fez, no app inteiro — o número que a aba Equipe (US-023)
+ * mostra ao abrir a linha de um vendedor ("já treinou em 3 treinos").
+ *
+ * A pergunta atravessa simulações de propósito: o painel é de um treino, mas quem conversa com a
+ * pessoa quer saber se ela é veterana ou se está na primeira vez. Uma consulta agregada para a tela
+ * toda, nunca uma por vendedor.
+ */
+export function treinosPorParticipante(): Record<string, number> {
+  const linhas = banco()
+    .prepare("SELECT participanteId, COUNT(DISTINCT simulacaoCodigo) AS treinos FROM sessoes_treino GROUP BY participanteId")
+    .all() as { participanteId: string; treinos: number }[];
+  return Object.fromEntries(linhas.map((l) => [l.participanteId, l.treinos]));
+}
+
+/**
  * Nota média por simulação, só das sessões já avaliadas.
  *
  * A nota não mora aqui: ela é parte do resultado gravado em `lib/historico.ts` (o mesmo registro que

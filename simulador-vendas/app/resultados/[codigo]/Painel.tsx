@@ -8,6 +8,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Chip, Destaque, Empty, ErrorBox, Topbar, data, lerErro, useStatus, type ErroLido } from "@/components/ui";
 import type { CompetenciaAgregada, PainelSimulacao } from "@/lib/painel-simulacao";
+import { PREENCHIMENTO, contagem, nota, tomDaNota } from "./apresentacao";
+import Equipe from "./Equipe";
 
 type Resposta = { painel: PainelSimulacao; oportunidade: { frase: string; daIA: boolean } };
 
@@ -35,25 +37,6 @@ function IconeSemConversa() {
     </svg>
   );
 }
-
-/** Número com vírgula, do jeito que se lê em português. */
-function nota(valor: number | null): string {
-  return valor === null ? "—" : valor.toFixed(1).replace(".", ",");
-}
-
-function contagem(n: number, singular: string, plural: string) {
-  return `${n} ${n === 1 ? singular : plural}`;
-}
-
-/** Verde a partir de 7, âmbar a partir de 5, vermelho abaixo disso — a mesma régua nos números e nas barras. */
-function tomDaNota(valor: number | null): "ok" | "warn" | "danger" | "neutro" {
-  if (valor === null) return "neutro";
-  if (valor >= 7) return "ok";
-  if (valor >= 5) return "warn";
-  return "danger";
-}
-
-const PREENCHIMENTO: Record<string, string> = { ok: "fill-ok", warn: "fill-warn", danger: "fill-danger", neutro: "fill-accent" };
 
 /**
  * Uma competência em barra horizontal. O desenho é um SVG próprio (dois retângulos: a régua de 0 a 10
@@ -229,12 +212,7 @@ export default function Painel({ codigo }: { codigo: string }) {
                   <VisaoGeral painel={painel} oportunidade={resposta.oportunidade} />
                 ))}
 
-              {aba === "equipe" && (
-                <EmBreve
-                  titulo="Como cada pessoa foi"
-                  descricao="Aqui vai ficar a lista de quem treinou, com nota, número de tentativas e o ponto mais fraco de cada um. Por enquanto, cada conversa avaliada tem a própria página no histórico."
-                />
-              )}
+              {aba === "equipe" && <Equipe painel={painel} />}
 
               {aba === "personas" && (
                 <EmBreve

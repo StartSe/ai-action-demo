@@ -11,11 +11,17 @@
 // código: o painel nunca fica sem a linha que diz o que fazer.
 import { aiEnabled, askJSON, modelName } from "./ai";
 import { GRUPOS, criteriosDe, metodologia, type Grupo } from "./metodologias";
+import { obter as obterParticipante } from "./participantes";
+import { persona, rotulo } from "./personas";
 import { obter as obterProduto } from "./produtos";
-import { avaliacoesDaSimulacao, listarPorSimulacao } from "./sessoes";
+import { avaliacoesDaSimulacao, listarPorSimulacao, treinosPorParticipante, type ModoSessao, type Sessao, type StatusSessao } from "./sessoes";
 import { obter as obterSimulacao, type Dificuldade, type StatusSimulacao } from "./simulacoes";
 
 const DIA_MS = 24 * 60 * 60 * 1000;
+/** A mesma régua de `lib/painel-equipe.ts`: abaixo de 0,3 de diferença entre as duas janelas, a nota
+ * de alguém não subiu nem caiu — variou. Uma seta para cada oscilação de uma conversa faria a coluna
+ * inteira piscar e deixaria de significar coisa alguma. */
+const LIMIAR_TENDENCIA = 0.3;
 /** A frase da IA vale uma hora — ou até uma conversa nova chegar, o que vier primeiro. */
 const VALIDADE_FRASE_MS = 60 * 60 * 1000;
 
@@ -29,6 +35,49 @@ type AvaliacaoGravada = {
 
 /** Uma competência do time: a mesma rubrica que avaliou cada conversa, agora com a média de todas. */
 export type CompetenciaAgregada = { id: string; nome: string; grupo: Grupo; nota: number; avaliacoes: number };
+
+export type Tendencia = "subindo" | "estavel" | "caindo";
+
+/** Uma conversa de um vendedor neste treino: a linha que o gestor abre no detalhe e a linha da
+ * planilha exportada. Entram todas as sessões, inclusive as que não viraram nota — uma pessoa que
+ * abriu o link três vezes e nunca terminou uma conversa é exatamente o tipo de coisa que o gestor
+ * precisa enxergar. */
+export type ConversaDoVendedor = {
+  sessaoId: string;
+  personaId: string;
+  /** Emoji + nome (D2): a única forma de mostrar uma persona na tela. */
+  persona: string;
+  modo: ModoSessao;
+  status: StatusSessao;
+  nota: number | null;
+  duracaoSeg: number | null;
+  /** Quando a conversa terminou — ou quando ela começou, se ainda não terminou. */
+  quando: string;
+  resultadoId: string | null;
+};
+
+/** Uma pessoa do time dentro deste treino (US-023). */
+export type VendedorNaSimulacao = {
+  participanteId: string;
+  nome: string;
+  email: string;
+  /** Todas as sessões da pessoa neste treino — somadas, dão o total do cabeçalho. */
+  sessoes: number;
+  avaliadas: number;
+  /** Média de todas as conversas avaliadas da pessoa neste treino, sem recorte de período. */
+  nota: number | null;
+  tendencia: Tendencia;
+  variacao: number | null;
+  /** Quantos treinos diferentes ela já fez no app inteiro. */
+  treinos: number;
+  /** O tipo de cliente com quem ela vai melhor e o com quem ela mais trava. */
+  melhor: { persona: string; nota: number; conversas: number } | null;
+  desafio: { persona: string; nota: number; conversas: number } | null;
+  ultima: string | null;
+  /** O resultado da conversa mais recente que chegou a ser avaliada (o link /r/<id>). */
+  ultimoResultadoId: string | null;
+  conversas: ConversaDoVendedor[];
+};
 
 export type PainelSimulacao = {
   codigo: string;
@@ -58,6 +107,8 @@ export type PainelSimulacao = {
   variacao: number | null;
   competencias: CompetenciaAgregada[];
   grupos: { grupo: Grupo; nota: number; criterios: number }[];
+  /** Pessoa por pessoa, da maior nota para a menor (US-023). */
+  equipe: VendedorNaSimulacao[];
   ultimaSessao: string | null;
 };
 
@@ -107,12 +158,12 @@ export function montarPainelSimulacao(codigo: string, dias = 30): PainelSimulaca
   const inicioJanela = agora - dias * DIA_MS;
   const inicioAnterior = agora - 2 * dias * DIA_MS;
 
-  const avaliadas: { quando: number; nota: number; avaliacao: AvaliacaoGravada }[] = [];
+  const avaliadas: { sessaoId: string; quando: number; nota: number; avaliacao: AvaliacaoGravada }[] = [];
   for (const { sessao, saida } of avaliacoesDaSimulacao(codigo)) {
     const avaliacao = lerAvaliacao(saida);
     const nota = avaliacao && numero(avaliacao.notaGeral);
     if (!avaliacao || nota === null) continue;
-    avaliadas.push({ quando: new Date(sessao.encerradaEm ?? sessao.criadoEm).getTime(), nota, avaliacao });
+    avaliadas.push({ sessaoId: sessao.id, quando: new Date(sessao.encerradaEm ?? sessao.criadoEm).getTime(), nota, avaliacao });
   }
 
   const daJanela = avaliadas.filter((a) => a.quando >= inicioJanela);
@@ -166,8 +217,121 @@ export function montarPainelSimulacao(codigo: string, dias = 30): PainelSimulaca
     variacao: notaJanela === null || notaAnterior === null ? null : Math.round((notaJanela - notaAnterior) * 10) / 10,
     competencias,
     grupos,
+    equipe: montarEquipe(sessoes, new Map(avaliadas.map((a) => [a.sessaoId, a.nota])), inicioJanela, inicioAnterior),
     ultimaSessao,
   };
+}
+
+// ---------------------------------------------------------------------------
+// A aba Equipe: pessoa por pessoa (US-023)
+// ---------------------------------------------------------------------------
+
+function tendenciaDe(atual: number | null, anterior: number | null): Tendencia {
+  if (atual === null || anterior === null) return "estavel";
+  const diferenca = atual - anterior;
+  if (diferenca > LIMIAR_TENDENCIA) return "subindo";
+  if (diferenca < -LIMIAR_TENDENCIA) return "caindo";
+  return "estavel";
+}
+
+/** Emoji + nome do tipo de cliente. Id que saiu do catálogo vira um rótulo genérico em vez de sumir:
+ * a conversa aconteceu e continua contando. */
+function rotuloDaPersona(id: string): string {
+  const p = persona(id);
+  return p ? rotulo(p) : "Cliente";
+}
+
+/** A melhor e a pior média por tipo de cliente desta pessoa. O desafio só existe quando ele é de fato
+ * **pior** que o melhor: com um tipo de cliente só — ou com todos empatados — apontar um "maior
+ * desafio" com a mesma nota do "vai melhor com" seria inventar uma diferença que não houve. */
+function melhorEDesafio(conversas: ConversaDoVendedor[]) {
+  const porPersona = new Map<string, { persona: string; notas: number[] }>();
+  for (const c of conversas) {
+    if (c.nota === null) continue;
+    const atual = porPersona.get(c.personaId) ?? { persona: c.persona, notas: [] };
+    atual.notas.push(c.nota);
+    porPersona.set(c.personaId, atual);
+  }
+  const ordenadas = Array.from(porPersona.values())
+    .map((p) => ({ persona: p.persona, nota: media(p.notas) ?? 0, conversas: p.notas.length }))
+    .sort((a, b) => b.nota - a.nota);
+  const melhor = ordenadas[0] ?? null;
+  const pior = ordenadas[ordenadas.length - 1] ?? null;
+  return { melhor, desafio: melhor && pior && pior.nota < melhor.nota ? pior : null };
+}
+
+/**
+ * O time deste treino, pessoa por pessoa.
+ *
+ * Entram **todas** as sessões de cada um, não só as avaliadas: a soma das linhas tem de bater com o
+ * "N sessões" do cabeçalho, e uma pessoa que abriu o link duas vezes sem terminar nenhuma conversa
+ * precisa aparecer na lista — é justamente com ela que o gestor vai querer falar.
+ *
+ * A tendência compara as duas janelas do painel (a atual contra a imediatamente anterior, não
+ * sobrepostas), com o mesmo limiar de 0,3 de `lib/painel-equipe.ts`. A **nota**, como as competências
+ * da visão geral, soma tudo: sem recorte de período, senão quem treinou mês passado apareceria sem
+ * nota nenhuma.
+ */
+function montarEquipe(
+  sessoes: Sessao[],
+  notaPorSessao: Map<string, number>,
+  inicioJanela: number,
+  inicioAnterior: number,
+): VendedorNaSimulacao[] {
+  const treinos = treinosPorParticipante();
+  const porParticipante = new Map<string, ConversaDoVendedor[]>();
+
+  for (const s of sessoes) {
+    const lista = porParticipante.get(s.participanteId) ?? [];
+    lista.push({
+      sessaoId: s.id,
+      personaId: s.personaId,
+      persona: rotuloDaPersona(s.personaId),
+      modo: s.modo,
+      status: s.status,
+      nota: notaPorSessao.get(s.id) ?? null,
+      duracaoSeg: s.duracaoSeg ?? null,
+      quando: s.encerradaEm ?? s.criadoEm,
+      resultadoId: s.resultadoId ?? null,
+    });
+    porParticipante.set(s.participanteId, lista);
+  }
+
+  const equipe: VendedorNaSimulacao[] = [];
+  for (const [participanteId, lista] of porParticipante) {
+    const conversas = [...lista].sort((a, b) => b.quando.localeCompare(a.quando));
+    const pessoa = obterParticipante(participanteId);
+    const comNota = conversas.filter((c) => c.nota !== null);
+    const daJanela = comNota.filter((c) => new Date(c.quando).getTime() >= inicioJanela);
+    const daAnterior = comNota.filter((c) => {
+      const quando = new Date(c.quando).getTime();
+      return quando >= inicioAnterior && quando < inicioJanela;
+    });
+    const notaJanela = media(daJanela.map((c) => c.nota as number));
+    const notaAnterior = media(daAnterior.map((c) => c.nota as number));
+    const { melhor, desafio } = melhorEDesafio(conversas);
+
+    equipe.push({
+      participanteId,
+      nome: pessoa?.nome?.trim() || "Sem nome",
+      email: pessoa?.email ?? "",
+      sessoes: conversas.length,
+      avaliadas: comNota.length,
+      nota: media(comNota.map((c) => c.nota as number)),
+      tendencia: tendenciaDe(notaJanela, notaAnterior),
+      variacao: notaJanela === null || notaAnterior === null ? null : Math.round((notaJanela - notaAnterior) * 10) / 10,
+      treinos: treinos[participanteId] ?? 1,
+      melhor,
+      desafio,
+      ultima: conversas[0]?.quando ?? null,
+      ultimoResultadoId: conversas.find((c) => c.resultadoId)?.resultadoId ?? null,
+      conversas,
+    });
+  }
+
+  // Quem ainda não tem nota vai para o fim: a lista responde "com quem eu falo esta semana?", e a
+  // primeira resposta é sempre alguém que já treinou.
+  return equipe.sort((a, b) => (b.nota ?? -1) - (a.nota ?? -1) || a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
 // ---------------------------------------------------------------------------
