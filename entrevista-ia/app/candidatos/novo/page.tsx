@@ -19,8 +19,14 @@ import {
 } from "@/components/FormularioCandidato";
 import { Aviso, Topbar, lerErro, useStatus } from "@/components/ui";
 
-/** Depois de salvar: o candidato está criado e só falta o texto do currículo que o arquivo não deu. */
-type Salvo = { id: string; nome: string; aviso: string };
+/**
+ * Depois de salvar: o candidato está criado e alguma coisa ficou faltando.
+ *
+ * Duas faltas diferentes, com saídas diferentes: **sem texto** (o arquivo não deu texto nenhum), e aí
+ * a saída é colar o currículo; **com texto, sem ficha** (a leitura da US-009 estourou o prazo ou
+ * falhou), e aí a saída é pedir para ler de novo — o texto já está guardado, não há o que colar.
+ */
+type Salvo = { id: string; nome: string; aviso: string; temTexto: boolean };
 
 function Conteudo() {
   const { status, erro } = useStatus();
@@ -57,7 +63,7 @@ function Conteudo() {
       }
 
       if (aviso) {
-        setSalvo({ id: candidato.id, nome: candidato.nome, aviso });
+        setSalvo({ id: candidato.id, nome: candidato.nome, aviso, temTexto: Boolean(candidato.temCvTexto) });
         setSalvando(false);
         return;
       }
@@ -68,7 +74,11 @@ function Conteudo() {
     }
   }
 
-  /** O texto que a pessoa colou entra no mesmo lugar do que sairia do arquivo: `cvTexto`. */
+  /**
+   * O texto que a pessoa colou entra no mesmo lugar do que sairia do arquivo: `cvTexto` — e, logo em
+   * seguida, vira ficha pelo mesmo caminho de sempre. Se a leitura falhar, ela não segura a pessoa
+   * nesta tela: o texto já está salvo e "Ler o currículo de novo" continua à mão na ficha.
+   */
   async function salvarTexto() {
     if (!salvo || !textoColado.trim()) return;
     setSalvando(true);
@@ -79,6 +89,22 @@ function Conteudo() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cvTexto: textoColado }),
       });
+      if (!r.ok) throw r;
+      await fetch(`/api/candidatos/${salvo.id}/ficha`, { method: "POST" }).catch(() => null);
+      router.push(destino);
+    } catch (e) {
+      setFalha((await lerErro(e)).mensagem);
+      setSalvando(false);
+    }
+  }
+
+  /** O texto do currículo já está guardado: só faltou a ficha. */
+  async function lerDeNovo() {
+    if (!salvo) return;
+    setSalvando(true);
+    setFalha("");
+    try {
+      const r = await fetch(`/api/candidatos/${salvo.id}/ficha`, { method: "POST" });
       if (!r.ok) throw r;
       router.push(destino);
     } catch (e) {
@@ -107,16 +133,18 @@ function Conteudo() {
               <Aviso tom="warn">{salvo.aviso}</Aviso>
             </div>
 
-            <div className="flex flex-col gap-1.5 mb-4">
-              <label htmlFor="candidato-cv-texto" className="text-[13px] font-semibold">Texto do currículo</label>
-              <textarea
-                id="candidato-cv-texto"
-                className="input min-h-40 resize-y"
-                value={textoColado}
-                placeholder="Cole aqui o texto do currículo, do jeito que estiver."
-                onChange={(e) => setTextoColado(e.target.value)}
-              />
-            </div>
+            {!salvo.temTexto && (
+              <div className="flex flex-col gap-1.5 mb-4">
+                <label htmlFor="candidato-cv-texto" className="text-[13px] font-semibold">Texto do currículo</label>
+                <textarea
+                  id="candidato-cv-texto"
+                  className="input min-h-40 resize-y"
+                  value={textoColado}
+                  placeholder="Cole aqui o texto do currículo, do jeito que estiver."
+                  onChange={(e) => setTextoColado(e.target.value)}
+                />
+              </div>
+            )}
 
             {falha && (
               <div className="mb-4">
@@ -125,11 +153,17 @@ function Conteudo() {
             )}
 
             <div className="flex items-center gap-2.5 flex-wrap">
-              <button type="button" className="btn-primary !w-auto max-md:!w-full" disabled={salvando || !textoColado.trim()} onClick={() => void salvarTexto()}>
-                {salvando ? "Salvando..." : "Salvar o texto"}
-              </button>
+              {salvo.temTexto ? (
+                <button type="button" id="candidato-ler-de-novo" className="btn-primary !w-auto max-md:!w-full" disabled={salvando} onClick={() => void lerDeNovo()}>
+                  {salvando ? "Lendo..." : "Ler o currículo de novo"}
+                </button>
+              ) : (
+                <button type="button" className="btn-primary !w-auto max-md:!w-full" disabled={salvando || !textoColado.trim()} onClick={() => void salvarTexto()}>
+                  {salvando ? "Salvando..." : "Salvar o texto"}
+                </button>
+              )}
               <button type="button" className="btn-ghost !w-auto max-md:!w-full" onClick={() => router.push(destino)}>
-                Continuar sem o texto
+                {salvo.temTexto ? "Continuar sem a ficha" : "Continuar sem o texto"}
               </button>
             </div>
           </section>

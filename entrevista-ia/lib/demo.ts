@@ -1,7 +1,7 @@
 // Respostas de exemplo usadas quando não há chave de IA configurada.
 import type { Cultura } from "./cultura";
 import type { ValorDaEmpresa, VagaEstruturada } from "./vagas";
-import type { AderenciaRequisito, CriterioCultural, CriterioTecnico, ItemConsistencia, Parecer, Recomendacao, Scorecard, SituacaoRequisito, Troca, Vaga } from "./types";
+import type { AderenciaRequisito, CriterioCultural, CriterioTecnico, FichaBruta, ItemConsistencia, Parecer, Recomendacao, Scorecard, SituacaoRequisito, Troca, Vaga } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
@@ -347,5 +347,125 @@ export function vagaEstruturadaDemo(daEmpresa: ValorDaEmpresa[] = []): VagaEstru
       ...daEmpresa.slice(0, 2).map((v) => ({ id: v.id, nome: v.nome, descricao: v.descricao, origem: "empresa" as const })),
       { id: "firmeza-em-conversa-dificil", nome: "Firmeza em conversa difícil", descricao: "Dar uma notícia ruim ao cliente na hora certa, sem rodeio e sem prometer o que não dá.", origem: "vaga" as const },
     ],
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// A ficha lida do currículo (US-009)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * A ficha que "ler o currículo" devolve enquanto não há chave de IA.
+ *
+ * Os quatro candidatos da demonstração (lib/semear-demo.ts) têm a ficha escrita à mão, e é ela que
+ * volta quando o nome bate: quem cadastra "Bruno Alves" de novo para ver como funciona vê a mesma
+ * pessoa que já está na lista. Só a parte de origem `cv` aparece aqui — o que a ficha semeada tem de
+ * `web` é obra da pesquisa (US-011/US-012), e fingir que saiu do currículo seria mentir sobre a
+ * procedência, justamente o que esta tela existe para mostrar.
+ *
+ * Para qualquer outro nome não há exemplo escrito, e **nada é inventado**: o que volta sai do próprio
+ * texto colado (as primeiras frases, as linhas de "Ferramentas:" e "Idiomas:"). Uma ficha de mentira
+ * com o nome de uma pessoa de verdade seria pior que uma ficha vazia.
+ */
+export function fichaDemo({ nome, cvTexto }: { nome: string; cvTexto: string }): FichaBruta {
+  const exemplo = FICHAS_DE_EXEMPLO[semAcento(nome)];
+  return exemplo ? { ...exemplo } : fichaDoTexto(cvTexto);
+}
+
+function semAcento(texto: string): string {
+  return texto
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Os mesmos quatro da lista semeada, com o que o currículo deles diz — e só isso. */
+const FICHAS_DE_EXEMPLO: Record<string, FichaBruta> = {
+  "bruno alves": {
+    resumo: "Analista de Customer Success com quatro anos em contas B2B de médio porte, vindo de suporte e implantação.",
+    cargoAtual: "Analista de Customer Success",
+    empresaAtual: "Órbita Software",
+    anosExperiencia: 4,
+    experiencias: [
+      { empresa: "Órbita Software", cargo: "Analista de Customer Success", inicio: "2021", fim: "atual", descricao: "Carteira de 38 contas B2B, renovação de 92%." },
+      { empresa: "Grupo Vela", cargo: "Analista de suporte", inicio: "2019", fim: "2021", descricao: "Suporte e implantação de novos clientes." },
+    ],
+    formacao: [{ curso: "Administração", instituicao: "Universidade de exemplo", fim: "2019" }],
+    competencias: ["HubSpot", "Zendesk", "Metabase"],
+    idiomas: ["Inglês intermediário"],
+    disponibilidade: "30 dias",
+  },
+  "camila rocha": {
+    resumo: "Sete anos em relacionamento e Customer Success, com passagem por coordenação de time pequeno.",
+    cargoAtual: "Coordenadora de Customer Success",
+    empresaAtual: "Nexo Serviços",
+    cidade: "Campinas (SP)",
+    anosExperiencia: 7,
+    experiencias: [
+      { empresa: "Nexo Serviços", cargo: "Coordenadora de Customer Success", inicio: "2021", fim: "atual", descricao: "Time de três pessoas e carteira de 60 contas." },
+      { empresa: "Casa Nove", cargo: "Analista de relacionamento", inicio: "2018", fim: "2021", descricao: "Atendimento e renovação de contratos." },
+    ],
+    formacao: [{ curso: "Comunicação Social", instituicao: "Universidade de exemplo", fim: "2017" }],
+    competencias: ["Salesforce", "Intercom"],
+    idiomas: ["Inglês avançado"],
+    disponibilidade: "Imediata",
+  },
+  "diego martins": {
+    resumo: "Dois anos em atendimento a consumidor final, buscando a primeira posição em contas B2B.",
+    cargoAtual: "Analista de atendimento",
+    empresaAtual: "Ponte Digital",
+    anosExperiencia: 2,
+    experiencias: [
+      { empresa: "Ponte Digital", cargo: "Analista de atendimento", inicio: "2023", fim: "atual", descricao: "Chat e telefone para consumidor final." },
+    ],
+    formacao: [{ curso: "Publicidade", instituicao: "Universidade de exemplo", fim: "2022" }],
+    competencias: ["Zendesk"],
+    idiomas: ["Inglês básico"],
+    disponibilidade: "15 dias",
+  },
+  "fernanda lima": {
+    resumo: "Três anos em Customer Success B2B, com implantação de novos clientes.",
+    cargoAtual: "Analista de Customer Success",
+    empresaAtual: "Ampla Tecnologia",
+    anosExperiencia: 3,
+    experiencias: [
+      { empresa: "Ampla Tecnologia", cargo: "Analista de Customer Success", inicio: "2022", fim: "atual", descricao: "Carteira de 25 contas B2B e implantação." },
+    ],
+    formacao: [{ curso: "Sistemas de Informação", instituicao: "Universidade de exemplo", fim: "2021" }],
+    competencias: ["HubSpot", "Looker"],
+    idiomas: ["Inglês avançado"],
+    disponibilidade: "30 dias",
+  },
+};
+
+/** Uma etiqueta no começo da linha ("Ferramentas: HubSpot, Zendesk") e o que vem depois dela. */
+function itensDaEtiqueta(texto: string, etiquetas: string[]): string[] {
+  for (const etiqueta of etiquetas) {
+    const achado = new RegExp(`${etiqueta}\\s*:\\s*([^\\n.]+)`, "i").exec(texto);
+    if (achado) {
+      return achado[1]
+        .split(/[,;•|]/)
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .slice(0, 8);
+    }
+  }
+  return [];
+}
+
+/**
+ * O pouco que dá para tirar de um currículo sem modelo nenhum: as primeiras frases e as listas que o
+ * próprio texto etiqueta. Tudo que não estiver escrito volta em branco — é a mesma regra do prompt.
+ */
+function fichaDoTexto(cvTexto: string): FichaBruta {
+  const texto = cvTexto.replace(/\s+/g, " ").trim();
+  const frases = texto.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ");
+  return {
+    resumo: frases ? frases.slice(0, 400) : null,
+    competencias: itensDaEtiqueta(texto, ["ferramentas", "compet[êe]ncias", "habilidades", "tecnologias"]),
+    idiomas: itensDaEtiqueta(texto, ["idiomas"]),
+    links: (texto.match(/https?:\/\/[^\s,;)]+/g) ?? []).slice(0, 5),
   };
 }

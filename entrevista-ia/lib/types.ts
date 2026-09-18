@@ -107,3 +107,96 @@ export interface Parecer {
   /** Entrevista encerrada antes do fim: o parecer cobre só o que foi conversado. */
   parcial: boolean;
 }
+
+// ---------------------------------------------------------------------------------------------
+// A ficha do candidato (US-009). Como o Parecer, os tipos moram aqui — no fundo do grafo de imports
+// — porque `lib/demo.ts` precisa deles para a ficha de exemplo e `lib/ficha.ts` precisa de
+// `lib/demo.ts`. Um arquivo só de tipos é o que impede esse ciclo de nascer.
+// ---------------------------------------------------------------------------------------------
+
+/** De onde veio o que está escrito no campo. É a D5 inteira em três palavras: o currículo vence a
+ * web, e o que o gestor digitou vence os dois e nunca é sobrescrito. */
+export type OrigemCampo = "cv" | "web" | "gestor";
+
+/**
+ * Um campo da ficha e a procedência dele.
+ *
+ * `fonteId` aponta para a linha de `fontes_candidato` que sustenta o valor (o currículo, o perfil
+ * público, a página trazida na pesquisa) — é o que permite à tela oferecer o link "fonte" ao lado da
+ * informação, em vez de pedir confiança.
+ */
+export interface CampoFicha<T> {
+  valor: T;
+  origem: OrigemCampo;
+  fonteId?: string;
+  /** Quanto a consolidação da pesquisa na web confia neste campo, de 0 a 1 (US-012). Nunca vem do
+   * currículo: o que está escrito no CV é o que o candidato afirma, e isso não tem grau. */
+  confianca?: number;
+}
+
+export interface ExperienciaFicha {
+  empresa: string;
+  cargo: string;
+  /** Do jeito que aparece no currículo ("2021", "mar/2021"): normalizar data de currículo é
+   * inventar precisão que o texto não tem. */
+  inicio?: string;
+  fim?: string;
+  descricao?: string;
+}
+
+export interface FormacaoFicha {
+  curso: string;
+  instituicao?: string;
+  inicio?: string;
+  fim?: string;
+}
+
+/** Currículo e web dizem coisas diferentes sobre o mesmo campo. Nenhum dos dois é apagado: fica o do
+ * currículo (D5) e o gestor vê os dois lado a lado para decidir. */
+export interface DivergenciaFicha {
+  campo: string;
+  cv: string;
+  web: string;
+  /** A fonte da web que originou o conflito, para a tela linkar de onde saiu a outra versão. */
+  fonteId?: string;
+}
+
+/** A ficha do candidato: cada campo com a origem dele, mais os conflitos ainda não resolvidos. */
+export interface Ficha {
+  resumo?: CampoFicha<string>;
+  cargoAtual?: CampoFicha<string>;
+  empresaAtual?: CampoFicha<string>;
+  cidade?: CampoFicha<string>;
+  anosExperiencia?: CampoFicha<number>;
+  experiencias?: CampoFicha<ExperienciaFicha>[];
+  formacao?: CampoFicha<FormacaoFicha>[];
+  competencias?: CampoFicha<string>[];
+  idiomas?: CampoFicha<string>[];
+  links?: CampoFicha<string>[];
+  pretensaoSalarial?: CampoFicha<string>;
+  disponibilidade?: CampoFicha<string>;
+  observacoes?: CampoFicha<string>;
+  divergencias?: DivergenciaFicha[];
+}
+
+/**
+ * A ficha como a IA (e o exemplo do modo demonstração) a devolvem: valores crus, sem procedência.
+ *
+ * Quem sabe de onde aquilo veio é quem chamou o modelo, não o modelo — pedir a origem na resposta
+ * seria pedir para ele inventar mais um campo. `normalizarFicha()` (lib/ficha.ts) carimba a origem.
+ */
+export interface FichaBruta {
+  resumo?: string | null;
+  cargoAtual?: string | null;
+  empresaAtual?: string | null;
+  cidade?: string | null;
+  anosExperiencia?: number | null;
+  experiencias?: ExperienciaFicha[] | null;
+  formacao?: FormacaoFicha[] | null;
+  competencias?: string[] | null;
+  idiomas?: string[] | null;
+  links?: string[] | null;
+  pretensaoSalarial?: string | null;
+  disponibilidade?: string | null;
+  observacoes?: string | null;
+}

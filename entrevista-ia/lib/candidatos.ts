@@ -7,13 +7,16 @@
 import { agora, banco, gerarId } from "./banco";
 import { removerCandidatosDeExemplo } from "./exemplos";
 import { semearDemonstracao } from "./semear-demo";
+// Só o tipo: `lib/ficha.ts` importa ESTE módulo (para registrar a fonte `cv`), e um import de valor
+// na volta fecharia o ciclo. O tipo mora em `lib/types.ts` exatamente por isso.
+import type { Ficha } from "./types";
 
 export type PesquisaStatus = "nao_pedida" | "pendente" | "em_andamento" | "concluida" | "sem_resultado" | "falhou";
 export type TipoFonteCandidato = "cv" | "linkedin" | "busca" | "pagina";
 
-/** A ficha estruturada do candidato, com a origem de cada campo (US-009). Enquanto `lib/ficha.ts` não
- * existe, ela viaja como JSON opaco: este módulo só guarda e devolve; quem a interpreta é a US-009. */
-export type FichaCandidato = Record<string, unknown>;
+/** A ficha estruturada do candidato, com a origem de cada campo. Este módulo só a guarda e devolve:
+ * quem a monta, mescla e lê é `lib/ficha.ts` (US-009). */
+export type FichaCandidato = Ficha;
 
 /**
  * O candidato como as telas o veem.
@@ -308,6 +311,14 @@ export function adicionarFonte({
     .prepare("INSERT INTO fontes_candidato (id, candidatoId, tipo, url, titulo, resumo, conteudo, coletadoEm) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .run(id, candidatoId, tipo, url?.trim() || null, titulo?.trim() || null, resumo?.trim() || null, cortado, coletadoEm);
   return { id, candidatoId, tipo, url, titulo, resumo, conteudo: cortado, coletadoEm };
+}
+
+/**
+ * Apaga as fontes de um tipo. É o que permite reler o currículo (ou refazer a pesquisa) sem empilhar
+ * duas linhas do mesmo documento: a fonte é substituída, não somada.
+ */
+export function removerFontes(candidatoId: string, tipo: TipoFonteCandidato): void {
+  banco().prepare("DELETE FROM fontes_candidato WHERE candidatoId = ? AND tipo = ?").run(candidatoId, tipo);
 }
 
 export function listarFontes(candidatoId: string): FonteCandidato[] {

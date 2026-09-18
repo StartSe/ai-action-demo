@@ -5,8 +5,14 @@
 // de negócio não mora aqui: `validarCandidato` (lib/candidatos.ts) sabe o que é um nome grande demais
 // e `lerCurriculo` (lib/curriculo.ts) sabe o que é um arquivo aceitável — a mesma regra precisa valer
 // para esta rota, para o assistente (MCP) e para qualquer porta que venha depois.
-import { criar, validarCandidato } from "@/lib/candidatos";
+//
+// Quando há texto de currículo, a ficha é montada ANTES da resposta (US-009), com o prazo de
+// `fichaDoCurriculo`: quem acabou de cadastrar quer cair numa ficha preenchida, não numa tela vazia
+// que enche sozinha meio minuto depois. Passado o prazo, o candidato é salvo do mesmo jeito e a
+// resposta traz a frase que oferece "Ler o currículo de novo".
+import { atualizar, criar, validarCandidato } from "@/lib/candidatos";
 import { lerCurriculo } from "@/lib/curriculo";
+import { fichaDoCurriculo } from "@/lib/ficha";
 import { listarCandidatosNoPainel } from "@/lib/painel";
 
 export const dynamic = "force-dynamic";
@@ -52,5 +58,12 @@ export async function POST(req: Request) {
     aviso = leitura.leitura.aviso;
   }
 
-  return Response.json({ candidato: criar({ ...validacao.campos, ...curriculo }), aviso });
+  const candidato = criar({ ...validacao.campos, ...curriculo });
+
+  const daFicha = await fichaDoCurriculo({ candidatoId: candidato.id, nome: candidato.nome, cvTexto: curriculo?.cvTexto ?? "" });
+  // O aviso do arquivo (não deu para ler o texto) vem primeiro: sem texto não havia ficha para tentar.
+  const recado = aviso || daFicha.aviso;
+  if (!daFicha.ficha) return Response.json({ candidato, aviso: recado });
+
+  return Response.json({ candidato: atualizar(candidato.id, { ficha: daFicha.ficha }) ?? candidato, aviso: recado });
 }
