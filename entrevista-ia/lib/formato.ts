@@ -14,3 +14,13 @@ export function data(d: Date | string, { comHora = false, comAno = false }: { co
   if (comHora) texto += ` às ${new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(dt)}`;
   return texto;
 }
+
+/**
+ * Reais inteiros, sem centavos: `5500` vira "R$ 5.500".
+ *
+ * A faixa salarial de uma vaga é digitada e guardada em reais cheios (US-005) — centavos num salário
+ * anunciado só ocupam espaço e ninguém negocia por eles.
+ */
+export function moeda(valor: number) {
+  return `R$ ${numero(Math.round(valor))}`;
+}

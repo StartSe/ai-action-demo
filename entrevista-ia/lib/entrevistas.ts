@@ -309,3 +309,41 @@ export function cancelar(id: string): Entrevista | null {
   const { changes } = banco().prepare("UPDATE entrevistas SET status = 'cancelada' WHERE id = ?").run(id);
   return Number(changes) > 0 ? obter(id) : null;
 }
+
+/** Quantos candidatos estão em cada etapa de uma vaga. Cancelada e expirada ficam de fora: são
+ * convites que não valem mais, e contá-los faria a vaga parecer mais movimentada do que está. */
+export type ContagemVaga = { total: number; convidados: number; emAndamento: number; concluidas: number; avaliadas: number };
+
+export const CONTAGEM_VAZIA: ContagemVaga = { total: 0, convidados: 0, emAndamento: 0, concluidas: 0, avaliadas: 0 };
+
+/**
+ * A contagem por etapa de TODAS as vagas, numa consulta agregada só.
+ *
+ * A lista de vagas (US-005) mostra "3 convidados · 2 concluídas · 1 avaliada" em cada cartão: com uma
+ * consulta por cartão, trinta vagas abertas viram trinta consultas para mostrar números pequenos.
+ */
+export function contarPorVaga(): Record<string, ContagemVaga> {
+  expirarVencidas();
+  const linhas = banco()
+    .prepare("SELECT vagaId, status, COUNT(*) AS total FROM entrevistas GROUP BY vagaId, status")
+    .all() as { vagaId: string; status: string; total: number }[];
+
+  const contagens: Record<string, ContagemVaga> = {};
+  for (const linha of linhas) {
+    const etapa =
+      linha.status === "convidada" || linha.status === "aberta"
+        ? "convidados"
+        : linha.status === "em_andamento"
+          ? "emAndamento"
+          : linha.status === "concluida"
+            ? "concluidas"
+            : linha.status === "avaliada"
+              ? "avaliadas"
+              : null;
+    if (!etapa) continue;
+    const atual = (contagens[linha.vagaId] ??= { ...CONTAGEM_VAZIA });
+    atual[etapa] += Number(linha.total);
+    atual.total += Number(linha.total);
+  }
+  return contagens;
+}

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { CodigoErroIA, Meta } from "@/lib/ai";
-import { numero, data } from "@/lib/formato";
+import { numero, data, moeda } from "@/lib/formato";
 import { NAVEGACAO, type ItemNavegacao } from "@/lib/navegacao";
 import { ilustracaoDoSegmento, type Segmento } from "@/lib/ilustracao";
 import { MODELOS_GRATUITOS, type ProximoPasso } from "@/lib/modelos";
@@ -839,4 +839,4 @@ export function useScrollToResult(pronto: boolean) {
 export function esc(s: unknown) { return String(s ?? ""); }
 
 /** Reexportados para não quebrar quem já importa esses helpers de "@/components/ui"; definidos em lib/formato.ts (sem "use client") para poderem ser chamados também de Server Components. */
-export { numero, data };
+export { numero, data, moeda };

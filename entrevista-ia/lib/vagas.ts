@@ -4,6 +4,7 @@
 // dependia de todo mundo escrever o mesmo texto. Agora ela tem id, e é dela que a entrevistadora tira
 // o que perguntar (requisitos, desafios, competências culturais) e o que avaliar.
 import { agora, banco, gerarId } from "./banco";
+import { moeda, numero } from "./formato";
 import { removerVagasDeExemplo } from "./exemplos";
 import { semearDemonstracao } from "./semear-demo";
 
@@ -120,8 +121,19 @@ function linhaParaVaga(l: LinhaVaga): Vaga {
   };
 }
 
-/** Os campos que tela e rota podem escrever. `id`, datas e `exemplo` ficam de fora de propósito. */
-export type CamposVaga = Partial<Omit<Vaga, "id" | "criadoEm" | "atualizadoEm" | "exemplo" | "status">>;
+/**
+ * Os campos que tela e rota podem escrever. `id`, datas e `exemplo` ficam de fora de propósito.
+ *
+ * Senioridade, modelo e a faixa salarial aceitam `null` além de `undefined`, e a diferença importa em
+ * `atualizar`: `undefined` é "não mexa nisso", `null` é "apague o que estava lá". Sem os dois, uma
+ * vaga que nasceu "pleno" nunca mais poderia voltar a não dizer a senioridade.
+ */
+export type CamposVaga = Partial<Omit<Vaga, "id" | "criadoEm" | "atualizadoEm" | "exemplo" | "status" | "senioridade" | "modelo" | "salarioMin" | "salarioMax">> & {
+  senioridade?: Senioridade | null;
+  modelo?: ModeloTrabalho | null;
+  salarioMin?: number | null;
+  salarioMax?: number | null;
+};
 
 export function criar(campos: CamposVaga & { cargo: string; exemplo?: boolean }): Vaga {
   // A primeira vaga de verdade tira o exemplo de cena, aqui e não na rota: a regra vale igual para a
@@ -245,4 +257,155 @@ export function apagar(id: string): void {
     d.exec("ROLLBACK");
     throw err;
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Validação do que uma PESSOA digitou (US-005)
+// ---------------------------------------------------------------------------------------------
+//
+// Mesma separação já adotada na cultura da empresa (lib/cultura.ts): `validarVaga` fala com quem
+// preencheu o formulário e RECUSA o que está fora (`{ ok: false, erro }` → 400 com a frase pronta),
+// enquanto `criar`/`atualizar` CORTAM em silêncio o que vem da IA ou do assistente (`limitar`). Uma
+// pessoa que digitou 40 perguntas precisa saber que o limite é 12; um modelo que devolveu 40 só
+// precisa que o número entre certo no banco.
+
+export const LIMITE_CARGO = 80;
+export const LIMITE_AREA = 60;
+export const LIMITE_LOCAL = 80;
+export const LIMITE_DESAFIOS = 1500;
+export const LIMITE_REQUISITOS = 3000;
+export const LIMITE_NOME_COMPETENCIA = 40;
+export const LIMITE_DESCRICAO_COMPETENCIA = 200;
+export const MAX_COMPETENCIAS = 10;
+/** Teto de sanidade da faixa salarial: acima disso é dedo escorregado no zero, não proposta. */
+export const SALARIO_TETO = 1_000_000;
+
+export type ValidacaoVaga = { ok: true; campos: CamposVaga & { cargo: string } } | { ok: false; erro: string };
+
+function texto(valor: unknown): string {
+  return typeof valor === "string" ? valor.trim() : "";
+}
+
+/** Uma linha só: quebras viram espaço, para um cargo colado de um anúncio não virar parágrafo. */
+function umaLinha(valor: unknown): string {
+  return texto(valor).replace(/\s+/g, " ");
+}
+
+function encurtar(valor: string, limite: number): string {
+  return valor.length > limite ? `${valor.slice(0, limite - 1).trimEnd()}…` : valor;
+}
+
+/** Aceita o número (do assistente) e o texto com máscara de milhar (da tela). Vazio é "não informado". */
+function lerSalario(valor: unknown): number | null | "invalido" {
+  if (valor === null || valor === undefined || valor === "") return null;
+  const bruto = typeof valor === "number" ? valor : Number(texto(valor).replace(/\./g, "").replace(",", "."));
+  if (!Number.isFinite(bruto) || bruto < 0) return "invalido";
+  return Math.round(bruto);
+}
+
+function lerCompetenciasDigitadas(bruto: unknown): CompetenciaCultural[] | { erro: string } {
+  if (!Array.isArray(bruto)) return [];
+  const lista: CompetenciaCultural[] = [];
+  for (const item of bruto) {
+    if (!item || typeof item !== "object") continue;
+    const registro = item as Record<string, unknown>;
+    const nome = umaLinha(registro.nome);
+    const descricao = umaLinha(registro.descricao);
+    if (!nome && !descricao) continue;
+    if (!nome) return { erro: "Dê um nome curto a cada competência, ou apague a linha em branco." };
+    if (nome.length > LIMITE_NOME_COMPETENCIA) {
+      return { erro: `O nome de uma competência pode ter até ${LIMITE_NOME_COMPETENCIA} caracteres. Encurte "${encurtar(nome, 24)}".` };
+    }
+    if (descricao.length > LIMITE_DESCRICAO_COMPETENCIA) {
+      return { erro: `A frase de "${nome}" pode ter até ${LIMITE_DESCRICAO_COMPETENCIA} caracteres. Deixe uma frase só.` };
+    }
+    const id = texto(registro.id) || nome.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+    lista.push({ id: id || `competencia-${lista.length + 1}`, nome, descricao, origem: registro.origem === "vaga" ? "vaga" : "empresa" });
+  }
+  if (lista.length > MAX_COMPETENCIAS) {
+    return { erro: `São ${MAX_COMPETENCIAS} competências no máximo: mais do que isso e nenhuma delas pesa na avaliação.` };
+  }
+  return lista;
+}
+
+/**
+ * Lê o corpo que a tela (ou o assistente) mandou e devolve os campos prontos para `criar`/`atualizar`,
+ * ou a primeira frase que a pessoa precisa ler para corrigir. Nunca lança.
+ */
+export function validarVaga(bruto: unknown): ValidacaoVaga {
+  const dados = (bruto ?? {}) as Record<string, unknown>;
+
+  const cargo = umaLinha(dados.cargo);
+  if (!cargo) return { ok: false, erro: "Diga qual é o cargo da vaga para continuar." };
+  if (cargo.length > LIMITE_CARGO) return { ok: false, erro: `O cargo pode ter até ${LIMITE_CARGO} caracteres. Encurte "${encurtar(cargo, 24)}".` };
+
+  const area = umaLinha(dados.area);
+  if (area.length > LIMITE_AREA) return { ok: false, erro: `A área pode ter até ${LIMITE_AREA} caracteres.` };
+  const local = umaLinha(dados.local);
+  if (local.length > LIMITE_LOCAL) return { ok: false, erro: `O local pode ter até ${LIMITE_LOCAL} caracteres.` };
+
+  // Um requisito por linha, como o gestor digita: as linhas em branco do meio do texto somem aqui, e
+  // não na tela, para o assistente e o formulário gravarem a mesma coisa.
+  const requisitos = texto(dados.requisitos)
+    .split("\n")
+    .map((linha) => linha.trim())
+    .filter(Boolean)
+    .join("\n");
+  if (!requisitos) return { ok: false, erro: "Liste ao menos um requisito da vaga, um por linha." };
+  if (requisitos.length > LIMITE_REQUISITOS) {
+    return { ok: false, erro: `Os requisitos podem ter até ${numero(LIMITE_REQUISITOS)} caracteres ao todo. Deixe só o que é eliminatório.` };
+  }
+
+  const desafios = texto(dados.desafios);
+  if (desafios.length > LIMITE_DESAFIOS) {
+    return { ok: false, erro: `Os desafios dos primeiros meses podem ter até ${numero(LIMITE_DESAFIOS)} caracteres.` };
+  }
+
+  const salarioACombinar = Boolean(dados.salarioACombinar);
+  const min = lerSalario(dados.salarioMin);
+  const max = lerSalario(dados.salarioMax);
+  if (min === "invalido" || max === "invalido") return { ok: false, erro: "Escreva a faixa salarial só com números, sem centavos." };
+  if (!salarioACombinar) {
+    if ((min ?? 0) > SALARIO_TETO || (max ?? 0) > SALARIO_TETO) {
+      return { ok: false, erro: `A faixa salarial vai até ${moeda(SALARIO_TETO)}. Confira os zeros.` };
+    }
+    if (min !== null && max !== null && min > max) {
+      return { ok: false, erro: "O salário mínimo não pode ser maior que o máximo." };
+    }
+  }
+
+  const perguntas = dados.numeroPerguntas === undefined ? undefined : Number(dados.numeroPerguntas);
+  if (perguntas !== undefined && (!Number.isFinite(perguntas) || perguntas < PERGUNTAS_MIN || perguntas > PERGUNTAS_MAX)) {
+    return { ok: false, erro: `A entrevista pode ter de ${PERGUNTAS_MIN} a ${PERGUNTAS_MAX} perguntas.` };
+  }
+  const duracao = dados.duracaoMin === undefined ? undefined : Number(dados.duracaoMin);
+  if (duracao !== undefined && (!Number.isFinite(duracao) || duracao < DURACAO_MIN || duracao > DURACAO_MAX)) {
+    return { ok: false, erro: `A duração estimada pode ser de ${DURACAO_MIN} a ${DURACAO_MAX} minutos.` };
+  }
+
+  const competencias = lerCompetenciasDigitadas(dados.competenciasCulturais);
+  if (!Array.isArray(competencias)) return { ok: false, erro: competencias.erro };
+
+  return {
+    ok: true,
+    campos: {
+      cargo,
+      // Texto em branco e `null` são "apague o que estava aqui", nunca "mantenha": quem edita uma vaga
+      // para tirar a área precisa conseguir tirá-la.
+      area,
+      senioridade: SENIORIDADES.includes(dados.senioridade as Senioridade) ? (dados.senioridade as Senioridade) : null,
+      modelo: MODELOS.includes(dados.modelo as ModeloTrabalho) ? (dados.modelo as ModeloTrabalho) : null,
+      local,
+      salarioACombinar,
+      salarioMin: salarioACombinar ? null : min,
+      salarioMax: salarioACombinar ? null : max,
+      desafios,
+      requisitos,
+      competenciasCulturais: competencias,
+      tom: dados.tom === "objetivo" ? "objetivo" : "acolhedor",
+      numeroPerguntas: perguntas ?? 8,
+      duracaoMin: duracao ?? 15,
+      perguntaPretensao: dados.perguntaPretensao !== false,
+    },
+  };
 }
