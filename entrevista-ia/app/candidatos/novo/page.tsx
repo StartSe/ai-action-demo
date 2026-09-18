@@ -40,7 +40,9 @@ function Conteudo() {
   const [salvo, setSalvo] = useState<Salvo | null>(null);
   const [textoColado, setTextoColado] = useState("");
 
-  const destino = vaga ? `/vagas/${vaga}` : "/candidatos";
+  // Sem vaga no endereço, o lugar de cair é a ficha recém-montada (US-013): é ela que a pessoa quer
+  // conferir depois de enviar um currículo. Vindo da vaga, o lugar continua sendo a vaga.
+  const destino = (candidatoId: string) => (vaga ? `/vagas/${vaga}` : `/candidatos/${candidatoId}`);
 
   async function salvar() {
     setSalvando(true);
@@ -67,7 +69,7 @@ function Conteudo() {
         setSalvando(false);
         return;
       }
-      router.push(destino);
+      router.push(destino(candidato.id));
     } catch (e) {
       setFalha((await lerErro(e)).mensagem);
       setSalvando(false);
@@ -91,7 +93,7 @@ function Conteudo() {
       });
       if (!r.ok) throw r;
       await fetch(`/api/candidatos/${salvo.id}/ficha`, { method: "POST" }).catch(() => null);
-      router.push(destino);
+      router.push(destino(salvo.id));
     } catch (e) {
       setFalha((await lerErro(e)).mensagem);
       setSalvando(false);
@@ -106,7 +108,7 @@ function Conteudo() {
     try {
       const r = await fetch(`/api/candidatos/${salvo.id}/ficha`, { method: "POST" });
       if (!r.ok) throw r;
-      router.push(destino);
+      router.push(destino(salvo.id));
     } catch (e) {
       setFalha((await lerErro(e)).mensagem);
       setSalvando(false);
@@ -162,7 +164,7 @@ function Conteudo() {
                   {salvando ? "Salvando..." : "Salvar o texto"}
                 </button>
               )}
-              <button type="button" className="btn-ghost !w-auto max-md:!w-full" onClick={() => router.push(destino)}>
+              <button type="button" className="btn-ghost !w-auto max-md:!w-full" onClick={() => router.push(destino(salvo.id))}>
                 {salvo.temTexto ? "Continuar sem a ficha" : "Continuar sem o texto"}
               </button>
             </div>
@@ -174,7 +176,7 @@ function Conteudo() {
             curriculo={curriculo}
             onCurriculo={setCurriculo}
             onSalvar={() => void salvar()}
-            onCancelar={() => router.push(destino)}
+            onCancelar={() => router.push(vaga ? `/vagas/${vaga}` : "/candidatos")}
             salvando={salvando}
             erro={falha}
             rotuloSalvar={vaga ? "Cadastrar e adicionar à vaga" : "Cadastrar candidato"}

@@ -40,7 +40,13 @@ function IconeCandidatos() {
 /** Toda célula que pode ficar sem conteúdo devolve "—": no celular o rótulo da coluna aparece
  * sempre, e um rótulo sozinho parece defeito. */
 const COLUNAS: Coluna<CandidatoLista>[] = [
-  { chave: "nome", titulo: "Candidato", papel: "titulo", largura: "17%", render: (c) => c.nome },
+  {
+    chave: "nome",
+    titulo: "Candidato",
+    papel: "titulo",
+    largura: "17%",
+    render: (c) => <Link href={`/candidatos/${c.id}`} className="btn-link">{c.nome}</Link>,
+  },
   {
     chave: "origem",
     titulo: "Ficha",

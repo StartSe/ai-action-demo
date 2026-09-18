@@ -337,6 +337,30 @@ export function removerFontes(candidatoId: string, tipo: TipoFonteCandidato): vo
   banco().prepare("DELETE FROM fontes_candidato WHERE candidatoId = ? AND tipo = ?").run(candidatoId, tipo);
 }
 
+/**
+ * As fontes sem o conteúdo delas — o que a tela do candidato mostra (US-013).
+ *
+ * Mesma razão de `COLUNAS_LEVES`: o conteúdo de uma página são até 20 mil caracteres, e quatro fontes
+ * numa tela que sonda a cada três segundos enquanto a pesquisa corre seriam 80 KB por sondagem para
+ * mostrar quatro títulos e um link.
+ */
+export type ResumoFonte = Omit<FonteCandidato, "conteudo">;
+
+export function listarFontesResumidas(candidatoId: string): ResumoFonte[] {
+  const linhas = banco()
+    .prepare("SELECT id, candidatoId, tipo, url, titulo, resumo, coletadoEm FROM fontes_candidato WHERE candidatoId = ? ORDER BY coletadoEm DESC")
+    .all(candidatoId) as Omit<LinhaFonte, "conteudo">[];
+  return linhas.map((l) => ({
+    id: l.id,
+    candidatoId: l.candidatoId,
+    tipo: TIPOS_FONTE.includes(l.tipo as TipoFonteCandidato) ? (l.tipo as TipoFonteCandidato) : "pagina",
+    url: l.url ?? undefined,
+    titulo: l.titulo ?? undefined,
+    resumo: l.resumo ?? undefined,
+    coletadoEm: l.coletadoEm,
+  }));
+}
+
 export function listarFontes(candidatoId: string): FonteCandidato[] {
   const linhas = banco()
     .prepare("SELECT * FROM fontes_candidato WHERE candidatoId = ? ORDER BY coletadoEm DESC")

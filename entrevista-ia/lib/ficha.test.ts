@@ -7,7 +7,17 @@
 // atual de alguém por um cargo antigo achado na web, e ninguém descobre.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mesclar, normalizarFicha, origensDaFicha, valorDaFicha } from "./ficha";
+import {
+  decidirIdentidade,
+  editarFicha,
+  guardarPesquisaWeb,
+  mesclar,
+  normalizarFicha,
+  origensDaFicha,
+  resolverDivergencia,
+  validarEdicaoFicha,
+  valorDaFicha,
+} from "./ficha";
 import type { Ficha } from "./types";
 
 function doCv(): Ficha {
@@ -160,4 +170,135 @@ test("origensDaFicha devolve os chips na ordem da D5", () => {
     ["gestor", "cv", "web"],
   );
   assert.deepEqual(origensDaFicha(undefined), []);
+});
+
+// ---------------------------------------------------------------------------------------------
+// As decisões do gestor (US-013)
+// ---------------------------------------------------------------------------------------------
+
+test("o gestor corrige um campo e o que ele escreveu vira origem gestor", () => {
+  const ficha = editarFicha(doCv(), { cargoAtual: "Gerente de Customer Success" });
+
+  assert.equal(valorDaFicha(ficha, "cargoAtual"), "Gerente de Customer Success");
+  assert.equal(ficha.cargoAtual?.origem, "gestor");
+  assert.equal(valorDaFicha(ficha, "empresaAtual"), "Órbita Software", "o que ele não tocou fica como estava");
+});
+
+test("campo esvaziado pelo gestor some de verdade, e a divergência dele sai junto", () => {
+  const comConflito = mesclar(doCv(), daWeb({ cargoAtual: "Analista sênior" }), "web");
+  assert.equal(comConflito.divergencias?.length, 1);
+
+  const ficha = editarFicha(comConflito, { cargoAtual: "" });
+  assert.equal(ficha.cargoAtual, undefined);
+  assert.equal(ficha.divergencias, undefined);
+  assert.equal(valorDaFicha(ficha, "empresaAtual"), "Órbita Software", "só o campo esvaziado some");
+});
+
+test("lista esvaziada pelo gestor some; lista ausente na edição fica como estava", () => {
+  const semCompetencias = editarFicha(doCv(), { competencias: [] });
+  assert.equal(semCompetencias.competencias, undefined);
+  assert.deepEqual(semCompetencias.idiomas?.map((i) => i.valor), ["Inglês intermediário"], "idiomas não veio na edição");
+});
+
+test("a edição do gestor atravessa a pesquisa que ainda espera decisão", () => {
+  const pendente = guardarPesquisaWeb(doCv(), {
+    ficha: daWeb({ cidade: "Curitiba (PR)" }),
+    identidades: [],
+    confiancaMedia: 0.5,
+    em: "2026-09-18T12:00:00.000Z",
+  });
+
+  const ficha = editarFicha(pendente, { resumo: "Escrito por mim." });
+  assert.equal(ficha.web?.confiancaMedia, 0.5, "a escolha pendente não pode ser apagada por uma correção à mão");
+});
+
+test('"Usar o da web" grava o valor da web como escolha do gestor e resolve o conflito', () => {
+  const comConflito = mesclar(doCv(), daWeb({ cargoAtual: "Analista sênior de Customer Success" }), "web");
+
+  const ficha = resolverDivergencia(comConflito, "cargoAtual", "web");
+  assert.equal(valorDaFicha(ficha, "cargoAtual"), "Analista sênior de Customer Success");
+  assert.equal(ficha.cargoAtual?.origem, "gestor", "foi uma escolha de uma pessoa, não uma leitura");
+  assert.equal(ficha.divergencias, undefined);
+
+  // E a escolha resiste a uma leitura nova do currículo, que é o ponto de ela ser `gestor`.
+  const relido = mesclar(ficha, doCv(), "cv");
+  assert.equal(valorDaFicha(relido, "cargoAtual"), "Analista sênior de Customer Success");
+});
+
+test('"Manter o currículo" só tira a linha da tela, sem mexer no valor', () => {
+  const comConflitos = mesclar(doCv(), daWeb({ cargoAtual: "Analista sênior", empresaAtual: "Nexo Serviços" }), "web");
+
+  const ficha = resolverDivergencia(comConflitos, "cargoAtual", "cv");
+  assert.equal(valorDaFicha(ficha, "cargoAtual"), "Analista de Customer Success");
+  assert.equal(ficha.cargoAtual?.origem, "cv");
+  assert.deepEqual(ficha.divergencias?.map((d) => d.campo), ["empresaAtual"], "a outra divergência fica de pé");
+});
+
+/** Uma pesquisa com dois homônimos, cada um com a própria página. */
+function comHomonimos(): Ficha {
+  const daPesquisa = normalizarFicha(
+    {
+      cidade: { valor: "São Paulo (SP)", confianca: 0.6, fonteId: "fonte-a" },
+      cargoAtual: { valor: "Dentista", confianca: 0.6, fonteId: "fonte-b" },
+      competencias: [{ valor: "Gestão de carteira", confianca: 0.5, fonteId: "fonte-a" }],
+    },
+    "web",
+    "fonte-a",
+    new Set(["fonte-a", "fonte-b"]),
+  );
+  return guardarPesquisaWeb(doCv(), {
+    ficha: daPesquisa,
+    identidades: [
+      { nome: "Bruno Alves", descricao: "Customer Success na Órbita", url: "https://exemplo.com/a", bate: ["mesma empresa"], naoBate: [] },
+      { nome: "Bruno Alves", descricao: "Dentista em Belo Horizonte", url: "https://exemplo.com/b", bate: [], naoBate: ["outra profissão"] },
+    ],
+    confiancaMedia: 0.57,
+    em: "2026-09-18T12:00:00.000Z",
+  });
+}
+
+const FONTES = [
+  { id: "fonte-a", url: "https://exemplo.com/a" },
+  { id: "fonte-b", url: "https://www.exemplo.com/b/" },
+];
+
+test('"É esta pessoa" mescla a web e deixa de fora o que saiu da página do outro homônimo', () => {
+  const ficha = decidirIdentidade(comHomonimos(), 0, FONTES);
+
+  assert.equal(valorDaFicha(ficha, "cidade"), "São Paulo (SP)", "a página da pessoa escolhida entra");
+  assert.equal(valorDaFicha(ficha, "cargoAtual"), "Analista de Customer Success", "o currículo continua valendo");
+  assert.equal(ficha.divergencias, undefined, '"Dentista" saiu com a página do outro, então não há conflito');
+  assert.equal(ficha.web, undefined, "a escolha foi feita: nada mais pendente");
+});
+
+test('"Nenhuma destas" descarta a pesquisa inteira e não toca na ficha', () => {
+  const ficha = decidirIdentidade(comHomonimos(), null, FONTES);
+
+  assert.equal(ficha.web, undefined);
+  assert.equal(ficha.cidade, undefined, "nada da web entrou");
+  assert.equal(valorDaFicha(ficha, "cargoAtual"), "Analista de Customer Success");
+});
+
+test("sem fontes para separar os homônimos, o que a web disse entra e o conflito vira divergência", () => {
+  const ficha = decidirIdentidade(comHomonimos(), 1);
+
+  assert.equal(valorDaFicha(ficha, "cargoAtual"), "Analista de Customer Success", "o currículo vence a web");
+  assert.deepEqual(ficha.divergencias?.map((d) => d.campo), ["cargoAtual"], "o gestor vê os dois lados");
+});
+
+test("validarEdicaoFicha recusa o texto grande demais com a frase pronta", () => {
+  const grande = validarEdicaoFicha({ cargoAtual: "x".repeat(201) });
+  assert.equal(grande.ok, false);
+  assert.match(grande.ok === false ? grande.erro : "", /Cargo atual/);
+
+  const muitos = validarEdicaoFicha({ competencias: Array.from({ length: 13 }, (_, i) => `Competência ${i}`) });
+  assert.equal(muitos.ok, false);
+
+  const bom = validarEdicaoFicha({ cargoAtual: "  Gerente   de CS  ", competencias: ["HubSpot"] });
+  assert.deepEqual(bom.ok === true ? bom.campos : null, { cargoAtual: "Gerente de CS", competencias: ["HubSpot"] });
+});
+
+test("validarEdicaoFicha deixa passar o campo em branco: esvaziar é uma decisão", () => {
+  const vazio = validarEdicaoFicha({ cidade: "   " });
+  assert.deepEqual(vazio.ok === true ? vazio.campos : null, { cidade: "" });
 });

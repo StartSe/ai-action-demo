@@ -10,6 +10,13 @@ import { useCallback, useEffect, useState } from "react";
 import { DialogoAdicionarCandidato } from "@/components/DialogoAdicionarCandidato";
 import { faixaSalarial, rotuloModelo, rotuloSenioridade, type VagaSalva } from "@/components/FormularioVaga";
 import {
+  ChipSituacao,
+  NotaDaEntrevista,
+  ROTULO_DECISAO,
+  VIVAS,
+  type EntrevistaNaTabela,
+} from "@/components/RotulosEntrevista";
+import {
   Aviso,
   Chip,
   DataTable,
@@ -26,58 +33,9 @@ import {
 /** A vaga como esta tela a usa: o cadastro que o formulário conhece, mais o que só a página mostra. */
 type VagaDaPagina = VagaSalva & { id: string; status: "aberta" | "encerrada"; exemplo: boolean };
 
-type StatusEntrevista = "convidada" | "aberta" | "em_andamento" | "concluida" | "avaliada" | "expirada" | "cancelada";
-type Decisao = "avancar" | "aguardar" | "reprovar";
-
-type LinhaCandidato = {
-  id: string;
-  candidatoId: string;
-  candidatoNome: string;
-  status: StatusEntrevista;
-  codigo?: string;
-  decisao?: Decisao;
-  notaGeral?: number;
-  recomendacao?: string;
-  resultadoId?: string;
-  criadoEm: string;
-  concluidaEm?: string;
-};
-
-/** Situação de cada entrevista na linguagem de quem acompanha o processo, não do banco. `convidada`
- * sem código é a entrevista que já foi atribuída mas cujo convite ainda não saiu (o convite em si é
- * da história seguinte): dizer "convidada" nesse estado seria contar que um e-mail foi enviado. */
-function situacao(l: LinhaCandidato): { nivel: string; rotulo: string } {
-  switch (l.status) {
-    case "convidada":
-      return l.codigo ? { nivel: "neutral", rotulo: "Convite enviado" } : { nivel: "cinza", rotulo: "Aguardando convite" };
-    case "aberta":
-      return { nivel: "neutral", rotulo: "Link aberto" };
-    case "em_andamento":
-      return { nivel: "neutro", rotulo: "Conversando agora" };
-    case "concluida":
-      return { nivel: "neutro", rotulo: "Preparando o parecer" };
-    case "avaliada":
-      return { nivel: "positivo", rotulo: "Avaliada" };
-    case "expirada":
-      return { nivel: "cinza", rotulo: "Convite vencido" };
-    default:
-      return { nivel: "cinza", rotulo: "Cancelada" };
-  }
-}
-
-const ROTULO_DECISAO: Record<Decisao, string> = { avancar: "Avançar", aguardar: "Aguardar", reprovar: "Não avançar" };
-
-/** A recomendação da IA já vem escrita em português no parecer; o chip só escolhe a cor. */
-function nivelRecomendacao(r?: string): string {
-  return r === "avançar" ? "positivo" : r === "não avançar" ? "negativo" : "neutro";
-}
-
-function nota(valor: number): string {
-  return `${valor.toFixed(1).replace(".", ",")}/10`;
-}
-
-/** Só quem ainda ocupa o par (vaga, candidato): é quem não pode ser adicionado de novo. */
-const VIVAS: StatusEntrevista[] = ["convidada", "aberta", "em_andamento", "concluida", "avaliada"];
+/** A linha desta tabela é a mesma entrevista que a tela do candidato e a tela Entrevistas mostram; os
+ * rótulos vêm de `components/RotulosEntrevista.tsx` para as três dizerem a mesma coisa. */
+type LinhaCandidato = EntrevistaNaTabela;
 
 export default function Page() {
   const { status, erro } = useStatus();
@@ -176,30 +134,10 @@ export default function Page() {
       chave: "candidato",
       titulo: "Candidato",
       papel: "titulo",
-      render: (l) => l.candidatoNome,
+      render: (l) => <Link href={`/candidatos/${l.candidatoId}`} className="btn-link">{l.candidatoNome}</Link>,
     },
-    {
-      chave: "situacao",
-      titulo: "Situação",
-      papel: "chip",
-      render: (l) => {
-        const s = situacao(l);
-        return <Chip nivel={s.nivel}>{s.rotulo}</Chip>;
-      },
-    },
-    {
-      chave: "nota",
-      titulo: "Nota",
-      render: (l) =>
-        l.notaGeral === undefined ? (
-          <span className="text-muted">—</span>
-        ) : (
-          <span className="flex items-center gap-2 flex-wrap">
-            <strong>{nota(l.notaGeral)}</strong>
-            {l.recomendacao && <Chip nivel={nivelRecomendacao(l.recomendacao)}>{l.recomendacao}</Chip>}
-          </span>
-        ),
-    },
+    { chave: "situacao", titulo: "Situação", papel: "chip", render: (l) => <ChipSituacao entrevista={l} /> },
+    { chave: "nota", titulo: "Nota", render: (l) => <NotaDaEntrevista entrevista={l} /> },
     {
       chave: "decisao",
       titulo: "Sua decisão",

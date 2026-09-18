@@ -18,7 +18,7 @@
 import { aiEnabled, askJSON } from "./ai";
 import { adicionarFonte, removerFontes } from "./candidatos";
 import { esperar, fichaDemo } from "./demo";
-import type { CampoFicha, DivergenciaFicha, Ficha, FichaBruta, OrigemCampo, PesquisaWeb } from "./types";
+import type { CampoFicha, DivergenciaFicha, Ficha, FichaBruta, IdentidadePossivel, OrigemCampo, PesquisaWeb } from "./types";
 
 // ---------------------------------------------------------------------------------------------
 // O catálogo de campos
@@ -421,6 +421,196 @@ export function origensDaFicha(ficha?: Ficha): OrigemCampo[] {
     for (const item of (ficha[nome] ?? []) as CampoFicha<unknown>[]) presentes.add(item.origem);
   }
   return (["gestor", "cv", "web"] as const).filter((o) => presentes.has(o));
+}
+
+// ---------------------------------------------------------------------------------------------
+// As decisões do gestor (US-013)
+// ---------------------------------------------------------------------------------------------
+// Três decisões que só uma pessoa pode tomar, e que por isso viram origem `gestor`: corrigir um
+// campo, escolher entre o que diz o currículo e o que diz a web, e dizer quem é a pessoa. As três
+// moram aqui, e não nas rotas, pelo mesmo motivo das regras de mesclagem: elas decidem em silêncio o
+// que o gestor vê sobre alguém de verdade, e um erro nelas não quebra tela nenhuma.
+
+/**
+ * A ficha como a tela devolve quando o gestor salva.
+ *
+ * Campo ausente é "não mexa". Texto em branco (ou lista vazia) é **apague**: esta é a única porta em
+ * que o vazio foi digitado por alguém que está olhando a ficha, e isso é uma decisão — em todas as
+ * outras (currículo relido, pesquisa refeita) o vazio é só silêncio da fonte.
+ */
+export type EdicaoFicha = Partial<Record<CampoSimples, string>> & Partial<Record<CampoLista, unknown[]>>;
+
+function remover(ficha: Ficha, nome: string): void {
+  delete (ficha as Record<string, unknown>)[nome];
+}
+
+/** Aplica a edição à mão: o que o gestor escreveu vira origem `gestor` e o que ele esvaziou some. */
+export function editarFicha(atual: Ficha | undefined, edicao: EdicaoFicha): Ficha {
+  const resultado = mesclar(atual, normalizarFicha(edicao, "gestor"), "gestor");
+
+  const apagados = new Set<string>();
+  for (const nome of CAMPOS_SIMPLES) {
+    const valor = edicao[nome];
+    if (valor !== undefined && !String(valor).trim()) {
+      remover(resultado, nome);
+      apagados.add(nome);
+    }
+  }
+  for (const nome of CAMPOS_LISTA) {
+    const itens = edicao[nome];
+    if (Array.isArray(itens) && itens.length === 0) {
+      remover(resultado, nome);
+      apagados.add(nome);
+    }
+  }
+
+  // Campo esvaziado não tem mais dois lados para comparar: a divergência dele sai junto.
+  const divergencias = (resultado.divergencias ?? []).filter((d) => !apagados.has(d.campo));
+  if (divergencias.length) resultado.divergencias = divergencias;
+  else remover(resultado, "divergencias");
+  return resultado;
+}
+
+/**
+ * "Manter o currículo" ou "Usar o da web", no bloco de divergências.
+ *
+ * O valor da web entra como `gestor`, e não como `web`, porque foi uma escolha de uma pessoa e não
+ * uma leitura: é isso que impede a próxima releitura do currículo (ou a próxima pesquisa) de desfazer
+ * em silêncio o que ela decidiu.
+ */
+export function resolverDivergencia(atual: Ficha | undefined, campo: string, escolha: "cv" | "web"): Ficha {
+  const ficha = atual ?? {};
+  const linha = (ficha.divergencias ?? []).find((d) => d.campo === campo);
+  if (!linha) return ficha;
+
+  // "Manter o currículo" já está aplicado (é a D5): o que falta é tirar a linha da tela.
+  const base = escolha === "web" ? editarFicha(ficha, { [campo]: linha.web } as EdicaoFicha) : { ...ficha };
+  const restantes = (base.divergencias ?? []).filter((d) => d.campo !== campo);
+  if (restantes.length) base.divergencias = restantes;
+  else remover(base, "divergencias");
+  return base;
+}
+
+/** Dois endereços que apontam para a mesma página. Esquema, `www.` e barra final não separam nada. */
+function mesmoEndereco(a?: string, b?: string): boolean {
+  if (!a || !b) return false;
+  const limpar = (u: string) => u.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/+$/, "").toLowerCase();
+  return limpar(a) === limpar(b);
+}
+
+/** As fontes que pertencem a um homônimo que o gestor NÃO escolheu. */
+function fontesDosOutros(identidades: IdentidadePossivel[], escolhida: number, fontes: { id: string; url?: string }[]): Set<string> {
+  const daEscolhida = new Set(fontes.filter((f) => mesmoEndereco(f.url, identidades[escolhida]?.url)).map((f) => f.id));
+  const alheias = new Set<string>();
+  identidades.forEach((identidade, i) => {
+    if (i === escolhida) return;
+    for (const fonte of fontes) {
+      if (mesmoEndereco(fonte.url, identidade.url) && !daEscolhida.has(fonte.id)) alheias.add(fonte.id);
+    }
+  });
+  return alheias;
+}
+
+/** A ficha sem os campos que saíram das fontes indicadas. */
+function semAsFontes(ficha: Ficha, ids: Set<string>): Ficha {
+  if (!ids.size) return ficha;
+  const resultado: Ficha = {};
+  for (const nome of CAMPOS_SIMPLES) {
+    const campo = ficha[nome] as CampoFicha<unknown> | undefined;
+    if (campo && !(campo.fonteId && ids.has(campo.fonteId))) definir(resultado, nome, campo);
+  }
+  for (const nome of CAMPOS_LISTA) {
+    const itens = ((ficha[nome] ?? []) as CampoFicha<unknown>[]).filter((i) => !(i.fonteId && ids.has(i.fonteId)));
+    if (itens.length) definirLista(resultado, nome, itens);
+  }
+  return resultado;
+}
+
+/**
+ * "É esta pessoa" / "Nenhuma destas": a decisão de identidade da D6.
+ *
+ * `escolhida` é o índice do cartão em `web.identidades`; `null` é "Nenhuma destas", e aí o material
+ * inteiro é descartado — ele é sobre outra pessoa, e guardá-lo faria a tela pedir para sempre uma
+ * escolha já feita.
+ *
+ * O filtro por fonte é o que impede a escolha do segundo cartão de trazer os campos do primeiro: a
+ * consolidação monta UMA ficha, a da pessoa mais provável, e os campos que saíram da página de outro
+ * homônimo ficam de fora. O que não dá para atribuir a ninguém entra e, se contradisser o currículo,
+ * vira divergência — que é de novo uma pergunta para o gestor, não uma decisão nossa.
+ */
+export function decidirIdentidade(
+  atual: Ficha | undefined,
+  escolhida: number | null,
+  fontes: { id: string; url?: string }[] = [],
+): Ficha {
+  const pendente = atual?.web;
+  if (!pendente || escolhida === null) return guardarPesquisaWeb(atual, null);
+  if (!pendente.identidades[escolhida]) return atual ?? {};
+
+  const daWeb = semAsFontes(pendente.ficha, fontesDosOutros(pendente.identidades, escolhida, fontes));
+  return guardarPesquisaWeb(mesclar(atual, daWeb, "web"), null);
+}
+
+// ---------------------------------------------------------------------------------------------
+// O que o gestor digitou (US-013)
+// ---------------------------------------------------------------------------------------------
+// Mesma separação de sempre: aqui se RECUSA com a frase pronta (é uma pessoa preenchendo), enquanto
+// `normalizarFicha` CORTA em silêncio (é a IA, ou um JSON já gravado).
+
+const LIMITE_DO_CAMPO: Record<CampoSimples, number> = {
+  resumo: LIMITE_RESUMO,
+  cargoAtual: LIMITE_LINHA,
+  empresaAtual: LIMITE_LINHA,
+  cidade: LIMITE_LINHA,
+  anosExperiencia: 10,
+  pretensaoSalarial: LIMITE_LINHA,
+  disponibilidade: LIMITE_LINHA,
+  observacoes: LIMITE_RESUMO,
+};
+
+export type ValidacaoEdicaoFicha = { ok: true; campos: EdicaoFicha } | { ok: false; erro: string };
+
+const NAO_ENTENDI = "A ficha não chegou como esperávamos. Recarregue a página e tente de novo.";
+
+/** Os textos de um item de lista: a linha inteira, quando é texto, ou os campos de uma experiência. */
+function textosDoItem(item: unknown): string[] {
+  if (typeof item === "string") return [item];
+  if (!item || typeof item !== "object") return [];
+  return Object.values(item as Record<string, unknown>).filter((v): v is string => typeof v === "string");
+}
+
+export function validarEdicaoFicha(bruto: unknown): ValidacaoEdicaoFicha {
+  if (!bruto || typeof bruto !== "object") return { ok: false, erro: NAO_ENTENDI };
+  const dados = bruto as Record<string, unknown>;
+  const campos: EdicaoFicha = {};
+
+  for (const nome of CAMPOS_SIMPLES) {
+    const valor = dados[nome];
+    if (valor === undefined) continue;
+    if (typeof valor !== "string") return { ok: false, erro: NAO_ENTENDI };
+    const limpo = valor.replace(/\s+/g, " ").trim();
+    if (limpo.length > LIMITE_DO_CAMPO[nome]) {
+      return { ok: false, erro: `"${ROTULOS_FICHA[nome]}" pode ter até ${LIMITE_DO_CAMPO[nome]} caracteres.` };
+    }
+    campos[nome] = limpo;
+  }
+
+  for (const nome of CAMPOS_LISTA) {
+    const itens = dados[nome];
+    if (itens === undefined) continue;
+    if (!Array.isArray(itens)) return { ok: false, erro: NAO_ENTENDI };
+    if (itens.length > MAX_ITENS_LISTA) {
+      return { ok: false, erro: `"${ROTULOS_FICHA[nome]}" pode ter até ${MAX_ITENS_LISTA} itens. Deixe os mais importantes.` };
+    }
+    for (const item of itens) {
+      if (textosDoItem(item).some((t) => t.length > LIMITE_DESCRICAO)) {
+        return { ok: false, erro: `Cada linha de "${ROTULOS_FICHA[nome]}" pode ter até ${LIMITE_DESCRICAO} caracteres.` };
+      }
+    }
+    campos[nome] = itens;
+  }
+
+  return { ok: true, campos };
 }
 
 // ---------------------------------------------------------------------------------------------
