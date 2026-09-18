@@ -116,7 +116,7 @@ docker login ghcr.io                   # token do GitHub com escopo write:packag
 
 Botão por app e da suíte inteira no catálogo público, ou direto:
 
-- Suíte (os 18; o AutoML é o único pago): `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy`
+- Suíte (os 18; Atendente no WhatsApp, Vídeos de Campanha e AutoML são os pagos, com disco persistente): `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy`
 - Um app: `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-<app>`
 
 Depois do deploy, abra `https://<nome>.onrender.com/setup` e conecte a IA e as integrações. O plano `free` hiberna após inatividade e tem disco efêmero: a configuração feita em `/setup` se perde a cada deploy. Para persistir, use um plano pago e descomente o bloco `disk` no Blueprint.

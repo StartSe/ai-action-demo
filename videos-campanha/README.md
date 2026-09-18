@@ -36,7 +36,7 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 - Publicar com um clique: https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-videos-campanha (o `render.yaml` desta pasta é gerado a partir do `catalogo.json` da raiz; não edite à mão).
 - Rodar no seu computador sem construir: `docker run --rm -p 3017:10000 -v videos-campanha-dados:/app/data ghcr.io/startse/videos-campanha:latest` e abra http://localhost:3017.
 - Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
-- O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração se perde a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
+- O health check responde em `/api/health`. O Blueprint usa o plano `starter` (pago) com um disco de 1 GB em `/app/data`: configuração, conta, campanhas e os projetos e assets do Creative Flow ficam no SQLite desse disco e sobrevivem a cada atualização da imagem. No Docker Compose o volume `videos-campanha-dados` faz o mesmo papel.
 
 ## Como os conceitos são criados
 1. O navegador lê a imagem do produto como data URL e envia em `POST /api/conceitos` junto com `produto`, `publico`, `objetivo` (`lancamento`, `promocao`, `marca`, `evento`), `tom`, `formato` (`9:16`, `16:9`, `1:1`) e `duracaoSeg` (`5`, `10`, `15`).
