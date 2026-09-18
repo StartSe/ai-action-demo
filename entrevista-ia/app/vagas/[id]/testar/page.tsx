@@ -9,26 +9,19 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Sala } from "@/components/Sala";
-import { faixaSalarial, type VagaSalva } from "@/components/FormularioVaga";
+import { type VagaSalva } from "@/components/FormularioVaga";
 import { Aviso, ErrorBox, Topbar, lerErro, useStatus, type ErroLido } from "@/components/ui";
 import { ACAO_VOZ } from "@/lib/acoes";
 import type { Tom, Vaga as VagaDaConversa } from "@/lib/types";
 
-/** O que a entrevistadora recebe nesta prévia. Enquanto `lib/roteiro.ts` não existe (US-016), o
- * roteiro é o mesmo texto que a página da vaga mostra: requisitos, desafios e competências, na mesma
- * ordem — assim a prévia pergunta sobre o que está escrito na vaga, e não só sobre os requisitos. */
+/** O cabeçalho da sala — quem está conversando com quem. O ROTEIRO não sai daqui: desde a US-016 ele
+ * é montado no servidor por `lib/roteiro.ts`, a partir do `vagaId` que a sala manda junto, com a
+ * cultura da empresa e um candidato vazio. Uma prévia que perguntasse a partir de um resumo montado
+ * na tela mostraria ao gestor uma entrevista diferente da que o candidato vai receber. */
 function conversaDaVaga(vaga: VagaSalva): VagaDaConversa {
-  const competencias = vaga.competenciasCulturais.map((c) => c.nome).join(", ");
   return {
     titulo: vaga.cargo,
-    requisitos: [
-      vaga.requisitos,
-      vaga.desafios ? `Desafios dos primeiros meses: ${vaga.desafios}` : "",
-      competencias ? `Competências culturais a observar: ${competencias}` : "",
-      `Faixa salarial: ${faixaSalarial(vaga)}`,
-    ]
-      .filter(Boolean)
-      .join("\n"),
+    requisitos: vaga.requisitos,
     // A prévia não tem candidato: quem digita é quem abriu a vaga.
     candidato: "você",
     tom: vaga.tom as Tom,
@@ -95,6 +88,7 @@ export default function Page() {
             key={tentativa}
             vaga={conversaDaVaga(vaga)}
             rotas={{ proxima: "/api/entrevista/proxima", voz: "/api/tts" }}
+            corpoExtra={{ vagaId: id }}
             vozLigada={Boolean(status?.integrations?.tts)}
             acaoVoz={ACAO_VOZ}
             modoExemplo={false}

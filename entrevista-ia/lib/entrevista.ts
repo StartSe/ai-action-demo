@@ -1,8 +1,13 @@
-// Lógica de avaliação da entrevista e do link público por candidato, compartilhada entre a rota HTTP
-// (app/api/entrevista/avaliar/route.ts) e o link do candidato (app/api/entrevista/candidato/[token]/route.ts),
-// para não duplicar o prompt nem a gravação no histórico.
+// O scorecard antigo: a avaliação da transcrição e o agrupamento por título de vaga, de antes de
+// Vaga → Candidato → Entrevista existirem como registros (US-002).
+//
+// **A condução da conversa saiu daqui na US-016**: `SYSTEM_PERGUNTA`, `proximaPergunta()` e
+// `numeroDePerguntas()` foram substituídos por `lib/roteiro.ts`, que conhece a vaga inteira, a
+// cultura e a ficha do candidato — e não só um título e uma lista de requisitos digitada num
+// formulário. O que sobrou aqui é a avaliação, que a US-022 (o parecer agêntico) substitui por
+// inteiro; até lá, ela é o que os dois caminhos de scorecard ainda usam.
 import { aiEnabled, askJSON, meta, type Meta } from "./ai";
-import { esperar, mensagemEncerramento, proximaPerguntaDemo, scorecardDemo } from "./demo";
+import { esperar, scorecardDemo } from "./demo";
 import { listar, obter, salvar } from "./historico";
 import type { CandidatoRanking, Ranking, Recomendacao, Scorecard, Troca, Vaga } from "./types";
 
@@ -25,15 +30,6 @@ Formato de saída (JSON):
   "recomendacao": "avançar|avaliar com o gestor|não avançar",
   "proximos_passos": [""]
 }`;
-
-const SYSTEM_PERGUNTA = `Você é uma entrevistadora de IA que conduz a primeira triagem por voz e texto de candidatos para vagas de empresas brasileiras, no lugar do gestor de contratação.
-Regras:
-- Faça UMA pergunta por vez, curta (no máximo 2 frases), em português do Brasil.
-- Baseie as perguntas nos principais requisitos da vaga e no que já foi respondido. Não repita um tema já coberto.
-- Se a última resposta do candidato foi vaga, genérica ou muito curta, faça uma pergunta de follow-up pedindo um exemplo concreto em vez de mudar de assunto.
-- Adapte o tom: "acolhedor" é mais caloroso e usa frases de transição; "objetivo" é direto e enxuto.
-- Nunca inclua saudação de encerramento nem mencione avaliação, nota ou scorecard.
-Formato de saída (JSON): {"pergunta": "texto da pergunta"}`;
 
 export function normalizarHistorico(historico: unknown): Troca[] {
   if (!Array.isArray(historico)) return [];
@@ -128,44 +124,4 @@ export function gerarRanking(tituloVaga: string): { ranking: Ranking; meta: Meta
   const metaGerada = meta({ demo: !aiEnabled(), insumo: "toda a lista de scorecards desta vaga" });
   const id = salvar({ tipo: "ranking", titulo: `Ranking de ${ranking.vagaTitulo}`, entrada: { vagaTitulo: ranking.vagaTitulo }, saida: ranking, meta: metaGerada });
   return { ranking, meta: metaGerada, id };
-}
-
-/** Quantas perguntas a entrevista tem, dentro dos limites aceitos (4 a 6). */
-export function numeroDePerguntas(vaga: Vaga): number {
-  return Math.min(6, Math.max(4, Number(vaga.numero_perguntas) || 5));
-}
-
-function construirPromptPergunta({ vaga, historico, perguntasFeitas, numeroPerguntas }: { vaga: Vaga; historico: Troca[]; perguntasFeitas: number; numeroPerguntas: number }) {
-  const conversa = historico.length
-    ? historico.map((h) => `${h.papel === "entrevistadora" ? "Entrevistadora" : "Candidato"}: ${h.texto}`).join("\n")
-    : "(nenhuma troca ainda)";
-  return `Vaga: ${vaga.titulo}
-Principais requisitos:
-${vaga.requisitos}
-Tom da entrevista: ${vaga.tom || "acolhedor"}
-Nome do candidato: ${vaga.candidato || "não informado"}
-Esta será a pergunta número ${perguntasFeitas + 1} de ${numeroPerguntas}.
-
-Conversa até agora:
-${conversa}
-
-Gere a próxima pergunta da entrevista.`;
-}
-
-/** Próxima fala da entrevistadora, compartilhada pela rota do gestor (app/api/entrevista/proxima) e
- * pela rota pública do candidato (app/api/entrevista/candidato/[token]/proxima), para o prompt e a
- * regra de encerramento existirem uma vez só. */
-export async function proximaPergunta(vaga: Vaga, historico: Troca[]): Promise<{ pergunta: string; encerrar: boolean }> {
-  const numeroPerguntas = numeroDePerguntas(vaga);
-  const perguntasFeitas = historico.filter((h) => h.papel === "entrevistadora").length;
-  if (perguntasFeitas >= numeroPerguntas) {
-    return { pergunta: mensagemEncerramento({ vaga }), encerrar: true };
-  }
-  if (!aiEnabled()) {
-    await esperar(700);
-    return { pergunta: proximaPerguntaDemo({ vaga, historico, perguntasFeitas }), encerrar: false };
-  }
-  const prompt = construirPromptPergunta({ vaga, historico, perguntasFeitas, numeroPerguntas });
-  const resposta = await askJSON<{ pergunta: string }>({ system: SYSTEM_PERGUNTA, prompt, maxTokens: 500 });
-  return { pergunta: resposta.pergunta, encerrar: false };
 }

@@ -43,6 +43,7 @@ export type RotasSala = { proxima: string; voz: string };
 export function Sala({
   vaga,
   rotas,
+  corpoExtra,
   vozLigada,
   acaoVoz,
   modoExemplo,
@@ -50,6 +51,10 @@ export function Sala({
 }: {
   vaga: Vaga;
   rotas: RotasSala;
+  /** O que mais vai no corpo de `rotas.proxima`. A prévia do gestor manda o `vagaId`: o roteiro
+   * (lib/roteiro.ts) é montado no servidor a partir da vaga cadastrada, e não do resumo que a sala
+   * tem em mãos. A sala do candidato não manda nada — quem identifica a conversa é o código do link. */
+  corpoExtra?: Record<string, unknown>;
   /** A voz natural da entrevistadora está ligada; quando não, a sala usa a voz do navegador ou só texto. */
   vozLigada: boolean;
   /** "O que fazer agora" quando a voz está desligada. Só quem administra o app recebe (o candidato não configura nada). */
@@ -186,7 +191,7 @@ export function Sala({
   async function proximaPergunta(hist: Troca[]) {
     setFalha(null);
     try {
-      const r = await fetch(rotas.proxima, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vaga, historico: hist }) });
+      const r = await fetch(rotas.proxima, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...corpoExtra, historico: hist }) });
       if (!r.ok) {
         setFalha(await lerErro(r));
         return;

@@ -251,3 +251,74 @@ export interface ConsolidacaoBruta {
     | ({ nome?: string | null; descricao?: string | null; url?: string | null; bate?: unknown; naoBate?: unknown } | null)[]
     | null;
 }
+
+// ---------------------------------------------------------------------------------------------
+// O roteiro da entrevista (US-015 da PRD). Como o Parecer e a Ficha, os tipos moram aqui — no fundo
+// do grafo de imports — porque `lib/demo.ts` precisa deles para o `roteiroDemo` e `lib/roteiro.ts`
+// precisa de `lib/demo.ts`. Um arquivo só de tipos é o que impede esse ciclo de nascer.
+// ---------------------------------------------------------------------------------------------
+
+/** Os blocos do roteiro, na ordem em que a entrevista os percorre. */
+export type BlocoRoteiro = "abertura" | "curriculo" | "requisitos" | "desafios" | "cultura" | "pretensao" | "encerramento";
+
+export interface PerguntaRoteiro {
+  bloco: BlocoRoteiro;
+  pergunta: string;
+  /** O requisito, o desafio ou a competência que originou a pergunta. Vazio na abertura e no
+   * encerramento. Não é dito ao candidato: é o que o parecer (US-019) usa para saber o que cada
+   * resposta deveria sustentar. */
+  foco?: string;
+}
+
+/** O plano da conversa, feito uma vez na abertura da sala e guardado em `entrevistas.roteiro`. */
+export interface Roteiro {
+  perguntas: PerguntaRoteiro[];
+  /** A despedida, escrita junto com o plano: a conversa termina com as mesmas palavras, tenha ela
+   * ido até o fim ou sido encerrada antes. */
+  despedida: string;
+  /** O plano saiu do modo demonstração, não de uma chamada ao modelo. */
+  demo: boolean;
+  em: string;
+}
+
+/** Um campo da ficha do candidato como a entrevistadora o recebe: já em texto, e de onde veio. */
+export interface ItemFichaRoteiro {
+  rotulo: string;
+  valor: string;
+  origem: OrigemCampo;
+}
+
+/**
+ * Tudo que a entrevistadora sabe antes de abrir a boca: a vaga, a cultura e a ficha do candidato.
+ *
+ * O que NÃO está aqui é tão importante quanto o que está. A ficha só traz o que veio do currículo,
+ * do gestor e — quando a identidade foi confirmada (D6) — da web; o salário só aparece quando a vaga
+ * pergunta pretensão; e nada além destes campos pode ser dito ao candidato.
+ */
+export interface ContextoRoteiro {
+  cargo: string;
+  area?: string;
+  senioridade?: string;
+  modelo?: string;
+  local?: string;
+  /** Só quando `perguntaPretensao`: fora disso a entrevistadora não fala de dinheiro. */
+  faixaSalarial?: string;
+  desafios: string[];
+  requisitos: string[];
+  competencias: { nome: string; descricao: string }[];
+  /** Da cultura da empresa (US-003): o que se espera no dia a dia. */
+  comportamentos: string;
+  /** E o que não funciona por lá. */
+  naoCombina: string;
+  tom: Tom;
+  numeroPerguntas: number;
+  duracaoMin: number;
+  perguntaPretensao: boolean;
+  candidato: {
+    nome: string;
+    primeiroNome: string;
+    ficha: ItemFichaRoteiro[];
+    /** As divergências da ficha (US-012), viradas em pontos a esclarecer na conversa. */
+    aEsclarecer: string[];
+  };
+}

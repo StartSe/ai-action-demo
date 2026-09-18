@@ -11,7 +11,7 @@
 // requisitos); o que tem padrão bom e raramente muda (tom, número de perguntas, duração) fica atrás
 // de "Entrevista", junto das competências culturais.
 import type { ReactNode } from "react";
-import { Aviso, Field, MaisDetalhes, Row, moeda, numero } from "./ui";
+import { Aviso, Field, MaisDetalhes, Row, numero } from "./ui";
 
 export type ValorDaEmpresa = { id: string; nome: string; descricao: string };
 
@@ -94,13 +94,10 @@ export function rotuloModelo(valor?: string): string {
   return MODELOS.find((m) => m.valor === valor)?.rotulo ?? "";
 }
 
-/** Uma faixa pela metade continua sendo informação: "A partir de R$ 5.500" diz mais que "A combinar". */
-export function faixaSalarial(vaga: { salarioACombinar: boolean; salarioMin?: number; salarioMax?: number }): string {
-  if (vaga.salarioACombinar || (!vaga.salarioMin && !vaga.salarioMax)) return "A combinar";
-  if (vaga.salarioMin && vaga.salarioMax) return `${moeda(vaga.salarioMin)} a ${moeda(vaga.salarioMax)}`;
-  if (vaga.salarioMin) return `A partir de ${moeda(vaga.salarioMin)}`;
-  return `Até ${moeda(vaga.salarioMax as number)}`;
-}
+/** A frase da faixa salarial mora em `lib/formato.ts` desde a US-016: a entrevistadora (código de
+ * servidor) também precisa dela, e um client component não pode ser a fonte dessa palavra. O
+ * reexporte mantém `import { faixaSalarial } from "@/components/FormularioVaga"` valendo nas telas. */
+export { faixaSalarial } from "@/lib/formato";
 
 /** Só dígitos, com ponto de milhar: quem digita "5500" vê "5.500" e ninguém precisa pensar em centavos. */
 export function mascaraMilhar(texto: string): string {

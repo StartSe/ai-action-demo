@@ -1,7 +1,7 @@
 // Respostas de exemplo usadas quando não há chave de IA configurada.
 import type { Cultura } from "./cultura";
 import type { ValorDaEmpresa, VagaEstruturada } from "./vagas";
-import type { AderenciaRequisito, ConsolidacaoBruta, CriterioCultural, CriterioTecnico, FichaBruta, ItemConsistencia, Parecer, Recomendacao, Scorecard, SituacaoRequisito, Troca, Vaga } from "./types";
+import type { AderenciaRequisito, BlocoRoteiro, ConsolidacaoBruta, ContextoRoteiro, CriterioCultural, CriterioTecnico, FichaBruta, ItemConsistencia, Parecer, PerguntaRoteiro, Recomendacao, Roteiro, Scorecard, SituacaoRequisito, Troca, Vaga } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
@@ -12,39 +12,6 @@ function parseRequisitos(requisitos: string | undefined) {
     .split(/\n|;/)
     .map((s) => s.replace(/^[-•*]\s*/, "").trim())
     .filter(Boolean);
-}
-
-const MODELOS: ((item: string) => string)[] = [
-  (item) => `Me conta sobre uma experiência real em que você usou ${item}.`,
-  (item) => `Qual foi um desafio que você enfrentou envolvendo ${item} e como você resolveu?`,
-  (item) => `Como você avalia o seu nível hoje em ${item}? Me dê um exemplo concreto que sustente isso.`,
-  (item) => `Fale sobre um resultado do qual você se orgulha relacionado a ${item}.`,
-  (item) => `O que costuma ser mais difícil, na prática, quando o assunto é ${item}?`,
-  (item) => `Me dá um exemplo de como ${item} apareceu no seu dia a dia recentemente?`,
-];
-
-// Roteiro fixo: uma pergunta de abertura, perguntas cicladas pelos requisitos informados
-// (um requisito por vez, com um modelo diferente a cada volta pela lista, para não repetir a mesma
-// frase para requisitos diferentes) e um follow-up simples quando a última resposta foi muito curta.
-export function proximaPerguntaDemo({ vaga, historico, perguntasFeitas }: { vaga: Vaga; historico: Troca[]; perguntasFeitas: number }): string {
-  if (perguntasFeitas === 0) {
-    return `Para começar, me conta rapidamente sobre sua trajetória e o que te chamou atenção na vaga de ${vaga.titulo}.`;
-  }
-  const ultimaResposta = [...historico].reverse().find((h) => h.papel === "candidato")?.texto || "";
-  const palavras = ultimaResposta.trim().split(/\s+/).filter(Boolean).length;
-  if (palavras > 0 && palavras < 8) {
-    return "Pode detalhar com um exemplo concreto? Uma situação real ajuda bastante a entender melhor.";
-  }
-  const itens = parseRequisitos(vaga.requisitos);
-  const item = itens.length ? itens[(perguntasFeitas - 1) % itens.length] : "os requisitos da vaga";
-  const modelo = MODELOS[(perguntasFeitas - 1) % MODELOS.length];
-  return modelo(item);
-}
-
-export function mensagemEncerramento({ vaga }: { vaga?: Vaga } = {}): string {
-  const nome = vaga?.candidato ? vaga.candidato.split(" ")[0] : "";
-  const saudacao = nome ? `Muito obrigada, ${nome}!` : "Muito obrigada pelo seu tempo!";
-  return `${saudacao} Foi ótimo te conhecer melhor. Vou repassar essa conversa para o gestor da vaga, que entra em contato em breve com os próximos passos.`;
 }
 
 /** Para cada pergunta da entrevistadora (numerada na ordem em que aparece), a resposta do candidato que a sucede. */
@@ -563,3 +530,146 @@ const WEB_DE_EXEMPLO: Record<string, WebDeExemplo> = {
     identidadesPossiveis: [],
   },
 };
+
+// ---------------------------------------------------------------------------------------------
+// O roteiro da entrevista (US-016)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Perguntas de cultura do modo demonstração.
+ *
+ * São situacionais e **nenhuma cita o nome do valor** que quer observar — essa é a regra inteira do
+ * bloco de cultura: quem ouve "fale sobre colaboração" responde a palavra, não a própria história.
+ * O nome da competência viaja em `foco`, que só o parecer lê.
+ */
+const CULTURAIS_DEMO = [
+  "Me conta uma situação recente em que você discordou de uma decisão do time. O que você fez?",
+  "Descreva um momento em que uma entrega sua dependia de outra área e as coisas não andaram. Como você conduziu?",
+  "Conte sobre uma vez em que algo deu errado por uma decisão sua. O que aconteceu depois?",
+];
+
+const MODELOS_REQUISITO: ((item: string) => string)[] = [
+  (item) => `Sobre ${item}: me dá um exemplo concreto de quando isso apareceu no seu trabalho?`,
+  (item) => `Qual foi o desafio mais difícil que você enfrentou envolvendo ${item}, e como resolveu?`,
+  (item) => `Como você avalia o seu nível hoje em ${item}? Me conta uma situação que sustente isso.`,
+  (item) => `Fale sobre um resultado do qual você se orgulha relacionado a ${item}.`,
+];
+
+/** Quantas perguntas cada bloco quer, na ordem em que o orçamento é distribuído. */
+type Cota = { bloco: BlocoRoteiro; minimo: number; teto: number; itens: string[] };
+
+/**
+ * Distribui o total de perguntas entre os blocos opcionais: primeiro o mínimo de cada um, na ordem;
+ * depois de um em um, em rodadas, até o orçamento acabar. É o que faz uma vaga com oito perguntas e
+ * outra com doze usarem o mesmo roteiro, só com mais fôlego em requisitos e cultura.
+ */
+function distribuir(cotas: Cota[], orcamento: number): Map<BlocoRoteiro, number> {
+  const quantidade = new Map<BlocoRoteiro, number>(cotas.map((c) => [c.bloco, 0]));
+  let sobra = orcamento;
+  for (const cota of cotas) {
+    const teto = Math.min(cota.teto, cota.itens.length);
+    const quer = Math.min(cota.minimo, teto, sobra);
+    quantidade.set(cota.bloco, quer);
+    sobra -= quer;
+  }
+  let mudou = true;
+  while (sobra > 0 && mudou) {
+    mudou = false;
+    for (const cota of cotas) {
+      if (sobra <= 0) break;
+      const teto = Math.min(cota.teto, cota.itens.length);
+      const atual = quantidade.get(cota.bloco) as number;
+      if (atual >= teto) continue;
+      quantidade.set(cota.bloco, atual + 1);
+      sobra--;
+      mudou = true;
+    }
+  }
+  return quantidade;
+}
+
+/**
+ * O roteiro do modo demonstração: fixo, derivado da vaga, sem nenhuma chamada de modelo.
+ *
+ * Ele não é um enchimento — é o que a pessoa que está avaliando o app vê antes de conectar a IA, e
+ * por isso traz uma pergunta de **desafio** e uma de **cultura** reconhecíveis: são as duas que
+ * distinguem esta entrevistadora de um formulário de requisitos.
+ */
+export function roteiroDemo(ctx: ContextoRoteiro): Roteiro {
+  const nome = ctx.candidato.primeiroNome;
+  const perguntas: PerguntaRoteiro[] = [];
+
+  perguntas.push({
+    bloco: "abertura",
+    pergunta: `${nome ? `Oi, ${nome}! ` : ""}Para começar, me conta rapidamente sobre a sua trajetória e o que te chamou atenção na vaga de ${ctx.cargo}.`,
+  });
+
+  // Abertura e encerramento são intocáveis; a pretensão só existe se a vaga pedir. O que sobra é o
+  // que os blocos opcionais disputam.
+  const reservadas = 2 + (ctx.perguntaPretensao ? 1 : 0);
+  const orcamento = Math.max(0, ctx.numeroPerguntas - reservadas);
+
+  const doCurriculo = ctx.candidato.aEsclarecer.length
+    ? ctx.candidato.aEsclarecer
+    : ctx.candidato.ficha.length
+      ? ["a sua experiência mais recente"]
+      : [];
+  const quantidade = distribuir(
+    [
+      { bloco: "requisitos", minimo: 2, teto: 4, itens: ctx.requisitos },
+      { bloco: "curriculo", minimo: 1, teto: 2, itens: doCurriculo },
+      { bloco: "desafios", minimo: 1, teto: 2, itens: ctx.desafios },
+      { bloco: "cultura", minimo: 1, teto: 2, itens: ctx.competencias.map((c) => c.nome) },
+    ],
+    orcamento,
+  );
+
+  for (let i = 0; i < (quantidade.get("curriculo") as number); i++) {
+    const item = doCurriculo[i];
+    perguntas.push({
+      bloco: "curriculo",
+      // "Você comentou no currículo" é permitido; citar um perfil público, nunca (D12).
+      pergunta: `Você comentou no currículo sobre ${item}. Pode me contar um pouco mais sobre isso?`,
+      foco: item,
+    });
+  }
+
+  for (let i = 0; i < (quantidade.get("requisitos") as number); i++) {
+    const item = ctx.requisitos[i];
+    perguntas.push({ bloco: "requisitos", pergunta: MODELOS_REQUISITO[i % MODELOS_REQUISITO.length](item), foco: item });
+  }
+
+  for (let i = 0; i < (quantidade.get("desafios") as number); i++) {
+    const item = ctx.desafios[i];
+    perguntas.push({
+      bloco: "desafios",
+      pergunta: `Um dos desafios dos primeiros meses é ${item}. Como você atacaria isso nas primeiras semanas?`,
+      foco: item,
+    });
+  }
+
+  for (let i = 0; i < (quantidade.get("cultura") as number); i++) {
+    perguntas.push({ bloco: "cultura", pergunta: CULTURAIS_DEMO[i % CULTURAIS_DEMO.length], foco: ctx.competencias[i]?.nome });
+  }
+
+  if (ctx.perguntaPretensao) {
+    perguntas.push({
+      bloco: "pretensao",
+      pergunta: "Para fechar a parte prática: qual é a sua pretensão salarial e a partir de quando você poderia começar?",
+    });
+  }
+
+  perguntas.push({ bloco: "encerramento", pergunta: "Antes de terminarmos, você tem alguma pergunta sobre a vaga ou sobre o processo?" });
+
+  return { perguntas, despedida: despedidaDemo(nome), demo: true, em: new Date().toISOString() };
+}
+
+function despedidaDemo(primeiroNome: string): string {
+  const saudacao = primeiroNome ? `Muito obrigada, ${primeiroNome}!` : "Muito obrigada pelo seu tempo!";
+  return `${saudacao} Foi ótimo te conhecer melhor. Vou repassar essa conversa para o gestor da vaga, que entra em contato em breve com os próximos passos.`;
+}
+
+/** O pedido de exemplo concreto, quando a resposta anterior foi curta demais para sustentar nada. */
+export function followUpDemo(): string {
+  return "Pode detalhar com um exemplo concreto? Uma situação real ajuda bastante a entender melhor.";
+}

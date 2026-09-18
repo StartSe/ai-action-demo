@@ -26,6 +26,23 @@ export function moeda(valor: number) {
 }
 
 /**
+ * A faixa salarial de uma vaga, do jeito que toda tela a diz.
+ *
+ * Mora aqui, e não em `components/FormularioVaga.tsx` (de onde veio), porque a entrevistadora
+ * também precisa dela: `lib/roteiro.ts` é código de servidor e importar um client component para
+ * reaproveitar a frase arrastaria a fronteira de cliente junto. Lista, página da vaga, formulário e
+ * entrevista têm de dizer a MESMA coisa sobre a mesma vaga.
+ *
+ * Uma faixa pela metade continua sendo informação: "A partir de R$ 5.500" diz mais que "A combinar".
+ */
+export function faixaSalarial(vaga: { salarioACombinar: boolean; salarioMin?: number; salarioMax?: number }): string {
+  if (vaga.salarioACombinar || (!vaga.salarioMin && !vaga.salarioMax)) return "A combinar";
+  if (vaga.salarioMin && vaga.salarioMax) return `${moeda(vaga.salarioMin)} a ${moeda(vaga.salarioMax)}`;
+  if (vaga.salarioMin) return `A partir de ${moeda(vaga.salarioMin)}`;
+  return `Até ${moeda(vaga.salarioMax as number)}`;
+}
+
+/**
  * Há quanto tempo, em dias: "hoje", "ontem", "há 5 dias".
  *
  * A tela Entrevistas (US-015) acompanha espera, não agenda: quem olha a lista quer saber quantos dias

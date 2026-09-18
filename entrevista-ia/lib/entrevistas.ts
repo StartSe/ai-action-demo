@@ -281,6 +281,22 @@ export function registrarMensagem({
   return { id, entrevistaId, papel, texto, segundo, criadoEm };
 }
 
+/**
+ * O plano da conversa (lib/roteiro.ts), em JSON, escrito na abertura da sala.
+ *
+ * Fica FORA do tipo `Entrevista` de propósito, como `cvTexto` fica fora de `Candidato`: são alguns
+ * milhares de caracteres por entrevista, e uma lista de trinta linhas os carregaria todos para
+ * mostrar trinta nomes. Quem precisa do plano pede por aqui.
+ */
+export function lerRoteiro(id: string): string | null {
+  const linha = banco().prepare("SELECT roteiro FROM entrevistas WHERE id = ?").get(id) as { roteiro: string | null } | undefined;
+  return linha?.roteiro ?? null;
+}
+
+export function salvarRoteiro(id: string, roteiro: string): void {
+  banco().prepare("UPDATE entrevistas SET roteiro = ? WHERE id = ?").run(roteiro, id);
+}
+
 /** A conversa inteira, na ordem em que aconteceu. */
 export function transcricao(entrevistaId: string): MensagemEntrevista[] {
   const linhas = banco()
