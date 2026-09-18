@@ -61,10 +61,40 @@ function Preview({ asset }: { asset?: Asset }) {
     </div>
   );
 }
+const PHASES: Partial<Record<Kind, string[]>> = {
+  video: ["Preparando a cena", "Compondo os quadros", "Renderizando o movimento", "Finalizando os detalhes"],
+  image: ["Interpretando o prompt", "Compondo a imagem", "Refinando os detalhes"],
+  transform: ["Lendo a referência", "Aplicando a transformação", "Refinando os detalhes"],
+};
+/* Estado de geração do bloco: substitui o preview enquanto o pedido está na fila.
+ * As fases são só ritmo visual (o provedor não informa progresso); o que é real é
+ * "Enviando ao modelo" (status "sending") contra "na fila" (status "pending"). */
+function Generating({ kind, status, asset }: { kind: Kind; status?: string; asset?: Asset }) {
+  const phases = PHASES[kind] ?? PHASES.image!;
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setStep((s) => (s + 1) % phases.length), 4500);
+    return () => clearInterval(t);
+  }, [phases.length]);
+  const title = kind === "video" ? "Gerando seu vídeo…" : kind === "transform" ? "Transformando sua imagem…" : "Gerando sua imagem…";
+  const hint = kind === "video" ? "Vídeos levam alguns minutos. O bloco avisa quando estiver pronto." : "Isso leva alguns segundos. O bloco avisa quando estiver pronto.";
+  return (
+    <div className="cf-generating">
+      {asset && (asset.kind === "video" ? <video src={asset.url} muted preload="metadata" aria-hidden="true" /> : <img src={asset.url} alt="" aria-hidden="true" />)}
+      <div className="cf-generating-body">
+        <span className="cf-spark" aria-hidden="true"><i /><i /><b>✦</b></span>
+        <strong>{title}</strong>
+        <small key={status === "sending" ? "sending" : step}>{status === "sending" ? "Enviando ao modelo" : phases[step]}</small>
+        <span className="cf-progress" aria-hidden="true"><i /></span>
+        <em>{hint}</em>
+      </div>
+    </div>
+  );
+}
 function CreativeNode({
   data,
   selected,
-}: NodeProps<Block["data"] & { asset?: Asset; onRemove?: () => void; locked?: boolean }>) {
+}: NodeProps<Block["data"] & { asset?: Asset; onRemove?: () => void; onCancel?: () => void; locked?: boolean }>) {
   const loading = data.status === "pending" || data.status === "sending";
   const problem = ["failed", "uncertain", "submitting"].includes(data.status || "");
   const state = loading ? "Gerando…" : problem ? "Geração precisa de atenção" : data.dirty ? "Precisa atualizar" : data.asset ? "Concluído" : "Aguardando geração";
@@ -79,12 +109,18 @@ function CreativeNode({
         <span className={`cf-node-state ${loading ? "is-loading" : problem ? "is-error" : data.asset && !data.dirty ? "is-complete" : ""}`} role="status" aria-label={state} title={state}>
           <span aria-hidden="true">{loading ? "⚙" : problem ? "!" : data.dirty ? "↻" : data.asset ? "✓" : "···"}</span>
         </span>
-        <button className="cf-node-delete nodrag nopan" aria-label={`Excluir bloco ${data.title}`} title="Excluir bloco" disabled={data.locked} onClick={(event) => { event.stopPropagation(); data.onRemove?.(); }}>×</button>
+        {loading ? (
+          <button className="cf-node-cancel nodrag nopan" title="A execução para depois desta geração" onClick={(event) => { event.stopPropagation(); data.onCancel?.(); }}>Cancelar</button>
+        ) : (
+          <button className="cf-node-delete nodrag nopan" aria-label={`Excluir bloco ${data.title}`} title="Excluir bloco" disabled={data.locked} onClick={(event) => { event.stopPropagation(); data.onRemove?.(); }}>×</button>
+        )}
       </header>
       {data.kind === "idea" ? (
         <p className="cf-idea">
           {data.prompt || "Descreva sua campanha. O que vamos criar?"}
         </p>
+      ) : loading ? (
+        <Generating kind={data.kind} status={data.status} asset={data.asset} />
       ) : (
         <Preview asset={data.asset} />
       )}
@@ -854,6 +890,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                   data: {
                     ...n.data, asset: assetFor(n.data.assetId),
                     locked: busy, onRemove: () => removeBlock(n.id),
+                    onCancel: () => { stop.current = true; setNotice("A execução vai parar após a geração atual."); },
                     status: sendingId === n.id ? "sending" : projectJobs.find((j) => j.nodeId === n.id)?.status === "pending" ? "pending" : n.data.status,
                   },
                 }))}
