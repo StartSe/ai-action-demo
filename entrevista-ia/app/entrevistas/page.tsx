@@ -15,10 +15,12 @@ import { useCallback, useEffect, useState } from "react";
 import { AvisoExemplo } from "@/components/AvisoExemplo";
 import { DialogoConvite } from "@/components/DialogoConvite";
 import { DialogoDecisao } from "@/components/DialogoDecisao";
+import { DialogoLigar } from "@/components/DialogoLigar";
 import {
   ChipSituacao,
   NotaDaEntrevista,
   PODE_CONVIDAR,
+  PODE_LIGAR,
   ROTULO_DECISAO,
   ROTULO_NIVEL_VOZ,
   VIVAS,
@@ -86,6 +88,7 @@ export default function Page() {
   const [versao, setVersao] = useState(0);
   const [convite, setConvite] = useState<{ entrevistaId: string; reenviar: boolean } | null>(null);
   const [decisao, setDecisao] = useState<Linha | null>(null);
+  const [ligacao, setLigacao] = useState<Linha | null>(null);
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);
 
   const recarregar = useCallback(() => setVersao((v) => v + 1), []);
@@ -137,6 +140,10 @@ export default function Page() {
       setErroTela(await lerErro(e));
     }
   }
+
+  // A ligação só aparece quando a empresa conectou o agente E um número de telefone (`integrations.ligacao`):
+  // um botão que só sabe explicar que não está configurado é ruído numa tabela de acompanhamento.
+  const podeLigar = Boolean(status?.integrations?.ligacao);
 
   const colunas: Coluna<Linha>[] = [
     {
@@ -199,6 +206,9 @@ export default function Page() {
             <button key="convite" type="button" className="btn-link" onClick={() => setConvite({ entrevistaId: l.id, reenviar: true })}>
               {rotuloConvite(l)}
             </button>
+          ) : null,
+          podeLigar && PODE_LIGAR.includes(l.status) ? (
+            <button key="ligar" type="button" className="btn-link" onClick={() => setLigacao(l)}>Ligar agora</button>
           ) : null,
           VIVAS.includes(l.status) && l.status !== "avaliada" ? (
             <button key="cancelar" type="button" className="btn-link !text-danger" onClick={() => void cancelarEntrevista(l)}>Cancelar</button>
@@ -317,6 +327,16 @@ export default function Page() {
           reenviar={convite.reenviar}
           onFechar={() => setConvite(null)}
           onMudou={recarregar}
+        />
+      )}
+      {ligacao && (
+        <DialogoLigar
+          entrevistaId={ligacao.id}
+          candidatoId={ligacao.candidatoId}
+          candidatoNome={ligacao.candidatoNome}
+          vagaCargo={ligacao.vagaCargo}
+          onFechar={() => setLigacao(null)}
+          onLigou={recarregar}
         />
       )}
       {decisao && (

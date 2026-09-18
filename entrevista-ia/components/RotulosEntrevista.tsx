@@ -42,6 +42,11 @@ export function rotuloConvite(e: { status: StatusEntrevista; codigo?: string }):
   return e.codigo ? "Reenviar convite" : "Enviar convite";
 }
 
+/** Quando "Ligar para o candidato agora" (US-020) faz sentido: enquanto a pessoa ainda não conversou.
+ * Depois disso a ligação criaria uma segunda conversa para a mesma entrevista, e o parecer sairia de
+ * cima das duas. A mesma regra vale no servidor (`POST /api/ligar`). */
+export const PODE_LIGAR: StatusEntrevista[] = ["convidada", "aberta"];
+
 export const ROTULO_DECISAO: Record<Decisao, string> = { avancar: "Avançar", aguardar: "Aguardar", reprovar: "Não avançar" };
 
 /** As três decisões na ordem em que a tela as oferece, com a frase que diz o que cada uma significa. */

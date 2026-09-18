@@ -365,7 +365,7 @@
         "Typecheck passes"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": "Fase 3: convite e entrevista do candidato · PRD US-017 (2/2)"
     },
     {

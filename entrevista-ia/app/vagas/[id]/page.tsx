@@ -9,11 +9,13 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { DialogoAdicionarCandidato } from "@/components/DialogoAdicionarCandidato";
 import { DialogoConvite } from "@/components/DialogoConvite";
+import { DialogoLigar } from "@/components/DialogoLigar";
 import { faixaSalarial, rotuloModelo, rotuloSenioridade, type VagaSalva } from "@/components/FormularioVaga";
 import {
   ChipSituacao,
   NotaDaEntrevista,
   PODE_CONVIDAR,
+  PODE_LIGAR,
   ROTULO_DECISAO,
   VIVAS,
   rotuloConvite,
@@ -51,6 +53,7 @@ export default function Page() {
   // O convite aberto na tela: `reenviar` diz se abrir já estende o prazo (quem clicou em "Reenviar
   // convite") ou só mostra o link que acabou de nascer com a atribuição.
   const [convite, setConvite] = useState<{ entrevistaId: string; reenviar: boolean } | null>(null);
+  const [ligacao, setLigacao] = useState<LinhaCandidato | null>(null);
   const [recado, setRecado] = useState("");
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);
 
@@ -135,6 +138,9 @@ export default function Page() {
     void carregar();
   }, [carregar]);
 
+  // A ligação só aparece quando a empresa conectou o agente E um número de telefone
+  // (`integrations.ligacao`): um botão que só sabe explicar que não está configurado é ruído.
+  const podeLigar = Boolean(status?.integrations?.ligacao);
   const requisitos = (vaga?.requisitos ?? "").split("\n").map((r) => r.trim()).filter(Boolean);
   const avaliadas = (linhas ?? []).filter((l) => l.status === "avaliada").length;
   const jaNaVaga = (linhas ?? []).filter((l) => VIVAS.includes(l.status)).map((l) => l.candidatoId);
@@ -170,6 +176,9 @@ export default function Page() {
             <button key="convite" type="button" className="btn-link" onClick={() => setConvite({ entrevistaId: l.id, reenviar: true })}>
               {rotuloConvite(l)}
             </button>
+          ) : null,
+          podeLigar && PODE_LIGAR.includes(l.status) ? (
+            <button key="ligar" type="button" className="btn-link" onClick={() => setLigacao(l)}>Ligar agora</button>
           ) : null,
           VIVAS.includes(l.status) && l.status !== "avaliada" ? (
             <button key="cancelar" type="button" className="btn-link !text-danger" onClick={() => void cancelarEntrevista(l)}>Cancelar</button>
@@ -324,6 +333,16 @@ export default function Page() {
           reenviar={convite.reenviar}
           onFechar={() => setConvite(null)}
           onMudou={recarregar}
+        />
+      )}
+      {ligacao && (
+        <DialogoLigar
+          entrevistaId={ligacao.id}
+          candidatoId={ligacao.candidatoId}
+          candidatoNome={ligacao.candidatoNome}
+          vagaCargo={ligacao.vagaCargo}
+          onFechar={() => setLigacao(null)}
+          onLigou={recarregar}
         />
       )}
       {Dialogo}

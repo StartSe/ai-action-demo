@@ -35,7 +35,7 @@ export const PRAZOS_VALIDOS = [7, 15, 30];
 export const PRAZO_PADRAO = 15;
 
 const MARCA = "E";
-const NOME_PUBLICO = "Entrevistadora IA";
+export const NOME_PUBLICO = "Entrevistadora IA";
 
 /** Parâmetros guardados no formulário do convite: só o id da entrevista. Vaga, candidato e roteiro
  * são lidos do banco na hora, para uma vaga corrigida depois do convite valer para quem já o recebeu. */

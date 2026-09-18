@@ -167,14 +167,13 @@ export async function gerarAudio(texto: string): Promise<ArrayBuffer> {
   return r.arrayBuffer();
 }
 
-interface DadosLigacao {
-  telefone: string;
-  vaga?: string;
-  requisitos?: string;
-  candidato?: string;
-}
-
-export async function ligar({ telefone, vaga, requisitos, candidato }: DadosLigacao) {
+/**
+ * A ligação telefônica: o mesmo agente conversacional da sala do navegador, agora discando para o
+ * candidato (US-020). Quem monta as variáveis é quem chamou — `lib/agente.ts` para uma entrevista de
+ * verdade —, porque elas têm de ser as MESMAS nos dois caminhos: um agente que recebe `roteiro` numa
+ * conversa e não na outra conduz duas entrevistas diferentes para a mesma vaga.
+ */
+export async function ligar({ telefone, variaveis }: { telefone: string; variaveis: Record<string, string> }) {
   let r: Response;
   try {
     r = await fetch("https://api.elevenlabs.io/v1/convai/twilio/outbound-call", {
@@ -187,13 +186,7 @@ export async function ligar({ telefone, vaga, requisitos, candidato }: DadosLiga
         agent_id: getConfig("ELEVENLABS_AGENT_ID"),
         agent_phone_number_id: getConfig("ELEVENLABS_PHONE_NUMBER_ID"),
         to_number: telefone,
-        conversation_initiation_client_data: {
-          dynamic_variables: {
-            vaga: vaga || "",
-            requisitos: requisitos || "",
-            candidato: candidato || "",
-          },
-        },
+        conversation_initiation_client_data: { dynamic_variables: variaveis },
       }),
     });
   } catch (err) {
