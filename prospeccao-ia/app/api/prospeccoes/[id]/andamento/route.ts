@@ -14,11 +14,15 @@ export async function GET(_req: Request, { params }: RouteContext<"/api/prospecc
   if (!prospeccao) return Response.json({ error: "Prospecção não encontrada." }, { status: 404 });
   const produto = obterProduto(prospeccao.produtoId);
   const icp = obterICP(prospeccao.icpId);
+  const contas = listarContas(id);
   return Response.json({
     prospeccao,
     produtoNome: produto?.nome ?? "Produto",
     icpNome: icp?.nome ?? "Perfil",
-    contasEncontradas: listarContas(id).length,
+    // Array completo (não só a contagem): a lista de resultados do modo "Encontrar empresas" (US-017)
+    // usa isto direto, sem uma segunda rota — o volume é o mesmo teto da "quantidade alvo" (até 50).
+    contas,
+    contasEncontradas: contas.length,
     leadsEncontrados: listarLeads(id).length,
   });
 }

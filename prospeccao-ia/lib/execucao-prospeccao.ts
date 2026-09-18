@@ -10,15 +10,25 @@
 // `erro` preenchido, nunca `"falhou"` (esse estado é só para a recuperação na inicialização — processo
 // reiniciado no meio, ver recuperarProspeccoesTravadas em lib/workspace.ts).
 //
-// Escopo desta história (fronteira exata para US-015/017-020/024-026 substituírem sem reler este
-// arquivo inteiro): toda conta/lead nasce com fit:null, evidencias:[], sinais:[] — nenhuma qualificação
-// de verdade acontece aqui. Leads nascem com papel:"desconhecido" (papel real é US-026) e
-// status:"pesquisado" (só a etapa 5 promove para "qualificado", sem calcular fit). Sinais de intenção do
-// ICP/critérios são lidos e filtrados na etapa 3, mas NUNCA persistidos como SinalProspeccao (exigiria
-// origem real, que só a US-020 vai trazer) — "sinal sem fonte é descartado".
+// Escopo desta história (fronteira exata para US-018/019/020/024-026 substituírem sem reler este
+// arquivo inteiro): só o modo "empresas" (US-017) faz descoberta de verdade — busca na web, leitura da
+// página institucional e qualificação por evidências (lib/qualificacao.ts). Os demais modos continuam
+// fictícios: toda conta/lead nasce com fit:null, evidencias:[], sinais:[]. Leads nascem com
+// papel:"desconhecido" (papel real é US-026) e status:"pesquisado" (só a etapa 5 promove para
+// "qualificado"). Sinais de intenção do ICP/critérios são lidos e filtrados na etapa 3 para os modos
+// fictícios, mas NUNCA persistidos como SinalProspeccao ali (exigiria origem real, que só a US-020 vai
+// trazer para os demais modos) — "sinal sem fonte é descartado".
 import { ETAPAS_PROSPECCAO } from "./execucao-etapas";
+import { buscarNaWeb, lerPagina } from "./descoberta";
+import type { ResultadoBuscaWeb } from "./descoberta";
+import { avaliarCriterios, calcularFit, dominioDe, resumoDaPagina, sinaisEncontrados } from "./qualificacao";
+import { QUANTIDADES_EMPRESAS } from "./rotulos";
 import { atualizarLead, atualizarProspeccao, criarConta, criarLead, leadsDoProduto, listarContas, listarLeads, obterICP, obterProduto, obterProspeccao } from "./workspace";
 import type { ICP, Jornada, ModoProspeccao } from "./types";
+
+const QUANTIDADE_EMPRESAS_PADRAO = 10;
+// 5 páginas de 10 resultados orgânicos = até 50 candidatas, a maior quantidade alvo possível.
+const TETO_PAGINAS_BUSCA = 5;
 
 const NOMES_EMPRESA = ["Nortis", "Aliança", "Vetor", "Cadence", "Plena", "Horizonte", "Mérito", "Élan", "Polar", "Cedro"];
 const SUFIXOS_EMPRESA = ["Tecnologia", "Soluções", "Indústria", "Serviços", "Comércio", "Consultoria"];
@@ -58,11 +68,111 @@ function deveCriarPessoas(modo: ModoProspeccao): boolean {
   return modo !== "empresas";
 }
 
-/** Etapa 2: cria as contas (empresas) compatíveis com os critérios recebidos — fit/evidências/sinais
- * vazios (qualificação real é US-024; sinal com origem real é US-020), demo sempre false (não confundir
- * com o exemplo semeado por "Ver uma prospecção de exemplo"). */
-function etapaProcurarEmpresas(prospeccaoId: string, modo: ModoProspeccao, jornada: Jornada, criterios: Record<string, unknown>): void {
-  if (!deveCriarContas(modo, jornada)) return;
+function quantidadeAlvo(criterios: Record<string, unknown>): number {
+  const bruta = Number(criterios.quantidade);
+  return (QUANTIDADES_EMPRESAS as readonly number[]).includes(bruta) ? bruta : QUANTIDADE_EMPRESAS_PADRAO;
+}
+
+/** Resultados de `buscarNaWeb`, paginados (US-017: "quantidade alvo" pode passar da 1ª página de 10) e
+ * unificados por domínio ("empresas repetidas entre consultas são unificadas pelo domínio do site").
+ * Em demonstração, `buscarNaWeb` sempre devolve os 3 mesmos resultados fixos — não pagina (AC "em
+ * demonstração, 3 empresas de exemplo"), só deduplica. */
+async function buscarCandidatasDeduplicadas(consulta: string, alvo: number): Promise<{ itens: ResultadoBuscaWeb[]; demo: boolean }> {
+  const primeira = await buscarNaWeb(consulta);
+  if (primeira.demo) return { itens: primeira.itens, demo: true };
+
+  const vistos = new Set<string>();
+  const candidatas: ResultadoBuscaWeb[] = [];
+  function acrescentar(itens: ResultadoBuscaWeb[]) {
+    for (const item of itens) {
+      const dom = dominioDe(item.url);
+      if (!dom || vistos.has(dom)) continue;
+      vistos.add(dom);
+      candidatas.push(item);
+    }
+  }
+  acrescentar(primeira.itens);
+
+  let pagina = 1;
+  while (candidatas.length < alvo && pagina < TETO_PAGINAS_BUSCA) {
+    let resposta;
+    try {
+      resposta = await buscarNaWeb(consulta, pagina);
+    } catch {
+      break; // sem mais páginas (ou falha na próxima): fica com o que já achou até aqui
+    }
+    if (!resposta.itens.length) break;
+    acrescentar(resposta.itens);
+    pagina++;
+  }
+  return { itens: candidatas.slice(0, alvo), demo: false };
+}
+
+/** Nome da candidata a partir do título do resultado de busca (limpo de sufixos comuns de página
+ * institucional, ex.: "Empresa X - Início" → "Empresa X"); sem título, cai no domínio. */
+function nomeDaEmpresa(candidata: ResultadoBuscaWeb): string {
+  const titulo = candidata.titulo.split(/\s[-–|]\s/)[0]?.trim();
+  return titulo || dominioDe(candidata.url) || candidata.url;
+}
+
+/** Conteúdo institucional de demonstração PRÓPRIO deste modo (não o `conteudoPaginaDemo` genérico de
+ * `lib/descoberta.ts`, usado por toda leitura de página sem distinguir o que está sendo lido): 2 de
+ * cada 3 candidatas "atendem" aos critérios pedidos e 1 não tem nada verificável — mesma variação de
+ * fit (alta/média/baixa) que `lib/demo.ts:criarProspeccaoExemplo` já usa para o exemplo semeado. */
+function conteudoDemoDaCandidata(indice: number, segmento: string, porte: string, localizacao: string, sinal: string | undefined): string {
+  if (indice % 3 === 2) return "Empresa de demonstração, sem informações públicas suficientes para confirmar os critérios pedidos.";
+  const partes = [segmento && `Atuação: ${segmento}.`, porte && `Porte: ${porte}.`, localizacao && `Sede em ${localizacao}.`, sinal && `Processo seletivo aberto: ${sinal}.`].filter(Boolean);
+  return `Empresa de demonstração. ${partes.join(" ")}`;
+}
+
+/** Etapa 2, modo "empresas" (US-017): busca na web a partir de segmento/localização/porte, lê a página
+ * institucional de cada candidata e qualifica por evidências (lib/qualificacao.ts) — primeiro modo com
+ * fit/evidências/sinais de verdade (os demais continuam fictícios, ver fronteira no topo do arquivo).
+ * Falha ao ler uma candidata isolada não derruba a etapa inteira (mesmo espírito de descobrirEmLote em
+ * lib/descoberta.ts): a candidata só é descartada. */
+async function buscarContasReais(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null): Promise<void> {
+  const segmento = textoCriterio(criterios, "segmento");
+  const localizacao = textoCriterio(criterios, "localizacao");
+  const porte = textoCriterio(criterios, "porte");
+  const sinaisDoCriterio = Array.isArray(criterios.sinais) ? criterios.sinais.filter((s): s is string => typeof s === "string") : [];
+  const sinaisAlvo = Array.from(new Set([...sinaisDoCriterio, ...(icp?.sinais ?? [])]));
+
+  const consulta = ["empresas", segmento, localizacao, porte].filter(Boolean).join(" ") || "empresas";
+  const { itens: candidatas, demo: buscaDemo } = await buscarCandidatasDeduplicadas(consulta, quantidadeAlvo(criterios));
+
+  for (const [indice, candidata] of candidatas.entries()) {
+    let pagina;
+    try {
+      pagina = await lerPagina(candidata.url);
+    } catch (err) {
+      console.error("Falha ao ler página institucional de uma candidata:", candidata.url, err instanceof Error ? err.message : err);
+      continue;
+    }
+    const conteudo = buscaDemo ? conteudoDemoDaCandidata(indice, segmento, porte, localizacao, sinaisAlvo[0]) : pagina.conteudo || candidata.resumo;
+    const evidencias = avaliarCriterios(conteudo, [
+      { criterio: "Segmento", valor: segmento },
+      { criterio: "Porte", valor: porte },
+      { criterio: "Localização", valor: localizacao },
+    ]);
+    criarConta({
+      prospeccaoId,
+      nome: buscaDemo ? nomeEmpresaFicticia(segmento, indice) : nomeDaEmpresa(candidata),
+      site: candidata.url,
+      setor: segmento || null,
+      porte: porte || null,
+      cidade: localizacao || null,
+      fit: calcularFit(evidencias),
+      evidencias,
+      sinais: sinaisEncontrados(conteudo, sinaisAlvo, pagina.origem, pagina.consultadoEm),
+      resumo: resumoDaPagina(conteudo),
+      demo: pagina.demo,
+    });
+  }
+}
+
+/** Etapa 2, demais modos: continuam fictícias (fit/evidências/sinais vazios) até cada uma ganhar
+ * descoberta real na sua própria história (empresa_unica → US-018, pessoas/oportunidades B2B → US-019/020). */
+function criarContasFicticias(prospeccaoId: string, modo: ModoProspeccao, criterios: Record<string, unknown>): void {
   const base = { prospeccaoId, site: null, fit: null, evidencias: [], sinais: [], resumo: "", demo: false as const };
   if (modo === "empresa_unica") {
     const nome = textoCriterio(criterios, "empresaNome") || "Empresa sem nome informado";
@@ -75,6 +185,16 @@ function etapaProcurarEmpresas(prospeccaoId: string, modo: ModoProspeccao, jorna
   for (let i = 0; i < 3; i++) {
     criarConta({ ...base, nome: nomeEmpresaFicticia(segmento, i), setor: segmento || null, porte: porte || null, cidade: localizacao || null });
   }
+}
+
+/** Etapa 2: cria as contas (empresas) compatíveis com os critérios recebidos. */
+async function etapaProcurarEmpresas(prospeccaoId: string, modo: ModoProspeccao, jornada: Jornada, criterios: Record<string, unknown>, icp: ICP | null): Promise<void> {
+  if (!deveCriarContas(modo, jornada)) return;
+  if (modo === "empresas") {
+    await buscarContasReais(prospeccaoId, criterios, icp);
+    return;
+  }
+  criarContasFicticias(prospeccaoId, modo, criterios);
 }
 
 /** Etapa 3: trabalho real = ler e filtrar os sinais de intenção do ICP e dos critérios recebidos — só para
@@ -168,7 +288,7 @@ async function executarPipeline(prospeccaoId: string): Promise<void> {
     if (foiCancelada(prospeccaoId)) return;
     rotuloEtapaAtual = ETAPAS_PROSPECCAO[1].rotulo;
     atualizarProspeccao(prospeccaoId, { etapa: ETAPAS_PROSPECCAO[1].chave });
-    etapaProcurarEmpresas(prospeccaoId, prospeccao.modo, jornada, prospeccao.criterios);
+    await etapaProcurarEmpresas(prospeccaoId, prospeccao.modo, jornada, prospeccao.criterios, icp);
 
     // Etapa 3: analisando sinais públicos (sem persistência, ver comentário de topo).
     if (foiCancelada(prospeccaoId)) return;

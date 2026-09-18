@@ -112,8 +112,12 @@ interface OrganicoSerp {
   description?: string;
 }
 
-export async function buscarNaWeb(consulta: string): Promise<RespostaBusca> {
-  const origem = `https://www.google.com/search?q=${encodeURIComponent(consulta)}`;
+/** `pagina` (0-indexado) soma `&start=<pagina*10>` à busca do Google (paginação padrão de resultados
+ * orgânicos, não específica da Bright Data) — usado por quem precisa de mais de uma página de
+ * candidatos (ex.: lib/execucao-prospeccao.ts, "Quantidade alvo" de 25/50 empresas). */
+export async function buscarNaWeb(consulta: string, pagina = 0): Promise<RespostaBusca> {
+  const origemBase = `https://www.google.com/search?q=${encodeURIComponent(consulta)}`;
+  const origem = pagina > 0 ? `${origemBase}&start=${pagina * 10}` : origemBase;
   const consultadoEm = new Date().toISOString();
   const zona = zonaBusca();
   if (!chaveConfigurada() || !zona) {

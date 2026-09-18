@@ -7,6 +7,7 @@
 import { useState, type KeyboardEvent } from "react";
 import { CampoLista } from "@/components/CampoLista";
 import { Field } from "@/components/ui";
+import { QUANTIDADES_EMPRESAS } from "@/lib/rotulos";
 import type { ICP, Jornada, ModoProspeccao } from "@/lib/types";
 
 export type CriteriosBusca = {
@@ -21,6 +22,7 @@ export type CriteriosBusca = {
   recorte: string;
   sinais: string[];
   somenteRecentes: boolean;
+  quantidade: string;
 };
 
 export function criteriosIniciais(icp: ICP, modo: ModoProspeccao, jornada: Jornada): CriteriosBusca {
@@ -37,6 +39,7 @@ export function criteriosIniciais(icp: ICP, modo: ModoProspeccao, jornada: Jorna
     recorte: jornada === "b2b" ? c.setor ?? "" : c.localizacao ?? "",
     sinais: [...icp.sinais],
     somenteRecentes: modo === "oportunidades",
+    quantidade: String(QUANTIDADES_EMPRESAS[0]),
   };
 }
 
@@ -116,6 +119,13 @@ export function CriteriosProspeccaoForm({
           </Field>
           <Field label="Porte" htmlFor="porte">
             <input id="porte" className="input" value={valor.porte} onChange={(e) => campo("porte", e.target.value)} />
+          </Field>
+          <Field label="Quantidade alvo" htmlFor="quantidade">
+            <select id="quantidade" className="input !w-auto" value={valor.quantidade} onChange={(e) => campo("quantidade", e.target.value)}>
+              {QUANTIDADES_EMPRESAS.map((q) => (
+                <option key={q} value={q}>{q} empresas</option>
+              ))}
+            </select>
           </Field>
         </>
       )}

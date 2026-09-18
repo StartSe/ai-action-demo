@@ -39,6 +39,11 @@ export const DESCRICAO_MODO: Record<Jornada, Partial<Record<ModoProspeccao, stri
   },
 };
 
+// Quantidade alvo do modo "Encontrar empresas" (US-017): mesmo array usado pelo `<select>` do passo 4
+// (components/CriteriosProspeccao.tsx) e pela validação do pipeline (lib/execucao-prospeccao.ts) — somar
+// um valor aqui exige somar nos dois lugares.
+export const QUANTIDADES_EMPRESAS = [10, 25, 50] as const;
+
 // Passo 4 do assistente (US-012): o botão primário diz o que a busca vai fazer, em vez de "Continuar".
 export const ROTULO_ACAO_MODO: Record<ModoProspeccao, string> = {
   empresas: "Buscar empresas",

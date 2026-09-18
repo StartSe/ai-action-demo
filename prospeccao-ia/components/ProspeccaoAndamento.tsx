@@ -8,16 +8,17 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Aviso, Topbar, useConfirmacao, useStatus, lerErro } from "@/components/ui";
+import { Aviso, Chip, Topbar, useConfirmacao, useStatus, lerErro } from "@/components/ui";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 import { ROTULO_MODO } from "@/lib/rotulos";
 import { ETAPAS_PROSPECCAO } from "@/lib/execucao-etapas";
-import type { Prospeccao } from "@/lib/types";
+import type { Conta, Prospeccao } from "@/lib/types";
 
 type Andamento = {
   prospeccao: Prospeccao;
   produtoNome: string;
   icpNome: string;
+  contas: Conta[];
   contasEncontradas: number;
   leadsEncontrados: number;
 };
@@ -35,6 +36,8 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
   const [cancelando, setCancelando] = useState(false);
   const [erroCancelar, setErroCancelar] = useState<string | null>(null);
   const [apagando, setApagando] = useState(false);
+  const [buscandoPessoasId, setBuscandoPessoasId] = useState<string | null>(null);
+  const [erroVerPessoas, setErroVerPessoas] = useState<string | null>(null);
 
   const carregar = useCallback(() => {
     fetch(`/api/prospeccoes/${prospeccaoId}/andamento`)
@@ -88,6 +91,39 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
       const lido = await lerErro(e);
       setErroRepetir(lido.mensagem);
       setRepetindo(false);
+    }
+  }
+
+  /** "Ver pessoas" de uma conta (US-017): abre uma nova prospecção no modo "Explorar uma empresa" já
+   * preenchida com o que a conta encontrada trouxe — mesmo caminho de "Explorar uma empresa" (modo
+   * `empresa_unica`) que a pessoa já usaria manualmente, sem inventar uma segunda tela. */
+  async function verPessoas(conta: Conta) {
+    if (!andamento || buscandoPessoasId) return;
+    setBuscandoPessoasId(conta.id);
+    setErroVerPessoas(null);
+    try {
+      const r = await fetch("/api/prospeccoes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          produtoId: andamento.prospeccao.produtoId,
+          icpId: andamento.prospeccao.icpId,
+          modo: "empresa_unica",
+          criterios: { empresaNome: conta.nome, segmento: conta.setor ?? "", localizacao: conta.cidade ?? "", porte: conta.porte ?? "" },
+        }),
+      });
+      if (!r.ok) {
+        const lido = await lerErro(r);
+        setErroVerPessoas(lido.mensagem);
+        setBuscandoPessoasId(null);
+        return;
+      }
+      const nova = (await r.json()) as Prospeccao;
+      router.push(`/prospeccoes/${nova.id}`);
+    } catch (e) {
+      const lido = await lerErro(e);
+      setErroVerPessoas(lido.mensagem);
+      setBuscandoPessoasId(null);
     }
   }
 
@@ -194,6 +230,45 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                 <p className="text-[13px] text-muted">
                   {andamento.contasEncontradas} empresas e {andamento.leadsEncontrados} pessoas encontradas.
                 </p>
+
+                {andamento.prospeccao.modo === "empresas" && (
+                  <div className="flex flex-col gap-2.5 mb-1">
+                    {andamento.contas.length === 0 ? (
+                      <Aviso tom="warn">Nenhuma empresa encontrada com esses critérios.</Aviso>
+                    ) : (
+                      andamento.contas.map((conta) => (
+                        <div key={conta.id} className="card p-4 flex flex-col gap-2">
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div>
+                              <p className="font-semibold text-[14px]">{conta.nome}</p>
+                              <p className="text-[13px] text-muted">
+                                {[conta.cidade, conta.porte].filter(Boolean).join(" · ") || "Cidade e porte não identificados"}
+                              </p>
+                            </div>
+                            {conta.fit && <Chip nivel={conta.fit} />}
+                          </div>
+                          {conta.sinais.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {conta.sinais.slice(0, 3).map((sinal, i) => (
+                                <Chip key={i} nivel="positivo">{sinal.descricao}</Chip>
+                              ))}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            className="btn-link text-[13px] self-start"
+                            onClick={() => verPessoas(conta)}
+                            disabled={buscandoPessoasId === conta.id}
+                          >
+                            {buscandoPessoasId === conta.id ? "Abrindo…" : "Ver pessoas"}
+                          </button>
+                        </div>
+                      ))
+                    )}
+                    {erroVerPessoas && <Aviso tom="danger">{erroVerPessoas}</Aviso>}
+                  </div>
+                )}
+
                 <div className="flex items-center gap-3.5">
                   <Link href="/leads" className="btn-link text-[13px]">Ver leads</Link>
                   <button type="button" className="btn-link text-[13px]" onClick={repetir} disabled={repetindo}>
