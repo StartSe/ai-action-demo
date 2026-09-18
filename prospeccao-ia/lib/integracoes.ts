@@ -72,6 +72,15 @@ export const BRIGHTDATA: Integracao = {
     { chave: "BRIGHTDATA_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "•••••••••••••••••", ajuda: "Fica no topo do painel da Bright Data, junto com a lista de zonas." },
     { chave: "BRIGHTDATA_ZONE_BUSCA", rotulo: "Zona de busca", tipo: "text", opcional: true, avancado: true, padrao: "serp_api1", ajuda: "Só mude se você criou a zona de busca com outro nome no painel da Bright Data." },
     { chave: "BRIGHTDATA_ZONE_LEITURA", rotulo: "Zona de leitura", tipo: "text", opcional: true, avancado: true, padrao: "web_unlocker1", ajuda: "Só mude se você criou a zona de leitura com outro nome no painel da Bright Data." },
+    {
+      chave: "BRIGHTDATA_TETO_CONSULTAS",
+      rotulo: "Teto de consultas por prospecção",
+      tipo: "text",
+      opcional: true,
+      avancado: true,
+      padrao: "60",
+      ajuda: "Quantas buscas e leituras uma prospecção pode fazer antes de parar para não consumir sua cota.",
+    },
   ],
   testar: async (config) => {
     const chave = config.BRIGHTDATA_API_KEY;

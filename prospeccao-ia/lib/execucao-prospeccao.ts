@@ -25,7 +25,7 @@
 // pessoa é adicionada sem seleção explícita" (AC da US-018) é isso: a tela nunca esconde quem foi
 // encontrado, só não considera ninguém parte da prospecção até a escolha.
 import { ETAPAS_PROSPECCAO } from "./execucao-etapas";
-import { buscarNaWeb, lerPagina, perfilDePessoa } from "./descoberta";
+import { buscarNaWeb, lerPagina, perfilDePessoa, TetoConsultasAtingido } from "./descoberta";
 import type { ResultadoBuscaWeb } from "./descoberta";
 import { data } from "./formato";
 import { apolloEnabled, buscarLeads, buscarPessoasDaEmpresa } from "./leads";
@@ -43,6 +43,13 @@ const SUFIXOS_EMPRESA = ["Tecnologia", "Soluções", "Indústria", "Serviços", 
 const NOMES_PESSOA = ["Ana", "Bruno", "Carla", "Diego", "Elisa", "Fábio", "Gabriela", "Heitor", "Isadora", "João", "Karina", "Leandro"];
 const SOBRENOMES_PESSOA = ["Almeida", "Barros", "Costa", "Duarte", "Farias", "Gouveia", "Lopes", "Martins", "Nogueira", "Pereira", "Queiroz", "Ramos"];
 const CARGOS_PESSOA = ["Gerente", "Diretor(a)", "Coordenador(a)", "Analista", "Head", "Especialista"];
+
+/** Um catch "isolado" (falha ao ler UMA candidata não derruba a etapa inteira) nunca deve engolir o
+ * teto de consultas (US-023): ele precisa propagar até o try/catch mais externo (executarPipeline),
+ * que é quem sabe marcar a prospecção "pronta" com o aviso de orçamento. */
+function propagarTeto(err: unknown): void {
+  if (err instanceof TetoConsultasAtingido) throw err;
+}
 
 function textoCriterio(criterios: Record<string, unknown>, chave: string): string {
   const v = criterios[chave];
@@ -85,8 +92,8 @@ function quantidadeAlvo(criterios: Record<string, unknown>): number {
  * unificados por domínio ("empresas repetidas entre consultas são unificadas pelo domínio do site").
  * Em demonstração, `buscarNaWeb` sempre devolve os 3 mesmos resultados fixos — não pagina (AC "em
  * demonstração, 3 empresas de exemplo"), só deduplica. */
-async function buscarCandidatasDeduplicadas(consulta: string, alvo: number): Promise<{ itens: ResultadoBuscaWeb[]; demo: boolean }> {
-  const primeira = await buscarNaWeb(consulta);
+async function buscarCandidatasDeduplicadas(consulta: string, alvo: number, prospeccaoId: string): Promise<{ itens: ResultadoBuscaWeb[]; demo: boolean }> {
+  const primeira = await buscarNaWeb(consulta, 0, prospeccaoId);
   if (primeira.demo) return { itens: primeira.itens, demo: true };
 
   const vistos = new Set<string>();
@@ -105,8 +112,9 @@ async function buscarCandidatasDeduplicadas(consulta: string, alvo: number): Pro
   while (candidatas.length < alvo && pagina < TETO_PAGINAS_BUSCA) {
     let resposta;
     try {
-      resposta = await buscarNaWeb(consulta, pagina);
-    } catch {
+      resposta = await buscarNaWeb(consulta, pagina, prospeccaoId);
+    } catch (err) {
+      propagarTeto(err);
       break; // sem mais páginas (ou falha na próxima): fica com o que já achou até aqui
     }
     if (!resposta.itens.length) break;
@@ -146,13 +154,14 @@ async function buscarContasReais(prospeccaoId: string, criterios: Record<string,
   const sinaisAlvo = Array.from(new Set([...sinaisDoCriterio, ...(icp?.sinais ?? [])]));
 
   const consulta = ["empresas", segmento, localizacao, porte].filter(Boolean).join(" ") || "empresas";
-  const { itens: candidatas, demo: buscaDemo } = await buscarCandidatasDeduplicadas(consulta, quantidadeAlvo(criterios));
+  const { itens: candidatas, demo: buscaDemo } = await buscarCandidatasDeduplicadas(consulta, quantidadeAlvo(criterios), prospeccaoId);
 
   for (const [indice, candidata] of candidatas.entries()) {
     let pagina;
     try {
-      pagina = await lerPagina(candidata.url);
+      pagina = await lerPagina(candidata.url, prospeccaoId);
     } catch (err) {
+      propagarTeto(err);
       console.error("Falha ao ler página institucional de uma candidata:", candidata.url, err instanceof Error ? err.message : err);
       continue;
     }
@@ -241,13 +250,14 @@ async function buscarOportunidadesEmpresas(prospeccaoId: string, criterios: Reco
   if (sinaisAlvo.length === 0) return; // sem nenhum sinal de intenção, não há o que procurar neste modo
 
   const consulta = ["empresas", recorte, ...sinaisAlvo].filter(Boolean).join(" ");
-  const { itens: candidatas, demo: buscaDemo } = await buscarCandidatasDeduplicadas(consulta, quantidadeAlvo(criterios));
+  const { itens: candidatas, demo: buscaDemo } = await buscarCandidatasDeduplicadas(consulta, quantidadeAlvo(criterios), prospeccaoId);
 
   for (const [indice, candidata] of candidatas.entries()) {
     let pagina;
     try {
-      pagina = await lerPagina(candidata.url);
+      pagina = await lerPagina(candidata.url, prospeccaoId);
     } catch (err) {
+      propagarTeto(err);
       console.error("Falha ao ler página institucional de uma candidata a oportunidade:", candidata.url, err instanceof Error ? err.message : err);
       continue;
     }
@@ -320,10 +330,11 @@ async function buscarContaUnicaReal(prospeccaoId: string, criterios: Record<stri
   let buscaDemo = false;
   if (!site) {
     try {
-      const busca = await buscarNaWeb(`${nome} site institucional`);
+      const busca = await buscarNaWeb(`${nome} site institucional`, 0, prospeccaoId);
       buscaDemo = busca.demo;
       site = busca.itens[0]?.url ?? null;
     } catch (err) {
+      propagarTeto(err);
       console.error("Falha ao localizar o site institucional para explorar a empresa:", nome, err instanceof Error ? err.message : err);
     }
   }
@@ -333,8 +344,9 @@ async function buscarContaUnicaReal(prospeccaoId: string, criterios: Record<stri
 
   let pagina;
   try {
-    pagina = await lerPagina(site);
+    pagina = await lerPagina(site, prospeccaoId);
   } catch (err) {
+    propagarTeto(err);
     console.error("Falha ao ler a página institucional para explorar a empresa:", site, err instanceof Error ? err.message : err);
     return criarConta({ ...base, site, fit: "media", evidencias: [], sinais: [], resumo: RESUMO_SITE_ILEGIVEL, demo: false });
   }
@@ -449,10 +461,11 @@ async function buscarPessoasChaveUnica(prospeccaoId: string, conta: Conta, produ
     }
   } else {
     try {
-      const resultado = await buscarNaWeb(`site:linkedin.com/in "${conta.nome}" (diretor OR gerente OR head OR coordenador)`);
+      const resultado = await buscarNaWeb(`site:linkedin.com/in "${conta.nome}" (diretor OR gerente OR head OR coordenador)`, 0, prospeccaoId);
       demo = resultado.demo;
       candidatos = resultado.demo ? pessoasChaveDemo() : resultado.itens.map((item) => ({ ...pessoaDoResultado(item), linkedin: item.url }));
     } catch (err) {
+      propagarTeto(err);
       console.error("Falha ao buscar pessoas-chave de", conta.nome, err instanceof Error ? err.message : err);
       candidatos = [];
     }
@@ -497,10 +510,11 @@ async function buscarPessoasOportunidadesEmpresas(prospeccaoId: string, produtoI
       candidatos = pessoasChaveDemo();
     } else {
       try {
-        const resultado = await buscarNaWeb(`site:linkedin.com/in "${conta.nome}" (diretor OR gerente OR head OR coordenador)`);
+        const resultado = await buscarNaWeb(`site:linkedin.com/in "${conta.nome}" (diretor OR gerente OR head OR coordenador)`, 0, prospeccaoId);
         demo = resultado.demo;
         candidatos = resultado.demo ? pessoasChaveDemo() : resultado.itens.map((item) => ({ ...pessoaDoResultado(item), linkedin: item.url }));
       } catch (err) {
+        propagarTeto(err);
         console.error("Falha ao buscar pessoas-chave de uma oportunidade:", conta.nome, err instanceof Error ? err.message : err);
         candidatos = [];
       }
@@ -544,8 +558,9 @@ async function buscarPessoasOportunidadesB2C(prospeccaoId: string, criterios: Re
   const consulta = ["site:linkedin.com/in", recorte, ...sinaisAlvo].filter(Boolean).join(" ");
   let resultado;
   try {
-    resultado = await buscarNaWeb(consulta);
+    resultado = await buscarNaWeb(consulta, 0, prospeccaoId);
   } catch (err) {
+    propagarTeto(err);
     console.error("Falha na busca pública de oportunidades (B2C):", err instanceof Error ? err.message : err);
     return;
   }
@@ -572,8 +587,9 @@ async function buscarPessoasOportunidadesB2C(prospeccaoId: string, criterios: Re
     } else {
       let perfil;
       try {
-        perfil = await perfilDePessoa(candidato.linkedin);
+        perfil = await perfilDePessoa(candidato.linkedin, prospeccaoId);
       } catch (err) {
+        propagarTeto(err);
         console.error("Falha ao ler perfil público de uma pessoa (oportunidades B2C):", candidato.linkedin, err instanceof Error ? err.message : err);
         continue;
       }
@@ -628,8 +644,9 @@ async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, 
   const consulta = ["site:linkedin.com/in", ocupacao, localizacao, ...interesses].filter(Boolean).join(" ");
   let resultado;
   try {
-    resultado = await buscarNaWeb(consulta);
+    resultado = await buscarNaWeb(consulta, 0, prospeccaoId);
   } catch (err) {
+    propagarTeto(err);
     console.error("Falha na busca pública de pessoas (B2C):", err instanceof Error ? err.message : err);
     return;
   }
@@ -655,8 +672,9 @@ async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, 
     } else {
       let perfil;
       try {
-        perfil = await perfilDePessoa(candidato.linkedin);
+        perfil = await perfilDePessoa(candidato.linkedin, prospeccaoId);
       } catch (err) {
+        propagarTeto(err);
         console.error("Falha ao ler perfil público de uma pessoa (pessoas B2C):", candidato.linkedin, err instanceof Error ? err.message : err);
         continue;
       }
@@ -724,12 +742,13 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
     let demo = demoForcado;
     if (site) {
       try {
-        const pagina = await lerPagina(site);
+        const pagina = await lerPagina(site, prospeccaoId);
         demo = demo || pagina.demo;
         const conteudo = pagina.demo ? conteudoDemoDaCandidata(0, empresaOuSegmento, "", localizacao, sinaisAlvo[0]) : pagina.conteudo;
         evidencias = avaliarCriterios(conteudo, [{ criterio: "Segmento", valor: empresaOuSegmento }, { criterio: "Localização", valor: localizacao }]);
         sinais = sinaisEncontrados(conteudo, sinaisAlvo, pagina.origem, pagina.consultadoEm);
       } catch (err) {
+        propagarTeto(err);
         console.error("Falha ao ler página institucional para qualificar", nome, err instanceof Error ? err.message : err);
       }
     }
@@ -771,8 +790,9 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
   const consulta = ["site:linkedin.com/in", cargo, empresaOuSegmento, localizacao].filter(Boolean).join(" ");
   let resultado;
   try {
-    resultado = await buscarNaWeb(consulta);
+    resultado = await buscarNaWeb(consulta, 0, prospeccaoId);
   } catch (err) {
+    propagarTeto(err);
     console.error("Falha na busca pública de pessoas:", err instanceof Error ? err.message : err);
     return;
   }
@@ -881,6 +901,16 @@ async function executarPipeline(prospeccaoId: string): Promise<void> {
   } catch (err) {
     console.error("Falha ao executar a prospecção", prospeccaoId, err);
     if (foiCancelada(prospeccaoId)) return;
+    // Teto de consultas (US-023) não é uma falha de serviço: a prospecção termina "pronta" com o
+    // aviso de orçamento, e não com a mensagem genérica de etapa interrompida.
+    if (err instanceof TetoConsultasAtingido) {
+      atualizarProspeccao(prospeccaoId, {
+        estado: "pronta",
+        erro: `Paramos em ${err.teto} empresas para não consumir sua cota.`,
+        concluidoEm: new Date().toISOString(),
+      });
+      return;
+    }
     atualizarProspeccao(prospeccaoId, {
       estado: "pronta",
       erro: `Não foi possível concluir a etapa "${rotuloEtapaAtual}"; os resultados encontrados até aqui foram mantidos.`,

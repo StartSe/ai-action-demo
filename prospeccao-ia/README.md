@@ -45,8 +45,9 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `APOLLO_API_KEY` | Alternativa ao setup. Ativa a busca de leads reais na Apollo.io. Obtenha em https://app.apollo.io/#/settings/integrations/api |
 | `BRIGHTDATA_API_KEY` | Alternativa ao setup. Ativa a pesquisa de mercado e sinais (busca na web, leitura de página, perfil de pessoa) usada pelo workspace de prospecção, e o enriquecimento do site do lead na abordagem. Obtenha em https://brightdata.com/cp/zones |
 | `BRIGHTDATA_ZONE` | Alternativa ao setup. Nome da zona Web Unlocker (leitura de página) configurada na Bright Data. Padrão `web_unlocker1`. |
-| `BRIGHTDATA_ZONE_LEITURA` | Ainda sem campo em `/setup` (chega numa história futura); quando definida, tem prioridade sobre `BRIGHTDATA_ZONE` para leitura de página e perfil de pessoa. |
-| `BRIGHTDATA_ZONE_BUSCA` | Ainda sem campo em `/setup` (chega numa história futura). Nome da zona SERP usada pela busca na web do workspace de prospecção. |
+| `BRIGHTDATA_ZONE_LEITURA` | Campo "Zona de leitura" em Opções avançadas (padrão `web_unlocker1`); quando definida, tem prioridade sobre `BRIGHTDATA_ZONE` para leitura de página e perfil de pessoa. |
+| `BRIGHTDATA_ZONE_BUSCA` | Campo "Zona de busca" em Opções avançadas (padrão `serp_api1`). Nome da zona SERP usada pela busca na web do workspace de prospecção. |
+| `BRIGHTDATA_TETO_CONSULTAS` | Campo "Teto de consultas por prospecção" em Opções avançadas (padrão 60). Quantas buscas e leituras reais uma prospecção pode fazer antes de parar e terminar "pronta" com o aviso de orçamento; páginas já lidas nas últimas 24h são reaproveitadas do cache e não contam. |
 | `BRIGHTDATA_BASE_URL` | Só para testes locais: substitui `https://api.brightdata.com` por um fornecedor falso. Não aparece em `/setup`. |
 | `MCP_CRM_URL` / `MCP_CRM_CODIGO` | Alternativa ao setup. CRM (HubSpot, Zendesk, Intercom...) que recebe os leads aprovados como contatos e negócios. |
 | `GOOGLE_CLIENT_ID_APP`, `GOOGLE_CLIENT_SECRET_APP`, `MICROSOFT_CLIENT_ID_APP`, `MICROSOFT_CLIENT_SECRET_APP` | Credenciais da suíte (equipe técnica, embutidas na imagem por `ARG`→`ENV` no `Dockerfile`) que liberam "Conectar meu Gmail"/"Conectar meu Outlook" no cartão Notificações. Sem elas, os botões não aparecem e o cartão segue por Slack, Resend ou SMTP. |
