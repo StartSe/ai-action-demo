@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { Aviso, Chip, Topbar, useConfirmacao, useStatus, lerErro } from "@/components/ui";
 import { ExploracaoEmpresa } from "@/components/ExploracaoEmpresa";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
-import { ROTULO_MODO } from "@/lib/rotulos";
+import { ROTULO_MODO, ROTULO_PAPEL } from "@/lib/rotulos";
 import { ETAPAS_PROSPECCAO } from "@/lib/execucao-etapas";
 import type { Conta, LeadProspeccao, Prospeccao } from "@/lib/types";
 
@@ -268,6 +268,42 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                       ))
                     )}
                     {erroVerPessoas && <Aviso tom="danger">{erroVerPessoas}</Aviso>}
+                  </div>
+                )}
+
+                {andamento.prospeccao.modo === "pessoas" && (
+                  <div className="flex flex-col gap-2.5 mb-1">
+                    {andamento.leads.length === 0 ? (
+                      <Aviso tom="warn">Nenhuma pessoa encontrada com esses critérios.</Aviso>
+                    ) : (
+                      andamento.leads.map((lead) => {
+                        const rotuloPapel = ROTULO_PAPEL[lead.papel];
+                        return (
+                          <div key={lead.id} className="card p-4 flex flex-col gap-1.5">
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="font-semibold text-[14px]">{lead.nome}</p>
+                                  {rotuloPapel && <Chip nivel="neutral">{rotuloPapel}</Chip>}
+                                </div>
+                                <p className="text-[13px] text-muted">
+                                  {[lead.cargo, lead.empresa, lead.cidade].filter(Boolean).join(" · ") || "Dados não identificados"}
+                                </p>
+                              </div>
+                              {lead.fit && <Chip nivel={lead.fit} />}
+                            </div>
+                            <div className="flex items-center gap-3 flex-wrap">
+                              {lead.linkedin && (
+                                <a href={lead.linkedin} target="_blank" rel="noopener noreferrer" className="text-[12px] text-accent-ink hover:underline">
+                                  Ver perfil
+                                </a>
+                              )}
+                              {lead.fonte && <span className="text-[12px] text-muted">{lead.fonte}</span>}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 )}
 
