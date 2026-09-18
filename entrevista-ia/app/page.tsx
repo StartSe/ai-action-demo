@@ -10,8 +10,9 @@
 //
 // Os números vêm todos de `GET /api/inicio`, que é cálculo puro sobre o que já está gravado
 // (`lib/inicio.ts`) — nenhuma chamada de IA nasce ao abrir o app.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AvisoExemplo } from "@/components/AvisoExemplo";
 import { Chip, IlustracaoSegmento, Item, Topbar, numero, useStatus } from "@/components/ui";
 import type { Inicio, PendenciaInicio, VagaAbertaInicio } from "@/lib/inicio";
@@ -156,15 +157,44 @@ function ComeceEm3Passos({ passos }: { passos: Inicio["passos"] }) {
 
 export default function Page() {
   const { status, erro } = useStatus();
+  const router = useRouter();
   const [inicio, setInicio] = useState<Inicio | null>(null);
+  const atalhoUsado = useRef(false);
+
+  function recarregarInicio() {
+    return fetch("/api/inicio")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c: Inicio | null) => setInicio(c))
+      .catch(() => setInicio(null));
+  }
+
+  // O atalho `/?exemplo=1` da suíte (US-025 da PRD): o botão "Testar com um exemplo" de Configurações
+  // e a captura do catálogo. Ele garante que a demonstração está semeada mesmo quando a marca de "já
+  // semeei" já foi gravada (ou a IA está conectada) — o servidor é que decide, e recusa se já houver
+  // dado de verdade. Com `captura=1` a tela que abre é a da vaga de exemplo, que mostra o app cheio
+  // (vaga, candidatos e notas) numa dobra só; é essa a imagem do catálogo.
+  //
+  // A busca do Início só sai depois, para a tela não piscar os quatro zeros antes da semeadura chegar.
+  useEffect(() => {
+    if (atalhoUsado.current) return;
+    const busca = new URLSearchParams(location.search);
+    if (busca.get("exemplo") !== "1") return;
+    atalhoUsado.current = true;
+    const captura = busca.get("captura") === "1";
+    fetch("/api/exemplo", { method: "POST" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c: { vagaId: string | null } | null) => {
+        if (captura && c?.vagaId) router.replace(`/vagas/${c.vagaId}?captura=1`);
+        else return recarregarInicio();
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma única vez ao abrir a página
+  }, []);
 
   // Busca inicial em forma de corrente: a regra react-hooks/set-state-in-effect acusa a chamada direta
   // a uma função que mexe em estado no corpo do efeito, mesmo sendo assíncrona.
   useEffect(() => {
-    fetch("/api/inicio")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((c: Inicio | null) => setInicio(c))
-      .catch(() => setInicio(null));
+    recarregarInicio().catch(() => setInicio(null));
   }, []);
 
   const vazio = inicio?.vazio ?? true;

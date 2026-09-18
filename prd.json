@@ -503,7 +503,7 @@
         "Typecheck passes"
       ],
       "priority": 28,
-      "passes": false,
+      "passes": true,
       "notes": "Fase 5: relatórios, integrações e fechamento · PRD US-025"
     }
   ]

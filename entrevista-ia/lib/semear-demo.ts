@@ -530,6 +530,9 @@ function avaliarEntrevistaSemeada(e: EntrevistaDeExemplo): void {
   banco().prepare("UPDATE entrevistas SET resultadoId = ?, parecerStatus = 'pronto' WHERE id = ?").run(id, e.id);
 }
 
+/** O id da vaga de exemplo, para quem precisa abrir a tela dela (o atalho `?exemplo=1`). */
+export const ID_VAGA_EXEMPLO = VAGA_ID;
+
 /**
  * Semeia a demonstração, uma vez por instalação. Não lança: um app que não abre a lista porque o
  * exemplo falhou é pior que uma lista vazia.
@@ -537,11 +540,16 @@ function avaliarEntrevistaSemeada(e: EntrevistaDeExemplo): void {
  * Chamada na primeira leitura de qualquer lista (`lib/vagas.ts`, `lib/candidatos.ts`,
  * `lib/entrevistas.ts`), e não na subida do servidor: assim quem apagou os dados de exemplo não os vê
  * voltar, e quem nunca abre as telas novas não paga nada por elas.
+ *
+ * `forcar` é o atalho `?exemplo=1` da suíte (o botão "Testar com um exemplo" de Configurações e a
+ * captura do catálogo): aí quem pediu o exemplo foi uma PESSOA, então nem a marca de "já semeei" nem
+ * a IA conectada valem como recusa. O banco virgem continua valendo para todo mundo — exemplo nunca
+ * entra numa instalação que já tem vaga, candidato ou entrevista de verdade.
  */
-export function semearDemonstracao(): void {
+export function semearDemonstracao(forcar = false): void {
   try {
-    if (getConfig(CHAVE_SEMEADURA)) return;
-    if (aiEnabled()) {
+    if (!forcar && getConfig(CHAVE_SEMEADURA)) return;
+    if (!forcar && aiEnabled()) {
       // Com a IA conectada não há demonstração a fazer, e a marca evita reconsiderar isso a cada
       // leitura de lista pelo resto da vida da instalação.
       setConfig(CHAVE_SEMEADURA, agora());
