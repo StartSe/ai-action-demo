@@ -1,0 +1,13 @@
+# Sobe só este app: docker compose up --build  (http://localhost:3021)
+# Nenhuma variável é obrigatória: abra /setup no navegador para conectar a IA.
+services:
+  briefing-de-campanha:
+    build: .
+    ports:
+      - "3021:10000"
+    volumes:
+      - dados:/app/data
+    restart: unless-stopped
+
+volumes:
+  dados:

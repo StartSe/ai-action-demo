@@ -17,7 +17,8 @@ const svg = (app) => `<svg width="32" height="32" viewBox="0 0 32 32" xmlns="htt
 </svg>
 `;
 
-for (const app of cat.apps) {
+// Apps com "padrao": "proprio" (ex.: automl-pocket) têm estrutura própria — sem app/icon.svg.
+for (const app of cat.apps.filter((a) => a.padrao !== "proprio")) {
   const destino = join(raiz, app.id, "app", "icon.svg");
   writeFileSync(destino, svg(app));
   console.log(`Gerado ${app.id}/app/icon.svg`);

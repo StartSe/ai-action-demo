@@ -219,5 +219,18 @@
       44
     ],
     "contrasteBranco": 5.46
+  },
+  "briefing-de-campanha": {
+    "segmento": "Marketing",
+    "acento": "#6b2406",
+    "acento2": "#ae6c09",
+    "soft": "#f9ece7",
+    "ink": "#5e2208",
+    "hsl": [
+      18,
+      90,
+      22
+    ],
+    "contrasteBranco": 11.17
   }
 }
