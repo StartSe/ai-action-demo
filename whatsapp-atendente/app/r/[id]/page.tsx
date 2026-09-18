@@ -3,7 +3,7 @@ import { Topbar } from "@/components/ui";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
 import type { AtendimentoSaida, RelatorioAtendimentoSaida } from "@/lib/types";
-import { Resultado, ResultadoRelatorio } from "../../page";
+import { Resultado, ResultadoRelatorio } from "@/components/Resultado";
 
 const TIPOS_VALIDOS = ["atendimento", "relatorio-atendimento"];
 

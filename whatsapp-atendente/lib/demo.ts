@@ -1,7 +1,8 @@
 // Configuração de exemplo (para o app já funcionar ao abrir, sem nenhuma chave configurada) e
 // resposta local sem IA: uma busca simples na base de conhecimento, reformulada no tom configurado
 // em vez de devolver o trecho da base copiado ao pé da letra.
-import type { Config, Tom } from "./types";
+import { ASSUNTO_OUTROS, assuntosDoObjetivo, semAcento } from "./assuntos";
+import type { Config, Objetivo, PapelMensagem, StatusConversa, Tom } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
@@ -18,10 +19,7 @@ const STOPWORDS = new Set(
 );
 
 function normalizar(texto: string): string[] {
-  return String(texto || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
+  return semAcento(texto)
     .replace(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
     .filter((t) => t.length > 2 && !STOPWORDS.has(t));
@@ -49,9 +47,9 @@ function trechos(base: string): string[] {
 
 function prefixoTom(tom: Tom): string {
   switch (tom) {
-    case "direto":
+    case "profissional":
       return "";
-    case "descontraido":
+    case "personalizado":
       return "Boa pergunta! ";
     default:
       return "Claro! ";
@@ -114,10 +112,79 @@ export function respostaLocal(texto: string, config: Config): { resposta: string
   return { resposta: reformular(melhor, config.tom), transferir: false };
 }
 
+// --- Assunto da conversa sem IA ---------------------------------------------------------------
+// A mesma ideia da resposta local: com a chave da IA configurada quem separa por assunto é
+// lib/atendente.ts:classificarConversa; sem ela, estas palavras. A lista de assuntos vem de
+// lib/assuntos.ts, derivada do objetivo escolhido em Configurações.
+
+/**
+ * O que costuma aparecer na mensagem de quem está falando de cada assunto, sem acento e em
+ * minúsculas (é assim que o texto do cliente chega para a comparação). Cada palavra é procurada no
+ * COMEÇO de uma palavra da mensagem, e o fim dela fica solto de propósito: "parcel" cobre parcelar,
+ * parcelado e parcelamento, e "marcar" não casa dentro de "remarcar". Assuntos de objetivos
+ * diferentes convivem aqui; só entram na conta os que estiverem na lista do objetivo escolhido.
+ */
+const PALAVRAS_DO_ASSUNTO: Record<string, string[]> = {
+  Preços: ["preco", "quanto custa", "quanto fica", "quanto sai", "quanto voces cobram", "cobram", "custa", "custo", "valor", "orcamento", "reais"],
+  "Horário de atendimento": [
+    "horario de atendimento",
+    "horario de funcionamento",
+    "que horas",
+    "abre",
+    "abrem",
+    "fecha",
+    "fecham",
+    "aberto",
+    "funcionam",
+    "sabado",
+    "domingo",
+    "feriado",
+    "plantao",
+  ],
+  "Produtos e serviços": ["servico", "produto", "voces fazem", "fazem ", "faz ", "oferecem", "vendem", "trabalham com", "tratamento", "modelo", "tamanho", "como funciona"],
+  "Localização e contato": ["endereco", "onde fica", "onde voces", "localiza", "como chego", "como chegar", "estacionamento", "bairro", "rua ", "telefone", "mail", "mapa"],
+  Reclamações: ["reclama", "problema", "defeito", "insatisfeit", "pessimo", "nao funciona", "nao chegou", "atraso", "demora", "quero meu dinheiro", "doendo", "mal atendid"],
+  "Formas de pagamento": ["pagamento", "pagar", "parcel", "cartao", "pix", "boleto", "dinheiro", "convenio", "debito", "credito", "a vista", "juros"],
+  Promoções: ["promoc", "desconto", "oferta", "cupom", "liquidacao", "black friday", "combo", "condicao especial"],
+  Agendamentos: ["agendar", "agendamento", "marcar", "tem horario", "horario para", "disponibilidade", "encaixe", "vaga", "reservar"],
+  Remarcações: ["remarcar", "remarcac", "desmarcar", "adiar", "mudar o horario", "trocar o horario", "cancelar a consulta", "cancelar o horario"],
+};
+
+/**
+ * O assunto da conversa sem IA: ganha o assunto cujas palavras mais aparecem nas mensagens do
+ * cliente, e só quem não tem nenhuma palavra em comum cai em "Outros". Empate fica com o primeiro
+ * da lista, que é o assunto mais comum.
+ */
+export function classificarLocal(textos: string[], objetivo: Objetivo): string {
+  // Pontuação vira espaço e a frase inteira ganha espaço nas pontas: assim procurar " marcar"
+  // encontra a palavra no começo dela, e não no meio de "remarcar".
+  const texto = ` ${semAcento(textos.join(" ")).replace(/[^a-z0-9]+/g, " ")} `;
+  let melhor = ASSUNTO_OUTROS;
+  let melhorScore = 0;
+  for (const assunto of assuntosDoObjetivo(objetivo)) {
+    let score = 0;
+    for (const palavra of PALAVRAS_DO_ASSUNTO[assunto] ?? []) if (texto.includes(` ${palavra}`)) score++;
+    if (score > melhorScore) {
+      melhorScore = score;
+      melhor = assunto;
+    }
+  }
+  return melhor;
+}
+
+/**
+ * Perguntas de cliente que o app oferece como atalho: uma que a base responde (preço), uma sobre
+ * horário e uma de propósito fora do que a clínica faz, para mostrar o que acontece quando o
+ * atendente não sabe. Ficam aqui, e não na tela, porque o Assistente usa a primeira na prévia do
+ * passo 1 e as três como botões no passo 2.
+ */
+export const SUGESTOES = ["Quanto custa o clareamento dental?", "Vocês atendem aos sábados?", "Fazem cirurgia cardíaca?"];
+
 export const configExemplo: Config = {
   negocio: "Sorriso Pleno Odontologia",
   atendente: "Bia",
-  tom: "cordial",
+  objetivo: "atendimento",
+  tom: "profissional",
   horario: "segunda a sexta, das 8h às 18h, e aos sábados das 8h ao meio-dia",
   naoSei: "humano",
   baseConhecimento: `Sobre a clínica: a Sorriso Pleno Odontologia fica na Rua das Flores, 120, no Jardim América, em São Paulo. Atendemos há 12 anos com foco em odontologia geral, estética e ortodontia.
@@ -148,3 +215,191 @@ Perguntas frequentes:
 - Posso levar meu filho? Sim, atendemos odontopediatria a partir dos 2 anos de idade.
 - Fazem clareamento em quem tem restauração? Depende do caso, é avaliado na consulta inicial.`,
 };
+
+// --- Conversas de exemplo (modo demonstração) -------------------------------------------------
+// Sem número da empresa conectado e sem nenhuma conversa real, o app se abre com estas nove
+// conversas, gravadas uma única vez (lib/conversas.ts:semearExemplosSeVazio). Elas são apagadas
+// sozinhas na primeira mensagem real do WhatsApp, e à mão pelo link do cartão em Configurações.
+// São da mesma clínica de `configExemplo`, para as respostas combinarem com a base de conhecimento.
+
+export const AVISO_CONVERSAS_EXEMPLO = "Você está vendo conversas de exemplo. Conecte o número da empresa para ver as reais.";
+
+/**
+ * Mesmo aviso depois que o número já está conectado: a demonstração continua na tela até o primeiro
+ * cliente escrever (é a primeira mensagem real que apaga os exemplos, ver semearExemplosSeVazio), e sem
+ * esta frase o app parecia não ter saído da demonstração mesmo com o número ligado.
+ */
+export const AVISO_CONVERSAS_EXEMPLO_CONECTADO =
+  "O número da empresa já está conectado. Estas conversas ainda são de exemplo: elas somem sozinhas quando o primeiro cliente escrever, ou você pode apagá-las agora.";
+
+/** Ação dos avisos de modo demonstração: onde a pessoa conecta o número da empresa. */
+export const ACAO_CONECTAR_NUMERO = { rotulo: "Conectar o número da empresa", url: "/setup#whatsapp" };
+
+/** Rótulo e pergunta de confirmação de quem apaga a demonstração pela própria tela (o mesmo que o link do cartão do WhatsApp em Configurações faz). */
+export const ROTULO_APAGAR_EXEMPLOS = "Apagar as conversas de exemplo";
+export const CONFIRMAR_APAGAR_EXEMPLOS = "Apagar as conversas de exemplo? Elas não voltam, e as telas ficam vazias até o primeiro cliente escrever.";
+
+export interface MensagemExemplo {
+  papel: PapelMensagem;
+  texto: string;
+  /** Quantos minutos antes de "agora" a mensagem chegou: é o que espalha as conversas pelos últimos 7 dias. */
+  atras: number;
+  /**
+   * Quanto o atendente levou para escrever esta resposta, em milissegundos (só nas respostas). É o que
+   * alimenta o "tempo médio de resposta" de lib/metricas.ts no modo demonstração: `atras` é contado em
+   * minutos e não daria para expressar os poucos segundos que a IA leva. A resposta escrita por uma
+   * pessoa leva minutos, de propósito.
+   */
+  respostaMs?: number;
+}
+
+export interface ConversaExemplo {
+  numero: string;
+  nome: string;
+  /** Status gravado. Uma conversa `ia` parada há mais de 24 h é LIDA como resolvida (lib/conversas.ts). */
+  status: StatusConversa;
+  assunto: string;
+  naoLidas?: number;
+  mensagens: MensagemExemplo[];
+}
+
+const HORA = 60;
+const DIA = 24 * HORA;
+
+/**
+ * As nove conversas de exemplo, da mais recente para a mais antiga. Seis ficam gravadas como `ia`:
+ * cinco com mensagem do cliente nas últimas 24 h (aparecem como "Atendida pela IA") e a da Camila
+ * Souza parada há três dias, que a leitura mostra como "Resolvida". As outras três são duas
+ * "Precisa de atenção" e uma "Em atendimento humano", com uma mensagem ainda não lida.
+ */
+export function conversasExemplo(): ConversaExemplo[] {
+  return [
+    {
+      numero: "5511988761234",
+      nome: "Mariana Costa",
+      status: "ia",
+      assunto: "Agendamentos",
+      mensagens: [
+        { papel: "cliente", texto: "Oi! Vocês têm horário para limpeza esta semana?", atras: 50 },
+        { papel: "atendente", texto: "Claro! Temos quinta às 9h e sexta às 14h. Qual fica melhor para você?", atras: 49, respostaMs: 2400 },
+        { papel: "cliente", texto: "Quinta às 9h está ótimo.", atras: 46 },
+        { papel: "atendente", texto: "Perfeito, Mariana. Anotei quinta às 9h para a limpeza. Se precisar mudar, avise com pelo menos 4 horas de antecedência.", atras: 45, respostaMs: 3100 },
+      ],
+    },
+    {
+      numero: "5511991234567",
+      nome: "Ana Paula",
+      status: "humano",
+      assunto: "Tratamentos",
+      naoLidas: 1,
+      mensagens: [
+        { papel: "cliente", texto: "Fiz um implante em outra clínica e está doendo. Vocês avaliam?", atras: 1 * DIA + 2 * HORA },
+        { papel: "atendente", texto: "Sinto muito, Ana Paula. Avaliamos sim: a consulta de avaliação custa R$ 120 e fica gratuita para quem fechar tratamento.", atras: 1 * DIA + 2 * HORA - 1, respostaMs: 4200 },
+        { papel: "cliente", texto: "Consigo hoje? A dor aumentou à noite.", atras: 4 * HORA },
+        { papel: "humano", texto: "Oi, Ana Paula, aqui é a recepção. Consigo te encaixar hoje às 17h30 com a Dra. Helena.", atras: 3 * HORA, respostaMs: 480000 },
+        { papel: "cliente", texto: "Perfeito, obrigada! Vou levar a radiografia que fiz na outra clínica.", atras: 2 * HORA },
+      ],
+    },
+    {
+      numero: "5511987654321",
+      nome: "Carlos Menezes",
+      status: "atencao",
+      assunto: "Preços",
+      mensagens: [
+        { papel: "cliente", texto: "Bom dia! Quanto custa o clareamento?", atras: 3 * DIA },
+        { papel: "atendente", texto: "Bom dia! O clareamento dental a laser sai por R$ 900, em 3 sessões.", atras: 3 * DIA - 1, respostaMs: 2800 },
+        { papel: "cliente", texto: "E dá para parcelar em 10 vezes no boleto?", atras: 3 * HORA + 10 },
+        {
+          papel: "atendente",
+          texto: "Essa pergunta é melhor respondida por alguém da equipe. Já vou encaminhar para um atendente humano falar com você (segunda a sexta, das 8h às 18h).",
+          atras: 3 * HORA,
+          respostaMs: 5200,
+        },
+      ],
+    },
+    {
+      numero: "5511996543210",
+      nome: "Ricardo Lima",
+      status: "ia",
+      assunto: "Horário de atendimento",
+      mensagens: [
+        { papel: "cliente", texto: "Vocês abrem no sábado?", atras: 6 * HORA + 2 },
+        { papel: "atendente", texto: "Sim! Aos sábados atendemos das 8h ao meio-dia.", atras: 6 * HORA, respostaMs: 3500 },
+      ],
+    },
+    {
+      numero: "5511993456789",
+      nome: "Fernanda Alves",
+      status: "ia",
+      assunto: "Agendamentos",
+      mensagens: [
+        { papel: "cliente", texto: "Oi, preciso remarcar minha consulta de terça.", atras: 5 * DIA },
+        { papel: "atendente", texto: "Sem problema, Fernanda. Consigo remarcar para quinta às 10h ou sexta às 16h.", atras: 5 * DIA - 2, respostaMs: 2600 },
+        { papel: "cliente", texto: "Pode ser sexta às 16h.", atras: 13 * HORA },
+        { papel: "atendente", texto: "Combinado. Sua consulta ficou para sexta às 16h.", atras: 12 * HORA, respostaMs: 4800 },
+      ],
+    },
+    {
+      numero: "5511992345678",
+      nome: "João Pedro",
+      status: "ia",
+      assunto: "Preços",
+      mensagens: [
+        { papel: "cliente", texto: "Quanto fica o aparelho invisível?", atras: 20 * HORA + 6 },
+        { papel: "atendente", texto: "O aparelho invisível começa em R$ 6.500, parcelado em até 12x sem juros.", atras: 20 * HORA + 5, respostaMs: 3900 },
+        { papel: "cliente", texto: "Precisa de avaliação antes?", atras: 20 * HORA + 1 },
+        { papel: "atendente", texto: "Precisa sim: a avaliação inicial custa R$ 120 e fica gratuita para quem fechar tratamento.", atras: 20 * HORA, respostaMs: 3300 },
+      ],
+    },
+    {
+      numero: "5511995678901",
+      nome: "Eduardo Santos",
+      status: "ia",
+      assunto: "Outros",
+      mensagens: [
+        { papel: "cliente", texto: "Tem estacionamento aí?", atras: 22 * HORA + 3 },
+        { papel: "atendente", texto: "Tem sim: no prédio ao lado, conveniado, com desconto para pacientes.", atras: 22 * HORA, respostaMs: 2400 },
+      ],
+    },
+    {
+      numero: "5511994567890",
+      nome: "Luciana Ferraz",
+      status: "atencao",
+      assunto: "Tratamentos",
+      mensagens: [
+        { papel: "cliente", texto: "Faço clareamento tendo restauração na frente?", atras: 2 * DIA + 5 * HORA },
+        { papel: "atendente", texto: "Depende do caso: isso é avaliado na consulta inicial.", atras: 2 * DIA + 5 * HORA - 1, respostaMs: 3100 },
+        { papel: "cliente", texto: "E se a restauração for de porcelana? Meu dentista antigo disse que mancha.", atras: 2 * DIA + 3 * HORA },
+        {
+          papel: "atendente",
+          texto: "Essa pergunta é melhor respondida por alguém da equipe. Já vou encaminhar para um atendente humano falar com você (segunda a sexta, das 8h às 18h).",
+          atras: 2 * DIA + 3 * HORA - 1,
+          respostaMs: 4200,
+        },
+      ],
+    },
+    {
+      numero: "5511997654321",
+      nome: "Camila Souza",
+      status: "ia",
+      assunto: "Agendamentos",
+      mensagens: [
+        { papel: "cliente", texto: "Boa tarde! Meu filho tem 4 anos, vocês atendem crianças?", atras: 6 * DIA },
+        { papel: "atendente", texto: "Boa tarde! Atendemos odontopediatria a partir dos 2 anos de idade.", atras: 6 * DIA - 2, respostaMs: 2800 },
+        { papel: "cliente", texto: "Ótimo. Consigo marcar para a terça da semana que vem?", atras: 3 * DIA + 40 },
+        { papel: "atendente", texto: "Consigo sim: terça às 15h com a odontopediatra. Posso confirmar?", atras: 3 * DIA + 39, respostaMs: 5200 },
+        { papel: "cliente", texto: "Obrigado pelo atendimento!", atras: 3 * DIA + 35 },
+        { papel: "atendente", texto: "Nós que agradecemos, Camila. Até terça!", atras: 3 * DIA + 34, respostaMs: 3500 },
+      ],
+    },
+  ];
+}
+
+/**
+ * true quando a lista tem só conversas de exemplo — é quando as telas mostram o aviso acima. Recebe
+ * qualquer lista com o campo `exemplo` (registros antigos de `/r/[id]` não têm o campo e contam como
+ * conversas reais, que é o que eram).
+ */
+export function soConversasDeExemplo(conversas: { exemplo?: boolean }[]): boolean {
+  return conversas.length > 0 && conversas.every((c) => c.exemplo === true);
+}

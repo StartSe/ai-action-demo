@@ -1,6 +1,6 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 import { randomBytes } from "node:crypto";
-import { MCP_EMPRESA, NOTIFICACOES, openrouter, type Integracao } from "./setup-comum";
+import { NOTIFICACOES, openrouter, type Integracao } from "./setup-comum";
 import { getConfig, setConfig } from "./store";
 import { conferirNumero } from "./whatsapp";
 
@@ -24,16 +24,39 @@ export const WHATSAPP: Integracao = {
   beneficio: "Faz o atendente responder clientes no número real da empresa",
   descricao:
     "Conecte o número real da empresa para o atendente responder clientes de verdade. Sem isso, o simulador (o celular na tela) continua funcionando normalmente para testar o atendente.",
-  // Resumo de negócio antes dos campos: o que a empresa precisa ter e quanto tempo isso costuma levar.
+  // Resumo de negócio antes dos campos: o que a empresa precisa ter antes de colar os valores.
   notaConexao:
-    "Você precisa de uma conta Meta Business com o WhatsApp Cloud API ativado e o número da empresa já verificado. Com a conta pronta, a equipe técnica leva cerca de 30 minutos para ligar o número a este app, usando os dados de \"Ligar o número na Meta\" logo abaixo.",
+    "A empresa precisa de uma conta na z-api e de uma instância criada lá (a z-api cobra um valor mensal por instância, direto com eles). Com a instância criada, conectar o número aqui é só colar os três valores abaixo e escanear um QR Code com o celular da empresa.",
   obrigatoria: false,
-  link: { url: "https://business.facebook.com/", rotulo: "Abrir a conta Meta Business" },
+  link: { url: "https://app.z-api.io", rotulo: "Abrir o painel da z-api" },
+  // Dois caminhos no mesmo cartão: a z-api (principal) e a Cloud API da Meta (avançado). Por isso a
+  // conexão não pode ser "todos os campos preenchidos" — basta a chave de um dos dois provedores.
+  campoConectado: ["ZAPI_TOKEN", "WHATSAPP_TOKEN"],
   campos: [
+    {
+      chave: "ZAPI_INSTANCE_ID",
+      rotulo: "Identificação da instância",
+      tipo: "text",
+      placeholder: "3D1A2B...",
+      ajuda: "No painel da z-api, em Instâncias, clique em editar a instância e copie o valor de \"ID\".",
+    },
+    {
+      chave: "ZAPI_TOKEN",
+      rotulo: "Chave da instância",
+      tipo: "secret",
+      ajuda: "Na mesma tela da instância no painel da z-api, logo abaixo, copie o valor de \"Token\".",
+    },
+    {
+      chave: "ZAPI_CLIENT_TOKEN",
+      rotulo: "Chave de segurança da conta",
+      tipo: "secret",
+      ajuda: "No painel da z-api, em Segurança, copie o token de segurança da conta (vale para todas as instâncias).",
+    },
     {
       chave: "WHATSAPP_TOKEN",
       rotulo: "Código de acesso permanente",
       tipo: "secret",
+      opcional: true,
       avancado: true,
       ajuda: "No painel da Meta, em Configurações do app › Usuários do sistema, gere um código permanente (que não expira) para o usuário de sistema com acesso ao WhatsApp.",
     },
@@ -41,6 +64,7 @@ export const WHATSAPP: Integracao = {
       chave: "WHATSAPP_PHONE_NUMBER_ID",
       rotulo: "Identificador do número",
       tipo: "text",
+      opcional: true,
       avancado: true,
       placeholder: "1234567890",
       ajuda: "No painel da Meta, em WhatsApp › Configuração da API, copie o número que aparece no bloco \"De\".",
@@ -50,21 +74,30 @@ export const WHATSAPP: Integracao = {
 };
 
 /**
- * Texto de negócio por cima da integração compartilhada (padrão da suíte: nunca editar
- * lib/setup-comum.ts para um app só). O título genérico carrega a sigla do protocolo, que não diz
- * nada para quem vai conectar — aqui o cartão fala do que o atendente ganha com a conexão.
+ * Integrações com cartão próprio em /setup: saem da lista genérica devolvida pelo `GET /api/setup` e
+ * continuam em `INTEGRACOES` para o `PUT`, para o botão de testar e para o `/api/status` (mesmo desenho
+ * que `custos-ia` usa com Gmail e Outlook). O WhatsApp está aqui porque `components/ConexaoWhatsApp.tsx`
+ * faz tudo o que o cartão genérico fazia — e mais: QR Code, estado da conexão, número conectado,
+ * "Desconectar" e o bloco da equipe técnica. Com os dois na tela, a mesma pessoa era convidada a colar
+ * as mesmas três credenciais duas vezes seguidas (achado aberto da US-020).
  */
-const SISTEMAS_DA_EMPRESA: Integracao = {
-  ...MCP_EMPRESA,
-  titulo: "Sistemas da empresa",
-  beneficio: "Deixa o atendente consultar pedidos e estoque antes de responder",
-  descricao:
-    "Conecte o sistema onde ficam pedidos, estoque ou cadastro de clientes (um ERP, um CRM, uma planilha compartilhada) para o atendente consultar dados reais em vez de responder só pela base de conhecimento.",
-  campos: MCP_EMPRESA.campos.map((c) =>
-    c.chave === "MCP_EMPRESA_URL"
-      ? { ...c, ajuda: "A equipe que cuida do seu ERP ou CRM tem esse endereço. Se o sistema for outro app desta suíte, ele aparece no cartão \"Usar dentro do seu assistente\" de lá." }
-      : c
-  ),
-};
+export const COM_CARTAO_PROPRIO: Integracao[] = [WHATSAPP];
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, WHATSAPP, NOTIFICACOES, SISTEMAS_DA_EMPRESA];
+// "Sistemas da empresa (MCP)" saiu de Configurações: conectar um ERP/CRM por MCP confundia quem só
+// quer o atendente respondendo no WhatsApp, e o cartão ficava entre dois outros que falam de conexão.
+// A capacidade continua em lib/empresa-mcp.ts e é ligada por variável de ambiente (MCP_EMPRESA_URL e
+// MCP_EMPRESA_CODIGO, lidas por getConfig), sem aparecer na tela.
+export const INTEGRACOES: Integracao[] = [OPENROUTER, WHATSAPP, NOTIFICACOES];
+
+/**
+ * Integrações que saem dos cartões numerados de /setup e vão para um bloco recolhido no fim da página.
+ * Elas continuam inteiras (mesmo cartão, mesmos campos, mesmo "Salvar") — só deixam de disputar a
+ * atenção de quem chegou para fazer uma coisa: pôr o atendente no ar. Avisos por e-mail ou Slack são um
+ * ajuste de quem já está rodando, não um passo da configuração inicial.
+ */
+export const SECUNDARIAS: Integracao[] = [NOTIFICACOES];
+
+/** O que o cartão genérico de /setup desenha em destaque: tudo menos quem tem cartão próprio ou é secundária. */
+export const GENERICAS: Integracao[] = INTEGRACOES.filter(
+  (i) => !COM_CARTAO_PROPRIO.some((p) => p.id === i.id) && !SECUNDARIAS.some((p) => p.id === i.id)
+);

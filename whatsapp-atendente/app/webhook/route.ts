@@ -1,7 +1,7 @@
 // Webhook da WhatsApp Cloud API (Meta): verificação (GET) e recebimento de mensagens (POST).
 // Rota pública em proxy.ts: quem chama é a Meta, sem cookie de sessão; a autenticação é o valor de
 // verificação gerado por este app e cadastrado no painel da Meta.
-import { responder } from "@/lib/atendente";
+import { classificarEmSegundoPlano, responder } from "@/lib/atendente";
 import { getConfig } from "@/lib/store";
 import { enviarMensagem, ErroWhatsApp, registrarFalhaEnvio, registrarRecebida } from "@/lib/whatsapp";
 
@@ -58,6 +58,8 @@ async function processarWebhook(body: CorpoWebhook) {
         // cartão de diagnóstico precisa saber, mesmo que a resposta falhe logo depois.
         registrarRecebida(de);
         const { resposta } = await responder({ numero: de, texto, origem: "whatsapp" });
+        // Conversa assumida por uma pessoa: a mensagem foi guardada, mas quem responde é ela.
+        if (!resposta) continue;
         try {
           await enviarMensagem(de, resposta);
         } catch (err) {
@@ -67,6 +69,8 @@ async function processarWebhook(body: CorpoWebhook) {
           if (!(err instanceof ErroWhatsApp)) console.error("Falha inesperada ao responder pelo WhatsApp:", err);
           registrarFalhaEnvio(mensagem);
         }
+        // Depois de a resposta sair: o assunto da conversa, para os relatórios (lib/atendente.ts).
+        classificarEmSegundoPlano(de);
       }
     }
   }

@@ -112,9 +112,9 @@
         "Atendimento",
         "Vendas"
       ],
-      "problema": "Perguntas repetidas chegam fora do horário e ficam sem resposta.",
-      "ia": "Responde com base no conhecimento da empresa e transfere para uma pessoa quando não sabe.",
-      "integracoes": "WhatsApp Cloud API (Meta) via webhook.",
+      "problema": "Perguntas repetidas chegam fora do horário e ninguém acompanha o que foi respondido.",
+      "ia": "Responde com o conhecimento da empresa, avisa quando o cliente precisa de uma pessoa e mostra o dia em números.",
+      "integracoes": "WhatsApp por QR Code (z-api) ou WhatsApp Cloud API (Meta).",
       "acento": "#0e7c6a",
       "porta": 3006,
       "captura": "capturas/whatsapp-atendente.png",
@@ -124,7 +124,12 @@
         "formulario",
         "rotina"
       ],
-      "demo": null
+      "demo": null,
+      "independente": true,
+      "plano": "starter",
+      "discoGB": 1,
+      "discoGuarda": "a configuração, as conversas e a conta",
+      "aposPublicar": "Depois de publicar, abra o app e clique em Configurações (`/setup`) para conectar a IA e o número de WhatsApp da empresa. O disco é o que faz a conexão e as conversas continuarem lá depois de cada publicação."
     },
     {
       "id": "contratos-ia",
@@ -370,7 +375,8 @@
         "AUTH_SECRET"
       ],
       "aposPublicar": "Abra o app e crie sua conta (nome, e-mail e senha). Não há IA para conectar: a planilha de exemplo já aparece pronta em Datasets e o treino roda dentro do próprio app.",
-      "padrao": "proprio"
+      "padrao": "proprio",
+      "discoGuarda": "planilhas, modelos e a conta"
     }
   ]
 }

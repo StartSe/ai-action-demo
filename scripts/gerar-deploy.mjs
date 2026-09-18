@@ -17,6 +17,14 @@ const CAPACIDADES_VALIDAS = ["artefato", "mcp", "formulario", "rotina"];
 const PLANOS_VALIDOS = ["free", "starter", "standard", "pro"];
 const plano = (app) => app.plano ?? "free";
 const pago = (app) => plano(app) !== "free";
+// O que o disco daquele app guarda, em uma expressão que cabe no meio de uma frase ("... para guardar
+// X"). Cada app pago diz o seu em `discoGuarda`; sem isso, o texto genérico serve.
+const discoGuarda = (app) => app.discoGuarda ?? "os dados do app";
+// Nome do disco. O Render exige um nome único dentro do Blueprint, então ele carrega o id do app: com
+// "dados" fixo, publicar um segundo app com disco pelo mesmo Blueprint dava conflito. `discoNome` no
+// catálogo permite manter o nome antigo num app já publicado — renomear o disco de um serviço no ar faz
+// o Render criar um disco NOVO e vazio, sem o conteúdo do anterior.
+const discoNome = (app) => app.discoNome ?? `${app.id}-dados`;
 for (const app of cat.apps) {
   if (!PLANOS_VALIDOS.includes(plano(app))) {
     throw new Error(`${app.id}: plano desconhecido "${app.plano}" (válidos: ${PLANOS_VALIDOS.join(", ")})`);
@@ -30,8 +38,19 @@ for (const app of cat.apps) {
   if (app.variaveisGeradas !== undefined && !(Array.isArray(app.variaveisGeradas) && app.variaveisGeradas.every((v) => /^[A-Z][A-Z0-9_]*$/.test(v)))) {
     throw new Error(`${app.id}: variaveisGeradas precisa ser uma lista de nomes de variável (MAIÚSCULAS_COM_SUBLINHADO)`);
   }
+  if (app.discoNome !== undefined && !/^[a-z0-9-]+$/.test(app.discoNome ?? "")) {
+    throw new Error(`${app.id}: discoNome precisa ser um texto com letras minúsculas, números e hífens`);
+  }
+  if (app.discoGuarda !== undefined && typeof app.discoGuarda !== "string") {
+    throw new Error(`${app.id}: discoGuarda precisa ser um texto`);
+  }
   if (app.aposPublicar !== undefined && typeof app.aposPublicar !== "string") {
     throw new Error(`${app.id}: aposPublicar precisa ser um texto`);
+  }
+  // "independente" só diz a scripts/verificar-padrao.sh que a camada de produto do app é dele (ver a
+  // seção "Apps independentes" do PADRAO.md); não muda nada no render.yaml nem na página pública.
+  if (app.independente !== undefined && typeof app.independente !== "boolean") {
+    throw new Error(`${app.id}: independente precisa ser true ou false`);
   }
   if (typeof app.captura !== "string" || !app.captura) {
     throw new Error(`${app.id}: captura precisa ser um caminho relativo (string não vazia)`);
@@ -70,15 +89,15 @@ function servico(app) {
     .map((v) => `      - key: ${v}\n        generateValue: true\n`)
     .join("");
   const disco = app.discoGB
-    ? `    # Planilhas, modelos e a conta ficam em /app/data e sobrevivem a deploys.
+    ? `    # ${app.discoGuarda ? app.discoGuarda[0].toUpperCase() + app.discoGuarda.slice(1) : "Os dados do app"} ficam em /app/data e sobrevivem a deploys.
     disk:
-      name: dados
+      name: ${discoNome(app)}
       mountPath: /app/data
       sizeGB: ${app.discoGB}
 `
     : `    # Para manter a configuração feita em /setup entre deploys (exige plano pago):
     # disk:
-    #   name: dados
+    #   name: ${discoNome(app)}
     #   mountPath: /app/data
     #   sizeGB: 1
 `;
@@ -100,7 +119,7 @@ const cabecalho = (texto) => `# ${texto.split("\n").join("\n# ")}\n`;
 
 function renderApp(app) {
   const nota = pago(app)
-    ? `Este app exige o plano ${plano(app)} (pago) e cria um disco de ${app.discoGB ?? 1} GB em /app/data, onde ficam planilhas, modelos e a conta.
+    ? `Este app exige o plano ${plano(app)} (pago) e cria um disco de ${app.discoGB ?? 1} GB em /app/data, onde ficam ${discoGuarda(app)}.
 ${app.aposPublicar ?? "Nenhuma chave é necessária aqui."}`
     : `Nenhuma chave é necessária aqui: após publicar, abra /setup no app e conecte a IA.
 As chaves ficam em SQLite em /app/data. No plano free o disco é efêmero e a configuração se perde a cada deploy.`;
@@ -136,8 +155,12 @@ function readmePublico() {
         `| [${a.nome}](${repoPublicoUrl}/tree/${branchDeploy(a)}) | ${a.areas.join(", ")} | ${a.problema}${pago(a) ? ` **Exige plano pago (${plano(a)}).**` : ""} | [Publicar este app](${urlPublicar(a)}) |`
     )
     .join("\n");
+  // Com mais de um app pago, "é a exceção" (no singular, uma vez por app) deixa de fazer sentido: a
+  // frase final passa a dizer quantos são e que o resto continua gratuito.
   const avisoPagos = appsPagos.length
-    ? `\n- ${appsPagos.map((a) => `**${a.nome}** é a exceção: exige o plano ${plano(a)} (pago) e cria um disco de ${a.discoGB ?? 1} GB para guardar planilhas e modelos. Ao publicar a suíte inteira, o serviço de hospedagem pede um cartão só por causa dele; os demais continuam gratuitos.`).join("\n- ")}`
+    ? `\n- ${appsPagos
+        .map((a) => `**${a.nome}** exige o plano ${plano(a)} (pago) e cria um disco de ${a.discoGB ?? 1} GB para guardar ${discoGuarda(a)}.`)
+        .join("\n- ")}\n- Ao publicar a suíte inteira, o serviço de hospedagem pede um cartão por causa ${appsPagos.length === 1 ? "desse app" : `desses ${appsPagos.length} apps`}; os outros ${cat.apps.length - appsPagos.length} continuam gratuitos.`
     : "";
   return `# ${cat.titulo}
 
@@ -171,7 +194,8 @@ ${comandoDocker(cat.apps[0])}
 
 - Ao clicar em Publicar, você entra (ou cria uma conta gratuita) no serviço de hospedagem e confirma. O app é criado na sua conta, não na nossa.
 - Nenhuma chave é pedida na publicação. Depois, abra o app, clique em Configurações (\`/setup\`) e conecte a IA e as integrações em um minuto.
-- No plano gratuito o app adormece após um tempo sem uso e a configuração feita em Configurações pode se perder quando ele for atualizado. Um plano pago mantém tudo salvo (descomente o bloco \`disk\` do Blueprint).${avisoPagos}
+- No plano gratuito o app adormece após um tempo sem uso e a configuração feita em Configurações pode se perder quando ele for atualizado. Um plano pago mantém tudo salvo (descomente o bloco \`disk\` do Blueprint).
+- Se você já publicou este app antes, o serviço de hospedagem pergunta entre associar ao serviço existente ou criar tudo de novo. Associar é o normal: ele atualiza o que já está no ar e mantém o mesmo endereço. Criar de novo faz uma segunda instalação, com outro endereço.${avisoPagos}
 `;
 }
 
@@ -181,7 +205,7 @@ function readmeBranch(app) {
 ${app.problema} ${app.ia}
 
 [![Publicar este app](https://img.shields.io/badge/Publicar%20este%20app-1f4fd8?style=for-the-badge)](${urlPublicar(app)})
-${pago(app) ? `\n**Exige plano pago no serviço de hospedagem** (${plano(app)}) e cria um disco de ${app.discoGB ?? 1} GB em \`/app/data\`, onde ficam planilhas, modelos e a conta. Não usa IA externa nem pede chave.\n` : ""}
+${pago(app) ? `\n**Exige plano pago no serviço de hospedagem** (${plano(app)}) e cria um disco de ${app.discoGB ?? 1} GB em \`/app/data\`, onde ficam ${discoGuarda(app)}.\n` : ""}
 Imagem: \`${imagem(app)}\`
 
 Opção avançada, rodar no seu computador (requer Docker):

@@ -70,6 +70,24 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   .sobretitulo { @apply text-xs font-bold uppercase tracking-[0.08em] text-accent; }
   .apoio { @apply text-[13px] text-ink-2; }
 
+  /* Específico deste app ------------------------------------------------------------------------
+     Classes que não existem nos outros dezesseis apps (ver CLAUDE.md, "app independente"). */
+
+  /* Quarto chip de status das conversas, "Em atendimento humano": azul, a única cor que os outros três
+     (verde, âmbar, cinza) ainda não usavam. Contraste do texto sobre o fundo: 6,86:1 (AA). */
+  .chip-humano { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-[#e8effb] text-[#1c4f9c]; }
+
+  /* Fundo da conversa aberta (components/ConversaAberta.tsx): o papel de parede claro que todo mundo
+     reconhece do WhatsApp, refeito em CSS — um bege esverdeado com uma trama discreta de pontos. Ele
+     existe para a conversa parecer a conversa, e não uma lista de caixas: as bolhas brancas (cliente) e
+     verdes (atendente) só se separam do fundo quando ele não é branco. Contraste do texto das bolhas
+     não muda, porque nenhum texto é escrito diretamente sobre este fundo. */
+  .fundo-conversa {
+    background-color: #efeae2;
+    background-image: radial-gradient(rgba(20, 20, 50, 0.045) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
   /* Mancha decorativa atrás da ilustração do segmento (ver lib/ilustracao.ts e components/ui.tsx,
      IlustracaoSegmento): o blob deixou de fazer parte do PNG (era lilás, fixo) e virou CSS no acento de
      cada app. Aplicar num contêiner com `position: relative`, como irmão anterior da ilustração. */

@@ -25,6 +25,8 @@ export const FERRAMENTAS: Ferramenta[] = [
       const pergunta = String(args.pergunta || "").trim();
       if (!pergunta) throw new Error("Informe a pergunta do cliente.");
       const { resposta, transferir } = await responder({ numero: NUMERO_MCP, texto: pergunta, origem: "mcp" });
+      // resposta nula = a conversa foi assumida por uma pessoa e a IA não responde por ela.
+      if (!resposta) return { resposta: "Esta conversa está sendo atendida por uma pessoa da equipe.", transferir: false };
       return { resposta, transferir };
     },
   },
