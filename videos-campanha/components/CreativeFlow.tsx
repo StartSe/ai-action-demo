@@ -3,7 +3,7 @@
 import Link from "next/link";
 import DeleteConfirmation from "./DeleteConfirmation";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useId, useRef, useState, type CSSProperties } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -68,21 +68,52 @@ const PHASES: Partial<Record<Kind, string[]>> = {
 };
 /* Estado de geração do bloco: substitui o preview enquanto o pedido está na fila.
  * As fases são só ritmo visual (o provedor não informa progresso); o que é real é
- * "Enviando ao modelo" (status "sending") contra "na fila" (status "pending"). */
+ * "Enviando ao modelo" (status "sending") contra "na fila" (status "pending").
+ * A barra avança com uma curva de tempo estimada (--cf-eta) e estaciona perto do fim
+ * até a resposta chegar — nunca chega a 100% sozinha. */
+const ETA: Partial<Record<Kind, string>> = { video: "150s", image: "35s", transform: "35s" };
 function Generating({ kind, status, asset }: { kind: Kind; status?: string; asset?: Asset }) {
   const phases = PHASES[kind] ?? PHASES.image!;
   const [step, setStep] = useState(0);
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   useEffect(() => {
     const t = setInterval(() => setStep((s) => (s + 1) % phases.length), 4500);
     return () => clearInterval(t);
   }, [phases.length]);
   const title = kind === "video" ? "Gerando seu vídeo…" : kind === "transform" ? "Transformando sua imagem…" : "Gerando sua imagem…";
-  const hint = kind === "video" ? "Vídeos levam alguns minutos. O bloco avisa quando estiver pronto." : "Isso leva alguns segundos. O bloco avisa quando estiver pronto.";
+  const hint = kind === "video" ? "Isso pode levar alguns minutos. Você será avisado quando estiver pronto." : "Isso pode levar alguns segundos. Você será avisado quando estiver pronto.";
   return (
-    <div className="cf-generating">
+    <div className="cf-generating" style={{ "--cf-eta": ETA[kind] ?? ETA.image } as CSSProperties}>
       {asset && (asset.kind === "video" ? <video src={asset.url} muted preload="metadata" aria-hidden="true" /> : <img src={asset.url} alt="" aria-hidden="true" />)}
+      <svg className="cf-waves" viewBox="0 0 400 200" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id={`cfw1${uid}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#f7bfe6" stopOpacity=".7" />
+            <stop offset="1" stopColor="#dccbfb" stopOpacity=".45" />
+          </linearGradient>
+          <linearGradient id={`cfw2${uid}`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#ffffff" stopOpacity=".85" />
+            <stop offset="1" stopColor="#f3d2ef" stopOpacity=".5" />
+          </linearGradient>
+        </defs>
+        <path d="M0 118 C70 60 150 175 250 108 S375 40 400 66 L400 200 L0 200 Z" fill={`url(#cfw1${uid})`} />
+        <path d="M0 165 C90 105 200 205 300 142 S372 96 400 118 L400 200 L0 200 Z" fill={`url(#cfw2${uid})`} />
+      </svg>
       <div className="cf-generating-body">
-        <span className="cf-spark" aria-hidden="true"><i /><i /><b>✦</b></span>
+        <span className="cf-spark" aria-hidden="true">
+          <i /><i />
+          <svg viewBox="0 0 64 64">
+            <defs>
+              <linearGradient id={`cfs${uid}`} x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stopColor="#f22baa" />
+                <stop offset="1" stopColor="#7b3fe4" />
+              </linearGradient>
+            </defs>
+            <path d="M32 3 C34.5 21 43 29.5 61 32 C43 34.5 34.5 43 32 61 C29.5 43 21 34.5 3 32 C21 29.5 29.5 21 32 3 Z" fill={`url(#cfs${uid})`} />
+            <path d="M32 14 C33.2 24.5 39.5 30.8 50 32 C39.5 33.2 33.2 39.5 32 50 C30.8 39.5 24.5 33.2 14 32 C24.5 30.8 30.8 24.5 32 14 Z" fill="#fff" opacity=".55" />
+          </svg>
+          <em /><em /><em />
+        </span>
         <strong>{title}</strong>
         <small key={status === "sending" ? "sending" : step}>{status === "sending" ? "Enviando ao modelo" : phases[step]}</small>
         <span className="cf-progress" aria-hidden="true"><i /></span>
