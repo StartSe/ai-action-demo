@@ -1,6 +1,6 @@
 // Rótulos de valores guardados no banco, num Record completo (nunca um ternário na tela):
 // somar um valor ao union vira erro de compilação aqui em vez de um rótulo faltando na tela.
-import type { Evidencia, Fit, Jornada, ModoProspeccao, Papel, StatusLead } from "./types";
+import type { Evidencia, EstrategiaAbordagem, Fit, Jornada, ModoProspeccao, Papel, StatusLead } from "./types";
 
 export const ROTULO_JORNADA: Record<Jornada, string> = {
   b2b: "Empresas e decisores",
@@ -95,4 +95,13 @@ export const ROTULO_STATUS_LEAD: Record<StatusLead, string> = {
   abordado: "Abordado",
   respondeu: "Respondeu",
   descartado: "Descartado",
+};
+
+// Itens da estratégia de uma abordagem (US-029), um por linha, rótulo à esquerda.
+export const ROTULO_CAMPO_ESTRATEGIA: Record<keyof EstrategiaAbordagem, string> = {
+  objetivo: "Objetivo",
+  gancho: "Gancho",
+  dorProvavel: "Dor provável",
+  tom: "Tom",
+  cta: "CTA",
 };
