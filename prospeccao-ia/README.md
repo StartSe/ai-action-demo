@@ -77,10 +77,14 @@ lib/rotinas-do-app.ts      rotina "Leads novos toda semana"
 lib/ai.ts                  cliente OpenRouter (askText, askJSON)
 lib/demo.ts                leads e abordagens de exemplo do modo demonstração
 lib/types.ts               tipos do domínio
+lib/workspace.ts           tabelas do workspace: produto, ICP, prospecção, conta, lead e abordagem
 Dockerfile                 build multi-stage com saída standalone
 docker-compose.yml         sobe este app isolado (porta 3005)
 render.yaml                blueprint do Render (runtime image)
 ```
+
+## Retenção de dados
+Contas e leads do workspace (produtos, prospecções, contas, leads e abordagens; ver `lib/workspace.ts`) são apagados automaticamente depois de 180 dias sem atualização (`limparExpirados()`, rodada na inicialização do app). Apagar um lead ou uma conta apaga junto as abordagens escritas para ele.
 
 ## Limites conhecidos
 - A Apollo.io não devolve um "sinal" de prospecção pronto: quando a integração está conectada, o sinal exibido é montado a partir de campos públicos da organização (ano de fundação, setor, número estimado de funcionários), não de um evento recente real.

@@ -1,0 +1,408 @@
+// Workspace de prospecção: tabelas próprias para produto, ICP, prospecção, conta,
+// lead e abordagem, no mesmo app.sqlite de lib/store.ts (ver abrirBanco()).
+// Cada entidade expõe criar/listar/obter/atualizar/apagar; nenhuma rota monta SQL.
+import crypto from "node:crypto";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
+import { abrirBanco } from "./store";
+import type {
+  Produto, NovoProduto,
+  ICP, NovoICP,
+  Prospeccao, NovaProspeccao,
+  Conta, NovaConta,
+  LeadProspeccao, NovoLeadProspeccao,
+  AbordagemRegistro, NovaAbordagemRegistro,
+  CriteriosICP, Evidencia, SinalProspeccao, EstrategiaAbordagem,
+} from "./types";
+
+let criado = false;
+
+function banco(): DatabaseSync {
+  const d = abrirBanco();
+  if (criado) return d;
+  d.exec(`CREATE TABLE IF NOT EXISTS produtos (
+    id TEXT PRIMARY KEY,
+    nome TEXT NOT NULL,
+    descricao TEXT NOT NULL DEFAULT '',
+    site TEXT,
+    proposta_valor TEXT NOT NULL DEFAULT '',
+    criado_em TEXT NOT NULL
+  )`);
+  d.exec(`CREATE TABLE IF NOT EXISTS icps (
+    id TEXT PRIMARY KEY,
+    produto_id TEXT NOT NULL,
+    nome TEXT NOT NULL,
+    jornada TEXT NOT NULL,
+    criterios TEXT NOT NULL DEFAULT '{}',
+    personas TEXT NOT NULL DEFAULT '[]',
+    dores TEXT NOT NULL DEFAULT '[]',
+    sinais TEXT NOT NULL DEFAULT '[]',
+    criado_em TEXT NOT NULL
+  )`);
+  d.exec(`CREATE INDEX IF NOT EXISTS idx_icps_produto ON icps (produto_id)`);
+  d.exec(`CREATE TABLE IF NOT EXISTS prospeccoes (
+    id TEXT PRIMARY KEY,
+    produto_id TEXT NOT NULL,
+    icp_id TEXT NOT NULL,
+    modo TEXT NOT NULL,
+    criterios TEXT NOT NULL DEFAULT '{}',
+    estado TEXT NOT NULL,
+    etapa TEXT,
+    erro TEXT,
+    criado_em TEXT NOT NULL,
+    concluido_em TEXT
+  )`);
+  d.exec(`CREATE INDEX IF NOT EXISTS idx_prospeccoes_produto ON prospeccoes (produto_id)`);
+  d.exec(`CREATE TABLE IF NOT EXISTS contas (
+    id TEXT PRIMARY KEY,
+    prospeccao_id TEXT NOT NULL,
+    nome TEXT NOT NULL,
+    site TEXT,
+    setor TEXT,
+    porte TEXT,
+    cidade TEXT,
+    fit TEXT,
+    evidencias TEXT NOT NULL DEFAULT '[]',
+    sinais TEXT NOT NULL DEFAULT '[]',
+    resumo TEXT NOT NULL DEFAULT '',
+    criado_em TEXT NOT NULL,
+    atualizado_em TEXT NOT NULL
+  )`);
+  d.exec(`CREATE INDEX IF NOT EXISTS idx_contas_prospeccao ON contas (prospeccao_id)`);
+  d.exec(`CREATE TABLE IF NOT EXISTS leads (
+    id TEXT PRIMARY KEY,
+    prospeccao_id TEXT NOT NULL,
+    conta_id TEXT,
+    nome TEXT NOT NULL,
+    cargo TEXT,
+    empresa TEXT,
+    cidade TEXT,
+    linkedin TEXT,
+    fonte TEXT,
+    papel TEXT NOT NULL DEFAULT 'desconhecido',
+    fit TEXT,
+    evidencias TEXT NOT NULL DEFAULT '[]',
+    sinais TEXT NOT NULL DEFAULT '[]',
+    hipotese TEXT,
+    status TEXT NOT NULL DEFAULT 'novo',
+    no_crm INTEGER NOT NULL DEFAULT 0,
+    criado_em TEXT NOT NULL,
+    atualizado_em TEXT NOT NULL
+  )`);
+  d.exec(`CREATE INDEX IF NOT EXISTS idx_leads_prospeccao ON leads (prospeccao_id)`);
+  d.exec(`CREATE INDEX IF NOT EXISTS idx_leads_conta ON leads (conta_id)`);
+  d.exec(`CREATE TABLE IF NOT EXISTS abordagens (
+    id TEXT PRIMARY KEY,
+    lead_id TEXT NOT NULL,
+    estrategia TEXT NOT NULL DEFAULT '{}',
+    email TEXT NOT NULL DEFAULT '{}',
+    linkedin TEXT NOT NULL DEFAULT '',
+    whatsapp TEXT NOT NULL DEFAULT '',
+    variacao TEXT,
+    criado_em TEXT NOT NULL
+  )`);
+  d.exec(`CREATE INDEX IF NOT EXISTS idx_abordagens_lead ON abordagens (lead_id)`);
+  criado = true;
+  return d;
+}
+
+function gerarId(): string {
+  return crypto.randomBytes(9).toString("base64url");
+}
+
+/** Constrói "SET col = ?, col2 = ?" a partir de um objeto já em snake_case, ignorando chaves com valor undefined. */
+function montarSet(campos: Record<string, SQLInputValue | undefined>): { set: string; valores: SQLInputValue[] } {
+  const chaves = Object.keys(campos).filter((c) => campos[c] !== undefined);
+  return { set: chaves.map((c) => `${c} = ?`).join(", "), valores: chaves.map((c) => campos[c] as SQLInputValue) };
+}
+
+// --- Produtos --------------------------------------------------------------
+
+type LinhaProduto = { id: string; nome: string; descricao: string; site: string | null; proposta_valor: string; criado_em: string };
+
+function linhaParaProduto(l: LinhaProduto): Produto {
+  return { id: l.id, nome: l.nome, descricao: l.descricao, site: l.site, propostaValor: l.proposta_valor, criadoEm: l.criado_em };
+}
+
+export function criarProduto(dados: NovoProduto, em?: Date): Produto {
+  const id = gerarId();
+  const criadoEm = (em ?? new Date()).toISOString();
+  banco().prepare("INSERT INTO produtos (id, nome, descricao, site, proposta_valor, criado_em) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(id, dados.nome, dados.descricao, dados.site, dados.propostaValor, criadoEm);
+  return { id, criadoEm, ...dados };
+}
+
+export function listarProdutos(): Produto[] {
+  const linhas = banco().prepare("SELECT * FROM produtos ORDER BY criado_em DESC").all() as LinhaProduto[];
+  return linhas.map(linhaParaProduto);
+}
+
+export function obterProduto(id: string): Produto | null {
+  const linha = banco().prepare("SELECT * FROM produtos WHERE id = ?").get(id) as LinhaProduto | undefined;
+  return linha ? linhaParaProduto(linha) : null;
+}
+
+export function atualizarProduto(id: string, dados: Partial<NovoProduto>): Produto | null {
+  const { set, valores } = montarSet({ nome: dados.nome, descricao: dados.descricao, site: dados.site, proposta_valor: dados.propostaValor });
+  if (set) banco().prepare(`UPDATE produtos SET ${set} WHERE id = ?`).run(...valores, id);
+  return obterProduto(id);
+}
+
+export function apagarProduto(id: string): void {
+  banco().prepare("DELETE FROM produtos WHERE id = ?").run(id);
+}
+
+// --- ICPs --------------------------------------------------------------
+
+type LinhaICP = { id: string; produto_id: string; nome: string; jornada: string; criterios: string; personas: string; dores: string; sinais: string; criado_em: string };
+
+function linhaParaICP(l: LinhaICP): ICP {
+  return {
+    id: l.id, produtoId: l.produto_id, nome: l.nome, jornada: l.jornada as ICP["jornada"],
+    criterios: JSON.parse(l.criterios) as CriteriosICP, personas: JSON.parse(l.personas), dores: JSON.parse(l.dores), sinais: JSON.parse(l.sinais),
+    criadoEm: l.criado_em,
+  };
+}
+
+export function criarICP(dados: NovoICP, em?: Date): ICP {
+  const id = gerarId();
+  const criadoEm = (em ?? new Date()).toISOString();
+  banco().prepare("INSERT INTO icps (id, produto_id, nome, jornada, criterios, personas, dores, sinais, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, dados.produtoId, dados.nome, dados.jornada, JSON.stringify(dados.criterios), JSON.stringify(dados.personas), JSON.stringify(dados.dores), JSON.stringify(dados.sinais), criadoEm);
+  return { id, criadoEm, ...dados };
+}
+
+export function listarICPs(produtoId?: string): ICP[] {
+  const linhas = (produtoId
+    ? banco().prepare("SELECT * FROM icps WHERE produto_id = ? ORDER BY criado_em DESC").all(produtoId)
+    : banco().prepare("SELECT * FROM icps ORDER BY criado_em DESC").all()) as LinhaICP[];
+  return linhas.map(linhaParaICP);
+}
+
+export function obterICP(id: string): ICP | null {
+  const linha = banco().prepare("SELECT * FROM icps WHERE id = ?").get(id) as LinhaICP | undefined;
+  return linha ? linhaParaICP(linha) : null;
+}
+
+export function atualizarICP(id: string, dados: Partial<NovoICP>): ICP | null {
+  const { set, valores } = montarSet({
+    nome: dados.nome, jornada: dados.jornada,
+    criterios: dados.criterios && JSON.stringify(dados.criterios),
+    personas: dados.personas && JSON.stringify(dados.personas),
+    dores: dados.dores && JSON.stringify(dados.dores),
+    sinais: dados.sinais && JSON.stringify(dados.sinais),
+  });
+  if (set) banco().prepare(`UPDATE icps SET ${set} WHERE id = ?`).run(...valores, id);
+  return obterICP(id);
+}
+
+export function apagarICP(id: string): void {
+  banco().prepare("DELETE FROM icps WHERE id = ?").run(id);
+}
+
+// --- Prospecções --------------------------------------------------------------
+
+type LinhaProspeccao = { id: string; produto_id: string; icp_id: string; modo: string; criterios: string; estado: string; etapa: string | null; erro: string | null; criado_em: string; concluido_em: string | null };
+
+function linhaParaProspeccao(l: LinhaProspeccao): Prospeccao {
+  return {
+    id: l.id, produtoId: l.produto_id, icpId: l.icp_id, modo: l.modo as Prospeccao["modo"],
+    criterios: JSON.parse(l.criterios), estado: l.estado as Prospeccao["estado"], etapa: l.etapa, erro: l.erro,
+    criadoEm: l.criado_em, concluidoEm: l.concluido_em,
+  };
+}
+
+export function criarProspeccao(dados: NovaProspeccao, em?: Date): Prospeccao {
+  const id = gerarId();
+  const criadoEm = (em ?? new Date()).toISOString();
+  const concluidoEm = dados.concluidoEm ?? null;
+  banco().prepare("INSERT INTO prospeccoes (id, produto_id, icp_id, modo, criterios, estado, etapa, erro, criado_em, concluido_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, dados.produtoId, dados.icpId, dados.modo, JSON.stringify(dados.criterios), dados.estado, dados.etapa, dados.erro, criadoEm, concluidoEm);
+  return { id, criadoEm, ...dados, concluidoEm };
+}
+
+export function listarProspeccoes(produtoId?: string): Prospeccao[] {
+  const linhas = (produtoId
+    ? banco().prepare("SELECT * FROM prospeccoes WHERE produto_id = ? ORDER BY criado_em DESC").all(produtoId)
+    : banco().prepare("SELECT * FROM prospeccoes ORDER BY criado_em DESC").all()) as LinhaProspeccao[];
+  return linhas.map(linhaParaProspeccao);
+}
+
+export function obterProspeccao(id: string): Prospeccao | null {
+  const linha = banco().prepare("SELECT * FROM prospeccoes WHERE id = ?").get(id) as LinhaProspeccao | undefined;
+  return linha ? linhaParaProspeccao(linha) : null;
+}
+
+export function atualizarProspeccao(id: string, dados: Partial<NovaProspeccao>): Prospeccao | null {
+  const { set, valores } = montarSet({
+    modo: dados.modo, criterios: dados.criterios && JSON.stringify(dados.criterios), estado: dados.estado,
+    etapa: dados.etapa, erro: dados.erro, concluido_em: dados.concluidoEm,
+  });
+  if (set) banco().prepare(`UPDATE prospeccoes SET ${set} WHERE id = ?`).run(...valores, id);
+  return obterProspeccao(id);
+}
+
+export function apagarProspeccao(id: string): void {
+  banco().prepare("DELETE FROM abordagens WHERE lead_id IN (SELECT id FROM leads WHERE prospeccao_id = ?)").run(id);
+  banco().prepare("DELETE FROM leads WHERE prospeccao_id = ?").run(id);
+  banco().prepare("DELETE FROM contas WHERE prospeccao_id = ?").run(id);
+  banco().prepare("DELETE FROM prospeccoes WHERE id = ?").run(id);
+}
+
+// --- Contas (empresas) --------------------------------------------------------------
+
+type LinhaConta = { id: string; prospeccao_id: string; nome: string; site: string | null; setor: string | null; porte: string | null; cidade: string | null; fit: string | null; evidencias: string; sinais: string; resumo: string; criado_em: string; atualizado_em: string };
+
+function linhaParaConta(l: LinhaConta): Conta {
+  return {
+    id: l.id, prospeccaoId: l.prospeccao_id, nome: l.nome, site: l.site, setor: l.setor, porte: l.porte, cidade: l.cidade,
+    fit: l.fit as Conta["fit"], evidencias: JSON.parse(l.evidencias) as Evidencia[], sinais: JSON.parse(l.sinais) as SinalProspeccao[],
+    resumo: l.resumo, criadoEm: l.criado_em, atualizadoEm: l.atualizado_em,
+  };
+}
+
+export function criarConta(dados: NovaConta, em?: Date): Conta {
+  const id = gerarId();
+  const agora = (em ?? new Date()).toISOString();
+  banco().prepare("INSERT INTO contas (id, prospeccao_id, nome, site, setor, porte, cidade, fit, evidencias, sinais, resumo, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, dados.prospeccaoId, dados.nome, dados.site, dados.setor, dados.porte, dados.cidade, dados.fit, JSON.stringify(dados.evidencias), JSON.stringify(dados.sinais), dados.resumo, agora, agora);
+  return { id, criadoEm: agora, atualizadoEm: agora, ...dados };
+}
+
+export function listarContas(prospeccaoId?: string): Conta[] {
+  const linhas = (prospeccaoId
+    ? banco().prepare("SELECT * FROM contas WHERE prospeccao_id = ? ORDER BY criado_em DESC").all(prospeccaoId)
+    : banco().prepare("SELECT * FROM contas ORDER BY criado_em DESC").all()) as LinhaConta[];
+  return linhas.map(linhaParaConta);
+}
+
+export function obterConta(id: string): Conta | null {
+  const linha = banco().prepare("SELECT * FROM contas WHERE id = ?").get(id) as LinhaConta | undefined;
+  return linha ? linhaParaConta(linha) : null;
+}
+
+export function atualizarConta(id: string, dados: Partial<NovaConta>, em?: Date): Conta | null {
+  const { set, valores } = montarSet({
+    nome: dados.nome, site: dados.site, setor: dados.setor, porte: dados.porte, cidade: dados.cidade, fit: dados.fit,
+    evidencias: dados.evidencias && JSON.stringify(dados.evidencias), sinais: dados.sinais && JSON.stringify(dados.sinais),
+    resumo: dados.resumo, atualizado_em: (em ?? new Date()).toISOString(),
+  });
+  if (set) banco().prepare(`UPDATE contas SET ${set} WHERE id = ?`).run(...valores, id);
+  return obterConta(id);
+}
+
+export function apagarConta(id: string): void {
+  banco().prepare("DELETE FROM contas WHERE id = ?").run(id);
+}
+
+// --- Leads (pessoas) --------------------------------------------------------------
+
+type LinhaLead = {
+  id: string; prospeccao_id: string; conta_id: string | null; nome: string; cargo: string | null; empresa: string | null; cidade: string | null;
+  linkedin: string | null; fonte: string | null; papel: string; fit: string | null; evidencias: string; sinais: string; hipotese: string | null;
+  status: string; no_crm: number; criado_em: string; atualizado_em: string;
+};
+
+function linhaParaLead(l: LinhaLead): LeadProspeccao {
+  return {
+    id: l.id, prospeccaoId: l.prospeccao_id, contaId: l.conta_id, nome: l.nome, cargo: l.cargo, empresa: l.empresa, cidade: l.cidade,
+    linkedin: l.linkedin, fonte: l.fonte, papel: l.papel as LeadProspeccao["papel"], fit: l.fit as LeadProspeccao["fit"],
+    evidencias: JSON.parse(l.evidencias) as Evidencia[], sinais: JSON.parse(l.sinais) as SinalProspeccao[], hipotese: l.hipotese,
+    status: l.status as LeadProspeccao["status"], noCRM: l.no_crm === 1, criadoEm: l.criado_em, atualizadoEm: l.atualizado_em,
+  };
+}
+
+export function criarLead(dados: NovoLeadProspeccao, em?: Date): LeadProspeccao {
+  const id = gerarId();
+  const agora = (em ?? new Date()).toISOString();
+  banco().prepare(`INSERT INTO leads (id, prospeccao_id, conta_id, nome, cargo, empresa, cidade, linkedin, fonte, papel, fit, evidencias, sinais, hipotese, status, no_crm, criado_em, atualizado_em)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(id, dados.prospeccaoId, dados.contaId, dados.nome, dados.cargo, dados.empresa, dados.cidade, dados.linkedin, dados.fonte, dados.papel, dados.fit,
+      JSON.stringify(dados.evidencias), JSON.stringify(dados.sinais), dados.hipotese, dados.status, dados.noCRM ? 1 : 0, agora, agora);
+  return { id, criadoEm: agora, atualizadoEm: agora, ...dados };
+}
+
+export function listarLeads(prospeccaoId?: string): LeadProspeccao[] {
+  const linhas = (prospeccaoId
+    ? banco().prepare("SELECT * FROM leads WHERE prospeccao_id = ? ORDER BY criado_em DESC").all(prospeccaoId)
+    : banco().prepare("SELECT * FROM leads ORDER BY criado_em DESC").all()) as LinhaLead[];
+  return linhas.map(linhaParaLead);
+}
+
+export function obterLead(id: string): LeadProspeccao | null {
+  const linha = banco().prepare("SELECT * FROM leads WHERE id = ?").get(id) as LinhaLead | undefined;
+  return linha ? linhaParaLead(linha) : null;
+}
+
+export function atualizarLead(id: string, dados: Partial<NovoLeadProspeccao>, em?: Date): LeadProspeccao | null {
+  const { set, valores } = montarSet({
+    conta_id: dados.contaId, nome: dados.nome, cargo: dados.cargo, empresa: dados.empresa, cidade: dados.cidade, linkedin: dados.linkedin,
+    fonte: dados.fonte, papel: dados.papel, fit: dados.fit, evidencias: dados.evidencias && JSON.stringify(dados.evidencias),
+    sinais: dados.sinais && JSON.stringify(dados.sinais), hipotese: dados.hipotese, status: dados.status,
+    no_crm: dados.noCRM === undefined ? undefined : (dados.noCRM ? 1 : 0), atualizado_em: (em ?? new Date()).toISOString(),
+  });
+  if (set) banco().prepare(`UPDATE leads SET ${set} WHERE id = ?`).run(...valores, id);
+  return obterLead(id);
+}
+
+export function apagarLead(id: string): void {
+  banco().prepare("DELETE FROM abordagens WHERE lead_id = ?").run(id);
+  banco().prepare("DELETE FROM leads WHERE id = ?").run(id);
+}
+
+// --- Abordagens --------------------------------------------------------------
+
+type LinhaAbordagem = { id: string; lead_id: string; estrategia: string; email: string; linkedin: string; whatsapp: string; variacao: string | null; criado_em: string };
+
+function linhaParaAbordagem(l: LinhaAbordagem): AbordagemRegistro {
+  return {
+    id: l.id, leadId: l.lead_id, estrategia: JSON.parse(l.estrategia) as EstrategiaAbordagem, email: JSON.parse(l.email),
+    linkedin: l.linkedin, whatsapp: l.whatsapp, variacao: l.variacao, criadoEm: l.criado_em,
+  };
+}
+
+export function criarAbordagem(dados: NovaAbordagemRegistro, em?: Date): AbordagemRegistro {
+  const id = gerarId();
+  const criadoEm = (em ?? new Date()).toISOString();
+  banco().prepare("INSERT INTO abordagens (id, lead_id, estrategia, email, linkedin, whatsapp, variacao, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, dados.leadId, JSON.stringify(dados.estrategia), JSON.stringify(dados.email), dados.linkedin, dados.whatsapp, dados.variacao, criadoEm);
+  return { id, criadoEm, ...dados };
+}
+
+export function listarAbordagens(leadId?: string): AbordagemRegistro[] {
+  const linhas = (leadId
+    ? banco().prepare("SELECT * FROM abordagens WHERE lead_id = ? ORDER BY criado_em DESC").all(leadId)
+    : banco().prepare("SELECT * FROM abordagens ORDER BY criado_em DESC").all()) as LinhaAbordagem[];
+  return linhas.map(linhaParaAbordagem);
+}
+
+export function obterAbordagem(id: string): AbordagemRegistro | null {
+  const linha = banco().prepare("SELECT * FROM abordagens WHERE id = ?").get(id) as LinhaAbordagem | undefined;
+  return linha ? linhaParaAbordagem(linha) : null;
+}
+
+export function atualizarAbordagem(id: string, dados: Partial<NovaAbordagemRegistro>): AbordagemRegistro | null {
+  const { set, valores } = montarSet({
+    estrategia: dados.estrategia && JSON.stringify(dados.estrategia), email: dados.email && JSON.stringify(dados.email),
+    linkedin: dados.linkedin, whatsapp: dados.whatsapp, variacao: dados.variacao,
+  });
+  if (set) banco().prepare(`UPDATE abordagens SET ${set} WHERE id = ?`).run(...valores, id);
+  return obterAbordagem(id);
+}
+
+export function apagarAbordagem(id: string): void {
+  banco().prepare("DELETE FROM abordagens WHERE id = ?").run(id);
+}
+
+// --- Retenção --------------------------------------------------------------
+
+/** Dias sem atualização até uma conta ou lead ser apagado (ver README, seção "Retenção de dados"). */
+export const DIAS_RETENCAO = 180;
+
+/** Apaga contas e leads (e as abordagens deles) sem atualização há mais de DIAS_RETENCAO dias; roda na inicialização (instrumentation.ts), como lib/historico.ts. */
+export function limparExpirados(): void {
+  const corte = new Date(Date.now() - DIAS_RETENCAO * 24 * 60 * 60 * 1000).toISOString();
+  const d = banco();
+  d.prepare("DELETE FROM abordagens WHERE lead_id IN (SELECT id FROM leads WHERE atualizado_em < ?)").run(corte);
+  d.prepare("DELETE FROM leads WHERE atualizado_em < ?").run(corte);
+  d.prepare("DELETE FROM contas WHERE atualizado_em < ?").run(corte);
+}
