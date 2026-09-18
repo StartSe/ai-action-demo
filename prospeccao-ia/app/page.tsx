@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { Aviso, Chip, CopyButton, DataTable, Entregar, ErrorBox, Field, Hero, Item, Loading, MaisDetalhes, Origem, Passos, Privacidade, ResultHead, Row, Section, SeloIA, Stage, Topbar, data, lerErro, useConfirmacao, useScrollToResult, useStatus, type Coluna, type PassoIndicador } from "@/components/ui";
 import { ACAO_BUSCA_DE_LEADS, ACAO_CONFERIR_CRM, ACAO_NOTIFICACOES } from "@/lib/acoes";
 import type { CodigoErroIA, Meta } from "@/lib/ai";
+import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 import type { Abordagem, DadosBusca, Fonte, Lead } from "@/lib/types";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
@@ -407,7 +408,7 @@ export default function Page() {
 
   return (
     <>
-      <Topbar marca="P" nome="Prospecção com IA" area="Vendas" status={status} erro={erro} resumo="Modo demonstração: os leads exibidos são fictícios." usuario={status?.usuario} />
+      <Topbar marca="P" nome="Prospecção com IA" area="Vendas" status={status} erro={erro} resumo="Modo demonstração: os leads exibidos são fictícios." usuario={status?.usuario} navegacao={NAVEGACAO_PROSPECCAO} />
 
       <Hero sobretitulo={PROMESSA.sobretitulo} titulo={PROMESSA.titulo} apoio={PROMESSA.apoio} segmento="Vendas">
         <Passos passos={PASSOS} atual={passoAtual} />
@@ -496,7 +497,7 @@ export default function Page() {
                     ))}
                   </ul>
                   <div className="flex items-center gap-4">
-                    <Link href="/historico" className="btn-link text-[13px]">Ver todos</Link>
+                    <Link href="/prospeccoes" className="btn-link text-[13px]">Ver todos</Link>
                     <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
                   </div>
                 </>

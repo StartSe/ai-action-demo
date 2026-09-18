@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Topbar } from "@/components/ui";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
+import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 import type { DadosBusca, ResultadoBusca } from "@/lib/types";
 import { Resultado } from "../../page";
 
@@ -12,7 +13,7 @@ export default async function Page({ params }: PageProps<"/r/[id]">) {
 
   return (
     <>
-      <Topbar marca="P" nome="Prospecção com IA" area="Vendas" status={{ ai: !registro.meta.demo, demo: registro.meta.demo, model: registro.meta.model }} />
+      <Topbar marca="P" nome="Prospecção com IA" area="Vendas" status={{ ai: !registro.meta.demo, demo: registro.meta.demo, model: registro.meta.model }} navegacao={NAVEGACAO_PROSPECCAO} />
       <main className="max-w-[1080px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
         <Resultado
           dados={registro.entrada}
