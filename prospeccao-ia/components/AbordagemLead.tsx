@@ -1,18 +1,47 @@
 "use client";
-// Estratégia da abordagem (US-029, Fase 5, SUBSTITUI a casca "Em breve" da US-027): a tela abre com o
-// bloco "Estratégia para <primeiro nome>" já gerado (GET /api/leads/[id]/abordagem cria e salva na
-// primeira visita, ver a rota) e cada item é editável por clique — a edição chama PUT, que regera as
-// mensagens a partir da estratégia atualizada (lib/estrategia.ts:gerarMensagens), sem tocar nos outros
-// campos. As três abas com os canais/"Copiar" (AC "mensagens dos três canais") são a US-030: este arquivo
-// deve ser ESTENDIDO por ela, não duplicado.
-import { useEffect, useRef, useState } from "react";
+// Estratégia e mensagens da abordagem (US-029 + US-030, Fase 5, SUBSTITUI a casca "Em breve" da US-027): a
+// tela abre com o bloco "Estratégia para <primeiro nome>" já gerado (GET /api/leads/[id]/abordagem cria e
+// salva na primeira visita, ver a rota) e cada item é editável por clique — a edição chama PUT, que regera
+// as mensagens a partir da estratégia atualizada (lib/estrategia.ts:gerarMensagens), sem tocar nos outros
+// campos. Abaixo, as três abas (LinkedIn/E-mail/WhatsApp) com o texto de cada canal e "Copiar" (US-030).
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Aviso, Topbar, useStatus } from "@/components/ui";
+import type { Meta } from "@/lib/ai";
+import { Aviso, Chip, CopyButton, Origem, Topbar, useStatus } from "@/components/ui";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
-import { ROTULO_CAMPO_ESTRATEGIA } from "@/lib/rotulos";
+import { ROTULO_CAMPO_ESTRATEGIA, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
 import type { AbordagemRegistro, EstrategiaAbordagem, LeadProspeccao } from "@/lib/types";
 
 const CAMPOS: (keyof EstrategiaAbordagem)[] = ["objetivo", "gancho", "dorProvavel", "tom", "cta"];
+
+type Canal = "linkedin" | "email" | "whatsapp";
+const CANAIS: { chave: Canal; rotulo: string }[] = [
+  { chave: "linkedin", rotulo: "LinkedIn" },
+  { chave: "email", rotulo: "E-mail" },
+  { chave: "whatsapp", rotulo: "WhatsApp" },
+];
+
+function TabButton({ ativo, onClick, children }: { ativo: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={ativo}
+      onClick={onClick}
+      className={`bg-transparent border-0 border-b-2 cursor-pointer pt-2 pb-2.5 px-1 mr-3.5 font-semibold text-[13px] whitespace-nowrap shrink-0 ${
+        ativo ? "text-accent-ink border-accent" : "text-muted border-transparent"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function textoDoCanal(abordagem: AbordagemRegistro, canal: Canal) {
+  if (canal === "linkedin") return abordagem.linkedin;
+  if (canal === "whatsapp") return abordagem.whatsapp;
+  return `Assunto: ${abordagem.email.assunto}\n\n${abordagem.email.corpo}`;
+}
 
 function LinhaEstrategia({
   campo,
@@ -83,6 +112,9 @@ export function AbordagemLead({ leadId }: { leadId: string }) {
   const [abordagem, setAbordagem] = useState<AbordagemRegistro | null>(null);
   const [naoEncontrada, setNaoEncontrada] = useState(false);
   const [erroSalvar, setErroSalvar] = useState<string | null>(null);
+  const [canal, setCanal] = useState<Canal>("linkedin");
+  const [marcando, setMarcando] = useState(false);
+  const [erroMarcar, setErroMarcar] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/leads/${leadId}/abordagem`)
@@ -112,6 +144,23 @@ export function AbordagemLead({ leadId }: { leadId: string }) {
       setErroSalvar("Não foi possível salvar esta alteração.");
     }
   }
+
+  async function marcarAbordado() {
+    setErroMarcar(null);
+    setMarcando(true);
+    try {
+      const r = await fetch(`/api/leads/${leadId}/marcar-abordado`, { method: "POST" });
+      const corpo = await r.json().catch(() => null);
+      if (!r.ok) { setErroMarcar(corpo?.error || "Não foi possível marcar como abordado."); return; }
+      setLead(corpo as LeadProspeccao);
+    } catch {
+      setErroMarcar("Não foi possível marcar como abordado.");
+    } finally {
+      setMarcando(false);
+    }
+  }
+
+  const origemMeta: Meta | null = abordagem ? { demo: abordagem.demo, model: "", geradoEm: abordagem.criadoEm, insumo: "estratégia definida acima" } : null;
 
   return (
     <>
@@ -144,6 +193,36 @@ export function AbordagemLead({ leadId }: { leadId: string }) {
             )}
 
             {erroSalvar && <div className="mt-3"><Aviso tom="danger">{erroSalvar}</Aviso></div>}
+
+            {abordagem && origemMeta && (
+              <>
+                <div className="mt-7">
+                  <Origem meta={origemMeta} demoTexto="Exemplo ilustrativo de mensagem, sem usar IA." />
+                </div>
+
+                <div role="tablist" className="flex border-b border-line mb-4">
+                  {CANAIS.map((c) => (
+                    <TabButton key={c.chave} ativo={canal === c.chave} onClick={() => setCanal(c.chave)}>{c.rotulo}</TabButton>
+                  ))}
+                </div>
+
+                <div className="card">
+                  <p className="whitespace-pre-wrap text-[14px] text-ink mb-4">{textoDoCanal(abordagem, canal)}</p>
+                  <CopyButton texto={() => textoDoCanal(abordagem, canal)} />
+                </div>
+
+                <div className="mt-5 flex items-center gap-3">
+                  {lead && (lead.status === "abordado" || lead.status === "respondeu") ? (
+                    <Chip nivel="neutral">{ROTULO_STATUS_LEAD[lead.status]}</Chip>
+                  ) : (
+                    <button type="button" className="btn-primary" disabled={marcando} onClick={marcarAbordado}>
+                      {marcando ? "Marcando…" : "Marcar como abordado"}
+                    </button>
+                  )}
+                </div>
+                {erroMarcar && <div className="mt-3"><Aviso tom="danger">{erroMarcar}</Aviso></div>}
+              </>
+            )}
           </>
         )}
       </main>
