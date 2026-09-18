@@ -8,12 +8,15 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { DialogoAdicionarCandidato } from "@/components/DialogoAdicionarCandidato";
+import { DialogoConvite } from "@/components/DialogoConvite";
 import { faixaSalarial, rotuloModelo, rotuloSenioridade, type VagaSalva } from "@/components/FormularioVaga";
 import {
   ChipSituacao,
   NotaDaEntrevista,
+  PODE_CONVIDAR,
   ROTULO_DECISAO,
   VIVAS,
+  rotuloConvite,
   type EntrevistaNaTabela,
 } from "@/components/RotulosEntrevista";
 import {
@@ -45,6 +48,9 @@ export default function Page() {
   const [vaga, setVaga] = useState<VagaDaPagina | null>(null);
   const [linhas, setLinhas] = useState<LinhaCandidato[] | null>(null);
   const [adicionando, setAdicionando] = useState(false);
+  // O convite aberto na tela: `reenviar` diz se abrir já estende o prazo (quem clicou em "Reenviar
+  // convite") ou só mostra o link que acabou de nascer com a atribuição.
+  const [convite, setConvite] = useState<{ entrevistaId: string; reenviar: boolean } | null>(null);
   const [recado, setRecado] = useState("");
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);
 
@@ -125,6 +131,10 @@ export default function Page() {
     }
   }
 
+  const recarregar = useCallback(() => {
+    void carregar();
+  }, [carregar]);
+
   const requisitos = (vaga?.requisitos ?? "").split("\n").map((r) => r.trim()).filter(Boolean);
   const avaliadas = (linhas ?? []).filter((l) => l.status === "avaliada").length;
   const jaNaVaga = (linhas ?? []).filter((l) => VIVAS.includes(l.status)).map((l) => l.candidatoId);
@@ -156,7 +166,11 @@ export default function Page() {
         // célula vazia, e no celular o rótulo "Ações" sozinho parecia defeito.
         const acoes = [
           l.resultadoId ? <Link key="parecer" href={`/r/${l.resultadoId}`} className="btn-link">Ver parecer</Link> : null,
-          l.codigo && (l.status === "convidada" || l.status === "aberta") ? <CopiarConvite key="convite" codigo={l.codigo} /> : null,
+          PODE_CONVIDAR.includes(l.status) ? (
+            <button key="convite" type="button" className="btn-link" onClick={() => setConvite({ entrevistaId: l.id, reenviar: true })}>
+              {rotuloConvite(l)}
+            </button>
+          ) : null,
           VIVAS.includes(l.status) && l.status !== "avaliada" ? (
             <button key="cancelar" type="button" className="btn-link !text-danger" onClick={() => void cancelarEntrevista(l)}>Cancelar</button>
           ) : null,
@@ -296,37 +310,23 @@ export default function Page() {
           cargo={vaga.cargo}
           jaNaVaga={jaNaVaga}
           onFechar={() => setAdicionando(false)}
-          onAtribuido={(nome) => {
+          onAtribuido={({ candidatoNome, entrevistaId }) => {
             setAdicionando(false);
-            setRecado(`${nome} entrou nesta vaga.`);
+            setRecado(`${candidatoNome} entrou nesta vaga. Mande o convite para a conversa começar.`);
+            setConvite({ entrevistaId, reenviar: false });
             void carregar();
           }}
         />
       )}
+      {convite && (
+        <DialogoConvite
+          entrevistaId={convite.entrevistaId}
+          reenviar={convite.reenviar}
+          onFechar={() => setConvite(null)}
+          onMudou={recarregar}
+        />
+      )}
       {Dialogo}
     </>
-  );
-}
-
-/** Copiar o endereço do convite já criado. Reenviar de verdade (estender o prazo e reabrir a
- * mensagem pronta para o candidato) é da história do convite. */
-function CopiarConvite({ codigo }: { codigo: string }) {
-  const [copiado, setCopiado] = useState(false);
-  return (
-    <button
-      type="button"
-      className="btn-link"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(`${location.origin}/entrevista/${codigo}`);
-          setCopiado(true);
-          setTimeout(() => setCopiado(false), 1800);
-        } catch {
-          setCopiado(false);
-        }
-      }}
-    >
-      {copiado ? "Copiado" : "Copiar o link do convite"}
-    </button>
   );
 }

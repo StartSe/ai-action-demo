@@ -5,28 +5,23 @@
 // A mensagem de erro daqui fala com o CANDIDATO, não com quem administra o app: nenhuma frase manda
 // conectar nada em Configurações (ver a regra registrada na US-032 da suíte).
 import { NextResponse } from "next/server";
-import { normalizarHistorico, proximaPergunta, type ParametrosCandidato } from "@/lib/entrevista";
-import { expirou, listarRespostas, obter } from "@/lib/formularios";
+import { FECHADO, resolverConvite } from "@/lib/convite";
+import { normalizarHistorico, proximaPergunta } from "@/lib/entrevista";
 
 const SEM_CACHE = { "Cache-Control": "no-store" };
 
 export async function POST(request: Request, { params }: RouteContext<"/api/entrevista/candidato/[token]/proxima">) {
   const { token } = await params;
-  const formulario = obter<ParametrosCandidato>(token);
-  if (!formulario || formulario.tipo !== "scorecard") {
-    return NextResponse.json({ error: "Link inválido." }, { status: 404, headers: SEM_CACHE });
-  }
-  if (expirou(formulario)) {
-    return NextResponse.json({ error: "Este link expirou." }, { status: 410, headers: SEM_CACHE });
-  }
-  if (formulario.limite !== null && listarRespostas(token).length >= formulario.limite) {
-    return NextResponse.json({ error: "Este link já foi usado." }, { status: 410, headers: SEM_CACHE });
+  const resolucao = resolverConvite(token);
+  if (!resolucao.ok) {
+    const { titulo, status } = FECHADO[resolucao.motivo];
+    return NextResponse.json({ error: `${titulo}.` }, { status, headers: SEM_CACHE });
   }
 
   const body = await request.json().catch(() => null);
   const historico = normalizarHistorico((body as { historico?: unknown } | null)?.historico);
   try {
-    return NextResponse.json(await proximaPergunta(formulario.parametros.vaga, historico), { headers: SEM_CACHE });
+    return NextResponse.json(await proximaPergunta(resolucao.sala.vaga, historico), { headers: SEM_CACHE });
   } catch (err) {
     console.error(err);
     return NextResponse.json(

@@ -34,7 +34,6 @@ import {
   type PassoIndicador,
 } from "@/components/ui";
 import { Sala } from "@/components/Sala";
-import { DialogoLinkCandidato } from "@/components/DialogoLinkCandidato";
 import { ACAO_CULTURA, ACAO_VOZ } from "@/lib/acoes";
 import type { CodigoErroIA, Meta } from "@/lib/ai";
 import type { CandidatoRanking, Ranking, Recomendacao, Scorecard, Troca, Vaga } from "@/lib/types";
@@ -121,7 +120,6 @@ export default function Page() {
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
   const [modoExemplo, setModoExemplo] = useState(false);
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
-  const [linkCandidatoAberto, setLinkCandidatoAberto] = useState(false);
   const [candidatosVaga, setCandidatosVaga] = useState<CandidatoDaVaga[] | null>(null);
   const [comparando, setComparando] = useState(false);
   const autoIniciado = useRef(false);
@@ -316,9 +314,11 @@ export default function Page() {
                 <button type="submit" className="btn-primary !w-auto px-5" disabled={emAndamento}>
                   {emAndamento ? "Entrevista em andamento" : "Iniciar entrevista"}
                 </button>
-                <button type="button" className="btn-ghost !w-auto max-w-full whitespace-normal" onClick={() => setLinkCandidatoAberto(true)}>
-                  Criar link para candidatos
-                </button>
+                {/* O convite do candidato agora nasce na vaga, junto com a entrevista dele (US-014):
+                    é lá que ele tem prazo, mensagem pronta e um lugar para voltar. */}
+                <Link href="/vagas" className="btn-ghost !w-auto max-w-full whitespace-normal grid place-items-center">
+                  Convidar um candidato
+                </Link>
               </div>
             </form>
           </CartaoEntrada>
@@ -429,9 +429,6 @@ export default function Page() {
         </Stage>
       </main>
 
-      {linkCandidatoAberto && (
-        <DialogoLinkCandidato onFechar={() => setLinkCandidatoAberto(false)} vagaInicial={vaga} />
-      )}
       {Dialogo}
     </>
   );

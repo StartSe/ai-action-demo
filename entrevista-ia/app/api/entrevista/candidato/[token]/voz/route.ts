@@ -5,8 +5,7 @@
 // Nenhuma resposta daqui manda o candidato configurar coisa alguma: quando a voz falha, a resposta traz
 // `continuaPorTexto` e a sala segue pela voz do navegador (ou só por texto), sem interromper a conversa.
 import { NextResponse } from "next/server";
-import { type ParametrosCandidato } from "@/lib/entrevista";
-import { expirou, obter } from "@/lib/formularios";
+import { resolverConvite } from "@/lib/convite";
 import { gerarAudio, ttsEnabled } from "@/lib/voz";
 
 export const dynamic = "force-dynamic";
@@ -16,8 +15,7 @@ const SEM_VOZ = { error: "A voz não está disponível agora; a entrevista conti
 
 export async function GET(request: Request, { params }: RouteContext<"/api/entrevista/candidato/[token]/voz">) {
   const { token } = await params;
-  const formulario = obter<ParametrosCandidato>(token);
-  if (!formulario || formulario.tipo !== "scorecard" || expirou(formulario)) {
+  if (!resolverConvite(token).ok) {
     return NextResponse.json({ error: "Link inválido." }, { status: 404, headers: SEM_CACHE });
   }
   const texto = new URL(request.url).searchParams.get("texto")?.trim();

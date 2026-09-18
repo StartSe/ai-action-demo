@@ -27,7 +27,8 @@ export function DialogoAdicionarCandidato({
   /** Quem já tem entrevista viva nesta vaga: aparece na lista, mas não pode ser escolhido de novo. */
   jaNaVaga: string[];
   onFechar: () => void;
-  onAtribuido: (candidatoNome: string) => void;
+  /** O candidato entrou na vaga: o convite já existe e a tela de trás abre o diálogo dele. */
+  onAtribuido: (atribuicao: { candidatoNome: string; entrevistaId: string }) => void;
 }) {
   const [busca, setBusca] = useState("");
   const [itens, setItens] = useState<CandidatoDaBusca[] | null>(null);
@@ -76,7 +77,8 @@ export function DialogoAdicionarCandidato({
         body: JSON.stringify({ vagaId, candidatoId: candidato.id }),
       });
       if (!r.ok) throw r;
-      onAtribuido(candidato.nome);
+      const { entrevista } = await r.json();
+      onAtribuido({ candidatoNome: candidato.nome, entrevistaId: entrevista.id });
     } catch (e) {
       setErroTela(await lerErro(e));
       setAtribuindo("");

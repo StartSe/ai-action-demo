@@ -12,8 +12,9 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { DialogoAtribuirVaga } from "@/components/DialogoAtribuirVaga";
+import { DialogoConvite } from "@/components/DialogoConvite";
 import { FichaCandidato, type FonteNaTela } from "@/components/FichaCandidato";
-import { ChipSituacao, NotaDaEntrevista, ROTULO_DECISAO, VIVAS, type EntrevistaNaTabela } from "@/components/RotulosEntrevista";
+import { ChipSituacao, NotaDaEntrevista, PODE_CONVIDAR, ROTULO_DECISAO, VIVAS, rotuloConvite, type EntrevistaNaTabela } from "@/components/RotulosEntrevista";
 import { Aviso, Chip, DataTable, ErrorBox, Topbar, data, lerErro, useConfirmacao, useStatus, type Coluna, type ErroLido } from "@/components/ui";
 import type { EdicaoFicha } from "@/lib/ficha";
 import type { Ficha, OrigemCampo } from "@/lib/types";
@@ -90,6 +91,9 @@ export default function Page() {
   const [salvando, setSalvando] = useState(false);
   const [erroFicha, setErroFicha] = useState("");
   const [atribuindo, setAtribuindo] = useState(false);
+  // O convite aberto na tela: `reenviar` diz se abrir já estende o prazo ("Reenviar convite") ou só
+  // mostra o link que acabou de nascer com a atribuição.
+  const [convite, setConvite] = useState<{ entrevistaId: string; reenviar: boolean } | null>(null);
   const [recado, setRecado] = useState("");
   const [aviso, setAviso] = useState<ErroLido | null>(null);
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);
@@ -99,6 +103,14 @@ export default function Page() {
     if (corpo.fontes) setFontes(corpo.fontes);
     if (corpo.origens) setOrigens(corpo.origens);
   }, []);
+
+  /** Relê só a tabela de entrevistas: a ficha não muda quando o convite muda. */
+  const recarregarEntrevistas = useCallback(() => {
+    fetch(`/api/candidatos/${id}/entrevistas`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((corpo) => setEntrevistas(corpo.itens))
+      .catch(() => {});
+  }, [id]);
 
   const carregar = useCallback(async () => {
     const r = await fetch(`/api/candidatos/${id}`);
@@ -228,7 +240,19 @@ export default function Page() {
     {
       chave: "acoes",
       titulo: "Ações",
-      render: (e) => (e.resultadoId ? <Link href={`/r/${e.resultadoId}`} className="btn-link">Ver parecer</Link> : <span className="text-muted">—</span>),
+      render: (e) => {
+        // Uma coluna sem conteúdo devolve um traço: no celular o rótulo "Ações" sozinho parece defeito.
+        const acoes = [
+          e.resultadoId ? <Link key="parecer" href={`/r/${e.resultadoId}`} className="btn-link">Ver parecer</Link> : null,
+          PODE_CONVIDAR.includes(e.status) ? (
+            <button key="convite" type="button" className="btn-link" onClick={() => setConvite({ entrevistaId: e.id, reenviar: true })}>
+              {rotuloConvite(e)}
+            </button>
+          ) : null,
+        ].filter(Boolean);
+        if (!acoes.length) return <span className="text-muted">—</span>;
+        return <span className="flex items-center gap-3 flex-wrap">{acoes}</span>;
+      },
     },
   ];
 
@@ -393,14 +417,20 @@ export default function Page() {
           candidatoNome={candidato.nome}
           jaEm={jaEm}
           onFechar={() => setAtribuindo(false)}
-          onAtribuido={(cargo) => {
+          onAtribuido={({ cargo, entrevistaId }) => {
             setAtribuindo(false);
-            setRecado(`${candidato.nome} entrou na vaga de ${cargo}.`);
-            fetch(`/api/candidatos/${id}/entrevistas`)
-              .then((r) => (r.ok ? r.json() : Promise.reject(r)))
-              .then((corpo) => setEntrevistas(corpo.itens))
-              .catch(() => {});
+            setRecado(`${candidato.nome} entrou na vaga de ${cargo}. Mande o convite para a conversa começar.`);
+            setConvite({ entrevistaId, reenviar: false });
+            recarregarEntrevistas();
           }}
+        />
+      )}
+      {convite && (
+        <DialogoConvite
+          entrevistaId={convite.entrevistaId}
+          reenviar={convite.reenviar}
+          onFechar={() => setConvite(null)}
+          onMudou={recarregarEntrevistas}
         />
       )}
       {Dialogo}

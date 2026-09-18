@@ -259,7 +259,7 @@
         "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "Fase 3: convite e entrevista do candidato · PRD US-013"
     },
     {

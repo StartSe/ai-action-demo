@@ -29,6 +29,17 @@ export type EntrevistaNaTabela = {
 /** Só quem ainda ocupa o par (vaga, candidato): é quem não pode ser convidado de novo. */
 export const VIVAS: StatusEntrevista[] = ["convidada", "aberta", "em_andamento", "concluida", "avaliada"];
 
+/** Os estados em que ainda faz sentido mandar (ou remandar) o convite: um convite vencido ganha um
+ * link novo e a entrevista volta a esperar o candidato (US-014). */
+export const PODE_CONVIDAR: StatusEntrevista[] = ["convidada", "aberta", "expirada"];
+
+/** O rótulo do botão do convite. São três frases porque são três situações diferentes para quem lê a
+ * tabela: nada foi enviado ainda, já foi enviado e vai de novo, ou o prazo venceu e o link será outro. */
+export function rotuloConvite(e: { status: StatusEntrevista; codigo?: string }): string {
+  if (e.status === "expirada") return "Convidar de novo";
+  return e.codigo ? "Reenviar convite" : "Enviar convite";
+}
+
 export const ROTULO_DECISAO: Record<Decisao, string> = { avancar: "Avançar", aguardar: "Aguardar", reprovar: "Não avançar" };
 
 /**

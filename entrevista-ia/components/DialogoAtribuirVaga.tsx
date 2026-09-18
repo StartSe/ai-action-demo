@@ -22,7 +22,8 @@ export function DialogoAtribuirVaga({
   /** Vagas em que ele já tem entrevista viva: aparecem na lista, mas não podem ser escolhidas. */
   jaEm: string[];
   onFechar: () => void;
-  onAtribuido: (cargo: string) => void;
+  /** A pessoa entrou na vaga: o convite já existe e a tela de trás abre o diálogo dele. */
+  onAtribuido: (atribuicao: { cargo: string; entrevistaId: string }) => void;
 }) {
   const [itens, setItens] = useState<VagaParaAtribuir[] | null>(null);
   const [atribuindo, setAtribuindo] = useState("");
@@ -60,7 +61,8 @@ export function DialogoAtribuirVaga({
     try {
       const r = await fetch("/api/entrevistas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vagaId: vaga.id, candidatoId }) });
       if (!r.ok) throw r;
-      onAtribuido(vaga.cargo);
+      const { entrevista } = await r.json();
+      onAtribuido({ cargo: vaga.cargo, entrevistaId: entrevista.id });
     } catch (e) {
       setErroTela(await lerErro(e));
       setAtribuindo("");

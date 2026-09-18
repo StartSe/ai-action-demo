@@ -3,7 +3,6 @@
 // para não duplicar o prompt nem a gravação no histórico.
 import { aiEnabled, askJSON, meta, type Meta } from "./ai";
 import { esperar, mensagemEncerramento, proximaPerguntaDemo, scorecardDemo } from "./demo";
-import { criar, type ParametrosPublicos } from "./formularios";
 import { listar, obter, salvar } from "./historico";
 import type { CandidatoRanking, Ranking, Recomendacao, Scorecard, Troca, Vaga } from "./types";
 
@@ -84,21 +83,6 @@ export async function gerarScorecard(
   const metaGerada = meta({ demo: false, insumo });
   const id = salvar({ tipo, titulo: `Scorecard de ${vaga.candidato}`, entrada: { vaga, historico }, saida: scorecard, meta: metaGerada, expiraEmDias: opts.expiraEmDias });
   return { demo: false, scorecard, meta: metaGerada, id };
-}
-
-/** Parâmetros do link de candidato: a vaga inteira, para a sala de entrevista e a avaliação usarem os mesmos dados. */
-export type ParametrosCandidato = ParametrosPublicos & { vaga: Vaga };
-
-/** Cria o link público (/entrevista/<código>) que o candidato usa para conversar sozinho com a entrevistadora. */
-export function criarLinkCandidato(vaga: Vaga, expiraEmDias: number): string {
-  const parametros: ParametrosCandidato = {
-    marca: "E",
-    nome: "Entrevistadora IA",
-    titulo: `Entrevista para ${vaga.titulo}`,
-    descricao: `Converse com a entrevistadora de IA sobre a vaga de ${vaga.titulo}. Leva poucos minutos, por voz ou texto.`,
-    vaga,
-  };
-  return criar({ tipo: "scorecard", campos: [], parametros, expiraEmDias, limite: 1 });
 }
 
 export type CandidatoDaVaga = { id: string; candidato: string; nota_geral: number; recomendacao: Recomendacao; criadoEm: string };
