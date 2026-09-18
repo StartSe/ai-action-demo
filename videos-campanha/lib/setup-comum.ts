@@ -4,12 +4,12 @@ import { getConfig, mascarar, origemConfig, setConfig } from "./store";
 import { enviar, type Canal } from "./notificacoes";
 import { conectar, listarFerramentas, type FerramentaMCP } from "./mcp-cliente";
 import { conexaoAutorizada } from "./mcp-oauth";
-import { MODELO_AUTOMATICO, MODELOS_GRATUITOS, MODELOS_VISAO, type Opcao, type ProximoPasso } from "./modelos";
-import { DEFAULT_MODEL, interpretarFalha, modelName } from "./ai";
+import { MODELOS_GRATUITOS, MODELOS_VISAO, type Opcao, type ProximoPasso } from "./modelos";
+import { interpretarFalha } from "./ai";
 import { contaConectada, credenciaisDoApp as credenciaisAppEmail } from "./email-envio";
 
 export type { Opcao, ProximoPasso };
-export { MODELO_AUTOMATICO, MODELOS_GRATUITOS, MODELOS_VISAO };
+export { MODELOS_GRATUITOS, MODELOS_VISAO };
 
 export type Campo = {
   chave: string;
@@ -158,79 +158,34 @@ export function registrarEnderecoPublico(req: Request): void {
   setConfig("APP_URL", atual);
 }
 
-// Catálogo vivo de modelos do OpenRouter, agrupado em gratuitos e pagos. Cache de 1 hora em memória: a
-// lista completa do catálogo não varia por usuário, então uma única cópia por processo basta. A lista
-// fixa de lib/modelos.ts é só a rede de segurança de quem ainda não salvou chave (ou de um catálogo que
-// não respondeu): o que a pessoa escolhe em /setup vem do provedor, não do código.
+// Modelos gratuitos vivos do catálogo do OpenRouter, além dos fixos de lib/modelos.ts. Cache de 1 hora em
+// memória: a lista completa do catálogo não varia por usuário, então uma única cópia por processo basta.
 const CACHE_MODELOS_MS = 60 * 60 * 1000;
-/** Quantos modelos de cada grupo entram no menu: o catálogo tem centenas, e uma lista que ninguém
- * consegue percorrer é tão inútil quanto uma lista fixa. Os maiores de contexto primeiro. */
-const MODELOS_POR_GRUPO = 12;
 let cacheModelosDinamicos: { expiraEm: number; modelos: Opcao[] } | null = null;
 
-type ModeloCatalogo = { id: string; name?: string; context_length?: number };
-
-async function modelosDinamicos(chave: string): Promise<Opcao[]> {
+async function modelosGratuitosDinamicos(chave: string): Promise<Opcao[]> {
   if (cacheModelosDinamicos && cacheModelosDinamicos.expiraEm > Date.now()) return cacheModelosDinamicos.modelos;
   const r = await fetch("https://openrouter.ai/api/v1/models", { headers: { Authorization: `Bearer ${chave}` } });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const data = (await r.json()) as { data?: ModeloCatalogo[] };
-  const catalogo = data.data ?? [];
-  const porContexto = (a: ModeloCatalogo, b: ModeloCatalogo) => (b.context_length ?? 0) - (a.context_length ?? 0);
-  const opcao = (m: ModeloCatalogo, grupo: Opcao["grupo"]): Opcao => ({ valor: m.id, rotulo: m.name || m.id, grupo });
-  const gratuito = (m: ModeloCatalogo) => m.id.endsWith(":free");
-  const recomendado = catalogo.find((m) => m.id === DEFAULT_MODEL);
-  const modelos: Opcao[] = [
-    ...(recomendado ? [opcao(recomendado, "recomendado")] : []),
-    ...catalogo.filter((m) => gratuito(m) && m.id !== DEFAULT_MODEL).sort(porContexto).slice(0, MODELOS_POR_GRUPO).map((m) => opcao(m, "gratuito")),
-    ...catalogo.filter((m) => !gratuito(m)).sort(porContexto).slice(0, MODELOS_POR_GRUPO).map((m) => opcao(m, "pago")),
-  ];
-  if (modelos.length === 0) throw new Error("catálogo vazio");
+  const data = (await r.json()) as { data?: { id: string; name?: string; context_length?: number }[] };
+  const existentes = new Set(MODELOS_GRATUITOS.map((m) => m.valor));
+  const extras: Opcao[] = (data.data ?? [])
+    .filter((m) => m.id.endsWith(":free") && !existentes.has(m.id))
+    .sort((a, b) => (b.context_length ?? 0) - (a.context_length ?? 0))
+    .slice(0, 8)
+    .map((m) => ({ valor: m.id, rotulo: m.name || m.id, grupo: "gratuito" }));
+  const modelos = [...MODELOS_GRATUITOS, ...extras];
   cacheModelosDinamicos = { expiraEm: Date.now() + CACHE_MODELOS_MS, modelos };
   return modelos;
 }
 
-/** Opções de um campo de modelo: "Automático" na frente, o catálogo vivo depois. */
-async function opcoesDeModelo(chave: string | undefined, automatico: Opcao): Promise<Opcao[]> {
-  if (!chave) return [automatico, ...MODELOS_GRATUITOS];
-  try {
-    return [automatico, ...(await modelosDinamicos(chave))];
-  } catch {
-    return [automatico, ...MODELOS_GRATUITOS];
-  }
-}
-
 /** Integração de IA usada por todos os apps. Passe `visao: true` só nos apps que realmente leem
  * imagem (hoje `clone-site` e `custos-ia`) — os demais não ganham o campo "Modelo para imagens".
- * `avaliacao: true` acrescenta um segundo modelo, só para o que vira nota (hoje `simulador-vendas`):
- * um modelo rápido conversa e um mais capaz avalia, sem pagar caro nas duas pontas. `rotuloModelo`
- * renomeia o campo principal quando o app tem um nome melhor para o que a IA faz o tempo todo
- * (ex.: "Modelo para simulação"). `beneficio` é a frase de uma linha do cartão, em linguagem de
- * negócio e própria de cada app (ex.: "Liga a IA que gera o plano de desenvolvimento"). */
-export function openrouter({
-  visao = false,
-  avaliacao = false,
-  rotuloModelo = "Modelo de IA",
-  beneficio = "Liga a IA que gera o resultado deste app",
-}: { visao?: boolean; avaliacao?: boolean; rotuloModelo?: string; beneficio?: string } = {}): Integracao {
+ * `beneficio` é a frase de uma linha do cartão, em linguagem de negócio e própria de cada app
+ * (ex.: "Liga a IA que gera o plano de desenvolvimento"). */
+export function openrouter({ visao = false, beneficio = "Liga a IA que gera o resultado deste app" }: { visao?: boolean; beneficio?: string } = {}): Integracao {
   const camposVisao: Campo[] = visao
     ? [{ chave: "OPENROUTER_MODEL_VISAO", rotulo: "Modelo para imagens", tipo: "select", opcional: true, avancado: true, padrao: MODELOS_VISAO[0].valor, opcoes: MODELOS_VISAO, ajuda: "Modelo usado quando o app precisa ler uma imagem" }]
-    : [];
-  const automaticoPadrao: Opcao = { valor: MODELO_AUTOMATICO, rotulo: "Automático (o app escolhe)" };
-  const automaticoAvaliacao: Opcao = { valor: MODELO_AUTOMATICO, rotulo: `Automático (o mesmo de "${rotuloModelo}")` };
-  const camposAvaliacao: Campo[] = avaliacao
-    ? [
-        {
-          chave: "OPENROUTER_MODEL_AVALIACAO",
-          rotulo: "Modelo para avaliação",
-          tipo: "select",
-          opcional: true,
-          padrao: MODELO_AUTOMATICO,
-          opcoes: [automaticoAvaliacao, ...MODELOS_GRATUITOS],
-          ajuda: "Um modelo mais capaz só aqui deixa a nota mais confiável sem encarecer o resto.",
-          opcoesDinamicas: async (config) => opcoesDeModelo(config.OPENROUTER_API_KEY, automaticoAvaliacao),
-        },
-      ]
     : [];
   return {
     id: "openrouter",
@@ -245,15 +200,22 @@ export function openrouter({
       { chave: "OPENROUTER_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk-or-v1-..." },
       {
         chave: "OPENROUTER_MODEL",
-        rotulo: rotuloModelo,
+        rotulo: "Modelo de IA",
         tipo: "select",
         opcional: true,
-        padrao: MODELO_AUTOMATICO,
-        opcoes: [automaticoPadrao, ...MODELOS_GRATUITOS],
-        ajuda: 'Automático já funciona. Se aparecer "sem crédito" ou "limite diário", troque por outro gratuito ou adicione créditos.',
-        opcoesDinamicas: async (config) => opcoesDeModelo(config.OPENROUTER_API_KEY, automaticoPadrao),
+        padrao: "nvidia/nemotron-3-super-120b-a12b:free",
+        opcoes: MODELOS_GRATUITOS,
+        ajuda: 'Comece pelo recomendado. Se aparecer "sem crédito" ou "limite diário", troque por outro gratuito ou adicione créditos.',
+        opcoesDinamicas: async (config) => {
+          const chave = config.OPENROUTER_API_KEY;
+          if (!chave) return MODELOS_GRATUITOS;
+          try {
+            return await modelosGratuitosDinamicos(chave);
+          } catch {
+            return MODELOS_GRATUITOS;
+          }
+        },
       },
-      ...camposAvaliacao,
       ...camposVisao,
     ],
     testar: async (config) => {
@@ -266,7 +228,7 @@ export function openrouter({
       }
       const data = (await r.json()) as { data?: { limit?: number | null; usage?: number; is_free_tier?: boolean } };
 
-      const modelo = modelName();
+      const modelo = config.OPENROUTER_MODEL || "nvidia/nemotron-3-super-120b-a12b:free";
       const resposta = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${chave}`, "Content-Type": "application/json" },

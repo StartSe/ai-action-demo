@@ -17,24 +17,22 @@ export async function GET(req: Request, { params }: RouteContext<"/api/setup/oau
     return Response.redirect(`${baseUrl(req)}/setup?erro=${encodeURIComponent("Integração desconhecida.")}`, 302);
   }
   const campoUrl = integracao.campos.find((c) => c.chave === `${prefixo}_URL`);
-  const urlServidor = getConfig(`${prefixo}_URL`) || campoUrl?.padrao;
+  let urlServidor = getConfig(`${prefixo}_URL`) || campoUrl?.padrao;
+  if (prefixo === "HIGGSFIELD" && /^https:\/\/mcp\.higgsfield\.ai\/?$/.test(urlServidor || "")) urlServidor = "https://mcp.higgsfield.ai/mcp";
   if (!urlServidor) {
     return Response.redirect(`${baseUrl(req)}/setup?erro=${encodeURIComponent(`Informe o endereço em "${integracao.titulo}" antes de autorizar.`)}`, 302);
   }
   try {
     const redirectUri = `${baseUrl(req)}/api/setup/oauth/mcp/${prefixo}/callback`;
-    const { destino, verifier } = await iniciarAutorizacao(prefixo, urlServidor, redirectUri);
+    const { destino, verifier, state } = await iniciarAutorizacao(prefixo, urlServidor, redirectUri);
     const seguro = redirectUri.startsWith("https") ? "; Secure" : "";
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: destino,
-        "Set-Cookie": `mcp_${prefixo}_verifier=${verifier}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${seguro}`,
-      },
-    });
+    const headers = new Headers({ Location: destino });
+    headers.append("Set-Cookie", `mcp_${prefixo}_verifier=${verifier}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${seguro}`);
+    headers.append("Set-Cookie", `mcp_${prefixo}_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${seguro}`);
+    return new Response(null, { status: 302, headers });
   } catch (err) {
     console.error(err);
-    return Response.redirect(`${baseUrl(req)}/setup?erro=${encodeURIComponent(`Não foi possível iniciar a conexão com "${integracao.titulo}".`)}`, 302);
+    return Response.redirect(`${baseUrl(req)}/setup?erro=${encodeURIComponent(err instanceof Error ? err.message : `Não foi possível iniciar a conexão com "${integracao.titulo}".`)}`, 302);
   }
 }
 

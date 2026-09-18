@@ -9,11 +9,6 @@ export type Opcao = { valor: string; rotulo: string; /** Agrupamento do <select>
  * contrário de setup.tsx). */
 export type ProximoPasso = { id: string; titulo: string; beneficio: string; url: string };
 
-/** Valor de "Automático" nos campos de modelo de /setup: deixa o app escolher (o modelo padrão de
- * lib/ai.ts; na tarefa de avaliação, o modelo da tarefa padrão). Precisa de um valor de verdade porque
- * app/api/setup/route.ts trata string vazia como "não mexa neste campo". */
-export const MODELO_AUTOMATICO = "auto";
-
 export const MODELOS_GRATUITOS: Opcao[] = [
   { valor: "nvidia/nemotron-3-super-120b-a12b:free", rotulo: "Nemotron 3 Super 120B (gratuito, padrão)", grupo: "recomendado" },
   { valor: "google/gemma-4-31b-it:free", rotulo: "Gemma 4 31B (gratuito)", grupo: "gratuito" },

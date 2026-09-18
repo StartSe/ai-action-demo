@@ -56,7 +56,7 @@ export function higgsfieldConfigurado(): boolean {
 /** Conexão pronta: token do fluxo OAuth (renovado quando preciso) ou código colado à mão, com o endereço padrão quando nenhum foi salvo. */
 async function conexaoAtual(): Promise<ConexaoMCP> {
   const autorizada = await conexaoAutorizada(PREFIXO_HIGGSFIELD);
-  if (autorizada) return conectar(autorizada.url, autorizada.token);
+  if (autorizada) return conectar(autorizada.url.replace(/^https:\/\/mcp\.higgsfield\.ai\/?$/, "https://mcp.higgsfield.ai/mcp"), autorizada.token);
   const config = lerConfig(HIGGSFIELD);
   const url = config[`${PREFIXO_HIGGSFIELD}_URL`];
   const codigo = config[`${PREFIXO_HIGGSFIELD}_CODIGO`];

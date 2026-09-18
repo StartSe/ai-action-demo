@@ -12,11 +12,13 @@ type MetadadosOAuth = {
   authorization_endpoint: string;
   token_endpoint: string;
   registration_endpoint?: string;
+  resource: string;
+  scopes?: string;
 };
 
 async function buscarJson(url: string): Promise<Record<string, unknown> | null> {
   try {
-    const r = await fetch(url, { headers: { Accept: "application/json" } });
+    const r = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
     if (!r.ok) return null;
     return (await r.json()) as Record<string, unknown>;
   } catch {
@@ -33,11 +35,16 @@ export async function descobrirMetadados(urlServidor: string): Promise<Metadados
   const primeiroServidor = Array.isArray(recurso?.authorization_servers) ? (recurso!.authorization_servers as unknown[])[0] : undefined;
   if (typeof primeiroServidor === "string" && primeiroServidor) servidorAutorizacao = primeiroServidor;
 
-  const metadados = await buscarJson(`${servidorAutorizacao}/.well-known/oauth-authorization-server`);
+  const metadados = await buscarJson(`${servidorAutorizacao}/.well-known/oauth-authorization-server`)
+    || await buscarJson(`${servidorAutorizacao}/.well-known/openid-configuration`);
+  if (typeof metadados?.authorization_endpoint !== "string" || typeof metadados?.token_endpoint !== "string")
+    throw new Error("O provedor não disponibilizou os endpoints OAuth. Tente novamente mais tarde.");
   return {
-    authorization_endpoint: typeof metadados?.authorization_endpoint === "string" ? metadados.authorization_endpoint : `${servidorAutorizacao}/authorize`,
-    token_endpoint: typeof metadados?.token_endpoint === "string" ? metadados.token_endpoint : `${servidorAutorizacao}/token`,
-    registration_endpoint: typeof metadados?.registration_endpoint === "string" ? metadados.registration_endpoint : undefined,
+    authorization_endpoint: metadados.authorization_endpoint,
+    token_endpoint: metadados.token_endpoint,
+    registration_endpoint: typeof metadados.registration_endpoint === "string" ? metadados.registration_endpoint : undefined,
+    resource: typeof recurso?.resource === "string" ? recurso.resource : urlServidor,
+    scopes: Array.isArray(recurso?.scopes_supported) ? recurso.scopes_supported.filter((s) => ["openid", "email", "offline_access"].includes(String(s))).join(" ") : undefined,
   };
 }
 
@@ -49,6 +56,7 @@ async function obterClientId(prefixo: string, metadados: MetadadosOAuth, redirec
   try {
     const resposta = await fetch(metadados.registration_endpoint, {
       method: "POST",
+      signal: AbortSignal.timeout(15000),
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         client_name: "IA para Executivos",
@@ -74,24 +82,28 @@ function gravarToken(prefixo: string, dados: { access_token?: string; refresh_to
   setConfig(`${prefixo}_EXPIRA`, dados.expires_in ? String(Date.now() + dados.expires_in * 1000) : null);
 }
 
-export type InicioAutorizacao = { destino: string; verifier: string };
+export type InicioAutorizacao = { destino: string; verifier: string; state: string };
 
 /** Monta a URL de autorização (com PKCE) e salva o endereço do servidor para as próximas etapas. */
 export async function iniciarAutorizacao(prefixo: string, urlServidor: string, redirectUri: string): Promise<InicioAutorizacao> {
   const metadados = await descobrirMetadados(urlServidor);
   const clientId = await obterClientId(prefixo, metadados, redirectUri);
+  if (!clientId) throw new Error("O provedor não permitiu registrar o aplicativo automaticamente. Informe o Client ID fornecido pelo Higgsfield nas opções avançadas.");
   setConfig(`${prefixo}_URL`, urlServidor);
 
   const verifier = randomBytes(32).toString("base64url");
+  const state = randomBytes(32).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
   const destino = new URL(metadados.authorization_endpoint);
   destino.searchParams.set("response_type", "code");
   destino.searchParams.set("redirect_uri", redirectUri);
   destino.searchParams.set("code_challenge", challenge);
   destino.searchParams.set("code_challenge_method", "S256");
-  destino.searchParams.set("resource", new URL(urlServidor).origin);
+  destino.searchParams.set("resource", metadados.resource);
+  destino.searchParams.set("state", state);
+  if (metadados.scopes) destino.searchParams.set("scope", metadados.scopes);
   if (clientId) destino.searchParams.set("client_id", clientId);
-  return { destino: destino.toString(), verifier };
+  return { destino: destino.toString(), verifier, state };
 }
 
 /** Troca o code (recebido no retorno) pelo token no servidor e grava o resultado. */
@@ -102,14 +114,16 @@ export async function trocarCode(prefixo: string, code: string, verifier: string
   const clientId = getConfig(`${prefixo}_CLIENT_ID`);
   const corpo = new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: redirectUri, code_verifier: verifier });
   if (clientId) corpo.set("client_id", clientId);
+  corpo.set("resource", metadados.resource);
 
   const resposta = await fetch(metadados.token_endpoint, {
     method: "POST",
+    signal: AbortSignal.timeout(15000),
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
     body: corpo.toString(),
   });
   if (!resposta.ok) {
-    console.error("O servidor não devolveu o código de acesso:", resposta.status, await resposta.text().catch(() => ""));
+    console.error("O servidor não devolveu o código de acesso:", resposta.status);
     throw new Error("O servidor não concluiu a conexão. Tente autorizar de novo; se repetir, cole o código de acesso manualmente em Opções avançadas.");
   }
   const dados = (await resposta.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
@@ -126,8 +140,10 @@ async function renovar(prefixo: string): Promise<string | undefined> {
     const clientId = getConfig(`${prefixo}_CLIENT_ID`);
     const corpo = new URLSearchParams({ grant_type: "refresh_token", refresh_token: refresh });
     if (clientId) corpo.set("client_id", clientId);
+  corpo.set("resource", metadados.resource);
     const resposta = await fetch(metadados.token_endpoint, {
       method: "POST",
+      signal: AbortSignal.timeout(15000),
       headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
       body: corpo.toString(),
     });

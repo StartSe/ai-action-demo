@@ -1,3 +1,5 @@
+> **Creative Flow:** a página inicial agora usa projetos com blocos conectáveis, receitas e biblioteca global de assets. Consulte [uso, arquitetura e validação](docs/creative-flow.md). O fluxo de briefing descrito abaixo permanece em `/briefing`.
+
 # Vídeos de Campanha
 
 Descreva a campanha, envie a imagem do produto e escolha entre três conceitos de vídeo curto antes de gastar créditos. Área: Marketing.
