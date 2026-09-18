@@ -32,6 +32,7 @@ import {
   registrarMensagem,
   salvarRoteiro,
   transcricao,
+  type NivelVoz,
 } from "./entrevistas";
 import { ROTULOS_FICHA, CAMPOS_LISTA, CAMPOS_SIMPLES } from "./ficha";
 import { faixaSalarial } from "./formato";
@@ -621,8 +622,17 @@ function comoTrocas(falas: { papel: string; texto: string }[]): Troca[] {
  * Sem `ordem` (um cliente que não a manda), vale a comparação de texto, que é o melhor possível.
  *
  * Recarregar a página sem responder nada devolve a pergunta atual, sem gastar uma do total.
+ *
+ * **`nivelVoz` é gravado na primeira resposta e não muda depois.** Ele responde "como foi esta
+ * entrevista?" na tela de quem acompanha o processo, e a resposta honesta é a de quando a conversa
+ * começou: quem trocou de jeito no meio (caiu para o teclado numa pergunta) não fez outra entrevista.
  */
-export async function proximaFala(entrevistaId: string, ultimaResposta?: string, ordem?: number): Promise<Fala> {
+export async function proximaFala(
+  entrevistaId: string,
+  ultimaResposta?: string,
+  ordem?: number,
+  { nivelVoz }: { nivelVoz?: NivelVoz } = {}
+): Promise<Fala> {
   const entrevista = obterEntrevista(entrevistaId);
   if (!entrevista) throw new Error(`Entrevista ${entrevistaId} não encontrada.`);
   const ctx = montarContexto(entrevistaId);
@@ -641,12 +651,17 @@ export async function proximaFala(entrevistaId: string, ultimaResposta?: string,
   if (resposta && !repetida) {
     registrarMensagem({ entrevistaId, papel: "candidato", texto: resposta });
     falas = [...falas, { papel: "candidato", texto: resposta }];
-    if (entrevista.status === "convidada" || entrevista.status === "aberta") mudarStatus(entrevistaId, "em_andamento");
+    if (entrevista.status === "convidada" || entrevista.status === "aberta") {
+      mudarStatus(entrevistaId, "em_andamento", { nivelVoz: entrevista.nivelVoz ?? nivelVoz });
+    }
   }
 
-  // Recarregou a página sem nada novo a dizer: repete a pergunta em que a conversa parou.
+  // Nada novo a dizer (recarregou a página) ou a resposta já estava guardada e o turno já tinha sido
+  // respondido ("Tentar de novo" depois de a resposta do servidor se perder): repete a pergunta em que
+  // a conversa parou, em vez de fazer outra. Gastar um turno por um pedido repetido tiraria uma
+  // pergunta de quem está sendo entrevistado e deixaria a anterior sem resposta na transcrição.
   const agora = falas[falas.length - 1];
-  if (!resposta && agora?.papel === "entrevistadora") {
+  if ((!resposta || repetida) && agora?.papel === "entrevistadora") {
     const posicao = posicaoNoRoteiro(plano, falas.slice(0, -1), ctx.numeroPerguntas);
     const passo = decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas: ctx.numeroPerguntas });
     return {
@@ -672,6 +687,38 @@ export async function proximaFala(entrevistaId: string, ultimaResposta?: string,
     indice: passo.tipo === "encerrar" ? posicao.feitas : posicao.feitas + 1,
     total: plano.perguntas.length,
     transcricao: [...falas, { papel: "entrevistadora", texto }],
+  };
+}
+
+/**
+ * A conversa como o servidor a tem, **sem escrever nada e sem gastar um turno**.
+ *
+ * É o que a sala pede ao abrir: quem recarregou a página no meio da entrevista volta com as falas já
+ * trocadas na tela e com o "Pergunta 3 de 8" no lugar certo. Pedir isso a `proximaFala()` funcionaria,
+ * mas ela grava — e uma tela que se abre duas vezes (a montagem dupla do React em desenvolvimento, um
+ * toque duplo no link) escreveria duas vezes.
+ *
+ * Devolve `null` quando ainda não há nada: aí quem abre a sala é a primeira fala da entrevistadora.
+ * `pergunta` fica vazia quando a última coisa dita foi do candidato — a resposta chegou, a fala
+ * seguinte não, e é a sala que pede a próxima.
+ */
+export async function conversaAtual(entrevistaId: string): Promise<Fala | null> {
+  const falas = comoTrocas(transcricao(entrevistaId));
+  if (!falas.length) return null;
+  const ctx = montarContexto(entrevistaId);
+  if (!ctx) return null;
+  const plano = await roteiroDaEntrevista(entrevistaId, ctx);
+
+  const ultima = falas[falas.length - 1];
+  const anteriores = ultima.papel === "entrevistadora" ? falas.slice(0, -1) : falas;
+  const posicao = posicaoNoRoteiro(plano, anteriores, ctx.numeroPerguntas);
+  const passo = decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas: ctx.numeroPerguntas });
+  return {
+    pergunta: ultima.papel === "entrevistadora" ? ultima.texto : "",
+    encerrar: passo.tipo === "encerrar",
+    indice: passo.tipo === "encerrar" ? posicao.feitas : posicao.feitas + 1,
+    total: plano.perguntas.length,
+    transcricao: falas,
   };
 }
 

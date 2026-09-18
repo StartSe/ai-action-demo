@@ -46,6 +46,7 @@ export default async function Page({ params }: PageProps<"/entrevista/[token]">)
       duracaoMin={duracaoMin}
       vozLigada={ttsEnabled()}
       retomando={resultado.entrevista?.status === "em_andamento"}
+      conversaNoNavegador={!resultado.entrevista}
     />
   );
 }

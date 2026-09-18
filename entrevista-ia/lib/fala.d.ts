@@ -1,5 +1,5 @@
 // Tipos da escuta do navegador (Web Speech API), usados pelo teste de microfone das boas-vindas
-// (components/BoasVindas.tsx) e pela sala da entrevista (components/Sala.tsx).
+// (components/BoasVindas.tsx) e pela sala do candidato (components/SalaCandidato.tsx).
 //
 // `speechSynthesis` (a fala) já vem do DOM do TypeScript e não precisa de nada aqui; `SpeechRecognition`
 // (a escuta) ainda não está em `lib.dom.d.ts`, então as partes que o app usa são declaradas aqui.

@@ -5,6 +5,11 @@ import { Aviso, ErrorBox, lerErro, type ErroLido } from "./ui";
 import type { CodigoErroIA } from "@/lib/ai";
 import type { Troca, Vaga } from "@/lib/types";
 
+// **Esta sala é a prévia do gestor (D11), e só ela.** A conversa do candidato mora em
+// components/SalaCandidato.tsx desde a US-018: lá a fala é falada, a escuta é do navegador e a
+// transcrição é do servidor. Aqui quem responde é quem administra o app, digitando, para ouvir as
+// perguntas que a vaga gera antes de convidar alguém — nada é gravado e nenhum parecer sai daqui.
+//
 // A tipagem da escuta do navegador (`SpeechRecognition`) mora em lib/fala.d.ts, no escopo global:
 // as boas-vindas (components/BoasVindas.tsx) usam a mesma, e duas declarações locais não convivem.
 
@@ -26,7 +31,6 @@ export function Sala({
   corpoExtra,
   vozLigada,
   acaoVoz,
-  audioLiberado = false,
   modoExemplo,
   onFinalizar,
 }: {
@@ -40,9 +44,6 @@ export function Sala({
   vozLigada: boolean;
   /** "O que fazer agora" quando a voz está desligada. Só quem administra o app recebe (o candidato não configura nada). */
   acaoVoz?: { rotulo: string; url: string };
-  /** O áudio deste navegador já foi liberado por um gesto FORA da sala (o "Começar a entrevista" das
-   * boas-vindas): a primeira pergunta pode ser falada sem esperar um segundo clique. */
-  audioLiberado?: boolean;
   modoExemplo: boolean;
   onFinalizar: (historico: Troca[]) => void;
 }) {
@@ -72,7 +73,7 @@ export function Sala({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mudoRef = useRef(false);
   const iniciouRef = useRef(false);
-  const gestoRef = useRef(audioLiberado);
+  const gestoRef = useRef(false);
   const pendenteRef = useRef<string | null>(null);
   // A voz natural desistiu nesta conversa: não adianta pedir de novo a cada pergunta.
   const vozDesistiuRef = useRef(false);

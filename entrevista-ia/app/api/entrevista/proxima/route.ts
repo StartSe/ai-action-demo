@@ -2,7 +2,7 @@
 // entrevista de verdade, com um candidato vazio — o gestor ouve exatamente as perguntas que a vaga
 // gera, sem que nada seja gravado nem avaliado.
 //
-// A conversa do candidato tem rota própria (app/api/entrevista/candidato/[token]/proxima), que lê a
+// A conversa do candidato tem rota própria (app/api/entrevista/candidato/[token]/falar), que lê a
 // vaga do link e guarda a transcrição no servidor.
 import { responderErro } from "@/app/api/erros";
 import { normalizarHistorico } from "@/lib/entrevista";
