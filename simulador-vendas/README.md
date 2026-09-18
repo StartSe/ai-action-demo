@@ -53,6 +53,14 @@ No painel, "Criar link de treino" gera um link (`/simular/<código>`, válido po
   5. Se a avaliação não chegar em 90 segundos, a sala avisa o vendedor ("Sua conversa foi registrada, mas a avaliação ainda não chegou. Avise quem enviou o link") e a conversa fica registrada mesmo assim. O cartão "Dados para a equipe técnica" em `/setup` mostra quantas conversas ficaram sem avaliação e qual foi o motivo da última tentativa recusada (assinatura ausente, segredo não salvo, análise falhou).
   6. Se o widget não carregar em 10 segundos, a sala troca sozinha para a conversa por voz do próprio navegador, sem o vendedor precisar fazer nada. Ele também pode pedir a troca a qualquer momento ("Prefiro conversar por aqui"), que é a saída para o caso de o agente carregar e mesmo assim não conectar.
 
+## Voz do cliente
+Todo treino já acontece por voz sem nada configurado: o cliente fala pelo `speechSynthesis` do navegador de quem está treinando. A ElevenLabs só melhora a naturalidade da voz — ela não é o que faz o treino ser falado.
+
+- Cada tipo de cliente tem um jeito de falar próprio (`lib/vozes.ts`): velocidade, estabilidade e tom. Sem a ElevenLabs, isso vira `rate`/`pitch` do navegador (o apressado atropela, o resistente arrasta); com ela, vira `voice_settings` na geração do áudio, mais uma voz diferente da sua conta para cada tipo (escolhida por posição sobre a lista de `GET /v1/voices`, sempre a mesma para o mesmo tipo).
+- O cartão "Voz do cliente" em `/setup` mostra o estado da conexão, o interruptor "Voz automática por tipo de cliente" (ligado por padrão) e um botão de amostra por tipo — a amostra toca pelo mesmo caminho que o vendedor vai ouvir.
+- Desligando o interruptor, todos os tipos voltam a falar com a mesma voz (a padrão, ou a de `ELEVENLABS_VOICE_ID`).
+- A chave da ElevenLabs nunca vai para o navegador: o link do treino é público, então o áudio é gerado no servidor (`POST /api/salas/<código>/voz`). Quando ela não responde, a resposta é 409 e a tela fala pelo navegador sem o vendedor perceber.
+
 ## Usar dentro de um assistente de IA (MCP)
 O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, para que assistentes como Claude ou ChatGPT chamem a ferramenta `analisar_conversa` diretamente. Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
 
@@ -82,6 +90,7 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `OPENROUTER_MODEL` | Alternativa ao setup. Modelo usado no dia a dia do app. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
 | `OPENROUTER_MODEL_AVALIACAO` | Alternativa ao setup. Modelo usado só na avaliação da conversa; sem ele vale o de `OPENROUTER_MODEL`. |
 | `ELEVENLABS_API_KEY` | Opcional. Chave da ElevenLabs para a sala de treino por voz. Obtenha em https://elevenlabs.io/app/settings/api-keys. |
+| `ELEVENLABS_VOICE_ID` | Opcional. Voz usada quando a voz automática por tipo de cliente está desligada (ou quando a lista de vozes da conta não pôde ser lida). Sem ela vale uma voz padrão da ElevenLabs. |
 | `ELEVENLABS_AGENT_ID` | Opcional. Agente conversacional que faz o papel do cliente. Crie em https://elevenlabs.io/app/conversational-ai; em `/setup` a lista é carregada da própria conta. |
 | `ELEVENLABS_WEBHOOK_SECRET` | Opcional. Segredo de verificação do aviso de pós-conversa (Configurações › Webhooks na ElevenLabs), usado para validar a assinatura em `app/webhook/elevenlabs/route.ts`. |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |

@@ -504,7 +504,7 @@
       ],
       "priority": 28,
       "notes": "Fase 7: Home, voz por persona e fechamento",
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-029",

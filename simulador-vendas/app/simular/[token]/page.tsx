@@ -16,6 +16,7 @@ import { emAndamento, emPreparacao, historicoDe, melhorSessaoDe, tentativasDe, t
 import { retomarOuFechar } from "@/lib/retomada";
 import { montarPersonagem } from "@/lib/cliente-simulado";
 import { personasDe } from "@/lib/personas";
+import { caracteristicasEmUso, vozDoNavegador } from "@/lib/vozes";
 import { lerSessaoVendedor } from "@/lib/sessao-vendedor";
 import { nomeDoProvedor, provedoresDisponiveis } from "@/lib/entrar-vendedor";
 import { obter as obterCenario } from "@/lib/cenarios";
@@ -210,6 +211,9 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
       // A chave da voz nunca vem para cá: a tela só precisa saber se existe uma para pedir o áudio
       // ao servidor, ou se a fala do cliente sai do próprio navegador.
       vozDoServidor: Boolean(getConfig("ELEVENLABS_API_KEY")),
+      // O jeito de falar deste tipo de cliente (US-028), já resolvido aqui: o que atravessa são dois
+      // números do `speechSynthesis`, nunca o `personaId`.
+      voz: vozDoNavegador(caracteristicasEmUso(aberta.personaId)),
     };
 
     // Nível 1 (US-016): com o agente conversacional conectado, quem conduz a conversa é ele, e as

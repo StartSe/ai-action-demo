@@ -33,9 +33,12 @@ const MINIMO_ENTRE_ESCUTAS_MS = 400;
  * Rede de segurança do `speechSynthesis`, que às vezes não avisa que terminou: um teto proporcional ao
  * tamanho da fala (uma voz lenta faz ~11 caracteres por segundo), entre 3 e 15 segundos. Teto fixo e
  * generoso era pior — numa máquina sem voz instalada a sala ficava parada em "Falando..." sem som.
+ *
+ * O ritmo do tipo de cliente (US-028) entra na conta: um cliente arrastado leva mais tempo para dizer
+ * a mesma frase, e um teto calculado no ritmo neutro devolveria a vez ao vendedor antes da hora.
  */
-function limiteDaFala(texto: string): number {
-  return Math.min(15_000, Math.max(3_000, 1500 + texto.length * 90));
+function limiteDaFala(texto: string, ritmo: number): number {
+  return Math.min(15_000, Math.max(3_000, (1500 + texto.length * 90) / Math.max(0.5, ritmo)));
 }
 
 /** Tempo até conferir se o navegador realmente começou a falar; se não começou, não há o que esperar. */
@@ -79,6 +82,12 @@ export type PropsSalaVoz = {
   porTexto: boolean;
   /** Existe voz própria no servidor; sem isso a fala do cliente sai do próprio navegador. */
   vozDoServidor: boolean;
+  /**
+   * Como este cliente fala, quando quem fala é o navegador (US-028): ritmo e altura da voz, já
+   * calculados no servidor. São dois números e nada mais — o tipo de cliente continua escondido de
+   * quem treina até o feedback (D2), e daqui não dá para deduzi-lo.
+   */
+  voz: { rate: number; pitch: number };
 };
 
 const ROTULO_ESTADO: Record<EstadoConversa, string> = {
@@ -121,7 +130,7 @@ function vozPortuguesa(): SpeechSynthesisVoice | null {
   return vozes.find((v) => v.lang?.toLowerCase().startsWith("pt-br")) ?? vozes.find((v) => v.lang?.toLowerCase().startsWith("pt")) ?? null;
 }
 
-export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duracaoMin, iniciadaEm, falasIniciais, porVoz, porTexto, vozDoServidor }: PropsSalaVoz) {
+export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duracaoMin, iniciadaEm, falasIniciais, porVoz, porTexto, vozDoServidor, voz }: PropsSalaVoz) {
   const totalSeg = Math.max(1, duracaoMin) * 60;
   /** Segundo da conversa em que a fala aconteceu — é o que a avaliação usa para citar momentos. */
   const decorrido = useCallback(() => Math.floor((Date.now() - new Date(iniciadaEm).getTime()) / 1000), [iniciadaEm]);
@@ -239,38 +248,45 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
   }, []);
 
   /** A voz do próprio navegador, o caminho padrão do app (não exige nada configurado). */
-  const sintetizar = useCallback((texto: string) => {
-    return new Promise<void>((resolver) => {
-      const sintese = window.speechSynthesis;
-      if (!sintese) {
-        resolver();
-        return;
-      }
-      const fala = new SpeechSynthesisUtterance(texto);
-      fala.lang = "pt-BR";
-      const voz = vozPortuguesa();
-      if (voz) fala.voice = voz;
-      let respondido = false;
-      const pronto = () => {
-        if (respondido) return;
-        respondido = true;
-        clearTimeout(prazo);
-        clearTimeout(conferencia);
-        resolver();
-      };
-      const prazo = setTimeout(pronto, limiteDaFala(texto));
-      fala.onend = pronto;
-      fala.onerror = pronto;
-      sintese.cancel();
-      sintese.speak(fala);
-      // Navegador sem nenhuma voz de fala instalada aceita o pedido e não fala nada — e também não
-      // avisa. Sem esta conferência, a vez do vendedor só voltaria quando o prazo acima estourasse,
-      // com a tela parada em "Falando..." e nenhum som saindo.
-      const conferencia = setTimeout(() => {
-        if (!sintese.speaking && !sintese.pending) pronto();
-      }, CONFERIR_SE_FALA_MS);
-    });
-  }, []);
+  const sintetizar = useCallback(
+    (texto: string) => {
+      return new Promise<void>((resolver) => {
+        const sintese = window.speechSynthesis;
+        if (!sintese) {
+          resolver();
+          return;
+        }
+        const fala = new SpeechSynthesisUtterance(texto);
+        fala.lang = "pt-BR";
+        // O ritmo e a altura deste tipo de cliente. É o pouco que o navegador oferece, e é o bastante
+        // para duas conversas seguidas não soarem como a mesma pessoa.
+        fala.rate = voz.rate;
+        fala.pitch = voz.pitch;
+        const vozEscolhida = vozPortuguesa();
+        if (vozEscolhida) fala.voice = vozEscolhida;
+        let respondido = false;
+        const pronto = () => {
+          if (respondido) return;
+          respondido = true;
+          clearTimeout(prazo);
+          clearTimeout(conferencia);
+          resolver();
+        };
+        const prazo = setTimeout(pronto, limiteDaFala(texto, voz.rate));
+        fala.onend = pronto;
+        fala.onerror = pronto;
+        sintese.cancel();
+        sintese.speak(fala);
+        // Navegador sem nenhuma voz de fala instalada aceita o pedido e não fala nada — e também não
+        // avisa. Sem esta conferência, a vez do vendedor só voltaria quando o prazo acima estourasse,
+        // com a tela parada em "Falando..." e nenhum som saindo.
+        const conferencia = setTimeout(() => {
+          if (!sintese.speaking && !sintese.pending) pronto();
+        }, CONFERIR_SE_FALA_MS);
+      });
+    },
+    [voz],
+  );
 
   const dizer = useCallback(
     async (texto: string) => {
