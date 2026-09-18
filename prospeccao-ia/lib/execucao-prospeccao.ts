@@ -28,10 +28,10 @@ import { ETAPAS_PROSPECCAO } from "./execucao-etapas";
 import { buscarNaWeb, lerPagina, perfilDePessoa } from "./descoberta";
 import type { ResultadoBuscaWeb } from "./descoberta";
 import { data } from "./formato";
-import { apolloEnabled, buscarLeads } from "./leads";
+import { apolloEnabled, buscarLeads, buscarPessoasDaEmpresa } from "./leads";
 import { avaliarCriterios, calcularFit, dominioDe, inferirPapel, resumoDaPagina, sinaisEncontrados, sinalAntigo } from "./qualificacao";
 import { QUANTIDADES_EMPRESAS } from "./rotulos";
-import { atualizarLead, atualizarProspeccao, criarConta, criarLead, leadsDoProduto, listarContas, listarLeads, obterICP, obterProduto, obterProspeccao } from "./workspace";
+import { atualizarConta, atualizarLead, atualizarProspeccao, criarConta, criarLead, leadsDoProduto, listarContas, listarLeads, obterICP, obterProduto, obterProspeccao } from "./workspace";
 import type { Conta, Evidencia, ICP, Jornada, ModoProspeccao, SinalProspeccao } from "./types";
 
 const QUANTIDADE_EMPRESAS_PADRAO = 10;
@@ -302,6 +302,12 @@ function pareceEndereco(texto: string): boolean {
  * deste modo só pede o nome da empresa (US-012), sem redigitar os critérios do perfil. Sem página
  * encontrada/legível, a conta ainda nasce (fit "media", sem evidências) — "explorar" nunca falha por
  * completo só porque a leitura pública não deu certo. */
+// As duas mensagens abaixo marcam uma conta que nasceu SEM informação de página pública: são a condição
+// para a etapa 4 (buscarPessoasChaveUnica) enriquecer `resumo` com o que a Apollo devolver sobre a
+// organização, sem nunca sobrescrever um resumo real já lido da própria página institucional.
+const RESUMO_SEM_SITE = "Não encontramos uma página pública para confirmar critérios desta empresa.";
+const RESUMO_SITE_ILEGIVEL = "Não foi possível ler a página pública desta empresa.";
+
 async function buscarContaUnicaReal(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null): Promise<Conta> {
   const nome = textoCriterio(criterios, "empresaNome") || "Empresa sem nome informado";
   const segmento = icp?.criterios.setor || "";
@@ -322,7 +328,7 @@ async function buscarContaUnicaReal(prospeccaoId: string, criterios: Record<stri
     }
   }
   if (!site) {
-    return criarConta({ ...base, site: null, fit: "media", evidencias: [], sinais: [], resumo: "Não encontramos uma página pública para confirmar critérios desta empresa.", demo: false });
+    return criarConta({ ...base, site: null, fit: "media", evidencias: [], sinais: [], resumo: RESUMO_SEM_SITE, demo: false });
   }
 
   let pagina;
@@ -330,7 +336,7 @@ async function buscarContaUnicaReal(prospeccaoId: string, criterios: Record<stri
     pagina = await lerPagina(site);
   } catch (err) {
     console.error("Falha ao ler a página institucional para explorar a empresa:", site, err instanceof Error ? err.message : err);
-    return criarConta({ ...base, site, fit: "media", evidencias: [], sinais: [], resumo: "Não foi possível ler a página pública desta empresa.", demo: false });
+    return criarConta({ ...base, site, fit: "media", evidencias: [], sinais: [], resumo: RESUMO_SITE_ILEGIVEL, demo: false });
   }
 
   const demo = buscaDemo || pagina.demo;
@@ -409,21 +415,38 @@ function pessoasChaveDemo(): { nome: string; cargo: string | null; linkedin: str
   return [0, 1, 2].map((i) => ({ nome: nomePessoaFicticia(i), cargo: CARGOS_PESSOA[i % CARGOS_PESSOA.length], linkedin: null }));
 }
 
-/** Etapa 4, modo "empresa_unica" (US-018): busca pessoas públicas ligadas à empresa explorada (consulta
- * `site:linkedin.com/in` com os cargos mais comuns de quem decide/influencia) em vez das pessoas fixas e
- * fictícias dos demais modos — primeiro modo com descoberta real de PESSOAS (contas real desde a mesma
- * história; "empresas"/US-017 já tinha real só para contas). Evidências/sinais herdam os da própria
- * conta (a mesma leitura institucional já qualificou a empresa; não há orçamento nesta história para ler
- * o perfil de cada pessoa também — isso é da US-019, que já vai trazer `perfilDePessoa`). Nasce com
- * `status: "novo"` (não "pesquisado"): só vira parte de fato da prospecção quando selecionada na tela
- * (ver comentário de topo do arquivo). */
+/** Etapa 4, modo "empresa_unica" (US-018, Apollo como fonte desde a US-022): busca pessoas ligadas à
+ * empresa explorada em vez das pessoas fixas e fictícias dos demais modos — primeiro modo com descoberta
+ * real de PESSOAS (contas real desde a mesma história; "empresas"/US-017 já tinha real só para contas).
+ * Duas fontes, nunca misturadas na mesma busca (mesmo critério do modo "pessoas", US-019): com a Apollo
+ * conectada, ela é a fonte ÚNICA — cargo e nome vêm dos campos ESTRUTURADOS da organização (mais
+ * confiáveis que extrair do título de um resultado de busca), e o fato sobre a empresa que a Apollo
+ * devolve enriquece `conta.resumo` (exibido na ficha como "Sobre a empresa", nunca como sinal) quando a
+ * leitura da página institucional (etapa 2) não achou nada para contar. Sem Apollo, cai na busca pública
+ * `site:linkedin.com/in` de sempre. Evidências/sinais continuam herdados da própria conta (a mesma
+ * leitura institucional já qualificou a empresa; ler o perfil de cada pessoa também é orçamento que só a
+ * US-019 trouxe, e só para o modo "pessoas"). Nasce com `status: "novo"` (não "pesquisado"): só vira parte
+ * de fato da prospecção quando selecionada na tela (ver comentário de topo do arquivo). */
 async function buscarPessoasChaveUnica(prospeccaoId: string, conta: Conta, produtoId: string): Promise<void> {
   const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
   let candidatos: { nome: string; cargo: string | null; linkedin: string | null }[];
   let demo = conta.demo;
+  let viaApollo = false;
 
   if (conta.demo) {
     candidatos = pessoasChaveDemo();
+  } else if (apolloEnabled()) {
+    try {
+      const resultado = await buscarPessoasDaEmpresa(conta.nome, TETO_PESSOAS_CHAVE);
+      candidatos = resultado.pessoas;
+      viaApollo = true;
+      if (resultado.sobreEmpresa && (conta.resumo === RESUMO_SEM_SITE || conta.resumo === RESUMO_SITE_ILEGIVEL)) {
+        atualizarConta(conta.id, { resumo: resultado.sobreEmpresa });
+      }
+    } catch (err) {
+      console.error("Falha ao buscar pessoas da empresa via Apollo:", conta.nome, err instanceof Error ? err.message : err);
+      candidatos = [];
+    }
   } else {
     try {
       const resultado = await buscarNaWeb(`site:linkedin.com/in "${conta.nome}" (diretor OR gerente OR head OR coordenador)`);
@@ -445,7 +468,9 @@ async function buscarPessoasChaveUnica(prospeccaoId: string, conta: Conta, produ
     vistosNestaBusca.add(chave);
     criarLead({
       prospeccaoId, contaId: conta.id, nome: candidato.nome, cargo: candidato.cargo, empresa: conta.nome, cidade: conta.cidade,
-      linkedin: candidato.linkedin ?? null, fonte: demo ? null : "busca pública", papel: inferirPapel(candidato.cargo),
+      linkedin: candidato.linkedin ?? null,
+      fonte: demo ? null : viaApollo ? origemPessoa(conta.site ? dominioDe(conta.site) : null, conta.criadoEm, true) : "busca pública",
+      papel: inferirPapel(candidato.cargo),
       fit: conta.fit, evidencias: conta.evidencias, sinais: conta.sinais, hipotese: null,
       status: "novo", noCRM: false, demo,
     });

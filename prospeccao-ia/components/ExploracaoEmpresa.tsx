@@ -86,6 +86,12 @@ export function ExploracaoEmpresa({
           </div>
           {conta.fit && <Chip nivel={conta.fit} />}
         </div>
+        {conta.resumo && (
+          <div>
+            <p className="font-semibold text-[13px] mb-1.5">Sobre a empresa</p>
+            <p className="text-[13px] text-ink">{conta.resumo}</p>
+          </div>
+        )}
         <div>
           <p className="font-semibold text-[13px] mb-1.5">Por que pode fazer sentido</p>
           {marcadores.length === 0 ? (
