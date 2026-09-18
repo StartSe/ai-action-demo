@@ -6,3 +6,8 @@ export const ROTULO_JORNADA: Record<Jornada, string> = {
   b2b: "Empresas e decisores",
   b2c: "Pessoas/consumidores",
 };
+
+export const DESCRICAO_JORNADA: Record<Jornada, string> = {
+  b2b: "Encontre empresas que combinam com seu perfil e as pessoas que decidem por elas.",
+  b2c: "Encontre pessoas físicas por localização, interesses e sinais públicos.",
+};
