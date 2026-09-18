@@ -8,7 +8,8 @@
 import { aiEnabled, askJSON } from "./ai";
 import { data } from "./formato";
 import { contemTermo } from "./qualificacao";
-import type { Evidencia, SinalProspeccao } from "./types";
+import { termoSensivel } from "./sensivel";
+import type { Evidencia, Jornada, SinalProspeccao } from "./types";
 
 const SYSTEM_QUALIFICACAO_IA = `Você decide se um critério de perfil de cliente ideal (ICP) é atendido, a partir só do texto informado (uma página institucional ou um perfil público).
 Regras:
@@ -51,29 +52,49 @@ Regras:
 - 1 a 2 frases curtas, português do Brasil, sem clichê de vendas.
 Formato de saída (JSON): { "hipotese": string }`;
 
+// US-028: em B2C a hipótese fala de NECESSIDADE ou MOMENTO de vida (nunca de característica pessoal
+// protegida — raça, religião, orientação sexual, saúde, opinião política, sindicalização), regra que o
+// SYSTEM abaixo reforça para a IA; sinais/dores que batem em lib/sensivel.ts:termoSensivel nem chegam a
+// entrar no prompt nem na frase-modelo sem IA (gerarHipoteseDor filtra antes), então a proibição vale nos
+// dois caminhos, não só quando há IA configurada.
+const SYSTEM_HIPOTESE_DOR_B2C = `Você escreve uma hipótese de dor sobre UMA PESSOA FÍSICA (não uma empresa), a partir só dos sinais públicos informados e das dores típicas do perfil de cliente ideal (ICP).
+Regras:
+- Baseie-se SÓ nos sinais informados; nunca afirme como fato algo que eles não sustentam. Não invente contexto ou problema que não esteja nos sinais.
+- Fale de NECESSIDADE ou MOMENTO de vida (ex.: mudança recente, novo projeto, busca por algo) — NUNCA de característica pessoal protegida (raça, religião, orientação sexual, saúde, opinião política ou sindicalização).
+- A frase é sempre condicional: use "pode estar", "provavelmente", "talvez" ou construção equivalente — nunca uma afirmação categórica.
+- Cite ao menos um dos sinais informados dentro da frase (pode citar a data dele).
+- 1 a 2 frases curtas, português do Brasil, sem clichê de vendas.
+Formato de saída (JSON): { "hipotese": string }`;
+
 /** Hipótese de dor de um lead (US-025), gerada a partir dos SINAIS que ele já tem (nunca das evidências,
  * que ficam num bloco separado — "a ficha nunca mistura hipótese e evidência no mesmo bloco") e das dores
  * do ICP. Sem nenhum sinal, não há do que partir: devolve `null` direto, sem chamar a IA (a tela mostra
  * "Ainda sem sinais públicos suficientes para uma hipótese" nesse caso). Sem IA configurada, cai numa
  * frase-modelo determinística que já respeita as mesmas regras (condicional, cita o sinal mais recente com
- * data) — é o que mantém a demonstração funcionando sem nenhuma chave. */
-export async function gerarHipoteseDor(sinais: SinalProspeccao[], dores: string[]): Promise<string | null> {
-  if (sinais.length === 0) return null;
-  const sinalPrincipal = [...sinais].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())[0];
+ * data) — é o que mantém a demonstração funcionando sem nenhuma chave.
+ * `jornada` (US-028, padrão "b2b" — todo call-site anterior continua igual): em "b2c", sinais e dores que
+ * contêm um termo de categoria sensível são descartados ANTES de virar sinal principal/entrar no prompt
+ * (nunca chegam nem à frase-modelo sem IA, nem ao texto enviado à IA), e o SYSTEM usado passa a exigir
+ * "necessidade ou momento", nunca característica pessoal protegida. */
+export async function gerarHipoteseDor(sinais: SinalProspeccao[], dores: string[], jornada: Jornada = "b2b"): Promise<string | null> {
+  const sinaisSeguros = jornada === "b2c" ? sinais.filter((s) => !termoSensivel(s.descricao)) : sinais;
+  if (sinaisSeguros.length === 0) return null;
+  const sinalPrincipal = [...sinaisSeguros].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())[0];
   const dataSinal = data(sinalPrincipal.data, { comAno: true });
+  const doresSeguras = jornada === "b2c" ? dores.filter((d) => !termoSensivel(d)) : dores;
 
   if (!aiEnabled()) {
-    const dor = dores[0];
+    const dor = doresSeguras[0];
     return dor
       ? `Pode estar enfrentando ${dor.charAt(0).toLowerCase()}${dor.slice(1)}, a julgar por “${sinalPrincipal.descricao}” (${dataSinal}).`
       : `“${sinalPrincipal.descricao}” (${dataSinal}) talvez seja um bom momento para essa conversa.`;
   }
 
   try {
-    const sinaisTexto = sinais.map((s) => `- ${s.descricao} (${data(s.data, { comAno: true })})`).join("\n");
-    const doresTexto = dores.length > 0 ? dores.join("; ") : "não informadas";
+    const sinaisTexto = sinaisSeguros.map((s) => `- ${s.descricao} (${data(s.data, { comAno: true })})`).join("\n");
+    const doresTexto = doresSeguras.length > 0 ? doresSeguras.join("; ") : "não informadas";
     const resposta = await askJSON<{ hipotese?: string }>({
-      system: SYSTEM_HIPOTESE_DOR,
+      system: jornada === "b2c" ? SYSTEM_HIPOTESE_DOR_B2C : SYSTEM_HIPOTESE_DOR,
       prompt: `Sinais públicos encontrados sobre o lead:\n${sinaisTexto}\n\nDores típicas do perfil de cliente ideal: ${doresTexto}`,
       maxTokens: 200,
     });

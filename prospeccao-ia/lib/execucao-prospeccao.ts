@@ -34,6 +34,12 @@
 // aparece na lista para poder ser selecionada) e derrubaria o modo "pessoas" B2B inteiro em demonstração
 // (a busca pública nunca qualifica a conta, `contaPara` é chamada com `site: null`).
 //
+// US-028 (qualificação B2C): `buscarPessoasB2C` já usava os critérios da US-006 (Localização/Ocupação/
+// Interesses/Contexto) desde a US-024 — esta história só ACRESCENTOU a recusa de termo de categoria
+// sensível (`omitirEvidenciasSensiveis`, lista fechada em `lib/sensivel.ts`) por cima da evidência já
+// calculada, e uma hipótese de dor específica de B2C (`gerarHipoteseDor(..., jornada)`, "necessidade ou
+// momento", nunca característica pessoal protegida) — nenhuma das duas muda o comportamento B2B.
+//
 // "empresa_unica" (US-018) tem uma particularidade: as pessoas encontradas nascem com status "novo"
 // (não "pesquisado"), então a etapa 5 (que só promove "pesquisado" → "qualificado") NÃO as promove — elas
 // só entram de fato na prospecção quando a pessoa marca a caixa de seleção e confirma "Adicionar à
@@ -50,6 +56,7 @@ import { apolloEnabled, buscarLeads, buscarPessoasDaEmpresa } from "./leads";
 import { avaliarCriterios, calcularFit, dominioDe, inferirPapel, resumoDaPagina, sinaisEncontrados, sinalAntigo } from "./qualificacao";
 import { avaliarCriterioInterpretativo, gerarHipoteseDor } from "./qualificacao-ia";
 import { QUANTIDADES_EMPRESAS } from "./rotulos";
+import { termoSensivel } from "./sensivel";
 import { atualizarConta, atualizarLead, atualizarProspeccao, criarConta, criarLead, leadsDoProduto, listarContas, listarLeads, obterICP, obterProduto, obterProspeccao } from "./workspace";
 import type { Conta, Evidencia, ICP, Jornada, ModoProspeccao, SinalProspeccao } from "./types";
 
@@ -83,6 +90,20 @@ async function avaliarComOutros(conteudo: string, criteriosObjetivos: { criterio
   const base = avaliarCriterios(conteudo, criteriosObjetivos);
   const outros = await avaliarCriterioInterpretativo(conteudo, "Outros critérios", icp?.criterios.outros);
   return outros ? [...base, outros] : base;
+}
+
+/** Qualificação B2C (US-028): "critério sem dado nunca conta como atendido" já existia; esta é a mesma
+ * ideia para dado pessoal SENSÍVEL — um critério cujo valor bate na lista fechada de `lib/sensivel.ts`
+ * (ex.: um "interesse" ou "contexto" que descreve religião/orientação/saúde), ou cujo `trecho` citado pela
+ * IA interpretativa cita um termo assim, nunca vira evidência: a evidência inteira é OMITIDA (não marcada
+ * "nao_atende"/"atende"), com o motivo em `console.error` — nunca na tela. */
+function omitirEvidenciasSensiveis(evidencias: Evidencia[]): Evidencia[] {
+  return evidencias.filter((e) => {
+    const achado = termoSensivel(e.valor) ?? (e.trecho ? termoSensivel(e.trecho) : null);
+    if (!achado) return true;
+    console.error(`Evidência B2C omitida por termo de categoria sensível (${achado.categoria}: "${achado.termo}") no critério "${e.criterio}".`);
+    return false;
+  });
 }
 
 function nomeEmpresaFicticia(segmento: string, indice: number): string {
@@ -724,7 +745,10 @@ async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, 
       { criterio: "Interesses", valor: interesses.join(", ") },
     ]);
     const evidenciaContexto = await avaliarCriterioInterpretativo(conteudo, "Contexto", contexto);
-    const evidencias = evidenciaContexto ? [...evidenciasBase, evidenciaContexto] : evidenciasBase;
+    const evidenciasBrutas = evidenciaContexto ? [...evidenciasBase, evidenciaContexto] : evidenciasBase;
+    // US-028: termo de categoria sensível (lista fechada, lib/sensivel.ts) nunca qualifica — a evidência
+    // é omitida antes de decidir se a pessoa entra na lista, não só antes de exibir.
+    const evidencias = omitirEvidenciasSensiveis(evidenciasBrutas);
     // US-024: sem nenhuma evidência verificável (nem determinística, nem interpretativa), a pessoa não
     // entra na lista — mesmo critério de "sem sinal nenhum não é uma oportunidade" (US-020), aplicado aqui
     // a evidência em vez de sinal.
@@ -882,8 +906,9 @@ async function etapaEncontrarPessoas(prospeccaoId: string, modo: ModoProspeccao,
  * dores do ICP da prospecção — sem nenhum sinal, `gerarHipoteseDor` devolve `null` sem chamar a IA. */
 async function etapaQualificar(prospeccaoId: string, icp: ICP | null): Promise<void> {
   const dores = icp?.dores ?? [];
+  const jornada: Jornada = icp?.jornada ?? "b2b";
   for (const lead of listarLeads(prospeccaoId)) {
-    const hipotese = await gerarHipoteseDor(lead.sinais, dores);
+    const hipotese = await gerarHipoteseDor(lead.sinais, dores, jornada);
     const status = lead.status === "pesquisado" ? "qualificado" : lead.status;
     atualizarLead(lead.id, { status, hipotese });
   }
