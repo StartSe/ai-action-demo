@@ -38,7 +38,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Fase 0: fundação (independência, navegação e modelo de dados) · PRD US-002"
     },
     {
