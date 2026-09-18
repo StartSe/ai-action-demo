@@ -1,0 +1,115 @@
+"use client";
+// Tela de Início: o que já está rodando e um botão para começar (US-003). Os quatro números e a lista de
+// prospecções recentes vêm de GET /api/inicio (lib/workspace.ts é a fonte única); esta tela não calcula nada.
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { Hero, Topbar, data, useStatus } from "@/components/ui";
+import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
+
+type ProspeccaoRecente = { id: string; nome: string; produto: string; criadoEm: string; encontrados: number; qualificados: number; abordagens: number };
+type ResumoInicio = { prospeccoes: number; leadsEncontrados: number; qualificados: number; respostas: number; recentes: ProspeccaoRecente[] };
+
+function CartaoNumero({ valor, rotulo }: { valor: number; rotulo: string }) {
+  return (
+    <div className="card px-5 py-4">
+      <div className="text-[28px] leading-none font-extrabold tracking-[-0.02em]">{valor}</div>
+      <div className="text-[13px] font-semibold text-muted mt-1.5">{rotulo}</div>
+    </div>
+  );
+}
+
+function funilResumido(r: ProspeccaoRecente) {
+  const item = (n: number, singular: string, plural: string) => `${n} ${n === 1 ? singular : plural}`;
+  return `${item(r.encontrados, "encontrado", "encontrados")} · ${item(r.qualificados, "qualificado", "qualificados")} · ${item(r.abordagens, "abordagem", "abordagens")}`;
+}
+
+export function Inicio() {
+  const { status, erro } = useStatus();
+  const [resumo, setResumo] = useState<ResumoInicio | null>(null);
+  const [criandoExemplo, setCriandoExemplo] = useState(false);
+
+  const carregar = useCallback(() => {
+    fetch("/api/inicio")
+      .then((r) => r.json())
+      .then(setResumo)
+      .catch(() => setResumo({ prospeccoes: 0, leadsEncontrados: 0, qualificados: 0, respostas: 0, recentes: [] }));
+  }, []);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  async function verExemplo() {
+    setCriandoExemplo(true);
+    try {
+      await fetch("/api/inicio/exemplo", { method: "POST" });
+      carregar();
+    } finally {
+      setCriandoExemplo(false);
+    }
+  }
+
+  const vazio = resumo !== null && resumo.prospeccoes === 0;
+
+  return (
+    <>
+      <Topbar marca="P" nome="Prospecção com IA" area="Vendas" status={status} erro={erro} usuario={status?.usuario} navegacao={NAVEGACAO_PROSPECCAO} />
+
+      <Hero
+        sobretitulo="Vendas"
+        titulo="Encontre as pessoas certas para o seu negócio"
+        apoio="Descreva o que você vende: a IA busca contas e pessoas, qualifica com evidências e sugere a abordagem."
+        segmento="Vendas"
+      >
+        <Link href="/prospeccoes/novo" className="btn-primary !w-auto">Nova prospecção</Link>
+      </Hero>
+
+      <main className="max-w-[1400px] mx-auto px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
+        <div className="grid gap-4 grid-cols-2 min-[1240px]:grid-cols-4 mb-8">
+          <CartaoNumero valor={resumo?.prospeccoes ?? 0} rotulo="Prospecções" />
+          <CartaoNumero valor={resumo?.leadsEncontrados ?? 0} rotulo="Leads encontrados" />
+          <CartaoNumero valor={resumo?.qualificados ?? 0} rotulo="Qualificados" />
+          <CartaoNumero valor={resumo?.respostas ?? 0} rotulo="Respostas" />
+        </div>
+
+        <section aria-label="Prospecções recentes">
+          <div className="flex items-baseline justify-between gap-4 mb-3">
+            <h2 className="section-title !mb-0">Prospecções recentes</h2>
+            {resumo && resumo.recentes.length > 0 && <Link href="/prospeccoes" className="btn-link text-[13px]">Ver todas</Link>}
+          </div>
+
+          {resumo === null ? (
+            <div className="card px-5 py-[18px]" aria-hidden="true">
+              {[0, 1, 2].map((i) => (
+                <span key={i} className="skeleton block w-full mt-3 first:mt-0" />
+              ))}
+            </div>
+          ) : vazio ? (
+            <div className="card px-5 py-6 text-center text-[13px] text-muted">
+              <p className="text-ink font-bold mb-1">Nenhuma prospecção ainda</p>
+              <p className="mb-3">Comece a primeira busca ou veja um exemplo pronto.</p>
+              <button type="button" className="btn-secundario !w-auto" disabled={criandoExemplo} onClick={verExemplo}>
+                {criandoExemplo ? "Preparando exemplo..." : "Ver uma prospecção de exemplo"}
+              </button>
+            </div>
+          ) : (
+            <ul className="flex flex-col gap-2.5">
+              {resumo.recentes.map((r) => (
+                <li key={r.id} className="card px-5 py-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                      <strong className="block truncate">{r.nome}</strong>
+                      <span className="text-[13px] text-muted">{r.produto}</span>
+                    </div>
+                    <span className="text-muted text-[12.5px] shrink-0">{data(r.criadoEm)}</span>
+                  </div>
+                  <p className="text-[13px] text-muted mt-2 mb-0">{funilResumido(r)}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </main>
+    </>
+  );
+}
