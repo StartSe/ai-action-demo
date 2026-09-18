@@ -15,14 +15,17 @@ export async function GET(_req: Request, { params }: RouteContext<"/api/prospecc
   const produto = obterProduto(prospeccao.produtoId);
   const icp = obterICP(prospeccao.icpId);
   const contas = listarContas(id);
+  const leads = listarLeads(id);
   return Response.json({
     prospeccao,
     produtoNome: produto?.nome ?? "Produto",
     icpNome: icp?.nome ?? "Perfil",
-    // Array completo (não só a contagem): a lista de resultados do modo "Encontrar empresas" (US-017)
-    // usa isto direto, sem uma segunda rota — o volume é o mesmo teto da "quantidade alvo" (até 50).
+    // Array completo (não só a contagem): a lista de resultados do modo "Encontrar empresas" (US-017) e
+    // as pessoas-chave do modo "Explorar uma empresa" (US-018) usam isto direto, sem uma segunda rota —
+    // o volume é o mesmo teto da "quantidade alvo"/`TETO_PESSOAS_CHAVE` (até 50 contas, até 5 pessoas).
     contas,
+    leads,
     contasEncontradas: contas.length,
-    leadsEncontrados: listarLeads(id).length,
+    leadsEncontrados: leads.length,
   });
 }

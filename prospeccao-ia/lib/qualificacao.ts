@@ -5,7 +5,7 @@
 // (prd.json > regras): um termo não encontrado no texto vira "nao_verificavel", nunca "nao_atende" —
 // não dá para afirmar com segurança que uma página institucional NÃO atende um critério só porque o
 // termo não apareceu nela.
-import type { Evidencia, Fit, SinalProspeccao } from "./types";
+import type { Evidencia, Fit, Papel, SinalProspeccao } from "./types";
 
 function normalizar(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -55,4 +55,18 @@ export function dominioDe(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+const PALAVRAS_DECISOR = /diretor|presidente|\bceo\b|\bcoo\b|\bcto\b|vice-presidente|\bvp\b|s[oó]cio|fundador/i;
+const PALAVRAS_INFLUENCIADOR = /gerente|coordenador|\bhead\b|supervisor/i;
+
+/** Papel de uma pessoa no processo de decisão, a partir só do cargo (US-018, modo "Explorar uma
+ * empresa"): heurística por palavra-chave, primeira implementação. "Champion" não é inferido daqui —
+ * exige um sinal de proximidade com o produto que o cargo sozinho não dá. Derivação completa cruzando
+ * as personas do ICP, e a edição manual preservada entre execuções, são da US-026 (ainda não existe). */
+export function inferirPapel(cargo: string | null): Papel {
+  if (!cargo) return "desconhecido";
+  if (PALAVRAS_DECISOR.test(cargo)) return "decisor";
+  if (PALAVRAS_INFLUENCIADOR.test(cargo)) return "influenciador";
+  return "desconhecido";
 }

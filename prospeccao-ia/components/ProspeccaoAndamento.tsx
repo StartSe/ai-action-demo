@@ -9,16 +9,18 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Aviso, Chip, Topbar, useConfirmacao, useStatus, lerErro } from "@/components/ui";
+import { ExploracaoEmpresa } from "@/components/ExploracaoEmpresa";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 import { ROTULO_MODO } from "@/lib/rotulos";
 import { ETAPAS_PROSPECCAO } from "@/lib/execucao-etapas";
-import type { Conta, Prospeccao } from "@/lib/types";
+import type { Conta, LeadProspeccao, Prospeccao } from "@/lib/types";
 
 type Andamento = {
   prospeccao: Prospeccao;
   produtoNome: string;
   icpNome: string;
   contas: Conta[];
+  leads: LeadProspeccao[];
   contasEncontradas: number;
   leadsEncontrados: number;
 };
@@ -267,6 +269,19 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                     )}
                     {erroVerPessoas && <Aviso tom="danger">{erroVerPessoas}</Aviso>}
                   </div>
+                )}
+
+                {andamento.prospeccao.modo === "empresa_unica" && (
+                  andamento.contas.length === 0 ? (
+                    <Aviso tom="warn">Não encontramos essa empresa.</Aviso>
+                  ) : (
+                    <ExploracaoEmpresa
+                      conta={andamento.contas[0]}
+                      leads={andamento.leads}
+                      prospeccaoId={prospeccaoId}
+                      onLeadsAtualizados={(leads) => setAndamento((a) => (a ? { ...a, leads } : a))}
+                    />
+                  )
                 )}
 
                 <div className="flex items-center gap-3.5">

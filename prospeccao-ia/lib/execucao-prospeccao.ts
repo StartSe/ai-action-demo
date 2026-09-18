@@ -10,21 +10,28 @@
 // `erro` preenchido, nunca `"falhou"` (esse estado é só para a recuperação na inicialização — processo
 // reiniciado no meio, ver recuperarProspeccoesTravadas em lib/workspace.ts).
 //
-// Escopo desta história (fronteira exata para US-018/019/020/024-026 substituírem sem reler este
-// arquivo inteiro): só o modo "empresas" (US-017) faz descoberta de verdade — busca na web, leitura da
-// página institucional e qualificação por evidências (lib/qualificacao.ts). Os demais modos continuam
-// fictícios: toda conta/lead nasce com fit:null, evidencias:[], sinais:[]. Leads nascem com
-// papel:"desconhecido" (papel real é US-026) e status:"pesquisado" (só a etapa 5 promove para
-// "qualificado"). Sinais de intenção do ICP/critérios são lidos e filtrados na etapa 3 para os modos
-// fictícios, mas NUNCA persistidos como SinalProspeccao ali (exigiria origem real, que só a US-020 vai
-// trazer para os demais modos) — "sinal sem fonte é descartado".
+// Escopo desta história (fronteira exata para US-019/020/024-026 substituírem sem reler este arquivo
+// inteiro): "empresas" (US-017) e "empresa_unica" (US-018) fazem descoberta de verdade — busca na web,
+// leitura de página e qualificação por evidências (lib/qualificacao.ts). Os demais modos ("pessoas" e
+// "oportunidades") continuam fictícios: toda conta/lead nasce com fit:null, evidencias:[], sinais:[] e
+// papel:"desconhecido" (derivação completa de papel a partir das personas do ICP, e edição manual
+// preservada entre execuções, são da US-026). Sinais de intenção do ICP/critérios são lidos e filtrados
+// na etapa 3 para os modos fictícios, mas NUNCA persistidos como SinalProspeccao ali (exigiria origem
+// real, que só a US-020 vai trazer para os demais modos) — "sinal sem fonte é descartado".
+//
+// "empresa_unica" (US-018) tem uma particularidade: as pessoas encontradas nascem com status "novo"
+// (não "pesquisado"), então a etapa 5 (que só promove "pesquisado" → "qualificado") NÃO as promove — elas
+// só entram de fato na prospecção quando a pessoa marca a caixa de seleção e confirma "Adicionar à
+// prospecção" (POST /api/prospeccoes/[id]/selecionar-pessoas, status "novo" → "selecionado"). "Nenhuma
+// pessoa é adicionada sem seleção explícita" (AC da US-018) é isso: a tela nunca esconde quem foi
+// encontrado, só não considera ninguém parte da prospecção até a escolha.
 import { ETAPAS_PROSPECCAO } from "./execucao-etapas";
 import { buscarNaWeb, lerPagina } from "./descoberta";
 import type { ResultadoBuscaWeb } from "./descoberta";
-import { avaliarCriterios, calcularFit, dominioDe, resumoDaPagina, sinaisEncontrados } from "./qualificacao";
+import { avaliarCriterios, calcularFit, dominioDe, inferirPapel, resumoDaPagina, sinaisEncontrados } from "./qualificacao";
 import { QUANTIDADES_EMPRESAS } from "./rotulos";
 import { atualizarLead, atualizarProspeccao, criarConta, criarLead, leadsDoProduto, listarContas, listarLeads, obterICP, obterProduto, obterProspeccao } from "./workspace";
-import type { ICP, Jornada, ModoProspeccao } from "./types";
+import type { Conta, ICP, Jornada, ModoProspeccao } from "./types";
 
 const QUANTIDADE_EMPRESAS_PADRAO = 10;
 // 5 páginas de 10 resultados orgânicos = até 50 candidatas, a maior quantidade alvo possível.
@@ -170,21 +177,89 @@ async function buscarContasReais(prospeccaoId: string, criterios: Record<string,
   }
 }
 
-/** Etapa 2, demais modos: continuam fictícias (fit/evidências/sinais vazios) até cada uma ganhar
- * descoberta real na sua própria história (empresa_unica → US-018, pessoas/oportunidades B2B → US-019/020). */
-function criarContasFicticias(prospeccaoId: string, modo: ModoProspeccao, criterios: Record<string, unknown>): void {
+/** Etapa 2, modos "pessoas"/"oportunidades": continuam fictícias (fit/evidências/sinais vazios) até
+ * ganharem descoberta real na sua própria história (US-019/020). */
+function criarContasFicticias(prospeccaoId: string, criterios: Record<string, unknown>): void {
   const base = { prospeccaoId, site: null, fit: null, evidencias: [], sinais: [], resumo: "", demo: false as const };
-  if (modo === "empresa_unica") {
-    const nome = textoCriterio(criterios, "empresaNome") || "Empresa sem nome informado";
-    criarConta({ ...base, nome, setor: textoCriterio(criterios, "segmento") || null, porte: textoCriterio(criterios, "porte") || null, cidade: textoCriterio(criterios, "localizacao") || null });
-    return;
-  }
   const segmento = textoCriterio(criterios, "segmento") || textoCriterio(criterios, "recorte");
   const localizacao = textoCriterio(criterios, "localizacao");
   const porte = textoCriterio(criterios, "porte");
   for (let i = 0; i < 3; i++) {
     criarConta({ ...base, nome: nomeEmpresaFicticia(segmento, i), setor: segmento || null, porte: porte || null, cidade: localizacao || null });
   }
+}
+
+/** Conteúdo institucional de demonstração PRÓPRIO do modo "Explorar uma empresa" (mesmo motivo do
+ * `conteudoDemoDaCandidata` do modo "empresas": o `conteudoPaginaDemo` genérico de `lib/descoberta.ts`
+ * não cita os critérios pedidos e não renderia evidências coerentes). Diferente do modo "empresas" (que
+ * varia fit entre as várias candidatas para mostrar diversidade numa lista), aqui há só uma empresa —
+ * a que a própria pessoa escolheu explorar — então o conteúdo sempre confirma os critérios que existirem. */
+function conteudoDemoDaEmpresaUnica(nome: string, segmento: string, porte: string, localizacao: string, sinal: string | undefined): string {
+  const partes = [segmento && `Atuação: ${segmento}.`, porte && `Porte: ${porte}.`, localizacao && `Sede em ${localizacao}.`, sinal && `Processo seletivo aberto: ${sinal}.`].filter(Boolean);
+  return `Empresa de demonstração para ${nome}. ${partes.join(" ")}`.trim();
+}
+
+/** Entrada "parece um endereço" (mesma heurística simples já usada por `lib/produto-ia.ts`): começa com
+ * http(s) ou não tem espaço e tem um ponto — o suficiente para distinguir "Zetta Manutenção Industrial"
+ * (nome) de "zettamanutencao.com.br" (site), sem exigir que a pessoa saiba qual dos dois está digitando. */
+function pareceEndereco(texto: string): boolean {
+  return /^https?:\/\//i.test(texto) || (!texto.includes(" ") && texto.includes("."));
+}
+
+/** Etapa 2, modo "empresa_unica" (US-018): resolve o nome/site informado para uma única `Conta`, com
+ * fit/evidências/sinais reais a partir da própria página institucional — mesma qualificação de
+ * `buscarContasReais` (lib/qualificacao.ts), só que para UMA empresa escolhida pela pessoa em vez de uma
+ * lista. Os critérios comparados vêm do ICP (segmento/porte/localização), não de `criterios` — o passo 4
+ * deste modo só pede o nome da empresa (US-012), sem redigitar os critérios do perfil. Sem página
+ * encontrada/legível, a conta ainda nasce (fit "media", sem evidências) — "explorar" nunca falha por
+ * completo só porque a leitura pública não deu certo. */
+async function buscarContaUnicaReal(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null): Promise<Conta> {
+  const nome = textoCriterio(criterios, "empresaNome") || "Empresa sem nome informado";
+  const segmento = icp?.criterios.setor || "";
+  const localizacao = icp?.criterios.localizacao || "";
+  const porte = icp?.criterios.porte || "";
+  const sinaisAlvo = icp?.sinais ?? [];
+  const base = { prospeccaoId, nome, setor: segmento || null, porte: porte || null, cidade: localizacao || null };
+
+  let site = pareceEndereco(nome) ? (nome.startsWith("http") ? nome : `https://${nome}`) : null;
+  let buscaDemo = false;
+  if (!site) {
+    try {
+      const busca = await buscarNaWeb(`${nome} site institucional`);
+      buscaDemo = busca.demo;
+      site = busca.itens[0]?.url ?? null;
+    } catch (err) {
+      console.error("Falha ao localizar o site institucional para explorar a empresa:", nome, err instanceof Error ? err.message : err);
+    }
+  }
+  if (!site) {
+    return criarConta({ ...base, site: null, fit: "media", evidencias: [], sinais: [], resumo: "Não encontramos uma página pública para confirmar critérios desta empresa.", demo: false });
+  }
+
+  let pagina;
+  try {
+    pagina = await lerPagina(site);
+  } catch (err) {
+    console.error("Falha ao ler a página institucional para explorar a empresa:", site, err instanceof Error ? err.message : err);
+    return criarConta({ ...base, site, fit: "media", evidencias: [], sinais: [], resumo: "Não foi possível ler a página pública desta empresa.", demo: false });
+  }
+
+  const demo = buscaDemo || pagina.demo;
+  const conteudo = demo ? conteudoDemoDaEmpresaUnica(nome, segmento, porte, localizacao, sinaisAlvo[0]) : pagina.conteudo;
+  const evidencias = avaliarCriterios(conteudo, [
+    { criterio: "Segmento", valor: segmento },
+    { criterio: "Porte", valor: porte },
+    { criterio: "Localização", valor: localizacao },
+  ]);
+  return criarConta({
+    ...base,
+    site,
+    fit: calcularFit(evidencias),
+    evidencias,
+    sinais: sinaisEncontrados(conteudo, sinaisAlvo, pagina.origem, pagina.consultadoEm),
+    resumo: resumoDaPagina(conteudo),
+    demo,
+  });
 }
 
 /** Etapa 2: cria as contas (empresas) compatíveis com os critérios recebidos. */
@@ -194,7 +269,11 @@ async function etapaProcurarEmpresas(prospeccaoId: string, modo: ModoProspeccao,
     await buscarContasReais(prospeccaoId, criterios, icp);
     return;
   }
-  criarContasFicticias(prospeccaoId, modo, criterios);
+  if (modo === "empresa_unica") {
+    await buscarContaUnicaReal(prospeccaoId, criterios, icp);
+    return;
+  }
+  criarContasFicticias(prospeccaoId, criterios);
 }
 
 /** Etapa 3: trabalho real = ler e filtrar os sinais de intenção do ICP e dos critérios recebidos — só para
@@ -213,13 +292,14 @@ function chaveLead(nome: string, empresa: string | null, linkedin: string | null
   return `nome:${nome.trim().toLowerCase()}|${String(empresa || "").trim().toLowerCase()}`;
 }
 
-/** Etapa 4: 2 pessoas por conta já criada (contaId vinculado), ou 6 pessoas soltas (contaId null) quando
- * não há conta (ex.: jornada B2C). papel "desconhecido" (papel real é US-026), status "pesquisado" (só a
- * etapa 5 promove), fit/evidências/sinais vazios, linkedin/fonte sem dado real ainda.
+/** Etapa 4, modos "pessoas"/"oportunidades": 2 pessoas por conta já criada (contaId vinculado), ou 6
+ * pessoas soltas (contaId null) quando não há conta (ex.: jornada B2C). papel "desconhecido" (papel real
+ * é US-026), status "pesquisado" (só a etapa 5 promove), fit/evidências/sinais vazios, linkedin/fonte sem
+ * dado real ainda.
  * Não duplica um lead já encontrado antes para o mesmo produto (US-014, "Repetir prospecção"): como os
  * dados fictícios são determinísticos (mesmo índice → mesmo nome), repetir com os mesmos critérios tende
  * a reconhecer todo mundo como já visto — comportamento esperado da demonstração, não um bug. */
-function etapaEncontrarPessoas(prospeccaoId: string, criterios: Record<string, unknown>, produtoId: string): void {
+function criarPessoasFicticias(prospeccaoId: string, criterios: Record<string, unknown>, produtoId: string): void {
   const contas = listarContas(prospeccaoId);
   const cargoCriterio = textoCriterio(criterios, "cargo");
   const cidadeCriterio = textoCriterio(criterios, "localizacao");
@@ -246,6 +326,80 @@ function etapaEncontrarPessoas(prospeccaoId: string, criterios: Record<string, u
   } else {
     for (let i = 0; i < 6; i++) criarPessoa(null, null);
   }
+}
+
+// Modo "empresa_unica" (US-018): no máximo 5 pessoas-chave por empresa explorada — teto pequeno de
+// propósito (é uma busca focada numa única empresa, não uma lista para rolar).
+const TETO_PESSOAS_CHAVE = 5;
+
+/** Nome e cargo a partir do título de um resultado de busca por perfil (formato típico de busca por
+ * `site:linkedin.com/in`: "Nome Sobrenome - Cargo - Empresa | LinkedIn", às vezes só "Nome Sobrenome |
+ * LinkedIn"): descarta o sufixo do serviço (depois do `|`) e lê o primeiro segmento como nome, o segundo
+ * (se existir) como cargo. */
+function pessoaDoResultado(item: ResultadoBuscaWeb): { nome: string; cargo: string | null } {
+  const titulo = item.titulo.split("|")[0].trim();
+  const partes = titulo.split(/\s[-–]\s/).map((p) => p.trim()).filter(Boolean);
+  return { nome: partes[0] || titulo, cargo: partes[1] || null };
+}
+
+/** Pessoas-chave de demonstração PRÓPRIAS deste modo (mesmo motivo de `conteudoDemoDaEmpresaUnica`):
+ * nomes e cargos plausíveis, variados o bastante para exercitar as três classificações de papel. */
+function pessoasChaveDemo(): { nome: string; cargo: string | null; linkedin: string | null }[] {
+  return [0, 1, 2].map((i) => ({ nome: nomePessoaFicticia(i), cargo: CARGOS_PESSOA[i % CARGOS_PESSOA.length], linkedin: null }));
+}
+
+/** Etapa 4, modo "empresa_unica" (US-018): busca pessoas públicas ligadas à empresa explorada (consulta
+ * `site:linkedin.com/in` com os cargos mais comuns de quem decide/influencia) em vez das pessoas fixas e
+ * fictícias dos demais modos — primeiro modo com descoberta real de PESSOAS (contas real desde a mesma
+ * história; "empresas"/US-017 já tinha real só para contas). Evidências/sinais herdam os da própria
+ * conta (a mesma leitura institucional já qualificou a empresa; não há orçamento nesta história para ler
+ * o perfil de cada pessoa também — isso é da US-019, que já vai trazer `perfilDePessoa`). Nasce com
+ * `status: "novo"` (não "pesquisado"): só vira parte de fato da prospecção quando selecionada na tela
+ * (ver comentário de topo do arquivo). */
+async function buscarPessoasChaveUnica(prospeccaoId: string, conta: Conta, produtoId: string): Promise<void> {
+  const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
+  let candidatos: { nome: string; cargo: string | null; linkedin: string | null }[];
+  let demo = conta.demo;
+
+  if (conta.demo) {
+    candidatos = pessoasChaveDemo();
+  } else {
+    try {
+      const resultado = await buscarNaWeb(`site:linkedin.com/in "${conta.nome}" (diretor OR gerente OR head OR coordenador)`);
+      demo = resultado.demo;
+      candidatos = resultado.demo ? pessoasChaveDemo() : resultado.itens.map((item) => ({ ...pessoaDoResultado(item), linkedin: item.url }));
+    } catch (err) {
+      console.error("Falha ao buscar pessoas-chave de", conta.nome, err instanceof Error ? err.message : err);
+      candidatos = [];
+    }
+  }
+
+  const vistosNestaBusca = new Set<string>();
+  let criados = 0;
+  for (const candidato of candidatos) {
+    if (criados >= TETO_PESSOAS_CHAVE) break;
+    if (!candidato.nome) continue;
+    const chave = chaveLead(candidato.nome, conta.nome, candidato.linkedin ?? null);
+    if (jaVistos.has(chave) || vistosNestaBusca.has(chave)) continue;
+    vistosNestaBusca.add(chave);
+    criarLead({
+      prospeccaoId, contaId: conta.id, nome: candidato.nome, cargo: candidato.cargo, empresa: conta.nome, cidade: conta.cidade,
+      linkedin: candidato.linkedin ?? null, fonte: demo ? null : "busca pública", papel: inferirPapel(candidato.cargo),
+      fit: conta.fit, evidencias: conta.evidencias, sinais: conta.sinais, hipotese: null,
+      status: "novo", noCRM: false, demo,
+    });
+    criados++;
+  }
+}
+
+/** Etapa 4: encontra as pessoas-chave do modo escolhido. */
+async function etapaEncontrarPessoas(prospeccaoId: string, modo: ModoProspeccao, criterios: Record<string, unknown>, produtoId: string): Promise<void> {
+  if (modo === "empresa_unica") {
+    const conta = listarContas(prospeccaoId)[0];
+    if (conta) await buscarPessoasChaveUnica(prospeccaoId, conta, produtoId);
+    return;
+  }
+  criarPessoasFicticias(prospeccaoId, criterios, produtoId);
 }
 
 /** Etapa 5: único efeito real desta história — promove os leads recém-criados de "pesquisado" para
@@ -300,7 +454,7 @@ async function executarPipeline(prospeccaoId: string): Promise<void> {
     if (foiCancelada(prospeccaoId)) return;
     rotuloEtapaAtual = ETAPAS_PROSPECCAO[3].rotulo;
     atualizarProspeccao(prospeccaoId, { etapa: ETAPAS_PROSPECCAO[3].chave });
-    if (deveCriarPessoas(prospeccao.modo)) etapaEncontrarPessoas(prospeccaoId, prospeccao.criterios, prospeccao.produtoId);
+    if (deveCriarPessoas(prospeccao.modo)) await etapaEncontrarPessoas(prospeccaoId, prospeccao.modo, prospeccao.criterios, prospeccao.produtoId);
 
     // Etapa 5: qualificando oportunidades.
     if (foiCancelada(prospeccaoId)) return;

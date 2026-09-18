@@ -1,6 +1,6 @@
 // Rótulos de valores guardados no banco, num Record completo (nunca um ternário na tela):
 // somar um valor ao union vira erro de compilação aqui em vez de um rótulo faltando na tela.
-import type { Jornada, ModoProspeccao } from "./types";
+import type { Jornada, ModoProspeccao, Papel } from "./types";
 
 export const ROTULO_JORNADA: Record<Jornada, string> = {
   b2b: "Empresas e decisores",
@@ -50,4 +50,13 @@ export const ROTULO_ACAO_MODO: Record<ModoProspeccao, string> = {
   pessoas: "Buscar pessoas",
   empresa_unica: "Explorar empresa",
   oportunidades: "Buscar oportunidades",
+};
+
+// Papel de cada pessoa no processo de decisão (US-018, primeira aparição, ver inferirPapel em
+// lib/qualificacao.ts). "desconhecido" não tem rótulo: nenhum chip aparece na tela.
+export const ROTULO_PAPEL: Record<Papel, string | null> = {
+  decisor: "Decisor provável",
+  influenciador: "Influenciador",
+  champion: "Champion potencial",
+  desconhecido: null,
 };
