@@ -9,6 +9,7 @@ import { Chip } from "./ui";
 export type StatusEntrevista = "convidada" | "aberta" | "em_andamento" | "concluida" | "avaliada" | "expirada" | "cancelada";
 export type Decisao = "avancar" | "aguardar" | "reprovar";
 export type NivelVoz = "agente" | "navegador" | "texto";
+export type ParecerStatus = "nao_pedido" | "em_andamento" | "falhou" | "sem_material" | "pronto";
 
 /** A entrevista como as tabelas do painel a recebem (`listarEntrevistasNoPainel`, lib/painel.ts). */
 export type EntrevistaNaTabela = {
@@ -20,6 +21,7 @@ export type EntrevistaNaTabela = {
   status: StatusEntrevista;
   codigo?: string;
   nivelVoz?: NivelVoz;
+  parecerStatus: ParecerStatus;
   decisao?: Decisao;
   notaGeral?: number;
   recomendacao?: string;
@@ -64,13 +66,28 @@ export const ROTULO_NIVEL_VOZ: Record<NivelVoz, string> = {
   texto: "Texto",
 };
 
+/** Uma entrevista concluída ainda espera o parecer? É isso que faz a lista se reler sozinha, e é
+ * falso quando a conversa foi curta demais ou quando a análise falhou e alguém precisa pedir de novo. */
+export function esperandoParecer(e: { status: StatusEntrevista; parecerStatus: ParecerStatus }): boolean {
+  return e.status === "concluida" && e.parecerStatus !== "falhou" && e.parecerStatus !== "sem_material";
+}
+
+/** O que a coluna "Nota" diz enquanto não há nota. São três esperas diferentes, e só uma delas termina
+ * sozinha — por isso não cabem na mesma frase. */
+export function esperaDoParecer(e: { status: StatusEntrevista; parecerStatus: ParecerStatus }): string | null {
+  if (e.status !== "concluida") return null;
+  if (e.parecerStatus === "sem_material") return "Encerrada cedo demais para avaliar";
+  if (e.parecerStatus === "falhou") return "O parecer não ficou pronto";
+  return "Preparando o parecer...";
+}
+
 /**
  * A situação na linguagem de quem acompanha o processo, não na do banco.
  *
  * `convidada` sem código é a entrevista já atribuída cujo convite ainda não saiu: dizer "convidada"
  * nesse estado contaria que uma mensagem foi enviada a alguém.
  */
-export function situacaoDaEntrevista(e: { status: StatusEntrevista; codigo?: string }): { nivel: string; rotulo: string } {
+export function situacaoDaEntrevista(e: { status: StatusEntrevista; codigo?: string; parecerStatus?: ParecerStatus }): { nivel: string; rotulo: string } {
   switch (e.status) {
     case "convidada":
       return e.codigo ? { nivel: "neutral", rotulo: "Convite enviado" } : { nivel: "cinza", rotulo: "Aguardando convite" };
@@ -79,6 +96,9 @@ export function situacaoDaEntrevista(e: { status: StatusEntrevista; codigo?: str
     case "em_andamento":
       return { nivel: "neutro", rotulo: "Conversando agora" };
     case "concluida":
+      if (e.parecerStatus === "sem_material") return { nivel: "cinza", rotulo: "Encerrada cedo" };
+      // "neutro" é o âmbar da paleta (`.chip-neutro`); não existe `chip-warn`.
+      if (e.parecerStatus === "falhou") return { nivel: "neutro", rotulo: "Parecer pendente" };
       return { nivel: "neutro", rotulo: "Preparando o parecer" };
     case "avaliada":
       return { nivel: "positivo", rotulo: "Avaliada" };
@@ -89,7 +109,7 @@ export function situacaoDaEntrevista(e: { status: StatusEntrevista; codigo?: str
   }
 }
 
-export function ChipSituacao({ entrevista }: { entrevista: { status: StatusEntrevista; codigo?: string } }) {
+export function ChipSituacao({ entrevista }: { entrevista: { status: StatusEntrevista; codigo?: string; parecerStatus?: ParecerStatus } }) {
   const s = situacaoDaEntrevista(entrevista);
   return <Chip nivel={s.nivel}>{s.rotulo}</Chip>;
 }

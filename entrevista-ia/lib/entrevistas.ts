@@ -16,6 +16,16 @@ export type NivelVoz = "agente" | "navegador" | "texto";
 export type Decisao = "avancar" | "aguardar" | "reprovar";
 export type PapelMensagem = "entrevistadora" | "candidato";
 
+/**
+ * Em que pé está o preparo do parecer de uma entrevista já concluída (US-021).
+ *
+ * O status da entrevista não dá conta disso sozinho: `concluida` é ao mesmo tempo "acabou agora e o
+ * parecer está sendo preparado", "o parecer não saiu e alguém precisa pedir de novo" e "a conversa
+ * foi curta demais para avaliar". São três esperas diferentes para quem acompanha o processo, e só a
+ * do meio tem um botão. `pronto` convive com `status = "avaliada"`; os outros, com `concluida`.
+ */
+export type ParecerStatus = "nao_pedido" | "em_andamento" | "falhou" | "sem_material" | "pronto";
+
 export type Entrevista = {
   id: string;
   vagaId: string;
@@ -31,6 +41,7 @@ export type Entrevista = {
   expiraEm?: string;
   /** Id do parecer em lib/historico.ts (o link /r/<id>), preenchido quando a avaliação termina. */
   resultadoId?: string;
+  parecerStatus: ParecerStatus;
   decisao?: Decisao;
   decisaoEm?: string;
   exemplo: boolean;
@@ -60,6 +71,7 @@ type LinhaEntrevista = {
   concluidaEm: string | null;
   expiraEm: string | null;
   resultadoId: string | null;
+  parecerStatus: string | null;
   decisao: string | null;
   decisaoEm: string | null;
   exemplo: number;
@@ -71,6 +83,7 @@ type LinhaMensagem = { id: string; entrevistaId: string; papel: string; texto: s
 const STATUS: StatusEntrevista[] = ["convidada", "aberta", "em_andamento", "concluida", "avaliada", "expirada", "cancelada"];
 const NIVEIS: NivelVoz[] = ["agente", "navegador", "texto"];
 const DECISOES: Decisao[] = ["avancar", "aguardar", "reprovar"];
+const PARECER_STATUS: ParecerStatus[] = ["nao_pedido", "em_andamento", "falhou", "sem_material", "pronto"];
 
 /** Uma entrevista nestes estados ainda "vale": é ela que o par (vaga, candidato) não pode duplicar. */
 const STATUS_VIVOS = STATUS.filter((s) => s !== "cancelada" && s !== "expirada");
@@ -99,6 +112,7 @@ function linhaParaEntrevista(l: LinhaEntrevista): Entrevista {
     concluidaEm: l.concluidaEm ?? undefined,
     expiraEm: l.expiraEm ?? undefined,
     resultadoId: l.resultadoId ?? undefined,
+    parecerStatus: PARECER_STATUS.includes(l.parecerStatus as ParecerStatus) ? (l.parecerStatus as ParecerStatus) : "nao_pedido",
     decisao: DECISOES.includes(l.decisao as Decisao) ? (l.decisao as Decisao) : undefined,
     decisaoEm: l.decisaoEm ?? undefined,
     exemplo: l.exemplo === 1,
@@ -308,9 +322,26 @@ export function transcricao(entrevistaId: string): MensagemEntrevista[] {
 /** Liga o parecer gerado (lib/historico.ts) à entrevista e a marca como avaliada. */
 export function registrarResultado(id: string, resultadoId: string): Entrevista | null {
   const { changes } = banco()
-    .prepare("UPDATE entrevistas SET resultadoId = ?, status = 'avaliada', concluidaEm = COALESCE(concluidaEm, ?) WHERE id = ?")
+    .prepare("UPDATE entrevistas SET resultadoId = ?, status = 'avaliada', parecerStatus = 'pronto', concluidaEm = COALESCE(concluidaEm, ?) WHERE id = ?")
     .run(resultadoId, agora(), id);
   return Number(changes) > 0 ? obter(id) : null;
+}
+
+/** Em que pé está o preparo do parecer (US-021). Escrito ANTES de a avaliação começar e de novo
+ * quando ela falha: é esse campo que a tela do gestor lê para saber se ainda vale esperar. */
+export function marcarParecer(id: string, parecerStatus: ParecerStatus): Entrevista | null {
+  const { changes } = banco().prepare("UPDATE entrevistas SET parecerStatus = ? WHERE id = ?").run(parecerStatus, id);
+  return Number(changes) > 0 ? obter(id) : null;
+}
+
+/** Quantas vezes o candidato falou nesta conversa. É o que separa uma entrevista encerrada cedo
+ * demais para avaliar de uma que rendeu material — e uma contagem em SQL evita carregar a
+ * transcrição inteira só para medir o tamanho dela. */
+export function contarRespostasDoCandidato(entrevistaId: string): number {
+  const linha = banco()
+    .prepare("SELECT COUNT(*) AS total FROM mensagens_entrevista WHERE entrevistaId = ? AND papel = 'candidato'")
+    .get(entrevistaId) as { total: number };
+  return linha.total;
 }
 
 /** A decisão do gestor depois de ler o parecer (US-020). Não muda o status: uma entrevista avaliada

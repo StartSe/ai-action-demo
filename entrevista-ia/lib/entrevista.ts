@@ -47,8 +47,16 @@ function formatarHistorico(historico: Troca[]): string {
     .join("\n");
 }
 
-function construirPromptAvaliacao({ vaga, historico }: { vaga: Vaga; historico: Troca[] }) {
-  return `Vaga: ${vaga.titulo}
+/** O aviso de conversa interrompida, quando ela foi. Vai no prompt E no resumo pedido ao modelo: uma
+ * entrevista encerrada no meio rendeu menos material, e o gestor precisa ler isso em vez de uma nota
+ * baixa sem explicação. */
+const ENTREVISTA_PARCIAL = `Atenção: esta conversa foi encerrada antes do fim — o candidato respondeu menos perguntas do que o combinado.
+Diga isso na primeira frase do "resumo", não penalize o candidato por assuntos que a entrevistadora nem chegou a perguntar, e registre em "pontos_atencao" o que ficou por conversar.`;
+
+function construirPromptAvaliacao({ vaga, historico, parcial }: { vaga: Vaga; historico: Troca[]; parcial?: boolean }) {
+  return `${parcial ? `${ENTREVISTA_PARCIAL}
+
+` : ""}Vaga: ${vaga.titulo}
 Principais requisitos:
 ${vaga.requisitos}
 Nome do candidato: ${vaga.candidato || "não informado"}
@@ -59,11 +67,14 @@ ${formatarHistorico(historico)}
 Gere o scorecard da triagem.`;
 }
 
-/** Gera o scorecard a partir da vaga e da transcrição, e salva no histórico; tipo/expiraEmDias deixam distinguir um scorecard gerado pelo gestor de um gerado por um link de candidato. */
+/** Gera o scorecard a partir da vaga e da transcrição, e salva no histórico; tipo/expiraEmDias deixam
+ * distinguir um scorecard gerado pelo gestor de um gerado por um link de candidato. `parcial` marca a
+ * conversa encerrada antes do fim (US-021) e fica guardado na entrada, para quem reler o resultado
+ * saber de que tamanho de conversa ele saiu. */
 export async function gerarScorecard(
   vaga: Vaga,
   historico: Troca[],
-  opts: { tipo?: string; expiraEmDias?: number } = {}
+  opts: { tipo?: string; expiraEmDias?: number; parcial?: boolean } = {}
 ): Promise<{ demo: boolean; scorecard: Scorecard; meta: Meta; id: string }> {
   const tipo = opts.tipo ?? "entrevista";
   const insumo = "toda a conversa e os requisitos da vaga";
@@ -71,13 +82,13 @@ export async function gerarScorecard(
     await esperar(1200);
     const scorecard = scorecardDemo({ vaga, historico });
     const metaGerada = meta({ demo: true, insumo });
-    const id = salvar({ tipo, titulo: `Scorecard de ${vaga.candidato}`, entrada: { vaga, historico }, saida: scorecard, meta: metaGerada, expiraEmDias: opts.expiraEmDias });
+    const id = salvar({ tipo, titulo: `Scorecard de ${vaga.candidato}`, entrada: { vaga, historico, parcial: opts.parcial }, saida: scorecard, meta: metaGerada, expiraEmDias: opts.expiraEmDias });
     return { demo: true, scorecard, meta: metaGerada, id };
   }
-  const prompt = construirPromptAvaliacao({ vaga, historico });
+  const prompt = construirPromptAvaliacao({ vaga, historico, parcial: opts.parcial });
   const scorecard = await askJSON<Scorecard>({ system: SYSTEM_AVALIAR, prompt, maxTokens: 2000 });
   const metaGerada = meta({ demo: false, insumo });
-  const id = salvar({ tipo, titulo: `Scorecard de ${vaga.candidato}`, entrada: { vaga, historico }, saida: scorecard, meta: metaGerada, expiraEmDias: opts.expiraEmDias });
+  const id = salvar({ tipo, titulo: `Scorecard de ${vaga.candidato}`, entrada: { vaga, historico, parcial: opts.parcial }, saida: scorecard, meta: metaGerada, expiraEmDias: opts.expiraEmDias });
   return { demo: false, scorecard, meta: metaGerada, id };
 }
 

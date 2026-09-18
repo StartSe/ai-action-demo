@@ -14,6 +14,7 @@ import { faixaSalarial, rotuloModelo, rotuloSenioridade, type VagaSalva } from "
 import {
   ChipSituacao,
   NotaDaEntrevista,
+  esperaDoParecer,
   PODE_CONVIDAR,
   PODE_LIGAR,
   ROTULO_DECISAO,
@@ -153,7 +154,15 @@ export default function Page() {
       render: (l) => <Link href={`/candidatos/${l.candidatoId}`} className="btn-link">{l.candidatoNome}</Link>,
     },
     { chave: "situacao", titulo: "Situação", papel: "chip", render: (l) => <ChipSituacao entrevista={l} /> },
-    { chave: "nota", titulo: "Nota", render: (l) => <NotaDaEntrevista entrevista={l} /> },
+    {
+      chave: "nota",
+      titulo: "Nota",
+      // A mesma frase de `/entrevistas` sobre a mesma linha (ver `esperaDoParecer`).
+      render: (l) => {
+        const espera = esperaDoParecer(l);
+        return espera ? <span className="text-muted">{espera}</span> : <NotaDaEntrevista entrevista={l} />;
+      },
+    },
     {
       chave: "decisao",
       titulo: "Sua decisão",

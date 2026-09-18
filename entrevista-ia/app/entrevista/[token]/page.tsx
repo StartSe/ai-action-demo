@@ -16,6 +16,7 @@
 // funciona sem nada configurado.
 import { headers } from "next/headers";
 import { EntrevistaCandidato } from "@/components/EntrevistaCandidato";
+import { AGRADECIMENTO_APOIO, agradecimentoTitulo } from "@/lib/formato";
 import { abrirSala, agenteDaSala } from "@/lib/sala-do-candidato";
 import { ttsEnabled } from "@/lib/voz";
 
@@ -30,6 +31,18 @@ function Indisponivel({ titulo, descricao }: { titulo: string; descricao: string
   );
 }
 
+/** Quem volta ao link depois de conversar lê a MESMA tela do fim da entrevista (US-021), nunca "este
+ * link já foi usado": a pessoa acabou de responder oito perguntas, e uma frase de link vencido faz
+ * parecer que o que ela disse se perdeu. */
+function Agradecimento({ nome }: { nome?: string }) {
+  return (
+    <main className="min-h-[70vh] flex flex-col items-center justify-center text-center gap-3 px-6">
+      <h1 className="text-2xl font-extrabold">{agradecimentoTitulo(nome)}</h1>
+      <p className="text-muted max-w-[420px]">{AGRADECIMENTO_APOIO} Você já pode fechar esta página.</p>
+    </main>
+  );
+}
+
 export default async function Page({ params }: PageProps<"/entrevista/[token]">) {
   const { token } = await params;
   // O candidato abriu o convite: quem acompanha o processo vê "Link aberto" em vez de continuar
@@ -37,6 +50,7 @@ export default async function Page({ params }: PageProps<"/entrevista/[token]">)
   const resultado = abrirSala(token, (await headers()).get("cookie"));
 
   if (!resultado.ok) {
+    if (resultado.motivo === "concluida") return <Agradecimento nome={resultado.nome} />;
     return <Indisponivel titulo={resultado.titulo} descricao={resultado.descricao} />;
   }
 

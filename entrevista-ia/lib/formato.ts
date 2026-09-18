@@ -59,3 +59,18 @@ export function haDias(d: Date | string) {
   if (dias === 1) return "ontem";
   return `há ${numero(dias)} dias`;
 }
+
+/**
+ * O que o candidato lê quando a entrevista acaba (US-021).
+ *
+ * Mora aqui pela mesma razão de `faixaSalarial`: o SERVIDOR também precisa dizer isso. A tela de
+ * agradecimento aparece por dois caminhos — a sala, logo depois da despedida, e a página do link,
+ * quando a pessoa volta ao mesmo endereço horas depois — e as duas têm de dizer a mesma frase. Nunca
+ * há nota, parecer nem qualquer pista do que foi avaliado: isso é conversa do gestor.
+ */
+export const AGRADECIMENTO_APOIO = "A equipe de recrutamento vai analisar e entrar em contato.";
+
+export function agradecimentoTitulo(nome?: string): string {
+  const primeiro = nome?.trim().split(/\s+/)[0];
+  return primeiro ? `Obrigado, ${primeiro}. Sua entrevista foi enviada.` : "Obrigado, sua entrevista foi enviada.";
+}

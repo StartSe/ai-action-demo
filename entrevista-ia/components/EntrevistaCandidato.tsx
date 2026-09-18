@@ -1,7 +1,8 @@
 "use client";
 // Tela pública do link de candidato (app/entrevista/[token]): em vez do formulário genérico de
-// campos texto/textarea (app/f/[token]), a conversa é o formulário. Ao concluir, envia a transcrição
-// para gerar o parecer (que só o gestor vê) e mostra uma tela de agradecimento para o candidato.
+// campos texto/textarea (app/f/[token]), a conversa é o formulário. Ao concluir, avisa o servidor e
+// mostra a tela de agradecimento; o parecer é preparado depois, em segundo plano, e o candidato nunca
+// vê nota, avaliação nem qualquer pista do que foi analisado (US-021).
 //
 // A ordem é: boas-vindas (components/BoasVindas.tsx, com o teste de microfone) → sala → agradecimento.
 // Quem recarregou a página no meio da conversa entra direto na sala: as boas-vindas são o convite, e
@@ -11,6 +12,7 @@
 // a do nível 1 (components/SalaAgenteCandidato.tsx), que cai sozinha para a do nível 2 quando o widget
 // não carrega; sem ele, a do nível 2 (components/SalaCandidato.tsx) direto.
 import { useState } from "react";
+import { AGRADECIMENTO_APOIO, agradecimentoTitulo } from "@/lib/formato";
 import { BoasVindas } from "./BoasVindas";
 import { SalaAgenteCandidato } from "./SalaAgenteCandidato";
 import { SalaCandidato, type PropsSalaCandidato } from "./SalaCandidato";
@@ -104,9 +106,11 @@ export function EntrevistaCandidato({
       </div>
 
       {fase === "concluida" ? (
+        // A MESMA frase da página do link (app/entrevista/[token]), que é o que quem voltar ao
+        // endereço depois vai ler: as duas vêm de lib/formato.ts.
         <div className="card p-7 max-md:p-[22px] text-center">
-          <h1 className="text-xl font-extrabold mb-1.5">Obrigado, sua entrevista foi enviada.</h1>
-          <p className="text-muted">Você já pode fechar esta página. A equipe de recrutamento vai analisar suas respostas.</p>
+          <h1 className="text-xl font-extrabold mb-1.5">{agradecimentoTitulo(vaga.candidato)}</h1>
+          <p className="text-muted">{AGRADECIMENTO_APOIO} Você já pode fechar esta página.</p>
         </div>
       ) : fase === "erro" ? (
         <div className="card p-7 max-md:p-[22px] text-center">

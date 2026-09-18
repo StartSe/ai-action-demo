@@ -20,7 +20,7 @@ import {
   obterPorCodigo,
   type Entrevista,
 } from "./entrevistas";
-import { data } from "./formato";
+import { AGRADECIMENTO_APOIO, data } from "./formato";
 import { contarRespostas, criar, encerrar, expirou, obter as obterFormulario, type ParametrosPublicos } from "./formularios";
 import { getConfig } from "./store";
 import type { Vaga as VagaDaSala } from "./types";
@@ -234,8 +234,12 @@ export function cancelarConvite(entrevistaId: string): Entrevista | null {
   return cancelar(entrevistaId);
 }
 
-/** Por que um link público não abre. Cada motivo tem a sua frase na tela do candidato. */
-export type MotivoFechado = "invalido" | "expirado" | "usado" | "cancelado";
+/** Por que um link público não abre. Cada motivo tem a sua frase na tela do candidato.
+ *
+ * `concluida` é o único que não é má notícia: a conversa aconteceu e quem volta ao endereço vê a
+ * mesma tela de agradecimento do fim da entrevista (US-021). Dizer "este link já foi usado" a quem
+ * acabou de responder a oito perguntas soa como se a entrevista tivesse se perdido. */
+export type MotivoFechado = "invalido" | "expirado" | "usado" | "cancelado" | "concluida";
 
 export type SalaPublica = {
   marca: string;
@@ -251,7 +255,10 @@ export type SalaPublica = {
 /** Quanto dura a conversa de um link antigo (`scorecard`), que não tem vaga cadastrada por trás. */
 export const DURACAO_PADRAO = 15;
 
-export type ResolucaoConvite = { ok: true; sala: SalaPublica } | { ok: false; motivo: MotivoFechado };
+export type ResolucaoConvite =
+  | { ok: true; sala: SalaPublica }
+  /** `nome` só vem com `motivo: "concluida"`: é o nome do agradecimento ("Obrigado, Bruno."). */
+  | { ok: false; motivo: MotivoFechado; nome?: string };
 
 /**
  * O que existe por trás de um código de link público — a única porta das quatro rotas públicas.
@@ -266,6 +273,9 @@ export function resolverConvite(codigo: string): ResolucaoConvite {
   // convite cancelado passaria a dizer "este link não existe" depois da primeira reinicialização.
   if (!formulario) {
     const orfa = obterPorCodigo(codigo);
+    if (orfa?.status === "concluida" || orfa?.status === "avaliada") {
+      return { ok: false, motivo: "concluida", nome: obterCandidato(orfa.candidatoId)?.nome };
+    }
     if (orfa?.status === "cancelada") return { ok: false, motivo: "cancelado" };
     if (orfa?.status === "expirada") return { ok: false, motivo: "expirado" };
     return { ok: false, motivo: "invalido" };
@@ -284,12 +294,21 @@ export function resolverConvite(codigo: string): ResolucaoConvite {
   const entrevista = obterPorCodigo(codigo);
   if (!entrevista) return { ok: false, motivo: "invalido" };
   if (entrevista.status === "cancelada") return { ok: false, motivo: "cancelado" };
-  if (entrevista.status === "expirada" || expirou(formulario)) return { ok: false, motivo: "expirado" };
-  if (formulario.limite !== null && contarRespostas(codigo) >= formulario.limite) return { ok: false, motivo: "usado" };
 
   const vaga = obterVaga(entrevista.vagaId);
   const candidato = obterCandidato(entrevista.candidatoId);
   if (!vaga || !candidato) return { ok: false, motivo: "invalido" };
+
+  // A conclusão vem ANTES do prazo: uma entrevista respondida no último dia do convite continua
+  // agradecendo a quem volta ao endereço na semana seguinte, em vez de dizer que o link venceu.
+  // O limite de uso do formulário é a mesma notícia por outro caminho (`responder()` na conclusão).
+  const concluida =
+    entrevista.status === "concluida" ||
+    entrevista.status === "avaliada" ||
+    (formulario.limite !== null && contarRespostas(codigo) >= formulario.limite);
+  if (concluida) return { ok: false, motivo: "concluida", nome: candidato.nome };
+
+  if (entrevista.status === "expirada" || expirou(formulario)) return { ok: false, motivo: "expirado" };
 
   return {
     ok: true,
@@ -325,6 +344,14 @@ export const FECHADO: Record<MotivoFechado, { titulo: string; descricao: string;
   usado: {
     titulo: "Esta entrevista já foi concluída",
     descricao: "Este link já foi usado e não vale mais. A equipe de recrutamento entra em contato com os próximos passos.",
+    status: 410,
+  },
+  // A página do candidato não mostra esta frase: ela renderiza o agradecimento (`agradecimentoTitulo`,
+  // lib/formato.ts) com o nome de quem conversou. Estas palavras são as que as ROTAS devolvem quando
+  // alguém tenta continuar uma conversa que já acabou.
+  concluida: {
+    titulo: "Esta entrevista já foi concluída",
+    descricao: AGRADECIMENTO_APOIO,
     status: 410,
   },
   cancelado: {

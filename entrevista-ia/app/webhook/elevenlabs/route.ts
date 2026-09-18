@@ -10,7 +10,8 @@
 // um `JSON.parse` seguido de `JSON.stringify` muda espaços e ordem e derruba a conferência.
 import crypto from "node:crypto";
 import { registrarConversaRecebida, registrarRecusa } from "@/lib/aviso-pos-conversa";
-import { mudarStatus, obter as obterEntrevista, registrarMensagem, transcricao as transcricaoDaEntrevista } from "@/lib/entrevistas";
+import { concluirEntrevista } from "@/lib/conclusao";
+import { obter as obterEntrevista, registrarMensagem, transcricao as transcricaoDaEntrevista } from "@/lib/entrevistas";
 import type { PapelMensagem } from "@/lib/entrevistas";
 import { getConfig } from "@/lib/store";
 
@@ -77,11 +78,12 @@ function processarEntrevista(entrevistaId: string, falas: Fala[]): boolean {
 
   // `nivelVoz: "agente"` só é escrito aqui: no nível 1 nenhum turno passa pelo servidor, então esta é
   // a primeira (e única) vez que o app sabe como a conversa aconteceu.
-  if (entrevista.status !== "concluida" && entrevista.status !== "avaliada") {
-    mudarStatus(entrevista.id, "concluida", { nivelVoz: "agente" });
-  }
-  // O parecer (US-022) é preparado a partir daqui, em segundo plano: `concluida` é exatamente o
-  // estado que a tela do gestor lê como "Preparando o parecer".
+  //
+  // `concluirEntrevista()` é a mesma porta da sala do navegador (lib/conclusao.ts): ela marca o
+  // estado, mede o tamanho da conversa e põe o parecer a caminho em segundo plano. Uma entrevista já
+  // concluída ou avaliada não volta atrás nem ganha um segundo parecer — o que importa aqui, porque a
+  // ElevenLabs reentrega o aviso que não recebeu 200.
+  concluirEntrevista(entrevista.id, { nivelVoz: "agente" });
   return true;
 }
 

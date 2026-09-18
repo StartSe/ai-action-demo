@@ -24,6 +24,8 @@ import {
   ROTULO_DECISAO,
   ROTULO_NIVEL_VOZ,
   VIVAS,
+  esperaDoParecer,
+  esperandoParecer,
   rotuloConvite,
   type EntrevistaNaTabela,
 } from "@/components/RotulosEntrevista";
@@ -120,14 +122,28 @@ export default function Page() {
   }, []);
 
   // O parecer é gerado depois que a conversa termina: a linha fica em "Preparando o parecer" e a
-  // lista se relê sozinha a cada 5 s até ele chegar. Sem alguém `concluida` na tela não há o que
-  // esperar, e o relógio para.
-  const preparando = (painel?.itens ?? []).some((l) => l.status === "concluida");
+  // lista se relê sozinha a cada 5 s até ele chegar. Sem ninguém ESPERANDO na tela não há o que
+  // esperar, e o relógio para — uma entrevista encerrada cedo demais ou cujo parecer falhou está
+  // `concluida` e nunca vai mudar sozinha, e sondá-la seria reler a lista para sempre.
+  const preparando = (painel?.itens ?? []).some((l) => esperandoParecer(l));
   useEffect(() => {
     if (!preparando) return;
     const relogio = setInterval(() => setVersao((v) => v + 1), 5000);
     return () => clearInterval(relogio);
   }, [preparando]);
+
+  /** A saída de quando a análise não saiu: a conversa está guardada, e pedi-la de novo é um clique —
+   * nunca um pedido ao candidato para conversar outra vez por causa de uma falha que não é dele. */
+  async function prepararParecer(linha: Linha) {
+    setErroTela(null);
+    try {
+      const r = await fetch(`/api/entrevistas/${linha.id}/avaliar`, { method: "POST" });
+      if (!r.ok) throw r;
+      recarregar();
+    } catch (e) {
+      setErroTela(await lerErro(e));
+    }
+  }
 
   async function cancelarEntrevista(linha: Linha) {
     if (!(await confirmar(`Cancelar a entrevista de ${linha.candidatoNome}? O convite deixa de valer.`, { confirmarRotulo: "Cancelar entrevista", cancelarRotulo: "Voltar" }))) return;
@@ -174,8 +190,10 @@ export default function Page() {
     {
       chave: "nota",
       titulo: "Nota",
-      render: (l) =>
-        l.status === "concluida" ? <span className="text-muted">Preparando o parecer...</span> : <NotaDaEntrevista entrevista={l} />,
+      render: (l) => {
+        const espera = esperaDoParecer(l);
+        return espera ? <span className="text-muted">{espera}</span> : <NotaDaEntrevista entrevista={l} />;
+      },
     },
     {
       chave: "decisao",
@@ -197,6 +215,11 @@ export default function Page() {
       render: (l) => {
         const acoes = [
           l.resultadoId ? <Link key="parecer" href={`/r/${l.resultadoId}`} className="btn-link">Abrir parecer</Link> : null,
+          l.status === "concluida" && l.parecerStatus === "falhou" ? (
+            <button key="avaliar" type="button" className="btn-link" onClick={() => void prepararParecer(l)}>
+              Preparar o parecer de novo
+            </button>
+          ) : null,
           l.status === "avaliada" ? (
             <button key="decidir" type="button" className="btn-link" onClick={() => setDecisao(l)}>
               {l.decisao ? "Mudar decisão" : "Decidir"}

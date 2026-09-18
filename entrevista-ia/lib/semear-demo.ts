@@ -527,7 +527,7 @@ function avaliarEntrevistaSemeada(e: EntrevistaDeExemplo): void {
   // O histórico grava com a data de hoje; a entrevista é de dias atrás e a demonstração não pode
   // vencer sozinha (quem a apaga é o primeiro dado real, em lib/exemplos.ts).
   banco().prepare("UPDATE resultados SET criadoEm = ?, expiraEm = NULL WHERE id = ?").run(quando, id);
-  banco().prepare("UPDATE entrevistas SET resultadoId = ? WHERE id = ?").run(id, e.id);
+  banco().prepare("UPDATE entrevistas SET resultadoId = ?, parecerStatus = 'pronto' WHERE id = ?").run(id, e.id);
 }
 
 /**

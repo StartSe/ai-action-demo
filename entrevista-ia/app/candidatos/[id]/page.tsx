@@ -14,7 +14,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DialogoAtribuirVaga } from "@/components/DialogoAtribuirVaga";
 import { DialogoConvite } from "@/components/DialogoConvite";
 import { FichaCandidato, type FonteNaTela } from "@/components/FichaCandidato";
-import { ChipSituacao, NotaDaEntrevista, PODE_CONVIDAR, ROTULO_DECISAO, VIVAS, rotuloConvite, type EntrevistaNaTabela } from "@/components/RotulosEntrevista";
+import { ChipSituacao, NotaDaEntrevista, PODE_CONVIDAR, ROTULO_DECISAO, VIVAS, esperaDoParecer, rotuloConvite, type EntrevistaNaTabela } from "@/components/RotulosEntrevista";
 import { Aviso, Chip, DataTable, ErrorBox, Topbar, data, lerErro, useConfirmacao, useStatus, type Coluna, type ErroLido } from "@/components/ui";
 import type { EdicaoFicha } from "@/lib/ficha";
 import type { Ficha, OrigemCampo } from "@/lib/types";
@@ -234,7 +234,16 @@ export default function Page() {
   const colunas: Coluna<EntrevistaNaTabela>[] = [
     { chave: "vaga", titulo: "Vaga", papel: "titulo", render: (e) => <Link href={`/vagas/${e.vagaId}`} className="btn-link">{e.vagaCargo}</Link> },
     { chave: "situacao", titulo: "Situação", papel: "chip", render: (e) => <ChipSituacao entrevista={e} /> },
-    { chave: "nota", titulo: "Nota", render: (e) => <NotaDaEntrevista entrevista={e} /> },
+    {
+      chave: "nota",
+      titulo: "Nota",
+      // A mesma frase de `/entrevistas` sobre a mesma linha: "Preparando o parecer...", "Encerrada
+      // cedo demais para avaliar" ou a nota. Um traço aqui e uma frase lá seriam dois registros.
+      render: (e) => {
+        const espera = esperaDoParecer(e);
+        return espera ? <span className="text-muted">{espera}</span> : <NotaDaEntrevista entrevista={e} />;
+      },
+    },
     { chave: "decisao", titulo: "Sua decisão", render: (e) => (e.decisao ? ROTULO_DECISAO[e.decisao] : <span className="text-muted">—</span>) },
     { chave: "quando", titulo: "Quando", render: (e) => <span className="text-muted">{data(e.concluidaEm ?? e.criadoEm)}</span> },
     {

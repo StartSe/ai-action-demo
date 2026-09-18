@@ -148,12 +148,17 @@ function criarTabelas(d: DatabaseSync): void {
     decisao TEXT NULL,
     decisaoEm TEXT NULL,
     roteiro TEXT NULL,
+    parecerStatus TEXT NOT NULL DEFAULT 'nao_pedido',
     exemplo INTEGER NOT NULL DEFAULT 0,
     criadoEm TEXT NOT NULL
   )`);
   // `roteiro` nasceu depois da tabela (US-015): o plano da conversa em JSON, escrito na abertura da
   // sala. Um banco criado antes desta versão ganha a coluna aqui, sem perder nada do que já tem.
   garantirColuna(d, "entrevistas", "roteiro");
+  // `parecerStatus` nasceu na US-021: em que pé está o preparo do parecer de uma entrevista já
+  // concluída. É o que separa "o parecer está sendo preparado" de "ele não saiu, peça de novo" e de
+  // "a conversa foi curta demais para avaliar" — três esperas diferentes para quem acompanha.
+  garantirColuna(d, "entrevistas", "parecerStatus", "TEXT NOT NULL DEFAULT 'nao_pedido'");
   d.exec("CREATE INDEX IF NOT EXISTS idx_entrevistas_vaga ON entrevistas (vagaId, criadoEm)");
   d.exec("CREATE INDEX IF NOT EXISTS idx_entrevistas_candidato ON entrevistas (candidatoId, criadoEm)");
   // "Uma entrevista por par enquanto ela vale": o índice parcial é quem garante isso no banco, e não

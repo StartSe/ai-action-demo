@@ -39,12 +39,20 @@ export type SalaAberta = {
   mesmoAparelho: boolean;
 };
 
-export type SalaBloqueada = { ok: false; motivo: MotivoBloqueio; titulo: string; descricao: string; status: number };
+export type SalaBloqueada = {
+  ok: false;
+  motivo: MotivoBloqueio;
+  titulo: string;
+  descricao: string;
+  status: number;
+  /** Só com `motivo: "concluida"`: o nome de quem conversou, para o agradecimento da página (US-021). */
+  nome?: string;
+};
 
 export type ResultadoSala = SalaAberta | SalaBloqueada;
 
-function bloquear(motivo: MotivoBloqueio): SalaBloqueada {
-  return { ok: false, motivo, ...BLOQUEIOS[motivo] };
+function bloquear(motivo: MotivoBloqueio, nome?: string): SalaBloqueada {
+  return { ok: false, motivo, ...BLOQUEIOS[motivo], nome };
 }
 
 /**
@@ -55,7 +63,7 @@ function bloquear(motivo: MotivoBloqueio): SalaBloqueada {
  */
 export function conferirSala(codigo: string, cabecalhoCookie: string | null): ResultadoSala {
   const resolucao = resolverConvite(codigo);
-  if (!resolucao.ok) return bloquear(resolucao.motivo);
+  if (!resolucao.ok) return bloquear(resolucao.motivo, resolucao.nome);
 
   const { entrevistaId } = resolucao.sala;
   const entrevista = entrevistaId ? obterEntrevista(entrevistaId) : null;
