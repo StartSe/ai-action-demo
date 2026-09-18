@@ -3,56 +3,15 @@
 // sem icpId, cria; com icpId, busca o ICP em GET /api/icps/[id] e edita. Critérios mudam conforme a
 // jornada (B2B: setor/porte/localização/outros; B2C: localização/faixa etária/ocupação/interesses/contexto);
 // personas, dores e sinais são chips adicionados e removidos um a um, nunca textarea livre.
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Aviso, Chip, Field } from "@/components/ui";
+import { Aviso, Field } from "@/components/ui";
+import { CampoLista } from "@/components/CampoLista";
 import { ROTULO_JORNADA } from "@/lib/rotulos";
 import type { CriteriosICP, Jornada } from "@/lib/types";
 
 const CRITERIOS_VAZIOS: CriteriosICP = {};
-
-/** Campo de chips: digitar e apertar Enter (ou "Adicionar") acrescenta um item; cada chip tem um botão próprio de remover. */
-function CampoLista({ id, label, hint, placeholder, valores, onChange }: { id: string; label: string; hint?: string; placeholder: string; valores: string[]; onChange: (v: string[]) => void }) {
-  const [texto, setTexto] = useState("");
-
-  function adicionar() {
-    const v = texto.trim();
-    if (!v || valores.includes(v)) {
-      setTexto("");
-      return;
-    }
-    onChange([...valores, v]);
-    setTexto("");
-  }
-
-  function aoTeclar(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key !== "Enter") return;
-    e.preventDefault();
-    adicionar();
-  }
-
-  return (
-    <Field label={label} htmlFor={id} hint={hint}>
-      <div className="flex gap-2">
-        <input id={id} className="input" placeholder={placeholder} value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={aoTeclar} />
-        <button type="button" className="btn-secundario !w-auto shrink-0" onClick={adicionar}>Adicionar</button>
-      </div>
-      {valores.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2.5">
-          {valores.map((v) => (
-            <Chip key={v} nivel="neutral">
-              <span className="inline-flex items-center gap-1.5">
-                {v}
-                <button type="button" aria-label={`Remover ${v}`} className="leading-none cursor-pointer" onClick={() => onChange(valores.filter((x) => x !== v))}>×</button>
-              </span>
-            </Chip>
-          ))}
-        </div>
-      )}
-    </Field>
-  );
-}
 
 export function ICPForm({ produtoId, icpId }: { produtoId: string; icpId?: string }) {
   const router = useRouter();

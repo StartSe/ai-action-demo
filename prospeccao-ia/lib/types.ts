@@ -103,6 +103,20 @@ export interface ICP {
 }
 export type NovoICP = Omit<ICP, "id" | "criadoEm">;
 
+/** Sugestão de produto + ICP a partir do site (US-007): nunca salva direto, sempre editada em ProdutoComIA antes de virar Produto/ICP de verdade. */
+export interface SugestaoProduto {
+  nome: string;
+  descricao: string;
+  propostaValor: string;
+  icp: {
+    nome: string;
+    criterios: CriteriosICP;
+    personas: string[];
+    dores: string[];
+    sinais: string[];
+  };
+}
+
 export interface Prospeccao {
   id: string;
   produtoId: string;

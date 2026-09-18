@@ -1,7 +1,8 @@
 "use client";
 // Formulário compartilhado por /produtos/novo e /produtos/[id] (US-005): sem produtoId, cria; com
 // produtoId, busca o produto em GET /api/produtos/[id] e edita. O caminho de IA a partir do site
-// (?ia=1, ver components/Produtos.tsx) chega na US-007 — esta versão ignora o parâmetro.
+// (?ia=1, ver components/Produtos.tsx) é outra tela (components/ProdutoComIA.tsx, US-007), escolhida
+// por components/ProdutoNovo.tsx antes deste formulário nascer — ele nunca lê o parâmetro sozinho.
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -81,7 +82,7 @@ export function ProdutoForm({ produtoId }: { produtoId?: string }) {
         <input id="descricao" className="input" value={descricao} onChange={(e) => setDescricao(e.target.value)} />
       </Field>
 
-      <Field label="Site" htmlFor="site" hint="Opcional. Usado para criar com IA a partir do site (em breve).">
+      <Field label="Site" htmlFor="site" hint="Opcional. Usado para criar com IA a partir do site.">
         <input id="site" type="url" className="input" placeholder="https://" value={site} onChange={(e) => setSite(e.target.value)} />
       </Field>
 
