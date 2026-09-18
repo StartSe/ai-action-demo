@@ -373,16 +373,22 @@ export function pendentesDeAvaliacao(limite = 50): Sessao[] {
  *
  * `ultimaSessao` existe para `/resultados` (US-022) ordenar os treinos por movimento e não por data de
  * criação: o gestor volta ao que o time está usando esta semana, que raramente é o último que ele criou.
+ *
+ * `reais` conta só o que não é de exemplo (US-030). Quem mostra movimento quer o total — as conversas
+ * semeadas são o que faz o painel de uma instalação nova ter o que mostrar —, mas quem marca um passo
+ * do gestor ("Compartilhe o link", US-027) precisa perguntar se alguém de verdade treinou: a semeadura
+ * não pode marcar passo que ninguém deu.
  */
-export function resumoPorSimulacao(): Record<string, { sessoes: number; participantes: number; ultimaSessao: string | null }> {
+export function resumoPorSimulacao(): Record<string, { sessoes: number; reais: number; participantes: number; ultimaSessao: string | null }> {
   const linhas = banco()
     .prepare(
-      `SELECT simulacaoCodigo, COUNT(*) AS sessoes, COUNT(DISTINCT participanteId) AS participantes, MAX(criadoEm) AS ultimaSessao
+      `SELECT simulacaoCodigo, COUNT(*) AS sessoes, SUM(CASE WHEN exemplo = 0 THEN 1 ELSE 0 END) AS reais,
+              COUNT(DISTINCT participanteId) AS participantes, MAX(criadoEm) AS ultimaSessao
          FROM sessoes_treino GROUP BY simulacaoCodigo`,
     )
-    .all() as { simulacaoCodigo: string; sessoes: number; participantes: number; ultimaSessao: string | null }[];
+    .all() as { simulacaoCodigo: string; sessoes: number; reais: number; participantes: number; ultimaSessao: string | null }[];
   return Object.fromEntries(
-    linhas.map((l) => [l.simulacaoCodigo, { sessoes: l.sessoes, participantes: l.participantes, ultimaSessao: l.ultimaSessao }]),
+    linhas.map((l) => [l.simulacaoCodigo, { sessoes: l.sessoes, reais: l.reais, participantes: l.participantes, ultimaSessao: l.ultimaSessao }]),
   );
 }
 

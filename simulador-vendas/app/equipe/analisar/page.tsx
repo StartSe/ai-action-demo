@@ -314,7 +314,7 @@ export default function Page() {
               {avisoArquivo && <div className="mb-4"><Aviso tom={avisoArquivo.tom}>{avisoArquivo.texto}</Aviso></div>}
 
               <Row>
-                <Field label="De quem foi a conversa" htmlFor="pessoa" hint="A análise entra no histórico dela, junto com os treinos.">
+                <Field label="De quem foi a conversa" htmlFor="pessoa" hint="Entra no histórico dela, junto com os treinos.">
                   <select
                     id="pessoa"
                     className="input"

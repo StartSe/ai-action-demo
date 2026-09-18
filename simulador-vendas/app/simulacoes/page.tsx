@@ -276,7 +276,7 @@ export default function Page() {
           <div className="flex flex-col gap-3">
             {visiveis.map((s) => (
               <article key={s.codigo} className="card px-5 py-4">
-                <div className="flex items-start justify-between gap-3 mb-1.5 max-md:flex-col max-md:gap-1.5">
+                <div className="flex items-start justify-between gap-3 mb-1.5 max-md:flex-col max-md:items-stretch max-md:gap-1.5">
                   <div className="min-w-0">
                     <h2 className="font-bold text-[16px] truncate">{s.nome}</h2>
                     <p className="text-muted text-sm mt-0.5 truncate">{s.produtoNome}</p>

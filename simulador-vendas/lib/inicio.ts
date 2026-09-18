@@ -167,6 +167,9 @@ export function montarInicio(quando = new Date()): Inicio {
 
   const quatro = indicadores(quando);
   const sessoesDeSempre = Object.values(resumo).reduce((soma, r) => soma + r.sessoes, 0);
+  // Só as conversas de verdade: as seis semeadas (US-030) mostram o app cheio, mas não podem marcar um
+  // passo que o gestor não deu — a mesma régua dos dois primeiros, que olham produto/treino não-exemplo.
+  const sessoesReais = Object.values(resumo).reduce((soma, r) => soma + r.reais, 0);
 
   const temProduto = produtos.some((p) => !p.exemplo);
   const temSimulacao = simulacoes.some((s) => !s.exemplo);
@@ -191,7 +194,7 @@ export function montarInicio(quando = new Date()): Inicio {
       apoio: "O mesmo link serve para o time inteiro; cada pessoa treina com um cliente próprio.",
       // Marcado pelo que aconteceu de verdade: alguém abriu o link e conversou. Um link copiado não
       // deixa rastro nenhum no banco, e um passo que se marca sozinho por otimismo não vale nada.
-      concluido: sessoesDeSempre > 0,
+      concluido: sessoesReais > 0,
       acao: { rotulo: "Copiar o link do treino", url: "/simulacoes" },
     },
   ];
