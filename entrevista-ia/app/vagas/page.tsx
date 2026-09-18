@@ -172,7 +172,9 @@ export default function Page() {
               <article key={v.id} className="card px-5 py-4">
                 <div className="flex items-start justify-between gap-3 mb-1.5 max-md:flex-col max-md:gap-1.5">
                   <div className="min-w-0">
-                    <h2 className="font-bold text-[16px] truncate">{v.cargo}</h2>
+                    <h2 className="font-bold text-[16px] truncate">
+                      <Link href={`/vagas/${v.id}`} className="hover:underline">{v.cargo}</Link>
+                    </h2>
                     {contexto(v) && <p className="text-muted text-sm mt-0.5">{contexto(v)}</p>}
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -185,6 +187,7 @@ export default function Page() {
                 <p className="text-[13px] text-muted mb-3">{etapas(v.candidatos)} · atualizada em {data(v.atualizadoEm)}</p>
 
                 <div className="flex items-center gap-4 flex-wrap">
+                  <Link href={`/vagas/${v.id}`} className="btn-link">Abrir a vaga</Link>
                   <Link href={`/vagas/${v.id}/editar`} className="btn-link">Editar</Link>
                   <button type="button" className="btn-link !text-danger" onClick={() => apagar(v)}>Apagar</button>
                 </div>

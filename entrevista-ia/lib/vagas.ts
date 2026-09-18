@@ -242,6 +242,47 @@ export function mudarStatus(id: string, status: StatusVaga): Vaga | null {
   return Number(changes) > 0 ? obter(id) : null;
 }
 
+/** Os status de quem foi convidado e ainda não começou a conversar: é o que encerrar a vaga cancela. */
+const CONVITES_PENDENTES = "status IN ('convidada', 'aberta')";
+
+/** Quantos convites desta vaga ainda esperam o candidato. A tela pergunta antes de encerrar ("2
+ * convites ainda não respondidos serão cancelados"), então o número precisa vir do mesmo lugar que
+ * o cancelamento usa — senão a confirmação promete um número e o banco faz outro. */
+export function contarConvitesPendentes(id: string): number {
+  const linha = banco()
+    .prepare(`SELECT COUNT(*) AS total FROM entrevistas WHERE vagaId = ? AND ${CONVITES_PENDENTES}`)
+    .get(id) as { total: number };
+  return Number(linha.total);
+}
+
+/**
+ * Encerra a vaga e cancela os convites que ainda esperavam o candidato (US-007).
+ *
+ * Quem já está conversando, já concluiu ou já foi avaliado fica como está: encerrar a vaga é parar de
+ * receber gente nova, não apagar o que aconteceu. A regra mora aqui, e não na rota, para valer igual
+ * para a tela, para o assistente (MCP) e para qualquer porta que venha depois.
+ */
+export function encerrar(id: string): { vaga: Vaga | null; convitesCancelados: number } {
+  const d = banco();
+  const convitesCancelados = contarConvitesPendentes(id);
+  d.exec("BEGIN");
+  try {
+    d.prepare(`UPDATE entrevistas SET status = 'cancelada' WHERE vagaId = ? AND ${CONVITES_PENDENTES}`).run(id);
+    d.prepare("UPDATE vagas SET status = 'encerrada', atualizadoEm = ? WHERE id = ?").run(agora(), id);
+    d.exec("COMMIT");
+  } catch (err) {
+    d.exec("ROLLBACK");
+    throw err;
+  }
+  return { vaga: obter(id), convitesCancelados };
+}
+
+/** Reabre a vaga. Os convites cancelados ao encerrar **não** voltam: o candidato precisa de um link
+ * novo, e ressuscitar um convite que já foi dado como cancelado seria pior que reconvidar. */
+export function reabrir(id: string): Vaga | null {
+  return mudarStatus(id, "aberta");
+}
+
 /** Apaga a vaga, as entrevistas dela e as falas dessas entrevistas, na mesma transação. O parecer de
  * cada entrevista continua em `resultados` (lib/historico.ts): ele tem conexão própria e nunca é
  * tocado de dentro de uma transação daqui. */
