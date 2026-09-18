@@ -20,6 +20,10 @@ export async function GET(_req: Request, { params }: RouteContext<"/api/prospecc
     prospeccao,
     produtoNome: produto?.nome ?? "Produto",
     icpNome: icp?.nome ?? "Perfil",
+    // Jornada do ICP (nunca persistida na prospecção, ver comentário de lib/execucao-prospeccao.ts):
+    // components/ProspeccaoAndamento.tsx usa isto para desenhar a lista do modo "pessoas" em B2C
+    // (Pessoa | Fit | Sinal | Contexto | Status) diferente da lista B2B (US-021).
+    jornada: icp?.jornada ?? "b2b",
     // Array completo (não só a contagem): a lista de resultados do modo "Encontrar empresas" (US-017) e
     // as pessoas-chave do modo "Explorar uma empresa" (US-018) usam isto direto, sem uma segunda rota —
     // o volume é o mesmo teto da "quantidade alvo"/`TETO_PESSOAS_CHAVE` (até 50 contas, até 5 pessoas).

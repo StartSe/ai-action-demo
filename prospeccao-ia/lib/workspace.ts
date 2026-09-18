@@ -440,14 +440,33 @@ export function apagarAbordagem(id: string): void {
 
 // --- Retenção --------------------------------------------------------------
 
-/** Dias sem atualização até uma conta ou lead ser apagado (ver README, seção "Retenção de dados"). */
+/** Dias sem atualização até uma conta ser apagada, e retenção de lead na jornada B2B (ver README, seção
+ * "Retenção de dados"). Mantido com o nome antigo (sem sufixo) porque é o valor que já era o único até a
+ * US-021 diferenciar B2C. */
 export const DIAS_RETENCAO = 180;
+export const DIAS_RETENCAO_B2B = DIAS_RETENCAO;
+// Retenção mais curta na jornada B2C (US-021, prd.json > regras: "Retenção 180 dias B2B / 90 dias B2C").
+export const DIAS_RETENCAO_B2C = 90;
 
-/** Apaga contas e leads (e as abordagens deles) sem atualização há mais de DIAS_RETENCAO dias; roda na inicialização (instrumentation.ts), como lib/historico.ts. */
+/** Um lead expira pela retenção da JORNADA da sua prospecção (icps.jornada): 90 dias em B2C, 180 nos
+ * demais — inclusive quando o ICP da prospecção já foi apagado (apagarICP é DELETE, não soft delete), já
+ * que o LEFT JOIN cai no ramo "não é b2c" (180 dias) nesse caso: nunca apaga cedo demais um lead cuja
+ * jornada não dá mais para confirmar. Contas não têm jornada própria (só existem em prospecções B2B —
+ * ver deveCriarContas em lib/execucao-prospeccao.ts) e continuam na retenção única de sempre. */
+const SUBQUERY_LEADS_EXPIRADOS = `
+  SELECT leads.id FROM leads
+  LEFT JOIN prospeccoes ON prospeccoes.id = leads.prospeccao_id
+  LEFT JOIN icps ON icps.id = prospeccoes.icp_id
+  WHERE (icps.jornada = 'b2c' AND leads.atualizado_em < ?)
+     OR ((icps.jornada IS NULL OR icps.jornada != 'b2c') AND leads.atualizado_em < ?)
+`;
+
+/** Apaga leads (e as abordagens deles) e contas expirados; roda na inicialização (instrumentation.ts), como lib/historico.ts. */
 export function limparExpirados(): void {
-  const corte = new Date(Date.now() - DIAS_RETENCAO * 24 * 60 * 60 * 1000).toISOString();
+  const corteB2C = new Date(Date.now() - DIAS_RETENCAO_B2C * 24 * 60 * 60 * 1000).toISOString();
+  const corteB2B = new Date(Date.now() - DIAS_RETENCAO_B2B * 24 * 60 * 60 * 1000).toISOString();
   const d = banco();
-  d.prepare("DELETE FROM abordagens WHERE lead_id IN (SELECT id FROM leads WHERE atualizado_em < ?)").run(corte);
-  d.prepare("DELETE FROM leads WHERE atualizado_em < ?").run(corte);
-  d.prepare("DELETE FROM contas WHERE atualizado_em < ?").run(corte);
+  d.prepare(`DELETE FROM abordagens WHERE lead_id IN (${SUBQUERY_LEADS_EXPIRADOS})`).run(corteB2C, corteB2B);
+  d.prepare(`DELETE FROM leads WHERE id IN (${SUBQUERY_LEADS_EXPIRADOS})`).run(corteB2C, corteB2B);
+  d.prepare("DELETE FROM contas WHERE atualizado_em < ?").run(corteB2B);
 }

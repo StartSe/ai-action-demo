@@ -12,9 +12,9 @@ import { Aviso, Chip, Topbar, data, useConfirmacao, useStatus, lerErro } from "@
 import { ExploracaoEmpresa } from "@/components/ExploracaoEmpresa";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 import { sinalAntigo } from "@/lib/qualificacao";
-import { ROTULO_MODO, ROTULO_PAPEL } from "@/lib/rotulos";
+import { ROTULO_MODO, ROTULO_PAPEL, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
 import { ETAPAS_PROSPECCAO } from "@/lib/execucao-etapas";
-import type { Conta, LeadProspeccao, Prospeccao, SinalProspeccao } from "@/lib/types";
+import type { Conta, Jornada, LeadProspeccao, Prospeccao, SinalProspeccao } from "@/lib/types";
 
 /** Chip de um sinal de intenção (US-020): descrição + data, em cinza e com "· Antigo" quando passou dos
  * 90 dias (lib/qualificacao.ts:sinalAntigo) — sinal sem essa marca é recente e continua em verde
@@ -33,6 +33,7 @@ type Andamento = {
   prospeccao: Prospeccao;
   produtoNome: string;
   icpNome: string;
+  jornada: Jornada;
   contas: Conta[];
   leads: LeadProspeccao[];
   contasEncontradas: number;
@@ -54,6 +55,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
   const [apagando, setApagando] = useState(false);
   const [buscandoPessoasId, setBuscandoPessoasId] = useState<string | null>(null);
   const [erroVerPessoas, setErroVerPessoas] = useState<string | null>(null);
+  const [apagandoPessoaId, setApagandoPessoaId] = useState<string | null>(null);
 
   const carregar = useCallback(() => {
     fetch(`/api/prospeccoes/${prospeccaoId}/andamento`)
@@ -173,6 +175,17 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
     router.push("/prospeccoes");
   }
 
+  /** "Apagar dados desta pessoa" (US-021, jornada B2C): apaga o lead e as abordagens dele por completo,
+   * sem afetar mais ninguém da prospecção — diferente de "Apagar" (acima), que apaga a prospecção inteira. */
+  async function apagarPessoa(leadId: string) {
+    const ok = await confirmar("Apagar os dados desta pessoa? A ação não pode ser desfeita.", { confirmarRotulo: "Apagar" });
+    if (!ok) return;
+    setApagandoPessoaId(leadId);
+    await fetch(`/api/leads/${leadId}`, { method: "DELETE" });
+    setAndamento((a) => (a ? { ...a, leads: a.leads.filter((l) => l.id !== leadId) } : a));
+    setApagandoPessoaId(null);
+  }
+
   const indiceEtapaAtual = andamento ? ETAPAS_PROSPECCAO.findIndex((e) => e.chave === andamento.prospeccao.etapa) : -1;
 
   return (
@@ -285,7 +298,68 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                   </div>
                 )}
 
-                {andamento.prospeccao.modo === "pessoas" && (
+                {andamento.prospeccao.modo === "pessoas" && andamento.jornada === "b2c" && (
+                  <div className="flex flex-col gap-2.5 mb-1">
+                    <Aviso tom="warn">Só entram dados que a própria pessoa publicou em perfil público; nada de lista comprada, inferência ou dado sensível.</Aviso>
+                    {andamento.leads.length === 0 ? (
+                      <Aviso tom="warn">Nenhuma pessoa encontrada com esses critérios.</Aviso>
+                    ) : (
+                      andamento.leads.map((lead) => (
+                        <div key={lead.id} className="card p-4 flex flex-col gap-1.5">
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div>
+                              <p className="font-semibold text-[14px]">{lead.nome}</p>
+                              <p className="text-[13px] text-muted">
+                                {[lead.cargo, lead.cidade].filter(Boolean).join(" · ") || "Contexto não identificado"}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {lead.fit && <Chip nivel={lead.fit} />}
+                              <Chip nivel="neutral">{ROTULO_STATUS_LEAD[lead.status]}</Chip>
+                            </div>
+                          </div>
+                          {lead.sinais.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {lead.sinais.map((sinal, i) => (
+                                <ChipSinal key={i} sinal={sinal} />
+                              ))}
+                            </div>
+                          )}
+                          {lead.evidencias.length > 0 && (
+                            <div className="text-[12px] text-muted">
+                              <p className="font-semibold text-ink text-[12px] mb-0.5">Como este dado chegou aqui</p>
+                              <ul className="flex flex-col gap-0.5">
+                                {lead.evidencias.map((ev, i) => (
+                                  <li key={i}>
+                                    {ev.criterio}: {ev.valor}
+                                    {lead.fonte ? ` · ${lead.fonte}` : ""} · {data(lead.criadoEm, { comAno: true })}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {lead.linkedin && (
+                              <a href={lead.linkedin} target="_blank" rel="noopener noreferrer" className="text-[12px] text-accent-ink hover:underline">
+                                Ver perfil
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              className="btn-link text-[12px] text-danger"
+                              onClick={() => apagarPessoa(lead.id)}
+                              disabled={apagandoPessoaId === lead.id}
+                            >
+                              {apagandoPessoaId === lead.id ? "Apagando…" : "Apagar dados desta pessoa"}
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {andamento.prospeccao.modo === "pessoas" && andamento.jornada === "b2b" && (
                   <div className="flex flex-col gap-2.5 mb-1">
                     {andamento.leads.length === 0 ? (
                       <Aviso tom="warn">Nenhuma pessoa encontrada com esses critérios.</Aviso>

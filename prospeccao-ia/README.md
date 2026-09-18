@@ -87,7 +87,7 @@ render.yaml                blueprint do Render (runtime image)
 ```
 
 ## Retenção de dados
-Contas e leads do workspace (produtos, prospecções, contas, leads e abordagens; ver `lib/workspace.ts`) são apagados automaticamente depois de 180 dias sem atualização (`limparExpirados()`, rodada na inicialização do app). Apagar um lead ou uma conta apaga junto as abordagens escritas para ele.
+Contas e leads do workspace (produtos, prospecções, contas, leads e abordagens; ver `lib/workspace.ts`) são apagados automaticamente depois de um período sem atualização (`limparExpirados()`, rodada na inicialização do app): 180 dias para contas e leads de prospecções B2B (empresas e decisores), 90 dias para leads de prospecções B2C (pessoas físicas) — a retenção segue a jornada do perfil ideal (ICP) da prospecção. Apagar um lead ou uma conta apaga junto as abordagens escritas para ele; na jornada B2C, "Apagar dados desta pessoa" também está disponível a qualquer momento na tela da prospecção. Em B2C, só entram dados que a própria pessoa publicou em perfil ou página pública — o app nunca compra lista, nunca infere dado e nunca grava categoria sensível.
 
 ## Limites conhecidos
 - A Apollo.io não devolve um "sinal" de prospecção pronto: quando a integração está conectada, o sinal exibido é montado a partir de campos públicos da organização (ano de fundação, setor, número estimado de funcionários), não de um evento recente real.

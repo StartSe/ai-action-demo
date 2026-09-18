@@ -1,6 +1,6 @@
 // Rótulos de valores guardados no banco, num Record completo (nunca um ternário na tela):
 // somar um valor ao union vira erro de compilação aqui em vez de um rótulo faltando na tela.
-import type { Jornada, ModoProspeccao, Papel } from "./types";
+import type { Jornada, ModoProspeccao, Papel, StatusLead } from "./types";
 
 export const ROTULO_JORNADA: Record<Jornada, string> = {
   b2b: "Empresas e decisores",
@@ -59,4 +59,16 @@ export const ROTULO_PAPEL: Record<Papel, string | null> = {
   influenciador: "Influenciador",
   champion: "Champion potencial",
   desconhecido: null,
+};
+
+// Status de um lead na lista (US-021, jornada B2C: coluna "Status" da lista "Pessoa | Fit | Sinal |
+// Contexto | Status" — mostrado só ali por ora, os outros modos ainda não desenham essa coluna).
+export const ROTULO_STATUS_LEAD: Record<StatusLead, string> = {
+  novo: "Novo",
+  pesquisado: "Pesquisado",
+  qualificado: "Qualificado",
+  selecionado: "Selecionado",
+  abordado: "Abordado",
+  respondeu: "Respondeu",
+  descartado: "Descartado",
 };
