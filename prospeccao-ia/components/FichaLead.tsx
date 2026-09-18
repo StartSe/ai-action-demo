@@ -14,8 +14,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Aviso, Chip, data } from "@/components/ui";
 import { motivoPapel, sinalAntigo } from "@/lib/qualificacao";
-import { NIVEL_CHIP_EVIDENCIA, ROTULO_FIT, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA } from "@/lib/rotulos";
-import type { Conta, Jornada, LeadProspeccao, Papel } from "@/lib/types";
+import { NIVEL_CHIP_EVIDENCIA, ORDEM_MOTIVOS_DESCARTE, ROTULO_FIT, ROTULO_MOTIVO_DESCARTE, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
+import type { Conta, Jornada, LeadProspeccao, MotivoDescarte, Papel, StatusLead } from "@/lib/types";
 
 type FichaDados = { lead: LeadProspeccao; conta: Conta | null; icpPersonas: string[]; jornada: Jornada };
 type Aba = "geral" | "sinais" | "empresa";
@@ -23,6 +23,7 @@ type Aba = "geral" | "sinais" | "empresa";
 // Mesma ordem já usada pelo editor anterior (US-026): "desconhecido" por último, como "sem papel
 // identificado" (ROTULO_PAPEL não tem rótulo para ele, só o editor precisa de um texto).
 const PAPEIS: Papel[] = ["decisor", "influenciador", "champion", "desconhecido"];
+const STATUS: StatusLead[] = ["novo", "pesquisado", "qualificado", "selecionado", "abordado", "respondeu", "descartado"];
 
 function TabButton({ ativo, onClick, children }: { ativo: boolean; onClick: () => void; children: ReactNode }) {
   return (
@@ -45,6 +46,8 @@ export function FichaLead({ leadId, onLeadAtualizado }: { leadId: string; onLead
   const [naoEncontrada, setNaoEncontrada] = useState(false);
   const [aba, setAba] = useState<Aba>("geral");
   const [salvandoPapel, setSalvandoPapel] = useState(false);
+  const [salvandoStatus, setSalvandoStatus] = useState(false);
+  const [pedirMotivo, setPedirMotivo] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erroLista, setErroLista] = useState<string | null>(null);
 
@@ -53,6 +56,7 @@ export function FichaLead({ leadId, onLeadAtualizado }: { leadId: string; onLead
       setDados(null);
       setNaoEncontrada(false);
       setAba("geral");
+      setPedirMotivo(false);
       fetch(`/api/leads/${leadId}`)
         .then(async (r) => {
           if (r.status === 404) {
@@ -77,6 +81,26 @@ export function FichaLead({ leadId, onLeadAtualizado }: { leadId: string; onLead
       }
     } finally {
       setSalvandoPapel(false);
+    }
+  }
+
+  /** Seletor de status da ficha (US-034, além do menu "•••" da lista/US-033): escolher "Descartado" não
+   * salva na hora — abre a lista curta de motivos (`pedirMotivo`) primeiro, mesmo padrão do segundo nível
+   * do menu de `ProspeccaoAndamento.tsx`. Qualquer outro status salva direto e limpa o motivo (rota já faz
+   * isso quando `status !== "descartado"`). */
+  async function alterarStatus(status: StatusLead, motivo?: MotivoDescarte) {
+    setSalvandoStatus(true);
+    try {
+      const corpo = status === "descartado" ? { status, motivo } : { status };
+      const r = await fetch(`/api/leads/${leadId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+      if (r.ok) {
+        const lead = (await r.json()) as LeadProspeccao;
+        setDados((d) => (d ? { ...d, lead } : d));
+        onLeadAtualizado?.(lead);
+        setPedirMotivo(false);
+      }
+    } finally {
+      setSalvandoStatus(false);
     }
   }
 
@@ -165,6 +189,47 @@ export function FichaLead({ leadId, onLeadAtualizado }: { leadId: string; onLead
           <p className="text-[12px] text-muted mt-1">{motivo ?? "Escolha o papel quando o cargo não deixar claro."}</p>
         </div>
       )}
+
+      <div>
+        <p className="font-semibold text-[13px] mb-1.5">Status</p>
+        <select
+          className="text-[13px] border border-line rounded-md px-2 py-1.5 w-full"
+          value={lead.status}
+          disabled={salvandoStatus}
+          onChange={(e) => {
+            const novoStatus = e.target.value as StatusLead;
+            if (novoStatus === "descartado") setPedirMotivo(true);
+            else alterarStatus(novoStatus);
+          }}
+          aria-label="Status desta pessoa"
+        >
+          {STATUS.map((s) => (
+            <option key={s} value={s}>{ROTULO_STATUS_LEAD[s]}</option>
+          ))}
+        </select>
+        {pedirMotivo && (
+          <div className="mt-2 flex flex-col gap-1.5">
+            <p className="text-[12px] text-muted">Por que descartar esta pessoa?</p>
+            <div className="flex gap-1.5 flex-wrap">
+              {ORDEM_MOTIVOS_DESCARTE.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  className="btn-ghost !w-auto !py-1 !px-2.5 text-[12.5px]"
+                  disabled={salvandoStatus}
+                  onClick={() => alterarStatus("descartado", m)}
+                >
+                  {ROTULO_MOTIVO_DESCARTE[m]}
+                </button>
+              ))}
+              <button type="button" className="btn-link !w-auto text-[12.5px]" onClick={() => setPedirMotivo(false)}>Cancelar</button>
+            </div>
+          </div>
+        )}
+        {lead.status === "descartado" && lead.motivoDescarte && (
+          <p className="text-[12px] text-muted mt-1">Motivo do descarte: {ROTULO_MOTIVO_DESCARTE[lead.motivoDescarte]}</p>
+        )}
+      </div>
 
       <div className="flex gap-1.5 border-b border-line" role="tablist">
         <TabButton ativo={aba === "geral"} onClick={() => setAba("geral")}>Visão geral</TabButton>

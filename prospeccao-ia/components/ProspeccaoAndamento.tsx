@@ -13,9 +13,9 @@ import { Aviso, Chip, DataTable, Topbar, data, useConfirmacao, useStatus, lerErr
 import { ExploracaoEmpresa } from "@/components/ExploracaoEmpresa";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 import { motivoPapel, ordenarLeadsPorPrioridade, sinalAntigo, sinalMaisRecente } from "@/lib/qualificacao";
-import { NIVEL_CHIP_EVIDENCIA, ROTULO_FIT, ROTULO_MODO, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
+import { NIVEL_CHIP_EVIDENCIA, ORDEM_MOTIVOS_DESCARTE, ROTULO_FIT, ROTULO_MODO, ROTULO_MOTIVO_DESCARTE, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
 import { ETAPAS_PROSPECCAO } from "@/lib/execucao-etapas";
-import type { Conta, Evidencia, Jornada, LeadProspeccao, Prospeccao, SinalProspeccao, StatusLead } from "@/lib/types";
+import type { Conta, Evidencia, Jornada, LeadProspeccao, MotivoDescarte, Prospeccao, SinalProspeccao, StatusLead } from "@/lib/types";
 
 /** Chip de papel no processo de decisão (US-026): mostra o rótulo (ou nada, para "desconhecido") com o
  * `title` explicando a inferência em uma frase (`lib/qualificacao.ts:motivoPapel`) — `Chip` (INFRA) não
@@ -81,7 +81,9 @@ const LARGURA_MENU_ACOES = 224; // w-56
  * `MenuRegenerar` (`components/AbordagemLead.tsx`) — não compartilhável porque os itens são diferentes em
  * cada caso. "Mudar status" abre um SEGUNDO nível dentro do mesmo menu (mesma ideia de "Usar outro sinal"
  * do `MenuRegenerar`), listando `ROTULO_STATUS_LEAD` menos o status atual e menos "descartado" (que já tem
- * o próprio item "Descartar", redundante ali). "Enviar para o CRM"/"Apagar dados desta pessoa" (só em B2C,
+ * o próprio item "Descartar", redundante ali). "Descartar" abre seu PRÓPRIO segundo nível (US-034): a lista
+ * curta de motivos (`ORDEM_MOTIVOS_DESCARTE`) — escolher um motivo é o que dispara o PUT, nunca o clique em
+ * "Descartar" sozinho. "Enviar para o CRM"/"Apagar dados desta pessoa" (só em B2C,
  * US-021) somem quando não fazem sentido no estado atual — "um botão que não faria nada naquele estado não
  * fica desligado, ele sai" (Codebase Patterns raiz). Diferente de `Entregar`/`MenuRegenerar`, este menu
  * abre num `createPortal` para `document.body`, com posição calculada a partir do botão (`position: fixed`,
@@ -103,33 +105,35 @@ function MenuAcoesLead({
   enviandoCRM: boolean;
   onMudarStatus: (status: StatusLead) => void;
   onEnviarCRM: () => void;
-  onDescartar: () => void;
+  onDescartar: (motivo: MotivoDescarte) => void;
   onApagarPessoa?: () => void;
   apagando: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
-  const [mudarStatus, setMudarStatus] = useState(false);
+  const [nivel, setNivel] = useState<"raiz" | "status" | "descartar">("raiz");
   const [posicao, setPosicao] = useState<{ top: number; left: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const botaoRef = useRef<HTMLButtonElement>(null);
+
+  function fechar() { setAberto(false); setNivel("raiz"); }
 
   function alternar() {
     const retangulo = botaoRef.current?.getBoundingClientRect();
     if (retangulo) setPosicao({ top: retangulo.bottom + 8, left: Math.max(8, retangulo.right - LARGURA_MENU_ACOES) });
     setAberto((v) => !v);
-    setMudarStatus(false);
+    setNivel("raiz");
   }
 
   useEffect(() => {
     if (!aberto) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") { setAberto(false); setMudarStatus(false); }
+      if (e.key === "Escape") fechar();
     }
     function onClickFora(e: MouseEvent) {
       const alvo = e.target as Node;
-      if (menuRef.current && !menuRef.current.contains(alvo) && !botaoRef.current?.contains(alvo)) { setAberto(false); setMudarStatus(false); }
+      if (menuRef.current && !menuRef.current.contains(alvo) && !botaoRef.current?.contains(alvo)) fechar();
     }
-    function onScroll() { setAberto(false); setMudarStatus(false); }
+    function onScroll() { fechar(); }
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("mousedown", onClickFora);
     window.addEventListener("scroll", onScroll, true);
@@ -157,31 +161,40 @@ function MenuAcoesLead({
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
       </button>
       {aberto && posicao && createPortal(
-        !mudarStatus ? (
+        nivel === "raiz" ? (
           <div ref={menuRef} role="menu" style={{ top: posicao.top, left: posicao.left }} className="fixed z-50 w-56 card p-1.5 text-[13.5px]">
-            <Link role="menuitem" className={itemClasse} href={`/leads/${lead.id}`} onClick={() => setAberto(false)}>Ver ficha</Link>
-            <Link role="menuitem" className={itemClasse} href={`/leads/${lead.id}/abordagem`} onClick={() => setAberto(false)}>Criar abordagem</Link>
-            <button type="button" role="menuitem" className={itemClasse} onClick={() => setMudarStatus(true)}>Mudar status</button>
+            <Link role="menuitem" className={itemClasse} href={`/leads/${lead.id}`} onClick={fechar}>Ver ficha</Link>
+            <Link role="menuitem" className={itemClasse} href={`/leads/${lead.id}/abordagem`} onClick={fechar}>Criar abordagem</Link>
+            <button type="button" role="menuitem" className={itemClasse} onClick={() => setNivel("status")}>Mudar status</button>
             {crmConfigurado && !lead.noCRM && (
-              <button type="button" role="menuitem" className={itemClasse} disabled={enviandoCRM} onClick={() => { onEnviarCRM(); setAberto(false); }}>
+              <button type="button" role="menuitem" className={itemClasse} disabled={enviandoCRM} onClick={() => { onEnviarCRM(); fechar(); }}>
                 {enviandoCRM ? "Enviando…" : "Enviar para o CRM"}
               </button>
             )}
             {lead.status !== "descartado" && (
-              <button type="button" role="menuitem" className={`${itemClasse} text-danger`} onClick={() => { onDescartar(); setAberto(false); }}>Descartar</button>
+              <button type="button" role="menuitem" className={`${itemClasse} text-danger`} onClick={() => setNivel("descartar")}>Descartar</button>
             )}
             {onApagarPessoa && (
-              <button type="button" role="menuitem" className={`${itemClasse} text-danger`} disabled={apagando} onClick={() => { onApagarPessoa(); setAberto(false); }}>
+              <button type="button" role="menuitem" className={`${itemClasse} text-danger`} disabled={apagando} onClick={() => { onApagarPessoa(); fechar(); }}>
                 {apagando ? "Apagando…" : "Apagar dados desta pessoa"}
               </button>
             )}
           </div>
+        ) : nivel === "status" ? (
+          <div ref={menuRef} role="menu" style={{ top: posicao.top, left: posicao.left }} className="fixed z-50 w-56 card p-1.5 text-[13.5px]">
+            <button type="button" className="w-full text-left px-3 py-1.5 text-[12px] text-muted" onClick={() => setNivel("raiz")}>‹ Voltar</button>
+            {statusEscolhiveis.map((s) => (
+              <button key={s} type="button" role="menuitem" className={itemClasse} onClick={() => { onMudarStatus(s); fechar(); }}>
+                {ROTULO_STATUS_LEAD[s]}
+              </button>
+            ))}
+          </div>
         ) : (
           <div ref={menuRef} role="menu" style={{ top: posicao.top, left: posicao.left }} className="fixed z-50 w-56 card p-1.5 text-[13.5px]">
-            <button type="button" className="w-full text-left px-3 py-1.5 text-[12px] text-muted" onClick={() => setMudarStatus(false)}>‹ Voltar</button>
-            {statusEscolhiveis.map((s) => (
-              <button key={s} type="button" role="menuitem" className={itemClasse} onClick={() => { onMudarStatus(s); setAberto(false); setMudarStatus(false); }}>
-                {ROTULO_STATUS_LEAD[s]}
+            <button type="button" className="w-full text-left px-3 py-1.5 text-[12px] text-muted" onClick={() => setNivel("raiz")}>‹ Voltar</button>
+            {ORDEM_MOTIVOS_DESCARTE.map((m) => (
+              <button key={m} type="button" role="menuitem" className={`${itemClasse} text-danger`} onClick={() => { onDescartar(m); fechar(); }}>
+                {ROTULO_MOTIVO_DESCARTE[m]}
               </button>
             ))}
           </div>
@@ -205,7 +218,7 @@ function construirColunasLeads(opcoes: {
   apagandoPessoaId: string | null;
   onMudarStatus: (leadId: string, status: StatusLead) => void;
   onEnviarCRM: (leadId: string) => void;
-  onDescartar: (leadId: string) => void;
+  onDescartar: (leadId: string, motivo: MotivoDescarte) => void;
   onApagarPessoa?: (leadId: string) => void;
 }): Coluna<LeadProspeccao>[] {
   const colunas: Coluna<LeadProspeccao>[] = [
@@ -272,7 +285,7 @@ function construirColunasLeads(opcoes: {
         apagando={opcoes.apagandoPessoaId === l.id}
         onMudarStatus={(status) => opcoes.onMudarStatus(l.id, status)}
         onEnviarCRM={() => opcoes.onEnviarCRM(l.id)}
-        onDescartar={() => opcoes.onDescartar(l.id)}
+        onDescartar={(motivo) => opcoes.onDescartar(l.id, motivo)}
         onApagarPessoa={opcoes.onApagarPessoa ? () => opcoes.onApagarPessoa!(l.id) : undefined}
       />
     ),
@@ -441,11 +454,12 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
     setApagandoPessoaId(null);
   }
 
-  /** "Mudar status"/"Descartar" do menu "•••" (US-033): `PUT /api/leads/[id]` com `{ status }`, extensão
-   * da mesma rota que já grava `papel` (US-026) — a única escrita de status fora do pipeline até a US-034
-   * trazer o motivo do descarte. */
-  async function mudarStatusLead(leadId: string, status: StatusLead) {
-    const r = await fetch(`/api/leads/${leadId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+  /** "Mudar status"/"Descartar" do menu "•••" (US-033/US-034): `PUT /api/leads/[id]` com `{ status }` (mais
+   * `motivo`, só quando `status === "descartado"`) — extensão da mesma rota que já grava `papel` (US-026),
+   * a única escrita de status fora do pipeline. */
+  async function mudarStatusLead(leadId: string, status: StatusLead, motivo?: MotivoDescarte) {
+    const corpo = status === "descartado" ? { status, motivo } : { status };
+    const r = await fetch(`/api/leads/${leadId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
     if (!r.ok) return;
     const atualizado = (await r.json()) as LeadProspeccao;
     setAndamento((a) => (a ? { ...a, leads: a.leads.map((l) => (l.id === leadId ? atualizado : l)) } : a));
@@ -477,7 +491,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
         apagandoPessoaId,
         onMudarStatus: mudarStatusLead,
         onEnviarCRM: enviarParaCRM,
-        onDescartar: (leadId) => mudarStatusLead(leadId, "descartado"),
+        onDescartar: (leadId, motivo) => mudarStatusLead(leadId, "descartado", motivo),
         onApagarPessoa: andamento.jornada === "b2c" ? apagarPessoa : undefined,
       })
     : [];

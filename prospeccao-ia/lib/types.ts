@@ -54,6 +54,8 @@ export type Papel = "decisor" | "influenciador" | "champion" | "desconhecido";
 export type StatusLead = "novo" | "pesquisado" | "qualificado" | "selecionado" | "abordado" | "respondeu" | "descartado";
 /** Direção de "Regenerar" (US-031): reescreve só a mensagem do canal aberto na tela, nunca a estratégia. */
 export type DirecaoRegeneracao = "mais_curto" | "mais_executivo" | "mais_consultivo" | "sem_pitch" | "outro_sinal" | "outra_abordagem";
+/** Motivo do descarte (US-034), lista curta em vez de texto livre — pedido junto com `status: "descartado"`. */
+export type MotivoDescarte = "fora_do_perfil" | "sem_sinal" | "ja_e_cliente" | "outro";
 
 /** Um critério do ICP avaliado para um lead/conta específico: valor encontrado e o resultado da checagem.
  * `trecho` só existe em critérios interpretativos avaliados por IA (US-024): a cópia literal do texto que
@@ -180,12 +182,18 @@ export interface LeadProspeccao {
   sinais: SinalProspeccao[];
   hipotese: string | null;
   status: StatusLead;
+  /** Só preenchido quando `status === "descartado"` (US-034); volta a `null` se o status mudar para outro. */
+  motivoDescarte: MotivoDescarte | null;
   noCRM: boolean;
   demo: boolean;
   criadoEm: string;
   atualizadoEm: string;
 }
-export type NovoLeadProspeccao = Omit<LeadProspeccao, "id" | "criadoEm" | "atualizadoEm" | "demo" | "papelManual"> & { demo?: boolean; papelManual?: boolean };
+export type NovoLeadProspeccao = Omit<LeadProspeccao, "id" | "criadoEm" | "atualizadoEm" | "demo" | "papelManual" | "motivoDescarte"> & {
+  demo?: boolean;
+  papelManual?: boolean;
+  motivoDescarte?: MotivoDescarte | null;
+};
 
 export interface EstrategiaAbordagem {
   objetivo: string;

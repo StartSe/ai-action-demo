@@ -1,9 +1,10 @@
-import { ROTULO_PAPEL, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
-import type { Papel, StatusLead } from "@/lib/types";
+import { ROTULO_MOTIVO_DESCARTE, ROTULO_PAPEL, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
+import type { MotivoDescarte, Papel, StatusLead } from "@/lib/types";
 import { apagarLead, atualizarLead, obterConta, obterICP, obterLead, obterProspeccao } from "@/lib/workspace";
 
 const PAPEIS = Object.keys(ROTULO_PAPEL) as Papel[];
 const STATUS = Object.keys(ROTULO_STATUS_LEAD) as StatusLead[];
+const MOTIVOS_DESCARTE = Object.keys(ROTULO_MOTIVO_DESCARTE) as MotivoDescarte[];
 
 /** Ficha do lead (US-027, `/leads/[id]` e o painel lateral de `ExploracaoEmpresa.tsx`): um único payload
  * com o lead, a conta vinculada (nula em B2C ou quando ainda não se sabe a empresa) e o que vem do ICP da
@@ -33,18 +34,26 @@ export async function DELETE(_req: Request, { params }: RouteContext<"/api/leads
   return Response.json({ ok: true });
 }
 
-/** Papel editado à mão pelo vendedor (US-026) OU status mudado pelo menu "•••" da lista (US-033, "Mudar
- * status"/"Descartar") — as duas únicas escritas feitas fora do pipeline, então nunca são sobrescritas por
- * uma nova execução da prospecção (que, ao repetir, nem recria este mesmo registro — ver
- * lib/execucao-prospeccao.ts:chaveLead). O corpo só pode trazer UM dos dois campos por vez; "motivo" do
- * descarte (lista curta, aparece na ficha) é escopo da US-034, ainda não implementada. */
+/** Papel editado à mão pelo vendedor (US-026) OU status mudado pelo menu "•••" da lista/pela ficha (US-033/
+ * US-034, "Mudar status"/"Descartar") — as duas únicas escritas feitas fora do pipeline, então nunca são
+ * sobrescritas por uma nova execução da prospecção (que, ao repetir, nem recria este mesmo registro — ver
+ * lib/execucao-prospeccao.ts:chaveLead). O corpo só pode trazer UM dos dois campos (status/papel) por vez.
+ * "motivo" (US-034, lista curta) só é lido junto de `status: "descartado"`: um valor desconhecido é 400,
+ * ausente cai no padrão (`null`, "sem motivo registrado"); qualquer status diferente de "descartado" limpa
+ * o motivo gravado antes, para a ficha nunca mostrar um motivo de um descarte que já foi desfeito. */
 export async function PUT(req: Request, { params }: RouteContext<"/api/leads/[id]">) {
   const { id } = await params;
   if (!obterLead(id)) return Response.json({ error: "Pessoa não encontrada." }, { status: 404 });
   const corpo = await req.json().catch(() => null);
   if (corpo?.status !== undefined) {
     if (!STATUS.includes(corpo.status)) return Response.json({ error: "Escolha um status válido para esta pessoa." }, { status: 400 });
-    return Response.json(atualizarLead(id, { status: corpo.status as StatusLead }));
+    if (corpo.status === "descartado") {
+      if (corpo.motivo !== undefined && !MOTIVOS_DESCARTE.includes(corpo.motivo)) {
+        return Response.json({ error: "Escolha um motivo válido para o descarte." }, { status: 400 });
+      }
+      return Response.json(atualizarLead(id, { status: "descartado", motivoDescarte: (corpo.motivo as MotivoDescarte) ?? null }));
+    }
+    return Response.json(atualizarLead(id, { status: corpo.status as StatusLead, motivoDescarte: null }));
   }
   if (!PAPEIS.includes(corpo?.papel)) return Response.json({ error: "Escolha um papel válido para esta pessoa." }, { status: 400 });
   return Response.json(atualizarLead(id, { papel: corpo.papel as Papel, papelManual: true }));
