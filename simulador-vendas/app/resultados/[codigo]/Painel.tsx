@@ -8,8 +8,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Chip, Destaque, Empty, ErrorBox, Topbar, data, lerErro, useStatus, type ErroLido } from "@/components/ui";
 import type { CompetenciaAgregada, PainelSimulacao } from "@/lib/painel-simulacao";
-import { PREENCHIMENTO, contagem, nota, tomDaNota } from "./apresentacao";
+import { contagem, nota, tomDaNota } from "./apresentacao";
+import BarraNota from "./BarraNota";
 import Equipe from "./Equipe";
+import Personas from "./Personas";
 
 type Resposta = { painel: PainelSimulacao; oportunidade: { frase: string; daIA: boolean } };
 
@@ -38,32 +40,18 @@ function IconeSemConversa() {
   );
 }
 
-/**
- * Uma competência em barra horizontal. O desenho é um SVG próprio (dois retângulos: a régua de 0 a 10
- * e a nota), sem nenhuma dependência de gráfico: são dez, doze linhas e a escala é sempre a mesma.
- *
- * `preserveAspectRatio="none"` é o que deixa a barra acompanhar a largura da tela sem recalcular nada
- * no navegador; o arredondamento fica no invólucro, em CSS, porque esticar um `rx` deformaria a ponta.
- */
+/** Uma competência em barra horizontal — o mesmo desenho de nota da aba Personas (`BarraNota`). */
 function BarraCompetencia({ competencia }: { competencia: CompetenciaAgregada }) {
-  const tom = tomDaNota(competencia.nota);
   return (
     <li>
       <div className="flex items-baseline justify-between gap-3 mb-1.5">
         <span className="text-sm font-semibold min-w-0 truncate">{competencia.nome}</span>
         <span className="text-[13px] text-muted shrink-0">{nota(competencia.nota)}</span>
       </div>
-      <div className="h-2.5 rounded-chip overflow-hidden bg-line">
-        <svg
-          viewBox="0 0 100 10"
-          preserveAspectRatio="none"
-          className="block w-full h-full"
-          role="img"
-          aria-label={`${competencia.nome}: nota ${nota(competencia.nota)} de 10, em ${contagem(competencia.avaliacoes, "conversa", "conversas")}`}
-        >
-          <rect x="0" y="0" width={Math.max(0, Math.min(10, competencia.nota)) * 10} height="10" className={PREENCHIMENTO[tom]} />
-        </svg>
-      </div>
+      <BarraNota
+        valor={competencia.nota}
+        descricao={`${competencia.nome}: nota ${nota(competencia.nota)} de 10, em ${contagem(competencia.avaliacoes, "conversa", "conversas")}`}
+      />
       <p className="text-[13px] text-muted mt-1">{`${competencia.grupo} · ${contagem(competencia.avaliacoes, "conversa", "conversas")}`}</p>
     </li>
   );
@@ -116,15 +104,6 @@ function VisaoGeral({ painel, oportunidade }: Resposta) {
         </p>
       </section>
     </>
-  );
-}
-
-function EmBreve({ titulo, descricao }: { titulo: string; descricao: string }) {
-  return (
-    <div className="card px-6 py-7">
-      <h2 className="font-bold text-[17px] mb-1.5">{titulo}</h2>
-      <p className="apoio">{descricao}</p>
-    </div>
   );
 }
 
@@ -214,12 +193,7 @@ export default function Painel({ codigo }: { codigo: string }) {
 
               {aba === "equipe" && <Equipe painel={painel} />}
 
-              {aba === "personas" && (
-                <EmBreve
-                  titulo="Como o time vende para cada cliente"
-                  descricao="Aqui vai ficar a nota do time por tipo de cliente — com quem ele vai bem e com quem ele trava. Por enquanto, o tipo de cliente aparece dentro de cada conversa avaliada."
-                />
-              )}
+              {aba === "personas" && <Personas painel={painel} />}
             </div>
           </>
         )}

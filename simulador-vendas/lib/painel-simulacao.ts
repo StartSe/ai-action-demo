@@ -6,9 +6,10 @@
 // somada. É o que permite comparar dois vendedores e dois meses — duas conversas avaliadas em dias
 // diferentes continuam somando do mesmo jeito.
 //
-// A única coisa que a IA escreve é a **frase** da principal oportunidade do time, e ela é escrita a
-// partir dos números já calculados, nunca das conversas. Sem IA (ou quando ela falha) a frase sai do
-// código: o painel nunca fica sem a linha que diz o que fazer.
+// A IA escreve aqui só duas **frases** — a principal oportunidade do time (US-022) e a maior
+// dificuldade com um tipo de cliente (US-024) —, e as duas são escritas a partir dos números já
+// calculados, nunca das conversas. Sem IA (ou quando ela falha) cada uma sai do código: o painel nunca
+// fica sem a linha que diz o que fazer.
 import { aiEnabled, askJSON, modelName } from "./ai";
 import { GRUPOS, criteriosDe, metodologia, type Grupo } from "./metodologias";
 import { obter as obterParticipante } from "./participantes";
@@ -22,6 +23,10 @@ const DIA_MS = 24 * 60 * 60 * 1000;
  * de alguém não subiu nem caiu — variou. Uma seta para cada oscilação de uma conversa faria a coluna
  * inteira piscar e deixaria de significar coisa alguma. */
 const LIMIAR_TENDENCIA = 0.3;
+/** Quantas conversas avaliadas um tipo de cliente precisa ter para a média dele virar nota na tela
+ * (US-024). Com uma ou duas, a média diz mais sobre o dia de quem treinou do que sobre o time — e é
+ * justamente essa a conclusão errada que o gestor tiraria. Abaixo disso a tela diz "poucos dados". */
+const MINIMO_PARA_NOTA = 3;
 /** A frase da IA vale uma hora — ou até uma conversa nova chegar, o que vier primeiro. */
 const VALIDADE_FRASE_MS = 60 * 60 * 1000;
 
@@ -54,6 +59,25 @@ export type ConversaDoVendedor = {
   /** Quando a conversa terminou — ou quando ela começou, se ainda não terminou. */
   quando: string;
   resultadoId: string | null;
+};
+
+/** Um tipo de cliente dentro deste treino (US-024). */
+export type PersonaNaSimulacao = {
+  id: string;
+  /** Emoji e nome separados porque a tela mostra o emoji grande ao lado do nome — juntos, são o
+   * rótulo de sempre (D2: emoji + nome é a única forma de mostrar uma persona). */
+  nome: string;
+  emoji: string;
+  /** Todas as conversas abertas com esse cliente, terminadas ou não. */
+  sessoes: number;
+  avaliadas: number;
+  /** Pessoas distintas que encararam esse cliente. */
+  vendedores: number;
+  /** Média das conversas avaliadas — `null` enquanto a base for pequena demais (`poucosDados`). */
+  nota: number | null;
+  poucosDados: boolean;
+  /** As competências mais fracas nas conversas com esse cliente: o padrão observado que a frase cita. */
+  pontosFracos: { nome: string; nota: number }[];
 };
 
 /** Uma pessoa do time dentro deste treino (US-023). */
@@ -109,6 +133,8 @@ export type PainelSimulacao = {
   grupos: { grupo: Grupo; nota: number; criterios: number }[];
   /** Pessoa por pessoa, da maior nota para a menor (US-023). */
   equipe: VendedorNaSimulacao[];
+  /** Tipo de cliente por tipo de cliente, da maior nota para a menor (US-024). */
+  personas: PersonaNaSimulacao[];
   ultimaSessao: string | null;
 };
 
@@ -218,6 +244,7 @@ export function montarPainelSimulacao(codigo: string, dias = 30): PainelSimulaca
     competencias,
     grupos,
     equipe: montarEquipe(sessoes, new Map(avaliadas.map((a) => [a.sessaoId, a.nota])), inicioJanela, inicioAnterior),
+    personas: montarPersonas(sessoes, new Map(avaliadas.map((a) => [a.sessaoId, a]))),
     ultimaSessao,
   };
 }
@@ -335,6 +362,72 @@ function montarEquipe(
 }
 
 // ---------------------------------------------------------------------------
+// A aba Personas: em que tipo de cliente o time trava (US-024)
+// ---------------------------------------------------------------------------
+
+/**
+ * Os tipos de cliente deste treino, do que o time domina para o que o derruba.
+ *
+ * "Quantas sessões" conta **todas** as conversas abertas com aquele cliente — é o mesmo número de
+ * `contarPorPersona`, o que o rodízio da US-008 equilibrou —, enquanto a nota sai só das avaliadas.
+ * São perguntas diferentes e a tela mostra as duas lado a lado: uma persona com seis sessões e uma
+ * conversa avaliada aparece como bastante treinada e ainda sem nota, que é a verdade.
+ *
+ * `pontosFracos` é o padrão observado: as competências que mais caem nas conversas com aquele
+ * cliente. É o insumo da frase que a IA escreve abaixo da lista — e do texto de reserva quando ela
+ * não está conectada.
+ */
+function montarPersonas(sessoes: Sessao[], avaliacaoPorSessao: Map<string, { nota: number; avaliacao: AvaliacaoGravada }>): PersonaNaSimulacao[] {
+  type Acumulado = { sessoes: number; notas: number[]; vendedores: Set<string>; criterios: Map<string, { nome: string; notas: number[] }> };
+  const porPersona = new Map<string, Acumulado>();
+
+  for (const s of sessoes) {
+    const atual: Acumulado = porPersona.get(s.personaId) ?? { sessoes: 0, notas: [], vendedores: new Set<string>(), criterios: new Map() };
+    atual.sessoes += 1;
+    atual.vendedores.add(s.participanteId);
+    const avaliada = avaliacaoPorSessao.get(s.id);
+    if (avaliada) {
+      atual.notas.push(avaliada.nota);
+      for (const c of avaliada.avaliacao.criterios ?? []) {
+        const nota = numero(c?.nota);
+        const nome = String(c?.nome ?? "").trim();
+        if (nota === null || !nome) continue;
+        const chave = String(c?.id ?? "") || nome.toLowerCase();
+        const doCriterio = atual.criterios.get(chave) ?? { nome, notas: [] };
+        doCriterio.notas.push(nota);
+        atual.criterios.set(chave, doCriterio);
+      }
+    }
+    porPersona.set(s.personaId, atual);
+  }
+
+  const lista = Array.from(porPersona.entries()).map(([id, dados]) => {
+    // Persona que saiu do catálogo continua na lista com um rótulo genérico: aquelas conversas
+    // aconteceram e as notas delas continuam contando.
+    const p = persona(id);
+    const poucosDados = dados.notas.length < MINIMO_PARA_NOTA;
+    return {
+      id,
+      nome: p?.nome ?? "Cliente",
+      emoji: p?.emoji ?? "👤",
+      sessoes: dados.sessoes,
+      avaliadas: dados.notas.length,
+      vendedores: dados.vendedores.size,
+      nota: poucosDados ? null : media(dados.notas),
+      poucosDados,
+      pontosFracos: Array.from(dados.criterios.values())
+        .map((c) => ({ nome: c.nome, nota: media(c.notas) ?? 0 }))
+        .sort((a, b) => a.nota - b.nota)
+        .slice(0, 3),
+    };
+  });
+
+  // Da maior nota para a menor, com quem ainda não tem base no fim: a última linha com nota é o
+  // cliente que derruba o time, e é sobre ela que a frase abaixo da lista fala.
+  return lista.sort((a, b) => (b.nota ?? -1) - (a.nota ?? -1) || b.avaliadas - a.avaliadas || a.nome.localeCompare(b.nome, "pt-BR"));
+}
+
+// ---------------------------------------------------------------------------
 // A frase da principal oportunidade do time
 // ---------------------------------------------------------------------------
 
@@ -417,5 +510,116 @@ export async function oportunidadeDoTime(painel: PainelSimulacao): Promise<Oport
   }
 
   cache.set(painel.codigo, { chave, expiraEm: Date.now() + VALIDADE_FRASE_MS, valor });
+  return valor;
+}
+
+// ---------------------------------------------------------------------------
+// A frase da maior dificuldade do time com um tipo de cliente (US-024)
+// ---------------------------------------------------------------------------
+
+const SYSTEM_PERSONA = `Você é um gerente de vendas experiente lendo como o seu time se sai com cada tipo de cliente em um treino.
+Escreva UM parágrafo, em português do Brasil, sobre a maior dificuldade do time com o tipo de cliente indicado no resumo.
+Regras:
+- Três frases no máximo, até 55 palavras no total.
+- Diga o padrão que os números mostram (o que cai junto com a nota desse cliente, comparado com o resto do treino) e termine com o que treinar na próxima rodada.
+- Fale do time, nunca de uma pessoa específica; você não recebeu nome de ninguém.
+- Não invente número nenhum: use só os que estão no resumo, e não repita todos eles.
+- Sem jargão de consultoria e sem termo técnico de inteligência artificial.
+Formato de saída (JSON): {"frase": ""}`;
+
+/** Número do jeito que se lê em português, do lado do servidor (a tela tem o dela em `apresentacao.ts`). */
+function decimal(valor: number | null): string {
+  return valor === null ? "sem base" : valor.toFixed(1).replace(".", ",");
+}
+
+function rotuloDe(p: PersonaNaSimulacao): string {
+  return `${p.emoji} ${p.nome}`;
+}
+
+/** O tipo de cliente com a menor nota do treino — o fim da lista, que já vem ordenada, ignorando quem
+ * ainda não tem base. `null` quando nenhuma persona chegou às três conversas avaliadas. */
+function personaMaisDificil(painel: PainelSimulacao): PersonaNaSimulacao | null {
+  const comNota = painel.personas.filter((p) => p.nota !== null);
+  return comNota.length ? comNota[comNota.length - 1] : null;
+}
+
+/** O texto de reserva da aba Personas: é o que a tela mostra sem IA conectada ou quando ela falha. */
+export function dificuldadeCalculada(painel: PainelSimulacao): string {
+  if (painel.personas.length === 0) {
+    return "Ninguém conversou com nenhum tipo de cliente ainda. Assim que as primeiras conversas terminarem, o cliente que mais desafia o time aparece aqui.";
+  }
+  const pior = personaMaisDificil(painel);
+  if (!pior) {
+    return `Nenhum tipo de cliente chegou a ${MINIMO_PARA_NOTA} conversas avaliadas neste treino. Com menos que isso, a média diria mais sobre o dia de quem treinou do que sobre o time — mande o link para mais gente e volte aqui.`;
+  }
+  const fraco = pior.pontosFracos[0];
+  const padrao = fraco ? ` Nessas conversas, o que mais cai é "${fraco.nome}", com média ${decimal(fraco.nota)}.` : "";
+  const oQueFazer = ` Crie a próxima rodada só com esse cliente e refaça junto com o time as conversas de nota mais baixa.`;
+  const base = `${decimal(pior.nota)} em ${pior.avaliadas === 1 ? "uma conversa avaliada" : `${pior.avaliadas} conversas avaliadas`}`;
+
+  // Com um único tipo de cliente avaliado não há com o que comparar: dizer que o time "vai pior" com
+  // ele seria inventar uma diferença que não houve.
+  if (painel.personas.filter((p) => p.nota !== null).length === 1) {
+    return `${rotuloDe(pior)} é o único tipo de cliente com base suficiente neste treino: média ${base}.${padrao}${oQueFazer}`;
+  }
+  return `O time vai pior com ${rotuloDe(pior)}: média ${base}, contra ${decimal(painel.notaMedia)} no treino inteiro.${padrao}${oQueFazer}`;
+}
+
+function resumoDaPersonaParaPrompt(painel: PainelSimulacao, pior: PersonaNaSimulacao): string {
+  const catalogo = persona(pior.id);
+  const outras = painel.personas.filter((p) => p.id !== pior.id && p.nota !== null).map((p) => `${rotuloDe(p)}: ${decimal(p.nota)}`);
+  return [
+    `Treino: ${painel.nome}`,
+    `Produto: ${painel.produto}`,
+    `Método de avaliação: ${painel.metodologia}`,
+    `Nota média do time no treino inteiro: ${decimal(painel.notaMedia)}`,
+    "",
+    `Tipo de cliente com a menor nota: ${rotuloDe(pior)}`,
+    catalogo ? `Como esse cliente se comporta: ${catalogo.comportamento}` : "",
+    `Nota dele: ${decimal(pior.nota)}, em ${pior.avaliadas} conversas avaliadas, de ${pior.vendedores} pessoas`,
+    "Competências mais fracas nas conversas com esse cliente:",
+    ...pior.pontosFracos.map((c) => `- ${c.nome}: ${decimal(c.nota)}`),
+    outras.length ? `Notas dos outros tipos de cliente: ${outras.join("; ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** A frase já escrita, por simulação. Mesma regra da US-022: conversa nova invalida. */
+const cachePersona = new Map<string, { chave: string; expiraEm: number; valor: OportunidadeDoTime }>();
+
+/**
+ * O parágrafo de "Onde o time mais trava" da aba Personas.
+ *
+ * Mesma regra da US-022 em tudo: os números saem do cálculo, a IA só escreve a leitura deles, a
+ * resposta vale uma hora ou até chegar sessão nova, e sem IA vale o texto calculado no código. Mora
+ * numa rota própria (`/api/resultados/<código>/personas`), buscada quando a aba abre: pendurá-la na
+ * resposta do painel gastaria uma chamada de IA por abertura de tela mesmo para o gestor que nunca
+ * sai da visão geral.
+ */
+export async function dificuldadeComPersona(painel: PainelSimulacao): Promise<OportunidadeDoTime> {
+  const pior = personaMaisDificil(painel);
+  const chave = `${chaveDe(painel)}|${pior?.id ?? ""}`;
+  const guardada = cachePersona.get(painel.codigo);
+  if (guardada && guardada.chave === chave && guardada.expiraEm > Date.now()) return guardada.valor;
+
+  let valor: OportunidadeDoTime = { frase: dificuldadeCalculada(painel), daIA: false };
+
+  if (aiEnabled() && pior) {
+    try {
+      const resposta = await askJSON<{ frase?: unknown }>({
+        system: SYSTEM_PERSONA,
+        prompt: resumoDaPersonaParaPrompt(painel, pior),
+        maxTokens: 400,
+        model: modelName("avaliacao"),
+      });
+      const frase = String(resposta?.frase ?? "").trim();
+      if (frase) valor = { frase, daIA: true };
+    } catch (err) {
+      console.error("Não foi possível escrever a leitura por tipo de cliente; usando o texto calculado.", err);
+    }
+  }
+
+  cachePersona.set(painel.codigo, { chave, expiraEm: Date.now() + VALIDADE_FRASE_MS, valor });
   return valor;
 }

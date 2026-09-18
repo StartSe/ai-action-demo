@@ -1,4 +1,4 @@
-// Os formatos que as abas do painel de um treino compartilham (US-022, US-023).
+// Os formatos que as abas do painel de um treino compartilham (US-022, US-023, US-024).
 //
 // Cada aba é um arquivo, e todas mostram nota: a régua de cor ("verde a partir de 7") tem de ser a
 // mesma na barra de competência da visão geral e na coluna da tabela da equipe. Duas cópias
@@ -30,3 +30,6 @@ export function normalizar(texto: string): string {
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase();
 }
+
+/** A mesma régua, agora na cor do texto: o número grande de uma nota (US-024). */
+export const COR_DA_NOTA: Record<string, string> = { ok: "text-ok", warn: "text-warn", danger: "text-danger", neutro: "text-accent-ink" };

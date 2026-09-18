@@ -62,6 +62,8 @@ Branch: ralph/simulador-vendas-produto-simulacao-sessoes
 - **`next build` recria o diretório do servidor autônomo e apaga os estáticos copiados para dentro dele.** O sintoma é uma tela que fica em "Carregando..." para sempre — o JS do navegador responde 404 e a busca inicial nunca roda —, sem nenhum erro no log do servidor. Depois de **todo** build, recopiar `.next/static` e `public` antes de subir o servidor de teste.
 - **Entrar por formulário no Playwright corre com a hidratação.** `fill` + `click` logo depois do `goto` dispara o envio nativo do formulário e recarrega a própria tela de entrar com os campos na barra de endereço. Quando o alvo da conferência é outra tela, entrar por `fetch` na rota e `context.addCookies` com o cookie devolvido é o caminho estável.
 - **Número que a tabela mostra é o agregado da linha, não o de um item dela.** A coluna traz a média da pessoa; a nota de cada conversa vive no detalhe e na planilha. Um teste que procure na tabela o número de um item específico falha sem que haja defeito.
+- **Cálculo viaja junto com a tela; frase de IA viaja quando a aba abre.** Uma segunda chamada de modelo pendurada na mesma resposta dobra o custo de abrir o painel, inclusive para quem nunca sai da primeira aba. O agregado (que é barato e puro) vai na resposta principal; a frase que o interpreta mora numa rota própria, buscada na montagem da aba.
+- **Quando um limite da AC é escrito como um número, conferir de qual número a conclusão sai.** "Menos de 3 sessões" e "menos de 3 conversas avaliadas" parecem a mesma regra e não são: a média sai das avaliadas, então medir por sessões deixa passar uma média tirada de uma conversa só. A régua mais apertada costuma cobrir a AC e mais um caso — e a escolha precisa ficar escrita, senão parece descuido.
 ---
 
 ## 2026-09-17 - US-001
@@ -396,3 +398,15 @@ Branch: ralph/simulador-vendas-produto-simulacao-sessoes
   - **A soma das linhas da aba tem de bater com o número do cabeçalho**, e isso vira conferência: contar só as conversas avaliadas esconderia quem abriu o link e nunca terminou.
   - Uma porta do servidor ocupada por um servidor de teste esquecido dá um erro que não aparece no que se está conferindo: o `EADDRINUSE` fica no log e quem responde é a instância antiga, com o banco antigo. O roteiro de subida agora mata quem está na porta antes de começar.
 ---
+
+## 2026-09-17 - US-024
+- `lib/painel-simulacao.ts`: `montarPersonas` (tipo de cliente por tipo de cliente — sessões, avaliadas, vendedores, nota, `poucosDados` e as competências mais fracas daquelas conversas), `dificuldadeCalculada` (texto de reserva) e `dificuldadeComPersona` (a frase da IA, com o mesmo cache de 1 h invalidado por conversa nova da US-022).
+- `app/api/resultados/[codigo]/personas/route.ts` (novo): só a frase. A lista vem no painel (cálculo puro); a segunda chamada de IA fica atrás da abertura da aba, para não custar nada a quem só olha a visão geral.
+- `app/resultados/[codigo]/Personas.tsx` (novo): emoji, nome, número grande, barra e "N sessões · N vendedores · N conversas avaliadas", da maior nota para a menor, com "Poucos dados" (chip cinza, sem número) para quem tem menos de 3 conversas avaliadas e a linha dizendo o que falta. Abaixo, "Onde o time mais trava".
+- `app/resultados/[codigo]/BarraNota.tsx` (novo): a barra da competência (US-022) e a da persona viraram um componente só; `apresentacao.ts` ganhou `COR_DA_NOTA`.
+- Verificado: build, `tsc --noEmit`, lint, `verificar-padrao`, `verificar-paleta` e `verificar-jargao` em 0; 45 conferências de rota em servidor de verdade (`DATA_DIR` em `/tmp`, 13 conversas de 3 vendedores em três treinos) e 28 em navegador (1400x1000 e 390 com toque), sem erro de console nem rolagem horizontal.
+- **Learnings for future iterations:**
+  - **A resposta de `POST /api/simulacoes` é `{ simulacao, url }`, e a de `POST /api/salas/<código>/encerrar` é `{ conversa, avaliacao }`** — diferente de `POST /api/produtos`, que devolve o produto cru. Conferir o formato de cada rota antes de escrever o roteiro; três delas divergem dentro do mesmo app.
+  - **A distribuição de personas da US-008 é previsível o bastante para um teste.** Com N participantes e duas personas escolhidas, a 2ª sessão de cada pessoa cai na outra persona (o critério 1 é o histórico do próprio participante): 6 sessões de 3 pessoas dão 3/3, 5 dão 3/2 e 2 dão 1/1 — exatamente os três estados da aba. Melhor que forçar `personaId` no banco.
+  - **Quando um limite da AC é medido por um número (aqui "menos de 3 sessões"), conferir de qual número a conclusão realmente sai.** A média sai das conversas **avaliadas**; usar as sessões deixaria passar uma nota tirada de uma conversa só. A régua mais apertada cobre a AC e mais um caso — e isso precisa estar escrito, senão parece descuido.
+  - **Cálculo viaja com a tela; frase de IA viaja quando a aba abre.** Duas frases de IA na mesma resposta dobram o custo de abrir o painel para quem nunca sai da primeira aba.
