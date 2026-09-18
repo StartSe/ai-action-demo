@@ -1,11 +1,14 @@
 import { notFound } from "next/navigation";
 import { ConteudoParecer } from "@/components/ConteudoParecer";
+import { ConteudoRelatorio } from "@/components/ConteudoRelatorio";
 import { Origem } from "@/components/ui";
 import { transcricao } from "@/lib/entrevistas";
 import { data } from "@/lib/formato";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
 import type { Parecer, Ranking, Scorecard, Troca, Vaga } from "@/lib/types";
+import type { Relatorio } from "@/lib/relatorios";
+import { periodoEmPalavras } from "@/lib/relatorio-texto";
 import { RankingSalvo } from "@/components/RankingSalvo";
 import { ConteudoScorecard } from "@/components/ConteudoScorecard";
 import { ImprimirAoCarregar } from "./ImprimirAoCarregar";
@@ -36,6 +39,24 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
         <footer className="mt-8 pt-4 border-t border-line">
           <Origem meta={registro.meta} />
         </footer>
+      </div>
+    );
+  }
+
+  // Um relatório guardado (US-026). Sem `Origem` no rodapé: nenhum modelo escreveu estes números.
+  if (tipagem.tipo === "relatorio") {
+    const registro = obter<unknown, Relatorio, Meta>(id)!;
+    return (
+      <div className="print-sheet max-w-[860px] mx-auto px-8 py-10 max-md:px-4">
+        <ImprimirAoCarregar />
+        <header className="mb-8 pb-4 border-b border-line">
+          <div className="text-[13px] font-semibold text-muted">Entrevistadora IA</div>
+          <h1 className="text-2xl font-extrabold tracking-[-0.01em]">{registro.titulo}</h1>
+          <div className="text-muted text-sm">{periodoEmPalavras(registro.saida)}</div>
+          <div className="text-muted text-sm">{`Guardado em ${data(registro.criadoEm, { comAno: true })}`}</div>
+        </header>
+
+        <ConteudoRelatorio relatorio={registro.saida} comLinks={false} />
       </div>
     );
   }

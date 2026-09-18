@@ -4,7 +4,13 @@
 // enviado" e a tela do candidato disser "Convidada" sobre a mesma linha, quem lê as duas conclui que
 // são coisas diferentes. Aqui não há nenhuma chamada nem estado: é a tradução do que o banco guarda
 // para o que a pessoa de RH entende.
+import { ROTULO_DECISAO, ROTULO_NIVEL_VOZ, situacaoDaEntrevista } from "@/lib/formato";
 import { Chip } from "./ui";
+
+// Os três rótulos abaixo moram em `lib/formato.ts` desde os Relatórios (US-026), porque o SERVIDOR
+// também precisa dizer as mesmas palavras (a planilha do período é montada fora do navegador). As
+// telas continuam importando daqui: este arquivo é o lugar único de como uma entrevista é dita.
+export { ROTULO_DECISAO, ROTULO_NIVEL_VOZ, situacaoDaEntrevista };
 
 export type StatusEntrevista = "convidada" | "aberta" | "em_andamento" | "concluida" | "avaliada" | "expirada" | "cancelada";
 export type Decisao = "avancar" | "aguardar" | "reprovar";
@@ -49,22 +55,12 @@ export function rotuloConvite(e: { status: StatusEntrevista; codigo?: string }):
  * cima das duas. A mesma regra vale no servidor (`POST /api/ligar`). */
 export const PODE_LIGAR: StatusEntrevista[] = ["convidada", "aberta"];
 
-export const ROTULO_DECISAO: Record<Decisao, string> = { avancar: "Avançar", aguardar: "Aguardar", reprovar: "Não avançar" };
-
 /** As três decisões na ordem em que a tela as oferece, com a frase que diz o que cada uma significa. */
 export const DECISOES: { valor: Decisao; rotulo: string; apoio: string }[] = [
   { valor: "avancar", rotulo: "Avançar", apoio: "Segue para a próxima etapa do processo." },
   { valor: "aguardar", rotulo: "Aguardar", apoio: "Fica em espera até você decidir." },
   { valor: "reprovar", rotulo: "Não avançar", apoio: "Encerra o processo deste candidato nesta vaga." },
 ];
-
-/** Como a conversa aconteceu (D3). Só faz sentido depois que a sala abriu: até lá o nível é nulo,
- * porque é o navegador do candidato que decide o que dá para usar. */
-export const ROTULO_NIVEL_VOZ: Record<NivelVoz, string> = {
-  agente: "Voz natural",
-  navegador: "Voz do navegador",
-  texto: "Texto",
-};
 
 /** Uma entrevista concluída ainda espera o parecer? É isso que faz a lista se reler sozinha, e é
  * falso quando a conversa foi curta demais ou quando a análise falhou e alguém precisa pedir de novo. */
@@ -79,34 +75,6 @@ export function esperaDoParecer(e: { status: StatusEntrevista; parecerStatus: Pa
   if (e.parecerStatus === "sem_material") return "Encerrada cedo demais para avaliar";
   if (e.parecerStatus === "falhou") return "O parecer não ficou pronto";
   return "Preparando o parecer...";
-}
-
-/**
- * A situação na linguagem de quem acompanha o processo, não na do banco.
- *
- * `convidada` sem código é a entrevista já atribuída cujo convite ainda não saiu: dizer "convidada"
- * nesse estado contaria que uma mensagem foi enviada a alguém.
- */
-export function situacaoDaEntrevista(e: { status: StatusEntrevista; codigo?: string; parecerStatus?: ParecerStatus }): { nivel: string; rotulo: string } {
-  switch (e.status) {
-    case "convidada":
-      return e.codigo ? { nivel: "neutral", rotulo: "Convite enviado" } : { nivel: "cinza", rotulo: "Aguardando convite" };
-    case "aberta":
-      return { nivel: "neutral", rotulo: "Link aberto" };
-    case "em_andamento":
-      return { nivel: "neutro", rotulo: "Conversando agora" };
-    case "concluida":
-      if (e.parecerStatus === "sem_material") return { nivel: "cinza", rotulo: "Encerrada cedo" };
-      // "neutro" é o âmbar da paleta (`.chip-neutro`); não existe `chip-warn`.
-      if (e.parecerStatus === "falhou") return { nivel: "neutro", rotulo: "Parecer pendente" };
-      return { nivel: "neutro", rotulo: "Preparando o parecer" };
-    case "avaliada":
-      return { nivel: "positivo", rotulo: "Avaliada" };
-    case "expirada":
-      return { nivel: "cinza", rotulo: "Convite vencido" };
-    default:
-      return { nivel: "cinza", rotulo: "Cancelada" };
-  }
 }
 
 export function ChipSituacao({ entrevista }: { entrevista: { status: StatusEntrevista; codigo?: string; parecerStatus?: ParecerStatus } }) {

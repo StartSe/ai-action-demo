@@ -1,5 +1,9 @@
 /** Helpers de formatação pt-BR. Arquivo sem "use client": pode ser chamado tanto de Server quanto de Client Components. */
 
+// Só tipos: o `import type` é apagado na compilação, então nenhum módulo de banco entra no pacote do
+// navegador por causa dele (ver os rótulos de entrevista no fim do arquivo).
+import type { Decisao, NivelVoz, ParecerStatus, StatusEntrevista } from "./entrevistas";
+
 /** Formata número no padrão pt-BR (vírgula decimal), com `casas` dígitos após a vírgula. */
 export function numero(n: number, casas = 0) {
   return new Intl.NumberFormat("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas }).format(n);
@@ -86,4 +90,57 @@ export function duracao(segundos: number): string {
   if (!Number.isFinite(segundos) || segundos <= 0) return "—";
   if (segundos < 60) return `${Math.round(segundos)} s`;
   return `${numero(Math.round(segundos / 60))} min`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Como uma entrevista é DITA — a mesma palavra na tela, no texto que sai por e-mail e na planilha.
+//
+// Estes rótulos nasceram em `components/RotulosEntrevista.tsx`, e continuam sendo exportados de lá
+// (nenhuma tela mudou de import). Vieram para cá quando os Relatórios (US-026) passaram a montar uma
+// planilha no SERVIDOR: um rótulo de domínio que o servidor também precisa dizer não pode morar num
+// client component, senão a rota que exporta o CSV escreveria a sua própria versão de "Convite
+// vencido" — e duas palavras diferentes sobre a mesma linha fazem quem lê as duas concluir que são
+// registros diferentes.
+//
+// O `import type` é apagado na compilação: nada de `node:sqlite` entra no pacote do navegador por
+// causa dele.
+// ---------------------------------------------------------------------------------------------
+
+export const ROTULO_DECISAO: Record<Decisao, string> = { avancar: "Avançar", aguardar: "Aguardar", reprovar: "Não avançar" };
+
+/** Como a conversa aconteceu (D3). Só faz sentido depois que a sala abriu: até lá o nível é nulo,
+ * porque é o navegador do candidato que decide o que dá para usar. */
+export const ROTULO_NIVEL_VOZ: Record<NivelVoz, string> = {
+  agente: "Voz natural",
+  navegador: "Voz do navegador",
+  texto: "Texto",
+};
+
+/**
+ * A situação na linguagem de quem acompanha o processo, não na do banco.
+ *
+ * `convidada` sem código é a entrevista já atribuída cujo convite ainda não saiu: dizer "convidada"
+ * nesse estado contaria que uma mensagem foi enviada a alguém. O `nivel` é a cor do chip na tela
+ * (`components/ui.tsx`); quem só precisa da palavra usa o `rotulo`.
+ */
+export function situacaoDaEntrevista(e: { status: StatusEntrevista; codigo?: string; parecerStatus?: ParecerStatus }): { nivel: string; rotulo: string } {
+  switch (e.status) {
+    case "convidada":
+      return e.codigo ? { nivel: "neutral", rotulo: "Convite enviado" } : { nivel: "cinza", rotulo: "Aguardando convite" };
+    case "aberta":
+      return { nivel: "neutral", rotulo: "Link aberto" };
+    case "em_andamento":
+      return { nivel: "neutro", rotulo: "Conversando agora" };
+    case "concluida":
+      if (e.parecerStatus === "sem_material") return { nivel: "cinza", rotulo: "Encerrada cedo" };
+      // "neutro" é o âmbar da paleta (`.chip-neutro`); não existe `chip-warn`.
+      if (e.parecerStatus === "falhou") return { nivel: "neutro", rotulo: "Parecer pendente" };
+      return { nivel: "neutro", rotulo: "Preparando o parecer" };
+    case "avaliada":
+      return { nivel: "positivo", rotulo: "Avaliada" };
+    case "expirada":
+      return { nivel: "cinza", rotulo: "Convite vencido" };
+    default:
+      return { nivel: "cinza", rotulo: "Cancelada" };
+  }
 }

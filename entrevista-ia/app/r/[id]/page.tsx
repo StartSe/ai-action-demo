@@ -1,12 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ConteudoParecer } from "@/components/ConteudoParecer";
+import { ConteudoRelatorio } from "@/components/ConteudoRelatorio";
 import { Origem, ResultHead, Topbar } from "@/components/ui";
+// `data` vem de `lib/formato.ts`, e não do reexport de `components/ui.tsx`: esta página é um Server
+// Component, e chamar uma função de um módulo `"use client"` no servidor derruba a renderização
+// ("Attempted to call data() from the server but data is on the client").
+import { data } from "@/lib/formato";
 import { transcricao } from "@/lib/entrevistas";
 import { obter } from "@/lib/historico";
 import { ligacaoEnabled } from "@/lib/voz";
 import type { Meta } from "@/lib/ai";
 import type { Parecer, Ranking, Scorecard, Troca, Vaga } from "@/lib/types";
+import type { Relatorio } from "@/lib/relatorios";
+import { periodoEmPalavras } from "@/lib/relatorio-texto";
 import { RankingSalvo } from "@/components/RankingSalvo";
 import { Resultado } from "@/components/ConteudoScorecard";
 
@@ -27,6 +34,26 @@ export default async function Page({ params }: PageProps<"/r/[id]">) {
         <main className="max-w-[860px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
           <article className="reveal">
             <RankingSalvo ranking={registro.saida} id={id} meta={registro.meta} />
+          </article>
+        </main>
+      </>
+    );
+  }
+
+  // Um relatório guardado (US-026): os números daquele período, congelados no dia em que alguém os
+  // salvou. Ele não tem `Origem` nem selo de IA — não há modelo nenhum por trás de uma contagem, e
+  // dizer o contrário seria a única mentira possível numa tela que só tem somas.
+  if (tipagem.tipo === "relatorio") {
+    const registro = obter<unknown, Relatorio, Meta>(id)!;
+    return (
+      <>
+        <Topbar marca="E" nome="Entrevistadora IA" area="Recursos Humanos" status={{ ai: false, demo: false, model: "" }} />
+        <main className="max-w-[1100px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
+          <article className="reveal">
+            <ResultHead titulo={registro.titulo} subtitulo={`${periodoEmPalavras(registro.saida)} · guardado em ${data(registro.criadoEm, { comAno: true })}`}>
+              <Link href="/relatorios" className="btn-ghost">Ver o período de hoje</Link>
+            </ResultHead>
+            <ConteudoRelatorio relatorio={registro.saida} />
           </article>
         </main>
       </>

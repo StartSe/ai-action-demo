@@ -3,13 +3,9 @@
 // Mora fora de `lib/comparacao.ts` pelo mesmo motivo de `lib/parecer-texto.ts`: a tela é um client
 // component, e um import de valor de um módulo que toca o banco arrastaria o `node:sqlite` para o
 // pacote do navegador. Daqui só sai texto — o tipo vem por `import type`, que a compilação apaga.
-import { data, numero } from "./formato";
+import { ROTULO_DECISAO, data, numero } from "./formato";
 import { ROTULO_REQUISITO } from "./parecer-texto";
 import type { CandidatoComparado, Comparacao } from "./comparacao";
-
-/** O rótulo da decisão do gestor. O mesmo par de palavras da tela (components/RotulosEntrevista.tsx):
- * a duplicação é deliberada, porque aquele arquivo é do navegador e este também serve ao servidor. */
-const ROTULO_DECISAO = { avancar: "Avançar", aguardar: "Aguardar", reprovar: "Não avançar" } as const;
 
 /** A linha de números de um candidato — a mesma da tabela, em uma frase. */
 export function resumoNumerico(c: CandidatoComparado): string {
