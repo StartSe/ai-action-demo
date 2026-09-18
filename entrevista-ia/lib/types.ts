@@ -161,6 +161,38 @@ export interface DivergenciaFicha {
   fonteId?: string;
 }
 
+/**
+ * Uma pessoa que a busca trouxe e que PODE ser o candidato — ou pode ser um homônimo (D6).
+ *
+ * `bate` e `naoBate` são o que a pessoa de RH lê para decidir em cinco segundos: "mesma empresa do
+ * currículo" de um lado, "trabalha em outra cidade" do outro. A decisão é dela, nunca do modelo.
+ */
+export interface IdentidadePossivel {
+  nome: string;
+  descricao: string;
+  url?: string;
+  bate: string[];
+  naoBate: string[];
+}
+
+/**
+ * O que a pesquisa na web consolidou e que ainda NÃO entrou na ficha (D6).
+ *
+ * Existe porque "achamos isto sobre alguém com este nome" e "isto é sobre o seu candidato" são
+ * afirmações diferentes. Enquanto a segunda não estiver garantida — uma só pessoa plausível e
+ * confiança média alta — o material fica aqui, visível para o gestor escolher, e a entrevistadora
+ * não o usa.
+ */
+export interface PesquisaWeb {
+  ficha: Ficha;
+  identidades: IdentidadePossivel[];
+  /** A média da confiança dos campos, de 0 a 1 — o número que a regra da D6 compara com 0,7. */
+  confiancaMedia: number;
+  /** A consolidação saiu do exemplo do modo demonstração, não de uma pessoa de verdade. */
+  exemplo?: boolean;
+  em: string;
+}
+
 /** A ficha do candidato: cada campo com a origem dele, mais os conflitos ainda não resolvidos. */
 export interface Ficha {
   resumo?: CampoFicha<string>;
@@ -177,6 +209,9 @@ export interface Ficha {
   disponibilidade?: CampoFicha<string>;
   observacoes?: CampoFicha<string>;
   divergencias?: DivergenciaFicha[];
+  /** A pesquisa na web que aguarda a decisão do gestor (US-012). Não é um campo da ficha: é o que
+   * ainda não virou ficha. */
+  web?: PesquisaWeb;
 }
 
 /**
@@ -199,4 +234,20 @@ export interface FichaBruta {
   pretensaoSalarial?: string | null;
   disponibilidade?: string | null;
   observacoes?: string | null;
+}
+
+/**
+ * A consolidação da pesquisa na web, como a IA (e o exemplo do modo demonstração) a devolvem.
+ *
+ * `ficha` tem o formato de `FichaBruta`, com cada valor podendo chegar embrulhado em
+ * `{ valor, confianca, fonteId }` — é `normalizarFicha()` (lib/ficha.ts) que desembrulha e carimba a
+ * origem. `fontes` traz as duas frases de resumo de cada página trazida, e `identidadesPossiveis` só
+ * vem preenchida quando há mais de uma pessoa plausível.
+ */
+export interface ConsolidacaoBruta {
+  ficha?: Record<string, unknown> | null;
+  fontes?: ({ fonteId?: string | null; resumo?: string | null } | null)[] | null;
+  identidadesPossiveis?:
+    | ({ nome?: string | null; descricao?: string | null; url?: string | null; bate?: unknown; naoBate?: unknown } | null)[]
+    | null;
 }

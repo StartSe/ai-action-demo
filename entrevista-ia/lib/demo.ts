@@ -1,7 +1,7 @@
 // Respostas de exemplo usadas quando não há chave de IA configurada.
 import type { Cultura } from "./cultura";
 import type { ValorDaEmpresa, VagaEstruturada } from "./vagas";
-import type { AderenciaRequisito, CriterioCultural, CriterioTecnico, FichaBruta, ItemConsistencia, Parecer, Recomendacao, Scorecard, SituacaoRequisito, Troca, Vaga } from "./types";
+import type { AderenciaRequisito, ConsolidacaoBruta, CriterioCultural, CriterioTecnico, FichaBruta, ItemConsistencia, Parecer, Recomendacao, Scorecard, SituacaoRequisito, Troca, Vaga } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
@@ -469,3 +469,97 @@ function fichaDoTexto(cvTexto: string): FichaBruta {
     links: (texto.match(/https?:\/\/[^\s,;)]+/g) ?? []).slice(0, 5),
   };
 }
+
+// ---------------------------------------------------------------------------------------------
+// A consolidação da pesquisa na web (US-012)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * A consolidação da pesquisa na web sem IA nenhuma.
+ *
+ * Duas regras, as mesmas de `fichaDemo()`. Para os quatro candidatos semeados existe um perfil
+ * público escrito à mão — e ele é o que torna a demonstração da D6 possível: "Bruno Alves" volta com
+ * **duas** pessoas plausíveis (o analista e um advogado homônimo), que é exatamente a tela que o
+ * gestor precisa ver antes de confiar numa pesquisa. Para qualquer outro nome **nada é inventado**: o
+ * que volta são as páginas que a pesquisa realmente trouxe, com confiança baixa e o resumo dizendo de
+ * onde vieram. Um perfil público de mentira com o nome de uma pessoa de verdade é pior que nenhum.
+ */
+export function fichaWebDemo({ nome, paginas }: { nome: string; paginas: { fonteId: string; url: string; titulo: string }[] }): ConsolidacaoBruta {
+  const escrita = WEB_DE_EXEMPLO[semAcento(nome)];
+  const fontes = paginas.map((p) => ({ fonteId: p.fonteId, resumo: `Página pública encontrada na pesquisa: ${p.titulo}. O conteúdo dela está guardado nas fontes deste candidato.` }));
+  if (!escrita) {
+    return {
+      ficha: paginas.length ? { links: paginas.map((p) => ({ valor: p.url, confianca: 0.3, fonteId: p.fonteId })) } : {},
+      fontes,
+      identidadesPossiveis: [],
+    };
+  }
+  // A primeira fonte trazida é quem sustenta os campos do exemplo: sem IA, não há como saber qual
+  // página disse o quê, e apontar para a fonte errada é pior que apontar para a mais provável.
+  const fonteId = paginas[0]?.fonteId;
+  const comFonte = Object.fromEntries(
+    Object.entries(escrita.ficha).map(([chave, valor]) => [chave, Array.isArray(valor) ? valor.map((v) => ({ ...v, fonteId })) : { ...(valor as object), fonteId }]),
+  );
+  return { ficha: comFonte, fontes, identidadesPossiveis: escrita.identidadesPossiveis };
+}
+
+type WebDeExemplo = { ficha: Record<string, unknown>; identidadesPossiveis: ConsolidacaoBruta["identidadesPossiveis"] };
+
+/** O perfil público dos quatro candidatos semeados, do jeito que uma consolidação o devolveria. */
+const WEB_DE_EXEMPLO: Record<string, WebDeExemplo> = {
+  "bruno alves": {
+    ficha: {
+      cidade: { valor: "São Paulo (SP)", confianca: 0.85 },
+      cargoAtual: { valor: "Analista de Customer Success", confianca: 0.9 },
+      empresaAtual: { valor: "Órbita Software", confianca: 0.9 },
+      competencias: [{ valor: "Acompanhamento de carteira", confianca: 0.6 }],
+      links: [{ valor: "https://exemplo.com/perfil/bruno-alves", confianca: 0.8 }],
+    },
+    // O caso da D6: dois perfis públicos com o mesmo nome. A ficha não é mesclada até o gestor dizer
+    // qual é a pessoa dele.
+    identidadesPossiveis: [
+      {
+        nome: "Bruno Alves",
+        descricao: "Analista de Customer Success na Órbita Software, em São Paulo.",
+        url: "https://exemplo.com/perfil/bruno-alves",
+        bate: ["Mesma empresa do currículo", "Mesmo cargo do currículo"],
+        naoBate: [],
+      },
+      {
+        nome: "Bruno Alves",
+        descricao: "Advogado com escritório próprio no Recife.",
+        url: "https://exemplo.com/perfil/bruno-alves-advogado",
+        bate: ["Mesmo nome completo"],
+        naoBate: ["Outra área de atuação", "Outra cidade", "Nenhuma empresa do currículo aparece"],
+      },
+    ],
+  },
+  "camila rocha": {
+    ficha: {
+      cidade: { valor: "Campinas (SP)", confianca: 0.8 },
+      cargoAtual: { valor: "Analista sênior de Customer Success", confianca: 0.75 },
+      empresaAtual: { valor: "Nexo Serviços", confianca: 0.85 },
+      idiomas: [{ valor: "Espanhol básico", confianca: 0.6 }],
+      links: [{ valor: "https://exemplo.com/perfil/camila-rocha", confianca: 0.8 }],
+    },
+    identidadesPossiveis: [],
+  },
+  "diego martins": {
+    ficha: {
+      cidade: { valor: "Rio de Janeiro (RJ)", confianca: 0.8 },
+      cargoAtual: { valor: "Analista de atendimento", confianca: 0.85 },
+      empresaAtual: { valor: "Ponte Digital", confianca: 0.85 },
+      links: [{ valor: "https://exemplo.com/perfil/diego-martins", confianca: 0.75 }],
+    },
+    identidadesPossiveis: [],
+  },
+  "fernanda lima": {
+    ficha: {
+      cidade: { valor: "São Paulo (SP)", confianca: 0.85 },
+      cargoAtual: { valor: "Analista de Customer Success", confianca: 0.9 },
+      empresaAtual: { valor: "Ampla Tecnologia", confianca: 0.9 },
+      links: [{ valor: "https://exemplo.com/perfil/fernanda-lima", confianca: 0.8 }],
+    },
+    identidadesPossiveis: [],
+  },
+};

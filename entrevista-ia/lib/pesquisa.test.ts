@@ -1,4 +1,4 @@
-// Testes da coleta da pesquisa na web (lib/pesquisa.ts, US-011), fora do Next (`npm test`).
+// Testes da pesquisa na web (lib/pesquisa.ts, US-011 e US-012), fora do Next (`npm test`).
 //
 // Duas coisas são exercitadas aqui, e as duas decidem em silêncio o que o gestor vai ler sobre uma
 // pessoa de verdade:
@@ -7,6 +7,8 @@
 //    perfil de um homônimo custam três das seis chamadas do orçamento e envenenam a ficha.
 //  - **O orçamento.** Um site lento não pode virar uma pesquisa que nunca termina; o que já foi
 //    coletado volta com `parcial: true`.
+//  - **A regra de identidade (D6).** Homônimo que entra na ficha vira pergunta de entrevista e
+//    parecer sobre a pessoa errada, sem dar erro em lugar nenhum.
 //
 // O serviço de verdade é substituído por um servidor MCP descartável (`http.createServer`), que
 // responde `initialize`, `tools/list` e `tools/call` com fixtures — a mesma receita de
@@ -23,11 +25,23 @@ import { after, describe, it } from "node:test";
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "entrevista-pesquisa-"));
 delete process.env.BRIGHTDATA_API_TOKEN;
 
-const { criar, listarFontes } = await import("./candidatos");
+const { criar, listarFontes, obter: obterCandidato } = await import("./candidatos");
 const { esquecerFerramentas, FERRAMENTAS } = await import("./pesquisa-cliente");
-const { classificar, coletar, lerResultados, montarConsulta, nomeBate, separar } = await import("./pesquisa");
+const {
+  classificar,
+  coletar,
+  confiancaMedia,
+  consolidar,
+  identidadeConfirmada,
+  impedimentoDaPesquisa,
+  lerResultados,
+  montarConsulta,
+  nomeBate,
+  pesquisarCandidato,
+  separar,
+} = await import("./pesquisa");
 const { ErroPesquisa } = await import("./pesquisa-cliente");
-import type { Ficha } from "./types";
+import type { ConsolidacaoBruta, Ficha } from "./types";
 
 // ---------------------------------------------------------------------------------------------
 // O servidor MCP descartável
@@ -347,5 +361,282 @@ describe("coletar", () => {
     assert.equal(coleta.status, "coletada", "o perfil entrou antes de o tempo acabar");
     assert.deepEqual(coleta.paginas.map((p) => p.tipo), ["linkedin"]);
     assert.match(coleta.motivo ?? "", /leitura de|tempo da pesquisa/);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// A consolidação e a regra de identidade (US-012)
+// ---------------------------------------------------------------------------------------------
+
+/** A consolidação de uma pessoa clara: um perfil só, confiança alta e um conflito com o currículo. */
+function consolidacaoDeUmaPessoa(fonteId: string): ConsolidacaoBruta {
+  return {
+    ficha: {
+      resumo: { valor: "Analista de Customer Success em contas B2B.", confianca: 0.9, fonteId },
+      cargoAtual: { valor: "Analista de Customer Success", confianca: 0.9, fonteId },
+      // O currículo diz "Órbita Software"; a web diz outra coisa. O currículo vence (D5) e a
+      // divergência fica registrada.
+      empresaAtual: { valor: "Órbita Tecnologia", confianca: 0.8, fonteId },
+      cidade: { valor: "São Paulo (SP)", confianca: 0.85, fonteId },
+      competencias: [{ valor: "Acompanhamento de carteira", confianca: 0.7, fonteId: "fonte-inventada-pelo-modelo" }],
+    },
+    fontes: [{ fonteId, resumo: "Perfil profissional público. Mostra a posição atual e o tempo de casa." }],
+    identidadesPossiveis: [],
+  };
+}
+
+/** A mesma pessoa, agora com um homônimo plausível no meio (D6). */
+function consolidacaoComHomonimo(fonteId: string): ConsolidacaoBruta {
+  return {
+    ficha: {
+      cargoAtual: { valor: "Analista de Customer Success", confianca: 0.5, fonteId },
+      cidade: { valor: "São Paulo (SP)", confianca: 0.5, fonteId },
+    },
+    fontes: [{ fonteId, resumo: "Perfil profissional público." }],
+    identidadesPossiveis: [
+      { nome: "Bruno Alves", descricao: "Analista de Customer Success na Órbita Software.", url: "https://br.linkedin.com/in/bruno-alves-cs", bate: ["Mesma empresa do currículo"], naoBate: [] },
+      { nome: "Bruno Alves", descricao: "Advogado no Recife.", url: "https://www.linkedin.com/in/bruno-alves-advogado", bate: ["Mesmo nome"], naoBate: ["Outra área", "Outra cidade"] },
+    ],
+  };
+}
+
+async function pesquisaDeBruno(consolidador?: (entrada: { candidato: { id: string } }) => Promise<ConsolidacaoBruta>) {
+  const falso = await servirMCP({
+    ferramentas: TODAS,
+    respostas: {
+      [FERRAMENTAS.busca]: { valor: SERP },
+      [FERRAMENTAS.linkedin]: { valor: PERFIL },
+      [FERRAMENTAS.markdown]: { valor: "# Portfólio de Bruno Alves" },
+    },
+  });
+  const candidato = novoCandidato({
+    nome: "Bruno Alves",
+    termoBusca: "Órbita Software",
+    cvTexto: "currículo do Bruno",
+    ficha: {
+      empresaAtual: { valor: "Órbita Software", origem: "cv", fonteId: "fonte-cv" },
+      cargoAtual: { valor: "Analista de Customer Success", origem: "cv", fonteId: "fonte-cv" },
+    },
+  });
+  const status = await pesquisarCandidato(candidato.id, { conexao: conexaoDe(falso), consolidador });
+  return { candidato: obterCandidato(candidato.id)!, status };
+}
+
+describe("confiancaMedia e identidadeConfirmada", () => {
+  it("campo sem confiança conta como zero: o modelo que não respondeu não está dizendo que tem certeza", () => {
+    assert.equal(confiancaMedia({}), 0);
+    assert.equal(confiancaMedia({ cidade: { valor: "Recife (PE)", origem: "web" } }), 0);
+    assert.equal(
+      confiancaMedia({ cidade: { valor: "Recife (PE)", origem: "web", confianca: 0.8 }, cargoAtual: { valor: "Analista", origem: "web", confianca: 0.6 } }),
+      0.7,
+    );
+  });
+
+  it("só confirma com uma pessoa plausível E confiança alta", () => {
+    const ficha: Ficha = { cidade: { valor: "Recife (PE)", origem: "web", confianca: 0.9 } };
+    assert.equal(identidadeConfirmada({ ficha, identidades: [], confiancaMedia: 0.9, exemplo: false }), true);
+    assert.equal(identidadeConfirmada({ ficha, identidades: [], confiancaMedia: 0.69, exemplo: false }), false, "confiança abaixo do corte");
+    const dois = [
+      { nome: "A", descricao: "", bate: [], naoBate: [] },
+      { nome: "B", descricao: "", bate: [], naoBate: [] },
+    ];
+    assert.equal(identidadeConfirmada({ ficha, identidades: dois, confiancaMedia: 0.95, exemplo: false }), false, "homônimo é decisão do gestor");
+    assert.equal(identidadeConfirmada({ ficha, identidades: [], confiancaMedia: 0.9, exemplo: true }), false, "exemplo não entra na ficha sozinho");
+  });
+});
+
+describe("pesquisarCandidato", () => {
+  it("pessoa clara: mescla na ficha, e o currículo vence a web no conflito", async () => {
+    const { candidato, status } = await pesquisaDeBruno(async ({ candidato: c }) => {
+      const fontes = listarFontes(c.id).filter((f) => f.tipo !== "cv");
+      return consolidacaoDeUmaPessoa(fontes[fontes.length - 1].id);
+    });
+
+    assert.equal(status, "concluida");
+    assert.equal(candidato.pesquisaStatus, "concluida");
+    assert.ok(candidato.pesquisaEm, "a data da pesquisa fica registrada");
+    assert.equal(candidato.identidadeConfirmada, true);
+    assert.equal(candidato.ficha?.web, undefined, "confirmada, a ficha web entrou e não ficou pendente");
+
+    // O que o currículo dizia continua de pé; o que ele não dizia veio da web.
+    assert.equal(candidato.ficha?.empresaAtual?.valor, "Órbita Software");
+    assert.equal(candidato.ficha?.empresaAtual?.origem, "cv");
+    assert.equal(candidato.ficha?.cidade?.valor, "São Paulo (SP)");
+    assert.equal(candidato.ficha?.cidade?.origem, "web");
+    assert.equal(candidato.ficha?.cidade?.confianca, 0.85);
+    assert.deepEqual(
+      candidato.ficha?.divergencias?.map((d) => [d.campo, d.cv, d.web]),
+      [["empresaAtual", "Órbita Software", "Órbita Tecnologia"]],
+    );
+
+    // Cada campo aponta para a página de onde saiu; um `fonteId` inventado pelo modelo cai na fonte
+    // da ficha inteira em vez de virar um link para lugar nenhum.
+    const fontes = listarFontes(candidato.id);
+    const perfil = fontes.find((f) => f.tipo === "linkedin")!;
+    const paginas = fontes.filter((f) => f.tipo === "pagina");
+    assert.ok(fontes.some((f) => f.id === candidato.ficha?.cidade?.fonteId));
+    assert.equal(candidato.ficha?.competencias?.[0].fonteId, perfil.id, "fonte inventada não entra");
+    assert.ok(paginas.length > 0);
+
+    // O resumo de duas frases da consolidação foi gravado na fonte.
+    assert.match(fontes.find((f) => f.id === candidato.ficha?.cidade?.fonteId)?.resumo ?? "", /Perfil profissional público/);
+  });
+
+  it("homônimos: nada é mesclado e a escolha fica para o gestor", async () => {
+    const { candidato, status } = await pesquisaDeBruno(async ({ candidato: c }) => {
+      const fontes = listarFontes(c.id).filter((f) => f.tipo !== "cv");
+      return consolidacaoComHomonimo(fontes[0].id);
+    });
+
+    assert.equal(status, "concluida");
+    assert.equal(candidato.identidadeConfirmada, false);
+    assert.equal(candidato.ficha?.cidade, undefined, "a ficha não recebeu nada da web");
+    assert.equal(candidato.ficha?.empresaAtual?.origem, "cv", "o que era do currículo continua igual");
+
+    const pendente = candidato.ficha?.web;
+    assert.ok(pendente, "a ficha web fica guardada, e não mesclada");
+    assert.equal(pendente?.identidades.length, 2);
+    assert.deepEqual(pendente?.identidades[1].naoBate, ["Outra área", "Outra cidade"]);
+    assert.equal(pendente?.ficha.cidade?.valor, "São Paulo (SP)");
+    assert.equal(pendente?.ficha.cidade?.origem, "web");
+    assert.ok(pendente?.em);
+  });
+
+  it("uma correção feita à mão durante a pesquisa não é atropelada pela mesclagem", async () => {
+    const { candidato } = await pesquisaDeBruno(async ({ candidato: c }) => {
+      // Enquanto a rodada corria, o gestor corrigiu a cidade na tela.
+      const { atualizar } = await import("./candidatos");
+      const atual = obterCandidato(c.id)!;
+      atualizar(c.id, { ficha: { ...atual.ficha, cidade: { valor: "Santos (SP)", origem: "gestor" } } });
+      const fontes = listarFontes(c.id).filter((f) => f.tipo !== "cv");
+      return consolidacaoDeUmaPessoa(fontes[0].id);
+    });
+
+    assert.equal(candidato.ficha?.cidade?.valor, "Santos (SP)");
+    assert.equal(candidato.ficha?.cidade?.origem, "gestor");
+  });
+
+  it("modo demonstração: a consolidação de exemplo fica marcada e não entra na ficha sozinha", async () => {
+    const { candidato, status } = await pesquisaDeBruno();
+
+    assert.equal(status, "concluida");
+    assert.equal(candidato.identidadeConfirmada, false);
+    assert.equal(candidato.ficha?.web?.exemplo, true);
+    assert.equal(candidato.ficha?.web?.identidades.length, 2, "o exemplo do Bruno traz o homônimo advogado");
+    assert.equal(candidato.ficha?.cidade, undefined);
+    assert.ok(listarFontes(candidato.id).some((f) => (f.resumo ?? "").includes("Página pública encontrada")));
+  });
+
+  it("busca sem nada plausível: sem_resultado, e a ficha não muda", async () => {
+    const falso = await servirMCP({
+      ferramentas: TODAS,
+      respostas: { [FERRAMENTAS.busca]: { valor: { organic: [{ title: "Outra pessoa", link: "https://exemplo.test/marcos", description: "Marcos Dias" }] } } },
+    });
+    const candidato = novoCandidato({ nome: "Camila Rocha", termoBusca: "Nexo Serviços" });
+
+    const status = await pesquisarCandidato(candidato.id, { conexao: conexaoDe(falso) });
+
+    assert.equal(status, "sem_resultado");
+    const depois = obterCandidato(candidato.id)!;
+    assert.equal(depois.pesquisaStatus, "sem_resultado");
+    assert.ok(depois.pesquisaEm);
+    assert.equal(depois.ficha, undefined);
+  });
+
+  it("consolidação que não devolve campo nenhum vale como sem resultado", async () => {
+    const falso = await servirMCP({
+      ferramentas: TODAS,
+      respostas: { [FERRAMENTAS.busca]: { valor: SERP }, [FERRAMENTAS.linkedin]: { valor: PERFIL }, [FERRAMENTAS.markdown]: { valor: "# Página" } },
+    });
+    const candidato = novoCandidato({ nome: "Bruno Alves", termoBusca: "Órbita Software" });
+
+    const status = await pesquisarCandidato(candidato.id, { conexao: conexaoDe(falso), consolidador: async () => ({ ficha: {}, fontes: [], identidadesPossiveis: [] }) });
+
+    assert.equal(status, "sem_resultado");
+    assert.equal(obterCandidato(candidato.id)?.ficha, undefined);
+  });
+
+  it("consolidação que levanta erro deixa a pesquisa como falhou, sem derrubar nada", async () => {
+    const falso = await servirMCP({
+      ferramentas: TODAS,
+      respostas: { [FERRAMENTAS.busca]: { valor: SERP }, [FERRAMENTAS.linkedin]: { valor: PERFIL }, [FERRAMENTAS.markdown]: { valor: "# Página" } },
+    });
+    const candidato = novoCandidato({ nome: "Bruno Alves", termoBusca: "Órbita Software" });
+
+    const status = await pesquisarCandidato(candidato.id, {
+      conexao: conexaoDe(falso),
+      consolidador: async () => {
+        throw new Error("a IA saiu do ar");
+      },
+    });
+
+    assert.equal(status, "falhou");
+    const depois = obterCandidato(candidato.id)!;
+    assert.equal(depois.pesquisaStatus, "falhou");
+    // As páginas trazidas continuam guardadas: a coleta deu certo, quem falhou foi a leitura delas.
+    assert.ok(listarFontes(candidato.id).length > 0);
+  });
+
+  it("código de acesso recusado: falhou, e a frase do serviço não vira estado da tela", async () => {
+    const falso = await servirMCP({ status: 401 });
+    const candidato = novoCandidato({ nome: "Bruno Alves", termoBusca: "Órbita Software" });
+
+    assert.equal(await pesquisarCandidato(candidato.id, { conexao: conexaoDe(falso) }), "falhou");
+    assert.equal(obterCandidato(candidato.id)?.pesquisaStatus, "falhou");
+  });
+
+  it("sem conexão e sem pistas, a pesquisa não roda e a tela recebe o que fazer", async () => {
+    const semPistas = novoCandidato({ nome: "Diego Martins" });
+    const comPistas = novoCandidato({ nome: "Fernanda Lima", termoBusca: "Ampla Tecnologia" });
+
+    const semConexao = impedimentoDaPesquisa(comPistas, null);
+    assert.equal(semConexao?.codigo, "sem_conexao");
+    assert.equal(semConexao?.acao?.url, "/setup#brightdata");
+
+    const falso = await servirMCP({ ferramentas: TODAS });
+    const semNada = impedimentoDaPesquisa(semPistas, conexaoDe(falso));
+    assert.equal(semNada?.codigo, "sem_pistas");
+    assert.match(semNada?.aviso ?? "", /termo de busca/);
+    assert.equal(impedimentoDaPesquisa(comPistas, conexaoDe(falso)), null);
+
+    assert.equal(await pesquisarCandidato(semPistas.id, { conexao: conexaoDe(falso) }), "nao_pedida");
+    assert.equal(obterCandidato(semPistas.id)?.pesquisaStatus, "nao_pedida");
+  });
+});
+
+describe("consolidar", () => {
+  it("o resumo de uma fonte que não é desta rodada é ignorado", async () => {
+    const candidato = novoCandidato({ nome: "Bruno Alves", termoBusca: "Órbita Software" });
+    const { adicionarFonte } = await import("./candidatos");
+    const minha = adicionarFonte({ candidatoId: candidato.id, tipo: "pagina", url: "https://exemplo.test/a", titulo: "A", conteudo: "conteúdo" });
+    const alheia = adicionarFonte({ candidatoId: candidato.id, tipo: "pagina", url: "https://exemplo.test/b", titulo: "B", conteudo: "conteúdo" });
+
+    const coleta = {
+      status: "coletada" as const,
+      consulta: "Bruno Alves",
+      paginas: [{ tipo: "pagina" as const, url: "https://exemplo.test/a", titulo: "A", conteudo: "conteúdo", fonteId: minha.id }],
+      resultados: [],
+      parcial: false,
+      chamadas: 1,
+    };
+    const consolidacao = await consolidar(
+      { candidato, coleta },
+      {
+        consolidador: async () => ({
+          ficha: { cidade: { valor: "Recife (PE)", confianca: 0.9 } },
+          fontes: [
+            { fonteId: minha.id, resumo: "Esta é da rodada." },
+            { fonteId: alheia.id, resumo: "Esta não é." },
+          ],
+          identidadesPossiveis: [],
+        }),
+      },
+    );
+
+    assert.equal(consolidacao.confiancaMedia, 0.9);
+    assert.equal(consolidacao.exemplo, false);
+    const fontes = listarFontes(candidato.id);
+    assert.equal(fontes.find((f) => f.id === minha.id)?.resumo, "Esta é da rodada.");
+    assert.equal(fontes.find((f) => f.id === alheia.id)?.resumo, undefined);
   });
 });

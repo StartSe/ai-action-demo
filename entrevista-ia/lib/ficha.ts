@@ -18,7 +18,7 @@
 import { aiEnabled, askJSON } from "./ai";
 import { adicionarFonte, removerFontes } from "./candidatos";
 import { esperar, fichaDemo } from "./demo";
-import type { CampoFicha, DivergenciaFicha, Ficha, FichaBruta, OrigemCampo } from "./types";
+import type { CampoFicha, DivergenciaFicha, Ficha, FichaBruta, OrigemCampo, PesquisaWeb } from "./types";
 
 // ---------------------------------------------------------------------------------------------
 // O catálogo de campos
@@ -136,20 +136,35 @@ function confiancaDe(valor: unknown): number | undefined {
 }
 
 /**
+ * A fonte de UM campo, quando ela é diferente da fonte da ficha inteira.
+ *
+ * O currículo é uma fonte só, mas a pesquisa na web traz quatro páginas (US-012) e cada campo sai de
+ * uma delas — é isso que permite à tela pôr "de onde saiu" ao lado da informação. `validas` existe
+ * porque o modelo escreve este campo: um `fonteId` inventado viraria um link para lugar nenhum, e
+ * nesse caso vale mais a fonte da ficha inteira do que uma promessa que não se cumpre.
+ */
+function fonteDe(valor: unknown, padrao: string | undefined, validas: Set<string> | undefined): string | undefined {
+  if (!validas || !valor || typeof valor !== "object") return padrao;
+  const id = (valor as { fonteId?: unknown }).fonteId;
+  return typeof id === "string" && validas.has(id) ? id : padrao;
+}
+
+/**
  * Transforma o JSON cru da IA (ou da ficha guardada) numa `Ficha` com a origem carimbada.
  *
  * Campo que o modelo devolveu vazio ou `null` **não entra**: uma ficha sem `cidade` e uma ficha com
  * `cidade: ""` são a mesma coisa para quem lê a tela, mas só a primeira deixa a mesclagem seguinte
  * preencher o campo.
  */
-export function normalizarFicha(bruto: unknown, origem: OrigemCampo, fonteId?: string): Ficha {
+export function normalizarFicha(bruto: unknown, origem: OrigemCampo, fonteId?: string, fontesValidas?: Set<string>): Ficha {
   const dados = (bruto ?? {}) as Record<string, unknown>;
   const ficha: Ficha = {};
+  const fonte = (cru: unknown) => fonteDe(cru, fonteId, fontesValidas);
 
   const simples = (chave: Exclude<CampoSimples, "anosExperiencia">, limite: number) => {
     const cru = dados[chave];
     const texto = textoDe(desembrulhar(cru), limite);
-    if (texto) ficha[chave] = campo(texto, origemDe(cru, origem), fonteId, confiancaDe(cru));
+    if (texto) ficha[chave] = campo(texto, origemDe(cru, origem), fonte(cru), confiancaDe(cru));
   };
 
   simples("resumo", LIMITE_RESUMO);
@@ -161,7 +176,7 @@ export function normalizarFicha(bruto: unknown, origem: OrigemCampo, fonteId?: s
   simples("observacoes", LIMITE_RESUMO);
 
   const anos = numeroDe(desembrulhar(dados.anosExperiencia));
-  if (anos !== null) ficha.anosExperiencia = campo(anos, origemDe(dados.anosExperiencia, origem), fonteId, confiancaDe(dados.anosExperiencia));
+  if (anos !== null) ficha.anosExperiencia = campo(anos, origemDe(dados.anosExperiencia, origem), fonte(dados.anosExperiencia), confiancaDe(dados.anosExperiencia));
 
   const experiencias = lista(dados.experiencias)
     .map((item) => {
@@ -178,7 +193,7 @@ export function normalizarFicha(bruto: unknown, origem: OrigemCampo, fonteId?: s
           descricao: textoDe(dentro.descricao, LIMITE_DESCRICAO) || undefined,
         },
         origemDe(item, origem),
-        fonteId,
+        fonte(item),
         confiancaDe(item),
       );
     })
@@ -198,7 +213,7 @@ export function normalizarFicha(bruto: unknown, origem: OrigemCampo, fonteId?: s
           fim: textoDe(dentro.fim, 40) || undefined,
         },
         origemDe(item, origem),
-        fonteId,
+        fonte(item),
         confiancaDe(item),
       );
     })
@@ -209,7 +224,7 @@ export function normalizarFicha(bruto: unknown, origem: OrigemCampo, fonteId?: s
     const itens = lista(dados[chave])
       .map((item) => {
         const texto = textoDe(desembrulhar(item), LIMITE_LINHA);
-        return texto ? campo(texto, origemDe(item, origem), fonteId, confiancaDe(item)) : null;
+        return texto ? campo(texto, origemDe(item, origem), fonte(item), confiancaDe(item)) : null;
       })
       .filter((x) => x !== null);
     if (itens.length) ficha[chave] = itens;
@@ -352,6 +367,25 @@ export function mesclar(fichaAtual: Ficha | undefined, novaFicha: Ficha, origem:
   const divergencias = [...conservadas, ...divergenciasNovas];
   if (divergencias.length) resultado.divergencias = divergencias;
 
+  // A pesquisa que aguarda a decisão do gestor (US-012) atravessa a mesclagem intacta: ela não é um
+  // campo da ficha, é o que ainda NÃO virou ficha. Sem esta linha, corrigir um campo à mão apagaria
+  // em silêncio as identidades que a tela está pedindo ao gestor para escolher.
+  if (atual.web) resultado.web = atual.web;
+
+  return resultado;
+}
+
+/**
+ * Guarda (ou tira) a pesquisa na web que ainda espera a decisão do gestor.
+ *
+ * `null` é o que se chama quando a identidade foi confirmada e a ficha web já entrou pela mesclagem:
+ * o material deixou de estar pendente, e mantê-lo faria a tela pedir para sempre uma escolha que já
+ * foi feita.
+ */
+export function guardarPesquisaWeb(ficha: Ficha | undefined, pesquisa: PesquisaWeb | null): Ficha {
+  const resultado: Ficha = { ...(ficha ?? {}) };
+  if (pesquisa) resultado.web = pesquisa;
+  else delete resultado.web;
   return resultado;
 }
 

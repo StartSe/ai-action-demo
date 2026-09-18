@@ -313,6 +313,22 @@ export function adicionarFonte({
   return { id, candidatoId, tipo, url, titulo, resumo, conteudo: cortado, coletadoEm };
 }
 
+/** As duas frases que a consolidação escreve sobre uma fonte (US-012). Um parágrafo inteiro numa
+ * lista de quatro fontes vira uma tela que ninguém lê. */
+export const LIMITE_RESUMO_FONTE = 400;
+
+/**
+ * Escreve as duas frases de resumo de uma fonte já coletada.
+ *
+ * A coleta (US-011) grava a página com o resumo vazio, porque quem sabe resumir é a consolidação, que
+ * só roda depois de todas as páginas estarem no banco. Separar as duas escritas é o que permite a
+ * coleta terminar (e o material ficar guardado) mesmo quando a consolidação não acontece.
+ */
+export function definirResumoFonte(id: string, resumo: string): void {
+  const limpo = resumo.replace(/\s+/g, " ").trim().slice(0, LIMITE_RESUMO_FONTE);
+  banco().prepare("UPDATE fontes_candidato SET resumo = ? WHERE id = ?").run(limpo || null, id);
+}
+
 /**
  * Apaga as fontes de um tipo. É o que permite reler o currículo (ou refazer a pesquisa) sem empilhar
  * duas linhas do mesmo documento: a fonte é substituída, não somada.
@@ -481,9 +497,10 @@ export function resumoDaFicha(ficha?: FichaCandidato): ResumoFicha {
   const origens = new Set<"cv" | "web">();
 
   for (const [chave, valor] of Object.entries(ficha)) {
-    // `divergencias` guarda o conflito entre currículo e web (US-012), não um campo da ficha: contá-la
-    // como origem faria toda ficha com uma divergência parecer ter as duas fontes.
-    if (chave === "divergencias") continue;
+    // `divergencias` guarda o conflito entre currículo e web (US-012) e `web` guarda a pesquisa que
+    // ainda espera a decisão do gestor (D6): nenhum dos dois é campo da ficha. Contá-los como origem
+    // faria a lista mostrar o chip "Web" numa ficha em que a web ainda não entrou.
+    if (chave === "divergencias" || chave === "web") continue;
     for (const item of Array.isArray(valor) ? valor : [valor]) {
       const origem = origemDoCampo(item);
       if (origem === "cv" || origem === "web") origens.add(origem);

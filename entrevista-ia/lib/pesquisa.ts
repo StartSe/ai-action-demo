@@ -1,9 +1,9 @@
-// A pesquisa do candidato na web, primeira metade: a COLETA (US-011).
+// A pesquisa do candidato na web, em duas metades: a COLETA (US-011) e a CONSOLIDAÇÃO (US-012).
 //
-// Aqui o app decide **o que procurar** e **o que vale a pena ler**; quem sabe falar com a Bright Data
-// é lib/pesquisa-cliente.ts e quem transforma o que foi lido numa ficha é a consolidação (US-012).
-// A divisão é de propósito: a regra de "esta página é da pessoa certa" precisa ser lida, discutida e
-// testada sem servidor nenhum no meio.
+// Aqui o app decide **o que procurar**, **o que vale a pena ler** e **se aquilo é mesmo do candidato**;
+// quem sabe falar com a Bright Data é lib/pesquisa-cliente.ts e quem sabe juntar duas fichas é
+// lib/ficha.ts. A divisão é de propósito: a regra de "esta página é da pessoa certa" precisa ser
+// lida, discutida e testada sem servidor nenhum no meio.
 //
 // Três princípios que valem para todo este arquivo:
 //
@@ -13,10 +13,25 @@
 //  2. **Ruído não entra.** Uma vaga aberta com o nome do candidato, um agregador de contatos e o
 //     perfil de um homônimo custam três chamadas e envenenam a ficha. Separar antes de ler é o que
 //     torna o orçamento suficiente.
-//  3. **Nada aqui decide identidade.** A coleta traz material e diz de onde ele veio; se é a pessoa
-//     certa é pergunta da consolidação (US-012) e, em último caso, do gestor (D6).
+//  3. **Identidade não é chute.** A coleta traz material e diz de onde ele veio; a consolidação diz
+//     o quanto confia em cada campo e quem mais apareceu com aquele nome. Uma pessoa plausível com
+//     confiança alta entra na ficha; qualquer dúvida fica para o gestor resolver (D6). Ficha de
+//     candidato errada não dá erro em lugar nenhum — ela só vira pergunta de entrevista e parecer.
 import { ACAO_PESQUISA } from "./acoes";
-import { adicionarFonte, obter as obterCandidato, removerFontes, type Candidato, type TipoFonteCandidato } from "./candidatos";
+import { aiEnabled, askJSON } from "./ai";
+import { agora } from "./banco";
+import {
+  adicionarFonte,
+  atualizar as atualizarCandidato,
+  definirResumoFonte,
+  obter as obterCandidato,
+  removerFontes,
+  type Candidato,
+  type PesquisaStatus,
+  type TipoFonteCandidato,
+} from "./candidatos";
+import { esperar, fichaWebDemo } from "./demo";
+import { CAMPOS_LISTA, CAMPOS_SIMPLES, guardarPesquisaWeb, mesclar, normalizarFicha, valorDaFicha } from "./ficha";
 import {
   chamarFerramenta,
   conexaoBrightData,
@@ -27,7 +42,7 @@ import {
   type CodigoErroPesquisa,
   type ConexaoPesquisa,
 } from "./pesquisa-cliente";
-import type { CampoFicha, Ficha } from "./types";
+import type { CampoFicha, ConsolidacaoBruta, Ficha, IdentidadePossivel } from "./types";
 
 // ---------------------------------------------------------------------------------------------
 // O orçamento (P9)
@@ -395,6 +410,45 @@ function vazia(status: Coleta["status"], consulta: string, motivo?: string): Col
   return { status, consulta, paginas: [], resultados: [], parcial: false, chamadas: 0, motivo };
 }
 
+/** Por que esta pesquisa não pode nem começar. `aviso` é para a tela; `motivo`, para o log. */
+export type ImpedimentoPesquisa = {
+  codigo: "sem_conexao" | "sem_pistas";
+  aviso: string;
+  motivo: string;
+  acao?: { rotulo: string; url: string };
+};
+
+/**
+ * A pesquisa pode rodar para este candidato?
+ *
+ * São duas perguntas, e as duas têm resposta ANTES de qualquer chamada — por isso a rota pode
+ * responder de imediato em vez de disparar uma pesquisa em segundo plano que morreria em silêncio:
+ *
+ *  - **A Bright Data está conectada?** Se não, a resposta da rota já traz o caminho de Configurações.
+ *  - **Há por onde separar homônimos?** Sem currículo, sem termo de busca e sem perfil o que existe é
+ *    um nome, e um nome sozinho traz gente parecida, não a pessoa (D6). Gastar seis chamadas para
+ *    trazer o perfil de outra pessoa é pior que não pesquisar.
+ */
+export function impedimentoDaPesquisa(candidato: Candidato, conexao?: ConexaoPesquisa | null): ImpedimentoPesquisa | null {
+  const ligada = conexao === undefined ? conexaoBrightData() : conexao;
+  if (!ligada) {
+    return {
+      codigo: "sem_conexao",
+      aviso: "A pesquisa na web ainda não foi conectada. Conecte a Bright Data em Configurações para procurar o perfil público do candidato.",
+      motivo: "a pesquisa na web ainda não foi conectada",
+      acao: ACAO_PESQUISA,
+    };
+  }
+  if (!candidato.temCvTexto && !candidato.termoBusca && !candidato.linkedinUrl) {
+    return {
+      codigo: "sem_pistas",
+      aviso: "Para procurar esta pessoa na web precisamos de mais uma informação além do nome: envie o currículo, informe o endereço do perfil ou escreva um termo de busca (a empresa, o cargo ou a cidade).",
+      motivo: "sem currículo, sem termo de busca e sem perfil não há como separar homônimos",
+    };
+  }
+  return null;
+}
+
 /**
  * Procura o candidato na web e guarda as páginas encontradas como fontes dele.
  *
@@ -411,15 +465,10 @@ export async function coletar(candidatoId: string, opcoes: OpcoesColeta = {}): P
   if (!candidato) return vazia("nao_pedida", "", "candidato não encontrado");
 
   const conexao = opcoes.conexao === undefined ? conexaoBrightData() : opcoes.conexao;
-  if (!conexao) return vazia("nao_pedida", "", "a pesquisa na web ainda não foi conectada");
+  const impedimento = impedimentoDaPesquisa(candidato, conexao);
+  if (impedimento) return vazia("nao_pedida", "", impedimento.motivo);
 
-  // Sem currículo, sem termo de busca e sem perfil, o que existe é um nome — e um nome sozinho traz
-  // homônimos, não a pessoa. A pesquisa não roda; a tela pede um dos três (D6).
-  if (!candidato.temCvTexto && !candidato.termoBusca && !candidato.linkedinUrl) {
-    return vazia("nao_pedida", "", "sem currículo, sem termo de busca e sem perfil não há como separar homônimos");
-  }
-
-  return coletarDe(candidato, conexao, opcoes);
+  return coletarDe(candidato, conexao as ConexaoPesquisa, opcoes);
 }
 
 async function coletarDe(candidato: Candidato, conexao: ConexaoPesquisa, opcoes: OpcoesColeta): Promise<Coleta> {
@@ -533,4 +582,287 @@ async function coletarDe(candidato: Candidato, conexao: ConexaoPesquisa, opcoes:
 
   const status: Coleta["status"] = paginas.length ? "coletada" : parcial ? "falhou" : "sem_resultado";
   return { status, consulta, paginas, resultados, parcial, chamadas, motivo };
+}
+
+// ---------------------------------------------------------------------------------------------
+// A consolidação (US-012)
+// ---------------------------------------------------------------------------------------------
+
+/** Quanto de cada página vai no prompt. Quatro páginas inteiras de 20 mil caracteres estouram a
+ * janela de um modelo gratuito; o que interessa num perfil público está no começo. */
+export const LIMITE_FONTE_NO_PROMPT = 6_000;
+/** Quantos resultados da busca (inclusive o que não foi lido) o modelo vê para reconhecer homônimos. */
+export const MAX_RESULTADOS_NO_PROMPT = 10;
+/** No máximo três possibilidades na tela: uma lista de dez homônimos não é uma escolha, é uma
+ * desistência. */
+export const MAX_IDENTIDADES = 3;
+/** O corte da D6. É um chute razoável, e a PRD manda revisá-lo com dez candidatos reais. */
+export const LIMITE_CONFIANCA = 0.7;
+
+/** O que a consolidação produziu, antes de qualquer decisão sobre gravar. */
+export type Consolidacao = {
+  ficha: Ficha;
+  identidades: IdentidadePossivel[];
+  confiancaMedia: number;
+  /** Saiu do exemplo do modo demonstração, não de uma leitura de verdade. */
+  exemplo: boolean;
+};
+
+/** O material que a consolidação lê. Existe como tipo próprio para o teste poder substituir só a
+ * chamada de IA, mantendo todo o resto da rodada igual ao que roda em produção. */
+export type EntradaConsolidacao = {
+  candidato: Candidato;
+  coleta: Coleta;
+};
+
+export type OpcoesPesquisa = OpcoesColeta & {
+  /** Injetado nos testes, no lugar da chamada de IA. */
+  consolidador?: (entrada: EntradaConsolidacao) => Promise<ConsolidacaoBruta>;
+};
+
+const INSTRUCOES_CONSOLIDAR = `Você lê páginas públicas encontradas na web sobre um candidato a uma vaga e consolida o que elas dizem sobre a vida PROFISSIONAL dele.
+Regras:
+- Escreva em português do Brasil.
+- **Só o que as páginas dizem.** Todo campo que elas não trouxerem volta como null. Um campo null é uma resposta correta; um palpite não é.
+- **Nada de vida pessoal.** Religião, partido, família, saúde, orientação sexual, fotos e opiniões fora do trabalho não entram em nenhum campo, mesmo que apareçam nas páginas.
+- "confianca" é um número de 0 a 1 por campo: 1 quando duas páginas independentes dizem a mesma coisa, 0,8 quando o perfil profissional da própria pessoa diz, 0,5 quando é uma menção de terceiros, 0,3 quando é dedução. Na dúvida, baixe a confiança em vez de omitir o campo.
+- "fonteId" é o identificador da página de onde aquele campo saiu, exatamente como veio na lista de fontes. Nunca invente um identificador.
+- "fontes": para CADA página recebida, duas frases sobre o que ela mostra dessa pessoa, com o mesmo "fonteId".
+- "identidadesPossiveis": só preencha quando as páginas descreverem MAIS DE UMA pessoa plausível com esse nome (profissões, cidades ou empresas incompatíveis entre si). Para cada uma: "nome", "descricao" (uma frase), "url", "bate" (o que confere com o currículo e com o termo de busca) e "naoBate". Se tudo indicar uma pessoa só, devolva uma lista vazia.
+- Quando houver mais de uma pessoa plausível, **ainda assim** preencha a ficha com o que for da pessoa mais provável, e baixe a confiança dos campos.
+Formato de saída (JSON, sem nenhum texto fora dele):
+{
+  "ficha": {
+    "resumo": { "valor": "duas ou três frases sobre a trajetória pública", "confianca": 0.8, "fonteId": "..." },
+    "cargoAtual": { "valor": "texto ou null", "confianca": 0.9, "fonteId": "..." },
+    "empresaAtual": { "valor": "texto ou null", "confianca": 0.9, "fonteId": "..." },
+    "cidade": { "valor": "texto ou null", "confianca": 0.7, "fonteId": "..." },
+    "anosExperiencia": { "valor": 4, "confianca": 0.4, "fonteId": "..." },
+    "experiencias": [{ "valor": { "empresa": "texto", "cargo": "texto", "inicio": "2021", "fim": "atual", "descricao": "texto" }, "confianca": 0.8, "fonteId": "..." }],
+    "formacao": [{ "valor": { "curso": "texto", "instituicao": "texto", "inicio": "2015", "fim": "2019" }, "confianca": 0.7, "fonteId": "..." }],
+    "competencias": [{ "valor": "texto", "confianca": 0.6, "fonteId": "..." }],
+    "idiomas": [{ "valor": "texto", "confianca": 0.6, "fonteId": "..." }],
+    "links": [{ "valor": "https://...", "confianca": 0.9, "fonteId": "..." }],
+    "observacoes": { "valor": "texto ou null", "confianca": 0.5, "fonteId": "..." }
+  },
+  "fontes": [{ "fonteId": "...", "resumo": "duas frases" }],
+  "identidadesPossiveis": [{ "nome": "texto", "descricao": "texto", "url": "https://...", "bate": ["texto"], "naoBate": ["texto"] }]
+}`;
+
+/** O que o currículo já afirma, para o modelo saber com o que comparar as páginas. Sem isto ele não
+ * tem como dizer o que "bate" e o que "não bate" numa identidade possível. */
+function oQueOCurriculoDiz(candidato: Candidato): string {
+  const linhas: string[] = [];
+  const dizer = (rotulo: string, valor: string) => {
+    if (valor) linhas.push(`- ${rotulo}: ${valor}`);
+  };
+  dizer("Cargo atual", valorDaFicha(candidato.ficha, "cargoAtual"));
+  dizer("Empresa atual", valorDaFicha(candidato.ficha, "empresaAtual"));
+  dizer("Cidade", valorDaFicha(candidato.ficha, "cidade") || candidato.cidade || "");
+  dizer("Resumo", valorDaFicha(candidato.ficha, "resumo"));
+  dizer("Termo de busca informado pelo gestor", candidato.termoBusca ?? "");
+  return linhas.length ? linhas.join("\n") : "- (o gestor não cadastrou currículo nem outros dados)";
+}
+
+function promptDaConsolidacao({ candidato, coleta }: EntradaConsolidacao): string {
+  const fontes = coleta.paginas
+    .map((p, i) => `### Fonte ${i + 1}\nfonteId: ${p.fonteId}\nEndereço: ${p.url}\nTítulo: ${p.titulo}\nConteúdo:\n${p.conteudo.slice(0, LIMITE_FONTE_NO_PROMPT)}`)
+    .join("\n\n");
+  // Tudo que a busca devolveu, inclusive o que não foi lido: é daí que sai o homônimo da D6.
+  const outros = coleta.resultados
+    .slice(0, MAX_RESULTADOS_NO_PROMPT)
+    .map((r) => `- ${r.titulo || r.url} — ${r.url}${r.descricao ? ` — ${r.descricao}` : ""}`)
+    .join("\n");
+  return [
+    `Candidato: ${candidato.nome}`,
+    `Consulta usada na busca: ${coleta.consulta}`,
+    `\nO que o cadastro e o currículo já dizem sobre ele:\n${oQueOCurriculoDiz(candidato)}`,
+    `\nPáginas trazidas:\n\n${fontes}`,
+    outros ? `\nOutros resultados que a busca devolveu (não foram lidos; servem para reconhecer homônimos):\n${outros}` : "",
+  ].join("\n");
+}
+
+function textoCurto(valor: unknown, limite: number): string {
+  return typeof valor === "string" ? valor.replace(/\s+/g, " ").trim().slice(0, limite) : "";
+}
+
+function listaDeFrases(valor: unknown): string[] {
+  if (!Array.isArray(valor)) return [];
+  return valor.map((i) => textoCurto(i, 200)).filter(Boolean).slice(0, 5);
+}
+
+/** As identidades como a tela as mostra: no máximo três, cada uma com nome e uma frase. */
+export function normalizarIdentidades(bruto: ConsolidacaoBruta["identidadesPossiveis"]): IdentidadePossivel[] {
+  if (!Array.isArray(bruto)) return [];
+  return bruto
+    .map((item) => {
+      if (!item) return null;
+      const nome = textoCurto(item.nome, 120);
+      const descricao = textoCurto(item.descricao, 300);
+      if (!nome && !descricao) return null;
+      const url = textoCurto(item.url, 2000);
+      const identidade: IdentidadePossivel = { nome, descricao, bate: listaDeFrases(item.bate), naoBate: listaDeFrases(item.naoBate) };
+      if (url) identidade.url = url;
+      return identidade;
+    })
+    .filter((x) => x !== null)
+    .slice(0, MAX_IDENTIDADES);
+}
+
+/**
+ * A média da confiança dos campos da ficha web, de 0 a 1.
+ *
+ * Campo sem `confianca` conta como **zero**, de propósito. O prompt pede o número em todo campo; um
+ * modelo que o omite não está dizendo "tenho certeza", está deixando de responder — e a consequência
+ * de tratar isso como certeza seria mesclar o perfil de um estranho na ficha de um candidato sem
+ * ninguém ter olhado. Ficha vazia também dá zero: não há o que confirmar.
+ */
+export function confiancaMedia(ficha: Ficha): number {
+  const notas: number[] = [];
+  for (const nome of CAMPOS_SIMPLES) {
+    const campo = ficha[nome] as CampoFicha<unknown> | undefined;
+    if (campo) notas.push(campo.confianca ?? 0);
+  }
+  for (const nome of CAMPOS_LISTA) {
+    for (const item of (ficha[nome] ?? []) as CampoFicha<unknown>[]) notas.push(item.confianca ?? 0);
+  }
+  if (!notas.length) return 0;
+  return notas.reduce((a, b) => a + b, 0) / notas.length;
+}
+
+/**
+ * A regra de identidade da D6, inteira.
+ *
+ * Duas condições, e as duas precisam valer: **uma só pessoa plausível** (a lista de identidades
+ * existe justamente quando há mais de uma) e **confiança média ≥ 0,7**. Qualquer outra combinação
+ * deixa o material guardado para o gestor escolher — porque o custo dos dois erros não é o mesmo:
+ * uma ficha que esperou um clique atrasa a entrevista, uma ficha com o perfil de outra pessoa vira
+ * pergunta de entrevista, parecer e, no fim, decisão sobre a vida de alguém.
+ *
+ * O exemplo do modo demonstração nunca é mesclado sozinho pelo mesmo motivo: ele não foi lido de
+ * lugar nenhum, e entrar na ficha carimbado como `web` seria apresentá-lo como se tivesse sido.
+ */
+export function identidadeConfirmada(consolidacao: Consolidacao): boolean {
+  if (consolidacao.exemplo) return false;
+  return consolidacao.identidades.length <= 1 && consolidacao.confiancaMedia >= LIMITE_CONFIANCA;
+}
+
+/**
+ * Lê o que a coleta trouxe e devolve a ficha de origem `web`, com confiança por campo, mais quem
+ * mais apareceu com aquele nome.
+ *
+ * Também é aqui que cada fonte ganha as duas frases de resumo que a tela mostra — a coleta as deixou
+ * vazias de propósito, porque resumir exige ver todas as páginas juntas.
+ */
+export async function consolidar(entrada: EntradaConsolidacao, opcoes: OpcoesPesquisa = {}): Promise<Consolidacao> {
+  const { candidato, coleta } = entrada;
+  const validas = new Set(coleta.paginas.map((p) => p.fonteId));
+  const exemplo = !opcoes.consolidador && !aiEnabled();
+
+  let bruto: ConsolidacaoBruta;
+  if (opcoes.consolidador) {
+    bruto = await opcoes.consolidador(entrada);
+  } else if (exemplo) {
+    await esperar(900);
+    bruto = fichaWebDemo({ nome: candidato.nome, paginas: coleta.paginas });
+  } else {
+    bruto = await askJSON<ConsolidacaoBruta>({
+      system: INSTRUCOES_CONSOLIDAR,
+      prompt: promptDaConsolidacao(entrada),
+      maxTokens: 2500,
+    });
+  }
+
+  for (const fonte of bruto.fontes ?? []) {
+    const id = textoCurto(fonte?.fonteId, 80);
+    const resumo = textoCurto(fonte?.resumo, 600);
+    if (id && resumo && validas.has(id)) definirResumoFonte(id, resumo);
+  }
+
+  // A fonte padrão é a primeira página trazida (o perfil profissional, quando existe): é para onde a
+  // tela aponta quando o modelo não disse de qual página aquele campo saiu.
+  const ficha = normalizarFicha(bruto.ficha, "web", coleta.paginas[0]?.fonteId, validas);
+  return { ficha, identidades: normalizarIdentidades(bruto.identidadesPossiveis), confiancaMedia: confiancaMedia(ficha), exemplo };
+}
+
+// ---------------------------------------------------------------------------------------------
+// A rodada inteira
+// ---------------------------------------------------------------------------------------------
+
+function registrar(candidatoId: string, status: PesquisaStatus, extra: { ficha?: Ficha; identidadeConfirmada?: boolean } = {}): PesquisaStatus {
+  atualizarCandidato(candidatoId, { ...extra, pesquisaStatus: status, pesquisaEm: agora() });
+  return status;
+}
+
+/**
+ * Uma rodada completa de pesquisa: coletar, consolidar, decidir a identidade e gravar.
+ *
+ * Roda em **segundo plano** (ver `dispararPesquisa`), e é por isso que ela nunca levanta erro: não há
+ * ninguém do outro lado para receber a exceção, e o que a tela precisa saber cabe em `pesquisaStatus`.
+ * Cada desfecho é um estado, e cada estado tem uma frase na tela do candidato (US-013):
+ *
+ *  - `concluida` — achamos e lemos. Mesclado ou aguardando a escolha do gestor, conforme a D6.
+ *  - `sem_resultado` — a busca rodou e não trouxe nada plausível desta pessoa.
+ *  - `falhou` — deu errado (conexão, conta, tempo). O motivo vai para o log, não para a tela.
+ *  - `nao_pedida` — não havia como pesquisar (sem conexão ou sem nada além do nome).
+ */
+export async function pesquisarCandidato(candidatoId: string, opcoes: OpcoesPesquisa = {}): Promise<PesquisaStatus> {
+  const candidato = obterCandidato(candidatoId);
+  if (!candidato) return "nao_pedida";
+
+  const conexao = opcoes.conexao === undefined ? conexaoBrightData() : opcoes.conexao;
+  const impedimento = impedimentoDaPesquisa(candidato, conexao);
+  if (impedimento) return registrar(candidatoId, "nao_pedida");
+
+  atualizarCandidato(candidatoId, { pesquisaStatus: "em_andamento" });
+
+  try {
+    const coleta = await coletar(candidatoId, { ...opcoes, conexao });
+    if (coleta.status !== "coletada") {
+      if (coleta.motivo) console.error("Pesquisa na web do candidato", candidatoId, "—", coleta.motivo);
+      return registrar(candidatoId, coleta.status === "nao_pedida" ? "nao_pedida" : coleta.status);
+    }
+
+    const consolidacao = await consolidar({ candidato, coleta }, opcoes);
+
+    // Nenhum campo saiu das páginas: houve material, mas nada dele é ficha. Para quem lê a tela isto
+    // é o mesmo que não ter achado — e as páginas ficam guardadas nas fontes de qualquer jeito.
+    const temCampos = Object.keys(consolidacao.ficha).length > 0;
+    if (!temCampos && !consolidacao.identidades.length) return registrar(candidatoId, "sem_resultado");
+
+    // A ficha atual é relida agora: a coleta pode ter levado um minuto, e nesse tempo o gestor pode
+    // ter corrigido um campo à mão. Gravar a cópia que veio do começo da rodada apagaria a correção.
+    const atual = obterCandidato(candidatoId)?.ficha;
+    const confirmada = identidadeConfirmada(consolidacao);
+    const ficha = confirmada
+      ? guardarPesquisaWeb(mesclar(atual, consolidacao.ficha, "web"), null)
+      : guardarPesquisaWeb(atual, {
+          ficha: consolidacao.ficha,
+          identidades: consolidacao.identidades,
+          confiancaMedia: consolidacao.confiancaMedia,
+          ...(consolidacao.exemplo ? { exemplo: true } : {}),
+          em: agora(),
+        });
+
+    return registrar(candidatoId, "concluida", { ficha, identidadeConfirmada: confirmada });
+  } catch (err) {
+    console.error("Pesquisa na web do candidato", candidatoId, "não deu certo:", err instanceof Error ? err.message : err);
+    return registrar(candidatoId, "falhou");
+  }
+}
+
+/**
+ * Marca a pesquisa como pendente e a deixa correndo, sem esperar.
+ *
+ * A rota responde na hora e a tela sonda `pesquisaStatus` a cada três segundos: uma pesquisa leva até
+ * um minuto, e nenhum pedido HTTP deve ficar aberto tanto tempo. `pendente` é gravado **antes** de a
+ * promessa começar, para que a tela já veja o estado certo na primeira sondagem — e o `catch` final é
+ * obrigatório: uma rejeição sem dono num processo Node derruba o servidor inteiro.
+ */
+export function dispararPesquisa(candidatoId: string, opcoes: OpcoesPesquisa = {}): void {
+  atualizarCandidato(candidatoId, { pesquisaStatus: "pendente" });
+  void pesquisarCandidato(candidatoId, opcoes).catch((err) => {
+    console.error("Pesquisa na web do candidato", candidatoId, "morreu fora do caminho previsto:", err);
+    registrar(candidatoId, "falhou");
+  });
 }

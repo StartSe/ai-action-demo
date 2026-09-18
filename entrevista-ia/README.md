@@ -81,7 +81,7 @@ lib/integracoes.ts                  integrações que este app precisa (OpenRout
 lib/ai.ts                           cliente OpenRouter (askText, askJSON)
 lib/voz.ts                          integração opcional com a ElevenLabs (voz, ligação e tradução das falhas)
 lib/pesquisa-cliente.ts             conexão com a pesquisa na web (Bright Data pelo protocolo MCP) e tradução das falhas
-lib/pesquisa.ts                     a pesquisa do candidato na web: o que procurar, o que ler e o orçamento da rodada
+lib/pesquisa.ts                     a pesquisa do candidato na web: o que procurar, o que ler, o orçamento da rodada e a consolidação (com a regra de identidade)
 lib/acoes.ts                        "o que fazer agora" de cada aviso, compartilhado entre tela e servidor
 lib/demo.ts                         perguntas roteirizadas e scorecard de exemplo do modo demonstração
 lib/types.ts                        tipos do domínio
