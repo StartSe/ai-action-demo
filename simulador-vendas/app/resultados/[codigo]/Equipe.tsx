@@ -3,8 +3,8 @@
 //
 // Ela responde uma pergunta prática: "com quem eu converso esta semana?". Por isso a tabela mostra
 // pouca coisa — quem é, como está, para onde está indo, quanto treinou e quando foi a última vez — e
-// o resto (com que tipo de cliente a pessoa vai bem, com qual ela trava, o link da última conversa)
-// fica atrás de "Ver detalhes", aberto uma linha por vez.
+// o resto (com que tipo de cliente a pessoa vai bem, com qual ela trava, a evolução mês a mês, o link
+// da última conversa) fica atrás de "Ver detalhes", aberto uma linha por vez.
 //
 // Nenhum número é calculado aqui: tudo vem pronto de `montarPainelSimulacao`. Ordenar, buscar e
 // exportar são operações sobre a lista que já está na tela — são trinta pessoas, e voltar ao servidor
@@ -14,6 +14,7 @@ import Link from "next/link";
 import { Chip, DataTable, data } from "@/components/ui";
 import type { PainelSimulacao, Tendencia, VendedorNaSimulacao } from "@/lib/painel-simulacao";
 import type { ModoSessao, StatusSessao } from "@/lib/sessoes";
+import Evolucao from "./Evolucao";
 import { contagem, nota, normalizar, tomDaNota } from "./apresentacao";
 
 const TENDENCIAS: Record<Tendencia, { rotulo: string; nivel: string }> = {
@@ -65,7 +66,7 @@ function Detalhe({ vendedor }: { vendedor: VendedorNaSimulacao }) {
   }
 
   return (
-    <div className="flex flex-col gap-2 text-[13px] min-w-[230px]">
+    <div className="flex flex-col gap-2 text-[13px] min-w-[260px]">
       <div>
         <span className="text-muted">Nota: </span>
         <strong>{nota(vendedor.nota)}</strong>
@@ -94,6 +95,8 @@ function Detalhe({ vendedor }: { vendedor: VendedorNaSimulacao }) {
         </div>
       )}
       {!vendedor.melhor && <p className="text-muted">Nenhuma conversa desta pessoa foi avaliada ainda.</p>}
+      <hr className="border-0 border-t border-line" />
+      <Evolucao evolucao={vendedor.evolucao} />
       {vendedor.ultimoResultadoId && (
         <Link href={`/r/${vendedor.ultimoResultadoId}`} className="text-accent-ink font-semibold hover:underline self-start">
           Abrir a última conversa

@@ -15,7 +15,7 @@ import { GRUPOS, criteriosDe, metodologia, type Grupo } from "./metodologias";
 import { obter as obterParticipante } from "./participantes";
 import { persona, rotulo } from "./personas";
 import { obter as obterProduto } from "./produtos";
-import { avaliacoesDaSimulacao, listarPorSimulacao, treinosPorParticipante, type ModoSessao, type Sessao, type StatusSessao } from "./sessoes";
+import { avaliacoesDaSimulacao, avaliacoesDosParticipantes, listarPorSimulacao, treinosPorParticipante, type ModoSessao, type Sessao, type StatusSessao } from "./sessoes";
 import { obter as obterSimulacao, type Dificuldade, type StatusSimulacao } from "./simulacoes";
 
 const DIA_MS = 24 * 60 * 60 * 1000;
@@ -29,6 +29,16 @@ const LIMIAR_TENDENCIA = 0.3;
 const MINIMO_PARA_NOTA = 3;
 /** A frase da IA vale uma hora — ou até uma conversa nova chegar, o que vier primeiro. */
 const VALIDADE_FRASE_MS = 60 * 60 * 1000;
+/** Quantos meses a linha da evolução cobre (US-025), contando o mês corrente como um deles. Doze é o
+ * horizonte em que faz sentido perguntar "o time está melhorando?": mais que isso vira história, e a
+ * linha fica ilegível num detalhe que abre dentro de uma linha da tabela. */
+const MESES_DA_EVOLUCAO = 12;
+/** Um ponto só não é uma evolução. Com menos de dois meses de dado a área diz que ainda não dá para
+ * falar de evolução, em vez de desenhar uma linha reta que qualquer um leria como "estagnado". */
+const MESES_MINIMOS = 2;
+/** Mês abreviado em português, escrito no rótulo de cada ponto ("set/26"). Uma lista de doze palavras
+ * custa menos que um `Intl.DateTimeFormat` por ponto e não muda com a região do servidor. */
+const MES_CURTO = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 /** O formato gravado por `lib/avaliacao.ts`, lido aqui sem importar aquele módulo (ele lê as sessões,
  * e o caminho de volta seria circular). Só os campos que o painel soma. */
@@ -80,6 +90,39 @@ export type PersonaNaSimulacao = {
   pontosFracos: { nome: string; nota: number }[];
 };
 
+/** Um mês da evolução de uma pessoa (US-025). */
+export type MesDaEvolucao = {
+  /** "2026-09": a chave de ordenação, estável em qualquer idioma. */
+  mes: string;
+  /** "set/26": o que a tela escreve embaixo do ponto. */
+  rotulo: string;
+  /** Média das conversas avaliadas daquele mês, em todos os treinos. */
+  nota: number;
+  conversas: number;
+};
+
+/** A sequência de um grupo de competências ao longo dos mesmos meses — "Objeções 6,1 → 6,7 → 7,2".
+ * `null` no mês em que aquele grupo não foi avaliado (outro treino, outra metodologia): ausência de
+ * nota não é nota baixa. */
+export type SequenciaDeGrupo = { grupo: Grupo; valores: (number | null)[] };
+
+/**
+ * A evolução de uma pessoa ao longo dos meses (US-025).
+ *
+ * **Atravessa simulações**: soma as conversas avaliadas dela no app inteiro, não só as deste link.
+ * Quem melhorou em "Objeções" melhorou vendendo, não dentro de um treino — e é justamente o motivo
+ * pelo qual o gestor mantém o time treinando todo mês.
+ *
+ * Só entram os meses em que a pessoa treinou. Um mês vazio no meio viraria um buraco na linha (ou,
+ * pior, um zero), e o rótulo de cada ponto traz o mês, então a lacuna continua visível para quem lê.
+ */
+export type EvolucaoDoVendedor = {
+  meses: MesDaEvolucao[];
+  competencias: SequenciaDeGrupo[];
+  /** Falso com menos de dois meses de dado: a tela mostra o aviso em vez de uma linha de um ponto. */
+  suficiente: boolean;
+};
+
 /** Uma pessoa do time dentro deste treino (US-023). */
 export type VendedorNaSimulacao = {
   participanteId: string;
@@ -101,6 +144,8 @@ export type VendedorNaSimulacao = {
   /** O resultado da conversa mais recente que chegou a ser avaliada (o link /r/<id>). */
   ultimoResultadoId: string | null;
   conversas: ConversaDoVendedor[];
+  /** Mês a mês, em todos os treinos que a pessoa já fez (US-025). */
+  evolucao: EvolucaoDoVendedor;
 };
 
 export type PainelSimulacao = {
@@ -287,6 +332,82 @@ function melhorEDesafio(conversas: ConversaDoVendedor[]) {
   return { melhor, desafio: melhor && pior && pior.nota < melhor.nota ? pior : null };
 }
 
+/** A chave e o rótulo do mês em que a conversa terminou, ou `null` quando a data está ilegível. */
+function mesDe(quando: string): { mes: string; rotulo: string } | null {
+  const d = new Date(quando);
+  if (Number.isNaN(d.getTime())) return null;
+  return {
+    mes: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+    rotulo: `${MES_CURTO[d.getMonth()]}/${String(d.getFullYear()).slice(-2)}`,
+  };
+}
+
+/** O primeiro instante do primeiro mês da janela. Cortar por mês inteiro (e não por "365 dias atrás")
+ * é o que mantém o mês mais antigo da linha com a média do mês todo, e não com um pedaço dele. */
+function inicioDaJanelaDeMeses(hoje: Date): string {
+  return new Date(hoje.getFullYear(), hoje.getMonth() - (MESES_DA_EVOLUCAO - 1), 1).toISOString();
+}
+
+/**
+ * A evolução de cada pessoa da lista, mês a mês (US-025).
+ *
+ * A consulta é **uma só para o time inteiro** e ignora o treino: a evolução é do participante no app
+ * inteiro. Com trinta pessoas, uma consulta por pessoa seriam trinta idas ao banco por carregamento
+ * da tela do gestor.
+ *
+ * A nota do mês é a média das conversas avaliadas daquele mês, e a de cada grupo é a média dos
+ * critérios daquele grupo nas mesmas conversas — a mesma conta das barras da visão geral, recortada
+ * por mês. Nada disso passa pela IA: duas conversas avaliadas em meses diferentes só somam juntas
+ * porque a nota de cada uma já saiu do cálculo.
+ */
+function montarEvolucoes(participanteIds: string[]): Map<string, EvolucaoDoVendedor> {
+  type MesAcumulado = { rotulo: string; notas: number[]; grupos: Map<Grupo, number[]> };
+  const porPessoa = new Map<string, Map<string, MesAcumulado>>();
+
+  for (const linha of avaliacoesDosParticipantes(participanteIds, inicioDaJanelaDeMeses(new Date()))) {
+    const avaliacao = lerAvaliacao(linha.saida);
+    const nota = avaliacao && numero(avaliacao.notaGeral);
+    const quando = mesDe(linha.quando);
+    if (!avaliacao || nota === null || !quando) continue;
+
+    const meses = porPessoa.get(linha.participanteId) ?? new Map<string, MesAcumulado>();
+    const mes = meses.get(quando.mes) ?? { rotulo: quando.rotulo, notas: [], grupos: new Map<Grupo, number[]>() };
+    mes.notas.push(nota);
+    for (const c of avaliacao.criterios ?? []) {
+      const notaCriterio = numero(c?.nota);
+      if (notaCriterio === null || !String(c?.nome ?? "").trim()) continue;
+      const grupo = grupoValido(c?.grupo);
+      const doGrupo = mes.grupos.get(grupo) ?? [];
+      doGrupo.push(notaCriterio);
+      mes.grupos.set(grupo, doGrupo);
+    }
+    meses.set(quando.mes, mes);
+    porPessoa.set(linha.participanteId, meses);
+  }
+
+  const evolucoes = new Map<string, EvolucaoDoVendedor>();
+  for (const [participanteId, meses] of porPessoa) {
+    const ordenados = Array.from(meses.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    const pontos: MesDaEvolucao[] = ordenados.map(([mes, dados]) => ({
+      mes,
+      rotulo: dados.rotulo,
+      nota: media(dados.notas) ?? 0,
+      conversas: dados.notas.length,
+    }));
+    // Um grupo que não apareceu em mês nenhum sai da lista: escrever "Fechamento — → —" seria uma
+    // linha que não diz nada sobre ninguém.
+    const competencias = GRUPOS.map((grupo) => ({
+      grupo,
+      valores: ordenados.map(([, dados]) => media(dados.grupos.get(grupo) ?? [])),
+    })).filter((c) => c.valores.some((v) => v !== null));
+    evolucoes.set(participanteId, { meses: pontos, competencias, suficiente: pontos.length >= MESES_MINIMOS });
+  }
+  return evolucoes;
+}
+
+/** Quem ainda não tem nenhuma conversa avaliada: a área da evolução mostra o aviso, não uma linha. */
+const SEM_EVOLUCAO: EvolucaoDoVendedor = { meses: [], competencias: [], suficiente: false };
+
 /**
  * O time deste treino, pessoa por pessoa.
  *
@@ -324,6 +445,8 @@ function montarEquipe(
     porParticipante.set(s.participanteId, lista);
   }
 
+  const evolucoes = montarEvolucoes(Array.from(porParticipante.keys()));
+
   const equipe: VendedorNaSimulacao[] = [];
   for (const [participanteId, lista] of porParticipante) {
     const conversas = [...lista].sort((a, b) => b.quando.localeCompare(a.quando));
@@ -353,6 +476,7 @@ function montarEquipe(
       ultima: conversas[0]?.quando ?? null,
       ultimoResultadoId: conversas.find((c) => c.resultadoId)?.resultadoId ?? null,
       conversas,
+      evolucao: evolucoes.get(participanteId) ?? SEM_EVOLUCAO,
     });
   }
 

@@ -543,3 +543,39 @@ export function avaliacoesDaSimulacao(simulacaoCodigo: string): { sessao: Sessao
     .all(simulacaoCodigo) as (LinhaSessao & { saida: string })[];
   return linhas.map((l) => ({ sessao: linhaParaSessao(l), saida: l.saida }));
 }
+
+/**
+ * Todas as conversas avaliadas destas pessoas, **em qualquer simulação**, a partir de uma data.
+ *
+ * A evolução de um vendedor (US-025) atravessa treinos: quem melhorou em "Objeções" melhorou no app
+ * inteiro, não dentro de um link. Por isso a consulta não filtra por `simulacaoCodigo` — e é **uma**
+ * consulta para o time inteiro da tela, não uma por pessoa, pela mesma razão de
+ * `notaMediaPorSimulacao`: trinta vendedores dariam trinta consultas por carregamento de tela.
+ *
+ * `quando` é o fim da conversa, ou a abertura dela quando o fim não foi gravado — o mesmo carimbo com
+ * que o resto do painel coloca uma conversa numa janela de tempo.
+ *
+ * `resultados` pode ainda não existir num banco recém-criado, e `prepare` sobre tabela inexistente
+ * lança na hora (não na execução): a conferência vem antes.
+ */
+export function avaliacoesDosParticipantes(participanteIds: string[], desde: string): { participanteId: string; quando: string; saida: string }[] {
+  if (!participanteIds.length) return [];
+  const d = banco();
+  const existe = d.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'resultados'").get();
+  if (!existe) return [];
+
+  const marcadores = participanteIds.map(() => "?").join(", ");
+  return d
+    .prepare(
+      `SELECT s.participanteId AS participanteId,
+              COALESCE(s.encerradaEm, s.criadoEm) AS quando,
+              r.saida AS saida
+         FROM sessoes_treino s
+         JOIN resultados r ON r.id = s.resultadoId
+        WHERE s.participanteId IN (${marcadores})
+          AND s.resultadoId IS NOT NULL
+          AND COALESCE(s.encerradaEm, s.criadoEm) >= ?
+        ORDER BY quando ASC`,
+    )
+    .all(...participanteIds, desde) as { participanteId: string; quando: string; saida: string }[];
+}
