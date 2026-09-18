@@ -5,16 +5,17 @@
 // enquanto a aba está visível (document.visibilityState === "visible") e só enquanto o estado é
 // "executando" — mesmo padrão de components/ConexaoWhatsApp.tsx (whatsapp-atendente): o efeito depende
 // do ESTADO (primitivo), não do objeto inteiro de andamento, para não reiniciar o intervalo a cada poll.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Aviso, Chip, Topbar, data, useConfirmacao, useStatus, lerErro } from "@/components/ui";
+import { Aviso, Chip, DataTable, Topbar, data, useConfirmacao, useStatus, lerErro, type Coluna } from "@/components/ui";
 import { ExploracaoEmpresa } from "@/components/ExploracaoEmpresa";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
-import { motivoPapel, sinalAntigo } from "@/lib/qualificacao";
+import { motivoPapel, ordenarLeadsPorPrioridade, sinalAntigo, sinalMaisRecente } from "@/lib/qualificacao";
 import { NIVEL_CHIP_EVIDENCIA, ROTULO_FIT, ROTULO_MODO, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
 import { ETAPAS_PROSPECCAO } from "@/lib/execucao-etapas";
-import type { Conta, Evidencia, Jornada, LeadProspeccao, Prospeccao, SinalProspeccao } from "@/lib/types";
+import type { Conta, Evidencia, Jornada, LeadProspeccao, Prospeccao, SinalProspeccao, StatusLead } from "@/lib/types";
 
 /** Chip de papel no processo de decisão (US-026): mostra o rótulo (ou nada, para "desconhecido") com o
  * `title` explicando a inferência em uma frase (`lib/qualificacao.ts:motivoPapel`) — `Chip` (INFRA) não
@@ -64,23 +65,220 @@ function EvidenciasLista({ evidencias }: { evidencias: Evidencia[] }) {
   );
 }
 
-/** Hipótese de dor (US-025): bloco separado de `EvidenciasLista` de propósito ("a ficha nunca mistura
- * hipótese e evidência no mesmo bloco") — texto condicional citando um sinal, gerado por
- * `lib/qualificacao-ia.ts:gerarHipoteseDor` na etapa 5 do pipeline. Sem nenhum sinal público, o lead nunca
- * teve de onde partir (`hipotese` fica `null` sem nem chamar a IA): mostra a frase fixa em vez de nada. */
-function HipoteseDor({ hipotese, semSinal }: { hipotese: string | null; semSinal: boolean }) {
-  if (!hipotese && !semSinal) return null;
+/** Até `max` palavras, com o texto inteiro no `title` (US-033, coluna "Sinal"): a lista prioriza
+ * densidade — a frase inteira, evidências e hipótese de dor continuam na ficha ("Ver ficha", no menu
+ * "•••" abaixo), que já mostra tudo isso por extenso desde a US-027. */
+function truncarPalavras(texto: string, max: number): string {
+  const palavras = texto.trim().split(/\s+/);
+  if (palavras.length <= max) return texto;
+  return `${palavras.slice(0, max).join(" ")}…`;
+}
+
+const LARGURA_MENU_ACOES = 224; // w-56
+
+/** Menu "•••" por linha (US-033): as ações que antes ficavam soltas na tabela/cartão agora moram aqui.
+ * Mesmo padrão de menu local reimplementado já usado por `Entregar` (`components/ui.tsx`, INFRA) e por
+ * `MenuRegenerar` (`components/AbordagemLead.tsx`) — não compartilhável porque os itens são diferentes em
+ * cada caso. "Mudar status" abre um SEGUNDO nível dentro do mesmo menu (mesma ideia de "Usar outro sinal"
+ * do `MenuRegenerar`), listando `ROTULO_STATUS_LEAD` menos o status atual e menos "descartado" (que já tem
+ * o próprio item "Descartar", redundante ali). "Enviar para o CRM"/"Apagar dados desta pessoa" (só em B2C,
+ * US-021) somem quando não fazem sentido no estado atual — "um botão que não faria nada naquele estado não
+ * fica desligado, ele sai" (Codebase Patterns raiz). Diferente de `Entregar`/`MenuRegenerar`, este menu
+ * abre num `createPortal` para `document.body`, com posição calculada a partir do botão (`position: fixed`,
+ * mesmas coordenadas de `getBoundingClientRect`): dentro da tabela do `DataTable` (INFRA), o `<table>`
+ * desktop tem `overflow-hidden` (para os cantos arredondados) e um menu `absolute` comum, numa linha perto
+ * do fim da tabela, era cortado no meio — achado ao capturar a tela desta história, não visível no código. */
+function MenuAcoesLead({
+  lead,
+  crmConfigurado,
+  enviandoCRM,
+  onMudarStatus,
+  onEnviarCRM,
+  onDescartar,
+  onApagarPessoa,
+  apagando,
+}: {
+  lead: LeadProspeccao;
+  crmConfigurado: boolean;
+  enviandoCRM: boolean;
+  onMudarStatus: (status: StatusLead) => void;
+  onEnviarCRM: () => void;
+  onDescartar: () => void;
+  onApagarPessoa?: () => void;
+  apagando: boolean;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [mudarStatus, setMudarStatus] = useState(false);
+  const [posicao, setPosicao] = useState<{ top: number; left: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const botaoRef = useRef<HTMLButtonElement>(null);
+
+  function alternar() {
+    const retangulo = botaoRef.current?.getBoundingClientRect();
+    if (retangulo) setPosicao({ top: retangulo.bottom + 8, left: Math.max(8, retangulo.right - LARGURA_MENU_ACOES) });
+    setAberto((v) => !v);
+    setMudarStatus(false);
+  }
+
+  useEffect(() => {
+    if (!aberto) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") { setAberto(false); setMudarStatus(false); }
+    }
+    function onClickFora(e: MouseEvent) {
+      const alvo = e.target as Node;
+      if (menuRef.current && !menuRef.current.contains(alvo) && !botaoRef.current?.contains(alvo)) { setAberto(false); setMudarStatus(false); }
+    }
+    function onScroll() { setAberto(false); setMudarStatus(false); }
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("mousedown", onClickFora);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("mousedown", onClickFora);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [aberto]);
+
+  const itemClasse = "w-full text-left px-3 py-2 rounded-md hover:bg-accent-soft cursor-pointer block";
+  const statusEscolhiveis = (Object.keys(ROTULO_STATUS_LEAD) as StatusLead[]).filter((s) => s !== lead.status && s !== "descartado");
+
   return (
-    <div className="text-[12px] text-ink">
-      <p className="font-semibold text-[12px] mb-0.5 flex items-center gap-1">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.4.3.6.8.6 1.3V16h5.8v-.8c0-.5.2-1 .6-1.3A6 6 0 0 0 12 3Z" />
-        </svg>
-        Hipótese de dor
-      </p>
-      <p className={hipotese ? "italic" : "text-muted"}>{hipotese || "Ainda sem sinais públicos suficientes para uma hipótese."}</p>
-    </div>
+    <>
+      <button
+        ref={botaoRef}
+        type="button"
+        className="btn-ghost !px-2 !py-1.5 shrink-0"
+        aria-haspopup="menu"
+        aria-expanded={aberto}
+        aria-label={`Ações para ${lead.nome}`}
+        onClick={alternar}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
+      </button>
+      {aberto && posicao && createPortal(
+        !mudarStatus ? (
+          <div ref={menuRef} role="menu" style={{ top: posicao.top, left: posicao.left }} className="fixed z-50 w-56 card p-1.5 text-[13.5px]">
+            <Link role="menuitem" className={itemClasse} href={`/leads/${lead.id}`} onClick={() => setAberto(false)}>Ver ficha</Link>
+            <Link role="menuitem" className={itemClasse} href={`/leads/${lead.id}/abordagem`} onClick={() => setAberto(false)}>Criar abordagem</Link>
+            <button type="button" role="menuitem" className={itemClasse} onClick={() => setMudarStatus(true)}>Mudar status</button>
+            {crmConfigurado && !lead.noCRM && (
+              <button type="button" role="menuitem" className={itemClasse} disabled={enviandoCRM} onClick={() => { onEnviarCRM(); setAberto(false); }}>
+                {enviandoCRM ? "Enviando…" : "Enviar para o CRM"}
+              </button>
+            )}
+            {lead.status !== "descartado" && (
+              <button type="button" role="menuitem" className={`${itemClasse} text-danger`} onClick={() => { onDescartar(); setAberto(false); }}>Descartar</button>
+            )}
+            {onApagarPessoa && (
+              <button type="button" role="menuitem" className={`${itemClasse} text-danger`} disabled={apagando} onClick={() => { onApagarPessoa(); setAberto(false); }}>
+                {apagando ? "Apagando…" : "Apagar dados desta pessoa"}
+              </button>
+            )}
+          </div>
+        ) : (
+          <div ref={menuRef} role="menu" style={{ top: posicao.top, left: posicao.left }} className="fixed z-50 w-56 card p-1.5 text-[13.5px]">
+            <button type="button" className="w-full text-left px-3 py-1.5 text-[12px] text-muted" onClick={() => setMudarStatus(false)}>‹ Voltar</button>
+            {statusEscolhiveis.map((s) => (
+              <button key={s} type="button" role="menuitem" className={itemClasse} onClick={() => { onMudarStatus(s); setAberto(false); setMudarStatus(false); }}>
+                {ROTULO_STATUS_LEAD[s]}
+              </button>
+            ))}
+          </div>
+        ),
+        document.body,
+      )}
+    </>
   );
+}
+
+/** Colunas da lista de leads (US-033): Lead/Empresa/Fit/Sinal/Papel/Status em B2B, Pessoa/Fit/Sinal/
+ * Contexto/Status em B2C — a jornada é da PROSPECÇÃO (nunca varia lead a lead dentro da mesma lista), por
+ * isso um parâmetro só, não um campo por lead. No celular, `DataTable` (INFRA) só rotula colunas sem
+ * `papel`: aqui são no máximo 4 (Empresa/Papel/Status/Ações em B2B; Contexto/Status/Ações em B2C) — Lead
+ * (`papel: "titulo"`), Fit (`papel: "chip"`) e Sinal (`papel: "resumo"`) não contam. */
+function construirColunasLeads(opcoes: {
+  jornada: Jornada;
+  icpPersonas: string[];
+  crmConfigurado: boolean;
+  enviandoCRMId: string | null;
+  apagandoPessoaId: string | null;
+  onMudarStatus: (leadId: string, status: StatusLead) => void;
+  onEnviarCRM: (leadId: string) => void;
+  onDescartar: (leadId: string) => void;
+  onApagarPessoa?: (leadId: string) => void;
+}): Coluna<LeadProspeccao>[] {
+  const colunas: Coluna<LeadProspeccao>[] = [
+    {
+      chave: "nome",
+      titulo: opcoes.jornada === "b2c" ? "Pessoa" : "Lead",
+      papel: "titulo",
+      render: (l) => (
+        <div>
+          <p className="font-semibold text-[14px]">{l.nome}</p>
+          {l.linkedin && (
+            <a href={l.linkedin} target="_blank" rel="noopener noreferrer" className="text-[12px] text-accent-ink hover:underline">Ver perfil</a>
+          )}
+        </div>
+      ),
+    },
+    { chave: "fit", titulo: "Fit", papel: "chip", render: (l) => (l.fit ? <Chip nivel={l.fit}>{ROTULO_FIT[l.fit]}</Chip> : null) },
+    {
+      chave: "sinal",
+      titulo: "Sinal",
+      papel: "resumo",
+      render: (l) => {
+        const sinal = sinalMaisRecente(l.sinais);
+        if (!sinal) return <span className="text-muted">Nenhum sinal</span>;
+        return (
+          <span title={sinal.descricao}>
+            {truncarPalavras(sinal.descricao, 5)}
+            {sinalAntigo(sinal) ? " · Antigo" : ""}
+          </span>
+        );
+      },
+    },
+  ];
+
+  if (opcoes.jornada === "b2c") {
+    colunas.push({
+      chave: "contexto",
+      titulo: "Contexto",
+      render: (l) => [l.cargo, l.cidade].filter(Boolean).join(" · ") || "Não identificado",
+    });
+  } else {
+    colunas.push({
+      chave: "empresa",
+      titulo: "Empresa",
+      render: (l) => [l.empresa, l.cidade].filter(Boolean).join(" · ") || "Não identificada",
+    });
+    colunas.push({
+      chave: "papel",
+      titulo: "Papel",
+      render: (l) => <ChipPapel lead={l} personas={opcoes.icpPersonas} />,
+    });
+  }
+
+  colunas.push({ chave: "status", titulo: "Status", render: (l) => <Chip nivel="neutral">{ROTULO_STATUS_LEAD[l.status]}</Chip> });
+
+  colunas.push({
+    chave: "acoes",
+    titulo: "",
+    render: (l) => (
+      <MenuAcoesLead
+        lead={l}
+        crmConfigurado={opcoes.crmConfigurado}
+        enviandoCRM={opcoes.enviandoCRMId === l.id}
+        apagando={opcoes.apagandoPessoaId === l.id}
+        onMudarStatus={(status) => opcoes.onMudarStatus(l.id, status)}
+        onEnviarCRM={() => opcoes.onEnviarCRM(l.id)}
+        onDescartar={() => opcoes.onDescartar(l.id)}
+        onApagarPessoa={opcoes.onApagarPessoa ? () => opcoes.onApagarPessoa!(l.id) : undefined}
+      />
+    ),
+  });
+
+  return colunas;
 }
 
 type Andamento = {
@@ -111,6 +309,8 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
   const [buscandoPessoasId, setBuscandoPessoasId] = useState<string | null>(null);
   const [erroVerPessoas, setErroVerPessoas] = useState<string | null>(null);
   const [apagandoPessoaId, setApagandoPessoaId] = useState<string | null>(null);
+  const [enviandoCRMId, setEnviandoCRMId] = useState<string | null>(null);
+  const [erroCRM, setErroCRM] = useState<string | null>(null);
 
   const carregar = useCallback(() => {
     fetch(`/api/prospeccoes/${prospeccaoId}/andamento`)
@@ -241,13 +441,52 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
     setApagandoPessoaId(null);
   }
 
+  /** "Mudar status"/"Descartar" do menu "•••" (US-033): `PUT /api/leads/[id]` com `{ status }`, extensão
+   * da mesma rota que já grava `papel` (US-026) — a única escrita de status fora do pipeline até a US-034
+   * trazer o motivo do descarte. */
+  async function mudarStatusLead(leadId: string, status: StatusLead) {
+    const r = await fetch(`/api/leads/${leadId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+    if (!r.ok) return;
+    const atualizado = (await r.json()) as LeadProspeccao;
+    setAndamento((a) => (a ? { ...a, leads: a.leads.map((l) => (l.id === leadId ? atualizado : l)) } : a));
+  }
+
+  /** "Enviar para o CRM" do menu "•••" (US-033): mesma rota já usada por `AbordagemLead.tsx` (US-032). */
+  async function enviarParaCRM(leadId: string) {
+    setEnviandoCRMId(leadId);
+    setErroCRM(null);
+    try {
+      const r = await fetch(`/api/leads/${leadId}/crm`, { method: "POST" });
+      const corpo = await r.json().catch(() => null);
+      if (!r.ok) { setErroCRM(corpo?.error || "Não foi possível enviar para o CRM."); return; }
+      setAndamento((a) => (a ? { ...a, leads: a.leads.map((l) => (l.id === leadId ? (corpo as LeadProspeccao) : l)) } : a));
+    } catch {
+      setErroCRM("Não foi possível enviar para o CRM.");
+    } finally {
+      setEnviandoCRMId(null);
+    }
+  }
+
   const indiceEtapaAtual = andamento ? ETAPAS_PROSPECCAO.findIndex((e) => e.chave === andamento.prospeccao.etapa) : -1;
+  const colunasLeads = andamento
+    ? construirColunasLeads({
+        jornada: andamento.jornada,
+        icpPersonas: andamento.icpPersonas,
+        crmConfigurado: !!status?.integrations?.["mcp-crm"],
+        enviandoCRMId,
+        apagandoPessoaId,
+        onMudarStatus: mudarStatusLead,
+        onEnviarCRM: enviarParaCRM,
+        onDescartar: (leadId) => mudarStatusLead(leadId, "descartado"),
+        onApagarPessoa: andamento.jornada === "b2c" ? apagarPessoa : undefined,
+      })
+    : [];
 
   return (
     <>
       <Topbar marca="P" nome="Prospecção com IA" area="Vendas" status={status} erro={erro} usuario={status?.usuario} navegacao={NAVEGACAO_PROSPECCAO} />
 
-      <main className="max-w-[720px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
+      <main className="max-w-[1000px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
         {naoEncontrada ? (
           <Aviso tom="danger" acao={{ rotulo: "Nova prospecção", url: "/prospeccoes/nova" }}>
             Esta prospecção não existe mais.
@@ -360,55 +599,9 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                     {andamento.leads.length === 0 ? (
                       <Aviso tom="warn">Nenhuma pessoa encontrada com esses critérios.</Aviso>
                     ) : (
-                      andamento.leads.map((lead) => (
-                        <div key={lead.id} className="card p-4 flex flex-col gap-1.5">
-                          <div className="flex items-start justify-between gap-3 flex-wrap">
-                            <div>
-                              <p className="font-semibold text-[14px]">{lead.nome}</p>
-                              <p className="text-[13px] text-muted">
-                                {[lead.cargo, lead.cidade].filter(Boolean).join(" · ") || "Contexto não identificado"}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              {lead.fit && <Chip nivel={lead.fit}>{ROTULO_FIT[lead.fit]}</Chip>}
-                              <Chip nivel="neutral">{ROTULO_STATUS_LEAD[lead.status]}</Chip>
-                            </div>
-                          </div>
-                          {lead.sinais.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5">
-                              {lead.sinais.map((sinal, i) => (
-                                <ChipSinal key={i} sinal={sinal} />
-                              ))}
-                            </div>
-                          )}
-                          {lead.evidencias.length > 0 && (
-                            <div className="text-[12px] text-muted">
-                              <p className="font-semibold text-ink text-[12px] mb-0.5">Como este dado chegou aqui</p>
-                              <EvidenciasLista evidencias={lead.evidencias} />
-                              <p className="mt-0.5">
-                                {lead.fonte || "Fonte não identificada"} · {data(lead.criadoEm, { comAno: true })}
-                              </p>
-                            </div>
-                          )}
-                          <HipoteseDor hipotese={lead.hipotese} semSinal={lead.sinais.length === 0} />
-                          <div className="flex items-center gap-3 flex-wrap">
-                            {lead.linkedin && (
-                              <a href={lead.linkedin} target="_blank" rel="noopener noreferrer" className="text-[12px] text-accent-ink hover:underline">
-                                Ver perfil
-                              </a>
-                            )}
-                            <button
-                              type="button"
-                              className="btn-link text-[12px] text-danger"
-                              onClick={() => apagarPessoa(lead.id)}
-                              disabled={apagandoPessoaId === lead.id}
-                            >
-                              {apagandoPessoaId === lead.id ? "Apagando…" : "Apagar dados desta pessoa"}
-                            </button>
-                          </div>
-                        </div>
-                      ))
+                      <DataTable colunas={colunasLeads} linhas={ordenarLeadsPorPrioridade(andamento.leads)} />
                     )}
+                    {erroCRM && <Aviso tom="danger">{erroCRM}</Aviso>}
                   </div>
                 )}
 
@@ -417,35 +610,9 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                     {andamento.leads.length === 0 ? (
                       <Aviso tom="warn">Nenhuma pessoa encontrada com esses critérios.</Aviso>
                     ) : (
-                      andamento.leads.map((lead) => {
-                        return (
-                          <div key={lead.id} className="card p-4 flex flex-col gap-1.5">
-                            <div className="flex items-start justify-between gap-3 flex-wrap">
-                              <div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="font-semibold text-[14px]">{lead.nome}</p>
-                                  <ChipPapel lead={lead} personas={andamento.icpPersonas} />
-                                </div>
-                                <p className="text-[13px] text-muted">
-                                  {[lead.cargo, lead.empresa, lead.cidade].filter(Boolean).join(" · ") || "Dados não identificados"}
-                                </p>
-                              </div>
-                              {lead.fit && <Chip nivel={lead.fit}>{ROTULO_FIT[lead.fit]}</Chip>}
-                            </div>
-                            <EvidenciasLista evidencias={lead.evidencias} />
-                            <HipoteseDor hipotese={lead.hipotese} semSinal={lead.sinais.length === 0} />
-                            <div className="flex items-center gap-3 flex-wrap">
-                              {lead.linkedin && (
-                                <a href={lead.linkedin} target="_blank" rel="noopener noreferrer" className="text-[12px] text-accent-ink hover:underline">
-                                  Ver perfil
-                                </a>
-                              )}
-                              {lead.fonte && <span className="text-[12px] text-muted">{lead.fonte}</span>}
-                            </div>
-                          </div>
-                        );
-                      })
+                      <DataTable colunas={colunasLeads} linhas={ordenarLeadsPorPrioridade(andamento.leads)} />
                     )}
+                    {erroCRM && <Aviso tom="danger">{erroCRM}</Aviso>}
                   </div>
                 )}
 
@@ -486,36 +653,10 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                             <EvidenciasLista evidencias={conta.evidencias} />
                           </div>
                         ))}
-                        {andamento.leads.map((lead) => (
-                          <div key={lead.id} className="card p-4 flex flex-col gap-2">
-                            <div className="flex items-start justify-between gap-3 flex-wrap">
-                              <div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="font-semibold text-[14px]">{lead.nome}</p>
-                                  <ChipPapel lead={lead} personas={andamento.icpPersonas} />
-                                </div>
-                                <p className="text-[13px] text-muted">
-                                  {[lead.cargo, lead.empresa, lead.cidade].filter(Boolean).join(" · ") || "Dados não identificados"}
-                                </p>
-                              </div>
-                              {lead.fit && <Chip nivel={lead.fit}>{ROTULO_FIT[lead.fit]}</Chip>}
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {lead.sinais.map((sinal, i) => (
-                                <ChipSinal key={i} sinal={sinal} />
-                              ))}
-                            </div>
-                            <EvidenciasLista evidencias={lead.evidencias} />
-                            <HipoteseDor hipotese={lead.hipotese} semSinal={lead.sinais.length === 0} />
-                            {lead.linkedin && (
-                              <a href={lead.linkedin} target="_blank" rel="noopener noreferrer" className="text-[12px] text-accent-ink hover:underline self-start">
-                                Ver perfil
-                              </a>
-                            )}
-                          </div>
-                        ))}
+                        {andamento.leads.length > 0 && <DataTable colunas={colunasLeads} linhas={ordenarLeadsPorPrioridade(andamento.leads)} />}
                       </>
                     )}
+                    {erroCRM && <Aviso tom="danger">{erroCRM}</Aviso>}
                   </div>
                 )}
 

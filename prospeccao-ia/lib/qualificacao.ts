@@ -10,7 +10,7 @@
 // do ICP) mora em `lib/qualificacao-ia.ts`, SEPARADO deste arquivo: este módulo é importado por Client
 // Components (sinalAntigo, em ProspeccaoAndamento.tsx/ExploracaoEmpresa.tsx) e não pode puxar lib/ai.ts
 // (que importa lib/store.ts, com node:sqlite) para dentro do bundle do navegador.
-import type { Evidencia, Fit, Papel, SinalProspeccao } from "./types";
+import type { Evidencia, Fit, LeadProspeccao, Papel, SinalProspeccao } from "./types";
 
 function normalizar(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -106,6 +106,31 @@ export const DIAS_SINAL_ANTIGO = 90;
 export function sinalAntigo(sinal: SinalProspeccao): boolean {
   const dias = (Date.now() - new Date(sinal.data).getTime()) / (24 * 60 * 60 * 1000);
   return dias > DIAS_SINAL_ANTIGO;
+}
+
+/** O sinal mais recente de um lead (US-033, coluna "Sinal" da lista): `null` sem nenhum sinal. */
+export function sinalMaisRecente(sinais: SinalProspeccao[]): SinalProspeccao | null {
+  if (sinais.length === 0) return null;
+  return [...sinais].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())[0];
+}
+
+const ORDEM_FIT: Record<Fit, number> = { alta: 0, media: 1, baixa: 2 };
+
+/** Ordenação padrão da lista de leads (US-033, prd.json > AC: "fit alta primeiro, depois sinal mais
+ * recente"): lead sem fit avaliado vai depois de todos os fits conhecidos; dentro do mesmo fit, lead sem
+ * nenhum sinal vai por último. */
+export function ordenarLeadsPorPrioridade(leads: LeadProspeccao[]): LeadProspeccao[] {
+  return [...leads].sort((a, b) => {
+    const fitA = a.fit ? ORDEM_FIT[a.fit] : 3;
+    const fitB = b.fit ? ORDEM_FIT[b.fit] : 3;
+    if (fitA !== fitB) return fitA - fitB;
+    const sinalA = sinalMaisRecente(a.sinais);
+    const sinalB = sinalMaisRecente(b.sinais);
+    if (!sinalA && !sinalB) return 0;
+    if (!sinalA) return 1;
+    if (!sinalB) return -1;
+    return new Date(sinalB.data).getTime() - new Date(sinalA.data).getTime();
+  });
 }
 
 /** Resumo de até ~2 linhas a partir do markdown lido: primeira linha "de conteúdo" (sem título/marcação, com um tamanho mínimo para não pegar um item de menu). */
