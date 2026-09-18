@@ -54,7 +54,7 @@
         "RH"
       ],
       "problema": "A triagem inicial de candidatos consome horas da equipe.",
-      "ia": "Conduz a entrevista por voz e texto e entrega um scorecard para o gestor.",
+      "ia": "Conduz a entrevista por voz e entrega um parecer técnico e cultural para o gestor.",
       "integracoes": "ElevenLabs (voz e ligação por agente conversacional).",
       "acento": "#6e3597",
       "porta": 3003,

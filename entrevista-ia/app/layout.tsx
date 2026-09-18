@@ -6,7 +6,7 @@ const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight
 
 export const metadata: Metadata = {
   title: "Entrevistadora IA · IA para Executivos",
-  description: "Entrevistadora de IA que conduz a primeira triagem de candidatos por voz e texto e entrega um scorecard para o gestor.",
+  description: "Entrevistadora de IA que conduz a primeira triagem de candidatos por voz e entrega um parecer técnico e cultural para o gestor.",
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };

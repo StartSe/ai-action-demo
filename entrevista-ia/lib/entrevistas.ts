@@ -438,3 +438,57 @@ export function contarEntrevistas(): number {
   const linha = banco().prepare("SELECT COUNT(*) AS total FROM entrevistas").get() as { total: number };
   return Number(linha.total);
 }
+
+/**
+ * A "fotografia" que o Início usa (US-022 da PRD): como o processo estava num instante.
+ *
+ * Três dos quatro números do topo são **fila**, não movimento: "quantas pessoas ainda não
+ * responderam" e "quantos pareceres ainda esperam a sua decisão" só querem dizer alguma coisa como
+ * estoque. Por isso a mesma consulta é feita duas vezes, uma para agora e outra para trinta dias
+ * atrás — a fila daquele dia é reconstruída a partir dos carimbos (`convidadaEm`, `iniciadaEm`,
+ * `concluidaEm`, `decisaoEm`), e não do status de hoje: contar o estado atual nas duas pontas faria
+ * a fila de um mês atrás parecer sempre vazia, e toda variação nasceria positiva.
+ *
+ * `concluidas` é o único que é movimento (o que aconteceu entre `desde` e `instante`) — uma conta
+ * acumulada de entrevistas concluídas só cresce e não diz nada.
+ */
+export type FotografiaEntrevistas = {
+  /** Convite entregue e conversa ainda não começada naquele instante. */
+  aguardando: number;
+  /** Conversa concluída e decisão ainda não tomada naquele instante. */
+  aDecidir: number;
+  /** Conversas concluídas entre `desde` e `instante`. */
+  concluidas: number;
+  /** Entrevistas que já existiam no instante — é o que separa "não mudou" de "não havia nada". */
+  total: number;
+};
+
+export function fotografia(instante: string, desde: string): FotografiaEntrevistas {
+  expirarVencidas();
+  const linha = banco()
+    .prepare(
+      `SELECT
+         COUNT(CASE WHEN convidadaEm IS NOT NULL AND convidadaEm <= ?
+                     AND (iniciadaEm IS NULL OR iniciadaEm > ?)
+                     AND (concluidaEm IS NULL OR concluidaEm > ?)
+                     AND (expiraEm IS NULL OR expiraEm > ?)
+                     AND status <> 'cancelada' THEN 1 END) AS aguardando,
+         COUNT(CASE WHEN concluidaEm IS NOT NULL AND concluidaEm <= ?
+                     AND (decisaoEm IS NULL OR decisaoEm > ?) THEN 1 END) AS aDecidir,
+         COUNT(CASE WHEN concluidaEm IS NOT NULL AND concluidaEm <= ? AND concluidaEm > ? THEN 1 END) AS concluidas,
+         COUNT(CASE WHEN criadoEm <= ? THEN 1 END) AS total
+       FROM entrevistas`,
+    )
+    .get(instante, instante, instante, instante, instante, instante, instante, desde, instante) as {
+    aguardando: number;
+    aDecidir: number;
+    concluidas: number;
+    total: number;
+  };
+  return {
+    aguardando: Number(linha.aguardando),
+    aDecidir: Number(linha.aDecidir),
+    concluidas: Number(linha.concluidas),
+    total: Number(linha.total),
+  };
+}

@@ -8,7 +8,7 @@ import { ligacaoEnabled } from "@/lib/voz";
 import type { Meta } from "@/lib/ai";
 import type { Parecer, Ranking, Scorecard, Troca, Vaga } from "@/lib/types";
 import { RankingSalvo } from "@/components/RankingSalvo";
-import { Resultado } from "../../page";
+import { Resultado } from "@/components/ConteudoScorecard";
 
 type EntradaEntrevista = { vaga: Vaga; historico: Troca[] };
 type EntradaRanking = { vagaTitulo: string };

@@ -568,3 +568,19 @@ export function normalizarVagaEstruturada(bruto: unknown, daEmpresa: ValorDaEmpr
     competenciasCulturais: competenciasSugeridas(dados.competenciasCulturais, daEmpresa),
   };
 }
+
+/**
+ * Quantas vagas já estavam abertas num instante — o primeiro número do Início (US-022 da PRD).
+ *
+ * O encerramento de uma vaga não tem carimbo próprio (só `status` e `atualizadoEm`), então uma vaga
+ * encerrada hoje não conta nem hoje nem na fotografia de trinta dias atrás. O erro é sempre para
+ * menos e some assim que a vaga some da tela — inventar uma data de encerramento a partir de
+ * `atualizadoEm` seria pior: qualquer edição de texto mudaria o número do mês passado.
+ */
+export function contarAbertasAte(instante: string): number {
+  semearDemonstracao();
+  const linha = banco()
+    .prepare("SELECT COUNT(*) AS total FROM vagas WHERE status = 'aberta' AND criadoEm <= ?")
+    .get(instante) as { total: number };
+  return Number(linha.total);
+}

@@ -7,7 +7,7 @@ import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
 import type { Parecer, Ranking, Scorecard, Troca, Vaga } from "@/lib/types";
 import { RankingSalvo } from "@/components/RankingSalvo";
-import { ConteudoScorecard } from "../../page";
+import { ConteudoScorecard } from "@/components/ConteudoScorecard";
 import { ImprimirAoCarregar } from "./ImprimirAoCarregar";
 
 type EntradaEntrevista = { vaga: Vaga; historico: Troca[] };
