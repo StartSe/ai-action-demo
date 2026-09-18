@@ -377,6 +377,24 @@
       "aposPublicar": "Abra o app e crie sua conta (nome, e-mail e senha). Não há IA para conectar: a planilha de exemplo já aparece pronta em Datasets e o treino roda dentro do próprio app.",
       "padrao": "proprio",
       "discoGuarda": "planilhas, modelos e a conta"
+    },
+    {
+      "id": "crm-que-se-preenche",
+      "nome": "CRM que Se Preenche",
+      "areas": [
+        "Comercial"
+      ],
+      "problema": "O vendedor odeia preencher CRM, e o funil vira ficção.",
+      "ia": "Escuta a reunião e propõe etapa, valor, concorrente e próximo passo, cada um com o trecho que sustenta — a pessoa revisa e confirma antes de aplicar.",
+      "integracoes": "IA (OpenRouter) para a análise da reunião. Opcional: transcrição de áudio (ElevenLabs ou OpenAI) para quem envia ou grava áudio em vez de colar o texto.",
+      "acento": "#11595f",
+      "porta": 3020,
+      "captura": "capturas/crm-que-se-preenche.png",
+      "capacidades": [
+        "artefato",
+        "mcp"
+      ],
+      "demo": null
     }
   ]
 }

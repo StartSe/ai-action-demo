@@ -219,5 +219,18 @@
       44
     ],
     "contrasteBranco": 5.46
+  },
+  "crm-que-se-preenche": {
+    "segmento": "Vendas",
+    "acento": "#11595f",
+    "acento2": "#116da7",
+    "soft": "#e7f7f9",
+    "ink": "#0a555c",
+    "hsl": [
+      185,
+      70,
+      22
+    ],
+    "contrasteBranco": 8.02
   }
 }
