@@ -661,3 +661,71 @@ export function sessoesComNotaDe(participanteId: string, limite = 200): SessaoCo
     .all(participanteId, limite) as (LinhaSessao & { saida: string | null })[];
   return linhas.map((l) => ({ ...linhaParaSessao(l), nota: l.saida ? notaDoResultado(l.saida) : null }));
 }
+
+/** O movimento de um período, para os indicadores do Início (US-027). */
+export type MovimentoDoPeriodo = {
+  /** Sessões que aconteceram no período (sem as que ficaram em preparação ou foram abandonadas). */
+  sessoes: number;
+  /** Pessoas diferentes que treinaram no período. */
+  vendedores: number;
+  /** Treinos diferentes que **rodaram** no período — não os que foram criados nele. */
+  simulacoes: number;
+  /** Média das conversas avaliadas do período; `null` enquanto não houver nenhuma. */
+  notaMedia: number | null;
+  avaliadas: number;
+};
+
+/**
+ * Tudo o que o Início mostra de um período, em duas consultas agregadas — uma para as contagens e uma
+ * para as notas. A tela pede este mesmo cálculo duas vezes (o período de agora e o anterior) para
+ * montar a variação, então ele não pode custar uma consulta por treino nem por pessoa.
+ *
+ * "Simulações" aqui são os treinos que **aconteceram** no período: o gestor pode ter dez links criados
+ * e três em uso, e é o número em uso que responde "o que está rodando esta semana". Criar um link não é
+ * um evento do time, é um evento dele.
+ *
+ * O intervalo é meio aberto (`>= desde` e `< ate`) para que dois períodos encostados não contem a mesma
+ * sessão duas vezes.
+ */
+export function movimentoEntre(desde: string, ate: string): MovimentoDoPeriodo {
+  marcarAbandonadas();
+  const d = banco();
+
+  const contagens = d
+    .prepare(
+      `SELECT COUNT(*) AS sessoes,
+              COUNT(DISTINCT participanteId) AS vendedores,
+              COUNT(DISTINCT simulacaoCodigo) AS simulacoes
+         FROM sessoes_treino
+        WHERE status NOT IN ('preparando', 'abandonada') AND criadoEm >= ? AND criadoEm < ?`,
+    )
+    .get(desde, ate) as { sessoes: number; vendedores: number; simulacoes: number };
+
+  const movimento: MovimentoDoPeriodo = { ...contagens, notaMedia: null, avaliadas: 0 };
+
+  // `resultados` (lib/historico.ts) pode não existir num banco recém-criado, e `prepare` sobre tabela
+  // inexistente lança na hora, não na execução: a conferência vem antes.
+  const comResultados = Boolean(d.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'resultados'").get());
+  if (!comResultados) return movimento;
+
+  const avaliadas = d
+    .prepare(
+      `SELECT r.saida AS saida
+         FROM sessoes_treino s
+         JOIN resultados r ON r.id = s.resultadoId
+        WHERE s.resultadoId IS NOT NULL AND s.status NOT IN ('preparando', 'abandonada')
+          AND s.criadoEm >= ? AND s.criadoEm < ?`,
+    )
+    .all(desde, ate) as { saida: string }[];
+
+  let soma = 0;
+  let total = 0;
+  for (const a of avaliadas) {
+    const nota = notaDoResultado(a.saida);
+    if (nota === null) continue;
+    soma += nota;
+    total += 1;
+  }
+  if (total === 0) return movimento;
+  return { ...movimento, notaMedia: Math.round((soma / total) * 10) / 10, avaliadas: total };
+}

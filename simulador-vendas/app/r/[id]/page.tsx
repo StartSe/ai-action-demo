@@ -4,7 +4,7 @@ import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
 import type { Analise, Conversa, DadosPainel, PainelEquipe } from "@/lib/types";
 import type { AvaliacaoSessao } from "@/lib/avaliacao";
-import { Resultado, ResultadoPainel, ResultadoSessao } from "../../page";
+import { Resultado, ResultadoPainel, ResultadoSessao } from "@/components/Resultado";
 
 export default async function Page({ params }: PageProps<"/r/[id]">) {
   const { id } = await params;

@@ -7,13 +7,13 @@
 // (`analisar_conversa`) e o formato do resultado são os mesmos de antes, e o Início agora manda para
 // cá — inclusive o atalho `/?exemplo=1` da suíte, que chega redirecionado com os parâmetros.
 //
-// O resultado é o `Resultado` exportado de `app/page.tsx`, o mesmo que `/r/<id>` e a sala mostram:
+// O resultado é o `Resultado` de `components/Resultado.tsx`, o mesmo que `/r/<id>` e a sala mostram:
 // uma tela que aparece em dois lugares é um componente, nunca duas cópias.
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Aviso, ErrorBox, Field, Loading, MaisDetalhes, Privacidade, Row, Stage, Topbar, data, lerErro, useScrollToResult, useStatus } from "@/components/ui";
-import { Resultado } from "@/app/page";
+import { Resultado } from "@/components/Resultado";
 import { CRITERIOS_PADRAO } from "@/lib/criterios";
 import type { CodigoErroIA, Meta } from "@/lib/ai";
 import type { Analise, Cenario, Conversa, DadosAnalise } from "@/lib/types";

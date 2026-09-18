@@ -1,88 +1,178 @@
 "use client";
-
+// O Início (US-027): o que está acontecendo e o que fazer a seguir.
+//
+// Esta tela não faz nada — ela só mostra e aponta. O gestor abre o app várias vezes por dia e o que ele
+// precisa é responder "o time está treinando?" em dois segundos e ter à mão o botão do que faz isso
+// acontecer. Por isso não há formulário nenhum aqui: o cadastro de produto mora em /produtos, a criação
+// de treino em /simulacoes/nova e a análise de uma conversa real em /equipe/analisar (US-026).
+//
+// Os números vêm todos de `GET /api/inicio`, que é cálculo puro sobre o que já está gravado
+// (`lib/inicio.ts`) — nenhuma chamada de IA nasce ao abrir o app.
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Aviso, Chip, CopyButton, DataTable, Destaque, Entregar, Hero, Item, Origem, Passos, ResultHead, Section, SeloIA, Stage, Topbar, data, lerErro, numero, useScrollToResult, useStatus, type PassoIndicador } from "@/components/ui";
-import { GraficoCriteriosFracos } from "@/components/GraficoCriteriosFracos";
-import { VendedoresPainel } from "@/components/VendedoresPainel";
-import type { Meta } from "@/lib/ai";
-import type { Analise, Conversa, PainelEquipe } from "@/lib/types";
-import type { AvaliacaoSessao, CriterioAvaliado } from "@/lib/avaliacao";
+import { Chip, Hero, Item, Topbar, numero, useStatus } from "@/components/ui";
+import { METODOLOGIAS } from "@/lib/metodologias";
+import type { Inicio } from "@/lib/inicio";
+import type { Dificuldade } from "@/lib/simulacoes";
 
-// Textos do hero (economia de texto: título ≤ 8 palavras, apoio ≤ 20, itens ≤ 5 de até 6 palavras — ver CLAUDE.md).
+// Economia de texto (ver CLAUDE.md): título com 8 palavras, apoio com 19 (teto de 20).
 const PROMESSA = {
   sobretitulo: "Vendas",
-  titulo: "Saiba como cada vendedor conduz a conversa",
-  apoio: "O time treina por voz com clientes simulados e você vê a nota, a evidência e o que melhorar.",
-  itens: [
-    "Nota geral da conversa",
-    "Nota e evidência por critério",
-    "Pontos fortes e o que melhorar",
-    "Momentos-chave da ligação",
-    "Painel com a evolução do time",
-  ],
+  titulo: "Treine seu time para qualquer cenário de venda",
+  apoio: "Cadastre o produto uma vez, crie o treino e mande um link só: o time inteiro pratica por voz.",
 };
 
-const PASSOS: PassoIndicador[] = [
-  { titulo: "Conversa", apoio: "Treino ou real" },
-  { titulo: "Análise", apoio: "Nota por critério" },
-  { titulo: "Evolução", apoio: "Painel da equipe" },
+/** Os seis passos do "Ver como funciona" — o que o gestor repete para o time quando manda o link. */
+const COMO_FUNCIONA: { titulo: string; apoio: string }[] = [
+  { titulo: "Cadastre o produto", apoio: "Cole a página, envie a apresentação ou escreva o que vocês vendem." },
+  { titulo: "Crie a simulação", apoio: "Escolha a metodologia, a dificuldade e os tipos de cliente." },
+  { titulo: "Mande um link só", apoio: "O mesmo endereço serve para o time inteiro, sem cadastro nenhum." },
+  { titulo: "Cada um treina por voz", apoio: "No navegador, com um cliente simulado diferente para cada pessoa." },
+  { titulo: "A conversa é avaliada", apoio: "Nota por critério, com o trecho da conversa que justifica cada uma." },
+  { titulo: "Você acompanha", apoio: "Por vendedor, por tipo de cliente e ao longo dos meses." },
 ];
 
-function IconeItem() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0 mt-0.5" aria-hidden="true">
-      <path d="M5 12.5 9.5 17 19 7" />
-    </svg>
-  );
+const DIFICULDADES: Record<Dificuldade, string> = { facil: "Fácil", realista: "Realista", dificil: "Difícil" };
+
+/** "3 sessões" / "1 sessão": plural resolvido aqui, não no meio do JSX. */
+function contagem(n: number, singular: string, plural: string) {
+  return `${n} ${n === 1 ? singular : plural}`;
 }
 
-/** Duas falas em balões com uma nota ao lado, no lugar de um glifo genérico. */
-function IlustracaoConversa() {
+/** Os seis passos, atrás do "Ver como funciona" do hero. Sem vídeo: é texto, e texto se lê no celular. */
+function ComoFunciona() {
   return (
-    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M6 12h30v16H18l-6 6v-6H6z" />
-      <path d="M12 18h18M12 23h11" />
-      <path d="M28 34h30v16H40l-6 6v-6h-6z" />
-      <path d="M34 40h18M34 45h11" />
-    </svg>
-  );
-}
-
-/** Prévia de "o que você vai receber", no lugar do resultado antes de o gestor pedir alguma coisa. */
-function Previa({ itens }: { itens: string[] }) {
-  return (
-    <div className="card p-7 max-md:p-5 h-full min-h-[420px] max-md:min-h-0 flex flex-col justify-center">
-      <div className="text-accent mb-4">
-        <IlustracaoConversa />
-      </div>
-      <h2 className="font-bold text-[15px] mb-4">O que você vai receber</h2>
-      <ul className="flex flex-col gap-3 mb-6">
-        {itens.map((it) => (
-          <li key={it} className="flex items-start gap-2.5 text-sm text-ink-2">
-            <IconeItem />
-            <span>{it}</span>
+    <details className="[&[open]]:basis-full min-w-0">
+      <summary className="btn-secundario !w-auto cursor-pointer list-none [&::-webkit-details-marker]:hidden">Ver como funciona</summary>
+      <ol className="mt-4 grid grid-cols-2 max-md:grid-cols-1 gap-x-6 gap-y-3 max-w-[560px]">
+        {COMO_FUNCIONA.map((p, i) => (
+          <li key={p.titulo} className="flex items-baseline gap-2">
+            <span className="font-extrabold text-[13px] text-accent shrink-0">{i + 1}</span>
+            <span className="text-[13px] text-ink-2">
+              <strong className="text-ink">{p.titulo}.</strong> {p.apoio}
+            </span>
           </li>
         ))}
-      </ul>
-      <Link href="/equipe/analisar?exemplo=1" className="btn-secundario !w-auto self-start">Ver a análise de exemplo</Link>
-    </div>
+      </ol>
+    </details>
+  );
+}
+
+/**
+ * Um dos quatro números do topo.
+ *
+ * A variação vem pronta do servidor como diferença absoluta (a mesma unidade do número), não como
+ * porcentagem: "+0,4" numa nota média diz o que aconteceu; "+6%" sobre uma nota não quer dizer nada.
+ */
+function Indicador({ rotulo, valor, decimais, variacao, dias }: { rotulo: string; valor: number | null; decimais: number; variacao: number | null; dias: number }) {
+  const cor = variacao === null || variacao === 0 ? "text-muted" : variacao > 0 ? "text-ok" : "text-danger";
+  return (
+    <Item>
+      <div className="text-[12.5px] font-semibold text-muted">{rotulo}</div>
+      <div className="text-[26px] leading-none font-extrabold tracking-[-0.02em] mt-1.5">{valor === null ? "—" : numero(valor, decimais)}</div>
+      <div className={`text-[12.5px] mt-1.5 ${cor}`}>
+        {variacao === null
+          ? "Sem base para comparar"
+          : `${variacao > 0 ? "+" : variacao < 0 ? "−" : ""}${numero(Math.abs(variacao), decimais)} vs. ${dias} dias anteriores`}
+      </div>
+    </Item>
+  );
+}
+
+/** Os três primeiros passos de quem está começando, marcados a partir do estado do banco. */
+function ComeceEm3Passos({ passos }: { passos: Inicio["passos"] }) {
+  return (
+    <section className="card p-5">
+      <h2 className="font-bold text-[15px] mb-1">Comece em 3 passos</h2>
+      <p className="text-[12.5px] text-muted mb-4">Do produto ao primeiro treino do time.</p>
+      <ol className="flex flex-col gap-3.5">
+        {passos.map((p, i) => (
+          <li key={p.titulo} className="flex items-start gap-3">
+            <span
+              aria-hidden="true"
+              className={`shrink-0 w-6 h-6 rounded-full grid place-items-center text-[12px] font-extrabold ${
+                p.concluido ? "bg-accent text-white" : "border border-line text-muted"
+              }`}
+            >
+              {p.concluido ? "✓" : i + 1}
+            </span>
+            <div className="min-w-0">
+              <div className="font-bold text-[13.5px]">
+                {p.titulo}
+                {p.concluido && <span className="sr-only"> (concluído)</span>}
+              </div>
+              <p className="text-[12.5px] text-muted mt-0.5">{p.apoio}</p>
+              <Link href={p.acao.url} className="btn-link text-[12.5px] mt-1 inline-block">{p.acao.rotulo}</Link>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/** Texto fixo que gira por semana; a rota já escolheu qual, para as duas colunas nunca discordarem. */
+function DicaDaSemana({ dica }: { dica: Inicio["dica"] }) {
+  return (
+    <section className="card p-5">
+      <h2 className="font-bold text-[15px] mb-1">Dica da semana</h2>
+      <div className="text-[13px] font-bold text-accent-ink mb-1.5">{dica.titulo}</div>
+      <p className="text-[13px] text-ink-2">{dica.texto}</p>
+    </section>
+  );
+}
+
+/** Até três treinos rodando agora, com o que cada um já rendeu. */
+function SimulacoesAtivas({ ativas, total }: { ativas: Inicio["ativas"]; total: number }) {
+  return (
+    <section>
+      <div className="flex items-baseline justify-between gap-3 mb-3">
+        <h2 className="section-title !mb-0">Simulações ativas</h2>
+        {total > ativas.length && <Link href="/simulacoes" className="btn-link text-[13px]">Ver todas</Link>}
+      </div>
+
+      {ativas.length === 0 ? (
+        <Item>
+          <p className="text-[13px] text-muted">
+            Nenhum treino ativo agora. <Link href="/simulacoes" className="btn-link">Reative um treino</Link> ou crie o próximo.
+          </p>
+        </Item>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {ativas.map((s) => (
+            <article key={s.codigo} className="card px-5 py-4">
+              <div className="flex items-start justify-between gap-3 mb-1.5 max-md:flex-col max-md:gap-1.5">
+                <div className="min-w-0">
+                  <h3 className="font-bold text-[16px] truncate">{s.nome}</h3>
+                  <p className="text-muted text-sm mt-0.5 truncate">{s.produtoNome}</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                  <Chip nivel="cinza">{METODOLOGIAS[s.metodologia].nome}</Chip>
+                  <Chip nivel="cinza">{DIFICULDADES[s.dificuldade]}</Chip>
+                </div>
+              </div>
+              <p className="text-[13px] text-muted mb-3">
+                {s.sessoes === 0
+                  ? "Ninguém treinou ainda"
+                  : `${contagem(s.participantes, "participante", "participantes")} · ${contagem(s.sessoes, "sessão", "sessões")} · ${
+                      s.notaMedia === null ? "sem nota ainda" : `nota média ${numero(s.notaMedia, 1)}`
+                    }`}
+              </p>
+              <Link href={`/resultados/${s.codigo}`} className="btn-link">Ver resultados</Link>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
 export default function Page() {
   const { status, erro } = useStatus();
   const router = useRouter();
-  const [criandoLinkTreino, setCriandoLinkTreino] = useState(false);
-  const [linkTreino, setLinkTreino] = useState<string | null>(null);
-  const [erroLinkTreino, setErroLinkTreino] = useState<string | null>(null);
-  const [gerandoPainel, setGerandoPainel] = useState(false);
-  const [erroPainel, setErroPainel] = useState<string | null>(null);
-  const [painel, setPainel] = useState<{ painel: PainelEquipe; meta: Meta; id: string; titulo: string } | null>(null);
+  const [inicio, setInicio] = useState<Inicio | null>(null);
   const redirecionado = useRef(false);
-
-  useScrollToResult(Boolean(painel));
 
   // O atalho `/?exemplo=1` da suíte (o botão "Testar com um exemplo" de /setup e a captura do
   // catálogo) continua valendo: desde a US-026 quem analisa uma conversa é /equipe/analisar, então o
@@ -97,568 +187,58 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma única vez ao abrir a página
   }, []);
 
-  /** Sessão expirada em qualquer chamada: volta para a tela de entrar e retorna para cá depois. */
-  function sessaoExpirou(r: Response, codigo?: string): boolean {
-    if (r.status === 401 && codigo === "sem_sessao") {
-      router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
-      return true;
-    }
-    return false;
-  }
+  // Busca inicial em forma de corrente: a regra react-hooks/set-state-in-effect acusa a chamada direta
+  // a uma função que mexe em estado no corpo do efeito, mesmo sendo assíncrona.
+  useEffect(() => {
+    fetch("/api/inicio")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c: Inicio | null) => setInicio(c))
+      .catch(() => setInicio(null));
+  }, []);
 
-  async function criarLinkTreino() {
-    setCriandoLinkTreino(true);
-    setErroLinkTreino(null);
-    try {
-      const r = await fetch("/api/salas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
-      if (!r.ok) {
-        const info = await lerErro(r);
-        if (sessaoExpirou(r, info.codigo)) return;
-        setErroLinkTreino(info.mensagem);
-        return;
-      }
-      const resposta = await r.json();
-      setLinkTreino(resposta.url);
-    } catch (e) {
-      setErroLinkTreino((await lerErro(e)).mensagem);
-    } finally {
-      setCriandoLinkTreino(false);
-    }
-  }
-
-  async function verPainelEquipe() {
-    setGerandoPainel(true);
-    setErroPainel(null);
-    try {
-      const r = await fetch("/api/painel-equipe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dias: 30 }) });
-      if (!r.ok) {
-        const info = await lerErro(r);
-        if (sessaoExpirou(r, info.codigo)) return;
-        setErroPainel(info.mensagem);
-        return;
-      }
-      const resposta = await r.json();
-      setPainel({ painel: resposta.painel, meta: resposta.meta, id: resposta.id, titulo: resposta.titulo });
-    } catch (e) {
-      setErroPainel((await lerErro(e)).mensagem);
-    } finally {
-      setGerandoPainel(false);
-    }
-  }
-
-  const comVoz = Boolean(status?.integrations?.["elevenlabs-agente"]);
+  const vazio = inicio?.vazio ?? true;
 
   return (
     <>
-      <Topbar marca="S" nome="Simulador de Vendas" area="Vendas" status={status} erro={erro} resumo="Modo demonstração: a conversa e a análise exibidas são um exemplo." usuario={status?.usuario} />
+      <Topbar marca="S" nome="Simulador de Vendas" area="Vendas" status={status} erro={erro} resumo="Modo demonstração: as conversas e as avaliações exibidas são um exemplo." usuario={status?.usuario} />
 
       <Hero sobretitulo={PROMESSA.sobretitulo} titulo={PROMESSA.titulo} apoio={PROMESSA.apoio} segmento="Vendas">
-        <Passos passos={PASSOS} atual={painel ? 3 : 1} />
+        <div className="flex gap-2.5 flex-wrap items-start">
+          <Link href="/simulacoes/nova" className="btn-primary !w-auto">+ Criar simulação</Link>
+          <ComoFunciona />
+        </div>
       </Hero>
 
-      <main className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">
-        <div>
-          <div className="card p-5 mb-3">
-            <h2 className="font-bold text-[15px] mb-3">Treinar e acompanhar</h2>
-            <div className="flex gap-2.5 flex-wrap mb-1.5">
-              <button type="button" className="btn-ghost" disabled={criandoLinkTreino} onClick={criarLinkTreino}>{criandoLinkTreino ? "Gerando..." : "Criar link de treino"}</button>
-              <button type="button" className="btn-ghost" disabled={gerandoPainel} onClick={verPainelEquipe}>{gerandoPainel ? "Montando..." : "Ver o painel da equipe"}</button>
-            </div>
-            <p className="text-[12.5px] text-muted">
-              {comVoz
-                ? "O vendedor abre o link e treina por voz com o cliente simulado."
-                : <>Hoje o treino é por voz do navegador. Conecte a ElevenLabs para a voz ficar mais natural. <Link href="/setup#elevenlabs-agente" className="btn-link">Conectar a ElevenLabs</Link></>}
-            </p>
-            {erroLinkTreino && <div className="mt-2.5"><Aviso tom="danger">{erroLinkTreino}</Aviso></div>}
-            {erroPainel && <div className="mt-2.5"><Aviso tom="danger">{erroPainel}</Aviso></div>}
-            {linkTreino && (
-              <div className="flex items-center gap-3 flex-wrap mt-3">
-                <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[220px]">{linkTreino}</code>
-                <CopyButton texto={() => linkTreino} rotulo="Copiar link" />
-              </div>
-            )}
-          </div>
+      <main className="grid grid-cols-[minmax(0,1fr)_320px] max-lg:grid-cols-1 gap-6 px-8 pt-6 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">
+        <div className="flex flex-col gap-6">
+          {inicio === null ? (
+            <p className="text-muted text-sm">Carregando...</p>
+          ) : (
+            <>
+              {!vazio && (
+                <section>
+                  <h2 className="section-title">Últimos {inicio.dias} dias</h2>
+                  <div className="grid grid-cols-4 max-md:grid-cols-2 gap-3 [&>*]:min-w-0">
+                    {inicio.indicadores.map((i) => (
+                      <Indicador key={i.id} rotulo={i.rotulo} valor={i.valor} decimais={i.decimais} variacao={i.variacao} dias={inicio.dias} />
+                    ))}
+                  </div>
+                </section>
+              )}
 
-          <div className="card p-5">
-            <h2 className="font-bold text-[15px] mb-2">Uma conversa que já aconteceu</h2>
-            <p className="text-[13px] text-muted mb-3.5">Cole ou envie a transcrição de uma conversa com um cliente de verdade e receba a mesma análise do treino.</p>
-            <div className="flex gap-2.5 flex-wrap">
-              <Link href="/equipe/analisar" className="btn-primary !w-auto">Analisar uma conversa real</Link>
-              <Link href="/equipe" className="btn-ghost">Ver a equipe</Link>
-            </div>
-          </div>
+              {/* Instalação em que ninguém treinou ainda: os três passos ocupam o lugar dos cartões —
+                  quatro zeros e uma lista vazia não diriam nada a quem ainda vai mandar o primeiro link.
+                  Eles são o estado vazio desta tela; um `Empty` acima deles diria a mesma coisa duas vezes. */}
+              {vazio ? <ComeceEm3Passos passos={inicio.passos} /> : <SimulacoesAtivas ativas={inicio.ativas} total={inicio.totalAtivas} />}
+            </>
+          )}
         </div>
 
-        <Stage>
-          {painel ? <ResultadoPainel painel={painel.painel} meta={painel.meta} id={painel.id} titulo={painel.titulo} /> : <Previa itens={PROMESSA.itens} />}
-        </Stage>
+        <aside className="flex flex-col gap-6">
+          {inicio !== null && !vazio && <ComeceEm3Passos passos={inicio.passos} />}
+          {inicio !== null && <DicaDaSemana dica={inicio.dica} />}
+        </aside>
       </main>
     </>
   );
-}
-
-function tomDestaque(nota: number): "ok" | "warn" | "danger" {
-  if (nota >= 7.5) return "ok";
-  if (nota >= 5) return "warn";
-  return "danger";
-}
-
-function tomChip(nota: number): "positivo" | "neutro" | "negativo" {
-  if (nota >= 7.5) return "positivo";
-  if (nota >= 5) return "neutro";
-  return "negativo";
-}
-
-function interpretacaoNota(nota: number): string {
-  if (nota >= 7.5) return "Conversa forte, boa referência para o time.";
-  if (nota >= 5) return "Conversa satisfatória, com pontos claros para evoluir.";
-  return "Conversa exige atenção antes da próxima ligação.";
-}
-
-function formatarSegundo(s?: number): string | null {
-  if (s === undefined || s === null || !Number.isFinite(s)) return null;
-  const min = Math.floor(s / 60);
-  const seg = Math.floor(s % 60);
-  return `${min}:${String(seg).padStart(2, "0")}`;
-}
-
-/**
- * `acoesDoGestor` liga as ações que só fazem sentido para quem administra o app (mandar a análise ao
- * vendedor, levar as notas ao CRM). A sala de treino (components/SalaSimulacao) renderiza este mesmo
- * componente para o vendedor, que não tem conta nem acesso a essas rotas, e troca o `demoTexto`: lá a
- * conversa exibida é a que o vendedor acabou de ter, só a avaliação é que é de exemplo.
- */
-export function Resultado({ conversa, analise, meta, id, titulo, acoesDoGestor = false, demoTexto = "Exemplo fixo: a conversa da renovação em risco, não a que você colou." }: { conversa: Conversa; analise: Analise; meta: Meta; id?: string; titulo: string; acoesDoGestor?: boolean; demoTexto?: string }) {
-  const [aviso, setAviso] = useState<{ tom: "ok" | "danger"; texto: string; acao?: { rotulo: string; url: string } } | null>(null);
-
-  async function acao(caminho: string) {
-    setAviso(null);
-    try {
-      const r = await fetch(caminho, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resultadoId: id }) });
-      if (!r.ok) {
-        const info = await lerErro(r);
-        setAviso({ tom: "danger", texto: info.mensagem, acao: info.acao });
-        return;
-      }
-      const resposta = (await r.json()) as { mensagem: string };
-      setAviso({ tom: "ok", texto: resposta.mensagem });
-    } catch (e) {
-      setAviso({ tom: "danger", texto: (await lerErro(e)).mensagem });
-    }
-  }
-
-  const extras = acoesDoGestor && id
-    ? [
-        { rotulo: "Enviar a análise ao vendedor", onClick: () => void acao("/api/enviar-analise") },
-        { rotulo: "Enviar as notas ao CRM", onClick: () => void acao("/api/crm") },
-      ]
-    : undefined;
-
-  return (
-    <article className="reveal">
-      <ResultHead titulo={titulo} subtitulo={`${conversa.transcricao.length} falas · ${data(conversa.criadoEm)}`}>
-        <Entregar id={id} titulo={titulo} texto={() => analiseParaTexto(analise)} extras={extras} />
-      </ResultHead>
-
-      <Origem meta={meta} demoTexto={demoTexto} />
-
-      {aviso && (
-        <div className="mb-4">
-          <Aviso tom={aviso.tom} acao={aviso.acao ? { rotulo: aviso.acao.rotulo, url: aviso.acao.url } : undefined}>{aviso.texto}</Aviso>
-        </div>
-      )}
-
-      <ConteudoAnalise conversa={conversa} analise={analise} />
-
-      <SeloIA demo={meta.demo} />
-    </article>
-  );
-}
-
-/** Corpo da análise (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
-export function ConteudoAnalise({ conversa, analise }: { conversa: Conversa; analise: Analise }) {
-  return (
-    <>
-      <Destaque valor={numero(analise.nota, 1)} rotulo="Nota geral" interpretacao={interpretacaoNota(analise.nota)} tom={tomDestaque(analise.nota)} />
-      <p className="summary">{analise.resumo}</p>
-
-      <Section titulo="Critérios de avaliação">
-        <DataTable
-          colunas={[
-            { chave: "nome", titulo: "Critério", papel: "titulo", largura: "24%", render: (l) => <strong>{l.nome}</strong> },
-            { chave: "nota", titulo: "Nota", papel: "chip", largura: "70px", render: (l) => <Chip nivel={tomChip(l.nota)}>{numero(l.nota, 1)}</Chip> },
-            { chave: "evidencia", titulo: "Evidência", papel: "resumo", render: (l) => l.evidencia },
-            { chave: "comoMelhorar", titulo: "Como melhorar", papel: "detalhe", render: (l) => l.comoMelhorar },
-          ]}
-          linhas={analise.criterios}
-        />
-      </Section>
-
-      <div className="grid grid-cols-2 max-md:grid-cols-1 gap-3.5 mb-8">
-        <Item>
-          <h3 className="font-bold mb-2">Pontos fortes</h3>
-          <ul className="text-sm text-muted flex flex-col gap-1.5">
-            {analise.pontosFortes.map((p, i) => <li key={i}>{p}</li>)}
-          </ul>
-        </Item>
-        <Item>
-          <h3 className="font-bold mb-2">O que melhorar</h3>
-          <ul className="text-sm text-muted flex flex-col gap-1.5">
-            {analise.oQueMelhorar.map((p, i) => <li key={i}>{p}</li>)}
-          </ul>
-        </Item>
-      </div>
-
-      <Section titulo="Momentos-chave">
-        <Item>
-          <ul className="flex flex-col gap-2">
-            {analise.momentos.map((m, i) => <li key={i}>{m}</li>)}
-          </ul>
-        </Item>
-      </Section>
-
-      <details className="group">
-        <summary className="text-[13px] font-bold text-accent-ink cursor-pointer marker:content-none flex items-center gap-1.5">
-          <span className="transition-transform group-open:rotate-90">›</span>
-          Ver a conversa completa
-        </summary>
-        <div className="mt-3 card shadow-none divide-y divide-line text-sm">
-          {conversa.transcricao.map((l, i) => {
-            const tempo = formatarSegundo(l.segundo);
-            return (
-              <div key={i} className="px-4 py-2.5">
-                <span className="font-bold">{l.papel === "vendedor" ? "Vendedor" : "Cliente"}</span>
-                {tempo && <span className="text-muted text-[12px]"> · {tempo}</span>}
-                <p className="mt-0.5">{l.texto}</p>
-              </div>
-            );
-          })}
-        </div>
-      </details>
-    </>
-  );
-}
-
-function analiseParaTexto(analise: Analise): string {
-  const l: string[] = [`Nota geral: ${numero(analise.nota, 1)}`, "", analise.resumo, "", "Critérios:"];
-  analise.criterios.forEach((c) => l.push(`- ${c.nome} (${numero(c.nota, 1)}): ${c.evidencia} | Como melhorar: ${c.comoMelhorar}`));
-  l.push("", "Pontos fortes:");
-  analise.pontosFortes.forEach((p) => l.push(`- ${p}`));
-  l.push("", "O que melhorar:");
-  analise.oQueMelhorar.forEach((p) => l.push(`- ${p}`));
-  l.push("", "Momentos-chave:");
-  analise.momentos.forEach((m) => l.push(`- ${m}`));
-  return l.join("\n");
-}
-
-// ---------------------------------------------------------------------------
-// A avaliação de uma sessão de treino (US-018)
-// ---------------------------------------------------------------------------
-
-const DIFICULDADES_ROTULO: Record<string, string> = { facil: "Cliente fácil", realista: "Cliente realista", dificil: "Cliente difícil" };
-
-/** A frase que traduz a nota, em vez de deixar o número sozinho. */
-export function leituraDaNota(nota: number): string {
-  if (nota >= 8.5) return "Conversa muito bem conduzida.";
-  if (nota >= 7) return "Bom desempenho, com pontos claros para evoluir.";
-  if (nota >= 5) return "Conversa razoável: dá para melhorar bastante na próxima.";
-  return "Esta conversa pede treino antes de falar com um cliente de verdade.";
-}
-
-/**
- * A avaliação de um treino: os quatro momentos, a régua inteira, o que foi bem e a principal
- * oportunidade. Reaproveitada pela tela do gestor (/r), pela impressão e pela sala do vendedor —
- * um treino avaliado é a mesma coisa nos três lugares, só a moldura em volta muda.
- */
-export function ConteudoSessao({ conversa, avaliacao, copiarFrase = false }: { conversa: Conversa; avaliacao: AvaliacaoSessao; copiarFrase?: boolean }) {
-  const c = avaliacao.contexto;
-  return (
-    <>
-      <Destaque valor={numero(avaliacao.notaGeral, 1)} rotulo="Nota geral" interpretacao={leituraDaNota(avaliacao.notaGeral)} tom={tomDestaque(avaliacao.notaGeral)} />
-      {avaliacao.resumo && <p className="summary">{avaliacao.resumo}</p>}
-
-      <p className="text-muted text-[13px] mb-6">
-        {[c.produto, c.metodologia, DIFICULDADES_ROTULO[c.dificuldade] ?? c.dificuldade, c.tipoDeCliente?.nome].filter(Boolean).join(" · ")}
-      </p>
-
-      {avaliacao.grupos.length > 0 && (
-        <Section titulo="Como foi cada momento da conversa">
-          <div className="grid grid-cols-4 max-md:grid-cols-2 gap-3 [&>*]:min-w-0">
-            {avaliacao.grupos.map((g) => (
-              <Item key={g.grupo}>
-                <div className={`text-[26px] leading-none font-extrabold tracking-[-0.02em] ${g.nota >= 7.5 ? "text-ok" : g.nota >= 5 ? "text-warn" : "text-danger"}`}>{numero(g.nota, 1)}</div>
-                <div className="text-[12.5px] font-semibold text-muted mt-1.5">{g.grupo}</div>
-              </Item>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {avaliacao.pontosFortes.length > 0 && (
-        <Section titulo="O que você fez bem">
-          <Item>
-            <ul className="text-sm flex flex-col gap-1.5">
-              {avaliacao.pontosFortes.map((ponto, i) => <li key={i}>{ponto}</li>)}
-            </ul>
-          </Item>
-        </Section>
-      )}
-
-      {avaliacao.oportunidade && (
-        <Section titulo="Principal oportunidade">
-          <Item>
-            <div className="text-[13px] font-bold text-accent-ink mb-2">{avaliacao.oportunidade.criterio}</div>
-            <p className="text-sm mb-2">{avaliacao.oportunidade.oQueAconteceu}</p>
-            <p className="text-sm mb-3">{avaliacao.oportunidade.oQueFazer}</p>
-            {avaliacao.oportunidade.fraseSugerida && (
-              <>
-                <div className="text-muted text-[12.5px] font-semibold uppercase tracking-[0.04em] mb-1">Experimente dizer</div>
-                <p className="text-sm italic">{`“${avaliacao.oportunidade.fraseSugerida}”`}</p>
-                {/* O botão de copiar existe na tela de quem treina (US-019): a frase é para levar para a
-                    próxima conversa, e no celular selecionar um texto em itálico é trabalhoso. Na tela do
-                    gestor e na impressão ele não aparece — lá a entrega inteira já tem "Copiar texto". */}
-                {copiarFrase && (
-                  <div className="mt-3">
-                    <CopyButton texto={() => avaliacao.oportunidade?.fraseSugerida ?? ""} rotulo="Copiar frase" />
-                  </div>
-                )}
-              </>
-            )}
-          </Item>
-        </Section>
-      )}
-
-      <Section titulo="Critérios de avaliação">
-        <DataTable
-          colunas={[
-            { chave: "nome", titulo: "Critério", papel: "titulo", largura: "22%", render: (l: CriterioAvaliado) => <strong>{l.nome}</strong> },
-            { chave: "nota", titulo: "Nota", papel: "chip", largura: "70px", render: (l: CriterioAvaliado) => <Chip nivel={tomChip(l.nota)}>{numero(l.nota, 1)}</Chip> },
-            {
-              chave: "evidencia",
-              titulo: "Na conversa",
-              papel: "resumo",
-              render: (l: CriterioAvaliado) => (l.semEvidencia ? <span className="text-muted">Sem trecho da conversa para citar aqui.</span> : l.evidencia),
-            },
-            { chave: "comoMelhorar", titulo: "Como melhorar", papel: "detalhe", render: (l: CriterioAvaliado) => l.comoMelhorar },
-          ]}
-          linhas={avaliacao.criterios}
-        />
-      </Section>
-
-      <details className="group">
-        <summary className="text-[13px] font-bold text-accent-ink cursor-pointer marker:content-none flex items-center gap-1.5">
-          <span className="transition-transform group-open:rotate-90">›</span>
-          Ver a conversa
-        </summary>
-        <div className="mt-3 card shadow-none divide-y divide-line text-sm">
-          {conversa.transcricao.map((l, i) => {
-            const tempo = formatarSegundo(l.segundo);
-            return (
-              <div key={i} className="px-4 py-2.5">
-                <span className="font-bold">{l.papel === "vendedor" ? "Vendedor" : "Cliente"}</span>
-                {tempo && <span className="text-muted text-[12px]"> · {tempo}</span>}
-                <p className="mt-0.5">{l.texto}</p>
-              </div>
-            );
-          })}
-        </div>
-      </details>
-    </>
-  );
-}
-
-function sessaoParaTexto(avaliacao: AvaliacaoSessao): string {
-  const l: string[] = [`Nota geral: ${numero(avaliacao.notaGeral, 1)}`, "", avaliacao.resumo, ""];
-  l.push(`Momentos: ${avaliacao.grupos.map((g) => `${g.grupo} ${numero(g.nota, 1)}`).join(" · ")}`, "", "Critérios:");
-  avaliacao.criterios.forEach((c) => l.push(`- ${c.nome} (${numero(c.nota, 1)}): ${c.evidencia || "sem trecho citado"} | Como melhorar: ${c.comoMelhorar}`));
-  l.push("", "O que foi bem:");
-  avaliacao.pontosFortes.forEach((p) => l.push(`- ${p}`));
-  if (avaliacao.oportunidade) {
-    l.push("", `Principal oportunidade — ${avaliacao.oportunidade.criterio}:`, avaliacao.oportunidade.oQueAconteceu, avaliacao.oportunidade.oQueFazer);
-    if (avaliacao.oportunidade.fraseSugerida) l.push(`Experimente dizer: "${avaliacao.oportunidade.fraseSugerida}"`);
-  }
-  return l.join("\n");
-}
-
-/**
- * A avaliação com cabeçalho, origem e selo — o molde de `Resultado`, aplicado ao treino.
- *
- * `entregar` sai desligado nas telas do **vendedor**: as ações de entrega levam a `/imprimir/<id>` e a
- * `/r/<id>`, que são rotas privadas (ver `proxy.ts`) e jogariam na tela de entrar quem abriu o app por
- * um link de treino, sem conta nenhuma. Quem tem conta é o gestor, e é na tela dele que elas aparecem.
- */
-export function ResultadoSessao({ conversa, avaliacao, meta, id, titulo, entregar = true, copiarFrase = false, demoTexto = "Exemplo fixo: as notas abaixo não são um julgamento desta conversa." }: { conversa: Conversa; avaliacao: AvaliacaoSessao; meta: Meta; id?: string; titulo: string; entregar?: boolean; copiarFrase?: boolean; demoTexto?: string }) {
-  return (
-    <article className="reveal">
-      <ResultHead titulo={titulo} subtitulo={`${conversa.transcricao.length} falas · ${data(conversa.criadoEm)}`}>
-        {entregar ? <Entregar id={id} titulo={titulo} texto={() => sessaoParaTexto(avaliacao)} /> : undefined}
-      </ResultHead>
-
-      <Origem meta={meta} demoTexto={demoTexto} />
-
-      <ConteudoSessao conversa={conversa} avaliacao={avaliacao} copiarFrase={copiarFrase} />
-
-      <SeloIA demo={meta.demo} />
-    </article>
-  );
-}
-
-function tomVariacaoPainel(variacao: number | null): "ok" | "warn" | "danger" | "neutro" {
-  if (variacao === null) return "neutro";
-  if (variacao > 0) return "ok";
-  if (variacao < 0) return "danger";
-  return "neutro";
-}
-
-function interpretacaoVariacaoPainel(variacao: number | null): string {
-  if (variacao === null) return "Sem conversas suficientes no período anterior para comparar.";
-  const sinal = variacao > 0 ? "+" : "";
-  return `${sinal}${numero(variacao, 1)} em relação aos 30 dias anteriores`;
-}
-
-export function ResultadoPainel({ painel, meta, id, titulo }: { painel: PainelEquipe; meta: Meta; id?: string; titulo: string }) {
-  return (
-    <article className="reveal">
-      <ResultHead titulo={titulo} subtitulo={`${painel.vendedores.length} vendedor${painel.vendedores.length === 1 ? "" : "es"} com conversas no período`}>
-        <Entregar id={id} titulo={titulo} texto={() => painelParaTexto(painel)} extras={[{ rotulo: "Baixar notas da equipe (CSV)", onClick: () => exportarNotasEquipeCSV(painel) }]} />
-      </ResultHead>
-
-      <Origem meta={meta} />
-
-      <ConteudoPainel painel={painel} />
-
-      <ReceberResumoEquipe />
-    </article>
-  );
-}
-
-type EstadoNotificacoes = { configurada: boolean; canal: "email" | "slack"; destino: string };
-type RotinaResumoEquipe = { id: string; tipo: string };
-
-/** Depois de ver o painel, oferece uma rotina semanal (toda sexta às 17h) com o resumo da equipe: conversas
- * da semana, nota média, quem mais evoluiu, quem não treinou e o critério mais fraco. Ao contrário da rotina
- * semanal do Radar de Sinais, não tem parâmetro nenhum (é sempre a mesma equipe), então só existe uma. */
-function ReceberResumoEquipe() {
-  const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
-  const [rotinaId, setRotinaId] = useState<string | null | undefined>(undefined);
-  const [criando, setCriando] = useState(false);
-  const [erroRotina, setErroRotina] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/setup")
-      .then((r) => r.json())
-      .then((d) => {
-        const integracao = (d.integracoes || []).find((i: { id: string }) => i.id === "notificacoes");
-        const campos: { chave: string; valorVisivel?: string }[] = integracao?.campos || [];
-        const canal = campos.find((c) => c.chave === "NOTIFICACOES_CANAL")?.valorVisivel === "slack" ? "slack" : "email";
-        const destino = campos.find((c) => c.chave === "NOTIFICACOES_DESTINO")?.valorVisivel || "";
-        setNotificacoes({ configurada: Boolean(integracao?.configurada), canal, destino });
-      })
-      .catch(() => setNotificacoes({ configurada: false, canal: "email", destino: "" }));
-    fetch("/api/rotinas")
-      .then((r) => r.json())
-      .then((d) => {
-        const existente = (d.itens || []).find((i: RotinaResumoEquipe) => i.tipo === "resumo-equipe");
-        setRotinaId(existente?.id ?? null);
-      })
-      .catch(() => setRotinaId(null));
-  }, []);
-
-  async function criar() {
-    if (!notificacoes?.configurada) return;
-    setCriando(true);
-    setErroRotina(null);
-    try {
-      const r = await fetch("/api/rotinas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tipo: "resumo-equipe", frequencia: "semanal", diaSemana: 5, hora: "17:00", canal: notificacoes.canal, destino: notificacoes.canal === "email" ? notificacoes.destino || undefined : undefined }),
-      });
-      if (!r.ok) {
-        setErroRotina((await lerErro(r)).mensagem);
-        return;
-      }
-      const d = await r.json();
-      setRotinaId(d.id);
-    } catch (e) {
-      setErroRotina((await lerErro(e)).mensagem);
-    } finally {
-      setCriando(false);
-    }
-  }
-
-  if (rotinaId === undefined || notificacoes === null) return null;
-
-  return (
-    <Item className="mt-4">
-      {rotinaId ? (
-        <p className="text-muted text-sm">Você já recebe o resumo da equipe toda sexta às 17h.</p>
-      ) : notificacoes.configurada ? (
-        <>
-          <button type="button" className="btn-ghost !w-auto" onClick={criar} disabled={criando}>
-            {criando ? "Criando..." : "Receber o resumo toda semana"}
-          </button>
-          {erroRotina && <div className="mt-2.5"><Aviso tom="danger">{erroRotina}</Aviso></div>}
-        </>
-      ) : (
-        <>
-          <a href="/setup#notificacoes" className="btn-ghost !w-auto">Receber o resumo toda semana</a>
-          <p className="text-[12.5px] text-muted mt-2">Precisa das Notificações configuradas para o resumo chegar até você.</p>
-        </>
-      )}
-    </Item>
-  );
-}
-
-/** Corpo do painel (sem cabeçalho nem Origem), reaproveitado pela página de impressão. */
-export function ConteudoPainel({ painel }: { painel: PainelEquipe }) {
-  const variacao = painel.notaMediaAnterior === null ? null : Math.round((painel.notaMedia - painel.notaMediaAnterior) * 10) / 10;
-  return (
-    <>
-      <Destaque
-        valor={numero(painel.notaMedia, 1)}
-        rotulo={`Nota média da equipe (últimos ${painel.dias} dias)`}
-        interpretacao={interpretacaoVariacaoPainel(variacao)}
-        tom={tomVariacaoPainel(variacao)}
-      />
-
-      <Section titulo="Vendedores">
-        <VendedoresPainel vendedores={painel.vendedores} />
-      </Section>
-
-      <Section titulo="Critérios mais fracos da equipe">
-        <Item>
-          <GraficoCriteriosFracos criterios={painel.criteriosFracos} />
-        </Item>
-      </Section>
-    </>
-  );
-}
-
-function painelParaTexto(painel: PainelEquipe): string {
-  const l: string[] = [`Painel da equipe — últimos ${painel.dias} dias`, `Nota média: ${numero(painel.notaMedia, 1)}`, ""];
-  l.push("Vendedores:");
-  painel.vendedores.forEach((v) => l.push(`- ${v.nome}: ${numero(v.notaMedia, 1)} (${v.conversas} conversa${v.conversas === 1 ? "" : "s"}, tendência ${v.tendencia}, critério mais fraco: ${v.criterioMaisFraco})`));
-  l.push("", "Critérios mais fracos da equipe:");
-  painel.criteriosFracos.forEach((c) => l.push(`- ${c.nome}: ${numero(c.notaMedia, 1)}`));
-  return l.join("\n");
-}
-
-function exportarNotasEquipeCSV(painel: PainelEquipe) {
-  const cabecalho = ["Vendedor", "Conversas", "Nota média", "Tendência", "Critério mais fraco", "Última conversa"];
-  const linhas = [cabecalho.join(";")];
-  painel.vendedores.forEach((v) => {
-    const campos = [v.nome, String(v.conversas), numero(v.notaMedia, 1), v.tendencia, v.criterioMaisFraco, v.ultimaConversa ? data(v.ultimaConversa) : ""];
-    linhas.push(campos.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"));
-  });
-  const csv = "﻿" + linhas.join("\r\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "notas-equipe.csv";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }

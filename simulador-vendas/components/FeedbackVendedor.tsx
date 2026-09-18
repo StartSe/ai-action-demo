@@ -16,7 +16,7 @@
 //    botão de treinar de novo — respeitando o limite de tentativas do gestor — e o caminho para as
 //    outras conversas dele.
 import type { ReactNode } from "react";
-import { ResultadoSessao } from "@/app/page";
+import { ResultadoSessao } from "@/components/Resultado";
 import type { AvaliacaoSessao } from "@/lib/avaliacao";
 import type { Meta } from "@/lib/ai";
 import type { Conversa } from "@/lib/types";

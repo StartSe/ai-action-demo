@@ -6,7 +6,7 @@ import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
 import type { Analise, Conversa, DadosPainel, PainelEquipe } from "@/lib/types";
 import type { AvaliacaoSessao } from "@/lib/avaliacao";
-import { ConteudoAnalise, ConteudoPainel, ConteudoSessao } from "../../page";
+import { ConteudoAnalise, ConteudoPainel, ConteudoSessao } from "@/components/Resultado";
 import { ImprimirAoCarregar } from "./ImprimirAoCarregar";
 
 function Moldura({ titulo, meta, children }: { titulo: string; meta: Meta; children: ReactNode }) {
