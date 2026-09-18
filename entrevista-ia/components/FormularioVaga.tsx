@@ -197,6 +197,69 @@ export function corpoDaVaga(dados: DadosVaga) {
   };
 }
 
+/** O que `POST /api/vagas/estruturar` devolve ao ler uma descrição colada (US-006): `null` em tudo
+ * que a descrição não disse. */
+export type VagaEstruturada = {
+  cargo: string | null;
+  area: string | null;
+  senioridade: string | null;
+  modelo: string | null;
+  local: string | null;
+  salarioMin: number | null;
+  salarioMax: number | null;
+  salarioACombinar: boolean;
+  desafios: string | null;
+  requisitos: string | null;
+  competenciasCulturais: { id: string; nome: string; descricao: string; origem: "empresa" | "vaga" }[];
+};
+
+/**
+ * As competências depois de uma sugestão: as da empresa passam a valer o que a descrição cobra, e o
+ * que só existe nesta vaga entra marcado.
+ *
+ * Sugestão vazia não desmarca nada: "a descrição não falava de cultura" não é o mesmo que "esta vaga
+ * não avalia cultura", e chegar ao formulário com tudo desmarcado faria a entrevista sair sem
+ * nenhuma pergunta de cultura sem ninguém ter escolhido isso.
+ */
+function comSugestoes(atuais: CompetenciaEscolhida[], sugeridas: VagaEstruturada["competenciasCulturais"]): CompetenciaEscolhida[] {
+  if (sugeridas.length === 0) return atuais;
+  const ids = new Set(sugeridas.map((c) => c.id));
+  const lista = atuais.map((c) => (c.origem === "empresa" ? { ...c, marcada: ids.has(c.id) } : c));
+  for (const sugerida of sugeridas) {
+    if (lista.length >= MAX_COMPETENCIAS) break;
+    if (lista.some((c) => c.id === sugerida.id)) continue;
+    lista.push({ ...sugerida, marcada: true });
+  }
+  return lista;
+}
+
+/**
+ * Escreve no formulário o que a IA leu da descrição colada.
+ *
+ * Campo que voltou `null` **mantém** o que estava na tela, em vez de apagá-lo: num formulário novo
+ * dá no mesmo (ele já estava vazio, e a AC pede que campo não inferido fique vazio), mas quem
+ * digitou o cargo antes de colar a descrição não perde o que digitou.
+ */
+export function aplicarVagaEstruturada(dados: DadosVaga, vaga: VagaEstruturada): DadosVaga {
+  const ou = (novo: string | null, atual: string) => novo ?? atual;
+  return {
+    ...dados,
+    cargo: ou(vaga.cargo, dados.cargo),
+    area: ou(vaga.area, dados.area),
+    senioridade: ou(vaga.senioridade, dados.senioridade),
+    modelo: ou(vaga.modelo, dados.modelo),
+    local: ou(vaga.local, dados.local),
+    salarioMin: vaga.salarioMin ? numero(vaga.salarioMin) : dados.salarioMin,
+    salarioMax: vaga.salarioMax ? numero(vaga.salarioMax) : dados.salarioMax,
+    // A descrição que anuncia uma faixa desliga "A combinar", e a que diz "a combinar" liga; a que
+    // não fala de salário deixa a escolha como estava.
+    salarioACombinar: vaga.salarioACombinar || (vaga.salarioMin === null && vaga.salarioMax === null && dados.salarioACombinar),
+    desafios: ou(vaga.desafios, dados.desafios),
+    requisitos: ou(vaga.requisitos, dados.requisitos),
+    competencias: comSugestoes(dados.competencias, vaga.competenciasCulturais),
+  };
+}
+
 /** A vaga que "Preencher com um exemplo" escreve: a mesma que a demonstração usa, para quem veio de lá reconhecer. */
 export const VAGA_DE_EXEMPLO = {
   cargo: "Analista de Customer Success",

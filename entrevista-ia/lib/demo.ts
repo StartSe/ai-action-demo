@@ -1,5 +1,6 @@
 // Respostas de exemplo usadas quando não há chave de IA configurada.
 import type { Cultura } from "./cultura";
+import type { ValorDaEmpresa, VagaEstruturada } from "./vagas";
 import type { AderenciaRequisito, CriterioCultural, CriterioTecnico, ItemConsistencia, Parecer, Recomendacao, Scorecard, SituacaoRequisito, Troca, Vaga } from "./types";
 
 export function esperar(ms = 900) {
@@ -309,4 +310,42 @@ export function parecerDemo(ctx: ContextoParecer): Parecer {
 /** Primeira letra em minúscula, para o requisito caber no meio de uma frase. */
 function minuscula(texto: string): string {
   return texto ? texto.charAt(0).toLowerCase() + texto.slice(1) : texto;
+}
+
+// ---------------------------------------------------------------------------------------------
+// A vaga lida de uma descrição colada (US-006)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * O que "Preencher a vaga" devolve enquanto não há chave de IA: a mesma vaga de Customer Success da
+ * demonstração e do "Preencher com um exemplo" da lista — quem já viu uma das duas reconhece esta.
+ *
+ * As competências sugeridas saem da cultura que está valendo (a da empresa, ou a de exemplo), porque
+ * é exatamente isso que a versão com IA faz: cruzar a descrição com o que a empresa valoriza. Ficam
+ * de fora as duas últimas, e entra uma própria da vaga — uma sugestão que marca tudo não mostraria
+ * que houve escolha nenhuma.
+ */
+export function vagaEstruturadaDemo(daEmpresa: ValorDaEmpresa[] = []): VagaEstruturada {
+  return {
+    cargo: "Analista de Customer Success",
+    area: "Customer Success",
+    senioridade: "pleno",
+    modelo: "hibrido",
+    local: "São Paulo (SP)",
+    salarioMin: 5500,
+    salarioMax: 7000,
+    salarioACombinar: false,
+    desafios:
+      "Assumir uma carteira de 40 contas de médio porte que hoje está sem dono fixo. Reduzir o cancelamento no primeiro ano, que fechou o último trimestre em 14%. Deixar registrado no sistema de atendimento o que hoje só existe na cabeça de quem atende.",
+    requisitos: [
+      "2 anos de experiência em atendimento B2B",
+      "Comunicação escrita clara e objetiva",
+      "Experiência com sistema de atendimento (HubSpot ou similar)",
+      "Disponibilidade para viagens ocasionais a clientes",
+    ].join("\n"),
+    competenciasCulturais: [
+      ...daEmpresa.slice(0, 2).map((v) => ({ id: v.id, nome: v.nome, descricao: v.descricao, origem: "empresa" as const })),
+      { id: "firmeza-em-conversa-dificil", nome: "Firmeza em conversa difícil", descricao: "Dar uma notícia ruim ao cliente na hora certa, sem rodeio e sem prometer o que não dá.", origem: "vaga" as const },
+    ],
+  };
 }

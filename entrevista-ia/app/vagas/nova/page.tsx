@@ -7,9 +7,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { DescricaoColada } from "@/components/DescricaoColada";
 import {
   FormularioVaga,
   VAGA_DE_EXEMPLO,
+  aplicarVagaEstruturada,
   corpoDaVaga,
   dadosVazios,
   type DadosVaga,
@@ -81,7 +83,9 @@ export default function Page() {
             rotuloSalvar="Abrir vaga"
             culturaDeExemplo={culturaDeExemplo}
             acaoCultura={ACAO_CULTURA}
-          />
+          >
+            <DescricaoColada onPreencher={(vaga) => setDados((atual) => (atual ? aplicarVagaEstruturada(atual, vaga) : atual))} />
+          </FormularioVaga>
         ) : (
           <p className="text-muted text-sm">Carregando...</p>
         )}

@@ -295,6 +295,18 @@ function encurtar(valor: string, limite: number): string {
   return valor.length > limite ? `${valor.slice(0, limite - 1).trimEnd()}…` : valor;
 }
 
+/** Id derivado do nome, sem acento: é o que faz "Cliente no centro" ser a MESMA competência vinda da
+ * tela, do assistente ou de uma descrição lida pela IA. Vazio quando não sobra nenhuma letra. */
+function chave(nome: string): string {
+  return nome
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+}
+
 /** Aceita o número (do assistente) e o texto com máscara de milhar (da tela). Vazio é "não informado". */
 function lerSalario(valor: unknown): number | null | "invalido" {
   if (valor === null || valor === undefined || valor === "") return null;
@@ -319,7 +331,7 @@ function lerCompetenciasDigitadas(bruto: unknown): CompetenciaCultural[] | { err
     if (descricao.length > LIMITE_DESCRICAO_COMPETENCIA) {
       return { erro: `A frase de "${nome}" pode ter até ${LIMITE_DESCRICAO_COMPETENCIA} caracteres. Deixe uma frase só.` };
     }
-    const id = texto(registro.id) || nome.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+    const id = texto(registro.id) || chave(nome);
     lista.push({ id: id || `competencia-${lista.length + 1}`, nome, descricao, origem: registro.origem === "vaga" ? "vaga" : "empresa" });
   }
   if (lista.length > MAX_COMPETENCIAS) {
@@ -407,5 +419,111 @@ export function validarVaga(bruto: unknown): ValidacaoVaga {
       duracaoMin: duracao ?? 15,
       perguntaPretensao: dados.perguntaPretensao !== false,
     },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// A vaga inferida de uma descrição colada (US-006)
+// ---------------------------------------------------------------------------------------------
+//
+// Aqui o excesso é CORTADO e o que falta vira `null`, nunca um erro: o outro lado desta função é um
+// modelo lendo um anúncio de vaga, e o resultado só preenche o formulário — quem salva (e passa por
+// `validarVaga`) é o gestor, depois de revisar. Um campo que a descrição não trazia tem de voltar
+// vazio: uma senioridade inventada é pior que uma senioridade em branco, porque ninguém revisa o que
+// parece certo.
+
+/** Tudo opcional: `null` é "não estava na descrição". */
+export type VagaEstruturada = {
+  cargo: string | null;
+  area: string | null;
+  senioridade: Senioridade | null;
+  modelo: ModeloTrabalho | null;
+  local: string | null;
+  salarioMin: number | null;
+  salarioMax: number | null;
+  salarioACombinar: boolean;
+  desafios: string | null;
+  requisitos: string | null;
+  competenciasCulturais: CompetenciaCultural[];
+};
+
+/** Só o que `normalizarVagaEstruturada` precisa saber sobre a cultura da empresa (lib/cultura.ts). */
+export type ValorDaEmpresa = { id: string; nome: string; descricao: string };
+
+function ouNulo(valor: string, limite: number): string | null {
+  return valor ? encurtar(valor, limite) : null;
+}
+
+/** Faixa vinda da IA: o que não é um número plausível volta vazio, em vez de virar erro na tela. */
+function salarioDaIA(valor: unknown): number | null {
+  if (valor === null || valor === undefined || valor === "") return null;
+  const bruto = typeof valor === "number" ? valor : Number(texto(valor).replace(/[^\d]/g, ""));
+  if (!Number.isFinite(bruto) || bruto <= 0 || bruto > SALARIO_TETO) return null;
+  return Math.round(bruto);
+}
+
+/** Lista que o modelo tanto manda como array quanto como um texto de várias linhas; marcador de lista some. */
+function linhasDaIA(valor: unknown, limite: number, separador = "\n"): string | null {
+  const itens = Array.isArray(valor) ? valor.map((v) => umaLinha(v)) : texto(valor).split("\n");
+  const junto = itens
+    .map((linha) => linha.trim().replace(/^[-•*]\s*/, ""))
+    .filter(Boolean)
+    .join(separador);
+  return ouNulo(junto, limite);
+}
+
+/**
+ * As competências sugeridas, cruzadas com a cultura da empresa: o que o modelo reconheceu como um
+ * valor da casa volta com o id, o nome e a frase DA EMPRESA (o texto da cultura é o que vale, não a
+ * paráfrase do modelo); o que só existe nesta descrição volta como competência da vaga.
+ */
+function competenciasSugeridas(bruto: unknown, daEmpresa: ValorDaEmpresa[]): CompetenciaCultural[] {
+  if (!Array.isArray(bruto)) return [];
+  const porId = new Map(daEmpresa.map((v) => [v.id, v]));
+  const porNome = new Map(daEmpresa.map((v) => [chave(v.nome), v]));
+  const lista: CompetenciaCultural[] = [];
+  for (const item of bruto) {
+    const registro = (item && typeof item === "object" ? item : { nome: item }) as Record<string, unknown>;
+    const nome = umaLinha(registro.nome);
+    const daCasa = porId.get(texto(registro.id)) ?? porNome.get(chave(nome));
+    const id = daCasa ? daCasa.id : chave(nome);
+    if (!id || lista.some((c) => c.id === id)) continue;
+    lista.push(
+      daCasa
+        ? { id: daCasa.id, nome: daCasa.nome, descricao: daCasa.descricao, origem: "empresa" }
+        : {
+            id,
+            nome: encurtar(nome, LIMITE_NOME_COMPETENCIA),
+            descricao: encurtar(umaLinha(registro.descricao), LIMITE_DESCRICAO_COMPETENCIA),
+            origem: "vaga",
+          },
+    );
+    if (lista.length === MAX_COMPETENCIAS) break;
+  }
+  return lista;
+}
+
+export function normalizarVagaEstruturada(bruto: unknown, daEmpresa: ValorDaEmpresa[] = []): VagaEstruturada {
+  const dados = (bruto ?? {}) as Record<string, unknown>;
+
+  const salarioACombinar = dados.salarioACombinar === true;
+  const min = salarioACombinar ? null : salarioDaIA(dados.salarioMin);
+  const max = salarioACombinar ? null : salarioDaIA(dados.salarioMax);
+  // Anúncio escrito ao contrário ("até R$ 7.000, a partir de R$ 5.500") faz o modelo trocar a ordem.
+  // Inverter aproveita os dois números que ele leu certo; descartar jogaria fora a faixa inteira.
+  const inverter = min !== null && max !== null && min > max;
+
+  return {
+    cargo: ouNulo(umaLinha(dados.cargo), LIMITE_CARGO),
+    area: ouNulo(umaLinha(dados.area), LIMITE_AREA),
+    senioridade: SENIORIDADES.includes(dados.senioridade as Senioridade) ? (dados.senioridade as Senioridade) : null,
+    modelo: MODELOS.includes(dados.modelo as ModeloTrabalho) ? (dados.modelo as ModeloTrabalho) : null,
+    local: ouNulo(umaLinha(dados.local), LIMITE_LOCAL),
+    salarioMin: inverter ? max : min,
+    salarioMax: inverter ? min : max,
+    salarioACombinar,
+    desafios: linhasDaIA(dados.desafios, LIMITE_DESAFIOS, " "),
+    requisitos: linhasDaIA(dados.requisitos, LIMITE_REQUISITOS),
+    competenciasCulturais: competenciasSugeridas(dados.competenciasCulturais, daEmpresa),
   };
 }
