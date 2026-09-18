@@ -4,11 +4,12 @@
 // mesmo padrão `history.pushState` + `popstate` já usado por components/Relatorios.tsx
 // (whatsapp-atendente) — nunca `useSearchParams`, que obrigaria a embrulhar a página num `Suspense`.
 // O passo 4 é o último do assistente: seu botão primário já diz o que a busca vai fazer
-// (ROTULO_ACAO_MODO) em vez de "Continuar", mas ainda não dispara nada de verdade — criar a
-// `Prospeccao` de fato (POST /api/prospeccoes) é a US-013, que ainda não existe.
+// (ROTULO_ACAO_MODO) em vez de "Continuar" e, desde a US-013, dispara `POST /api/prospeccoes` de
+// verdade e navega para `/prospeccoes/<id>` (a tela de execução) em vez de só mostrar um aviso.
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Aviso, Chip, Field, Topbar, useStatus } from "@/components/ui";
+import { useRouter } from "next/navigation";
+import { Aviso, Chip, Field, Topbar, lerErro, useStatus } from "@/components/ui";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 import { CriteriosProspeccaoForm, criteriosIniciais, type CriteriosBusca } from "@/components/CriteriosProspeccao";
 import { DESCRICAO_JORNADA, DESCRICAO_MODO, MODOS_POR_JORNADA, ROTULO_ACAO_MODO, ROTULO_JORNADA, ROTULO_MODO } from "@/lib/rotulos";
@@ -42,6 +43,7 @@ function lerPassoDoEndereco(): number {
 
 export function ProspeccaoNova() {
   const { status, erro } = useStatus();
+  const router = useRouter();
   const [passo, setPasso] = useState(1);
   const [produtos, setProdutos] = useState<ProdutoComICPs[] | null>(null);
   const [produtoId, setProdutoId] = useState<string | null>(null);
@@ -49,7 +51,8 @@ export function ProspeccaoNova() {
   const [jornada, setJornada] = useState<Jornada | null>(null);
   const [modo, setModo] = useState<ModoProspeccao | null>(null);
   const [criterios, setCriterios] = useState<CriteriosBusca | null>(null);
-  const [buscaIniciada, setBuscaIniciada] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [erroEnvio, setErroEnvio] = useState<string | null>(null);
   const chaveCriteriosRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -85,6 +88,34 @@ export function ProspeccaoNova() {
     params.set("passo", String(novoPasso));
     history.pushState(null, "", `${location.pathname}?${params}`);
     setPasso(novoPasso);
+  }
+
+  // Botão final do passo 4 (US-013): cria a prospecção de verdade e navega para a tela de execução.
+  // Erro (400/404) mostra o aviso inline sem navegar; nenhum estado local precisa ser limpo, porque a
+  // tela é trocada por completo ao navegar com sucesso.
+  async function iniciarBusca() {
+    if (!produtoId || !icpId || !modoEfetivo || !criterios || enviando) return;
+    setEnviando(true);
+    setErroEnvio(null);
+    try {
+      const r = await fetch("/api/prospeccoes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ produtoId, icpId, modo: modoEfetivo, criterios }),
+      });
+      if (!r.ok) {
+        const lido = await lerErro(r);
+        setErroEnvio(lido.mensagem);
+        setEnviando(false);
+        return;
+      }
+      const prospeccao: { id: string } = await r.json();
+      router.push(`/prospeccoes/${prospeccao.id}`);
+    } catch (e) {
+      const lido = await lerErro(e);
+      setErroEnvio(lido.mensagem);
+      setEnviando(false);
+    }
   }
 
   const produtoSelecionado = produtos?.find((p) => p.id === produtoId) ?? null;
@@ -138,7 +169,7 @@ export function ProspeccaoNova() {
           ) : (
             <div className="flex flex-col gap-4">
               <CriteriosProspeccaoForm modo={modoEfetivo} jornada={jornadaEfetiva ?? icpEfetivo.jornada} icp={icpEfetivo} valor={criterios} onChange={setCriterios} />
-              {buscaIniciada && <Aviso tom="ok">Em breve: a busca com estes critérios.</Aviso>}
+              {erroEnvio && <Aviso tom="danger">{erroEnvio}</Aviso>}
             </div>
           )
         ) : passo === 2 ? (
@@ -266,10 +297,10 @@ export function ProspeccaoNova() {
           <button
             type="button"
             className="btn-primary !w-auto max-md:!w-full"
-            disabled={!podeContinuar}
-            onClick={() => (passo < TOTAL_PASSOS ? irParaPasso(passo + 1) : setBuscaIniciada(true))}
+            disabled={!podeContinuar || enviando}
+            onClick={() => (passo < TOTAL_PASSOS ? irParaPasso(passo + 1) : iniciarBusca())}
           >
-            {passo < TOTAL_PASSOS ? "Continuar" : modoEfetivo ? ROTULO_ACAO_MODO[modoEfetivo] : "Continuar"}
+            {passo < TOTAL_PASSOS ? "Continuar" : enviando ? "Enviando…" : modoEfetivo ? ROTULO_ACAO_MODO[modoEfetivo] : "Continuar"}
           </button>
         </div>
       </main>

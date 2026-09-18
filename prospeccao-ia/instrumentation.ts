@@ -4,8 +4,9 @@ export async function register() {
     limparExpirados();
     const { limparExpirados: limparFormulariosExpirados } = await import("@/lib/formularios");
     limparFormulariosExpirados();
-    const { limparExpirados: limparWorkspaceExpirado } = await import("@/lib/workspace");
+    const { limparExpirados: limparWorkspaceExpirado, recuperarProspeccoesTravadas } = await import("@/lib/workspace");
     limparWorkspaceExpirado();
+    recuperarProspeccoesTravadas();
 
     await import("@/lib/rotinas-do-app");
     const { executarVencidas } = await import("@/lib/rotinas");

@@ -260,6 +260,23 @@ export function apagarProspeccao(id: string): void {
   banco().prepare("DELETE FROM prospeccoes WHERE id = ?").run(id);
 }
 
+/** Mensagem gravada em prospeccoes.erro por recuperarProspeccoesTravadas (US-013); reaproveitada pelo teste. */
+export const MENSAGEM_EXECUCAO_TRAVADA = "A execução não terminou a tempo (mais de 30 minutos). Tente repetir a busca.";
+
+/**
+ * Prospecções travadas em "executando" (processo reiniciado no meio do pipeline de lib/execucao-prospeccao.ts)
+ * viram "falhou" na inicialização, com o erro pronto para a tela mostrar o botão "Repetir" (US-013). Corte
+ * é o limite de BAIXO de uma janela (comparação exclusiva `<`, mesmo padrão de limparExpirados) — não é o
+ * gotcha do limite de CIMA (fim de período nunca `new Date()` direto): aqui `new Date(Date.now() -
+ * limiteMinutos*60000)` está correto.
+ */
+export function recuperarProspeccoesTravadas(limiteMinutos = 30): void {
+  const corte = new Date(Date.now() - limiteMinutos * 60 * 1000).toISOString();
+  banco()
+    .prepare("UPDATE prospeccoes SET estado = 'falhou', erro = ? WHERE estado = 'executando' AND criado_em < ?")
+    .run(MENSAGEM_EXECUCAO_TRAVADA, corte);
+}
+
 // --- Contas (empresas) --------------------------------------------------------------
 
 type LinhaConta = { id: string; prospeccao_id: string; nome: string; site: string | null; setor: string | null; porte: string | null; cidade: string | null; fit: string | null; evidencias: string; sinais: string; resumo: string; demo: number; criado_em: string; atualizado_em: string };
