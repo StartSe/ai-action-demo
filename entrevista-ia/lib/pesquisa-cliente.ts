@@ -105,9 +105,40 @@ export async function ferramentasDisponiveis(opcoes: { conexao?: ConexaoPesquisa
   const conexao = opcoes.conexao === undefined ? conexaoBrightData() : opcoes.conexao;
   if (!conexao) return [];
   if (!opcoes.forcar && cache && cache.chave === conexao.url && Date.now() - cache.em < CACHE_MS) return cache.ferramentas;
-  const ferramentas = (await listarFerramentas(mcp(conexao))).map((f) => f.nome);
+  let ferramentas: string[];
+  try {
+    ferramentas = (await listarFerramentas(mcp(conexao))).map((f) => f.nome);
+  } catch (err) {
+    throw await traduzir(conexao, err);
+  }
   cache = { chave: conexao.url, em: Date.now(), ferramentas };
   return ferramentas;
+}
+
+/**
+ * O nome de cada ferramenta que a coleta usa, **como esta conta a chama**.
+ *
+ * A Bright Data pode renomear uma ferramenta ou oferecer uma variante (`search_engine_batch`), e uma
+ * coleta que só conhece o nome literal morre calada no dia em que isso acontecer. Por isso o nome
+ * preferido vem primeiro e um padrão tolerante vem depois: quem manda é o que `tools/list` devolveu.
+ * `null` é "esta conta não tem isso" — quem chama decide se é o fim da pesquisa ou só uma parte dela.
+ */
+export function escolherFerramentas(disponiveis: string[]): { busca: string | null; markdown: string | null; linkedin: string | null } {
+  const achar = (preferida: string, combina: (nome: string) => boolean) =>
+    disponiveis.includes(preferida) ? preferida : (disponiveis.find(combina) ?? null);
+  return {
+    // `search_dataset` também casa com /search/, e ela é outra coisa: busca em conjunto de dados.
+    busca: achar(FERRAMENTAS.busca, (n) => /search|busca/i.test(n) && !/dataset|batch/i.test(n)),
+    markdown: achar(FERRAMENTAS.markdown, (n) => /markdown|scrape/i.test(n) && !/batch/i.test(n)),
+    linkedin: achar(FERRAMENTAS.linkedin, (n) => /linkedin/i.test(n) && /person|profile|perfil/i.test(n)),
+  };
+}
+
+/** Falha crua (do cliente MCP compartilhado, que não carrega o código HTTP) virada em `ErroPesquisa`. */
+async function traduzir(conexao: ConexaoPesquisa, err: unknown): Promise<ErroPesquisa> {
+  if (err instanceof ErroPesquisa) return err;
+  const { status, detalhe } = await sondar(conexao);
+  return interpretarFalhaPesquisa(status, detalhe || (err instanceof Error ? err.message : ""), conexao.token);
 }
 
 /** Esquece o cache de ferramentas (usado depois de salvar a configuração e nos testes). */
@@ -125,9 +156,11 @@ export async function chamarFerramenta(
   if (!conexao) {
     throw new ErroPesquisa("nao_conectada", "A pesquisa na web ainda não foi conectada.", 400, { acao: ACAO_PESQUISA });
   }
-  const chamada = chamar(mcp(conexao), nome, argumentos).catch((err) => {
+  const chamada = chamar(mcp(conexao), nome, argumentos).catch(async (err) => {
     console.error("Falha na pesquisa na web:", nome, semToken(err instanceof Error ? err.message : String(err), conexao.token));
-    throw new ErroPesquisa("pedido_recusado", "A pesquisa na web não respondeu como esperado. Tente de novo em um minuto.", 502, { acao: ACAO_PESQUISA });
+    // O motivo importa: token recusado e cota esgotada param a pesquisa inteira, uma página que não
+    // abriu só a deixa parcial. `traduzir` vai buscar o código de resposta que o cliente MCP perdeu.
+    throw await traduzir(conexao, err);
   });
   if (!opcoes.limiteMs) return chamada;
   let relogio: ReturnType<typeof setTimeout> | undefined;
@@ -138,6 +171,9 @@ export async function chamarFerramenta(
     return await Promise.race([chamada, prazo]);
   } finally {
     if (relogio) clearTimeout(relogio);
+    // A chamada que PERDEU a corrida continua correndo e pode falhar sozinha daqui a meio minuto.
+    // Sem este `catch` de cortesia, essa falha vira uma rejeição sem dono e derruba o processo.
+    chamada.catch(() => {});
   }
 }
 
@@ -189,9 +225,7 @@ export async function testarPesquisa(config: Record<string, string | undefined>)
   try {
     ferramentas = await ferramentasDisponiveis({ conexao, forcar: true });
   } catch (err) {
-    const { status, detalhe } = await sondar(conexao);
-    const bruto = detalhe || (err instanceof Error ? err.message : "");
-    return { ok: false, mensagem: interpretarFalhaPesquisa(status, bruto, conexao.token).message };
+    return { ok: false, mensagem: (await traduzir(conexao, err)).message };
   }
   const faltando = FERRAMENTAS_NECESSARIAS.filter((f) => !ferramentas.includes(f.nome));
   if (faltando.length) {
