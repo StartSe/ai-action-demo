@@ -1,10 +1,58 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 import { getConfig } from "./store";
 import { openrouter, type Integracao, type Opcao } from "./setup-comum";
+import { testarPesquisa, URL_MCP_PADRAO } from "./pesquisa-cliente";
 
 const OPENROUTER = openrouter({ beneficio: "Liga a IA que conduz a entrevista e escreve o scorecard" });
 
 const VOICE_ID_PADRAO = "EXAVITQu4vr4xnSDxMaL";
+
+// Pesquisa do candidato na web pelo servidor MCP remoto da Bright Data. O endereço e o modo avançado
+// ficam em Opções avançadas; como o serviço autentica pelo endereço, quem monta a conexão de verdade é
+// lib/pesquisa-cliente.ts — aqui só ficam os campos e o teste.
+const BRIGHTDATA: Integracao = {
+  id: "brightdata",
+  titulo: "Pesquisa de candidatos na web",
+  beneficio: "Encontra o perfil público do candidato para completar a ficha",
+  descricao:
+    "Procura o candidato na web pela Bright Data e usa o que é público (perfil profissional, portfólio, publicações, notícias) para completar a ficha. Opcional: sem ela, a ficha fica só com o que veio do currículo.",
+  notaConexao:
+    "Exige uma conta na Bright Data. Sem isso o app continua funcionando: a ficha do candidato fica só com o que veio do currículo.",
+  obrigatoria: false,
+  link: { url: "https://brightdata.com/cp/setting/users", rotulo: "Obter o token da Bright Data" },
+  campos: [
+    {
+      chave: "BRIGHTDATA_API_TOKEN",
+      rotulo: "Token da Bright Data",
+      tipo: "secret",
+      placeholder: "•••••••••••••••••",
+      ajuda: "Fica em Settings › API tokens, dentro da sua conta da Bright Data.",
+    },
+    {
+      chave: "BRIGHTDATA_MCP_URL",
+      rotulo: "Endereço do serviço de pesquisa",
+      tipo: "text",
+      opcional: true,
+      avancado: true,
+      padrao: URL_MCP_PADRAO,
+      ajuda: "Só mude se a Bright Data indicar outro endereço para a sua conta.",
+    },
+    {
+      chave: "BRIGHTDATA_MODO_PRO",
+      rotulo: "Modo avançado",
+      tipo: "select",
+      opcional: true,
+      avancado: true,
+      padrao: "0",
+      opcoes: [
+        { valor: "0", rotulo: "Desligado" },
+        { valor: "1", rotulo: "Ligado" },
+      ],
+      ajuda: "Ligue se a sua conta tiver as ferramentas de perfil do LinkedIn.",
+    },
+  ],
+  testar: testarPesquisa,
+};
 
 const ELEVENLABS_VOZ: Integracao = {
   id: "elevenlabs",
@@ -120,4 +168,4 @@ const ELEVENLABS_LIGACAO: Integracao = {
   },
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, ELEVENLABS_VOZ, ELEVENLABS_LIGACAO];
+export const INTEGRACOES: Integracao[] = [OPENROUTER, BRIGHTDATA, ELEVENLABS_VOZ, ELEVENLABS_LIGACAO];

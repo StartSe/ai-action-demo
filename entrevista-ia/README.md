@@ -12,6 +12,7 @@ Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com mod
 Abra `/setup` no navegador. Lá você conecta cada integração colando uma chave (ou, no caso da IA, com um clique em "Conectar com OpenRouter") e testa a conexão antes de usar:
 
 - **Inteligência artificial (OpenRouter)** — obrigatória para sair do modo demonstração. Gera as perguntas da entrevista e o scorecard final.
+- **Pesquisa de candidatos na web** (Bright Data) — opcional. Com o token salvo, o app procura o candidato na web e usa o que é público (perfil profissional, portfólio, publicações) para completar a ficha; sem ela, a ficha fica só com o que veio do currículo. Em "Opções avançadas" ficam o endereço do serviço e o modo avançado (necessário para as ferramentas de perfil do LinkedIn e de conjunto de dados).
 - **Voz da entrevistadora** (ElevenLabs) — opcional. Com a chave salva, escolha a voz em uma lista carregada da própria conta; sem ela, a voz é a do próprio navegador do candidato e a sala avisa isso na tela. Se a ElevenLabs recusar a chamada no meio da conversa (chave recusada, conta sem créditos, serviço fora do ar), a entrevista continua por texto e o aviso explica o motivo em uma frase — nunca com código de resposta nem texto do provedor.
 - **Ligação telefônica automática** (ElevenLabs + Twilio) — opcional. Exige a chave da ElevenLabs salva acima, um agente conversacional criado na conta e um número de telefone da Twilio ligado a ele; os dois são escolhidos em "Opções avançadas" do cartão. Com os dois selecionados, a seção "Ligar para o candidato" do scorecard passa a funcionar.
 
@@ -48,6 +49,9 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
+| `BRIGHTDATA_API_TOKEN` | Alternativa ao setup. Liga a pesquisa do candidato na web. Obtenha em [brightdata.com/cp/setting/users](https://brightdata.com/cp/setting/users). |
+| `BRIGHTDATA_MCP_URL` | Alternativa ao setup. Endereço do serviço de pesquisa da Bright Data. Padrão `https://mcp.brightdata.com/mcp`. |
+| `BRIGHTDATA_MODO_PRO` | Alternativa ao setup. `1` liga o modo avançado (ferramentas de perfil do LinkedIn e de conjunto de dados); padrão `0`. |
 | `ELEVENLABS_API_KEY` | Alternativa ao setup. Ativa a voz da entrevistadora. Obtenha em [elevenlabs.io/app/settings/api-keys](https://elevenlabs.io/app/settings/api-keys). |
 | `ELEVENLABS_VOICE_ID` | Alternativa ao setup. Voz usada no text-to-speech. Padrão `EXAVITQu4vr4xnSDxMaL`. |
 | `ELEVENLABS_AGENT_ID` | Alternativa ao setup. Id do agente conversacional usado na ligação telefônica. |
@@ -76,6 +80,7 @@ lib/setup-comum.ts                  tipos do setup e integração OpenRouter (co
 lib/integracoes.ts                  integrações que este app precisa (OpenRouter, voz e ligação da ElevenLabs)
 lib/ai.ts                           cliente OpenRouter (askText, askJSON)
 lib/voz.ts                          integração opcional com a ElevenLabs (voz, ligação e tradução das falhas)
+lib/pesquisa-cliente.ts             conexão com a pesquisa na web (Bright Data pelo protocolo MCP) e tradução das falhas
 lib/acoes.ts                        "o que fazer agora" de cada aviso, compartilhado entre tela e servidor
 lib/demo.ts                         perguntas roteirizadas e scorecard de exemplo do modo demonstração
 lib/types.ts                        tipos do domínio

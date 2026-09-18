@@ -7,3 +7,4 @@ export const ACAO_VOZ = { rotulo: "Conferir a voz em Configurações", url: "/se
 export const ACAO_LIGACAO = { rotulo: "Conferir a ligação em Configurações", url: "/setup#elevenlabs-ligacao" };
 export const ACAO_IA = { rotulo: "Conectar a IA", url: "/setup#openrouter" };
 export const ACAO_CULTURA = { rotulo: "Cadastrar a cultura da empresa", url: "/setup#cultura" };
+export const ACAO_PESQUISA = { rotulo: "Conectar a pesquisa na web em Configurações", url: "/setup#brightdata" };
