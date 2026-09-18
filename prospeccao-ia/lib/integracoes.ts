@@ -8,7 +8,7 @@ const OPENROUTER = openrouter({ beneficio: "Liga a IA que escreve a abordagem de
 export const APOLLO: Integracao = {
   id: "apollo",
   titulo: "Busca de leads",
-  descricao: "Traz contatos reais (nome, cargo, empresa e LinkedIn) da base da Apollo.io a partir do perfil de cliente ideal. Sem ela, o app mostra leads fictícios.",
+  descricao: "Fonte alternativa de contatos: traz nome, cargo, empresa e LinkedIn da base da Apollo.io a partir do perfil de cliente ideal. Sem ela, a pesquisa de mercado já encontra pessoas por fontes públicas.",
   beneficio: "Troca os leads de exemplo por contatos reais do seu mercado",
   obrigatoria: false,
   link: { url: "https://app.apollo.io/#/settings/integrations/api", rotulo: "Criar conta e obter a chave na Apollo" },
@@ -35,39 +35,55 @@ export const APOLLO: Integracao = {
   },
 };
 
-// A zona fica em "Opções avançadas" com o padrão já preenchido: o cartão principal pede só a chave.
+/** Testa uma zona da Bright Data com uma URL de exemplo, devolvendo um rótulo curto do resultado
+ * ("conectada", "recusou a chave", "não respondeu", "não funcionou com a zona “x”") — nunca lança,
+ * quem chama decide como combinar o resultado das duas zonas numa única mensagem. */
+async function testarZona(zona: string, url: string, chave: string): Promise<{ ok: boolean; detalhe: string }> {
+  let r: Response;
+  try {
+    r = await fetch("https://api.brightdata.com/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${chave}` },
+      body: JSON.stringify({ zone: zona, url, format: "raw" }),
+    });
+  } catch (err) {
+    console.error("Bright Data: falha de rede no teste de conexão", err);
+    return { ok: false, detalhe: "não respondeu" };
+  }
+  if (r.status === 401 || r.status === 403) return { ok: false, detalhe: "recusou a chave" };
+  if (!r.ok) {
+    console.error("Bright Data: teste de conexão recusado", r.status, zona);
+    return { ok: false, detalhe: `não funcionou com a zona “${zona}”` };
+  }
+  return { ok: true, detalhe: "conectada" };
+}
+
+// As zonas de busca e leitura ficam em "Opções avançadas" com o padrão já preenchido: o cartão
+// principal pede só a chave. BRIGHTDATA_ZONE (campo único de antes desta história) não aparece mais
+// aqui, mas continua funcionando como zona de leitura para quem já a configurou (lib/descoberta.ts).
 export const BRIGHTDATA: Integracao = {
   id: "brightdata",
-  titulo: "Enriquecimento com o site do lead",
-  descricao: "Lê o site da empresa do lead pela Bright Data para a abordagem citar algo concreto de lá. Opcional: sem ela, a abordagem usa só o sinal do lead.",
-  beneficio: "Deixa a abordagem mais específica, com algo do site da empresa",
+  titulo: "Pesquisa de mercado e sinais",
+  descricao: "Encontra empresas, pessoas e sinais públicos de verdade para a prospecção, pela Bright Data. Sem ela, os resultados são fictícios.",
+  beneficio: "Encontra empresas, pessoas e sinais públicos de verdade",
   obrigatoria: false,
   link: { url: "https://brightdata.com/cp/zones", rotulo: "Criar conta e gerar a chave na Bright Data" },
   campos: [
     { chave: "BRIGHTDATA_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "•••••••••••••••••", ajuda: "Fica no topo do painel da Bright Data, junto com a lista de zonas." },
-    { chave: "BRIGHTDATA_ZONE", rotulo: "Zona", tipo: "text", opcional: true, avancado: true, padrao: "web_unlocker1", ajuda: "Só mude se você criou a zona com outro nome no painel da Bright Data." },
+    { chave: "BRIGHTDATA_ZONE_BUSCA", rotulo: "Zona de busca", tipo: "text", opcional: true, avancado: true, padrao: "serp_api1", ajuda: "Só mude se você criou a zona de busca com outro nome no painel da Bright Data." },
+    { chave: "BRIGHTDATA_ZONE_LEITURA", rotulo: "Zona de leitura", tipo: "text", opcional: true, avancado: true, padrao: "web_unlocker1", ajuda: "Só mude se você criou a zona de leitura com outro nome no painel da Bright Data." },
   ],
   testar: async (config) => {
     const chave = config.BRIGHTDATA_API_KEY;
-    const zona = config.BRIGHTDATA_ZONE || "web_unlocker1";
     if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
-    let r: Response;
-    try {
-      r = await fetch("https://api.brightdata.com/request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${chave}` },
-        body: JSON.stringify({ zone: zona, url: "https://example.com", format: "raw" }),
-      });
-    } catch (err) {
-      console.error("Bright Data: falha de rede no teste de conexão", err);
-      return { ok: false, mensagem: "O enriquecimento não respondeu; tente de novo em um minuto." };
-    }
-    if (r.status === 401 || r.status === 403) return { ok: false, mensagem: "A chave foi recusada. Copie de novo no painel da Bright Data." };
-    if (!r.ok) {
-      console.error("Bright Data: teste de conexão recusado", r.status);
-      return { ok: false, mensagem: `A leitura de sites não funcionou com a zona “${zona}”. Confira o nome da zona em Opções avançadas.` };
-    }
-    return { ok: true, mensagem: "Conectado. A próxima abordagem pode citar o site do lead." };
+    const zonaBusca = config.BRIGHTDATA_ZONE_BUSCA || "serp_api1";
+    const zonaLeitura = config.BRIGHTDATA_ZONE_LEITURA || config.BRIGHTDATA_ZONE || "web_unlocker1";
+    const [busca, leitura] = await Promise.all([
+      testarZona(zonaBusca, "https://www.google.com/search?q=teste&brd_json=1", chave),
+      testarZona(zonaLeitura, "https://example.com", chave),
+    ]);
+    if (busca.ok && leitura.ok) return { ok: true, mensagem: "Conectado. A busca e a leitura de páginas estão funcionando." };
+    return { ok: false, mensagem: `Busca: ${busca.detalhe}. Leitura: ${leitura.detalhe}. Confira as zonas em Opções avançadas.` };
   },
 };
 

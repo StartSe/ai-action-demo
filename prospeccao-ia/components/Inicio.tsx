@@ -82,7 +82,7 @@ export function Inicio() {
 
   return (
     <>
-      <Topbar marca="P" nome="Prospecção com IA" area="Vendas" status={status} erro={erro} usuario={status?.usuario} navegacao={NAVEGACAO_PROSPECCAO} />
+      <Topbar marca="P" nome="Prospecção com IA" area="Vendas" status={status} erro={erro} resumo="Modo demonstração: leads, sinais e mensagens exibidos são exemplos." usuario={status?.usuario} navegacao={NAVEGACAO_PROSPECCAO} />
 
       <Hero
         sobretitulo="Vendas"
