@@ -94,6 +94,7 @@ function banco(): DatabaseSync {
     atualizado_em TEXT NOT NULL
   )`);
   try { d.exec(`ALTER TABLE leads ADD COLUMN demo INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
+  try { d.exec(`ALTER TABLE leads ADD COLUMN papel_manual INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
   d.exec(`CREATE INDEX IF NOT EXISTS idx_leads_prospeccao ON leads (prospeccao_id)`);
   d.exec(`CREATE INDEX IF NOT EXISTS idx_leads_conta ON leads (conta_id)`);
   d.exec(`CREATE TABLE IF NOT EXISTS abordagens (
@@ -334,13 +335,13 @@ export function apagarConta(id: string): void {
 type LinhaLead = {
   id: string; prospeccao_id: string; conta_id: string | null; nome: string; cargo: string | null; empresa: string | null; cidade: string | null;
   linkedin: string | null; fonte: string | null; papel: string; fit: string | null; evidencias: string; sinais: string; hipotese: string | null;
-  status: string; no_crm: number; demo: number; criado_em: string; atualizado_em: string;
+  status: string; no_crm: number; demo: number; papel_manual: number; criado_em: string; atualizado_em: string;
 };
 
 function linhaParaLead(l: LinhaLead): LeadProspeccao {
   return {
     id: l.id, prospeccaoId: l.prospeccao_id, contaId: l.conta_id, nome: l.nome, cargo: l.cargo, empresa: l.empresa, cidade: l.cidade,
-    linkedin: l.linkedin, fonte: l.fonte, papel: l.papel as LeadProspeccao["papel"], fit: l.fit as LeadProspeccao["fit"],
+    linkedin: l.linkedin, fonte: l.fonte, papel: l.papel as LeadProspeccao["papel"], papelManual: l.papel_manual === 1, fit: l.fit as LeadProspeccao["fit"],
     evidencias: JSON.parse(l.evidencias) as Evidencia[], sinais: JSON.parse(l.sinais) as SinalProspeccao[], hipotese: l.hipotese,
     status: l.status as LeadProspeccao["status"], noCRM: l.no_crm === 1, demo: l.demo === 1, criadoEm: l.criado_em, atualizadoEm: l.atualizado_em,
   };
@@ -350,11 +351,12 @@ export function criarLead(dados: NovoLeadProspeccao, em?: Date): LeadProspeccao 
   const id = gerarId();
   const agora = (em ?? new Date()).toISOString();
   const demo = dados.demo ?? false;
-  banco().prepare(`INSERT INTO leads (id, prospeccao_id, conta_id, nome, cargo, empresa, cidade, linkedin, fonte, papel, fit, evidencias, sinais, hipotese, status, no_crm, demo, criado_em, atualizado_em)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+  const papelManual = dados.papelManual ?? false;
+  banco().prepare(`INSERT INTO leads (id, prospeccao_id, conta_id, nome, cargo, empresa, cidade, linkedin, fonte, papel, fit, evidencias, sinais, hipotese, status, no_crm, demo, papel_manual, criado_em, atualizado_em)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, dados.prospeccaoId, dados.contaId, dados.nome, dados.cargo, dados.empresa, dados.cidade, dados.linkedin, dados.fonte, dados.papel, dados.fit,
-      JSON.stringify(dados.evidencias), JSON.stringify(dados.sinais), dados.hipotese, dados.status, dados.noCRM ? 1 : 0, demo ? 1 : 0, agora, agora);
-  return { id, criadoEm: agora, atualizadoEm: agora, ...dados, demo };
+      JSON.stringify(dados.evidencias), JSON.stringify(dados.sinais), dados.hipotese, dados.status, dados.noCRM ? 1 : 0, demo ? 1 : 0, papelManual ? 1 : 0, agora, agora);
+  return { id, criadoEm: agora, atualizadoEm: agora, ...dados, demo, papelManual };
 }
 
 export function listarLeads(prospeccaoId?: string): LeadProspeccao[] {
@@ -374,7 +376,9 @@ export function atualizarLead(id: string, dados: Partial<NovoLeadProspeccao>, em
     conta_id: dados.contaId, nome: dados.nome, cargo: dados.cargo, empresa: dados.empresa, cidade: dados.cidade, linkedin: dados.linkedin,
     fonte: dados.fonte, papel: dados.papel, fit: dados.fit, evidencias: dados.evidencias && JSON.stringify(dados.evidencias),
     sinais: dados.sinais && JSON.stringify(dados.sinais), hipotese: dados.hipotese, status: dados.status,
-    no_crm: dados.noCRM === undefined ? undefined : (dados.noCRM ? 1 : 0), atualizado_em: (em ?? new Date()).toISOString(),
+    no_crm: dados.noCRM === undefined ? undefined : (dados.noCRM ? 1 : 0),
+    papel_manual: dados.papelManual === undefined ? undefined : (dados.papelManual ? 1 : 0),
+    atualizado_em: (em ?? new Date()).toISOString(),
   });
   if (set) banco().prepare(`UPDATE leads SET ${set} WHERE id = ?`).run(...valores, id);
   return obterLead(id);

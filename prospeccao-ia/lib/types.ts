@@ -169,6 +169,10 @@ export interface LeadProspeccao {
   linkedin: string | null;
   fonte: string | null;
   papel: Papel;
+  /** true só quando o vendedor editou o papel à mão na "ficha" (US-026) — nunca marcado pelo pipeline,
+   * que só grava `papel` uma vez, na criação. É o que faz a explicação da inferência (motivoPapel) dar
+   * lugar a "definido manualmente" em vez de citar um cargo/persona que não bateu de verdade. */
+  papelManual: boolean;
   fit: Fit | null;
   evidencias: Evidencia[];
   sinais: SinalProspeccao[];
@@ -179,7 +183,7 @@ export interface LeadProspeccao {
   criadoEm: string;
   atualizadoEm: string;
 }
-export type NovoLeadProspeccao = Omit<LeadProspeccao, "id" | "criadoEm" | "atualizadoEm" | "demo"> & { demo?: boolean };
+export type NovoLeadProspeccao = Omit<LeadProspeccao, "id" | "criadoEm" | "atualizadoEm" | "demo" | "papelManual"> & { demo?: boolean; papelManual?: boolean };
 
 export interface EstrategiaAbordagem {
   objetivo: string;

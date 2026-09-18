@@ -9,21 +9,27 @@
 // ser extraído para um componente compartilhado.
 import { useState } from "react";
 import { Aviso, Chip, data } from "@/components/ui";
-import { sinalAntigo } from "@/lib/qualificacao";
+import { motivoPapel, sinalAntigo } from "@/lib/qualificacao";
 import { NIVEL_CHIP_EVIDENCIA, ROTULO_FIT, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA } from "@/lib/rotulos";
-import type { Conta, LeadProspeccao } from "@/lib/types";
+import type { Conta, LeadProspeccao, Papel } from "@/lib/types";
 
 const STATUS_JA_NA_PROSPECCAO = new Set(["selecionado", "qualificado", "abordado", "respondeu"]);
+
+// Todo valor de Papel, na ordem mostrada no editor da "ficha" (US-026) — "desconhecido" por último,
+// como "sem papel identificado" (ROTULO_PAPEL não tem rótulo para ele, só o editor precisa de um texto).
+const PAPEIS: Papel[] = ["decisor", "influenciador", "champion", "desconhecido"];
 
 export function ExploracaoEmpresa({
   conta,
   leads,
   prospeccaoId,
+  icpPersonas,
   onLeadsAtualizados,
 }: {
   conta: Conta;
   leads: LeadProspeccao[];
   prospeccaoId: string;
+  icpPersonas: string[];
   onLeadsAtualizados: (leads: LeadProspeccao[]) => void;
 }) {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
@@ -31,6 +37,25 @@ export function ExploracaoEmpresa({
   const [erro, setErro] = useState<string | null>(null);
   const [confirmadas, setConfirmadas] = useState(false);
   const [painelLeadId, setPainelLeadId] = useState<string | null>(null);
+  const [salvandoPapel, setSalvandoPapel] = useState(false);
+
+  /** Papel editado à mão (US-026, AC "editável pelo vendedor na ficha"): este painel lateral é a única
+   * "ficha" de um lead que já existe no app — antes da US-027 trazer `/leads/[id]`, é aqui que a edição
+   * mora; a US-027 é quem deve mover este controle para a tela nova, não duplicar. A escrita não é
+   * sobrescrita por uma nova execução da prospecção porque "Repetir" cria uma prospecção nova, e o
+   * dedup por produto (lib/execucao-prospeccao.ts:chaveLead) nunca recria este mesmo registro. */
+  async function alterarPapel(leadId: string, papel: Papel) {
+    setSalvandoPapel(true);
+    try {
+      const r = await fetch(`/api/leads/${leadId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ papel }) });
+      if (r.ok) {
+        const atualizado = (await r.json()) as LeadProspeccao;
+        onLeadsAtualizados(leads.map((l) => (l.id === leadId ? atualizado : l)));
+      }
+    } finally {
+      setSalvandoPapel(false);
+    }
+  }
 
   function alternarSelecao(id: string) {
     setSelecionados((prev) => {
@@ -116,6 +141,7 @@ export function ExploracaoEmpresa({
               {leads.map((lead) => {
                 const jaNaProspeccao = STATUS_JA_NA_PROSPECCAO.has(lead.status);
                 const rotuloPapel = ROTULO_PAPEL[lead.papel];
+                const motivo = lead.papelManual ? "Definido manualmente pelo vendedor." : motivoPapel(lead.papel, lead.cargo, icpPersonas);
                 return (
                   <div key={lead.id} className="flex items-start gap-2.5 border-b border-line pb-2.5 last:border-0 last:pb-0">
                     <input
@@ -129,7 +155,11 @@ export function ExploracaoEmpresa({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold text-[14px]">{lead.nome}</p>
-                        {rotuloPapel && <Chip nivel="neutral">{rotuloPapel}</Chip>}
+                        {rotuloPapel && (
+                          <span title={motivo ?? undefined}>
+                            <Chip nivel="neutral">{rotuloPapel}</Chip>
+                          </span>
+                        )}
                         {jaNaProspeccao && <Chip nivel="positivo">Na prospecção</Chip>}
                       </div>
                       <p className="text-[13px] text-muted">{lead.cargo || "Cargo não identificado"}</p>
@@ -183,6 +213,25 @@ export function ExploracaoEmpresa({
                   <path d="M5 5l14 14M19 5 5 19" />
                 </svg>
               </button>
+            </div>
+            <div>
+              <p className="font-semibold text-[13px] mb-1.5">Papel no processo de decisão</p>
+              <select
+                className="text-[13px] border border-line rounded-md px-2 py-1.5 w-full"
+                value={painelLead.papel}
+                disabled={salvandoPapel}
+                onChange={(e) => alterarPapel(painelLead.id, e.target.value as Papel)}
+                aria-label="Papel desta pessoa no processo de decisão"
+              >
+                {PAPEIS.map((p) => (
+                  <option key={p} value={p}>{ROTULO_PAPEL[p] ?? "Sem papel identificado"}</option>
+                ))}
+              </select>
+              <p className="text-[12px] text-muted mt-1">
+                {painelLead.papelManual
+                  ? "Definido manualmente pelo vendedor."
+                  : motivoPapel(painelLead.papel, painelLead.cargo, icpPersonas) ?? "Escolha o papel quando o cargo não deixar claro."}
+              </p>
             </div>
             <div>
               <p className="font-semibold text-[13px] mb-1.5">Critérios atendidos</p>

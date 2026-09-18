@@ -468,7 +468,7 @@ function pessoasChaveDemo(): { nome: string; cargo: string | null; linkedin: str
  * leitura institucional já qualificou a empresa; ler o perfil de cada pessoa também é orçamento que só a
  * US-019 trouxe, e só para o modo "pessoas"). Nasce com `status: "novo"` (não "pesquisado"): só vira parte
  * de fato da prospecção quando selecionada na tela (ver comentário de topo do arquivo). */
-async function buscarPessoasChaveUnica(prospeccaoId: string, conta: Conta, produtoId: string): Promise<void> {
+async function buscarPessoasChaveUnica(prospeccaoId: string, conta: Conta, produtoId: string, personas: string[]): Promise<void> {
   const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
   let candidatos: { nome: string; cargo: string | null; linkedin: string | null }[];
   let demo = conta.demo;
@@ -512,7 +512,7 @@ async function buscarPessoasChaveUnica(prospeccaoId: string, conta: Conta, produ
       prospeccaoId, contaId: conta.id, nome: candidato.nome, cargo: candidato.cargo, empresa: conta.nome, cidade: conta.cidade,
       linkedin: candidato.linkedin ?? null,
       fonte: demo ? null : viaApollo ? origemPessoa(conta.site ? dominioDe(conta.site) : null, conta.criadoEm, true) : "busca pública",
-      papel: inferirPapel(candidato.cargo),
+      papel: inferirPapel(candidato.cargo, personas),
       fit: conta.fit, evidencias: conta.evidencias, sinais: conta.sinais, hipotese: null,
       status: "novo", noCRM: false, demo,
     });
@@ -528,7 +528,7 @@ async function buscarPessoasChaveUnica(prospeccaoId: string, conta: Conta, produ
  * — "Explorar uma empresa" é uma busca manual e pontual, cujo `"novo"` exige seleção explícita antes de
  * contar como lead da prospecção; "oportunidades" não tem essa tela intermediária), e o "já visto"
  * (`jaVistos`) é compartilhado por TODAS as contas do laço, não reiniciado a cada uma. */
-async function buscarPessoasOportunidadesEmpresas(prospeccaoId: string, produtoId: string): Promise<void> {
+async function buscarPessoasOportunidadesEmpresas(prospeccaoId: string, produtoId: string, personas: string[]): Promise<void> {
   const contas = listarContas(prospeccaoId).slice(0, TETO_CONTAS_PESSOAS_OPORTUNIDADE);
   const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
 
@@ -557,7 +557,7 @@ async function buscarPessoasOportunidadesEmpresas(prospeccaoId: string, produtoI
       jaVistos.add(chave);
       criarLead({
         prospeccaoId, contaId: conta.id, nome: candidato.nome, cargo: candidato.cargo, empresa: conta.nome, cidade: conta.cidade,
-        linkedin: candidato.linkedin ?? null, fonte: demo ? null : "busca pública", papel: inferirPapel(candidato.cargo),
+        linkedin: candidato.linkedin ?? null, fonte: demo ? null : "busca pública", papel: inferirPapel(candidato.cargo, personas),
         fit: conta.fit, evidencias: conta.evidencias, sinais: conta.sinais, hipotese: null,
         status: "pesquisado", noCRM: false, demo,
       });
@@ -763,6 +763,7 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
   const empresaOuSegmento = textoCriterio(criterios, "segmento");
   const localizacao = textoCriterio(criterios, "localizacao");
   const sinaisAlvo = icp?.sinais ?? [];
+  const personas = icp?.personas ?? [];
   const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
   const contasCache = new Map<string, Conta>(listarContas(prospeccaoId).map((c) => [c.nome.trim().toLowerCase(), c]));
   let criados = 0;
@@ -816,7 +817,7 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
         prospeccaoId, contaId: conta.id, nome: lead.nome, cargo: lead.cargo || cargo || null, empresa: nomeEmpresa,
         cidade: lead.cidade || localizacao || null, linkedin: lead.linkedin || null,
         fonte: origemPessoa(conta.site ? dominioDe(conta.site) : null, conta.criadoEm, true),
-        papel: inferirPapel(lead.cargo || cargo || null), fit: conta.fit, evidencias: conta.evidencias, sinais: conta.sinais,
+        papel: inferirPapel(lead.cargo || cargo || null, personas), fit: conta.fit, evidencias: conta.evidencias, sinais: conta.sinais,
         hipotese: null, status: "pesquisado", noCRM: false, demo: false,
       });
       criados++;
@@ -847,7 +848,7 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
       prospeccaoId, contaId: conta.id, nome: candidato.nome, cargo: candidato.cargo, empresa: nomeEmpresa,
       cidade: localizacao || null, linkedin: candidato.linkedin ?? null,
       fonte: resultado.demo ? null : origemPessoa(candidato.linkedin ? dominioDe(candidato.linkedin) : null, resultado.consultadoEm, false),
-      papel: inferirPapel(candidato.cargo), fit: conta.fit, evidencias: conta.evidencias, sinais: conta.sinais,
+      papel: inferirPapel(candidato.cargo, personas), fit: conta.fit, evidencias: conta.evidencias, sinais: conta.sinais,
       hipotese: null, status: "pesquisado", noCRM: false, demo: resultado.demo,
     });
     criados++;
@@ -860,7 +861,7 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
 async function etapaEncontrarPessoas(prospeccaoId: string, modo: ModoProspeccao, jornada: Jornada, criterios: Record<string, unknown>, produtoId: string, icp: ICP | null): Promise<void> {
   if (modo === "empresa_unica") {
     const conta = listarContas(prospeccaoId)[0];
-    if (conta) await buscarPessoasChaveUnica(prospeccaoId, conta, produtoId);
+    if (conta) await buscarPessoasChaveUnica(prospeccaoId, conta, produtoId, icp?.personas ?? []);
     return;
   }
   if (modo === "pessoas") {
@@ -869,7 +870,7 @@ async function etapaEncontrarPessoas(prospeccaoId: string, modo: ModoProspeccao,
     return;
   }
   // modo === "oportunidades" (único caso restante)
-  if (jornada === "b2b") await buscarPessoasOportunidadesEmpresas(prospeccaoId, produtoId);
+  if (jornada === "b2b") await buscarPessoasOportunidadesEmpresas(prospeccaoId, produtoId, icp?.personas ?? []);
   else await buscarPessoasOportunidadesB2C(prospeccaoId, criterios, icp, produtoId);
 }
 

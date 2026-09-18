@@ -11,10 +11,25 @@ import { useRouter } from "next/navigation";
 import { Aviso, Chip, Topbar, data, useConfirmacao, useStatus, lerErro } from "@/components/ui";
 import { ExploracaoEmpresa } from "@/components/ExploracaoEmpresa";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
-import { sinalAntigo } from "@/lib/qualificacao";
+import { motivoPapel, sinalAntigo } from "@/lib/qualificacao";
 import { NIVEL_CHIP_EVIDENCIA, ROTULO_FIT, ROTULO_MODO, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
 import { ETAPAS_PROSPECCAO } from "@/lib/execucao-etapas";
 import type { Conta, Evidencia, Jornada, LeadProspeccao, Prospeccao, SinalProspeccao } from "@/lib/types";
+
+/** Chip de papel no processo de decisão (US-026): mostra o rótulo (ou nada, para "desconhecido") com o
+ * `title` explicando a inferência em uma frase (`lib/qualificacao.ts:motivoPapel`) — `Chip` (INFRA) não
+ * aceita `title`, por isso o `<span>` embrulhando. Só leitura aqui: a EDIÇÃO mora na "ficha" (o painel
+ * lateral de `ExploracaoEmpresa.tsx`, único lugar com esse detalhe antes da US-027 trazer `/leads/[id]`). */
+function ChipPapel({ lead, personas }: { lead: LeadProspeccao; personas: string[] }) {
+  const rotulo = ROTULO_PAPEL[lead.papel];
+  if (!rotulo) return null;
+  const motivo = lead.papelManual ? "Definido manualmente pelo vendedor." : motivoPapel(lead.papel, lead.cargo, personas);
+  return (
+    <span title={motivo ?? undefined}>
+      <Chip nivel="neutral">{rotulo}</Chip>
+    </span>
+  );
+}
 
 /** Chip de um sinal de intenção (US-020): descrição + data, em cinza e com "· Antigo" quando passou dos
  * 90 dias (lib/qualificacao.ts:sinalAntigo) — sinal sem essa marca é recente e continua em verde
@@ -73,6 +88,7 @@ type Andamento = {
   produtoNome: string;
   icpNome: string;
   jornada: Jornada;
+  icpPersonas: string[];
   contas: Conta[];
   leads: LeadProspeccao[];
   contasEncontradas: number;
@@ -402,14 +418,13 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                       <Aviso tom="warn">Nenhuma pessoa encontrada com esses critérios.</Aviso>
                     ) : (
                       andamento.leads.map((lead) => {
-                        const rotuloPapel = ROTULO_PAPEL[lead.papel];
                         return (
                           <div key={lead.id} className="card p-4 flex flex-col gap-1.5">
                             <div className="flex items-start justify-between gap-3 flex-wrap">
                               <div>
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <p className="font-semibold text-[14px]">{lead.nome}</p>
-                                  {rotuloPapel && <Chip nivel="neutral">{rotuloPapel}</Chip>}
+                                  <ChipPapel lead={lead} personas={andamento.icpPersonas} />
                                 </div>
                                 <p className="text-[13px] text-muted">
                                   {[lead.cargo, lead.empresa, lead.cidade].filter(Boolean).join(" · ") || "Dados não identificados"}
@@ -442,6 +457,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                       conta={andamento.contas[0]}
                       leads={andamento.leads}
                       prospeccaoId={prospeccaoId}
+                      icpPersonas={andamento.icpPersonas}
                       onLeadsAtualizados={(leads) => setAndamento((a) => (a ? { ...a, leads } : a))}
                     />
                   )
@@ -474,7 +490,10 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                           <div key={lead.id} className="card p-4 flex flex-col gap-2">
                             <div className="flex items-start justify-between gap-3 flex-wrap">
                               <div>
-                                <p className="font-semibold text-[14px]">{lead.nome}</p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="font-semibold text-[14px]">{lead.nome}</p>
+                                  <ChipPapel lead={lead} personas={andamento.icpPersonas} />
+                                </div>
                                 <p className="text-[13px] text-muted">
                                   {[lead.cargo, lead.empresa, lead.cidade].filter(Boolean).join(" · ") || "Dados não identificados"}
                                 </p>

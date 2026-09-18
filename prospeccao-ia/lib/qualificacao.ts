@@ -130,13 +130,36 @@ export function dominioDe(url: string): string | null {
 const PALAVRAS_DECISOR = /diretor|presidente|\bceo\b|\bcoo\b|\bcto\b|vice-presidente|\bvp\b|s[oó]cio|fundador/i;
 const PALAVRAS_INFLUENCIADOR = /gerente|coordenador|\bhead\b|supervisor/i;
 
-/** Papel de uma pessoa no processo de decisão, a partir só do cargo (US-018, modo "Explorar uma
- * empresa"): heurística por palavra-chave, primeira implementação. "Champion" não é inferido daqui —
- * exige um sinal de proximidade com o produto que o cargo sozinho não dá. Derivação completa cruzando
- * as personas do ICP, e a edição manual preservada entre execuções, são da US-026 (ainda não existe). */
-export function inferirPapel(cargo: string | null): Papel {
+/** Persona do ICP que casa com o cargo — nas duas direções, porque tanto o cargo pode ser a versão mais
+ * específica de uma persona genérica ("Gerente de Manutenção Industrial" contém a persona "Gerente de
+ * Manutenção") quanto o contrário, comum em cargo curto extraído de busca ("Analista" dentro da persona
+ * "Analista de Manutenção"). Mesma comparação de termo usada para critério/sinal (`contemTermo`).
+ * Devolve a persona encontrada (para citar na explicação) ou `null`. */
+function personaDoCargo(cargo: string, personas: string[]): string | null {
+  return personas.find((p) => p.trim() && (contemTermo(cargo, p) || contemTermo(p, cargo))) ?? null;
+}
+
+/** Papel de uma pessoa no processo de decisão (US-018: heurística só por palavra-chave no cargo; US-026:
+ * cruza também as personas do ICP). Palavra de decisor/influenciador no cargo tem prioridade; sem
+ * nenhuma delas, um cargo que corresponde a uma persona do perfil (o comprador que o ICP já descreveu)
+ * vira "champion" — o sinal de proximidade com o produto que o cargo sozinho não dava antes da US-026. */
+export function inferirPapel(cargo: string | null, personas: string[] = []): Papel {
   if (!cargo) return "desconhecido";
   if (PALAVRAS_DECISOR.test(cargo)) return "decisor";
   if (PALAVRAS_INFLUENCIADOR.test(cargo)) return "influenciador";
+  if (personaDoCargo(cargo, personas)) return "champion";
   return "desconhecido";
+}
+
+/** Explicação em uma frase do porquê do papel inferido (US-026, AC "o `title` explica a inferência em
+ * uma frase") — citando o próprio cargo ou a persona do ICP que casou com ele. `null` para
+ * "desconhecido" (nenhum chip aparece, então não há o que explicar). */
+export function motivoPapel(papel: Papel, cargo: string | null, personas: string[] = []): string | null {
+  if (papel === "decisor") return `Cargo com palavra de liderança/decisão: "${cargo}".`;
+  if (papel === "influenciador") return `Cargo com palavra de gestão/influência: "${cargo}".`;
+  if (papel === "champion") {
+    const persona = cargo ? personaDoCargo(cargo, personas) : null;
+    return persona ? `Cargo corresponde à persona "${persona}" do perfil ideal.` : `Cargo corresponde a uma persona do perfil ideal.`;
+  }
+  return null;
 }
