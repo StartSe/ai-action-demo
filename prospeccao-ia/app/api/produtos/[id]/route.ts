@@ -1,12 +1,12 @@
-import { apagarProduto, atualizarProduto, obterProduto } from "@/lib/workspace";
+import { apagarProduto, atualizarProduto, listarICPs, obterProduto } from "@/lib/workspace";
 import type { NovoProduto } from "@/lib/types";
 
-/** Produto para pré-preencher o formulário de edição (US-005); sem filtro de apagado_em (ver lib/workspace.ts). */
+/** Produto para pré-preencher o formulário de edição (US-005), com os ICPs vinculados embutidos (US-006, mesmo padrão de GET /api/produtos); sem filtro de apagado_em (ver lib/workspace.ts). */
 export async function GET(_req: Request, { params }: RouteContext<"/api/produtos/[id]">) {
   const { id } = await params;
   const produto = obterProduto(id);
   if (!produto) return Response.json({ error: "Produto não encontrado." }, { status: 404 });
-  return Response.json(produto);
+  return Response.json({ ...produto, icps: listarICPs(id) });
 }
 
 /** Atualiza um produto (US-005); mesma validação da criação. Devolve o registro inteiro já atualizado. */
