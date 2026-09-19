@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { aiEnabled, askText, modelName, interpretarFalha } from "./ai";
+import { chatGPT } from "./chatgpt";
 import { getConfig } from "./store";
 import { conexaoAutorizada } from "./mcp-oauth";
 import {
@@ -54,87 +54,54 @@ async function callTool(name: string, args: unknown) {
   const r = await mcp("tools/call", { name, arguments: args });
   return JSON.stringify(r).slice(0, 30000);
 }
-async function agent(n: Block, r: Run) {
+async function agent(n: Block, r: Run, signal: AbortSignal) {
   const c = n.data.config;
-  const allowed = (c.tools || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (!allowed.length)
-    return askText({
-      system: interpolate(c.system, r),
-      prompt: interpolate(c.prompt, r),
-      model: c.model || undefined,
-      maxTokens: 2000,
-    });
-  const tools = (await availableTools()).filter((t) =>
-    allowed.includes(t.name),
-  );
+  const allowed =
+    n.data.kind === "agent"
+      ? (c.tools || "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+  const tools = allowed.length
+    ? (await availableTools()).filter((t) => allowed.includes(t.name))
+    : [];
   if (tools.length !== new Set(allowed).size)
     throw new FlowError(
       "Uma ferramenta autorizada não está disponível. Confira os nomes.",
     );
-  const messages: Record<string, unknown>[] = [
-    { role: "system", content: interpolate(c.system, r) },
-    { role: "user", content: interpolate(c.prompt, r) },
-  ];
-  for (let round = 0; round < 6; round++) {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${getConfig("OPENROUTER_API_KEY")}`,
-        "Content-Type": "application/json",
+  return chatGPT().run({
+    system: interpolate(c.system, r),
+    prompt: interpolate(c.prompt, r),
+    model: c.model || undefined,
+    signal,
+    onText: (text) => {
+      if (getRun(r.id).status === "running") {
+        r.output = text.slice(0, 50000);
+        putRun(r);
+      }
+    },
+    tools: tools.map((t) => ({
+      name: t.name,
+      description: t.description || t.name,
+      schema: t.inputSchema || { type: "object", properties: {} },
+      call: async (args) => {
+        if (signal.aborted) throw new FlowError("Execução cancelada.");
+        const output = await callTool(t.name, args);
+        r.trace.push({
+          nodeId: n.id,
+          label: "Ferramenta: " + t.name,
+          output,
+          at: new Date().toISOString(),
+          ms: 0,
+        });
+        if (getRun(r.id).status === "running") putRun(r);
+        return output;
       },
-      body: JSON.stringify({
-        model: c.model || modelName(),
-        messages,
-        max_tokens: 2000,
-        tools: tools.map((t) => ({
-          type: "function",
-          function: {
-            name: t.name,
-            description: t.description,
-            parameters: t.inputSchema || { type: "object", properties: {} },
-          },
-        })),
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
-    if (!res.ok) throw interpretarFalha(res, await res.text());
-    const msg = (await res.json()).choices?.[0]?.message;
-    if (!msg) throw new FlowError("A IA não devolveu uma resposta.");
-    messages.push(msg);
-    if (!msg.tool_calls?.length) {
-      if (typeof msg.content !== "string")
-        throw new FlowError("A IA devolveu uma resposta vazia.");
-      return msg.content;
-    }
-    if (msg.tool_calls.length > 8)
-      throw new FlowError(
-        "O agente solicitou ferramentas demais em uma etapa.",
-      );
-    for (const tc of msg.tool_calls) {
-      if (!allowed.includes(tc.function.name))
-        throw new FlowError("O agente pediu uma ferramenta não autorizada.");
-      const output = await callTool(
-        tc.function.name,
-        JSON.parse(tc.function.arguments),
-      );
-      r.trace.push({
-        nodeId: n.id,
-        label: `Ferramenta: ${tc.function.name}`,
-        output,
-        at: new Date().toISOString(),
-        ms: 0,
-      });
-      putRun(r);
-      messages.push({ role: "tool", tool_call_id: tc.id, content: output });
-    }
-  }
-  throw new FlowError(
-    "O agente atingiu o limite de seis rodadas. Simplifique a tarefa.",
-  );
+    })),
+  });
 }
+const activeRuns = new Map<string, AbortController>();
 function next(r: Run, n: Block, handle?: string) {
   return (
     r.graph.edges.find(
@@ -155,6 +122,8 @@ function record(r: Run, n: Block, output: string, started: number) {
 }
 async function execute(r: Run): Promise<Run> {
   const deadline = Date.now() + 180000;
+  const controller = new AbortController();
+  activeRuns.set(r.id, controller);
   try {
     while (r.next) {
       if (getRun(r.id).status === "cancelled") return getRun(r.id);
@@ -203,19 +172,13 @@ async function execute(r: Run): Promise<Run> {
       if (k === "approval") {
         r.status = "waiting";
         record(r, n, interpolate(c.prompt, r) + "\n\n" + r.output, start);
+        activeRuns.delete(r.id);
         return putRun(r);
       }
       if (k === "llm" || k === "agent")
         output = r.demo
           ? `[Demonstração] ${n.data.label}\nEntrada analisada: ${interpolate(c.prompt, r).slice(0, 600)}\nPrioridade: acompanhar hoje.\nPróxima ação: confirmar os detalhes com a equipe e responder ao solicitante.`
-          : k === "agent"
-            ? await agent(n, r)
-            : await askText({
-                system: interpolate(c.system, r),
-                prompt: interpolate(c.prompt, r),
-                model: c.model || undefined,
-                maxTokens: 2000,
-              });
+          : await agent(n, r, controller.signal);
       if (k === "tool")
         output = r.demo
           ? `[Demonstração] Ferramenta ${c.tool}: nenhuma ação externa realizada.`
@@ -283,6 +246,8 @@ async function execute(r: Run): Promise<Run> {
     r.status = "failed";
     r.error =
       err instanceof Error ? err.message : "Não foi possível executar o fluxo.";
+  } finally {
+    activeRuns.delete(r.id);
   }
   return putRun(r);
 }
@@ -303,6 +268,11 @@ export async function startRun(
       409,
     );
   const graph = validateGraph(published ? f.published : f.graph, true);
+  if (demo !== true && !(await chatGPT().account()).account)
+    throw new FlowError(
+      "Conecte o ChatGPT para executar ou escolha simular no painel de teste.",
+      409,
+    );
   const now = new Date().toISOString();
   const r: Run = {
     id: randomUUID(),
@@ -311,7 +281,7 @@ export async function startRun(
     version: published ? f.version : 0,
     graph,
     status: "running",
-    demo: demo === true || !aiEnabled(),
+    demo: demo === true,
     input,
     output: "",
     next: graph.nodes.find((n) => n.data.kind === "start")!.id,
@@ -340,6 +310,7 @@ export function cancelRun(id: string) {
   const r = getRun(id);
   if (!["waiting", "running"].includes(r.status))
     throw new FlowError("Esta execução já terminou.", 409);
+  activeRuns.get(id)?.abort();
   r.status = "cancelled";
   return putRun(r);
 }

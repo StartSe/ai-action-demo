@@ -1,18 +1,27 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { useRouter } from "next/navigation";
 import {
   ReactFlow,
   Background,
   Controls,
+  ControlButton,
   MiniMap,
   Handle,
   Position,
+  NodeToolbar,
   addEdge,
   applyNodeChanges,
   applyEdgeChanges,
   type NodeProps,
   type Node,
+  type ReactFlowInstance,
   type Connection,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -25,804 +34,1026 @@ import {
   type Graph,
   type Run,
 } from "@/lib/flow-types";
-import { Topbar, useStatus } from "./ui";
-import { IntegrationCode } from "./IntegrationCode";
+import { NODE_STYLE } from "@/lib/flow-presets";
+import { Icon, IconButton, Modal, request } from "./StudioUI";
+import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
+import { NodeDialog } from "./NodeDialog";
 import { RunView } from "./RunView";
-export async function request<T>(
-  url: string,
-  method = "GET",
-  body?: unknown,
-): Promise<T> {
-  const r = await fetch(url, {
-    method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data.error || "Não foi possível concluir.");
-  return data;
-}
-function FlowBlock({ data, selected }: NodeProps<Node<Block["data"]>>) {
-  const item = BLOCKS[data.kind];
-  const branches =
-    data.kind === "condition" || data.kind === "approval"
-      ? ["yes", "no"]
-      : data.kind === "loop"
-        ? ["repeat", "done"]
-        : [];
+import { IntegrationDialog } from "./IntegrationDialog";
+
+type VisualData = Block["data"] & {
+  execution?: string;
+  edit?: () => void;
+  duplicate?: () => void;
+  remove?: () => void;
+};
+function FlowNode({ data, selected }: NodeProps<Node<VisualData>>) {
+  const style = NODE_STYLE[data.kind],
+    branches =
+      data.kind === "condition" || data.kind === "approval"
+        ? ["yes", "no"]
+        : data.kind === "loop"
+          ? ["repeat", "done"]
+          : [];
   return (
-    <div className={`flow-block ${selected ? "selected" : ""}`}>
-      {data.kind !== "start" && (
-        <Handle type="target" position={Position.Left} />
-      )}
-      <div className="block-type">
-        <span className="block-icon">{item.icon}</span>
-        {item.label}
-      </div>
-      <strong>{data.label}</strong>
-      <small>{data.config.prompt || data.config.text || item.help}</small>
-      {data.kind !== "end" &&
-        (branches.length ? (
-          branches.map((h, i) => (
-            <div key={h}>
-              <span className={`port-label port-${i}`}>
-                {h === "yes"
-                  ? "Sim"
-                  : h === "no"
-                    ? "Não"
-                    : h === "repeat"
-                      ? "Repetir"
-                      : "Concluir"}
+    <>
+      <NodeToolbar>
+        <div className="node-hover-toolbar">
+          <IconButton
+            icon="settings"
+            label="Editar bloco"
+            onClick={() => data.edit?.()}
+          />
+          {data.kind !== "start" && (
+            <IconButton
+              icon="copy"
+              label="Duplicar bloco"
+              onClick={() => data.duplicate?.()}
+            />
+          )}
+          <IconButton
+            icon="trash"
+            label="Excluir bloco"
+            onClick={() => data.remove?.()}
+          />
+        </div>
+      </NodeToolbar>
+      <div
+        className={
+          "agent-node" +
+          (selected ? " selected" : "") +
+          (data.execution ? " execution-" + data.execution : "")
+        }
+        style={
+          {
+            "--node-color": style.color,
+            "--node-soft": style.soft,
+          } as CSSProperties
+        }
+      >
+        {data.kind !== "start" && (
+          <Handle type="target" position={Position.Left} />
+        )}
+        <span className="agent-node-icon">
+          <Icon name={data.kind} size={24} />
+        </span>
+        <div className="agent-node-copy">
+          <strong>{data.label}</strong>
+          <div className="agent-node-caption">
+            {["agent", "llm"].includes(data.kind) ? (
+              <span>
+                <Icon name="spark" size={12} />
+                ChatGPT
               </span>
-              <Handle
-                type="source"
-                position={Position.Right}
-                id={h}
-                style={{ top: i ? "78%" : "48%" }}
+            ) : data.kind === "start" ? (
+              <span>
+                <Icon name="chat" size={12} />
+                Entrada de conversa
+              </span>
+            ) : (
+              <span>{BLOCKS[data.kind].label}</span>
+            )}
+          </div>
+        </div>
+        {data.execution && (
+          <span className={"node-execution-badge " + data.execution}>
+            {data.execution === "running" ? (
+              <span className="studio-spinner" />
+            ) : (
+              <Icon
+                name={
+                  data.execution === "failed"
+                    ? "close"
+                    : data.execution === "waiting"
+                      ? "approval"
+                      : "check"
+                }
+                size={13}
               />
-            </div>
-          ))
-        ) : (
-          <Handle type="source" position={Position.Right} />
-        ))}
-    </div>
+            )}
+          </span>
+        )}
+        {data.kind !== "end" &&
+          (branches.length ? (
+            branches.map((h, i) => (
+              <div key={h}>
+                <span
+                  className="branch-label"
+                  style={{ top: i ? "72%" : "27%" }}
+                >
+                  {h === "yes"
+                    ? "Sim"
+                    : h === "no"
+                      ? "Não"
+                      : h === "repeat"
+                        ? "Repetir"
+                        : "Concluir"}
+                </span>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={h}
+                  style={{ top: i ? "78%" : "33%" }}
+                />
+              </div>
+            ))
+          ) : (
+            <Handle type="source" position={Position.Right} />
+          ))}
+      </div>
+    </>
   );
 }
-const nodeTypes = { block: FlowBlock };
-const names: Record<string, string> = {
-  system: "Instruções do agente",
-  prompt: "Entrada",
-  model: "Modelo (opcional)",
-  tools: "Ferramentas autorizadas",
-  state: "Estado inicial",
-  value: "Valor",
-  operator: "Comparação",
-  compare: "Comparar com",
-  key: "Nome da variável",
-  url: "Endereço do serviço",
-  method: "Método",
-  body: "Conteúdo enviado",
-  credential: "Nome da credencial (opcional)",
-  tool: "Nome da ferramenta",
-  args: "Argumentos",
-  limit: "Número de passagens",
-  text: "Resposta final",
-};
-const fields: Record<Kind, string[]> = {
-  start: ["state"],
-  llm: ["system", "prompt", "model"],
-  agent: ["system", "prompt", "model", "tools"],
-  condition: ["value", "operator", "compare"],
-  state: ["key", "value"],
-  http: ["url", "method", "body", "credential"],
-  tool: ["tool", "args"],
-  approval: ["prompt"],
-  loop: ["limit"],
-  end: ["text"],
-};
-export function FlowEditor() {
-  const {status,erro}=useStatus();
-  const [flows, setFlows] = useState<Flow[]>([]),
-    [flow, setFlow] = useState<Flow | null>(null),
-    [graph, setGraph] = useState<Graph>({ nodes: [], edges: [] }),
-    [selected, setSelected] = useState<string | null>(null),
-    [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
-    [busy, setBusy] = useState(false),
-    [dirty, setDirty] = useState(false),
-    [panel, setPanel] = useState<"blocks" | "test" | "integration">("blocks"),
-    [input, setInput] = useState(
-      "Meu pedido está atrasado e preciso de ajuda urgente.",
+const nodeTypes = { block: FlowNode };
+export function FlowEditor({ id }: { id: string }) {
+  const router = useRouter(),
+    canvasRef = useRef<HTMLDivElement>(null),
+    instance = useRef<Pick<ReactFlowInstance, "screenToFlowPosition"> | null>(
+      null,
     ),
-    [run, setRun] = useState<Run | null>(null),
-    [demo, setDemo] = useState(true),
-    [toolNames, setToolNames] = useState<string[]>([]);
-  const file = useRef<HTMLInputElement>(null),
-    started = useRef(false);
-  const choose = useCallback((f: Flow) => {
-    setFlow(f);
-    setGraph(f.graph);
-    setSelected(null);
-    setDirty(false);
-    setRun(null);
-    setNotice("");
-  }, []);
+    past = useRef<Graph[]>([]),
+    future = useRef<Graph[]>([]);
+  const [flow, setFlow] = useState<Flow | null>(null);
+  const [graph, setGraph] = useState<Graph>({ nodes: [], edges: [] });
+  const [dirty, setDirty] = useState(false);
+  const [undoCount, setUndoCount] = useState(0);
+  const [redoCount, setRedoCount] = useState(0);
+  const [palette, setPalette] = useState(false);
+  const [search, setSearch] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);
+  const [rename, setRename] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [connect, setConnect] = useState(false);
+  const [integration, setIntegration] = useState(false);
+  const [chat, setChat] = useState(false);
+  const [history, setHistory] = useState(false);
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [run, setRun] = useState<Run | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [input, setInput] = useState("");
+  const [demo, setDemo] = useState(false);
+  const [snap, setSnap] = useState(false);
+  const [dots, setDots] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+  const { connection, setConnection } = useChatGPT();
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    request<Flow[]>("/api/flows")
-      .then(async (list) => {
-        setFlows(list);
-        const query = new URLSearchParams(location.search);
-        const id = query.get("flow");
-        let f = list.find((f) => f.id === id) || list[0];
-        if (query.has("exemplo") && !f) {
-          f = await request<Flow>("/api/flows", "POST", {
-            name: "Triagem de atendimento",
-            example: true,
-          });
-          setFlows([f]);
+    let alive = true;
+    void request<Flow>("/api/flows/" + id)
+      .then((f) => {
+        if (alive) {
+          setFlow(f);
+          setGraph(f.graph);
+          setTitle(f.name);
+          setDescription(f.description);
         }
-        if (f) choose(f);
       })
-      .catch((e) => setError(e.message));
-  }, [choose]);
-  useEffect(() => {
-    if (!busy || !flow) return;
-    const t = setInterval(() => {
-      request<Run[]>("/api/runs?flowId=" + flow.id)
-        .then((r) => {
-          if (r[0]) setRun(r[0]);
-        })
-        .catch(() => {});
-    }, 1200);
-    return () => clearInterval(t);
-  }, [busy, flow]);
-  useEffect(() => {
-    const onLeave = (e: BeforeUnloadEvent) => {
-      if (dirty) {
-        e.preventDefault();
-      }
+      .catch((e) => {
+        if (alive) setError(e.message);
+      });
+    const theme = localStorage.getItem("agentflows-theme") || "light";
+    document.documentElement.dataset.studioTheme = theme;
+    return () => {
+      alive = false;
     };
-    window.addEventListener("beforeunload", onLeave);
-    return () => window.removeEventListener("beforeunload", onLeave);
-  }, [dirty]);
-  const act = async (fn: () => Promise<void>) => {
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      await fn();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Não foi possível concluir.");
-    } finally {
-      setBusy(false);
-    }
-  };
-  const sync = (f: Flow) => {
-    setFlow(f);
-    setFlows((prev) => [f, ...prev.filter((x) => x.id !== f.id)]);
-    setDirty(false);
-  };
-  async function save() {
-    if (!flow) throw new Error("Crie um fluxo primeiro.");
-    const f = await request<Flow>("/api/flows/" + flow.id, "PUT", {
+  }, [id]);
+  const snapshot = useCallback((g: Graph) => {
+    past.current = [...past.current.slice(-49), structuredClone(g)];
+    future.current = [];
+    setUndoCount(past.current.length);
+    setRedoCount(0);
+  }, []);
+  const commit = useCallback(
+    (g: Graph) => {
+      snapshot(graph);
+      setGraph(g);
+      setDirty(true);
+    },
+    [graph, snapshot, setGraph, setDirty],
+  );
+  const undo = useCallback(() => {
+    const g = past.current.pop();
+    if (!g) return;
+    future.current.push(structuredClone(graph));
+    setGraph(g);
+    setUndoCount(past.current.length);
+    setRedoCount(future.current.length);
+    setDirty(true);
+  }, [graph, setGraph, setDirty, setUndoCount, setRedoCount]);
+  const redo = useCallback(() => {
+    const g = future.current.pop();
+    if (!g) return;
+    past.current.push(structuredClone(graph));
+    setGraph(g);
+    setUndoCount(past.current.length);
+    setRedoCount(future.current.length);
+    setDirty(true);
+  }, [graph, setGraph, setDirty, setUndoCount, setRedoCount]);
+  const save = useCallback(async () => {
+    if (!flow) throw new Error("Fluxo não carregado.");
+    const saved = await request<Flow>("/api/flows/" + id, "PUT", {
       name: flow.name,
       description: flow.description,
       graph,
     });
-    sync(f);
-    return f;
+    setFlow(saved);
+    setDirty(false);
+    return saved;
+  }, [flow, graph, id, setFlow, setDirty]);
+  const act = useCallback(
+    async (fn: () => Promise<void>) => {
+      setBusy(true);
+      setError("");
+      setNotice("");
+      try {
+        await fn();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Não foi possível concluir.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [setBusy, setError, setNotice],
+  );
+  useEffect(() => {
+    const leave = (e: BeforeUnloadEvent) => {
+      if (dirty) e.preventDefault();
+    };
+    const keys = (e: KeyboardEvent) => {
+      if (editing || rename || connect || integration) return;
+      const el = e.target as HTMLElement;
+      if (el.matches("input,textarea,select")) return;
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        if (!busy)
+          void act(async () => {
+            await save();
+            setNotice("Fluxo salvo.");
+          });
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+      }
+    };
+    window.addEventListener("beforeunload", leave);
+    window.addEventListener("keydown", keys);
+    return () => {
+      window.removeEventListener("beforeunload", leave);
+      window.removeEventListener("keydown", keys);
+    };
+  }, [
+    dirty,
+    editing,
+    rename,
+    connect,
+    integration,
+    busy,
+    save,
+    undo,
+    redo,
+    act,
+  ]);
+  useEffect(() => {
+    if (!history) return;
+    void request<Run[]>("/api/runs?flowId=" + id)
+      .then(setRuns)
+      .catch((e) => setError(e.message));
+  }, [history, id]);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 3500);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  function add(kind: Kind, position?: { x: number; y: number }) {
+    const bounds = canvasRef.current?.getBoundingClientRect();
+    const pos = position ||
+      instance.current?.screenToFlowPosition({
+        x: (bounds?.x || 0) + (bounds?.width || 800) / 2 - 100,
+        y: (bounds?.y || 0) + (bounds?.height || 600) / 2,
+      }) || { x: 300, y: 200 };
+    const n = block(kind, "n_" + crypto.randomUUID(), pos.x, pos.y);
+    commit({ ...graph, nodes: [...graph.nodes, n] });
+    setPalette(false);
+    setEditing(n.id);
   }
-  const updateGraph = (g: Graph) => {
-    setGraph(g);
-    setDirty(true);
-  };
-  const onConnect = useCallback((c: Connection) => {
-    setGraph((g) => ({ ...g, edges: addEdge(c, g.edges) }));
-    setDirty(true);
-  }, []);
-  const node = graph.nodes.find((n) => n.id === selected);
-  function patchNode(key: string, value: string) {
-    if (!node) return;
-    updateGraph({
-      ...graph,
-      nodes: graph.nodes.map((n) =>
-        n.id === node.id
-          ? {
-              ...n,
-              data:
-                key === "label"
-                  ? { ...n.data, label: value }
-                  : { ...n.data, config: { ...n.data.config, [key]: value } },
-            }
-          : n,
-      ),
+  function duplicate(n: Block) {
+    const copy = structuredClone(n);
+    copy.id = "n_" + crypto.randomUUID();
+    copy.position = { x: n.position.x + 50, y: n.position.y + 120 };
+    copy.data.label += " (cópia)";
+    commit({ ...graph, nodes: [...graph.nodes, copy] });
+  }
+  function remove(id: string) {
+    commit({
+      nodes: graph.nodes.filter((n) => n.id !== id),
+      edges: graph.edges.filter((e) => e.source !== id && e.target !== id),
     });
   }
-  function add(kind: Kind) {
-    const id = "n_" + crypto.randomUUID();
-    updateGraph({
-      ...graph,
-      nodes: [
-        ...graph.nodes,
-        block(
-          kind,
-          id,
-          100 + (graph.nodes.length % 3) * 290,
-          100 + Math.floor(graph.nodes.length / 3) * 200,
-        ),
-      ],
-    });
-    setSelected(id);
+  function connectNodes(c: Connection) {
+    if (c.source === c.target) {
+      setError("Conecte blocos diferentes. Use Repetir para criar ciclos.");
+      return;
+    }
+    commit({ ...graph, edges: addEdge(c, graph.edges) });
   }
-  async function create(example = false) {
-    if (dirty && !window.confirm("Descartar as alterações não salvas?")) return;
-    await act(async () => {
-      const f = await request<Flow>("/api/flows", "POST", {
-        name: example ? "Triagem de atendimento" : "Novo fluxo",
-        example,
-      });
-      setFlows((prev) => [f, ...prev]);
-      choose(f);
-    });
-  }
-  function exportGraph() {
+  function exportFlow() {
     if (!flow) return;
-    const blob = new Blob(
-      [
-        JSON.stringify(
-          {
-            format: "build-agentflows/v1",
-            name: flow.name,
-            description: flow.description,
-            graph,
-          },
-          null,
-          2,
-        ),
-      ],
-      { type: "application/json" },
+    const url = URL.createObjectURL(
+      new Blob(
+        [
+          JSON.stringify(
+            {
+              format: "build-agentflows/v1",
+              name: flow.name,
+              description: flow.description,
+              graph,
+            },
+            null,
+            2,
+          ),
+        ],
+        { type: "application/json" },
+      ),
     );
-    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = flow.name.replace(/[^a-z0-9_-]/gi, "_") + ".json";
     a.click();
     URL.revokeObjectURL(url);
   }
-  async function importGraph(f: File) {
-    if (dirty && !window.confirm("Descartar as alterações não salvas?")) return;
-    await act(async () => {
-      if (f.size > 300000) throw new Error("Use um arquivo de até 300 KB.");
-      const b = JSON.parse(await f.text());
-      if (b.format !== "build-agentflows/v1")
-        throw new Error("Use um arquivo exportado pelo Build Agentflows.");
-      const created = await request<Flow>("/api/flows", "POST", {
-        name: b.name,
-      });
-      try {
-        const saved = await request<Flow>("/api/flows/" + created.id, "PUT", {
-          name: b.name,
-          description: b.description || "",
-          graph: b.graph,
-        });
-        setFlows((prev) => [saved, ...prev]);
-        choose(saved);
-      } catch (e) {
-        await request("/api/flows/" + created.id, "DELETE");
-        throw e;
-      }
-    });
+  async function execute() {
+    setRunning(true);
+    setError("");
+    setRun(null);
+    let timer: ReturnType<typeof setInterval> | undefined;
+    try {
+      await save();
+      const from = new Date().toISOString();
+      timer = setInterval(() => {
+        void request<Run[]>("/api/runs?flowId=" + id)
+          .then((items) => {
+            const latest = items.find((r) => r.createdAt >= from);
+            if (latest) setRun(latest);
+          })
+          .catch(() => {});
+      }, 800);
+      setRun(
+        await request<Run>("/api/flows/" + id + "/run", "POST", {
+          input: input.trim(),
+          demo,
+        }),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível executar.");
+    } finally {
+      if (timer) clearInterval(timer);
+      setRunning(false);
+    }
   }
-  return (
-    <>
-      <Topbar
-        marca="B"
-        nome="Build Agentflows"
-        area="Operações"
-        status={status} erro={erro} usuario={status?.usuario}
-      />
-      <main className="flows-main">
-        <div className="flows-heading">
-          <div>
-            <p className="eyebrow">Seu time de agentes</p>
-            <h1>Transforme tarefas em fluxos inteligentes</h1>
-            <p>Conecte agentes, defina decisões e acompanhe cada execução.</p>
-          </div>
-          <div className="toolbar">
-            <button
-              className="btn-ghost"
-              disabled={busy}
-              onClick={() => file.current?.click()}
-            >
-              Importar fluxo
+  const node = graph.nodes.find((n) => n.id === editing);
+  const visualNodes = graph.nodes.map((n) => {
+    const done = run?.trace.some((t) => t.nodeId === n.id);
+    const current = run?.next === n.id;
+    const execution =
+      current && ["running", "waiting", "failed"].includes(run?.status || "")
+        ? run!.status
+        : done
+          ? "completed"
+          : undefined;
+    return {
+      ...n,
+      data: {
+        ...n.data,
+        execution,
+        edit: () => setEditing(n.id),
+        duplicate: () => duplicate(n),
+        remove: () => remove(n.id),
+      },
+    };
+  });
+  if (!flow)
+    return (
+      <main className="studio-loading">
+        {error ? (
+          <>
+            <p role="alert">{error}</p>
+            <button className="studio-button" onClick={() => router.push("/")}>
+              Voltar aos fluxos
             </button>
-            <button
-              className="btn-primary"
-              disabled={busy}
-              onClick={() => create()}
-            >
-              Novo fluxo
-            </button>
-          </div>
-        </div>
-        <input
-          ref={file}
-          type="file"
-          accept="application/json,.json"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void importGraph(f);
-            e.target.value = "";
-          }}
-        />
-        {error && (
-          <div className="flow-error" role="alert">
-            {error}
-            <button onClick={() => setError("")} aria-label="Fechar erro">
-              ×
-            </button>
-          </div>
-        )}
-        {notice && (
-          <p role="status" className="flow-notice">
-            {notice}
-          </p>
-        )}
-        {!flow ? (
-          <section className="flow-welcome card">
-            <span className="welcome-symbol">◈</span>
-            <h2>Uma tarefa. Vários agentes trabalhando juntos.</h2>
-            <p>
-              Monte seu primeiro fluxo ou explore um exemplo de atendimento.
-            </p>
-            <button
-              className="btn-primary"
-              disabled={busy}
-              onClick={() => create(true)}
-            >
-              Preencher com um exemplo
-            </button>
-            <div className="welcome-steps">
-              <span>Desenhe o caminho</span>
-              <span>Teste cada etapa</span>
-              <span>Conecte aos seus sistemas</span>
-            </div>
-          </section>
+          </>
         ) : (
           <>
-            <div className="flow-toolbar">
-              <label className="flow-picker">
-                Fluxo
-                <select
-                  aria-label="Escolher fluxo"
-                  value={flow.id}
-                  disabled={busy}
-                  onChange={(e) => {
-                    if (
-                      !dirty ||
-                      window.confirm("Descartar as alterações não salvas?")
-                    )
-                      choose(flows.find((f) => f.id === e.target.value)!);
-                  }}
-                >
-                  {flows.map((f) => (
-                    <option value={f.id} key={f.id}>
-                      {f.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <span className="flow-badge">
-                {flow.published ? "Publicado · v" + flow.version : "Rascunho"}
-              </span>
-              <span className="save-status">
-                {dirty ? "Alterações não salvas" : "Salvo"}
-              </span>
-              <div className="toolbar">
-                <button
-                  className="btn-ghost"
-                  disabled={busy}
-                  onClick={() =>
-                    act(async () => {
-                      await save();
-                      setNotice("Fluxo salvo.");
-                    })
-                  }
-                >
-                  Salvar
-                </button>
-                <button
-                  className="btn-ghost"
-                  disabled={busy}
-                  onClick={() =>
-                    act(async () => {
-                      await save();
-                      sync(
-                        await request<Flow>(
-                          "/api/flows/" + flow.id + "/publish",
-                          "POST",
-                          {},
-                        ),
-                      );
-                      setNotice(
-                        "Versão publicada. As integrações já podem executá-la.",
-                      );
-                    })
-                  }
-                >
-                  Publicar
-                </button>
-                <button
-                  className="btn-primary"
-                  disabled={busy}
-                  onClick={() => {
-                    setPanel("test");
-                    setSelected(null);
-                  }}
-                >
-                  Testar fluxo
-                </button>
-              </div>
+            <span className="studio-spinner" />
+            Abrindo Agentflow…
+          </>
+        )}
+      </main>
+    );
+  return (
+    <main className="canvas-page">
+      <header className="canvas-header">
+        <IconButton
+          icon="arrow"
+          label="Voltar aos fluxos"
+          onClick={() => {
+            if (!dirty || window.confirm("Sair sem salvar as alterações?"))
+              router.push("/");
+          }}
+        />
+        <div className="canvas-title">
+          <button
+            onClick={() => {
+              setTitle(flow.name);
+              setDescription(flow.description);
+              setRename(true);
+            }}
+          >
+            <h1>{flow.name}</h1>
+            <Icon name="settings" size={15} />
+          </button>
+          <span>
+            <i className={dirty ? "unsaved" : ""} />
+            {dirty
+              ? "Alterações não salvas"
+              : flow.published
+                ? "Publicado · v" + flow.version
+                : "Rascunho salvo"}
+          </span>
+        </div>
+        <div className="canvas-header-actions">
+          <button
+            className={
+              "studio-button connection-button" +
+              (connection?.account ? " is-connected" : "")
+            }
+            onClick={() => setConnect(true)}
+          >
+            <Icon name="spark" size={17} />
+            <span>{connection?.account ? "ChatGPT" : "Conectar ChatGPT"}</span>
+          </button>
+          <IconButton
+            icon="runs"
+            label="Histórico do fluxo"
+            active={history}
+            onClick={() => {
+              setHistory(!history);
+              setChat(false);
+            }}
+          />
+          <IconButton
+            icon="code"
+            label="Integrar fluxo"
+            onClick={() => setIntegration(true)}
+          />
+          <details className="canvas-menu">
+            <summary aria-label="Mais ações">
+              <Icon name="more" />
+            </summary>
+            <div>
+              <button onClick={exportFlow}>
+                <Icon name="download" size={16} />
+                Exportar fluxo
+              </button>
+              <button
+                disabled={busy}
+                onClick={() =>
+                  act(async () => {
+                    const f = await request<Flow>("/api/flows", "POST", {
+                      name: flow.name + " (cópia)",
+                    });
+                    await request("/api/flows/" + f.id, "PUT", {
+                      ...f,
+                      description: flow.description,
+                      graph,
+                    });
+                    router.push("/flows/" + f.id);
+                  })
+                }
+              >
+                <Icon name="copy" size={16} />
+                Duplicar fluxo
+              </button>
+              <button className="danger" onClick={() => setConfirmDelete(true)}>
+                <Icon name="trash" size={16} />
+                Excluir fluxo
+              </button>
             </div>
-            <div className="flow-workspace">
-              <aside className="flow-sidebar">
-                <div className="flow-tabs">
-                  <button
-                    className={panel === "blocks" ? "active" : ""}
-                    onClick={() => setPanel("blocks")}
-                  >
-                    Blocos
-                  </button>
-                  <button
-                    className={panel === "test" ? "active" : ""}
-                    onClick={() => setPanel("test")}
-                  >
-                    Teste
-                  </button>
-                  <button
-                    className={panel === "integration" ? "active" : ""}
-                    onClick={() => setPanel("integration")}
-                  >
-                    Integrar
-                  </button>
-                </div>
-                {panel === "blocks" ? (
-                  <>
-                    <h2>Adicionar bloco</h2>
-                    <p>Escolha uma etapa e conecte suas saídas.</p>
-                    <div className="block-library">
-                      {(Object.keys(BLOCKS) as Kind[]).map((k) => (
-                        <button key={k} disabled={busy} onClick={() => add(k)}>
-                          <span className="block-icon">{BLOCKS[k].icon}</span>
+          </details>
+          <button
+            className="studio-button primary"
+            disabled={busy || running}
+            onClick={() =>
+              act(async () => {
+                await save();
+                setNotice("Fluxo salvo.");
+              })
+            }
+          >
+            <Icon name="save" size={17} />
+            <span>Salvar</span>
+          </button>
+        </div>
+      </header>
+      <div className="canvas-body">
+        <div
+          className="studio-canvas"
+          ref={canvasRef}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            const kind = e.dataTransfer.getData(
+              "application/agentflow",
+            ) as Kind;
+            if (Object.hasOwn(BLOCKS, kind))
+              add(
+                kind,
+                instance.current?.screenToFlowPosition({
+                  x: e.clientX,
+                  y: e.clientY,
+                }),
+              );
+          }}
+        >
+          <ReactFlow
+            nodes={visualNodes}
+            edges={graph.edges.map((e) => ({
+              ...e,
+              animated: running && run?.next === e.target,
+            }))}
+            nodeTypes={nodeTypes}
+            onInit={(i) => {
+              instance.current = i;
+            }}
+            onBeforeDelete={async () => { snapshot(graph); return true; }}
+            onNodesChange={(changes) => {
+              setGraph((g) => ({
+                ...g,
+                nodes: applyNodeChanges(changes, g.nodes) as Block[],
+              }));
+              if (changes.some((c) => ["remove", "position"].includes(c.type)))
+                setDirty(true);
+            }}
+            onEdgesChange={(changes) => {
+              setGraph((g) => ({
+                ...g,
+                edges: applyEdgeChanges(changes, g.edges),
+              }));
+              if (changes.some((c) => c.type === "remove")) setDirty(true);
+            }}
+            onNodeDragStart={() => snapshot(graph)}
+            onConnect={connectNodes}
+            onNodeDoubleClick={(_, n) => setEditing(n.id)}
+            onEdgeClick={(_, e) => setSelectedEdge(e.id)}
+            onPaneClick={() => setSelectedEdge(null)}
+            fitView
+            fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
+            minZoom={0.25}
+            maxZoom={2}
+            snapToGrid={snap}
+            snapGrid={[20, 20]}
+            deleteKeyCode={
+              editing || rename || connect || integration
+                ? null
+                : ["Backspace", "Delete"]
+            }
+            nodesDraggable={!running}
+            nodesConnectable={!running}
+            colorMode="light"
+          >
+            {dots && <Background gap={20} size={1} color="#c9ccd6" />}
+            <Controls
+              position="bottom-center"
+              orientation="horizontal"
+              showInteractive={false}
+            >
+              <ControlButton
+                title="Desfazer"
+                aria-label="Desfazer"
+                disabled={!undoCount}
+                onClick={undo}
+              >
+                <Icon name="undo" size={16} />
+              </ControlButton>
+              <ControlButton
+                title="Refazer"
+                aria-label="Refazer"
+                disabled={!redoCount}
+                onClick={redo}
+              >
+                <Icon name="redo" size={16} />
+              </ControlButton>
+              <ControlButton
+                title="Ajustar à grade"
+                aria-label="Ajustar à grade"
+                className={snap ? "active" : ""}
+                onClick={() => setSnap(!snap)}
+              >
+                <Icon name="grid" size={16} />
+              </ControlButton>
+              <ControlButton
+                title="Mostrar grade"
+                aria-label="Mostrar grade"
+                className={dots ? "active" : ""}
+                onClick={() => setDots(!dots)}
+              >
+                <Icon name="more" size={16} />
+              </ControlButton>
+            </Controls>
+            <MiniMap
+              position="bottom-left"
+              pannable
+              zoomable
+              nodeColor={(n) => NODE_STYLE[(n.data as Block["data"]).kind].soft}
+              nodeStrokeColor={(n) =>
+                NODE_STYLE[(n.data as Block["data"]).kind].color
+              }
+              nodeStrokeWidth={2}
+            />
+          </ReactFlow>
+          <div className="canvas-left-actions">
+            <button
+              className={"add-node-button" + (palette ? " active" : "")}
+              title="Adicionar bloco"
+              aria-label="Adicionar bloco"
+              onClick={() => setPalette(!palette)}
+            >
+              <Icon name={palette ? "close" : "plus"} size={23} />
+            </button>
+          </div>
+          {palette && (
+            <aside className="node-palette">
+              <header>
+                <h2>Adicionar blocos</h2>
+                <IconButton
+                  icon="close"
+                  label="Fechar biblioteca"
+                  onClick={() => setPalette(false)}
+                />
+              </header>
+              <label className="studio-search">
+                <Icon name="search" size={17} />
+                <input
+                  autoFocus
+                  placeholder="Buscar blocos"
+                  aria-label="Buscar blocos"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </label>
+              <div className="node-palette-scroll">
+                {[
+                  "Agentes e IA",
+                  "Controle de fluxo",
+                  "Dados e integrações",
+                ].map((group) => (
+                  <section key={group}>
+                    <h3>{group}</h3>
+                    {(Object.keys(BLOCKS) as Kind[])
+                      .filter(
+                        (k) =>
+                          NODE_STYLE[k].group === group &&
+                          (BLOCKS[k].label + " " + BLOCKS[k].help)
+                            .toLowerCase()
+                            .includes(search.toLowerCase()),
+                      )
+                      .map((k) => (
+                        <button
+                          key={k}
+                          draggable
+                          onDragStart={(e) =>
+                            e.dataTransfer.setData("application/agentflow", k)
+                          }
+                          onClick={() => add(k)}
+                        >
+                          <span
+                            className="palette-node-icon"
+                            style={{
+                              color: NODE_STYLE[k].color,
+                              background: NODE_STYLE[k].soft,
+                            }}
+                          >
+                            <Icon name={k} size={21} />
+                          </span>
                           <span>
                             <strong>{BLOCKS[k].label}</strong>
                             <small>{BLOCKS[k].help}</small>
                           </span>
-                          <span>+</span>
+                          <Icon name="plus" size={15} />
                         </button>
                       ))}
-                    </div>
-                  </>
-                ) : panel === "test" ? (
-                  <>
-                    <h2>Teste seu fluxo</h2>
-                    <label>
-                      Entrada
-                      <textarea
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        rows={5}
-                      />
-                    </label>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={demo}
-                        onChange={(e) => setDemo(e.target.checked)}
-                      />{" "}
-                      Simular sem ações externas
-                    </label>
-                    <p>Sem IA conectada, a execução será demonstrativa.</p>
-                    <button
-                      className="btn-primary"
-                      disabled={busy}
-                      onClick={() =>
-                        act(async () => {
-                          await save();
-                          setRun(null);
-                          setRun(
-                            await request<Run>(
-                              "/api/flows/" + flow.id + "/run",
-                              "POST",
-                              { input, demo },
-                            ),
-                          );
-                        })
-                      }
-                    >
-                      {busy ? "Executando…" : "Executar teste"}
-                    </button>
-                    <Link className="btn-link" href="/historico">
-                      Ver todas as execuções
-                    </Link>
-                  </>
+                  </section>
+                ))}
+              </div>
+            </aside>
+          )}
+          {selectedEdge && (
+            <div className="selected-edge-action">
+              <span>Conexão selecionada</span>
+              <button
+                onClick={() => {
+                  commit({
+                    ...graph,
+                    edges: graph.edges.filter((e) => e.id !== selectedEdge),
+                  });
+                  setSelectedEdge(null);
+                }}
+              >
+                <Icon name="trash" size={15} />
+                Excluir conexão
+              </button>
+            </div>
+          )}
+          <div className="canvas-help">
+            Clique duas vezes em um bloco para editar
+          </div>
+          {!chat && !history && (
+            <button className="chat-launcher" onClick={() => setChat(true)}>
+              <Icon name="chat" size={23} />
+              <span>Testar</span>
+            </button>
+          )}
+        </div>
+        {(chat || history) && (
+          <aside className="canvas-test-panel">
+            <header>
+              <div>
+                <Icon name={chat ? "chat" : "runs"} size={20} />
+                <h2>{chat ? "Testar Agentflow" : "Execuções do fluxo"}</h2>
+              </div>
+              <IconButton
+                icon="close"
+                label="Fechar painel"
+                onClick={() => {
+                  setChat(false);
+                  setHistory(false);
+                }}
+              />
+            </header>
+            {history ? (
+              <div className="flow-runs-list">
+                {!runs.length ? (
+                  <div className="chat-empty">
+                    <Icon name="runs" size={30} />
+                    <h3>Nenhuma execução ainda</h3>
+                    <p>Teste seu fluxo para acompanhar cada etapa.</p>
+                  </div>
                 ) : (
-                  <>
-                    <h2>Conecte seu fluxo</h2>
-                    <p>
-                      Publique uma versão e gere um código de acesso em
-                      Configurações.
-                    </p>
-                    <Link className="btn-link" href="/setup">
-                      Configurar acesso
-                    </Link>
-                    <details>
-                      <summary>Dados para a equipe técnica</summary>
-                      <p>POST com Authorization: Bearer e corpo:</p>
-                      <IntegrationCode id={flow.id} />
-                      <p>
-                        No MCP, use executar_fluxo com id e input. O código
-                        também dá acesso aos demais fluxos desta instalação.
-                      </p>
-                    </details>
-                    <button className="btn-ghost" onClick={exportGraph}>
-                      Exportar fluxo
+                  runs.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => {
+                        setRun(r);
+                        setChat(true);
+                        setHistory(false);
+                      }}
+                    >
+                      <span className={"run-status-dot " + r.status} />
+                      <span>
+                        <strong>{r.input.slice(0, 70)}</strong>
+                        <small>
+                          {new Date(r.createdAt).toLocaleString("pt-BR")} ·{" "}
+                          {r.demo ? "Demonstração" : "ChatGPT"}
+                        </small>
+                      </span>
+                      <span>
+                        {r.status === "completed"
+                          ? "Concluída"
+                          : r.status === "waiting"
+                            ? "Aguardando"
+                            : r.status === "failed"
+                              ? "Falhou"
+                              : "Em execução"}
+                      </span>
                     </button>
-                    {flow.published && (
+                  ))
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="chat-scroll">
+                  {!run && !running ? (
+                    <div className="chat-empty">
+                      <div className="chat-empty-icon">
+                        <Icon name="agent" size={34} />
+                      </div>
+                      <h3>Converse com seu fluxo</h3>
+                      <p>
+                        Envie uma mensagem para testar seus agentes e acompanhar
+                        o caminho percorrido.
+                      </p>
                       <button
-                        className="btn-ghost"
-                        disabled={busy}
                         onClick={() =>
-                          act(async () => {
-                            sync(
-                              await request<Flow>(
-                                "/api/flows/" + flow.id + "/publish",
-                                "POST",
-                                { active: false },
-                              ),
-                            );
-                            setNotice("Publicação desativada.");
-                          })
+                          setInput(
+                            "Meu pedido está atrasado e preciso de ajuda urgente.",
+                          )
                         }
                       >
-                        Desativar publicação
+                        Testar com uma solicitação de exemplo
                       </button>
-                    )}
-                  </>
-                )}
-              </aside>
-              <div className="flow-canvas" aria-label="Editor visual do fluxo">
-                <ReactFlow
-                  nodes={graph.nodes}
-                  edges={graph.edges}
-                  nodeTypes={nodeTypes}
-                  onNodesChange={(changes) => {
-                    setGraph((g) => ({
-                      ...g,
-                      nodes: applyNodeChanges(changes, g.nodes) as Block[],
-                    }));
-                    if (
-                      changes.some(
-                        (c) => c.type !== "select" && c.type !== "dimensions",
-                      )
-                    )
-                      setDirty(true);
-                  }}
-                  onEdgesChange={(changes) => {
-                    setGraph((g) => ({
-                      ...g,
-                      edges: applyEdgeChanges(changes, g.edges),
-                    }));
-                    setDirty(true);
-                  }}
-                  onConnect={onConnect}
-                  onNodeClick={(_, n) => setSelected(n.id)}
-                  onPaneClick={() => setSelected(null)}
-                  fitView
-                  minZoom={0.2}
-                  maxZoom={1.5}
-                  deleteKeyCode={["Backspace", "Delete"]}
-                  nodesDraggable={!busy}
-                  nodesConnectable={!busy}
-                  elementsSelectable={!busy}
-                >
-                  <Background gap={22} size={1} />
-                  <Controls />
-                  <MiniMap pannable zoomable />
-                </ReactFlow>
-                <div className="canvas-hint">
-                  Conecte os pontos entre blocos · selecione para editar
+                    </div>
+                  ) : (
+                    <>
+                      {run && (
+                        <>
+                          <div className="test-user-message">{run.input}</div>
+                          <RunView run={run} onChange={setRun} compact />
+                        </>
+                      )}
+                      {running && (
+                        <div className="chat-thinking">
+                          <span className="studio-spinner" />
+                          Executando as etapas…
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
-              </div>
-              <aside className="flow-inspector">
-                {node ? (
-                  <>
-                    <div className="inspector-heading">
-                      <h2>{BLOCKS[node.data.kind].label}</h2>
-                      <button
-                        aria-label="Fechar bloco"
-                        onClick={() => setSelected(null)}
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <label>
-                      Nome do bloco
-                      <input
-                        value={node.data.label}
-                        maxLength={100}
-                        onChange={(e) => patchNode("label", e.target.value)}
-                      />
-                    </label>
-                    <p>{BLOCKS[node.data.kind].help}</p>
-                    {fields[node.data.kind].map((key) => (
-                      <label key={key}>
-                        {names[key]}
-                        {key === "operator" || key === "method" ? (
-                          <select
-                            value={node.data.config[key] || ""}
-                            onChange={(e) => patchNode(key, e.target.value)}
-                          >
-                            {(key === "operator"
-                              ? [
-                                  ["contains", "Contém"],
-                                  ["equals", "É igual a"],
-                                  ["notEquals", "É diferente de"],
-                                  ["greater", "É maior que"],
-                                  ["empty", "Está vazio"],
-                                ]
-                              : ["GET", "POST", "PUT", "PATCH", "DELETE"].map(
-                                  (v) => [v, v],
-                                )
-                            ).map(([v, l]) => (
-                              <option value={v} key={v}>
-                                {l}
-                              </option>
-                            ))}
-                          </select>
-                        ) : [
-                            "system",
-                            "prompt",
-                            "state",
-                            "body",
-                            "args",
-                            "text",
-                          ].includes(key) ? (
-                          <textarea
-                            rows={4}
-                            value={node.data.config[key] || ""}
-                            onChange={(e) => patchNode(key, e.target.value)}
-                          />
-                        ) : (
-                          <input
-                            value={node.data.config[key] || ""}
-                            onChange={(e) => patchNode(key, e.target.value)}
-                          />
-                        )}
-                      </label>
-                    ))}
-                    <details>
-                      <summary>Referências a outras etapas</summary>
-                      <p>
-                        <code>{"{{input}}"}</code> entrada original
-                        <br />
-                        <code>{"{{last}}"}</code> última saída
-                        <br />
-                        <code>{"{{state.nome}}"}</code> variável
-                        <br />
-                        <code>{"{{nodes." + node.id + "}}"}</code> saída deste
-                        bloco nas próximas etapas
-                      </p>
-                    </details>
-                    {["agent", "tool"].includes(node.data.kind) && (
-                      <>
-                        <button
-                          className="btn-ghost"
-                          onClick={() =>
-                            act(async () => {
-                              const ts =
-                                await request<{ name: string }[]>("/api/tools");
-                              setToolNames(ts.map((t) => t.name));
-                            })
-                          }
-                        >
-                          Consultar ferramentas
-                        </button>
-                        {toolNames.length > 0 && <p>{toolNames.join(", ")}</p>}
-                        <p>
-                          Separe os nomes autorizados por vírgula. Use uma
-                          aprovação antes de ações que precisam de revisão.
-                        </p>
-                      </>
-                    )}
-                    <button
-                      className="delete-button"
-                      disabled={busy}
-                      onClick={() => {
-                        updateGraph({
-                          nodes: graph.nodes.filter((n) => n.id !== node.id),
-                          edges: graph.edges.filter(
-                            (e) => e.source !== node.id && e.target !== node.id,
-                          ),
-                        });
-                        setSelected(null);
-                      }}
-                    >
-                      Excluir bloco
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <h2>Sobre o fluxo</h2>
-                    <label>
-                      Nome
-                      <input
-                        value={flow.name}
-                        maxLength={100}
-                        onChange={(e) => {
-                          setFlow({ ...flow, name: e.target.value });
-                          setDirty(true);
-                        }}
-                      />
-                    </label>
-                    <label>
-                      Descrição
-                      <textarea
-                        value={flow.description}
-                        maxLength={1000}
-                        rows={4}
-                        onChange={(e) => {
-                          setFlow({ ...flow, description: e.target.value });
-                          setDirty(true);
-                        }}
-                      />
-                    </label>
-                    <div className="flow-facts">
-                      <strong>{graph.nodes.length} blocos</strong>
-                      <span>{graph.edges.length} conexões</span>
-                    </div>
+                <div className="chat-composer">
+                  <label className="demo-toggle">
+                    <input
+                      type="checkbox"
+                      checked={demo}
+                      onChange={(e) => setDemo(e.target.checked)}
+                    />
+                    Simular com respostas de exemplo
+                  </label>
+                  {!connection?.account && !demo && (
                     <p>
-                      Selecione um bloco no quadro para configurar suas
-                      instruções.
+                      Conecte o ChatGPT para executar de verdade.{" "}
+                      <button onClick={() => setConnect(true)}>Conectar</button>
                     </p>
-                    <p>
-                      Alterações ficam no rascunho até você publicar uma nova
-                      versão.
-                    </p>
-                    <button className="btn-ghost" onClick={exportGraph}>
-                      Exportar fluxo
-                    </button>
-                    <button
-                      className="delete-button"
-                      disabled={busy}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            "Excluir este fluxo? O histórico de execuções será mantido.",
+                  )}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (input.trim() && !running) void execute();
+                    }}
+                  >
+                    <textarea
+                      aria-label="Mensagem para testar"
+                      placeholder="Digite sua mensagem…"
+                      rows={3}
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          if (
+                            input.trim() &&
+                            !running &&
+                            (demo || connection?.account)
                           )
-                        )
-                          void act(async () => {
-                            await request("/api/flows/" + flow.id, "DELETE");
-                            const rest = flows.filter((f) => f.id !== flow.id);
-                            setFlows(rest);
-                            setFlow(null);
-                            if (rest[0]) choose(rest[0]);
-                          });
+                            void execute();
+                        }
                       }}
+                    />
+                    <button
+                      type="submit"
+                      className="chat-send"
+                      title="Enviar mensagem"
+                      aria-label="Enviar mensagem"
+                      disabled={
+                        running ||
+                        !input.trim() ||
+                        (!demo && !connection?.account)
+                      }
                     >
-                      Excluir fluxo
+                      <Icon name="play" size={17} />
                     </button>
-                  </>
-                )}
-              </aside>
-            </div>
-            {run && <RunView run={run} onChange={setRun} />}
-          </>
+                  </form>
+                  <small>
+                    {demo
+                      ? "Demonstração · nenhuma ação externa"
+                      : "ChatGPT · usa os limites da sua assinatura"}
+                  </small>
+                </div>
+              </>
+            )}
+          </aside>
         )}
-      </main>
-    </>
+      </div>
+      {error && (
+        <div role="alert" className="canvas-toast error">
+          {error}
+          <button aria-label="Fechar erro" onClick={() => setError("")}>
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+      )}
+      {notice && (
+        <div role="status" className="canvas-toast">
+          <Icon name="check" size={17} />
+          {notice}
+        </div>
+      )}
+      {node && (
+        <NodeDialog
+          key={node.id}
+          node={node}
+          models={connection?.models || []}
+          onClose={() => setEditing(null)}
+          onSave={(n) =>
+            commit({
+              ...graph,
+              nodes: graph.nodes.map((x) => (x.id === n.id ? n : x)),
+            })
+          }
+        />
+      )}
+      {connect && (
+        <ChatGPTConnection
+          onClose={() => setConnect(false)}
+          onChange={setConnection}
+        />
+      )}
+      {integration && (
+        <IntegrationDialog
+          flow={flow}
+          save={save}
+          onChange={setFlow}
+          onClose={() => setIntegration(false)}
+        />
+      )}
+      {rename && (
+        <Modal title="Detalhes do Agentflow" onClose={() => setRename(false)}>
+          <div className="node-fields">
+            <label>
+              Nome
+              <input
+                autoFocus
+                value={title}
+                maxLength={100}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </label>
+            <label>
+              Descrição
+              <textarea
+                rows={3}
+                value={description}
+                maxLength={1000}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className="modal-actions">
+            <button className="studio-button" onClick={() => setRename(false)}>
+              Cancelar
+            </button>
+            <button
+              className="studio-button primary"
+              disabled={!title.trim()}
+              onClick={() => {
+                setFlow({ ...flow, name: title.trim(), description });
+                setDirty(true);
+                setRename(false);
+              }}
+            >
+              Salvar detalhes
+            </button>
+          </div>
+        </Modal>
+      )}
+      {confirmDelete && (
+        <Modal
+          title="Excluir Agentflow"
+          onClose={() => setConfirmDelete(false)}
+        >
+          <p>
+            Excluir “{flow.name}”? O histórico de execuções será preservado.
+          </p>
+          <div className="modal-actions">
+            <button
+              className="studio-button"
+              onClick={() => setConfirmDelete(false)}
+            >
+              Cancelar
+            </button>
+            <button
+              className="studio-button danger"
+              disabled={busy}
+              onClick={() =>
+                act(async () => {
+                  await request("/api/flows/" + id, "DELETE");
+                  setDirty(false);
+                  router.push("/");
+                })
+              }
+            >
+              Excluir fluxo
+            </button>
+          </div>
+        </Modal>
+      )}
+    </main>
   );
 }

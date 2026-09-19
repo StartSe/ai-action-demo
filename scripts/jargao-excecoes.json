@@ -1,5 +1,6 @@
 {
   "build-agentflows": [
-    "webhook"
+    "webhook",
+    "token"
   ]
 }
