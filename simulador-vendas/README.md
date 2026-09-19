@@ -238,3 +238,7 @@ Em Configurações → Dados de exemplo, é possível remover a demonstração. 
 ### Cadastro e revisão (0.4.0)
 
 Escolha **Importar pelo link** ou **Preencher manualmente**. A importação mostra as etapas informadas pelo servidor e sugere nome, categoria, descrição e ficha em uma única leitura com IA. A revisão abre esses campos editáveis; materiais adicionais ficam recolhidos. **Confirmar ficha** salva os dados básicos junto da ficha e libera o treino. Informações ausentes, como preço e concorrentes, não são inventadas. Respostas vazias da IA preservam a página como material e oferecem nova tentativa, sem anunciar sucesso.
+
+### Ajustes de voz (0.4.1)
+
+O fluxo LiveKit publica o microfone antes de aguardar a prontidão do agente, como no Entrevistadora IA, evitando uma espera circular na conexão. O agente aguarda o participante e só inicializa a CLI quando executado diretamente. A imagem inclui as bibliotecas de áudio e corrige a propriedade do volume antes de iniciar os processos sem root. O build testa a preservação da chave mestra e das configurações em um volume com proprietário antigo.

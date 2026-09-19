@@ -26,11 +26,11 @@ export function useConversaLivekit(codigo: string, callbacks: Callbacks) {
     if (roomRef.current?.state === "connected") return roomRef.current;
     cb.current.estado("conectando");
     pendente.current = (async () => {
-      const r = await fetch(`/api/salas/${codigo}/livekit`, { method: "POST" });
+      const r = await fetch(`/api/salas/${codigo}/livekit`, { method: "POST", signal: AbortSignal.timeout(10000) });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "Não foi possível conectar a voz.");
       if (!montada.current) throw new Error("Conversa fechada");
-      const room = new Room();
+      const room = new Room({ adaptiveStream: true, audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       roomRef.current = room;
       const atualizar = (_: unknown, p: Participant) => {
         if (!p.isAgent || encerrando.current) return;
@@ -40,7 +40,7 @@ export function useConversaLivekit(codigo: string, callbacks: Callbacks) {
       room.on(RoomEvent.ParticipantAttributesChanged, atualizar);
       room.on(RoomEvent.TrackSubscribed, track => {
         if (track.kind !== Track.Kind.Audio) return;
-        const audio = track.attach(); audio.muted = silencioso.current; audios.current.add(audio);
+        const audio = track.attach(); audio.muted = silencioso.current; audio.hidden = true; document.body.appendChild(audio); audios.current.add(audio);
         void audio.play().catch(() => cb.current.erro("Toque em Iniciar microfone para liberar o áudio."));
       });
       room.on(RoomEvent.TrackUnsubscribed, track => { track.detach().forEach(a => { audios.current.delete(a); a.remove(); }); });
@@ -56,11 +56,18 @@ export function useConversaLivekit(codigo: string, callbacks: Callbacks) {
         } catch { if (montada.current) cb.current.erro("Não foi possível exibir uma legenda da conversa."); }
       });
       try {
-        await room.connect(data.url, data.token);
+        await room.connect(data.url, data.token, { peerConnectionTimeout: 15000, websocketTimeout: 10000 });
+        if (!montada.current || encerrando.current) throw new Error("Conversa fechada");
         await room.startAudio();
+        // O agente pode depender da faixa de áudio para sair de initializing.
+        // Publicar só depois de listening cria uma espera circular.
+        if (querMicrofone.current && !encerrando.current) {
+          await room.localParticipant.setMicrophoneEnabled(true);
+          if (!montada.current || !querMicrofone.current || encerrando.current) await room.localParticipant.setMicrophoneEnabled(false);
+        }
         const inicio = Date.now();
         while (!agente(room) || agente(room)?.attributes["lk.agent.state"] === "initializing") {
-          if (!montada.current || room.state !== "connected") throw new Error("Conexão interrompida");
+          if (!montada.current || encerrando.current || room.state !== "connected") throw new Error("Conexão interrompida");
           if (Date.now() - inicio > 25000) throw new Error("O serviço de voz não respondeu. Você pode tentar novamente ou usar a voz do navegador.");
           await new Promise(resolve => setTimeout(resolve, 100));
         }
@@ -83,6 +90,7 @@ export function useConversaLivekit(codigo: string, callbacks: Callbacks) {
     async texto(texto: string) {
       querMicrofone.current = false;
       silencioso.current = true; audios.current.forEach(a => { a.muted = true; });
+      await roomRef.current?.localParticipant.setMicrophoneEnabled(false);
       const room = await conectar();
       if (!montada.current || encerrando.current) throw new Error("A conversa foi encerrada antes do envio.");
       await room.localParticipant.setMicrophoneEnabled(false);
@@ -102,6 +110,7 @@ export function useConversaLivekit(codigo: string, callbacks: Callbacks) {
     },
     async finalizar() {
       encerrando.current = true; querMicrofone.current = false;
+      await roomRef.current?.localParticipant.setMicrophoneEnabled(false);
       if (pendente.current) await pendente.current.catch(() => undefined);
       const room = roomRef.current;
       if (!room) return;

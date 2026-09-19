@@ -39,6 +39,7 @@ export default defineAgent({
     });
     session.on(voice.AgentSessionEventTypes.Close, () => { setTimeout(() => ctx.shutdown("Conversa finalizada"), 500); });
     await ctx.connect();
+    await ctx.waitForParticipant(`vendedor-${sessao.id}`);
     const dono = `vendedor-${sessao.id}`;
     ctx.room.localParticipant!.registerRpcMethod("interromper", async data => {
       if (data.callerIdentity !== dono) throw new Error("Participante inválido");
@@ -48,12 +49,14 @@ export default defineAgent({
       if (data.callerIdentity !== dono) throw new Error("Participante inválido");
       await session.close(); return "ok";
     });
-    await session.start({ agent: new voice.Agent({ instructions: roteiro.instrucoes, chatCtx }), room: ctx.room, inputOptions: { participantIdentity: dono, closeOnDisconnect: false } });
+    await session.start({ agent: new voice.Agent({ instructions: roteiro.instrucoes, chatCtx }), room: ctx.room, inputOptions: { participantIdentity: dono, textEnabled: true, closeOnDisconnect: false } });
     const prazo = setTimeout(() => { void session.close(); }, restanteSeg(sessao, simulacao.duracaoMin) * 1000);
     ctx.addShutdownCallback(async () => { clearTimeout(prazo); await session.close(); });
   },
 });
 
-const opcoes = new ServerOptions({ agent: fileURLToPath(import.meta.url), agentName: NOME_AGENTE, numIdleProcesses: 1,
-  wsURL: getConfig("LIVEKIT_URL"), apiKey: getConfig("LIVEKIT_API_KEY"), apiSecret: getConfig("LIVEKIT_API_SECRET") });
-cli.runApp(opcoes);
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const opcoes = new ServerOptions({ agent: fileURLToPath(import.meta.url), agentName: NOME_AGENTE, numIdleProcesses: 1,
+    wsURL: getConfig("LIVEKIT_URL"), apiKey: getConfig("LIVEKIT_API_KEY"), apiSecret: getConfig("LIVEKIT_API_SECRET") });
+  cli.runApp(opcoes);
+}

@@ -38,7 +38,7 @@ type Sala = { state: string; mensagens: string[]; microfones: boolean[]; pronto:
 type Harness = { chamada: { iniciar: () => Promise<void>; pausar: () => Promise<void>; texto: (texto: string) => Promise<void>; finalizar: () => Promise<void> }; salas: Sala[]; pedidos: number; terminou?: boolean; erro?: string; desmontar: () => void };
 
 test("texto aguarda o agente e cancela a abertura pendente do microfone", async ({ page }) => {
-  await page.evaluate(() => { const w = window as unknown as Harness; void w.chamada.iniciar(); });
+  await page.evaluate(() => { const w = window as unknown as Harness; void w.chamada.iniciar().catch(() => {}); });
   await page.waitForFunction(() => (window as unknown as Harness).salas[0]?.state === "connected");
   await page.evaluate(() => { const w = window as unknown as Harness; void w.chamada.texto("Bom dia").then(() => { w.terminou = true; }); });
   // A sala WebRTC já conectou, mas o agente ainda não está pronto.
@@ -48,14 +48,24 @@ test("texto aguarda o agente e cancela a abertura pendente do microfone", async 
   const observado = await page.evaluate(() => { const w = window as unknown as Harness; return { pedidos: w.pedidos, mensagens: w.salas[0].mensagens, microfones: w.salas[0].microfones }; });
   expect(observado.pedidos).toBe(1);
   expect(observado.mensagens).toEqual(["Bom dia"]);
-  expect(observado.microfones).not.toContain(true);
+  expect(observado.microfones.at(-1)).toBe(false);
 });
 
 test("encerrar durante a conexão não abre o microfone depois", async ({ page }) => {
-  await page.evaluate(() => { const w = window as unknown as Harness; void w.chamada.iniciar(); });
+  await page.evaluate(() => { const w = window as unknown as Harness; void w.chamada.iniciar().catch(() => {}); });
   await page.waitForFunction(() => Boolean((window as unknown as Harness).salas[0]));
   await page.evaluate(() => { const w = window as unknown as Harness; void w.chamada.finalizar().then(() => { w.terminou = true; }); w.salas[0].pronto(); });
   await page.waitForFunction(() => (window as unknown as Harness).terminou);
-  expect(await page.evaluate(() => (window as unknown as Harness).salas[0].microfones)).not.toContain(true);
+  expect(await page.evaluate(() => (window as unknown as Harness).salas[0].microfones.at(-1))).toBe(false);
   expect(await page.evaluate(() => (window as unknown as Harness).salas[0].state)).toBe("disconnected");
+});
+
+
+test("publica o microfone antes de aguardar o agente, sem espera circular", async ({ page }) => {
+  await page.evaluate(() => { const w = window as unknown as Harness; void w.chamada.iniciar().then(() => { w.terminou = true; }); });
+  await page.waitForFunction(() => (window as unknown as Harness).salas[0]?.microfones.includes(true));
+  expect(await page.evaluate(() => (window as unknown as Harness).terminou)).not.toBe(true);
+  // Simula o agente que só consegue terminar a preparação após receber a faixa.
+  await page.evaluate(() => (window as unknown as Harness).salas[0].pronto());
+  await page.waitForFunction(() => (window as unknown as Harness).terminou);
 });

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -23,4 +23,12 @@ test("produção mantém site e voz juntos e recupera o processo de voz", async 
     pai.kill("SIGTERM"); await encerrado;
     for (const p of ler()) expect(() => process.kill(p.pid, 0)).toThrow();
   } finally { pai.kill("SIGTERM"); for (const p of ler()) { try { process.kill(p.pid, "SIGTERM"); } catch {} } rmSync(dir, { recursive: true, force: true }); }
+});
+
+
+test("importar o agente em um processo de chamada não inicia outra CLI", () => {
+  const resultado = spawnSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", "await import('./agent/main.ts'); console.log('agente-importado');"], { encoding: "utf8", timeout: 10000 });
+  expect(resultado.error).toBeUndefined();
+  expect(resultado.status, resultado.stderr).toBe(0);
+  expect(resultado.stdout).toContain("agente-importado");
 });
