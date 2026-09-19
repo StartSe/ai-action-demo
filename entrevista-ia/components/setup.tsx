@@ -404,7 +404,7 @@ const LIMITE_BOTOES = 3;
 
 // Ordem fixa dos grupos de um <select> com Opcao.grupo definido (hoje só o modelo de IA).
 const GRUPOS_OPCAO: { chave: NonNullable<Opcao["grupo"]>; rotulo: string }[] = [
-  { chave: "recomendado", rotulo: "Recomendado (gratuito)" },
+  { chave: "recomendado", rotulo: "Recomendado" },
   { chave: "gratuito", rotulo: "Outros gratuitos" },
   { chave: "pago", rotulo: "Pagos (mais qualidade)" },
 ];

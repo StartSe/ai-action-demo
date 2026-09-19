@@ -511,7 +511,7 @@ export function FormularioVaga({
               <option value="objetivo">Objetivo</option>
             </select>
           </Field>
-          <Field label="Número de perguntas" htmlFor="vaga-perguntas">
+          <Field label="Perguntas principais" htmlFor="vaga-perguntas">
             <select id="vaga-perguntas" className="input" value={dados.numeroPerguntas} onChange={(e) => mudar({ numeroPerguntas: Number(e.target.value) })}>
               {[6, 7, 8, 9, 10, 11, 12].map((n) => (
                 <option key={n} value={n}>{n} perguntas</option>
@@ -520,9 +520,9 @@ export function FormularioVaga({
           </Field>
         </Row>
 
-        <Field label="Duração estimada" htmlFor="vaga-duracao" hint="É o que o candidato lê antes de começar.">
+        <Field label="Duração estimada" htmlFor="vaga-duracao" hint="De 10 a 20 minutos, com tempo para pensar e aprofundar as respostas.">
           <select id="vaga-duracao" className="input" value={dados.duracaoMin} onChange={(e) => mudar({ duracaoMin: Number(e.target.value) })}>
-            {[10, 15, 20, 25, 30].map((n) => (
+            {[10, 15, 20].map((n) => (
               <option key={n} value={n}>{n} minutos</option>
             ))}
           </select>

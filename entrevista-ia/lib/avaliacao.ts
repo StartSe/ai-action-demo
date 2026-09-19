@@ -28,7 +28,7 @@ import { esperar, parecerDemo } from "./demo";
 import { lerRoteiro, obter as obterEntrevista, registrarResultado, transcricao } from "./entrevistas";
 import { faixaSalarial } from "./formato";
 import { salvar } from "./historico";
-import { fichaParaEntrevista } from "./roteiro";
+import { decidirPasso, fichaParaEntrevista, posicaoNoRoteiro } from "./roteiro";
 import { obter as obterVaga } from "./vagas";
 import type {
   AderenciaRequisito,
@@ -38,6 +38,7 @@ import type {
   ItemConsistencia,
   ItemFichaRoteiro,
   Parecer,
+  Roteiro,
   Recomendacao,
   SituacaoConsistencia,
   SituacaoRequisito,
@@ -118,21 +119,22 @@ function corte(bruto: string, limite: number): string {
   return limpo.length > limite ? `${limpo.slice(0, limite)}…` : limpo;
 }
 
-/**
- * Quantas perguntas esta conversa era para ter — o plano guardado, ou o combinado na vaga.
- *
- * O plano (US-016) já respeita o número de perguntas da vaga e pode ser menor que ele; usar sempre a
- * vaga faria uma entrevista completa de sete perguntas, planejada para oito, parecer interrompida.
- */
-function perguntasCombinadas(entrevistaId: string, numeroPerguntas: number): number {
+/** Aprofundamentos não completam tópicos. Só a resposta à última pergunta do
+ * plano encerra a v2; pareceres de roteiros antigos mantêm a contagem original. */
+function entrevistaParcial(entrevistaId: string, numeroPerguntas: number, falas: Troca[]): boolean {
+  const respostas = falas.filter(f => f.papel === "candidato").length;
   const bruto = lerRoteiro(entrevistaId);
-  if (!bruto) return numeroPerguntas;
+  if (!bruto) return respostas < numeroPerguntas;
   try {
-    const plano = JSON.parse(bruto) as { perguntas?: unknown[] };
-    return Array.isArray(plano.perguntas) && plano.perguntas.length > 0 ? plano.perguntas.length : numeroPerguntas;
+    const plano = JSON.parse(bruto) as Roteiro;
+    if (!Array.isArray(plano.perguntas) || !plano.perguntas.length) return respostas < numeroPerguntas;
+    if (plano.versaoConducao !== 2) return respostas < plano.perguntas.length;
+    const ultimaResposta = falas.findLastIndex(f => f.papel === "candidato");
+    const posicao = posicaoNoRoteiro(plano, falas.slice(0, ultimaResposta + 1), numeroPerguntas);
+    return decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas }).tipo !== "encerrar";
   } catch (err) {
     console.error("Roteiro gravado ilegível ao medir a entrevista; vale o número combinado na vaga.", err);
-    return numeroPerguntas;
+    return respostas < numeroPerguntas;
   }
 }
 
@@ -177,7 +179,7 @@ export function contextoDaAvaliacao(entrevistaId: string): ContextoAvaliacao & {
     divergencias: candidato.ficha?.divergencias ?? [],
     falas,
     perguntasFeitas: falas.filter((f) => f.papel === "entrevistadora").length,
-    parcial: respostas < perguntasCombinadas(entrevistaId, vaga.numeroPerguntas),
+    parcial: entrevistaParcial(entrevistaId, vaga.numeroPerguntas, falas),
   };
 }
 

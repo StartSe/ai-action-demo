@@ -49,3 +49,48 @@ test("correção de JSON compartilha o prazo total em vez de reiniciar o relógi
   assert.equal(sinais.length, 2);
   assert.equal(sinais[0], sinais[1]);
 });
+
+test("resposta só com raciocínio tenta recuperar texto dentro do mesmo prazo", async t => {
+  const chamadas: RequestInit[] = [];
+  t.mock.method(console, "warn", () => {});
+  t.mock.method(globalThis, "fetch", async (_url: unknown, opts?: RequestInit) => {
+    chamadas.push(opts!);
+    return Response.json({ choices: [{ finish_reason: chamadas.length === 1 ? "length" : "stop", message: {
+      content: chamadas.length === 1 ? null : '{"ok":true}', reasoning: "não é a resposta",
+    } }] });
+  });
+  assert.deepEqual(await askJSON({ system: "teste", prompt: "teste", maxTokens: 2000, limiteMs: 90000 }), { ok: true });
+  assert.equal(chamadas.length, 2);
+  assert.equal(chamadas[0].signal, chamadas[1].signal);
+  const recuperacao = JSON.parse(String(chamadas[1].body));
+  assert.equal(recuperacao.max_tokens, 4000);
+  assert.deepEqual(recuperacao.reasoning, { effort: "low" });
+});
+
+test("resposta vazia persistente encerra após duas chamadas com ação para trocar modelo", async t => {
+  let chamadas = 0;
+  t.mock.method(console, "warn", () => {});
+  t.mock.method(globalThis, "fetch", async () => {
+    chamadas++;
+    return Response.json({ choices: [{ message: { content: "   " } }] });
+  });
+  await assert.rejects(askJSON({ system: "teste", prompt: "teste" }), (err: unknown) => {
+    assert.ok(err instanceof ErroIA);
+    assert.equal(err.codigo, "resposta_vazia");
+    assert.equal(err.acao?.url, "/setup#openrouter");
+    return true;
+  });
+  assert.equal(chamadas, 2);
+});
+
+test("falha de autenticação não dispara recuperação de resposta vazia", async t => {
+  let chamadas = 0;
+  t.mock.method(console, "error", () => {});
+  t.mock.method(globalThis, "fetch", async () => { chamadas++; return new Response("recusada", { status: 401 }); });
+  await assert.rejects(askText({ system: "teste", prompt: "teste" }), (err: unknown) => {
+    assert.ok(err instanceof ErroIA);
+    assert.equal(err.codigo, "chave_invalida");
+    return true;
+  });
+  assert.equal(chamadas, 1);
+});

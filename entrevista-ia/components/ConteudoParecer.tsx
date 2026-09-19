@@ -69,19 +69,26 @@ export function ConteudoParecer({
     <>
       {parecer.parcial && <div className="mb-5"><Aviso tom="warn">{AVISO_PARCIAL}</Aviso></div>}
 
-      <Destaque valor={`${numero(parecer.notaGeral, 1)}/10`} rotulo="Nota geral" tom={tomNota} />
-      <div className="mb-4"><Chip nivel={nivelRec}>{parecer.recomendacao}</Chip></div>
-      <p className="summary">{parecer.resumo}</p>
+      <div className="grid grid-cols-[180px_1fr] gap-7 items-start mb-7 rounded-xl bg-bg/60 p-5 max-sm:grid-cols-1 max-sm:gap-4 print:bg-transparent">
+        <div>
+          <Destaque valor={`${numero(parecer.notaGeral, 1)}/10`} rotulo="Nota geral" tom={tomNota} />
+          <Chip nivel={nivelRec}>{parecer.recomendacao}</Chip>
+        </div>
+        <div>
+          <h2 className="font-bold mb-2">Síntese da entrevista</h2>
+          <p className="text-[16px] leading-relaxed text-ink-2">{parecer.resumo}</p>
+        </div>
+      </div>
 
       {abaixoDoResumo}
 
       <Section titulo="Aderência à vaga">
-        <div className="flex flex-col gap-3.5">
+        <div className="grid grid-cols-2 gap-3.5 max-md:grid-cols-1 print:grid-cols-1">
           {parecer.aderencia.map((a, i) => (
             <Item key={i}>
               <div className="flex items-start justify-between gap-3 mb-1">
                 <strong>{a.requisito}</strong>
-                <Chip nivel={NIVEL_REQUISITO[a.situacao]}>{ROTULO_REQUISITO[a.situacao]}</Chip>
+                <span className="shrink-0"><Chip nivel={NIVEL_REQUISITO[a.situacao]}>{ROTULO_REQUISITO[a.situacao]}</Chip></span>
               </div>
               <p className="text-sm text-ink-2">{a.evidencia}<DeQualPergunta pergunta={a.pergunta} comConversa={comConversa} /></p>
             </Item>
@@ -108,7 +115,7 @@ export function ConteudoParecer({
       </Section>
 
       <Section titulo="Cultura">
-        <div className="flex flex-col gap-3.5">
+        <div className="grid grid-cols-2 gap-3.5 max-md:grid-cols-1 print:grid-cols-1">
           {parecer.cultura.map((c, i) => (
             <Item key={i}>
               <div className="flex items-start justify-between gap-3 mb-1">
@@ -126,12 +133,12 @@ export function ConteudoParecer({
 
       {parecer.consistencia.length > 0 && (
         <Section titulo="O que bate e o que não bate">
-          <div className="flex flex-col gap-3.5">
+          <div className="grid grid-cols-2 gap-3.5 max-md:grid-cols-1 print:grid-cols-1">
             {parecer.consistencia.map((c, i) => (
               <Item key={i}>
                 <div className="flex items-start justify-between gap-3 mb-1">
                   <strong>{c.afirmacao}</strong>
-                  <Chip nivel={NIVEL_CONSISTENCIA[c.situacao]}>{ROTULO_CONSISTENCIA[c.situacao]}</Chip>
+                  <span className="shrink-0"><Chip nivel={NIVEL_CONSISTENCIA[c.situacao]}>{ROTULO_CONSISTENCIA[c.situacao]}</Chip></span>
                 </div>
                 <p className={`text-sm ${c.situacao === "nao_verificavel" ? "text-muted" : "text-ink-2"}`}>
                   Comparado com o {ROTULO_FONTE_CONSISTENCIA[c.fonte]}: {c.detalhe}
@@ -142,6 +149,7 @@ export function ConteudoParecer({
         </Section>
       )}
 
+      <div className="grid grid-cols-2 gap-6 max-sm:grid-cols-1 max-sm:gap-0">
       <Section titulo="Pontos fortes">
         <ul className="list-disc pl-5 flex flex-col gap-1.5">
           {parecer.pontosFortes.map((p, i) => <li key={i}>{p}</li>)}
@@ -153,6 +161,8 @@ export function ConteudoParecer({
           {parecer.pontosAtencao.map((p, i) => <li key={i}>{p}</li>)}
         </ul>
       </Section>
+
+      </div>
 
       <Section titulo="Para a próxima etapa">
         <Item>
@@ -177,7 +187,7 @@ export function ConteudoParecer({
       )}
 
       {conversa && conversa.length > 0 && (
-        <details className="mt-2">
+        <details className="mt-2 border-t border-line pt-5">
           <summary className="text-[13px] font-bold text-accent-ink cursor-pointer marker:content-none mb-3">Ver a conversa completa</summary>
           <div className="flex flex-col gap-2.5 card shadow-none p-4">
             {conversa.map((fala, i) => {

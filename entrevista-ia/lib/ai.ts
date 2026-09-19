@@ -6,8 +6,8 @@ import { MODELO_AUTOMATICO, MODELOS_VISAO } from "./modelos";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-// Modelo padrão gratuito. Troque por OPENROUTER_MODEL (ex.: "anthropic/claude-sonnet-4.5") quando quiser um modelo pago.
-export const DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free";
+// Modelo padrão da entrevista. OPENROUTER_MODEL ou a escolha em Configurações podem substituí-lo.
+export const DEFAULT_MODEL = "openai/gpt-4.1-mini";
 // Se o modelo principal falhar (fila cheia, indisponível), o OpenRouter tenta estes em ordem.
 export const FALLBACK_MODELS = ["google/gemma-4-31b-it:free", "nvidia/nemotron-3-ultra-550b-a55b:free"];
 
@@ -181,22 +181,40 @@ export async function askText({ system, prompt, maxTokens = 4000, temperature = 
   const messages: Message[] = [{ role: "system", content: system }, { role: "user", content: prompt }];
   const escolha = model || modelName();
   const fallbacks = (getConfig("OPENROUTER_FALLBACK_MODELS") || FALLBACK_MODELS.join(",")).split(",").map((m) => m.trim()).filter(Boolean);
-  const res = await chamarOpenRouter({
+  const body = {
     model: escolha,
     models: [escolha, ...fallbacks],
     messages,
     max_tokens: maxTokens,
     temperature,
-  }, limiteMs, prazo);
-  if (!res.ok) {
-    const detalhe = await res.text().catch(() => "");
-    throw interpretarFalha(res, detalhe);
+  };
+  for (let tentativa = 0; tentativa < 2; tentativa++) {
+    const res = await chamarOpenRouter({
+      ...body,
+      // Uma resposta vazia pode ter consumido todo o orçamento em raciocínio.
+      // Reduzir o esforço preserva modelos em que raciocínio é obrigatório.
+      ...(tentativa > 0 ? { reasoning: { effort: "low" } } : {}),
+    }, limiteMs, prazo);
+    if (!res.ok) {
+      const detalhe = await res.text().catch(() => "");
+      throw interpretarFalha(res, detalhe);
+    }
+    // O fetch pode receber os cabeçalhos antes do prazo, mas expirar lendo o corpo.
+    const data = await res.json().catch((err: unknown) => { conferirTimeout(err, prazo); throw err; });
+    const resposta = data?.choices?.[0];
+    const texto = resposta?.message?.content;
+    if (typeof texto === "string" && texto.trim()) return texto;
+    // Só metadados: não registrar prompt, currículo nem raciocínio do modelo.
+    console.warn("Resposta vazia da IA:", {
+      modelo: data?.model ?? escolha,
+      motivo: resposta?.finish_reason,
+      tokens: data?.usage?.completion_tokens,
+      tokensRaciocinio: data?.usage?.completion_tokens_details?.reasoning_tokens,
+      tentativa: tentativa + 1,
+    });
+    if (resposta?.finish_reason === "length") body.max_tokens = maxTokens * 2;
   }
-  // O fetch pode receber os cabeçalhos antes do prazo, mas expirar lendo o corpo.
-  const data = await res.json().catch((err: unknown) => { conferirTimeout(err, prazo); throw err; });
-  const texto = data?.choices?.[0]?.message?.content;
-  if (!texto) throw new ErroIA("resposta_vazia", "A IA devolveu uma resposta vazia. Tente novamente.", 502);
-  return String(texto);
+  throw new ErroIA("resposta_vazia", "A IA devolveu uma resposta vazia mesmo após uma nova tentativa. Tente novamente ou escolha outro modelo em Configurações.", 502, ACAO_TROCAR_MODELO);
 }
 
 type VisionContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
@@ -241,7 +259,7 @@ export async function askVision({
 export async function askJSON<T = unknown>(opts: { system: string; prompt: string; maxTokens?: number; model?: string; limiteMs?: number }): Promise<T> {
   const system = `${opts.system}\n\nResponda somente com JSON válido, sem comentários e sem blocos de código markdown.`;
   // Um único prazo inclui a repetição HTTP e a correção de JSON inválido.
-  const signal = opts.limiteMs ? AbortSignal.timeout(opts.limiteMs) : undefined;
+  const signal = AbortSignal.timeout(opts.limiteMs ?? 120000);
   const texto = await askText({ ...opts, system, temperature: 0.2, signal });
   try {
     return parseJSON<T>(texto);

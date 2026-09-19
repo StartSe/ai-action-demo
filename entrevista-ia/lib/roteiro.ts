@@ -22,7 +22,7 @@ import { comTurnoExclusivo } from "./trava-entrevista";
 //
 // Substitui o `proximaPergunta`/`SYSTEM_PERGUNTA` que morava em `lib/entrevista.ts`, onde a
 // entrevistadora só conhecia o título e os requisitos digitados num formulário.
-import { aiEnabled, askJSON } from "./ai";
+import { aiEnabled, askJSON, ErroIA } from "./ai";
 import { obter as obterCandidato } from "./candidatos";
 import { obterCultura } from "./cultura";
 import { esperar, followUpDemo, roteiroDemo } from "./demo";
@@ -55,7 +55,7 @@ import type {
 // ---------------------------------------------------------------------------------------------
 
 /** Uma resposta com até tantas palavras não sustenta nada: é dela que nasce o follow-up. */
-export const PALAVRAS_RESPOSTA_VAGA = 12;
+export const PALAVRAS_RESPOSTA_VAGA = 40;
 
 /** Quanto da ficha e da conversa vai no prompt de cada turno. A entrevista inteira cabe folgado; o
  * corte existe para uma transcrição estranhamente longa não virar um pedido gigante. */
@@ -184,7 +184,7 @@ export function contextoDaVaga(
     naoCombina: cultura.naoCombina,
     tom: vaga.tom,
     numeroPerguntas: vaga.numeroPerguntas,
-    duracaoMin: vaga.duracaoMin,
+    duracaoMin: Math.min(20, Math.max(10, vaga.duracaoMin)),
     perguntaPretensao: vaga.perguntaPretensao,
     candidato: {
       nome: candidato?.nome ?? "",
@@ -248,7 +248,8 @@ Os blocos, nesta ordem:
 
 Regras:
 - O total de perguntas tem de ser EXATAMENTE o número pedido. Corte primeiro de "cultura" e "desafios"; "abertura" e "encerramento" têm sempre uma cada.
-- Uma pergunta por vez, curta (no máximo 2 frases), para ser ouvida e não lida.
+- Planeje uma conversa de 10 a 20 minutos, com cerca de 1 a 2 minutos para cada resposta. Prefira perguntas abertas sobre situações reais, ações e resultados; evite perguntas de sim ou não.
+- Uma pergunta principal por vez, curta (no máximo 2 frases), para ser ouvida e não lida. Os aprofundamentos acontecem depois e NÃO substituem perguntas do roteiro.
 - As perguntas de cultura NUNCA citam o nome do valor ou da competência: "Fale sobre colaboração" está proibido. Peça uma situação real de trabalho e deixe o comportamento aparecer.
 - Nunca mencione que o candidato foi pesquisado na internet nem cite um perfil público ("Vi no seu LinkedIn que..." está proibido). Falar do que está no currículo é permitido ("Você comentou no currículo que...").
 - Nunca mencione nota, avaliação, parecer ou que a conversa será analisada.
@@ -342,6 +343,7 @@ export function normalizarRoteiro(bruto: unknown, ctx: ContextoRoteiro, demo = f
   const final = [...corpo.slice(0, Math.max(0, ctx.numeroPerguntas - 1)), fim];
 
   return {
+    versaoConducao: 2,
     perguntas: final,
     despedida:
       corte(dados.despedida) ||
@@ -355,10 +357,20 @@ export function normalizarRoteiro(bruto: unknown, ctx: ContextoRoteiro, demo = f
 export async function planejarRoteiro(ctx: ContextoRoteiro, limiteMs = 25000): Promise<Roteiro> {
   if (!aiEnabled()) {
     await esperar(600);
-    return roteiroDemo(ctx);
+    return { ...roteiroDemo(ctx), versaoConducao: 2 };
   }
-  const bruto = await askJSON<unknown>({ system: SYSTEM_ROTEIRO, prompt: construirPromptRoteiro(ctx), maxTokens: 2000, limiteMs });
-  return normalizarRoteiro(bruto, ctx);
+  const inicio = Date.now();
+  for (let tentativa = 0; tentativa < 2; tentativa++) {
+    const bruto = await askJSON<unknown>({
+      system: SYSTEM_ROTEIRO,
+      prompt: construirPromptRoteiro(ctx) + (tentativa ? "\nA tentativa anterior veio incompleta. Inclua todas as perguntas solicitadas, abertura e encerramento." : ""),
+      maxTokens: 4000,
+      limiteMs: Math.max(1, limiteMs - (Date.now() - inicio)),
+    });
+    const plano = normalizarRoteiro(bruto, ctx);
+    if (plano.perguntas.length === ctx.numeroPerguntas && plano.perguntas[0].bloco === "abertura") return plano;
+  }
+  throw new ErroIA("resposta_invalida", "A IA não preparou todas as perguntas da entrevista. Tente preparar o convite novamente.", 502);
 }
 
 /** Uma ficha gravada num formato antigo (ou escrita por outra versão) nunca derruba a sala. */
@@ -417,53 +429,35 @@ export function respostaVaga(texto: string): boolean {
 export type PassoRoteiro =
   | { tipo: "encerrar" }
   | { tipo: "followup"; bloco: BlocoRoteiro }
-  | { tipo: "pergunta"; indice: number; pergunta: PerguntaRoteiro };
+  | { tipo: "pergunta" | "retomar"; indice: number; pergunta: PerguntaRoteiro };
 
-type Posicao = { indice: number; feitas: number; followUps: BlocoRoteiro[] };
+type Posicao = { indice: number; feitas: number; followUps: number[] };
 
-/**
- * O que a entrevistadora faz agora. Função **pura**, testada por `npm test`, porque é ela que decide
- * em silêncio quantas perguntas a pessoa do outro lado vai ouvir.
- *
- * Duas garantias, e as duas são sobre não estourar o combinado com o gestor:
- *
- *  - **Um follow-up por bloco**, e só quando ainda cabem duas perguntas (a dele e o encerramento).
- *  - **A última vaga do total é sempre do encerramento.** Se os aprofundamentos comeram o caminho,
- *    a conversa pula direto para "você tem alguma pergunta?" em vez de terminar sem ele.
- */
-export function decidirPasso({
-  plano,
-  posicao,
-  resposta,
-  numeroPerguntas,
-}: {
+/** Aprofundamentos não gastam perguntas principais. Cada pergunta pode ganhar um
+ * aprofundamento; só encerramos depois de percorrer todo o plano e ouvir a resposta final. */
+export function decidirPasso({ plano, posicao, resposta }: {
   plano: Roteiro;
   posicao: Posicao;
   resposta: string;
   numeroPerguntas: number;
 }): PassoRoteiro {
-  const { indice, feitas, followUps } = posicao;
-  if (feitas >= numeroPerguntas || indice >= plano.perguntas.length) return { tipo: "encerrar" };
-
-  const sobra = numeroPerguntas - feitas;
-  const blocoAnterior = indice > 0 ? plano.perguntas[indice - 1].bloco : null;
-  if (
-    resposta &&
-    blocoAnterior &&
-    blocoAnterior !== "encerramento" &&
-    !followUps.includes(blocoAnterior) &&
-    sobra >= 2 &&
-    respostaVaga(resposta)
-  ) {
-    return { tipo: "followup", bloco: blocoAnterior };
+  const { indice, followUps } = posicao;
+  const anterior = plano.perguntas[indice - 1];
+  if (anterior && resposta.trim().split(/\s+/).length <= 16 && /^(?:(?:desculp[ae]|oi)[,.!?]?\s*)?(?:pode(?:ria)? repetir|repita|não (?:ouvi|entendi)|qual (?:era|foi) a pergunta)/i.test(resposta.trim())) {
+    return { tipo: "retomar", indice: indice - 1, pergunta: anterior };
   }
-
-  let i = indice;
-  if (sobra <= 1) {
-    const fim = plano.perguntas.findIndex((p, k) => k >= indice && p.bloco === "encerramento");
-    if (fim >= 0) i = fim;
+  if (indice >= plano.perguntas.length) return { tipo: "encerrar" };
+  const preferePular = /(?:não (?:sei|tenho experiência|quero responder)|prefiro não|pode pular)/i.test(resposta);
+  if (resposta && anterior && anterior.bloco !== "encerramento" &&
+      !followUps.includes(indice - 1) && !preferePular && respostaVaga(resposta)) {
+    return { tipo: "followup", bloco: anterior.bloco };
   }
-  return { tipo: "pergunta", indice: i, pergunta: plano.perguntas[i] };
+  return { tipo: "pergunta", indice, pergunta: plano.perguntas[indice] };
+}
+
+/** O indicador acompanha o roteiro, não o número de falas ou de aprofundamentos. */
+function indiceDoPasso(passo: PassoRoteiro, posicao: Posicao): number {
+  return passo.tipo === "pergunta" ? passo.indice + 1 : posicao.indice;
 }
 
 /**
@@ -484,7 +478,7 @@ export function posicaoNoRoteiro(plano: Roteiro, falas: Troca[], numeroPerguntas
     }
     const passo = decidirPasso({ plano, posicao, resposta, numeroPerguntas });
     if (passo.tipo === "followup") {
-      posicao.followUps.push(passo.bloco);
+      posicao.followUps.push(posicao.indice - 1);
       posicao.feitas++;
     } else if (passo.tipo === "pergunta") {
       posicao.indice = passo.indice + 1;
@@ -501,7 +495,7 @@ O roteiro já foi planejado e quem decide o próximo passo é o sistema, não vo
 
 Regras:
 - Uma fala curta, no máximo 3 frases, para ser OUVIDA.
-- Quando a instrução for "faça a próxima pergunta do roteiro", faça aquela pergunta. Você pode reescrevê-la para encaixar no que acabou de ser dito, mas não troque o assunto nem a deixe de fora.
+- Quando a instrução for "faça a próxima pergunta do roteiro", escreva SOMENTE uma breve transição ligada à última resposta, sem perguntas. O sistema acrescentará a pergunta planejada. Se não houver uma transição útil, devolva fala vazia. Nunca anuncie o encerramento nesta transição.
 - Quando a instrução for "aprofunde a última resposta", peça um exemplo concreto do que o candidato acabou de dizer, sem mudar de assunto e sem repetir a pergunta anterior com outras palavras.
 - Se o candidato tiver feito uma pergunta, responda em UMA frase, só com os fatos da vaga listados abaixo, e siga com a pergunta do turno. Se a resposta não estiver nos fatos, diga que quem responde isso é o time de recrutamento. Nunca invente benefício, salário, horário, etapa nem prazo.
 - Nunca mencione nota, avaliação, parecer nem que a conversa está sendo analisada.
@@ -545,7 +539,7 @@ async function escreverFala({
   ctx: ContextoRoteiro;
   plano: Roteiro;
   falas: Troca[];
-  passo: Extract<PassoRoteiro, { tipo: "followup" | "pergunta" }>;
+  passo: Exclude<PassoRoteiro, { tipo: "encerrar" }>;
   primeira: boolean;
 }): Promise<string> {
   const instrucao =
@@ -572,7 +566,13 @@ async function escreverFala({
   ].join("\n");
 
   const resposta = await askJSON<{ fala?: unknown }>({ system: SYSTEM_FALA, prompt, maxTokens: 400, limiteMs: 8000 });
-  return corte(resposta?.fala);
+  const fala = corte(resposta?.fala, passo.tipo === "pergunta" ? 180 : LIMITE_FALA);
+  if (passo.tipo === "pergunta") {
+    // O texto gerado não pode trocar o tópico, omitir a pergunta ou encerrar a conversa.
+    const transicao = /[?]|(?:encerr|termin|obrigad.*tempo|próxim[oa]s? passos)/i.test(fala) ? "" : fala;
+    return [transicao, passo.pergunta.pergunta].filter(Boolean).join(" ");
+  }
+  return fala;
 }
 
 /**
@@ -586,10 +586,11 @@ async function falaDoPasso(args: {
   ctx: ContextoRoteiro;
   plano: Roteiro;
   falas: Troca[];
-  passo: Extract<PassoRoteiro, { tipo: "followup" | "pergunta" }>;
+  passo: Exclude<PassoRoteiro, { tipo: "encerrar" }>;
   primeira: boolean;
 }): Promise<string> {
   const reserva = args.passo.tipo === "followup" ? followUpDemo() : args.passo.pergunta.pergunta;
+  if (args.passo.tipo === "retomar") return `Claro. ${reserva}`;
   if (!aiEnabled()) {
     await esperar(500);
     return reserva;
@@ -597,7 +598,7 @@ async function falaDoPasso(args: {
   // O roteiro já contém a primeira pergunta. Reformulá-la exigia outra chamada
   // ao provedor antes de a pessoa conseguir começar.
   if (args.primeira && args.passo.tipo === "pergunta") {
-    return `Olá${args.ctx.candidato.primeiroNome ? `, ${args.ctx.candidato.primeiroNome}` : ""}! ${reserva}`;
+    return `Olá${args.ctx.candidato.primeiroNome ? `, ${args.ctx.candidato.primeiroNome}` : ""}! Vamos conversar por cerca de ${args.ctx.duracaoMin} minutos. Fique à vontade para pensar e contar exemplos com calma. ${reserva}`;
   }
   try {
     return (await escreverFala(args)) || reserva;
@@ -695,7 +696,7 @@ async function executarProximaFala(
     return {
       pergunta: agora.texto,
       encerrar: passo.tipo === "encerrar",
-      indice: passo.tipo === "encerrar" ? posicao.feitas : posicao.feitas + 1,
+      indice: indiceDoPasso(passo, posicao),
       total: plano.perguntas.length,
       transcricao: falas,
     };
@@ -712,7 +713,7 @@ async function executarProximaFala(
   return {
     pergunta: texto,
     encerrar: passo.tipo === "encerrar",
-    indice: passo.tipo === "encerrar" ? posicao.feitas : posicao.feitas + 1,
+    indice: indiceDoPasso(passo, posicao),
     total: plano.perguntas.length,
     transcricao: [...falas, { papel: "entrevistadora", texto }],
   };
@@ -744,7 +745,7 @@ export async function conversaAtual(entrevistaId: string): Promise<Fala | null> 
   return {
     pergunta: ultima.papel === "entrevistadora" ? ultima.texto : "",
     encerrar: passo.tipo === "encerrar",
-    indice: passo.tipo === "encerrar" ? posicao.feitas : posicao.feitas + 1,
+    indice: indiceDoPasso(passo, posicao),
     total: plano.perguntas.length,
     transcricao: falas,
   };
@@ -791,7 +792,7 @@ export async function falaAvulsa(ctx: ContextoRoteiro, plano: Roteiro, historico
   return {
     pergunta: texto,
     encerrar: passo.tipo === "encerrar",
-    indice: passo.tipo === "encerrar" ? posicao.feitas : posicao.feitas + 1,
+    indice: indiceDoPasso(passo, posicao),
     total: plano.perguntas.length,
     transcricao: [...historico, { papel: "entrevistadora", texto }],
   };

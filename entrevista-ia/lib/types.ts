@@ -272,6 +272,8 @@ export interface PerguntaRoteiro {
 
 /** O plano da conversa, feito uma vez na abertura da sala e guardado em `entrevistas.roteiro`. */
 export interface Roteiro {
+  /** v2 separa aprofundamentos de perguntas principais na condução e no parecer. */
+  versaoConducao?: 2;
   perguntas: PerguntaRoteiro[];
   /** A despedida, escrita junto com o plano: a conversa termina com as mesmas palavras, tenha ela
    * ido até o fim ou sido encerrada antes. */

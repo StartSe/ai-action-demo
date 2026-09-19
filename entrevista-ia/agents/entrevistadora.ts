@@ -1,5 +1,6 @@
 import { cli, defineAgent, ServerOptions, voice, inference, type JobContext, type JobProcess, type VAD } from "@livekit/agents";
 import { TTS } from "@livekit/agents-plugin-elevenlabs";
+import { CONDUCAO_VOZ } from "../lib/conducao-voz";
 import { RoteiroLLM } from "./roteiro-llm";
 import { fileURLToPath } from "node:url";
 import { getConfig } from "../lib/store";
@@ -25,7 +26,7 @@ export default defineAgent({
       llm: modelo,
       stt: new inference.STT({ model: "deepgram/nova-3", language: "pt-BR", apiKey: getConfig("LIVEKIT_API_KEY"), apiSecret: getConfig("LIVEKIT_API_SECRET") }),
       tts: new TTS({ ...configuracaoVoz(), language: "pt" }),
-      turnHandling: { turnDetection: "vad", endpointing: { minDelay: 800, maxDelay: 4000 } },
+      turnHandling: CONDUCAO_VOZ,
     });
     session.on(voice.AgentSessionEventTypes.Error, () => { void enviar({ tipo: "erro", mensagem: "A voz foi interrompida. Reconecte para continuar de onde parou." }); });
     session.on(voice.AgentSessionEventTypes.AgentStateChanged, (e) => {

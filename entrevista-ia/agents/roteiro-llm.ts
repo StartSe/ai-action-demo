@@ -39,6 +39,7 @@ class RoteiroStream extends llm.LLMStream {
   private modelo: RoteiroLLM;
   constructor(modelo: RoteiroLLM, options: ConstructorParameters<typeof llm.LLMStream>[1]) { super(modelo, options); this.modelo = modelo; }
   protected async run() {
+    if (this.abortController.signal.aborted) return;
     const texto = await this.modelo.responder(this.chatCtx);
     if (texto && !this.abortController.signal.aborted) this.queue.put({ id: crypto.randomUUID(), delta: { role: "assistant", content: texto } });
   }

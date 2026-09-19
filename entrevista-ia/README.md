@@ -65,7 +65,7 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `CONTA_DESLIGADA` | `1` trata toda rota como pública. Só para o contêiner efêmero da captura de prévia — nunca numa instância real. |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
-| `OPENROUTER_MODEL` | Alternativa ao setup. Modelo padrão (roteiro, currículo, descrição colada, cultura). Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
+| `OPENROUTER_MODEL` | Alternativa ao setup. Modelo padrão (roteiro, currículo, descrição colada, cultura). Padrão `openai/gpt-4.1-mini`. |
 | `OPENROUTER_MODEL_AVALIACAO` | Alternativa ao setup. Modelo usado só nos três passos do parecer. Sem ele, vale o modelo padrão. |
 | `BRIGHTDATA_API_TOKEN` | Alternativa ao setup. Liga a pesquisa do candidato na web. Obtenha em [brightdata.com/cp/setting/users](https://brightdata.com/cp/setting/users). |
 | `BRIGHTDATA_MCP_URL` | Alternativa ao setup. Endereço do serviço de pesquisa da Bright Data. Padrão `https://mcp.brightdata.com/mcp`. |
@@ -181,3 +181,14 @@ Falhas conhecidas da IA na preparação do roteiro preservam código, mensagem e
 A criação ou renovação do convite permite até 90 segundos para preparar o roteiro, com prazo único compartilhado entre a chamada e as repetições. O navegador espera até 120 segundos, e o servidor envia um sinal de espera a cada 10 segundos, sem inventar avanço nas etapas. O roteiro salvo é reutilizado.
 
 Um timeout antes dos cabeçalhos ou durante a leitura do corpo da resposta é convertido em `tempo_esgotado`, com orientação para tentar novamente ou trocar o modelo. O link continua condicionado à conclusão do roteiro. Testes cobrem ambos os caminhos de timeout e a manutenção do prazo entre tentativas; uma resposta simulada com corpo atrasado em 30 segundos valida a geração além do limite antigo.
+
+
+### Condução da entrevista e parecer (0.4.5)
+
+O padrão de texto no OpenRouter é `openai/gpt-4.1-mini` (usa créditos). Uma escolha explícita em Configurações ou `OPENROUTER_MODEL` tem prioridade sobre o padrão do código. A duração estimada é de 10 a 20 minutos, com 15 minutos como padrão; o tempo efetivo depende das respostas do candidato.
+
+As perguntas principais são percorridas na ordem. Aprofundamentos não consomem o total nem substituem tópicos: cada pergunta pode receber um pedido de exemplo quando a resposta for curta. Pedidos de repetição mantêm a posição. O planejamento incompleto é refeito antes de liberar o convite. Nas falas intermediárias, a IA escreve a transição e o sistema preserva o texto da pergunta planejada.
+
+O adaptador LiveKit persiste os turnos; por isso a geração antecipada (`preemptiveGeneration`) fica desativada. A detecção de fim de fala dá mais espaço às pausas e filtra interrupções curtas. No modo mãos livres do navegador, uma pausa de quatro segundos encerra a resposta; o fechamento espontâneo do reconhecimento tenta retomar a escuta preservando o texto.
+
+O parecer organiza nota e síntese lado a lado, alinha os botões e reúne as ações de compartilhamento em um popover. Aprofundamentos não fazem uma entrevista interrompida ser considerada completa. Respostas vazias da IA recebem uma tentativa adicional dentro do prazo original.

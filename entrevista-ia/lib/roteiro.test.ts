@@ -5,7 +5,7 @@
 //
 //  - **O que a entrevistadora sabe (D6).** Um campo trazido da web sobre um possível homônimo não
 //    pode virar pergunta enquanto o gestor não confirmar de quem é aquele perfil.
-//  - **Quantas perguntas ela faz.** Follow-ups não podem estourar o número combinado com o gestor,
+//  - **Quantas perguntas ela faz.** Follow-ups não podem substituir as perguntas combinadas com o gestor,
 //    e o encerramento (o espaço para as perguntas do candidato) não pode ser comido por eles.
 //  - **A posição na conversa**, que é deduzida da transcrição em vez de guardada: se a dedução não
 //    devolver o mesmo caminho, uma entrevista retomada repete ou pula perguntas.
@@ -57,7 +57,7 @@ function conversa(plano: Plano, respostas: string[]): { papel: "entrevistadora" 
 }
 
 const LONGA =
-  "Trabalho há quatro anos com atendimento a clientes B2B e hoje lidero o time de suporte sênior em uma empresa de software de médio porte, cuidando de uma carteira de sessenta contas.";
+  "Trabalho há quatro anos com atendimento a clientes B2B e hoje lidero o time de suporte sênior em uma empresa de software de médio porte, cuidando de uma carteira de sessenta contas. Redesenhei os processos de atendimento, treinei os colegas e medi os resultados semanalmente para diminuir o tempo de resolução e a perda de clientes.";
 
 describe("a ficha que a entrevistadora recebe (D6)", () => {
   const ficha = {
@@ -209,15 +209,15 @@ describe("decidirPasso", () => {
     assert.equal(passo.tipo === "pergunta" && passo.pergunta.bloco, "abertura");
   });
 
-  it("aprofunda uma resposta vaga, uma vez só por bloco", () => {
+  it("aprofunda uma resposta vaga, uma vez só por pergunta", () => {
     const posicao = { indice: 2, feitas: 2, followUps: [] as never[] };
     const bloco = plano.perguntas[1].bloco;
     const primeiro = decidirPasso({ plano, posicao, resposta: "Sim, bastante.", numeroPerguntas: 8 });
     assert.equal(primeiro.tipo, "followup");
     assert.equal(primeiro.tipo === "followup" && primeiro.bloco, bloco);
 
-    const segundo = decidirPasso({ plano, posicao: { ...posicao, followUps: [bloco] }, resposta: "Sim, bastante.", numeroPerguntas: 8 });
-    assert.equal(segundo.tipo, "pergunta", "o mesmo bloco não ganha um segundo aprofundamento");
+    const segundo = decidirPasso({ plano, posicao: { ...posicao, followUps: [1] }, resposta: "Sim, bastante.", numeroPerguntas: 8 });
+    assert.equal(segundo.tipo, "pergunta", "a mesma pergunta não ganha um segundo aprofundamento");
   });
 
   it("não aprofunda uma resposta longa", () => {
@@ -225,10 +225,16 @@ describe("decidirPasso", () => {
     assert.equal(passo.tipo, "pergunta");
   });
 
-  it("não aprofunda quando só cabe mais uma pergunta: a última vaga é do encerramento", () => {
-    const passo = decidirPasso({ plano, posicao: { indice: 3, feitas: 7, followUps: [] }, resposta: "Sim.", numeroPerguntas: 8 });
+  it("aprofundamentos nunca fazem pular perguntas para ir ao encerramento", () => {
+    const posicao = { indice: 3, feitas: 7, followUps: [2] };
+    const passo = decidirPasso({ plano, posicao, resposta: "Sim.", numeroPerguntas: 8 });
     assert.equal(passo.tipo, "pergunta");
-    assert.equal(passo.tipo === "pergunta" && passo.pergunta.bloco, "encerramento");
+    assert.equal(passo.tipo === "pergunta" && passo.indice, 3);
+  });
+
+  it("não insiste quando a pessoa diz que não sabe responder", () => {
+    const passo = decidirPasso({ plano, posicao: { indice: 3, feitas: 3, followUps: [] }, resposta: "Não tenho experiência nessa área.", numeroPerguntas: 8 });
+    assert.equal(passo.tipo, "pergunta");
   });
 
   it("encerra quando o total acabou", () => {
@@ -257,12 +263,12 @@ describe("posicaoNoRoteiro", () => {
       { papel: "candidato" as const, texto: LONGA },
     ];
     const posicao = posicaoNoRoteiro(plano, falas, 8);
-    assert.equal(posicao.feitas, 2, "o aprofundamento gasta uma pergunta do total");
+    assert.equal(posicao.feitas, 2, "o aprofundamento conta como fala, sem consumir o plano");
     assert.equal(posicao.indice, 1, "mas o plano não andou");
-    assert.deepEqual(posicao.followUps, ["abertura"]);
+    assert.deepEqual(posicao.followUps, [0]);
   });
 
-  it("uma conversa inteira termina no encerramento e nunca passa do total", () => {
+  it("uma conversa com respostas curtas cobre TODO o roteiro antes de encerrar", () => {
     let falas: { papel: "entrevistadora" | "candidato"; texto: string }[] = [];
     const perguntas: string[] = [];
     // Toda resposta é curta: o pior caso para o orçamento, com um aprofundamento por bloco.
@@ -274,7 +280,8 @@ describe("posicaoNoRoteiro", () => {
       perguntas.push(texto);
       falas = [...falas, { papel: "entrevistadora", texto }, { papel: "candidato", texto: "Sim." }];
     }
-    assert.ok(perguntas.length <= 8, `a conversa fez ${perguntas.length} perguntas, acima do total combinado`);
+    assert.deepEqual(perguntas.filter((p) => p !== "Pode detalhar?"), plano.perguntas.map((p) => p.pergunta));
+    assert.equal(perguntas.length, plano.perguntas.length * 2 - 1, "um aprofundamento por pergunta, exceto no encerramento");
     assert.equal(perguntas[perguntas.length - 1], plano.perguntas[plano.perguntas.length - 1].pergunta, "a última pergunta tem de ser a do encerramento");
   });
 });

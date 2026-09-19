@@ -13,6 +13,8 @@ export function criarEscuta({ reconhecimento: r, automatico, onEstado, onTexto, 
   let encerrada = false;
   let parando = false;
   let texto = "";
+  let prefixo = "";
+  let reinicios = 0;
   let prazo: ReturnType<typeof setTimeout> | undefined;
   let silencio: ReturnType<typeof setTimeout> | undefined;
 
@@ -58,19 +60,32 @@ export function criarEscuta({ reconhecimento: r, automatico, onEstado, onTexto, 
     if (encerrada) return;
     // results contém a sessão inteira, inclusive correções de trechos anteriores.
     // Reconstruir evita repetir uma frase final quando ela reaparece em outro evento.
-    texto = Array.from({ length: evento.results.length }, (_, i) => evento.results[i][0].transcript.trim())
-      .filter(Boolean).join(" ");
+    const trecho = Array.from({ length: evento.results.length }, (_, i) => evento.results[i][0].transcript.trim()).filter(Boolean).join(" ");
+    texto = [prefixo, trecho].filter(Boolean).join(" ");
     onTexto(texto);
     if (automatico && !parando) {
       clearTimeout(silencio);
-      if (texto) silencio = setTimeout(stop, 2000);
+      if (texto) silencio = setTimeout(stop, 4000);
     }
   };
   r.onerror = (evento) => {
+    if (evento.error === "no-speech" && automatico && texto && !parando) return;
     if (evento.error === "no-speech" || evento.error === "aborted") terminar();
     else terminar(evento.error);
   };
-  r.onend = () => terminar();
+  r.onend = () => {
+    if (encerrada) return;
+    // SpeechRecognition pode fechar uma sessão durante uma pausa curta. Esse
+    // evento não significa que a pessoa concluiu a resposta.
+    if (automatico && texto && !parando) {
+      if (++reinicios > 3) { terminar("escuta-interrompida"); return; }
+      prefixo = texto;
+      prazo = setTimeout(() => terminar("tempo-esgotado"), 12000);
+      try { r.start(); } catch { terminar("inicio-falhou"); }
+      return;
+    }
+    terminar();
+  };
 
   onEstado("iniciando");
   prazo = setTimeout(() => terminar("tempo-esgotado"), 12000);

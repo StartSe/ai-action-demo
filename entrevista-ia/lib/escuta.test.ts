@@ -70,7 +70,7 @@ test("mãos livres espera silêncio desde o último trecho", (t) => {
   s.resultado("Comecei", "pelo planejamento");
   t.mock.timers.tick(1500);
   assert.equal(s.paradas(), 0);
-  t.mock.timers.tick(500);
+  t.mock.timers.tick(2500);
   assert.equal(s.paradas(), 1);
   s.r.onend?.();
   assert.deepEqual(s.finais, ["Comecei pelo planejamento"]);
@@ -106,4 +106,22 @@ test("sair da sala cancela microfone, prazos e eventos atrasados", (t) => {
   assert.deepEqual(s.falhas, []);
   assert.equal(s.paradas(), 0);
   assert.equal(s.abortos(), 1);
+});
+
+
+test("fim espontâneo do reconhecimento não envia uma resposta incompleta", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const s = preparar(true);
+  s.r.onstart?.();
+  s.resultado("Atendi um cliente");
+  t.mock.timers.tick(1000);
+  s.r.onend?.();
+  assert.deepEqual(s.finais, []);
+  s.r.onstart?.();
+  s.resultado("que queria cancelar o contrato");
+  t.mock.timers.tick(3900);
+  assert.equal(s.paradas(), 0);
+  t.mock.timers.tick(100);
+  s.r.onend?.();
+  assert.deepEqual(s.finais, ["Atendi um cliente que queria cancelar o contrato"]);
 });

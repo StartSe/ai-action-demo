@@ -2,7 +2,7 @@
 // Componentes visuais compartilhados pela suíte. Copie este arquivo para cada app sem alterar.
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { Meta } from "@/lib/ai";
 import { numero, data, moeda } from "@/lib/formato";
 import { NAVEGACAO, type ItemNavegacao } from "@/lib/navegacao";
@@ -80,7 +80,8 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
   const estadoChip = erro || !status ? "pendente" : status.ai ? "conectado" : "demonstracao";
   const badge = (
     <span className={`chip-status chip-status-${estadoChip} min-w-[128px] justify-center max-md:min-w-0 max-md:px-2 max-md:text-[11px]`}>
-      {texto}
+      <span className="max-[380px]:hidden">{texto}</span>
+      <span className="hidden max-[380px]:inline">{demo ? "Conectar IA" : texto}</span>
       {estadoChip === "demonstracao" && (
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" /></svg>
       )}
@@ -740,67 +741,41 @@ export function OptInGuardar({ checked, onChange }: { checked: boolean; onChange
   );
 }
 
-/** Bloco de entrega padrão: baixar PDF (abre /imprimir/<id>; sem id imprime a própria tela) e um menu "Mais" com copiar texto, e-mail, link e extras do app. */
+/** Exportação e compartilhamento em popover nativo (Escape, clique fora e foco). */
 export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: string; texto: () => string; extras?: { rotulo: string; onClick: () => void }[] }) {
-  const [aberto, setAberto] = useState(false);
-  const [copiadoTexto, setCopiadoTexto] = useState(false);
-  const [copiadoLink, setCopiadoLink] = useState(false);
-  const [falhaCopia, setFalhaCopia] = useState(false);
+  const popoverId = useId();
   const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!aberto) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setAberto(false);
-    }
-    function onClickFora(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setAberto(false);
-    }
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("mousedown", onClickFora);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("mousedown", onClickFora);
-    };
-  }, [aberto]);
-
-  async function copiar(t: string, marcar: (v: boolean) => void) {
-    try {
-      await navigator.clipboard.writeText(t);
-      marcar(true);
-      setTimeout(() => marcar(false), 1800);
-    } catch {
-      setFalhaCopia(true);
-      setTimeout(() => setFalhaCopia(false), 4000);
-    }
-    setAberto(false);
+  const [posicao, setPosicao] = useState({ top: 0, left: 0 });
+  const [recado, setRecado] = useState("");
+  const fechar = () => menuRef.current?.hidePopover();
+  async function copiar(conteudo: string) {
+    try { await navigator.clipboard.writeText(conteudo); setRecado("Copiado"); }
+    catch { setRecado("Não foi possível copiar. Tente novamente."); }
+    setTimeout(() => setRecado(""), 4000);
+    fechar();
   }
-
   const link = id && typeof window !== "undefined" ? `${location.origin}/r/${id}` : undefined;
-  const itemClasse = "w-full text-left px-3 py-2 rounded-md hover:bg-accent-soft cursor-pointer";
-
+  const itemClasse = "flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm hover:bg-accent-soft cursor-pointer";
   return (
-    <div className="flex flex-col gap-2.5 max-md:w-full">
-      <div className="flex gap-2.5 max-md:w-full">
-        <button type="button" className="btn-primary !w-auto max-md:flex-1" onClick={() => (id ? window.open(`/imprimir/${id}`, "_blank") : window.print())}>Baixar PDF</button>
-        <div className="relative shrink-0" ref={menuRef}>
-          <button type="button" className="btn-ghost" aria-haspopup="menu" aria-expanded={aberto} aria-label="Mais opções para entregar este resultado" onClick={() => setAberto((v) => !v)}>
-            <span className="max-md:hidden">Mais</span>
-            <svg className="md:hidden" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
-          </button>
-          {aberto && (
-            <div role="menu" className="absolute right-0 top-[calc(100%+8px)] z-20 w-56 card p-1.5 text-[13.5px]">
-              <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(texto(), setCopiadoTexto)}>{copiadoTexto ? "Copiado" : "Copiar texto"}</button>
-              <a role="menuitem" className={`${itemClasse} block`} href={`mailto:?subject=${encodeURIComponent(titulo)}&body=${encodeURIComponent(texto())}`} onClick={() => setAberto(false)}>Enviar por e-mail</a>
-              {link && <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(link, setCopiadoLink)}>{copiadoLink ? "Copiado" : "Copiar link"}</button>}
-              {extras?.map((ex) => (
-                <button key={ex.rotulo} type="button" role="menuitem" className={itemClasse} onClick={() => { ex.onClick(); setAberto(false); }}>{ex.rotulo}</button>
-              ))}
-            </div>
-          )}
-        </div>
+    <div className="relative flex items-center gap-2">
+      <button type="button" className="btn-primary !w-auto !h-11 !text-sm" onClick={() => (id ? window.open(`/imprimir/${id}`, "_blank", "noopener,noreferrer") : window.print())}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5" /></svg>
+        Baixar PDF
+      </button>
+      <button type="button" className="btn-ghost !size-11 !p-0" popoverTarget={popoverId} aria-label="Ações do parecer" title="Ações do parecer" aria-haspopup="dialog" onClick={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setPosicao({ left: Math.max(12, Math.min(rect.right - 256, window.innerWidth - 268)), top: Math.max(12, Math.min(rect.bottom + 8, window.innerHeight - 320)) });
+      }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
+      </button>
+      <div id={popoverId} ref={menuRef} popover="auto" role="dialog" aria-label="Ações do parecer" style={posicao} className="fixed inset-auto m-0 w-64 max-w-[calc(100vw-24px)] rounded-xl border border-line bg-surface p-2 text-ink shadow-xl">
+        <p className="px-3 py-2 text-xs font-semibold text-muted">Compartilhar e exportar</p>
+        <button type="button" className={itemClasse} onClick={() => void copiar(texto())}>Copiar texto</button>
+        <a className={itemClasse} href={`mailto:?subject=${encodeURIComponent(titulo)}&body=${encodeURIComponent(texto())}`} onClick={fechar}>Enviar por e-mail</a>
+        {link && <button type="button" className={itemClasse} onClick={() => void copiar(link)}>Copiar link</button>}
+        {extras && <div className="mt-1 border-t border-line pt-1">{extras.map((ex) => <button key={ex.rotulo} type="button" className={itemClasse} onClick={() => { fechar(); ex.onClick(); }}>{ex.rotulo}</button>)}</div>}
       </div>
-      {falhaCopia && <Aviso tom="danger">Não foi possível copiar automaticamente. Selecione o texto e copie com Ctrl+C (ou Cmd+C no Mac).</Aviso>}
+      <span role="status" className={recado ? "absolute right-0 top-full z-10 mt-2 rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-card" : "sr-only"}>{recado}</span>
     </div>
   );
 }

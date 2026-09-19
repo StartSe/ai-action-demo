@@ -77,7 +77,7 @@ const MODELOS: ModeloTrabalho[] = ["presencial", "hibrido", "remoto"];
 export const PERGUNTAS_MIN = 6;
 export const PERGUNTAS_MAX = 12;
 export const DURACAO_MIN = 10;
-export const DURACAO_MAX = 30;
+export const DURACAO_MAX = 20;
 
 function limitar(valor: number, min: number, max: number, padrao: number): number {
   const n = Math.round(Number(valor));
@@ -112,7 +112,7 @@ function linhaParaVaga(l: LinhaVaga): Vaga {
     competenciasCulturais: lerCompetencias(l.competenciasCulturais),
     tom: l.tom === "objetivo" ? "objetivo" : "acolhedor",
     numeroPerguntas: l.numeroPerguntas,
-    duracaoMin: l.duracaoMin,
+    duracaoMin: Math.min(DURACAO_MAX, Math.max(DURACAO_MIN, l.duracaoMin)),
     perguntaPretensao: l.perguntaPretensao === 1,
     status: l.status === "encerrada" ? "encerrada" : "aberta",
     exemplo: l.exemplo === 1,

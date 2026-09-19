@@ -142,7 +142,7 @@ export default function Page() {
     <>
       <Topbar marca="E" nome="Entrevistadora IA" area="Recursos Humanos" status={status} erro={erro} usuario={status?.usuario} />
 
-      <main className="max-w-[860px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
+      <main className="max-w-[1120px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
         <Link href="/entrevistas" className="btn-link text-[13px] no-print">← Entrevistas</Link>
 
         {erroTela && (
@@ -155,7 +155,7 @@ export default function Page() {
           !erroTela && <p className="text-muted text-sm mt-4">Carregando...</p>
         ) : (
           <>
-            <div className="flex items-start justify-between gap-4 mt-3 mb-5 max-md:flex-col max-md:gap-3">
+            <div className="flex flex-wrap items-end justify-between gap-5 mt-3 mb-6">
               <div className="min-w-0">
                 <h1 className="titulo-painel mb-1.5">
                   <Link href={`/candidatos/${entrevista.candidatoId}`} className="hover:underline">{entrevista.candidatoNome}</Link>
@@ -171,7 +171,10 @@ export default function Page() {
                 </div>
               </div>
 
-              <div className="no-print shrink-0 flex flex-col gap-2.5 max-md:w-full">
+              <div className="no-print flex flex-wrap items-center gap-2 max-sm:w-full max-sm:justify-between">
+                <button type="button" className="btn-ghost !h-11 !py-0 !text-sm" onClick={() => setAtribuindo(true)}>
+                  Nova entrevista
+                </button>
                 {parecer && (
                   <Entregar
                     id={entrevista.resultadoId}
@@ -180,15 +183,12 @@ export default function Page() {
                     extras={[{ rotulo: "Imprimir", onClick: () => window.print() }]}
                   />
                 )}
-                <button type="button" className="btn-ghost !w-auto max-md:!w-full" onClick={() => setAtribuindo(true)}>
-                  Nova entrevista com este candidato
-                </button>
               </div>
             </div>
 
             {recado && <div className="mb-5"><Aviso tom="ok">{recado}</Aviso></div>}
 
-            <article className="card p-7 max-md:p-5">
+            <article className="card p-8 max-md:p-5">
               {parecer ? (
                 <>
                   {entrevista.meta && <Origem meta={entrevista.meta} />}
@@ -196,19 +196,20 @@ export default function Page() {
                     parecer={parecer}
                     conversa={entrevista.conversa}
                     abaixoDoResumo={
-                      <section className="no-print border border-line rounded-card p-5 mb-8" id="decisao">
+                      <section className="no-print border border-line bg-bg/50 rounded-card p-5 mb-8" id="decisao">
                         <h2 className="font-extrabold text-[17px] mb-1">Sua decisão</h2>
                         <p className="apoio mb-4">
                           {entrevista.decisao
                             ? `Hoje está como "${ROTULO_DECISAO[entrevista.decisao]}"${entrevista.decisaoEm ? `, desde ${data(entrevista.decisaoEm, { comAno: true })}` : ""}. Escolher outra troca o registro.`
                             : "Fica registrada no app, ao lado do parecer — e aparece na lista de entrevistas e na comparação da vaga."}
                         </p>
-                        <div className="flex gap-2.5 flex-wrap max-md:flex-col">
+                        <div className="grid grid-cols-3 gap-3 max-sm:grid-cols-1">
                           {DECISOES.map((d) => (
                             <button
                               key={d.valor}
                               type="button"
-                              className={`text-left border rounded-card px-4 py-3 flex-1 min-w-[200px] ${d.valor === entrevista.decisao ? "border-accent" : "border-line"} disabled:opacity-60`}
+                              className={`text-left border rounded-xl px-4 py-3 transition-colors hover:border-accent ${d.valor === entrevista.decisao ? "border-accent bg-accent-soft" : "border-line bg-surface"} disabled:opacity-60`}
+                              aria-pressed={d.valor === entrevista.decisao}
                               disabled={Boolean(gravando)}
                               onClick={() => void decidir(d.valor)}
                             >

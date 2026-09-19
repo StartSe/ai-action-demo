@@ -8,6 +8,11 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "recuperacao-ia-"))
 process.env.OPENROUTER_API_KEY = "teste-local";
 const { askText, ErroIA } = await import("./ai");
 
+const roteiroCompleto = { perguntas: Array.from({ length: 8 }, (_, i) => ({
+  bloco: i === 0 ? "abertura" : i === 7 ? "encerramento" : "requisitos",
+  pergunta: i === 0 ? "Como você trabalha?" : i === 7 ? "Tem alguma pergunta?" : `Conte um exemplo da competência ${i}.`,
+})) };
+
 test("leitura recupera 502 HTML sem perder a conversa", async (t) => {
   let chamadas = 0;
   t.mock.method(globalThis, "fetch", async (_url: string, init: RequestInit) => {
@@ -60,7 +65,7 @@ test("convite prepara roteiro recuperando 502 e abertura usa apenas dados salvos
   t.mock.method(globalThis, "fetch", async () => {
     chamadas++;
     if (chamadas === 1) return new Response("Bad Gateway", { status: 502 });
-    const resposta = chamadas === 2 ? { perguntas: [{ bloco: "abertura", pergunta: "Conte sobre sua trajetória." }, { bloco: "encerramento", pergunta: "Tem alguma pergunta?" }] } : { fala: "Olá, Ana! Conte sobre sua trajetória." };
+    const resposta = chamadas === 2 ? roteiroCompleto : { fala: "Olá, Ana! Conte sobre sua trajetória." };
     return Response.json({ choices: [{ message: { content: JSON.stringify(resposta) } }] });
   });
   const convite = await atribuirEConvidar({ vagaId: vaga({ cargo: "Analista" }).id, candidatoId: candidato({ nome: "Ana" }).id, origem: "http://localhost" });
@@ -89,14 +94,14 @@ test("inícios concorrentes compartilham roteiro e primeira pergunta, sem chamad
   t.mock.method(globalThis, "fetch", async () => {
     chamadas++;
     await new Promise(resolve => setTimeout(resolve, 20));
-    return Response.json({ choices: [{ message: { content: JSON.stringify({ perguntas: [{ bloco: "abertura", pergunta: "Conte sobre sua trajetória." }, { bloco: "encerramento", pergunta: "Tem alguma pergunta?" }] }) } }] });
+    return Response.json({ choices: [{ message: { content: JSON.stringify(roteiroCompleto) } }] });
   });
   const convite = await atribuirEConvidar({ vagaId: vaga({ cargo: "Analista" }).id, candidatoId: candidato({ nome: "Ana" }).id, origem: "http://localhost" });
   assert.ok(convite.ok);
   const [primeira, repetida] = await Promise.all([proximaFala(convite.entrevista.id), proximaFala(convite.entrevista.id)]);
   assert.equal(chamadas, 1);
   assert.deepEqual(primeira, repetida);
-  assert.match(primeira.pergunta, /Olá, Ana! Conte sobre sua trajetória/);
+  assert.match(primeira.pergunta, /Olá, Ana!.*15 minutos.*Como você trabalha/);
   assert.equal(transcricao(convite.entrevista.id).length, 1);
 });
 
@@ -126,7 +131,7 @@ test("falha no planejamento não libera link e nova tentativa reaproveita a entr
   let chamadas = 0;
   mock.mock.mockImplementation(async () => {
     chamadas++;
-    return Response.json({ choices: [{ message: { content: JSON.stringify({ perguntas: [{ bloco: "abertura", pergunta: "Conte sobre sua trajetória." }] }) } }] });
+    return Response.json({ choices: [{ message: { content: JSON.stringify(roteiroCompleto) } }] });
   });
   const [convite, repetido] = await Promise.all([atribuirEConvidar(parametros), atribuirEConvidar(parametros)]);
   assert.ok(convite.ok && repetido.ok);

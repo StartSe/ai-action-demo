@@ -187,7 +187,7 @@ async function modelosDinamicos(chave: string): Promise<Opcao[]> {
     ...destaques,
     ...(recomendado ? [opcao(recomendado, "recomendado")] : []),
     ...catalogo.filter((m) => gratuito(m) && m.id !== DEFAULT_MODEL).sort(porContexto).slice(0, MODELOS_POR_GRUPO).map((m) => opcao(m, "gratuito")),
-    ...catalogo.filter((m) => !gratuito(m) && !destaques.some((d) => d.valor === m.id)).sort(porContexto).slice(0, MODELOS_POR_GRUPO).map((m) => opcao(m, "pago")),
+    ...catalogo.filter((m) => !gratuito(m) && m.id !== DEFAULT_MODEL && !destaques.some((d) => d.valor === m.id)).sort(porContexto).slice(0, MODELOS_POR_GRUPO).map((m) => opcao(m, "pago")),
   ];
   if (modelos.length === 0) throw new Error("catálogo vazio");
   cacheModelosDinamicos = { expiraEm: Date.now() + CACHE_MODELOS_MS, modelos };
@@ -244,7 +244,7 @@ export function openrouter({
     obrigatoria: true,
     link: { url: "https://openrouter.ai/keys", rotulo: "Criar uma chave gratuita" },
     oauth: { tipo: "openrouter", rotulo: "Conectar a IA", url: "/api/setup/oauth/openrouter" },
-    notaConexao: "Conta gratuita do OpenRouter basta. Os modelos gratuitos têm limite diário; créditos ampliam o limite e liberam modelos melhores.",
+    notaConexao: "O modelo padrão é GPT-4.1 mini e usa créditos do OpenRouter. Você também pode escolher um modelo gratuito.",
     campos: [
       { chave: "OPENROUTER_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk-or-v1-..." },
       {
@@ -254,7 +254,7 @@ export function openrouter({
         opcional: true,
         padrao: MODELO_AUTOMATICO,
         opcoes: [automaticoPadrao, ...MODELOS_GRATUITOS],
-        ajuda: 'Automático já funciona. Se aparecer "sem crédito" ou "limite diário", troque por outro gratuito ou adicione créditos.',
+        ajuda: 'Automático usa GPT-4.1 mini. Adicione créditos ao OpenRouter ou escolha um modelo gratuito.',
         opcoesDinamicas: async (config) => opcoesDeModelo(config.OPENROUTER_API_KEY, automaticoPadrao),
       },
       ...camposAvaliacao,
