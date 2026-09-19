@@ -28,6 +28,9 @@ export class ErroBusca extends Error {}
 /** Um provedor com chave recusou a chave (401/403): vira aviso na tela, nunca falha silenciosa. */
 class ChaveRecusada extends Error {}
 
+/** Bloqueio conhecido: mantém a fonte indisponível sem repetir erros no console. */
+class RedditBloqueado extends Error {}
+
 interface Provedor {
   id: IdFonteBusca;
   /** Precisa de uma chave em /setup (Exa, Tavily). */
@@ -87,12 +90,15 @@ const HACKERNEWS: Provedor = {
 };
 
 let ultimaChamadaReddit = 0;
+let redditBloqueadoAte = 0;
+const PAUSA_REDDIT_MS = 15 * 60_000;
 
-/** Reddit pede no máximo 1 requisição por segundo por cliente; espera o intervalo faltante antes de buscar. */
+/** Espaça as consultas ao Reddit, inclusive quando várias buscas começam juntas. */
 async function respeitarLimiteReddit(): Promise<void> {
-  const espera = ultimaChamadaReddit + 1000 - Date.now();
+  const agora = Date.now();
+  ultimaChamadaReddit = Math.max(ultimaChamadaReddit + 1000, agora);
+  const espera = ultimaChamadaReddit - agora;
   if (espera > 0) await new Promise((r) => setTimeout(r, espera));
-  ultimaChamadaReddit = Date.now();
 }
 
 const REDDIT: Provedor = {
@@ -100,9 +106,18 @@ const REDDIT: Provedor = {
   comChave: false,
   disponivel: () => true,
   async buscar(consulta, dias) {
+    if (Date.now() < redditBloqueadoAte) throw new RedditBloqueado();
     await respeitarLimiteReddit();
+    if (Date.now() < redditBloqueadoAte) throw new RedditBloqueado();
     const url = `https://www.reddit.com/search.json?q=${encodeURIComponent(consulta)}&sort=new&limit=30&t=${dias <= 7 ? "week" : dias <= 30 ? "month" : "year"}`;
     const r = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(TEMPO_LIMITE_MS) });
+    if (r.status === 403) {
+      if (Date.now() >= redditBloqueadoAte) {
+        console.warn("Reddit recusou o acesso público (HTTP 403). Fonte indisponível; nova tentativa em 15 minutos. As demais fontes continuam funcionando.");
+      }
+      redditBloqueadoAte = Date.now() + PAUSA_REDDIT_MS;
+      throw new RedditBloqueado();
+    }
     if (!r.ok) throw falhaHttp("reddit", r);
     const data = (await r.json()) as { data?: { children?: { data: { title: string; selftext?: string; url?: string; permalink: string; subreddit: string; created_utc: number; score?: number; num_comments?: number } }[] } };
     const corte = Date.now() - dias * 86_400_000;
@@ -371,7 +386,7 @@ export async function buscarDetalhado({ consulta, dias, aoResponder, provedores,
       ultimoEstado.set(p.id, { estado: "ok", em: Date.now() });
       return { ...estadoDe(p, "ok"), cache: res.value.cache, coletadoEm: res.value.coletadoEm };
     }
-    console.error(`Provedor de busca "${p.id}" falhou:`, res.reason);
+    if (!(res.reason instanceof RedditBloqueado)) console.error(`Provedor de busca "${p.id}" falhou:`, res.reason);
     const estado: EstadoFonte["estado"] = res.reason instanceof ChaveRecusada ? "chave_recusada" : "indisponivel";
     ultimoEstado.set(p.id, { estado, em: Date.now() });
     return estadoDe(p, estado);
@@ -401,7 +416,7 @@ export async function estadoDasFontes(selecionadas?: IdFonteBusca[]): Promise<Es
   if (sondar.length > 0) {
     const resultados = await Promise.allSettled(sondar.map((p) => p.buscar("inteligência artificial", 7)));
     resultados.forEach((res, i) => {
-      if (res.status === "rejected") console.error(`Sondagem da fonte "${sondar[i].id}" falhou:`, res.reason);
+      if (res.status === "rejected" && !(res.reason instanceof RedditBloqueado)) console.error(`Sondagem da fonte "${sondar[i].id}" falhou:`, res.reason);
       ultimoEstado.set(sondar[i].id, { estado: res.status === "fulfilled" ? "ok" : "indisponivel", em: Date.now() });
     });
   }
