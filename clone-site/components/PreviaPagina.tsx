@@ -3,12 +3,21 @@
 // este app, nem cookies, nem o armazenamento local), alternância entre computador e celular (390 px, oculta
 // no celular, onde não faz sentido), a miniatura da referência ao lado, o código-fonte em <details> com
 // botão de copiar e o aviso sobre conteúdo de terceiros.
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { CopyButton } from "./ui";
+import { Ampliar, AmpliarImagem } from "./Ampliar";
 
 type Modo = "computador" | "celular";
 
 export const LARGURA_CELULAR = 390;
+
+function Moldura({ html, titulo, style, ampliada = false }: { html: string; titulo: string; style?: CSSProperties; ampliada?: boolean }) {
+  const [pronta, setPronta] = useState(false);
+  return <div className={`relative ${ampliada ? "h-full" : ""}`}>
+    {!pronta && <p role="status" className="absolute top-3 left-3 right-3 p-3 rounded-lg bg-surface border border-line text-sm text-ink">Carregando a prévia...</p>}
+    <iframe title={titulo} sandbox="allow-scripts" srcDoc={html} onLoad={() => setPronta(true)} className={`block bg-white mx-auto ${ampliada ? "h-full" : "w-full"}`} style={style} />
+  </div>;
+}
 
 export function PreviaPagina({ html, titulo, referencia, alturaComputador = 680, alturaCelular = 760 }: { html: string; titulo: string; referencia?: string; alturaComputador?: number; alturaCelular?: number }) {
   const [modo, setModo] = useState<Modo>("computador");
@@ -16,8 +25,7 @@ export function PreviaPagina({ html, titulo, referencia, alturaComputador = 680,
   const botao = (valor: Modo, rotulo: string) => (
     <button
       type="button"
-      role="radio"
-      aria-checked={modo === valor}
+      aria-pressed={modo === valor}
       className={`px-3.5 py-1.5 rounded-lg text-[13.5px] font-bold cursor-pointer transition-colors ${modo === valor ? "bg-accent text-white" : "text-ink hover:bg-bg"}`}
       onClick={() => setModo(valor)}
     >
@@ -27,20 +35,18 @@ export function PreviaPagina({ html, titulo, referencia, alturaComputador = 680,
 
   return (
     <div>
-      <div className="no-print flex items-end justify-between gap-3 mb-3">
+      <div className="no-print flex items-center justify-between flex-wrap gap-3 mb-3">
         {/* O alternador não aparece no celular: lá a prévia já ocupa a largura do aparelho. */}
-        <div role="radiogroup" aria-label="Tamanho da prévia" className="max-md:hidden inline-flex gap-1 p-1 border border-line rounded-[10px] bg-surface">
+        <div role="group" aria-label="Tamanho da prévia" className="max-md:hidden inline-flex gap-1 p-1 border border-line rounded-[10px] bg-surface">
           {botao("computador", "Computador")}
           {botao("celular", "Celular")}
         </div>
+        <Ampliar rotulo="Abrir em tela cheia" titulo={titulo}>
+          <Moldura html={html} titulo={`Prévia ampliada de ${titulo}`} ampliada style={{ width: celular ? LARGURA_CELULAR : "100%", maxWidth: "100%" }} />
+        </Ampliar>
         {referencia && (
           <figure className="m-0 shrink-0 max-md:ml-auto">
-            <div
-              role="img"
-              aria-label="Captura da página de referência"
-              className="w-[88px] h-[58px] rounded-[7px] border border-line bg-white bg-top bg-cover"
-              style={{ backgroundImage: `url("${referencia}")` }}
-            />
+            <AmpliarImagem src={referencia} />
             <figcaption className="text-muted text-[11.5px] text-center mt-1">Referência</figcaption>
           </figure>
         )}
@@ -52,14 +58,7 @@ export function PreviaPagina({ html, titulo, referencia, alturaComputador = 680,
             <span className="w-2.5 h-2.5 rounded-full bg-line" /><span className="w-2.5 h-2.5 rounded-full bg-line" /><span className="w-2.5 h-2.5 rounded-full bg-line" />
             <span className="ml-2 text-[11px] text-muted truncate">{titulo}</span>
           </div>
-          <iframe
-            key={modo}
-            title={`Prévia de ${titulo}`}
-            sandbox="allow-scripts"
-            srcDoc={html}
-            className="block w-full bg-white"
-            style={{ height: celular ? alturaCelular : alturaComputador }}
-          />
+          <Moldura key={modo} html={html} titulo={`Prévia de ${titulo}`} style={{ height: celular ? alturaCelular : alturaComputador }} />
         </div>
       </div>
 
