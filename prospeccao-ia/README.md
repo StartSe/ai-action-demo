@@ -17,6 +17,18 @@ Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com mod
 ## Configuração inicial (sem variáveis de ambiente)
 Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar a IA", fluxo OAuth) ou colando uma chave, e também pode conectar a pesquisa de mercado e sinais (Bright Data), a busca de leads como fonte alternativa de contatos (Apollo), Exa (pesquisa profunda), Tavily, SearchAPI e o CRM — todos testáveis com um clique. Tudo fica salvo cifrado em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar nada, o app roda em modo demonstração: produto, perfil ideal, prospecção, contas, leads e abordagem de exemplo prontos (Zetta Manutenção Industrial).
 
+## Abordagem e qualificação aprofundada — versão 0.1.6
+
+A criação da abordagem transmite etapas reais do servidor (contexto, estratégia, mensagens e salvamento). O resultado tem estratégia editável, mensagens por canal, cópia direta, regeneração com desfazer e exportação. Falhas da IA preservam a versão anterior e permitem nova tentativa; conteúdo incompleto não vira mensagem salva. Gerações simultâneas do mesmo lead compartilham a execução no processo.
+
+Na ficha do lead, **Pesquisar e sugerir pontuação** inicia uma pesquisa em segundo plano. Marcar o status como **Qualificado** pela API da ficha também inicia a pesquisa quando há fontes conectadas e ainda não há uma avaliação concluída. O usuário pode sair e voltar; fontes, etapas, avisos e resultado ficam em SQLite. Uma reinicialização do servidor interrompe o trabalho ativo e a ficha oferece nova tentativa — não há um worker externo com retomada automática.
+
+Com Bright Data, a pesquisa faz leituras novas com `web_data_linkedin_person_profile`, `web_data_linkedin_posts`, `web_data_instagram_profiles` e `web_data_instagram_posts`/`web_data_instagram_reels`, conforme os endereços disponíveis. Busca até três posts vinculados ao identificador do LinkedIn. Instagram só é consultado quando vinculado no perfil ou informado pelo vendedor; até dois posts ligados a esse perfil são lidos. Sem Bright Data, usa as fontes alternativas de pesquisa/leitura conectadas. Há um limite de dez operações de busca/leitura por execução, além dos limites por fonte; uma busca alternativa pode consultar mais de um fornecedor.
+
+A pontuação sugerida soma **60 pontos para critérios do ICP/personas e 40 para necessidade relacionada ao produto**. A IA interpreta cada critério; o servidor exige URL coletada e citação literal antes de atribuir pontos. Critérios sem evidência ficam não verificados; a cobertura aparece separadamente e, sem nenhuma evidência verificável, não há nota. A pontuação não altera o status nem o papel do lead, e não representa probabilidade de compra. A pesquisa não usa atributos pessoais sensíveis para pontuar. Evidências confirmadas entram no contexto das novas estratégias e mensagens; textos já salvos são preservados.
+
+Validação automatizada usa fornecedores simulados, incluindo falhas, geração concorrente, retomada da tela, reinício do processo, remoção do lead e pontuação sem evidências. As telas foram verificadas em desktop e celular; chamadas reais dependem das chaves e permissões das contas conectadas.
+
 ## Pesquisa com fontes opcionais — versão 0.1.5
 
 Conecte somente as fontes que deseja usar em Configurações. Exa oferece os modos automático, rápido, profundo (padrão) e profundo com raciocínio; Tavily oferece básico ou avançado (padrão). Cada cartão permite salvar a chave, testar a conexão e limitar consultas por prospecção. Os testes de conexão também consomem a cota do fornecedor.

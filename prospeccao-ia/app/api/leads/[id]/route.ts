@@ -1,3 +1,5 @@
+import { iniciarQualificacaoProfunda } from "@/lib/qualificacao-profunda";
+import { descobertaAtiva } from "@/lib/descoberta";
 import { ROTULO_PAPEL } from "@/lib/rotulos";
 import type { Papel } from "@/lib/types";
 import { apagarLead, atualizarLead, mudarStatusLead, obterConta, obterICP, obterLead, obterProspeccao } from "@/lib/workspace";
@@ -46,7 +48,9 @@ export async function PUT(req: Request, { params }: RouteContext<"/api/leads/[id
   const corpo = await req.json().catch(() => null);
   if (corpo?.status !== undefined) {
     try {
-      return Response.json(mudarStatusLead(id, String(corpo.status), corpo.motivo === undefined ? undefined : String(corpo.motivo)));
+      const lead = mudarStatusLead(id, String(corpo.status), corpo.motivo === undefined ? undefined : String(corpo.motivo));
+      if (corpo.status === "qualificado" && descobertaAtiva()) iniciarQualificacaoProfunda(id);
+      return Response.json(lead);
     } catch (err) {
       return Response.json({ error: err instanceof Error ? err.message : "Não foi possível mudar o status." }, { status: 400 });
     }

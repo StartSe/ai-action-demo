@@ -1,3 +1,4 @@
+import { responderErro } from "@/app/api/erros";
 import { CAMPOS_MENSAGEM, contextoDoLead, partialParaCanal, regenerarMensagem, type CampoMensagem, type Mensagens } from "@/lib/estrategia";
 import { ROTULO_DIRECAO_REGENERACAO } from "@/lib/rotulos";
 import type { DirecaoRegeneracao } from "@/lib/types";
@@ -40,6 +41,8 @@ export async function POST(req: Request, { params }: RouteContext<"/api/leads/[i
   const sinalEscolhido = direcao === "outro_sinal" ? lead.sinais[corpo.sinalIndice] : undefined;
   if (direcao === "outro_sinal" && !sinalEscolhido) return Response.json({ error: "Escolha um sinal existente desta pessoa." }, { status: 400 });
 
-  const valor = await regenerarMensagem(lead, produto, existente.estrategia, canal, direcao, sinalEscolhido);
-  return Response.json(atualizarAbordagem(existente.id, { ...partialParaCanal(canal, valor), variacao: direcao }));
+  try {
+    const valor = await regenerarMensagem(lead, produto, existente.estrategia, canal, direcao, sinalEscolhido);
+    return Response.json(atualizarAbordagem(existente.id, { ...partialParaCanal(canal, valor), variacao: direcao }));
+  } catch (erro) { return responderErro(erro, "Não foi possível regenerar. Sua mensagem anterior foi mantida."); }
 }

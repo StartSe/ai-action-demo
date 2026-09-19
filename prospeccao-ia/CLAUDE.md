@@ -16,6 +16,9 @@ Este é o único app da suíte com mais de um destino no `Topbar` além de `/set
 
 ## Notas específicas deste app
 
+- **0.1.6 — abordagem:** `abordagem-progresso.ts` define etapas e leitor NDJSON; a rota negocia o stream por Accept e mantém JSON para MCP/consumidores antigos. `gerarOuObterAbordagem` compartilha geração em curso por lead. Falha de IA não salva exemplo; edição/regeneração preservam a versão anterior. `ia-prazo.ts` limita espera local, sem alterar a infraestrutura de IA compartilhada.
+- **0.1.6 — qualificação aprofundada:** `qualificacao-profunda.ts` executa pesquisa pública em background; `qualificacao-profunda-store.ts` guarda progresso/fontes/avaliação por lead. GET/POST `/api/leads/[id]/qualificacao`; PUT de status qualificado inicia quando descoberta está conectada. Reinício marca trabalhos interrompidos, sem worker externo. Pontuação com citações verificadas: ICP/personas 60 + relevância ao produto 40; desconhecido não pontua. Não muda status/papel automaticamente. Exclusão do lead/prospecção limpa a pesquisa; worker verifica existência antes de gravar. Instagram exige vínculo explícito ou URL informada. UI e testes próprios em `QualificacaoProfunda.tsx` e `tests/qualificacao-profunda.test.ts`.
+
 - **0.1.5 — fontes opcionais:** `lib/pesquisa-fontes.ts` implementa Exa, Tavily e SearchAPI; `lib/descoberta.ts` orquestra busca Exa → Bright Data → Tavily → SearchAPI e leitura Bright Data → Exa → Tavily. Apollo sem contatos novos ou com erro permite continuar nas fontes web. Nunca gerar demonstração quando houver fonte real conectada.
 - `lib/pesquisa-registro.ts` registra consultas e limites por fonte em SQLite; `obterAndamento` entrega esse diagnóstico à interface. Falha total marca `falhou`; resultado parcial com falhas mostra ressalvas. Exclusão da prospecção remove os registros. `tests/pesquisa-fontes.test.ts` usa APIs simuladas e banco temporário.
 

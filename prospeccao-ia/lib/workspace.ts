@@ -1,3 +1,4 @@
+import { apagarQualificacaoProfunda } from "./qualificacao-profunda-store";
 import { apagarConsultas, consultasDaProspeccao } from "./pesquisa-registro";
 // Workspace de prospecção: tabelas próprias para produto, ICP, prospecção, conta,
 // lead e abordagem, no mesmo app.sqlite de lib/store.ts (ver abrirBanco()).
@@ -269,6 +270,7 @@ export function atualizarProspeccao(id: string, dados: Partial<NovaProspeccao>):
 }
 
 export function apagarProspeccao(id: string): void {
+  for (const lead of listarLeads(id)) apagarQualificacaoProfunda(lead.id);
   apagarConsultas(id);
   banco().prepare("DELETE FROM abordagens WHERE lead_id IN (SELECT id FROM leads WHERE prospeccao_id = ?)").run(id);
   banco().prepare("DELETE FROM leads WHERE prospeccao_id = ?").run(id);
@@ -449,6 +451,7 @@ export function atualizarLead(id: string, dados: Partial<NovoLeadProspeccao>, em
 }
 
 export function apagarLead(id: string): void {
+  apagarQualificacaoProfunda(id);
   banco().prepare("DELETE FROM abordagens WHERE lead_id = ?").run(id);
   banco().prepare("DELETE FROM leads WHERE id = ?").run(id);
 }

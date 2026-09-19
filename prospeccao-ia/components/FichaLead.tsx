@@ -12,6 +12,7 @@
 // escrita (PUT /api/leads/[id]).
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { QualificacaoProfunda } from "./QualificacaoProfunda";
 import { Aviso, Chip, data } from "@/components/ui";
 import { motivoPapel, sinalAntigo } from "@/lib/qualificacao";
 import { NIVEL_CHIP_EVIDENCIA, ORDEM_MOTIVOS_DESCARTE, ROTULO_FIT, ROTULO_MOTIVO_DESCARTE, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
@@ -89,7 +90,7 @@ export function FichaLead({ leadId, onLeadAtualizado }: { leadId: string; onLead
    * do menu de `ProspeccaoAndamento.tsx`. Qualquer outro status salva direto e limpa o motivo (rota já faz
    * isso quando `status !== "descartado"`). */
   async function alterarStatus(status: StatusLead, motivo?: MotivoDescarte) {
-    setSalvandoStatus(true);
+    setSalvandoStatus(true); setErroLista(null);
     try {
       const corpo = status === "descartado" ? { status, motivo } : { status };
       const r = await fetch(`/api/leads/${leadId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
@@ -98,7 +99,8 @@ export function FichaLead({ leadId, onLeadAtualizado }: { leadId: string; onLead
         setDados((d) => (d ? { ...d, lead } : d));
         onLeadAtualizado?.(lead);
         setPedirMotivo(false);
-      }
+      } else { const erro = await r.json().catch(() => null); setErroLista(erro?.error || "Não foi possível atualizar o status."); }
+    } catch { setErroLista("Não foi possível atualizar o status. Tente novamente.");
     } finally {
       setSalvandoStatus(false);
     }
@@ -169,6 +171,8 @@ export function FichaLead({ leadId, onLeadAtualizado }: { leadId: string; onLead
           </a>
         )}
       </div>
+
+      <QualificacaoProfunda key={lead.id} leadId={lead.id} status={lead.status} aoQualificar={() => alterarStatus("qualificado")} />
 
       {jornada === "b2b" && (
         <div>

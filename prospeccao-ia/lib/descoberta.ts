@@ -247,7 +247,7 @@ export type RespostaLeitura = { conteudo: string; origem: string; consultadoEm: 
 const LIMITE_CONTEUDO = 8000;
 
 /** Snapshots podem conter registros de erro mesmo sem isError no envelope MCP. */
-function conteudoEstruturado(resultado: unknown): string | undefined {
+export function conteudoEstruturado(resultado: unknown): string | undefined {
   const registros = Array.isArray(resultado) ? resultado : [resultado];
   const validos = registros.filter((r): r is Record<string, unknown> =>
     r !== null && typeof r === "object" && !Array.isArray(r)

@@ -14,7 +14,7 @@ export function FichaLeadPagina({ leadId }: { leadId: string }) {
     <>
       <Topbar marca="P" nome="Prospecção com IA" area="Vendas" status={status} erro={erro} usuario={status?.usuario} navegacao={NAVEGACAO_PROSPECCAO} />
 
-      <main className="max-w-[640px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
+      <main className="max-w-[880px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
         <Link href="/leads" className="btn-link text-[13px] mb-4 inline-block">‹ Leads</Link>
         <div className="card p-6">
           <FichaLead leadId={leadId} />
