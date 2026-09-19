@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type Cliente = { nome: string; cargo: string; empresa: string; contexto: string };
-type Preparo = { cliente: Cliente; objetivo: string; duracaoMin: number; porVoz: boolean };
+type Preparo = { cliente: Cliente; objetivo: string; duracaoMin: number; porVoz: boolean; roteiro: string[] };
 
 type Props = {
   codigo: string;
@@ -120,6 +120,12 @@ export function Preparacao({ codigo, marca, nome, titulo, produto }: Props) {
 
       <Linha rotulo="Tempo da conversa" valor={`Cerca de ${duracaoMin} minutos`} />
       <Linha rotulo="Seu objetivo" valor={objetivo} />
+
+      <section className="mt-5 rounded-xl bg-bg p-4" aria-label="Roteiro da conversa">
+        <h2 className="font-bold mb-2">Seu roteiro</h2>
+        <p className="text-sm text-muted mb-3">Use como guia e adapte a conversa ao que o cliente disser.</p>
+        <ol className="list-decimal pl-5 space-y-2 text-sm">{preparo.roteiro.map(etapa => <li key={etapa}>{etapa}</li>)}</ol>
+      </section>
 
       {erro && (
         <p role="alert" className="mt-4 px-3.5 py-3 rounded-field bg-[#fde8e6] text-danger text-[13.5px] font-semibold">

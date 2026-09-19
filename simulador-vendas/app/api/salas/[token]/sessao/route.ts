@@ -1,3 +1,4 @@
+import { prepararRoteiro } from "@/lib/roteiro";
 // A sessão de treino do vendedor (US-014): a conversa que ele está prestes a ter dentro do link que o
 // gestor mandou para o time inteiro.
 //
@@ -8,17 +9,11 @@
 //
 // PUT é o "Começar conversa": a sessão sai de "preparando", o cronômetro começa e o modo da conversa
 // fica gravado.
-import { montarPersonagem } from "@/lib/cliente-simulado";
 import { obter as obterParticipante } from "@/lib/participantes";
-import { personasDe } from "@/lib/personas";
-import { obter as obterProduto } from "@/lib/produtos";
 import { cookieSessaoVendedor, ehSeguro, lerSessaoVendedor } from "@/lib/sessao-vendedor";
 import { abrir, emAndamento, emPreparacao, iniciar, obter as obterSessao, tentativasDe, type ModoSessao } from "@/lib/sessoes";
 import { obter as obterSimulacao, type Simulacao } from "@/lib/simulacoes";
 import { baseUrl } from "@/lib/setup-comum";
-
-/** O que o vendedor combina de fazer nesta conversa quando o gestor não escreveu um objetivo. */
-const OBJETIVO_PADRAO = "Entender a situação do cliente e sair da conversa com um próximo passo combinado.";
 
 /** Voz é o padrão do treino (US-015); só quem desligou a voz na simulação começa por texto (US-011). */
 function modoInicial(simulacao: Simulacao): ModoSessao {
@@ -57,22 +52,15 @@ export async function POST(req: Request, { params }: RouteContext<"/api/salas/[t
   }
 
   const sessao = aberta ?? abrir({ simulacaoCodigo: token, participanteId, modo: modoInicial(simulacao) });
-  const produto = obterProduto(simulacao.produtoId);
-  const personagem = montarPersonagem({
-    persona: personasDe([sessao.personaId])[0],
-    dificuldade: simulacao.dificuldade,
-    produto: produto ?? { nome: simulacao.nome, conhecimento: undefined },
-    // A semente é o id da sessão: o personagem é remontado a cada turno da conversa (US-015) e sem ela
-    // o cliente trocaria de nome no meio da ligação.
-    semente: sessao.id,
-  });
+  const roteiro = prepararRoteiro(sessao, simulacao);
 
   return Response.json(
     {
       // `instrucoes` (o que o modelo recebe) e `personaId` ficam de fora de propósito: são exatamente
       // o que estragaria o treino se o vendedor olhasse.
-      cliente: { nome: personagem.nome, cargo: personagem.cargo, empresa: personagem.empresa, contexto: personagem.contexto },
-      objetivo: simulacao.objetivo?.trim() || OBJETIVO_PADRAO,
+      cliente: roteiro.cliente,
+      roteiro: roteiro.etapas,
+      objetivo: roteiro.objetivo,
       duracaoMin: simulacao.duracaoMin,
       // A tela avisa sobre o microfone antes de pedir a permissão; num treino só por texto o aviso
       // certo é outro, e é por isto que o modo viaja junto.
@@ -101,6 +89,7 @@ export async function PUT(req: Request, { params }: RouteContext<"/api/salas/[to
 
   const corpo = (await req.json().catch(() => ({}))) as { modo?: string };
   const pedido = corpo.modo === "texto" || corpo.modo === "voz-navegador" ? (corpo.modo as ModoSessao) : undefined;
+  prepararRoteiro(sessao, simulacao);
   const atualizada = iniciar(sessao.id, pedido ?? modoInicial(simulacao));
   return Response.json({ comecou: atualizada?.status === "em_andamento" });
 }

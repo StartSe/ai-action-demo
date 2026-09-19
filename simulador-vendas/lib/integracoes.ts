@@ -47,4 +47,25 @@ export const ELEVENLABS_VOZ: Integracao = {
   },
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, ELEVENLABS_VOZ, CRM];
+export const LIVEKIT: Integracao = {
+  id: "livekit", titulo: "Conversa ao vivo (LiveKit)",
+  descricao: "Converse naturalmente, com respostas contínuas e interrupções por voz.",
+  beneficio: "Uma conversa fluida com a voz da ElevenLabs e a IA do OpenRouter",
+  obrigatoria: false,
+  link: { url: "https://cloud.livekit.io", rotulo: "Abrir LiveKit" },
+  campos: [
+    { chave: "LIVEKIT_URL", rotulo: "Endereço do LiveKit", tipo: "text", placeholder: "wss://seu-projeto.livekit.cloud" },
+    { chave: "LIVEKIT_API_KEY", rotulo: "Chave do LiveKit", tipo: "secret" },
+    { chave: "LIVEKIT_API_SECRET", rotulo: "Segredo do LiveKit", tipo: "secret" },
+  ],
+  testar: async config => {
+    if (!config.LIVEKIT_URL || !config.LIVEKIT_API_KEY || !config.LIVEKIT_API_SECRET) return { ok: false, mensagem: "Preencha os três campos do LiveKit." };
+    try {
+      const { RoomServiceClient } = await import("livekit-server-sdk");
+      await new RoomServiceClient(config.LIVEKIT_URL, config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET).listRooms();
+      return { ok: true, mensagem: "LiveKit conectado. Mantenha o serviço de voz em execução para receber as conversas." };
+    } catch { return { ok: false, mensagem: "Não foi possível conectar ao LiveKit. Confira o endereço e as chaves." }; }
+  },
+};
+
+export const INTEGRACOES: Integracao[] = [OPENROUTER, ELEVENLABS_VOZ, LIVEKIT, CRM];

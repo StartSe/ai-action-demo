@@ -189,3 +189,36 @@ O cartão **Dica para sua próxima fala** mostra uma orientação de até 160 ca
 No encerramento, o avaliador calcula o feedback com a rubrica e verifica as citações. Um segundo agente consulta essa avaliação para produzir até três ações, cada uma ligada a um critério existente e com uma forma observável de conferir a aplicação. O plano fica salvo junto ao resultado, aparece também no histórico, na impressão e no texto copiado. As duas menores notas abaixo de 7 recebem destaque como pontos a melhorar.
 
 O orientador tem limite de 8 segundos; o planejador, 15 segundos. Ambos executam no máximo três rodadas com o modelo. Falha, resposta inválida ou ausência da consulta obrigatória utiliza uma orientação básica, identificada na tela. Sem IA conectada, dicas e plano são exemplos explicitamente rotulados. Os testes simulam respostas dos modelos e verificam as consultas às ferramentas, validação, isolamento por sessão e continuidade da conversa.
+
+
+## Conversa contínua com LiveKit
+
+O vendedor recebe um roteiro antes de iniciar. O roteiro, o personagem e o contexto do produto ficam salvos por sessão; alterações no cadastro não mudam a conversa em andamento.
+
+Em `/setup`, conecte OpenRouter, ElevenLabs e LiveKit. Escolha o modelo da simulação e o da avaliação separadamente: os seletores incluem Gemini e OpenAI. A ElevenLabs fornece transcrição Scribe v2 Realtime e voz Flash v2.5; o LiveKit transporta o áudio e permite interrupções. As chaves ficam no servidor.
+
+Além do Next.js, execute o serviço de voz:
+
+```sh
+npm ci
+npm run agent:dev
+# Produção:
+npm run agent:start
+```
+
+Os dois processos precisam usar o mesmo diretório de trabalho e `DATA_DIR` (SQLite e arquivo `chave-mestra`). Se usar `CHAVE_MESTRA` por ambiente, defina a mesma nos dois processos. Variáveis de ambiente precisam ser fornecidas aos dois processos; o comando `tsx` não carrega `.env.local` automaticamente. Reinicie o serviço de voz após alterar credenciais do LiveKit. O servidor deve permitir conexões de saída aos três provedores, e o navegador precisa de HTTPS (ou localhost) para o microfone.
+
+Com Docker, configure as conexões no app e execute `docker compose --profile voz up --build -d`. O serviço `voz` compartilha o volume do app. O worker usa Debian para suportar as bibliotecas nativas de áudio. A imagem web standalone, sozinha, não executa o worker; o blueprint Render atual precisa de uma implantação que mantenha ambos os processos e o mesmo disco para habilitar LiveKit.
+
+Na conversa, um toque abre o microfone. É possível interromper o cliente falando, pausar o microfone e digitar sem trocar de sessão. As falas são gravadas pelo worker no servidor e reutilizadas na avaliação; ao encerrar, o navegador aguarda o worker fechar a conversa antes de pedir a avaliação. Uma reconexão reutiliza o histórico e o roteiro. Sem as três integrações configuradas, continua disponível o modo anterior de voz do navegador e a demonstração.
+
+Referências: [LiveKit Agents](https://docs.livekit.io/reference/agents-js/), [ElevenLabs no LiveKit](https://docs.livekit.io/agents/models/tts/elevenlabs/) e [OpenRouter no LiveKit](https://docs.livekit.io/agents/models/llm/openrouter/).
+
+
+### Conectar a conta LiveKit pelo navegador
+
+Em `/setup`, o botão **Conectar LiveKit Cloud** abre a autorização no LiveKit. Após entrar na conta e selecionar o projeto, a aplicação consulta a aprovação e salva URL, chave e segredo cifrados no servidor. Não é necessário instalar a CLI ou copiar as chaves.
+
+Esta é uma adaptação experimental do [fluxo público no código da CLI oficial](https://github.com/livekit/livekit-cli/blob/main/cmd/lk/cloud.go), usando `/cli/auth`, `/cli/confirm-auth` e `/cli/claim`. Não é uma API OAuth pública documentada para terceiros, e esses endpoints podem mudar. Os campos manuais continuam disponíveis. O navegador precisa permitir acesso a `cloud.livekit.io`, e o servidor precisa acessar `cloud-api.livekit.io`.
+
+A tentativa expira em até 15 minutos, fica vinculada ao navegador que a iniciou e exige acesso administrativo ao app. Cancelar interrompe a importação neste app; não revoga credenciais que já tenham sido emitidas no LiveKit. As variáveis de ambiente têm prioridade: remova as variáveis `LIVEKIT_*` antes de trocar o projeto pela tela. Uma troca de projeto exige reiniciar o serviço de voz, como na configuração manual.

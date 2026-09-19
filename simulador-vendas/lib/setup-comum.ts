@@ -167,10 +167,13 @@ async function modelosDinamicos(chave: string): Promise<Opcao[]> {
   const opcao = (m: ModeloCatalogo, grupo: Opcao["grupo"]): Opcao => ({ valor: m.id, rotulo: m.name || m.id, grupo });
   const gratuito = (m: ModeloCatalogo) => m.id.endsWith(":free");
   const recomendado = catalogo.find((m) => m.id === DEFAULT_MODEL);
+  const preferidos = MODELOS_GRATUITOS.filter(m => m.valor.startsWith("google/gemini-") || m.valor.startsWith("openai/"))
+    .flatMap(m => { const atual = catalogo.find(c => c.id === m.valor); return atual ? [opcao(atual, "pago")] : []; });
   const modelos: Opcao[] = [
+    ...preferidos,
     ...(recomendado ? [opcao(recomendado, "recomendado")] : []),
     ...catalogo.filter((m) => gratuito(m) && m.id !== DEFAULT_MODEL).sort(porContexto).slice(0, MODELOS_POR_GRUPO).map((m) => opcao(m, "gratuito")),
-    ...catalogo.filter((m) => !gratuito(m)).sort(porContexto).slice(0, MODELOS_POR_GRUPO).map((m) => opcao(m, "pago")),
+    ...catalogo.filter((m) => !gratuito(m) && !preferidos.some(p => p.valor === m.id)).sort(porContexto).slice(0, MODELOS_POR_GRUPO).map((m) => opcao(m, "pago")),
   ];
   if (modelos.length === 0) throw new Error("catálogo vazio");
   cacheModelosDinamicos = { expiraEm: Date.now() + CACHE_MODELOS_MS, modelos };

@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
+import { useConversaLivekit } from "./useConversaLivekit";
 import { DicaConversa } from "@/components/DicaConversa";
 import { OrbeVoz } from "@/components/OrbeVoz";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
@@ -32,6 +33,7 @@ type Resposta = {
 type Fim = { resultado?: Resposta; semConversa?: boolean; semFeedback?: boolean; tentativas?: Tentativas };
 
 export type PropsSalaVoz = {
+  livekit?: boolean;
   codigo: string;
   marca: string;
   nome: string;
@@ -61,7 +63,7 @@ const ROTULO_ESTADO: Record<EstadoConversa, string> = {
 };
 function relogio(segundos: number) { return `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, "0")}`; }
 
-export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duracaoMin, iniciadaEm, falasIniciais, porVoz, porTexto, vozDoServidor, voz }: PropsSalaVoz) {
+export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duracaoMin, iniciadaEm, falasIniciais, porVoz, porTexto, vozDoServidor, voz, livekit = false }: PropsSalaVoz) {
   const [falas, setFalas] = useState<Fala[]>(falasIniciais);
   const [estado, setEstado] = useState<EstadoConversa>("parado");
   const [modo, setModo] = useState<"voz" | "texto">(porVoz ? "voz" : "texto");
@@ -95,6 +97,11 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     useCallback((avisar) => { const t = setInterval(avisar, 1000); return () => clearInterval(t); }, []),
     () => Math.max(0, totalSeg - Math.floor((Date.now() - new Date(iniciadaEm).getTime()) / 1000)), () => totalSeg,
   );
+  const chamada = useConversaLivekit(codigo, {
+    estado: guardarEstado,
+    fala: fala => setFalas(atuais => [...atuais, fala]),
+    erro: mensagem => { setErro(mensagem); ativaRef.current = false; setAtiva(false); },
+  });
   function guardarEstado(novo: EstadoConversa) { estadoRef.current = novo; if (montadaRef.current) setEstado(novo); }
   function pararAudio() {
     audioGeracaoRef.current++;
@@ -115,6 +122,7 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     return pronta;
   }
   function pausar() {
+    if (livekit) void chamada.pausar().catch(() => setErro("Não foi possível pausar o microfone."));
     ativaRef.current = false;
     setAtiva(false);
     if (transcriptRef.current.trim()) setDigitado(transcriptRef.current.trim());
@@ -124,11 +132,18 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
   }
   function usarTexto(motivo = "") {
     pausar();
+    if (livekit) chamada.silenciar();
     setModo("texto");
     setMotivoTexto(motivo);
   }
   async function iniciarEscuta() {
     if (fechandoRef.current || turnoRef.current || estadoRef.current === "conectando" || !montadaRef.current) return;
+    if (livekit) {
+      setErro(""); ativaRef.current = true; setAtiva(true);
+      try { await chamada.iniciar(); }
+      catch (err) { setErro(err instanceof Error ? err.message : "Não foi possível abrir o microfone."); ativaRef.current = false; setAtiva(false); guardarEstado("parado"); }
+      return;
+    }
     if (!browserSupportsSpeechRecognition || !isMicrophoneAvailable) {
       usarTexto(!browserSupportsSpeechRecognition ? "Este navegador não reconhece fala. Continue por texto ou abra este link no Chrome." : "Libere o microfone nas permissões do navegador para falar. Você também pode continuar por texto.");
       return;
@@ -206,6 +221,7 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     pausar();
     setEncerrando(true); setErro("");
     try {
+      if (livekit) await chamada.finalizar();
       const r = await fetch(`/api/salas/${codigo}/encerrar`, { method: "POST" });
       const corpo = await r.json() as Resposta & { error?: string; semConversa?: boolean; semFeedback?: boolean };
       if (!r.ok) throw new Error(corpo.error || "Não foi possível fechar a conversa.");
@@ -221,6 +237,19 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
 
   async function conversar(texto: string, retomar = false) {
     if (turnoRef.current || fechandoRef.current || !montadaRef.current) return;
+    if (livekit) {
+      turnoRef.current = true;
+      setErro("");
+      guardarEstado("pensando");
+      try { await chamada.texto(texto); }
+      catch (err) {
+        setDigitado(texto);
+        setErro(err instanceof Error ? err.message : "Não foi possível enviar a mensagem.");
+        guardarEstado("parado");
+      } finally { turnoRef.current = false; }
+      if (finalizarRef.current) await pedirResultado();
+      return;
+    }
     turnoRef.current = true;
     guardarEstado("pensando"); setErro(""); setErroTurno(false);
     await pararMicrofone();
@@ -281,15 +310,15 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     return () => clearTimeout(timer);
   }, [transcript, listening, estado]);
   const aoPerderMicrofone = useEffectEvent(() => usarTexto("O microfone não está disponível. Libere a permissão para falar ou continue por texto."));
-  useEffect(() => { if (isMicrophoneAvailable) return; const timer = setTimeout(aoPerderMicrofone, 0); return () => clearTimeout(timer); }, [isMicrophoneAvailable]);
+  useEffect(() => { if (livekit || isMicrophoneAvailable) return; const timer = setTimeout(aoPerderMicrofone, 0); return () => clearTimeout(timer); }, [isMicrophoneAvailable, livekit]);
   const aoPararSemFala = useEffectEvent(() => {
     if (!turnoRef.current && !enviandoFalaRef.current) { ativaRef.current = false; setAtiva(false); guardarEstado("parado"); }
   });
   useEffect(() => {
-    if (listening || transcript || estado !== "ouvindo") return;
+    if (livekit || listening || transcript || estado !== "ouvindo") return;
     const timer = setTimeout(aoPararSemFala, 1000);
     return () => clearTimeout(timer);
-  }, [listening, transcript, estado]);
+  }, [listening, transcript, estado, livekit]);
   const aoExpirar = useEffectEvent(() => { if (!fim && !fechandoRef.current && !turnoRef.current) void pedirResultado(); });
   useEffect(() => { if (restante === 0) aoExpirar(); }, [restante]);
   useEffect(() => {
@@ -312,6 +341,7 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     if (!turnoRef.current) void pedirResultado();
   }
   function interromper() {
+    if (livekit) { void chamada.interromper().catch(() => setErro("Não foi possível interromper a fala.")); return; }
     pararAudio();
     // A resposta já está gravada. A continuação do turno retoma a escuta após cancelar o áudio.
   }

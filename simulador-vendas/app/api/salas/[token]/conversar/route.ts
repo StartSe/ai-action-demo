@@ -1,3 +1,4 @@
+import { prepararRoteiro } from "@/lib/roteiro";
 // Uma fala do vendedor na sala de treino (app/simular/[código]): devolve a próxima fala do cliente.
 //
 // A rota atende dois caminhos, distinguidos pelo corpo do pedido:
@@ -7,10 +8,7 @@
 //   personagem da sessão (que já carrega a ficha do produto) e as últimas 20 falas.
 // - **Sala antiga** (`{ transcricao }`): os links criados antes da US-002 continuam abrindo, e a sala
 //   deles reenvia a conversa inteira a cada turno. Reaproveita lib/simulacao.ts, sem mudança.
-import { montarPersonagem } from "@/lib/cliente-simulado";
 import { FALAS_NO_PROMPT, falaDoCliente } from "@/lib/conversa-sessao";
-import { personasDe } from "@/lib/personas";
-import { obter as obterProduto } from "@/lib/produtos";
 import { obter as obterSala, expirou } from "@/lib/salas";
 import { obter as obterCenario } from "@/lib/cenarios";
 import { conversaAberta, restanteSeg } from "@/lib/sala-do-vendedor";
@@ -61,19 +59,12 @@ export async function POST(req: Request, { params }: RouteContext<"/api/salas/[t
   // o cliente responde. Gravada aqui, ela também não se perde se o modelo falhar no meio.
   if (fala) registrarMensagem({ sessaoId: sessao.id, papel: "vendedor", texto: fala, segundo });
 
-  const produto = obterProduto(simulacao.produtoId);
-  const personagem = montarPersonagem({
-    persona: personasDe([sessao.personaId])[0],
-    dificuldade: simulacao.dificuldade,
-    produto: produto ?? { nome: simulacao.nome, conhecimento: undefined },
-    // Mesma semente da preparação (US-014): sem ela o cliente trocaria de nome no meio da conversa.
-    semente: sessao.id,
-  });
+  const roteiro = prepararRoteiro(sessao, simulacao);
 
   let texto: string;
   try {
     texto = await falaDoCliente({
-      instrucoes: personagem.instrucoes,
+      instrucoes: roteiro.instrucoes,
       historico: ultimasMensagens(sessao.id, FALAS_NO_PROMPT),
       despedir,
     });

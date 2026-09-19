@@ -1,3 +1,5 @@
+import { livekitConfigurado } from "@/lib/livekit";
+import { prepararRoteiro } from "@/lib/roteiro";
 // Sala de treino pública: o link que o gestor manda para o time inteiro (/simular/<código>).
 //
 // A ordem da tela é: treino disponível? → quem é você? (US-013) → ainda tem tentativa? → conversa.
@@ -14,8 +16,6 @@ import { obter as obterProduto } from "@/lib/produtos";
 import { obter as obterParticipante } from "@/lib/participantes";
 import { emAndamento, emPreparacao, historicoDe, melhorSessaoDe, tentativasDe, transcricao } from "@/lib/sessoes";
 import { retomarOuFechar } from "@/lib/retomada";
-import { montarPersonagem } from "@/lib/cliente-simulado";
-import { personasDe } from "@/lib/personas";
 import { caracteristicasEmUso, vozDoNavegador } from "@/lib/vozes";
 import { lerSessaoVendedor } from "@/lib/sessao-vendedor";
 import { nomeDoProvedor, provedoresDisponiveis } from "@/lib/entrar-vendedor";
@@ -31,7 +31,6 @@ import { Preparacao } from "./Preparacao";
 export const dynamic = "force-dynamic";
 
 /** Mesmo texto de app/api/salas/[token]/sessao: o que o vendedor combina quando o gestor não escreveu nada. */
-const OBJETIVO_PADRAO = "Entender a situação do cliente e sair da conversa com um próximo passo combinado.";
 
 function Indisponivel({ titulo, descricao }: { titulo: string; descricao: string }) {
   return (
@@ -183,14 +182,10 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
   // sessão), então é o mesmo cliente que o vendedor acabou de conhecer. Só nome, cargo e empresa
   // atravessam para o navegador: `instrucoes` e `personaId` ficam no servidor (D2).
   if (aberta?.status === "em_andamento") {
-    const personagem = montarPersonagem({
-      persona: personasDe([aberta.personaId])[0],
-      dificuldade: simulacao.dificuldade,
-      produto: produto ?? { nome: simulacao.nome, conhecimento: undefined },
-      semente: aberta.id,
-    });
-    const objetivo = simulacao.objetivo?.trim() || OBJETIVO_PADRAO;
+    const personagem = prepararRoteiro(aberta, simulacao).cliente;
+    const objetivo = prepararRoteiro(aberta, simulacao).objetivo;
     const nivel2: PropsSalaVoz = {
+      livekit: livekitConfigurado() && simulacao.permiteVoz,
       codigo: token,
       marca: MARCA,
       nome: NOME_APP,

@@ -1,4 +1,5 @@
 "use client";
+import { ConectarLivekit } from "./ConectarLivekit";
 // Tela de configuração inicial, gerada a partir de lib/integracoes.ts. Compartilhada pela suíte: copie sem alterar.
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
@@ -313,6 +314,8 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque }: { integ
           <p className="mt-0.5 truncate text-sm text-ink-2">{i.beneficio || i.descricao}</p>
         </div>
       </div>
+
+      {i.id === "livekit" && <ConectarLivekit aoConectar={aoSalvar} configurada={i.configurada} porAmbiente={i.campos.some(c => c.origem === "env")} />}
 
       {i.oauth ? (
         <>

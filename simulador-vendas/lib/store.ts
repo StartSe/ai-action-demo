@@ -76,6 +76,7 @@ function abrir(): DatabaseSync {
   if (db) return db;
   fs.mkdirSync(DATA_DIR, { recursive: true });
   db = new DatabaseSync(path.join(DATA_DIR, "app.sqlite"));
+  db.exec("PRAGMA busy_timeout = 5000");
   db.exec(`CREATE TABLE IF NOT EXISTS config (
     chave TEXT PRIMARY KEY,
     valor TEXT NOT NULL,
