@@ -12,9 +12,10 @@
 import { aiEnabled, askJSON } from "./ai";
 import { esperar } from "./demo";
 import { data } from "./formato";
-import { ROTULO_FIT, ROTULO_PAPEL } from "./rotulos";
+import { ORDEM_STATUS_LEAD, ROTULO_FIT, ROTULO_PAPEL } from "./rotulos";
 import { getConfig } from "./store";
-import type { Conta, DirecaoRegeneracao, EstrategiaAbordagem, ICP, LeadProspeccao, NovaAbordagemRegistro, Produto, SinalProspeccao } from "./types";
+import { atualizarLead, criarAbordagem, listarAbordagens, obterConta, obterICP, obterLead, obterProduto, obterProspeccao } from "./workspace";
+import type { AbordagemRegistro, Conta, DirecaoRegeneracao, EstrategiaAbordagem, ICP, LeadProspeccao, NovaAbordagemRegistro, Produto, SinalProspeccao } from "./types";
 
 function primeiroNome(nome: string) {
   return nome.split(" ")[0];
@@ -158,6 +159,55 @@ Remetente: ${remetenteNome || "não informado"}${remetenteEmpresa ? `, da empres
     console.error("Falha ao gerar mensagens da abordagem:", err instanceof Error ? err.message : err);
     return mensagensDemo(lead, produto, estrategia, remetenteNome, remetenteEmpresa);
   }
+}
+
+// --- Contexto e geração de abordagem (US-029/030) --------------------------------------------------------
+// Compartilhado por app/api/leads/[id]/abordagem/route.ts, .../regenerar/route.ts e a ferramenta MCP
+// `criar_abordagem` (US-039) — nenhum dos três recalcula a busca do lead/produto/ICP/conta sozinho.
+
+export type ContextoLead = { lead: LeadProspeccao; produto: Produto; icp: ICP | null; conta: Conta | null };
+
+/** Contexto necessário para gerar/editar/regenerar a abordagem de um lead: a própria pessoa, a conta
+ * vinculada (nula em B2C ou "Explorar uma empresa" sem site) e o produto da prospecção. `null` quando o
+ * lead, a prospecção ou o produto não existem mais ("Esta pessoa não existe mais." nas rotas). */
+export function contextoDoLead(leadId: string): ContextoLead | null {
+  const lead = obterLead(leadId);
+  if (!lead) return null;
+  const prospeccao = obterProspeccao(lead.prospeccaoId);
+  const produto = prospeccao ? obterProduto(prospeccao.produtoId) : null;
+  if (!produto) return null;
+  const icp = prospeccao ? obterICP(prospeccao.icpId) : null;
+  const conta = lead.contaId ? obterConta(lead.contaId) : null;
+  return { lead, produto, icp, conta };
+}
+
+/** "A abordagem é salva... e o lead passa a status: 'selecionado'" (AC da US-030): só promove para a
+ * frente (novo/pesquisado/qualificado → selecionado), nunca reverte um lead que já foi abordado ou
+ * respondeu, e nunca tira um lead de "descartado" (fora dessa ordem, `indexOf` devolve -1). */
+function promoverParaSelecionado(lead: LeadProspeccao): LeadProspeccao {
+  const atual = ORDEM_STATUS_LEAD.indexOf(lead.status);
+  const alvo = ORDEM_STATUS_LEAD.indexOf("selecionado");
+  if (atual === -1 || atual >= alvo) return lead;
+  return atualizarLead(lead.id, { status: "selecionado" }) ?? lead;
+}
+
+/** Abordagem de um lead (GET /api/leads/[id]/abordagem e a ferramenta MCP `criar_abordagem`): a primeira
+ * chamada gera e SALVA estratégia + mensagens e promove o lead a "selecionado"; chamadas seguintes só leem
+ * o registro já existente (uma abordagem por lead — "Regenerar"/variações mexem no registro por fora desta
+ * função). `null` quando o lead não existe mais. */
+export async function gerarOuObterAbordagem(leadId: string): Promise<{ lead: LeadProspeccao; abordagem: AbordagemRegistro } | null> {
+  const contexto = contextoDoLead(leadId);
+  if (!contexto) return null;
+  const { lead, produto, icp, conta } = contexto;
+
+  const existente = listarAbordagens(leadId)[0];
+  if (existente) return { lead, abordagem: existente };
+
+  const estrategia = await gerarEstrategia(lead, conta, produto, icp);
+  const mensagens = await gerarMensagens(lead, produto, estrategia);
+  const abordagem = criarAbordagem({ leadId, estrategia, ...mensagens, variacao: null });
+  const leadAtualizado = promoverParaSelecionado(lead);
+  return { lead: leadAtualizado, abordagem };
 }
 
 // --- Regenerar com direção (US-031) ---------------------------------------------------------------------

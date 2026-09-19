@@ -1,9 +1,25 @@
 // Ferramentas expostas via app/mcp/route.ts para assistentes de IA (Claude, ChatGPT etc.).
 // Cada app da suíte declara as suas aqui, reaproveitando a mesma lógica das rotas normais.
+//
+// As seis ferramentas do workspace (US-039) chamam a MESMA função de lib/ usada pela rota HTTP
+// equivalente, sem duplicar prompt nem regra: listar_produtos → lib/workspace.ts:produtosComICPs (GET
+// /api/produtos), criar_prospeccao → lib/execucao-prospeccao.ts:criarProspeccaoValidada (POST
+// /api/prospeccoes), andamento_prospeccao → lib/workspace.ts:obterAndamento (GET
+// /api/prospeccoes/[id]/andamento), listar_leads → lib/workspace.ts:listarLeadsComContexto (GET
+// /api/leads/todos, com o filtro de fit/status aplicado aqui, por cima), qualificar_lead →
+// lib/workspace.ts:mudarStatusLead (PUT /api/leads/[id]) e criar_abordagem →
+// lib/estrategia.ts:gerarOuObterAbordagem (GET /api/leads/[id]/abordagem).
 import { escreverAbordagem } from "./abordagem";
+import { gerarOuObterAbordagem } from "./estrategia";
+import { criarProspeccaoValidada } from "./execucao-prospeccao";
 import { buscarLeads, QUANTIDADES_VALIDAS } from "./leads";
 import type { Ferramenta } from "./mcp";
+import { ROTULO_MOTIVO_DESCARTE, ROTULO_STATUS_LEAD } from "./rotulos";
 import type { DadosBusca, Lead } from "./types";
+import { listarLeadsComContexto, mudarStatusLead, obterAndamento, produtosComICPs } from "./workspace";
+
+const STATUS_LEAD_VALIDOS = Object.keys(ROTULO_STATUS_LEAD);
+const MOTIVOS_DESCARTE_VALIDOS = Object.keys(ROTULO_MOTIVO_DESCARTE);
 
 export const NOME_SERVIDOR = "prospeccao-ia";
 
@@ -73,6 +89,114 @@ export const FERRAMENTAS: Ferramenta[] = [
       if (!proposta) throw new Error("Descreva o que sua empresa vende e para quem.");
       const segmento = args.segmento ? String(args.segmento).trim() : undefined;
       return escreverAbordagem({ lead, proposta, segmento });
+    },
+  },
+  {
+    nome: "listar_produtos",
+    descricao: "Lista os produtos cadastrados no workspace de prospecção, cada um com os perfis ideais de cliente (ICPs) vinculados.",
+    schema: { type: "object", properties: {} },
+    async executar() {
+      return produtosComICPs();
+    },
+  },
+  {
+    nome: "criar_prospeccao",
+    descricao:
+      "Cria uma prospecção para um produto e um perfil ideal de cliente já cadastrados e começa a busca em segundo plano: empresas, pessoas, uma empresa específica ou oportunidades por sinal de intenção.",
+    schema: {
+      type: "object",
+      properties: {
+        produtoId: { type: "string", description: "Id do produto (ver listar_produtos)" },
+        icpId: { type: "string", description: "Id do perfil ideal de cliente (ICP), vinculado ao produto" },
+        modo: {
+          type: "string",
+          enum: ["empresas", "pessoas", "empresa_unica", "oportunidades"],
+          description: "Tipo de busca: empresas, pessoas, uma empresa específica (empresa_unica) ou oportunidades por sinal",
+        },
+        criterios: {
+          type: "object",
+          description: "Critérios da busca conforme o modo (segmento, localização, porte, cargo, sinais, empresaNome em 'empresa_unica' etc.)",
+        },
+      },
+      required: ["produtoId", "icpId", "modo", "criterios"],
+    },
+    async executar(args) {
+      const resultado = criarProspeccaoValidada({
+        produtoId: String(args.produtoId || ""),
+        icpId: String(args.icpId || ""),
+        modo: args.modo,
+        criterios: args.criterios,
+      });
+      if (!resultado.ok) throw new Error(resultado.erro);
+      return resultado.prospeccao;
+    },
+  },
+  {
+    nome: "andamento_prospeccao",
+    descricao: "Mostra o andamento de uma prospecção: etapa atual, empresas e pessoas já encontradas, com aderência ao perfil e sinais públicos.",
+    schema: {
+      type: "object",
+      properties: { prospeccaoId: { type: "string", description: "Id da prospecção (ver criar_prospeccao)" } },
+      required: ["prospeccaoId"],
+    },
+    async executar(args) {
+      const andamento = obterAndamento(String(args.prospeccaoId || ""));
+      if (!andamento) throw new Error("Prospecção não encontrada.");
+      return andamento;
+    },
+  },
+  {
+    nome: "listar_leads",
+    descricao: "Lista as pessoas encontradas em todas as prospecções, com a empresa e a aderência ao perfil ideal; aceita filtro por aderência e por status.",
+    schema: {
+      type: "object",
+      properties: {
+        fit: { type: "string", enum: ["alta", "media", "baixa"], description: "Filtra só quem tem esta aderência ao perfil ideal (opcional)" },
+        status: { type: "string", enum: STATUS_LEAD_VALIDOS, description: "Filtra só quem está neste status (opcional)" },
+      },
+    },
+    async executar(args) {
+      const { leads, prospeccoes } = listarLeadsComContexto();
+      const fit = typeof args.fit === "string" ? args.fit : null;
+      const status = typeof args.status === "string" ? args.status : null;
+      const filtrados = leads.filter((l) => (!fit || l.fit === fit) && (!status || l.status === status));
+      return { leads: filtrados, prospeccoes };
+    },
+  },
+  {
+    nome: "qualificar_lead",
+    descricao: "Muda o status de uma pessoa na prospecção (ex.: marcar como qualificada, selecionada ou descartada, com o motivo do descarte).",
+    schema: {
+      type: "object",
+      properties: {
+        leadId: { type: "string", description: "Id da pessoa (ver listar_leads)" },
+        status: { type: "string", enum: STATUS_LEAD_VALIDOS, description: "Novo status da pessoa" },
+        motivo: { type: "string", enum: MOTIVOS_DESCARTE_VALIDOS, description: "Motivo do descarte, só quando status é 'descartado' (opcional)" },
+      },
+      required: ["leadId", "status"],
+    },
+    async executar(args) {
+      const leadId = String(args.leadId || "");
+      if (!leadId) throw new Error("Informe a pessoa a qualificar.");
+      const motivo = typeof args.motivo === "string" ? args.motivo : undefined;
+      const atualizado = mudarStatusLead(leadId, String(args.status || ""), motivo);
+      if (!atualizado) throw new Error("Pessoa não encontrada.");
+      return atualizado;
+    },
+  },
+  {
+    nome: "criar_abordagem",
+    descricao:
+      "Gera (ou devolve, se já existir) a estratégia e as mensagens de abordagem — e-mail, LinkedIn e WhatsApp — para uma pessoa já encontrada numa prospecção.",
+    schema: {
+      type: "object",
+      properties: { leadId: { type: "string", description: "Id da pessoa (ver listar_leads)" } },
+      required: ["leadId"],
+    },
+    async executar(args) {
+      const resultado = await gerarOuObterAbordagem(String(args.leadId || ""));
+      if (!resultado) throw new Error("Esta pessoa não existe mais.");
+      return resultado;
     },
   },
 ];

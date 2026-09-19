@@ -1,12 +1,10 @@
-import { criarProduto, listarICPs, listarProdutos } from "@/lib/workspace";
+import { criarProduto, produtosComICPs } from "@/lib/workspace";
 import type { NovoProduto } from "@/lib/types";
 
-/** Lista de produtos com os ICPs de cada um já embutidos (US-004): a tela não faz uma segunda chamada por produto. */
+/** Lista de produtos com os ICPs de cada um já embutidos (US-004): a tela não faz uma segunda chamada por
+ * produto. Mesma função (lib/workspace.ts:produtosComICPs) usada pela ferramenta MCP `listar_produtos`. */
 export async function GET() {
-  const produtos = listarProdutos();
-  const icps = listarICPs();
-  const itens = produtos.map((p) => ({ ...p, icps: icps.filter((i) => i.produtoId === p.id) }));
-  return Response.json({ itens });
+  return Response.json({ itens: produtosComICPs() });
 }
 
 /** Cria um produto (US-005); nome e proposta de valor são obrigatórios, descrição e site são opcionais. */

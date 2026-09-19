@@ -3,16 +3,20 @@
 // Cada entidade expõe criar/listar/obter/atualizar/apagar; nenhuma rota monta SQL.
 import crypto from "node:crypto";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
+import { nomeProspeccao, ROTULO_MOTIVO_DESCARTE, ROTULO_STATUS_LEAD } from "./rotulos";
 import { abrirBanco } from "./store";
 import type {
   Produto, NovoProduto,
   ICP, NovoICP,
   Prospeccao, NovaProspeccao,
   Conta, NovaConta,
-  LeadProspeccao, NovoLeadProspeccao,
+  LeadProspeccao, NovoLeadProspeccao, MotivoDescarte, StatusLead,
   AbordagemRegistro, NovaAbordagemRegistro,
   CriteriosICP, Evidencia, SinalProspeccao, EstrategiaAbordagem,
 } from "./types";
+
+const STATUS_LEAD_VALIDOS = Object.keys(ROTULO_STATUS_LEAD) as StatusLead[];
+const MOTIVOS_DESCARTE_VALIDOS = Object.keys(ROTULO_MOTIVO_DESCARTE) as MotivoDescarte[];
 
 let criado = false;
 
@@ -163,6 +167,14 @@ export function apagarProduto(id: string, em?: Date): void {
   banco().prepare("UPDATE produtos SET apagado_em = ? WHERE id = ?").run((em ?? new Date()).toISOString(), id);
 }
 
+/** Produtos com os ICPs de cada um já embutidos (GET /api/produtos e a ferramenta MCP `listar_produtos`) —
+ * evita uma segunda chamada por produto. */
+export function produtosComICPs(): (Produto & { icps: ICP[] })[] {
+  const produtos = listarProdutos();
+  const icps = listarICPs();
+  return produtos.map((p) => ({ ...p, icps: icps.filter((i) => i.produtoId === p.id) }));
+}
+
 // --- ICPs --------------------------------------------------------------
 
 type LinhaICP = { id: string; produto_id: string; nome: string; jornada: string; criterios: string; personas: string; dores: string; sinais: string; demo: number; criado_em: string };
@@ -260,6 +272,51 @@ export function apagarProspeccao(id: string): void {
   banco().prepare("DELETE FROM leads WHERE prospeccao_id = ?").run(id);
   banco().prepare("DELETE FROM contas WHERE prospeccao_id = ?").run(id);
   banco().prepare("DELETE FROM prospeccoes WHERE id = ?").run(id);
+}
+
+/** Andamento de uma prospecção (GET /api/prospeccoes/[id]/andamento e a ferramenta MCP
+ * `andamento_prospeccao`): produto/ICP, contas e leads num payload único, servindo tanto a carga inicial da
+ * tela quanto o poll a cada 2 s. `produtoNome`/`icpNome` vêm de obterProduto/obterICP, que não filtram
+ * apagado (funciona mesmo se o produto tiver sido apagado depois de a prospecção existir). `null` quando a
+ * prospecção não existe. */
+export function obterAndamento(id: string) {
+  const prospeccao = obterProspeccao(id);
+  if (!prospeccao) return null;
+  const produto = obterProduto(prospeccao.produtoId);
+  const icp = obterICP(prospeccao.icpId);
+  const contas = listarContas(id);
+  const leads = listarLeads(id);
+  return {
+    prospeccao,
+    produtoNome: produto?.nome ?? "Produto",
+    icpNome: icp?.nome ?? "Perfil",
+    jornada: icp?.jornada ?? "b2b",
+    icpPersonas: icp?.personas ?? [],
+    contas,
+    leads,
+    contasEncontradas: contas.length,
+    leadsEncontrados: leads.length,
+  };
+}
+
+/** Todos os leads de todas as prospecções, com `prospeccaoNome`/`site` já resolvidos (GET /api/leads/todos
+ * e a ferramenta MCP `listar_leads`) — a tela e o assistente nunca recalculam isso sozinhos. */
+export function listarLeadsComContexto() {
+  const prospeccoes = listarProspeccoes();
+  const nomesPorProspeccao = new Map(
+    prospeccoes.map((p) => {
+      const produtoNome = obterProduto(p.produtoId)?.nome ?? "Produto";
+      return [p.id, nomeProspeccao(produtoNome, p.modo, p.criterios)] as const;
+    }),
+  );
+  const sitePorConta = new Map(listarContas().map((c) => [c.id, c.site] as const));
+  const leads = listarLeads().map((l) => ({
+    ...l,
+    prospeccaoNome: nomesPorProspeccao.get(l.prospeccaoId) ?? "Prospecção",
+    site: l.contaId ? (sitePorConta.get(l.contaId) ?? null) : null,
+  }));
+  const prospeccoesFiltro = prospeccoes.map((p) => ({ id: p.id, nome: nomesPorProspeccao.get(p.id) ?? "Prospecção" }));
+  return { leads, prospeccoes: prospeccoesFiltro };
 }
 
 /** Mensagem gravada em prospeccoes.erro por recuperarProspeccoesTravadas (US-013); reaproveitada pelo teste. */
@@ -399,6 +456,22 @@ export function leadsDoProduto(produtoId: string): LeadProspeccao[] {
     .prepare("SELECT leads.* FROM leads JOIN prospeccoes ON prospeccoes.id = leads.prospeccao_id WHERE prospeccoes.produto_id = ?")
     .all(produtoId) as LinhaLead[];
   return linhas.map(linhaParaLead);
+}
+
+/** Muda o status de um lead (PUT /api/leads/[id] e a ferramenta MCP `qualificar_lead`) — uma das duas
+ * únicas escritas de status fora do pipeline, ao lado da edição de papel. `null` quando o lead não existe
+ * (404 na rota); lança um `Error` com mensagem de negócio para status/motivo inválidos (400 na rota,
+ * repassada como está pelo assistente MCP). */
+export function mudarStatusLead(id: string, status: string, motivo?: string): LeadProspeccao | null {
+  if (!obterLead(id)) return null;
+  if (!STATUS_LEAD_VALIDOS.includes(status as StatusLead)) throw new Error("Escolha um status válido para esta pessoa.");
+  if (status === "descartado") {
+    if (motivo !== undefined && !MOTIVOS_DESCARTE_VALIDOS.includes(motivo as MotivoDescarte)) {
+      throw new Error("Escolha um motivo válido para o descarte.");
+    }
+    return atualizarLead(id, { status: "descartado", motivoDescarte: (motivo as MotivoDescarte) ?? null });
+  }
+  return atualizarLead(id, { status: status as StatusLead, motivoDescarte: null });
 }
 
 // --- Abordagens --------------------------------------------------------------

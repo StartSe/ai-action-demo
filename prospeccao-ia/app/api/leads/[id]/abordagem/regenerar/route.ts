@@ -1,8 +1,7 @@
-import { CAMPOS_MENSAGEM, partialParaCanal, regenerarMensagem, type CampoMensagem, type Mensagens } from "@/lib/estrategia";
+import { CAMPOS_MENSAGEM, contextoDoLead, partialParaCanal, regenerarMensagem, type CampoMensagem, type Mensagens } from "@/lib/estrategia";
 import { ROTULO_DIRECAO_REGENERACAO } from "@/lib/rotulos";
 import type { DirecaoRegeneracao } from "@/lib/types";
 import { atualizarAbordagem, listarAbordagens } from "@/lib/workspace";
-import { contextoDoLead } from "../comum";
 
 const DIRECOES_VALIDAS = Object.keys(ROTULO_DIRECAO_REGENERACAO) as DirecaoRegeneracao[];
 

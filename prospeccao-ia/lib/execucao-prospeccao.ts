@@ -57,8 +57,10 @@ import { avaliarCriterios, calcularFit, dominioDe, inferirPapel, resumoDaPagina,
 import { avaliarCriterioInterpretativo, gerarHipoteseDor } from "./qualificacao-ia";
 import { QUANTIDADES_EMPRESAS } from "./rotulos";
 import { termoSensivel } from "./sensivel";
-import { atualizarConta, atualizarLead, atualizarProspeccao, criarConta, criarLead, leadsDoProduto, listarContas, listarLeads, obterICP, obterProduto, obterProspeccao } from "./workspace";
-import type { Conta, Evidencia, ICP, Jornada, ModoProspeccao, SinalProspeccao } from "./types";
+import { atualizarConta, atualizarLead, atualizarProspeccao, criarConta, criarLead, criarProspeccao, leadsDoProduto, listarContas, listarLeads, obterICP, obterProduto, obterProspeccao } from "./workspace";
+import type { Conta, Evidencia, ICP, Jornada, ModoProspeccao, Prospeccao, SinalProspeccao } from "./types";
+
+const MODOS_PROSPECCAO_VALIDOS: ModoProspeccao[] = ["empresas", "pessoas", "empresa_unica", "oportunidades"];
 
 const QUANTIDADE_EMPRESAS_PADRAO = 10;
 // 5 páginas de 10 resultados orgânicos = até 50 candidatas, a maior quantidade alvo possível.
@@ -917,6 +919,45 @@ async function etapaQualificar(prospeccaoId: string, icp: ICP | null): Promise<v
 /** Dispara o pipeline em segundo plano; nunca aguardada pela rota que cria a prospecção. */
 export function iniciarExecucao(prospeccaoId: string): void {
   void executarPipeline(prospeccaoId);
+}
+
+export type ResultadoCriarProspeccao = { ok: true; prospeccao: Prospeccao } | { ok: false; erro: string; status: number };
+
+/** Valida, cria e dispara a execução de uma prospecção (POST /api/prospeccoes e a ferramenta MCP
+ * `criar_prospeccao`, US-039) — mesma validação e o mesmo pipeline nos dois casos. `status` acompanha o
+ * `erro` só para o chamador HTTP montar o código certo (404 produto/ICP, 400 os demais); a ferramenta MCP
+ * ignora `status` e lança `erro` direto. */
+export function criarProspeccaoValidada(dados: { produtoId: string; icpId: string; modo: unknown; criterios: unknown }): ResultadoCriarProspeccao {
+  const { produtoId, icpId, modo, criterios } = dados;
+  if (!produtoId || !obterProduto(produtoId)) return { ok: false, erro: "Produto não encontrado.", status: 404 };
+
+  const icp = icpId ? obterICP(icpId) : null;
+  if (!icpId || !icp) return { ok: false, erro: "Perfil ideal de cliente não encontrado.", status: 404 };
+  if (icp.produtoId !== produtoId) return { ok: false, erro: "Este perfil ideal de cliente não pertence ao produto escolhido.", status: 400 };
+
+  if (typeof modo !== "string" || !MODOS_PROSPECCAO_VALIDOS.includes(modo as ModoProspeccao)) {
+    return { ok: false, erro: "Escolha um tipo de busca válido.", status: 400 };
+  }
+
+  if (!criterios || typeof criterios !== "object" || Array.isArray(criterios)) {
+    return { ok: false, erro: "Informe os critérios da busca.", status: 400 };
+  }
+  if (modo === "empresa_unica") {
+    const empresaNome = typeof (criterios as Record<string, unknown>).empresaNome === "string" ? ((criterios as Record<string, unknown>).empresaNome as string) : "";
+    if (!empresaNome.trim()) return { ok: false, erro: "Informe o nome da empresa para explorar.", status: 400 };
+  }
+
+  const prospeccao = criarProspeccao({
+    produtoId,
+    icpId,
+    modo: modo as ModoProspeccao,
+    criterios: criterios as Record<string, unknown>,
+    estado: "executando",
+    etapa: null,
+    erro: null,
+  });
+  iniciarExecucao(prospeccao.id);
+  return { ok: true, prospeccao };
 }
 
 /** Estado gravado pelo momento em que a checagem ocorre (nunca cacheado): uma "Cancelar" (US-014) só tem
