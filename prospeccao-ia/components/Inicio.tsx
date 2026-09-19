@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Chip, Hero, Topbar, data, useConfirmacao, useScrollToResult, useStatus } from "@/components/ui";
+import { BuscaLivre } from "@/components/BuscaLivre";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 
 type ProspeccaoRecente = { id: string; nome: string; produto: string; demo: boolean; criadoEm: string; encontrados: number; qualificados: number; abordagens: number };
@@ -94,6 +95,8 @@ export function Inicio() {
       </Hero>
 
       <main className="max-w-[1400px] mx-auto px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
+        <BuscaLivre />
+
         <div className="grid gap-4 grid-cols-2 min-[1240px]:grid-cols-4 mb-8">
           <CartaoNumero valor={resumo?.prospeccoes ?? 0} rotulo="Prospecções" />
           <CartaoNumero valor={resumo?.leadsEncontrados ?? 0} rotulo="Leads encontrados" />

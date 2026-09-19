@@ -54,6 +54,10 @@ export function ProspeccaoNova() {
   const [enviando, setEnviando] = useState(false);
   const [erroEnvio, setErroEnvio] = useState<string | null>(null);
   const chaveCriteriosRef = useRef<string | null>(null);
+  // Critérios já sugeridos por fora (US-038, "Ajustar critérios" de components/BuscaLivre.tsx): lido uma
+  // única vez na abertura e consumido pelo efeito de derivação abaixo, para o passo 4 abrir com o que já
+  // foi entendido em vez de recalcular do zero a partir do ICP.
+  const criteriosSugeridosRef = useRef<CriteriosBusca | null>(null);
 
   useEffect(() => {
     fetch("/api/produtos")
@@ -70,6 +74,16 @@ export function ProspeccaoNova() {
       const params = new URLSearchParams(location.search);
       setProdutoId(params.get("produtoId"));
       setIcpId(params.get("icpId"));
+      const modoParam = params.get("modo");
+      if (modoParam) setModo(modoParam as ModoProspeccao);
+      const criteriosParam = params.get("criterios");
+      if (criteriosParam) {
+        try {
+          criteriosSugeridosRef.current = JSON.parse(criteriosParam);
+        } catch {
+          // parâmetro corrompido: o passo 4 cai no padrão calculado a partir do ICP
+        }
+      }
     }, 0);
     return () => clearTimeout(t);
   }, []);
@@ -141,8 +155,10 @@ export function ProspeccaoNova() {
     const chave = `${icpEfetivo.id}:${modoEfetivo}`;
     if (chaveCriteriosRef.current === chave) return;
     chaveCriteriosRef.current = chave;
+    const sugerido = criteriosSugeridosRef.current;
+    criteriosSugeridosRef.current = null;
     const t = setTimeout(() => {
-      setCriterios(criteriosIniciais(icpEfetivo, modoEfetivo, jornadaEfetiva ?? icpEfetivo.jornada));
+      setCriterios(sugerido ?? criteriosIniciais(icpEfetivo, modoEfetivo, jornadaEfetiva ?? icpEfetivo.jornada));
     }, 0);
     return () => clearTimeout(t);
   }, [icpEfetivo, modoEfetivo, jornadaEfetiva]);
