@@ -535,7 +535,7 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
 
   function enviarDigitado() {
     const texto = digitado.trim();
-    if (!texto || estado === "pensando" || estado === "falando") return;
+    if (!texto || encerrandoRef.current || estadoRef.current !== "parado") return;
     setDigitado("");
     void conversar(texto);
   }
@@ -622,7 +622,7 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
 
         <div className="flex-1 min-h-[120px] grid place-items-center text-center py-2">
           {ultimaDoCliente ? (
-            <p className="text-[19px] leading-[1.35] max-md:text-[17px]">{ultimaDoCliente}</p>
+            <p aria-live="polite" className="text-[19px] leading-[1.35] max-md:text-[17px] whitespace-pre-wrap break-words">{ultimaDoCliente}</p>
           ) : (
             <p className="text-muted text-[14px]">{`Você tem ${duracaoMin} minutos. Seu objetivo: ${objetivo}`}</p>
           )}
@@ -666,28 +666,48 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
             </button>
           </div>
         ) : (
-          <div className="flex gap-2">
-            <input
-              className="input"
-              placeholder="Escreva sua fala..."
-              value={digitado}
-              onChange={(e) => setDigitado(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  enviarDigitado();
-                }
-              }}
-              disabled={estado === "pensando" || estado === "falando" || encerrando}
-            />
-            <button type="button" className="btn-primary !w-auto" disabled={!digitado.trim() || estado === "pensando" || estado === "falando"} onClick={enviarDigitado}>
-              Enviar
-            </button>
+          <div>
+            <label htmlFor="fala-digitada" className="block text-sm font-semibold mb-2">Sua mensagem</label>
+            <div className="flex items-end gap-2">
+              <textarea
+                id="fala-digitada"
+                rows={3}
+                aria-describedby="ajuda-mensagem"
+                className="input resize-y min-w-0 max-md:text-base"
+                placeholder="Escreva sua fala..."
+                value={digitado}
+                onChange={(e) => setDigitado(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    enviarDigitado();
+                  }
+                }}
+                disabled={estado === "pensando" || estado === "falando" || encerrando}
+              />
+              <button type="button" className="btn-primary !w-auto" disabled={!digitado.trim() || estado !== "parado" || encerrando} onClick={enviarDigitado}>
+                Enviar
+              </button>
+            </div>
+            <p id="ajuda-mensagem" className="text-xs text-muted mt-2">Enter envia. Shift + Enter cria uma nova linha.</p>
           </div>
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-3 pt-3">
+      {falas.length > 0 && (
+        <details className="card p-4 mt-3">
+          <summary className="cursor-pointer text-sm font-semibold">Ver conversa completa ({falas.length})</summary>
+          <ol className="mt-3 space-y-3 max-h-64 overflow-y-auto" aria-label="Conversa completa">
+            {falas.map((fala, i) => (
+              <li key={i} className="text-sm whitespace-pre-wrap break-words">
+                <span className="block text-xs font-semibold text-muted">{fala.papel === "vendedor" ? "Você" : cliente.nome}</span>
+                {fala.texto}
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
         {porTexto && modo === "voz" ? (
           <button type="button" className="btn-ghost !w-auto text-[13px]" onClick={() => setModo("texto")}>
             Prefiro digitar

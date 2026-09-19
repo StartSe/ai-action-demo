@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AvisoExemplo } from "@/components/AvisoExemplo";
-import { Chip, Hero, Item, Topbar, numero, useStatus } from "@/components/ui";
+import { Chip, ErrorBox, Hero, Item, Topbar, numero, lerErro, useStatus, type ErroLido } from "@/components/ui";
 import { METODOLOGIAS } from "@/lib/metodologias";
 import type { Inicio } from "@/lib/inicio";
 import type { Dificuldade } from "@/lib/simulacoes";
@@ -174,6 +174,8 @@ export default function Page() {
   const { status, erro } = useStatus();
   const router = useRouter();
   const [inicio, setInicio] = useState<Inicio | null>(null);
+  const [erroInicio, setErroInicio] = useState<ErroLido | null>(null);
+  const [tentativa, setTentativa] = useState(0);
   const redirecionado = useRef(false);
 
   // O atalho `/?exemplo=1` da suíte (o botão "Testar com um exemplo" de /setup e a captura do
@@ -193,10 +195,10 @@ export default function Page() {
   // a uma função que mexe em estado no corpo do efeito, mesmo sendo assíncrona.
   useEffect(() => {
     fetch("/api/inicio")
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
       .then((c: Inicio | null) => setInicio(c))
-      .catch(() => setInicio(null));
-  }, []);
+      .catch(async (e) => setErroInicio(await lerErro(e)));
+  }, [tentativa]);
 
   const vazio = inicio?.vazio ?? true;
 
@@ -213,8 +215,13 @@ export default function Page() {
 
       <main className="grid grid-cols-[minmax(0,1fr)_320px] max-lg:grid-cols-1 gap-6 px-8 pt-6 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">
         <div className="flex flex-col gap-6">
-          {inicio === null ? (
-            <p className="text-muted text-sm">Carregando...</p>
+          {erroInicio ? (
+            <div>
+              <ErrorBox mensagem={erroInicio.mensagem} acao={erroInicio.acao} />
+              <button type="button" className="btn-ghost mt-3" onClick={() => { setErroInicio(null); setTentativa((n) => n + 1); }}>Tentar novamente</button>
+            </div>
+          ) : inicio === null ? (
+            <p role="status" className="text-muted text-sm">Carregando o resumo do time...</p>
           ) : (
             <>
               {inicio.exemplo && (
