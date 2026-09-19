@@ -201,9 +201,38 @@ export function Assistente() {
     else irPara(2);
   }
 
-  /** Lê um manual, tabela de preços ou documento de perguntas frequentes e ACRESCENTA ao campo. */
+  /** Documentos são persistidos separadamente da configuração do formulário. */
+  const [documentos, setDocumentos] = useState<{ id: string; nome: string; trechos: number; modo: string }[]>([]);
+  const [removendo, setRemovendo] = useState<string | null>(null);
+  async function carregarDocumentos() {
+    const r = await fetch("/api/base/arquivo");
+    if (!r.ok) throw new Error("Não foi possível carregar os documentos.");
+    setDocumentos((await r.json()).documentos);
+  }
+  useEffect(() => {
+    let ativo = true;
+    fetch("/api/base/arquivo").then(async (r) => {
+      if (!r.ok) throw new Error("Falha na leitura");
+      const dados = await r.json();
+      if (ativo) setDocumentos(dados.documentos);
+    }).catch(() => {
+      if (ativo) setAvisoImportacao({ tom: "danger", texto: "Não foi possível carregar os documentos. Atualize a página para tentar novamente." });
+    });
+    return () => { ativo = false; };
+  }, []);
+  async function removerDocumento(id: string) {
+    setRemovendo(id);
+    try {
+      const r = await fetch(`/api/base/arquivo?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!r.ok) throw new Error("Não foi possível remover o documento.");
+      await carregarDocumentos();
+      setAvisoImportacao({ tom: "ok", texto: "Documento removido da busca. Respostas anteriores permanecem no histórico." });
+    } catch (e) {
+      setAvisoImportacao({ tom: "danger", texto: (await lerErro(e)).mensagem });
+    } finally { setRemovendo(null); }
+  }
   async function importarArquivo(arquivo: File | null) {
-    if (!arquivo) return;
+    if (!arquivo || importando) return;
     setImportando(true);
     setAvisoImportacao(null);
     try {
@@ -215,19 +244,8 @@ export function Assistente() {
         return;
       }
       const d = await r.json();
-      let sobrou = false;
-      setConfig((c) => {
-        const junto = c.baseConhecimento.trim() ? `${c.baseConhecimento.trim()}\n\n${d.texto}` : d.texto;
-        sobrou = junto.length > LIMITE_BASE;
-        return { ...c, baseConhecimento: junto.slice(0, LIMITE_BASE) };
-      });
-      setAvisoImportacao({
-        tom: sobrou || d.cortado ? "danger" : "ok",
-        texto:
-          sobrou || d.cortado
-            ? `O texto de ${arquivo.name} não coube inteiro: o campo guarda até ${LIMITE_BASE.toLocaleString("pt-BR")} caracteres. Confira o que entrou e apague o que não for necessário.`
-            : `Conteúdo de ${arquivo.name} acrescentado. Confira o texto antes de continuar.`,
-      });
+      setAvisoImportacao({ tom: "ok", texto: `${arquivo.name} salvo em ${d.documento.trechos} trechos. Busca ${d.documento.modo}.` });
+      await carregarDocumentos();
     } catch (e) {
       setAvisoImportacao({ tom: "danger", texto: (await lerErro(e)).mensagem });
     } finally {
@@ -584,6 +602,9 @@ export function Assistente() {
                     />
                   ))}
                 </Grupo>
+                {config.objetivo === "agendamentos" && (
+                  <Aviso tom="warn">Para consultar horários e marcar, <a href="/setup#mcp-agenda" className="underline font-semibold">conecte sua agenda</a>. Sem ferramentas de agenda disponíveis, o atendente coleta preferências e encaminha à equipe, sem confirmar reserva.</Aviso>
+                )}
                 {config.objetivo === "outro" && (
                   <Field label="Em uma linha, o que ele deve fazer?" htmlFor="objetivoTexto">
                     <input
@@ -621,8 +642,13 @@ export function Assistente() {
                 </p>
 
                 <p className="text-[13px] font-semibold mb-2">Adicionar arquivo (opcional)</p>
+                <p className="text-muted text-[12.5px] mb-2">Os documentos são salvos imediatamente e consultados por trechos relevantes, sem ocupar o campo acima. Até 30 arquivos de 200 mil caracteres. Com IA conectada, a busca semântica usa créditos do OpenRouter; se indisponível, usamos palavras-chave. Reenvie o mesmo arquivo para tentar indexá-lo novamente.</p>
+                {documentos.map((d) => <div key={d.id} className="flex items-center justify-between gap-3 text-[13px] mb-2">
+                  <span>{d.nome} · {d.trechos} trechos · busca {d.modo}</span>
+                  <button type="button" className="underline" disabled={removendo !== null || importando} onClick={() => removerDocumento(d.id)} aria-label={`Remover ${d.nome}`}>{removendo === d.id ? "Removendo…" : "Remover"}</button>
+                </div>)}
                 <Dropzone id="arquivo-base" accept={ACEITA_ARQUIVO} tiposLabel="PDF, TXT" maxSizeMB={10} arquivo={null} onArquivo={importarArquivo} />
-                {importando && <p className="text-muted text-[12.5px] mt-2">Lendo o arquivo...</p>}
+                {importando && <p className="text-muted text-[12.5px] mt-2">Lendo e indexando o arquivo...</p>}
                 {avisoImportacao && <div className="mt-3"><Aviso tom={avisoImportacao.tom}>{avisoImportacao.texto}</Aviso></div>}
 
                 <div className="mt-5">

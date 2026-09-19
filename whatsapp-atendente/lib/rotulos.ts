@@ -113,7 +113,7 @@ export const OBJETIVOS: Objetivo[] = ["atendimento", "vendas", "agendamentos", "
 const ROTULOS_OBJETIVO: Record<Objetivo, Escolha> = {
   atendimento: { titulo: "Atendimento", apoio: "Tira dúvidas e informa" },
   vendas: { titulo: "Vendas", apoio: "Apresenta e ajuda a fechar" },
-  agendamentos: { titulo: "Agendamentos", apoio: "Marca horários" },
+  agendamentos: { titulo: "Agendamentos", apoio: "Agenda conectada ou encaminhamento à equipe" },
   outro: { titulo: "Outro", apoio: "Você escreve o que ele faz" },
 };
 

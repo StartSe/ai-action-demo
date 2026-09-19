@@ -2,6 +2,8 @@
 // + IA (com fallback local sem chave).
 import { aiEnabled, askJSON, askText, askWithTools, ErroIA, type ToolMessage } from "./ai";
 import { ASSUNTO_OUTROS, assuntosDoObjetivo, normalizarAssunto } from "./assuntos";
+import { buscarDocumentos } from "./documentos";
+import { toolsAgenda } from "./agenda";
 import { baseAprovadaComoTexto } from "./base";
 import { definirAssunto, historicoRecente, MAX_HISTORICO, obterConversa, obterRegistro, perguntasDoCliente, registrarMensagemCliente, registrarResposta } from "./conversas";
 import { classificarLocal, esperar, respostaLocal } from "./demo";
@@ -27,7 +29,7 @@ function descricaoObjetivo(config: Config): string {
     case "vendas":
       return "entender a necessidade, apresentar a opção certa e convidar a fechar";
     case "agendamentos":
-      return "coletar dia e horário preferidos e confirmar que uma pessoa vai marcar";
+      return "consultar a agenda conectada para agendar; sem ferramenta disponível, coletar preferências e encaminhar à equipe sem confirmar reserva";
     case "outro":
       return config.objetivoTexto?.trim() || "tirar dúvidas e informar";
     default:
@@ -115,8 +117,20 @@ Regras:
  * empresa (lib/empresa-mcp.ts) quando alguma estiver conectada e liberada. Devolve o nome da primeira
  * ferramenta chamada (se alguma foi), para a tela e o relatório diário mostrarem "Consultado em X".
  */
-async function perguntarComFerramentas({ system, prompt, maxTokens }: { system: string; prompt: string; maxTokens: number }): Promise<{ texto: string; ferramentaUsada?: string }> {
-  const ferramentas = await toolsParaAtendente().catch(() => null);
+async function perguntarComFerramentas({ system, prompt, maxTokens, usarAgenda = true }: { system: string; prompt: string; maxTokens: number; usarAgenda?: boolean }): Promise<{ texto: string; ferramentaUsada?: string }> {
+  const [empresa, agenda] = await Promise.all([toolsParaAtendente().catch(() => null), usarAgenda ? toolsAgenda().catch(() => null) : Promise.resolve(null)]);
+  system += `
+Regras de agenda: ${agenda ? "Há ferramentas de agenda disponíveis." : "A agenda não está disponível; para pedidos de agendamento, apenas colete preferências e encaminhe à equipe com [TRANSFERIR]."} Nunca afirme disponibilidade sem consulta. Antes de criar um evento, peça confirmação explícita do cliente sobre data, hora, fuso, duração e participantes. Só confirme agendamento após sucesso da ferramenta; erro ou resposta ambígua não é confirmação. Não repita uma criação cujo resultado seja incerto.
+Data atual: ${new Date().toISOString()}.`;
+  const conjuntos = [empresa, agenda].filter((f) => f !== null);
+  const ferramentas = conjuntos.length ? {
+    tools: conjuntos.flatMap((f) => f.tools),
+    executeTool: async (nome: string, args: Record<string, unknown>) => {
+      const conjunto = conjuntos.find((f) => f.tools.some((t) => t.function.name === nome));
+      if (!conjunto) throw new Error("Ferramenta não autorizada");
+      return conjunto.executeTool(nome, args);
+    },
+  } : null;
   if (!ferramentas) return { texto: await askText({ system, prompt, maxTokens }) };
   const usadas: string[] = [];
   const messages: ToolMessage[] = [{ role: "user", content: prompt }];
@@ -155,12 +169,18 @@ export async function responder({
   /** Configuração ainda não salva (testada no simulador antes de clicar em "Salvar"); sem ela, usa a configuração salva. */
   config?: Config;
 }): Promise<{ resposta: string | null; transferir: boolean; ferramentaUsada?: string; atendimentoHumano?: boolean }> {
-  const config = comBaseAprovada(configRascunho ?? getConfig());
+  let config = comBaseAprovada(configRascunho ?? getConfig());
   const comecouEm = Date.now();
   const conversa = registrarMensagemCliente({ numero, texto, origem, nome });
   // Conversa assumida por uma pessoa: a mensagem fica guardada e contada como não lida, e quem
   // responde é ela. A IA só volta a responder quando a conversa for devolvida.
   if (conversa.status === "humano") return { resposta: null, transferir: false, atendimentoHumano: true };
+
+  const consulta = [...historicoRecente(numero, 4).filter((m) => m.papel === "cliente").map((m) => m.texto)].join("\n");
+  const documentos = await buscarDocumentos(consulta || texto, aiEnabled() ? "contexto" : "texto");
+  config = { ...config, baseConhecimento: `${config.baseConhecimento}
+
+${documentos}` };
 
   let resposta: string;
   let transferir: boolean;
@@ -181,7 +201,8 @@ export async function responder({
       // O modelo devolveu raciocínio em vez de mensagem (acontece com os modelos gratuitos). Mandar isso
       // ao cliente seria pior do que responder pela base: o caminho sem IA assume, e fica o registro.
       console.error("Resposta da IA descartada (parecia raciocínio, não mensagem):", bruta.slice(0, 200));
-      const r = respostaLocal(texto, config);
+      const baseLocal = comBaseAprovada(configRascunho ?? getConfig());
+      const r = respostaLocal(texto, { ...baseLocal, baseConhecimento: `${baseLocal.baseConhecimento}\n\n${await buscarDocumentos(consulta || texto, "texto")}` });
       resposta = r.resposta;
       transferir = r.transferir;
     }
@@ -315,8 +336,9 @@ Regras: no máximo 2 a 3 frases, sem falar em transferir para humano ou em intel
 export async function sugerirResposta(pergunta: string): Promise<{ resposta: string; ferramentaUsada?: string }> {
   if (!aiEnabled())
     return { resposta: 'Configure a chave da IA em /setup para receber uma sugestão automática. Por enquanto, use "Corrigir" para gravar a resposta certa.' };
-  const config = comBaseAprovada(getConfig());
-  const { texto, ferramentaUsada } = await perguntarComFerramentas({ system: montarSystemPromptSugestao(config), prompt: pergunta, maxTokens: 200 });
+  const base = comBaseAprovada(getConfig());
+  const config = { ...base, baseConhecimento: `${base.baseConhecimento}\n\n${await buscarDocumentos(pergunta)}` };
+  const { texto, ferramentaUsada } = await perguntarComFerramentas({ system: montarSystemPromptSugestao(config), prompt: pergunta, maxTokens: 200, usarAgenda: false });
   const limpa = limparSaida(texto);
   if (!limpa) {
     console.error("Sugestão da IA descartada (parecia raciocínio, não mensagem):", texto.slice(0, 200));

@@ -140,3 +140,50 @@ Dockerfile                                build multi-stage com saída standalon
 docker-compose.yml                        sobe este app isolado, com volume para os dados
 render.yaml                               blueprint do Render (runtime image)
 ```
+
+### Documentos e busca para atendimento
+
+Arquivos PDF com texto, TXT e Markdown são armazenados separadamente da base manual em
+SQLite (`documentos`), em trechos de até 1.400 caracteres com sobreposição de 200.
+O upload salva imediatamente, aceita até 10 MB / 200 mil caracteres e não corta conteúdo.
+Há limite de 30 documentos; arquivos idênticos são deduplicados pelo conteúdo. A tela permite
+remover documentos. Para substituir uma versão alterada, remova a anterior e envie a nova.
+Arquivos importados antes desta mudança continuam no campo manual; podem ser removidos desse
+campo e reenviados para participar da busca.
+
+Com `OPENROUTER_API_KEY`, a indexação usa embeddings (padrão
+`openai/text-embedding-3-small`, configurável por `OPENROUTER_EMBEDDING_MODEL`). Isto consome
+créditos no OpenRouter e envia os trechos ao provedor. Sem chave ou em caso de falha, o documento
+fica disponível por palavras-chave, com o modo indicado na tela. Reenvie o mesmo documento para
+reindexá-lo quando a conexão estiver disponível. Na consulta, falhas de embeddings também
+preservam a busca lexical. O ranking híbrido combina similaridade cosseno e frequência de termos;
+até cinco trechos, com nome do arquivo e posição, entram no contexto do atendimento e das sugestões.
+Conversas usam as últimas mensagens do cliente para dar contexto a perguntas de continuação.
+Não há OCR para PDFs escaneados. O histórico e respostas já aprovadas não são apagados ao remover
+um arquivo. Em modo demonstração não há geração semântica de respostas.
+
+Referência da API: https://openrouter.ai/docs/api/api-reference/embeddings/create-embeddings
+
+### Agenda via MCP
+
+Ao escolher Agendamentos, o assistente oferece o atalho para **Configurações → Agenda de
+atendimento**. Informe o endereço do servidor MCP de agenda da empresa, autorize via OAuth do
+servidor (ou informe um token manual) e teste a conexão. Em Opções avançadas, informe os nomes
+exatos das ferramentas permitidas, separados por vírgulas; inclua consulta de disponibilidade e
+criação de eventos conforme o serviço. Nenhuma ferramenta é liberada automaticamente. O teste
+lista as ferramentas e verifica os nomes configurados.
+
+O servidor escolhido deve expor a agenda Google Calendar ou Outlook Calendar. Os OAuth nativos
+de Gmail/Outlook deste app continuam destinados ao envio de e-mail; eles não autorizam calendário.
+O cliente MCP atual usa JSON-RPC sobre HTTP com respostas JSON; servidores que exigem sessões
+Streamable HTTP/SSE não são suportados por este cliente.
+
+O atendente recebe instruções para consultar disponibilidade, solicitar confirmação de data,
+hora, fuso, duração e participantes e só confirmar após sucesso da ferramenta. Sem conexão,
+permissão ou diante de erro, deve encaminhar à equipe sem prometer uma reserva. Essas regras
+conversacionais dependem do modelo; o servidor de agenda deve validar disponibilidade, permissões
+e duplicidade na criação. Ferramentas não autorizadas são bloqueadas no executor. Sugestões de
+resposta para aprovação não executam ferramentas de agenda.
+
+Validação local: `npm test`, `npm run lint`, `npm run build`. Os testes usam SQLite temporário e
+provedores simulados; uma conta real precisa ser autorizada para validar o serviço de agenda escolhido.
