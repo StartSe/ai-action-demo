@@ -321,7 +321,7 @@ export function FlowEditor() {
         marca="B"
         nome="Build Agentflows"
         area="Operações"
-        status={status} erro={erro}
+        status={status} erro={erro} usuario={status?.usuario}
       />
       <main className="flows-main">
         <div className="flows-heading">

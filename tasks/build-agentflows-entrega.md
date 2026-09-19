@@ -19,3 +19,9 @@ Objetivo: nova aplicação simplificada de Agentflows v2 no padrão da suíte, i
 - Compilação de produção, TypeScript, lint (apenas aviso herdado de img no setup), padrão, paleta e jargão.
 
 Serviços de IA e ferramentas foram testados com respostas simuladas; nenhuma credencial de cliente foi usada. A funcionalidade real exige conectar provedores em Configurações.
+
+Verificação global da suíte após incorporar a main: o novo app passa integralmente; a verificação global detecta divergências já presentes na main em `entrevista-ia/lib/mcp-cliente.ts`, arquivos de infraestrutura de `radar-sinais` e de `videos-campanha`. Não são alterações desta entrega. O catálogo e o deploy foram regenerados preservando as mudanças concorrentes.
+
+A autoria pelo quadro também foi exercitada no navegador: adicionar/configurar bloco de estado, remover conexão, desenhar duas conexões, salvar, executar, exportar e importar.
+
+Checkpoint também verificado com reinício real do servidor standalone: aprovação aguardando foi preservada no disco e retomou até a conclusão após subir o novo processo.

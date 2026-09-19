@@ -10,7 +10,7 @@ registrarExecutor("resumo-fluxos", async (rotina) => {
   return {
     titulo: "Resumo do Build Agentflows",
     texto: runs.length
-      ? runs.map((r) => r.name + ": " + r.status).join("\n")
+      ? runs.map((r) => r.name + ": " + ({running:'em execução',waiting:'aguardando aprovação',completed:'concluída',failed:'falhou',cancelled:'cancelada'}[r.status])).join("\n")
       : "Nenhuma execução nova no período.",
   };
 });
