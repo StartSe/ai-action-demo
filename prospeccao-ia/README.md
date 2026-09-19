@@ -179,6 +179,10 @@ Validação: `npm test` cobre extração, falhas e transmissão do progresso; `n
 
 Na versão 0.1.4, os cards de produtos destacam a nova prospecção e separam editar e apagar, com confirmação e tratamento de falha na exclusão. O assistente de prospecção envia o perfil efetivamente exibido, inclusive quando ele foi escolhido automaticamente; o botão mostra o envio em andamento e permite tentar novamente após uma falha sem perder os critérios.
 
+### Módulo de busca avançada de pessoas (0.2.1)
+
+Adiciona o módulo `lib/busca-avancada-pessoas.ts` para consultar perfis públicos via dataset da Bright Data, com filtros compatíveis com os campos disponíveis, paginação, deduplicação e alternativa de busca web. O módulo ainda não está integrado ao fluxo da aplicação.
+
 ### Arquivar prospecções (0.2.0)
 
 A lista de Prospecções abre em **Ativas** e oferece o filtro **Arquivadas**, com a quantidade de itens em cada grupo. **Arquivar** retira a busca da lista de ativas; **Restaurar** a devolve. O arquivamento é salvo no SQLite e preserva leads, contas, abordagens, histórico e acesso ao detalhe. Ele organiza a lista, sem cancelar uma execução em andamento.
