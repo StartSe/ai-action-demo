@@ -369,6 +369,7 @@ export function Loading({ texto, etapas }: { texto?: string; etapas?: string[] }
 }
 
 function tituloErro(codigo?: string): string {
+  if (codigo === "tempo_esgotado") return "A IA demorou para responder";
   if (codigo === "sem_credito") return "A IA está sem crédito";
   if (codigo === "limite_diario") return "Limite diário atingido";
   if (codigo === "modelo_indisponivel") return "Modelo indisponível";

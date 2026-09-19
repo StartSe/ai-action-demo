@@ -1,5 +1,5 @@
 import { ErroIA, type CodigoErroIA } from "./ai";
-import type { AoProgressoConvite } from "./progresso-convite";
+import { LIMITE_ROTEIRO_CONVITE_MS, type AoProgressoConvite } from "./progresso-convite";
 import { montarContexto, roteiroDaEntrevista } from "./roteiro";
 // O convite de uma entrevista (US-014): o link público que o candidato abre, até quando ele vale e a
 // mensagem pronta para colar num e-mail ou numa conversa.
@@ -209,7 +209,7 @@ export async function convidar({
   if (!contexto) return { ok: false, erro: "Não foi possível preparar os dados desta entrevista.", status: 404 };
   try {
     progresso?.("roteiro");
-    await roteiroDaEntrevista(entrevista.id, contexto);
+    await roteiroDaEntrevista(entrevista.id, contexto, LIMITE_ROTEIRO_CONVITE_MS);
   } catch (err) {
     console.error("Preparação do convite falhou:", err);
     if (err instanceof ErroIA) return { ok: false, erro: err.message, status: err.status, codigo: err.codigo, acao: err.acao };

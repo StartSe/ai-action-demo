@@ -108,7 +108,7 @@ test("prazo de preparação cancela o provedor lento e encerra a espera", async 
   t.mock.method(globalThis, "fetch", async (_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
     init.signal!.addEventListener("abort", () => reject(init.signal!.reason), { once: true });
   }));
-  await assert.rejects(askJSON({ system: "", prompt: "", limiteMs: 20 }), (err) => err instanceof ErroIA && err.codigo === "rede");
+  await assert.rejects(askJSON({ system: "", prompt: "", limiteMs: 20 }), (err) => err instanceof ErroIA && err.codigo === "tempo_esgotado");
 });
 
 test("falha no planejamento não libera link e nova tentativa reaproveita a entrevista", async (t) => {

@@ -65,3 +65,20 @@ test("encerrar a vaga durante a preparação impede liberar um novo link", async
   assert.ok(interrompida);
   assert.ok(!interrompida.codigo, "vaga encerrada não ganha link");
 });
+
+test("convite concede 90 s ao planejamento e o navegador aguarda além desse prazo", async (t) => {
+  const { LIMITE_ROTEIRO_CONVITE_MS, LIMITE_ACOMPANHAMENTO_CONVITE_MS } = await import("./progresso-convite");
+  const prazos: number[] = [];
+  const original = AbortSignal.timeout;
+  t.mock.method(AbortSignal, "timeout", (ms: number) => { prazos.push(ms); return original(ms); });
+  t.mock.method(globalThis, "fetch", async () => Response.json({ choices: [{ message: { content: JSON.stringify({ perguntas: [{ bloco: "requisitos", pergunta: "Como você trabalha?" }] }) } }] }));
+  process.env.OPENROUTER_API_KEY = "teste";
+  try {
+    const vaga = vagaNova({ cargo: "Preparação com prazo próprio" });
+    const pessoa = pessoaNova({ nome: "Pessoa do prazo" });
+    const resultado = await atribuirEConvidar({ vagaId: vaga.id, candidatoId: pessoa.id, origem: "https://app.test" });
+    assert.ok(resultado.ok);
+    assert.deepEqual(prazos, [90000]);
+    assert.ok(LIMITE_ACOMPANHAMENTO_CONVITE_MS > LIMITE_ROTEIRO_CONVITE_MS);
+  } finally { delete process.env.OPENROUTER_API_KEY; }
+});

@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ETAPAS_CONVITE, ErroPreparacaoConvite, lerPreparacaoConvite, type EtapaConvite } from "@/lib/progresso-convite";
+import { LIMITE_ACOMPANHAMENTO_CONVITE_MS, ETAPAS_CONVITE, ErroPreparacaoConvite, lerPreparacaoConvite, type EtapaConvite } from "@/lib/progresso-convite";
 export type PreparacaoConvite = { etapa?: EtapaConvite; inicio: number; fim?: number; falhou?: boolean };
 
 export function usePrepararConvite() {
@@ -12,7 +12,7 @@ export function usePrepararConvite() {
     const controller = new AbortController();
     pedido.current = controller;
     setProgresso({ inicio: Date.now() });
-    const limite = setTimeout(() => controller.abort(new ErroPreparacaoConvite("A confirmação demorou mais que o esperado. Tente novamente para recuperar ou concluir o convite, sem repetir o cadastro.")), 60000);
+    const limite = setTimeout(() => controller.abort(new ErroPreparacaoConvite("A confirmação demorou mais que o esperado. Tente novamente para recuperar ou concluir o convite, sem repetir o cadastro.")), LIMITE_ACOMPANHAMENTO_CONVITE_MS);
     try {
       const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" }, body: JSON.stringify(corpo), signal: controller.signal });
       const dados = await lerPreparacaoConvite<T>(res, etapa => setProgresso(p => p && ({ ...p, etapa })));

@@ -1,4 +1,6 @@
 // Contrato compartilhado; este arquivo também pode ser importado pelo navegador.
+export const LIMITE_ROTEIRO_CONVITE_MS = 90000;
+export const LIMITE_ACOMPANHAMENTO_CONVITE_MS = 120000;
 export class ErroPreparacaoConvite extends Error {
   codigo?: string;
   acao?: { rotulo: string; url: string };
@@ -8,7 +10,7 @@ export class ErroPreparacaoConvite extends Error {
 }
 export const ETAPAS_CONVITE = [
   { id: "dados", titulo: "Conferindo a vaga e o candidato", detalhe: "Verificando os dados necessários para a entrevista." },
-  { id: "roteiro", titulo: "Preparando o roteiro da entrevista", detalhe: "A IA está organizando as perguntas. Esta etapa pode levar alguns segundos." },
+  { id: "roteiro", titulo: "Preparando o roteiro da entrevista", detalhe: "A IA está organizando as perguntas. Esta etapa pode levar até 90 segundos." },
   { id: "link", titulo: "Gerando o link e a mensagem", detalhe: "Salvando o convite e sua validade." },
 ] as const;
 export type EtapaConvite = (typeof ETAPAS_CONVITE)[number]["id"];

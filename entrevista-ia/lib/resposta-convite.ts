@@ -13,6 +13,7 @@ export async function respostaConvite(req: Request, executar: (progresso: AoProg
       const enviar = (evento: unknown) => {
         if (aberta) { try { controller.enqueue(encoder.encode(JSON.stringify(evento) + "\n")); } catch { aberta = false; } }
       };
+      const pulso = setInterval(() => enviar({ tipo: "aguardando" }), 10000);
       try {
         const r = await executar(etapa => enviar({ tipo: "progresso", etapa }));
         if (!r.ok) enviar({ tipo: "erro", error: r.erro, codigo: r.codigo, acao: r.acao });
@@ -20,7 +21,7 @@ export async function respostaConvite(req: Request, executar: (progresso: AoProg
       } catch (err) {
         console.error("Falha ao preparar convite:", err);
         enviar({ tipo: "erro", error: "Não foi possível concluir o convite. Seus dados foram mantidos; tente novamente." });
-      } finally { if (aberta) controller.close(); }
+      } finally { clearInterval(pulso); if (aberta) controller.close(); }
     },
     // Fechar o diálogo não desfaz gravações nem interrompe a preparação no servidor.
     cancel() { aberta = false; },

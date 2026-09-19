@@ -352,12 +352,12 @@ export function normalizarRoteiro(bruto: unknown, ctx: ContextoRoteiro, demo = f
 }
 
 /** O plano da conversa. Uma chamada de modelo, feita antes de liberar o convite e guardada. */
-export async function planejarRoteiro(ctx: ContextoRoteiro): Promise<Roteiro> {
+export async function planejarRoteiro(ctx: ContextoRoteiro, limiteMs = 25000): Promise<Roteiro> {
   if (!aiEnabled()) {
     await esperar(600);
     return roteiroDemo(ctx);
   }
-  const bruto = await askJSON<unknown>({ system: SYSTEM_ROTEIRO, prompt: construirPromptRoteiro(ctx), maxTokens: 2000, limiteMs: 25000 });
+  const bruto = await askJSON<unknown>({ system: SYSTEM_ROTEIRO, prompt: construirPromptRoteiro(ctx), maxTokens: 2000, limiteMs });
   return normalizarRoteiro(bruto, ctx);
 }
 
@@ -381,12 +381,12 @@ export function lerRoteiroGravado(entrevistaId: string): Roteiro | null {
  * seguinte cai no caminho do `lerRoteiroGravado`.
  */
 const planejamentos = new Map<string, Promise<Roteiro>>();
-export async function roteiroDaEntrevista(entrevistaId: string, ctx: ContextoRoteiro): Promise<Roteiro> {
+export async function roteiroDaEntrevista(entrevistaId: string, ctx: ContextoRoteiro, limiteMs = 25000): Promise<Roteiro> {
   const guardado = lerRoteiroGravado(entrevistaId);
   if (guardado) return guardado;
   const emCurso = planejamentos.get(entrevistaId);
   if (emCurso) return emCurso;
-  const pedido = planejarRoteiro(ctx).then((plano) => {
+  const pedido = planejarRoteiro(ctx, limiteMs).then((plano) => {
     salvarRoteiro(entrevistaId, JSON.stringify(plano));
     return plano;
   });

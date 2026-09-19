@@ -25,6 +25,7 @@ export type CodigoErroIA =
   | "entrada_recusada"
   | "sem_visao"
   | "provedor_fora"
+  | "tempo_esgotado"
   | "rede"
   | "resposta_vazia"
   | "resposta_invalida";
@@ -99,6 +100,12 @@ export function respostaErro(err: unknown): Response {
   return Response.json({ error: mensagem }, { status: 500 });
 }
 
+function conferirTimeout(err: unknown, signal?: AbortSignal): void {
+  if ((err as { name?: string })?.name === "TimeoutError" || (signal?.aborted && signal.reason?.name === "TimeoutError")) {
+    throw new ErroIA("tempo_esgotado", "A IA demorou mais que o tempo disponível para responder. Tente novamente ou escolha um modelo mais rápido em Configurações.", 504, ACAO_TROCAR_MODELO);
+  }
+}
+
 async function chamarOpenRouter(body: Record<string, unknown>, limiteMs = 120000, signal = AbortSignal.timeout(limiteMs)): Promise<Response> {
   if (!apiKey()) {
     throw new ErroIA("chave_ausente", "Nenhuma chave da IA foi configurada. Conecte em Configurações.", 401, ACAO_CONECTAR_IA);
@@ -121,6 +128,7 @@ async function chamarOpenRouter(body: Record<string, unknown>, limiteMs = 120000
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
   } catch (err) {
+    conferirTimeout(err, signal);
     console.error("Falha de rede ao chamar a IA:", err);
     throw new ErroIA("rede", "Não foi possível falar com o serviço de IA. Confira a conexão do servidor e tente de novo.", 503);
   }
@@ -169,6 +177,7 @@ type Message = { role: "system" | "user" | "assistant"; content: string };
 
 /** `model` troca o modelo só desta chamada (ex.: modelName("avaliacao")); sem ele vale o modelo padrão. */
 export async function askText({ system, prompt, maxTokens = 4000, temperature = 0.4, model, limiteMs, signal }: { system: string; prompt: string; maxTokens?: number; temperature?: number; model?: string; limiteMs?: number; signal?: AbortSignal }): Promise<string> {
+  const prazo = signal ?? AbortSignal.timeout(limiteMs ?? 120000);
   const messages: Message[] = [{ role: "system", content: system }, { role: "user", content: prompt }];
   const escolha = model || modelName();
   const fallbacks = (getConfig("OPENROUTER_FALLBACK_MODELS") || FALLBACK_MODELS.join(",")).split(",").map((m) => m.trim()).filter(Boolean);
@@ -178,12 +187,13 @@ export async function askText({ system, prompt, maxTokens = 4000, temperature = 
     messages,
     max_tokens: maxTokens,
     temperature,
-  }, limiteMs, signal);
+  }, limiteMs, prazo);
   if (!res.ok) {
     const detalhe = await res.text().catch(() => "");
     throw interpretarFalha(res, detalhe);
   }
-  const data = await res.json();
+  // O fetch pode receber os cabeçalhos antes do prazo, mas expirar lendo o corpo.
+  const data = await res.json().catch((err: unknown) => { conferirTimeout(err, prazo); throw err; });
   const texto = data?.choices?.[0]?.message?.content;
   if (!texto) throw new ErroIA("resposta_vazia", "A IA devolveu uma resposta vazia. Tente novamente.", 502);
   return String(texto);
