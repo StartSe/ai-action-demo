@@ -95,7 +95,10 @@ export function Inicio() {
       </Hero>
 
       <main className="max-w-[1400px] mx-auto px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
-        <BuscaLivre />
+        {/* `key` força remontar (e refazer o fetch de /api/produtos) depois que "Ver exemplo"/`?exemplo=1`
+            semeia o primeiro produto — sem isso, o card fica preso ao array vazio que já tinha buscado
+            no mount, antes do POST de semeadura terminar, e some da tela até um recarregamento manual. */}
+        <BuscaLivre key={exemploCriado ? "com-exemplo" : "sem-exemplo"} />
 
         <div className="grid gap-4 grid-cols-2 min-[1240px]:grid-cols-4 mb-8">
           <CartaoNumero valor={resumo?.prospeccoes ?? 0} rotulo="Prospecções" />

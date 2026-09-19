@@ -32,11 +32,13 @@ function modoDisponivel(modo: ModoProspeccao, jornada: Jornada): ModoProspeccao 
   return MODOS_POR_JORNADA[jornada].includes(modo) ? modo : "pessoas";
 }
 
+// Textos curtos de propósito (até 6 palavras, PADRAO.md > "Menos texto na tela"): só o rótulo do chip
+// muda aqui, `modo`/`camposFixos` (o que a lógica realmente usa) continuam os mesmos de antes.
 const EXEMPLOS: ExemploBusca[] = [
-  { texto: "Quem devo procurar dentro da <empresa> para vender <produto>?", modo: "empresa_unica" },
+  { texto: "Quem procurar na <empresa>?", modo: "empresa_unica" },
   { texto: "Empresas parecidas com meus melhores clientes", modo: "empresas" },
-  { texto: "Pessoas com o cargo certo para o meu produto", modo: "pessoas" },
-  { texto: "Empresas com sinal recente de que é hora de comprar", modo: "oportunidades", camposFixos: { somenteRecentes: true } },
+  { texto: "Cargo certo para o meu produto", modo: "pessoas" },
+  { texto: "Sinal recente de compra", modo: "oportunidades", camposFixos: { somenteRecentes: true } },
 ];
 
 // Mesma frase usada por lib/interpretacao.ts (duplicada de propósito: aquele arquivo é server-only e
@@ -175,14 +177,14 @@ export function BuscaLivre() {
       {(produtos.length > 1 || icpsDoProduto.length > 1) && (
         <div className="flex flex-wrap gap-2 mb-3">
           {produtos.length > 1 && (
-            <select className="input !w-auto" value={produtoSelecionado.id} onChange={(e) => { setProdutoId(e.target.value); setIcpId(null); }}>
+            <select className="input !w-auto max-w-full" value={produtoSelecionado.id} onChange={(e) => { setProdutoId(e.target.value); setIcpId(null); }}>
               {produtos.map((p) => (
                 <option key={p.id} value={p.id}>{p.nome}</option>
               ))}
             </select>
           )}
           {icpsDoProduto.length > 1 && (
-            <select className="input !w-auto" value={icpEfetivo.id} onChange={(e) => setIcpId(e.target.value)}>
+            <select className="input !w-auto max-w-full" value={icpEfetivo.id} onChange={(e) => setIcpId(e.target.value)}>
               {icpsDoProduto.map((i) => (
                 <option key={i.id} value={i.id}>{i.nome}</option>
               ))}

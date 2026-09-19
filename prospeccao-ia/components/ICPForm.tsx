@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Aviso, Field } from "@/components/ui";
+import { Aviso, Field, MaisDetalhes, Row } from "@/components/ui";
 import { CampoLista } from "@/components/CampoLista";
 import { ROTULO_JORNADA } from "@/lib/rotulos";
 import type { CriteriosICP, Jornada } from "@/lib/types";
@@ -135,30 +135,28 @@ export function ICPForm({ produtoId, icpId }: { produtoId: string; icpId?: strin
 
       {jornada === "b2b" ? (
         <>
-          <Field label="Setor" htmlFor="setor" hint="Segmento das empresas que combinam com este perfil.">
-            <input id="setor" className="input" value={criterios.setor ?? ""} onChange={(e) => campo("setor", e.target.value)} />
-          </Field>
-          <Field label="Porte" htmlFor="porte" hint="Faixa de número de funcionários.">
-            <input id="porte" className="input" placeholder="Ex.: 50 a 200 funcionários" value={criterios.porte ?? ""} onChange={(e) => campo("porte", e.target.value)} />
-          </Field>
+          <Row>
+            <Field label="Setor" htmlFor="setor" hint="Segmento das empresas que combinam com este perfil.">
+              <input id="setor" className="input" value={criterios.setor ?? ""} onChange={(e) => campo("setor", e.target.value)} />
+            </Field>
+            <Field label="Porte" htmlFor="porte" hint="Faixa de número de funcionários.">
+              <input id="porte" className="input" placeholder="Ex.: 50 a 200 funcionários" value={criterios.porte ?? ""} onChange={(e) => campo("porte", e.target.value)} />
+            </Field>
+          </Row>
           <Field label="Localização" htmlFor="localizacao" hint="Cidade, estado ou região.">
             <input id="localizacao" className="input" value={criterios.localizacao ?? ""} onChange={(e) => campo("localizacao", e.target.value)} />
-          </Field>
-          <Field label="Outros critérios" htmlFor="outros" hint="Opcional. Qualquer outro filtro relevante, em texto livre.">
-            <textarea id="outros" className="input min-h-[80px] resize-y" value={criterios.outros ?? ""} onChange={(e) => campo("outros", e.target.value)} />
           </Field>
         </>
       ) : (
         <>
-          <Field label="Localização" htmlFor="localizacao" hint="Cidade, estado ou região.">
-            <input id="localizacao" className="input" value={criterios.localizacao ?? ""} onChange={(e) => campo("localizacao", e.target.value)} />
-          </Field>
-          <Field label="Faixa etária" htmlFor="faixaEtaria" hint="Opcional.">
-            <input id="faixaEtaria" className="input" placeholder="Ex.: 25 a 40 anos" value={criterios.faixaEtaria ?? ""} onChange={(e) => campo("faixaEtaria", e.target.value)} />
-          </Field>
-          <Field label="Profissão ou ocupação" htmlFor="ocupacao" hint="O que essa pessoa faz.">
-            <input id="ocupacao" className="input" value={criterios.ocupacao ?? ""} onChange={(e) => campo("ocupacao", e.target.value)} />
-          </Field>
+          <Row>
+            <Field label="Localização" htmlFor="localizacao" hint="Cidade, estado ou região.">
+              <input id="localizacao" className="input" value={criterios.localizacao ?? ""} onChange={(e) => campo("localizacao", e.target.value)} />
+            </Field>
+            <Field label="Profissão ou ocupação" htmlFor="ocupacao" hint="O que essa pessoa faz.">
+              <input id="ocupacao" className="input" value={criterios.ocupacao ?? ""} onChange={(e) => campo("ocupacao", e.target.value)} />
+            </Field>
+          </Row>
           <CampoLista
             id="interesses"
             label="Interesses"
@@ -167,15 +165,28 @@ export function ICPForm({ produtoId, icpId }: { produtoId: string; icpId?: strin
             valores={criterios.interesses ?? []}
             onChange={(v) => setCriterios((c) => ({ ...c, interesses: v }))}
           />
-          <Field label="Contexto relevante" htmlFor="contexto" hint="Opcional. Situação ou momento de vida que importa para a abordagem.">
-            <textarea id="contexto" className="input min-h-[80px] resize-y" value={criterios.contexto ?? ""} onChange={(e) => campo("contexto", e.target.value)} />
-          </Field>
         </>
       )}
 
-      <CampoLista id="personas" label="Personas" hint="Cargos ou perfis de quem você fala com." placeholder="Ex.: gerente de manutenção" valores={personas} onChange={setPersonas} />
-      <CampoLista id="dores" label="Problemas que resolvemos" hint="As dores que este produto ataca." placeholder="Ex.: manutenção reativa" valores={dores} onChange={setDores} />
-      <CampoLista id="sinais" label="Sinais de intenção" hint="O que indica que é hora de abordar." placeholder="Ex.: abertura de nova unidade" valores={sinais} onChange={setSinais} />
+      <MaisDetalhes titulo="Mais detalhes do perfil">
+        {jornada === "b2b" ? (
+          <Field label="Outros critérios" htmlFor="outros" hint="Opcional. Qualquer outro filtro relevante, em texto livre.">
+            <textarea id="outros" className="input min-h-[80px] resize-y" value={criterios.outros ?? ""} onChange={(e) => campo("outros", e.target.value)} />
+          </Field>
+        ) : (
+          <Row>
+            <Field label="Faixa etária" htmlFor="faixaEtaria" hint="Opcional.">
+              <input id="faixaEtaria" className="input" placeholder="Ex.: 25 a 40 anos" value={criterios.faixaEtaria ?? ""} onChange={(e) => campo("faixaEtaria", e.target.value)} />
+            </Field>
+            <Field label="Contexto relevante" htmlFor="contexto" hint="Opcional. Momento de vida que importa para a abordagem.">
+              <textarea id="contexto" className="input min-h-[44px] resize-y" value={criterios.contexto ?? ""} onChange={(e) => campo("contexto", e.target.value)} />
+            </Field>
+          </Row>
+        )}
+        <CampoLista id="personas" label="Personas" hint="Cargos ou perfis de quem você fala com." placeholder="Ex.: gerente de manutenção" valores={personas} onChange={setPersonas} />
+        <CampoLista id="dores" label="Problemas que resolvemos" hint="As dores que este produto ataca." placeholder="Ex.: manutenção reativa" valores={dores} onChange={setDores} />
+        <CampoLista id="sinais" label="Sinais de intenção" hint="O que indica que é hora de abordar." placeholder="Ex.: abertura de nova unidade" valores={sinais} onChange={setSinais} />
+      </MaisDetalhes>
 
       <div className="flex items-center gap-4 mt-2">
         <button type="submit" className="btn-primary !w-auto max-md:!w-full" disabled={salvando}>{salvando ? "Salvando..." : "Salvar"}</button>

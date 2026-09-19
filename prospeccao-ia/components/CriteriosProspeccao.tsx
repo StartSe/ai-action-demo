@@ -6,7 +6,7 @@
 // nenhum: a entidade `Prospeccao` só nasce na US-013, que decide como este objeto entra em `criterios`.
 import { useState, type KeyboardEvent } from "react";
 import { CampoLista } from "@/components/CampoLista";
-import { Field } from "@/components/ui";
+import { Field, Row } from "@/components/ui";
 import { QUANTIDADES_EMPRESAS } from "@/lib/rotulos";
 import type { ICP, Jornada, ModoProspeccao } from "@/lib/types";
 
@@ -114,14 +114,16 @@ export function CriteriosProspeccaoForm({
           <Field label="Segmento" htmlFor="segmento" hint="Preenchido a partir do perfil ideal.">
             <input id="segmento" className="input" value={valor.segmento} onChange={(e) => campo("segmento", e.target.value)} />
           </Field>
-          <Field label="Localização" htmlFor="localizacao">
-            <input id="localizacao" className="input" value={valor.localizacao} onChange={(e) => campo("localizacao", e.target.value)} />
-          </Field>
-          <Field label="Porte" htmlFor="porte">
-            <input id="porte" className="input" value={valor.porte} onChange={(e) => campo("porte", e.target.value)} />
-          </Field>
+          <Row>
+            <Field label="Localização" htmlFor="localizacao">
+              <input id="localizacao" className="input" value={valor.localizacao} onChange={(e) => campo("localizacao", e.target.value)} />
+            </Field>
+            <Field label="Porte" htmlFor="porte">
+              <input id="porte" className="input" value={valor.porte} onChange={(e) => campo("porte", e.target.value)} />
+            </Field>
+          </Row>
           <Field label="Quantidade alvo" htmlFor="quantidade">
-            <select id="quantidade" className="input !w-auto" value={valor.quantidade} onChange={(e) => campo("quantidade", e.target.value)}>
+            <select id="quantidade" className="input !w-auto max-w-full" value={valor.quantidade} onChange={(e) => campo("quantidade", e.target.value)}>
               {QUANTIDADES_EMPRESAS.map((q) => (
                 <option key={q} value={q}>{q} empresas</option>
               ))}
@@ -132,12 +134,14 @@ export function CriteriosProspeccaoForm({
 
       {modo === "pessoas" && jornada === "b2b" && (
         <>
-          <Field label="Cargo" htmlFor="cargo">
-            <input id="cargo" className="input" value={valor.cargo} onChange={(e) => campo("cargo", e.target.value)} />
-          </Field>
-          <Field label="Empresa ou segmento" htmlFor="segmento">
-            <input id="segmento" className="input" value={valor.segmento} onChange={(e) => campo("segmento", e.target.value)} />
-          </Field>
+          <Row>
+            <Field label="Cargo" htmlFor="cargo">
+              <input id="cargo" className="input" value={valor.cargo} onChange={(e) => campo("cargo", e.target.value)} />
+            </Field>
+            <Field label="Empresa ou segmento" htmlFor="segmento">
+              <input id="segmento" className="input" value={valor.segmento} onChange={(e) => campo("segmento", e.target.value)} />
+            </Field>
+          </Row>
           <Field label="Localização" htmlFor="localizacao">
             <input id="localizacao" className="input" value={valor.localizacao} onChange={(e) => campo("localizacao", e.target.value)} />
           </Field>
@@ -146,12 +150,14 @@ export function CriteriosProspeccaoForm({
 
       {modo === "pessoas" && jornada === "b2c" && (
         <>
-          <Field label="Localização" htmlFor="localizacao">
-            <input id="localizacao" className="input" value={valor.localizacao} onChange={(e) => campo("localizacao", e.target.value)} />
-          </Field>
-          <Field label="Profissão ou ocupação" htmlFor="ocupacao">
-            <input id="ocupacao" className="input" value={valor.ocupacao} onChange={(e) => campo("ocupacao", e.target.value)} />
-          </Field>
+          <Row>
+            <Field label="Localização" htmlFor="localizacao">
+              <input id="localizacao" className="input" value={valor.localizacao} onChange={(e) => campo("localizacao", e.target.value)} />
+            </Field>
+            <Field label="Profissão ou ocupação" htmlFor="ocupacao">
+              <input id="ocupacao" className="input" value={valor.ocupacao} onChange={(e) => campo("ocupacao", e.target.value)} />
+            </Field>
+          </Row>
           <CampoLista id="interesses" label="Interesses" placeholder="Ex.: finanças pessoais" valores={valor.interesses} onChange={(v) => campo("interesses", v)} />
           <Field label="Contexto relevante" htmlFor="contexto">
             <textarea id="contexto" className="input min-h-[80px] resize-y" value={valor.contexto} onChange={(e) => campo("contexto", e.target.value)} />

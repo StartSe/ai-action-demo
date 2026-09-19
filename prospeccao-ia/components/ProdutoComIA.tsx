@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Aviso, Field, Origem } from "@/components/ui";
+import { Aviso, Field, MaisDetalhes, Origem, Row } from "@/components/ui";
 import { CampoLista } from "@/components/CampoLista";
 import type { Meta } from "@/lib/ai";
 import type { CriteriosICP, SugestaoProduto } from "@/lib/types";
@@ -169,38 +169,44 @@ export function ProdutoComIA() {
         </div>
       )}
 
-      <Field label="Nome" htmlFor="nome" hint="Como o produto aparece nas suas prospecções.">
+      <Field label="Nome" htmlFor="nome">
         <input id="nome" className="input" value={nome} onChange={(e) => setNome(e.target.value)} required />
       </Field>
-      <Field label="Descrição" htmlFor="descricao" hint="Uma linha, para reconhecer o produto de relance.">
-        <input id="descricao" className="input" value={descricao} onChange={(e) => setDescricao(e.target.value)} />
-      </Field>
-      <Field label="Site" htmlFor="site" hint="Opcional.">
-        <input id="site" type="url" className="input" placeholder="https://" value={site} onChange={(e) => setSite(e.target.value)} />
-      </Field>
       <Field label="Proposta de valor" htmlFor="propostaValor" hint="O problema que o produto resolve e para quem.">
-        <textarea id="propostaValor" className="input min-h-[100px] resize-y" value={propostaValor} onChange={(e) => setPropostaValor(e.target.value)} required />
+        <textarea id="propostaValor" className="input min-h-[64px] resize-y" value={propostaValor} onChange={(e) => setPropostaValor(e.target.value)} required />
       </Field>
 
-      <h2 className="font-bold text-[15px] mt-2 mb-1">Perfil ideal sugerido</h2>
-      <p className="text-muted text-sm mb-4">Revise os critérios, personas, dores e sinais antes de salvar.</p>
+      <h2 className="font-bold text-[15px] mt-1 mb-1">Perfil ideal sugerido</h2>
+      <p className="text-muted text-sm mb-2">Revise os critérios, personas, dores e sinais antes de salvar.</p>
 
-      <Field label="Nome do perfil" htmlFor="icpNome" hint="Como este perfil aparece ao escolher uma prospecção.">
+      <Field label="Nome do perfil" htmlFor="icpNome">
         <input id="icpNome" className="input" value={icpNome} onChange={(e) => setIcpNome(e.target.value)} required />
       </Field>
-      <Field label="Setor" htmlFor="setor" hint="Segmento das empresas que combinam com este perfil.">
-        <input id="setor" className="input" value={criterios.setor ?? ""} onChange={(e) => setCriterios((c) => ({ ...c, setor: e.target.value }))} />
-      </Field>
-      <Field label="Porte" htmlFor="porte" hint="Faixa de número de funcionários.">
-        <input id="porte" className="input" value={criterios.porte ?? ""} onChange={(e) => setCriterios((c) => ({ ...c, porte: e.target.value }))} />
-      </Field>
-      <Field label="Localização" htmlFor="localizacao" hint="Cidade, estado ou região.">
-        <input id="localizacao" className="input" value={criterios.localizacao ?? ""} onChange={(e) => setCriterios((c) => ({ ...c, localizacao: e.target.value }))} />
-      </Field>
+      <Row>
+        <Field label="Setor" htmlFor="setor">
+          <input id="setor" className="input" value={criterios.setor ?? ""} onChange={(e) => setCriterios((c) => ({ ...c, setor: e.target.value }))} />
+        </Field>
+        <Field label="Porte" htmlFor="porte">
+          <input id="porte" className="input" value={criterios.porte ?? ""} onChange={(e) => setCriterios((c) => ({ ...c, porte: e.target.value }))} />
+        </Field>
+      </Row>
 
-      <CampoLista id="personas" label="Personas" hint="Cargos ou perfis de quem você fala com." placeholder="Ex.: gerente de manutenção" valores={personas} onChange={setPersonas} />
-      <CampoLista id="dores" label="Problemas que resolvemos" hint="As dores que este produto ataca." placeholder="Ex.: manutenção reativa" valores={dores} onChange={setDores} />
-      <CampoLista id="sinais" label="Sinais de intenção" hint="O que indica que é hora de abordar." placeholder="Ex.: abertura de nova unidade" valores={sinais} onChange={setSinais} />
+      <MaisDetalhes titulo="Mais detalhes do produto e do perfil">
+        <Row>
+          <Field label="Descrição" htmlFor="descricao" hint="Uma linha, para reconhecer o produto de relance.">
+            <input id="descricao" className="input" value={descricao} onChange={(e) => setDescricao(e.target.value)} />
+          </Field>
+          <Field label="Site" htmlFor="site" hint="Opcional.">
+            <input id="site" type="url" className="input" placeholder="https://" value={site} onChange={(e) => setSite(e.target.value)} />
+          </Field>
+        </Row>
+        <Field label="Localização" htmlFor="localizacao" hint="Cidade, estado ou região.">
+          <input id="localizacao" className="input" value={criterios.localizacao ?? ""} onChange={(e) => setCriterios((c) => ({ ...c, localizacao: e.target.value }))} />
+        </Field>
+        <CampoLista id="personas" label="Personas" hint="Cargos ou perfis de quem você fala com." placeholder="Ex.: gerente de manutenção" valores={personas} onChange={setPersonas} />
+        <CampoLista id="dores" label="Problemas que resolvemos" hint="As dores que este produto ataca." placeholder="Ex.: manutenção reativa" valores={dores} onChange={setDores} />
+        <CampoLista id="sinais" label="Sinais de intenção" hint="O que indica que é hora de abordar." placeholder="Ex.: abertura de nova unidade" valores={sinais} onChange={setSinais} />
+      </MaisDetalhes>
 
       <div className="flex items-center gap-4 mt-2">
         <button type="submit" className="btn-primary !w-auto max-md:!w-full" disabled={salvando}>{salvando ? "Salvando..." : "Salvar"}</button>
