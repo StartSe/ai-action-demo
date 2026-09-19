@@ -8,6 +8,7 @@ export function numero(n: number, casas = 0) {
 /** Formata data no padrão pt-BR; inclui o ano quando `comAno` ou fora do ano corrente, e a hora quando `comHora`. */
 export function data(d: Date | string, { comHora = false, comAno = false }: { comHora?: boolean; comAno?: boolean } = {}) {
   const dt = typeof d === "string" ? new Date(d) : d;
+  if (!Number.isFinite(dt.getTime())) return "data não informada";
   const opcoes: Intl.DateTimeFormatOptions = { day: "2-digit", month: "2-digit" };
   if (comAno || dt.getFullYear() !== new Date().getFullYear()) opcoes.year = "numeric";
   let texto = new Intl.DateTimeFormat("pt-BR", opcoes).format(dt);

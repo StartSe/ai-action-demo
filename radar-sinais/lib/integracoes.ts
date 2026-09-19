@@ -1,3 +1,4 @@
+import { testarBrightData } from "./brightdata";
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 // A busca na web (Exa ou Tavily) é usada só por este app, por isso mora aqui e não em lib/setup-comum.ts.
 import { openrouter, NOTIFICACOES, type Integracao } from "./setup-comum";
@@ -67,4 +68,13 @@ export const BUSCA_WEB: Integracao = {
   },
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, NOTIFICACOES, BUSCA_WEB];
+export const BRIGHTDATA: Integracao = {
+  id: "brightdata", titulo: "Bright Data", beneficio: "Pesquisa a web e lê páginas em Markdown",
+  descricao: "Conecta Search Engine e Scraper as Markdown via MCP HTTP. O modo Pro (pro=1) é ativado automaticamente. Até quatro páginas são lidas por radar.",
+  obrigatoria: false,
+  link: { url: "https://brightdata.com/cp/setting/users", rotulo: "Obter token da Bright Data" },
+  campos: [{ chave: "BRIGHTDATA_API_TOKEN", rotulo: "Token da Bright Data", tipo: "secret", opcional: true }],
+  campoConectado: "BRIGHTDATA_API_TOKEN", testar: testarBrightData,
+};
+
+export const INTEGRACOES: Integracao[] = [OPENROUTER, NOTIFICACOES, BUSCA_WEB, BRIGHTDATA];

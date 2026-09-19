@@ -15,6 +15,7 @@ type Rotina = {
   tipo: string;
   frequencia: Frequencia;
   hora: string;
+  parametros?: { horarios?: string[]; fuso?: string };
   diaSemana: number | null;
   diaMes: number | null;
   dataUnica: string | null;
@@ -26,12 +27,13 @@ type Rotina = {
   criadoEm: string;
 };
 
-type TipoRotina = { tipo: string; rotulo: string };
+type TipoRotina = { tipo: string; rotulo: string; cadastroProprio?: boolean };
 type StatusCodigo = { ativo: boolean; mascarado: string | null };
 
 const DIAS_SEMANA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
 function descreverAgenda(r: Rotina): string {
+  if (r.tipo === "radar-diario") return `Todos os dias às ${r.parametros?.horarios?.join(", ")} (${r.parametros?.fuso})`;
   if (r.frequencia === "diaria") return `Todos os dias às ${r.hora}`;
   if (r.frequencia === "semanal") return `Toda ${DIAS_SEMANA[r.diaSemana ?? 0]} às ${r.hora}`;
   if (r.frequencia === "mensal") return `Dia ${r.diaMes ?? 1} de cada mês às ${r.hora}`;
@@ -220,7 +222,7 @@ export function Rotinas() {
               <label className="flex flex-col gap-1 text-[13px] font-semibold flex-1 min-w-[200px]">
                 O que fazer
                 <select className="input" value={tipo} onChange={(e) => setTipo(e.target.value)}>
-                  {tipos.map((t) => (
+                  {tipos.filter(t => !t.cadastroProprio).map((t) => (
                     <option key={t.tipo} value={t.tipo}>{t.rotulo}</option>
                   ))}
                 </select>

@@ -232,6 +232,7 @@ function Legenda() {
 export function Grafo({ nos, arestas, sinais }: { nos: No[]; arestas: Aresta[]; sinais: Sinal[] }) {
   const posicoes = useMemo(() => layoutForca(nos, arestas), [nos, arestas]);
   const [selecionado, setSelecionado] = useState<string | null>(null);
+  const [busca, setBusca] = useState("");
 
   useEffect(() => {
     if (!selecionado) return;
@@ -266,8 +267,15 @@ export function Grafo({ nos, arestas, sinais }: { nos: No[]; arestas: Aresta[]; 
   return (
     <div>
       <Legenda />
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="relative w-full md:flex-1 min-w-0 h-[420px] max-md:h-[360px] rounded-card border border-line bg-surface">
+      <label className="block text-sm mb-3">Encontrar no grafo
+        <input className="input mt-1" placeholder="Tema, sinal, empresa ou tecnologia" value={busca} onChange={e => setBusca(e.target.value)} />
+      </label>
+      {busca.trim() && <div className="flex flex-wrap gap-2 mb-3" aria-live="polite">
+        {nos.filter(n => n.rotulo.toLocaleLowerCase().includes(busca.trim().toLocaleLowerCase())).slice(0, 12).map(n => <button type="button" className="chip-neutral cursor-pointer" key={n.id} onClick={() => setSelecionado(n.id)}>{n.rotulo}</button>)}
+        {!nos.some(n => n.rotulo.toLocaleLowerCase().includes(busca.trim().toLocaleLowerCase())) && <span className="text-sm text-muted">Nenhum nó encontrado.</span>}
+      </div>}
+      <div className="flex flex-col gap-4">
+        <div className="relative w-full min-w-0 h-[420px] max-md:h-[360px] rounded-card border border-line bg-surface">
           <svg viewBox={`0 0 ${LARGURA} ${ALTURA}`} preserveAspectRatio="none" className="absolute inset-0 w-full h-full" aria-hidden="true" onClick={() => setSelecionado(null)}>
             {arestas.map((a, i) => {
               const pa = posicoes.get(a.origem), pb = posicoes.get(a.destino);
@@ -319,7 +327,7 @@ export function Grafo({ nos, arestas, sinais }: { nos: No[]; arestas: Aresta[]; 
         </div>
 
         {noSelecionado && (
-          <div className="card shadow-none p-4 text-sm w-full md:w-72 shrink-0 self-start">
+          <div className="card shadow-none p-4 text-sm w-full">
             <div className="flex items-start justify-between gap-2 mb-2">
               <span className="chip-neutral">{ROTULO_TIPO[noSelecionado.tipo]}</span>
               <button type="button" className="text-muted hover:text-ink text-lg leading-none cursor-pointer" aria-label="Fechar cartão do nó" onClick={() => setSelecionado(null)}>×</button>
@@ -352,7 +360,7 @@ export function Grafo({ nos, arestas, sinais }: { nos: No[]; arestas: Aresta[]; 
                   <ul className="flex flex-col gap-1 text-muted">
                     {[...vizinhosDoSelecionado].map((id) => {
                       const v = nos.find((n) => n.id === id);
-                      return v ? <li key={id}>{v.rotulo}</li> : null;
+                      return v ? <li key={id}><button type="button" className="text-accent-ink hover:underline text-left" onClick={() => setSelecionado(id)}>{v.rotulo}</button><span className="block text-xs">{arestas.filter(a => (a.origem === selecionado && a.destino === id) || (a.destino === selecionado && a.origem === id)).map(a => a.relacao).join(" · ")}</span></li> : null;
                     })}
                   </ul>
                 </>

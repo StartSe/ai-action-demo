@@ -2,6 +2,7 @@
 // resultado por notificação (lib/notificacoes.ts). Usa o mesmo arquivo SQLite de lib/store.ts. Copie
 // este arquivo para cada app sem alterar; o que cada `tipo` de rotina faz é registrado por
 // lib/rotinas-do-app.ts (arquivo próprio de cada app, não compartilhado).
+import { monitoramentoDevido, TIPO_MONITORAMENTO, type Monitoramento } from "./monitoramento";
 import { DatabaseSync } from "node:sqlite";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -36,6 +37,7 @@ function abrir(): DatabaseSync {
   // Bancos criados antes da US-023 não têm estas colunas; ALTER TABLE falha silenciosamente quando já existem.
   try { db.exec(`ALTER TABLE rotinas ADD COLUMN ultimaFalha TEXT NULL`); } catch { /* coluna já existe */ }
   try { db.exec(`ALTER TABLE rotinas ADD COLUMN falhasSeguidas INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
+  db.exec(`CREATE TABLE IF NOT EXISTS rotina_locks (id TEXT PRIMARY KEY, ate INTEGER NOT NULL)`);
   return db;
 }
 
@@ -45,7 +47,7 @@ export type Rotina<P = unknown> = {
   id: string;
   tipo: string;
   frequencia: Frequencia;
-  /** "HH:MM", horário do relógio do servidor. */
+  /** "HH:MM", horário do servidor nas rotinas legadas; monitoramentos usam horarios/fuso nos parâmetros. */
   hora: string;
   /** 0 (domingo) a 6 (sábado); só para frequencia "semanal". */
   diaSemana: number | null;
@@ -111,6 +113,10 @@ export function criar({ tipo, frequencia, hora, diaSemana, diaMes, dataUnica, ca
   return id;
 }
 
+export function atualizarMonitoramento(id: string, parametros: Monitoramento): void {
+  abrir().prepare("UPDATE rotinas SET parametros = ?, hora = ? WHERE id = ?").run(JSON.stringify(parametros), parametros.horarios[0], id);
+}
+
 export function listar<P = unknown>(): Rotina<P>[] {
   const linhas = abrir().prepare("SELECT * FROM rotinas ORDER BY criadoEm DESC").all() as Linha[];
   return linhas.map((l) => linhaParaRotina<P>(l));
@@ -147,6 +153,7 @@ function marcarFalha(id: string, quando: string, motivo: string): void {
 export type TipoRotina<P = unknown> = {
   tipo: string;
   rotulo: string;
+  cadastroProprio?: boolean;
   /** Confere os parâmetros específicos desta rotina (ex.: temas, empresa) antes de criar; devolve a mensagem de erro, ou undefined quando pode criar. */
   validar?: (parametros: P, config: Record<string, string | undefined>) => string | undefined;
 };
@@ -217,6 +224,7 @@ function ultimoHorarioDevido(r: Pick<Rotina, "frequencia" | "hora" | "diaSemana"
 
 function devida(r: Rotina, agora: Date): boolean {
   if (!r.ativa) return false;
+  if (r.tipo === TIPO_MONITORAMENTO) return monitoramentoDevido(r.parametros as Monitoramento, r.ultimaExecucao, r.criadoEm, agora);
   const alvo = ultimoHorarioDevido(r, agora);
   if (!alvo) return false;
   if (!r.ultimaExecucao) return true;
@@ -224,6 +232,14 @@ function devida(r: Rotina, agora: Date): boolean {
 }
 
 async function executar(r: Rotina): Promise<{ id: string; ok: boolean; mensagem: string }> {
+  const lock = abrir().prepare(`INSERT INTO rotina_locks (id, ate) VALUES (?, ?)
+    ON CONFLICT(id) DO UPDATE SET ate = excluded.ate WHERE rotina_locks.ate < ?`).run(r.id, Date.now() + 30 * 60_000, Date.now());
+  if (!lock.changes) return { id: r.id, ok: false, mensagem: "Esta rotina já está em execução." };
+  try { return await executarComLock(r); }
+  finally { abrir().prepare("DELETE FROM rotina_locks WHERE id = ?").run(r.id); }
+}
+
+async function executarComLock(r: Rotina): Promise<{ id: string; ok: boolean; mensagem: string }> {
   const agora = new Date().toISOString();
   const executor = executores.get(r.tipo);
   if (!executor) {
@@ -261,7 +277,10 @@ async function executar(r: Rotina): Promise<{ id: string; ok: boolean; mensagem:
 export async function executarVencidas(agora = new Date()): Promise<{ id: string; ok: boolean; mensagem: string }[]> {
   const vencidas = listar().filter((r) => devida(r, agora));
   const resultados: { id: string; ok: boolean; mensagem: string }[] = [];
-  for (const r of vencidas) resultados.push(await executar(r));
+  for (const r of vencidas) {
+    const atual = obter(r.id);
+    if (atual && devida(atual, agora)) resultados.push(await executar(atual));
+  }
   return resultados;
 }
 

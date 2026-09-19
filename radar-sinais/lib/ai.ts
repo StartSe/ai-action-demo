@@ -113,6 +113,7 @@ async function chamarOpenRouter(body: Record<string, unknown>): Promise<Response
         "X-Title": getConfig("APP_NAME") || "IA para Executivos",
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(180_000),
     });
   } catch (err) {
     console.error("Falha de rede ao chamar a IA:", err);
