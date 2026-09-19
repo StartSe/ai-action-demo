@@ -20,34 +20,17 @@ Três coisas, nesta ordem. Entender esta sequência é entender o app inteiro:
 | **Simulações** (`/simulacoes`) | Os treinos criados, com o link de cada um, quantas pessoas treinaram e a nota média. |
 | **Equipe** (`/equipe`) | Quem já treinou, como cada um foi, o convite para quem ainda não entrou — e "Analisar uma conversa real". |
 | **Resultados** (`/resultados`) | O painel de cada treino: visão geral, equipe, tipos de cliente e evolução ao longo dos meses. |
-| **Configurações** (`/setup`) | A IA, a voz, o envio de feedback por e-mail, o acesso para assistentes e as rotinas. |
+| **Configurações** (`/setup`) | A IA, a voz e o acesso para assistentes. |
 
 ### O que o vendedor vê
 Ele abre o link, diz quem é (com Google, com Microsoft ou escrevendo nome e e-mail), lê **quem é o cliente** — nome, cargo, empresa e por que aceitou falar — e começa a conversa. Ele não vê o tipo de cliente antes: isso só é revelado no feedback, senão o treino vira decoreba. No fim ele recebe a nota, o que foi bem, **uma** coisa para fazer diferente e uma frase pronta para usar. Nenhuma tela do vendedor tem menu do app, cabeçalho de gestor ou caminho para as configurações.
 
-## Voz do cliente: três níveis
-**O treino já acontece por voz sem você conectar nada.** Esta é a parte que costuma confundir, então em linguagem de negócio:
+## Conversa por voz
+A IA do simulador conduz todas as conversas. A ElevenLabs fornece apenas a voz: salve a chave em `/setup`, selecione **Voz do cliente** e ouça uma amostra. A voz escolhida é usada para todos os clientes; o ajuste por perfil muda o ritmo e a expressividade.
 
-| Nível | O que é | O que exige |
-|---|---|---|
-| **1 — Agente conversacional** | A conversa mais natural que o app oferece: o cliente escuta e responde em tempo real, com interrupção, como numa ligação de verdade. | Uma conta da ElevenLabs com um agente conversacional configurado. |
-| **2 — Voz do navegador (o padrão)** | O navegador do vendedor escuta o que ele fala, a IA responde como cliente e a resposta sai falada. Com a chave da ElevenLabs, a voz é a da nuvem (mais natural); sem ela, é a voz do próprio navegador. | **Nada.** Funciona com a IA conectada e mais nada. |
-| **3 — Texto** | A mesma conversa, escrita. Nunca some: é a alternativa explícita ("Prefiro digitar") e o caminho de quem está num navegador que não transcreve fala ou não teve o microfone liberado. | Nada. |
+A sala usa [react-speech-recognition](https://github.com/JamesBrill/react-speech-recognition). Um toque inicia o microfone, uma pausa de 1,4 segundo envia a fala e a escuta volta após a resposta. **Enviar fala agora**, **Pausar microfone** e **Interromper e falar** permitem controlar o ritmo sem segurar botões. Texto e voz compartilham a transcrição salva no servidor.
 
-O app escolhe o nível mais alto disponível na abertura da sala e **cai sozinho** para o de baixo quando precisa: se o agente não carregar em 10 segundos, a sala vira o nível 2 sem o vendedor fazer nada (e ele pode pedir a troca a qualquer momento, em "Prefiro conversar por aqui"); se a voz da nuvem não responder, a fala sai pelo navegador sem ninguém perceber. A ElevenLabs, portanto, **melhora a voz — ela não é o que faz o treino ser falado.**
-
-Cada tipo de cliente tem um jeito de falar próprio (velocidade, estabilidade e tom): o apressado atropela, o resistente arrasta. O cartão "Voz do cliente" em `/setup` traz o interruptor "Voz automática por tipo de cliente" (ligado por padrão) e um botão de amostra por tipo, que toca pelo mesmo caminho que o vendedor vai ouvir. Desligando o interruptor, todos falam com a mesma voz.
-
-### Configurar o agente conversacional (nível 1, opcional)
-1. Na ElevenLabs (Conversational AI › Agents › seu agente › aba Security), desligue a exigência de autenticação — o link é público, sem login — e adicione o domínio onde este app está publicado à lista de domínios permitidos, para nenhum outro site poder embutir o mesmo agente.
-2. Configure o aviso automático de pós-conversa (evento `post_call_transcription`) apontando para o endereço mostrado no cartão "Dados para a equipe técnica" em `/setup#elevenlabs-agente`, com o segredo de verificação salvo no mesmo cartão — é assim que a avaliação da conversa chega de volta.
-3. Declare em Agent › Dynamic variables as seis variáveis que o app manda, todas da **sessão** daquele vendedor: `sessao_id` (a única obrigatória: é o que liga a conversa recebida à sessão certa), `simulacao`, `produto`, `persona_instrucoes`, `participante` e `duracao_minutos`. `sala_token` e `vendedor_id`, do modelo antigo, continuam aceitos para os agentes já configurados assim.
-4. O prompt do agente é uma linha só, porque o personagem inteiro é montado pelo app a cada conversa:
-
-   ```
-   Siga {{persona_instrucoes}}
-   ```
-5. Se a avaliação não chegar em 90 segundos, o vendedor é avisado e a conversa fica registrada mesmo assim. O cartão "Dados para a equipe técnica" mostra quantas conversas ficaram sem avaliação e qual foi o motivo da última tentativa recusada.
+O reconhecimento depende do suporte do navegador à Web Speech API. A escuta contínua é habilitada apenas onde a biblioteca indica suporte; sem reconhecimento ou permissão do microfone, a conversa oferece texto. Se a ElevenLabs falhar, a síntese do navegador fornece o áudio. Não é necessário criar ou selecionar agentes externos.
 
 ## Metodologia e avaliação
 O gestor escolhe a régua por treino: **SPIN Selling** (9 critérios), **Venda consultiva** (7 critérios) ou **Personalizada** (o gestor escreve de 3 a 10 critérios). A avaliação devolve uma nota por critério com o **trecho literal da conversa** que a justifica — citação conferida contra a transcrição, não texto de confiança: o que não aparece na conversa é descartado. A nota geral e as notas por momento da conversa são calculadas no app, nunca pedidas à IA, que é o que permite comparar duas pessoas avaliadas em dias diferentes.
@@ -91,10 +74,8 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 - Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
 - O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração se perde a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
 
-## Feedback por e-mail, convite e rotina
-- **Feedback por e-mail:** assim que uma conversa é avaliada, o vendedor recebe a nota, os pontos fortes, a oportunidade e o link do resultado dele. Ligado por padrão, com interruptor no cartão "Feedback por e-mail" de `/setup`. Não é enviado quando o treino esconde o feedback, quando a pessoa entrou sem e-mail ou quando não há conta de e-mail configurada — e nenhum desses casos vira erro na sua tela.
-- **Convite:** o botão "Convidar" em Equipe gera, para o treino escolhido, um endereço público onde quem abre informa nome e e-mail antes de ver o link. Ele serve para você saber quem pediu, não para esconder o endereço do treino.
-- **Rotina:** "Resumo dos treinos do time" manda periodicamente quem treinou, a nota média, a competência mais fraca e o treino mais praticado desde a última execução. "Resumo semanal da equipe" continua cobrindo as conversas reais analisadas. Agende as duas no cartão "Rotinas" de `/setup`.
+## Convite e resultados
+O botão **Convidar** em Equipe gera um link público onde a pessoa informa nome e e-mail e vê o endereço do treino. O feedback fica disponível no simulador e no histórico de resultados. Não há notificações, envios automáticos de feedback nem resumos agendados. Endpoints antigos de envio e webhook respondem HTTP 410, inclusive para instalações com credenciais antigas salvas.
 
 ## Usar dentro de um assistente de IA (MCP)
 O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, para que assistentes como Claude ou ChatGPT operem o app conversando. Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
@@ -127,17 +108,15 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | Variável | Descrição |
 |---|---|
 | `DATA_DIR` | Pasta do banco SQLite. Padrão `./data` (Docker: `/app/data`). |
-| `APP_URL` | Endereço público do app. Sem ele, o e-mail do feedback sai sem link e o assistente devolve o caminho relativo do treino. É aprendido sozinho na primeira criação de treino pela tela. |
+| `APP_URL` | Endereço público do app. Sem ele, o assistente devolve o caminho relativo do treino. É aprendido sozinho na primeira criação de treino pela tela. |
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Modelo do dia a dia: o cliente simulado, a ficha do produto e a análise de conversa real. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
 | `OPENROUTER_MODEL_AVALIACAO` | Alternativa ao setup. Modelo usado só na avaliação da conversa; sem ele vale o de `OPENROUTER_MODEL`. |
 | `GOOGLE_CLIENT_ID_APP` / `GOOGLE_CLIENT_SECRET_APP` | Opcionais. Habilitam "Entrar com Google" para o vendedor se identificar no link (escopo `openid email profile`). |
 | `MICROSOFT_CLIENT_ID_APP` / `MICROSOFT_CLIENT_SECRET_APP` | Opcionais. O mesmo, para "Entrar com Microsoft". |
-| `ELEVENLABS_API_KEY` | Opcional. Melhora a voz do cliente (nível 2) e habilita o agente conversacional (nível 1). Obtenha em https://elevenlabs.io/app/settings/api-keys. |
-| `ELEVENLABS_VOICE_ID` | Opcional. Voz usada quando a voz automática por tipo de cliente está desligada (ou quando a lista de vozes da conta não pôde ser lida). |
-| `ELEVENLABS_AGENT_ID` | Opcional. Agente conversacional que faz o papel do cliente (nível 1). Crie em https://elevenlabs.io/app/conversational-ai; em `/setup` a lista é carregada da própria conta. |
-| `ELEVENLABS_WEBHOOK_SECRET` | Opcional. Segredo de verificação do aviso de pós-conversa (Configurações › Webhooks na ElevenLabs), usado para validar a assinatura em `app/webhook/elevenlabs/route.ts`. |
+| `ELEVENLABS_API_KEY` | Opcional. Gera a voz do cliente escolhida em Configurações. Obtenha em https://elevenlabs.io/app/settings/api-keys. |
+| `ELEVENLABS_VOICE_ID` | Opcional. Voz selecionada em Configurações, usada em todas as conversas e amostras. |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
 
 ## Estrutura
@@ -149,19 +128,19 @@ app/simulacoes/page.tsx            os treinos criados, com filtro, busca, link e
 app/simulacoes/nova/page.tsx       criar treino em três passos (produto → desafio → link)
 app/equipe/page.tsx                quem já treinou, cadastro, convite e a linha do tempo de cada um
 app/equipe/analisar/page.tsx       analisar uma conversa real (colar ou enviar .txt/.vtt/.srt)
-app/resultados/page.tsx            lista dos treinos com conversa, avaliações pendentes e falhas de envio
+app/resultados/page.tsx            lista dos treinos com conversa, avaliações pendentes
 app/resultados/[codigo]/           painel de um treino: visão geral, equipe, tipos de cliente e evolução
 app/simular/[token]/page.tsx       o link do vendedor: identificação → preparação → conversa
 app/simular/[token]/meus-resultados/  o histórico e o feedback de quem treinou (público, por cookie assinado)
-app/setup/page.tsx                 configuração (IA, voz, feedback por e-mail, acesso MCP, rotinas)
+app/setup/page.tsx                 configuração (IA, voz e acesso MCP)
 app/r/[id] · app/imprimir/[id]     ler e imprimir um resultado salvo (conversa, sessão, painel, painel do treino)
-app/webhook/elevenlabs/route.ts    aviso de pós-conversa do agente conversacional (assinado)
+app/webhook/elevenlabs/route.ts    endpoint aposentado (HTTP 410)
 app/mcp/route.ts                   endpoint MCP (JSON-RPC 2.0) para assistentes de IA
 app/api/produtos/**                produtos, materiais e a ficha
 app/api/simulacoes/**              treinos, mudança de status e o convite
 app/api/salas/[token]/**           rotas públicas do vendedor (o prefixo é histórico; a entidade é a simulação)
 app/api/resultados/[codigo]/**     o painel de um treino e a frase dos tipos de cliente
-app/api/sessoes/**                 avaliações pendentes e falhas de envio de e-mail
+app/api/sessoes/**                 avaliações pendentes de e-mail
 app/api/equipe/**                  a lista da equipe e a linha do tempo de uma pessoa
 
 lib/banco.ts               esquema e migração das tabelas do modelo Produto → Simulação → Sessão
@@ -188,16 +167,25 @@ lib/painel-equipe.ts       o resumo da equipe no período
 lib/inicio.ts              os quatro indicadores e os três passos do Início
 lib/equipe.ts              a tela de Equipe
 lib/demo.ts                o conteúdo de exemplo; lib/semear-demo.ts semeia, lib/exemplos.ts remove
-lib/envio-analise.ts       o e-mail do feedback e o da análise
 lib/ferramentas.ts         as quatro ferramentas expostas por MCP
-lib/rotinas-do-app.ts      "Resumo dos treinos do time" e "Resumo semanal da equipe"
 lib/store.ts               configuração em SQLite, com variáveis de ambiente como prioridade
 lib/ai.ts                  cliente OpenRouter (askText, askJSON, askWithTools), com modelo por tarefa
 components/Resultado.tsx   as telas dos quatro formatos de resultado, compartilhadas
-components/SalaVoz.tsx     a sala por voz do navegador (nível 2)
-components/SalaAgente.tsx  a sala com o agente conversacional (nível 1), que cai para o nível 2 sozinha
+components/SalaVoz.tsx     conversa com react-speech-recognition e voz selecionada
 components/FeedbackVendedor.tsx  o feedback de quem treinou, nas duas telas que o mostram
 Dockerfile                 build multi-stage com saída standalone
 docker-compose.yml         sobe este app isolado
 render.yaml                blueprint do Render (runtime image)
 ```
+
+## Verificação local
+`npm run build` verifica o build e os tipos. `npm run lint` verifica as regras do projeto.
+
+`npm test` executa os testes Playwright usando um servidor na porta 3217 e SQLite temporário. Se necessário, instale o navegador com `npx playwright install chromium`. O reconhecimento de fala, a síntese e a resposta da ElevenLabs são simulados nos testes; sessões, cookies, transcrição e avaliação em modo demonstração usam o código real. Para conferir timbre e latência com a sua conta, selecione uma voz em `/setup` e faça uma conversa com microfone real.
+
+## Orientação durante e depois da conversa
+O cartão **Dica para sua próxima fala** mostra uma orientação de até 160 caracteres após cada resposta do cliente. Um orientador com ferramentas consulta o objetivo, os critérios da metodologia e a ficha do produto; a última parte da conversa orienta a sugestão. Ele não recebe a persona oculta. A dica é buscada separadamente da resposta de voz, guardada por mensagem e nunca entra na transcrição nem no áudio. Recarregar a sala reutiliza a dica.
+
+No encerramento, o avaliador calcula o feedback com a rubrica e verifica as citações. Um segundo agente consulta essa avaliação para produzir até três ações, cada uma ligada a um critério existente e com uma forma observável de conferir a aplicação. O plano fica salvo junto ao resultado, aparece também no histórico, na impressão e no texto copiado. As duas menores notas abaixo de 7 recebem destaque como pontos a melhorar.
+
+O orientador tem limite de 8 segundos; o planejador, 15 segundos. Ambos executam no máximo três rodadas com o modelo. Falha, resposta inválida ou ausência da consulta obrigatória utiliza uma orientação básica, identificada na tela. Sem IA conectada, dicas e plano são exemplos explicitamente rotulados. Os testes simulam respostas dos modelos e verificam as consultas às ferramentas, validação, isolamento por sessão e continuidade da conversa.

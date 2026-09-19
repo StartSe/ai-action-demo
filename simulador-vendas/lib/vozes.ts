@@ -1,21 +1,4 @@
-// A voz de cada tipo de cliente (US-028).
-//
-// O treino já era por voz desde a US-015, mas com uma voz só: os sete tipos de cliente falavam
-// exatamente igual, e um vendedor que treinou com o apressado e com o resistente ouviu o mesmo robô
-// nas duas conversas. Aqui cada tipo ganha um jeito de falar — e, quando o gestor conectou a
-// ElevenLabs, uma voz diferente da conta dele.
-//
-// Três características descrevem a voz de um tipo de cliente (`velocidade`, `estabilidade`, `tom`),
-// e elas viram dois ajustes diferentes conforme quem fala:
-//
-// - **voz do próprio navegador** (o padrão, sem nada configurado): `rate` e `pitch` de
-//   `speechSynthesis`. É pouco, mas é o suficiente para o apressado atropelar e o cético soar sério.
-// - **voz da ElevenLabs** (quando conectada): `voice_settings` na geração do áudio, mais uma voz
-//   real da conta por tipo de cliente.
-//
-// Este módulo lê configuração (`lib/store.ts`), então é de servidor. A tela de quem treina recebe só
-// `rate`/`pitch` prontos — nunca o tipo de cliente, que continua escondido até o feedback (D2).
-import { PERSONAS_IDS } from "@/lib/personas";
+// Voz escolhida em Configurações, com ritmo e expressividade ajustados ao cliente.
 import { getConfig, setConfig } from "@/lib/store";
 
 /** Como um tipo de cliente fala. Os três números são independentes do meio que vai produzir a voz. */
@@ -169,21 +152,6 @@ export async function vozesDaConta(chave: string): Promise<VozDaConta[]> {
   }
 }
 
-/**
- * Qual voz da conta fala por um tipo de cliente.
- *
- * A escolha é por **posição no catálogo**, sobre a lista ordenada por nome: nada na resposta da
- * ElevenLabs diz que uma voz soa cética ou apressada (os rótulos falam de sotaque, idade e uso, não de
- * humor), e inventar essa leitura daria um resultado pior e imprevisível. O que importa para o treino
- * é que os sete tipos não soem como a mesma pessoa e que cada um soe **sempre igual** — as duas coisas
- * saem da posição, que não muda entre uma conversa e outra.
- */
-export function escolherVoz(personaId: string, vozes: VozDaConta[]): string | null {
-  if (!vozes.length) return null;
-  const posicao = PERSONAS_IDS.indexOf(personaId);
-  return vozes[(posicao < 0 ? 0 : posicao) % vozes.length].id;
-}
-
 /** A voz configurada à mão pelo gestor, quando existir; senão a de reserva. */
 function vozDeReserva(): string {
   return getConfig("ELEVENLABS_VOICE_ID") || VOZ_PADRAO;
@@ -201,8 +169,7 @@ export async function falaDoCliente({ texto, personaId }: { texto: string; perso
 
   const tipo = vozPorPersonaLigada() ? personaId : null;
   const caracteristicas = caracteristicasDaPersona(tipo);
-  const daConta = tipo ? escolherVoz(tipo, await vozesDaConta(chave)) : null;
-  const vozId = daConta ?? vozDeReserva();
+  const vozId = vozDeReserva();
 
   try {
     const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(vozId)}?output_format=mp3_44100_128`, {

@@ -13,10 +13,5 @@ export async function register() {
     const { semearDemonstracao } = await import("@/lib/semear-demo");
     semearDemonstracao();
 
-    await import("@/lib/rotinas-do-app");
-    const { executarVencidas } = await import("@/lib/rotinas");
-    setInterval(() => {
-      executarVencidas().catch((err) => console.error("Falha ao executar rotinas vencidas", err));
-    }, 60_000);
   }
 }

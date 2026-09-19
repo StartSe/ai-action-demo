@@ -1,16 +1,4 @@
-// Gera, mostra o estado e revoga o código de acesso usado pelo gatilho externo (app/api/rotinas/executar).
-import { codigoAtivo, codigoMascarado, gerarCodigo, revogarCodigo } from "@/lib/rotinas";
-
-export async function GET() {
-  return Response.json({ ativo: Boolean(codigoAtivo()), mascarado: codigoMascarado() });
-}
-
-export async function POST() {
-  const codigo = gerarCodigo();
-  return Response.json({ codigo });
-}
-
-export async function DELETE() {
-  revogarCodigo();
-  return Response.json({ ok: true });
-}
+// Recurso removido do simulador. Não executa envios nem processa agentes externos.
+export async function GET() { return Response.json({ error: "Este recurso foi removido do simulador." }, { status: 410 }); }
+export async function POST() { return Response.json({ error: "Este recurso foi removido do simulador." }, { status: 410 }); }
+export async function DELETE() { return Response.json({ error: "Este recurso foi removido do simulador." }, { status: 410 }); }

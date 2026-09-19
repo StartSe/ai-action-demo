@@ -3,8 +3,6 @@
 //
 // Rota privada (fora da lista de `proxy.ts`), ao contrário da voz da conversa: aqui quem está do outro
 // lado é o gestor, dentro das Configurações.
-import { integracaoConfigurada } from "@/lib/setup-comum";
-import { ELEVENLABS_AGENTE } from "@/lib/integracoes";
 import { PERSONAS, rotulo } from "@/lib/personas";
 import { caracteristicasEmUso, definirVozPorPersona, vozDoNavegador, vozPorPersonaLigada } from "@/lib/vozes";
 import { getConfig } from "@/lib/store";
@@ -12,10 +10,7 @@ import { getConfig } from "@/lib/store";
 /** O que o cartão mostra e o que ele usa para falar pelo navegador quando não há voz da nuvem. */
 function estado() {
   return {
-    // A voz da nuvem precisa só da chave; o agente conversacional (o resto do cartão da ElevenLabs) é
-    // outra coisa e pode estar pela metade sem impedir a voz de funcionar.
     conectado: Boolean(getConfig("ELEVENLABS_API_KEY")),
-    agente: integracaoConfigurada(ELEVENLABS_AGENTE),
     porPersona: vozPorPersonaLigada(),
     personas: PERSONAS.map((p) => ({
       persona: p.id,

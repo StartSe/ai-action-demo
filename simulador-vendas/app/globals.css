@@ -92,3 +92,77 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   .print-sheet .summary { box-shadow: none; break-inside: avoid; }
   .print-sheet .chip-neutral { background: none; border: 1px solid currentColor; }
 }
+
+/* Orbe conversacional: animações por estado, sem capturar outro fluxo de microfone. */
+.sala-conversacional {
+  background: radial-gradient(ellipse at 50% 31%, #edf4ff 0%, #fff 60%);
+}
+.orbe-palco {
+  --orbe-ritmo: 9s;
+  --orbe-pulso: 5s;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: clamp(190px, 26vh, 260px);
+  margin-block: -6px;
+}
+.orbe-esfera {
+  position: relative;
+  width: clamp(150px, 21vw, 196px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(circle at 32% 24%, #f3fcff 0%, #9deaff 27%, #568aef 55%, #7267df 80%, #393fb2 100%);
+  box-shadow: inset 0 0 22px #ffffffa6, inset -12px -14px 28px #3e42b040, 0 12px 38px #517eea33;
+  animation: orbe-respirar var(--orbe-pulso) ease-in-out infinite;
+  transition: filter .6s, opacity .6s, box-shadow .6s;
+}
+.orbe-fluxo {
+  position: absolute;
+  inset: -35%;
+  background: conic-gradient(from 40deg, transparent 5%, #ecfcffdb 20%, #74dfffaa 32%, transparent 44%, #445be3cc 58%, #bcb1ffb3 72%, #eeffffc9 86%, transparent);
+  filter: blur(15px);
+  animation: orbe-girar var(--orbe-ritmo) linear infinite;
+}
+.orbe-luz {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at 33% 18%, #ffffffed 0%, #ffffff50 22%, transparent 52%);
+  box-shadow: inset 0 0 10px #ffffff91;
+}
+.orbe-halo {
+  position: absolute;
+  width: clamp(200px, 29vw, 280px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, #a7dfff6b, #a6b4ff38 42%, transparent 70%);
+  filter: blur(12px);
+  animation: orbe-respirar var(--orbe-pulso) ease-in-out infinite reverse;
+  transition: opacity .6s;
+}
+.orbe-anel {
+  position: absolute;
+  width: clamp(172px, 24vw, 224px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px solid #91b8f54d;
+  opacity: 0;
+  transition: opacity .6s;
+}
+.orbe-palco[data-estado="parado"] .orbe-esfera { filter: saturate(.7); opacity: .85; }
+.orbe-palco[data-estado="parado"] .orbe-halo { opacity: .45; }
+.orbe-palco[data-estado="ouvindo"] { --orbe-ritmo: 7s; --orbe-pulso: 3s; }
+.orbe-palco[data-estado="ouvindo"] .orbe-anel { opacity: 1; animation: orbe-escuta 3s ease-out infinite; }
+.orbe-palco[data-estado="falando"] { --orbe-ritmo: 3s; --orbe-pulso: 1.25s; }
+.orbe-palco[data-estado="falando"] .orbe-esfera { box-shadow: inset 0 0 22px #ffffffa6, 0 0 44px #77a6ff70, 0 14px 40px #7770eb40; }
+.orbe-palco[data-estado="pensando"], .orbe-palco[data-estado="conectando"] { --orbe-ritmo: 2.5s; --orbe-pulso: 4s; }
+.orbe-palco[data-estado="pensando"] .orbe-esfera { filter: hue-rotate(18deg); }
+@keyframes orbe-girar { to { transform: rotate(360deg); } }
+@keyframes orbe-respirar { 0%, 100% { transform: scale(.97); } 50% { transform: scale(1.035); } }
+@keyframes orbe-escuta { 0% { transform: scale(.9); opacity: .7; } 100% { transform: scale(1.13); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .orbe-palco *, .orbe-palco[data-estado] .orbe-anel { animation: none; transition: none; }
+}

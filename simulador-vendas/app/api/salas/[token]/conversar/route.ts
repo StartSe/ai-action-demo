@@ -81,14 +81,14 @@ export async function POST(req: Request, { params }: RouteContext<"/api/salas/[t
     return clienteMudo(err);
   }
 
-  registrarMensagem({ sessaoId: sessao.id, papel: "cliente", texto, segundo });
+  const mensagem = registrarMensagem({ sessaoId: sessao.id, papel: "cliente", texto, segundo });
   // Com o tempo esgotado a conversa fecha aqui, na despedida: quem treinou não precisa clicar em nada
   // para a sessão ficar consistente, e o resultado é pedido logo depois pela rota de encerramento.
   if (despedir) encerrar(sessao.id);
 
   // `instrucoes` e `personaId` não saem daqui de propósito: são o que estragaria o treino se o
   // vendedor lesse a resposta crua da rota no navegador.
-  return Response.json({ texto, restanteSeg: despedir ? 0 : restante, encerrada: despedir });
+  return Response.json({ texto, mensagemId: mensagem.id, restanteSeg: despedir ? 0 : restante, encerrada: despedir });
 }
 
 /** O turno das salas criadas antes da US-002, que mandam a conversa inteira a cada fala. */

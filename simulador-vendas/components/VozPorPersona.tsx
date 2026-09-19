@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { Aviso } from "./ui";
 
 type VozDaPersona = { persona: string; rotulo: string; frase: string; rate: number; pitch: number };
-type Dados = { conectado: boolean; agente: boolean; porPersona: boolean; personas: VozDaPersona[] };
+type Dados = { conectado: boolean; porPersona: boolean; personas: VozDaPersona[] };
 
 /** Uma voz em português do navegador, quando houver; sem ela o cliente fala com a voz padrão. */
 function vozPortuguesa(): SpeechSynthesisVoice | null {
@@ -27,18 +27,19 @@ export function VozPorPersona() {
   const [falha, setFalha] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Busca inicial em forma de corrente: a regra react-hooks/set-state-in-effect acusa a chamada
-  // direta de uma função que mexe em estado no corpo do efeito, mesmo sendo assíncrona.
-  useEffect(() => {
-    fetch("/api/voz")
-      .then((r) => r.json())
-      .then((d: Dados) => setDados(d))
-      .catch(() => setFalha("Não foi possível ler esta configuração agora. Atualize a página."));
-  }, []);
+  const cancelarRef = useRef<(() => void) | null>(null);
+  const pedidoRef = useRef<AbortController | null>(null);
 
-  // Sair da tela no meio de uma amostra não pode deixar uma voz falando sozinha.
   useEffect(() => {
+    let ativa = true;
+    const carregar = () => fetch("/api/voz").then(r => r.json()).then((d: Dados) => { if (ativa) setDados(d); }).catch(() => { if (ativa) setFalha("Não foi possível ler esta configuração. Atualize a página."); });
+    void carregar();
+    window.addEventListener("configuracao-atualizada", carregar);
     return () => {
+      ativa = false;
+      window.removeEventListener("configuracao-atualizada", carregar);
+      pedidoRef.current?.abort();
+      cancelarRef.current?.();
       audioRef.current?.pause();
       window.speechSynthesis?.cancel();
     };
@@ -63,47 +64,47 @@ export function VozPorPersona() {
     }
   }
 
-  function falarNoNavegador(voz: VozDaPersona) {
-    const sintese = window.speechSynthesis;
-    if (!sintese) return;
-    const fala = new SpeechSynthesisUtterance(voz.frase);
-    fala.lang = "pt-BR";
-    fala.rate = voz.rate;
-    fala.pitch = voz.pitch;
-    const escolhida = vozPortuguesa();
-    if (escolhida) fala.voice = escolhida;
-    sintese.cancel();
-    sintese.speak(fala);
-  }
-
   async function ouvir(voz: VozDaPersona) {
-    setFalha("");
-    setTocando(voz.persona);
+    pedidoRef.current?.abort();
+    cancelarRef.current?.();
     audioRef.current?.pause();
     window.speechSynthesis?.cancel();
+    const controller = new AbortController();
+    pedidoRef.current = controller;
+    setFalha(""); setTocando(voz.persona);
+    const pronto = () => { if (!controller.signal.aborted) setTocando(""); };
     try {
-      // Sem ElevenLabs conectada a amostra sai daqui mesmo, sem passar pelo servidor: é o caminho que
-      // o vendedor vai ouvir, e pedir um áudio que já se sabe que não existe só encheria o registro do
-      // navegador de recusas. Mesma decisão do `vozDoServidor` da sala de treino.
-      if (dados?.conectado) {
-        const r = await fetch("/api/voz/amostra", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ persona: voz.persona }) });
-        if (r.ok) {
-          const audio = new Audio(URL.createObjectURL(await r.blob()));
-          audioRef.current = audio;
-          audio.onended = () => setTocando("");
-          await audio.play();
-          return;
-        }
-        // 409 aqui é a ElevenLabs ter recusado, e isso não é falha: a amostra sai pelo navegador.
+      // Consulta o servidor mesmo após uma chave recém-salva: a amostra usa a escolha atual.
+      const r = await fetch("/api/voz/amostra", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ persona: voz.persona }), signal: controller.signal });
+      if (r.ok) {
+        const blob = await r.blob();
+        if (controller.signal.aborted) return;
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        const limpar = () => { audio.pause(); audio.onended = null; audio.onerror = null; URL.revokeObjectURL(url); };
+        cancelarRef.current = limpar;
+        audio.onended = () => { limpar(); pronto(); };
+        audio.onerror = () => { limpar(); pronto(); setFalha("Não foi possível tocar a amostra. Tente novamente."); };
+        try { await audio.play(); } catch { limpar(); throw new Error("Não foi possível tocar a amostra."); }
+        return;
       }
-      falarNoNavegador(voz);
+      if (controller.signal.aborted) return;
+      const sintese = window.speechSynthesis;
+      if (!sintese) throw new Error("Este navegador não consegue reproduzir a amostra.");
+      const fala = new SpeechSynthesisUtterance(voz.frase);
+      fala.lang = "pt-BR"; fala.rate = voz.rate; fala.pitch = voz.pitch;
+      const escolhida = vozPortuguesa();
+      if (escolhida) fala.voice = escolhida;
+      const timer = setTimeout(() => { limpar(); pronto(); }, 30000);
+      const limpar = () => { clearTimeout(timer); fala.onend = null; fala.onerror = null; sintese.cancel(); };
+      cancelarRef.current = limpar;
+      fala.onend = () => { limpar(); pronto(); };
+      fala.onerror = () => { limpar(); pronto(); };
+      sintese.speak(fala);
     } catch (err) {
-      console.error("Não foi possível tocar a amostra", err);
-      falarNoNavegador(voz);
-    } finally {
-      // A voz do navegador não avisa quando termina de um jeito confiável; o rótulo volta ao normal
-      // logo, e o áudio da nuvem desmarca sozinho no `onended`.
-      setTimeout(() => setTocando((atual) => (atual === voz.persona ? "" : atual)), 1200);
+      if (controller.signal.aborted) return;
+      setFalha(err instanceof Error ? err.message : "Não foi possível tocar a amostra."); pronto();
     }
   }
 
@@ -119,7 +120,7 @@ export function VozPorPersona() {
         <div className="mb-4">
           <Aviso tom={dados.conectado ? "ok" : "warn"}>
             {dados.conectado
-              ? "ElevenLabs conectada: o cliente fala com a voz da sua conta."
+              ? "ElevenLabs conectada: o cliente fala com a voz selecionada acima."
               : "ElevenLabs não conectada: o cliente fala com a voz do navegador de quem treina, e o treino funciona normalmente."}
           </Aviso>
         </div>
@@ -133,10 +134,10 @@ export function VozPorPersona() {
           disabled={!dados || salvando}
           onChange={(e) => void trocar(e.target.checked)}
         />
-        <span>Voz automática por tipo de cliente — o apressado fala mais rápido, o cético fala mais sério</span>
+        <span>Adaptar o ritmo por tipo de cliente — o apressado fala mais rápido, o cético fala mais sério</span>
       </label>
 
-      {dados && !dados.porPersona && <p className="text-muted text-sm mt-3">Todos os tipos de cliente falam com a mesma voz.</p>}
+      {dados && !dados.porPersona && <p className="text-muted text-sm mt-3">Todos os tipos de cliente usam o mesmo ritmo.</p>}
 
       {dados && (
         <ul className="mt-4 flex flex-col divide-y divide-line border-t border-line">

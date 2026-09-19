@@ -99,7 +99,7 @@ export function respostaErro(err: unknown): Response {
   return Response.json({ error: mensagem }, { status: 500 });
 }
 
-async function chamarOpenRouter(body: Record<string, unknown>): Promise<Response> {
+async function chamarOpenRouter(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
   if (!apiKey()) {
     throw new ErroIA("chave_ausente", "Nenhuma chave da IA foi configurada. Conecte em Configurações.", 401, ACAO_CONECTAR_IA);
   }
@@ -113,6 +113,7 @@ async function chamarOpenRouter(body: Record<string, unknown>): Promise<Response
         "X-Title": getConfig("APP_NAME") || "IA para Executivos",
       },
       body: JSON.stringify(body),
+      signal,
     });
   } catch (err) {
     console.error("Falha de rede ao chamar a IA:", err);
@@ -279,6 +280,8 @@ export async function askWithTools({
   executeTool,
   maxTokens = 4000,
   maxIterations = 8,
+  model,
+  signal,
 }: {
   system: string;
   messages: ToolMessage[];
@@ -286,18 +289,20 @@ export async function askWithTools({
   executeTool: (nome: string, args: Record<string, unknown>) => Promise<unknown>;
   maxTokens?: number;
   maxIterations?: number;
+  model?: string;
+  signal?: AbortSignal;
 }): Promise<string> {
   const fallbacks = (getConfig("OPENROUTER_FALLBACK_MODELS") || FALLBACK_MODELS.join(",")).split(",").map((m) => m.trim()).filter(Boolean);
   const historico: ToolMessage[] = [{ role: "system", content: system }, ...messages];
 
   for (let iteracao = 0; iteracao < maxIterations; iteracao++) {
     const res = await chamarOpenRouter({
-      model: modelName(),
-      models: [modelName(), ...fallbacks],
+      model: model || modelName(),
+      models: [model || modelName(), ...fallbacks],
       messages: historico,
       tools,
       max_tokens: maxTokens,
-    });
+    }, signal);
     if (!res.ok) {
       const detalhe = await res.text().catch(() => "");
       throw interpretarFalha(res, detalhe);

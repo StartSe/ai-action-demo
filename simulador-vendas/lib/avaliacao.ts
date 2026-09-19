@@ -15,10 +15,11 @@
 // Duas portas chegam até aqui e as duas têm de produzir o mesmo resultado: a conversa que termina na
 // própria tela (US-015, nível 2) e a que chega de fora pelo aviso de pós-conversa do agente
 // conversacional (US-016, nível 1). A terceira é o "Tentar de novo" do gestor, quando a IA falhou.
+import { planejarTreino } from "./coaching";
+import type { PlanoTreino } from "./coaching-comum";
 import { aiEnabled, askJSON, meta, modelName, type Meta } from "./ai";
 import { salvarResultado } from "./analise";
 import { avaliacaoDemo, esperar } from "./demo";
-import { enviarFeedbackDaSessao } from "./envio-analise";
 import { agruparCriterios, criteriosDe, GRUPOS, metodologia, type Criterio, type Grupo } from "./metodologias";
 import { obter as obterParticipante } from "./participantes";
 import { persona as obterPersona, rotulo } from "./personas";
@@ -68,6 +69,7 @@ export type ContextoAvaliacao = {
 
 export type AvaliacaoSessao = {
   /** Média dos critérios, com uma casa decimal. **Nunca vem da IA.** */
+  planoAcao?: PlanoTreino;
   notaGeral: number;
   criterios: CriterioAvaliado[];
   grupos: NotaGrupo[];
@@ -396,17 +398,12 @@ export async function avaliarSessao(sessaoId: string): Promise<SessaoAvaliada | 
   }
 
   const avaliacao = montarAvaliacao({ criterios, bruta, falas: conversa.transcricao, contexto });
+  avaliacao.planoAcao = await planejarTreino(avaliacao, conversa.transcricao, demo);
   const metaGerada = meta({ demo, insumo: INSUMO, model: modelo });
   const titulo = `Conversa de ${contexto.vendedor} · ${simulacao.nome}`;
 
   const id = salvarResultado({ tipo: "sessao", titulo, resumo: avaliacao.resumo, conversa, saida: avaliacao, meta: metaGerada });
   registrarResultado(sessao.id, id);
-
-  // O e-mail do feedback (US-020) sai daqui, e não das rotas, porque quatro portas chegam à avaliação
-  // (o fim da conversa na sala, o aviso de pós-conversa do agente, a retomada e o "Tentar de novo" do
-  // gestor) e o vendedor tem de receber o mesmo e-mail por todas elas. `enviarFeedbackDaSessao` nunca
-  // lança: uma conta de e-mail mal configurada não pode transformar uma avaliação pronta em falha.
-  await enviarFeedbackDaSessao(sessao.id);
 
   return { demo, conversa, avaliacao, meta: metaGerada, id, titulo };
 }

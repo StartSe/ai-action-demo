@@ -10,7 +10,6 @@ import { ilustracaoDoSegmento, type Segmento } from "@/lib/ilustracao";
 import { MODELOS_GRATUITOS, type ProximoPasso } from "@/lib/modelos";
 
 export type UsuarioTopbar = { nome: string; email: string };
-export type NotificacaoTopbar = { id: string; texto: string; url?: string };
 
 export type Status = { ai: boolean; demo: boolean; model: string; integrations?: Record<string, boolean>; setup?: { pronto: boolean; url: string }; usuario?: UsuarioTopbar | null; proximos?: ProximoPasso[] };
 
@@ -57,21 +56,18 @@ function iniciaisDe(nome: string) {
 }
 
 /** Cabeçalho da suíte: marca à esquerda, navegação ao centro (desktop) e chip de status + sino + conta à direita; no celular a navegação e a conta viram um botão "Menu" com uma folha. */
-export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notificacoes, navegacao = NAVEGACAO }: { marca: string; nome: string; area: string; status: Status | null; erro?: boolean; resumo?: string; usuario?: UsuarioTopbar | null; notificacoes?: NotificacaoTopbar[]; navegacao?: ItemNavegacao[] }) {
+export function Topbar({ marca, nome, area, status, erro, resumo, usuario, navegacao = NAVEGACAO }: { marca: string; nome: string; area: string; status: Status | null; erro?: boolean; resumo?: string; usuario?: UsuarioTopbar | null; navegacao?: ItemNavegacao[] }) {
   const pathname = usePathname();
   const router = useRouter();
   const sair = () => { fetch("/api/conta/sair", { method: "POST" }).then(() => router.push("/entrar")); };
   const [popoverAberto, setPopoverAberto] = useState(false);
-  const [sinoAberto, setSinoAberto] = useState(false);
   const [contaAberto, setContaAberto] = useState(false);
   const [menuAberto, setMenuAberto] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const sinoRef = useRef<HTMLDivElement>(null);
   const contaRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useFecharAoClicarFora(popoverAberto, popoverRef, setPopoverAberto);
-  useFecharAoClicarFora(sinoAberto, sinoRef, setSinoAberto);
   useFecharAoClicarFora(contaAberto, contaRef, setContaAberto);
   useFecharAoClicarFora(menuAberto, menuRef, setMenuAberto);
 
@@ -148,26 +144,6 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
           <Link href="/setup" aria-label="Configurações" className="md:hidden shrink-0 w-[30px] h-[30px] rounded-full grid place-items-center hover:bg-bg">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" /><path d="M19.4 13.5a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V19a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H4a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H10a1.65 1.65 0 0 0 1-1.51V4a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V10a1.65 1.65 0 0 0 1.51 1H20a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></svg>
           </Link>
-
-          {notificacoes && notificacoes.length > 0 && (
-            <div className="relative max-md:hidden" ref={sinoRef}>
-              <button type="button" className="relative w-8 h-8 grid place-items-center rounded-full hover:bg-bg cursor-pointer" aria-haspopup="dialog" aria-expanded={sinoAberto} aria-label={`${notificacoes.length} avisos`} onClick={() => setSinoAberto((v) => !v)}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6Z" /><path d="M10 19a2 2 0 0 0 4 0" /></svg>
-                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold grid place-items-center">{notificacoes.length}</span>
-              </button>
-              {sinoAberto && (
-                <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-80 max-md:w-64 card p-1.5 text-[13.5px] text-ink">
-                  {notificacoes.map((n) =>
-                    n.url ? (
-                      <Link key={n.id} href={n.url} className="block px-3 py-2 rounded-md hover:bg-accent-soft" onClick={() => setSinoAberto(false)}>{n.texto}</Link>
-                    ) : (
-                      <p key={n.id} className="px-3 py-2">{n.texto}</p>
-                    )
-                  )}
-                </div>
-              )}
-            </div>
-          )}
 
           {usuario && (
             <div className="relative max-md:hidden" ref={contaRef}>

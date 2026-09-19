@@ -13,7 +13,8 @@
 //   - `ResultadoPainel`/`ConteudoPainel` → `tipo: "painel"` (o resumo da equipe, `lib/painel-equipe.ts`)
 //   - `ResultadoPainelSimulacao`/`ConteudoPainelSimulacao` → `tipo: "painel-simulacao"` (a fotografia do
 //     painel de um treino, `lib/painel-simulacao.ts`)
-import { useEffect, useState } from "react";
+import { acaoDoCriterio, planoBase, pontosFracos } from "@/lib/coaching-comum";
+import { useState } from "react";
 import { Aviso, Chip, CopyButton, DataTable, Destaque, Entregar, Item, Origem, ResultHead, Section, SeloIA, data, lerErro, numero } from "@/components/ui";
 import { GraficoCriteriosFracos } from "@/components/GraficoCriteriosFracos";
 import { VendedoresPainel } from "@/components/VendedoresPainel";
@@ -74,7 +75,6 @@ export function Resultado({ conversa, analise, meta, id, titulo, acoesDoGestor =
 
   const extras = acoesDoGestor && id
     ? [
-        { rotulo: "Enviar a análise ao vendedor", onClick: () => void acao("/api/enviar-analise") },
         { rotulo: "Enviar as notas ao CRM", onClick: () => void acao("/api/crm") },
       ]
     : undefined;
@@ -197,6 +197,8 @@ export function leituraDaNota(nota: number): string {
  */
 export function ConteudoSessao({ conversa, avaliacao, copiarFrase = false }: { conversa: Conversa; avaliacao: AvaliacaoSessao; copiarFrase?: boolean }) {
   const c = avaliacao.contexto;
+  const fracos = pontosFracos(avaliacao);
+  const plano = avaliacao.planoAcao ?? planoBase(avaliacao);
   return (
     <>
       <Destaque valor={numero(avaliacao.notaGeral, 1)} rotulo="Nota geral" interpretacao={leituraDaNota(avaliacao.notaGeral)} tom={tomDestaque(avaliacao.notaGeral)} />
@@ -228,6 +230,29 @@ export function ConteudoSessao({ conversa, avaliacao, copiarFrase = false }: { c
           </Item>
         </Section>
       )}
+
+      <Section titulo="Pontos a melhorar">
+        <Item>
+          {fracos.length ? <ul className="space-y-3 text-sm">{fracos.map(ponto => (
+            <li key={ponto.id}>
+              <p className="font-semibold">{ponto.nome} · {numero(ponto.nota, 1)}/10</p>
+              <p className="text-muted mt-1">{acaoDoCriterio(ponto)}</p>
+              {ponto.evidencia ? <p className="text-xs mt-1 italic">{ponto.evidencia}</p> : <p className="text-xs mt-1 text-muted">Sem trecho confirmado para este critério; valide no próximo treino.</p>}
+            </li>
+          ))}</ul> : <p className="text-sm">Nenhum critério ficou abaixo de 7. Use o plano para aperfeiçoar os pontos de menor nota.</p>}
+        </Item>
+      </Section>
+      {plano.acoes.length > 0 && <Section titulo="Seu plano de ação rápido">
+        <Item>
+          <p className="text-sm text-muted mb-4">Pratique por 5 minutos e aplique na próxima conversa.{plano.origem === "demo" ? " Plano de exemplo." : plano.origem === "orientacao" ? " Plano baseado nos critérios da avaliação." : " Plano personalizado a partir da avaliação."}</p>
+          <ol className="space-y-4 text-sm">{plano.acoes.map((acao, i) => (
+            <li key={acao.criterioId} className="flex gap-3">
+              <span className="shrink-0 w-6 h-6 rounded-full bg-accent-soft text-accent grid place-items-center font-bold" aria-hidden="true">{i + 1}</span>
+              <div><p className="font-semibold">{acao.acao}</p><p className="text-muted mt-1"><strong>Como conferir:</strong> {acao.comoMedir}</p></div>
+            </li>
+          ))}</ol>
+        </Item>
+      </Section>}
 
       {avaliacao.oportunidade && (
         <Section titulo="Principal oportunidade">
@@ -302,6 +327,10 @@ function sessaoParaTexto(avaliacao: AvaliacaoSessao): string {
     l.push("", `Principal oportunidade — ${avaliacao.oportunidade.criterio}:`, avaliacao.oportunidade.oQueAconteceu, avaliacao.oportunidade.oQueFazer);
     if (avaliacao.oportunidade.fraseSugerida) l.push(`Experimente dizer: "${avaliacao.oportunidade.fraseSugerida}"`);
   }
+  l.push("", "Pontos a melhorar:");
+  pontosFracos(avaliacao).forEach(c => l.push(`- ${c.nome} (${numero(c.nota, 1)}): ${c.comoMelhorar}`));
+  l.push("", "Plano de ação rápido:");
+  (avaliacao.planoAcao ?? planoBase(avaliacao)).acoes.forEach((a, i) => l.push(`${i + 1}. ${a.acao} Como conferir: ${a.comoMedir}`));
   return l.join("\n");
 }
 
@@ -352,86 +381,7 @@ export function ResultadoPainel({ painel, meta, id, titulo }: { painel: PainelEq
 
       <ConteudoPainel painel={painel} />
 
-      <ReceberResumoEquipe />
     </article>
-  );
-}
-
-type EstadoNotificacoes = { configurada: boolean; canal: "email" | "slack"; destino: string };
-type RotinaResumoEquipe = { id: string; tipo: string };
-
-/** Depois de ver o painel, oferece uma rotina semanal (toda sexta às 17h) com o resumo da equipe: conversas
- * da semana, nota média, quem mais evoluiu, quem não treinou e o critério mais fraco. Ao contrário da rotina
- * semanal do Radar de Sinais, não tem parâmetro nenhum (é sempre a mesma equipe), então só existe uma. */
-function ReceberResumoEquipe() {
-  const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
-  const [rotinaId, setRotinaId] = useState<string | null | undefined>(undefined);
-  const [criando, setCriando] = useState(false);
-  const [erroRotina, setErroRotina] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/setup")
-      .then((r) => r.json())
-      .then((d) => {
-        const integracao = (d.integracoes || []).find((i: { id: string }) => i.id === "notificacoes");
-        const campos: { chave: string; valorVisivel?: string }[] = integracao?.campos || [];
-        const canal = campos.find((c) => c.chave === "NOTIFICACOES_CANAL")?.valorVisivel === "slack" ? "slack" : "email";
-        const destino = campos.find((c) => c.chave === "NOTIFICACOES_DESTINO")?.valorVisivel || "";
-        setNotificacoes({ configurada: Boolean(integracao?.configurada), canal, destino });
-      })
-      .catch(() => setNotificacoes({ configurada: false, canal: "email", destino: "" }));
-    fetch("/api/rotinas")
-      .then((r) => r.json())
-      .then((d) => {
-        const existente = (d.itens || []).find((i: RotinaResumoEquipe) => i.tipo === "resumo-equipe");
-        setRotinaId(existente?.id ?? null);
-      })
-      .catch(() => setRotinaId(null));
-  }, []);
-
-  async function criar() {
-    if (!notificacoes?.configurada) return;
-    setCriando(true);
-    setErroRotina(null);
-    try {
-      const r = await fetch("/api/rotinas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tipo: "resumo-equipe", frequencia: "semanal", diaSemana: 5, hora: "17:00", canal: notificacoes.canal, destino: notificacoes.canal === "email" ? notificacoes.destino || undefined : undefined }),
-      });
-      if (!r.ok) {
-        setErroRotina((await lerErro(r)).mensagem);
-        return;
-      }
-      const d = await r.json();
-      setRotinaId(d.id);
-    } catch (e) {
-      setErroRotina((await lerErro(e)).mensagem);
-    } finally {
-      setCriando(false);
-    }
-  }
-
-  if (rotinaId === undefined || notificacoes === null) return null;
-
-  return (
-    <Item className="mt-4">
-      {rotinaId ? (
-        <p className="text-muted text-sm">Você já recebe o resumo da equipe toda sexta às 17h.</p>
-      ) : notificacoes.configurada ? (
-        <>
-          <button type="button" className="btn-ghost !w-auto" onClick={criar} disabled={criando}>
-            {criando ? "Criando..." : "Receber o resumo toda semana"}
-          </button>
-          {erroRotina && <div className="mt-2.5"><Aviso tom="danger">{erroRotina}</Aviso></div>}
-        </>
-      ) : (
-        <>
-          <a href="/setup#notificacoes" className="btn-ghost !w-auto">Receber o resumo toda semana</a>
-          <p className="text-[12.5px] text-muted mt-2">Precisa das Notificações configuradas para o resumo chegar até você.</p>
-        </>
-      )}
-    </Item>
   );
 }
 

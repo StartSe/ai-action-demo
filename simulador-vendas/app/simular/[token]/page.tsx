@@ -21,10 +21,7 @@ import { lerSessaoVendedor } from "@/lib/sessao-vendedor";
 import { nomeDoProvedor, provedoresDisponiveis } from "@/lib/entrar-vendedor";
 import { obter as obterCenario } from "@/lib/cenarios";
 import { getConfig } from "@/lib/store";
-import { integracaoConfigurada } from "@/lib/setup-comum";
-import { ELEVENLABS_AGENTE } from "@/lib/integracoes";
 import { SalaSimulacao } from "@/components/SalaSimulacao";
-import { SalaAgente } from "@/components/SalaAgente";
 import { SalaVoz, type PropsSalaVoz } from "@/components/SalaVoz";
 import { numero } from "@/lib/formato";
 import { Identificacao } from "./Identificacao";
@@ -70,14 +67,12 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
   }
 
   const cenario = sala?.cenarioId ? obterCenario(sala.cenarioId) : null;
-  const comVoz = integracaoConfigurada(ELEVENLABS_AGENTE);
-  const agentId = comVoz ? getConfig("ELEVENLABS_AGENT_ID") : undefined;
 
   // Link antigo sem simulação (instalação onde a migração ainda não rodou): segue o caminho de antes,
   // sem identificação, para ninguém ficar de fora de um treino que já estava no ar.
   if (!simulacao) {
     const vendedor = sala?.vendedorId ? obterParticipante(sala.vendedorId) : null;
-    return <SalaSimulacao codigo={token} marca={MARCA} nome={NOME_APP} cenario={cenario} vendedorId={vendedor?.id} comVoz={comVoz} agentId={agentId || undefined} />;
+    return <SalaSimulacao codigo={token} marca={MARCA} nome={NOME_APP} cenario={cenario} vendedorId={vendedor?.id} />;
   }
 
   const sessaoVendedor = lerSessaoVendedor((await headers()).get("cookie"));
@@ -215,30 +210,6 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
       // números do `speechSynthesis`, nunca o `personaId`.
       voz: vozDoNavegador(caracteristicasEmUso(aberta.personaId)),
     };
-
-    // Nível 1 (US-016): com o agente conversacional conectado, quem conduz a conversa é ele, e as
-    // variáveis que ele recebe são as da **sessão** — cada vendedor no mesmo link tem a sua.
-    //
-    // `persona_instrucoes` é o único lugar do app em que o system prompt do personagem atravessa para
-    // o navegador, e não há como ser diferente: o widget roda ali e é ele quem fala com o agente. A
-    // regra de esconder as instruções (D2) continua valendo em toda rota — a preparação, o turno da
-    // conversa e o resultado seguem devolvendo só o personagem visível.
-    if (comVoz && agentId && simulacao.permiteVoz) {
-      return (
-        <SalaAgente
-          agente={agentId}
-          variaveis={{
-            sessao_id: aberta.id,
-            simulacao: simulacao.nome,
-            produto: produto?.nome ?? simulacao.nome,
-            persona_instrucoes: personagem.instrucoes,
-            participante: participante.nome,
-            duracao_minutos: String(simulacao.duracaoMin),
-          }}
-          navegador={nivel2}
-        />
-      );
-    }
 
     return <SalaVoz {...nivel2} />;
   }

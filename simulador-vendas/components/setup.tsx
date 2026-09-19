@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { IlustracaoSegmento, MaisDetalhes, Topbar, useStatus } from "./ui";
-import type { CampoStatus, IntegracaoStatus, Opcao, StatusCaixasEmail, StatusEnderecoPublico } from "@/lib/setup-comum";
+import type { CampoStatus, IntegracaoStatus, Opcao, StatusEnderecoPublico } from "@/lib/setup-comum";
 import type { Segmento } from "@/lib/ilustracao";
 
-type Resposta = { integracoes: IntegracaoStatus[]; pronto: boolean; enderecoPublico: StatusEnderecoPublico; caixasEmail: StatusCaixasEmail };
+type Resposta = { integracoes: IntegracaoStatus[]; pronto: boolean; enderecoPublico: StatusEnderecoPublico };
 
 // Duas frases de privacidade, verdadeiras desde a US-011 (as chaves são cifradas em
 // repouso, ver lib/store.ts, mas o app continua chamando serviços externos de verdade
@@ -23,7 +23,6 @@ const ITENS_APOIO = ["Leva menos de 2 minutos", "Você decide o que conectar", "
 // caem no ícone padrão — cobre integrações futuras (MCP_TAREFAS, MCP_CRM etc.) sem precisar de mudança aqui.
 const ICONE_POR_ID: Record<string, string> = {
   openrouter: "robo",
-  notificacoes: "conversa",
   "mcp-tarefas": "checklist",
   "mcp-crm": "rede",
   "mcp-empresa": "integracao",
@@ -50,7 +49,7 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
   const [dados, setDados] = useState<Resposta | null>(null);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
 
-  const carregar = () => fetch("/api/setup").then((r) => r.json()).then(setDados).catch(() => setAviso({ tipo: "erro", texto: "Não foi possível carregar a configuração." }));
+  const carregar = () => fetch("/api/setup").then((r) => r.json()).then((dados) => { setDados(dados); window.dispatchEvent(new Event("configuracao-atualizada")); }).catch(() => setAviso({ tipo: "erro", texto: "Não foi possível carregar a configuração." }));
   const primeiroPendenteId = dados?.integracoes.find((i) => i.obrigatoria && !i.configurada)?.id;
   const conectadas = dados?.integracoes.filter((i) => i.configurada).length ?? 0;
   const total = dados?.integracoes.length ?? 0;
@@ -149,7 +148,6 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
                   numero={indice + 1}
                   aoSalvar={carregar}
                   destaque={i.id === primeiroPendenteId}
-                  caixasEmail={i.id === "notificacoes" ? dados.caixasEmail : undefined}
                 />
               ))}
             </div>
@@ -211,7 +209,7 @@ function CampoEnderecoPublico({ status, aoSalvar }: { status: StatusEnderecoPubl
     <div className="mt-3 pt-3 border-t border-line">
       <label className="text-[13px] font-semibold" htmlFor="app-url">Endereço público do app</label>
       <p className="text-muted text-[12.5px] mb-1.5">
-        {status.valor ? "Detectado sozinho. Usado nos links de e-mail e Slack das rotinas." : "Ainda não detectado: abra o app pelo endereço publicado uma vez, ou informe abaixo."}
+        {status.valor ? "Detectado sozinho. Usado nos links de treino e resultados." : "Ainda não detectado: abra o app pelo endereço publicado uma vez, ou informe abaixo."}
         {status.origem === "env" && " Vem de variável de ambiente: tem prioridade sobre o que for salvo aqui."}
       </p>
       <div className="flex gap-2 flex-wrap items-center">
@@ -223,7 +221,7 @@ function CampoEnderecoPublico({ status, aoSalvar }: { status: StatusEnderecoPubl
   );
 }
 
-function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEmail }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean; caixasEmail?: StatusCaixasEmail }) {
+function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   const [desconectando, setDesconectando] = useState(false);
@@ -272,7 +270,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
   // `visivelQuando` sem depender de um novo PUT — trocar o canal já mostra o campo certo na hora.
   const valoresAtuais = Object.fromEntries(i.campos.map((c) => [c.chave, valores[c.chave] || c.valorVisivel || c.padrao || ""]));
   const campoVisivel = (c: CampoStatus) => !c.visivelQuando || c.visivelQuando.valores.includes(valoresAtuais[c.visivelQuando.campo] ?? "");
-  const passos = i.oauth ? [] : passosSetup(i, valoresAtuais);
+  const passos = i.oauth ? [] : passosSetup(i);
   const camposPrincipais = i.campos.filter((c) => !c.avancado && campoVisivel(c));
   const camposAvancados = i.campos.filter((c) => c.avancado && campoVisivel(c));
 
@@ -349,7 +347,6 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
               {passos.map((p) => <li key={p}>{p}</li>)}
             </ol>
           )}
-          {caixasEmail && <ConectarCaixasEmail status={caixasEmail} aoMudar={aoSalvar} />}
           {campos}
           {opcoesAvancadas}
           <div className="flex items-center gap-3 flex-wrap justify-end max-md:flex-col max-md:items-stretch mt-4">
@@ -365,55 +362,11 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
   );
 }
 
-/** Botões "Conectar meu Gmail"/"Conectar meu Outlook" do cartão "Notificações" (US-024): envia os avisos
- * pela própria caixa da pessoa em vez do Resend/SMTP genérico. Some por completo quando a equipe técnica
- * não definiu as credenciais do app daquele provedor — nunca mostra um botão que vai falhar. */
-function ConectarCaixasEmail({ status, aoMudar }: { status: StatusCaixasEmail; aoMudar: () => void }) {
-  if (!status.gmail.disponivel && !status.outlook.disponivel) return null;
-  return (
-    <div className="flex flex-col gap-2 mb-4">
-      {status.gmail.disponivel && <CaixaEmail nome="Gmail" url="/api/setup/oauth/google" status={status.gmail} aoMudar={aoMudar} />}
-      {status.outlook.disponivel && <CaixaEmail nome="Outlook" url="/api/setup/oauth/microsoft" status={status.outlook} aoMudar={aoMudar} />}
-    </div>
-  );
-}
-
-function CaixaEmail({ nome, url, status, aoMudar }: { nome: string; url: string; status: { conta?: string }; aoMudar: () => void }) {
-  const [desconectando, setDesconectando] = useState(false);
-
-  async function desconectar() {
-    setDesconectando(true);
-    try {
-      await fetch(url, { method: "PUT" });
-      aoMudar();
-    } finally {
-      setDesconectando(false);
-    }
-  }
-
-  if (status.conta) {
-    return (
-      <div className="flex items-center gap-3 flex-wrap">
-        <span className="chip-positivo">Conectado como {status.conta}</span>
-        <button type="button" className="btn-ghost !w-auto" onClick={desconectar} disabled={desconectando}>{desconectando ? "Desconectando" : "Desconectar"}</button>
-      </div>
-    );
-  }
-  return <a href={url} className="btn-secundario !w-auto">Conectar meu {nome}</a>;
-}
-
 /** Passo a passo de até três passos, gerado a partir do link para obter a chave. A ajuda do primeiro
  * campo não entra aqui: ela já aparece sob o próprio campo (`CampoSetup`), repeti-la duplicaria o texto.
  * Uma integração sem nenhum campo secreto (ex.: as cotações de câmbio do custos-ia) não tem chave para colar:
- * o último passo fala em preencher os campos. Notificações tem um passo a passo próprio por canal, porque
- * o caminho (Resend/SMTP para e-mail, webhook para Slack) muda por completo conforme a escolha. */
-function passosSetup(i: IntegracaoStatus, valoresAtuais: Record<string, string>): string[] {
-  if (i.id === "notificacoes") {
-    const canal = valoresAtuais.NOTIFICACOES_CANAL || "email";
-    return canal === "slack"
-      ? ["No Slack, crie um webhook de entrada em Aplicativos › Incoming Webhooks e cole a URL abaixo."]
-      : ["Conecte seu Gmail ou Outlook acima; sem isso, crie uma chave gratuita do Resend ou preencha o SMTP em Opções avançadas."];
-  }
+ * o último passo fala em preencher os campos. */
+function passosSetup(i: IntegracaoStatus): string[] {
   // Integração que já funciona sozinha (todos os campos são `avancado`, ex.: o câmbio automático do
   // custos-ia) não tem nada a preencher: mandar "Preencha os campos abaixo" com a grade vazia logo
   // embaixo seria uma instrução falsa.
@@ -425,7 +378,7 @@ function passosSetup(i: IntegracaoStatus, valoresAtuais: Record<string, string>)
   return passos.slice(0, 3);
 }
 
-/** Campo `select` com poucas opções fixas (ex.: canal das Notificações) vira um par de botões lado a
+/** Campo `select` com poucas opções fixas vira um par de botões lado a
  * lado em vez de um menu suspenso — mais rápido de ler e de escolher quando só há 2 ou 3 alternativas.
  * `select`s com mais opções (ex.: modelo de IA) continuam como `select`. */
 const LIMITE_BOTOES = 3;

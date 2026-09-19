@@ -1,5 +1,5 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
-import { openrouter, MCP_CRM, NOTIFICACOES, type Integracao, type Opcao } from "./setup-comum";
+import { openrouter, MCP_CRM, type Integracao, type Opcao } from "./setup-comum";
 
 /** Duas pontas com exigências diferentes (US-021): o cliente simulado responde a cada fala do vendedor e
  * precisa ser rápido; a avaliação acontece uma vez por conversa e vira nota, então vale um modelo mais
@@ -17,65 +17,34 @@ export const CRM: Integracao = {
   campos: MCP_CRM.campos.map((c) => (c.chave === "MCP_CRM_URL" ? { ...c, ajuda: "Endereço do servidor do seu CRM (HubSpot, Pipedrive, Zendesk e outros oferecem um)." } : c)),
 };
 
-/** Cliente simulado por voz: um agente conversacional da ElevenLabs que liga para o vendedor treinar,
- * mais o segredo usado para validar o aviso automático de pós-conversa (app/webhook/elevenlabs). */
-export const ELEVENLABS_AGENTE: Integracao = {
-  id: "elevenlabs-agente",
-  titulo: "Cliente simulado por voz (ElevenLabs)",
-  descricao: "Um agente da ElevenLabs faz o papel do cliente e conversa por voz com o vendedor; a conversa volta sozinha para a análise.",
-  beneficio: "Deixa o vendedor treinar falando, não só colando conversa",
+/** ElevenLabs fornece apenas a voz; a conversa é conduzida pela IA do simulador. */
+export const ELEVENLABS_VOZ: Integracao = {
+  id: "elevenlabs-voz",
+  titulo: "Voz do cliente (ElevenLabs)",
+  descricao: "Escolha a voz que o cliente usa durante a simulação.",
+  beneficio: "Uma voz natural para conversar com o cliente",
   obrigatoria: false,
   link: { url: "https://elevenlabs.io/app/settings/api-keys", rotulo: "Chaves da ElevenLabs" },
   campos: [
+    { chave: "ELEVENLABS_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "sk_...", ajuda: "Salve a chave para carregar as vozes da sua conta." },
     {
-      chave: "ELEVENLABS_API_KEY",
-      rotulo: "Chave da API",
-      tipo: "secret",
-      placeholder: "sk_...",
-      ajuda: "A mesma conta precisa ter um agente conversacional criado.",
-    },
-    {
-      chave: "ELEVENLABS_AGENT_ID",
-      rotulo: "Agente conversacional",
-      tipo: "select",
-      ajuda: "Crie o agente em elevenlabs.io/app/conversational-ai e salve a chave acima para a lista carregar.",
-      opcoes: [],
+      chave: "ELEVENLABS_VOICE_ID", rotulo: "Voz do cliente", tipo: "select", opcoes: [],
+      ajuda: "Esta voz será usada nas conversas e nas amostras abaixo.",
       opcoesDinamicas: async (config): Promise<Opcao[]> => {
-        const chave = config.ELEVENLABS_API_KEY;
-        if (!chave) return [];
-        try {
-          const r = await fetch("https://api.elevenlabs.io/v1/convai/agents", { headers: { "xi-api-key": chave } });
-          if (!r.ok) return [];
-          const data = (await r.json()) as { agents?: { agent_id: string; name: string }[] };
-          return (data.agents || []).map((a) => ({ valor: a.agent_id, rotulo: a.name }));
-        } catch {
-          return [];
-        }
+        if (!config.ELEVENLABS_API_KEY) return [];
+        const { vozesDaConta } = await import("./vozes");
+        return (await vozesDaConta(config.ELEVENLABS_API_KEY)).map(v => ({ valor: v.id, rotulo: v.nome }));
       },
-    },
-    {
-      chave: "ELEVENLABS_WEBHOOK_SECRET",
-      rotulo: "Segredo de verificação",
-      tipo: "secret",
-      opcional: true,
-      avancado: true,
-      ajuda: "Na ElevenLabs, em Webhooks, aponte o evento post_call_transcription para o endereço do cartão \"Dados para a equipe técnica\" e cole aqui o segredo gerado.",
     },
   ],
   testar: async (config) => {
-    const chave = config.ELEVENLABS_API_KEY;
-    if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
-    const agentId = config.ELEVENLABS_AGENT_ID;
-    if (!agentId) return { ok: false, mensagem: "Selecione o agente conversacional." };
-    const r = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, { headers: { "xi-api-key": chave } });
-    if (r.status === 401 || r.status === 403) return { ok: false, mensagem: "Chave recusada. Gere outra na ElevenLabs e salve aqui." };
-    if (r.status === 404) return { ok: false, mensagem: "Agente conversacional não encontrado. Selecione outro." };
-    if (!r.ok) {
-      console.error("ElevenLabs recusou o teste de conexão", r.status);
-      return { ok: false, mensagem: "A ElevenLabs não respondeu como esperado. Tente de novo em alguns minutos." };
-    }
-    return { ok: true, mensagem: "Conectado. Agente conversacional confirmado." };
+    if (!config.ELEVENLABS_API_KEY) return { ok: false, mensagem: "Salve a chave da ElevenLabs." };
+    if (!config.ELEVENLABS_VOICE_ID) return { ok: false, mensagem: "Escolha uma voz para o cliente." };
+    const r = await fetch(`https://api.elevenlabs.io/v1/voices/${encodeURIComponent(config.ELEVENLABS_VOICE_ID)}`, {
+      headers: { "xi-api-key": config.ELEVENLABS_API_KEY }, signal: AbortSignal.timeout(12000),
+    });
+    return r.ok ? { ok: true, mensagem: "Voz disponível para as simulações." } : { ok: false, mensagem: "Não foi possível acessar essa voz. Confira a chave e selecione uma voz disponível na conta." };
   },
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, ELEVENLABS_AGENTE, CRM, { ...NOTIFICACOES, beneficio: "Manda o resumo da equipe e a análise para o vendedor" }];
+export const INTEGRACOES: Integracao[] = [OPENROUTER, ELEVENLABS_VOZ, CRM];

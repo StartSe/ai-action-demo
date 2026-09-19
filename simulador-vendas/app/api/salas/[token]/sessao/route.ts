@@ -100,7 +100,7 @@ export async function PUT(req: Request, { params }: RouteContext<"/api/salas/[to
   }
 
   const corpo = (await req.json().catch(() => ({}))) as { modo?: string };
-  const pedido = corpo.modo === "texto" || corpo.modo === "voz-navegador" || corpo.modo === "voz-agente" ? (corpo.modo as ModoSessao) : undefined;
+  const pedido = corpo.modo === "texto" || corpo.modo === "voz-navegador" ? (corpo.modo as ModoSessao) : undefined;
   const atualizada = iniciar(sessao.id, pedido ?? modoInicial(simulacao));
   return Response.json({ comecou: atualizada?.status === "em_andamento" });
 }
