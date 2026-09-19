@@ -1,3 +1,4 @@
+import { apagarConsultas, consultasDaProspeccao } from "./pesquisa-registro";
 // Workspace de prospecção: tabelas próprias para produto, ICP, prospecção, conta,
 // lead e abordagem, no mesmo app.sqlite de lib/store.ts (ver abrirBanco()).
 // Cada entidade expõe criar/listar/obter/atualizar/apagar; nenhuma rota monta SQL.
@@ -268,6 +269,7 @@ export function atualizarProspeccao(id: string, dados: Partial<NovaProspeccao>):
 }
 
 export function apagarProspeccao(id: string): void {
+  apagarConsultas(id);
   banco().prepare("DELETE FROM abordagens WHERE lead_id IN (SELECT id FROM leads WHERE prospeccao_id = ?)").run(id);
   banco().prepare("DELETE FROM leads WHERE prospeccao_id = ?").run(id);
   banco().prepare("DELETE FROM contas WHERE prospeccao_id = ?").run(id);
@@ -294,6 +296,7 @@ export function obterAndamento(id: string) {
     icpPersonas: icp?.personas ?? [],
     contas,
     leads,
+    consultas: consultasDaProspeccao(id),
     contasEncontradas: contas.length,
     leadsEncontrados: leads.length,
   };

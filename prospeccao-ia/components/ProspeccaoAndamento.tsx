@@ -5,6 +5,7 @@
 // enquanto a aba está visível (document.visibilityState === "visible") e só enquanto o estado é
 // "executando" — mesmo padrão de components/ConexaoWhatsApp.tsx (whatsapp-atendente): o efeito depende
 // do ESTADO (primitivo), não do objeto inteiro de andamento, para não reiniciar o intervalo a cada poll.
+import type { ConsultaPesquisa } from "@/lib/pesquisa-registro";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
@@ -340,6 +341,7 @@ function construirColunasLeads(opcoes: {
 }
 
 type Andamento = {
+  consultas?: ConsultaPesquisa[];
   prospeccao: Prospeccao;
   produtoNome: string;
   icpNome: string;
@@ -633,6 +635,25 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
               </div>
             )}
 
+            {!!andamento.consultas?.length && (
+              <details className="card p-5 mb-4" open={andamento.prospeccao.estado === "falhou" || (!andamento.leadsEncontrados && !andamento.contasEncontradas && andamento.prospeccao.estado === "pronta")}>
+                <summary className="font-semibold text-sm cursor-pointer">Fontes consultadas · {andamento.consultas.length} consultas</summary>
+                <p className="text-xs text-muted mt-3">Os resultados das fontes são candidatos. A lista final considera critérios, evidências e contatos já encontrados.</p>
+                <ul className="mt-3 flex flex-col gap-3">
+                  {andamento.consultas.map(c => (
+                    <li key={c.id} className="text-sm border-t border-line pt-3">
+                      <div className="flex justify-between gap-3 flex-wrap">
+                        <span className="font-semibold">{({ brightdata: "Bright Data", exa: "Exa", tavily: "Tavily", searchapi: "SearchAPI", apollo: "Apollo" } as Record<string, string>)[c.fonte] ?? c.fonte} · {c.acao === "busca" || c.acao === "search_engine" ? "Busca" : "Leitura e enriquecimento"}</span>
+                        <span className={c.estado === "falhou" || c.estado === "limite" ? "text-danger" : "text-muted"}>{c.estado === "consultando" ? "Consultando…" : c.estado === "falhou" ? "Falha na consulta" : c.estado === "limite" ? "Limite atingido" : c.estado === "vazia" ? "Sem resultados" : `${c.quantidade} resultado(s)`}</span>
+                      </div>
+                      <p className="text-xs text-muted mt-1 break-words">{c.consulta}</p>
+                      {c.mensagem && <p className="text-xs text-danger mt-1">{c.mensagem}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+
             {andamento.prospeccao.estado === "executando" && (
               <div className="flex flex-col gap-3">
                 <button type="button" className="btn-ghost self-start !w-auto" onClick={cancelar} disabled={cancelando}>
@@ -644,7 +665,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
 
             {andamento.prospeccao.estado === "pronta" && (
               <div className="flex flex-col gap-3">
-                <p className="font-semibold text-[15px]">Prospecção concluída</p>
+                <p className="font-semibold text-[15px]">{andamento.prospeccao.erro ? "Prospecção concluída com ressalvas" : "Prospecção concluída"}</p>
                 {andamento.prospeccao.erro && <Aviso tom="warn">{andamento.prospeccao.erro}</Aviso>}
                 <p className="text-[13px] text-muted">
                   {andamento.contasEncontradas} empresas e {andamento.leadsEncontrados} pessoas encontradas.

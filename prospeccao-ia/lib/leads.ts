@@ -115,6 +115,7 @@ export async function buscarLeads(dados: DadosBusca): Promise<ResultadoBusca & {
   try {
     r = await fetch("https://api.apollo.io/api/v1/mixed_people/search", {
       method: "POST",
+      signal: AbortSignal.timeout(45_000),
       headers: { "Content-Type": "application/json", "x-api-key": getConfig("APOLLO_API_KEY") || "" },
       body: JSON.stringify({
         person_titles: [cargo],
@@ -150,15 +151,15 @@ const CARGOS_DECISAO_EMPRESA = ["Diretor", "Gerente", "Head", "Coordenador"];
  * estruturados de cargo e organização que a Apollo devolve, mais confiáveis do que extrair nome/cargo do
  * título de um resultado de busca pública. `sobreEmpresa` é o mesmo fato construído a partir dos campos
  * da organização (`sinalApollo`) — na ficha do workspace ele aparece como "Sobre a empresa", nunca como
- * sinal (que exige data e fonte, regra do workspace). Lança ErroApollo em falha; quem chama engole o erro
- * e não cai para a busca pública — mesmo padrão já usado no modo "pessoas" (Apollo é fonte única quando
- * conectada, sem combinar com o caminho público).
+ * sinal (que exige data e fonte, regra do workspace). Lança ErroApollo em falha; o pipeline tenta
+ * as fontes de pesquisa conectadas quando a Apollo falha ou não traz contatos.
  */
 export async function buscarPessoasDaEmpresa(nomeEmpresa: string, quantidade: number): Promise<{ pessoas: PessoaDaEmpresa[]; sobreEmpresa: string | null }> {
   let r: Response;
   try {
     r = await fetch("https://api.apollo.io/api/v1/mixed_people/search", {
       method: "POST",
+      signal: AbortSignal.timeout(45_000),
       headers: { "Content-Type": "application/json", "x-api-key": getConfig("APOLLO_API_KEY") || "" },
       body: JSON.stringify({
         q_organization_name: nomeEmpresa,

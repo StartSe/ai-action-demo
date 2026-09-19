@@ -9,13 +9,27 @@ Prospectar hoje é manual e disperso: a cada busca a pessoa redigita o perfil de
 - **Produtos** — o produto/serviço e um ou mais perfis de cliente ideal (ICP) por produto, com critérios, personas, dores e sinais de intenção.
 - **Prospecções** — o assistente que cria uma busca (empresas, pessoas, uma empresa específica ou oportunidades por sinal, nas jornadas B2B e B2C) e acompanha a execução por etapas.
 - **Leads** — todos os leads de todas as prospecções, com filtro por estado, prospecção e aderência, a ficha de cada um e a abordagem gerada.
-- **Configurações** — `/setup`, com o cartão único de pesquisa de mercado e sinais e as demais integrações.
+- **Configurações** — `/setup`, com Bright Data, Exa, Tavily, SearchAPI e as demais integrações opcionais.
 
 ## Stack
 Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão.
 
 ## Configuração inicial (sem variáveis de ambiente)
-Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar a IA", fluxo OAuth) ou colando uma chave, e também pode conectar a pesquisa de mercado e sinais (Bright Data), a busca de leads como fonte alternativa de contatos (Apollo), as notificações (Gmail, Outlook, Slack ou Resend) e o CRM — todos testáveis com um clique. Tudo fica salvo cifrado em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar nada, o app roda em modo demonstração: produto, perfil ideal, prospecção, contas, leads e abordagem de exemplo prontos (Zetta Manutenção Industrial).
+Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar a IA", fluxo OAuth) ou colando uma chave, e também pode conectar a pesquisa de mercado e sinais (Bright Data), a busca de leads como fonte alternativa de contatos (Apollo), Exa (pesquisa profunda), Tavily, SearchAPI e o CRM — todos testáveis com um clique. Tudo fica salvo cifrado em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar nada, o app roda em modo demonstração: produto, perfil ideal, prospecção, contas, leads e abordagem de exemplo prontos (Zetta Manutenção Industrial).
+
+## Pesquisa com fontes opcionais — versão 0.1.5
+
+Conecte somente as fontes que deseja usar em Configurações. Exa oferece os modos automático, rápido, profundo (padrão) e profundo com raciocínio; Tavily oferece básico ou avançado (padrão). Cada cartão permite salvar a chave, testar a conexão e limitar consultas por prospecção. Os testes de conexão também consomem a cota do fornecedor.
+
+A busca web tenta **Exa → Bright Data → Tavily → SearchAPI**, avançando quando a fonte está desconectada, falha ou não encontra resultados compatíveis. Para contatos B2B, a Apollo continua sendo consultada primeiro; se falhar ou não adicionar contatos, a busca continua nas fontes web conectadas. A leitura de páginas tenta Bright Data, Exa e Tavily; quando só há um trecho real da busca, ele serve como evidência limitada, sem inventar conteúdo de página.
+
+Bright Data continua usando MCP com `pro=1`: o catálogo dinâmico disponibiliza `search_engine`, `search_dataset` e ações de dados públicos, incluindo LinkedIn e Instagram. As novas fontes também expõem ações de busca e, para Exa/Tavily, leitura ao assistente.
+
+O acompanhamento mostra fontes consultadas, resultados candidatos, falhas e limites. Falha de fornecedor não aparece como busca concluída vazia; resultados parciais recebem ressalvas. Uma fonte real conectada nunca é substituída por dados de demonstração. Rotinas e notificações permanecem ocultas na interface.
+
+Os testes automatizados simulam as APIs externas, incluindo autenticação recusada, limites, respostas vazias e troca entre fontes. A validação com uma conta real depende das chaves salvas em Configurações.
+
+Referências dos contratos: [Exa Search](https://exa.ai/docs/reference/search), [Exa Contents](https://exa.ai/docs/reference/get-contents), [Tavily Search](https://docs.tavily.com/documentation/api-reference/endpoint/search), [Tavily Extract](https://docs.tavily.com/documentation/api-reference/endpoint/extract), [SearchAPI Google](https://www.searchapi.io/docs/google) e [Bright Data MCP](https://github.com/brightdata/brightdata-mcp).
 
 ## Primeiro acesso
 Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
@@ -52,6 +66,10 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `APOLLO_API_KEY` | Alternativa ao setup. Ativa a Apollo.io como fonte alternativa de contatos. Obtenha em https://app.apollo.io/#/settings/integrations/api |
 | `BRIGHTDATA_API_KEY` | Alternativa ao setup. Ativa a pesquisa de mercado e sinais (busca de empresas, pessoas e sinais públicos) — o motor de descoberta do workspace, atrás de `lib/descoberta.ts`. A chave já salva é reaproveitada pelo MCP HTTP com `pro=1`, sem zonas manuais. Obtenha em https://brightdata.com/cp/mcp |
 | `BRIGHTDATA_TETO_CONSULTAS` | Campo "Teto de consultas por prospecção" em Opções avançadas (padrão 60). Quantas buscas e leituras reais uma prospecção pode fazer antes de parar e terminar "pronta" com o aviso de orçamento; páginas já lidas nas últimas 24h são reaproveitadas do cache e não contam. |
+| `EXA_API_KEY` / `TAVILY_API_KEY` / `SEARCHAPI_API_KEY` | Credenciais opcionais; também podem ser salvas em Configurações. |
+| `EXA_TIPO_BUSCA` | `auto`, `deep-lite`, `deep` (padrão) ou `deep-reasoning`. |
+| `TAVILY_PROFUNDIDADE` | `basic` ou `advanced` (padrão). |
+| `EXA_TETO_CONSULTAS` / `TAVILY_TETO_CONSULTAS` / `SEARCHAPI_TETO_CONSULTAS` | Limite de buscas e leituras por fonte e prospecção; padrão 10. Ao atingir, tenta outra fonte conectada. |
 | `MCP_CRM_URL` / `MCP_CRM_CODIGO` | Alternativa ao setup. CRM (HubSpot, Zendesk, Intercom...) que recebe os leads aprovados como contatos e negócios. |
 | `GOOGLE_CLIENT_ID_APP`, `GOOGLE_CLIENT_SECRET_APP`, `MICROSOFT_CLIENT_ID_APP`, `MICROSOFT_CLIENT_SECRET_APP` | Credenciais da suíte (equipe técnica, embutidas na imagem por `ARG`→`ENV` no `Dockerfile`) que liberam "Conectar meu Gmail"/"Conectar meu Outlook" no cartão Notificações. Sem elas, os botões não aparecem e o cartão segue por Slack, Resend ou SMTP. |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |

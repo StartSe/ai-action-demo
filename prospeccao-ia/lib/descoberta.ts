@@ -2,12 +2,14 @@
 // compartilham a chave salva, o teto de consultas e o cache; sem chave, usa demonstração.
 // Referência: https://github.com/brightdata/brightdata-mcp (search_engine, scrape_as_markdown,
 // search_dataset e web_data_*). Catálogo e schemas são descobertos por tools/list.
+import { buscarFonte, lerFonte, fontesOpcionais, FONTES, ErroFonte, type FonteOpcional } from "./pesquisa-fontes";
+import { registrarConsulta, concluirConsulta, limiteDaFonte } from "./pesquisa-registro";
 import type { DatabaseSync } from "node:sqlite";
 import { ACAO_PESQUISA_DE_MERCADO } from "./acoes";
 import { conteudoPaginaDemo, perfilPessoaDemo, resultadosBuscaDemo } from "./demo";
 import { abrirBanco, getConfig } from "./store";
 import { acaoParaUrl, brightDataAtiva, chamarBrightData, listarAcoesBrightData, mensagemFalhaBrightData, resultadosOrganicos } from "./brightdata";
-import { ErroMCP } from "./brightdata-http";
+import { ErroMCP, type FerramentaMCP } from "./brightdata-http";
 
 export type CodigoErroDescoberta = "chave_recusada" | "limite_do_plano" | "servico_fora" | "sem_resultado";
 
@@ -132,20 +134,73 @@ function interpretarFalha(erro: unknown): ErroDescoberta {
 }
 
 export function descobertaAtiva(): boolean {
-  return brightDataAtiva();
+  return brightDataAtiva() || fontesOpcionais().length > 0;
 }
 
 /** Ações públicas expostas também ao assistente, com os schemas atuais do servidor. */
-export async function listarAcoesPesquisa() {
-  try { return await listarAcoesBrightData(); }
-  catch (erro) { throw interpretarFalha(erro); }
+export async function listarAcoesPesquisa(): Promise<FerramentaMCP[]> {
+  const opcionais = fontesOpcionais();
+  const acoes: FerramentaMCP[] = opcionais.flatMap(fonte => [
+    { nome: `${fonte}_search`, descricao: `Pesquisa na web via ${FONTES[fonte]}.`, schema: { type: "object", properties: { consulta: { type: "string" }, pagina: { type: "integer", minimum: 0, maximum: 4 } }, required: ["consulta"] } },
+    ...(fonte === "searchapi" ? [] : [{ nome: `${fonte}_read`, descricao: `Lê uma página pública via ${FONTES[fonte]}.`, schema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } }]),
+  ]);
+  if (brightDataAtiva()) {
+    try { acoes.push(...await listarAcoesBrightData()); }
+    catch (erro) { if (!acoes.length) throw interpretarFalha(erro); }
+  }
+  return acoes;
 }
 
 export async function executarAcaoPesquisa(nome: string, argumentos: Record<string, unknown>, prospeccaoId?: string): Promise<unknown> {
-  if (!descobertaAtiva()) throw new ErroDescoberta("chave_recusada", "Conecte a pesquisa de mercado em Configurações.", 401, ACAO_PESQUISA_DE_MERCADO);
+  const alternativa = /^(exa|tavily|searchapi)_(search|read)$/.exec(nome);
+  if (alternativa) {
+    const fonte = alternativa[1] as FonteOpcional;
+    if (!fontesOpcionais().includes(fonte)) throw new ErroDescoberta("chave_recusada", `Conecte ${FONTES[fonte]} em Configurações.`, 400);
+    if (alternativa[2] === "search") {
+      const consulta = typeof argumentos.consulta === "string" ? argumentos.consulta.trim() : "";
+      const pagina = argumentos.pagina ?? 0;
+      if (!consulta || !Number.isInteger(pagina) || Number(pagina) < 0 || Number(pagina) > 4) throw new ErroDescoberta("servico_fora", "Informe uma consulta e uma página válida (0 a 4).", 400);
+      return consultarOpcional(fonte, "busca", consulta, prospeccaoId, () => buscarFonte(fonte, consulta, Number(pagina)));
+    }
+    if (fonte === "searchapi") throw new ErroDescoberta("servico_fora", "SearchAPI oferece busca; use outra fonte para leitura.", 400);
+    const url = typeof argumentos.url === "string" ? argumentos.url : "";
+    if (!/^https?:\/\//i.test(url)) throw new ErroDescoberta("servico_fora", "Informe o endereço público da página.", 400);
+    return consultarOpcional(fonte, "leitura", url, prospeccaoId, () => lerFonte(fonte, url));
+  }
+  if (!brightDataAtiva()) throw new ErroDescoberta("chave_recusada", "Conecte a pesquisa de mercado em Configurações.", 401, ACAO_PESQUISA_DE_MERCADO);
   reservarConsulta(prospeccaoId);
-  try { return await chamarBrightData(nome, argumentos); }
-  catch (erro) { throw interpretarFalha(erro); }
+  const registro = registrarConsulta(prospeccaoId, "brightdata", nome, String(argumentos.query ?? argumentos.url ?? nome));
+  try {
+    const resultado = await chamarBrightData(nome, argumentos);
+    const quantidade = nome === "search_engine" ? resultadosOrganicos(resultado).length : resultado ? 1 : 0;
+    concluirConsulta(registro, quantidade ? "concluida" : "vazia", quantidade);
+    return resultado;
+  } catch (erro) {
+    const falha = interpretarFalha(erro);
+    concluirConsulta(registro, "falhou", 0, falha.message);
+    throw falha;
+  }
+}
+
+/** Limites e registro também cobrem leituras das fontes alternativas. */
+async function consultarOpcional<T extends string | ResultadoBuscaWeb[]>(fonte: FonteOpcional, acao: string, consulta: string, prospeccaoId: string | undefined, executar: () => Promise<T>): Promise<T> {
+  const limite = limiteDaFonte(prospeccaoId, fonte);
+  const id = registrarConsulta(prospeccaoId, fonte, acao, consulta);
+  if (limite) {
+    const mensagem = `O limite de consultas de ${FONTES[fonte]} nesta prospecção foi atingido.`;
+    concluirConsulta(id, "limite", 0, mensagem);
+    throw new ErroDescoberta("limite_do_plano", mensagem, 429);
+  }
+  try {
+    const resultado = await executar();
+    const quantidade = typeof resultado === "string" ? Number(Boolean(resultado)) : resultado.length;
+    concluirConsulta(id, quantidade ? "concluida" : "vazia", quantidade);
+    return resultado;
+  } catch (erro) {
+    const mensagem = erro instanceof ErroFonte ? erro.message : `Não foi possível consultar ${FONTES[fonte]}.`;
+    concluirConsulta(id, "falhou", 0, mensagem);
+    throw new ErroDescoberta(erro instanceof ErroFonte && erro.codigo !== "resposta_invalida" ? erro.codigo : "servico_fora", mensagem, 502, { rotulo: `Conferir ${FONTES[fonte]}`, url: `/setup#${fonte}` });
+  }
 }
 
 // --- Busca na web --------------------------------------------------------------------------------
@@ -163,16 +218,26 @@ export async function buscarNaWeb(consulta: string, pagina = 0, prospeccaoId?: s
   if (!descobertaAtiva()) {
     return { itens: resultadosBuscaDemo(consulta), origem, consultadoEm, demo: true };
   }
-  const resultado = await executarAcaoPesquisa("search_engine", {
-    query: consulta, engine: "google", ...(pagina > 0 ? { cursor: String(pagina) } : {}),
-  }, prospeccaoId);
-  let itens: ResultadoBuscaWeb[];
-  try { itens = resultadosOrganicos(resultado); }
-  catch (erro) { throw interpretarFalha(erro); }
-  if (!itens.length) {
-    throw new ErroDescoberta("sem_resultado", "A pesquisa não encontrou nada para esse critério.", 404);
+  const opcionais = fontesOpcionais();
+  const fontes = [...(opcionais.includes("exa") ? ["exa" as const] : []), ...(brightDataAtiva() ? ["brightdata" as const] : []), ...opcionais.filter(f => f !== "exa")];
+  let ultimaFalha: unknown;
+  for (const fonte of fontes) {
+    try {
+      const itens = fonte === "brightdata"
+        ? resultadosOrganicos(await executarAcaoPesquisa("search_engine", { query: consulta, engine: "google", ...(pagina > 0 ? { cursor: String(pagina) } : {}) }, prospeccaoId))
+        : await consultarOpcional(fonte, "busca", consulta, prospeccaoId, () => buscarFonte(fonte, consulta, pagina));
+      const site = /site:([^\s]+)/i.exec(consulta)?.[1];
+      const filtrados = site ? itens.filter(item => {
+        try {
+          const alvo = new URL(`https://${site}`), url = new URL(item.url);
+          return (url.hostname === alvo.hostname || url.hostname.endsWith(`.${alvo.hostname}`)) && url.pathname.startsWith(alvo.pathname);
+        } catch { return false; }
+      }) : itens;
+      if (filtrados.length) return { itens: filtrados, origem, consultadoEm, demo: false };
+    } catch (erro) { ultimaFalha = erro; }
   }
-  return { itens, origem, consultadoEm, demo: false };
+  if (ultimaFalha) throw ultimaFalha;
+  throw new ErroDescoberta("sem_resultado", "As fontes conectadas não encontraram resultados para esses critérios. Tente ampliar a busca.", 404);
 }
 
 // --- Leitura de página e perfil de pessoa --------------------------------------------------------
@@ -192,7 +257,7 @@ function conteudoEstruturado(resultado: unknown): string | undefined {
 
 /** Reaproveita `cache_paginas` quando a URL já foi lida há menos de 24h (sem nova chamada à Bright
  * Data, sem contar consulta nenhuma); senão lê de verdade e grava o resultado no cache. */
-async function lerConteudo(url: string, prospeccaoId?: string): Promise<string> {
+async function lerConteudoBrightData(url: string, prospeccaoId?: string): Promise<string> {
   const emCache = lerCache(url);
   if (emCache !== null) return emCache;
   const acao = acaoParaUrl(url);
@@ -218,24 +283,46 @@ async function lerConteudo(url: string, prospeccaoId?: string): Promise<string> 
   return limitado;
 }
 
+async function lerConteudo(url: string, prospeccaoId?: string, resumoAlternativo?: string): Promise<string> {
+  const emCache = lerCache(url);
+  if (emCache !== null) return emCache;
+  let falha: unknown;
+  if (brightDataAtiva()) {
+    try { return await lerConteudoBrightData(url, prospeccaoId); }
+    catch (erro) { falha = erro; }
+  }
+  for (const fonte of fontesOpcionais()) {
+    if (fonte === "searchapi") continue;
+    try {
+      const conteudo = await consultarOpcional(fonte, "leitura", url, prospeccaoId, () => lerFonte(fonte, url));
+      gravarCache(url, conteudo.slice(0, LIMITE_CONTEUDO));
+      return conteudo.slice(0, LIMITE_CONTEUDO);
+    } catch (erro) { falha = erro; }
+  }
+  // O trecho veio da busca real e pode sustentar evidências limitadas; nunca vira conteúdo fictício.
+  if (resumoAlternativo?.trim()) return resumoAlternativo.slice(0, LIMITE_CONTEUDO);
+  if (falha) throw falha;
+  throw new ErroDescoberta("servico_fora", "Conecte uma fonte de leitura (Bright Data, Exa ou Tavily) para analisar páginas e perfis.", 400);
+}
+
 /** Texto limpo (markdown) de uma página pública. `prospeccaoId`, quando informado, conta a chamada
  * (se real) para o teto de consultas daquela prospecção (US-023). */
-export async function lerPagina(url: string, prospeccaoId?: string): Promise<RespostaLeitura> {
+export async function lerPagina(url: string, prospeccaoId?: string, resumoAlternativo?: string): Promise<RespostaLeitura> {
   const consultadoEm = new Date().toISOString();
   if (!descobertaAtiva()) {
     return { conteudo: conteudoPaginaDemo(url), origem: url, consultadoEm, demo: true };
   }
-  const conteudo = await lerConteudo(url, prospeccaoId);
+  const conteudo = await lerConteudo(url, prospeccaoId, resumoAlternativo);
   return { conteudo, origem: url, consultadoEm, demo: false };
 }
 
 /** Perfil público: dados estruturados da rede quando disponíveis, com fallback para Markdown. */
-export async function perfilDePessoa(url: string, prospeccaoId?: string): Promise<RespostaLeitura> {
+export async function perfilDePessoa(url: string, prospeccaoId?: string, resumoAlternativo?: string): Promise<RespostaLeitura> {
   const consultadoEm = new Date().toISOString();
   if (!descobertaAtiva()) {
     return { conteudo: perfilPessoaDemo(url), origem: url, consultadoEm, demo: true };
   }
-  const conteudo = await lerConteudo(url, prospeccaoId);
+  const conteudo = await lerConteudo(url, prospeccaoId, resumoAlternativo);
   return { conteudo, origem: url, consultadoEm, demo: false };
 }
 

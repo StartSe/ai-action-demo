@@ -49,10 +49,11 @@
 // DOR (US-025) de TODO lead, independente do status — inclusive os "novo" de "empresa_unica", que ela não
 // promove: é por isso que o laço da etapa 5 não filtra por status antes de chamar `gerarHipoteseDor`.
 import { ETAPAS_PROSPECCAO } from "./execucao-etapas";
-import { buscarNaWeb, lerPagina, perfilDePessoa, TetoConsultasAtingido } from "./descoberta";
+import { registrarConsulta, concluirConsulta, consultasDaProspeccao } from "./pesquisa-registro";
+import { buscarNaWeb, descobertaAtiva, ErroDescoberta, lerPagina, perfilDePessoa, TetoConsultasAtingido } from "./descoberta";
 import type { ResultadoBuscaWeb } from "./descoberta";
 import { data } from "./formato";
-import { apolloEnabled, buscarLeads, buscarPessoasDaEmpresa } from "./leads";
+import { ErroApollo, apolloEnabled, buscarLeads, buscarPessoasDaEmpresa } from "./leads";
 import { avaliarCriterios, calcularFit, dominioDe, inferirPapel, resumoDaPagina, sinaisEncontrados, sinalAntigo } from "./qualificacao";
 import { avaliarCriterioInterpretativo, gerarHipoteseDor } from "./qualificacao-ia";
 import { QUANTIDADES_EMPRESAS } from "./rotulos";
@@ -78,6 +79,12 @@ const CARGOS_PESSOA = ["Gerente", "Diretor(a)", "Coordenador(a)", "Analista", "H
 function propagarTeto(err: unknown): void {
   if (err instanceof TetoConsultasAtingido) throw err;
 }
+
+function propagarFalhaBusca(erro: unknown): void {
+  if (erro instanceof ErroDescoberta && erro.codigo === "sem_resultado") return;
+  throw erro;
+}
+
 
 function textoCriterio(criterios: Record<string, unknown>, chave: string): string {
   const v = criterios[chave];
@@ -211,7 +218,7 @@ async function buscarContasReais(prospeccaoId: string, criterios: Record<string,
   for (const [indice, candidata] of candidatas.entries()) {
     let pagina;
     try {
-      pagina = await lerPagina(candidata.url, prospeccaoId);
+      pagina = await lerPagina(candidata.url, prospeccaoId, candidata.resumo);
     } catch (err) {
       propagarTeto(err);
       console.error("Falha ao ler página institucional de uma candidata:", candidata.url, err instanceof Error ? err.message : err);
@@ -307,7 +314,7 @@ async function buscarOportunidadesEmpresas(prospeccaoId: string, criterios: Reco
   for (const [indice, candidata] of candidatas.entries()) {
     let pagina;
     try {
-      pagina = await lerPagina(candidata.url, prospeccaoId);
+      pagina = await lerPagina(candidata.url, prospeccaoId, candidata.resumo);
     } catch (err) {
       propagarTeto(err);
       console.error("Falha ao ler página institucional de uma candidata a oportunidade:", candidata.url, err instanceof Error ? err.message : err);
@@ -493,25 +500,31 @@ function pessoasChaveDemo(): { nome: string; cargo: string | null; linkedin: str
  * de fato da prospecção quando selecionada na tela (ver comentário de topo do arquivo). */
 async function buscarPessoasChaveUnica(prospeccaoId: string, conta: Conta, produtoId: string, personas: string[]): Promise<void> {
   const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
-  let candidatos: { nome: string; cargo: string | null; linkedin: string | null }[];
+  let candidatos: { nome: string; cargo: string | null; linkedin: string | null }[] = [];
   let demo = conta.demo;
   let viaApollo = false;
 
   if (conta.demo) {
     candidatos = pessoasChaveDemo();
   } else if (apolloEnabled()) {
+    const registro = registrarConsulta(prospeccaoId, "apollo", "busca", conta.nome);
     try {
       const resultado = await buscarPessoasDaEmpresa(conta.nome, TETO_PESSOAS_CHAVE);
       candidatos = resultado.pessoas;
+      concluirConsulta(registro, candidatos.length ? "concluida" : "vazia", candidatos.length);
       viaApollo = true;
       if (resultado.sobreEmpresa && (conta.resumo === RESUMO_SEM_SITE || conta.resumo === RESUMO_SITE_ILEGIVEL)) {
         atualizarConta(conta.id, { resumo: resultado.sobreEmpresa });
       }
     } catch (err) {
       console.error("Falha ao buscar pessoas da empresa via Apollo:", conta.nome, err instanceof Error ? err.message : err);
+      concluirConsulta(registro, "falhou", 0, err instanceof ErroApollo ? err.message : "A busca de contatos não respondeu.");
+      if (!descobertaAtiva()) throw err;
       candidatos = [];
     }
-  } else {
+  }
+  if (!candidatos.length && !conta.demo && (!apolloEnabled() || descobertaAtiva())) {
+    viaApollo = false;
     try {
       const resultado = await buscarNaWeb(`site:linkedin.com/in "${conta.nome}" (diretor OR gerente OR head OR coordenador)`, 0, prospeccaoId);
       demo = resultado.demo;
@@ -556,7 +569,7 @@ async function buscarPessoasOportunidadesEmpresas(prospeccaoId: string, produtoI
   const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
 
   for (const conta of contas) {
-    let candidatos: { nome: string; cargo: string | null; linkedin: string | null }[];
+    let candidatos: { nome: string; cargo: string | null; linkedin: string | null }[] = [];
     let demo = conta.demo;
     if (conta.demo) {
       candidatos = pessoasChaveDemo();
@@ -612,7 +625,7 @@ async function buscarPessoasOportunidadesB2C(prospeccaoId: string, criterios: Re
   try {
     resultado = await buscarNaWeb(consulta, 0, prospeccaoId);
   } catch (err) {
-    propagarTeto(err);
+    propagarFalhaBusca(err);
     console.error("Falha na busca pública de oportunidades (B2C):", err instanceof Error ? err.message : err);
     return;
   }
@@ -639,7 +652,7 @@ async function buscarPessoasOportunidadesB2C(prospeccaoId: string, criterios: Re
     } else {
       let perfil;
       try {
-        perfil = await perfilDePessoa(candidato.linkedin, prospeccaoId);
+        perfil = await perfilDePessoa(candidato.linkedin, prospeccaoId, resultado.itens.find(item => item.url === candidato.linkedin)?.resumo);
       } catch (err) {
         propagarTeto(err);
         console.error("Falha ao ler perfil público de uma pessoa (oportunidades B2C):", candidato.linkedin, err instanceof Error ? err.message : err);
@@ -700,7 +713,7 @@ async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, 
   try {
     resultado = await buscarNaWeb(consulta, 0, prospeccaoId);
   } catch (err) {
-    propagarTeto(err);
+    propagarFalhaBusca(err);
     console.error("Falha na busca pública de pessoas (B2C):", err instanceof Error ? err.message : err);
     return;
   }
@@ -726,7 +739,7 @@ async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, 
     } else {
       let perfil;
       try {
-        perfil = await perfilDePessoa(candidato.linkedin, prospeccaoId);
+        perfil = await perfilDePessoa(candidato.linkedin, prospeccaoId, resultado.itens.find(item => item.url === candidato.linkedin)?.resumo);
       } catch (err) {
         propagarTeto(err);
         console.error("Falha ao ler perfil público de uma pessoa (pessoas B2C):", candidato.linkedin, err instanceof Error ? err.message : err);
@@ -778,10 +791,10 @@ function origemPessoa(dominio: string | null, consultadoEm: string, viaApollo: b
 /** Modo "pessoas", jornada B2B (US-019): busca pessoas por cargo/empresa-ou-segmento/localização,
  * vinculando cada uma a uma `Conta` (criada sob demanda, com o mesmo cache local por nome — a etapa 2
  * não cria nada para este modo, ver `etapaProcurarEmpresas`). Duas fontes, nunca misturadas na mesma
- * pessoa: com a Apollo conectada, ela é a fonte de CONTATO (`lib/leads.ts:buscarLeads`, mesmo caminho da
+ * pessoa: com a Apollo conectada, ela é a primeira fonte de CONTATO (`lib/leads.ts:buscarLeads`, mesmo caminho da
  * busca de leads de hoje) e a conta de cada pessoa ainda é qualificada com sinais públicos de verdade
  * (lê a página do site da empresa devolvido pela Apollo, mesma qualificação de `buscarContasReais`); sem
- * Apollo, as pessoas vêm direto de uma busca pública `site:linkedin.com/in`, mesma técnica de
+ * contatos novos ou se a Apollo falhar, tenta as fontes de pesquisa conectadas numa busca pública `site:linkedin.com/in`, mesma técnica de
  * `buscarPessoasChaveUnica` (US-018), com fallback de demonstração próprio quando a busca não está
  * conectada (`pessoasChaveDemo`, não o `resultadosBuscaDemo` genérico — que não gera nomes de pessoa). */
 async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null, produtoId: string): Promise<void> {
@@ -825,12 +838,15 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
   }
 
   if (apolloEnabled()) {
+    const registro = registrarConsulta(prospeccaoId, "apollo", "busca", [cargo, empresaOuSegmento, localizacao].filter(Boolean).join(" "));
     let resultado;
     try {
       resultado = await buscarLeads({ segmento: empresaOuSegmento, cargo, localizacao, porte: "", proposta: "", quantidade: String(TETO_PESSOAS_MODO) });
+      concluirConsulta(registro, resultado.leads.length ? "concluida" : "vazia", resultado.leads.length);
     } catch (err) {
-      console.error("Falha na busca de contato via Apollo para o modo pessoas:", err instanceof Error ? err.message : err);
-      return;
+      concluirConsulta(registro, "falhou", 0, err instanceof ErroApollo ? err.message : "A busca de contatos não respondeu.");
+      if (!descobertaAtiva()) throw err;
+      resultado = { leads: [] };
     }
     for (const lead of resultado.leads) {
       if (criados >= TETO_PESSOAS_MODO || !lead.nome) continue;
@@ -848,7 +864,7 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
       });
       criados++;
     }
-    return;
+    if (criados > 0 || !descobertaAtiva()) return;
   }
 
   const consulta = ["site:linkedin.com/in", cargo, empresaOuSegmento, localizacao].filter(Boolean).join(" ");
@@ -856,7 +872,7 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
   try {
     resultado = await buscarNaWeb(consulta, 0, prospeccaoId);
   } catch (err) {
-    propagarTeto(err);
+    propagarFalhaBusca(err);
     console.error("Falha na busca pública de pessoas:", err instanceof Error ? err.message : err);
     return;
   }
@@ -1011,23 +1027,34 @@ export async function executarPipeline(prospeccaoId: string): Promise<void> {
     await etapaQualificar(prospeccaoId, icp);
 
     if (foiCancelada(prospeccaoId)) return;
-    atualizarProspeccao(prospeccaoId, { estado: "pronta", erro: null, concluidoEm: new Date().toISOString() });
+    const consultas = consultasDaProspeccao(prospeccaoId);
+    const falhas = consultas.filter(c => c.estado === "falhou" || c.estado === "limite");
+    const temResultados = listarContas(prospeccaoId).length > 0 || listarLeads(prospeccaoId).length > 0;
+    atualizarProspeccao(prospeccaoId, {
+      estado: !temResultados && falhas.length ? "falhou" : "pronta",
+      erro: falhas.length ? (temResultados ? "Algumas fontes não responderam; mantivemos os resultados encontrados. Confira as fontes consultadas abaixo." : "Não foi possível concluir a busca em todas as fontes. Confira as conexões e tente novamente.") : null,
+      concluidoEm: new Date().toISOString(),
+    });
   } catch (err) {
     console.error("Falha ao executar a prospecção", prospeccaoId, err);
     if (foiCancelada(prospeccaoId)) return;
+    if (err instanceof ErroDescoberta && err.codigo === "sem_resultado") {
+      atualizarProspeccao(prospeccaoId, { estado: "pronta", erro: null, concluidoEm: new Date().toISOString() });
+      return;
+    }
     // Teto de consultas (US-023) não é uma falha de serviço: a prospecção termina "pronta" com o
     // aviso de orçamento, e não com a mensagem genérica de etapa interrompida.
     if (err instanceof TetoConsultasAtingido) {
       atualizarProspeccao(prospeccaoId, {
         estado: "pronta",
-        erro: `Paramos em ${err.teto} empresas para não consumir sua cota.`,
+        erro: `Paramos após ${err.teto} consultas para não consumir sua cota.`,
         concluidoEm: new Date().toISOString(),
       });
       return;
     }
     atualizarProspeccao(prospeccaoId, {
-      estado: "pronta",
-      erro: `Não foi possível concluir a etapa "${rotuloEtapaAtual}"; os resultados encontrados até aqui foram mantidos.`,
+      estado: listarContas(prospeccaoId).length || listarLeads(prospeccaoId).length ? "pronta" : "falhou",
+      erro: err instanceof ErroDescoberta || err instanceof ErroApollo ? err.message : `Não foi possível concluir a etapa "${rotuloEtapaAtual}"; os resultados encontrados até aqui foram mantidos.`,
       concluidoEm: new Date().toISOString(),
     });
   }

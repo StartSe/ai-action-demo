@@ -9,9 +9,7 @@ export function statusExtra(): Record<string, boolean> {
     // O genérico só olha o campo "Canal" (que tem padrão e quase nunca é salvo); aqui "configurado" quer
     // dizer "os leads novos da semana chegam a alguém": canal com credencial e destino definidos.
     notificacoes: notificacoesProntas(),
-    // "brightdata" (calculado pelo genérico a partir de INTEGRACOES) já reflete a chave salva; aqui é
-    // "chave configurada para MCP" (o que lib/descoberta.ts de fato usa para decidir entre
-    // real e demonstração).
+    // Qualquer fonte de pesquisa conectada habilita descoberta real; cada cartão mantém seu status.
     descoberta: descobertaAtiva(),
   };
 }

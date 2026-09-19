@@ -27,7 +27,7 @@ export const NOME_SERVIDOR = "prospeccao-ia";
 export const FERRAMENTAS: Ferramenta[] = [
   {
     nome: "listar_acoes_pesquisa",
-    descricao: "Lista as ações de pesquisa conectadas e seus schemas atuais: busca na web, leitura de páginas, Search Dataset e dados públicos de LinkedIn, Instagram e outras redes. Consulte antes de executar uma ação.",
+    descricao: "Lista as ações de pesquisa conectadas e seus schemas atuais (Bright Data, Exa, Tavily e SearchAPI): busca na web, leitura de páginas, Search Dataset e dados públicos de LinkedIn, Instagram e outras redes. Consulte antes de executar uma ação.",
     schema: { type: "object", properties: {} },
     async executar() { return listarAcoesPesquisa(); },
   },
