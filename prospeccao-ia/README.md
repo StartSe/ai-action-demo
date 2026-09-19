@@ -38,7 +38,8 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 - Publicar com um clique: https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-prospeccao-ia (o `render.yaml` desta pasta é gerado a partir do `catalogo.json` da raiz; não edite à mão).
 - Rodar no seu computador sem construir: `docker run --rm -p 3005:10000 -v prospeccao-ia-dados:/app/data ghcr.io/startse/prospeccao-ia:latest` e abra http://localhost:3005.
 - Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
-- O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração e os dados do workspace se perdem a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
+- O health check responde em `/api/health`. O Blueprint usa o plano `starter` (pago) e um disco persistente de 1 GB, chamado `prospeccao-ia-dados`, montado em `/app/data`. Ele preserva a configuração, a conta, os produtos, os perfis de cliente, as prospecções e os leads entre deploys e reinícios.
+- Para uma instância existente, aplique o Blueprint atualizado no Render e confirme o disco em `/app/data`. O push da imagem sozinho não adiciona o disco. Antes de migrar uma instância com dados efêmeros, faça backup de `/app/data`, incluindo o SQLite e a chave de cifragem; adicionar um disco não copia automaticamente os arquivos antigos.
 
 ## Variáveis de ambiente (todas opcionais)
 Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando definidas, têm prioridade sobre o que foi salvo.
