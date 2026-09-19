@@ -7,5 +7,5 @@ export function AvisoImportacao({ id }: { id: string }) {
     const aviso = sessionStorage.getItem(`importacao-${id}`);
     if (aviso) { queueMicrotask(() => setMensagem(aviso)); sessionStorage.removeItem(`importacao-${id}`); }
   }, [id]);
-  return mensagem ? <div className="mb-4"><Aviso>{mensagem}</Aviso></div> : null;
+  return mensagem ? <div className="mb-4"><Aviso tom={mensagem.startsWith("Sugestões da IA") ? "ok" : "warn"}>{mensagem}</Aviso></div> : null;
 }

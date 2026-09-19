@@ -1,11 +1,8 @@
 "use client";
-// Biblioteca de produtos (US-003): o que a empresa vende, cadastrado uma vez e reaproveitado em
-// quantos treinos o gestor quiser. É o primeiro passo do "Comece em 3 passos" da Home.
-//
-// O cadastro é um formulário inline (sem modal, como o de vendedor em app/page.tsx): nome, categoria e
-// uma descrição curta. Ensinar o produto à IA — página, materiais e ficha — é a tela de edição, que
-// chega nas US-004/US-005/US-006; até lá "Editar" leva para o detalhe com o que já existe.
+// Cadastro por link ou manual; a importação abre a revisão com sugestões editáveis.
 import Link from "next/link";
+import { ProgressoImportacao } from "@/components/ProgressoImportacao";
+import { ErroImportacao, lerImportacao } from "@/lib/ler-importacao";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { AvisoExemplo } from "@/components/AvisoExemplo";
@@ -42,6 +39,8 @@ function contagem(n: number, singular: string, plural: string, vazio: string) {
 
 export default function Page() {
   const router = useRouter();
+  const [modo, setModo] = useState<"link" | "manual">("link");
+  const [etapa, setEtapa] = useState("pagina");
   const [url, setUrl] = useState("");
   const { status, erro } = useStatus();
   const { confirmar, Dialogo } = useConfirmacao();
@@ -61,7 +60,7 @@ export default function Page() {
       const corpo = await r.json();
       setItens(corpo.itens);
     } catch (e) {
-      setErroTela(await lerErro(e));
+      setErroTela(e instanceof ErroImportacao ? { mensagem: e.message } : await lerErro(e));
       setItens([]);
     }
   }, []);
@@ -75,27 +74,32 @@ export default function Page() {
       .then((r) => (r.ok ? r.json() : Promise.reject(r)))
       .then((corpo) => setItens(corpo.itens))
       .catch(async (e) => {
-        setErroTela(await lerErro(e));
+        setErroTela(e instanceof ErroImportacao ? { mensagem: e.message } : await lerErro(e));
         setItens([]);
       });
   }, []);
 
   async function salvar(e: FormEvent) {
     e.preventDefault();
-    if ((!nome.trim() && !url.trim()) || salvando) return;
+    if ((modo === "link" ? !url.trim() : !nome.trim()) || salvando) return;
     setSalvando(true);
+    setEtapa("pagina");
     setErroTela(null);
+    let navegando = false;
     try {
       const r = await fetch("/api/produtos", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim() || undefined, nome: nome.trim(), categoria: categoria.trim() || undefined, descricao: descricao.trim() || undefined }),
+        headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" },
+        body: JSON.stringify(modo === "link" ? { url: url.trim() } : { nome: nome.trim(), categoria: categoria.trim(), descricao: descricao.trim() }),
       });
       if (!r.ok) throw r;
-      const produto = await r.json();
-      if (url.trim()) {
+      const produto = await lerImportacao(r, setEtapa);
+      if (modo === "link") {
+        setEtapa("salvando");
         sessionStorage.setItem(`importacao-${produto.id}`, produto.aviso || "Página importada.");
+        navegando = true;
         router.push(`/produtos/${produto.id}`);
+        return;
       }
       setUrl("");
       setNome("");
@@ -104,9 +108,9 @@ export default function Page() {
       setCadastrando(false);
       await carregar();
     } catch (e) {
-      setErroTela(await lerErro(e));
+      setErroTela(e instanceof ErroImportacao ? { mensagem: e.message } : await lerErro(e));
     } finally {
-      setSalvando(false);
+      if (!navegando) setSalvando(false);
     }
   }
 
@@ -122,7 +126,7 @@ export default function Page() {
       if (!r.ok) throw r;
       await carregar();
     } catch (e) {
-      setErroTela(await lerErro(e));
+      setErroTela(e instanceof ErroImportacao ? { mensagem: e.message } : await lerErro(e));
     }
   }
 
@@ -147,14 +151,23 @@ export default function Page() {
 
         {erroTela && <div className="mb-5"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao} /></div>}
 
-        {cadastrando && (
+        {cadastrando && salvando && modo === "link" ? <ProgressoImportacao etapa={etapa} comIA={status?.ai !== false} /> : cadastrando && (
           <form className="card p-5 mb-5" onSubmit={salvar}>
             <h2 className="font-bold text-[15px] mb-3.5">Novo produto</h2>
-            <div className="mb-3">
-              <Field label="Link da página de vendas" htmlFor="produto-url" hint="Opcional. Importe o produto pela LP ou preencha os campos abaixo. O nome pode ser obtido da página.">
-                <input id="produto-url" type="url" className="input" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://suaempresa.com/produto" />
-              </Field>
+            <div className="grid grid-cols-2 max-md:grid-cols-1 gap-3 mb-6" aria-label="Como cadastrar">
+              <button type="button" aria-pressed={modo === "link"} disabled={salvando} onClick={() => setModo("link")} className={`text-left rounded-xl border p-4 ${modo === "link" ? "border-accent bg-accent/5" : "border-line"}`}>
+                <span className="font-semibold block">Importar pelo link</span><span className="text-sm text-muted">A IA prepara o cadastro para você revisar.</span>
+              </button>
+              <button type="button" aria-pressed={modo === "manual"} disabled={salvando} onClick={() => setModo("manual")} className={`text-left rounded-xl border p-4 ${modo === "manual" ? "border-accent bg-accent/5" : "border-line"}`}>
+                <span className="font-semibold block">Preencher manualmente</span><span className="text-sm text-muted">Comece com os dados que você já tem.</span>
+              </button>
             </div>
+            {modo === "link" ? <div className="mb-3">
+              <Field label="Link da página de vendas" htmlFor="produto-url" hint="Cole a página do produto. Vamos sugerir nome, descrição, público e argumentos de venda. Você poderá editar tudo na próxima etapa.">
+                <input id="produto-url" type="url" required className="input" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://suaempresa.com/produto" />
+              </Field>
+              {status?.ai === false && <p className="text-sm text-muted mt-3">A página será salva como material. Para receber sugestões, conecte a IA em Configurações.</p>}
+            </div> : <>
             <div className="grid grid-cols-2 max-md:grid-cols-1 gap-3 mb-3">
               <Field label="Nome" htmlFor="produto-nome">
                 <input id="produto-nome" className="input" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Plataforma de gestão" autoFocus />
@@ -166,22 +179,23 @@ export default function Page() {
             <Field label="Descrição" htmlFor="produto-descricao">
               <input id="produto-descricao" className="input" value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Uma frase sobre o que ele resolve" />
             </Field>
+            </>}
             <div className="flex gap-2.5 mt-4">
-              <button type="submit" className="btn-primary !w-auto" disabled={(!nome.trim() && !url.trim()) || salvando}>
-                {salvando ? (url.trim() ? "Importando página e preparando ficha..." : "Salvando...") : (url.trim() ? "Importar produto" : "Salvar produto")}
+              <button type="submit" className="btn-primary !w-auto" disabled={(modo === "link" ? !url.trim() : !nome.trim()) || salvando}>
+                {salvando ? "Salvando..." : modo === "link" ? "Importar e preparar sugestões" : "Criar produto"}
               </button>
-              <button type="button" className="btn-ghost !w-auto" onClick={() => setCadastrando(false)}>Cancelar</button>
+              <button type="button" className="btn-ghost !w-auto" disabled={salvando} onClick={() => setCadastrando(false)}>Cancelar</button>
             </div>
           </form>
         )}
 
-        {temExemplo && (
+        {!salvando && temExemplo && (
           <AvisoExemplo>
             O produto abaixo é um exemplo, com a ficha já pronta; ele some quando você cadastrar o primeiro produto de verdade.
           </AvisoExemplo>
         )}
 
-        {itens === null ? (
+        {!cadastrando && (itens === null ? (
           <p className="text-muted text-sm">Carregando...</p>
         ) : itens.length === 0 ? (
           <Empty
@@ -220,7 +234,7 @@ export default function Page() {
               </article>
             ))}
           </div>
-        )}
+        ))}
       </main>
       {Dialogo}
     </>

@@ -54,5 +54,6 @@ export default defineAgent({
   },
 });
 
-cli.runApp(new ServerOptions({ agent: fileURLToPath(import.meta.url), agentName: NOME_AGENTE,
-  wsURL: getConfig("LIVEKIT_URL"), apiKey: getConfig("LIVEKIT_API_KEY"), apiSecret: getConfig("LIVEKIT_API_SECRET") }));
+const opcoes = new ServerOptions({ agent: fileURLToPath(import.meta.url), agentName: NOME_AGENTE, numIdleProcesses: 1,
+  wsURL: getConfig("LIVEKIT_URL"), apiKey: getConfig("LIVEKIT_API_KEY"), apiSecret: getConfig("LIVEKIT_API_SECRET") });
+cli.runApp(opcoes);

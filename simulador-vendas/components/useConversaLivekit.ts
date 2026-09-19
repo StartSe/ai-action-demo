@@ -61,7 +61,7 @@ export function useConversaLivekit(codigo: string, callbacks: Callbacks) {
         const inicio = Date.now();
         while (!agente(room) || agente(room)?.attributes["lk.agent.state"] === "initializing") {
           if (!montada.current || room.state !== "connected") throw new Error("Conexão interrompida");
-          if (Date.now() - inicio > 25000) throw new Error("O cliente não ficou disponível. Tente novamente em instantes.");
+          if (Date.now() - inicio > 25000) throw new Error("O serviço de voz não respondeu. Você pode tentar novamente ou usar a voz do navegador.");
           await new Promise(resolve => setTimeout(resolve, 100));
         }
         return room;
@@ -94,6 +94,11 @@ export function useConversaLivekit(codigo: string, callbacks: Callbacks) {
     async interromper() {
       const room = roomRef.current; const p = room && agente(room);
       if (room && p) await room.localParticipant.performRpc({ destinationIdentity: p.identity, method: "interromper", payload: "" });
+    },
+    async desconectar() {
+      encerrando.current = true; querMicrofone.current = false;
+      await roomRef.current?.disconnect(); roomRef.current = null;
+      audios.current.forEach(a => a.remove()); audios.current.clear();
     },
     async finalizar() {
       encerrando.current = true; querMicrofone.current = false;

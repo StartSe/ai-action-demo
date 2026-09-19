@@ -91,7 +91,7 @@ test("cadastro por link abre produto importado e banner conectado oferece gerenc
   await expect(page.getByRole("link", { name: "Conectar a IA", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "+ Novo produto" }).click();
   await page.getByLabel("Link da página de vendas").fill("https://example.com/produto");
-  await page.getByRole("button", { name: "Importar produto" }).click();
+  await page.getByRole("button", { name: "Importar e preparar sugestões" }).click();
   await expect(page).toHaveURL(/\/produtos\/lp-teste$/);
 });
 
@@ -102,11 +102,12 @@ test("LP com IA gera ficha para revisão e mantém o material quando a IA falha"
   const original = globalThis.fetch;
   const ids: string[] = [];
   let falhar = false;
+  let vazia = false;
   setConfig("BRIGHTDATA_API_KEY", "teste"); setConfig("OPENROUTER_API_KEY", "teste");
   globalThis.fetch = async (url, init) => {
     if (String(url).includes("openrouter.ai")) {
       if (falhar) return new Response(null, { status: 503 });
-      return Response.json({ choices: [{ message: { content: JSON.stringify({ resumo: "Sistema comercial da LP.", publico: "Equipes de vendas", beneficios: ["Relatórios"], diferenciais: [], objecoes: [], concorrentes: [] }) } }] });
+      return Response.json({ choices: [{ message: { content: JSON.stringify(vazia ? {} : { nome: "Produto sugerido", categoria: "Software", descricao: "Gestão comercial para equipes", conhecimento: { resumo: "Sistema comercial da LP.", publico: "Equipes de vendas", beneficios: ["Relatórios"], diferenciais: [], objecoes: [], concorrentes: [] } }) } }] });
     }
     const rpc = JSON.parse(String(init?.body));
     if (rpc.method === "notifications/initialized") return new Response(null, { status: 202 });
@@ -120,9 +121,24 @@ test("LP com IA gera ficha para revisão e mantém o material quando a IA falha"
       expect(res.status).toBe(200);
       const produto = await res.json(); ids.push(produto.id); return produto;
     };
-    const produto = await cadastrar();
+    const { lerImportacao } = await import("../lib/ler-importacao");
+    const etapas: string[] = [];
+    const resposta = await POST(new Request("http://localhost/api/produtos", { method: "POST", headers: { accept: "application/x-ndjson" }, body: JSON.stringify({ url: "https://example.com/" }) }));
+    const produto = await lerImportacao(resposta, etapa => etapas.push(etapa)); ids.push(produto.id);
+    expect(etapas).toEqual(["pagina", "ficha", "salvando"]);
+    expect(obter(produto.id)?.nome).toBe("Produto sugerido");
+    expect(obter(produto.id)?.categoria).toBe("Software");
+    expect(obter(produto.id)?.descricao).toBe("Gestão comercial para equipes");
+    const { GET } = await import("../app/api/produtos/[id]/route");
+    const detalhe = await (await GET(new Request("http://localhost"), { params: Promise.resolve({ id: produto.id }) })).json();
+    expect(detalhe.produto.conhecimento.resumo).toBe("Sistema comercial da LP.");
     expect(obter(produto.id)?.conhecimento?.resumo).toBe("Sistema comercial da LP.");
     expect(obter(produto.id)?.status).toBe("rascunho");
+    vazia = true;
+    const vazio = await cadastrar();
+    expect(vazio.aviso).toContain("não conseguiu preencher");
+    expect(obter(vazio.id)?.conhecimento).toBeUndefined();
+    vazia = false;
     falhar = true;
     const falha = await cadastrar();
     expect(falha.aviso).toContain("material está salvo");

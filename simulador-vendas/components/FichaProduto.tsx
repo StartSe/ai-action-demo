@@ -43,6 +43,7 @@ function BlocoLista({
     <div className="mb-5">
       <h3 className="font-bold text-[14px] mb-0.5">{titulo}</h3>
       <p className="text-muted text-[12.5px] mb-2">{ajuda}</p>
+      {!itens.length && <p className="text-xs text-muted mb-2">Não identificado no material. Complemente se tiver essa informação.</p>}
       <div className="flex flex-col gap-2">
         {itens.map((item, i) => (
           <div key={i} className="flex gap-2 items-center">
@@ -113,7 +114,7 @@ export function FichaProduto({
     <div className="card p-5">
       <div className="flex items-start justify-between gap-3 mb-1 max-md:flex-col max-md:gap-2">
         <div>
-          <h2 className="font-bold text-[15px]">Entendemos seu produto</h2>
+          <h2 className="font-bold text-[15px]">2. Ficha para o treino</h2>
           <p className="text-muted text-[13px]">Corrija o que estiver errado: é isto que o cliente simulado e a avaliação usam.</p>
         </div>
         <div className="flex items-center gap-2.5 shrink-0">
@@ -136,7 +137,7 @@ export function FichaProduto({
 
       {vazia && !gerando && !erro ? (
         <p className="text-muted text-sm mt-4">
-          Nenhuma ficha ainda. Adicione material acima e clique em “Gerar ficha” — ou escreva a ficha você mesmo, começando pelo resumo.
+          Ainda não foi possível preparar as sugestões. Se você já importou uma página, clique em “Gerar ficha” para tentar novamente. Você também pode preencher os campos ou complementar os materiais abaixo.
         </p>
       ) : null}
 
@@ -170,7 +171,7 @@ export function FichaProduto({
         <BlocoLista titulo="Objeções prováveis" ajuda="O que o cliente vai dizer para não comprar. O cliente simulado usa estas." itens={conhecimento.objecoes} placeholder="Ex.: Já temos um sistema e trocar dá trabalho" onMudar={mudarLista("objecoes")} />
 
         <div className="mb-5">
-          <Field label="Faixa de preço" htmlFor="ficha-preco" hint="Opcional. Deixe vazio se não quiser que apareça na conversa.">
+          <Field label="Faixa de preço" htmlFor="ficha-preco" hint="Opcional. Se a página não informar o preço, este campo fica vazio para não inventar um valor.">
             <input
               id="ficha-preco"
               className="input"
@@ -192,7 +193,7 @@ export function FichaProduto({
           disabled={!conhecimento.resumo.trim() || salvando}
           onClick={() => { setSalvo(true); onSalvar(); }}
         >
-          {salvando ? "Salvando..." : "Salvar ficha"}
+          {salvando ? "Salvando..." : "Confirmar ficha"}
         </button>
         {salvo && !salvando && !erro && <span className="text-[13px] text-ok font-semibold">Ficha salva. O produto está pronto para treinar.</span>}
       </div>

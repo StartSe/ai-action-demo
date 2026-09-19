@@ -208,7 +208,7 @@ npm run agent:start
 
 Os dois processos precisam usar o mesmo diretório de trabalho e `DATA_DIR` (SQLite e arquivo `chave-mestra`). Se usar `CHAVE_MESTRA` por ambiente, defina a mesma nos dois processos. Variáveis de ambiente precisam ser fornecidas aos dois processos; o comando `tsx` não carrega `.env.local` automaticamente. Reinicie o serviço de voz após alterar credenciais do LiveKit. O servidor deve permitir conexões de saída aos três provedores, e o navegador precisa de HTTPS (ou localhost) para o microfone.
 
-Com Docker, configure as conexões no app e execute `docker compose --profile voz up --build -d`. O serviço `voz` compartilha o volume do app. O worker usa Debian para suportar as bibliotecas nativas de áudio. A imagem web standalone, sozinha, não executa o worker; o blueprint Render atual precisa de uma implantação que mantenha ambos os processos e o mesmo disco para habilitar LiveKit.
+Com Docker, execute `docker compose up --build -d` e configure as conexões no app. A imagem Debian inicia o site e o serviço de voz no mesmo contêiner, compartilhando `/app/data`; isso também vale para o blueprint do Render. O serviço de voz aguarda as credenciais e é reiniciado se parar. O serviço mantém apenas um processo de chamada pré-aquecido, em vez do padrão de até quatro. Se o LiveKit não responder, a tela oferece a voz do navegador. Uma chamada real depende de credenciais válidas, acesso ao microfone e recursos disponíveis na instância.
 
 Na conversa, um toque abre o microfone. É possível interromper o cliente falando, pausar o microfone e digitar sem trocar de sessão. As falas são gravadas pelo worker no servidor e reutilizadas na avaliação; ao encerrar, o navegador aguarda o worker fechar a conversa antes de pedir a avaliação. Uma reconexão reutiliza o histórico e o roteiro. Sem as três integrações configuradas, continua disponível o modo anterior de voz do navegador e a demonstração.
 
@@ -234,3 +234,7 @@ Bright Data é opcional em Configurações (ou `BRIGHTDATA_API_KEY`). A aplicaç
 O blueprint usa Starter com disco de 1 GB em `/app/data`. SQLite e o arquivo `chave-mestra` devem permanecer juntos: guardam dados e acesso às configurações cifradas. Instalações existentes precisam sincronizar o blueprint no Render. Antes de alterar uma instalação sem disco, copie seu diretório de dados; anexar um disco não migra o conteúdo efêmero automaticamente.
 
 Em Configurações → Dados de exemplo, é possível remover a demonstração. Dados reais, credenciais e exemplos referenciados por treinos reais são preservados. A remoção fica registrada para impedir recriação no próximo reinício.
+
+### Cadastro e revisão (0.4.0)
+
+Escolha **Importar pelo link** ou **Preencher manualmente**. A importação mostra as etapas informadas pelo servidor e sugere nome, categoria, descrição e ficha em uma única leitura com IA. A revisão abre esses campos editáveis; materiais adicionais ficam recolhidos. **Confirmar ficha** salva os dados básicos junto da ficha e libera o treino. Informações ausentes, como preço e concorrentes, não são inventadas. Respostas vazias da IA preservam a página como material e oferecem nova tentativa, sem anunciar sucesso.

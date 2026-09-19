@@ -1,26 +1,28 @@
-# Imagem de produção do Next.js (saída standalone). Node 22 Alpine.
-FROM node:22-alpine AS deps
+# Debian suporta as bibliotecas nativas de áudio do LiveKit.
+FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-FROM node:22-alpine AS build
-WORKDIR /app
+FROM deps AS build
 ENV NEXT_TELEMETRY_DISABLED=1
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+RUN npm run build && npm prune --omit=dev
 
-FROM node:22-alpine AS runner
+FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=10000 HOSTNAME=0.0.0.0 \
     DATA_DIR=/app/data NODE_OPTIONS=--disable-warning=ExperimentalWarning
-RUN addgroup -S app && adduser -S app -G app && mkdir -p /app/data && chown app:app /app/data
+RUN mkdir -p /app/data && chown node:node /app/data
 COPY --from=build /app/public ./public
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
-USER app
-# As chaves configuradas em /setup ficam no SQLite em /app/data. Monte um volume aqui para persistir.
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/agent ./agent
+COPY --from=build /app/lib ./lib
+COPY --from=build /app/tsconfig.json ./tsconfig.json
+COPY --from=build /app/scripts/iniciar-producao.mjs ./scripts/iniciar-producao.mjs
+USER node
 VOLUME ["/app/data"]
 EXPOSE 10000
-CMD ["node", "server.js"]
+CMD ["node", "scripts/iniciar-producao.mjs"]

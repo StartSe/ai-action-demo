@@ -1,12 +1,5 @@
 "use client";
-// Um produto: os dados básicos, os materiais que ensinam a IA e a ficha ("Entendemos seu produto").
-//
-// Três caminhos para ensinar o produto, todos terminando em texto guardado em `fontes_produto`:
-// importar a página (US-004), enviar um arquivo e colar texto (US-005). O envio e o texto ficam lado a
-// lado de propósito — enquanto não lemos PDF nem apresentação (Q1 das Open Questions do PRD), colar é
-// o caminho garantido e precisa estar à vista, não escondido atrás de um "mais opções".
-//
-// A ficha gerada pela IA (US-006) entra abaixo dos materiais, sem mudar o desenho da tela.
+// Revisão do produto: dados básicos e ficha primeiro; materiais podem ser consultados e complementados.
 import Link from "next/link";
 import { AvisoImportacao } from "@/components/AvisoImportacao";
 import { use, useEffect, useState, type FormEvent } from "react";
@@ -216,6 +209,11 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
     setSalvandoFicha(true);
     setErroFicha(null);
     try {
+      const dados = await fetch(`/api/produtos/${id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome: nome.trim(), categoria: categoria.trim(), descricao: descricao.trim() }),
+      });
+      if (!dados.ok) throw dados;
       const r = await fetch(`/api/produtos/${id}/conhecimento`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -273,7 +271,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
             <div className="flex items-start justify-between gap-3 mb-6 max-md:flex-col max-md:gap-2">
               <div className="min-w-0">
                 <h1 className="titulo-painel mb-1.5">{produto.nome}</h1>
-                <p className="apoio">Quanto mais a IA souber deste produto, mais real fica o treino.</p>
+                <p className="apoio">Revise as sugestões, ajuste o que precisar e confirme a ficha para usar nos treinos.</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 {produto.exemplo && <Chip nivel="neutral">Exemplo</Chip>}
@@ -285,7 +283,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
             {erroTela && <div className="mb-5"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao} /></div>}
 
             <form className="card p-5 mb-6" onSubmit={salvar}>
-              <h2 className="font-bold text-[15px] mb-3.5">Dados do produto</h2>
+              <h2 className="font-bold text-[15px] mb-3.5">1. Dados do produto</h2>
               <div className="grid grid-cols-2 max-md:grid-cols-1 gap-3 mb-3">
                 <Field label="Nome" htmlFor="produto-nome">
                   <input id="produto-nome" className="input" value={nome} onChange={(e) => { setNome(e.target.value); setSalvo(false); }} />
@@ -299,12 +297,29 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
               </Field>
               <div className="flex items-center gap-3 mt-4">
                 <button type="submit" className="btn-primary !w-auto" disabled={!nome.trim() || salvando}>
-                  {salvando ? "Salvando..." : "Salvar"}
+                  {salvando ? "Salvando..." : "Salvar dados básicos"}
                 </button>
                 {salvo && <span className="text-[13px] text-ok font-semibold">Salvo.</span>}
               </div>
             </form>
 
+            <div className="mt-6">
+              <FichaProduto
+                conhecimento={ficha}
+                metaIA={metaIA}
+                gerando={gerandoFicha}
+                salvando={salvandoFicha}
+                erro={erroFicha}
+                acaoConectar={status?.ai === false ? { rotulo: "Conectar a IA", url: "/setup#openrouter" } : undefined}
+                onMudar={setFicha}
+                onGerar={gerarFicha}
+                onSalvar={salvarFicha}
+              />
+            </div>
+
+            <details className="mt-6" open={fontes.length === 0}>
+              <summary className="cursor-pointer rounded-xl border border-line p-4 font-semibold text-sm">Materiais de referência ({fontes.length}) · Ver ou complementar</summary>
+              <div className="mt-4">
             <Section titulo="Ensine a IA sobre o produto">
               <form className="card p-5 mb-4" onSubmit={importarPagina}>
                 <Field label="Endereço da página" htmlFor="produto-endereco" hint="A página do produto no seu site. Lemos o texto dela para você.">
@@ -390,23 +405,12 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                 </div>
               )}
             </Section>
+              </div>
+            </details>
 
-            <div className="mt-6">
-              <FichaProduto
-                conhecimento={ficha}
-                metaIA={metaIA}
-                gerando={gerandoFicha}
-                salvando={salvandoFicha}
-                erro={erroFicha}
-                acaoConectar={status?.ai === false ? { rotulo: "Conectar a IA", url: "/setup#openrouter" } : undefined}
-                onMudar={setFicha}
-                onGerar={gerarFicha}
-                onSalvar={salvarFicha}
-              />
-            </div>
 
             <div className="mt-8 pt-5 border-t border-line flex items-center gap-4 flex-wrap">
-              <Link href={`/simulacoes/nova?produto=${produto.id}`} className="btn-link">Criar treino com este produto</Link>
+              {produto.status === "pronto" ? <Link href={`/simulacoes/nova?produto=${produto.id}`} className="btn-primary !w-auto">Criar treino com este produto</Link> : <p className="text-sm text-muted">Confirme a ficha acima para começar um treino.</p>}
               <button type="button" className="btn-link !text-danger" onClick={apagar}>Apagar produto</button>
             </div>
           </>

@@ -9,14 +9,5 @@ services:
       - dados:/app/data
     restart: unless-stopped
 
-  voz:
-    profiles: [voz]
-    build:
-      context: .
-      dockerfile: agent/Dockerfile
-    volumes:
-      - dados:/app/data
-    restart: unless-stopped
-
 volumes:
   dados:

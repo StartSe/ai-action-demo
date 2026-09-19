@@ -64,6 +64,9 @@ const ROTULO_ESTADO: Record<EstadoConversa, string> = {
 function relogio(segundos: number) { return `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, "0")}`; }
 
 export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duracaoMin, iniciadaEm, falasIniciais, porVoz, porTexto, vozDoServidor, voz, livekit = false }: PropsSalaVoz) {
+  const [vozAlternativa, setVozAlternativa] = useState(false);
+  const [falhaLivekit, setFalhaLivekit] = useState(false);
+  const usarLivekit = livekit && !vozAlternativa;
   const [falas, setFalas] = useState<Fala[]>(falasIniciais);
   const [estado, setEstado] = useState<EstadoConversa>("parado");
   const [modo, setModo] = useState<"voz" | "texto">(porVoz ? "voz" : "texto");
@@ -122,7 +125,7 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     return pronta;
   }
   function pausar() {
-    if (livekit) void chamada.pausar().catch(() => setErro("Não foi possível pausar o microfone."));
+    if (usarLivekit) void chamada.pausar().catch(() => setErro("Não foi possível pausar o microfone."));
     ativaRef.current = false;
     setAtiva(false);
     if (transcriptRef.current.trim()) setDigitado(transcriptRef.current.trim());
@@ -132,16 +135,27 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
   }
   function usarTexto(motivo = "") {
     pausar();
-    if (livekit) chamada.silenciar();
+    if (usarLivekit) chamada.silenciar();
     setModo("texto");
     setMotivoTexto(motivo);
   }
+  async function usarVozDoNavegador() {
+    await chamada.desconectar();
+    if (!montadaRef.current || fechandoRef.current) return;
+    setVozAlternativa(true); setFalhaLivekit(false); setErro("");
+    guardarEstado("parado"); ativaRef.current = false; setAtiva(false);
+    setMotivoTexto("Voz do navegador selecionada. Toque em Iniciar microfone para conversar.");
+  }
   async function iniciarEscuta() {
     if (fechandoRef.current || turnoRef.current || estadoRef.current === "conectando" || !montadaRef.current) return;
-    if (livekit) {
+    if (usarLivekit) {
       setErro(""); ativaRef.current = true; setAtiva(true);
       try { await chamada.iniciar(); }
-      catch (err) { setErro(err instanceof Error ? err.message : "Não foi possível abrir o microfone."); ativaRef.current = false; setAtiva(false); guardarEstado("parado"); }
+      catch (err) {
+        const negado = err instanceof Error && err.name === "NotAllowedError";
+        setErro(negado ? "Libere o microfone nas permissões do navegador e tente novamente." : err instanceof Error ? err.message : "Não foi possível abrir o microfone.");
+        setFalhaLivekit(!negado); ativaRef.current = false; setAtiva(false); guardarEstado("parado");
+      }
       return;
     }
     if (!browserSupportsSpeechRecognition || !isMicrophoneAvailable) {
@@ -221,7 +235,7 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     pausar();
     setEncerrando(true); setErro("");
     try {
-      if (livekit) await chamada.finalizar();
+      if (usarLivekit) await chamada.finalizar();
       const r = await fetch(`/api/salas/${codigo}/encerrar`, { method: "POST" });
       const corpo = await r.json() as Resposta & { error?: string; semConversa?: boolean; semFeedback?: boolean };
       if (!r.ok) throw new Error(corpo.error || "Não foi possível fechar a conversa.");
@@ -237,7 +251,7 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
 
   async function conversar(texto: string, retomar = false) {
     if (turnoRef.current || fechandoRef.current || !montadaRef.current) return;
-    if (livekit) {
+    if (usarLivekit) {
       turnoRef.current = true;
       setErro("");
       guardarEstado("pensando");
@@ -310,15 +324,15 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     return () => clearTimeout(timer);
   }, [transcript, listening, estado]);
   const aoPerderMicrofone = useEffectEvent(() => usarTexto("O microfone não está disponível. Libere a permissão para falar ou continue por texto."));
-  useEffect(() => { if (livekit || isMicrophoneAvailable) return; const timer = setTimeout(aoPerderMicrofone, 0); return () => clearTimeout(timer); }, [isMicrophoneAvailable, livekit]);
+  useEffect(() => { if (usarLivekit || isMicrophoneAvailable) return; const timer = setTimeout(aoPerderMicrofone, 0); return () => clearTimeout(timer); }, [isMicrophoneAvailable, usarLivekit]);
   const aoPararSemFala = useEffectEvent(() => {
     if (!turnoRef.current && !enviandoFalaRef.current) { ativaRef.current = false; setAtiva(false); guardarEstado("parado"); }
   });
   useEffect(() => {
-    if (livekit || listening || transcript || estado !== "ouvindo") return;
+    if (usarLivekit || listening || transcript || estado !== "ouvindo") return;
     const timer = setTimeout(aoPararSemFala, 1000);
     return () => clearTimeout(timer);
-  }, [listening, transcript, estado, livekit]);
+  }, [listening, transcript, estado, usarLivekit]);
   const aoExpirar = useEffectEvent(() => { if (!fim && !fechandoRef.current && !turnoRef.current) void pedirResultado(); });
   useEffect(() => { if (restante === 0) aoExpirar(); }, [restante]);
   useEffect(() => {
@@ -341,7 +355,7 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     if (!turnoRef.current) void pedirResultado();
   }
   function interromper() {
-    if (livekit) { void chamada.interromper().catch(() => setErro("Não foi possível interromper a fala.")); return; }
+    if (usarLivekit) { void chamada.interromper().catch(() => setErro("Não foi possível interromper a fala.")); return; }
     pararAudio();
     // A resposta já está gravada. A continuação do turno retoma a escuta após cancelar o áudio.
   }
@@ -411,6 +425,7 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
         </div>
         {!encerrando && <DicaConversa codigo={codigo} turno={falas.length} ultimaFala={ultimaDoCliente} aguardando={falas.at(-1)?.papel === "vendedor"} />}
         {motivoTexto && <p className="text-sm text-muted">{motivoTexto}</p>}
+        {falhaLivekit && usarLivekit && browserSupportsSpeechRecognition && <button type="button" className="btn-ghost !w-auto" onClick={() => void usarVozDoNavegador()}>Usar voz do navegador</button>}
         {erro && <Aviso tom="danger" acao={erroTurno ? { rotulo: "Tentar resposta novamente", onClick: () => { if (!turnoRef.current) void conversar("", true); } } : undefined}>{erro}</Aviso>}
         {modo === "voz" ? (
           <div className="flex flex-col items-center gap-3">
