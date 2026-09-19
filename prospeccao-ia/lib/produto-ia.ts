@@ -1,8 +1,10 @@
 // Sugestão de produto + ICP a partir do site ou de um parágrafo colado (US-007), usada por
 // POST /api/produtos/analisar. O resultado nunca é salvo direto: components/ProdutoComIA.tsx sempre
 // abre o formulário de edição com a sugestão pré-preenchida.
-import { aiEnabled, askJSON, meta } from "./ai";
-import { lerPagina } from "./descoberta";
+import { aiEnabled, ErroIA, meta } from "./ai";
+import { extrairProduto } from "./produto-extracao";
+import type { EtapaProduto } from "./produto-progresso";
+import { descobertaAtiva, lerPagina } from "./descoberta";
 import { esperar } from "./demo";
 import type { SugestaoProduto } from "./types";
 
@@ -46,7 +48,7 @@ Formato de saída (JSON):
   "icp": { "nome": "", "criterios": { "setor": "", "porte": "", "localizacao": "" }, "personas": [], "dores": [], "sinais": [] }
 }`;
 
-export async function sugerirProdutoDoSite(entradaBruta: string): Promise<{
+export async function sugerirProdutoDoSite(entradaBruta: string, progresso: (etapa: EtapaProduto) => void = () => {}, signal?: AbortSignal): Promise<{
   demo: boolean;
   sugestao: SugestaoProduto;
   avisoLeitura?: string;
@@ -54,45 +56,28 @@ export async function sugerirProdutoDoSite(entradaBruta: string): Promise<{
 }> {
   const entrada = entradaBruta.trim();
   const ehEndereco = pareceEndereco(entrada);
-  let avisoLeitura: string | undefined;
   let contexto = entrada;
-
-  if (ehEndereco) {
-    try {
-      const pagina = await lerPagina(normalizarEndereco(entrada));
-      if (pagina.demo) {
-        avisoLeitura = "A leitura de páginas não está conectada; a sugestão usou só o endereço informado.";
-      } else {
-        contexto = pagina.conteudo.slice(0, 6000);
-      }
-    } catch {
-      avisoLeitura = "Não foi possível ler o site agora; a sugestão usou só o endereço informado.";
-      contexto = entrada;
-    }
-  }
-
+  signal?.throwIfAborted();
   if (!aiEnabled()) {
+    progresso("demonstracao");
     await esperar(1100);
-    return { demo: true, sugestao: SUGESTAO_DEMO, avisoLeitura, meta: meta({ demo: true, insumo: "seu site" }) };
+    return { demo: true, sugestao: SUGESTAO_DEMO, meta: meta({ demo: true, insumo: "exemplo ilustrativo" }) };
+  }
+  if (ehEndereco) {
+    progresso("leitura");
+    if (!descobertaAtiva()) {
+      throw new ErroIA("entrada_recusada", "Conecte a pesquisa de mercado em Configurações para ler o site, ou cole uma descrição do produto.", 400, { rotulo: "Conectar pesquisa de mercado", url: "/setup#brightdata" });
+    }
+    const pagina = await lerPagina(normalizarEndereco(entrada));
+    signal?.throwIfAborted();
+    contexto = pagina.conteudo.trim();
+    if (pagina.demo || contexto.length < 80) throw new ErroIA("entrada_recusada", "A página não trouxe conteúdo suficiente. Confira o link ou cole uma descrição do produto.", 422);
   }
 
   const prompt = ehEndereco
-    ? `Endereço informado: ${entrada}\n\nTexto lido da página (pode estar incompleto ou vazio):\n"""\n${contexto || "(não foi possível ler a página)"}\n"""`
+    ? `Endereço informado: ${entrada}\n\nConteúdo extraído da página em Markdown:\n"""\n${contexto || "(não foi possível ler a página)"}\n"""`
     : `Descrição escrita pelo vendedor sobre o produto:\n"""\n${entrada}\n"""`;
 
-  const bruta = await askJSON<Partial<SugestaoProduto>>({ system: SYSTEM_PRODUTO, prompt, maxTokens: 1500 });
-  const icpBruto = bruta.icp || ({} as NonNullable<SugestaoProduto["icp"]>);
-  const sugestao: SugestaoProduto = {
-    nome: bruta.nome || "",
-    descricao: bruta.descricao || "",
-    propostaValor: bruta.propostaValor || "",
-    icp: {
-      nome: icpBruto.nome || "Perfil sugerido",
-      criterios: icpBruto.criterios || {},
-      personas: (icpBruto.personas || []).slice(0, 4),
-      dores: (icpBruto.dores || []).slice(0, 5),
-      sinais: (icpBruto.sinais || []).slice(0, 6),
-    },
-  };
-  return { demo: false, sugestao, avisoLeitura, meta: meta({ demo: false, insumo: "seu site" }) };
+  const { sugestao, model } = await extrairProduto(SYSTEM_PRODUTO, prompt, progresso, signal);
+  return { demo: false, sugestao, meta: meta({ demo: false, model, insumo: ehEndereco ? normalizarEndereco(entrada) : "descrição informada" }) };
 }

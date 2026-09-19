@@ -142,3 +142,7 @@ Validação local: `npm test`, `npm run lint` e `npm run build`. Os testes usam 
 a conta publicada precisa ser validada no botão de teste do setup após atualizar o app.
 
 Rotinas e Notificações ficam ocultas na interface, incluindo o convite para receber leads semanalmente. As configurações e os serviços existentes são preservados.
+
+Criação de produto por link (0.1.3): o modal acompanha a leitura da página, a análise do produto e do perfil ideal e a preparação dos campos para revisão. Exibe tempo decorrido e permite cancelar sem perder o endereço. A leitura usa `scrape_as_markdown` da Bright Data; falhas pedem corrigir o link ou colar uma descrição, sem gerar um produto apenas a partir da URL. A resposta da IA usa modo JSON, recuperação de formato e validação dos campos, com uma nova tentativa quando vier incompleta. O produto só é salvo após a revisão do usuário.
+
+Validação: `npm test` cobre extração, falhas e transmissão do progresso; `npm run build` verifica o build de produção. Referências: [ferramentas Bright Data](https://github.com/brightdata/brightdata-mcp/blob/main/assets/Tools.md) e [Response Healing do OpenRouter](https://openrouter.ai/docs/guides/features/plugins/overview).

@@ -11,6 +11,8 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Aviso, Field, MaisDetalhes, Origem, Row } from "@/components/ui";
+import { ProgressoProduto } from "./ProgressoProduto";
+import { lerAnaliseProduto, type EtapaProduto } from "@/lib/produto-progresso";
 import { CampoLista } from "@/components/CampoLista";
 import type { Meta } from "@/lib/ai";
 import type { CriteriosICP, SugestaoProduto } from "@/lib/types";
@@ -22,6 +24,11 @@ export function ProdutoComIA() {
   const [passo, setPasso] = useState<Passo>("entrada");
   const [entrada, setEntrada] = useState("");
   const [analisando, setAnalisando] = useState(false);
+  const [etapa, setEtapa] = useState<EtapaProduto>("preparacao");
+  const requisicao = useRef<AbortController | null>(null);
+  useEffect(() => () => requisicao.current?.abort(), []);
+  function cancelarAnalise() { requisicao.current?.abort(); }
+
   const [erroEntrada, setErroEntrada] = useState<string | null>(null);
   const [avisoLeitura, setAvisoLeitura] = useState<string | null>(null);
   const [meta, setMeta] = useState<Meta | null>(null);
@@ -55,6 +62,7 @@ export function ProdutoComIA() {
 
   async function analisar(e: FormEvent) {
     e.preventDefault();
+    if (requisicao.current) return;
     const t = entrada.trim();
     if (!t) {
       setErroEntrada("Cole o endereço do site ou escreva um parágrafo sobre o produto.");
@@ -62,18 +70,19 @@ export function ProdutoComIA() {
     }
     setErroEntrada(null);
     setAnalisando(true);
+    setEtapa("preparacao");
+    const controle = new AbortController();
+    requisicao.current = controle;
+    const signal = AbortSignal.any([controle.signal, AbortSignal.timeout(300_000)]);
     try {
       const resposta = await fetch("/api/produtos/analisar", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" },
+        signal,
         body: JSON.stringify({ entrada: t }),
       });
-      const corpo = await resposta.json().catch(() => null);
-      if (!resposta.ok) {
-        setErroEntrada(corpo?.error || "Não foi possível analisar agora. Tente de novo.");
-        setAnalisando(false);
-        return;
-      }
+      const corpo = await lerAnaliseProduto(resposta, setEtapa);
+      signal.throwIfAborted();
       const sugestao: SugestaoProduto = corpo.sugestao;
       entradaEraEndereco.current = /^https?:\/\//i.test(t) || (!/\s/.test(t) && t.includes("."));
       setNome(sugestao.nome);
@@ -88,9 +97,12 @@ export function ProdutoComIA() {
       setAvisoLeitura(corpo.avisoLeitura || null);
       setMeta(corpo.meta);
       setPasso("editar");
-    } catch {
-      setErroEntrada("Não foi possível analisar agora. Tente de novo.");
+    } catch (erro) {
+      if (!controle.signal.aborted) setErroEntrada(signal.aborted
+        ? "A análise demorou mais que o esperado. Tente novamente ou cole uma descrição do produto."
+        : erro instanceof Error ? erro.message : "Não foi possível analisar agora. Tente de novo.");
     } finally {
+      requisicao.current = null;
       setAnalisando(false);
     }
   }
@@ -131,7 +143,8 @@ export function ProdutoComIA() {
 
   if (passo === "entrada") {
     return (
-      <form onSubmit={analisar} className="card p-6">
+      <form onSubmit={analisar} className="card p-6" aria-busy={analisando}>
+        {analisando && <ProgressoProduto etapa={etapa} endereco={/^https?:\/\//i.test(entrada.trim()) || (!/\s/.test(entrada.trim()) && entrada.includes("."))} cancelar={cancelarAnalise} />}
         {erroEntrada && (
           <div className="mb-4">
             <Aviso tom="danger">{erroEntrada}</Aviso>
@@ -140,6 +153,7 @@ export function ProdutoComIA() {
         <Field label="Endereço do site" htmlFor="entrada" hint="Ou cole um parágrafo sobre o produto, se preferir não usar um site.">
           <textarea
             id="entrada"
+            disabled={analisando}
             className="input min-h-[100px] resize-y"
             placeholder="https://suaempresa.com.br"
             value={entrada}
