@@ -29,11 +29,12 @@ type SimulacaoLista = {
   criadoEm: string;
 };
 
-type Filtro = "todas" | "ativas" | "encerradas";
+type Filtro = "todas" | "ativas" | "pausadas" | "encerradas";
 
 const FILTROS: { id: Filtro; rotulo: string }[] = [
   { id: "todas", rotulo: "Todas" },
   { id: "ativas", rotulo: "Ativas" },
+  { id: "pausadas", rotulo: "Pausadas" },
   { id: "encerradas", rotulo: "Encerradas" },
 ];
 
@@ -76,7 +77,10 @@ function MenuAcoes({ rotulo, itens }: { rotulo: string; itens: { rotulo: string;
   useEffect(() => {
     if (!aberto) return;
     function aoTeclar(e: KeyboardEvent) {
-      if (e.key === "Escape") setAberto(false);
+      if (e.key === "Escape") {
+        setAberto(false);
+        ref.current?.querySelector("button")?.focus();
+      }
     }
     function aoClicarFora(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false);
@@ -90,17 +94,16 @@ function MenuAcoes({ rotulo, itens }: { rotulo: string; itens: { rotulo: string;
   }, [aberto]);
 
   return (
-    <div className="relative" ref={ref}>
-      <button type="button" className="btn-link" aria-haspopup="menu" aria-expanded={aberto} aria-label={rotulo} onClick={() => setAberto((a) => !a)}>
+    <div className="relative" ref={ref} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setAberto(false); }}>
+      <button type="button" className="btn-link" aria-expanded={aberto} aria-label={rotulo} onClick={() => setAberto((a) => !a)}>
         Mais ações
       </button>
       {aberto && (
-        <div role="menu" className="absolute right-0 z-20 mt-1.5 min-w-[190px] card p-1.5 shadow-lg max-md:right-auto max-md:left-0">
+        <div className="absolute right-0 z-20 mt-1.5 min-w-[190px] card p-1.5 shadow-lg max-md:right-auto max-md:left-0">
           {itens.map((i) => (
             <button
               key={i.rotulo}
               type="button"
-              role="menuitem"
               className={`block w-full text-left text-[13px] px-2.5 py-2 rounded-field hover:bg-bg ${i.perigo ? "text-danger" : ""}`}
               onClick={() => {
                 setAberto(false);
@@ -129,6 +132,7 @@ export default function Page() {
   const [falhaCopia, setFalhaCopia] = useState(false);
 
   const carregar = useCallback(async () => {
+    setErroTela(null);
     try {
       const r = await fetch("/api/simulacoes");
       if (!r.ok) throw r;
@@ -136,7 +140,6 @@ export default function Page() {
       setItens(corpo.itens);
     } catch (e) {
       setErroTela(await lerErro(e));
-      setItens([]);
     }
   }, []);
 
@@ -148,7 +151,6 @@ export default function Page() {
       .then((corpo: { itens: SimulacaoLista[] }) => setItens(corpo.itens))
       .catch(async (e) => {
         setErroTela(await lerErro(e));
-        setItens([]);
       });
   }, []);
 
@@ -206,7 +208,7 @@ export default function Page() {
   // ao servidor. São dez, vinte treinos — pedir de novo a cada tecla seria mais lento e mais frágil.
   const alvo = normalizar(busca.trim());
   const visiveis = (itens ?? []).filter((s) => {
-    const peloStatus = filtro === "todas" || (filtro === "ativas" ? s.status === "ativa" : s.status === "encerrada");
+    const peloStatus = filtro === "todas" || (filtro === "ativas" ? s.status === "ativa" : filtro === "pausadas" ? s.status === "pausada" : s.status === "encerrada");
     const pelaBusca = !alvo || normalizar(s.nome).includes(alvo) || normalizar(s.produtoNome).includes(alvo);
     return peloStatus && pelaBusca;
   });
@@ -226,7 +228,7 @@ export default function Page() {
           </Link>
         </div>
 
-        {erroTela && <div className="mb-5"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao} /></div>}
+        {erroTela && <div className="mb-5"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao} /><button type="button" className="btn-ghost mt-3" onClick={carregar}>Atualizar lista</button></div>}
         {falhaCopia && <div className="mb-5"><Aviso tom="danger">Não foi possível copiar automaticamente. Abra o treino e copie o link de lá.</Aviso></div>}
 
         {(itens ?? []).some((s) => s.exemplo) && (
@@ -237,13 +239,13 @@ export default function Page() {
 
         {itens !== null && itens.length > 0 && (
           <div className="flex items-center justify-between gap-3 mb-5 max-md:flex-col max-md:items-stretch">
-            <div className="flex gap-1.5" role="group" aria-label="Filtrar por situação">
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar por situação">
               {FILTROS.map((f) => (
                 <button
                   key={f.id}
                   type="button"
                   aria-pressed={filtro === f.id}
-                  className={`text-[13px] font-semibold px-3 py-1.5 rounded-chip border ${filtro === f.id ? "border-accent bg-accent-soft text-accent-ink" : "border-line text-muted hover:bg-bg"}`}
+                  className={`text-[13px] font-semibold px-3 min-h-11 rounded-chip border ${filtro === f.id ? "border-accent bg-accent-soft text-accent-ink" : "border-line text-muted hover:bg-bg"}`}
                   onClick={() => setFiltro(f.id)}
                 >
                   {f.rotulo}
@@ -262,7 +264,7 @@ export default function Page() {
         )}
 
         {itens === null ? (
-          <p className="text-muted text-sm">Carregando...</p>
+          !erroTela && <p role="status" className="text-muted text-sm">Carregando os treinos...</p>
         ) : itens.length === 0 ? (
           <Empty
             ilustracao={<IconeSimulacao />}
@@ -271,15 +273,19 @@ export default function Page() {
             acaoSecundaria={{ rotulo: "Criar meu primeiro treino", url: "/simulacoes/nova" }}
           />
         ) : visiveis.length === 0 ? (
-          <p className="text-muted text-sm">Nenhum treino com esse filtro. Troque a situação ou limpe a busca.</p>
+          <div className="card p-6 text-center">
+            <p className="font-semibold mb-2">Nenhum treino encontrado</p>
+            <p className="text-muted text-sm mb-4">Tente outro nome ou veja todas as situações.</p>
+            <button className="btn-ghost" onClick={() => { setBusca(""); setFiltro("todas"); }}>Limpar filtros</button>
+          </div>
         ) : (
           <div className="flex flex-col gap-3">
             {visiveis.map((s) => (
               <article key={s.codigo} className="card px-5 py-4">
                 <div className="flex items-start justify-between gap-3 mb-1.5 max-md:flex-col max-md:items-stretch max-md:gap-1.5">
                   <div className="min-w-0">
-                    <h2 className="font-bold text-[16px] truncate">{s.nome}</h2>
-                    <p className="text-muted text-sm mt-0.5 truncate">{s.produtoNome}</p>
+                    <h2 className="font-bold text-[16px] break-words">{s.nome}</h2>
+                    <p className="text-muted text-sm mt-0.5 break-words">{s.produtoNome}</p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
                     {s.exemplo && <Chip nivel="neutral">Exemplo</Chip>}
@@ -299,10 +305,10 @@ export default function Page() {
 
                 <div className="flex items-center gap-4 flex-wrap">
                   <Link href={`/resultados/${s.codigo}`} className="btn-link">Ver resultados</Link>
+                  <button type="button" className="btn-ghost !py-2 text-[13px]" onClick={() => copiar(s.codigo, s.url, "Link copiado")}>Copiar link</button>
                   <MenuAcoes
                     rotulo={`Mais ações do treino ${s.nome}`}
                     itens={[
-                      { rotulo: "Copiar link", onClick: () => copiar(s.codigo, s.url, "Link copiado") },
                       { rotulo: "Copiar convite", onClick: () => copiarConvite(s) },
                       ...(s.status === "ativa" ? [{ rotulo: "Pausar", onClick: () => mudarStatus(s, "pausada") }] : []),
                       ...(s.status === "pausada" ? [{ rotulo: "Reativar", onClick: () => mudarStatus(s, "ativa") }] : []),
@@ -310,7 +316,7 @@ export default function Page() {
                       ...(s.status === "encerrada" ? [] : [{ rotulo: "Encerrar", onClick: () => mudarStatus(s, "encerrada"), perigo: true }]),
                     ]}
                   />
-                  {copiado?.codigo === s.codigo && <span className="text-[13px] font-semibold text-ok">{copiado.texto}</span>}
+                  {copiado?.codigo === s.codigo && <span role="status" className="text-[13px] font-semibold text-ok">{copiado.texto}</span>}
                 </div>
               </article>
             ))}

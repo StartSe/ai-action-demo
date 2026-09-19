@@ -5,7 +5,7 @@ Radar de sinais de mercado gerado por IA a partir dos temas que você acompanha,
 ## O que resolve
 Movimentos do mercado chegam tarde e dispersos. Este app junta o que saiu no período sobre os temas acompanhados, agrupa em sinais (com força, tendência e o que fazer em cada um) e mostra as conexões entre eles.
 
-Como funciona: o motor de busca (`lib/busca.ts`) consulta em paralelo as fontes sem chave (Hacker News, Reddit, GitHub e Google Notícias, este em português do Brasil) e, quando uma chave da Exa ou da Tavily está conectada, também notícias em português e conteúdo geral da web. Cada fonte é isolada: uma que falhar (o Reddit, por exemplo, bloqueia endereços de nuvem) não derruba a rodada, e a tela diz quais fontes entraram ("Hacker News, GitHub, Google Notícias; Reddit indisponível") antes e depois de montar o radar. A IA agrupa o que foi encontrado em sinais com força, tendência e o que fazer, e só cita fontes que de fato vieram da busca; quando nenhum achado sustenta um sinal, o radar sai vazio e explica o motivo. Sem IA conectada, o radar é um exemplo (`lib/demo.ts`) com fontes marcadas como "(exemplo)" e links para a página de cada veículo. O grafo de nós e arestas é desenhado em SVG por `components/Grafo.tsx`, com layout de força próprio, sem biblioteca externa. A rotina semanal (botão "Receber este radar toda semana" no resultado) reenvia só os sinais novos em relação à última execução.
+Como funciona: o motor de busca (`lib/busca.ts`) consulta em paralelo as fontes sem chave (Hacker News, Reddit, GitHub e Google Notícias, este em português do Brasil) e, quando Exa, Tavily ou Bright Data estão conectadas, também notícias em português e conteúdo geral da web. A Bright Data usa MCP HTTP com `pro=1`, `search_engine` e `scrape_as_markdown` (até quatro páginas por radar). Cada fonte é isolada: uma que falhar (o Reddit, por exemplo, bloqueia endereços de nuvem) não derruba a rodada, e a tela diz quais fontes entraram ("Hacker News, GitHub, Google Notícias; Reddit indisponível") antes e depois de montar o radar. A IA agrupa o que foi encontrado em sinais com força, tendência e o que fazer, e só cita fontes que de fato vieram da busca; quando nenhum achado sustenta um sinal, o radar sai vazio e explica o motivo. Sem IA conectada, o radar é um exemplo (`lib/demo.ts`) com fontes marcadas como "(exemplo)" e links para a página de cada veículo. O grafo de nós e arestas é desenhado em SVG por `components/Grafo.tsx`, com layout de força próprio, sem biblioteca externa. O monitoramento diário salva termos, setor, período, horários e fuso no SQLite. Cada rodada gera um radar novo e entrega resumo, ações sugeridas e fontes por e-mail ou Slack. Rotinas semanais antigas permanecem compatíveis.
 
 ## Stack
 Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão.
@@ -34,7 +34,7 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 - Publicar com um clique: https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-radar-sinais (o `render.yaml` desta pasta é gerado a partir do `catalogo.json` da raiz; não edite à mão).
 - Rodar no seu computador sem construir: `docker run --rm -p 3011:10000 -v radar-sinais-dados:/app/data ghcr.io/startse/radar-sinais:latest` e abra http://localhost:3011.
 - Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
-- O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração se perde a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
+- O health check responde em `/api/health`. O Blueprint usa plano Starter (pago), com disco de 1 GB em `/app/data`, para manter termos e agendas entre deploys e executar as rotinas sem suspensão por inatividade.
 
 ## Usar dentro de um assistente de IA (MCP)
 O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, para que assistentes como Claude ou ChatGPT chamem a ferramenta `montar_radar` diretamente. Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
@@ -64,8 +64,9 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
 | `EXA_API_KEY` | Opcional. Amplia a busca para notícias em português e a web em geral. Obtenha em https://dashboard.exa.ai/api-keys. Sem ela (e sem Tavily), o radar usa só Hacker News, Reddit, GitHub e Google Notícias. |
+| `BRIGHTDATA_API_TOKEN` | Token do MCP HTTP da Bright Data. O conector usa `https://mcp.brightdata.com/mcp?token=...&pro=1`. |
 | `TAVILY_API_KEY` | Opcional, alternativa à Exa (basta uma das duas). Obtenha em https://app.tavily.com (API Keys). |
-| `NOTIFICACOES_*` | Opcionais, configuradas em `/setup` (cartão Notificações): canal, destino e credencial do Resend/SMTP/Slack, ou Gmail/Outlook conectados em um clique. Necessárias para a rotina semanal. |
+| `NOTIFICACOES_*` | Opcionais, configuradas em `/setup` (cartão Notificações): canal, destino e credencial do Resend/SMTP/Slack, ou Gmail/Outlook conectados em um clique. Necessárias para os alertas de monitoramento. |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
 
 ## Estrutura
@@ -74,7 +75,11 @@ app/page.tsx            tela única (formulário + resultado)
 app/api/radar/route.ts  geração do radar (POST), últimos radares com temas (GET) e apagar tudo (DELETE)
 app/api/radar/fontes/route.ts    situação das fontes de busca antes de montar (linha "Fontes desta rodada")
 app/api/radar/andamento/route.ts fontes que já responderam numa rodada em andamento (Loading)
-app/api/radar/semanal/route.ts   cria a rotina "Radar semanal dos meus temas" a partir do botão do resultado
+app/api/radar/monitoramentos/route.ts lista, cadastra e edita monitoramentos diários
+app/api/radar/semanal/route.ts   compatibilidade com rotinas semanais anteriores
+components/Monitoramentos.tsx   cadastro, edição, pausa e execução manual
+lib/monitoramento.ts           validação e cálculo de slots no fuso escolhido
+lib/brightdata.ts              Search Engine e Scraper as Markdown por MCP HTTP
 app/mcp/route.ts        endpoint MCP (JSON-RPC 2.0) para assistentes de IA
 app/api/mcp/token/route.ts  gera, consulta e revoga o código de acesso do endpoint MCP
 app/setup/page.tsx      configuração inicial (chaves, OAuth, teste de conexão, acesso MCP)
@@ -91,7 +96,7 @@ lib/ai.ts               cliente OpenRouter (askText, askJSON, askWithTools)
 lib/mcp.ts              protocolo MCP (JSON-RPC 2.0), código de acesso e limite de chamadas
 lib/ferramentas.ts      ferramentas expostas via MCP (montar_radar)
 lib/radar.ts            lógica de geração do radar, usada pela rota HTTP e pela ferramenta MCP
-lib/busca.ts            busca em Hacker News, Reddit, GitHub, Google Notícias, Exa e Tavily (fontes isoladas entre si)
+lib/busca.ts            busca em Hacker News, Reddit, GitHub, Google Notícias, Exa, Tavily e Bright Data (fontes isoladas entre si)
 lib/fontes.ts           nomes das fontes e a frase "X, Y; Z indisponível" (puro, usado na tela e no servidor)
 lib/andamento.ts        andamento de uma rodada em memória (quais fontes já responderam)
 lib/perfil.ts           chave do perfil acompanhado (temas + setor), usada pela rotina semanal e pela tela
@@ -102,3 +107,20 @@ Dockerfile              build multi-stage com saída standalone
 docker-compose.yml      sobe este app isolado
 render.yaml             blueprint do Render (runtime image)
 ```
+
+## Monitoramento diário
+
+1. Conecte OpenRouter e o canal de notificações em `/setup`. Opcionalmente conecte Tavily, Exa e/ou Bright Data; o teste da Bright Data verifica as duas ferramentas MCP.
+2. Informe até 12 termos (um por linha), setor e período no formulário inicial.
+3. Em **Monitoramento diário**, mantenha `08:00, 16:00, 20:00` ou escolha até 12 horários. O fuso padrão é `America/Sao_Paulo`, independente do relógio do servidor.
+4. Clique em **Monitorar estes termos**. Use **Editar** para carregar os termos e horários no formulário, **Pausar/Retomar**, **Executar agora** ou **Excluir**. Os radares completos, com grafos e fontes, ficam no histórico.
+
+A rotina começa no próximo horário após o cadastro. O agendador verifica a cada minuto; o processo precisa permanecer ativo. Depois de uma interrupção, executa somente a rodada mais recente pendente. Um lock no SQLite impede execuções simultâneas da mesma rotina entre processos; após queda, o lock expira em 30 minutos. Três falhas consecutivas pausam a rotina e o motivo fica visível. Não há envio de exemplos sem IA configurada. Rodadas sem evidência enviam um aviso explícito, sem inventar insights. Fontes sem data mostram “data não informada”.
+
+O gatilho autenticado `POST /api/rotinas/executar` também pode ser chamado por um agendador externo; gere seu código em `/setup`. Configure o endereço público para os alertas incluírem o link do radar. O canal/destino é definido a partir de Notificações no cadastro; para mudar a entrega de uma rotina existente, recrie-a.
+
+## Validação
+
+`npm test` cobre validação de termos/horários, fusos, slots, recuperação, execução concorrente e fluxo integrado de cadastro, MCP HTTP/SSE, busca, Markdown, síntese, fontes, grafo, histórico e alerta usando serviços simulados. `npm run lint` e `npm run build` verificam o projeto. Chamadas reais aos provedores e entrega externa exigem credenciais da instância.
+
+Referências: [Bright Data MCP](https://docs.brightdata.com/ai/mcp-server/overview), [cliente MCP HTTP](https://docs.brightdata.com/cn/ai/mcp-server/integrations/llamaindex).

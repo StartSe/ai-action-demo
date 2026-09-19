@@ -1,0 +1,8 @@
+/* A barra compartilhada precisa de duas linhas nos celulares mais estreitos. */
+@media (width < 640px) {
+  body > header.no-print { flex-wrap: wrap; }
+  body > header.no-print > div:first-child { width: 100%; }
+  body > header.no-print > div:last-child { width: 100%; justify-content: space-between; }
+  /* Configurações continua acessível pelo Menu. */
+  body > header.no-print > div:last-child > a[aria-label="Configurações"] { display: none; }
+}

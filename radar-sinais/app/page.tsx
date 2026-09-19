@@ -7,7 +7,7 @@ import { Aviso, Chip, DataTable, Destaque, Entregar, ErrorBox, Field, Hero, Item
 import { Grafo, grafoParaJSON } from "@/components/Grafo";
 import type { CodigoErroIA, Meta } from "@/lib/ai";
 import { descreverFontes } from "@/lib/fontes";
-import { chavePerfil } from "@/lib/perfil";
+import { Monitoramentos } from "@/components/Monitoramentos";
 import type { DadosRadar, EstadoFonte, Fonte, Radar, Sinal } from "@/lib/types";
 
 type ItemHistorico = { id: string; titulo: string; criadoEm: string; entrada: DadosRadar };
@@ -41,7 +41,7 @@ const PROMESSA = {
     "O que fazer em cada um",
     "Fontes verificadas, com link",
     "Mapa de conexões entre sinais",
-    "Radar semanal por e-mail",
+    "Alertas diários por e-mail ou Slack",
   ],
 };
 
@@ -314,7 +314,7 @@ export default function Page() {
                 Fontes desta rodada: {descreverFontes(fontesDaRodada)}.
                 {!buscaWeb && (
                   <>
-                    {" "}Para mais notícias em português e páginas da web, <a href="/setup#exa" className="btn-link text-[12.5px]">conecte a Exa ou a Tavily</a>.
+                    {" "}Para mais notícias em português e páginas da web, <a href="/setup#exa" className="btn-link text-[12.5px]">conecte Exa, Tavily ou Bright Data</a>.
                   </>
                 )}
               </p>
@@ -324,8 +324,10 @@ export default function Page() {
             <button type="button" className="btn-secundario mt-2" disabled={carregando} onClick={usarExemplo}>Usar temas de exemplo</button>
           </form>
 
+          <Monitoramentos dados={formParaDados(form)} onEditar={d => setForm(dadosParaForm(d))} />
+
           <div className="card p-5 mt-4">
-            <Privacidade detalhe="O radar fica salvo neste app até você apagar em 'Últimos resultados'. Os temas ficam lembrados só neste navegador." />
+            <Privacidade detalhe="O radar fica salvo neste app até você apagar em 'Últimos resultados'. Monitoramentos e termos cadastrados ficam salvos neste app." />
 
             <MaisDetalhes titulo="Últimos resultados">
               {historico === null ? (
@@ -412,7 +414,7 @@ export function Resultado({ radar, dados, meta, id, mostrarRefazer = false }: { 
         </Item>
       )}
 
-      <ReceberRadarSemanal dados={dados} />
+      <Link href="/#monitoramentos" className="btn-ghost mt-4">Configurar monitoramento diário</Link>
 
       <MaisDetalhes titulo="Para a equipe técnica">
         <p className="text-muted text-[13px] mb-3">Nós, conexões e grupos do mapa, no formato que ferramentas de grafo leem.</p>
@@ -421,78 +423,6 @@ export function Resultado({ radar, dados, meta, id, mostrarRefazer = false }: { 
 
       <SeloIA demo={meta.demo} />
     </article>
-  );
-}
-
-type RotinaRadar = { id: string; tipo: string; parametros: Partial<DadosRadar> };
-
-/** Depois de um radar, oferece uma rotina semanal para o mesmo perfil (temas+setor): toda segunda às 8h,
- * comparando com o radar anterior desse perfil e avisando o que é novo e o que continua forte.
- * Três estados: carregando → nada; já existe → frase; senão → botão (ou link para Notificações, se não estiverem prontas). */
-function ReceberRadarSemanal({ dados }: { dados: DadosRadar }) {
-  const { status } = useStatus();
-  const [rotinaId, setRotinaId] = useState<string | null | undefined>(undefined);
-  const [criando, setCriando] = useState(false);
-  const [erroRotina, setErroRotina] = useState<{ mensagem: string; motivo?: string } | null>(null);
-
-  useEffect(() => {
-    const perfilAtual = chavePerfil(dados.temas, dados.setor);
-    fetch("/api/rotinas")
-      .then((r) => r.json())
-      .then((d) => {
-        const existente = (d.itens || []).find((i: RotinaRadar) => i.tipo === "radar-semanal" && chavePerfil(i.parametros?.temas || [], i.parametros?.setor) === perfilAtual);
-        setRotinaId(existente?.id ?? null);
-      })
-      .catch(() => setRotinaId(null));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- o perfil (temas+setor) não muda enquanto o resultado está na tela
-  }, []);
-
-  async function criar() {
-    setCriando(true);
-    setErroRotina(null);
-    try {
-      const r = await fetch("/api/radar/semanal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ temas: dados.temas, setor: dados.setor }) });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        setErroRotina({ mensagem: typeof d.error === "string" ? d.error : "Não foi possível criar a rotina. Tente de novo.", motivo: d.motivo });
-        return;
-      }
-      setRotinaId(d.id);
-    } catch (e) {
-      setErroRotina({ mensagem: (await lerErro(e)).mensagem });
-    } finally {
-      setCriando(false);
-    }
-  }
-
-  const notificacoesProntas = status ? Boolean(status.integrations?.notificacoes) : undefined;
-  if (rotinaId === undefined || notificacoesProntas === undefined) return null;
-
-  return (
-    <Item className="mt-4">
-      {rotinaId ? (
-        <p className="text-muted text-sm">Você já recebe este radar toda semana para esses temas, toda segunda às 8h.</p>
-      ) : notificacoesProntas ? (
-        <button type="button" className="btn-ghost !w-auto" onClick={criar} disabled={criando}>
-          {criando ? "Criando..." : "Receber este radar toda semana"}
-        </button>
-      ) : (
-        <a href="/setup#notificacoes" className="btn-ghost !w-auto">Receber este radar toda semana</a>
-      )}
-      {erroRotina && (
-        <div className="mt-3">
-          <Aviso tom="danger">
-            {erroRotina.mensagem}
-            {erroRotina.motivo === "notificacoes" && (
-              <>
-                {" "}
-                <a className="btn-link text-[13px]" href="/setup#notificacoes">Configurar notificações</a>
-              </>
-            )}
-          </Aviso>
-        </div>
-      )}
-    </Item>
   );
 }
 

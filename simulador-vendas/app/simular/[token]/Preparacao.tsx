@@ -36,7 +36,7 @@ function Moldura({ marca, nome, children }: { marca: string; nome: string; child
 function Linha({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
     <div className="flex flex-col gap-0.5 py-3 border-t border-line">
-      <div className="text-muted text-[12.5px] font-semibold uppercase tracking-[0.04em]">{rotulo}</div>
+      <div className="text-muted text-[12.5px] font-semibold ">{rotulo}</div>
       <div className="text-[14.5px]">{valor}</div>
     </div>
   );
@@ -46,6 +46,7 @@ export function Preparacao({ codigo, marca, nome, titulo, produto }: Props) {
   const router = useRouter();
   const [preparo, setPreparo] = useState<Preparo | null>(null);
   const [erro, setErro] = useState("");
+  const [tentativa, setTentativa] = useState(0);
   const [comecando, setComecando] = useState(false);
 
   // Busca inicial em corrente: abrir a sessão é um POST porque é ele que grava a conversa que vai
@@ -67,7 +68,7 @@ export function Preparacao({ codigo, marca, nome, titulo, produto }: Props) {
     return () => {
       vivo = false;
     };
-  }, [codigo]);
+  }, [codigo, tentativa]);
 
   async function comecar() {
     setComecando(true);
@@ -90,6 +91,7 @@ export function Preparacao({ codigo, marca, nome, titulo, produto }: Props) {
         <p role="alert" className="px-3.5 py-3 rounded-field bg-[#fde8e6] text-danger text-[13.5px] font-semibold">
           {erro}
         </p>
+        <button type="button" className="btn-primary mt-4" onClick={() => { setErro(""); setTentativa((n) => n + 1); }}>Tentar novamente</button>
       </Moldura>
     );
   }
@@ -98,7 +100,7 @@ export function Preparacao({ codigo, marca, nome, titulo, produto }: Props) {
     return (
       <Moldura marca={marca} nome={nome}>
         <h1 className="text-[22px] leading-[1.2] font-extrabold tracking-[-0.02em] mb-2">Seu cliente</h1>
-        <p className="text-muted">Preparando a sua conversa...</p>
+        <p role="status" className="text-muted">Preparando a sua conversa...</p>
       </Moldura>
     );
   }
