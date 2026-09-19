@@ -7,6 +7,7 @@ export const NOMES_FONTE: Record<IdFonteBusca, string> = {
   github: "GitHub",
   googlenews: "Google Notícias",
   exa: "Exa",
+  grok: "Grok · X Search",
   tavily: "Tavily",
   brightdata: "Bright Data Search Engine",
   "brightdata-markdown": "Bright Data Markdown",

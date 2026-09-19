@@ -1,7 +1,10 @@
+import { comandoRedis } from "./cache-busca";
 import { testarBrightData } from "./brightdata";
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 // A busca na web (Exa ou Tavily) é usada só por este app, por isso mora aqui e não em lib/setup-comum.ts.
 import { openrouter, NOTIFICACOES, type Integracao } from "./setup-comum";
+
+NOTIFICACOES.beneficio = "Entrega resumos e novos sinais por e-mail ou Slack";
 
 const OPENROUTER = openrouter({ beneficio: "Liga a IA que agrupa os achados em sinais" });
 
@@ -77,4 +80,19 @@ export const BRIGHTDATA: Integracao = {
   campoConectado: "BRIGHTDATA_API_TOKEN", testar: testarBrightData,
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, NOTIFICACOES, BUSCA_WEB, BRIGHTDATA];
+OPENROUTER.campos.push({ chave: "OPENROUTER_MODEL_ONTOLOGIA", rotulo: "Modelo para sinais e ontologia", tipo: "text", opcional: true, placeholder: "ID do modelo no OpenRouter", ajuda: "Use um modelo com boa capacidade de raciocínio e saída JSON. Em branco, usa o modelo principal." });
+
+export const GROK: Integracao = {
+  id: "grok", titulo: "Grok · X Search", beneficio: "Identifica conversas e sinais recentes no X",
+  descricao: "Consulta o X pela API xAI, com janela de datas e URLs citadas pela ferramenta. Exige créditos xAI; a escolha de Grok no OpenRouter não habilita esta busca.", obrigatoria: false,
+  link: { url: "https://console.x.ai", rotulo: "Obter chave xAI" },
+  campos: [{ chave: "XAI_API_KEY", rotulo: "Chave xAI", tipo: "secret", opcional: true }, { chave: "XAI_SEARCH_MODEL", rotulo: "Modelo de busca", tipo: "text", padrao: "grok-4.6", opcional: true }], campoConectado: "XAI_API_KEY",
+  testar: config => testarFonte("xAI", () => fetch("https://api.x.ai/v1/models", { headers: { Authorization: `Bearer ${config.XAI_API_KEY}` }, signal: AbortSignal.timeout(10000) })),
+};
+export const REDIS: Integracao = {
+  id: "redis", titulo: "Redis · cache de pesquisa", beneficio: "Reduz consultas repetidas aos buscadores",
+  descricao: "Cache opcional de cinco minutos via Upstash Redis REST. Só guarda buscas bem-sucedidas com achados. Se ficar indisponível, a busca continua. Histórico, termos e agendamentos permanecem no SQLite.", obrigatoria: false,
+  campos: [{ chave: "UPSTASH_REDIS_REST_URL", rotulo: "Endpoint HTTPS do Upstash", tipo: "text", placeholder: "https://seu-banco.upstash.io" }, { chave: "UPSTASH_REDIS_REST_TOKEN", rotulo: "Token Redis REST", tipo: "secret" }],
+  testar: async config => { try { const r = await comandoRedis(["PING"], config); return { ok: r === "PONG", mensagem: r === "PONG" ? "Redis disponível para cache de pesquisa." : "Redis não respondeu ao teste." }; } catch { return { ok: false, mensagem: "Confira o endpoint HTTPS e o token Upstash Redis." }; } },
+};
+export const INTEGRACOES: Integracao[] = [OPENROUTER, BUSCA_WEB, BRIGHTDATA, GROK, REDIS, NOTIFICACOES];

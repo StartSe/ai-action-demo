@@ -11,8 +11,8 @@ export async function POST(req: Request) {
   const setor = typeof body?.setor === "string" ? body.setor.trim() : "";
   const rodada = rodadaValida(body?.rodada);
 
-  if (temas.length === 0) {
-    return Response.json({ error: "Informe ao menos um tema para acompanhar, um por linha." }, { status: 400 });
+  if (temas.length === 0 || temas.length > 12 || temas.some((t: string) => t.length > 200) || setor.length > 200) {
+    return Response.json({ error: "Informe de 1 a 12 temas de até 200 caracteres e um setor de até 200 caracteres." }, { status: 400 });
   }
   if (!periodoDias) {
     return Response.json({ error: "Escolha um período válido: 7, 30 ou 90 dias." }, { status: 400 });

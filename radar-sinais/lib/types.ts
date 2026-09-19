@@ -46,10 +46,10 @@ export interface Conexao {
 }
 
 /** Provedores de busca de lib/busca.ts (os quatro primeiros sem chave; Exa e Tavily com chave). */
-export type IdFonteBusca = "hackernews" | "reddit" | "github" | "googlenews" | "exa" | "tavily" | "brightdata" | "brightdata-markdown";
+export type IdFonteBusca = "hackernews" | "reddit" | "github" | "googlenews" | "exa" | "tavily" | "brightdata" | "brightdata-markdown" | "grok";
 
 /** Situação de uma fonte numa rodada (ou na sondagem feita antes dela): respondeu, não respondeu, chave recusada ou sem chave. */
-export type EstadoFonte = { id: IdFonteBusca; nome: string; estado: "ok" | "indisponivel" | "chave_recusada" | "sem_chave" };
+export type EstadoFonte = { id: IdFonteBusca; nome: string; estado: "ok" | "indisponivel" | "chave_recusada" | "sem_chave"; cache?: boolean; coletadoEm?: string };
 
 export interface Radar {
   periodoDias: number;
@@ -61,6 +61,7 @@ export interface Radar {
   fontes?: EstadoFonte[];
   /** Quantos achados a busca trouxe antes da IA agrupar (explica um radar com 0 sinais). */
   totalAchados?: number;
+  coleta?: { iniciadaEm: string; consultas: number; semData: number; sitesPriorizados: string[]; avisos?: string[] };
 }
 
 export interface DadosRadar {

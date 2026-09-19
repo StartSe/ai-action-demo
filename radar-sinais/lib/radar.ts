@@ -1,7 +1,9 @@
+import { pertenceAoSite } from "./pesquisa";
+import { lerPesquisa } from "./pesquisa-store";
 import { brightDataConectada, enriquecerMarkdown } from "./brightdata";
 // Motor de geração do radar de sinais. Reaproveitado por app/api/radar/route.ts, por lib/rotinas-do-app.ts
 // (rotina semanal) e por lib/ferramentas.ts (ferramenta MCP montar_radar) — nunca duplicar este prompt/lógica.
-import { aiEnabled, askJSON, meta } from "./ai";
+import { aiEnabled, askJSON, meta, modelName } from "./ai";
 import { registrarResposta } from "./andamento";
 import { buscarDetalhado, ErroBusca, type Achado } from "./busca";
 import { esperar, radarDemo } from "./demo";
@@ -54,7 +56,7 @@ function consolidarFontes(porConsulta: EstadoFonte[][]): EstadoFonte[] {
       porId.set(f.id, f);
       return;
     }
-    if (f.estado === "ok" || (f.estado === "chave_recusada" && atual.estado !== "ok")) porId.set(f.id, f);
+    if (f.estado === "ok" || (f.estado === "chave_recusada" && atual.estado !== "ok")) porId.set(f.id, { ...f, cache: atual.cache || f.cache, coletadoEm: [atual.coletadoEm, f.coletadoEm].filter((v): v is string => Boolean(v)).sort()[0] });
   });
   return [...porId.values()];
 }
@@ -67,28 +69,30 @@ function calcularForca(fontes: Fonte[]): Sinal["forca"] {
   return "baixa";
 }
 
-function normalizar(bruto: Partial<Radar> | null | undefined, dados: DadosRadar, achados: Achado[]): Radar {
+export function normalizar(bruto: Partial<Radar> | null | undefined, dados: DadosRadar, achados: Achado[]): Radar {
   const achadoPorUrl = new Map(achados.map((a) => [a.url, a]));
 
   const sinaisBrutos = Array.isArray(bruto?.sinais) ? bruto!.sinais : [];
   const sinais: Sinal[] = sinaisBrutos
+    .filter(s => s && typeof s.id === "string" && typeof s.titulo === "string" && typeof s.resumo === "string" && typeof s.oQueFazer === "string")
     .map((s) => {
       const fontes: Fonte[] = (Array.isArray(s.fontes) ? s.fontes : [])
-        .filter((f) => achadoPorUrl.has(f.url))
+        .filter((f) => f && achadoPorUrl.has(f.url))
         .map((f) => {
           const achado = achadoPorUrl.get(f.url)!;
-          return { titulo: f.titulo || achado.titulo, url: achado.url, veiculo: achado.veiculo, publicadoEm: achado.publicadoEm };
+          return { titulo: achado.titulo, url: achado.url, veiculo: achado.veiculo, publicadoEm: achado.publicadoEm };
         });
-      return { ...s, fontes, forca: calcularForca(fontes) };
+      const unicas = [...new Map(fontes.map(f => [f.url, f])).values()];
+      return { ...s, temas: Array.isArray(s.temas) ? s.temas.filter(t => typeof t === "string") : [], tendencia: (["subindo", "estavel", "caindo"].includes(s.tendencia) ? s.tendencia : "estavel") as Sinal["tendencia"], fontes: unicas, forca: calcularForca(unicas) };
     })
     .filter((s) => s.fontes.length > 0)
     .sort((a, b) => b.fontes.length - a.fontes.length)
     .slice(0, 12);
 
   const idsSinaisValidos = new Set(sinais.map((s) => s.id));
-  const nosBrutos = (Array.isArray(bruto?.nos) ? bruto!.nos : []).filter((n) => n.tipo !== "sinal" || idsSinaisValidos.has(n.id));
+  const nosBrutos = (Array.isArray(bruto?.nos) ? bruto!.nos : []).filter((n) => n && typeof n.id === "string" && typeof n.rotulo === "string" && ["tema", "sinal", "ator", "tecnologia"].includes(n.tipo) && (n.tipo !== "sinal" || idsSinaisValidos.has(n.id))).map(n => ({ ...n, peso: Number.isFinite(n.peso) ? Math.min(10, Math.max(1, n.peso)) : 1 }));
   const idsNos = new Set(nosBrutos.map((n) => n.id));
-  const arestasBrutas = (Array.isArray(bruto?.arestas) ? bruto!.arestas : []).filter((a) => idsNos.has(a.origem) && idsNos.has(a.destino));
+  const arestasBrutas = (Array.isArray(bruto?.arestas) ? bruto!.arestas : []).filter((a) => a && typeof a.relacao === "string" && idsNos.has(a.origem) && idsNos.has(a.destino)).map(a => ({ ...a, peso: Number.isFinite(a.peso) ? Math.min(5, Math.max(1, a.peso)) : 1 }));
 
   // Remove nós sem nenhuma aresta e limita a 120, priorizando os de maior peso.
   const idsComAresta = new Set(arestasBrutas.flatMap((a) => [a.origem, a.destino]));
@@ -100,10 +104,11 @@ function normalizar(bruto: Partial<Radar> | null | undefined, dados: DadosRadar,
   const arestas = arestasBrutas.filter((a) => idsFinais.has(a.origem) && idsFinais.has(a.destino));
 
   const conexoes = (Array.isArray(bruto?.conexoes) ? bruto!.conexoes : [])
-    .map((c) => ({ ...c, nos: (c.nos || []).filter((id) => idsFinais.has(id)) }))
+    .filter(c => c && typeof c.titulo === "string" && typeof c.explicacao === "string")
+    .map((c) => ({ ...c, nos: (Array.isArray(c.nos) ? c.nos : []).filter((id) => idsFinais.has(id)) }))
     .filter((c) => c.nos.length > 0);
 
-  return { periodoDias: Number(bruto?.periodoDias) || dados.periodoDias, sinais, nos, arestas, conexoes };
+  return { periodoDias: dados.periodoDias, sinais, nos, arestas, conexoes };
 }
 
 export type OpcoesRadar = {
@@ -119,39 +124,53 @@ export async function montarRadar(dados: DadosRadar, { rodada }: OpcoesRadar = {
     return { ...radarDemo(dados.periodoDias), meta: meta({ demo: true, insumo }) };
   }
 
+  const pesquisa = lerPesquisa();
+  const iniciadaEm = new Date().toISOString();
   // Tema puro e tema + setor, sem repetir consultas idênticas.
   const consultas = [...new Set(dados.temas.flatMap((tema) => [tema, dados.setor ? `${tema} ${dados.setor}` : tema]))];
   const aoResponder = rodada ? (fonte: string) => registrarResposta(rodada, fonte) : undefined;
-  const resultados = await Promise.allSettled(consultas.map((consulta) => buscarDetalhado({ consulta, dias: dados.periodoDias, aoResponder })));
+  const tarefas = consultas.map(consulta => ({ consulta, site: undefined as string | undefined }));
+  for (const fonte of pesquisa.fontes.filter(f => f.ativa)) tarefas.push({ consulta: dados.temas.join(" OR "), site: fonte.url });
+  // Limita a concorrência entre consultas; cada consulta isola a falha de cada provedor.
+  const resultados: PromiseSettledResult<Awaited<ReturnType<typeof buscarDetalhado>>>[] = [];
+  for (let i = 0; i < tarefas.length; i += 3) resultados.push(...await Promise.allSettled(tarefas.slice(i, i + 3).map(t => buscarDetalhado({ ...t, dias: dados.periodoDias, aoResponder, provedores: pesquisa.provedores }))));
 
+  const avisos: string[] = [];
   const achadosBrutos: Achado[] = [];
   const fontesPorConsulta: EstadoFonte[][] = [];
   resultados.forEach((r, i) => {
     if (r.status === "fulfilled") {
       achadosBrutos.push(...r.value.achados);
       fontesPorConsulta.push(r.value.fontes);
+      if (tarefas[i].site && !r.value.achados.length) avisos.push(`Nenhuma evidência recente encontrada em ${tarefas[i].site}.`);
     } else {
-      console.error(`Consulta de busca "${consultas[i]}" falhou:`, r.reason);
+      if (tarefas[i].site) avisos.push(`Não foi possível consultar ${tarefas[i].site}. Habilite e configure Exa, Tavily ou Bright Data.`);
+      console.error(`Consulta de busca "${tarefas[i].consulta}" falhou:`, r.reason);
     }
   });
   if (fontesPorConsulta.length === 0) {
+    const primeiraFalha = resultados.find(r => r.status === "rejected");
+    if (primeiraFalha?.status === "rejected" && primeiraFalha.reason instanceof ErroBusca) throw primeiraFalha.reason;
     throw new ErroBusca("Nenhuma fonte de busca respondeu agora. Tente novamente em alguns minutos.");
   }
   const fontes = consolidarFontes(fontesPorConsulta);
 
-  const enriquecido = await enriquecerMarkdown(mesclarAchados(achadosBrutos).slice(0, MAXIMO_ACHADOS_PROMPT));
+  const sites = pesquisa.fontes.filter(f => f.ativa).map(f => f.url);
+  const priorizado = (a: Achado) => sites.some(site => pertenceAoSite(a.url, site));
+  const selecionados = mesclarAchados(achadosBrutos).sort((a, b) => Number(priorizado(b)) - Number(priorizado(a)) || b.pontuacao - a.pontuacao).slice(0, MAXIMO_ACHADOS_PROMPT);
+  const enriquecido = pesquisa.provedores.includes("brightdata") ? await enriquecerMarkdown(selecionados) : { achados: selecionados, falhou: false };
   const achados = enriquecido.achados;
-  if (brightDataConectada() && achados.length) fontes.push({ id: "brightdata-markdown", nome: NOMES_FONTE["brightdata-markdown"], estado: enriquecido.falhou ? "indisponivel" : "ok" });
+  if (pesquisa.provedores.includes("brightdata") && brightDataConectada() && achados.length) fontes.push({ id: "brightdata-markdown", nome: NOMES_FONTE["brightdata-markdown"], estado: enriquecido.falhou ? "indisponivel" : "ok" });
   const listaAchados = achados.map((a, i) => `${i + 1}. [${NOMES_FONTE[a.fonte]}] "${a.titulo}" — ${a.veiculo}, ${a.publicadoEm.slice(0, 10) || "data não informada"}\n   url: ${a.url}\n   trecho: ${a.trecho || "(sem trecho)"}`).join("\n");
   const prompt = `Temas acompanhados:\n${dados.temas.map((t) => `- ${t}`).join("\n")}\n\nPeríodo: últimos ${dados.periodoDias} dias.${dados.setor ? `\nSetor da empresa: ${dados.setor}.` : ""}\n\nAchados encontrados na busca:\n${listaAchados}\n\nMonte o radar de sinais a partir desses achados.`;
 
   // Sem nenhum achado não há o que a IA agrupar: devolve um radar vazio (a tela explica) sem gastar a chamada.
-  const bruto = achados.length > 0 ? await askJSON<Radar>({ system: SYSTEM, prompt, maxTokens: 6000 }) : null;
+  const bruto = achados.length > 0 ? await askJSON<Radar>({ system: SYSTEM, prompt, maxTokens: 6000, model: modelName("ontologia") }) : null;
   const radar = normalizar(bruto, dados, achados);
 
   // Origem: "42 achados de Hacker News, GitHub e Google Notícias; Reddit indisponível".
   const nomesOk = fontes.filter((f) => f.estado === "ok").map((f) => f.nome);
   const problemas = descreverFontes(fontes.filter((f) => f.estado !== "ok"));
   const insumo = `${achados.length} ${achados.length === 1 ? "achado" : "achados"} de ${listarEmProsa(nomesOk)}${problemas ? `; ${problemas}` : ""}`;
-  return { ...radar, fontes, totalAchados: achados.length, meta: meta({ demo: false, insumo }) };
+  return { ...radar, fontes, totalAchados: achados.length, coleta: { avisos, iniciadaEm, consultas: tarefas.length, semData: achados.filter(a => !a.publicadoEm).length, sitesPriorizados: pesquisa.fontes.filter(f => f.ativa).map(f => f.url) }, meta: meta({ demo: false, insumo, model: modelName("ontologia") }) };
 }
