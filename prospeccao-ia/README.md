@@ -49,12 +49,8 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Ativa a IA que qualifica leads, gera a hipótese de dor e escreve a estratégia e as mensagens. Obtenha em https://openrouter.ai/keys |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
 | `APOLLO_API_KEY` | Alternativa ao setup. Ativa a Apollo.io como fonte alternativa de contatos. Obtenha em https://app.apollo.io/#/settings/integrations/api |
-| `BRIGHTDATA_API_KEY` | Alternativa ao setup. Ativa a pesquisa de mercado e sinais (busca de empresas, pessoas e sinais públicos) — o motor de descoberta do workspace, atrás de `lib/descoberta.ts`. Obtenha em https://brightdata.com/cp/zones |
-| `BRIGHTDATA_ZONE` | Alternativa ao setup. Nome da zona Web Unlocker (leitura de página) configurada na Bright Data. Padrão `web_unlocker1`. |
-| `BRIGHTDATA_ZONE_LEITURA` | Campo "Zona de leitura" em Opções avançadas (padrão `web_unlocker1`); quando definida, tem prioridade sobre `BRIGHTDATA_ZONE` para leitura de página e perfil de pessoa. |
-| `BRIGHTDATA_ZONE_BUSCA` | Campo "Zona de busca" em Opções avançadas (padrão `serp_api1`). Nome da zona SERP usada pela busca na web do workspace de prospecção. |
+| `BRIGHTDATA_API_KEY` | Alternativa ao setup. Ativa a pesquisa de mercado e sinais (busca de empresas, pessoas e sinais públicos) — o motor de descoberta do workspace, atrás de `lib/descoberta.ts`. A chave já salva é reaproveitada pelo MCP HTTP com `pro=1`, sem zonas manuais. Obtenha em https://brightdata.com/cp/mcp |
 | `BRIGHTDATA_TETO_CONSULTAS` | Campo "Teto de consultas por prospecção" em Opções avançadas (padrão 60). Quantas buscas e leituras reais uma prospecção pode fazer antes de parar e terminar "pronta" com o aviso de orçamento; páginas já lidas nas últimas 24h são reaproveitadas do cache e não contam. |
-| `BRIGHTDATA_BASE_URL` | Só para testes locais: substitui `https://api.brightdata.com` por um fornecedor falso. Não aparece em `/setup`. |
 | `MCP_CRM_URL` / `MCP_CRM_CODIGO` | Alternativa ao setup. CRM (HubSpot, Zendesk, Intercom...) que recebe os leads aprovados como contatos e negócios. |
 | `GOOGLE_CLIENT_ID_APP`, `GOOGLE_CLIENT_SECRET_APP`, `MICROSOFT_CLIENT_ID_APP`, `MICROSOFT_CLIENT_SECRET_APP` | Credenciais da suíte (equipe técnica, embutidas na imagem por `ARG`→`ENV` no `Dockerfile`) que liberam "Conectar meu Gmail"/"Conectar meu Outlook" no cartão Notificações. Sem elas, os botões não aparecem e o cartão segue por Slack, Resend ou SMTP. |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
@@ -79,6 +75,7 @@ components/ui.tsx                          componentes visuais compartilhados pe
 components/setup.tsx                       tela de setup genérica, gerada a partir de lib/integracoes.ts
 lib/workspace.ts                           tabelas do workspace: produto, ICP, prospecção, conta, lead, abordagem
 lib/descoberta.ts                          busca, leitura de página e perfil, com fallback de demonstração
+lib/brightdata.ts, brightdata-http.ts       catálogo e chamadas MCP HTTP com pro=1, sessões e JSON/SSE
 lib/qualificacao.ts, qualificacao-ia.ts    aderência ao ICP com evidências e hipótese de dor
 lib/estrategia.ts                          estratégia da abordagem e as três mensagens (e-mail, LinkedIn, WhatsApp)
 lib/execucao-prospeccao.ts                 pipeline assíncrono de uma prospecção, por etapas
@@ -101,7 +98,38 @@ Contas e leads do workspace (produtos, prospecções, contas, leads e abordagens
 
 ## Limites conhecidos
 - A Apollo.io não devolve um "sinal" de prospecção pronto: quando ela é a fonte de um contato, o texto "Sobre a empresa" vem de campos públicos da organização (ano de fundação, setor, número estimado de funcionários), não de um evento recente real — sinal, no sentido de evidência datada, é sempre da pesquisa pública (Bright Data).
-- A descoberta em lote (`descobrirEmLote`) é busca na web + leitura de página, não a API de datasets assíncrona da Bright Data; um teto de consultas por prospecção (padrão 60, configurável em Opções avançadas) evita que uma busca ampla consuma a cota inteira, reaproveitando páginas já lidas nas últimas 24h.
+- A descoberta em lote (`descobrirEmLote`) continua como busca na web + leitura de página. Search Dataset fica disponível como ação de pesquisa com filtros explícitos, sem iniciar uma compra ou exportação assíncrona. O teto de consultas por prospecção (padrão 60) e o cache de páginas de 24h continuam valendo.
 - Uma conta ou pessoa sem nenhuma evidência verificável não entra na lista; um critério sem dado nunca conta como atendido, aparece como "não foi possível verificar".
 - Em modo demonstração, o exemplo (produto, ICP, prospecção, 3 contas, 6 pessoas, 1 abordagem) é fixo e marcado como exemplo em toda tela onde aparece; "Limpar exemplo" remove só o que ele criou.
 - O modelo antigo de busca única (`lib/historico.ts`, `app/historico`) continua funcionando em paralelo para o link permanente, a impressão e o envio ao CRM de resultados anteriores ao workspace; toda tela e rota novas usam só o modelo do workspace (`lib/workspace.ts`).
+
+## Bright Data via MCP
+
+O teste e as pesquisas usam `POST https://mcp.brightdata.com/mcp?token=<chave>&pro=1`
+(Streamable HTTP). O cliente inicializa a sessão, envia `notifications/initialized` e aceita respostas
+JSON ou SSE. A chave continua em `BRIGHTDATA_API_KEY`; zonas antigas salvas são ignoradas e não
+precisam ser apagadas. O teste de conexão lista o catálogo, executa Search Engine e Scrape as Markdown
+e informa quais capacidades adicionais estão disponíveis. Ter uma ação no catálogo não comprova saldo
+ou permissão para executar todos os datasets; falhas são informadas quando a ação é chamada.
+
+- Busca: `search_engine` com `engine: "google"` e `cursor` para paginação.
+- Páginas: `scrape_as_markdown`. Perfis, empresas, vagas e posts do LinkedIn, além de perfis,
+  posts e reels do Instagram, usam a extração estruturada correspondente quando disponível.
+  Falhas dessa extração tentam Markdown; chave recusada, saldo e teto de consultas são respeitados.
+- Assistentes conectados ao MCP deste app usam `listar_acoes_pesquisa` para obter nomes e schemas
+  atuais e `executar_acao_pesquisa` para chamar uma ação. O catálogo inclui todas as `web_data_*`
+  disponibilizadas pela conta (inclusive busca de pessoas e comentários), Search Dataset e as buscas
+  e leituras em lote. Ações de interação com navegador ficam de fora.
+- Para Search Dataset, consulte `list_dataset_fields` com o `dataset_id` antes de montar o filtro de
+  `search_dataset`. Passe os campos, operadores, tamanho e cursor conforme o schema retornado pelo
+  servidor. A resposta mantém `hits`, `total_hits` e `search_after` para a próxima página.
+
+Sem chave, os fluxos existentes continuam em demonstração. Com chave, uma falha de conexão ou de
+ferramenta nunca é substituída por dados fictícios. Tokens e respostas externas de erro não são
+registrados em logs nem devolvidos ao usuário.
+
+Referências oficiais: [conexão HTTP Pro](https://brightdata.com/blog/ai/truefoundry-with-bright-data)
+e [schemas e implementação das ferramentas](https://github.com/brightdata/brightdata-mcp/blob/main/server.js).
+
+Validação local: `npm test`, `npm run lint` e `npm run build`. Os testes usam um servidor simulado;
+a conta publicada precisa ser validada no botão de teste do setup após atualizar o app.

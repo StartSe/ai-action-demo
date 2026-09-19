@@ -1,4 +1,5 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
+import { testarBrightData } from "./brightdata";
 import { MCP_CRM, NOTIFICACOES, openrouter, type Integracao } from "./setup-comum";
 
 const OPENROUTER = openrouter({ beneficio: "Liga a IA que escreve a abordagem de cada lead" });
@@ -35,43 +36,15 @@ export const APOLLO: Integracao = {
   },
 };
 
-/** Testa uma zona da Bright Data com uma URL de exemplo, devolvendo um rótulo curto do resultado
- * ("conectada", "recusou a chave", "não respondeu", "não funcionou com a zona “x”") — nunca lança,
- * quem chama decide como combinar o resultado das duas zonas numa única mensagem. */
-async function testarZona(zona: string, url: string, chave: string): Promise<{ ok: boolean; detalhe: string }> {
-  let r: Response;
-  try {
-    r = await fetch("https://api.brightdata.com/request", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${chave}` },
-      body: JSON.stringify({ zone: zona, url, format: "raw" }),
-    });
-  } catch (err) {
-    console.error("Bright Data: falha de rede no teste de conexão", err);
-    return { ok: false, detalhe: "não respondeu" };
-  }
-  if (r.status === 401 || r.status === 403) return { ok: false, detalhe: "recusou a chave" };
-  if (!r.ok) {
-    console.error("Bright Data: teste de conexão recusado", r.status, zona);
-    return { ok: false, detalhe: `não funcionou com a zona “${zona}”` };
-  }
-  return { ok: true, detalhe: "conectada" };
-}
-
-// As zonas de busca e leitura ficam em "Opções avançadas" com o padrão já preenchido: o cartão
-// principal pede só a chave. BRIGHTDATA_ZONE (campo único de antes desta história) não aparece mais
-// aqui, mas continua funcionando como zona de leitura para quem já a configurou (lib/descoberta.ts).
 export const BRIGHTDATA: Integracao = {
   id: "brightdata",
   titulo: "Pesquisa de mercado e sinais",
   descricao: "Encontra empresas, pessoas e sinais públicos de verdade para a prospecção, pela Bright Data. Sem ela, os resultados são fictícios.",
   beneficio: "Encontra empresas, pessoas e sinais públicos de verdade",
   obrigatoria: false,
-  link: { url: "https://brightdata.com/cp/zones", rotulo: "Criar conta e gerar a chave na Bright Data" },
+  link: { url: "https://brightdata.com/cp/mcp", rotulo: "Criar conta e gerar a chave na Bright Data" },
   campos: [
-    { chave: "BRIGHTDATA_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "•••••••••••••••••", ajuda: "Fica no topo do painel da Bright Data, junto com a lista de zonas." },
-    { chave: "BRIGHTDATA_ZONE_BUSCA", rotulo: "Zona de busca", tipo: "text", opcional: true, avancado: true, padrao: "serp_api1", ajuda: "Só mude se você criou a zona de busca com outro nome no painel da Bright Data." },
-    { chave: "BRIGHTDATA_ZONE_LEITURA", rotulo: "Zona de leitura", tipo: "text", opcional: true, avancado: true, padrao: "web_unlocker1", ajuda: "Só mude se você criou a zona de leitura com outro nome no painel da Bright Data." },
+    { chave: "BRIGHTDATA_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "•••••••••••••••••", ajuda: "Use a chave da sua conta Bright Data. A conexão usa MCP com todas as ferramentas habilitadas, sem configurar zonas." },
     {
       chave: "BRIGHTDATA_TETO_CONSULTAS",
       rotulo: "Teto de consultas por prospecção",
@@ -82,18 +55,7 @@ export const BRIGHTDATA: Integracao = {
       ajuda: "Quantas buscas e leituras uma prospecção pode fazer antes de parar para não consumir sua cota.",
     },
   ],
-  testar: async (config) => {
-    const chave = config.BRIGHTDATA_API_KEY;
-    if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
-    const zonaBusca = config.BRIGHTDATA_ZONE_BUSCA || "serp_api1";
-    const zonaLeitura = config.BRIGHTDATA_ZONE_LEITURA || config.BRIGHTDATA_ZONE || "web_unlocker1";
-    const [busca, leitura] = await Promise.all([
-      testarZona(zonaBusca, "https://www.google.com/search?q=teste&brd_json=1", chave),
-      testarZona(zonaLeitura, "https://example.com", chave),
-    ]);
-    if (busca.ok && leitura.ok) return { ok: true, mensagem: "Conectado. A busca e a leitura de páginas estão funcionando." };
-    return { ok: false, mensagem: `Busca: ${busca.detalhe}. Leitura: ${leitura.detalhe}. Confira as zonas em Opções avançadas.` };
-  },
+  testar: testarBrightData,
 };
 
 const CRM: Integracao = {

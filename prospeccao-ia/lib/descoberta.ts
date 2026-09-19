@@ -1,29 +1,13 @@
-// Camada única de descoberta: busca na web, leitura de página, perfil de pessoa e descoberta em
-// lote. Nenhuma rota ou outra lib deste app fala com api.brightdata.com diretamente — todas passam
-// por aqui, que decide entre a chamada real e o fallback de demonstração (lib/demo.ts).
-//
-// Endereços e formatos CONFERIDOS na documentação oficial em 18/09/2026 (https://docs.brightdata.com):
-//   POST https://api.brightdata.com/request, cabeçalho `Authorization: Bearer <chave>`, corpo
-//   `{ zone, url, format: "raw" }` (scraping-automation/web-unlocker/send-your-first-request).
-//   - Leitura de página: soma `data_format: "markdown"` ao corpo — o Web Unlocker converte o HTML em
-//     markdown do próprio lado do serviço (scraping-automation/web-unlocker/features: "Web Unlocker is
-//     able to live convert your pages from HTML to markdown"), então não é mais preciso limpar HTML na
-//     mão como `lib/abordagem.ts`/`lib/produto-ia.ts` faziam antes desta história.
-//   - Busca na web (zona SERP): a `url` é uma busca do Google (`https://www.google.com/search?q=<consulta>`)
-//     com `&brd_json=1` na própria query string do alvo (não no corpo do POST) — é o que faz o serviço
-//     devolver o resultado já em JSON estruturado (`{ organic: [{ title, link, description }] }`) em vez
-//     do HTML da página de busca (scraping-automation/serp-api/parsed-json-results).
-//   - Descoberta em lote (os conjuntos de dados prontos da Bright Data, com disparo assíncrono e
-//     consulta de andamento por id) fica FORA da v1 por decisão da própria PRD (Open Question 4,
-//     `naoFazer` do prd.json): `descobrirEmLote` tem a interface pronta, mas hoje é busca + leitura de
-//     cada resultado encontrado, sem chamar a API de datasets.
+// Camada de descoberta via Bright Data MCP HTTP (pro=1). Busca, leitura e dados estruturados
+// compartilham a chave salva, o teto de consultas e o cache; sem chave, usa demonstração.
+// Referência: https://github.com/brightdata/brightdata-mcp (search_engine, scrape_as_markdown,
+// search_dataset e web_data_*). Catálogo e schemas são descobertos por tools/list.
 import type { DatabaseSync } from "node:sqlite";
 import { ACAO_PESQUISA_DE_MERCADO } from "./acoes";
 import { conteudoPaginaDemo, perfilPessoaDemo, resultadosBuscaDemo } from "./demo";
 import { abrirBanco, getConfig } from "./store";
-
-/** Base do serviço. A variável só existe para os testes locais apontarem para um fornecedor falso. */
-const BASE = process.env.BRIGHTDATA_BASE_URL || "https://api.brightdata.com";
+import { acaoParaUrl, brightDataAtiva, chamarBrightData, listarAcoesBrightData, mensagemFalhaBrightData, resultadosOrganicos } from "./brightdata";
+import { ErroMCP } from "./brightdata-http";
 
 export type CodigoErroDescoberta = "chave_recusada" | "limite_do_plano" | "servico_fora" | "sem_resultado";
 
@@ -133,72 +117,41 @@ export class ErroDescoberta extends Error {
   }
 }
 
-/** Único ponto que traduz uma resposta não-ok da Bright Data em ErroDescoberta. */
-function interpretarFalha(status: number, detalheBruto: string): ErroDescoberta {
-  console.error("Bright Data recusou:", status, detalheBruto.slice(0, 200));
-  if (status === 401 || status === 403) {
-    return new ErroDescoberta(
-      "chave_recusada",
-      "A pesquisa de mercado recusou a chave. Confira em Configurações › Pesquisa de mercado e sinais.",
-      401,
-      ACAO_PESQUISA_DE_MERCADO
-    );
+/** Não propaga respostas externas nem URLs que possam conter o token. */
+function interpretarFalha(erro: unknown): ErroDescoberta {
+  const mensagem = mensagemFalhaBrightData(erro);
+  if (erro instanceof ErroMCP) {
+    if ([401, 403].includes(erro.status) || /unauthorized|invalid.*(?:token|key)|authentication/i.test(erro.detalhe)) {
+      return new ErroDescoberta("chave_recusada", mensagem, 401, ACAO_PESQUISA_DE_MERCADO);
+    }
+    if ([402, 429].includes(erro.status) || /quota|credit|balance|rate.?limit|payment/i.test(erro.detalhe)) {
+      return new ErroDescoberta("limite_do_plano", mensagem, 429, ACAO_PESQUISA_DE_MERCADO);
+    }
   }
-  if (status === 402 || status === 429) {
-    return new ErroDescoberta("limite_do_plano", "A pesquisa de mercado atingiu o limite do plano.", 429, ACAO_PESQUISA_DE_MERCADO);
-  }
-  return new ErroDescoberta("servico_fora", "A pesquisa de mercado não respondeu; tente de novo em um minuto.", 502);
+  return new ErroDescoberta("servico_fora", mensagem, 502, ACAO_PESQUISA_DE_MERCADO);
 }
 
-function chaveConfigurada(): boolean {
-  return Boolean(getConfig("BRIGHTDATA_API_KEY"));
-}
-
-function zonaBusca(): string | undefined {
-  return getConfig("BRIGHTDATA_ZONE_BUSCA");
-}
-
-// BRIGHTDATA_ZONE é o nome já usado por quem lia página antes desta camada existir (US-007, e o
-// enriquecimento de abordagem de antes da US-001); continua valendo como zona de leitura enquanto a
-// US-016 não separa os dois campos (busca/leitura) no /setup, para não mudar o comportamento de quem
-// já configurou.
-function zonaLeitura(): string | undefined {
-  return getConfig("BRIGHTDATA_ZONE_LEITURA") || getConfig("BRIGHTDATA_ZONE");
-}
-
-/** Se pelo menos uma capacidade (busca ou leitura) tem chave e zona configuradas. */
 export function descobertaAtiva(): boolean {
-  return chaveConfigurada() && Boolean(zonaBusca() || zonaLeitura());
+  return brightDataAtiva();
 }
 
-async function chamar(zone: string, corpo: Record<string, unknown>, prospeccaoId?: string): Promise<string> {
+/** Ações públicas expostas também ao assistente, com os schemas atuais do servidor. */
+export async function listarAcoesPesquisa() {
+  try { return await listarAcoesBrightData(); }
+  catch (erro) { throw interpretarFalha(erro); }
+}
+
+export async function executarAcaoPesquisa(nome: string, argumentos: Record<string, unknown>, prospeccaoId?: string): Promise<unknown> {
+  if (!descobertaAtiva()) throw new ErroDescoberta("chave_recusada", "Conecte a pesquisa de mercado em Configurações.", 401, ACAO_PESQUISA_DE_MERCADO);
   reservarConsulta(prospeccaoId);
-  let r: Response;
-  try {
-    r = await fetch(`${BASE}/request`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getConfig("BRIGHTDATA_API_KEY")}` },
-      body: JSON.stringify({ zone, ...corpo }),
-    });
-  } catch (err) {
-    console.error("Erro de rede ao chamar a Bright Data:", err);
-    throw new ErroDescoberta("servico_fora", "A pesquisa de mercado não respondeu; tente de novo em um minuto.", 502);
-  }
-  const texto = await r.text().catch(() => "");
-  if (!r.ok) throw interpretarFalha(r.status, texto);
-  return texto;
+  try { return await chamarBrightData(nome, argumentos); }
+  catch (erro) { throw interpretarFalha(erro); }
 }
 
 // --- Busca na web --------------------------------------------------------------------------------
 
 export type ResultadoBuscaWeb = { titulo: string; url: string; resumo: string };
 export type RespostaBusca = { itens: ResultadoBuscaWeb[]; origem: string; consultadoEm: string; demo: boolean };
-
-interface OrganicoSerp {
-  title?: string;
-  link?: string;
-  description?: string;
-}
 
 /** `pagina` (0-indexado) soma `&start=<pagina*10>` à busca do Google (paginação padrão de resultados
  * orgânicos, não específica da Bright Data) — usado por quem precisa de mais de uma página de
@@ -207,20 +160,15 @@ export async function buscarNaWeb(consulta: string, pagina = 0, prospeccaoId?: s
   const origemBase = `https://www.google.com/search?q=${encodeURIComponent(consulta)}`;
   const origem = pagina > 0 ? `${origemBase}&start=${pagina * 10}` : origemBase;
   const consultadoEm = new Date().toISOString();
-  const zona = zonaBusca();
-  if (!chaveConfigurada() || !zona) {
+  if (!descobertaAtiva()) {
     return { itens: resultadosBuscaDemo(consulta), origem, consultadoEm, demo: true };
   }
-  const texto = await chamar(zona, { url: `${origem}&brd_json=1`, format: "raw" }, prospeccaoId);
-  let dados: { organic?: OrganicoSerp[] } = {};
-  try {
-    dados = JSON.parse(texto);
-  } catch (err) {
-    console.error("Resposta da busca não veio em JSON:", err instanceof Error ? err.message : err);
-  }
-  const itens = (dados.organic || [])
-    .map((o): ResultadoBuscaWeb => ({ titulo: o.title || "", url: o.link || "", resumo: o.description || "" }))
-    .filter((item) => item.url);
+  const resultado = await executarAcaoPesquisa("search_engine", {
+    query: consulta, engine: "google", ...(pagina > 0 ? { cursor: String(pagina) } : {}),
+  }, prospeccaoId);
+  let itens: ResultadoBuscaWeb[];
+  try { itens = resultadosOrganicos(resultado); }
+  catch (erro) { throw interpretarFalha(erro); }
   if (!itens.length) {
     throw new ErroDescoberta("sem_resultado", "A pesquisa não encontrou nada para esse critério.", 404);
   }
@@ -233,13 +181,38 @@ export type RespostaLeitura = { conteudo: string; origem: string; consultadoEm: 
 
 const LIMITE_CONTEUDO = 8000;
 
+/** Snapshots podem conter registros de erro mesmo sem isError no envelope MCP. */
+function conteudoEstruturado(resultado: unknown): string | undefined {
+  const registros = Array.isArray(resultado) ? resultado : [resultado];
+  const validos = registros.filter((r): r is Record<string, unknown> =>
+    r !== null && typeof r === "object" && !Array.isArray(r)
+    && !r.error && !r.error_code && Object.keys(r).length > 0);
+  return validos.length ? JSON.stringify(validos) : undefined;
+}
+
 /** Reaproveita `cache_paginas` quando a URL já foi lida há menos de 24h (sem nova chamada à Bright
  * Data, sem contar consulta nenhuma); senão lê de verdade e grava o resultado no cache. */
-async function lerComMarkdown(zona: string, url: string, prospeccaoId?: string): Promise<string> {
+async function lerConteudo(url: string, prospeccaoId?: string): Promise<string> {
   const emCache = lerCache(url);
   if (emCache !== null) return emCache;
-  const conteudo = await chamar(zona, { url, format: "raw", data_format: "markdown" }, prospeccaoId);
-  if (!conteudo.trim()) throw new ErroDescoberta("sem_resultado", "Não foi possível ler o conteúdo dessa página.", 404);
+  const acao = acaoParaUrl(url);
+  let conteudo: string | undefined;
+  if (acao !== "scrape_as_markdown") {
+    const acoes = await listarAcoesPesquisa();
+    if (acoes.some(f => f.nome === acao)) {
+      try { conteudo = conteudoEstruturado(await executarAcaoPesquisa(acao, { url }, prospeccaoId)); }
+      catch (erro) {
+        if (erro instanceof TetoConsultasAtingido || (erro instanceof ErroDescoberta && ["chave_recusada", "limite_do_plano"].includes(erro.codigo))) throw erro;
+        // Falha da extração específica: tenta a leitura pública da mesma página.
+      }
+    }
+  }
+  if (!conteudo) {
+    const markdown = await executarAcaoPesquisa("scrape_as_markdown", { url }, prospeccaoId);
+    // Um envelope vazio ou objeto de erro não é conteúdo de uma página.
+    if (typeof markdown === "string") conteudo = markdown;
+  }
+  if (!conteudo?.trim()) throw new ErroDescoberta("sem_resultado", "Não foi possível ler o conteúdo dessa página.", 404);
   const limitado = conteudo.trim().slice(0, LIMITE_CONTEUDO);
   gravarCache(url, limitado);
   return limitado;
@@ -249,26 +222,20 @@ async function lerComMarkdown(zona: string, url: string, prospeccaoId?: string):
  * (se real) para o teto de consultas daquela prospecção (US-023). */
 export async function lerPagina(url: string, prospeccaoId?: string): Promise<RespostaLeitura> {
   const consultadoEm = new Date().toISOString();
-  const zona = zonaLeitura();
-  if (!chaveConfigurada() || !zona) {
+  if (!descobertaAtiva()) {
     return { conteudo: conteudoPaginaDemo(url), origem: url, consultadoEm, demo: true };
   }
-  const conteudo = await lerComMarkdown(zona, url, prospeccaoId);
+  const conteudo = await lerConteudo(url, prospeccaoId);
   return { conteudo, origem: url, consultadoEm, demo: false };
 }
 
-/**
- * Texto limpo (markdown) de um perfil público de pessoa. Hoje é a MESMA leitura de página de
- * `lerPagina` (mesma zona, mesmo formato) — uma capacidade própria é o que permite, mais adiante,
- * trocar por um provedor/endpoint dedicado a perfil profissional sem mexer em quem já chama `lerPagina`.
- */
+/** Perfil público: dados estruturados da rede quando disponíveis, com fallback para Markdown. */
 export async function perfilDePessoa(url: string, prospeccaoId?: string): Promise<RespostaLeitura> {
   const consultadoEm = new Date().toISOString();
-  const zona = zonaLeitura();
-  if (!chaveConfigurada() || !zona) {
+  if (!descobertaAtiva()) {
     return { conteudo: perfilPessoaDemo(url), origem: url, consultadoEm, demo: true };
   }
-  const conteudo = await lerComMarkdown(zona, url, prospeccaoId);
+  const conteudo = await lerConteudo(url, prospeccaoId);
   return { conteudo, origem: url, consultadoEm, demo: false };
 }
 

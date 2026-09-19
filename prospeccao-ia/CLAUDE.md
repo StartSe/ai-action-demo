@@ -288,3 +288,14 @@ Este é o único app da suíte com mais de um destino no `Topbar` além de `/set
     - `/leads/[id]` — sem h1 de frase escrita (nome da pessoa, dado real); "Papel no processo de decisão" e "Status" são `<select>` com no máximo 1 linha de explicação dinâmica abaixo (`motivoPapel`/nenhuma), nunca 2.
     - `/leads/[id]/abordagem` — h1 "Estratégia para `<nome>`" (nome real); apoio "Concorde com o rumo ou clique em qualquer item para mudar." (11); a tabela de 5 linhas (Objetivo/Gancho/Dor provável/Tom/CTA) é conteúdo GERADO (real ou de demonstração), não uma lista curta escrita pela equipe — fora do escopo da regra, como qualquer outro dado de negócio na tela.
   - **Arquivos tocados nesta história**: `components/BuscaLivre.tsx` (overflow do `<select>` + textos dos 4 exemplos), `components/Inicio.tsx` (`key` no `<BuscaLivre>`), `components/ICPForm.tsx` (`Row`+`MaisDetalhes`), `components/CriteriosProspeccao.tsx` (`Row` nos 3 modos + `max-w-full` no `<select>` de quantidade), `components/ProdutoComIA.tsx` (`Row`+`MaisDetalhes`+hints removidos+textarea menor), `prospeccao-ia/CLAUDE.md` (esta seção). Nenhum arquivo de `scripts/verificar-padrao.sh` foi tocado (conferido com o `diff` do antes/depois do script, vazio).
+
+- **Bright Data MCP (19/09/2026):** substitui as notas históricas sobre chamadas REST por zonas.
+  `lib/brightdata.ts` + `lib/brightdata-http.ts` usam POST Streamable HTTP em
+  `https://mcp.brightdata.com/mcp?token=...&pro=1`, inicialização, sessão e JSON/SSE.
+  A chave salva `BRIGHTDATA_API_KEY` continua válida; `BRIGHTDATA_ZONE*` e `BRIGHTDATA_BASE_URL`
+  não são mais usados. `lib/descoberta.ts` mantém demo só sem chave, cache e teto, passa busca a
+  `search_engine` e leitura a `scrape_as_markdown` ou ação `web_data_*` específica da URL.
+  O setup testa busca e leitura reais e mostra capacidades do catálogo. `listar_acoes_pesquisa` e
+  `executar_acao_pesquisa` no MCP do app expõem os schemas e ações públicas, incluindo
+  `list_dataset_fields`/`search_dataset` e todas as ações sociais disponíveis. O cliente MCP
+  compartilhado de CRM permanece separado. Regressões em `tests/brightdata.test.ts` (`npm test`).

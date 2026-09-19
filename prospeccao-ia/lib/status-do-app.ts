@@ -10,7 +10,7 @@ export function statusExtra(): Record<string, boolean> {
     // dizer "os leads novos da semana chegam a alguém": canal com credencial e destino definidos.
     notificacoes: notificacoesProntas(),
     // "brightdata" (calculado pelo genérico a partir de INTEGRACOES) já reflete a chave salva; aqui é
-    // "chave e ao menos uma zona configuradas" (o que lib/descoberta.ts de fato usa para decidir entre
+    // "chave configurada para MCP" (o que lib/descoberta.ts de fato usa para decidir entre
     // real e demonstração).
     descoberta: descobertaAtiva(),
   };

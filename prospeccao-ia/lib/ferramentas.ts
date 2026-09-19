@@ -10,6 +10,7 @@
 // lib/workspace.ts:mudarStatusLead (PUT /api/leads/[id]) e criar_abordagem →
 // lib/estrategia.ts:gerarOuObterAbordagem (GET /api/leads/[id]/abordagem).
 import { escreverAbordagem } from "./abordagem";
+import { executarAcaoPesquisa, listarAcoesPesquisa } from "./descoberta";
 import { gerarOuObterAbordagem } from "./estrategia";
 import { criarProspeccaoValidada } from "./execucao-prospeccao";
 import { buscarLeads, QUANTIDADES_VALIDAS } from "./leads";
@@ -24,6 +25,32 @@ const MOTIVOS_DESCARTE_VALIDOS = Object.keys(ROTULO_MOTIVO_DESCARTE);
 export const NOME_SERVIDOR = "prospeccao-ia";
 
 export const FERRAMENTAS: Ferramenta[] = [
+  {
+    nome: "listar_acoes_pesquisa",
+    descricao: "Lista as ações de pesquisa conectadas e seus schemas atuais: busca na web, leitura de páginas, Search Dataset e dados públicos de LinkedIn, Instagram e outras redes. Consulte antes de executar uma ação.",
+    schema: { type: "object", properties: {} },
+    async executar() { return listarAcoesPesquisa(); },
+  },
+  {
+    nome: "executar_acao_pesquisa",
+    descricao: "Executa uma ação de consulta retornada por listar_acoes_pesquisa, usando exatamente seu schema. Para search_dataset, consulte list_dataset_fields antes para escolher campos e filtros válidos. Permite todas as ações de dados públicos disponíveis, incluindo perfis, empresas, vagas, posts, busca de pessoas, reels e comentários. Não envia mensagens.",
+    schema: {
+      type: "object",
+      properties: {
+        acao: { type: "string", description: "Nome exato da ação no catálogo" },
+        argumentos: { type: "object", description: "Argumentos conforme o schema retornado no catálogo" },
+        prospeccaoId: { type: "string", description: "Id da prospecção para contabilizar a consulta no teto (opcional)" },
+      },
+      required: ["acao", "argumentos"],
+    },
+    async executar(args) {
+      if (typeof args.acao !== "string" || !args.acao.trim()) throw new Error("Informe a ação de pesquisa.");
+      if (!args.argumentos || typeof args.argumentos !== "object" || Array.isArray(args.argumentos)) throw new Error("Informe os argumentos da ação como objeto.");
+      const id = typeof args.prospeccaoId === "string" ? args.prospeccaoId : undefined;
+      if (id && !obterAndamento(id)) throw new Error("Prospecção não encontrada.");
+      return executarAcaoPesquisa(args.acao, args.argumentos as Record<string, unknown>, id);
+    },
+  },
   {
     nome: "buscar_leads",
     descricao:
