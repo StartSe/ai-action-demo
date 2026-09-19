@@ -73,9 +73,8 @@ const INSUMO = "toda a conversa, o currículo e a ficha do candidato";
 /**
  * O que a avaliação sabe antes de começar.
  *
- * Diferente do contexto da entrevistadora (`ContextoRoteiro`, lib/roteiro.ts), aqui a faixa salarial
- * entra **sempre**: quem lê o parecer é o gestor, e dizer se a pretensão cabe no orçamento é metade
- * da utilidade de tê-la perguntado. O que continua valendo igual é a D6 — o que a pesquisa na web
+ * A faixa salarial permite comparar a pretensão com o orçamento no parecer do gestor.
+ * O contexto da entrevistadora também usa a faixa para responder dúvidas sobre a vaga. O que continua valendo igual é a D6 — o que a pesquisa na web
  * trouxe só entra depois de o gestor confirmar de quem é aquele perfil.
  */
 export type ContextoAvaliacao = {
@@ -132,7 +131,8 @@ function entrevistaParcial(entrevistaId: string, numeroPerguntas: number, falas:
     if (plano.versaoConducao !== 2) return respostas < plano.perguntas.length;
     const ultimaResposta = falas.findLastIndex(f => f.papel === "candidato");
     const posicao = posicaoNoRoteiro(plano, falas.slice(0, ultimaResposta + 1), numeroPerguntas);
-    return decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas }).tipo !== "encerrar";
+    const passo = decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas });
+    return passo.tipo !== "encerrar" && !(passo.tipo === "duvida" && posicao.indice >= plano.perguntas.length);
   } catch (err) {
     console.error("Roteiro gravado ilegível ao medir a entrevista; vale o número combinado na vaga.", err);
     return respostas < numeroPerguntas;

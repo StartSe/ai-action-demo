@@ -294,8 +294,8 @@ export interface ItemFichaRoteiro {
  * Tudo que a entrevistadora sabe antes de abrir a boca: a vaga, a cultura e a ficha do candidato.
  *
  * O que NÃO está aqui é tão importante quanto o que está. A ficha só traz o que veio do currículo,
- * do gestor e — quando a identidade foi confirmada (D6) — da web; o salário só aparece quando a vaga
- * pergunta pretensão; e nada além destes campos pode ser dito ao candidato.
+ * do gestor e — quando a identidade foi confirmada (D6) — da web. A faixa cadastrada serve para
+ * responder dúvidas, mesmo se a vaga não perguntar pretensão. Nada além destes campos pode ser dito.
  */
 export interface ContextoRoteiro {
   cargo: string;
@@ -303,7 +303,7 @@ export interface ContextoRoteiro {
   senioridade?: string;
   modelo?: string;
   local?: string;
-  /** Só quando `perguntaPretensao`: fora disso a entrevistadora não fala de dinheiro. */
+  /** Faixa cadastrada para responder dúvidas; não obriga a perguntar pretensão. */
   faixaSalarial?: string;
   desafios: string[];
   requisitos: string[];

@@ -15,6 +15,7 @@ import { carregarConversaComRecuperacao } from "@/lib/carregar-conversa";
 //     configura nada e não recebe recado de quem administra o app.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Aviso, ErrorBox, lerErro, useConfirmacao, type ErroLido } from "./ui";
+import { criarPausaDespedida } from "@/lib/pausa-despedida";
 import { criarEscuta, type SessaoEscuta } from "@/lib/escuta";
 import type { CodigoErroIA } from "@/lib/ai";
 import type { Troca } from "@/lib/types";
@@ -96,7 +97,12 @@ export function SalaCandidato({
   const [falas, setFalas] = useState<Troca[]>([]);
   const [estado, setEstado] = useState<EstadoConversa>("pensando");
   const [modo, setModo] = useState<"voz" | "texto">(porVoz ? "voz" : "texto");
-  const [escuta, setEscuta] = useState<ModoEscuta>("toque");
+  const [escuta, setEscuta] = useState<ModoEscuta>("livre");
+  const [aguardandoFim, setAguardandoFim] = useState(false);
+  const pausaRef = useRef<ReturnType<typeof criarPausaDespedida> | null>(null);
+  const pararFalaRef = useRef<(() => void) | null>(null);
+  const geracaoFalaRef = useRef(0);
+  const adiarFim = useCallback(() => { pausaRef.current?.cancelar(); setAguardandoFim(false); }, []);
   const [parcial, setParcial] = useState("");
   const [digitado, setDigitado] = useState("");
   const [indice, setIndice] = useState(0);
@@ -196,6 +202,7 @@ export function SalaCandidato({
         resolver();
       };
       const prazo = setTimeout(pronto, limiteDaFala(texto));
+      pararFalaRef.current = pronto;
       audio.onended = pronto;
       audio.onerror = pronto;
       audio.play().catch((err) => {
@@ -226,6 +233,7 @@ export function SalaCandidato({
         resolver();
       };
       const prazo = setTimeout(pronto, limiteDaFala(texto));
+      pararFalaRef.current = pronto;
       fala.onend = pronto;
       fala.onerror = pronto;
       sintese.cancel();
@@ -241,14 +249,16 @@ export function SalaCandidato({
   const dizer = useCallback(
     async (texto: string) => {
       if (!texto || !gestoRef.current || fechandoRef.current || modoRef.current === "texto") return;
+      const geracao = geracaoFalaRef.current;
+      pararEscuta();
       guardarEstado("falando");
       if (vozLigada && !vozDesistiuRef.current) {
         try {
           const r = await fetch(`/api/entrevista/candidato/${codigo}/voz?texto=${encodeURIComponent(texto)}`, { signal: AbortSignal.timeout(10000) });
-          if (fechandoRef.current) return;
+          if (fechandoRef.current || geracao !== geracaoFalaRef.current) return;
           if (r.ok) {
             const blob = await r.blob();
-            if (fechandoRef.current) return;
+            if (fechandoRef.current || geracao !== geracaoFalaRef.current) return;
             await tocar(blob, texto);
             return;
           }
@@ -259,20 +269,34 @@ export function SalaCandidato({
           setAvisoVoz(await lerErro(err));
         }
       }
-      if (!fechandoRef.current) await sintetizar(texto);
+      if (!fechandoRef.current && geracao === geracaoFalaRef.current) await sintetizar(texto);
     },
-    [codigo, sintetizar, tocar, vozLigada]
+    [codigo, sintetizar, tocar, vozLigada, pararEscuta]
   );
 
   const finalizar = useCallback(() => {
     if (fechandoRef.current) return;
     fechandoRef.current = true;
+    pausaRef.current?.cancelar();
     pararEscuta();
     window.speechSynthesis?.cancel();
     audioRef.current?.pause();
     setEncerrando(true);
     onFinalizar(falasRef.current);
   }, [onFinalizar, pararEscuta]);
+
+  useEffect(() => {
+    const pausa = criarPausaDespedida(finalizar);
+    pausaRef.current = pausa;
+    return () => pausa.cancelar();
+  }, [finalizar]);
+
+  const aguardarDespedida = useCallback(() => {
+    guardarEstado("parado");
+    setAguardandoFim(true);
+    pausaRef.current?.aguardar();
+    if (modoRef.current === "voz" && escutaModoRef.current === "livre") iniciarEscutaRef.current?.();
+  }, []);
 
   /**
    * Um turno: manda a última resposta e recebe a fala seguinte.
@@ -306,10 +330,11 @@ export function SalaCandidato({
         guardarFalas(turno.transcricao.length ? turno.transcricao : [...falasRef.current, { papel: "entrevistadora", texto: turno.pergunta }]);
         setIndice(turno.indice);
         setTotal(turno.total);
+        const geracao = geracaoFalaRef.current;
         await dizer(turno.pergunta);
-        if (fechandoRef.current) return;
+        if (fechandoRef.current || geracao !== geracaoFalaRef.current) return;
         if (turno.encerrar) {
-          finalizar();
+          aguardarDespedida();
           return;
         }
         guardarEstado("parado");
@@ -322,18 +347,19 @@ export function SalaCandidato({
         guardarEstado("parado");
       }
     },
-    [codigo, tentativaAtual, conversaNoNavegador, dizer, finalizar]
+    [codigo, tentativaAtual, conversaNoNavegador, dizer, aguardarDespedida]
   );
 
   const responder = useCallback(
     (texto: string) => {
       const limpo = texto.trim();
       if (!limpo || fechandoRef.current) return;
+      adiarFim();
       const ordem = falasRef.current.filter((f) => f.papel === "candidato").length + 1;
       guardarFalas([...falasRef.current, { papel: "candidato", texto: limpo }]);
       void enviarTurno(limpo, ordem);
     },
-    [enviarTurno]
+    [enviarTurno, adiarFim]
   );
 
   const iniciarEscuta = useCallback(() => {
@@ -352,6 +378,7 @@ export function SalaCandidato({
       automatico: escutaModoRef.current === "livre",
       onEstado: guardarEstado,
       onTexto: (texto) => {
+        if (texto.trim()) adiarFim();
         parcialRef.current = texto;
         setParcial(texto);
       },
@@ -370,16 +397,17 @@ export function SalaCandidato({
         cairParaTexto(erro === "not-allowed" || erro === "service-not-allowed" ? "microfone" : "servico");
       },
     });
-  }, [cairParaTexto, pararEscuta, responder]);
+  }, [cairParaTexto, pararEscuta, responder, adiarFim]);
 
   /** Retoma a conversa de onde o servidor a deixou: fala a pergunta atual e devolve a vez. */
   const continuar = useCallback(
     async (atual: Turno | null) => {
       if (atual?.pergunta) {
+        const geracao = geracaoFalaRef.current;
         await dizer(atual.pergunta);
-        if (fechandoRef.current) return;
+        if (fechandoRef.current || geracao !== geracaoFalaRef.current) return;
         if (atual.encerrar) {
-          finalizar();
+          aguardarDespedida();
           return;
         }
         guardarEstado("parado");
@@ -388,7 +416,7 @@ export function SalaCandidato({
       }
       await enviarTurno("", falasRef.current.filter((f) => f.papel === "candidato").length);
     },
-    [dizer, enviarTurno, finalizar]
+    [dizer, enviarTurno, aguardarDespedida]
   );
 
   // Os caminhos que se chamam de dentro de um manipulador da escuta viajam por referência, atualizada
@@ -445,6 +473,8 @@ export function SalaCandidato({
     fechandoRef.current = false;
     return () => {
       fechandoRef.current = true;
+      pausaRef.current?.cancelar();
+      pararFalaRef.current?.();
       escutaAtivaRef.current?.abort();
       audioRef.current?.pause();
       window.speechSynthesis?.cancel();
@@ -452,6 +482,16 @@ export function SalaCandidato({
   }, []);
 
   function alternarMicrofone() {
+    adiarFim();
+    if (estadoRef.current === "falando") {
+      geracaoFalaRef.current++;
+      window.speechSynthesis?.cancel();
+      audioRef.current?.pause();
+      pararFalaRef.current?.();
+      guardarEstado("parado");
+      iniciarEscuta();
+      return;
+    }
     if (estadoRef.current === "ouvindo") {
       try {
         escutaAtivaRef.current?.stop();
@@ -473,6 +513,7 @@ export function SalaCandidato({
   }
 
   function irParaTexto() {
+    adiarFim();
     const reconhecido = parcialRef.current;
     if (reconhecido) setDigitado((anterior) => [anterior, reconhecido].filter(Boolean).join(" "));
     parcialRef.current = "";
@@ -484,8 +525,9 @@ export function SalaCandidato({
   }
 
   function voltarParaVoz() {
+    adiarFim();
     setMotivoTexto("");
-    setEscuta("toque");
+    setEscuta("livre");
     modoRef.current = "voz";
     setModo("voz");
   }
@@ -507,7 +549,7 @@ export function SalaCandidato({
     finalizar();
   }
 
-  const podeFalarAgora = estado === "parado" || estado === "ouvindo";
+  const podeFalarAgora = estado === "parado" || estado === "ouvindo" || estado === "falando";
   const manual = escuta === "toque";
 
   return (
@@ -567,6 +609,7 @@ export function SalaCandidato({
       )}
 
       <div className="resposta">
+        {aguardandoFim && <p role="status" className="text-sm text-muted text-center">Vamos encerrar em alguns segundos. Se ainda tiver uma dúvida, pode falar ou digitar.</p>}
         <div className="text-center text-[12.5px] font-semibold uppercase tracking-[0.06em] text-muted" aria-live="polite">
           {encerrando ? "Enviando as suas respostas..." : precisaToque ? "Entrevista em andamento" : estado === "pensando" && !falas.length ? "Preparando sua entrevista..." : ROTULO_ESTADO[estado]}
         </div>
@@ -579,7 +622,7 @@ export function SalaCandidato({
           <div className="flex flex-col items-center gap-3">
             <button
               type="button"
-              aria-label={estado === "ouvindo" ? "Parar gravação" : "Começar gravação"}
+              aria-label={estado === "falando" ? "Interromper e falar" : estado === "ouvindo" ? "Parar gravação" : "Começar gravação"}
               aria-pressed={estado === "ouvindo"}
               className={`w-[76px] h-[76px] rounded-full grid place-items-center text-white transition-transform disabled:opacity-45 ${estado === "ouvindo" ? "bg-danger scale-105" : "bg-accent"}`}
               disabled={!podeFalarAgora || encerrando || !!falha}
@@ -592,7 +635,7 @@ export function SalaCandidato({
               </svg>
             </button>
             <p className="text-muted text-[12.5px] text-center">
-              {manual ? (estado === "ouvindo" ? "Gravando. Toque novamente para parar e revisar sua resposta." : "Toque para gravar, sem segurar. Revise o texto antes de enviar.") : "Mãos livres: após 2 segundos de silêncio, sua resposta é enviada automaticamente."}
+              {estado === "falando" ? "Microfone pausado durante a fala. Toque para interromper e falar." : manual ? (estado === "ouvindo" ? "Gravando. Toque novamente para parar e revisar sua resposta." : "Toque para gravar, sem segurar. Revise o texto antes de enviar.") : "Mãos livres: após 4 segundos de silêncio, sua resposta é enviada automaticamente."}
             </p>
             <button type="button" className="btn-ghost !w-auto text-[13px]" disabled={estado !== "parado" || !!digitado.trim()} onClick={() => setEscuta(manual ? "livre" : "toque")}>
               {manual ? "Usar envio automático por silêncio" : "Revisar antes de enviar"}
@@ -611,7 +654,7 @@ export function SalaCandidato({
               rows={2}
               placeholder="Escreva a sua resposta..."
               value={digitado}
-              onChange={(e) => setDigitado(e.target.value)}
+              onChange={(e) => { adiarFim(); setDigitado(e.target.value); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();

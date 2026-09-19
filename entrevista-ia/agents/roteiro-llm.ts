@@ -26,7 +26,7 @@ export class RoteiroLLM extends llm.LLM {
   }
   async responder(chatCtx: llm.ChatContext): Promise<string | null> {
     const mensagem = [...chatCtx.items].reverse().find((m) => m.type === "message" && m.role === "user");
-    if (!mensagem || mensagem.type !== "message" || !mensagem.textContent || this.terminou) return null;
+    if (!mensagem || mensagem.type !== "message" || !mensagem.textContent) return null;
     const entrevista = obter(this.entrevistaId);
     if (!entrevista || entrevista.tentativa !== this.tentativa || !["convidada", "aberta", "em_andamento"].includes(entrevista.status)) return null;
     let ordem = this.ordens.get(mensagem.id);

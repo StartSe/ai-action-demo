@@ -1,3 +1,4 @@
+import { temDuvidaSobreVaga, responderDuvidaDaVaga } from "./duvidas-vaga";
 import { conferirTentativa } from "./tentativa";
 import { comTurnoExclusivo } from "./trava-entrevista";
 // O roteiro da entrevista (US-016): o que a entrevistadora sabe antes de abrir a boca, o plano que
@@ -176,8 +177,8 @@ export function contextoDaVaga(
     senioridade: vaga.senioridade,
     modelo: vaga.modelo,
     local: vaga.local,
-    // Sem "perguntar pretensão" a faixa nem viaja: o que não está no contexto não pode ser dito.
-    faixaSalarial: vaga.perguntaPretensao ? faixaSalarial(vaga) : undefined,
+    // Perguntar a pretensão é opcional; responder sobre a faixa cadastrada continua possível.
+    faixaSalarial: faixaSalarial(vaga),
     desafios: desafiosDaVaga(vaga.desafios),
     requisitos: linhas(vaga.requisitos),
     competencias: vaga.competenciasCulturais.map((c) => ({ nome: c.nome, descricao: c.descricao })),
@@ -429,6 +430,7 @@ export function respostaVaga(texto: string): boolean {
 
 export type PassoRoteiro =
   | { tipo: "encerrar" }
+  | { tipo: "duvida"; retomar?: PerguntaRoteiro }
   | { tipo: "followup"; bloco: BlocoRoteiro }
   | { tipo: "pergunta" | "retomar"; indice: number; pergunta: PerguntaRoteiro };
 
@@ -447,6 +449,7 @@ export function decidirPasso({ plano, posicao, resposta }: {
   if (anterior && resposta.trim().split(/\s+/).length <= 16 && /^(?:(?:desculp[ae]|oi)[,.!?]?\s*)?(?:pode(?:ria)? repetir|repita|não (?:ouvi|entendi)|qual (?:era|foi) a pergunta)/i.test(resposta.trim())) {
     return { tipo: "retomar", indice: indice - 1, pergunta: anterior };
   }
+  if (temDuvidaSobreVaga(resposta)) return { tipo: "duvida", retomar: indice < plano.perguntas.length ? anterior : undefined };
   if (indice >= plano.perguntas.length) return { tipo: "encerrar" };
   const preferePular = /(?:não (?:sei|tenho experiência|quero responder)|prefiro não|pode pular)/i.test(resposta);
   if (resposta && anterior && anterior.bloco !== "encerramento" &&
@@ -514,7 +517,7 @@ export function fatosDaVaga(ctx: ContextoRoteiro): string[] {
     ctx.senioridade && `Senioridade: ${ctx.senioridade}`,
     ctx.modelo && `Modelo de trabalho: ${ctx.modelo}`,
     ctx.local && `Local: ${ctx.local}`,
-    // Sem "perguntar pretensão" não há faixa no contexto — e sem faixa não há o que responder.
+    // A faixa cadastrada permite responder dúvidas mesmo sem perguntar a pretensão.
     ctx.faixaSalarial && `Faixa salarial: ${ctx.faixaSalarial}`,
     ctx.desafios.length && `Desafios dos primeiros meses: ${ctx.desafios.join("; ")}`,
     ctx.requisitos.length && `Requisitos: ${ctx.requisitos.join("; ")}`,
@@ -540,7 +543,7 @@ async function escreverFala({
   ctx: ContextoRoteiro;
   plano: Roteiro;
   falas: Troca[];
-  passo: Exclude<PassoRoteiro, { tipo: "encerrar" }>;
+  passo: Exclude<PassoRoteiro, { tipo: "encerrar" | "duvida" }>;
   primeira: boolean;
 }): Promise<string> {
   const instrucao =
@@ -590,6 +593,12 @@ async function falaDoPasso(args: {
   passo: Exclude<PassoRoteiro, { tipo: "encerrar" }>;
   primeira: boolean;
 }): Promise<string> {
+  if (args.passo.tipo === "duvida") {
+    const pergunta = args.falas.findLast(f => f.papel === "candidato")?.texto ?? "";
+    const resposta = responderDuvidaDaVaga(args.ctx, pergunta);
+    if (resposta.endsWith("?")) return resposta;
+    return `${resposta} ${args.passo.retomar ? `Retomando a nossa conversa: ${args.passo.retomar.pergunta}` : "Tem mais alguma dúvida sobre a vaga?"}`;
+  }
   const reserva = args.passo.tipo === "followup" ? followUpDemo() : args.passo.pergunta.pergunta;
   if (args.passo.tipo === "retomar") return `Claro. ${reserva}`;
   if (!aiEnabled()) {
@@ -602,7 +611,7 @@ async function falaDoPasso(args: {
     return `Olá${args.ctx.candidato.primeiroNome ? `, ${args.ctx.candidato.primeiroNome}` : ""}! Vamos conversar por cerca de ${args.ctx.duracaoMin} minutos. Fique à vontade para pensar e contar exemplos com calma. ${reserva}`;
   }
   try {
-    return (await escreverFala(args)) || reserva;
+    return (await escreverFala({ ...args, passo: args.passo })) || reserva;
   } catch (err) {
     console.error("A entrevistadora não conseguiu escrever a fala deste turno; seguindo pelo roteiro planejado.", err);
     return reserva;

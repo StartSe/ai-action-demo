@@ -103,12 +103,12 @@ describe("a ficha que a entrevistadora recebe (D6)", () => {
 });
 
 describe("os fatos que a entrevistadora pode dizer sobre a vaga", () => {
-  it("não fala de salário quando a vaga não pergunta pretensão", () => {
+  it("não inventa faixa salarial quando ela não está no contexto", () => {
     const ctx = contexto({ perguntaPretensao: false, faixaSalarial: undefined });
     assert.ok(!fatosDaVaga(ctx).some((f) => /Faixa salarial/.test(f)));
   });
 
-  it("fala só a faixa quando a vaga pergunta", () => {
+  it("inclui a faixa cadastrada nos fatos disponíveis", () => {
     const fatos = fatosDaVaga(contexto({ faixaSalarial: "R$ 5.500 a R$ 7.000" }));
     assert.ok(fatos.some((f) => f === "Faixa salarial: R$ 5.500 a R$ 7.000"));
   });
@@ -276,7 +276,8 @@ describe("posicaoNoRoteiro", () => {
       const posicao = posicaoNoRoteiro(plano, falas, 8);
       const passo = decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas: 8 });
       if (passo.tipo === "encerrar") break;
-      const texto = passo.tipo === "followup" ? "Pode detalhar?" : passo.pergunta.pergunta;
+      assert.notEqual(passo.tipo, "duvida");
+      const texto = passo.tipo === "followup" || passo.tipo === "duvida" ? "Pode detalhar?" : passo.pergunta.pergunta;
       perguntas.push(texto);
       falas = [...falas, { papel: "entrevistadora", texto }, { papel: "candidato", texto: "Sim." }];
     }

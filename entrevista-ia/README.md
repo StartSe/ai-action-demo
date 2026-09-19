@@ -198,3 +198,11 @@ O parecer organiza nota e síntese lado a lado, alinha os botões e reúne as a�
 O modelo padrão passa a ser `openai/gpt-5.4-mini`; escolhas explícitas em Configurações continuam tendo prioridade. No detalhe da entrevista, o gestor pode usar **Reabrir entrevista** (no menu de ações quando já existe parecer). A confirmação apaga a conversa, o parecer e a decisão anteriores, preserva o roteiro e libera o mesmo link por mais 15 dias. Somente a nova entrevista entra no parecer e nos indicadores. A vaga precisa estar aberta, sem outra entrevista ativa para o mesmo candidato.
 
 A ação exige sessão autenticada do gestor. Abas, sessões de voz, webhooks e avaliações em processamento da tentativa anterior não podem gravar dados na nova tentativa. Pareceres antigos deixam de estar disponíveis pelos links de compartilhamento.
+
+### Dúvidas e ritmo da conversa (0.6.0)
+
+A entrevistadora responde dúvidas durante e ao final da conversa, inclusive salário, modalidade e local de trabalho. Usa os dados cadastrados e encaminha ao recrutamento o que não estiver confirmado. A faixa salarial cadastrada pode ser informada mesmo quando a opção de perguntar a pretensão está desligada. As dúvidas não consomem perguntas do roteiro nem aprofundamentos.
+
+Na voz, o microfone pausa durante a fala da entrevistadora e volta automaticamente depois. **Interromper e falar** permite tomar a palavra manualmente; a pausa voluntária do microfone continua sendo respeitada. No navegador, o envio por silêncio passa a ser o padrão, com opção de revisar antes de enviar.
+
+O encerramento espera o áudio da despedida terminar e mais 8 segundos. Falar, digitar ou interromper nesse intervalo mantém a conversa aberta. O mesmo cuidado vale na sala LiveKit e na voz do navegador.

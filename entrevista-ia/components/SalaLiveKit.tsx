@@ -1,9 +1,13 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Room, RoomEvent, Track, ParticipantKind, type RemoteParticipant } from "livekit-client";
+import { MicrofoneEntrevista } from "@/lib/microfone-entrevista";
 import type { Troca } from "@/lib/types";
 
 export function SalaLiveKit({ codigo, tentativaAtual = 1, cargo, onFinalizar, onTexto }: { codigo: string; tentativaAtual?: number; cargo: string; onFinalizar: (falas: Troca[]) => Promise<void>; onTexto: () => void }) {
+  const microfone = useRef<MicrofoneEntrevista | null>(null);
+  const [agenteFalando, setAgenteFalando] = useState(false);
+  const [pausaManual, setPausaManual] = useState(false);
   const sala = useRef<Room | null>(null);
   const falas = useRef<Troca[]>([]);
   const finalizar = useRef(onFinalizar);
@@ -12,7 +16,7 @@ export function SalaLiveKit({ codigo, tentativaAtual = 1, cargo, onFinalizar, on
   const [estado, setEstado] = useState("Conectando sua entrevista");
   const [erro, setErro] = useState("");
   const [conectado, setConectado] = useState(false);
-  const [mudo, setMudo] = useState(false);
+  const [mudo, setMudo] = useState(true);
   const [microfoneOcupado, setMicrofoneOcupado] = useState(false);
   const [fala, setFala] = useState("");
   const [legenda, setLegenda] = useState("");
@@ -27,11 +31,17 @@ export function SalaLiveKit({ codigo, tentativaAtual = 1, cargo, onFinalizar, on
     const controller = new AbortController();
     const room = new Room({ adaptiveStream: true, audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     sala.current = room;
+    const controle = new MicrofoneEntrevista(ativo => room.localParticipant.setMicrophoneEnabled(ativo), estado => {
+      if (ativo) { setMudo(!estado.ativo); setAgenteFalando(estado.falando); setPausaManual(estado.pausado); }
+    });
+    microfone.current = controle;
+    const falhaMicrofone = () => { if (ativo) setErro("Não conseguimos acessar o microfone. Confira a permissão ou continue por texto."); };
     const audios = new Set<HTMLMediaElement>();
     const prazo = setTimeout(() => { if (ativo) { setErro("A conexão está demorando. Reconecte ou continue por texto; as respostas já enviadas estão salvas."); void room.disconnect(); } }, 30000);
     function agente(participant?: RemoteParticipant) {
       if (!ativo || participant?.kind !== ParticipantKind.AGENT) return;
       const status = participant.attributes["lk.agent.state"];
+      void controle.aoFalar(status === "speaking").catch(falhaMicrofone);
       if (status && status !== "initializing") { clearTimeout(prazo); setConectado(true); setErro(""); }
       setEstado(status === "speaking" ? "A entrevistadora está falando" : status === "thinking" ? "Preparando a próxima pergunta" : status === "listening" ? "Pode falar. Estou ouvindo" : "Preparando o áudio");
     }
@@ -73,24 +83,32 @@ export function SalaLiveKit({ codigo, tentativaAtual = 1, cargo, onFinalizar, on
         await room.connect(body.url, body.token, { peerConnectionTimeout: 15000, websocketTimeout: 10000 });
         if (!ativo) { await room.disconnect(); return; }
         await room.startAudio().catch(() => { if (ativo) setPrecisaAudio(true); });
-        await room.localParticipant.setMicrophoneEnabled(true);
-        if (ativo) { setMudo(false); room.remoteParticipants.forEach(agente); }
+        if (ativo) room.remoteParticipants.forEach(agente);
       } catch (e) { if (ativo) { clearTimeout(prazo); setErro(e instanceof Error ? e.message : "Não foi possível conectar."); setConectado(false); void room.disconnect(); } }
     }
     void conectar();
-    return () => { ativo = false; controller.abort(); clearTimeout(prazo); void room.disconnect(); audios.forEach((audio) => { audio.pause(); audio.remove(); }); if (sala.current === room) sala.current = null; };
+    return () => { ativo = false; controle.fechar(); if (microfone.current === controle) microfone.current = null; controller.abort(); clearTimeout(prazo); void room.disconnect(); audios.forEach((audio) => { audio.pause(); audio.remove(); }); if (sala.current === room) sala.current = null; };
   }, [codigo, tentativa, tentativaAtual]);
 
   async function alternarMicrofone() {
     setMicrofoneOcupado(true);
-    try { await sala.current?.localParticipant.setMicrophoneEnabled(mudo); setMudo(!mudo); }
+    try { await microfone.current?.pausar(!pausaManual); }
     catch { setErro("Não conseguimos acessar o microfone. Confira a permissão ou continue por texto."); }
+    finally { setMicrofoneOcupado(false); }
+  }
+  async function controleDaConversa(tipo: "interromper" | "digitando") {
+    await sala.current?.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({ tipo })), { reliable: true, topic: "entrevista-controle" });
+  }
+  async function interromper() {
+    setMicrofoneOcupado(true);
+    try { await controleDaConversa("interromper"); await microfone.current?.interromper(); }
+    catch { setErro("Não foi possível interromper agora. Tente novamente ou continue por texto."); }
     finally { setMicrofoneOcupado(false); }
   }
   async function enviarTexto() {
     if (!texto.trim() || !sala.current || enviando) return;
     setEnviando(true);
-    try { await sala.current.localParticipant.sendText(texto.trim(), { topic: "lk.chat" }); setTexto(""); }
+    try { await controleDaConversa("interromper"); await sala.current.localParticipant.sendText(texto.trim(), { topic: "lk.chat" }); setTexto(""); }
     catch { setErro("Não foi possível enviar. Seu texto continua aqui para tentar de novo."); }
     finally { setEnviando(false); }
   }
@@ -99,7 +117,7 @@ export function SalaLiveKit({ codigo, tentativaAtual = 1, cargo, onFinalizar, on
     <div className="px-6 py-8 text-center">
       <div aria-hidden="true" className={`mx-auto size-28 rounded-full bg-gradient-to-br from-violet-300 via-purple-600 to-indigo-900 shadow-[0_0_55px_12px_rgba(139,92,246,0.25)] ${conectado && !mudo ? "motion-safe:animate-pulse" : ""}`} />
       <p role="status" className="font-semibold mt-7">{erro ? "Vamos retomar sua conversa" : estado}</p>
-      <p className="text-sm text-muted mt-2">{mudo ? "Microfone pausado" : "Converse no seu ritmo. Você pode interromper a entrevistadora."}</p>
+      <p className="text-sm text-muted mt-2">{agenteFalando ? "O microfone fica pausado durante a fala e volta automaticamente depois. Para falar antes, toque em Interromper." : pausaManual ? "Microfone pausado por você" : "Pode falar no seu ritmo."}</p>
       {precisaAudio && <button className="btn-ghost mt-3" onClick={() => void sala.current?.startAudio().then(() => setPrecisaAudio(false))}>Ativar áudio</button>}
     </div>
     <div className="px-6 pb-6">
@@ -109,8 +127,8 @@ export function SalaLiveKit({ codigo, tentativaAtual = 1, cargo, onFinalizar, on
       {historico.length > 1 && <details className="mt-5"><summary className="cursor-pointer text-sm text-accent font-semibold">Ver conversa anterior</summary><ol className="mt-3 space-y-3 max-h-60 overflow-auto">{historico.slice(0, -1).map((item, i) => <li key={i} className="text-sm"><strong>{item.papel === "candidato" ? "Você" : "Entrevistadora"}: </strong>{item.texto}</li>)}</ol></details>}
     </div>
     <footer className="border-t border-line p-5 space-y-4">
-      <div className="flex items-center justify-center gap-3 flex-wrap"><button type="button" className="btn-primary !w-auto" aria-pressed={mudo} disabled={!conectado || microfoneOcupado} onClick={() => void alternarMicrofone()}>{mudo ? "Ativar microfone" : "Pausar microfone"}</button><button className="btn-ghost" disabled={!historico.some((f) => f.papel === "candidato")} onClick={() => void onFinalizar(falas.current)}>Encerrar entrevista</button></div>
-      <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void enviarTexto(); }}><input className="input min-w-0" aria-label="Responder por texto" placeholder="Se preferir, escreva sua resposta" value={texto} maxLength={5000} onChange={(e) => setTexto(e.target.value)} /><button className="btn-ghost" disabled={!conectado || enviando || !texto.trim()}>Enviar</button></form>
+      <div className="flex items-center justify-center gap-3 flex-wrap"><button type="button" className="btn-primary !w-auto" aria-pressed={mudo} disabled={!conectado || microfoneOcupado} onClick={() => void (agenteFalando ? interromper() : alternarMicrofone())}>{agenteFalando ? "Interromper e falar" : pausaManual ? "Ativar microfone" : "Pausar microfone"}</button><button className="btn-ghost" disabled={!historico.some((f) => f.papel === "candidato")} onClick={() => void onFinalizar(falas.current)}>Encerrar entrevista</button></div>
+      <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void enviarTexto(); }}><input className="input min-w-0" aria-label="Responder por texto" placeholder="Se preferir, escreva sua resposta" value={texto} maxLength={5000} onChange={(e) => { setTexto(e.target.value); void controleDaConversa("digitando").catch(() => {}); }} /><button className="btn-ghost" disabled={!conectado || enviando || !texto.trim()}>Enviar</button></form>
     </footer>
   </section>;
 }
