@@ -1,9 +1,10 @@
 "use client";
-// Tela de configuração inicial, gerada a partir de lib/integracoes.ts. Compartilhada pela suíte: copie sem alterar.
+// Tela de configuração inicial, gerada a partir de lib/integracoes.ts. Base compartilhada pela suíte, com navegação própria opcional.
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { IlustracaoSegmento, MaisDetalhes, Topbar, useStatus } from "./ui";
 import type { CampoStatus, IntegracaoStatus, Opcao, StatusCaixasEmail, StatusEnderecoPublico } from "@/lib/setup-comum";
+import type { ItemNavegacao } from "@/lib/navegacao";
 import type { Segmento } from "@/lib/ilustracao";
 
 type Resposta = { integracoes: IntegracaoStatus[]; pronto: boolean; enderecoPublico: StatusEnderecoPublico; caixasEmail: StatusCaixasEmail };
@@ -45,7 +46,7 @@ function IconeApoio() {
 /** `children`: cartões próprios do app (política, webhook...) que precisam aparecer ANTES do rodapé "Ir
  * para o app" — quem entra em /setup não deve ser convidado a sair antes de ver o que ainda falta
  * configurar. Cartões secundários (como "Usar dentro do seu assistente") continuam depois da tela. */
-export function SetupPage({ marca, nome, area, segmento, children }: { marca: string; nome: string; area: string; segmento: Segmento; children?: ReactNode }) {
+export function SetupPage({ marca, nome, area, segmento, children, navegacao }: { marca: string; nome: string; area: string; segmento: Segmento; children?: ReactNode; navegacao?: ItemNavegacao[] }) {
   const { status, erro } = useStatus();
   const [dados, setDados] = useState<Resposta | null>(null);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
@@ -70,7 +71,7 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
 
   return (
     <>
-      <Topbar marca={marca} nome={nome} area={area} status={status} erro={erro} usuario={status?.usuario} />
+      <Topbar marca={marca} nome={nome} area={area} status={status} erro={erro} usuario={status?.usuario} navegacao={navegacao} />
       <main className="max-w-[1100px] mx-auto px-8 max-md:px-4 pt-8 pb-16">
         <div className="grid grid-cols-[260px_minmax(0,1fr)] max-md:grid-cols-1 gap-10 max-md:gap-6">
           <aside className="flex flex-col gap-5 self-start md:sticky md:top-6">

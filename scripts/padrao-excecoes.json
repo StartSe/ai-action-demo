@@ -21,5 +21,8 @@
     "app/api/setup/oauth/mcp/[prefixo]/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT.",
     "app/api/setup/oauth/mcp/[prefixo]/callback/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT.",
     "app/api/setup/testar/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT."
+  },
+  "prospeccao-ia": {
+    "components/setup.tsx": "Aceita a propriedade navegacao para manter os cinco destinos do workspace também em Configurações."
   }
 }
