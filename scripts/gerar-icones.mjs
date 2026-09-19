@@ -18,6 +18,7 @@ const svg = (app) => `<svg width="32" height="32" viewBox="0 0 32 32" xmlns="htt
 `;
 
 for (const app of cat.apps) {
+  if (app.padrao === "proprio") continue; // Esses apps mantêm os próprios ícones e estrutura.
   const destino = join(raiz, app.id, "app", "icon.svg");
   writeFileSync(destino, svg(app));
   console.log(`Gerado ${app.id}/app/icon.svg`);

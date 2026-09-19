@@ -1,0 +1,303 @@
+import { randomUUID } from "node:crypto";
+import { abrirBanco } from "./store";
+import {
+  BLOCKS,
+  template,
+  type Flow,
+  type Graph,
+  type Run,
+} from "./flow-types";
+export class FlowError extends Error {
+  status: number;
+  constructor(message: string, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+function db() {
+  const d = abrirBanco();
+  d.exec(`CREATE TABLE IF NOT EXISTS flows (id TEXT PRIMARY KEY, body TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS flow_runs (id TEXT PRIMARY KEY, flow_id TEXT NOT NULL, status TEXT NOT NULL, body TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS flow_runs_flow ON flow_runs(flow_id);`);
+  return d;
+}
+export function validateGraph(value: unknown, executable = false): Graph {
+  if (!value || typeof value !== "object")
+    throw new FlowError("O fluxo precisa de blocos e conexões.");
+  const g = value as Graph;
+  if (
+    !Array.isArray(g.nodes) ||
+    !Array.isArray(g.edges) ||
+    g.nodes.length > 60 ||
+    g.edges.length > 120 ||
+    JSON.stringify(g).length > 250000
+  )
+    throw new FlowError("Use até 60 blocos e 120 conexões por fluxo.");
+  const ids = new Set<string>();
+  for (const n of g.nodes) {
+    if (
+      !n ||
+      typeof n.id !== "string" ||
+      !/^[a-zA-Z0-9_-]{1,80}$/.test(n.id) ||
+      ids.has(n.id) ||
+      !n.data ||
+      !Object.hasOwn(BLOCKS, n.data.kind) ||
+      typeof n.data.label !== "string" ||
+      n.data.label.length > 100 ||
+      !n.position ||
+      !Number.isFinite(n.position.x) ||
+      !Number.isFinite(n.position.y) ||
+      !n.data.config ||
+      Array.isArray(n.data.config) ||
+      typeof n.data.config !== "object" ||
+      Object.values(n.data.config).some(
+        (v) => typeof v !== "string" || v.length > 20000,
+      )
+    )
+      throw new FlowError(
+        "Há um bloco inválido ou repetido. Confira o arquivo importado.",
+      );
+    ids.add(n.id);
+  }
+  const edges = new Set<string>();
+  for (const e of g.edges) {
+    if (
+      !e ||
+      typeof e.id !== "string" ||
+      edges.has(e.id) ||
+      !ids.has(e.source) ||
+      !ids.has(e.target) ||
+      (e.sourceHandle != null &&
+        !["yes", "no", "repeat", "done"].includes(e.sourceHandle))
+    )
+      throw new FlowError("Há uma conexão inválida.");
+    edges.add(e.id);
+  }
+  if (executable) {
+    const starts = g.nodes.filter((n) => n.data.kind === "start");
+    if (starts.length !== 1 || !g.nodes.some((n) => n.data.kind === "end"))
+      throw new FlowError(
+        "Use exatamente um Início e pelo menos uma Resposta.",
+      );
+    for (const n of g.nodes) {
+      const out = g.edges.filter((e) => e.source === n.id);
+      const k = n.data.kind;
+      const handles =
+        k === "condition" || k === "approval"
+          ? ["yes", "no"]
+          : k === "loop"
+            ? ["repeat", "done"]
+            : k === "end"
+              ? []
+              : [null];
+      if (
+        out.length !== handles.length ||
+        handles.some(
+          (h) => out.filter((e) => (e.sourceHandle || null) === h).length !== 1,
+        )
+      )
+        throw new FlowError(
+          `Conecte todas as saídas de “${n.data.label}”, uma vez cada.`,
+        );
+      if (k === "start" && g.edges.some((e) => e.target === n.id))
+        throw new FlowError("O Início não pode receber conexões.");
+      const c = n.data.config;
+      if (["agent", "llm"].includes(k) && !c.prompt?.trim())
+        throw new FlowError(`Escreva a entrada de “${n.data.label}”.`);
+      if (k === "state" && !/^[a-zA-Z][a-zA-Z0-9_]{0,60}$/.test(c.key || ""))
+        throw new FlowError("Dê um nome válido à variável de estado.");
+      if (
+        k === "loop" &&
+        (!/^\d+$/.test(c.limit || "") || +c.limit < 1 || +c.limit > 20)
+      )
+        throw new FlowError("A repetição deve ter entre 1 e 20 passagens.");
+      if (
+        k === "condition" &&
+        !["contains", "equals", "notEquals", "greater", "empty"].includes(
+          c.operator,
+        )
+      )
+        throw new FlowError("Escolha uma comparação válida.");
+      if (k === "http") {
+        try {
+          const u = new URL(c.url);
+          if (
+            !["https:", "http:"].includes(u.protocol) ||
+            u.username ||
+            u.password
+          )
+            throw 0;
+        } catch {
+          throw new FlowError(
+            "Informe um endereço HTTP válido, sem credenciais.",
+          );
+        }
+        if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(c.method))
+          throw new FlowError("Método HTTP inválido.");
+      }
+      if (k === "tool" && !c.tool?.trim())
+        throw new FlowError("Escolha a ferramenta a executar.");
+      if (k === "start") {
+        try {
+          const s = JSON.parse(c.state || "{}");
+          if (
+            !s ||
+            Array.isArray(s) ||
+            typeof s !== "object" ||
+            Object.values(s).some((v) => typeof v !== "string")
+          )
+            throw 0;
+        } catch {
+          throw new FlowError(
+            "O estado inicial deve ser um objeto com valores de texto.",
+          );
+        }
+      }
+    }
+    const reachable = new Set<string>();
+    function walk(id: string) {
+      if (reachable.has(id)) return;
+      reachable.add(id);
+      g.edges.filter((e) => e.source === id).forEach((e) => walk(e.target));
+    }
+    walk(starts[0].id);
+    if (reachable.size !== g.nodes.length)
+      throw new FlowError(
+        "Todos os blocos precisam estar conectados ao Início.",
+      );
+    // Every block must have a route to an end; bounded loops may revisit earlier blocks.
+    const finishing = new Set(
+      g.nodes.filter((n) => n.data.kind === "end").map((n) => n.id),
+    );
+    for (let i = 0; i < g.nodes.length; i++)
+      g.edges.forEach((e) => {
+        if (finishing.has(e.target)) finishing.add(e.source);
+      });
+    if (finishing.size !== g.nodes.length)
+      throw new FlowError("Todo caminho precisa poder chegar a uma Resposta.");
+  }
+  return structuredClone(g);
+}
+export function listFlows(): Flow[] {
+  return (
+    db().prepare("SELECT body FROM flows ORDER BY rowid DESC").all() as {
+      body: string;
+    }[]
+  ).map((r) => JSON.parse(r.body));
+}
+export function getFlow(id: string): Flow {
+  const row = db().prepare("SELECT body FROM flows WHERE id=?").get(id) as
+    { body: string } | undefined;
+  if (!row) throw new FlowError("Fluxo não encontrado.", 404);
+  return JSON.parse(row.body);
+}
+function putFlow(f: Flow) {
+  db()
+    .prepare(
+      "INSERT INTO flows(id,body) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body",
+    )
+    .run(f.id, JSON.stringify(f));
+  return f;
+}
+export function createFlow(name = "Novo fluxo", example = false) {
+  return putFlow({
+    id: randomUUID(),
+    name: name.slice(0, 100),
+    description: "",
+    graph: template(example),
+    published: null,
+    version: 0,
+    updatedAt: new Date().toISOString(),
+  });
+}
+export function saveFlow(id: string, data: unknown) {
+  const f = getFlow(id);
+  if (!data || typeof data !== "object")
+    throw new FlowError("Envie os dados do fluxo.");
+  const b = data as Partial<Flow>;
+  if (
+    typeof b.name !== "string" ||
+    !b.name.trim() ||
+    b.name.length > 100 ||
+    typeof b.description !== "string" ||
+    b.description.length > 1000
+  )
+    throw new FlowError("Informe nome e descrição válidos.");
+  f.name = b.name.trim();
+  f.description = b.description;
+  f.graph = validateGraph(b.graph);
+  f.updatedAt = new Date().toISOString();
+  return putFlow(f);
+}
+export function publishFlow(id: string, active = true) {
+  const f = getFlow(id);
+  f.published = active ? validateGraph(f.graph, true) : null;
+  if (active) f.version++;
+  f.updatedAt = new Date().toISOString();
+  return putFlow(f);
+}
+export function deleteFlow(id: string) {
+  getFlow(id);
+  if (
+    db().prepare("SELECT 1 FROM flow_runs WHERE flow_id=? AND status IN ('running','waiting') LIMIT 1").get(id)
+  )
+    throw new FlowError(
+      "Finalize ou cancele as execuções pendentes antes de excluir.",
+      409,
+    );
+  db().prepare("DELETE FROM flows WHERE id=?").run(id);
+}
+export function putRun(r: Run) {
+  r.updatedAt = new Date().toISOString();
+  db()
+    .prepare(
+      "INSERT INTO flow_runs(id,flow_id,status,body) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET status=excluded.status,body=excluded.body",
+    )
+    .run(r.id, r.flowId, r.status, JSON.stringify(r));
+  return r;
+}
+export function getRun(id: string): Run {
+  const row = db().prepare("SELECT body FROM flow_runs WHERE id=?").get(id) as
+    { body: string } | undefined;
+  if (!row) throw new FlowError("Execução não encontrada.", 404);
+  return JSON.parse(row.body);
+}
+export function listRuns(flowId?: string): Run[] {
+  const rows = (
+    flowId
+      ? db()
+          .prepare(
+            "SELECT body FROM flow_runs WHERE flow_id=? ORDER BY rowid DESC LIMIT 100",
+          )
+          .all(flowId)
+      : db()
+          .prepare("SELECT body FROM flow_runs ORDER BY rowid DESC LIMIT 100")
+          .all()
+  ) as { body: string }[];
+  return rows.map((r) => JSON.parse(r.body));
+}
+export function claimRun(id: string) {
+  const r = getRun(id);
+  if (r.status !== "waiting")
+    throw new FlowError("Esta execução não está aguardando uma decisão.", 409);
+  r.status = "running";
+  const changed = db()
+    .prepare(
+      "UPDATE flow_runs SET status='running',body=? WHERE id=? AND status='waiting'",
+    )
+    .run(JSON.stringify(r), id);
+  if (!changed.changes)
+    throw new FlowError("Esta decisão já foi recebida.", 409);
+  return r;
+}
+export function interruptRuns() {
+  for (const row of db()
+    .prepare("SELECT body FROM flow_runs WHERE status='running'")
+    .all() as { body: string }[]) {
+    const r: Run = JSON.parse(row.body);
+    r.status = "failed";
+    r.error =
+      "A execução foi interrompida pelo reinício do servidor. Confira as etapas antes de executar novamente.";
+    putRun(r);
+  }
+}
