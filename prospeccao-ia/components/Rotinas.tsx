@@ -3,6 +3,7 @@
 // fixo, sem que ninguém precise abrir a tela (lib/rotinas.ts). Lista as rotinas, permite criar,
 // executar agora, pausar e apagar, e mostra o código de acesso do gatilho externo.
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { data } from "@/lib/formato";
 import { Aviso, CopyButton, DataTable, MaisDetalhes, useConfirmacao } from "./ui";
 import type { Coluna } from "./ui";
@@ -24,12 +25,22 @@ type Rotina = {
   ultimaExecucao: string | null;
   ultimaFalha: string | null;
   criadoEm: string;
+  parametros?: { prospeccaoId?: string } | null;
 };
 
 type TipoRotina = { tipo: string; rotulo: string };
 type StatusCodigo = { ativo: boolean; mascarado: string | null };
+type ProspeccaoResumo = { id: string; nome: string };
 
 const DIAS_SEMANA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
+// "Oportunidades novas de uma prospecção" (US-040) é configurada sobre uma prospecção SALVA (seletor),
+// não sobre um formulário de busca à parte — por isso, ao contrário dos demais tipos, precisa de um campo
+// extra no formulário genérico abaixo. E só roda diária ou semanalmente (AC da própria história): a
+// restrição é só de tela, `lib/rotinas.ts` (INFRA, não pode divergir) aceita as 4 frequências para
+// qualquer tipo.
+const TIPO_PROSPECCAO = "oportunidades-novas";
+const FREQUENCIAS_PROSPECCAO: Frequencia[] = ["diaria", "semanal"];
 
 function descreverAgenda(r: Rotina): string {
   if (r.frequencia === "diaria") return `Todos os dias às ${r.hora}`;
@@ -63,6 +74,10 @@ export function Rotinas() {
   const [erroMotivo, setErroMotivo] = useState("");
   const { confirmar, Dialogo } = useConfirmacao();
 
+  const [prospeccoes, setProspeccoes] = useState<ProspeccaoResumo[]>([]);
+  const [prospeccaoId, setProspeccaoId] = useState("");
+  const precisaProspeccao = tipo === TIPO_PROSPECCAO;
+
   function carregar() {
     fetch("/api/rotinas")
       .then((r) => r.json())
@@ -85,7 +100,24 @@ export function Rotinas() {
         setEndereco(`${window.location.origin}/api/rotinas/executar`);
       })
       .catch(() => {});
+    fetch("/api/prospeccoes")
+      .then((r) => r.json())
+      .then((d: ProspeccaoResumo[]) => {
+        setProspeccoes(d);
+        setProspeccaoId((atual) => atual || d[0]?.id || "");
+      })
+      .catch(() => {});
   }, []);
+
+  function escolherTipo(novoTipo: string) {
+    setTipo(novoTipo);
+    if (novoTipo === TIPO_PROSPECCAO && !FREQUENCIAS_PROSPECCAO.includes(frequencia)) setFrequencia("diaria");
+  }
+
+  function nomeDaProspeccao(id: string | undefined): string | null {
+    if (!id) return null;
+    return prospeccoes.find((p) => p.id === id)?.nome ?? "prospecção apagada";
+  }
 
   async function gerarCodigo() {
     setGerando(true);
@@ -117,6 +149,7 @@ export function Rotinas() {
           dataUnica: frequencia === "unica" ? dataUnica : undefined,
           canal,
           destino: destino || undefined,
+          parametros: precisaProspeccao ? { prospeccaoId } : undefined,
         }),
       });
       const d = await r.json();
@@ -155,7 +188,16 @@ export function Rotinas() {
   }
 
   const colunas: Coluna<Rotina>[] = [
-    { chave: "tipo", titulo: "Rotina", papel: "titulo", render: (r) => tipos.find((t) => t.tipo === r.tipo)?.rotulo || r.tipo },
+    {
+      chave: "tipo",
+      titulo: "Rotina",
+      papel: "titulo",
+      render: (r) => {
+        const rotulo = tipos.find((t) => t.tipo === r.tipo)?.rotulo || r.tipo;
+        const alvo = r.tipo === TIPO_PROSPECCAO ? nomeDaProspeccao(r.parametros?.prospeccaoId) : null;
+        return alvo ? `${rotulo} · ${alvo}` : rotulo;
+      },
+    },
     { chave: "agenda", titulo: "Quando", papel: "resumo", render: (r) => `${descreverAgenda(r)}${r.ativa ? "" : " · Pausada"}` },
     { chave: "canal", titulo: "Canal", papel: "chip", render: (r) => <span className="chip-neutral">{r.canal === "email" ? "E-mail" : "Slack"}</span> },
     {
@@ -219,7 +261,7 @@ export function Rotinas() {
             <div className="flex gap-3 flex-wrap">
               <label className="flex flex-col gap-1 text-[13px] font-semibold flex-1 min-w-[200px]">
                 O que fazer
-                <select className="input" value={tipo} onChange={(e) => setTipo(e.target.value)}>
+                <select className="input" value={tipo} onChange={(e) => escolherTipo(e.target.value)}>
                   {tipos.map((t) => (
                     <option key={t.tipo} value={t.tipo}>{t.rotulo}</option>
                   ))}
@@ -230,8 +272,12 @@ export function Rotinas() {
                 <select className="input" value={frequencia} onChange={(e) => setFrequencia(e.target.value as Frequencia)}>
                   <option value="diaria">Diária</option>
                   <option value="semanal">Semanal</option>
-                  <option value="mensal">Mensal</option>
-                  <option value="unica">Uma vez</option>
+                  {!precisaProspeccao && (
+                    <>
+                      <option value="mensal">Mensal</option>
+                      <option value="unica">Uma vez</option>
+                    </>
+                  )}
                 </select>
               </label>
               <label className="flex flex-col gap-1 text-[13px] font-semibold w-28">
@@ -239,6 +285,24 @@ export function Rotinas() {
                 <input type="time" className="input" value={hora} onChange={(e) => setHora(e.target.value)} required />
               </label>
             </div>
+            {precisaProspeccao && (
+              <div className="flex gap-3 flex-wrap">
+                <label className="flex flex-col gap-1 text-[13px] font-semibold flex-1 min-w-[240px]">
+                  Prospecção
+                  {prospeccoes.length === 0 ? (
+                    <p className="text-muted text-[12.5px]">
+                      Nenhuma prospecção salva ainda: <Link className="btn-link text-[12.5px]" href="/prospeccoes/nova">crie uma prospecção</Link> antes de agendar esta rotina.
+                    </p>
+                  ) : (
+                    <select className="input" value={prospeccaoId} onChange={(e) => setProspeccaoId(e.target.value)}>
+                      {prospeccoes.map((p) => (
+                        <option key={p.id} value={p.id}>{p.nome}</option>
+                      ))}
+                    </select>
+                  )}
+                </label>
+              </div>
+            )}
             <div className="flex gap-3 flex-wrap">
               {frequencia === "semanal" && (
                 <label className="flex flex-col gap-1 text-[13px] font-semibold flex-1 min-w-[160px]">
@@ -290,7 +354,7 @@ export function Rotinas() {
                 )}
               </Aviso>
             )}
-            <button type="submit" className="btn-primary !w-auto self-start" disabled={criando}>{criando ? "Criando" : "Criar rotina"}</button>
+            <button type="submit" className="btn-primary !w-auto self-start" disabled={criando || (precisaProspeccao && !prospeccaoId)}>{criando ? "Criando" : "Criar rotina"}</button>
           </form>
         )}
       </div>
