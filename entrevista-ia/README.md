@@ -169,3 +169,9 @@ Os testes automatizados cobrem autorização, recusa, expiração, isolamento do
 A escolha de um candidato, a atribuição a uma vaga, o cadastro vindo da vaga e a renovação do convite mostram as etapas registradas pelo servidor: conferir dados, preparar roteiro e salvar link/mensagem. A etapa atual fica em destaque; as demais aparecem em uma lista expansível. O tempo decorrido não faz a etapa avançar artificialmente.
 
 O navegador solicita eventos NDJSON nas mesmas rotas de criação; clientes JSON mantêm o contrato anterior. Uma conexão encerrada antes da confirmação é tratada como falha recuperável. Nova tentativa reaproveita o candidato e a entrevista, e o link só fica disponível depois de salvar o roteiro. O diálogo também permite gerar um convite que ainda não tenha link. O acompanhamento no navegador tem limite de 60 segundos; fechar a janela não desfaz dados já gravados e a operação iniciada pode terminar no servidor.
+
+### Diagnóstico do convite e da versão (0.4.2)
+
+Configurações exibe a versão instalada em destaque no topo, antes das orientações. `GET /api/health` devolve `ok` e `versao`, sem cache e sem dados da conta, para conferir a imagem realmente instalada. Publicar a imagem no GitHub não confirma o redeploy de uma instalação no Render.
+
+Falhas conhecidas da IA na preparação do roteiro preservam código, mensagem e ação tanto em JSON quanto no acompanhamento por etapas. A tela distingue chave recusada, falta de crédito, limite e modelo indisponível; não substitui essas causas por uma mensagem genérica de preparação. Isso permite diagnosticar a tentativa real, sem afirmar que todo erro de geração tem a mesma causa.

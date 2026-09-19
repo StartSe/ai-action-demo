@@ -114,7 +114,7 @@ export function DialogoConvite({
         </p>
 
         <ProgressoConvite estado={progresso} />
-        {erroTela && <div className="mb-4"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao} /></div>}
+        {erroTela && <div className="mb-4"><ErrorBox mensagem={erroTela.mensagem} codigo={erroTela.codigo} acao={erroTela.acao} /></div>}
 
         {convite && (
           <div className="flex flex-col gap-4">

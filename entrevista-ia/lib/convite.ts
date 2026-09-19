@@ -1,3 +1,4 @@
+import { ErroIA, type CodigoErroIA } from "./ai";
 import type { AoProgressoConvite } from "./progresso-convite";
 import { montarContexto, roteiroDaEntrevista } from "./roteiro";
 // O convite de uma entrevista (US-014): o link público que o candidato abre, até quando ele vale e a
@@ -62,7 +63,7 @@ export type Convite = {
   status: Entrevista["status"];
 };
 
-export type ResultadoConvite = { ok: true; convite: Convite } | { ok: false; erro: string; status: number };
+export type ResultadoConvite = { ok: true; convite: Convite } | { ok: false; erro: string; status: number; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string } };
 
 export function prazoValido(bruto: unknown): number {
   const dias = Number(bruto);
@@ -211,6 +212,7 @@ export async function convidar({
     await roteiroDaEntrevista(entrevista.id, contexto);
   } catch (err) {
     console.error("Preparação do convite falhou:", err);
+    if (err instanceof ErroIA) return { ok: false, erro: err.message, status: err.status, codigo: err.codigo, acao: err.acao };
     return { ok: false, erro: "Não conseguimos preparar o roteiro. Tente gerar o convite novamente; o link só será liberado quando estiver pronto.", status: 503 };
   }
   // Revalida depois da IA: o gestor pode ter cancelado durante a preparação.
@@ -247,7 +249,7 @@ export async function convidar({
   return montar(atualizada, codigo, origem, remetente);
 }
 
-export type ResultadoAtribuicao = { ok: true; entrevista: Entrevista; convite: Convite } | { ok: false; erro: string; status: number };
+export type ResultadoAtribuicao = { ok: true; entrevista: Entrevista; convite: Convite } | { ok: false; erro: string; status: number; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string } };
 
 /**
  * Atribui um candidato a uma vaga e já cria o convite (US-014).

@@ -79,13 +79,16 @@ export function SetupPage({ marca, nome, area, segmento, children, extras, versa
     <>
       <Topbar marca={marca} nome={nome} area={area} status={status} erro={erro} usuario={status?.usuario} />
       <main className="max-w-[1100px] mx-auto px-8 max-md:px-4 pt-8 pb-16">
+        <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-accent/25 bg-accent-soft px-4 py-3">
+          <span className="font-semibold">Configurações</span>
+          <span className="text-sm">Versão instalada <strong data-testid="versao-instalada">{versao}</strong></span>
+        </div>
         {dados && <JornadaGestor iaPronta={dados.pronto} />}
         <div className="grid grid-cols-[260px_minmax(0,1fr)] max-md:grid-cols-1 gap-10 max-md:gap-6">
           <aside className="flex flex-col gap-5 self-start md:sticky md:top-6">
             <div>
               <p className="sobretitulo mb-1">{area}</p>
               <h1 className="titulo-painel mb-2">Configure sua entrevista</h1>
-              <p className="text-xs text-muted mb-4">Versão instalada <span className="font-semibold text-ink-2">{versao}</span></p>
               <p className="apoio max-w-[280px]">{FRASE_PRIVACIDADE}</p>
               <p className="apoio max-w-[280px] mt-2">{FRASE_CONEXOES}</p>
             </div>

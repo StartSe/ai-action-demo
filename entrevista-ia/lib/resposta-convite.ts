@@ -1,9 +1,9 @@
 import type { AoProgressoConvite } from "./progresso-convite";
-type Resultado = { ok: true; [chave: string]: unknown } | { ok: false; erro: string; status: number };
+type Resultado = { ok: true; [chave: string]: unknown } | { ok: false; erro: string; status: number; codigo?: string; acao?: { rotulo: string; url: string } };
 export async function respostaConvite(req: Request, executar: (progresso: AoProgressoConvite) => Promise<Resultado>) {
   if (!req.headers.get("accept")?.includes("application/x-ndjson")) {
     const r = await executar(() => {});
-    if (!r.ok) return Response.json({ error: r.erro }, { status: r.status });
+    if (!r.ok) return Response.json({ error: r.erro, codigo: r.codigo, acao: r.acao }, { status: r.status });
     return Response.json(Object.fromEntries(Object.entries(r).filter(([chave]) => chave !== "ok")));
   }
   let aberta = true;
@@ -15,7 +15,7 @@ export async function respostaConvite(req: Request, executar: (progresso: AoProg
       };
       try {
         const r = await executar(etapa => enviar({ tipo: "progresso", etapa }));
-        if (!r.ok) enviar({ tipo: "erro", error: r.erro });
+        if (!r.ok) enviar({ tipo: "erro", error: r.erro, codigo: r.codigo, acao: r.acao });
         else enviar({ tipo: "resultado", dados: Object.fromEntries(Object.entries(r).filter(([chave]) => chave !== "ok")) });
       } catch (err) {
         console.error("Falha ao preparar convite:", err);

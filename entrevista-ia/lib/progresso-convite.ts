@@ -1,5 +1,11 @@
 // Contrato compartilhado; este arquivo também pode ser importado pelo navegador.
-export class ErroPreparacaoConvite extends Error {}
+export class ErroPreparacaoConvite extends Error {
+  codigo?: string;
+  acao?: { rotulo: string; url: string };
+  constructor(mensagem: string, codigo?: string, acao?: { rotulo: string; url: string }) {
+    super(mensagem); this.codigo = codigo; this.acao = acao;
+  }
+}
 export const ETAPAS_CONVITE = [
   { id: "dados", titulo: "Conferindo a vaga e o candidato", detalhe: "Verificando os dados necessários para a entrevista." },
   { id: "roteiro", titulo: "Preparando o roteiro da entrevista", detalhe: "A IA está organizando as perguntas. Esta etapa pode levar alguns segundos." },
@@ -27,7 +33,7 @@ export async function lerPreparacaoConvite<T>(res: Response, progresso: AoProgre
         if (!linha.trim()) continue;
         const evento = JSON.parse(linha);
         if (evento.tipo === "progresso" && ETAPAS_CONVITE.some(e => e.id === evento.etapa)) progresso(evento.etapa);
-        if (evento.tipo === "erro") throw new ErroPreparacaoConvite(evento.error || "Não foi possível preparar o convite.");
+        if (evento.tipo === "erro") throw new ErroPreparacaoConvite(evento.error || "Não foi possível preparar o convite.", evento.codigo, evento.acao);
         if (evento.tipo === "resultado") return evento.dados as T;
       }
       if (done) break;

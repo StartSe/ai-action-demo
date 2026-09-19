@@ -39,6 +39,11 @@ test("falha na IA não libera link; nova tentativa reutiliza entrevista e cadast
   try {
     const falha = await atribuirEConvidar(dados);
     assert.equal(falha.ok, false);
+    if (!falha.ok) {
+      assert.equal(falha.codigo, "chave_invalida");
+      assert.equal(falha.acao?.url, "/setup#openrouter");
+      assert.match(falha.erro, /chave.*recusada/);
+    }
     const entrevista = entrevistaViva(vaga.id, pessoa.id)!;
     assert.ok(!entrevista.codigo, "não libera código sem roteiro");
     delete process.env.OPENROUTER_API_KEY;

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import type { CodigoErroIA, Meta } from "@/lib/ai";
+import type { Meta } from "@/lib/ai";
 import { numero, data, moeda } from "@/lib/formato";
 import { NAVEGACAO, type ItemNavegacao } from "@/lib/navegacao";
 import { ilustracaoDoSegmento, type Segmento } from "@/lib/ilustracao";
@@ -368,7 +368,7 @@ export function Loading({ texto, etapas }: { texto?: string; etapas?: string[] }
   );
 }
 
-function tituloErro(codigo?: CodigoErroIA): string {
+function tituloErro(codigo?: string): string {
   if (codigo === "sem_credito") return "A IA está sem crédito";
   if (codigo === "limite_diario") return "Limite diário atingido";
   if (codigo === "modelo_indisponivel") return "Modelo indisponível";
@@ -377,7 +377,7 @@ function tituloErro(codigo?: CodigoErroIA): string {
 }
 
 /** Rola até si mesma no celular ao aparecer (mesmo critério de useScrollToResult); onTentarNovamente exibe o botão "Tentar de novo". `codigo`/`acao` vêm de ErroIA (lib/ai.ts, ver respostaErro). */
-export function ErrorBox({ mensagem, codigo, acao, onTentarNovamente }: { mensagem: string; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string }; onTentarNovamente?: () => void }) {
+export function ErrorBox({ mensagem, codigo, acao, onTentarNovamente }: { mensagem: string; codigo?: string; acao?: { rotulo: string; url: string }; onTentarNovamente?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [trocandoModelo, setTrocandoModelo] = useState(false);
   useEffect(() => {

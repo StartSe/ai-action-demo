@@ -65,7 +65,7 @@ export function DialogoAtribuirVaga({
         <p className="text-muted text-sm mb-5">{candidatoNome} vai conversar com a entrevistadora sobre a vaga que você escolher aqui.</p>
 
         <ProgressoConvite estado={progresso} />
-        {erroTela && <div className="mb-4"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao} /></div>}
+        {erroTela && <div className="mb-4"><ErrorBox mensagem={erroTela.mensagem} codigo={erroTela.codigo} acao={erroTela.acao} /></div>}
 
         <div className="border border-line rounded-card divide-y divide-line max-h-[280px] overflow-y-auto mb-5">
           {itens === null ? (

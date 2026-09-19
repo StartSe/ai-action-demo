@@ -47,3 +47,19 @@ test("clientes JSON preservam contrato e status de erro", async () => {
   const erro = await respostaConvite(req, async () => ({ ok: false, erro: "Vaga encerrada", status: 409 }));
   assert.equal(erro.status, 409);
 });
+
+
+test("JSON e acompanhamento preservam motivo e ação para corrigir a IA", async () => {
+  for (const codigo of ["sem_credito", "limite_diario", "modelo_indisponivel"]) {
+    const falha = { ok: false as const, erro: "Corrija a conexão da IA.", status: 402, codigo, acao: { rotulo: "Configurar", url: "/setup#openrouter" } };
+    const res = await respostaConvite(new Request("https://app.test"), async () => falha);
+    assert.deepEqual(await res.json(), { error: falha.erro, codigo, acao: falha.acao });
+    const stream = await respostaConvite(pedido(), async () => falha);
+    await assert.rejects(lerPreparacaoConvite(stream, () => {}), (err: unknown) => {
+      const erro = err as Error & { codigo: string; acao: { url: string } };
+      assert.equal(erro.codigo, codigo);
+      assert.equal(erro.acao.url, "/setup#openrouter");
+      return true;
+    });
+  }
+});

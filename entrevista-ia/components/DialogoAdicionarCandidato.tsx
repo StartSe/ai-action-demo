@@ -91,7 +91,7 @@ export function DialogoAdicionarCandidato({
         </div>
 
         <ProgressoConvite estado={progresso} />
-        {erroTela && <div className="mb-4"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao} /></div>}
+        {erroTela && <div className="mb-4"><ErrorBox mensagem={erroTela.mensagem} codigo={erroTela.codigo} acao={erroTela.acao} /></div>}
 
         <div className="border border-line rounded-card divide-y divide-line max-h-[280px] overflow-y-auto mb-5">
           {itens === null ? (

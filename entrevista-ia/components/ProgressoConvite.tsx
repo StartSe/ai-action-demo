@@ -22,7 +22,7 @@ export function usePrepararConvite() {
     } catch (err) {
       if (pedido.current === controller) setProgresso(p => p && ({ ...p, fim: Date.now(), falhou: true }));
       const motivo = controller.signal.aborted ? controller.signal.reason : err;
-      throw motivo instanceof ErroPreparacaoConvite ? Response.json({ error: motivo.message }, { status: 503 }) : motivo;
+      throw motivo instanceof ErroPreparacaoConvite ? Response.json({ error: motivo.message, codigo: motivo.codigo, acao: motivo.acao }, { status: 503 }) : motivo;
     } finally { clearTimeout(limite); }
   }, []);
   return { progresso, preparar };
