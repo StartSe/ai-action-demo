@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { Aviso, Dropzone, ErrorBox, Field, Hero, Loading, MaisDetalhes, Origem, Passos, Privacidade, ResultHead, Row, Stage, Topbar, data, lerErro, useScrollToResult, useStatus, type PassoIndicador } from "@/components/ui";
 import { EditorPagina } from "@/components/EditorPagina";
 import { EntregarPagina } from "@/components/EntregarPagina";
+import { AmpliarImagem } from "@/components/Ampliar";
 import { PreviaPagina } from "@/components/PreviaPagina";
 import type { CodigoErroIA, Meta } from "@/lib/ai";
 import type { Marca, Pagina, Stack } from "@/lib/types";
@@ -122,6 +123,14 @@ function lerComoDataUrl(arquivo: File): Promise<string> {
   });
 }
 
+async function buscarHistorico(): Promise<ItemHistorico[]> {
+  const resposta = await fetch("/api/pagina");
+  if (!resposta.ok) throw new Error("Não foi possível carregar o histórico.");
+  const corpo = await resposta.json();
+  if (!Array.isArray(corpo.itens)) throw new Error("Histórico indisponível.");
+  return corpo.itens;
+}
+
 function montarMarca(f: Formulario): Marca | undefined {
   const nome = f.marcaNome.trim();
   const corPrimaria = f.corPrimaria.trim();
@@ -145,36 +154,51 @@ export default function Page() {
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
   const autoEnviado = useRef(false);
+  const leituraAtual = useRef(0);
+  const gerando = useRef(false);
+  const [preparando, setPreparando] = useState(false);
+  const [erroHistorico, setErroHistorico] = useState(false);
 
   useScrollToResult(estado.fase === "pronto");
 
   useEffect(() => {
-    fetch("/api/pagina").then((r) => r.json()).then((r) => setHistorico(r.itens)).catch(() => setHistorico([]));
+    buscarHistorico().then((itens) => { setHistorico(itens); setErroHistorico(false); }).catch(() => setErroHistorico(true));
     fetch("/api/captura").then((r) => r.json()).then((r) => setServicoConectado(Boolean(r.servicoConectado))).catch(() => setServicoConectado(false));
   }, []);
 
   function apagarHistorico() {
     if (!window.confirm("Apagar todas as páginas salvas? Essa ação não pode ser desfeita.")) return;
     fetch("/api/pagina", { method: "DELETE" })
-      .then(() => fetch("/api/pagina").then((r) => r.json()).then((r) => setHistorico(r.itens)))
-      .catch(() => setHistorico([]));
+      .then(async (r) => { if (!r.ok) throw new Error((await lerErro(r)).mensagem); return buscarHistorico().then((itens) => { setHistorico(itens); setErroHistorico(false); }); })
+      .catch(() => setErroHistorico(true));
   }
 
   const set = (campo: keyof Formulario) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [campo]: e.target.value }));
 
-  function escolherArquivo(f: File | null) {
+  async function escolherArquivo(f: File | null) {
+    if (!f || gerando.current || preparando || buscandoEndereco) return;
     setAvisoArquivo(null);
-    setCaptura(null);
-    if (!f) { setArquivo(null); return; }
-    if (!/^image\/(png|jpeg)$/.test(f.type)) { setArquivo(null); setAvisoArquivo({ tom: "danger", texto: "Envie uma imagem PNG ou JPG." }); return; }
-    if (f.size > LIMITE_MB * 1024 * 1024) { setArquivo(null); setAvisoArquivo({ tom: "danger", texto: `A captura passa de ${LIMITE_MB} MB. Reduza a imagem e envie de novo.` }); return; }
-    setArquivo(f);
-    lerComoDataUrl(f).then(setCaptura).catch(() => setCaptura(null));
+    if (!/^image\/(png|jpeg)$/.test(f.type)) { setAvisoArquivo({ tom: "danger", texto: captura ? "Envie uma imagem PNG ou JPG. A referência anterior foi mantida." : "Envie uma imagem PNG ou JPG." }); return; }
+    if (f.size > LIMITE_MB * 1024 * 1024) { setAvisoArquivo({ tom: "danger", texto: `A captura passa de ${LIMITE_MB} MB. Reduza a imagem e envie de novo.` }); return; }
+    const leitura = ++leituraAtual.current;
+    setPreparando(true);
+    try {
+      const imagem = await lerComoDataUrl(f);
+      if (leitura !== leituraAtual.current) return;
+      setArquivo(f);
+      setCaptura(imagem);
+    } catch {
+      if (leitura === leituraAtual.current) setAvisoArquivo({ tom: "danger", texto: "Não foi possível ler a imagem. Escolha o arquivo novamente." });
+    } finally {
+      if (leitura === leituraAtual.current) setPreparando(false);
+    }
   }
 
   /** "ou cole um endereço": uma imagem publicada é baixada direto; um site vira captura pelo serviço de /setup. */
   async function trazerDoEndereco() {
     if (!endereco.trim()) { setAvisoArquivo({ tom: "danger", texto: "Cole o endereço da captura ou do site de referência." }); return; }
+    if (gerando.current || buscandoEndereco) return;
+    const leitura = ++leituraAtual.current;
     setBuscandoEndereco(true);
     setAvisoArquivo(null);
     try {
@@ -186,6 +210,7 @@ export default function Page() {
         return;
       }
       const resposta = await r.json();
+      if (leitura !== leituraAtual.current) return;
       setArquivo(null);
       setCaptura(resposta.imagem);
       setAvisoArquivo({ tom: "warn", texto: resposta.origem === "site" ? "Captura pronta a partir do site." : "Captura pronta a partir do endereço." });
@@ -197,6 +222,9 @@ export default function Page() {
   }
 
   async function gerar(imagem: string, f: Formulario) {
+    if (gerando.current) return;
+    gerando.current = true;
+    setAvisoArquivo(null);
     setEstado({ fase: "carregando" });
     try {
       const r = await fetch("/api/pagina", {
@@ -216,15 +244,19 @@ export default function Page() {
       }
       const resposta = await r.json();
       setEstado({ fase: "pronto", pagina: resposta.pagina, meta: resposta.meta, id: resposta.id, referencia: imagem });
-      fetch("/api/pagina").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
+      buscarHistorico().then((itens) => { setHistorico(itens); setErroHistorico(false); }).catch(() => setErroHistorico(true));
     } catch (e) {
       const info = await lerErro(e);
       setEstado({ fase: "erro", mensagem: info.mensagem, tentativa: { imagem, form: f } });
+    } finally {
+      gerando.current = false;
     }
   }
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (gerando.current || preparando || buscandoEndereco) return;
+    if ([form.corPrimaria, form.corSecundaria].some((cor) => cor.trim() && !COR_HEX.test(cor.trim()))) { setAvisoArquivo({ tom: "danger", texto: "Use seis dígitos nas cores, como #792a3f, ou escolha pela paleta." }); return; }
     if (!captura) { setAvisoArquivo({ tom: "danger", texto: "Envie a captura da página de referência antes de gerar." }); return; }
     gerar(captura, form);
   }
@@ -235,13 +267,23 @@ export default function Page() {
     return lerComoDataUrl(new File([await r.blob()], "referencia-exemplo.png", { type: "image/png" }));
   }
 
-  /** "Usar uma referência de exemplo" preenche E gera: quem quer ver o resultado não precisa rolar até o botão. */
-  function usarExemplo() {
-    setForm(EXEMPLO);
-    setArquivo(null);
-    capturaDeExemplo()
-      .then((imagem) => { setCaptura(imagem); gerar(imagem, EXEMPLO); })
-      .catch(() => setAvisoArquivo({ tom: "danger", texto: "A captura de exemplo não está disponível. Envie a sua." }));
+  /** Preenche para revisão antes de disparar uma geração. */
+  async function usarExemplo() {
+    if (gerando.current) return;
+    setPreparando(true);
+    const leitura = ++leituraAtual.current;
+    try {
+      const imagem = await capturaDeExemplo();
+      if (leitura !== leituraAtual.current) return;
+      setForm(EXEMPLO);
+      setArquivo(null);
+      setCaptura(imagem);
+      setAvisoArquivo(null);
+    } catch {
+      setAvisoArquivo({ tom: "danger", texto: "A captura de exemplo não está disponível. Envie a sua." });
+    } finally {
+      setPreparando(false);
+    }
   }
 
   // Atalho para demonstrações: /?exemplo=1 carrega a captura de exemplo, preenche a marca e envia.
@@ -275,18 +317,15 @@ export default function Page() {
       <main className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">
         <div>
           <form onSubmit={onSubmit}>
+            <fieldset disabled={carregando || preparando || buscandoEndereco} className="min-w-0">
             <CartaoEntrada icone={<IconeReferencia />} titulo="A referência">
               <Field label="Captura da página" htmlFor="captura">
                 <div className="dropzone-baixa"><Dropzone id="captura" accept="image/png,image/jpeg" tiposLabel="A página inteira, em PNG ou JPG" maxSizeMB={LIMITE_MB} arquivo={arquivo} onArquivo={escolherArquivo} /></div>
                 {captura && (
                   <div className="mt-2.5 flex items-center gap-3">
-                    <div
-                      role="img"
-                      aria-label="Miniatura da captura enviada"
-                      className="w-[76px] h-[52px] shrink-0 rounded-[7px] border border-line bg-white bg-top bg-cover"
-                      style={{ backgroundImage: `url("${captura}")` }}
-                    />
-                    <button type="button" className="btn-link text-[13px]" onClick={() => { setArquivo(null); setCaptura(null); setAvisoArquivo(null); }}>Trocar a captura</button>
+                    <AmpliarImagem src={captura} />
+                    <span className="text-sm text-ink-2">Referência pronta</span>
+                    <button type="button" className="btn-link text-[13px]" onClick={() => { leituraAtual.current++; setArquivo(null); setCaptura(null); setAvisoArquivo(null); }}>Trocar a captura</button>
                   </div>
                 )}
               </Field>
@@ -294,7 +333,7 @@ export default function Page() {
               <Field
                 label="Ou cole um endereço"
                 htmlFor="endereco"
-                hint={servicoConectado ? "O endereço de uma imagem ou de um site que você quer usar como referência." : "O endereço de uma imagem já publicada (terminado em .png ou .jpg)."}
+                hint="Cole o endereço completo, começando com https://."
               >
                 <div className="flex gap-2 max-md:flex-col">
                   <input id="endereco" type="url" className="input flex-1 min-w-0" placeholder="https://..." value={endereco} onChange={(e) => setEndereco(e.target.value)} />
@@ -303,6 +342,7 @@ export default function Page() {
                   </button>
                 </div>
               </Field>
+              {servicoConectado === false && <p className="text-muted text-[13px] mb-3">Para capturar um site pelo endereço, <Link className="btn-link" href="/setup#captura">conecte o serviço de captura</Link>. Você também pode enviar uma imagem.</p>}
               {avisoArquivo && (
                 <div className="mb-4">
                   <Aviso tom={avisoArquivo.tom} acao={avisoArquivo.acao}>{avisoArquivo.texto}</Aviso>
@@ -340,15 +380,17 @@ export default function Page() {
               </MaisDetalhes>
             </CartaoEntrada>
 
-            <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Gerando a página" : "Gerar a página"}</button>
-            <button type="button" className="btn-secundario mt-2" disabled={carregando} onClick={usarExemplo}>Usar uma referência de exemplo</button>
+            <button type="submit" className="btn-primary" disabled={carregando || preparando || buscandoEndereco || !captura}>{carregando ? "Gerando a página" : "Gerar a página"}</button>
+            <button type="button" className="btn-secundario mt-2" disabled={carregando} onClick={usarExemplo}>Preencher com um exemplo</button>
+            </fieldset>
+            <p role="status" className="text-muted text-[13px] mt-2">{preparando ? "Preparando a referência..." : buscandoEndereco ? "Buscando a captura. Isso pode levar até 90 segundos." : !captura ? "Escolha uma referência para começar." : status?.demo ? "Demonstração: será gerada uma página ilustrativa, sem ler a sua captura." : "Confira a referência e a marca antes de gerar."}</p>
           </form>
 
           <div className="card p-5 mt-4">
             <Privacidade detalhe="A captura é usada só para gerar a página e não fica salva. O código gerado fica neste app até você apagar." />
 
             <MaisDetalhes titulo="Últimos resultados">
-              {historico === null ? (
+              {erroHistorico ? <p role="alert" className="text-danger text-sm">Não foi possível carregar as páginas salvas. <Link className="btn-link" href="/historico">Abrir histórico</Link></p> : historico === null ? (
                 <p className="text-muted text-sm">Carregando...</p>
               ) : historico.length === 0 ? (
                 <p className="text-muted text-sm">Nenhuma página salva ainda.</p>
@@ -377,6 +419,7 @@ export default function Page() {
           {estado.fase === "carregando" && (
             <div className="flex flex-col gap-3">
               <Loading etapas={ETAPAS_CARREGANDO} />
+              <p role="status" className="text-muted text-[13px] text-center">Mantenha esta aba aberta até a página ficar pronta.</p>
               {status?.ai && <p className="text-muted text-[13px] text-center">Isso leva de 1 a 2 minutos com o modelo gratuito.</p>}
             </div>
           )}

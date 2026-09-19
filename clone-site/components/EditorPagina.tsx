@@ -3,7 +3,7 @@
 // textos pelos da minha empresa" (uma edição por instrução pré-montada no servidor) e a lista "Versões" com
 // "Voltar para esta". Toda mudança vira uma versão nova gravada no histórico; a prévia mostra sempre a última.
 import { useState, type FormEvent } from "react";
-import { Aviso, Field } from "./ui";
+import { Aviso, Field, lerErro } from "./ui";
 import { data } from "@/lib/formato";
 import type { Meta } from "@/lib/ai";
 import type { Pagina, Versao } from "@/lib/types";
@@ -27,12 +27,15 @@ export function EditorPagina({ pagina, demo = false, onAtualizada }: { pagina: P
     setAviso(null);
     try {
       const r = await fetch(`/api/pagina/${pagina.id}/${caminho}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+      if (!r.ok) {
+        setErro((await lerErro(r)).mensagem);
+        return false;
+      }
       const resposta = await r.json();
-      if (!r.ok) throw new Error(resposta.error || "Não foi possível aplicar a mudança.");
       onAtualizada(resposta.pagina, resposta.meta);
       return true;
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro inesperado.");
+      setErro((await lerErro(e)).mensagem);
       return false;
     } finally {
       setOcupado(null);
