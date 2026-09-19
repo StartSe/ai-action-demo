@@ -70,7 +70,8 @@ async function enviar(conexao: ConexaoMCP, method: string, params: Record<string
     const r = await fetch(conexao.url, {
       method: "POST", headers, cache: "no-store",
       body: JSON.stringify({ jsonrpc: "2.0", ...(notificacao ? {} : { id }), method, params }),
-      signal: AbortSignal.timeout(60000),
+      // A coleta real pode ultrapassar um minuto; controle de sessão deve responder rápido.
+      signal: AbortSignal.timeout(method === "tools/call" ? 180000 : 30000),
     });
     if (!r.ok) throw new ErroMCP(r.status, (await r.text()).slice(0, 2000));
     if (notificacao) {
@@ -80,6 +81,7 @@ async function enviar(conexao: ConexaoMCP, method: string, params: Record<string
     return { resultado: await lerResposta(r, id), idSessao: r.headers.get("Mcp-Session-Id") || undefined };
   } catch (err) {
     if (err instanceof ErroMCP) throw err;
+    if (err instanceof Error && ["TimeoutError", "AbortError"].includes(err.name)) throw new ErroMCP(504, "Tempo limite da consulta MCP excedido.");
     throw new ErroMCP(0, "Falha de conexão com o serviço MCP.");
   }
 }
@@ -139,5 +141,12 @@ export async function chamar(conexao: ConexaoMCP, nome: string, args: Record<str
   if (resultado.isError) throw new ErroMCP(200, texto || "A ferramenta MCP falhou.");
   if (resultado.structuredContent !== undefined) return resultado.structuredContent;
   if (!texto) return resultado;
-  try { return JSON.parse(texto); } catch { return texto; }
+  try { return JSON.parse(texto); } catch { /* O MCP hospedado pode envolver JSON em marcadores. */ }
+  // Extrai dados apenas de um envelope completo com o mesmo id no aviso e nos dois marcadores.
+  // Remove metadados do transporte para que o aviso não vire o resumo da empresa.
+  const envelope = texto.match(/^SECURITY NOTICE:[^\r\n]*\(id ([a-f0-9]{32})\)[^\r\n]*\r?\n=====UNTRUSTED_\1_BEGIN=====\r?\n([\s\S]*)\r?\n=====UNTRUSTED_\1_END=====\s*$/);
+  if (envelope) {
+    try { return JSON.parse(envelope[2]); } catch { return envelope[2]; }
+  }
+  return texto;
 }

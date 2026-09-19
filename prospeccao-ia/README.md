@@ -112,6 +112,12 @@ precisam ser apagadas. O teste de conexão lista o catálogo, executa Search Eng
 e informa quais capacidades adicionais estão disponíveis. Ter uma ação no catálogo não comprova saldo
 ou permissão para executar todos os datasets; falhas são informadas quando a ação é chamada.
 
+O MCP hospedado pode envolver o resultado em um aviso `SECURITY NOTICE` e marcadores com um id.
+O cliente confere o id do aviso e dos dois marcadores antes de extrair JSON ou Markdown; esses
+metadados de transporte não entram no resumo da empresa. O conteúdo extraído continua sendo dado externo.
+Chamadas de ferramentas têm limite de três minutos; inicialização e catálogo, de 30 segundos.
+Se esse prazo for excedido, o teste informa demora da consulta, sem confundir com chave recusada.
+
 - Busca: `search_engine` com `engine: "google"` e `cursor` para paginação.
 - Páginas: `scrape_as_markdown`. Perfis, empresas, vagas e posts do LinkedIn, além de perfis,
   posts e reels do Instagram, usam a extração estruturada correspondente quando disponível.

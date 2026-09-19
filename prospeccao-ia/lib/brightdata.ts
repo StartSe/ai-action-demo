@@ -47,6 +47,7 @@ export async function chamarBrightData(nome: string, argumentos: Record<string, 
 
 export function mensagemFalhaBrightData(erro: unknown): string {
   if (erro instanceof ErroMCP) {
+    if (erro.status === 504) return "A Bright Data demorou além do tempo limite. Tente novamente em alguns minutos.";
     if ([401, 403].includes(erro.status) || /unauthorized|invalid.*(?:token|key)|authentication/i.test(erro.detalhe)) {
       return "A Bright Data recusou a chave. Confira a chave e as permissões no painel da conta.";
     }
