@@ -1,4 +1,6 @@
-> **Radar estratégico:** veja [a pesquisa técnica e o funcionamento](docs/pesquisa-estrategica.md) para last30days, fontes cadastradas, Grok X Search, ontologia e cache Redis. As telas principais são Início (`/`), Termos (`/termos`), Radar & Insights (`/radar`), Relatórios (`/historico`) e Configurações (`/setup`).
+> **Interface executiva (19/09/2026):** mapa interativo como foco do Radar & Insights, detalhes por seleção e configurações compactas com orientação do mínimo necessário. Relatórios saíram da navegação; Redis é infraestrutura interna, configurada por ambiente.
+
+> **Radar estratégico:** veja [a pesquisa técnica e o funcionamento](docs/pesquisa-estrategica.md) para last30days, fontes cadastradas, Grok X Search, ontologia e cache Redis. As telas principais são Início (`/`), Termos (`/termos`), Radar & Insights (`/radar`) e Configurações (`/setup`).
 
 # Radar de Sinais
 

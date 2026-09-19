@@ -1,4 +1,3 @@
-import { comandoRedis } from "./cache-busca";
 import { testarBrightData } from "./brightdata";
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 // A busca na web (Exa ou Tavily) é usada só por este app, por isso mora aqui e não em lib/setup-comum.ts.
@@ -89,10 +88,4 @@ export const GROK: Integracao = {
   campos: [{ chave: "XAI_API_KEY", rotulo: "Chave xAI", tipo: "secret", opcional: true }, { chave: "XAI_SEARCH_MODEL", rotulo: "Modelo de busca", tipo: "text", padrao: "grok-4.6", opcional: true }], campoConectado: "XAI_API_KEY",
   testar: config => testarFonte("xAI", () => fetch("https://api.x.ai/v1/models", { headers: { Authorization: `Bearer ${config.XAI_API_KEY}` }, signal: AbortSignal.timeout(10000) })),
 };
-export const REDIS: Integracao = {
-  id: "redis", titulo: "Redis · cache de pesquisa", beneficio: "Reduz consultas repetidas aos buscadores",
-  descricao: "Cache opcional de cinco minutos via Upstash Redis REST. Só guarda buscas bem-sucedidas com achados. Se ficar indisponível, a busca continua. Histórico, termos e agendamentos permanecem no SQLite.", obrigatoria: false,
-  campos: [{ chave: "UPSTASH_REDIS_REST_URL", rotulo: "Endpoint HTTPS do Upstash", tipo: "text", placeholder: "https://seu-banco.upstash.io" }, { chave: "UPSTASH_REDIS_REST_TOKEN", rotulo: "Token Redis REST", tipo: "secret" }],
-  testar: async config => { try { const r = await comandoRedis(["PING"], config); return { ok: r === "PONG", mensagem: r === "PONG" ? "Redis disponível para cache de pesquisa." : "Redis não respondeu ao teste." }; } catch { return { ok: false, mensagem: "Confira o endpoint HTTPS e o token Upstash Redis." }; } },
-};
-export const INTEGRACOES: Integracao[] = [OPENROUTER, BUSCA_WEB, BRIGHTDATA, GROK, REDIS, NOTIFICACOES];
+export const INTEGRACOES: Integracao[] = [OPENROUTER, BUSCA_WEB, BRIGHTDATA, GROK, NOTIFICACOES];

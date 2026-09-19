@@ -1,5 +1,17 @@
 # Pesquisa estratégica do Radar de Sinais
 
+## Revisão executiva — 19/09/2026
+
+O Radar & Insights abre no mapa (última pesquisa real, quando disponível; demonstração identificada nos demais casos). Zoom, arraste, busca, destaque por tipo e tela cheia permitem explorar. A seleção apresenta relações, ação sugerida e evidências; não há uma segunda lista extensa repetindo o mapa. O formulário fica em “Editar pesquisa”, e os detalhes da coleta em “Sobre esta pesquisa”. A tela inicial concentra três indicadores e atalhos para investigar sinais.
+
+Configurações distingue IA essencial de conectores opcionais. O caminho mínimo é conectar a IA, cadastrar termos e usar as fontes públicas selecionadas; para priorizar sites, basta um buscador web compatível. Conectores abrem individualmente, e a seleção de fontes fica recolhida. Não aparecem Redis, explicações sobre last30days, conexão ao ChatGPT/MCP ou Rotinas. A gestão de horários existente permanece recolhida em Termos.
+
+Relatórios foi retirado da navegação e `/historico` redireciona para o radar. Dados já salvos e links individuais continuam íntegros. Redis continua funcionando internamente; configure suas variáveis no servidor. Seus campos deixaram também o catálogo público de configuração e a lista de chaves editáveis por essa API.
+
+Validação: build, lint, testes de domínio e verificação com navegador de navegação, seleção, zoom, arraste, pesquisa de nós, tela cheia/Escape, persistência de conectores/termos, geração e larguras móveis.
+
+## Base técnica
+
 Pesquisa técnica realizada em 18/09/2026. Referência da last30days: commit `beb7ed1868f034f198842174bfe2694e44b78363`, skill 3.25.0. Código consultado localmente a partir do repositório oficial; nenhuma credencial de navegador foi lida e a skill não foi instalada nem executada como serviço.
 
 ## O que torna a last30days recente
@@ -36,7 +48,7 @@ Grok no OpenRouter é uma escolha de modelo; [X Search](https://docs.x.ai/develo
 
 ## Redis e implantação
 
-Redis é opcional, usado como cache de buscas bem-sucedidas e não vazias, com TTL de 300 segundos. Configure `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN`, ou use Configurações. O adaptador segue a [API REST oficial Upstash](https://upstash.com/docs/redis/features/restapi), aceita somente endpoints HTTPS Upstash e usa timeout de dois segundos. Falha de cache provoca busca normal. Chaves são hashes da consulta, período, provedor, credencial e modelo de busca; credenciais não são gravadas em texto no Redis. O payload contém achados públicos e horário original de coleta, validado ao reutilizar.
+Redis é opcional, usado como cache de buscas bem-sucedidas e não vazias, com TTL de 300 segundos. Configure `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN`. Essas variáveis são internas; não aparecem na interface. O adaptador segue a [API REST oficial Upstash](https://upstash.com/docs/redis/features/restapi), aceita somente endpoints HTTPS Upstash e usa timeout de dois segundos. Falha de cache provoca busca normal. Chaves são hashes da consulta, período, provedor, credencial e modelo de busca; credenciais não são gravadas em texto no Redis. O payload contém achados públicos e horário original de coleta, validado ao reutilizar.
 
 SQLite permanece responsável por termos, histórico, configurações cifradas e locks das rotinas. Redis não torna essa implantação multi-instância: para múltiplos servidores, também seria necessário migrar a persistência e o agendamento. Um servidor persistente com volume SQLite é o desenho atual. O cache não substitui coleta agendada nem concede acesso aos provedores.
 
