@@ -70,5 +70,8 @@ export async function toolsParaAtendente(): Promise<{
   if (!conexao) return null;
   const permitidas = await ferramentasPermitidas();
   if (permitidas.length === 0) return null;
-  return { tools: permitidas.map(paraToolDefinition), executeTool: (nome, args) => chamar(conexao, nome, args) };
+  return { tools: permitidas.map(paraToolDefinition), executeTool: (nome, args) => {
+    if (!permitidas.some((f) => f.nome === nome)) throw new Error("Ferramenta não autorizada");
+    return chamar(conexao, nome, args);
+  } };
 }

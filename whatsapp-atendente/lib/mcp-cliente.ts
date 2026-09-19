@@ -14,6 +14,7 @@ async function chamarRpc(conexao: ConexaoMCP, method: string, params?: Record<st
     r = await fetch(conexao.url, {
       method: "POST",
       headers: cabecalhos,
+      signal: AbortSignal.timeout(15_000),
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params: params ?? {} }),
     });
   } catch (err) {
@@ -53,7 +54,8 @@ export async function listarFerramentas(conexao: ConexaoMCP): Promise<Ferramenta
 }
 
 export async function chamar(conexao: ConexaoMCP, nome: string, args: Record<string, unknown>): Promise<unknown> {
-  const resultado = (await chamarRpc(conexao, "tools/call", { name: nome, arguments: args })) as { content?: { type: string; text?: string }[] };
+  const resultado = (await chamarRpc(conexao, "tools/call", { name: nome, arguments: args })) as { isError?: boolean; content?: { type: string; text?: string }[] };
+  if (resultado.isError) throw new Error("A ferramenta informou uma falha. Não confirme a operação nem repita uma criação sem conferir o resultado.");
   const texto = resultado.content?.find((c) => c.type === "text")?.text;
   if (texto === undefined) return resultado;
   try {

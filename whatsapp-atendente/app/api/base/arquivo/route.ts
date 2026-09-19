@@ -1,14 +1,18 @@
-// Importa a base de conhecimento de um arquivo (.txt ou .pdf) em vez de colar o texto à mão — é como
-// a informação já existe na maioria das empresas (um manual, uma tabela de preços, um documento de
-// perguntas frequentes). Devolve só o texto extraído: quem decide o que fica é a pessoa, no campo do
-// formulário, antes de salvar.
+import { indexarDocumento, listarDocumentos, excluirDocumento, ErroDocumento } from "@/lib/documentos";
 import { extractText } from "unpdf";
 import { responderErro } from "@/app/api/erros";
 
 export const dynamic = "force-dynamic";
 
 const LIMITE_BYTES = 10 * 1024 * 1024; // 10 MB
-const LIMITE_CARACTERES = 20000;
+export async function GET() {
+  return Response.json({ documentos: listarDocumentos() });
+}
+export async function DELETE(req: Request) {
+  const id = new URL(req.url).searchParams.get("id");
+  if (!id || !excluirDocumento(id)) return Response.json({ error: "Documento não encontrado." }, { status: 404 });
+  return Response.json({ ok: true });
+}
 
 export async function POST(req: Request) {
   let form: FormData;
@@ -45,10 +49,11 @@ export async function POST(req: Request) {
       return Response.json({ error: "Este app lê arquivos de texto (.txt) e PDF. Converta o documento para um desses formatos e envie de novo." }, { status: 400 });
     }
 
-    // O corte é dito na tela (`cortado`), nunca silencioso: a pessoa precisa saber que sobrou texto fora.
-    const cortado = texto.length > LIMITE_CARACTERES;
-    return Response.json({ texto: cortado ? texto.slice(0, LIMITE_CARACTERES) : texto, cortado, caracteres: texto.length });
+    if (texto.length > 200_000) return Response.json({ error: "O documento passa de 200 mil caracteres. Divida em arquivos menores; nenhum conteúdo foi importado." }, { status: 400 });
+    const documento = await indexarDocumento(arquivo.name, texto);
+    return Response.json({ documento });
   } catch (err) {
+    if (err instanceof ErroDocumento) return Response.json({ error: err.message }, { status: 400 });
     return responderErro(err, "Não foi possível ler esse arquivo. Confira se ele abre normalmente e tente de novo.");
   }
 }

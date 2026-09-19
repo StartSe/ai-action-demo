@@ -1,6 +1,6 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 import { randomBytes } from "node:crypto";
-import { NOTIFICACOES, openrouter, type Integracao } from "./setup-comum";
+import { NOTIFICACOES, openrouter, integracaoMCP, type Integracao } from "./setup-comum";
 import { getConfig, setConfig } from "./store";
 import { conferirNumero } from "./whatsapp";
 
@@ -83,11 +83,22 @@ export const WHATSAPP: Integracao = {
  */
 export const COM_CARTAO_PROPRIO: Integracao[] = [WHATSAPP];
 
-// "Sistemas da empresa (MCP)" saiu de Configurações: conectar um ERP/CRM por MCP confundia quem só
-// quer o atendente respondendo no WhatsApp, e o cartão ficava entre dois outros que falam de conexão.
-// A capacidade continua em lib/empresa-mcp.ts e é ligada por variável de ambiente (MCP_EMPRESA_URL e
-// MCP_EMPRESA_CODIGO, lidas por getConfig), sem aparecer na tela.
-export const INTEGRACOES: Integracao[] = [OPENROUTER, WHATSAPP, NOTIFICACOES];
+export const AGENDA = integracaoMCP({
+  id: "mcp-agenda",
+  titulo: "Agenda de atendimento",
+  descricao: "Conecte sua agenda por um servidor MCP compatível com Google Calendar ou Outlook Calendar. Autorize a conta e escolha as ferramentas que o atendente pode usar. Sem conexão, ele coleta preferências e encaminha à equipe.",
+  ajudaUrl: "Informe o endereço MCP fornecido pelo serviço de agenda da empresa. A conexão de e-mail deste app não dá acesso à agenda.",
+  rotuloFerramentas: "Ferramentas",
+  camposExtras: [{ chave: "MCP_AGENDA_FERRAMENTAS", rotulo: "Ferramentas autorizadas", tipo: "text", opcional: true,
+    ajuda: "Use Testar conexão para ver os nomes. Informe os nomes exatos, separados por vírgula, de consulta de horários e criação de eventos. Nenhuma ferramenta é liberada automaticamente." }],
+  testarExtra: (ferramentas) => {
+    const nomes = (getConfig("MCP_AGENDA_FERRAMENTAS") || "").split(",").map((n) => n.trim()).filter(Boolean);
+    const faltam = nomes.filter((n) => !ferramentas.some((f) => f.nome === n));
+    if (!nomes.length || faltam.length) return { ok: false, mensagem: `Escolha ferramentas válidas em Opções avançadas. Disponíveis: ${ferramentas.map((f) => f.nome).join(", ")}.` };
+    return { ok: true, mensagem: `Agenda disponível. Ferramentas autorizadas: ${nomes.join(", ")}.` };
+  },
+});
+export const INTEGRACOES: Integracao[] = [OPENROUTER, WHATSAPP, AGENDA, NOTIFICACOES];
 
 /**
  * Integrações que saem dos cartões numerados de /setup e vão para um bloco recolhido no fim da página.
