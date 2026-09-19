@@ -2,6 +2,7 @@
 // As chaves das integrações ficam aqui, gravadas pelo setup inicial (/setup), sempre
 // cifradas em repouso (AES-256-GCM, node:crypto) — ver cifrar()/decifrar() abaixo.
 // Variáveis de ambiente continuam funcionando como alternativa e têm prioridade.
+import { carregarChaveMestra } from "./chave-mestra";
 import { DatabaseSync } from "node:sqlite";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -21,30 +22,10 @@ let chaveMestraCache: Buffer | null = null;
  */
 function chaveMestra(): Buffer {
   if (chaveMestraCache) return chaveMestraCache;
-  const env = process.env.CHAVE_MESTRA?.trim();
-  if (env) {
-    const buf = Buffer.from(env, "base64");
-    if (buf.length === 32) {
-      chaveMestraCache = buf;
-      return buf;
-    }
-    console.error("CHAVE_MESTRA inválida (precisa de 32 bytes em base64); gerando uma chave própria em DATA_DIR.");
-  }
-  const arquivo = path.join(DATA_DIR, "chave-mestra");
-  try {
-    const existente = fs.readFileSync(arquivo);
-    if (existente.length === 32) {
-      chaveMestraCache = existente;
-      return existente;
-    }
-  } catch {
-    // arquivo ainda não existe: gera abaixo
-  }
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  const nova = crypto.randomBytes(32);
-  fs.writeFileSync(arquivo, nova, { mode: 0o600 });
-  chaveMestraCache = nova;
-  return nova;
+  chaveMestraCache = carregarChaveMestra(DATA_DIR, process.env.CHAVE_MESTRA, () => Boolean(
+    abrir().prepare("SELECT 1 FROM config WHERE valor LIKE 'v1:%' LIMIT 1").get(),
+  ));
+  return chaveMestraCache;
 }
 
 /** Formato gravado no banco: `v1:<iv>:<tag>:<cifra>`, tudo em base64url. */
@@ -67,7 +48,7 @@ function decifrar(valorCifrado: string): string | undefined {
     const texto = Buffer.concat([decifra.update(Buffer.from(dadosB64, "base64url")), decifra.final()]);
     return texto.toString("utf8");
   } catch (err) {
-    console.error("Falha ao decifrar uma configuração salva: a chave mestra mudou ou foi perdida.", err);
+    console.error("Não foi possível ler uma configuração cifrada. Confira o acesso à chave mestra e se ela corresponde aos dados salvos.", err);
     return undefined;
   }
 }

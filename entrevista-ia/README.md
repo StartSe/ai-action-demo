@@ -142,3 +142,10 @@ Sem LiveKit configurado, o fluxo por voz do navegador e texto continua disponív
 A criação do convite prepara e salva o roteiro **antes de disponibilizar o link**. Se a IA falhar, a criação informa o problema e permite tentar novamente. A abertura de um novo convite usa o roteiro salvo, sem uma chamada de planejamento. Links antigos sem roteiro mantêm o caminho de compatibilidade do app.
 
 Referências de implementação: [LiveKit Agents](https://docs.livekit.io/agents/start/voice-ai/), [ElevenLabs TTS](https://docs.livekit.io/agents/models/tts/elevenlabs/), [transcrição LiveKit](https://docs.livekit.io/agents/models/stt/), [catálogo OpenRouter](https://openrouter.ai/api/v1/models) e [Chat Completions OpenAI](https://developers.openai.com/api/reference/resources/chat).
+
+
+### Correção de permissões do volume (0.3.1)
+
+A atualização de Alpine para Debian mudou a identificação numérica do usuário e podia causar `EACCES` ao ler `/app/data/chave-mestra`. A imagem 0.3.1 ajusta o proprietário do volume ao iniciar e executa o site e o agente como `app` (UID/GID 10001), sem privilégios de root. A chave e os dados existentes são preservados. O build testa um volume com proprietário antigo e confirma leitura, gravação e reutilização da mesma chave em duas inicializações.
+
+Para recuperar uma instalação afetada, atualize a imagem e faça redeploy **mantendo o disco existente**. Não apague `chave-mestra` e não configure uma `CHAVE_MESTRA` nova: configurações já cifradas precisam da chave original. Falhas de permissão ou uma chave inválida não são mais tratadas como instalação nova. A troca de usuário após a preparação usa [gosu](https://github.com/tianon/gosu).

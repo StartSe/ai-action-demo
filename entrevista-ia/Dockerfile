@@ -24,8 +24,8 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=10000 HOSTNAME=0.0.0.0 \
     DATA_DIR=/app/data NODE_OPTIONS=--disable-warning=ExperimentalWarning \
     GOOGLE_CLIENT_ID_APP=${GOOGLE_CLIENT_ID_APP} GOOGLE_CLIENT_SECRET_APP=${GOOGLE_CLIENT_SECRET_APP} \
     MICROSOFT_CLIENT_ID_APP=${MICROSOFT_CLIENT_ID_APP} MICROSOFT_CLIENT_SECRET_APP=${MICROSOFT_CLIENT_SECRET_APP}
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libgomp1 && rm -rf /var/lib/apt/lists/*
-RUN groupadd --system app && useradd --system --gid app --create-home app && mkdir -p /app/data && chown app:app /app/data
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libgomp1 gosu && rm -rf /var/lib/apt/lists/*
+RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --create-home app && mkdir -p /app/data && chown app:app /app/data
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/agents ./agents
 COPY --from=build /app/scripts ./scripts
@@ -34,7 +34,12 @@ COPY --from=build /app/tsconfig.json ./tsconfig.json
 COPY --from=build /app/public ./public
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
-USER app
+# Corrige o proprietário do volume montado antes de abandonar privilégios.
+# O chown durante o build não alcança o disco persistente montado pelo Render.
+COPY --chmod=755 scripts/entrada.sh /usr/local/bin/entrada-entrevista
+USER root
+RUN sh scripts/testar-volume.sh
+ENTRYPOINT ["/usr/local/bin/entrada-entrevista"]
 # As chaves configuradas em /setup ficam no SQLite em /app/data. Monte um volume aqui para persistir.
 VOLUME ["/app/data"]
 EXPOSE 10000
