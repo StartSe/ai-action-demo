@@ -1,4 +1,5 @@
 "use client";
+import { carregarConversaComRecuperacao } from "@/lib/carregar-conversa";
 // A conversa do candidato (US-018, nível 2 do PRD): ele fala, a entrevistadora responde em voz alta.
 //
 // Substitui `components/Sala.tsx` no link público — aquela ficou sendo só a prévia do gestor, que
@@ -175,16 +176,24 @@ export function SalaCandidato({
   );
 
   /** Toca o áudio recebido do servidor e só devolve quando ele termina. */
-  const tocar = useCallback((blob: Blob) => {
+  const tocar = useCallback((blob: Blob, texto: string) => {
     return new Promise<void>((resolver) => {
       const endereco = URL.createObjectURL(blob);
       const audio = new Audio(endereco);
       audioRef.current = audio;
+      let terminou = false;
       const pronto = () => {
+        if (terminou) return;
+        terminou = true;
+        clearTimeout(prazo);
+        audio.pause();
+        audio.onended = null;
+        audio.onerror = null;
         URL.revokeObjectURL(endereco);
         if (audioRef.current === audio) audioRef.current = null;
         resolver();
       };
+      const prazo = setTimeout(pronto, limiteDaFala(texto));
       audio.onended = pronto;
       audio.onerror = pronto;
       audio.play().catch((err) => {
@@ -229,16 +238,16 @@ export function SalaCandidato({
 
   const dizer = useCallback(
     async (texto: string) => {
-      if (!texto || !gestoRef.current || fechandoRef.current) return;
+      if (!texto || !gestoRef.current || fechandoRef.current || modoRef.current === "texto") return;
       guardarEstado("falando");
       if (vozLigada && !vozDesistiuRef.current) {
         try {
-          const r = await fetch(`/api/entrevista/candidato/${codigo}/voz?texto=${encodeURIComponent(texto)}`);
+          const r = await fetch(`/api/entrevista/candidato/${codigo}/voz?texto=${encodeURIComponent(texto)}`, { signal: AbortSignal.timeout(10000) });
           if (fechandoRef.current) return;
           if (r.ok) {
             const blob = await r.blob();
             if (fechandoRef.current) return;
-            await tocar(blob);
+            await tocar(blob, texto);
             return;
           }
           vozDesistiuRef.current = true;
@@ -284,7 +293,7 @@ export function SalaCandidato({
           // Só os links antigos precisam disto: eles não têm entrevista guardada no servidor.
           historico: conversaNoNavegador ? falasRef.current : undefined,
         };
-        const r = await fetch(`/api/entrevista/candidato/${codigo}/falar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+        const r = await fetch(`/api/entrevista/candidato/${codigo}/falar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo), signal: AbortSignal.timeout(45000) });
         if (!r.ok) {
           setFalha(await lerErro(r));
           guardarEstado("parado");
@@ -304,7 +313,10 @@ export function SalaCandidato({
         guardarEstado("parado");
         if (modoRef.current === "voz" && escutaModoRef.current === "livre") iniciarEscutaRef.current?.();
       } catch (err) {
-        setFalha(await lerErro(err));
+        if (fechandoRef.current) return;
+        setFalha(err instanceof Error && err.name === "TimeoutError"
+          ? { mensagem: "A preparação demorou mais que o esperado. Tente novamente; sua conversa será retomada sem apagar as respostas." }
+          : await lerErro(err));
         guardarEstado("parado");
       }
     },
@@ -401,7 +413,7 @@ export function SalaCandidato({
     setFalha(null);
     setFalhaAbertura(false);
     try {
-      const r = await fetch(`/api/entrevista/candidato/${codigo}/conversa`);
+      const r = await carregarConversaComRecuperacao(`/api/entrevista/candidato/${codigo}/conversa`);
       if (!r.ok) throw r;
       const atual = (await r.json()) as Turno;
       if (fechandoRef.current) return;
@@ -520,6 +532,8 @@ export function SalaCandidato({
       {motivoTexto && <Aviso tom="warn">{motivoTexto}</Aviso>}
       {avisoVoz && <Aviso tom="warn">{avisoVoz.mensagem}</Aviso>}
 
+      {estado === "pensando" && !falas.length && !falha && <p className="text-sm text-muted text-center" role="status">Estamos preparando a primeira pergunta. Isso pode levar alguns segundos. Se não conseguirmos concluir, você poderá tentar novamente aqui.</p>}
+
       <div className="chat" ref={chatRef} aria-live="polite">
         {falas.map((f, i) => (
           <div key={i} className={`bubble ${f.papel}`}>
@@ -552,7 +566,7 @@ export function SalaCandidato({
 
       <div className="resposta">
         <div className="text-center text-[12.5px] font-semibold uppercase tracking-[0.06em] text-muted" aria-live="polite">
-          {encerrando ? "Enviando as suas respostas..." : precisaToque ? "Entrevista em andamento" : ROTULO_ESTADO[estado]}
+          {encerrando ? "Enviando as suas respostas..." : precisaToque ? "Entrevista em andamento" : estado === "pensando" && !falas.length ? "Preparando sua entrevista..." : ROTULO_ESTADO[estado]}
         </div>
 
         {precisaToque ? (

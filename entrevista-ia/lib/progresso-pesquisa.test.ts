@@ -20,6 +20,10 @@ test("progresso persistido é devolvido pela API e removido com o candidato", as
   const r = await GET(new Request("http://localhost"), { params: Promise.resolve({ id: c.id }) });
   const { progresso } = await r.json();
   assert.deepEqual(progresso.passos.map((p: { estado: string }) => p.estado), ["concluido", "aviso", "em_andamento"]);
+  assert.ok(progresso.passos.every((p: { iniciadoEm?: string }) => p.iniciadoEm));
+  assert.ok(progresso.passos[0].concluidoEm);
+  assert.ok(progresso.passos[1].concluidoEm);
+  assert.equal(progresso.passos[2].concluidoEm, undefined);
   concluirEtapaPesquisa(c.id, "falhou");
   assert.equal(lerProgressoPesquisa(c.id)?.passos.at(-1)?.estado, "falhou");
   iniciarProgressoPesquisa(c.id);

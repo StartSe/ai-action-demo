@@ -1,6 +1,6 @@
 import { banco } from "./banco";
 
-export type PassoPesquisa = { titulo: string; estado: "em_andamento" | "concluido" | "aviso" | "falhou" };
+export type PassoPesquisa = { titulo: string; estado: "em_andamento" | "concluido" | "aviso" | "falhou"; iniciadoEm?: string; concluidoEm?: string };
 export type ProgressoPesquisa = { passos: PassoPesquisa[]; atualizadoEm: string };
 function db() {
   const d = banco();
@@ -19,16 +19,16 @@ function gravar(id: string, passos: PassoPesquisa[]) {
     .run(id, JSON.stringify({ passos, atualizadoEm: new Date().toISOString() }));
 }
 export function iniciarProgressoPesquisa(id: string) {
-  gravar(id, [{ titulo: "Preparando a pesquisa e verificando a conexão", estado: "em_andamento" }]);
+  gravar(id, [{ titulo: "Preparando a pesquisa e verificando a conexão", estado: "em_andamento", iniciadoEm: new Date().toISOString() }]);
 }
 export function etapaPesquisa(id: string, titulo: string) {
   const progresso = lerProgressoPesquisa(id);
   if (!progresso) return;
-  const passos = progresso.passos.map((p): PassoPesquisa => p.estado === "em_andamento" ? { ...p, estado: "concluido" } : p);
-  gravar(id, [...passos, { titulo, estado: "em_andamento" }]);
+  const passos = progresso.passos.map((p): PassoPesquisa => p.estado === "em_andamento" ? { ...p, estado: "concluido", concluidoEm: new Date().toISOString() } : p);
+  gravar(id, [...passos, { titulo, estado: "em_andamento", iniciadoEm: new Date().toISOString() }]);
 }
 export function concluirEtapaPesquisa(id: string, estado: "concluido" | "aviso" | "falhou") {
   const progresso = lerProgressoPesquisa(id);
   if (!progresso) return;
-  gravar(id, progresso.passos.map((p) => p.estado === "em_andamento" ? { ...p, estado } : p));
+  gravar(id, progresso.passos.map((p) => p.estado === "em_andamento" ? { ...p, estado, concluidoEm: new Date().toISOString() } : p));
 }

@@ -115,3 +115,17 @@ render.yaml                           blueprint do Render (runtime image)
 ```
 
 O enriquecimento usa Search Engine, Search Dataset, LinkedIn Person Profile e Scrape as Markdown. Search Dataset consulta primeiro `list_dataset_fields` para montar um filtro válido; o orçamento por rodada é de até 8 chamadas de ferramenta, mantendo o prazo total. O teste de conexão exige as quatro ações principais.
+
+## Progresso do enriquecimento e recuperação da entrevista
+
+O acompanhamento mostra quatro fases (preparação, consulta das fontes, organização e preparação para revisão). A barra avança conforme as fases registradas pelo servidor, não conforme um temporizador. Cada consulta mantém início e término no banco, permitindo reabrir a janela sem reiniciar a duração. As faixas de tempo em `lib/tempo-pesquisa.ts` são referências iniciais aproximadas, ainda não calibradas por telemetria; ultrapassá-las mostra um aviso e não simula conclusão. Uma falha ao consultar o andamento provoca nova leitura após cinco segundos.
+
+Na sala do candidato, a leitura da conversa repete erros de rede e respostas 502/503/504 até três tentativas, com limite de 15 segundos por tentativa. Se a indisponibilidade persistir, a pessoa pode tentar novamente. Respostas do candidato não são reenviadas automaticamente. Chamadas ao OpenRouter repetem uma vez respostas 502/503/504; o planejamento e a escrita das falas têm, cada um, um prazo total de 25 segundos, incluindo novas tentativas HTTP e correção de JSON. A primeira pergunta usa diretamente o roteiro, dispensando uma segunda geração. No navegador, registrar a abertura tem prazo de 15 segundos, receber um turno tem prazo de 45 segundos e buscar a voz tem prazo de 10 segundos. Falhas permitem tentar novamente; começar por escrito dispensa o áudio. Turnos da mesma entrevista são serializados no processo para evitar duplicação quando uma tentativa chega antes de a anterior terminar.
+
+`npm test` cobre persistência dos tempos, falhas transitórias e persistentes, links expirados e abertura/retomada com um 502 simulado do provedor. Esses testes não identificam a causa de um 502 ocorrido na hospedagem: para investigá-lo, é necessário correlacionar o caminho da requisição e o horário com os logs do servidor. A mensagem isolada do console não distingue provedor de IA, voz e proxy da hospedagem.
+
+## Versão instalada
+
+Configurações (`/setup`) mostra a versão instalada, incorporada ao build a partir do campo `version` do `package.json`. A versão `0.2.0` inclui o progresso do enriquecimento e a recuperação de falhas na abertura da entrevista.
+
+Antes de publicar uma atualização deste app, incremente a versão na pasta `entrevista-ia` com `npm version patch --no-git-tag-version` (correções) ou `npm version minor --no-git-tag-version` (novos recursos). O comando mantém `package.json` e `package-lock.json` sincronizados. Gere e publique uma nova imagem; depois de atualizar a instalação, confira o número em Configurações. A tela identifica a versão instalada, sem consultar automaticamente se há uma atualização disponível.

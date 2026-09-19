@@ -6,6 +6,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const RAIZ = process.cwd();
 
 export function resolve(especificador, contexto, proximo) {
+  // O bundler do Next aceita este submódulo sem extensão; o ESM do Node exige .js.
+  if (especificador === "next/server") return proximo("next/server.js", contexto);
+
   // O atalho `@/` do tsconfig aponta para a raiz do app.
   if (especificador.startsWith("@/")) {
     const base = path.join(RAIZ, especificador.slice(2));

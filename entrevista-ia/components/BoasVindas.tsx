@@ -138,7 +138,7 @@ export function BoasVindas({
     setFase("pedindo");
     liberarAudio();
     try {
-      const r = await fetch(`/api/entrevista/candidato/${codigo}/abrir`, { method: "POST" });
+      const r = await fetch(`/api/entrevista/candidato/${codigo}/abrir`, { method: "POST", signal: AbortSignal.timeout(15000) });
       if (!r.ok) {
         const corpo = (await r.json().catch(() => null)) as { error?: string } | null;
         setErro(corpo?.error || "Não foi possível começar a entrevista agora. Tente de novo em alguns segundos.");

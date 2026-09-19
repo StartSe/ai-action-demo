@@ -99,21 +99,27 @@ export function respostaErro(err: unknown): Response {
   return Response.json({ error: mensagem }, { status: 500 });
 }
 
-async function chamarOpenRouter(body: Record<string, unknown>): Promise<Response> {
+async function chamarOpenRouter(body: Record<string, unknown>, limiteMs = 120000, signal = AbortSignal.timeout(limiteMs)): Promise<Response> {
   if (!apiKey()) {
     throw new ErroIA("chave_ausente", "Nenhuma chave da IA foi configurada. Conecte em Configurações.", 401, ACAO_CONECTAR_IA);
   }
   try {
-    return await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey()}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": getConfig("APP_URL") || "http://localhost:3000",
-        "X-Title": getConfig("APP_NAME") || "IA para Executivos",
-      },
-      body: JSON.stringify(body),
-    });
+    for (let tentativa = 0; ; tentativa++) {
+      const res = await fetch(OPENROUTER_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey()}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": getConfig("APP_URL") || "http://localhost:3000",
+          "X-Title": getConfig("APP_NAME") || "IA para Executivos",
+        },
+        body: JSON.stringify(body),
+        signal,
+      });
+      if (tentativa > 0 || ![502, 503, 504].includes(res.status)) return res;
+      await res.body?.cancel();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
   } catch (err) {
     console.error("Falha de rede ao chamar a IA:", err);
     throw new ErroIA("rede", "Não foi possível falar com o serviço de IA. Confira a conexão do servidor e tente de novo.", 503);
@@ -162,7 +168,7 @@ export function meta({ demo, insumo, model }: { demo: boolean; insumo: string; m
 type Message = { role: "system" | "user" | "assistant"; content: string };
 
 /** `model` troca o modelo só desta chamada (ex.: modelName("avaliacao")); sem ele vale o modelo padrão. */
-export async function askText({ system, prompt, maxTokens = 4000, temperature = 0.4, model }: { system: string; prompt: string; maxTokens?: number; temperature?: number; model?: string }): Promise<string> {
+export async function askText({ system, prompt, maxTokens = 4000, temperature = 0.4, model, limiteMs, signal }: { system: string; prompt: string; maxTokens?: number; temperature?: number; model?: string; limiteMs?: number; signal?: AbortSignal }): Promise<string> {
   const messages: Message[] = [{ role: "system", content: system }, { role: "user", content: prompt }];
   const escolha = model || modelName();
   const fallbacks = (getConfig("OPENROUTER_FALLBACK_MODELS") || FALLBACK_MODELS.join(",")).split(",").map((m) => m.trim()).filter(Boolean);
@@ -172,7 +178,7 @@ export async function askText({ system, prompt, maxTokens = 4000, temperature = 
     messages,
     max_tokens: maxTokens,
     temperature,
-  });
+  }, limiteMs, signal);
   if (!res.ok) {
     const detalhe = await res.text().catch(() => "");
     throw interpretarFalha(res, detalhe);
@@ -222,13 +228,15 @@ export async function askVision({
 }
 
 /** Modelos gratuitos erram o formato JSON com frequência: uma segunda tentativa antes de desistir evita jogar fora uma resposta boa por causa de um erro isolado. */
-export async function askJSON<T = unknown>(opts: { system: string; prompt: string; maxTokens?: number; model?: string }): Promise<T> {
+export async function askJSON<T = unknown>(opts: { system: string; prompt: string; maxTokens?: number; model?: string; limiteMs?: number }): Promise<T> {
   const system = `${opts.system}\n\nResponda somente com JSON válido, sem comentários e sem blocos de código markdown.`;
-  const texto = await askText({ ...opts, system, temperature: 0.2 });
+  // Um único prazo inclui a repetição HTTP e a correção de JSON inválido.
+  const signal = opts.limiteMs ? AbortSignal.timeout(opts.limiteMs) : undefined;
+  const texto = await askText({ ...opts, system, temperature: 0.2, signal });
   try {
     return parseJSON<T>(texto);
   } catch {
-    const segundaTentativa = await askText({ ...opts, system, temperature: 0.2 });
+    const segundaTentativa = await askText({ ...opts, system, temperature: 0.2, signal });
     try {
       return parseJSON<T>(segundaTentativa);
     } catch {

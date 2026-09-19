@@ -356,7 +356,7 @@ export async function planejarRoteiro(ctx: ContextoRoteiro): Promise<Roteiro> {
     await esperar(600);
     return roteiroDemo(ctx);
   }
-  const bruto = await askJSON<unknown>({ system: SYSTEM_ROTEIRO, prompt: construirPromptRoteiro(ctx), maxTokens: 2000 });
+  const bruto = await askJSON<unknown>({ system: SYSTEM_ROTEIRO, prompt: construirPromptRoteiro(ctx), maxTokens: 2000, limiteMs: 25000 });
   return normalizarRoteiro(bruto, ctx);
 }
 
@@ -563,7 +563,7 @@ async function escreverFala({
     "Escreva a fala.",
   ].join("\n");
 
-  const resposta = await askJSON<{ fala?: unknown }>({ system: SYSTEM_FALA, prompt, maxTokens: 400 });
+  const resposta = await askJSON<{ fala?: unknown }>({ system: SYSTEM_FALA, prompt, maxTokens: 400, limiteMs: 25000 });
   return corte(resposta?.fala);
 }
 
@@ -585,6 +585,11 @@ async function falaDoPasso(args: {
   if (!aiEnabled()) {
     await esperar(500);
     return reserva;
+  }
+  // O roteiro já contém a primeira pergunta. Reformulá-la exigia outra chamada
+  // ao provedor antes de a pessoa conseguir começar.
+  if (args.primeira && args.passo.tipo === "pergunta") {
+    return `Olá${args.ctx.candidato.primeiroNome ? `, ${args.ctx.candidato.primeiroNome}` : ""}! ${reserva}`;
   }
   try {
     return (await escreverFala(args)) || reserva;
@@ -627,7 +632,22 @@ function comoTrocas(falas: { papel: string; texto: string }[]): Troca[] {
  * entrevista?" na tela de quem acompanha o processo, e a resposta honesta é a de quando a conversa
  * começou: quem trocou de jeito no meio (caiu para o teclado numa pergunta) não fez outra entrevista.
  */
+const turnosEmCurso = new Map<string, Promise<unknown>>();
+
 export async function proximaFala(
+  entrevistaId: string,
+  ultimaResposta?: string,
+  ordem?: number,
+  opcoes: { nivelVoz?: NivelVoz } = {},
+): Promise<Fala> {
+  const anterior = turnosEmCurso.get(entrevistaId) ?? Promise.resolve();
+  const atual = anterior.catch(() => {}).then(() => executarProximaFala(entrevistaId, ultimaResposta, ordem, opcoes));
+  turnosEmCurso.set(entrevistaId, atual);
+  try { return await atual; }
+  finally { if (turnosEmCurso.get(entrevistaId) === atual) turnosEmCurso.delete(entrevistaId); }
+}
+
+async function executarProximaFala(
   entrevistaId: string,
   ultimaResposta?: string,
   ordem?: number,

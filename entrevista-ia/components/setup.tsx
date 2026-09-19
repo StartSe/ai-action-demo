@@ -49,7 +49,7 @@ function IconeApoio() {
  * `extras`: um pedaço de tela próprio do app DENTRO do cartão de uma integração, por id dela (ex.:
  * "Apagar os dados de exemplo" no cartão do OpenRouter). Existe porque há assuntos que só fazem
  * sentido ao lado daquela conexão — num cartão separado, ninguém liga um ao outro. */
-export function SetupPage({ marca, nome, area, segmento, children, extras }: { marca: string; nome: string; area: string; segmento: Segmento; children?: ReactNode; extras?: Record<string, ReactNode> }) {
+export function SetupPage({ marca, nome, area, segmento, children, extras, versao }: { versao: string; marca: string; nome: string; area: string; segmento: Segmento; children?: ReactNode; extras?: Record<string, ReactNode> }) {
   const { status, erro } = useStatus();
   const [opcionaisAbertas, setOpcionaisAbertas] = useState(false);
   const [dados, setDados] = useState<Resposta | null>(null);
@@ -84,6 +84,7 @@ export function SetupPage({ marca, nome, area, segmento, children, extras }: { m
             <div>
               <p className="sobretitulo mb-1">{area}</p>
               <h1 className="titulo-painel mb-2">Configure sua entrevista</h1>
+              <p className="text-xs text-muted mb-4">Versão instalada <span className="font-semibold text-ink-2">{versao}</span></p>
               <p className="apoio max-w-[280px]">{FRASE_PRIVACIDADE}</p>
               <p className="apoio max-w-[280px] mt-2">{FRASE_CONEXOES}</p>
             </div>
