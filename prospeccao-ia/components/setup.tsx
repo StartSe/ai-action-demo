@@ -51,7 +51,7 @@ export function SetupPage({ marca, nome, area, segmento, children, navegacao }: 
   const [dados, setDados] = useState<Resposta | null>(null);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
 
-  const carregar = () => fetch("/api/setup").then((r) => r.json()).then(setDados).catch(() => setAviso({ tipo: "erro", texto: "Não foi possível carregar a configuração." }));
+  const carregar = () => fetch("/api/setup").then((r) => r.json()).then((resposta: Resposta) => setDados({ ...resposta, integracoes: resposta.integracoes.filter((i) => i.id !== "notificacoes") })).catch(() => setAviso({ tipo: "erro", texto: "Não foi possível carregar a configuração." }));
   const primeiroPendenteId = dados?.integracoes.find((i) => i.obrigatoria && !i.configurada)?.id;
   const conectadas = dados?.integracoes.filter((i) => i.configurada).length ?? 0;
   const total = dados?.integracoes.length ?? 0;

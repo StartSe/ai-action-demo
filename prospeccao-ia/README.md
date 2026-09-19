@@ -140,3 +140,5 @@ e [schemas e implementação das ferramentas](https://github.com/brightdata/brig
 
 Validação local: `npm test`, `npm run lint` e `npm run build`. Os testes usam um servidor simulado;
 a conta publicada precisa ser validada no botão de teste do setup após atualizar o app.
+
+Rotinas e Notificações ficam ocultas na interface, incluindo o convite para receber leads semanalmente. As configurações e os serviços existentes são preservados.

@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { Aviso, Chip, CopyButton, DataTable, Entregar, Item, MaisDetalhes, ResultHead, Section, data, lerErro, type Coluna } from "@/components/ui";
-import { ACAO_BUSCA_DE_LEADS, ACAO_CONFERIR_CRM, ACAO_NOTIFICACOES } from "@/lib/acoes";
+import { useState } from "react";
+import { Aviso, Chip, CopyButton, DataTable, Entregar, Item, MaisDetalhes, ResultHead, Section, data, type Coluna } from "@/components/ui";
+import { ACAO_BUSCA_DE_LEADS, ACAO_CONFERIR_CRM } from "@/lib/acoes";
 import { Inicio } from "@/components/Inicio";
 import type { Meta } from "@/lib/ai";
 import type { Abordagem, DadosBusca, Fonte, Lead } from "@/lib/types";
@@ -173,120 +173,7 @@ export function Resultado({
         </Section>
       )}
 
-      {onEscrever && <ReceberLeadsSemanais dados={dados} />}
     </article>
-  );
-}
-
-type EstadoNotificacoes = { configurada: boolean; canal: "email" | "slack"; destino: string };
-type RotinaLeads = { id: string; tipo: string; parametros: Partial<DadosBusca> };
-
-/** Mesma normalização de lib/leads-vistos.ts (chavePerfil), duplicada aqui porque esse arquivo importa
- * node:sqlite e não pode ser importado por um componente "use client". */
-function chavePerfil(d: Pick<DadosBusca, "segmento" | "cargo" | "localizacao" | "porte">): string {
-  return [d.segmento, d.cargo, d.localizacao, d.porte].map((v) => String(v || "").trim().toLowerCase()).join("|");
-}
-
-/** Depois de uma busca, oferece automatizar a prospecção: uma rotina semanal que busca leads novos
- * para o mesmo perfil, exclui quem já foi entregue antes e já escreve a abordagem de cada um. */
-function ReceberLeadsSemanais({ dados }: { dados: DadosBusca }) {
-  const [notificacoes, setNotificacoes] = useState<EstadoNotificacoes | null>(null);
-  const [rotinaId, setRotinaId] = useState<string | null | undefined>(undefined);
-  const [quantidade, setQuantidade] = useState("10");
-  const [criando, setCriando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/status")
-      .then((r) => r.json())
-      .then((d) => {
-        const configurada = Boolean(d.integrations?.notificacoes);
-        return fetch("/api/setup")
-          .then((r) => r.json())
-          .then((s) => {
-            const integracao = (s.integracoes || []).find((i: { id: string }) => i.id === "notificacoes");
-            const campos: { chave: string; valorVisivel?: string }[] = integracao?.campos || [];
-            const canal = campos.find((c) => c.chave === "NOTIFICACOES_CANAL")?.valorVisivel === "slack" ? "slack" : "email";
-            const destino = campos.find((c) => c.chave === "NOTIFICACOES_DESTINO")?.valorVisivel || "";
-            setNotificacoes({ configurada, canal, destino });
-          });
-      })
-      .catch(() => setNotificacoes({ configurada: false, canal: "email", destino: "" }));
-    const perfilAtual = chavePerfil(dados);
-    fetch("/api/rotinas")
-      .then((r) => r.json())
-      .then((d) => {
-        const existente = (d.itens || []).find((i: RotinaLeads) => i.tipo === "leads-semanais" && chavePerfil(i.parametros as DadosBusca) === perfilAtual);
-        setRotinaId(existente?.id ?? null);
-      })
-      .catch(() => setRotinaId(null));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma única vez por resultado
-  }, []);
-
-  async function criar() {
-    if (!notificacoes?.configurada) return;
-    setCriando(true);
-    setErro(null);
-    try {
-      const r = await fetch("/api/rotinas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tipo: "leads-semanais",
-          frequencia: "semanal",
-          diaSemana: 1,
-          hora: "08:00",
-          canal: notificacoes.canal,
-          destino: notificacoes.canal === "email" ? notificacoes.destino || undefined : undefined,
-          parametros: { ...dados, quantidade },
-        }),
-      });
-      if (!r.ok) {
-        setErro((await lerErro(r)).mensagem);
-        return;
-      }
-      const d = await r.json();
-      setRotinaId(d.id);
-    } catch (e) {
-      setErro((await lerErro(e)).mensagem);
-    } finally {
-      setCriando(false);
-    }
-  }
-
-  if (rotinaId === undefined || notificacoes === null) return null;
-
-  return (
-    <Item className="mt-4">
-      {rotinaId ? (
-        <p className="text-muted text-sm">Você já recebe leads novos toda semana para esse perfil, toda segunda às 8h.</p>
-      ) : (
-        <>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <label className="flex items-center gap-1.5 text-[13px] font-semibold">
-              Quantidade
-              <select className="input !w-auto" value={quantidade} onChange={(e) => setQuantidade(e.target.value)}>
-                <option value="10">10 leads</option>
-                <option value="20">20 leads</option>
-                <option value="30">30 leads</option>
-              </select>
-            </label>
-            {notificacoes.configurada ? (
-              <button type="button" className="btn-ghost !w-auto" onClick={criar} disabled={criando}>
-                {criando ? "Criando..." : "Receber leads novos toda semana"}
-              </button>
-            ) : (
-              <a href="/setup#notificacoes" className="btn-ghost !w-auto">Receber leads novos toda semana</a>
-            )}
-          </div>
-          {erro && (
-            <div className="mt-3">
-              <Aviso tom="danger" acao={ACAO_NOTIFICACOES}>{erro}</Aviso>
-            </div>
-          )}
-        </>
-      )}
-    </Item>
   );
 }
 

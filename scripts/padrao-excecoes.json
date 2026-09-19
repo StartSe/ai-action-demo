@@ -23,6 +23,6 @@
     "app/api/setup/testar/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT."
   },
   "prospeccao-ia": {
-    "components/setup.tsx": "Aceita a propriedade navegacao para manter os cinco destinos do workspace também em Configurações."
+    "components/setup.tsx": "Aceita a propriedade navegacao para manter os cinco destinos do workspace também em Configurações. Oculta Notificações nos cartões, nas sugestões e no progresso de configuração."
   }
 }
