@@ -72,7 +72,7 @@ export function conferirSala(codigo: string, cabecalhoCookie: string | null): Re
   const sessao = lerSessaoCandidato(cabecalhoCookie);
   // Sem entrevista no banco (link antigo) não há o que disputar: aquele link carrega a conversa
   // consigo, no próprio navegador.
-  const mesmoAparelho = !entrevista || (sessao?.entrevistaId === entrevista.id && sessao.codigo === codigo);
+  const mesmoAparelho = !entrevista || (sessao?.entrevistaId === entrevista.id && sessao.codigo === codigo && sessao.tentativa === entrevista.tentativa);
   if (entrevista?.status === "em_andamento" && !mesmoAparelho) return bloquear("outro_aparelho");
 
   return { ok: true, sala: resolucao.sala, entrevista, mesmoAparelho };
@@ -97,7 +97,7 @@ export function abrirSala(codigo: string, cabecalhoCookie: string | null): Resul
 /** O `Set-Cookie` que marca este aparelho como o dono da conversa. Nulo nos links antigos. */
 export function cookieDaSala(sala: SalaAberta, codigo: string, seguro: boolean): string | null {
   if (!sala.entrevista) return null;
-  return cookieSessaoCandidato({ entrevistaId: sala.entrevista.id, codigo, expiraEm: sala.entrevista.expiraEm, seguro });
+  return cookieSessaoCandidato({ entrevistaId: sala.entrevista.id, codigo, expiraEm: sala.entrevista.expiraEm, tentativa: sala.entrevista.tentativa, seguro });
 }
 
 /**

@@ -45,10 +45,11 @@ export type ResultadoConclusao = {
  * por um parecer que não vem.
  */
 export function prepararParecer(entrevistaId: string): void {
+  const tentativa = obterEntrevista(entrevistaId)?.tentativa;
   marcarParecer(entrevistaId, "em_andamento");
   avaliarEntrevista(entrevistaId).catch((err) => {
     console.error(`O parecer da entrevista ${entrevistaId} não pôde ser preparado.`, err);
-    marcarParecer(entrevistaId, "falhou");
+    if (obterEntrevista(entrevistaId)?.tentativa === tentativa) marcarParecer(entrevistaId, "falhou");
   });
 }
 

@@ -54,6 +54,7 @@ export default async function Page({ params }: PageProps<"/entrevista/[token]">)
   return (
     <EntrevistaCandidato
       codigo={token}
+      tentativaAtual={resultado.entrevista?.tentativa ?? 1}
       marca={marca}
       nome={nome}
       vaga={vaga}

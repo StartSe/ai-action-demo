@@ -155,6 +155,7 @@ function criarTabelas(d: DatabaseSync): void {
   // `roteiro` nasceu depois da tabela (US-015): o plano da conversa em JSON, escrito na abertura da
   // sala. Um banco criado antes desta versão ganha a coluna aqui, sem perder nada do que já tem.
   garantirColuna(d, "entrevistas", "roteiro");
+  garantirColuna(d, "entrevistas", "tentativa", "INTEGER NOT NULL DEFAULT 1");
   // `parecerStatus` nasceu na US-021: em que pé está o preparo do parecer de uma entrevista já
   // concluída. É o que separa "o parecer está sendo preparado" de "ele não saiu, peça de novo" e de
   // "a conversa foi curta demais para avaliar" — três esperas diferentes para quem acompanha.

@@ -15,12 +15,12 @@ export type ProximoPasso = { id: string; titulo: string; beneficio: string; url:
 export const MODELO_AUTOMATICO = "auto";
 
 export const MODELOS_GRATUITOS: Opcao[] = [
-  { valor: "openai/gpt-4.1-mini", rotulo: "OpenAI GPT-4.1 mini (pago, padrão)", grupo: "recomendado" },
+  { valor: "openai/gpt-5.4-mini", rotulo: "OpenAI GPT-5.4 mini (pago, padrão)", grupo: "recomendado" },
   { valor: "nvidia/nemotron-3-super-120b-a12b:free", rotulo: "Nemotron 3 Super 120B (gratuito)", grupo: "gratuito" },
   { valor: "google/gemma-4-31b-it:free", rotulo: "Gemma 4 31B (gratuito)", grupo: "gratuito" },
   { valor: "nvidia/nemotron-3-ultra-550b-a55b:free", rotulo: "Nemotron 3 Ultra 550B (gratuito)", grupo: "gratuito" },
   { valor: "anthropic/claude-sonnet-4.5", rotulo: "Claude Sonnet 4.5 (pago, mais qualidade)", grupo: "pago" },
-  { valor: "openai/gpt-5.4-mini", rotulo: "OpenAI GPT-5.4 mini (pago)", grupo: "pago" },
+  { valor: "openai/gpt-4.1-mini", rotulo: "OpenAI GPT-4.1 mini (pago)", grupo: "pago" },
   { valor: "google/gemini-3.5-flash", rotulo: "Google Gemini 3.5 Flash (pago)", grupo: "pago" },
   { valor: "google/gemini-2.5-pro", rotulo: "Google Gemini 2.5 Pro (pago)", grupo: "pago" },
   { valor: "google/gemini-2.5-flash", rotulo: "Google Gemini 2.5 Flash (pago)", grupo: "pago" },

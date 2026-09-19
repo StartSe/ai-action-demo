@@ -11,9 +11,9 @@ import { lerRoteiroGravado, proximaFala } from "../lib/roteiro";
 export default defineAgent({
   prewarm: async (proc: JobProcess) => { proc.userData.vad = new inference.VAD({ model: "silero" }); },
   entry: async (ctx: JobContext) => {
-    const { entrevistaId } = JSON.parse(ctx.job.metadata || "{}");
+    const { entrevistaId, tentativa = 1 } = JSON.parse(ctx.job.metadata || "{}");
     const entrevista = typeof entrevistaId === "string" ? obter(entrevistaId) : null;
-    if (!entrevista || !["convidada", "aberta", "em_andamento"].includes(entrevista.status) || !lerRoteiroGravado(entrevista.id)) { ctx.shutdown("Convite inválido ou sem roteiro"); return; }
+    if (!entrevista || entrevista.tentativa !== tentativa || !["convidada", "aberta", "em_andamento"].includes(entrevista.status) || !lerRoteiroGravado(entrevista.id)) { ctx.shutdown("Convite inválido ou sem roteiro"); return; }
     const id = entrevista.id;
     let terminou = false;
     let encerrando = false;
@@ -39,7 +39,7 @@ export default defineAgent({
     await ctx.connect();
     await ctx.waitForParticipant(`candidato-${id}`);
     await session.start({ agent: new voice.Agent({ instructions: "Siga o roteiro preparado para esta entrevista em português do Brasil." }), room: ctx.room, inputOptions: { participantIdentity: `candidato-${id}`, textEnabled: true }, outputOptions: { transcriptionEnabled: true } });
-    const primeira = await proximaFala(id);
+    const primeira = await proximaFala(id, undefined, undefined, { tentativa });
     terminou = primeira.encerrar;
     await enviar({ tipo: "turno", ...primeira });
     session.say(primeira.pergunta);

@@ -1,3 +1,4 @@
+import { bloquearTentativaAntiga } from "@/lib/tentativa";
 // "Começar a entrevista" (US-016 da PRD): o toque do candidato no botão das boas-vindas.
 //
 // Duas coisas acontecem aqui e em nenhum outro lugar: a entrevista passa a `aberta` (quem acompanha o
@@ -16,6 +17,8 @@ const SEM_CACHE = { "Cache-Control": "no-store" };
 
 export async function POST(request: Request, { params }: RouteContext<"/api/entrevista/candidato/[token]/abrir">) {
   const { token } = await params;
+  const bloqueio = bloquearTentativaAntiga(request, token);
+  if (bloqueio) return bloqueio;
   const resultado = abrirSala(token, request.headers.get("cookie"));
   if (!resultado.ok) {
     return NextResponse.json(

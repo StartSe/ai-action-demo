@@ -1,3 +1,4 @@
+import { conferirTentativa } from "./tentativa";
 // O parecer da entrevista (US-022): a leitura que o gestor abre no lugar da transcrição inteira.
 //
 // **São três chamadas ao modelo, e a divisão é de produto antes de ser de código.** Uma chamada só,
@@ -740,6 +741,7 @@ export function parecerDeExemplo(ctx: ContextoAvaliacao): Parecer {
  * do outro lado esperando uma resposta.
  */
 export async function avaliarEntrevista(entrevistaId: string, opcoes: OpcoesAvaliacao = {}): Promise<{ resultadoId: string; parecer: Parecer }> {
+  const tentativa = obterEntrevista(entrevistaId)?.tentativa;
   const ctx = contextoDaAvaliacao(entrevistaId);
   const semModelo = !opcoes.extrator && !opcoes.cruzador && !opcoes.redator && !aiEnabled();
 
@@ -754,6 +756,7 @@ export async function avaliarEntrevista(entrevistaId: string, opcoes: OpcoesAval
     parecer = montarParecer(ctx, extracao, cruzamento, julgamento);
   }
 
+  conferirTentativa(entrevistaId, tentativa!);
   const resultadoId = salvar({
     tipo: "parecer",
     titulo: `${ctx.candidato.nome} · ${ctx.cargo}`,

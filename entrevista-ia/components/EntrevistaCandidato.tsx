@@ -19,6 +19,7 @@ type Fase = "boas-vindas" | "entrevista" | "enviando" | "concluida" | "erro";
 
 export function EntrevistaCandidato({
   codigo,
+  tentativaAtual = 1,
   marca,
   nome,
   vaga,
@@ -29,6 +30,7 @@ export function EntrevistaCandidato({
   conversaNoNavegador = false,
 }: {
   codigo: string;
+  tentativaAtual?: number;
   marca: string;
   nome: string;
   vaga: Vaga;
@@ -58,7 +60,7 @@ export function EntrevistaCandidato({
     respostasFinais.current = historico;
     setFase("enviando");
     try {
-      const r = await fetch(`/api/entrevista/candidato/${codigo}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ historico }) });
+      const r = await fetch(`/api/entrevista/candidato/${codigo}`, { method: "POST", headers: { "Content-Type": "application/json", "X-Entrevista-Tentativa": String(tentativaAtual) }, body: JSON.stringify({ historico }) });
       const resposta = await r.json();
       if (!r.ok) throw new Error(resposta.error || "Não foi possível concluir a entrevista.");
       setFase("concluida");
@@ -72,6 +74,7 @@ export function EntrevistaCandidato({
 
   const propsDaSala: PropsSalaCandidato = {
     codigo,
+    tentativaAtual,
     cargo: vaga.titulo,
     primeiroNome: vaga.candidato.trim().split(/\s+/)[0] || vaga.candidato,
     vozLigada,
@@ -84,7 +87,7 @@ export function EntrevistaCandidato({
   if (fase === "boas-vindas") {
     return (
       <BoasVindas
-        codigo={codigo}
+        codigo={codigo} tentativaAtual={tentativaAtual}
         livekit={livekit}
         marca={marca}
         nome={nome}
@@ -124,7 +127,7 @@ export function EntrevistaCandidato({
         <p className="card p-7 text-center" role="status">Enviando suas respostas...</p>
 
       ) : (
-        livekit && porVoz ? <SalaLiveKit codigo={codigo} cargo={vaga.titulo} onFinalizar={onFinalizar} onTexto={() => setPorVoz(false)} /> : <SalaCandidato {...propsDaSala} />
+        livekit && porVoz ? <SalaLiveKit codigo={codigo} tentativaAtual={tentativaAtual} cargo={vaga.titulo} onFinalizar={onFinalizar} onTexto={() => setPorVoz(false)} /> : <SalaCandidato {...propsDaSala} />
       )}
 
 

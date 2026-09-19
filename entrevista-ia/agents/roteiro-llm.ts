@@ -8,11 +8,13 @@ type Fala = Awaited<ReturnType<typeof proximaFala>>;
 export class RoteiroLLM extends llm.LLM {
   private ordens = new Map<string, number>();
   private ordem: number;
+  private tentativa: number;
   terminou = false;
   private entrevistaId: string;
   private aoResponder: (fala: Fala) => Promise<void>;
   constructor(entrevistaId: string, aoResponder: (fala: Fala) => Promise<void>) {
     super();
+    this.tentativa = obter(entrevistaId)?.tentativa ?? 1;
     this.entrevistaId = entrevistaId; this.aoResponder = aoResponder;
     this.ordem = transcricao(entrevistaId).filter((f) => f.papel === "candidato").length;
   }
@@ -26,10 +28,10 @@ export class RoteiroLLM extends llm.LLM {
     const mensagem = [...chatCtx.items].reverse().find((m) => m.type === "message" && m.role === "user");
     if (!mensagem || mensagem.type !== "message" || !mensagem.textContent || this.terminou) return null;
     const entrevista = obter(this.entrevistaId);
-    if (!entrevista || !["convidada", "aberta", "em_andamento"].includes(entrevista.status)) return null;
+    if (!entrevista || entrevista.tentativa !== this.tentativa || !["convidada", "aberta", "em_andamento"].includes(entrevista.status)) return null;
     let ordem = this.ordens.get(mensagem.id);
     if (ordem === undefined) { ordem = ++this.ordem; this.ordens.set(mensagem.id, ordem); }
-    const fala = await proximaFala(this.entrevistaId, mensagem.textContent, ordem, { nivelVoz: "agente" });
+    const fala = await proximaFala(this.entrevistaId, mensagem.textContent, ordem, { nivelVoz: "agente", tentativa: this.tentativa });
     this.terminou = fala.encerrar;
     await this.aoResponder(fala);
     return fala.pergunta;

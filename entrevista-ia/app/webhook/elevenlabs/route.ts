@@ -62,9 +62,10 @@ type Fala = { papel: PapelMensagem; texto: string; segundo?: number };
  * novo (a mesma conversa apareceria em dobro no parecer) e uma entrevista já concluída ou avaliada
  * não volta atrás.
  */
-function processarEntrevista(entrevistaId: string, falas: Fala[]): boolean {
+function processarEntrevista(entrevistaId: string, falas: Fala[], tentativa: number): boolean {
   const entrevista = obterEntrevista(entrevistaId);
   if (!entrevista) return false;
+  if (entrevista.tentativa !== tentativa) return true;
   if (entrevista.status === "cancelada" || entrevista.status === "expirada") {
     console.error("Conversa recebida de uma entrevista que não vale mais:", entrevistaId, entrevista.status);
     return true;
@@ -108,7 +109,7 @@ async function processar(corpo: string): Promise<void> {
     console.error("Conversa recebida da ElevenLabs sem entrevista_id: confira as variáveis dinâmicas do agente.");
     return;
   }
-  if (!processarEntrevista(entrevistaId, falas)) {
+  if (!processarEntrevista(entrevistaId, falas, Number(variaveis.tentativa ?? 1))) {
     console.error("Conversa recebida da ElevenLabs para uma entrevista que não existe mais:", entrevistaId);
     return;
   }

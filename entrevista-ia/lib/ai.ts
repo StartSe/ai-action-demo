@@ -7,7 +7,7 @@ import { MODELO_AUTOMATICO, MODELOS_VISAO } from "./modelos";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 // Modelo padrão da entrevista. OPENROUTER_MODEL ou a escolha em Configurações podem substituí-lo.
-export const DEFAULT_MODEL = "openai/gpt-4.1-mini";
+export const DEFAULT_MODEL = "openai/gpt-5.4-mini";
 // Se o modelo principal falhar (fila cheia, indisponível), o OpenRouter tenta estes em ordem.
 export const FALLBACK_MODELS = ["google/gemma-4-31b-it:free", "nvidia/nemotron-3-ultra-550b-a55b:free"];
 

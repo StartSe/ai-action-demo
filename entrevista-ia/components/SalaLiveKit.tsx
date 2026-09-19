@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Room, RoomEvent, Track, ParticipantKind, type RemoteParticipant } from "livekit-client";
 import type { Troca } from "@/lib/types";
 
-export function SalaLiveKit({ codigo, cargo, onFinalizar, onTexto }: { codigo: string; cargo: string; onFinalizar: (falas: Troca[]) => Promise<void>; onTexto: () => void }) {
+export function SalaLiveKit({ codigo, tentativaAtual = 1, cargo, onFinalizar, onTexto }: { codigo: string; tentativaAtual?: number; cargo: string; onFinalizar: (falas: Troca[]) => Promise<void>; onTexto: () => void }) {
   const sala = useRef<Room | null>(null);
   const falas = useRef<Troca[]>([]);
   const finalizar = useRef(onFinalizar);
@@ -66,7 +66,7 @@ export function SalaLiveKit({ codigo, cargo, onFinalizar, onTexto }: { codigo: s
     });
     async function conectar() {
       try {
-        const response = await fetch(`/api/entrevista/candidato/${codigo}/livekit`, { method: "POST", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]) });
+        const response = await fetch(`/api/entrevista/candidato/${codigo}/livekit`, { method: "POST", headers: { "X-Entrevista-Tentativa": String(tentativaAtual) }, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]) });
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || "Não foi possível conectar a voz.");
         if (!ativo) return;
@@ -79,7 +79,7 @@ export function SalaLiveKit({ codigo, cargo, onFinalizar, onTexto }: { codigo: s
     }
     void conectar();
     return () => { ativo = false; controller.abort(); clearTimeout(prazo); void room.disconnect(); audios.forEach((audio) => { audio.pause(); audio.remove(); }); if (sala.current === room) sala.current = null; };
-  }, [codigo, tentativa]);
+  }, [codigo, tentativa, tentativaAtual]);
 
   async function alternarMicrofone() {
     setMicrofoneOcupado(true);

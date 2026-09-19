@@ -22,6 +22,7 @@ export type SessaoCandidato = {
   codigo: string;
   /** Instante (ms) em que este cookie deixa de valer, conferido no servidor. */
   ate: number;
+  tentativa?: number;
 };
 
 function segredo(): Buffer {
@@ -60,7 +61,7 @@ export function lerSessaoCandidato(cabecalho: string | null): SessaoCandidato | 
     const lido = JSON.parse(Buffer.from(corpo, "base64url").toString("utf8")) as Partial<SessaoCandidato>;
     if (typeof lido.entrevistaId !== "string" || typeof lido.codigo !== "string" || typeof lido.ate !== "number") return null;
     if (lido.ate < Date.now()) return null;
-    return { entrevistaId: lido.entrevistaId, codigo: lido.codigo, ate: lido.ate };
+    return { entrevistaId: lido.entrevistaId, codigo: lido.codigo, ate: lido.ate, tentativa: lido.tentativa ?? 1 };
   } catch (err) {
     console.error("Cookie de sessão do candidato mal formado; tratando como ausente.", err);
     return null;
@@ -79,14 +80,16 @@ export function cookieSessaoCandidato({
   entrevistaId,
   codigo,
   expiraEm,
+  tentativa = 1,
   seguro,
 }: {
   entrevistaId: string;
   codigo: string;
   expiraEm?: string;
+  tentativa?: number;
   seguro: boolean;
 }): string {
-  const dados: SessaoCandidato = { entrevistaId, codigo, ate: ate(expiraEm) };
+  const dados: SessaoCandidato = { entrevistaId, codigo, tentativa, ate: ate(expiraEm) };
   const corpo = Buffer.from(JSON.stringify(dados), "utf8").toString("base64url");
   const valor = `${corpo}.${assinar(corpo)}`;
   const segundos = Math.max(60, Math.floor((dados.ate - Date.now()) / 1000));

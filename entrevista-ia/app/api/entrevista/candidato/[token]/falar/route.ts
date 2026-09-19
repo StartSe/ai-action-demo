@@ -1,3 +1,4 @@
+import { bloquearTentativaAntiga, tentativaDaRequisicao } from "@/lib/tentativa";
 // Um turno da conversa do candidato (US-018): ele diz uma coisa, a entrevistadora responde a
 // próxima. Substitui a rota `proxima` desta mesma pasta, que recebia a conversa inteira do navegador.
 //
@@ -30,6 +31,8 @@ function nivelDoCorpo(bruto: unknown): NivelVoz | undefined {
 
 export async function POST(request: Request, { params }: RouteContext<"/api/entrevista/candidato/[token]/falar">) {
   const { token } = await params;
+  const bloqueio = bloquearTentativaAntiga(request, token);
+  if (bloqueio) return bloqueio;
   const resolucao = resolverConvite(token);
   if (!resolucao.ok) {
     const { titulo, status } = FECHADO[resolucao.motivo];
@@ -42,7 +45,7 @@ export async function POST(request: Request, { params }: RouteContext<"/api/entr
   const { entrevistaId, vaga } = resolucao.sala;
   try {
     const fala = entrevistaId
-      ? await proximaFala(entrevistaId, resposta, ordem, { nivelVoz: nivelDoCorpo(body.nivel) })
+      ? await proximaFala(entrevistaId, resposta, ordem, { nivelVoz: nivelDoCorpo(body.nivel), tentativa: tentativaDaRequisicao(request) })
       : await proximaFalaDeLinkAntigo(vaga, normalizarHistorico(body.historico));
     return NextResponse.json(fala, { headers: SEM_CACHE });
   } catch (err) {

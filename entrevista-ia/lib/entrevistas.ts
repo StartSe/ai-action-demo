@@ -32,6 +32,7 @@ export type Entrevista = {
   candidatoId: string;
   /** O token do link público (lib/formularios.ts); ausente até o convite ser criado (US-013). */
   codigo?: string;
+  tentativa: number;
   status: StatusEntrevista;
   nivelVoz?: NivelVoz;
   convidadaEm?: string;
@@ -63,6 +64,7 @@ type LinhaEntrevista = {
   vagaId: string;
   candidatoId: string;
   codigo: string | null;
+  tentativa: number;
   status: string;
   nivelVoz: string | null;
   convidadaEm: string | null;
@@ -104,6 +106,7 @@ function linhaParaEntrevista(l: LinhaEntrevista): Entrevista {
     vagaId: l.vagaId,
     candidatoId: l.candidatoId,
     codigo: l.codigo ?? undefined,
+    tentativa: l.tentativa,
     status: STATUS.includes(l.status as StatusEntrevista) ? (l.status as StatusEntrevista) : "convidada",
     nivelVoz: NIVEIS.includes(l.nivelVoz as NivelVoz) ? (l.nivelVoz as NivelVoz) : undefined,
     convidadaEm: l.convidadaEm ?? undefined,

@@ -1,3 +1,4 @@
+import { conferirTentativa } from "./tentativa";
 import { comTurnoExclusivo } from "./trava-entrevista";
 // O roteiro da entrevista (US-016): o que a entrevistadora sabe antes de abrir a boca, o plano que
 // ela segue e a fala de cada turno.
@@ -647,8 +648,9 @@ export async function proximaFala(
   entrevistaId: string,
   ultimaResposta?: string,
   ordem?: number,
-  opcoes: { nivelVoz?: NivelVoz } = {},
+  opcoes: { nivelVoz?: NivelVoz; tentativa?: number } = {},
 ): Promise<Fala> {
+  opcoes = { ...opcoes, tentativa: opcoes.tentativa ?? obterEntrevista(entrevistaId)?.tentativa };
   const anterior = turnosEmCurso.get(entrevistaId) ?? Promise.resolve();
   const atual = anterior.catch(() => {}).then(() => comTurnoExclusivo(entrevistaId, () => executarProximaFala(entrevistaId, ultimaResposta, ordem, opcoes)));
   turnosEmCurso.set(entrevistaId, atual);
@@ -660,15 +662,17 @@ async function executarProximaFala(
   entrevistaId: string,
   ultimaResposta?: string,
   ordem?: number,
-  { nivelVoz }: { nivelVoz?: NivelVoz } = {}
+  { nivelVoz, tentativa }: { nivelVoz?: NivelVoz; tentativa?: number } = {}
 ): Promise<Fala> {
   const entrevista = obterEntrevista(entrevistaId);
   if (!entrevista) throw new Error(`Entrevista ${entrevistaId} não encontrada.`);
+  if (tentativa !== undefined) conferirTentativa(entrevistaId, tentativa);
   const ctx = montarContexto(entrevistaId);
   if (!ctx) throw new Error(`A vaga ou o candidato da entrevista ${entrevistaId} não existe mais.`);
 
   const plano = await roteiroDaEntrevista(entrevistaId, ctx);
 
+  if (tentativa !== undefined) conferirTentativa(entrevistaId, tentativa);
   let falas = comoTrocas(transcricao(entrevistaId));
   const resposta = (ultimaResposta ?? "").replace(/\s+/g, " ").trim();
   const guardadas = falas.filter((f) => f.papel === "candidato").length;
@@ -678,6 +682,7 @@ async function executarProximaFala(
       ? guardadas >= ordem
       : ultima?.papel === "candidato" && ultima.texto === resposta;
   if (resposta && !repetida) {
+    if (tentativa !== undefined) conferirTentativa(entrevistaId, tentativa);
     registrarMensagem({ entrevistaId, papel: "candidato", texto: resposta });
     falas = [...falas, { papel: "candidato", texto: resposta }];
     if (entrevista.status === "convidada" || entrevista.status === "aberta") {
@@ -709,6 +714,7 @@ async function executarProximaFala(
       ? plano.despedida
       : await falaDoPasso({ ctx, plano, falas, passo, primeira: posicao.feitas === 0 });
 
+  if (tentativa !== undefined) conferirTentativa(entrevistaId, tentativa);
   registrarMensagem({ entrevistaId, papel: "entrevistadora", texto });
   return {
     pergunta: texto,

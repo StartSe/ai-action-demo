@@ -68,6 +68,7 @@ function vozPortuguesa(): SpeechSynthesisVoice | null {
 export type PropsSalaCandidato = {
   /** O código do link público: é ele que identifica esta conversa nas rotas. */
   codigo: string;
+  tentativaAtual?: number;
   cargo: string;
   primeiroNome: string;
   /** A voz natural da entrevistadora está conectada; sem ela, quem fala é o próprio navegador. */
@@ -83,6 +84,7 @@ export type PropsSalaCandidato = {
 
 export function SalaCandidato({
   codigo,
+  tentativaAtual = 1,
   cargo,
   primeiroNome,
   vozLigada,
@@ -293,7 +295,7 @@ export function SalaCandidato({
           // Só os links antigos precisam disto: eles não têm entrevista guardada no servidor.
           historico: conversaNoNavegador ? falasRef.current : undefined,
         };
-        const r = await fetch(`/api/entrevista/candidato/${codigo}/falar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo), signal: AbortSignal.timeout(45000) });
+        const r = await fetch(`/api/entrevista/candidato/${codigo}/falar`, { method: "POST", headers: { "Content-Type": "application/json", "X-Entrevista-Tentativa": String(tentativaAtual) }, body: JSON.stringify(corpo), signal: AbortSignal.timeout(45000) });
         if (!r.ok) {
           setFalha(await lerErro(r));
           guardarEstado("parado");
@@ -320,7 +322,7 @@ export function SalaCandidato({
         guardarEstado("parado");
       }
     },
-    [codigo, conversaNoNavegador, dizer, finalizar]
+    [codigo, tentativaAtual, conversaNoNavegador, dizer, finalizar]
   );
 
   const responder = useCallback(

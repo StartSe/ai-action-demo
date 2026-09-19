@@ -27,7 +27,7 @@ import {
   esperandoParecer,
   type Decisao,
 } from "@/components/RotulosEntrevista";
-import { Aviso, Chip, Entregar, ErrorBox, Origem, Topbar, data, lerErro, useStatus, type ErroLido } from "@/components/ui";
+import { Aviso, Chip, Entregar, ErrorBox, Origem, Topbar, data, lerErro, useStatus, useConfirmacao, type ErroLido } from "@/components/ui";
 import { duracao } from "@/lib/formato";
 import { parecerParaTexto } from "@/lib/parecer-texto";
 import type { EntrevistaNaTela } from "@/lib/painel";
@@ -60,6 +60,8 @@ export default function Page() {
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);
   const [gravando, setGravando] = useState<Decisao | "">("");
   const [pedindoParecer, setPedindoParecer] = useState(false);
+  const { confirmar, Dialogo } = useConfirmacao();
+  const [reabrindo, setReabrindo] = useState(false);
   const [recado, setRecado] = useState("");
   const [atribuindo, setAtribuindo] = useState(false);
   const [jaEm, setJaEm] = useState<string[]>([]);
@@ -96,6 +98,21 @@ export default function Page() {
     const relogio = setInterval(recarregar, 5000);
     return () => clearInterval(relogio);
   }, [esperando, recarregar]);
+
+  async function reabrir() {
+    if (!entrevista || reabrindo) return;
+    const tentativa = entrevista.tentativa;
+    if (!await confirmar("Reabrir a entrevista? A conversa, o parecer e a decisão atuais serão apagados. A pessoa poderá começar novamente pelo mesmo link, válido por mais 15 dias.", { confirmarRotulo: "Reabrir entrevista" })) return;
+    setReabrindo(true);
+    setErroTela(null);
+    try {
+      const r = await fetch(`/api/entrevistas/${id}/reabrir`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tentativa }) });
+      if (!r.ok) throw r;
+      setRecado("Entrevista reaberta. A pessoa já pode começar novamente pelo mesmo link. Será considerada apenas a nova entrevista.");
+      recarregar();
+    } catch (e) { setErroTela(await lerErro(e)); }
+    finally { setReabrindo(false); }
+  }
 
   async function decidir(decisao: Decisao) {
     setGravando(decisao);
@@ -140,6 +157,7 @@ export default function Page() {
 
   return (
     <>
+      {Dialogo}
       <Topbar marca="E" nome="Entrevistadora IA" area="Recursos Humanos" status={status} erro={erro} usuario={status?.usuario} />
 
       <main className="max-w-[1120px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
@@ -180,12 +198,13 @@ export default function Page() {
                     id={entrevista.resultadoId}
                     titulo={`Parecer de ${entrevista.candidatoNome}`}
                     texto={() => parecerParaTexto(parecer, { candidato: entrevista.candidatoNome, cargo: entrevista.vagaCargo, quando, comoFoi })}
-                    extras={[{ rotulo: "Imprimir", onClick: () => window.print() }]}
+                    extras={[{ rotulo: "Imprimir", onClick: () => window.print() }, ...(entrevista.codigo ? [{ rotulo: reabrindo ? "Reabrindo..." : "Reabrir entrevista", onClick: reabrir }] : [])]}
                   />
                 )}
               </div>
             </div>
 
+            {!parecer && entrevista.codigo && <div className="mb-5 no-print"><button className="btn-ghost !w-auto" disabled={reabrindo} onClick={reabrir}>{reabrindo ? "Reabrindo..." : "Reabrir entrevista"}</button></div>}
             {recado && <div className="mb-5"><Aviso tom="ok">{recado}</Aviso></div>}
 
             <article className="card p-8 max-md:p-5">

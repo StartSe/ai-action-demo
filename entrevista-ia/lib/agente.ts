@@ -1,3 +1,4 @@
+import { obter as obterEntrevista } from "./entrevistas";
 // As variáveis dinâmicas que o agente conversacional da ElevenLabs recebe no começo de uma entrevista.
 //
 // Dois caminhos levam ao MESMO agente: a sala do candidato no navegador (US-019, nível 1) e a ligação
@@ -23,6 +24,7 @@ export type VariaveisDoAgente = Record<string, string>;
  * social, e inventar um aqui seria dar ao agente um nome que ninguém digitou.
  */
 export async function variaveisDaEntrevista(entrevistaId: string, empresa: string): Promise<VariaveisDoAgente | null> {
+  const tentativa = obterEntrevista(entrevistaId)?.tentativa ?? 1;
   const ctx = montarContexto(entrevistaId);
   if (!ctx) return null;
 
@@ -36,6 +38,7 @@ export async function variaveisDaEntrevista(entrevistaId: string, empresa: strin
 
   return {
     entrevista_id: entrevistaId,
+    tentativa: String(tentativa),
     candidato: ctx.candidato.primeiroNome,
     cargo: ctx.cargo,
     empresa,

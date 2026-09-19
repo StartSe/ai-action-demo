@@ -33,14 +33,14 @@ function preparar() {
 test("voz: respostas curtas e repetições do SDK não pulam perguntas nem encerram cedo", async t => {
   t.mock.method(globalThis, "fetch", async (_url: unknown, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body));
-    assert.equal(body.model, "openai/gpt-4.1-mini");
+    assert.equal(body.model, "openai/gpt-5.4-mini");
     return Response.json({ choices: [{ message: { content: JSON.stringify({ fala: body.messages[1].content.includes("Instrução deste turno: aprofunde") ? "Qual foi a sua ação e o resultado?" : "Entendi o contexto." }) } }] });
   });
   const { entrevista } = preparar();
   const turnos: Awaited<ReturnType<typeof proximaFala>>[] = [await proximaFala(entrevista.id)];
   const modelo = new RoteiroLLM(entrevista.id, async fala => { turnos.push(fala); });
-  assert.equal(modelo.model, "openai/gpt-4.1-mini");
-  assert.equal(modelName(), "openai/gpt-4.1-mini");
+  assert.equal(modelo.model, "openai/gpt-5.4-mini");
+  assert.equal(modelName(), "openai/gpt-5.4-mini");
   initializeLogger({ pretty: false, level: "silent" });
   const session = new voice.AgentSession({ llm: modelo, turnHandling: CONDUCAO_VOZ });
   assert.equal(session.sessionOptions.turnHandling.preemptiveGeneration.enabled, false, "o SDK não pode gerar turnos especulativos com efeitos no banco");

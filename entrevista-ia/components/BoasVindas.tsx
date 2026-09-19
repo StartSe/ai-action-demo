@@ -21,6 +21,7 @@ const FRASE_TESTE = "Diga “olá” para testarmos o seu microfone.";
 
 export function BoasVindas({
   codigo,
+  tentativaAtual = 1,
   marca,
   nome,
   primeiroNome,
@@ -30,6 +31,7 @@ export function BoasVindas({
   livekit = false,
 }: {
   codigo: string;
+  tentativaAtual?: number;
   livekit?: boolean;
   marca: string;
   nome: string;
@@ -156,7 +158,7 @@ export function BoasVindas({
     setFase("pedindo");
     liberarAudio();
     try {
-      const r = await fetch(`/api/entrevista/candidato/${codigo}/abrir`, { method: "POST", signal: AbortSignal.timeout(15000) });
+      const r = await fetch(`/api/entrevista/candidato/${codigo}/abrir`, { method: "POST", headers: { "X-Entrevista-Tentativa": String(tentativaAtual) }, signal: AbortSignal.timeout(15000) });
       if (!r.ok) {
         const corpo = (await r.json().catch(() => null)) as { error?: string } | null;
         setErro(corpo?.error || "Não foi possível começar a entrevista agora. Tente de novo em alguns segundos.");

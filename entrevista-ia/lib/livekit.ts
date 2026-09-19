@@ -10,13 +10,13 @@ export function livekitConfigurado() {
 export function configuracaoVoz() {
   return { apiKey: getConfig("ELEVENLABS_API_KEY"), voiceId: getConfig("ELEVENLABS_VOICE_ID") || "EXAVITQu4vr4xnSDxMaL", model: getConfig("ELEVENLABS_MODEL_ID") || MODELO_VOZ_PADRAO };
 }
-export async function tokenDaEntrevista(entrevistaId: string) {
+export async function tokenDaEntrevista(entrevistaId: string, tentativa = 1) {
   if (!livekitConfigurado()) throw new Error("Conversa por voz indisponível neste momento.");
   // Uma reconexão explícita cria outra sala e despacha um agente novo, retomando o banco.
   const room = `entrevista-${entrevistaId}-${randomUUID()}`;
   const identity = `candidato-${entrevistaId}`;
   const token = new AccessToken(getConfig("LIVEKIT_API_KEY"), getConfig("LIVEKIT_API_SECRET"), { identity, ttl: "10m" });
   token.addGrant({ roomJoin: true, room, canSubscribe: true, canPublish: true, canPublishData: true, canPublishSources: [TrackSource.MICROPHONE] });
-  token.roomConfig = new RoomConfiguration({ emptyTimeout: 60, maxParticipants: 2, agents: [new RoomAgentDispatch({ agentName: NOME_AGENTE, metadata: JSON.stringify({ entrevistaId }) })] });
+  token.roomConfig = new RoomConfiguration({ emptyTimeout: 60, maxParticipants: 2, agents: [new RoomAgentDispatch({ agentName: NOME_AGENTE, metadata: JSON.stringify({ entrevistaId, tentativa }) })] });
   return { token: await token.toJwt(), url: getConfig("LIVEKIT_URL"), room, identity };
 }

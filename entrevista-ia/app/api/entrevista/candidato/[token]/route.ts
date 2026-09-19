@@ -1,3 +1,4 @@
+import { bloquearTentativaAntiga } from "@/lib/tentativa";
 // O fim da conversa do candidato (US-021): a sala avisa que a entrevistadora se despediu (ou que o
 // candidato encerrou) e esta rota fecha a entrevista.
 //
@@ -25,6 +26,8 @@ const FIM = { ...SEM_CACHE, "Set-Cookie": cookieSairCandidato() };
 
 export async function POST(request: Request, { params }: RouteContext<"/api/entrevista/candidato/[token]">) {
   const { token } = await params;
+  const bloqueio = bloquearTentativaAntiga(request, token);
+  if (bloqueio) return bloqueio;
   const resolucao = resolverConvite(token);
   if (!resolucao.ok) {
     // Concluir duas vezes é comum (um toque duplo, um reenvio depois de a resposta se perder) e não é

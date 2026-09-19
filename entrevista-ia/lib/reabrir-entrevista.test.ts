@@ -1,0 +1,90 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { it } from "node:test";
+process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "entrevista-reabrir-"));
+delete process.env.OPENROUTER_API_KEY;
+const e = await import("./entrevistas");
+const f = await import("./formularios");
+const h = await import("./historico");
+const { criar: vaga } = await import("./vagas");
+const { criar: candidato } = await import("./candidatos");
+const { reabrirEntrevista } = await import("./reabrir-entrevista");
+const { resolverConvite } = await import("./convite");
+const { avaliarEntrevista } = await import("./avaliacao");
+const { proximaFala } = await import("./roteiro");
+const { POST } = await import("../app/api/entrevistas/[id]/reabrir/route");
+const { POST: finalizar } = await import("../app/api/entrevista/candidato/[token]/route");
+const { criarConta, entrar } = await import("./conta");
+function fixture() {
+  const v = vaga({ cargo: "Analista", requisitos: "Atendimento", numeroPerguntas: 6 });
+  const c = candidato({ nome: "Pessoa" });
+  const entrevista = e.criar({ vagaId: v.id, candidatoId: c.id });
+  const codigo = f.criar({ tipo: "entrevista", campos: [], parametros: { entrevistaId: entrevista.id }, limite: 1 });
+  e.definirCodigo(entrevista.id, codigo);
+  for (let i = 0; i < 2; i++) e.registrarMensagem({ entrevistaId: entrevista.id, papel: "candidato", texto: "Trabalhei com clientes e organizei os processos." });
+  return { id: entrevista.id, codigo };
+}
+it("somente gestor autenticado reabre; mantém link e substitui todos os dados", async () => {
+  const { id, codigo } = fixture();
+  const resultado = h.salvar({ tipo: "parecer", titulo: "Antigo", entrada: { entrevistaId: id }, saida: {}, meta: {} });
+  e.registrarResultado(id, resultado); e.decidir(id, "avancar"); f.responder(codigo, {});
+  const req = (cookie = "") => new Request("http://localhost/api/reabrir", { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ tentativa: 1 }) });
+  assert.equal((await POST(req("ei_sessao=candidato"), { params: Promise.resolve({ id }) })).status, 401);
+  assert.equal(e.obter(id)?.resultadoId, resultado);
+  criarConta({ nome: "Gestor", email: "gestor@example.com", senha: "SenhaTeste123!" });
+  const { token } = entrar({ email: "gestor@example.com", senha: "SenhaTeste123!" });
+  assert.equal((await POST(req(`sessao=${token}`), { params: Promise.resolve({ id }) })).status, 200);
+  const atual = e.obter(id)!;
+  assert.equal(atual.tentativa, 2); assert.equal(atual.codigo, codigo); assert.equal(atual.status, "convidada");
+  assert.equal(atual.resultadoId, undefined); assert.equal(atual.decisao, undefined); assert.equal(atual.concluidaEm, undefined);
+  assert.deepEqual(e.transcricao(id), []); assert.equal(h.obter(resultado), null); assert.equal(f.contarRespostas(codigo), 0);
+  assert.equal(resolverConvite(codigo).ok, true);
+  assert.equal((await POST(req(`sessao=${token}`), { params: Promise.resolve({ id }) })).status, 409);
+  assert.equal((await finalizar(new Request("http://localhost", { method: "POST" }), { params: Promise.resolve({ token: codigo }) })).status, 409);
+  await assert.rejects(proximaFala(id, "Resposta antiga", 1, { tentativa: 1 }));
+  assert.deepEqual(e.transcricao(id), []);
+});
+it("restaura o mesmo link mesmo após limpeza do formulário expirado", async () => {
+  const { id, codigo } = fixture(); f.apagar(codigo); e.cancelar(id);
+  await reabrirEntrevista(id, 1);
+  assert.equal(resolverConvite(codigo).ok, true); assert.equal(e.obter(id)?.codigo, codigo);
+});
+it("avaliação antiga em processamento não grava parecer na nova tentativa", async () => {
+  const { id } = fixture();
+  const pendente = assert.rejects(avaliarEntrevista(id), /reaberta/);
+  await reabrirEntrevista(id, 1);
+  await pendente;
+  assert.equal(e.obter(id)?.parecerStatus, "nao_pedido");
+  assert.equal(e.obter(id)?.resultadoId, undefined);
+});
+it("nova tentativa grava apenas a conversa e o parecer mais recentes", async () => {
+  const { id } = fixture(); await reabrirEntrevista(id, 1);
+  for (let i = 0; i < 2; i++) e.registrarMensagem({ entrevistaId: id, papel: "candidato", texto: "Nova resposta com exemplo do meu trabalho em atendimento." });
+  const resultado = await avaliarEntrevista(id);
+  assert.equal(e.obter(id)?.resultadoId, resultado.resultadoId);
+  assert.equal(e.transcricao(id).length, 2);
+  assert.ok(e.transcricao(id).every(m => m.texto.startsWith("Nova resposta")));
+});
+it("cookie anterior perde a posse da sala e o novo cookie permite retomada", async () => {
+  const { id, codigo } = fixture();
+  const { cookieSessaoCandidato } = await import("./sessao-candidato");
+  const { conferirSala } = await import("./sala-do-candidato");
+  const antigo = cookieSessaoCandidato({ entrevistaId: id, codigo, seguro: false });
+  await reabrirEntrevista(id, 1); e.mudarStatus(id, "em_andamento");
+  assert.equal(conferirSala(codigo, antigo).ok, false);
+  const novo = cookieSessaoCandidato({ entrevistaId: id, codigo, seguro: false, tentativa: 2 });
+  assert.equal(conferirSala(codigo, novo).ok, true);
+});
+it("vaga encerrada e outra entrevista ativa impedem a reabertura sem apagar dados", async () => {
+  const { id } = fixture();
+  const entrevista = e.obter(id)!;
+  const { mudarStatus } = await import("./vagas");
+  mudarStatus(entrevista.vagaId, "encerrada");
+  await assert.rejects(reabrirEntrevista(id, 1), /Reabra a vaga/);
+  mudarStatus(entrevista.vagaId, "aberta");
+  e.cancelar(id); e.criar({ vagaId: entrevista.vagaId, candidatoId: entrevista.candidatoId });
+  await assert.rejects(reabrirEntrevista(id, 1), /outra entrevista ativa/);
+  assert.equal(e.transcricao(id).length, 2);
+});

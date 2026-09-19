@@ -65,7 +65,7 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `CONTA_DESLIGADA` | `1` trata toda rota como pública. Só para o contêiner efêmero da captura de prévia — nunca numa instância real. |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
-| `OPENROUTER_MODEL` | Alternativa ao setup. Modelo padrão (roteiro, currículo, descrição colada, cultura). Padrão `openai/gpt-4.1-mini`. |
+| `OPENROUTER_MODEL` | Alternativa ao setup. Modelo padrão (roteiro, currículo, descrição colada, cultura). Padrão `openai/gpt-5.4-mini`. |
 | `OPENROUTER_MODEL_AVALIACAO` | Alternativa ao setup. Modelo usado só nos três passos do parecer. Sem ele, vale o modelo padrão. |
 | `BRIGHTDATA_API_TOKEN` | Alternativa ao setup. Liga a pesquisa do candidato na web. Obtenha em [brightdata.com/cp/setting/users](https://brightdata.com/cp/setting/users). |
 | `BRIGHTDATA_MCP_URL` | Alternativa ao setup. Endereço do serviço de pesquisa da Bright Data. Padrão `https://mcp.brightdata.com/mcp`. |
@@ -185,10 +185,16 @@ Um timeout antes dos cabeçalhos ou durante a leitura do corpo da resposta é co
 
 ### Condução da entrevista e parecer (0.4.5)
 
-O padrão de texto no OpenRouter é `openai/gpt-4.1-mini` (usa créditos). Uma escolha explícita em Configurações ou `OPENROUTER_MODEL` tem prioridade sobre o padrão do código. A duração estimada é de 10 a 20 minutos, com 15 minutos como padrão; o tempo efetivo depende das respostas do candidato.
+O padrão de texto no OpenRouter é `openai/gpt-5.4-mini` (usa créditos). Uma escolha explícita em Configurações ou `OPENROUTER_MODEL` tem prioridade sobre o padrão do código. A duração estimada é de 10 a 20 minutos, com 15 minutos como padrão; o tempo efetivo depende das respostas do candidato.
 
 As perguntas principais são percorridas na ordem. Aprofundamentos não consomem o total nem substituem tópicos: cada pergunta pode receber um pedido de exemplo quando a resposta for curta. Pedidos de repetição mantêm a posição. O planejamento incompleto é refeito antes de liberar o convite. Nas falas intermediárias, a IA escreve a transição e o sistema preserva o texto da pergunta planejada.
 
 O adaptador LiveKit persiste os turnos; por isso a geração antecipada (`preemptiveGeneration`) fica desativada. A detecção de fim de fala dá mais espaço às pausas e filtra interrupções curtas. No modo mãos livres do navegador, uma pausa de quatro segundos encerra a resposta; o fechamento espontâneo do reconhecimento tenta retomar a escuta preservando o texto.
 
 O parecer organiza nota e síntese lado a lado, alinha os botões e reúne as ações de compartilhamento em um popover. Aprofundamentos não fazem uma entrevista interrompida ser considerada completa. Respostas vazias da IA recebem uma tentativa adicional dentro do prazo original.
+
+### Reabertura pelo gestor (0.5.0)
+
+O modelo padrão passa a ser `openai/gpt-5.4-mini`; escolhas explícitas em Configurações continuam tendo prioridade. No detalhe da entrevista, o gestor pode usar **Reabrir entrevista** (no menu de ações quando já existe parecer). A confirmação apaga a conversa, o parecer e a decisão anteriores, preserva o roteiro e libera o mesmo link por mais 15 dias. Somente a nova entrevista entra no parecer e nos indicadores. A vaga precisa estar aberta, sem outra entrevista ativa para o mesmo candidato.
+
+A ação exige sessão autenticada do gestor. Abas, sessões de voz, webhooks e avaliações em processamento da tentativa anterior não podem gravar dados na nova tentativa. Pareceres antigos deixam de estar disponíveis pelos links de compartilhamento.
