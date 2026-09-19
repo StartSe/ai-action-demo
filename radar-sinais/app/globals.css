@@ -93,3 +93,17 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   .print-sheet .chip-neutral { background: none; border: 1px solid currentColor; }
 }
 /* Específico deste app */
+/* Grafo: halo dos sinais fortes em alta, destaque de leitura, transição suave da vista e tooltip.
+   Movimento funcional (acomodação e pulso), decisão de 19/09/2026 registrada no CLAUDE.md; tudo
+   desligado sob prefers-reduced-motion e na impressão. */
+@keyframes pulso-halo { from { transform: scale(1); opacity: .55; } to { transform: scale(2.1); opacity: 0; } }
+.halo-pulso { position: absolute; border-radius: 9999px; pointer-events: none; background: color-mix(in srgb, var(--color-danger) 40%, transparent); animation: pulso-halo 2.2s ease-out infinite; }
+.no-destaque { outline: 2px solid var(--color-accent-2); outline-offset: 3px; }
+.plano-suave { transition: transform .45s cubic-bezier(.2, .7, .2, 1); }
+.dica-grafo { animation: reveal .12s ease-out; }
+.no-grafo { transition: opacity .2s; }
+@media (prefers-reduced-motion: reduce) {
+  .halo-pulso { animation: none; transform: scale(1.4); opacity: .3; }
+  .plano-suave, .dica-grafo, .no-grafo { transition: none; animation: none; }
+}
+@media print { .halo-pulso, .dica-grafo { display: none; } }

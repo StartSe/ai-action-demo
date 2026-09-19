@@ -2,116 +2,103 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Topbar } from "@/components/ui";
 import { Grafo } from "@/components/Grafo";
+import { SinalChips } from "@/components/SinalChips";
 import { listarPorTipo } from "@/lib/historico";
 import { lerPesquisa } from "@/lib/pesquisa-store";
 import { radarDemo } from "@/lib/demo";
 import { aiEnabled, modelName, type Meta } from "@/lib/ai";
+import { DESTINO_CONECTAR_IA, DESTINO_RADAR, DESTINO_TEMAS } from "@/lib/destinos";
+import { ordenarSinais, resumoRadar } from "@/lib/sinais";
 import type { DadosRadar, Radar } from "@/lib/types";
 import { data } from "@/lib/formato";
 export const dynamic = "force-dynamic";
+
+// Limites de texto do PADRAO.md, medidos: título 6 palavras (≤ 8); apoio 17 palavras (≤ 20).
+const TITULO = "Veja o mercado se mover antes";
+const APOIO = "Os temas que você acompanha, lidos pela IA e ligados em um mapa de sinais, força e tendência.";
+
 export default async function Page({ searchParams }: PageProps<"/">) {
   const params = await searchParams;
   if (params.exemplo || params.temas) {
     const query = new URLSearchParams();
-    for (const [k, v] of Object.entries(params))
-      if (typeof v === "string") query.set(k, v);
-    redirect(`/radar?${query}`);
+    for (const [k, v] of Object.entries(params)) if (typeof v === "string") query.set(k, v);
+    redirect(`${DESTINO_RADAR}?${query}`);
   }
   const pesquisa = lerPesquisa();
-  const ultimo = listarPorTipo<DadosRadar, Radar, Meta>("radar", 30).find(
-    (h) => !h.meta.demo,
-  );
+  const iaLigada = aiEnabled();
+  const ultimo = listarPorTipo<DadosRadar, Radar, Meta>("radar", 30).find((h) => !h.meta.demo);
   const radar = ultimo?.saida || radarDemo(30);
   const termos = pesquisa.termos.filter((t) => t.ativo).length;
+  const resumo = resumoRadar(radar);
+  const emFoco = ordenarSinais(radar.sinais).slice(0, 3);
+  const leituras = (radar.conexoes ?? []).map((c, indice) => ({ ...c, indice })).slice(0, 3);
+  const proximo = !iaLigada
+    ? { href: DESTINO_CONECTAR_IA, rotulo: "Conectar a IA", titulo: "Comece conectando a IA", texto: "Um clique e o radar passa a ler os seus temas. As fontes públicas já estão disponíveis." }
+    : termos === 0
+      ? { href: DESTINO_TEMAS, rotulo: "Escolher meus temas", titulo: "Comece com um tema", texto: "Escolha os temas e concorrentes que importam para o seu negócio." }
+      : { href: DESTINO_RADAR, rotulo: "Abrir o radar", titulo: "Refine seu foco", texto: "Acompanhe os temas e concorrentes que importam para o seu negócio." };
+  const indicadores: { valor: string; rotulo: string }[] = [
+    { valor: String(resumo.fortes), rotulo: "Sinais fortes" },
+    { valor: String(resumo.subindo), rotulo: "Subindo" },
+    { valor: String(resumo.leituras), rotulo: "Leituras" },
+    ultimo ? { valor: data(ultimo.criadoEm), rotulo: "Última atualização" } : { valor: "Exemplo", rotulo: "Dados ilustrativos" },
+  ];
   return (
     <>
-      <Topbar
-        marca="R"
-        nome="Radar de Sinais"
-        area="Estratégia"
-        status={{ ai: aiEnabled(), demo: !aiEnabled(), model: modelName() }}
-      />
+      <Topbar marca="R" nome="Radar de Sinais" area="Estratégia" status={{ ai: iaLigada, demo: !iaLigada, model: modelName() }} />
       <main className="max-w-[1300px] mx-auto px-5 py-8">
-        <header className="flex flex-wrap items-center justify-between gap-5 mb-7">
-          <div>
-            <p className="sobretitulo">Seu horizonte estratégico</p>
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mt-2">
-              Antecipe seu próximo movimento.
-            </h1>
-            <p className="text-muted mt-3 text-sm">
-              Conecte os sinais do mercado às decisões do seu negócio.
-            </p>
+        <header className="flex flex-wrap items-end justify-between gap-5 mb-6">
+          <div className="max-w-2xl">
+            <p className="sobretitulo">Radar de sinais</p>
+            <h1 className="titulo-painel mt-2">{TITULO}</h1>
+            <p className="text-muted mt-3">{APOIO}</p>
           </div>
-          <Link href="/radar" className="btn-primary !w-auto">
-            Explorar radar →
-          </Link>
+          <Link href={proximo.href} className="btn-primary !w-auto">{proximo.rotulo}</Link>
         </header>
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          {[
-            [termos, "Termos ativos"],
-            [ultimo ? radar.sinais.length : "—", "Sinais identificados"],
-            [ultimo ? radar.arestas.length : "—", "Conexões mapeadas"],
-          ].map(([valor, titulo]) => (
-            <div className="card !shadow-none p-4" key={titulo}>
-              <strong className="block text-2xl text-accent-ink">
-                {valor}
-              </strong>
-              <span className="text-xs text-muted">{titulo}</span>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          {indicadores.map((i) => (
+            <div className="card !shadow-none p-4" key={i.rotulo}>
+              <strong className="block text-2xl text-accent-ink leading-tight">{i.valor}</strong>
+              <span className="text-xs text-muted">{i.rotulo}</span>
             </div>
           ))}
         </div>
-        <div className="grid lg:grid-cols-[1fr_300px] gap-5 items-start">
+        <div className="grid lg:grid-cols-[1fr_320px] gap-5 items-start">
           <section className="card p-5 min-w-0">
             <div className="flex flex-wrap justify-between gap-2 items-center mb-4">
-              <h2 className="font-bold">Seu mapa de sinais</h2>
-              <span className="text-xs text-muted">
-                {ultimo
-                  ? `Atualizado em ${data(ultimo.criadoEm, { comHora: true })}`
-                  : "Demonstração · dados ilustrativos"}
-              </span>
+              <h2 className="font-bold">Seu radar</h2>
+              <span className="text-xs text-muted">{ultimo ? `Atualizado em ${data(ultimo.criadoEm, { comHora: true })}` : "Demonstração · dados ilustrativos"}</span>
             </div>
-            <Grafo
-              nos={radar.nos}
-              arestas={radar.arestas}
-              sinais={radar.sinais}
-            />
+            <Grafo nos={radar.nos} arestas={radar.arestas} sinais={radar.sinais} destinoDoNo={`${DESTINO_RADAR}?foco=`} />
+            <Link href={DESTINO_RADAR} className="btn-link text-sm inline-block mt-3">Explorar o mapa completo</Link>
           </section>
           <aside className="space-y-4">
             <section className="card p-5">
-              <h2 className="font-bold mb-2">Em foco</h2>
-              <p className="text-xs text-muted mb-3">
-                {ultimo
-                  ? "Sinais da última pesquisa"
-                  : "Exemplos do que você pode investigar"}
-              </p>
-              {radar.sinais.slice(0, 3).map((s) => (
-                <Link
-                  key={s.id}
-                  href={`/radar?foco=${encodeURIComponent(s.id)}`}
-                  className="block border-t border-line py-3 text-sm hover:text-accent"
-                >
-                  {s.titulo}
-                  <span className="block text-xs text-accent mt-1">
-                    Investigar →
-                  </span>
+              <h2 className="font-bold mb-1">Em foco</h2>
+              <p className="text-xs text-muted mb-2">{ultimo ? "Os sinais mais fortes da última pesquisa" : "Exemplos do que você pode investigar"}</p>
+              {emFoco.map((s) => (
+                <Link key={s.id} href={`${DESTINO_RADAR}?foco=${encodeURIComponent(s.id)}`} className="block border-t border-line py-3 text-sm hover:text-accent">
+                  <span className="block leading-snug">{s.titulo}</span>
+                  <SinalChips forca={s.forca} tendencia={s.tendencia} className="mt-1.5" />
                 </Link>
               ))}
             </section>
+            {leituras.length > 0 && (
+              <section className="card p-5">
+                <h2 className="font-bold mb-1">Leituras</h2>
+                <p className="text-xs text-muted mb-2">O que os sinais dizem juntos</p>
+                {leituras.map((c) => (
+                  <Link key={c.indice} href={`${DESTINO_RADAR}?insight=${c.indice}`} className="block border-t border-line py-3 text-sm hover:text-accent">
+                    <span className="block font-semibold leading-snug">{c.titulo}</span>
+                    <span className="block text-xs text-muted mt-1 line-clamp-2">{c.explicacao}</span>
+                  </Link>
+                ))}
+              </section>
+            )}
             <section className="rounded-2xl bg-accent-soft p-5">
-              <h2 className="font-bold text-sm">
-                {termos ? "Refine seu foco" : "Comece com um tema"}
-              </h2>
-              <p className="text-sm text-muted mt-2">
-                {termos
-                  ? "Acompanhe os temas e concorrentes que importam para o seu negócio."
-                  : "Conecte a IA e escolha o que deseja acompanhar. As fontes públicas já estão disponíveis."}
-              </p>
-              <Link
-                href={termos ? "/termos" : "/setup"}
-                className="btn-link text-sm inline-block mt-3"
-              >
-                {termos ? "Gerenciar termos" : "Configurar o essencial"} →
-              </Link>
+              <h2 className="font-bold text-sm">{proximo.titulo}</h2>
+              <p className="text-sm text-muted mt-2">{proximo.texto}</p>
+              <Link href={proximo.href} className="btn-link text-sm inline-block mt-3">{proximo.rotulo}</Link>
             </section>
           </aside>
         </div>

@@ -143,7 +143,7 @@ export function SetupPage({
                 className="btn-link mt-2"
                 onClick={() => setAberta("openrouter")}
               >
-                {dados?.pronto ? "Revisar conexão" : "Conectar IA"} →
+                {dados?.pronto ? "Revisar conexão" : "Conectar IA"}
               </button>
             </div>
             <div>
@@ -152,7 +152,7 @@ export function SetupPage({
                 Cadastre um tema, concorrente ou tecnologia.
               </p>
               <Link className="btn-link inline-block mt-2" href="/termos">
-                Configurar termos →
+                Escolher temas
               </Link>
             </div>
           </div>
@@ -243,7 +243,7 @@ export function SetupPage({
             Suas chaves ficam protegidas no servidor.
           </p>
           <Link href="/radar" className="btn-primary !w-auto !h-10 !text-sm">
-            Explorar radar →
+            Abrir o radar
           </Link>
         </footer>
       </main>

@@ -79,7 +79,7 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
   function adicionarTermo(valor = termo) {
     if (!pesquisa || !valor.trim()) return;
     if (pesquisa.termos.length >= 12) {
-      setMensagem("Limite de 12 termos por pesquisa.");
+      setMensagem("Limite de 12 temas por pesquisa.");
       return;
     }
     if (
@@ -87,7 +87,7 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
         (t) => t.termo.toLowerCase() === valor.trim().toLowerCase(),
       )
     ) {
-      setMensagem("Este termo já está cadastrado.");
+      setMensagem("Este tema já está cadastrado.");
       return;
     }
     editar({
@@ -138,7 +138,7 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
       {modo === "termos" ? (
         <>
           <section className="card !shadow-none p-4">
-            <h2 className="text-base font-bold mb-4">Adicionar novo termo</h2>
+            <h2 className="text-base font-bold mb-4">Adicionar tema</h2>
             <form
               className="flex flex-wrap items-end gap-3"
               onSubmit={(e) => {
@@ -176,7 +176,7 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
                   ))}
                 </select>
               </label>
-              <button className="btn-primary !w-auto">+ Adicionar termo</button>
+              <button className="btn-primary !w-auto">Adicionar tema</button>
             </form>
             <p className="text-sm text-muted mt-5 mb-2">
               Sugestões para começar
@@ -202,20 +202,20 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
           <section className="card !shadow-none p-4">
             <div className="flex flex-wrap gap-3 justify-between items-center mb-5">
               <h2 className="text-base font-bold">
-                Seus termos{" "}
+                Seus temas{" "}
                 <span className="text-muted">({pesquisa.termos.length})</span>
               </h2>
               <input
                 className="input !w-auto"
-                aria-label="Buscar termos"
-                placeholder="Buscar termos…"
+                aria-label="Buscar temas"
+                placeholder="Buscar temas…"
                 value={filtro}
                 onChange={(e) => setFiltro(e.target.value)}
               />
             </div>
             {!pesquisa.termos.length && (
               <p className="text-muted">
-                Cadastre seu primeiro termo para começar a mapear oportunidades.
+                Cadastre seu primeiro tema para começar a mapear oportunidades.
               </p>
             )}
             <div className="divide-y divide-line">
@@ -228,7 +228,7 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
                     >
                       <input
                         className="input flex-1 min-w-40"
-                        aria-label={`Editar termo ${i + 1}`}
+                        aria-label={`Editar tema ${i + 1}`}
                         value={t.termo}
                         maxLength={200}
                         onChange={(e) =>
@@ -417,7 +417,7 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
           </label>
         </div>
       </section>
-      {(alterado || mensagem) && (
+      {(modo === "termos" || alterado || mensagem) && (
         <div className="flex flex-wrap items-center gap-4">
           <button
             type="button"
@@ -433,7 +433,7 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
           </span>
           {!alterado && temas.length > 0 && (
             <Link href="/radar" className="btn-link">
-              Explorar o radar →
+              Abrir o radar
             </Link>
           )}
         </div>
