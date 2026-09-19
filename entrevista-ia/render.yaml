@@ -1,6 +1,6 @@
 # Blueprint de publicação de Entrevistadora IA (especificação: https://render.com/docs/blueprint-spec)
 # Imagem pública publicada pelo GitHub Actions em ghcr.io/startse/entrevista-ia:latest.
-# Este app exige o plano starter (pago) e cria um disco de 1 GB em /app/data, onde ficam a configuração, a conta, as vagas, os candidatos e as entrevistas.
+# Este app exige o plano standard (pago) e cria um disco de 1 GB em /app/data, onde ficam a configuração, a conta, as vagas, os candidatos e as entrevistas.
 # Nenhuma chave é necessária aqui.
 services:
   - type: web
@@ -8,7 +8,7 @@ services:
     runtime: image
     image:
       url: ghcr.io/startse/entrevista-ia:latest
-    plan: starter
+    plan: standard
     region: oregon
     healthCheckPath: /api/health
     envVars:

@@ -60,7 +60,7 @@
       "porta": 3003,
       "captura": "capturas/entrevista-ia.png",
       "independente": true,
-      "plano": "starter",
+      "plano": "standard",
       "discoGB": 1,
       "discoGuarda": "a configuração, a conta, as vagas, os candidatos e as entrevistas",
       "capacidades": [

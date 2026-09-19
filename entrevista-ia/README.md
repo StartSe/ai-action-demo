@@ -52,7 +52,7 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 - Publicar com um clique: https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-entrevista-ia (o `render.yaml` desta pasta é gerado a partir do `catalogo.json` da raiz; não edite à mão).
 - Rodar no seu computador sem construir: `docker run --rm -p 3003:10000 -v entrevista-ia-dados:/app/data ghcr.io/startse/entrevista-ia:latest` e abra http://localhost:3003.
 - Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
-- O health check responde em `/api/health`. O Blueprint usa o plano `starter` (pago) com um disco persistente de 1 GB em `/app/data`, preservando a configuração, a conta, as vagas, os candidatos e as entrevistas entre deploys.
+- O health check responde em `/api/health`. O Blueprint usa o plano `standard` (2 GB de RAM e 1 CPU; também chamado `1c-2g`) com um disco persistente de 1 GB em `/app/data`, preservando a configuração, a conta, as vagas, os candidatos e as entrevistas entre deploys.
 
 ## Variáveis de ambiente (todas opcionais)
 Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando definidas, têm prioridade sobre o que foi salvo lá.
@@ -149,3 +149,9 @@ Referências de implementação: [LiveKit Agents](https://docs.livekit.io/agents
 A atualização de Alpine para Debian mudou a identificação numérica do usuário e podia causar `EACCES` ao ler `/app/data/chave-mestra`. A imagem 0.3.1 ajusta o proprietário do volume ao iniciar e executa o site e o agente como `app` (UID/GID 10001), sem privilégios de root. A chave e os dados existentes são preservados. O build testa um volume com proprietário antigo e confirma leitura, gravação e reutilização da mesma chave em duas inicializações.
 
 Para recuperar uma instalação afetada, atualize a imagem e faça redeploy **mantendo o disco existente**. Não apague `chave-mestra` e não configure uma `CHAVE_MESTRA` nova: configurações já cifradas precisam da chave original. Falhas de permissão ou uma chave inválida não são mais tratadas como instalação nova. A troca de usuário após a preparação usa [gosu](https://github.com/tianon/gosu).
+
+### Memória da instância no Render
+
+Após um encerramento por exceder os 512 MB do Starter, o Blueprint passa a usar Standard (2 GB de RAM, 1 CPU). O preço de computação consultado em 19/09/2026 é US$ 25/mês, além do disco e de outros consumos: [preços do Render](https://render.com/pricing). Este é o dimensionamento inicial; acompanhe a memória em Metrics, especialmente com entrevistas simultâneas e o agente de voz ativo.
+
+Para uma instalação existente, abra o serviço no Render → **Compute → Edit**, selecione **Standard / 1c-2g** e salve; o Render inicia o deploy. Se a instalação é gerenciada por Blueprint, sincronize a atualização do plano. Mantenha o mesmo serviço e o disco `entrevista-ia-dados` em `/app/data`, incluindo a chave mestra. A mudança de plano com disco persistente envolve uma breve indisponibilidade. Alterar os arquivos do projeto, por si só, não confirma a mudança da máquina em execução. [Documentação do Render](https://render.com/docs/compute-plans#changing-a-services-compute-plan).
