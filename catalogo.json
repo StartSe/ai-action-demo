@@ -92,9 +92,9 @@
       "areas": [
         "Vendas"
       ],
-      "problema": "Montar a lista de leads e escrever a primeira abordagem é lento.",
-      "ia": "Monta a lista pelo perfil de cliente ideal e escreve e-mail, LinkedIn e WhatsApp para cada lead.",
-      "integracoes": "IA (OpenRouter) para escrever a abordagem de cada lead. Busca de leads (Apollo) para trazer contatos reais em vez dos de exemplo. Enriquecimento com o site do lead (Bright Data), opcional. Notificações (e-mail ou Slack) para os leads novos da semana. CRM (MCP) para receber os leads aprovados.",
+      "problema": "Cada busca de leads recomeça do zero, sem perfil salvo, evidência ou estratégia antes da mensagem.",
+      "ia": "Pesquisa empresas e pessoas pelo perfil ideal salvo, qualifica com evidências e sinais públicos, e escreve a estratégia e as mensagens da abordagem.",
+      "integracoes": "IA (OpenRouter) qualifica os leads, gera a hipótese de dor e escreve a estratégia e as mensagens. Pesquisa de mercado e sinais (Bright Data) é o motor de busca de empresas, pessoas e sinais públicos. Busca de leads (Apollo) continua como fonte alternativa de contatos. Notificações (e-mail ou Slack) avisam as oportunidades novas de uma prospecção salva. CRM (MCP) recebe os leads aprovados.",
       "acento": "#0b5789",
       "porta": 3005,
       "captura": "capturas/prospeccao-ia.png",
