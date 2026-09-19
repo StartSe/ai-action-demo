@@ -96,7 +96,7 @@ const ELEVENLABS_VOZ: Integracao = {
 const LIVEKIT: Integracao = {
   id: "livekit", titulo: "Conversa em tempo real", beneficio: "Permite falar naturalmente com a entrevistadora e interromper quando precisar",
   descricao: "Conecta o áudio pelo LiveKit Cloud. Usa a voz e o modelo ElevenLabs escolhidos acima, o modelo OpenRouter selecionado e transcrição em português pelo LiveKit Inference.",
-  notaConexao: "Requer um projeto LiveKit Cloud com Inference disponível. O agente inicia automaticamente após salvar. A transcrição e o transporte de áudio usam a conta LiveKit.",
+  notaConexao: "Requer um projeto LiveKit Cloud com Inference disponível. Autorize o acesso e escolha o projeto. O agente inicia automaticamente após conectar. A transcrição e o transporte de áudio usam a conta LiveKit.",
   obrigatoria: false, link: { url: "https://cloud.livekit.io", rotulo: "Abrir LiveKit Cloud" },
   campos: [
     { chave: "LIVEKIT_URL", rotulo: "URL do projeto", tipo: "text", placeholder: "wss://seu-projeto.livekit.cloud" },
@@ -104,7 +104,7 @@ const LIVEKIT: Integracao = {
     { chave: "LIVEKIT_API_SECRET", rotulo: "API secret do LiveKit", tipo: "secret" },
   ],
   testar: async (config) => {
-    if (!config.LIVEKIT_URL || !config.LIVEKIT_API_KEY || !config.LIVEKIT_API_SECRET) return { ok: false, mensagem: "Preencha os três campos do projeto LiveKit." };
+    if (!config.LIVEKIT_URL || !config.LIVEKIT_API_KEY || !config.LIVEKIT_API_SECRET) return { ok: false, mensagem: "Autorize o acesso ao projeto LiveKit Cloud." };
     if (!/^wss:\/\//.test(config.LIVEKIT_URL)) return { ok: false, mensagem: "Use a URL segura do projeto, começando com wss://." };
     try {
       const client = new RoomServiceClient(config.LIVEKIT_URL, config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET);

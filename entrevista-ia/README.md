@@ -133,7 +133,7 @@ Antes de publicar uma atualização deste app, incremente a versão na pasta `en
 
 ## Conversa LiveKit (0.3.0)
 
-Em Configurações, salve OpenRouter, a chave ElevenLabs, a voz e o modelo de voz. Depois, no cartão **Conversa em tempo real**, informe `LIVEKIT_URL` (`wss://...livekit.cloud`), `LIVEKIT_API_KEY` e `LIVEKIT_API_SECRET` do mesmo projeto LiveKit Cloud. A conta precisa ter LiveKit Inference disponível para transcrição Deepgram Nova-3 em português. As chaves ficam no servidor, cifradas no banco, e não são enviadas ao navegador.
+Em Configurações, salve OpenRouter, a chave ElevenLabs, a voz e o modelo de voz. Depois, no cartão **Conversa em tempo real**, clique em **Autorizar LiveKit Cloud**, entre na conta e escolha o projeto. O app salva a URL e as credenciais automaticamente. O preenchimento manual continua em **Opções avançadas**. A conta precisa ter LiveKit Inference disponível para transcrição Deepgram Nova-3 em português. As chaves ficam no servidor, cifradas no banco, e não são enviadas ao navegador.
 
 `npm run dev` e `npm start` iniciam o site e supervisionam o agente. O agente inicia após salvar as conexões; não exige outro serviço ou disco. A imagem Docker usa Debian e inclui as bibliotecas nativas de áudio. A porta interna 8091 verifica a saúde do agente; apenas a porta web precisa ser publicada. Use uma única instância com o disco persistente deste projeto. Dimensione memória para o Next e o processo de áudio; acompanhe o consumo da instalação antes de aumentar entrevistas simultâneas.
 
@@ -155,3 +155,11 @@ Para recuperar uma instalação afetada, atualize a imagem e faça redeploy **ma
 Após um encerramento por exceder os 512 MB do Starter, o Blueprint passa a usar Standard (2 GB de RAM, 1 CPU). O preço de computação consultado em 19/09/2026 é US$ 25/mês, além do disco e de outros consumos: [preços do Render](https://render.com/pricing). Este é o dimensionamento inicial; acompanhe a memória em Metrics, especialmente com entrevistas simultâneas e o agente de voz ativo.
 
 Para uma instalação existente, abra o serviço no Render → **Compute → Edit**, selecione **Standard / 1c-2g** e salve; o Render inicia o deploy. Se a instalação é gerenciada por Blueprint, sincronize a atualização do plano. Mantenha o mesmo serviço e o disco `entrevista-ia-dados` em `/app/data`, incluindo a chave mestra. A mudança de plano com disco persistente envolve uma breve indisponibilidade. Alterar os arquivos do projeto, por si só, não confirma a mudança da máquina em execução. [Documentação do Render](https://render.com/docs/compute-plans#changing-a-services-compute-plan).
+
+### Autorizar LiveKit Cloud (0.4.0)
+
+O botão usa o fluxo de autorização pelo navegador da [CLI oficial](https://docs.livekit.io/reference/developer-tools/livekit-cli/projects/), com `/cli/auth`, a página de aprovação do LiveKit e `/cli/claim`. Não é um OAuth público convencional e depende desses endpoints do provedor. Não exige cadastro de client ID ou redirect URI.
+
+Somente uma sessão administrativa da mesma origem pode iniciar, consultar ou cancelar uma tentativa. Um cookie HttpOnly associa a tentativa ao navegador; a autorização expira em até 15 minutos. URL, API key e secret são salvos juntos e cifrados no servidor; o navegador recebe apenas a confirmação. Cancelamento, expiração e respostas inválidas preservam a conexão anterior. Credenciais definidas por variáveis de ambiente têm prioridade e impedem a troca pelo botão.
+
+Os testes automatizados cobrem autorização, recusa, expiração, isolamento do navegador, limites de consulta, cancelamento e cifragem. O início e a espera pela aprovação foram conferidos contra o serviço real; a aprovação com uma conta e projeto próprios precisa ser feita pela pessoa no LiveKit.

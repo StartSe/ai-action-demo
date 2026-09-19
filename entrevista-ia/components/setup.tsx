@@ -1,6 +1,7 @@
 "use client";
 // Configuração das integrações e orientação para a primeira entrevista.
 import Link from "next/link";
+import { ConectarLivekit } from "./ConectarLivekit";
 import { JornadaGestor } from "./JornadaGestor";
 import { useEffect, useState, type ReactNode } from "react";
 import { IlustracaoSegmento, MaisDetalhes, Topbar, useStatus } from "./ui";
@@ -273,7 +274,18 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
         </div>
       </div>
 
-      {i.oauth ? (
+      {i.id === "livekit" ? (
+        <>
+          <ConectarLivekit aoConectar={() => { setValores({}); setTeste(null); aoSalvar(); }} configurada={i.configurada} porAmbiente={i.campos.some((c) => c.origem === "env")} />
+          {i.notaConexao && <p className="text-sm text-muted mb-4">{i.notaConexao}</p>}
+          {i.configurada && <div className="flex gap-3 mb-4">
+            <button type="button" className="btn-secundario !w-auto" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>
+          </div>}
+          <MaisDetalhes titulo="Opções avançadas: configurar manualmente">
+            {campos}{opcoesAvancadas}{acoesSalvar}
+          </MaisDetalhes>
+        </>
+      ) : i.oauth ? (
         <>
           <div className="flex items-center gap-3 flex-wrap justify-end max-md:flex-col max-md:items-stretch mb-4">
             {i.configurada ? (
