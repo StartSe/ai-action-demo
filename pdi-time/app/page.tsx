@@ -1,9 +1,11 @@
 "use client";
 
+import "./pdi.css";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Aviso, Chip, DataTable, Entregar, ErrorBox, Field, Hero, Item, Loading, MaisDetalhes, OptInGuardar, Origem, Passos, Privacidade, ResultHead, Row, SeloIA, Section, Stage, Topbar, data, lerErro, useScrollToResult, useStatus, type ErroLido, type PassoIndicador } from "@/components/ui";
+import { Aviso, Chip, DataTable, Entregar, ErrorBox, Field, Hero, Item, Loading, MaisDetalhes, OptInGuardar, Origem, Passos, Privacidade, ResultHead, Row, SeloIA, Section, Stage, Topbar, data, lerErro, useStatus, type ErroLido, type PassoIndicador } from "@/components/ui";
 import { BuscarEntregas } from "@/components/BuscarEntregas";
 import { DialogoAutoavaliacao } from "@/components/DialogoAutoavaliacao";
 import { LembrarCheckins } from "@/components/LembrarCheckins";
@@ -124,29 +126,54 @@ export default function Page() {
   const formRef = useRef<HTMLFormElement>(null);
   const autoEnviado = useRef(false);
 
-  useScrollToResult(estado.fase === "pronto");
+  const [erroHistorico, setErroHistorico] = useState(false);
+  const [erroLista, setErroLista] = useState(false);
+  const [apagando, setApagando] = useState(false);
+  const [erroExclusao, setErroExclusao] = useState("");
+  const emAndamento = useRef(false);
+  const resultadoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (estado.fase === "vazio") return;
+    const area = resultadoRef.current;
+    if (estado.fase !== "carregando") area?.focus({ preventScroll: true });
+    if (window.innerWidth < 1024) area?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" });
+  }, [estado.fase]);
 
   function carregarHistorico() {
-    fetch("/api/pdi").then((r) => r.json()).then((r) => {
+    fetch("/api/pdi").then((r) => { if (!r.ok) throw new Error(); return r.json(); }).then((r) => {
+      setErroHistorico(false);
       setHistorico(r.itens);
       if (r.nomeUsuario) setDados((d) => (d.preparadoPor ? d : { ...d, preparadoPor: r.nomeUsuario }));
-    }).catch(() => setHistorico([]));
+    }).catch(() => setErroHistorico(true));
   }
 
   function carregarAutoavaliacoes() {
-    fetch("/api/pdi/autoavaliacao").then((r) => r.json()).then((r) => setAutoavaliacoes(r.itens)).catch(() => setAutoavaliacoes([]));
+    fetch("/api/pdi/autoavaliacao").then((r) => { if (!r.ok) throw new Error(); return r.json(); }).then((r) => { setAutoavaliacoes(r.itens); setErroLista(false); }).catch(() => setErroLista(true));
   }
 
   useEffect(() => { carregarHistorico(); carregarAutoavaliacoes(); }, []);
 
-  function apagarHistorico() {
+  async function apagarHistorico() {
     if (!window.confirm("Apagar todos os resultados salvos? Essa ação não pode ser desfeita.")) return;
-    fetch("/api/pdi", { method: "DELETE" }).then(carregarHistorico);
+    setApagando(true);
+    setErroExclusao("");
+    try {
+      const resposta = await fetch("/api/pdi", { method: "DELETE" });
+      if (!resposta.ok) throw new Error();
+      carregarHistorico();
+    } catch {
+      setErroExclusao("Não foi possível apagar os resultados. Tente novamente.");
+    } finally {
+      setApagando(false);
+    }
   }
 
   const set = (campo: keyof DadosPDI) => (e: { target: { value: string } }) => setDados((d) => ({ ...d, [campo]: e.target.value }));
 
   async function gerar(d: DadosPDI, guardarResultado: boolean, erroForcado?: string) {
+    if (emAndamento.current) return;
+    emAndamento.current = true;
     setEstado({ fase: "carregando" });
     try {
       const url = erroForcado ? `/api/pdi?erro=${erroForcado}` : "/api/pdi";
@@ -163,22 +190,35 @@ export default function Page() {
       }
       const resposta = await r.json();
       setEstado({ fase: "pronto", pdi: resposta.pdi, dados: d, meta: resposta.meta, id: resposta.id });
-      fetch("/api/pdi").then((r2) => r2.json()).then((r2) => setHistorico(r2.itens)).catch(() => setHistorico([]));
+      fetch("/api/pdi").then((r2) => { if (!r2.ok) throw new Error(); return r2.json(); }).then((r2) => { setHistorico(r2.itens); setErroHistorico(false); }).catch(() => setErroHistorico(true));
     } catch (e) {
       const info = await lerErro(e);
       setEstado({ fase: "erro", mensagem: info.mensagem, dados: d });
+    } finally {
+      emAndamento.current = false;
     }
   }
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
+    const campos = ["nome", "cargo", "entregas", "objetivos"] as const;
+    for (const campo of campos) {
+      if (!dados[campo].trim()) {
+        const input = document.getElementById(campo) as HTMLInputElement;
+        input.setCustomValidity("Preencha este campo com mais que espaços.");
+        input.reportValidity();
+        return;
+      }
+    }
     gerar(dados, guardar);
   }
 
-  /** "Usar colaborador de exemplo" preenche E gera: quem quer ver o resultado não precisa rolar até o botão. */
+  /** Preenche para revisão, sem disparar geração ou apagar um rascunho sem confirmação. */
   function preencherExemplo() {
-    setDados(EXEMPLO);
-    gerar(EXEMPLO, guardar);
+    if ([dados.nome, dados.cargo, dados.entregas, dados.objetivos].some((v) => v.trim()) && !window.confirm("Substituir os campos preenchidos pelo exemplo?")) return;
+    setDados({ ...VAZIO, ...EXEMPLO, preparadoPor: dados.preparadoPor });
+    formRef.current?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea").forEach((campo) => campo.setCustomValidity(""));
+    document.getElementById("nome")?.focus();
   }
 
   /** "Gerar PDI agora" numa autoavaliação recebida cuja IA falhou na hora (app/api/pdi/autoavaliacao/[id]/gerar). */
@@ -231,20 +271,22 @@ export default function Page() {
         <Passos passos={PASSOS} atual={passoAtual} />
       </Hero>
 
-      <main className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">
-        <div>
-          <form ref={formRef} onSubmit={onSubmit}>
+      <main className="grid grid-cols-1 lg:grid-cols-[minmax(340px,420px)_minmax(0,1fr)] gap-6 px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">
+        <div className="no-print">
+          <form ref={formRef} onSubmit={onSubmit} onInput={(e) => { const campo = e.target; if (campo instanceof HTMLInputElement || campo instanceof HTMLTextAreaElement) campo.setCustomValidity(""); }}>
+            <p className="text-sm text-muted mb-3">Preencha os quatro campos abaixo para criar o plano.</p>
+            <fieldset disabled={carregando} className="min-w-0">
             <CartaoEntrada icone={<IconePessoa />} titulo="Sobre o colaborador">
-              <Row>
+              <div>
                 <Field label="Nome" htmlFor="nome"><input id="nome" className="input" required placeholder="Marina Costa" value={dados.nome} onChange={set("nome")} /></Field>
                 <Field label="Cargo" htmlFor="cargo"><input id="cargo" className="input" required placeholder="Coordenadora de Marketing" value={dados.cargo} onChange={set("cargo")} /></Field>
-              </Row>
+              </div>
             </CartaoEntrada>
 
             <CartaoEntrada icone={<IconeContexto />} titulo="Contexto profissional">
-              <Row>
+              <div>
                 <Field label="Entregas e atividades recentes" htmlFor="entregas">
-                  <textarea id="entregas" className="input min-h-20 resize-y" required placeholder="Ex.: liderou o lançamento da campanha X, reduziu custo por lead em 18%..." value={dados.entregas} onChange={set("entregas")} />
+                  <textarea id="entregas" className="input min-h-28 resize-y" required placeholder="Ex.: liderou o lançamento da campanha X, reduziu custo por lead em 18%..." value={dados.entregas} onChange={set("entregas")} />
                   <BuscarEntregas
                     nome={dados.nome}
                     conectado={status ? Boolean(status.integrations?.mcpTarefas) : null}
@@ -252,10 +294,10 @@ export default function Page() {
                   />
                 </Field>
                 <Field label="Objetivos da empresa para o período" htmlFor="objetivos">
-                  <textarea id="objetivos" className="input min-h-20 resize-y" required placeholder="Ex.: crescer 30% em receita recorrente, abrir o mercado corporativo..." value={dados.objetivos} onChange={set("objetivos")} />
+                  <textarea id="objetivos" className="input min-h-28 resize-y" required placeholder="Ex.: crescer 30% em receita recorrente, abrir o mercado corporativo..." value={dados.objetivos} onChange={set("objetivos")} />
                 </Field>
-              </Row>
-              <MaisDetalhes>
+              </div>
+              <MaisDetalhes titulo="Personalizar o plano (opcional)">
                 <Row>
                   <Field label="Tempo na função" htmlFor="tempo">
                     <select id="tempo" className="input" value={dados.tempo} onChange={set("tempo")}>
@@ -279,7 +321,9 @@ export default function Page() {
             </CartaoEntrada>
 
             <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Gerando plano" : "Gerar PDI"}</button>
-            <button type="button" className="btn-secundario mt-2" disabled={carregando} onClick={preencherExemplo}>Usar colaborador de exemplo</button>
+            <button type="button" className="btn-secundario mt-2" disabled={carregando} onClick={preencherExemplo}>Preencher com exemplo</button>
+            </fieldset>
+            {carregando && <p role="status" className="text-sm text-accent-ink mt-3">Gerando seu plano. Aguarde nesta página.</p>}
           </form>
 
           <div className="card p-5 mt-4">
@@ -291,7 +335,8 @@ export default function Page() {
             </div>
 
             <MaisDetalhes titulo="Últimos resultados">
-              {historico === null ? (
+              {erroExclusao && <p role="alert" className="text-danger text-sm mb-2">{erroExclusao}</p>}
+              {erroHistorico ? (<div role="alert"><p className="text-danger text-sm">Não foi possível carregar os resultados.</p><button type="button" className="btn-link" onClick={carregarHistorico}>Tentar novamente</button></div>) : historico === null ? (
                 <p className="text-muted text-sm">Carregando...</p>
               ) : historico.length === 0 ? (
                 <p className="text-muted text-sm">Nenhum resultado salvo ainda.</p>
@@ -307,14 +352,14 @@ export default function Page() {
                   </ul>
                   <div className="flex items-center gap-4">
                     <Link href="/historico" className="btn-link text-[13px]">Ver todos</Link>
-                    <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
+                    <button type="button" className="btn-ghost" disabled={apagando} onClick={apagarHistorico}>{apagando ? "Apagando…" : "Apagar tudo"}</button>
                   </div>
                 </>
               )}
             </MaisDetalhes>
 
             <MaisDetalhes titulo="Autoavaliações recebidas">
-              {autoavaliacoes === null ? (
+              {erroLista ? (<div role="alert"><p className="text-danger text-sm">Não foi possível carregar as autoavaliações.</p><button type="button" className="btn-link" onClick={carregarAutoavaliacoes}>Tentar novamente</button></div>) : autoavaliacoes === null ? (
                 <p className="text-muted text-sm">Carregando...</p>
               ) : autoavaliacoes.length === 0 ? (
                 <p className="text-muted text-sm">Nenhuma resposta recebida ainda.</p>
@@ -329,7 +374,7 @@ export default function Page() {
                           {a.resultadoId ? (
                             <Link href={`/r/${a.resultadoId}`} className="text-accent-ink font-semibold hover:underline">Abrir PDI</Link>
                           ) : (
-                            <button type="button" className="btn-link text-sm" disabled={gerandoAutoavaliacao === a.id} onClick={() => gerarDaAutoavaliacao(a.id)}>
+                            <button type="button" className="btn-link text-sm" disabled={gerandoAutoavaliacao !== null} onClick={() => gerarDaAutoavaliacao(a.id)}>
                               {gerandoAutoavaliacao === a.id ? "Gerando" : "Gerar PDI agora"}
                             </button>
                           )}
@@ -349,12 +394,14 @@ export default function Page() {
           </div>
         </div>
 
+        <div ref={resultadoRef} tabIndex={-1} aria-label="Resultado do PDI" className="min-w-0 scroll-mt-6 focus:outline-none">
         <Stage>
           {estado.fase === "vazio" && <Previa itens={PROMESSA.itens} />}
           {estado.fase === "carregando" && <Loading etapas={ETAPAS_CARREGANDO} />}
           {estado.fase === "erro" && <ErrorBox mensagem={estado.mensagem} codigo={estado.codigo} acao={estado.acao} onTentarNovamente={() => gerar(estado.dados, guardar)} />}
           {estado.fase === "pronto" && <Resultado pdi={estado.pdi} dados={estado.dados} meta={estado.meta} id={estado.id} />}
         </Stage>
+        </div>
       </main>
 
       {autoavaliacaoAberta && (
@@ -417,7 +464,7 @@ export function ConteudoPDI({ pdi, dataConversa, acompanhamentoExtra }: { pdi: P
       <p className="summary">{pdi.resumo}</p>
 
       <Section titulo="Pontos fortes a preservar">
-        <div className="grid grid-cols-3 max-md:grid-cols-1 gap-3.5">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-3.5">
           {pdi.pontos_fortes.map((f) => <Item key={f.titulo}><h3 className="font-bold mb-1">{f.titulo}</h3><p className="text-muted text-sm">{f.evidencia}</p></Item>)}
         </div>
       </Section>
@@ -436,13 +483,13 @@ export function ConteudoPDI({ pdi, dataConversa, acompanhamentoExtra }: { pdi: P
       <Section titulo="Objetivos de desenvolvimento para 90 dias">
         {pdi.objetivos.map((o) => (
           <div key={o.titulo} className="card shadow-none px-[22px] py-5 mb-3.5">
-            <header className="flex justify-between gap-4 mb-3 max-md:flex-col">
+            <header className="flex flex-col gap-2 mb-3">
               <div><h3 className="font-bold">{o.titulo}</h3><p className="text-muted text-sm">{o.resultado_esperado}</p></div>
-              <div className="text-[13px] text-muted md:w-56 md:shrink-0 md:text-right">Indicador<br /><strong className="text-ink">{o.indicador}</strong></div>
+              <div className="text-[13px] text-muted ">Indicador<br /><strong className="text-ink">{o.indicador}</strong></div>
             </header>
             <div className="border-t border-line divide-y divide-line text-sm">
               {o.acoes.map((a) => (
-                <div key={a.prazo} className="flex gap-4 py-[11px]"><span className={`${dataConversa ? "w-36" : "w-24"} shrink-0 font-bold text-accent-ink`}>{prazoComData(a.prazo, dataConversa)}</span><span>{a.acao}</span></div>
+                <div key={a.prazo} className="flex flex-col sm:flex-row gap-1 sm:gap-4 py-[11px]"><span className={`${dataConversa ? "w-36" : "w-24"} shrink-0 font-bold text-accent-ink`}>{prazoComData(a.prazo, dataConversa)}</span><span>{a.acao}</span></div>
               ))}
             </div>
           </div>
@@ -450,7 +497,7 @@ export function ConteudoPDI({ pdi, dataConversa, acompanhamentoExtra }: { pdi: P
       </Section>
 
       <Section titulo="Recursos de apoio">
-        <div className="grid grid-cols-3 max-md:grid-cols-1 gap-3.5">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-3.5">
           {pdi.recursos.map((r) => <Item key={r.nome}><Chip nivel="neutral">{r.tipo}</Chip><h3 className="font-bold mt-2 mb-1">{r.nome}</h3><p className="text-muted text-sm">{r.motivo}</p></Item>)}
         </div>
       </Section>

@@ -15,22 +15,24 @@ export function DialogoAutoavaliacao({ onFechar, objetivosIniciais }: Props) {
   const [fase, setFase] = useState<Fase>("form");
   const [link, setLink] = useState("");
   const [mensagemErro, setMensagemErro] = useState("");
-  const caixaRef = useRef<HTMLDivElement>(null);
+  const caixaRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onFechar();
-    }
-    function onClickFora(e: MouseEvent) {
-      if (caixaRef.current && !caixaRef.current.contains(e.target as Node)) onFechar();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("mousedown", onClickFora);
+    const dialogo = caixaRef.current;
+    const anterior = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    dialogo?.showModal();
+    document.body.style.overflow = "hidden";
     return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("mousedown", onClickFora);
+      dialogo?.close();
+      document.body.style.overflow = overflow;
+      anterior?.focus();
     };
-  }, [onFechar]);
+  }, []);
+
+  useEffect(() => {
+    if (fase === "pronto") caixaRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+  }, [fase]);
 
   async function gerar(e: FormEvent) {
     e.preventDefault();
@@ -56,8 +58,7 @@ export function DialogoAutoavaliacao({ onFechar, objetivosIniciais }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-30 bg-black/40 grid place-items-center px-4" role="presentation">
-      <div ref={caixaRef} role="dialog" aria-modal="true" aria-labelledby="titulo-autoavaliacao" className="card w-full max-w-[480px] p-7 max-md:p-5">
+    <dialog ref={caixaRef} aria-labelledby="titulo-autoavaliacao" onCancel={(e) => { e.preventDefault(); onFechar(); }} className="card m-auto w-[calc(100%-32px)] max-w-[480px] max-h-[calc(100dvh-32px)] overflow-y-auto p-7 max-md:p-5 backdrop:bg-black/40">
         <h2 id="titulo-autoavaliacao" className="text-xl font-extrabold mb-1.5">Pedir autoavaliação por link</h2>
         <p className="text-muted text-sm mb-5">A pessoa preenche nome, cargo, tempo na função, entregas recentes e aspirações; assim que ela responder, o PDI é gerado com os objetivos abaixo.</p>
 
@@ -73,24 +74,23 @@ export function DialogoAutoavaliacao({ onFechar, objetivosIniciais }: Props) {
           <form onSubmit={gerar}>
             <div className="flex flex-col gap-1.5 mb-4">
               <label htmlFor="objetivosAutoavaliacao" className="text-[13px] font-semibold">Objetivos da empresa para o período</label>
-              <textarea id="objetivosAutoavaliacao" className="input min-h-24 resize-y" required value={objetivos} onChange={(e) => setObjetivos(e.target.value)} />
+              <textarea id="objetivosAutoavaliacao" autoFocus disabled={fase === "gerando"} className="input min-h-24 resize-y" required value={objetivos} onChange={(e) => setObjetivos(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5 mb-5">
               <label htmlFor="expiraEmDiasAutoavaliacao" className="text-[13px] font-semibold">O link expira em</label>
-              <select id="expiraEmDiasAutoavaliacao" className="input" value={expiraEmDias} onChange={(e) => setExpiraEmDias(Number(e.target.value))}>
+              <select id="expiraEmDiasAutoavaliacao" disabled={fase === "gerando"} className="input" value={expiraEmDias} onChange={(e) => setExpiraEmDias(Number(e.target.value))}>
                 <option value={7}>7 dias</option>
                 <option value={30}>30 dias</option>
                 <option value={90}>90 dias</option>
               </select>
             </div>
-            {fase === "erro" && <p className="text-danger text-sm mb-4">{mensagemErro}</p>}
+            {fase === "erro" && <p role="alert" className="text-danger text-sm mb-4">{mensagemErro}</p>}
             <div className="flex gap-2.5">
               <button type="submit" className="btn-primary !w-auto flex-1" disabled={fase === "gerando"}>{fase === "gerando" ? "Gerando" : "Gerar link"}</button>
               <button type="button" className="btn-ghost" onClick={onFechar}>Cancelar</button>
             </div>
           </form>
         )}
-      </div>
-    </div>
+    </dialog>
   );
 }
