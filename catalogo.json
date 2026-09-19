@@ -397,14 +397,13 @@
       ],
       "problema": "Tarefas que dependem de várias etapas de IA ficam espalhadas entre conversas e sistemas.",
       "ia": "Crie fluxos visuais com agentes, decisões, ferramentas e aprovação humana. Teste cada etapa e publique uma versão integrável.",
-      "integracoes": "OpenRouter para os agentes; ferramentas MCP e requisições HTTP para conectar serviços; MCP e HTTP autenticado para executar fluxos publicados; notificações para resumos das execuções.",
+      "integracoes": "Login ChatGPT para os agentes; ferramentas MCP e requisições HTTP para conectar serviços; MCP e HTTP autenticado para executar fluxos publicados.",
       "acento": "#163669",
       "porta": 3019,
       "captura": "capturas/build-agentflows.png",
       "capacidades": [
         "artefato",
-        "mcp",
-        "rotina"
+        "mcp"
       ],
       "demo": null,
       "independente": true,

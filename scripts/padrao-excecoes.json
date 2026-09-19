@@ -8,5 +8,18 @@
   },
   "whatsapp-atendente": {
     "app/api/setup/route.ts": "Duas divergências de propósito: (1) depois de salvar as três credenciais da z-api, cadastra sozinho na instância o endereço dos avisos (lib/zapi.ts:configurarWebhooks), tirando do caminho da pessoa copiar esse endereço à mão no painel da z-api; (2) o WhatsApp sai da lista genérica do GET e vai em comCartaoProprio, porque components/ConexaoWhatsApp.tsx já desenha o cartão dele inteiro (QR Code, estado, desconectar) — mesmo desenho que custos-ia usa com Gmail e Outlook"
+  },
+  "build-agentflows": {
+    "app/api/setup/route.ts": "Produto focado em fluxos, com login exclusivo ChatGPT; configuração e integrações antigas da suíte desativadas por solicitação explícita.",
+    "app/api/status/route.ts": "Produto focado em fluxos, com login exclusivo ChatGPT; configuração e integrações antigas da suíte desativadas por solicitação explícita.",
+    "app/api/setup/oauth/openrouter/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT.",
+    "app/api/setup/oauth/openrouter/callback/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT.",
+    "app/api/setup/oauth/google/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT.",
+    "app/api/setup/oauth/google/callback/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT.",
+    "app/api/setup/oauth/microsoft/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT.",
+    "app/api/setup/oauth/microsoft/callback/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT.",
+    "app/api/setup/oauth/mcp/[prefixo]/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT.",
+    "app/api/setup/oauth/mcp/[prefixo]/callback/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT.",
+    "app/api/setup/testar/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT."
   }
 }

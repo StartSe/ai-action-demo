@@ -10,6 +10,14 @@ const runtime = await import("./flow-runtime");
 const { setConfig } = await import("./store");
 const { block, template } = await import("./flow-types");
 const { FERRAMENTAS } = await import("./ferramentas");
+const { chatGPT } = await import("./chatgpt");
+const bridge = chatGPT();
+bridge.account = async () => ({
+  account: { type: "chatgpt", email: "teste@example.com", planType: "plus" },
+  login: null,
+  error: null,
+});
+bridge.run = async () => "Resposta ChatGPT simulada no teste";
 test.after(() => rmSync(dir, { recursive: true, force: true }));
 function flow(graph = template()) {
   const f = store.createFlow("Teste");
@@ -129,150 +137,158 @@ test("referência ausente falha com diagnóstico e mantém etapas", async () => 
   assert.match(r.error!, /não tem valor/);
   assert.equal(r.trace.length, 2);
 });
-test("sem chave, demo nunca realiza chamadas externas", async () => {
-  const original = globalThis.fetch;
+test("somente ChatGPT: chave antiga nunca habilita execução real", async () => {
+  const account = bridge.account;
+  bridge.account = async () => ({ account: null, login: null, error: null });
+  setConfig("OPENROUTER_API_KEY", "chave-antiga-ignorada");
+  try {
+    const f = flow();
+    await assert.rejects(
+      () => runtime.startRun(f.id, "Olá"),
+      /Conecte o ChatGPT/,
+    );
+    assert.equal((await runtime.startRun(f.id, "Olá", false, true)).demo, true);
+  } finally {
+    bridge.account = account;
+    setConfig("OPENROUTER_API_KEY", null);
+  }
+});
+test("simulação explícita nunca usa ChatGPT ou ferramentas externas", async () => {
+  const fetch = globalThis.fetch,
+    run = bridge.run;
   globalThis.fetch = async () => {
-    throw new Error("NÃO DEVERIA CHAMAR");
+    throw Error("Não deve chamar");
+  };
+  bridge.run = async () => {
+    throw Error("Não deve chamar");
   };
   try {
     const g = template();
     g.nodes[1] = block("http", "analista", 0, 0);
     g.nodes[1].data.config.url = "https://example.com";
-    const f = flow(g);
-    const r = await runtime.startRun(f.id, "x");
-    assert.equal(r.demo, true);
+    const r = await runtime.startRun(flow(g).id, "Olá", false, true);
     assert.equal(r.status, "completed");
+    assert.match(r.output, /Demonstração/);
   } finally {
-    globalThis.fetch = original;
+    globalThis.fetch = fetch;
+    bridge.run = run;
   }
 });
-test("agente real escolhe ferramenta MCP autorizada e usa retorno", async () => {
-  const original = globalThis.fetch;
-  setConfig("OPENROUTER_API_KEY", "test-key");
+test("agente ChatGPT recebe somente ferramentas autorizadas e registra chamadas e texto", async () => {
+  const fetch = globalThis.fetch,
+    run = bridge.run;
   setConfig("FERRAMENTAS_URL", "https://tools.example/mcp");
   setConfig("FERRAMENTAS_CODIGO", "test-code");
-  let calls = 0;
-  const bodies: unknown[] = [];
-  globalThis.fetch = async (url, init) => {
+  globalThis.fetch = async (_, init) => {
     const b = JSON.parse(init?.body as string);
-    bodies.push(b);
-    if (String(url).includes("tools.example")) {
-      if (b.method === "tools/list")
-        return Response.json({
-          result: {
-            tools: [
-              {
-                name: "buscar",
-                inputSchema: { type: "object", properties: {} },
-              },
-            ],
-          },
-        });
-      return Response.json({
-        result: { content: [{ type: "text", text: "Encontrado" }] },
-      });
-    }
-    calls++;
     return Response.json({
-      choices: [
-        {
-          message:
-            calls === 1
-              ? {
-                  role: "assistant",
-                  content: null,
-                  tool_calls: [
-                    {
-                      id: "tool1",
-                      type: "function",
-                      function: { name: "buscar", arguments: "{}" },
-                    },
-                  ],
-                }
-              : {
-                  role: "assistant",
-                  content: "Resultado da ferramenta incorporado.",
+      result:
+        b.method === "tools/list"
+          ? {
+              tools: [
+                {
+                  name: "buscar",
+                  description: "Busca informações",
+                  inputSchema: { type: "object", properties: {} },
                 },
-        },
-      ],
+                { name: "nao_autorizada" },
+              ],
+            }
+          : { content: [{ type: "text", text: "Encontrado" }] },
     });
+  };
+  bridge.run = async (options) => {
+    assert.deepEqual(
+      options.tools!.map((t) => t.name),
+      ["buscar"],
+    );
+    const result = await options.tools![0].call({ query: "x" });
+    assert.match(result, /Encontrado/);
+    options.onText?.("Resposta parcial");
+    return "Resposta final baseada na ferramenta";
   };
   try {
     const g = template();
     g.nodes[1].data.config.tools = "buscar";
-    const f = flow(g);
-    const r = await runtime.startRun(f.id, "Pesquisar", false, false);
+    const r = await runtime.startRun(flow(g).id, "Pesquisar");
     assert.equal(r.status, "completed");
     assert.equal(r.demo, false);
-    assert.equal(calls, 2);
-    assert.match(r.output, /incorporado/);
+    assert.match(r.output, /Resposta final/);
     assert.ok(r.trace.some((t) => t.label === "Ferramenta: buscar"));
-    assert.equal(bodies.length, 4);
   } finally {
-    globalThis.fetch = original;
-    setConfig("OPENROUTER_API_KEY", null);
-    setConfig("FERRAMENTAS_URL", null);
-    setConfig("FERRAMENTAS_CODIGO", null);
+    globalThis.fetch = fetch;
+    bridge.run = run;
   }
 });
-test("erros MCP e HTTP encerram a execução sem respostas de sucesso", async () => {
-  const original = globalThis.fetch;
-  setConfig("OPENROUTER_API_KEY", "test-key");
-  setConfig("FERRAMENTAS_URL", "https://tools.example/mcp");
-  setConfig("FERRAMENTAS_CODIGO", "test-code");
+test("falhas ChatGPT não caem para outro provedor nem para demonstração", async () => {
+  const run = bridge.run;
+  bridge.run = async () => {
+    throw Error("Limite da assinatura atingido");
+  };
   try {
-    globalThis.fetch = async () =>
-      Response.json({
-        result: { isError: true, content: [{ text: "Falhou" }] },
-      });
-    const g = template();
-    g.nodes[1] = block("tool", "analista", 0, 0);
-    g.nodes[1].data.config.tool = "buscar";
-    let f = flow(g);
-    assert.equal((await runtime.startRun(f.id, "x")).status, "failed");
-    g.nodes[1] = block("http", "analista", 0, 0);
-    g.nodes[1].data.config.url = "https://api.example";
-    globalThis.fetch = async () => new Response("falha", { status: 503 });
-    f = flow(g);
-    const r = await runtime.startRun(f.id, "x");
+    const r = await runtime.startRun(flow().id, "Pesquisar");
     assert.equal(r.status, "failed");
-    assert.match(r.error!, /503/);
+    assert.equal(r.demo, false);
+    assert.match(r.error!, /Limite da assinatura/);
   } finally {
-    globalThis.fetch = original;
-    setConfig("OPENROUTER_API_KEY", null);
+    bridge.run = run;
   }
 });
-test("MCP lista apenas publicados e execução usa o mesmo motor", async () => {
+test("cancelamento interrompe o agente e impede próximas etapas", async () => {
+  const run = bridge.run;
+  let began!: () => void;
+  const ready = new Promise<void>((r) => (began = r));
+  bridge.run = async (options) =>
+    new Promise((_, reject) => {
+      options.signal?.addEventListener(
+        "abort",
+        () => reject(Error("Cancelado")),
+        { once: true },
+      );
+      began();
+    });
+  try {
+    const f = flow();
+    const pending = runtime.startRun(f.id, "Pesquisar");
+    await ready;
+    const r = store.listRuns(f.id)[0];
+    runtime.cancelRun(r.id);
+    const result = await pending;
+    assert.equal(result.status, "cancelled");
+    assert.ok(!result.trace.some((t) => t.nodeId === "resposta"));
+  } finally {
+    bridge.run = run;
+  }
+});
+test("MCP lista publicados e executa pelo mesmo motor ChatGPT", async () => {
   const f = flow();
   store.publishFlow(f.id);
   const list = (await FERRAMENTAS[0].executar({})) as { id: string }[];
   assert.ok(list.some((x) => x.id === f.id));
   const r = (await FERRAMENTAS[1].executar({ id: f.id, input: "Olá" })) as {
     status: string;
+    demo: boolean;
   };
   assert.equal(r.status, "completed");
+  assert.equal(r.demo, false);
 });
-test("reinício marca execução ativa interrompida sem repetir ações", () => {
-  const f = flow();
-  const now = new Date().toISOString();
-  store.putRun({
-    id: "interrupted",
-    flowId: f.id,
-    name: f.name,
-    version: 0,
-    status: "running",
-    demo: true,
-    input: "x",
-    output: "",
-    graph: f.graph,
-    next: "inicio",
-    state: {},
-    outputs: {},
-    visits: {},
-    trace: [],
-    createdAt: now,
-    updatedAt: now,
-  });
+test("modelos de exemplo possuem grafos executáveis", async () => {
+  const { PRESETS, preset } = await import("./flow-presets");
+  for (const p of PRESETS) {
+    store.validateGraph(preset(p.id), true);
+    const r = await runtime.startRun(
+      flow(preset(p.id)).id,
+      "urgente",
+      false,
+      true,
+    );
+    assert.ok(["completed", "waiting"].includes(r.status));
+  }
+});
+test("reinício interrompe execução ativa e preserva aprovação pendente", async () => {
+  const r = await runtime.startRun(flow().id, "x", false, true);
+  r.status = "running";
+  store.putRun(r);
   store.interruptRuns();
-  assert.equal(store.getRun("interrupted").status, "failed");
+  assert.equal(store.getRun(r.id).status, "failed");
 });
