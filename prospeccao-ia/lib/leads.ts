@@ -136,3 +136,48 @@ export async function buscarLeads(dados: DadosBusca): Promise<ResultadoBusca & {
   const leads = pessoas.slice(0, quantidade).map((p, i) => mapApolloPessoa(p, i, segmento));
   return { fonte: "apollo", leads, meta: meta({ demo: false, insumo }) };
 }
+
+export interface PessoaDaEmpresa {
+  nome: string;
+  cargo: string | null;
+  linkedin: string | null;
+}
+
+const CARGOS_DECISAO_EMPRESA = ["Diretor", "Gerente", "Head", "Coordenador"];
+
+/**
+ * Busca pessoas ligadas a UMA empresa (modo "Explorar uma empresa", prospeccao-ia): usa os campos
+ * estruturados de cargo e organização que a Apollo devolve, mais confiáveis do que extrair nome/cargo do
+ * título de um resultado de busca pública. `sobreEmpresa` é o mesmo fato construído a partir dos campos
+ * da organização (`sinalApollo`) — na ficha do workspace ele aparece como "Sobre a empresa", nunca como
+ * sinal (que exige data e fonte, regra do workspace). Lança ErroApollo em falha; quem chama engole o erro
+ * e não cai para a busca pública — mesmo padrão já usado no modo "pessoas" (Apollo é fonte única quando
+ * conectada, sem combinar com o caminho público).
+ */
+export async function buscarPessoasDaEmpresa(nomeEmpresa: string, quantidade: number): Promise<{ pessoas: PessoaDaEmpresa[]; sobreEmpresa: string | null }> {
+  let r: Response;
+  try {
+    r = await fetch("https://api.apollo.io/api/v1/mixed_people/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": getConfig("APOLLO_API_KEY") || "" },
+      body: JSON.stringify({
+        q_organization_name: nomeEmpresa,
+        person_titles: CARGOS_DECISAO_EMPRESA,
+        per_page: quantidade,
+      }),
+    });
+  } catch (err) {
+    console.error("Falha de rede ao buscar pessoas da empresa via Apollo:", err);
+    throw new ErroApollo("servico_fora", "A busca de leads não respondeu; tente de novo em um minuto.", 502);
+  }
+  if (!r.ok) {
+    throw interpretarFalhaApollo(r.status, await r.text().catch(() => ""));
+  }
+  const data = await r.json();
+  const pessoas: ApolloPessoa[] = Array.isArray(data?.people) ? data.people : [];
+  const organizacao = pessoas[0]?.organization;
+  return {
+    pessoas: pessoas.slice(0, quantidade).map((p) => ({ nome: p.name || "", cargo: p.title || null, linkedin: p.linkedin_url || null })),
+    sobreEmpresa: organizacao ? sinalApollo(organizacao) : null,
+  };
+}

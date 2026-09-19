@@ -2,14 +2,16 @@
 //
 // Regra da suíte: nenhuma mensagem na tela mostra código HTTP cru, corpo do provedor ou "fetch failed"
 // (o detalhe técnico vai só para console.error), e todo erro diz o que fazer e para onde ir.
-// `respostaErro` (lib/ai.ts, compartilhado) já faz isso para as falhas da IA; aqui ele ganha o caso de
-// antes da IA: ErroApollo (lib/leads.ts), a busca de leads recusando a chave, estourando o plano ou não
-// respondendo — sempre com a ação para o cartão "Busca de leads" de /setup.
+// `respostaErro` (lib/ai.ts, compartilhado) já faz isso para as falhas da IA; aqui ele ganha os casos de
+// antes da IA: ErroApollo (lib/leads.ts, busca de leads) e ErroDescoberta (lib/descoberta.ts, pesquisa
+// de mercado e sinais) recusando a chave, estourando o plano ou não respondendo — cada um com a ação
+// para o cartão certo de /setup.
 import { respostaErro } from "@/lib/ai";
+import { ErroDescoberta } from "@/lib/descoberta";
 import { ErroApollo } from "@/lib/leads";
 
 export function responderErro(err: unknown, mensagemGenerica: string): Response {
-  if (err instanceof ErroApollo) {
+  if (err instanceof ErroApollo || err instanceof ErroDescoberta) {
     return Response.json({ error: err.message, codigo: err.codigo, acao: err.acao }, { status: err.status });
   }
   const resposta = respostaErro(err);

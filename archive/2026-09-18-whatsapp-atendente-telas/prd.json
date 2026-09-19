@@ -1,0 +1,421 @@
+{
+  "project": "IA para Executivos (ai-action-demo) — Atendente no WhatsApp: telas de produto e primeiro app independente da suíte",
+  "branchName": "ralph/whatsapp-atendente-telas",
+  "fonte": "ai-action-demo/tasks/prd-whatsapp-atendente-telas.md — leia a história completa lá antes de implementar; o prd.json traz o resumo, a PRD traz Decisões (D1-D5), Premissas (P1-P7), Design e Technical Considerations. Atenção: os números US-039/040/041/060/061/074 citados nas histórias são da PRD anterior (tasks/prd-revisao-onboarding-erros-conta.md), e quatro referências cruzadas da PRD nova estão deslocadas em um número (o passo 3 do Assistente é a US-011, 'Relatórios anteriores' é a US-018, a classificação de assunto é a US-019); este prd.json já usa os números corretos.",
+  "description": "O Atendente no WhatsApp (whatsapp-atendente/) deixa de ser uma tela única (formulário + celular simulado + tabela de última pergunta) e passa a ter cinco: Início (painel do dia), Conversas (lista, conversa aberta, contato), Assistente (Configurar → Testar → Conectar), Relatórios (indicadores, gráfico, assuntos, exportação) e Configurações (o /setup existente, com o cartão de conexão). Conversas e mensagens passam a viver em SQLite com status (ia | atencao | humano | resolvida); a pessoa pode assumir, responder pelo número real e devolver para a IA. A conexão do número passa a ser pela z-api.io (três credenciais coladas uma vez, depois QR Code dentro do app), com a Meta Cloud API mantida em Opções avançadas. Tudo funciona em modo demonstração com nove conversas de exemplo (Mariana Costa, Carlos Menezes, Ana Paula, Ricardo Lima, Fernanda Alves, João Pedro, Luciana Ferraz, Eduardo Santos, Camila Souza). Este app é o PILOTO do modelo de app independente: a Fase 0 (US-001) faz scripts/verificar-padrao.sh comparar só a camada de infraestrutura para apps com independente: true, e a partir daí components/ui.tsx, setup.tsx, conta.tsx, lib/navegacao.ts, lib/ilustracao.ts e app/globals.css são próprios do app. Referência visual: cinco mockups de 17/09/2026 (Início, Conversas, Assistente, Relatórios, QR Code), com as simplificações registradas em Design Considerations.",
+  "regras": [
+    "PADRAO.md continua valendo fora da camada de produto: Next.js 16, Tailwind 4, React 19, node:sqlite, IA via OpenRouter por fetch direto, português sem jargão na tela (scripts/verificar-jargao.mjs), acento do segmento Atendimento #0e7c6a (scripts/verificar-paleta.mjs). Nenhuma dependência nova (leitura de DOCX fica em Open Questions; só PDF/TXT/MD).",
+    "Escopo é só whatsapp-atendente/ mais a mudança de raiz da US-001 (catalogo.json, scripts/verificar-padrao.sh, scripts/gerar-deploy.mjs, PADRAO.md). Nenhuma tela desta rodada é replicada para os outros 16 apps.",
+    "A partir da US-001, components/ui.tsx, components/setup.tsx, components/conta.tsx, lib/navegacao.ts, lib/ilustracao.ts e app/globals.css são PRÓPRIOS do app: estendê-los é permitido; a camada INFRA (lib/ai.ts, lib/store.ts, lib/conta*.ts, lib/setup-comum.ts, lib/historico.ts, lib/mcp*.ts, lib/formularios.ts, lib/notificacoes.ts, lib/email-envio.ts, lib/rotinas.ts, lib/modelos.ts, app/mcp, app/f, app/api/rotinas|setup|status|conta|historico, proxy.ts, eslint.config.mjs) continua idêntica ao pdi-time.",
+    "Modo demonstração sempre funciona: sem IA e sem número conectado, as cinco telas mostram as conversas de exemplo com o chip 'Exemplo' e um Aviso de uma frase com o link para conectar. As conversas de exemplo somem sozinhas na primeira conversa real.",
+    "Fora de 'Opções avançadas' / 'Para a equipe técnica' nenhuma tela usa as palavras webhook, token, API ou instância (exceção única: o rótulo 'Identificação da instância' dos campos de credencial). verificar-jargao.mjs passa sem exceção nova.",
+    "Toda rota nova é privada por padrão (proxy.ts não muda). A única rota pública nova é /webhook/zapi, coberta pela regra /webhook/** existente, com comentário no topo justificando a autenticação própria.",
+    "Endpoints, verbos, cabeçalho Client-Token e formatos de resposta da z-api são CONFERIDOS em https://developer.z-api.io na hora de implementar (US-005), nunca assumidos a partir da PRD; a data da conferência vai para o CLAUDE.md do app.",
+    "Gráficos são SVG desenhado à mão no componente (linha, barras), sem biblioteca, com <title> e tabela sr-only. Sem sparklines nos indicadores.",
+    "Polling em vez de WebSocket/SSE: conexão a cada 5 s (estado) e 20 s (QR), conversa aberta a cada 10 s, só enquanto document.visibilityState === 'visible'.",
+    "Textos seguem os limites do PADRAO.md: título de painel até 8 palavras, apoio até 20, uma linha de ajuda por campo. Sentence case, sem setas em botões, botões dizem o que fazem.",
+    "Cores dos chips de status: positivo (verde) para 'Atendida pela IA', warn/âmbar para 'Precisa de atenção', azul novo chip-humano (definido depois de /* Específico deste app */ no globals.css) para 'Em atendimento humano', neutro para 'Resolvida'. Verde da marca do WhatsApp só como ícone de origem (16 px), nunca como acento.",
+    "Todos os números de Início e Relatórios vêm de lib/metricas.ts (US-015), com as definições documentadas no topo do arquivo. Nada é calculado de outro jeito na tela.",
+    "Testes que precisam de servidor, de z-api falsa (http.createServer local) ou de fetch simulado ficam FORA do repositório (scratchpad), como nas rodadas anteriores. Servidor standalone com DATA_DIR em /tmp.",
+    "Nenhuma mensagem de erro na tela mostra HTTP cru, corpo do provedor ou 'fetch failed'; frases de negócio via interpretarFalhaZapi / ErroWhatsApp, detalhe técnico só em console.error."
+  ],
+  "naoFazer": [
+    "Barra lateral de navegação; 'Integrações' e 'Automações' como páginas próprias (ficam em Configurações). 'Precisa de ajuda?' e 'Quer insights mais avançados?'.",
+    "Observações, etiquetas, 'Ações rápidas', 'Histórico da conversa', 'Editar contato' no painel do contato; botão separado de 'Transferir para humano' (Assumir cobre os dois casos).",
+    "Múltiplos atendentes humanos, permissões, filtro 'Todos os atendentes': uma conta por instância.",
+    "'Leads identificados' e 'Canais de origem' nos relatórios.",
+    "Anexos, emojis, áudio, imagens, 'respostas salvas' no composer; mensagens que não sejam texto (a rota ignora e registra no log).",
+    "Modelos de mensagem, envio ativo para quem não escreveu primeiro, campanhas.",
+    "Guardar a foto de perfil do cliente (senderPhoto): avatar sempre por iniciais.",
+    "Conta z-api da StartSe com instância sob demanda; Meta Embedded Signup (OAuth da Meta). A Meta continua só como opção avançada com credenciais manuais.",
+    "Alterar lib/ferramentas.ts (MCP exposto) além do necessário para compilar.",
+    "Sparklines nos indicadores, robô mascote, abas 'Responder como IA / manualmente', os quatro filtros do topo de Conversas dos mockups.",
+    "Migração das conversas antigas em memória (sempre se perdiam ao reiniciar) e tarefa agendada para resolver conversas em 24 h (é calculado na leitura)."
+  ],
+  "verificacao": {
+    "sempre": [
+      "cd ai-action-demo/whatsapp-atendente && npx tsc --noEmit",
+      "cd ai-action-demo/whatsapp-atendente && npm run lint",
+      "cd ai-action-demo/whatsapp-atendente && npm run build",
+      "cd ai-action-demo && node scripts/verificar-jargao.mjs whatsapp-atendente",
+      "cd ai-action-demo && node scripts/verificar-paleta.mjs",
+      "cd ai-action-demo && bash scripts/verificar-padrao.sh (sai 0 para os 17 apps)"
+    ],
+    "capturas": "Toda história com tela: servidor standalone, capturas em desktop 1400x1000 e celular 390 px (via CDP Emulation.setDeviceMetricsOverride com mobile: true, conferindo document.documentElement.scrollWidth), abertas com a ferramenta Read e corrigidas até ficarem limpas; zero erro de console e nenhum selo de issue do next dev. Ver PADRAO.md, seção 'Verificação obrigatória'.",
+    "mobile": "A experiência no celular é verificada na MESMA história, nunca deixada para depois.",
+    "zapiFalsa": "A partir da US-005 existe uma z-api falsa (http.createServer local, fetch real, no scratchpad) usada em toda verificação que envolve conexão, QR Code, envio ou recebimento. Guarde o script fora do repositório e descreva no progress.txt como reproduzi-lo."
+  },
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "[Fase 0] Registrar o modelo de app independente na suíte",
+      "description": "As a mantenedor da suíte, I want que um app possa evoluir a própria camada de produto sem ser reprovado por scripts/verificar-padrao.sh so that o Atendente no WhatsApp ganhe as telas novas sem replicar nada nos outros 16 apps nem virar uma pilha de exceções.",
+      "acceptanceCriteria": [
+        "`catalogo.json`: a entrada de `whatsapp-atendente` ganha `\"independente\": true`; `scripts/gerar-deploy.mjs` aceita o campo (opcional, booleano) sem alterar o `render.yaml` gerado",
+        "`scripts/verificar-padrao.sh` divide a lista `ARQUIVOS` em `INFRA` (`lib/ai.ts`, `lib/store.ts`, `lib/conta.ts`, `lib/conta-comum.ts`, `lib/setup-comum.ts`, `lib/historico.ts`, `lib/mcp.ts`, `lib/mcp-cliente.ts`, `lib/mcp-oauth.ts`, `lib/formularios.ts`, `lib/notificacoes.ts`, `lib/email-envio.ts`, `lib/rotinas.ts`, `lib/modelos.ts`, `app/mcp`, `app/f`, `app/api/rotinas`, `app/api/setup`, `app/api/status`, `app/api/conta`, `app/api/historico`, `proxy.ts`, `eslint.config.mjs`) e `PRODUTO` (`components/ui.tsx`, `components/setup.tsx`, `components/conta.tsx`, `lib/navegacao.ts`, `lib/ilustracao.ts`, `app/globals.css`, `public/ilustracoes/icones`)",
+        "Para um app com `independente: true`, só `INFRA` e a `ESTRUTURA` (`app/conta`, `app/entrar`, `app/r/[id]`, `app/imprimir/[id]`; `app/historico/page.tsx` sai da estrutura obrigatória de um app independente) são conferidas; os demais apps continuam exatamente como hoje",
+        "A saída do script diz, por app independente, \"camada de produto própria (independente: true)\" em vez de listar divergências dessa camada",
+        "`PADRAO.md` ganha a seção \"Apps independentes\": o que pode mudar (telas, componentes, navegação, estilos depois dos tokens, `setup.tsx`), o que não pode (tudo em `INFRA`, `GET /api/health`, `GET /api/status` no formato da suíte, `/mcp`, `/f/<token>`, rotinas, conta e sessão, verificação de jargão e de paleta) e a regra de que um arquivo de produto copiado do `pdi-time` passa a ser do app a partir da data registrada no `CLAUDE.md` dele, sem obrigação de acompanhar melhorias futuras do `pdi-time` (e vice-versa)",
+        "`whatsapp-atendente/CLAUDE.md` registra a data (17/09/2026) e o commit a partir do qual `components/ui.tsx`, `components/setup.tsx`, `components/conta.tsx`, `lib/navegacao.ts`, `lib/ilustracao.ts` e `app/globals.css` são próprios do app",
+        "`bash scripts/verificar-padrao.sh` sai 0 para os 17 apps antes e depois da mudança (nenhum outro app muda de comportamento)",
+        "Typecheck passes (npx tsc --noEmit)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Feito em 17/09/2026. A camada de produto do whatsapp-atendente saiu da comparação com o pdi-time; render.yaml gerado inalterado. verificar-padrao.sh continua saindo 1 só pelo bloco == paleta == (automl-pocket sem entrada em tasks/paleta-segmentos.json e ΔE 6,84 contra este app), falha herdada dos commits do AutoML, fora do escopo desta rodada."
+    },
+    {
+      "id": "US-002",
+      "title": "[Fase 0] Navegação e esqueleto das páginas novas",
+      "description": "As a usuário, I want ver no cabeçalho os cinco lugares do app (Início, Conversas, Assistente, Relatórios, Configurações) so that eu saiba onde estou e para onde ir, mesmo antes de as telas ficarem prontas.",
+      "acceptanceCriteria": [
+        "`lib/navegacao.ts` (agora próprio do app) exporta `NAVEGACAO` com Início `/`, Conversas `/conversas`, Assistente `/assistente`, Relatórios `/relatorios`, Configurações `/setup`; \"Histórico\" sai do cabeçalho e passa a ser linkado só de Relatórios (\"Relatórios anteriores\", US-018)",
+        "Páginas `app/conversas/page.tsx`, `app/assistente/page.tsx`, `app/relatorios/page.tsx` existem, são client components, usam o mesmo `Topbar` e, até as histórias delas chegarem, mostram um `Empty` com título e a ação que leva ao que já existe (ex.: Assistente → \"/\"); nenhuma rota devolve 404",
+        "`proxy.ts` não muda: as três páginas nascem privadas (exigem sessão), como toda rota nova",
+        "O item ativo do cabeçalho reflete a rota atual nas cinco páginas (a lógica `ativo()` do `Topbar` já cobre prefixos)",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)",
+        "Verificar no navegador: cabeçalho nas cinco rotas, desktop 1400x1000 e celular 390 com o menu recolhido, capturas abertas com Read"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "[Fase 1] Conversas e mensagens em SQLite, com status",
+      "description": "As a operador do atendimento, I want que toda conversa e toda mensagem fiquem guardadas so that eu possa abrir a conversa inteira, ver o status dela e nada se perca quando o app reiniciar.",
+      "acceptanceCriteria": [
+        "Novo `lib/conversas.ts` cria em `lib/store.ts` (mesmo `app.sqlite`, `CREATE TABLE IF NOT EXISTS` na abertura, padrão de `lib/conta.ts`) as tabelas `conversas` (`numero` chave, `nome`, `origem` `simulador|whatsapp|mcp|exemplo`, `status` `ia|atencao|humano|resolvida`, `assunto` nulo até a US-019, `exemplo` 0/1, `nao_lidas`, `criado_em`, `atualizado_em`) e `mensagens` (`id`, `numero`, `papel` `cliente|atendente|humano`, `texto`, `criado_em`, `ferramenta_usada`, `tempo_resposta_ms`)",
+        "`lib/atendente.ts` deixa de usar o `Map` em memória: `responder()` lê o histórico (últimas 20 mensagens) e grava pergunta e resposta em `lib/conversas.ts`; `tempo_resposta_ms` é a diferença entre a mensagem do cliente e a resposta gravada",
+        "Regras de status: conversa nova ou respondida pela IA → `ia`; IA terminou com o marcador de transferência → `atencao`; assumida por uma pessoa → `humano` (a IA NÃO responde mensagens de um número em `humano`, só grava e soma `nao_lidas`); \"Devolver para a IA\" → `ia`; \"Marcar como resolvida\" → `resolvida`; conversa `ia` sem mensagem do cliente há mais de 24 h é lida como `resolvida` (calculado na leitura, não por tarefa agendada); `atencao` nunca resolve sozinha; mensagem nova do cliente numa `resolvida` reabre como `ia`",
+        "Funções: `listarConversas({ periodo?, status?, busca? })`, `obterConversa(numero)` (com mensagens), `assumir(numero)`, `devolver(numero)`, `resolver(numero)`, `registrarMensagemHumana(numero, texto)`, `apagarConversa(numero)`; `perguntasPendentes()` (relatório diário) passa a ler o banco e a contar frequência de verdade (a aproximação por última pergunta da US-060 da PRD anterior deixa de existir)",
+        "`CanalOrigem` ganha `\"exemplo\"` e `rotuloOrigem()` devolve \"Exemplo\" para ele; nenhum ternário novo por origem",
+        "`POST /api/simular` deixa de gravar um snapshot da lista de conversas no histórico a cada mensagem; `app/r/[id]` continua abrindo registros antigos do tipo `atendimento` e os relatórios diários",
+        "Testes com `curl` num servidor standalone e `DATA_DIR` em /tmp: simular três mensagens de dois números, reiniciar o servidor, conferir que `GET /api/conversas` devolve as duas conversas com as mensagens; transferência vira `atencao`; assumir e mandar nova mensagem do cliente não gera resposta da IA e soma `nao_lidas`",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "[Fase 1] Conversas de exemplo no modo demonstração",
+      "description": "As a executivo avaliando o app, I want ver as telas cheias de conversas plausíveis mesmo sem conectar nada so that eu entenda o que o app faz antes de decidir conectar o número.",
+      "acceptanceCriteria": [
+        "`lib/demo.ts` ganha `conversasExemplo()`: nove conversas com os nomes e mensagens dos mockups (Mariana Costa, Carlos Menezes, Ana Paula, Ricardo Lima, Fernanda Alves, João Pedro, Luciana Ferraz, Eduardo Santos, Camila Souza), cada uma com 2 a 6 mensagens (cliente e atendente), horários espalhados nos últimos 7 dias relativos a \"agora\", status variados (seis `ia`, duas `atencao`, uma `humano`, e \"Obrigado pelo atendimento!\" como `resolvida`), `assunto` já preenchido (Agendamentos, Preços, Tratamentos, Horário de atendimento, Outros) e `exemplo = 1`",
+        "Na primeira leitura de `GET /api/conversas` com a tabela vazia e sem número conectado, as conversas de exemplo são gravadas no banco (uma vez); com número conectado e tabela vazia, nada é gravado",
+        "Quando a primeira mensagem real de WhatsApp chega (`origem: \"whatsapp\"`), todas as conversas com `exemplo = 1` são apagadas, e o fato é registrado no log",
+        "Toda tela que lista conversas mostra o chip \"Exemplo\" nas de exemplo e, quando só existem conversas de exemplo, um `Aviso` de uma frase: \"Você está vendo conversas de exemplo. Conecte o número da empresa para ver as reais.\" com a ação para `/setup#whatsapp`",
+        "Ações nas conversas de exemplo funcionam localmente (assumir, responder, resolver) sem tentar enviar nada para fora; uma resposta humana numa conversa de exemplo aparece na conversa como qualquer outra",
+        "Configurações ganha, no cartão do WhatsApp, o link \"Apagar as conversas de exemplo\" (com confirmação via `useConfirmacao`), que recria o estado inicial vazio",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "[Fase 2] Cliente da z-api (lib/zapi.ts) e despacho de provedor",
+      "description": "As a app, I want falar com a instância da z-api da empresa so that eu consiga mostrar o QR Code, saber se o número está conectado e mandar mensagens pelo número real.",
+      "acceptanceCriteria": [
+        "ANTES de escrever código: conferir em https://developer.z-api.io os endpoints `status`, `qr-code/image`, `send-text`, `disconnect`, `restore-session`, `update-webhook-*`, o cabeçalho `Client-Token`, verbos e formatos de resposta; registrar no `CLAUDE.md` do app a data da conferência e a versão da documentação lida",
+        "`lib/integracoes.ts`: a integração `whatsapp` passa a ter como campos principais `ZAPI_INSTANCE_ID` (rótulo \"Identificação da instância\"), `ZAPI_TOKEN` (\"Chave da instância\", `secret`) e `ZAPI_CLIENT_TOKEN` (\"Chave de segurança da conta\", `secret`), cada um com uma linha de ajuda dizendo onde copiar no painel da z-api; `link` aponta para https://app.z-api.io com o rótulo \"Abrir o painel da z-api\"; `notaConexao` explica em duas frases que a empresa precisa de conta e instância na z-api (plano por instância, cobrado por eles) e que depois disso a conexão é escanear um QR Code aqui",
+        "Os campos da Meta (`WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`) continuam na mesma integração com `avancado: true`, sob o texto \"Já usa a WhatsApp Cloud API da Meta? Preencha aqui e deixe os campos da z-api em branco.\"",
+        "Novo `lib/zapi.ts` com `credenciais()` (três valores por `getConfig`), `statusInstancia()` → `{ conectado, celularConectado, erro? }`, `qrCode()` → data URL da imagem (ou `null` quando já conectado), `enviarTexto(para, texto)`, `desconectar()`, `reiniciarSessao()`, `configurarWebhooks(urlBase)` (registra na instância os avisos de mensagem recebida, conectado e desconectado apontando para `/webhook/zapi?chave=...`, rota da US-006) e `interpretarFalhaZapi(status, corpo)` no formato de `interpretarFalhaMeta`, com frases de negócio: credenciais erradas → \"A z-api não reconheceu a identificação ou as chaves da instância. Confira os três valores em Configurações.\"; instância sem sessão → \"O número ainda não está conectado. Escaneie o QR Code em Configurações.\"; limite → \"A z-api está limitando o envio agora. Espere um minuto.\"; indisponível → \"A z-api não está respondendo agora.\"",
+        "`lib/whatsapp.ts` vira o despachante: `provedorAtivo()` devolve `\"zapi\"` quando os três campos da z-api existem, `\"meta\"` quando só os da Meta existem, `null` quando nenhum; `enviarMensagem()` chama o provedor ativo; `ErroWhatsApp` e os códigos continuam, com os códigos novos da z-api somados ao tipo; `conferirNumero()` (\"Testar conexão\") chama `statusInstancia()` para a z-api e mantém o teste da Meta",
+        "`PUT /api/setup` com os três campos da z-api preenchidos dispara `configurarWebhooks(baseUrl(req))` logo depois de salvar; se falhar, o erro vira um `Aviso` no cartão dizendo que a equipe técnica pode cadastrar o endereço à mão (exibido em \"Para a equipe técnica\", US-007); a pessoa nunca precisa saber que webhooks existem no caminho feliz",
+        "`GET /api/status` informa `integrations.whatsapp` como \"número conectado de verdade\" (`statusInstancia().conectado` quando o provedor é z-api; credenciais presentes quando é Meta), com cache de 30 s",
+        "Testado com um servidor HTTP descartável que imita a z-api (`http.createServer` local e `fetch` real, no scratchpad, mesma técnica da US-074 da PRD anterior), cobrindo status conectado/desconectado, QR Code, envio com sucesso, 401 de credencial e 5xx",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "[Fase 2] Receber mensagens da z-api (/webhook/zapi)",
+      "description": "As a cliente da empresa, I want que a mensagem que eu mando pelo WhatsApp chegue ao atendente e seja respondida so that a conexão por QR Code sirva para atender de verdade.",
+      "acceptanceCriteria": [
+        "Nova rota `app/webhook/zapi/route.ts` (`POST`), pública em `proxy.ts` pela regra `/webhook/**` já existente (proxy.ts não muda), com comentário no topo justificando a autenticação própria",
+        "Autenticação: a URL registrada na z-api leva `?chave=<WHATSAPP_WEBHOOK_CHAVE>` (32 bytes aleatórios gerados e persistidos pelo mesmo padrão de `verifyTokenWhatsApp()`); a rota compara com `crypto.timingSafeEqual` depois de conferir o tamanho e devolve 401 sem chave ou com chave errada; exige que o `instanceId` do corpo seja igual ao salvo, senão 403; os dois casos vão para o log, nunca para a resposta",
+        "Trata três tipos de aviso: mensagem recebida (só texto, ignorando `fromMe` e grupos; chama `registrarRecebida`, `responder({ origem: \"whatsapp\", nome: senderName })` e `enviarMensagem`, exatamente como o webhook da Meta faz hoje, inclusive `registrarFalhaEnvio` no `catch`), conectado e desconectado (gravam `WHATSAPP_CONEXAO` `{ conectado, em, numero?, nome? }` via `setConfig`)",
+        "`responder()` aceita `nome?: string` e grava em `conversas.nome` na primeira vez que ele chega (nunca sobrescreve um nome salvo por um vazio); a foto do remetente NÃO é guardada",
+        "Responde 200 imediatamente e processa depois, como a rota da Meta",
+        "Novo `lib/telefone.ts` com `formatarTelefone(\"5511987654321\")` → `+55 11 98765-4321` (e o número cru de volta quando não reconhece o formato), a ser usado em toda tela que mostra um número",
+        "Testado com `curl` no servidor standalone: aviso válido gera resposta (com a z-api falsa da US-005 recebendo o `send-text`), chave errada dá 401, `instanceId` diferente dá 403, `fromMe: true` é ignorado",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "[Fase 2] Cartão \"Conectar o WhatsApp\" com QR Code e status ao vivo",
+      "description": "As a dona do negócio, I want conectar o número da empresa escaneando um QR Code so that eu não precise de ninguém técnico para o atendente começar a responder meus clientes.",
+      "acceptanceCriteria": [
+        "Novo `components/ConexaoWhatsApp.tsx` (client component, próprio do app), registrado em `app/setup/page.tsx` no lugar de `WebhookWhatsApp` (e reutilizado no passo 3 do Assistente, US-011). Lê `GET /api/whatsapp/conexao` (nova rota privada: `{ provedor, estado, numero?, nome?, desde?, qr?, mensagem? }`) e mostra um de quatro estados",
+        "Estado 'sem credenciais': passo a passo de três passos com capturas do painel da z-api em `public/ajuda/zapi-*.png` (recortadas ao essencial, sem dados reais de conta): 1. Crie a conta e uma instância em app.z-api.io; 2. Copie os três valores da instância; 3. Cole aqui e clique em \"Salvar e conectar\"; mais os três campos da integração; \"Salvar e conectar\" salva pelo `PUT /api/setup` e passa ao estado seguinte",
+        "Estado 'aguardando QR Code': imagem do QR recarregada a cada 20 s (frase \"O código muda a cada 20 segundos\") e a instrução em três linhas \"No celular da empresa, abra o WhatsApp › Dispositivos conectados › Conectar dispositivo e aponte a câmera para este código.\"; a tela consulta o estado a cada 5 s e muda sozinha para 'conectado'",
+        "Estado 'conectado': chip verde \"Conectado\", número formatado (`formatarTelefone`) e nome do perfil, \"desde <data e hora>\", última mensagem recebida (reaproveitando `ultimaRecebida()`), botão \"Desconectar\" (confirmação: \"O atendente vai parar de responder clientes até você conectar de novo.\") e o link \"Apagar as conversas de exemplo\" (US-004) quando ainda houver alguma",
+        "Estado 'problema': `Aviso` vermelho com a frase de `interpretarFalhaZapi` e a ação \"Revisar os valores\" que abre os campos",
+        "O que era `WebhookWhatsApp.tsx` (endereço e valor de verificação da Meta, diagnóstico \"As mensagens estão chegando?\") passa para dentro de `MaisDetalhes titulo=\"Para a equipe técnica\"` no fim do cartão, acrescido do endereço de avisos da z-api com a chave (para cadastro manual quando `configurarWebhooks` falhou); o `MaisDetalhes` genérico de mesmo nome do rodapé é removido do `/setup` deste app (`components/setup.tsx` agora é próprio do app)",
+        "Nada fora de \"Para a equipe técnica\" usa as palavras webhook, token, API, instância (exceto o rótulo \"Identificação da instância\"); `node scripts/verificar-jargao.mjs whatsapp-atendente` passa sem exceção nova",
+        "Verificado com a z-api falsa da US-005: os quatro estados aparecem, o QR troca de imagem, a transição para 'conectado' acontece sem recarregar a página, \"Desconectar\" volta para 'aguardando QR Code'",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)",
+        "Verificar no navegador: os quatro estados em desktop 1400x1000 e celular 390, capturas abertas com Read"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Imagens de public/ajuda/zapi-*.png são desenhos esquemáticos do painel (não há conta na z-api neste ambiente); o MaisDetalhes genérico do rodapé foi RENOMEADO para \"Ajustes do servidor\" em vez de apagado, para não perder o campo do endereço público do app."
+    },
+    {
+      "id": "US-008",
+      "title": "[Fase 3] Modelo de configuração do atendente (objetivo, tom, migração)",
+      "description": "As a dona do negócio, I want dizer o que o atendente deve fazer e como deve falar em escolhas simples so that eu não precise escrever instruções.",
+      "acceptanceCriteria": [
+        "`Config` (`lib/types.ts`) ganha `objetivo: \"atendimento\" | \"vendas\" | \"agendamentos\" | \"outro\"`, `objetivoTexto?: string` (só quando `outro`) e `tomTexto?: string` (só quando `tom === \"personalizado\"`); `Tom` passa a ser `\"profissional\" | \"amigavel\" | \"personalizado\"`",
+        "Migração ao ler (`lib/estado.ts:getConfig`): `direto` → `profissional`, `cordial` → `amigavel`, `descontraido` → `personalizado` com `tomTexto: \"descontraído e simpático, próximo, mas sempre profissional\"`; configuração sem `objetivo` → `atendimento`; nenhum registro antigo quebra",
+        "`montarSystemPrompt()` (`lib/atendente.ts`) incorpora o objetivo em uma frase cada: atendimento (\"tirar dúvidas e informar\"), vendas (\"entender a necessidade, apresentar a opção certa e convidar a fechar\"), agendamentos (\"coletar dia e horário preferidos e confirmar que uma pessoa vai marcar\"), outro (o texto da pessoa); `descricaoTom()` cobre os três tons, com `tomTexto` para o personalizado",
+        "`configExemplo` (`lib/demo.ts`) vira a Sorriso Pleno Odontologia dos mockups (atendente Bia, objetivo atendimento, tom profissional, texto \"O que ele precisa saber?\" do mockup mais os preços e horários que o simulador já usa nas sugestões)",
+        "`PUT /api/config` valida os valores novos (400 com mensagem para objetivo ou tom desconhecido; `objetivoTexto` obrigatório quando `outro`)",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "[Fase 3] Passo 1 do Assistente, \"Configurar\", com prévia do celular",
+      "description": "As a dona do negócio, I want preencher quem é o meu atendente numa tela só, vendo ao lado como ele vai aparecer para o cliente so that criar o atendente pareça montar um perfil, não configurar um sistema.",
+      "acceptanceCriteria": [
+        "`app/assistente/page.tsx` mostra no topo o indicador `Passos` com \"1 Configurar · Defina quem é o seu agente\", \"2 Testar · Veja como ele responde\", \"3 Conectar · Conecte seu WhatsApp\"; o passo atual vem de `?passo=1|2|3` (padrão 1) e os passos concluídos são clicáveis",
+        "Título \"Vamos criar seu atendente de IA?\" e apoio \"Em poucos minutos você terá um atendente pronto para atender seus clientes no WhatsApp.\"",
+        "Formulário do passo 1, nesta ordem: Nome do atendente e Nome da empresa (lado a lado no desktop); \"O que ele deve fazer?\" como quatro cartões selecionáveis (Atendimento · Tira dúvidas e informa; Vendas · Converte clientes; Agendamentos · Marca horários; Outro · Personalizado, que abre um campo de uma linha); \"O que ele precisa saber?\" (`textarea` com contador `n/12000`, placeholder com o texto da clínica do mockup) e logo abaixo o `Dropzone` \"Adicionar arquivo (opcional) · PDF, TXT (até 10 MB)\", que continua chamando `POST /api/base/arquivo` e ACRESCENTA o texto extraído ao campo; \"Tom de resposta\" como três cartões (Profissional · Clara e objetiva; Amigável · Próxima e acolhedora; Personalizado · Definir estilo próprio, que abre um campo de uma linha)",
+        "Os campos que o mockup não mostra ficam em `MaisDetalhes titulo=\"Quando ele não souber responder\"`: a regra `naoSei` (três opções) e o horário de atendimento humano",
+        "Coluna direita (desktop; abaixo do formulário no celular): cartão \"Seu atendente, do seu jeito\" com o `Celular` em modo prévia, estático, mostrando a saudação \"Olá! Eu sou a {atendente} da {empresa}. Como posso ajudar?\" e uma pergunta de cliente da lista `SUGESTOES`, com o nome no topo do celular atualizando enquanto a pessoa digita; abaixo, a `Dica`: \"Você pode testar diferentes mensagens no próximo passo para ajustar as respostas do seu atendente.\"",
+        "Rodapé do formulário: link \"Salvar e sair\" (salva e vai para `/`) e botão primário \"Continuar para teste\" (salva via `PUT /api/config` e vai para `?passo=2`); ambos desabilitados enquanto salva; erro de validação aparece como `ErrorBox` acima dos botões",
+        "A barra fixa \"Alterações não salvas\" e o truque do `configRef` (US-039 da PRD anterior) deixam de existir: o simulador do passo 2 testa a configuração salva, porque \"Continuar\" salva antes",
+        "`?exemplo=1` em `/assistente` preenche com `configExemplo` e segue para o passo 2 enviando a primeira sugestão (mesmo mecanismo de `autoEnviado`, sem `clearTimeout`, ver `PADRAO.md`)",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)",
+        "Verificar no navegador: desktop 1400x1000 e celular 390; cartões selecionados com borda no acento; contador; prévia atualizando enquanto digita; capturas abertas com Read"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "[Fase 3] Passo 2 do Assistente, \"Testar\"",
+      "description": "As a dona do negócio, I want conversar com o meu atendente como se eu fosse um cliente so that eu ajuste o que ele sabe antes de colocá-lo no número da empresa.",
+      "acceptanceCriteria": [
+        "`?passo=2` mostra o `Celular` interativo (o simulador de hoje, com bolhas, \"digitando...\", `AcoesResposta` Aprovar/Corrigir por resposta, \"Consultado em {ferramenta}\") centralizado e, ao lado no desktop, um cartão \"O que testar\" com as três sugestões clicáveis e a frase \"Não gostou de uma resposta? Clique em Corrigir e a resposta certa entra na base do atendente.\"",
+        "Botões do passo: \"Voltar e ajustar\" (`?passo=1`) e primário \"Continuar para conectar\" (`?passo=3`); link \"Limpar a conversa de teste\" apaga a conversa `simulador` (`DELETE /api/conversas/simulador`, já existe)",
+        "O simulador grava na conversa `simulador` do banco (US-003), então ela aparece em Conversas com o rótulo \"Simulador\"",
+        "`MaisDetalhes titulo=\"Respostas aprovadas pela equipe\"` (a base da US-041 da PRD anterior, com a lista e o link do formulário de sugestões da US-061) fica abaixo do celular neste passo",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)",
+        "Verificar no navegador: desktop 1400x1000 e celular 390; o fluxo `?exemplo=1` chega aqui com a primeira resposta na tela; capturas abertas com Read"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "[Fase 3] Passo 3 do Assistente, \"Conectar\", e aposentadoria da tela antiga",
+      "description": "As a dona do negócio, I want que o último passo de criar o atendente seja conectar o número so that eu termine o fluxo com o atendente funcionando, não com um link para outra tela.",
+      "acceptanceCriteria": [
+        "`?passo=3` renderiza `ConexaoWhatsApp` (US-007) com o mesmo comportamento de Configurações, com título \"Conecte seu WhatsApp\" e apoio \"Escaneie o código com o celular da empresa e o atendente começa a responder.\"",
+        "Quando o estado é 'conectado', aparece o cartão \"Tudo pronto\" com o botão \"Ir para o Início\" e a frase \"A {atendente} já está respondendo no número {número}.\"",
+        "Um link discreto \"Fazer isso depois\" leva ao Início sem conectar (o Início mostra o que falta, US-016)",
+        "O antigo `app/page.tsx` (formulário + celular + conversas recebidas) é removido; o que restava dele e ainda vale (`ConteudoConversas` para `/r/[id]` de registros antigos, `ConteudoRelatorio` do relatório diário e o cartão \"Conversa selecionada\" de `?atender=`) passa para `components/Resultado.tsx`; `?atender=<numero>` passa a abrir `/conversas?numero=<numero>` (US-013) por um redirect em `/` que preserva a querystring, para os links dos relatórios já gerados continuarem funcionando; até a US-016, `/` mostra um `Empty` provisório com a ação para `/assistente`",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)",
+        "Verificar no navegador: desktop 1400x1000 e celular 390; caminho completo passo 1 → 2 → 3 em modo demonstração, com a z-api falsa da US-005 levando até \"Tudo pronto\"; capturas abertas com Read"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "[Fase 4] Lista de conversas com abas, período e busca",
+      "description": "As a operador do atendimento, I want ver todas as conversas em uma lista com o status de cada uma so that eu encontre em segundos as que precisam de mim.",
+      "acceptanceCriteria": [
+        "`/conversas`: título \"Conversas\", apoio \"Acompanhe os atendimentos, veja como seu atendente está se saindo e intervenha quando necessário.\"; à direita do título, seletor de período (Hoje · Últimos 7 dias · Últimos 30 dias · Tudo, padrão \"Últimos 7 dias\") e campo de busca (nome, número ou trecho da mensagem), refletidos em `?periodo=&q=`",
+        "Abas com contadores: Todas · Em atendimento (status `humano`) · Precisa de atenção (status `atencao`); a aba vem de `?aba=`",
+        "Cada linha: avatar por iniciais em círculo no acento suave (sem foto), nome (ou número formatado quando não há nome), hora (hoje) ou dia e mês, primeira linha da última mensagem com reticências, chip de status (Atendida pela IA · verde; Precisa de atenção · âmbar; Em atendimento humano · azul `chip-humano`; Resolvida · cinza) e o ícone da origem (WhatsApp, Simulador, Exemplo), sem rótulo textual da origem",
+        "Contador de não lidas como número no acento quando `nao_lidas > 0`; o item \"Conversas\" do cabeçalho ganha o mesmo contador com o total de conversas em `atencao` (acrescentar `contador?: number` a `ItemNavegacao` em `lib/navegacao.ts`, arquivo próprio do app, e renderizar no `Topbar`)",
+        "Estado vazio: `Empty` com a `IlustracaoConversa` e a ação \"Testar com uma pergunta\" que leva a `/assistente?passo=2`",
+        "`GET /api/conversas` aceita `periodo`, `status`, `q` e devolve `{ itens, contadores: { todas, humano, atencao } }`; a linha selecionada vem de `?numero=`",
+        "Layout desktop em três colunas (lista 360 px · conversa flexível · contato 300 px), com as colunas central e direita ainda vazias/placeholder até as US-013 e US-014; no celular, a lista ocupa a tela e escolher uma conversa abre a conversa com botão \"Voltar\"",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)",
+        "Verificar no navegador: desktop 1400x1000 e celular 390; abas, busca e período alterando a lista sem recarregar; capturas abertas com Read"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "[Fase 4] Conversa aberta: assumir, responder e devolver",
+      "description": "As a operador do atendimento, I want ler a conversa inteira e, quando precisar, responder eu mesmo pelo número da empresa so that nenhum cliente fique sem resposta quando a IA não soube.",
+      "acceptanceCriteria": [
+        "Coluna central de `/conversas`: cabeçalho com avatar, nome, número formatado e ícone da origem; bolhas do cliente à esquerda e do atendente à direita, com hora; bolhas da IA levam o rótulo \"{atendente} · Assistente de IA\" e as `AcoesResposta` (Aprovar/Corrigir); bolhas de uma pessoa levam \"Você\"",
+        "Faixa \"Intervir na conversa · O atendente passou esta conversa para uma pessoa.\" em âmbar, com o botão \"Assumir atendimento\", quando o status é `atencao`; nos demais status o botão \"Assumir atendimento\" fica no cabeçalho",
+        "Composer: enquanto a conversa não está em `humano`, campo desabilitado com a frase \"Assuma o atendimento para responder\"; em `humano`, `textarea` de uma linha que cresce, botão primário \"Enviar\" (Enter envia, Shift+Enter quebra linha) e os links \"Devolver para a IA\" e \"Marcar como resolvida\"",
+        "Rotas `POST /api/conversas/[numero]/assumir`, `/devolver`, `/resolver` e `POST /api/conversas/[numero]/mensagens` `{ texto }`: a mensagem humana é gravada com `papel: \"humano\"` e, quando a origem é `whatsapp`, enviada por `enviarMensagem()`; falha de envio vira `ErrorBox` com a frase de `ErroWhatsApp` e a ação para `/setup#whatsapp`, e a mensagem fica marcada com `erro` na bolha (mesmo estado visual do simulador); em `simulador`/`exemplo`/`mcp` nada é enviado para fora; cada ação devolve a conversa atualizada",
+        "Abrir a conversa zera `nao_lidas`; a lista à esquerda reflete status e última mensagem sem recarregar",
+        "A conversa recarrega sozinha a cada 10 s enquanto a aba está visível (`document.visibilityState`)",
+        "Quem chega por `/conversas?numero=X` (links do relatório diário e do Início) vê essa conversa aberta e rolada até o fim; `&corrigir=1` abre a última resposta da IA já em modo \"corrigindo\" (substitui o cartão \"Conversa selecionada\" da US-060 da PRD anterior)",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)",
+        "Verificar no navegador: desktop 1400x1000 e celular 390; assumir → enviar → devolver, com a z-api falsa recebendo o envio numa conversa `whatsapp` de teste; capturas abertas com Read"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "[Fase 4] Painel do contato",
+      "description": "As a operador do atendimento, I want ver quem é o cliente e o resumo da relação dele com a empresa ao lado da conversa so that eu não precise procurar isso em outro lugar.",
+      "acceptanceCriteria": [
+        "Coluna direita de `/conversas` (desktop) com o cartão \"Informações do contato\": avatar por iniciais, nome, número formatado, chips de status e origem; lista rotulada com Nome, Telefone, Origem (WhatsApp/Simulador/Exemplo), Primeiro contato (data e hora), Última mensagem, Total de mensagens e \"Respostas aprovadas nesta conversa\" (contagem de pares da base que vieram dela, se a base registrar a origem; senão, omitir a linha)",
+        "Ações do cartão: \"Marcar como resolvida\" (quando não resolvida) e \"Apagar conversa\" (com confirmação, `DELETE /api/conversas/[numero]`, já existente); para a conversa `simulador`, o rótulo é \"Apagar conversa de teste\"",
+        "Abaixo de 1100 px e no celular, o painel vira um `MaisDetalhes titulo=\"Sobre o contato\"` acima das bolhas",
+        "Sem \"Editar\", \"Observações\", \"Etiquetas\", \"Ações rápidas\" e \"Histórico da conversa\" do mockup",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)",
+        "Verificar no navegador: desktop 1400x1000 e celular 390; capturas abertas com Read"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "[Fase 5] Métricas do período (lib/metricas.ts e GET /api/metricas)",
+      "description": "As a app, I want calcular os números do atendimento para qualquer período so that Início e Relatórios usem a mesma fonte e nunca discordem.",
+      "acceptanceCriteria": [
+        "Novo `lib/metricas.ts` com `calcular(periodo: \"hoje\" | \"7d\" | \"30d\")` → `{ conversas, resolvidasIA, passadasPessoa, tempoMedioMs, variacao: { conversas, resolvidasIA, passadasPessoa, tempoMedioMs } (percentuais em relação ao período imediatamente anterior de mesmo tamanho, null quando o anterior é zero), porDia: [{ dia, conversas, resolvidasIA }], assuntos: [{ assunto, total }], atencao: Conversa[] }`, calculado por consulta SQL a cada chamada (sem cache)",
+        "Definições documentadas no topo do arquivo: \"conversa no período\" = teve pelo menos uma mensagem do cliente no período; \"resolvida pela IA\" = status `ia` ou `resolvida` sem nenhuma mensagem `humano`; \"passada para uma pessoa\" = teve status `atencao` ou `humano` em algum momento (coluna nova `passou_por_pessoa` 0/1 na tabela `conversas`, marcada ao mudar de status); \"tempo médio de resposta\" = média de `tempo_resposta_ms` das mensagens do atendente (IA e humano) no período",
+        "`GET /api/metricas?periodo=` (privada) devolve isso; `porDia` cobre todos os dias do período (zeros incluídos), para o gráfico não ter buracos",
+        "Testado por `curl` com as conversas de exemplo (US-004): números coerentes com o que foi semeado",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "[Fase 5] Tela de Início",
+      "description": "As a dona do negócio, I want abrir o app e saber em cinco segundos se está tudo bem e o que precisa de mim so that eu não precise abrir cada conversa para descobrir.",
+      "acceptanceCriteria": [
+        "`/` mostra a data por extenso (\"Quarta-feira, 17 de setembro\"), \"Bom dia/Boa tarde/Boa noite, {primeiro nome}!\" (nome vem de `status.usuario`) e uma frase de situação por regra: número conectado → \"A {atendente} está atendendo seus clientes no WhatsApp.\"; sem número → \"A {atendente} está pronta. Falta conectar o número da empresa.\"; sem IA e sem número → \"Você está vendo uma demonstração com dados de exemplo.\"",
+        "Cartão de situação à direita do título com a `IlustracaoSegmento` do app e uma de três frases: \"Tudo certo por aqui\" (nada em `atencao`, número conectado), \"{n} conversas precisam de você\" (link para `/conversas?aba=atencao`), \"Falta conectar o WhatsApp\" (link para `/assistente?passo=3`)",
+        "Quatro indicadores de hoje via `GET /api/metricas?periodo=hoje`: Conversas hoje, Resolvidas pela IA, Passadas para uma pessoa, Tempo médio de resposta (em segundos ou \"min\" quando ≥ 60 s), cada um com a variação em relação a ontem (\"↑ 12%\" verde, \"↓ 8%\" vermelho; para tempo de resposta, cair é verde), usando `Destaque` de `ui.tsx` estendido com `variacao`",
+        "Quatro cartões de ação: \"Ver conversas · Acompanhe e intervenha quando necessário\" (destacado no acento, `/conversas`), \"Editar atendente · Ajuste informações, comportamento e respostas\" (`/assistente`), \"Adicionar conhecimento · Envie arquivos ou textos\" (`/assistente#conhecimento`, âncora no campo), e o quarto muda com o estado: \"Conectar o WhatsApp · Escaneie o QR Code\" (`/assistente?passo=3`) sem número, senão \"Configurações · Integrações e relatório diário\" (`/setup`)",
+        "\"Conversas recentes\": as cinco últimas em uma `DataTable` (Cliente com avatar de iniciais, Última mensagem, Status como chip, Horário relativo \"Há 3 min\"/\"Há 1 hora\"/\"Ontem\"), cada linha levando a `/conversas?numero=`, e o link \"Ver todas\"",
+        "Coluna direita: cartão \"Seu atendente\" (avatar com a inicial, nome, chip \"Online\" quando o número está conectado ou \"Só no simulador\" quando não, \"Atendimento da {empresa}\", botão \"Editar\") e o cartão \"Mais resultados para seu negócio · Veja como a IA está atendendo\" com \"Ver relatórios\" (`/relatorios`)",
+        "O `Aviso` de conversas de exemplo (US-004) aparece acima da tabela quando só há exemplos; o redirect de `?atender=` da US-011 continua funcionando",
+        "`?exemplo=1&captura=1` (usado pelo workflow de publicação para a prévia do catálogo) mostra o Início cheio com as conversas de exemplo, sem rolagem automática",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)",
+        "Verificar no navegador: desktop 1400x1000 e celular 390; os três estados da frase de situação; capturas abertas com Read"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "[Fase 6] Tela de Relatórios com indicadores e gráfico",
+      "description": "As a dona do negócio, I want ver em um lugar se a IA está resolvendo e quanto so that eu decida com números se vale manter e expandir o atendente.",
+      "acceptanceCriteria": [
+        "`/relatorios`: sobretítulo \"Relatórios\", título \"Desempenho do seu atendente\", apoio \"Acompanhe como seu atendente está atendendo e resolvendo dúvidas.\"; à direita, seletor de período (Hoje · Últimos 7 dias · Últimos 30 dias, padrão 7 dias, em `?periodo=`) e o botão \"Exportar\" (comportamento na US-018; aqui pode ficar desabilitado ou ausente)",
+        "Quatro indicadores do período com \"vs. período anterior\" (mesmo `Destaque` com `variacao` da US-016)",
+        "Cartão \"Conversas ao longo do tempo\": gráfico de linhas em SVG inline (`components/GraficoLinhas.tsx`, próprio do app, sem biblioteca) com duas séries (Total de conversas no acento; Resolvidas pela IA no acento a 50% de opacidade), área preenchida suave sob a linha principal, pontos, eixo de dias abreviados (\"10 set\") e legenda; escala linear, `viewBox` fixo, `preserveAspectRatio=\"none\"` só no fundo; acessível com `<title>` e tabela oculta (`sr-only`) com os mesmos números; sem animação além do `reveal`",
+        "Cartão \"Principais assuntos\": barras horizontais em SVG/CSS com rótulo e total, ordenadas, no máximo cinco (as demais somadas em \"Outros\"); enquanto a US-019 não existir, mostra \"Sem classificação ainda\" para conversas reais e os assuntos semeados nos exemplos",
+        "Cartão \"Conversas que precisam de atenção\": até cinco conversas em `atencao`, com avatar, nome, trecho, hora e chip \"Aguardando\", cada uma levando a `/conversas?numero=`; link \"Ver todas\" para `/conversas?aba=atencao`; estado vazio \"Nenhuma conversa aguardando. A IA está dando conta.\"",
+        "Sem \"Canais de origem\" e sem \"Quer insights mais avançados?\"",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)",
+        "Verificar no navegador: desktop 1400x1000 e celular 390; os três períodos; o gráfico com o conjunto de exemplo e com um único dia de dados; capturas abertas com Read"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "[Fase 6] Exportar e relatório diário a partir da tela",
+      "description": "As a dona do negócio, I want levar os números para uma planilha e receber o relatório por e-mail so that eu compartilhe o desempenho com a equipe sem entrar no app todo dia.",
+      "acceptanceCriteria": [
+        "\"Exportar\" abre um menu com \"Baixar planilha (CSV)\" e \"Copiar resumo\": o CSV (`GET /api/metricas/exportar?periodo=`, privada) tem uma linha por conversa do período (nome, número, origem, status, assunto, primeira mensagem, última mensagem, total de mensagens, resolvida pela IA sim/não, tempo médio de resposta) em UTF-8 com BOM para o Excel abrir com acentos; \"Copiar resumo\" usa `Entregar` com os quatro números e os assuntos em texto",
+        "Cartão \"Receber o relatório diário por e-mail\" no rodapé de Relatórios, reaproveitando o fluxo da US-060 da PRD anterior (botão que cria a rotina `relatorio-atendimento` às 8h com o destino de `NOTIFICACOES_DESTINO`; quando as notificações não estão configuradas, o cartão leva a `/setup#notificacoes`)",
+        "Link \"Relatórios anteriores\" para `/historico` (que continua existindo e listando os relatórios diários salvos; é o único lugar de onde se chega a ele)",
+        "`ConteudoRelatorio` (relatório diário em `/r/[id]`) ganha, no topo, o link \"Ver o painel completo\" para `/relatorios?periodo=7d`, e os links \"Aprovar\"/\"Corrigir\" passam a apontar para `/conversas?numero=X` e `/conversas?numero=X&corrigir=1` (US-013)",
+        "Testado: o CSV abre no Numbers/Excel com acentos corretos (ou, sem app de planilha, conferir o BOM `EF BB BF` e o conteúdo com `xxd`/`python3 csv`); `curl` do CSV com período sem conversas devolve só o cabeçalho",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)",
+        "Verificar no navegador: desktop 1400x1000 e celular 390; menu Exportar e cartão do relatório diário; capturas abertas com Read"
+      ],
+      "priority": 18,
+      "passes": true,
+      "notes": "Planilha em UTF-8 com marca de ordem de bytes e separador ponto e vírgula (Excel pt-BR); as colunas \"primeira/última mensagem\" são as DATAS da conversa, e cada linha descreve a conversa inteira, não só a fatia dentro do período. O agendamento do relatório diário ganhou rota própria (GET/POST /api/relatorio-diario), porque app/api/rotinas é INFRA e a tela precisa saber antes do clique se as notificações conseguem sair. \"Copiar resumo\" reaproveita a mecânica de Entregar (useMenuSuspenso/ITEM_DE_MENU extraídos para components/ui.tsx), não o componente inteiro."
+    },
+    {
+      "id": "US-019",
+      "title": "[Fase 6] Classificação de assunto por conversa",
+      "description": "As a dona do negócio, I want saber sobre o que os clientes mais perguntam so that eu melhore a base do atendente e o próprio negócio onde mais importa.",
+      "acceptanceCriteria": [
+        "Lista de assuntos derivada do objetivo (US-008), em `lib/assuntos.ts`: atendimento → Preços, Horário de atendimento, Produtos e serviços, Localização e contato, Reclamações, Outros; vendas → acrescenta Formas de pagamento e Promoções; agendamentos → acrescenta Agendamentos e Remarcações; outro → a lista de atendimento",
+        "Classificação com `askJSON` na PRIMEIRA resposta da IA a cada conversa nova (uma chamada extra pequena, `maxTokens` baixo) e regravada quando a conversa muda de status para `resolvida`; sem IA conectada, heurística por palavras-chave em `lib/demo.ts` (`classificarLocal`), nunca \"Outros\" para tudo",
+        "`assunto` gravado em `conversas.assunto`; `lib/metricas.ts:assuntos` passa a vir dali; o painel do contato (US-014) mostra a linha \"Assunto\"",
+        "Falha na classificação nunca atrasa nem derruba a resposta ao cliente: roda depois de `enviarMensagem`, com `catch` que só registra no log",
+        "Testado sem chave real com o mesmo truque de `global.fetch` para `openrouter.ai` da US-074 da PRD anterior (script fora do repositório)",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)"
+      ],
+      "priority": 19,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "[Fase 7] Documentação, catálogo, jargão e capturas finais",
+      "description": "As a mantenedor, I want que tudo o que descreve o app (README, catálogo, CLAUDE.md, capturas) reflita as telas novas so that quem publicar ou evoluir o app não leia instruções da tela antiga.",
+      "acceptanceCriteria": [
+        "`README.md` do app: seção \"Configuração inicial\" reescrita para a z-api (criar conta, colar três valores, escanear), com a Meta em uma subseção \"Já usa a Cloud API da Meta?\"; tabela de variáveis com `ZAPI_INSTANCE_ID`, `ZAPI_TOKEN`, `ZAPI_CLIENT_TOKEN`, `WHATSAPP_WEBHOOK_CHAVE`; \"Estrutura\" com as páginas e rotas novas",
+        "`catalogo.json`: `integracoes` vira \"WhatsApp por QR Code (z-api) ou WhatsApp Cloud API (Meta).\", `problema`/`ia` revisados para o que o app faz agora; `node scripts/gerar-deploy.mjs` sem alteração no `render.yaml` além do esperado",
+        "`CLAUDE.md` do app: as notas das US-039/040/041/060/061 (PRD anterior) que descreviam a tela única são reescritas ou removidas onde deixaram de valer (barra \"Alterações não salvas\", `configRef`, snapshot de conversas por mensagem, \"Conversa selecionada\"); as notas novas registram as decisões desta PRD que não se leem do código (regras de status, política de conversas de exemplo, por que `/historico` saiu do cabeçalho, data da conferência da documentação da z-api)",
+        "`node scripts/verificar-jargao.mjs whatsapp-atendente` passa sem exceção nova; `node scripts/verificar-paleta.mjs` passa; `bash scripts/verificar-padrao.sh` sai 0 para os 17",
+        "Verificação completa do `PADRAO.md`: servidor standalone, `curl` em `/api/health`, `/api/status`, `/api/setup` e nas rotas novas com entradas inválidas devolvendo 400",
+        "Capturas finais de `/`, `/conversas`, `/assistente` (três passos), `/relatorios` e `/setup` em desktop 1400x1000 e celular 390, abertas com Read, revisadas e corrigidas até ficarem limpas",
+        "A prévia do catálogo (`/?exemplo=1&captura=1`) mostra o Início com as conversas de exemplo",
+        "Lint e build passam",
+        "Typecheck passes (npx tsc --noEmit)"
+      ],
+      "priority": 20,
+      "passes": true,
+      "notes": "README, catálogo e CLAUDE.md reescritos para as cinco telas e para a z-api; ConversaSelecionada (código morto da tela única) removido. tsc, lint, build, verificar-jargao, verificar-paleta e verificar-padrao.sh (17 apps + paleta) saem 0. Verificação por curl das rotas novas e capturas desktop 1400x1000 + celular 390 das cinco telas revisadas, sem erro de console e sem estouro horizontal. Achado aberto registrado no CLAUDE.md: /setup pede as três credenciais da z-api duas vezes."
+    }
+  ]
+}
