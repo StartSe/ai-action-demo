@@ -172,6 +172,6 @@ O navegador solicita eventos NDJSON nas mesmas rotas de criação; clientes JSON
 
 ### Diagnóstico do convite e da versão (0.4.2)
 
-Configurações exibe a versão instalada em destaque no topo, antes das orientações. `GET /api/health` devolve `ok` e `versao`, sem cache e sem dados da conta, para conferir a imagem realmente instalada. Publicar a imagem no GitHub não confirma o redeploy de uma instalação no Render.
+Configurações exibe a versão instalada no rodapé, centralizada e em cinza claro. `GET /api/health` devolve `ok` e `versao`, sem cache e sem dados da conta, para conferir a imagem realmente instalada. Publicar a imagem no GitHub não confirma o redeploy de uma instalação no Render.
 
 Falhas conhecidas da IA na preparação do roteiro preservam código, mensagem e ação tanto em JSON quanto no acompanhamento por etapas. A tela distingue chave recusada, falta de crédito, limite e modelo indisponível; não substitui essas causas por uma mensagem genérica de preparação. Isso permite diagnosticar a tentativa real, sem afirmar que todo erro de geração tem a mesma causa.
