@@ -17,18 +17,30 @@ export function useStatus() {
   const [status, setStatus] = useState<Status | null>(null);
   const [erro, setErro] = useState(false);
   const router = useRouter();
+  const caminho = usePathname();
   useEffect(() => {
-    fetch("/api/status")
-      .then((r) => {
-        if (r.status === 401) {
-          router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
-          return null;
-        }
-        return r.json();
-      })
-      .then((d) => d && setStatus(d))
-      .catch(() => setErro(true));
-  }, [router]);
+    let ativo = true;
+    let ultima = 0;
+    async function atualizar() {
+      const chamada = ++ultima;
+      try {
+        const r = await fetch("/api/status", { cache: "no-store" });
+        if (!ativo || chamada !== ultima) return;
+        if (r.status === 401) { router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`); return; }
+        if (!r.ok) throw new Error();
+        const d = await r.json();
+        if (ativo && chamada === ultima) { setStatus(d); setErro(false); }
+      } catch { if (ativo && chamada === ultima) setErro(true); }
+    }
+    void atualizar();
+    window.addEventListener("configuracao-atualizada", atualizar);
+    window.addEventListener("focus", atualizar);
+    return () => {
+      ativo = false;
+      window.removeEventListener("configuracao-atualizada", atualizar);
+      window.removeEventListener("focus", atualizar);
+    };
+  }, [router, caminho]);
   return { status, erro };
 }
 
@@ -501,9 +513,7 @@ export function Origem({ meta, demoTexto }: { meta: Meta; demoTexto?: string }) 
   return (
     <p className="text-muted text-[13px] mb-4" title={meta.model}>
       {demoTexto ?? `Exemplo ilustrativo a partir de ${meta.insumo}.`}{" "}
-      <Link href="/setup#openrouter" className="font-semibold text-accent underline underline-offset-2">
-        {demoTexto ? "Conectar a IA" : "Conecte a IA para usar os seus dados"}
-      </Link>
+
     </p>
   );
 }

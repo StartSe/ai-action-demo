@@ -1,3 +1,4 @@
+import { getConfig } from "./store";
 // A semeadura do modo demonstração (US-030): o app nasce cheio.
 //
 // Quem abre este app pela primeira vez para decidir se vale a pena é um executivo, não um
@@ -454,7 +455,7 @@ function avaliarSessaoSemeada(s: SessaoDeExemplo, giro: number): void {
  */
 export function semearDemonstracao(): void {
   try {
-    if (aiEnabled()) return;
+    if (aiEnabled() || getConfig("DEMO_REMOVIDA") === "1") return;
     if (temSessoesDeExemplo()) return;
     if (!bancoVirgem()) return;
 

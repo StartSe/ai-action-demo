@@ -1,3 +1,4 @@
+import { importarLanding } from "@/lib/importar-landing";
 // Materiais de um produto: importar a página (US-004), enviar um documento e colar texto (US-005).
 //
 // Três entradas, um destino: tudo vira **texto normalizado** em `fontes_produto`. Nenhum arquivo é
@@ -6,7 +7,7 @@
 // Regra de erro desta rota: o gestor **nunca** vê o motivo técnico. Cada falha vira uma frase que diz
 // o que fazer, e o caminho de saída é sempre o mesmo — colar o texto à mão funciona igual. O código
 // técnico vai para o `console.error`, como no resto do app.
-import { FalhaExtracao, extrairPagina, type ErroExtracao } from "@/lib/extrair-pagina";
+import { FalhaExtracao, type ErroExtracao } from "@/lib/extrair-pagina";
 import { EXTENSOES_MATERIAL, textoDoArquivo } from "@/lib/legendas";
 import { adicionarFonte, atualizar, listarFontes, obter } from "@/lib/produtos";
 
@@ -105,7 +106,7 @@ async function receberJson(req: Request, produtoId: string): Promise<Recebido> {
   if (!url) return { ok: false, resposta: Response.json({ error: "Cole o endereço da página do produto." }, { status: 400 }) };
 
   try {
-    const pagina = await extrairPagina(url);
+    const pagina = await importarLanding(url);
     const fonte = adicionarFonte({ produtoId, tipo: "landing", origem: pagina.url, conteudo: pagina.texto });
     return { ok: true, resposta: Response.json({ fonte, titulo: pagina.titulo }) };
   } catch (err) {

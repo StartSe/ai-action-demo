@@ -68,4 +68,18 @@ export const LIVEKIT: Integracao = {
   },
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, ELEVENLABS_VOZ, LIVEKIT, CRM];
+export const BRIGHTDATA: Integracao = {
+  id: "brightdata", titulo: "Importar páginas (Bright Data)",
+  descricao: "Importe o conteúdo da página de vendas para cadastrar e ensinar o produto à IA.",
+  beneficio: "Obtém o conteúdo da página, inclusive em sites que dificultam a leitura direta",
+  obrigatoria: false,
+  link: { url: "https://brightdata.com/cp/setting/users", rotulo: "Obter chave do Bright Data" },
+  campos: [{ chave: "BRIGHTDATA_API_KEY", rotulo: "Chave da API", tipo: "secret", ajuda: "Opcional. Sem esta conexão, tentaremos a leitura direta da página." }],
+  testar: async config => {
+    if (!config.BRIGHTDATA_API_KEY) return { ok: false, mensagem: "Salve a chave do Bright Data." };
+    const { testarBrightData } = await import("./importar-landing");
+    return testarBrightData(config.BRIGHTDATA_API_KEY);
+  },
+};
+
+export const INTEGRACOES: Integracao[] = [OPENROUTER, ELEVENLABS_VOZ, LIVEKIT, CRM, BRIGHTDATA];

@@ -72,7 +72,7 @@ function ipPrivado(ip: string): boolean {
  * Confere um endereço antes de buscá-lo: esquema, nome e **todos** os IPs para os quais o nome
  * resolve. Lança `FalhaExtracao` quando o endereço não pode ser buscado.
  */
-async function conferirEndereco(bruto: string): Promise<URL> {
+export async function conferirEndereco(bruto: string): Promise<URL> {
   let url: URL;
   try {
     url = new URL(bruto);
@@ -82,6 +82,8 @@ async function conferirEndereco(bruto: string): Promise<URL> {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new FalhaExtracao("endereco_invalido", `Esquema fora de http/https: ${url.protocol}`);
   }
+
+  if (url.username || url.password) throw new FalhaExtracao("endereco_invalido", "Não use credenciais no endereço.");
 
   const nome = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (nome === "localhost" || nome.endsWith(".localhost") || nome.endsWith(".internal") || nome.endsWith(".local")) {

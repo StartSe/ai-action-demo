@@ -82,6 +82,7 @@ function removerPessoasSemConversa(): void {
  */
 export function removerConjuntoDeExemplo(): void {
   removerSessoesDeExemplo();
+  removerPessoasSemConversa();
 
   const d = banco();
   d.prepare("DELETE FROM simulacoes WHERE exemplo = 1 AND codigo NOT IN (SELECT simulacaoCodigo FROM sessoes_treino)").run();

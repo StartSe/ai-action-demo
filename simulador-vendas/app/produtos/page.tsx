@@ -6,6 +6,7 @@
 // uma descrição curta. Ensinar o produto à IA — página, materiais e ficha — é a tela de edição, que
 // chega nas US-004/US-005/US-006; até lá "Editar" leva para o detalhe com o que já existe.
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { AvisoExemplo } from "@/components/AvisoExemplo";
 import { Chip, Empty, ErrorBox, Field, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
@@ -40,6 +41,8 @@ function contagem(n: number, singular: string, plural: string, vazio: string) {
 }
 
 export default function Page() {
+  const router = useRouter();
+  const [url, setUrl] = useState("");
   const { status, erro } = useStatus();
   const { confirmar, Dialogo } = useConfirmacao();
 
@@ -79,16 +82,22 @@ export default function Page() {
 
   async function salvar(e: FormEvent) {
     e.preventDefault();
-    if (!nome.trim() || salvando) return;
+    if ((!nome.trim() && !url.trim()) || salvando) return;
     setSalvando(true);
     setErroTela(null);
     try {
       const r = await fetch("/api/produtos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: nome.trim(), categoria: categoria.trim() || undefined, descricao: descricao.trim() || undefined }),
+        body: JSON.stringify({ url: url.trim() || undefined, nome: nome.trim(), categoria: categoria.trim() || undefined, descricao: descricao.trim() || undefined }),
       });
       if (!r.ok) throw r;
+      const produto = await r.json();
+      if (url.trim()) {
+        sessionStorage.setItem(`importacao-${produto.id}`, produto.aviso || "Página importada.");
+        router.push(`/produtos/${produto.id}`);
+      }
+      setUrl("");
       setNome("");
       setCategoria("");
       setDescricao("");
@@ -141,6 +150,11 @@ export default function Page() {
         {cadastrando && (
           <form className="card p-5 mb-5" onSubmit={salvar}>
             <h2 className="font-bold text-[15px] mb-3.5">Novo produto</h2>
+            <div className="mb-3">
+              <Field label="Link da página de vendas" htmlFor="produto-url" hint="Opcional. Importe o produto pela LP ou preencha os campos abaixo. O nome pode ser obtido da página.">
+                <input id="produto-url" type="url" className="input" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://suaempresa.com/produto" />
+              </Field>
+            </div>
             <div className="grid grid-cols-2 max-md:grid-cols-1 gap-3 mb-3">
               <Field label="Nome" htmlFor="produto-nome">
                 <input id="produto-nome" className="input" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Plataforma de gestão" autoFocus />
@@ -153,8 +167,8 @@ export default function Page() {
               <input id="produto-descricao" className="input" value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Uma frase sobre o que ele resolve" />
             </Field>
             <div className="flex gap-2.5 mt-4">
-              <button type="submit" className="btn-primary !w-auto" disabled={!nome.trim() || salvando}>
-                {salvando ? "Salvando..." : "Salvar produto"}
+              <button type="submit" className="btn-primary !w-auto" disabled={(!nome.trim() && !url.trim()) || salvando}>
+                {salvando ? (url.trim() ? "Importando página e preparando ficha..." : "Salvando...") : (url.trim() ? "Importar produto" : "Salvar produto")}
               </button>
               <button type="button" className="btn-ghost !w-auto" onClick={() => setCadastrando(false)}>Cancelar</button>
             </div>

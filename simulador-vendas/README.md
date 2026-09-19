@@ -72,7 +72,7 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 - Publicar com um clique: https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-simulador-vendas (o `render.yaml` desta pasta é gerado a partir do `catalogo.json` da raiz; não edite à mão).
 - Rodar no seu computador sem construir: `docker run --rm -p 3013:10000 -v simulador-vendas-dados:/app/data ghcr.io/startse/simulador-vendas:latest` e abra http://localhost:3013.
 - Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
-- O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração se perde a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
+- O health check responde em `/api/health`. O blueprint usa o plano Starter com disco persistente de 1 GB em `/app/data`, onde ficam os dados e as configurações cifradas.
 
 ## Convite e resultados
 O botão **Convidar** em Equipe gera um link público onde a pessoa informa nome e e-mail e vê o endereço do treino. O feedback fica disponível no simulador e no histórico de resultados. Não há notificações, envios automáticos de feedback nem resumos agendados. Endpoints antigos de envio e webhook respondem HTTP 410, inclusive para instalações com credenciais antigas salvas.
@@ -222,3 +222,15 @@ Em `/setup`, o botão **Conectar LiveKit Cloud** abre a autorização no LiveKit
 Esta é uma adaptação experimental do [fluxo público no código da CLI oficial](https://github.com/livekit/livekit-cli/blob/main/cmd/lk/cloud.go), usando `/cli/auth`, `/cli/confirm-auth` e `/cli/claim`. Não é uma API OAuth pública documentada para terceiros, e esses endpoints podem mudar. Os campos manuais continuam disponíveis. O navegador precisa permitir acesso a `cloud.livekit.io`, e o servidor precisa acessar `cloud-api.livekit.io`.
 
 A tentativa expira em até 15 minutos, fica vinculada ao navegador que a iniciou e exige acesso administrativo ao app. Cancelar interrompe a importação neste app; não revoga credenciais que já tenham sido emitidas no LiveKit. As variáveis de ambiente têm prioridade: remova as variáveis `LIVEKIT_*` antes de trocar o projeto pela tela. Uma troca de projeto exige reiniciar o serviço de voz, como na configuração manual.
+
+### Cadastro pela página de vendas
+
+Em Produtos → Novo produto, informe o link da LP. O nome é obtido do título quando não preenchido. A página fica salva como material e, com a IA conectada, gera uma ficha em rascunho para revisão. Se a geração falhar, o material permanece disponível para tentar novamente. A coleta não segue links para outras páginas; confira a cobertura do material importado.
+
+Bright Data é opcional em Configurações (ou `BRIGHTDATA_API_KEY`). A aplicação usa `scrape_as_markdown` no [MCP hospedado](https://docs.brightdata.com/products/mcp-server/overview). Sem a integração, tenta a leitura direta de HTML.
+
+### Persistência e exemplos
+
+O blueprint usa Starter com disco de 1 GB em `/app/data`. SQLite e o arquivo `chave-mestra` devem permanecer juntos: guardam dados e acesso às configurações cifradas. Instalações existentes precisam sincronizar o blueprint no Render. Antes de alterar uma instalação sem disco, copie seu diretório de dados; anexar um disco não migra o conteúdo efêmero automaticamente.
+
+Em Configurações → Dados de exemplo, é possível remover a demonstração. Dados reais, credenciais e exemplos referenciados por treinos reais são preservados. A remoção fica registrada para impedir recriação no próximo reinício.

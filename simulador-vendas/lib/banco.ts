@@ -17,7 +17,7 @@
 // lib/participantes.ts, lib/sessoes.ts): aqui só moram o formato e a migração.
 import type { DatabaseSync } from "node:sqlite";
 import crypto from "node:crypto";
-import { abrirBanco } from "./store";
+import { abrirBanco, getConfig } from "./store";
 import { PERSONAS_IDS } from "./personas";
 
 let preparado = false;
@@ -271,7 +271,7 @@ function linhasDe(d: DatabaseSync, tabela: string): number {
  */
 function garantirProdutoExemplo(d: DatabaseSync): void {
   const temReal = Number((d.prepare("SELECT COUNT(*) AS total FROM produtos WHERE exemplo = 0").get() as { total: number }).total) > 0;
-  if (temReal && linhasDe(d, "cenarios") === 0 && linhasDe(d, "salas") === 0) return;
+  if ((temReal || getConfig("DEMO_REMOVIDA") === "1") && linhasDe(d, "cenarios") === 0 && linhasDe(d, "salas") === 0) return;
 
   const momento = agora();
   d.prepare(

@@ -55,7 +55,7 @@ test("configuração oferece voz, sem agentes ou notificações; endpoints antig
   await expect(page.getByLabel("Voz do cliente", { exact: true })).toBeVisible();
   await expect(page.getByText(/Agente conversacional|Feedback por e-mail|^Notificações$|^Rotinas$/)).toHaveCount(0);
   const setup = await (await page.request.get("/api/setup")).json();
-  expect(setup.integracoes.map((i: { id: string }) => i.id)).toEqual(["openrouter", "elevenlabs-voz", "livekit", "mcp-crm"]);
+  expect(setup.integracoes.map((i: { id: string }) => i.id)).toEqual(["openrouter", "elevenlabs-voz", "livekit", "mcp-crm", "brightdata"]);
   for (const path of ["/api/enviar-analise", "/api/rotinas/executar", "/webhook/elevenlabs"]) {
     expect((await page.request.post(path, { data: {} })).status()).toBe(410);
   }

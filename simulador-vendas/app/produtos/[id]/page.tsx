@@ -8,6 +8,7 @@
 //
 // A ficha gerada pela IA (US-006) entra abaixo dos materiais, sem mudar o desenho da tela.
 import Link from "next/link";
+import { AvisoImportacao } from "@/components/AvisoImportacao";
 import { use, useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Aviso, Chip, Dropzone, ErrorBox, Field, Section, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
@@ -280,6 +281,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
               </div>
             </div>
 
+            <AvisoImportacao id={id} />
             {erroTela && <div className="mb-5"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao} /></div>}
 
             <form className="card p-5 mb-6" onSubmit={salvar}>
@@ -396,7 +398,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                 gerando={gerandoFicha}
                 salvando={salvandoFicha}
                 erro={erroFicha}
-                acaoConectar={{ rotulo: "Conectar a IA", url: "/setup#openrouter" }}
+                acaoConectar={status?.ai === false ? { rotulo: "Conectar a IA", url: "/setup#openrouter" } : undefined}
                 onMudar={setFicha}
                 onGerar={gerarFicha}
                 onSalvar={salvarFicha}

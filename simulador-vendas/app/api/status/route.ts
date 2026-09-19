@@ -12,5 +12,5 @@ export async function GET(req: Request) {
   const proximos = calcularProximos(INTEGRACOES);
   const integrations: Record<string, boolean> = Object.fromEntries(INTEGRACOES.map((i) => [i.id, integracaoConfigurada(i)]));
   Object.assign(integrations, statusExtra());
-  return Response.json({ ai: aiEnabled(), demo: !aiEnabled(), model: modelName(), vision: visionEnabled(), integrations, setup: { pronto, url: "/setup" }, usuario, proximos });
+  return Response.json({ ai: aiEnabled(), demo: !aiEnabled(), model: modelName(), vision: visionEnabled(), integrations, setup: { pronto, url: "/setup" }, usuario, proximos }, { headers: { "Cache-Control": "no-store" } });
 }

@@ -96,7 +96,7 @@ export function FichaProduto({
   gerando: boolean;
   salvando: boolean;
   erro: ErroLido | null;
-  acaoConectar: { rotulo: string; url: string };
+  acaoConectar?: { rotulo: string; url: string };
   onMudar: (c: Conhecimento) => void;
   onGerar: () => void;
   onSalvar: () => void;
@@ -127,7 +127,7 @@ export function FichaProduto({
       {metaIA?.demo && (
         <div className="mt-3.5">
           <Aviso tom="warn" acao={acaoConectar}>
-            Esta ficha é um exemplo. Conecte a IA para ela ler os seus materiais.
+            {acaoConectar ? "Esta ficha é um exemplo. Conecte a IA para ela ler os seus materiais." : "Esta ficha é um exemplo. Gere uma nova ficha a partir dos seus materiais."}
           </Aviso>
         </div>
       )}

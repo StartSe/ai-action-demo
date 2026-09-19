@@ -1,3 +1,4 @@
+import { DadosExemplo } from "@/components/DadosExemplo";
 import { AcessoMCP } from "@/components/AcessoMCP";
 import { SetupPage } from "@/components/setup";
 import { VozPorPersona } from "@/components/VozPorPersona";
@@ -10,6 +11,7 @@ export default function Page() {
       <div className="max-w-[860px] mx-auto px-8 max-md:px-4 pb-16 flex flex-col gap-6">
         <VozPorPersona />
         <AcessoMCP />
+        <DadosExemplo />
         <footer className="border-t border-line pt-4 text-center text-xs text-muted">
           Simulador de Vendas · Versão {version}
         </footer>
