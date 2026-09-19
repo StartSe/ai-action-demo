@@ -385,6 +385,29 @@
       "aposPublicar": "Abra o app e crie sua conta (nome, e-mail e senha). Não há IA para conectar: a planilha de exemplo já aparece pronta em Datasets e o treino roda dentro do próprio app.",
       "padrao": "proprio",
       "discoGuarda": "planilhas, modelos e a conta"
+    },
+    {
+      "id": "build-agentflows",
+      "nome": "Build Agentflows",
+      "areas": [
+        "Gestão"
+      ],
+      "problema": "Tarefas que dependem de várias etapas de IA ficam espalhadas entre conversas e sistemas.",
+      "ia": "Crie fluxos visuais com agentes, decisões, ferramentas e aprovação humana. Teste cada etapa e publique uma versão integrável.",
+      "integracoes": "OpenRouter para os agentes; ferramentas MCP e requisições HTTP para conectar serviços; MCP e HTTP autenticado para executar fluxos publicados; notificações para resumos das execuções.",
+      "acento": "#163669",
+      "porta": 3019,
+      "captura": "capturas/build-agentflows.png",
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "rotina"
+      ],
+      "demo": null,
+      "independente": true,
+      "plano": "starter",
+      "discoGB": 1,
+      "discoGuarda": "fluxos, versões publicadas, execuções, aprovações pendentes, conta e credenciais"
     }
   ]
 }

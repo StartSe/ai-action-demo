@@ -139,6 +139,13 @@ services:
     ports: ["3018:10000"]
     volumes: [automl-pocket-dados:/app/data]
 
+  build-agentflows:
+    <<: *app
+    build: ./build-agentflows
+    image: ghcr.io/startse/build-agentflows:latest
+    ports: ["3019:10000"]
+    volumes: [build-agentflows-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -158,3 +165,4 @@ volumes:
   prospeccao-linkedin-dados:
   videos-campanha-dados:
   automl-pocket-dados:
+  build-agentflows-dados:
