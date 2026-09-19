@@ -178,3 +178,9 @@ Criação de produto por link (0.1.3): o modal acompanha a leitura da página, a
 Validação: `npm test` cobre extração, falhas e transmissão do progresso; `npm run build` verifica o build de produção. Referências: [ferramentas Bright Data](https://github.com/brightdata/brightdata-mcp/blob/main/assets/Tools.md) e [Response Healing do OpenRouter](https://openrouter.ai/docs/guides/features/plugins/overview).
 
 Na versão 0.1.4, os cards de produtos destacam a nova prospecção e separam editar e apagar, com confirmação e tratamento de falha na exclusão. O assistente de prospecção envia o perfil efetivamente exibido, inclusive quando ele foi escolhido automaticamente; o botão mostra o envio em andamento e permite tentar novamente após uma falha sem perder os critérios.
+
+### Arquivar prospecções (0.2.0)
+
+A lista de Prospecções abre em **Ativas** e oferece o filtro **Arquivadas**, com a quantidade de itens em cada grupo. **Arquivar** retira a busca da lista de ativas; **Restaurar** a devolve. O arquivamento é salvo no SQLite e preserva leads, contas, abordagens, histórico e acesso ao detalhe. Ele organiza a lista, sem cancelar uma execução em andamento.
+
+A API aceita `GET /api/prospeccoes?situacao=ativas|arquivadas|todas` (sem filtro mantém todas) e `PATCH /api/prospeccoes/:id/arquivo` com `{ "arquivada": true }` ou `false`. A rota usa a autenticação administrativa existente.

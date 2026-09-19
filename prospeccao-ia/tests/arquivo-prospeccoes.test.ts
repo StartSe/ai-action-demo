@@ -1,0 +1,37 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+test("arquivar, filtrar e restaurar preserva prospecção e leads", async t => {
+  const pasta = mkdtempSync(path.join(tmpdir(), "arquivo-prospeccoes-"));
+  process.env.DATA_DIR = pasta;
+  t.after(() => rmSync(pasta, { recursive: true, force: true }));
+  const ws = await import("../lib/workspace");
+  const { datasArquivamento } = await import("../lib/arquivo-prospeccoes");
+  const { PATCH } = await import("../app/api/prospeccoes/[id]/arquivo/route");
+  const { GET } = await import("../app/api/prospeccoes/route");
+  const produto = ws.criarProduto({ nome: "Produto", descricao: "", site: null, propostaValor: "Valor" });
+  const icp = ws.criarICP({ produtoId: produto.id, nome: "Diretores", jornada: "b2b", criterios: {}, personas: [], dores: [], sinais: [] });
+  const prospeccao = ws.criarProspeccao({ produtoId: produto.id, icpId: icp.id, modo: "pessoas", criterios: {}, estado: "pronta", etapa: null, erro: null });
+  const lead = ws.criarLead({ prospeccaoId: prospeccao.id, contaId: null, nome: "Pessoa", cargo: null, empresa: null, cidade: null, linkedin: null, fonte: null, papel: "desconhecido", fit: null, evidencias: [], sinais: [], hipotese: null, status: "pesquisado", noCRM: false });
+  const alterar = (arquivada: unknown, id = prospeccao.id) => PATCH(new Request("http://localhost/api/prospeccoes/" + id + "/arquivo", { method: "PATCH", body: JSON.stringify({ arquivada }) }), { params: Promise.resolve({ id }) });
+  const lista = async (situacao: string) => (await GET(new Request("http://localhost/api/prospeccoes?situacao=" + situacao))).json();
+  assert.equal((await lista("ativas")).length, 1);
+  assert.equal((await lista("arquivadas")).length, 0);
+  assert.equal((await alterar("sim")).status, 400);
+  assert.equal((await alterar(true, "inexistente")).status, 404);
+  const arquivada = await (await alterar(true)).json();
+  assert.ok(arquivada.arquivadaEm);
+  assert.equal(datasArquivamento().get(prospeccao.id), arquivada.arquivadaEm);
+  assert.deepEqual(await (await alterar(true)).json(), arquivada);
+  assert.equal((await lista("ativas")).length, 0);
+  assert.equal((await lista("arquivadas"))[0].id, prospeccao.id);
+  assert.deepEqual(ws.obterProspeccao(prospeccao.id), prospeccao);
+  assert.deepEqual(ws.obterLead(lead.id), lead);
+  assert.deepEqual(await (await alterar(false)).json(), { arquivadaEm: null });
+  assert.equal((await lista("ativas"))[0].id, prospeccao.id);
+  assert.equal((await lista("arquivadas")).length, 0);
+  assert.equal((await GET(new Request("http://localhost/api/prospeccoes?situacao=outro"))).status, 400);
+});

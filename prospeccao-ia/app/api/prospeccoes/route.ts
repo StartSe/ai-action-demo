@@ -1,3 +1,4 @@
+import { datasArquivamento } from "@/lib/arquivo-prospeccoes";
 import { listarLeads, listarProspeccoes, obterProduto } from "@/lib/workspace";
 import { criarProspeccaoValidada } from "@/lib/execucao-prospeccao";
 import { formatarFunil, funilContagens } from "@/lib/qualificacao";
@@ -5,14 +6,18 @@ import { nomeProspeccao } from "@/lib/rotulos";
 
 /** Lista todas as prospecções com o mesmo resumo de funil da página de detalhe (US-035,
  * components/Prospeccoes.tsx) — nome/funil calculados aqui, nunca na tela. */
-export async function GET() {
-  const prospeccoes = listarProspeccoes();
+export async function GET(req?: Request) {
+  const situacao = req ? new URL(req.url).searchParams.get("situacao") || "todas" : "todas";
+  if (!["ativas", "arquivadas", "todas"].includes(situacao)) return Response.json({ error: "Filtro de prospecções inválido." }, { status: 400 });
+  const arquivo = datasArquivamento();
+  const prospeccoes = listarProspeccoes().filter(p => situacao === "todas" || (situacao === "arquivadas" ? arquivo.has(p.id) : !arquivo.has(p.id)));
   const leads = listarLeads();
   const itens = prospeccoes.map((p) => {
     const leadsDaProspeccao = leads.filter((l) => l.prospeccaoId === p.id);
     const produtoNome = obterProduto(p.produtoId)?.nome ?? "Produto";
     return {
       id: p.id,
+      arquivadaEm: arquivo.get(p.id) ?? null,
       nome: nomeProspeccao(produtoNome, p.modo, p.criterios),
       modo: p.modo,
       demo: p.demo,
