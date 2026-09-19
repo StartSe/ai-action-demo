@@ -50,14 +50,12 @@ test("IA não repete erro de credencial e limita indisponibilidade persistente",
   assert.equal(chamadas, 3);
 });
 
-test("abertura real da entrevista sobrevive a um 502 do provedor e pode ser retomada", async (t) => {
+test("convite prepara roteiro recuperando 502 e abertura usa apenas dados salvos", async (t) => {
   const { criar: vaga } = await import("./vagas");
   const { criar: candidato } = await import("./candidatos");
   const { atribuirEConvidar } = await import("./convite");
   const { POST } = await import("../app/api/entrevista/candidato/[token]/falar/route");
   const { GET } = await import("../app/api/entrevista/candidato/[token]/conversa/route");
-  const convite = atribuirEConvidar({ vagaId: vaga({ cargo: "Analista" }).id, candidatoId: candidato({ nome: "Ana" }).id, origem: "http://localhost" });
-  assert.ok(convite.ok);
   let chamadas = 0;
   t.mock.method(globalThis, "fetch", async () => {
     chamadas++;
@@ -65,6 +63,9 @@ test("abertura real da entrevista sobrevive a um 502 do provedor e pode ser reto
     const resposta = chamadas === 2 ? { perguntas: [{ bloco: "abertura", pergunta: "Conte sobre sua trajetória." }, { bloco: "encerramento", pergunta: "Tem alguma pergunta?" }] } : { fala: "Olá, Ana! Conte sobre sua trajetória." };
     return Response.json({ choices: [{ message: { content: JSON.stringify(resposta) } }] });
   });
+  const convite = await atribuirEConvidar({ vagaId: vaga({ cargo: "Analista" }).id, candidatoId: candidato({ nome: "Ana" }).id, origem: "http://localhost" });
+  assert.ok(convite.ok);
+  assert.equal(chamadas, 2, "roteiro preparado antes de entregar o convite, incluindo recuperação do 502");
   const params = { params: Promise.resolve({ token: convite.convite.codigo }) };
   const abertura = await POST(new Request("http://localhost", { method: "POST", body: JSON.stringify({ resposta: "", ordem: 0 }) }), params);
   assert.equal(abertura.status, 200);
@@ -84,14 +85,14 @@ test("inícios concorrentes compartilham roteiro e primeira pergunta, sem chamad
   const { atribuirEConvidar } = await import("./convite");
   const { proximaFala } = await import("./roteiro");
   const { transcricao } = await import("./entrevistas");
-  const convite = atribuirEConvidar({ vagaId: vaga({ cargo: "Analista" }).id, candidatoId: candidato({ nome: "Ana" }).id, origem: "http://localhost" });
-  assert.ok(convite.ok);
   let chamadas = 0;
   t.mock.method(globalThis, "fetch", async () => {
     chamadas++;
     await new Promise(resolve => setTimeout(resolve, 20));
     return Response.json({ choices: [{ message: { content: JSON.stringify({ perguntas: [{ bloco: "abertura", pergunta: "Conte sobre sua trajetória." }, { bloco: "encerramento", pergunta: "Tem alguma pergunta?" }] }) } }] });
   });
+  const convite = await atribuirEConvidar({ vagaId: vaga({ cargo: "Analista" }).id, candidatoId: candidato({ nome: "Ana" }).id, origem: "http://localhost" });
+  assert.ok(convite.ok);
   const [primeira, repetida] = await Promise.all([proximaFala(convite.entrevista.id), proximaFala(convite.entrevista.id)]);
   assert.equal(chamadas, 1);
   assert.deepEqual(primeira, repetida);
@@ -108,4 +109,29 @@ test("prazo de preparação cancela o provedor lento e encerra a espera", async 
     init.signal!.addEventListener("abort", () => reject(init.signal!.reason), { once: true });
   }));
   await assert.rejects(askJSON({ system: "", prompt: "", limiteMs: 20 }), (err) => err instanceof ErroIA && err.codigo === "rede");
+});
+
+test("falha no planejamento não libera link e nova tentativa reaproveita a entrevista", async (t) => {
+  const { criar: criarVaga } = await import("./vagas");
+  const { criar: criarCandidato } = await import("./candidatos");
+  const { atribuirEConvidar } = await import("./convite");
+  const { entrevistaViva, lerRoteiro } = await import("./entrevistas");
+  const parametros = { vagaId: criarVaga({ cargo: "Analista" }).id, candidatoId: criarCandidato({ nome: "Bia" }).id, origem: "http://localhost" };
+  const mock = t.mock.method(globalThis, "fetch", async () => new Response("Unauthorized", { status: 401 }));
+  const falha = await atribuirEConvidar(parametros);
+  assert.equal(falha.ok, false);
+  const entrevista = entrevistaViva(parametros.vagaId, parametros.candidatoId)!;
+  assert.ok(!entrevista.codigo);
+  assert.equal(lerRoteiro(entrevista.id), null);
+  let chamadas = 0;
+  mock.mock.mockImplementation(async () => {
+    chamadas++;
+    return Response.json({ choices: [{ message: { content: JSON.stringify({ perguntas: [{ bloco: "abertura", pergunta: "Conte sobre sua trajetória." }] }) } }] });
+  });
+  const [convite, repetido] = await Promise.all([atribuirEConvidar(parametros), atribuirEConvidar(parametros)]);
+  assert.ok(convite.ok && repetido.ok);
+  assert.equal(convite.entrevista.id, entrevista.id);
+  assert.equal(convite.convite.codigo, repetido.convite.codigo);
+  assert.equal(chamadas, 1);
+  assert.ok(lerRoteiro(entrevista.id));
 });

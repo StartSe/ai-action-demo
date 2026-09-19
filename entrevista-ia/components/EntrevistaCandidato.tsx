@@ -10,6 +10,7 @@
 //
 import { useRef, useState } from "react";
 import { AGRADECIMENTO_APOIO, agradecimentoTitulo } from "@/lib/formato";
+import { SalaLiveKit } from "./SalaLiveKit";
 import { BoasVindas } from "./BoasVindas";
 import { SalaCandidato, type PropsSalaCandidato } from "./SalaCandidato";
 import type { Troca, Vaga } from "@/lib/types";
@@ -23,6 +24,7 @@ export function EntrevistaCandidato({
   vaga,
   duracaoMin,
   vozLigada,
+  livekit = false,
   retomando = false,
   conversaNoNavegador = false,
 }: {
@@ -32,6 +34,7 @@ export function EntrevistaCandidato({
   vaga: Vaga;
   duracaoMin: number;
   vozLigada: boolean;
+  livekit?: boolean;
   /** Este aparelho já começou esta conversa: entra direto na sala. */
   retomando?: boolean;
   /** Link antigo, sem entrevista guardada: a conversa viaja no corpo de cada turno. */
@@ -82,6 +85,7 @@ export function EntrevistaCandidato({
     return (
       <BoasVindas
         codigo={codigo}
+        livekit={livekit}
         marca={marca}
         nome={nome}
         primeiroNome={vaga.candidato.trim().split(/\s+/)[0] || vaga.candidato}
@@ -120,7 +124,7 @@ export function EntrevistaCandidato({
         <p className="card p-7 text-center" role="status">Enviando suas respostas...</p>
 
       ) : (
-        <SalaCandidato {...propsDaSala} />
+        livekit && porVoz ? <SalaLiveKit codigo={codigo} cargo={vaga.titulo} onFinalizar={onFinalizar} onTexto={() => setPorVoz(false)} /> : <SalaCandidato {...propsDaSala} />
       )}
 
 

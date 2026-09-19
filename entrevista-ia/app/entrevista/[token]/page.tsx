@@ -13,6 +13,7 @@ import { headers } from "next/headers";
 import { EntrevistaCandidato } from "@/components/EntrevistaCandidato";
 import { AGRADECIMENTO_APOIO, agradecimentoTitulo } from "@/lib/formato";
 import { abrirSala } from "@/lib/sala-do-candidato";
+import { livekitConfigurado } from "@/lib/livekit";
 import { ttsEnabled } from "@/lib/voz";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +58,7 @@ export default async function Page({ params }: PageProps<"/entrevista/[token]">)
       nome={nome}
       vaga={vaga}
       duracaoMin={duracaoMin}
+      livekit={Boolean(resultado.entrevista) && livekitConfigurado()}
       vozLigada={ttsEnabled()}
       retomando={resultado.entrevista?.status === "em_andamento"}
       conversaNoNavegador={!resultado.entrevista}

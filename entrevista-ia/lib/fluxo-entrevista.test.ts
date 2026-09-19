@@ -14,7 +14,7 @@ const { criar: criarCandidato } = await import("./candidatos");
 const { atribuirEConvidar, resolverConvite, cancelarConvite } = await import("./convite");
 const { abrirSala, cookieDaSala, conferirSala } = await import("./sala-do-candidato");
 const { proximaFala, conversaAtual } = await import("./roteiro");
-const { obter, transcricao } = await import("./entrevistas");
+const { obter, transcricao, lerRoteiro } = await import("./entrevistas");
 const { concluirEntrevista } = await import("./conclusao");
 const { montarInicio } = await import("./inicio");
 
@@ -26,7 +26,7 @@ test("vaga → candidato → link → retomada → respostas → parecer", async
   assert.equal(inicio.passos[0].concluido, false, "demonstração não equivale a IA conectada");
   assert.equal(inicio.passos[2].acao.url, `/vagas/${vaga.id}`);
   const parametros = { vagaId: vaga.id, candidatoId: candidato.id, origem: "https://entrevista.example.com" };
-  const atribuicao = atribuirEConvidar(parametros);
+  const atribuicao = await atribuirEConvidar(parametros);
   assert.ok(atribuicao.ok);
   const { entrevista, convite } = atribuicao;
   assert.equal(vaga.status, "aberta");
@@ -35,8 +35,9 @@ test("vaga → candidato → link → retomada → respostas → parecer", async
   assert.equal(convite.candidatoNome, candidato.nome);
   assert.equal(convite.cargo, vaga.cargo);
   assert.ok(resolverConvite(convite.codigo).ok);
+  assert.ok(lerRoteiro(entrevista.id), "roteiro já existe antes de abrir o link");
 
-  const repetida = atribuirEConvidar(parametros);
+  const repetida = await atribuirEConvidar(parametros);
   assert.ok(repetida.ok);
   assert.equal(repetida.entrevista.id, entrevista.id);
   assert.equal(repetida.convite.link, convite.link);
@@ -85,16 +86,16 @@ test("vaga → candidato → link → retomada → respostas → parecer", async
   assert.equal(concluirEntrevista(entrevista.id)?.entrevista.resultadoId, avaliada.resultadoId);
 });
 
-test("vaga encerrada não convida e entrevista cancelada não abre", () => {
+test("vaga encerrada não convida e entrevista cancelada não abre", async () => {
   const vaga = criarVaga({ cargo: "Vaga encerrada" });
   const candidato = criarCandidato({ nome: "Pessoa do teste" });
   const parametros = { vagaId: vaga.id, candidatoId: candidato.id, origem: "https://entrevista.example.com" };
-  const atribuicao = atribuirEConvidar(parametros);
+  const atribuicao = await atribuirEConvidar(parametros);
   assert.ok(atribuicao.ok);
   cancelarConvite(atribuicao.entrevista.id);
   assert.equal(abrirSala(atribuicao.convite.codigo, null).ok, false);
   encerrar(vaga.id);
-  const nova = atribuirEConvidar(parametros);
+  const nova = await atribuirEConvidar(parametros);
   assert.equal(nova.ok, false);
   if (!nova.ok) assert.match(nova.erro, /encerrada/);
 });

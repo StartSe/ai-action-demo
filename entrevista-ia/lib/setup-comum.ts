@@ -170,22 +170,24 @@ const CACHE_MODELOS_MS = 60 * 60 * 1000;
 const MODELOS_POR_GRUPO = 12;
 let cacheModelosDinamicos: { expiraEm: number; modelos: Opcao[] } | null = null;
 
-type ModeloCatalogo = { id: string; name?: string; context_length?: number };
+type ModeloCatalogo = { id: string; name?: string; context_length?: number; architecture?: { output_modalities?: string[] } };
 
 async function modelosDinamicos(chave: string): Promise<Opcao[]> {
   if (cacheModelosDinamicos && cacheModelosDinamicos.expiraEm > Date.now()) return cacheModelosDinamicos.modelos;
-  const r = await fetch("https://openrouter.ai/api/v1/models", { headers: { Authorization: `Bearer ${chave}` } });
+  const r = await fetch("https://openrouter.ai/api/v1/models", { headers: { Authorization: `Bearer ${chave}` }, signal: AbortSignal.timeout(8000) });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const data = (await r.json()) as { data?: ModeloCatalogo[] };
-  const catalogo = data.data ?? [];
+  const catalogo = (data.data ?? []).filter((m) => !m.id.endsWith(":batch") && (!m.architecture?.output_modalities || m.architecture.output_modalities.includes("text")));
   const porContexto = (a: ModeloCatalogo, b: ModeloCatalogo) => (b.context_length ?? 0) - (a.context_length ?? 0);
   const opcao = (m: ModeloCatalogo, grupo: Opcao["grupo"]): Opcao => ({ valor: m.id, rotulo: m.name || m.id, grupo });
   const gratuito = (m: ModeloCatalogo) => m.id.endsWith(":free");
   const recomendado = catalogo.find((m) => m.id === DEFAULT_MODEL);
+  const destaques = MODELOS_GRATUITOS.filter((m) => m.grupo === "pago").flatMap((m) => { const encontrado = catalogo.find((c) => c.id === m.valor); return encontrado ? [opcao(encontrado, "pago")] : []; });
   const modelos: Opcao[] = [
+    ...destaques,
     ...(recomendado ? [opcao(recomendado, "recomendado")] : []),
     ...catalogo.filter((m) => gratuito(m) && m.id !== DEFAULT_MODEL).sort(porContexto).slice(0, MODELOS_POR_GRUPO).map((m) => opcao(m, "gratuito")),
-    ...catalogo.filter((m) => !gratuito(m)).sort(porContexto).slice(0, MODELOS_POR_GRUPO).map((m) => opcao(m, "pago")),
+    ...catalogo.filter((m) => !gratuito(m) && !destaques.some((d) => d.valor === m.id)).sort(porContexto).slice(0, MODELOS_POR_GRUPO).map((m) => opcao(m, "pago")),
   ];
   if (modelos.length === 0) throw new Error("catálogo vazio");
   cacheModelosDinamicos = { expiraEm: Date.now() + CACHE_MODELOS_MS, modelos };

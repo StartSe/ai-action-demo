@@ -27,8 +27,10 @@ export function BoasVindas({
   cargo,
   duracaoMin,
   onPronto,
+  livekit = false,
 }: {
   codigo: string;
+  livekit?: boolean;
   marca: string;
   nome: string;
   primeiroNome: string;
@@ -42,6 +44,7 @@ export function BoasVindas({
   const [erro, setErro] = useState("");
   const escutaRef = useRef<SpeechRecognition | null>(null);
   const abrindoRef = useRef(false);
+  const testeAtual = useRef(0);
   const prazoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // O que já foi transcrito, para o `onend` decidir sem depender do estado congelado no momento em que
   // os manipuladores da escuta foram criados.
@@ -50,6 +53,7 @@ export function BoasVindas({
   // A escuta continua rodando depois que a tela sai: sem isto, o microfone fica aberto durante a
   // conversa inteira e o navegador mostra o ponto vermelho o tempo todo.
   function pararTeste() {
+    testeAtual.current++;
     if (prazoRef.current) clearTimeout(prazoRef.current);
     const escuta = escutaRef.current;
     escutaRef.current = null;
@@ -83,6 +87,20 @@ export function BoasVindas({
     setFase("pedindo");
     ouviuRef.current = "";
     setOuviu("");
+    if (livekit) {
+      if (!navigator.mediaDevices?.getUserMedia) { setFase("sem-escuta"); return; }
+      const tentativa = testeAtual.current;
+      prazoRef.current = setTimeout(() => { testeAtual.current++; setFase("sem-permissao"); }, 15000);
+      // Vale também para uma nova tentativa após negar a permissão.
+      void navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+        stream.getTracks().forEach((track) => track.stop());
+        if (tentativa === testeAtual.current) entrar(true);
+      }).catch(() => {
+        if (tentativa !== testeAtual.current) return;
+        pararTeste(); setFase("sem-permissao");
+      });
+      return;
+    }
     const Escuta = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!Escuta) {
       setFase("sem-escuta");

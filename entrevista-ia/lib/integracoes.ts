@@ -1,4 +1,6 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
+import { RoomServiceClient } from "livekit-server-sdk";
+import { MODELO_VOZ_PADRAO } from "./livekit";
 import { openrouter, type Integracao, type Opcao } from "./setup-comum";
 import { opcoesDeVoz, type VozDisponivel } from "./vozes";
 import { testarPesquisa, URL_MCP_PADRAO } from "./pesquisa-cliente";
@@ -51,6 +53,8 @@ const ELEVENLABS_VOZ: Integracao = {
   obrigatoria: false,
   link: { url: "https://elevenlabs.io/app/settings/api-keys", rotulo: "Obter a chave da ElevenLabs" },
   campos: [
+    { chave: "ELEVENLABS_MODEL_ID", rotulo: "Modelo de voz", tipo: "select", opcional: true, padrao: MODELO_VOZ_PADRAO,
+      opcoes: [{ valor: "eleven_flash_v2_5", rotulo: "Flash v2.5 — conversa rápida" }, { valor: "eleven_turbo_v2_5", rotulo: "Turbo v2.5" }, { valor: "eleven_multilingual_v2", rotulo: "Multilingual v2" }], ajuda: "Usado com a voz selecionada, tanto no LiveKit quanto na leitura das perguntas." },
     { chave: "ELEVENLABS_API_KEY", rotulo: "Chave da ElevenLabs", tipo: "secret", placeholder: "sk_...", ajuda: "Fica em Settings › API Keys, dentro da sua conta da ElevenLabs." },
     {
       chave: "ELEVENLABS_VOICE_ID",
@@ -89,5 +93,26 @@ const ELEVENLABS_VOZ: Integracao = {
   },
 };
 
+const LIVEKIT: Integracao = {
+  id: "livekit", titulo: "Conversa em tempo real", beneficio: "Permite falar naturalmente com a entrevistadora e interromper quando precisar",
+  descricao: "Conecta o áudio pelo LiveKit Cloud. Usa a voz e o modelo ElevenLabs escolhidos acima, o modelo OpenRouter selecionado e transcrição em português pelo LiveKit Inference.",
+  notaConexao: "Requer um projeto LiveKit Cloud com Inference disponível. O agente inicia automaticamente após salvar. A transcrição e o transporte de áudio usam a conta LiveKit.",
+  obrigatoria: false, link: { url: "https://cloud.livekit.io", rotulo: "Abrir LiveKit Cloud" },
+  campos: [
+    { chave: "LIVEKIT_URL", rotulo: "URL do projeto", tipo: "text", placeholder: "wss://seu-projeto.livekit.cloud" },
+    { chave: "LIVEKIT_API_KEY", rotulo: "API key do LiveKit", tipo: "secret" },
+    { chave: "LIVEKIT_API_SECRET", rotulo: "API secret do LiveKit", tipo: "secret" },
+  ],
+  testar: async (config) => {
+    if (!config.LIVEKIT_URL || !config.LIVEKIT_API_KEY || !config.LIVEKIT_API_SECRET) return { ok: false, mensagem: "Preencha os três campos do projeto LiveKit." };
+    if (!/^wss:\/\//.test(config.LIVEKIT_URL)) return { ok: false, mensagem: "Use a URL segura do projeto, começando com wss://." };
+    try {
+      const client = new RoomServiceClient(config.LIVEKIT_URL, config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET);
+      await client.listRooms();
+      return { ok: true, mensagem: "Projeto conectado. A conversa também precisa de ElevenLabs e OpenRouter configurados." };
+    } catch { return { ok: false, mensagem: "Não conseguimos conectar ao projeto LiveKit. Confira URL, API key e API secret." }; }
+  },
+};
+
 // Somente as conexões usadas no fluxo de entrevista por link.
-export const INTEGRACOES: Integracao[] = [OPENROUTER, ELEVENLABS_VOZ, BRIGHTDATA];
+export const INTEGRACOES: Integracao[] = [OPENROUTER, ELEVENLABS_VOZ, LIVEKIT, BRIGHTDATA];

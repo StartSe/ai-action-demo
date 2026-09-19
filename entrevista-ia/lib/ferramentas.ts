@@ -187,7 +187,7 @@ export const FERRAMENTAS: Ferramenta[] = [
       if (!origem) {
         throw new Error("O app ainda não sabe o próprio endereço público. Abra o app uma vez no navegador (ou defina APP_URL) e peça de novo.");
       }
-      const resultado = atribuirEConvidar({
+      const resultado = await atribuirEConvidar({
         vagaId: String(args.vaga_id || "").trim(),
         candidatoId: String(args.candidato_id || "").trim(),
         expiraEmDias: args.expira_em_dias,

@@ -95,7 +95,7 @@ export function DialogoAtribuirVaga({
                     <span className="text-muted text-[12.5px] shrink-0">Já está nesta vaga</span>
                   ) : (
                     <button type="button" className="btn-ghost !w-auto shrink-0" disabled={Boolean(atribuindo)} onClick={() => void atribuir(v)}>
-                      {atribuindo === v.id ? "Atribuindo" : "Atribuir"}
+                      {atribuindo === v.id ? "Preparando roteiro..." : "Atribuir"}
                     </button>
                   )}
                 </div>

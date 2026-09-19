@@ -1,3 +1,4 @@
+import { comTurnoExclusivo } from "./trava-entrevista";
 // O roteiro da entrevista (US-016): o que a entrevistadora sabe antes de abrir a boca, o plano que
 // ela segue e a fala de cada turno.
 //
@@ -7,7 +8,7 @@
 //     só a parte da ficha que veio do currículo, do gestor e (quando a identidade foi confirmada,
 //     D6) da web. O que a pesquisa trouxe sobre um possível homônimo NÃO entra: uma pergunta feita
 //     a partir do perfil de outra pessoa não dá erro em lugar nenhum, só constrange quem responde.
-//  2. **Planejar uma vez.** `planejarRoteiro()` é UMA chamada de modelo, na abertura da sala,
+//  2. **Planejar uma vez.** `planejarRoteiro()` é UMA chamada de modelo, na criação do convite,
 //     guardada em `entrevistas.roteiro`. Planejar a cada turno faria a conversa esquecer o que já
 //     tinha decidido perguntar e estourar o número de perguntas combinado com o gestor.
 //  3. **Conduzir sem escorregar.** `proximaFala()` segue o plano, aprofunda quando a resposta foi
@@ -350,7 +351,7 @@ export function normalizarRoteiro(bruto: unknown, ctx: ContextoRoteiro, demo = f
   };
 }
 
-/** O plano da conversa. Uma chamada de modelo, feita na abertura da sala e guardada. */
+/** O plano da conversa. Uma chamada de modelo, feita antes de liberar o convite e guardada. */
 export async function planejarRoteiro(ctx: ContextoRoteiro): Promise<Roteiro> {
   if (!aiEnabled()) {
     await esperar(600);
@@ -361,7 +362,7 @@ export async function planejarRoteiro(ctx: ContextoRoteiro): Promise<Roteiro> {
 }
 
 /** Uma ficha gravada num formato antigo (ou escrita por outra versão) nunca derruba a sala. */
-function lerRoteiroGravado(entrevistaId: string): Roteiro | null {
+export function lerRoteiroGravado(entrevistaId: string): Roteiro | null {
   const cru = lerRoteiro(entrevistaId);
   if (!cru) return null;
   try {
@@ -376,15 +377,22 @@ function lerRoteiroGravado(entrevistaId: string): Roteiro | null {
 /**
  * O roteiro desta entrevista: o que já está guardado, ou um recém-planejado e gravado.
  *
- * É aqui que a única chamada de planejamento acontece — a sala chama na abertura e todo turno
+ * É aqui que a única chamada de planejamento acontece — o convite prepara o plano; links legados ainda podem preparar na abertura. Todo turno
  * seguinte cai no caminho do `lerRoteiroGravado`.
  */
+const planejamentos = new Map<string, Promise<Roteiro>>();
 export async function roteiroDaEntrevista(entrevistaId: string, ctx: ContextoRoteiro): Promise<Roteiro> {
   const guardado = lerRoteiroGravado(entrevistaId);
   if (guardado) return guardado;
-  const plano = await planejarRoteiro(ctx);
-  salvarRoteiro(entrevistaId, JSON.stringify(plano));
-  return plano;
+  const emCurso = planejamentos.get(entrevistaId);
+  if (emCurso) return emCurso;
+  const pedido = planejarRoteiro(ctx).then((plano) => {
+    salvarRoteiro(entrevistaId, JSON.stringify(plano));
+    return plano;
+  });
+  planejamentos.set(entrevistaId, pedido);
+  try { return await pedido; }
+  finally { planejamentos.delete(entrevistaId); }
 }
 
 /** O plano em texto corrido, para quem não fala JSON: o prompt de cada turno e (US-019) a variável
@@ -563,7 +571,7 @@ async function escreverFala({
     "Escreva a fala.",
   ].join("\n");
 
-  const resposta = await askJSON<{ fala?: unknown }>({ system: SYSTEM_FALA, prompt, maxTokens: 400, limiteMs: 25000 });
+  const resposta = await askJSON<{ fala?: unknown }>({ system: SYSTEM_FALA, prompt, maxTokens: 400, limiteMs: 8000 });
   return corte(resposta?.fala);
 }
 
@@ -641,7 +649,7 @@ export async function proximaFala(
   opcoes: { nivelVoz?: NivelVoz } = {},
 ): Promise<Fala> {
   const anterior = turnosEmCurso.get(entrevistaId) ?? Promise.resolve();
-  const atual = anterior.catch(() => {}).then(() => executarProximaFala(entrevistaId, ultimaResposta, ordem, opcoes));
+  const atual = anterior.catch(() => {}).then(() => comTurnoExclusivo(entrevistaId, () => executarProximaFala(entrevistaId, ultimaResposta, ordem, opcoes)));
   turnosEmCurso.set(entrevistaId, atual);
   try { return await atual; }
   finally { if (turnosEmCurso.get(entrevistaId) === atual) turnosEmCurso.delete(entrevistaId); }

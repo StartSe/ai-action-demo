@@ -126,6 +126,19 @@ Na sala do candidato, a leitura da conversa repete erros de rede e respostas 502
 
 ## Versão instalada
 
-Configurações (`/setup`) mostra a versão instalada, incorporada ao build a partir do campo `version` do `package.json`. A versão `0.2.0` inclui o progresso do enriquecimento e a recuperação de falhas na abertura da entrevista.
+Configurações (`/setup`) mostra a versão instalada, incorporada ao build a partir do campo `version` do `package.json`. A versão `0.3.0` prepara o roteiro antes de liberar o convite, adiciona a sala LiveKit com voz ElevenLabs e amplia a seleção de modelos OpenAI e Gemini pelo OpenRouter.
 
 Antes de publicar uma atualização deste app, incremente a versão na pasta `entrevista-ia` com `npm version patch --no-git-tag-version` (correções) ou `npm version minor --no-git-tag-version` (novos recursos). O comando mantém `package.json` e `package-lock.json` sincronizados. Gere e publique uma nova imagem; depois de atualizar a instalação, confira o número em Configurações. A tela identifica a versão instalada, sem consultar automaticamente se há uma atualização disponível.
+
+
+## Conversa LiveKit (0.3.0)
+
+Em Configurações, salve OpenRouter, a chave ElevenLabs, a voz e o modelo de voz. Depois, no cartão **Conversa em tempo real**, informe `LIVEKIT_URL` (`wss://...livekit.cloud`), `LIVEKIT_API_KEY` e `LIVEKIT_API_SECRET` do mesmo projeto LiveKit Cloud. A conta precisa ter LiveKit Inference disponível para transcrição Deepgram Nova-3 em português. As chaves ficam no servidor, cifradas no banco, e não são enviadas ao navegador.
+
+`npm run dev` e `npm start` iniciam o site e supervisionam o agente. O agente inicia após salvar as conexões; não exige outro serviço ou disco. A imagem Docker usa Debian e inclui as bibliotecas nativas de áudio. A porta interna 8091 verifica a saúde do agente; apenas a porta web precisa ser publicada. Use uma única instância com o disco persistente deste projeto. Dimensione memória para o Next e o processo de áudio; acompanhe o consumo da instalação antes de aumentar entrevistas simultâneas.
+
+Sem LiveKit configurado, o fluxo por voz do navegador e texto continua disponível. Com LiveKit, a sala oferece conversa por áudio contínuo, interrupção, transcrição, pausa do microfone e reconexão. O botão de texto continua disponível quando a voz falha. A voz e o modelo ElevenLabs selecionados valem para novas sessões, e o modelo OpenRouter selecionado conduz os turnos. As respostas continuam salvas na mesma entrevista e alimentam o parecer existente.
+
+A criação do convite prepara e salva o roteiro **antes de disponibilizar o link**. Se a IA falhar, a criação informa o problema e permite tentar novamente. A abertura de um novo convite usa o roteiro salvo, sem uma chamada de planejamento. Links antigos sem roteiro mantêm o caminho de compatibilidade do app.
+
+Referências de implementação: [LiveKit Agents](https://docs.livekit.io/agents/start/voice-ai/), [ElevenLabs TTS](https://docs.livekit.io/agents/models/tts/elevenlabs/), [transcrição LiveKit](https://docs.livekit.io/agents/models/stt/), [catálogo OpenRouter](https://openrouter.ai/api/v1/models) e [Chat Completions OpenAI](https://developers.openai.com/api/reference/resources/chat).

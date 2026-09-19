@@ -1,19 +1,25 @@
 {
   "name": "entrevista-ia",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node --import tsx scripts/servico.ts --dev",
+    "build": "next build && node scripts/preparar-standalone.mjs",
+    "start": "node --import tsx scripts/servico.ts",
     "lint": "eslint",
-    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/gancho-ts.mjs --test lib/*.test.ts"
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/gancho-ts.mjs --test lib/*.test.ts",
+    "agent": "node --import tsx agents/entrevistadora.ts"
   },
   "dependencies": {
+    "@livekit/agents": "^1.9.0",
+    "@livekit/agents-plugin-elevenlabs": "^1.9.0",
+    "livekit-client": "^2.22.3",
+    "livekit-server-sdk": "^2.19.0",
     "next": "16.3.5",
     "nodemailer": "^10.0.9",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "tsx": "^4.23.13",
     "unpdf": "^1.8.1"
   },
   "devDependencies": {

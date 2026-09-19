@@ -21,7 +21,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const corpo = await req.json().catch(() => ({}));
   registrarEnderecoPublico(req);
-  const resultado = convidar({
+  const resultado = await convidar({
     entrevistaId: id,
     expiraEmDias: corpo?.expiraEmDias,
     origem: baseUrl(req),

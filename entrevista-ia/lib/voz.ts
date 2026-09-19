@@ -155,7 +155,7 @@ export async function gerarAudio(texto: string): Promise<ArrayBuffer> {
         "Content-Type": "application/json",
         accept: "audio/mpeg",
       },
-      body: JSON.stringify({ text: texto, model_id: "eleven_multilingual_v2" }),
+      body: JSON.stringify({ text: texto, model_id: getConfig("ELEVENLABS_MODEL_ID") || "eleven_flash_v2_5" }),
     });
   } catch (err) {
     throw falhaDeRede(err, "voz");

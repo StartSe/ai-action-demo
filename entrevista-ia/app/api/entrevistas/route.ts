@@ -41,7 +41,7 @@ export async function POST(req: Request) {
   registrarEnderecoPublico(req);
   // As regras de "esta vaga aceita mais alguém?" moram em lib/convite.ts, não aqui: a ferramenta
   // criar_convite do MCP (US-027) entra pela mesma porta e tem de recusar exatamente o mesmo.
-  const resultado = atribuirEConvidar({
+  const resultado = await atribuirEConvidar({
     vagaId: typeof corpo?.vagaId === "string" ? corpo.vagaId : "",
     candidatoId: typeof corpo?.candidatoId === "string" ? corpo.candidatoId : "",
     expiraEmDias: corpo?.expiraEmDias,
