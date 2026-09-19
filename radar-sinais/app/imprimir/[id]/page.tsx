@@ -4,7 +4,7 @@ import { data } from "@/lib/formato";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
 import type { DadosRadar, Radar } from "@/lib/types";
-import { ConteudoRadar } from "../../page";
+import { ConteudoRadar } from "../../radar/page";
 import { ImprimirAoCarregar } from "./ImprimirAoCarregar";
 
 export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
@@ -21,7 +21,7 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
         <div className="text-muted text-sm">{data(new Date())}</div>
       </header>
 
-      <ConteudoRadar radar={registro.saida} />
+      <ConteudoRadar radar={registro.saida} impressao />
 
       <footer className="mt-8 pt-4 border-t border-line">
         <Origem meta={registro.meta} />

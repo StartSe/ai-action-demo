@@ -1,3 +1,5 @@
+> **Radar estratégico:** veja [a pesquisa técnica e o funcionamento](docs/pesquisa-estrategica.md) para last30days, fontes cadastradas, Grok X Search, ontologia e cache Redis. As telas principais são Início (`/`), Termos (`/termos`), Radar & Insights (`/radar`), Relatórios (`/historico`) e Configurações (`/setup`).
+
 # Radar de Sinais
 
 Radar de sinais de mercado gerado por IA a partir dos temas que você acompanha, agrupados por força e tendência e conectados entre si. Área: Estratégia, Inovação.

@@ -127,7 +127,7 @@ export function aiEnabled(): boolean {
 
 /** As tarefas que podem usar modelos diferentes. "padrao" é tudo o que o app gera no dia a dia;
  * "avaliacao" é o que julga um trabalho e vira nota — vale pagar um modelo mais capaz só nela. */
-export type TarefaIA = "padrao" | "avaliacao";
+export type TarefaIA = "padrao" | "avaliacao" | "ontologia";
 
 /** Modelo escolhido à mão em /setup, ou nada quando o campo está em "Automático". */
 function escolhido(chave: string): string | undefined {
@@ -139,6 +139,7 @@ function escolhido(chave: string): string | undefined {
  * específico — mesmo desenho de visionModelName()/OPENROUTER_MODEL_VISAO. */
 export function modelName(tarefa: TarefaIA = "padrao"): string {
   const padrao = escolhido("OPENROUTER_MODEL") || DEFAULT_MODEL;
+  if (tarefa === "ontologia") return escolhido("OPENROUTER_MODEL_ONTOLOGIA") || padrao;
   if (tarefa === "avaliacao") return escolhido("OPENROUTER_MODEL_AVALIACAO") || padrao;
   return padrao;
 }
@@ -169,7 +170,7 @@ export async function askText({ system, prompt, maxTokens = 4000, temperature = 
   const fallbacks = (getConfig("OPENROUTER_FALLBACK_MODELS") || FALLBACK_MODELS.join(",")).split(",").map((m) => m.trim()).filter(Boolean);
   const res = await chamarOpenRouter({
     model: escolha,
-    models: [escolha, ...fallbacks],
+    models: model ? [escolha] : [escolha, ...fallbacks],
     messages,
     max_tokens: maxTokens,
     temperature,

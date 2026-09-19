@@ -171,9 +171,9 @@ function raioNo(no: No): number {
 
 const ROTULO_TIPO: Record<No["tipo"], string> = { tema: "Tema", sinal: "Sinal", ator: "Ator", tecnologia: "Tecnologia" };
 
-const COR_TEMA = "var(--color-ink)";
-const COR_SINAL = "var(--color-accent)";
-const COR_OUTRO = "#eef0f2";
+const COR_TEMA = "#087d96";
+const COR_SINAL = "#8864df";
+const COR_OUTRO = "#a9dce8";
 const BORDA_OUTRO = "1.5px solid #98a2b3";
 
 export type GrafoJSON = {
@@ -317,7 +317,7 @@ export function Grafo({ nos, arestas, sinais }: { nos: No[]; arestas: Aresta[]; 
                 onFocus={() => setSelecionado(no.id)}
                 aria-label={`${ROTULO_TIPO[no.tipo]}: ${no.rotulo}`}
               >
-                <span className="block rounded-full shrink-0" style={{ width: raio * 2, height: raio * 2, backgroundColor: corFundo, border: borda }} />
+                <span className="block rounded-full shrink-0" style={{ width: raio * 2, height: raio * 2, backgroundColor: corFundo, border: borda, boxShadow: no.tipo === "tema" ? "0 0 0 5px #dbf1f5, 0 0 18px #92d7e3" : no.tipo === "sinal" ? "0 0 0 3px #eee8fc" : undefined }} />
                 <span className={`${classeRotulo} absolute top-full left-1/2 -translate-x-1/2 mt-0.5 w-[110px] pointer-events-none`}>
                   <span className="block text-[10px] leading-tight line-clamp-2 text-center px-1 rounded bg-surface/90 text-ink font-medium">{no.rotulo}</span>
                 </span>

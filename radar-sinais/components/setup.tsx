@@ -1,8 +1,9 @@
 "use client";
 // Tela de configuração inicial, gerada a partir de lib/integracoes.ts. Compartilhada pela suíte: copie sem alterar.
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState, type ReactNode } from "react";
-import { IlustracaoSegmento, MaisDetalhes, Topbar, useStatus } from "./ui";
+import { MaisDetalhes, Topbar, useStatus } from "./ui";
 import type { CampoStatus, IntegracaoStatus, Opcao, StatusCaixasEmail, StatusEnderecoPublico } from "@/lib/setup-comum";
 import type { Segmento } from "@/lib/ilustracao";
 
@@ -14,10 +15,6 @@ type Resposta = { integracoes: IntegracaoStatus[]; pronto: boolean; enderecoPubl
 // rodapé: mesmo texto nos dois lugares, nunca reescritas.
 const FRASE_PRIVACIDADE = "As chaves ficam cifradas neste app, no seu servidor. Nunca aparecem por inteiro depois de salvas.";
 const FRASE_CONEXOES = "Seus dados não passam por nenhum servidor nosso: o app fala direto com os serviços que você conectar.";
-
-// Três garantias genéricas (nenhuma referência ao domínio de um app específico) mostradas na coluna de
-// apoio de /setup, ao lado da ilustração do segmento.
-const ITENS_APOIO = ["Leva menos de 2 minutos", "Você decide o que conectar", "Pode trocar quando quiser"];
 
 // Ícone circular de cada cartão, por id de integração (ver public/ilustracoes/icones). Ids não listados
 // caem no ícone padrão — cobre integrações futuras (MCP_TAREFAS, MCP_CRM etc.) sem precisar de mudança aqui.
@@ -34,18 +31,10 @@ function iconeIntegracao(id: string): string {
   return ICONE_POR_ID[id] ?? ICONE_PADRAO;
 }
 
-function IconeApoio() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0 mt-0.5" aria-hidden="true">
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
-
 /** `children`: cartões próprios do app (política, webhook...) que precisam aparecer ANTES do rodapé "Ir
  * para o app" — quem entra em /setup não deve ser convidado a sair antes de ver o que ainda falta
  * configurar. Cartões secundários (como "Usar dentro do seu assistente") continuam depois da tela. */
-export function SetupPage({ marca, nome, area, segmento, children }: { marca: string; nome: string; area: string; segmento: Segmento; children?: ReactNode }) {
+export function SetupPage({ marca, nome, area, children }: { marca: string; nome: string; area: string; segmento: Segmento; children?: ReactNode }) {
   const { status, erro } = useStatus();
   const [dados, setDados] = useState<Resposta | null>(null);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
@@ -71,28 +60,9 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
   return (
     <>
       <Topbar marca={marca} nome={nome} area={area} status={status} erro={erro} usuario={status?.usuario} />
-      <main className="max-w-[1100px] mx-auto px-8 max-md:px-4 pt-8 pb-16">
-        <div className="grid grid-cols-[260px_minmax(0,1fr)] max-md:grid-cols-1 gap-10 max-md:gap-6">
-          <aside className="flex flex-col gap-5 self-start md:sticky md:top-6">
-            <div>
-              <p className="sobretitulo mb-1">{area}</p>
-              <h1 className="titulo-painel mb-2">Configuração inicial</h1>
-              <p className="apoio max-w-[280px]">{FRASE_PRIVACIDADE}</p>
-              <p className="apoio max-w-[280px] mt-2">{FRASE_CONEXOES}</p>
-            </div>
-            <ul className="flex flex-col gap-2.5">
-              {ITENS_APOIO.map((item) => (
-                <li key={item} className="flex items-start gap-2 text-sm text-ink-2">
-                  <IconeApoio />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="relative w-full max-w-[220px] max-md:hidden">
-              <div className="blob-acento" />
-              <IlustracaoSegmento segmento={segmento} className="relative w-full h-auto" />
-            </div>
-          </aside>
+      <main className="max-w-[1400px] mx-auto px-8 max-md:px-4 pt-8 pb-16">
+        <div className="grid grid-cols-1 gap-7 [&>*]:min-w-0">
+          <header className="max-w-3xl"><p className="sobretitulo mb-2">Configurações</p><h1 className="titulo-painel">Deixe seu Radar do seu jeito</h1><p className="text-muted mt-3">Conecte fontes, defina o período e escolha como o Radar busca, analisa e entrega os sinais do seu negócio.</p></header>
 
           <div>
             {dados && (
@@ -122,7 +92,7 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
                 <h2 className="text-lg font-bold mb-1">Tudo pronto</h2>
                 <p className="text-muted text-sm mb-4">Já dá para usar o app com IA de verdade.</p>
                 <div className="flex items-center gap-3 flex-wrap">
-                  <Link href="/?exemplo=1" className="btn-primary !w-auto">Testar com um exemplo</Link>
+                  <Link href="/radar?exemplo=1" className="btn-primary !w-auto">Testar com um exemplo</Link>
                   <Link href="/" className="btn-ghost">Ir para o app</Link>
                 </div>
                 {opcionaisFaltando.length > 0 && (
@@ -141,7 +111,10 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
               </section>
             )}
 
+            <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-6 items-start [&>*]:min-w-0">
+            {children && <div className="space-y-5">{children}</div>}
             <div className="flex flex-col gap-5">
+              <h2 className="font-bold text-xl">Conexões e modelos</h2>
               {dados?.integracoes.map((i, indice) => (
                 <CartaoIntegracao
                   key={i.id}
@@ -154,7 +127,7 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
               ))}
             </div>
 
-            {children && <div className="flex flex-col gap-5 mt-5">{children}</div>}
+            </div>
 
             <footer className="mt-8 pt-6 border-t border-line">
               <p className="text-muted text-[13px] max-w-[560px]">{FRASE_PRIVACIDADE}</p>
@@ -304,18 +277,19 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
         <div className="relative shrink-0">
           <span className="absolute -left-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-[11px] font-bold text-white">{numero}</span>
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft overflow-hidden">
-            <img src={`/ilustracoes/icones/${iconeIntegracao(i.id)}.webp`} alt="" aria-hidden="true" width={32} height={32} className="h-8 w-8 object-contain" />
+            <Image src={`/ilustracoes/icones/${iconeIntegracao(i.id)}.webp`} alt="" aria-hidden="true" width={32} height={32} className="h-8 w-8 object-contain" />
           </div>
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h2 className="text-lg font-bold">{i.titulo}</h2>
-            <span className={`chip-status ${i.configurada ? "chip-status-conectado" : "chip-status-pendente"}`}>{i.configurada ? "Conectado" : "Pendente"}</span>
+            <span className={`chip-status ${i.configurada ? "chip-status-conectado" : "chip-status-pendente"}`}>{i.configurada ? "Configurado" : "Pendente"}</span>
           </div>
-          <p className="mt-0.5 truncate text-sm text-ink-2">{i.beneficio || i.descricao}</p>
+          <p className="mt-0.5 text-sm text-ink-2">{i.beneficio || i.descricao}</p>
         </div>
       </div>
 
+      {i.beneficio && <p className="text-sm text-muted mb-4">{i.descricao}</p>}
       {i.oauth ? (
         <>
           <div className="flex items-center gap-3 flex-wrap justify-end max-md:flex-col max-md:items-stretch mb-4">
@@ -335,7 +309,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
             )}
           </div>
           {!i.configurada && i.notaConexao && <p className="text-[12.5px] text-muted -mt-2 mb-4">{i.notaConexao}</p>}
-          <MaisDetalhes titulo="Opções avançadas: colar uma chave">
+          <MaisDetalhes titulo={i.id === "openrouter" ? "Chave e modelos de IA" : "Opções avançadas: colar uma chave"}>
             {campos}
             {opcoesAvancadas}
             {acoesSalvar}

@@ -1,3 +1,7 @@
+import { buscarComCache } from "./cache-busca";
+import { COLETORES } from "./pesquisa";
+import { buscarGrok } from "./grok";
+import { pertenceAoSite } from "./pesquisa";
 import { brightDataConectada, buscarBrightData } from "./brightdata";
 // Motor de busca em fontes reais para o radar de sinais. Sem chave: Hacker News, Reddit, GitHub e Google Notícias
 // (consulta em português do Brasil). Com chave: Exa ou Tavily (notícias em português e web em geral, com trechos).
@@ -37,6 +41,7 @@ const TEMPO_LIMITE_MS = 12_000;
 
 /** Pontuação simples: engajamento normalizado (log para não deixar um outlier dominar) menos uma penalidade por idade. */
 function pontuar(engajamento: number, publicadoEm: string, diasDoPeriodo: number): number {
+  if (!publicadoEm || !Number.isFinite(Date.parse(publicadoEm))) return Math.log10(Math.max(0, engajamento) + 1) * 10;
   const idadeDias = Math.max(0, (Date.now() - new Date(publicadoEm).getTime()) / 86_400_000);
   const recencia = Math.max(0, 1 - idadeDias / Math.max(1, diasDoPeriodo));
   return Math.log10(engajamento + 1) * 10 + recencia * 5;
@@ -66,7 +71,7 @@ const HACKERNEWS: Provedor = {
     return (data.hits || [])
       .filter((h) => h.title)
       .map((h) => {
-        const publicadoEm = h.created_at || new Date().toISOString();
+        const publicadoEm = dataPublicacao(h.created_at);
         const engajamento = (h.points ?? 0) + (h.num_comments ?? 0);
         return {
           titulo: h.title!,
@@ -180,7 +185,7 @@ const GOOGLENEWS: Provedor = {
         // O título do RSS vem como "Manchete - Veículo": tira o sufixo quando bate com a fonte.
         const titulo = tituloBruto.endsWith(` - ${veiculo}`) ? tituloBruto.slice(0, -(veiculo.length + 3)).trim() : tituloBruto;
         const link = campoRss(item, "link");
-        const publicadoEm = new Date(campoRss(item, "pubDate") || Date.now()).toISOString();
+        const publicadoEm = dataPublicacao(campoRss(item, "pubDate"));
         return { titulo, link, veiculo, publicadoEm, descricao: decodificarHtml(campoRss(item, "description")) };
       })
       .filter((i) => i.titulo && i.link && new Date(i.publicadoEm).getTime() >= corte)
@@ -235,7 +240,7 @@ const EXA: Provedor = {
     if (!r.ok) throw falhaHttp("exa", r);
     const data = (await r.json()) as { results?: { title?: string; url: string; publishedDate?: string; score?: number; highlights?: string[] }[] };
     return (data.results || []).map((res) => {
-      const publicadoEm = res.publishedDate || new Date().toISOString();
+      const publicadoEm = dataPublicacao(res.publishedDate);
       return {
         titulo: res.title || res.url,
         url: res.url,
@@ -265,7 +270,7 @@ const TAVILY: Provedor = {
     if (!r.ok) throw falhaHttp("tavily", r);
     const data = (await r.json()) as { results?: { title?: string; url: string; content?: string; score?: number; published_date?: string }[] };
     return (data.results || []).map((res) => {
-      const publicadoEm = res.published_date ? new Date(res.published_date).toISOString() : new Date().toISOString();
+      const publicadoEm = dataPublicacao(res.published_date);
       return {
         titulo: res.title || res.url,
         url: res.url,
@@ -280,16 +285,25 @@ const TAVILY: Provedor = {
 };
 
 /** Ordem de consulta e de exibição. Fontes sem chave primeiro; as com chave só entram quando conectadas. */
-const PROVEDORES: Provedor[] = [HACKERNEWS, REDDIT, GITHUB, GOOGLENEWS, EXA, TAVILY, { id: "brightdata", comChave: true, disponivel: brightDataConectada, buscar: buscarBrightData }];
+const PROVEDORES: Provedor[] = [{ id: "grok", comChave: true, disponivel: () => Boolean(getConfig("XAI_API_KEY")), buscar: buscarGrok }, HACKERNEWS, REDDIT, GITHUB, GOOGLENEWS, EXA, TAVILY, { id: "brightdata", comChave: true, disponivel: brightDataConectada, buscar: buscarBrightData }];
 
-/** URL "normalizada" para deduplicar: sem protocolo, sem www, sem barra final, sem querystring/hash. */
-function normalizarUrl(url: string): string {
+/** Mantém parâmetros que identificam documentos; remove apenas rastreamento. */
+export function normalizarUrl(url: string): string {
   try {
     const u = new URL(url);
-    return `${u.hostname.replace(/^www\./, "")}${u.pathname}`.replace(/\/+$/, "").toLowerCase();
-  } catch {
-    return url.trim().toLowerCase();
-  }
+    u.hash = "";
+    for (const chave of [...u.searchParams.keys()]) if (/^utm_|^(fbclid|gclid)$/i.test(chave)) u.searchParams.delete(chave);
+    u.searchParams.sort();
+    return `${u.hostname.replace(/^www\./, "")}${u.pathname.replace(/\/+$/, "")}${u.search}`;
+  } catch { return url.trim(); }
+}
+export function dataPublicacao(valor?: string): string {
+  if (!valor) return "";
+  const instante = Date.parse(valor);
+  return Number.isFinite(instante) ? new Date(instante).toISOString() : "";
+}
+export function filtrarPeriodo(achados: Achado[], dias: number, agora = Date.now()): Achado[] {
+  return achados.filter(a => /^https?:\/\//i.test(a.url) && (!a.publicadoEm || (Date.parse(a.publicadoEm) >= agora - dias * 86400000 && Date.parse(a.publicadoEm) <= agora)));
 }
 
 function normalizarTitulo(titulo: string): string {
@@ -334,13 +348,18 @@ export type ResultadoBusca = { achados: Achado[]; fontes: EstadoFonte[] };
  * situação de cada fonte nesta consulta. `aoResponder` é chamado com o nome de cada fonte assim que ela responde
  * (a tela mostra "já responderam: ..." enquanto espera). Cada provedor roda isolado: uma falha só gera console.error.
  */
-export async function buscarDetalhado({ consulta, dias, aoResponder }: { consulta: string; dias: number; aoResponder?: (fonte: string) => void }): Promise<ResultadoBusca> {
-  const disponiveis = PROVEDORES.filter((p) => p.disponivel());
+export async function buscarDetalhado({ consulta, dias, aoResponder, provedores, site }: { consulta: string; dias: number; aoResponder?: (fonte: string) => void; provedores?: IdFonteBusca[]; site?: string }): Promise<ResultadoBusca> {
+  const selecionados = PROVEDORES.filter(p => (!provedores || provedores.includes(p.id)) && (!site || ["exa", "tavily", "brightdata"].includes(p.id)));
+  const disponiveis = selecionados.filter(p => p.disponivel());
+  if (!disponiveis.length) throw new ErroBusca("Nenhum buscador selecionado está configurado. Revise as fontes em Configurações.");
   const resultados = await Promise.allSettled(
     disponiveis.map(async (p) => {
-      const achados = await p.buscar(consulta, dias);
+      const query = site ? `${consulta} site:${new URL(site).hostname}${new URL(site).pathname.replace(/\/$/, "")}` : consulta;
+      const campo = COLETORES.find(c => c.id === p.id)?.chave;
+      const resultado = await buscarComCache([p.id, query, dias, campo ? getConfig(campo) : "publico", p.id === "grok" ? getConfig("XAI_SEARCH_MODEL") : ""], () => p.buscar(query, dias));
+      const achados = filtrarPeriodo(resultado.achados, dias).filter(a => !site || pertenceAoSite(a.url, site));
       aoResponder?.(NOMES_FONTE[p.id]);
-      return achados;
+      return { ...resultado, achados };
     })
   );
 
@@ -348,9 +367,9 @@ export async function buscarDetalhado({ consulta, dias, aoResponder }: { consult
   const fontes: EstadoFonte[] = resultados.map((res, i) => {
     const p = disponiveis[i];
     if (res.status === "fulfilled") {
-      achados.push(...res.value);
+      achados.push(...res.value.achados);
       ultimoEstado.set(p.id, { estado: "ok", em: Date.now() });
-      return estadoDe(p, "ok");
+      return { ...estadoDe(p, "ok"), cache: res.value.cache, coletadoEm: res.value.coletadoEm };
     }
     console.error(`Provedor de busca "${p.id}" falhou:`, res.reason);
     const estado: EstadoFonte["estado"] = res.reason instanceof ChaveRecusada ? "chave_recusada" : "indisponivel";
@@ -362,7 +381,7 @@ export async function buscarDetalhado({ consulta, dias, aoResponder }: { consult
     throw new ErroBusca("Nenhuma fonte de busca respondeu agora. Tente novamente em alguns minutos.");
   }
 
-  return { achados: deduplicar(achados).slice(0, MAXIMO_ACHADOS), fontes };
+  return { achados: deduplicar(achados).slice(0, MAXIMO_ACHADOS), fontes: [...fontes, ...selecionados.filter(p => !p.disponivel()).map(p => estadoDe(p, "sem_chave"))] };
 }
 
 /** Só os achados (compatível com quem não precisa da situação das fontes). */
@@ -375,9 +394,10 @@ export async function buscar(args: { consulta: string; dias: number }): Promise<
  * (uma vez a cada 15 minutos por processo) para a linha "Fontes desta rodada" já dizer, por exemplo, que o Reddit
  * está indisponível; fontes com chave só dizem se a chave existe (a recusa aparece na rodada de verdade).
  */
-export async function estadoDasFontes(): Promise<EstadoFonte[]> {
+export async function estadoDasFontes(selecionadas?: IdFonteBusca[]): Promise<EstadoFonte[]> {
   const agora = Date.now();
-  const sondar = PROVEDORES.filter((p) => !p.comChave && (!ultimoEstado.has(p.id) || agora - ultimoEstado.get(p.id)!.em > VALIDADE_SONDAGEM_MS));
+  const habilitados = PROVEDORES.filter(p => !selecionadas || selecionadas.includes(p.id));
+  const sondar = habilitados.filter((p) => !p.comChave && (!ultimoEstado.has(p.id) || agora - ultimoEstado.get(p.id)!.em > VALIDADE_SONDAGEM_MS));
   if (sondar.length > 0) {
     const resultados = await Promise.allSettled(sondar.map((p) => p.buscar("inteligência artificial", 7)));
     resultados.forEach((res, i) => {
@@ -385,7 +405,7 @@ export async function estadoDasFontes(): Promise<EstadoFonte[]> {
       ultimoEstado.set(sondar[i].id, { estado: res.status === "fulfilled" ? "ok" : "indisponivel", em: Date.now() });
     });
   }
-  return PROVEDORES.map((p) => {
+  return habilitados.map((p) => {
     if (p.comChave) return estadoDe(p, p.disponivel() ? (ultimoEstado.get(p.id)?.estado ?? "ok") : "sem_chave");
     return estadoDe(p, ultimoEstado.get(p.id)?.estado ?? "ok");
   });
