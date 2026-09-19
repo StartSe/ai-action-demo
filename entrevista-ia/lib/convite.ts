@@ -1,3 +1,4 @@
+import type { AoProgressoConvite } from "./progresso-convite";
 import { montarContexto, roteiroDaEntrevista } from "./roteiro";
 // O convite de uma entrevista (US-014): o link público que o candidato abre, até quando ele vale e a
 // mensagem pronta para colar num e-mail ou numa conversa.
@@ -177,12 +178,15 @@ export async function convidar({
   expiraEmDias,
   origem,
   remetente,
+  progresso,
 }: {
   entrevistaId: string;
   expiraEmDias?: unknown;
   origem: string;
   remetente?: string;
+  progresso?: AoProgressoConvite;
 }): Promise<ResultadoConvite> {
+  progresso?.("dados");
   const entrevista = obterEntrevista(entrevistaId);
   if (!entrevista) return { ok: false, erro: "Essa entrevista não existe mais.", status: 404 };
   if (entrevista.status === "cancelada") {
@@ -203,6 +207,7 @@ export async function convidar({
   const contexto = montarContexto(entrevista.id);
   if (!contexto) return { ok: false, erro: "Não foi possível preparar os dados desta entrevista.", status: 404 };
   try {
+    progresso?.("roteiro");
     await roteiroDaEntrevista(entrevista.id, contexto);
   } catch (err) {
     console.error("Preparação do convite falhou:", err);
@@ -212,6 +217,9 @@ export async function convidar({
   const vigente = obterEntrevista(entrevista.id);
   if (!vigente || vigente.status === "cancelada") return { ok: false, erro: "Esta entrevista foi cancelada durante a preparação.", status: 409 };
 
+  const vagaAtual = obterVaga(vigente.vagaId);
+  if (!vagaAtual || vagaAtual.status === "encerrada") return { ok: false, erro: "A vaga foi encerrada durante a preparação. Reabra a vaga antes de gerar o convite.", status: 409 };
+  progresso?.("link");
   const dias = prazoValido(expiraEmDias);
   const expiraEm = new Date(Date.now() + dias * 24 * 60 * 60 * 1000).toISOString();
   const precisaDeLinkNovo = !vigente.codigo || vigente.status === "expirada" || !obterFormulario(vigente.codigo);
@@ -259,13 +267,16 @@ export async function atribuirEConvidar({
   expiraEmDias,
   origem,
   remetente,
+  progresso,
 }: {
   vagaId: string;
   candidatoId: string;
   expiraEmDias?: unknown;
   origem: string;
   remetente?: string;
+  progresso?: AoProgressoConvite;
 }): Promise<ResultadoAtribuicao> {
+  progresso?.("dados");
   const vaga = obterVaga(vagaId);
   if (!vaga) return { ok: false, erro: "Essa vaga não existe mais.", status: 404 };
   if (vaga.status === "encerrada") {
@@ -274,9 +285,9 @@ export async function atribuirEConvidar({
   if (!obterCandidato(candidatoId)) return { ok: false, erro: "Esse candidato não existe mais.", status: 404 };
 
   const entrevista = criarEntrevista({ vagaId, candidatoId });
-  const resultado = await convidar({ entrevistaId: entrevista.id, expiraEmDias, origem, remetente });
+  const resultado = await convidar({ entrevistaId: entrevista.id, expiraEmDias, origem, remetente, progresso });
   if (!resultado.ok) return resultado;
-  return { ok: true, entrevista, convite: resultado.convite };
+  return { ok: true, entrevista: obterEntrevista(entrevista.id)!, convite: resultado.convite };
 }
 
 /** Cancela a entrevista e encerra o link: quem abrir o endereço depois disso lê que o convite foi

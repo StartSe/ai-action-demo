@@ -5,6 +5,7 @@
 // A busca é por nome e acontece no servidor (`GET /api/candidatos?busca=`), não em memória: a lista
 // de candidatos cresce com o tempo e filtrar no navegador exigiria baixá-la inteira toda vez.
 import Link from "next/link";
+import { ProgressoConvite, usePrepararConvite } from "./ProgressoConvite";
 import { useDialogo } from "./useDialogo";
 import { useEffect, useRef, useState } from "react";
 import { ErrorBox, lerErro, type ErroLido } from "./ui";
@@ -35,6 +36,7 @@ export function DialogoAdicionarCandidato({
   const [itens, setItens] = useState<CandidatoDaBusca[] | null>(null);
   const [atribuindo, setAtribuindo] = useState("");
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);
+  const { progresso, preparar } = usePrepararConvite();
   const caixaRef = useRef<HTMLDivElement>(null);
   useDialogo(caixaRef, onFechar);
 
@@ -61,13 +63,7 @@ export function DialogoAdicionarCandidato({
     setAtribuindo(candidato.id);
     setErroTela(null);
     try {
-      const r = await fetch("/api/entrevistas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vagaId, candidatoId: candidato.id }),
-      });
-      if (!r.ok) throw r;
-      const { entrevista } = await r.json();
+      const { entrevista } = await preparar<{ entrevista: { id: string } }>("/api/entrevistas", { vagaId, candidatoId: candidato.id });
       onAtribuido({ candidatoNome: candidato.nome, entrevistaId: entrevista.id });
     } catch (e) {
       setErroTela(await lerErro(e));
@@ -78,6 +74,7 @@ export function DialogoAdicionarCandidato({
   return (
     <div className="fixed inset-0 z-30 bg-black/40 grid place-items-center px-4" role="presentation">
       <div ref={caixaRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="titulo-adicionar-candidato" className="card w-full max-w-[480px] p-7 max-md:p-5 max-h-[calc(100dvh-3rem)] overflow-y-auto">
+        <button type="button" className="btn-link float-right ml-3 sticky top-0 bg-white" onClick={onFechar} aria-label="Fechar preparação do convite">Fechar</button>
         <h2 id="titulo-adicionar-candidato" className="text-xl font-extrabold mb-1.5">Para quem é a entrevista?</h2>
         <p className="text-muted text-sm mb-5">Selecione ou cadastre um candidato para gerar o link da entrevista de {cargo}.</p>
 
@@ -93,6 +90,7 @@ export function DialogoAdicionarCandidato({
           />
         </div>
 
+        <ProgressoConvite estado={progresso} />
         {erroTela && <div className="mb-4"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao} /></div>}
 
         <div className="border border-line rounded-card divide-y divide-line max-h-[280px] overflow-y-auto mb-5">
@@ -115,7 +113,7 @@ export function DialogoAdicionarCandidato({
                     <span className="text-muted text-[12.5px] shrink-0">Já está nesta vaga</span>
                   ) : (
                     <button type="button" className="btn-ghost !w-auto shrink-0" disabled={Boolean(atribuindo)} onClick={() => void atribuir(c)}>
-                      {atribuindo === c.id ? "Preparando roteiro..." : "Gerar link"}
+                      {atribuindo === c.id ? "Gerando…" : "Gerar link"}
                     </button>
                   )}
                 </div>

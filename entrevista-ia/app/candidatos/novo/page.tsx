@@ -9,6 +9,7 @@
 // já é atribuído à vaga e a tela volta para lá com o recado. O convite em si (o link e a mensagem
 // pronta) é da US-014.
 import Link from "next/link";
+import { ProgressoConvite, usePrepararConvite } from "@/components/ProgressoConvite";
 import { PesquisaComplementar } from "@/components/PesquisaComplementar";
 import type { Ficha } from "@/lib/types";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -42,6 +43,7 @@ function Conteudo() {
   const [salvo, setSalvo] = useState<Salvo | null>(null);
   const [textoColado, setTextoColado] = useState("");
   const [preparado, setPreparado] = useState<Salvo | null>(null);
+  const { progresso, preparar } = usePrepararConvite();
   const [convitePendente, setConvitePendente] = useState<Salvo | null>(null);
 
   // Sem vaga no endereço, o lugar de cair é a ficha recém-montada (US-013): é ela que a pessoa quer
@@ -62,12 +64,7 @@ function Conteudo() {
     setSalvando(true);
     setFalha("");
     try {
-      const atribuicao = await fetch("/api/entrevistas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vagaId: vaga, candidatoId: candidato.id }),
-      });
-      if (!atribuicao.ok) throw atribuicao;
+      await preparar("/api/entrevistas", { vagaId: vaga, candidatoId: candidato.id });
       setConvitePendente(null);
       continuar(candidato);
     } catch (e) {
@@ -146,6 +143,7 @@ function Conteudo() {
         <h1 className="titulo-painel mt-3 mb-1.5">Cadastrar candidato</h1>
         <p className="apoio mb-6">Comece com o nome e o currículo. LinkedIn e anotações são opcionais.</p>
 
+        <ProgressoConvite estado={progresso} />
         {preparado ? (
           <>
             <div className="card p-5 mb-5 border-accent/30">

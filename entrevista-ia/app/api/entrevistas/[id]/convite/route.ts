@@ -1,3 +1,4 @@
+import { respostaConvite } from "@/lib/resposta-convite";
 // O convite de uma entrevista (US-014): ler o que já existe (`GET`) e criar ou renovar (`POST`).
 //
 // `GET` nunca cria nada: abrir o diálogo do convite de uma entrevista que ainda não tem link devolve
@@ -21,12 +22,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const corpo = await req.json().catch(() => ({}));
   registrarEnderecoPublico(req);
-  const resultado = await convidar({
+  return respostaConvite(req, (progresso) => convidar({
+    progresso,
     entrevistaId: id,
     expiraEmDias: corpo?.expiraEmDias,
     origem: baseUrl(req),
     remetente: sessaoAtual(req)?.nome,
-  });
-  if (!resultado.ok) return Response.json({ error: resultado.erro }, { status: resultado.status });
-  return Response.json({ convite: resultado.convite });
+  }));
+
 }

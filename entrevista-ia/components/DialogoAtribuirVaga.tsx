@@ -5,7 +5,9 @@
 // Só vagas abertas entram na lista: convidar alguém para uma vaga encerrada é o pedido que a rota
 // recusa, e oferecer na tela o que vai ser recusado é desperdiçar o clique de quem está trabalhando.
 import Link from "next/link";
+import { ProgressoConvite, usePrepararConvite } from "./ProgressoConvite";
 import { useEffect, useRef, useState } from "react";
+import { useDialogo } from "./useDialogo";
 import { ErrorBox, lerErro, type ErroLido } from "./ui";
 
 export type VagaParaAtribuir = { id: string; cargo: string; area?: string; local?: string };
@@ -28,22 +30,10 @@ export function DialogoAtribuirVaga({
   const [itens, setItens] = useState<VagaParaAtribuir[] | null>(null);
   const [atribuindo, setAtribuindo] = useState("");
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);
+  const { progresso, preparar } = usePrepararConvite();
   const caixaRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onFechar();
-    }
-    function onClickFora(e: MouseEvent) {
-      if (caixaRef.current && !caixaRef.current.contains(e.target as Node)) onFechar();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("mousedown", onClickFora);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("mousedown", onClickFora);
-    };
-  }, [onFechar]);
+  useDialogo(caixaRef, onFechar);
 
   useEffect(() => {
     fetch("/api/vagas?status=aberta")
@@ -59,9 +49,7 @@ export function DialogoAtribuirVaga({
     setAtribuindo(vaga.id);
     setErroTela(null);
     try {
-      const r = await fetch("/api/entrevistas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vagaId: vaga.id, candidatoId }) });
-      if (!r.ok) throw r;
-      const { entrevista } = await r.json();
+      const { entrevista } = await preparar<{ entrevista: { id: string } }>("/api/entrevistas", { vagaId: vaga.id, candidatoId });
       onAtribuido({ cargo: vaga.cargo, entrevistaId: entrevista.id });
     } catch (e) {
       setErroTela(await lerErro(e));
@@ -71,10 +59,12 @@ export function DialogoAtribuirVaga({
 
   return (
     <div className="fixed inset-0 z-30 bg-black/40 grid place-items-center px-4" role="presentation">
-      <div ref={caixaRef} role="dialog" aria-modal="true" aria-labelledby="titulo-atribuir-vaga" className="card w-full max-w-[480px] p-7 max-md:p-5">
+      <div ref={caixaRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="titulo-atribuir-vaga" className="card w-full max-w-[480px] p-7 max-md:p-5 max-h-[calc(100dvh-3rem)] overflow-y-auto">
+        <button type="button" className="btn-link float-right ml-3 sticky top-0 bg-white" onClick={onFechar} aria-label="Fechar preparação do convite">Fechar</button>
         <h2 id="titulo-atribuir-vaga" className="text-xl font-extrabold mb-1.5">Atribuir a uma vaga</h2>
         <p className="text-muted text-sm mb-5">{candidatoNome} vai conversar com a entrevistadora sobre a vaga que você escolher aqui.</p>
 
+        <ProgressoConvite estado={progresso} />
         {erroTela && <div className="mb-4"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao} /></div>}
 
         <div className="border border-line rounded-card divide-y divide-line max-h-[280px] overflow-y-auto mb-5">
@@ -95,7 +85,7 @@ export function DialogoAtribuirVaga({
                     <span className="text-muted text-[12.5px] shrink-0">Já está nesta vaga</span>
                   ) : (
                     <button type="button" className="btn-ghost !w-auto shrink-0" disabled={Boolean(atribuindo)} onClick={() => void atribuir(v)}>
-                      {atribuindo === v.id ? "Preparando roteiro..." : "Atribuir"}
+                      {atribuindo === v.id ? "Gerando…" : "Atribuir"}
                     </button>
                   )}
                 </div>

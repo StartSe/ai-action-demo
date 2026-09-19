@@ -163,3 +163,9 @@ O botão usa o fluxo de autorização pelo navegador da [CLI oficial](https://do
 Somente uma sessão administrativa da mesma origem pode iniciar, consultar ou cancelar uma tentativa. Um cookie HttpOnly associa a tentativa ao navegador; a autorização expira em até 15 minutos. URL, API key e secret são salvos juntos e cifrados no servidor; o navegador recebe apenas a confirmação. Cancelamento, expiração e respostas inválidas preservam a conexão anterior. Credenciais definidas por variáveis de ambiente têm prioridade e impedem a troca pelo botão.
 
 Os testes automatizados cobrem autorização, recusa, expiração, isolamento do navegador, limites de consulta, cancelamento e cifragem. O início e a espera pela aprovação foram conferidos contra o serviço real; a aprovação com uma conta e projeto próprios precisa ser feita pela pessoa no LiveKit.
+
+### Acompanhamento da geração do convite (0.4.1)
+
+A escolha de um candidato, a atribuição a uma vaga, o cadastro vindo da vaga e a renovação do convite mostram as etapas registradas pelo servidor: conferir dados, preparar roteiro e salvar link/mensagem. A etapa atual fica em destaque; as demais aparecem em uma lista expansível. O tempo decorrido não faz a etapa avançar artificialmente.
+
+O navegador solicita eventos NDJSON nas mesmas rotas de criação; clientes JSON mantêm o contrato anterior. Uma conexão encerrada antes da confirmação é tratada como falha recuperável. Nova tentativa reaproveita o candidato e a entrevista, e o link só fica disponível depois de salvar o roteiro. O diálogo também permite gerar um convite que ainda não tenha link. O acompanhamento no navegador tem limite de 60 segundos; fechar a janela não desfaz dados já gravados e a operação iniciada pode terminar no servidor.

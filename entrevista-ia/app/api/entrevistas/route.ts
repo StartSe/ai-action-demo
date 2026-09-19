@@ -1,3 +1,4 @@
+import { respostaConvite } from "@/lib/resposta-convite";
 // A lista de entrevistas (US-015) e a atribuição de um candidato a uma vaga com o convite junto
 // (US-007 e US-014).
 //
@@ -41,13 +42,13 @@ export async function POST(req: Request) {
   registrarEnderecoPublico(req);
   // As regras de "esta vaga aceita mais alguém?" moram em lib/convite.ts, não aqui: a ferramenta
   // criar_convite do MCP (US-027) entra pela mesma porta e tem de recusar exatamente o mesmo.
-  const resultado = await atribuirEConvidar({
+  return respostaConvite(req, (progresso) => atribuirEConvidar({
+    progresso,
     vagaId: typeof corpo?.vagaId === "string" ? corpo.vagaId : "",
     candidatoId: typeof corpo?.candidatoId === "string" ? corpo.candidatoId : "",
     expiraEmDias: corpo?.expiraEmDias,
     origem: baseUrl(req),
     remetente: sessaoAtual(req)?.nome,
-  });
-  if (!resultado.ok) return Response.json({ error: resultado.erro }, { status: resultado.status });
-  return Response.json({ entrevista: resultado.entrevista, convite: resultado.convite });
+  }));
+
 }
