@@ -342,13 +342,14 @@ export function removerFontes(candidatoId: string, tipo: TipoFonteCandidato): vo
  *
  * Mesma razão de `COLUNAS_LEVES`: o conteúdo de uma página são até 20 mil caracteres, e quatro fontes
  * numa tela que sonda a cada três segundos enquanto a pesquisa corre seriam 80 KB por sondagem para
- * mostrar quatro títulos e um link.
+ * mostrar quatro títulos e um link. Antes da consolidação, um trecho limitado permite consultar
+ * o material salvo mesmo que a IA falhe.
  */
 export type ResumoFonte = Omit<FonteCandidato, "conteudo">;
 
 export function listarFontesResumidas(candidatoId: string): ResumoFonte[] {
   const linhas = banco()
-    .prepare("SELECT id, candidatoId, tipo, url, titulo, resumo, coletadoEm FROM fontes_candidato WHERE candidatoId = ? ORDER BY coletadoEm DESC")
+    .prepare("SELECT id, candidatoId, tipo, url, titulo, COALESCE(resumo, SUBSTR(conteudo, 1, 600)) AS resumo, coletadoEm FROM fontes_candidato WHERE candidatoId = ? ORDER BY coletadoEm DESC")
     .all(candidatoId) as Omit<LinhaFonte, "conteudo">[];
   return linhas.map((l) => ({
     id: l.id,

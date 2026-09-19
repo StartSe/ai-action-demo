@@ -583,6 +583,31 @@ describe("pesquisarCandidato", () => {
     assert.equal(depois.pesquisaStatus, "falhou");
     // As páginas trazidas continuam guardadas: a coleta deu certo, quem falhou foi a leitura delas.
     assert.ok(listarFontes(candidato.id).length > 0);
+    const fontesAntes = listarFontes(candidato.id);
+    const chamadasAntes = falso.chamadas.length;
+    const { lerColetaSalva } = await import("./coleta-salva");
+    const salva = lerColetaSalva(candidato.id)!;
+    assert.ok(salva.resultados.length > 0, "preserva também os resultados da busca para conferir homônimos");
+    const retomada = await pesquisarCandidato(candidato.id, {
+      retomar: true, conexao: null,
+      consolidador: async ({ coleta }) => {
+        assert.deepEqual(coleta, salva);
+        return consolidacaoDeUmaPessoa(coleta.paginas[0].fonteId);
+      },
+    });
+    assert.equal(retomada, "concluida");
+    assert.equal(falso.chamadas.length, chamadasAntes, "não repete consultas externas");
+    assert.deepEqual(listarFontes(candidato.id).map((f) => f.id), fontesAntes.map((f) => f.id));
+    assert.ok(obterCandidato(candidato.id)?.ficha?.web, "material segue para revisão");
+    assert.equal(obterCandidato(candidato.id)?.identidadeConfirmada, false);
+
+    // Compatibilidade com pesquisas que falharam antes de salvarmos a coleta inteira.
+    const { banco } = await import("./banco");
+    banco().prepare("DELETE FROM coleta_pesquisa WHERE candidatoId = ?").run(candidato.id);
+    const antiga = lerColetaSalva(candidato.id)!;
+    assert.equal(antiga.paginas.length, fontesAntes.length);
+    assert.deepEqual(antiga.paginas.map((p) => p.fonteId), fontesAntes.map((f) => f.id));
+
   });
 
   it("código de acesso recusado: falhou, e a frase do serviço não vira estado da tela", async () => {

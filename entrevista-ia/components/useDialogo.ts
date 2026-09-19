@@ -9,7 +9,7 @@ export function useDialogo(caixa: RefObject<HTMLDivElement | null>, fechar: () =
     const origem = document.activeElement as HTMLElement | null;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    caixa.current?.focus();
+    caixa.current?.focus({ preventScroll: true });
     function teclado(e: KeyboardEvent) {
       if (e.key === "Escape") { e.preventDefault(); aoFechar.current(); }
       if (e.key !== "Tab") return;

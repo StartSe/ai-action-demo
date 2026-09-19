@@ -396,9 +396,9 @@ export default function Page() {
             />
 
             {fontes.length > 0 && (
-              <section className="card p-5 mt-4">
+              <section id="fontes-pesquisa" className="card p-5 mt-4 scroll-mt-6">
                 <h2 className="font-extrabold text-[17px] mb-1">Onde procuramos</h2>
-                <p className="apoio mb-4">O currículo enviado e as páginas públicas que a pesquisa leu.</p>
+                <p className="apoio mb-4">O currículo enviado e as páginas públicas que a pesquisa leu. Enquanto a organização não termina, mostramos trechos do material coletado.</p>
                 <ul className="flex flex-col gap-2.5">
                   {fontes.map((f) => (
                     <li key={f.id}>

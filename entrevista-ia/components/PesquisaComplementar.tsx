@@ -5,7 +5,7 @@ import { sugerirTermos, type TermoPesquisa } from "@/lib/consulta-candidato";
 import type { Candidato } from "@/lib/candidatos";
 import { Aviso, ErrorBox, lerErro, type ErroLido } from "./ui";
 
-type Pessoa = Pick<Candidato, "id" | "nome" | "ficha" | "cidade" | "termoBusca" | "linkedinUrl">;
+type Pessoa = Pick<Candidato, "id" | "nome" | "ficha" | "cidade" | "termoBusca" | "linkedinUrl"> & { pesquisaStatus?: Candidato["pesquisaStatus"] };
 export function PesquisaComplementar({ candidato, aoPesquisar, correndo = false }: { candidato: Pessoa; aoPesquisar?: () => void; correndo?: boolean }) {
   const [modal, setModal] = useState(false);
   const [termos, setTermos] = useState(() => sugerirTermos(candidato));
@@ -55,6 +55,7 @@ export function PesquisaComplementar({ candidato, aoPesquisar, correndo = false 
       </fieldset>
       <div className="flex items-center gap-3 flex-wrap mt-4">
         <button type="button" className="btn-primary !w-auto max-md:!w-full" disabled={ocupado || !termos.length || Boolean(novo.trim())} onClick={() => correndo || recado ? setModal(true) : void pesquisar()}>{ocupado ? "Iniciando..." : correndo || recado ? "Acompanhar enriquecimento" : "Enriquecer com dados da web"}</button>
+        {candidato.pesquisaStatus === "falhou" && <button type="button" className="btn-ghost" onClick={() => setModal(true)}>Ver pesquisa interrompida</button>}
         <span className="text-xs text-muted">Usa a conexão com a Bright Data.</span>
       </div>
       {erro && <div className="mt-3"><ErrorBox mensagem={erro.mensagem} acao={erro.acao} /></div>}

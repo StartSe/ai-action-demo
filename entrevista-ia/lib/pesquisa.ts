@@ -1,3 +1,4 @@
+import { lerColetaSalva, salvarColeta } from "./coleta-salva";
 import { iniciarProgressoPesquisa, etapaPesquisa, concluirEtapaPesquisa } from "./progresso-pesquisa";
 // A pesquisa do candidato na web, em duas metades: a COLETA (US-011) e a CONSOLIDAÇÃO (US-012).
 //
@@ -639,6 +640,7 @@ export type EntradaConsolidacao = {
 };
 
 export type OpcoesPesquisa = OpcoesColeta & {
+  retomar?: boolean;
   /** Injetado nos testes, no lugar da chamada de IA. */
   consolidador?: (entrada: EntradaConsolidacao) => Promise<ConsolidacaoBruta>;
 };
@@ -835,14 +837,17 @@ export async function pesquisarCandidato(candidatoId: string, opcoes: OpcoesPesq
   if (!candidato) return "nao_pedida";
 
   const conexao = opcoes.conexao === undefined ? conexaoBrightData() : opcoes.conexao;
-  const impedimento = impedimentoDaPesquisa(candidato, conexao, opcoes.termos);
+  const salva = opcoes.retomar ? lerColetaSalva(candidatoId) : null;
+  if (opcoes.retomar && !salva) return registrar(candidatoId, "falhou");
+  const impedimento = salva ? null : impedimentoDaPesquisa(candidato, conexao, opcoes.termos);
   if (impedimento) return registrar(candidatoId, "nao_pedida");
 
-  iniciarProgressoPesquisa(candidatoId);
+  if (!salva) iniciarProgressoPesquisa(candidatoId);
   atualizarCandidato(candidatoId, { pesquisaStatus: "em_andamento" });
 
   try {
-    const coleta = await coletar(candidatoId, { ...opcoes, conexao });
+    const coleta = salva ?? await coletar(candidatoId, { ...opcoes, conexao });
+    if (coleta.paginas.length) salvarColeta(candidatoId, coleta);
     if (coleta.status !== "coletada") {
       if (coleta.motivo) console.error("Pesquisa na web do candidato", candidatoId, "—", coleta.motivo);
       return registrar(candidatoId, coleta.status === "nao_pedida" ? "nao_pedida" : coleta.status);
