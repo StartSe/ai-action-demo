@@ -323,7 +323,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
               <>
                 <span className="chip-positivo max-md:self-start">Conectado{chaveSecreta?.mascarado ? ` · ${chaveSecreta.mascarado}` : ""}</span>
                 <button type="button" className="btn-ghost !w-auto max-md:!w-full" onClick={desconectar} disabled={desconectando}>{desconectando ? "Desconectando" : "Desconectar"}</button>
-                <button type="button" className="btn-secundario !w-auto max-md:!w-full" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>
+                {i.testavel && <button type="button" className="btn-secundario !w-auto max-md:!w-full" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>}
               </>
             ) : (
               // Quem ainda não tem conta no serviço precisa criá-la ANTES de autorizar: o link fica
@@ -353,7 +353,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
           {campos}
           {opcoesAvancadas}
           <div className="flex items-center gap-3 flex-wrap justify-end max-md:flex-col max-md:items-stretch mt-4">
-            {i.configurada && <button type="button" className="btn-secundario !w-auto max-md:!w-full" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>}
+            {i.configurada && i.testavel && <button type="button" className="btn-secundario !w-auto max-md:!w-full" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>}
             <button type="button" className="btn-primary !w-auto max-md:!w-full" onClick={salvar} disabled={!alterado || salvando}>{salvando ? "Salvando" : "Salvar"}</button>
             {!alterado && <span className="text-muted text-sm">Preencha ao menos um campo para salvar</span>}
             {i.link && <a className="btn-link text-sm" href={i.link.url} target="_blank" rel="noreferrer">{i.link.rotulo}</a>}
@@ -471,8 +471,12 @@ function CampoSetup({ campo: c, valor, aoMudar }: { campo: CampoStatus; valor: s
       <label htmlFor={id} className="text-[13px] font-semibold">{rotulo}</label>
       {c.tipo === "select" ? (
         <select id={id} className="input" value={atual} onChange={(e) => aoMudar(e.target.value)}>
-          {opcoes.some((o) => o.grupo)
-            ? GRUPOS_OPCAO.map((g) => {
+          {opcoes.some((o) => o.grupo) ? (
+            <>
+              {/* Sem grupo vem antes de qualquer optgroup (ex.: "Automático" no modelo de IA): fora do
+                  <optgroup> a opção continua aparecendo, e no topo, que é onde ela é escolhida. */}
+              {opcoes.filter((o) => !o.grupo).map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+              {GRUPOS_OPCAO.map((g) => {
                 const doGrupo = opcoes.filter((o) => o.grupo === g.chave);
                 if (doGrupo.length === 0) return null;
                 return (
@@ -480,8 +484,11 @@ function CampoSetup({ campo: c, valor, aoMudar }: { campo: CampoStatus; valor: s
                     {doGrupo.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
                   </optgroup>
                 );
-              })
-            : opcoes.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+              })}
+            </>
+          ) : (
+            opcoes.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)
+          )}
           {c.valorVisivel && !opcoes.some((o) => o.valor === c.valorVisivel) && <option value={c.valorVisivel}>{c.valorVisivel}</option>}
         </select>
       ) : (

@@ -2,7 +2,7 @@
 // Telas "Criar sua conta" e "Entrar", compartilhadas pela suíte. Copie este arquivo para cada app sem alterar.
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Field, MaisDetalhes } from "./ui";
+import { Field } from "./ui";
 import { REGRA_SENHA, emailInvalido, forcaSenha, senhaFraca } from "@/lib/conta-comum";
 
 function proximoDestino() {
@@ -65,7 +65,8 @@ export function TelaCriarConta({ marca, nome: nomeApp }: { marca: string; nome: 
       const r = await fetch("/api/conta", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome, email, senha, confirmarSenha }) });
       const resposta = await r.json();
       if (!r.ok) throw new Error(resposta.error || "Não foi possível criar a conta.");
-      location.href = proximoDestino();
+      router.replace("/setup?primeiro=1");
+      router.refresh();
     } catch (err) {
       setErroGeral(err instanceof Error ? err.message : "Não foi possível criar a conta.");
       setEnviando(false);
@@ -162,12 +163,6 @@ export function TelaEntrar({ marca, nome: nomeApp }: { marca: string; nome: stri
             </Field>
             <button type="submit" className="btn-primary mt-1" disabled={enviando}>{enviando ? "Entrando" : "Entrar"}</button>
           </form>
-
-          <MaisDetalhes titulo="Esqueci a senha">
-            <p className="text-[13px] text-muted">
-              Peça para a equipe técnica definir a variável <code>NOVA_SENHA_ADMIN</code> com a nova senha e reiniciar o app. Isso troca sua senha e encerra sessões abertas; depois é só remover a variável.
-            </p>
-          </MaisDetalhes>
         </div>
       </div>
     </main>

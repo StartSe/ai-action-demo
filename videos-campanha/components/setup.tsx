@@ -190,7 +190,7 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
 // Campo "Endereço público do app" ("Para a equipe técnica"): mostra o valor detectado sozinho a partir
 // do host da primeira rotina/lembrete/formulário/pedido criado (ver lib/setup-comum.ts:registrarEnderecoPublico)
 // e permite corrigir à mão (domínio próprio, proxy que o app não enxerga).
-function CampoEnderecoPublico({ status, aoSalvar }: { status: StatusEnderecoPublico; aoSalvar: () => void }) {
+export function CampoEnderecoPublico({ status, aoSalvar }: { status: StatusEnderecoPublico; aoSalvar: () => void }) {
   const [valor, setValor] = useState(status.valor ?? "");
   const [salvando, setSalvando] = useState(false);
   const [aviso, setAviso] = useState("");
@@ -223,7 +223,7 @@ function CampoEnderecoPublico({ status, aoSalvar }: { status: StatusEnderecoPubl
   );
 }
 
-function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEmail }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean; caixasEmail?: StatusCaixasEmail }) {
+export function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEmail }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean; caixasEmail?: StatusCaixasEmail }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   const [desconectando, setDesconectando] = useState(false);
@@ -323,7 +323,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
               <>
                 <span className="chip-positivo max-md:self-start">Conectado{chaveSecreta?.mascarado ? ` · ${chaveSecreta.mascarado}` : ""}</span>
                 <button type="button" className="btn-ghost !w-auto max-md:!w-full" onClick={desconectar} disabled={desconectando}>{desconectando ? "Desconectando" : "Desconectar"}</button>
-                <button type="button" className="btn-secundario !w-auto max-md:!w-full" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>
+                {i.testavel && <button type="button" className="btn-secundario !w-auto max-md:!w-full" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>}
               </>
             ) : (
               // Quem ainda não tem conta no serviço precisa criá-la ANTES de autorizar: o link fica
@@ -353,7 +353,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
           {campos}
           {opcoesAvancadas}
           <div className="flex items-center gap-3 flex-wrap justify-end max-md:flex-col max-md:items-stretch mt-4">
-            {i.configurada && <button type="button" className="btn-secundario !w-auto max-md:!w-full" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>}
+            {i.configurada && i.testavel && <button type="button" className="btn-secundario !w-auto max-md:!w-full" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>}
             <button type="button" className="btn-primary !w-auto max-md:!w-full" onClick={salvar} disabled={!alterado || salvando}>{salvando ? "Salvando" : "Salvar"}</button>
             {!alterado && <span className="text-muted text-sm">Preencha ao menos um campo para salvar</span>}
             {i.link && <a className="btn-link text-sm" href={i.link.url} target="_blank" rel="noreferrer">{i.link.rotulo}</a>}

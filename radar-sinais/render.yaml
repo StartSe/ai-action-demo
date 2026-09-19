@@ -1,21 +1,21 @@
 # Blueprint de publicação de Radar de Sinais (especificação: https://render.com/docs/blueprint-spec)
 # Imagem pública publicada pelo GitHub Actions em ghcr.io/startse/radar-sinais:latest.
-# Nenhuma chave é necessária aqui: após publicar, abra /setup no app e conecte a IA.
-# As chaves ficam em SQLite em /app/data. No plano free o disco é efêmero e a configuração se perde a cada deploy.
+# Este app exige o plano starter (pago) e cria um disco de 1 GB em /app/data, onde ficam a configuração, a conta, os termos monitorados, as rotinas e os radares.
+# Nenhuma chave é necessária aqui.
 services:
   - type: web
     name: radar-sinais
     runtime: image
     image:
       url: ghcr.io/startse/radar-sinais:latest
-    plan: free
+    plan: starter
     region: oregon
     healthCheckPath: /api/health
     envVars:
       - key: PORT
         value: "10000"
-    # Para manter a configuração feita em /setup entre deploys (exige plano pago):
-    # disk:
-    #   name: radar-sinais-dados
-    #   mountPath: /app/data
-    #   sizeGB: 1
+    # A configuração, a conta, os termos monitorados, as rotinas e os radares ficam em /app/data e sobrevivem a deploys.
+    disk:
+      name: radar-sinais-dados
+      mountPath: /app/data
+      sizeGB: 1

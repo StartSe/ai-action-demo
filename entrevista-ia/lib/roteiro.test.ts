@@ -1,0 +1,319 @@
+// Testes do roteiro da entrevista (lib/roteiro.ts, US-016), fora do Next (`npm test`).
+//
+// O que é exercitado aqui decide, em silêncio, o que uma pessoa de verdade vai ouvir numa entrevista
+// — e um erro em qualquer um destes pontos não quebra tela nenhuma:
+//
+//  - **O que a entrevistadora sabe (D6).** Um campo trazido da web sobre um possível homônimo não
+//    pode virar pergunta enquanto o gestor não confirmar de quem é aquele perfil.
+//  - **Quantas perguntas ela faz.** Follow-ups não podem estourar o número combinado com o gestor,
+//    e o encerramento (o espaço para as perguntas do candidato) não pode ser comido por eles.
+//  - **A posição na conversa**, que é deduzida da transcrição em vez de guardada: se a dedução não
+//    devolver o mesmo caminho, uma entrevista retomada repete ou pula perguntas.
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { describe, it } from "node:test";
+
+// `lib/store.ts` lê `DATA_DIR` no momento em que é importado (lib/cultura.ts entra pelo import de
+// lib/roteiro.ts), então a variável é definida ANTES dos imports do app, que são dinâmicos.
+process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "entrevista-roteiro-"));
+
+const { contextoDaVagaAntiga, decidirPasso, fatosDaVaga, fichaParaEntrevista, normalizarRoteiro, pontosAEsclarecer, posicaoNoRoteiro, respostaVaga } =
+  await import("./roteiro");
+const { roteiroDemo } = await import("./demo");
+
+type Ctx = Awaited<ReturnType<typeof contextoDaVagaAntiga>>;
+type Plano = ReturnType<typeof roteiroDemo>;
+
+function contexto(extra: Partial<Ctx> = {}): Ctx {
+  return {
+    cargo: "Analista de Customer Success",
+    desafios: ["reduzir o churn da carteira de PMEs", "montar o onboarding padrão"],
+    requisitos: ["experiência com SaaS B2B", "HubSpot ou outro CRM", "inglês para reuniões", "análise de dados de uso"],
+    competencias: [
+      { nome: "Colaboração", descricao: "ajuda antes de ser pedido" },
+      { nome: "Dono do resultado", descricao: "vai até o fim" },
+    ],
+    comportamentos: "resolve com autonomia",
+    naoCombina: "esperar ordem para agir",
+    tom: "acolhedor",
+    numeroPerguntas: 8,
+    duracaoMin: 15,
+    perguntaPretensao: true,
+    candidato: { nome: "Marina Souza", primeiroNome: "Marina", ficha: [], aEsclarecer: [] },
+    ...extra,
+  };
+}
+
+function conversa(plano: Plano, respostas: string[]): { papel: "entrevistadora" | "candidato"; texto: string }[] {
+  // Uma conversa em que a entrevistadora fez exatamente as perguntas do plano, na ordem.
+  const falas: { papel: "entrevistadora" | "candidato"; texto: string }[] = [];
+  respostas.forEach((resposta, i) => {
+    falas.push({ papel: "entrevistadora", texto: plano.perguntas[i]?.pergunta ?? "..." });
+    falas.push({ papel: "candidato", texto: resposta });
+  });
+  return falas;
+}
+
+const LONGA =
+  "Trabalho há quatro anos com atendimento a clientes B2B e hoje lidero o time de suporte sênior em uma empresa de software de médio porte, cuidando de uma carteira de sessenta contas.";
+
+describe("a ficha que a entrevistadora recebe (D6)", () => {
+  const ficha = {
+    cargoAtual: { valor: "Analista de CS", origem: "cv" as const },
+    empresaAtual: { valor: "Contabilizei", origem: "web" as const },
+    cidade: { valor: "Curitiba", origem: "gestor" as const },
+    links: [{ valor: "https://linkedin.com/in/marina", origem: "cv" as const }],
+    competencias: [
+      { valor: "HubSpot", origem: "cv" as const },
+      { valor: "Zendesk", origem: "web" as const },
+    ],
+  };
+
+  it("deixa a web de fora enquanto a identidade não foi confirmada", () => {
+    const itens = fichaParaEntrevista(ficha, false);
+    const valores = itens.map((i) => i.valor).join(" | ");
+    assert.match(valores, /Analista de CS/);
+    assert.match(valores, /Curitiba/);
+    assert.doesNotMatch(valores, /Contabilizei/, "empresa vinda da web não pode entrar sem confirmação");
+    assert.doesNotMatch(valores, /Zendesk/, "item de lista vindo da web também não");
+  });
+
+  it("deixa a web entrar depois da confirmação", () => {
+    const valores = fichaParaEntrevista(ficha, true).map((i) => i.valor).join(" | ");
+    assert.match(valores, /Contabilizei/);
+    assert.match(valores, /Zendesk/);
+  });
+
+  it("nunca entrega os links de perfil, mesmo confirmada", () => {
+    for (const confirmada of [false, true]) {
+      const valores = fichaParaEntrevista(ficha, confirmada).map((i) => i.valor).join(" | ");
+      assert.doesNotMatch(valores, /linkedin/i, "a entrevistadora não pode ter um perfil público à mão");
+    }
+  });
+
+  it("vira ponto a esclarecer sem contar de onde saiu a outra versão", () => {
+    const pontos = pontosAEsclarecer({ divergencias: [{ campo: "Cidade", cv: "Curitiba", web: "São Paulo" }] });
+    assert.equal(pontos.length, 1);
+    assert.match(pontos[0], /Curitiba/);
+    assert.match(pontos[0], /São Paulo/);
+    assert.doesNotMatch(pontos[0], /web|internet|LinkedIn|perfil/i);
+  });
+});
+
+describe("os fatos que a entrevistadora pode dizer sobre a vaga", () => {
+  it("não fala de salário quando a vaga não pergunta pretensão", () => {
+    const ctx = contexto({ perguntaPretensao: false, faixaSalarial: undefined });
+    assert.ok(!fatosDaVaga(ctx).some((f) => /Faixa salarial/.test(f)));
+  });
+
+  it("fala só a faixa quando a vaga pergunta", () => {
+    const fatos = fatosDaVaga(contexto({ faixaSalarial: "R$ 5.500 a R$ 7.000" }));
+    assert.ok(fatos.some((f) => f === "Faixa salarial: R$ 5.500 a R$ 7.000"));
+  });
+});
+
+describe("o roteiro do modo demonstração", () => {
+  it("nunca passa do total, abre na abertura e fecha no encerramento", () => {
+    for (const numeroPerguntas of [6, 8, 12]) {
+      const plano = roteiroDemo(contexto({ numeroPerguntas }));
+      // "Respeita o total" é um TETO: com quatro requisitos, dois desafios e duas competências não
+      // há doze perguntas honestas a fazer, e repetir para preencher seria pior que perguntar menos.
+      assert.ok(plano.perguntas.length <= numeroPerguntas, `total com ${numeroPerguntas} perguntas: saíram ${plano.perguntas.length}`);
+      assert.equal(plano.perguntas[0].bloco, "abertura");
+      assert.equal(plano.perguntas[plano.perguntas.length - 1].bloco, "encerramento");
+    }
+  });
+
+  it("usa o total inteiro quando há material para isso", () => {
+    for (const numeroPerguntas of [6, 8]) {
+      assert.equal(roteiroDemo(contexto({ numeroPerguntas })).perguntas.length, numeroPerguntas);
+    }
+  });
+
+  it("corta cultura antes de desafios quando o total aperta", () => {
+    const plano = roteiroDemo(contexto({ numeroPerguntas: 6 }));
+    assert.ok(plano.perguntas.some((p) => p.bloco === "desafios"));
+    assert.ok(!plano.perguntas.some((p) => p.bloco === "cultura"));
+  });
+
+  it("traz uma pergunta de desafio e uma de cultura reconhecíveis", () => {
+    const plano = roteiroDemo(contexto());
+    const desafio = plano.perguntas.find((p) => p.bloco === "desafios");
+    const cultura = plano.perguntas.find((p) => p.bloco === "cultura");
+    assert.ok(desafio, "o roteiro de exemplo precisa ter uma pergunta de desafio");
+    assert.match(desafio.pergunta, /reduzir o churn da carteira de PMEs/);
+    assert.ok(cultura, "o roteiro de exemplo precisa ter uma pergunta de cultura");
+    // A regra do bloco de cultura: a pergunta é situacional e nunca nomeia a competência.
+    assert.doesNotMatch(cultura.pergunta, /Colaboração|Dono do resultado/);
+    assert.equal(cultura.foco, "Colaboração");
+  });
+
+  it("não pergunta pretensão quando a vaga não pede", () => {
+    const plano = roteiroDemo(contexto({ perguntaPretensao: false }));
+    assert.ok(!plano.perguntas.some((p) => p.bloco === "pretensao"));
+  });
+
+  it("não cita perfil público em pergunta nenhuma", () => {
+    const plano = roteiroDemo(contexto({ candidato: { nome: "Marina Souza", primeiroNome: "Marina", ficha: [], aEsclarecer: ["Cidade: o currículo diz \"Curitiba\""] } }));
+    for (const p of plano.perguntas) assert.doesNotMatch(p.pergunta, /LinkedIn|internet|perfil público|pesquis/i);
+  });
+});
+
+describe("normalizarRoteiro", () => {
+  it("corta o excesso e garante o encerramento no fim", () => {
+    const ctx = contexto({ numeroPerguntas: 6 });
+    const plano = normalizarRoteiro(
+      {
+        perguntas: [
+          ...Array.from({ length: 10 }, (_, i) => ({ bloco: "requisitos", pergunta: `Pergunta ${i}` })),
+          { bloco: "encerramento", pergunta: "Você tem alguma pergunta?" },
+        ],
+        despedida: "Obrigada!",
+      },
+      ctx,
+    );
+    assert.equal(plano.perguntas.length, 6);
+    assert.equal(plano.perguntas[5].bloco, "encerramento");
+  });
+
+  it("descarta a pretensão quando a vaga não pergunta, mesmo se o modelo insistir", () => {
+    const ctx = contexto({ perguntaPretensao: false });
+    const plano = normalizarRoteiro({ perguntas: [{ bloco: "pretensao", pergunta: "Quanto você quer ganhar?" }] }, ctx);
+    assert.ok(!plano.perguntas.some((p) => p.bloco === "pretensao"));
+  });
+
+  it("inventa um encerramento e uma despedida quando o modelo esquece", () => {
+    const plano = normalizarRoteiro({ perguntas: [{ bloco: "abertura", pergunta: "Me conta sobre você." }] }, contexto());
+    assert.equal(plano.perguntas[plano.perguntas.length - 1].bloco, "encerramento");
+    assert.match(plano.despedida, /Marina/);
+  });
+});
+
+describe("respostaVaga", () => {
+  it("chama de vaga a resposta curta e de suficiente a longa", () => {
+    assert.equal(respostaVaga("Sim."), true);
+    assert.equal(respostaVaga("Acho que sim, sempre trabalhei bem em equipe."), true);
+    assert.equal(respostaVaga(LONGA), false);
+    assert.equal(respostaVaga("   "), false, "silêncio não é resposta vaga: não há o que aprofundar");
+  });
+});
+
+describe("decidirPasso", () => {
+  const plano = roteiroDemo(contexto({ numeroPerguntas: 8 }));
+
+  it("começa pela abertura", () => {
+    const passo = decidirPasso({ plano, posicao: { indice: 0, feitas: 0, followUps: [] }, resposta: "", numeroPerguntas: 8 });
+    assert.equal(passo.tipo, "pergunta");
+    assert.equal(passo.tipo === "pergunta" && passo.pergunta.bloco, "abertura");
+  });
+
+  it("aprofunda uma resposta vaga, uma vez só por bloco", () => {
+    const posicao = { indice: 2, feitas: 2, followUps: [] as never[] };
+    const bloco = plano.perguntas[1].bloco;
+    const primeiro = decidirPasso({ plano, posicao, resposta: "Sim, bastante.", numeroPerguntas: 8 });
+    assert.equal(primeiro.tipo, "followup");
+    assert.equal(primeiro.tipo === "followup" && primeiro.bloco, bloco);
+
+    const segundo = decidirPasso({ plano, posicao: { ...posicao, followUps: [bloco] }, resposta: "Sim, bastante.", numeroPerguntas: 8 });
+    assert.equal(segundo.tipo, "pergunta", "o mesmo bloco não ganha um segundo aprofundamento");
+  });
+
+  it("não aprofunda uma resposta longa", () => {
+    const passo = decidirPasso({ plano, posicao: { indice: 2, feitas: 2, followUps: [] }, resposta: LONGA, numeroPerguntas: 8 });
+    assert.equal(passo.tipo, "pergunta");
+  });
+
+  it("não aprofunda quando só cabe mais uma pergunta: a última vaga é do encerramento", () => {
+    const passo = decidirPasso({ plano, posicao: { indice: 3, feitas: 7, followUps: [] }, resposta: "Sim.", numeroPerguntas: 8 });
+    assert.equal(passo.tipo, "pergunta");
+    assert.equal(passo.tipo === "pergunta" && passo.pergunta.bloco, "encerramento");
+  });
+
+  it("encerra quando o total acabou", () => {
+    assert.equal(decidirPasso({ plano, posicao: { indice: 8, feitas: 8, followUps: [] }, resposta: "", numeroPerguntas: 8 }).tipo, "encerrar");
+  });
+});
+
+describe("posicaoNoRoteiro", () => {
+  const plano = roteiroDemo(contexto({ numeroPerguntas: 8 }));
+
+  it("deduz a posição de uma conversa sem aprofundamentos", () => {
+    const falas = conversa(plano, [LONGA, LONGA, LONGA]);
+    const posicao = posicaoNoRoteiro(plano, falas, 8);
+    assert.equal(posicao.feitas, 3);
+    assert.equal(posicao.indice, 3);
+    assert.deepEqual(posicao.followUps, []);
+    assert.equal(posicao.ultimaResposta, LONGA);
+  });
+
+  it("conta o aprofundamento como pergunta feita, sem andar no plano", () => {
+    // Pergunta 1 → resposta curta → aprofundamento → resposta longa.
+    const falas = [
+      { papel: "entrevistadora" as const, texto: plano.perguntas[0].pergunta },
+      { papel: "candidato" as const, texto: "Sim." },
+      { papel: "entrevistadora" as const, texto: "Pode detalhar com um exemplo concreto?" },
+      { papel: "candidato" as const, texto: LONGA },
+    ];
+    const posicao = posicaoNoRoteiro(plano, falas, 8);
+    assert.equal(posicao.feitas, 2, "o aprofundamento gasta uma pergunta do total");
+    assert.equal(posicao.indice, 1, "mas o plano não andou");
+    assert.deepEqual(posicao.followUps, ["abertura"]);
+  });
+
+  it("uma conversa inteira termina no encerramento e nunca passa do total", () => {
+    let falas: { papel: "entrevistadora" | "candidato"; texto: string }[] = [];
+    const perguntas: string[] = [];
+    // Toda resposta é curta: o pior caso para o orçamento, com um aprofundamento por bloco.
+    for (let turno = 0; turno < 30; turno++) {
+      const posicao = posicaoNoRoteiro(plano, falas, 8);
+      const passo = decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas: 8 });
+      if (passo.tipo === "encerrar") break;
+      const texto = passo.tipo === "followup" ? "Pode detalhar?" : passo.pergunta.pergunta;
+      perguntas.push(texto);
+      falas = [...falas, { papel: "entrevistadora", texto }, { papel: "candidato", texto: "Sim." }];
+    }
+    assert.ok(perguntas.length <= 8, `a conversa fez ${perguntas.length} perguntas, acima do total combinado`);
+    assert.equal(perguntas[perguntas.length - 1], plano.perguntas[plano.perguntas.length - 1].pergunta, "a última pergunta tem de ser a do encerramento");
+  });
+});
+
+describe("os desafios escritos como parágrafo corrido", () => {
+  it("viram um desafio por frase", async () => {
+    // O gestor digita os desafios num parágrafo só, e é assim que a vaga de exemplo os guarda. Sem
+    // a quebra por frase, "como você atacaria isso?" chegaria com os três de uma vez.
+    const { obterCultura } = await import("./cultura");
+    assert.ok(obterCultura, "lib/cultura.ts precisa carregar para o contexto ser montado");
+    const { contextoDaVaga } = await import("./roteiro");
+    const ctx = contextoDaVaga({
+      id: "v1",
+      cargo: "Analista",
+      salarioACombinar: true,
+      desafios: "Assumir uma carteira de 40 contas. Reduzir o cancelamento no primeiro ano. Deixar registrado no CRM.",
+      requisitos: "SQL\nPython",
+      competenciasCulturais: [],
+      tom: "acolhedor",
+      numeroPerguntas: 8,
+      duracaoMin: 15,
+      perguntaPretensao: false,
+      status: "aberta",
+      exemplo: false,
+      criadoEm: "",
+      atualizadoEm: "",
+    });
+    assert.deepEqual(ctx.desafios, ["Assumir uma carteira de 40 contas", "Reduzir o cancelamento no primeiro ano", "Deixar registrado no CRM"]);
+    assert.deepEqual(ctx.requisitos, ["SQL", "Python"], "requisito continua sendo um por linha");
+  });
+});
+
+describe("contextoDaVagaAntiga", () => {
+  it("monta um contexto sem cultura, sem desafios e sem dinheiro", () => {
+    const ctx = contextoDaVagaAntiga({ titulo: "Analista", requisitos: "SQL\nPython", candidato: "João da Silva", tom: "objetivo", numero_perguntas: 5 });
+    assert.deepEqual(ctx.requisitos, ["SQL", "Python"]);
+    assert.equal(ctx.perguntaPretensao, false);
+    assert.equal(ctx.faixaSalarial, undefined);
+    assert.equal(ctx.candidato.primeiroNome, "João");
+    assert.equal(ctx.numeroPerguntas, 5);
+  });
+});

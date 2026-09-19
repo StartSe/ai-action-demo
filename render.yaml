@@ -1,5 +1,5 @@
-# Blueprint único da suíte IA para Executivos: publica os 18 apps de uma vez.
-# Atendente no WhatsApp exige o plano starter (pago); AutoML exige o plano standard (pago); os outros 16 são gratuitos.
+# Blueprint único da suíte IA para Executivos: publica os 19 apps de uma vez.
+# Entrevistadora IA exige o plano starter (pago); Atendente no WhatsApp exige o plano starter (pago); Radar de Sinais exige o plano starter (pago); Vídeos de Campanha exige o plano starter (pago); AutoML exige o plano standard (pago); Build Agentflows exige o plano starter (pago); os outros 13 são gratuitos.
 # Cada app também tem seu próprio Blueprint (branch deploy-<app> em https://github.com/StartSe/ai-action-app-deploy).
 # Imagens públicas publicadas pelo GitHub Actions em ghcr.io/startse/<app>:latest.
 # Nenhuma chave é necessária aqui: após publicar, abra /setup em cada app e conecte a IA.
@@ -44,17 +44,17 @@ services:
     runtime: image
     image:
       url: ghcr.io/startse/entrevista-ia:latest
-    plan: free
+    plan: starter
     region: oregon
     healthCheckPath: /api/health
     envVars:
       - key: PORT
         value: "10000"
-    # Para manter a configuração feita em /setup entre deploys (exige plano pago):
-    # disk:
-    #   name: entrevista-ia-dados
-    #   mountPath: /app/data
-    #   sizeGB: 1
+    # A configuração, a conta, as vagas, os candidatos e as entrevistas ficam em /app/data e sobrevivem a deploys.
+    disk:
+      name: entrevista-ia-dados
+      mountPath: /app/data
+      sizeGB: 1
 
   - type: web
     name: posts-sociais
@@ -180,17 +180,17 @@ services:
     runtime: image
     image:
       url: ghcr.io/startse/radar-sinais:latest
-    plan: free
+    plan: starter
     region: oregon
     healthCheckPath: /api/health
     envVars:
       - key: PORT
         value: "10000"
-    # Para manter a configuração feita em /setup entre deploys (exige plano pago):
-    # disk:
-    #   name: radar-sinais-dados
-    #   mountPath: /app/data
-    #   sizeGB: 1
+    # A configuração, a conta, os termos monitorados, as rotinas e os radares ficam em /app/data e sobrevivem a deploys.
+    disk:
+      name: radar-sinais-dados
+      mountPath: /app/data
+      sizeGB: 1
 
   - type: web
     name: bussola-ia
@@ -282,17 +282,17 @@ services:
     runtime: image
     image:
       url: ghcr.io/startse/videos-campanha:latest
-    plan: free
+    plan: starter
     region: oregon
     healthCheckPath: /api/health
     envVars:
       - key: PORT
         value: "10000"
-    # Para manter a configuração feita em /setup entre deploys (exige plano pago):
-    # disk:
-    #   name: videos-campanha-dados
-    #   mountPath: /app/data
-    #   sizeGB: 1
+    # A configuração feita em /setup, a conta, as campanhas e os projetos e assets do Creative Flow ficam em /app/data e sobrevivem a deploys.
+    disk:
+      name: videos-campanha-dados
+      mountPath: /app/data
+      sizeGB: 1
 
   - type: web
     name: automl-pocket
@@ -310,5 +310,22 @@ services:
     # Planilhas, modelos e a conta ficam em /app/data e sobrevivem a deploys.
     disk:
       name: automl-pocket-dados
+      mountPath: /app/data
+      sizeGB: 1
+
+  - type: web
+    name: build-agentflows
+    runtime: image
+    image:
+      url: ghcr.io/startse/build-agentflows:latest
+    plan: starter
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "10000"
+    # Fluxos, versões publicadas, execuções, aprovações pendentes, conta e credenciais ficam em /app/data e sobrevivem a deploys.
+    disk:
+      name: build-agentflows-dados
       mountPath: /app/data
       sizeGB: 1

@@ -1,6 +1,7 @@
 "use client";
-// Tela de configuração inicial, gerada a partir de lib/integracoes.ts. Compartilhada pela suíte: copie sem alterar.
+// Configuração das integrações e orientação para a primeira entrevista.
 import Link from "next/link";
+import { JornadaGestor } from "./JornadaGestor";
 import { useEffect, useState, type ReactNode } from "react";
 import { IlustracaoSegmento, MaisDetalhes, Topbar, useStatus } from "./ui";
 import type { CampoStatus, IntegracaoStatus, Opcao, StatusCaixasEmail, StatusEnderecoPublico } from "@/lib/setup-comum";
@@ -10,14 +11,13 @@ type Resposta = { integracoes: IntegracaoStatus[]; pronto: boolean; enderecoPubl
 
 // Duas frases de privacidade, verdadeiras desde a US-011 (as chaves são cifradas em
 // repouso, ver lib/store.ts, mas o app continua chamando serviços externos de verdade
-// — nunca afirmar "nenhuma conexão externa"). Repetidas na coluna de apoio e no
-// rodapé: mesmo texto nos dois lugares, nunca reescritas.
+// — nunca afirmar "nenhuma conexão externa"). Exibidas na coluna de apoio.
 const FRASE_PRIVACIDADE = "As chaves ficam cifradas neste app, no seu servidor. Nunca aparecem por inteiro depois de salvas.";
 const FRASE_CONEXOES = "Seus dados não passam por nenhum servidor nosso: o app fala direto com os serviços que você conectar.";
 
 // Três garantias genéricas (nenhuma referência ao domínio de um app específico) mostradas na coluna de
 // apoio de /setup, ao lado da ilustração do segmento.
-const ITENS_APOIO = ["Leva menos de 2 minutos", "Você decide o que conectar", "Pode trocar quando quiser"];
+const ITENS_APOIO = ["1. Conecte a IA para conduzir e avaliar", "2. Abra a vaga e adicione candidatos", "3. Compartilhe o link da entrevista", "4. Acompanhe as respostas e o parecer"];
 
 // Ícone circular de cada cartão, por id de integração (ver public/ilustracoes/icones). Ids não listados
 // caem no ícone padrão — cobre integrações futuras (MCP_TAREFAS, MCP_CRM etc.) sem precisar de mudança aqui.
@@ -44,22 +44,28 @@ function IconeApoio() {
 
 /** `children`: cartões próprios do app (política, webhook...) que precisam aparecer ANTES do rodapé "Ir
  * para o app" — quem entra em /setup não deve ser convidado a sair antes de ver o que ainda falta
- * configurar. Cartões secundários (como "Usar dentro do seu assistente") continuam depois da tela. */
-export function SetupPage({ marca, nome, area, segmento, children }: { marca: string; nome: string; area: string; segmento: Segmento; children?: ReactNode }) {
+ * configurar. Cartões secundários (como "Usar dentro do seu assistente") continuam depois da tela.
+ *
+ * `extras`: um pedaço de tela próprio do app DENTRO do cartão de uma integração, por id dela (ex.:
+ * "Apagar os dados de exemplo" no cartão do OpenRouter). Existe porque há assuntos que só fazem
+ * sentido ao lado daquela conexão — num cartão separado, ninguém liga um ao outro. */
+export function SetupPage({ marca, nome, area, segmento, children, extras }: { marca: string; nome: string; area: string; segmento: Segmento; children?: ReactNode; extras?: Record<string, ReactNode> }) {
   const { status, erro } = useStatus();
+  const [opcionaisAbertas, setOpcionaisAbertas] = useState(false);
   const [dados, setDados] = useState<Resposta | null>(null);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
 
   const carregar = () => fetch("/api/setup").then((r) => r.json()).then(setDados).catch(() => setAviso({ tipo: "erro", texto: "Não foi possível carregar a configuração." }));
   const primeiroPendenteId = dados?.integracoes.find((i) => i.obrigatoria && !i.configurada)?.id;
-  const conectadas = dados?.integracoes.filter((i) => i.configurada).length ?? 0;
-  const total = dados?.integracoes.length ?? 0;
+  const conectadas = dados?.integracoes.filter((i) => i.obrigatoria && i.configurada).length ?? 0;
+  const total = dados?.integracoes.filter((i) => i.obrigatoria).length ?? 0;
   const progresso = total > 0 ? Math.round((conectadas / total) * 100) : 0;
   const opcionaisFaltando = dados?.integracoes.filter((i) => !i.obrigatoria && !i.configurada) ?? [];
 
   useEffect(() => {
     const t = setTimeout(() => {
       carregar();
+      if (location.hash && location.hash !== "#openrouter") setOpcionaisAbertas(true);
       const p = new URLSearchParams(location.search);
       if (p.get("conectado")) setAviso({ tipo: "ok", texto: "Conta conectada. A chave foi salva neste app." });
       if (p.get("erro")) setAviso({ tipo: "erro", texto: p.get("erro") || "" });
@@ -72,11 +78,12 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
     <>
       <Topbar marca={marca} nome={nome} area={area} status={status} erro={erro} usuario={status?.usuario} />
       <main className="max-w-[1100px] mx-auto px-8 max-md:px-4 pt-8 pb-16">
+        {dados && <JornadaGestor iaPronta={dados.pronto} />}
         <div className="grid grid-cols-[260px_minmax(0,1fr)] max-md:grid-cols-1 gap-10 max-md:gap-6">
           <aside className="flex flex-col gap-5 self-start md:sticky md:top-6">
             <div>
               <p className="sobretitulo mb-1">{area}</p>
-              <h1 className="titulo-painel mb-2">Configuração inicial</h1>
+              <h1 className="titulo-painel mb-2">Configure sua entrevista</h1>
               <p className="apoio max-w-[280px]">{FRASE_PRIVACIDADE}</p>
               <p className="apoio max-w-[280px] mt-2">{FRASE_CONEXOES}</p>
             </div>
@@ -102,7 +109,7 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
                     Para rodar: <span className={dados.pronto ? "text-ok" : "text-warn"}>{dados.pronto ? "IA conectada" : "falta conectar a IA"}</span>
                   </span>
                   {opcionaisFaltando.length > 0 && (
-                    <span className="text-sm text-ink-2">Faz mais com: {opcionaisFaltando.map((i) => i.titulo).join(", ")}</span>
+                    <span className="text-sm text-ink-2">Recursos opcionais: {opcionaisFaltando.map((i) => i.titulo).join(", ")}</span>
                   )}
                 </div>
                 <div className="h-2 rounded-full bg-line overflow-hidden">
@@ -119,11 +126,11 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
 
             {dados?.pronto && (
               <section className="card border-accent p-6 max-md:p-5 mb-5">
-                <h2 className="text-lg font-bold mb-1">Tudo pronto</h2>
-                <p className="text-muted text-sm mb-4">Já dá para usar o app com IA de verdade.</p>
+                <h2 className="text-lg font-bold mb-1">IA configurada</h2>
+                <p className="text-muted text-sm mb-4">Próximo passo: crie uma vaga, adicione um candidato e gere o link da entrevista inicial.</p>
                 <div className="flex items-center gap-3 flex-wrap">
-                  <Link href="/?exemplo=1" className="btn-primary !w-auto">Testar com um exemplo</Link>
-                  <Link href="/" className="btn-ghost">Ir para o app</Link>
+                  <Link href="/vagas/nova" className="btn-primary !w-auto">Criar vaga</Link>
+                  <Link href="/vagas" className="btn-ghost">Ver minhas vagas</Link>
                 </div>
                 {opcionaisFaltando.length > 0 && (
                   <div className="mt-5 pt-5 border-t border-line">
@@ -131,7 +138,7 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
                     <ul className="flex flex-col gap-1.5">
                       {opcionaisFaltando.map((i) => (
                         <li key={i.id} className="text-sm">
-                          <a href={`#${i.id}`} className="font-semibold text-accent underline underline-offset-2">{i.titulo}</a>
+                          <a href={`#${i.id}`} onClick={() => setOpcionaisAbertas(true)} className="font-semibold text-accent underline underline-offset-2">{i.titulo}</a>
                           <span className="text-ink-2"> — {i.beneficio || i.descricao}</span>
                         </li>
                       ))}
@@ -142,7 +149,7 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
             )}
 
             <div className="flex flex-col gap-5">
-              {dados?.integracoes.map((i, indice) => (
+              {dados?.integracoes.filter((i) => i.obrigatoria).map((i, indice) => (
                 <CartaoIntegracao
                   key={i.id}
                   integracao={i}
@@ -150,36 +157,21 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
                   aoSalvar={carregar}
                   destaque={i.id === primeiroPendenteId}
                   caixasEmail={i.id === "notificacoes" ? dados.caixasEmail : undefined}
+                  extra={extras?.[i.id]}
                 />
               ))}
             </div>
 
-            {children && <div className="flex flex-col gap-5 mt-5">{children}</div>}
-
-            <footer className="mt-8 pt-6 border-t border-line">
-              <p className="text-muted text-[13px] max-w-[560px]">{FRASE_PRIVACIDADE}</p>
-              <p className="text-muted text-[13px] max-w-[560px] mt-1">{FRASE_CONEXOES}</p>
-              <div className="mt-4 flex gap-3 flex-wrap items-center">
-                <Link href="/" className="btn-primary !w-auto">Ir para o app</Link>
+            <details className="card p-5 mt-5" open={opcionaisAbertas} onToggle={(e) => setOpcionaisAbertas(e.currentTarget.open)}>
+              <summary className="cursor-pointer font-bold">Personalizar e conectar recursos opcionais</summary>
+              <p className="text-sm text-muted mt-2 mb-5">A entrevista funciona com a IA conectada. Ative estes recursos quando precisar.</p>
+              <div className="flex flex-col gap-5">
+                {dados?.integracoes.filter((i) => !i.obrigatoria).map((i, indice) => <CartaoIntegracao key={i.id} integracao={i} numero={indice + 2} aoSalvar={carregar} caixasEmail={i.id === "notificacoes" ? dados.caixasEmail : undefined} extra={extras?.[i.id]} />)}
+                {children}
               </div>
-            </footer>
+            </details>
 
-            <MaisDetalhes titulo="Para a equipe técnica">
-              <p className="text-muted text-[13px]">Variáveis de ambiente, quando existirem, têm prioridade sobre o que é salvo aqui.</p>
-              <p className="text-muted text-[13px]">Neste plano de hospedagem, o histórico pode se perder ao reiniciar.</p>
-              {dados && <CampoEnderecoPublico status={dados.enderecoPublico} aoSalvar={carregar} />}
-              {dados && (
-                <ul className="mt-2 flex flex-col gap-1 text-[13px] text-muted">
-                  {dados.integracoes.flatMap((i) =>
-                    i.campos.filter((c) => c.definido).map((c) => (
-                      <li key={c.chave}>
-                        <code>{c.chave}</code>: {c.origem === "env" ? "variável de ambiente (tem prioridade sobre o valor salvo aqui)" : "salvo neste app"}
-                      </li>
-                    ))
-                  )}
-                </ul>
-              )}
-            </MaisDetalhes>
+
           </div>
         </div>
       </main>
@@ -187,43 +179,7 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
   );
 }
 
-// Campo "Endereço público do app" ("Para a equipe técnica"): mostra o valor detectado sozinho a partir
-// do host da primeira rotina/lembrete/formulário/pedido criado (ver lib/setup-comum.ts:registrarEnderecoPublico)
-// e permite corrigir à mão (domínio próprio, proxy que o app não enxerga).
-function CampoEnderecoPublico({ status, aoSalvar }: { status: StatusEnderecoPublico; aoSalvar: () => void }) {
-  const [valor, setValor] = useState(status.valor ?? "");
-  const [salvando, setSalvando] = useState(false);
-  const [aviso, setAviso] = useState("");
-
-  async function salvar() {
-    setSalvando(true); setAviso("");
-    try {
-      const r = await fetch("/api/setup", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ valores: { APP_URL: valor.trim() } }) });
-      if (!r.ok) throw new Error("Falha ao salvar.");
-      setAviso("Salvo.");
-      aoSalvar();
-    } catch {
-      setAviso("Não foi possível salvar. Tente de novo.");
-    } finally { setSalvando(false); }
-  }
-
-  return (
-    <div className="mt-3 pt-3 border-t border-line">
-      <label className="text-[13px] font-semibold" htmlFor="app-url">Endereço público do app</label>
-      <p className="text-muted text-[12.5px] mb-1.5">
-        {status.valor ? "Detectado sozinho. Usado nos links de e-mail e Slack das rotinas." : "Ainda não detectado: abra o app pelo endereço publicado uma vez, ou informe abaixo."}
-        {status.origem === "env" && " Vem de variável de ambiente: tem prioridade sobre o que for salvo aqui."}
-      </p>
-      <div className="flex gap-2 flex-wrap items-center">
-        <input id="app-url" className="input flex-1 min-w-[240px]" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="https://meu-app.exemplo.com" disabled={status.origem === "env"} />
-        <button type="button" className="btn-secundario !w-auto" onClick={salvar} disabled={salvando || status.origem === "env" || !valor.trim()}>{salvando ? "Salvando" : "Corrigir"}</button>
-      </div>
-      {aviso && <p className="text-[12.5px] text-muted mt-1">{aviso}</p>}
-    </div>
-  );
-}
-
-function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEmail }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean; caixasEmail?: StatusCaixasEmail }) {
+function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEmail, extra }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean; caixasEmail?: StatusCaixasEmail; extra?: ReactNode }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   const [desconectando, setDesconectando] = useState(false);
@@ -310,7 +266,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h2 className="text-lg font-bold">{i.titulo}</h2>
-            <span className={`chip-status ${i.configurada ? "chip-status-conectado" : "chip-status-pendente"}`}>{i.configurada ? "Conectado" : "Pendente"}</span>
+            <span className={`chip-status ${i.configurada ? "chip-status-conectado" : "chip-status-pendente"}`}>{i.configurada ? "Conectado" : i.obrigatoria ? "Necessário" : "Opcional"}</span>
           </div>
           <p className="mt-0.5 truncate text-sm text-ink-2">{i.beneficio || i.descricao}</p>
         </div>
@@ -323,7 +279,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
               <>
                 <span className="chip-positivo max-md:self-start">Conectado{chaveSecreta?.mascarado ? ` · ${chaveSecreta.mascarado}` : ""}</span>
                 <button type="button" className="btn-ghost !w-auto max-md:!w-full" onClick={desconectar} disabled={desconectando}>{desconectando ? "Desconectando" : "Desconectar"}</button>
-                <button type="button" className="btn-secundario !w-auto max-md:!w-full" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>
+                {i.testavel && <button type="button" className="btn-secundario !w-auto max-md:!w-full" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>}
               </>
             ) : (
               // Quem ainda não tem conta no serviço precisa criá-la ANTES de autorizar: o link fica
@@ -353,7 +309,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
           {campos}
           {opcoesAvancadas}
           <div className="flex items-center gap-3 flex-wrap justify-end max-md:flex-col max-md:items-stretch mt-4">
-            {i.configurada && <button type="button" className="btn-secundario !w-auto max-md:!w-full" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>}
+            {i.configurada && i.testavel && <button type="button" className="btn-secundario !w-auto max-md:!w-full" onClick={testar} disabled={testando}>{testando ? "Testando" : "Testar conexão"}</button>}
             <button type="button" className="btn-primary !w-auto max-md:!w-full" onClick={salvar} disabled={!alterado || salvando}>{salvando ? "Salvando" : "Salvar"}</button>
             {!alterado && <span className="text-muted text-sm">Preencha ao menos um campo para salvar</span>}
             {i.link && <a className="btn-link text-sm" href={i.link.url} target="_blank" rel="noreferrer">{i.link.rotulo}</a>}
@@ -361,6 +317,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
         </>
       )}
       {teste && <p className={`mt-3 text-sm font-semibold ${teste.ok ? "text-ok" : "text-danger"}`}>{teste.mensagem}</p>}
+      {extra && <div className="mt-5 pt-5 border-t border-line">{extra}</div>}
     </section>
   );
 }
@@ -440,8 +397,12 @@ const GRUPOS_OPCAO: { chave: NonNullable<Opcao["grupo"]>; rotulo: string }[] = [
 function CampoSetup({ campo: c, valor, aoMudar }: { campo: CampoStatus; valor: string; aoMudar: (v: string) => void }) {
   const id = `campo-${c.chave}`;
   const rotulo = `${c.rotulo}${c.opcional ? " (opcional)" : ""}`;
-  const opcoes = c.opcoes ?? [];
   const atual = valor || c.valorVisivel || c.padrao || "";
+  const disponiveis = c.opcoes ?? [];
+  // Não deixa o navegador exibir a primeira voz como selecionada quando outra está salva.
+  const opcoes = atual && !disponiveis.some((o) => o.valor === atual)
+    ? [...disponiveis, { valor: atual, rotulo: `Seleção atual (${atual})` }]
+    : disponiveis;
 
   if (c.tipo === "select" && opcoes.length > 0 && opcoes.length <= LIMITE_BOTOES) {
     return (
@@ -471,8 +432,12 @@ function CampoSetup({ campo: c, valor, aoMudar }: { campo: CampoStatus; valor: s
       <label htmlFor={id} className="text-[13px] font-semibold">{rotulo}</label>
       {c.tipo === "select" ? (
         <select id={id} className="input" value={atual} onChange={(e) => aoMudar(e.target.value)}>
-          {opcoes.some((o) => o.grupo)
-            ? GRUPOS_OPCAO.map((g) => {
+          {opcoes.some((o) => o.grupo) ? (
+            <>
+              {/* Sem grupo vem antes de qualquer optgroup (ex.: "Automático" no modelo de IA): fora do
+                  <optgroup> a opção continua aparecendo, e no topo, que é onde ela é escolhida. */}
+              {opcoes.filter((o) => !o.grupo).map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+              {GRUPOS_OPCAO.map((g) => {
                 const doGrupo = opcoes.filter((o) => o.grupo === g.chave);
                 if (doGrupo.length === 0) return null;
                 return (
@@ -480,9 +445,11 @@ function CampoSetup({ campo: c, valor, aoMudar }: { campo: CampoStatus; valor: s
                     {doGrupo.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
                   </optgroup>
                 );
-              })
-            : opcoes.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
-          {c.valorVisivel && !opcoes.some((o) => o.valor === c.valorVisivel) && <option value={c.valorVisivel}>{c.valorVisivel}</option>}
+              })}
+            </>
+          ) : (
+            opcoes.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)
+          )}
         </select>
       ) : (
         <input id={id} className="input" type={c.tipo === "secret" ? "password" : "text"} autoComplete="off" value={valor} onChange={(e) => aoMudar(e.target.value)}

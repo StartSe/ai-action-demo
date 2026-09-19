@@ -1,11 +1,18 @@
-// Lógica de avaliação da entrevista e do link público por candidato, compartilhada entre a rota HTTP
-// (app/api/entrevista/avaliar/route.ts) e o link do candidato (app/api/entrevista/candidato/[token]/route.ts),
-// para não duplicar o prompt nem a gravação no histórico.
+// O scorecard antigo: a avaliação da transcrição e o agrupamento por título de vaga, de antes de
+// Vaga → Candidato → Entrevista existirem como registros (US-002).
+//
+// **A condução da conversa saiu daqui na US-016**: `SYSTEM_PERGUNTA`, `proximaPergunta()` e
+// `numeroDePerguntas()` foram substituídos por `lib/roteiro.ts`, que conhece a vaga inteira, a
+// cultura e a ficha do candidato — e não só um título e uma lista de requisitos digitada num
+// formulário. **A avaliação de uma entrevista saiu daqui na US-022**: o parecer de hoje é
+// `lib/avaliacao.ts` (três passos, cruzando a conversa com a vaga, a cultura e a ficha do
+// candidato). `gerarScorecard` continua de pé só para os caminhos que não têm entrevista no banco —
+// a prévia do gestor (`POST /api/entrevista/avaliar`) e os links `scorecard` criados antes da
+// US-014, que podem ser removidos a partir de 17/12/2026 junto com o resto daquele tipo.
 import { aiEnabled, askJSON, meta, type Meta } from "./ai";
-import { esperar, mensagemEncerramento, proximaPerguntaDemo, scorecardDemo } from "./demo";
-import { criar, type ParametrosPublicos } from "./formularios";
+import { esperar, scorecardDemo } from "./demo";
 import { listar, obter, salvar } from "./historico";
-import type { CandidatoRanking, Ranking, Recomendacao, Scorecard, Troca, Vaga } from "./types";
+import type { Recomendacao, Scorecard, Troca, Vaga } from "./types";
 
 const SYSTEM_AVALIAR = `Você é uma especialista em recrutamento e seleção que avalia a transcrição de uma entrevista de triagem conduzida por uma IA, para apoiar a decisão do gestor de contratação.
 Regras:
@@ -27,15 +34,6 @@ Formato de saída (JSON):
   "proximos_passos": [""]
 }`;
 
-const SYSTEM_PERGUNTA = `Você é uma entrevistadora de IA que conduz a primeira triagem por voz e texto de candidatos para vagas de empresas brasileiras, no lugar do gestor de contratação.
-Regras:
-- Faça UMA pergunta por vez, curta (no máximo 2 frases), em português do Brasil.
-- Baseie as perguntas nos principais requisitos da vaga e no que já foi respondido. Não repita um tema já coberto.
-- Se a última resposta do candidato foi vaga, genérica ou muito curta, faça uma pergunta de follow-up pedindo um exemplo concreto em vez de mudar de assunto.
-- Adapte o tom: "acolhedor" é mais caloroso e usa frases de transição; "objetivo" é direto e enxuto.
-- Nunca inclua saudação de encerramento nem mencione avaliação, nota ou scorecard.
-Formato de saída (JSON): {"pergunta": "texto da pergunta"}`;
-
 export function normalizarHistorico(historico: unknown): Troca[] {
   if (!Array.isArray(historico)) return [];
   return historico.filter(
@@ -52,8 +50,16 @@ function formatarHistorico(historico: Troca[]): string {
     .join("\n");
 }
 
-function construirPromptAvaliacao({ vaga, historico }: { vaga: Vaga; historico: Troca[] }) {
-  return `Vaga: ${vaga.titulo}
+/** O aviso de conversa interrompida, quando ela foi. Vai no prompt E no resumo pedido ao modelo: uma
+ * entrevista encerrada no meio rendeu menos material, e o gestor precisa ler isso em vez de uma nota
+ * baixa sem explicação. */
+const ENTREVISTA_PARCIAL = `Atenção: esta conversa foi encerrada antes do fim — o candidato respondeu menos perguntas do que o combinado.
+Diga isso na primeira frase do "resumo", não penalize o candidato por assuntos que a entrevistadora nem chegou a perguntar, e registre em "pontos_atencao" o que ficou por conversar.`;
+
+function construirPromptAvaliacao({ vaga, historico, parcial }: { vaga: Vaga; historico: Troca[]; parcial?: boolean }) {
+  return `${parcial ? `${ENTREVISTA_PARCIAL}
+
+` : ""}Vaga: ${vaga.titulo}
 Principais requisitos:
 ${vaga.requisitos}
 Nome do candidato: ${vaga.candidato || "não informado"}
@@ -64,11 +70,14 @@ ${formatarHistorico(historico)}
 Gere o scorecard da triagem.`;
 }
 
-/** Gera o scorecard a partir da vaga e da transcrição, e salva no histórico; tipo/expiraEmDias deixam distinguir um scorecard gerado pelo gestor de um gerado por um link de candidato. */
+/** Gera o scorecard a partir da vaga e da transcrição, e salva no histórico; tipo/expiraEmDias deixam
+ * distinguir um scorecard gerado pelo gestor de um gerado por um link de candidato. `parcial` marca a
+ * conversa encerrada antes do fim (US-021) e fica guardado na entrada, para quem reler o resultado
+ * saber de que tamanho de conversa ele saiu. */
 export async function gerarScorecard(
   vaga: Vaga,
   historico: Troca[],
-  opts: { tipo?: string; expiraEmDias?: number } = {}
+  opts: { tipo?: string; expiraEmDias?: number; parcial?: boolean } = {}
 ): Promise<{ demo: boolean; scorecard: Scorecard; meta: Meta; id: string }> {
   const tipo = opts.tipo ?? "entrevista";
   const insumo = "toda a conversa e os requisitos da vaga";
@@ -76,29 +85,14 @@ export async function gerarScorecard(
     await esperar(1200);
     const scorecard = scorecardDemo({ vaga, historico });
     const metaGerada = meta({ demo: true, insumo });
-    const id = salvar({ tipo, titulo: `Scorecard de ${vaga.candidato}`, entrada: { vaga, historico }, saida: scorecard, meta: metaGerada, expiraEmDias: opts.expiraEmDias });
+    const id = salvar({ tipo, titulo: `Scorecard de ${vaga.candidato}`, entrada: { vaga, historico, parcial: opts.parcial }, saida: scorecard, meta: metaGerada, expiraEmDias: opts.expiraEmDias });
     return { demo: true, scorecard, meta: metaGerada, id };
   }
-  const prompt = construirPromptAvaliacao({ vaga, historico });
+  const prompt = construirPromptAvaliacao({ vaga, historico, parcial: opts.parcial });
   const scorecard = await askJSON<Scorecard>({ system: SYSTEM_AVALIAR, prompt, maxTokens: 2000 });
   const metaGerada = meta({ demo: false, insumo });
-  const id = salvar({ tipo, titulo: `Scorecard de ${vaga.candidato}`, entrada: { vaga, historico }, saida: scorecard, meta: metaGerada, expiraEmDias: opts.expiraEmDias });
+  const id = salvar({ tipo, titulo: `Scorecard de ${vaga.candidato}`, entrada: { vaga, historico, parcial: opts.parcial }, saida: scorecard, meta: metaGerada, expiraEmDias: opts.expiraEmDias });
   return { demo: false, scorecard, meta: metaGerada, id };
-}
-
-/** Parâmetros do link de candidato: a vaga inteira, para a sala de entrevista e a avaliação usarem os mesmos dados. */
-export type ParametrosCandidato = ParametrosPublicos & { vaga: Vaga };
-
-/** Cria o link público (/entrevista/<código>) que o candidato usa para conversar sozinho com a entrevistadora. */
-export function criarLinkCandidato(vaga: Vaga, expiraEmDias: number): string {
-  const parametros: ParametrosCandidato = {
-    marca: "E",
-    nome: "Entrevistadora IA",
-    titulo: `Entrevista para ${vaga.titulo}`,
-    descricao: `Converse com a entrevistadora de IA sobre a vaga de ${vaga.titulo}. Leva poucos minutos, por voz ou texto.`,
-    vaga,
-  };
-  return criar({ tipo: "scorecard", campos: [], parametros, expiraEmDias, limite: 1 });
 }
 
 export type CandidatoDaVaga = { id: string; candidato: string; nota_geral: number; recomendacao: Recomendacao; criadoEm: string };
@@ -124,64 +118,4 @@ export function listarCandidatosDaVaga(tituloVaga: string): CandidatoDaVaga[] {
     recomendacao: r.saida.recomendacao,
     criadoEm: r.criadoEm,
   }));
-}
-
-/** Gera e salva o ranking dos candidatos desta vaga, ordenado por nota (maior primeiro); null se houver menos de 2 candidatos avaliados. */
-export function gerarRanking(tituloVaga: string): { ranking: Ranking; meta: Meta; id: string } | null {
-  const registros = registrosDaVaga(tituloVaga);
-  if (registros.length < 2) return null;
-  const candidatos: CandidatoRanking[] = registros
-    .map((r) => ({
-      id: r.id,
-      candidato: r.entrada.vaga.candidato,
-      nota_geral: r.saida.nota_geral,
-      recomendacao: r.saida.recomendacao,
-      pontos_fortes: r.saida.pontos_fortes,
-      pontos_atencao: r.saida.pontos_atencao,
-    }))
-    .sort((a, b) => b.nota_geral - a.nota_geral);
-  const ranking: Ranking = { vagaTitulo: tituloVaga.trim(), candidatos };
-  const metaGerada = meta({ demo: !aiEnabled(), insumo: "toda a lista de scorecards desta vaga" });
-  const id = salvar({ tipo: "ranking", titulo: `Ranking de ${ranking.vagaTitulo}`, entrada: { vagaTitulo: ranking.vagaTitulo }, saida: ranking, meta: metaGerada });
-  return { ranking, meta: metaGerada, id };
-}
-
-/** Quantas perguntas a entrevista tem, dentro dos limites aceitos (4 a 6). */
-export function numeroDePerguntas(vaga: Vaga): number {
-  return Math.min(6, Math.max(4, Number(vaga.numero_perguntas) || 5));
-}
-
-function construirPromptPergunta({ vaga, historico, perguntasFeitas, numeroPerguntas }: { vaga: Vaga; historico: Troca[]; perguntasFeitas: number; numeroPerguntas: number }) {
-  const conversa = historico.length
-    ? historico.map((h) => `${h.papel === "entrevistadora" ? "Entrevistadora" : "Candidato"}: ${h.texto}`).join("\n")
-    : "(nenhuma troca ainda)";
-  return `Vaga: ${vaga.titulo}
-Principais requisitos:
-${vaga.requisitos}
-Tom da entrevista: ${vaga.tom || "acolhedor"}
-Nome do candidato: ${vaga.candidato || "não informado"}
-Esta será a pergunta número ${perguntasFeitas + 1} de ${numeroPerguntas}.
-
-Conversa até agora:
-${conversa}
-
-Gere a próxima pergunta da entrevista.`;
-}
-
-/** Próxima fala da entrevistadora, compartilhada pela rota do gestor (app/api/entrevista/proxima) e
- * pela rota pública do candidato (app/api/entrevista/candidato/[token]/proxima), para o prompt e a
- * regra de encerramento existirem uma vez só. */
-export async function proximaPergunta(vaga: Vaga, historico: Troca[]): Promise<{ pergunta: string; encerrar: boolean }> {
-  const numeroPerguntas = numeroDePerguntas(vaga);
-  const perguntasFeitas = historico.filter((h) => h.papel === "entrevistadora").length;
-  if (perguntasFeitas >= numeroPerguntas) {
-    return { pergunta: mensagemEncerramento({ vaga }), encerrar: true };
-  }
-  if (!aiEnabled()) {
-    await esperar(700);
-    return { pergunta: proximaPerguntaDemo({ vaga, historico, perguntasFeitas }), encerrar: false };
-  }
-  const prompt = construirPromptPergunta({ vaga, historico, perguntasFeitas, numeroPerguntas });
-  const resposta = await askJSON<{ pergunta: string }>({ system: SYSTEM_PERGUNTA, prompt, maxTokens: 500 });
-  return { pergunta: resposta.pergunta, encerrar: false };
 }

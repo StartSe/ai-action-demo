@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { CodigoErroIA, Meta } from "@/lib/ai";
-import { numero, data } from "@/lib/formato";
+import { numero, data, moeda } from "@/lib/formato";
 import { NAVEGACAO, type ItemNavegacao } from "@/lib/navegacao";
 import { ilustracaoDoSegmento, type Segmento } from "@/lib/ilustracao";
 import { MODELOS_GRATUITOS, type ProximoPasso } from "@/lib/modelos";
@@ -804,12 +804,12 @@ export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: s
   );
 }
 
-export function CopyButton({ texto, rotulo = "Copiar texto" }: { texto: () => string; rotulo?: string }) {
+export function CopyButton({ texto, rotulo = "Copiar texto", disabled = false }: { texto: () => string; rotulo?: string; disabled?: boolean }) {
   const [ok, setOk] = useState(false);
   const [falha, setFalha] = useState(false);
   return (
     <div className="inline-flex flex-col gap-2 items-start">
-      <button type="button" className="btn-ghost" onClick={async () => {
+      <button type="button" className="btn-ghost" disabled={disabled} aria-live="polite" onClick={async () => {
         try {
           await navigator.clipboard.writeText(texto());
           setOk(true);
@@ -839,4 +839,4 @@ export function useScrollToResult(pronto: boolean) {
 export function esc(s: unknown) { return String(s ?? ""); }
 
 /** Reexportados para não quebrar quem já importa esses helpers de "@/components/ui"; definidos em lib/formato.ts (sem "use client") para poderem ser chamados também de Server Components. */
-export { numero, data };
+export { numero, data, moeda };

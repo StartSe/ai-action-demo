@@ -48,6 +48,7 @@ function rotaPublica(pathname: string, metodo: string): boolean {
   if (pathname === "/api/conta" || pathname.startsWith("/api/conta/")) return true;
   if (pathname.startsWith("/_next/")) return true;
   if (/^\/api\/setup\/oauth\/[^/]+\/callback$/.test(pathname)) return true;
+  if (/^\/api\/setup\/oauth\/mcp\/[^/]+\/callback$/.test(pathname)) return true;
   return false;
 }
 

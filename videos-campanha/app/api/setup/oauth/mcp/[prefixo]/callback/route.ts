@@ -12,11 +12,12 @@ export async function GET(req: Request, { params }: RouteContext<"/api/setup/oau
   const { prefixo } = await params;
   const url = new URL(req.url);
   const destinoSetup = `${baseUrl(req)}/setup`;
-  const limparCookie = `mcp_${prefixo}_verifier=; Path=/; Max-Age=0`;
-  const voltar = (erro?: string) => new Response(null, {
-    status: 302,
-    headers: { Location: erro ? `${destinoSetup}?erro=${encodeURIComponent(erro)}` : `${destinoSetup}?conectado=${encodeURIComponent(prefixo)}`, "Set-Cookie": limparCookie },
-  });
+  const voltar = (erro?: string) => {
+    const headers = new Headers({ Location: erro ? `${destinoSetup}?erro=${encodeURIComponent(erro)}` : `${destinoSetup}?conectado=${encodeURIComponent(prefixo)}` });
+    for (const key of ["verifier", "state"])
+      headers.append("Set-Cookie", `mcp_${prefixo}_${key}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+    return new Response(null, { status: 302, headers });
+  };
 
   const integracao = integracaoDoPrefixo(prefixo);
   if (!integracao) return voltar("Integração desconhecida.");
@@ -30,6 +31,8 @@ export async function GET(req: Request, { params }: RouteContext<"/api/setup/oau
   const code = url.searchParams.get("code");
   const cookie = req.headers.get("cookie") || "";
   const verifier = new RegExp(`(?:^|;\\s*)mcp_${prefixo}_verifier=([^;]+)`).exec(cookie)?.[1];
+  const stateCookie = new RegExp(`(?:^|;\\s*)mcp_${prefixo}_state=([^;]+)`).exec(cookie)?.[1];
+  if (!stateCookie || url.searchParams.get("state") !== stateCookie) return voltar("A autorização não corresponde a esta sessão. Tente autorizar novamente.");
   if (!code || !verifier) return voltar("A conexão expirou. Tente autorizar de novo.");
 
   try {

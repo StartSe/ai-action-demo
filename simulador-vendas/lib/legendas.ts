@@ -10,6 +10,18 @@
 
 export const EXTENSOES_ACEITAS = [".txt", ".vtt", ".srt"] as const;
 
+/**
+ * O que o **material de um produto** aceita (US-005). É uma lista à parte da de cima porque as duas
+ * respondem a perguntas diferentes: `EXTENSOES_ACEITAS` é "de onde sai uma conversa para analisar"
+ * (uma transcrição), e aqui é "de onde sai o que a empresa vende" — onde um `.md` de apresentação
+ * comercial cabe e uma legenda de vídeo institucional também.
+ *
+ * `.pdf`, `.docx` e `.pptx` ficam de fora enquanto a Q1 das Open Questions do PRD não for respondida:
+ * ler esses formatos exige dependência nova, e a decisão vale para a suíte inteira. O caminho
+ * garantido nesse meio-tempo é colar o conteúdo no campo "Texto", que a tela deixa ao lado.
+ */
+export const EXTENSOES_MATERIAL = [".txt", ".md", ".vtt", ".srt"] as const;
+
 /** Faixa de tempo de SRT/VTT: "00:00:12,300 --> 00:00:15,000" (vírgula ou ponto nos milissegundos). */
 const FAIXA_TEMPO = /-->/;
 /** Bloco numerado do SRT: uma linha contendo só um número. */

@@ -1,28 +1,82 @@
 # Simulador de Vendas
 
-Cole uma conversa de vendas (ou envie a transcrição em `.txt`, `.vtt` ou `.srt`) e veja a análise: nota geral, nota e evidência de cada critério de venda consultiva, pontos fortes, o que melhorar e os momentos-chave. Área: Vendas.
+Treine o time inteiro em conversas de venda de verdade. O gestor cadastra o produto uma vez, cria um treino e manda **um link só** para o time; cada vendedor abre esse link, conversa **por voz** com um cliente simulado pela IA e recebe um feedback que ensina — enquanto o gestor acompanha por vendedor, por tipo de cliente e ao longo dos meses. Área: Vendas.
 
 ## O que resolve
-O gestor de vendas só enxerga o resultado final de cada negócio, nunca como a conversa foi conduzida. Aqui ele cola (ou envia) a conversa e recebe uma avaliação objetiva contra 7 critérios de venda consultiva, com evidências da própria conversa, não conselhos genéricos — e um painel com a evolução de cada vendedor ao longo do tempo.
+Vendedor não aprende a vender lendo material: aprende conversando. Só que a conversa onde ele aprende é a conversa com o cliente de verdade, e o erro ali custa o negócio. Aqui ele erra antes, com um cliente simulado que conhece o produto da empresa, tem um jeito próprio de responder e levanta as objeções reais — e sai com nota por critério, o trecho da conversa que justifica cada nota e uma frase pronta para usar na próxima vez.
 
-## Formatos aceitos na conversa
-Uma fala por linha, começando com quem falou: `Vendedor:` ou `Cliente:`. Também são reconhecidos `Vendedora`, `Eu`, `Atendente`, `Consultor(a)`, `Representante` e `Falante 1`/`Speaker 1` (todos como vendedor); `Comprador(a)`, `Prospecto` e `Falante 2`/`Speaker 2` (como cliente). Carimbos de tempo antes do nome (`[00:12] Vendedor:`, `00:12:45 Cliente:`, `(1:03) Vendedor:`) são descartados. O botão "Enviar arquivo" aceita `.txt`, `.vtt` e `.srt` (até 2 MB): a conversão roda no servidor (`lib/legendas.ts`) e o texto convertido cai no campo para você conferir antes de analisar. Quando nenhuma linha é reconhecida, o app avisa antes de gastar uma chamada de IA.
+## Produto → Simulação → Sessão
+Três coisas, nesta ordem. Entender esta sequência é entender o app inteiro:
+
+1. **Produto** — o que sua empresa vende. Cadastrado **uma vez** em `/produtos`: nome, categoria e o material que ensina a IA (o endereço da página do produto, arquivos `.txt`/`.md`/`.vtt`/`.srt`, ou texto colado). A partir desse material o app gera a **ficha do produto** — resumo, público, principais benefícios, diferenciais, objeções prováveis, faixa de preço e concorrentes —, você confere, corrige o que estiver torto e salva. A ficha é o que o cliente simulado e o avaliador sabem sobre o produto; o material bruto fica guardado só para gerar a ficha de novo.
+2. **Simulação** — o treino, criado em `/simulacoes/nova` em três passos: escolher o produto, montar o desafio (metodologia, dificuldade, tipos de cliente, tentativas, tempo, se mostra o feedback, se aceita voz e texto) e pegar **o link**. O link é do treino, não de uma pessoa: o mesmo endereço serve para o time inteiro, sem cadastro nenhum e sem prazo de validade. Quem tira um treino do ar é você, pausando ou encerrando em `/simulacoes`.
+3. **Sessão** — uma conversa de um vendedor. Trinta pessoas no mesmo link geram trinta sessões independentes, cada uma com o seu tipo de cliente, a sua transcrição e a sua avaliação. Nada se mistura: o vendedor vê só o que é dele, e o gestor vê tudo em `/resultados`.
+
+### Os seis lugares do app
+| Onde | Para quê |
+|---|---|
+| **Início** (`/`) | O que está acontecendo: quatro números com a variação contra os 30 dias anteriores, os treinos ativos e o que fazer a seguir. |
+| **Produtos** (`/produtos`) | A biblioteca do que sua empresa vende, com o material e a ficha de cada um. |
+| **Simulações** (`/simulacoes`) | Os treinos criados, com o link de cada um, quantas pessoas treinaram e a nota média. |
+| **Equipe** (`/equipe`) | Quem já treinou, como cada um foi, o convite para quem ainda não entrou — e "Analisar uma conversa real". |
+| **Resultados** (`/resultados`) | O painel de cada treino: visão geral, equipe, tipos de cliente e evolução ao longo dos meses. |
+| **Configurações** (`/setup`) | A IA, a voz, o envio de feedback por e-mail, o acesso para assistentes e as rotinas. |
+
+### O que o vendedor vê
+Ele abre o link, diz quem é (com Google, com Microsoft ou escrevendo nome e e-mail), lê **quem é o cliente** — nome, cargo, empresa e por que aceitou falar — e começa a conversa. Ele não vê o tipo de cliente antes: isso só é revelado no feedback, senão o treino vira decoreba. No fim ele recebe a nota, o que foi bem, **uma** coisa para fazer diferente e uma frase pronta para usar. Nenhuma tela do vendedor tem menu do app, cabeçalho de gestor ou caminho para as configurações.
+
+## Voz do cliente: três níveis
+**O treino já acontece por voz sem você conectar nada.** Esta é a parte que costuma confundir, então em linguagem de negócio:
+
+| Nível | O que é | O que exige |
+|---|---|---|
+| **1 — Agente conversacional** | A conversa mais natural que o app oferece: o cliente escuta e responde em tempo real, com interrupção, como numa ligação de verdade. | Uma conta da ElevenLabs com um agente conversacional configurado. |
+| **2 — Voz do navegador (o padrão)** | O navegador do vendedor escuta o que ele fala, a IA responde como cliente e a resposta sai falada. Com a chave da ElevenLabs, a voz é a da nuvem (mais natural); sem ela, é a voz do próprio navegador. | **Nada.** Funciona com a IA conectada e mais nada. |
+| **3 — Texto** | A mesma conversa, escrita. Nunca some: é a alternativa explícita ("Prefiro digitar") e o caminho de quem está num navegador que não transcreve fala ou não teve o microfone liberado. | Nada. |
+
+O app escolhe o nível mais alto disponível na abertura da sala e **cai sozinho** para o de baixo quando precisa: se o agente não carregar em 10 segundos, a sala vira o nível 2 sem o vendedor fazer nada (e ele pode pedir a troca a qualquer momento, em "Prefiro conversar por aqui"); se a voz da nuvem não responder, a fala sai pelo navegador sem ninguém perceber. A ElevenLabs, portanto, **melhora a voz — ela não é o que faz o treino ser falado.**
+
+Cada tipo de cliente tem um jeito de falar próprio (velocidade, estabilidade e tom): o apressado atropela, o resistente arrasta. O cartão "Voz do cliente" em `/setup` traz o interruptor "Voz automática por tipo de cliente" (ligado por padrão) e um botão de amostra por tipo, que toca pelo mesmo caminho que o vendedor vai ouvir. Desligando o interruptor, todos falam com a mesma voz.
+
+### Configurar o agente conversacional (nível 1, opcional)
+1. Na ElevenLabs (Conversational AI › Agents › seu agente › aba Security), desligue a exigência de autenticação — o link é público, sem login — e adicione o domínio onde este app está publicado à lista de domínios permitidos, para nenhum outro site poder embutir o mesmo agente.
+2. Configure o aviso automático de pós-conversa (evento `post_call_transcription`) apontando para o endereço mostrado no cartão "Dados para a equipe técnica" em `/setup#elevenlabs-agente`, com o segredo de verificação salvo no mesmo cartão — é assim que a avaliação da conversa chega de volta.
+3. Declare em Agent › Dynamic variables as seis variáveis que o app manda, todas da **sessão** daquele vendedor: `sessao_id` (a única obrigatória: é o que liga a conversa recebida à sessão certa), `simulacao`, `produto`, `persona_instrucoes`, `participante` e `duracao_minutos`. `sala_token` e `vendedor_id`, do modelo antigo, continuam aceitos para os agentes já configurados assim.
+4. O prompt do agente é uma linha só, porque o personagem inteiro é montado pelo app a cada conversa:
+
+   ```
+   Siga {{persona_instrucoes}}
+   ```
+5. Se a avaliação não chegar em 90 segundos, o vendedor é avisado e a conversa fica registrada mesmo assim. O cartão "Dados para a equipe técnica" mostra quantas conversas ficaram sem avaliação e qual foi o motivo da última tentativa recusada.
+
+## Metodologia e avaliação
+O gestor escolhe a régua por treino: **SPIN Selling** (9 critérios), **Venda consultiva** (7 critérios) ou **Personalizada** (o gestor escreve de 3 a 10 critérios). A avaliação devolve uma nota por critério com o **trecho literal da conversa** que a justifica — citação conferida contra a transcrição, não texto de confiança: o que não aparece na conversa é descartado. A nota geral e as notas por momento da conversa são calculadas no app, nunca pedidas à IA, que é o que permite comparar duas pessoas avaliadas em dias diferentes.
+
+Os tipos de cliente são sete (Amigável, Apressado, Direto, Cético, Sensível a preço, Especialista e Resistente) e a dificuldade (Fácil, Realista, Difícil) muda quantas objeções o cliente levanta e quanta informação ele dá. No modo "Clientes variados", o app distribui os tipos pelo time em vez de sortear, para o painel não ficar enviesado por um perfil que caiu para nove pessoas e outro para uma.
+
+## Analisar uma conversa real
+Em **Equipe › Analisar uma conversa real** você cola (ou envia em `.txt`, `.vtt` ou `.srt`) uma conversa que aconteceu com um cliente de verdade e recebe a mesma avaliação, vinculada à pessoa. Formato: uma fala por linha, começando com `Vendedor:` ou `Cliente:`. Também são reconhecidos `Vendedora`, `Eu`, `Atendente`, `Consultor(a)`, `Representante` e `Falante 1`/`Speaker 1` (como vendedor); `Comprador(a)`, `Prospecto` e `Falante 2`/`Speaker 2` (como cliente). Carimbos de tempo antes do nome (`[00:12] Vendedor:`, `00:12:45 Cliente:`) são descartados. Quando nenhuma linha é reconhecida, o app avisa antes de gastar uma chamada de IA.
 
 ## Stack
-Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão.
+Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. Banco em SQLite (`node:sqlite`, sem dependência externa). IA via OpenRouter com modelo gratuito por padrão.
 
 ## Configuração inicial (sem variáveis de ambiente)
-Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave, escolhe o modelo e testa a conexão. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar, o app roda em modo demonstração com uma conversa e uma análise de exemplo.
+Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave, escolhe os modelos e testa a conexão. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`.
+
+São **dois** modelos, porque as duas pontas têm exigências opostas: o **cliente simulado** responde a cada fala e precisa ser rápido; a **avaliação** acontece uma vez por conversa e vira nota, então vale um modelo mais capaz. Em "Automático" (o padrão dos dois), a avaliação usa o mesmo modelo da simulação.
+
+Até conectar a IA, o app roda em **modo demonstração**: ele nasce com um produto, dois treinos, três pessoas e seis conversas já avaliadas, espalhadas por quatro meses, para você abrir qualquer tela e ver como ela fica cheia. Esse conjunto sai de cena sozinho assim que chega dado de verdade — o primeiro produto real apaga os exemplos, a primeira conversa real apaga as conversas de exemplo. Um treino de exemplo em que alguém conversou de verdade fica.
 
 ## Primeiro acesso
 Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
+
+O **vendedor não tem conta**: ele se identifica no próprio link, com Google, com Microsoft ou escrevendo nome e e-mail. Os botões dos provedores só aparecem quando a instalação tem as credenciais; o caminho manual fica sempre visível. Nenhum acesso do provedor é guardado — o app lê o nome e o e-mail e descarta o resto.
 
 ## Rodar localmente
 ```bash
 npm install
 npm run dev             # http://localhost:3000 e depois http://localhost:3000/setup
 ```
-Abra `/?exemplo=1` para preencher e executar um exemplo sozinho.
 
 ## Rodar com Docker
 ```bash
@@ -37,27 +91,24 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 - Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
 - O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração se perde a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
 
-## Sala de simulação pública ("Criar link de treino")
-No painel, "Criar link de treino" gera um link (`/simular/<código>`, válido por 30 dias, sem limite de usos) que o vendedor abre sozinho para treinar com o cliente simulado do cenário escolhido.
-
-- **Sem a integração "Cliente simulado por voz" conectada:** a sala mostra uma conversa por texto (a IA responde como o cliente); ao clicar em "Encerrar e ver minha análise", o vendedor vê a mesma análise do painel.
-- **Com a integração conectada:** a sala carrega o widget oficial de voz da ElevenLabs (`<elevenlabs-convai>`) no lugar do texto. Para isso funcionar de verdade:
-  1. No agente conversacional (ElevenLabs › Conversational AI › Agents › seu agente › aba Security), desligue a exigência de autenticação (o link é público, sem login) e adicione o domínio onde este app está publicado à lista de domínios permitidos, para nenhum outro site poder embutir o mesmo agente.
-  2. Configure o aviso automático de pós-conversa (evento `post_call_transcription`) apontando para o endereço mostrado no cartão "Dados para a equipe técnica" em `/setup#elevenlabs-agente`, como já descrito acima em "Segredo de verificação" — é assim que a análise da ligação chega de volta.
-  3. O widget manda três variáveis dinâmicas para o agente: `sala_token` (liga a conversa recebida à sala certa — o mesmo agente pode atender várias salas ao mesmo tempo), `vendedor_id` (quem está treinando, quando escolhido no painel) e `cenario` (o título do cenário). Declare as três em Agent › Dynamic variables; `sala_token` é a única obrigatória para a análise voltar.
-  4. Prompt-modelo do agente (o mesmo que o cartão "Dados para a equipe técnica" deixa pronto para copiar):
-
-     ```
-     Você é {{cenario}}, um cliente em uma ligação de vendas. Nunca saia do personagem e nunca dê dicas de vendas.
-     Responda em português do Brasil, em falas curtas, reagindo de forma realista ao que o vendedor disser.
-     Levante suas objeções quando fizer sentido e deixe o vendedor conduzir: quem encerra a ligação é ele.
-     ```
-  5. Se a análise não chegar em 90 segundos, a sala avisa o vendedor ("A análise ainda não chegou; peça ao gestor para conferir a conexão com a ElevenLabs") e registra a ligação mesmo assim. O cartão "Dados para a equipe técnica" em `/setup` mostra quantas ligações ficaram sem análise e qual foi o motivo da última tentativa recusada (assinatura ausente, segredo não salvo, análise falhou).
+## Feedback por e-mail, convite e rotina
+- **Feedback por e-mail:** assim que uma conversa é avaliada, o vendedor recebe a nota, os pontos fortes, a oportunidade e o link do resultado dele. Ligado por padrão, com interruptor no cartão "Feedback por e-mail" de `/setup`. Não é enviado quando o treino esconde o feedback, quando a pessoa entrou sem e-mail ou quando não há conta de e-mail configurada — e nenhum desses casos vira erro na sua tela.
+- **Convite:** o botão "Convidar" em Equipe gera, para o treino escolhido, um endereço público onde quem abre informa nome e e-mail antes de ver o link. Ele serve para você saber quem pediu, não para esconder o endereço do treino.
+- **Rotina:** "Resumo dos treinos do time" manda periodicamente quem treinou, a nota média, a competência mais fraca e o treino mais praticado desde a última execução. "Resumo semanal da equipe" continua cobrindo as conversas reais analisadas. Agende as duas no cartão "Rotinas" de `/setup`.
 
 ## Usar dentro de um assistente de IA (MCP)
-O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, para que assistentes como Claude ou ChatGPT chamem a ferramenta `analisar_conversa` diretamente. Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
+O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, para que assistentes como Claude ou ChatGPT operem o app conversando. Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
 
-Decisão de implementação: protocolo implementado à mão em `lib/mcp.ts` (JSON-RPC 2.0: `initialize`, `tools/list`, `tools/call`), em vez do pacote `@modelcontextprotocol/sdk`. O app só precisa desses três métodos, sem `resources`, `prompts` nem streaming de progresso — a mesma filosofia de `lib/store.ts` (SQLite sem dependências externas) evita adicionar uma dependência pesada para um uso pequeno. Rate limit de 60 chamadas por minuto por código, em memória (`lib/mcp.ts`); reinicia ao reiniciar o servidor ou ao gerar um novo código.
+Quatro ferramentas:
+
+| Ferramenta | O que faz |
+|---|---|
+| `criar_simulacao` | Cria um treino e devolve o link. Aceita o produto pelo **nome** ("crie um treino do Plano Empresarial"), não só pelo identificador. |
+| `resultados_da_simulacao` | Os agregados de um treino (nota, competências, equipe, tipos de cliente). Sem o código, devolve a lista de treinos. Nunca devolve transcrição nem feedback individual. |
+| `analisar_conversa` | Avalia uma conversa real colada, igual à tela de Equipe. |
+| `painel_equipe` | O resumo da equipe no período. |
+
+Decisão de implementação: protocolo implementado à mão em `lib/mcp.ts` (JSON-RPC 2.0: `initialize`, `tools/list`, `tools/call`), em vez do pacote `@modelcontextprotocol/sdk`. O app só precisa desses três métodos, sem `resources`, `prompts` nem streaming de progresso — a mesma filosofia de `lib/store.ts` (SQLite sem dependências externas) evita adicionar uma dependência pesada para um uso pequeno. Rate limit de 60 chamadas por minuto por código, em memória; reinicia ao reiniciar o servidor ou ao gerar um novo código.
 
 ```bash
 curl -X POST https://<seu-app>/mcp \
@@ -65,77 +116,88 @@ curl -X POST https://<seu-app>/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
-O cartão também mostra um passo a passo de três passos para o Claude Desktop e para o ChatGPT, e um botão "Copiar configuração" que copia um JSON pronto (endereço + código) logo após gerar um acesso.
-
 ### Testar com o MCP Inspector
 ```bash
 npx @modelcontextprotocol/inspector
 ```
-Na interface que abre no navegador, escolha o transporte "Streamable HTTP", cole `http://localhost:3000/mcp` (ou o endereço do deploy) em URL e adicione o cabeçalho `Authorization: Bearer <código>` em "Custom Headers". Clique em "Connect": a aba "Tools" deve listar `analisar_conversa`; ao executá-la com uma transcrição, o resultado devolvido é o mesmo objeto (nota, critérios, pontos fortes) que a rota `/api/analisar` produz.
+Na interface que abre no navegador, escolha o transporte "Streamable HTTP", cole `http://localhost:3000/mcp` (ou o endereço do deploy) em URL e adicione o cabeçalho `Authorization: Bearer <código>` em "Custom Headers". Clique em "Connect": a aba "Tools" deve listar as quatro ferramentas.
 
 ## Variáveis de ambiente (todas opcionais)
 Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando definidas, têm prioridade sobre o que foi salvo.
 | Variável | Descrição |
 |---|---|
 | `DATA_DIR` | Pasta do banco SQLite. Padrão `./data` (Docker: `/app/data`). |
+| `APP_URL` | Endereço público do app. Sem ele, o e-mail do feedback sai sem link e o assistente devolve o caminho relativo do treino. É aprendido sozinho na primeira criação de treino pela tela. |
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
-| `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
-| `ELEVENLABS_API_KEY` | Opcional. Chave da ElevenLabs para a sala de treino por voz. Obtenha em https://elevenlabs.io/app/settings/api-keys. |
-| `ELEVENLABS_AGENT_ID` | Opcional. Agente conversacional que faz o papel do cliente. Crie em https://elevenlabs.io/app/conversational-ai; em `/setup` a lista é carregada da própria conta. |
+| `OPENROUTER_MODEL` | Alternativa ao setup. Modelo do dia a dia: o cliente simulado, a ficha do produto e a análise de conversa real. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
+| `OPENROUTER_MODEL_AVALIACAO` | Alternativa ao setup. Modelo usado só na avaliação da conversa; sem ele vale o de `OPENROUTER_MODEL`. |
+| `GOOGLE_CLIENT_ID_APP` / `GOOGLE_CLIENT_SECRET_APP` | Opcionais. Habilitam "Entrar com Google" para o vendedor se identificar no link (escopo `openid email profile`). |
+| `MICROSOFT_CLIENT_ID_APP` / `MICROSOFT_CLIENT_SECRET_APP` | Opcionais. O mesmo, para "Entrar com Microsoft". |
+| `ELEVENLABS_API_KEY` | Opcional. Melhora a voz do cliente (nível 2) e habilita o agente conversacional (nível 1). Obtenha em https://elevenlabs.io/app/settings/api-keys. |
+| `ELEVENLABS_VOICE_ID` | Opcional. Voz usada quando a voz automática por tipo de cliente está desligada (ou quando a lista de vozes da conta não pôde ser lida). |
+| `ELEVENLABS_AGENT_ID` | Opcional. Agente conversacional que faz o papel do cliente (nível 1). Crie em https://elevenlabs.io/app/conversational-ai; em `/setup` a lista é carregada da própria conta. |
 | `ELEVENLABS_WEBHOOK_SECRET` | Opcional. Segredo de verificação do aviso de pós-conversa (Configurações › Webhooks na ElevenLabs), usado para validar a assinatura em `app/webhook/elevenlabs/route.ts`. |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
 
 ## Estrutura
 ```
-app/page.tsx              tela única (painel + análise)
-app/api/analisar/route.ts análise de uma conversa (POST) e histórico (GET/DELETE)
-app/api/vendedores/route.ts cadastro e lista do time de vendas
-app/api/cenarios/route.ts lista dos cenários de cliente simulado (semeados na primeira leitura)
-app/api/salas/route.ts    cria o link de treino ("Criar link de treino")
-app/api/salas/[token]/conversar/route.ts próxima fala do cliente simulado (sala por texto)
-app/api/salas/[token]/analisar/route.ts  encerra a conversa por texto e gera a análise
-app/api/salas/[token]/ultima/route.ts    sondado pela sala por voz até a análise chegar
-app/api/salas/[token]/ligacao/route.ts   registra que a ligação por voz terminou
-app/api/analisar/arquivo/route.ts        converte .txt/.vtt/.srt no servidor para o campo da conversa
-app/api/crm/route.ts      leva a nota e os pontos a melhorar para o CRM conectado
-app/api/enviar-analise/route.ts envia a análise para o e-mail do vendedor
-app/api/webhook-info/route.ts   dados do aviso de pós-conversa para o cartão da equipe técnica
-app/simular/[token]/page.tsx sala de simulação pública (texto ou widget de voz)
-components/SalaSimulacao.tsx tela da sala pública (conversa por texto e widget de voz)
-app/webhook/elevenlabs/route.ts aviso automático de pós-conversa (ligação por voz)
-app/mcp/route.ts          endpoint MCP (JSON-RPC 2.0) para assistentes de IA
-app/api/mcp/token/route.ts  gera, consulta e revoga o código de acesso do endpoint MCP
-app/setup/page.tsx        configuração inicial (chaves, OAuth, teste de conexão, acesso MCP, rotinas)
-app/api/setup/            leitura/gravação da configuração, teste e OAuth do OpenRouter
-app/api/status/route.ts   informa ao frontend se a IA está conectada
-app/api/health/route.ts   health check
-components/ui.tsx         componentes visuais compartilhados pela suíte
-components/setup.tsx      tela de setup genérica, gerada a partir de lib/integracoes.ts
-components/AcessoMCP.tsx  cartão do /setup para gerar/revogar o acesso MCP
-components/Rotinas.tsx    cartão do /setup para agendar o resumo periódico
-lib/store.ts               configuração em SQLite (node:sqlite), com variáveis de ambiente como prioridade
-lib/setup-comum.ts         tipos do setup e integração OpenRouter (compartilhado)
-lib/integracoes.ts         integrações que este app precisa
-lib/ai.ts                  cliente OpenRouter (askText, askJSON, askWithTools)
-lib/mcp.ts                 protocolo MCP (JSON-RPC 2.0), código de acesso e limite de chamadas
-lib/ferramentas.ts         ferramentas expostas via MCP (analisar_conversa)
-lib/analise.ts              lógica de análise, usada pela rota HTTP e pela ferramenta MCP
-lib/vendedores.ts           CRUD do time de vendas (SQLite)
-lib/cenarios.ts             CRUD dos cenários de cliente simulado, com seed idempotente de 3 modelos
-lib/criterios.ts            lista padrão dos 7 critérios de venda consultiva
-lib/conversa.ts             conversão do texto colado em transcrição estruturada
-lib/legendas.ts             conversão de .txt/.vtt/.srt para o formato colado
-lib/crm.ts                  anotação no CRM conectado (MCP) com a nota e os pontos a melhorar
-lib/envio-analise.ts        envio da análise ao e-mail do vendedor
-lib/aviso-pos-conversa.ts   estado do aviso de pós-conversa (última conversa e última recusa)
-lib/salas.ts                salas de simulação pública (SQLite): link de treino de 30 dias
-lib/simulacao.ts             próxima fala do cliente simulado (sala por texto), com roteiro fixo em demo
-lib/elevenlabs-convai.d.ts   tipo do elemento <elevenlabs-convai> do widget oficial de voz
-lib/demo.ts                 conversa e análise de exemplo do modo demonstração
-lib/rotinas-do-app.ts       rotina "Resumo das conversas analisadas"
-lib/types.ts                 tipos do domínio
+app/page.tsx                       Início: indicadores, treinos ativos, "Comece em 3 passos" e a dica da semana
+app/produtos/page.tsx              biblioteca de produtos (lista + cadastro)
+app/produtos/[id]/page.tsx         um produto: dados, materiais e a ficha
+app/simulacoes/page.tsx            os treinos criados, com filtro, busca, link e ações
+app/simulacoes/nova/page.tsx       criar treino em três passos (produto → desafio → link)
+app/equipe/page.tsx                quem já treinou, cadastro, convite e a linha do tempo de cada um
+app/equipe/analisar/page.tsx       analisar uma conversa real (colar ou enviar .txt/.vtt/.srt)
+app/resultados/page.tsx            lista dos treinos com conversa, avaliações pendentes e falhas de envio
+app/resultados/[codigo]/           painel de um treino: visão geral, equipe, tipos de cliente e evolução
+app/simular/[token]/page.tsx       o link do vendedor: identificação → preparação → conversa
+app/simular/[token]/meus-resultados/  o histórico e o feedback de quem treinou (público, por cookie assinado)
+app/setup/page.tsx                 configuração (IA, voz, feedback por e-mail, acesso MCP, rotinas)
+app/r/[id] · app/imprimir/[id]     ler e imprimir um resultado salvo (conversa, sessão, painel, painel do treino)
+app/webhook/elevenlabs/route.ts    aviso de pós-conversa do agente conversacional (assinado)
+app/mcp/route.ts                   endpoint MCP (JSON-RPC 2.0) para assistentes de IA
+app/api/produtos/**                produtos, materiais e a ficha
+app/api/simulacoes/**              treinos, mudança de status e o convite
+app/api/salas/[token]/**           rotas públicas do vendedor (o prefixo é histórico; a entidade é a simulação)
+app/api/resultados/[codigo]/**     o painel de um treino e a frase dos tipos de cliente
+app/api/sessoes/**                 avaliações pendentes e falhas de envio de e-mail
+app/api/equipe/**                  a lista da equipe e a linha do tempo de uma pessoa
+
+lib/banco.ts               esquema e migração das tabelas do modelo Produto → Simulação → Sessão
+lib/produtos.ts            produtos e os materiais de cada um
+lib/conhecimento.ts        gera e normaliza a ficha do produto (com tetos aplicados no código)
+lib/extrair-pagina.ts      lê o texto de uma página, com bloqueio de endereços internos
+lib/legendas.ts            converte .txt/.md/.vtt/.srt em texto
+lib/simulacoes.ts          os treinos e o código do link
+lib/metodologias.ts        SPIN, consultiva e personalizada — os critérios e os quatro momentos
+lib/personas.ts            os 7 tipos de cliente e os atributos de cada um
+lib/atribuicao.ts          distribui os tipos de cliente pelo time (não sorteia)
+lib/cliente-simulado.ts    monta o personagem da conversa a partir de produto + tipo + dificuldade
+lib/participantes.ts       quem treina (criado no próprio link, sem conta)
+lib/sessoes.ts             as conversas, as transcrições e todas as consultas agregadas
+lib/conversa-sessao.ts     o turno da conversa: a próxima fala do cliente
+lib/sala-do-vendedor.ts    o que a sala pode fazer agora (tempo restante, tentativas)
+lib/sessao-vendedor.ts     o cookie assinado que identifica quem treina
+lib/entrar-vendedor.ts     identificação por Google e Microsoft (openid email profile)
+lib/vozes.ts               a voz de cada tipo de cliente, no navegador e na ElevenLabs
+lib/avaliacao.ts           o avaliador: nota por critério, evidência conferida e as médias
+lib/analise.ts             a análise de conversa real e a gravação de todo resultado no histórico
+lib/painel-simulacao.ts    os agregados do painel de um treino (cálculo puro)
+lib/painel-equipe.ts       o resumo da equipe no período
+lib/inicio.ts              os quatro indicadores e os três passos do Início
+lib/equipe.ts              a tela de Equipe
+lib/demo.ts                o conteúdo de exemplo; lib/semear-demo.ts semeia, lib/exemplos.ts remove
+lib/envio-analise.ts       o e-mail do feedback e o da análise
+lib/ferramentas.ts         as quatro ferramentas expostas por MCP
+lib/rotinas-do-app.ts      "Resumo dos treinos do time" e "Resumo semanal da equipe"
+lib/store.ts               configuração em SQLite, com variáveis de ambiente como prioridade
+lib/ai.ts                  cliente OpenRouter (askText, askJSON, askWithTools), com modelo por tarefa
+components/Resultado.tsx   as telas dos quatro formatos de resultado, compartilhadas
+components/SalaVoz.tsx     a sala por voz do navegador (nível 2)
+components/SalaAgente.tsx  a sala com o agente conversacional (nível 1), que cai para o nível 2 sozinha
+components/FeedbackVendedor.tsx  o feedback de quem treinou, nas duas telas que o mostram
 Dockerfile                 build multi-stage com saída standalone
 docker-compose.yml         sobe este app isolado
-render.yaml                 blueprint do Render (runtime image)
+render.yaml                blueprint do Render (runtime image)
 ```

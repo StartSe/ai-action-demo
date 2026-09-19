@@ -26,12 +26,9 @@
   --radius-chip: 999px;
 }
 
-/* Gradiente do botão primário e dos ícones circulares: extremidade clara (--color-accent-2) mede
-   contraste 3,59:1 contra branco (abaixo de 4,5:1, acima do mínimo 3:1 de componente de UI/texto
-   grande) — ver nota de contraste no CLAUDE.md antes de usar texto branco solto sobre --color-accent-2
-   puro fora de um botão preenchido. */
+/* Gradiente com contraste de texto branco acima de 4,5:1 nas duas extremidades. */
 :root {
-  --gradiente-acento: linear-gradient(135deg, var(--color-accent), var(--color-accent-2));
+  --gradiente-acento: linear-gradient(135deg, var(--color-accent), #8540a8);
 }
 
 html { -webkit-text-size-adjust: 100%; overflow-x: clip; }
@@ -141,3 +138,5 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   .room-head { flex-wrap: wrap; }
   .room-head .btn-ghost { width: 100%; }
 }
+
+:where(a, button, input, select, textarea, summary):focus-visible { outline: 3px solid var(--color-accent); outline-offset: 3px; }

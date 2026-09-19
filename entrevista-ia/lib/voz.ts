@@ -119,6 +119,27 @@ export function ttsEnabled(): boolean {
   return Boolean(getConfig("ELEVENLABS_API_KEY"));
 }
 
+/**
+ * O agente conversacional da ElevenLabs está conectado?
+ *
+ * É o nível 1 da conversa (D3): o candidato fala naturalmente e pode até interromper. Ele NÃO exige o
+ * número de telefone — só a ligação (`ligacaoEnabled`) exige. Por isso as duas perguntas são
+ * diferentes: a sala do navegador só precisa da chave e do agente.
+ */
+export function agenteEnabled(): boolean {
+  return Boolean(getConfig("ELEVENLABS_API_KEY") && getConfig("ELEVENLABS_AGENT_ID"));
+}
+
+/**
+ * O identificador do agente conversacional escolhido em Configurações, ou vazio quando não há.
+ *
+ * Ele é o único dado da ElevenLabs que chega ao navegador do candidato: o widget precisa dele para
+ * abrir a conversa. A chave da conta continua só no servidor.
+ */
+export function agenteConfigurado(): string {
+  return getConfig("ELEVENLABS_AGENT_ID") ?? "";
+}
+
 export function ligacaoEnabled(): boolean {
   return Boolean(getConfig("ELEVENLABS_API_KEY") && getConfig("ELEVENLABS_AGENT_ID") && getConfig("ELEVENLABS_PHONE_NUMBER_ID"));
 }
@@ -146,14 +167,13 @@ export async function gerarAudio(texto: string): Promise<ArrayBuffer> {
   return r.arrayBuffer();
 }
 
-interface DadosLigacao {
-  telefone: string;
-  vaga?: string;
-  requisitos?: string;
-  candidato?: string;
-}
-
-export async function ligar({ telefone, vaga, requisitos, candidato }: DadosLigacao) {
+/**
+ * A ligação telefônica: o mesmo agente conversacional da sala do navegador, agora discando para o
+ * candidato (US-020). Quem monta as variáveis é quem chamou — `lib/agente.ts` para uma entrevista de
+ * verdade —, porque elas têm de ser as MESMAS nos dois caminhos: um agente que recebe `roteiro` numa
+ * conversa e não na outra conduz duas entrevistas diferentes para a mesma vaga.
+ */
+export async function ligar({ telefone, variaveis }: { telefone: string; variaveis: Record<string, string> }) {
   let r: Response;
   try {
     r = await fetch("https://api.elevenlabs.io/v1/convai/twilio/outbound-call", {
@@ -166,13 +186,7 @@ export async function ligar({ telefone, vaga, requisitos, candidato }: DadosLiga
         agent_id: getConfig("ELEVENLABS_AGENT_ID"),
         agent_phone_number_id: getConfig("ELEVENLABS_PHONE_NUMBER_ID"),
         to_number: telefone,
-        conversation_initiation_client_data: {
-          dynamic_variables: {
-            vaga: vaga || "",
-            requisitos: requisitos || "",
-            candidato: candidato || "",
-          },
-        },
+        conversation_initiation_client_data: { dynamic_variables: variaveis },
       }),
     });
   } catch (err) {

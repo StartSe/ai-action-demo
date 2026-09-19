@@ -1,11 +1,18 @@
+import { generationConnections } from "@/lib/flow/connections";
 import { INTEGRACOES } from "@/lib/integracoes";
 import { statusIntegracoes } from "@/lib/setup-comum";
 import { setConfig } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
+async function statusSetup() {
+  const status = await statusIntegracoes(INTEGRACOES);
+  const connections = generationConnections();
+  return { ...status, pronto: !connections.demo, demo: connections.demo };
+}
+
 export async function GET() {
-  return Response.json(await statusIntegracoes(INTEGRACOES));
+  return Response.json(await statusSetup());
 }
 
 /** Salva valores. Chave com valor "" é ignorada (mantém o atual); null apaga. */
@@ -21,5 +28,5 @@ export async function PUT(req: Request) {
     setConfig(chave, valor);
     salvos++;
   }
-  return Response.json({ salvos, ...(await statusIntegracoes(INTEGRACOES)) });
+  return Response.json({ salvos, ...(await statusSetup()) });
 }

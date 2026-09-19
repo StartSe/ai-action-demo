@@ -7,7 +7,7 @@ import { obter as obterResultado } from "./historico";
 import { chamar, conectar, listarFerramentas, type ConexaoMCP, type FerramentaMCP } from "./mcp-cliente";
 import { conexaoAutorizada } from "./mcp-oauth";
 import { obter as obterCenario } from "./cenarios";
-import { obter as obterVendedor } from "./vendedores";
+import { obter as obterParticipante } from "./participantes";
 import { integracaoConfigurada } from "./setup-comum";
 import { numero } from "./formato";
 import type { Meta } from "./ai";
@@ -99,7 +99,7 @@ export async function enviarConversaParaCRM(resultadoId: string): Promise<{ mens
   }
 
   const cenario = resultado.entrada.cenarioId ? obterCenario(resultado.entrada.cenarioId) : null;
-  const vendedor = resultado.entrada.vendedorId ? obterVendedor(resultado.entrada.vendedorId) : null;
+  const vendedor = resultado.entrada.vendedorId ? obterParticipante(resultado.entrada.vendedorId) : null;
   const conexao = await conexaoAtual();
 
   let ferramentas: FerramentaMCP[];

@@ -20,6 +20,7 @@ export async function POST(req: Request) {
   registrarEnderecoPublico(req);
   const corpo = await req.json().catch(() => null);
   const tipo = typeof corpo?.tipo === "string" ? corpo.tipo : "";
+  if (tipo === "radar-diario") return Response.json({ error: "Cadastre os termos e horários em Monitoramento diário na tela inicial." }, { status: 400 });
   const frequencia = corpo?.frequencia as Frequencia;
   const hora = typeof corpo?.hora === "string" ? corpo.hora : "";
   const canal = corpo?.canal === "slack" ? "slack" : "email";

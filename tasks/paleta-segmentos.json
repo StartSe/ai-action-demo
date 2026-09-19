@@ -219,5 +219,18 @@
       44
     ],
     "contrasteBranco": 5.46
+  },
+  "build-agentflows": {
+    "segmento": "Gestão",
+    "acento": "#163669",
+    "acento2": "#1724b0",
+    "soft": "#e7eef9",
+    "ink": "#0d2a59",
+    "hsl": [
+      217,
+      65,
+      25
+    ],
+    "contrasteBranco": 11.89
   }
 }

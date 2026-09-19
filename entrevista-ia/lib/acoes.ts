@@ -4,4 +4,7 @@
 // devolvida por uma rota. Também mantém o caminho de Configurações fora de app/page.tsx, onde
 // scripts/verificar-jargao.mjs o acusaria como jargão escrito na tela.
 export const ACAO_VOZ = { rotulo: "Conferir a voz em Configurações", url: "/setup#elevenlabs" };
-export const ACAO_LIGACAO = { rotulo: "Conferir a ligação em Configurações", url: "/setup#elevenlabs-ligacao" };
+export const ACAO_LIGACAO = { rotulo: "Conferir a ligação em Configurações", url: "/setup#elevenlabs-agente" };
+export const ACAO_IA = { rotulo: "Conectar a IA", url: "/setup#openrouter" };
+export const ACAO_CULTURA = { rotulo: "Cadastrar a cultura da empresa", url: "/setup#cultura" };
+export const ACAO_PESQUISA = { rotulo: "Conectar a pesquisa na web em Configurações", url: "/setup#brightdata" };

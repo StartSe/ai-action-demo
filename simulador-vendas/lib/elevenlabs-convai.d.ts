@@ -1,5 +1,5 @@
 // Declaração de tipo do elemento customizado do widget oficial da ElevenLabs (script embutido por
-// components/SalaSimulacao.tsx), para o TypeScript reconhecer <elevenlabs-convai> como elemento JSX válido.
+// components/SalaAgente.tsx e components/SalaSimulacao.tsx), para o TypeScript reconhecer <elevenlabs-convai> como elemento JSX válido.
 import type { DetailedHTMLProps, HTMLAttributes } from "react";
 
 declare module "react" {

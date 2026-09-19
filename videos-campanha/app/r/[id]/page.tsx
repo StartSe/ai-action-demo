@@ -5,7 +5,7 @@ import { higgsfieldConfigurado } from "@/lib/higgsfield";
 import { listarPorCampanha } from "@/lib/videos";
 import type { Meta } from "@/lib/ai";
 import type { Campanha, EntradaCampanha } from "@/lib/types";
-import { Resultado } from "../../page";
+import { Resultado } from "../../briefing/page";
 
 export default async function Page({ params }: PageProps<"/r/[id]">) {
   const { id } = await params;

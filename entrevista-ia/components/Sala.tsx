@@ -5,28 +5,13 @@ import { Aviso, ErrorBox, lerErro, type ErroLido } from "./ui";
 import type { CodigoErroIA } from "@/lib/ai";
 import type { Troca, Vaga } from "@/lib/types";
 
-// Tipagem mínima da Web Speech API (não coberta pelo lib.dom.d.ts do TypeScript).
-interface SpeechRecognitionResultLike {
-  0: { transcript: string };
-}
-interface SpeechRecognitionEventLike extends Event {
-  results: { 0: SpeechRecognitionResultLike };
-}
-interface SpeechRecognitionLike extends EventTarget {
-  lang: string;
-  interimResults: boolean;
-  onresult: ((ev: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((ev: Event) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-}
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
-declare global {
-  interface Window {
-    SpeechRecognition?: SpeechRecognitionCtor;
-    webkitSpeechRecognition?: SpeechRecognitionCtor;
-  }
-}
+// **Esta sala é a prévia do gestor (D11), e só ela.** A conversa do candidato mora em
+// components/SalaCandidato.tsx desde a US-018: lá a fala é falada, a escuta é do navegador e a
+// transcrição é do servidor. Aqui quem responde é quem administra o app, digitando, para ouvir as
+// perguntas que a vaga gera antes de convidar alguém — nada é gravado e nenhum parecer sai daqui.
+//
+// A tipagem da escuta do navegador (`SpeechRecognition`) mora em lib/fala.d.ts, no escopo global:
+// as boas-vindas (components/BoasVindas.tsx) usam a mesma, e duas declarações locais não convivem.
 
 const RESPOSTAS_EXEMPLO = [
   "Trabalho há quatro anos com atendimento a clientes B2B e hoje lidero o time de suporte sênior em uma empresa de SaaS de médio porte. Me candidatei porque quero atuar mais perto do sucesso do cliente, não só do suporte reativo.",
@@ -43,6 +28,7 @@ export type RotasSala = { proxima: string; voz: string };
 export function Sala({
   vaga,
   rotas,
+  corpoExtra,
   vozLigada,
   acaoVoz,
   modoExemplo,
@@ -50,6 +36,10 @@ export function Sala({
 }: {
   vaga: Vaga;
   rotas: RotasSala;
+  /** O que mais vai no corpo de `rotas.proxima`. A prévia do gestor manda o `vagaId`: o roteiro
+   * (lib/roteiro.ts) é montado no servidor a partir da vaga cadastrada, e não do resumo que a sala
+   * tem em mãos. A sala do candidato não manda nada — quem identifica a conversa é o código do link. */
+  corpoExtra?: Record<string, unknown>;
   /** A voz natural da entrevistadora está ligada; quando não, a sala usa a voz do navegador ou só texto. */
   vozLigada: boolean;
   /** "O que fazer agora" quando a voz está desligada. Só quem administra o app recebe (o candidato não configura nada). */
@@ -186,7 +176,7 @@ export function Sala({
   async function proximaPergunta(hist: Troca[]) {
     setFalha(null);
     try {
-      const r = await fetch(rotas.proxima, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vaga, historico: hist }) });
+      const r = await fetch(rotas.proxima, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...corpoExtra, historico: hist }) });
       if (!r.ok) {
         setFalha(await lerErro(r));
         return;

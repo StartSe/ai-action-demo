@@ -18,16 +18,23 @@ export const HIGGSFIELD: Integracao = {
   ...integracaoMCP({
     id: "higgsfield",
     titulo: "Higgsfield",
-    descricao: "Gera o vídeo a partir da imagem do produto com os efeitos da plataforma. Sem conectar, a prévia é só ilustrativa e nenhum crédito é gasto.",
+    descricao: "Autorize sua conta Higgsfield com OAuth2. As gerações usam créditos da sua conta; o uso ilimitado do site não se aplica.",
     ajudaUrl: "Endereço do servidor MCP do Higgsfield. Normalmente não precisa mudar: clique em Autorizar e entre com a sua conta.",
-    urlPadrao: "https://mcp.higgsfield.ai",
+    urlPadrao: "https://mcp.higgsfield.ai/mcp",
     rotuloFerramentas: "Ferramentas",
+    camposExtras: [{ chave: "HIGGSFIELD_CLIENT_ID", rotulo: "Client ID OAuth", tipo: "text", opcional: true, avancado: true, ajuda: "Necessário somente se o Higgsfield exigir registro prévio do aplicativo e não oferecer registro automático." }],
   }),
-  beneficio: "Transforma a imagem do produto no vídeo da campanha",
+  beneficio: "Conecte sua conta para acessar os modelos do Higgsfield",
+
   link: { url: "https://higgsfield.ai", rotulo: "Criar conta no Higgsfield" },
 };
 
 /** O vídeo leva minutos: o aviso evita esperar de aba aberta. */
 const AVISOS: Integracao = { ...NOTIFICACOES, beneficio: "Avisa você por e-mail ou Slack quando o vídeo fica pronto" };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, HIGGSFIELD, AVISOS];
+export const MUAPI: Integracao = {
+  id: "muapi", titulo: "MuAPI", descricao: "Gera imagens e vídeos nas etapas do Creative Flow.", beneficio: "Conecta Nano Banana 2 e Veo 3.1 ao seu fluxo", obrigatoria: false,
+  link: { url: "https://muapi.ai/access-keys", rotulo: "Obter chave MuAPI" },
+  campos: [{ chave: "MUAPI_API_KEY", rotulo: "Chave da API", tipo: "secret", ajuda: "A chave fica cifrada no servidor. As gerações consomem o saldo da sua conta MuAPI." }],
+};
+export const INTEGRACOES: Integracao[] = [MUAPI, OPENROUTER, HIGGSFIELD, AVISOS];

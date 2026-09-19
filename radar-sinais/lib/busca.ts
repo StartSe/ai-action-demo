@@ -1,3 +1,4 @@
+import { brightDataConectada, buscarBrightData } from "./brightdata";
 // Motor de busca em fontes reais para o radar de sinais. Sem chave: Hacker News, Reddit, GitHub e Google Notícias
 // (consulta em português do Brasil). Com chave: Exa ou Tavily (notícias em português e web em geral, com trechos).
 // Reaproveitado por lib/radar.ts, que substitui o "melhor esforço" da IA por achados reais.
@@ -207,7 +208,7 @@ function tavilyApiKey(): string | undefined {
 
 /** Alguma fonte com chave (Exa ou Tavily) está conectada. */
 export function buscaWebConectada(): boolean {
-  return Boolean(exaApiKey() || tavilyApiKey());
+  return Boolean(exaApiKey() || tavilyApiKey() || brightDataConectada());
 }
 
 function veiculoDaUrl(url: string, padrao: string): string {
@@ -279,7 +280,7 @@ const TAVILY: Provedor = {
 };
 
 /** Ordem de consulta e de exibição. Fontes sem chave primeiro; as com chave só entram quando conectadas. */
-const PROVEDORES: Provedor[] = [HACKERNEWS, REDDIT, GITHUB, GOOGLENEWS, EXA, TAVILY];
+const PROVEDORES: Provedor[] = [HACKERNEWS, REDDIT, GITHUB, GOOGLENEWS, EXA, TAVILY, { id: "brightdata", comChave: true, disponivel: brightDataConectada, buscar: buscarBrightData }];
 
 /** URL "normalizada" para deduplicar: sem protocolo, sem www, sem barra final, sem querystring/hash. */
 function normalizarUrl(url: string): string {

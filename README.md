@@ -1,6 +1,6 @@
 # IA para Executivos
 
-Dezoito apps independentes, cada um resolvendo um problema específico do dia a dia de uma empresa com IA em alguma etapa. Feitos para executivos: crie sua conta em 30 segundos, teste com dados de exemplo sem nenhuma chave e publique com um clique, na sua própria conta no Render, a partir de uma imagem Docker pública via Blueprint. Catálogo com botão de um clique: https://startse.github.io/ai-action-app-deploy/
+Dezenove apps independentes, cada um resolvendo um problema específico do dia a dia de uma empresa com IA em alguma etapa. Feitos para executivos: crie sua conta em 30 segundos, teste com dados de exemplo sem nenhuma chave e publique com um clique, na sua própria conta no Render, a partir de uma imagem Docker pública via Blueprint. Catálogo com botão de um clique: https://startse.github.io/ai-action-app-deploy/
 
 ## Mapa de ideias
 
@@ -24,6 +24,7 @@ Dezoito apps independentes, cada um resolvendo um problema específico do dia a 
 | 16 | [Prospecção no LinkedIn](prospeccao-linkedin/) | Vendas | Prospectar no LinkedIn consome horas entre buscar perfis e escrever mensagens | Monta a lista de leads pelo cliente ideal, escreve a sequência de mensagens e envia as aprovadas | Prospect Halo (servidor MCP com OAuth) |
 | 17 | [Vídeos de Campanha](videos-campanha/) | Marketing | Produzir um vídeo curto por campanha leva semanas e gastar créditos às cegas custa caro | Propõe três conceitos com roteiro por cena e gera o vídeo a partir da imagem do produto, mostrando o custo antes | Higgsfield (servidor MCP com OAuth) |
 | 18 | [AutoML](automl-pocket/) | Dados, Financeiro e Vendas | Prever churn, fraude ou vendas a partir de planilhas depende de um cientista de dados que não existe | Treina sozinho modelos de classificação, regressão e previsão de séries e explica o resultado em português | nenhuma: aprendizado de máquina local (scikit-learn, XGBoost). **Exceção ao padrão: web + worker Python + Redis numa imagem única, plano pago no Render** |
+| 19 | [Build Agentflows](build-agentflows/) | Gestão | Orquestrar tarefas de IA entre agentes e sistemas | Editor visual com agentes, condições, ferramentas, aprovação humana e versões publicadas | OpenRouter, ferramentas MCP e HTTP; execução por MCP e HTTP autenticado. Disco persistente no Render |
 
 Ideias mapeadas e deixadas para uma segunda rodada: copiloto de OKRs com check-in semanal, análise de concorrentes a partir de sites e redes, triagem de currículos contra a descrição da vaga, gerador de propostas comerciais a partir do CRM, resumo diário de e-mails e Slack para a diretoria.
 
@@ -42,7 +43,7 @@ Todos seguem o mesmo padrão (detalhes em [PADRAO.md](PADRAO.md)):
 ## Rodar a suíte inteira com Docker Compose
 
 ```bash
-docker compose up --build     # constrói e sobe os 18 apps; depois abra http://localhost:3001/setup (e assim por diante)
+docker compose up --build     # constrói e sobe os 19 apps; depois abra http://localhost:3001/setup (e assim por diante)
 ```
 
 Cada app guarda sua configuração em um volume Docker próprio, então as chaves sobrevivem a reinícios.
@@ -58,6 +59,7 @@ Cada app guarda sua configuração em um volume Docker próprio, então as chave
 | 3013 | simulador-vendas | | 3014 | custos-ia |
 | 3015 | clone-site | | 3016 | prospeccao-linkedin |
 | 3017 | videos-campanha | | 3018 | automl-pocket |
+| 3019 | build-agentflows | | | |
 
 Um app só: `docker compose up --build pdi-time`, ou dentro da pasta do app `docker compose up --build`.
 
@@ -116,7 +118,7 @@ docker login ghcr.io                   # token do GitHub com escopo write:packag
 
 Botão por app e da suíte inteira no catálogo público, ou direto:
 
-- Suíte (os 18; o AutoML é o único pago): `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy`
+- Suíte (os 18; Atendente no WhatsApp, Vídeos de Campanha e AutoML são os pagos, com disco persistente): `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy`
 - Um app: `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-<app>`
 
 Depois do deploy, abra `https://<nome>.onrender.com/setup` e conecte a IA e as integrações. O plano `free` hiberna após inatividade e tem disco efêmero: a configuração feita em `/setup` se perde a cada deploy. Para persistir, use um plano pago e descomente o bloco `disk` no Blueprint.
@@ -148,10 +150,10 @@ Os links abaixo aparecem também dentro de cada tela `/setup`, ao lado do campo 
 
 ```
 README.md              este arquivo
-PADRAO.md              padrão técnico e visual seguido por 17 dos 18 apps (automl-pocket tem estrutura própria)
+PADRAO.md              padrão técnico e visual seguido por 17 dos 19 apps (automl-pocket tem estrutura própria)
 catalogo.json          fonte única: apps, áreas, textos, cor, porta (alimenta render.yaml, página e branches de deploy)
 render.yaml            blueprint da suíte completa (gerado)
-docker-compose.yml     sobe os 18 apps localmente (portas 3001 a 3018); com `docker compose pull` usa as imagens do GHCR
+docker-compose.yml     sobe os 19 apps localmente (portas 3001 a 3019); com `docker compose pull` usa as imagens do GHCR
 site/index.html        página do catálogo publicada no GitHub Pages do repositório público
 scripts/               gerar-deploy.mjs (gera render.yaml e a pasta publico/), publicar-publico.sh (envia ao repo público), verificar-padrao.sh (compara os apps com pdi-time; exceções em padrao-excecoes.json) e verificar-jargao.mjs (jargão técnico na tela; exceções em jargao-excecoes.json)
 .github/workflows/     publicar.yml: constrói as imagens alteradas e atualiza o repositório público

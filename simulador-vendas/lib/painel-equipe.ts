@@ -3,7 +3,7 @@
 // (app/api/painel-equipe/route.ts) e pela ferramenta MCP painel_equipe (lib/ferramentas.ts).
 import { aiEnabled, meta, type Meta } from "./ai";
 import { listarPorTipo, salvar } from "./historico";
-import { listar as listarVendedores } from "./vendedores";
+import { listar as listarParticipantes } from "./participantes";
 import { obter as obterCenario } from "./cenarios";
 import type { Analise, Conversa, DadosPainel, PainelEquipe, VendedorPainel } from "./types";
 
@@ -60,7 +60,7 @@ export function montarPainelEquipe(dias = 30): PainelEquipe {
 
   // Por vendedor: só entram vendedores cadastrados com ao menos 1 conversa na janela atual.
   const vendedores: VendedorPainel[] = [];
-  for (const v of listarVendedores(500)) {
+  for (const v of listarParticipantes(500)) {
     const doVendedorJanela = daJanela.filter((r) => r.entrada.vendedorId === v.id);
     if (doVendedorJanela.length === 0) continue;
     const doVendedorAnterior = daJanelaAnterior.filter((r) => r.entrada.vendedorId === v.id);

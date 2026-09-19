@@ -98,3 +98,11 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
 .dropzone-baixa > label {
   @apply py-6;
 }
+
+.ampliar-miniatura { cursor: zoom-in; border: 1px solid var(--color-line); border-radius: 8px; }
+.ampliar-miniatura:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 3px; }
+.clone-dialogo { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 16px; border: 0; background: transparent; }
+.clone-dialogo::backdrop { background: rgb(0 0 0 / 65%); }
+.clone-dialogo-conteudo { display: flex; flex-direction: column; height: 100%; overflow: hidden; border-radius: 12px; background: var(--color-bg); }
+.clone-dialogo-corpo { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+@media (max-width: 767px) { .clone-dialogo { padding: 8px; } }
