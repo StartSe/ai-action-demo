@@ -2,6 +2,12 @@
 // somar um valor ao union vira erro de compilação aqui em vez de um rótulo faltando na tela.
 import type { DirecaoRegeneracao, Evidencia, EstrategiaAbordagem, Fit, Jornada, ModoProspeccao, MotivoDescarte, Papel, StatusLead } from "./types";
 
+// Ordem fixa de progressão de um lead (US-030, antes só local a app/api/leads/[id]/abordagem/route.ts):
+// nunca ande para trás nessa ordem ao promover automaticamente. Reaproveitada pelas abas do funil
+// (US-035, components/ProspeccaoAndamento.tsx) — "descartado" fica de fora (indexOf -1), então nenhuma
+// aba de progresso mínimo o inclui.
+export const ORDEM_STATUS_LEAD: StatusLead[] = ["novo", "pesquisado", "qualificado", "selecionado", "abordado", "respondeu"];
+
 export const ROTULO_JORNADA: Record<Jornada, string> = {
   b2b: "Empresas e decisores",
   b2c: "Pessoas/consumidores",
@@ -130,3 +136,35 @@ export const ROTULO_MOTIVO_DESCARTE: Record<MotivoDescarte, string> = {
 };
 
 export const ORDEM_MOTIVOS_DESCARTE: MotivoDescarte[] = ["fora_do_perfil", "sem_sinal", "ja_e_cliente", "outro"];
+
+function textoCriterio(criterios: Record<string, unknown>, chave: string): string {
+  const v = criterios[chave];
+  return typeof v === "string" ? v.trim() : "";
+}
+
+/** Recorte da busca (US-035): um resumo curto do que foi pedido no passo 4 (components/CriteriosProspeccao.tsx),
+ * lido direto de `Prospeccao.criterios` (nunca tipado ali — `Record<string, unknown>`). Cada modo lê os
+ * campos que o próprio passo 4 preenche para ele; "pessoas" decide entre B2B (tem `cargo`) e B2C (tem
+ * `ocupacao`) pelo que existe, já que a jornada não é persistida na prospecção (ver nota de US-010). */
+export function recorteProspeccao(modo: ModoProspeccao, criterios: Record<string, unknown>): string {
+  const c = (chave: string) => textoCriterio(criterios, chave);
+  switch (modo) {
+    case "empresas":
+      return [c("segmento"), c("localizacao")].filter(Boolean).join(" ");
+    case "pessoas":
+      return c("cargo")
+        ? [c("cargo"), c("localizacao")].filter(Boolean).join(" ")
+        : [c("ocupacao"), c("localizacao")].filter(Boolean).join(" ");
+    case "empresa_unica":
+      return c("empresaNome");
+    case "oportunidades":
+      return c("recorte");
+  }
+}
+
+/** Nome de uma prospecção (US-035, prd.json: "nome (produto + recorte, ex.: 'Indústrias SP — DecisionOS')")
+ * — a entidade não tem campo `nome` próprio (mesmo caso já documentado para `icp.nome` no progress.txt). */
+export function nomeProspeccao(produtoNome: string, modo: ModoProspeccao, criterios: Record<string, unknown>): string {
+  const recorte = recorteProspeccao(modo, criterios);
+  return recorte ? `${recorte} — ${produtoNome}` : produtoNome;
+}

@@ -1,8 +1,30 @@
-import { criarProspeccao, obterICP, obterProduto } from "@/lib/workspace";
+import { criarProspeccao, listarLeads, listarProspeccoes, obterICP, obterProduto } from "@/lib/workspace";
 import { iniciarExecucao } from "@/lib/execucao-prospeccao";
+import { formatarFunil, funilContagens } from "@/lib/qualificacao";
+import { nomeProspeccao } from "@/lib/rotulos";
 import type { ModoProspeccao, NovaProspeccao } from "@/lib/types";
 
 const MODOS_VALIDOS: ModoProspeccao[] = ["empresas", "pessoas", "empresa_unica", "oportunidades"];
+
+/** Lista todas as prospecções com o mesmo resumo de funil da página de detalhe (US-035,
+ * components/Prospeccoes.tsx) — nome/funil calculados aqui, nunca na tela. */
+export async function GET() {
+  const prospeccoes = listarProspeccoes();
+  const leads = listarLeads();
+  const itens = prospeccoes.map((p) => {
+    const leadsDaProspeccao = leads.filter((l) => l.prospeccaoId === p.id);
+    const produtoNome = obterProduto(p.produtoId)?.nome ?? "Produto";
+    return {
+      id: p.id,
+      nome: nomeProspeccao(produtoNome, p.modo, p.criterios),
+      modo: p.modo,
+      demo: p.demo,
+      criadoEm: p.criadoEm,
+      funil: formatarFunil(funilContagens(leadsDaProspeccao)),
+    };
+  });
+  return Response.json(itens);
+}
 
 /**
  * Cria uma prospecção e devolve o registro na hora (US-013): `estado: "executando"` já gravado, sem

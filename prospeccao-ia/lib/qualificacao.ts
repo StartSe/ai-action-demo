@@ -10,7 +10,8 @@
 // do ICP) mora em `lib/qualificacao-ia.ts`, SEPARADO deste arquivo: este módulo é importado por Client
 // Components (sinalAntigo, em ProspeccaoAndamento.tsx/ExploracaoEmpresa.tsx) e não pode puxar lib/ai.ts
 // (que importa lib/store.ts, com node:sqlite) para dentro do bundle do navegador.
-import type { Evidencia, Fit, LeadProspeccao, Papel, SinalProspeccao } from "./types";
+import type { Evidencia, Fit, LeadProspeccao, Papel, SinalProspeccao, StatusLead } from "./types";
+import { ORDEM_STATUS_LEAD } from "./rotulos";
 
 function normalizar(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -112,6 +113,41 @@ export function sinalAntigo(sinal: SinalProspeccao): boolean {
 export function sinalMaisRecente(sinais: SinalProspeccao[]): SinalProspeccao | null {
   if (sinais.length === 0) return null;
   return [...sinais].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())[0];
+}
+
+export type FunilContagens = { encontrados: number; qualificados: number; selecionados: number; contatados: number; respondidos: number };
+
+/** Funil de uma prospecção (US-035): contagens ACUMULATIVAS pela ordem fixa de progressão do lead
+ * (`ORDEM_STATUS_LEAD`) — um lead "abordado" também conta como "qualificado" e "selecionado". Leads
+ * "descartado" (fora dessa ordem, `indexOf` -1) só entram em `encontrados` (a busca encontrou a pessoa,
+ * mesmo que ela não siga adiante), nunca nas contagens de progresso. Reaproveitada pelo cabeçalho de
+ * `/prospeccoes/[id]` e pela lista de `/prospeccoes` (components/Prospeccoes.tsx) — sempre a partir dos
+ * leads JÁ FILTRADOS por prospecção, nunca do total do produto/app inteiro. */
+export function funilContagens(leads: LeadProspeccao[]): FunilContagens {
+  const emOuDepoisDe = (minimo: StatusLead) => {
+    const indiceMinimo = ORDEM_STATUS_LEAD.indexOf(minimo);
+    return leads.filter((l) => ORDEM_STATUS_LEAD.indexOf(l.status) >= indiceMinimo).length;
+  };
+  return {
+    encontrados: leads.length,
+    qualificados: emOuDepoisDe("qualificado"),
+    selecionados: emOuDepoisDe("selecionado"),
+    contatados: emOuDepoisDe("abordado"),
+    respondidos: emOuDepoisDe("respondeu"),
+  };
+}
+
+/** Texto do funil ("42 encontrados → 18 qualificados → 7 abordagens → 3 respostas", prd.json > AC da
+ * US-035) — "Selecionados" tem sua própria aba na tela (US-035), mas não ganha um número aqui: o
+ * cabeçalho mostra só os 4 marcos que a AC pede, na ordem literal do exemplo. */
+export function formatarFunil(c: FunilContagens): string {
+  const item = (n: number, singular: string, plural: string) => `${n} ${n === 1 ? singular : plural}`;
+  return [
+    item(c.encontrados, "encontrado", "encontrados"),
+    item(c.qualificados, "qualificado", "qualificados"),
+    item(c.contatados, "abordagem", "abordagens"),
+    item(c.respondidos, "resposta", "respostas"),
+  ].join(" → ");
 }
 
 const ORDEM_FIT: Record<Fit, number> = { alta: 0, media: 1, baixa: 2 };

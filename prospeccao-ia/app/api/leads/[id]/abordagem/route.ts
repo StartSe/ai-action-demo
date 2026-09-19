@@ -1,16 +1,15 @@
 import { gerarEstrategia, gerarMensagens } from "@/lib/estrategia";
-import type { EstrategiaAbordagem, LeadProspeccao, StatusLead } from "@/lib/types";
+import type { EstrategiaAbordagem, LeadProspeccao } from "@/lib/types";
 import { atualizarLead, criarAbordagem, listarAbordagens, atualizarAbordagem } from "@/lib/workspace";
+import { ORDEM_STATUS_LEAD } from "@/lib/rotulos";
 import { contextoDoLead, estrategiaValida } from "./comum";
 
 /** "A abordagem é salva... e o lead passa a status: 'selecionado'" (AC da US-030): só promove para a
  * frente (novo/pesquisado/qualificado → selecionado), nunca reverte um lead que já foi abordado ou
  * respondeu, e nunca tira um lead de "descartado" (fora desta ordem, `indexOf` devolve -1 e nada muda). */
-const ORDEM_STATUS: StatusLead[] = ["novo", "pesquisado", "qualificado", "selecionado", "abordado", "respondeu"];
-
 function promoverParaSelecionado(lead: LeadProspeccao): LeadProspeccao {
-  const atual = ORDEM_STATUS.indexOf(lead.status);
-  const alvo = ORDEM_STATUS.indexOf("selecionado");
+  const atual = ORDEM_STATUS_LEAD.indexOf(lead.status);
+  const alvo = ORDEM_STATUS_LEAD.indexOf("selecionado");
   if (atual === -1 || atual >= alvo) return lead;
   return atualizarLead(lead.id, { status: "selecionado" }) ?? lead;
 }

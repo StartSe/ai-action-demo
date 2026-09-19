@@ -12,8 +12,8 @@ import { useRouter } from "next/navigation";
 import { Aviso, Chip, DataTable, Topbar, data, useConfirmacao, useStatus, lerErro, type Coluna } from "@/components/ui";
 import { ExploracaoEmpresa } from "@/components/ExploracaoEmpresa";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
-import { motivoPapel, ordenarLeadsPorPrioridade, sinalAntigo, sinalMaisRecente } from "@/lib/qualificacao";
-import { NIVEL_CHIP_EVIDENCIA, ORDEM_MOTIVOS_DESCARTE, ROTULO_FIT, ROTULO_MODO, ROTULO_MOTIVO_DESCARTE, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
+import { formatarFunil, funilContagens, motivoPapel, ordenarLeadsPorPrioridade, sinalAntigo, sinalMaisRecente } from "@/lib/qualificacao";
+import { NIVEL_CHIP_EVIDENCIA, ORDEM_MOTIVOS_DESCARTE, ORDEM_STATUS_LEAD, ROTULO_FIT, ROTULO_MODO, ROTULO_MOTIVO_DESCARTE, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA, ROTULO_STATUS_LEAD, nomeProspeccao, recorteProspeccao } from "@/lib/rotulos";
 import { ETAPAS_PROSPECCAO } from "@/lib/execucao-etapas";
 import type { Conta, Evidencia, Jornada, LeadProspeccao, MotivoDescarte, Prospeccao, SinalProspeccao, StatusLead } from "@/lib/types";
 
@@ -72,6 +72,50 @@ function truncarPalavras(texto: string, max: number): string {
   const palavras = texto.trim().split(/\s+/);
   if (palavras.length <= max) return texto;
   return `${palavras.slice(0, max).join(" ")}…`;
+}
+
+/** Abas do funil (US-035): filtram a lista de leads por progresso MÍNIMO (ver funilContagens em
+ * lib/qualificacao.ts, mesma ordem/regra) — "Descobertos" não tem mínimo, mostra todo mundo, inclusive
+ * quem já foi descartado. Só aparecem nos modos que desenham `DataTable` de leads nesta tela
+ * ("pessoas"/"oportunidades"); "empresas" e "empresa_unica" não têm uma lista de leads própria para filtrar. */
+type AbaFunil = "descobertos" | "qualificados" | "selecionados" | "contatados" | "responderam";
+
+const ABAS_FUNIL: { chave: AbaFunil; rotulo: string; minimo?: StatusLead }[] = [
+  { chave: "descobertos", rotulo: "Descobertos" },
+  { chave: "qualificados", rotulo: "Qualificados", minimo: "qualificado" },
+  { chave: "selecionados", rotulo: "Selecionados", minimo: "selecionado" },
+  { chave: "contatados", rotulo: "Contatados", minimo: "abordado" },
+  { chave: "responderam", rotulo: "Responderam", minimo: "respondeu" },
+];
+
+function leadsNaAba(leads: LeadProspeccao[], aba: AbaFunil): LeadProspeccao[] {
+  const minimo = ABAS_FUNIL.find((a) => a.chave === aba)?.minimo;
+  if (!minimo) return leads;
+  const indiceMinimo = ORDEM_STATUS_LEAD.indexOf(minimo);
+  return leads.filter((l) => ORDEM_STATUS_LEAD.indexOf(l.status) >= indiceMinimo);
+}
+
+/** Abas do funil (US-035): `role="tablist"` local, sem componente compartilhado ainda (só esta tela
+ * precisa hoje) — mesmo critério já usado para outros pares de abas pequenos e locais desta suíte. */
+function AbasFunil({ aba, onChange }: { aba: AbaFunil; onChange: (aba: AbaFunil) => void }) {
+  return (
+    <div role="tablist" aria-label="Etapas do funil" className="flex gap-1.5 flex-wrap mb-3">
+      {ABAS_FUNIL.map((item) => (
+        <button
+          key={item.chave}
+          type="button"
+          role="tab"
+          aria-selected={aba === item.chave}
+          className={`px-3 py-1.5 rounded-full text-[13px] font-semibold border cursor-pointer ${
+            aba === item.chave ? "bg-accent text-white border-accent" : "border-line text-muted hover:text-ink"
+          }`}
+          onClick={() => onChange(item.chave)}
+        >
+          {item.rotulo}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 const LARGURA_MENU_ACOES = 224; // w-56
@@ -324,6 +368,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
   const [apagandoPessoaId, setApagandoPessoaId] = useState<string | null>(null);
   const [enviandoCRMId, setEnviandoCRMId] = useState<string | null>(null);
   const [erroCRM, setErroCRM] = useState<string | null>(null);
+  const [aba, setAba] = useState<AbaFunil>("descobertos");
 
   const carregar = useCallback(() => {
     fetch(`/api/prospeccoes/${prospeccaoId}/andamento`)
@@ -482,6 +527,10 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
   }
 
   const indiceEtapaAtual = andamento ? ETAPAS_PROSPECCAO.findIndex((e) => e.chave === andamento.prospeccao.etapa) : -1;
+  const nomeDaProspeccao = andamento ? nomeProspeccao(andamento.produtoNome, andamento.prospeccao.modo, andamento.prospeccao.criterios) : "";
+  const recorte = andamento ? recorteProspeccao(andamento.prospeccao.modo, andamento.prospeccao.criterios) : "";
+  const funil = andamento ? funilContagens(andamento.leads) : null;
+  const leadsFiltrados = andamento ? leadsNaAba(andamento.leads, aba) : [];
   const colunasLeads = andamento
     ? construirColunasLeads({
         jornada: andamento.jornada,
@@ -514,13 +563,20 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
         ) : (
           <>
             <div className="flex items-baseline justify-between gap-4 flex-wrap mb-1.5">
-              <h1 className="titulo-painel !mb-0">Nova prospecção</h1>
+              <h1 className="titulo-painel !mb-0">{nomeDaProspeccao}</h1>
               <button type="button" className="btn-link text-[13px] text-danger" onClick={apagar} disabled={apagando}>
                 {apagando ? "Apagando…" : "Apagar"}
               </button>
             </div>
-            <p className="apoio mb-6">
-              {andamento.produtoNome} · {andamento.icpNome} · {ROTULO_MODO[andamento.prospeccao.modo]}
+            <p className="text-[13px] text-muted mb-1">
+              {data(andamento.prospeccao.criadoEm, { comAno: true })} · {ROTULO_MODO[andamento.prospeccao.modo]}
+            </p>
+            {funil && <p className="apoio mb-1.5">{formatarFunil(funil)}</p>}
+            <p className="text-[13px] text-muted mb-6 line-clamp-2">
+              {andamento.produtoNome} · {andamento.icpNome}
+              {recorte && ` · ${recorte}`}
+              {" · "}
+              <Link href={`/produtos/${andamento.prospeccao.produtoId}/icps/${andamento.prospeccao.icpId}`} className="btn-link text-[13px]">Editar estratégia</Link>
             </p>
 
             {(andamento.prospeccao.estado === "executando" || andamento.prospeccao.estado === "pronta") && (
@@ -610,10 +666,13 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                 {andamento.prospeccao.modo === "pessoas" && andamento.jornada === "b2c" && (
                   <div className="flex flex-col gap-2.5 mb-1">
                     <Aviso tom="warn">Só entram dados que a própria pessoa publicou em perfil público; nada de lista comprada, inferência ou dado sensível.</Aviso>
+                    {andamento.leads.length > 0 && <AbasFunil aba={aba} onChange={setAba} />}
                     {andamento.leads.length === 0 ? (
                       <Aviso tom="warn">Nenhuma pessoa encontrada com esses critérios.</Aviso>
+                    ) : leadsFiltrados.length === 0 ? (
+                      <Aviso tom="warn">Nenhuma pessoa nesta etapa do funil ainda.</Aviso>
                     ) : (
-                      <DataTable colunas={colunasLeads} linhas={ordenarLeadsPorPrioridade(andamento.leads)} />
+                      <DataTable colunas={colunasLeads} linhas={ordenarLeadsPorPrioridade(leadsFiltrados)} />
                     )}
                     {erroCRM && <Aviso tom="danger">{erroCRM}</Aviso>}
                   </div>
@@ -621,10 +680,13 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
 
                 {andamento.prospeccao.modo === "pessoas" && andamento.jornada === "b2b" && (
                   <div className="flex flex-col gap-2.5 mb-1">
+                    {andamento.leads.length > 0 && <AbasFunil aba={aba} onChange={setAba} />}
                     {andamento.leads.length === 0 ? (
                       <Aviso tom="warn">Nenhuma pessoa encontrada com esses critérios.</Aviso>
+                    ) : leadsFiltrados.length === 0 ? (
+                      <Aviso tom="warn">Nenhuma pessoa nesta etapa do funil ainda.</Aviso>
                     ) : (
-                      <DataTable colunas={colunasLeads} linhas={ordenarLeadsPorPrioridade(andamento.leads)} />
+                      <DataTable colunas={colunasLeads} linhas={ordenarLeadsPorPrioridade(leadsFiltrados)} />
                     )}
                     {erroCRM && <Aviso tom="danger">{erroCRM}</Aviso>}
                   </div>
@@ -646,6 +708,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
 
                 {andamento.prospeccao.modo === "oportunidades" && (
                   <div className="flex flex-col gap-2.5 mb-1">
+                    {andamento.leads.length > 0 && <AbasFunil aba={aba} onChange={setAba} />}
                     {andamento.contas.length === 0 && andamento.leads.length === 0 ? (
                       <Aviso tom="warn">Nenhuma oportunidade encontrada com esses critérios.</Aviso>
                     ) : (
@@ -667,7 +730,13 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                             <EvidenciasLista evidencias={conta.evidencias} />
                           </div>
                         ))}
-                        {andamento.leads.length > 0 && <DataTable colunas={colunasLeads} linhas={ordenarLeadsPorPrioridade(andamento.leads)} />}
+                        {andamento.leads.length > 0 && (
+                          leadsFiltrados.length === 0 ? (
+                            <Aviso tom="warn">Nenhuma pessoa nesta etapa do funil ainda.</Aviso>
+                          ) : (
+                            <DataTable colunas={colunasLeads} linhas={ordenarLeadsPorPrioridade(leadsFiltrados)} />
+                          )
+                        )}
                       </>
                     )}
                     {erroCRM && <Aviso tom="danger">{erroCRM}</Aviso>}
