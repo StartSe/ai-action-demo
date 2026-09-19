@@ -6,6 +6,5 @@ export const NAVEGACAO: ItemNavegacao[] = [
   { rotulo: "Início", href: "/" },
   { rotulo: "Termos", href: "/termos" },
   { rotulo: "Radar & Insights", href: "/radar" },
-  { rotulo: "Relatórios", href: "/historico" },
   { rotulo: "Configurações", href: "/setup" },
 ];

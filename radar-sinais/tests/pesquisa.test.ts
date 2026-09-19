@@ -111,4 +111,18 @@ test("termos e fonte cadastrados chegam à síntese e deixam proveniência audit
   assert.equal(r.coleta?.semData, 1); assert.equal(r.coleta?.consultas, 2); assert.deepEqual(r.coleta?.avisos, []);
   delete process.env.OPENROUTER_API_KEY; delete process.env.EXA_API_KEY; delete process.env.OPENROUTER_MODEL_ONTOLOGIA;
 });
+test("radar reabre a última pesquisa real e Redis não integra a configuração pública", async () => {
+  const { GET } = await import("../app/api/radar/route");
+  const { salvar } = await import("../lib/historico");
+  const { INTEGRACOES } = await import("../lib/integracoes");
+  assert.ok(INTEGRACOES.every(i => i.id !== "redis" && i.campos.every(c => !c.chave.startsWith("UPSTASH_"))));
+  const req = new Request("http://localhost/api/radar?ultimo=1");
+  assert.equal(await (await GET(req)).json(), null);
+  const entrada = { temas: ["IA"], periodoDias: 7 };
+  const saida = { periodoDias: 7, sinais: [], nos: [], arestas: [], conexoes: [] };
+  const id = salvar({ tipo: "radar", titulo: "Real", entrada, saida, meta: { demo: false, model: "teste", geradoEm: "2026-09-19", insumo: "teste" } });
+  salvar({ tipo: "radar", titulo: "Exemplo posterior", entrada, saida, meta: { demo: true } });
+  const ultimo = await (await GET(req)).json();
+  assert.equal(ultimo.id, id); assert.equal(ultimo.meta.demo, false); assert.deepEqual(ultimo.dados, entrada);
+});
 test.after(() => { global.fetch = fetchOriginal; rmSync(pasta, { recursive: true, force: true }); });
