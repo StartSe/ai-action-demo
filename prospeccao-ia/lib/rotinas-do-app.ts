@@ -2,10 +2,15 @@
 // Ao contrário de lib/rotinas.ts, este arquivo NÃO é copiado sem alterar entre apps — cada app registra
 // aqui o que faz sentido rodar sozinho, chamando registrarExecutor (ver pdi-time/lib/rotinas-do-app.ts).
 import { escreverAbordagem } from "./abordagem";
+import { executarPipeline } from "./execucao-prospeccao";
 import { salvar } from "./historico";
 import { buscarLeadsNovos } from "./leads-vistos";
+import { ordenarLeadsPorPrioridade, sinalMaisRecente } from "./qualificacao";
 import { registrarExecutor, type Rotina, type TipoRotina } from "./rotinas";
+import { nomeProspeccao } from "./rotulos";
+import { enderecoPublico } from "./setup-comum";
 import { ultimaBusca } from "./ultima-busca";
+import { atualizarLead, criarProspeccao, listarLeads, obterProduto, obterProspeccao } from "./workspace";
 import type { Abordagem, DadosBusca } from "./types";
 
 const SEM_PERFIL =
@@ -27,14 +32,30 @@ export function perfilDaRotina(parametros: unknown): DadosBusca | null {
   return perfilCompleto(ultimo) ? ultimo : null;
 }
 
+const SEM_PROSPECCAO = "Esta rotina precisa de uma prospecção salva: escolha uma na lista antes de criar.";
+
+/** Parâmetro da rotina "Oportunidades novas" (US-040): a prospecção que serve de modelo (produto, ICP,
+ * modo e critérios) para as execuções seguintes — nunca um formulário de busca à parte, como a rotina
+ * antiga "leads-semanais" (modelo anterior, ainda de pé para as rotas `/api/leads`/`/api/abordagem`). */
+function prospeccaoDaRotina(parametros: unknown): { prospeccaoId: string } | null {
+  const p = (parametros && typeof parametros === "object" ? parametros : {}) as { prospeccaoId?: unknown };
+  return typeof p.prospeccaoId === "string" && p.prospeccaoId && obterProspeccao(p.prospeccaoId) ? { prospeccaoId: p.prospeccaoId } : null;
+}
+
 /** Tipos de rotina deste app, para o cartão "Rotinas" de /setup listar num seletor. O `validar` recusa
  * criar "Leads novos toda semana" enquanto não houver perfil nenhum (nem nos parâmetros, nem de uma
- * busca anterior): sem ele a rotina falharia em silêncio no dia marcado. */
+ * busca anterior): sem ele a rotina falharia em silêncio no dia marcado. Mesma ideia para "Oportunidades
+ * novas": sem uma prospecção salva escolhida, a rotina não teria o que repetir. */
 export const TIPOS_ROTINA: TipoRotina[] = [
   {
     tipo: "leads-semanais",
     rotulo: "Leads novos toda semana",
     validar: (parametros) => (perfilDaRotina(parametros) ? undefined : SEM_PERFIL),
+  },
+  {
+    tipo: "oportunidades-novas",
+    rotulo: "Oportunidades novas de uma prospecção",
+    validar: (parametros) => (prospeccaoDaRotina(parametros) ? undefined : SEM_PROSPECCAO),
   },
 ];
 
@@ -80,4 +101,70 @@ registrarExecutor("leads-semanais", async (rotina: Rotina) => {
   ].filter(Boolean).join(" ");
 
   return { titulo, texto, resultadoId };
+});
+
+/**
+ * "Oportunidades novas" (US-040): roda a MESMA descoberta da prospecção escolhida (produto, ICP, modo e
+ * critérios), criando uma prospecção-filha e aguardando o pipeline (`executarPipeline`, diferente de
+ * `iniciarExecucao`, nunca aguardada pela rota HTTP) — o dedup do próprio pipeline (`chaveLead` contra
+ * `leadsDoProduto`, lib/execucao-prospeccao.ts) já garante que só quem nunca apareceu antes no produto
+ * entra na prospecção-filha, então "os novos" são, literalmente, os leads dela. Escopo desta rotina é só
+ * PESSOAS: o modo "empresas" (sem etapa de pessoas) sempre volta 0 leads aqui, porque não existe hoje um
+ * mecanismo de "empresa já vista" equivalente ao de leads — mesma fronteira já aceita para o modo
+ * "empresas" em `criarContasFicticias`/dedup por domínio (só dentro de uma execução, nunca entre elas).
+ */
+registrarExecutor("oportunidades-novas", async (rotina: Rotina) => {
+  const alvo = prospeccaoDaRotina(rotina.parametros);
+  const tituloGenerico = "Oportunidades novas";
+  if (!alvo) return { titulo: tituloGenerico, texto: SEM_PROSPECCAO, enviar: false };
+
+  const original = obterProspeccao(alvo.prospeccaoId);
+  const produto = original ? obterProduto(original.produtoId) : null;
+  if (!original || !produto) {
+    return { titulo: tituloGenerico, texto: "A prospecção escolhida para esta rotina não existe mais: escolha outra em Configurações.", enviar: false };
+  }
+  const nomeAlvo = nomeProspeccao(produto.nome, original.modo, original.criterios);
+  const titulo = `Oportunidades novas: ${nomeAlvo}`;
+
+  // Prospecção-filha com o MESMO produto/ICP/modo/critérios do original (mesma ideia de "Repetir
+  // prospecção", US-014) — direto por lib/workspace.ts (não `criarProspeccaoValidada`, que já dispara
+  // `iniciarExecucao` sem aguardar; aqui o próprio executor precisa aguardar o pipeline terminar).
+  const nova = criarProspeccao({
+    produtoId: original.produtoId,
+    icpId: original.icpId,
+    modo: original.modo,
+    criterios: original.criterios,
+    estado: "executando",
+    etapa: null,
+    erro: null,
+  });
+  await executarPipeline(nova.id);
+
+  const encontrados = listarLeads(nova.id);
+  if (encontrados.length === 0) {
+    const concluida = obterProspeccao(nova.id);
+    const motivo = concluida?.erro ? ` ${concluida.erro}` : "";
+    return { titulo, texto: `Nenhuma oportunidade nova para ${nomeAlvo}: ninguém além de quem já tinha aparecido antes.${motivo}`, enviar: false };
+  }
+
+  // "Grava os novos com status Novo" (AC): o pipeline normal promove a "qualificado"/"pesquisado", mas
+  // aqui ninguém ainda revisou — a rotina achou sozinha, enquanto o vendedor vendia.
+  for (const lead of encontrados) atualizarLead(lead.id, { status: "novo" });
+
+  const base = enderecoPublico();
+  if (!base) console.error('Rotina "oportunidades-novas": endereço público desconhecido, links omitidos do aviso.');
+  const melhores = ordenarLeadsPorPrioridade(encontrados).slice(0, 5);
+  const linhas = melhores.map((lead) => {
+    const sinal = sinalMaisRecente(lead.sinais);
+    const partes = [lead.nome, lead.empresa, sinal ? sinal.descricao : "Sem sinal público"].filter(Boolean).join(" · ");
+    return base ? `${partes} — ${base}/leads/${lead.id}` : partes;
+  });
+
+  const plural = encontrados.length > 1;
+  const texto = [
+    `${encontrados.length} oportunidade${plural ? "s" : ""} nova${plural ? "s" : ""} para ${nomeAlvo}. Os melhores por aderência:`,
+    ...linhas,
+  ].join("\n");
+
+  return { titulo, texto };
 });

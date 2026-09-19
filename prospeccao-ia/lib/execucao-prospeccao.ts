@@ -969,7 +969,10 @@ function foiCancelada(prospeccaoId: string): boolean {
   return obterProspeccao(prospeccaoId)?.estado === "cancelada";
 }
 
-async function executarPipeline(prospeccaoId: string): Promise<void> {
+/** Exportada para a rotina "Oportunidades novas" (US-040, lib/rotinas-do-app.ts) poder AGUARDAR o
+ * pipeline de uma prospecção-filha antes de montar o aviso — diferente de `iniciarExecucao`, que nunca é
+ * aguardada (a rota HTTP responde antes do pipeline terminar). */
+export async function executarPipeline(prospeccaoId: string): Promise<void> {
   let rotuloEtapaAtual: string = ETAPAS_PROSPECCAO[0].rotulo;
   try {
     const prospeccao = obterProspeccao(prospeccaoId);
