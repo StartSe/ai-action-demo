@@ -36,7 +36,7 @@ async function enviarPorSlack({ destino, titulo, texto, link }: Notificacao): Pr
   if (destino) corpo.channel = destino;
   let resposta: Response;
   try {
-    resposta = await fetch(webhook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+    resposta = await fetch(webhook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo), signal: AbortSignal.timeout(30_000) });
   } catch (err) {
     console.error("Não foi possível conectar ao Slack:", err);
     return { ok: false, mensagem: "Não foi possível conectar ao Slack. Confira o endereço do webhook e tente de novo." };
@@ -47,7 +47,8 @@ async function enviarPorSlack({ destino, titulo, texto, link }: Notificacao): Pr
 
 async function enviarPorEmail({ destino, titulo, texto, link }: Notificacao): Promise<{ ok: boolean; mensagem: string }> {
   if (!destino) return { ok: false, mensagem: "Informe um e-mail de destino." };
-  const html = `<p>${texto.replace(/\n/g, "<br/>")}</p>${link ? `<p><a href="${link}">${link}</a></p>` : ""}`;
+  const seguro = texto.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const html = `<p>${seguro.replace(/\n/g, "<br/>")}</p>${link ? `<p><a href="${link}">${link}</a></p>` : ""}`;
   const provedor = provedorDeEnvio();
   if (provedor === "gmail" || provedor === "outlook") return enviarPorCaixaPropria(provedor, destino, titulo, html);
   const chaveResend = getConfig("NOTIFICACOES_RESEND_API_KEY");

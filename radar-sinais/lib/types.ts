@@ -46,7 +46,7 @@ export interface Conexao {
 }
 
 /** Provedores de busca de lib/busca.ts (os quatro primeiros sem chave; Exa e Tavily com chave). */
-export type IdFonteBusca = "hackernews" | "reddit" | "github" | "googlenews" | "exa" | "tavily";
+export type IdFonteBusca = "hackernews" | "reddit" | "github" | "googlenews" | "exa" | "tavily" | "brightdata" | "brightdata-markdown";
 
 /** Situação de uma fonte numa rodada (ou na sondagem feita antes dela): respondeu, não respondeu, chave recusada ou sem chave. */
 export type EstadoFonte = { id: IdFonteBusca; nome: string; estado: "ok" | "indisponivel" | "chave_recusada" | "sem_chave" };

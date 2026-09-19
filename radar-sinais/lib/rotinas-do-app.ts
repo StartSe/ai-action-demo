@@ -1,3 +1,5 @@
+import { aiEnabled } from "./ai";
+import { TIPO_MONITORAMENTO, validarMonitoramento } from "./monitoramento";
 // Tipos de rotina deste app: cada um sabe gerar o resultado entregue por notificação (lib/rotinas.ts).
 // Ao contrário de lib/rotinas.ts, este arquivo NÃO é copiado sem alterar entre apps — cada app registra
 // aqui o que faz sentido rodar sozinho.
@@ -20,7 +22,7 @@ export const TIPO_RADAR_SEMANAL: TipoRotina<Partial<DadosRadar>> = {
 };
 
 /** Tipos de rotina disponíveis neste app, para o cartão de /setup listar num seletor. */
-export const TIPOS_ROTINA: TipoRotina[] = [{ tipo: "resumo-radar-sinais", rotulo: "Resumo dos radares gerados" }, TIPO_RADAR_SEMANAL as TipoRotina];
+export const TIPOS_ROTINA: TipoRotina[] = [{ tipo: "resumo-radar-sinais", rotulo: "Resumo dos radares gerados" }, TIPO_RADAR_SEMANAL as TipoRotina, { tipo: TIPO_MONITORAMENTO, rotulo: "Monitoramento diário", cadastroProprio: true, validar: (p) => { try { validarMonitoramento(p); } catch (e) { return (e as Error).message; } } }];
 
 registrarExecutor("resumo-radar-sinais", async (rotina: Rotina) => {
   const desde = rotina.ultimaExecucao ? new Date(rotina.ultimaExecucao) : new Date(0);
@@ -69,4 +71,15 @@ registrarExecutor(TIPO_RADAR_SEMANAL.tipo, async (rotina: Rotina) => {
   if (continuamFortes.length > 0) partes.push(`Continuam fortes (${continuamFortes.length}): ${continuamFortes.map((s) => s.titulo).join("; ")}.`);
 
   return { titulo, texto: partes.join("\n\n"), resultadoId };
+});
+
+registrarExecutor(TIPO_MONITORAMENTO, async (rotina: Rotina) => {
+  if (!aiEnabled()) throw new Error("Conecte a IA em Configurações para monitorar fontes reais.");
+  const dados = validarMonitoramento(rotina.parametros);
+  const { meta, ...radar } = await montarRadar(dados);
+  if (meta.demo) throw new Error("O monitoramento não envia dados de demonstração.");
+  const titulo = `Radar: ${dados.temas.join(", ")}`;
+  const resultadoId = salvar({ tipo: "radar", titulo, entrada: dados, saida: radar, meta });
+  const texto = radar.sinais.length ? radar.sinais.map(s => `${s.titulo} (${s.forca})\n${s.resumo}\nAção sugerida: ${s.oQueFazer}\n${s.fontes.map(f => `${f.veiculo}: ${f.url}`).join("\n")}`).join("\n\n") : "Nenhum insight sustentado pelas fontes nesta rodada. O monitoramento continua nos próximos horários.";
+  return { titulo, texto, resultadoId };
 });
