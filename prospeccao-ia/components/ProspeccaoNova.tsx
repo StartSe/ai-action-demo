@@ -108,14 +108,19 @@ export function ProspeccaoNova() {
   // Erro (400/404) mostra o aviso inline sem navegar; nenhum estado local precisa ser limpo, porque a
   // tela é trocada por completo ao navegar com sucesso.
   async function iniciarBusca() {
-    if (!produtoId || !icpId || !modoEfetivo || !criterios || enviando) return;
+    if (enviando) return;
+    if (!produtoSelecionado || !icpEfetivo || !modoEfetivo || !criterios) {
+      setErroEnvio("Confira o produto, o perfil ideal e o tipo de busca antes de continuar.");
+      return;
+    }
     setEnviando(true);
     setErroEnvio(null);
     try {
       const r = await fetch("/api/prospeccoes", {
         method: "POST",
+        signal: AbortSignal.timeout(30_000),
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ produtoId, icpId, modo: modoEfetivo, criterios }),
+        body: JSON.stringify({ produtoId: produtoSelecionado.id, icpId: icpEfetivo.id, modo: modoEfetivo, criterios }),
       });
       if (!r.ok) {
         const lido = await lerErro(r);
@@ -123,7 +128,8 @@ export function ProspeccaoNova() {
         setEnviando(false);
         return;
       }
-      const prospeccao: { id: string } = await r.json();
+      const prospeccao: { id?: string } = await r.json();
+      if (!prospeccao.id) throw new Error("A busca não retornou uma confirmação. Tente novamente.");
       router.push(`/prospeccoes/${prospeccao.id}`);
     } catch (e) {
       const lido = await lerErro(e);
@@ -152,12 +158,12 @@ export function ProspeccaoNova() {
   // editar um campo aqui não é sobrescrito enquanto a combinação não mudar.
   useEffect(() => {
     if (!icpEfetivo || !modoEfetivo) return;
-    const chave = `${icpEfetivo.id}:${modoEfetivo}`;
+    const chave = `${icpEfetivo.id}:${modoEfetivo}:${jornadaEfetiva}`;
     if (chaveCriteriosRef.current === chave) return;
-    chaveCriteriosRef.current = chave;
-    const sugerido = criteriosSugeridosRef.current;
-    criteriosSugeridosRef.current = null;
     const t = setTimeout(() => {
+      chaveCriteriosRef.current = chave;
+      const sugerido = criteriosSugeridosRef.current;
+      criteriosSugeridosRef.current = null;
       setCriterios(sugerido ?? criteriosIniciais(icpEfetivo, modoEfetivo, jornadaEfetiva ?? icpEfetivo.jornada));
     }, 0);
     return () => clearTimeout(t);
@@ -185,7 +191,7 @@ export function ProspeccaoNova() {
           ) : (
             <div className="flex flex-col gap-4">
               <CriteriosProspeccaoForm modo={modoEfetivo} jornada={jornadaEfetiva ?? icpEfetivo.jornada} icp={icpEfetivo} valor={criterios} onChange={setCriterios} />
-              {erroEnvio && <Aviso tom="danger">{erroEnvio}</Aviso>}
+              {erroEnvio && <div role="alert"><Aviso tom="danger">{erroEnvio}</Aviso></div>}
             </div>
           )
         ) : passo === 2 ? (
@@ -308,7 +314,7 @@ export function ProspeccaoNova() {
 
         <div className="mt-6 flex items-center gap-4">
           {passo > 1 && (
-            <button type="button" className="btn-link text-[13px]" onClick={() => irParaPasso(passo - 1)}>Voltar</button>
+            <button type="button" className="btn-ghost !w-auto" disabled={enviando} onClick={() => irParaPasso(passo - 1)}>Voltar</button>
           )}
           <button
             type="button"
@@ -316,7 +322,7 @@ export function ProspeccaoNova() {
             disabled={!podeContinuar || enviando}
             onClick={() => (passo < TOTAL_PASSOS ? irParaPasso(passo + 1) : iniciarBusca())}
           >
-            {passo < TOTAL_PASSOS ? "Continuar" : enviando ? "Enviando…" : modoEfetivo ? ROTULO_ACAO_MODO[modoEfetivo] : "Continuar"}
+            {passo < TOTAL_PASSOS ? "Continuar" : enviando ? "Iniciando busca…" : modoEfetivo ? ROTULO_ACAO_MODO[modoEfetivo] : "Continuar"}
           </button>
         </div>
       </main>
