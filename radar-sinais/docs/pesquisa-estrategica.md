@@ -2,13 +2,9 @@
 
 ## Revisão executiva — 19/09/2026
 
-O Radar & Insights abre no mapa (última pesquisa real, quando disponível; demonstração identificada nos demais casos). Zoom, arraste, busca, destaque por tipo e tela cheia permitem explorar. A seleção apresenta relações, ação sugerida e evidências; não há uma segunda lista extensa repetindo o mapa. O formulário fica em “Editar pesquisa”, e os detalhes da coleta em “Sobre esta pesquisa”. A tela inicial concentra três indicadores e atalhos para investigar sinais.
+O Radar abre no mapa (última pesquisa real, quando disponível; demonstração identificada nos demais casos). Os pontos se acomodam ao abrir; cada sinal mostra a força (anel) e a tendência (selo), e os fortes em alta pulsam. Passar o mouse mostra um resumo; o clique abre relações, ação sugerida e evidências; é possível arrastar pontos, aproximar com a roda do mouse ou pinça e abrir em tela cheia. O painel ao lado traz as "Leituras" (o que os sinais dizem juntos, acendendo os pontos envolvidos no mapa) e a lista de sinais por relevância. O cabeçalho resume o radar (sinais fortes, subindo, leituras) e, com IA conectada, diz de quantas evidências e fontes ele saiu. O formulário fica em "Editar pesquisa", os detalhes da coleta em "Sobre esta pesquisa" e os radares salvos em "Radares anteriores", com Imprimir e Copiar link.
 
-Configurações distingue IA essencial de conectores opcionais. O caminho mínimo é conectar a IA, cadastrar termos e usar as fontes públicas selecionadas; para priorizar sites, basta um buscador web compatível. Conectores abrem individualmente, e a seleção de fontes fica recolhida. Não aparecem Redis, explicações sobre last30days, conexão ao ChatGPT/MCP ou Rotinas. A gestão de horários existente permanece recolhida em Termos.
-
-Relatórios foi retirado da navegação e `/historico` redireciona para o radar. Dados já salvos e links individuais continuam íntegros. Redis continua funcionando internamente; configure suas variáveis no servidor. Seus campos deixaram também o catálogo público de configuração e a lista de chaves editáveis por essa API.
-
-Validação: build, lint, testes de domínio e verificação com navegador de navegação, seleção, zoom, arraste, pesquisa de nós, tela cheia/Escape, persistência de conectores/termos, geração e larguras móveis.
+O Início concentra o botão principal conforme o estado (conectar a IA, escolher temas ou abrir o radar), quatro indicadores, o mapa em modo vitrine, os sinais em foco e as leituras. Configurações distingue IA essencial de conectores opcionais; o caminho mínimo é conectar a IA, cadastrar temas e usar as fontes públicas. Relatórios não voltou à navegação; Redis continua interno, configurado por ambiente. Ver `tasks/revisao-ux-radar-sinais.md` para o diagnóstico completo e a validação.
 
 ## Base técnica
 
