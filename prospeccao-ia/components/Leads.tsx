@@ -7,13 +7,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Chip, DataTable, Empty, Topbar, useStatus, type Coluna } from "@/components/ui";
+import { Aviso, Chip, DataTable, Empty, Topbar, data, useStatus, type Coluna } from "@/components/ui";
+import { baixarCSV } from "@/lib/exportacao";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 import { ordenarLeadsPorPrioridade, sinalAntigo, sinalMaisRecente } from "@/lib/qualificacao";
 import { ORDEM_STATUS_LEAD, ROTULO_FIT, ROTULO_STATUS_LEAD } from "@/lib/rotulos";
 import type { Fit, LeadProspeccao } from "@/lib/types";
 
-type LeadDaLista = LeadProspeccao & { prospeccaoNome: string };
+type LeadDaLista = LeadProspeccao & { prospeccaoNome: string; site: string | null };
 type ProspeccaoFiltro = { id: string; nome: string };
 
 /** As quatro abas da lista (AC da US-036: "Todos, Novos, Abordados, Responderam"). "Novos"/"Responderam"
@@ -69,16 +70,47 @@ function IconeLeads() {
   );
 }
 
-function construirColunas(): Coluna<LeadDaLista>[] {
+/**
+ * Exporta a lista de leads em CSV (US-037): as colunas visíveis (Lead/Fit/Sinal/Prospecção/Status) mais
+ * LinkedIn, site (vem da `Conta` vinculada, `GET /api/leads/todos`) e TODOS os sinais com data — a coluna
+ * "Sinal" da tela mostra só o mais recente truncado, a exportação não corta nada. `leads` já chega
+ * filtrado pela aba/prospecção/aderência aplicadas (a mesma lista que a tabela desenha).
+ */
+function exportarLeads(leads: LeadDaLista[]) {
+  const cabecalho = ["Nome", "Fit", "Sinal mais recente", "Prospecção", "Status", "LinkedIn", "Site", "Sinais (com data)"];
+  const linhas = leads.map((l) => [
+    l.nome,
+    l.fit ? ROTULO_FIT[l.fit] : "",
+    sinalMaisRecente(l.sinais)?.descricao ?? "",
+    l.prospeccaoNome,
+    ROTULO_STATUS_LEAD[l.status],
+    l.linkedin ?? "",
+    l.site ?? "",
+    l.sinais.map((s) => `${s.descricao} (${data(s.data, { comAno: true })})`).join(" | "),
+  ]);
+  baixarCSV(cabecalho, linhas, "leads.csv");
+}
+
+function construirColunas(opcoes: { selecionados: Set<string>; onAlternar: (id: string) => void }): Coluna<LeadDaLista>[] {
   return [
     {
       chave: "nome",
       titulo: "Lead",
       papel: "titulo",
       render: (l) => (
-        <div>
-          <Link href={`/leads/${l.id}`} className="font-semibold text-[14px] text-accent-ink hover:underline">{l.nome}</Link>
-          {l.demo && <Chip nivel="neutral">Exemplo</Chip>}
+        <div className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            className="w-4 h-4 mt-0.5 shrink-0 accent-accent"
+            checked={opcoes.selecionados.has(l.id)}
+            onChange={() => opcoes.onAlternar(l.id)}
+            aria-label={`Selecionar ${l.nome}`}
+          />
+          <div>
+            <Link href={`/leads/${l.id}`} className="font-semibold text-[14px] text-accent-ink hover:underline">{l.nome}</Link>
+            {l.demo && <Chip nivel="neutral">Exemplo</Chip>}
+            {l.noCRM && <Chip nivel="positivo">No CRM</Chip>}
+          </div>
         </div>
       ),
     },
@@ -107,8 +139,6 @@ function construirColunas(): Coluna<LeadDaLista>[] {
   ];
 }
 
-const COLUNAS = construirColunas();
-
 export function Leads() {
   const { status, erro } = useStatus();
   const router = useRouter();
@@ -118,6 +148,18 @@ export function Leads() {
   const [fit, setFit] = useState<Fit | "">("");
   const [leads, setLeads] = useState<LeadDaLista[] | null>(null);
   const [prospeccoes, setProspeccoes] = useState<ProspeccaoFiltro[]>([]);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [enviandoCRM, setEnviandoCRM] = useState(false);
+  const [resultadoCRM, setResultadoCRM] = useState<{ mensagem: string; comFalha: boolean } | null>(null);
+
+  const alternarSelecao = useCallback((id: string) => {
+    setSelecionados((prev) => {
+      const novo = new Set(prev);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  }, []);
 
   /** O endereço é a fonte da verdade do filtro (US-036, AC "o link ser compartilhável"): toda escolha
    * passa por aqui antes de virar estado, mesmo padrão de irPara já usado em outras telas da suíte. */
@@ -170,6 +212,44 @@ export function Leads() {
     .filter((l) => naAba(l, aba))
     .filter((l) => !prospeccaoId || l.prospeccaoId === prospeccaoId)
     .filter((l) => !fit || l.fit === fit);
+  const filtradosOrdenados = ordenarLeadsPorPrioridade(filtrados) as LeadDaLista[];
+  const crmConfigurado = !!status?.integrations?.["mcp-crm"];
+  const selecionadosSemCRM = filtradosOrdenados.filter((l) => selecionados.has(l.id) && !l.noCRM);
+
+  /** "Enviar selecionados para o CRM" (US-037): uma chamada por lead (a rota do workspace,
+   * `POST /api/leads/[id]/crm`, só aceita um id por vez — diferente do modelo antigo, que recebe um lote
+   * no corpo), sequencial, mesmo padrão de "Escrever para os selecionados" de `app/page.tsx`. Conta
+   * sucesso/falha e resume os dois no final, em vez de um aviso genérico "algo deu errado". */
+  async function enviarSelecionadosParaCRM() {
+    if (enviandoCRM || selecionadosSemCRM.length === 0) return;
+    setEnviandoCRM(true);
+    setResultadoCRM(null);
+    let sucesso = 0;
+    const falhas: string[] = [];
+    for (const lead of selecionadosSemCRM) {
+      try {
+        const r = await fetch(`/api/leads/${lead.id}/crm`, { method: "POST" });
+        if (r.ok) {
+          sucesso++;
+          setLeads((ls) => (ls ? ls.map((l) => (l.id === lead.id ? { ...l, noCRM: true } : l)) : ls));
+        } else {
+          const corpo = await r.json().catch(() => null);
+          falhas.push(`${lead.nome} (${corpo?.error || "não aceito pelo CRM"})`);
+        }
+      } catch {
+        falhas.push(`${lead.nome} (não aceito pelo CRM)`);
+      }
+    }
+    setResultadoCRM({
+      comFalha: falhas.length > 0,
+      mensagem:
+        falhas.length === 0
+          ? `${sucesso} lead${sucesso === 1 ? "" : "s"} enviado${sucesso === 1 ? "" : "s"} para o CRM.`
+          : `${sucesso} enviado${sucesso === 1 ? "" : "s"}; ${falhas.length} falhou/falharam: ${falhas.join(", ")}.`,
+    });
+    setSelecionados(new Set());
+    setEnviandoCRM(false);
+  }
 
   return (
     <>
@@ -212,39 +292,54 @@ export function Leads() {
               ))}
             </div>
 
-            <div className="flex gap-3 flex-wrap mb-4">
-              <label className="text-[13px]">
-                <span className="block text-muted mb-1">Prospecção</span>
-                <select
-                  value={prospeccaoId}
-                  onChange={(e) => irPara({ prospeccaoId: e.target.value })}
-                  className="input !py-1.5 !text-[13px] min-w-[200px]"
-                >
-                  <option value="">Todas as prospecções</option>
-                  {prospeccoes.map((p) => (
-                    <option key={p.id} value={p.id}>{p.nome}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-[13px]">
-                <span className="block text-muted mb-1">Aderência</span>
-                <select
-                  value={fit}
-                  onChange={(e) => irPara({ fit: lerFit(e.target.value) })}
-                  className="input !py-1.5 !text-[13px] min-w-[160px]"
-                >
-                  <option value="">Qualquer aderência</option>
-                  <option value="alta">{ROTULO_FIT.alta}</option>
-                  <option value="media">{ROTULO_FIT.media}</option>
-                  <option value="baixa">{ROTULO_FIT.baixa}</option>
-                </select>
-              </label>
+            <div className="flex items-end justify-between gap-3 flex-wrap mb-4">
+              <div className="flex gap-3 flex-wrap">
+                <label className="text-[13px]">
+                  <span className="block text-muted mb-1">Prospecção</span>
+                  <select
+                    value={prospeccaoId}
+                    onChange={(e) => irPara({ prospeccaoId: e.target.value })}
+                    className="input !py-1.5 !text-[13px] min-w-[200px]"
+                  >
+                    <option value="">Todas as prospecções</option>
+                    {prospeccoes.map((p) => (
+                      <option key={p.id} value={p.id}>{p.nome}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-[13px]">
+                  <span className="block text-muted mb-1">Aderência</span>
+                  <select
+                    value={fit}
+                    onChange={(e) => irPara({ fit: lerFit(e.target.value) })}
+                    className="input !py-1.5 !text-[13px] min-w-[160px]"
+                  >
+                    <option value="">Qualquer aderência</option>
+                    <option value="alta">{ROTULO_FIT.alta}</option>
+                    <option value="media">{ROTULO_FIT.media}</option>
+                    <option value="baixa">{ROTULO_FIT.baixa}</option>
+                  </select>
+                </label>
+              </div>
+              <button type="button" className="btn-ghost !w-auto" onClick={() => exportarLeads(filtradosOrdenados)}>Exportar CSV</button>
             </div>
+
+            {selecionados.size > 0 && (
+              <div className="card shadow-none flex items-center justify-between gap-3 px-3.5 py-2.5 mb-3 flex-wrap">
+                <span className="text-sm text-muted">{selecionados.size} lead{selecionados.size === 1 ? "" : "s"} selecionado{selecionados.size === 1 ? "" : "s"}</span>
+                {crmConfigurado && selecionadosSemCRM.length > 0 && (
+                  <button type="button" className="btn-ghost !w-auto" disabled={enviandoCRM} onClick={enviarSelecionadosParaCRM}>
+                    {enviandoCRM ? "Enviando..." : "Enviar selecionados para o CRM"}
+                  </button>
+                )}
+              </div>
+            )}
+            {resultadoCRM && <div className="mb-3"><Aviso tom={resultadoCRM.comFalha ? "warn" : "ok"}>{resultadoCRM.mensagem}</Aviso></div>}
 
             {filtrados.length === 0 ? (
               <p className="apoio">Nenhum lead com esse filtro.</p>
             ) : (
-              <DataTable colunas={COLUNAS} linhas={ordenarLeadsPorPrioridade(filtrados) as LeadDaLista[]} />
+              <DataTable colunas={construirColunas({ selecionados, onAlternar: alternarSelecao })} linhas={filtradosOrdenados} />
             )}
           </>
         )}

@@ -11,6 +11,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Aviso, Chip, DataTable, Topbar, data, useConfirmacao, useStatus, lerErro, type Coluna } from "@/components/ui";
 import { ExploracaoEmpresa } from "@/components/ExploracaoEmpresa";
+import { baixarCSV } from "@/lib/exportacao";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 import { formatarFunil, funilContagens, motivoPapel, ordenarLeadsPorPrioridade, sinalAntigo, sinalMaisRecente } from "@/lib/qualificacao";
 import { NIVEL_CHIP_EVIDENCIA, ORDEM_MOTIVOS_DESCARTE, ORDEM_STATUS_LEAD, ROTULO_FIT, ROTULO_MODO, ROTULO_MOTIVO_DESCARTE, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA, ROTULO_STATUS_LEAD, nomeProspeccao, recorteProspeccao } from "@/lib/rotulos";
@@ -526,6 +527,31 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
     }
   }
 
+  /** "Exportar CSV" (US-037): as colunas visíveis da lista de leads desta prospecção (Lead/Empresa ou
+   * Contexto/Fit/Papel/Sinal/Status) mais LinkedIn, site (da `Conta` vinculada) e TODOS os sinais com
+   * data — a coluna "Sinal" da tabela mostra só o mais recente truncado. `leads` já chega filtrado pela
+   * aba do funil aplicada (a mesma lista que o `DataTable` desenha). */
+  function exportarLeadsCSV(leads: LeadProspeccao[]) {
+    const contaPorId = new Map((andamento?.contas ?? []).map((c) => [c.id, c] as const));
+    const cabecalho = ["Nome", "Cargo", "Empresa", "Cidade", "Fit", "Papel", "Status", "LinkedIn", "Site", "Sinais (com data)"];
+    const linhas = leads.map((l) => {
+      const conta = l.contaId ? contaPorId.get(l.contaId) : undefined;
+      return [
+        l.nome,
+        l.cargo ?? "",
+        l.empresa ?? conta?.nome ?? "",
+        l.cidade ?? conta?.cidade ?? "",
+        l.fit ? ROTULO_FIT[l.fit] : "",
+        ROTULO_PAPEL[l.papel] ?? "",
+        ROTULO_STATUS_LEAD[l.status],
+        l.linkedin ?? "",
+        conta?.site ?? "",
+        l.sinais.map((s) => `${s.descricao} (${data(s.data, { comAno: true })})`).join(" | "),
+      ];
+    });
+    baixarCSV(cabecalho, linhas, "leads.csv");
+  }
+
   const indiceEtapaAtual = andamento ? ETAPAS_PROSPECCAO.findIndex((e) => e.chave === andamento.prospeccao.etapa) : -1;
   const nomeDaProspeccao = andamento ? nomeProspeccao(andamento.produtoNome, andamento.prospeccao.modo, andamento.prospeccao.criterios) : "";
   const recorte = andamento ? recorteProspeccao(andamento.prospeccao.modo, andamento.prospeccao.criterios) : "";
@@ -672,7 +698,10 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                     ) : leadsFiltrados.length === 0 ? (
                       <Aviso tom="warn">Nenhuma pessoa nesta etapa do funil ainda.</Aviso>
                     ) : (
-                      <DataTable colunas={colunasLeads} linhas={ordenarLeadsPorPrioridade(leadsFiltrados)} />
+                      <>
+                        <button type="button" className="btn-ghost self-end !w-auto" onClick={() => exportarLeadsCSV(leadsFiltrados)}>Exportar CSV</button>
+                        <DataTable colunas={colunasLeads} linhas={ordenarLeadsPorPrioridade(leadsFiltrados)} />
+                      </>
                     )}
                     {erroCRM && <Aviso tom="danger">{erroCRM}</Aviso>}
                   </div>
@@ -686,7 +715,10 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                     ) : leadsFiltrados.length === 0 ? (
                       <Aviso tom="warn">Nenhuma pessoa nesta etapa do funil ainda.</Aviso>
                     ) : (
-                      <DataTable colunas={colunasLeads} linhas={ordenarLeadsPorPrioridade(leadsFiltrados)} />
+                      <>
+                        <button type="button" className="btn-ghost self-end !w-auto" onClick={() => exportarLeadsCSV(leadsFiltrados)}>Exportar CSV</button>
+                        <DataTable colunas={colunasLeads} linhas={ordenarLeadsPorPrioridade(leadsFiltrados)} />
+                      </>
                     )}
                     {erroCRM && <Aviso tom="danger">{erroCRM}</Aviso>}
                   </div>
@@ -734,7 +766,10 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                           leadsFiltrados.length === 0 ? (
                             <Aviso tom="warn">Nenhuma pessoa nesta etapa do funil ainda.</Aviso>
                           ) : (
-                            <DataTable colunas={colunasLeads} linhas={ordenarLeadsPorPrioridade(leadsFiltrados)} />
+                            <>
+                              <button type="button" className="btn-ghost self-end !w-auto" onClick={() => exportarLeadsCSV(leadsFiltrados)}>Exportar CSV</button>
+                              <DataTable colunas={colunasLeads} linhas={ordenarLeadsPorPrioridade(leadsFiltrados)} />
+                            </>
                           )
                         )}
                       </>
