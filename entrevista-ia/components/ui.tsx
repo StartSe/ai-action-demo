@@ -804,12 +804,12 @@ export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: s
   );
 }
 
-export function CopyButton({ texto, rotulo = "Copiar texto" }: { texto: () => string; rotulo?: string }) {
+export function CopyButton({ texto, rotulo = "Copiar texto", disabled = false }: { texto: () => string; rotulo?: string; disabled?: boolean }) {
   const [ok, setOk] = useState(false);
   const [falha, setFalha] = useState(false);
   return (
     <div className="inline-flex flex-col gap-2 items-start">
-      <button type="button" className="btn-ghost" onClick={async () => {
+      <button type="button" className="btn-ghost" disabled={disabled} aria-live="polite" onClick={async () => {
         try {
           await navigator.clipboard.writeText(texto());
           setOk(true);

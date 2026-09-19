@@ -8,13 +8,13 @@
 //     autentica só por esse parâmetro. Por isso `conectar()` recebe o endereço já com ele e nenhum
 //     cabeçalho Authorization — e todo log passa por `semToken()`.
 //   - `search_engine` e `scrape_as_markdown` vêm ligadas em qualquer conta; `web_data_linkedin_person_profile`
-//     exige `&pro=1` e `search_dataset` exige `&groups=social`. É isso que o "modo avançado" liga.
+//     exige `&pro=1` e `search_dataset` exige `&groups=social`. O conector sempre habilita esses parâmetros.
 //
 // Nenhuma falha daqui chega crua à tela: `interpretarFalhaPesquisa` devolve uma frase de negócio com
 // código e ação (mesmo formato de ErroVoz em lib/voz.ts). Falha de pesquisa nunca interrompe um
 // cadastro: a ficha segue com o que veio do currículo.
 import { ACAO_PESQUISA } from "./acoes";
-import { chamar, conectar, listarFerramentas, type ConexaoMCP } from "./mcp-cliente";
+import { ErroMCP, chamar, conectar, listarFerramentas, type ConexaoMCP } from "./mcp-cliente";
 import { getConfig } from "./store";
 
 export const URL_MCP_PADRAO = "https://mcp.brightdata.com/mcp";
@@ -72,7 +72,7 @@ function ler(config: Record<string, string | undefined> | undefined, chave: stri
 export function conexaoBrightData(config?: Record<string, string | undefined>): ConexaoPesquisa | null {
   const token = ler(config, "BRIGHTDATA_API_TOKEN");
   if (!token) return null;
-  const modoAvancado = ler(config, "BRIGHTDATA_MODO_PRO") === "1";
+  const modoAvancado = true; // As quatro ações fazem parte do enriquecimento.
   let endereco: URL;
   try {
     endereco = new URL(ler(config, "BRIGHTDATA_MCP_URL") || URL_MCP_PADRAO);
@@ -80,9 +80,14 @@ export function conexaoBrightData(config?: Record<string, string | undefined>): 
     endereco = new URL(URL_MCP_PADRAO);
   }
   endereco.searchParams.set("token", token);
-  if (modoAvancado) {
-    endereco.searchParams.set("pro", "1");
-    endereco.searchParams.set("groups", "social");
+  endereco.searchParams.set("pro", "1");
+  const grupos = new Set((endereco.searchParams.get("groups") || "").split(",").filter(Boolean));
+  grupos.add("social");
+  endereco.searchParams.set("groups", [...grupos].join(","));
+  if (endereco.searchParams.has("tools")) {
+    const ferramentas = new Set((endereco.searchParams.get("tools") || "").split(",").filter(Boolean));
+    for (const nome of [...Object.values(FERRAMENTAS), "list_dataset_fields"]) ferramentas.add(nome);
+    endereco.searchParams.set("tools", [...ferramentas].join(","));
   }
   return { url: endereco.toString(), token, modoAvancado };
 }
@@ -92,8 +97,10 @@ export function pesquisaEnabled(): boolean {
   return Boolean(getConfig("BRIGHTDATA_API_TOKEN"));
 }
 
+let clienteAtual: ConexaoMCP | undefined;
 function mcp(conexao: ConexaoPesquisa): ConexaoMCP {
-  return conectar(conexao.url);
+  if (clienteAtual?.url !== conexao.url) clienteAtual = conectar(conexao.url);
+  return clienteAtual;
 }
 
 const CACHE_MS = 10 * 60 * 1000;
@@ -123,10 +130,12 @@ export async function ferramentasDisponiveis(opcoes: { conexao?: ConexaoPesquisa
  * preferido vem primeiro e um padrão tolerante vem depois: quem manda é o que `tools/list` devolveu.
  * `null` é "esta conta não tem isso" — quem chama decide se é o fim da pesquisa ou só uma parte dela.
  */
-export function escolherFerramentas(disponiveis: string[]): { busca: string | null; markdown: string | null; linkedin: string | null } {
+export function escolherFerramentas(disponiveis: string[]): { busca: string | null; markdown: string | null; linkedin: string | null; conjuntoDeDados: string | null; camposDataset: string | null } {
   const achar = (preferida: string, combina: (nome: string) => boolean) =>
     disponiveis.includes(preferida) ? preferida : (disponiveis.find(combina) ?? null);
   return {
+    conjuntoDeDados: disponiveis.includes(FERRAMENTAS.conjuntoDeDados) ? FERRAMENTAS.conjuntoDeDados : null,
+    camposDataset: disponiveis.includes("list_dataset_fields") ? "list_dataset_fields" : null,
     // `search_dataset` também casa com /search/, e ela é outra coisa: busca em conjunto de dados.
     busca: achar(FERRAMENTAS.busca, (n) => /search|busca/i.test(n) && !/dataset|batch/i.test(n)),
     markdown: achar(FERRAMENTAS.markdown, (n) => /markdown|scrape/i.test(n) && !/batch/i.test(n)),
@@ -134,11 +143,10 @@ export function escolherFerramentas(disponiveis: string[]): { busca: string | nu
   };
 }
 
-/** Falha crua (do cliente MCP compartilhado, que não carrega o código HTTP) virada em `ErroPesquisa`. */
+/** Traduz o erro original; uma sondagem sem sessão mascararia a causa real. */
 async function traduzir(conexao: ConexaoPesquisa, err: unknown): Promise<ErroPesquisa> {
   if (err instanceof ErroPesquisa) return err;
-  const { status, detalhe } = await sondar(conexao);
-  return interpretarFalhaPesquisa(status, detalhe || (err instanceof Error ? err.message : ""), conexao.token);
+  return interpretarFalhaPesquisa(err instanceof ErroMCP ? err.status : 0, err instanceof ErroMCP ? err.detalhe : "Falha de conexão", conexao.token);
 }
 
 /** Esquece o cache de ferramentas (usado depois de salvar a configuração e nos testes). */
@@ -159,7 +167,7 @@ export async function chamarFerramenta(
   const chamada = chamar(mcp(conexao), nome, argumentos).catch(async (err) => {
     console.error("Falha na pesquisa na web:", nome, semToken(err instanceof Error ? err.message : String(err), conexao.token));
     // O motivo importa: token recusado e cota esgotada param a pesquisa inteira, uma página que não
-    // abriu só a deixa parcial. `traduzir` vai buscar o código de resposta que o cliente MCP perdeu.
+    // abriu só a deixa parcial. `traduzir` preserva o código da resposta original.
     throw await traduzir(conexao, err);
   });
   if (!opcoes.limiteMs) return chamada;
@@ -195,22 +203,6 @@ export function interpretarFalhaPesquisa(status: number, detalheBruto: string, t
   return new ErroPesquisa("pedido_recusado", "A Bright Data recusou a chamada. Confira o token e o endereço em Configurações.", 400, { acao: ACAO_PESQUISA });
 }
 
-/** Só o código de resposta do serviço, para traduzir a falha (o cliente MCP compartilhado não o
- * carrega na exceção). Devolve 0 quando nem deu para chegar lá. */
-async function sondar(conexao: ConexaoPesquisa): Promise<{ status: number; detalhe: string }> {
-  try {
-    const r = await fetch(conexao.url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
-      signal: AbortSignal.timeout(15000),
-    });
-    return { status: r.status, detalhe: (await r.text().catch(() => "")).slice(0, 500) };
-  } catch {
-    return { status: 0, detalhe: "" };
-  }
-}
-
 function juntar(itens: string[]): string {
   if (itens.length <= 1) return itens.join("");
   return `${itens.slice(0, -1).join(", ")} e ${itens[itens.length - 1]}`;
@@ -231,9 +223,7 @@ export async function testarPesquisa(config: Record<string, string | undefined>)
   if (faltando.length) {
     const lista = juntar(faltando.map((f) => f.rotulo));
     const verbo = faltando.length > 1 ? "estão disponíveis" : "está disponível";
-    const saida = faltando.some((f) => f.exigeModoAvancado) && !conexao.modoAvancado
-      ? " Ligue o modo avançado em Opções avançadas e teste de novo."
-      : " Confira o plano da sua conta na Bright Data.";
+    const saida = " O conector já usa pro=1. Confira as permissões e o plano da sua conta na Bright Data.";
     return { ok: false, mensagem: `Conectado, mas ${lista} não ${verbo} nesta conta.${saida}` };
   }
   const n = ferramentas.length;

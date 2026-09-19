@@ -8,7 +8,7 @@
 // os três de uma vez, e os módulos de entidade só podem depender de `lib/banco.ts`. Ninguém importa
 // o Início de volta.
 import { listar as listarCandidatos } from "./candidatos";
-import { culturaConfigurada } from "./cultura";
+import { aiEnabled } from "./ai";
 import { CONTAGEM_VAZIA, contarPorVaga, fotografia, listar as listarEntrevistas, type ContagemVaga } from "./entrevistas";
 import { haDias } from "./formato";
 import { contarAbertasAte, listar as listarVagas } from "./vagas";
@@ -256,15 +256,14 @@ export function montarInicio(quando = new Date()): Inicio {
   // cheio, mas não podem marcar um passo que ninguém deu.
   const temVaga = todasAsVagas.some((v) => !v.exemplo);
   const temConvite = entrevistas.some((e) => !e.exemplo);
+  const primeiraVagaAberta = todasAsVagas.find((v) => !v.exemplo && v.status === "aberta");
 
   const passos: PassoInicio[] = [
     {
-      titulo: "Cadastre a cultura da empresa",
-      apoio: "O que vocês valorizam, uma vez só. Toda entrevista passa a avaliar cultura por isso.",
-      concluido: culturaConfigurada(),
-      // O caminho com `#` mora em `lib/acoes.ts`: scripts/verificar-jargao.mjs acusa o endereço de
-      // Configurações escrito dentro de uma tela, mas não dentro de um módulo de lib.
-      acao: { rotulo: culturaConfigurada() ? "Rever a cultura" : "Cadastrar a cultura", url: "/setup#cultura" },
+      titulo: "Conecte a IA",
+      apoio: "Configure a IA que conduz as perguntas e prepara o parecer. A voz e a cultura da empresa podem ser ajustadas na mesma tela.",
+      concluido: aiEnabled(),
+      acao: { rotulo: aiEnabled() ? "Rever configuração" : "Configurar IA", url: "/setup#openrouter" },
     },
     {
       titulo: "Abra uma vaga",
@@ -276,7 +275,7 @@ export function montarInicio(quando = new Date()): Inicio {
       titulo: "Convide um candidato",
       apoio: "Cadastre a pessoa, atribua à vaga e mande o link. Ela conversa do celular, quando puder.",
       concluido: temConvite,
-      acao: { rotulo: temConvite ? "Ver as entrevistas" : "Cadastrar candidato", url: temConvite ? "/entrevistas" : "/candidatos" },
+      acao: { rotulo: temConvite ? "Ver as entrevistas" : "Adicionar candidato à vaga", url: temConvite ? "/entrevistas" : primeiraVagaAberta ? `/vagas/${primeiraVagaAberta.id}` : "/vagas/nova" },
     },
   ];
 

@@ -9,6 +9,8 @@
 // já é atribuído à vaga e a tela volta para lá com o recado. O convite em si (o link e a mensagem
 // pronta) é da US-014.
 import Link from "next/link";
+import { PesquisaComplementar } from "@/components/PesquisaComplementar";
+import type { Ficha } from "@/lib/types";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import {
@@ -26,7 +28,7 @@ import { Aviso, Topbar, lerErro, useStatus } from "@/components/ui";
  * a saída é colar o currículo; **com texto, sem ficha** (a leitura da US-009 estourou o prazo ou
  * falhou), e aí a saída é pedir para ler de novo — o texto já está guardado, não há o que colar.
  */
-type Salvo = { id: string; nome: string; aviso: string; temTexto: boolean };
+type Salvo = { id: string; nome: string; aviso: string; temTexto: boolean; ficha?: Ficha; linkedinUrl?: string };
 
 function Conteudo() {
   const { status, erro } = useStatus();
@@ -39,37 +41,55 @@ function Conteudo() {
   const [falha, setFalha] = useState("");
   const [salvo, setSalvo] = useState<Salvo | null>(null);
   const [textoColado, setTextoColado] = useState("");
+  const [preparado, setPreparado] = useState<Salvo | null>(null);
+  const [convitePendente, setConvitePendente] = useState<Salvo | null>(null);
 
   // Sem vaga no endereço, o lugar de cair é a ficha recém-montada (US-013): é ela que a pessoa quer
   // conferir depois de enviar um currículo. Vindo da vaga, o lugar continua sendo a vaga.
-  const destino = (candidatoId: string) => (vaga ? `/vagas/${vaga}` : `/candidatos/${candidatoId}`);
+  const destino = (candidatoId: string) => (vaga ? `/vagas/${vaga}?candidato=${encodeURIComponent(candidatoId)}` : `/candidatos/${candidatoId}`);
+
+  function continuar(candidato: Salvo) {
+    if (candidato.aviso) {
+      setSalvo(candidato);
+      setSalvando(false);
+    } else {
+      setPreparado(candidato);
+      setSalvando(false);
+    }
+  }
+
+  async function gerarConvite(candidato: Salvo) {
+    setSalvando(true);
+    setFalha("");
+    try {
+      const atribuicao = await fetch("/api/entrevistas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vagaId: vaga, candidatoId: candidato.id }),
+      });
+      if (!atribuicao.ok) throw atribuicao;
+      setConvitePendente(null);
+      continuar(candidato);
+    } catch (e) {
+      // A pessoa já foi salva. Uma nova tentativa deve repetir só a atribuição,
+      // que é idempotente para o mesmo candidato e vaga, nunca o cadastro.
+      setConvitePendente(candidato);
+      setFalha((await lerErro(e)).mensagem);
+      setSalvando(false);
+    }
+  }
 
   async function salvar() {
+    if (salvando) return;
     setSalvando(true);
     setFalha("");
     try {
       const r = await fetch("/api/candidatos", { method: "POST", body: corpoDoCandidato(dados, curriculo) });
       if (!r.ok) throw r;
       const { candidato, aviso } = await r.json();
-
-      // A atribuição passa pela mesma rota do diálogo da vaga (`POST /api/entrevistas`), que é quem
-      // sabe recusar uma vaga encerrada. Se ela falhar, o candidato continua cadastrado e a mensagem
-      // diz o que aconteceu — refazer o cadastro inteiro por causa disso seria pior.
-      if (vaga) {
-        const atribuicao = await fetch("/api/entrevistas", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ vagaId: vaga, candidatoId: candidato.id }),
-        });
-        if (!atribuicao.ok) throw atribuicao;
-      }
-
-      if (aviso) {
-        setSalvo({ id: candidato.id, nome: candidato.nome, aviso, temTexto: Boolean(candidato.temCvTexto) });
-        setSalvando(false);
-        return;
-      }
-      router.push(destino(candidato.id));
+      const cadastrado: Salvo = { id: candidato.id, nome: candidato.nome, aviso: aviso || "", temTexto: Boolean(candidato.temCvTexto), ficha: candidato.ficha, linkedinUrl: candidato.linkedinUrl };
+      if (vaga) await gerarConvite(cadastrado);
+      else continuar(cadastrado);
     } catch (e) {
       setFalha((await lerErro(e)).mensagem);
       setSalvando(false);
@@ -124,9 +144,31 @@ function Conteudo() {
           {vaga ? "← Voltar para a vaga" : "← Candidatos"}
         </Link>
         <h1 className="titulo-painel mt-3 mb-1.5">Cadastrar candidato</h1>
-        <p className="apoio mb-6">O nome, o currículo e o que a pesquisa na web precisa saber para achar a pessoa certa.</p>
+        <p className="apoio mb-6">Comece com o nome e o currículo. LinkedIn e anotações são opcionais.</p>
 
-        {salvo ? (
+        {preparado ? (
+          <>
+            <div className="card p-5 mb-5 border-accent/30">
+              <p className="sobretitulo mb-2">Cadastro concluído</p>
+              <h2 className="font-bold text-xl">{preparado.nome}</h2>
+              <p className="text-sm text-muted mt-2">{vaga ? "O link de entrevista já está pronto. Você pode complementar a ficha antes de compartilhar." : "A ficha está salva. Você pode complementar os dados agora ou continuar para escolher uma vaga."}</p>
+            </div>
+            <PesquisaComplementar candidato={preparado} />
+            <button type="button" className="btn-primary !w-auto max-md:!w-full" onClick={() => router.push(destino(preparado.id))}>{vaga ? "Continuar para o link da entrevista →" : "Continuar para a ficha →"}</button>
+          </>
+        ) : convitePendente ? (
+          <section className="card p-6 max-md:p-5">
+            <h2 className="font-bold text-lg mb-2">{convitePendente.nome} já está cadastrado</h2>
+            <p className="text-muted text-sm mb-4">Falta gerar o link para esta vaga. Você pode tentar novamente sem refazer o cadastro.</p>
+            {falha && <div className="mb-4"><Aviso tom="danger">{falha}</Aviso></div>}
+            <div className="flex gap-3 flex-wrap">
+              <button type="button" className="btn-primary !w-auto max-md:!w-full" disabled={salvando} onClick={() => void gerarConvite(convitePendente)}>
+                {salvando ? "Gerando link..." : "Tentar gerar o link novamente"}
+              </button>
+              <Link className="btn-ghost" href={`/candidatos/${convitePendente.id}`}>Ver candidato salvo</Link>
+            </div>
+          </section>
+        ) : salvo ? (
           <section className="card p-6 max-md:p-5">
             <h2 className="font-bold text-[16px] mb-1.5">{salvo.nome} está cadastrado</h2>
             <p className="text-muted text-sm mb-4">O arquivo do currículo ficou guardado e você pode abri-lo quando quiser.</p>
@@ -179,7 +221,7 @@ function Conteudo() {
             onCancelar={() => router.push(vaga ? `/vagas/${vaga}` : "/candidatos")}
             salvando={salvando}
             erro={falha}
-            rotuloSalvar={vaga ? "Cadastrar e adicionar à vaga" : "Cadastrar candidato"}
+            rotuloSalvar={vaga ? "Cadastrar e gerar link" : "Cadastrar candidato"}
           />
         )}
       </main>

@@ -78,10 +78,10 @@ async function servirMCP(opcoes: {
         res.end("Unauthorized");
         return;
       }
-      const pedido = JSON.parse(corpo || "{}") as { method?: string; params?: { name?: string; arguments?: Record<string, unknown> } };
+      const pedido = JSON.parse(corpo || "{}") as { id?: number; method?: string; params?: { name?: string; arguments?: Record<string, unknown> } };
       const responder = (resultado: unknown) => {
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ jsonrpc: "2.0", id: 1, result: resultado }));
+        res.end(JSON.stringify({ jsonrpc: "2.0", id: pedido.id, result: resultado }));
       };
 
       if (pedido.method === "initialize") return responder({ protocolVersion: "2024-11-05", serverInfo: { name: "bright-data-falso" } });
@@ -446,15 +446,23 @@ describe("confiancaMedia e identidadeConfirmada", () => {
 });
 
 describe("pesquisarCandidato", () => {
-  it("pessoa clara: mescla na ficha, e o currículo vence a web no conflito", async () => {
-    const { candidato, status } = await pesquisaDeBruno(async ({ candidato: c }) => {
+  it("pessoa clara: aguarda aprovação, e o currículo vence a web no conflito", async () => {
+    const resultado = await pesquisaDeBruno(async ({ candidato: c }) => {
       const fontes = listarFontes(c.id).filter((f) => f.tipo !== "cv");
       return consolidacaoDeUmaPessoa(fontes[fontes.length - 1].id);
     });
 
+    let { candidato } = resultado;
+    const { status } = resultado;
     assert.equal(status, "concluida");
     assert.equal(candidato.pesquisaStatus, "concluida");
     assert.ok(candidato.pesquisaEm, "a data da pesquisa fica registrada");
+    assert.equal(candidato.identidadeConfirmada, false);
+    assert.ok(candidato.ficha?.web);
+    const { POST } = await import("../app/api/candidatos/[id]/identidade/route");
+    const resposta = await POST(new Request("http://localhost", { method: "POST", body: JSON.stringify({ escolha: 0 }) }), { params: Promise.resolve({ id: candidato.id }) });
+    assert.equal(resposta.status, 200);
+    candidato = (await resposta.json()).candidato;
     assert.equal(candidato.identidadeConfirmada, true);
     assert.equal(candidato.ficha?.web, undefined, "confirmada, a ficha web entrou e não ficou pendente");
 

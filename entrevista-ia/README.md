@@ -69,7 +69,7 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `OPENROUTER_MODEL_AVALIACAO` | Alternativa ao setup. Modelo usado só nos três passos do parecer. Sem ele, vale o modelo padrão. |
 | `BRIGHTDATA_API_TOKEN` | Alternativa ao setup. Liga a pesquisa do candidato na web. Obtenha em [brightdata.com/cp/setting/users](https://brightdata.com/cp/setting/users). |
 | `BRIGHTDATA_MCP_URL` | Alternativa ao setup. Endereço do serviço de pesquisa da Bright Data. Padrão `https://mcp.brightdata.com/mcp`. |
-| `BRIGHTDATA_MODO_PRO` | Alternativa ao setup. `1` liga o modo avançado (leitura de perfil do LinkedIn e conjunto de dados); padrão `0`. |
+| `BRIGHTDATA_MODO_PRO` | Legado, ignorado. O conector sempre inclui `pro=1` e o grupo `social` para habilitar as ações do enriquecimento. |
 | `ELEVENLABS_API_KEY` | Alternativa ao setup. Ativa a voz da entrevistadora. Obtenha em [elevenlabs.io/app/settings/api-keys](https://elevenlabs.io/app/settings/api-keys). |
 | `ELEVENLABS_VOICE_ID` | Alternativa ao setup. Voz usada no texto-para-voz. Padrão `EXAVITQu4vr4xnSDxMaL`. |
 | `ELEVENLABS_AGENT_ID` | Alternativa ao setup. Id do agente conversacional que conduz a entrevista por voz (e a ligação telefônica). |
@@ -113,3 +113,5 @@ Dockerfile                            build multi-stage com saída standalone
 docker-compose.yml                    sobe este app isolado
 render.yaml                           blueprint do Render (runtime image)
 ```
+
+O enriquecimento usa Search Engine, Search Dataset, LinkedIn Person Profile e Scrape as Markdown. Search Dataset consulta primeiro `list_dataset_fields` para montar um filtro válido; o orçamento por rodada é de até 8 chamadas de ferramenta, mantendo o prazo total. O teste de conexão exige as quatro ações principais.

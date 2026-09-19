@@ -83,6 +83,12 @@ export default function Page() {
       .then(([daVaga, dasEntrevistas]) => {
         setVaga(daVaga.vaga);
         setLinhas(dasEntrevistas.itens);
+        const candidatoNovo = new URLSearchParams(window.location.search).get("candidato");
+        const entrevistaNova = (dasEntrevistas.itens as LinhaCandidato[]).find((item) => item.candidatoId === candidatoNovo && (item.status === "convidada" || item.status === "aberta"));
+        if (entrevistaNova) {
+          setConvite({ entrevistaId: entrevistaNova.id, reenviar: false });
+          window.history.replaceState(null, "", window.location.pathname);
+        }
       })
       .catch(async (e) => {
         setErroTela(await lerErro(e));
@@ -231,7 +237,7 @@ export default function Page() {
                 disabled={vaga.status === "encerrada"}
                 onClick={() => setAdicionando(true)}
               >
-                Adicionar candidato
+                Gerar link de entrevista
               </button>
             </div>
 
@@ -255,6 +261,17 @@ export default function Page() {
               <div className="mb-5">
                 <Aviso>Esta vaga está encerrada: ninguém novo pode ser chamado. Reabra a vaga para voltar a convidar candidatos.</Aviso>
               </div>
+            )}
+
+            {vaga.status === "aberta" && (
+              <section className="card p-5 mb-6 border-accent" aria-label="Etapas da entrevista inicial">
+                <h2 className="font-bold mb-2">Da vaga ao parecer</h2>
+                <ol className="grid grid-cols-3 max-md:grid-cols-1 gap-4 text-sm">
+                  <li><strong>1. Adicione o candidato</strong><p className="text-muted mt-1">Selecione alguém cadastrado ou cadastre uma nova pessoa nesta vaga.</p></li>
+                  <li><strong>2. Compartilhe o link</strong><p className="text-muted mt-1">O convite é gerado ao adicionar. Copie e envie para o candidato realizar a entrevista.</p></li>
+                  <li><strong>3. Consulte o parecer</strong><p className="text-muted mt-1">Após a conversa, acompanhe aqui a avaliação da IA e decida os próximos passos.</p></li>
+                </ol>
+              </section>
             )}
 
             <section className="card p-5 mb-6">

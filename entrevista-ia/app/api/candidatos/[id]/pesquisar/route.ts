@@ -10,17 +10,23 @@
 // nada além do nome para separar homônimos) são respondidas **de imediato**, com a frase pronta e,
 // quando for o caso, o caminho de Configurações — disparar em segundo plano uma pesquisa que morreria
 // em silêncio deixaria a pessoa esperando por nada.
+import { validarTermos } from "@/lib/consulta-candidato";
 import { atualizar, obter } from "@/lib/candidatos";
 import { dispararPesquisa, impedimentoDaPesquisa } from "@/lib/pesquisa";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const candidato = obter(id);
   if (!candidato) return Response.json({ error: "Esse candidato não existe mais." }, { status: 404 });
 
-  const impedimento = impedimentoDaPesquisa(candidato);
+  const texto = await req.text();
+  let corpo;
+  try { corpo = texto ? JSON.parse(texto) : {}; } catch { return Response.json({ error: "Os termos de busca não são válidos." }, { status: 400 }); }
+  if (!corpo || typeof corpo !== "object" || (corpo.termos !== undefined && !validarTermos(corpo.termos))) return Response.json({ error: "Adicione de 1 a 12 termos válidos. Use um endereço https://linkedin.com/in/ para o perfil." }, { status: 400 });
+  const termos = corpo.termos;
+  const impedimento = impedimentoDaPesquisa(candidato, undefined, termos);
   if (impedimento) {
     // Uma pesquisa que já deu certo antes continua valendo: o código de acesso pode ter saído hoje, e
     // trocar `concluida` por `nao_pedida` faria a tela dizer que nunca procuramos esta pessoa.
@@ -33,6 +39,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     return Response.json({ candidato, emAndamento: true });
   }
 
-  dispararPesquisa(id);
+  dispararPesquisa(id, { termos });
   return Response.json({ candidato: obter(id) });
 }

@@ -103,6 +103,7 @@ function periodo(inicio?: string, fim?: string): string {
 }
 
 export function FichaCandidato({
+  pessoa,
   ficha,
   fontes,
   editando,
@@ -111,6 +112,7 @@ export function FichaCandidato({
   onSalvar,
   onCancelar,
 }: {
+  pessoa?: { id: string; nome: string; email?: string; cidade?: string; linkedinUrl?: string; cvNome?: string };
   ficha?: Ficha;
   fontes: FonteNaTela[];
   editando: boolean;
@@ -127,106 +129,65 @@ export function FichaCandidato({
   const formacao = ficha?.formacao ?? [];
   const links = ficha?.links ?? [];
 
+  const temHistorico = Boolean(ficha?.resumo || experiencias.length || formacao.length);
+  const iniciais = pessoa?.nome.trim().split(/\s+/).slice(0, 2).map((n) => n[0]).join("") || "CV";
   return (
-    <div className="flex flex-col gap-4">
-      <Secao titulo="Resumo">
-        <div className="grid grid-cols-4 gap-4 mb-4 max-md:grid-cols-2">
-          <Linha rotulo="Cargo atual" campo={ficha?.cargoAtual} fontes={fontes} />
-          <Linha rotulo="Empresa atual" campo={ficha?.empresaAtual} fontes={fontes} />
-          <Linha rotulo="Cidade" campo={ficha?.cidade} fontes={fontes} />
-          <Linha rotulo="Anos de experiência" campo={ficha?.anosExperiencia} fontes={fontes} />
+    <article className="card overflow-hidden mb-7" aria-label="Currículo digital do candidato">
+      <header className="px-8 py-7 max-md:p-5 border-b border-line bg-surface-2 flex items-start gap-5">
+        <div aria-hidden="true" className="size-16 max-md:size-12 shrink-0 rounded-2xl bg-accent text-white grid place-items-center text-xl font-bold">{iniciais}</div>
+        <div className="min-w-0 flex-1">
+          <p className="sobretitulo mb-1">Currículo digital</p>
+          <h2 className="text-2xl font-extrabold break-words">{pessoa?.nome || "Perfil profissional"}</h2>
+          {(ficha?.cargoAtual || ficha?.empresaAtual) && <p className="text-sm text-muted mt-1">{[ficha?.cargoAtual?.valor, ficha?.empresaAtual?.valor].filter(Boolean).join(" · ")}</p>}
+          <p className="text-xs text-muted mt-2">Informações do currículo e de fontes públicas, com origem identificada.</p>
         </div>
-        {ficha?.resumo ? (
-          <p className="text-sm">
-            {ficha.resumo.valor} <Marca campo={ficha.resumo} fontes={fontes} />
-          </p>
-        ) : (
-          <Vazio>Nenhum resumo ainda. Envie o currículo ou escreva um à mão em &quot;Editar ficha&quot;.</Vazio>
-        )}
-      </Secao>
-
-      <Secao titulo="Experiência">
-        {experiencias.length ? (
-          <ul className="flex flex-col gap-3.5">
-            {experiencias.map((item, i) => (
-              <li key={i}>
-                <p className="text-sm font-semibold flex items-baseline gap-2 flex-wrap">
-                  <span>{[item.valor.cargo, item.valor.empresa].filter(Boolean).join(" · ")}</span>
-                  <Marca campo={item} fontes={fontes} />
-                </p>
-                {periodo(item.valor.inicio, item.valor.fim) && (
-                  <p className="text-muted text-[12.5px]">{periodo(item.valor.inicio, item.valor.fim)}</p>
-                )}
-                {item.valor.descricao && <p className="text-sm mt-0.5">{item.valor.descricao}</p>}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <Vazio>Nenhuma posição registrada.</Vazio>
-        )}
-      </Secao>
-
-      <Secao titulo="Formação">
-        {formacao.length ? (
-          <ul className="flex flex-col gap-2.5">
-            {formacao.map((item, i) => (
-              <li key={i}>
-                <p className="text-sm font-semibold flex items-baseline gap-2 flex-wrap">
-                  <span>{item.valor.curso}</span>
-                  <Marca campo={item} fontes={fontes} />
-                </p>
-                <p className="text-muted text-[12.5px]">
-                  {[item.valor.instituicao, periodo(item.valor.inicio, item.valor.fim)].filter(Boolean).join(" · ")}
-                </p>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <Vazio>Nenhuma formação registrada.</Vazio>
-        )}
-      </Secao>
-
-      <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
-        <Secao titulo="Competências">
-          <ListaDeTextos itens={ficha?.competencias} fontes={fontes} vazio="Nenhuma competência registrada." />
-        </Secao>
-        <Secao titulo="Idiomas">
-          <ListaDeTextos itens={ficha?.idiomas} fontes={fontes} vazio="Nenhum idioma registrado." />
-        </Secao>
+        {pessoa?.cvNome && <a className="btn-link text-sm max-md:hidden" href={`/api/candidatos/${pessoa.id}/cv`} target="_blank" rel="noreferrer">CV original ↗</a>}
+      </header>
+      <div className="grid grid-cols-[minmax(0,1fr)_280px] max-md:grid-cols-1 [&_section]:shadow-none [&_section]:border-0 [&_section]:rounded-none [&_section]:bg-transparent [&_section]:p-0">
+        <div className="p-8 max-md:p-5 space-y-8 min-w-0">
+          {ficha?.resumo && <Secao titulo="Perfil profissional"><p className="text-sm leading-relaxed whitespace-pre-line">{ficha.resumo.valor} <Marca campo={ficha.resumo} fontes={fontes} /></p></Secao>}
+          {!temHistorico && <div className="rounded-field border border-dashed border-accent/25 bg-accent-soft/30 p-6">
+            <h3 className="font-bold mb-2">Vamos construir este currículo</h3>
+            <p className="text-sm text-muted">Use o enriquecimento acima para buscar informações profissionais ou preencha os dados em “Editar ficha”. O histórico aparecerá aqui conforme os dados forem adicionados.</p>
+          </div>}
+          {experiencias.length > 0 && <Secao titulo="Experiência profissional">
+            <ol className="border-l-2 border-accent/20 ml-1 space-y-6">
+              {experiencias.map((item, i) => <li key={i} className="pl-5 relative">
+                <span className="absolute size-2.5 rounded-full bg-accent -left-[6px] top-1.5" aria-hidden="true" />
+                <h3 className="font-bold text-base">{item.valor.cargo || item.valor.empresa}</h3>
+                {item.valor.cargo && item.valor.empresa && <p className="text-sm text-accent mt-0.5">{item.valor.empresa}</p>}
+                <p className="text-xs text-muted mt-1 mb-2">{periodo(item.valor.inicio, item.valor.fim)} <Marca campo={item} fontes={fontes} /></p>
+                {item.valor.descricao && <p className="text-sm leading-relaxed whitespace-pre-line">{item.valor.descricao}</p>}
+              </li>)}
+            </ol>
+          </Secao>}
+          {formacao.length > 0 && <Secao titulo="Formação acadêmica"><ul className="space-y-5">{formacao.map((item, i) => <li key={i}>
+            <h3 className="font-bold text-sm">{item.valor.curso}</h3>
+            <p className="text-sm text-muted mt-1">{[item.valor.instituicao, periodo(item.valor.inicio, item.valor.fim)].filter(Boolean).join(" · ")}</p>
+            <Marca campo={item} fontes={fontes} />
+          </li>)}</ul></Secao>}
+          {ficha?.observacoes && <Secao titulo="Anotações do processo"><p className="text-sm whitespace-pre-line leading-relaxed">{ficha.observacoes.valor} <Marca campo={ficha.observacoes} fontes={fontes} /></p></Secao>}
+        </div>
+        <aside className="p-6 max-md:p-5 bg-bg/60 border-l max-md:border-l-0 max-md:border-t border-line space-y-7 min-w-0">
+          <Secao titulo="Informações">
+            <div className="space-y-4">
+              {ficha?.cidade ? <Linha rotulo="Localização" campo={ficha.cidade} fontes={fontes} /> : pessoa?.cidade ? <p className="text-sm">{pessoa.cidade}</p> : null}
+              {ficha?.anosExperiencia && <Linha rotulo="Anos de experiência" campo={ficha.anosExperiencia} fontes={fontes} />}
+              {pessoa?.email && <p className="text-sm break-all"><a className="btn-link" href={`mailto:${pessoa.email}`}>{pessoa.email}</a></p>}
+              {pessoa?.linkedinUrl && <a className="btn-link text-sm block break-all" href={pessoa.linkedinUrl} target="_blank" rel="noreferrer">Perfil no LinkedIn ↗</a>}
+              {!ficha?.cidade && !pessoa?.cidade && !pessoa?.email && !pessoa?.linkedinUrl && !ficha?.anosExperiencia && <Vazio>Contatos e localização ainda não informados.</Vazio>}
+            </div>
+          </Secao>
+          {Boolean(ficha?.competencias?.length) && <Secao titulo="Competências"><ul className="flex flex-wrap gap-2">{ficha?.competencias?.map((item, i) => <li key={i} className="rounded-field border border-accent/15 bg-accent-soft/60 px-2.5 py-1.5 text-xs"><span className="font-semibold">{item.valor}</span> <Marca campo={item} fontes={fontes} /></li>)}</ul></Secao>}
+          {Boolean(ficha?.idiomas?.length) && <Secao titulo="Idiomas"><ListaDeTextos itens={ficha?.idiomas} fontes={fontes} vazio="" /></Secao>}
+          {(ficha?.pretensaoSalarial || ficha?.disponibilidade) && <Secao titulo="Disponibilidade"><div className="space-y-4">
+            {ficha?.pretensaoSalarial && <Linha rotulo="Pretensão salarial" campo={ficha.pretensaoSalarial} fontes={fontes} />}
+            {ficha?.disponibilidade && <Linha rotulo="Disponibilidade" campo={ficha.disponibilidade} fontes={fontes} />}
+          </div></Secao>}
+          {links.length > 0 && <Secao titulo="Links profissionais"><ul className="space-y-3">{links.map((item, i) => <li key={i} className="text-sm break-all"><a href={item.valor} target="_blank" rel="noreferrer" className="btn-link">{item.valor}</a> <Marca campo={item} fontes={fontes} /></li>)}</ul></Secao>}
+        </aside>
       </div>
-
-      <Secao titulo="Links">
-        {links.length ? (
-          <ul className="flex flex-col gap-1.5 text-sm">
-            {links.map((item, i) => (
-              <li key={i} className="flex items-baseline gap-2 flex-wrap">
-                <a href={item.valor} target="_blank" rel="noreferrer" className="btn-link break-all">{item.valor}</a>
-                <Marca campo={item} fontes={fontes} />
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <Vazio>Nenhum endereço registrado.</Vazio>
-        )}
-      </Secao>
-
-      <Secao titulo="Pretensão e disponibilidade">
-        <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
-          <Linha rotulo="Pretensão salarial" campo={ficha?.pretensaoSalarial} fontes={fontes} />
-          <Linha rotulo="Disponibilidade" campo={ficha?.disponibilidade} fontes={fontes} />
-        </div>
-      </Secao>
-
-      <Secao titulo="Observações">
-        {ficha?.observacoes ? (
-          <p className="text-sm">
-            {ficha.observacoes.valor} <Marca campo={ficha.observacoes} fontes={fontes} />
-          </p>
-        ) : (
-          <Vazio>Nada anotado.</Vazio>
-        )}
-      </Secao>
-    </div>
+    </article>
   );
 }
 

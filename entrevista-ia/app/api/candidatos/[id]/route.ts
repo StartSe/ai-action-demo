@@ -9,6 +9,7 @@
 // campo tem porta própria (`PATCH /api/candidatos/[id]/ficha`), porque lá quem decide o que vence é
 // `lib/ficha.ts`.
 import { obter, apagar, atualizar, listarFontesResumidas, validarMudancasCandidato } from "@/lib/candidatos";
+import { lerProgressoPesquisa } from "@/lib/progresso-pesquisa";
 import { origensDaFicha } from "@/lib/ficha";
 import { apagar as apagarResultado } from "@/lib/historico";
 
@@ -22,7 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!candidato) return Response.json(SUMIU, { status: 404 });
   // `origens` sai daqui, e não do navegador: quais chips a ficha mostra ("CV", "Web", "Editado por
   // você") é leitura da D5, e ela mora em `lib/ficha.ts` como todo o resto dela.
-  return Response.json({ candidato, fontes: listarFontesResumidas(id), origens: origensDaFicha(candidato.ficha) });
+  return Response.json({ candidato, progresso: lerProgressoPesquisa(id), fontes: listarFontesResumidas(id), origens: origensDaFicha(candidato.ficha) });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {

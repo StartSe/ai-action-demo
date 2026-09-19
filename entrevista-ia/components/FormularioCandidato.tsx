@@ -1,15 +1,6 @@
 "use client";
-// O formulário de um candidato (US-008), usado em `/candidatos/novo`.
-//
-// É **controlado de fora**, como o da vaga: quem renderiza guarda o estado e recebe cada mudança. O
-// motivo é o mesmo — a US-009 preenche esta ficha com o que a IA leu do currículo, e uma tela que
-// precisa escrever nos campos não pode deixar o estado dentro do componente.
-//
-// O fluxo principal tem duas coisas só: o nome e o currículo. Tudo que existe para a pesquisa na web
-// achar a pessoa certa (e-mail, telefone, cidade, perfil, termo de busca) fica atrás de
-// "Para a pesquisa na web": é o tipo de campo que ninguém preenche no cadastro e todo mundo preenche
-// quando a pesquisa não encontrou quem devia.
-import { Aviso, Dropzone, Field, MaisDetalhes, Row } from "./ui";
+// Cadastro essencial; a pesquisa complementar é oferecida após a leitura do CV.
+import { Aviso, Dropzone, Field } from "./ui";
 
 /** Tudo em texto, como o formulário guarda. O currículo viaja separado: é um `File`, não um campo. */
 export type DadosCandidato = {
@@ -19,6 +10,7 @@ export type DadosCandidato = {
   cidade: string;
   linkedinUrl: string;
   termoBusca: string;
+  anotacao: string;
 };
 
 export const LIMITE_NOME = 120;
@@ -26,7 +18,7 @@ export const LIMITE_EMAIL = 160;
 export const LIMITE_TELEFONE = 40;
 export const LIMITE_CIDADE = 80;
 export const LIMITE_LINKEDIN = 300;
-export const LIMITE_TERMO_BUSCA = 120;
+export const LIMITE_TERMO_BUSCA = 200;
 
 /** O mesmo teto de `lib/curriculo.ts`, aqui em megabytes: a tela recusa antes de subir 20 MB para
  * receber a mesma recusa do servidor depois da espera. */
@@ -34,7 +26,7 @@ export const LIMITE_CV_MB = 5;
 export const TIPOS_CV = ".pdf,.docx,.txt";
 
 export function dadosVaziosCandidato(): DadosCandidato {
-  return { nome: "", email: "", telefone: "", cidade: "", linkedinUrl: "", termoBusca: "" };
+  return { nome: "", email: "", telefone: "", cidade: "", linkedinUrl: "", termoBusca: "", anotacao: "" };
 }
 
 /** O que a tela envia: os campos e o arquivo no mesmo `formData`, porque o currículo vai junto. */
@@ -84,6 +76,8 @@ export function FormularioCandidato({
           value={dados.nome}
           maxLength={LIMITE_NOME}
           placeholder="Bruno Alves"
+          required
+          autoComplete="name"
           autoFocus
           onChange={(e) => mudar({ nome: e.target.value })}
         />
@@ -107,28 +101,13 @@ export function FormularioCandidato({
         )}
       </div>
 
-      <MaisDetalhes titulo="Para a pesquisa na web">
-        <Row>
-          <Field label="E-mail" htmlFor="candidato-email">
-            <input id="candidato-email" className="input" type="email" value={dados.email} maxLength={LIMITE_EMAIL} placeholder="bruno.alves@exemplo.com" onChange={(e) => mudar({ email: e.target.value })} />
-          </Field>
-          <Field label="Telefone" htmlFor="candidato-telefone">
-            <input id="candidato-telefone" className="input" value={dados.telefone} maxLength={LIMITE_TELEFONE} placeholder="(11) 98888-1020" onChange={(e) => mudar({ telefone: e.target.value })} />
-          </Field>
-        </Row>
-
-        <Field label="Cidade" htmlFor="candidato-cidade">
-          <input id="candidato-cidade" className="input" value={dados.cidade} maxLength={LIMITE_CIDADE} placeholder="São Paulo (SP)" onChange={(e) => mudar({ cidade: e.target.value })} />
-        </Field>
-
-        <Field label="Perfil no LinkedIn" htmlFor="candidato-linkedin">
-          <input id="candidato-linkedin" className="input" value={dados.linkedinUrl} maxLength={LIMITE_LINKEDIN} placeholder="linkedin.com/in/nome-da-pessoa" onChange={(e) => mudar({ linkedinUrl: e.target.value })} />
-        </Field>
-
-        <Field label="Termo de busca" htmlFor="candidato-termo" hint="Empresa atual, cargo ou cidade, para achar a pessoa certa.">
-          <input id="candidato-termo" className="input" value={dados.termoBusca} maxLength={LIMITE_TERMO_BUSCA} placeholder="Customer Success · Órbita Software" onChange={(e) => mudar({ termoBusca: e.target.value })} />
-        </Field>
-      </MaisDetalhes>
+      <Field label="LinkedIn (opcional)" htmlFor="candidato-linkedin" hint="Ajuda a encontrar o perfil certo na pesquisa complementar.">
+        <input id="candidato-linkedin" className="input" value={dados.linkedinUrl} maxLength={LIMITE_LINKEDIN} placeholder="linkedin.com/in/nome-da-pessoa" onChange={(e) => mudar({ linkedinUrl: e.target.value })} />
+      </Field>
+      <Field label="Anotação (opcional)" htmlFor="candidato-anotacao" hint="Fica na ficha do candidato como uma observação sua.">
+        <textarea id="candidato-anotacao" className="input min-h-24 resize-y" value={dados.anotacao} maxLength={1500} placeholder="Ex.: indicação da equipe, pontos para conversar ou disponibilidade." onChange={(e) => mudar({ anotacao: e.target.value })} />
+      </Field>
+      <p className="text-sm text-muted mb-5">Depois de salvar, você pode buscar mais informações na web com uma sugestão baseada no nome e no currículo.</p>
 
       {grande && (
         <div className="mb-4">

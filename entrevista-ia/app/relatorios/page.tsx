@@ -42,7 +42,9 @@ function IconeRelatorios() {
 export default function Page() {
   const { status, erro } = useStatus();
 
-  const [relatorio, setRelatorio] = useState<Relatorio | null>(null);
+  const [resultado, setResultado] = useState<{ consulta: string; dados: Relatorio } | null>(null);
+  const [falhaConsulta, setFalhaConsulta] = useState<{ consulta: string; erro: ErroLido } | null>(null);
+  const [tentativa, setTentativa] = useState(0);
   const [vagas, setVagas] = useState<{ id: string; cargo: string }[]>([]);
   const [vagaId, setVagaId] = useState("");
   const [periodo, setPeriodo] = useState("30");
@@ -66,15 +68,26 @@ export default function Page() {
     busca.set("dias", periodo);
   }
   const consulta = busca.toString();
+  const relatorio = resultado?.consulta === consulta ? resultado.dados : null;
+  const erroConsulta = falhaConsulta?.consulta === consulta ? falhaConsulta.erro : null;
 
   // A leitura vai em corrente, e não `await`: a regra `react-hooks/set-state-in-effect` acusa
   // qualquer função que mexa em estado chamada no corpo de um efeito, mesmo assíncrona.
   useEffect(() => {
-    fetch(`/api/relatorios?${consulta}`)
+    let ativo = true;
+    const controller = new AbortController();
+    fetch(`/api/relatorios?${consulta}`, { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(r)))
-      .then((corpo: Relatorio) => setRelatorio(corpo))
-      .catch(async (e) => setErroTela(await lerErro(e)));
-  }, [consulta]);
+      .then((corpo: Relatorio) => {
+        if (ativo) { setResultado({ consulta, dados: corpo }); setFalhaConsulta(null); }
+      })
+      .catch(async (e) => {
+        if (!ativo) return;
+        const erro = await lerErro(e);
+        if (ativo) setFalhaConsulta({ consulta, erro });
+      });
+    return () => { ativo = false; controller.abort(); };
+  }, [consulta, tentativa]);
 
   useEffect(() => {
     fetch("/api/vagas")
@@ -112,22 +125,31 @@ export default function Page() {
       <Topbar marca="E" nome="Entrevistadora IA" area="Recursos Humanos" status={status} erro={erro} usuario={status?.usuario} />
 
       <main className="max-w-[1100px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
-        <h1 className="titulo-painel mb-1.5">Relatórios</h1>
-        <p className="apoio mb-6">Quantos convites viram entrevista e quanto tempo isso leva.</p>
+        <div className="flex items-start justify-between gap-5 flex-wrap mb-7">
+          <div>
+            <h1 className="titulo-painel mb-1.5">Relatórios</h1>
+            <p className="apoio">Acompanhe a evolução das entrevistas e os resultados de cada etapa.</p>
+          </div>
+          {relatorio && !vazio && <div className="flex items-center gap-2 ml-auto no-print">
+            <a className="btn-primary !w-auto" href={`/api/relatorios/exportar?${consulta}`} download>
+              <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5" /></svg>
+              Baixar relatório
+            </a>
+            <details className="relative">
+              <summary className="btn-ghost !p-3 list-none [&::-webkit-details-marker]:hidden" aria-label="Mais opções do relatório" title="Mais opções">
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+              </summary>
+              <div className="absolute right-0 top-full z-20 mt-2 card p-3 w-64 flex flex-col gap-2 shadow-lg">
+                <a className="btn-ghost" href={`/imprimir/relatorio?${consulta}`} target="_blank" rel="noreferrer">Imprimir / salvar PDF</a>
+                <CopyButton texto={() => relatorioParaTexto(relatorio)} />
+                <button type="button" className="btn-ghost" onClick={() => void salvar()} disabled={salvando}>{salvando ? "Salvando..." : "Salvar no histórico"}</button>
+              </div>
+            </details>
+          </div>}
+        </div>
 
         {erroTela && <div className="mb-5"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao} /></div>}
 
-        {relatorio === null ? (
-          <p className="text-muted text-sm">Carregando...</p>
-        ) : vazio ? (
-          <Empty
-            ilustracao={<IconeRelatorios />}
-            titulo="Nada para medir ainda"
-            descricao="Assim que você convidar o primeiro candidato, este é o lugar de acompanhar quantos responderam, em quanto tempo e o que saiu de cada conversa."
-            acaoSecundaria={{ rotulo: "Abrir os relatórios anteriores", url: "/historico" }}
-          />
-        ) : (
-          <>
             <div className="flex items-end gap-3 mb-5 flex-wrap no-print">
               <div className="flex flex-col gap-1.5 min-w-[220px]">
                 <label htmlFor="filtro-vaga" className="text-[13px] font-semibold">Vaga</label>
@@ -160,14 +182,22 @@ export default function Page() {
               )}
             </div>
 
-            <div className="flex items-center gap-2.5 mb-5 flex-wrap no-print max-md:[&>*]:flex-1">
-              <a className="btn-ghost" href={`/api/relatorios/exportar?${consulta}`} download>Exportar planilha</a>
-              <a className="btn-ghost" href={`/imprimir/relatorio?${consulta}`} target="_blank" rel="noreferrer">Imprimir</a>
-              <CopyButton texto={() => relatorioParaTexto(relatorio)} />
-              <button type="button" className="btn-ghost" onClick={() => void salvar()} disabled={salvando}>
-                {salvando ? "Salvando..." : "Salvar este relatório"}
-              </button>
-            </div>
+
+        {erroConsulta ? (
+          <div className="card p-5"><ErrorBox mensagem={erroConsulta.mensagem} acao={erroConsulta.acao} /><button className="btn-ghost mt-3" onClick={() => { setFalhaConsulta(null); setTentativa((n) => n + 1); }}>Tentar novamente</button></div>
+        ) : relatorio === null ? (
+          <p role="status" className="text-muted text-sm">Atualizando métricas deste período...</p>
+        ) : vazio ? (
+          <Empty
+            ilustracao={<IconeRelatorios />}
+            titulo="Nada para medir ainda"
+            descricao="Assim que você convidar o primeiro candidato, este é o lugar de acompanhar quantos responderam, em quanto tempo e o que saiu de cada conversa."
+            acaoSecundaria={{ rotulo: "Escolher vaga e gerar convite", url: "/vagas" }}
+          />
+        ) : (
+          <>
+
+
 
             {salvo?.consulta === consulta && (
               <div className="mb-5 no-print">

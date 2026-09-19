@@ -7,8 +7,10 @@
 // porque o envio por e-mail manda exatamente o mesmo texto.
 //
 // Só é montado enquanto está aberto, então o estado nasce limpo a cada abertura.
+import Link from "next/link";
+import { useDialogo } from "./useDialogo";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Aviso, CopyButton, ErrorBox, lerErro, type ErroLido } from "./ui";
+import { Aviso, CopyButton, ErrorBox, lerErro, useStatus, type ErroLido } from "./ui";
 import type { Convite } from "@/lib/convite";
 
 /** Os mesmos prazos que o servidor aceita (`PRAZOS_VALIDOS`, lib/convite.ts). A duplicação é
@@ -29,13 +31,15 @@ export function DialogoConvite({
   /** Chamado quando o prazo ou o estado da entrevista mudou, para a tela de trás se atualizar. */
   onMudou?: () => void;
 }) {
+  const { status } = useStatus();
   const [convite, setConvite] = useState<Convite | null>(null);
-  const [prazo, setPrazo] = useState(PRAZO_PADRAO);
+  const [prazo, setPrazo] = useState("");
   const [ocupado, setOcupado] = useState(true);
   const [enviando, setEnviando] = useState(false);
   const [recado, setRecado] = useState("");
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);
   const caixaRef = useRef<HTMLDivElement>(null);
+  useDialogo(caixaRef, onFechar);
 
   // `onMudou` entra por referência, e não na lista de dependências: um pai que passe uma função nova
   // a cada render faria o efeito de abertura reenviar o convite de novo a cada render.
@@ -44,20 +48,7 @@ export function DialogoConvite({
     aoMudar.current = onMudou;
   }, [onMudou]);
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onFechar();
-    }
-    function onClickFora(e: MouseEvent) {
-      if (caixaRef.current && !caixaRef.current.contains(e.target as Node)) onFechar();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("mousedown", onClickFora);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("mousedown", onClickFora);
-    };
-  }, [onFechar]);
+
 
   // A abertura vai em corrente, e não `await`: a regra `react-hooks/set-state-in-effect` acusa
   // qualquer função que mexa em estado chamada no corpo de um efeito, mesmo assíncrona.
@@ -85,7 +76,7 @@ export function DialogoConvite({
   /** Trocar o prazo reemite o convite: o link continua o mesmo enquanto ninguém o usou. */
   const trocarPrazo = useCallback(
     async (dias: number) => {
-      setPrazo(dias);
+      setPrazo(String(dias));
       setOcupado(true);
       setErroTela(null);
       setRecado("");
@@ -101,6 +92,7 @@ export function DialogoConvite({
       } catch (e) {
         setErroTela(await lerErro(e));
       } finally {
+        setPrazo("");
         setOcupado(false);
       }
     },
@@ -125,7 +117,9 @@ export function DialogoConvite({
 
   return (
     <div className="fixed inset-0 z-30 bg-black/40 grid place-items-center px-4 py-6 overflow-y-auto" role="presentation">
-      <div ref={caixaRef} role="dialog" aria-modal="true" aria-labelledby="titulo-convite" className="card w-full max-w-[520px] p-7 max-md:p-5">
+      <div ref={caixaRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="titulo-convite" className="card w-full max-w-[520px] p-7 max-md:p-5 max-h-[calc(100dvh-3rem)] overflow-y-auto">
+        <p className="sobretitulo mb-2">Compartilhar entrevista</p>
+        <button type="button" aria-label="Fechar convite" className="btn-link float-right ml-3" onClick={onFechar}>Fechar</button>
         <h2 id="titulo-convite" className="text-xl font-extrabold mb-1.5">
           {convite ? `Convite de ${convite.candidatoNome}` : "Convite do candidato"}
         </h2>
@@ -139,13 +133,17 @@ export function DialogoConvite({
 
         {convite && (
           <div className="flex flex-col gap-4">
+            {status?.demo && (
+              <Aviso tom="warn">A IA ainda está em demonstração. <Link href="/setup#openrouter" className="underline font-semibold">Configure a IA</Link> antes de enviar este convite para uma entrevista real.</Aviso>
+            )}
+            <label htmlFor="link-convite" className="text-sm font-semibold">Link exclusivo do candidato</label>
             <div className="flex items-center gap-2 flex-wrap">
-              <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[220px]">{convite.link}</code>
-              <CopyButton texto={() => convite.link} rotulo="Copiar link" />
+              <input id="link-convite" className="input flex-1 min-w-0" readOnly value={convite.link} onFocus={(evento) => evento.currentTarget.select()} />
+              <CopyButton texto={() => convite.link} rotulo="Copiar link" disabled={ocupado} />
             </div>
 
             <div className="flex items-center gap-2.5 flex-wrap">
-              <CopyButton texto={() => convite.mensagem} rotulo="Copiar convite" />
+              <CopyButton texto={() => convite.mensagem} rotulo="Copiar convite" disabled={ocupado} />
               {convite.podeEnviarPorEmail && (
                 <button type="button" className="btn-ghost !w-auto" disabled={enviando || ocupado} onClick={() => void enviarPorEmail()}>
                   {enviando ? "Enviando..." : "Enviar por e-mail"}
@@ -153,7 +151,7 @@ export function DialogoConvite({
               )}
               <span className="text-muted text-[12.5px]">
                 {convite.candidatoEmail && !convite.podeEnviarPorEmail
-                  ? "Conecte um e-mail em Configurações para enviar daqui."
+                  ? "Copie a mensagem e envie pelo seu e-mail ou WhatsApp."
                   : "A mensagem já explica o que esperar da conversa."}
               </span>
             </div>
@@ -164,7 +162,7 @@ export function DialogoConvite({
             </details>
 
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="convite-prazo" className="text-[13px] font-semibold">O convite vale por</label>
+              <label htmlFor="convite-prazo" className="text-[13px] font-semibold">Renovar validade a partir de hoje</label>
               <select
                 id="convite-prazo"
                 className="input"
@@ -172,13 +170,15 @@ export function DialogoConvite({
                 disabled={ocupado}
                 onChange={(e) => void trocarPrazo(Number(e.target.value))}
               >
+                <option value="">Escolher novo prazo</option>
                 {PRAZOS.map((d) => (
                   <option key={d} value={d}>{d} dias</option>
                 ))}
               </select>
-              <span className="text-[12.5px] text-muted">Vale para uma conversa só; depois do prazo o link deixa de abrir.</span>
+              <span className="text-[12.5px] text-muted">{convite.expiraEm ? `Válido até ${new Date(convite.expiraEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}. ` : ""}Exclusivo para uma conversa com este candidato.</span>
             </div>
 
+            <p className="text-sm text-muted">Depois de compartilhar, acompanhe a resposta em <Link href={`/entrevistas/${entrevistaId}`} className="btn-link">Ver entrevista</Link>.</p>
             {recado && <Aviso tom="ok">{recado}</Aviso>}
 
             <button type="button" className="btn-ghost !w-auto self-start" onClick={onFechar}>Fechar</button>

@@ -8,13 +8,9 @@
 // Quem recarregou a página no meio da conversa entra direto na sala: as boas-vindas são o convite, e
 // quem já aceitou não precisa aceitar de novo.
 //
-// Qual sala é decisão do SERVIDOR (lib/sala-do-candidato.ts): com o agente conversacional conectado,
-// a do nível 1 (components/SalaAgenteCandidato.tsx), que cai sozinha para a do nível 2 quando o widget
-// não carrega; sem ele, a do nível 2 (components/SalaCandidato.tsx) direto.
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AGRADECIMENTO_APOIO, agradecimentoTitulo } from "@/lib/formato";
 import { BoasVindas } from "./BoasVindas";
-import { SalaAgenteCandidato } from "./SalaAgenteCandidato";
 import { SalaCandidato, type PropsSalaCandidato } from "./SalaCandidato";
 import type { Troca, Vaga } from "@/lib/types";
 
@@ -29,7 +25,6 @@ export function EntrevistaCandidato({
   vozLigada,
   retomando = false,
   conversaNoNavegador = false,
-  agente = null,
 }: {
   codigo: string;
   marca: string;
@@ -41,11 +36,11 @@ export function EntrevistaCandidato({
   retomando?: boolean;
   /** Link antigo, sem entrevista guardada: a conversa viaja no corpo de cada turno. */
   conversaNoNavegador?: boolean;
-  /** O agente conversacional desta entrevista (nível 1). Nulo quando a empresa não o conectou. */
-  agente?: { id: string; variaveis: Record<string, string> } | null;
 }) {
   const [fase, setFase] = useState<Fase>(retomando ? "entrevista" : "boas-vindas");
   const [mensagemErro, setMensagemErro] = useState("");
+  const respostasFinais = useRef<Troca[]>([]);
+  const enviandoRef = useRef(false);
   // O toque em "Começar a entrevista" é o gesto que libera o áudio deste navegador; sem ele a sala
   // esperaria um segundo gesto para falar a primeira pergunta, e a tela ficaria muda. Quem chega aqui
   // por uma recarga da página não passou por esse toque, e a sala pede um antes de falar.
@@ -55,6 +50,9 @@ export function EntrevistaCandidato({
   const [porVoz, setPorVoz] = useState(true);
 
   async function onFinalizar(historico: Troca[]) {
+    if (enviandoRef.current) return;
+    enviandoRef.current = true;
+    respostasFinais.current = historico;
     setFase("enviando");
     try {
       const r = await fetch(`/api/entrevista/candidato/${codigo}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ historico }) });
@@ -64,11 +62,11 @@ export function EntrevistaCandidato({
     } catch (err) {
       setMensagemErro(err instanceof Error ? err.message : "Erro inesperado.");
       setFase("erro");
+    } finally {
+      enviandoRef.current = false;
     }
   }
 
-  // As mesmas props servem às duas salas: a do agente carrega a do navegador inteira, para a queda
-  // para o nível 2 não precisar de uma segunda volta ao servidor.
   const propsDaSala: PropsSalaCandidato = {
     codigo,
     cargo: vaga.titulo,
@@ -116,14 +114,16 @@ export function EntrevistaCandidato({
         <div className="card p-7 max-md:p-[22px] text-center">
           <h1 className="text-xl font-extrabold mb-1.5">Não foi possível continuar</h1>
           <p className="text-muted">{mensagemErro}</p>
+          <button type="button" className="btn-primary mt-4" onClick={() => void onFinalizar(respostasFinais.current)}>Tentar enviar novamente</button>
         </div>
-      ) : agente ? (
-        <SalaAgenteCandidato agente={agente.id} variaveis={agente.variaveis} navegador={propsDaSala} onConcluida={() => setFase("concluida")} />
+      ) : fase === "enviando" ? (
+        <p className="card p-7 text-center" role="status">Enviando suas respostas...</p>
+
       ) : (
         <SalaCandidato {...propsDaSala} />
       )}
 
-      {fase === "enviando" && <p className="text-muted text-sm text-center mt-4">Enviando suas respostas...</p>}
+
     </div>
   );
 }

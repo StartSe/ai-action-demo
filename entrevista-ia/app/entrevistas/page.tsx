@@ -41,11 +41,11 @@ type Faixa = "aguardando" | "andamento" | "concluidas" | "decididas" | "encerrad
 type Painel = { itens: Linha[]; contagens: Record<Faixa, number>; total: number };
 
 const ABAS: { valor: Faixa; rotulo: string }[] = [
-  { valor: "aguardando", rotulo: "Aguardando o candidato" },
+  { valor: "aguardando", rotulo: "Aguardando" },
   { valor: "andamento", rotulo: "Em andamento" },
   { valor: "concluidas", rotulo: "Concluídas" },
   { valor: "decididas", rotulo: "Decididas" },
-  { valor: "encerradas", rotulo: "Expiradas e canceladas" },
+  { valor: "encerradas", rotulo: "Encerradas" },
 ];
 
 /** O que dizer quando a aba está vazia mas o app não está: cada espera tem um motivo diferente para
@@ -164,21 +164,19 @@ export default function Page() {
   const colunas: Coluna<Linha>[] = [
     {
       chave: "candidato",
-      titulo: "Candidato",
+      titulo: "Candidato / vaga",
       papel: "titulo",
       render: (l) => (
-        <span className="flex items-center gap-2 flex-wrap">
-          <Link href={`/candidatos/${l.candidatoId}`} className="btn-link">{l.candidatoNome}</Link>
-          {l.exemplo && <Chip nivel="cinza">Exemplo</Chip>}
-        </span>
+        <div className="flex items-center gap-3 min-w-[190px]">
+          <span aria-hidden="true" className="flex items-center justify-center w-10 h-10 shrink-0 rounded-full bg-accent-soft text-accent font-bold text-sm">{l.candidatoNome.trim().split(/\s+/).filter(Boolean).map((n) => n[0]).slice(0, 2).join("")}</span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap"><Link href={`/candidatos/${l.candidatoId}`} className="btn-link !text-ink">{l.candidatoNome}</Link>{l.exemplo && <Chip nivel="cinza">Exemplo</Chip>}</div>
+            <Link href={`/vagas/${l.vagaId}`} className="text-xs text-muted hover:text-accent hover:underline block mt-1">{l.vagaCargo}</Link>
+          </div>
+        </div>
       ),
     },
-    {
-      chave: "vaga",
-      titulo: "Vaga",
-      render: (l) => <Link href={`/vagas/${l.vagaId}`} className="btn-link">{l.vagaCargo}</Link>,
-    },
-    { chave: "situacao", titulo: "Situação", papel: "chip", render: (l) => <ChipSituacao entrevista={l} /> },
+    { chave: "situacao", titulo: "Situação", papel: "chip", render: (l) => <span className="whitespace-nowrap"><ChipSituacao entrevista={l} /></span> },
     {
       chave: "comofoi",
       titulo: "Como foi",
@@ -226,7 +224,7 @@ export default function Page() {
             </button>
           ) : null,
           PODE_CONVIDAR.includes(l.status) ? (
-            <button key="convite" type="button" className="btn-link" onClick={() => setConvite({ entrevistaId: l.id, reenviar: true })}>
+            <button key="convite" type="button" className="btn-ghost !px-3 !py-2 !text-xs" onClick={() => setConvite({ entrevistaId: l.id, reenviar: true })}>
               {rotuloConvite(l)}
             </button>
           ) : null,
@@ -234,16 +232,23 @@ export default function Page() {
             <button key="ligar" type="button" className="btn-link" onClick={() => setLigacao(l)}>Ligar agora</button>
           ) : null,
           VIVAS.includes(l.status) && l.status !== "avaliada" ? (
-            <button key="cancelar" type="button" className="btn-link !text-danger" onClick={() => void cancelarEntrevista(l)}>Cancelar</button>
+            <button key="cancelar" type="button" className="btn-ghost !p-2 !text-danger" title="Cancelar entrevista" aria-label={`Cancelar entrevista de ${l.candidatoNome}`} onClick={() => void cancelarEntrevista(l)}><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><path d="m6 6 12 12"/></svg></button>
           ) : null,
         ].filter(Boolean);
         // Uma entrevista cancelada não tem o que fazer: um traço diz isso melhor que uma célula vazia,
         // porque no celular o rótulo "Ações" aparece sempre.
         if (!acoes.length) return <span className="text-muted">—</span>;
-        return <span className="flex items-center gap-3 flex-wrap">{acoes}</span>;
+        return <span className="flex items-center gap-2 flex-wrap">{acoes}</span>;
       },
     },
   ];
+
+  const colunasVisiveis = colunas.filter((c) => {
+    if (c.chave === "comofoi") return (painel?.itens ?? []).some((l) => l.nivelVoz);
+    if (c.chave === "nota") return faixa === "concluidas" || faixa === "decididas";
+    if (c.chave === "decisao") return faixa === "decididas";
+    return true;
+  });
 
   const filtrando = Boolean(vagaId || busca.trim() || dias !== "tudo");
   const soExemplo = Boolean(painel?.itens.length) && painel?.itens.every((l) => l.exemplo);
@@ -252,7 +257,7 @@ export default function Page() {
     <>
       <Topbar marca="E" nome="Entrevistadora IA" area="Recursos Humanos" status={status} erro={erro} usuario={status?.usuario} />
 
-      <main className="max-w-[980px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
+      <main className="max-w-[1100px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
         <h1 className="titulo-painel mb-1.5">Entrevistas</h1>
         <p className="apoio mb-6">Quem foi convidado, quem já conversou e o que falta decidir.</p>
 
@@ -275,7 +280,7 @@ export default function Page() {
           />
         ) : (
           <>
-            <div className="flex items-center gap-1.5 mb-4 flex-wrap" role="group" aria-label="Filtrar por situação">
+            <div className="flex items-center gap-2 mb-5 flex-wrap" role="group" aria-label="Filtrar por situação">
               {ABAS.map((a) => (
                 <button
                   key={a.valor}
@@ -286,13 +291,13 @@ export default function Page() {
                   }`}
                   onClick={() => setFaixa(a.valor)}
                 >
-                  {a.rotulo} ({painel.contagens[a.valor]})
+                  {a.rotulo} <span className="inline-flex items-center justify-center min-w-5 px-1.5 ml-1.5 rounded-full bg-bg text-xs tabular-nums">{painel.contagens[a.valor]}</span>
                 </button>
               ))}
             </div>
 
-            <div className="flex items-end gap-3 mb-5 flex-wrap">
-              <div className="flex flex-col gap-1.5 min-w-[220px] flex-1 max-w-[320px]">
+            <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,1fr)] max-md:grid-cols-1 gap-4 mb-6 rounded-card border border-line bg-surface p-4">
+              <div className="flex flex-col gap-1.5 min-w-0">
                 <label htmlFor="busca-entrevistas" className="text-[13px] font-semibold">Procurar pelo nome</label>
                 <input
                   id="busca-entrevistas"
@@ -302,7 +307,7 @@ export default function Page() {
                   onChange={(e) => setBusca(e.target.value)}
                 />
               </div>
-              <div className="flex flex-col gap-1.5 min-w-[200px]">
+              <div className="flex flex-col gap-1.5 min-w-0">
                 <label htmlFor="filtro-vaga" className="text-[13px] font-semibold">Vaga</label>
                 <select id="filtro-vaga" className="input" value={vagaId} onChange={(e) => setVagaId(e.target.value)}>
                   <option value="">Todas as vagas</option>
@@ -311,7 +316,7 @@ export default function Page() {
                   ))}
                 </select>
               </div>
-              <div className="flex flex-col gap-1.5 min-w-[170px]">
+              <div className="flex flex-col gap-1.5 min-w-0">
                 <label htmlFor="filtro-periodo" className="text-[13px] font-semibold">Período</label>
                 <select id="filtro-periodo" className="input" value={dias} onChange={(e) => setDias(e.target.value)}>
                   {PERIODOS.map((p) => (
@@ -338,7 +343,10 @@ export default function Page() {
                 )}
               </p>
             ) : (
-              <DataTable colunas={colunas} linhas={painel.itens} />
+              <section>
+                <div className="flex items-center justify-between gap-3 mb-3"><h2 className="text-sm font-bold">{ABAS.find((a) => a.valor === faixa)?.rotulo}</h2><span className="text-xs text-muted">{painel.itens.length} {painel.itens.length === 1 ? "entrevista" : "entrevistas"}</span></div>
+                <DataTable colunas={colunasVisiveis} linhas={painel.itens} />
+              </section>
             )}
           </>
         )}

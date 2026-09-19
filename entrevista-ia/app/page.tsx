@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AvisoExemplo } from "@/components/AvisoExemplo";
-import { Chip, IlustracaoSegmento, Item, Topbar, numero, useStatus } from "@/components/ui";
+import { Chip, ErrorBox, IlustracaoSegmento, Item, Topbar, numero, useStatus } from "@/components/ui";
 import type { Inicio, PendenciaInicio, VagaAbertaInicio } from "@/lib/inicio";
 
 /** "3 convidados · 1 avaliada": só as etapas que têm gente, para um cartão novo não nascer cheio de zeros. */
@@ -38,7 +38,7 @@ function etapas(c: VagaAbertaInicio["candidatos"]): string {
  */
 function Indicador({ indicador, dias }: { indicador: Inicio["indicadores"][number]; dias: number }) {
   const { rotulo, valor, decimais, variacao, janela } = indicador;
-  const cor = variacao === null || variacao === 0 ? "text-muted" : variacao > 0 ? "text-ok" : "text-danger";
+  const cor = "text-muted"; // Uma fila maior não representa, por si só, melhora ou piora.
   const referencia = janela === "agora" ? `${dias} dias atrás` : `${dias} dias anteriores`;
   return (
     <Item>
@@ -128,7 +128,7 @@ function ComeceEm3Passos({ passos }: { passos: Inicio["passos"] }) {
   return (
     <section className="card p-5">
       <h2 className="font-bold text-[15px] mb-1">Comece em 3 passos</h2>
-      <p className="text-[12.5px] text-muted mb-4">Da cultura da empresa à primeira conversa.</p>
+      <p className="text-[12.5px] text-muted mb-4">Da configuração da IA ao link da primeira entrevista.</p>
       <ol className="flex flex-col gap-3.5">
         {passos.map((p, i) => (
           <li key={p.titulo} className="flex items-start gap-3">
@@ -160,12 +160,13 @@ export default function Page() {
   const router = useRouter();
   const [inicio, setInicio] = useState<Inicio | null>(null);
   const atalhoUsado = useRef(false);
+  const [erroInicio, setErroInicio] = useState(false);
 
   function recarregarInicio() {
     return fetch("/api/inicio")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((c: Inicio | null) => setInicio(c))
-      .catch(() => setInicio(null));
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((c: Inicio) => { setInicio(c); setErroInicio(false); })
+      .catch(() => setErroInicio(true));
   }
 
   // O atalho `/?exemplo=1` da suíte (US-025 da PRD): o botão "Testar com um exemplo" de Configurações
@@ -187,14 +188,14 @@ export default function Page() {
         if (captura && c?.vagaId) router.replace(`/vagas/${c.vagaId}?captura=1`);
         else return recarregarInicio();
       })
-      .catch(() => {});
+      .catch(() => setErroInicio(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma única vez ao abrir a página
   }, []);
 
   // Busca inicial em forma de corrente: a regra react-hooks/set-state-in-effect acusa a chamada direta
   // a uma função que mexe em estado no corpo do efeito, mesmo sendo assíncrona.
   useEffect(() => {
-    recarregarInicio().catch(() => setInicio(null));
+    if (new URLSearchParams(location.search).get("exemplo") !== "1") void recarregarInicio();
   }, []);
 
   const vazio = inicio?.vazio ?? true;
@@ -220,17 +221,20 @@ export default function Page() {
       <div className="max-w-[1400px] mx-auto px-8 pt-7 max-md:px-4 max-md:pt-5">
         <div className="flex items-start justify-between gap-4 max-md:flex-col max-md:gap-3">
           <div>
-            <h1 className="titulo-painel mb-1.5">Início</h1>
+            <p className="sobretitulo mb-2">Seu painel de recrutamento</p>
+            <h1 className="titulo-painel mb-1.5">Da entrevista à decisão</h1>
             <p className="apoio">Onde cada candidato está e o que espera uma decisão sua.</p>
           </div>
-          <Link href="/vagas/nova" className="btn-primary !w-auto shrink-0 max-md:!w-full">Abrir vaga</Link>
+          <div className="flex gap-3 flex-wrap max-md:w-full"><Link href="/relatorios" className="btn-ghost max-md:flex-1">Ver métricas</Link><Link href="/vagas/nova" className="btn-primary !w-auto shrink-0 max-md:flex-1">Abrir vaga</Link></div>
         </div>
       </div>
 
       <main className="grid grid-cols-[minmax(0,1fr)_320px] max-lg:grid-cols-1 gap-6 px-8 pt-6 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">
         <div className="flex flex-col gap-6">
-          {inicio === null ? (
-            <p className="text-muted text-sm">Carregando...</p>
+          {erroInicio ? (
+            <div className="card p-5"><ErrorBox mensagem="Não foi possível carregar seu painel." /><button className="btn-ghost mt-3" onClick={() => { setErroInicio(false); void recarregarInicio(); }}>Tentar novamente</button></div>
+          ) : inicio === null ? (
+            <div role="status" className="card p-6"><p className="text-muted text-sm mb-4">Carregando seu painel...</p><div className="skeleton !h-20" /></div>
           ) : vazio ? (
             // Nada cadastrado ainda: quatro zeros e três listas vazias não diriam nada a quem ainda vai
             // abrir a primeira vaga. Os três passos são o estado vazio desta tela, e é aqui que a
@@ -274,6 +278,18 @@ export default function Page() {
         </div>
 
         <aside className="flex flex-col gap-6">
+          <section className="card p-6 bg-accent-soft border-accent/15">
+            <span className="sobretitulo">Próxima entrevista</span>
+            <h2 className="text-xl font-extrabold mt-2 mb-2">Gere um link para o candidato</h2>
+            <p className="text-sm text-accent-ink mb-5">Escolha uma vaga e adicione a pessoa. O link exclusivo fica pronto para copiar e compartilhar.</p>
+            <Link href={inicio && inicio.totalVagasAbertas > 0 ? "/vagas" : "/vagas/nova"} className="btn-primary">{inicio && inicio.totalVagasAbertas > 0 ? "Escolher vaga e gerar link" : "Criar minha primeira vaga"}</Link>
+            <p className="text-xs text-muted mt-3">Um link por candidato. Acompanhe a resposta em Entrevistas.</p>
+          </section>
+          <section className="card p-5">
+            <h2 className="font-bold mb-2">Acompanhe os resultados</h2>
+            <p className="text-sm text-muted mb-3">Veja a taxa de conclusão, o tempo de resposta e os pareceres por vaga e período.</p>
+            <Link href="/relatorios" className="btn-link">Explorar métricas →</Link>
+          </section>
           {inicio !== null && !vazio && faltaAlgo && <ComeceEm3Passos passos={inicio.passos} />}
         </aside>
       </main>

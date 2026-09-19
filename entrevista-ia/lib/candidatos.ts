@@ -381,7 +381,7 @@ export const LIMITE_EMAIL = 160;
 export const LIMITE_TELEFONE = 40;
 export const LIMITE_CIDADE = 80;
 export const LIMITE_LINKEDIN = 300;
-export const LIMITE_TERMO_BUSCA = 120;
+export const LIMITE_TERMO_BUSCA = 200;
 
 /** O cadastro completo (`POST`): o nome sempre volta preenchido. */
 export type ValidacaoCandidato = { ok: true; campos: CamposCandidato & { nome: string } } | { ok: false; erro: string };

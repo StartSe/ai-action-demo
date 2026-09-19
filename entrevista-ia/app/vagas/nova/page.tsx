@@ -56,7 +56,8 @@ export default function Page() {
     try {
       const r = await fetch("/api/vagas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpoDaVaga(dados)) });
       if (!r.ok) throw r;
-      router.push("/vagas");
+      const { vaga } = await r.json();
+      router.push(`/vagas/${vaga.id}`);
     } catch (e) {
       setFalha((await lerErro(e)).mensagem);
       setSalvando(false);

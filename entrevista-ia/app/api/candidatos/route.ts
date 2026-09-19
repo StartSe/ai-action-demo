@@ -12,7 +12,7 @@
 // resposta traz a frase que oferece "Ler o currículo de novo".
 import { atualizar, criar, validarCandidato } from "@/lib/candidatos";
 import { lerCurriculo } from "@/lib/curriculo";
-import { fichaDoCurriculo } from "@/lib/ficha";
+import { editarFicha, fichaDoCurriculo } from "@/lib/ficha";
 import { listarCandidatosNoPainel } from "@/lib/painel";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +40,9 @@ export async function POST(req: Request) {
   });
   if (!validacao.ok) return Response.json({ error: validacao.erro }, { status: 400 });
 
+  const anotacao = String(form.get("anotacao") ?? "").trim();
+  if (anotacao.length > 1500) return Response.json({ error: "A anotação deve ter até 1.500 caracteres." }, { status: 400 });
+
   const arquivo = form.get("curriculo");
   let curriculo: { cvNome: string; cvTipo: string; cvTexto: string; cvArquivo: Uint8Array } | undefined;
   let aviso: string | undefined;
@@ -63,7 +66,6 @@ export async function POST(req: Request) {
   const daFicha = await fichaDoCurriculo({ candidatoId: candidato.id, nome: candidato.nome, cvTexto: curriculo?.cvTexto ?? "" });
   // O aviso do arquivo (não deu para ler o texto) vem primeiro: sem texto não havia ficha para tentar.
   const recado = aviso || daFicha.aviso;
-  if (!daFicha.ficha) return Response.json({ candidato, aviso: recado });
-
-  return Response.json({ candidato: atualizar(candidato.id, { ficha: daFicha.ficha }) ?? candidato, aviso: recado });
+  const ficha = anotacao ? editarFicha(daFicha.ficha ?? undefined, { observacoes: anotacao }) : daFicha.ficha;
+  return Response.json({ candidato: ficha ? atualizar(candidato.id, { ficha }) ?? candidato : candidato, aviso: recado });
 }

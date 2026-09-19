@@ -41,13 +41,33 @@ export function BoasVindas({
   const [ouviu, setOuviu] = useState("");
   const [erro, setErro] = useState("");
   const escutaRef = useRef<SpeechRecognition | null>(null);
+  const abrindoRef = useRef(false);
+  const prazoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // O que já foi transcrito, para o `onend` decidir sem depender do estado congelado no momento em que
   // os manipuladores da escuta foram criados.
   const ouviuRef = useRef("");
 
   // A escuta continua rodando depois que a tela sai: sem isto, o microfone fica aberto durante a
   // conversa inteira e o navegador mostra o ponto vermelho o tempo todo.
-  useEffect(() => () => escutaRef.current?.abort(), []);
+  function pararTeste() {
+    if (prazoRef.current) clearTimeout(prazoRef.current);
+    const escuta = escutaRef.current;
+    escutaRef.current = null;
+    if (!escuta) return;
+    escuta.onstart = null;
+    escuta.onresult = null;
+    escuta.onerror = null;
+    escuta.onend = null;
+    try { escuta.abort(); } catch { /* O teste já terminou. */ }
+  }
+
+  useEffect(() => pararTeste, []);
+
+  function entrar(porVoz: boolean) {
+    pararTeste();
+    liberarAudio();
+    onPronto({ porVoz });
+  }
 
   /** Libera o áudio deste navegador dentro do gesto do usuário, para a primeira pergunta ser falada. */
   function liberarAudio() {
@@ -59,6 +79,8 @@ export function BoasVindas({
   }
 
   function testarMicrofone() {
+    pararTeste();
+    setFase("pedindo");
     ouviuRef.current = "";
     setOuviu("");
     const Escuta = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -72,6 +94,10 @@ export function BoasVindas({
     escuta.interimResults = true;
     escuta.maxAlternatives = 1;
     escutaRef.current = escuta;
+    prazoRef.current = setTimeout(() => {
+      pararTeste();
+      setFase("sem-escuta");
+    }, 12000);
     escuta.onstart = () => setFase("ouvindo");
     escuta.onresult = (evento) => {
       let texto = "";
@@ -81,26 +107,33 @@ export function BoasVindas({
       ouviuRef.current = limpo;
       setOuviu(limpo);
       if (evento.results[evento.results.length - 1].isFinal) {
-        escuta.stop();
+        pararTeste();
         setFase("ouviu");
       }
     };
     escuta.onerror = (evento) => {
       // "no-speech" é ficar em silêncio, e silêncio não é defeito: a tela continua oferecendo o teste.
       if (evento.error === "no-speech" || evento.error === "aborted") return;
+      pararTeste();
       setFase(evento.error === "not-allowed" || evento.error === "service-not-allowed" ? "sem-permissao" : "sem-escuta");
     };
     // A escuta se encerra sozinha depois de alguns segundos de silêncio: quem falou vê o resultado,
     // quem não falou volta ao botão em vez de ficar num "estamos ouvindo..." que já acabou.
-    escuta.onend = () => setFase((atual) => (atual === "ouvindo" ? (ouviuRef.current ? "ouviu" : "convite") : atual));
+    escuta.onend = () => {
+      pararTeste();
+      setFase((atual) => (atual === "ouvindo" || atual === "pedindo" ? (ouviuRef.current ? "ouviu" : "convite") : atual));
+    };
     try {
       escuta.start();
     } catch {
+      pararTeste();
       setFase("sem-escuta");
     }
   }
 
-  async function comecar() {
+  async function comecar(porVoz: boolean) {
+    if (abrindoRef.current) return;
+    abrindoRef.current = true;
     setErro("");
     setFase("pedindo");
     liberarAudio();
@@ -116,8 +149,11 @@ export function BoasVindas({
       setErro("Não foi possível começar a entrevista agora. Confira a sua conexão e tente de novo.");
       setFase("convite");
       return;
+    } finally {
+      abrindoRef.current = false;
     }
-    testarMicrofone();
+    if (porVoz) testarMicrofone();
+    else entrar(false);
   }
 
   const cabecalho = (
@@ -140,11 +176,11 @@ export function BoasVindas({
         <ul className="flex flex-col gap-2 mb-5 text-[14.5px]">
           <li className="flex gap-2.5">
             <span aria-hidden="true" className="w-4 shrink-0">1.</span>
-            <span>Voc&ecirc; fala pelo microfone, como falaria numa conversa por v&iacute;deo.</span>
+            <span>Toque para gravar sua resposta e toque novamente para parar. Não precisa segurar.</span>
           </li>
           <li className="flex gap-2.5">
             <span aria-hidden="true" className="w-4 shrink-0">2.</span>
-            <span>A entrevistadora responde em voz alta e segue com a pr&oacute;xima pergunta.</span>
+            <span>Revise o texto e envie quando estiver pronto. A entrevistadora segue com a próxima pergunta.</span>
           </li>
           <li className="flex gap-2.5">
             <span aria-hidden="true" className="w-4 shrink-0">3.</span>
@@ -164,9 +200,14 @@ export function BoasVindas({
         )}
 
         {(fase === "convite" || fase === "pedindo") && (
-          <button type="button" className="btn-primary" disabled={fase === "pedindo"} onClick={comecar}>
-            {fase === "pedindo" ? "Preparando..." : "Começar a entrevista"}
-          </button>
+          <div className="flex flex-col gap-3">
+            <button type="button" className="btn-primary" disabled={fase === "pedindo"} onClick={() => void comecar(true)}>
+              {fase === "pedindo" ? "Preparando..." : "Testar microfone e começar"}
+            </button>
+            <button type="button" className="btn-link text-sm" disabled={fase === "pedindo"} onClick={() => void comecar(false)}>
+              Começar por escrito
+            </button>
+          </div>
         )}
 
         {(fase === "ouvindo" || fase === "ouviu") && (
@@ -178,11 +219,11 @@ export function BoasVindas({
             <p className="px-3.5 py-3 mb-4 rounded-field bg-bg text-[14.5px] min-h-[46px]" aria-live="polite">
               {ouviu || <span className="text-muted">Falta voc&ecirc; falar...</span>}
             </p>
-            <button type="button" className="btn-primary" onClick={() => onPronto({ porVoz: true })}>
+            <button type="button" className="btn-primary" onClick={() => entrar(true)}>
               Entrar na conversa
             </button>
             <p className="text-center mt-3">
-              <button type="button" className="btn-link text-[13.5px]" onClick={() => onPronto({ porVoz: false })}>
+              <button type="button" className="btn-link text-[13.5px]" onClick={() => entrar(false)}>
                 Prefiro digitar
               </button>
             </p>
@@ -196,7 +237,7 @@ export function BoasVindas({
               Este navegador n&atilde;o consegue escutar a sua voz. Voc&ecirc; pode responder digitando, do mesmo jeito, ou abrir este mesmo endere&ccedil;o no Chrome
               para conversar falando.
             </p>
-            <button type="button" className="btn-primary" onClick={() => onPronto({ porVoz: false })}>
+            <button type="button" className="btn-primary" onClick={() => entrar(false)}>
               Come&ccedil;ar por escrito
             </button>
           </div>
@@ -212,7 +253,7 @@ export function BoasVindas({
               Testar o microfone de novo
             </button>
             <p className="text-center mt-3">
-              <button type="button" className="btn-link text-[13.5px]" onClick={() => onPronto({ porVoz: false })}>
+              <button type="button" className="btn-link text-[13.5px]" onClick={() => entrar(false)}>
                 Prefiro digitar
               </button>
             </p>

@@ -12,6 +12,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { DialogoAtribuirVaga } from "@/components/DialogoAtribuirVaga";
+import { DadosEncontrados } from "@/components/DadosEncontrados";
+import { PesquisaComplementar } from "@/components/PesquisaComplementar";
 import { DialogoConvite } from "@/components/DialogoConvite";
 import { FichaCandidato, type FonteNaTela } from "@/components/FichaCandidato";
 import { ChipSituacao, NotaDaEntrevista, PODE_CONVIDAR, ROTULO_DECISAO, VIVAS, esperaDoParecer, rotuloConvite, type EntrevistaNaTabela } from "@/components/RotulosEntrevista";
@@ -89,13 +91,13 @@ export default function Page() {
   const [entrevistas, setEntrevistas] = useState<EntrevistaNaTabela[] | null>(null);
   const [editando, setEditando] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [revisando, setRevisando] = useState(false);
   const [erroFicha, setErroFicha] = useState("");
   const [atribuindo, setAtribuindo] = useState(false);
   // O convite aberto na tela: `reenviar` diz se abrir já estende o prazo ("Reenviar convite") ou só
   // mostra o link que acabou de nascer com a atribuição.
   const [convite, setConvite] = useState<{ entrevistaId: string; reenviar: boolean } | null>(null);
   const [recado, setRecado] = useState("");
-  const [aviso, setAviso] = useState<ErroLido | null>(null);
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);
 
   const aplicar = useCallback((corpo: { candidato: CandidatoDaPagina; fontes?: FonteNaTela[]; origens?: OrigemCampo[] }) => {
@@ -150,20 +152,6 @@ export default function Page() {
     return () => clearInterval(relogio);
   }, [correndo, id, aplicar]);
 
-  async function pesquisar() {
-    setAviso(null);
-    setErroTela(null);
-    try {
-      const r = await fetch(`/api/candidatos/${id}/pesquisar`, { method: "POST" });
-      if (!r.ok) throw r;
-      const corpo = await r.json();
-      setCandidato(corpo.candidato);
-      if (corpo.aviso) setAviso({ mensagem: corpo.aviso, acao: corpo.acao });
-    } catch (e) {
-      setErroTela(await lerErro(e));
-    }
-  }
-
   async function salvarFicha(campos: EdicaoFicha) {
     if (!Object.keys(campos).length) {
       setEditando(false);
@@ -185,14 +173,19 @@ export default function Page() {
   }
 
   async function decidirIdentidade(escolha: number | null) {
+    if (revisando) return;
+    setRevisando(true);
     setErroTela(null);
     try {
       const r = await fetch(`/api/candidatos/${id}/identidade`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ escolha }) });
       if (!r.ok) throw r;
       setRecado(escolha === null ? "Descartamos o que a pesquisa tinha encontrado." : "Pronto: a ficha agora tem também o que encontramos na web.");
       await carregar();
+      if (escolha !== null) requestAnimationFrame(() => document.getElementById("curriculo-digital")?.scrollIntoView({ behavior: "smooth" }));
     } catch (e) {
       setErroTela(await lerErro(e));
+    } finally {
+      setRevisando(false);
     }
   }
 
@@ -226,6 +219,19 @@ export default function Page() {
   const ficha = candidato?.ficha;
   const pendente = ficha?.web;
   const precisaEscolher = Boolean(candidato && !candidato.identidadeConfirmada && pendente?.identidades.length);
+  useEffect(() => {
+    if (!precisaEscolher) return;
+    const direcionar = () => {
+      if (window.location.hash !== "#dados-encontrados") return;
+      const secao = document.getElementById("dados-encontrados");
+      secao?.scrollIntoView({ behavior: "smooth" });
+      secao?.focus({ preventScroll: true });
+    };
+    direcionar();
+    window.addEventListener("hashchange", direcionar);
+    return () => window.removeEventListener("hashchange", direcionar);
+  }, [precisaEscolher]);
+
   const divergencias = ficha?.divergencias ?? [];
   const jaEm = (entrevistas ?? []).filter((e) => VIVAS.includes(e.status)).map((e) => e.vagaId);
   const cabecalho = [ficha?.cargoAtual?.valor, ficha?.empresaAtual?.valor].filter(Boolean).join(" · ");
@@ -269,7 +275,7 @@ export default function Page() {
     <>
       <Topbar marca="E" nome="Entrevistadora IA" area="Recursos Humanos" status={status} erro={erro} usuario={status?.usuario} />
 
-      <main className="max-w-[980px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
+      <main className="max-w-[1180px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
         <Link href="/candidatos" className="btn-link text-[13px]">← Candidatos</Link>
 
         {erroTela && <div className="mt-4"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao ?? { rotulo: "Voltar para os candidatos", url: "/candidatos" }} /></div>}
@@ -288,36 +294,41 @@ export default function Page() {
                   <span className="text-muted text-[12.5px]">{frasePesquisa(candidato)}</span>
                 </div>
               </div>
-              <button type="button" className="btn-primary !w-auto shrink-0 max-md:!w-full" onClick={() => setAtribuindo(true)}>
+              <div className="flex items-center gap-2 shrink-0 max-md:w-full">
+                <button type="button" className="btn-ghost !w-auto !p-3" aria-label="Editar ficha" title="Editar ficha" disabled={editando} onClick={() => { setErroFicha(""); setEditando(true); requestAnimationFrame(() => document.getElementById("curriculo-digital")?.scrollIntoView({ block: "start" })); }}>
+                  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m16 3 5 5-12 12-6 1 1-6Z"/><path d="m14 5 5 5"/></svg>
+                </button>
+                <button type="button" className="btn-ghost !w-auto !p-3 text-danger" aria-label="Excluir candidato" title="Excluir candidato" onClick={() => void apagar()}>
+                  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg>
+                </button>
+              <button type="button" className="btn-primary !w-auto max-md:flex-1 max-md:!px-3" onClick={() => setAtribuindo(true)}>
                 Atribuir a uma vaga
               </button>
+              </div>
             </div>
 
             <div className="flex items-center gap-4 flex-wrap mb-5">
-              {!editando && <button type="button" className="btn-link" onClick={() => { setErroFicha(""); setEditando(true); }}>Editar ficha</button>}
-              <button type="button" className="btn-link" disabled={correndo} onClick={() => void pesquisar()}>
-                {correndo ? "Pesquisando..." : candidato.pesquisaStatus === "nao_pedida" ? "Pesquisar na web" : "Pesquisar de novo"}
-              </button>
               {candidato.cvNome && (
                 <a href={`/api/candidatos/${id}/cv`} target="_blank" rel="noreferrer" className="btn-link">Abrir currículo</a>
               )}
-              <button type="button" className="btn-link !text-danger" onClick={() => void apagar()}>Apagar candidato</button>
             </div>
 
+            <PesquisaComplementar candidato={candidato} correndo={correndo} aoPesquisar={() => { void fetch(`/api/candidatos/${id}`).then((r) => r.ok ? r.json() : Promise.reject(r)).then(aplicar).catch(() => {}); }} />
             {recado && <div className="mb-5"><Aviso tom="ok">{recado}</Aviso></div>}
-            {aviso && <div className="mb-5"><Aviso acao={aviso.acao}>{aviso.mensagem}</Aviso></div>}
 
             {precisaEscolher && pendente && (
-              <section className="card p-5 mb-5">
-                <h2 className="font-extrabold text-[17px] mb-1">Confirme quem é a pessoa</h2>
+              <section id="dados-encontrados" tabIndex={-1} className="card p-6 max-md:p-5 mb-5 scroll-mt-6 border-accent/30">
+                <h2 className="font-extrabold text-xl mb-1">Revise os dados encontrados</h2>
                 <p className="apoio mb-4">
-                  A busca trouxe mais de uma pessoa com esse nome. Nada disso entra na ficha — nem nas perguntas da entrevista — antes de você dizer quem é.
+                  Confira as informações e as fontes antes de atualizar a ficha. Seus dados atuais e anotações são preservados; diferenças em relação ao currículo ficam sinalizadas para revisão.
                 </p>
                 {pendente.exemplo && (
                   <div className="mb-4">
                     <Aviso>Este resultado é um exemplo, para você ver como a tela funciona. Ele não foi lido de nenhuma página de verdade.</Aviso>
                   </div>
                 )}
+                <DadosEncontrados ficha={pendente.ficha} fontes={fontes} />
+                {pendente.identidades.length > 1 && <p className="text-sm font-semibold mb-3">Há mais de uma identidade possível. Escolha o perfil correto; apenas as fontes compatíveis serão aplicadas.</p>}
                 <div className="flex flex-col gap-3 mb-4">
                   {pendente.identidades.map((pessoa, i) => (
                     <div key={i} className="border border-line rounded-card p-4">
@@ -330,11 +341,11 @@ export default function Page() {
                       )}
                       {pessoa.bate.length > 0 && <p className="text-[12.5px]"><strong>Bate com:</strong> {pessoa.bate.join("; ")}</p>}
                       {pessoa.naoBate.length > 0 && <p className="text-[12.5px]"><strong>Não bate com:</strong> {pessoa.naoBate.join("; ")}</p>}
-                      <button type="button" className="btn-ghost !w-auto mt-3 max-md:!w-full" onClick={() => void decidirIdentidade(i)}>É esta pessoa</button>
+                      <button type="button" className="btn-ghost !w-auto mt-3 max-md:!w-full" disabled={revisando} onClick={() => void decidirIdentidade(i)}>{pendente.identidades.length > 1 ? "Confirmar esta pessoa e atualizar ficha" : "Atualizar ficha com estes dados"}</button>
                     </div>
                   ))}
                 </div>
-                <button type="button" className="btn-link" onClick={() => void decidirIdentidade(null)}>Nenhuma destas</button>
+                <button type="button" className="btn-link" disabled={revisando} onClick={() => void decidirIdentidade(null)}>Descartar resultados e manter a ficha</button>
               </section>
             )}
 
@@ -372,7 +383,9 @@ export default function Page() {
               </section>
             )}
 
+            <div id="curriculo-digital" className="scroll-mt-6" />
             <FichaCandidato
+              pessoa={candidato}
               ficha={ficha}
               fontes={fontes}
               editando={editando}

@@ -8,7 +8,9 @@ const RAIZ = process.cwd();
 export function resolve(especificador, contexto, proximo) {
   // O atalho `@/` do tsconfig aponta para a raiz do app.
   if (especificador.startsWith("@/")) {
-    return proximo(pathToFileURL(path.join(RAIZ, especificador.slice(2))).href, contexto);
+    const base = path.join(RAIZ, especificador.slice(2));
+    const arquivo = !path.extname(base) && existsSync(`${base}.ts`) ? `${base}.ts` : base;
+    return proximo(pathToFileURL(arquivo).href, contexto);
   }
 
   // Import relativo sem extensão: `./candidatos` → `./candidatos.ts`.

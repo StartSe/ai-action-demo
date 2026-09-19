@@ -45,17 +45,6 @@ function IconeVagas() {
   );
 }
 
-/** "3 convidados · 1 avaliada": só as etapas que têm gente, para um cartão novo não nascer cheio de zeros. */
-function etapas(c: VagaLista["candidatos"]): string {
-  if (!c.total) return "Nenhum candidato ainda";
-  const partes: string[] = [];
-  if (c.convidados) partes.push(`${c.convidados} ${c.convidados === 1 ? "convidado" : "convidados"}`);
-  if (c.emAndamento) partes.push(`${c.emAndamento} conversando agora`);
-  if (c.concluidas) partes.push(`${c.concluidas} ${c.concluidas === 1 ? "concluída" : "concluídas"}`);
-  if (c.avaliadas) partes.push(`${c.avaliadas} ${c.avaliadas === 1 ? "avaliada" : "avaliadas"}`);
-  return partes.join(" · ");
-}
-
 /** A linha de contexto do cartão: só o que a vaga realmente informou. */
 function contexto(v: VagaLista): string {
   return [v.area, rotuloSenioridade(v.senioridade), rotuloModelo(v.modelo), v.local].filter(Boolean).join(" · ");
@@ -116,13 +105,13 @@ export default function Page() {
     <>
       <Topbar marca="E" nome="Entrevistadora IA" area="Recursos Humanos" status={status} erro={erro} usuario={status?.usuario} />
 
-      <main className="max-w-[980px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
+      <main className="max-w-[1180px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
         <div className="flex items-start justify-between gap-4 mb-6 max-md:flex-col max-md:gap-3">
           <div>
             <h1 className="titulo-painel mb-1.5">Vagas</h1>
-            <p className="apoio">O que a vaga exige, para a entrevista perguntar o que importa.</p>
+            <p className="apoio">Organize seus processos, convide candidatos e acompanhe cada etapa.</p>
           </div>
-          <Link href="/vagas/nova" className="btn-primary !w-auto shrink-0 max-md:!w-full">Abrir vaga</Link>
+          <Link href="/vagas/nova" className="btn-primary !w-auto shrink-0 max-md:!w-full">+ Nova vaga</Link>
         </div>
 
         {erroTela && <div className="mb-5"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao} /></div>}
@@ -139,7 +128,7 @@ export default function Page() {
                 }`}
                 onClick={() => setFiltro(f.valor)}
               >
-                {f.rotulo}
+                {f.rotulo} <span className="ml-1 opacity-70">{itens?.filter((v) => f.valor === "todas" || v.status === f.valor).length}</span>
               </button>
             ))}
           </div>
@@ -167,12 +156,12 @@ export default function Page() {
             {filtro === "encerrada" ? "Nenhuma vaga encerrada ainda." : "Nenhuma vaga aberta agora."}
           </p>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 max-md:grid-cols-1 gap-5">
             {visiveis.map((v) => (
-              <article key={v.id} className="card px-5 py-4">
+              <article key={v.id} className="card p-6 max-md:p-5 flex flex-col hover:border-accent/30 transition-colors">
                 <div className="flex items-start justify-between gap-3 mb-1.5 max-md:flex-col max-md:gap-1.5">
                   <div className="min-w-0">
-                    <h2 className="font-bold text-[16px] truncate">
+                    <h2 className="font-bold text-xl leading-snug break-words">
                       <Link href={`/vagas/${v.id}`} className="hover:underline">{v.cargo}</Link>
                     </h2>
                     {contexto(v) && <p className="text-muted text-sm mt-0.5">{contexto(v)}</p>}
@@ -183,13 +172,21 @@ export default function Page() {
                   </div>
                 </div>
 
-                <p className="text-[13px] font-semibold mb-1">{faixaSalarial(v)}</p>
-                <p className="text-[13px] text-muted mb-3">{etapas(v.candidatos)} · atualizada em {data(v.atualizadoEm)}</p>
-
-                <div className="flex items-center gap-4 flex-wrap">
-                  <Link href={`/vagas/${v.id}`} className="btn-link">Abrir a vaga</Link>
-                  <Link href={`/vagas/${v.id}/editar`} className="btn-link">Editar</Link>
-                  <button type="button" className="btn-link !text-danger" onClick={() => apagar(v)}>Apagar</button>
+                <p className="text-sm font-semibold mt-3">{faixaSalarial(v)}</p>
+                <dl className="grid grid-cols-3 gap-3 rounded-field bg-bg p-4 mt-5 mb-5">
+                  {[{ rotulo: "Candidatos", valor: v.candidatos.total }, { rotulo: "Em entrevista", valor: v.candidatos.emAndamento }, { rotulo: "Pareceres", valor: v.candidatos.avaliadas }].map((m) => <div key={m.rotulo}><dd className="text-2xl font-extrabold tabular-nums">{m.valor}</dd><dt className="text-xs text-muted mt-1">{m.rotulo}</dt></div>)}
+                </dl>
+                <p className="text-xs text-muted mb-4">Atualizada em {data(v.atualizadoEm)}</p>
+                <div className="flex flex-wrap items-center justify-between gap-3 mt-auto border-t border-line pt-4">
+                  <Link href={`/vagas/${v.id}`} className="btn-primary !w-auto">{v.status === "encerrada" || v.candidatos.total ? "Acompanhar vaga →" : "Convidar candidato →"}</Link>
+                  <div className="flex items-center gap-2 shrink-0 ml-auto">
+                    <Link href={`/vagas/${v.id}/editar`} className="btn-ghost !w-auto !p-3" aria-label={`Editar vaga ${v.cargo}`} title="Editar vaga">
+                      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m16 3 5 5-12 12-6 1 1-6Z"/><path d="m14 5 5 5"/></svg>
+                    </Link>
+                    <button type="button" className="btn-ghost !w-auto !p-3 !text-danger" aria-label={`Excluir vaga ${v.cargo}`} title="Excluir vaga" onClick={() => apagar(v)}>
+                      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg>
+                    </button>
+                  </div>
                 </div>
               </article>
             ))}

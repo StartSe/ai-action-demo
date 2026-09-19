@@ -13,40 +13,19 @@ import { Chip, DataTable, Item, data, numero, type Coluna } from "@/components/u
 import { horas, periodoEmPalavras, porcentagem } from "@/lib/relatorio-texto";
 import type { Fatia, LinhaRelatorio, Relatorio } from "@/lib/relatorios";
 
-/** Uma barra horizontal em SVG. A `rect` usa largura em porcentagem, então a barra acompanha a
- * coluna em qualquer largura de tela sem nenhuma medição em JavaScript — e a cor vem de
- * `currentColor`, para a paleta do app continuar sendo a única fonte de cor. */
-function Barra({ fracao, tom = "text-accent" }: { fracao: number; tom?: string }) {
-  const largura = Math.max(0, Math.min(1, fracao)) * 100;
-  return (
-    <svg width="100%" height="12" viewBox="0 0 100 12" preserveAspectRatio="none" aria-hidden="true" className={tom}>
-      <rect x="0" y="0" width="100" height="12" rx="3" className="text-line" fill="currentColor" opacity="0.35" />
-      {largura > 0 && <rect x="0" y="0" width={largura} height="12" rx="3" fill="currentColor" />}
-    </svg>
-  );
-}
+const CORES = ["#74349b", "#9760b3", "#397f91", "#328566", "#b27730"];
 
-/** Uma lista de barras com rótulo à esquerda e número à direita — o desenho do funil e das duas
- * distribuições. O denominador é sempre o MAIOR valor da lista, e não o total: com o total, um funil
- * em que quase todo mundo concluiu ficaria com cinco barras quase iguais. */
+/** Dimensões em CSS mantêm as pontas arredondadas sem distorcer o gráfico. */
 function Barras({ linhas, maximo, sufixo }: { linhas: { rotulo: string; valor: number }[]; maximo: number; sufixo?: (l: { valor: number }) => string }) {
   const teto = Math.max(maximo, 1);
-  return (
-    <ul className="flex flex-col gap-2.5">
-      {linhas.map((l) => (
-        <li key={l.rotulo} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
-          <span className="text-[13px] font-semibold truncate">{l.rotulo}</span>
-          <span className="text-[13px] text-muted whitespace-nowrap">
-            {numero(l.valor)}
-            {sufixo ? ` · ${sufixo(l)}` : ""}
-          </span>
-          <span className="col-span-2">
-            <Barra fracao={l.valor / teto} />
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
+  return <ol className="space-y-5">
+    {linhas.map((l, i) => <li key={l.rotulo} className="grid grid-cols-[28px_minmax(0,1fr)_80px] max-sm:grid-cols-[24px_minmax(0,1fr)_64px] gap-x-3 items-center">
+      <span className="row-span-2 flex items-center justify-center w-7 h-7 rounded-full bg-accent-soft text-xs font-bold text-accent">{i + 1}</span>
+      <span className="text-sm font-semibold mb-2">{l.rotulo}</span>
+      <span className="row-span-2 text-right"><strong className="block text-xl tabular-nums">{numero(l.valor)}</strong>{sufixo && <span className="text-xs text-muted">{sufixo(l)}</span>}</span>
+      <div className="h-3 rounded-full bg-line/60 overflow-hidden" aria-hidden="true"><div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, l.valor / teto * 100))}%`, backgroundColor: CORES[i % CORES.length], printColorAdjust: "exact" }} /></div>
+    </li>)}
+  </ol>;
 }
 
 function Indicador({ rotulo, valor, apoio }: { rotulo: string; valor: string; apoio: string }) {
@@ -61,15 +40,23 @@ function Indicador({ rotulo, valor, apoio }: { rotulo: string; valor: string; ap
 
 function Distribuicao({ titulo, apoio, fatias }: { titulo: string; apoio: string; fatias: Fatia[] }) {
   const total = fatias.reduce((soma, f) => soma + f.valor, 0);
+  const segmentos = fatias.map((f, i) => ({ ...f, inicio: fatias.slice(0, i).reduce((soma, anterior) => soma + anterior.valor, 0) }));
   return (
-    <section className="card p-5">
-      <h3 className="font-bold text-[15px] mb-0.5">{titulo}</h3>
-      <p className="text-[12.5px] text-muted mb-4">{apoio}</p>
-      {total === 0 ? (
-        <p className="text-[13px] text-muted">Nada por aqui neste período.</p>
-      ) : (
-        <Barras linhas={fatias} maximo={Math.max(...fatias.map((f) => f.valor))} />
-      )}
+    <section className="card p-6">
+      <h3 className="font-bold text-base mb-1">{titulo}</h3>
+      <p className="text-sm text-muted mb-5">{apoio}</p>
+      <div className="flex items-center gap-6 flex-wrap">
+        <div className="relative w-32 h-32 shrink-0 mx-auto">
+          <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90" aria-hidden="true">
+            <circle cx="60" cy="60" r="48" fill="none" stroke="currentColor" className="text-line" strokeWidth="13" />
+            {total > 0 && segmentos.map((f, i) => f.valor > 0 && <circle key={f.rotulo} cx="60" cy="60" r="48" fill="none" stroke={CORES[i % CORES.length]} strokeWidth="13" pathLength="100" strokeDasharray={`${f.valor / total * 100} ${100 - f.valor / total * 100}`} strokeDashoffset={-f.inicio / total * 100} />)}
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center"><strong className="text-2xl tabular-nums">{numero(total)}</strong><span className="text-xs text-muted">{total === 1 ? "registro" : "registros"}</span></div>
+        </div>
+        {total === 0 ? <p className="flex-1 min-w-[140px] text-sm text-muted">Os resultados aparecerão aqui assim que houver registros neste período.</p> : <ul className="flex-1 min-w-[150px] space-y-3">
+          {fatias.map((f, i) => <li key={f.rotulo} className="flex items-center gap-2 text-sm"><span aria-hidden="true" className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: CORES[i % CORES.length], printColorAdjust: "exact" }} /><span className="flex-1">{f.rotulo}</span><strong className="tabular-nums">{numero(f.valor)}</strong><span className="text-muted text-xs w-10 text-right">{porcentagem(f.valor / total)}</span></li>)}
+        </ul>}
+      </div>
     </section>
   );
 }
@@ -154,7 +141,7 @@ export function ConteudoRelatorio({ relatorio, comLinks = true }: { relatorio: R
       <section>
         <h2 className="section-title">O período em números</h2>
         <div className="grid grid-cols-4 max-md:grid-cols-2 gap-3 [&>*]:min-w-0">
-          <Indicador rotulo="Convites enviados" valor={numero(convidados)} apoio={periodoEmPalavras(relatorio)} />
+          <Indicador rotulo="Convites gerados" valor={numero(convidados)} apoio={periodoEmPalavras(relatorio)} />
           <Indicador
             rotulo="Taxa de conclusão"
             valor={relatorio.taxaConclusao === null ? "—" : porcentagem(relatorio.taxaConclusao)}
@@ -173,11 +160,13 @@ export function ConteudoRelatorio({ relatorio, comLinks = true }: { relatorio: R
         </div>
       </section>
 
-      <section className="card p-5">
-        <h3 className="font-bold text-[15px] mb-0.5">Do convite à decisão</h3>
-        <p className="text-[12.5px] text-muted mb-4">Onde o processo para. Cada etapa conta as mesmas pessoas convidadas neste período.</p>
+      <section className="card p-6">
+        <div className="flex justify-between items-start gap-4 flex-wrap mb-6">
+          <div><h3 className="font-bold text-lg mb-1">Do convite à decisão</h3><p className="text-sm text-muted">Veja quantas entrevistas chegaram a cada etapa.</p></div>
+          <span className="text-xs text-muted rounded-full border border-line px-3 py-1.5">Percentuais sobre os convites gerados</span>
+        </div>
         {convidados === 0 ? (
-          <p className="text-[13px] text-muted">Nenhum convite saiu neste período.</p>
+          <p className="text-[13px] text-muted">Nenhum convite foi gerado neste período.</p>
         ) : (
           <Barras
             linhas={relatorio.funil}
@@ -185,6 +174,7 @@ export function ConteudoRelatorio({ relatorio, comLinks = true }: { relatorio: R
             sufixo={(l) => porcentagem(l.valor / convidados)}
           />
         )}
+        <p className="text-xs text-muted mt-6 pt-4 border-t border-line">Gerar um link não confirma o envio ao candidato. As etapas consideram os convites criados no período selecionado.</p>
       </section>
 
       <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4 [&>*]:min-w-0">

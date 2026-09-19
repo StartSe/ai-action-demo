@@ -5,6 +5,7 @@
 // A busca é por nome e acontece no servidor (`GET /api/candidatos?busca=`), não em memória: a lista
 // de candidatos cresce com o tempo e filtrar no navegador exigiria baixá-la inteira toda vez.
 import Link from "next/link";
+import { useDialogo } from "./useDialogo";
 import { useEffect, useRef, useState } from "react";
 import { ErrorBox, lerErro, type ErroLido } from "./ui";
 
@@ -35,36 +36,25 @@ export function DialogoAdicionarCandidato({
   const [atribuindo, setAtribuindo] = useState("");
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);
   const caixaRef = useRef<HTMLDivElement>(null);
+  useDialogo(caixaRef, onFechar);
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onFechar();
-    }
-    function onClickFora(e: MouseEvent) {
-      if (caixaRef.current && !caixaRef.current.contains(e.target as Node)) onFechar();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("mousedown", onClickFora);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("mousedown", onClickFora);
-    };
-  }, [onFechar]);
+
 
   // Uma busca por digitação, com meio segundo de espera: quem digita "Bruno" não precisa de cinco
   // consultas para ver um nome.
   useEffect(() => {
     const termo = busca.trim();
+    let ativo = true;
     const tempo = setTimeout(() => {
       fetch(`/api/candidatos?busca=${encodeURIComponent(termo)}`)
         .then((r) => (r.ok ? r.json() : Promise.reject(r)))
-        .then((corpo) => setItens(corpo.itens))
+        .then((corpo) => { if (ativo) { setItens(corpo.itens); setErroTela(null); } })
         .catch(async (e) => {
-          setErroTela(await lerErro(e));
-          setItens([]);
+          const erro = await lerErro(e);
+          if (ativo) { setErroTela(erro); setItens([]); }
         });
     }, termo ? 400 : 0);
-    return () => clearTimeout(tempo);
+    return () => { ativo = false; clearTimeout(tempo); };
   }, [busca]);
 
   async function atribuir(candidato: CandidatoDaBusca) {
@@ -87,9 +77,9 @@ export function DialogoAdicionarCandidato({
 
   return (
     <div className="fixed inset-0 z-30 bg-black/40 grid place-items-center px-4" role="presentation">
-      <div ref={caixaRef} role="dialog" aria-modal="true" aria-labelledby="titulo-adicionar-candidato" className="card w-full max-w-[480px] p-7 max-md:p-5">
-        <h2 id="titulo-adicionar-candidato" className="text-xl font-extrabold mb-1.5">Adicionar candidato</h2>
-        <p className="text-muted text-sm mb-5">Quem entra nesta vaga conversa com a entrevistadora sobre {cargo}.</p>
+      <div ref={caixaRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="titulo-adicionar-candidato" className="card w-full max-w-[480px] p-7 max-md:p-5 max-h-[calc(100dvh-3rem)] overflow-y-auto">
+        <h2 id="titulo-adicionar-candidato" className="text-xl font-extrabold mb-1.5">Para quem é a entrevista?</h2>
+        <p className="text-muted text-sm mb-5">Selecione ou cadastre um candidato para gerar o link da entrevista de {cargo}.</p>
 
         <div className="flex flex-col gap-1.5 mb-4">
           <label htmlFor="busca-candidato" className="text-[13px] font-semibold">Procurar pelo nome</label>
@@ -99,7 +89,7 @@ export function DialogoAdicionarCandidato({
             autoFocus
             placeholder="Comece a digitar o nome"
             value={busca}
-            onChange={(e) => setBusca(e.target.value)}
+            onChange={(e) => { setBusca(e.target.value); setItens(null); }}
           />
         </div>
 
@@ -125,7 +115,7 @@ export function DialogoAdicionarCandidato({
                     <span className="text-muted text-[12.5px] shrink-0">Já está nesta vaga</span>
                   ) : (
                     <button type="button" className="btn-ghost !w-auto shrink-0" disabled={Boolean(atribuindo)} onClick={() => void atribuir(c)}>
-                      {atribuindo === c.id ? "Adicionando" : "Adicionar"}
+                      {atribuindo === c.id ? "Gerando..." : "Gerar link"}
                     </button>
                   )}
                 </div>

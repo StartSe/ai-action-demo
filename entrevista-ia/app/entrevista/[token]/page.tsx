@@ -7,17 +7,12 @@
 // pessoa é) e `scorecard` (os links criados antes desta história). Quem conhece os dois é
 // `resolverConvite()` — ver lib/convite.ts e a nota de remoção do tipo antigo no CLAUDE.md.
 //
-// A conferência (link válido, entrevista aberta, qual aparelho está conversando) e a decisão do nível
-// de voz (D3) são do servidor, em lib/sala-do-candidato.ts: esta tela não consulta /api/status, que é
-// rota privada, e quem abre o link não configura nada.
-//
-// É aqui que o nível 1 (o agente conversacional da ElevenLabs) é escolhido: `agenteDaSala()` devolve o
-// agente e as variáveis desta entrevista, ou `null` — e `null` não é erro, é a sala do nível 2, que
-// funciona sem nada configurado.
+// O link usa a conversa do app com a voz escolhida no setup. Configurações antigas de agente
+// não alteram silenciosamente a experiência nem exigem um widget externo para começar.
 import { headers } from "next/headers";
 import { EntrevistaCandidato } from "@/components/EntrevistaCandidato";
 import { AGRADECIMENTO_APOIO, agradecimentoTitulo } from "@/lib/formato";
-import { abrirSala, agenteDaSala } from "@/lib/sala-do-candidato";
+import { abrirSala } from "@/lib/sala-do-candidato";
 import { ttsEnabled } from "@/lib/voz";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +50,6 @@ export default async function Page({ params }: PageProps<"/entrevista/[token]">)
   }
 
   const { marca, nome, vaga, duracaoMin } = resultado.sala;
-  const agente = await agenteDaSala(resultado);
   return (
     <EntrevistaCandidato
       codigo={token}
@@ -66,7 +60,6 @@ export default async function Page({ params }: PageProps<"/entrevista/[token]">)
       vozLigada={ttsEnabled()}
       retomando={resultado.entrevista?.status === "em_andamento"}
       conversaNoNavegador={!resultado.entrevista}
-      agente={agente}
     />
   );
 }

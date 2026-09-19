@@ -30,9 +30,11 @@ async function servirMCP(opcoes: { ferramentas?: string[]; status?: number }): P
         res.end("Unauthorized");
         return;
       }
+      const pedido = JSON.parse(corpo);
+      if (pedido.method === "notifications/initialized") { res.writeHead(202); res.end(); return; }
       const tools = (opcoes.ferramentas ?? []).map((name) => ({ name, description: name }));
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ jsonrpc: "2.0", id: 1, result: { tools } }));
+      res.end(JSON.stringify({ jsonrpc: "2.0", id: pedido.id, result: pedido.method === "initialize" ? { protocolVersion: "2025-03-26", capabilities: {}, serverInfo: { name: "teste", version: "1" } } : { tools } }));
     });
   });
   servidores.push(servidor);
@@ -57,8 +59,8 @@ describe("conexaoBrightData", () => {
     const url = new URL(conexao.url);
     assert.equal(url.origin + url.pathname, URL_MCP_PADRAO);
     assert.equal(url.searchParams.get("token"), "abc123");
-    assert.equal(url.searchParams.get("pro"), null);
-    assert.equal(conexao.modoAvancado, false);
+    assert.equal(url.searchParams.get("pro"), "1");
+    assert.equal(conexao.modoAvancado, true);
   });
 
   it("o modo avançado liga as ferramentas de perfil e de conjunto de dados", () => {
@@ -68,6 +70,14 @@ describe("conexaoBrightData", () => {
     assert.equal(url.searchParams.get("pro"), "1");
     assert.equal(url.searchParams.get("groups"), "social");
     assert.equal(conexao.modoAvancado, true);
+  });
+
+  it("mantém pro=1 com configuração antiga e preserva parâmetros do conector", () => {
+    const conexao = conexaoBrightData({ BRIGHTDATA_API_TOKEN: "fake", BRIGHTDATA_MODO_PRO: "0", BRIGHTDATA_MCP_URL: "https://exemplo.test/mcp?pro=0&groups=ecommerce&tools=search_engine" });
+    const url = new URL(conexao!.url);
+    assert.equal(url.searchParams.get("pro"), "1");
+    assert.equal(url.searchParams.get("groups"), "ecommerce,social");
+    for (const nome of Object.values(FERRAMENTAS)) assert.ok(url.searchParams.get("tools")?.split(",").includes(nome));
   });
 
   it("respeita um endereço próprio e cai no padrão quando ele não é um endereço", () => {
@@ -115,14 +125,14 @@ describe("testarPesquisa", () => {
     assert.deepEqual(r, { ok: true, mensagem: "Conectado. 5 ferramentas disponíveis." });
   });
 
-  it("diz qual ferramenta falta e sugere o modo avançado", async () => {
+  it("diz qual ferramenta falta com pro já habilitado", async () => {
     esquecerFerramentas();
     const url = await servirMCP({ ferramentas: BASICAS });
     const r = await testarPesquisa({ BRIGHTDATA_API_TOKEN: "t", BRIGHTDATA_MCP_URL: url });
     assert.equal(r.ok, false);
     assert.match(r.mensagem, /perfil profissional/);
     assert.match(r.mensagem, /conjunto de dados/);
-    assert.match(r.mensagem, /modo avançado/);
+    assert.match(r.mensagem, /pro=1/);
   });
 
   it("com o modo avançado já ligado, manda conferir o plano da conta", async () => {

@@ -1,9 +1,4 @@
-// "É esta pessoa" / "Nenhuma destas" (US-013): a decisão de identidade da D6.
-//
-// A pesquisa na web só mescla sozinha quando há uma pessoa plausível e confiança alta (US-012). Fora
-// disso o material fica guardado em `ficha.web` esperando por esta rota — e o que ela grava é
-// definitivo nos dois sentidos: `identidadeConfirmada` some da tela e a pesquisa deixa de estar
-// pendente. Quem decide o que entra na ficha continua sendo `lib/ficha.ts`.
+// Toda pesquisa aguarda revisão explícita antes de mesclar os dados na ficha.
 import { atualizar, listarFontesResumidas, obter } from "@/lib/candidatos";
 import { decidirIdentidade } from "@/lib/ficha";
 

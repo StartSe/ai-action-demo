@@ -65,7 +65,8 @@ export function TelaCriarConta({ marca, nome: nomeApp }: { marca: string; nome: 
       const r = await fetch("/api/conta", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome, email, senha, confirmarSenha }) });
       const resposta = await r.json();
       if (!r.ok) throw new Error(resposta.error || "Não foi possível criar a conta.");
-      location.href = proximoDestino();
+      router.replace("/setup?primeiro=1");
+      router.refresh();
     } catch (err) {
       setErroGeral(err instanceof Error ? err.message : "Não foi possível criar a conta.");
       setEnviando(false);
