@@ -192,7 +192,7 @@ export function Rotinas() {
   ];
 
   return (
-    <section className="card p-6 max-md:p-5">
+    <section id="rotinas" className="card p-6 max-md:p-5 settings-extra"><p className="eyebrow">03 / ACOMPANHAR</p>
       <h2 className="text-lg font-bold mb-1">Rotinas</h2>
       <p className="text-muted text-sm mb-4 max-w-[640px]">Agende o app para gerar e entregar um resultado sozinho, em um horário fixo, sem que ninguém precise abrir a tela.</p>
 
@@ -304,13 +304,13 @@ export function Rotinas() {
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-[13px] font-semibold w-[130px] shrink-0">Endereço</span>
-              <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[220px]">{endereco}</code>
+              <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-0 basis-[220px]">{endereco}</code>
               <CopyButton texto={() => endereco} rotulo="Copiar" />
             </div>
             {codigoNovo ? (
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-[13px] font-semibold w-[130px] shrink-0">Código (só agora)</span>
-                <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[220px]">{codigoNovo}</code>
+                <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-0 basis-[220px]">{codigoNovo}</code>
                 <CopyButton texto={() => codigoNovo} rotulo="Copiar" />
               </div>
             ) : status?.ativo && status.mascarado ? (

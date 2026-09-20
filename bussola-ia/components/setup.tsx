@@ -1,190 +1,55 @@
 "use client";
-// Tela de configuração inicial, gerada a partir de lib/integracoes.ts. Compartilhada pela suíte: copie sem alterar.
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { IlustracaoSegmento, MaisDetalhes, Topbar, useStatus } from "./ui";
+import { MaisDetalhes, useStatus } from "./ui";
+import { EstruturaObservatorio } from "./observatorio/EstruturaObservatorio";
+import { Icone, type NomeIcone } from "./observatorio/Icone";
+import { requisitar } from "@/lib/http-cliente";
 import type { CampoStatus, IntegracaoStatus, Opcao, StatusCaixasEmail, StatusEnderecoPublico } from "@/lib/setup-comum";
-import type { Segmento } from "@/lib/ilustracao";
 
 type Resposta = { integracoes: IntegracaoStatus[]; pronto: boolean; enderecoPublico: StatusEnderecoPublico; caixasEmail: StatusCaixasEmail };
+const ICONE_POR_ID: Record<string, NomeIcone> = { openrouter: "spark", notificacoes: "people", "mcp-tarefas": "layers" };
 
-// Duas frases de privacidade, verdadeiras desde a US-011 (as chaves são cifradas em
-// repouso, ver lib/store.ts, mas o app continua chamando serviços externos de verdade
-// — nunca afirmar "nenhuma conexão externa"). Repetidas na coluna de apoio e no
-// rodapé: mesmo texto nos dois lugares, nunca reescritas.
-const FRASE_PRIVACIDADE = "As chaves ficam cifradas neste app, no seu servidor. Nunca aparecem por inteiro depois de salvas.";
-const FRASE_CONEXOES = "Seus dados não passam por nenhum servidor nosso: o app fala direto com os serviços que você conectar.";
-
-// Três garantias genéricas (nenhuma referência ao domínio de um app específico) mostradas na coluna de
-// apoio de /setup, ao lado da ilustração do segmento.
-const ITENS_APOIO = ["Leva menos de 2 minutos", "Você decide o que conectar", "Pode trocar quando quiser"];
-
-// Ícone circular de cada cartão, por id de integração (ver public/ilustracoes/icones). Ids não listados
-// caem no ícone padrão — cobre integrações futuras (MCP_TAREFAS, MCP_CRM etc.) sem precisar de mudança aqui.
-const ICONE_POR_ID: Record<string, string> = {
-  openrouter: "robo",
-  notificacoes: "conversa",
-  "mcp-tarefas": "checklist",
-  "mcp-crm": "rede",
-  "mcp-empresa": "integracao",
-  "mcp-dados": "grafico",
-};
-const ICONE_PADRAO = "integracao";
-function iconeIntegracao(id: string): string {
-  return ICONE_POR_ID[id] ?? ICONE_PADRAO;
-}
-
-function IconeApoio() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0 mt-0.5" aria-hidden="true">
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
-
-/** `children`: cartões próprios do app (política, webhook...) que precisam aparecer ANTES do rodapé "Ir
- * para o app" — quem entra em /setup não deve ser convidado a sair antes de ver o que ainda falta
- * configurar. Cartões secundários (como "Usar dentro do seu assistente") continuam depois da tela. */
-export function SetupPage({ marca, nome, area, segmento, children }: { marca: string; nome: string; area: string; segmento: Segmento; children?: ReactNode }) {
+export function SetupPage({ children }: { children?: ReactNode }) {
   const { status, erro } = useStatus();
   const [dados, setDados] = useState<Resposta | null>(null);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
-
-  const carregar = () => fetch("/api/setup").then((r) => r.json()).then(setDados).catch(() => setAviso({ tipo: "erro", texto: "Não foi possível carregar a configuração." }));
-  const primeiroPendenteId = dados?.integracoes.find((i) => i.obrigatoria && !i.configurada)?.id;
+  const carregar = () => requisitar<Resposta>("/api/setup").then((d) => { setDados(d); setAviso(null); }).catch(() => setAviso({ tipo: "erro", texto: "Não foi possível carregar a configuração. Tente novamente." }));
   const conectadas = dados?.integracoes.filter((i) => i.configurada).length ?? 0;
-  const total = dados?.integracoes.length ?? 0;
-  const progresso = total > 0 ? Math.round((conectadas / total) * 100) : 0;
-  const opcionaisFaltando = dados?.integracoes.filter((i) => !i.obrigatoria && !i.configurada) ?? [];
-
   useEffect(() => {
-    const t = setTimeout(() => {
-      carregar();
+    const t = setTimeout(async () => {
+      await carregar();
       const p = new URLSearchParams(location.search);
       if (p.get("conectado")) setAviso({ tipo: "ok", texto: "Conta conectada. A chave foi salva neste app." });
       if (p.get("erro")) setAviso({ tipo: "erro", texto: p.get("erro") || "" });
-      if (p.get("conectado") || p.get("erro")) history.replaceState(null, "", "/setup");
+      if (p.get("conectado") || p.get("erro")) history.replaceState(null, "", `/setup${location.hash}`);
     }, 0);
     return () => clearTimeout(t);
   }, []);
-
-  return (
-    <>
-      <Topbar marca={marca} nome={nome} area={area} status={status} erro={erro} usuario={status?.usuario} />
-      <main className="max-w-[1100px] mx-auto px-8 max-md:px-4 pt-8 pb-16">
-        <div className="grid grid-cols-[260px_minmax(0,1fr)] max-md:grid-cols-1 gap-10 max-md:gap-6">
-          <aside className="flex flex-col gap-5 self-start md:sticky md:top-6">
-            <div>
-              <p className="sobretitulo mb-1">{area}</p>
-              <h1 className="titulo-painel mb-2">Configuração inicial</h1>
-              <p className="apoio max-w-[280px]">{FRASE_PRIVACIDADE}</p>
-              <p className="apoio max-w-[280px] mt-2">{FRASE_CONEXOES}</p>
-            </div>
-            <ul className="flex flex-col gap-2.5">
-              {ITENS_APOIO.map((item) => (
-                <li key={item} className="flex items-start gap-2 text-sm text-ink-2">
-                  <IconeApoio />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="relative w-full max-w-[220px] max-md:hidden">
-              <div className="blob-acento" />
-              <IlustracaoSegmento segmento={segmento} className="relative w-full h-auto" />
-            </div>
-          </aside>
-
-          <div>
-            {dados && (
-              <div className="mb-6">
-                <div className="flex flex-col gap-0.5 mb-2">
-                  <span className="text-sm font-semibold">
-                    Para rodar: <span className={dados.pronto ? "text-ok" : "text-warn"}>{dados.pronto ? "IA conectada" : "falta conectar a IA"}</span>
-                  </span>
-                  {opcionaisFaltando.length > 0 && (
-                    <span className="text-sm text-ink-2">Faz mais com: {opcionaisFaltando.map((i) => i.titulo).join(", ")}</span>
-                  )}
-                </div>
-                <div className="h-2 rounded-full bg-line overflow-hidden">
-                  <div className="h-full rounded-full bg-[image:var(--gradiente-acento)] transition-[width]" style={{ width: `${progresso}%` }} />
-                </div>
-              </div>
-            )}
-
-            {aviso && (
-              <div className={`mb-5 px-4 py-3 rounded-[10px] text-sm border ${aviso.tipo === "ok" ? "bg-[#e4f4ec] border-[#bfe3cf] text-ok" : "bg-[#fde8e6] border-[#f5c2bd] text-danger"}`}>{aviso.texto}</div>
-            )}
-
-            {!dados && !aviso && <p className="text-muted">Carregando...</p>}
-
-            {dados?.pronto && (
-              <section className="card border-accent p-6 max-md:p-5 mb-5">
-                <h2 className="text-lg font-bold mb-1">Tudo pronto</h2>
-                <p className="text-muted text-sm mb-4">Já dá para usar o app com IA de verdade.</p>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <Link href="/?exemplo=1" className="btn-primary !w-auto">Testar com um exemplo</Link>
-                  <Link href="/" className="btn-ghost">Ir para o app</Link>
-                </div>
-                {opcionaisFaltando.length > 0 && (
-                  <div className="mt-5 pt-5 border-t border-line">
-                    <h3 className="text-sm font-bold mb-2">Quer ir além?</h3>
-                    <ul className="flex flex-col gap-1.5">
-                      {opcionaisFaltando.map((i) => (
-                        <li key={i.id} className="text-sm">
-                          <a href={`#${i.id}`} className="font-semibold text-accent underline underline-offset-2">{i.titulo}</a>
-                          <span className="text-ink-2"> — {i.beneficio || i.descricao}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </section>
-            )}
-
-            <div className="flex flex-col gap-5">
-              {dados?.integracoes.map((i, indice) => (
-                <CartaoIntegracao
-                  key={i.id}
-                  integracao={i}
-                  numero={indice + 1}
-                  aoSalvar={carregar}
-                  destaque={i.id === primeiroPendenteId}
-                  caixasEmail={i.id === "notificacoes" ? dados.caixasEmail : undefined}
-                />
-              ))}
-            </div>
-
-            {children && <div className="flex flex-col gap-5 mt-5">{children}</div>}
-
-            <footer className="mt-8 pt-6 border-t border-line">
-              <p className="text-muted text-[13px] max-w-[560px]">{FRASE_PRIVACIDADE}</p>
-              <p className="text-muted text-[13px] max-w-[560px] mt-1">{FRASE_CONEXOES}</p>
-              <div className="mt-4 flex gap-3 flex-wrap items-center">
-                <Link href="/" className="btn-primary !w-auto">Ir para o app</Link>
-              </div>
-            </footer>
-
-            <MaisDetalhes titulo="Para a equipe técnica">
-              <p className="text-muted text-[13px]">Variáveis de ambiente, quando existirem, têm prioridade sobre o que é salvo aqui.</p>
-              <p className="text-muted text-[13px]">Neste plano de hospedagem, o histórico pode se perder ao reiniciar.</p>
-              {dados && <CampoEnderecoPublico status={dados.enderecoPublico} aoSalvar={carregar} />}
-              {dados && (
-                <ul className="mt-2 flex flex-col gap-1 text-[13px] text-muted">
-                  {dados.integracoes.flatMap((i) =>
-                    i.campos.filter((c) => c.definido).map((c) => (
-                      <li key={c.chave}>
-                        <code>{c.chave}</code>: {c.origem === "env" ? "variável de ambiente (tem prioridade sobre o valor salvo aqui)" : "salvo neste app"}
-                      </li>
-                    ))
-                  )}
-                </ul>
-              )}
-            </MaisDetalhes>
-          </div>
-        </div>
-      </main>
-    </>
-  );
+  return <EstruturaObservatorio ativo="setup" status={status && dados ? { ...status, ai: dados.pronto } : status}>
+    <div className="page-heading"><div><p className="eyebrow">CONEXÕES E PREFERÊNCIAS</p><h1>Seu espaço, conectado.</h1><p>Escolha as ferramentas que ampliam o olhar e o alcance do seu time.</p></div><Link href="/" className="obs-btn secondary">Voltar ao painel <Icone nome="arrow" size={16} /></Link></div>
+    {(aviso || erro) && <div role={aviso?.tipo === "ok" ? "status" : "alert"} className={`obs-alert ${aviso?.tipo === "ok" ? "" : "error"}`}>{aviso?.texto || "Não foi possível verificar a conexão."}{aviso?.tipo === "erro" && <button className="text-link" onClick={() => void carregar()}>Tentar novamente</button>}</div>}
+    <div className="setup-overview" aria-label="Resumo das conexões">
+      <div><span className="setup-icon mint"><Icone nome="spark" /></span><div><small>INTELIGÊNCIA</small><strong>{dados ? dados.pronto ? "IA conectada" : "Modo assistido" : "Carregando…"}</strong><p>{dados?.pronto ? "Agentes prontos para aprofundar a análise" : "Coleta e leitura automática disponíveis"}</p></div></div>
+      <div><span className="setup-icon lavender"><Icone nome="link" /></span><div><small>INTEGRAÇÕES</small><strong>{dados ? `${conectadas} de ${dados.integracoes.length} conectadas` : "Carregando…"}</strong><p>Você decide o que faz sentido conectar</p></div></div>
+      <div><span className="setup-icon peach"><Icone nome="shield" /></span><div><small>SEU CONTROLE</small><strong>Chaves protegidas</strong><p>Cifradas no servidor deste app</p></div></div>
+    </div>
+    <nav className="settings-jump" aria-label="Seções de configurações"><a href="#integracoes">Integrações</a><a href="#assistentes">Seu assistente</a><a href="#rotinas">Rotinas</a><a href="#tecnico">Avançado</a></nav>
+    <div className="settings-grid">
+      <div className="settings-content">
+        <section id="integracoes" aria-labelledby="titulo-integracoes"><div className="settings-section-heading"><span>01 / CONECTAR</span><h2 id="titulo-integracoes">Mais possibilidades para o seu time.</h2><p>Da construção das perguntas à entrega dos próximos passos.</p></div>
+          {!dados && !aviso && <div className="obs-panel settings-loading" role="status">Carregando suas conexões…</div>}
+          <div className="settings-stack">{dados?.integracoes.map((i) => <CartaoIntegracao key={i.id} integracao={i} aoSalvar={carregar} caixasEmail={i.id === "notificacoes" ? dados.caixasEmail : undefined} />)}</div>
+        </section>
+        {children}
+        <section id="tecnico" className="card settings-technical"><MaisDetalhes titulo="Para a equipe técnica"><p className="text-muted text-[13px]">Variáveis de ambiente, quando existirem, têm prioridade sobre o que é salvo aqui.</p>{dados && <CampoEnderecoPublico status={dados.enderecoPublico} aoSalvar={carregar} />}{dados && <ul className="mt-4 flex flex-col gap-1 text-[13px] text-muted">{dados.integracoes.flatMap((i) => i.campos.filter((c) => c.definido).map((c) => <li key={c.chave}><code>{c.chave}</code>: {c.origem === "env" ? "variável de ambiente" : "salvo neste app"}</li>))}</ul>}</MaisDetalhes></section>
+      </div>
+      <aside className="settings-aside">
+        <div className="settings-note"><span className="eyebrow">NO SEU RITMO</span><Icone nome="compass" size={76} /><h2>Conecte<br /><em>possibilidades.</em></h2><p>O observatório já acompanha seus grupos e coleta respostas. Com IA, os agentes ajudam a transformar os sinais em novas perspectivas.</p><Link href="/?tela=oficina">Explorar a oficina <Icone nome="arrow" size={16} /></Link></div>
+        <div className="settings-privacy"><Icone nome="shield" /><h3>Você está no comando.</h3><p>As chaves ficam cifradas no servidor deste app e aparecem mascaradas depois de salvas.</p><p>Ao usar uma integração, o app envia os dados necessários diretamente ao serviço que você conectou.</p></div>
+      </aside>
+    </div>
+  </EstruturaObservatorio>;
 }
 
 // Campo "Endereço público do app" ("Para a equipe técnica"): mostra o valor detectado sozinho a partir
@@ -215,7 +80,7 @@ function CampoEnderecoPublico({ status, aoSalvar }: { status: StatusEnderecoPubl
         {status.origem === "env" && " Vem de variável de ambiente: tem prioridade sobre o que for salvo aqui."}
       </p>
       <div className="flex gap-2 flex-wrap items-center">
-        <input id="app-url" className="input flex-1 min-w-[240px]" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="https://meu-app.exemplo.com" disabled={status.origem === "env"} />
+        <input id="app-url" className="input flex-1 min-w-0 basis-[220px]" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="https://meu-app.exemplo.com" disabled={status.origem === "env"} />
         <button type="button" className="btn-secundario !w-auto" onClick={salvar} disabled={salvando || status.origem === "env" || !valor.trim()}>{salvando ? "Salvando" : "Corrigir"}</button>
       </div>
       {aviso && <p className="text-[12.5px] text-muted mt-1">{aviso}</p>}
@@ -223,7 +88,7 @@ function CampoEnderecoPublico({ status, aoSalvar }: { status: StatusEnderecoPubl
   );
 }
 
-function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEmail }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean; caixasEmail?: StatusCaixasEmail }) {
+function CartaoIntegracao({ integracao: i, aoSalvar, caixasEmail }: { integracao: IntegracaoStatus; aoSalvar: () => void; caixasEmail?: StatusCaixasEmail }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   const [desconectando, setDesconectando] = useState(false);
@@ -299,20 +164,15 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
   );
 
   return (
-    <section id={i.id} className={`card p-6 max-md:p-5 ${destaque ? "border-accent border-2" : ""}`}>
+    <section id={i.id} className="card integration-card p-6 max-md:p-5" aria-labelledby={`titulo-${i.id}`}>
       <div className="flex items-start gap-3.5 mb-4">
-        <div className="relative shrink-0">
-          <span className="absolute -left-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-[11px] font-bold text-white">{numero}</span>
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft overflow-hidden">
-            <img src={`/ilustracoes/icones/${iconeIntegracao(i.id)}.webp`} alt="" aria-hidden="true" width={32} height={32} className="h-8 w-8 object-contain" />
-          </div>
-        </div>
+        <span className={`setup-icon ${i.id === "openrouter" ? "mint" : i.id === "notificacoes" ? "peach" : "lavender"}`}><Icone nome={ICONE_POR_ID[i.id] ?? "link"} size={23} /></span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h2 className="text-lg font-bold">{i.titulo}</h2>
+            <h3 id={`titulo-${i.id}`} className="text-base font-bold">{i.titulo}</h3>
             <span className={`chip-status ${i.configurada ? "chip-status-conectado" : "chip-status-pendente"}`}>{i.configurada ? "Conectado" : "Pendente"}</span>
           </div>
-          <p className="mt-0.5 truncate text-sm text-ink-2">{i.beneficio || i.descricao}</p>
+          <p className="mt-1 text-sm text-ink-2">{i.beneficio || i.descricao}</p>
         </div>
       </div>
 
@@ -360,7 +220,7 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
           </div>
         </>
       )}
-      {teste && <p className={`mt-3 text-sm font-semibold ${teste.ok ? "text-ok" : "text-danger"}`}>{teste.mensagem}</p>}
+      {teste && <p role={teste.ok ? "status" : "alert"} className={`mt-3 text-sm font-semibold ${teste.ok ? "text-ok" : "text-danger"}`}>{teste.mensagem}</p>}
     </section>
   );
 }

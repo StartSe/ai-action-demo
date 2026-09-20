@@ -17,24 +17,18 @@ import {
 import type { Avaliacao, Resposta } from "@/lib/types";
 import type { Meta } from "@/lib/ai";
 
-type Tela = "visao" | "assessments" | "oficina" | "inteligencia";
+import { EstruturaObservatorio, type Tela } from "./EstruturaObservatorio";
 type ResultadoState = { avaliacao: Avaliacao; meta: Meta; id?: string };
-const nav: { id: Tela; nome: string; icone: NomeIcone }[] = [
-  { id: "visao", nome: "Visão geral", icone: "grid" },
-  { id: "assessments", nome: "Assessments", icone: "layers" },
-  { id: "oficina", nome: "Oficina de criação", icone: "spark" },
-  { id: "inteligencia", nome: "Inteligência", icone: "chart" },
-];
 const dataCurta = (valor: string) =>
   new Date(valor).toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "short",
   });
 export function PainelGestor({
-  resultadoInicial,
-}: { resultadoInicial?: ResultadoState } = {}) {
+  resultadoInicial, telaInicial = "visao",
+}: { resultadoInicial?: ResultadoState; telaInicial?: Tela } = {}) {
   const [tela, setTela] = useState<Tela>(
-    resultadoInicial ? "inteligencia" : "visao",
+    resultadoInicial ? "inteligencia" : telaInicial,
   );
   const [painel, setPainel] = useState<DadosPainel | null>(null);
   const [erro, setErro] = useState("");
@@ -191,97 +185,8 @@ export function PainelGestor({
       (grupo === "todos" || (a.grupoTipo ?? "empresa") === grupo),
   );
   const detalhe = assessments.find((a) => a.codigo === selecionado);
-  const nome = status?.usuario?.nome?.split(" ")[0];
   return (
-    <div className="observatorio">
-      <a href="#conteudo-principal" className="skip-link">
-        Ir para o conteúdo
-      </a>
-      <aside className="obs-sidebar">
-        <Link href="/" className="obs-brand">
-          <span>
-            <Icone nome="compass" size={29} />
-          </span>
-          <div>
-            bússola<span>INOVAÇÃO + INTELIGÊNCIA</span>
-          </div>
-        </Link>
-        <div className="workspace-label">
-          <span className="live-dot" /> Espaço do gestor <span>↗</span>
-        </div>
-        <p className="nav-label">WORKSPACE</p>
-        <nav aria-label="Navegação principal">
-          {nav.map((n) => (
-            <button
-              key={n.id}
-              aria-current={tela === n.id ? "page" : undefined}
-              onClick={() => navegar(n.id)}
-            >
-              <Icone nome={n.icone} />
-              <span>{n.nome}</span>
-              {n.id === "assessments" && <small>{assessments.length}</small>}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="sidebar-note">
-            <Icone nome="spark" />
-            <strong>
-              Um novo olhar.
-              <br />
-              Seu próximo movimento.
-            </strong>
-            <p>Especialistas de IA, da pergunta à decisão.</p>
-            <Link href="/setup">
-              {status?.ai ? "Gerenciar agentes" : "Conectar inteligência"}{" "}
-              <Icone nome="arrow" size={15} />
-            </Link>
-          </div>
-          <Link className="sidebar-settings" href="/setup">
-            <Icone nome="settings" /> Configurações
-          </Link>
-          <div className="obs-account">
-            <span className="account-avatar">{nome?.[0] ?? "G"}</span>
-            <div>
-              <strong>{nome ?? "Gestor"}</strong>
-              <small>Gestão de inovação</small>
-            </div>
-            <button
-              aria-label="Sair da conta"
-              onClick={async () => {
-                try {
-                  await requisitar("/api/conta/sair", { method: "POST" });
-                  router.push("/entrar");
-                } catch (e) {
-                  setErro((e as Error).message);
-                }
-              }}
-            >
-              <Icone nome="logout" size={17} />
-            </button>
-          </div>
-        </div>
-      </aside>
-      <div className="obs-body">
-        <header className="obs-topbar">
-          <div>
-            <span>Workspace</span>
-            <span>/</span>
-            <strong>{nav.find((n) => n.id === tela)?.nome}</strong>
-          </div>
-          <Link
-            href="/setup"
-            className={`connection-pill ${status?.ai ? "connected" : ""}`}
-          >
-            <span className="live-dot" />
-            {status === null
-              ? "Verificando conexão"
-              : status.ai
-                ? "IA conectada"
-                : "Modo assistido · sem IA"}
-          </Link>
-        </header>
-        <main id="conteudo-principal" className="obs-main">
+    <EstruturaObservatorio ativo={tela} status={status} totalAssessments={assessments.length} aoNavegar={navegar}>
           <div className="page-heading">
             <div>
               <p className="eyebrow">SEU OBSERVATÓRIO DE INOVAÇÃO</p>
@@ -843,17 +748,7 @@ export function PainelGestor({
               )}
             </>
           )}
-          <footer className="obs-footer">
-            <span>
-              BÚSSOLA <i>/</i> clareza para transformar.
-            </span>
-            <span>
-              Feito para quem move o futuro <span>↗</span>
-            </span>
-          </footer>
-        </main>
-      </div>
       {Dialogo}
-    </div>
+    </EstruturaObservatorio>
   );
 }

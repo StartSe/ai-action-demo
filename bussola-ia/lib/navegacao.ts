@@ -1,9 +1,11 @@
-// Destinos reais do cabeçalho da suíte. Copie este arquivo para cada app sem alterar.
 export type ItemNavegacao = { rotulo: string; href: string };
-
-/** Um app pode acrescentar um destino próprio passando `navegacao={[...NAVEGACAO, {...}]}` ao Topbar, sem editar o componente. */
 export const NAVEGACAO: ItemNavegacao[] = [
   { rotulo: "Início", href: "/" },
   { rotulo: "Histórico", href: "/historico" },
   { rotulo: "Configurações", href: "/setup" },
 ];
+
+export type Tela = "visao" | "assessments" | "oficina" | "inteligencia";
+export function telaDoParametro(valor: string | string[] | undefined): Tela {
+  return valor === "assessments" || valor === "oficina" || valor === "inteligencia" ? valor : "visao";
+}
