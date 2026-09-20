@@ -48,10 +48,10 @@ export async function vozes(): Promise<{ id: string; nome: string }[]> {
   const d = (await r.json()) as { voices?: { voice_id: string; name: string }[] };
   return (d.voices || []).map((v) => ({ id: v.voice_id, nome: v.name }));
 }
-export async function falar(texto: string): Promise<ArrayBuffer> {
+export async function falar(texto: string, vozEscolhida?: string): Promise<ArrayBuffer> {
   const t = texto.trim().slice(0, 2500);
   if (!t) throw new FlowError("Nada para falar.");
-  const voz = getConfig("ELEVENLABS_VOICE_ID") || VOZ_PADRAO;
+  const voz = (vozEscolhida || "").replace(/[^a-zA-Z0-9_-]/g, "") || getConfig("ELEVENLABS_VOICE_ID") || VOZ_PADRAO;
   const r = await chamar(`/text-to-speech/${encodeURIComponent(voz)}?output_format=mp3_44100_128`, {
     method: "POST",
     headers: { "Content-Type": "application/json", accept: "audio/mpeg" },

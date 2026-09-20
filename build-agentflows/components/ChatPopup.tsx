@@ -3,11 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import type { Run } from "@/lib/flow-types";
 import { Icon, IconButton, request } from "./StudioUI";
 // Fala um texto com a voz configurada em Conexões (ElevenLabs).
-async function speak(text: string) {
+async function speak(text: string, voz?: string) {
   const r = await fetch("/api/voz/falar", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ texto: text.slice(0, 2500) }),
+    body: JSON.stringify({ texto: text.slice(0, 2500), voz }),
   });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Não foi possível gerar a fala.");
   const url = URL.createObjectURL(await r.blob());
@@ -29,10 +29,12 @@ function duration(ms: number) {
 function BotMessage({
   run,
   voice,
+  voz,
   onChange,
 }: {
   run: Run;
   voice: boolean;
+  voz?: string;
   onChange: (r: Run) => void;
 }) {
   const [busy, setBusy] = useState(false),
@@ -131,7 +133,7 @@ function BotMessage({
               title="Ouvir a resposta"
               onClick={() => {
                 setSpeaking(true);
-                speak(run.output)
+                speak(run.output, voz)
                   .catch((e) => setError(e.message))
                   .finally(() => setSpeaking(false));
               }}
@@ -158,6 +160,7 @@ export function ChatPopup({
   connected,
   expanded,
   voice = false,
+  flowId,
   onDemo,
   onSend,
   onChange,
@@ -173,6 +176,7 @@ export function ChatPopup({
   connected: boolean;
   expanded: boolean;
   voice?: boolean;
+  flowId: string;
   onDemo: (v: boolean) => void;
   onSend: (input: string) => void;
   onChange: (r: Run) => void;
@@ -186,10 +190,23 @@ export function ChatPopup({
     [recording, setRecording] = useState(false),
     [transcribing, setTranscribing] = useState(false),
     [voiceError, setVoiceError] = useState(""),
+    [voices, setVoices] = useState<{ id: string; nome: string }[] | null>(null),
+    [voz, setVoz] = useState(""),
     recorder = useRef<MediaRecorder | null>(null),
     spoken = useRef(new Set<string>()),
     scroll = useRef<HTMLDivElement>(null);
   const canSend = !running && (demo || connected);
+  // A voz escolhida para este fluxo fica lembrada no navegador.
+  useEffect(() => {
+    if (!listen || voices !== null) return;
+    try {
+      const saved = localStorage.getItem("agentflows-voz-" + flowId) || "";
+      if (saved) setTimeout(() => setVoz(saved), 0);
+    } catch {}
+    void request<{ id: string; nome: string }[]>("/api/voz/vozes")
+      .then(setVoices)
+      .catch(() => setVoices([]));
+  }, [listen, voices, flowId]);
   // Com "Ouvir respostas" ligado, cada resposta concluída é falada uma vez.
   useEffect(() => {
     if (!listen || !voice) return;
@@ -198,8 +215,8 @@ export function ChatPopup({
     );
     if (!done) return;
     spoken.current.add(done.id);
-    speak(done.output).catch((e) => setVoiceError(e.message));
-  }, [session, listen, voice]);
+    speak(done.output, voz).catch((e) => setVoiceError(e.message));
+  }, [session, listen, voice, voz]);
   async function toggleRecording() {
     setVoiceError("");
     if (recording) {
@@ -295,7 +312,7 @@ export function ChatPopup({
                 <div className="chat-msg user">
                   <div className="chat-bubble">{r.input}</div>
                 </div>
-                <BotMessage run={r} voice={voice} onChange={onChange} />
+                <BotMessage run={r} voice={voice} voz={voz} onChange={onChange} />
               </div>
             ))}
             {running && !session.some((r) => r.status === "running") && (
@@ -339,6 +356,27 @@ export function ChatPopup({
                 }}
               />
               Ouvir respostas
+            </label>
+          )}
+          {voice && listen && (
+            <label className="voice-pick">
+              Voz
+              <select
+                value={voz}
+                onChange={(e) => {
+                  setVoz(e.target.value);
+                  try {
+                    localStorage.setItem("agentflows-voz-" + flowId, e.target.value);
+                  } catch {}
+                }}
+              >
+                <option value="">Padrão</option>
+                {(voices || []).map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.nome}
+                  </option>
+                ))}
+              </select>
             </label>
           )}
         </div>

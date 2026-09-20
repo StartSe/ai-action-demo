@@ -4,12 +4,28 @@ import type { Flow } from "@/lib/flow-types";
 import { Icon, Modal, request } from "./StudioUI";
 const TABS = [
   ["publish", "Publicação"],
+  ["whatsapp", "WhatsApp"],
+  ["calls", "Ligações"],
   ["curl", "cURL"],
   ["javascript", "JavaScript"],
   ["python", "Python"],
   ["mcp", "Assistentes (MCP)"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
+type CampoStatus = {
+  chave: string;
+  rotulo: string;
+  tipo: "text" | "secret" | "select";
+  opcional?: boolean;
+  ajuda?: string;
+  mascarado: string | null;
+  valor?: string;
+};
+type Channels = {
+  whatsapp: { provedor: string | null; configurado: boolean; fluxo: string | null };
+  elevenlabs: { configurado: boolean };
+  ligacao: { configurada: boolean; fluxo: string | null; campos: CampoStatus[]; aviso: string };
+};
 // Diálogo de implantação no formato do Flowise: publicação, código de acesso e um exemplo por
 // linguagem para chamar a versão publicada do fluxo.
 export function IntegrationDialog({
@@ -32,11 +48,24 @@ export function IntegrationDialog({
     [tab, setTab] = useState<Tab>("publish"),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [copied, setCopied] = useState("");
+    [copied, setCopied] = useState(""),
+    [channels, setChannels] = useState<Channels | null>(null),
+    [flows, setFlows] = useState<Flow[]>([]),
+    [drafts, setDrafts] = useState<Record<string, string>>({}),
+    [phone, setPhone] = useState(""),
+    [called, setCalled] = useState("");
+  const loadChannels = () =>
+    Promise.all([request<Channels>("/api/conexoes"), request<Flow[]>("/api/flows")])
+      .then(([c, f]) => {
+        setChannels(c);
+        setFlows(f);
+      })
+      .catch((e) => setError(e.message));
   useEffect(() => {
     void request<{ ativo: boolean; mascarado: string | null }>("/api/mcp/token")
       .then(setAccess)
       .catch((e) => setError(e.message));
+    void loadChannels();
     const timer = setTimeout(() => setOrigin(location.origin), 0);
     return () => clearTimeout(timer);
   }, []);
@@ -58,7 +87,8 @@ export function IntegrationDialog({
   }
   const url = `${origin}/webhook/flows/${flow.id}`,
     bearer = code || "SEU_CODIGO";
-  const snippets: Record<Exclude<Tab, "publish">, string> = {
+  type CodeTab = Exclude<Tab, "publish" | "whatsapp" | "calls">;
+  const snippets: Record<CodeTab, string> = {
     curl: `curl -X POST '${url}' \\
   -H 'Authorization: Bearer ${bearer}' \\
   -H 'Content-Type: application/json' \\
@@ -100,6 +130,20 @@ print(dados["status"], dados["output"])`,
     void navigator.clipboard.writeText(text);
     setCopied(key);
   }
+  async function saveChannel(campos: Record<string, string | null>) {
+    await act(async () => {
+      await request("/api/conexoes", "PUT", { campos });
+      setDrafts({});
+      await loadChannels();
+    });
+  }
+  const flowName = (id: string | null) =>
+    id ? flows.find((f) => f.id === id)?.name || "(fluxo removido)" : null;
+  const publishHint = !flow.published && (
+    <p className="generator-warning">
+      Publique o fluxo na aba Publicação: canais só executam a versão publicada.
+    </p>
+  );
   return (
     <Modal title="Implantar Agentflow" onClose={onClose} wide>
       <div className="dialog-tabs">
@@ -237,6 +281,187 @@ print(dados["status"], dados["output"])`,
             </button>
           )}
         </>
+      ) : tab === "whatsapp" ? (
+        <section className="integration-section">
+          <h3>Responder no WhatsApp</h3>
+          {!channels ? (
+            <p>Consultando conexões…</p>
+          ) : !channels.whatsapp.configurado ? (
+            <p>
+              Conecte o número em{" "}
+              <a href="/conexoes" target="_blank" rel="noreferrer">
+                Conexões › WhatsApp
+              </a>{" "}
+              e volte aqui para vincular este fluxo.
+            </p>
+          ) : (
+            <>
+              <p>
+                Mensagens recebidas no número conectado executam o fluxo vinculado e a
+                resposta volta pelo mesmo número. Um fluxo por número.
+              </p>
+              <p className="connection-note">
+                {channels.whatsapp.fluxo === flow.id
+                  ? "Este fluxo está vinculado ao WhatsApp."
+                  : channels.whatsapp.fluxo
+                    ? `Hoje o número responde com “${flowName(channels.whatsapp.fluxo)}”.`
+                    : "Nenhum fluxo vinculado ainda."}
+              </p>
+              {publishHint}
+              <div className="studio-actions">
+                {channels.whatsapp.fluxo === flow.id ? (
+                  <button
+                    className="studio-button danger"
+                    disabled={busy}
+                    onClick={() => saveChannel({ WHATSAPP_FLOW_ID: null })}
+                  >
+                    Desvincular do WhatsApp
+                  </button>
+                ) : (
+                  <button
+                    className="studio-button primary"
+                    disabled={busy || !flow.published}
+                    onClick={() => saveChannel({ WHATSAPP_FLOW_ID: flow.id })}
+                  >
+                    <Icon name="whatsapp" size={16} />
+                    Vincular este fluxo ao WhatsApp
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </section>
+      ) : tab === "calls" ? (
+        <section className="integration-section">
+          <h3>Ligações por voz</h3>
+          {!channels ? (
+            <p>Consultando conexões…</p>
+          ) : !channels.elevenlabs.configurado ? (
+            <p>
+              Salve a chave da ElevenLabs em{" "}
+              <a href="/conexoes" target="_blank" rel="noreferrer">
+                Conexões › ElevenLabs
+              </a>{" "}
+              para habilitar ligações.
+            </p>
+          ) : (
+            <>
+              <p>
+                Um agente de conversa da ElevenLabs atende e faz ligações. Ao fim de cada
+                ligação, o fluxo vinculado recebe a transcrição para registrar, classificar
+                ou dar sequência (por exemplo, enviar um WhatsApp).
+              </p>
+              <div className="node-fields">
+                {channels.ligacao.campos.map((c) => (
+                  <label key={c.chave}>
+                    {c.rotulo}
+                    <input
+                      type={c.tipo === "secret" ? "password" : "text"}
+                      autoComplete="off"
+                      value={drafts[c.chave] ?? (c.tipo === "secret" ? "" : c.valor || "")}
+                      placeholder={c.tipo === "secret" ? c.mascarado || "" : ""}
+                      onChange={(e) => setDrafts({ ...drafts, [c.chave]: e.target.value })}
+                    />
+                    {c.ajuda && <small>{c.ajuda}</small>}
+                  </label>
+                ))}
+              </div>
+              <div className="connection-hint">
+                <strong>Endereço do aviso de fim de ligação</strong>
+                <code>{channels.ligacao.aviso}</code>
+                <div className="studio-actions">
+                  <button
+                    className="studio-button subtle"
+                    onClick={() => copy(channels.ligacao.aviso, "aviso")}
+                  >
+                    <Icon name="copy" size={15} />
+                    {copied === "aviso" ? "Copiado" : "Copiar endereço"}
+                  </button>
+                </div>
+                <small>
+                  Cole em Conversational AI › Settings › Post-call webhook e copie o segredo
+                  gerado lá para o campo acima.
+                </small>
+              </div>
+              <p className="connection-note">
+                {channels.ligacao.fluxo === flow.id
+                  ? "Este fluxo recebe as transcrições das ligações."
+                  : channels.ligacao.fluxo
+                    ? `Hoje as transcrições vão para “${flowName(channels.ligacao.fluxo)}”.`
+                    : "Nenhum fluxo recebe as transcrições ainda."}
+              </p>
+              {publishHint}
+              <div className="studio-actions">
+                <button
+                  className="studio-button"
+                  disabled={busy || !Object.keys(drafts).length}
+                  onClick={() =>
+                    saveChannel(
+                      Object.fromEntries(
+                        Object.entries(drafts).map(([k, v]) => [k, v === "" ? null : v]),
+                      ),
+                    )
+                  }
+                >
+                  Salvar dados da ligação
+                </button>
+                {channels.ligacao.fluxo === flow.id ? (
+                  <button
+                    className="studio-button danger"
+                    disabled={busy}
+                    onClick={() => saveChannel({ ELEVENLABS_FLOW_ID: null })}
+                  >
+                    Desvincular das ligações
+                  </button>
+                ) : (
+                  <button
+                    className="studio-button primary"
+                    disabled={busy || !flow.published}
+                    onClick={() => saveChannel({ ELEVENLABS_FLOW_ID: flow.id })}
+                  >
+                    <Icon name="call" size={16} />
+                    Vincular este fluxo às ligações
+                  </button>
+                )}
+              </div>
+              {channels.ligacao.configurada && (
+                <div className="integration-call-test">
+                  <strong>Ligar agora (prospecção ativa)</strong>
+                  <div className="studio-actions">
+                    <input
+                      type="tel"
+                      placeholder="+55 11 99999-0000"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                    />
+                    <button
+                      className="studio-button primary"
+                      disabled={busy || phone.replace(/\D/g, "").length < 10}
+                      onClick={() =>
+                        act(async () => {
+                          const r = await request<{ conversationId?: string }>(
+                            "/api/voz/ligar",
+                            "POST",
+                            { telefone: phone, contexto: `Ligação iniciada a partir do fluxo “${flow.name}”.` },
+                          );
+                          setCalled(
+                            r.conversationId
+                              ? `Ligação iniciada (conversa ${r.conversationId}).`
+                              : "Ligação iniciada.",
+                          );
+                        })
+                      }
+                    >
+                      <Icon name="call" size={15} />
+                      Ligar
+                    </button>
+                  </div>
+                  {called && <p className="connection-result ok">{called}</p>}
+                </div>
+              )}
+            </>
+          )}
+        </section>
       ) : (
         <section className="integration-section">
           <div className="integration-code-title">
@@ -247,7 +472,7 @@ print(dados["status"], dados["output"])`,
             </h3>
             <button
               className="studio-button subtle"
-              onClick={() => copy(snippets[tab], tab)}
+              onClick={() => copy(snippets[tab as CodeTab], tab)}
             >
               <Icon name="copy" size={16} />
               {copied === tab ? "Copiado" : "Copiar"}
@@ -258,7 +483,7 @@ print(dados["status"], dados["output"])`,
               ? "Cole esta configuração no cliente MCP do seu assistente. Ele passa a listar os fluxos publicados, executar, consultar execuções e responder aprovações."
               : "A resposta traz status, output, error, demo e version. Confira status: completed, failed ou waiting (aguardando aprovação)."}
           </p>
-          <pre className="integration-code">{snippets[tab]}</pre>
+          <pre className="integration-code">{snippets[tab as CodeTab]}</pre>
           {!flow.published && (
             <p className="generator-warning">
               Publique o fluxo na aba Publicação antes de usar este exemplo.

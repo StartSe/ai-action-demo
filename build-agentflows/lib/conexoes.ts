@@ -32,15 +32,19 @@ export const WHATSAPP_CAMPOS: Campo[] = [
   { chave: "ZAPPERHUB_KEY", rotulo: "ZapperHub · Chave", tipo: "secret", opcional: true },
 ];
 export const ELEVENLABS_CAMPOS: Campo[] = [
-  { chave: "ELEVENLABS_API_KEY", rotulo: "Chave da ElevenLabs", tipo: "secret", placeholder: "sk_..." },
-  { chave: "ELEVENLABS_VOICE_ID", rotulo: "Voz para responder", tipo: "select", opcional: true, opcoes: [] },
-  { chave: "ELEVENLABS_AGENT_ID", rotulo: "Agente de conversa (ligações)", tipo: "text", opcional: true, ajuda: "Identificador do agente criado em Conversational AI." },
-  { chave: "ELEVENLABS_PHONE_NUMBER_ID", rotulo: "Número para ligações", tipo: "text", opcional: true, ajuda: "Identificador do número importado na ElevenLabs (Twilio ou SIP)." },
+  { chave: "ELEVENLABS_API_KEY", rotulo: "Chave da ElevenLabs", tipo: "secret", placeholder: "sk_...", ajuda: "A voz é escolhida no chat de cada fluxo; ligações são configuradas em Implantar." },
+];
+// Ligações por voz: configuradas por fluxo em Implantar › Ligações.
+export const LIGACAO_CAMPOS: Campo[] = [
+  { chave: "ELEVENLABS_AGENT_ID", rotulo: "Agente de conversa", tipo: "text", ajuda: "Identificador do agente criado em Conversational AI." },
+  { chave: "ELEVENLABS_PHONE_NUMBER_ID", rotulo: "Número para ligações", tipo: "text", ajuda: "Identificador do número importado na ElevenLabs (Twilio ou SIP)." },
   { chave: "ELEVENLABS_WEBHOOK_SECRET", rotulo: "Segredo do aviso de fim de ligação", tipo: "secret", opcional: true, ajuda: "Copie do aviso pós-ligação em Conversational AI › Settings." },
 ];
 const CHAVES_LIVRES = new Set([
   ...WHATSAPP_CAMPOS.map((c) => c.chave),
   ...ELEVENLABS_CAMPOS.map((c) => c.chave),
+  ...LIGACAO_CAMPOS.map((c) => c.chave),
+  "ELEVENLABS_VOICE_ID",
   "WHATSAPP_FLOW_ID",
   "ELEVENLABS_FLOW_ID",
   "OPENROUTER_API_KEY",
@@ -150,14 +154,6 @@ export function chaveWebhook() {
   return nova;
 }
 export async function statusConexoes(origem: string) {
-  let vozes: { valor: string; rotulo: string }[] = [];
-  if (elevenLabsConfigurado())
-    try {
-      const { vozes: listar } = await import("./elevenlabs");
-      vozes = (await listar()).map((v) => ({ valor: v.id, rotulo: v.nome }));
-    } catch {
-      vozes = [];
-    }
   const servidores = await Promise.all(
     servidoresMCP().map(async (s) => ({
       ...s,
@@ -183,9 +179,13 @@ export async function statusConexoes(origem: string) {
       configurado: elevenLabsConfigurado(),
       ligacao: ligacaoConfigurada(),
       fluxo: getConfig("ELEVENLABS_FLOW_ID") || null,
-      campos: statusCampos(ELEVENLABS_CAMPOS).map((c) =>
-        c.chave === "ELEVENLABS_VOICE_ID" ? { ...c, opcoes: vozes } : c,
-      ),
+      campos: statusCampos(ELEVENLABS_CAMPOS),
+      aviso: `${origem}/webhook/elevenlabs`,
+    },
+    ligacao: {
+      configurada: ligacaoConfigurada(),
+      fluxo: getConfig("ELEVENLABS_FLOW_ID") || null,
+      campos: statusCampos(LIGACAO_CAMPOS),
       aviso: `${origem}/webhook/elevenlabs`,
     },
   };
