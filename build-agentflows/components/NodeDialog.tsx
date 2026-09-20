@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { BLOCKS, type Block, type Kind } from "@/lib/flow-types";
 import { NODE_STYLE } from "@/lib/flow-presets";
 import { Icon, Modal, request } from "./StudioUI";
+import { ReferenceField, type Reference } from "./ReferenceField";
 const fields: Record<Kind, string[]> = {
   start: ["state"],
   llm: ["system", "prompt", "model"],
@@ -17,7 +18,10 @@ const fields: Record<Kind, string[]> = {
 };
 const labels: Record<string, [string, string]> = {
   system: ["Instruções", "Quem é este agente, o que deve fazer e como responder."],
-  prompt: ["Mensagem de entrada", "O que o agente recebe a cada execução."],
+  prompt: [
+    "Mensagem (opcional)",
+    "Em branco, o bloco recebe a conversa ou o resultado da etapa anterior.",
+  ],
   model: ["Modelo ChatGPT", "Os modelos disponíveis dependem da conta conectada."],
   tools: ["Ferramentas autorizadas", "Só as ferramentas marcadas ficam disponíveis."],
   state: ["Estado inicial", "Objeto JSON com valores de texto, opcional."],
@@ -51,13 +55,13 @@ type Tool = { name: string; description?: string };
 // e a lista de campos do tipo. Referências e ferramentas entram por clique, sem digitar código.
 export function NodeDialog({
   node,
-  others,
+  nodes,
   models,
   onClose,
   onSave,
 }: {
   node: Block;
-  others: { id: string; label: string }[];
+  nodes: Block[];
   models: { id: string; name: string }[];
   onClose: () => void;
   onSave: (n: Block) => void;
@@ -86,9 +90,6 @@ export function NodeDialog({
       ...d,
       data: { ...d.data, config: { ...d.data.config, [key]: value } },
     }));
-  }
-  function insert(key: string, ref: string) {
-    change(key, ((c[key] || "") + " " + ref).trim());
   }
   const selected = (c.tools || "")
     .split(",")
@@ -119,13 +120,34 @@ export function NodeDialog({
       setBusy(false);
     }
   }
-  const references: [string, string][] = [
-    ["{{input}}", "Entrada"],
-    ["{{last}}", "Etapa anterior"],
-    ["{{state.nome}}", "Variável"],
-    ...others
-      .filter((o) => o.id !== node.id)
-      .map((o): [string, string] => [`{{nodes.${o.id}}}`, o.label]),
+  const stateKeys = new Set<string>();
+  for (const n of nodes) {
+    if (n.data.kind === "state" && n.data.config.key)
+      stateKeys.add(n.data.config.key);
+    if (n.data.kind === "start")
+      try {
+        Object.keys(JSON.parse(n.data.config.state || "{}")).forEach((k) =>
+          stateKeys.add(k),
+        );
+      } catch {}
+  }
+  const references: Reference[] = [
+    { value: "{{input}}", label: "Conversa", hint: "o que a pessoa enviou" },
+    { value: "{{last}}", label: "Etapa anterior", hint: "resultado do bloco anterior" },
+    ...[...stateKeys].map((k) => ({
+      value: `{{state.${k}}}`,
+      label: "Variável " + k,
+    })),
+    { value: "{{state.approval}}", label: "Decisão da aprovação", hint: "yes ou no" },
+    ...nodes
+      .filter(
+        (o) => o.id !== node.id && !["start", "end"].includes(o.data.kind),
+      )
+      .map((o) => ({
+        value: `{{nodes.${o.id}}}`,
+        label: o.data.label,
+        hint: BLOCKS[o.data.kind].label,
+      })),
   ];
   return (
     <Modal
@@ -157,25 +179,17 @@ export function NodeDialog({
           <p>{BLOCKS[k].help}</p>
         </div>
       </div>
+      <p className="reference-tip">
+        Digite <code>{"{{"}</code> em qualquer campo para inserir a conversa, o
+        resultado anterior ou uma variável.
+      </p>
       <div className="node-fields">
         {fields[k].map((key) => (
           <label key={key}>
             <span className="field-title">
-              {labels[key][0]}
-              {REFERENCES.includes(key) && (
-                <span className="reference-chips">
-                  {references.map(([v, l]) => (
-                    <button
-                      key={v}
-                      type="button"
-                      title={"Inserir " + v}
-                      onClick={() => insert(key, v)}
-                    >
-                      {l}
-                    </button>
-                  ))}
-                </span>
-              )}
+              {k === "approval" && key === "prompt"
+                ? "O que a pessoa deve revisar"
+                : labels[key][0]}
             </span>
             {key === "model" ? (
               <select
@@ -250,11 +264,19 @@ export function NodeDialog({
                 )}
               </select>
             ) : TEXTAREAS.includes(key) ? (
-              <textarea
+              <ReferenceField
+                multiline
                 rows={key === "system" ? 5 : 3}
                 spellCheck={key === "system" || key === "prompt"}
                 value={c[key] || ""}
-                onChange={(e) => change(key, e.target.value)}
+                references={references}
+                onChange={(v) => change(key, v)}
+              />
+            ) : REFERENCES.includes(key) ? (
+              <ReferenceField
+                value={c[key] || ""}
+                references={references}
+                onChange={(v) => change(key, v)}
               />
             ) : (
               <input
@@ -265,7 +287,11 @@ export function NodeDialog({
                 onChange={(e) => change(key, e.target.value)}
               />
             )}
-            {labels[key][1] && <small>{labels[key][1]}</small>}
+            {k === "approval" && key === "prompt" ? (
+              <small>Mostrado junto com o resultado, antes da decisão.</small>
+            ) : (
+              labels[key][1] && <small>{labels[key][1]}</small>
+            )}
           </label>
         ))}
         {usesTools && (

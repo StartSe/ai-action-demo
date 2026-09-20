@@ -7,9 +7,9 @@ const KINDS = Object.keys(BLOCKS) as Kind[];
 // Campos de configuração aceitos por tipo, para o modelo preencher além dos blocos e conexões.
 const FIELDS: Record<Kind, string> = {
   start: "state (JSON com valores de texto, opcional)",
-  llm: "system (instruções), prompt (mensagem; use {{input}}, {{last}}, {{nodes.id}}, {{state.nome}})",
+  llm: "system (instruções), prompt (opcional: em branco o bloco recebe a conversa ou o resultado da etapa anterior; use {{input}}, {{last}}, {{nodes.id}}, {{state.nome}} só quando precisar combinar textos)",
   agent:
-    "system (instruções), prompt (mensagem; use {{input}}, {{last}}, {{nodes.id}}, {{state.nome}}), tools (nomes separados por vírgula, só se pedido)",
+    "system (instruções), prompt (opcional, mesma regra do llm), tools (nomes separados por vírgula, só se pedido)",
   condition:
     "value (texto a avaliar, ex.: {{last}}), operator (contains | equals | notEquals | greater | empty), compare (valor)",
   state: "key (nome da variável, letras e números), value (ex.: {{last}})",

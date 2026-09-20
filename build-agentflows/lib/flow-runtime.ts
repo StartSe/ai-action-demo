@@ -54,6 +54,11 @@ async function callTool(name: string, args: unknown) {
   const r = await mcp("tools/call", { name, arguments: args });
   return JSON.stringify(r).slice(0, 30000);
 }
+// Mensagem que o LLM/Agente recebe: o texto configurado ou, em branco, o que veio antes
+// (a conversa no primeiro passo, o resultado da etapa anterior depois), como o Flowise encadeia.
+export function message(c: Record<string, string>, r: Run) {
+  return c.prompt?.trim() ? interpolate(c.prompt, r) : r.output;
+}
 async function agent(n: Block, r: Run, signal: AbortSignal) {
   const c = n.data.config;
   const allowed =
@@ -72,7 +77,7 @@ async function agent(n: Block, r: Run, signal: AbortSignal) {
     );
   return chatGPT().run({
     system: interpolate(c.system, r),
-    prompt: interpolate(c.prompt, r),
+    prompt: message(c, r),
     model: c.model || undefined,
     signal,
     onText: (text) => {
@@ -177,7 +182,7 @@ async function execute(r: Run): Promise<Run> {
       }
       if (k === "llm" || k === "agent")
         output = r.demo
-          ? `[Demonstração] ${n.data.label}\nEntrada analisada: ${interpolate(c.prompt, r).slice(0, 600)}\nPrioridade: acompanhar hoje.\nPróxima ação: confirmar os detalhes com a equipe e responder ao solicitante.`
+          ? `[Demonstração] ${n.data.label}\nEntrada analisada: ${message(c, r).slice(0, 600)}\nPrioridade: acompanhar hoje.\nPróxima ação: confirmar os detalhes com a equipe e responder ao solicitante.`
           : await agent(n, r, controller.signal);
       if (k === "tool")
         output = r.demo

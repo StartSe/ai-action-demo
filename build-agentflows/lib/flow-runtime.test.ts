@@ -292,3 +292,23 @@ test("reinício interrompe execução ativa e preserva aprovação pendente", as
   store.interruptRuns();
   assert.equal(store.getRun(r.id).status, "failed");
 });
+
+test("LLM sem mensagem recebe a conversa e depois o resultado anterior", async () => {
+  const g = template();
+  g.nodes[1].data.config.prompt = "";
+  const segundo = block("llm", "revisor", 0, 0);
+  segundo.data.config.prompt = "";
+  g.nodes.splice(2, 0, segundo);
+  g.edges = [
+    { id: "1", source: "inicio", target: "analista" },
+    { id: "2", source: "analista", target: "revisor" },
+    { id: "3", source: "revisor", target: "resposta" },
+  ];
+  const f = flow(g);
+  const r = await runtime.startRun(f.id, "Pedido atrasado", false, true);
+  assert.equal(r.status, "completed");
+  assert.match(r.trace[1].output, /Entrada analisada: Pedido atrasado/);
+  assert.match(r.trace[2].output, /Entrada analisada: \[Demonstração\] Agente/);
+  const c = { prompt: "Contexto: {{input}}" };
+  assert.equal(runtime.message(c, r), "Contexto: Pedido atrasado");
+});
