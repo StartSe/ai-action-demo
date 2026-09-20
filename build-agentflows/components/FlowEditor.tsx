@@ -34,6 +34,8 @@ import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
 import { NodeDialog } from "./NodeDialog";
 import { RunView } from "./RunView";
 import { IntegrationDialog } from "./IntegrationDialog";
+import { GeneratorDialog } from "./GeneratorDialog";
+import type { Generated } from "@/lib/flow-generator";
 import { AgentNode, type VisualNode } from "./flow/AgentNode";
 import { AgentEdge, type VisualEdge } from "./flow/AgentEdge";
 import { ConnectionLine } from "./flow/ConnectionLine";
@@ -49,7 +51,10 @@ type Pending = {
 export function FlowEditor({ id }: { id: string }) {
   const router = useRouter(),
     canvasRef = useRef<HTMLDivElement>(null),
-    instance = useRef<Pick<ReactFlowInstance, "screenToFlowPosition"> | null>(
+    instance = useRef<Pick<
+      ReactFlowInstance<VisualNode, VisualEdge>,
+      "screenToFlowPosition" | "fitView"
+    > | null>(
       null,
     ),
     past = useRef<Graph[]>([]),
@@ -82,6 +87,7 @@ export function FlowEditor({ id }: { id: string }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
   const [info, setInfo] = useState<Kind | null>(null);
+  const [generator, setGenerator] = useState(false);
   const [dark, setDark] = useState(false);
   const { connection, setConnection } = useChatGPT();
   useEffect(() => {
@@ -169,7 +175,7 @@ export function FlowEditor({ id }: { id: string }) {
       if (dirty) e.preventDefault();
     };
     const keys = (e: KeyboardEvent) => {
-      if (editing || rename || connect || integration) return;
+      if (editing || rename || connect || integration || generator) return;
       const el = e.target as HTMLElement;
       if (el.matches("input,textarea,select")) return;
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
@@ -198,6 +204,7 @@ export function FlowEditor({ id }: { id: string }) {
     rename,
     connect,
     integration,
+    generator,
     busy,
     save,
     undo,
@@ -215,6 +222,19 @@ export function FlowEditor({ id }: { id: string }) {
     const timer = setTimeout(() => setNotice(""), 3500);
     return () => clearTimeout(timer);
   }, [notice]);
+  function applyGenerated(g: Generated) {
+    commit(g.graph);
+    setFlow({
+      ...flow!,
+      name: /^Novo (fluxo|Agentflow)$/i.test(flow!.name) ? g.name : flow!.name,
+      description: flow!.description || g.description,
+    });
+    setNotice("Fluxo gerado. Revise as instruções de cada bloco e salve.");
+    setTimeout(
+      () => instance.current?.fitView({ padding: 0.3, maxZoom: 1 }),
+      60,
+    );
+  }
   function closePalette() {
     setPalette(false);
     setPending(null);
@@ -597,7 +617,7 @@ export function FlowEditor({ id }: { id: string }) {
             snapToGrid={snap}
             snapGrid={[25, 25]}
             deleteKeyCode={
-              editing || rename || connect || integration || info
+              editing || rename || connect || integration || info || generator
                 ? null
                 : ["Backspace", "Delete"]
             }
@@ -665,6 +685,14 @@ export function FlowEditor({ id }: { id: string }) {
             >
               <Icon name={palette ? "close" : "plus"} size={23} />
             </button>
+            <button
+              className="generate-button"
+              title="Gerar fluxo com IA"
+              aria-label="Gerar fluxo com IA"
+              onClick={() => setGenerator(true)}
+            >
+              <Icon name="spark" size={22} />
+            </button>
           </div>
           {palette && (
             <aside
@@ -699,8 +727,11 @@ export function FlowEditor({ id }: { id: string }) {
                   "Controle de fluxo",
                   "Dados e integrações",
                 ].map((group) => (
-                  <section key={group}>
-                    <h3>{group}</h3>
+                  <details key={group} open>
+                    <summary>
+                      {group}
+                      <Icon name="chevron" size={14} />
+                    </summary>
                     {(Object.keys(BLOCKS) as Kind[])
                       .filter(
                         (k) =>
@@ -732,7 +763,7 @@ export function FlowEditor({ id }: { id: string }) {
                           <Icon name="plus" size={15} />
                         </button>
                       ))}
-                  </section>
+                  </details>
                 ))}
               </div>
             </aside>
@@ -964,6 +995,19 @@ export function FlowEditor({ id }: { id: string }) {
             </button>
           </div>
         </Modal>
+      )}
+      {generator && (
+        <GeneratorDialog
+          flowId={id}
+          replaces={graph.nodes.length > 1 || graph.edges.length > 0}
+          connected={!!connection?.account}
+          onConnect={() => {
+            setGenerator(false);
+            setConnect(true);
+          }}
+          onClose={() => setGenerator(false)}
+          onApply={applyGenerated}
+        />
       )}
       {connect && (
         <ChatGPTConnection

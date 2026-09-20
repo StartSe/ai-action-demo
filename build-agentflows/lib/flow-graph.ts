@@ -78,3 +78,30 @@ export function connect(g: Graph, c: Candidate): Graph {
   if (c.sourceHandle) edge.sourceHandle = c.sourceHandle;
   return { ...g, edges: [...g.edges, edge] };
 }
+// Organiza os blocos em colunas pela distância do Início (usado por fluxos gerados por IA).
+export function layout(g: Graph): Graph {
+  const start = g.nodes.find((n) => n.data.kind === "start") || g.nodes[0];
+  if (!start) return g;
+  const depth = new Map<string, number>([[start.id, 0]]);
+  const queue = [start.id];
+  while (queue.length) {
+    const id = queue.shift()!;
+    for (const e of g.edges)
+      if (e.source === id && !depth.has(e.target)) {
+        depth.set(e.target, depth.get(id)! + 1);
+        queue.push(e.target);
+      }
+  }
+  let orphan = Math.max(0, ...depth.values()) + 1;
+  for (const n of g.nodes) if (!depth.has(n.id)) depth.set(n.id, orphan++);
+  const rows = new Map<number, number>();
+  return {
+    ...g,
+    nodes: g.nodes.map((n) => {
+      const d = depth.get(n.id)!;
+      const row = rows.get(d) || 0;
+      rows.set(d, row + 1);
+      return { ...n, position: { x: 60 + d * 340, y: 80 + row * 170 } };
+    }),
+  };
+}

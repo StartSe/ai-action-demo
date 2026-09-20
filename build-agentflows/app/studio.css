@@ -922,6 +922,137 @@
   color: var(--studio-primary);
   border: 1px solid var(--studio-line);
 }
+.canvas-left-actions {
+  display: flex;
+  gap: 10px;
+}
+.generate-button {
+  width: 43px;
+  height: 43px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: linear-gradient(45deg, #ff6b6b 30%, #ff8e53 90%);
+  box-shadow: 0 4px 14px #ff7a5e40;
+  transition: filter 0.15s;
+}
+.generate-button:hover {
+  filter: brightness(1.06);
+}
+.node-palette details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--studio-ink);
+  padding: 12px 10px 8px;
+}
+.node-palette details > summary::-webkit-details-marker {
+  display: none;
+}
+.node-palette details > summary > svg {
+  color: var(--studio-muted);
+  transition: transform 0.15s;
+}
+.node-palette details[open] > summary > svg {
+  transform: rotate(90deg);
+}
+.generator-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 4px;
+}
+.generator-examples button {
+  font-size: 10px;
+  line-height: 1.5;
+  text-align: left;
+  padding: 7px 10px;
+  border: 1px solid var(--studio-line);
+  border-radius: 9px;
+  background: var(--studio-bg);
+  color: var(--studio-muted);
+}
+.generator-examples button:hover {
+  color: var(--studio-primary);
+  border-color: var(--studio-primary);
+}
+.generator-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--studio-muted);
+  margin: 12px 0 2px;
+}
+.generator-progress > span {
+  flex: 1;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--studio-primary-soft);
+  overflow: hidden;
+  position: relative;
+}
+.generator-progress > span::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 35%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #ff6b6b, #ff8e53);
+  animation: generator-slide 1.2s ease-in-out infinite;
+}
+@keyframes generator-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+.generator-warning {
+  font-size: 11px;
+  color: #8a5a1e;
+  background: #fff6e8;
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-top: 10px;
+}
+.generator-warning button {
+  color: var(--studio-primary);
+  font-weight: 700;
+  text-decoration: underline;
+}
+.generator-summary {
+  border: 1px solid var(--studio-line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: var(--studio-bg);
+}
+.generator-summary strong {
+  font-size: 14px;
+}
+.generator-summary > p {
+  margin: 4px 0 0;
+  font-size: 11px;
+}
+.generator-summary .preset-chain {
+  margin: 12px 0 10px;
+}
+.generator-summary .preset-chain > span {
+  color: white;
+}
+.generator-summary ol {
+  font-size: 11px;
+  color: var(--studio-muted);
+  padding-left: 18px;
+  line-height: 1.8;
+  columns: 2;
+}
 .node-palette {
   position: absolute;
   left: 24px;
@@ -960,7 +1091,7 @@
   color: var(--studio-muted);
   padding: 14px 10px 9px;
 }
-.node-palette section > button {
+.node-palette details > button {
   display: flex;
   align-items: center;
   gap: 11px;
@@ -969,7 +1100,7 @@
   border-radius: 8px;
   text-align: left;
 }
-.node-palette section > button:hover {
+.node-palette details > button:hover {
   background: var(--studio-bg);
 }
 .palette-node-icon {
@@ -993,7 +1124,7 @@
   line-height: 1.6;
   margin-top: 3px;
 }
-.node-palette section > button > svg {
+.node-palette details > button > svg {
   color: var(--studio-muted);
   flex-shrink: 0;
 }
