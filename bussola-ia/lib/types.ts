@@ -43,6 +43,8 @@ export interface LeituraDimensao {
 }
 
 export interface Analise {
+  conselho?: ParecerAgente[];
+  acoesConcluidas?: number[];
   resumo: string;
   nivelGeral: number;
   nomeEstagio: string;
@@ -85,4 +87,16 @@ export interface ContextoAssessment {
   objetivo?: string;
   setor?: string;
   porte?: string;
+}
+
+export interface ParecerAgente {
+  id: "analista" | "critico" | "estrategista";
+  nome: string;
+  papel: string;
+  origem: "ia" | "automatica";
+  mensagem: string;
+  recomendacoes: string[];
+  pergunta: string;
+  dimensoes: string[];
+  aviso?: string;
 }

@@ -1,233 +1,33 @@
 "use client";
-// Formulário público genérico (marca do app, título, campos declarados, botão "Enviar"), renderizado
-// a partir do que o app registrou em lib/formularios.ts. Copie este arquivo junto com page.tsx sem alterar.
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import type { CampoFormulario } from "@/lib/formularios";
-
-type Props = { token: string; marca: string; nome: string; titulo: string; descricao?: string; agradecimento?: string; campos: CampoFormulario[] };
-
-type Fase = "preenchendo" | "enviando" | "enviado" | "erro";
-
-export function FormularioPublico({ token, marca, nome, titulo, descricao, agradecimento, campos }: Props) {
-  const [dados, setDados] = useState<Record<string, string>>(() => Object.fromEntries(campos.map((c) => [c.chave, ""])));
-  const [nomesArquivo, setNomesArquivo] = useState<Record<string, string>>({});
-  const [armadilha, setArmadilha] = useState("");
-  const [fase, setFase] = useState<Fase>("preenchendo");
-  const [mensagemErro, setMensagemErro] = useState("");
-
-  const set = (chave: string) => (e: { target: { value: string } }) => setDados((d) => ({ ...d, [chave]: e.target.value }));
-
-  async function setArquivo(chave: string, arquivo: File | null) {
-    if (!arquivo) return;
-    const texto = await arquivo.text();
-    setDados((d) => ({ ...d, [chave]: texto }));
-    setNomesArquivo((n) => ({ ...n, [chave]: arquivo.name }));
-  }
-
-  async function onSubmit(e: FormEvent) {
+import { Icone } from "@/components/observatorio/Icone";
+type Props={token:string;marca:string;nome:string;titulo:string;descricao?:string;agradecimento?:string;campos:CampoFormulario[]};
+export function FormularioPublico({token,nome,titulo,descricao,agradecimento,campos}:Props){
+  const [dados,setDados]=useState<Record<string,string>>({});
+  const [etapa,setEtapa]=useState(0);
+  const [fase,setFase]=useState<"respondendo"|"enviando"|"enviado">("respondendo");
+  const [erro,setErro]=useState("");
+  const [armadilha,setArmadilha]=useState("");
+  const tituloRef=useRef<HTMLHeadingElement>(null);
+  const enviando=useRef(false);
+  const secoes=[...new Set(campos.map(c=>c.secao||"Sua percepção"))];
+  const secao=secoes[etapa];
+  const visiveis=campos.filter(c=>(c.secao||"Sua percepção")===secao);
+  const respondidas=campos.filter(c=>dados[c.chave]?.trim()).length;
+  function set(chave:string,valor:string){setDados(d=>({...d,[chave]:valor}));setErro("");}
+  function ir(i:number){setEtapa(i);setErro("");requestAnimationFrame(()=>{tituloRef.current?.focus();tituloRef.current?.scrollIntoView({behavior:"smooth",block:"center"});});}
+  async function enviar(e:FormEvent){
     e.preventDefault();
-    // Campos "nota"/"decisao"/"escala"/"escolha" são grupos de botões, sem validação nativa de "required" do HTML.
-    const notaFaltando = campos.find((c) => c.tipo === "nota" && c.obrigatorio && !dados[c.chave]);
-    if (notaFaltando) {
-      setMensagemErro(`Escolha uma nota para "${notaFaltando.rotulo}".`);
-      setFase("erro");
-      return;
-    }
-    const decisaoFaltando = campos.find((c) => c.tipo === "decisao" && c.obrigatorio && !dados[c.chave]);
-    if (decisaoFaltando) {
-      setMensagemErro(`Escolha uma opção para "${decisaoFaltando.rotulo}".`);
-      setFase("erro");
-      return;
-    }
-    const escalaFaltando = campos.find((c) => c.tipo === "escala" && c.obrigatorio && !dados[c.chave]);
-    if (escalaFaltando) {
-      setMensagemErro(`Escolha um valor para "${escalaFaltando.rotulo}".`);
-      setFase("erro");
-      return;
-    }
-    const escolhaFaltando = campos.find((c) => c.tipo === "escolha" && c.obrigatorio && !dados[c.chave]);
-    if (escolhaFaltando) {
-      setMensagemErro(`Escolha uma opção para "${escolhaFaltando.rotulo}".`);
-      setFase("erro");
-      return;
-    }
-    setFase("enviando");
-    try {
-      const r = await fetch(`/api/f/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dados, armadilha }) });
-      const resposta = await r.json();
-      if (!r.ok) throw new Error(resposta.error || "Não foi possível enviar sua resposta.");
-      setFase("enviado");
-    } catch (err) {
-      setMensagemErro(err instanceof Error ? err.message : "Erro inesperado.");
-      setFase("erro");
-    }
+    if(etapa<secoes.length-1){ir(etapa+1);return;}
+    if(enviando.current)return;
+    const faltando=campos.find(c=>c.obrigatorio&&!dados[c.chave]?.trim());
+    if(faltando){ir(secoes.indexOf(faltando.secao||"Sua percepção"));setErro(`Responda “${faltando.rotulo}” para continuar.`);return;}
+    enviando.current=true;setFase("enviando");setErro("");
+    try{const r=await fetch(`/api/f/${token}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({dados,armadilha})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Não foi possível enviar. Tente novamente.");setFase("enviado");}catch(e){setErro(e instanceof Error?e.message:"Falha de conexão. Suas respostas continuam aqui.");setFase("respondendo");}finally{enviando.current=false;}
   }
-
-  return (
-    <div className="max-w-[560px] mx-auto px-8 py-12 max-md:px-4 max-md:py-8" style={{ colorScheme: "light" }}>
-      <div className="flex items-center gap-3 mb-7">
-        <div className="shrink-0 w-[34px] h-[34px] rounded-[9px] bg-accent text-white grid place-items-center font-extrabold text-[15px] tracking-tight">{marca}</div>
-        <div className="font-bold text-[15px]">{nome}</div>
-      </div>
-
-      {fase === "enviado" ? (
-        <div className="card p-7 max-md:p-[22px] text-center">
-          <h1 className="text-xl font-extrabold mb-1.5">{agradecimento || "Obrigado, sua resposta foi enviada."}</h1>
-          <p className="text-muted">Você já pode fechar esta página.</p>
-        </div>
-      ) : (
-        <div className="card p-7 max-md:p-[22px]">
-          <h1 className="text-[22px] leading-[1.2] font-extrabold tracking-[-0.02em] mb-2">{titulo}</h1>
-          {descricao && <p className="text-muted mb-6">{descricao}</p>}
-
-          <form onSubmit={onSubmit}>
-            {/* Honeypot: campo invisível para pessoas, atrativo para bots que preenchem tudo. */}
-            <label className="absolute -left-[9999px] w-px h-px overflow-hidden" aria-hidden="true">
-              Deixe este campo em branco
-              <input tabIndex={-1} autoComplete="off" value={armadilha} onChange={(e) => setArmadilha(e.target.value)} />
-            </label>
-
-            {campos.map((campo, i) => (
-              <div key={campo.chave}>
-                {campo.secao && campo.secao !== campos[i - 1]?.secao && <h2 className="text-[15px] font-bold mt-6 mb-3 first:mt-0">{campo.secao}</h2>}
-                <div className="flex flex-col gap-1.5 mb-4">
-                  <label htmlFor={campo.chave} className="text-[13px] font-semibold">
-                    {campo.rotulo}
-                    {!campo.obrigatorio && " (opcional)"}
-                  </label>
-                  {campo.tipo === "arquivo" ? (
-                    <>
-                      <input
-                        id={campo.chave}
-                        type="file"
-                        className="input"
-                        accept={campo.aceitar}
-                        required={campo.obrigatorio}
-                        onChange={(e) => setArquivo(campo.chave, e.target.files?.[0] ?? null)}
-                      />
-                      {nomesArquivo[campo.chave] && <p className="text-muted text-[12.5px]">Arquivo selecionado: {nomesArquivo[campo.chave]}</p>}
-                    </>
-                  ) : campo.tipo === "textarea" ? (
-                    <textarea id={campo.chave} className="input min-h-24 resize-y" required={campo.obrigatorio} maxLength={4000} value={dados[campo.chave]} onChange={set(campo.chave)} />
-                  ) : campo.tipo === "nota" ? (
-                    <div id={campo.chave} className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={campo.rotulo}>
-                      {Array.from({ length: 11 }, (_, n) => n).map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          role="radio"
-                          aria-checked={dados[campo.chave] === String(n)}
-                          className={`h-9 w-9 rounded-[10px] border text-sm font-bold transition-colors ${
-                            dados[campo.chave] === String(n) ? "bg-accent border-accent text-white" : "border-line bg-white text-ink hover:bg-bg"
-                          }`}
-                          onClick={() => setDados((d) => ({ ...d, [campo.chave]: String(n) }))}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                  ) : campo.tipo === "decisao" ? (
-                    <div id={campo.chave} className="flex flex-wrap gap-2" role="radiogroup" aria-label={campo.rotulo}>
-                      {(
-                        [
-                          { valor: "aprovar", rotulo: "Aprovar" },
-                          { valor: "ajustar", rotulo: "Pedir ajuste" },
-                          { valor: "descartar", rotulo: "Descartar" },
-                        ] as const
-                      ).map((opcao) => (
-                        <button
-                          key={opcao.valor}
-                          type="button"
-                          role="radio"
-                          aria-checked={dados[campo.chave] === opcao.valor}
-                          className={`px-3.5 py-2 rounded-[10px] border text-sm font-semibold transition-colors ${
-                            dados[campo.chave] === opcao.valor ? "bg-accent border-accent text-white" : "border-line bg-white text-ink hover:bg-bg"
-                          }`}
-                          onClick={() => setDados((d) => ({ ...d, [campo.chave]: opcao.valor }))}
-                        >
-                          {opcao.rotulo}
-                        </button>
-                      ))}
-                    </div>
-                  ) : campo.tipo === "escala" ? (
-                    <div id={campo.chave}>
-                      <div className="flex gap-1.5" role="radiogroup" aria-label={campo.rotulo}>
-                        {Array.from({ length: (campo.max ?? 5) - (campo.min ?? 1) + 1 }, (_, n) => (campo.min ?? 1) + n).map((n) => (
-                          <button
-                            key={n}
-                            type="button"
-                            role="radio"
-                            aria-checked={dados[campo.chave] === String(n)}
-                            className={`flex-1 h-9 rounded-[10px] border text-sm font-bold transition-colors ${
-                              dados[campo.chave] === String(n) ? "bg-accent border-accent text-white" : "border-line bg-white text-ink hover:bg-bg"
-                            }`}
-                            onClick={() => setDados((d) => ({ ...d, [campo.chave]: String(n) }))}
-                          >
-                            {n}
-                          </button>
-                        ))}
-                      </div>
-                      {(campo.rotuloMin || campo.rotuloMax) && (
-                        <div className="flex justify-between mt-1 text-[12px] text-muted">
-                          <span>{campo.rotuloMin}</span>
-                          <span>{campo.rotuloMax}</span>
-                        </div>
-                      )}
-                    </div>
-                  ) : campo.tipo === "escolha" ? (
-                    campo.multipla ? (
-                      <div id={campo.chave} className="flex flex-col gap-2">
-                        {(campo.opcoes ?? []).map((opcao) => {
-                          const selecionados = dados[campo.chave] ? dados[campo.chave].split(",") : [];
-                          return (
-                            <label key={opcao.valor} className="flex items-center gap-2 text-sm">
-                              <input
-                                type="checkbox"
-                                checked={selecionados.includes(opcao.valor)}
-                                onChange={(e) => {
-                                  const atual = dados[campo.chave] ? dados[campo.chave].split(",") : [];
-                                  const novo = e.target.checked ? [...atual, opcao.valor] : atual.filter((v) => v !== opcao.valor);
-                                  setDados((d) => ({ ...d, [campo.chave]: novo.join(",") }));
-                                }}
-                              />
-                              {opcao.rotulo}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div id={campo.chave} className="flex flex-wrap gap-2" role="radiogroup" aria-label={campo.rotulo}>
-                        {(campo.opcoes ?? []).map((opcao) => (
-                          <button
-                            key={opcao.valor}
-                            type="button"
-                            role="radio"
-                            aria-checked={dados[campo.chave] === opcao.valor}
-                            className={`px-3.5 py-2 rounded-[10px] border text-sm font-semibold transition-colors ${
-                              dados[campo.chave] === opcao.valor ? "bg-accent border-accent text-white" : "border-line bg-white text-ink hover:bg-bg"
-                            }`}
-                            onClick={() => setDados((d) => ({ ...d, [campo.chave]: opcao.valor }))}
-                          >
-                            {opcao.rotulo}
-                          </button>
-                        ))}
-                      </div>
-                    )
-                  ) : (
-                    <input id={campo.chave} className="input" required={campo.obrigatorio} maxLength={4000} value={dados[campo.chave]} onChange={set(campo.chave)} />
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {fase === "erro" && <p className="text-danger text-sm mb-4">{mensagemErro}</p>}
-
-            <button type="submit" className="btn-primary" disabled={fase === "enviando"}>
-              {fase === "enviando" ? "Enviando" : "Enviar"}
-            </button>
-          </form>
-        </div>
-      )}
-    </div>
-  );
+  return <div className="observatorio public-assessment"><header className="public-header"><div className="public-brand"><Icone nome="compass" size={27}/><strong>bússola</strong></div><span>UM NOVO OLHAR COMEÇA COM VOCÊ</span></header><main className="public-main">
+    {fase==="enviado"?<section className="public-success obs-panel" role="status"><div className="success-orbit"><Icone nome="check" size={36}/></div><p className="eyebrow">SUA VOZ AGORA FAZ PARTE DO MAPA</p><h1>Obrigado por abrir<br/><em>novos caminhos.</em></h1><p>{agradecimento||"Sua resposta foi registrada."}</p><p className="small-note">O gestor reunirá as percepções do grupo para construir o diagnóstico. Você já pode fechar esta página.</p></section>:<><div className="public-intro"><p className="eyebrow">ASSESSMENT DE INOVAÇÃO / {nome}</p><h1>{titulo}</h1><p>{descricao}</p></div><div className="public-progress"><div><span>ETAPA {etapa+1} DE {secoes.length}</span><span>{respondidas} de {campos.length} campos respondidos</span></div><div className="progress-track"><i style={{width:`${(etapa+1)/secoes.length*100}%`}}/></div></div><div className="public-layout"><form className="obs-panel respondent-form" onSubmit={enviar}><div className="respondent-section"><span className="group-avatar"><Icone nome={etapa===secoes.length-1?"people":"compass"}/></span><div><p className="eyebrow">{String(etapa+1).padStart(2,"0")} / SUA PERSPECTIVA</p><h2 ref={tituloRef} tabIndex={-1}>{secao}</h2></div></div><p className="respondent-help">Não há resposta certa. Pense no que acontece hoje, no dia a dia do seu grupo.</p><label className="absolute -left-[9999px] w-px h-px overflow-hidden" aria-hidden="true">Deixe em branco<input tabIndex={-1} autoComplete="off" value={armadilha} onChange={e=>setArmadilha(e.target.value)}/></label><fieldset disabled={fase==="enviando"} className="respondent-fields">{visiveis.map((c,i)=><div className="respondent-question" key={c.chave}>{c.tipo==="escala"||c.tipo==="nota"?<fieldset><legend><span>{String(i+1).padStart(2,"0")}</span>{c.rotulo}{!c.obrigatorio&&<small>Opcional</small>}</legend><div className="respondent-scale">{Array.from({length:(c.max??(c.tipo==="nota"?10:5))-(c.min??(c.tipo==="nota"?0:1))+1},(_,n)=>(c.min??(c.tipo==="nota"?0:1))+n).map(n=><label key={n} className={dados[c.chave]===String(n)?"selected":""}><input type="radio" name={c.chave} value={n} required={c.obrigatorio} checked={dados[c.chave]===String(n)} onChange={()=>set(c.chave,String(n))}/><span>{n}</span></label>)}</div><div className="scale-anchors"><span>{c.rotuloMin||"Não existe"}</span><span>{c.rotuloMax||"Consolidado"}</span></div></fieldset>:c.tipo==="escolha"?<fieldset><legend><span>{String(i+1).padStart(2,"0")}</span>{c.rotulo}</legend><div className="public-options">{c.opcoes?.map(o=><label key={o.valor}><input type="radio" name={c.chave} required={c.obrigatorio} checked={dados[c.chave]===o.valor} onChange={()=>set(c.chave,o.valor)}/>{o.rotulo}</label>)}</div></fieldset>:<label className="respondent-text"><span><b>{String(i+1).padStart(2,"0")}</b>{c.rotulo}{!c.obrigatorio&&<small>Opcional</small>}</span>{c.tipo==="textarea"?<textarea required={c.obrigatorio} maxLength={4000} rows={4} placeholder="Sua experiência traz contexto para os números…" value={dados[c.chave]??""} onChange={e=>set(c.chave,e.target.value)}/>:<input required={c.obrigatorio} maxLength={150} value={dados[c.chave]??""} onChange={e=>set(c.chave,e.target.value)}/>}</label>}</div>)}</fieldset>{erro&&<div className="obs-alert error" role="alert">{erro}</div>}<div className="respondent-actions">{etapa>0?<button type="button" className="text-link" disabled={fase==="enviando"} onClick={()=>ir(etapa-1)}>← Voltar</button>:<span>Um passo de cada vez.</span>}<button type="submit" className="obs-btn primary" disabled={fase==="enviando"}>{fase==="enviando"?"Enviando sua perspectiva…":etapa<secoes.length-1?"Próxima dimensão":"Enviar minha perspectiva"}<Icone nome="arrow" size={16}/></button></div></form><aside className="respondent-guide"><span className="agent-avatar mint"><Icone nome="compass"/></span><h3>Sua experiência<br/><em>é o ponto de partida.</em></h3><p>Responda com base na sua percepção. Diferenças entre as pessoas ajudam a encontrar oportunidades.</p><div className="guide-scale"><strong>COMO LER A ESCALA</strong><span><b>1</b> Não existe</span><span><b>2</b> Iniciativas isoladas</span><span><b>3</b> Em estruturação</span><span><b>4</b> Prática consistente</span><span><b>5</b> Consolidado</span></div><p className="small-note">Não pedimos nome ou e-mail. Área e cargo são opcionais. Suas respostas ficam disponíveis ao gestor.</p></aside></div></>}
+    <footer className="public-footer"><Icone nome="compass" size={14}/> Bússola · clareza para transformar.</footer>
+  </main></div>;
 }

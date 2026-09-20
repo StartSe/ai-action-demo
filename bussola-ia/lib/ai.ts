@@ -105,6 +105,7 @@ async function chamarOpenRouter(body: Record<string, unknown>): Promise<Response
   }
   try {
     return await fetch(OPENROUTER_URL, {
+      signal: AbortSignal.timeout(45_000),
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey()}`,

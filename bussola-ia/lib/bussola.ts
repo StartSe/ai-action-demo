@@ -1,3 +1,4 @@
+import { consultarConselho } from "./conselho-ia";
 import { validarAdaptacao } from "./assessment-input";
 // Lógica de geração da avaliação, compartilhada entre a rota HTTP (app/api/bussola/route.ts)
 // e a ferramenta MCP (lib/ferramentas.ts), para não duplicar a lógica nos dois lugares.
@@ -112,6 +113,9 @@ export async function analisarAvaliacao({ empresa, titulo, questionario, respost
     const entrada = { empresa, contexto, nivelGeral, nomeEstagio, dispersao, mediasPorDimensao, ...(mediasPorArea.length >= 2 ? { mediasPorArea } : {}), respostasTexto };
     try {
       extra = await askJSON<RespostaAnaliseIA>({ system: SYSTEM_ANALISE, prompt: JSON.stringify(entrada) });
+      const textos = (v: unknown): v is string[] => Array.isArray(v) && v.length > 0 && v.length <= 10 && v.every(s => typeof s === "string" && s.trim().length > 0 && s.length < 4000);
+      if (!extra || typeof extra.resumo !== "string" || !extra.resumo.trim() || !textos(extra.forcas) || !textos(extra.lacunas) || !textos(extra.proximosPassos) || !Array.isArray(extra.leituraPorDimensao) || extra.leituraPorDimensao.length !== mediasPorDimensao.length || !mediasPorDimensao.every(m=>extra.leituraPorDimensao.some(l=>l && l.dimensao===m.dimensao && typeof l.leitura==="string" && l.leitura.trim())) || (extra.ondeDiscordam != null && (!Array.isArray(extra.ondeDiscordam) || extra.ondeDiscordam.some(v=>typeof v!=="string")))) throw new ErroIA("resposta_invalida", "Leitura incompleta da IA.", 502);
+
     } catch (err) {
       if (!podeCairNaLeituraAutomatica(err)) throw err;
       extra = automatica();
@@ -124,6 +128,7 @@ export async function analisarAvaliacao({ empresa, titulo, questionario, respost
   const ondeDiscordam = mediasPorArea.length >= 2 ? (extra.ondeDiscordam ?? undefined) : undefined;
 
   const analise: Analise = { resumo: extra.resumo, nivelGeral, nomeEstagio, mediasPorDimensao, dispersao, leituraPorDimensao: extra.leituraPorDimensao, forcas: extra.forcas, lacunas: extra.lacunas, proximosPassos: extra.proximosPassos, ondeDiscordam, origemLeitura, avisoIA };
+  analise.conselho = await consultarConselho(analise, respostas.length, contexto);
   const avaliacao: Avaliacao = { empresa, titulo, questionario, respostas, analise, contexto };
   const n = respostas.length;
   const insumo = `${n} ${n === 1 ? "resposta recebida" : "respostas recebidas"}${origemLeitura === "automatica" ? " (leitura automática, sem IA)" : ""}`;

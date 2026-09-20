@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { Aviso, DataTable, Destaque, Entregar, Item, Origem, ResultHead, SeloIA, Section, data, lerErro, numero, useStatus, type ErroLido } from "@/components/ui";
+import { conselhoAutomatico } from "@/lib/conselho";
 import { GraficoMaturidade } from "@/components/GraficoMaturidade";
 import type { Meta } from "@/lib/ai";
 import type { Analise, Avaliacao, MediaDimensao } from "@/lib/types";
@@ -16,7 +17,7 @@ function respostasParaCSV(avaliacao: Avaliacao): string {
   return "﻿" + [linha(cabecalho), ...linhas].join("\r\n");
 }
 
-function baixarRespostasCSV(avaliacao: Avaliacao) {
+export function baixarRespostasCSV(avaliacao: Avaliacao) {
   const blob = new Blob([respostasParaCSV(avaliacao)], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -88,7 +89,7 @@ type EnvioPasso = { indice: number; passo: string; ok: boolean; mensagem: string
 
 /** "Enviar próximos passos ao quadro": cada passo vira um cartão no quadro de tarefas conectado (MCP). Três estados:
  * status carregando → nada; quadro conectado → botão; senão → link para conectar em Configurações. */
-function EnviarAoQuadro({ id, analise }: { id: string; analise: Analise }) {
+export function EnviarAoQuadro({ id, analise }: { id: string; analise: Analise }) {
   const { status } = useStatus();
   const [enviando, setEnviando] = useState(false);
   const [noQuadro, setNoQuadro] = useState<number[]>(analise.passosNoQuadro ?? []);
@@ -210,6 +211,10 @@ export function ConteudoAvaliacao({ avaliacao, acoesPassos }: { avaliacao: Avali
         </Section>
       )}
 
+      {analise && <Section titulo="Conselho de agentes">
+        {(analise.conselho ?? conselhoAutomatico(analise, n, avaliacao.contexto)).map(p => <div key={p.id} className="mb-5"><h3 className="font-semibold">{p.nome} · {p.origem === "ia" ? "Interpretação com IA" : "Leitura automática"}</h3><p>{p.mensagem}</p><ul className="list-disc pl-5">{p.recomendacoes.map((r,i)=><li key={i}>{r}</li>)}</ul><p className="italic mt-2">{p.pergunta}</p></div>)}
+      </Section>}
+
       <Section titulo={`Respondentes (${n})`}>
         <DataTable
           colunas={[
@@ -224,7 +229,7 @@ export function ConteudoAvaliacao({ avaliacao, acoesPassos }: { avaliacao: Avali
   );
 }
 
-function avaliacaoParaTexto(avaliacao: Avaliacao): string {
+export function avaliacaoParaTexto(avaliacao: Avaliacao): string {
   const analise = avaliacao.analise;
   const l: string[] = [`${avaliacao.titulo} — ${avaliacao.empresa}`, ""];
   if (analise) {
@@ -236,6 +241,7 @@ function avaliacaoParaTexto(avaliacao: Avaliacao): string {
   if (analise?.lacunas?.length) { l.push("", "Lacunas:"); analise.lacunas.forEach((f) => l.push(`- ${f}`)); }
   if (analise?.proximosPassos?.length) { l.push("", "Próximos passos:"); analise.proximosPassos.forEach((p, i) => l.push(`${i + 1}. ${p}`)); }
   if (analise?.ondeDiscordam?.length) { l.push("", "Onde discordam:"); analise.ondeDiscordam.forEach((f) => l.push(`- ${f}`)); }
+  if (analise) (analise.conselho ?? conselhoAutomatico(analise, avaliacao.respostas.length, avaliacao.contexto)).forEach(p => { l.push("", `${p.nome} (${p.origem === "ia" ? "IA" : "leitura automática"})`, p.mensagem, ...p.recomendacoes.map(r=>`- ${r}`), p.pergunta); });
   l.push("", `Respondentes (${avaliacao.respostas.length}):`);
   avaliacao.respostas.forEach((r) => l.push(`- ${r.respondente?.area || "Não informado"} · ${r.respondente?.cargo || "Não informado"}`));
   return l.join("\n");

@@ -23,7 +23,7 @@ export function calcularMediasPorDimensao(questionario: Questionario, respostas:
   questionario.dimensoes.forEach((dim) => {
     const perguntasDim = questionario.perguntas.filter((p) => p.dimensao === dim.nome && p.tipo === "escala");
     if (!perguntasDim.length) return;
-    const notas = respostas.flatMap((r) => perguntasDim.map((p) => Number(r.valores[p.id])).filter((n) => !Number.isNaN(n)));
+    const notas = respostas.flatMap((r) => perguntasDim.map((p) => Number(r.valores[p.id])).filter((n) => Number.isFinite(n) && n >= ESCALA_MODELO.min && n <= ESCALA_MODELO.max));
     if (!notas.length) return;
     resultado.push({ dimensao: dim.nome, media: arredondar(media(notas)) });
   });
@@ -158,6 +158,7 @@ function resumoSemIA({ nomeEstagio, ordenadas, totalRespostas }: { nomeEstagio: 
     return `Só "${maisForte.dimensao}" tem notas (média ${maisForte.media}): ${totalRespostas === 1 ? "a única resposta" : `as ${totalRespostas} respostas`} não cobrem as outras dimensões.`;
   }
   const distancia = arredondar(maisForte.media - maisFraca.media);
+  if (distancia === 0) return `As ${ordenadas.length} dimensões têm a mesma média (${maisForte.media}). Valide esse equilíbrio com evidências do dia a dia e escolha uma prioridade ligada ao objetivo do grupo.`;
   const frase1 = `"${maisForte.dimensao}" é a dimensão mais madura (média ${maisForte.media}) e "${maisFraca.dimensao}" a mais frágil (média ${maisFraca.media}).`;
   let frase2: string;
   if (distancia >= 1.5) frase2 = `A distância de ${distancia} ponto${distancia === 1 ? "" : "s"} entre elas indica evolução desigual: o avanço do estágio "${nomeEstagio}" passa por puxar a dimensão mais frágil, não por reforçar a mais forte.`;
