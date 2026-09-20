@@ -32,7 +32,7 @@ import {
 import { Icon, IconButton, Modal, request } from "./StudioUI";
 import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
 import { NodeDialog } from "./NodeDialog";
-import { RunView } from "./RunView";
+import { ChatPopup } from "./ChatPopup";
 import { IntegrationDialog } from "./IntegrationDialog";
 import { GeneratorDialog } from "./GeneratorDialog";
 import type { Generated } from "@/lib/flow-generator";
@@ -80,7 +80,9 @@ export function FlowEditor({ id }: { id: string }) {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [input, setInput] = useState("");
+  const [session, setSession] = useState<Run[]>([]);
+  const [pendingInput, setPendingInput] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const [demo, setDemo] = useState(false);
   const [snap, setSnap] = useState(false);
   const [dots, setDots] = useState(true);
@@ -356,9 +358,19 @@ export function FlowEditor({ id }: { id: string }) {
     a.click();
     URL.revokeObjectURL(url);
   }
-  async function execute() {
+  // Cada execução vira uma troca no chat; o mesmo registro é atualizado enquanto roda.
+  const updateRun = useCallback((r: Run) => {
+    setRun(r);
+    setSession((list) =>
+      list.some((x) => x.id === r.id)
+        ? list.map((x) => (x.id === r.id ? r : x))
+        : [...list, r],
+    );
+  }, [setRun, setSession]);
+  async function execute(input: string) {
     setRunning(true);
     setError("");
+    setPendingInput(input);
     setRun(null);
     let timer: ReturnType<typeof setInterval> | undefined;
     try {
@@ -368,13 +380,13 @@ export function FlowEditor({ id }: { id: string }) {
         void request<Run[]>("/api/runs?flowId=" + id)
           .then((items) => {
             const latest = items.find((r) => r.createdAt >= from);
-            if (latest) setRun(latest);
+            if (latest) updateRun(latest);
           })
           .catch(() => {});
       }, 800);
-      setRun(
+      updateRun(
         await request<Run>("/api/flows/" + id + "/run", "POST", {
-          input: input.trim(),
+          input,
           demo,
         }),
       );
@@ -772,169 +784,91 @@ export function FlowEditor({ id }: { id: string }) {
             Arraste a seta de um bloco para conectar · clique duas vezes para
             editar
           </div>
-          {!chat && !history && (
-            <button className="chat-launcher" onClick={() => setChat(true)}>
-              <Icon name="chat" size={23} />
-              <span>Testar</span>
+          <div className="canvas-right-actions">
+            <button
+              className={"chat-fab" + (chat ? " active" : "")}
+              title={chat ? "Fechar chat" : "Testar Agentflow"}
+              aria-label={chat ? "Fechar chat" : "Testar Agentflow"}
+              onClick={() => {
+                setChat(!chat);
+                setHistory(false);
+              }}
+            >
+              <Icon name={chat ? "close" : "chat"} size={22} />
             </button>
+          </div>
+          {chat && (
+            <ChatPopup
+              session={session}
+              pendingInput={pendingInput}
+              running={running}
+              demo={demo}
+              connected={!!connection?.account}
+              expanded={expanded}
+              onDemo={setDemo}
+              onSend={(text) => void execute(text)}
+              onChange={updateRun}
+              onConnect={() => setConnect(true)}
+              onClose={() => setChat(false)}
+              onClear={() => {
+                setSession([]);
+                setRun(null);
+              }}
+              onExpand={() => setExpanded(!expanded)}
+            />
           )}
         </div>
-        {(chat || history) && (
+        {history && (
           <aside className="canvas-test-panel">
             <header>
               <div>
-                <Icon name={chat ? "chat" : "runs"} size={20} />
-                <h2>{chat ? "Testar Agentflow" : "Execuções do fluxo"}</h2>
+                <Icon name="runs" size={20} />
+                <h2>Execuções do fluxo</h2>
               </div>
               <IconButton
                 icon="close"
                 label="Fechar painel"
-                onClick={() => {
-                  setChat(false);
-                  setHistory(false);
-                }}
+                onClick={() => setHistory(false)}
               />
             </header>
-            {history ? (
-              <div className="flow-runs-list">
-                {!runs.length ? (
-                  <div className="chat-empty">
-                    <Icon name="runs" size={30} />
-                    <h3>Nenhuma execução ainda</h3>
-                    <p>Teste seu fluxo para acompanhar cada etapa.</p>
-                  </div>
-                ) : (
-                  runs.map((r) => (
-                    <button
-                      key={r.id}
-                      onClick={() => {
-                        setRun(r);
-                        setChat(true);
-                        setHistory(false);
-                      }}
-                    >
-                      <span className={"run-status-dot " + r.status} />
-                      <span>
-                        <strong>{r.input.slice(0, 70)}</strong>
-                        <small>
-                          {new Date(r.createdAt).toLocaleString("pt-BR")} ·{" "}
-                          {r.demo ? "Demonstração" : "ChatGPT"}
-                        </small>
-                      </span>
-                      <span>
-                        {r.status === "completed"
-                          ? "Concluída"
-                          : r.status === "waiting"
-                            ? "Aguardando"
-                            : r.status === "failed"
-                              ? "Falhou"
-                              : "Em execução"}
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
-            ) : (
-              <>
-                <div className="chat-scroll">
-                  {!run && !running ? (
-                    <div className="chat-empty">
-                      <div className="chat-empty-icon">
-                        <Icon name="agent" size={34} />
-                      </div>
-                      <h3>Converse com seu fluxo</h3>
-                      <p>
-                        Envie uma mensagem para testar seus agentes e acompanhar
-                        o caminho percorrido.
-                      </p>
-                      <button
-                        onClick={() =>
-                          setInput(
-                            "Meu pedido está atrasado e preciso de ajuda urgente.",
-                          )
-                        }
-                      >
-                        Testar com uma solicitação de exemplo
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      {run && (
-                        <>
-                          <div className="test-user-message">{run.input}</div>
-                          <RunView run={run} onChange={setRun} compact />
-                        </>
-                      )}
-                      {running && (
-                        <div className="chat-thinking">
-                          <span className="studio-spinner" />
-                          Executando as etapas…
-                        </div>
-                      )}
-                    </>
-                  )}
+            <div className="flow-runs-list">
+              {!runs.length ? (
+                <div className="chat-empty">
+                  <Icon name="runs" size={30} />
+                  <h3>Nenhuma execução ainda</h3>
+                  <p>Teste seu fluxo para acompanhar cada etapa.</p>
                 </div>
-                <div className="chat-composer">
-                  <label className="demo-toggle">
-                    <input
-                      type="checkbox"
-                      checked={demo}
-                      onChange={(e) => setDemo(e.target.checked)}
-                    />
-                    Simular com respostas de exemplo
-                  </label>
-                  {!connection?.account && !demo && (
-                    <p>
-                      Conecte o ChatGPT para executar de verdade.{" "}
-                      <button onClick={() => setConnect(true)}>Conectar</button>
-                    </p>
-                  )}
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (input.trim() && !running) void execute();
+              ) : (
+                runs.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => {
+                      updateRun(r);
+                      setChat(true);
+                      setHistory(false);
                     }}
                   >
-                    <textarea
-                      aria-label="Mensagem para testar"
-                      placeholder="Digite sua mensagem…"
-                      rows={3}
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          if (
-                            input.trim() &&
-                            !running &&
-                            (demo || connection?.account)
-                          )
-                            void execute();
-                        }
-                      }}
-                    />
-                    <button
-                      type="submit"
-                      className="chat-send"
-                      title="Enviar mensagem"
-                      aria-label="Enviar mensagem"
-                      disabled={
-                        running ||
-                        !input.trim() ||
-                        (!demo && !connection?.account)
-                      }
-                    >
-                      <Icon name="play" size={17} />
-                    </button>
-                  </form>
-                  <small>
-                    {demo
-                      ? "Demonstração · nenhuma ação externa"
-                      : "ChatGPT · usa os limites da sua assinatura"}
-                  </small>
-                </div>
-              </>
-            )}
+                    <span className={"run-status-dot " + r.status} />
+                    <span>
+                      <strong>{r.input.slice(0, 70)}</strong>
+                      <small>
+                        {new Date(r.createdAt).toLocaleString("pt-BR")} ·{" "}
+                        {r.demo ? "Demonstração" : "ChatGPT"}
+                      </small>
+                    </span>
+                    <span>
+                      {r.status === "completed"
+                        ? "Concluída"
+                        : r.status === "waiting"
+                          ? "Aguardando"
+                          : r.status === "failed"
+                            ? "Falhou"
+                            : "Em execução"}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
           </aside>
         )}
       </div>
