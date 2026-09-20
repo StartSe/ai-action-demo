@@ -23,4 +23,17 @@ A validação usa armazenamento temporário e não altera as contas ou conexões
 - Conferência visual em 1440×1000 e 390×844. Verificação de navegação e campos em 1366×768, 1024×768, 768×1024, 360×800 e 320×720.
 - Integrações externas simuladas nos testes; armazenamento temporário isolado. Não foram enviados e-mails, mensagens ou comandos para serviços externos.
 
-Commits por etapa: `6b31099` (estrutura e configurações), `2b8cf2c` (demais telas), seguido do commit de validação e estados de falha.
+Commits por etapa: `6b31099` (estrutura e configurações), `2b8cf2c` (demais telas), `e934902` (validação e estados de falha).
+
+
+## Revisão complementar do acompanhamento dos grupos
+
+Pendências identificadas e resolvidas após a solicitação de continuar:
+
+- Falhas na consulta de respostas deixam de manter o carregamento indefinidamente. O gestor recebe um aviso no grupo e pode tentar novamente.
+- Uma falha durante a atualização preserva as últimas respostas consultadas e informa que os dados exibidos são da consulta anterior.
+- Trocar de assessment cancela a consulta anterior; respostas atrasadas não aparecem no grupo recém-selecionado.
+- A atualização da lista não apaga falhas de análise. Erros do painel, da análise e da consulta de respostas têm estados separados.
+- Falhas no primeiro carregamento encerram o indicador de espera; a ação de atualizar reflete o estado da requisição.
+
+Validação consolidada: 10 testes de unidade e 15 testes de navegador aprovados; build/TypeScript, ESLint e `git diff --check` aprovados. A regressão inclui criação de grupos, coleta, análise, ações, exportação, configurações, acesso, histórico, responsividade e recuperação de falhas. Nenhuma pendência de implementação identificada neste ciclo ficou aberta.

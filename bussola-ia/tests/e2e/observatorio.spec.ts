@@ -466,3 +466,196 @@ test("trocar de diagnóstico na biblioteca carrega o registro correto", async ({
   await expect(page).toHaveURL(new RegExp(ids[1]));
   await expect(page.locator(".analysis-heading h2")).toHaveText("Norte B");
 });
+
+test("acompanhamento recupera falha e preserva a última consulta do grupo", async ({
+  page,
+}) => {
+  await login(page);
+  const grupo = await criar(page, {
+    titulo: "Recuperação das respostas",
+    grupoTipo: "area",
+    grupoNome: "Operações",
+  });
+  expect(
+    (
+      await page.request.post(`/api/f/${grupo.codigo}`, {
+        data: respostas("3", "Operações"),
+      })
+    ).ok(),
+  ).toBeTruthy();
+  await page.route(`**/api/bussola/link/${grupo.codigo}/respostas`, (route) =>
+    route.fulfill({ status: 503, json: { error: "Falha temporária" } }),
+  );
+  await page.goto("/?tela=assessments");
+  await page
+    .getByRole("button", {
+      name: "Acompanhar Recuperação das respostas",
+      exact: true,
+    })
+    .click();
+  const detalhe = page.locator(".assessment-detail");
+  await expect(detalhe.getByRole("alert")).toContainText(
+    "Não foi possível carregar as respostas deste grupo.",
+  );
+  await expect(
+    detalhe.getByText("Carregando respostas…", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    detalhe.getByText("O grupo ainda não respondeu.", { exact: true }),
+  ).toHaveCount(0);
+  await page.unroute(`**/api/bussola/link/${grupo.codigo}/respostas`);
+  await detalhe
+    .getByRole("button", { name: "Tentar carregar respostas", exact: true })
+    .click();
+  await expect(detalhe.locator(".response-list")).toContainText("Operações");
+  await expect(detalhe.getByRole("alert")).toHaveCount(0);
+  await page.route(`**/api/bussola/link/${grupo.codigo}/respostas`, (route) =>
+    route.fulfill({ status: 503, json: { error: "Falha temporária" } }),
+  );
+  await page
+    .getByRole("button", { name: "Atualizar assessments", exact: true })
+    .click();
+  await expect(detalhe.getByRole("alert")).toContainText(
+    "Exibindo as respostas da última consulta bem-sucedida.",
+  );
+  await expect(detalhe.locator(".response-list")).toContainText("Operações");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await a11y(page);
+  await semOverflow(page);
+  await page.unroute(`**/api/bussola/link/${grupo.codigo}/respostas`);
+  await detalhe
+    .getByRole("button", { name: "Tentar carregar respostas", exact: true })
+    .click();
+  await expect(detalhe.getByRole("alert")).toHaveCount(0);
+});
+
+test("trocar de grupo cancela a consulta anterior sem misturar respostas", async ({
+  page,
+}) => {
+  await login(page);
+  const primeiro = await criar(page, {
+    titulo: "Grupo anterior",
+    grupoTipo: "area",
+    grupoNome: "Financeiro",
+  });
+  const segundo = await criar(page, {
+    titulo: "Grupo atual",
+    grupoTipo: "area",
+    grupoNome: "Comercial",
+  });
+  expect(
+    (
+      await page.request.post(`/api/f/${segundo.codigo}`, {
+        data: respostas("4", "Comercial"),
+      })
+    ).ok(),
+  ).toBeTruthy();
+  let liberar!: () => void;
+  const bloqueio = new Promise<void>((resolve) => {
+    liberar = resolve;
+  });
+  let iniciou!: () => void;
+  const consultaIniciada = new Promise<void>((resolve) => {
+    iniciou = resolve;
+  });
+  let terminou!: () => void;
+  const consultaTerminada = new Promise<void>((resolve) => {
+    terminou = resolve;
+  });
+  await page.route(
+    `**/api/bussola/link/${primeiro.codigo}/respostas`,
+    async (route) => {
+      iniciou();
+      await bloqueio;
+      try {
+        await route.fulfill({
+          json: {
+            respostas: [
+              {
+                id: "antiga",
+                criadoEm: new Date().toISOString(),
+                respondente: { area: "Financeiro", cargo: "Direção" },
+              },
+            ],
+          },
+        });
+      } finally {
+        terminou();
+      }
+    },
+  );
+  await page.goto("/?tela=assessments");
+  await page
+    .getByRole("button", { name: "Acompanhar Grupo anterior", exact: true })
+    .click();
+  await consultaIniciada;
+  await expect(
+    page.locator(".assessment-detail").getByRole("status"),
+  ).toHaveText("Carregando respostas…");
+  await page
+    .getByRole("button", { name: "Acompanhar Grupo atual", exact: true })
+    .click();
+  await expect(page.locator(".response-list")).toContainText("Comercial");
+  liberar();
+  await consultaTerminada;
+  await expect(page.locator(".response-list")).not.toContainText("Financeiro");
+  await expect(page.locator(".assessment-detail h3")).toHaveText("Grupo atual");
+});
+
+test("falha inicial do painel encerra o carregamento e não apaga erros de análise", async ({
+  page,
+}) => {
+  await login(page);
+  const grupo = await criar(page, { titulo: "Análise indisponível" });
+  expect(
+    (
+      await page.request.post(`/api/f/${grupo.codigo}`, {
+        data: respostas("3"),
+      })
+    ).ok(),
+  ).toBeTruthy();
+  await page.route("**/api/bussola/painel", (route) =>
+    route.fulfill({ status: 503, json: { error: "Painel indisponível" } }),
+  );
+  await page.goto("/");
+  await expect(page.locator(".obs-alert[role=alert]")).toContainText(
+    "Painel indisponível",
+  );
+  await expect(
+    page.getByText("Buscando seus assessments…", { exact: true }),
+  ).toHaveCount(0);
+  await page.unroute("**/api/bussola/painel");
+  await page
+    .getByRole("button", { name: "Tentar atualizar", exact: true })
+    .click();
+  await page
+    .getByRole("button", {
+      name: "Acompanhar Análise indisponível",
+      exact: true,
+    })
+    .click();
+  await page.route(`**/api/bussola/link/${grupo.codigo}/analisar`, (route) =>
+    route.fulfill({
+      status: 503,
+      json: { error: "A análise não foi concluída. Tente novamente." },
+    }),
+  );
+  await page
+    .getByRole("button", { name: "Analisar respostas", exact: true })
+    .click();
+  await expect(page.locator(".obs-alert[role=alert]")).toContainText(
+    "A análise não foi concluída.",
+  );
+  await page.getByRole("button", { name: "Visão geral", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Atualizar assessments", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Atualizar assessments", exact: true }),
+  ).toBeEnabled();
+  await expect(page.locator(".obs-alert[role=alert]")).toContainText(
+    "A análise não foi concluída.",
+  );
+  await page.getByRole("button", { name: "Fechar aviso", exact: true }).click();
+  await expect(page.locator(".obs-alert[role=alert]")).toHaveCount(0);
+});

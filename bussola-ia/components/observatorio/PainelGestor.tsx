@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useStatus, useConfirmacao } from "@/components/ui";
 import { SalaAnalise } from "./SalaAnalise";
 import { Oficina } from "./Oficina";
+import { RespostasGrupo } from "./RespostasGrupo";
 import { Icone, type NomeIcone } from "./Icone";
 import { BussolaOrbital } from "./BussolaOrbital";
 import {
@@ -14,7 +15,7 @@ import {
   type AssessmentPainel,
   type DadosPainel,
 } from "@/lib/painel";
-import type { Avaliacao, Resposta } from "@/lib/types";
+import type { Avaliacao } from "@/lib/types";
 import type { Meta } from "@/lib/ai";
 
 import { EstruturaObservatorio, type Tela } from "./EstruturaObservatorio";
@@ -33,11 +34,11 @@ export function PainelGestor({
   );
   const [painel, setPainel] = useState<DadosPainel | null>(null);
   const [erro, setErro] = useState("");
+  const [erroPainel, setErroPainel] = useState("");
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState("todos");
   const [grupo, setGrupo] = useState("todos");
   const [selecionado, setSelecionado] = useState<string | null>(null);
-  const [respostas, setRespostas] = useState<Resposta[] | null>(null);
   const [resultado, setResultado] = useState<ResultadoState | null>(
     resultadoInicial ?? null,
   );
@@ -48,14 +49,24 @@ export function PainelGestor({
   const { confirmar, Dialogo } = useConfirmacao();
   const router = useRouter();
   const auto = useRef(false);
+  const consultaPainel = useRef<AbortController | null>(null);
   const carregar = useCallback(async () => {
+    consultaPainel.current?.abort();
+    const controlador = new AbortController();
+    consultaPainel.current = controlador;
+    setAtualizando(true);
     try {
-      setPainel(await requisitar<DadosPainel>("/api/bussola/painel"));
-      setErro("");
+      const dados = await requisitar<DadosPainel>("/api/bussola/painel", {
+        signal: controlador.signal,
+      });
+      if (!controlador.signal.aborted) {
+        setPainel(dados);
+        setErroPainel("");
+      }
     } catch (e) {
-      setErro((e as Error).message);
+      if (!controlador.signal.aborted) setErroPainel((e as Error).message);
     } finally {
-      setAtualizando(false);
+      if (!controlador.signal.aborted) setAtualizando(false);
     }
   }, []);
   useEffect(() => {
@@ -66,6 +77,7 @@ export function PainelGestor({
     return () => {
       clearTimeout(inicial);
       clearInterval(id);
+      consultaPainel.current?.abort();
     };
   }, [carregar]);
   const abrirExemplo = useCallback(async () => {
@@ -99,22 +111,6 @@ export function PainelGestor({
       void abrirExemplo();
     }
   }, [abrirExemplo]);
-  useEffect(() => {
-    if (!selecionado) return;
-    let ativo = true;
-    requisitar<{ respostas: Resposta[] }>(
-      `/api/bussola/link/${selecionado}/respostas`,
-    )
-      .then((d) => {
-        if (ativo) setRespostas(d.respostas);
-      })
-      .catch((e) => {
-        if (ativo) setErro(e.message);
-      });
-    return () => {
-      ativo = false;
-    };
-  }, [selecionado, painel]);
   function navegar(nova: Tela) {
     setTela(nova);
     setAviso("");
@@ -225,10 +221,18 @@ export function PainelGestor({
           </button>
         )}
       </div>
+      {erroPainel && (
+        <div className="obs-alert error" role="alert">
+          {erroPainel}
+          <button disabled={atualizando} onClick={() => void carregar()}>
+            Tentar atualizar
+          </button>
+        </div>
+      )}
       {erro && (
         <div className="obs-alert error" role="alert">
           {erro}
-          <button onClick={() => void carregar()}>Tentar atualizar</button>
+          <button onClick={() => setErro("")}>Fechar aviso</button>
         </div>
       )}
       {aviso && (
@@ -396,8 +400,17 @@ export function PainelGestor({
             </div>
             {painel === null ? (
               <div className="empty-state">
-                <span className="loading-orbit" />
-                <p>Buscando seus assessments…</p>
+                {erroPainel && !atualizando ? (
+                  <p>
+                    O acompanhamento estará disponível quando a conexão for
+                    restabelecida. Tente atualizar acima.
+                  </p>
+                ) : (
+                  <>
+                    <span className="loading-orbit" />
+                    <p role="status">Buscando seus assessments…</p>
+                  </>
+                )}
               </div>
             ) : visiveis.length === 0 ? (
               <div className="empty-state">
@@ -442,7 +455,6 @@ export function PainelGestor({
                       <button
                         className="assessment-name"
                         onClick={() => {
-                          setRespostas(null);
                           setSelecionado(
                             selecionado === a.codigo ? null : a.codigo,
                           );
@@ -492,7 +504,6 @@ export function PainelGestor({
                         className="icon-button"
                         aria-label={`Acompanhar ${a.titulo}`}
                         onClick={() => {
-                          if (selecionado !== a.codigo) setRespostas(null);
                           setSelecionado(a.codigo);
                         }}
                       >
@@ -569,31 +580,7 @@ export function PainelGestor({
                     ↗
                   </Link>
                 )}
-                <h4>Respostas do grupo</h4>
-                <p className="small-note">
-                  Contagem de envios, sem identificação individual. Não
-                  representa pessoas únicas verificadas.
-                </p>
-                {respostas === null ? (
-                  <p>Carregando respostas…</p>
-                ) : respostas.length === 0 ? (
-                  <p className="small-note">O grupo ainda não respondeu.</p>
-                ) : (
-                  <div className="response-list">
-                    {respostas.map((r, i) => (
-                      <div key={r.id}>
-                        <span>{String(i + 1).padStart(2, "0")}</span>
-                        <strong>
-                          {r.respondente?.area || "Área não informada"}
-                        </strong>
-                        <span>
-                          {r.respondente?.cargo || "Cargo não informado"}
-                        </span>
-                        <time>{dataCurta(r.criadoEm)}</time>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <RespostasGrupo key={detalhe.codigo} assessment={detalhe} />
               </section>
             )}
             <div className="panel-footer">
