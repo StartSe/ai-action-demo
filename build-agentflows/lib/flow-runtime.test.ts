@@ -137,19 +137,47 @@ test("referência ausente falha com diagnóstico e mantém etapas", async () => 
   assert.match(r.error!, /não tem valor/);
   assert.equal(r.trace.length, 2);
 });
-test("somente ChatGPT: chave antiga nunca habilita execução real", async () => {
-  const account = bridge.account;
+test("OpenRouter só vale para blocos que escolhem um modelo dele; sem fallback", async () => {
+  const account = bridge.account,
+    run = bridge.run,
+    fetch0 = globalThis.fetch;
   bridge.account = async () => ({ account: null, login: null, error: null });
-  setConfig("OPENROUTER_API_KEY", "chave-antiga-ignorada");
+  bridge.run = async () => {
+    throw new Error("Conecte sua conta ChatGPT para executar este agente.");
+  };
+  setConfig("OPENROUTER_API_KEY", null);
   try {
     const f = flow();
     await assert.rejects(
       () => runtime.startRun(f.id, "Olá"),
       /Conecte o ChatGPT/,
     );
+    setConfig("OPENROUTER_API_KEY", "sk-or-teste");
+    // Bloco em "Automático · ChatGPT" continua exigindo o ChatGPT: nada de cair para outro provedor.
+    const r = await runtime.startRun(f.id, "Olá");
+    assert.equal(r.status, "failed");
+    assert.match(r.error || "", /ChatGPT/);
+    // Bloco com modelo do OpenRouter roda por ele.
+    const g = template();
+    g.nodes[1].data.config.model = "openrouter:openai/gpt-4.1-mini";
+    const f2 = flow(g);
+    let chamado = "";
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      chamado = String(url) + " " + JSON.parse(String(init?.body)).model;
+      return new Response(
+        JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "Via OpenRouter" } }] }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+    const r2 = await runtime.startRun(f2.id, "Olá");
+    assert.equal(r2.status, "completed");
+    assert.equal(r2.output, "Via OpenRouter");
+    assert.match(chamado, /openrouter\.ai.* openai\/gpt-4\.1-mini$/);
     assert.equal((await runtime.startRun(f.id, "Olá", false, true)).demo, true);
   } finally {
     bridge.account = account;
+    bridge.run = run;
+    globalThis.fetch = fetch0;
     setConfig("OPENROUTER_API_KEY", null);
   }
 });

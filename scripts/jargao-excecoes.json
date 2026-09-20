@@ -1,7 +1,8 @@
 {
   "build-agentflows": [
     "webhook",
-    "token"
+    "token",
+    "OpenRouter"
   ],
   "radar-sinais": [
     "OpenRouter"

@@ -1,4 +1,5 @@
 import { chatGPT } from "./chatgpt";
+import { GENERATOR_MODEL, openRouterKey, runOpenRouter } from "./openrouter";
 import { FlowError, validateGraph } from "./flow-store";
 import { BLOCKS, block, type Graph, type Kind } from "./flow-types";
 import { layout, outputs } from "./flow-graph";
@@ -106,12 +107,22 @@ export function parseGenerated(answer: string): Generated {
   };
 }
 // Pede ao ChatGPT um fluxo completo e tenta uma correção quando a primeira resposta é inválida.
+// ChatGPT quando conectado; senão o OpenRouter com um modelo econômico.
+export async function defaultRunner() {
+  if ((await chatGPT().account()).account)
+    return (system: string, prompt: string) => chatGPT().run({ system, prompt });
+  if (openRouterKey())
+    return (system: string, prompt: string) =>
+      runOpenRouter({ system, prompt, model: GENERATOR_MODEL });
+  throw new FlowError("Conecte o ChatGPT ou o OpenRouter para gerar fluxos.", 409);
+}
 export async function generateFlow(
   request: unknown,
-  run = (system: string, prompt: string) => chatGPT().run({ system, prompt }),
+  run?: (system: string, prompt: string) => Promise<string>,
 ): Promise<Generated> {
   if (typeof request !== "string" || !request.trim() || request.length > 4000)
     throw new FlowError("Descreva o fluxo em até 4 mil caracteres.");
+  run ??= await defaultRunner();
   const answer = await run(GENERATOR_SYSTEM, request.trim());
   try {
     return parseGenerated(answer);

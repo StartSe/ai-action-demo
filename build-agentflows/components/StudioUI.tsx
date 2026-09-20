@@ -286,7 +286,7 @@ export function StudioShell({
   connected,
 }: {
   children: ReactNode;
-  active: "flows" | "runs";
+  active: "flows" | "runs" | "connections";
   onConnect: () => void;
   connected?: boolean;
 }) {
@@ -318,6 +318,13 @@ export function StudioShell({
           <Link className={active === "runs" ? "active" : ""} href="/historico">
             <Icon name="runs" />
             Execuções
+          </Link>
+          <Link
+            className={active === "connections" ? "active" : ""}
+            href="/conexoes"
+          >
+            <Icon name="link" />
+            Conexões
           </Link>
         </nav>
         <div className="studio-nav-bottom">
