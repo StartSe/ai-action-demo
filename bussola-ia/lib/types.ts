@@ -65,6 +65,7 @@ export interface Analise {
 }
 
 export interface Avaliacao {
+  contexto?: ContextoAssessment;
   empresa: string;
   titulo: string;
   questionario: Questionario;
@@ -75,4 +76,13 @@ export interface Avaliacao {
 export interface DadosAvaliacao {
   empresa: string;
   titulo: string;
+}
+
+export interface ContextoAssessment {
+  grupoTipo: "empresa" | "area";
+  grupoNome?: string;
+  participantes?: number;
+  objetivo?: string;
+  setor?: string;
+  porte?: string;
 }

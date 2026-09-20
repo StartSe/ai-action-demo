@@ -4,7 +4,7 @@
 // avisa sobre o endereço (o link circula fora do app) e sobre o disco efêmero do plano gratuito (US-029).
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Aviso, CopyButton, lerErro } from "./ui";
-import type { Questionario } from "@/lib/types";
+import type { ContextoAssessment, Questionario } from "@/lib/types";
 
 type Props = {
   onFechar: () => void;
@@ -12,6 +12,7 @@ type Props = {
   questionario: Questionario;
   titulo: string;
   empresa: string;
+  contexto?: ContextoAssessment;
   /** Render sem disco persistente: as respostas se perdem quando o app reinicia (GET /api/bussola/link). */
   discoEfemero: boolean;
 };
@@ -23,34 +24,25 @@ function enderecoLocal(): boolean {
 }
 
 /** Só é montado enquanto o diálogo está aberto (ver app/page.tsx), para o estado nascer limpo a cada abertura. */
-export function DialogoLinkAvaliacao({ onFechar, aoCriar, questionario, titulo, empresa, discoEfemero }: Props) {
+export function DialogoLinkAvaliacao({ onFechar, aoCriar, questionario, titulo, empresa, contexto, discoEfemero }: Props) {
   const [expiraEmDias, setExpiraEmDias] = useState("30");
   const [limite, setLimite] = useState("50");
   const [fase, setFase] = useState<Fase>("form");
   const [link, setLink] = useState("");
   const [mensagemErro, setMensagemErro] = useState("");
-  const caixaRef = useRef<HTMLDivElement>(null);
+  const caixaRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onFechar();
-    }
-    function onClickFora(e: MouseEvent) {
-      if (caixaRef.current && !caixaRef.current.contains(e.target as Node)) onFechar();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("mousedown", onClickFora);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("mousedown", onClickFora);
-    };
-  }, [onFechar]);
+    const dialog = caixaRef.current;
+    dialog?.showModal();
+    return () => { dialog?.close(); };
+  }, []);
 
   async function gerar(e: FormEvent) {
     e.preventDefault();
     setFase("gerando");
     try {
-      const corpo = { questionario, titulo, empresa, expiraEmDias: Number(expiraEmDias), limite: limite === "sem-limite" ? null : Number(limite) };
+      const corpo = { ...contexto, questionario, titulo, empresa, expiraEmDias: Number(expiraEmDias), limite: limite === "sem-limite" ? null : Number(limite) };
       const r = await fetch("/api/bussola/link", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
       if (!r.ok) {
         setMensagemErro((await lerErro(r)).mensagem);
@@ -69,10 +61,9 @@ export function DialogoLinkAvaliacao({ onFechar, aoCriar, questionario, titulo, 
   }
 
   return (
-    <div className="fixed inset-0 z-30 bg-black/40 grid place-items-center px-4" role="presentation">
-      <div ref={caixaRef} role="dialog" aria-modal="true" aria-labelledby="titulo-link-avaliacao" className="card w-full max-w-[480px] p-7 max-md:p-5 max-h-[92vh] overflow-y-auto">
+    <dialog ref={caixaRef} onCancel={(e)=>{e.preventDefault();if(fase!=="gerando")onFechar();}} aria-labelledby="titulo-link-avaliacao" className="assessment-dialog card w-[calc(100%-32px)] max-w-[480px] p-7 max-md:p-5 max-h-[92vh] overflow-y-auto m-auto">
         <h2 id="titulo-link-avaliacao" className="text-xl font-extrabold mb-1.5">Criar link de avaliação</h2>
-        <p className="text-muted text-sm mb-5">Quem abrir o link responde sem precisar entrar no app. As respostas chegam aqui, em &ldquo;Avaliações em andamento&rdquo;.</p>
+        <p className="text-muted text-sm mb-5">Quem abrir o link responde sem precisar entrar no app. Acompanhe a participação do grupo no painel de assessments.</p>
 
         {fase === "pronto" ? (
           <div className="flex flex-col gap-4">
@@ -116,11 +107,10 @@ export function DialogoLinkAvaliacao({ onFechar, aoCriar, questionario, titulo, 
             {fase === "erro" && <div className="mb-4"><Aviso tom="danger">{mensagemErro}</Aviso></div>}
             <div className="flex gap-2.5">
               <button type="submit" className="btn-primary !w-auto flex-1" disabled={fase === "gerando"}>{fase === "gerando" ? "Gerando" : "Gerar link"}</button>
-              <button type="button" className="btn-ghost" onClick={onFechar}>Cancelar</button>
+              <button type="button" className="btn-ghost" disabled={fase === "gerando"} onClick={onFechar}>Cancelar</button>
             </div>
           </form>
         )}
-      </div>
-    </div>
+    </dialog>
   );
 }

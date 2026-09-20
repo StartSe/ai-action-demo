@@ -7,13 +7,13 @@ import { contarRespostas, criar, encerrar, expirou, listarPorTipo, obter as obte
 import { atualizar as atualizarQuestionario, obter as obterQuestionario, obterPorTitulo, salvar as salvarQuestionario } from "./questionarios";
 import { listarPorCodigo, salvar as salvarResposta } from "./respostas";
 import { ESCALA_MODELO } from "./modelo";
-import type { Questionario, Resposta } from "./types";
+import type { ContextoAssessment, Questionario, Resposta } from "./types";
 
 export const TIPO_LINK_AVALIACAO = "bussola";
 
 const SECAO_SOBRE_VOCE = "Sobre você (opcional)";
 
-export type ParametrosLinkAvaliacao = ParametrosPublicos & { questionarioId: string; empresa: string };
+export type ParametrosLinkAvaliacao = ParametrosPublicos & Partial<ContextoAssessment> & { questionarioId: string; empresa: string };
 
 /** Converte as perguntas do questionário em campos do formulário público, agrupados por dimensão (secao);
  * "Área" e "Cargo" entram como campos opcionais numa seção extra ao final. */
@@ -35,16 +35,17 @@ export function camposDoQuestionario(questionario: Questionario): CampoFormulari
 const PRAZOS_VALIDOS = [7, 30, 90];
 const LIMITES_VALIDOS = [10, 50, 200];
 
-export function criarLinkAvaliacao({ questionarioId, titulo, empresa, expiraEmDias, limite }: { questionarioId: string; titulo: string; empresa: string; expiraEmDias?: number; limite?: number }): string {
+export function criarLinkAvaliacao({ questionarioId, titulo, empresa, expiraEmDias, limite, contexto }: { contexto?: ContextoAssessment; questionarioId: string; titulo: string; empresa: string; expiraEmDias?: number; limite?: number }): string {
   const salvo = obterQuestionario(questionarioId);
   if (!salvo) throw new Error("Questionário não encontrado.");
   const prazo = PRAZOS_VALIDOS.includes(expiraEmDias ?? 30) ? (expiraEmDias ?? 30) : 30;
   const teto = limite === undefined ? undefined : LIMITES_VALIDOS.includes(limite) ? limite : 50;
   const parametros: ParametrosLinkAvaliacao = {
+    ...contexto,
     marca: "B",
     nome: "Bússola de IA",
     titulo: titulo || salvo.titulo,
-    descricao: `${empresa}. Você pode responder sem se identificar.`,
+    descricao: `${empresa}${contexto?.grupoNome ? ` · ${contexto.grupoNome}` : ""}. Compartilhe sua percepção sobre inovação e IA. Área e cargo são opcionais; as respostas ficam disponíveis ao gestor.`,
     agradecimento: `Sua resposta entrou na avaliação de ${empresa}.`,
     questionarioId,
     empresa,
@@ -52,7 +53,7 @@ export function criarLinkAvaliacao({ questionarioId, titulo, empresa, expiraEmDi
   return criar({ tipo: TIPO_LINK_AVALIACAO, campos: camposDoQuestionario(salvo.questionario), parametros, expiraEmDias: prazo, limite: teto });
 }
 
-export type AvaliacaoEmAndamento = {
+export type AvaliacaoEmAndamento = Partial<ContextoAssessment> & {
   codigo: string;
   titulo: string;
   empresa: string;
@@ -70,6 +71,11 @@ export type AvaliacaoEmAndamento = {
 export function listarAvaliacoesEmAndamento(limite = 50): AvaliacaoEmAndamento[] {
   return listarPorTipo<ParametrosLinkAvaliacao>(TIPO_LINK_AVALIACAO, limite).map((f) => ({
     codigo: f.token,
+    grupoTipo: f.parametros.grupoTipo ?? "empresa",
+    grupoNome: f.parametros.grupoNome,
+    participantes: f.parametros.participantes,
+    objetivo: f.parametros.objetivo,
+    setor: f.parametros.setor,
     titulo: f.parametros.titulo,
     empresa: f.parametros.empresa,
     questionarioId: f.parametros.questionarioId,

@@ -1,10 +1,11 @@
 "use client";
+import { requisitar } from "@/lib/http-cliente";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStatus, useConfirmacao } from "@/components/ui";
 import { Resultado } from "@/components/ResultadoAvaliacao";
-import OficinaLegado from "./OficinaLegado";
+import { Oficina } from "./Oficina";
 import { Icone, type NomeIcone } from "./Icone";
 import { BussolaOrbital } from "./BussolaOrbital";
 import { estadoColeta, participacao, type AssessmentPainel, type DadosPainel } from "@/lib/painel";
@@ -15,12 +16,6 @@ type Tela = "visao" | "assessments" | "oficina" | "inteligencia";
 type ResultadoState = { avaliacao: Avaliacao; meta: Meta; id?: string };
 const nav: { id: Tela; nome: string; icone: NomeIcone }[] = [{id:"visao",nome:"Visão geral",icone:"grid"},{id:"assessments",nome:"Assessments",icone:"layers"},{id:"oficina",nome:"Oficina de criação",icone:"spark"},{id:"inteligencia",nome:"Inteligência",icone:"chart"}];
 const dataCurta = (valor: string) => new Date(valor).toLocaleDateString("pt-BR", {day:"2-digit",month:"short"});
-export async function requisitar<T>(url: string, options?: RequestInit): Promise<T> {
-  const r = await fetch(url, options);
-  const d = await r.json();
-  if (!r.ok) { throw new Error(d.error || "Não foi possível concluir. Tente novamente."); }
-  return d as T;
-}
 export function PainelGestor() {
   const [tela,setTela]=useState<Tela>("visao");
   const [painel,setPainel]=useState<DadosPainel | null>(null);
@@ -78,7 +73,7 @@ export function PainelGestor() {
           <div className="panel-footer"><span><span className="live-dot"/> Atualização a cada 30 segundos</span><Link href="/setup#notificacoes">Configurar notificações ↗</Link></div></section>
           {tela==="visao"&&<aside className="agents-panel obs-panel"><div className="panel-heading"><div><span className="eyebrow">INTELIGÊNCIA COLABORATIVA</span><h2>Seu time de agentes</h2></div><Icone nome="spark" size={20}/></div><p>Três perspectivas. Uma direção mais clara.</p>{[{nome:"Arquiteto",papel:"Perguntas com propósito",cor:"mint",icon:"layers"},{nome:"Analista",papel:"Conexões entre os sinais",cor:"lavender",icon:"chart"},{nome:"Estrategista",papel:"Clareza para agir",cor:"peach",icon:"target"}].map((a,i)=><div className="agent-mini" key={a.nome}><span className={`agent-avatar ${a.cor}`}><Icone nome={a.icon as NomeIcone}/></span><div><strong>{a.nome}</strong><small>{a.papel}</small></div><span className="agent-index">0{i+1}</span></div>)}<div className="agent-note"><span className="live-dot"/><p>{status?.ai?"IA pronta para criar e interpretar. Você decide o próximo passo.":"Explore com o modelo e leituras automáticas. Conecte a IA para personalizar."}</p></div><button className="text-link" onClick={()=>navegar("oficina")}>Conhecer a oficina <Icone nome="arrow" size={16}/></button></aside>}
         </div>}
-        {tela==="oficina"&&<div className="legacy-workshop"><OficinaLegado/></div>}
+        <div hidden={tela!=="oficina"}><Oficina ai={Boolean(status?.ai)} aoPublicar={()=>{void carregar();navegar("assessments");setAviso("Assessment criado. Abra o acompanhamento para copiar o link e convidar o grupo.");}}/></div>
         {tela==="inteligencia"&&<>{ocupado?<div className="analysis-loading obs-panel" role="status"><span className="loading-orbit"/><p className="eyebrow">DA ESCUTA À CLAREZA</p><h2>Organizando os sinais do seu grupo.</h2><p>Calculando dimensões e preparando as perspectivas. Aguarde a conclusão da análise.</p></div>:resultado?<div className="obs-panel result-panel"><Resultado {...resultado}/></div>:<div className="obs-panel empty-state"><span className="empty-icon"><Icone nome="chart" size={30}/></span><h2>Uma nova perspectiva espera pelo seu time.</h2><p>Analise as respostas de um assessment ou explore um diagnóstico de exemplo.</p><div className="detail-actions"><button className="obs-btn primary" onClick={()=>navegar("assessments")}>Ir para assessments</button><button className="obs-btn secondary" onClick={()=>void abrirExemplo()}>Explorar exemplo</button></div></div>}{Boolean(painel?.resultados.length)&&<section className="obs-panel history-panel"><div className="panel-heading"><h2>Biblioteca de diagnósticos</h2><Link className="text-link" href="/historico">Gerenciar histórico ↗</Link></div>{painel!.resultados.map(r=><Link key={r.id} className="history-row" href={`/r/${r.id}`}><Icone nome="chart"/><div><strong>{r.titulo}</strong><small>{r.empresa} · {dataCurta(r.criadoEm)}</small></div>{r.demo&&<span className="status-tag">Exemplo</span>}<Icone nome="arrow" size={18}/></Link>)}</section>}</>}
         <footer className="obs-footer"><span>BÚSSOLA <i>/</i> clareza para transformar.</span><span>Feito para quem move o futuro <span>↗</span></span></footer>
       </main>
