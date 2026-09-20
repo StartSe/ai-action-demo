@@ -79,9 +79,7 @@ export function NodeDialog({
   return (
     <Modal title={draft.data.label} onClose={onClose}>
       <div className="node-dialog-type">
-        <span
-          style={{ background: NODE_STYLE[k].soft, color: NODE_STYLE[k].color }}
-        >
+        <span style={{ background: NODE_STYLE[k].color }}>
           <Icon name={k} size={24} />
         </span>
         <div>

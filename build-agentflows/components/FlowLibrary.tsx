@@ -288,8 +288,8 @@ export function FlowLibrary() {
                           key={k}
                           title={BLOCKS[k].label}
                           style={{
-                            color: NODE_STYLE[k].color,
-                            background: NODE_STYLE[k].soft,
+                            color: "white",
+                            background: NODE_STYLE[k].color,
                           }}
                         >
                           <Icon name={k} size={18} />
@@ -370,8 +370,8 @@ export function FlowLibrary() {
                     <span
                       key={i}
                       style={{
-                        color: NODE_STYLE[k].color,
-                        background: NODE_STYLE[k].soft,
+                        color: "white",
+                        background: NODE_STYLE[k].color,
                       }}
                     >
                       <Icon name={k} size={22} />

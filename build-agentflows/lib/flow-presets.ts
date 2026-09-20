@@ -1,18 +1,26 @@
 import { block, template, type Graph, type Kind } from "./flow-types";
+// Cores dos blocos do Flowise Agentflows v2 (AGENTFLOW_ICONS), com o fundo suave derivado.
+function style(color: string, group: string) {
+  return {
+    color,
+    soft: `color-mix(in srgb, ${color} 14%, white)`,
+    group,
+  };
+}
 export const NODE_STYLE: Record<
   Kind,
   { color: string; soft: string; group: string }
 > = {
-  start: { color: "#45a878", soft: "#edf8f1", group: "Controle de fluxo" },
-  llm: { color: "#7e57c2", soft: "#f2edfb", group: "Agentes e IA" },
-  agent: { color: "#596fe0", soft: "#eef0fd", group: "Agentes e IA" },
-  condition: { color: "#d59829", soft: "#fff7e7", group: "Controle de fluxo" },
-  state: { color: "#9c6bc3", soft: "#f7eefc", group: "Dados e integrações" },
-  http: { color: "#3b9ba8", soft: "#eaf8fa", group: "Dados e integrações" },
-  tool: { color: "#d07a4d", soft: "#fff1e9", group: "Dados e integrações" },
-  approval: { color: "#c56c98", soft: "#fceef5", group: "Controle de fluxo" },
-  loop: { color: "#ca9247", soft: "#fcf4e8", group: "Controle de fluxo" },
-  end: { color: "#5997c5", soft: "#eaf4fb", group: "Controle de fluxo" },
+  start: style("#7EE787", "Controle de fluxo"),
+  llm: style("#64B5F6", "Agentes e IA"),
+  agent: style("#4DD0E1", "Agentes e IA"),
+  condition: style("#FFB938", "Controle de fluxo"),
+  state: style("#E4B7FF", "Dados e integrações"),
+  http: style("#FF7F7F", "Dados e integrações"),
+  tool: style("#d4a373", "Dados e integrações"),
+  approval: style("#6E6EFD", "Controle de fluxo"),
+  loop: style("#FFA07A", "Controle de fluxo"),
+  end: style("#4DDBBB", "Controle de fluxo"),
 };
 export const PRESETS = [
   {
