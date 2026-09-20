@@ -1,5 +1,6 @@
-import { availableTools } from "@/lib/flow-runtime";
+import { listTools } from "@/lib/tools";
 import { api } from "@/lib/flow-api";
+export const dynamic = "force-dynamic";
 export async function GET() {
-  return api(availableTools);
+  return api(listTools);
 }

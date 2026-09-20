@@ -38,7 +38,7 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
     data.kind === "agent"
       ? (data.config.tools || "")
           .split(",")
-          .map((s) => s.trim())
+          .map((s) => s.trim().split(":").pop() || "")
           .filter(Boolean)
       : [];
   return (
@@ -137,7 +137,7 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
           {data.kind === "tool" && data.config.tool && (
             <span className="af-pill">
               <Icon name="tool" size={12} />
-              {data.config.tool}
+              {data.config.tool.split(":").pop()}
             </span>
           )}
           {tools.length > 0 && (

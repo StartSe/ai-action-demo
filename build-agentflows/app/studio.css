@@ -1663,6 +1663,30 @@
   padding: 6px 10px;
   font-size: 11px;
 }
+.tool-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tool-group h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--studio-muted);
+  margin-bottom: 2px;
+}
+.tool-group .tool-choices {
+  margin-top: 6px;
+}
+.tool-group-error {
+  color: #9c2533;
+}
+.tool-groups a {
+  color: var(--studio-primary);
+  font-weight: 650;
+}
 .model-picker {
   display: flex;
   flex-direction: column;
