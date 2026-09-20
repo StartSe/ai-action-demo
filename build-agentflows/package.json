@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint --ignore-pattern \"data/**\"",
     "test": "node --import ./scripts/gancho-ts.mjs --test lib/*.test.ts"
   },
   "dependencies": {

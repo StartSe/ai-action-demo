@@ -5,9 +5,9 @@ export const BLOCKS = {
     help: "Recebe a entrada e prepara o estado.",
   },
   llm: {
-    label: "Gerar com IA",
+    label: "LLM (Assistente)",
     icon: "✧",
-    help: "Transforma instruções em uma resposta.",
+    help: "Responde com um modelo de IA, sem ferramentas.",
   },
   agent: {
     label: "Agente",
@@ -47,6 +47,10 @@ export const BLOCKS = {
   end: { label: "Resposta", icon: "□", help: "Entrega o resultado do fluxo." },
 } as const;
 export type Kind = keyof typeof BLOCKS;
+// Nome curto usado nos blocos novos (Agente 0, LLM 1...), como no Flowise.
+export function shortLabel(kind: Kind) {
+  return kind === "llm" ? "LLM" : BLOCKS[kind].label;
+}
 export type Block = {
   id: string;
   type: "block";

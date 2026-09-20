@@ -31,7 +31,13 @@ export function ChatGPTConnection({
 }) {
   const [connection, setConnection] = useState<ConnectionState | null>(null),
     [busy, setBusy] = useState(false),
+    [copied, setCopied] = useState(false),
     [error, setError] = useState("");
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
   useEffect(() => {
     let alive = true;
     const load = () =>
@@ -125,14 +131,16 @@ export function ChatGPTConnection({
         <div className="device-login">
           <p>Abra a página oficial e informe este código:</p>
           <button
-            className="device-code"
+            className={"device-code" + (copied ? " copied" : "")}
             title="Copiar código"
-            onClick={() =>
-              navigator.clipboard.writeText(connection.login!.userCode)
-            }
+            onClick={() => {
+              void navigator.clipboard.writeText(connection.login!.userCode);
+              setCopied(true);
+            }}
           >
             {connection.login.userCode}
-            <Icon name="copy" size={18} />
+            <Icon name={copied ? "check" : "copy"} size={18} />
+            <small>{copied ? "Copiado" : "Copiar"}</small>
           </button>
           <a
             className="studio-button primary"

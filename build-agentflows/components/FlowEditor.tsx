@@ -17,6 +17,7 @@ import "@xyflow/react/dist/style.css";
 import {
   BLOCKS,
   block,
+  shortLabel,
   type Kind,
   type Block,
   type Flow,
@@ -255,6 +256,7 @@ export function FlowEditor({ id }: { id: string }) {
         y: (bounds?.y || 0) + (bounds?.height || 600) / 2,
       }) || { x: 300, y: 200 };
     const n = block(kind, "n_" + crypto.randomUUID(), pos.x, pos.y);
+    n.data.label = nextLabel(kind);
     n.selected = true;
     let next: Graph = {
       ...graph,
@@ -267,12 +269,30 @@ export function FlowEditor({ id }: { id: string }) {
     commit(next);
     closePalette();
   }
+  // Nome incremental como no Flowise: Agente 0, Agente 1, LLM 0...
+  function nextLabel(kind: Kind) {
+    const base = shortLabel(kind);
+    const used = new Set(graph.nodes.map((n) => n.data.label));
+    let i = graph.nodes.filter((n) => n.data.kind === kind).length;
+    while (used.has(`${base} ${i}`)) i++;
+    return `${base} ${i}`;
+  }
   function duplicate(n: Block) {
     const copy = structuredClone(n);
     copy.id = "n_" + crypto.randomUUID();
     copy.position = { x: n.position.x + 50, y: n.position.y + 120 };
-    copy.data.label += " (cópia)";
+    copy.data.label = nextLabel(n.data.kind);
+    copy.selected = false;
     commit({ ...graph, nodes: [...graph.nodes, copy] });
+    setNotice("Bloco duplicado.");
+  }
+  function renameBlock(id: string, label: string) {
+    commit({
+      ...graph,
+      nodes: graph.nodes.map((x) =>
+        x.id === id ? { ...x, data: { ...x.data, label } } : x,
+      ),
+    });
   }
   function remove(id: string) {
     commit({
@@ -419,6 +439,7 @@ export function FlowEditor({ id }: { id: string }) {
         duplicate: () => duplicate(n),
         remove: () => remove(n.id),
         info: () => setInfo(n.data.kind),
+        rename: (label: string) => renameBlock(n.id, label),
       },
     };
   });
@@ -893,12 +914,13 @@ export function FlowEditor({ id }: { id: string }) {
           others={graph.nodes.map((n) => ({ id: n.id, label: n.data.label }))}
           models={connection?.models || []}
           onClose={() => setEditing(null)}
-          onSave={(n) =>
+          onSave={(n) => {
             commit({
               ...graph,
               nodes: graph.nodes.map((x) => (x.id === n.id ? n : x)),
-            })
-          }
+            });
+            setNotice("Bloco atualizado. Salve o fluxo para manter.");
+          }}
         />
       )}
       {info && (

@@ -1370,6 +1370,137 @@
   transform: scale(1.25);
   box-shadow: 0 0 8px #0006;
 }
+.modal-title-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  color: var(--studio-muted);
+}
+.modal-title-input input {
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--studio-ink);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 4px 8px;
+  margin-left: -8px;
+}
+.modal-title-input input:hover {
+  border-color: var(--studio-line);
+}
+.modal-title-input input:focus {
+  outline: none;
+  border-color: var(--studio-primary);
+  background: var(--studio-surface);
+}
+.af-node-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.af-node-pencil {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--studio-muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.af-node.hover .af-node-pencil,
+.af-node.selected .af-node-pencil {
+  opacity: 1;
+}
+.af-node-pencil:hover {
+  background: #ffffffb3;
+  color: var(--studio-ink);
+}
+.af-node-rename {
+  font-size: 13.6px;
+  font-weight: 500;
+  width: 200px;
+  padding: 3px 6px;
+  border: 1px solid var(--node-color);
+  border-radius: 6px;
+  background: var(--studio-surface);
+  color: var(--studio-ink);
+  outline: none;
+}
+.library-pagination {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+  font-size: 11px;
+  color: var(--studio-muted);
+}
+.library-pagination label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.library-pagination select {
+  padding: 6px 10px;
+  border: 1px solid var(--studio-line);
+  border-radius: 8px;
+  background: var(--studio-surface);
+  color: var(--studio-ink);
+  font-size: 11px;
+}
+.pagination-pages {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+.pagination-pages .studio-icon-button {
+  width: 30px;
+  height: 30px;
+}
+.page-slot {
+  display: inline-flex;
+  align-items: center;
+}
+.page-slot i {
+  padding: 0 4px;
+  font-style: normal;
+}
+.page-slot button {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--studio-muted);
+}
+.page-slot button:hover,
+.page-slot button.active {
+  background: var(--studio-primary-soft);
+  color: var(--studio-primary);
+}
+.studio-toast {
+  position: fixed;
+  z-index: 40;
+}
+.device-code.copied {
+  border-color: #42a476;
+  color: #2c7a55;
+}
+.device-code small {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--studio-muted);
+}
 .node-palette.anchored {
   top: auto;
   max-height: 400px;

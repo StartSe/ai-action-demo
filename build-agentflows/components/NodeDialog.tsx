@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { BLOCKS, type Block, type Kind } from "@/lib/flow-types";
 import { NODE_STYLE } from "@/lib/flow-presets";
-import { Icon, IconButton, Modal, request } from "./StudioUI";
+import { Icon, Modal, request } from "./StudioUI";
 const fields: Record<Kind, string[]> = {
   start: ["state"],
   llm: ["system", "prompt", "model"],
@@ -63,8 +63,6 @@ export function NodeDialog({
   onSave: (n: Block) => void;
 }) {
   const [draft, setDraft] = useState(() => structuredClone(node)),
-    [renaming, setRenaming] = useState(false),
-    [name, setName] = useState(node.data.label),
     [error, setError] = useState(""),
     [tools, setTools] = useState<Tool[] | null>(null),
     [toolsUrl, setToolsUrl] = useState(""),
@@ -130,56 +128,34 @@ export function NodeDialog({
       .map((o): [string, string] => [`{{nodes.${o.id}}}`, o.label]),
   ];
   return (
-    <Modal title={BLOCKS[k].label} onClose={onClose}>
+    <Modal
+      title={
+        <label className="modal-title-input">
+          <input
+            value={draft.data.label}
+            maxLength={100}
+            aria-label="Nome do bloco"
+            placeholder={BLOCKS[k].label}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                data: { ...draft.data, label: e.target.value },
+              })
+            }
+          />
+          <Icon name="pencil" size={15} />
+        </label>
+      }
+      onClose={onClose}
+    >
       <div className="node-dialog-type">
         <span style={{ background: NODE_STYLE[k].color }}>
           <Icon name={k} size={24} />
         </span>
-        {renaming ? (
-          <div className="node-rename">
-            <input
-              autoFocus
-              value={name}
-              maxLength={100}
-              aria-label="Nome do bloco"
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && name.trim()) {
-                  setDraft({ ...draft, data: { ...draft.data, label: name.trim() } });
-                  setRenaming(false);
-                }
-                if (e.key === "Escape") setRenaming(false);
-              }}
-            />
-            <IconButton
-              icon="check"
-              label="Salvar nome"
-              disabled={!name.trim()}
-              onClick={() => {
-                setDraft({ ...draft, data: { ...draft.data, label: name.trim() } });
-                setRenaming(false);
-              }}
-            />
-            <IconButton
-              icon="close"
-              label="Cancelar"
-              onClick={() => {
-                setName(draft.data.label);
-                setRenaming(false);
-              }}
-            />
-          </div>
-        ) : (
-          <div className="node-name">
-            <strong>{draft.data.label}</strong>
-            <IconButton
-              icon="pencil"
-              label="Editar nome"
-              onClick={() => setRenaming(true)}
-            />
-            <p>{BLOCKS[k].help}</p>
-          </div>
-        )}
+        <div>
+          <strong>{BLOCKS[k].label}</strong>
+          <p>{BLOCKS[k].help}</p>
+        </div>
       </div>
       <div className="node-fields">
         {fields[k].map((key) => (
@@ -335,8 +311,12 @@ export function NodeDialog({
         </button>
         <button
           className="studio-button primary"
+          disabled={!draft.data.label.trim()}
           onClick={() => {
-            onSave(draft);
+            onSave({
+              ...draft,
+              data: { ...draft.data, label: draft.data.label.trim() },
+            });
             onClose();
           }}
         >

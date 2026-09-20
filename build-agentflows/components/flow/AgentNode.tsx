@@ -18,6 +18,7 @@ export type VisualData = Block["data"] & {
   duplicate?: () => void;
   remove?: () => void;
   info?: () => void;
+  rename?: (label: string) => void;
 };
 export type VisualNode = Node<VisualData, "block">;
 // Seta em círculo usada nas saídas (mesmo desenho do Flowise Agentflows v2).
@@ -25,7 +26,13 @@ export const CHEVRON =
   "M12 2c5.523 0 10 4.477 10 10a10 10 0 0 1 -20 0c0 -5.523 4.477 -10 10 -10m-.293 6.293a1 1 0 0 0 -1.414 0l-.083 .094a1 1 0 0 0 .083 1.32l2.292 2.293l-2.292 2.293a1 1 0 0 0 1.414 1.414l3 -3a1 1 0 0 0 0 -1.414z";
 function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
   const [hover, setHover] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
   const outs = outputs(data.kind);
+  const finishRename = () => {
+    const label = (editing ?? "").trim();
+    if (label && label !== data.label) data.rename?.(label);
+    setEditing(null);
+  };
   const tools =
     data.kind === "agent"
       ? (data.config.tools || "")
@@ -79,7 +86,41 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
           <Icon name={data.kind} size={24} />
         </span>
         <div className="af-node-text">
-          <strong>{data.label}</strong>
+          {editing === null ? (
+            <span className="af-node-title">
+              <strong>{data.label}</strong>
+              <button
+                type="button"
+                className="af-node-pencil nodrag"
+                title="Renomear bloco"
+                aria-label="Renomear bloco"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditing(data.label);
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
+              >
+                <Icon name="pencil" size={12} />
+              </button>
+            </span>
+          ) : (
+            <input
+              autoFocus
+              className="af-node-rename nodrag nopan"
+              value={editing}
+              maxLength={100}
+              aria-label="Nome do bloco"
+              onChange={(e) => setEditing(e.target.value)}
+              onBlur={finishRename}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") finishRename();
+                if (e.key === "Escape") setEditing(null);
+                e.stopPropagation();
+              }}
+              onDoubleClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            />
+          )}
           {(data.kind === "agent" || data.kind === "llm") && (
             <span className="af-pill">
               <Icon name="spark" size={13} />
