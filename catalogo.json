@@ -250,10 +250,10 @@
         "Estratégia",
         "Gestão"
       ],
-      "problema": "A empresa não sabe em que estágio de maturidade em IA está nem o que fazer a seguir.",
-      "ia": "Coleta as respostas do time por um link, calcula o nível em 6 dimensões e escreve o diagnóstico com forças, lacunas e próximos passos.",
+      "problema": "O gestor precisa acompanhar assessments de empresas, áreas e times e transformar as respostas em ações.",
+      "ia": "Ajuda a criar questionários, analisa respostas em seis dimensões e propõe experimentos. O painel acompanha participação, prazos e diagnósticos de cada grupo.",
       "integracoes": "IA (OpenRouter). Opcional: quadro de tarefas via MCP para os próximos passos e e-mail ou Slack para o resumo da coleta.",
-      "acento": "#1a6d93",
+      "acento": "#315d48",
       "porta": 3012,
       "captura": "capturas/bussola-ia.png",
       "capacidades": [
@@ -262,7 +262,13 @@
         "formulario",
         "rotina"
       ],
-      "demo": null
+      "demo": null,
+      "versao": "0.2.1",
+      "persistencia": {
+        "plano": "0.5c-512mb",
+        "discoGB": 1,
+        "discoGuarda": "a conta, as configurações, os questionários, os assessments, as respostas, os diagnósticos e os planos de ação"
+      }
     },
     {
       "id": "simulador-vendas",

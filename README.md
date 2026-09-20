@@ -17,7 +17,7 @@ Dezenove apps independentes, cada um resolvendo um problema específico do dia a
 | 9 | [Analista Financeiro](financas-ia/) | Financeiro | Planilha de despesas sem tempo de destrinchar | Lê o CSV, mostra os números que importam e responde perguntas | OpenRouter (dados ficam no navegador; só agregados vão para a IA) |
 | 10 | [Voz do Cliente](voz-do-cliente/) | CX e Marketing | Centenas de comentários que ninguém lê | Agrupa por tema, mede sentimento e NPS, prioriza ações | só OpenRouter |
 | 11 | [Radar de Sinais](radar-sinais/) | Estratégia e Inovação | Movimentos do mercado chegam tarde e dispersos | Busca o que saiu no período em Hacker News, Reddit, GitHub e na web, agrupa em sinais com fontes verificadas e mostra as conexões em grafo | Hacker News, Reddit e GitHub sem chave; Exa (opcional) para a web em geral |
-| 12 | [Bússola de IA](bussola-ia/) | Estratégia e Gestão | A empresa não sabe em que estágio de maturidade em IA está | Aplica um questionário de maturidade em 6 dimensões por link único e devolve o estágio atual e o que fazer | só OpenRouter |
+| 12 | [Bússola de IA v0.2.1](bussola-ia/) | Estratégia e Gestão | O gestor precisa acompanhar assessments de empresas, áreas e times | Cria questionários, acompanha participação e prazos, analisa respostas em seis dimensões e propõe ações | OpenRouter; MCP, e-mail e Slack opcionais; [Render com volume (pago)](https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-bussola-ia-persistente) |
 | 13 | [Simulador de Vendas](simulador-vendas/) | Vendas | O gestor só vê o resultado da venda, não como a conversa foi conduzida | Avalia conversas contra 7 critérios de venda consultiva, treina por texto e voz e resume a equipe por semana | ElevenLabs (sala de treino por voz, com aviso de pós-conversa assinado) |
 | 14 | [Custos de IA](custos-ia/) | Financeiro e TI | O CFO não sabe quanto gasta com ferramentas de IA nem se está no orçamento | Lê notas em PDF, texto ou direto do e-mail, compara com o orçamento e alerta o que estourou | Gmail (OAuth em um clique); câmbio manual |
 | 15 | [Clone de Site](clone-site/) | Marketing e Produto | Montar uma página nova leva semanas entre briefing e agência | Lê a captura de uma página de referência e escreve a sua versão em HTML, editável por instrução e publicável em um link | OpenRouter com modelo de visão |
@@ -93,7 +93,9 @@ Catálogo público: https://startse.github.io/ai-action-app-deploy/ (filtro por 
 
 `catalogo.json` é a fonte única: nome, áreas, textos, cor de acento, porta e URL de demonstração de cada app. Depois de alterar, rode `node scripts/gerar-deploy.mjs` para atualizar os `render.yaml` versionados aqui (o workflow faz o mesmo antes de publicar).
 
-Campos opcionais para um app que não cabe no plano gratuito: `plano` (`free`, `starter`, `standard` ou `pro`; ausente = `free`), `discoGB` (disco persistente em `/app/data`, só com plano pago), `variaveisGeradas` (segredos que o Render gera no deploy, com `generateValue`), `aposPublicar` (texto que substitui "abra /setup e conecte a IA") e `padrao: "proprio"` (o app não segue o padrão de `pdi-time` e sai de `verificar-padrao.sh`, `verificar-jargao.mjs` e `verificar-paleta.mjs`). Um app pago entra no Blueprint da suíte com o seu plano e ganha aviso de plano pago na página e nos READMEs.
+Campos opcionais para um app que não cabe no plano gratuito: `plano` (`free`, `0.5c-512mb` ou os legados `starter`, `standard`, `pro`; ausente = `free`), `discoGB` (disco persistente em `/app/data`, só com plano pago), `variaveisGeradas` (segredos que o Render gera no deploy, com `generateValue`), `aposPublicar` (texto que substitui "abra /setup e conecte a IA") e `padrao: "proprio"` (o app não segue o padrão de `pdi-time` e sai de `verificar-padrao.sh`, `verificar-jargao.mjs` e `verificar-paleta.mjs`). Um app pago entra no Blueprint da suíte com o seu plano e ganha aviso de plano pago na página e nos READMEs.
+
+Para oferecer persistência como **opção**, use `persistencia: { "plano": "0.5c-512mb", "discoGB": 1, "discoGuarda": "os dados do app" }`. O gerador cria `<app>/render-persistente.yaml` e o branch público `deploy-<app>-persistente`; o índice oferece uma escolha de volume antes de abrir o Render. A opção não muda o plano padrão do app nem o da suíte. `versao` exibe a versão no catálogo. Valide o gerador com `node --test scripts/gerar-deploy.test.mjs`.
 
 ### Uma vez, depois do primeiro build
 
@@ -120,8 +122,9 @@ Botão por app e da suíte inteira no catálogo público, ou direto:
 
 - Suíte (os 18; Atendente no WhatsApp, Vídeos de Campanha e AutoML são os pagos, com disco persistente): `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy`
 - Um app: `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-<app>`
+- Bússola de IA: [teste gratuito, sem volume](https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-bussola-ia) ou [com volume de 1 GB (pago)](https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-bussola-ia-persistente). O volume mantém contas, configurações, assessments, respostas, diagnósticos e planos de ação. A suíte usa a opção gratuita, sem volume.
 
-Depois do deploy, abra `https://<nome>.onrender.com/setup` e conecte a IA e as integrações. O plano `free` hiberna após inatividade e tem disco efêmero: a configuração feita em `/setup` se perde a cada deploy. Para persistir, use um plano pago e descomente o bloco `disk` no Blueprint.
+Depois do deploy, abra `https://<nome>.onrender.com/setup` e conecte a IA e as integrações. O plano `free` hiberna após inatividade. Sem volume persistente, contas, configurações e respostas podem se perder em reinícios e atualizações. Para a Bússola, a opção com volume já configura o disco; nos demais apps sem disco, ative o bloco `disk` e use um plano pago.
 
 ### AutoML: a exceção paga
 

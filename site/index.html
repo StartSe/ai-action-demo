@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IA para Executivos</title>
-<meta name="description" content="Dezessete apps de IA para o dia a dia de uma empresa. Escolha um, clique em Publicar e em poucos minutos ele está no ar na sua conta.">
+<meta name="description" content="Apps de IA para o dia a dia de uma empresa. Escolha um, clique em Publicar e em poucos minutos ele está no ar na sua conta.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -92,6 +92,8 @@
   .capacidades svg { width: 15px; height: 15px; flex: none; color: var(--acento); }
   .acoes { display: flex; flex-direction: column; gap: 10px; margin-top: auto; padding-top: 10px; }
   .dica { margin: 0; color: var(--suave); font-size: .88rem; text-align: center; }
+  .persistencia { display: flex; align-items: flex-start; gap: 10px; font-size: .92rem; cursor: pointer; padding: 10px; border: 1px solid var(--linha); border-radius: 8px; }
+  .persistencia input { margin: 4px 0 0; width: 18px; height: 18px; flex: none; accent-color: var(--primario); }
 
   /* Opções avançadas: recolhidas por padrão */
   details.avancado { width: 100%; min-width: 0; margin-top: 4px; border-top: 1px solid var(--linha); padding-top: 8px; }
@@ -194,14 +196,14 @@
       <ul>
         <li>Nenhuma senha ou chave é pedida na publicação. A IA é conectada depois, dentro do app, em Configurações.</li>
         <li>No plano gratuito o app adormece após um tempo sem uso e leva alguns segundos para acordar no próximo acesso.</li>
-        <li>Também no plano gratuito, a conexão com a IA pode se perder quando o app for atualizado. Basta refazê-la em Configurações. Um plano pago mantém tudo salvo.</li>
+        <li>Sem volume persistente, contas, configurações e respostas podem se perder em reinícios e atualizações. Na Bússola de IA, marque a opção de volume para manter esses dados. Ela exige um plano pago.</li>
         <li>Os apps usam dados de exemplo e servem para aprendizado e testes. Não coloque dados sensíveis da sua empresa.</li>
         <li id="avisoPago" hidden></li>
       </ul>
       <details class="avancado">
         <summary>Para a equipe técnica</summary>
         <div class="avancado-corpo">
-          <p>Cada app é uma imagem Docker pública em <code>ghcr.io/startse/&lt;app&gt;</code>, sem login para baixar. A configuração fica em SQLite em <code>/app/data</code>; a página <code>/setup</code> aceita login no OpenRouter ou uma chave de API colada. Os arquivos de publicação (um Blueprint por app e um da suíte) estão em <a id="linkRepo" href="#">github.com/StartSe/ai-action-app-deploy</a>. Para persistir a configuração entre deploys, use um plano pago e descomente o bloco <code>disk</code> do Blueprint.</p>
+          <p>Cada app é uma imagem Docker pública em <code>ghcr.io/startse/&lt;app&gt;</code>, sem login para baixar. A configuração fica em SQLite em <code>/app/data</code>; a página <code>/setup</code> aceita login no OpenRouter ou uma chave de API colada. Os arquivos de publicação estão em <a id="linkRepo" href="#">github.com/StartSe/ai-action-app-deploy</a>. A opção com volume da Bússola já inclui o disco em <code>/app/data</code> para guardar também a chave de criptografia. Veja a <a href="https://render.com/docs/disks">documentação de discos do Render</a>.</p>
         </div>
       </details>
     </section>
@@ -230,12 +232,16 @@
       <ul></ul>
     </div>
     <div class="acoes">
+      <label class="persistencia" hidden>
+        <input type="checkbox">
+        <span>Manter dados com volume persistente (plano pago)</span>
+      </label>
       <a class="btn btn-largo publicar" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
         Publicar este app
       </a>
       <a class="btn-ghost btn-largo demo" target="_blank" rel="noopener" hidden>Ver demonstração</a>
-      <p class="dica">Gratuito. Abre em uma nova aba, na sua conta.</p>
+      <p class="dica" aria-live="polite">Gratuito. Abre em uma nova aba, na sua conta.</p>
       <details class="avancado">
         <summary>Opções avançadas</summary>
         <div class="avancado-corpo">
@@ -287,6 +293,9 @@
   $("#apoioSuite").textContent = `Um único clique cria os ${quantosSuite} apps na sua conta. Depois, abra cada um e conecte a IA em Configurações.` +
     (pagos.length ? ` ${pagos.map((a) => `${a.nome} exige plano pago (${a.plano})`).join("; ")}; os outros ${POR_EXTENSO[nGratis] || nGratis} são gratuitos.` : "");
   $("#rotuloSuite").textContent = `Publicar os ${quantosSuite} apps`;
+  if (dados.apps.some((a) => naSuite.has(a.id) && a.persistencia)) {
+    $("#apoioSuite").textContent += " A suíte usa a opção gratuita da Bússola, sem volume. Para manter os dados dela, use a opção com volume no cartão do app.";
+  }
   if (pagos.length) {
     const aviso = $("#avisoPago");
     aviso.hidden = false;
@@ -306,6 +315,7 @@
   const modelo = $("#modeloCard");
   for (const app of dados.apps) {
     const el = modelo.content.firstElementChild.cloneNode(true);
+    el.id = app.id;
     el.style.setProperty("--acento", app.acento);
     el.dataset.areas = app.areas.join("|");
     const previa = $(".previa", el);
@@ -317,6 +327,12 @@
     }
     $(".areas", el).innerHTML = app.areas.map((a) => `<span class="area">${a}</span>`).join("") +
       (ePago(app) ? `<span class="area pago">Plano pago</span>` : "");
+    if (app.versao) {
+      const versao = document.createElement("span");
+      versao.className = "area";
+      versao.textContent = `v${app.versao}`;
+      $(".areas", el).appendChild(versao);
+    }
     $("h2", el).textContent = app.nome;
     $(".problema", el).textContent = app.problema;
     $(".ia", el).textContent = app.ia;
@@ -326,6 +342,24 @@
     if (app.demo) { const d = $(".demo", el); d.href = app.demo; d.hidden = false; }
     if (ePago(app)) {
       $(".dica", el).textContent = `Plano pago (${app.plano})${app.discoGB ? ` com disco de ${app.discoGB} GB` : ""}. Abre em uma nova aba, na sua conta.`;
+    }
+    if (app.persistencia && app.publicarPersistente) {
+      const opcao = $(".persistencia", el);
+      const entrada = $("input", opcao);
+      const dica = $(".dica", el);
+      opcao.hidden = false;
+      dica.id = `${app.id}-instalacao`;
+      entrada.setAttribute("aria-describedby", dica.id);
+      const atualizarInstalacao = () => {
+        const persistente = entrada.checked;
+        $(".publicar", el).href = persistente ? app.publicarPersistente : app.publicar;
+        $(".publicar", el).setAttribute("aria-label", `Publicar ${app.nome} ${persistente ? "com volume (pago)" : "sem volume (gratuito)"}`);
+        dica.textContent = persistente
+          ? `Plano pago e volume de ${app.persistencia.discoGB} GB. Mantém ${app.persistencia.discoGuarda} entre reinícios e atualizações.`
+          : "Teste gratuito, sem volume. Contas, configurações e respostas podem se perder em reinícios e atualizações.";
+      };
+      entrada.addEventListener("change", atualizarInstalacao);
+      atualizarInstalacao();
     }
     const capacidades = (app.capacidades || []).map((c) => CAPACIDADES[c]).filter(Boolean);
     if (capacidades.length) {

@@ -168,7 +168,9 @@ jobs:
           merge-multiple: true
         continue-on-error: true
       - name: Gerar Blueprints e página
-        run: node scripts/gerar-deploy.mjs
+        run: |
+          node --test scripts/gerar-deploy.test.mjs
+          node scripts/gerar-deploy.mjs
       - name: Publicar em ${{ env.REPO_PUBLICO }}
         env:
           CHAVE_SSH: ${{ secrets.CHAVE_DEPLOY_PUBLICO }}

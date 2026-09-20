@@ -1,6 +1,6 @@
 # Bússola de IA
 
-Versão **0.2.0** · [Notas da versão](./CHANGELOG.md).
+Versão **0.2.1** · [Notas da versão](./CHANGELOG.md).
 
 Um observatório de inovação com IA para o gestor acompanhar assessments de **empresas, áreas e times**, da criação das perguntas ao plano de ação.
 
@@ -42,10 +42,12 @@ docker compose up --build   # http://localhost:3012
 ## Imagem pública e deploy no Render
 A imagem é construída e publicada pelo GitHub Actions do repositório da suíte a cada push na `main`: `ghcr.io/startse/bussola-ia:latest`. Não é preciso construir nem publicar à mão.
 
-- Publicar com um clique: https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-bussola-ia (o `render.yaml` desta pasta é gerado a partir do `catalogo.json` da raiz; não edite à mão).
+- [Teste gratuito, sem volume](https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-bussola-ia): usa `render.yaml`. Contas, configurações e respostas podem se perder em reinícios e atualizações.
+- [Instalar com volume persistente de 1 GB (plano pago)](https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-bussola-ia-persistente): usa `render-persistente.yaml`, com disco já ativado em `/app/data` e plano `0.5c-512mb`. Mantém a conta, as configurações, os questionários, os assessments, as respostas, os diagnósticos e os planos de ação. O Render cobra pelo serviço e pelo disco; consulte [discos persistentes](https://render.com/docs/disks).
+- As duas opções também estão no [catálogo principal](https://startse.github.io/ai-action-app-deploy/#bussola-ia). Os Blueprints são gerados de `catalogo.json`; não edite à mão. A instalação da suíte inteira usa a opção gratuita da Bússola.
 - Rodar no seu computador sem construir: `docker run --rm -p 3012:10000 -v bussola-ia-dados:/app/data ghcr.io/startse/bussola-ia:latest` e abra http://localhost:3012.
 - Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
-- O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração se perde a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
+- O health check responde em `/api/health` e informa a versão. O Docker define `DATA_DIR=/app/data`; preserve todo esse diretório, incluindo `app.sqlite` e `chave-mestra` (chave de criptografia). Ao atualizar uma instalação que já tem volume, mantenha o mesmo serviço e disco. Criar outra instalação não transfere dados da anterior.
 
 ## Usar dentro de um assistente de IA (MCP)
 O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, para que assistentes como Claude ou ChatGPT chamem as ferramentas `avaliar_respostas` (calcula o diagnóstico a partir de respostas já coletadas) e `resultado_avaliacao` diretamente. Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.

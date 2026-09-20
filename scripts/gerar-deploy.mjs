@@ -13,19 +13,33 @@ const repoPublicoUrl = `https://github.com/${cat.repoPublico}`;
 
 const CAPACIDADES_VALIDAS = ["artefato", "mcp", "formulario", "rotina"];
 // Planos do Render aceitos em "plano" (ausente = free). Qualquer coisa além de free vira "app pago":
-// sai do Blueprint da suíte e ganha aviso na página e nos READMEs.
-const PLANOS_VALIDOS = ["free", "starter", "standard", "pro"];
+// ganha aviso na página e nos READMEs. Mantemos os nomes legados usados pelos apps existentes.
+const PLANOS_VALIDOS = ["free", "starter", "standard", "pro", "0.5c-512mb"];
 const plano = (app) => app.plano ?? "free";
 const pago = (app) => plano(app) !== "free";
 // O que o disco daquele app guarda, em uma expressão que cabe no meio de uma frase ("... para guardar
 // X"). Cada app pago diz o seu em `discoGuarda`; sem isso, o texto genérico serve.
 const discoGuarda = (app) => app.discoGuarda ?? "os dados do app";
-// Nome do disco. O Render exige um nome único dentro do Blueprint, então ele carrega o id do app: com
-// "dados" fixo, publicar um segundo app com disco pelo mesmo Blueprint dava conflito. `discoNome` no
-// catálogo permite manter o nome antigo num app já publicado — renomear o disco de um serviço no ar faz
-// o Render criar um disco NOVO e vazio, sem o conteúdo do anterior.
+// Preserva os nomes dos discos já publicados e usa o id do app para discos novos.
 const discoNome = (app) => app.discoNome ?? `${app.id}-dados`;
+// A alternativa paga usa a mesma imagem e o mesmo diretório de dados. Não muda o plano da suíte.
+const comPersistencia = (app) => ({
+  ...app,
+  plano: app.persistencia.plano,
+  discoGB: app.persistencia.discoGB,
+  discoGuarda: app.persistencia.discoGuarda,
+  persistencia: undefined,
+  variante: "persistente",
+});
 for (const app of cat.apps) {
+  if (app.persistencia !== undefined && (
+    !app.persistencia || typeof app.persistencia !== "object" || Array.isArray(app.persistencia) ||
+    !PLANOS_VALIDOS.includes(app.persistencia.plano) || app.persistencia.plano === "free" ||
+    !Number.isInteger(app.persistencia.discoGB) || app.persistencia.discoGB < 1 ||
+    typeof app.persistencia.discoGuarda !== "string" || !app.persistencia.discoGuarda.trim()
+  )) {
+    throw new Error(`${app.id}: persistencia exige plano pago válido, discoGB inteiro >= 1 e discoGuarda`);
+  }
   if (!PLANOS_VALIDOS.includes(plano(app))) {
     throw new Error(`${app.id}: plano desconhecido "${app.plano}" (válidos: ${PLANOS_VALIDOS.join(", ")})`);
   }
@@ -69,7 +83,7 @@ for (const app of cat.apps) {
 }
 
 const imagem = (app) => `${cat.registro}/${app.id}:latest`;
-const branchDeploy = (app) => `deploy-${app.id}`;
+const branchDeploy = (app) => `deploy-${app.id}${app.variante ? `-${app.variante}` : ""}`;
 const urlPublicar = (app) => `https://render.com/deploy?repo=${repoPublicoUrl}/tree/${branchDeploy(app)}`;
 const urlPublicarSuite = `https://render.com/deploy?repo=${repoPublicoUrl}`;
 // O Blueprint da suíte publica todos os apps; os pagos são citados por nome com o plano.
@@ -83,6 +97,9 @@ const aposPublicar = (app) =>
   app.aposPublicar ?? "Depois de publicar, abra o app e clique em Configurações (`/setup`) para conectar a IA.";
 const comandoDocker = (app) =>
   `docker run --rm -p ${app.porta}:10000 -v ${app.id}-dados:/app/data ${imagem(app)}`;
+const opcoesPersistencia = (app) => app.persistencia
+  ? `\n**Escolha a instalação:** [Teste gratuito, sem volume](${urlPublicar(app)}) · [Com volume de ${app.persistencia.discoGB} GB (pago)](${urlPublicar(comPersistencia(app))}). O volume mantém ${app.persistencia.discoGuarda} entre reinícios e atualizações. Sem volume, esses dados podem se perder.\n`
+  : "";
 
 function servico(app) {
   const geradas = (app.variaveisGeradas ?? [])
@@ -121,11 +138,15 @@ function renderApp(app) {
   const nota = pago(app)
     ? `Este app exige o plano ${plano(app)} (pago) e cria um disco de ${app.discoGB ?? 1} GB em /app/data, onde ficam ${discoGuarda(app)}.
 ${app.aposPublicar ?? "Nenhuma chave é necessária aqui."}`
+    : app.persistencia
+    ? `Instalação gratuita de teste, sem volume: contas, configurações e respostas podem se perder em reinícios e atualizações.
+Para manter os dados, use a opção com volume (pago): ${urlPublicar(comPersistencia(app))}.
+Após publicar, abra o app, crie a conta e conecte a IA em /setup.`
     : `Nenhuma chave é necessária aqui: após publicar, abra /setup no app e conecte a IA.
 As chaves ficam em SQLite em /app/data. No plano free o disco é efêmero e a configuração se perde a cada deploy.`;
   return (
     cabecalho(
-      `Blueprint de publicação de ${app.nome} (especificação: https://render.com/docs/blueprint-spec)
+      `Blueprint de publicação de ${app.nome}${app.versao ? ` v${app.versao}` : ""} (especificação: https://render.com/docs/blueprint-spec)
 Imagem pública publicada pelo GitHub Actions em ${imagem(app)}.
 ${nota}`
     ) +
@@ -152,7 +173,7 @@ function readmePublico() {
   const linhas = cat.apps
     .map(
       (a) =>
-        `| [${a.nome}](${repoPublicoUrl}/tree/${branchDeploy(a)}) | ${a.areas.join(", ")} | ${a.problema}${pago(a) ? ` **Exige plano pago (${plano(a)}).**` : ""} | [Publicar este app](${urlPublicar(a)}) |`
+        `| [${a.nome}${a.versao ? ` v${a.versao}` : ""}](${repoPublicoUrl}/tree/${branchDeploy(a)}) | ${a.areas.join(", ")} | ${a.problema}${pago(a) ? ` **Exige plano pago (${plano(a)}).**` : ""} | [${a.persistencia ? "Teste gratuito, sem volume" : "Publicar este app"}](${urlPublicar(a)})${a.persistencia ? ` · [Com volume de ${a.persistencia.discoGB} GB (pago)](${urlPublicar(comPersistencia(a))})` : ""} |`
     )
     .join("\n");
   // Com mais de um app pago, "é a exceção" (no singular, uma vez por app) deixa de fazer sentido: a
@@ -194,18 +215,19 @@ ${comandoDocker(cat.apps[0])}
 
 - Ao clicar em Publicar, você entra (ou cria uma conta gratuita) no serviço de hospedagem e confirma. O app é criado na sua conta, não na nossa.
 - Nenhuma chave é pedida na publicação. Depois, abra o app, clique em Configurações (\`/setup\`) e conecte a IA e as integrações em um minuto.
-- No plano gratuito o app adormece após um tempo sem uso e a configuração feita em Configurações pode se perder quando ele for atualizado. Um plano pago mantém tudo salvo (descomente o bloco \`disk\` do Blueprint).
+- Sem volume persistente, contas, configurações e respostas podem se perder em reinícios e atualizações. Na Bússola de IA, escolha a instalação com volume para manter esses dados. O volume exige plano pago: [discos persistentes no Render](https://render.com/docs/disks). A instalação da suíte usa a opção gratuita da Bússola, sem volume.
 - Se você já publicou este app antes, o serviço de hospedagem pergunta entre associar ao serviço existente ou criar tudo de novo. Associar é o normal: ele atualiza o que já está no ar e mantém o mesmo endereço. Criar de novo faz uma segunda instalação, com outro endereço.${avisoPagos}
 `;
 }
 
 function readmeBranch(app) {
-  return `# ${app.nome}
+  return `# ${app.nome}${app.versao ? ` — v${app.versao}` : ""}
 
 ${app.problema} ${app.ia}
 
 [![Publicar este app](https://img.shields.io/badge/Publicar%20este%20app-1f4fd8?style=for-the-badge)](${urlPublicar(app)})
 ${pago(app) ? `\n**Exige plano pago no serviço de hospedagem** (${plano(app)}) e cria um disco de ${app.discoGB ?? 1} GB em \`/app/data\`, onde ficam ${discoGuarda(app)}.\n` : ""}
+${opcoesPersistencia(app)}
 Imagem: \`${imagem(app)}\`
 
 Opção avançada, rodar no seu computador (requer Docker):
@@ -224,6 +246,9 @@ writeFileSync(join(raiz, "render.yaml"), renderSuite());
 for (const app of cat.apps) {
   if (!existsSync(join(raiz, app.id))) throw new Error(`Pasta do app não encontrada: ${app.id}`);
   writeFileSync(join(raiz, app.id, "render.yaml"), renderApp(app));
+  if (app.persistencia) {
+    writeFileSync(join(raiz, app.id, "render-persistente.yaml"), renderApp(comPersistencia(app)));
+  }
 }
 
 // 2) Conteúdo do repositório público
@@ -270,6 +295,10 @@ writeFileSync(
           imagem: imagem(a),
           publicar: urlPublicar(a),
           blueprint: `${repoPublicoUrl}/tree/${branchDeploy(a)}`,
+          ...(a.persistencia ? {
+            publicarPersistente: urlPublicar(comPersistencia(a)),
+            blueprintPersistente: `${repoPublicoUrl}/tree/${branchDeploy(comPersistencia(a))}`,
+          } : {}),
           docker: comandoDocker(a),
         };
       }),
@@ -278,11 +307,12 @@ writeFileSync(
     2
   )
 );
-for (const app of cat.apps) {
+const instalacoes = cat.apps.flatMap((app) => app.persistencia ? [app, comPersistencia(app)] : [app]);
+for (const app of instalacoes) {
   const dir = join(publico, branchDeploy(app));
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "render.yaml"), renderApp(app));
   writeFileSync(join(dir, "README.md"), readmeBranch(app));
 }
 
-console.log(`render.yaml da suíte, ${cat.apps.length} render.yaml de app e publico/ (main + ${cat.apps.length} branches) gerados.`);
+console.log(`render.yaml da suíte, ${instalacoes.length} Blueprints de app e publico/ (main + ${instalacoes.length} branches) gerados.`);

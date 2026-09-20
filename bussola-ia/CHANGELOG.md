@@ -1,5 +1,14 @@
 # Notas de versão
 
+## 0.2.1 — 2026-09-20
+
+- Catálogo público e índices principais atualizados com o painel do gestor para assessments por empresa, área e time, identidade verde e versão visível.
+- Escolha entre instalação gratuita de teste e instalação paga com volume persistente de 1 GB no Render.
+- Blueprint dedicado com disco em `/app/data`, preservando o banco, a chave de criptografia, as contas, as respostas e os planos de ação.
+- Gerador publica automaticamente a alternativa `deploy-bussola-ia-persistente` e seus links de instalação.
+
+Validação: 5 testes do gerador, 10 testes de unidade, 15 testes de navegador, lint e build. Catálogo conferido em 1440 e 390 px, com troca dos links gratuito/pago e verificação de acessibilidade.
+
 ## 0.2.0 — 2026-09-20
 
 - Painel do gestor com acompanhamento de assessments por empresa, área ou time, metas, participação, prazos e respostas.
