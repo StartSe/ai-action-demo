@@ -92,6 +92,7 @@ export function FlowEditor({ id }: { id: string }) {
   const [info, setInfo] = useState<Kind | null>(null);
   const [generator, setGenerator] = useState(false);
   const [dark, setDark] = useState(false);
+  const [voice, setVoice] = useState({ voz: false, ligacao: false });
   const { connection, setConnection } = useChatGPT();
   useEffect(() => {
     let alive = true;
@@ -107,6 +108,11 @@ export function FlowEditor({ id }: { id: string }) {
       .catch((e) => {
         if (alive) setError(e.message);
       });
+    void request<{ voz: boolean; ligacao: boolean }>("/api/voz")
+      .then((v) => {
+        if (alive) setVoice(v);
+      })
+      .catch(() => {});
     const theme = localStorage.getItem("agentflows-theme") || "light";
     document.documentElement.dataset.studioTheme = theme;
     const timer = setTimeout(() => setDark(theme === "dark"), 0);
@@ -827,6 +833,7 @@ export function FlowEditor({ id }: { id: string }) {
               demo={demo}
               connected={!!connection?.account}
               expanded={expanded}
+              voice={voice.voz}
               onDemo={setDemo}
               onSend={(text) => void execute(text)}
               onChange={updateRun}

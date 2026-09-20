@@ -135,7 +135,7 @@ export function validateGraph(value: unknown, executable = false): Graph {
       }
       if (k === "tool" && !c.tool?.trim())
         throw new FlowError("Escolha a ferramenta a executar.");
-      if (k === "whatsapp" && !c.to?.trim())
+      if ((k === "whatsapp" || k === "call") && !c.to?.trim())
         throw new FlowError(`Informe o número em “${n.data.label}”.`);
       if (k === "start") {
         try {

@@ -49,7 +49,10 @@ export type IconName =
   | "pencil"
   | "history"
   | "chevron"
-  | "whatsapp";
+  | "whatsapp"
+  | "call"
+  | "mic"
+  | "speaker";
 const paths: Record<string, ReactNode> = {
   flows: (
     <>
@@ -184,6 +187,18 @@ const paths: Record<string, ReactNode> = {
   pencil: <path d="M4 20h4L19 9a2.1 2.1 0 0 0-4-4L4 16zm9.5-13.5 4 4" />,
   history: <path d="M12 8v4l3 3M3.05 11a9 9 0 1 0 .5-4M3 3v5h5" />,
   chevron: <path d="m9 6 6 6-6 6" />,
+  call: (
+    <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2" />
+  ),
+  mic: (
+    <>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v3m-4 0h8" />
+    </>
+  ),
+  speaker: (
+    <path d="M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
+  ),
   whatsapp: (
     <>
       <path d="M3 21l1.6-4.6A8.5 8.5 0 1 1 8 19.6z" />

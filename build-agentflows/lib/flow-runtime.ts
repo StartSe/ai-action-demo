@@ -157,6 +157,17 @@ async function execute(r: Run): Promise<Run> {
           output = `Mensagem enviada para ${para}.\n\n${texto}`;
         }
       }
+      if (k === "call") {
+        const para = interpolate(c.to, r),
+          contexto = interpolate(c.context, r);
+        if (r.demo)
+          output = `[Demonstração] Ligação para ${para}: nenhuma chamada feita.\n\nContexto: ${contexto}`;
+        else {
+          const { ligar } = await import("./elevenlabs");
+          const l = await ligar(para, contexto);
+          output = `Ligação iniciada para ${para}${l.conversationId ? ` (conversa ${l.conversationId})` : ""}. O fim da ligação executa o fluxo escolhido em Conexões.`;
+        }
+      }
       if (k === "tool")
         output = r.demo
           ? `[Demonstração] Ferramenta ${c.tool}: nenhuma ação externa realizada.`

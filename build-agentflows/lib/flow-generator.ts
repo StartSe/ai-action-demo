@@ -18,6 +18,7 @@ const FIELDS: Record<Kind, string> = {
   tool: "tool (nome da ferramenta), args (JSON)",
   approval: "prompt (o que a pessoa deve revisar)",
   whatsapp: "to (número com DDI e DDD; use {{state.telefone}} ou o número fixo), text (mensagem; use {{last}})",
+  call: "to (telefone com DDI e DDD), context (o que o agente de voz deve saber e fazer; use {{last}})",
   loop: "limit (número de 1 a 20)",
   end: "text (resposta final; use {{last}} ou {{nodes.id}})",
 };

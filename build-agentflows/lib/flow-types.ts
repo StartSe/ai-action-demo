@@ -49,6 +49,11 @@ export const BLOCKS = {
     icon: "✆",
     help: "Envia uma mensagem pelo número conectado.",
   },
+  call: {
+    label: "Ligação por voz",
+    icon: "☎",
+    help: "Liga para um telefone com o agente de conversa.",
+  },
   end: { label: "Resposta", icon: "□", help: "Entrega o resultado do fluxo." },
 } as const;
 export type Kind = keyof typeof BLOCKS;
@@ -123,6 +128,8 @@ export function block(kind: Kind, id: string, x: number, y: number): Block {
                   ? { prompt: "Revise o resultado antes de continuar." }
                   : kind === "whatsapp"
                     ? { to: "", text: "{{last}}" }
+                    : kind === "call"
+                      ? { to: "", context: "{{last}}" }
                   : kind === "end"
                     ? { text: "{{last}}" }
                     : {

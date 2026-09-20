@@ -16,6 +16,7 @@ const fields: Record<Kind, string[]> = {
   approval: ["prompt"],
   loop: ["limit"],
   whatsapp: ["to", "text"],
+  call: ["to", "context"],
   end: ["text"],
 };
 const labels: Record<string, [string, string]> = {
@@ -43,9 +44,10 @@ const labels: Record<string, [string, string]> = {
   limit: ["Máximo de repetições", "Entre 1 e 20 passagens."],
   text: ["Resposta final", "Texto entregue a quem chamou o fluxo."],
   to: ["Número de destino", "Com DDI e DDD, ex.: 5511999990000. Aceita {{state.telefone}}."],
+  context: ["Contexto da ligação", "O que o agente de voz deve saber e fazer nesta chamada."],
 };
-const TEXTAREAS = ["system", "prompt", "state", "body", "args", "text"];
-const REFERENCES = ["system", "prompt", "value", "compare", "body", "args", "text", "to"];
+const TEXTAREAS = ["system", "prompt", "state", "body", "args", "text", "context"];
+const REFERENCES = ["system", "prompt", "value", "compare", "body", "args", "text", "to", "context"];
 const COMPARISONS: [string, string][] = [
   ["contains", "Contém"],
   ["equals", "É igual a"],

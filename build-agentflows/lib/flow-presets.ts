@@ -22,6 +22,7 @@ export const NODE_STYLE: Record<
   loop: style("#FFA07A", "Controle de fluxo"),
   end: style("#4DDBBB", "Controle de fluxo"),
   whatsapp: style("#25D366", "Canais"),
+  call: style("#F4A261", "Canais"),
 };
 export const PRESETS = [
   {
