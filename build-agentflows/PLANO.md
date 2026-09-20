@@ -68,3 +68,69 @@ Playwright em tela larga, tema escuro e celular.
   do Flowise).
 - Início por formulário ou agendamento, além da conversa.
 - Notas adesivas no quadro e bloco de iteração sobre listas.
+
+# Rodada 2 (20/09/2026): simplificação para executivos, conexões e canais
+
+Pedidos recebidos depois da primeira rodada, agrupados em etapas. Cada etapa
+termina com testes, lint e um commit próprio.
+
+## A. Ajustes de UX no editor e na biblioteca
+
+- Nome do bloco editado direto no título do diálogo (sem campo repetido).
+- Sem a marca "V2" no menu, no cabeçalho e no rodapé.
+- "Gerar com IA" passa a se chamar "LLM (Assistente)"; "Agente" continua.
+- Blocos novos nascem com nome incremental (Agente 0, Agente 1, LLM 0…), como
+  no Flowise, e o nome pode ser trocado direto no cabeçalho do bloco.
+- Biblioteca com paginação de 10, 20, 50 ou 100 fluxos por página.
+- Mensagem de confirmação em todas as cópias (código do ChatGPT, código de
+  acesso, exemplos) e nas ações sem retorno visível (publicar, duplicar, importar).
+
+## B. Variáveis sem esforço
+
+- `{{input}}` deixa de ser obrigatório: um LLM ou Agente com a mensagem em
+  branco recebe automaticamente a conversa (no primeiro passo) ou o resultado
+  da etapa anterior, como o Flowise encadeia os nós. A validação e o gerador
+  acompanham.
+- Ao digitar `{{` em qualquer campo de texto aparece um autocompletar com a
+  entrada, a etapa anterior, as variáveis de estado e os blocos do fluxo. Somem
+  os atalhos separados acima dos campos.
+
+## C. Conexões: OpenRouter ao lado do ChatGPT
+
+- Página Conexões no menu, com cartões: ChatGPT (principal, assinatura),
+  OpenRouter (OAuth em um clique, mais de 500 modelos), Ferramentas (MCP),
+  WhatsApp e ElevenLabs.
+- O seletor de modelo do LLM/Agente lista os modelos do ChatGPT e, quando o
+  OpenRouter está conectado, os modelos dele agrupados por provedor. O motor
+  roda o modelo escolhido: ChatGPT pelo Codex, OpenRouter por chamada direta
+  com as mesmas ferramentas.
+
+## D. Ferramentas como no Flowise
+
+- Ferramentas prontas, sem configurar: data e hora, calculadora, requisição
+  HTTP, executar outro fluxo publicado, enviar WhatsApp e ligar por voz (as
+  duas últimas quando o canal está conectado).
+- Vários servidores MCP nomeados (endereço + autorização em um clique ou
+  código), cada um listando suas ferramentas.
+- No Agente, as ferramentas aparecem agrupadas por origem e são marcadas por
+  clique; o bloco mostra as escolhidas.
+
+## E. WhatsApp
+
+- Provedores: Z-API (conexão por QR Code), Meta (oficial) e ZapperHub, com
+  o mesmo contrato de envio e recebimento.
+- Bloco "Enviar WhatsApp" e ferramenta "enviar_whatsapp" para o Agente.
+- Mensagens recebidas executam o fluxo publicado escolhido em Conexões e a
+  resposta volta pelo mesmo número.
+
+## F. ElevenLabs (voz)
+
+- Chave, voz, agente de conversa e número em Conexões.
+- No chat de teste: falar em vez de digitar (transcrição) e ouvir a resposta.
+- Bloco "Ligação por voz" e ferramenta "ligar_por_voz" para prospecção ativa;
+  o fim da ligação (inbound ou outbound) executa o fluxo escolhido com a
+  transcrição, para registrar ou dar sequência.
+
+## G. Fechamento
+
+- README, CLAUDE.md, verificações da suíte, versão 0.3.0.
