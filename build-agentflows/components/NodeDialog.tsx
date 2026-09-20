@@ -55,7 +55,16 @@ const COMPARISONS: [string, string][] = [
   ["greater", "É maior que"],
   ["empty", "Está vazio"],
 ];
-type ToolInfo = { id: string; name: string; description: string };
+type Credential = { chave: string; rotulo: string; ajuda?: string; link?: string; secret?: boolean };
+type ToolInfo = {
+  id: string;
+  name: string;
+  description: string;
+  category?: string;
+  configured?: boolean;
+  credentials?: Credential[];
+  setup?: string;
+};
 type ToolGroup = { id: string; name: string; kind: "builtin" | "mcp"; tools: ToolInfo[]; error?: string };
 // Diálogo de edição do bloco, no formato do Flowise: ícone colorido, nome editável em linha
 // e a lista de campos do tipo. Referências e ferramentas entram por clique, sem digitar código.
@@ -74,11 +83,13 @@ export function NodeDialog({
 }) {
   const [draft, setDraft] = useState(() => structuredClone(node)),
     [error, setError] = useState(""),
-    [groups, setGroups] = useState<ToolGroup[] | null>(null);
+    [groups, setGroups] = useState<ToolGroup[] | null>(null),
+    [setup, setSetup] = useState<ToolInfo | null>(null),
+    [credentials, setCredentials] = useState<Record<string, string>>({}),
+    [saving, setSaving] = useState(false);
   const c = draft.data.config,
     k = draft.data.kind,
     usesTools = k === "agent" || k === "tool";
-  void setError;
   useEffect(() => {
     if (!usesTools) return;
     let alive = true;
@@ -240,26 +251,130 @@ export function NodeDialog({
                       ) : !g.tools.length ? (
                         <small>Nenhuma ferramenta disponível.</small>
                       ) : (
-                        <div className="tool-choices">
-                          {g.tools.map((t) => (
-                            <button
-                              key={t.id}
-                              type="button"
-                              className={selected.includes(t.id) ? "active" : ""}
-                              title={t.description}
-                              onClick={() => toggleTool(t.id)}
-                            >
-                              <Icon
-                                name={selected.includes(t.id) ? "check" : "plus"}
-                                size={12}
-                              />
-                              {t.name}
-                            </button>
-                          ))}
-                        </div>
+                        [...new Set(g.tools.map((t) => t.category || ""))].map((cat) => (
+                          <div key={cat} className="tool-category">
+                            {cat && <h5>{cat}</h5>}
+                            <div className="tool-choices">
+                              {g.tools
+                                .filter((t) => (t.category || "") === cat)
+                                .map((t) => (
+                                  <button
+                                    key={t.id}
+                                    type="button"
+                                    className={
+                                      (selected.includes(t.id) ? "active" : "") +
+                                      (t.configured === false ? " needs-setup" : "")
+                                    }
+                                    title={
+                                      t.configured === false
+                                        ? t.description + " · precisa de configuração"
+                                        : t.description
+                                    }
+                                    onClick={() => {
+                                      if (t.configured === false) {
+                                        setSetup(setup?.id === t.id ? null : t);
+                                        setCredentials({});
+                                      } else toggleTool(t.id);
+                                    }}
+                                  >
+                                    <Icon
+                                      name={
+                                        t.configured === false
+                                          ? "settings"
+                                          : selected.includes(t.id)
+                                            ? "check"
+                                            : "plus"
+                                      }
+                                      size={12}
+                                    />
+                                    {t.name}
+                                  </button>
+                                ))}
+                            </div>
+                          </div>
+                        ))
                       )}
                     </div>
                   ))
+                )}
+                {setup && (
+                  <div className="tool-setup">
+                    <strong>
+                      <Icon name="settings" size={13} />
+                      Configurar {setup.name}
+                    </strong>
+                    <p>{setup.description}</p>
+                    {setup.setup ? (
+                      <p>
+                        Conecte o canal em{" "}
+                        <a href={setup.setup} target="_blank" rel="noreferrer">
+                          Conexões
+                        </a>{" "}
+                        e volte aqui para marcar a ferramenta.
+                      </p>
+                    ) : (
+                      <>
+                        {(setup.credentials || []).map((c) => (
+                          <label key={c.chave}>
+                            {c.rotulo}
+                            <input
+                              type={c.secret ? "password" : "text"}
+                              autoComplete="off"
+                              value={credentials[c.chave] || ""}
+                              onChange={(e) =>
+                                setCredentials({ ...credentials, [c.chave]: e.target.value })
+                              }
+                            />
+                            {(c.ajuda || c.link) && (
+                              <small>
+                                {c.ajuda}{" "}
+                                {c.link && (
+                                  <a href={c.link} target="_blank" rel="noreferrer">
+                                    Onde obter
+                                  </a>
+                                )}
+                              </small>
+                            )}
+                          </label>
+                        ))}
+                        <div className="studio-actions">
+                          <button
+                            type="button"
+                            className="studio-button"
+                            onClick={() => setSetup(null)}
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            className="studio-button primary"
+                            disabled={
+                              saving ||
+                              (setup.credentials || []).some((c) => !credentials[c.chave]?.trim())
+                            }
+                            onClick={async () => {
+                              setSaving(true);
+                              setError("");
+                              try {
+                                const next = await request<ToolGroup[]>("/api/tools", "PUT", {
+                                  campos: credentials,
+                                });
+                                setGroups(next);
+                                toggleTool(setup.id);
+                                setSetup(null);
+                              } catch (e) {
+                                setError(e instanceof Error ? e.message : "Não foi possível salvar.");
+                              } finally {
+                                setSaving(false);
+                              }
+                            }}
+                          >
+                            {saving ? "Salvando…" : "Salvar e usar"}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
                 {orphan.length > 0 && (
                   <div className="tool-group">

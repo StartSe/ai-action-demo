@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { getConfig, setConfig, mascarar } from "./store";
 import { conexaoAutorizada, desconectar as desautorizar } from "./mcp-oauth";
 import { FlowError } from "./flow-store";
+import { TOOL_CREDENTIAL_KEYS } from "./tool-credentials";
 export type Campo = {
   chave: string;
   rotulo: string;
@@ -43,6 +44,7 @@ const CHAVES_LIVRES = new Set([
   "WHATSAPP_FLOW_ID",
   "ELEVENLABS_FLOW_ID",
   "OPENROUTER_API_KEY",
+  ...TOOL_CREDENTIAL_KEYS,
 ]);
 // Grava um conjunto de campos; só chaves conhecidas, só texto curto.
 export function salvarCampos(campos: unknown) {

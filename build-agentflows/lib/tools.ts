@@ -8,9 +8,21 @@ import type { AgentTool } from "./chatgpt";
 import { conexaoMCP, servidoresMCP, whatsappConfigurado, ligacaoConfigurada } from "./conexoes";
 import { conectar, chamar, listarFerramentas } from "./mcp-cliente";
 import { FlowError, listFlows } from "./flow-store";
-export type ToolInfo = { id: string; name: string; description: string; schema: unknown };
+import { getConfig } from "./store";
+import { TOOL_CREDENTIALS, type Credential } from "./tool-credentials";
+export type ToolInfo = {
+  id: string;
+  name: string;
+  description: string;
+  schema: unknown;
+  category?: string;
+  // Ferramenta pronta que ainda precisa de credencial (campos) ou de uma conexão (setup).
+  configured?: boolean;
+  credentials?: Credential[];
+  setup?: string;
+};
 export type ToolGroup = { id: string; name: string; kind: "builtin" | "mcp"; tools: ToolInfo[]; error?: string };
-type Builtin = ToolInfo & { available?: () => boolean; call: (args: Record<string, unknown>) => Promise<string> };
+type Builtin = ToolInfo & { credential?: string; available?: () => boolean; call: (args: Record<string, unknown>) => Promise<string> };
 // --- Calculadora sem eval: números, + - * / % ^ e parênteses. ---------------------------------
 export function calculate(expression: string): number {
   const src = expression.replace(/\s+/g, "").replace(/,/g, ".");
@@ -97,51 +109,230 @@ export async function fetchText(url: string, method = "GET", body?: string) {
   if (!res.ok) throw new FlowError(`O serviço respondeu com erro ${res.status}.`);
   return text;
 }
+// --- Catálogo de ferramentas prontas (mesmos serviços do Flowise) ----------------------------
+function cred(id: string) {
+  const list = TOOL_CREDENTIALS[id] || [];
+  const values: Record<string, string> = {};
+  for (const c of list) values[c.chave] = getConfig(c.chave) || "";
+  return { ok: list.every((c) => values[c.chave]), values };
+}
+function needs(id: string) {
+  return () => cred(id).ok;
+}
+type Hit = { titulo?: string; url?: string; trecho?: string };
+function hits(list: Hit[], extra?: Record<string, unknown>) {
+  return JSON.stringify({ ...(extra || {}), resultados: list.slice(0, 8) }).slice(0, 30000);
+}
+async function getJson(url: string, init: RequestInit = {}): Promise<Record<string, unknown>> {
+  const r = await fetch(url, { ...init, signal: AbortSignal.timeout(30000) });
+  if (!r.ok) throw new FlowError(`O serviço de busca respondeu com erro ${r.status}.`);
+  return (await r.json()) as Record<string, unknown>;
+}
+const QUERY = { type: "object", properties: { consulta: { type: "string", description: "o que buscar" } }, required: ["consulta"] };
+export function stripHtml(html: string) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<\/(p|div|li|h[1-6]|tr|br|section|article)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .split("\n")
+    .map((l) => l.replace(/[ \t]+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n");
+}
+// Caminho simples "a.b[0].c" dentro de um JSON.
+export function extractPath(value: unknown, path: string): unknown {
+  const parts = path.replace(/\[(\d+)\]/g, ".$1").split(".").filter(Boolean);
+  let cur: unknown = value;
+  for (const p of parts) {
+    if (cur === null || typeof cur !== "object") return undefined;
+    cur = (cur as Record<string, unknown>)[p];
+  }
+  return cur;
+}
 const BUILTIN: Builtin[] = [
+  // Busca na web
   {
-    id: "interno:data_hora",
-    name: "data_hora",
+    id: "interno:tavily", name: "tavily", category: "Busca na web", credential: "tavily",
+    description: "Busca na web pela Tavily, feita para agentes de IA, com resposta resumida.",
+    schema: QUERY, available: needs("tavily"),
+    call: async (a) => {
+      const d = await getJson("https://api.tavily.com/search", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: cred("tavily").values.TOOL_TAVILY_KEY, query: String(a.consulta ?? ""), max_results: 5, include_answer: true }),
+      });
+      const r = (d.results as { title?: string; url?: string; content?: string }[]) || [];
+      return hits(r.map((x) => ({ titulo: x.title, url: x.url, trecho: x.content })), { resposta: d.answer });
+    },
+  },
+  {
+    id: "interno:searchapi", name: "searchapi", category: "Busca na web", credential: "searchapi",
+    description: "Resultados do Google em tempo real pela SearchApi.",
+    schema: QUERY, available: needs("searchapi"),
+    call: async (a) => {
+      const u = new URL("https://www.searchapi.io/api/v1/search");
+      u.searchParams.set("engine", "google"); u.searchParams.set("q", String(a.consulta ?? "")); u.searchParams.set("api_key", cred("searchapi").values.TOOL_SEARCHAPI_KEY);
+      const d = await getJson(u.toString());
+      const r = (d.organic_results as { title?: string; link?: string; snippet?: string }[]) || [];
+      return hits(r.map((x) => ({ titulo: x.title, url: x.link, trecho: x.snippet })), { resposta: (d.answer_box as { answer?: string } | undefined)?.answer });
+    },
+  },
+  {
+    id: "interno:exa", name: "exa", category: "Busca na web", credential: "exa",
+    description: "Busca semântica pela Exa, com o texto das páginas encontradas.",
+    schema: QUERY, available: needs("exa"),
+    call: async (a) => {
+      const d = await getJson("https://api.exa.ai/search", {
+        method: "POST", headers: { "Content-Type": "application/json", "x-api-key": cred("exa").values.TOOL_EXA_KEY },
+        body: JSON.stringify({ query: String(a.consulta ?? ""), numResults: 5, contents: { text: { maxCharacters: 1500 } } }),
+      });
+      const r = (d.results as { title?: string; url?: string; text?: string }[]) || [];
+      return hits(r.map((x) => ({ titulo: x.title, url: x.url, trecho: x.text })));
+    },
+  },
+  {
+    id: "interno:serper", name: "serper", category: "Busca na web", credential: "serper",
+    description: "Resultados do Google pela Serper.dev.",
+    schema: QUERY, available: needs("serper"),
+    call: async (a) => {
+      const d = await getJson("https://google.serper.dev/search", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-API-KEY": cred("serper").values.TOOL_SERPER_KEY },
+        body: JSON.stringify({ q: String(a.consulta ?? ""), num: 5, gl: "br", hl: "pt-br" }),
+      });
+      const r = (d.organic as { title?: string; link?: string; snippet?: string }[]) || [];
+      return hits(r.map((x) => ({ titulo: x.title, url: x.link, trecho: x.snippet })), { resposta: (d.answerBox as { answer?: string; snippet?: string } | undefined)?.answer });
+    },
+  },
+  {
+    id: "interno:serpapi", name: "serpapi", category: "Busca na web", credential: "serpapi",
+    description: "Resultados do Google pela SerpApi.",
+    schema: QUERY, available: needs("serpapi"),
+    call: async (a) => {
+      const u = new URL("https://serpapi.com/search.json");
+      u.searchParams.set("q", String(a.consulta ?? "")); u.searchParams.set("api_key", cred("serpapi").values.TOOL_SERPAPI_KEY); u.searchParams.set("num", "5"); u.searchParams.set("hl", "pt-br"); u.searchParams.set("gl", "br");
+      const d = await getJson(u.toString());
+      const r = (d.organic_results as { title?: string; link?: string; snippet?: string }[]) || [];
+      return hits(r.map((x) => ({ titulo: x.title, url: x.link, trecho: x.snippet })));
+    },
+  },
+  {
+    id: "interno:brave", name: "brave", category: "Busca na web", credential: "brave",
+    description: "Busca na web pela Brave Search.",
+    schema: QUERY, available: needs("brave"),
+    call: async (a) => {
+      const u = new URL("https://api.search.brave.com/res/v1/web/search");
+      u.searchParams.set("q", String(a.consulta ?? "")); u.searchParams.set("count", "5");
+      const d = await getJson(u.toString(), { headers: { Accept: "application/json", "X-Subscription-Token": cred("brave").values.TOOL_BRAVE_KEY } });
+      const r = ((d.web as { results?: { title?: string; url?: string; description?: string }[] } | undefined)?.results) || [];
+      return hits(r.map((x) => ({ titulo: x.title, url: x.url, trecho: x.description })));
+    },
+  },
+  {
+    id: "interno:google", name: "google", category: "Busca na web", credential: "google",
+    description: "Google Custom Search (mecanismo de busca programável).",
+    schema: QUERY, available: needs("google"),
+    call: async (a) => {
+      const { values } = cred("google");
+      const u = new URL("https://www.googleapis.com/customsearch/v1");
+      u.searchParams.set("key", values.TOOL_GOOGLE_KEY); u.searchParams.set("cx", values.TOOL_GOOGLE_CX); u.searchParams.set("q", String(a.consulta ?? "")); u.searchParams.set("num", "5");
+      const d = await getJson(u.toString());
+      const r = (d.items as { title?: string; link?: string; snippet?: string }[]) || [];
+      return hits(r.map((x) => ({ titulo: x.title, url: x.link, trecho: x.snippet })));
+    },
+  },
+  {
+    id: "interno:searxng", name: "searxng", category: "Busca na web", credential: "searxng",
+    description: "Busca na sua própria instância SearXNG (metabusca livre).",
+    schema: QUERY, available: needs("searxng"),
+    call: async (a) => {
+      const base = cred("searxng").values.TOOL_SEARXNG_URL.replace(/\/+$/, "");
+      const u = new URL(base + "/search");
+      u.searchParams.set("q", String(a.consulta ?? "")); u.searchParams.set("format", "json");
+      const d = await getJson(u.toString());
+      const r = (d.results as { title?: string; url?: string; content?: string }[]) || [];
+      return hits(r.map((x) => ({ titulo: x.title, url: x.url, trecho: x.content })));
+    },
+  },
+  // Conhecimento
+  {
+    id: "interno:arxiv", name: "arxiv", category: "Conhecimento",
+    description: "Busca artigos científicos no arXiv (título, resumo e link).",
+    schema: QUERY,
+    call: async (a) => {
+      const u = new URL("https://export.arxiv.org/api/query");
+      u.searchParams.set("search_query", "all:" + String(a.consulta ?? "")); u.searchParams.set("max_results", "5");
+      const xml = await fetchText(u.toString());
+      const entries = [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].map((m) => {
+        const e = m[1];
+        const pick = (tag: string) => (e.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`))?.[1] || "").replace(/\s+/g, " ").trim();
+        return { titulo: pick("title"), url: pick("id"), trecho: pick("summary").slice(0, 600) };
+      });
+      return hits(entries);
+    },
+  },
+  {
+    id: "interno:wolfram", name: "wolfram", category: "Conhecimento", credential: "wolfram",
+    description: "Respostas curtas de cálculo e conhecimento pelo Wolfram Alpha.",
+    schema: { type: "object", properties: { pergunta: { type: "string" } }, required: ["pergunta"] }, available: needs("wolfram"),
+    call: async (a) => {
+      const u = new URL("https://api.wolframalpha.com/v1/result");
+      u.searchParams.set("appid", cred("wolfram").values.TOOL_WOLFRAM_APPID); u.searchParams.set("i", String(a.pergunta ?? ""));
+      const r = await fetch(u.toString(), { signal: AbortSignal.timeout(30000) });
+      const text = await r.text();
+      if (!r.ok) throw new FlowError(r.status === 501 ? "O Wolfram Alpha não soube responder a essa pergunta." : `O Wolfram Alpha respondeu com erro ${r.status}.`);
+      return text.slice(0, 5000);
+    },
+  },
+  // Web e dados
+  {
+    id: "interno:ler_pagina", name: "ler_pagina", category: "Web e dados",
+    description: "Lê o texto de uma página pública da internet.",
+    schema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
+    call: async (a) => stripHtml(await fetchText(String(a.url ?? ""))).slice(0, 20000),
+  },
+  {
+    id: "interno:requisicao_http", name: "requisicao_http", category: "Web e dados",
+    description: "Consulta ou envia dados a um endereço público na internet (GET ou POST com JSON).",
+    schema: { type: "object", properties: { url: { type: "string" }, method: { type: "string", enum: ["GET", "POST"] }, body: { type: "string", description: "JSON enviado no POST" } }, required: ["url"] },
+    call: async (a) => fetchText(String(a.url ?? ""), a.method === "POST" ? "POST" : "GET", a.body ? String(a.body) : undefined),
+  },
+  {
+    id: "interno:extrair_json", name: "extrair_json", category: "Web e dados",
+    description: "Extrai um valor de um JSON por caminho (ex.: dados.itens[0].nome).",
+    schema: { type: "object", properties: { json: { type: "string" }, caminho: { type: "string" } }, required: ["json", "caminho"] },
+    call: async (a) => {
+      let v: unknown;
+      try { v = JSON.parse(String(a.json ?? "")); } catch { throw new FlowError("O texto não é um JSON válido."); }
+      const out = extractPath(v, String(a.caminho ?? ""));
+      return out === undefined ? "Caminho não encontrado." : typeof out === "string" ? out : JSON.stringify(out).slice(0, 30000);
+    },
+  },
+  // Utilidades
+  {
+    id: "interno:data_hora", name: "data_hora", category: "Utilidades",
     description: "Informa a data e a hora atuais no Brasil.",
     schema: { type: "object", properties: {} },
     call: async () => {
       const now = new Date();
-      return JSON.stringify({
-        iso: now.toISOString(),
-        brasil: now.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "full", timeStyle: "short" }),
-      });
+      return JSON.stringify({ iso: now.toISOString(), brasil: now.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "full", timeStyle: "short" }) });
     },
   },
   {
-    id: "interno:calculadora",
-    name: "calculadora",
+    id: "interno:calculadora", name: "calculadora", category: "Utilidades",
     description: "Calcula uma expressão matemática (ex.: (1200*0.15)+80).",
     schema: { type: "object", properties: { expressao: { type: "string" } }, required: ["expressao"] },
     call: async (a) => String(calculate(String(a.expressao ?? ""))),
   },
+  // Fluxos
   {
-    id: "interno:requisicao_http",
-    name: "requisicao_http",
-    description: "Consulta ou envia dados a um endereço público na internet (GET ou POST com JSON).",
-    schema: {
-      type: "object",
-      properties: {
-        url: { type: "string" },
-        method: { type: "string", enum: ["GET", "POST"] },
-        body: { type: "string", description: "JSON enviado no POST" },
-      },
-      required: ["url"],
-    },
-    call: async (a) => fetchText(String(a.url ?? ""), a.method === "POST" ? "POST" : "GET", a.body ? String(a.body) : undefined),
-  },
-  {
-    id: "interno:executar_fluxo",
-    name: "executar_fluxo",
+    id: "interno:executar_fluxo", name: "executar_fluxo", category: "Fluxos",
     description: "Executa outro fluxo publicado desta instalação e devolve a resposta dele.",
-    schema: {
-      type: "object",
-      properties: { fluxo: { type: "string", description: "nome ou identificador do fluxo" }, entrada: { type: "string" } },
-      required: ["fluxo", "entrada"],
-    },
+    schema: { type: "object", properties: { fluxo: { type: "string", description: "nome ou identificador do fluxo" }, entrada: { type: "string" } }, required: ["fluxo", "entrada"] },
     call: async (a) => {
       const { startRun } = await import("./flow-runtime");
       const alvo = String(a.fluxo ?? "");
@@ -151,9 +342,9 @@ const BUILTIN: Builtin[] = [
       return JSON.stringify({ status: r.status, output: r.output, error: r.error, id: r.id });
     },
   },
+  // Canais
   {
-    id: "interno:enviar_whatsapp",
-    name: "enviar_whatsapp",
+    id: "interno:enviar_whatsapp", name: "enviar_whatsapp", category: "Canais", setup: "/conexoes",
     description: "Envia uma mensagem de WhatsApp para um número (DDI+DDD+número).",
     schema: { type: "object", properties: { para: { type: "string" }, mensagem: { type: "string" } }, required: ["para", "mensagem"] },
     available: whatsappConfigurado,
@@ -164,14 +355,9 @@ const BUILTIN: Builtin[] = [
     },
   },
   {
-    id: "interno:ligar_por_voz",
-    name: "ligar_por_voz",
+    id: "interno:ligar_por_voz", name: "ligar_por_voz", category: "Canais", setup: "/conexoes",
     description: "Faz uma ligação telefônica por voz com o agente de conversa, passando contexto para a conversa.",
-    schema: {
-      type: "object",
-      properties: { telefone: { type: "string" }, contexto: { type: "string", description: "o que o agente deve saber e fazer" } },
-      required: ["telefone"],
-    },
+    schema: { type: "object", properties: { telefone: { type: "string" }, contexto: { type: "string", description: "o que o agente deve saber e fazer" } }, required: ["telefone"] },
     available: ligacaoConfigurada,
     call: async (a) => {
       const { ligar } = await import("./elevenlabs");
@@ -181,7 +367,16 @@ const BUILTIN: Builtin[] = [
   },
 ];
 export function builtinTools(): ToolInfo[] {
-  return BUILTIN.filter((t) => !t.available || t.available()).map(({ id, name, description, schema }) => ({ id, name, description, schema }));
+  return BUILTIN.map(({ id, name, description, schema, category, credential, setup, available }) => ({
+    id,
+    name,
+    description,
+    schema,
+    category,
+    configured: !available || available(),
+    credentials: credential ? TOOL_CREDENTIALS[credential] : undefined,
+    setup,
+  }));
 }
 export function toolShortName(id: string) {
   return id.split(":").pop() || id;
