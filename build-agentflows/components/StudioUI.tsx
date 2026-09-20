@@ -248,7 +248,7 @@ export function Modal({
   onClose,
   wide = false,
 }: {
-  title: string;
+  title: ReactNode;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
@@ -272,7 +272,7 @@ export function Modal({
       }}
     >
       <header>
-        <h2>{title}</h2>
+        {typeof title === "string" ? <h2>{title}</h2> : title}
         <IconButton icon="close" label="Fechar diálogo" onClick={onClose} />
       </header>
       <div className="studio-modal-body">{children}</div>
@@ -313,7 +313,7 @@ export function StudioShell({
         <nav>
           <Link className={active === "flows" ? "active" : ""} href="/">
             <Icon name="flows" />
-            Agentflows<span className="nav-tag">V2</span>
+            Agentflows
           </Link>
           <Link className={active === "runs" ? "active" : ""} href="/historico">
             <Icon name="runs" />
@@ -356,7 +356,7 @@ export function StudioShell({
               <Icon name="logout" size={17} />
             </button>
           </div>
-          <small>Build Agentflows · Agentflow V2</small>
+          <small>Build Agentflows</small>
         </div>
       </aside>
       <div className="studio-content">{children}</div>

@@ -19,7 +19,22 @@ export function FlowLibrary() {
     [busy, setBusy] = useState(false),
     [connect, setConnect] = useState(false),
     [templates, setTemplates] = useState(false),
+    [notice, setNotice] = useState(""),
+    [page, setPage] = useState(1),
+    [perPage, setPerPage] = useState(10),
     [toDelete, setToDelete] = useState<Flow | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 3500);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  useEffect(() => {
+    try {
+      const saved = Number(localStorage.getItem("agentflows-por-pagina"));
+      if ([10, 20, 50, 100].includes(saved))
+        setTimeout(() => setPerPage(saved), 0);
+    } catch {}
+  }, []);
   const { connection, setConnection } = useChatGPT();
   const load = useCallback(async () => {
     const items = await request<Flow[]>("/api/flows");
@@ -85,6 +100,7 @@ export function FlowLibrary() {
         graph: f.graph,
       });
       await load();
+      setNotice(`Fluxo duplicado como “${copy.name}”.`);
     });
   }
   function download(f: Flow) {
@@ -136,6 +152,16 @@ export function FlowLibrary() {
   const filtered = flows.filter((f) =>
     (f.name + " " + f.description).toLowerCase().includes(search.toLowerCase()),
   );
+  const pages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const current = Math.min(page, pages);
+  const visible = filtered.slice((current - 1) * perPage, current * perPage);
+  function choosePerPage(n: number) {
+    setPerPage(n);
+    setPage(1);
+    try {
+      localStorage.setItem("agentflows-por-pagina", String(n));
+    } catch {}
+  }
   return (
     <StudioShell
       active="flows"
@@ -146,9 +172,7 @@ export function FlowLibrary() {
         <header className="library-header">
           <div>
             <div className="studio-breadcrumb">Workspace / Agentflows</div>
-            <h1>
-              Agentflows <span>V2</span>
-            </h1>
+            <h1>Agentflows</h1>
             <p>Construa e conecte seus agentes de IA.</p>
           </div>
           <div className="studio-actions">
@@ -182,7 +206,10 @@ export function FlowLibrary() {
               aria-label="Buscar fluxos"
               placeholder="Buscar Agentflows"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
             />
           </label>
           <span className="library-count">
@@ -260,7 +287,7 @@ export function FlowLibrary() {
           </section>
         ) : (
           <div className={"flow-collection " + view}>
-            {filtered.map((f) => (
+            {visible.map((f) => (
               <article className="flow-card" key={f.id}>
                 <Link className="flow-card-link" href={"/flows/" + f.id}>
                   <div className="flow-card-top">
@@ -327,6 +354,58 @@ export function FlowLibrary() {
             ))}
           </div>
         )}
+        {filtered.length > 0 && (
+          <nav className="library-pagination" aria-label="Paginação">
+            <label>
+              Por página
+              <select
+                value={perPage}
+                onChange={(e) => choosePerPage(Number(e.target.value))}
+              >
+                {[10, 20, 50, 100].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span>
+              {(current - 1) * perPage + 1}–
+              {Math.min(current * perPage, filtered.length)} de{" "}
+              {filtered.length}
+            </span>
+            <div className="pagination-pages">
+              <IconButton
+                icon="arrow"
+                label="Página anterior"
+                disabled={current <= 1}
+                onClick={() => setPage(current - 1)}
+              />
+              {Array.from({ length: pages }, (_, i) => i + 1)
+                .filter(
+                  (p) => p === 1 || p === pages || Math.abs(p - current) <= 1,
+                )
+                .map((p, i, list) => (
+                  <span key={p} className="page-slot">
+                    {i > 0 && list[i - 1] !== p - 1 && <i>…</i>}
+                    <button
+                      className={p === current ? "active" : ""}
+                      aria-current={p === current ? "page" : undefined}
+                      onClick={() => setPage(p)}
+                    >
+                      {p}
+                    </button>
+                  </span>
+                ))}
+              <IconButton
+                icon="chevron"
+                label="Próxima página"
+                disabled={current >= pages}
+                onClick={() => setPage(current + 1)}
+              />
+            </div>
+          </nav>
+        )}
         {!connection?.account && (
           <div className="library-connect-banner">
             <Icon name="spark" size={23} />
@@ -340,6 +419,12 @@ export function FlowLibrary() {
           </div>
         )}
       </main>
+      {notice && (
+        <div role="status" className="canvas-toast studio-toast">
+          <Icon name="check" size={17} />
+          {notice}
+        </div>
+      )}
       {connect && (
         <ChatGPTConnection
           onClose={() => setConnect(false)}
@@ -405,6 +490,7 @@ export function FlowLibrary() {
                   await request("/api/flows/" + toDelete.id, "DELETE");
                   setToDelete(null);
                   await load();
+                  setNotice("Fluxo excluído.");
                 })
               }
             >
