@@ -23,7 +23,7 @@ A validação usa armazenamento temporário e não altera as contas ou conexões
 - Conferência visual em 1440×1000 e 390×844. Verificação de navegação e campos em 1366×768, 1024×768, 768×1024, 360×800 e 320×720.
 - Integrações externas simuladas nos testes; armazenamento temporário isolado. Não foram enviados e-mails, mensagens ou comandos para serviços externos.
 
-Commits por etapa: `6b31099` (estrutura e configurações), `2b8cf2c` (demais telas), `e934902` (validação e estados de falha).
+Commits por etapa: `cd1abd3` (estrutura e configurações), `a85719d` (demais telas), `5d93f96` (validação e estados de falha).
 
 
 ## Revisão complementar do acompanhamento dos grupos

@@ -39,7 +39,7 @@ Sala de análise: maturidade e radar interativo, perspectivas dos agentes (Anali
 
 | Requisito | Evidência verificável |
 | --- | --- |
-| Planejar layout antes da construção | Direção e composição documentadas no início deste arquivo; fundamento entregue em c92cdbd. |
+| Planejar layout antes da construção | Direção e composição documentadas no início deste arquivo; fundamento entregue em 622cffa. |
 | Interface inovadora e responsiva | Painel editorial, bússola SVG explorável, oficina com agentes e sala de análise; capturas Playwright a 1440, 768 e 390 px inspecionadas. |
 | Painel para empresa ou área | `ContextoAssessment`, parâmetros persistidos, filtros por escopo, meta separada do limite, progresso e acompanhamento por coleta. Teste completo cria Marketing e verifica persistência/participação. |
 | Agentes na criação | Arquiteto chama IA com objetivo/setor/área; validação estrutural; fallback explícito e revisão editável. Contratos válidos e inválidos testados. |
@@ -48,6 +48,6 @@ Sala de análise: maturidade e radar interativo, perspectivas dos agentes (Anali
 | Exportação e navegação | CSV baixado; página de impressão com conselho e rótulo de leitura automática; troca entre diagnósticos pela biblioteca sem reaproveitar estado do registro anterior. |
 | Persistência e volume | Teste com 501 respostas preserva leitura completa e assessment encerrado após limpeza de inicialização. 210 tentativas concorrentes resultam em exatamente 200 aceitas no limite 200. |
 | Acessibilidade e falhas | Axe WCAG A/AA nas telas novas; teclado/foco no modal; rádios nativos; ausência de overflow e erros de console; falha de rede mantém preenchimento e permite tentar novamente. |
-| Testes e commits por etapa | c92cdbd (painel), 4f4a1e1 (oficina/grupos), 472145b (análise/resposta); etapa final com testes e correções consolidadas no commit de validação. |
+| Testes e commits por etapa | 622cffa (painel), 208249e (oficina/grupos), 5e27875 (análise/resposta); etapa final com testes e correções consolidadas no commit de validação. |
 
 Resultado: 10 testes de domínio/contratos/persistência e 5 testes de ponta a ponta passaram; build e TypeScript passaram; lint sem erros, com um aviso preexistente de `<img>` em `components/setup.tsx`. `git diff --check` sem problemas. Nenhum dado ou conta existente foi usado nos testes. Não foi feita chamada a IA externa real, publicação nem push.

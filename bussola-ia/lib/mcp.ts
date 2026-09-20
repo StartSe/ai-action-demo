@@ -3,6 +3,7 @@
 // precisa de "tools/list" e "tools/call" (sem resources, prompts ou streaming de progresso) — a
 // mesma filosofia de lib/store.ts (SQLite sem dependências) evitando uma dependência pesada para pouco uso.
 import crypto from "node:crypto";
+import { version } from "../package.json";
 import { getConfig, mascarar, setConfig } from "./store";
 
 export type Ferramenta = {
@@ -85,7 +86,7 @@ export async function tratarRequisicaoRpc(corpo: RpcRequisicao, ferramentas: Fer
         result: {
           protocolVersion: "2024-11-05",
           capabilities: { tools: {} },
-          serverInfo: { name: nomeServidor, version: "1.0.0" },
+          serverInfo: { name: nomeServidor, version },
         },
       };
     }

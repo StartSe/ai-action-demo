@@ -6,6 +6,7 @@ import { type Status } from "@/components/ui";
 import { requisitar } from "@/lib/http-cliente";
 import { Icone, type NomeIcone } from "./Icone";
 import type { Tela } from "@/lib/navegacao";
+import { version } from "@/package.json";
 export type { Tela } from "@/lib/navegacao";
 const nav: { id: Tela; nome: string; icone: NomeIcone }[] = [
   { id: "visao", nome: "Visão geral", icone: "grid" },
@@ -192,7 +193,8 @@ export function EstruturaObservatorio({
           {children}
           <footer className="obs-footer">
             <span>
-              BÚSSOLA <i>/</i> clareza para transformar.
+              BÚSSOLA <span aria-label={`Versão ${version}`}>v{version}</span>{" "}
+              <i>/</i> clareza para transformar.
             </span>
             <span>
               Feito para quem move o futuro <span>↗</span>

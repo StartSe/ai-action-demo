@@ -1,5 +1,7 @@
 # Bússola de IA
 
+Versão **0.2.0** · [Notas da versão](./CHANGELOG.md).
+
 Um observatório de inovação com IA para o gestor acompanhar assessments de **empresas, áreas e times**, da criação das perguntas ao plano de ação.
 
 ## A experiência
