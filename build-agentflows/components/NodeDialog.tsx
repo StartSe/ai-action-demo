@@ -74,16 +74,20 @@ export function NodeDialog({
   models,
   onClose,
   onSave,
+  onRename,
 }: {
   node: Block;
   nodes: Block[];
   models: { id: string; name: string }[];
   onClose: () => void;
   onSave: (n: Block) => void;
+  onRename: (label: string) => void;
 }) {
   const [draft, setDraft] = useState(() => structuredClone(node)),
     [error, setError] = useState(""),
     [groups, setGroups] = useState<ToolGroup[] | null>(null),
+    [savedName, setSavedName] = useState(node.data.label),
+    [nameSaved, setNameSaved] = useState(false),
     [setup, setSetup] = useState<ToolInfo | null>(null),
     [credentials, setCredentials] = useState<Record<string, string>>({}),
     [saving, setSaving] = useState(false);
@@ -121,6 +125,15 @@ export function NodeDialog({
         : [...selected, id]
       ).join(","),
     );
+  }
+  // Enter ou o check no título salvam só o nome; o diálogo continua aberto.
+  function saveName() {
+    const label = draft.data.label.trim();
+    if (!label || label === savedName) return;
+    onRename(label);
+    setSavedName(label);
+    setNameSaved(true);
+    setTimeout(() => setNameSaved(false), 1800);
   }
   function saveAndClose() {
     onSave({
@@ -178,16 +191,25 @@ export function NodeDialog({
             onKeyDown={(e) => {
               if (e.key === "Enter" && draft.data.label.trim()) {
                 e.preventDefault();
-                saveAndClose();
+                saveName();
               }
             }}
           />
-          <IconButton
-            icon="check"
-            label="Salvar bloco"
-            disabled={!draft.data.label.trim()}
-            onClick={saveAndClose}
-          />
+          {nameSaved ? (
+            <span className="modal-title-saved">
+              <Icon name="check" size={14} />
+              Nome salvo
+            </span>
+          ) : (
+            <IconButton
+              icon="check"
+              label="Salvar nome"
+              disabled={
+                !draft.data.label.trim() || draft.data.label.trim() === savedName
+              }
+              onClick={saveName}
+            />
+          )}
         </label>
       }
       onClose={onClose}

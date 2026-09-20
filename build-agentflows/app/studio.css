@@ -1398,6 +1398,15 @@
   border-color: var(--studio-primary);
   background: var(--studio-surface);
 }
+.modal-title-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 650;
+  color: #2c7a55;
+  white-space: nowrap;
+}
 .af-node-title {
   display: flex;
   align-items: center;

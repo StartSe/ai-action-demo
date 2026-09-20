@@ -54,7 +54,7 @@ test("catálogo agrupa ferramentas prontas e de cada servidor; ids antigos apont
     const builtin = groups[0].tools;
     const names = builtin.map((t) => t.name);
     assert.ok(names.includes("calculadora") && names.includes("executar_fluxo") && names.includes("tavily"));
-    assert.equal(builtin.find((t) => t.name === "enviar_whatsapp")?.configured, false, "WhatsApp aparece como não configurado");
+    assert.ok(!names.includes("enviar_whatsapp") && !names.includes("ligar_por_voz"), "canais ficam em Implantar, não no Agente");
     assert.equal(builtin.find((t) => t.name === "tavily")?.configured, false);
     assert.equal(builtin.find((t) => t.name === "tavily")?.credentials?.[0].chave, "TOOL_TAVILY_KEY");
     assert.equal(builtin.find((t) => t.name === "calculadora")?.configured, true);
