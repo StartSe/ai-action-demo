@@ -7,5 +7,9 @@ export const NAVEGACAO: ItemNavegacao[] = [
 
 export type Tela = "visao" | "assessments" | "oficina" | "inteligencia";
 export function telaDoParametro(valor: string | string[] | undefined): Tela {
-  return valor === "assessments" || valor === "oficina" || valor === "inteligencia" ? valor : "visao";
+  return valor === "assessments" ||
+    valor === "oficina" ||
+    valor === "inteligencia"
+    ? valor
+    : "visao";
 }

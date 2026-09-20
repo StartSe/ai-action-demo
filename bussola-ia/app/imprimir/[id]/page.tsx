@@ -17,15 +17,30 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
     <div className="print-sheet max-w-[860px] mx-auto px-8 py-10 max-md:px-4">
       <ImprimirAoCarregar />
       <header className="mb-8 pb-4 border-b border-line">
-        <div className="print-brand"><Icone nome="compass" size={25} /><span>bússola<small>INOVAÇÃO + INTELIGÊNCIA</small></span></div>
+        <div className="print-brand">
+          <Icone nome="compass" size={25} />
+          <span>
+            bússola<small>INOVAÇÃO + INTELIGÊNCIA</small>
+          </span>
+        </div>
         <h1 className="print-title">{registro.saida.titulo}</h1>
-        <div className="text-muted text-sm">{registro.saida.empresa} · {data(registro.criadoEm)}</div>
+        <div className="text-muted text-sm">
+          {registro.saida.empresa} · {data(registro.criadoEm)}
+        </div>
       </header>
 
       <ConteudoAvaliacao avaliacao={registro.saida} />
 
       <footer className="mt-8 pt-4 border-t border-line">
-        {!registro.meta.demo && registro.saida.analise?.origemLeitura === "automatica" ? <p className="text-sm">Diagnóstico real · Leitura automática, sem IA · {registro.meta.insumo}</p> : <Origem meta={registro.meta} />}
+        {!registro.meta.demo &&
+        registro.saida.analise?.origemLeitura === "automatica" ? (
+          <p className="text-sm">
+            Diagnóstico real · Leitura automática, sem IA ·{" "}
+            {registro.meta.insumo}
+          </p>
+        ) : (
+          <Origem meta={registro.meta} />
+        )}
       </footer>
     </div>
   );

@@ -13,18 +13,45 @@ export default async function Page({ params }: PageProps<"/f/[token]">) {
   const formulario = obter<ParametrosPublicos>(token);
 
   if (!formulario) {
-    return <EstadoPagina titulo="Este link não existe" descricao="Confira se o endereço foi copiado corretamente, ou peça um novo link a quem enviou este formulário." />;
+    return (
+      <EstadoPagina
+        titulo="Este link não existe"
+        descricao="Confira se o endereço foi copiado corretamente, ou peça um novo link a quem enviou este formulário."
+      />
+    );
   }
 
   if (expirou(formulario)) {
-    return <EstadoPagina titulo="Este link expirou" descricao="Peça um novo link a quem enviou este formulário." />;
+    return (
+      <EstadoPagina
+        titulo="Este link expirou"
+        descricao="Peça um novo link a quem enviou este formulário."
+      />
+    );
   }
 
-  const noLimite = formulario.limite !== null && contarRespostas(token) >= formulario.limite;
+  const noLimite =
+    formulario.limite !== null && contarRespostas(token) >= formulario.limite;
   if (noLimite) {
-    return <EstadoPagina titulo="Este formulário não recebe mais respostas" descricao="O limite de respostas deste link já foi atingido." />;
+    return (
+      <EstadoPagina
+        titulo="Este formulário não recebe mais respostas"
+        descricao="O limite de respostas deste link já foi atingido."
+      />
+    );
   }
 
-  const { marca, nome, titulo, descricao, agradecimento } = formulario.parametros;
-  return <FormularioPublico token={token} marca={marca} nome={nome} titulo={titulo} descricao={descricao} agradecimento={agradecimento} campos={formulario.campos} />;
+  const { marca, nome, titulo, descricao, agradecimento } =
+    formulario.parametros;
+  return (
+    <FormularioPublico
+      token={token}
+      marca={marca}
+      nome={nome}
+      titulo={titulo}
+      descricao={descricao}
+      agradecimento={agradecimento}
+      campos={formulario.campos}
+    />
+  );
 }

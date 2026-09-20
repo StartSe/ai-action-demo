@@ -2,6 +2,7 @@
 // Cartão adicional do /setup: gera o código de acesso para um assistente de IA (Claude, ChatGPT
 // etc.) usar este app diretamente, via app/mcp/route.ts.
 import { useEffect, useState } from "react";
+import { requisitar } from "@/lib/http-cliente";
 import { CopyButton } from "./ui";
 
 type Status = { ativo: boolean; mascarado: string | null };
@@ -9,27 +10,38 @@ type Status = { ativo: boolean; mascarado: string | null };
 export function AcessoMCP() {
   const [status, setStatus] = useState<Status | null>(null);
   const [codigoNovo, setCodigoNovo] = useState<string | null>(null);
+  const [erro, setErro] = useState("");
   const [gerando, setGerando] = useState(false);
   const [revogando, setRevogando] = useState(false);
   const [endereco, setEndereco] = useState("/mcp");
 
-  useEffect(() => {
-    fetch("/api/mcp/token")
-      .then((r) => r.json())
+  function carregar() {
+    setErro("");
+    requisitar<Status>("/api/mcp/token")
       .then((d) => {
         setStatus(d);
         setEndereco(`${window.location.origin}/mcp`);
       })
-      .catch(() => {});
+      .catch(() =>
+        setErro("Não foi possível carregar o acesso do assistente."),
+      );
+  }
+  useEffect(() => {
+    const t = setTimeout(carregar, 0);
+    return () => clearTimeout(t);
   }, []);
 
   async function gerar() {
     setGerando(true);
+    setErro("");
     try {
-      const r = await fetch("/api/mcp/token", { method: "POST" });
-      const d = await r.json();
+      const d = await requisitar<{ codigo: string }>("/api/mcp/token", {
+        method: "POST",
+      });
       setCodigoNovo(d.codigo);
       setStatus({ ativo: true, mascarado: null });
+    } catch (e) {
+      setErro((e as Error).message);
     } finally {
       setGerando(false);
     }
@@ -37,10 +49,13 @@ export function AcessoMCP() {
 
   async function revogar() {
     setRevogando(true);
+    setErro("");
     try {
-      await fetch("/api/mcp/token", { method: "DELETE" });
+      await requisitar("/api/mcp/token", { method: "DELETE" });
       setCodigoNovo(null);
       setStatus({ ativo: false, mascarado: null });
+    } catch (e) {
+      setErro((e as Error).message);
     } finally {
       setRevogando(false);
     }
@@ -48,64 +63,141 @@ export function AcessoMCP() {
 
   const configuracao = codigoNovo
     ? JSON.stringify(
-        { mcpServers: { "bussola-ia": { url: endereco, headers: { Authorization: `Bearer ${codigoNovo}` } } } },
+        {
+          mcpServers: {
+            "bussola-ia": {
+              url: endereco,
+              headers: { Authorization: `Bearer ${codigoNovo}` },
+            },
+          },
+        },
         null,
-        2
+        2,
       )
     : null;
 
   return (
-    <section id="assistentes" className="card p-6 max-md:p-5 settings-extra"><p className="eyebrow">02 / AMPLIAR</p>
+    <section id="assistentes" className="card p-6 max-md:p-5 settings-extra">
+      <p className="eyebrow">02 / AMPLIAR</p>
       <h2 className="text-lg font-bold mb-1">Usar dentro do seu assistente</h2>
       <p className="text-muted text-sm mb-4 max-w-[640px]">
-        Gere um código de acesso para que um assistente de IA (Claude, ChatGPT e outros) avalie a maturidade em IA da empresa diretamente pela conversa, sem precisar abrir o navegador.
+        Gere um código de acesso para que um assistente de IA (Claude, ChatGPT e
+        outros) avalie a maturidade em IA da empresa diretamente pela conversa,
+        sem precisar abrir o navegador.
       </p>
+      {erro && (
+        <div role="alert" className="obs-alert error">
+          {erro}
+          {!status && (
+            <button className="text-link" onClick={carregar}>
+              Tentar novamente
+            </button>
+          )}
+        </div>
+      )}
+      {!status && !erro && (
+        <p className="text-muted text-sm mb-4" role="status">
+          Carregando acesso…
+        </p>
+      )}
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-[13px] font-semibold w-[130px] shrink-0">Endereço</span>
-          <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-0 basis-[220px]">{endereco}</code>
+          <span className="text-[13px] font-semibold w-[130px] shrink-0">
+            Endereço
+          </span>
+          <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-0 basis-[220px]">
+            {endereco}
+          </code>
           <CopyButton texto={() => endereco} rotulo="Copiar" />
         </div>
         {codigoNovo ? (
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-[13px] font-semibold w-[130px] shrink-0">Código (só agora)</span>
-            <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-0 basis-[220px]">{codigoNovo}</code>
+            <span className="text-[13px] font-semibold w-[130px] shrink-0">
+              Código (só agora)
+            </span>
+            <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-0 basis-[220px]">
+              {codigoNovo}
+            </code>
             <CopyButton texto={() => codigoNovo} rotulo="Copiar" />
           </div>
         ) : status?.ativo && status.mascarado ? (
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-[13px] font-semibold w-[130px] shrink-0">Código</span>
-            <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px]">{status.mascarado}</code>
+            <span className="text-[13px] font-semibold w-[130px] shrink-0">
+              Código
+            </span>
+            <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px]">
+              {status.mascarado}
+            </code>
           </div>
         ) : null}
         <div className="flex items-center gap-3 flex-wrap mt-1">
-          <button type="button" className="btn-primary !w-auto" onClick={gerar} disabled={gerando}>
-            {gerando ? "Gerando" : status?.ativo ? "Gerar novo acesso" : "Gerar acesso"}
+          <button
+            type="button"
+            className="btn-primary !w-auto"
+            onClick={gerar}
+            disabled={gerando || revogando || !status}
+          >
+            {gerando
+              ? "Gerando"
+              : status?.ativo
+                ? "Gerar novo acesso"
+                : "Gerar acesso"}
           </button>
           {status?.ativo && (
-            <button type="button" className="btn-ghost" onClick={revogar} disabled={revogando}>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={revogar}
+              disabled={revogando || gerando}
+            >
               {revogando ? "Revogando" : "Revogar"}
             </button>
           )}
         </div>
-        {codigoNovo && <p className="text-[12.5px] text-muted">Guarde este código agora: por segurança, ele não aparece de novo depois desta tela.</p>}
+        {codigoNovo && (
+          <p className="text-[12.5px] text-muted">
+            Guarde este código agora: por segurança, ele não aparece de novo
+            depois desta tela.
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-6 max-md:grid-cols-1 mt-6">
         <div>
-          <h3 className="text-sm font-semibold mb-2">Conectar no Claude Desktop</h3>
+          <h3 className="text-sm font-semibold mb-2">
+            Conectar no Claude Desktop
+          </h3>
           <ol className="text-[13px] text-muted list-decimal pl-5 space-y-1">
-            <li>Abra Configurações → Conectores → &quot;Adicionar conector personalizado&quot; → &quot;Editar configuração&quot;.</li>
-            <li>Clique em &quot;Copiar configuração&quot; abaixo e cole no arquivo que abrir.</li>
-            <li>Salve e reinicie o Claude Desktop: a Bússola de IA aparece na lista de conectores.</li>
+            <li>
+              Abra Configurações → Conectores → &quot;Adicionar conector
+              personalizado&quot; → &quot;Editar configuração&quot;.
+            </li>
+            <li>
+              Clique em &quot;Copiar configuração&quot; abaixo e cole no arquivo
+              que abrir.
+            </li>
+            <li>
+              Salve e reinicie o Claude Desktop: a Bússola de IA aparece na
+              lista de conectores.
+            </li>
           </ol>
         </div>
         <div>
           <h3 className="text-sm font-semibold mb-2">Conectar no ChatGPT</h3>
           <ol className="text-[13px] text-muted list-decimal pl-5 space-y-1">
-            <li>Abra Configurações → Conectores → &quot;Criar&quot; (conector personalizado).</li>
-            <li>Cole o Endereço acima em &quot;URL&quot; e, em &quot;Autenticação&quot;, escolha &quot;Chave de acesso&quot; e cole o código gerado acima.</li>
-            <li>Salve: a Bússola de IA aparece nas ferramentas disponíveis dentro da conversa.</li>
+            <li>
+              Abra Configurações → Conectores → &quot;Criar&quot; (conector
+              personalizado).
+            </li>
+            <li>
+              Cole o Endereço acima em &quot;URL&quot; e, em
+              &quot;Autenticação&quot;, escolha &quot;Chave de acesso&quot; e
+              cole o código gerado acima.
+            </li>
+            <li>
+              Salve: a Bússola de IA aparece nas ferramentas disponíveis dentro
+              da conversa.
+            </li>
           </ol>
         </div>
       </div>
@@ -114,13 +206,21 @@ export function AcessoMCP() {
         <h3 className="text-sm font-semibold mb-2">Configuração pronta</h3>
         {configuracao ? (
           <>
-            <pre className="bg-bg border border-line rounded-md p-3 text-[12px] leading-relaxed overflow-x-auto whitespace-pre-wrap break-all">{configuracao}</pre>
+            <pre className="bg-bg border border-line rounded-md p-3 text-[12px] leading-relaxed overflow-x-auto whitespace-pre-wrap break-all">
+              {configuracao}
+            </pre>
             <div className="mt-2">
-              <CopyButton texto={() => configuracao} rotulo="Copiar configuração" />
+              <CopyButton
+                texto={() => configuracao}
+                rotulo="Copiar configuração"
+              />
             </div>
           </>
         ) : (
-          <p className="text-[12.5px] text-muted">Gere um acesso acima para liberar a configuração pronta, já com o código incluído.</p>
+          <p className="text-[12.5px] text-muted">
+            Gere um acesso acima para liberar a configuração pronta, já com o
+            código incluído.
+          </p>
         )}
       </div>
     </section>
