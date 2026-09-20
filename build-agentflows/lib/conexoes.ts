@@ -148,6 +148,14 @@ export function chaveWebhook() {
   return nova;
 }
 export async function statusConexoes(origem: string) {
+  let vozes: { valor: string; rotulo: string }[] = [];
+  if (elevenLabsConfigurado())
+    try {
+      const { vozes: listar } = await import("./elevenlabs");
+      vozes = (await listar()).map((v) => ({ valor: v.id, rotulo: v.nome }));
+    } catch {
+      vozes = [];
+    }
   const servidores = await Promise.all(
     servidoresMCP().map(async (s) => ({
       ...s,
@@ -173,7 +181,9 @@ export async function statusConexoes(origem: string) {
       configurado: elevenLabsConfigurado(),
       ligacao: ligacaoConfigurada(),
       fluxo: getConfig("ELEVENLABS_FLOW_ID") || null,
-      campos: statusCampos(ELEVENLABS_CAMPOS),
+      campos: statusCampos(ELEVENLABS_CAMPOS).map((c) =>
+        c.chave === "ELEVENLABS_VOICE_ID" ? { ...c, opcoes: vozes } : c,
+      ),
       aviso: `${origem}/webhook/elevenlabs`,
     },
   };

@@ -2,6 +2,19 @@
 import { useEffect, useRef, useState } from "react";
 import type { Run } from "@/lib/flow-types";
 import { Icon, IconButton, request } from "./StudioUI";
+// Fala um texto com a voz configurada em Conexões (ElevenLabs).
+async function speak(text: string) {
+  const r = await fetch("/api/voz/falar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ texto: text.slice(0, 2500) }),
+  });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Não foi possível gerar a fala.");
+  const url = URL.createObjectURL(await r.blob());
+  const audio = new Audio(url);
+  audio.onended = () => URL.revokeObjectURL(url);
+  await audio.play();
+}
 const STATUS: Record<Run["status"], string> = {
   running: "Em execução",
   waiting: "Aguardando sua decisão",
@@ -15,12 +28,15 @@ function duration(ms: number) {
 // Resposta do fluxo em formato de balão, com as etapas executadas, o estado e a aprovação em linha.
 function BotMessage({
   run,
+  voice,
   onChange,
 }: {
   run: Run;
+  voice: boolean;
   onChange: (r: Run) => void;
 }) {
   const [busy, setBusy] = useState(false),
+    [speaking, setSpeaking] = useState(false),
     [error, setError] = useState("");
   async function act(action: string, decision?: string) {
     setBusy(true);
@@ -108,6 +124,22 @@ function BotMessage({
           <span className={"run-status-dot " + run.status} />
           {STATUS[run.status]} · {run.demo ? "Demonstração" : "ChatGPT"}
           {run.version ? " · v" + run.version : " · rascunho"}
+          {voice && run.status === "completed" && run.output && (
+            <button
+              className="chat-listen"
+              disabled={speaking}
+              title="Ouvir a resposta"
+              onClick={() => {
+                setSpeaking(true);
+                speak(run.output)
+                  .catch((e) => setError(e.message))
+                  .finally(() => setSpeaking(false));
+              }}
+            >
+              <Icon name="speaker" size={13} />
+              {speaking ? "Falando…" : "Ouvir"}
+            </button>
+          )}
           {["waiting", "running"].includes(run.status) && (
             <button disabled={busy} onClick={() => act("cancel")}>
               Cancelar execução
@@ -125,6 +157,7 @@ export function ChatPopup({
   demo,
   connected,
   expanded,
+  voice = false,
   onDemo,
   onSend,
   onChange,
@@ -139,6 +172,7 @@ export function ChatPopup({
   demo: boolean;
   connected: boolean;
   expanded: boolean;
+  voice?: boolean;
   onDemo: (v: boolean) => void;
   onSend: (input: string) => void;
   onChange: (r: Run) => void;
@@ -148,8 +182,59 @@ export function ChatPopup({
   onExpand: () => void;
 }) {
   const [input, setInput] = useState(""),
+    [listen, setListen] = useState(false),
+    [recording, setRecording] = useState(false),
+    [transcribing, setTranscribing] = useState(false),
+    [voiceError, setVoiceError] = useState(""),
+    recorder = useRef<MediaRecorder | null>(null),
+    spoken = useRef(new Set<string>()),
     scroll = useRef<HTMLDivElement>(null);
   const canSend = !running && (demo || connected);
+  // Com "Ouvir respostas" ligado, cada resposta concluída é falada uma vez.
+  useEffect(() => {
+    if (!listen || !voice) return;
+    const done = session.find(
+      (r) => r.status === "completed" && r.output && !spoken.current.has(r.id),
+    );
+    if (!done) return;
+    spoken.current.add(done.id);
+    speak(done.output).catch((e) => setVoiceError(e.message));
+  }, [session, listen, voice]);
+  async function toggleRecording() {
+    setVoiceError("");
+    if (recording) {
+      recorder.current?.stop();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      rec.ondataavailable = (e) => chunks.push(e.data);
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setRecording(false);
+        setTranscribing(true);
+        try {
+          const form = new FormData();
+          form.set("audio", new Blob(chunks, { type: rec.mimeType || "audio/webm" }));
+          const r = await fetch("/api/voz/transcrever", { method: "POST", body: form });
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.error || "Não foi possível transcrever.");
+          if (data.texto) setInput((v) => (v ? v + " " : "") + data.texto);
+        } catch (e) {
+          setVoiceError(e instanceof Error ? e.message : "Não foi possível transcrever.");
+        } finally {
+          setTranscribing(false);
+        }
+      };
+      recorder.current = rec;
+      rec.start();
+      setRecording(true);
+    } catch {
+      setVoiceError("Permita o uso do microfone para falar com o fluxo.");
+    }
+  }
   useEffect(() => {
     scroll.current?.scrollTo({ top: scroll.current.scrollHeight });
   }, [session, running]);
@@ -210,7 +295,7 @@ export function ChatPopup({
                 <div className="chat-msg user">
                   <div className="chat-bubble">{r.input}</div>
                 </div>
-                <BotMessage run={r} onChange={onChange} />
+                <BotMessage run={r} voice={voice} onChange={onChange} />
               </div>
             ))}
             {running && !session.some((r) => r.status === "running") && (
@@ -233,14 +318,35 @@ export function ChatPopup({
         )}
       </div>
       <div className="chat-composer">
-        <label className="demo-toggle">
-          <input
-            type="checkbox"
-            checked={demo}
-            onChange={(e) => onDemo(e.target.checked)}
-          />
-          Simular com respostas de exemplo
-        </label>
+        <div className="chat-toggles">
+          <label className="demo-toggle">
+            <input
+              type="checkbox"
+              checked={demo}
+              onChange={(e) => onDemo(e.target.checked)}
+            />
+            Simular com respostas de exemplo
+          </label>
+          {voice && (
+            <label className="demo-toggle">
+              <input
+                type="checkbox"
+                checked={listen}
+                onChange={(e) => {
+                  // Só as próximas respostas são faladas; as antigas ficam em silêncio.
+                  if (e.target.checked) session.forEach((r) => spoken.current.add(r.id));
+                  setListen(e.target.checked);
+                }}
+              />
+              Ouvir respostas
+            </label>
+          )}
+        </div>
+        {voiceError && (
+          <p className="studio-error" role="alert">
+            {voiceError}
+          </p>
+        )}
         {!connected && !demo && (
           <p>
             Conecte o ChatGPT para executar de verdade.{" "}
@@ -267,6 +373,22 @@ export function ChatPopup({
               }
             }}
           />
+          {voice && (
+            <button
+              type="button"
+              className={"chat-mic" + (recording ? " recording" : "")}
+              title={recording ? "Parar gravação" : "Falar em vez de digitar"}
+              aria-label={recording ? "Parar gravação" : "Falar em vez de digitar"}
+              disabled={running || transcribing}
+              onClick={toggleRecording}
+            >
+              {transcribing ? (
+                <span className="studio-spinner" />
+              ) : (
+                <Icon name={recording ? "stop" : "mic"} size={17} />
+              )}
+            </button>
+          )}
           <button
             type="submit"
             className="chat-send"
