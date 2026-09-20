@@ -2050,6 +2050,18 @@
   padding: 0 0 22px;
   border-bottom: 1px solid var(--studio-line);
 }
+.integration-version .publication-badge {
+  display: inline-block;
+  margin-bottom: 8px;
+}
+.integration-version strong {
+  display: block;
+}
+.integration-hint {
+  font-size: 10px;
+  color: var(--studio-muted);
+  margin-top: 8px;
+}
 .integration-version strong {
   font-size: 13px;
 }

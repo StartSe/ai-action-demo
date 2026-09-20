@@ -508,7 +508,7 @@ export function FlowEditor({ id }: { id: string }) {
           />
           <IconButton
             icon="code"
-            label="Integrar fluxo"
+            label="Implantar fluxo"
             onClick={() => setIntegration(true)}
           />
           <details className="canvas-menu">
