@@ -11,6 +11,7 @@ import type { Block } from "@/lib/flow-types";
 import { NODE_STYLE } from "@/lib/flow-presets";
 import { outputs } from "@/lib/flow-graph";
 import { Icon, IconButton } from "../StudioUI";
+import { modelLabel, modelProvider } from "../ModelPicker";
 export type VisualData = Block["data"] & {
   execution?: string;
   connected?: (string | null)[];
@@ -122,9 +123,9 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
             />
           )}
           {(data.kind === "agent" || data.kind === "llm") && (
-            <span className="af-pill">
-              <Icon name="spark" size={13} />
-              {data.config.model || "ChatGPT"}
+            <span className="af-pill" title={modelProvider(data.config.model)}>
+              <Icon name={modelProvider(data.config.model) === "ChatGPT" ? "spark" : "link"} size={13} />
+              {modelLabel(data.config.model)}
             </span>
           )}
           {data.kind === "start" && (

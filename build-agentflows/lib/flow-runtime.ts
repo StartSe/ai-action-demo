@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { chatGPT } from "./chatgpt";
+import { isOpenRouterModel, openRouterKey, runOpenRouter } from "./openrouter";
 import { getConfig } from "./store";
 import { conexaoAutorizada } from "./mcp-oauth";
 import {
@@ -75,7 +76,8 @@ async function agent(n: Block, r: Run, signal: AbortSignal) {
     throw new FlowError(
       "Uma ferramenta autorizada não está disponível. Confira os nomes.",
     );
-  return chatGPT().run({
+  const runner = isOpenRouterModel(c.model) ? runOpenRouter : chatGPT().run.bind(chatGPT());
+  return runner({
     system: interpolate(c.system, r),
     prompt: message(c, r),
     model: c.model || undefined,
@@ -273,9 +275,9 @@ export async function startRun(
       409,
     );
   const graph = validateGraph(published ? f.published : f.graph, true);
-  if (demo !== true && !(await chatGPT().account()).account)
+  if (demo !== true && !openRouterKey() && !(await chatGPT().account()).account)
     throw new FlowError(
-      "Conecte o ChatGPT para executar ou escolha simular no painel de teste.",
+      "Conecte o ChatGPT (ou o OpenRouter em Conexões) para executar, ou escolha simular no painel de teste.",
       409,
     );
   const now = new Date().toISOString();

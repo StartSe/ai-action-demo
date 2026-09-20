@@ -4,6 +4,7 @@ import { BLOCKS, type Block, type Kind } from "@/lib/flow-types";
 import { NODE_STYLE } from "@/lib/flow-presets";
 import { Icon, Modal, request } from "./StudioUI";
 import { ReferenceField, type Reference } from "./ReferenceField";
+import { ModelPicker } from "./ModelPicker";
 const fields: Record<Kind, string[]> = {
   start: ["state"],
   llm: ["system", "prompt", "model"],
@@ -22,7 +23,7 @@ const labels: Record<string, [string, string]> = {
     "Mensagem (opcional)",
     "Em branco, o bloco recebe a conversa ou o resultado da etapa anterior.",
   ],
-  model: ["Modelo ChatGPT", "Os modelos disponíveis dependem da conta conectada."],
+  model: ["Modelo de IA", ""],
   tools: ["Ferramentas autorizadas", "Só as ferramentas marcadas ficam disponíveis."],
   state: ["Estado inicial", "Objeto JSON com valores de texto, opcional."],
   value: ["Valor", "Texto que será comparado."],
@@ -192,20 +193,11 @@ export function NodeDialog({
                 : labels[key][0]}
             </span>
             {key === "model" ? (
-              <select
+              <ModelPicker
                 value={c[key] || ""}
-                onChange={(e) => change(key, e.target.value)}
-              >
-                <option value="">Automático · ChatGPT</option>
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-                {c.model && !models.some((m) => m.id === c.model) && (
-                  <option value={c.model}>{c.model} · modelo salvo</option>
-                )}
-              </select>
+                chatModels={models}
+                onChange={(v) => change(key, v)}
+              />
             ) : key === "operator" || key === "method" ? (
               <select
                 value={c[key] || ""}
