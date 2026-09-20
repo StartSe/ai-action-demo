@@ -5,7 +5,7 @@
 // já esteja registrado quando a rota carrega.
 import { NextResponse } from "next/server";
 import { obter, obterCallback, responder } from "@/lib/formularios";
-import "@/lib/bussola"; // registra o callback "bussola" (US-012)
+import { registrarRespostaAvaliacao, TIPO_LINK_AVALIACAO } from "@/lib/link-avaliacao";
 
 export async function POST(request: Request, { params }: RouteContext<"/api/f/[token]">) {
   const { token } = await params;
@@ -33,7 +33,7 @@ export async function POST(request: Request, { params }: RouteContext<"/api/f/[t
       const min = campo.min ?? 1;
       const max = campo.max ?? 5;
       const n = Number(valor);
-      if (!Number.isFinite(n) || n < min || n > max) {
+      if (!Number.isInteger(n) || n < min || n > max) {
         return NextResponse.json({ error: `Escolha um valor entre ${min} e ${max} para "${campo.rotulo}".` }, { status: 400, headers: { "Cache-Control": "no-store" } });
       }
     }
@@ -45,6 +45,17 @@ export async function POST(request: Request, { params }: RouteContext<"/api/f/[t
       }
     }
     dados[campo.chave] = valor;
+  }
+
+  if (formulario.tipo === TIPO_LINK_AVALIACAO) {
+    try {
+      const resultado = registrarRespostaAvaliacao(token, dados);
+      if (!resultado.ok) return NextResponse.json({ error: resultado.motivo === "limite" ? "Este formulário atingiu o limite de respostas." : "Este link expirou." }, { status: 410, headers: { "Cache-Control": "no-store" } });
+      return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+    } catch (err) {
+      console.error("Falha ao registrar resposta do assessment", err);
+      return NextResponse.json({ error: "Não foi possível salvar a resposta. Tente novamente." }, { status: 500 });
+    }
   }
 
   let resultadoId: string | undefined;

@@ -132,7 +132,7 @@ export function encerrar(token: string): void {
 
 /** true quando o formulário já passou do prazo; centralizado aqui para nunca chamar Date.now() direto de um componente. */
 export function expirou(formulario: Pick<Formulario, "expiraEm">): boolean {
-  return formulario.expiraEm !== null && new Date(formulario.expiraEm).getTime() < Date.now();
+  return formulario.expiraEm !== null && new Date(formulario.expiraEm).getTime() <= Date.now();
 }
 
 export type ResultadoResposta = { ok: true; id: string } | { ok: false; motivo: "invalido" | "expirado" | "limite" };
@@ -142,7 +142,7 @@ export function responder(token: string, dados: Record<string, string>, resultad
   const formulario = obter(token);
   if (!formulario) return { ok: false, motivo: "invalido" };
   if (expirou(formulario)) return { ok: false, motivo: "expirado" };
-  if (formulario.limite !== null && listarRespostas(token).length >= formulario.limite) return { ok: false, motivo: "limite" };
+  if (formulario.limite !== null && contarRespostas(token) >= formulario.limite) return { ok: false, motivo: "limite" };
 
   const id = gerarId();
   const criadoEm = new Date().toISOString();
@@ -178,7 +178,8 @@ export function apagar(token: string): void {
 /** Remove formulários expirados (e suas respostas); roda na inicialização do servidor (ver instrumentation.ts). */
 export function limparExpirados(): void {
   const d = abrir();
-  const expirados = d.prepare("SELECT token FROM formularios WHERE expiraEm IS NOT NULL AND expiraEm < ?").all(new Date().toISOString()) as { token: string }[];
+  // Assessments encerrados permanecem no painel do gestor e conservam suas respostas.
+  const expirados = d.prepare("SELECT token FROM formularios WHERE tipo != 'bussola' AND expiraEm IS NOT NULL AND expiraEm < ?").all(new Date().toISOString()) as { token: string }[];
   for (const { token } of expirados) apagar(token);
 }
 

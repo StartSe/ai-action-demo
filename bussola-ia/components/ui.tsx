@@ -453,35 +453,36 @@ export function Aviso({ tom = "warn", children, acao }: { tom?: "ok" | "warn" | 
 
 type PedidoConfirmacao = { mensagem: string; confirmarRotulo: string; cancelarRotulo: string; resolver: (v: boolean) => void };
 
-/** Diálogo de confirmação da suíte, no lugar de `window.confirm` (reservado só para "Apagar tudo"). Renderize `Dialogo` uma vez na árvore do componente; `confirmar(mensagem)` devolve uma Promise<boolean>. */
+function DialogoConfirmacao({ pedido, responder }: { pedido: PedidoConfirmacao; responder: (valor: boolean) => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, []);
+  return <dialog ref={ref} role="alertdialog" aria-labelledby="titulo-confirmacao" aria-describedby="mensagem-confirmacao" className="assessment-dialog card w-[calc(100%-32px)] max-w-[440px] p-6 m-auto" onCancel={e=>{e.preventDefault();responder(false);}} onKeyDown={e=>{
+    if(e.key!=="Tab")return;
+    const botoes=e.currentTarget.querySelectorAll("button");
+    if(e.shiftKey&&document.activeElement===botoes[0]){e.preventDefault();botoes[1]?.focus();}
+    if(!e.shiftKey&&document.activeElement===botoes[1]){e.preventDefault();botoes[0]?.focus();}
+  }}>
+    <h2 id="titulo-confirmacao" className="text-lg font-semibold mb-3">{pedido.confirmarRotulo}?</h2>
+    <p id="mensagem-confirmacao" className="text-sm mb-5">{pedido.mensagem}</p>
+    <div className="flex gap-2.5 justify-end">
+      <button type="button" className="btn-ghost !w-auto" onClick={()=>responder(false)}>{pedido.cancelarRotulo}</button>
+      <button type="button" className="btn-primary !w-auto" onClick={()=>responder(true)}>{pedido.confirmarRotulo}</button>
+    </div>
+  </dialog>;
+}
+
+/** Confirmação com foco contido, Escape e restauração do foco no acionador. */
 export function useConfirmacao() {
   const [pedido, setPedido] = useState<PedidoConfirmacao | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
-
   function confirmar(mensagem: string, opcoes?: { confirmarRotulo?: string; cancelarRotulo?: string }): Promise<boolean> {
-    return new Promise((resolver) => {
-      setPedido({ mensagem, confirmarRotulo: opcoes?.confirmarRotulo ?? "Confirmar", cancelarRotulo: opcoes?.cancelarRotulo ?? "Cancelar", resolver });
-    });
+    return new Promise(resolver => setPedido({mensagem, confirmarRotulo:opcoes?.confirmarRotulo ?? "Confirmar",cancelarRotulo:opcoes?.cancelarRotulo ?? "Cancelar",resolver}));
   }
-
-  function responder(v: boolean) {
-    pedido?.resolver(v);
-    setPedido(null);
-  }
-
-  const Dialogo = pedido ? (
-    <div className="fixed inset-0 z-30 bg-black/40 grid place-items-center px-4" role="presentation">
-      <div ref={ref} role="alertdialog" aria-modal="true" className="card w-full max-w-[400px] p-6">
-        <p className="text-[15px] mb-5">{pedido.mensagem}</p>
-        <div className="flex gap-2.5 justify-end">
-          <button type="button" className="btn-ghost !w-auto" onClick={() => responder(false)}>{pedido.cancelarRotulo}</button>
-          <button type="button" className="btn-primary !w-auto" onClick={() => responder(true)}>{pedido.confirmarRotulo}</button>
-        </div>
-      </div>
-    </div>
-  ) : null;
-
-  return { confirmar, Dialogo };
+  function responder(valor: boolean) { pedido?.resolver(valor); setPedido(null); }
+  return { confirmar, Dialogo: pedido ? <DialogoConfirmacao pedido={pedido} responder={responder}/> : null };
 }
 
 export type ErroLido = { mensagem: string; codigo?: string; acao?: { rotulo: string; url: string } };

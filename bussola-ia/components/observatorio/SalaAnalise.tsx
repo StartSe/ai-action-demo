@@ -1,7 +1,11 @@
 "use client";
 import { useState } from "react";
 import { Entregar } from "@/components/ui";
-import { avaliacaoParaTexto, baixarRespostasCSV, EnviarAoQuadro } from "@/components/ResultadoAvaliacao";
+import {
+  avaliacaoParaTexto,
+  baixarRespostasCSV,
+  EnviarAoQuadro,
+} from "@/components/ResultadoAvaliacao";
 import { conselhoAutomatico } from "@/lib/conselho";
 import { calcularMediasPorArea } from "@/lib/analise-bussola";
 import { requisitar } from "@/lib/http-cliente";
@@ -9,32 +13,534 @@ import { Icone } from "./Icone";
 import { BussolaOrbital } from "./BussolaOrbital";
 import type { Avaliacao, ParecerAgente } from "@/lib/types";
 import type { Meta } from "@/lib/ai";
-const fmt=(n:number)=>n.toLocaleString("pt-BR",{maximumFractionDigits:1,minimumFractionDigits:1});
-export function SalaAnalise({avaliacao,meta,id}:{avaliacao:Avaliacao;meta:Meta;id?:string}){
-  const [aba,setAba]=useState("sintese");
-  const [agente,setAgente]=useState(0);
-  const [feitas,setFeitas]=useState(avaliacao.analise?.acoesConcluidas??[]);
-  const [salvando,setSalvando]=useState(false);
-  const [erro,setErro]=useState("");
-  const [dim,setDim]=useState(0);
-  const [alvo,setAlvo]=useState<number|null>(null);
-  const an=avaliacao.analise;
-  if(!an)return <div className="obs-alert">Este registro não tem análise disponível.</div>;
-  const conselho=an.conselho??conselhoAutomatico(an,avaliacao.respostas.length,avaliacao.contexto);
-  const parecer=conselho[agente]??conselho[0];
-  const areas=calcularMediasPorArea(avaliacao.questionario,avaliacao.respostas);
-  const selecionada=an.mediasPorDimensao[dim];
-  const projecao=selecionada&&alvo!==null?(an.mediasPorDimensao.reduce((s,m)=>s+m.media,0)-selecionada.media+alvo)/an.mediasPorDimensao.length:an.nivelGeral;
-  async function concluir(indice:number,concluida:boolean){if(!id)return;const anteriores=feitas;setFeitas(concluida?[...feitas,indice]:feitas.filter(i=>i!==indice));setSalvando(true);setErro("");try{const d=await requisitar<{acoesConcluidas:number[]}>(`/api/bussola/${id}/plano`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({indice,concluida})});setFeitas(d.acoesConcluidas);}catch(e){setFeitas(anteriores);setErro((e as Error).message);}finally{setSalvando(false);}}
-  const evidencias=(p:ParecerAgente)=>p.dimensoes.map(d=>an.mediasPorDimensao.find(m=>m.dimensao===d)).filter(m=>Boolean(m));
-  return <article className="analysis-room">
-    <div className={`analysis-source ${meta.demo?"demo":""}`}><span><Icone nome={meta.demo?"compass":"shield"} size={16}/>{meta.demo?"EXEMPLO ILUSTRATIVO · 8 RESPOSTAS FICTÍCIAS":`DADOS REAIS · ${avaliacao.respostas.length} ${avaliacao.respostas.length===1?"RESPOSTA RECEBIDA":"RESPOSTAS RECEBIDAS"}`}</span><span>{meta.demo?"Explore sem alterar seus grupos":an.origemLeitura==="automatica"?"Leitura automática · sem IA":"Interpretação com IA"}</span></div>
-    <header className="analysis-heading"><div><p className="eyebrow">{avaliacao.empresa}{avaliacao.contexto?.grupoNome?` / ${avaliacao.contexto.grupoNome}`:""}</p><h2>{avaliacao.titulo}</h2><p>Retrato da coleta em {new Date(meta.geradoEm).toLocaleDateString("pt-BR")} · {avaliacao.contexto?.objetivo || "Inovação orientada por evidências"}</p></div><Entregar id={id} titulo={avaliacao.titulo} texto={()=>avaliacaoParaTexto(avaliacao)} extras={[{rotulo:"Baixar respostas (CSV)",onClick:()=>baixarRespostasCSV(avaliacao)}]}/></header>
-    {an.avisoIA&&<div className="obs-alert" role="status">{an.avisoIA}</div>}{erro&&<div className="obs-alert error" role="alert">{erro}</div>}
-    <div className="analysis-tabs" role="group" aria-label="Explorar diagnóstico">{[["sintese","Visão estratégica","compass"],["conselho","Conselho de agentes","spark"],["plano","Plano de ação","target"],["evidencias","Evidências do grupo","people"]].map(([v,n,i])=><button key={v} aria-pressed={aba===v} onClick={()=>setAba(v)}><Icone nome={i as "compass"|"spark"|"target"|"people"} size={16}/>{n}</button>)}</div>
-    {aba==="sintese"&&<div className="strategic-grid"><section className="maturity-card"><div className="maturity-head"><span className="eyebrow">MATURIDADE DO GRUPO</span><span>ESCALA 1 — 5</span></div><div className="maturity-number"><strong>{an.mediasPorDimensao.length?fmt(an.nivelGeral):"—"}</strong><span>/ 5<small>{an.mediasPorDimensao.length?an.nomeEstagio:"Sem notas de escala"}</small></span></div><BussolaOrbital compacta medias={an.mediasPorDimensao}/><div className="maturity-foot">{an.mediasPorDimensao.length} dimensões medidas · {avaliacao.respostas.length} respostas</div></section><section className="obs-panel strategic-reading"><p className="eyebrow">O QUE ESSE RETRATO REVELA</p><h3>Potencial existe.<br/><em>Direção faz a diferença.</em></h3><p>{an.resumo}</p><div className="insight-pair"><div><span className="insight-label"><Icone nome="spark" size={15}/>FORÇAS PARA AMPLIAR</span><ul>{an.forcas.map((f,i)=><li key={i}>{f}</li>)}</ul></div><div><span className="insight-label"><Icone nome="target" size={15}/>ESPAÇOS PARA EVOLUIR</span><ul>{an.lacunas.map((f,i)=><li key={i}>{f}</li>)}</ul></div></div><button className="text-link" onClick={()=>setAba("conselho")}>Ouvir o conselho de agentes <Icone nome="arrow" size={16}/></button></section><section className="obs-panel dimensions-panel"><div className="panel-heading"><div><p className="eyebrow">SEIS OLHARES, UM SISTEMA</p><h2>Leitura por dimensão</h2></div></div>{an.mediasPorDimensao.map((m,i)=><div className="dimension-row" key={m.dimensao}><span className="dimension-index">0{i+1}</span><div><strong>{m.dimensao}</strong><p>{an.leituraPorDimensao.find(l=>l.dimensao===m.dimensao)?.leitura}</p></div><div className="dimension-score"><strong>{fmt(m.media)}</strong><div className="progress-track"><i style={{width:`${m.media*20}%`}}/></div></div></div>)}</section><section className="obs-panel scenario-panel"><span className="eyebrow">LABORATÓRIO DE CENÁRIOS</span><h3>E se você avançasse aqui?</h3><p>Explore o efeito matemático de mudar uma dimensão. Uma hipótese para discutir com o time.</p>{selecionada?<><label>Dimensão<select value={dim} onChange={e=>{setDim(Number(e.target.value));setAlvo(null);}}>{an.mediasPorDimensao.map((m,i)=><option key={m.dimensao} value={i}>{m.dimensao}</option>)}</select></label><label>Nota hipotética <strong>{fmt(alvo??selecionada.media)}</strong><input type="range" min={1} max={5} step={.1} value={alvo??selecionada.media} onChange={e=>setAlvo(Number(e.target.value))}/></label><div className="scenario-score"><span>Média geral nessa hipótese</span><strong>{fmt(projecao)} <small>/ 5</small></strong></div></>:<p>Inclua perguntas de escala para explorar cenários.</p>}<small>Simulação aritmética. Não é previsão, meta aprovada ou alteração do diagnóstico.</small></section></div>}
-    {aba==="conselho"&&<div className="council-layout"><div className="council-selector">{conselho.map((p,i)=><button key={p.id} aria-pressed={agente===i} onClick={()=>setAgente(i)}><span className={`agent-avatar ${i===0?"mint":i===1?"lavender":"peach"}`}><Icone nome={i===0?"chart":i===1?"shield":"target"}/></span><div><strong>{p.nome}</strong><small>{p.papel}</small></div><span>↗</span></button>)}<p>As perspectivas se complementam. Avalie as evidências antes de decidir.</p></div><section className="obs-panel council-message"><div className="council-title"><span className="eyebrow">{parecer.papel}</span><span className="status-tag">{meta.demo?"Exemplo · leitura automática":parecer.origem==="ia"?"Interpretação com IA":"Leitura automática"}</span></div><h3>{parecer.nome}</h3>{parecer.aviso&&<div className="obs-alert">{parecer.aviso}</div>}<p className="council-lead">{parecer.mensagem}</p><div className="council-evidence"><span>EVIDÊNCIAS USADAS</span>{evidencias(parecer).length?evidencias(parecer).map(m=><span key={m!.dimensao}>{m!.dimensao} <b>{fmt(m!.media)}/5</b></span>):<p>Leitura do contexto e da cobertura da coleta.</p>}</div><ul className="council-recommendations">{parecer.recomendacoes.map((r,i)=><li key={i}><span>{String(i+1).padStart(2,"0")}</span>{r}</li>)}</ul><div className="council-question"><Icone nome="spark" size={18}/><div><span>UMA PERGUNTA PARA LEVAR AO TIME</span><p>{parecer.pergunta}</p></div></div><button className="obs-btn primary" onClick={()=>setAba("plano")}>Transformar em ação <Icone nome="arrow" size={16}/></button></section></div>}
-    {aba==="plano"&&<section className="obs-panel action-plan"><div className="panel-heading"><div><p className="eyebrow">DO DIAGNÓSTICO À PRÁTICA</p><h2>Pequenos movimentos. Avanços concretos.</h2></div><span className="status-tag">{feitas.length} / {an.proximosPassos.length} concluídas</span></div><p className="plan-intro">Escolha responsáveis e prazos com o grupo. Comece por um experimento e volte aqui para registrar o que avançou.</p>{an.proximosPassos.map((p,i)=><label key={i} className={`plan-action ${feitas.includes(i)?"done":""}`}><input type="checkbox" checked={feitas.includes(i)} disabled={!id||salvando} onChange={e=>void concluir(i,e.target.checked)}/><span className="action-index">0{i+1}</span><div><span>PRIORIDADE {i+1}</span><p>{p}</p></div><Icone nome={feitas.includes(i)?"check":"arrow"} size={19}/></label>)}{!id&&<p className="small-note">Abra um diagnóstico salvo para registrar ações concluídas.</p>}<div className="plan-ritual"><span className="agent-avatar peach"><Icone nome="target"/></span><div><strong>Sugestão de ritual: revisão em 30 dias</strong><p>O que testamos? Que evidência mudou? Qual é o próximo experimento? Use as mesmas perguntas para acompanhar a evolução.</p></div></div>{id&&<EnviarAoQuadro id={id} analise={an}/>}</section>}
-    {aba==="evidencias"&&<div className="evidence-grid"><section className="obs-panel"><div className="panel-heading"><div><p className="eyebrow">PERSPECTIVAS DO GRUPO</p><h2>Como as áreas enxergam a inovação</h2></div></div><p className="evidence-note">Médias por área declarada. Grupos pequenos e diferenças de participação podem afetar a comparação.</p>{areas.length<2?<div className="empty-state"><Icone nome="people" size={30}/><h3>Mais vozes revelam outros ângulos.</h3><p>A comparação aparece quando ao menos duas áreas informadas têm respostas de escala.</p></div>:<div className="area-comparison">{areas.map(a=><div key={a.area}><span>{a.area}<small>{avaliacao.respostas.filter(r=>r.respondente?.area?.trim()===a.area).length} respostas</small></span><div className="progress-track"><i style={{width:`${a.nivelGeral*20}%`}}/></div><strong>{fmt(a.nivelGeral)}</strong></div>)}</div>}{Boolean(an.ondeDiscordam?.length)&&<div className="divergences"><h3>Onde as percepções divergem</h3>{an.ondeDiscordam!.map((v,i)=><p key={i}>{v}</p>)}</div>}</section><section className="obs-panel evidence-method"><span className="agent-avatar lavender"><Icone nome="shield"/></span><h3>O que os números dizem.</h3><p>Cada dimensão é a média das notas válidas de 1 a 5. A nota geral é a média das dimensões, com o mesmo peso.</p><p>As notas são calculadas no servidor. Os agentes interpretam esse retrato e sugerem caminhos.</p><p>São {avaliacao.respostas.length} envios, sem verificação de pessoas únicas. A pesquisa registra percepções, não uma auditoria de capacidade.</p>{avaliacao.contexto?.participantes&&<span className="status-tag">Meta do grupo: {avaliacao.contexto.participantes} participantes</span>}</section><section className="obs-panel open-evidence"><div className="panel-heading"><h2>Vozes do grupo</h2></div>{avaliacao.questionario.perguntas.filter(p=>p.tipo==="texto").map(p=>{const rs=avaliacao.respostas.filter(r=>r.valores[p.id]?.trim());return <div className="open-question" key={p.id}><h3>{p.texto}</h3>{rs.length?rs.map(r=><blockquote key={r.id}>{r.valores[p.id]}</blockquote>):<p className="small-note">Nenhuma resposta aberta nesta pergunta.</p>}</div>;})}</section></div>}
-  </article>;
+const fmt = (n: number) =>
+  n.toLocaleString("pt-BR", {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 1,
+  });
+export function SalaAnalise({
+  avaliacao,
+  meta,
+  id,
+}: {
+  avaliacao: Avaliacao;
+  meta: Meta;
+  id?: string;
+}) {
+  const [aba, setAba] = useState("sintese");
+  const [agente, setAgente] = useState(0);
+  const [feitas, setFeitas] = useState(
+    avaliacao.analise?.acoesConcluidas ?? [],
+  );
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [dim, setDim] = useState(0);
+  const [alvo, setAlvo] = useState<number | null>(null);
+  const an = avaliacao.analise;
+  if (!an)
+    return (
+      <div className="obs-alert">Este registro não tem análise disponível.</div>
+    );
+  const conselho =
+    an.conselho ??
+    conselhoAutomatico(an, avaliacao.respostas.length, avaliacao.contexto);
+  const parecer = conselho[agente] ?? conselho[0];
+  const areas = calcularMediasPorArea(
+    avaliacao.questionario,
+    avaliacao.respostas,
+  );
+  const selecionada = an.mediasPorDimensao[dim];
+  const projecao =
+    selecionada && alvo !== null
+      ? (an.mediasPorDimensao.reduce((s, m) => s + m.media, 0) -
+          selecionada.media +
+          alvo) /
+        an.mediasPorDimensao.length
+      : an.nivelGeral;
+  async function concluir(indice: number, concluida: boolean) {
+    if (!id) return;
+    const anteriores = feitas;
+    setFeitas(
+      concluida ? [...feitas, indice] : feitas.filter((i) => i !== indice),
+    );
+    setSalvando(true);
+    setErro("");
+    try {
+      const d = await requisitar<{ acoesConcluidas: number[] }>(
+        `/api/bussola/${id}/plano`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ indice, concluida }),
+        },
+      );
+      setFeitas(d.acoesConcluidas);
+    } catch (e) {
+      setFeitas(anteriores);
+      setErro((e as Error).message);
+    } finally {
+      setSalvando(false);
+    }
+  }
+  const evidencias = (p: ParecerAgente) =>
+    p.dimensoes
+      .map((d) => an.mediasPorDimensao.find((m) => m.dimensao === d))
+      .filter((m) => Boolean(m));
+  return (
+    <article className="analysis-room">
+      <div className={`analysis-source ${meta.demo ? "demo" : ""}`}>
+        <span>
+          <Icone nome={meta.demo ? "compass" : "shield"} size={16} />
+          {meta.demo
+            ? "EXEMPLO ILUSTRATIVO · 8 RESPOSTAS FICTÍCIAS"
+            : `DADOS REAIS · ${avaliacao.respostas.length} ${avaliacao.respostas.length === 1 ? "RESPOSTA RECEBIDA" : "RESPOSTAS RECEBIDAS"}`}
+        </span>
+        <span>
+          {meta.demo
+            ? "Explore sem alterar seus grupos"
+            : an.origemLeitura === "automatica"
+              ? "Leitura automática · sem IA"
+              : "Interpretação com IA"}
+        </span>
+      </div>
+      <header className="analysis-heading">
+        <div>
+          <p className="eyebrow">
+            {avaliacao.empresa}
+            {avaliacao.contexto?.grupoNome
+              ? ` / ${avaliacao.contexto.grupoNome}`
+              : ""}
+          </p>
+          <h2>{avaliacao.titulo}</h2>
+          <p>
+            Retrato da coleta em{" "}
+            {new Date(meta.geradoEm).toLocaleDateString("pt-BR")} ·{" "}
+            {avaliacao.contexto?.objetivo ||
+              "Inovação orientada por evidências"}
+          </p>
+        </div>
+        <Entregar
+          id={id}
+          titulo={avaliacao.titulo}
+          texto={() => avaliacaoParaTexto(avaliacao)}
+          extras={[
+            {
+              rotulo: "Baixar respostas (CSV)",
+              onClick: () => baixarRespostasCSV(avaliacao),
+            },
+          ]}
+        />
+      </header>
+      {an.avisoIA && (
+        <div className="obs-alert" role="status">
+          {an.avisoIA}
+        </div>
+      )}
+      {erro && (
+        <div className="obs-alert error" role="alert">
+          {erro}
+        </div>
+      )}
+      <div
+        className="analysis-tabs"
+        role="group"
+        aria-label="Explorar diagnóstico"
+      >
+        {[
+          ["sintese", "Visão estratégica", "compass"],
+          ["conselho", "Conselho de agentes", "spark"],
+          ["plano", "Plano de ação", "target"],
+          ["evidencias", "Evidências do grupo", "people"],
+        ].map(([v, n, i]) => (
+          <button key={v} aria-pressed={aba === v} onClick={() => setAba(v)}>
+            <Icone
+              nome={i as "compass" | "spark" | "target" | "people"}
+              size={16}
+            />
+            {n}
+          </button>
+        ))}
+      </div>
+      {aba === "sintese" && (
+        <div className="strategic-grid">
+          <section className="maturity-card">
+            <div className="maturity-head">
+              <span className="eyebrow">MATURIDADE DO GRUPO</span>
+              <span>ESCALA 1 — 5</span>
+            </div>
+            <div className="maturity-number">
+              <strong>
+                {an.mediasPorDimensao.length ? fmt(an.nivelGeral) : "—"}
+              </strong>
+              <span>
+                / 5
+                <small>
+                  {an.mediasPorDimensao.length
+                    ? an.nomeEstagio
+                    : "Sem notas de escala"}
+                </small>
+              </span>
+            </div>
+            <BussolaOrbital compacta medias={an.mediasPorDimensao} />
+            <div className="maturity-foot">
+              {an.mediasPorDimensao.length} dimensões medidas ·{" "}
+              {avaliacao.respostas.length} respostas
+            </div>
+          </section>
+          <section className="obs-panel strategic-reading">
+            <p className="eyebrow">O QUE ESSE RETRATO REVELA</p>
+            <h3>
+              Potencial existe.
+              <br />
+              <em>Direção faz a diferença.</em>
+            </h3>
+            <p>{an.resumo}</p>
+            <div className="insight-pair">
+              <div>
+                <span className="insight-label">
+                  <Icone nome="spark" size={15} />
+                  FORÇAS PARA AMPLIAR
+                </span>
+                <ul>
+                  {an.forcas.map((f, i) => (
+                    <li key={i}>{f}</li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <span className="insight-label">
+                  <Icone nome="target" size={15} />
+                  ESPAÇOS PARA EVOLUIR
+                </span>
+                <ul>
+                  {an.lacunas.map((f, i) => (
+                    <li key={i}>{f}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <button className="text-link" onClick={() => setAba("conselho")}>
+              Ouvir o conselho de agentes <Icone nome="arrow" size={16} />
+            </button>
+          </section>
+          <section className="obs-panel dimensions-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">DIFERENTES OLHARES, UM SISTEMA</p>
+                <h2>Leitura por dimensão</h2>
+              </div>
+            </div>
+            {an.mediasPorDimensao.map((m, i) => (
+              <div className="dimension-row" key={m.dimensao}>
+                <span className="dimension-index">0{i + 1}</span>
+                <div>
+                  <strong>{m.dimensao}</strong>
+                  <p>
+                    {
+                      an.leituraPorDimensao.find(
+                        (l) => l.dimensao === m.dimensao,
+                      )?.leitura
+                    }
+                  </p>
+                </div>
+                <div className="dimension-score">
+                  <strong>{fmt(m.media)}</strong>
+                  <div className="progress-track">
+                    <i style={{ width: `${m.media * 20}%` }} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </section>
+          <section className="obs-panel scenario-panel">
+            <span className="eyebrow">LABORATÓRIO DE CENÁRIOS</span>
+            <h3>E se você avançasse aqui?</h3>
+            <p>
+              Explore o efeito matemático de mudar uma dimensão. Uma hipótese
+              para discutir com o time.
+            </p>
+            {selecionada ? (
+              <>
+                <label>
+                  Dimensão
+                  <select
+                    value={dim}
+                    onChange={(e) => {
+                      setDim(Number(e.target.value));
+                      setAlvo(null);
+                    }}
+                  >
+                    {an.mediasPorDimensao.map((m, i) => (
+                      <option key={m.dimensao} value={i}>
+                        {m.dimensao}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Nota hipotética{" "}
+                  <strong>{fmt(alvo ?? selecionada.media)}</strong>
+                  <input
+                    type="range"
+                    min={1}
+                    max={5}
+                    step={0.1}
+                    value={alvo ?? selecionada.media}
+                    onChange={(e) => setAlvo(Number(e.target.value))}
+                  />
+                </label>
+                <div className="scenario-score">
+                  <span>Média geral nessa hipótese</span>
+                  <strong>
+                    {fmt(projecao)} <small>/ 5</small>
+                  </strong>
+                </div>
+              </>
+            ) : (
+              <p>Inclua perguntas de escala para explorar cenários.</p>
+            )}
+            <small>
+              Simulação aritmética. Não é previsão, meta aprovada ou alteração
+              do diagnóstico.
+            </small>
+          </section>
+        </div>
+      )}
+      {aba === "conselho" && (
+        <div className="council-layout">
+          <div className="council-selector">
+            {conselho.map((p, i) => (
+              <button
+                key={p.id}
+                aria-pressed={agente === i}
+                onClick={() => setAgente(i)}
+              >
+                <span
+                  className={`agent-avatar ${i === 0 ? "mint" : i === 1 ? "lavender" : "peach"}`}
+                >
+                  <Icone
+                    nome={i === 0 ? "chart" : i === 1 ? "shield" : "target"}
+                  />
+                </span>
+                <div>
+                  <strong>{p.nome}</strong>
+                  <small>{p.papel}</small>
+                </div>
+                <span>↗</span>
+              </button>
+            ))}
+            <p>
+              As perspectivas se complementam. Avalie as evidências antes de
+              decidir.
+            </p>
+          </div>
+          <section className="obs-panel council-message">
+            <div className="council-title">
+              <span className="eyebrow">{parecer.papel}</span>
+              <span className="status-tag">
+                {meta.demo
+                  ? "Exemplo · leitura automática"
+                  : parecer.origem === "ia"
+                    ? "Interpretação com IA"
+                    : "Leitura automática"}
+              </span>
+            </div>
+            <h3>{parecer.nome}</h3>
+            {parecer.aviso && <div className="obs-alert">{parecer.aviso}</div>}
+            <p className="council-lead">{parecer.mensagem}</p>
+            <div className="council-evidence">
+              <span>EVIDÊNCIAS USADAS</span>
+              {evidencias(parecer).length ? (
+                evidencias(parecer).map((m) => (
+                  <span key={m!.dimensao}>
+                    {m!.dimensao} <b>{fmt(m!.media)}/5</b>
+                  </span>
+                ))
+              ) : (
+                <p>Leitura do contexto e da cobertura da coleta.</p>
+              )}
+            </div>
+            <ul className="council-recommendations">
+              {parecer.recomendacoes.map((r, i) => (
+                <li key={i}>
+                  <span>{String(i + 1).padStart(2, "0")}</span>
+                  {r}
+                </li>
+              ))}
+            </ul>
+            <div className="council-question">
+              <Icone nome="spark" size={18} />
+              <div>
+                <span>UMA PERGUNTA PARA LEVAR AO TIME</span>
+                <p>{parecer.pergunta}</p>
+              </div>
+            </div>
+            <button className="obs-btn primary" onClick={() => setAba("plano")}>
+              Transformar em ação <Icone nome="arrow" size={16} />
+            </button>
+          </section>
+        </div>
+      )}
+      {aba === "plano" && (
+        <section className="obs-panel action-plan">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">DO DIAGNÓSTICO À PRÁTICA</p>
+              <h2>Pequenos movimentos. Avanços concretos.</h2>
+            </div>
+            <span className="status-tag">
+              {feitas.length} / {an.proximosPassos.length} concluídas
+            </span>
+          </div>
+          <p className="plan-intro">
+            Escolha responsáveis e prazos com o grupo. Comece por um experimento
+            e volte aqui para registrar o que avançou.
+          </p>
+          {an.proximosPassos.map((p, i) => (
+            <label
+              key={i}
+              className={`plan-action ${feitas.includes(i) ? "done" : ""}`}
+            >
+              <input
+                type="checkbox"
+                checked={feitas.includes(i)}
+                disabled={!id || salvando}
+                onChange={(e) => void concluir(i, e.target.checked)}
+              />
+              <span className="action-index">0{i + 1}</span>
+              <div>
+                <span>PRIORIDADE {i + 1}</span>
+                <p>{p}</p>
+              </div>
+              <Icone nome={feitas.includes(i) ? "check" : "arrow"} size={19} />
+            </label>
+          ))}
+          {!id && (
+            <p className="small-note">
+              Abra um diagnóstico salvo para registrar ações concluídas.
+            </p>
+          )}
+          <div className="plan-ritual">
+            <span className="agent-avatar peach">
+              <Icone nome="target" />
+            </span>
+            <div>
+              <strong>Sugestão de ritual: revisão em 30 dias</strong>
+              <p>
+                O que testamos? Que evidência mudou? Qual é o próximo
+                experimento? Use as mesmas perguntas para acompanhar a evolução.
+              </p>
+            </div>
+          </div>
+          {id && <EnviarAoQuadro id={id} analise={an} />}
+        </section>
+      )}
+      {aba === "evidencias" && (
+        <div className="evidence-grid">
+          <section className="obs-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">PERSPECTIVAS DO GRUPO</p>
+                <h2>Como as áreas enxergam a inovação</h2>
+              </div>
+            </div>
+            <p className="evidence-note">
+              Médias por área declarada. Grupos pequenos e diferenças de
+              participação podem afetar a comparação.
+            </p>
+            {areas.length < 2 ? (
+              <div className="empty-state">
+                <Icone nome="people" size={30} />
+                <h3>Mais vozes revelam outros ângulos.</h3>
+                <p>
+                  A comparação aparece quando ao menos duas áreas informadas têm
+                  respostas de escala.
+                </p>
+              </div>
+            ) : (
+              <div className="area-comparison">
+                {areas.map((a) => (
+                  <div key={a.area}>
+                    <span>
+                      {a.area}
+                      <small>
+                        {
+                          avaliacao.respostas.filter(
+                            (r) => r.respondente?.area?.trim() === a.area,
+                          ).length
+                        }{" "}
+                        respostas
+                      </small>
+                    </span>
+                    <div className="progress-track">
+                      <i style={{ width: `${a.nivelGeral * 20}%` }} />
+                    </div>
+                    <strong>{fmt(a.nivelGeral)}</strong>
+                  </div>
+                ))}
+              </div>
+            )}
+            {Boolean(an.ondeDiscordam?.length) && (
+              <div className="divergences">
+                <h3>Onde as percepções divergem</h3>
+                {an.ondeDiscordam!.map((v, i) => (
+                  <p key={i}>{v}</p>
+                ))}
+              </div>
+            )}
+          </section>
+          <section className="obs-panel evidence-method">
+            <span className="agent-avatar lavender">
+              <Icone nome="shield" />
+            </span>
+            <h3>O que os números dizem.</h3>
+            <p>
+              Cada dimensão é a média das notas válidas de 1 a 5. A nota geral é
+              a média das dimensões, com o mesmo peso.
+            </p>
+            <p>
+              As notas são calculadas no servidor. Os agentes interpretam esse
+              retrato e sugerem caminhos.
+            </p>
+            <p>
+              São {avaliacao.respostas.length} envios, sem verificação de
+              pessoas únicas. A pesquisa registra percepções, não uma auditoria
+              de capacidade.
+            </p>
+            {avaliacao.contexto?.participantes && (
+              <span className="status-tag">
+                Meta do grupo: {avaliacao.contexto.participantes} participantes
+              </span>
+            )}
+          </section>
+          <section className="obs-panel open-evidence">
+            <div className="panel-heading">
+              <h2>Vozes do grupo</h2>
+            </div>
+            {avaliacao.questionario.perguntas
+              .filter((p) => p.tipo === "texto")
+              .map((p) => {
+                const rs = avaliacao.respostas.filter((r) =>
+                  r.valores[p.id]?.trim(),
+                );
+                return (
+                  <div className="open-question" key={p.id}>
+                    <h3>{p.texto}</h3>
+                    {rs.length ? (
+                      rs.map((r) => (
+                        <blockquote key={r.id}>{r.valores[p.id]}</blockquote>
+                      ))
+                    ) : (
+                      <p className="small-note">
+                        Nenhuma resposta aberta nesta pergunta.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+          </section>
+        </div>
+      )}
+    </article>
+  );
 }

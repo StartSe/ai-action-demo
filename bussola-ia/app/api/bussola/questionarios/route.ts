@@ -10,11 +10,28 @@ export async function GET() {
 
 /** Salva o questionário editado: o mesmo título atualiza o salvo em vez de duplicar (lib/link-avaliacao.ts:guardarQuestionario). */
 export async function POST(req: Request) {
-  const corpo = (await req.json().catch(() => ({}))) as { titulo?: string; questionario?: Questionario };
-  if (typeof corpo.titulo !== "string" || !corpo.titulo.trim() || corpo.titulo.length > 200) return Response.json({ error: "Informe um título para o questionário." }, { status: 400 });
+  const corpo = (await req.json().catch(() => ({}))) as {
+    titulo?: string;
+    questionario?: Questionario;
+  };
+  if (
+    typeof corpo.titulo !== "string" ||
+    !corpo.titulo.trim() ||
+    corpo.titulo.length > 200
+  )
+    return Response.json(
+      { error: "Informe um título para o questionário." },
+      { status: 400 },
+    );
   if (!validarQuestionario(corpo.questionario)) {
-    return Response.json({ error: "O questionário precisa de ao menos uma pergunta." }, { status: 400 });
+    return Response.json(
+      { error: "O questionário precisa de ao menos uma pergunta." },
+      { status: 400 },
+    );
   }
-  const { id, atualizado } = guardarQuestionario({ titulo: corpo.titulo, questionario: { ...corpo.questionario, titulo: corpo.titulo.trim() } });
+  const { id, atualizado } = guardarQuestionario({
+    titulo: corpo.titulo,
+    questionario: { ...corpo.questionario, titulo: corpo.titulo.trim() },
+  });
   return Response.json({ id, atualizado });
 }

@@ -24,7 +24,7 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
       <ConteudoAvaliacao avaliacao={registro.saida} />
 
       <footer className="mt-8 pt-4 border-t border-line">
-        <Origem meta={registro.meta} />
+        {!registro.meta.demo && registro.saida.analise?.origemLeitura === "automatica" ? <p className="text-sm">Diagnóstico real · Leitura automática, sem IA · {registro.meta.insumo}</p> : <Origem meta={registro.meta} />}
       </footer>
     </div>
   );

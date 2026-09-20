@@ -3,7 +3,11 @@ import { lerContexto, validarQuestionario } from "@/lib/assessment-input";
 // cria o formulário público (lib/link-avaliacao.ts) a partir dele. GET lista "Avaliações em andamento" no painel
 // e informa se o disco é efêmero (Render sem disco), para a tela avisar antes de criar o link.
 import { discoEfemero } from "@/lib/conta";
-import { criarLinkAvaliacao, guardarQuestionario, listarAvaliacoesEmAndamento } from "@/lib/link-avaliacao";
+import {
+  criarLinkAvaliacao,
+  guardarQuestionario,
+  listarAvaliacoesEmAndamento,
+} from "@/lib/link-avaliacao";
 import { baseUrl, registrarEnderecoPublico } from "@/lib/setup-comum";
 import type { Questionario } from "@/lib/types";
 
@@ -16,28 +20,71 @@ export async function POST(req: Request) {
   const corpo = await req.json().catch(() => null);
   const questionario = corpo?.questionario as Questionario | undefined;
   const titulo = typeof corpo?.titulo === "string" ? corpo.titulo.trim() : "";
-  const empresa = typeof corpo?.empresa === "string" ? corpo.empresa.trim() : "";
-  const expiraEmDias = PRAZOS_VALIDOS.includes(Number(corpo?.expiraEmDias)) ? Number(corpo.expiraEmDias) : 30;
+  const empresa =
+    typeof corpo?.empresa === "string" ? corpo.empresa.trim() : "";
+  const expiraEmDias = PRAZOS_VALIDOS.includes(Number(corpo?.expiraEmDias))
+    ? Number(corpo.expiraEmDias)
+    : 30;
   const limiteBruto = corpo?.limite;
-  const limite = limiteBruto === null ? undefined : LIMITES_VALIDOS.includes(Number(limiteBruto)) ? Number(limiteBruto) : 50;
+  const limite =
+    limiteBruto === null
+      ? undefined
+      : LIMITES_VALIDOS.includes(Number(limiteBruto))
+        ? Number(limiteBruto)
+        : 50;
 
-  if (!empresa || empresa.length > 200) return Response.json({ error: "Informe o nome da empresa." }, { status: 400 });
-  if (!titulo || titulo.length > 200) return Response.json({ error: "Informe o título da avaliação." }, { status: 400 });
-  if (!validarQuestionario(questionario)) return Response.json({ error: "Revise as dimensões, perguntas e opções do questionário." }, { status: 400 });
+  if (!empresa || empresa.length > 200)
+    return Response.json(
+      { error: "Informe o nome da empresa." },
+      { status: 400 },
+    );
+  if (!titulo || titulo.length > 200)
+    return Response.json(
+      { error: "Informe o título da avaliação." },
+      { status: 400 },
+    );
+  if (!validarQuestionario(questionario))
+    return Response.json(
+      { error: "Revise as dimensões, perguntas e opções do questionário." },
+      { status: 400 },
+    );
   let contexto;
-  try { contexto = lerContexto(corpo); } catch (err) { return Response.json({ error: (err as Error).message }, { status: 400 }); }
+  try {
+    contexto = lerContexto(corpo);
+  } catch (err) {
+    return Response.json({ error: (err as Error).message }, { status: 400 });
+  }
 
   try {
-    const { id: questionarioId } = guardarQuestionario({ titulo: questionario.titulo?.trim() || titulo, questionario });
-    const codigo = criarLinkAvaliacao({ questionarioId, titulo, empresa, expiraEmDias, limite, contexto });
+    const { id: questionarioId } = guardarQuestionario({
+      titulo: questionario.titulo?.trim() || titulo,
+      questionario,
+    });
+    const codigo = criarLinkAvaliacao({
+      questionarioId,
+      titulo,
+      empresa,
+      expiraEmDias,
+      limite,
+      contexto,
+    });
     return Response.json({ codigo, url: `${baseUrl(req)}/f/${codigo}` });
   } catch (err) {
     console.error(err);
-    return Response.json({ error: "Não foi possível criar o link de avaliação agora. Tente de novo." }, { status: 500 });
+    return Response.json(
+      {
+        error:
+          "Não foi possível criar o link de avaliação agora. Tente de novo.",
+      },
+      { status: 500 },
+    );
   }
 }
 
 /** "Avaliações em andamento" no painel. */
 export async function GET() {
-  return Response.json({ itens: listarAvaliacoesEmAndamento(), discoEfemero: discoEfemero() });
+  return Response.json({
+    itens: listarAvaliacoesEmAndamento(),
+    discoEfemero: discoEfemero(),
+  });
 }

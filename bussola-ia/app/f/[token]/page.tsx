@@ -2,7 +2,7 @@
 // Copie este arquivo (e FormularioPublico.tsx) para cada app sem alterar; o conteúdo vem inteiro do
 // que o app gravou em lib/formularios.ts (criar).
 import type { ParametrosPublicos } from "@/lib/formularios";
-import { expirou, obter, listarRespostas } from "@/lib/formularios";
+import { expirou, obter, contarRespostas } from "@/lib/formularios";
 import { FormularioPublico } from "./FormularioPublico";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,7 @@ export default async function Page({ params }: PageProps<"/f/[token]">) {
     return <Indisponivel titulo="Este link expirou" descricao="Peça um novo link a quem enviou este formulário." />;
   }
 
-  const noLimite = formulario.limite !== null && listarRespostas(token).length >= formulario.limite;
+  const noLimite = formulario.limite !== null && contarRespostas(token) >= formulario.limite;
   if (noLimite) {
     return <Indisponivel titulo="Este formulário não recebe mais respostas" descricao="O limite de respostas deste link já foi atingido." />;
   }

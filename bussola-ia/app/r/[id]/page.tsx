@@ -10,5 +10,10 @@ export default async function Page({ params }: PageProps<"/r/[id]">) {
   const registro = obter<DadosAvaliacao, Avaliacao, Meta>(id);
   if (!registro || registro.tipo !== "avaliacao") notFound();
 
-  return <PainelGestor resultadoInicial={{avaliacao:registro.saida,meta:registro.meta,id}} />;
+  return (
+    <PainelGestor
+      key={id}
+      resultadoInicial={{ avaliacao: registro.saida, meta: registro.meta, id }}
+    />
+  );
 }

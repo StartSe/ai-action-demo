@@ -1,19 +1,26 @@
 # Bússola de IA
 
-Avaliação da maturidade em IA da empresa em 6 dimensões, com o estágio atual e o que fazer para evoluir. Área: Estratégia e Gestão.
+Um observatório de inovação com IA para o gestor acompanhar assessments de **empresas, áreas e times**, da criação das perguntas ao plano de ação.
 
-## O que resolve
-A empresa não sabe em que estágio de maturidade em IA está nem o que fazer a seguir. Este app aplica um questionário modelo (24 perguntas de escala + 2 de texto, em 6 dimensões), coleta as respostas do time por um link público e devolve um diagnóstico real: nível geral, nome do estágio (Inicial, Exploração, Estruturação, Escala ou Transformação), média por dimensão, forças, lacunas, próximos passos e onde as áreas discordam.
+## A experiência
 
-O fluxo tem três etapas, narradas na própria tela: ajustar o questionário (ou usar o modelo, ou gerar um para o setor), criar o link e enviar ao time, e analisar as respostas quando chegarem. As médias são sempre calculadas no servidor; a IA só escreve a leitura. Sem IA conectada (ou quando ela falha por crédito, fila ou instabilidade) a leitura sai automática, com aviso na tela — o diagnóstico continua real, nunca rotulado como exemplo. "Ver um diagnóstico de exemplo" é o único caminho que mostra dados fictícios.
+- **Painel do gestor:** indicadores calculados das coletas, busca, filtros por tipo de grupo/status, meta de participação, prazos, respostas e último diagnóstico de cada assessment. Atualiza a cada 30 segundos enquanto a página está visível.
+- **Oficina de criação:** informe empresa, área (opcional), setor, meta e missão. O Arquiteto adapta as perguntas usando IA quando conectada; sem conexão, usa um modelo com adaptação limitada às perguntas abertas. O revisor de cobertura usa regras automáticas. Revise as perguntas por dimensão, personalize no editor completo e salve na biblioteca antes de gerar o link.
+- **Jornada do participante:** uma dimensão por etapa, escala de 1 a 5 com controles acessíveis, navegação para revisar respostas e recuperação de falhas de envio sem apagar o preenchimento. Não solicita nome nem e-mail. Área e cargo são opcionais; o gestor pode consultar as respostas.
+- **Sala de análise:** radar interativo, forças/lacunas, comparação entre áreas e respostas abertas. O Analista interpreta os sinais; o Crítico questiona a amostra e os pressupostos; o Estrategista propõe experimentos. Cada perspectiva informa a origem (IA ou regras automáticas) e as dimensões usadas como evidência.
+- **Da leitura à ação:** simule uma mudança de nota no laboratório de cenários (hipótese aritmética, sem alterar o diagnóstico), registre ações concluídas no plano e exporte relatório por impressão/PDF, texto ou CSV. Ações concluídas são persistidas por diagnóstico.
 
-Opcionais: um quadro de tarefas conectado via MCP recebe os próximos passos como cartões; e-mail ou Slack recebem a rotina "Resumo da coleta" (respostas recebidas, quantas faltam e o prazo de cada avaliação aberta).
+O questionário modelo tem 24 perguntas de escala e duas abertas, em seis dimensões. Os números são calculados no servidor. A IA interpreta os agregados e as respostas abertas; não define notas. Falhas de serviço ou respostas inválidas usam leitura automática identificada. O exemplo (`/?exemplo=1`) contém oito respostas fictícias e é explicitamente rotulado.
+
+A participação conta **submissões, não pessoas únicas verificadas**. A meta do grupo é independente do limite técnico do link e pode ser ultrapassada. Encerrar uma coleta impede novos envios, mas mantém seu histórico e suas respostas mesmo após reiniciar o app. O envio grava as duas coleções de respostas na mesma transação para respeitar o limite sob concorrência.
+
+Opcionais: um quadro conectado via MCP recebe os próximos passos como cartões; e-mail ou Slack podem receber a rotina “Resumo da coleta”, configurada em `/setup`.
 
 ## Stack
 Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão.
 
 ## Configuração inicial (sem variáveis de ambiente)
-Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave, escolhe o modelo e testa a conexão. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar, o app roda em modo demonstração: a leitura do diagnóstico sai automática (sem IA) e o exemplo continua disponível.
+Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave, escolhe o modelo e testa a conexão. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar, o app permite criar coletas reais e calcular diagnósticos com leitura automática (sem IA). O exemplo ilustrativo continua disponível.
 
 ## Primeiro acesso
 Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
@@ -69,7 +76,14 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 
 ## Estrutura
 ```
-app/page.tsx                tela única (formulário + resultado)
+app/page.tsx                entrada do painel do gestor
+components/observatorio/    painel, oficina, bússola e sala de análise
+components/ResultadoAvaliacao.tsx  relatório para impressão e exportação
+lib/assessment-input.ts     validação de grupos, perguntas e saída do Arquiteto
+lib/conselho.ts             perspectivas automáticas e validação dos agentes
+lib/conselho-ia.ts          Crítico e Estrategista via IA com fallback individual
+app/api/bussola/painel/     coletas e diagnósticos associados
+app/api/bussola/[id]/plano/ conclusão persistida de ações
 app/api/bussola/route.ts    diagnóstico de exemplo (dados fictícios); a análise real é app/api/bussola/link/[codigo]/analisar
 app/mcp/route.ts            endpoint MCP (JSON-RPC 2.0) para assistentes de IA
 app/api/mcp/token/route.ts  gera, consulta e revoga o código de acesso do endpoint MCP
@@ -99,3 +113,20 @@ Dockerfile                  build multi-stage com saída standalone
 docker-compose.yml          sobe este app isolado
 render.yaml                 blueprint do Render (runtime image)
 ```
+
+## Testes e decisões de implementação
+
+```bash
+npm install
+npx playwright install chromium
+npm run lint
+npm test                    # testes de domínio + build + testes de navegador
+npm run test:unit           # domínio, persistência e contratos de IA
+npm run test:e2e            # requer build atualizado
+```
+
+O Playwright sobe a versão de produção na porta 3118, com SQLite temporário e autenticação habilitada. Cria uma conta de teste, testa o fluxo completo, falhas de rede, demonstração, filtros, limites concorrentes, PDF/CSV e reabertura do plano. As verificações axe cobrem WCAG A/AA nas telas novas; capturas desktop/mobile ficam em `test-results/` (ignorado pelo Git).
+
+Os contratos de IA são testados com provedor simulado, incluindo JSON incompleto e fallback parcial. Não exigem chave nem geram custo externo. O uso real depende de uma conexão configurada em `/setup`. Há limite de 45 segundos por chamada ao provedor. Uma análise completa conectada usa três chamadas: Analista, Crítico e Estrategista; respostas JSON malformadas podem gerar a tentativa adicional já prevista na camada de IA.
+
+`PLANO-EXPERIENCIA.md` registra a direção visual, as etapas e a auditoria. Os novos campos de grupo são opcionais para manter compatibilidade com registros anteriores. Diagnósticos antigos permanecem na biblioteca; apenas os novos armazenam vínculo explícito ao código do assessment. A conta de gestor permanece única por instalação, como na base original.

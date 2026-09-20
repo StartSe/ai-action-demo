@@ -49,7 +49,7 @@ export function salvar({ codigo, questionarioId, area, cargo, valores }: { codig
 }
 
 /** Respostas de um link, mais recentes primeiro; já no formato usado por Avaliacao.respostas. */
-export function listarPorCodigo(codigo: string, limite = 500): Resposta[] {
+export function listarPorCodigo(codigo: string, limite = -1): Resposta[] {
   const linhas = abrir()
     .prepare("SELECT * FROM respostas_avaliacao WHERE codigo = ? ORDER BY criadoEm DESC LIMIT ?")
     .all(codigo, limite) as Linha[];

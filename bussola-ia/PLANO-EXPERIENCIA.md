@@ -34,3 +34,20 @@ Sala de análise: maturidade e radar interativo, perspectivas dos agentes (Anali
 - Etapa 1 concluída: painel responsivo, navegação, busca/filtros, respostas por grupo, biblioteca de diagnósticos e bússola interativa. Build de produção passou; lint sem erros (um aviso anterior em setup.tsx); smoke em Chromium passou a 1440 px e 390 px, sem overflow nem exceções. Capturas inspecionadas. A oficina anterior fica temporariamente acessível até a etapa 2.
 - Etapa 2 concluída: oficina própria substituiu formulário legado; escopo empresa/área, meta, objetivo, setor e porte; Arquiteto via IA ou modelo contextual com origem explícita; revisão por dimensão, editor completo, biblioteca e link. Contexto persistido e resultados associados ao assessment. Validação estrutural protege a metodologia contra saídas incompletas da IA. Modal nativo prende o foco. Três testes de domínio, fluxo Chromium de criação/publicação e persistência, lint e build passaram; telas inspecionadas a 1440 e 390 px.
 - Etapa 3 concluída: sala de análise com radar explorável, conselho Analista/Crítico/Estrategista, evidências por área, respostas abertas, cenários aritméticos e plano com conclusão persistida. Crítico/Estrategista fazem chamadas separadas à IA quando conectada, com validação e fallback individual. Resposta pública passou a ter etapas, rádios nativos, progresso e revisão. Corrigidas notas vazias/fora da escala e divergência de precisão SVG na hidratação. Nove testes de domínio/contratos com provedor simulado passaram; jornada Chromium de resposta → diagnóstico real → conselho → ação → reabertura passou em desktop/mobile; lint e build passaram. Nenhuma chamada a provedor real foi usada na validação.
+
+## Auditoria final de entrega
+
+| Requisito | Evidência verificável |
+| --- | --- |
+| Planejar layout antes da construção | Direção e composição documentadas no início deste arquivo; fundamento entregue em c92cdbd. |
+| Interface inovadora e responsiva | Painel editorial, bússola SVG explorável, oficina com agentes e sala de análise; capturas Playwright a 1440, 768 e 390 px inspecionadas. |
+| Painel para empresa ou área | `ContextoAssessment`, parâmetros persistidos, filtros por escopo, meta separada do limite, progresso e acompanhamento por coleta. Teste completo cria Marketing e verifica persistência/participação. |
+| Agentes na criação | Arquiteto chama IA com objetivo/setor/área; validação estrutural; fallback explícito e revisão editável. Contratos válidos e inválidos testados. |
+| Agentes na análise final | Analista + Crítico + Estrategista, origem por agente, evidências de dimensão, plano, comparação de áreas e vozes do grupo. Chamadas separadas e falha parcial testadas com provedor simulado. |
+| Ciclo completo real | E2E autenticado cria assessment, coleta duas respostas pelo fluxo público/API, valida nota 2,0, consulta conselho, persiste ação e reabre. |
+| Exportação e navegação | CSV baixado; página de impressão com conselho e rótulo de leitura automática; troca entre diagnósticos pela biblioteca sem reaproveitar estado do registro anterior. |
+| Persistência e volume | Teste com 501 respostas preserva leitura completa e assessment encerrado após limpeza de inicialização. 210 tentativas concorrentes resultam em exatamente 200 aceitas no limite 200. |
+| Acessibilidade e falhas | Axe WCAG A/AA nas telas novas; teclado/foco no modal; rádios nativos; ausência de overflow e erros de console; falha de rede mantém preenchimento e permite tentar novamente. |
+| Testes e commits por etapa | c92cdbd (painel), 4f4a1e1 (oficina/grupos), 472145b (análise/resposta); etapa final com testes e correções consolidadas no commit de validação. |
+
+Resultado: 10 testes de domínio/contratos/persistência e 5 testes de ponta a ponta passaram; build e TypeScript passaram; lint sem erros, com um aviso preexistente de `<img>` em `components/setup.tsx`. `git diff --check` sem problemas. Nenhum dado ou conta existente foi usado nos testes. Não foi feita chamada a IA externa real, publicação nem push.

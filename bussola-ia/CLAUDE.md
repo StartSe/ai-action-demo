@@ -1,6 +1,22 @@
 @AGENTS.md
 
-## Notas específicas deste app
+## Observatório de inovação (setembro de 2026)
+
+As notas abaixo são históricas. A interface atual substitui a antiga tela de duas colunas pelo painel do gestor, com oficina e sala de análise em `components/observatorio`. Consulte `PLANO-EXPERIENCIA.md` e os testes antes de usar orientações antigas sobre layout, cópias idênticas ou fronteiras de histórias.
+
+- O contexto do grupo vive nos parâmetros do formulário e na avaliação salva; `codigo` na entrada do histórico associa diagnósticos às coletas.
+- O POST público de Bússola usa `registrarRespostaAvaliacao`: uma transação na conexão comum grava respostas e respostas_avaliacao. Não volte a executar o callback genérico antes dessa transação.
+- Formulários de tipo bussola encerrados/expirados permanecem no banco. A limpeza de inicialização não deve apagá-los; são o arquivo do gestor.
+- Questionários vinculados a qualquer coleta, inclusive encerrada, não podem ser apagados nem sobrescritos. Editar um modelo usado cria cópia; o histórico deve conservar as perguntas originais.
+- Contagem de limites usa COUNT, não o tamanho de uma listagem paginada. A análise de um link lê todas as respostas (LIMIT -1).
+- Analista usa a leitura principal. Crítico e Estrategista são chamadas independentes com fallback identificado por agente. Esquemas e dimensões são validados antes de persistir.
+- Notas inválidas/ausentes não entram na média; nenhuma nota é confiada ao modelo. Cenários hipotéticos são somente locais e não alteram os dados salvos.
+- Coordenadas trigonométricas do SVG são arredondadas para quatro casas para não gerar divergência de hidratação entre Node e Chromium.
+- `/r/[id]` usa key={id} no painel para trocar corretamente o estado ao navegar entre diagnósticos no cliente.
+- A UI tem CSS próprio no escopo `.observatorio`; os diálogos de link e confirmação usam `<dialog>` nativo com foco contido. A jornada pública foi especializada para os campos produzidos por Bússola.
+- `npm test` executa testes com banco temporário, conta de teste e IA simulada. Nunca configure credenciais reais nos testes.
+
+## Notas históricas específicas deste app
 
 - 12º app da suíte, criado a partir de uma cópia completa de `pdi-time/` (ciclo "novos-apps", US-010 do prd.json). `components/ui.tsx`/`components/setup.tsx`/`lib/ai.ts`/`lib/store.ts`/`lib/setup-comum.ts`/`lib/historico.ts`/`lib/mcp.ts`/`lib/mcp-cliente.ts`/`lib/mcp-oauth.ts`/`lib/formularios.ts`/`lib/notificacoes.ts`/`lib/rotinas.ts`/`app/mcp`/`app/f`/`app/api/rotinas`/`app/api/setup`/`proxy.ts` são cópias literais (`scripts/verificar-padrao.sh` ganhou `bussola-ia` na lista `APPS`). `app/globals.css` diverge só nas 4 linhas de cor de acento (Estratégia, `tasks/paleta-segmentos.json`: `#1a6d93`/`#1663df`/`#e7f3f9`/`#0a425c`, desde a US-029 da rodada onboarding-erros-conta). `app/r/[id]/page.tsx`, `app/imprimir/[id]/page.tsx` e os `not-found.tsx` são próprios daqui, por dependerem do tipo salvo (`tipo: "avaliacao"`, `entrada = DadosAvaliacao`, `saida = Avaliacao`).
 - Arquivos específicos de PDI (`lib/pdi.ts`, `lib/checkins.ts`, `components/DialogoAutoavaliacao.tsx`, `components/LembrarCheckins.tsx`, `app/api/pdi/**`) foram removidos da cópia. `lib/rotinas-do-app.ts` ficou com `TIPOS_ROTINA` vazio e nenhum executor registrado (este app não declara a capacidade `rotina` em `catalogo.json` ainda); `app/api/f/[token]/route.ts` ficou sem nenhum `import "@/lib/..."` de efeito colateral pelo mesmo motivo — nenhum `registrarCallback` existe ainda, mesmo a capacidade `formulario` já estando declarada em `catalogo.json` (o link de coleta real é a US-012).
