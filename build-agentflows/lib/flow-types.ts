@@ -30,9 +30,9 @@ export const BLOCKS = {
     help: "Consulta ou envia dados para um serviço.",
   },
   tool: {
-    label: "Ferramenta MCP",
+    label: "Ferramenta",
     icon: "⚒",
-    help: "Executa uma ferramenta do serviço conectado.",
+    help: "Executa uma ferramenta pronta ou de um servidor conectado.",
   },
   approval: {
     label: "Aprovação humana",

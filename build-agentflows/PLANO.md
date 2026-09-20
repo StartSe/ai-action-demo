@@ -72,7 +72,8 @@ Playwright em tela larga, tema escuro e celular.
 # Rodada 2 (20/09/2026): simplificação para executivos, conexões e canais
 
 Pedidos recebidos depois da primeira rodada, agrupados em etapas. Cada etapa
-termina com testes, lint e um commit próprio.
+termina com testes, lint e um commit próprio. As sete etapas foram concluídas
+em 20/09/2026 (versão 0.3.0), com verificação visual por Playwright.
 
 ## A. Ajustes de UX no editor e na biblioteca
 
@@ -134,3 +135,11 @@ termina com testes, lint e um commit próprio.
 ## G. Fechamento
 
 - README, CLAUDE.md, verificações da suíte, versão 0.3.0.
+
+## Fora do recorte da rodada 2
+
+- Conexão do WhatsApp por QR Code dentro do app (hoje o QR Code é lido no
+  painel do provedor; o app confere o estado no botão Testar).
+- Ligações recebidas atendidas diretamente pelo fluxo (hoje o agente de
+  conversa da ElevenLabs atende e o fluxo recebe a transcrição ao final).
+- Modelos de exemplo com WhatsApp e voz.

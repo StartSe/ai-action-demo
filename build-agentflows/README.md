@@ -4,15 +4,27 @@ Crie fluxos visuais de agentes de IA, teste cada etapa e publique versões que s
 
 ## O que resolve
 
-Um quadro visual conecta dez tipos de bloco: Início, Gerar com IA, Agente, Condição, Atualizar estado, Requisição HTTP, Ferramenta MCP, Aprovação humana, Repetir e Resposta. O agente escolhe ferramentas autorizadas e incorpora seus resultados, em até 12 chamadas por etapa. As conexões determinam o caminho; condições e aprovações possuem saídas Sim/Não, e repetições têm saídas Repetir/Concluir.
+Um quadro visual conecta doze tipos de bloco: Início, LLM (Assistente), Agente, Condição, Atualizar estado, Requisição HTTP, Ferramenta, Aprovação humana, Repetir, Enviar WhatsApp, Ligação por voz e Resposta. Blocos novos nascem com nome incremental (Agente 0, LLM 1…) e podem ser renomeados no próprio cabeçalho. O agente escolhe ferramentas autorizadas e incorpora seus resultados, em até 12 chamadas por etapa. As conexões determinam o caminho; condições e aprovações possuem saídas Sim/Não, e repetições têm saídas Repetir/Concluir.
+
+Um LLM ou Agente com a mensagem em branco recebe automaticamente a conversa (no primeiro passo) ou o resultado da etapa anterior; `{{input}}` não é obrigatório. Ao digitar `{{` em qualquer campo aparece um autocompletar com a conversa, a etapa anterior, as variáveis e os blocos do fluxo.
 
 O editor segue a experiência do Agentflow V2: blocos compactos coloridos, alça de entrada em barra, saídas em seta que aparecem ao passar o mouse, conexões com gradiente entre as cores dos blocos e botão para removê-las, rótulo do ramo (Sim, Não, Repetir, Concluir) junto à origem. Arraste uma saída para outro bloco para conectar; solte no vazio para escolher o próximo bloco já conectado. Cada saída aceita uma conexão e ciclos só existem pela saída Repetir. O botão ✨ abre "O que você quer construir?": o ChatGPT desenha blocos, conexões e instruções a partir de uma descrição, com prévia antes de ir para o quadro. Salvar altera o rascunho; publicar cria uma cópia estável para integrações. Testes usam o rascunho pelo chat no canto superior direito, com histórico da sessão, etapas executadas e aprovação em linha. Cada execução guarda entrada, saída, versão, estado e registro de etapas em SQLite. Aprovações persistem após reinício e aceitam uma única decisão. Execuções que estavam rodando no momento do reinício são marcadas como interrompidas para não repetir ações externas silenciosamente.
 
 Ao selecionar explicitamente a simulação, os fluxos rodam em demonstração: agentes devolvem respostas ilustrativas e nenhuma chamada HTTP ou ferramenta externa é executada. Também é possível selecionar a simulação mesmo com IA conectada. `/?exemplo=1` cria um exemplo de triagem quando ainda não há fluxos.
 
+## Conexões
+
+A tela **Conexões** reúne o que os agentes podem usar:
+
+- **ChatGPT** (principal): assinatura conectada por código de dispositivo pelo Codex App Server oficial, fixado em @openai/codex 0.155.1.
+- **OpenRouter**: conexão em um clique (OAuth PKCE) com mais de 500 modelos de 80 provedores. O modelo é escolhido bloco a bloco; um bloco em "Automático · ChatGPT" nunca cai para o OpenRouter, e vice-versa. O gerador de fluxos usa o OpenRouter só quando o ChatGPT não está conectado.
+- **Ferramentas (MCP)**: vários servidores nomeados, autorizados em um clique ou por código. O Agente também tem ferramentas prontas: data e hora, calculadora, requisição HTTP (sem endereços internos), executar outro fluxo publicado, enviar WhatsApp e ligar por voz.
+- **WhatsApp**: Z-API (QR Code), Meta oficial ou ZapperHub. Mensagens recebidas em `/webhook/whatsapp?chave=…` executam o fluxo publicado escolhido e a resposta volta pelo mesmo número; o endereço de avisos é cadastrado no provedor ao salvar (na Meta é colado no painel, com a mesma chave como valor de verificação).
+- **ElevenLabs**: falar no chat de teste (transcrição), ouvir as respostas e ligações por voz com um agente de conversa. O aviso de fim de ligação, assinado, chega em `/webhook/elevenlabs` e executa o fluxo escolhido com a transcrição.
+
 ## Stack
 
-Next.js 16, React 19, TypeScript, Tailwind 4, React Flow (`@xyflow/react`, editor acessível com conexões/arraste/zoom) e SQLite nativo do Node. Conta, sessão, configurações cifradas e MCP reutilizam a infraestrutura da suíte. A IA usa exclusivamente login ChatGPT pelo Codex App Server oficial, fixado em @openai/codex 0.155.1.
+Next.js 16, React 19, TypeScript, Tailwind 4, React Flow (`@xyflow/react`, editor acessível com conexões/arraste/zoom) e SQLite nativo do Node. Conta, sessão, configurações cifradas e MCP reutilizam a infraestrutura da suíte. A IA principal usa login ChatGPT pelo Codex App Server oficial; o OpenRouter é a alternativa explícita, por conexão em Conexões.
 
 ## Rodar localmente
 
@@ -92,7 +104,13 @@ Implementação própria simplificada, sem copiar código do Flowise. Não é um
 - `components/RunView.tsx`: resultado, etapas e aprovação (página de execução).
 - `lib/flow-types.ts`: blocos, grafo e contratos.
 - `lib/flow-graph.ts`: saídas por tipo, validação de conexão e layout automático.
-- `lib/flow-generator.ts`: geração de fluxo pelo ChatGPT e validação da resposta.
+- `lib/flow-generator.ts`: geração de fluxo pelo ChatGPT (ou OpenRouter) e validação da resposta.
+- `lib/conexoes.ts`, `components/Connections.tsx`, `app/api/conexoes/`: tela e rotas de Conexões.
+- `lib/openrouter.ts`: execução pelo OpenRouter com ferramentas.
+- `lib/tools.ts`: ferramentas prontas e catálogo dos servidores MCP.
+- `lib/whatsapp.ts`, `app/webhook/whatsapp/`: canal WhatsApp.
+- `lib/elevenlabs.ts`, `app/webhook/elevenlabs/`, `app/api/voz/`: voz e ligações.
+- `components/ReferenceField.tsx`: autocompletar de referências com `{{`.
 - `lib/flow-store.ts`: validação, versões, persistência e checkpoints.
 - `lib/flow-runtime.ts`: motor, IA, ferramentas e HTTP.
 - `lib/ferramentas.ts`: ferramentas expostas pelo MCP.
@@ -103,4 +121,4 @@ Implementação própria simplificada, sem copiar código do Flowise. Não é um
 
 A experiência foi estudada diretamente no [Flowise Agentflows v2](https://github.com/FlowiseAI/Flowise/tree/9291856d1ea4a4ceea9f8fef8ce14f4f6c81e8eb/packages/ui/src/views/agentflowsv2): biblioteca em grade/lista, editor em tela inteira, blocos compactos com as mesmas cores, alças e conexões com gradiente, paleta flutuante com gerador por IA, diálogo de edição, minimapa, chat em popover e diálogo de implantação com abas. O canvas usa `@xyflow/react` (sucessor do `reactflow` do Flowise); o MUI não entra porque a suíte não usa bibliotecas de UI, e o visual é reproduzido em CSS próprio. Os componentes são próprios; não é uma reprodução integral do Flowise. O plano e o diagnóstico estão em `PLANO.md`.
 
-Os testes cobrem 27 comportamentos: motor, protocolo ChatGPT com subprocesso simulado, regras de conexão e layout do grafo e o gerador de fluxos com respostas simuladas. O binário oficial foi validado até a leitura de conta sem autenticação. Execução real com assinatura exige conectar uma conta e não é coberta por esses testes automatizados.
+Os testes cobrem 44 comportamentos: motor, protocolo ChatGPT com subprocesso simulado, regras de conexão e layout do grafo, gerador de fluxos, OpenRouter com ferramentas, conexões, catálogo de ferramentas, WhatsApp (três provedores e aviso recebido) e ElevenLabs (fala, transcrição, ligação e aviso assinado), todos com serviços simulados. O binário oficial foi validado até a leitura de conta sem autenticação. Execução real com assinatura exige conectar uma conta e não é coberta por esses testes automatizados.
