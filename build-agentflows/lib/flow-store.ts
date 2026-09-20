@@ -102,8 +102,6 @@ export function validateGraph(value: unknown, executable = false): Graph {
       if (k === "start" && g.edges.some((e) => e.target === n.id))
         throw new FlowError("O Início não pode receber conexões.");
       const c = n.data.config;
-      if (["agent", "llm"].includes(k) && !c.prompt?.trim())
-        throw new FlowError(`Escreva a entrada de “${n.data.label}”.`);
       if (k === "state" && !/^[a-zA-Z][a-zA-Z0-9_]{0,60}$/.test(c.key || ""))
         throw new FlowError("Dê um nome válido à variável de estado.");
       if (

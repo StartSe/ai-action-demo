@@ -911,7 +911,7 @@ export function FlowEditor({ id }: { id: string }) {
         <NodeDialog
           key={node.id}
           node={node}
-          others={graph.nodes.map((n) => ({ id: n.id, label: n.data.label }))}
+          nodes={graph.nodes}
           models={connection?.models || []}
           onClose={() => setEditing(null)}
           onSave={(n) => {

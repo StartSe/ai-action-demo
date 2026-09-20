@@ -2023,6 +2023,66 @@
   background: var(--studio-surface);
   color: var(--studio-ink);
 }
+.reference-tip {
+  font-size: 10px;
+  color: var(--studio-muted);
+  margin: -8px 0 14px;
+}
+.reference-tip code {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--studio-primary-soft);
+  color: var(--studio-primary);
+}
+.reference-field {
+  position: relative;
+}
+.reference-field textarea,
+.reference-field input {
+  width: 100%;
+}
+.reference-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% - 4px);
+  z-index: 5;
+  max-height: 220px;
+  overflow: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--studio-surface);
+  border: 1px solid var(--studio-line);
+  border-radius: 10px;
+  box-shadow: var(--studio-shadow);
+}
+.reference-menu li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.reference-menu li.active {
+  background: var(--studio-primary-soft);
+}
+.reference-menu li strong {
+  font-weight: 650;
+}
+.reference-menu li code {
+  font-size: 10px;
+  color: var(--studio-primary);
+}
+.reference-menu li small {
+  grid-column: 1 / -1;
+  font-size: 9.5px;
+  color: var(--studio-muted);
+}
 .field-title {
   display: flex;
   align-items: center;

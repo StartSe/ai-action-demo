@@ -121,7 +121,7 @@ export function block(kind: Kind, id: string, x: number, y: number): Block {
                     : {
                         system:
                           "Você é um assistente cuidadoso. Responda em português.",
-                        prompt: "{{input}}",
+                        prompt: "",
                         model: "",
                         tools: "",
                       };
