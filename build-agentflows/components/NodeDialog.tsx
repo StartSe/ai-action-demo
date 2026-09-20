@@ -51,7 +51,8 @@ const COMPARISONS: [string, string][] = [
   ["greater", "É maior que"],
   ["empty", "Está vazio"],
 ];
-type Tool = { name: string; description?: string };
+type ToolInfo = { id: string; name: string; description: string };
+type ToolGroup = { id: string; name: string; kind: "builtin" | "mcp"; tools: ToolInfo[]; error?: string };
 // Diálogo de edição do bloco, no formato do Flowise: ícone colorido, nome editável em linha
 // e a lista de campos do tipo. Referências e ferramentas entram por clique, sem digitar código.
 export function NodeDialog({
@@ -69,19 +70,17 @@ export function NodeDialog({
 }) {
   const [draft, setDraft] = useState(() => structuredClone(node)),
     [error, setError] = useState(""),
-    [tools, setTools] = useState<Tool[] | null>(null),
-    [toolsUrl, setToolsUrl] = useState(""),
-    [toolsCode, setToolsCode] = useState(""),
-    [busy, setBusy] = useState(false);
+    [groups, setGroups] = useState<ToolGroup[] | null>(null);
   const c = draft.data.config,
     k = draft.data.kind,
     usesTools = k === "agent" || k === "tool";
+  void setError;
   useEffect(() => {
     if (!usesTools) return;
     let alive = true;
-    void request<Tool[]>("/api/tools")
-      .then((t) => alive && setTools(t))
-      .catch(() => alive && setTools([]));
+    void request<ToolGroup[]>("/api/tools")
+      .then((g) => alive && setGroups(g))
+      .catch(() => alive && setGroups([]));
     return () => {
       alive = false;
     };
@@ -92,35 +91,24 @@ export function NodeDialog({
       data: { ...d.data, config: { ...d.data.config, [key]: value } },
     }));
   }
+  // Ids antigos (nome sem prefixo) pertencem ao servidor "Ferramentas" da primeira versão.
+  const normalize = (id: string) => (id.includes(":") ? id : "mcp:FERRAMENTAS:" + id);
   const selected = (c.tools || "")
     .split(",")
     .map((s) => s.trim())
-    .filter(Boolean);
-  function toggleTool(name: string) {
+    .filter(Boolean)
+    .map(normalize);
+  function toggleTool(id: string) {
     change(
       "tools",
-      (selected.includes(name)
-        ? selected.filter((t) => t !== name)
-        : [...selected, name]
+      (selected.includes(id)
+        ? selected.filter((t) => t !== id)
+        : [...selected, id]
       ).join(","),
     );
   }
-  async function connectTools() {
-    setBusy(true);
-    setError("");
-    try {
-      await request("/api/tool-connection", "PUT", {
-        url: toolsUrl,
-        code: toolsCode,
-      });
-      setToolsCode("");
-      setTools(await request<Tool[]>("/api/tools"));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Não foi possível conectar.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const known = new Set((groups || []).flatMap((g) => g.tools.map((t) => t.id)));
+  const orphan = selected.filter((id) => !known.has(id));
   const stateKeys = new Set<string>();
   for (const n of nodes) {
     if (n.data.kind === "state" && n.data.config.key)
@@ -215,44 +203,87 @@ export function NodeDialog({
                 ))}
               </select>
             ) : key === "tools" ? (
-              <div className="tool-choices">
-                {tools === null ? (
+              <div className="tool-groups">
+                {groups === null ? (
                   <small>Consultando ferramentas…</small>
-                ) : !tools.length && !selected.length ? (
-                  <small>Nenhuma ferramenta conectada ainda.</small>
                 ) : (
-                  [...new Set([...selected, ...tools.map((t) => t.name)])].map(
-                    (name) => (
-                      <button
-                        key={name}
-                        type="button"
-                        className={selected.includes(name) ? "active" : ""}
-                        title={tools.find((t) => t.name === name)?.description}
-                        onClick={() => toggleTool(name)}
-                      >
-                        <Icon
-                          name={selected.includes(name) ? "check" : "plus"}
-                          size={12}
-                        />
-                        {name}
-                      </button>
-                    ),
-                  )
+                  groups.map((g) => (
+                    <div key={g.id} className="tool-group">
+                      <h4>
+                        <Icon name={g.kind === "builtin" ? "spark" : "link"} size={13} />
+                        {g.name}
+                      </h4>
+                      {g.error ? (
+                        <small className="tool-group-error">{g.error}</small>
+                      ) : !g.tools.length ? (
+                        <small>Nenhuma ferramenta disponível.</small>
+                      ) : (
+                        <div className="tool-choices">
+                          {g.tools.map((t) => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              className={selected.includes(t.id) ? "active" : ""}
+                              title={t.description}
+                              onClick={() => toggleTool(t.id)}
+                            >
+                              <Icon
+                                name={selected.includes(t.id) ? "check" : "plus"}
+                                size={12}
+                              />
+                              {t.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))
                 )}
+                {orphan.length > 0 && (
+                  <div className="tool-group">
+                    <h4>Marcadas, mas fora do ar</h4>
+                    <div className="tool-choices">
+                      {orphan.map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className="active"
+                          onClick={() => toggleTool(id)}
+                        >
+                          <Icon name="close" size={12} />
+                          {id.split(":").pop()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <small>
+                  Conecte mais servidores e canais em{" "}
+                  <a href="/conexoes" target="_blank" rel="noreferrer">
+                    Conexões
+                  </a>
+                  .
+                </small>
               </div>
-            ) : key === "tool" && tools?.length ? (
+            ) : key === "tool" ? (
               <select
-                value={c[key] || ""}
+                value={c[key] ? normalize(c[key]) : ""}
                 onChange={(e) => change(key, e.target.value)}
               >
                 <option value="">Escolha uma ferramenta</option>
-                {tools.map((t) => (
-                  <option key={t.name} value={t.name}>
-                    {t.name}
-                  </option>
+                {(groups || []).map((g) => (
+                  <optgroup key={g.id} label={g.name}>
+                    {g.tools.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
-                {c.tool && !tools.some((t) => t.name === c.tool) && (
-                  <option value={c.tool}>{c.tool} · salva</option>
+                {c.tool && !known.has(normalize(c.tool)) && (
+                  <option value={normalize(c.tool)}>
+                    {c.tool.split(":").pop()} · fora do ar
+                  </option>
                 )}
               </select>
             ) : TEXTAREAS.includes(key) ? (
@@ -286,37 +317,6 @@ export function NodeDialog({
             )}
           </label>
         ))}
-        {usesTools && (
-          <details className="node-tools">
-            <summary>Conectar ferramentas externas</summary>
-            <p>Opcional. Use um servidor MCP para dar ferramentas ao agente.</p>
-            <label>
-              Endereço
-              <input
-                type="url"
-                value={toolsUrl}
-                placeholder="https://seu-servico/mcp"
-                onChange={(e) => setToolsUrl(e.target.value)}
-              />
-            </label>
-            <label>
-              Código de acesso
-              <input
-                type="password"
-                value={toolsCode}
-                autoComplete="off"
-                onChange={(e) => setToolsCode(e.target.value)}
-              />
-            </label>
-            <button
-              className="studio-button"
-              disabled={busy || !toolsUrl}
-              onClick={connectTools}
-            >
-              {busy ? "Conectando…" : "Conectar e listar ferramentas"}
-            </button>
-          </details>
-        )}
       </div>
       {error && (
         <p className="studio-error" role="alert">

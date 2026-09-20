@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { chatGPT } from "./chatgpt";
 import { isOpenRouterModel, openRouterKey, runOpenRouter } from "./openrouter";
 import { getConfig } from "./store";
-import { conexaoAutorizada } from "./mcp-oauth";
+import { resolveTools, callTool } from "./tools";
 import {
   FlowError,
   getFlow,
@@ -23,38 +23,6 @@ export function interpolate(text: string, r: Run): string {
     throw new FlowError(`A referência “${key}” não tem valor nesta etapa.`);
   });
 }
-async function mcp(method: string, params: unknown) {
-  const c = await conexaoAutorizada("FERRAMENTAS");
-  if (!c?.url) throw new FlowError("Conecte as ferramentas em Configurações.");
-  const res = await fetch(c.url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(c.token ? { Authorization: `Bearer ${c.token}` } : {}),
-    },
-    body: JSON.stringify({ jsonrpc: "2.0", id: randomUUID(), method, params }),
-    signal: AbortSignal.timeout(30000),
-    redirect: "error",
-  });
-  if (!res.ok)
-    throw new FlowError("O serviço de ferramentas recusou a chamada.");
-  const body = await res.json();
-  if (body.error || body.result?.isError)
-    throw new FlowError("A ferramenta não conseguiu concluir a operação.");
-  return body.result;
-}
-export async function availableTools() {
-  const r = await mcp("tools/list", {});
-  return (r.tools || []) as {
-    name: string;
-    description?: string;
-    inputSchema?: Record<string, unknown>;
-  }[];
-}
-async function callTool(name: string, args: unknown) {
-  const r = await mcp("tools/call", { name, arguments: args });
-  return JSON.stringify(r).slice(0, 30000);
-}
 // Mensagem que o LLM/Agente recebe: o texto configurado ou, em branco, o que veio antes
 // (a conversa no primeiro passo, o resultado da etapa anterior depois), como o Flowise encadeia.
 export function message(c: Record<string, string>, r: Run) {
@@ -69,13 +37,7 @@ async function agent(n: Block, r: Run, signal: AbortSignal) {
           .map((s) => s.trim())
           .filter(Boolean)
       : [];
-  const tools = allowed.length
-    ? (await availableTools()).filter((t) => allowed.includes(t.name))
-    : [];
-  if (tools.length !== new Set(allowed).size)
-    throw new FlowError(
-      "Uma ferramenta autorizada não está disponível. Confira os nomes.",
-    );
+  const tools = allowed.length ? await resolveTools(allowed) : [];
   const runner = isOpenRouterModel(c.model) ? runOpenRouter : chatGPT().run.bind(chatGPT());
   return runner({
     system: interpolate(c.system, r),
@@ -89,12 +51,10 @@ async function agent(n: Block, r: Run, signal: AbortSignal) {
       }
     },
     tools: tools.map((t) => ({
-      name: t.name,
-      description: t.description || t.name,
-      schema: t.inputSchema || { type: "object", properties: {} },
-      call: async (args) => {
+      ...t,
+      call: async (args: unknown) => {
         if (signal.aborted) throw new FlowError("Execução cancelada.");
-        const output = await callTool(t.name, args);
+        const output = await t.call(args);
         r.trace.push({
           nodeId: n.id,
           label: "Ferramenta: " + t.name,
