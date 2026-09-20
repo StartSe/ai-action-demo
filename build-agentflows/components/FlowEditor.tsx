@@ -1,11 +1,5 @@
 "use client";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ReactFlow,
@@ -13,16 +7,11 @@ import {
   Controls,
   ControlButton,
   MiniMap,
-  Handle,
-  Position,
-  NodeToolbar,
-  addEdge,
   applyNodeChanges,
   applyEdgeChanges,
-  type NodeProps,
-  type Node,
   type ReactFlowInstance,
   type Connection,
+  type FinalConnectionState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
@@ -35,136 +24,28 @@ import {
   type Run,
 } from "@/lib/flow-types";
 import { NODE_STYLE } from "@/lib/flow-presets";
+import {
+  connect as connectGraph,
+  connectionProblem,
+  outputLabel,
+} from "@/lib/flow-graph";
 import { Icon, IconButton, Modal, request } from "./StudioUI";
 import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
 import { NodeDialog } from "./NodeDialog";
 import { RunView } from "./RunView";
 import { IntegrationDialog } from "./IntegrationDialog";
-
-type VisualData = Block["data"] & {
-  execution?: string;
-  edit?: () => void;
-  duplicate?: () => void;
-  remove?: () => void;
+import { AgentNode, type VisualNode } from "./flow/AgentNode";
+import { AgentEdge, type VisualEdge } from "./flow/AgentEdge";
+import { ConnectionLine } from "./flow/ConnectionLine";
+const nodeTypes = { block: AgentNode };
+const edgeTypes = { agent: AgentEdge };
+// Conexão iniciada em uma saída e solta no vazio: o próximo bloco nasce já conectado.
+type Pending = {
+  source: string;
+  sourceHandle: string | null;
+  position: { x: number; y: number };
+  screen: { x: number; y: number };
 };
-function FlowNode({ data, selected }: NodeProps<Node<VisualData>>) {
-  const style = NODE_STYLE[data.kind],
-    branches =
-      data.kind === "condition" || data.kind === "approval"
-        ? ["yes", "no"]
-        : data.kind === "loop"
-          ? ["repeat", "done"]
-          : [];
-  return (
-    <>
-      <NodeToolbar>
-        <div className="node-hover-toolbar">
-          <IconButton
-            icon="settings"
-            label="Editar bloco"
-            onClick={() => data.edit?.()}
-          />
-          {data.kind !== "start" && (
-            <IconButton
-              icon="copy"
-              label="Duplicar bloco"
-              onClick={() => data.duplicate?.()}
-            />
-          )}
-          <IconButton
-            icon="trash"
-            label="Excluir bloco"
-            onClick={() => data.remove?.()}
-          />
-        </div>
-      </NodeToolbar>
-      <div
-        className={
-          "agent-node" +
-          (selected ? " selected" : "") +
-          (data.execution ? " execution-" + data.execution : "")
-        }
-        style={
-          {
-            "--node-color": style.color,
-            "--node-soft": style.soft,
-          } as CSSProperties
-        }
-      >
-        {data.kind !== "start" && (
-          <Handle type="target" position={Position.Left} />
-        )}
-        <span className="agent-node-icon">
-          <Icon name={data.kind} size={24} />
-        </span>
-        <div className="agent-node-copy">
-          <strong>{data.label}</strong>
-          <div className="agent-node-caption">
-            {["agent", "llm"].includes(data.kind) ? (
-              <span>
-                <Icon name="spark" size={12} />
-                ChatGPT
-              </span>
-            ) : data.kind === "start" ? (
-              <span>
-                <Icon name="chat" size={12} />
-                Entrada de conversa
-              </span>
-            ) : (
-              <span>{BLOCKS[data.kind].label}</span>
-            )}
-          </div>
-        </div>
-        {data.execution && (
-          <span className={"node-execution-badge " + data.execution}>
-            {data.execution === "running" ? (
-              <span className="studio-spinner" />
-            ) : (
-              <Icon
-                name={
-                  data.execution === "failed"
-                    ? "close"
-                    : data.execution === "waiting"
-                      ? "approval"
-                      : "check"
-                }
-                size={13}
-              />
-            )}
-          </span>
-        )}
-        {data.kind !== "end" &&
-          (branches.length ? (
-            branches.map((h, i) => (
-              <div key={h}>
-                <span
-                  className="branch-label"
-                  style={{ top: i ? "72%" : "27%" }}
-                >
-                  {h === "yes"
-                    ? "Sim"
-                    : h === "no"
-                      ? "Não"
-                      : h === "repeat"
-                        ? "Repetir"
-                        : "Concluir"}
-                </span>
-                <Handle
-                  type="source"
-                  position={Position.Right}
-                  id={h}
-                  style={{ top: i ? "78%" : "33%" }}
-                />
-              </div>
-            ))
-          ) : (
-            <Handle type="source" position={Position.Right} />
-          ))}
-      </div>
-    </>
-  );
-}
-const nodeTypes = { block: FlowNode };
 export function FlowEditor({ id }: { id: string }) {
   const router = useRouter(),
     canvasRef = useRef<HTMLDivElement>(null),
@@ -199,7 +80,9 @@ export function FlowEditor({ id }: { id: string }) {
   const [snap, setSnap] = useState(false);
   const [dots, setDots] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [info, setInfo] = useState<Kind | null>(null);
+  const [dark, setDark] = useState(false);
   const { connection, setConnection } = useChatGPT();
   useEffect(() => {
     let alive = true;
@@ -217,8 +100,10 @@ export function FlowEditor({ id }: { id: string }) {
       });
     const theme = localStorage.getItem("agentflows-theme") || "light";
     document.documentElement.dataset.studioTheme = theme;
+    const timer = setTimeout(() => setDark(theme === "dark"), 0);
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
   }, [id]);
   const snapshot = useCallback((g: Graph) => {
@@ -330,17 +215,35 @@ export function FlowEditor({ id }: { id: string }) {
     const timer = setTimeout(() => setNotice(""), 3500);
     return () => clearTimeout(timer);
   }, [notice]);
+  function closePalette() {
+    setPalette(false);
+    setPending(null);
+    setSearch("");
+  }
   function add(kind: Kind, position?: { x: number; y: number }) {
+    if (kind === "start" && graph.nodes.some((n) => n.data.kind === "start")) {
+      setError("O fluxo tem apenas um Início.");
+      return;
+    }
     const bounds = canvasRef.current?.getBoundingClientRect();
     const pos = position ||
+      pending?.position ||
       instance.current?.screenToFlowPosition({
         x: (bounds?.x || 0) + (bounds?.width || 800) / 2 - 100,
         y: (bounds?.y || 0) + (bounds?.height || 600) / 2,
       }) || { x: 300, y: 200 };
     const n = block(kind, "n_" + crypto.randomUUID(), pos.x, pos.y);
-    commit({ ...graph, nodes: [...graph.nodes, n] });
-    setPalette(false);
-    setEditing(n.id);
+    n.selected = true;
+    let next: Graph = {
+      ...graph,
+      nodes: [...graph.nodes.map((x) => ({ ...x, selected: false })), n],
+    };
+    if (pending) {
+      const c = { ...pending, target: n.id };
+      if (!connectionProblem(next, c)) next = connectGraph(next, c);
+    }
+    commit(next);
+    closePalette();
   }
   function duplicate(n: Block) {
     const copy = structuredClone(n);
@@ -356,11 +259,57 @@ export function FlowEditor({ id }: { id: string }) {
     });
   }
   function connectNodes(c: Connection) {
-    if (c.source === c.target) {
-      setError("Conecte blocos diferentes. Use Repetir para criar ciclos.");
+    const problem = connectionProblem(graph, c);
+    if (problem) {
+      setError(problem);
       return;
     }
-    commit({ ...graph, edges: addEdge(c, graph.edges) });
+    commit(connectGraph(graph, c));
+  }
+  // Ao soltar uma conexão: explica por que foi recusada ou, no vazio, oferece o próximo bloco.
+  function connectEnd(
+    event: MouseEvent | TouchEvent,
+    state: FinalConnectionState,
+  ) {
+    if (state.isValid || !state.fromNode || state.fromHandle?.type !== "source")
+      return;
+    if (state.toNode) {
+      const problem = connectionProblem(graph, {
+        source: state.fromNode.id,
+        target: state.toNode.id,
+        sourceHandle: state.fromHandle.id,
+      });
+      if (problem) setError(problem);
+      return;
+    }
+    const from = state.fromNode.id,
+      handle = state.fromHandle.id ?? null;
+    if (
+      graph.edges.some(
+        (e) => e.source === from && (e.sourceHandle || null) === handle,
+      )
+    ) {
+      setError(
+        "Esta saída já está conectada. Remova a conexão atual ou use uma Condição para ramificar.",
+      );
+      return;
+    }
+    const point = "changedTouches" in event ? event.changedTouches[0] : event;
+    const bounds = canvasRef.current?.getBoundingClientRect();
+    if (!point || !bounds || !instance.current) return;
+    setPending({
+      source: from,
+      sourceHandle: handle,
+      position: instance.current.screenToFlowPosition({
+        x: point.clientX,
+        y: point.clientY,
+      }),
+      screen: {
+        x: Math.min(point.clientX - bounds.x, bounds.width - 330),
+        y: Math.min(point.clientY - bounds.y, Math.max(bounds.height - 420, 80)),
+      },
+    });
+    setPalette(true);
   }
   function exportFlow() {
     if (!flow) return;
@@ -417,7 +366,7 @@ export function FlowEditor({ id }: { id: string }) {
     }
   }
   const node = graph.nodes.find((n) => n.id === editing);
-  const visualNodes = graph.nodes.map((n) => {
+  const visualNodes: VisualNode[] = graph.nodes.map((n) => {
     const done = run?.trace.some((t) => t.nodeId === n.id);
     const current = run?.next === n.id;
     const execution =
@@ -431,9 +380,28 @@ export function FlowEditor({ id }: { id: string }) {
       data: {
         ...n.data,
         execution,
+        connected: graph.edges
+          .filter((e) => e.source === n.id)
+          .map((e) => e.sourceHandle || null),
         edit: () => setEditing(n.id),
         duplicate: () => duplicate(n),
         remove: () => remove(n.id),
+        info: () => setInfo(n.data.kind),
+      },
+    };
+  });
+  const kindOf = (id: string) => graph.nodes.find((n) => n.id === id)?.data.kind;
+  const visualEdges: VisualEdge[] = graph.edges.map((e) => {
+    const from = kindOf(e.source),
+      to = kindOf(e.target);
+    return {
+      ...e,
+      type: "agent",
+      data: {
+        sourceColor: from ? NODE_STYLE[from].color : "#6557d2",
+        targetColor: to ? NODE_STYLE[to].color : "#6557d2",
+        label: from ? outputLabel(from, e.sourceHandle) : "",
+        active: running && run?.next === e.target,
       },
     };
   });
@@ -583,21 +551,27 @@ export function FlowEditor({ id }: { id: string }) {
               );
           }}
         >
-          <ReactFlow
+          <ReactFlow<VisualNode, VisualEdge>
             nodes={visualNodes}
-            edges={graph.edges.map((e) => ({
-              ...e,
-              animated: running && run?.next === e.target,
-            }))}
+            edges={visualEdges}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            connectionLineComponent={ConnectionLine}
+            connectionRadius={36}
+            isValidConnection={(c) => !connectionProblem(graph, c)}
             onInit={(i) => {
               instance.current = i;
             }}
-            onBeforeDelete={async () => { snapshot(graph); return true; }}
+            onBeforeDelete={async () => {
+              snapshot(graph);
+              return true;
+            }}
             onNodesChange={(changes) => {
               setGraph((g) => ({
                 ...g,
-                nodes: applyNodeChanges(changes, g.nodes) as Block[],
+                nodes: applyNodeChanges(changes, g.nodes as VisualNode[]).map(
+                  (n) => ({ ...n, data: { ...n.data } }) as Block,
+                ),
               }));
               if (changes.some((c) => ["remove", "position"].includes(c.type)))
                 setDirty(true);
@@ -611,25 +585,29 @@ export function FlowEditor({ id }: { id: string }) {
             }}
             onNodeDragStart={() => snapshot(graph)}
             onConnect={connectNodes}
+            onConnectEnd={connectEnd}
             onNodeDoubleClick={(_, n) => setEditing(n.id)}
-            onEdgeClick={(_, e) => setSelectedEdge(e.id)}
-            onPaneClick={() => setSelectedEdge(null)}
+            onPaneClick={() => {
+              if (pending) closePalette();
+            }}
             fitView
             fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
             minZoom={0.25}
             maxZoom={2}
             snapToGrid={snap}
-            snapGrid={[20, 20]}
+            snapGrid={[25, 25]}
             deleteKeyCode={
-              editing || rename || connect || integration
+              editing || rename || connect || integration || info
                 ? null
                 : ["Backspace", "Delete"]
             }
             nodesDraggable={!running}
             nodesConnectable={!running}
-            colorMode="light"
+            colorMode={dark ? "dark" : "light"}
           >
-            {dots && <Background gap={20} size={1} color="#c9ccd6" />}
+            {dots && (
+              <Background gap={16} size={1} color={dark ? "#4a4d5e" : "#aaa"} />
+            )}
             <Controls
               position="bottom-center"
               orientation="horizontal"
@@ -652,31 +630,30 @@ export function FlowEditor({ id }: { id: string }) {
                 <Icon name="redo" size={16} />
               </ControlButton>
               <ControlButton
-                title="Ajustar à grade"
-                aria-label="Ajustar à grade"
+                title="Alinhar à grade"
+                aria-label="Alinhar à grade"
                 className={snap ? "active" : ""}
                 onClick={() => setSnap(!snap)}
               >
-                <Icon name="grid" size={16} />
+                <Icon name="magnet" size={16} />
               </ControlButton>
               <ControlButton
-                title="Mostrar grade"
-                aria-label="Mostrar grade"
+                title="Mostrar fundo"
+                aria-label="Mostrar fundo"
                 className={dots ? "active" : ""}
                 onClick={() => setDots(!dots)}
               >
-                <Icon name="more" size={16} />
+                <Icon name="artboard" size={16} />
               </ControlButton>
             </Controls>
             <MiniMap
               position="bottom-left"
               pannable
               zoomable
-              nodeColor={(n) => NODE_STYLE[(n.data as Block["data"]).kind].soft}
-              nodeStrokeColor={(n) =>
-                NODE_STYLE[(n.data as Block["data"]).kind].color
-              }
-              nodeStrokeWidth={2}
+              nodeColor={(n) => NODE_STYLE[(n.data as Block["data"]).kind].color}
+              nodeStrokeColor={dark ? "#525252" : "#fff"}
+              nodeStrokeWidth={3}
+              maskColor={dark ? "#2d2d2d99" : "#f0f0f099"}
             />
           </ReactFlow>
           <div className="canvas-left-actions">
@@ -684,19 +661,26 @@ export function FlowEditor({ id }: { id: string }) {
               className={"add-node-button" + (palette ? " active" : "")}
               title="Adicionar bloco"
               aria-label="Adicionar bloco"
-              onClick={() => setPalette(!palette)}
+              onClick={() => (palette ? closePalette() : setPalette(true))}
             >
               <Icon name={palette ? "close" : "plus"} size={23} />
             </button>
           </div>
           {palette && (
-            <aside className="node-palette">
+            <aside
+              className={"node-palette" + (pending ? " anchored" : "")}
+              style={
+                pending
+                  ? { left: pending.screen.x, top: pending.screen.y }
+                  : undefined
+              }
+            >
               <header>
-                <h2>Adicionar blocos</h2>
+                <h2>{pending ? "Próximo bloco" : "Adicionar blocos"}</h2>
                 <IconButton
                   icon="close"
                   label="Fechar biblioteca"
-                  onClick={() => setPalette(false)}
+                  onClick={closePalette}
                 />
               </header>
               <label className="studio-search">
@@ -721,6 +705,7 @@ export function FlowEditor({ id }: { id: string }) {
                       .filter(
                         (k) =>
                           NODE_STYLE[k].group === group &&
+                          !(pending && k === "start") &&
                           (BLOCKS[k].label + " " + BLOCKS[k].help)
                             .toLowerCase()
                             .includes(search.toLowerCase()),
@@ -736,10 +721,7 @@ export function FlowEditor({ id }: { id: string }) {
                         >
                           <span
                             className="palette-node-icon"
-                            style={{
-                              color: NODE_STYLE[k].color,
-                              background: NODE_STYLE[k].soft,
-                            }}
+                            style={{ background: NODE_STYLE[k].color }}
                           >
                             <Icon name={k} size={21} />
                           </span>
@@ -755,25 +737,9 @@ export function FlowEditor({ id }: { id: string }) {
               </div>
             </aside>
           )}
-          {selectedEdge && (
-            <div className="selected-edge-action">
-              <span>Conexão selecionada</span>
-              <button
-                onClick={() => {
-                  commit({
-                    ...graph,
-                    edges: graph.edges.filter((e) => e.id !== selectedEdge),
-                  });
-                  setSelectedEdge(null);
-                }}
-              >
-                <Icon name="trash" size={15} />
-                Excluir conexão
-              </button>
-            </div>
-          )}
           <div className="canvas-help">
-            Clique duas vezes em um bloco para editar
+            Arraste a seta de um bloco para conectar · clique duas vezes para
+            editar
           </div>
           {!chat && !history && (
             <button className="chat-launcher" onClick={() => setChat(true)}>
@@ -968,6 +934,36 @@ export function FlowEditor({ id }: { id: string }) {
             })
           }
         />
+      )}
+      {info && (
+        <Modal title={BLOCKS[info].label} onClose={() => setInfo(null)}>
+          <div className="node-dialog-type">
+            <span style={{ background: NODE_STYLE[info].color }}>
+              <Icon name={info} size={24} />
+            </span>
+            <div>
+              <strong>{BLOCKS[info].label}</strong>
+              <p>{BLOCKS[info].help}</p>
+            </div>
+          </div>
+          <p>
+            {outputLabel(info, "yes")
+              ? `Este bloco tem duas saídas (${outputLabel(info, "yes")} e ${outputLabel(info, "no")}). Conecte cada uma ao próximo passo.`
+              : info === "loop"
+                ? "Repetir volta a uma etapa anterior pela saída Repetir até o limite e então segue pela saída Concluir."
+                : info === "end"
+                  ? "A Resposta encerra o fluxo e entrega o texto final a quem chamou."
+                  : "Conecte a saída deste bloco ao próximo passo do fluxo."}
+          </p>
+          <div className="modal-actions">
+            <button
+              className="studio-button primary"
+              onClick={() => setInfo(null)}
+            >
+              Entendi
+            </button>
+          </div>
+        </Modal>
       )}
       {connect && (
         <ChatGPTConnection

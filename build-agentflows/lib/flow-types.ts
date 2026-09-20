@@ -51,6 +51,7 @@ export type Block = {
   id: string;
   type: "block";
   position: { x: number; y: number };
+  selected?: boolean;
   data: { kind: Kind; label: string; config: Record<string, string> };
 };
 export type Link = {

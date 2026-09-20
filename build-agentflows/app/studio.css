@@ -978,7 +978,8 @@
   width: 36px;
   height: 36px;
   flex-shrink: 0;
-  border-radius: 10px;
+  border-radius: 12px;
+  color: white;
 }
 .node-palette strong {
   display: block;
@@ -996,108 +997,251 @@
   color: var(--studio-muted);
   flex-shrink: 0;
 }
-.agent-node {
+/* Blocos, alças e conexões no estilo Flowise Agentflows v2 */
+.af-node {
+  --node-soft: color-mix(in srgb, var(--node-color) 10%, var(--studio-surface));
+  --node-hover: color-mix(in srgb, var(--node-color) 20%, var(--studio-surface));
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  width: 250px;
-  min-height: 86px;
+  width: max-content;
+  max-width: 300px;
+  min-height: 60px;
+  padding: 10px;
+  border-radius: 12px;
   background: var(--node-soft);
-  border: 1px solid color-mix(in srgb, var(--node-color) 55%, white);
-  border-radius: 14px;
-  padding: 17px 20px 17px 15px;
-  color: #31354b;
-  position: relative;
-  box-shadow: 0 2px 4px #27314703;
+  border: 1px solid color-mix(in srgb, var(--node-color) 50%, transparent);
+  color: var(--studio-ink);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
-.agent-node.selected {
-  box-shadow: 0 0 0 2px var(--node-color);
+.af-node.hover {
+  background: var(--node-hover);
+  border-color: color-mix(in srgb, var(--node-color) 80%, transparent);
+}
+.af-node.selected {
   border-color: var(--node-color);
+  box-shadow: 0 0 0 1px var(--node-color);
 }
-.agent-node-icon {
+.af-node-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.af-node-icon {
   display: grid;
   place-items: center;
-  width: 43px;
-  height: 43px;
+  width: 40px;
+  height: 40px;
+  border-radius: 15px;
   background: var(--node-color);
   color: white;
-  border-radius: 12px;
   flex-shrink: 0;
+  cursor: grab;
 }
-.agent-node-copy {
+.af-node-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   min-width: 0;
+  padding-right: 6px;
 }
-.agent-node strong {
-  display: block;
-  font-size: 12px;
-  font-weight: 650;
-  max-width: 158px;
+.af-node-text strong {
+  font-size: 13.6px;
+  font-weight: 500;
+  max-width: 210px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.agent-node-caption {
+.af-pills {
   display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 7px;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 220px;
 }
-.agent-node-caption > span {
-  display: flex;
+.af-pill {
+  display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 8px;
-  border-radius: 6px;
-  padding: 2px 5px;
-  background: #ffffffa8;
-  color: #626980;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 16px;
+  background: #ffffffe6;
+  color: var(--studio-ink);
+  font-size: 11px;
+  width: max-content;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.studio-canvas .react-flow__handle {
-  width: 8px;
-  height: 8px;
-  border: 1.5px solid var(--node-color);
-  background: white;
+.af-pill.tool {
+  height: 20px;
+  font-size: 10px;
 }
-.studio-canvas .react-flow__edge-path {
-  stroke: #a9acc0;
-  stroke-width: 1.5;
+:root[data-studio-theme="dark"] .af-pill {
+  background: #ffffff33;
 }
-.studio-canvas .react-flow__edge.selected .react-flow__edge-path {
-  stroke: var(--studio-primary);
-  stroke-width: 2;
-}
-.studio-canvas .react-flow__connection-path {
-  stroke: var(--studio-primary);
-  stroke-width: 2;
-}
-.branch-label {
-  position: absolute;
-  right: 8px;
-  font-size: 7px;
-  color: var(--node-color);
-  background: var(--node-soft);
-  padding: 0 2px;
-}
-.agent-node:has(.branch-label) {
-  width: 265px;
-  padding-right: 38px;
-}
-.node-hover-toolbar {
+.af-toolbar {
   display: flex;
-  gap: 2px;
-  padding: 4px;
-  border: 1px solid var(--studio-line);
+  gap: 4px;
+  padding: 5px;
+  border-radius: 10px;
   background: var(--studio-surface);
-  box-shadow: var(--studio-shadow);
-  border-radius: 9px;
+  box-shadow: 0 2px 14px 0 #20282d14;
 }
-.node-hover-toolbar .studio-icon-button {
+.af-toolbar .studio-icon-button {
   width: 30px;
   height: 30px;
 }
-.node-hover-toolbar svg {
-  width: 16px;
-  height: 16px;
+.af-toolbar svg {
+  width: 17px;
+  height: 17px;
+}
+.studio-canvas .react-flow__handle.af-handle-in {
+  width: 5px;
+  height: 20px;
+  min-width: 0;
+  min-height: 0;
+  left: -2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.af-handle-in > span {
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  background: var(--node-color);
+  pointer-events: none;
+  transition: background 0.15s;
+}
+.af-handle-in.react-flow__handle-valid > span {
+  background: #5dba62;
+}
+.af-handle-in.react-flow__handle-connecting:not(.react-flow__handle-valid) > span {
+  background: #db4e4e;
+}
+.studio-canvas .react-flow__handle.af-handle-out {
+  width: 20px;
+  height: 20px;
+  min-width: 0;
+  min-height: 0;
+  right: -10px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--studio-surface);
+  color: var(--node-color);
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  cursor: crosshair;
+}
+.af-node.hover .af-handle-out,
+.af-node.selected .af-handle-out,
+.react-flow__handle.af-handle-out.connectingfrom {
+  opacity: 1;
+}
+.af-handle-out > svg {
+  pointer-events: none;
+  position: relative;
+  z-index: 1;
+}
+.af-handle-label {
+  position: absolute;
+  left: 25px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--node-color);
+  background: var(--studio-surface);
+  border: 1px solid color-mix(in srgb, var(--node-color) 40%, transparent);
+  border-radius: 6px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.af-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 15;
+  cursor: pointer;
+}
+.af-edge {
+  fill: none;
+  stroke-width: 2;
+  opacity: 0.75;
+  cursor: pointer;
+  transition:
+    opacity 0.15s,
+    stroke-width 0.15s;
+}
+.af-edge-hit:hover + .af-edge,
+.af-edge:hover,
+.af-edge.selected {
+  stroke-width: 3;
+  opacity: 1;
+}
+.af-edge.selected {
+  filter: drop-shadow(0 0 3px #0000004d);
+}
+.af-edge.active {
+  stroke-dasharray: 6 4;
+  animation: af-dash 0.8s linear infinite;
+}
+@keyframes af-dash {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+.af-connection path:first-child {
+  stroke-dasharray: 5 3;
+  animation: af-dash 0.6s linear infinite;
+}
+.af-edge-label {
+  position: absolute;
+  font-size: 9px;
+  font-weight: 700;
+  pointer-events: none;
+  z-index: 1000;
+}
+.af-edge-remove {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  pointer-events: all;
+  z-index: 1001;
+}
+.af-edge-remove button {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: white;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 4px #0000004d;
+  cursor: pointer;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+.af-edge-remove button:hover,
+.af-edge-remove button:focus-visible {
+  transform: scale(1.25);
+  box-shadow: 0 0 8px #0006;
+}
+.node-palette.anchored {
+  top: auto;
+  max-height: 400px;
 }
 .studio-canvas .react-flow__controls {
   border: 1px solid var(--studio-line);
@@ -1337,26 +1481,6 @@
   margin-left: 10px;
   flex-shrink: 0;
 }
-.selected-edge-action {
-  position: absolute;
-  top: 65px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  font-size: 10px;
-  border: 1px solid var(--studio-line);
-  border-radius: 8px;
-  background: var(--studio-surface);
-  padding: 9px 12px;
-  box-shadow: var(--studio-shadow);
-}
-.selected-edge-action button {
-  display: flex;
-  gap: 5px;
-  color: #b54a5c;
-}
 .node-execution-badge {
   position: absolute;
   right: -8px;
@@ -1391,7 +1515,8 @@
   width: 48px;
   height: 48px;
   flex-shrink: 0;
-  border-radius: 12px;
+  border-radius: 15px;
+  color: white;
 }
 .node-dialog-type strong {
   font-size: 13px;
@@ -2141,11 +2266,6 @@
   }
   .connect-intro h3 {
     font-size: 18px;
-  }
-  .selected-edge-action {
-    top: 75px;
-    white-space: nowrap;
-    font-size: 9px;
   }
   .library-empty {
     padding: 50px 18px;

@@ -40,7 +40,14 @@ export type IconName =
   | "moon"
   | "sun"
   | "logout"
-  | "book";
+  | "book"
+  | "magnet"
+  | "artboard"
+  | "info"
+  | "eraser"
+  | "expand"
+  | "pencil"
+  | "history";
 const paths: Record<string, ReactNode> = {
   flows: (
     <>
@@ -153,6 +160,27 @@ const paths: Record<string, ReactNode> = {
   book: (
     <path d="M12 5C8 2 4 3 2 4v16c4-2 7-1 10 1 3-2 6-3 10-1V4c-2-1-6-2-10 1v16" />
   ),
+  magnet: (
+    <path d="M4 3h4v9a4 4 0 0 0 8 0V3h4v9a8 8 0 0 1-16 0zM4 8h4m8 0h4" />
+  ),
+  artboard: (
+    <>
+      <rect x="8" y="8" width="8" height="8" rx="1" />
+      <path d="M3 8h2m14 0h2M3 16h2m14 0h2M8 3v2m8-2v2M8 19v2m8-2v2" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8h.01M11 12h1v4h1" />
+    </>
+  ),
+  eraser: (
+    <path d="m19 20-9 0M5 14l9-9 6 6-7 7H8zM12 7l6 6" />
+  ),
+  expand: <path d="M16 4h4v4m-4-4-6 6M8 20H4v-4m4 4 6-6" />,
+  pencil: <path d="M4 20h4L19 9a2.1 2.1 0 0 0-4-4L4 16zm9.5-13.5 4 4" />,
+  history: <path d="M12 8v4l3 3M3.05 11a9 9 0 1 0 .5-4M3 3v5h5" />,
 };
 export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   return (
