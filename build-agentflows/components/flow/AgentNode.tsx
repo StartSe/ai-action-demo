@@ -105,22 +105,37 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
               </button>
             </span>
           ) : (
-            <input
-              autoFocus
-              className="af-node-rename nodrag nopan"
-              value={editing}
-              maxLength={100}
-              aria-label="Nome do bloco"
-              onChange={(e) => setEditing(e.target.value)}
-              onBlur={finishRename}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") finishRename();
-                if (e.key === "Escape") setEditing(null);
-                e.stopPropagation();
-              }}
-              onDoubleClick={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-            />
+            <span className="af-node-title">
+              <input
+                autoFocus
+                className="af-node-rename nodrag nopan"
+                value={editing}
+                maxLength={100}
+                aria-label="Nome do bloco"
+                onChange={(e) => setEditing(e.target.value)}
+                onBlur={finishRename}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") finishRename();
+                  if (e.key === "Escape") setEditing(null);
+                  e.stopPropagation();
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              />
+              <button
+                type="button"
+                className="af-node-pencil af-node-ok nodrag"
+                title="Salvar nome"
+                aria-label="Salvar nome"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  finishRename();
+                }}
+              >
+                <Icon name="check" size={13} />
+              </button>
+            </span>
           )}
           {(data.kind === "agent" || data.kind === "llm") && (
             <span className="af-pill" title={modelProvider(data.config.model)}>

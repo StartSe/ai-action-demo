@@ -24,6 +24,8 @@ export const NODE_STYLE: Record<
   whatsapp: style("#25D366", "Canais"),
   call: style("#F4A261", "Canais"),
 };
+// Ferramentas, WhatsApp e ligações vivem dentro do Agente e em Implantar; não entram na paleta.
+export const PALETTE_HIDDEN: Kind[] = ["tool", "whatsapp", "call"];
 export const PRESETS = [
   {
     id: "support",
