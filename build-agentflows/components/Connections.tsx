@@ -33,6 +33,7 @@ type Status = {
     campos: CampoStatus[];
     aviso: string;
   };
+  ligacao: { configurada: boolean; fluxo: string | null; campos: CampoStatus[]; aviso: string };
 };
 type Resultado = { ok: boolean; mensagem: string };
 function Card({
@@ -186,26 +187,6 @@ export function Connections() {
           {c.ajuda && <small>{c.ajuda}</small>}
         </label>
       ));
-  }
-  function flowSelect(key: "WHATSAPP_FLOW_ID" | "ELEVENLABS_FLOW_ID", value: string | null, label: string) {
-    const published = flows.filter((f) => f.published);
-    return (
-      <label>
-        {label}
-        <select
-          value={drafts[key] ?? value ?? ""}
-          onChange={(e) => setDrafts({ ...drafts, [key]: e.target.value })}
-        >
-          <option value="">Nenhum</option>
-          {published.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name} · v{f.version}
-            </option>
-          ))}
-        </select>
-        <small>Só fluxos publicados aparecem aqui.</small>
-      </label>
-    );
   }
   function result(id: string) {
     const r = results[id];
@@ -419,11 +400,12 @@ export function Connections() {
                           c.chave === "WHATSAPP_PHONE_NUMBER_ID"
                         : c.chave.startsWith("ZAPPERHUB_"),
                   )}
-                {flowSelect(
-                  "WHATSAPP_FLOW_ID",
-                  status.whatsapp.fluxo,
-                  "Fluxo que responde às mensagens recebidas",
-                )}
+                <p className="connection-note">
+                  {status.whatsapp.fluxo
+                    ? `Fluxo vinculado: ${flows.find((f) => f.id === status.whatsapp.fluxo)?.name || "(removido)"}. `
+                    : "Nenhum fluxo vinculado ainda. "}
+                  O vínculo é feito em Implantar › WhatsApp, dentro de cada fluxo.
+                </p>
                 {provedor && (
                   <div className="connection-hint">
                     <strong>
@@ -453,10 +435,7 @@ export function Connections() {
                     className="studio-button primary"
                     disabled={busy === "save"}
                     onClick={() =>
-                      save([
-                        ...status.whatsapp.campos.map((c) => c.chave),
-                        "WHATSAPP_FLOW_ID",
-                      ])
+                      save(status.whatsapp.campos.map((c) => c.chave))
                     }
                   >
                     Salvar
@@ -477,37 +456,16 @@ export function Connections() {
             icon={<Icon name="play" size={22} />}
             title="ElevenLabs (voz)"
             connected={!!status?.elevenlabs.configurado}
-            description="Fale com o fluxo no chat, ouça a resposta e faça ligações por voz com um agente de conversa."
+            description="Fale com o fluxo no chat e ouça a resposta com a voz escolhida em cada fluxo. Ligações são configuradas em Implantar."
           >
             {status && (
               <div className="node-fields">
                 {fields(status.elevenlabs.campos)}
-                {flowSelect(
-                  "ELEVENLABS_FLOW_ID",
-                  status.elevenlabs.fluxo,
-                  "Fluxo executado ao fim de cada ligação",
-                )}
-                <div className="connection-hint">
-                  <strong>Endereço do aviso de fim de ligação</strong>
-                  <code>{status.elevenlabs.aviso}</code>
-                  <div className="studio-actions">
-                    <CopyButton text={status.elevenlabs.aviso} label="Copiar endereço" />
-                  </div>
-                  <small>
-                    Cole em Conversational AI › Settings › Post-call webhook e copie o segredo
-                    gerado lá para o campo acima.
-                  </small>
-                </div>
                 <div className="studio-actions">
                   <button
                     className="studio-button primary"
                     disabled={busy === "save"}
-                    onClick={() =>
-                      save([
-                        ...status.elevenlabs.campos.map((c) => c.chave),
-                        "ELEVENLABS_FLOW_ID",
-                      ])
-                    }
+                    onClick={() => save(status.elevenlabs.campos.map((c) => c.chave))}
                   >
                     Salvar
                   </button>

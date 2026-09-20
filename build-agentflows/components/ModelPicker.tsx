@@ -5,8 +5,10 @@ export type ChatModel = { id: string; name: string };
 export type RouterModel = { id: string; nome: string; provedor: string };
 const PREFIX = "openrouter:";
 // Nome curto de um modelo salvo no bloco, para a pílula do bloco e a lista.
+export const OPENROUTER_AUTO = PREFIX + "openrouter/auto";
 export function modelLabel(model?: string) {
   if (!model) return "ChatGPT";
+  if (model === OPENROUTER_AUTO) return "OpenRouter automático";
   if (model.startsWith(PREFIX)) {
     const id = model.slice(PREFIX.length);
     return id.includes("/") ? id.split("/").slice(1).join("/") : id;
@@ -55,6 +57,7 @@ export function ModelPicker({
   }, [filtered]);
   const known =
     !value ||
+    value === OPENROUTER_AUTO ||
     chatModels.some((m) => m.id === value) ||
     (router || []).some((m) => PREFIX + m.id === value);
   return (
@@ -77,6 +80,13 @@ export function ModelPicker({
             </option>
           ))}
         </optgroup>
+        {router && router.length > 0 && (
+          <optgroup label="OpenRouter · automático">
+            <option value={OPENROUTER_AUTO}>
+              Automático · OpenRouter escolhe o melhor modelo
+            </option>
+          </optgroup>
+        )}
         {groups.map(([provider, models]) => (
           <optgroup key={provider} label={"OpenRouter · " + provider}>
             {models.map((m) => (

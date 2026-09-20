@@ -836,6 +836,7 @@ export function FlowEditor({ id }: { id: string }) {
               connected={!!connection?.account}
               expanded={expanded}
               voice={voice.voz}
+              flowId={id}
               onDemo={setDemo}
               onSend={(text) => void execute(text)}
               onChange={updateRun}

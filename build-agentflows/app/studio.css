@@ -2030,6 +2030,49 @@
   color: #b54a5c;
   font-weight: 600;
 }
+.integration-call-test {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--studio-line);
+  font-size: 11px;
+}
+.integration-call-test strong {
+  display: block;
+  margin-bottom: 8px;
+}
+.integration-call-test input {
+  flex: 1;
+  min-width: 180px;
+  padding: 9px 12px;
+  border: 1px solid var(--studio-line);
+  border-radius: 9px;
+  background: var(--studio-surface);
+  color: var(--studio-ink);
+}
+.integration-section a {
+  color: var(--studio-primary);
+  font-weight: 650;
+}
+.connection-note {
+  font-size: 11px;
+  color: var(--studio-muted);
+}
+.voice-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--studio-muted);
+}
+.voice-pick select {
+  font-size: 10px;
+  padding: 3px 6px;
+  border: 1px solid var(--studio-line);
+  border-radius: 6px;
+  background: var(--studio-surface);
+  color: var(--studio-ink);
+  max-width: 160px;
+}
 .chat-toggles {
   display: flex;
   flex-wrap: wrap;
