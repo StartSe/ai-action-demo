@@ -143,3 +143,41 @@ em 20/09/2026 (versão 0.3.0), com verificação visual por Playwright.
 - Ligações recebidas atendidas diretamente pelo fluxo (hoje o agente de
   conversa da ElevenLabs atende e o fluxo recebe a transcrição ao final).
 - Modelos de exemplo com WhatsApp e voz.
+
+# Rodada 3 (20/09/2026): acabamento para executivos
+
+Concluída na versão 0.4.0, com testes e verificação visual por Playwright.
+
+## A. Editor
+
+- Limpar conversa pede confirmação; sair com alterações abre um modal no
+  padrão da interface (continuar, sair sem salvar, salvar e sair).
+- Botão Salvar inativo quando não há mudanças; qualquer alteração o reativa.
+- Renomear o bloco salva com Enter ou pelo check, no cabeçalho do bloco e no
+  título do diálogo.
+- Paleta sem o "+" por item e sem os blocos Ferramenta, Enviar WhatsApp e
+  Ligação por voz (ferramentas vivem no Agente; canais em Implantar).
+
+## B. Ferramentas como no Flowise
+
+- Catálogo por categoria com os mesmos serviços: Tavily, SearchApi, Exa,
+  Serper, SerpApi, Brave, Google Custom Search, SearXNG, arXiv, Wolfram Alpha,
+  ler página, requisição HTTP, extrair JSON, data e hora, calculadora,
+  executar fluxo, enviar WhatsApp e ligar por voz.
+- Credencial pedida dentro do Agente na primeira vez; vale para todos os fluxos.
+
+## C. Provedores e canais
+
+- "Automático · OpenRouter" no seletor de modelo.
+- ElevenLabs em Conexões só com a chave e o teste; a voz é escolhida no chat de
+  cada fluxo ao ligar "Ouvir respostas".
+- Implantar ganha as abas WhatsApp (vincular este fluxo ao número) e Ligações
+  (agente, número, segredo, vínculo da transcrição e ligar agora).
+
+## Fora do recorte da rodada 3
+
+- Ferramentas do Flowise que dependem de OAuth de terceiros (Gmail, Google
+  Agenda/Planilhas/Drive, Jira, Slack, Teams, Outlook): entram por servidores
+  MCP em Conexões.
+- Ferramentas que exigem navegador ou execução de código (Web Browser, Code
+  Interpreter).
