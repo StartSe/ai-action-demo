@@ -1423,6 +1423,21 @@
   background: #ffffffb3;
   color: var(--studio-ink);
 }
+.af-node-ok {
+  opacity: 1 !important;
+  color: white;
+  background: var(--node-color);
+}
+.af-node-ok:hover {
+  background: var(--node-color);
+  filter: brightness(0.95);
+}
+.save-button.saved:disabled {
+  background: var(--studio-line);
+  color: var(--studio-muted);
+  box-shadow: none;
+  opacity: 1;
+}
 .af-node-rename {
   font-size: 13.6px;
   font-weight: 500;

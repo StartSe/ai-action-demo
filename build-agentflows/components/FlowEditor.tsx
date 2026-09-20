@@ -24,7 +24,7 @@ import {
   type Graph,
   type Run,
 } from "@/lib/flow-types";
-import { NODE_STYLE } from "@/lib/flow-presets";
+import { NODE_STYLE, PALETTE_HIDDEN } from "@/lib/flow-presets";
 import {
   connect as connectGraph,
   connectionProblem,
@@ -91,6 +91,8 @@ export function FlowEditor({ id }: { id: string }) {
   const [pending, setPending] = useState<Pending | null>(null);
   const [info, setInfo] = useState<Kind | null>(null);
   const [generator, setGenerator] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [clearChat, setClearChat] = useState(false);
   const [dark, setDark] = useState(false);
   const [voice, setVoice] = useState({ voz: false, ligacao: false });
   const { connection, setConnection } = useChatGPT();
@@ -489,8 +491,8 @@ export function FlowEditor({ id }: { id: string }) {
           icon="arrow"
           label="Voltar aos fluxos"
           onClick={() => {
-            if (!dirty || window.confirm("Sair sem salvar as alterações?"))
-              router.push("/");
+            if (dirty) setLeaving(true);
+            else router.push("/");
           }}
         />
         <div className="canvas-title">
@@ -573,8 +575,9 @@ export function FlowEditor({ id }: { id: string }) {
             </div>
           </details>
           <button
-            className="studio-button primary"
-            disabled={busy || running}
+            className={"studio-button primary save-button" + (dirty ? "" : " saved")}
+            disabled={!dirty || busy || running}
+            title={dirty ? "Salvar alterações" : "Tudo salvo"}
             onClick={() =>
               act(async () => {
                 await save();
@@ -765,7 +768,6 @@ export function FlowEditor({ id }: { id: string }) {
                   "Agentes e IA",
                   "Controle de fluxo",
                   "Dados e integrações",
-                  "Canais",
                 ].map((group) => (
                   <details key={group} open>
                     <summary>
@@ -776,6 +778,7 @@ export function FlowEditor({ id }: { id: string }) {
                       .filter(
                         (k) =>
                           NODE_STYLE[k].group === group &&
+                          !PALETTE_HIDDEN.includes(k) &&
                           !(pending && k === "start") &&
                           (BLOCKS[k].label + " " + BLOCKS[k].help)
                             .toLowerCase()
@@ -800,7 +803,6 @@ export function FlowEditor({ id }: { id: string }) {
                             <strong>{BLOCKS[k].label}</strong>
                             <small>{BLOCKS[k].help}</small>
                           </span>
-                          <Icon name="plus" size={15} />
                         </button>
                       ))}
                   </details>
@@ -839,10 +841,7 @@ export function FlowEditor({ id }: { id: string }) {
               onChange={updateRun}
               onConnect={() => setConnect(true)}
               onClose={() => setChat(false)}
-              onClear={() => {
-                setSession([]);
-                setRun(null);
-              }}
+              onClear={() => setClearChat(true)}
               onExpand={() => setExpanded(!expanded)}
             />
           )}
@@ -930,6 +929,64 @@ export function FlowEditor({ id }: { id: string }) {
             setNotice("Bloco atualizado. Salve o fluxo para manter.");
           }}
         />
+      )}
+      {leaving && (
+        <Modal title="Sair sem salvar?" onClose={() => setLeaving(false)}>
+          <p>
+            Há alterações não salvas em “{flow.name}”. Você pode salvar antes de
+            sair ou descartar o que mudou.
+          </p>
+          <div className="modal-actions">
+            <button className="studio-button" onClick={() => setLeaving(false)}>
+              Continuar editando
+            </button>
+            <button
+              className="studio-button danger"
+              onClick={() => {
+                setDirty(false);
+                router.push("/");
+              }}
+            >
+              Sair sem salvar
+            </button>
+            <button
+              className="studio-button primary"
+              disabled={busy}
+              onClick={() =>
+                act(async () => {
+                  await save();
+                  router.push("/");
+                })
+              }
+            >
+              Salvar e sair
+            </button>
+          </div>
+        </Modal>
+      )}
+      {clearChat && (
+        <Modal title="Limpar a conversa?" onClose={() => setClearChat(false)}>
+          <p>
+            As mensagens deste teste somem do chat. As execuções continuam no
+            histórico do fluxo.
+          </p>
+          <div className="modal-actions">
+            <button className="studio-button" onClick={() => setClearChat(false)}>
+              Cancelar
+            </button>
+            <button
+              className="studio-button primary"
+              onClick={() => {
+                setSession([]);
+                setRun(null);
+                setClearChat(false);
+                setNotice("Conversa limpa.");
+              }}
+            >
+              Limpar conversa
+            </button>
+          </div>
+        </Modal>
       )}
       {info && (
         <Modal title={BLOCKS[info].label} onClose={() => setInfo(null)}>

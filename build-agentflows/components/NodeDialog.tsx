@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { BLOCKS, type Block, type Kind } from "@/lib/flow-types";
 import { NODE_STYLE } from "@/lib/flow-presets";
-import { Icon, Modal, request } from "./StudioUI";
+import { Icon, IconButton, Modal, request } from "./StudioUI";
 import { ReferenceField, type Reference } from "./ReferenceField";
 import { ModelPicker } from "./ModelPicker";
 const fields: Record<Kind, string[]> = {
@@ -111,6 +111,13 @@ export function NodeDialog({
       ).join(","),
     );
   }
+  function saveAndClose() {
+    onSave({
+      ...draft,
+      data: { ...draft.data, label: draft.data.label.trim() },
+    });
+    onClose();
+  }
   const known = new Set((groups || []).flatMap((g) => g.tools.map((t) => t.id)));
   const orphan = selected.filter((id) => !known.has(id));
   const stateKeys = new Set<string>();
@@ -157,8 +164,19 @@ export function NodeDialog({
                 data: { ...draft.data, label: e.target.value },
               })
             }
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && draft.data.label.trim()) {
+                e.preventDefault();
+                saveAndClose();
+              }
+            }}
           />
-          <Icon name="pencil" size={15} />
+          <IconButton
+            icon="check"
+            label="Salvar bloco"
+            disabled={!draft.data.label.trim()}
+            onClick={saveAndClose}
+          />
         </label>
       }
       onClose={onClose}
@@ -336,13 +354,7 @@ export function NodeDialog({
         <button
           className="studio-button primary"
           disabled={!draft.data.label.trim()}
-          onClick={() => {
-            onSave({
-              ...draft,
-              data: { ...draft.data, label: draft.data.label.trim() },
-            });
-            onClose();
-          }}
+          onClick={saveAndClose}
         >
           Salvar bloco
         </button>
