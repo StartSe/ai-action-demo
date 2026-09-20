@@ -6,7 +6,7 @@ Crie fluxos visuais de agentes de IA, teste cada etapa e publique versões que s
 
 Um quadro visual conecta dez tipos de bloco: Início, Gerar com IA, Agente, Condição, Atualizar estado, Requisição HTTP, Ferramenta MCP, Aprovação humana, Repetir e Resposta. O agente escolhe ferramentas autorizadas e incorpora seus resultados, em até 12 chamadas por etapa. As conexões determinam o caminho; condições e aprovações possuem saídas Sim/Não, e repetições têm saídas Repetir/Concluir.
 
-O editor permite arrastar, conectar, remover, configurar, importar e exportar fluxos. Salvar altera o rascunho; publicar cria uma cópia estável para integrações. Testes usam o rascunho. Cada execução guarda entrada, saída, versão, estado e registro de etapas em SQLite. Aprovações persistem após reinício e aceitam uma única decisão. Execuções que estavam rodando no momento do reinício são marcadas como interrompidas para não repetir ações externas silenciosamente.
+O editor segue a experiência do Agentflow V2: blocos compactos coloridos, alça de entrada em barra, saídas em seta que aparecem ao passar o mouse, conexões com gradiente entre as cores dos blocos e botão para removê-las, rótulo do ramo (Sim, Não, Repetir, Concluir) junto à origem. Arraste uma saída para outro bloco para conectar; solte no vazio para escolher o próximo bloco já conectado. Cada saída aceita uma conexão e ciclos só existem pela saída Repetir. O botão ✨ abre "O que você quer construir?": o ChatGPT desenha blocos, conexões e instruções a partir de uma descrição, com prévia antes de ir para o quadro. Salvar altera o rascunho; publicar cria uma cópia estável para integrações. Testes usam o rascunho pelo chat no canto superior direito, com histórico da sessão, etapas executadas e aprovação em linha. Cada execução guarda entrada, saída, versão, estado e registro de etapas em SQLite. Aprovações persistem após reinício e aceitam uma única decisão. Execuções que estavam rodando no momento do reinício são marcadas como interrompidas para não repetir ações externas silenciosamente.
 
 Ao selecionar explicitamente a simulação, os fluxos rodam em demonstração: agentes devolvem respostas ilustrativas e nenhuma chamada HTTP ou ferramenta externa é executada. Também é possível selecionar a simulação mesmo com IA conectada. `/?exemplo=1` cria um exemplo de triagem quando ainda não há fluxos.
 
@@ -43,7 +43,7 @@ O push na `main` publica `ghcr.io/startse/build-agentflows:latest` pelo workflow
 
 ## Integração
 
-Gere um código em **Integrar fluxo**, no cabeçalho do editor. Ele autentica tanto MCP quanto HTTP; revogação e rotação valem para os dois. É um acesso administrativo a esta instalação, não uma chave isolada por fluxo.
+Gere um código em **Implantar fluxo**, no cabeçalho do editor. O diálogo tem abas Publicação, cURL, JavaScript, Python e Assistentes (MCP), com exemplos prontos para copiar. Ele autentica tanto MCP quanto HTTP; revogação e rotação valem para os dois. É um acesso administrativo a esta instalação, não uma chave isolada por fluxo.
 
 ```sh
 curl -X POST 'https://SEU-APP/webhook/flows/ID-DO-FLUXO' \
@@ -83,9 +83,16 @@ Implementação própria simplificada, sem copiar código do Flowise. Não é um
 
 ## Estrutura
 
-- `components/FlowEditor.tsx`: quadro, biblioteca e painel de configuração.
-- `components/RunView.tsx`: resultado, etapas e aprovação.
+- `components/FlowEditor.tsx`: quadro, paleta, cabeçalho e histórico.
+- `components/flow/`: bloco (`AgentNode`), conexão (`AgentEdge`) e linha de conexão no estilo Agentflow V2.
+- `components/NodeDialog.tsx`: edição do bloco, com referências e ferramentas por clique.
+- `components/ChatPopup.tsx`: chat de teste em popover.
+- `components/GeneratorDialog.tsx`: gerador de fluxos por IA.
+- `components/IntegrationDialog.tsx`: publicação e opções de implantação.
+- `components/RunView.tsx`: resultado, etapas e aprovação (página de execução).
 - `lib/flow-types.ts`: blocos, grafo e contratos.
+- `lib/flow-graph.ts`: saídas por tipo, validação de conexão e layout automático.
+- `lib/flow-generator.ts`: geração de fluxo pelo ChatGPT e validação da resposta.
 - `lib/flow-store.ts`: validação, versões, persistência e checkpoints.
 - `lib/flow-runtime.ts`: motor, IA, ferramentas e HTTP.
 - `lib/ferramentas.ts`: ferramentas expostas pelo MCP.
@@ -94,6 +101,6 @@ Implementação própria simplificada, sem copiar código do Flowise. Não é um
 
 ## Referência visual e validação
 
-A experiência foi estudada diretamente no [Flowise Agentflows v2](https://github.com/FlowiseAI/Flowise/tree/9291856d1ea4a4ceea9f8fef8ce14f4f6c81e8eb/packages/ui/src/views/agentflowsv2): biblioteca em grade/lista, editor em tela inteira, blocos compactos coloridos, biblioteca flutuante, diálogos de edição, minimapa e painel de conversa. Os componentes são próprios; não é uma reprodução integral do Flowise.
+A experiência foi estudada diretamente no [Flowise Agentflows v2](https://github.com/FlowiseAI/Flowise/tree/9291856d1ea4a4ceea9f8fef8ce14f4f6c81e8eb/packages/ui/src/views/agentflowsv2): biblioteca em grade/lista, editor em tela inteira, blocos compactos com as mesmas cores, alças e conexões com gradiente, paleta flutuante com gerador por IA, diálogo de edição, minimapa, chat em popover e diálogo de implantação com abas. O canvas usa `@xyflow/react` (sucessor do `reactflow` do Flowise); o MUI não entra porque a suíte não usa bibliotecas de UI, e o visual é reproduzido em CSS próprio. Os componentes são próprios; não é uma reprodução integral do Flowise. O plano e o diagnóstico estão em `PLANO.md`.
 
-Os testes cobrem 19 comportamentos do motor e protocolo ChatGPT com subprocesso simulado. O binário oficial foi validado até a leitura de conta sem autenticação. Execução real com assinatura exige conectar uma conta e não é coberta por esses testes automatizados.
+Os testes cobrem 27 comportamentos: motor, protocolo ChatGPT com subprocesso simulado, regras de conexão e layout do grafo e o gerador de fluxos com respostas simuladas. O binário oficial foi validado até a leitura de conta sem autenticação. Execução real com assinatura exige conectar uma conta e não é coberta por esses testes automatizados.
