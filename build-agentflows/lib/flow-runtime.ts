@@ -146,6 +146,17 @@ async function execute(r: Run): Promise<Run> {
         output = r.demo
           ? `[Demonstração] ${n.data.label}\nEntrada analisada: ${message(c, r).slice(0, 600)}\nPrioridade: acompanhar hoje.\nPróxima ação: confirmar os detalhes com a equipe e responder ao solicitante.`
           : await agent(n, r, controller.signal);
+      if (k === "whatsapp") {
+        const para = interpolate(c.to, r),
+          texto = interpolate(c.text, r);
+        if (r.demo)
+          output = `[Demonstração] WhatsApp para ${para}: nenhuma mensagem enviada.\n\n${texto}`;
+        else {
+          const { enviarMensagem } = await import("./whatsapp");
+          await enviarMensagem(para, texto);
+          output = `Mensagem enviada para ${para}.\n\n${texto}`;
+        }
+      }
       if (k === "tool")
         output = r.demo
           ? `[Demonstração] Ferramenta ${c.tool}: nenhuma ação externa realizada.`

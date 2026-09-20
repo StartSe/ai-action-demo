@@ -48,7 +48,8 @@ export type IconName =
   | "expand"
   | "pencil"
   | "history"
-  | "chevron";
+  | "chevron"
+  | "whatsapp";
 const paths: Record<string, ReactNode> = {
   flows: (
     <>
@@ -183,6 +184,12 @@ const paths: Record<string, ReactNode> = {
   pencil: <path d="M4 20h4L19 9a2.1 2.1 0 0 0-4-4L4 16zm9.5-13.5 4 4" />,
   history: <path d="M12 8v4l3 3M3.05 11a9 9 0 1 0 .5-4M3 3v5h5" />,
   chevron: <path d="m9 6 6 6-6 6" />,
+  whatsapp: (
+    <>
+      <path d="M3 21l1.6-4.6A8.5 8.5 0 1 1 8 19.6z" />
+      <path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1a4 4 0 0 1-2-2l1-1-1-2z" />
+    </>
+  ),
 };
 export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   return (

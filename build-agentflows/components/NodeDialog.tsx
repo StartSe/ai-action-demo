@@ -15,6 +15,7 @@ const fields: Record<Kind, string[]> = {
   tool: ["tool", "args"],
   approval: ["prompt"],
   loop: ["limit"],
+  whatsapp: ["to", "text"],
   end: ["text"],
 };
 const labels: Record<string, [string, string]> = {
@@ -41,9 +42,10 @@ const labels: Record<string, [string, string]> = {
   args: ["Argumentos", "JSON com os parâmetros da ferramenta."],
   limit: ["Máximo de repetições", "Entre 1 e 20 passagens."],
   text: ["Resposta final", "Texto entregue a quem chamou o fluxo."],
+  to: ["Número de destino", "Com DDI e DDD, ex.: 5511999990000. Aceita {{state.telefone}}."],
 };
 const TEXTAREAS = ["system", "prompt", "state", "body", "args", "text"];
-const REFERENCES = ["system", "prompt", "value", "compare", "body", "args", "text"];
+const REFERENCES = ["system", "prompt", "value", "compare", "body", "args", "text", "to"];
 const COMPARISONS: [string, string][] = [
   ["contains", "Contém"],
   ["equals", "É igual a"],
@@ -312,6 +314,8 @@ export function NodeDialog({
             )}
             {k === "approval" && key === "prompt" ? (
               <small>Mostrado junto com o resultado, antes da decisão.</small>
+            ) : k === "whatsapp" && key === "text" ? (
+              <small>Mensagem enviada. Em branco não envia nada.</small>
             ) : (
               labels[key][1] && <small>{labels[key][1]}</small>
             )}

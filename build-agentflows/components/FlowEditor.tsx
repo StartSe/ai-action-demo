@@ -759,6 +759,7 @@ export function FlowEditor({ id }: { id: string }) {
                   "Agentes e IA",
                   "Controle de fluxo",
                   "Dados e integrações",
+                  "Canais",
                 ].map((group) => (
                   <details key={group} open>
                     <summary>
