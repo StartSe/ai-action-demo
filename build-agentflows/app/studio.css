@@ -2711,3 +2711,31 @@
     color: #111;
   }
 }
+@media (max-width: 720px) {
+  .chat-popup,
+  .chat-popup.expanded {
+    left: 12px;
+    right: 12px;
+    top: 70px;
+    width: auto;
+    height: calc(100% - 92px);
+  }
+  .node-palette.anchored {
+    left: 12px !important;
+    right: 12px;
+    top: 70px !important;
+    width: auto;
+    max-height: calc(100% - 92px);
+  }
+  .canvas-right-actions {
+    right: 16px;
+    top: 16px;
+  }
+  .canvas-left-actions {
+    left: 16px;
+    top: 16px;
+  }
+  .af-node-text strong {
+    max-width: 160px;
+  }
+}

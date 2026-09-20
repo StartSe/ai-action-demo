@@ -635,7 +635,7 @@ export function FlowEditor({ id }: { id: string }) {
             }
             nodesDraggable={!running}
             nodesConnectable={!running}
-            colorMode={dark ? "dark" : "light"}
+            colorMode="light"
           >
             {dots && (
               <Background gap={16} size={1} color={dark ? "#4a4d5e" : "#aaa"} />

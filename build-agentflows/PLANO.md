@@ -38,7 +38,9 @@ suíte proíbe bibliotecas de UI, e o visual é reproduzido em CSS próprio.
 
 ## Etapas
 
-Cada etapa termina com `npm test`, `npm run lint` e um commit próprio.
+Cada etapa termina com `npm test`, `npm run lint` e um commit próprio. Todas as
+seis foram concluídas em 20/09/2026; a verificação visual foi feita com
+Playwright em tela larga, tema escuro e celular.
 
 1. **Conexões e blocos ao estilo Flowise** — bloco compacto com cores do
    Flowise, alça de entrada em barra, alças de saída em círculo com seta
@@ -59,3 +61,10 @@ Cada etapa termina com `npm test`, `npm run lint` e um commit próprio.
 5. **Opções de implantação** — diálogo com abas (Publicação, cURL, JavaScript,
    Python, MCP) e estado de publicação no cabeçalho.
 6. **Fechamento** — README, CLAUDE.md, verificações da suíte, versão.
+
+## Fora do recorte (próximos passos possíveis)
+
+- Página pública de chat para compartilhar um fluxo publicado (Share Chatbot
+  do Flowise).
+- Início por formulário ou agendamento, além da conversa.
+- Notas adesivas no quadro e bloco de iteração sobre listas.
