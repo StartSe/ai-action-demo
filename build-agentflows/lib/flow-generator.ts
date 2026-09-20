@@ -17,6 +17,7 @@ const FIELDS: Record<Kind, string> = {
   http: "url (endereço fixo https), method (GET | POST | PUT | PATCH | DELETE), body (JSON)",
   tool: "tool (nome da ferramenta), args (JSON)",
   approval: "prompt (o que a pessoa deve revisar)",
+  whatsapp: "to (número com DDI e DDD; use {{state.telefone}} ou o número fixo), text (mensagem; use {{last}})",
   loop: "limit (número de 1 a 20)",
   end: "text (resposta final; use {{last}} ou {{nodes.id}})",
 };

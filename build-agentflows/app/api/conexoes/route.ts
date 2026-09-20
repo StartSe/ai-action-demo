@@ -7,7 +7,19 @@ export async function GET(req: Request) {
 }
 export async function PUT(req: Request) {
   return api(async () => {
-    salvarCampos((await body(req)).campos);
-    return statusConexoes(baseUrl(req));
+    const campos = (await body(req)).campos as Record<string, unknown> | undefined;
+    salvarCampos(campos);
+    // Ao salvar o WhatsApp, o endereço de avisos é cadastrado no provedor (Z-API e ZapperHub).
+    let aviso: string | null = null;
+    if (campos && Object.keys(campos).some((k) => /^(WHATSAPP_|ZAPI_|ZAPPERHUB_)/.test(k))) {
+      const { configurarAvisos } = await import("@/lib/whatsapp");
+      const { whatsappConfigurado } = await import("@/lib/conexoes");
+      if (whatsappConfigurado())
+        aviso = await configurarAvisos(baseUrl(req)).then(
+          (endereco) => (endereco ? "Endereço de avisos cadastrado no provedor." : null),
+          (err: Error) => `Credenciais salvas, mas o provedor não aceitou o endereço de avisos: ${err.message}`,
+        );
+    }
+    return { ...(await statusConexoes(baseUrl(req))), aviso };
   });
 }

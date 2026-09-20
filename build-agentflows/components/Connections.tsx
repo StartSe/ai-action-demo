@@ -146,13 +146,14 @@ export function Connections() {
     const campos: Record<string, string | null> = { ...extra };
     for (const k of keys) if (k in drafts) campos[k] = drafts[k] === "" ? null : drafts[k];
     await act("save", async () => {
-      setStatus(await request<Status>("/api/conexoes", "PUT", { campos }));
+      const s = await request<Status & { aviso?: string | null }>("/api/conexoes", "PUT", { campos });
+      setStatus(s);
       setDrafts((d) => {
         const next = { ...d };
         for (const k of keys) delete next[k];
         return next;
       });
-      setNotice("Conexão salva.");
+      setNotice(s.aviso ? `Conexão salva. ${s.aviso}` : "Conexão salva.");
     });
   }
   function fields(list: CampoStatus[], filter?: (c: CampoStatus) => boolean) {

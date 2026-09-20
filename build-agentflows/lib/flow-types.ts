@@ -44,6 +44,11 @@ export const BLOCKS = {
     icon: "↻",
     help: "Repete um caminho com limite de passagens.",
   },
+  whatsapp: {
+    label: "Enviar WhatsApp",
+    icon: "✆",
+    help: "Envia uma mensagem pelo número conectado.",
+  },
   end: { label: "Resposta", icon: "□", help: "Entrega o resultado do fluxo." },
 } as const;
 export type Kind = keyof typeof BLOCKS;
@@ -116,6 +121,8 @@ export function block(kind: Kind, id: string, x: number, y: number): Block {
                 ? { tool: "", args: "{}" }
                 : kind === "approval"
                   ? { prompt: "Revise o resultado antes de continuar." }
+                  : kind === "whatsapp"
+                    ? { to: "", text: "{{last}}" }
                   : kind === "end"
                     ? { text: "{{last}}" }
                     : {
