@@ -3,7 +3,7 @@ import { Topbar } from "@/components/ui";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
 import type { Avaliacao, DadosAvaliacao } from "@/lib/types";
-import { Resultado } from "../../page";
+import { Resultado } from "@/components/ResultadoAvaliacao";
 
 export default async function Page({ params }: PageProps<"/r/[id]">) {
   const { id } = await params;

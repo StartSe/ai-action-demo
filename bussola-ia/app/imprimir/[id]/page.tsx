@@ -4,7 +4,7 @@ import { data } from "@/lib/formato";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
 import type { Avaliacao, DadosAvaliacao } from "@/lib/types";
-import { ConteudoAvaliacao } from "../../page";
+import { ConteudoAvaliacao } from "@/components/ResultadoAvaliacao";
 import { ImprimirAoCarregar } from "./ImprimirAoCarregar";
 
 export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
