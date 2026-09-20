@@ -1,0 +1,127 @@
+import { chatGPT } from "./chatgpt";
+import { FlowError, validateGraph } from "./flow-store";
+import { BLOCKS, block, type Graph, type Kind } from "./flow-types";
+import { layout, outputs } from "./flow-graph";
+export type Generated = { name: string; description: string; graph: Graph };
+const KINDS = Object.keys(BLOCKS) as Kind[];
+// Campos de configuração aceitos por tipo, para o modelo preencher além dos blocos e conexões.
+const FIELDS: Record<Kind, string> = {
+  start: "state (JSON com valores de texto, opcional)",
+  llm: "system (instruções), prompt (mensagem; use {{input}}, {{last}}, {{nodes.id}}, {{state.nome}})",
+  agent:
+    "system (instruções), prompt (mensagem; use {{input}}, {{last}}, {{nodes.id}}, {{state.nome}}), tools (nomes separados por vírgula, só se pedido)",
+  condition:
+    "value (texto a avaliar, ex.: {{last}}), operator (contains | equals | notEquals | greater | empty), compare (valor)",
+  state: "key (nome da variável, letras e números), value (ex.: {{last}})",
+  http: "url (endereço fixo https), method (GET | POST | PUT | PATCH | DELETE), body (JSON)",
+  tool: "tool (nome da ferramenta), args (JSON)",
+  approval: "prompt (o que a pessoa deve revisar)",
+  loop: "limit (número de 1 a 20)",
+  end: "text (resposta final; use {{last}} ou {{nodes.id}})",
+};
+export const GENERATOR_SYSTEM = `Você desenha fluxos de agentes de IA para executivos. Responda somente com um JSON válido, sem comentários nem texto fora do JSON.
+
+Tipos de bloco disponíveis (kind) e seus campos de config:
+${KINDS.map((k) => `- ${k} (${BLOCKS[k].label}: ${BLOCKS[k].help}) → ${FIELDS[k]}`).join("\n")}
+
+Saídas (handle) de cada tipo: condition e approval têm "yes" e "no"; loop tem "repeat" e "done"; end não tem saída; os demais têm uma única saída (handle omitido).
+
+Regras:
+- Exatamente um bloco start e pelo menos um bloco end.
+- Todo bloco precisa ser alcançável a partir do start e chegar a um end.
+- Cada saída de cada bloco recebe exatamente uma conexão.
+- Só o handle "repeat" de um loop pode voltar a um bloco anterior.
+- Use de 3 a 10 blocos. Prefira agent para tarefas com raciocínio. Não use http nem tool sem o pedido mencionar um serviço ou ferramenta.
+- Textos em português do Brasil, claros e sem jargão técnico. Instruções (system) completas e específicas para o caso.
+- ids curtos em minúsculas sem espaços (ex.: "inicio", "analista", "resposta").
+
+Formato:
+{"name": "Nome do fluxo", "description": "Uma frase", "nodes": [{"id": "inicio", "kind": "start", "label": "Início", "config": {}}], "edges": [{"source": "inicio", "target": "analista"}, {"source": "cond", "target": "x", "handle": "yes"}]}`;
+type Raw = {
+  name?: unknown;
+  description?: unknown;
+  nodes?: unknown;
+  edges?: unknown;
+};
+function text(v: unknown, max: number) {
+  return typeof v === "string" ? v.trim().slice(0, max) : "";
+}
+// Converte a resposta do modelo em um grafo executável do produto.
+export function parseGenerated(answer: string): Generated {
+  const match = answer.match(/```(?:json)?\s*([\s\S]*?)```/) || [
+    null,
+    answer.slice(answer.indexOf("{"), answer.lastIndexOf("}") + 1),
+  ];
+  let raw: Raw;
+  try {
+    raw = JSON.parse(match[1] || "");
+  } catch {
+    throw new FlowError("A resposta do ChatGPT não veio no formato esperado.");
+  }
+  if (!Array.isArray(raw.nodes) || !Array.isArray(raw.edges))
+    throw new FlowError("A resposta do ChatGPT não trouxe blocos e conexões.");
+  const nodes = raw.nodes.map((n: Record<string, unknown>, i: number) => {
+    const kind = String(n.kind) as Kind;
+    if (!KINDS.includes(kind))
+      throw new FlowError(`Tipo de bloco desconhecido: ${String(n.kind)}.`);
+    const id =
+      text(n.id, 80).replace(/[^a-zA-Z0-9_-]/g, "_") || `${kind}_${i + 1}`;
+    const b = block(kind, id, 0, 0);
+    b.data.label = text(n.label, 100) || BLOCKS[kind].label;
+    const config =
+      n.config && typeof n.config === "object" && !Array.isArray(n.config)
+        ? (n.config as Record<string, unknown>)
+        : {};
+    for (const [k, v] of Object.entries(config))
+      if (Object.hasOwn(b.data.config, k) || k === "tools" || k === "model")
+        b.data.config[k] =
+          typeof v === "string" ? v.slice(0, 20000) : JSON.stringify(v);
+    return b;
+  });
+  const ids = new Set(nodes.map((n) => n.id));
+  const edges = raw.edges
+    .map((e: Record<string, unknown>) => {
+      const source = text(e.source, 80),
+        target = text(e.target, 80);
+      const kind = nodes.find((n) => n.id === source)?.data.kind;
+      // Saída única: qualquer handle informado é ignorado; ramificação: handle obrigatório.
+      const handle =
+        kind && outputs(kind).length > 1
+          ? text(e.handle ?? e.sourceHandle, 20)
+          : null;
+      return { source, target, handle };
+    })
+    .filter((e) => ids.has(e.source) && ids.has(e.target))
+    .map((e, i) => ({
+      id: `g${i + 1}`,
+      source: e.source,
+      target: e.target,
+      ...(e.handle ? { sourceHandle: e.handle } : {}),
+    }));
+  const graph = validateGraph(layout({ nodes, edges }), true);
+  return {
+    name: text(raw.name, 100) || "Fluxo gerado",
+    description: text(raw.description, 1000),
+    graph,
+  };
+}
+// Pede ao ChatGPT um fluxo completo e tenta uma correção quando a primeira resposta é inválida.
+export async function generateFlow(
+  request: unknown,
+  run = (system: string, prompt: string) => chatGPT().run({ system, prompt }),
+): Promise<Generated> {
+  if (typeof request !== "string" || !request.trim() || request.length > 4000)
+    throw new FlowError("Descreva o fluxo em até 4 mil caracteres.");
+  const answer = await run(GENERATOR_SYSTEM, request.trim());
+  try {
+    return parseGenerated(answer);
+  } catch (first) {
+    const reason =
+      first instanceof Error ? first.message : "resposta inválida";
+    const retry = await run(
+      GENERATOR_SYSTEM,
+      `${request.trim()}\n\nA resposta anterior foi recusada: ${reason}\nResposta anterior:\n${answer.slice(0, 6000)}\n\nCorrija e responda somente com o JSON.`,
+    );
+    return parseGenerated(retry);
+  }
+}

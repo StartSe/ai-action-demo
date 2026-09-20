@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { block, template, type Graph } from "./flow-types";
-import { connect, connectionProblem, outputLabel, outputs } from "./flow-graph";
+import {
+  connect,
+  connectionProblem,
+  layout,
+  outputLabel,
+  outputs,
+} from "./flow-graph";
 test("cada tipo de bloco expõe as saídas certas", () => {
   assert.deepEqual(outputs("agent"), [{ id: null, label: "" }]);
   assert.deepEqual(
@@ -80,4 +86,31 @@ test("ciclos só existem pela saída Repetir", () => {
   const done = connect(withLoop, { source: "rep", target: "fim", sourceHandle: "done" });
   assert.equal(done.edges.at(-1)?.id, "rep-done-fim");
   assert.equal(done.edges.at(-2)?.sourceHandle, "repeat");
+});
+test("layout distribui blocos em colunas pela distância do Início", () => {
+  const g: Graph = {
+    nodes: [
+      block("start", "inicio", 0, 0),
+      block("condition", "c", 0, 0),
+      block("agent", "a", 0, 0),
+      block("agent", "b", 0, 0),
+      block("end", "fim", 0, 0),
+      block("state", "solto", 0, 0),
+    ],
+    edges: [
+      { id: "1", source: "inicio", target: "c" },
+      { id: "2", source: "c", target: "a", sourceHandle: "yes" },
+      { id: "3", source: "c", target: "b", sourceHandle: "no" },
+      { id: "4", source: "a", target: "fim" },
+      { id: "5", source: "b", target: "fim" },
+    ],
+  };
+  const out = layout(g);
+  const pos = Object.fromEntries(out.nodes.map((n) => [n.id, n.position]));
+  assert.equal(pos.inicio.x, 60);
+  assert.equal(pos.c.x, 400);
+  assert.equal(pos.a.x, pos.b.x);
+  assert.notEqual(pos.a.y, pos.b.y);
+  assert.ok(pos.fim.x > pos.a.x);
+  assert.ok(pos.solto.x > pos.fim.x);
 });

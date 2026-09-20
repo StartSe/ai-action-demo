@@ -47,7 +47,8 @@ export type IconName =
   | "eraser"
   | "expand"
   | "pencil"
-  | "history";
+  | "history"
+  | "chevron";
 const paths: Record<string, ReactNode> = {
   flows: (
     <>
@@ -181,6 +182,7 @@ const paths: Record<string, ReactNode> = {
   expand: <path d="M16 4h4v4m-4-4-6 6M8 20H4v-4m4 4 6-6" />,
   pencil: <path d="M4 20h4L19 9a2.1 2.1 0 0 0-4-4L4 16zm9.5-13.5 4 4" />,
   history: <path d="M12 8v4l3 3M3.05 11a9 9 0 1 0 .5-4M3 3v5h5" />,
+  chevron: <path d="m9 6 6 6-6 6" />,
 };
 export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   return (
