@@ -162,8 +162,9 @@ Concluída na versão 0.4.0, com testes e verificação visual por Playwright.
 
 - Catálogo por categoria com os mesmos serviços: Tavily, SearchApi, Exa,
   Serper, SerpApi, Brave, Google Custom Search, SearXNG, arXiv, Wolfram Alpha,
-  ler página, requisição HTTP, extrair JSON, data e hora, calculadora,
-  executar fluxo, enviar WhatsApp e ligar por voz.
+  ler página, requisição HTTP, extrair JSON, data e hora, calculadora e
+  executar fluxo. WhatsApp e ligações ficam fora do Agente: o canal é ligado
+  ao fluxo completo em Implantar.
 - Credencial pedida dentro do Agente na primeira vez; vale para todos os fluxos.
 
 ## C. Provedores e canais

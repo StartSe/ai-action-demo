@@ -921,6 +921,7 @@ export function FlowEditor({ id }: { id: string }) {
           node={node}
           nodes={graph.nodes}
           models={connection?.models || []}
+          onRename={(label) => renameBlock(node.id, label)}
           onClose={() => setEditing(null)}
           onSave={(n) => {
             commit({

@@ -5,7 +5,7 @@
 // para as de um servidor. Um nome sem prefixo (fluxos da primeira versão) é o servidor antigo
 // "Ferramentas". O nome que o modelo vê é sempre o nome curto da ferramenta.
 import type { AgentTool } from "./chatgpt";
-import { conexaoMCP, servidoresMCP, whatsappConfigurado, ligacaoConfigurada } from "./conexoes";
+import { conexaoMCP, servidoresMCP } from "./conexoes";
 import { conectar, chamar, listarFerramentas } from "./mcp-cliente";
 import { FlowError, listFlows } from "./flow-store";
 import { getConfig } from "./store";
@@ -340,29 +340,6 @@ const BUILTIN: Builtin[] = [
       if (!f) throw new FlowError("Fluxo publicado não encontrado.");
       const r = await startRun(f.id, String(a.entrada ?? ""), true);
       return JSON.stringify({ status: r.status, output: r.output, error: r.error, id: r.id });
-    },
-  },
-  // Canais
-  {
-    id: "interno:enviar_whatsapp", name: "enviar_whatsapp", category: "Canais", setup: "/conexoes",
-    description: "Envia uma mensagem de WhatsApp para um número (DDI+DDD+número).",
-    schema: { type: "object", properties: { para: { type: "string" }, mensagem: { type: "string" } }, required: ["para", "mensagem"] },
-    available: whatsappConfigurado,
-    call: async (a) => {
-      const { enviarMensagem } = await import("./whatsapp");
-      await enviarMensagem(String(a.para ?? ""), String(a.mensagem ?? ""));
-      return "Mensagem enviada.";
-    },
-  },
-  {
-    id: "interno:ligar_por_voz", name: "ligar_por_voz", category: "Canais", setup: "/conexoes",
-    description: "Faz uma ligação telefônica por voz com o agente de conversa, passando contexto para a conversa.",
-    schema: { type: "object", properties: { telefone: { type: "string" }, contexto: { type: "string", description: "o que o agente deve saber e fazer" } }, required: ["telefone"] },
-    available: ligacaoConfigurada,
-    call: async (a) => {
-      const { ligar } = await import("./elevenlabs");
-      const r = await ligar(String(a.telefone ?? ""), String(a.contexto ?? ""));
-      return JSON.stringify(r);
     },
   },
 ];
