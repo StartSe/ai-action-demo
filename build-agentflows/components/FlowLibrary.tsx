@@ -97,6 +97,7 @@ export function FlowLibrary() {
       await request("/api/flows/" + copy.id, "PUT", {
         ...copy,
         description: f.description,
+        voiceId: f.voiceId || "",
         graph: f.graph,
       });
       await load();
@@ -112,6 +113,7 @@ export function FlowLibrary() {
               format: "build-agentflows/v1",
               name: f.name,
               description: f.description,
+              voiceId: f.voiceId || "",
               graph: f.graph,
             },
             null,
@@ -140,6 +142,7 @@ export function FlowLibrary() {
         await request("/api/flows/" + created.id, "PUT", {
           name: b.name,
           description: b.description || "",
+          voiceId: b.voiceId || "",
           graph: b.graph,
         });
         router.push("/flows/" + created.id);

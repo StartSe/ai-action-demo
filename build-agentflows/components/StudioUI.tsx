@@ -77,7 +77,9 @@ export type IconName =
   | "mic"
   | "speaker"
   | "paperclip"
-  | "send";
+  | "send"
+  | "wave"
+  | "mic-off";
 const paths: Record<string, ReactNode> = {
   flows: (
     <>
@@ -134,6 +136,8 @@ const paths: Record<string, ReactNode> = {
   upload: <path d="M12 16V4m-5 5 5-5 5 5M4 16v5h16v-5" />,
   undo: <path d="M4 4v6h6M4 10c4-8 17-5 16 5v4" />,
   redo: <path d="M20 4v6h-6m6 0C16 2 3 5 4 15v4" />,
+  wave: <path d="M4 10v4m4-8v12m4-16v20m4-16v12m4-8v4" />,
+  "mic-off": <path d="m3 3 18 18M9 9v3a3 3 0 0 0 5 2M9 5a3 3 0 0 1 6 0v4M5 10v2a7 7 0 0 0 12 5m2-7v2M12 19v3m-4 0h8" />,
   paperclip: <path d="m8 12 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l9-9m-6 11 8-8" />,
   send: <path d="M12 20V4m-7 7 7-7 7 7" />,
   play: <path d="m8 4 13 8-13 8z" />,

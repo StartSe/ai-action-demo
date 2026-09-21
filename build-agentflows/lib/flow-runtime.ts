@@ -1,6 +1,7 @@
 import { attachmentContext, resolveAttachments, markAttachmentsUsed } from "./attachments";
 import { assertImageModels } from "./attachment-models";
 import { reachableAiNodes } from "./model-capabilities";
+import { conversationHistory, conversationPrompt } from "./conversation";
 import { randomUUID } from "node:crypto";
 import { chatGPT } from "./chatgpt";
 import { isOpenRouterModel, openRouterKey, runOpenRouter } from "./openrouter";
@@ -45,7 +46,7 @@ async function agent(n: Block, r: Run, signal: AbortSignal) {
   const context = attachmentContext(r.flowId, r.attachments);
   return runner({
     system: interpolate(c.system, r),
-    prompt: message(c, r) + context.text,
+    prompt: conversationPrompt(r) + message(c, r) + context.text,
     images: context.images,
     model: c.model || undefined,
     signal,
@@ -251,6 +252,7 @@ export async function startRun(
   published = false,
   demo?: boolean,
   attachmentIds?: unknown,
+  conversationRunIds?: unknown,
 ) {
   if (typeof input !== "string" || !input.trim() || input.length > 20000)
     throw new FlowError(
@@ -264,6 +266,7 @@ export async function startRun(
     );
   const graph = validateGraph(published ? f.published : f.graph, true);
   const attachments = resolveAttachments(flowId, attachmentIds);
+  const conversation = conversationHistory(flowId, conversationRunIds);
   if (attachments.length && !reachableAiNodes(graph).length) throw new FlowError("Adicione um bloco de IA ao fluxo para analisar os anexos.");
   if (demo === true && attachments.length) throw new FlowError("Anexos precisam de uma execução real. Desative a simulação ou remova os arquivos.");
   if (attachments.some((a) => a.kind === "image")) await assertImageModels(graph);
@@ -283,6 +286,7 @@ export async function startRun(
     demo: demo === true,
     input,
     ...(attachments.length ? { attachments } : {}),
+    ...(conversation.length ? { conversation } : {}),
     output: "",
     next: graph.nodes.find((n) => n.data.kind === "start")!.id,
     state: {},

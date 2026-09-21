@@ -34,6 +34,7 @@ import { Icon, IconButton, Modal, request, useDismissMenus } from "./StudioUI";
 import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
 import { NodeDialog } from "./NodeDialog";
 import { ChatPopup } from "./ChatPopup";
+import { FlowSettingsDialog } from "./FlowSettingsDialog";
 import { IntegrationDialog } from "./IntegrationDialog";
 import { GeneratorDialog } from "./GeneratorDialog";
 import type { Generated } from "@/lib/flow-generator";
@@ -71,8 +72,6 @@ export function FlowEditor({ id }: { id: string }) {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [rename, setRename] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
   const [connect, setConnect] = useState(false);
   const [integration, setIntegration] = useState(false);
   const [chat, setChat] = useState(false);
@@ -140,25 +139,29 @@ export function FlowEditor({ id }: { id: string }) {
     void request<Flow>("/api/flows/" + id)
       .then((f) => {
         if (alive) {
-          setFlow(f);
+          let legacyVoice = "";
+          try { if (f.voiceId === undefined) legacyVoice = localStorage.getItem("agentflows-voz-" + id) || ""; } catch {}
+          setFlow(legacyVoice ? { ...f, voiceId: legacyVoice } : f);
+          if (legacyVoice) setDirty(true);
           setGraph(f.graph);
-          setTitle(f.name);
-          setDescription(f.description);
         }
       })
       .catch((e) => {
         if (alive) setError(e.message);
       });
-    void request<{ voz: boolean; ligacao: boolean }>("/api/voz")
+    const refreshVoice = () => { void request<{ voz: boolean; ligacao: boolean }>("/api/voz")
       .then((v) => {
         if (alive) setVoice(v);
       })
-      .catch(() => {});
+      .catch(() => {}); };
+    refreshVoice();
+    window.addEventListener("focus", refreshVoice);
     const theme = localStorage.getItem("agentflows-theme") || "light";
     document.documentElement.dataset.studioTheme = theme;
     const timer = setTimeout(() => setDark(theme === "dark"), 0);
     return () => {
       alive = false;
+      window.removeEventListener("focus", refreshVoice);
       clearTimeout(timer);
     };
   }, [id]);
@@ -199,6 +202,7 @@ export function FlowEditor({ id }: { id: string }) {
     const saved = await request<Flow>("/api/flows/" + id, "PUT", {
       name: flow.name,
       description: flow.description,
+      voiceId: flow.voiceId || "",
       graph,
     });
     setFlow(saved);
@@ -410,6 +414,7 @@ export function FlowEditor({ id }: { id: string }) {
               format: "build-agentflows/v1",
               name: flow.name,
               description: flow.description,
+              voiceId: flow.voiceId || "",
               graph,
             },
             null,
@@ -434,7 +439,7 @@ export function FlowEditor({ id }: { id: string }) {
         : [...list, r],
     );
   }, [setRun, setSession]);
-  async function execute(input: string, attachments: Attachment[]): Promise<boolean> {
+  async function execute(input: string, attachments: Attachment[], conversational = false): Promise<Run | null> {
     setRunning(true);
     setError("");
     setPendingInput(input);
@@ -452,17 +457,17 @@ export function FlowEditor({ id }: { id: string }) {
           })
           .catch(() => {});
       }, 800);
-      updateRun(
-        await request<Run>("/api/flows/" + id + "/run", "POST", {
+      const result = await request<Run>("/api/flows/" + id + "/run", "POST", {
           input,
           demo: effectiveDemo,
           attachments: attachments.map((a) => a.id),
-        }),
-      );
-      return true;
+          ...(conversational ? { conversationRunIds: session.filter((r) => r.status === "completed" && !r.demo).slice(-6).map((r) => r.id) } : {}),
+        });
+      updateRun(result);
+      return result;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Não foi possível executar.");
-      return false;
+      return null;
     } finally {
       if (timer) clearInterval(timer);
       setRunning(false);
@@ -540,11 +545,9 @@ export function FlowEditor({ id }: { id: string }) {
         />
         <div className="canvas-title">
           <button
-            onClick={() => {
-              setTitle(flow.name);
-              setDescription(flow.description);
-              setRename(true);
-            }}
+            aria-label="Configurações do fluxo"
+            title="Configurações do fluxo"
+            onClick={() => setRename(true)}
           >
             <h1>{flow.name}</h1>
             <Icon name="settings" size={15} />
@@ -604,6 +607,7 @@ export function FlowEditor({ id }: { id: string }) {
                     await request("/api/flows/" + f.id, "PUT", {
                       ...f,
                       description: flow.description,
+                      voiceId: flow.voiceId || "",
                       graph,
                     });
                     router.push("/flows/" + f.id);
@@ -887,9 +891,10 @@ export function FlowEditor({ id }: { id: string }) {
               running={running}
               demo={effectiveDemo}
               connected={aiConnected}
-              providerLabel={[...new Set(graph.nodes.filter((n) => ["agent", "llm"].includes(n.data.kind)).map((n) => n.data.config.model?.startsWith("openrouter:") ? "OpenRouter" : "ChatGPT"))].join(" + ") || "Modelo definido no fluxo"}
               expanded={expanded}
               voice={voice.voz}
+              voiceId={flow.voiceId || ""}
+              onVoiceSettings={() => setRename(true)}
               flowId={id}
               onDemo={setDemo}
               onSend={execute}
@@ -1098,44 +1103,10 @@ export function FlowEditor({ id }: { id: string }) {
         />
       )}
       {rename && (
-        <Modal title="Detalhes do Agentflow" onClose={() => setRename(false)}>
-          <div className="node-fields">
-            <label>
-              Nome
-              <input
-                autoFocus
-                value={title}
-                maxLength={100}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </label>
-            <label>
-              Descrição
-              <textarea
-                rows={3}
-                value={description}
-                maxLength={1000}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </label>
-          </div>
-          <div className="modal-actions">
-            <button className="studio-button" onClick={() => setRename(false)}>
-              Cancelar
-            </button>
-            <button
-              className="studio-button primary"
-              disabled={!title.trim()}
-              onClick={() => {
-                setFlow({ ...flow, name: title.trim(), description });
-                setDirty(true);
-                setRename(false);
-              }}
-            >
-              Salvar detalhes
-            </button>
-          </div>
-        </Modal>
+        <FlowSettingsDialog flow={flow} voiceAvailable={voice.voz} onClose={() => setRename(false)} onSave={async (settings) => {
+          const saved = await request<Flow>("/api/flows/" + id, "PUT", { ...settings, graph });
+          setFlow(saved); setDirty(false); setNotice("Configurações salvas.");
+        }} />
       )}
       {confirmDelete && (
         <Modal

@@ -5,7 +5,7 @@ export async function POST(req: Request) {
   try {
     const b = await body(req);
     if (typeof b.texto !== "string") throw new FlowError("Envie o texto a falar.");
-    return new Response(await falar(b.texto, typeof b.voz === "string" ? b.voz : undefined), {
+    return new Response(await falar(b.texto, typeof b.voz === "string" ? b.voz : undefined, req.signal), {
       headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" },
     });
   } catch (e) {

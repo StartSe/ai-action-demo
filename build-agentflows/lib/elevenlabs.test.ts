@@ -107,3 +107,15 @@ test("fim de ligação executa o fluxo escolhido com a transcrição", async () 
   assert.equal(ok.status, 200);
   setConfig("ELEVENLABS_FLOW_ID", null);
 });
+
+test("transcrição preserva formato do navegador e pedidos de voz aceitam cancelamento", async () => {
+  setConfig("ELEVENLABS_API_KEY", "fixture");
+  const controller = new AbortController();
+  const m = mockFetch(() => ({ text: "Olá" }));
+  try {
+    await el.transcrever(new Blob(["audio"], { type: "audio/mp4" }), controller.signal);
+    const form = m.calls[0].init?.body as FormData;
+    assert.equal((form.get("file") as File).name, "audio.m4a");
+    controller.abort(); assert.equal(m.calls[0].init?.signal?.aborted, true);
+  } finally { m.restore(); setConfig("ELEVENLABS_API_KEY", null); }
+});

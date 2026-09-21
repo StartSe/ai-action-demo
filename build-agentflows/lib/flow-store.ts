@@ -225,6 +225,10 @@ export function saveFlow(id: string, data: unknown) {
     throw new FlowError("Informe nome e descrição válidos.");
   f.name = b.name.trim();
   f.description = b.description;
+  if (b.voiceId !== undefined) {
+    if (typeof b.voiceId !== "string" || !/^[a-zA-Z0-9_-]{0,128}$/.test(b.voiceId)) throw new FlowError("Escolha uma voz válida para o fluxo.");
+    f.voiceId = b.voiceId;
+  }
   f.graph = validateGraph(b.graph);
   f.updatedAt = new Date().toISOString();
   return putFlow(f);

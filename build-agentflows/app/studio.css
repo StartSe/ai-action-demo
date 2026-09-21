@@ -3448,3 +3448,33 @@
 @media (max-width: 370px) {
   .studio-nav .studio-brand > span:last-child { display: none; }
 }
+
+/* Conversa contínua por voz, com controles junto ao compositor. */
+.chat-input-actions .chat-voice-start, .chat-input-actions .chat-voice-end { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; background: var(--studio-ink); color: var(--studio-surface); }
+.chat-input-actions .chat-voice-start:hover { background: var(--studio-primary); color: white; }
+.chat-input-actions .chat-voice-end { background: var(--studio-ink); color: var(--studio-surface); }
+.chat-input-actions .chat-mic.muted { color: var(--studio-ink); background: var(--studio-bg); }
+.voice-conversation { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 20px; }
+.voice-mode-heading { display: flex; align-items: center; gap: 7px; color: var(--studio-muted); font-size: 11px; margin-bottom: auto; }
+.voice-orb { position: relative; width: 132px; height: 132px; min-height: 132px; margin-top: 28px; border-radius: 50%; overflow: hidden; isolation: isolate; background: radial-gradient(circle at 30% 20%, #8d83ff, #6c63ee 40%, #b9caff 78%, #edf2ff); box-shadow: 0 14px 45px #7969f322, inset 0 0 20px #fff5; transform: scale(calc(1 + var(--voice-level, 0) * .18)); transition: transform .1s ease-out, opacity .3s; }
+.chat-popup .voice-orb:disabled { cursor: default; opacity: 1; }
+.voice-orb span { position: absolute; inset: -20%; border-radius: 43%; filter: blur(9px); background: linear-gradient(150deg, transparent 35%, #f4f6ffdd 52%, #a9baffaa 60%, transparent 70%); animation: voice-drift 9s linear infinite; }
+.voice-orb span:nth-child(2) { animation-direction: reverse; animation-duration: 12s; opacity: .6; }
+.voice-orb span:nth-child(3) { inset: 25% -30% -60%; background: #eef3ffbb; animation-duration: 7s; }
+.voice-conversation.hearing .voice-orb span, .voice-conversation.speaking .voice-orb span { animation-duration: 3s; }
+.voice-conversation.muted .voice-orb, .voice-conversation.waiting .voice-orb, .voice-conversation.error .voice-orb { opacity: .45; filter: saturate(.45); }
+.voice-conversation.connecting .voice-orb, .voice-conversation.transcribing .voice-orb, .voice-conversation.thinking .voice-orb { animation: voice-breathe 2s ease-in-out infinite; }
+.voice-status { text-align: center; min-height: 58px; }
+.voice-status strong { font-size: 16px; font-weight: 600; }
+.voice-status p { max-width: 310px; margin-top: 9px; font-size: 12px; line-height: 1.6; color: var(--studio-muted); }
+.voice-conversation.error .voice-status p { color: #bc5367; }
+.voice-transcript { max-width: 100%; overflow-wrap: anywhere; color: var(--studio-muted); font-size: 12px; line-height: 1.6; text-align: center; max-height: 90px; overflow: auto; }
+.voice-conversation::after { content: ""; margin-top: auto; }
+.flow-voice-settings { border-top: 1px solid var(--studio-line); padding-top: 18px; margin-top: 6px; display: grid; gap: 10px; }
+.flow-voice-settings > div { display: flex; align-items: center; gap: 8px; color: var(--studio-primary); }
+.flow-voice-settings p { font-size: 12px; line-height: 1.6; color: var(--studio-muted); }
+.flow-voice-settings a, .flow-voice-settings p button { color: var(--studio-primary); text-decoration: underline; }
+@keyframes voice-drift { to { transform: rotate(360deg); } }
+@keyframes voice-breathe { 50% { transform: scale(.93); opacity: .7; } }
+@media (prefers-reduced-motion: reduce) { .voice-orb, .voice-orb span { animation: none !important; transition: none; } }
+@media (max-height: 650px) { .voice-conversation { gap: 12px; padding: 16px; } .voice-orb { width: 88px; height: 88px; min-height: 88px; margin-top: 4px; } .voice-status { min-height: 35px; } }

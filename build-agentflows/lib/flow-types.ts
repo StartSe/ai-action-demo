@@ -80,6 +80,7 @@ export type Flow = {
   id: string;
   name: string;
   description: string;
+  voiceId?: string;
   graph: Graph;
   published: Graph | null;
   version: number;
@@ -101,6 +102,7 @@ export type Run = {
   demo: boolean;
   input: string;
   attachments?: Attachment[];
+  conversation?: { input: string; output: string }[];
   output: string;
   error?: string;
   graph: Graph;

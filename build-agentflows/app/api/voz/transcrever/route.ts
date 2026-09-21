@@ -6,6 +6,6 @@ export async function POST(req: Request) {
     const form = await req.formData().catch(() => null);
     const audio = form?.get("audio");
     if (!(audio instanceof Blob)) throw new FlowError("Envie o áudio gravado.");
-    return { texto: await transcrever(audio) };
+    return { texto: await transcrever(audio, req.signal) };
   });
 }
