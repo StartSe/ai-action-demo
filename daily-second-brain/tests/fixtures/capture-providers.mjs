@@ -1,7 +1,7 @@
 // Deterministic provider responses for contract and browser tests. The app
 // never imports this module. No real Slack or Zapier account is used.
 export function captureProviders(fallback = globalThis.fetch) {
-  /** @type {{mode: string, dataCalls: number, toolCalls: Array<{name: string, arguments: Record<string, unknown>}>, aiRequests: Array<{messages: Array<{role: string, content: string}>, tools?: Array<{function: {name: string, description: string}}>}>, failOrganization: boolean, failRead: boolean, gate: Promise<void> | null, unknownRead: boolean}} */
+  /** @type {{mode: string, dataCalls: number, toolCalls: Array<{name: string, arguments: Record<string, unknown>}>, aiRequests: Array<{messages: Array<{role: string, content: string}>, tools?: Array<{function: {name: string, description: string}}>}>, failOrganization: boolean, failRead: boolean, gate: Promise<void> | null, unknownRead: boolean, slackActions: boolean}} */
   const state = {
     mode: "managed",
     dataCalls: 0,
@@ -11,6 +11,7 @@ export function captureProviders(fallback = globalThis.fetch) {
     failRead: false,
     gate: null,
     unknownRead: false,
+    slackActions: false,
   };
   const messages = [
     {
@@ -79,6 +80,34 @@ export function captureProviders(fallback = globalThis.fetch) {
             inputSchema: schema,
             annotations: { readOnlyHint: false },
           },
+          ...(state.slackActions
+            ? [
+                {
+                  name: "slack_find_public_channel",
+                  title: "Slack: Find Public Channel",
+                  description: "Find a public channel by ID or name.",
+                },
+                {
+                  name: "slack_retrieve_thread_messages",
+                  title: "Slack: Retrieve Thread Messages",
+                  description: "Retrieve messages from a Slack thread.",
+                },
+                {
+                  name: "slack_get_message_by_timestamp",
+                  title: "Slack: Get Message by Timestamp",
+                  description: "Retrieve a message by its timestamp.",
+                },
+                {
+                  name: "slack_edit_message",
+                  title: "Slack: Edit Message",
+                  description: "Edit a message.",
+                },
+              ].map((t) => ({
+                ...t,
+                inputSchema: schema,
+                annotations: { readOnlyHint: false },
+              }))
+            : []),
         ];
   const answer = (content) =>
     Response.json({ choices: [{ message: { role: "assistant", content } }] });

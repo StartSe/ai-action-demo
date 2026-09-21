@@ -506,7 +506,7 @@ export function Brain() {
               onClick={() => go("setup")}
             >
               <Icon name="sun" size={18} />
-              Primeiro acesso
+              Configuração
             </button>
             <button
               className={view === "connections" ? "active" : ""}
@@ -570,7 +570,7 @@ export function Brain() {
                 (view === "connections"
                   ? "Conexões"
                   : view === "setup"
-                    ? "Primeiro acesso"
+                    ? "Configuração"
                     : "Regras da memória")}
             </strong>
           </span>
@@ -688,7 +688,7 @@ export function Brain() {
                       </p>
                     </div>
                     <button className="button" onClick={() => go("setup")}>
-                      Configurar primeiro acesso <Icon name="arrow" size={14} />
+                      Abrir configuração <Icon name="arrow" size={14} />
                     </button>
                   </div>
                 )}

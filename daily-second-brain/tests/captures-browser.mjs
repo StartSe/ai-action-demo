@@ -131,9 +131,35 @@ try {
       .getByRole("checkbox", { name: /slack send message/ })
       .isDisabled(),
   );
+  assert.ok(
+    await page
+      .getByRole("checkbox", { name: /Slack: Edit Message/ })
+      .isDisabled(),
+  );
+  const slackReads = [
+    "Slack: Find Public Channel",
+    "Slack: Retrieve Thread Messages",
+    "Slack: Get Message by Timestamp",
+  ];
+  for (const name of slackReads) {
+    const checkbox = page.getByRole("checkbox", { name: new RegExp(name) });
+    assert.ok(await checkbox.isEnabled());
+    assert.ok(!(await checkbox.isChecked()));
+    await checkbox.check();
+  }
   await page
     .getByRole("button", { name: "Salvar ferramentas de coleta" })
     .click();
+  await page.getByText("Ferramentas de coleta salvas.").waitFor();
+  await page.getByRole("button", { name: "Atualizar ferramentas" }).click();
+  await page
+    .getByText("Conexão verificada. Escolha as leituras que Daily pode usar.")
+    .waitFor();
+  for (const name of slackReads)
+    assert.ok(
+      await page.getByRole("checkbox", { name: new RegExp(name) }).isChecked(),
+    );
+  await page.screenshot({ path: join(out, "slack-tools.png"), fullPage: true });
   const next = page.getByRole("button", { name: "Continuar", exact: true });
   await waitFor(() => next.isEnabled());
   await next.click();

@@ -96,10 +96,12 @@ export function CollectionTools() {
               <strong>{t.title}</strong>
               <small>
                 {t.blocked
-                  ? "Disponível somente com confirmação no chat."
+                  ? "Fora da coleta automática. Use no chat e confirme a execução."
                   : t.declaredReadOnly
                     ? "Leitura identificada pelo servidor."
-                    : "Selecione se esta ferramenta apenas consulta informações."}
+                    : t.recognizedReadOnly
+                      ? "Consulta do Slack. Selecione para autorizar nas coletas."
+                      : "Selecione se esta ferramenta apenas consulta informações."}
               </small>
               <details>
                 <summary>O que esta ferramenta faz</summary>
@@ -125,6 +127,7 @@ export function CollectionTools() {
                 { action: "permissions", names: selected },
               );
               setTools(list);
+              setSelected(list.filter((t) => t.allowed).map((t) => t.name));
               setNotice("Ferramentas de coleta salvas.");
             } catch (e) {
               setError((e as Error).message);

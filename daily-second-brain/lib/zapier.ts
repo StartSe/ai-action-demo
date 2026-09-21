@@ -25,7 +25,7 @@ export async function zapierClient(signal?: AbortSignal) {
   const url = getConfig("ZAPIER_MCP_URL");
   if (!url) throw new BrainError("Conecte o Zapier em Conexões.");
   const token = getConfig("ZAPIER_MCP_TOKEN");
-  const c = new Client({ name: "daily-second-brain", version: "1.1.0" });
+  const c = new Client({ name: "daily-second-brain", version: "1.1.1" });
   try {
     await c.connect(
       new StreamableHTTPClientTransport(new URL(validateZapier(url)), {

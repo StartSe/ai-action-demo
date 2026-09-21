@@ -1,6 +1,7 @@
 import { appendFileSync } from "node:fs";
 import { captureProviders } from "./capture-providers.mjs";
 const fixture = captureProviders();
+fixture.state.slackActions = true;
 globalThis.fetch = async (input, init) => {
   const url =
     typeof input === "string"

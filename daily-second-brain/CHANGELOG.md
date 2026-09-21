@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1 — 2026-09-21
+
+- Permite selecionar consultas conhecidas do Slack mesmo quando o Zapier as marca como ações; mantém seleção explícita, verificação de permissões e confirmação de escrita no chat.
+- Renomeia “Primeiro acesso” para “Configuração” na interface.
+
 ## 1.1.0 — 2026-09-21
 
 - Captura agêntica por instrução: usa leituras autorizadas do Zapier, preserva fontes raw e organiza a wiki em segundo plano.

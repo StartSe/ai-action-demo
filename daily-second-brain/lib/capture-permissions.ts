@@ -25,6 +25,25 @@ const WRITE_META = new Set([
   "delete_zapier_skill",
   "send_feedback",
 ]);
+// Zapier also publishes read operations as actions, sometimes with
+// readOnlyHint=false. Only these exact Slack operations may be selected despite
+// that hint; names/titles containing "find" or "get" are not sufficient.
+// https://help.zapier.com/hc/en-us/articles/8495993391629
+const SLACK_READ_TOOLS = new Set([
+  "slack_find_public_channel",
+  "slack_retrieve_thread_messages",
+  "slack_get_message_by_timestamp",
+  "slack_get_message",
+  "slack_get_message_reactions",
+  "slack_find_message",
+  "slack_find_user_by_id",
+  "slack_find_user_by_username",
+  "slack_find_user_by_email",
+  "slack_find_user_by_name",
+  "slack_get_conversation",
+  "slack_get_conversation_members",
+  "slack_get_message_permalink",
+]);
 type Grant = { name: string; fingerprint: string };
 type Policy = { server: string; tools: Grant[] };
 export type CaptureAccess = { server: string; tools: Grant[] };
@@ -52,7 +71,9 @@ function policy(): Policy | null {
 function blocked(t: Tool) {
   return (
     WRITE_META.has(t.name) ||
-    (!READ_META.has(t.name) && t.annotations?.readOnlyHint === false)
+    (!READ_META.has(t.name) &&
+      !SLACK_READ_TOOLS.has(t.name) &&
+      t.annotations?.readOnlyHint === false)
   );
 }
 function allowed(t: Tool, p = policy()) {
@@ -73,6 +94,7 @@ export function describeCaptureTools(tools: Tool[]): CaptureTool[] {
     blocked: blocked(t),
     declaredReadOnly:
       READ_META.has(t.name) || t.annotations?.readOnlyHint === true,
+    recognizedReadOnly: SLACK_READ_TOOLS.has(t.name),
   }));
 }
 export async function captureToolCatalog() {

@@ -48,6 +48,7 @@ export type CaptureTool = {
   allowed: boolean;
   blocked: boolean;
   declaredReadOnly: boolean;
+  recognizedReadOnly: boolean;
 };
 export type SetupState = {
   status: "new" | "deferred" | "complete";

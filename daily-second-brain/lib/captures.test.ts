@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 const dir = mkdtempSync(join(tmpdir(), "brain-captures-"));
 process.env.DATA_DIR = dir;
 const { captureProviders } =
@@ -23,8 +24,13 @@ const {
   deleteSchedule,
   queueDueSchedules,
 } = await import("./captures");
-const { captureToolCatalog, saveCaptureTools } =
-  await import("./capture-permissions");
+const {
+  captureToolCatalog,
+  saveCaptureTools,
+  describeCaptureTools,
+  checkCaptureTool,
+} = await import("./capture-permissions");
+const { listTools } = await import("./zapier");
 const { runCapture } = await import("./capture-worker");
 const { nextOccurrence } = await import("./recurrence");
 const { setupState, verifySetupAI } = await import("./onboarding");
@@ -135,6 +141,97 @@ test("ferramenta sem classificação requer escolha de leitura; revogação e tr
   assert.match(changed.error, /conexão Zapier mudou/);
   assert.equal(fixture.state.dataCalls, 0);
   assert.equal(captureTask(first.id).sources.length, 0);
+});
+test("consultas Slack marcadas como ações podem ser selecionadas, salvas e executadas na coleta", async () => {
+  fixture.state.slackActions = true;
+  const names = [
+    "slack_find_public_channel",
+    "slack_retrieve_thread_messages",
+    "slack_get_message_by_timestamp",
+  ];
+  const catalog = await captureToolCatalog();
+  for (const name of names) {
+    const tool = catalog.find((t) => t.name === name)!;
+    assert.equal(tool.blocked, false, name);
+    assert.equal(tool.recognizedReadOnly, true, name);
+    assert.equal(tool.declaredReadOnly, false, name);
+    assert.equal(
+      tool.allowed,
+      false,
+      "a nova consulta exige seleção explícita",
+    );
+  }
+  for (const name of ["slack_send_message", "slack_edit_message"])
+    await assert.rejects(() => saveCaptureTools([name]), /não está disponível/);
+  const saved = await saveCaptureTools(names);
+  assert.deepEqual(
+    saved.filter((t) => t.allowed).map((t) => t.name),
+    names,
+  );
+  assert.equal((await setupState()).readTools, 3);
+  assert.deepEqual(
+    (await captureToolCatalog()).filter((t) => t.allowed).map((t) => t.name),
+    names,
+  );
+  await saveCaptureTools(["slack_retrieve_thread_messages"]);
+  await newTask();
+  const task = await runNext();
+  assert.equal(task.status, "done", task.error);
+  assert.equal(task.sources.length, 1);
+  assert.equal(task.pages.length, 1);
+  assert.equal(
+    fixture.state.toolCalls[0].name,
+    "slack_retrieve_thread_messages",
+  );
+  assert.ok(
+    !JSON.stringify(fixture.state.aiRequests).includes("slack_edit_message"),
+  );
+});
+test("exceção de consultas Slack mantém revogação e verificação da definição da ferramenta", async () => {
+  fixture.state.slackActions = true;
+  const name = "slack_find_public_channel";
+  await saveCaptureTools([name]);
+  const access = await collectionAccess();
+  const tool = (await listTools()).find((t) => t.name === name)!;
+  assert.doesNotThrow(() => checkCaptureTool(tool, access));
+  assert.throws(
+    () =>
+      checkCaptureTool(
+        { ...tool, inputSchema: { type: "object", properties: {} } },
+        access,
+      ),
+    /permissão dessa ferramenta mudou/,
+  );
+  await newTask();
+  await saveCaptureTools([]);
+  assert.throws(
+    () => checkCaptureTool(tool, access),
+    /permissão dessa ferramenta mudou/,
+  );
+  assert.equal((await runNext()).status, "failed");
+  assert.equal(fixture.state.dataCalls, 0);
+});
+test("nomes parecidos e títulos de consulta não liberam ações de escrita", () => {
+  const tools: Tool[] = [
+    "slack_find_public_channel_and_create",
+    "slack_find_or_create_channel",
+    "slack_retrieve_thread_messages_and_delete",
+    "slack_api_request",
+    "slack_edit_message",
+    "execute_zapier_write_action",
+    "write_code_action",
+    "enable_zapier_action",
+  ].map((name) => ({
+    name,
+    title: "Slack: Find Public Channel",
+    inputSchema: { type: "object" },
+    annotations: { readOnlyHint: false },
+  }));
+  for (const tool of describeCaptureTools(tools)) {
+    assert.equal(tool.blocked, true, tool.name);
+    assert.equal(tool.allowed, false, tool.name);
+    assert.equal(tool.recognizedReadOnly, false, tool.name);
+  }
 });
 test("falha ao organizar preserva o original e retomar reaproveita a leitura sem duplicar fonte", async () => {
   fixture.state.failOrganization = true;

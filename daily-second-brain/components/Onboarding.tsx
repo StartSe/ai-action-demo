@@ -100,7 +100,7 @@ export function Onboarding({
           <Icon name="brain" size={42} />
         </span>
       </div>
-      <nav className="onboarding-steps" aria-label="Etapas do primeiro acesso">
+      <nav className="onboarding-steps" aria-label="Etapas da configuração">
         {steps.map((s, i) => (
           <button
             key={s.title}
@@ -285,7 +285,7 @@ export function Onboarding({
         )}
       </footer>
       <p className="onboarding-hint">
-        Seu progresso fica salvo. Você pode retomar em Primeiro acesso a
+        Seu progresso fica salvo. Você pode retomar em Configuração a
         qualquer momento.
       </p>
     </div>

@@ -1,6 +1,6 @@
 # Daily Second Brain
 
-Produto independente criado em 21/09/2026, versão 1.1.0. Referências de experiência: Build Agentflows e Vídeos de Campanha. Mantém Node 22+, Next.js 16, conta administrativa, configuração cifrada em SQLite, saída standalone, imagem GHCR e Blueprint Render da suíte.
+Produto independente criado em 21/09/2026, versão 1.1.1. Referências de experiência: Build Agentflows e Vídeos de Campanha. Mantém Node 22+, Next.js 16, conta administrativa, configuração cifrada em SQLite, saída standalone, imagem GHCR e Blueprint Render da suíte.
 
 `padrao: proprio` registra o domínio de memória raw → wiki → outputs. Não replica o motor de formulários, notificações nem o servidor MCP dos apps de formulários. Tem uma fila e um agendador próprios para coletas, inicializados via `instrumentation.ts`. `lib/store.ts`, `lib/conta.ts`, `lib/conta-comum.ts` foram copiados da infraestrutura existente; `lib/chatgpt.ts` usa o bridge oficial do Build Agentflows, com testes de protocolo. O app é cliente Zapier MCP, não servidor MCP (por isso a capacidade `mcp` não é anunciada no catálogo).
 

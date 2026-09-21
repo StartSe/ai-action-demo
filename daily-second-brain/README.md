@@ -1,4 +1,4 @@
-# Daily Second Brain · v1.1.0
+# Daily Second Brain · v1.1.1
 
 Uma memória pessoal conectada: capture o que chega, transforme em conhecimento e converse para criar novos resultados. A experiência combina um observatório de ideias com páginas Markdown, fontes rastreáveis, regras próprias e um assistente por texto ou voz.
 
@@ -28,9 +28,11 @@ Zapier centraliza as fontes. Em **Coletas e rotinas**, o pedido autoriza as leit
 
 O modo agêntico do Zapier é atendido pelas ferramentas oficiais `inspect_zapier_actions`, `discover_zapier_actions`, `list_zapier_connections` e `execute_zapier_read_action`. No modo gerenciado, ferramentas declaradas como leitura pelo servidor são reconhecidas; ferramentas sem classificação precisam ser selecionadas pelo usuário em **Ferramentas de coleta**. A escolha fica vinculada ao servidor e à definição da ferramenta. Mudanças de conexão ou permissões são verificadas novamente na execução. Habilite as ações desejadas no Zapier; a coleta não habilita novas ações nem executa código externo. [Referência oficial dos modos do Zapier](https://docs.zapier.com/mcp/overview/how-tools-work).
 
-## Primeiro acesso e uma coleta do Slack
+Consultas conhecidas do Slack, incluindo **Find Public Channel**, **Retrieve Thread Messages** e **Get Message by Timestamp**, podem ser selecionadas mesmo quando o Zapier as classifica como ações. Marque as consultas desejadas e clique em **Salvar ferramentas de coleta**. Ações de envio e edição continuam disponíveis no chat, com confirmação da execução. A exceção usa uma lista de identificadores de consultas, sem liberar ferramentas apenas pelo título ou por palavras como “find” e “get”. [Operações do Slack no Zapier](https://help.zapier.com/hc/en-us/articles/8495993391629-How-to-get-started-with-Slack-on-Zapier).
 
-1. Crie sua conta. O guia abre automaticamente em uma memória nova e pode ser retomado pelo menu **Primeiro acesso**.
+## Configuração e uma coleta do Slack
+
+1. Crie sua conta. O guia abre automaticamente em uma memória nova e pode ser retomado pelo menu **Configuração**.
 2. Conecte ChatGPT ou OpenRouter e use **Testar IA e continuar**. O teste faz uma chamada real ao provedor escolhido.
 3. Conecte o Zapier e habilite a leitura de mensagens/histórico do Slack. Confira as ferramentas de coleta; escolha somente ações de consulta.
 4. Revise as regras de organização. ElevenLabs é opcional.
