@@ -136,6 +136,18 @@ function construirColunas(opcoes: { selecionados: Set<string>; onAlternar: (id: 
       render: (l) => <Link href={`/prospeccoes/${l.prospeccaoId}`} className="hover:underline">{l.prospeccaoNome}</Link>,
     },
     { chave: "status", titulo: "Status", render: (l) => <Chip nivel="neutral">{ROTULO_STATUS_LEAD[l.status]}</Chip> },
+    // Atalho para o passo seguinte da jornada sem passar pela ficha: a rota cria a abordagem na primeira
+    // visita e devolve a já escrita nas seguintes (app/api/leads/[id]/abordagem) — daí o rótulo mudar
+    // quando o lead já passou de "selecionado".
+    {
+      chave: "abordagem",
+      titulo: "Abordagem",
+      render: (l) => (
+        <Link href={`/leads/${l.id}/abordagem`} className="btn-link text-[13px] whitespace-nowrap">
+          {ORDEM_STATUS_LEAD.indexOf(l.status) >= ORDEM_STATUS_LEAD.indexOf("selecionado") ? "Ver abordagem" : "Criar abordagem"}
+        </Link>
+      ),
+    },
   ];
 }
 

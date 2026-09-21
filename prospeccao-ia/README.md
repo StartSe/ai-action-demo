@@ -1,5 +1,7 @@
 # Prospecção com IA
 
+Versão **0.3.0**. Veja as [notas de versão](CHANGELOG.md).
+
 Workspace de prospecção com cinco áreas: Início, Produtos, Prospecções, Leads e Configurações. Área: Vendas.
 
 ## O que resolve
@@ -9,13 +11,32 @@ Prospectar hoje é manual e disperso: a cada busca a pessoa redigita o perfil de
 - **Produtos** — o produto/serviço e um ou mais perfis de cliente ideal (ICP) por produto, com critérios, personas, dores e sinais de intenção.
 - **Prospecções** — o assistente que cria uma busca (empresas, pessoas, uma empresa específica ou oportunidades por sinal, nas jornadas B2B e B2C) e acompanha a execução por etapas.
 - **Leads** — todos os leads de todas as prospecções, com filtro por estado, prospecção e aderência, a ficha de cada um e a abordagem gerada.
-- **Configurações** — `/setup`, com Bright Data, Exa, Tavily, SearchAPI e as demais integrações opcionais.
+- **Configurações** — `/setup`, com a conta de IA (OpenRouter ou ChatGPT), Bright Data, Exa, Tavily, SearchAPI e as demais integrações opcionais.
 
 ## Stack
-Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão.
+Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter (modelo gratuito por padrão; GPT, Gemini, Claude e DeepSeek entre os pagos) ou pela assinatura ChatGPT, com a conta escolhida explicitamente em Configurações.
 
 ## Configuração inicial (sem variáveis de ambiente)
-Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar a IA", fluxo OAuth) ou colando uma chave, e também pode conectar a pesquisa de mercado e sinais (Bright Data), a busca de leads como fonte alternativa de contatos (Apollo), Exa (pesquisa profunda), Tavily, SearchAPI e o CRM — todos testáveis com um clique. Tudo fica salvo cifrado em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar nada, o app roda em modo demonstração: produto, perfil ideal, prospecção, contas, leads e abordagem de exemplo prontos (Zetta Manutenção Industrial).
+Abra `/setup` no navegador. No cartão **Inteligência artificial**, escolha a conta que vai qualificar os leads e escrever as abordagens:
+
+- **OpenRouter:** conecte com um clique ("Conectar com OpenRouter", fluxo OAuth) ou cole uma chave, escolha o modelo (Automático, gratuitos, "Mais usados" como GPT-5.4 Mini, Gemini 3.8 Flash e Claude Sonnet 5, ou qualquer outro do catálogo) e teste a conexão.
+- **ChatGPT:** clique em **Conectar com ChatGPT**, abra a página oficial da OpenAI e informe o código mostrado. Se solicitado, habilite o login por código de dispositivo nas configurações de segurança do ChatGPT. A conexão usa o [Codex App Server oficial](https://developers.openai.com/codex/app-server) (`@openai/codex` 0.155.1, o mesmo do Radar de Sinais e do Build Agentflows); o uso segue o acesso e os limites do seu plano, e os modelos listados são os da sua conta.
+
+A conta escolhida atende a todo o app: leitura de produto pelo site, qualificação com evidências, hipótese de dor, estratégia e mensagens, interpretação da busca livre e as ferramentas MCP. Uma falha na conta ChatGPT nunca cai no OpenRouter (nem o contrário) e nunca vira exemplo: a tela explica o que houve e oferece o caminho. A escolha fica em SQLite, as chaves do OpenRouter permanecem cifradas e a sessão ChatGPT fica isolada em `DATA_DIR/chatgpt` (preserve o disco de dados). O processo do conector roda em ambiente restrito, sem acesso às demais credenciais, sem terminal, arquivos ou navegador.
+
+No mesmo `/setup` você também conecta a pesquisa de mercado e sinais (Bright Data), a busca de leads como fonte alternativa de contatos (Apollo), Exa (pesquisa profunda), Tavily, SearchAPI e o CRM — todos testáveis com um clique. Tudo fica salvo cifrado em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar nada, o app roda em modo demonstração: produto, perfil ideal, prospecção, contas, leads e abordagem de exemplo prontos (Zetta Manutenção Industrial).
+
+## Conta de IA e jornada Produto › Prospecção › Leads — versão 0.3.0
+
+Além da escolha da conta de IA descrita acima, a jornada principal ficou mais fácil de ler sem perder nada do que já existia:
+
+- **Nova prospecção** mostra os quatro passos como um indicador numerado (o mesmo componente da suíte) com uma orientação curta por passo, no lugar da frase "Passo X de 4".
+- **Página da prospecção** abre com o tipo de busca e a data em chips e o funil em cinco números (encontrados, qualificados, selecionados, contatados, responderam). Quando há uma lista de pessoas, esses números são as próprias abas de filtro. Nos cartões de empresa, as evidências aparecem resumidas ("3 atendem · 1 sem verificação") e abrem item a item ao clicar. O link para ajustar os critérios agora diz "Editar perfil ideal".
+- **Ficha do lead** aberta como página fica em duas colunas no desktop: quem é a pessoa, evidências, sinais e empresa à esquerda; situação no funil (papel e status) e qualificação aprofundada à direita. No painel lateral da exploração de empresa, a ficha continua em uma coluna.
+- **Leads** ganhou a coluna "Abordagem" (criar ou ver a abordagem direto da lista).
+- **Configurações** mostra o cartão da IA como conectado pela conta escolhida, e o menu de modelos do OpenRouter traz um grupo "Mais usados" com GPT, Gemini, Claude, DeepSeek, Grok, Llama, Mistral e Qwen, sempre conferidos no catálogo vivo (variantes de lote, imagem, áudio e código ficam de fora).
+
+Validação: `npm test` (65 testes, incluindo protocolo do conector com respostas simuladas, escolha de conta sem fallback e curadoria do catálogo), `npm run lint`, `npm run build`, verificadores de padrão e jargão da suíte. O login em uma conta ChatGPT real e a geração com ela não fizeram parte da validação automatizada.
 
 ## Abordagem e qualificação aprofundada — versão 0.1.6
 
@@ -73,8 +94,10 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 |---|---|
 | `DATA_DIR` | Pasta do banco SQLite. Padrão `./data` (Docker: `/app/data`). |
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
+| `AI_PROVIDER` | `openrouter` (padrão) ou `chatgpt`. Prefira escolher na tela; definida no ambiente, trava a escolha. |
+| `CHATGPT_MODEL` | Opcional. Modelo da conta ChatGPT; vazio usa Automático. |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Ativa a IA que qualifica leads, gera a hipótese de dor e escreve a estratégia e as mensagens. Obtenha em https://openrouter.ai/keys |
-| `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
+| `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`; aceita qualquer id do catálogo, como `openai/gpt-5.4-mini` ou `google/gemini-3.8-flash`. |
 | `APOLLO_API_KEY` | Alternativa ao setup. Ativa a Apollo.io como fonte alternativa de contatos. Obtenha em https://app.apollo.io/#/settings/integrations/api |
 | `BRIGHTDATA_API_KEY` | Alternativa ao setup. Ativa a pesquisa de mercado e sinais (busca de empresas, pessoas e sinais públicos) — o motor de descoberta do workspace, atrás de `lib/descoberta.ts`. A chave já salva é reaproveitada pelo MCP HTTP com `pro=1`, sem zonas manuais. Obtenha em https://brightdata.com/cp/mcp |
 | `BRIGHTDATA_TETO_CONSULTAS` | Campo "Teto de consultas por prospecção" em Opções avançadas (padrão 60). Quantas buscas e leituras reais uma prospecção pode fazer antes de parar e terminar "pronta" com o aviso de orçamento; páginas já lidas nas últimas 24h são reaproveitadas do cache e não contam. |
@@ -93,7 +116,9 @@ app/produtos/**, components/Produtos*.tsx  Produtos e perfil de cliente ideal (I
 app/prospeccoes/**, components/Prospeccoes*.tsx  Assistente de 4 passos, execução assíncrona e resultado por modo
 app/leads/**, components/Leads.tsx, FichaLead*.tsx, AbordagemLead.tsx  Lista de leads, ficha e abordagem
 app/setup/page.tsx, components/setup.tsx   Configuração inicial (chaves, OAuth, teste de conexão)
+components/ConexaoIA.tsx                   escolha da conta de IA (OpenRouter ou ChatGPT), login por código e modelo
 app/api/setup/                             leitura/gravação da configuração, teste e OAuth do OpenRouter
+app/api/ia/, app/api/chatgpt/              preferência da conta de IA; conexão, código de dispositivo e modelos do ChatGPT
 app/api/produtos/, app/api/icps/           CRUD de produto e ICP
 app/api/prospeccoes/                       criação, andamento, cancelamento e resultado de uma prospecção
 app/api/leads/                             lista, ficha, status e abordagem de um lead
@@ -113,7 +138,9 @@ lib/execucao-prospeccao.ts                 pipeline assíncrono de uma prospecç
 lib/interpretacao.ts                       interpreta o campo único de busca livre do Início
 lib/rotinas-do-app.ts                      rotinas "Leads novos toda semana" e "Oportunidades novas"
 lib/ferramentas.ts                         ferramentas MCP do workspace
-lib/ai.ts                                  cliente OpenRouter (askText, askJSON)
+lib/ai.ts                                  camada de IA: OpenRouter ou ChatGPT conforme a conta escolhida (askText, askJSON)
+lib/chatgpt.ts                             conector do Codex App Server com sessão isolada em DATA_DIR/chatgpt
+lib/modelos.ts                             rede de segurança e curadoria do catálogo de modelos ("Mais usados")
 lib/demo.ts                                produto, ICP, prospecção, contas, leads e abordagem de exemplo
 lib/store.ts                               configuração em SQLite (node:sqlite), com variáveis de ambiente como prioridade
 Dockerfile                                 build multi-stage com saída standalone

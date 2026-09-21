@@ -1,8 +1,11 @@
 "use client";
-// Tela de configuração inicial, gerada a partir de lib/integracoes.ts. Base compartilhada pela suíte, com navegação própria opcional.
+// Tela de configuração inicial, gerada a partir de lib/integracoes.ts. Base compartilhada pela suíte, com
+// navegação própria opcional e, neste app, a escolha da conta de IA (OpenRouter ou ChatGPT) no primeiro
+// cartão (components/ConexaoIA.tsx). Divergência registrada em scripts/padrao-excecoes.json.
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { IlustracaoSegmento, MaisDetalhes, Topbar, useStatus } from "./ui";
+import { ConexaoIA } from "./ConexaoIA";
+import { IlustracaoSegmento, MaisDetalhes, Topbar, useStatus, type Status } from "./ui";
 import type { CampoStatus, IntegracaoStatus, Opcao, StatusCaixasEmail, StatusEnderecoPublico } from "@/lib/setup-comum";
 import type { ItemNavegacao } from "@/lib/navegacao";
 import type { Segmento } from "@/lib/ilustracao";
@@ -50,13 +53,24 @@ export function SetupPage({ marca, nome, area, segmento, children, navegacao }: 
   const { status, erro } = useStatus();
   const [dados, setDados] = useState<Resposta | null>(null);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
+  // `useStatus` busca uma vez ao abrir; depois de conectar ou trocar a conta de IA, o cabeçalho precisa
+  // refletir o estado novo sem recarregar a página — por isso o /api/status é relido junto com o /api/setup.
+  const [statusRecente, setStatusRecente] = useState<Status | null>(null);
+  const statusEfetivo = statusRecente ?? status;
 
-  const carregar = () => fetch("/api/setup").then((r) => r.json()).then((resposta: Resposta) => setDados({ ...resposta, integracoes: resposta.integracoes.filter((i) => i.id !== "notificacoes") })).catch(() => setAviso({ tipo: "erro", texto: "Não foi possível carregar a configuração." }));
-  const primeiroPendenteId = dados?.integracoes.find((i) => i.obrigatoria && !i.configurada)?.id;
-  const conectadas = dados?.integracoes.filter((i) => i.configurada).length ?? 0;
+  const carregar = () => {
+    fetch("/api/setup").then((r) => r.json()).then((resposta: Resposta) => setDados({ ...resposta, integracoes: resposta.integracoes.filter((i) => i.id !== "notificacoes") })).catch(() => setAviso({ tipo: "erro", texto: "Não foi possível carregar a configuração." }));
+    fetch("/api/status").then((r) => (r.ok ? r.json() : null)).then((s: Status | null) => { if (s) setStatusRecente(s); }).catch(() => {});
+  };
+  // O cartão da IA conta como conectado pela conta escolhida (OpenRouter ou ChatGPT), que é o que
+  // /api/setup devolve em `pronto`; os demais cartões continuam olhando as próprias chaves.
+  const iaConectada = dados?.pronto ?? false;
+  const configurada = (i: IntegracaoStatus) => (i.id === "openrouter" ? iaConectada : i.configurada);
+  const primeiroPendenteId = dados?.integracoes.find((i) => i.obrigatoria && !configurada(i))?.id;
+  const conectadas = dados?.integracoes.filter(configurada).length ?? 0;
   const total = dados?.integracoes.length ?? 0;
   const progresso = total > 0 ? Math.round((conectadas / total) * 100) : 0;
-  const opcionaisFaltando = dados?.integracoes.filter((i) => !i.obrigatoria && !i.configurada) ?? [];
+  const opcionaisFaltando = dados?.integracoes.filter((i) => !i.obrigatoria && !configurada(i)) ?? [];
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -71,7 +85,7 @@ export function SetupPage({ marca, nome, area, segmento, children, navegacao }: 
 
   return (
     <>
-      <Topbar marca={marca} nome={nome} area={area} status={status} erro={erro} usuario={status?.usuario} navegacao={navegacao} />
+      <Topbar marca={marca} nome={nome} area={area} status={statusEfetivo} erro={erro} usuario={statusEfetivo?.usuario} navegacao={navegacao} />
       <main className="max-w-[1100px] mx-auto px-8 max-md:px-4 pt-8 pb-16">
         <div className="grid grid-cols-[260px_minmax(0,1fr)] max-md:grid-cols-1 gap-10 max-md:gap-6">
           <aside className="flex flex-col gap-5 self-start md:sticky md:top-6">
@@ -143,16 +157,20 @@ export function SetupPage({ marca, nome, area, segmento, children, navegacao }: 
             )}
 
             <div className="flex flex-col gap-5">
-              {dados?.integracoes.map((i, indice) => (
-                <CartaoIntegracao
-                  key={i.id}
-                  integracao={i}
-                  numero={indice + 1}
-                  aoSalvar={carregar}
-                  destaque={i.id === primeiroPendenteId}
-                  caixasEmail={i.id === "notificacoes" ? dados.caixasEmail : undefined}
-                />
-              ))}
+              {dados?.integracoes.map((i, indice) =>
+                i.id === "openrouter" ? (
+                  <CartaoIA key={i.id} integracao={i} numero={indice + 1} conectada={iaConectada} aoSalvar={carregar} destaque={i.id === primeiroPendenteId} />
+                ) : (
+                  <CartaoIntegracao
+                    key={i.id}
+                    integracao={i}
+                    numero={indice + 1}
+                    aoSalvar={carregar}
+                    destaque={i.id === primeiroPendenteId}
+                    caixasEmail={i.id === "notificacoes" ? dados.caixasEmail : undefined}
+                  />
+                )
+              )}
             </div>
 
             {children && <div className="flex flex-col gap-5 mt-5">{children}</div>}
@@ -224,7 +242,42 @@ function CampoEnderecoPublico({ status, aoSalvar }: { status: StatusEnderecoPubl
   );
 }
 
-function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEmail }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean; caixasEmail?: StatusCaixasEmail }) {
+/** Cabeçalho comum dos cartões: ícone, número, título, chip de estado e a frase de uma linha. */
+function CabecalhoCartao({ integracao: i, numero, conectada }: { integracao: IntegracaoStatus; numero: number; conectada: boolean }) {
+  return (
+    <div className="flex items-start gap-3.5 mb-4">
+      <div className="relative shrink-0">
+        <span className="absolute -left-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-[11px] font-bold text-white">{numero}</span>
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft overflow-hidden">
+          <img src={`/ilustracoes/icones/${iconeIntegracao(i.id)}.webp`} alt="" aria-hidden="true" width={32} height={32} className="h-8 w-8 object-contain" />
+        </div>
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="text-lg font-bold">{i.titulo}</h2>
+          <span className={`chip-status ${conectada ? "chip-status-conectado" : "chip-status-pendente"}`}>{conectada ? "Conectado" : "Pendente"}</span>
+        </div>
+        <p className="mt-0.5 truncate text-sm text-ink-2">{i.beneficio || i.descricao}</p>
+      </div>
+    </div>
+  );
+}
+
+/** Cartão "Inteligência artificial": o cabeçalho reflete a conta escolhida (OpenRouter ou ChatGPT) e o
+ * corpo é a escolha da conta (components/ConexaoIA.tsx) com o cartão do OpenRouter embutido dentro dela. */
+function CartaoIA({ integracao: i, numero, conectada, aoSalvar, destaque }: { integracao: IntegracaoStatus; numero: number; conectada: boolean; aoSalvar: () => void; destaque?: boolean }) {
+  return (
+    <section id={i.id} className={`card p-6 max-md:p-5 ${destaque ? "border-accent border-2" : ""}`}>
+      <CabecalhoCartao integracao={i} numero={numero} conectada={conectada} />
+      <ConexaoIA aoMudar={aoSalvar}>
+        <CartaoIntegracao integracao={i} numero={numero} aoSalvar={aoSalvar} embutido />
+      </ConexaoIA>
+    </section>
+  );
+}
+
+/** `embutido`: só o corpo (sem moldura nem cabeçalho), para viver dentro de outro cartão — caso do OpenRouter em CartaoIA. */
+function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEmail, embutido = false }: { integracao: IntegracaoStatus; numero: number; aoSalvar: () => void; destaque?: boolean; caixasEmail?: StatusCaixasEmail; embutido?: boolean }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   const [desconectando, setDesconectando] = useState(false);
@@ -299,24 +352,8 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
     </div>
   );
 
-  return (
-    <section id={i.id} className={`card p-6 max-md:p-5 ${destaque ? "border-accent border-2" : ""}`}>
-      <div className="flex items-start gap-3.5 mb-4">
-        <div className="relative shrink-0">
-          <span className="absolute -left-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-[11px] font-bold text-white">{numero}</span>
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft overflow-hidden">
-            <img src={`/ilustracoes/icones/${iconeIntegracao(i.id)}.webp`} alt="" aria-hidden="true" width={32} height={32} className="h-8 w-8 object-contain" />
-          </div>
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h2 className="text-lg font-bold">{i.titulo}</h2>
-            <span className={`chip-status ${i.configurada ? "chip-status-conectado" : "chip-status-pendente"}`}>{i.configurada ? "Conectado" : "Pendente"}</span>
-          </div>
-          <p className="mt-0.5 truncate text-sm text-ink-2">{i.beneficio || i.descricao}</p>
-        </div>
-      </div>
-
+  const corpo = (
+    <>
       {i.oauth ? (
         <>
           <div className="flex items-center gap-3 flex-wrap justify-end max-md:flex-col max-md:items-stretch mb-4">
@@ -362,6 +399,14 @@ function CartaoIntegracao({ integracao: i, numero, aoSalvar, destaque, caixasEma
         </>
       )}
       {teste && <p className={`mt-3 text-sm font-semibold ${teste.ok ? "text-ok" : "text-danger"}`}>{teste.mensagem}</p>}
+    </>
+  );
+
+  if (embutido) return <div>{corpo}</div>;
+  return (
+    <section id={i.id} className={`card p-6 max-md:p-5 ${destaque ? "border-accent border-2" : ""}`}>
+      <CabecalhoCartao integracao={i} numero={numero} conectada={i.configurada} />
+      {corpo}
     </section>
   );
 }
@@ -435,7 +480,8 @@ const LIMITE_BOTOES = 3;
 const GRUPOS_OPCAO: { chave: NonNullable<Opcao["grupo"]>; rotulo: string }[] = [
   { chave: "recomendado", rotulo: "Recomendado (gratuito)" },
   { chave: "gratuito", rotulo: "Outros gratuitos" },
-  { chave: "pago", rotulo: "Pagos (mais qualidade)" },
+  { chave: "destaque", rotulo: "Mais usados (pagos)" },
+  { chave: "pago", rotulo: "Outros pagos (maior contexto)" },
 ];
 
 function CampoSetup({ campo: c, valor, aoMudar }: { campo: CampoStatus; valor: string; aoMudar: (v: string) => void }) {

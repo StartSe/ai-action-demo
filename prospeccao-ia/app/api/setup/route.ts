@@ -1,11 +1,14 @@
+import { aiEnabled } from "@/lib/ai";
 import { INTEGRACOES } from "@/lib/integracoes";
 import { statusIntegracoes } from "@/lib/setup-comum";
 import { setConfig } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
+/** Divergência registrada em scripts/padrao-excecoes.json: `pronto` usa a conta de IA escolhida (OpenRouter
+ * ou ChatGPT, lib/ai.ts:aiEnabled), sem exigir chave do OpenRouter quando a conta ChatGPT está conectada. */
 export async function GET() {
-  return Response.json(await statusIntegracoes(INTEGRACOES));
+  return Response.json({ ...(await statusIntegracoes(INTEGRACOES)), pronto: await aiEnabled() });
 }
 
 /** Salva valores. Chave com valor "" é ignorada (mantém o atual); null apaga. */
@@ -21,5 +24,5 @@ export async function PUT(req: Request) {
     setConfig(chave, valor);
     salvos++;
   }
-  return Response.json({ salvos, ...(await statusIntegracoes(INTEGRACOES)) });
+  return Response.json({ salvos, ...(await statusIntegracoes(INTEGRACOES)), pronto: await aiEnabled() });
 }

@@ -99,7 +99,7 @@
       ],
       "problema": "Cada busca de leads recomeça do zero, sem perfil salvo, evidência ou estratégia antes da mensagem.",
       "ia": "Pesquisa empresas e pessoas pelo perfil ideal salvo, qualifica com evidências e sinais públicos, e escreve a estratégia e as mensagens da abordagem.",
-      "integracoes": "IA (OpenRouter) qualifica os leads, gera a hipótese de dor e escreve a estratégia e as mensagens. Pesquisa de mercado e sinais (Bright Data) é o motor de busca de empresas, pessoas e sinais públicos. Busca de leads (Apollo) continua como fonte alternativa de contatos. Notificações (e-mail ou Slack) avisam as oportunidades novas de uma prospecção salva. CRM (MCP) recebe os leads aprovados.",
+      "integracoes": "IA (OpenRouter ou assinatura ChatGPT) qualifica os leads, gera a hipótese de dor e escreve a estratégia e as mensagens. Pesquisa de mercado e sinais (Bright Data) é o motor de busca de empresas, pessoas e sinais públicos. Busca de leads (Apollo) continua como fonte alternativa de contatos. Notificações (e-mail ou Slack) avisam as oportunidades novas de uma prospecção salva. CRM (MCP) recebe os leads aprovados.",
       "acento": "#0b5789",
       "porta": 3005,
       "captura": "capturas/prospeccao-ia.png",
@@ -111,7 +111,8 @@
         "mcp",
         "rotina"
       ],
-      "demo": null
+      "demo": null,
+      "versao": "0.3.0"
     },
     {
       "id": "whatsapp-atendente",

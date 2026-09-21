@@ -42,7 +42,10 @@ function TabButton({ ativo, onClick, children }: { ativo: boolean; onClick: () =
   );
 }
 
-export function FichaLead({ leadId, onLeadAtualizado }: { leadId: string; onLeadAtualizado?: (lead: LeadProspeccao) => void }) {
+/** `layout`: "painel" (padrão) empilha tudo numa coluna, para o painel lateral de ExploracaoEmpresa.tsx;
+ * "pagina" (FichaLeadPagina.tsx) abre em duas colunas no desktop — identidade, evidências e sinais à
+ * esquerda; situação no funil e qualificação aprofundada à direita — para a ficha não virar um bloco só de texto. */
+export function FichaLead({ leadId, onLeadAtualizado, layout = "painel" }: { leadId: string; onLeadAtualizado?: (lead: LeadProspeccao) => void; layout?: "painel" | "pagina" }) {
   const [dados, setDados] = useState<FichaDados | null>(null);
   const [naoEncontrada, setNaoEncontrada] = useState(false);
   const [aba, setAba] = useState<Aba>("geral");
@@ -153,8 +156,7 @@ export function FichaLead({ leadId, onLeadAtualizado }: { leadId: string; onLead
   const motivo = lead.papelManual ? "Definido manualmente pelo vendedor." : motivoPapel(lead.papel, lead.cargo, icpPersonas);
   const podeAdicionar = lead.status === "novo";
 
-  return (
-    <div className="flex flex-col gap-4">
+  const cabecalho = (
       <div>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
@@ -171,9 +173,10 @@ export function FichaLead({ leadId, onLeadAtualizado }: { leadId: string; onLead
           </a>
         )}
       </div>
-
-      <QualificacaoProfunda key={lead.id} leadId={lead.id} status={lead.status} aoQualificar={() => alterarStatus("qualificado")} />
-
+  );
+  const qualificacao = <QualificacaoProfunda key={lead.id} leadId={lead.id} status={lead.status} aoQualificar={() => alterarStatus("qualificado")} />;
+  const situacao = (
+    <div className="flex flex-col gap-4">
       {jornada === "b2b" && (
         <div>
           <p className="font-semibold text-[13px] mb-1.5">Papel no processo de decisão</p>
@@ -234,7 +237,10 @@ export function FichaLead({ leadId, onLeadAtualizado }: { leadId: string; onLead
           <p className="text-[12px] text-muted mt-1">Motivo do descarte: {ROTULO_MOTIVO_DESCARTE[lead.motivoDescarte]}</p>
         )}
       </div>
-
+    </div>
+  );
+  const abas = (
+    <>
       <div className="flex gap-1.5 border-b border-line" role="tablist">
         <TabButton ativo={aba === "geral"} onClick={() => setAba("geral")}>Visão geral</TabButton>
         <TabButton ativo={aba === "sinais"} onClick={() => setAba("sinais")}>Sinais</TabButton>
@@ -315,7 +321,9 @@ export function FichaLead({ leadId, onLeadAtualizado }: { leadId: string; onLead
           )}
         </div>
       )}
-
+    </>
+  );
+  const rodape = (
       <div className="flex flex-col gap-2 pt-3 border-t border-line">
         <div className="flex items-center gap-2.5 flex-wrap justify-end">
           {podeAdicionar && (
@@ -329,6 +337,34 @@ export function FichaLead({ leadId, onLeadAtualizado }: { leadId: string; onLead
         </div>
         {erroLista && <Aviso tom="danger">{erroLista}</Aviso>}
       </div>
+  );
+
+  if (layout === "pagina") {
+    return (
+      <div className="grid md:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] gap-5 items-start">
+        <section className="card p-6 max-md:p-5 flex flex-col gap-4 min-w-0" aria-label="Quem é e por que faz sentido">
+          {cabecalho}
+          {abas}
+          {rodape}
+        </section>
+        <div className="flex flex-col gap-5 min-w-0">
+          <section className="card p-6 max-md:p-5" aria-label="Situação no funil">
+            <h2 className="section-title">Situação no funil</h2>
+            {situacao}
+          </section>
+          {qualificacao}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {cabecalho}
+      {qualificacao}
+      {situacao}
+      {abas}
+      {rodape}
     </div>
   );
 }

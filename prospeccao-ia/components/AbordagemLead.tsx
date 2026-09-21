@@ -333,7 +333,7 @@ function ConteudoAbordagem({ leadId }: { leadId: string }) {
       <main className="max-w-[1200px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
         <Link href={`/leads/${leadId}`} className="btn-link text-sm mb-5 inline-block">‹ Voltar para a ficha</Link>
         <header className="mb-7">
-          <p className="text-xs font-semibold uppercase tracking-widest text-accent-ink mb-2">Abordagem personalizada</p>
+          <p className="sobretitulo mb-2">Abordagem personalizada</p>
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-ink">{lead ? `Uma conversa com ${lead.nome.split(" ")[0]}` : "Prepare a próxima conversa"}</h1>
           <p className="text-muted mt-2">{abordagem ? "Revise a estratégia, escolha o canal e use a mensagem para iniciar o contato." : "Transformando a qualificação do lead em uma estratégia e mensagens para cada canal."}</p>
           {lead && <div className="flex flex-wrap items-center gap-2 mt-4 text-sm"><span className="font-semibold">{lead.nome}</span><span className="text-muted">{[lead.cargo, lead.empresa].filter(Boolean).join(" · ")}</span><Chip nivel="neutral">{ROTULO_STATUS_LEAD[lead.status]}</Chip></div>}

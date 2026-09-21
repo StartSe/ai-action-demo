@@ -14,7 +14,7 @@ import { Aviso, Chip, DataTable, Topbar, data, useConfirmacao, useStatus, lerErr
 import { ExploracaoEmpresa } from "@/components/ExploracaoEmpresa";
 import { baixarCSV } from "@/lib/exportacao";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
-import { formatarFunil, funilContagens, motivoPapel, ordenarLeadsPorPrioridade, sinalAntigo, sinalMaisRecente } from "@/lib/qualificacao";
+import { funilContagens, motivoPapel, ordenarLeadsPorPrioridade, sinalAntigo, sinalMaisRecente, type FunilContagens } from "@/lib/qualificacao";
 import { NIVEL_CHIP_EVIDENCIA, ORDEM_MOTIVOS_DESCARTE, ORDEM_STATUS_LEAD, ROTULO_FIT, ROTULO_MODO, ROTULO_MOTIVO_DESCARTE, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA, ROTULO_STATUS_LEAD, nomeProspeccao, recorteProspeccao } from "@/lib/rotulos";
 import { ETAPAS_PROSPECCAO } from "@/lib/execucao-etapas";
 import type { Conta, Evidencia, Jornada, LeadProspeccao, MotivoDescarte, Prospeccao, SinalProspeccao, StatusLead } from "@/lib/types";
@@ -67,6 +67,28 @@ function EvidenciasLista({ evidencias }: { evidencias: Evidencia[] }) {
   );
 }
 
+/** Evidências dobradas (cartões de empresa dos modos "empresas" e "oportunidades"): o resumo em números
+ * ("3 atendem · 1 sem verificação") fica sempre visível; a lista item a item abre ao clicar — a informação
+ * não some, só deixa de ocupar a tela inteira quando há dez empresas seguidas. */
+function EvidenciasResumo({ evidencias }: { evidencias: Evidencia[] }) {
+  if (evidencias.length === 0) return null;
+  const quantos = (r: Evidencia["resultado"]) => evidencias.filter((e) => e.resultado === r).length;
+  const partes: [number, string, string][] = [
+    [quantos("atende"), "atende", "atendem"],
+    [quantos("nao_atende"), "não atende", "não atendem"],
+    [quantos("nao_verificavel"), "sem verificação", "sem verificação"],
+  ];
+  const resumo = partes.filter(([n]) => n > 0).map(([n, singular, plural]) => `${n} ${n === 1 ? singular : plural}`).join(" · ");
+  return (
+    <details className="text-[12.5px]">
+      <summary className="cursor-pointer font-semibold text-accent-ink select-none">Evidências: {resumo}</summary>
+      <div className="mt-2">
+        <EvidenciasLista evidencias={evidencias} />
+      </div>
+    </details>
+  );
+}
+
 /** Até `max` palavras, com o texto inteiro no `title` (US-033, coluna "Sinal"): a lista prioriza
  * densidade — a frase inteira, evidências e hipótese de dor continuam na ficha ("Ver ficha", no menu
  * "•••" abaixo), que já mostra tudo isso por extenso desde a US-027. */
@@ -76,46 +98,50 @@ function truncarPalavras(texto: string, max: number): string {
   return `${palavras.slice(0, max).join(" ")}…`;
 }
 
-/** Abas do funil (US-035): filtram a lista de leads por progresso MÍNIMO (ver funilContagens em
- * lib/qualificacao.ts, mesma ordem/regra) — "Descobertos" não tem mínimo, mostra todo mundo, inclusive
- * quem já foi descartado. Só aparecem nos modos que desenham `DataTable` de leads nesta tela
- * ("pessoas"/"oportunidades"); "empresas" e "empresa_unica" não têm uma lista de leads própria para filtrar. */
+/** Etapas do funil (US-035): cada uma filtra a lista de leads por progresso MÍNIMO (ver funilContagens em
+ * lib/qualificacao.ts, mesma ordem/regra) — "Encontrados" não tem mínimo, mostra todo mundo, inclusive
+ * quem já foi descartado. `contagem` aponta o número correspondente em FunilContagens: o mesmo array
+ * desenha os números do cabeçalho (FunilResumo) e decide o filtro da tabela. */
 type AbaFunil = "descobertos" | "qualificados" | "selecionados" | "contatados" | "responderam";
 
-const ABAS_FUNIL: { chave: AbaFunil; rotulo: string; minimo?: StatusLead }[] = [
-  { chave: "descobertos", rotulo: "Descobertos" },
-  { chave: "qualificados", rotulo: "Qualificados", minimo: "qualificado" },
-  { chave: "selecionados", rotulo: "Selecionados", minimo: "selecionado" },
-  { chave: "contatados", rotulo: "Contatados", minimo: "abordado" },
-  { chave: "responderam", rotulo: "Responderam", minimo: "respondeu" },
+const ETAPAS_FUNIL: { chave: AbaFunil; rotulo: string; contagem: keyof FunilContagens; minimo?: StatusLead }[] = [
+  { chave: "descobertos", rotulo: "Encontrados", contagem: "encontrados" },
+  { chave: "qualificados", rotulo: "Qualificados", contagem: "qualificados", minimo: "qualificado" },
+  { chave: "selecionados", rotulo: "Selecionados", contagem: "selecionados", minimo: "selecionado" },
+  { chave: "contatados", rotulo: "Contatados", contagem: "contatados", minimo: "abordado" },
+  { chave: "responderam", rotulo: "Responderam", contagem: "respondidos", minimo: "respondeu" },
 ];
 
 function leadsNaAba(leads: LeadProspeccao[], aba: AbaFunil): LeadProspeccao[] {
-  const minimo = ABAS_FUNIL.find((a) => a.chave === aba)?.minimo;
+  const minimo = ETAPAS_FUNIL.find((a) => a.chave === aba)?.minimo;
   if (!minimo) return leads;
   const indiceMinimo = ORDEM_STATUS_LEAD.indexOf(minimo);
   return leads.filter((l) => ORDEM_STATUS_LEAD.indexOf(l.status) >= indiceMinimo);
 }
 
-/** Abas do funil (US-035): `role="tablist"` local, sem componente compartilhado ainda (só esta tela
- * precisa hoje) — mesmo critério já usado para outros pares de abas pequenos e locais desta suíte. */
-function AbasFunil({ aba, onChange }: { aba: AbaFunil; onChange: (aba: AbaFunil) => void }) {
+/** Funil da prospecção em números, no lugar da frase "12 encontrados → 5 qualificados → …": cinco blocos
+ * lado a lado, um por etapa. Quando a tela tem uma lista de leads para filtrar (`onAba`), os blocos são
+ * as próprias abas (`role="tablist"`) — escolher um número filtra a tabela abaixo, sem uma segunda fileira
+ * de botões dizendo a mesma coisa. Sem lista (modo "empresas", busca em andamento), são só números. */
+function FunilResumo({ funil, aba, onAba }: { funil: FunilContagens; aba?: AbaFunil; onAba?: (aba: AbaFunil) => void }) {
   return (
-    <div role="tablist" aria-label="Etapas do funil" className="flex gap-1.5 flex-wrap mb-3">
-      {ABAS_FUNIL.map((item) => (
-        <button
-          key={item.chave}
-          type="button"
-          role="tab"
-          aria-selected={aba === item.chave}
-          className={`px-3 py-1.5 rounded-full text-[13px] font-semibold border cursor-pointer ${
-            aba === item.chave ? "bg-accent text-white border-accent" : "border-line text-muted hover:text-ink"
-          }`}
-          onClick={() => onChange(item.chave)}
-        >
-          {item.rotulo}
-        </button>
-      ))}
+    <div role={onAba ? "tablist" : undefined} aria-label={onAba ? "Etapas do funil" : undefined} className="grid grid-cols-5 max-md:grid-cols-3 max-sm:grid-cols-2 gap-2 mb-5">
+      {ETAPAS_FUNIL.map((etapa) => {
+        const ativo = onAba ? aba === etapa.chave : false;
+        const conteudo = (
+          <>
+            <span className="block text-[22px] leading-none font-extrabold tracking-[-0.02em]">{funil[etapa.contagem]}</span>
+            <span className="block text-[12px] font-semibold text-muted mt-1">{etapa.rotulo}</span>
+          </>
+        );
+        const base = "card shadow-none px-3.5 py-3 text-left transition-colors";
+        if (!onAba) return <div key={etapa.chave} className={base}>{conteudo}</div>;
+        return (
+          <button key={etapa.chave} type="button" role="tab" aria-selected={ativo} className={`${base} cursor-pointer ${ativo ? "border-accent bg-accent-soft" : "hover:bg-bg"}`} onClick={() => onAba(etapa.chave)}>
+            {conteudo}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -559,6 +585,8 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
   const recorte = andamento ? recorteProspeccao(andamento.prospeccao.modo, andamento.prospeccao.criterios) : "";
   const funil = andamento ? funilContagens(andamento.leads) : null;
   const leadsFiltrados = andamento ? leadsNaAba(andamento.leads, aba) : [];
+  // Os números do funil viram abas só quando há uma lista de leads abaixo para filtrar.
+  const filtraLeads = !!andamento && andamento.prospeccao.estado === "pronta" && (andamento.prospeccao.modo === "pessoas" || andamento.prospeccao.modo === "oportunidades") && andamento.leads.length > 0;
   const colunasLeads = andamento
     ? construirColunasLeads({
         jornada: andamento.jornada,
@@ -596,16 +624,18 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                 {apagando ? "Apagando…" : "Apagar"}
               </button>
             </div>
-            <p className="text-[13px] text-muted mb-1">
-              {data(andamento.prospeccao.criadoEm, { comAno: true })} · {ROTULO_MODO[andamento.prospeccao.modo]}
-            </p>
-            {funil && <p className="apoio mb-1.5">{formatarFunil(funil)}</p>}
-            <p className="text-[13px] text-muted mb-6 line-clamp-2">
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              <Chip nivel="neutral">{ROTULO_MODO[andamento.prospeccao.modo]}</Chip>
+              {andamento.prospeccao.demo && <Chip nivel="cinza">Exemplo</Chip>}
+              <span className="text-[13px] text-muted">{data(andamento.prospeccao.criadoEm, { comAno: true })}</span>
+            </div>
+            <p className="text-[13px] text-muted mb-5 line-clamp-2">
               {andamento.produtoNome} · {andamento.icpNome}
               {recorte && ` · ${recorte}`}
               {" · "}
-              <Link href={`/produtos/${andamento.prospeccao.produtoId}/icps/${andamento.prospeccao.icpId}`} className="btn-link text-[13px]">Editar estratégia</Link>
+              <Link href={`/produtos/${andamento.prospeccao.produtoId}/icps/${andamento.prospeccao.icpId}`} className="btn-link text-[13px]">Editar perfil ideal</Link>
             </p>
+            {funil && funil.encontrados > 0 && <FunilResumo funil={funil} aba={filtraLeads ? aba : undefined} onAba={filtraLeads ? setAba : undefined} />}
 
             {(andamento.prospeccao.estado === "executando" || andamento.prospeccao.estado === "pronta") && (
               <div className="card p-6 flex flex-col gap-4 mb-4">
@@ -694,7 +724,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                               ))}
                             </div>
                           )}
-                          <EvidenciasLista evidencias={conta.evidencias} />
+                          <EvidenciasResumo evidencias={conta.evidencias} />
                           <button
                             type="button"
                             className="btn-link text-[13px] self-start"
@@ -713,7 +743,6 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                 {andamento.prospeccao.modo === "pessoas" && andamento.jornada === "b2c" && (
                   <div className="flex flex-col gap-2.5 mb-1">
                     <Aviso tom="warn">Só entram dados que a própria pessoa publicou em perfil público; nada de lista comprada, inferência ou dado sensível.</Aviso>
-                    {andamento.leads.length > 0 && <AbasFunil aba={aba} onChange={setAba} />}
                     {andamento.leads.length === 0 ? (
                       <Aviso tom="warn">Nenhuma pessoa encontrada com esses critérios.</Aviso>
                     ) : leadsFiltrados.length === 0 ? (
@@ -730,7 +759,6 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
 
                 {andamento.prospeccao.modo === "pessoas" && andamento.jornada === "b2b" && (
                   <div className="flex flex-col gap-2.5 mb-1">
-                    {andamento.leads.length > 0 && <AbasFunil aba={aba} onChange={setAba} />}
                     {andamento.leads.length === 0 ? (
                       <Aviso tom="warn">Nenhuma pessoa encontrada com esses critérios.</Aviso>
                     ) : leadsFiltrados.length === 0 ? (
@@ -761,7 +789,6 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
 
                 {andamento.prospeccao.modo === "oportunidades" && (
                   <div className="flex flex-col gap-2.5 mb-1">
-                    {andamento.leads.length > 0 && <AbasFunil aba={aba} onChange={setAba} />}
                     {andamento.contas.length === 0 && andamento.leads.length === 0 ? (
                       <Aviso tom="warn">Nenhuma oportunidade encontrada com esses critérios.</Aviso>
                     ) : (
@@ -780,7 +807,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                                 <ChipSinal key={i} sinal={sinal} />
                               ))}
                             </div>
-                            <EvidenciasLista evidencias={conta.evidencias} />
+                            <EvidenciasResumo evidencias={conta.evidencias} />
                           </div>
                         ))}
                         {andamento.leads.length > 0 && (

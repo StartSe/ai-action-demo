@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   const icp = icpId ? obterICP(icpId) : null;
   if (!icp) return Response.json({ error: "Perfil ideal de cliente não encontrado." }, { status: 404 });
 
-  if (!aiEnabled()) {
+  if (!(await aiEnabled())) {
     return Response.json({ error: "Para interpretar sua frase, é preciso conectar a IA.", codigo: "chave_ausente", acao: { rotulo: "Conectar a IA", url: "/setup#openrouter" } }, { status: 400 });
   }
 
