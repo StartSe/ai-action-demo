@@ -187,6 +187,12 @@ function obterOuFalhar(id: string): Projeto {
   return p;
 }
 
+/** O projeto dono de uma página do histórico (para /r/[id] apontar para o workspace), ou null para páginas antigas sem site. */
+export function projetoDaPagina(paginaId: string): Projeto | null {
+  const linha = db().prepare(`SELECT ${COLUNAS} FROM projetos WHERE paginaId = ?`).get(paginaId) as Linha | undefined;
+  return linha ? paraProjeto(linha) : null;
+}
+
 /** Aceita o slug ou o id (os dois aparecem em links). */
 export function obterPorSlug(slugOuId: string): Projeto | null {
   const linha = db().prepare(`SELECT ${COLUNAS} FROM projetos WHERE slug = ? OR id = ?`).get(slugOuId, slugOuId) as Linha | undefined;

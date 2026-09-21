@@ -115,11 +115,26 @@ export default function Page() {
   const [preparando, setPreparando] = useState(false);
   const [sites, setSites] = useState<Projeto[] | null>(null);
   const [imagens, setImagens] = useState<ImagemPendente[]>([]);
+  // "Editar o pedido" (/?site=<id>): o formulário nasce preenchido com o site em rascunho/falhou e o envio faz PATCH + gerar.
+  const [editando, setEditando] = useState<Projeto | null>(null);
   const autoEnviado = useRef(false);
   const leituraAtual = useRef(0);
 
   useEffect(() => {
     fetch("/api/captura").then((r) => r.json()).then((r) => setServicoConectado(Boolean(r.servicoConectado))).catch(() => setServicoConectado(false));
+    const siteId = new URLSearchParams(location.search).get("site");
+    if (!siteId) return;
+    fetch(`/api/sites/${siteId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { projeto: Projeto } | null) => {
+        const s = d?.projeto;
+        if (!s || (s.estado !== "rascunho" && s.estado !== "falhou")) return;
+        setEditando(s);
+        setAba(s.origem === "briefing" ? "briefing" : "referencia");
+        setNomeDigitado(true);
+        setForm({ nomeSite: s.nome, stack: s.stack, instrucoes: s.instrucoes ?? "", marcaNome: s.marca?.nome ?? "", corPrimaria: s.marca?.corPrimaria ?? "", corSecundaria: s.marca?.corSecundaria ?? "", briefing: s.briefing ?? "" });
+      })
+      .catch(() => {});
   }, []);
 
   const set = (campo: keyof Formulario) => (e: { target: { value: string } }) => {
@@ -189,17 +204,12 @@ export default function Page() {
     setCriando(true);
     setAviso(null);
     try {
-      const corpo = {
-        nome: f.nomeSite.trim() || f.marcaNome.trim() || undefined,
-        origem,
-        imagem,
-        briefing: origem === "briefing" ? f.briefing.trim() : undefined,
-        stack: f.stack,
-        instrucoes: f.instrucoes,
-        marca: montarMarca(f),
-        gerar: pendentes.length === 0,
-      };
-      const r = await fetch("/api/sites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+      const marca = montarMarca(f);
+      const nome = f.nomeSite.trim() || f.marcaNome.trim() || undefined;
+      const corpo = editando
+        ? { nome, briefing: origem === "briefing" ? f.briefing.trim() : undefined, stack: f.stack, instrucoes: f.instrucoes, marca: marca ?? null }
+        : { nome, origem, imagem, briefing: origem === "briefing" ? f.briefing.trim() : undefined, stack: f.stack, instrucoes: f.instrucoes, marca, gerar: pendentes.length === 0 };
+      const r = await fetch(editando ? `/api/sites/${editando.id}` : "/api/sites", { method: editando ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
       if (!r.ok) {
         const info = await lerErro(r);
         if (r.status === 401 && info.codigo === "sem_sessao") { router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`); return; }
@@ -208,7 +218,7 @@ export default function Page() {
       }
       let { projeto } = (await r.json()) as { projeto: Projeto };
       let falhasImagens: string[] = [];
-      if (pendentes.length) {
+      if (pendentes.length || editando) {
         falhasImagens = await enviarPendentes(projeto.id, pendentes);
         const g = await fetch(`/api/sites/${projeto.id}/gerar`, { method: "POST" });
         if (g.ok || g.status === 409) projeto = ((await g.json()) as { projeto: Projeto }).projeto;
@@ -221,6 +231,7 @@ export default function Page() {
       setCaptura(null);
       setEndereco("");
       setImagens([]);
+      if (editando) { setEditando(null); history.replaceState(null, "", "/"); }
       setAviso(
         falhasImagens.length
           ? { tom: "warn", texto: `«${projeto.nome}» está sendo criado, mas ${falhasImagens.length === 1 ? "uma imagem não entrou" : `${falhasImagens.length} imagens não entraram`}: ${falhasImagens[0]}` }
@@ -244,6 +255,7 @@ export default function Page() {
       await criar("briefing", form, undefined, imagens);
       return;
     }
+    if (editando && editando.origem === "referencia") { await criar("referencia", form, undefined, imagens); return; }
     let imagem = captura;
     if (aba === "endereco" && !imagem) imagem = await trazerDoEndereco();
     if (!imagem) { if (aba === "referencia") setAviso({ tom: "danger", texto: "Envie a captura da página de referência antes de criar o site." }); return; }
@@ -298,7 +310,7 @@ export default function Page() {
   const corSecundariaValida = COR_HEX.test(form.corSecundaria) ? form.corSecundaria : "#bc342f";
   const temSites = Boolean(sites && sites.length);
   const passoAtual = temSites ? 3 : captura || form.briefing.trim().length >= MINIMO_BRIEFING ? 2 : 1;
-  const podeCriar = aba === "briefing" ? form.briefing.trim().length >= MINIMO_BRIEFING : aba === "endereco" ? Boolean(captura || endereco.trim()) : Boolean(captura);
+  const podeCriar = editando ? (aba !== "briefing" || form.briefing.trim().length >= MINIMO_BRIEFING) : aba === "briefing" ? form.briefing.trim().length >= MINIMO_BRIEFING : aba === "endereco" ? Boolean(captura || endereco.trim()) : Boolean(captura);
 
   const statusTexto = preparando
     ? "Preparando a referência..."
@@ -324,7 +336,15 @@ export default function Page() {
         <div>
           <form onSubmit={onSubmit} id="criar-site">
             <fieldset disabled={ocupado} className="min-w-0">
-              <CartaoEntrada icone={<IconeReferencia />} titulo="Criar um site">
+              <CartaoEntrada icone={<IconeReferencia />} titulo={editando ? `Editar o pedido de «${editando.nome}»` : "Criar um site"}>
+                {editando && (
+                  <div className="mb-4">
+                    <Aviso>
+                      {editando.origem === "referencia" ? "A captura enviada antes continua guardada: ajuste a marca ou as instruções e gere de novo." : "Ajuste o briefing, a marca ou as instruções e gere de novo."}{" "}
+                      <button type="button" className="btn-link text-[13px]" onClick={() => { setEditando(null); setForm(VAZIO); setNomeDigitado(false); history.replaceState(null, "", "/"); }}>Cancelar a edição</button>
+                    </Aviso>
+                  </div>
+                )}
                 <div role="tablist" aria-label="De onde o site nasce" className="flex gap-1 p-1 border border-line rounded-[10px] bg-surface mb-4 max-md:flex-col">
                   {ABAS.map((a) => (
                     <button
@@ -422,7 +442,7 @@ export default function Page() {
                 </MaisDetalhes>
               </CartaoEntrada>
 
-              <button type="submit" className="btn-primary" disabled={ocupado || !podeCriar}>{criando ? "Criando o site" : "Criar o site"}</button>
+              <button type="submit" className="btn-primary" disabled={ocupado || !podeCriar}>{criando ? (editando ? "Gerando o site" : "Criando o site") : editando ? "Salvar e gerar o site" : "Criar o site"}</button>
               <button type="button" className="btn-secundario mt-2" disabled={ocupado} onClick={usarExemplo}>Preencher com um exemplo</button>
             </fieldset>
             <p role="status" className="text-muted text-[13px] mt-2">{statusTexto}</p>

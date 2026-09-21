@@ -18,7 +18,7 @@ export function nomeDoArquivo(titulo: string, versao: number): string {
   return `${base || "pagina"}-v${versao}.html`;
 }
 
-export function EntregarPagina({ id, titulo, html, versao }: { id: string; titulo: string; html: string; versao: number }) {
+export function EntregarPagina({ id, titulo, html, versao, projetoId }: { id: string; titulo: string; html: string; versao: number; /** Página de um site: publicar é uma decisão do workspace (/sites/[id]), então a ação primária vira "Abrir o site". */ projetoId?: string }) {
   const [link, setLink] = useState<string | null>(null);
   const [menuAberto, setMenuAberto] = useState(false);
   const [copiadoLink, setCopiadoLink] = useState(false);
@@ -80,7 +80,11 @@ export function EntregarPagina({ id, titulo, html, versao }: { id: string; titul
 
   return (
     <div className="relative flex gap-2.5 max-md:w-full" ref={raizRef}>
-      <button type="button" className="btn-primary !w-auto max-md:flex-1" aria-expanded={link !== null} aria-controls="link-publicado" onClick={publicar}>Publicar link</button>
+      {projetoId ? (
+        <a href={`/sites/${projetoId}`} className="btn-primary !w-auto max-md:flex-1">Abrir o site</a>
+      ) : (
+        <button type="button" className="btn-primary !w-auto max-md:flex-1" aria-expanded={link !== null} aria-controls="link-publicado" onClick={publicar}>Publicar link</button>
+      )}
       <div className="shrink-0">
         <button type="button" className="btn-ghost" aria-haspopup="menu" aria-expanded={menuAberto} aria-label="Mais opções para entregar esta página" onClick={() => { setLink(null); setMenuAberto((v) => !v); }}>
           <span className="max-md:hidden">Mais</span>

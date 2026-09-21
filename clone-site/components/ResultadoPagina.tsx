@@ -14,7 +14,7 @@ export function rotuloFormato(html: string): string {
   return /cdn\.tailwindcss\.com/.test(html) ? "HTML com Tailwind" : "HTML com CSS";
 }
 
-export function Resultado({ pagina: inicial, meta: metaInicial, id, referencia }: { pagina: Pagina; meta: Meta; id: string; referencia?: string }) {
+export function Resultado({ pagina: inicial, meta: metaInicial, id, referencia, projetoId }: { pagina: Pagina; meta: Meta; id: string; referencia?: string; /** Quando a página pertence a um site, a entrega leva ao workspace em vez de publicar direto. */ projetoId?: string }) {
   // A página muda a cada edição/volta de versão sem sair da tela; a proveniência exibida passa a ser a da última mudança.
   const [pagina, setPagina] = useState<Pagina>(inicial);
   const [meta, setMeta] = useState<Meta>(metaInicial);
@@ -27,7 +27,7 @@ export function Resultado({ pagina: inicial, meta: metaInicial, id, referencia }
     <article className="reveal" data-id={id} data-versao={atual.n}>
       {/* Subtítulo sem o nome da marca: ele já está no título da página gerada, logo acima. */}
       <ResultHead titulo={pagina.titulo} subtitulo={`Versão ${atual.n} · ${rotuloFormato(atual.html)}`}>
-        <EntregarPagina id={id} titulo={pagina.titulo} html={atual.html} versao={atual.n} />
+        <EntregarPagina id={id} titulo={pagina.titulo} html={atual.html} versao={atual.n} projetoId={projetoId} />
       </ResultHead>
       {/* A faixa logo abaixo é que explica o que aconteceu e o que fazer; aqui fica só a proveniência. */}
       <Origem meta={meta} demoTexto="Exemplo ilustrativo, sem usar inteligência artificial." />

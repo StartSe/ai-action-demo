@@ -103,7 +103,7 @@
         "Lint, tsc e verificar-jargao passam; verificar em 1400x900 e 390 px: publicar a 1, gerar a 2 (voltar), faixa de não publicadas, publicar a 2 e conferir /s/<slug>"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "US-006 da PRD. Painéis Agente/Métricas/Domínio nascem aqui como lugar e ganham conteúdo nas US-007/008/009."
     },
     {

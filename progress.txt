@@ -76,3 +76,14 @@ Trabalho feito num worktree separado (../ai-action-demo-clone-site), criado a pa
   - **Caminho "/setup#..." num componente varrido pelo jargão só passa dentro de atributo `href=`**; como valor de prop/objeto (`acao={{ url }}`) é acusado. Constantes de link ficam em `lib/acoes.ts` (sem node:*) e são importadas.
   - **Subir o Codex demora ~2 s na primeira chamada** (`GET /api/chatgpt`); a tela consulta a cada 2,5 s, então "Verificando a conexão..." é esperado por um instante.
 ---
+
+## 20/09/2026 - US-006 - Workspace do site: prévia, versões, publicar, imagens, link
+- `app/sites/[id]/page.tsx` virou o workspace: cabeçalho com `NomeEditavel` (Renomear em linha, Enter/Esc), chip, "Apagar site" (confirm → DELETE → volta ao Início); duas colunas no desktop (prévia da versão selecionada + `FaixaPublicacao` à esquerda; `LinkPublico`, `PainelVersoes`, `PainelImagens` à direita), empilhado no celular. Estados rascunho (Gerar o site / Editar o pedido) e falhou (ErrorBox + Tentar de novo + Editar o pedido) ganharam o painel de imagens ao lado. `components/Workspace.tsx` concentra as peças.
+- Publicar é explícito: `FaixaPublicacao` mostra "Há mudanças ainda não publicadas: no ar está a versão 1, a mais recente é a 2" com "Publicar a versão N"; `PainelVersoes` tem Ver, Publicar esta e Voltar para esta (rota `voltar` existente), com chips "No ar"/"Rascunho". `LinkPublico`: endereço absoluto (montado no cliente), Copiar, Abrir, "Trocar o endereço" com o slug validado pelo servidor.
+- "Editar o pedido" (`/?site=<id>`): a tela inicial carrega o site em rascunho/falhou, preenche o formulário (aba pela origem, marca, briefing, instruções, formato), avisa que a captura anterior continua guardada e, ao enviar, faz `PATCH` + imagens + `gerar`. `lib/projetos.ts:projetoDaPagina` e `/r/[id]` → `EntregarPagina` mostra "Abrir o site" quando a página pertence a um site.
+- Até o agente (US-007), `EditorPagina` ("O que mudar") continua abaixo da prévia — a lista "Versões" dele duplica o painel novo por uma história; sai junto com ele.
+- Verificado: publicar a versão 2 trocou o `<header>` servido em `/s/cafe-aroma` e voltar à 1 restaurou; capturas 1400 px (workspace com faixa amarela e dois cartões de versão, Início em modo "Editar o pedido de «Estúdio Pilates»", site em rascunho) e 390 px (workspace empilhado, sem rolagem horizontal); `/r/<paginaId>` mostra "Abrir o site". Lint, tsc, build e jargão limpos.
+- **Learnings for future iterations:**
+  - **`setState` que precisa de `window` num efeito de montagem vai dentro de `Promise.resolve().then(...)`**: `react-hooks/set-state-in-effect` acusa a chamada direta (`useEffect(() => setOrigem(location.origin))`), e ler `window` no corpo do componente dá hydration mismatch quando o valor vira texto.
+  - **A versão selecionada para a prévia é estado da tela, não do servidor**: `selecionada` cai na última quando a lista muda (voltar cria versão nova e seleciona a criada).
+---
