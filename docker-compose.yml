@@ -146,6 +146,12 @@ services:
     ports: ["3019:10000"]
     volumes: [build-agentflows-dados:/app/data]
 
+  daily-second-brain:
+    build: ./daily-second-brain
+    image: ghcr.io/startse/daily-second-brain:latest
+    ports: ["3020:10000"]
+    volumes: [daily-second-brain-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -166,3 +172,4 @@ volumes:
   videos-campanha-dados:
   automl-pocket-dados:
   build-agentflows-dados:
+  daily-second-brain-dados:

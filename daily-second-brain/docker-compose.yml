@@ -1,0 +1,7 @@
+services:
+  app:
+    build: .
+    ports: ["3020:10000"]
+    volumes: [dados:/app/data]
+volumes:
+  dados:

@@ -1,6 +1,6 @@
 # IA para Executivos
 
-Dezenove apps independentes, cada um resolvendo um problema específico do dia a dia de uma empresa com IA em alguma etapa. Feitos para executivos: crie sua conta em 30 segundos, teste com dados de exemplo sem nenhuma chave e publique com um clique, na sua própria conta no Render, a partir de uma imagem Docker pública via Blueprint. Catálogo com botão de um clique: https://startse.github.io/ai-action-app-deploy/
+Vinte apps independentes, cada um resolvendo um problema específico do dia a dia de uma empresa com IA em alguma etapa. Feitos para executivos: crie sua conta em 30 segundos, teste com dados de exemplo sem nenhuma chave e publique com um clique, na sua própria conta no Render, a partir de uma imagem Docker pública via Blueprint. Catálogo com botão de um clique: https://startse.github.io/ai-action-app-deploy/
 
 ## Mapa de ideias
 
@@ -25,6 +25,7 @@ Dezenove apps independentes, cada um resolvendo um problema específico do dia a
 | 17 | [Vídeos de Campanha](videos-campanha/) | Marketing | Produzir um vídeo curto por campanha leva semanas e gastar créditos às cegas custa caro | Propõe três conceitos com roteiro por cena e gera o vídeo a partir da imagem do produto, mostrando o custo antes | Higgsfield (servidor MCP com OAuth) |
 | 18 | [AutoML](automl-pocket/) | Dados, Financeiro e Vendas | Prever churn, fraude ou vendas a partir de planilhas depende de um cientista de dados que não existe | Treina sozinho modelos de classificação, regressão e previsão de séries e explica o resultado em português | nenhuma: aprendizado de máquina local (scikit-learn, XGBoost). **Exceção ao padrão: web + worker Python + Redis numa imagem única, plano pago no Render** |
 | 19 | [Build Agentflows v0.7.0](build-agentflows/) | Gestão | Orquestrar tarefas de IA entre agentes e sistemas | Editor visual com agentes, condições, ferramentas, aprovação humana e versões publicadas | OpenRouter, ferramentas MCP e HTTP; execução por MCP e HTTP autenticado. Disco persistente no Render |
+| 20 | [Daily Second Brain v1.0.0](daily-second-brain/) | Gestão | Memórias e decisões dispersas | Wiki Markdown conectada, grafo, chat, voz e artefatos com fontes | ChatGPT, OpenRouter, Zapier MCP e ElevenLabs. Disco persistente no Render |
 
 Ideias mapeadas e deixadas para uma segunda rodada: copiloto de OKRs com check-in semanal, análise de concorrentes a partir de sites e redes, triagem de currículos contra a descrição da vaga, gerador de propostas comerciais a partir do CRM, resumo diário de e-mails e Slack para a diretoria.
 
@@ -43,7 +44,7 @@ Todos seguem o mesmo padrão (detalhes em [PADRAO.md](PADRAO.md)):
 ## Rodar a suíte inteira com Docker Compose
 
 ```bash
-docker compose up --build     # constrói e sobe os 19 apps; depois abra http://localhost:3001/setup (e assim por diante)
+docker compose up --build     # constrói e sobe os 20 apps; depois abra http://localhost:3001/setup (e assim por diante)
 ```
 
 Cada app guarda sua configuração em um volume Docker próprio, então as chaves sobrevivem a reinícios.
@@ -60,6 +61,7 @@ Cada app guarda sua configuração em um volume Docker próprio, então as chave
 | 3015 | clone-site | | 3016 | prospeccao-linkedin |
 | 3017 | videos-campanha | | 3018 | automl-pocket |
 | 3019 | build-agentflows | | | |
+| 3020 | daily-second-brain | | | |
 
 Um app só: `docker compose up --build pdi-time`, ou dentro da pasta do app `docker compose up --build`.
 
@@ -153,10 +155,10 @@ Os links abaixo aparecem também dentro de cada tela `/setup`, ao lado do campo 
 
 ```
 README.md              este arquivo
-PADRAO.md              padrão técnico e visual seguido por 17 dos 19 apps (automl-pocket tem estrutura própria)
+PADRAO.md              padrão técnico e visual seguido por 17 dos 20 apps (automl-pocket e daily-second-brain têm estrutura própria)
 catalogo.json          fonte única: apps, áreas, textos, cor, porta (alimenta render.yaml, página e branches de deploy)
 render.yaml            blueprint da suíte completa (gerado)
-docker-compose.yml     sobe os 19 apps localmente (portas 3001 a 3019); com `docker compose pull` usa as imagens do GHCR
+docker-compose.yml     sobe os 20 apps localmente (portas 3001 a 3020); com `docker compose pull` usa as imagens do GHCR
 site/index.html        página do catálogo publicada no GitHub Pages do repositório público
 scripts/               gerar-deploy.mjs (gera render.yaml e a pasta publico/), publicar-publico.sh (envia ao repo público), verificar-padrao.sh (compara os apps com pdi-time; exceções em padrao-excecoes.json) e verificar-jargao.mjs (jargão técnico na tela; exceções em jargao-excecoes.json)
 .github/workflows/     publicar.yml: constrói as imagens alteradas e atualiza o repositório público
