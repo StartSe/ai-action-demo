@@ -1,6 +1,6 @@
 "use client";
-// Cartão adicional do /setup: gera o código de acesso para um assistente de IA (Claude, ChatGPT
-// etc.) usar este app diretamente, via app/mcp/route.ts.
+// Corpo do cartão "Usar dentro do seu assistente" de Configurações (components/Configuracoes.tsx): gera o código
+// de acesso para um assistente de IA (Claude, ChatGPT etc.) usar este app diretamente, via app/mcp/route.ts.
 import { useEffect, useState } from "react";
 import { Aviso, CopyButton, lerErro } from "./ui";
 
@@ -71,18 +71,9 @@ export function AcessoMCP() {
     : null;
 
   return (
-    <section className="card p-6 max-md:p-5">
-      <details className="group">
-        <summary className="cursor-pointer select-none marker:content-none flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold mb-1">Usar dentro do seu assistente</h2>
-            <p className="text-muted text-sm">Para quem usa Claude ou ChatGPT</p>
-          </div>
-          <span className="text-muted transition-transform group-open:rotate-90 mt-1">›</span>
-        </summary>
-        <div className="mt-4">
-      <p className="text-muted text-sm mb-4 max-w-[640px]">
-        Gere um código de acesso para que um assistente de IA (Claude, ChatGPT e outros) gere páginas a partir de uma captura diretamente pela conversa, sem precisar abrir o navegador.
+    <div className="corpo-conexao">
+      <p className="text-muted text-[13px] max-w-[640px]">
+        Gere um código de acesso para que um assistente de IA (Claude, ChatGPT e outros) crie e edite sites daqui diretamente pela conversa, sem abrir o navegador.
       </p>
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3 flex-wrap">
@@ -103,11 +94,11 @@ export function AcessoMCP() {
           </div>
         ) : null}
         <div className="flex items-center gap-3 flex-wrap mt-1">
-          <button type="button" className="btn-primary !w-auto" onClick={gerar} disabled={gerando}>
+          <button type="button" className="btn-compacto-primario" onClick={gerar} disabled={gerando}>
             {gerando ? "Gerando" : status?.ativo ? "Gerar novo acesso" : "Gerar acesso"}
           </button>
           {status?.ativo && (
-            <button type="button" className="btn-ghost" onClick={revogar} disabled={revogando}>
+            <button type="button" className="btn-compacto" onClick={revogar} disabled={revogando}>
               {revogando ? "Revogando" : "Revogar"}
             </button>
           )}
@@ -160,8 +151,6 @@ export function AcessoMCP() {
           <p className="text-[12.5px] text-muted">Gere um acesso acima para liberar a configuração pronta, já com o código incluído.</p>
         )}
       </div>
-        </div>
-      </details>
-    </section>
+    </div>
   );
 }

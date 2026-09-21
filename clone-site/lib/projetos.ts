@@ -1,4 +1,4 @@
-// Site = projeto: nome, marca, origem (captura de referência ou briefing), estado e a página gerada (que
+// Site = projeto: nome, marca, origem (captura de referência, endereço de um site ou briefing), estado e a página gerada (que
 // continua no histórico, lib/historico.ts, com as suas versões). Próprio do app (nunca comparado por
 // scripts/verificar-padrao.sh). Tabela `projetos` no mesmo app.sqlite de lib/store.ts.
 //
@@ -10,13 +10,15 @@ import crypto from "node:crypto";
 import { ErroIA, type Meta } from "./ai";
 import { apagarDoProjeto as apagarAssetsDoProjeto, listar as listarAssets, montarBlocoAssets } from "./assets";
 import { apagarDoProjeto as apagarVisitasDoProjeto } from "./metricas";
-import { ACAO_ESCOLHER_MODELO, ErroDePedido, gerarDoBriefing, gerarPagina, normalizarMarca, normalizarStack, validarImagem, type OpcoesAssets } from "./gerador";
+import { ErroCaptura, enderecoPublico as validarEnderecoPublico, lerReferencia } from "./captura";
+import { construirSite, type Insumo } from "./construtor";
+import { ACAO_ESCOLHER_MODELO, ErroDePedido, normalizarMarca, normalizarStack, salvarPaginaConstruida, validarImagem, type OpcoesAssets } from "./gerador";
 import { apagar as apagarResultado, obter as obterResultado } from "./historico";
 import { abrirBanco } from "./store";
-import type { EntradaPagina, ErroProjeto, EstadoProjeto, Marca, OrigemProjeto, Pagina, Projeto, Stack, Versao } from "./types";
+import type { EntradaPagina, ErroProjeto, EstadoProjeto, Marca, OrigemProjeto, Pagina, ProgressoGeracao, Projeto, PublicacaoExterna, Stack, Versao } from "./types";
 
 const ESTADOS: EstadoProjeto[] = ["rascunho", "gerando", "pronto", "falhou"];
-/** Depois disso em `gerando`, o laço de 60 s (instrumentation.ts) encerra a geração como falha. */
+/** Depois disso em `gerando` sem nenhuma etapa concluída, o laço de 60 s (instrumentation.ts) encerra a geração como falha. */
 export const LIMITE_GERACAO_MS = 15 * 60 * 1000;
 export const LIMITE_BRIEFING = 4000;
 /** Nome dado quando ninguém informou um (ex.: POST /api/pagina antigo): trocado pelo título da página ao ficar pronto. */
@@ -51,6 +53,12 @@ function db() {
       vistoEm TEXT NULL
     )`);
     d.exec(`CREATE INDEX IF NOT EXISTS projetos_estado ON projetos (estado, atualizadoEm)`);
+    // Colunas que nasceram depois da tabela (21/09/2026): endereço de referência, andamento por etapas, prévia
+    // parcial e publicação externa. `ALTER TABLE ... ADD COLUMN` só quando a coluna ainda não existe.
+    const existentes = new Set((d.prepare("PRAGMA table_info(projetos)").all() as { name: string }[]).map((c) => c.name));
+    for (const [coluna, tipo] of [["url", "TEXT NULL"], ["progresso", "TEXT NULL"], ["htmlParcial", "TEXT NULL"], ["netlify", "TEXT NULL"]] as const) {
+      if (!existentes.has(coluna)) d.exec(`ALTER TABLE projetos ADD COLUMN ${coluna} ${tipo}`);
+    }
     tabelaPronta = true;
   }
   return d;
@@ -58,13 +66,13 @@ function db() {
 
 type Linha = {
   id: string; nome: string; slug: string; estado: EstadoProjeto; origem: OrigemProjeto; stack: Stack;
-  instrucoes: string | null; briefing: string | null; marca: string | null; tamanhoImagem: number;
-  paginaId: string | null; versaoPublicada: number | null; dominio: string | null; erro: string | null;
+  instrucoes: string | null; briefing: string | null; url: string | null; marca: string | null; tamanhoImagem: number;
+  paginaId: string | null; versaoPublicada: number | null; dominio: string | null; progresso: string | null; netlify: string | null; erro: string | null;
   criadoEm: string; atualizadoEm: string; terminadoEm: string | null; vistoEm: string | null;
 };
 
-// Nunca `SELECT *`: a coluna `imagem` (até 5 MB em base64) só sai por imagemDe().
-const COLUNAS = "id, nome, slug, estado, origem, stack, instrucoes, briefing, marca, tamanhoImagem, paginaId, versaoPublicada, dominio, erro, criadoEm, atualizadoEm, terminadoEm, vistoEm";
+// Nunca `SELECT *`: a coluna `imagem` (até 5 MB em base64) só sai por imagemDe(); `htmlParcial` só por progressoDe().
+const COLUNAS = "id, nome, slug, estado, origem, stack, instrucoes, briefing, url, marca, tamanhoImagem, paginaId, versaoPublicada, dominio, progresso, netlify, erro, criadoEm, atualizadoEm, terminadoEm, vistoEm";
 
 function paraProjeto(l: Linha): Projeto {
   const p: Projeto = {
@@ -73,10 +81,13 @@ function paraProjeto(l: Linha): Projeto {
   };
   if (l.instrucoes) p.instrucoes = l.instrucoes;
   if (l.briefing) p.briefing = l.briefing;
+  if (l.url) p.url = l.url;
   if (l.marca) { try { p.marca = JSON.parse(l.marca) as Marca; } catch { /* marca corrompida: segue sem */ } }
   if (l.paginaId) p.paginaId = l.paginaId;
   if (l.versaoPublicada) p.versaoPublicada = l.versaoPublicada;
   if (l.dominio) p.dominio = l.dominio;
+  if (l.progresso) { try { p.progresso = JSON.parse(l.progresso) as ProgressoGeracao; } catch { /* andamento corrompido: segue sem */ } }
+  if (l.netlify) { try { p.netlify = JSON.parse(l.netlify) as PublicacaoExterna; } catch { /* segue sem */ } }
   if (l.erro) { try { p.erro = JSON.parse(l.erro) as ErroProjeto; } catch { p.erro = { mensagem: l.erro }; } }
   if (l.terminadoEm) p.terminadoEm = l.terminadoEm;
   if (l.vistoEm) p.vistoEm = l.vistoEm;
@@ -142,6 +153,7 @@ export type NovoProjeto = {
   stack?: unknown;
   instrucoes?: unknown;
   briefing?: unknown;
+  url?: unknown;
   marca?: unknown;
   imagem?: unknown;
 };
@@ -152,28 +164,83 @@ function textoCurto(valor: unknown, limite: number): string | undefined {
   return t ? t.slice(0, limite) : undefined;
 }
 
-/** Valida e grava um projeto em `rascunho`. Imagem obrigatória só na origem "referencia"; briefing só em "briefing". */
+/**
+ * Nome de site a partir do título de uma página: fica com a parte antes do separador ("Nimbus Finanças · Gestão
+ * financeira" → "Nimbus Finanças") quando ela tem pelo menos 3 caracteres; senão corta em 60 numa fronteira de palavra.
+ */
+export function nomeCurto(titulo: string): string {
+  const limpo = titulo.replace(/\s+/g, " ").trim();
+  const parte = limpo.split(/\s+[·|–—-]\s+/)[0]?.trim() ?? "";
+  const base = parte.length >= 3 ? parte : limpo;
+  if (base.length <= 60) return base || NOME_AUTOMATICO;
+  const corte = base.slice(0, 60);
+  return (corte.lastIndexOf(" ") > 30 ? corte.slice(0, corte.lastIndexOf(" ")) : corte).trim();
+}
+
+/** Nome sugerido a partir do endereço de referência: "www.loja-aurora.com.br" → "loja-aurora.com.br". */
+function nomeDoEndereco(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").slice(0, 80);
+  } catch {
+    return NOME_AUTOMATICO;
+  }
+}
+
+/**
+ * Valida e grava um projeto em `rascunho`. A origem define o insumo obrigatório: captura em "referencia", endereço
+ * público em "endereco", texto (mínimo 20 caracteres) em "briefing". Tudo o mais é opcional: sem nome, o site nasce
+ * "Novo site" (ou com o domínio da referência) e recebe o título da página ao ficar pronto; sem marca, a IA mantém as
+ * cores da referência. Refinar (marca, logo, textos) acontece depois, no workspace, pelo agente.
+ */
 export function criar(dados: NovoProjeto): Projeto {
-  const origem: OrigemProjeto = dados.origem === "briefing" ? "briefing" : "referencia";
+  const origem: OrigemProjeto = dados.origem === "briefing" ? "briefing" : dados.origem === "endereco" ? "endereco" : "referencia";
   const marca = normalizarMarca(dados.marca);
   if (marca.erro) throw new ErroDePedido(marca.erro);
   const briefing = textoCurto(dados.briefing, LIMITE_BRIEFING);
   let imagem: string | null = null;
   let tamanhoImagem = 0;
+  let url: string | null = null;
   if (origem === "referencia") {
     const v = validarImagem(dados.imagem);
     if (!v.ok) throw new ErroDePedido(v.erro);
     imagem = dados.imagem as string;
     tamanhoImagem = v.tamanho;
+  } else if (origem === "endereco") {
+    if (typeof dados.url !== "string" || !dados.url.trim()) throw new ErroDePedido("Cole o endereço do site de referência, começando com https://.");
+    try {
+      url = validarEnderecoPublico(dados.url).toString();
+    } catch (err) {
+      throw new ErroDePedido(err instanceof ErroCaptura ? err.message : "Informe um endereço completo, começando com https://.");
+    }
   } else if (!briefing || briefing.length < 20) {
     throw new ErroDePedido("Conte em pelo menos uma frase o que a empresa faz e o que o site precisa ter.");
   }
-  const nome = textoCurto(dados.nome, 80) || marca.marca?.nome?.trim() || NOME_AUTOMATICO;
+  const nome = textoCurto(dados.nome, 80) || marca.marca?.nome?.trim() || (url ? nomeDoEndereco(url) : NOME_AUTOMATICO);
   const id = gerarId();
   const t = agora();
-  db().prepare(`INSERT INTO projetos (id, nome, slug, estado, origem, stack, instrucoes, briefing, marca, tamanhoImagem, imagem, criadoEm, atualizadoEm)
-                VALUES (?, ?, ?, 'rascunho', ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(id, nome, slugUnico(nome), origem, normalizarStack(dados.stack), textoCurto(dados.instrucoes, 4000) ?? null, briefing ?? null, marca.marca ? JSON.stringify(marca.marca) : null, tamanhoImagem, imagem, t, t);
+  db().prepare(`INSERT INTO projetos (id, nome, slug, estado, origem, stack, instrucoes, briefing, url, marca, tamanhoImagem, imagem, criadoEm, atualizadoEm)
+                VALUES (?, ?, ?, 'rascunho', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(id, nome, slugUnico(nome), origem, normalizarStack(dados.stack), textoCurto(dados.instrucoes, 4000) ?? null, briefing ?? null, url, marca.marca ? JSON.stringify(marca.marca) : null, tamanhoImagem, imagem, t, t);
+  return obterOuFalhar(id);
+}
+
+/** Andamento da geração e a prévia parcial (só esta função lê `htmlParcial`, que pode ter dezenas de KB). */
+export function progressoDe(id: string): { progresso: ProgressoGeracao | null; htmlParcial: string | null } {
+  const linha = db().prepare("SELECT progresso, htmlParcial FROM projetos WHERE id = ?").get(id) as { progresso: string | null; htmlParcial: string | null } | undefined;
+  let progresso: ProgressoGeracao | null = null;
+  if (linha?.progresso) { try { progresso = JSON.parse(linha.progresso) as ProgressoGeracao; } catch { progresso = null; } }
+  return { progresso, htmlParcial: linha?.htmlParcial ?? null };
+}
+
+function gravarProgresso(id: string, progresso: ProgressoGeracao, htmlParcial: string | null): void {
+  db().prepare("UPDATE projetos SET progresso = ?, htmlParcial = COALESCE(?, htmlParcial), atualizadoEm = ? WHERE id = ? AND estado = 'gerando'")
+    .run(JSON.stringify(progresso), htmlParcial, agora(), id);
+}
+
+/** Grava (ou remove, com null) a publicação externa do site (Netlify). */
+export function definirPublicacaoExterna(id: string, dados: PublicacaoExterna | null): Projeto {
+  obterOuFalhar(id);
+  db().prepare("UPDATE projetos SET netlify = ?, atualizadoEm = ? WHERE id = ?").run(dados ? JSON.stringify(dados) : null, agora(), id);
   return obterOuFalhar(id);
 }
 
@@ -281,10 +348,14 @@ export function projetoDoDominio(hostBruto: string | null | undefined): string |
   return mapa.get(host) ?? mapa.get(semWww) ?? mapa.get(`www.${semWww}`) ?? null;
 }
 
-/** Campos do pedido que só podem mudar antes de gerar (ou depois de uma falha). */
-export function editarPedido(id: string, dados: { marca?: unknown; instrucoes?: unknown; briefing?: unknown; stack?: unknown }): Projeto {
+/**
+ * Campos do pedido. A marca pode mudar a qualquer momento (o agente passa a conhecê-la e aplica no site a pedido);
+ * insumo (briefing, endereço), instruções e formato só antes de gerar ou depois de uma falha.
+ */
+export function editarPedido(id: string, dados: { marca?: unknown; instrucoes?: unknown; briefing?: unknown; stack?: unknown; url?: unknown }): Projeto {
   const p = obterOuFalhar(id);
-  if (p.estado !== "rascunho" && p.estado !== "falhou") throw new ErroDePedido("O pedido só pode ser alterado antes de gerar ou depois de uma falha.");
+  const soMarca = Object.entries(dados).every(([chave, valor]) => chave === "marca" || valor === undefined);
+  if (!soMarca && p.estado !== "rascunho" && p.estado !== "falhou") throw new ErroDePedido("O pedido só pode ser alterado antes de gerar ou depois de uma falha. Para mudar o site pronto, peça ao agente.");
   const sets: string[] = [];
   const valores: (string | null)[] = [];
   if (dados.marca !== undefined) {
@@ -300,6 +371,10 @@ export function editarPedido(id: string, dados: { marca?: unknown; instrucoes?: 
     sets.push("briefing = ?"); valores.push(briefing ?? null);
   }
   if (dados.stack !== undefined) { sets.push("stack = ?"); valores.push(normalizarStack(dados.stack)); }
+  if (dados.url !== undefined && p.origem === "endereco") {
+    if (typeof dados.url !== "string" || !dados.url.trim()) throw new ErroDePedido("Cole o endereço do site de referência, começando com https://.");
+    try { sets.push("url = ?"); valores.push(validarEnderecoPublico(dados.url).toString()); } catch (err) { throw new ErroDePedido(err instanceof ErroCaptura ? err.message : "Informe um endereço completo, começando com https://."); }
+  }
   if (!sets.length) return p;
   sets.push("atualizadoEm = ?");
   valores.push(agora());
@@ -382,42 +457,56 @@ function erroDe(err: unknown): ErroProjeto {
     if (err.acao) e.acao = err.acao;
     return e;
   }
+  if (err instanceof ErroCaptura) return err.acao ? { mensagem: err.message, acao: err.acao } : { mensagem: err.message };
   if (err instanceof Error && err.message) return { mensagem: err.message };
   return { mensagem: "Não foi possível gerar o site desta vez. Tente de novo." };
 }
 
 function gravarFalha(id: string, erro: ErroProjeto): void {
   const t = agora();
-  db().prepare("UPDATE projetos SET estado = 'falhou', erro = ?, terminadoEm = ?, atualizadoEm = ?, vistoEm = NULL WHERE id = ? AND estado = 'gerando'")
+  db().prepare("UPDATE projetos SET estado = 'falhou', erro = ?, htmlParcial = NULL, terminadoEm = ?, atualizadoEm = ?, vistoEm = NULL WHERE id = ? AND estado = 'gerando'")
     .run(JSON.stringify(erro), t, t, id);
 }
 
 /**
- * Corre fora da requisição HTTP. Em sucesso grava `pronto`, `paginaId`, `versaoPublicada = 1` e APAGA a
- * imagem (a captura não fica guardada depois de servir); em falha grava `falhou` com o motivo e mantém a
- * imagem para "Tentar de novo" sem reenviar.
+ * Corre fora da requisição HTTP. Constrói a página por etapas (lib/construtor.ts) gravando o andamento e a prévia
+ * parcial no projeto a cada passo; em sucesso grava `pronto`, `paginaId`, `versaoPublicada = 1` e APAGA a imagem
+ * (a captura não fica guardada depois de servir); em falha grava `falhou` com o motivo e mantém a imagem para
+ * "Tentar de novo" sem reenviar.
  */
 async function executarGeracao(id: string): Promise<void> {
   const p = obter(id);
   if (!p || p.estado !== "gerando") return;
   try {
-    let pagina: Pagina;
     const opcoes = opcoesAssetsDe(id);
+    let insumo: Insumo;
+    let tituloReferencia: string | null = null;
     if (p.origem === "briefing") {
-      pagina = (await gerarDoBriefing({ briefing: p.briefing ?? "", stack: p.stack, marca: p.marca, instrucoes: p.instrucoes }, opcoes)).pagina;
+      insumo = { tipo: "briefing", briefing: p.briefing ?? "" };
+    } else if (p.origem === "endereco") {
+      if (!p.url) throw new ErroDePedido("O endereço de referência deste site não foi guardado. Crie o site de novo.");
+      const referencia = await lerReferencia(p.url);
+      tituloReferencia = referencia.titulo;
+      insumo = { tipo: "endereco", referencia };
     } else {
       const imagem = imagemDe(id);
       if (!imagem) throw new ErroDePedido("A captura deste site não está mais guardada. Crie o site de novo.");
-      pagina = (await gerarPagina({ imagem, stack: p.stack, instrucoes: p.instrucoes, marca: p.marca }, opcoes)).pagina;
+      insumo = { tipo: "referencia", imagem };
     }
+    const construido = await construirSite({ insumo, stack: p.stack, marca: p.marca, instrucoes: p.instrucoes, assets: opcoes }, (progresso, htmlParcial) => gravarProgresso(id, progresso, htmlParcial));
+    const entrada: EntradaPagina = { stack: p.stack, tamanhoImagem: p.tamanhoImagem, ...(p.instrucoes ? { instrucoes: p.instrucoes } : {}), ...(p.marca ? { marca: p.marca } : {}), ...(p.briefing ? { briefing: p.briefing } : {}), ...(p.url ? { url: p.url } : {}) };
+    const rotulo = p.origem === "briefing" ? "Site criado a partir do briefing" : p.origem === "endereco" ? "Site criado a partir do endereço de referência" : "Página gerada a partir da captura";
+    const pagina: Pagina = salvarPaginaConstruida(entrada, construido.html, construido.meta, rotulo, p.marca);
     const t = agora();
-    const nomeFinal = p.nome === NOME_AUTOMATICO ? pagina.titulo.slice(0, 80) : p.nome;
-    const slugFinal = p.nome === NOME_AUTOMATICO ? slugUnico(nomeFinal, id) : p.slug;
-    db().prepare(`UPDATE projetos SET estado = 'pronto', paginaId = ?, versaoPublicada = 1, imagem = NULL, erro = NULL,
+    // Quem deu nome ao site mantém o nome (e o slug). Sem nome: a marca, o título do site de referência ou o título da página, encurtados.
+    const nomeAutomatico = p.nome === NOME_AUTOMATICO || (p.url && p.nome === nomeDoEndereco(p.url));
+    const nomeFinal = nomeAutomatico ? nomeCurto(p.marca?.nome?.trim() || tituloReferencia || pagina.titulo) : p.nome;
+    const slugFinal = nomeFinal !== p.nome ? slugUnico(nomeFinal, id) : p.slug;
+    db().prepare(`UPDATE projetos SET estado = 'pronto', paginaId = ?, versaoPublicada = 1, imagem = NULL, htmlParcial = NULL, erro = NULL, progresso = ?,
                   nome = ?, slug = ?, terminadoEm = ?, atualizadoEm = ?, vistoEm = NULL WHERE id = ? AND estado = 'gerando'`)
-      .run(pagina.id, nomeFinal, slugFinal, t, t, id);
+      .run(pagina.id, JSON.stringify(construido.progresso), nomeFinal, slugFinal, t, t, id);
   } catch (err) {
-    if (!(err instanceof ErroIA) && !(err instanceof ErroDePedido)) console.error("Falha ao gerar o site", id, err);
+    if (!(err instanceof ErroIA) && !(err instanceof ErroDePedido) && !(err instanceof ErroCaptura)) console.error("Falha ao gerar o site", id, err);
     gravarFalha(id, erroDe(err));
   }
 }
@@ -428,7 +517,7 @@ export function iniciarGeracao(id: string): Projeto {
   if (p.estado === "gerando") throw new ErroDePedido("Este site já está sendo gerado.");
   if (p.estado === "pronto") throw new ErroDePedido("Este site já está pronto. Para mudar algo, peça ao agente.");
   const t = agora();
-  db().prepare("UPDATE projetos SET estado = 'gerando', erro = NULL, terminadoEm = NULL, atualizadoEm = ? WHERE id = ?").run(t, id);
+  db().prepare("UPDATE projetos SET estado = 'gerando', erro = NULL, progresso = NULL, htmlParcial = NULL, terminadoEm = NULL, atualizadoEm = ? WHERE id = ?").run(t, id);
   void executarGeracao(id);
   return obterOuFalhar(id);
 }
@@ -446,7 +535,8 @@ export async function aguardarGeracao(id: string, limiteMs = LIMITE_GERACAO_MS):
 
 /**
  * Encerra o que ficou preso em `gerando`: na subida do processo (`naSubida: true`) tudo o que estava
- * gerando morreu com o processo anterior; no laço de 60 s, só o que passou de LIMITE_GERACAO_MS.
+ * gerando morreu com o processo anterior; no laço de 60 s, só o que está há mais de LIMITE_GERACAO_MS SEM
+ * PROGRESSO (cada etapa concluída renova `atualizadoEm`, então uma construção longa mas viva não é encerrada).
  */
 export function encerrarAbandonados({ naSubida = false }: { naSubida?: boolean } = {}): number {
   const presos = naSubida

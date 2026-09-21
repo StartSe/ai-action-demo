@@ -113,3 +113,71 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
 .chip-gerando::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 999px; background: #b7791f; animation: pulsar 1.2s ease-in-out infinite; }
 @keyframes pulsar { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.7); } }
 @media (prefers-reduced-motion: reduce) { .chip-gerando::before { animation: none; } }
+
+/* ------------------------------------------------------------------------------------------------------------
+   Configurações (components/Configuracoes.tsx): seções com título e cartões de conexão no desenho do Build
+   Agentflows — ícone quadrado, título com selo, estado à direita, corpo recolhível. */
+.secao-config { @apply flex items-start gap-3 mb-4; }
+.secao-config > svg { @apply text-accent shrink-0 mt-0.5; }
+.secao-config h2 { @apply text-[17px] font-extrabold tracking-[-0.01em]; }
+.secao-config p { @apply text-[13px] text-ink-2; }
+.grade-conexoes { @apply grid grid-cols-2 max-md:grid-cols-1 gap-4 items-start [&>*]:min-w-0; }
+.card-conexao { @apply bg-surface border border-line rounded-card shadow-card p-5 max-md:p-4 flex flex-col gap-3.5 transition-colors; }
+.card-conexao[data-conectado="true"] { border-color: color-mix(in srgb, var(--color-ok) 45%, var(--color-line)); }
+.card-conexao > header { @apply flex items-start gap-3; }
+.icone-conexao { @apply w-11 h-11 rounded-[12px] grid place-items-center bg-accent-soft text-accent shrink-0; }
+.card-conexao h3 { @apply text-[15px] font-bold flex items-center gap-2 flex-wrap leading-tight; }
+.selo-principal { @apply inline-block text-[10px] font-bold uppercase tracking-[0.04em] px-1.5 py-0.5 rounded-md bg-accent text-white; }
+.estado-conexao { @apply inline-flex items-center gap-1.5 text-[11.5px] font-bold px-2.5 py-1 rounded-full bg-bg text-muted shrink-0 whitespace-nowrap; }
+.estado-conexao::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: currentColor; opacity: 0.7; }
+.estado-conexao[data-on="true"] { @apply bg-[#e4f4ec] text-ok; }
+.corpo-conexao { @apply flex flex-col gap-3 text-[13.5px]; }
+.corpo-conexao label > span:first-child, .rotulo-campo { @apply block text-[12.5px] font-semibold mb-1; }
+.dica-conexao { @apply text-[12.5px] text-muted; }
+.acoes-conexao { @apply flex items-center gap-2.5 flex-wrap; }
+.btn-compacto { @apply inline-flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-field border border-line bg-surface text-ink text-[13.5px] font-semibold cursor-pointer hover:bg-bg disabled:opacity-60 disabled:cursor-wait whitespace-nowrap; }
+.btn-compacto-primario { @apply inline-flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-field border border-transparent text-white text-[13.5px] font-semibold cursor-pointer bg-[image:var(--gradiente-acento)] hover:brightness-95 disabled:opacity-60 disabled:cursor-wait whitespace-nowrap; }
+.resultado-teste { @apply text-[13px] font-semibold px-3 py-2 rounded-[10px]; }
+.resultado-teste[data-ok="true"] { @apply bg-[#e4f4ec] text-ok; }
+.resultado-teste[data-ok="false"] { @apply bg-[#fde8e6] text-danger; }
+.codigo-dispositivo { @apply font-mono text-2xl tracking-[0.2em] font-bold px-4 py-2 rounded-[10px] border border-line bg-bg; }
+
+/* ------------------------------------------------------------------------------------------------------------
+   Início: caixa de criação com o mínimo de fricção (components/CriarSite.tsx) e a grade de sites. */
+.caixa-criacao { @apply bg-surface border border-line rounded-card shadow-card p-2 flex flex-col gap-0 transition-[box-shadow,border-color]; }
+.caixa-criacao:focus-within { border-color: var(--color-accent); box-shadow: 0 0 0 3px var(--color-accent-soft), var(--shadow-card); }
+.caixa-criacao[data-arrastando="true"] { border-color: var(--color-accent); background: var(--color-accent-soft); }
+.caixa-criacao textarea { @apply w-full resize-none bg-transparent outline-none px-4 pt-3.5 pb-2 text-[16px] leading-snug min-h-[92px] placeholder:text-muted; }
+.rodape-caixa { @apply flex items-center justify-between gap-2 flex-wrap px-2.5 pb-2; }
+.selo-origem { @apply inline-flex items-center gap-1.5 text-[12px] font-bold px-2.5 py-1 rounded-full bg-accent-soft text-accent-ink; }
+.grade-sites { @apply grid grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1 gap-4 [&>*]:min-w-0; }
+.card-site { @apply bg-surface border border-line rounded-card shadow-card overflow-hidden flex flex-col transition-[transform,box-shadow] hover:-translate-y-0.5; }
+.card-site:hover { box-shadow: 0 2px 4px rgba(20, 20, 50, 0.05), 0 14px 32px rgba(20, 20, 50, 0.09); }
+.miniatura-site { @apply relative h-[150px] bg-bg border-b border-line overflow-hidden; }
+.miniatura-site iframe { width: 1200px; height: 720px; transform: scale(0.25); transform-origin: top left; pointer-events: none; border: 0; background: #fff; position: absolute; left: 50%; margin-left: -150px; top: 0; }
+.miniatura-site-vazia { @apply absolute inset-0 grid place-items-center text-[13px] font-semibold text-muted; }
+
+/* ------------------------------------------------------------------------------------------------------------
+   Workspace: acompanhamento da geração, abas, chat do agente em bolha flutuante. */
+.lista-etapas { @apply flex flex-col divide-y divide-line border border-line rounded-[12px] bg-surface; }
+.etapa { @apply flex items-center gap-3 px-3.5 py-2.5 text-[13.5px]; }
+.etapa-marca { @apply w-6 h-6 rounded-full grid place-items-center shrink-0 text-[12px] font-bold; }
+.etapa[data-estado="pendente"] { @apply text-muted; }
+.etapa[data-estado="pendente"] .etapa-marca { @apply bg-bg text-muted; }
+.etapa[data-estado="andamento"] .etapa-marca { @apply bg-accent-soft text-accent; }
+.etapa[data-estado="andamento"] .etapa-marca::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: currentColor; animation: pulsar 1.2s ease-in-out infinite; }
+.etapa[data-estado="pronta"] .etapa-marca { @apply bg-[#e4f4ec] text-ok; }
+.etapa[data-estado="falhou"] .etapa-marca { @apply bg-[#fde8e6] text-danger; }
+.abas-workspace { @apply inline-flex gap-1 p-1 border border-line rounded-[12px] bg-surface max-md:w-full max-md:overflow-x-auto; }
+.abas-workspace button { @apply px-3.5 py-1.5 rounded-lg text-[13.5px] font-bold cursor-pointer whitespace-nowrap text-ink hover:bg-bg; }
+.abas-workspace button[aria-selected="true"] { @apply bg-accent text-white hover:bg-accent; }
+.bolha-agente { @apply fixed z-30 right-6 bottom-6 max-md:right-4 max-md:bottom-4 h-14 pl-4 pr-5 rounded-full text-white font-bold text-[14.5px] inline-flex items-center gap-2.5 cursor-pointer bg-[image:var(--gradiente-acento)] hover:brightness-95; box-shadow: 0 10px 30px rgba(81, 21, 37, 0.35); }
+.bolha-agente[data-trabalhando="true"] { animation: respirar 1.6s ease-in-out infinite; }
+@keyframes respirar { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+.painel-agente { @apply fixed z-30 right-6 bottom-24 max-md:inset-x-3 max-md:bottom-3 max-md:right-3 w-[400px] max-md:w-auto max-h-[min(640px,calc(100vh-130px))] max-md:max-h-[80vh] bg-surface border border-line rounded-card flex flex-col overflow-hidden; box-shadow: 0 20px 60px rgba(20, 20, 50, 0.22); }
+.painel-agente > header { @apply flex items-center justify-between gap-3 px-4 py-3 border-b border-line; }
+.painel-agente-corpo { @apply flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col gap-2.5; }
+.painel-agente > form { @apply border-t border-line p-3 flex flex-col gap-2; }
+.faixa-ao-vivo { @apply inline-flex items-center gap-2 text-[12.5px] font-bold text-accent-ink bg-accent-soft px-3 py-1 rounded-full; }
+.faixa-ao-vivo::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--color-accent); animation: pulsar 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .bolha-agente[data-trabalhando="true"], .etapa .etapa-marca::before, .faixa-ao-vivo::before { animation: none; } }

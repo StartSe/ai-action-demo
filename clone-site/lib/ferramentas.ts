@@ -1,6 +1,6 @@
 // Ferramentas expostas via app/mcp/route.ts para assistentes de IA (Claude, ChatGPT etc.).
 // Cada app da suíte declara as suas aqui, reaproveitando a mesma lógica das rotas normais (lib/gerador.ts).
-import { baixarImagem, capturarSite, pareceImagem } from "./captura";
+import { baixarImagem, pareceImagem } from "./captura";
 import { editarPeloAgente } from "./agente";
 import { normalizarInstrucao, normalizarMarca } from "./gerador";
 import type { Ferramenta } from "./mcp";
@@ -52,11 +52,11 @@ export const FERRAMENTAS: Ferramenta[] = [
   },
   {
     nome: "gerar_pagina",
-    descricao: "Cria um site (arquivo HTML único, em português) a partir da captura de tela de uma página de referência, aplicando o nome e as cores da marca informada. Devolve o id da página, o id e o slug do site, o título, o link do site no app (/sites/<projetoId>), o link público publicado (/s/<slug>, HTML puro) e o HTML gerado.",
+    descricao: "Cria um site (arquivo HTML único, em português) a partir de uma página de referência: o endereço público de uma captura de tela (PNG/JPG) ou o endereço do próprio site, que o app lê sozinho. Aplica o nome e as cores da marca informada. Devolve o id da página, o id e o slug do site, o título, o link do site no app (/sites/<projetoId>), o link público publicado (/s/<slug>, HTML puro) e o HTML gerado.",
     schema: {
       type: "object",
       properties: {
-        imagem_url: { type: "string", description: "Endereço público (http/https) da captura de tela da página de referência, em PNG ou JPG, até 5 MB. Aceita também o endereço do próprio site de referência quando o serviço de captura está configurado no app." },
+        imagem_url: { type: "string", description: "Endereço público (http/https) da captura de tela da página de referência (PNG ou JPG, até 5 MB) ou do próprio site de referência (qualquer página web pública)." },
         instrucoes: { type: "string", description: "O que mudar em relação à referência (opcional)" },
         marca: {
           type: "object",
@@ -76,10 +76,10 @@ export const FERRAMENTAS: Ferramenta[] = [
       if (!imagem_url || typeof imagem_url !== "string") throw new Error("Informe imagem_url com o endereço da captura de referência.");
       const m = normalizarMarca(marca);
       if (m.erro) throw new Error(m.erro);
-      // Endereço terminado em .png/.jpg é a própria captura; qualquer outro é o site a fotografar pelo serviço.
-      const imagem = pareceImagem(imagem_url) ? await baixarImagem(imagem_url) : await capturarSite(imagem_url);
+      // Endereço terminado em .png/.jpg é a própria captura (origem "referencia"); qualquer outro é o site, lido na geração (origem "endereco").
       // Toda página nasce como um site (lib/projetos.ts): cria, gera em segundo plano e espera o fim aqui.
-      return criarEEsperar({ origem: "referencia", imagem, stack: formato, instrucoes, marca });
+      if (pareceImagem(imagem_url)) return criarEEsperar({ origem: "referencia", imagem: await baixarImagem(imagem_url), stack: formato, instrucoes, marca });
+      return criarEEsperar({ origem: "endereco", url: imagem_url, stack: formato, instrucoes, marca });
     },
   },
   {
