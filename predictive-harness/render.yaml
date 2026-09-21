@@ -1,0 +1,21 @@
+# Blueprint de publicação de Predictive Harness (especificação: https://render.com/docs/blueprint-spec)
+# Imagem pública publicada pelo GitHub Actions em ghcr.io/startse/predictive-harness:latest.
+# Este app exige o plano starter (pago) e cria um disco de 1 GB em /app/data, onde ficam planilhas, conversas, decisões do harness, conta e credenciais.
+# Crie sua conta, explore a planilha de exemplo e abra Configurações para conectar o ChatGPT e o OpenRouter (o Jev vive nele). Depois envie uma planilha CSV ou JSON e pergunte.
+services:
+  - type: web
+    name: predictive-harness
+    runtime: image
+    image:
+      url: ghcr.io/startse/predictive-harness:latest
+    plan: starter
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "10000"
+    # Planilhas, conversas, decisões do harness, conta e credenciais ficam em /app/data e sobrevivem a deploys.
+    disk:
+      name: predictive-harness-dados
+      mountPath: /app/data
+      sizeGB: 1

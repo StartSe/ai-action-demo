@@ -1,6 +1,6 @@
 # IA para Executivos
 
-Vinte e um apps independentes, cada um resolvendo um problema específico do dia a dia de uma empresa com IA em alguma etapa. Feitos para executivos: crie sua conta em 30 segundos, teste com dados de exemplo sem nenhuma chave e publique com um clique, na sua própria conta no Render, a partir de uma imagem Docker pública via Blueprint. Catálogo com botão de um clique: https://startse.github.io/ai-action-app-deploy/
+Vinte e dois apps independentes, cada um resolvendo um problema específico do dia a dia de uma empresa com IA em alguma etapa. Feitos para executivos: crie sua conta em 30 segundos, teste com dados de exemplo sem nenhuma chave e publique com um clique, na sua própria conta no Render, a partir de uma imagem Docker pública via Blueprint. Catálogo com botão de um clique: https://startse.github.io/ai-action-app-deploy/
 
 ## Mapa de ideias
 
@@ -27,6 +27,7 @@ Vinte e um apps independentes, cada um resolvendo um problema específico do dia
 | 19 | [Build Agentflows v0.8.1](build-agentflows/) | Gestão | Orquestrar tarefas de IA entre agentes e sistemas | Editor visual com agentes, condições, ferramentas, aprovação humana e versões publicadas | OpenRouter, ferramentas MCP e HTTP; execução por MCP e HTTP autenticado. Disco persistente no Render |
 | 20 | [Daily Second Brain v1.1.0](daily-second-brain/) | Gestão | Memórias e decisões dispersas | Coletas agênticas agendadas, wiki conectada, grafo, chat e voz | ChatGPT, OpenRouter, Zapier MCP e ElevenLabs. Disco persistente no Render |
 | 21 | [Mapify v1.0.1](mapify/) | Gestão, Educação e Produto | Conteúdo difícil de conectar e aplicar | Mapas mentais interativos com fontes, edição e conversa | ChatGPT por assinatura ou OpenRouter; YouTube, PDF, web e texto. Disco persistente no Render |
+| 22 | [Predictive Harness v0.1.0](predictive-harness/) | Dados e Gestão | Perguntar aos dados exige analista, e respostas de IA sem verificação não inspiram confiança | Conversa com a planilha: o ChatGPT escreve, o Jev (System One) tria, roteia e verifica cada resposta, com as decisões visíveis | ChatGPT por assinatura e OpenRouter (Jev). Disco persistente no Render |
 
 Ideias mapeadas e deixadas para uma segunda rodada: copiloto de OKRs com check-in semanal, análise de concorrentes a partir de sites e redes, triagem de currículos contra a descrição da vaga, gerador de propostas comerciais a partir do CRM, resumo diário de e-mails e Slack para a diretoria.
 

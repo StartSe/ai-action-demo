@@ -158,6 +158,12 @@ services:
     ports: ["3021:10000"]
     volumes: [mapify-dados:/app/data]
 
+  predictive-harness:
+    build: ./predictive-harness
+    image: ghcr.io/startse/predictive-harness:latest
+    ports: ["3022:10000"]
+    volumes: [predictive-harness-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -180,3 +186,4 @@ volumes:
   build-agentflows-dados:
   daily-second-brain-dados:
   mapify-dados:
+  predictive-harness-dados:

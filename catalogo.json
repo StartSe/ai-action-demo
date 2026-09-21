@@ -477,6 +477,31 @@
       "discoGuarda": "mapas, fontes, conversas, conta e credenciais",
       "versao": "1.0.1",
       "aposPublicar": "Crie sua conta, explore um mapa de exemplo e abra Conectar IA para usar sua assinatura ChatGPT ou uma chave OpenRouter. Depois importe uma fonte para gerar seu primeiro mapa."
+    },
+    {
+      "id": "predictive-harness",
+      "nome": "Predictive Harness",
+      "areas": [
+        "Dados",
+        "Gestão"
+      ],
+      "problema": "Perguntar aos dados exige analista, e respostas de IA sem verificação não inspiram confiança.",
+      "ia": "Converse com a planilha: o ChatGPT raciocina e escreve, o Jev decide rápido em cada etapa e verifica se os números batem, com cada decisão visível.",
+      "integracoes": "ChatGPT por assinatura e OpenRouter (obrigatório: é onde vive o Jev, o modelo de decisões da TypeSafe). Disco persistente no Render.",
+      "acento": "#2f4fb8",
+      "porta": 3022,
+      "captura": "capturas/predictive-harness.png",
+      "capacidades": [
+        "artefato"
+      ],
+      "demo": null,
+      "padrao": "proprio",
+      "independente": true,
+      "plano": "starter",
+      "discoGB": 1,
+      "discoGuarda": "planilhas, conversas, decisões do harness, conta e credenciais",
+      "versao": "0.1.0",
+      "aposPublicar": "Crie sua conta, explore a planilha de exemplo e abra Configurações para conectar o ChatGPT e o OpenRouter (o Jev vive nele). Depois envie uma planilha CSV ou JSON e pergunte."
     }
   ]
 }
