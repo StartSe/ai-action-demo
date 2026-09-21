@@ -3,7 +3,8 @@
 // Os prompts de sistema (geração e atualização) são portados e traduzidos do projeto aberto screenshot-to-code
 // (abi/screenshot-to-code), adaptados para um único arquivo HTML em português e com as imagens de terceiros
 // substituídas por blocos na cor da marca.
-import { aiEnabled, askText, askVision, ErroIA, meta, visionEnabled, visionModelName, type Meta } from "./ai";
+import { askVision, ErroIA, meta, visionEnabled, visionModelName, type Meta } from "./ai";
+import { gerarTexto, iaDisponivel, nomeModeloChatGPT, provedor } from "./motor";
 import { LIMITE_IMAGEM_BYTES } from "./captura";
 import { edicaoDemo, esperar, paginaDemo } from "./demo";
 import { atualizarSaida, obter, salvar } from "./historico";
@@ -159,6 +160,11 @@ function salvarPagina(pedido: Pedido, tamanhoImagem: number, html: string, metaG
 // Sem artigo inicial: o texto de `Origem` (components/ui.tsx) é "a partir de ${insumo}".
 export const INSUMO = "captura de referência e cores da marca";
 
+/** Proveniência de um texto gerado pelo motor (lib/motor.ts): o modelo exibido é o que respondeu de fato (ChatGPT ou OpenRouter). */
+export function metaTexto(insumo: string): Meta {
+  return meta({ demo: false, insumo, ...(provedor() === "chatgpt" ? { model: nomeModeloChatGPT() } : {}) });
+}
+
 /**
  * Toda leitura de imagem deste app passa por aqui: `askVision` avisa genericamente que "o modelo
  * configurado não lê imagens", e neste app isso é *a* falha a explicar — o app inteiro depende de visão.
@@ -274,7 +280,7 @@ export async function gerarDoBriefing(pedido: PedidoBriefing, opcoes: OpcoesAsse
   if (briefing.length < 20) throw new ErroDePedido("Conte em pelo menos uma frase o que a empresa faz e o que o site precisa ter.");
   const base: Pedido = { imagem: "", stack: pedido.stack, ...(pedido.instrucoes?.trim() ? { instrucoes: pedido.instrucoes.trim() } : {}), ...(pedido.marca ? { marca: pedido.marca } : {}) };
 
-  if (!aiEnabled()) {
+  if (!(await iaDisponivel())) {
     await esperar(1400);
     const html = paginaDemo({ ...base, briefing, ...opcoes.demoAssets });
     const metaGerada = meta({ demo: true, insumo: INSUMO_BRIEFING });
@@ -282,14 +288,14 @@ export async function gerarDoBriefing(pedido: PedidoBriefing, opcoes: OpcoesAsse
     return { demo: true, pagina, meta: metaGerada, id: pagina.id };
   }
 
-  const resposta = await askText({
+  const resposta = await gerarTexto({
     system: pedido.stack === "html-css" ? SYSTEM_BRIEFING_CSS : SYSTEM_BRIEFING_TAILWIND,
     prompt: montarPromptBriefing({ ...pedido, briefing, blocoAssets: pedido.blocoAssets ?? opcoes.blocoAssets }),
     maxTokens: 12000,
     temperature: 0.4,
   });
   const html = sanitizarHtml(extrairHtml(resposta), pedido.stack);
-  const metaGerada = meta({ demo: false, insumo: INSUMO_BRIEFING });
+  const metaGerada = metaTexto(INSUMO_BRIEFING);
   const pagina = salvarPagina(base, 0, html, metaGerada, briefing);
   return { demo: false, pagina, meta: metaGerada, id: pagina.id };
 }
@@ -394,19 +400,19 @@ export async function editarPagina(id: string, instrucao: string, htmlBase?: str
 
   let html: string;
   let metaGerada: Meta;
-  if (!aiEnabled()) {
+  if (!(await iaDisponivel())) {
     await esperar(900);
     html = edicaoDemo(base, n);
     metaGerada = meta({ demo: true, insumo: INSUMO_EDICAO });
   } else {
-    const resposta = await askText({
+    const resposta = await gerarTexto({
       system: stack === "html-css" ? SYSTEM_EDICAO_CSS : SYSTEM_EDICAO_TAILWIND,
       prompt: montarPromptEdicao(base, instrucao, pagina.marca, blocoAssets),
       maxTokens: 12000,
       temperature: 0.2,
     });
     html = sanitizarHtml(extrairHtml(resposta), stack);
-    metaGerada = meta({ demo: false, insumo: INSUMO_EDICAO });
+    metaGerada = metaTexto(INSUMO_EDICAO);
   }
 
   const versao: Versao = { n, html, instrucao: (rotulo || instrucao).trim().slice(0, 300), criadoEm: new Date().toISOString() };

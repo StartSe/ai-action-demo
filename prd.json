@@ -87,7 +87,7 @@
         "Lint, tsc e build passam; verificar no navegador: /setup#ia alterna, inicia login (código aparece) e cancela"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "US-005 da PRD. lib/ai.ts (INFRA) não muda: a escolha mora em lib/motor.ts."
     },
     {

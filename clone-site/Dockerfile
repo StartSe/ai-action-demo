@@ -20,7 +20,7 @@ COPY --from=build /app/public ./public
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 USER app
-# As chaves configuradas em /setup ficam no SQLite em /app/data. Monte um volume aqui para persistir.
+# Banco (chaves de /setup, sites, imagens), chave mestra e sessão ChatGPT (Codex) persistem em /app/data. Monte um volume aqui.
 VOLUME ["/app/data"]
 EXPOSE 10000
 CMD ["node", "server.js"]

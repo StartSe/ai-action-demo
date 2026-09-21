@@ -30,5 +30,8 @@
     "lib/setup-comum.ts": "O teste do OpenRouter usa seu próprio modelo mesmo quando o provedor selecionado é ChatGPT.",
     "app/api/setup/route.ts": "Prontidão usa a conta de IA selecionada (OpenRouter ou ChatGPT), sem exigir OpenRouter quando ChatGPT está ativo.",
     "app/api/status/route.ts": "Status da IA selecionada, sugestão única de conexão e visibilidade dos exemplos respeitam a conta e a limpeza dos dados de teste."
+  },
+  "clone-site": {
+    "app/api/status/route.ts": "Motor de IA escolhido entre OpenRouter (chave) e ChatGPT (assinatura pelo Codex App Server) em /setup#ia: ai/demo seguem lib/motor.ts:iaDisponivel() (async), integrations.chatgpt informa a conta conectada e o OpenRouter deixa de ser próximo passo obrigatório quando o ChatGPT responde (a leitura de captura continua só pelo OpenRouter, ver vision). Precedente: radar-sinais."
   }
 }

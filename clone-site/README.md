@@ -13,6 +13,13 @@ Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com um 
 ## Configuração inicial (sem variáveis de ambiente)
 Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave. O modelo que lê a captura tem cartão próprio, "Qualidade da página gerada", com o botão "Testar leitura de imagem" (manda um PNG mínimo ao modelo escolhido e mostra o que ele respondeu). O cartão opcional "Captura por endereço" guarda a chave de um serviço de captura (ScreenshotOne), que permite colar o endereço de um site em vez de enviar a imagem. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar um modelo com visão, o app roda em modo demonstração.
 
+## OpenRouter ou ChatGPT
+O motor que escreve e edita os sites é escolhido no cartão "Motor de inteligência artificial" de `/setup#ia` (`components/ConexaoIA.tsx`, `app/api/ia/route.ts`, config `IA_PROVEDOR`):
+- **OpenRouter (padrão)**: a chave do cartão "Inteligência artificial" (OAuth em um clique ou colada). É também o único caminho para **ler capturas** (`askVision`).
+- **ChatGPT (assinatura)**: login por código de dispositivo pelo Codex App Server oficial (`lib/chatgpt.ts`, `@openai/codex` fixado em `0.155.1`, o mesmo do Build Agentflows). A sessão fica em `DATA_DIR/chatgpt`, sem herdar credenciais da máquina, sem terminal, arquivos ou navegador. Texto (criação pelo briefing, edições, agente, sugestões) e ferramentas passam por ele; o modelo é escolhido no próprio cartão (`CHATGPT_MODEL`).
+
+`lib/motor.ts` é o único ponto que decide entre os dois (`gerarTexto`, `gerarJSON`, `executarComFerramentas`, `iaDisponivel`); `lib/ai.ts` continua o da suíte. Com o ChatGPT escolhido e sem chave do OpenRouter, clonar por captura cai em demonstração e a tela avisa para conectar também o OpenRouter.
+
 ## Primeiro acesso
 Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
 

@@ -2,7 +2,8 @@
 // Resultado completo de uma página (cabeçalho, proveniência, prévia e editor de versões). Veio de app/page.tsx
 // quando a tela inicial virou "Meus sites" (US-002): continua sendo o que /r/[id] mostra para uma página salva.
 import { useState } from "react";
-import { Aviso, Origem, ResultHead } from "./ui";
+import { Aviso, Origem, ResultHead, useStatus } from "./ui";
+import { ACAO_CONECTAR_IA, ACAO_CONECTAR_OPENROUTER } from "@/lib/acoes";
 import { EditorPagina } from "./EditorPagina";
 import { EntregarPagina } from "./EntregarPagina";
 import { PreviaPagina } from "./PreviaPagina";
@@ -17,6 +18,9 @@ export function Resultado({ pagina: inicial, meta: metaInicial, id, referencia }
   // A página muda a cada edição/volta de versão sem sair da tela; a proveniência exibida passa a ser a da última mudança.
   const [pagina, setPagina] = useState<Pagina>(inicial);
   const [meta, setMeta] = useState<Meta>(metaInicial);
+  const { status } = useStatus();
+  // `vision` é um campo extra do /api/status deste app (a Status compartilhada não o declara).
+  const semVisao = Boolean(status?.ai) && !(status as { vision?: boolean } | null)?.vision;
   const atual = pagina.versoes[pagina.versoes.length - 1];
   const modeloGratuito = !meta.demo && meta.model.endsWith(":free");
   return (
@@ -30,10 +34,16 @@ export function Resultado({ pagina: inicial, meta: metaInicial, id, referencia }
 
       {meta.demo && (
         <div className="mb-4">
-          <Aviso>
-            Esta é uma página de exemplo fixa: a sua captura não foi lida.{" "}
-            <a className="btn-link text-[13px]" href="/setup#openrouter">Conecte a inteligência artificial para gerar a sua versão</a>
-          </Aviso>
+          {semVisao ? (
+            <Aviso acao={ACAO_CONECTAR_OPENROUTER}>
+              A sua captura não foi lida: o ChatGPT cuida dos textos e das edições, mas a leitura da imagem passa pelo OpenRouter. Conecte também o OpenRouter para clonar por captura.
+            </Aviso>
+          ) : (
+            <Aviso>
+              Esta é uma página de exemplo fixa: a sua captura não foi lida.{" "}
+              <a className="btn-link text-[13px]" href={ACAO_CONECTAR_IA.url}>Conecte a inteligência artificial para gerar a sua versão</a>
+            </Aviso>
+          )}
         </div>
       )}
       {modeloGratuito && (
