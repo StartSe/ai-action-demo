@@ -468,8 +468,8 @@ export function ChatPopup({
             </button>
           )}
           {voiceMode && <button type="button" className={"chat-mic" + (voiceState.muted ? " muted" : "")} aria-label={voiceState.muted ? "Ativar microfone" : "Silenciar microfone"} title={voiceState.muted ? "Ativar microfone" : "Silenciar microfone"} aria-pressed={voiceState.muted} disabled={voiceState.phase === "connecting" || voiceState.phase === "error"} onClick={() => conversation.current?.setMuted(!voiceState.muted)}><Icon name={voiceState.muted ? "mic-off" : "mic"} size={18} /></button>}
-          <span className="chat-input-hint" role="status">{uploading ? "Preparando anexos…" : transcribing ? "Transcrevendo…" : recording ? "Gravando…" : voiceMode ? "" : "Enter para enviar"}</span>
-          {(!!input.trim() || !!attachments.length || running || sending) && <button
+          <span className="chat-input-hint" role="status">{uploading ? "Preparando anexos…" : transcribing ? "Transcrevendo…" : recording ? "Gravando…" : ""}</span>
+          <button
             type="submit"
             className="chat-send"
             title="Enviar mensagem"
@@ -477,7 +477,7 @@ export function ChatPopup({
             disabled={!canSend || (!input.trim() && !attachments.length)}
           >
             {running || sending ? <span className="studio-spinner" /> : <Icon name="send" size={19} />}
-          </button>}
+          </button>
           {voiceMode ? <button type="button" className="chat-voice-end" aria-label="Encerrar conversa por voz" title="Encerrar conversa por voz" onClick={endVoice}><Icon name="close" size={20} /></button> : <button type="button" className="chat-voice-start" aria-label="Iniciar conversa por voz" title={voice ? "Iniciar conversa por voz" : "Configure a voz do fluxo"} disabled={voice && (!connected || demo || running || recording || transcribing || uploading || !!issues.length)} onClick={voice ? beginVoice : onVoiceSettings}><Icon name="wave" size={20} /></button>}
           </div>
         </form>
