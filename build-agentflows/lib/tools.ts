@@ -1,5 +1,5 @@
 // Ferramentas do Agente, no espírito do Flowise: um catálogo com ferramentas prontas (sem
-// configurar nada) e as ferramentas de cada servidor MCP conectado em Conexões.
+// configurar nada) e as ferramentas de cada servidor MCP conectado em Configurações.
 //
 // Identificadores guardados no bloco: "interno:<nome>" para as prontas e "mcp:<prefixo>:<nome>"
 // para as de um servidor. Um nome sem prefixo (fluxos da primeira versão) é o servidor antigo

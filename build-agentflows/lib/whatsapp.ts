@@ -20,7 +20,7 @@ export function soDigitos(numero: string) {
 function falha(status: number, detalhe: string): FlowError {
   const t = detalhe.toLowerCase();
   if (status === 401 || status === 403 || /token|unauthorized|forbidden|api key/.test(t))
-    return new FlowError("O provedor de WhatsApp recusou as credenciais. Confira em Conexões.", 401);
+    return new FlowError("O provedor de WhatsApp recusou as credenciais. Confira em Configurações.", 401);
   if (status === 429) return new FlowError("O provedor está limitando o envio agora. Espere um minuto.", 429);
   if (/not connected|disconnected|restore|não conectado/.test(t))
     return new FlowError("O número ainda não está conectado ao provedor.", 409);
@@ -47,7 +47,7 @@ function zapi(caminho: string) {
   const id = getConfig("ZAPI_INSTANCE_ID"),
     token = getConfig("ZAPI_TOKEN"),
     client = getConfig("ZAPI_CLIENT_TOKEN");
-  if (!id || !token || !client) throw new FlowError("Conecte o WhatsApp (Z-API) em Conexões.");
+  if (!id || !token || !client) throw new FlowError("Conecte o WhatsApp (Z-API) em Configurações.");
   return {
     url: `${ZAPI_BASE}/instances/${encodeURIComponent(id)}/token/${encodeURIComponent(token)}/${caminho}`,
     headers: { "Content-Type": "application/json", "Client-Token": client },
@@ -55,14 +55,14 @@ function zapi(caminho: string) {
 }
 function zapperhub(caminho: string) {
   const key = getConfig("ZAPPERHUB_KEY");
-  if (!key) throw new FlowError("Conecte o WhatsApp (ZapperHub) em Conexões.");
+  if (!key) throw new FlowError("Conecte o WhatsApp (ZapperHub) em Configurações.");
   const base = (getConfig("ZAPPERHUB_URL") || "https://api.zapperapi.com").replace(/\/+$/, "");
   return { url: `${base}${caminho}`, headers: { "Content-Type": "application/json", "X-Api-Key": key, Token: key } };
 }
 function meta(caminho: string) {
   const token = getConfig("WHATSAPP_TOKEN"),
     numero = getConfig("WHATSAPP_PHONE_NUMBER_ID");
-  if (!token || !numero) throw new FlowError("Conecte o WhatsApp (Meta) em Conexões.");
+  if (!token || !numero) throw new FlowError("Conecte o WhatsApp (Meta) em Configurações.");
   return {
     url: `https://graph.facebook.com/v21.0/${encodeURIComponent(numero)}${caminho}`,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -74,7 +74,7 @@ export async function enviarMensagem(para: string, texto: string): Promise<void>
   const mensagem = texto.trim().slice(0, 4000);
   if (!mensagem) throw new FlowError("A mensagem está vazia.");
   const p = provedorWhatsApp();
-  if (!p || !whatsappConfigurado()) throw new FlowError("Conecte o WhatsApp em Conexões antes de enviar.");
+  if (!p || !whatsappConfigurado()) throw new FlowError("Conecte o WhatsApp em Configurações antes de enviar.");
   if (p === "zapi") {
     const { url, headers } = zapi("send-text");
     const d = await chamar(url, { method: "POST", headers, body: JSON.stringify({ phone: numero, message: mensagem }) });
@@ -95,7 +95,7 @@ export async function enviarMensagem(para: string, texto: string): Promise<void>
 // Cadastra o endereço de avisos no provedor (Z-API e ZapperHub). Na Meta é colado no painel.
 export async function configurarAvisos(urlBase: string): Promise<string | null> {
   const p = provedorWhatsApp();
-  if (!whatsappConfigurado()) throw new FlowError("Configure o WhatsApp e aceite os termos em Conexões.");
+  if (!whatsappConfigurado()) throw new FlowError("Configure o WhatsApp e aceite os termos em Configurações.");
   const endereco = `${urlBase.replace(/\/+$/, "")}/webhook/whatsapp?chave=${chaveWebhook()}`;
   if (p === "zapi") {
     for (const caminho of ["update-webhook-received", "update-webhook-connected", "update-webhook-disconnected"]) {

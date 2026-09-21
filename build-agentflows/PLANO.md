@@ -203,3 +203,12 @@ As limitações das rodadas anteriores sobre Gmail, Google/Microsoft, Browserles
 - Ações MCP por servidor: descrição, busca, seleção individual/em lote, atualização independente e recuperação de indisponibilidade sem apagar seleções.
 - Compatibilidade com fluxos anteriores e persistência de servidores anexados sem ações selecionadas.
 - Testes de comportamento/contrato e navegação com dois MCP locais, desktop, tema escuro e celular; lint, build e verificadores da suíte.
+
+# Rodada 6: chat com anexos e Configurações — 0.7.0
+
+- Fechamento externo e Esc para chat, paleta, histórico e menu do cabeçalho; rascunho preservado ao reabrir o chat.
+- Compositor com altura automática, envio, anexos, colagem, arrastar/soltar e voz.
+- Uploads privados e limitados; documentos extraídos como texto e imagens enviadas nativamente apenas a modelos compatíveis, com validação no servidor antes da execução.
+- Configurações com modelos compactos, limites expansíveis e formulários dos canais recolhidos; compatibilidade da URL anterior.
+- Remoção da busca do seletor OpenRouter; nova versão também no rodapé da sidebar.
+- Testes de anexos, permissões entre fluxos, contratos dos provedores e motor; navegação desktop/celular, tema escuro, lint, build e verificadores da suíte antes do push na main.

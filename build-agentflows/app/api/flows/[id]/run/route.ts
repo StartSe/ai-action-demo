@@ -6,6 +6,6 @@ export async function POST(
 ) {
   return api(async () => {
     const b = await body(req);
-    return startRun((await c.params).id, b.input, false, b.demo);
+    return startRun((await c.params).id, b.input, false, b.demo, b.attachments);
   });
 }

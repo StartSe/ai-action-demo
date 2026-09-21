@@ -5,7 +5,7 @@ export type ConnectionState = {
   account: { email?: string; planType?: string } | null;
   login: { loginId: string; verificationUrl: string; userCode: string } | null;
   error: string | null;
-  models: { id: string; name: string }[];
+  models: import("@/lib/model-capabilities").ModelCapability[];
 };
 export function useChatGPT() {
   const [connection, setConnection] = useState<ConnectionState | null>(null);

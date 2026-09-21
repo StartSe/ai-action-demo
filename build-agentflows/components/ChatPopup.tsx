@@ -1,8 +1,12 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import type { Run } from "@/lib/flow-types";
+import type { Graph, Run } from "@/lib/flow-types";
+import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_FILE_BYTES, MAX_TOTAL_BYTES, type Attachment } from "@/lib/attachment-types";
+import { imageIssues, type ModelCapability } from "@/lib/model-capabilities";
+import { ChatAttachments } from "./ChatAttachments";
+import type { RouterModel } from "./ModelPicker";
 import { Icon, request } from "./StudioUI";
-// Fala um texto com a voz configurada em Conexões (ElevenLabs).
+// Fala um texto com a voz configurada em Configurações (ElevenLabs).
 async function speak(text: string, voz?: string) {
   const r = await fetch("/api/voz/falar", {
     method: "POST",
@@ -153,8 +157,13 @@ function BotMessage({
   );
 }
 export function ChatPopup({
+  open,
   session,
   pendingInput,
+  pendingAttachments,
+  graph,
+  chatModels,
+  error,
   running,
   demo,
   connected,
@@ -167,8 +176,13 @@ export function ChatPopup({
   onChange,
   onConnect,
 }: {
+  open: boolean;
   session: Run[];
   pendingInput: string;
+  pendingAttachments: Attachment[];
+  graph: Graph;
+  chatModels: ModelCapability[];
+  error: string;
   running: boolean;
   demo: boolean;
   connected: boolean;
@@ -177,7 +191,7 @@ export function ChatPopup({
   voice?: boolean;
   flowId: string;
   onDemo: (v: boolean) => void;
-  onSend: (input: string) => void;
+  onSend: (input: string, attachments: Attachment[]) => Promise<boolean>;
   onChange: (r: Run) => void;
   onConnect: () => void;
 }) {
@@ -191,7 +205,67 @@ export function ChatPopup({
     recorder = useRef<MediaRecorder | null>(null),
     spoken = useRef(new Set<string>()),
     scroll = useRef<HTMLDivElement>(null);
-  const canSend = !running && (demo || connected);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [attachmentError, setAttachmentError] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const [routerModels, setRouterModels] = useState<ModelCapability[]>([]);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  const uploadLock = useRef(false);
+  const sendLock = useRef(false);
+  const recordingAllowed = useRef(open);
+  const hasImages = attachments.some((a) => a.kind === "image");
+  const issues = hasImages ? imageIssues(graph, [...chatModels, ...routerModels]) : [];
+  const canSend = !running && !sending && !uploading && !recording && !transcribing && (demo || connected) && !issues.length && !(demo && attachments.length);
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    void request<{ conectado: boolean; modelos: RouterModel[] }>("/api/conexoes/modelos").then((r) => {
+      if (alive) setRouterModels(r.conectado ? r.modelos.map((m) => ({ id: `openrouter:${m.id}`, name: m.nome, inputModalities: m.inputModalities || ["text"] })) : []);
+    }).catch(() => { if (alive) setRouterModels([]); });
+    textarea.current?.focus();
+    return () => { alive = false; };
+  }, [open]);
+  useEffect(() => {
+    recordingAllowed.current = open;
+    if (!open && recorder.current?.state === "recording") recorder.current.stop();
+  }, [open]);
+  useEffect(() => () => {
+    recordingAllowed.current = false;
+    const rec = recorder.current;
+    if (rec) {
+      rec.onstop = null;
+      if (rec.state !== "inactive") rec.stop();
+      rec.stream.getTracks().forEach((t) => t.stop());
+    }
+  }, []);
+  useEffect(() => {
+    const el = textarea.current;
+    if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 160)}px`; }
+  }, [input, open]);
+  async function attach(files: File[]) {
+    if (!files.length || uploadLock.current || sendLock.current || running) return;
+    setAttachmentError("");
+    if (demo) { setAttachmentError("Conecte um modelo de IA para analisar anexos. A simulação aceita apenas mensagens de texto."); return; }
+    if (attachments.length + files.length > MAX_ATTACHMENTS) { setAttachmentError("Use até 5 arquivos por mensagem."); return; }
+    if (files.some((f) => f.size > MAX_FILE_BYTES) || [...attachments, ...files].reduce((sum, f) => sum + f.size, 0) > MAX_TOTAL_BYTES) {
+      setAttachmentError("Use até 10 MB por arquivo e 20 MB por mensagem."); return;
+    }
+    uploadLock.current = true; setUploading(true);
+    const errors: string[] = [];
+    for (const file of files) {
+      try {
+        const form = new FormData(); form.set("file", file);
+        const response = await fetch(`/api/flows/${flowId}/attachments`, { method: "POST", body: form });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Não foi possível anexar.");
+        setAttachments((items) => [...items, data as Attachment]);
+      } catch (e) { errors.push(`${file.name}: ${e instanceof Error ? e.message : "Não foi possível anexar."}`); }
+    }
+    setAttachmentError(errors.join(" ")); uploadLock.current = false; setUploading(false);
+  }
   // A voz escolhida para este fluxo fica lembrada no navegador.
   useEffect(() => {
     if (!listen || voices !== null) return;
@@ -221,6 +295,7 @@ export function ChatPopup({
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!recordingAllowed.current) { stream.getTracks().forEach((t) => t.stop()); return; }
       const rec = new MediaRecorder(stream);
       const chunks: Blob[] = [];
       rec.ondataavailable = (e) => chunks.push(e.data);
@@ -251,13 +326,18 @@ export function ChatPopup({
   useEffect(() => {
     scroll.current?.scrollTo({ top: scroll.current.scrollHeight });
   }, [session, running]);
-  function send() {
-    if (!input.trim() || !canSend) return;
-    onSend(input.trim());
-    setInput("");
+  async function send() {
+    if ((!input.trim() && !attachments.length) || !canSend || sendLock.current) return;
+    sendLock.current = true; setSending(true); setAttachmentError("");
+    try {
+      if (await onSend(input.trim() || "Analise os anexos enviados.", attachments)) {
+        setInput(""); setAttachments([]);
+      }
+    } finally { sendLock.current = false; setSending(false); }
   }
   return (
     <section
+      hidden={!open}
       className={"chat-popup" + (expanded ? " expanded" : "")}
       aria-label="Testar Agentflow"
     >
@@ -285,7 +365,7 @@ export function ChatPopup({
             {session.map((r) => (
               <div key={r.id} className="chat-exchange">
                 <div className="chat-msg user">
-                  <div className="chat-bubble">{r.input}</div>
+                  <div className="chat-bubble"><ChatAttachments items={r.attachments || []} />{r.input}</div>
                 </div>
                 <BotMessage run={r} voice={voice} voz={voz} onChange={onChange} />
               </div>
@@ -293,7 +373,7 @@ export function ChatPopup({
             {running && !session.some((r) => r.status === "running") && (
               <div className="chat-exchange">
                 <div className="chat-msg user">
-                  <div className="chat-bubble">{pendingInput}</div>
+                  <div className="chat-bubble"><ChatAttachments items={pendingAttachments} />{pendingInput}</div>
                 </div>
                 <div className="chat-msg bot">
                   <span className="chat-avatar">
@@ -360,6 +440,10 @@ export function ChatPopup({
             {voiceError}
           </p>
         )}
+        {error && <p className="studio-error" role="alert">{error}</p>}
+        {attachmentError && <p className="studio-error" role="alert">{attachmentError}</p>}
+        {issues.length > 0 && <div className="chat-attachment-warning" role="status"><strong>Este fluxo precisa de um modelo que aceite imagens.</strong>{issues.map((issue) => <p key={issue.nodeId}>{issue.label}: {issue.reason}</p>)}<small>Edite o modelo do bloco ou remova as imagens para continuar.</small></div>}
+        {demo && attachments.length > 0 && <p className="studio-error" role="alert">Desative a simulação e conecte um modelo para enviar estes anexos.</p>}
         {!connected && !demo && (
           <p>
             Conecte o ChatGPT para executar de verdade.{" "}
@@ -367,25 +451,36 @@ export function ChatPopup({
           </p>
         )}
         <form
+          className={"chat-input-box" + (dragging ? " dragging" : "")}
+          onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.stopPropagation(); setDragging(true); } }}
+          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
+          onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(false); void attach(Array.from(e.dataTransfer.files)); }}
           onSubmit={(e) => {
             e.preventDefault();
-            send();
+            void send();
           }}
         >
+          <ChatAttachments items={attachments} disabled={running || sending || uploading} onRemove={(id) => { setAttachments((items) => items.filter((a) => a.id !== id)); setAttachmentError(""); }} />
           <textarea
+            ref={textarea}
             aria-label="Mensagem para testar"
             placeholder="Digite sua mensagem…"
-            rows={2}
+            rows={1}
+            maxLength={20000}
             value={input}
-            disabled={running}
+            disabled={running || sending}
+            onPaste={(e) => { const files = Array.from(e.clipboardData.files); if (files.length) { e.preventDefault(); void attach(files); } }}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
-                send();
+                void send();
               }
             }}
           />
+          <div className="chat-input-actions">
+          <input ref={fileInput} hidden type="file" accept={ATTACHMENT_ACCEPT} multiple onChange={(e) => { void attach(Array.from(e.target.files || [])); e.target.value = ""; }} />
+          <button type="button" className="chat-attach" aria-label="Anexar arquivos ou imagens" title="Anexar arquivos ou imagens" disabled={running || sending || uploading || demo} onClick={() => fileInput.current?.click()}><Icon name="paperclip" size={18} /></button>
           {voice && (
             <button
               type="button"
@@ -402,16 +497,19 @@ export function ChatPopup({
               )}
             </button>
           )}
+          <span className="chat-input-hint" role="status">{uploading ? "Preparando anexos…" : transcribing ? "Transcrevendo…" : recording ? "Gravando…" : "Enter para enviar"}</span>
           <button
             type="submit"
             className="chat-send"
             title="Enviar mensagem"
             aria-label="Enviar mensagem"
-            disabled={!canSend || !input.trim()}
+            disabled={!canSend || (!input.trim() && !attachments.length)}
           >
-            <Icon name="play" size={17} />
+            {running || sending ? <span className="studio-spinner" /> : <Icon name="send" size={19} />}
           </button>
+          </div>
         </form>
+        <small className="chat-file-help">PNG, JPG, WebP, PDF ou texto · até 5 arquivos, 10 MB cada. PDFs são enviados como texto; imagens exigem um modelo compatível.</small>
         <small>
           {demo
             ? "Demonstração · nenhuma ação externa"

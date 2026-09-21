@@ -1,3 +1,4 @@
+import type { Attachment } from "./attachment-types";
 export const BLOCKS = {
   start: {
     label: "Início",
@@ -99,6 +100,7 @@ export type Run = {
   status: "running" | "waiting" | "completed" | "failed" | "cancelled";
   demo: boolean;
   input: string;
+  attachments?: Attachment[];
   output: string;
   error?: string;
   graph: Graph;

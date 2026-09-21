@@ -1,6 +1,6 @@
 // Execução de um LLM/Agente pelo OpenRouter (mais de 500 modelos), com o mesmo contrato de
 // ferramentas do ChatGPT (lib/chatgpt.ts). A chave vem da conexão em um clique (OAuth PKCE) ou
-// colada em Conexões; o modelo é escolhido bloco a bloco como "openrouter:<provedor/modelo>".
+// colada em Configurações; o modelo é escolhido bloco a bloco como "openrouter:<provedor/modelo>".
 import { interpretarFalha } from "./ai";
 import { getConfig } from "./store";
 import type { AgentTool } from "./chatgpt";
@@ -12,7 +12,7 @@ export function openRouterKey() {
 export function isOpenRouterModel(model?: string) {
   return !!model && model.startsWith(PREFIX);
 }
-export type ModelOption = { id: string; nome: string; provedor: string };
+export type ModelOption = { id: string; nome: string; provedor: string; inputModalities: string[] };
 let cache: { at: number; modelos: ModelOption[] } | null = null;
 // Catálogo público do OpenRouter, guardado por uma hora.
 export async function listModels(force = false): Promise<ModelOption[]> {
@@ -21,20 +21,22 @@ export async function listModels(force = false): Promise<ModelOption[]> {
     signal: AbortSignal.timeout(20000),
   });
   if (!r.ok) throw new Error("O OpenRouter não devolveu a lista de modelos.");
-  const data = (await r.json()) as { data?: { id: string; name?: string }[] };
+  const data = (await r.json()) as { data?: { id: string; name?: string; architecture?: { input_modalities?: string[] } }[] };
   const modelos = (data.data || [])
     .filter((m) => typeof m.id === "string" && m.id.includes("/"))
     .map((m) => ({
       id: m.id,
       nome: m.name || m.id,
       provedor: m.id.split("/")[0],
+      inputModalities: m.architecture?.input_modalities || ["text"],
     }))
     .sort((a, b) => a.nome.localeCompare(b.nome));
   cache = { at: Date.now(), modelos };
   return modelos;
 }
 type Msg =
-  | { role: "system" | "user"; content: string }
+  | { role: "system"; content: string }
+  | { role: "user"; content: string | ({ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } })[] }
   | { role: "assistant"; content: string | null; tool_calls?: Call[] }
   | { role: "tool"; tool_call_id: string; content: string };
 type Call = {
@@ -47,6 +49,7 @@ export async function runOpenRouter({
   prompt,
   model,
   tools = [],
+  images = [],
   signal,
   onText,
   fetcher = fetch,
@@ -55,16 +58,21 @@ export async function runOpenRouter({
   prompt: string;
   model?: string;
   tools?: AgentTool[];
+  images?: string[];
   signal?: AbortSignal;
   onText?: (text: string) => void;
   fetcher?: typeof fetch;
 }): Promise<string> {
   const key = openRouterKey();
-  if (!key) throw new Error("Conecte o OpenRouter em Conexões para usar este modelo.");
+  if (!key) throw new Error("Conecte o OpenRouter em Configurações para usar este modelo.");
   const id = (model || "").startsWith(PREFIX) ? model!.slice(PREFIX.length) : model || GENERATOR_MODEL;
+  if (images.length) {
+    const selected = (await listModels()).find((m) => m.id === id);
+    if (id === "openrouter/auto" || !selected?.inputModalities.includes("image")) throw new Error("Escolha um modelo OpenRouter com suporte a imagens no bloco.");
+  }
   const history: Msg[] = [
     { role: "system", content: system },
-    { role: "user", content: prompt },
+    { role: "user", content: images.length ? [{ type: "text", text: prompt }, ...images.map((url) => ({ type: "image_url" as const, image_url: { url } }))] : prompt },
   ];
   for (let round = 0; round < 12; round++) {
     if (signal?.aborted) throw new Error("Execução cancelada.");

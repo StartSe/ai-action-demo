@@ -84,3 +84,26 @@ test("erro do provedor vira mensagem de negócio", async () => {
     (e: Error) => e.message.length > 10,
   );
 });
+
+test("catálogo informa modalidades e envia imagens no conteúdo nativo do modelo escolhido", async () => {
+  const fetch0 = globalThis.fetch;
+  const { listModels } = await import("./openrouter");
+  globalThis.fetch = async () => Response.json({ data: [
+    { id: "test/vision", name: "Visão", architecture: { input_modalities: ["text", "image"] } },
+    { id: "test/text", name: "Texto", architecture: { input_modalities: ["text"] } },
+    { id: "test/unknown", name: "Desconhecido" },
+  ] });
+  try {
+    const models = await listModels(true);
+    assert.deepEqual(models.find((m) => m.id === "test/vision")?.inputModalities, ["text", "image"]);
+    const image = "data:image/png;base64,aW1hZ2Vt";
+    const { fetcher, calls } = fakeFetch([{ choices: [{ message: { content: "Imagem lida" } }] }]);
+    assert.equal(await runOpenRouter({ system: "", prompt: "Analise", model: "openrouter:test/vision", images: [image], fetcher }), "Imagem lida");
+    assert.equal(calls[0].body.model, "test/vision");
+    assert.deepEqual((calls[0].body.messages as { content: unknown }[])[1].content, [{ type: "text", text: "Analise" }, { type: "image_url", image_url: { url: image } }]);
+    for (const model of ["test/text", "test/unknown", "openrouter/auto"]) {
+      await assert.rejects(() => runOpenRouter({ system: "", prompt: "Leia", model: `openrouter:${model}`, images: [image], fetcher }), /suporte a imagens/);
+    }
+    assert.equal(calls.length, 1);
+  } finally { globalThis.fetch = fetch0; }
+});

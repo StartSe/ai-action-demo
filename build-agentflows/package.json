@@ -1,6 +1,6 @@
 {
   "name": "build-agentflows",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -17,7 +17,9 @@
     "next": "16.3.5",
     "nodemailer": "^10.0.9",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "sharp": "0.35.4",
+    "unpdf": "1.8.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

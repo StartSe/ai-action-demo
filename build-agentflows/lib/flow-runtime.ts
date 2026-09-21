@@ -1,3 +1,6 @@
+import { attachmentContext, resolveAttachments, markAttachmentsUsed } from "./attachments";
+import { assertImageModels } from "./attachment-models";
+import { reachableAiNodes } from "./model-capabilities";
 import { randomUUID } from "node:crypto";
 import { chatGPT } from "./chatgpt";
 import { isOpenRouterModel, openRouterKey, runOpenRouter } from "./openrouter";
@@ -39,9 +42,11 @@ async function agent(n: Block, r: Run, signal: AbortSignal) {
       : [];
   const tools = allowed.length ? await resolveTools(allowed) : [];
   const runner = isOpenRouterModel(c.model) ? runOpenRouter : chatGPT().run.bind(chatGPT());
+  const context = attachmentContext(r.flowId, r.attachments);
   return runner({
     system: interpolate(c.system, r),
-    prompt: message(c, r),
+    prompt: message(c, r) + context.text,
+    images: context.images,
     model: c.model || undefined,
     signal,
     onText: (text) => {
@@ -165,7 +170,7 @@ async function execute(r: Run): Promise<Run> {
         else {
           const { ligar } = await import("./elevenlabs");
           const l = await ligar(para, contexto);
-          output = `Ligação iniciada para ${para}${l.conversationId ? ` (conversa ${l.conversationId})` : ""}. O fim da ligação executa o fluxo escolhido em Conexões.`;
+          output = `Ligação iniciada para ${para}${l.conversationId ? ` (conversa ${l.conversationId})` : ""}. O fim da ligação executa o fluxo escolhido em Configurações.`;
         }
       }
       if (k === "tool")
@@ -245,6 +250,7 @@ export async function startRun(
   input: unknown,
   published = false,
   demo?: boolean,
+  attachmentIds?: unknown,
 ) {
   if (typeof input !== "string" || !input.trim() || input.length > 20000)
     throw new FlowError(
@@ -257,9 +263,13 @@ export async function startRun(
       409,
     );
   const graph = validateGraph(published ? f.published : f.graph, true);
+  const attachments = resolveAttachments(flowId, attachmentIds);
+  if (attachments.length && !reachableAiNodes(graph).length) throw new FlowError("Adicione um bloco de IA ao fluxo para analisar os anexos.");
+  if (demo === true && attachments.length) throw new FlowError("Anexos precisam de uma execução real. Desative a simulação ou remova os arquivos.");
+  if (attachments.some((a) => a.kind === "image")) await assertImageModels(graph);
   if (demo !== true && !openRouterKey() && !(await chatGPT().account()).account)
     throw new FlowError(
-      "Conecte o ChatGPT (ou o OpenRouter em Conexões) para executar, ou escolha simular no painel de teste.",
+      "Conecte o ChatGPT (ou o OpenRouter em Configurações) para executar, ou escolha simular no painel de teste.",
       409,
     );
   const now = new Date().toISOString();
@@ -272,6 +282,7 @@ export async function startRun(
     status: "running",
     demo: demo === true,
     input,
+    ...(attachments.length ? { attachments } : {}),
     output: "",
     next: graph.nodes.find((n) => n.data.kind === "start")!.id,
     state: {},
@@ -281,6 +292,7 @@ export async function startRun(
     createdAt: now,
     updatedAt: now,
   };
+  markAttachmentsUsed(attachments);
   putRun(r);
   return execute(r);
 }

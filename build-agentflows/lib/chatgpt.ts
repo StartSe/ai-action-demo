@@ -8,6 +8,7 @@ import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
 
 import { normalizeUsage } from "./account-usage";
+import type { ModelCapability } from "./model-capabilities";
 
 type Json = Record<string, unknown>;
 type Message = {
@@ -333,14 +334,16 @@ export class ChatGPTBridge {
     await this.rpc("account/logout");
     this.loginError = null;
   }
-  async models(): Promise<{ id: string; name: string }[]> {
+  async models(): Promise<ModelCapability[]> {
     await this.start();
     const r = await this.rpc<{
-      data: { id: string; model: string; displayName: string }[];
+      data: { id: string; model: string; displayName: string; inputModalities?: string[]; isDefault?: boolean }[];
     }>("model/list", { limit: 100, includeHidden: false });
     return r.data.map((m) => ({
       id: m.model || m.id,
       name: m.displayName || m.model,
+      inputModalities: m.inputModalities || ["text", "image"],
+      isDefault: m.isDefault ?? r.data.length === 1,
     }));
   }
   async run({
@@ -348,6 +351,7 @@ export class ChatGPTBridge {
     prompt,
     model,
     tools = [],
+    images = [],
     signal,
     onText,
   }: {
@@ -355,6 +359,7 @@ export class ChatGPTBridge {
     prompt: string;
     model?: string;
     tools?: AgentTool[];
+    images?: string[];
     signal?: AbortSignal;
     onText?: (text: string) => void;
   }): Promise<string> {
@@ -362,6 +367,12 @@ export class ChatGPTBridge {
     if (!(await this.account()).account)
       throw new Error("Conecte sua conta ChatGPT para executar este agente.");
     if (signal?.aborted) throw new Error("Execução cancelada.");
+    if (images.length) {
+      const models = await this.models();
+      const selected = model ? models.find((m) => m.id === model) : models.find((m) => m.isDefault);
+      if (!selected?.inputModalities.includes("image")) throw new Error("Este modelo não tem suporte confirmado a imagens. Escolha um modelo com imagens no bloco.");
+      model = selected.id;
+    }
     const r = await this.rpc<{ thread: { id: string } }>("thread/start", {
       ...(model ? { model } : {}),
       cwd: this.workspace,
@@ -426,7 +437,7 @@ export class ChatGPTBridge {
       }
       void this.rpc<{ turn: { id: string } }>("turn/start", {
         threadId: id,
-        input: [{ type: "text", text: prompt }],
+        input: [{ type: "text", text: prompt }, ...images.map((url) => ({ type: "image", url }))],
         environments: [],
       })
         .then((result) => {

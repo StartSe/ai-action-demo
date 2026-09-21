@@ -45,6 +45,7 @@ function Card({
   badge,
   connected,
   description,
+  collapsible = false,
   children,
 }: {
   icon: ReactNode;
@@ -52,10 +53,12 @@ function Card({
   badge?: string;
   connected: boolean;
   description: string;
+  collapsible?: boolean;
   children: ReactNode;
 }) {
+  const [expanded, setExpanded] = useState(!collapsible);
   return (
-    <section className={"connection-card" + (connected ? " connected" : "")}>
+    <section className={"connection-card" + (connected ? " connected" : "") + (collapsible ? " channel-card" : "")}>
       <header>
         <span className="connection-icon">{icon}</span>
         <div>
@@ -66,10 +69,12 @@ function Card({
           <p>{description}</p>
         </div>
         <span className={"connection-state " + (connected ? "on" : "")}>
+          <i />
           {connected ? "Conectado" : "Não conectado"}
         </span>
+        {collapsible && <button className="studio-button connection-toggle" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Recolher" : connected ? "Gerenciar" : "Configurar"}<Icon name="chevron" size={14} /></button>}
       </header>
-      <div className="connection-body">{children}</div>
+      <div className="connection-body" hidden={!expanded}>{children}</div>
     </section>
   );
 }
@@ -120,7 +125,7 @@ export function Connections() {
       else if (q.get("conectado")) setNotice("Servidor de ferramentas autorizado.");
       if (q.get("erro")) setError(q.get("erro")!);
       if (q.has("conectado") || q.has("erro"))
-        history.replaceState(null, "", "/conexoes");
+        history.replaceState(null, "", "/configuracoes");
     }, 0);
     return () => clearTimeout(timer);
   }, [load]);
@@ -210,9 +215,9 @@ export function Connections() {
       <main className="library-page connections-page">
         <header className="library-header">
           <div>
-            <div className="studio-breadcrumb">Workspace / Conexões</div>
-            <h1>Conexões</h1>
-            <p>Modelos de IA e canais que seus agentes podem usar.</p>
+            <div className="studio-breadcrumb">Workspace / Configurações</div>
+            <h1>Configurações</h1>
+            <p>Gerencie os modelos, os canais e a voz dos seus agentes.</p>
           </div>
         </header>
         {error && (
@@ -220,7 +225,9 @@ export function Connections() {
             {error}
           </div>
         )}
-        <div className="connections-grid">
+        {!status && !error && <p role="status" className="settings-loading">Carregando configurações…</p>}
+        <div className="settings-section-heading"><Icon name="spark" size={18} /><div><h2>Modelos de IA</h2><p>Conecte suas contas e escolha o modelo dentro de cada bloco.</p></div></div>
+        <div className="connections-grid settings-models">
           <Card
             icon={<Icon name="spark" size={22} />}
             title="ChatGPT"
@@ -229,20 +236,16 @@ export function Connections() {
             description="Execute seus agentes com os modelos e limites da sua assinatura."
           >
             {connection?.account ? (
-              <p>
-                Conta <strong>{connection.account.email}</strong>
-                {connection.account.planType && ` · plano ${connection.account.planType}`}.{" "}
-                {connection.models.length} modelos disponíveis.
-              </p>
+              <div className="connection-account"><strong>{connection.account.email}</strong><span>{connection.account.planType ? `Plano ${connection.account.planType} · ` : ""}{connection.models.length} modelos disponíveis</span></div>
             ) : (
               <p>Conecte uma vez pelo código de dispositivo; a conta fica nesta instalação.</p>
             )}
-            {connection?.account && <ChatGPTUsage />}
             <div className="studio-actions">
               <button className="studio-button primary" onClick={() => setConnect(true)}>
                 {connection?.account ? "Gerenciar conexão" : "Conectar ChatGPT"}
               </button>
             </div>
+            {connection?.account && <details className="settings-usage"><summary>Ver limites da assinatura<Icon name="chevron" size={14} /></summary><ChatGPTUsage /></details>}
           </Card>
           <Card
             icon={<Icon name="link" size={22} />}
@@ -281,7 +284,7 @@ export function Connections() {
               </>
             ) : (
               <>
-                <p>Uma conta gratuita basta. A conexão abre o OpenRouter e volta para cá.</p>
+                <p>Autorize sua conta para acessar os modelos disponíveis no OpenRouter.</p>
                 <div className="studio-actions">
                   <a className="studio-button primary" href="/api/conexoes/openrouter">
                     <Icon name="link" size={16} />
@@ -291,11 +294,15 @@ export function Connections() {
               </>
             )}
           </Card>
+        </div>
+        <div className="settings-section-heading"><Icon name="chat" size={18} /><div><h2>Canais e voz</h2><p>Configure uma vez e vincule ao fluxo em Implantar.</p></div></div>
+        <div className="settings-channels">
           <Card
+            collapsible
             icon={<Icon name="chat" size={22} />}
             title="WhatsApp"
             connected={!!status?.whatsapp.configurado}
-            description="Receba mensagens no seu número e responda com um fluxo; envie mensagens a partir dos agentes."
+            description="Receba mensagens e responda com seus agentes."
           >
             {status && (
               <div className="node-fields">
@@ -363,10 +370,11 @@ export function Connections() {
             )}
           </Card>
           <Card
+            collapsible
             icon={<Icon name="play" size={22} />}
             title="ElevenLabs (voz)"
             connected={!!status?.elevenlabs.configurado}
-            description="Fale com o fluxo no chat e ouça a resposta com a voz escolhida em cada fluxo. Ligações são configuradas em Implantar."
+            description="Fale com o fluxo e ouça as respostas no chat."
           >
             {status && (
               <div className="node-fields">

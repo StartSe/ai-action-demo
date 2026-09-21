@@ -78,3 +78,15 @@ test("sinal de cancelamento interrompe o turno", async () => {
   setTimeout(() => abort.abort(), 50);
   await assert.rejects(() => response, /cancelada/);
 });
+
+test("imagens chegam ao turno pelo protocolo; modelo sem imagem é recusado", async () => {
+  await bridge.beginLogin();
+  const image = "data:image/png;base64,aW1hZ2Vt";
+  const result = await bridge.run({ system: "Analise", prompt: "inspect-images", images: [image] });
+  assert.deepEqual(JSON.parse(result), [{ type: "text", text: "inspect-images" }, { type: "image", url: image }]);
+  const models = bridge.models;
+  bridge.models = async () => [{ id: "text", name: "Texto", inputModalities: ["text"], isDefault: true }];
+  try {
+    await assert.rejects(() => bridge.run({ system: "", prompt: "Analise", model: "text", images: [image] }), /suporte confirmado/);
+  } finally { bridge.models = models; }
+});

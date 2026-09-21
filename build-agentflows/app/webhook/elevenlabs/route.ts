@@ -1,5 +1,5 @@
 // Aviso de fim de ligação da ElevenLabs (post_call_transcription). Rota pública (proxy.ts),
-// validada pela assinatura HMAC com o segredo colado em Conexões. Executa o fluxo escolhido com a
+// validada pela assinatura HMAC com o segredo colado em Configurações. Executa o fluxo escolhido com a
 // transcrição da ligação (inbound ou outbound) para registrar, classificar ou dar sequência.
 import { getConfig, setConfig } from "@/lib/store";
 import { assinaturaConfere, interpretarPosLigacao, type PosLigacao } from "@/lib/elevenlabs";

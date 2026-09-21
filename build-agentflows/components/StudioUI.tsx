@@ -3,6 +3,28 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { version } from "../package.json";
+// Menus de ações: clique externo, troca de foco e Esc, tanto no editor quanto na biblioteca.
+export function useDismissMenus() {
+  useEffect(() => {
+    const menus = () => document.querySelectorAll<HTMLDetailsElement>("details.canvas-menu[open], details.card-menu[open]");
+    const outside = (event: Event) => {
+      if (!(event.target instanceof Node)) return;
+      menus().forEach((menu) => { if (!menu.contains(event.target as Node)) menu.open = false; });
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || document.querySelector("dialog[open]")) return;
+      menus().forEach((menu) => { menu.open = false; menu.querySelector("summary")?.focus(); });
+    };
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("focusin", outside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("focusin", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, []);
+}
 export type IconName =
   | "flows"
   | "runs"
@@ -53,7 +75,9 @@ export type IconName =
   | "whatsapp"
   | "call"
   | "mic"
-  | "speaker";
+  | "speaker"
+  | "paperclip"
+  | "send";
 const paths: Record<string, ReactNode> = {
   flows: (
     <>
@@ -110,6 +134,8 @@ const paths: Record<string, ReactNode> = {
   upload: <path d="M12 16V4m-5 5 5-5 5 5M4 16v5h16v-5" />,
   undo: <path d="M4 4v6h6M4 10c4-8 17-5 16 5v4" />,
   redo: <path d="M20 4v6h-6m6 0C16 2 3 5 4 15v4" />,
+  paperclip: <path d="m8 12 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l9-9m-6 11 8-8" />,
+  send: <path d="M12 20V4m-7 7 7-7 7 7" />,
   play: <path d="m8 4 13 8-13 8z" />,
   stop: <rect x="5" y="5" width="14" height="14" rx="2" />,
   spark: <path d="m12 3 2.8 6.2L21 12l-6.2 2.8L12 21l-2.8-6.2L3 12l6.2-2.8z" />,
@@ -291,7 +317,9 @@ export function Modal({
         onClose();
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target !== e.currentTarget) return;
+        const bounds = e.currentTarget.getBoundingClientRect();
+        if (e.clientX < bounds.left || e.clientX > bounds.right || e.clientY < bounds.top || e.clientY > bounds.bottom) onClose();
       }}
     >
       <header>
@@ -313,6 +341,7 @@ export function StudioShell({
   onConnect: () => void;
   connected?: boolean;
 }) {
+  useDismissMenus();
   const router = useRouter();
   const [dark, setDark] = useState(false);
   useEffect(() => {
@@ -344,10 +373,10 @@ export function StudioShell({
           </Link>
           <Link
             className={active === "connections" ? "active" : ""}
-            href="/conexoes"
+            href="/configuracoes"
           >
-            <Icon name="link" />
-            Conexões
+            <Icon name="settings" />
+            Configurações
           </Link>
         </nav>
         <div className="studio-nav-bottom">

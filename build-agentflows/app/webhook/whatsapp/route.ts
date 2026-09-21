@@ -1,5 +1,5 @@
 // Avisos do WhatsApp (Z-API, Meta e ZapperHub) chegam aqui. Rota pública (proxy.ts, `/webhook/**`),
-// protegida pela chave secreta na URL (?chave=) gerada em Conexões; a Meta também usa essa chave
+// protegida pela chave secreta na URL (?chave=) gerada em Configurações; a Meta também usa essa chave
 // como valor de verificação. Cada mensagem de texto executa o fluxo publicado escolhido em
 // Conexões e a resposta volta pelo mesmo número. Responde 200 na hora e processa em seguida.
 import { getConfig, setConfig } from "@/lib/store";
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   if (recebida) processar(recebida).catch((err) => console.error("Erro ao responder no WhatsApp:", err));
   return new Response("OK", { status: 200 });
 }
-// Executa o fluxo escolhido em Conexões com o texto recebido e devolve a resposta ao remetente.
+// Executa o fluxo escolhido em Configurações com o texto recebido e devolve a resposta ao remetente.
 export async function processar(m: Recebida): Promise<string | null> {
   if (!whatsappConfigurado() || m.provedor !== provedorWhatsApp()) return null;
   setConfig("WHATSAPP_ULTIMA_RECEBIDA", JSON.stringify({ em: new Date().toISOString(), de: m.de }));

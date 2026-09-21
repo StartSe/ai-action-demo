@@ -30,7 +30,7 @@ import {
   connectionProblem,
   outputLabel,
 } from "@/lib/flow-graph";
-import { Icon, IconButton, Modal, request } from "./StudioUI";
+import { Icon, IconButton, Modal, request, useDismissMenus } from "./StudioUI";
 import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
 import { NodeDialog } from "./NodeDialog";
 import { ChatPopup } from "./ChatPopup";
@@ -40,6 +40,7 @@ import type { Generated } from "@/lib/flow-generator";
 import { AgentNode, type VisualNode } from "./flow/AgentNode";
 import { AgentEdge, type VisualEdge } from "./flow/AgentEdge";
 import { ConnectionLine } from "./flow/ConnectionLine";
+import type { Attachment } from "@/lib/attachment-types";
 const nodeTypes = { block: AgentNode };
 const edgeTypes = { agent: AgentEdge };
 // Conexão iniciada em uma saída e solta no vazio: o próximo bloco nasce já conectado.
@@ -50,6 +51,7 @@ type Pending = {
   screen: { x: number; y: number };
 };
 export function FlowEditor({ id }: { id: string }) {
+  useDismissMenus();
   const router = useRouter(),
     canvasRef = useRef<HTMLDivElement>(null),
     instance = useRef<Pick<
@@ -83,6 +85,7 @@ export function FlowEditor({ id }: { id: string }) {
   const [notice, setNotice] = useState("");
   const [session, setSession] = useState<Run[]>([]);
   const [pendingInput, setPendingInput] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [demo, setDemo] = useState(false);
   const [openrouterConnected, setOpenrouterConnected] = useState(false);
@@ -99,6 +102,31 @@ export function FlowEditor({ id }: { id: string }) {
   const { connection, setConnection } = useChatGPT();
   const aiConnected = !!connection?.account || openrouterConnected;
   const effectiveDemo = demo && !aiConnected;
+  useEffect(() => {
+    const dismiss = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof Element) || target.closest("dialog[open]")) return;
+      if (!target.closest(".react-flow__node, .af-toolbar")) setGraph((g) => g.nodes.some((n) => n.selected) ? { ...g, nodes: g.nodes.map((n) => ({ ...n, selected: false })) } : g);
+      if (!target.closest(".chat-popup, .canvas-right-actions")) setChat(false);
+      if (!target.closest(".node-palette, .add-node-button")) {
+        setPalette(false); setPending(null); setSearch("");
+      }
+      if (!target.closest('.canvas-test-panel, [aria-label="Histórico do fluxo"]')) setHistory(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || document.querySelector("dialog[open]")) return;
+      setGraph((g) => g.nodes.some((n) => n.selected) ? { ...g, nodes: g.nodes.map((n) => ({ ...n, selected: false })) } : g);
+      setChat(false); setPalette(false); setPending(null); setSearch(""); setHistory(false);
+    };
+    document.addEventListener("pointerdown", dismiss, true);
+    document.addEventListener("focusin", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss, true);
+      document.removeEventListener("focusin", dismiss);
+      document.removeEventListener("keydown", escape);
+    };
+  }, []);
   useEffect(() => {
     const refresh = () => {
       void request<{ openrouter: { conectado: boolean } }>("/api/conexoes").then((s) => setOpenrouterConnected(s.openrouter.conectado)).catch(() => {});
@@ -406,10 +434,11 @@ export function FlowEditor({ id }: { id: string }) {
         : [...list, r],
     );
   }, [setRun, setSession]);
-  async function execute(input: string) {
+  async function execute(input: string, attachments: Attachment[]): Promise<boolean> {
     setRunning(true);
     setError("");
     setPendingInput(input);
+    setPendingAttachments(attachments);
     setRun(null);
     let timer: ReturnType<typeof setInterval> | undefined;
     try {
@@ -427,10 +456,13 @@ export function FlowEditor({ id }: { id: string }) {
         await request<Run>("/api/flows/" + id + "/run", "POST", {
           input,
           demo: effectiveDemo,
+          attachments: attachments.map((a) => a.id),
         }),
       );
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Não foi possível executar.");
+      return false;
     } finally {
       if (timer) clearInterval(timer);
       setRunning(false);
@@ -551,7 +583,9 @@ export function FlowEditor({ id }: { id: string }) {
             label="Implantar fluxo"
             onClick={() => setIntegration(true)}
           />
-          <details className="canvas-menu">
+          <details className="canvas-menu" onClick={(e) => {
+            if ((e.target as Element).closest("button")) e.currentTarget.open = false;
+          }}>
             <summary aria-label="Mais ações">
               <Icon name="more" />
             </summary>
@@ -842,23 +876,26 @@ export function FlowEditor({ id }: { id: string }) {
               <Icon name={chat ? "close" : "chat"} size={22} />
             </button>
           </div>
-          {chat && (
             <ChatPopup
+              open={chat}
               session={session}
               pendingInput={pendingInput}
+              pendingAttachments={pendingAttachments}
+              graph={graph}
+              chatModels={connection?.models || []}
+              error={error}
               running={running}
               demo={effectiveDemo}
               connected={aiConnected}
-              providerLabel={connection?.account ? "ChatGPT · usa os limites da sua assinatura" : "OpenRouter · uso conforme o modelo escolhido"}
+              providerLabel={[...new Set(graph.nodes.filter((n) => ["agent", "llm"].includes(n.data.kind)).map((n) => n.data.config.model?.startsWith("openrouter:") ? "OpenRouter" : "ChatGPT"))].join(" + ") || "Modelo definido no fluxo"}
               expanded={expanded}
               voice={voice.voz}
               flowId={id}
               onDemo={setDemo}
-              onSend={(text) => void execute(text)}
+              onSend={execute}
               onChange={updateRun}
               onConnect={() => setConnect(true)}
             />
-          )}
         </div>
         {history && (
           <aside className="canvas-test-panel">

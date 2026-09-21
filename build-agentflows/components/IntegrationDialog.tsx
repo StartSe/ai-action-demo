@@ -289,8 +289,8 @@ print(dados["status"], dados["output"])`,
           ) : !channels.whatsapp.configurado ? (
             <p>
               Conecte o número em{" "}
-              <a href="/conexoes" target="_blank" rel="noreferrer">
-                Conexões › WhatsApp
+              <a href="/configuracoes" target="_blank" rel="noreferrer">
+                Configurações › WhatsApp
               </a>{" "}
               e volte aqui para vincular este fluxo.
             </p>
@@ -339,8 +339,8 @@ print(dados["status"], dados["output"])`,
           ) : !channels.elevenlabs.configurado ? (
             <p>
               Salve a chave da ElevenLabs em{" "}
-              <a href="/conexoes" target="_blank" rel="noreferrer">
-                Conexões › ElevenLabs
+              <a href="/configuracoes" target="_blank" rel="noreferrer">
+                Configurações › ElevenLabs
               </a>{" "}
               para habilitar ligações.
             </p>

@@ -1,4 +1,4 @@
-// Conexões do produto (tela Conexões): OpenRouter, servidores de ferramentas (MCP), WhatsApp e
+// Conexões do produto (tela Configurações): OpenRouter, servidores de ferramentas (MCP), WhatsApp e
 // ElevenLabs. O ChatGPT continua sendo a conexão principal e fica em lib/chatgpt.ts.
 // Tudo é guardado no banco cifrado da suíte (lib/store.ts); segredos nunca voltam inteiros.
 import { randomBytes } from "node:crypto";
@@ -157,7 +157,7 @@ export async function conexaoMCP(prefixo: string) {
   servidorMCP(prefixo);
   return conexaoAutorizada(prefixo);
 }
-// --- Estado geral da tela Conexões -----------------------------------------------------------
+// --- Estado geral da tela Configurações -----------------------------------------------------------
 export function provedorWhatsApp() {
   const escolhido = getConfig("WHATSAPP_PROVEDOR");
   if (escolhido === "zapi" || escolhido === "meta" || escolhido === "zapperhub") return escolhido;

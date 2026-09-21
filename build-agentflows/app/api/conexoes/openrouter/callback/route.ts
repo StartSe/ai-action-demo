@@ -10,8 +10,8 @@ export async function GET(req: Request) {
       status: 302,
       headers: {
         Location: erro
-          ? `/conexoes?erro=${encodeURIComponent(erro)}`
-          : "/conexoes?conectado=openrouter",
+          ? `/configuracoes?erro=${encodeURIComponent(erro)}`
+          : "/configuracoes?conectado=openrouter",
         "Set-Cookie": "or_verifier=; Path=/; Max-Age=0",
       },
     });

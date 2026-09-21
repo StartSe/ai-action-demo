@@ -1,4 +1,4 @@
-# Build Agentflows — v0.5.0
+# Build Agentflows — v0.7.0
 
 Crie fluxos visuais de agentes de IA, teste cada etapa e publique versões que seus sistemas e assistentes podem executar. Aplicação independente da suíte **IA para Executivos**, inspirada na orquestração explícita de [AgentFlow V2 do Flowise](https://docs.flowiseai.com/using-flowise/agentflowv2).
 
@@ -12,19 +12,19 @@ O editor segue a experiência do Agentflow V2: blocos compactos coloridos, alça
 
 Ao selecionar explicitamente a simulação, os fluxos rodam em demonstração: agentes devolvem respostas ilustrativas e nenhuma chamada HTTP ou ferramenta externa é executada. Com ChatGPT ou OpenRouter conectado, o chat oculta as sugestões e a opção de simulação e envia execuções reais. `/?exemplo=1` cria um exemplo de triagem quando ainda não há fluxos.
 
-## Conexões
+## Configurações
 
-A tela **Conexões** reúne o que os agentes podem usar:
+A tela **Configurações** reúne o que os agentes podem usar:
 
 - **ChatGPT** (principal): assinatura conectada por código de dispositivo pelo Codex App Server oficial, fixado em @openai/codex 0.155.1. O cartão mostra o percentual disponível e a próxima renovação de cada janela retornada por `account/rateLimits/read`. Atualiza a cada minuto e pelo botão Atualizar. São limites do uso pelo Codex, compartilhados com outras sessões da conta; ausência ou falha da consulta nunca aparece como saldo zero.
 - **OpenRouter**: conexão em um clique (OAuth PKCE) com mais de 500 modelos de 80 provedores, mais a opção "Automático · OpenRouter" (o OpenRouter escolhe o modelo). O modelo é escolhido bloco a bloco; um bloco em "Automático · ChatGPT" nunca cai para o OpenRouter, e vice-versa. O gerador de fluxos usa o OpenRouter só quando o ChatGPT não está conectado.
-- **Ferramentas no Agente** (catálogo no espírito do Flowise): busca na web (Tavily, SearchApi, Exa, Serper, SerpApi, Brave, Google Custom Search, SearXNG), conhecimento (arXiv, Wolfram Alpha), web e dados (ler página, requisição HTTP sem endereços internos, extrair JSON), utilidades (data e hora, calculadora) e fluxos (executar outro fluxo publicado). WhatsApp e ligações não são ferramentas do Agente: entram no fluxo completo por Implantar. As que precisam de chave pedem a credencial ali mesmo, uma vez para todos os fluxos. Servidores MCP nomeados são gerenciados dentro do Agente: adicionar, editar, autorizar, testar e remover. As ferramentas saíram da tela Conexões.
-- **WhatsApp**: Z-API (QR Code), Meta oficial ou ZapperHub, conectados em Conexões. Z-API e ZapperHub exigem aceite dos termos com a marca StartSe, registrado por provedor, versão e data; a API recusa a gravação sem aceite e conexões antigas precisam aceitar antes de enviar ou processar mensagens. Meta oficial não exige esse aceite. Cada fluxo é vinculado ao número em **Implantar › WhatsApp**: mensagens recebidas em `/webhook/whatsapp?chave=…` executam o fluxo vinculado e a resposta volta pelo mesmo número; o endereço de avisos é cadastrado no provedor ao salvar (na Meta é colado no painel, com a mesma chave como valor de verificação).
-- **ElevenLabs**: só a chave em Conexões. No chat de teste: falar em vez de digitar (transcrição) e ouvir as respostas com a voz escolhida por fluxo. Ligações por voz ficam em **Implantar › Ligações**: agente de conversa, número, segredo do aviso, vínculo do fluxo que recebe a transcrição (aviso assinado em `/webhook/elevenlabs`) e "Ligar agora" para prospecção ativa.
+- **Ferramentas no Agente** (catálogo no espírito do Flowise): busca na web (Tavily, SearchApi, Exa, Serper, SerpApi, Brave, Google Custom Search, SearXNG), conhecimento (arXiv, Wolfram Alpha), web e dados (ler página, requisição HTTP sem endereços internos, extrair JSON), utilidades (data e hora, calculadora) e fluxos (executar outro fluxo publicado). WhatsApp e ligações não são ferramentas do Agente: entram no fluxo completo por Implantar. As que precisam de chave pedem a credencial ali mesmo, uma vez para todos os fluxos. Servidores MCP nomeados são gerenciados dentro do Agente: adicionar, editar, autorizar, testar e remover. As ferramentas saíram da tela Configurações.
+- **WhatsApp**: Z-API (QR Code), Meta oficial ou ZapperHub, conectados em Configurações. Z-API e ZapperHub exigem aceite dos termos com a marca StartSe, registrado por provedor, versão e data; a API recusa a gravação sem aceite e conexões antigas precisam aceitar antes de enviar ou processar mensagens. Meta oficial não exige esse aceite. Cada fluxo é vinculado ao número em **Implantar › WhatsApp**: mensagens recebidas em `/webhook/whatsapp?chave=…` executam o fluxo vinculado e a resposta volta pelo mesmo número; o endereço de avisos é cadastrado no provedor ao salvar (na Meta é colado no painel, com a mesma chave como valor de verificação).
+- **ElevenLabs**: só a chave em Configurações. No chat de teste: falar em vez de digitar (transcrição) e ouvir as respostas com a voz escolhida por fluxo. Ligações por voz ficam em **Implantar › Ligações**: agente de conversa, número, segredo do aviso, vínculo do fluxo que recebe a transcrição (aviso assinado em `/webhook/elevenlabs`) e "Ligar agora" para prospecção ativa.
 
 ## Stack
 
-Next.js 16, React 19, TypeScript, Tailwind 4, React Flow (`@xyflow/react`, editor acessível com conexões/arraste/zoom) e SQLite nativo do Node. Conta, sessão, configurações cifradas e MCP reutilizam a infraestrutura da suíte. A IA principal usa login ChatGPT pelo Codex App Server oficial; o OpenRouter é a alternativa explícita, por conexão em Conexões.
+Next.js 16, React 19, TypeScript, Tailwind 4, React Flow (`@xyflow/react`, editor acessível com conexões/arraste/zoom) e SQLite nativo do Node. Conta, sessão, configurações cifradas e MCP reutilizam a infraestrutura da suíte. A IA principal usa login ChatGPT pelo Codex App Server oficial; o OpenRouter é a alternativa explícita, por conexão em Configurações.
 
 ## Rodar localmente
 
@@ -105,7 +105,7 @@ Implementação própria simplificada, sem copiar código do Flowise. Não é um
 - `lib/flow-types.ts`: blocos, grafo e contratos.
 - `lib/flow-graph.ts`: saídas por tipo, validação de conexão e layout automático.
 - `lib/flow-generator.ts`: geração de fluxo pelo ChatGPT (ou OpenRouter) e validação da resposta.
-- `lib/conexoes.ts`, `components/Connections.tsx`, `app/api/conexoes/`: tela e rotas de Conexões.
+- `lib/conexoes.ts`, `components/Connections.tsx`, `app/api/conexoes/`: tela e rotas de Configurações.
 - `lib/openrouter.ts`: execução pelo OpenRouter com ferramentas.
 - `lib/tools.ts`: ferramentas prontas e catálogo dos servidores MCP.
 - `lib/whatsapp.ts`, `app/webhook/whatsapp/`: canal WhatsApp.
@@ -158,3 +158,23 @@ Referências: [limites pelo Codex App Server](https://learn.chatgpt.com/docs/app
 - Fluxos anteriores continuam compatíveis: `config.tools` mantém as permissões usadas pelo motor. `config.toolCards` contém apenas identificadores e a organização dos cartões, sem credenciais. Depois de **Salvar bloco**, use **Salvar** no editor para persistir o fluxo.
 
 Validação: 64 testes de comportamento e contratos, lint, build de produção e verificadores de padrão/jargão. Navegação com Playwright em desktop, tema escuro e celular (390 px), usando dados temporários e dois servidores MCP locais: inclusão e recolhimento, campos obrigatórios, falha/repetição da gravação de credencial, ações homônimas com seleção independente, indisponibilidade e recuperação, persistência ao reabrir e servidor sem ações selecionadas. Serviços externos pagos não foram utilizados.
+
+## Chat, anexos e Configurações (0.7.0)
+
+O chat, Adicionar blocos, o histórico e o menu Mais ações fecham ao clicar fora ou pressionar Esc. Diálogos do cabeçalho também fecham pelo fundo externo. O rascunho do chat, incluindo anexos já preparados, continua disponível ao reabrir durante a edição do fluxo. Recarregar ou sair da página encerra esse rascunho.
+
+O compositor tem campo que cresce com a mensagem, botão de envio, anexos e microfone quando a voz está configurada. Enter envia; Shift+Enter quebra a linha. Use o botão de anexar, arraste arquivos para o campo ou cole imagens/arquivos. É possível enviar apenas anexos; nesse caso, o pedido é “Analise os anexos enviados.” Erros antes da criação da execução preservam o rascunho para nova tentativa.
+
+- Imagens: PNG, JPG e WebP estático, até 40 megapixels. O arquivo é decodificado e validado antes de ser aceito.
+- Documentos: PDF com texto extraível (até 100 páginas), TXT, MD, CSV e JSON em UTF-8. O conteúdo é extraído e enviado como texto a cada bloco de IA; PDFs digitalizados precisam ser enviados como imagens das páginas. Documentos com senha, binários e vazios são recusados.
+- Limites: 5 arquivos, 10 MB por arquivo, 20 MB por mensagem; 60 mil caracteres por documento e 100 mil somados. Conteúdo excedente é recusado, sem corte silencioso.
+- Todos os blocos LLM/Agente alcançáveis precisam aceitar imagens para que uma mensagem com imagens seja executada. A interface indica os blocos a revisar; o servidor valida novamente antes das etapas. O OpenRouter automático exige escolher um modelo específico com suporte a imagens. O aplicativo não troca o modelo nem ignora a imagem para conseguir executar.
+- A simulação aceita somente texto digitado. A mensagem com anexos exige conexão real e ao menos um bloco de IA. Documentos e imagens são incluídos em cada bloco de IA do fluxo; não são propagados automaticamente a outros fluxos chamados por ferramentas ou aos canais externos.
+
+Arquivos ficam privados em `DATA_DIR/chat-attachments/`, associados ao fluxo e acessíveis pela sessão administrativa. `chat_attachments` guarda metadados e texto extraído; a execução guarda apenas metadados. Arquivos usados são preservados para o histórico. Arquivos não enviados expiram após 24 horas e são removidos no próximo upload. Inclua esses dados nos backups do volume. O limite do proxy permite o arquivo de 10 MB mais o formulário; o endpoint aplica seu próprio limite durante a leitura.
+
+A antiga tela Conexões passa a se chamar **Configurações**, em `/configuracoes`; `/conexoes` redireciona preservando o retorno da autorização. Modelos de IA têm cartões compactos, limites da assinatura ficam em uma seção expansível e os canais apresentam a configuração sob demanda. O seletor mantém os modelos OpenRouter agrupados por provedor, sem campo de busca. O rodapé discreto da sidebar acompanha a versão do pacote.
+
+Contratos: [imagens e modalidades no Codex App Server](https://learn.chatgpt.com/docs/app-server), [imagens no OpenRouter](https://openrouter.ai/docs/guides/overview/multimodal/image-understanding) e [modalidades do catálogo OpenRouter](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties).
+
+Validação da versão: 73 testes automatizados, lint, build de produção e verificadores de padrão/jargão. Navegação em desktop, celular e tema escuro com clique externo/Esc, rascunhos, upload real, prévias, colagem, arrastar/soltar, recusa de imagem incompatível e recuperação de falha no envio. O servidor standalone foi verificado com autenticação, PDF, download privado, arquivo de 10 MB, rejeição de excesso e vínculo de anexo entre fluxos. As respostas dos provedores foram controladas; nenhuma conta paga foi usada.

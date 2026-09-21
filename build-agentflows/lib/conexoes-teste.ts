@@ -1,4 +1,4 @@
-// Botão "Testar" de cada cartão da tela Conexões: uma chamada real, curta, com resposta em
+// Botão "Testar" de cada cartão da tela Configurações: uma chamada real, curta, com resposta em
 // linguagem de negócio.
 import { FlowError } from "./flow-store";
 import { conexaoMCP, servidorMCP } from "./conexoes";

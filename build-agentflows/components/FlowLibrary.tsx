@@ -331,7 +331,9 @@ export function FlowLibrary() {
                     </span>
                   </footer>
                 </Link>
-                <details className="card-menu">
+                <details className="card-menu" onClick={(e) => {
+                  if ((e.target as Element).closest("button")) e.currentTarget.open = false;
+                }}>
                   <summary aria-label={"Ações de " + f.name}>
                     <Icon name="more" />
                   </summary>

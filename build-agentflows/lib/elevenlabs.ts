@@ -1,6 +1,6 @@
 // Voz com ElevenLabs: transcrição (falar no chat), fala (ouvir a resposta) e ligações telefônicas
 // pelo agente de conversa (Conversational AI + Twilio/SIP). O aviso de fim de ligação chega em
-// /webhook/elevenlabs assinado com HMAC e executa o fluxo escolhido em Conexões com a transcrição.
+// /webhook/elevenlabs assinado com HMAC e executa o fluxo escolhido em Configurações com a transcrição.
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { getConfig } from "./store";
 import { FlowError } from "./flow-store";
@@ -11,11 +11,11 @@ export const MODELO_TRANSCRICAO = "scribe_v1";
 export const VOZ_PADRAO = "21m00Tcm4TlvDq8ikWAM";
 function chave() {
   const k = getConfig("ELEVENLABS_API_KEY");
-  if (!k) throw new FlowError("Conecte a ElevenLabs em Conexões.");
+  if (!k) throw new FlowError("Conecte a ElevenLabs em Configurações.");
   return k;
 }
 function falha(status: number, detalhe: string) {
-  if (status === 401) return new FlowError("A ElevenLabs recusou a chave. Confira em Conexões.", 401);
+  if (status === 401) return new FlowError("A ElevenLabs recusou a chave. Confira em Configurações.", 401);
   if (status === 402 || /quota|credits|limit/i.test(detalhe))
     return new FlowError("A conta da ElevenLabs está sem créditos ou atingiu o limite.", 402);
   if (status === 404) return new FlowError("A ElevenLabs não encontrou a voz, o agente ou o número informado.", 404);
@@ -75,7 +75,7 @@ export async function ligar(telefone: string, contexto: string): Promise<{ ok: b
   if (numero.replace(/\D/g, "").length < 10) throw new FlowError("Informe o telefone com DDI e DDD.");
   const agent = getConfig("ELEVENLABS_AGENT_ID"),
     phone = getConfig("ELEVENLABS_PHONE_NUMBER_ID");
-  if (!agent || !phone) throw new FlowError("Informe o agente de conversa e o número em Conexões.");
+  if (!agent || !phone) throw new FlowError("Informe o agente de conversa e o número em Configurações.");
   const r = await chamar("/convai/twilio/outbound-call", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
