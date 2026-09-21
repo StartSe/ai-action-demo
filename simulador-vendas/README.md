@@ -28,9 +28,11 @@ Ele abre o link, diz quem é (com Google, com Microsoft ou escrevendo nome e e-m
 ## Conversa por voz
 A IA do simulador conduz todas as conversas. A ElevenLabs fornece apenas a voz: salve a chave em `/setup`, selecione **Voz do cliente** e ouça uma amostra. A voz escolhida é usada para todos os clientes; o ajuste por perfil muda o ritmo e a expressividade.
 
-A sala usa [react-speech-recognition](https://github.com/JamesBrill/react-speech-recognition). Um toque inicia o microfone, uma pausa de 1,4 segundo envia a fala e a escuta volta após a resposta. **Enviar fala agora**, **Pausar microfone** e **Interromper e falar** permitem controlar o ritmo sem segurar botões. Texto e voz compartilham a transcrição salva no servidor.
+A sala usa a Web Speech API do navegador quando a conversa ao vivo pelo LiveKit não está configurada. Um toque inicia o microfone, uma pausa de 1,4 segundo envia a fala e a escuta volta após a resposta. **Enviar fala agora**, **Pausar microfone** e **Interromper e falar** permitem controlar o ritmo sem segurar botões. Texto e voz compartilham a transcrição salva no servidor.
 
-O reconhecimento depende do suporte do navegador à Web Speech API. A escuta contínua é habilitada apenas onde a biblioteca indica suporte; sem reconhecimento ou permissão do microfone, a conversa oferece texto. Se a ElevenLabs falhar, a síntese do navegador fornece o áudio. Não é necessário criar ou selecionar agentes externos.
+O reconhecimento depende do suporte do navegador à Web Speech API. A tela só indica escuta depois da confirmação do navegador. Falhas de conexão, captura ou permissão oferecem texto e permitem tentar a voz novamente; uma inicialização sem resposta é cancelada após 10 segundos. Cada escuta usa uma instância nova, preservando as palavras finais e permitindo recuperar permissões sem recarregar a página. Se a ElevenLabs falhar, a síntese do navegador fornece o áudio. Não é necessário criar ou selecionar agentes externos.
+
+Os testes de conversa rodam com `npx playwright test tests/conversa.spec.ts tests/voz-fallback.spec.ts`. Para exercitar também o reconhecimento real do Chrome, forneça um WAV curto em português: `VOZ_TESTE_ARQUIVO=/caminho/fala.wav npx playwright test tests/voz-real.spec.ts`. Este teste usa a conexão externa do Chrome, substitui apenas a entrada de áudio pelo arquivo e não abre o microfone físico.
 
 ## Metodologia e avaliação
 O gestor escolhe a régua por treino: **SPIN Selling** (9 critérios), **Venda consultiva** (7 critérios) ou **Personalizada** (o gestor escreve de 3 a 10 critérios). A avaliação devolve uma nota por critério com o **trecho literal da conversa** que a justifica — citação conferida contra a transcrição, não texto de confiança: o que não aparece na conversa é descartado. A nota geral e as notas por momento da conversa são calculadas no app, nunca pedidas à IA, que é o que permite comparar duas pessoas avaliadas em dias diferentes.
@@ -171,7 +173,8 @@ lib/ferramentas.ts         as quatro ferramentas expostas por MCP
 lib/store.ts               configuração em SQLite, com variáveis de ambiente como prioridade
 lib/ai.ts                  cliente OpenRouter (askText, askJSON, askWithTools), com modelo por tarefa
 components/Resultado.tsx   as telas dos quatro formatos de resultado, compartilhadas
-components/SalaVoz.tsx     conversa com react-speech-recognition e voz selecionada
+components/SalaVoz.tsx     conversa e voz selecionada
+components/useReconhecimentoVoz.ts  captura, transcrição e recuperação de falhas do navegador
 components/FeedbackVendedor.tsx  o feedback de quem treinou, nas duas telas que o mostram
 Dockerfile                 build multi-stage com saída standalone
 docker-compose.yml         sobe este app isolado
@@ -242,3 +245,7 @@ Escolha **Importar pelo link** ou **Preencher manualmente**. A importação most
 ### Ajustes de voz (0.4.1)
 
 O fluxo LiveKit publica o microfone antes de aguardar a prontidão do agente, como no Entrevistadora IA, evitando uma espera circular na conexão. O agente aguarda o participante e só inicializa a CLI quando executado diretamente. A imagem inclui as bibliotecas de áudio e corrige a propriedade do volume antes de iniciar os processos sem root. O build testa a preservação da chave mestra e das configurações em um volume com proprietário antigo.
+
+### Reconhecimento de fala no navegador (0.4.2)
+
+A sala confirma o início do reconhecimento antes de mostrar “Estou ouvindo você” e explica falhas de conexão, captura ou permissão. É possível reiniciar a voz sem recarregar a página. Falas finais consecutivas são preservadas, e pausas ou cancelamentos não deixam o envio preso nem interrompem uma nova tentativa. A correção foi validada em 21 testes de voz, incluindo transcrição real pelo Chrome com áudio sintético, além de TypeScript, lint e build de produção.

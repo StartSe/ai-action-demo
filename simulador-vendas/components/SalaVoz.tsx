@@ -3,7 +3,7 @@ import { useCallback, useEffect, useEffectEvent, useRef, useState, useSyncExtern
 import { useConversaLivekit } from "./useConversaLivekit";
 import { DicaConversa } from "@/components/DicaConversa";
 import { OrbeVoz } from "@/components/OrbeVoz";
-import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
+import { useReconhecimentoVoz } from "./useReconhecimentoVoz";
 import { ConversaRegistrada, FeedbackVendedor, type Tentativas } from "@/components/FeedbackVendedor";
 import { Aviso, lerErro } from "@/components/ui";
 import { frasePerfil } from "@/lib/personas";
@@ -78,15 +78,15 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
   const [encerrando, setEncerrando] = useState(false);
   const [falaPronta, setFalaPronta] = useState(false);
   const [ativa, setAtiva] = useState(false);
-  const { transcript, resetTranscript, listening, browserSupportsSpeechRecognition, browserSupportsContinuousListening, isMicrophoneAvailable } = useSpeechRecognition();
+  const reconhecimento = useReconhecimentoVoz(mensagem => usarTexto(mensagem));
+  const { transcript, resetTranscript, listening, suporta: browserSupportsSpeechRecognition } = reconhecimento;
   const estadoRef = useRef<EstadoConversa>("parado");
   const ativaRef = useRef(false);
+  const escutaGeracaoRef = useRef(0);
   const finalizarRef = useRef(false);
   const fechandoRef = useRef(false);
   const montadaRef = useRef(true);
   const turnoRef = useRef(false);
-  const microfoneRef = useRef(false);
-  const paradaRef = useRef<Promise<void> | null>(null);
   const enviandoFalaRef = useRef(false);
   const transcriptRef = useRef("");
   const cancelarAudioRef = useRef<(() => void) | null>(null);
@@ -114,17 +114,10 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     window.speechSynthesis?.cancel();
   }
   function pararMicrofone(finalizar = false): Promise<void> {
-    if (paradaRef.current) return paradaRef.current;
-    if (!microfoneRef.current) return Promise.resolve();
-    microfoneRef.current = false;
-    // A biblioteca espera onend mesmo quando o microfone já parou. Compartilhar uma única
-    // parada evita promessas penduradas e preserva o resultado final ao clicar rapidamente.
-    const parada = finalizar ? SpeechRecognition.stopListening() : SpeechRecognition.abortListening();
-    const pronta = parada.finally(() => { if (paradaRef.current === pronta) paradaRef.current = null; });
-    paradaRef.current = pronta;
-    return pronta;
+    return reconhecimento.parar(finalizar);
   }
   function pausar() {
+    escutaGeracaoRef.current++;
     if (usarLivekit) void chamada.pausar().catch(() => setErro("Não foi possível pausar o microfone."));
     ativaRef.current = false;
     setAtiva(false);
@@ -148,36 +141,39 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
   }
   async function iniciarEscuta() {
     if (fechandoRef.current || turnoRef.current || estadoRef.current === "conectando" || !montadaRef.current) return;
+    const geracao = ++escutaGeracaoRef.current;
+    const vale = () => geracao === escutaGeracaoRef.current && ativaRef.current && !fechandoRef.current && montadaRef.current;
     if (usarLivekit) {
       setErro(""); ativaRef.current = true; setAtiva(true);
       try { await chamada.iniciar(); }
       catch (err) {
+        if (geracao !== escutaGeracaoRef.current || !montadaRef.current || fechandoRef.current) return;
         const negado = err instanceof Error && err.name === "NotAllowedError";
         setErro(negado ? "Libere o microfone nas permissões do navegador e tente novamente." : err instanceof Error ? err.message : "Não foi possível abrir o microfone.");
         setFalhaLivekit(!negado); ativaRef.current = false; setAtiva(false); guardarEstado("parado");
       }
       return;
     }
-    if (!browserSupportsSpeechRecognition || !isMicrophoneAvailable) {
-      usarTexto(!browserSupportsSpeechRecognition ? "Este navegador não reconhece fala. Continue por texto ou abra este link no Chrome." : "Libere o microfone nas permissões do navegador para falar. Você também pode continuar por texto.");
+    if (!browserSupportsSpeechRecognition) {
+      usarTexto("Este navegador não reconhece fala. Continue por texto ou abra este link no Chrome.");
       return;
     }
     pararAudio();
-    setErro("");
+    setErro(""); setMotivoTexto("");
     ativaRef.current = true;
     setAtiva(true);
     guardarEstado("conectando");
-    await paradaRef.current;
-    if (!ativaRef.current || fechandoRef.current || !montadaRef.current) return;
+    await reconhecimento.parar();
+    if (!vale()) return;
     transcriptRef.current = "";
     resetTranscript();
     try {
-      await SpeechRecognition.startListening({ continuous: browserSupportsContinuousListening, language: "pt-BR" });
-      if (!ativaRef.current || fechandoRef.current || !montadaRef.current) { await SpeechRecognition.abortListening(); return; }
-      microfoneRef.current = true;
+      await reconhecimento.iniciar();
+      if (!vale()) return;
       guardarEstado("ouvindo");
-    } catch {
-      usarTexto("Não foi possível abrir o microfone. Confira a permissão ou continue por texto.");
+    } catch (err) {
+      if (!vale()) return;
+      usarTexto(err instanceof Error ? err.message : "Não foi possível abrir o microfone. Confira a permissão ou continue por texto.");
     }
   }
   useEffect(() => { iniciarRef.current = iniciarEscuta; });
@@ -294,7 +290,7 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
   async function enviarFala() {
     if (enviandoFalaRef.current || turnoRef.current || !ativaRef.current || fechandoRef.current) return;
     enviandoFalaRef.current = true;
-    // stopListening aguarda o resultado final antes de enviar; abort descarta a fala em andamento.
+    // A parada aguarda o resultado final antes de enviar a fala em andamento.
     await pararMicrofone(true);
     if (!ativaRef.current || fechandoRef.current) { enviandoFalaRef.current = false; return; }
     // O último onresult e onend podem chegar no mesmo evento. Enviar no próximo efeito
@@ -314,7 +310,6 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     const timer = setTimeout(consumirFala, 0);
     return () => clearTimeout(timer);
   }, [falaPronta]);
-  useEffect(() => { if (!listening && estadoRef.current === "ouvindo") microfoneRef.current = false; }, [listening]);
   const aoTranscrever = useEffectEvent(() => { transcriptRef.current = transcript; });
   useEffect(() => { aoTranscrever(); }, [transcript]);
   const aoTerminarFala = useEffectEvent(() => { void enviarFala(); });
@@ -323,10 +318,11 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     const timer = setTimeout(aoTerminarFala, listening ? 1400 : 150);
     return () => clearTimeout(timer);
   }, [transcript, listening, estado]);
-  const aoPerderMicrofone = useEffectEvent(() => usarTexto("O microfone não está disponível. Libere a permissão para falar ou continue por texto."));
-  useEffect(() => { if (usarLivekit || isMicrophoneAvailable) return; const timer = setTimeout(aoPerderMicrofone, 0); return () => clearTimeout(timer); }, [isMicrophoneAvailable, usarLivekit]);
   const aoPararSemFala = useEffectEvent(() => {
-    if (!turnoRef.current && !enviandoFalaRef.current) { ativaRef.current = false; setAtiva(false); guardarEstado("parado"); }
+    if (!turnoRef.current && !enviandoFalaRef.current) {
+      ativaRef.current = false; setAtiva(false); guardarEstado("parado");
+      setMotivoTexto("Não recebi sua fala. Confira o microfone selecionado no navegador e toque em Iniciar microfone para tentar novamente.");
+    }
   });
   useEffect(() => {
     if (usarLivekit || listening || transcript || estado !== "ouvindo") return;
@@ -339,7 +335,6 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     montadaRef.current = true;
     return () => {
       montadaRef.current = false; ativaRef.current = false;
-      void SpeechRecognition.abortListening();
       audioPedidoRef.current?.abort(); cancelarAudioRef.current?.(); window.speechSynthesis?.cancel();
     };
   }, []);

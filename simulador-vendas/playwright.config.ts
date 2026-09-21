@@ -13,6 +13,6 @@ export default defineConfig({
     command: "npm run dev -- --port 3217",
     url: "http://localhost:3217/api/health",
     reuseExistingServer: false,
-    env: { DATA_DIR: mkdtempSync(join(tmpdir(), "simulador-voz-tests-")), CONTA_DESLIGADA: "1", ELEVENLABS_AGENT_ID: "agente-antigo-ignorado" },
+    env: { NEXT_DIST_DIR: ".next-test", DATA_DIR: mkdtempSync(join(tmpdir(), "simulador-voz-tests-")), CONTA_DESLIGADA: "1", ELEVENLABS_AGENT_ID: "agente-antigo-ignorado" },
   },
 });
