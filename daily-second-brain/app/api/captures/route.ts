@@ -2,6 +2,7 @@ import { api, body, string, BrainError } from "@/lib/api";
 import {
   captureState,
   captureTask,
+  captureSchedule,
   enqueueCapture,
   cancelCapture,
   retryCapture,
@@ -14,11 +15,19 @@ import {
   captureToolCatalog,
   saveCaptureTools,
 } from "@/lib/capture-permissions";
+import type { CaptureFilter } from "@/lib/capture-types";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   return api(() => {
-    const id = new URL(req.url).searchParams.get("id");
-    return id ? captureTask(id) : captureState();
+    const q = new URL(req.url).searchParams;
+    const id = q.get("id");
+    return id
+      ? captureTask(id)
+      : captureState({
+          taskPage: Number(q.get("taskPage") ?? 1),
+          schedulePage: Number(q.get("schedulePage") ?? 1),
+          filter: (q.get("filter") ?? "all") as CaptureFilter,
+        });
   });
 }
 export async function POST(req: Request) {
@@ -55,10 +64,7 @@ export async function POST(req: Request) {
         pauseSchedule(string(b.id, 100));
         return captureState();
       case "resume": {
-        const s = captureState().schedules.find(
-          (s) => s.id === string(b.id, 100),
-        );
-        if (!s) throw new BrainError("Agendamento não encontrado.", 404);
+        const s = captureSchedule(string(b.id, 100));
         return saveSchedule(
           s.instruction,
           s.recurrence,

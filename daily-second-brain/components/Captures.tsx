@@ -6,6 +6,9 @@ import {
   type CaptureTask,
   type CaptureSchedule,
   type Recurrence,
+  type CaptureQuery,
+  type CapturePagination,
+  type CaptureFilter,
 } from "@/lib/capture-types";
 import type { Note } from "@/lib/types";
 import { Icon } from "./Icons";
@@ -306,10 +309,52 @@ export function CaptureComposer({
   );
 }
 
+function Pagination({
+  label,
+  value,
+  busy,
+  change,
+}: {
+  label: string;
+  value: CapturePagination;
+  busy: boolean;
+  change: (page: number) => void;
+}) {
+  if (!value.total) return null;
+  return (
+    <nav className="capture-pagination" aria-label={`Paginação de ${label}`}>
+      <span>
+        {(value.page - 1) * value.pageSize + 1}–
+        {Math.min(value.page * value.pageSize, value.total)} de {value.total}
+      </span>
+      <div>
+        <button
+          className="button"
+          disabled={busy || value.page <= 1}
+          onClick={() => change(value.page - 1)}
+        >
+          Anterior
+        </button>
+        <span aria-live="polite">
+          Página {value.page} de {value.pages}
+        </span>
+        <button
+          className="button"
+          disabled={busy || value.page >= value.pages}
+          onClick={() => change(value.page + 1)}
+        >
+          Próxima
+        </button>
+      </div>
+    </nav>
+  );
+}
+
 export function Captures({
   state,
   notes,
   refresh,
+  paginate,
   open,
   ready,
   configure,
@@ -318,6 +363,7 @@ export function Captures({
   state: CaptureState;
   notes: Note[];
   refresh: () => Promise<void>;
+  paginate: (query: Partial<CaptureQuery>) => Promise<void>;
   open: (id: string) => void;
   ready: boolean;
   configure: () => void;
@@ -331,14 +377,40 @@ export function Captures({
   }>({ key: 0 });
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [notice, setNotice] = useState("");
+  const [paging, setPaging] = useState(false);
+  async function changePage(query: Partial<CaptureQuery>) {
+    setPaging(true);
+    setError("");
+    try {
+      await paginate(query);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPaging(false);
+    }
+  }
   const top = useRef<HTMLDivElement>(null);
   async function action(action: string, id: string) {
     setBusy(id);
     setError("");
+    setNotice("");
     try {
       await request("/api/captures", "POST", { action, id });
+      if (action === "repeat" || action === "retry")
+        await paginate({ taskPage: 1, filter: "all" });
       await refresh();
+      setNotice(
+        action === "pause"
+          ? "Rotina pausada."
+          : action === "resume"
+            ? "Rotina retomada."
+            : action === "delete-schedule"
+              ? "Agendamento excluído."
+              : action === "cancel"
+                ? "Coleta cancelada."
+                : "Coleta adicionada à fila.",
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -353,12 +425,7 @@ export function Captures({
     setComposer((c) => ({ key: c.key + 1, initial, scheduling, schedule }));
     top.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
-  const active = state.tasks.filter(
-    (t) => t.status === "queued" || t.status === "running",
-  );
-  const recent = [
-    ...new Map(state.tasks.map((t) => [t.instruction, t.instruction])).values(),
-  ].slice(0, 5);
+  const recent = state.recentInstructions;
   return (
     <div className="captures-page" ref={top}>
       <div className="page-heading row-heading">
@@ -385,7 +452,16 @@ export function Captures({
         scheduling={composer.scheduling}
         ready={ready}
         configure={configure}
-        done={refresh}
+        done={async (task) => {
+          await paginate(
+            task
+              ? { taskPage: 1, filter: "all" }
+              : composer.schedule
+                ? {}
+                : { schedulePage: 1 },
+          );
+          await refresh();
+        }}
       />
       {composer.schedule && (
         <button
@@ -413,24 +489,39 @@ export function Captures({
           {error}
         </p>
       )}
-      <section className="capture-history">
+      {notice && (
+        <p className="notice" role="status">
+          {notice}
+        </p>
+      )}
+      <section className="capture-history" aria-busy={paging}>
         <div className="section-heading">
           <div>
             <Icon name="clock" size={18} />
             <h2>Coletas</h2>
             <span className="count">
-              {active.length
-                ? `${active.length} em andamento`
-                : state.tasks.length}
+              {state.activeCount
+                ? `${state.activeCount} em andamento`
+                : state.pagination.tasks.total}
             </span>
           </div>
           <label className="capture-filter">
             <span className="sr-only">Filtrar coletas</span>
-            <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+            <select
+              disabled={paging}
+              value={state.filter}
+              onChange={(e) =>
+                void changePage({
+                  filter: e.target.value as CaptureFilter,
+                  taskPage: 1,
+                })
+              }
+            >
               <option value="all">Todas</option>
               <option value="active">Em andamento</option>
               <option value="done">Concluídas</option>
               <option value="failed">Precisam de atenção</option>
+              <option value="cancelled">Canceladas</option>
             </select>
           </label>
         </div>
@@ -438,159 +529,154 @@ export function Captures({
           <div className="inline-empty">
             <Icon name="inbox" size={22} />
             <p>
-              Sua primeira coleta aparecerá aqui, com cada etapa e as páginas
-              criadas.
+              {state.filter === "all"
+                ? "Sua primeira coleta aparecerá aqui, com cada etapa e as páginas criadas."
+                : "Nenhuma coleta encontrada para este filtro."}
             </p>
           </div>
         )}
         <div className="capture-task-list">
-          {state.tasks
-            .filter(
-              (t) =>
-                filter === "all" ||
-                (filter === "active"
-                  ? ["queued", "running"].includes(t.status)
-                  : t.status === filter),
-            )
-            .map((t) => (
-              <article
-                className={`capture-task task-${t.status}`}
-                key={t.id}
-                data-task-id={t.id}
-              >
-                <div className="capture-task-top">
-                  <span
-                    className={`badge ${t.status === "done" ? "green" : ""}`}
-                  >
-                    {t.status === "running" && <span className="live-dot" />}
-                    {statuses[t.status]}
-                  </span>
-                  <small>
-                    {date(t.created)}
-                    {t.scheduleId
-                      ? " · Agendada"
-                      : t.parentId
-                        ? " · Repetição"
-                        : ""}
-                  </small>
-                </div>
-                <h3>{t.instruction}</h3>
-                <div className="capture-progress" aria-label="Etapas da coleta">
-                  {["Na fila", "Coletar fontes", "Organizar wiki"].map(
-                    (label, i) => (
-                      <span
-                        key={label}
-                        className={
-                          t.status === "done" ||
-                          (i === 0 && t.status !== "queued") ||
-                          (i === 1 && t.sources.length > 0)
-                            ? "complete"
-                            : ""
-                        }
-                      >
-                        <Icon
-                          name={i === 0 ? "clock" : i === 1 ? "inbox" : "book"}
-                          size={14}
-                        />
-                        {label}
-                      </span>
-                    ),
-                  )}
-                </div>
-                {t.status === "running" && (
-                  <p className="capture-phase" role="status">
-                    {t.phase}… Você pode sair desta tela.
-                  </p>
+          {state.tasks.map((t) => (
+            <article
+              className={`capture-task task-${t.status}`}
+              key={t.id}
+              data-task-id={t.id}
+            >
+              <div className="capture-task-top">
+                <span className={`badge ${t.status === "done" ? "green" : ""}`}>
+                  {t.status === "running" && <span className="live-dot" />}
+                  {statuses[t.status]}
+                </span>
+                <small>
+                  {date(t.created)}
+                  {t.scheduleId
+                    ? " · Agendada"
+                    : t.parentId
+                      ? " · Repetição"
+                      : ""}
+                </small>
+              </div>
+              <h3>{t.instruction}</h3>
+              <div className="capture-progress" aria-label="Etapas da coleta">
+                {["Na fila", "Coletar fontes", "Organizar wiki"].map(
+                  (label, i) => (
+                    <span
+                      key={label}
+                      className={
+                        t.status === "done" ||
+                        (i === 0 && t.status !== "queued") ||
+                        (i === 1 && t.sources.length > 0)
+                          ? "complete"
+                          : ""
+                      }
+                    >
+                      <Icon
+                        name={i === 0 ? "clock" : i === 1 ? "inbox" : "book"}
+                        size={14}
+                      />
+                      {label}
+                    </span>
+                  ),
                 )}
-                {t.summary && <p>{t.summary}</p>}
-                {t.error && <p className="error">{t.error}</p>}
-                {t.status === "cancelled" && (
-                  <p className="muted">
-                    As fontes e páginas já salvas foram preservadas.
-                  </p>
-                )}
-                {(t.sources.length > 0 || t.pages.length > 0) && (
-                  <div className="capture-results">
-                    {t.pages.map((id) => (
-                      <button
-                        className="result-link"
-                        key={id}
-                        onClick={() => open(id)}
-                      >
-                        <Icon name="book" size={15} />
+              </div>
+              {t.status === "running" && (
+                <p className="capture-phase" role="status">
+                  {t.phase}… Você pode sair desta tela.
+                </p>
+              )}
+              {t.summary && <p>{t.summary}</p>}
+              {t.error && <p className="error">{t.error}</p>}
+              {t.status === "cancelled" && (
+                <p className="muted">
+                  As fontes e páginas já salvas foram preservadas.
+                </p>
+              )}
+              {(t.sources.length > 0 || t.pages.length > 0) && (
+                <div className="capture-results">
+                  {t.pages.map((id) => (
+                    <button
+                      className="result-link"
+                      key={id}
+                      onClick={() => open(id)}
+                    >
+                      <Icon name="book" size={15} />
+                      {notes.find((n) => n.id === id)?.title ||
+                        "Abrir página da wiki"}
+                      <Icon name="arrow" size={13} />
+                    </button>
+                  ))}
+                  <details>
+                    <summary>{t.sources.length} fonte(s) original(is)</summary>
+                    {t.sources.map((id) => (
+                      <button key={id} onClick={() => open(id)}>
+                        <Icon name="file" size={14} />
                         {notes.find((n) => n.id === id)?.title ||
-                          "Abrir página da wiki"}
-                        <Icon name="arrow" size={13} />
+                          "Abrir fonte original"}
                       </button>
                     ))}
-                    <details>
-                      <summary>
-                        {t.sources.length} fonte(s) original(is)
-                      </summary>
-                      {t.sources.map((id) => (
-                        <button key={id} onClick={() => open(id)}>
-                          <Icon name="file" size={14} />
-                          {notes.find((n) => n.id === id)?.title ||
-                            "Abrir fonte original"}
-                        </button>
-                      ))}
-                    </details>
-                  </div>
-                )}
-                <div className="capture-task-actions">
-                  {["queued", "running"].includes(t.status) ? (
+                  </details>
+                </div>
+              )}
+              <div className="capture-task-actions">
+                {["queued", "running"].includes(t.status) ? (
+                  <button
+                    className="text-button"
+                    disabled={busy === t.id}
+                    onClick={() => void action("cancel", t.id)}
+                  >
+                    Cancelar coleta
+                  </button>
+                ) : (
+                  <>
                     <button
                       className="text-button"
-                      disabled={busy === t.id}
-                      onClick={() => void action("cancel", t.id)}
+                      disabled={!!busy}
+                      onClick={() => void action("repeat", t.id)}
                     >
-                      Cancelar coleta
+                      <Icon name="refresh" size={14} />
+                      Repetir instrução
                     </button>
-                  ) : (
-                    <>
+                    {t.status === "failed" && (
                       <button
                         className="text-button"
                         disabled={!!busy}
-                        onClick={() => void action("repeat", t.id)}
+                        onClick={() => void action("retry", t.id)}
                       >
-                        <Icon name="refresh" size={14} />
-                        Repetir instrução
+                        Retomar coleta
                       </button>
-                      {t.status === "failed" && (
-                        <button
-                          className="text-button"
-                          disabled={!!busy}
-                          onClick={() => void action("retry", t.id)}
-                        >
-                          Retomar coleta
-                        </button>
-                      )}
-                    </>
-                  )}
-                  <button
-                    className="text-button"
-                    onClick={() => edit(t.instruction, true)}
-                  >
-                    <Icon name="clock" size={14} />
-                    Agendar
-                  </button>
-                  <button
-                    className="text-button"
-                    onClick={() => edit(t.instruction)}
-                  >
-                    Editar instrução
-                  </button>
-                </div>
-              </article>
-            ))}
+                    )}
+                  </>
+                )}
+                <button
+                  className="text-button"
+                  onClick={() => edit(t.instruction, true)}
+                >
+                  <Icon name="clock" size={14} />
+                  Agendar
+                </button>
+                <button
+                  className="text-button"
+                  onClick={() => edit(t.instruction)}
+                >
+                  Editar instrução
+                </button>
+              </div>
+            </article>
+          ))}
         </div>
+        <Pagination
+          label="coletas"
+          value={state.pagination.tasks}
+          busy={paging}
+          change={(taskPage) => void changePage({ taskPage })}
+        />
       </section>
-      <section className="capture-schedules">
+      <section className="capture-schedules" aria-busy={paging}>
         <div className="section-heading">
           <div>
             <Icon name="refresh" size={18} />
             <h2>Suas recorrências</h2>
-            <span className="count">{state.schedules.length}</span>
+            <span className="count">{state.pagination.schedules.total}</span>
           </div>
         </div>
         {!state.schedules.length && (
@@ -655,6 +741,12 @@ export function Captures({
             </article>
           ))}
         </div>
+        <Pagination
+          label="rotinas"
+          value={state.pagination.schedules}
+          busy={paging}
+          change={(schedulePage) => void changePage({ schedulePage })}
+        />
         <p className="schedule-note">
           Se o servidor ficar desligado, Daily faz uma coleta ao voltar e mantém
           o próximo horário. Execuções da mesma rotina não se sobrepõem.

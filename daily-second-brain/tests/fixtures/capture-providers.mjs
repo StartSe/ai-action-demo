@@ -1,7 +1,7 @@
 // Deterministic provider responses for contract and browser tests. The app
 // never imports this module. No real Slack or Zapier account is used.
 export function captureProviders(fallback = globalThis.fetch) {
-  /** @type {{mode: string, dataCalls: number, toolCalls: Array<{name: string, arguments: Record<string, unknown>}>, aiRequests: Array<{messages: Array<{role: string, content: string}>, tools?: Array<{function: {name: string, description: string}}>}>, failOrganization: boolean, failRead: boolean, gate: Promise<void> | null, unknownRead: boolean, slackActions: boolean}} */
+  /** @type {{mode: string, dataCalls: number, toolCalls: Array<{name: string, arguments: Record<string, unknown>}>, aiRequests: Array<{messages: Array<{role: string, content: string}>, tools?: Array<{function: {name: string, description: string}}>}>, failOrganization: boolean, failRead: boolean, gate: Promise<void> | null, unknownRead: boolean, slackActions: boolean, extraReadTools: number, toolPageSize: number}} */
   const state = {
     mode: "managed",
     dataCalls: 0,
@@ -12,6 +12,8 @@ export function captureProviders(fallback = globalThis.fetch) {
     gate: null,
     unknownRead: false,
     slackActions: false,
+    extraReadTools: 0,
+    toolPageSize: 0,
   };
   const messages = [
     {
@@ -108,6 +110,13 @@ export function captureProviders(fallback = globalThis.fetch) {
                 annotations: { readOnlyHint: false },
               }))
             : []),
+          ...Array.from({ length: state.extraReadTools }, (_, i) => ({
+            name: `archive_read_${i + 1}`,
+            title: `Arquivo: Consulta ${i + 1}`,
+            description: "Read archived messages.",
+            inputSchema: schema,
+            annotations: { readOnlyHint: true },
+          })),
         ];
   const answer = (content) =>
     Response.json({ choices: [{ message: { role: "assistant", content } }] });
@@ -133,8 +142,17 @@ export function captureProviders(fallback = globalThis.fetch) {
           capabilities: { tools: {} },
           serverInfo: { name: "capture-fixture", version: "1" },
         };
-      else if (req.method === "tools/list") result = { tools: catalog() };
-      else if (req.method === "tools/call") {
+      else if (req.method === "tools/list") {
+        const all = catalog(),
+          start = Number(req.params?.cursor || 0);
+        const size = state.toolPageSize || all.length;
+        result = {
+          tools: all.slice(start, start + size),
+          ...(start + size < all.length
+            ? { nextCursor: String(start + size) }
+            : {}),
+        };
+      } else if (req.method === "tools/call") {
         state.toolCalls.push(req.params);
         if (req.params.name === "inspect_zapier_actions")
           result = {

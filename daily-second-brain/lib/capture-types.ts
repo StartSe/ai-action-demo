@@ -40,6 +40,33 @@ export type CaptureSchedule = {
 export type CaptureState = {
   tasks: CaptureTask[];
   schedules: CaptureSchedule[];
+  pagination: { tasks: CapturePagination; schedules: CapturePagination };
+  filter: CaptureFilter;
+  activeCount: number;
+  recentInstructions: string[];
+};
+export type CaptureFilter = "all" | "active" | "done" | "failed" | "cancelled";
+export type CaptureQuery = {
+  taskPage: number;
+  schedulePage: number;
+  filter: CaptureFilter;
+};
+export type CapturePagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  pages: number;
+};
+export const EMPTY_CAPTURE_STATE: CaptureState = {
+  tasks: [],
+  schedules: [],
+  pagination: {
+    tasks: { page: 1, pageSize: 10, total: 0, pages: 1 },
+    schedules: { page: 1, pageSize: 10, total: 0, pages: 1 },
+  },
+  filter: "all",
+  activeCount: 0,
+  recentInstructions: [],
 };
 export type CaptureTool = {
   name: string;

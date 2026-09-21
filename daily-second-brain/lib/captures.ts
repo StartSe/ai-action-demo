@@ -8,6 +8,8 @@ import type {
   CaptureTask,
   CaptureSchedule,
   CaptureState,
+  CaptureQuery,
+  CapturePagination,
   Recurrence,
 } from "./capture-types";
 
@@ -91,28 +93,89 @@ export function captureTask(id: string): CaptureTask {
     })),
   };
 }
-export function captureState(): CaptureState {
+function scheduleFromRow(s: Record<string, unknown>): CaptureSchedule {
+  return {
+    id: String(s.id),
+    instruction: String(s.instruction),
+    recurrence: JSON.parse(String(s.recurrence)),
+    enabled: !!s.enabled,
+    nextRun: String(s.nextRun),
+    lastRun: s.lastRun ? String(s.lastRun) : null,
+    created: String(s.created),
+  };
+}
+export function captureSchedule(id: string): CaptureSchedule {
+  const s = captureDb()
+    .prepare("SELECT * FROM capture_schedules WHERE id=?")
+    .get(id);
+  if (!s) throw new BrainError("Agendamento não encontrado.", 404);
+  return scheduleFromRow(s);
+}
+function pagination(page: number, total: number): CapturePagination {
+  if (!Number.isSafeInteger(page) || page < 1)
+    throw new BrainError("Escolha uma página válida.");
+  const pages = Math.max(1, Math.ceil(total / 10));
+  return { page: Math.min(page, pages), pageSize: 10, total, pages };
+}
+export function captureState(query: Partial<CaptureQuery> = {}): CaptureState {
+  const filter = query.filter ?? "all";
+  if (!["all", "active", "done", "failed", "cancelled"].includes(filter))
+    throw new BrainError("Escolha um filtro de coletas válido.");
+  const d = captureDb();
+  const where =
+    filter === "all"
+      ? ""
+      : filter === "active"
+        ? "WHERE status IN ('queued','running')"
+        : "WHERE status=?";
+  const args = filter === "all" || filter === "active" ? [] : [filter];
+  const tasks = pagination(
+    query.taskPage ?? 1,
+    Number(
+      d.prepare(`SELECT count(*) AS n FROM capture_tasks ${where}`).get(...args)
+        ?.n,
+    ),
+  );
+  const schedules = pagination(
+    query.schedulePage ?? 1,
+    Number(d.prepare("SELECT count(*) AS n FROM capture_schedules").get()?.n),
+  );
   return {
     tasks: (
       captureDb()
         .prepare(
-          "SELECT id FROM capture_tasks ORDER BY created DESC,rowid DESC LIMIT 60",
+          `SELECT id FROM capture_tasks ${where} ORDER BY created DESC,rowid DESC LIMIT ? OFFSET ?`,
         )
-        .all() as { id: string }[]
+        .all(...args, tasks.pageSize, (tasks.page - 1) * tasks.pageSize) as {
+        id: string;
+      }[]
     ).map((t) => captureTask(t.id)),
     schedules: (
       captureDb()
-        .prepare("SELECT * FROM capture_schedules ORDER BY created DESC")
-        .all() as Record<string, unknown>[]
-    ).map((s) => ({
-      id: String(s.id),
-      instruction: String(s.instruction),
-      recurrence: JSON.parse(String(s.recurrence)),
-      enabled: !!s.enabled,
-      nextRun: String(s.nextRun),
-      lastRun: s.lastRun ? String(s.lastRun) : null,
-      created: String(s.created),
-    })),
+        .prepare(
+          "SELECT * FROM capture_schedules ORDER BY created DESC,rowid DESC LIMIT ? OFFSET ?",
+        )
+        .all(
+          schedules.pageSize,
+          (schedules.page - 1) * schedules.pageSize,
+        ) as Record<string, unknown>[]
+    ).map(scheduleFromRow),
+    pagination: { tasks, schedules },
+    filter,
+    activeCount: Number(
+      d
+        .prepare(
+          "SELECT count(*) AS n FROM capture_tasks WHERE status IN ('queued','running')",
+        )
+        .get()?.n,
+    ),
+    recentInstructions: (
+      d
+        .prepare(
+          "SELECT instruction FROM capture_tasks GROUP BY instruction ORDER BY MAX(created) DESC, MAX(rowid) DESC LIMIT 5",
+        )
+        .all() as { instruction: string }[]
+    ).map((t) => t.instruction),
   };
 }
 export async function collectionAccess() {
@@ -207,7 +270,7 @@ export function saveSchedule(
     next,
     now.toISOString(),
   );
-  return captureState().schedules.find((s) => s.id === key)!;
+  return captureSchedule(key);
 }
 export function pauseSchedule(id: string) {
   if (

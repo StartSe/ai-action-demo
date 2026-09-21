@@ -1,4 +1,4 @@
-# Daily Second Brain · v1.1.2
+# Daily Second Brain · v1.2.0
 
 Uma memória pessoal conectada: capture o que chega, transforme em conhecimento e converse para criar novos resultados. A experiência combina um observatório de ideias com páginas Markdown, fontes rastreáveis, regras próprias e um assistente por texto ou voz.
 
@@ -30,7 +30,7 @@ Zapier centraliza as fontes. Em **Coletas e rotinas**, o pedido autoriza as leit
 
 O modo agêntico do Zapier é atendido pelas ferramentas oficiais `inspect_zapier_actions`, `discover_zapier_actions`, `list_zapier_connections` e `execute_zapier_read_action`. No modo gerenciado, ferramentas declaradas como leitura pelo servidor são reconhecidas; ferramentas sem classificação precisam ser selecionadas pelo usuário em **Ferramentas de coleta**. A escolha fica vinculada ao servidor e à definição da ferramenta. Mudanças de conexão ou permissões são verificadas novamente na execução. Habilite as ações desejadas no Zapier; a coleta não habilita novas ações nem executa código externo. [Referência oficial dos modos do Zapier](https://docs.zapier.com/mcp/overview/how-tools-work).
 
-Consultas conhecidas do Slack, incluindo **Find Public Channel**, **Retrieve Thread Messages** e **Get Message by Timestamp**, podem ser selecionadas mesmo quando o Zapier as classifica como ações. Marque as consultas desejadas e clique em **Salvar ferramentas de coleta**. Ações de envio e edição continuam disponíveis no chat, com confirmação da execução. A exceção usa uma lista de identificadores de consultas, sem liberar ferramentas apenas pelo título ou por palavras como “find” e “get”. [Operações do Slack no Zapier](https://help.zapier.com/hc/en-us/articles/8495993391629-How-to-get-started-with-Slack-on-Zapier).
+Consultas conhecidas do Slack, incluindo **Find Public Channel**, **Retrieve Thread Messages** e **Get Message by Timestamp**, podem ser selecionadas mesmo quando o Zapier as classifica como ações. Use **Selecionar todas** para marcar todas as ferramentas disponíveis de uma vez, ou **Limpar seleção** para desmarcá-las. Você também pode marcar várias individualmente antes de clicar em **Salvar ferramentas de coleta**. A confirmação aparece junto ao botão, com o total autorizado; uma falha mantém a seleção para tentar novamente. Todas as páginas do catálogo Zapier são carregadas, sem cortar a lista em 50 ferramentas. Ações de envio e edição continuam disponíveis no chat, com confirmação da execução. A exceção usa uma lista de identificadores de consultas, sem liberar ferramentas apenas pelo título ou por palavras como “find” e “get”. [Operações do Slack no Zapier](https://help.zapier.com/hc/en-us/articles/8495993391629-How-to-get-started-with-Slack-on-Zapier).
 
 ## Configuração e uma coleta do Slack
 
@@ -50,7 +50,7 @@ O worker inicia com o servidor Next.js via `instrumentation.ts`, consulta a fila
 
 Após reinício, tarefas com lease expirado (90 segundos) são retomadas, até três tentativas automáticas. Cada leitura concluída guarda uma etapa e sua fonte na mesma transação; a organização também grava a página e o progresso juntos. Cancelar interrompe novos resultados e preserva o que já foi salvo. O limite por execução é de 8 minutos e 16 leituras, com até 90 KB de resposta por chamada; pedidos maiores devem ser divididos.
 
-Ocorrências perdidas durante indisponibilidade são consolidadas em uma coleta ao retornar, e execuções da mesma rotina não se sobrepõem. Os horários respeitam o fuso informado: horários inexistentes na entrada do horário de verão são pulados; horários duplicados na saída executam apenas uma vez por dia. O histórico exibe as 60 coletas mais recentes; os registros anteriores permanecem no banco.
+Ocorrências perdidas durante indisponibilidade são consolidadas em uma coleta ao retornar, e execuções da mesma rotina não se sobrepõem. Os horários respeitam o fuso informado: horários inexistentes na entrada do horário de verão são pulados; horários duplicados na saída executam apenas uma vez por dia. Coletas e rotinas têm paginação independente, com 10 registros por página e acesso a todo o histórico. Os filtros de status consultam todos os registros; trocar o filtro volta à primeira página. A atualização automática mantém a página escolhida.
 
 A voz é por turnos (gravar → revisar → enviar → ouvir), sem ligação telefônica ou conversa full duplex. Leitura de PDFs, imagens, áudio anexado, crawling de URLs e embeddings não estão nesta versão; textos desses materiais podem ser colados ou obtidos pelas ferramentas Zapier.
 
@@ -113,3 +113,5 @@ node ../scripts/verificar-jargao.mjs daily-second-brain
 `tests/browser.mjs` valida conta, captura, organização, edição/restauração, chat, artefatos, reciclagem, regras, exportação, busca e layout móvel em um servidor com banco temporário vazio. Configure `PLAYWRIGHT_MODULE` para o pacote Playwright instalado e `TEST_BASE_URL` para o servidor. Gera capturas em `TEST_ARTIFACTS` (padrão `/tmp/daily-brain-review`). Testes de integração usam respostas controladas dos provedores; acesso real depende das credenciais conectadas pelo usuário.
 
 `tests/captures-browser.mjs`, após o build, inicia o servidor standalone com banco temporário e respostas controladas para os serviços externos. Percorre o primeiro acesso inteiro, fecha a aba antes da conclusão, repete a instrução, cria/edita/pausa uma rotina e reinicia o processo para verificar execução agendada sem navegador. Valida também os layouts em 1440 px e 390 px. Nenhuma chamada real ao Slack é feita pelos testes.
+
+`tests/capture-controls-browser.mjs` valida seleção múltipla e em lote, confirmação e falha ao salvar, persistência após recarregar, histórico com 75 coletas e paginação de 23 rotinas, incluindo edição e exclusão na última página. Usa somente serviços simulados.

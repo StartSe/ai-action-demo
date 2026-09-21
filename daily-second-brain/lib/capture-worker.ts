@@ -1,10 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { BrainError } from "./api";
 import { note, save, rules } from "./brain";
 import { organize } from "./agent";
 import { generate } from "./motor";
-import { zapierClient } from "./zapier";
+import { zapierClient, listClientTools } from "./zapier";
 import type { AgentTool } from "./chatgpt";
 import {
   checkCaptureTool,
@@ -72,14 +71,8 @@ export async function runCapture(task: StoredTask, owner: string) {
         "A conexão Zapier mudou. Repita a instrução para usar a conexão atual.",
       );
     client = await zapierClient(signal);
-    const catalog: Tool[] = [];
-    let cursor: string | undefined;
-    do {
-      const result = await client.listTools({ cursor }, { signal });
-      catalog.push(...result.tools);
-      cursor = result.nextCursor;
-    } while (cursor && catalog.length < 50);
-    const available = catalog.slice(0, 50).filter((t) => {
+    const catalog = await listClientTools(client, signal);
+    const available = catalog.filter((t) => {
       try {
         checkCaptureTool(t, access);
         return true;

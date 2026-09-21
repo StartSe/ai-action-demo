@@ -9,7 +9,12 @@ import { Connections } from "./Connections";
 import { request } from "./client";
 import { Captures } from "./Captures";
 import { Onboarding } from "./Onboarding";
-import type { CaptureState, SetupState } from "@/lib/capture-types";
+import {
+  EMPTY_CAPTURE_STATE,
+  type CaptureState,
+  type SetupState,
+  type CaptureQuery,
+} from "@/lib/capture-types";
 import { APP_VERSION } from "@/lib/version";
 type View =
   | "home"
@@ -83,10 +88,13 @@ function Dialog({
 export function Brain() {
   const [initializing, setInitializing] = useState(true);
   const [state, setState] = useState<BrainState | null>(null);
-  const [captures, setCaptures] = useState<CaptureState>({
-    tasks: [],
-    schedules: [],
+  const [captures, setCaptures] = useState<CaptureState>(EMPTY_CAPTURE_STATE);
+  const captureQuery = useRef<CaptureQuery>({
+    taskPage: 1,
+    schedulePage: 1,
+    filter: "all",
   });
+  const captureRequest = useRef(0);
   const [setup, setSetup] = useState<SetupState | null>(null);
   const captureVersion = useRef("");
   const [settings, setSettings] = useState<Settings>({
@@ -126,15 +134,40 @@ export function Brain() {
     return s;
   }, []);
   const loadCaptures = useCallback(async () => {
-    const s = await request<CaptureState>("/api/captures");
-    setCaptures(s);
-    const version = JSON.stringify(
-      s.tasks.map((t) => [t.id, t.sources, t.pages, t.status]),
+    const requestId = ++captureRequest.current;
+    const q = captureQuery.current;
+    const s = await request<CaptureState>(
+      `/api/captures?taskPage=${q.taskPage}&schedulePage=${q.schedulePage}&filter=${q.filter}`,
     );
+    if (requestId !== captureRequest.current) return;
+    captureQuery.current = {
+      taskPage: s.pagination.tasks.page,
+      schedulePage: s.pagination.schedules.page,
+      filter: s.filter,
+    };
+    setCaptures(s);
+    const version = JSON.stringify([
+      s.activeCount,
+      s.tasks.map((t) => [t.id, t.sources, t.pages, t.status]),
+    ]);
     if (captureVersion.current && captureVersion.current !== version)
       await load();
     captureVersion.current = version;
   }, [load]);
+  const paginateCaptures = useCallback(
+    async (query: Partial<CaptureQuery>) => {
+      const previous = captureQuery.current;
+      const next = { ...previous, ...query };
+      captureQuery.current = next;
+      try {
+        await loadCaptures();
+      } catch (e) {
+        if (captureQuery.current === next) captureQuery.current = previous;
+        throw e;
+      }
+    },
+    [loadCaptures],
+  );
   const refreshCaptures = useCallback(async () => {
     await Promise.all([loadCaptures(), load()]);
   }, [loadCaptures, load]);
@@ -484,10 +517,9 @@ export function Brain() {
               <Icon name={n.icon} size={18} />
               <span>{n.label}</span>
               {n.id === "raw" && inbox.length > 0 && <em>{inbox.length}</em>}
-              {n.id === "captures" &&
-                captures.tasks.some((t) =>
-                  ["queued", "running"].includes(t.status),
-                ) && <span className="live-dot" />}
+              {n.id === "captures" && captures.activeCount > 0 && (
+                <span className="live-dot" />
+              )}
             </button>
           ))}
         </nav>
@@ -704,9 +736,7 @@ export function Brain() {
                   </span>
                   <span>
                     <strong>
-                      {captures.tasks.some((t) =>
-                        ["queued", "running"].includes(t.status),
-                      )
+                      {captures.activeCount > 0
                         ? "Daily está cuidando das suas coletas."
                         : "Peça ao Daily para buscar e organizar."}
                     </strong>
@@ -1285,6 +1315,7 @@ export function Brain() {
                 state={captures}
                 notes={notes}
                 refresh={refreshCaptures}
+                paginate={paginateCaptures}
                 ready={setup ? setup.aiConnected && settings.zapier : true}
                 configure={() => go("connections")}
                 manual={() => {

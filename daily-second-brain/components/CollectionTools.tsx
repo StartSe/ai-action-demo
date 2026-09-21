@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CaptureTool } from "@/lib/capture-types";
 import { request } from "./client";
 import { Icon } from "./Icons";
@@ -7,9 +7,22 @@ import { Icon } from "./Icons";
 export function CollectionTools() {
   const [tools, setTools] = useState<CaptureTool[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [busy, setBusy] = useState(true);
+  const [busy, setBusy] = useState<"loading" | "saving" | null>("loading");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const feedbackRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (feedback || error)
+      feedbackRef.current?.scrollIntoView({ block: "nearest" });
+  }, [feedback, error]);
+  const available = tools.filter((t) => !t.blocked);
+  const dirty = tools.some((t) => selected.includes(t.name) !== t.allowed);
+  function changeSelection(names: string[]) {
+    setSelected(names);
+    setFeedback("");
+    setError("");
+  }
   const receive = useCallback((list: CaptureTool[]) => {
     setTools(list);
     setSelected(list.filter((t) => t.allowed).map((t) => t.name));
@@ -23,7 +36,7 @@ export function CollectionTools() {
     return request<CaptureTool[]>("/api/captures", "POST", { action: "tools" })
       .then(receive)
       .catch((e) => setError(e.message))
-      .finally(() => setBusy(false));
+      .finally(() => setBusy(null));
   }
   useEffect(() => {
     let alive = true;
@@ -35,7 +48,7 @@ export function CollectionTools() {
         if (alive) setError(e.message);
       })
       .finally(() => {
-        if (alive) setBusy(false);
+        if (alive) setBusy(null);
       });
     return () => {
       alive = false;
@@ -48,15 +61,16 @@ export function CollectionTools() {
         <button
           type="button"
           className="text-button"
-          disabled={busy}
+          disabled={!!busy}
           onClick={() => {
-            setBusy(true);
+            setBusy("loading");
             setError("");
+            setFeedback("");
             void load();
           }}
         >
           <Icon name="refresh" size={14} />
-          {busy ? "Verificando…" : "Atualizar ferramentas"}
+          {busy === "loading" ? "Verificando…" : "Atualizar ferramentas"}
         </button>
       </div>
       <p>
@@ -64,15 +78,36 @@ export function CollectionTools() {
         apenas ferramentas de consulta; enviar mensagens ou alterar dados
         continua exigindo confirmação no chat.
       </p>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
       {notice && (
         <p className="muted" role="status">
           {notice}
         </p>
+      )}
+      {tools.length > 0 && (
+        <div className="tool-selection-actions">
+          <div className="button-row">
+            <button
+              type="button"
+              className="button"
+              disabled={!!busy || selected.length === available.length}
+              onClick={() => changeSelection(available.map((t) => t.name))}
+            >
+              Selecionar todas
+            </button>
+            <button
+              type="button"
+              className="text-button"
+              disabled={!!busy || !selected.length}
+              onClick={() => changeSelection([])}
+            >
+              Limpar seleção
+            </button>
+          </div>
+          <span aria-live="polite">
+            {selected.length} de {available.length} ferramentas disponíveis
+            selecionadas
+          </span>
+        </div>
       )}
       <div className="read-tool-list">
         {tools.map((t) => (
@@ -83,14 +118,17 @@ export function CollectionTools() {
             <input
               type="checkbox"
               checked={selected.includes(t.name)}
-              disabled={busy || t.blocked}
-              onChange={(e) =>
+              disabled={!!busy || t.blocked}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setFeedback("");
+                setError("");
                 setSelected((old) =>
-                  e.target.checked
-                    ? [...old, t.name]
+                  checked
+                    ? [...new Set([...old, t.name])]
                     : old.filter((n) => n !== t.name),
-                )
-              }
+                );
+              }}
             />
             <span>
               <strong>{t.title}</strong>
@@ -111,34 +149,61 @@ export function CollectionTools() {
           </label>
         ))}
       </div>
-      {tools.length > 0 && (
-        <button
-          type="button"
-          className="button"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            setError("");
-            setNotice("");
-            try {
-              const list = await request<CaptureTool[]>(
-                "/api/captures",
-                "POST",
-                { action: "permissions", names: selected },
-              );
-              setTools(list);
-              setSelected(list.filter((t) => t.allowed).map((t) => t.name));
-              setNotice("Ferramentas de coleta salvas.");
-            } catch (e) {
-              setError((e as Error).message);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          Salvar ferramentas de coleta
-        </button>
-      )}
+      <div
+        className="tool-save-feedback"
+        ref={feedbackRef}
+        aria-busy={busy === "saving"}
+      >
+        {tools.length > 0 && (
+          <button
+            type="button"
+            className="button"
+            disabled={!!busy}
+            onClick={async () => {
+              setBusy("saving");
+              setError("");
+              setFeedback("");
+              try {
+                const list = await request<CaptureTool[]>(
+                  "/api/captures",
+                  "POST",
+                  { action: "permissions", names: selected },
+                );
+                setTools(list);
+                setSelected(list.filter((t) => t.allowed).map((t) => t.name));
+                const count = list.filter((t) => t.allowed).length;
+                setFeedback(
+                  `Ferramentas de coleta salvas. ${count === 0 ? "Nenhuma ferramenta autorizada" : count === 1 ? "1 ferramenta autorizada" : `${count} ferramentas autorizadas`} para as próximas coletas.`,
+                );
+              } catch (e) {
+                setError((e as Error).message);
+              } finally {
+                setBusy(null);
+              }
+            }}
+          >
+            {busy === "saving"
+              ? "Salvando ferramentas…"
+              : "Salvar ferramentas de coleta"}
+          </button>
+        )}
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        {feedback && (
+          <p className="notice" role="status">
+            <Icon name="check" size={16} /> {feedback}
+          </p>
+        )}
+        {dirty && !feedback && (
+          <p className="muted">
+            Alterações não salvas. Clique em Salvar ferramentas de coleta para
+            aplicar.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

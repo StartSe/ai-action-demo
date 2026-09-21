@@ -57,17 +57,26 @@ export async function zapierClient(signal?: AbortSignal) {
 export async function listTools() {
   const c = await zapierClient();
   try {
-    const all = [];
-    let cursor: string | undefined;
-    do {
-      const r = await c.listTools({ cursor });
-      all.push(...r.tools);
-      cursor = r.nextCursor;
-    } while (cursor && all.length < 50);
-    return all.slice(0, 50);
+    return await listClientTools(c);
   } finally {
     await c.close();
   }
+}
+export async function listClientTools(c: Client, signal?: AbortSignal) {
+  const all = [];
+  const cursors = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const r = await c.listTools({ cursor }, { signal });
+    all.push(...r.tools);
+    cursor = r.nextCursor;
+    if (cursor && cursors.has(cursor))
+      throw new BrainError(
+        "O Zapier repetiu uma página de ferramentas. Atualize a lista.",
+      );
+    if (cursor) cursors.add(cursor);
+  } while (cursor);
+  return [...new Map(all.map((t) => [t.name, t])).values()];
 }
 export async function agentTools(): Promise<AgentTool[]> {
   if (!getConfig("ZAPIER_MCP_URL")) return [];

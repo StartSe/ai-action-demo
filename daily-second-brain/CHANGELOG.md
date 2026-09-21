@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0 — 2026-09-21
+
+- Paginação independente de coletas e rotinas, com 10 registros por página, totais e filtros em todo o histórico.
+- Seleção de todas as ferramentas disponíveis em um clique, limpeza da seleção e salvamento em lote, com indicador de alterações pendentes e confirmação junto ao botão.
+- Carrega todas as páginas do catálogo Zapier, sem o corte de 50 ferramentas, inclusive na execução das coletas.
+
 ## 1.1.2 — 2026-09-21
 
 - Exibe a versão completa abaixo do logo Daily no menu lateral, inclusive no menu do celular.

@@ -119,11 +119,7 @@ export function verifiedReadToolCount() {
   }
 }
 export async function saveCaptureTools(names: unknown) {
-  if (
-    !Array.isArray(names) ||
-    names.length > 50 ||
-    names.some((n) => typeof n !== "string")
-  )
+  if (!Array.isArray(names) || names.some((n) => typeof n !== "string"))
     throw new BrainError("Selecione as ferramentas de leitura.");
   const tools = await listTools();
   const selected = tools.filter((t) => names.includes(t.name));

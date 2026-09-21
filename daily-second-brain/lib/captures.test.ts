@@ -34,7 +34,7 @@ const { listTools } = await import("./zapier");
 const { runCapture } = await import("./capture-worker");
 const { nextOccurrence } = await import("./recurrence");
 const { setupState, verifySetupAI } = await import("./onboarding");
-const { POST } = await import("../app/api/captures/route");
+const { POST, GET } = await import("../app/api/captures/route");
 const originalFetch = globalThis.fetch;
 let fixture: ReturnType<typeof captureProviders>;
 const instruction =
@@ -423,4 +423,123 @@ test("fila cheia mantém agendamento pendente sem impedir o worker de avançar",
   );
   assert.ok(claimCapture("full-queue-worker"));
   assert.equal(captureState().schedules[0].nextRun, "2026-09-20T12:00:00.000Z");
+});
+
+test("paginação alcança todo o histórico, filtra antes de paginar e mantém totais globais", async () => {
+  const access = await collectionAccess();
+  const ids: string[] = [];
+  const now = new Date("2026-09-21T10:00:00Z");
+  for (let i = 1; i <= 75; i++) {
+    const t = enqueueCapture(`Coleta ${i}`, access, { now });
+    ids.push(t.id);
+    captureDb()
+      .prepare("UPDATE capture_tasks SET status=? WHERE id=?")
+      .run(i <= 10 ? "failed" : i >= 74 ? "queued" : "done", t.id);
+  }
+  const seen: string[] = [];
+  for (let page = 1; page <= 8; page++) {
+    const response = await GET(
+      new Request(`http://localhost/api/captures?taskPage=${page}`),
+    );
+    assert.equal(response.status, 200);
+    const s = await response.json();
+    assert.equal(s.pagination.tasks.total, 75);
+    assert.equal(s.pagination.tasks.page, page);
+    assert.equal(s.activeCount, 2);
+    assert.equal(s.recentInstructions[0], "Coleta 75");
+    seen.push(...s.tasks.map((t: { id: string }) => t.id));
+  }
+  assert.deepEqual(seen, ids.toReversed());
+  const failed = captureState({ filter: "failed" });
+  assert.equal(failed.pagination.tasks.total, 10);
+  assert.deepEqual(
+    failed.tasks.map((t) => t.id),
+    ids.slice(0, 10).reverse(),
+  );
+  assert.equal(captureState({ taskPage: 999 }).pagination.tasks.page, 8);
+  const empty = captureState({ filter: "cancelled", taskPage: 4 });
+  assert.equal(empty.pagination.tasks.page, 1);
+  assert.equal(empty.pagination.tasks.total, 0);
+  for (const query of [
+    "taskPage=0",
+    "taskPage=-1",
+    "taskPage=1.5",
+    "schedulePage=bad",
+    "filter=unknown",
+  ])
+    assert.equal(
+      (await GET(new Request(`http://localhost/api/captures?${query}`))).status,
+      400,
+    );
+  const single = await GET(
+    new Request(`http://localhost/api/captures?id=${ids[0]}`),
+  );
+  assert.equal((await single.json()).id, ids[0]);
+});
+
+test("rotinas têm paginação independente e podem ser editadas, retomadas e excluídas fora da primeira página", async () => {
+  const access = await collectionAccess();
+  const r = {
+    frequency: "daily",
+    time: "09:00",
+    timezone: "America/Sao_Paulo",
+    weekday: 1,
+  };
+  const ids: string[] = [];
+  for (let i = 0; i < 23; i++)
+    ids.push(
+      saveSchedule(
+        `Rotina ${i}`,
+        r,
+        access,
+        undefined,
+        new Date("2026-09-21T10:00:00Z"),
+      ).id,
+    );
+  let state = captureState({ schedulePage: 3 });
+  assert.equal(state.pagination.schedules.total, 23);
+  assert.deepEqual(
+    state.schedules.map((s) => s.id),
+    ids.slice(0, 3).reverse(),
+  );
+  assert.equal(state.pagination.tasks.page, 1);
+  assert.equal(
+    saveSchedule("Rotina editada", r, access, ids[0]).instruction,
+    "Rotina editada",
+  );
+  pauseSchedule(ids[0]);
+  const resumed = await POST(
+    new Request("http://localhost/api/captures", {
+      method: "POST",
+      body: JSON.stringify({ action: "resume", id: ids[0] }),
+    }),
+  );
+  assert.equal(resumed.status, 200);
+  assert.equal((await resumed.json()).enabled, true);
+  for (const id of ids.slice(0, 3)) deleteSchedule(id);
+  state = captureState({ schedulePage: 3 });
+  assert.equal(state.pagination.schedules.page, 2);
+  assert.equal(state.schedules.length, 10);
+});
+
+test("autoriza todas as consultas de um catálogo paginado com mais de 50 ferramentas e executa a última", async () => {
+  fixture.state.extraReadTools = 60;
+  fixture.state.toolPageSize = 20;
+  fixture.state.slackActions = true;
+  const catalog = await captureToolCatalog();
+  assert.equal(catalog.length, 66);
+  const names = catalog.filter((t) => !t.blocked).map((t) => t.name);
+  assert.equal(names.length, 64);
+  await saveCaptureTools(names);
+  assert.equal(
+    (await captureToolCatalog()).filter((t) => t.allowed).length,
+    64,
+  );
+  assert.equal((await collectionAccess()).tools.length, 64);
+  await saveCaptureTools(["archive_read_60"]);
+  await newTask();
+  assert.equal((await runNext()).status, "done");
+  assert.equal(fixture.state.toolCalls[0].name, "archive_read_60");
+  await saveCaptureTools([]);
+  assert.equal((await captureToolCatalog()).filter((t) => t.allowed).length, 0);
 });
