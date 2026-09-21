@@ -27,13 +27,13 @@ export const NOME_SERVIDOR = "prospeccao-ia";
 export const FERRAMENTAS: Ferramenta[] = [
   {
     nome: "listar_acoes_pesquisa",
-    descricao: "Lista as ações de pesquisa conectadas e seus schemas atuais (Bright Data, Exa, Tavily e SearchAPI): busca na web, leitura de páginas, Search Dataset e dados públicos de LinkedIn, Instagram e outras redes. Consulte antes de executar uma ação.",
+    descricao: "Lista as ações de pesquisa conectadas e seus schemas atuais (ProspectHalo MCP, Bright Data, Exa, Tavily e SearchAPI): busca na web, leitura de páginas, Search Dataset e dados públicos de LinkedIn, Instagram e outras redes. Consulte antes de executar uma ação.",
     schema: { type: "object", properties: {} },
     async executar() { return listarAcoesPesquisa(); },
   },
   {
     nome: "executar_acao_pesquisa",
-    descricao: "Executa uma ação de consulta retornada por listar_acoes_pesquisa, usando exatamente seu schema. Para search_dataset, consulte list_dataset_fields antes para escolher campos e filtros válidos. Permite todas as ações de dados públicos disponíveis, incluindo perfis, empresas, vagas, posts, busca de pessoas, reels e comentários. Não envia mensagens.",
+    descricao: "Executa uma ação de consulta retornada por listar_acoes_pesquisa, usando exatamente seu schema. Para search_dataset, consulte list_dataset_fields antes para escolher campos e filtros válidos. Permite todas as ações de dados públicos disponíveis, incluindo perfis, empresas, vagas, posts, busca de pessoas, reels e comentários. Para ProspectHalo, comece por prospecthalo_get_context; busque com regras explícitas e consulte o mesmo searchId enquanto estiver qualificando. Não envia mensagens.",
     schema: {
       type: "object",
       properties: {
@@ -62,7 +62,7 @@ export const FERRAMENTAS: Ferramenta[] = [
         cargo: { type: "string", description: "Cargo-alvo dentro dessas empresas" },
         localizacao: { type: "string", description: "Cidade, estado ou região das empresas-alvo" },
         proposta: { type: "string", description: "O que a empresa do usuário vende e para quem" },
-        porte: { type: "string", description: "Faixa de número de funcionários, ex.: '51-200' (opcional, padrão 51-200)" },
+        porte: { type: "string", description: "Faixa de número de funcionários, ex.: '51-200' (opcional; não presumir porte)" },
         quantidade: { type: "number", enum: QUANTIDADES_VALIDAS, description: "Quantidade de leads a buscar (opcional, padrão 10)" },
       },
       required: ["segmento", "cargo", "localizacao", "proposta"],
@@ -75,7 +75,7 @@ export const FERRAMENTAS: Ferramenta[] = [
       if (!segmento || !cargo || !localizacao || !proposta) {
         throw new Error("Informe segmento, cargo-alvo, localização e o que sua empresa vende.");
       }
-      const porte = String(args.porte || "51-200").trim();
+      const porte = String(args.porte || "").trim();
       const quantidade = QUANTIDADES_VALIDAS.includes(Number(args.quantidade)) ? String(args.quantidade) : "10";
       const dados: DadosBusca = { segmento, cargo, localizacao, porte, proposta, quantidade };
       return buscarLeads(dados);

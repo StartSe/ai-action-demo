@@ -1,4 +1,4 @@
-export type Fonte = "apollo" | "demo";
+export type Fonte = "apollo" | "prospecthalo" | "pesquisa" | "demo";
 
 export interface DadosBusca {
   segmento: string;
@@ -35,6 +35,7 @@ export interface Abordagem {
 }
 
 export interface ResultadoBusca {
+  avisos?: string[];
   fonte: Fonte;
   leads: Lead[];
   /** Abordagens já escritas para esses leads (rotina "leads novos toda semana"); ausente numa busca manual comum. */
@@ -53,7 +54,7 @@ export type EstadoProspeccao = "rascunho" | "executando" | "pronta" | "falhou" |
 export type Papel = "decisor" | "influenciador" | "champion" | "desconhecido";
 export type StatusLead = "novo" | "pesquisado" | "qualificado" | "selecionado" | "abordado" | "respondeu" | "descartado";
 /** Direção de "Regenerar" (US-031): reescreve só a mensagem do canal aberto na tela, nunca a estratégia. */
-export type DirecaoRegeneracao = "mais_curto" | "mais_executivo" | "mais_consultivo" | "sem_pitch" | "outro_sinal" | "outra_abordagem";
+export type DirecaoRegeneracao = "mais_personalizado" | "mais_curto" | "mais_executivo" | "mais_consultivo" | "sem_pitch" | "outro_sinal" | "outra_abordagem";
 /** Motivo do descarte (US-034), lista curta em vez de texto livre — pedido junto com `status: "descartado"`. */
 export type MotivoDescarte = "fora_do_perfil" | "sem_sinal" | "ja_e_cliente" | "outro";
 

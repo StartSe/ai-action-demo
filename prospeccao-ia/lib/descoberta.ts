@@ -2,6 +2,7 @@
 // compartilham a chave salva, o teto de consultas e o cache; sem chave, usa demonstração.
 // Referência: https://github.com/brightdata/brightdata-mcp (search_engine, scrape_as_markdown,
 // search_dataset e web_data_*). Catálogo e schemas são descobertos por tools/list.
+import { prospectHaloAtivo, listarAcoesProspectHalo, executarAcaoProspectHalo } from "./prospecthalo";
 import { buscarFonte, lerFonte, fontesOpcionais, FONTES, ErroFonte, type FonteOpcional } from "./pesquisa-fontes";
 import { registrarConsulta, concluirConsulta, limiteDaFonte } from "./pesquisa-registro";
 import type { DatabaseSync } from "node:sqlite";
@@ -102,7 +103,7 @@ function reservarConsulta(prospeccaoId: string | undefined): void {
 /**
  * Falha da pesquisa de mercado (Bright Data) já traduzida para a tela: mensagem em linguagem de
  * negócio, sem status HTTP nem corpo da resposta do fornecedor (isso vai só para o console). Mesmo
- * formato de ErroApollo (lib/leads.ts) e ErroIA (lib/ai.ts), para `responderErro` (app/api/erros.ts)
+ * formato de ErroProspectHalo (lib/prospecthalo.ts) e ErroIA (lib/ai.ts), para `responderErro` (app/api/erros.ts)
  * devolver `codigo`/`acao` sem caso especial.
  */
 export class ErroDescoberta extends Error {
@@ -144,6 +145,10 @@ export async function listarAcoesPesquisa(): Promise<FerramentaMCP[]> {
     { nome: `${fonte}_search`, descricao: `Pesquisa na web via ${FONTES[fonte]}.`, schema: { type: "object", properties: { consulta: { type: "string" }, pagina: { type: "integer", minimum: 0, maximum: 4 } }, required: ["consulta"] } },
     ...(fonte === "searchapi" ? [] : [{ nome: `${fonte}_read`, descricao: `Lê uma página pública via ${FONTES[fonte]}.`, schema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } }]),
   ]);
+  if (prospectHaloAtivo()) {
+    try { acoes.push(...await listarAcoesProspectHalo()); }
+    catch (erro) { if (!acoes.length && !brightDataAtiva()) throw erro; }
+  }
   if (brightDataAtiva()) {
     try { acoes.push(...await listarAcoesBrightData()); }
     catch (erro) { if (!acoes.length) throw interpretarFalha(erro); }
@@ -152,6 +157,7 @@ export async function listarAcoesPesquisa(): Promise<FerramentaMCP[]> {
 }
 
 export async function executarAcaoPesquisa(nome: string, argumentos: Record<string, unknown>, prospeccaoId?: string): Promise<unknown> {
+  if (nome.startsWith("prospecthalo_")) return executarAcaoProspectHalo(nome, argumentos, prospeccaoId);
   const alternativa = /^(exa|tavily|searchapi)_(search|read)$/.exec(nome);
   if (alternativa) {
     const fonte = alternativa[1] as FonteOpcional;
@@ -205,7 +211,32 @@ async function consultarOpcional<T extends string | ResultadoBuscaWeb[]>(fonte: 
 
 // --- Busca na web --------------------------------------------------------------------------------
 
-export type ResultadoBuscaWeb = { titulo: string; url: string; resumo: string };
+export type ResultadoBuscaWeb = { titulo: string; url: string; resumo: string; fontes?: string[]; pessoa?: { nome: string; cargo: string; empresa: string; cidade: string; site: string } };
+
+/** Intercala fornecedores para que o corte de candidatos não favoreça apenas a primeira fonte. */
+export function combinarResultados(lotes: ResultadoBuscaWeb[][]): ResultadoBuscaWeb[] {
+  const unicos = new Map<string, ResultadoBuscaWeb>();
+  for (let i = 0; i < Math.max(0, ...lotes.map(l => l.length)); i++) {
+    for (const lote of lotes) {
+      const item = lote[i];
+      if (!item) continue;
+      let chave: string;
+      try {
+        const u = new URL(item.url);
+        u.hash = ""; u.hostname = u.hostname.replace(/^www\./, "");
+        for (const k of [...u.searchParams.keys()]) if (/^utm_|^(trk|trackingId|gclid|fbclid)$/.test(k)) u.searchParams.delete(k);
+        chave = `${u.hostname}${u.pathname.replace(/\/$/, "")}${u.search}`;
+      } catch { continue; }
+      const anterior = unicos.get(chave);
+      if (!anterior) unicos.set(chave, { ...item });
+      else {
+        anterior.fontes = [...new Set([...(anterior.fontes ?? []), ...(item.fontes ?? [])])];
+        if (item.resumo && !anterior.resumo.includes(item.resumo)) anterior.resumo = [anterior.resumo, item.resumo].filter(Boolean).join("\n").slice(0, 12000);
+      }
+    }
+  }
+  return [...unicos.values()];
+}
 export type RespostaBusca = { itens: ResultadoBuscaWeb[]; origem: string; consultadoEm: string; demo: boolean };
 
 /** `pagina` (0-indexado) soma `&start=<pagina*10>` à busca do Google (paginação padrão de resultados
@@ -215,12 +246,13 @@ export async function buscarNaWeb(consulta: string, pagina = 0, prospeccaoId?: s
   const origemBase = `https://www.google.com/search?q=${encodeURIComponent(consulta)}`;
   const origem = pagina > 0 ? `${origemBase}&start=${pagina * 10}` : origemBase;
   const consultadoEm = new Date().toISOString();
-  if (!descobertaAtiva()) {
+  if (!descobertaAtiva() && !prospectHaloAtivo()) {
     return { itens: resultadosBuscaDemo(consulta), origem, consultadoEm, demo: true };
   }
   const opcionais = fontesOpcionais();
   const fontes = [...(opcionais.includes("exa") ? ["exa" as const] : []), ...(brightDataAtiva() ? ["brightdata" as const] : []), ...opcionais.filter(f => f !== "exa")];
   let ultimaFalha: unknown;
+  const lotes: ResultadoBuscaWeb[][] = [];
   for (const fonte of fontes) {
     try {
       const itens = fonte === "brightdata"
@@ -233,9 +265,11 @@ export async function buscarNaWeb(consulta: string, pagina = 0, prospeccaoId?: s
           return (url.hostname === alvo.hostname || url.hostname.endsWith(`.${alvo.hostname}`)) && url.pathname.startsWith(alvo.pathname);
         } catch { return false; }
       }) : itens;
-      if (filtrados.length) return { itens: filtrados, origem, consultadoEm, demo: false };
+      lotes.push(filtrados.map(item => ({ ...item, fontes: [fonte] })));
     } catch (erro) { ultimaFalha = erro; }
   }
+  const itens = combinarResultados(lotes);
+  if (itens.length) return { itens, origem, consultadoEm, demo: false };
   if (ultimaFalha) throw ultimaFalha;
   throw new ErroDescoberta("sem_resultado", "As fontes conectadas não encontraram resultados para esses critérios. Tente ampliar a busca.", 404);
 }
@@ -309,7 +343,7 @@ async function lerConteudo(url: string, prospeccaoId?: string, resumoAlternativo
  * (se real) para o teto de consultas daquela prospecção (US-023). */
 export async function lerPagina(url: string, prospeccaoId?: string, resumoAlternativo?: string): Promise<RespostaLeitura> {
   const consultadoEm = new Date().toISOString();
-  if (!descobertaAtiva()) {
+  if (!descobertaAtiva() && !prospectHaloAtivo()) {
     return { conteudo: conteudoPaginaDemo(url), origem: url, consultadoEm, demo: true };
   }
   const conteudo = await lerConteudo(url, prospeccaoId, resumoAlternativo);
@@ -319,7 +353,7 @@ export async function lerPagina(url: string, prospeccaoId?: string, resumoAltern
 /** Perfil público: dados estruturados da rede quando disponíveis, com fallback para Markdown. */
 export async function perfilDePessoa(url: string, prospeccaoId?: string, resumoAlternativo?: string): Promise<RespostaLeitura> {
   const consultadoEm = new Date().toISOString();
-  if (!descobertaAtiva()) {
+  if (!descobertaAtiva() && !prospectHaloAtivo()) {
     return { conteudo: perfilPessoaDemo(url), origem: url, consultadoEm, demo: true };
   }
   const conteudo = await lerConteudo(url, prospeccaoId, resumoAlternativo);

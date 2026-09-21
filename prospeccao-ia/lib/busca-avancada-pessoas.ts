@@ -1,6 +1,6 @@
 // Contrato oficial: brightdata/brightdata-mcp, search_dataset_schema.js e server.js.
 import { brightDataAtiva } from "./brightdata";
-import { buscarNaWeb, executarAcaoPesquisa, listarAcoesPesquisa, TetoConsultasAtingido, type RespostaBusca } from "./descoberta";
+import { buscarNaWeb, combinarResultados, executarAcaoPesquisa, listarAcoesPesquisa, type RespostaBusca } from "./descoberta";
 
 export const DATASET_PESSOAS = "gd_l1viktl72bvl7bjuj0";
 export type FiltrosPessoas = { cargo?: string; empresa?: string; localizacao?: string; setor?: string };
@@ -52,6 +52,7 @@ export function perfisDoDataset(hits: unknown): RespostaBusca["itens"] {
 
 /** Busca estruturada primeiro; indisponibilidade, campos incompatíveis ou lista vazia usam a web. */
 export async function buscarPessoasAvancada(consulta: string, filtros: FiltrosPessoas, prospeccaoId: string): Promise<RespostaBusca> {
+  let resultadoDataset: RespostaBusca | undefined;
   if (brightDataAtiva()) {
     try {
       const acoes = await listarAcoesPesquisa();
@@ -74,13 +75,16 @@ export async function buscarPessoasAvancada(consulta: string, filtros: FiltrosPe
             if (!resposta.hits.length || !cursor?.length || cursores.has(JSON.stringify(cursor))) break;
             cursores.add(JSON.stringify(cursor));
           }
-          if (itens.length) return { itens, origem: "Bright Data · base de perfis públicos", consultadoEm: new Date().toISOString(), demo: false };
+          if (itens.length) resultadoDataset = { itens: itens.map(i => ({ ...i, fontes: ["brightdata"] })), origem: "Bright Data · base de perfis públicos", consultadoEm: new Date().toISOString(), demo: false };
         }
       }
-    } catch (erro) {
-      if (erro instanceof TetoConsultasAtingido) throw erro;
+    } catch {
+      // O teto desta fonte não impede a consulta das demais.
       // executarAcaoPesquisa já registra a falha sem expor credenciais. A web é a alternativa.
     }
   }
-  return buscarNaWeb(consulta, 0, prospeccaoId);
+  try {
+    const web = await buscarNaWeb(consulta, 0, prospeccaoId);
+    return resultadoDataset ? { ...web, itens: combinarResultados([resultadoDataset.itens, web.itens]) } : web;
+  } catch (erro) { if (resultadoDataset) return resultadoDataset; throw erro; }
 }

@@ -673,8 +673,8 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                   {andamento.consultas.map(c => (
                     <li key={c.id} className="text-sm border-t border-line pt-3">
                       <div className="flex justify-between gap-3 flex-wrap">
-                        <span className="font-semibold">{({ brightdata: "Bright Data", exa: "Exa", tavily: "Tavily", searchapi: "SearchAPI", apollo: "Apollo" } as Record<string, string>)[c.fonte] ?? c.fonte} · {c.acao === "busca" || c.acao === "search_engine" ? "Busca" : "Leitura e enriquecimento"}</span>
-                        <span className={c.estado === "falhou" || c.estado === "limite" ? "text-danger" : "text-muted"}>{c.estado === "consultando" ? "Consultando…" : c.estado === "falhou" ? "Falha na consulta" : c.estado === "limite" ? "Limite atingido" : c.estado === "vazia" ? "Sem resultados" : `${c.quantidade} resultado(s)`}</span>
+                        <span className="font-semibold">{({ brightdata: "Bright Data", exa: "Exa", tavily: "Tavily", searchapi: "SearchAPI", prospecthalo: "ProspectHalo", apollo: "Fonte anterior" } as Record<string, string>)[c.fonte] ?? c.fonte} · {c.acao === "busca" || c.acao === "search_engine" || c.acao === "prospecthalo_find_leads" ? "Busca" : "Leitura e enriquecimento"}</span>
+                        <span className={c.estado === "falhou" || c.estado === "limite" ? "text-danger" : "text-muted"}>{c.estado === "pendente" ? "Qualificação em andamento" : c.estado === "consultando" ? "Consultando…" : c.estado === "falhou" ? "Falha na consulta" : c.estado === "limite" ? "Limite atingido" : c.estado === "vazia" ? "Sem resultados" : `${c.quantidade} resultado(s)`}</span>
                       </div>
                       <p className="text-xs text-muted mt-1 break-words">{c.consulta}</p>
                       {c.mensagem && <p className="text-xs text-danger mt-1">{c.mensagem}</p>}

@@ -1,6 +1,7 @@
+import { REGRAS_PERSONALIZACAO, gerarTextoRevisado } from "./mensagem-qualidade";
 // Geração de abordagens personalizadas (e-mail, LinkedIn, WhatsApp) para um lead, reaproveitada por
 // app/api/abordagem/route.ts e lib/ferramentas.ts (MCP).
-import { aiEnabled, askJSON, meta } from "./ai";
+import { aiEnabled, meta } from "./ai";
 import { lerPagina } from "./descoberta";
 import { abordagemDemo, esperar } from "./demo";
 import type { Abordagem, Lead } from "./types";
@@ -32,6 +33,7 @@ Regras:
 - Escreva um gancho de abertura diferente para o e-mail, para o LinkedIn e para o WhatsApp: mesma informação (o sinal do lead), texto diferente em cada canal. Nunca repita a mesma frase nos três.
 - Reescreva o que o usuário vende com suas próprias palavras, adaptado ao tom de cada canal. Nunca cole o texto da proposta do usuário literalmente.
 - Assine o e-mail com o nome e a empresa do remetente informados abaixo; se nenhum dos dois for informado, assine apenas "Equipe comercial". No WhatsApp, se souber o nome ou a empresa do remetente, apresente-se com eles ("Aqui é [nome], da [empresa]"); senão, não se apresente. Nunca use os marcadores [seu nome] ou [sua empresa].
+${REGRAS_PERSONALIZACAO}
 Formato de saída (JSON):
 {
   "gancho": "1 frase que resume por que vale abordar este lead agora",
@@ -84,6 +86,9 @@ Segmento-alvo desta prospecção: ${segmento || "não informado"}
 Remetente: ${remetenteNome || "não informado"}${remetenteEmpresa ? `, da empresa ${remetenteEmpresa}` : ""}${
     contexto ? `\n\nTrecho do site da empresa do lead (contexto adicional; use só o que for relevante):\n"""\n${contexto}\n"""` : ""
   }`;
-  const abordagem = await askJSON<Abordagem>({ system: SYSTEM_ABORDAGEM, prompt, maxTokens: 2000 });
+  const abordagem = await gerarTextoRevisado<Abordagem>(SYSTEM_ABORDAGEM, prompt, 2000, r => [
+    { canal: "email", texto: [r.email?.assunto, r.email?.corpo].filter(Boolean).join("\n") },
+    { canal: "linkedin", texto: r.linkedin || "" }, { canal: "whatsapp", texto: r.whatsapp || "" },
+  ]);
   return { demo: false, abordagem, meta: meta({ demo: false, insumo }) };
 }

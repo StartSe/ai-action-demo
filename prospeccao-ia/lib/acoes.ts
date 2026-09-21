@@ -3,7 +3,7 @@
 // usarem a MESMA constante: assim o rótulo e o destino não divergem entre o aviso da tela e a `acao`
 // devolvida por uma rota. Também mantém o caminho de Configurações fora de app/page.tsx, onde
 // scripts/verificar-jargao.mjs o acusaria como jargão escrito na tela.
-export const ACAO_BUSCA_DE_LEADS = { rotulo: "Conectar a busca de leads", url: "/setup#apollo" };
+export const ACAO_BUSCA_DE_LEADS = { rotulo: "Conectar a busca de leads", url: "/setup#prospecthalo" };
 export const ACAO_PESQUISA_DE_MERCADO = { rotulo: "Conectar a pesquisa de mercado", url: "/setup#brightdata" };
 export const ACAO_CRM = { rotulo: "Conectar o CRM em Configurações", url: "/setup#mcp-crm" };
 export const ACAO_CONFERIR_CRM = { rotulo: "Conferir o CRM", url: "/setup#mcp-crm" };

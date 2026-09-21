@@ -1,6 +1,6 @@
 # Prospecção com IA
 
-Versão **0.3.0**. Veja as [notas de versão](CHANGELOG.md).
+Versão **0.4.0**. Veja as [notas de versão](CHANGELOG.md).
 
 Workspace de prospecção com cinco áreas: Início, Produtos, Prospecções, Leads e Configurações. Área: Vendas.
 
@@ -24,7 +24,13 @@ Abra `/setup` no navegador. No cartão **Inteligência artificial**, escolha a c
 
 A conta escolhida atende a todo o app: leitura de produto pelo site, qualificação com evidências, hipótese de dor, estratégia e mensagens, interpretação da busca livre e as ferramentas MCP. Uma falha na conta ChatGPT nunca cai no OpenRouter (nem o contrário) e nunca vira exemplo: a tela explica o que houve e oferece o caminho. A escolha fica em SQLite, as chaves do OpenRouter permanecem cifradas e a sessão ChatGPT fica isolada em `DATA_DIR/chatgpt` (preserve o disco de dados). O processo do conector roda em ambiente restrito, sem acesso às demais credenciais, sem terminal, arquivos ou navegador.
 
-No mesmo `/setup` você também conecta a pesquisa de mercado e sinais (Bright Data), a busca de leads como fonte alternativa de contatos (Apollo), Exa (pesquisa profunda), Tavily, SearchAPI e o CRM — todos testáveis com um clique. Tudo fica salvo cifrado em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar nada, o app roda em modo demonstração: produto, perfil ideal, prospecção, contas, leads e abordagem de exemplo prontos (Zetta Manutenção Industrial).
+No mesmo `/setup` você também conecta a pesquisa de mercado e sinais (Bright Data), a busca de contatos via ProspectHalo (MCP), Exa (pesquisa profunda), Tavily, SearchAPI e o CRM — todos testáveis com um clique. Tudo fica salvo cifrado em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar nada, o app roda em modo demonstração: produto, perfil ideal, prospecção, contas, leads e abordagem de exemplo prontos (Zetta Manutenção Industrial).
+
+## Mensagens específicas para cada lead — versão 0.4.0
+
+Estratégia, geração, edição e regeneração usam a descrição e aplicações do produto, o resumo da empresa, sinais com origem, trechos de evidências e pesquisa complementar. Dores típicas do ICP e informações não confirmadas ficam identificadas como hipóteses ou lacunas. O texto deve conectar um detalhe público a uma aplicação concreta do produto e terminar com uma pergunta sobre o assunto; sem evidência, pergunta sobre o processo sem fingir familiaridade.
+
+O botão **Personalizar mensagem** revisa o canal aberto de uma abordagem já salva, usando a versão anterior como referência. Preserva os outros canais e a estratégia e permite desfazer. Novos textos passam por uma revisão automática quando há fórmulas genéricas conhecidas, marcadores não preenchidos ou LinkedIn com mais de 300 caracteres. Se a revisão continuar inválida, mantém a mensagem anterior. Textos salvos não são reescritos automaticamente no deploy.
 
 ## Conta de IA e jornada Produto › Prospecção › Leads — versão 0.3.0
 
@@ -50,19 +56,25 @@ A pontuação sugerida soma **60 pontos para critérios do ICP/personas e 40 par
 
 Validação automatizada usa fornecedores simulados, incluindo falhas, geração concorrente, retomada da tela, reinício do processo, remoção do lead e pontuação sem evidências. As telas foram verificadas em desktop e celular; chamadas reais dependem das chaves e permissões das contas conectadas.
 
-## Pesquisa com fontes opcionais — versão 0.1.5
+## Pesquisa complementar e ProspectHalo MCP — versão 0.4.0
 
 Conecte somente as fontes que deseja usar em Configurações. Exa oferece os modos automático, rápido, profundo (padrão) e profundo com raciocínio; Tavily oferece básico ou avançado (padrão). Cada cartão permite salvar a chave, testar a conexão e limitar consultas por prospecção. Os testes de conexão também consomem a cota do fornecedor.
 
-A busca web tenta **Exa → Bright Data → Tavily → SearchAPI**, avançando quando a fonte está desconectada, falha ou não encontra resultados compatíveis. Para contatos B2B, a Apollo continua sendo consultada primeiro; se falhar ou não adicionar contatos, a busca continua nas fontes web conectadas. A leitura de páginas tenta Bright Data, Exa e Tavily; quando só há um trecho real da busca, ele serve como evidência limitada, sem inventar conteúdo de página.
+A busca web consulta **Exa, Bright Data, Tavily e SearchAPI** quando conectadas e dentro dos respectivos limites, mesmo se a primeira já trouxer resultados. Intercala os candidatos entre fornecedores, unifica URLs e conserva trechos complementares. A leitura de uma página usa Bright Data, Exa ou Tavily; trechos reais da busca servem como evidência limitada se a leitura não funcionar.
 
-Bright Data continua usando MCP com `pro=1`: o catálogo dinâmico disponibiliza `search_engine`, `search_dataset` e ações de dados públicos, incluindo LinkedIn e Instagram. As novas fontes também expõem ações de busca e, para Exa/Tavily, leitura ao assistente.
+Para contatos B2B, o ProspectHalo complementa a web e o dataset da Bright Data. O fluxo usa `list_dataset_fields` antes de montar filtros e só usa o dataset quando todos os filtros têm correspondência. Pessoas e empresas recebem evidências; sem confirmação de todos os critérios avaliados, o contato permanece pesquisado. A etapa de sinais também pesquisa notícias e páginas além do site institucional.
+
+No cartão ProspectHalo, cole a chave ou o link oficial `https://app.prospecthalo.ai/api/agent/v1/mcp?key=<sua-chave>`. O app extrai a chave do link, salva cifrada e envia por `Authorization: Bearer`, sem segredo na URL. A conexão usa inicialização MCP, sessões, catálogo dinâmico e respostas JSON/SSE. O teste consulta contexto e disponibilidade das ferramentas, sem iniciar busca. É necessário vincular sua conta LinkedIn no ProspectHalo para pesquisar.
+
+As ferramentas de contexto, ICP, contas LinkedIn, buscas e leitura de leads também ficam disponíveis em `listar_acoes_pesquisa` / `executar_acao_pesquisa`. Criação de campanhas e envio de mensagens não fazem parte desta versão. Uma busca `qualifying` guarda o `searchId` em SQLite: **Repetir busca** com os mesmos critérios consulta esse identificador em vez de iniciar outra busca, respeitando `nextRetryAt`. Enquanto isso, resultados parciais continuam disponíveis e a tela informa a pendência; não há polling remoto permanente em segundo plano.
+
+Apollo fica oculto e não recebe novas chamadas, mesmo que uma chave antiga esteja salva. Registros históricos continuam legíveis.
 
 O acompanhamento mostra fontes consultadas, resultados candidatos, falhas e limites. Falha de fornecedor não aparece como busca concluída vazia; resultados parciais recebem ressalvas. Uma fonte real conectada nunca é substituída por dados de demonstração. Rotinas e notificações permanecem ocultas na interface.
 
 Os testes automatizados simulam as APIs externas, incluindo autenticação recusada, limites, respostas vazias e troca entre fontes. A validação com uma conta real depende das chaves salvas em Configurações.
 
-Referências dos contratos: [Exa Search](https://exa.ai/docs/reference/search), [Exa Contents](https://exa.ai/docs/reference/get-contents), [Tavily Search](https://docs.tavily.com/documentation/api-reference/endpoint/search), [Tavily Extract](https://docs.tavily.com/documentation/api-reference/endpoint/extract), [SearchAPI Google](https://www.searchapi.io/docs/google) e [Bright Data MCP](https://github.com/brightdata/brightdata-mcp).
+Referências dos contratos: [ProspectHalo para agentes](https://prospecthalo.ai/for-agents), [OpenAPI do ProspectHalo](https://app.prospecthalo.ai/api/agent/v1/openapi.json), [Exa Search](https://exa.ai/docs/reference/search), [Exa Contents](https://exa.ai/docs/reference/get-contents), [Tavily Search](https://docs.tavily.com/documentation/api-reference/endpoint/search), [Tavily Extract](https://docs.tavily.com/documentation/api-reference/endpoint/extract), [SearchAPI Google](https://www.searchapi.io/docs/google) e [Bright Data MCP](https://github.com/brightdata/brightdata-mcp).
 
 ## Primeiro acesso
 Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
@@ -98,7 +110,8 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `CHATGPT_MODEL` | Opcional. Modelo da conta ChatGPT; vazio usa Automático. |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Ativa a IA que qualifica leads, gera a hipótese de dor e escreve a estratégia e as mensagens. Obtenha em https://openrouter.ai/keys |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`; aceita qualquer id do catálogo, como `openai/gpt-5.4-mini` ou `google/gemini-3.8-flash`. |
-| `APOLLO_API_KEY` | Alternativa ao setup. Ativa a Apollo.io como fonte alternativa de contatos. Obtenha em https://app.apollo.io/#/settings/integrations/api |
+| `PROSPECTHALO_API_KEY` | Chave ou link MCP oficial do ProspectHalo; alternativa ao cartão em Configurações. |
+| `PROSPECTHALO_TETO_CONSULTAS` | Limite de busca e acompanhamento por prospecção; padrão 10. |
 | `BRIGHTDATA_API_KEY` | Alternativa ao setup. Ativa a pesquisa de mercado e sinais (busca de empresas, pessoas e sinais públicos) — o motor de descoberta do workspace, atrás de `lib/descoberta.ts`. A chave já salva é reaproveitada pelo MCP HTTP com `pro=1`, sem zonas manuais. Obtenha em https://brightdata.com/cp/mcp |
 | `BRIGHTDATA_TETO_CONSULTAS` | Campo "Teto de consultas por prospecção" em Opções avançadas (padrão 60). Quantas buscas e leituras reais uma prospecção pode fazer antes de parar e terminar "pronta" com o aviso de orçamento; páginas já lidas nas últimas 24h são reaproveitadas do cache e não contam. |
 | `EXA_API_KEY` / `TAVILY_API_KEY` / `SEARCHAPI_API_KEY` | Credenciais opcionais; também podem ser salvas em Configurações. |
@@ -155,7 +168,6 @@ Este é o único app com mais de um destino além de `/setup` no `Topbar` (`Iní
 Contas e leads do workspace (produtos, prospecções, contas, leads e abordagens; ver `lib/workspace.ts`) são apagados automaticamente depois de um período sem atualização (`limparExpirados()`, rodada na inicialização do app): 180 dias para contas e leads de prospecções B2B (empresas e decisores), 90 dias para leads de prospecções B2C (pessoas físicas) — a retenção segue a jornada do perfil ideal (ICP) da prospecção. Apagar um lead ou uma conta apaga junto as abordagens escritas para ele; na jornada B2C, "Apagar dados desta pessoa" também está disponível a qualquer momento na tela da prospecção. Em B2C, só entram dados que a própria pessoa publicou em perfil ou página pública — o app nunca compra lista, nunca infere dado e nunca grava categoria sensível.
 
 ## Limites conhecidos
-- A Apollo.io não devolve um "sinal" de prospecção pronto: quando ela é a fonte de um contato, o texto "Sobre a empresa" vem de campos públicos da organização (ano de fundação, setor, número estimado de funcionários), não de um evento recente real — sinal, no sentido de evidência datada, é sempre da pesquisa pública (Bright Data).
 - A descoberta em lote (`descobrirEmLote`) continua como busca na web + leitura de página. Search Dataset fica disponível como ação de pesquisa com filtros explícitos, sem iniciar uma compra ou exportação assíncrona. O teto de consultas por prospecção (padrão 60) e o cache de páginas de 24h continuam valendo.
 - Uma conta ou pessoa sem nenhuma evidência verificável não entra na lista; um critério sem dado nunca conta como atendido, aparece como "não foi possível verificar".
 - Em modo demonstração, o exemplo (produto, ICP, prospecção, 3 contas, 6 pessoas, 1 abordagem) é fixo e marcado como exemplo em toda tela onde aparece; "Limpar exemplo" remove só o que ele criou.

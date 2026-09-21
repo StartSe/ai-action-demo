@@ -59,7 +59,7 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
         <p className="text-muted text-[13px]">
           {registro.saida.fonte === "demo"
             ? `Lista de exemplo a partir de ${registro.meta.insumo}.`
-            : `Leads buscados na base da Apollo a partir de ${registro.meta.insumo}, em ${data(registro.meta.geradoEm, { comHora: true })}.`}
+            : `Leads encontrados nas fontes conectadas a partir de ${registro.meta.insumo}, em ${data(registro.meta.geradoEm, { comHora: true })}.`}
         </p>
       </footer>
     </div>

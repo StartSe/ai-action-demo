@@ -361,6 +361,7 @@ function ConteudoAbordagem({ leadId }: { leadId: string }) {
               <div className="flex justify-between gap-3 items-center mt-3 text-xs text-muted"><span>{(canal === "email" ? abordagem.email.corpo : textoDoCanal(abordagem, canal)).length} caracteres</span><span>Revise e personalize antes de usar</span></div>
               <div className="flex flex-wrap items-center gap-3 mt-5">
                 <CopyButton texto={() => textoDoCanal(abordagem, canal)} rotulo="Copiar mensagem" />
+                <button type="button" className="btn-ghost !w-auto" disabled={regenerando || salvandoEstrategia} onClick={() => regenerar("mais_personalizado")}>Personalizar mensagem</button>
                 <MenuRegenerar lead={lead} desabilitado={regenerando || salvandoEstrategia} onEscolher={regenerar} />
               </div>
               {anterior?.canal === canal && <button type="button" className="btn-link text-sm mt-3" disabled={regenerando || salvandoEstrategia} onClick={voltarVersaoAnterior}>Voltar à versão anterior</button>}

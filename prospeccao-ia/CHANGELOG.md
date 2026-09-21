@@ -1,5 +1,15 @@
 # Notas de versão
 
+## 0.4.0 — 2026-09-21
+
+- Mensagens com descrição e aplicações do produto, contexto da empresa, fontes, citações e lacunas explícitas. Abertura concreta, hipótese sem afirmação indevida e pergunta específica substituem o convite genérico padrão.
+- Botão Personalizar mensagem para textos já salvos, por canal, com desfazer; revisão automática limitada para clichês, marcadores e limite do LinkedIn.
+- ProspectHalo via MCP: chave ou link protegido, teste de contexto, catálogo dinâmico de coleta, consultas registradas e retomada de buscas pendentes pelo mesmo identificador. Apollo oculto e sem novas chamadas.
+- Coleta combina todas as fontes web conectadas e o dataset da Bright Data; intercala e deduplica resultados. Pesquisa complementar de sinais e leitura alternativa na qualificação profunda.
+- Promoção automática a qualificado exige confirmação dos critérios avaliados. Dados reais nunca recebem conteúdo de demonstração por falta de leitor.
+
+Validação: 89 testes automatizados com fornecedores e IA simulados, TypeScript, lint sem erros (um aviso preexistente de imagem no setup), build de produção, verificadores de padrão e jargão, e checagem HTTP de health, setup, prospecções e leads. Credenciais reais dos fornecedores não estavam disponíveis no ambiente local; envio pelo LinkedIn não foi implementado.
+
 ## 0.3.0 — 2026-09-20
 
 - Escolha da conta de IA em Configurações: OpenRouter (chave ou conexão em um clique) ou assinatura ChatGPT, com login por código de dispositivo pelo conector oficial, escolha do modelo da conta e desconexão. A conta escolhida atende a leitura de produto, qualificação, hipótese de dor, estratégia, mensagens, busca livre e ferramentas MCP, sem troca automática entre contas em caso de erro.

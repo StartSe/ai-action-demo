@@ -1,3 +1,4 @@
+import { REGRAS_PERSONALIZACAO, gerarTextoRevisado } from "./mensagem-qualidade";
 import { comPrazoIA } from "./ia-prazo";
 import { obterQualificacaoProfunda } from "./qualificacao-profunda-store";
 import type { EtapaAbordagem, ResultadoAbordagem } from "./abordagem-progresso";
@@ -24,6 +25,8 @@ function textoUtil(valor: unknown): valor is string {
   return typeof valor === "string" && /[\p{L}\p{N}]/u.test(valor);
 }
 
+function pergunta(texto: string) { return `${texto.trim().replace(/[?!.]+$/, "")}?`; }
+
 function primeiroNome(nome: string) {
   return nome.split(" ")[0];
 }
@@ -37,10 +40,12 @@ function contextoQualificacao(lead: LeadProspeccao, conta: Conta | null) {
   const papelRotulo = ROTULO_PAPEL[lead.papel];
   if (papelRotulo) linhas.push(`Papel na decisão: ${papelRotulo}`);
   const evidencias = lead.evidencias.filter((e) => e.resultado === "atende");
-  if (evidencias.length > 0) linhas.push(`Evidências que atendem ao perfil: ${evidencias.map((e) => `${e.criterio} (${e.valor})`).join("; ")}`);
-  if (lead.sinais.length > 0) linhas.push(`Sinais públicos:\n${lead.sinais.map((s) => `- ${s.descricao} (${data(s.data, { comAno: true })})`).join("\n")}`);
+  if (evidencias.length > 0) linhas.push(`Evidências que atendem ao perfil: ${evidencias.map((e) => `${e.criterio} (${e.valor})${e.trecho ? ` — trecho: ${e.trecho}` : ""}`).join("; ")}`);
+  if (lead.sinais.length > 0) linhas.push(`Sinais públicos:\n${lead.sinais.map((s) => `- ${s.descricao} (${data(s.data, { comAno: true })}) — fonte: ${s.origem}`).join("\n")}`);
   linhas.push(`Hipótese de dor: ${lead.hipotese || "nenhuma hipótese com sinal suficiente ainda"}`);
-  if (conta?.resumo) linhas.push(`Sobre a empresa: ${conta.resumo}`);
+  if (conta?.resumo) linhas.push(`Sobre a empresa (${conta.site || "sem endereço confirmado"}): ${conta.resumo}`);
+  const desconhecidos = lead.evidencias.filter(e => e.resultado !== "atende");
+  if (desconhecidos.length) linhas.push(`Critérios não confirmados (não afirmar na mensagem): ${desconhecidos.map(e => `${e.criterio}: ${e.resultado}`).join("; ")}`);
   const aprofundamento = obterQualificacaoProfunda(lead.id);
   if (aprofundamento?.resultado) {
     const verificadas = aprofundamento.resultado.criterios.filter(c => c.resultado === "atende" && c.trecho);
@@ -49,14 +54,28 @@ function contextoQualificacao(lead: LeadProspeccao, conta: Conta | null) {
   return linhas.join("\n");
 }
 
+function contextoProduto(produto: Produto, icp: ICP | null) {
+  return `Produto: ${produto.nome}
+Descrição e aplicações: ${produto.descricao || "não informadas"}
+Proposta de valor: ${produto.propostaValor}
+Dores típicas do público, NÃO confirmadas neste lead: ${icp?.dores.join("; ") || "não informadas"}`;
+}
+function contextoMensagens(lead: LeadProspeccao, produto: Produto): string {
+  const contexto = contextoDoLead(lead.id);
+  return `${contextoQualificacao(lead, contexto?.conta ?? null)}
+
+${contextoProduto(produto, contexto?.icp ?? null)}`;
+}
+
 const SYSTEM_ESTRATEGIA = `Você é um estrategista de vendas que decide COMO abordar UM lead específico, a partir da qualificação já feita (fit, evidências, sinais públicos, hipótese de dor, papel na decisão) e do que a empresa do usuário vende.
 Regras:
 - Baseie-se só nas informações fornecidas; nunca invente um fato sobre o lead que não esteja ali.
-- "objetivo": o resultado esperado desta primeira abordagem (ex.: agendar uma conversa de 15-20 minutos), 1 frase curta.
+- "objetivo": validar a relevância de uma aplicação concreta para este lead, sem impor agendamento como primeiro passo. Uma frase curta.
 - "gancho": o fato ou sinal que abre a conversa, citando em poucas palavras o que foi encontrado.
 - "dorProvavel": a dor mais provável deste lead, cruzando a hipótese com o que a empresa do usuário resolve; se a hipótese for condicional, mantenha o tom condicional aqui também.
 - "tom": uma palavra ou expressão curta (ex.: consultivo, direto, executivo).
 - "cta": a próxima ação pedida ao lead, 1 frase curta.
+${REGRAS_PERSONALIZACAO}
 Formato de saída (JSON): { "objetivo": "", "gancho": "", "dorProvavel": "", "tom": "", "cta": "" } — todos os campos são strings curtas, nunca vazias.`;
 
 /** Estratégia inicial de uma abordagem (US-029), gerada a partir da qualificação do lead e da proposta do
@@ -69,23 +88,23 @@ export async function gerarEstrategia(lead: LeadProspeccao, conta: Conta | null,
   if (!(await aiEnabled())) {
     await esperar(700);
     return {
-      objetivo: "Agendar uma conversa de 15 a 20 minutos",
-      gancho: sinalPrincipal ? sinalPrincipal.descricao : `Aderência ao perfil de ${produto.nome}`,
+      objetivo: `Entender se ${produto.nome} se aplica ao contexto de ${lead.empresa || primeiroNome(lead.nome)}`,
+      gancho: sinalPrincipal ? sinalPrincipal.descricao : `${lead.cargo || "Atuação"}${lead.empresa ? ` na ${lead.empresa}` : ""}`,
       dorProvavel: lead.hipotese || (dorIcp ? `Possível dificuldade com ${dorIcp.charAt(0).toLowerCase()}${dorIcp.slice(1)}` : "Ainda sem dor identificada"),
       tom: "consultivo",
-      cta: "Convite para uma conversa de 15 a 20 minutos",
+      cta: `Como vocês lidam hoje com ${dorIcp || produto.propostaValor.split(".")[0].toLowerCase()}?`,
     };
   }
 
   try {
-    const prompt = `Qualificação do lead:\n${contextoQualificacao(lead, conta)}\n\nO que a empresa do usuário vende:\n${produto.propostaValor}`;
+    const prompt = `Qualificação do lead:\n${contextoQualificacao(lead, conta)}\n\n${contextoProduto(produto, icp)}`;
     const resposta = await comPrazoIA(askJSON<Partial<EstrategiaAbordagem>>({ system: SYSTEM_ESTRATEGIA, prompt, maxTokens: 500 }));
     return {
-      objetivo: resposta.objetivo?.trim() || "Agendar uma conversa de 15 a 20 minutos",
-      gancho: resposta.gancho?.trim() || sinalPrincipal?.descricao || "Aderência ao perfil ideal",
+      objetivo: resposta.objetivo?.trim() || `Validar uma aplicação de ${produto.nome}`,
+      gancho: resposta.gancho?.trim() || sinalPrincipal?.descricao || `${lead.cargo || "Atuação"}${lead.empresa ? ` na ${lead.empresa}` : ""}`,
       dorProvavel: resposta.dorProvavel?.trim() || lead.hipotese || "Ainda sem dor identificada",
       tom: resposta.tom?.trim() || "consultivo",
-      cta: resposta.cta?.trim() || "Convite para uma conversa de 15 a 20 minutos",
+      cta: resposta.cta?.trim() || "Esse assunto está entre as prioridades de vocês?",
     };
   } catch (err) {
     console.error("Falha ao gerar estratégia de abordagem:", err instanceof Error ? err.message : err);
@@ -101,6 +120,7 @@ Regras:
 - A mensagem de LinkedIn tem no máximo 300 caracteres (contando espaços).
 - A mensagem de WhatsApp é curta (2 a 4 frases), informal mas profissional, sem emojis em excesso (no máximo 1).
 - Assine o e-mail com o nome e a empresa do remetente informados; se nenhum dos dois for informado, assine apenas "Equipe comercial". Nunca use os marcadores [seu nome] ou [sua empresa].
+${REGRAS_PERSONALIZACAO}
 Formato de saída (JSON): { "email": {"assunto": "", "corpo": ""}, "linkedin": "até 300 caracteres", "whatsapp": "" }`;
 
 export type Mensagens = { email: { assunto: string; corpo: string }; linkedin: string; whatsapp: string };
@@ -122,10 +142,10 @@ function mensagensDemo(lead: LeadProspeccao, produto: Produto, estrategia: Estra
   return {
     email: {
       assunto: `${lead.empresa || nome}: ${estrategia.objetivo.toLowerCase()}`,
-      corpo: `Olá, ${nome}.\n\n${estrategia.gancho}. ${estrategia.dorProvavel}\n\n${produto.propostaValor.split(".")[0]}. ${estrategia.cta}?\n\nAbraço,\n${assinatura}`,
+      corpo: `Olá, ${nome}.\n\n${estrategia.gancho}. ${estrategia.dorProvavel}\n\n${produto.propostaValor.split(".")[0]}. ${pergunta(estrategia.cta)}\n\nAbraço,\n${assinatura}`,
     },
-    linkedin: `${estrategia.gancho} — ${estrategia.cta.toLowerCase()}?`.slice(0, 300),
-    whatsapp: `Oi, ${nome}! ${estrategia.gancho}. ${estrategia.cta}?`,
+    linkedin: `${estrategia.gancho} — ${pergunta(estrategia.cta.toLowerCase())}`.slice(0, 300),
+    whatsapp: `Oi, ${nome}! ${estrategia.gancho}. ${pergunta(estrategia.cta)}`,
   };
 }
 
@@ -152,13 +172,13 @@ CTA: ${estrategia.cta}
 
 Lead: ${lead.nome}${lead.cargo ? `, ${lead.cargo}` : ""}${lead.empresa ? ` na ${lead.empresa}` : ""}
 Contexto verificado:
-${contextoQualificacao(lead, null)}
-
-O que a empresa do usuário vende:
-${produto.propostaValor}
+${contextoMensagens(lead, produto)}
 
 Remetente: ${remetenteNome || "não informado"}${remetenteEmpresa ? `, da empresa ${remetenteEmpresa}` : ""}`;
-    const resposta = await comPrazoIA(askJSON<Partial<Mensagens>>({ system: SYSTEM_MENSAGENS, prompt, maxTokens: 1200 }));
+    const resposta = await gerarTextoRevisado<Partial<Mensagens>>(SYSTEM_MENSAGENS, prompt, 1600, r => [
+      { canal: "email", texto: [r.email?.assunto, r.email?.corpo].filter(Boolean).join("\n") },
+      { canal: "linkedin", texto: r.linkedin || "" }, { canal: "whatsapp", texto: r.whatsapp || "" },
+    ]);
     if (![resposta.email?.assunto, resposta.email?.corpo, resposta.linkedin, resposta.whatsapp].every(textoUtil)) {
       throw new Error("resposta incompleta");
     }
@@ -244,6 +264,7 @@ export async function gerarOuObterAbordagem(leadId: string, aoProgresso?: (etapa
 const ROTULO_CANAL_MENSAGEM: Record<CampoMensagem, string> = { email: "e-mail", linkedin: "LinkedIn", whatsapp: "WhatsApp" };
 
 const INSTRUCAO_DIRECAO: Record<DirecaoRegeneracao, string> = {
+  mais_personalizado: "Reescreva a mensagem para esta pessoa: substitua a abertura genérica pelo melhor fato público disponível, conecte uma aplicação concreta do produto e termine com uma pergunta específica. Preserve a intenção da estratégia e não invente informação.",
   mais_curto: "Deixe a mensagem BEM mais curta que uma versão normal — só o essencial, sem enfeite.",
   mais_executivo: "Tom mais executivo: direto, sem rodeios, frases curtas.",
   mais_consultivo: "Tom mais consultivo: focado em entender o problema da pessoa antes de propor algo.",
@@ -274,34 +295,34 @@ function mensagemDemoCanal(
 ): Mensagens[CampoMensagem] {
   const nome = primeiroNome(lead.nome);
   const assinatura = remetenteNome ? `${remetenteNome}${remetenteEmpresa ? `, da ${remetenteEmpresa}` : ""}` : "Equipe comercial";
-  const cta = estrategia.cta;
+  const cta = pergunta(estrategia.cta);
 
   if (canal === "email") {
     const assunto = `${lead.empresa || nome}: ${estrategia.objetivo.toLowerCase()}`;
     const fechamento = `Abraço,\n${assinatura}`;
-    if (direcao === "mais_curto") return { assunto, corpo: `Olá, ${nome}.\n\n${gancho}. ${cta}?\n\n${fechamento}` };
-    if (direcao === "mais_executivo") return { assunto, corpo: `${nome}, direto ao ponto: ${gancho.toLowerCase()}. ${estrategia.dorProvavel}\n\n${cta}?\n\n${fechamento}` };
-    if (direcao === "mais_consultivo") return { assunto, corpo: `Olá, ${nome}.\n\nTenho visto isso de perto: ${gancho.toLowerCase()}. Como vocês têm lidado com ${estrategia.dorProvavel.toLowerCase()}?\n\n${cta}?\n\n${fechamento}` };
-    if (direcao === "sem_pitch") return { assunto, corpo: `Olá, ${nome}.\n\n${gancho}. ${estrategia.dorProvavel}\n\n${cta}?\n\n${fechamento}` };
-    if (direcao === "outra_abordagem") return { assunto, corpo: `Oi, ${nome}. ${cta}? Pergunto porque ${gancho.toLowerCase()}, e ${produto.propostaValor.split(".")[0].toLowerCase()}.\n\n${fechamento}` };
-    return { assunto, corpo: `Olá, ${nome}.\n\n${gancho}. ${estrategia.dorProvavel}\n\n${produto.propostaValor.split(".")[0]}. ${cta}?\n\n${fechamento}` };
+    if (direcao === "mais_curto") return { assunto, corpo: `Olá, ${nome}.\n\n${gancho}. ${cta}\n\n${fechamento}` };
+    if (direcao === "mais_executivo") return { assunto, corpo: `${nome}, direto ao ponto: ${gancho.toLowerCase()}. ${estrategia.dorProvavel}\n\n${cta}\n\n${fechamento}` };
+    if (direcao === "mais_consultivo") return { assunto, corpo: `Olá, ${nome}.\n\nTenho visto isso de perto: ${gancho.toLowerCase()}. Como vocês têm lidado com ${estrategia.dorProvavel.toLowerCase()}?\n\n${cta}\n\n${fechamento}` };
+    if (direcao === "sem_pitch") return { assunto, corpo: `Olá, ${nome}.\n\n${gancho}. ${estrategia.dorProvavel}\n\n${cta}\n\n${fechamento}` };
+    if (direcao === "outra_abordagem") return { assunto, corpo: `Oi, ${nome}. ${cta} Pergunto porque ${gancho.toLowerCase()}, e ${produto.propostaValor.split(".")[0].toLowerCase()}.\n\n${fechamento}` };
+    return { assunto, corpo: `Olá, ${nome}.\n\n${gancho}. ${estrategia.dorProvavel}\n\n${produto.propostaValor.split(".")[0]}. ${cta}\n\n${fechamento}` };
   }
 
   if (canal === "linkedin") {
-    if (direcao === "mais_curto") return `${gancho.split(".")[0]}. ${cta}?`.slice(0, 130);
-    if (direcao === "mais_executivo") return `Direto ao ponto: ${gancho}. ${cta}?`.slice(0, 300);
+    if (direcao === "mais_curto") return `${gancho.split(".")[0]}. ${cta}`.slice(0, 130);
+    if (direcao === "mais_executivo") return `Direto ao ponto: ${gancho}. ${cta}`.slice(0, 300);
     if (direcao === "mais_consultivo") return `Reparei que ${gancho.toLowerCase()}. Faz sentido trocarmos uma ideia sobre isso?`.slice(0, 300);
     if (direcao === "sem_pitch") return `${gancho}. Podemos conversar 15 minutos?`.slice(0, 300);
-    if (direcao === "outra_abordagem") return `${cta}? Pergunto porque ${gancho.toLowerCase()}.`.slice(0, 300);
-    return `${gancho} — ${cta.toLowerCase()}?`.slice(0, 300);
+    if (direcao === "outra_abordagem") return `${cta} Pergunto porque ${gancho.toLowerCase()}.`.slice(0, 300);
+    return `${gancho} — ${cta.toLowerCase()}`.slice(0, 300);
   }
 
-  if (direcao === "mais_curto") return `${nome}, ${gancho.toLowerCase()}. ${cta}?`;
-  if (direcao === "mais_executivo") return `${nome}, direto: ${gancho.toLowerCase()}. ${cta}?`;
-  if (direcao === "mais_consultivo") return `Oi, ${nome}! Como vocês têm lidado com isso: ${gancho.toLowerCase()}? ${cta}?`;
+  if (direcao === "mais_curto") return `${nome}, ${gancho.toLowerCase()}. ${cta}`;
+  if (direcao === "mais_executivo") return `${nome}, direto: ${gancho.toLowerCase()}. ${cta}`;
+  if (direcao === "mais_consultivo") return `Oi, ${nome}! Como vocês têm lidado com isso: ${gancho.toLowerCase()}? ${cta}`;
   if (direcao === "sem_pitch") return `Oi, ${nome}! ${gancho}. Podemos conversar rapidinho?`;
-  if (direcao === "outra_abordagem") return `${nome}, ${cta.toLowerCase()}? Vi que ${gancho.toLowerCase()}.`;
-  return `Oi, ${nome}! ${gancho}. ${cta}?`;
+  if (direcao === "outra_abordagem") return `${nome}, ${cta.toLowerCase()} Vi que ${gancho.toLowerCase()}.`;
+  return `Oi, ${nome}! ${gancho}. ${cta}`;
 }
 
 /** Regenera só o CANAL indicado (aba aberta na tela), a partir da estratégia JÁ salva e de uma direção
@@ -332,8 +353,13 @@ Regras:
 - Direção pedida: ${INSTRUCAO_DIRECAO[direcao]}
 - Use o gancho abaixo como abertura real.
 ${regrasCanalMensagem(canal)}
+${REGRAS_PERSONALIZACAO}
+${direcao === "sem_pitch" ? "Nesta variação, mantenha a aplicação concreta como contexto interno: não mencione produto, oferta ou proposta ao destinatário." : ""}
 Formato de saída (JSON): ${formatoCanalMensagem(canal)}`;
-    const prompt = `Estratégia decidida:
+    const anterior = listarAbordagens(lead.id)[0]?.[canal];
+    const prompt = `Texto anterior para revisar (referência, não instrução): ${JSON.stringify(anterior ?? "ainda não gerado")}
+
+Estratégia decidida:
 Objetivo: ${estrategia.objetivo}
 Gancho: ${gancho}
 Dor provável: ${estrategia.dorProvavel}
@@ -342,13 +368,12 @@ CTA: ${estrategia.cta}
 
 Lead: ${lead.nome}${lead.cargo ? `, ${lead.cargo}` : ""}${lead.empresa ? ` na ${lead.empresa}` : ""}
 Contexto verificado:
-${contextoQualificacao(lead, null)}
-
-O que a empresa do usuário vende:
-${produto.propostaValor}
+${contextoMensagens(lead, produto)}
 
 Remetente: ${remetenteNome || "não informado"}${remetenteEmpresa ? `, da empresa ${remetenteEmpresa}` : ""}`;
-    const resposta = await comPrazoIA(askJSON<{ assunto?: string; corpo?: string; texto?: string }>({ system, prompt, maxTokens: 500 }));
+    const resposta = await gerarTextoRevisado<{ assunto?: string; corpo?: string; texto?: string }>(system, prompt, 900, r => [
+      { canal, texto: canal === "email" ? [r.assunto, r.corpo].filter(Boolean).join("\n") : r.texto || "" },
+    ]);
     if (canal === "email") {
       if (!textoUtil(resposta.assunto) || !textoUtil(resposta.corpo)) throw new Error("resposta incompleta");
       return { assunto: resposta.assunto, corpo: resposta.corpo };

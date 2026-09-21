@@ -13,7 +13,7 @@ export function registrarConsulta(prospeccaoId: string | undefined, fonte: strin
   if (!prospeccaoId) return;
   return Number(banco().prepare("INSERT INTO pesquisa_consultas (prospeccao_id, fonte, acao, consulta, estado) VALUES (?, ?, ?, ?, 'consultando')").run(prospeccaoId, fonte, acao, consulta.slice(0, 500)).lastInsertRowid);
 }
-export function concluirConsulta(id: number | undefined, estado: "concluida" | "vazia" | "falhou" | "limite", quantidade: number, mensagem?: string) {
+export function concluirConsulta(id: number | undefined, estado: "concluida" | "vazia" | "falhou" | "limite" | "pendente", quantidade: number, mensagem?: string) {
   if (id === undefined) return;
   banco().prepare("UPDATE pesquisa_consultas SET estado = ?, quantidade = ?, mensagem = ? WHERE id = ?").run(estado, quantidade, mensagem ?? null, id);
 }

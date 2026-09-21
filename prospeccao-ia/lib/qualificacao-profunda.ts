@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { aiEnabled, askJSON } from "./ai";
 import { acaoParaUrl, brightDataAtiva } from "./brightdata";
 import { buscarNaWeb, conteudoEstruturado, descobertaAtiva, executarAcaoPesquisa, lerPagina } from "./descoberta";
+import { fontesOpcionais } from "./pesquisa-fontes";
 import { apagarConsultas } from "./pesquisa-registro";
 import { obterQualificacaoProfunda, salvarQualificacaoProfunda } from "./qualificacao-profunda-store";
 import { termoSensivel } from "./sensivel";
@@ -78,9 +79,18 @@ async function executar(job: QualificacaoProfunda, instagram?: string) {
       let texto: string;
       if (brightDataAtiva()) {
         // Leitura nova: usa a ação estruturada de cada rede, sem reaproveitar o cache da prospecção.
-        const r = await executarAcaoPesquisa(acaoParaUrl(url), { url }, consultaId);
-        texto = typeof r === "string" ? r : conteudoEstruturado(r) || "";
-        if (!texto || texto === "[]" || texto === "{}") throw new Error();
+        texto = "";
+        try {
+          const r = await executarAcaoPesquisa(acaoParaUrl(url), { url }, consultaId);
+          texto = typeof r === "string" ? r : conteudoEstruturado(r) || "";
+        } catch { /* Segue para as outras fontes conectadas. */ }
+        if (!texto || texto === "[]" || texto === "{}") {
+          for (const fonte of fontesOpcionais().filter(f => f !== "searchapi")) {
+            checar();
+            try { texto = String(await executarAcaoPesquisa(`${fonte}_read`, { url }, consultaId)); if (texto.trim()) break; } catch { /* Tenta a próxima fonte. */ }
+          }
+        }
+        if (!texto?.trim() || texto === "[]" || texto === "{}") throw new Error();
       } else {
         const r = await lerPagina(url, consultaId); if (r.demo) throw new Error(); texto = r.conteudo;
       }
