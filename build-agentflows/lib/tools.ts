@@ -5,7 +5,7 @@
 // para as de um servidor. Um nome sem prefixo (fluxos da primeira versão) é o servidor antigo
 // "Ferramentas". O nome que o modelo vê é sempre o nome curto da ferramenta.
 import type { AgentTool } from "./chatgpt";
-import { conexaoMCP, servidoresMCP } from "./conexoes";
+import { conexaoMCP, servidoresMCP, servidorMCP } from "./conexoes";
 import { conectar, chamar, listarFerramentas } from "./mcp-cliente";
 import { FlowError, listFlows } from "./flow-store";
 import { getConfig } from "./store";
@@ -364,9 +364,10 @@ export function toolShortName(id: string) {
   return id.split(":").pop() || id;
 }
 // Catálogo para o diálogo do Agente: ferramentas prontas e um grupo por servidor conectado.
-export async function listTools(): Promise<ToolGroup[]> {
-  const groups: ToolGroup[] = [{ id: "interno", name: "Ferramentas prontas", kind: "builtin", tools: builtinTools() }];
-  for (const s of servidoresMCP()) {
+export async function listTools(scope?: string): Promise<ToolGroup[]> {
+  const groups: ToolGroup[] = !scope || scope === "interno" ? [{ id: "interno", name: "Ferramentas prontas", kind: "builtin", tools: builtinTools() }] : [];
+  const servers = scope === "interno" ? [] : scope ? [servidorMCP(scope)] : servidoresMCP();
+  for (const s of servers) {
     const group: ToolGroup = { id: "mcp:" + s.prefixo, name: s.nome, kind: "mcp", tools: [] };
     try {
       const c = await conexaoMCP(s.prefixo);

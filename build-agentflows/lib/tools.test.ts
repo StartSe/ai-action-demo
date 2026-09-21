@@ -120,3 +120,58 @@ test("ferramentas de busca usam a credencial salva e devolvem resultados compact
     salvarCampos({ TOOL_TAVILY_KEY: null, TOOL_SERPER_KEY: null, TOOL_GOOGLE_KEY: null, TOOL_GOOGLE_CX: null });
   }
 });
+
+test("consultar ações de um servidor não depende de outros servidores nem expõe credenciais", async () => {
+  const connections = await import("./conexoes");
+  const good = connections.adicionarServidorMCP("CRM isolado", "https://isolado.example/mcp", "segredo-crm");
+  const bad = connections.adicionarServidorMCP("Fora do ar", "https://offline.example/mcp", "segredo-offline");
+  const original = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    calls.push(String(url));
+    if (String(url).includes("offline")) throw new Error("Serviço indisponível");
+    return Response.json({ result: { tools: [{ name: "buscar", description: "Buscar contatos" }, { name: "criar", description: "Criar contato" }] } });
+  }) as typeof fetch;
+  try {
+    assert.equal((await tools.listTools("interno"))[0].kind, "builtin");
+    assert.deepEqual(calls, []);
+    const group = await tools.listTools(good.prefixo);
+    assert.equal(group.length, 1);
+    assert.deepEqual(group[0].tools.map((t) => t.id), [`mcp:${good.prefixo}:buscar`, `mcp:${good.prefixo}:criar`]);
+    assert.deepEqual(calls, ["https://isolado.example/mcp"]);
+    assert.ok(!JSON.stringify(group).includes("segredo"));
+    assert.ok((await tools.listTools(bad.prefixo))[0].error);
+    assert.equal((await tools.listTools(good.prefixo))[0].tools.length, 2);
+    await assert.rejects(() => tools.listTools("MCP_INEXISTENTE"), /não encontrado/);
+  } finally {
+    globalThis.fetch = original;
+    connections.removerServidorMCP(good.prefixo);
+    connections.removerServidorMCP(bad.prefixo);
+  }
+});
+
+test("ações com o mesmo nome em dois MCP são isoladas e só as selecionadas chegam ao agente", async () => {
+  const connections = await import("./conexoes");
+  const crm = connections.adicionarServidorMCP("CRM", "https://crm-selecao.example/mcp", "codigo-crm");
+  const rh = connections.adicionarServidorMCP("RH", "https://rh-selecao.example/mcp", "codigo-rh");
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    const b = JSON.parse(String(init?.body));
+    if (b.method === "tools/list") return Response.json({ result: { tools: [{ name: "buscar" }, { name: "excluir" }] } });
+    assert.equal(new Headers(init?.headers).get("Authorization"), String(url).includes("crm-") ? "Bearer codigo-crm" : "Bearer codigo-rh");
+    return Response.json({ result: { content: [{ type: "text", text: JSON.stringify({ url: String(url), action: b.params.name }) }] } });
+  }) as typeof fetch;
+  try {
+    const selected = [`mcp:${crm.prefixo}:buscar`, `mcp:${rh.prefixo}:buscar`];
+    const actions = await tools.resolveTools(selected);
+    assert.equal(actions.length, 2);
+    assert.notEqual(actions[0].name, actions[1].name);
+    assert.ok(actions.every((a) => !a.name.includes("excluir")));
+    assert.deepEqual(JSON.parse(await actions[0].call({})), { url: "https://crm-selecao.example/mcp", action: "buscar" });
+    assert.deepEqual(JSON.parse(await actions[1].call({})), { url: "https://rh-selecao.example/mcp", action: "buscar" });
+  } finally {
+    globalThis.fetch = original;
+    connections.removerServidorMCP(crm.prefixo);
+    connections.removerServidorMCP(rh.prefixo);
+  }
+});

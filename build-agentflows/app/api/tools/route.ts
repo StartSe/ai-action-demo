@@ -4,8 +4,8 @@ import { TOOL_CREDENTIAL_KEYS } from "@/lib/tool-credentials";
 import { FlowError } from "@/lib/flow-store";
 import { api, body } from "@/lib/flow-api";
 export const dynamic = "force-dynamic";
-export async function GET() {
-  return api(listTools);
+export async function GET(req: Request) {
+  return api(() => listTools(new URL(req.url).searchParams.get("server") || undefined));
 }
 // Credenciais das ferramentas prontas (ex.: chave da Tavily), salvas a partir do diálogo do Agente.
 export async function PUT(req: Request) {
@@ -14,6 +14,6 @@ export async function PUT(req: Request) {
     if (!campos || typeof campos !== "object" || Array.isArray(campos) || Object.keys(campos).some((k) => !TOOL_CREDENTIAL_KEYS.includes(k))) throw new FlowError("Escolha uma credencial de ferramenta válida.");
     for (const key of Object.keys(campos)) if (process.env[key]?.trim()) throw new FlowError("Esta credencial está definida no ambiente do servidor. Altere-a no ambiente para atualizar ou remover.");
     salvarCampos(campos);
-    return listTools();
+    return listTools("interno");
   });
 }

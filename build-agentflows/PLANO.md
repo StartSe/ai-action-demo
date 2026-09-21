@@ -194,3 +194,12 @@ Concluída na versão 0.4.0, com testes e verificação visual por Playwright.
 - Testes de contratos, motor com dois agentes, navegador desktop/celular, lint, build e verificadores da suíte antes de publicar na main.
 
 As limitações das rodadas anteriores sobre Gmail, Google/Microsoft, Browserless, Slack, E2B e arquivos foram superadas por esta rodada. Configuração, ações e limites atuais estão documentados no README.
+
+# Rodada 5: ferramentas e servidores em cartões — 0.6.0
+
+- Inclusão progressiva por **Adicionar ferramenta** e **Adicionar servidor MCP**.
+- Um cartão recolhível por ferramenta ou servidor, com seleção e configuração no próprio item.
+- Credenciais compartilhadas, permissões individuais por agente e remoção local separada da exclusão global da conexão.
+- Ações MCP por servidor: descrição, busca, seleção individual/em lote, atualização independente e recuperação de indisponibilidade sem apagar seleções.
+- Compatibilidade com fluxos anteriores e persistência de servidores anexados sem ações selecionadas.
+- Testes de comportamento/contrato e navegação com dois MCP locais, desktop, tema escuro e celular; lint, build e verificadores da suíte.

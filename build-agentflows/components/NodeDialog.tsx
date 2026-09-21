@@ -27,7 +27,7 @@ const labels: Record<string, [string, string]> = {
     "Em branco, o bloco recebe a conversa ou o resultado da etapa anterior.",
   ],
   model: ["Modelo de IA", ""],
-  tools: ["Ferramentas autorizadas", "Só as ferramentas marcadas ficam disponíveis."],
+  tools: ["Ferramentas e servidores MCP", ""],
   state: ["Estado inicial", "Objeto JSON com valores de texto, opcional."],
   value: ["Valor", "Texto que será comparado."],
   operator: ["Comparação", ""],
@@ -239,7 +239,9 @@ export function NodeDialog({
                 ))}
               </select>
             ) : key === "tools" ? (
-              <ToolPicker value={c.tools || ""} onChange={(v) => change("tools", v)} />
+              <ToolPicker value={c.tools || ""} cardsValue={c.toolCards || ""} onChange={(tools, toolCards) => setDraft((d) => ({
+                ...d, data: { ...d.data, config: { ...d.data.config, tools, toolCards } },
+              }))} />
             ) : key === "tool" ? (
               <select
                 value={c[key] ? normalize(c[key]) : ""}
