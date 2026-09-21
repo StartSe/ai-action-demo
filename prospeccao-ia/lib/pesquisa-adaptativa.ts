@@ -2,17 +2,11 @@ import { aiEnabled, askJSON } from "./ai";
 import { comPrazoIA } from "./ia-prazo";
 import { combinarResultados, type ResultadoBuscaWeb } from "./descoberta";
 import { registrarDecisao } from "./pesquisa-registro";
+import { perfilLinkedin } from "./perfil-linkedin";
+export { perfilLinkedin } from "./perfil-linkedin";
 
 export type RotaPesquisa = { id: string; nome: string; executar: (cargoAlternativo?: string) => Promise<ResultadoBuscaWeb[]> };
 export const normalizarPesquisa = (texto: string) => texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
-
-export function perfilLinkedin(url: string): string | null {
-  try {
-    const u = new URL(url);
-    if (u.protocol !== "https:" || !(u.hostname === "linkedin.com" || u.hostname.endsWith(".linkedin.com")) || !/^\/in\/[^/]+\/?$/.test(u.pathname) || u.username || u.password) return null;
-    return `https://www.linkedin.com${u.pathname.replace(/\/$/, "").toLowerCase()}`;
-  } catch { return null; }
-}
 
 /** Descoberta suficiente não equivale a qualificação: os critérios completos são avaliados depois. */
 export function candidatosComContexto(itens: ResultadoBuscaWeb[], cargo?: string, empresa?: string): number {
@@ -48,6 +42,7 @@ export async function refinarPlano(criterios: Record<string, unknown>, rotas: Ro
 export async function pesquisarEmRodadas(opcoes: {
   rotas: RotaPesquisa[]; alvo: number; cargo?: string; empresa?: string; prospeccaoId: string;
   interrompida: () => boolean;
+  aoEncontrar?: (itens: ResultadoBuscaWeb[]) => void;
   refinar?: (restantes: RotaPesquisa[], encontrados: number) => Promise<{ ordem: string[]; cargos: string[] } | null>;
 }): Promise<ResultadoBuscaWeb[]> {
   const fila = [...opcoes.rotas];
@@ -60,7 +55,12 @@ export async function pesquisarEmRodadas(opcoes: {
   while (fila.length && chamadas < 8 && Date.now() - inicio < 180000 && !opcoes.interrompida()) {
     const rodada = fila.splice(0, 2);
     registrarDecisao(opcoes.prospeccaoId, `Buscando candidatos em ${rodada.map(r => r.nome).join(" e ")}${rodada.length > 1 ? ", em paralelo" : ""}.`);
-    const respostas = await Promise.allSettled(rodada.map(r => r.executar()));
+    const respostas = await Promise.allSettled(rodada.map(async r => {
+      const encontrados = (await r.executar()).filter(i => perfilLinkedin(i.url));
+      // Publica cada fonte assim que responde, sem esperar a outra fonte da rodada.
+      if (!opcoes.interrompida()) opcoes.aoEncontrar?.(encontrados);
+      return encontrados;
+    }));
     chamadas += rodada.length;
     const lotes: ResultadoBuscaWeb[][] = [itens];
     for (const resposta of respostas) {
@@ -92,7 +92,11 @@ export async function pesquisarEmRodadas(opcoes: {
       if (opcoes.interrompida() || chamadas >= 8 || Date.now() - inicio >= 180000) break;
       chamadas++;
       registrarDecisao(opcoes.prospeccaoId, `Testando a variação de cargo “${cargo}” em ${web.nome}. A qualificação continua usando o perfil ideal original.`);
-      try { itens = combinarResultados([itens, (await web.executar(cargo)).filter(i => perfilLinkedin(i.url))]); } catch (e) { falha = e; }
+      try {
+        const encontrados = (await web.executar(cargo)).filter(i => perfilLinkedin(i.url));
+        if (!opcoes.interrompida()) opcoes.aoEncontrar?.(encontrados);
+        itens = combinarResultados([itens, encontrados]);
+      } catch (e) { falha = e; }
       if (candidatosComContexto(itens, opcoes.cargo, opcoes.empresa) >= opcoes.alvo) break;
     }
   }

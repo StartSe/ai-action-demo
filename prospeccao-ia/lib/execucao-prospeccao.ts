@@ -481,6 +481,7 @@ async function adicionarPessoasDaConta(prospeccaoId: string, conta: Conta, produ
     criarLead({
       prospeccaoId, contaId: conta.id, nome: candidato.nome, cargo: candidato.cargo, empresa: conta.nome, cidade: conta.cidade,
       linkedin: candidato.linkedin, fonte: resultado.demo ? null : `${(candidato.item?.fontes ?? ["busca pública"]).join(", ")} · ${candidato.linkedin}`,
+      avatarUrl: candidato.item?.avatarUrl,
       papel: inferirPapel(candidato.cargo, personas), fit: conta.fit,
       evidencias: [...conta.evidencias, ...evidenciasPessoa], sinais: conta.sinais, hipotese: null,
       status, noCRM: false, demo: resultado.demo,
@@ -746,6 +747,7 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
     if (foiCancelada(prospeccaoId)) return;
     criarLead({ prospeccaoId, contaId: conta?.id ?? null, nome: pessoa.nome, cargo: pessoa.cargo, empresa: pessoa.empresa,
       cidade: item.pessoa?.cidade || null, linkedin: item.url || null,
+      avatarUrl: item.avatarUrl,
       fonte: resultado.demo ? null : `${(item.fontes ?? ["busca pública"]).join(", ")} · ${item.url} · ${data(resultado.consultadoEm, { comAno: true })}`,
       papel: inferirPapel(pessoa.cargo, icp?.personas ?? []), fit: calcularFit(evidencias), evidencias,
       sinais: [...(conta?.sinais ?? []), ...sinaisEncontrados(conteudo, icp?.sinais ?? [], item.url, resultado.consultadoEm)],

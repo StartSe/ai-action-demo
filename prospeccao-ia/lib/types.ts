@@ -165,6 +165,7 @@ export type NovaConta = Omit<Conta, "id" | "criadoEm" | "atualizadoEm" | "demo">
 
 /** Pessoa descoberta numa prospecção (nome próprio para não colidir com o Lead de lib/types.ts usado pelas rotas antigas). */
 export interface LeadProspeccao {
+  avatarUrl?: string | null;
   id: string;
   prospeccaoId: string;
   contaId: string | null;

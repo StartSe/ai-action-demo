@@ -6,12 +6,15 @@
 // "executando" — mesmo padrão de components/ConexaoWhatsApp.tsx (whatsapp-atendente): o efeito depende
 // do ESTADO (primitivo), não do objeto inteiro de andamento, para não reiniciar o intervalo a cada poll.
 import type { ConsultaPesquisa, DecisaoPesquisa } from "@/lib/pesquisa-registro";
+import type { CandidatoParcial } from "@/lib/pesquisa-parciais";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Aviso, Chip, DataTable, Topbar, data, useConfirmacao, useStatus, lerErro, type Coluna } from "@/components/ui";
 import { ExploracaoEmpresa } from "@/components/ExploracaoEmpresa";
+import { ResultadosParciais } from "@/components/ResultadosParciais";
+import { AvatarPessoa } from "@/components/AvatarPessoa";
 import { NOMES_FONTES, nomeAcaoPesquisa, ProgressoProspeccao } from "@/components/ProgressoProspeccao";
 import { baixarCSV } from "@/lib/exportacao";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
@@ -299,11 +302,14 @@ function construirColunasLeads(opcoes: {
       titulo: opcoes.jornada === "b2c" ? "Pessoa" : "Lead",
       papel: "titulo",
       render: (l) => (
-        <div>
-          <p className="font-semibold text-[14px]">{l.nome}</p>
-          {l.linkedin && (
-            <a href={l.linkedin} target="_blank" rel="noopener noreferrer" className="text-[12px] text-accent-ink hover:underline">Ver perfil</a>
-          )}
+        <div className="flex items-start gap-3">
+          <AvatarPessoa nome={l.nome} url={l.avatarUrl} />
+          <div className="min-w-0">
+            <p className="font-semibold text-[14px]">{l.nome}</p>
+            {l.linkedin && (
+              <a href={l.linkedin} target="_blank" rel="noopener noreferrer" className="text-[12px] text-accent-ink hover:underline">Ver perfil</a>
+            )}
+          </div>
         </div>
       ),
     },
@@ -367,6 +373,7 @@ function construirColunasLeads(opcoes: {
 }
 
 type Andamento = {
+  candidatos?: CandidatoParcial[];
   consultas?: ConsultaPesquisa[];
   decisoes?: DecisaoPesquisa[];
   prospeccao: Prospeccao;
@@ -633,6 +640,8 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
   const nomeDaProspeccao = andamento ? `${({ pessoas: "Pessoas", empresas: "Empresas", empresa_unica: "Pesquisa de empresa", oportunidades: "Oportunidades" })[andamento.prospeccao.modo]} para ${andamento.produtoNome}` : "";
   const recorte = andamento ? recorteProspeccao(andamento.prospeccao.modo, andamento.prospeccao.criterios) : "";
   const funil = andamento ? funilContagens(andamento.leads) : null;
+  const candidatos = andamento?.candidatos ?? [];
+  const mostrarParciais = !!andamento && andamento.prospeccao.estado !== "rascunho" && (andamento.prospeccao.estado !== "pronta" || (!!andamento.prospeccao.erro && candidatos.length > 0));
   const leadsFiltrados = andamento ? leadsNaAba(andamento.leads, aba) : [];
   // Os números do funil viram abas só quando há uma lista de leads abaixo para filtrar.
   const filtraLeads = !!andamento && andamento.prospeccao.estado === "pronta" && (andamento.prospeccao.modo === "pessoas" || andamento.prospeccao.modo === "oportunidades") && andamento.leads.length > 0;
@@ -704,10 +713,11 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
               <p className="font-semibold mb-1">O andamento pode estar desatualizado</p>
               {erroAtualizacao}
             </Aviso></div>}
-            {andamento.prospeccao.estado !== "rascunho" && <ProgressoProspeccao prospeccao={andamento.prospeccao} jornada={andamento.jornada} consultas={andamento.consultas ?? []} decisoes={andamento.decisoes ?? []} contas={andamento.contasEncontradas} pessoas={andamento.leadsEncontrados} ultimoContato={ultimoContato} semAtualizacao={!!erroAtualizacao} cancelando={cancelando} onCancelar={cancelar} />}
+            {andamento.prospeccao.estado !== "rascunho" && <ProgressoProspeccao prospeccao={andamento.prospeccao} jornada={andamento.jornada} consultas={andamento.consultas ?? []} decisoes={andamento.decisoes ?? []} contas={andamento.contasEncontradas} pessoas={andamento.leadsEncontrados + (mostrarParciais ? candidatos.length : 0)} ultimoContato={ultimoContato} semAtualizacao={!!erroAtualizacao} cancelando={cancelando} onCancelar={cancelar} />}
             {erroCancelar && <div role="alert" className="mb-4"><Aviso tom="danger">{erroCancelar}</Aviso></div>}
             {erroAcaoPessoa && <div role="alert" className="mb-4"><Aviso tom="danger">{erroAcaoPessoa}</Aviso></div>}
             {funil && funil.encontrados > 0 && <FunilResumo funil={funil} aba={filtraLeads ? aba : undefined} onAba={filtraLeads ? setAba : undefined} />}
+            {mostrarParciais && <ResultadosParciais candidatos={candidatos} leads={andamento.prospeccao.estado === "pronta" ? [] : andamento.leads} contas={andamento.prospeccao.estado === "pronta" ? [] : andamento.contas} executando={andamento.prospeccao.estado === "executando"} />}
 
             {!!andamento.decisoes?.length && (
               <details className="card px-5 py-4 mb-4">
@@ -890,7 +900,6 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                   <Link href="/setup" className="btn-link text-sm">Verificar conexões</Link>
                   {andamento.leads.length > 0 && <Link href="/leads" className="btn-link text-sm">Ver pessoas já encontradas</Link>}
                 </div>
-                {andamento.contas.length > 0 && <div className="card p-4"><p className="text-sm font-semibold mb-2">Empresas encontradas antes da interrupção</p><ul className="text-sm text-muted space-y-2">{andamento.contas.map(c => <li key={c.id}>{c.nome}</li>)}</ul></div>}
                 {erroRepetir && <div role="alert"><Aviso tom="danger">{erroRepetir}</Aviso></div>}
               </div>
             )}

@@ -1,5 +1,6 @@
 // Contrato oficial: brightdata/brightdata-mcp, search_dataset_schema.js e server.js.
 import { brightDataAtiva } from "./brightdata";
+import { urlAvatarPublico } from "./avatar-pessoa";
 import { buscarNaWeb, combinarResultados, executarAcaoPesquisa, listarAcoesPesquisa, type RespostaBusca } from "./descoberta";
 
 export const DATASET_PESSOAS = "gd_l1viktl72bvl7bjuj0";
@@ -46,7 +47,7 @@ export function perfisDoDataset(hits: unknown): RespostaBusca["itens"] {
     if (!nome) return [];
     const cargo = texto(dados.position) || texto(dados.job_title);
     const empresa = texto(dados.current_company_name) || texto(objeto(dados.current_company).name) || texto(dados.company_name);
-    return [{ pessoa: { nome, cargo, empresa, cidade: texto(dados.location) || texto(dados.city), site: texto(objeto(dados.current_company).website) }, conteudoPerfil: JSON.stringify(dados).slice(0, 12000), titulo: [nome, cargo, empresa].filter(Boolean).join(" - "), url, resumo: [texto(dados.about), texto(dados.location), texto(dados.city), texto(dados.country_code)].filter(Boolean).join(" · ").slice(0, 3000) }];
+    return [{ pessoa: { nome, cargo, empresa, cidade: texto(dados.location) || texto(dados.city), site: texto(objeto(dados.current_company).website) }, avatarUrl: urlAvatarPublico(dados.avatar), conteudoPerfil: JSON.stringify(dados).slice(0, 12000), titulo: [nome, cargo, empresa].filter(Boolean).join(" - "), url, resumo: [texto(dados.about), texto(dados.location), texto(dados.city), texto(dados.country_code)].filter(Boolean).join(" · ").slice(0, 3000) }];
   });
 }
 

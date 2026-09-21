@@ -88,6 +88,7 @@ export function incorporarPerfil(item: ResultadoBuscaWeb, dados: unknown): boole
   const lista = Array.isArray(dados) ? dados : dados && typeof dados === "object" && "results" in dados ? (dados as { results: unknown }).results : [dados];
   const perfil = perfisDoDataset(lista).find(p => perfilLinkedin(p.url) === perfilLinkedin(item.url));
   if (!perfil?.pessoa) return false;
+  item.avatarUrl = perfil.avatarUrl || item.avatarUrl;
   item.pessoa = { ...perfil.pessoa, cargo: perfil.pessoa.cargo || item.pessoa?.cargo || "", empresa: perfil.pessoa.empresa || item.pessoa?.empresa || "", cidade: perfil.pessoa.cidade || item.pessoa?.cidade || "", site: perfil.pessoa.site || item.pessoa?.site || "" };
   if (perfil.conteudoPerfil) anexarConteudo(item, perfil.conteudoPerfil);
   return completo(item);
@@ -174,13 +175,16 @@ async function completarPerfil(item: ResultadoBuscaWeb, id: string, acoes: Ferra
   finally { if (!cancelada()) item.perfilPesquisado = true; }
 }
 
-export async function completarPerfis(itens: ResultadoBuscaWeb[], id: string, acoes: FerramentaMCP[], cancelada: () => boolean) {
+export async function completarPerfis(itens: ResultadoBuscaWeb[], id: string, acoes: FerramentaMCP[], cancelada: () => boolean,
+  aoAtualizar?: (item: ResultadoBuscaWeb, fase: "verificando" | "analisando") => void) {
   let proximo = 0;
   const inicio = Date.now();
   await Promise.allSettled([0, 1].map(async () => {
     while (proximo < itens.length && !cancelada() && Date.now() - inicio < 300000) {
       const item = itens[proximo++];
+      aoAtualizar?.(item, "verificando");
       await completarPerfil(item, id, acoes, cancelada);
+      if (!cancelada()) aoAtualizar?.(item, "analisando");
     }
   }));
   const completos = itens.filter(completo).length;

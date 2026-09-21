@@ -1,5 +1,8 @@
 import { apagarQualificacaoProfunda } from "./qualificacao-profunda-store";
 import { apagarConsultas, consultasDaProspeccao, decisoesDaPesquisa } from "./pesquisa-registro";
+import { apagarCandidatosParciais, candidatosDaPesquisa, retirarCandidatoParcial } from "./pesquisa-parciais";
+import { perfilLinkedin } from "./perfil-linkedin";
+import { urlAvatarPublico } from "./avatar-pessoa";
 // Workspace de prospecção: tabelas próprias para produto, ICP, prospecção, conta,
 // lead e abordagem, no mesmo app.sqlite de lib/store.ts (ver abrirBanco()).
 // Cada entidade expõe criar/listar/obter/atualizar/apagar; nenhuma rota monta SQL.
@@ -103,6 +106,7 @@ function banco(): DatabaseSync {
   try { d.exec(`ALTER TABLE leads ADD COLUMN demo INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
   try { d.exec(`ALTER TABLE leads ADD COLUMN papel_manual INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
   try { d.exec(`ALTER TABLE leads ADD COLUMN motivo_descarte TEXT`); } catch { /* coluna já existe */ }
+  try { d.exec(`ALTER TABLE leads ADD COLUMN avatar_url TEXT`); } catch { /* coluna já existe */ }
   d.exec(`CREATE INDEX IF NOT EXISTS idx_leads_prospeccao ON leads (prospeccao_id)`);
   d.exec(`CREATE INDEX IF NOT EXISTS idx_leads_conta ON leads (conta_id)`);
   d.exec(`CREATE TABLE IF NOT EXISTS abordagens (
@@ -287,6 +291,7 @@ export function atualizarProspeccao(id: string, dados: Partial<NovaProspeccao>, 
 export function apagarProspeccao(id: string): void {
   for (const lead of listarLeads(id)) apagarQualificacaoProfunda(lead.id);
   apagarConsultas(id);
+  apagarCandidatosParciais(id);
   banco().prepare("DELETE FROM abordagens WHERE lead_id IN (SELECT id FROM leads WHERE prospeccao_id = ?)").run(id);
   banco().prepare("DELETE FROM leads WHERE prospeccao_id = ?").run(id);
   banco().prepare("DELETE FROM contas WHERE prospeccao_id = ?").run(id);
@@ -305,6 +310,7 @@ export function obterAndamento(id: string) {
   const icp = obterICP(prospeccao.icpId);
   const contas = listarContas(id);
   const leads = listarLeads(id);
+  const perfisComLead = new Set(leads.map(l => l.linkedin && perfilLinkedin(l.linkedin)).filter(Boolean));
   return {
     prospeccao,
     produtoNome: produto?.nome ?? "Produto",
@@ -313,6 +319,7 @@ export function obterAndamento(id: string) {
     icpPersonas: icp?.personas ?? [],
     contas,
     leads,
+    candidatos: candidatosDaPesquisa(id).filter(c => !perfisComLead.has(c.url)),
     consultas: consultasDaProspeccao(id),
     decisoes: decisoesDaPesquisa(id),
     contasEncontradas: contas.length,
@@ -411,6 +418,7 @@ export function apagarConta(id: string): void {
 // --- Leads (pessoas) --------------------------------------------------------------
 
 type LinhaLead = {
+  avatar_url: string | null;
   id: string; prospeccao_id: string; conta_id: string | null; nome: string; cargo: string | null; empresa: string | null; cidade: string | null;
   linkedin: string | null; fonte: string | null; papel: string; fit: string | null; evidencias: string; sinais: string; hipotese: string | null;
   status: string; no_crm: number; demo: number; papel_manual: number; motivo_descarte: string | null; criado_em: string; atualizado_em: string;
@@ -418,6 +426,7 @@ type LinhaLead = {
 
 function linhaParaLead(l: LinhaLead): LeadProspeccao {
   return {
+    avatarUrl: urlAvatarPublico(l.avatar_url),
     id: l.id, prospeccaoId: l.prospeccao_id, contaId: l.conta_id, nome: l.nome, cargo: l.cargo, empresa: l.empresa, cidade: l.cidade,
     linkedin: l.linkedin, fonte: l.fonte, papel: l.papel as LeadProspeccao["papel"], papelManual: l.papel_manual === 1, fit: l.fit as LeadProspeccao["fit"],
     evidencias: JSON.parse(l.evidencias) as Evidencia[], sinais: JSON.parse(l.sinais) as SinalProspeccao[], hipotese: l.hipotese,
@@ -432,11 +441,13 @@ export function criarLead(dados: NovoLeadProspeccao, em?: Date): LeadProspeccao 
   const demo = dados.demo ?? false;
   const papelManual = dados.papelManual ?? false;
   const motivoDescarte = dados.motivoDescarte ?? null;
-  banco().prepare(`INSERT INTO leads (id, prospeccao_id, conta_id, nome, cargo, empresa, cidade, linkedin, fonte, papel, fit, evidencias, sinais, hipotese, status, no_crm, demo, papel_manual, motivo_descarte, criado_em, atualizado_em)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+  const avatarUrl = urlAvatarPublico(dados.avatarUrl);
+  banco().prepare(`INSERT INTO leads (id, prospeccao_id, conta_id, nome, cargo, empresa, cidade, linkedin, fonte, papel, fit, evidencias, sinais, hipotese, status, no_crm, demo, papel_manual, motivo_descarte, criado_em, atualizado_em, avatar_url)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, dados.prospeccaoId, dados.contaId, dados.nome, dados.cargo, dados.empresa, dados.cidade, dados.linkedin, dados.fonte, dados.papel, dados.fit,
-      JSON.stringify(dados.evidencias), JSON.stringify(dados.sinais), dados.hipotese, dados.status, dados.noCRM ? 1 : 0, demo ? 1 : 0, papelManual ? 1 : 0, motivoDescarte, agora, agora);
-  return { id, criadoEm: agora, atualizadoEm: agora, ...dados, demo, papelManual, motivoDescarte };
+      JSON.stringify(dados.evidencias), JSON.stringify(dados.sinais), dados.hipotese, dados.status, dados.noCRM ? 1 : 0, demo ? 1 : 0, papelManual ? 1 : 0, motivoDescarte, agora, agora, avatarUrl);
+  retirarCandidatoParcial(dados.prospeccaoId, dados.linkedin);
+  return { id, criadoEm: agora, atualizadoEm: agora, ...dados, demo, papelManual, motivoDescarte, avatarUrl };
 }
 
 export function listarLeads(prospeccaoId?: string): LeadProspeccao[] {
@@ -453,6 +464,7 @@ export function obterLead(id: string): LeadProspeccao | null {
 
 export function atualizarLead(id: string, dados: Partial<NovoLeadProspeccao>, em?: Date): LeadProspeccao | null {
   const { set, valores } = montarSet({
+    avatar_url: dados.avatarUrl === undefined ? undefined : urlAvatarPublico(dados.avatarUrl),
     conta_id: dados.contaId, nome: dados.nome, cargo: dados.cargo, empresa: dados.empresa, cidade: dados.cidade, linkedin: dados.linkedin,
     fonte: dados.fonte, papel: dados.papel, fit: dados.fit, evidencias: dados.evidencias && JSON.stringify(dados.evidencias),
     sinais: dados.sinais && JSON.stringify(dados.sinais), hipotese: dados.hipotese, status: dados.status,

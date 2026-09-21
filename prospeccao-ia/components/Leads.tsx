@@ -1,4 +1,5 @@
 "use client";
+import { AvatarPessoa } from "@/components/AvatarPessoa";
 // Área "Leads" (US-036): todos os leads de todas as prospecções numa lista só, para trabalhar por
 // prioridade em vez de repetir a mesma busca. O filtro inteiro mora na barra de endereço
 // (`?estado=&prospeccaoId=&fit=`), mesmo par `history.pushState`/`popstate` já usado por
@@ -106,6 +107,7 @@ function construirColunas(opcoes: { selecionados: Set<string>; onAlternar: (id: 
             onChange={() => opcoes.onAlternar(l.id)}
             aria-label={`Selecionar ${l.nome}`}
           />
+          <AvatarPessoa nome={l.nome} url={l.avatarUrl} />
           <div>
             <Link href={`/leads/${l.id}`} className="font-semibold text-[14px] text-accent-ink hover:underline">{l.nome}</Link>
             {l.demo && <Chip nivel="neutral">Exemplo</Chip>}

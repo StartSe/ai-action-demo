@@ -213,7 +213,7 @@ async function consultarOpcional<T extends string | ResultadoBuscaWeb[]>(fonte: 
 
 // --- Busca na web --------------------------------------------------------------------------------
 
-export type ResultadoBuscaWeb = { titulo: string; url: string; resumo: string; fontes?: string[]; conteudoPerfil?: string; contextoProfissional?: boolean; perfilPesquisado?: boolean; pessoa?: { nome: string; cargo: string; empresa: string; cidade: string; site: string } };
+export type ResultadoBuscaWeb = { titulo: string; url: string; resumo: string; fontes?: string[]; avatarUrl?: string | null; conteudoPerfil?: string; contextoProfissional?: boolean; perfilPesquisado?: boolean; pessoa?: { nome: string; cargo: string; empresa: string; cidade: string; site: string } };
 
 /** Intercala fornecedores para que o corte de candidatos não favoreça apenas a primeira fonte. */
 export function combinarResultados(lotes: ResultadoBuscaWeb[][]): ResultadoBuscaWeb[] {
@@ -237,6 +237,7 @@ export function combinarResultados(lotes: ResultadoBuscaWeb[][]): ResultadoBusca
       else {
         anterior.fontes = [...new Set([...(anterior.fontes ?? []), ...(item.fontes ?? [])])];
         if (!anterior.pessoa && item.pessoa) anterior.pessoa = item.pessoa;
+        if (!anterior.avatarUrl && item.avatarUrl) anterior.avatarUrl = item.avatarUrl;
         if (!anterior.conteudoPerfil && item.conteudoPerfil) anterior.conteudoPerfil = item.conteudoPerfil;
         if (item.resumo && !anterior.resumo.includes(item.resumo)) anterior.resumo = [anterior.resumo, item.resumo].filter(Boolean).join("\n").slice(0, 12000);
       }

@@ -56,7 +56,7 @@ A pontuação sugerida soma **60 pontos para critérios do ICP/personas e 40 par
 
 Validação automatizada usa fornecedores simulados, incluindo falhas, geração concorrente, retomada da tela, reinício do processo, remoção do lead e pontuação sem evidências. As telas foram verificadas em desktop e celular; chamadas reais dependem das chaves e permissões das contas conectadas.
 
-## Pesquisa adaptativa e acompanhamento — versão 0.5.2
+## Pesquisa adaptativa e acompanhamento — versão 0.6.0
 
 Conecte somente as fontes que deseja usar em Configurações. Exa oferece os modos automático, rápido, profundo (padrão) e profundo com raciocínio; Tavily oferece básico ou avançado (padrão). Cada cartão permite salvar a chave, testar a conexão e limitar consultas por prospecção. Os testes de conexão também consomem a cota do fornecedor.
 
@@ -77,6 +77,10 @@ As ferramentas de contexto, ICP, contas LinkedIn, buscas e leitura de leads tamb
 Apollo fica oculto e não recebe novas chamadas, mesmo que uma chave antiga esteja salva. Registros históricos continuam legíveis.
 
 O acompanhamento mostra uma hierarquia compacta, contexto expansível, exclusão com confirmação, trabalho atual, decisões de pesquisa, fontes consultadas, resultados candidatos, falhas e limites. Os horários de início e fim de cada etapa ficam no banco, inclusive após recarregar ou cancelar. As estimativas são referências iniciais aproximadas, não médias históricas nem contagem regressiva garantida. Dados antigos sem horário não recebem tempos inventados. A interface avisa se a etapa ultrapassar a estimativa ou se a atualização falhar, tenta reconectar e oferece ações para ajustar critérios, verificar conexões e repetir. Falha de fornecedor não aparece como busca concluída vazia; resultados parciais recebem ressalvas. Uma fonte real conectada nunca é substituída por dados de demonstração. Rotinas e notificações permanecem ocultas na interface.
+
+**Resultados parciais:** na descoberta B2B, cada fonte disponibiliza candidatos assim que responde. Nome, cargo, empresa, fontes e andamento da conferência aparecem no próximo ciclo de atualização da tela (a cada dois segundos enquanto visível), sem esperar a outra fonte da rodada ou todos os perfis. A leitura de cada perfil atualiza sua prévia. Os registros persistem ao recarregar e após cancelamento; respostas tardias não modificam buscas encerradas ou excluídas. A prévia não atribui qualificação e é retirada quando o lead correspondente é criado. Empresas e leads já salvos também aparecem durante a execução. A lista final continua sujeita aos critérios, ao limite de candidatos e aos contatos já encontrados.
+
+**Avatares:** o campo público `avatar` recebido no dataset ou Person Profile é associado somente ao mesmo perfil LinkedIn. Fotos HTTPS do CDN público do LinkedIn são exibidas na prévia e nas listas; sem foto ou em caso de erro, aparecem as iniciais do nome. A URL é preservada no lead. Não há consulta adicional exclusiva para buscar fotos.
 
 Os testes automatizados simulam as APIs externas, incluindo autenticação recusada, limites, respostas vazias e troca entre fontes. A validação com uma conta real depende das chaves salvas em Configurações.
 

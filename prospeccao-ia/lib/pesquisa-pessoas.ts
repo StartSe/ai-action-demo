@@ -6,6 +6,7 @@ import { buscarProspectHalo, prospectHaloAtivo, type CriteriosProspectHalo } fro
 import { pesquisarEmRodadas, refinarPlano, type RotaPesquisa } from "./pesquisa-adaptativa";
 import { completarPerfis } from "./pesquisa-perfis";
 import { obterProspeccao } from "./workspace";
+import { registrarCandidatosParciais } from "./pesquisa-parciais";
 
 /** Agente de busca: descoberta em rodadas, replanejamento por lacunas e verificação limitada de perfis. */
 export async function pesquisarPessoas(c: CriteriosProspectHalo, prospeccaoId: string): Promise<RespostaBusca> {
@@ -32,8 +33,10 @@ export async function pesquisarPessoas(c: CriteriosProspectHalo, prospeccaoId: s
   if (brightDataAtiva()) rotas.splice(Math.min(2, rotas.length), 0, { id: "brightdata_web", nome: "Bright Data · busca web", executar: async alternativo => resultadosOrganicos(await executarAcaoPesquisa("search_engine", { query: consulta(alternativo), engine: "google" }, prospeccaoId)).map(i => ({ ...i, fontes: ["brightdata"] })) });
   const alvo = Math.max(1, Math.min(25, c.quantidade ?? 10));
   const itens = await pesquisarEmRodadas({ rotas, alvo, cargo: c.cargo, empresa: c.empresa, prospeccaoId, interrompida: cancelada,
+    aoEncontrar: encontrados => { if (vinculada) registrarCandidatosParciais(prospeccaoId, encontrados); },
     refinar: (restantes, encontrados) => refinarPlano({ ...c }, restantes, encontrados),
   });
-  if (!cancelada()) await completarPerfis(itens.slice(0, alvo), prospeccaoId, acoes, cancelada);
+  if (!cancelada()) await completarPerfis(itens.slice(0, alvo), prospeccaoId, acoes, cancelada,
+    (item, fase) => { if (vinculada) registrarCandidatosParciais(prospeccaoId, [item], fase); });
   return { itens, origem: [...new Set(itens.flatMap(i => i.fontes ?? []))].join(" · "), consultadoEm: new Date().toISOString(), demo: false };
 }

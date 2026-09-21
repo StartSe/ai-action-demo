@@ -1,5 +1,14 @@
 # Notas de versão
 
+## 0.6.0 — 2026-09-21
+
+- Resultados parciais aparecem durante a prospecção. Na descoberta B2B, cada fonte publica seus candidatos assim que responde, sem aguardar a outra consulta paralela ou o enriquecimento de todos os perfis.
+- A prévia mostra nome, cargo, empresa, fontes e etapa da conferência, atualiza após cada perfil e persiste ao recarregar. Candidatos são deduplicados pelo LinkedIn; a prévia é retirada quando o lead é criado, sem antecipar sua qualificação. Empresas e leads já salvos também ficam visíveis antes da conclusão.
+- Cancelamento mantém os resultados disponíveis; respostas tardias não alteram buscas encerradas nem recriam uma prospecção excluída.
+- Avatares públicos retornados pelo dataset ou Person Profile da Bright Data acompanham o candidato até o lead. A prévia e as listas mostram a foto quando disponível, com iniciais em caso de ausência ou erro de carregamento.
+
+Validação: 114 testes com fornecedores simulados, build de produção, lint sem erros e 10 cenários de navegador em desktop e celular, incluindo atualização progressiva, recarga, cancelamento, foto indisponível e transição para a lista final.
+
 ## 0.5.2 — 2026-09-21
 
 - Todo candidato com URL de perfil do LinkedIn selecionado para verificação passa pela leitura `web_data_linkedin_person_profile` quando a ação está disponível, mesmo quando a busca ou o dataset já trouxe cargo, empresa e contexto detalhado.
