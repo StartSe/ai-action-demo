@@ -1,236 +1,249 @@
 {
-  "financas-ia": {
-    "segmento": "Financeiro",
-    "acento": "#0f6b3d",
-    "acento2": "#0db593",
-    "soft": "#e7f9f0",
-    "ink": "#085e33",
-    "hsl": [
-      150,
-      75,
-      24
-    ],
-    "contrasteBranco": 6.58
-  },
-  "custos-ia": {
-    "segmento": "Financeiro",
-    "acento": "#1f8441",
-    "acento2": "#1ecc8c",
-    "soft": "#e7f9ed",
-    "ink": "#0e5827",
-    "hsl": [
-      140,
-      62,
-      32
-    ],
-    "contrasteBranco": 4.73
-  },
-  "whatsapp-atendente": {
-    "segmento": "Atendimento",
-    "acento": "#0e7c6a",
-    "acento2": "#0aaec7",
-    "soft": "#e7f9f6",
-    "ink": "#085e50",
-    "hsl": [
-      170,
-      80,
-      27
-    ],
-    "contrasteBranco": 5.11
-  },
-  "radar-sinais": {
-    "segmento": "Estratégia",
-    "acento": "#0a707f",
-    "acento2": "#0a75c7",
-    "soft": "#e7f6f9",
-    "ink": "#08535e",
-    "hsl": [
-      188,
-      85,
-      27
-    ],
-    "contrasteBranco": 5.77
-  },
-  "bussola-ia": {
-    "segmento": "Estratégia",
-    "acento": "#1a6d93",
-    "acento2": "#1663df",
-    "soft": "#e7f3f9",
-    "ink": "#0a425c",
-    "hsl": [
-      199,
-      70,
-      34
-    ],
-    "contrasteBranco": 5.75
-  },
-  "prospeccao-linkedin": {
-    "segmento": "Vendas",
-    "acento": "#0a63c2",
-    "acento2": "#2047f3",
-    "soft": "#e7eff9",
-    "ink": "#083768",
-    "hsl": [
-      211,
-      90,
-      40
-    ],
-    "contrasteBranco": 5.87
-  },
-  "prospeccao-ia": {
-    "segmento": "Vendas",
-    "acento": "#0b5789",
-    "acento2": "#0b46d0",
-    "soft": "#e7f2f9",
-    "ink": "#083c5e",
-    "hsl": [
-      204,
-      85,
-      29
-    ],
-    "contrasteBranco": 7.67
-  },
-  "simulador-vendas": {
-    "segmento": "Vendas",
-    "acento": "#3e68cc",
-    "acento2": "#6c6ce5",
-    "soft": "#e7ecf9",
-    "ink": "#1c3f92",
-    "hsl": [
-      222,
-      58,
-      52
-    ],
-    "contrasteBranco": 5.18
-  },
-  "agente-kanban": {
-    "segmento": "Gestão",
-    "acento": "#2e3b7a",
-    "acento2": "#4634bc",
-    "soft": "#e9ebf7",
-    "ink": "#17204f",
-    "hsl": [
-      230,
-      45,
-      33
-    ],
-    "contrasteBranco": 10.38
-  },
-  "reunioes-ia": {
-    "segmento": "Gestão",
-    "acento": "#465f9b",
-    "acento2": "#5e5ec9",
-    "soft": "#eaedf6",
-    "ink": "#223662",
-    "hsl": [
-      222,
-      38,
-      44
-    ],
-    "contrasteBranco": 6.23
-  },
-  "contratos-ia": {
-    "segmento": "Jurídico",
-    "acento": "#473b91",
-    "acento2": "#814ac9",
-    "soft": "#ebe9f6",
-    "ink": "#231b55",
-    "hsl": [
-      248,
-      42,
-      40
-    ],
-    "contrasteBranco": 9.12
-  },
-  "pdi-time": {
-    "segmento": "RH",
-    "acento": "#692bd4",
-    "acento2": "#bb5ceb",
-    "soft": "#ede7f9",
-    "ink": "#411490",
-    "hsl": [
-      262,
-      66,
-      50
-    ],
-    "contrasteBranco": 7.25
-  },
-  "entrevista-ia": {
-    "segmento": "RH",
-    "acento": "#6e3597",
-    "acento2": "#c043d0",
-    "soft": "#f1e8f7",
-    "ink": "#3e1859",
-    "hsl": [
-      275,
-      48,
-      40
-    ],
-    "contrasteBranco": 8.02
-  },
-  "posts-sociais": {
-    "segmento": "Marketing",
-    "acento": "#a5185a",
-    "acento2": "#ef153a",
-    "soft": "#f9e7ef",
-    "ink": "#5e0830",
-    "hsl": [
-      332,
-      75,
-      37
-    ],
-    "contrasteBranco": 7.3
-  },
-  "videos-campanha": {
-    "segmento": "Marketing",
-    "acento": "#cc199d",
-    "acento2": "#f5388a",
-    "soft": "#f9e7f4",
-    "ink": "#7f0a60",
-    "hsl": [
-      316,
-      78,
-      45
-    ],
-    "contrasteBranco": 5.01
-  },
-  "clone-site": {
-    "segmento": "Marketing",
-    "acento": "#792a3f",
-    "acento2": "#bc342f",
-    "soft": "#f7e8ec",
-    "ink": "#511525",
-    "hsl": [
-      344,
-      48,
-      32
-    ],
-    "contrasteBranco": 9.48
-  },
-  "voz-do-cliente": {
-    "segmento": "Marketing",
-    "acento": "#ab36ab",
-    "acento2": "#d84faf",
-    "soft": "#f8e8f8",
-    "ink": "#6b196b",
-    "hsl": [
-      300,
-      52,
-      44
-    ],
-    "contrasteBranco": 5.46
-  },
-  "build-agentflows": {
-    "segmento": "Gestão",
-    "acento": "#163669",
-    "acento2": "#1724b0",
-    "soft": "#e7eef9",
-    "ink": "#0d2a59",
-    "hsl": [
-      217,
-      65,
-      25
-    ],
-    "contrasteBranco": 11.89
-  }
+ "financas-ia": {
+  "segmento": "Financeiro",
+  "acento": "#0f6b3d",
+  "acento2": "#0db593",
+  "soft": "#e7f9f0",
+  "ink": "#085e33",
+  "hsl": [
+   150,
+   75,
+   24
+  ],
+  "contrasteBranco": 6.58
+ },
+ "custos-ia": {
+  "segmento": "Financeiro",
+  "acento": "#1f8441",
+  "acento2": "#1ecc8c",
+  "soft": "#e7f9ed",
+  "ink": "#0e5827",
+  "hsl": [
+   140,
+   62,
+   32
+  ],
+  "contrasteBranco": 4.73
+ },
+ "whatsapp-atendente": {
+  "segmento": "Atendimento",
+  "acento": "#0e7c6a",
+  "acento2": "#0aaec7",
+  "soft": "#e7f9f6",
+  "ink": "#085e50",
+  "hsl": [
+   170,
+   80,
+   27
+  ],
+  "contrasteBranco": 5.11
+ },
+ "radar-sinais": {
+  "segmento": "Estratégia",
+  "acento": "#0a707f",
+  "acento2": "#0a75c7",
+  "soft": "#e7f6f9",
+  "ink": "#08535e",
+  "hsl": [
+   188,
+   85,
+   27
+  ],
+  "contrasteBranco": 5.77
+ },
+ "bussola-ia": {
+  "segmento": "Estratégia",
+  "acento": "#1a6d93",
+  "acento2": "#1663df",
+  "soft": "#e7f3f9",
+  "ink": "#0a425c",
+  "hsl": [
+   199,
+   70,
+   34
+  ],
+  "contrasteBranco": 5.75
+ },
+ "prospeccao-linkedin": {
+  "segmento": "Vendas",
+  "acento": "#0a63c2",
+  "acento2": "#2047f3",
+  "soft": "#e7eff9",
+  "ink": "#083768",
+  "hsl": [
+   211,
+   90,
+   40
+  ],
+  "contrasteBranco": 5.87
+ },
+ "prospeccao-ia": {
+  "segmento": "Vendas",
+  "acento": "#0b5789",
+  "acento2": "#0b46d0",
+  "soft": "#e7f2f9",
+  "ink": "#083c5e",
+  "hsl": [
+   204,
+   85,
+   29
+  ],
+  "contrasteBranco": 7.67
+ },
+ "simulador-vendas": {
+  "segmento": "Vendas",
+  "acento": "#3e68cc",
+  "acento2": "#6c6ce5",
+  "soft": "#e7ecf9",
+  "ink": "#1c3f92",
+  "hsl": [
+   222,
+   58,
+   52
+  ],
+  "contrasteBranco": 5.18
+ },
+ "agente-kanban": {
+  "segmento": "Gestão",
+  "acento": "#2e3b7a",
+  "acento2": "#4634bc",
+  "soft": "#e9ebf7",
+  "ink": "#17204f",
+  "hsl": [
+   230,
+   45,
+   33
+  ],
+  "contrasteBranco": 10.38
+ },
+ "reunioes-ia": {
+  "segmento": "Gestão",
+  "acento": "#465f9b",
+  "acento2": "#5e5ec9",
+  "soft": "#eaedf6",
+  "ink": "#223662",
+  "hsl": [
+   222,
+   38,
+   44
+  ],
+  "contrasteBranco": 6.23
+ },
+ "contratos-ia": {
+  "segmento": "Jurídico",
+  "acento": "#473b91",
+  "acento2": "#814ac9",
+  "soft": "#ebe9f6",
+  "ink": "#231b55",
+  "hsl": [
+   248,
+   42,
+   40
+  ],
+  "contrasteBranco": 9.12
+ },
+ "pdi-time": {
+  "segmento": "RH",
+  "acento": "#692bd4",
+  "acento2": "#bb5ceb",
+  "soft": "#ede7f9",
+  "ink": "#411490",
+  "hsl": [
+   262,
+   66,
+   50
+  ],
+  "contrasteBranco": 7.25
+ },
+ "entrevista-ia": {
+  "segmento": "RH",
+  "acento": "#6e3597",
+  "acento2": "#c043d0",
+  "soft": "#f1e8f7",
+  "ink": "#3e1859",
+  "hsl": [
+   275,
+   48,
+   40
+  ],
+  "contrasteBranco": 8.02
+ },
+ "posts-sociais": {
+  "segmento": "Marketing",
+  "acento": "#a5185a",
+  "acento2": "#ef153a",
+  "soft": "#f9e7ef",
+  "ink": "#5e0830",
+  "hsl": [
+   332,
+   75,
+   37
+  ],
+  "contrasteBranco": 7.3
+ },
+ "videos-campanha": {
+  "segmento": "Marketing",
+  "acento": "#cc199d",
+  "acento2": "#f5388a",
+  "soft": "#f9e7f4",
+  "ink": "#7f0a60",
+  "hsl": [
+   316,
+   78,
+   45
+  ],
+  "contrasteBranco": 5.01
+ },
+ "clone-site": {
+  "segmento": "Marketing",
+  "acento": "#792a3f",
+  "acento2": "#bc342f",
+  "soft": "#f7e8ec",
+  "ink": "#511525",
+  "hsl": [
+   344,
+   48,
+   32
+  ],
+  "contrasteBranco": 9.48
+ },
+ "voz-do-cliente": {
+  "segmento": "Marketing",
+  "acento": "#ab36ab",
+  "acento2": "#d84faf",
+  "soft": "#f8e8f8",
+  "ink": "#6b196b",
+  "hsl": [
+   300,
+   52,
+   44
+  ],
+  "contrasteBranco": 5.46
+ },
+ "build-agentflows": {
+  "segmento": "Gestão",
+  "acento": "#163669",
+  "acento2": "#1724b0",
+  "soft": "#e7eef9",
+  "ink": "#0d2a59",
+  "hsl": [
+   217,
+   65,
+   25
+  ],
+  "contrasteBranco": 11.89
+ },
+ "precificador": {
+  "segmento": "Financeiro",
+  "acento": "#0d7754",
+  "acento2": "#0ac2bc",
+  "soft": "#e7f9f3",
+  "ink": "#085e41",
+  "hsl": [
+   160,
+   80,
+   26
+  ],
+  "contrasteBranco": 5.55
+ }
 }
