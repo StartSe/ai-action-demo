@@ -214,7 +214,7 @@ export function CreateMap({
               />
               <small>
                 {kind === "youtube"
-                  ? "Para vídeos públicos de qualquer canal, configure o Gemini em Configurações → YouTube. O app usa a forma de importação escolhida lá."
+                  ? "Cole o link de um vídeo público de qualquer canal. Cadastre sua chave do Google AI Studio em Configurações → YouTube."
                   : "Artigos, landing pages e PDFs públicos. Páginas que exigem login não podem ser lidas."}
               </small>
             </label>

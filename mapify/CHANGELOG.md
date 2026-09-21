@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.1 — 2026-09-21
+
+- Configuração do YouTube simplificada para vídeos públicos com Gemini; removidos o formulário OAuth e a seleção de modos. Configurações antigas de canal não alteram a importação.
+- Aceita o formato Auth de chaves do AI Studio, incluindo ponto e credenciais maiores, sem truncamento.
+- Valida chave e acesso ao modelo diretamente no Google antes de salvar, sem gerar conteúdo; preserva a chave anterior em caso de falha.
+- Erro HTTP 402 passa a informar pagamento/créditos pendentes, sem confundir com chave inválida ou repetir a chamada.
+
 ## 1.2.0 — 2026-09-21
 
 - O aplicativo passa a se chamar **Mapia**, com nova marca na navegação, login, título da página, versão, mensagens e exportações. Identificadores técnicos e dados existentes são preservados.

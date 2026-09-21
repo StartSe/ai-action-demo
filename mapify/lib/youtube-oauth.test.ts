@@ -403,7 +403,7 @@ test("origem usa HTTPS do proxy e permite localhost para teste", () => {
   );
 });
 
-test("fonte real usa a API oficial e configurações persistem cifradas", async () => {
+test("integração legada consulta a API oficial e configurações persistem cifradas", async () => {
   const { setConfig, abrirBanco } = await import("./store");
   setConfig("YOUTUBE_CLIENT_ID", CLIENT);
   setConfig("YOUTUBE_CLIENT_SECRET", SECRET);
@@ -437,13 +437,13 @@ test("fonte real usa a API oficial e configurações persistem cifradas", async 
       : new Response(srt);
   };
   try {
-    const { youtubeSource } = await import("./sources");
-    const source = await youtubeSource(
-      "https://www.youtube.com/watch?v=1QNsdr-Qx_I",
+    const { youtubeIntegration } = await import("./youtube-oauth");
+    const { captionSegments } = await import("./sources");
+    const segments = captionSegments(
+      await officialCaptions("1QNsdr-Qx_I", await youtubeIntegration()),
     );
-    assert.equal(source.title, "Vídeo autorizado");
-    assert.equal(source.segments[0].seconds, 1);
-    assert.match(source.segments[0].text, /Conhecimento organizado/);
+    assert.equal(segments[0].seconds, 1);
+    assert.match(segments[0].text, /Conhecimento organizado/);
     assert.ok(
       paths.some((p) => p.includes("www.googleapis.com/youtube/v3/captions")),
     );

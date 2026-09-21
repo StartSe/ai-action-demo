@@ -10,16 +10,19 @@ import {
   geminiVideoConfig,
   saveGeminiVideo,
   removeGeminiVideo,
-  setYouTubeMode,
-  youtubeMode,
+  validateGeminiVideo,
   GEMINI_VIDEO_MODEL,
 } from "./gemini-video";
 
 const dir = mkdtempSync(join(tmpdir(), "mapify-gemini-test-"));
 process.env.DATA_DIR = dir;
 const id = "1QNsdr-Qx_I";
-const key = "AIza-test-gemini-secret-for-unit-tests";
+const key = "AQ.fixture-gemini-secret-for-unit-tests";
 const config = { key, model: GEMINI_VIDEO_MODEL };
+const validModel: typeof fetch = async (url) =>
+  Response.json({ name: `models/${String(url).split("/").at(-1)}` });
+const save = (key: string, model: string) =>
+  saveGeminiVideo(key, model, undefined, validModel);
 const notes =
   "A aula explica como organizar ideias em mapas mentais, relacionar conceitos e aplicar o aprendizado a situações concretas. São notas de estudo resumidas, sem reproduzir a fala literalmente.";
 const analysis = {
@@ -133,6 +136,7 @@ test("erros Gemini distinguem chave, permissões, modelo e cota sem vazar respos
   for (const [status, expected] of [
     [400, /não aceitou/],
     [401, /chave Gemini/],
+    [402, /créditos.*HTTP 402/],
     [403, /não autorizou/],
     [404, /modelo Gemini/],
     [429, /cota/],
@@ -222,39 +226,34 @@ test("cancelamento alcança o provedor; URL inválida, chave ausente e resposta 
   );
 });
 
-test("configuração cifra chave, preserva segredo ao editar e dá prioridade ao Gemini sobre OAuth", async () => {
+test("configuração aceita chave Auth com ponto, valida antes de cifrar e preserva segredo ao editar", async () => {
   const { setConfig, abrirBanco } = await import("./store");
   setConfig("YOUTUBE_ACCOUNT", JSON.stringify({ revision: "old-oauth" }));
-  assert.equal(await youtubeMode(), "oauth");
-  await saveGeminiVideo(key, GEMINI_VIDEO_MODEL);
-  assert.equal(await youtubeMode(), "gemini");
+  await save(key, GEMINI_VIDEO_MODEL);
   const status = await geminiVideoStatus();
   assert.equal(status.configured, true);
+  assert.ok(status.validatedAt);
+  assert.equal("mode" in status, false);
   assert.ok(!JSON.stringify(status).includes(key));
   const row = abrirBanco()
     .prepare("SELECT valor FROM config WHERE chave = ?")
     .get("GEMINI_API_KEY") as { valor: string };
   assert.match(row.valor, /^v1:/);
   assert.ok(!row.valor.includes(key));
-  await saveGeminiVideo("", "gemini-2.5-flash");
+  await save("", "gemini-2.5-flash");
   assert.equal((await geminiVideoConfig()).key, key);
   assert.equal((await geminiVideoConfig()).model, "gemini-2.5-flash");
+  await assert.rejects(save("short", GEMINI_VIDEO_MODEL), /formato inválido/);
   await assert.rejects(
-    saveGeminiVideo("short", GEMINI_VIDEO_MODEL),
-    /formato inválido/,
-  );
-  await assert.rejects(
-    saveGeminiVideo(key, "https://another.example"),
+    save(key, "https://another.example"),
     /modelo Gemini válido/,
   );
-  await assert.rejects(setYouTubeMode("bad"), /forma válida/);
   await removeGeminiVideo();
-  assert.equal(await youtubeMode(), "gemini");
   assert.equal((await geminiVideoStatus()).configured, false);
   setConfig("YOUTUBE_ACCOUNT", null);
 });
 
-test("credenciais e modo definidos pelo ambiente não podem ser alterados pela interface", async () => {
+test("credenciais definidas pelo ambiente não podem ser alteradas pela interface", async () => {
   process.env.GEMINI_API_KEY = key;
   process.env.GEMINI_VIDEO_MODEL = GEMINI_VIDEO_MODEL;
   process.env.YOUTUBE_IMPORT_MODE = "gemini";
@@ -262,12 +261,10 @@ test("credenciais e modo definidos pelo ambiente não podem ser alterados pela i
     const status = await geminiVideoStatus();
     assert.equal(status.managed, true);
     assert.equal(status.modelManaged, true);
-    assert.equal(status.modeManaged, true);
-    await assert.rejects(saveGeminiVideo(key, GEMINI_VIDEO_MODEL), /ambiente/);
+    await assert.rejects(save(key, GEMINI_VIDEO_MODEL), /ambiente/);
     await assert.rejects(removeGeminiVideo(), /ambiente/);
-    await assert.rejects(setYouTubeMode("oauth"), /ambiente/);
-    await assert.rejects(saveGeminiVideo("", "gemini-2.5-flash"), /ambiente/);
-    await saveGeminiVideo("", GEMINI_VIDEO_MODEL);
+    await assert.rejects(save("", "gemini-2.5-flash"), /ambiente/);
+    await save("", GEMINI_VIDEO_MODEL);
   } finally {
     delete process.env.GEMINI_API_KEY;
     delete process.env.GEMINI_VIDEO_MODEL;
@@ -280,11 +277,13 @@ test("importação e geração integram análise Gemini, referências e persist�
   const { youtubeSource } = await import("./sources");
   const { generate } = await import("./generation");
   const { getMap } = await import("./maps");
-  await saveGeminiVideo(key, GEMINI_VIDEO_MODEL);
+  await save(key, GEMINI_VIDEO_MODEL);
   setConfig(
     "YOUTUBE_ACCOUNT",
     JSON.stringify({ revision: "oauth-still-connected" }),
   );
+  setConfig("YOUTUBE_IMPORT_MODE", "oauth");
+  process.env.YOUTUBE_IMPORT_MODE = "public";
   setConfig("OPENROUTER_API_KEY", "test-openrouter-key");
   const original = globalThis.fetch;
   const calls: string[] = [];
@@ -354,5 +353,137 @@ test("importação e geração integram análise Gemini, referências e persist�
     assert.ok(!JSON.stringify(map).includes(key));
   } finally {
     globalThis.fetch = original;
+    delete process.env.YOUTUBE_IMPORT_MODE;
   }
+});
+
+test("validação consulta metadados do Google, aceita chaves Standard/Auth e não gera conteúdo", async () => {
+  const { setConfig } = await import("./store");
+  for (const candidate of [
+    "AIza-fixture-standard-key-2026",
+    "AQ." + "fixture-".repeat(60),
+  ]) {
+    let calls = 0;
+    await saveGeminiVideo(
+      `  ${candidate}  `,
+      GEMINI_VIDEO_MODEL,
+      undefined,
+      async (url, init) => {
+        calls++;
+        assert.equal(
+          url,
+          `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_VIDEO_MODEL}`,
+        );
+        assert.equal(
+          new Headers(init?.headers).get("x-goog-api-key"),
+          candidate,
+        );
+        assert.equal(init?.body, undefined);
+        assert.equal(init?.redirect, "error");
+        return Response.json({ name: `models/${GEMINI_VIDEO_MODEL}` });
+      },
+    );
+    assert.equal(calls, 1);
+    assert.equal((await geminiVideoConfig()).key, candidate);
+    assert.ok((await geminiVideoStatus()).validatedAt);
+  }
+  setConfig("GEMINI_API_KEY", "another-key-never-validated");
+  assert.equal((await geminiVideoStatus()).validatedAt, null);
+});
+
+test("chave rejeitada, modelo ausente, erro ou cancelamento não substituem uma configuração válida", async () => {
+  await save(key, GEMINI_VIDEO_MODEL);
+  const before = await geminiVideoStatus();
+  for (const [status, expected] of [
+    [400, /chave Gemini/],
+    [402, /créditos/],
+    [403, /não autorizou/],
+    [404, /modelo Gemini/],
+    [429, /cota/],
+    [503, /mais tarde/],
+  ] as const) {
+    let calls = 0;
+    await assert.rejects(
+      saveGeminiVideo(
+        "AQ.another-fixture-key-to-reject",
+        "gemini-3.7-flash",
+        undefined,
+        async () => {
+          calls++;
+          return Response.json(
+            [
+              {
+                error: {
+                  code: status === 400 ? "authentication" : "provider_failure",
+                  message: key,
+                },
+              },
+            ],
+            { status },
+          );
+        },
+      ),
+      expected,
+    );
+    assert.equal(calls, 1);
+    assert.deepEqual(await geminiVideoConfig(), config);
+    assert.deepEqual(await geminiVideoStatus(), before);
+  }
+  for (const candidate of [
+    "AQ." + "x".repeat(2046),
+    "AQ.fixture-key\nheader-injection",
+    "AQ.fixture-key with space",
+  ]) {
+    await assert.rejects(
+      saveGeminiVideo(candidate, GEMINI_VIDEO_MODEL, undefined, async () => {
+        throw new Error("must not request");
+      }),
+      /formato inválido/,
+    );
+  }
+  const abort = new AbortController();
+  const pending = saveGeminiVideo(
+    "AQ.cancelled-fixture-credential",
+    GEMINI_VIDEO_MODEL,
+    abort.signal,
+    async (_url, init) => {
+      abort.abort();
+      init?.signal?.throwIfAborted();
+      return Response.json({});
+    },
+  );
+  await assert.rejects(pending, { name: "AbortError" });
+  assert.deepEqual(await geminiVideoConfig(), config);
+  await assert.rejects(
+    validateGeminiVideo(config, undefined, async () =>
+      Response.json({ name: "models/something-else" }),
+    ),
+    /não confirmou/,
+  );
+  await assert.rejects(
+    validateGeminiVideo(config, undefined, async () => {
+      throw new Error(key);
+    }),
+    (error) => error instanceof Error && !error.message.includes(key),
+  );
+});
+
+test("pagamento pendente tem mensagem própria e não repete análise de vídeo", async () => {
+  let calls = 0;
+  await assert.rejects(
+    analyzeYouTubeVideo(id, undefined, config, async () => {
+      calls++;
+      return Response.json(
+        [{ error: { code: "payment_required", message: key } }],
+        { status: 402 },
+      );
+    }),
+    (error) =>
+      error instanceof Error &&
+      "status" in error &&
+      error.status === 402 &&
+      /saldo pré-pago/.test(error.message) &&
+      !error.message.includes(key),
+  );
+  assert.equal(calls, 1);
 });

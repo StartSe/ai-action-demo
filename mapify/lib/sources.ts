@@ -2,10 +2,7 @@ import { load } from "cheerio";
 import { extractText } from "unpdf";
 import { download, publicUrl } from "./network";
 import { AppError } from "./api";
-import { fetchCaptions } from "./youtube";
-import { youtubeIntegration } from "./youtube-oauth";
-import { officialCaptions } from "./youtube-official";
-import { analyzeYouTubeVideo, youtubeMode } from "./gemini-video";
+import { analyzeYouTubeVideo } from "./gemini-video";
 import type { Source, Segment } from "./types";
 export const MAX_CHARACTERS = 160000;
 function finish(source: Omit<Source, "characters">): Source {
@@ -130,32 +127,8 @@ export async function youtubeSource(
 ): Promise<Source> {
   const id = youtubeId(url);
   if (!id) throw new AppError("Use um link válido de um vídeo do YouTube.");
-  const mode = await youtubeMode();
-  if (mode === "gemini") {
-    progress?.("Analisando o vídeo com Gemini", 12);
-    return analyzeYouTubeVideo(id, signal);
-  }
-  progress?.("Lendo as legendas do vídeo", 12);
-  const captions =
-    mode === "oauth"
-      ? await officialCaptions(id, await youtubeIntegration(), signal)
-      : await fetchCaptions(id, signal);
-  let title = "Vídeo do YouTube";
-  try {
-    const response = await fetch(
-      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`,
-      { signal: AbortSignal.timeout(5000) },
-    );
-    if (response.ok) title = (await response.json()).title || title;
-  } catch {
-    /* captions remain useful */
-  }
-  return finish({
-    kind: "youtube",
-    title,
-    url: `https://www.youtube.com/watch?v=${id}`,
-    segments: captionSegments(captions),
-  });
+  progress?.("Analisando o vídeo com Gemini", 12);
+  return analyzeYouTubeVideo(id, signal);
 }
 export async function linkSource(
   input: string,

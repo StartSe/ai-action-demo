@@ -1,16 +1,15 @@
 import { AppError } from "./api";
+import { createHash } from "node:crypto";
 import type { Source } from "./types";
 
 export const GEMINI_VIDEO_MODEL = "gemini-3.8-flash";
-export type YouTubeMode = "gemini" | "oauth" | "public";
 export type GeminiVideoConfig = { key: string; model: string };
 export type GeminiVideoStatus = {
   configured: boolean;
   managed: boolean;
   model: string;
   modelManaged: boolean;
-  mode: YouTubeMode;
-  modeManaged: boolean;
+  validatedAt: string | null;
 };
 const endpoint =
   "https://generativelanguage.googleapis.com/v1beta/interactions";
@@ -44,39 +43,40 @@ export async function geminiVideoConfig(): Promise<GeminiVideoConfig> {
     model: getConfig("GEMINI_VIDEO_MODEL") || GEMINI_VIDEO_MODEL,
   };
 }
-export async function youtubeMode(): Promise<YouTubeMode> {
-  const { getConfig } = await import("./store");
-  const mode = getConfig("YOUTUBE_IMPORT_MODE");
-  if (mode === "gemini" || mode === "oauth" || mode === "public") return mode;
-  if ((await geminiVideoConfig()).key) return "gemini";
-  const { youtubeIntegration } = await import("./youtube-oauth");
-  return (await youtubeIntegration()).hasConnection() ? "oauth" : "public";
+function fingerprint(config: GeminiVideoConfig) {
+  return createHash("sha256").update(JSON.stringify(config)).digest("hex");
 }
 export async function geminiVideoStatus(): Promise<GeminiVideoStatus> {
-  const { origemConfig } = await import("./store");
+  const { origemConfig, getConfig } = await import("./store");
   const config = await geminiVideoConfig();
+  let validatedAt: string | null = null;
+  try {
+    const saved = JSON.parse(getConfig("GEMINI_VALIDATION") || "null");
+    if (
+      config.key &&
+      saved?.fingerprint === fingerprint(config) &&
+      typeof saved.at === "string"
+    )
+      validatedAt = saved.at;
+  } catch {
+    /* A missing or old validation never prevents configuring a key. */
+  }
   return {
     configured: !!config.key,
     managed: origemConfig("GEMINI_API_KEY") === "env",
     model: config.model,
     modelManaged: origemConfig("GEMINI_VIDEO_MODEL") === "env",
-    mode: await youtubeMode(),
-    modeManaged: origemConfig("YOUTUBE_IMPORT_MODE") === "env",
+    validatedAt,
   };
 }
-export async function setYouTubeMode(mode: unknown) {
-  if (mode !== "gemini" && mode !== "oauth" && mode !== "public")
-    throw new AppError("Escolha uma forma válida de importar vídeos.");
-  const { setConfig, origemConfig, getConfig } = await import("./store");
-  if (origemConfig("YOUTUBE_IMPORT_MODE") === "env") {
-    if (getConfig("YOUTUBE_IMPORT_MODE") === mode) return;
-    throw new AppError(
-      "O modo de importação é definido no ambiente desta instalação.",
-    );
-  }
-  setConfig("YOUTUBE_IMPORT_MODE", mode);
-}
-export async function saveGeminiVideo(key: string, model: string) {
+export async function saveGeminiVideo(
+  key: string,
+  model: string,
+  signal?: AbortSignal,
+  fetcher = fetch,
+) {
+  key = key.trim();
+  model = model.trim();
   const { setConfig, origemConfig } = await import("./store");
   const previous = await geminiVideoConfig();
   if (key && origemConfig("GEMINI_API_KEY") === "env")
@@ -87,7 +87,9 @@ export async function saveGeminiVideo(key: string, model: string) {
     throw new AppError(
       "Informe uma chave da API Gemini, criada no Google AI Studio.",
     );
-  if (key && !/^[\w-]{20,300}$/.test(key))
+  // Keys are opaque credentials. Auth keys from AI Studio include a dot (AQ.).
+  // Only reject unsafe headers or unreasonable lengths; Google validates the key.
+  if (key && !/^[\x21-\x7e]{20,2048}$/.test(key))
     throw new AppError(
       "A chave Gemini tem um formato inválido. Copie-a do Google AI Studio.",
     );
@@ -103,11 +105,19 @@ export async function saveGeminiVideo(key: string, model: string) {
     throw new AppError(
       "O modelo Gemini é definido no ambiente desta instalação.",
     );
-  // Check the mode before writing credentials, avoiding partially saved changes.
-  await setYouTubeMode("gemini");
+  const config = { key: key || previous.key, model: selected };
+  await validateGeminiVideo(config, signal, fetcher);
+  signal?.throwIfAborted();
   if (key) setConfig("GEMINI_API_KEY", key);
   if (origemConfig("GEMINI_VIDEO_MODEL") !== "env")
     setConfig("GEMINI_VIDEO_MODEL", selected);
+  setConfig(
+    "GEMINI_VALIDATION",
+    JSON.stringify({
+      fingerprint: fingerprint(config),
+      at: new Date().toISOString(),
+    }),
+  );
 }
 export async function removeGeminiVideo() {
   const { setConfig, origemConfig } = await import("./store");
@@ -116,7 +126,49 @@ export async function removeGeminiVideo() {
       "Remova a chave Gemini nas variáveis de ambiente do serviço.",
     );
   setConfig("GEMINI_API_KEY", null);
-  // Keep the selected mode: removing a key must not silently switch to OAuth.
+  setConfig("GEMINI_VALIDATION", null);
+}
+
+// Metadata lookup validates authentication and model access without generating content.
+export async function validateGeminiVideo(
+  config: GeminiVideoConfig,
+  signal?: AbortSignal,
+  fetcher = fetch,
+) {
+  const timeout = AbortSignal.timeout(20000);
+  const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  combined.throwIfAborted();
+  try {
+    const response = await fetcher(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}`,
+      {
+        headers: { "x-goog-api-key": config.key },
+        redirect: "error",
+        signal: combined,
+      },
+    );
+    const data = await jsonBody(response, combined).catch((error) => {
+      if (!response.ok) return record(null);
+      throw error;
+    });
+    combined.throwIfAborted();
+    if (!response.ok) providerFailure(response.status, data);
+    if (data.name !== `models/${config.model}`)
+      throw new AppError(
+        "O Google não confirmou o modelo configurado. Confira o modelo e tente novamente.",
+      );
+  } catch (error) {
+    signal?.throwIfAborted();
+    if (timeout.aborted)
+      throw new AppError(
+        "O Google demorou demais para validar a chave. Tente novamente.",
+      );
+    if (error instanceof AppError) throw error;
+    throw new AppError(
+      "Não foi possível validar a chave no Google agora. Tente novamente.",
+      502,
+    );
+  }
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -146,7 +198,9 @@ async function jsonBody(response: Response, signal: AbortSignal) {
     reader.releaseLock();
   }
   try {
-    return record(JSON.parse(Buffer.concat(parts).toString("utf8")));
+    const value: unknown = JSON.parse(Buffer.concat(parts).toString("utf8"));
+    // Some Google gateways wrap an error in a single-element array.
+    return record(!response.ok && Array.isArray(value) ? value[0] : value);
   } catch {
     throw new AppError(
       "O Gemini retornou uma resposta inválida. Tente novamente.",
@@ -158,6 +212,11 @@ function providerFailure(status: number, data: Record<string, unknown>): never {
   const reasons = Array.isArray(error.details)
     ? error.details.map((d) => record(d).reason)
     : [];
+  if (status === 402 || error.code === "payment_required")
+    throw new AppError(
+      "O Google solicitou créditos para esta análise (HTTP 402). Confira o saldo pré-pago e o faturamento do projeto no Google AI Studio. A chave pode estar correta; trocar a chave não repõe o saldo.",
+      402,
+    );
   if (status === 429 || error.status === "RESOURCE_EXHAUSTED")
     throw new AppError(
       "A cota do Gemini foi atingida. Confira os limites do projeto no Google AI Studio e tente mais tarde.",
@@ -165,6 +224,7 @@ function providerFailure(status: number, data: Record<string, unknown>): never {
     );
   if (
     status === 401 ||
+    error.code === "authentication" ||
     reasons.includes("API_KEY_INVALID") ||
     reasons.includes("API_KEY_EXPIRED")
   )
@@ -178,6 +238,13 @@ function providerFailure(status: number, data: Record<string, unknown>): never {
   if (status === 404)
     throw new AppError(
       "O modelo Gemini configurado não está disponível. Confira o modelo em Configurações → YouTube.",
+    );
+  if (
+    error.code === "failed_precondition" ||
+    error.status === "FAILED_PRECONDITION"
+  )
+    throw new AppError(
+      "O projeto Google tem um requisito pendente. Confira o faturamento e a disponibilidade do Gemini no Google AI Studio.",
     );
   if (status === 400)
     throw new AppError(

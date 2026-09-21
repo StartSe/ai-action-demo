@@ -11,7 +11,7 @@ Transforma vídeos públicos do YouTube, PDFs, páginas e textos em mapas mentai
 1. Crie a conta desta instalação ao abrir o app.
 2. Explore o mapa de exemplo ou abra **Configurações → Inteligência artificial**.
 3. Conecte ChatGPT por código de dispositivo ou informe uma chave OpenRouter. Escolha o modelo ou mantenha Automático.
-4. Para vídeos públicos de qualquer canal, abra **Configurações → YouTube**, cadastre uma chave Gemini e clique em **Salvar e usar Gemini**. Depois crie um mapa com YouTube, PDF, página web ou texto, escolhendo detalhe e foco.
+4. Para vídeos públicos de qualquer canal, abra **Configurações → YouTube**, cadastre uma chave Gemini e clique em **Validar e salvar chave**. Depois crie um mapa com YouTube, PDF, página web ou texto, escolhendo detalhe e foco.
 5. Navegue com zoom e arraste, recolha ramos, edite tópicos e notas, adicione subtemas e consulte referências à fonte. As alterações são salvas automaticamente.
 6. Converse sobre o conteúdo e exporte em PNG, SVG, Markdown ou JSON. A biblioteca oferece busca, favoritos, duplicação e exclusão.
 
@@ -21,17 +21,16 @@ A versão instalada aparece no header da biblioteca e do editor, inclusive no ce
 
 ## Executar localmente
 
-Node 22.13+ (ou 24) e Python 3.10+.
+Node 22.13+ (ou 24).
 
 ```sh
 npm ci
-npm run setup:youtube
 npm run dev -- --port 3021
 ```
 
-Abra http://localhost:3021. Gemini, a API oficial do YouTube, PDF, web e texto não precisam de Python. A leitura pública sem conexão Google usa a dependência Python. Credenciais são configuradas na interface. Variáveis de ambiente opcionais estão em `.env.example` e têm prioridade sobre valores salvos.
+Abra http://localhost:3021. A importação de vídeos públicos usa Gemini e não precisa de Python, proxy ou autorização de canal. Credenciais são configuradas na interface. Variáveis de ambiente opcionais estão em `.env.example` e têm prioridade sobre valores salvos.
 
-O extrator detecta `.venv` automaticamente. `PYTHON_PATH` só é necessário para usar outro ambiente Python; no Docker já está definido. Para verificar um vídeo usando a forma de importação selecionada, execute o comando abaixo. **No modo Gemini, o teste consome cota/créditos do projeto Gemini.** O comando informa apenas metadados da análise, sem gerar um mapa:
+Para verificar um vídeo, execute o comando abaixo. **O teste consome cota/créditos do projeto Gemini.** O comando informa apenas metadados da análise, sem gerar um mapa:
 
 ```sh
 npm run check:youtube -- 'https://www.youtube.com/watch?v=1QNsdr-Qx_I'
@@ -39,48 +38,22 @@ npm run check:youtube -- 'https://www.youtube.com/watch?v=1QNsdr-Qx_I'
 
 ### Vídeos públicos de qualquer canal com Gemini
 
-1. Abra **Configurações → YouTube** e use o link **Criar chave no Google AI Studio**.
-2. Salve a chave em **Salvar e usar Gemini**. A chave é cifrada no servidor, não aparece nas respostas nem é incluída na imagem Docker.
+1. Abra **Configurações → YouTube** e use o link **Obter chave no Google AI Studio**.
+2. Cole a chave e clique em **Validar e salvar chave**. O servidor consulta os metadados do modelo no Google para validar autenticação e acesso, sem gerar conteúdo. Só uma validação bem-sucedida salva a chave cifrada. Chaves Standard e Auth (incluindo o formato com ponto) são aceitas; uma tentativa inválida não substitui a configuração anterior. A chave não aparece nas respostas nem é incluída na imagem Docker.
 3. Em **Testar um vídeo**, execute o teste com o link desejado. O vídeo `1QNsdr-Qx_I` já vem preenchido. O teste usa a cota Gemini e mostra uma prévia das notas geradas, sem criar um mapa.
 4. Para gerar o mapa, mantenha ChatGPT ou OpenRouter conectado na aba Inteligência artificial e cole o link em YouTube.
 
-A integração usa a [API oficial Gemini Interactions](https://ai.google.dev/api/interactions-api), enviando a URL como entrada de vídeo, com resposta estruturada em JSON e `store: false`. O modelo inicial é `gemini-3.8-flash`; pode ser alterado em **Modelo de análise**. O recurso de [URLs do YouTube](https://ai.google.dev/gemini-api/docs/video-understanding#youtube) é oferecido pelo Google em prévia, aceita vídeos públicos e tem limites próprios. Vídeos privados ou não listados não são aceitos por esse caminho. A disponibilidade, a cota e os custos dependem do modelo e do projeto Google.
+A integração usa a [API oficial Gemini Interactions](https://ai.google.dev/api/interactions-api), enviando a URL como entrada de vídeo, com resposta estruturada em JSON e `store: false`. O modelo inicial é `gemini-3.8-flash`; pode ser alterado em **Avançado · modelo de análise**. O recurso de [URLs do YouTube](https://ai.google.dev/gemini-api/docs/video-understanding#youtube) é oferecido pelo Google em prévia, aceita vídeos públicos e tem limites próprios. Vídeos privados ou não listados não são aceitos por esse caminho. A disponibilidade, a cota e os custos dependem do modelo e do projeto Google.
 
 O Gemini produz **análise em paráfrases, não transcrição literal**. Os trechos, o modelo, a data e a duração informada pelo provedor são preservados na fonte do mapa. O painel Fonte, o Markdown exportado e o contexto enviado à IA identificam a origem da análise; os tempos são aproximados. A resposta é validada e análises vazias, interrompidas, excessivas ou com tempos inválidos são recusadas. Há cancelamento e timeout de quatro minutos por análise, sem repetição automática de chamadas que possam consumir cota.
 
-**Salvar e usar Gemini** seleciona esse modo mesmo com uma conta OAuth já conectada. **Forma de importar vídeos** permite escolher explicitamente Gemini, OAuth do próprio canal ou legendas públicas experimentais. Erros não alternam silenciosamente para outro método. Remover a chave também não muda automaticamente o modo selecionado. Instalações antigas preservam o comportamento anterior até o Gemini ser configurado.
+A configuração é exclusiva para vídeos públicos de qualquer canal. Não há seleção de modos nem configuração OAuth do próprio canal. As importações sempre usam Gemini; valores legados de `YOUTUBE_IMPORT_MODE` e contas de canal já conectadas não desviam a consulta para legendas oficiais ou extratores experimentais. Mapas existentes continuam disponíveis.
 
-Alternativamente, defina `GEMINI_API_KEY`, `GEMINI_VIDEO_MODEL` e `YOUTUBE_IMPORT_MODE=gemini` no ambiente. Valores definidos por ambiente têm prioridade e não podem ser alterados pela interface. A chave Gemini é diferente do cliente/segredo OAuth e da conexão ChatGPT.
+Alternativamente, defina `GEMINI_API_KEY` e `GEMINI_VIDEO_MODEL` no ambiente. Valores definidos por ambiente têm prioridade e não podem ser alterados pela interface. A chave Gemini é diferente da chave OpenRouter e da conexão ChatGPT.
 
-### Conectar o YouTube oficial por OAuth
+**Validação da chave não confirma saldo para gerar conteúdo.** A interface distingue chave inválida, falta de permissão, modelo inexistente, cota excedida e pagamento pendente. O [HTTP 402 do Gemini](https://ai.google.dev/gemini-api/docs/api-errors) indica créditos pré-pagos esgotados; confira o faturamento no Google AI Studio. A chamada não é repetida automaticamente. Se não puder usar Gemini, copie a transcrição disponível no YouTube e cole na opção Texto.
 
-Abra **Configurações → YouTube**. O responsável pela instalação prepara o cliente Google uma vez:
-
-1. Crie ou escolha um projeto Google Cloud e ative **YouTube Data API v3**.
-2. Configure o consentimento no **Google Auth Platform**. Em modo de teste, adicione a conta que fará a autorização em **Público-alvo → Usuários de teste**.
-3. Crie um cliente OAuth do tipo **Aplicativo da Web**. Cadastre exatamente a URL de retorno exibida pelo Mapia. Nesta instalação: `https://mapify-0r8o.onrender.com/api/youtube/oauth/callback`; localmente: `http://localhost:3021/api/youtube/oauth/callback`.
-4. Salve o ID e o segredo do cliente nos campos protegidos do Mapia. Não use a senha da conta Google nem uma chave simples de API.
-5. Clique em **Conectar YouTube**, escolha a conta/canal autorizado e conceda a permissão. O navegador volta ao Mapia com o estado da conexão. **Verificar conexão** consulta o canal; a permissão de um vídeo específico é validada ao importá-lo.
-
-O método oficial [`captions.download`](https://developers.google.com/youtube/v3/docs/captions/download) exige permissão para **editar o vídeo**. O escopo obrigatório `youtube.force-ssl` é amplo na tela de consentimento; o Mapia usa somente consultas de canal e leitura/download de legendas, sem editar ou excluir conteúdo. A conexão Google não libera legendas de outros canais e não substitui a conexão com a IA.
-
-Com **YouTube OAuth** selecionado na forma de importação, as importações usam `captions.list` e `captions.download` da API oficial. A aplicação mantém os timestamps, renova o token automaticamente e distingue autorização expirada/revogada, cota excedida, ausência de legendas e falta de permissão. Uma falha oficial não alterna silenciosamente para o extrator público. **Desconectar YouTube** remove os tokens locais e solicita a revogação ao Google; selecione outro modo de importação para continuar sem essa conta.
-
-O fluxo usa a biblioteca oficial `google-auth-library`, estado aleatório de uso único e validade de dez minutos, cookie HttpOnly vinculado ao navegador e PKCE. Segredo, tokens e estado ficam cifrados no SQLite. As respostas da configuração nunca retornam tokens ou o segredo. Alterar o cliente exige autorizar novamente.
-
-Como alternativa ao cadastro pela interface, defina **ambas** `YOUTUBE_CLIENT_ID` e `YOUTUBE_CLIENT_SECRET` no servidor. Não são incluídas na imagem. A origem pública usa `APP_URL`, depois `RENDER_EXTERNAL_URL`, ou os cabeçalhos do proxy; `APP_URL` pode fixar um domínio personalizado. Use HTTPS em produção. Clientes Google em teste ou com autorização revogada podem exigir nova conexão; siga as políticas e a verificação de consentimento do Google para distribuir a integração.
-
-### Legendas públicas experimentais
-
-Um vídeo público pode ter legendas acessíveis no navegador e, ainda assim, o YouTube bloquear consultas feitas pelo IP do servidor. A [documentação do extrator](https://github.com/jdepoix/youtube-transcript-api#working-around-ip-bans-requestblocked-or-ipblocked-exception) descreve essa limitação em provedores de nuvem. ChatGPT e OpenRouter não participam do download das legendas.
-
-O Mapia distingue bloqueio de IP, ausência de legendas, vídeo restrito, verificação adicional, timeout e dependências Python ausentes. Para vídeos públicos, prefira o modo Gemini descrito acima. Se optar pelo extrator experimental no Render, configure **Environment → YOUTUBE_PROXY_URL** com a URL de um proxy residencial autorizado, incluindo as credenciais fornecidas pelo provedor, e aplique a atualização. A configuração é lida apenas no servidor. O proxy pode ter custo e também pode ser bloqueado; não há garantia de acesso a todo vídeo. A alternativa sem proxy é copiar **Mostrar transcrição** no YouTube e colar na opção **Texto**.
-
-Se o erro mencionar instalação, rode `npm run setup:youtube` localmente. O contêiner já inclui a dependência; nesse caso confira se o serviço usa a imagem atual e o `PYTHON_PATH` padrão do Dockerfile.
-
-**Validação em 21/09/2026:** o vídeo [`1QNsdr-Qx_I`](https://www.youtube.com/watch?v=1QNsdr-Qx_I) foi extraído localmente pela biblioteca `youtube-transcript-api`, retornando 1.949 caracteres agrupados em três trechos com timestamps. O mesmo vídeo, testado na instalação do Render com a versão 1.0.1, retornou bloqueio de consulta pelo YouTube. Esse resultado confirma que as legendas estavam públicas; o acesso depende também do servidor que faz a consulta. É um registro do teste, não uma garantia de disponibilidade futura.
-
-A biblioteca `youtube-transcript-api` é independente e não é a API oficial do YouTube. O método oficial [`captions.download`](https://developers.google.com/youtube/v3/docs/captions/download) exige autenticação OAuth e permissão para editar o vídeo. Assim, uma chave da YouTube Data API não resolve a importação de legendas de vídeos públicos de outros canais.
+**Validação em 21/09/2026:** uma chave Auth real foi aceita na consulta de metadados do modelo. A tentativa de analisar o vídeo `1QNsdr-Qx_I` retornou HTTP 402, sem análise gerada. Testes automatizados cobrem essa resposta e o fluxo de geração com respostas simuladas.
 
 ```sh
 npm test
@@ -99,7 +72,7 @@ Uma conta administrativa por instalação; não é um serviço multiusuário. Co
 
 ## Fontes e limites
 
-- **YouTube:** no modo Gemini, analisa vídeos públicos de qualquer canal, com áudio e imagem, para gerar notas e tempos aproximados. No modo OAuth, lê as legendas disponíveis pela API oficial nos vídeos que a conta pode editar. No modo experimental, tenta legendas públicas manuais ou automáticas com `youtube-transcript-api`; IPs de datacenter podem ser bloqueados. A análise Gemini não equivale às legendas originais. Não reutiliza cookies do navegador. A opção Texto continua disponível quando a importação não é possível.
+- **YouTube:** analisa vídeos públicos de qualquer canal pelo Gemini, com áudio e imagem, para gerar notas e tempos aproximados. A análise não equivale às legendas originais. Vídeos privados ou não listados não são aceitos. A opção Texto continua disponível quando a importação não é possível.
 - **PDF:** upload ou URL pública, até 15 MB, extração por página. PDFs escaneados precisam de OCR antes do upload; PDFs protegidos precisam ser desbloqueados.
 - **Web:** HTML público renderizado pelo servidor, extraído sem scripts, menus e rodapés. Sites que exigem JavaScript, login ou bloqueiam leitura podem exigir colar o texto.
 - **Texto:** entre 80 e 160.000 caracteres. O mesmo teto de caracteres se aplica às demais fontes, com erro explícito quando excedido. Conteúdos longos são processados em partes; não há truncamento silencioso da fonte.

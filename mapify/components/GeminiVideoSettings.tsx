@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { ErrorBox, Icon, request } from "./ui";
-import type { GeminiVideoStatus, YouTubeMode } from "@/lib/gemini-video";
+import type { GeminiVideoStatus } from "@/lib/gemini-video";
 
 export function GeminiVideoSettings() {
   const [status, setStatus] = useState<GeminiVideoStatus | null>(null);
@@ -79,16 +79,19 @@ export function GeminiVideoSettings() {
           analisa o áudio e as imagens a partir do link.
         </p>
         <p className="muted small">
-          A análise é um resumo em suas próprias palavras, com tempos
-          aproximados. A IA escolhida na aba Inteligência artificial gera o mapa
-          e responde às suas perguntas.
+          A análise resume o vídeo em notas de estudo, com tempos aproximados. A
+          IA escolhida na aba Inteligência artificial gera o mapa e responde às
+          suas perguntas.
         </p>
         {!status && !error && <p role="status">Carregando configuração…</p>}
         {status && (
           <>
             {status.configured && (
               <p className="connected">
-                <Icon name="check" size={16} /> Chave Gemini configurada
+                <Icon name="check" size={16} />{" "}
+                {status.validatedAt
+                  ? "Chave validada pelo Google"
+                  : "Chave salva · validar conexão"}
               </p>
             )}
             <form
@@ -104,7 +107,7 @@ export function GeminiVideoSettings() {
                   setKey("");
                   setModel(data.model);
                   setMessage(
-                    "Gemini selecionado para importar vídeos. Teste um link abaixo ou crie seu mapa.",
+                    "Chave validada e salva. Você já pode testar um vídeo público.",
                   );
                 });
               }}
@@ -115,7 +118,7 @@ export function GeminiVideoSettings() {
                 </p>
               ) : (
                 <label>
-                  Chave da API Gemini
+                  Chave do Google AI Studio
                   <input
                     type="password"
                     value={key}
@@ -126,7 +129,7 @@ export function GeminiVideoSettings() {
                     placeholder={
                       status.configured
                         ? "Salva. Preencha apenas para substituir."
-                        : "Cole a chave criada no Google AI Studio"
+                        : "Cole sua chave do Google AI Studio"
                     }
                   />
                 </label>
@@ -137,14 +140,18 @@ export function GeminiVideoSettings() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Criar chave no Google AI Studio
+                Obter chave no Google AI Studio
               </a>
               <p className="muted small">
                 Cadastre a chave uma única vez. A análise usa a cota do seu
                 projeto Gemini e pode gerar cobrança conforme seu plano.
               </p>
+              <p className="muted small">
+                A validação consulta o Google sem analisar vídeos. Chaves
+                antigas e novas do AI Studio são aceitas.
+              </p>
               <details className="youtube-setup">
-                <summary>Modelo de análise</summary>
+                <summary>Avançado · modelo de análise</summary>
                 <label>
                   Modelo Gemini
                   <input
@@ -160,13 +167,10 @@ export function GeminiVideoSettings() {
                 </small>
               </details>
               <div className="youtube-actions">
-                <button
-                  className="primary"
-                  disabled={
-                    busy || (status.modeManaged && status.mode !== "gemini")
-                  }
-                >
-                  {busy && !testing ? "Aguarde…" : "Salvar e usar Gemini"}
+                <button className="primary" disabled={busy}>
+                  {busy && !testing
+                    ? "Validando no Google…"
+                    : "Validar e salvar chave"}
                 </button>
                 {status.configured && !status.managed && (
                   <button
@@ -240,43 +244,6 @@ export function GeminiVideoSettings() {
           <strong>Prévia da análise</strong>
           <p>{preview}</p>
         </div>
-      )}
-      {status && (
-        <label>
-          Forma de importar vídeos
-          <select
-            value={status.mode}
-            disabled={busy || status.modeManaged}
-            onChange={(e) => {
-              const mode = e.target.value as YouTubeMode;
-              void run(async () => {
-                setStatus(
-                  await request<GeminiVideoStatus>(
-                    "/api/youtube/gemini",
-                    "PUT",
-                    { action: "mode", mode },
-                  ),
-                );
-                setMessage("Forma de importação atualizada.");
-              });
-            }}
-          >
-            <option value="gemini">
-              Gemini · vídeos públicos de qualquer canal
-            </option>
-            <option value="oauth">YouTube OAuth · legendas do meu canal</option>
-            <option value="public">Legendas públicas · experimental</option>
-          </select>
-          <small>
-            {status.mode === "gemini"
-              ? status.configured
-                ? "Gemini será usado mesmo com uma conta YouTube conectada abaixo."
-                : "Salve sua chave Gemini acima para importar vídeos."
-              : status.mode === "oauth"
-                ? "A conta conectada abaixo precisa ter acesso ao vídeo pela API do YouTube."
-                : "A leitura de legendas públicas pode ser bloqueada pelo YouTube em servidores de nuvem."}
-          </small>
-        </label>
       )}
     </section>
   );

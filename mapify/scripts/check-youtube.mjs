@@ -1,5 +1,4 @@
 import { youtubeSource } from "../lib/sources.ts";
-import { youtubeMode } from "../lib/gemini-video.ts";
 
 const url = process.argv[2];
 if (!url) {
@@ -9,8 +8,7 @@ if (!url) {
   process.exit(1);
 }
 try {
-  if ((await youtubeMode()) === "gemini")
-    console.error("Analisando com Gemini; esta chamada consome cota do projeto.");
+  console.error("Analisando com Gemini; esta chamada consome cota do projeto.");
   const source = await youtubeSource(url);
   console.log(
     JSON.stringify(

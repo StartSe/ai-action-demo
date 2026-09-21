@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Modal, Icon, ErrorBox, request } from "./ui";
 import type { ConnectionStatus } from "@/lib/types";
-import { YouTubeSettings } from "./YouTubeSettings";
+import { GeminiVideoSettings } from "./GeminiVideoSettings";
 export function Connections({
   onClose,
   onSaved,
@@ -103,7 +103,7 @@ export function Connections({
         </button>
       </div>
       {section === "youtube" ? (
-        <YouTubeSettings result={youtubeResult} />
+        <GeminiVideoSettings />
       ) : (
         <>
           <p className="muted">
@@ -209,8 +209,8 @@ export function Connections({
             <div className="connection-card">
               <h3>Uma conexão, vários modelos</h3>
               <p>
-                Use sua chave do OpenRouter. O consumo é cobrado na sua conta do
-                provedor.
+                Use uma chave criada no OpenRouter. Para vídeos, cadastre a
+                chave do Google AI Studio na aba YouTube.
               </p>
               {status?.openrouter && (
                 <span className="connected">

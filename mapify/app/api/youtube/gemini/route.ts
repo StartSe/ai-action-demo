@@ -3,7 +3,6 @@ import {
   geminiVideoStatus,
   saveGeminiVideo,
   removeGeminiVideo,
-  setYouTubeMode,
   analyzeYouTubeVideo,
 } from "@/lib/gemini-video";
 import { youtubeId } from "@/lib/sources";
@@ -16,8 +15,15 @@ export async function GET() {
 export async function PUT(req: Request) {
   return api(async () => {
     const b = await body(req);
-    if (b.action === "mode") await setYouTubeMode(b.mode);
-    else await saveGeminiVideo(string(b.key, 301), string(b.model, 120));
+    if (b.action !== undefined)
+      throw new AppError(
+        "Configure a chave Gemini para importar vídeos públicos.",
+      );
+    await saveGeminiVideo(
+      typeof b.key === "string" ? b.key : "",
+      typeof b.model === "string" ? b.model : "",
+      req.signal,
+    );
     return geminiVideoStatus();
   });
 }
