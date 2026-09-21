@@ -1,6 +1,7 @@
 import { AcessoMCP } from "@/components/AcessoMCP";
 import { ConexaoIA } from "@/components/ConexaoIA";
 import { QualidadePagina } from "@/components/QualidadePagina";
+import { Rotinas } from "@/components/Rotinas";
 import { SetupPage } from "@/components/setup";
 
 export default function Page() {
@@ -13,6 +14,7 @@ export default function Page() {
         <QualidadePagina />
       </SetupPage>
       <div className="max-w-[860px] mx-auto px-8 max-md:px-4 pb-16 flex flex-col gap-6">
+        <Rotinas />
         <AcessoMCP />
       </div>
     </>

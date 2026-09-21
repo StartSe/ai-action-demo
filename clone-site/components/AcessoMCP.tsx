@@ -116,6 +116,18 @@ export function AcessoMCP() {
         {erro && <Aviso tom="danger">{erro}</Aviso>}
       </div>
 
+      <div className="mt-5">
+        <h3 className="text-sm font-semibold mb-2">O que o assistente consegue fazer aqui</h3>
+        <ul className="text-[13px] text-muted list-disc pl-5 space-y-1">
+          <li><span className="font-mono text-ink">criar_site</span>: cria um site a partir de um briefing e devolve o link.</li>
+          <li><span className="font-mono text-ink">gerar_pagina</span>: clona uma referência a partir da captura (ou do endereço do site).</li>
+          <li><span className="font-mono text-ink">editar_pagina</span>: pede uma mudança ao agente do site; vira uma versão em rascunho.</li>
+          <li><span className="font-mono text-ink">publicar_site</span>: coloca uma versão no ar.</li>
+          <li><span className="font-mono text-ink">metricas_site</span>: visitas dos últimos 7 ou 30 dias.</li>
+          <li><span className="font-mono text-ink">listar_sites</span>: os sites desta instalação, com estado e links.</li>
+        </ul>
+      </div>
+
       <div className="grid grid-cols-2 gap-6 max-md:grid-cols-1 mt-6">
         <div>
           <h3 className="text-sm font-semibold mb-2">Conectar no Claude Desktop</h3>

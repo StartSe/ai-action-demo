@@ -3,7 +3,7 @@
 // quem prefere colar o endereço do site em vez de enviar a imagem.
 import { CHAVE_CAPTURA, urlDoServico } from "./captura";
 import { CHAVE_RENDER, CHAVE_SERVICO_RENDER, testarRender } from "./render";
-import { openrouter, type Integracao } from "./setup-comum";
+import { NOTIFICACOES, openrouter, type Integracao } from "./setup-comum";
 
 // O modelo que lê a captura decide a fidelidade da página, então não fica escondido no cartão genérico da
 // IA: ele tem cartão próprio em /setup ("Qualidade da página gerada", components/QualidadePagina.tsx), com
@@ -57,4 +57,7 @@ const RENDER: Integracao = {
   testar: testarRender,
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, CAPTURA, RENDER];
+// Avisos (e-mail ou Slack): usados pelo resumo semanal do site (lib/resumo-site.ts, rotina criada no painel Métricas).
+const AVISOS: Integracao = { ...NOTIFICACOES, beneficio: "Envia o resumo semanal de visitas do site por e-mail ou Slack" };
+
+export const INTEGRACOES: Integracao[] = [OPENROUTER, CAPTURA, RENDER, AVISOS];

@@ -4,7 +4,8 @@ import { baixarImagem, capturarSite, pareceImagem } from "./captura";
 import { editarPeloAgente } from "./agente";
 import { normalizarInstrucao, normalizarMarca } from "./gerador";
 import type { Ferramenta } from "./mcp";
-import { aguardarGeracao, criar, iniciarGeracao, obterPorSlug, paginaDoProjeto, publicar } from "./projetos";
+import { resumo, resumoEmTexto } from "./metricas";
+import { aguardarGeracao, criar, iniciarGeracao, listar, obterPorSlug, paginaDoProjeto, publicar } from "./projetos";
 
 export const NOME_SERVIDOR = "clone-site";
 
@@ -98,6 +99,27 @@ export const FERRAMENTAS: Ferramenta[] = [
       if (!projeto) throw new Error("Informe o id ou o slug do site (devolvido por criar_site ou gerar_pagina).");
       const r = await editarPeloAgente(projeto.id, normalizarInstrucao(instrucao));
       return { id: r.pagina.id, projetoId: r.projeto.id, slug: r.projeto.slug, resposta: r.resposta, versao: r.versao.n, versoesCriadas: r.versoes, publicou: r.publicou, totalVersoes: r.pagina.versoes.length, link: `/sites/${r.projeto.id}`, linkPublicado: `/s/${r.projeto.slug}`, html: r.versao.html };
+    },
+  },
+  {
+    nome: "listar_sites",
+    descricao: "Lista os sites desta instalação: id, slug, nome, estado (rascunho, gerando, pronto, falhou), versão publicada, domínio próprio e links.",
+    schema: { type: "object", properties: { estado: { type: "string", enum: ["rascunho", "gerando", "pronto", "falhou"], description: "Filtrar por estado (opcional)" } } },
+    async executar(args) {
+      const { estado } = args as { estado?: unknown };
+      return listar({ estado: typeof estado === "string" ? estado : undefined, limite: 50 }).map((p) => ({ id: p.id, slug: p.slug, nome: p.nome, estado: p.estado, origem: p.origem, versaoPublicada: p.versaoPublicada ?? null, dominio: p.dominio ?? null, criadoEm: p.criadoEm, link: `/sites/${p.id}`, linkPublicado: p.estado === "pronto" ? `/s/${p.slug}` : null, erro: p.erro?.mensagem ?? null }));
+    },
+  },
+  {
+    nome: "metricas_site",
+    descricao: "Visitas do site publicado nos últimos 7 ou 30 dias: total, por dia, celular × computador, de onde vieram e a variação contra o período anterior, mais um resumo em uma frase.",
+    schema: { type: "object", properties: { id: { type: "string", description: "Id ou slug do site" }, dias: { type: "integer", enum: [7, 30], description: "7 (padrão) ou 30" } }, required: ["id"] },
+    async executar(args) {
+      const { id, dias } = args as { id?: unknown; dias?: unknown };
+      const projeto = typeof id === "string" ? obterPorSlug(id.trim()) : null;
+      if (!projeto) throw new Error("Informe o id ou o slug do site.");
+      const n = Number(dias) === 30 ? 30 : 7;
+      return { projetoId: projeto.id, slug: projeto.slug, resumo: resumoEmTexto(projeto.id, n), ...resumo(projeto.id, n) };
     },
   },
   {

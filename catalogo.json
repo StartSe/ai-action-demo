@@ -321,16 +321,18 @@
         "Produto"
       ],
       "problema": "Montar uma página nova do zero leva semanas entre briefing, agência e ajustes.",
-      "ia": "Lê a captura de uma página de referência e escreve a sua versão em HTML, em português, com o nome e as cores da sua marca.",
-      "integracoes": "IA (OpenRouter, com um modelo que lê imagens). Opcional: um serviço de captura por endereço.",
+      "ia": "Lê a captura de referência ou o briefing e escreve o site com a sua marca e as suas imagens; um agente edita por conversa, publica e lê as métricas.",
+      "integracoes": "IA (OpenRouter ou ChatGPT). Opcional: captura por endereço, hospedagem Render para domínio próprio e avisos por e-mail ou Slack.",
       "acento": "#792a3f",
       "porta": 3015,
       "captura": "capturas/clone-site.png",
       "capacidades": [
         "artefato",
-        "mcp"
+        "mcp",
+        "rotina"
       ],
-      "demo": null
+      "demo": null,
+      "versao": "0.2.0"
     },
     {
       "id": "prospeccao-linkedin",

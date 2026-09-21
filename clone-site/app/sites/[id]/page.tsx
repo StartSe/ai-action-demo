@@ -12,6 +12,7 @@ import { ChipEstado, INTERVALO_ACOMPANHAMENTO_MS, TempoGerando } from "@/compone
 import { PainelDominio } from "@/components/PainelDominio";
 import { PainelImagens } from "@/components/PainelImagens";
 import { PainelMetricas } from "@/components/PainelMetricas";
+import { ResumoSemanal } from "@/components/ResumoSemanal";
 import { PreviaPagina } from "@/components/PreviaPagina";
 import { rotuloFormato } from "@/components/ResultadoPagina";
 import { TopbarSite } from "@/components/TopbarSite";
@@ -179,7 +180,7 @@ export default function Page() {
                   <LinkPublico projeto={p} aoAtualizar={aoAtualizar} />
                   <PainelVersoes projeto={p} pagina={pagina} selecionada={versaoSelecionada.n} aoSelecionar={setSelecionada} aoAtualizar={aoAtualizar} />
                   <PainelImagens projetoId={p.id} />
-                  <PainelMetricas projetoId={p.id} publicado={p.estado === "pronto"} versaoAtual={ultima.n} aoAplicar={(instrucao) => setPedidoExterno({ texto: instrucao, chave: Date.now() })} />
+                  <PainelMetricas projetoId={p.id} publicado={p.estado === "pronto"} versaoAtual={ultima.n} aoAplicar={(instrucao) => setPedidoExterno({ texto: instrucao, chave: Date.now() })} extra={<ResumoSemanal projetoId={p.id} />} />
                   <PainelDominio projeto={p} aoAtualizar={(novo) => aoAtualizar({ projeto: novo })} />
                 </aside>
               </div>

@@ -166,7 +166,7 @@
         "Verificação: lint, tsc, build, verificar-jargao, verificar-padrao (sem exceção sem uso), verificar-paleta; standalone com conta por curl: health, status, criar por briefing em demonstração, agente, publicar, /s/<slug>, métrica registrada, Host personalizado; capturas 1400x900 e 390 px anotadas no progress.txt"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "US-010 da PRD. Fecha a rodada."
     }
   ]

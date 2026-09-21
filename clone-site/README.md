@@ -1,34 +1,39 @@
 # Clone de Site
 
-Transforme a captura de uma página de referência em uma página sua, em HTML, com o nome e as cores da sua marca. Área: Marketing e Produto.
+O site da sua empresa, no ar hoje — e um agente que cuida dele depois. Área: Marketing e Produto.
 
 ## O que resolve
-Montar uma página nova do zero leva semanas entre briefing, agência e ajustes. Este app recebe a captura (PNG ou JPG, até 5 MB) de uma página que o executivo gosta e devolve, em minutos, a versão dele: um único arquivo HTML em português, com a estrutura da referência, os textos reescritos para a marca informada e as imagens de terceiros trocadas por blocos na cor da marca (com texto alternativo). A prévia aparece em tamanho de computador e de celular (390 px), com o código pronto para copiar. Sem chave de IA, o app devolve uma landing fictícia completa (Nimbus Finanças) rotulada como demonstração.
+Montar e manter um site leva semanas entre briefing, agência e ajustes; depois de publicado, ninguém sabe se alguém abriu. Este app cria o site de três jeitos (clonando a captura de uma página de referência, pelo endereço de um site, ou descrevendo a empresa num briefing), aplica o nome, as cores, o logo e as fotos da empresa, e publica um link único. A partir daí, um **agente** conversa em português com quem cuida do negócio: troca textos, coloca imagens, muda cores, publica quando a pessoa pede e lê as métricas de visitas. Cada site é um projeto com estado, versões (rascunho × publicado), imagens, métricas, sugestões do agente e domínio próprio. Sem chave de IA, tudo funciona em modo demonstração (páginas e mudanças ilustrativas, métricas reais do próprio link).
 
 Aviso mostrado abaixo de toda prévia: use a referência pela estrutura. Textos, marcas e imagens de terceiros são protegidos; troque pelo conteúdo da sua empresa.
 
+## A jornada
+1. **Criar um site** (tela inicial): "Clonar uma referência" (captura PNG/JPG até 5 MB), "Pelo endereço do site" (o serviço de captura fotografa a página) ou "Descrever a empresa" (briefing). Marca (nome, cores), nome do site, logo e até 6 imagens com descrição. Criar responde na hora: o site entra em "Meus sites" como **Gerando** e a pessoa pode sair da tela — o sino do cabeçalho avisa quando ficar **No ar** ou **Falhou** (com o motivo e "Tentar de novo", sem reenviar nada).
+2. **O site** (`/sites/<id>`): prévia da versão selecionada (computador/celular, tela cheia, código), faixa "há mudanças ainda não publicadas", link público com copiar/abrir/trocar o endereço, e os painéis **Agente**, **Versões** (ver, publicar esta, voltar para esta), **Imagens**, **Métricas** (7/30 dias, barras por dia, origens, "O que o agente sugere" com Aplicar, resumo semanal) e **Domínio próprio**.
+3. **O agente**: "troque o título por…", "coloque o logo no topo", "deixe o cabeçalho escuro", "publique", "como estão as visitas?". Toda mudança vira uma versão nova em rascunho; só publica quando a pessoa pede.
+
 ## Stack
-Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com um modelo de visão (a captura é enviada junto com o prompt por `askVision`, em `lib/ai.ts`). O prompt de sistema (`lib/gerador.ts`) foi portado e traduzido do projeto aberto screenshot-to-code, adaptado para um arquivo HTML único, textos em português e imagens substituídas por blocos.
+Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript, SQLite nativo do Node (`node:sqlite`), sem biblioteca de UI. IA por **OpenRouter** (chave; também é quem lê a captura, `askVision`) ou **ChatGPT** (assinatura, pelo Codex App Server oficial, `@openai/codex` fixado em `0.155.1`, como no Build Agentflows). Os prompts de geração e de edição foram portados e traduzidos do projeto aberto screenshot-to-code, assim como a ideia do agente que edita por trecho (`edit_file`) em vez de reescrever o arquivo.
 
 ## Configuração inicial (sem variáveis de ambiente)
-Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave. O modelo que lê a captura tem cartão próprio, "Qualidade da página gerada", com o botão "Testar leitura de imagem" (manda um PNG mínimo ao modelo escolhido e mostra o que ele respondeu). O cartão opcional "Captura por endereço" guarda a chave de um serviço de captura (ScreenshotOne), que permite colar o endereço de um site em vez de enviar a imagem. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar um modelo com visão, o app roda em modo demonstração.
+Abra `/setup`. Cartões: **Inteligência artificial** (OpenRouter: conectar em um clique ou colar a chave), **Captura por endereço** (ScreenshotOne, opcional), **Hospedagem (Render)** (opcional: cadastra o domínio próprio dos sites sozinho), **Notificações** (e-mail ou Slack, para o resumo semanal), **Motor de inteligência artificial** (OpenRouter × ChatGPT, login por código de dispositivo), **Qualidade da página gerada** (o modelo com visão que lê a captura, com "Testar leitura de imagem"), **Rotinas** e **Usar dentro do seu assistente** (MCP). Tudo fica em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), cifrado em repouso.
 
 ## OpenRouter ou ChatGPT
 O motor que escreve e edita os sites é escolhido no cartão "Motor de inteligência artificial" de `/setup#ia` (`components/ConexaoIA.tsx`, `app/api/ia/route.ts`, config `IA_PROVEDOR`):
-- **OpenRouter (padrão)**: a chave do cartão "Inteligência artificial" (OAuth em um clique ou colada). É também o único caminho para **ler capturas** (`askVision`).
-- **ChatGPT (assinatura)**: login por código de dispositivo pelo Codex App Server oficial (`lib/chatgpt.ts`, `@openai/codex` fixado em `0.155.1`, o mesmo do Build Agentflows). A sessão fica em `DATA_DIR/chatgpt`, sem herdar credenciais da máquina, sem terminal, arquivos ou navegador. Texto (criação pelo briefing, edições, agente, sugestões) e ferramentas passam por ele; o modelo é escolhido no próprio cartão (`CHATGPT_MODEL`).
+- **OpenRouter (padrão)**: a chave do cartão "Inteligência artificial". É também o único caminho para **ler capturas** (`askVision`).
+- **ChatGPT (assinatura)**: login por código de dispositivo pelo Codex App Server oficial (`lib/chatgpt.ts`). A sessão fica em `DATA_DIR/chatgpt`, sem herdar credenciais da máquina, sem terminal, arquivos ou navegador. Texto (criação pelo briefing, edições, agente, sugestões) e ferramentas passam por ele; o modelo é escolhido no cartão (`CHATGPT_MODEL`).
 
 `lib/motor.ts` é o único ponto que decide entre os dois (`gerarTexto`, `gerarJSON`, `executarComFerramentas`, `iaDisponivel`); `lib/ai.ts` continua o da suíte. Com o ChatGPT escolhido e sem chave do OpenRouter, clonar por captura cai em demonstração e a tela avisa para conectar também o OpenRouter.
 
 ## Primeiro acesso
-Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
+Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir `NOVA_SENHA_ADMIN` e reiniciar o app uma vez.
 
 ## Rodar localmente
 ```bash
 npm install
 npm run dev             # http://localhost:3000 e depois http://localhost:3000/setup
 ```
-Abra `/?exemplo=1` para carregar a captura de exemplo (`public/exemplo-referencia.png`), preencher a marca e gerar a página sozinho.
+`/?exemplo=1` cria um site de exemplo (captura `public/exemplo-referencia.png`, marca Nimbus Finanças); "Preencher com um exemplo" só preenche o formulário.
 
 ## Rodar com Docker
 ```bash
@@ -36,30 +41,23 @@ docker compose up --build   # http://localhost:3015
 ```
 
 ## Imagem pública e deploy no Render
-A imagem é construída e publicada pelo GitHub Actions do repositório da suíte a cada push na `main`: `ghcr.io/startse/clone-site:latest`. Não é preciso construir nem publicar à mão.
+A imagem é construída e publicada pelo GitHub Actions do repositório da suíte a cada push na `main`: `ghcr.io/startse/clone-site:latest`.
 
 - Publicar com um clique: https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-clone-site (o `render.yaml` desta pasta é gerado a partir do `catalogo.json` da raiz; não edite à mão).
-- Rodar no seu computador sem construir: `docker run --rm -p 3015:10000 -v clone-site-dados:/app/data ghcr.io/startse/clone-site:latest` e abra http://localhost:3015.
+- Rodar sem construir: `docker run --rm -p 3015:10000 -v clone-site-dados:/app/data ghcr.io/startse/clone-site:latest` e abra http://localhost:3015.
 - Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
-- O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração se perde a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
-
-## Como a página é gerada
-1. O navegador lê a captura como data URL e envia em `POST /api/pagina` com `stack` (`html-tailwind` ou `html-css`), `instrucoes` e `marca` (`nome`, `corPrimaria`, `corSecundaria`, cores em `#RRGGBB`).
-2. `lib/gerador.ts` valida a imagem (PNG/JPG, até 5 MB), monta o prompt e chama o modelo de visão. Da resposta, recorta o trecho `<html>...</html>` (exige `<body>` aberto e fechado) e sanitiza: remove todo `<script>` que não seja o Tailwind pela CDN (no formato CSS, remove todos), `iframe`/`object`/`embed`/`base`, atributos `on*` e links `javascript:`.
-3. A página é salva no histórico (tipo `pagina`) sem a captura: só formato, instruções, marca e o tamanho da imagem. O resultado abre em `/r/<id>`; "Publicar link" mostra o endereço público `/s/<id>`, que serve a versão atual como HTML puro (sem indexação por buscadores, sem cache e com uma política de segurança de conteúdo que só libera Tailwind pela CDN, fontes do Google e imagens). "Mais" traz "Baixar HTML" e "Copiar código".
-
-A prévia é um `<iframe sandbox="allow-scripts" srcDoc=...>`: o HTML gerado roda numa origem opaca, sem acesso a cookies, armazenamento nem ao próprio app. `allow-scripts` é necessário porque o Tailwind pela CDN é um script; sem ele, o formato Tailwind apareceria sem estilo.
+- Health check em `/api/health`. No plano free o disco é efêmero: sites, imagens e configuração se perdem a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
 
 ## Sites: projetos com estado, geração em segundo plano e link por slug
-Desde 20/09/2026 toda página nasce como um **site** (`lib/projetos.ts`, tabela `projetos` no mesmo `app.sqlite`): nome, marca, origem (`referencia` ou `briefing`), estado (`rascunho` → `gerando` → `pronto` | `falhou`; `falhou` → `gerando` em "Tentar de novo") e um `slug` legível, único na instância, derivado do nome (`clinica-sao-lucas`, `clinica-sao-lucas-2`…). A página com as versões continua no histórico (`resultados`, tipo `pagina`); o site guarda `paginaId` e `versaoPublicada`.
+Toda página nasce como um **site** (`lib/projetos.ts`, tabela `projetos`): nome, marca, origem (`referencia` ou `briefing`), estado (`rascunho` → `gerando` → `pronto` | `falhou`; `falhou` → `gerando` em "Tentar de novo") e um `slug` legível, único na instância, derivado do nome. A página com as versões continua no histórico (`resultados`, tipo `pagina`); o site guarda `paginaId` e `versaoPublicada`.
 
-- A geração corre **em segundo plano**: `POST /api/sites/<id>/gerar` responde `202` na hora e a tela consulta `GET /api/sites/<id>` a cada 5 s. Fechar a aba não perde nada.
-- A captura fica guardada na linha do site só até `pronto` (para gerar sem a aba aberta e para "Tentar de novo" sem reenviar) e é apagada em seguida. Em `falhou` ela permanece, com o motivo em português (`erro.mensagem`, `erro.codigo`, `erro.acao`), até a pessoa apagar o site.
-- Na subida do servidor, todo site em `gerando` vira `falhou` ("O servidor reiniciou durante a geração"); a cada 60 s, quem passou de 15 minutos em `gerando` também.
-- `/s/<slug>` (ou `/s/<id>`) serve a **versão publicada** (`POST /api/sites/<id>/publicar` com `{ n }`; a versão 1 é publicada sozinha ao ficar pronto). Edições criam versões novas sem mexer no que está no ar até a próxima publicação. Um id de página antigo, sem site, continua servindo a última versão.
+- A geração corre **em segundo plano**: `POST /api/sites/<id>/gerar` responde `202` na hora e a tela consulta `GET /api/sites/<id>` a cada 5 s.
+- A captura fica guardada só até `pronto` (para gerar sem a aba aberta e para "Tentar de novo") e é apagada em seguida. Em `falhou` ela permanece, com o motivo em português (`erro.mensagem`, `erro.codigo`, `erro.acao`).
+- Na subida do servidor, todo site em `gerando` vira `falhou` ("O servidor reiniciou durante a geração"); a cada 60 s, quem passou de 15 minutos também.
+- `/s/<slug>` (ou `/s/<id>`) serve a **versão publicada**. Edições criam versões novas sem mexer no que está no ar até a próxima publicação. Um id de página antigo, sem site, continua servindo a última versão.
 - `POST /api/pagina` e a ferramenta MCP `gerar_pagina` continuam existindo: criam o site, geram e esperam o fim, devolvendo também `projetoId` e `slug`.
 
-Rotas: `POST /api/sites` (cria; `gerar: true` já dispara), `GET /api/sites?estado=`, `GET|PATCH|DELETE /api/sites/<id>` (`PATCH`: `nome`, `slug`; `marca`/`instrucoes`/`briefing`/`stack` só em `rascunho`/`falhou`), `POST /api/sites/<id>/gerar`, `POST /api/sites/<id>/publicar`, `POST /api/sites/<id>/visto`, `GET /api/sites/avisos` (sino do cabeçalho).
+Rotas: `POST /api/sites` (cria; `gerar: true` já dispara), `GET /api/sites?estado=`, `GET|PATCH|DELETE /api/sites/<id>` (`PATCH`: `nome`, `slug`; `marca`/`instrucoes`/`briefing`/`stack` só em `rascunho`/`falhou`), `POST /api/sites/<id>/gerar`, `POST /api/sites/<id>/publicar` (`{ n }`), `POST /api/sites/<id>/visto`, `GET /api/sites/avisos` (sino).
 
 Teste rápido, com o app rodando e a sessão em um cookie (`-b cookies.txt`):
 ```bash
@@ -71,89 +69,88 @@ sqlite3 data/app.sqlite "select estado, versaoPublicada, imagem is null from pro
 curl -s http://localhost:3000/s/<slug> | head -3                                                            # a versão publicada, sem sessão
 ```
 
+## Criar do zero pelo briefing
+Na aba "Descrever a empresa", o briefing (o que a empresa faz, para quem, o que o site precisa ter; mínimo 20 caracteres) vai para `lib/gerador.ts:gerarDoBriefing`, que pede ao motor de texto uma landing com a estrutura padrão (cabeçalho com logo, herói, benefícios, como funciona, prova social, chamada final, rodapé) na marca informada e com as imagens enviadas. Em demonstração, a landing fixa recebe a primeira frase do briefing no título.
+
 ## Logo e imagens do cliente
-Cada site aceita um logo e até 12 imagens (PNG, JPG, WEBP ou SVG sem script; até 2 MB cada), enviados no formulário de criação (até 6 na hora, o resto depois) ou no painel "Imagens" do site (`lib/assets.ts`, tabela `assets`, `GET|POST /api/sites/<id>/imagens`, `DELETE /api/sites/<id>/imagens/<assetId>`). Os arquivos são servidos em `/s/<idDoProjeto>/a/<assetId>` (público como o site, cache de 1 h, `nosniff`; SVG com CSP que não executa nada) — um endereço absoluto que funciona na prévia, no link `/s/<slug>` e no domínio próprio. O gerador e o agente recebem o bloco "Imagens da empresa" (`montarBlocoAssets`) e usam `<img>` com esses endereços: o logo no cabeçalho e no rodapé, as fotos onde a referência tinha imagens; onde faltar imagem, continua o bloco na cor da marca. Em demonstração, a landing fixa recebe o logo e as fotos nos mesmos lugares.
+Cada site aceita um logo e até 12 imagens (PNG, JPG, WEBP ou SVG sem script; até 2 MB cada), enviados no formulário de criação (até 6 na hora) ou no painel "Imagens" do site (`lib/assets.ts`, `GET|POST /api/sites/<id>/imagens`, `DELETE /api/sites/<id>/imagens/<assetId>`). Os arquivos são servidos em `/s/<idDoProjeto>/a/<assetId>` (público como o site, cache de 1 h, `nosniff`; SVG com CSP que não executa nada). O gerador e o agente recebem o bloco "Imagens da empresa" e usam `<img>` com esses endereços: o logo no cabeçalho e no rodapé, as fotos onde a referência tinha imagens; onde faltar imagem, continua o bloco na cor da marca.
 
 Importante: a lista de origens da CSP de `/s/` (`lib/publicacao.ts`, `img-src 'self' data: https:`) e o que `sanitizarHtml` deixa passar andam juntas — ao liberar qualquer origem nova no sanitizador, atualize a CSP.
 
+## O agente do site
+`POST /api/sites/<id>/agente` com `{ texto }` (`lib/agente.ts`). O agente conhece a marca, as imagens (com endereços), a versão atual e a publicada, o código da página e as métricas dos últimos 7 dias, e só muda a página por ferramentas:
+- `editar_trecho` — substituições exatas (`antigo` → `novo`), a ferramenta principal: barata e não corrompe o resto;
+- `reescrever_pagina` — o arquivo inteiro, só para mudanças estruturais;
+- `trocar_imagem` — coloca uma imagem da empresa no cabeçalho, no herói, no rodapé ou junto a um texto;
+- `listar_imagens`, `ver_pagina`, `ver_metricas`;
+- `publicar` — só quando a pessoa pede.
+
+Tudo o que muda num pedido vira **uma** versão nova, em rascunho. A conversa fica guardada por site (`GET` lista, `DELETE` limpa). Em demonstração, cada pedido aplica uma mudança ilustrativa (e publica se o pedido falar em publicar). Roda no motor escolhido (OpenRouter com `tools` ou ChatGPT com `dynamicTools`).
+
+## Publicar × rascunho
+A versão 1 é publicada sozinha ao ficar pronta. Depois, cada edição (agente, "voltar para esta") cria uma versão nova que **não** vai ao ar até "Publicar esta" (painel Versões), "Publicar a versão N" (faixa acima da prévia), o pedido ao agente ou a ferramenta MCP `publicar_site`. O link `/s/<slug>` sempre mostra a publicada.
+
+## Métricas e sugestões
+Cada abertura do link público conta uma visita (`lib/metricas.ts`, tabela `visitas`: dia, hora, origem pelo `Referer`, celular × computador pelo `User-Agent`; robôs e `?previa=1` não contam). O painel "Métricas" mostra 7 ou 30 dias (visitas, % no celular, variação contra o período anterior, barras por dia, de onde vieram); `GET /api/sites/<id>/metricas?dias=`. "O que o agente sugere" (`lib/sugestoes.ts`, `GET /api/sites/<id>/sugestoes`) traz três melhorias para a versão atual, cada uma com "Aplicar" (manda a instrução ao agente); cache de 24 h por versão. "Receber este resumo toda semana" cria a rotina `resumo-site` (segunda, 9h, e-mail ou Slack via Notificações): visitas da semana, comparação, origem principal e a primeira sugestão, com o link do site.
+
 ## Domínio personalizado
-Cada site pode ter um domínio próprio (`www.minhaempresa.com.br`), no painel "Domínio próprio" do workspace (`PUT|GET|DELETE /api/sites/<id>/dominio`, `lib/projetos.ts:definirDominio`). A estratégia é **uma instância servindo vários sites**: quando o `Host` da requisição é o domínio cadastrado em um site, `proxy.ts` (divergência registrada em `scripts/padrao-excecoes.json`) reescreve a raiz — e qualquer caminho fora de `/_next/` e `/s/` — para `/s/<projetoId>`, sem exigir sessão. Os assets continuam em `/s/<projetoId>/a/<assetId>`, que já é público, então a mesma página funciona no link do app e no domínio.
+Cada site pode ter um domínio próprio (`www.minhaempresa.com.br`), no painel "Domínio próprio" (`PUT|GET|DELETE /api/sites/<id>/dominio`). A estratégia é **uma instância servindo vários sites**: quando o `Host` da requisição é o domínio cadastrado em um site, `proxy.ts` (divergência registrada em `scripts/padrao-excecoes.json`) reescreve a raiz — e qualquer caminho fora de `/_next/` e `/s/` — para `/s/<projetoId>`, sem exigir sessão. Os assets continuam em `/s/<projetoId>/a/<assetId>`, então a mesma página funciona no link do app e no domínio.
 
-Do lado da hospedagem, o Render precisa saber que o domínio pertence a este serviço (Settings › Custom Domains; domínio próprio exige um plano pago do serviço) e o provedor do domínio precisa de um `CNAME` de `www` apontando para `<seu-app>.onrender.com`. Com a integração opcional **"Hospedagem (Render)"** conectada em `/setup#render` (`RENDER_API_KEY` e `RENDER_SERVICE_ID`, `lib/render.ts`), o app cadastra o domínio no serviço sozinho ao salvar (`POST /v1/services/{id}/custom-domains`) e mostra o estado da verificação; sem ela, a tela dá o passo a passo manual. A verificação e o certificado levam de minutos a 1 hora; o link `/s/<slug>` continua funcionando enquanto isso.
+Do lado da hospedagem, o Render precisa saber que o domínio pertence a este serviço (Settings › Custom Domains; domínio próprio exige plano pago do serviço) e o provedor do domínio precisa de um `CNAME` de `www` apontando para `<seu-app>.onrender.com`. Com a integração opcional **"Hospedagem (Render)"** conectada em `/setup#render` (`RENDER_API_KEY` e `RENDER_SERVICE_ID`, `lib/render.ts`), o app cadastra o domínio no serviço sozinho ao salvar e mostra o estado da verificação; sem ela, a tela dá o passo a passo manual. Verificação e certificado levam de minutos a 1 hora; o link `/s/<slug>` continua funcionando.
 
-Alternativa não implementada: **uma instância por site** — subir outra cópia da imagem (`docker run ... ghcr.io/startse/clone-site:latest`) com `APP_URL` no domínio da empresa. Funciona, mas multiplica instâncias e contas; a rota pelo `Host` cobre o caso comum.
+Alternativa não implementada: **uma instância por site** — subir outra cópia da imagem com `APP_URL` no domínio da empresa. Funciona, mas multiplica instâncias e contas; a rota pelo `Host` cobre o caso comum.
 
 Teste local: `curl -H "Host: www.meusite.exemplo.com" http://127.0.0.1:3000/` devolve o HTML publicado do site com esse domínio; outro `Host` continua redirecionando a raiz para `/entrar`.
 
-## Edições por instrução e versões
-Abaixo da prévia, o campo "O que mudar" envia a instrução (e o HTML que a tela está mostrando) em `POST /api/pagina/<id>/editar`. `lib/gerador.ts:editarPagina` usa o prompt de atualização do screenshot-to-code (devolver o arquivo inteiro mudando só o que foi pedido), passa a resposta pela mesma extração e sanitização da geração e grava uma `Versao` nova na página; a prévia mostra sempre a última versão. O botão "Trocar os textos pelos da minha empresa" abre o campo "O que a empresa faz" e envia `{ empresa }`: o servidor monta a instrução pré-pronta (`instrucaoTrocarTextos`) e grava na versão só o rótulo curto "Textos trocados pelos da empresa: ...".
-
-A lista "Versões" (número, instrução e hora) tem "Voltar para esta" em cada versão anterior: `POST /api/pagina/<id>/voltar` com `{ n }` copia o HTML daquela versão como uma versão nova ("Voltou para a versão n"), sem apagar as intermediárias. Em modo demonstração (sem chave do OpenRouter), cada edição aplica mudanças fixas visíveis: a cor de fundo do cabeçalho e o título principal mudam a cada versão (`lib/demo.ts:edicaoDemo`).
-
 ## Usar dentro de um assistente de IA (MCP)
-O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, com as ferramentas `gerar_pagina(imagem_url, instrucoes?, marca?, formato?)` (endereço terminado em `.png`/`.jpg` é baixado direto; qualquer outro é o site a fotografar pelo serviço de captura configurado. Só http/https, sem endereços internos da rede, PNG ou JPG reconhecidos pelos primeiros bytes, até 5 MB; devolve id, título, link `/r/<id>` e o HTML) e `editar_pagina(id, instrucao)` (aplica a mudança sobre a última versão e devolve o número da versão nova e o HTML inteiro). Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
-
-Decisão de implementação: protocolo implementado à mão em `lib/mcp.ts` (JSON-RPC 2.0: `initialize`, `tools/list`, `tools/call`), em vez do pacote `@modelcontextprotocol/sdk` — mesma decisão herdada de `pdi-time`. Rate limit de 60 chamadas por minuto por código, em memória.
-
-```bash
-curl -X POST https://<seu-app>/mcp \
-  -H "Authorization: Bearer <código>" -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gerar_pagina","arguments":{"imagem_url":"https://exemplo.com/captura.png","marca":{"nome":"Minha Empresa","corPrimaria":"#0f766e"}}}}'
-```
-
-### Testar com o MCP Inspector
-```bash
-npx @modelcontextprotocol/inspector
-```
-Na interface que abre no navegador, escolha o transporte "Streamable HTTP", cole `http://localhost:3000/mcp` (ou o endereço do deploy) em URL e adicione o cabeçalho `Authorization: Bearer <código>` em "Custom Headers". Clique em "Connect": a aba "Tools" deve listar `gerar_pagina` e `editar_pagina`.
+`POST /mcp` (JSON-RPC 2.0, `Authorization: Bearer <código>` gerado em `/setup`, 60 chamadas por minuto). Ferramentas (`lib/ferramentas.ts`): `criar_site(nome, briefing, marca?, formato?)`, `gerar_pagina(imagem_url, instrucoes?, marca?, formato?)`, `editar_pagina(id|slug, instrucao)` (pelo agente; versão em rascunho), `publicar_site(id|slug, n?)`, `metricas_site(id|slug, dias?)`, `listar_sites(estado?)`. Protocolo implementado à mão em `lib/mcp.ts` (decisão herdada de `pdi-time`). Teste com `npx @modelcontextprotocol/inspector` (Streamable HTTP, `http://localhost:3000/mcp`, cabeçalho `Authorization`).
 
 ## Variáveis de ambiente (todas opcionais)
 Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando definidas, têm prioridade sobre o que foi salvo.
 | Variável | Descrição |
 |---|---|
-| `DATA_DIR` | Pasta do banco SQLite. Padrão `./data` (Docker: `/app/data`). |
-| `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
+| `DATA_DIR` | Pasta do banco SQLite, da chave mestra e da sessão ChatGPT. Padrão `./data` (Docker: `/app/data`). |
+| `APP_URL` | Endereço público do app (links absolutos em e-mails, Slack e no alvo do CNAME). Também gravado por `/setup`. |
+| `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida (equipe técnica). |
+| `IA_PROVEDOR` | `openrouter` (padrão) ou `chatgpt`. Alternativa ao cartão "Motor de inteligência artificial". |
+| `CHATGPT_MODEL` | Modelo da conta ChatGPT (vazio = automático). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
-| `OPENROUTER_MODEL` | Alternativa ao setup. Modelo de texto (usado nas edições por instrução). Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
-| `OPENROUTER_MODEL_VISAO` | Alternativa ao cartão "Qualidade da página gerada" do setup. Modelo com visão que lê a captura; padrão `inclusionai/ling-3.0-flash-vl:free`. Lista em https://openrouter.ai/models?modality=image-%3Etext. |
-| `SCREENSHOTONE_ACCESS_KEY` | Opcional, alternativa ao setup. Chave do serviço que fotografa a página de referência a partir do endereço do site. |
+| `OPENROUTER_MODEL` | Modelo de texto do OpenRouter (edições, briefing, agente). Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
+| `OPENROUTER_MODEL_VISAO` | Modelo com visão que lê a captura; padrão `inclusionai/ling-3.0-flash-vl:free`. |
+| `SCREENSHOTONE_ACCESS_KEY` | Serviço que fotografa a página de referência a partir do endereço (https://screenshotone.com). |
+| `RENDER_API_KEY`, `RENDER_SERVICE_ID` | Hospedagem (Render): cadastra o domínio próprio dos sites sozinho (https://dashboard.render.com/u/settings#api-keys). |
+| `NOTIFICACOES_*` | E-mail (Resend/SMTP/Gmail/Outlook) ou Slack para o resumo semanal (cartão Notificações). |
+| `CONTA_DESLIGADA` | `1` trata toda rota como pública (só para o contêiner efêmero de captura do catálogo). |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
 
 ## Estrutura
 ```
-app/page.tsx              tela única (captura + formato + marca → prévia)
-app/api/pagina/route.ts   gera a página (POST), lista as últimas (GET) e apaga o histórico (DELETE)
-app/api/pagina/[id]/editar/route.ts aplica uma instrução (ou a troca de textos) e grava uma versão nova
-app/api/pagina/[id]/voltar/route.ts copia uma versão anterior como versão nova ("Voltar para esta")
-app/r/[id]/page.tsx       prévia de uma página salva, por link
-app/s/[id]/route.ts       página publicada: a versão atual como HTML puro, em um link que sai do app
-app/mcp/route.ts          endpoint MCP (JSON-RPC 2.0) para assistentes de IA
-app/api/mcp/token/route.ts gera, consulta e revoga o código de acesso do endpoint MCP
-app/setup/page.tsx        configuração inicial (IA, captura por endereço, modelo que lê a captura, acesso MCP)
-app/api/captura/route.ts  traz a captura a partir de um endereço (imagem publicada ou site fotografado)
-app/api/visao/route.ts    lê, grava e testa o modelo que lê a captura
-app/api/setup/            leitura/gravação da configuração, teste e OAuth do OpenRouter
-app/api/status/route.ts   informa ao frontend se a IA (com visão) está conectada
-app/api/health/route.ts   health check
-components/ui.tsx         componentes visuais compartilhados pela suíte
-components/setup.tsx      tela de setup genérica, gerada a partir de lib/integracoes.ts
-components/AcessoMCP.tsx  cartão do /setup para gerar/revogar o acesso MCP
-components/QualidadePagina.tsx cartão do /setup: modelo que lê a captura e "Testar leitura de imagem"
-components/PreviaPagina.tsx prévia em iframe (Computador/Celular), "Ver o código" e aviso de terceiros
-components/EditorPagina.tsx "O que mudar", "Trocar os textos pelos da minha empresa" e lista "Versões"
-lib/gerador.ts            prompts de geração e de edição, extração e sanitização do HTML, versões no histórico
-lib/ferramentas.ts        ferramentas MCP gerar_pagina (baixa a imagem no servidor) e editar_pagina
-lib/demo.ts               landing fictícia completa e edição de demonstração (cabeçalho e título fixos)
-lib/types.ts              Pedido, Versao, Pagina, Marca
-lib/ai.ts                 cliente OpenRouter (askText, askVision, askJSON, askWithTools)
-lib/store.ts              configuração em SQLite (node:sqlite), com variáveis de ambiente como prioridade
-lib/setup-comum.ts        tipos do setup e integração OpenRouter (compartilhado)
-lib/integracoes.ts        integrações que este app precisa (OpenRouter e, opcional, o serviço de captura)
-lib/captura.ts            baixa a captura de um endereço e fotografa o site pelo serviço configurado
-lib/teste-visao.ts        PNG mínimo montado em código e teste "Testar leitura de imagem"
-lib/mcp.ts                protocolo MCP (JSON-RPC 2.0), código de acesso e limite de chamadas
-public/exemplo-referencia.png captura de exemplo usada por "Preencher com um exemplo" e /?exemplo=1
-Dockerfile                build multi-stage com saída standalone
-docker-compose.yml        sobe este app isolado
-render.yaml               blueprint do Render (runtime image)
+app/page.tsx                    tela inicial: "Criar um site" (três abas, marca, logo e imagens) + "Meus sites"
+app/sites/[id]/page.tsx         workspace do site: prévia, faixa de publicação, agente, versões, link, imagens, métricas, domínio
+app/api/sites/**                sites (criar, listar, gerar 202, publicar, visto, avisos, imagens, agente, métricas, sugestões, domínio)
+app/api/pagina/**               porta antiga (gera esperando; editar/voltar por versão)
+app/s/[id]/route.ts             site publicado (versão publicada por slug ou id) + contagem de visita
+app/s/[id]/a/[assetId]/route.ts logo e imagens do site (público, cache 1 h)
+app/api/ia, app/api/chatgpt     motor de IA (OpenRouter × ChatGPT) e a conta ChatGPT
+app/api/status/route.ts         status da suíte (divergência registrada: IA pelo motor)
+app/mcp/route.ts, lib/mcp.ts    endpoint MCP
+proxy.ts                        sessão + domínio personalizado (divergência registrada)
+components/MeusSites.tsx        lista de sites com estado e acompanhamento
+components/Workspace.tsx        nome editável, link público, faixa de publicação, painel de versões
+components/ChatAgente.tsx       conversa com o agente
+components/PainelImagens.tsx    seletor (criação) e painel (workspace) de logo e imagens
+components/PainelMetricas.tsx   visitas, sugestões com Aplicar, resumo semanal (ResumoSemanal.tsx)
+components/PainelDominio.tsx    domínio próprio e passo a passo
+components/ConexaoIA.tsx        cartão OpenRouter × ChatGPT em /setup
+components/useAvisos.ts, TopbarSite.tsx   sino do cabeçalho
+lib/projetos.ts                 sites: estados, slug, geração em segundo plano, publicação, domínio
+lib/gerador.ts                  prompts (captura, briefing, edição), extração e sanitização, versões
+lib/agente.ts                   o agente: ferramentas, edição por trecho, conversa
+lib/motor.ts, lib/chatgpt.ts    escolha do provedor; ponte oficial com o ChatGPT (Codex App Server)
+lib/assets.ts                   logo e imagens; bloco "Imagens da empresa"
+lib/metricas.ts, lib/sugestoes.ts, lib/resumo-site.ts   visitas, sugestões, rotina semanal
+lib/render.ts                   API do Render para o domínio próprio
+lib/publicacao.ts               CSP, 404 e resolução do que está no ar
+lib/demo.ts                     landing fixa e mudanças de demonstração
+lib/ferramentas.ts              ferramentas MCP
 ```
