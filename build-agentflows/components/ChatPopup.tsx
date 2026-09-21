@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { Run } from "@/lib/flow-types";
-import { Icon, IconButton, request } from "./StudioUI";
+import { Icon, request } from "./StudioUI";
 // Fala um texto com a voz configurada em Conexões (ElevenLabs).
 async function speak(text: string, voz?: string) {
   const r = await fetch("/api/voz/falar", {
@@ -124,7 +124,7 @@ function BotMessage({
         )}
         <footer>
           <span className={"run-status-dot " + run.status} />
-          {STATUS[run.status]} · {run.demo ? "Demonstração" : "ChatGPT"}
+          {STATUS[run.status]} · {run.demo ? "Demonstração" : "Execução real"}
           {run.version ? " · v" + run.version : " · rascunho"}
           {voice && run.status === "completed" && run.output && (
             <button
@@ -159,15 +159,13 @@ export function ChatPopup({
   demo,
   connected,
   expanded,
+  providerLabel,
   voice = false,
   flowId,
   onDemo,
   onSend,
   onChange,
   onConnect,
-  onClose,
-  onClear,
-  onExpand,
 }: {
   session: Run[];
   pendingInput: string;
@@ -175,15 +173,13 @@ export function ChatPopup({
   demo: boolean;
   connected: boolean;
   expanded: boolean;
+  providerLabel: string;
   voice?: boolean;
   flowId: string;
   onDemo: (v: boolean) => void;
   onSend: (input: string) => void;
   onChange: (r: Run) => void;
   onConnect: () => void;
-  onClose: () => void;
-  onClear: () => void;
-  onExpand: () => void;
 }) {
   const [input, setInput] = useState(""),
     [listen, setListen] = useState(false),
@@ -265,27 +261,6 @@ export function ChatPopup({
       className={"chat-popup" + (expanded ? " expanded" : "")}
       aria-label="Testar Agentflow"
     >
-      <header>
-        <div>
-          <Icon name="chat" size={18} />
-          <h2>Testar Agentflow</h2>
-        </div>
-        <div>
-          <IconButton
-            icon="eraser"
-            label="Limpar conversa"
-            disabled={!session.length || running}
-            onClick={onClear}
-          />
-          <IconButton
-            icon="expand"
-            label={expanded ? "Reduzir" : "Expandir"}
-            active={expanded}
-            onClick={onExpand}
-          />
-          <IconButton icon="close" label="Fechar chat" onClick={onClose} />
-        </div>
-      </header>
       <div className="chat-scroll" ref={scroll}>
         {!session.length && !running ? (
           <div className="chat-empty">
@@ -297,13 +272,13 @@ export function ChatPopup({
               Envie uma mensagem para testar seus agentes e acompanhar o caminho
               percorrido.
             </p>
-            <button
+            {!connected && <button
               onClick={() =>
                 setInput("Meu pedido está atrasado e preciso de ajuda urgente.")
               }
             >
               Usar uma solicitação de exemplo
-            </button>
+            </button>}
           </div>
         ) : (
           <>
@@ -336,14 +311,14 @@ export function ChatPopup({
       </div>
       <div className="chat-composer">
         <div className="chat-toggles">
-          <label className="demo-toggle">
+          {!connected && <label className="demo-toggle">
             <input
               type="checkbox"
               checked={demo}
               onChange={(e) => onDemo(e.target.checked)}
             />
             Simular com respostas de exemplo
-          </label>
+          </label>}
           {voice && (
             <label className="demo-toggle">
               <input
@@ -440,7 +415,7 @@ export function ChatPopup({
         <small>
           {demo
             ? "Demonstração · nenhuma ação externa"
-            : "ChatGPT · usa os limites da sua assinatura"}
+            : providerLabel}
         </small>
       </div>
     </section>

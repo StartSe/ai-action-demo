@@ -2,7 +2,7 @@
 // ElevenLabs. O ChatGPT continua sendo a conexão principal e fica em lib/chatgpt.ts.
 // Tudo é guardado no banco cifrado da suíte (lib/store.ts); segredos nunca voltam inteiros.
 import { randomBytes } from "node:crypto";
-import { getConfig, setConfig, mascarar } from "./store";
+import { getConfig, setConfig, mascarar, abrirBanco } from "./store";
 import { conexaoAutorizada, desconectar as desautorizar } from "./mcp-oauth";
 import { FlowError } from "./flow-store";
 import { TOOL_CREDENTIAL_KEYS } from "./tool-credentials";
@@ -51,16 +51,39 @@ const CHAVES_LIVRES = new Set([
   ...TOOL_CREDENTIAL_KEYS,
 ]);
 // Grava um conjunto de campos; só chaves conhecidas, só texto curto.
-export function salvarCampos(campos: unknown) {
+export function salvarCampos(campos: unknown, aceiteWhatsApp?: unknown) {
   if (!campos || typeof campos !== "object" || Array.isArray(campos))
     throw new FlowError("Envie os campos a salvar.");
-  for (const [chave, valor] of Object.entries(campos as Record<string, unknown>)) {
+  const entries = Object.entries(campos as Record<string, unknown>);
+  for (const [chave, valor] of entries) {
     if (!CHAVES_LIVRES.has(chave)) throw new FlowError(`Campo desconhecido: ${chave}.`);
     if (valor !== null && (typeof valor !== "string" || valor.length > 4000))
       throw new FlowError(`Valor inválido em ${chave}.`);
-    if (typeof valor === "string" && /^•+$|^.{4}••••.{4}$/.test(valor)) continue; // máscara devolvida sem alteração
-    setConfig(chave, valor);
   }
+  const values = campos as Record<string, string | null>;
+  const provider = process.env.WHATSAPP_PROVEDOR || ("WHATSAPP_PROVEDOR" in values ? values.WHATSAPP_PROVEDOR : provedorWhatsApp());
+  const touchesWhatsApp = entries.some(([k]) => /^(WHATSAPP_|ZAPI_|ZAPPERHUB_)/.test(k));
+  const accepted = aceiteWhatsApp as { provedor?: string; versao?: string } | undefined;
+  const requires = touchesWhatsApp && (provider === "zapi" || provider === "zapperhub");
+  const newAcceptance = requires && accepted?.provedor === provider && accepted.versao === "2026-09-20";
+  if (requires && !newAcceptance && aceiteWhatsAppAtual()?.provedor !== provider)
+    throw new FlowError("Leia e aceite os termos de uso da integração não oficial do WhatsApp.");
+  const db = abrirBanco();
+  db.exec("BEGIN");
+  try {
+    for (const [key, value] of entries) {
+      if (typeof value === "string" && /^•+$|^.{4}••••.{4}$/.test(value)) continue;
+      setConfig(key, value as string | null);
+    }
+    if (newAcceptance) setConfig("WHATSAPP_ACEITE", JSON.stringify({ provedor: provider, versao: "2026-09-20", data: new Date().toISOString() }));
+    db.exec("COMMIT");
+  } catch (e) { db.exec("ROLLBACK"); throw e; }
+}
+export function aceiteWhatsAppAtual(): { provedor: string; versao: string; data: string } | null {
+  try {
+    const a = JSON.parse(getConfig("WHATSAPP_ACEITE") || "null");
+    return a?.versao === "2026-09-20" && typeof a.data === "string" ? a : null;
+  } catch { return null; }
 }
 export function statusCampos(campos: Campo[]): CampoStatus[] {
   return campos.map((c) => {
@@ -112,6 +135,17 @@ export function adicionarServidorMCP(nome: unknown, url: unknown, codigo?: unkno
   if (codigo) setConfig(`${prefixo}_CODIGO`, codigo);
   return { prefixo, nome: nome.trim(), url: u.toString() };
 }
+export function atualizarServidorMCP(prefixo: string, nome: unknown, url: unknown, codigo?: unknown) {
+  const previous = servidorMCP(prefixo);
+  if (typeof nome !== "string" || !nome.trim() || nome.length > 60) throw new FlowError("Dê um nome curto ao servidor.");
+  let address: URL;
+  try { address = new URL(String(url)); if (!["http:", "https:"].includes(address.protocol) || address.username || address.password) throw 0; } catch { throw new FlowError("Informe um endereço HTTP válido."); }
+  if (codigo != null && (typeof codigo !== "string" || codigo.length > 10000)) throw new FlowError("Informe um código válido.");
+  if (previous.url !== address.toString()) desautorizar(prefixo);
+  setConfig(`${prefixo}_URL`, address.toString());
+  if (codigo) setConfig(`${prefixo}_CODIGO`, codigo as string);
+  setConfig(CHAVE_SERVIDORES, JSON.stringify(servidoresMCP().map((s) => s.prefixo === prefixo ? { ...s, nome: nome.trim() } : s)));
+}
 export function removerServidorMCP(prefixo: string) {
   servidorMCP(prefixo);
   desautorizar(prefixo);
@@ -134,6 +168,7 @@ export function provedorWhatsApp() {
 }
 export function whatsappConfigurado() {
   const p = provedorWhatsApp();
+  if ((p === "zapi" || p === "zapperhub") && aceiteWhatsAppAtual()?.provedor !== p) return false;
   if (p === "zapi") return !!(getConfig("ZAPI_INSTANCE_ID") && getConfig("ZAPI_TOKEN") && getConfig("ZAPI_CLIENT_TOKEN"));
   if (p === "meta") return !!(getConfig("WHATSAPP_TOKEN") && getConfig("WHATSAPP_PHONE_NUMBER_ID"));
   if (p === "zapperhub") return !!getConfig("ZAPPERHUB_KEY");
@@ -169,6 +204,7 @@ export async function statusConexoes(origem: string) {
     mcp: servidores,
     whatsapp: {
       provedor: provedorWhatsApp(),
+      aceite: aceiteWhatsAppAtual(),
       configurado: whatsappConfigurado(),
       fluxo: getConfig("WHATSAPP_FLOW_ID") || null,
       campos: statusCampos(WHATSAPP_CAMPOS),

@@ -1,7 +1,19 @@
 // Credenciais das ferramentas prontas (mesmos serviços do catálogo de ferramentas do Flowise).
 // Ficam no banco cifrado; a tela do Agente pede só o que a ferramenta escolhida precisa.
-export type Credential = { chave: string; rotulo: string; ajuda?: string; link?: string; secret?: boolean };
+export type Credential = { chave: string; rotulo: string; ajuda?: string; link?: string; secret?: boolean; optional?: boolean; definido?: boolean; valor?: string };
+const oauth = (provider: string, label: string, link: string): Credential[] => [
+  { chave: `TOOL_${provider}_TOKEN`, rotulo: `Token de acesso ${label}`, secret: true, link, ajuda: "Use as permissões dos serviços que deseja disponibilizar aos agentes." },
+  { chave: `TOOL_${provider}_REFRESH_TOKEN`, rotulo: "Token de renovação (opcional)", secret: true, optional: true },
+  { chave: `TOOL_${provider}_CLIENT_ID`, rotulo: "Identificador do aplicativo (para renovar)", optional: true },
+  { chave: `TOOL_${provider}_CLIENT_SECRET`, rotulo: "Segredo do aplicativo (para renovar)", secret: true, optional: true },
+];
 export const TOOL_CREDENTIALS: Record<string, Credential[]> = {
+  google_workspace: oauth("GOOGLE", "Google", "https://developers.google.com/oauthplayground/"),
+  microsoft: [...oauth("MICROSOFT", "Microsoft", "https://developer.microsoft.com/graph/graph-explorer"), { chave: "TOOL_MICROSOFT_TENANT", rotulo: "Diretório da organização (opcional)", optional: true }],
+  e2b: [{ chave: "TOOL_E2B_KEY", rotulo: "Chave da E2B", secret: true, link: "https://e2b.dev/dashboard" }],
+  browserless: [{ chave: "TOOL_BROWSERLESS_TOKEN", rotulo: "Token do Browserless", secret: true, link: "https://www.browserless.io/" }],
+  slack: [{ chave: "TOOL_SLACK_TOKEN", rotulo: "Token OAuth do Slack MCP", secret: true, ajuda: "Autorize seu aplicativo Slack com acesso ao servidor MCP.", link: "https://docs.slack.dev/ai/slack-mcp-server/" }],
+  openapi: [{ chave: "TOOL_OPENAPI_URL", rotulo: "Endereço da especificação OpenAPI 3 (JSON)" }, { chave: "TOOL_OPENAPI_TOKEN", rotulo: "Credencial Bearer (opcional)", secret: true, optional: true }],
   tavily: [{ chave: "TOOL_TAVILY_KEY", rotulo: "Chave da Tavily", link: "https://app.tavily.com/home", secret: true }],
   searchapi: [{ chave: "TOOL_SEARCHAPI_KEY", rotulo: "Chave da SearchApi", link: "https://www.searchapi.io/", secret: true }],
   exa: [{ chave: "TOOL_EXA_KEY", rotulo: "Chave da Exa", link: "https://dashboard.exa.ai/", secret: true }],

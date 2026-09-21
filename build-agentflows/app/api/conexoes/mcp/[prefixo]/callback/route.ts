@@ -9,8 +9,8 @@ export async function GET(req: Request, c: { params: Promise<{ prefixo: string }
       status: 302,
       headers: {
         Location: erro
-          ? `${baseUrl(req)}/conexoes?erro=${encodeURIComponent(erro)}`
-          : `${baseUrl(req)}/conexoes?conectado=${encodeURIComponent(prefixo)}`,
+          ? `${baseUrl(req)}/ferramentas?erro=${encodeURIComponent(erro)}`
+          : `${baseUrl(req)}/ferramentas?conectado=${encodeURIComponent(prefixo)}`,
         "Set-Cookie": `mcp_${prefixo}_verifier=; Path=/; Max-Age=0`,
       },
     });

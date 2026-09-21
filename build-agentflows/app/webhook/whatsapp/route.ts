@@ -4,6 +4,7 @@
 // Conexões e a resposta volta pelo mesmo número. Responde 200 na hora e processa em seguida.
 import { getConfig, setConfig } from "@/lib/store";
 import { chaveConfere, enviarMensagem, interpretarRecebido, type Recebida } from "@/lib/whatsapp";
+import { whatsappConfigurado, provedorWhatsApp } from "@/lib/conexoes";
 import { startRun } from "@/lib/flow-runtime";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
@@ -25,6 +26,7 @@ export async function POST(req: Request) {
 }
 // Executa o fluxo escolhido em Conexões com o texto recebido e devolve a resposta ao remetente.
 export async function processar(m: Recebida): Promise<string | null> {
+  if (!whatsappConfigurado() || m.provedor !== provedorWhatsApp()) return null;
   setConfig("WHATSAPP_ULTIMA_RECEBIDA", JSON.stringify({ em: new Date().toISOString(), de: m.de }));
   const flowId = getConfig("WHATSAPP_FLOW_ID");
   if (!flowId) return null;

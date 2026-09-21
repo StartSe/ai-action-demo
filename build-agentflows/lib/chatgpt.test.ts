@@ -23,7 +23,11 @@ test("login por dispositivo, modelos e logout pelo protocolo oficial", async () 
   assert.equal(login.userCode, "TEST-1234");
   assert.equal((await bridge.account()).account?.type, "chatgpt");
   assert.equal((await bridge.models())[0].id, "test-model");
+  const usage = await bridge.usage();
+  assert.equal(usage.buckets[0].primary?.usedPercent, 25);
+  assert.equal(usage.buckets[0].secondary?.windowDurationMins, 10080);
   await bridge.logout();
+  await assert.rejects(() => bridge.usage(), /Conecte sua conta/);
   assert.equal((await bridge.account()).account, null);
 });
 test("resposta incremental e política sem ambiente ou shell", async () => {

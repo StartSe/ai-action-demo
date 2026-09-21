@@ -95,6 +95,7 @@ export async function enviarMensagem(para: string, texto: string): Promise<void>
 // Cadastra o endereço de avisos no provedor (Z-API e ZapperHub). Na Meta é colado no painel.
 export async function configurarAvisos(urlBase: string): Promise<string | null> {
   const p = provedorWhatsApp();
+  if (!whatsappConfigurado()) throw new FlowError("Configure o WhatsApp e aceite os termos em Conexões.");
   const endereco = `${urlBase.replace(/\/+$/, "")}/webhook/whatsapp?chave=${chaveWebhook()}`;
   if (p === "zapi") {
     for (const caminho of ["update-webhook-received", "update-webhook-connected", "update-webhook-disconnected"]) {

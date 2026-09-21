@@ -10,7 +10,9 @@ import { conectar, chamar, listarFerramentas } from "./mcp-cliente";
 import { FlowError, listFlows } from "./flow-store";
 import { getConfig } from "./store";
 import { TOOL_CREDENTIALS, type Credential } from "./tool-credentials";
+import { SERVICE_TOOLS, resolveServiceToolkit } from "./tool-services";
 export type ToolInfo = {
+  label?: string;
   id: string;
   name: string;
   description: string;
@@ -22,7 +24,7 @@ export type ToolInfo = {
   setup?: string;
 };
 export type ToolGroup = { id: string; name: string; kind: "builtin" | "mcp"; tools: ToolInfo[]; error?: string };
-type Builtin = ToolInfo & { credential?: string; available?: () => boolean; call: (args: Record<string, unknown>) => Promise<string> };
+export type Builtin = ToolInfo & { credential?: string; available?: () => boolean; call: (args: Record<string, unknown>) => Promise<string> };
 // --- Calculadora sem eval: números, + - * / % ^ e parênteses. ---------------------------------
 export function calculate(expression: string): number {
   const src = expression.replace(/\s+/g, "").replace(/,/g, ".");
@@ -156,6 +158,7 @@ export function extractPath(value: unknown, path: string): unknown {
   return cur;
 }
 const BUILTIN: Builtin[] = [
+  ...SERVICE_TOOLS,
   // Busca na web
   {
     id: "interno:tavily", name: "tavily", category: "Busca na web", credential: "tavily",
@@ -343,15 +346,17 @@ const BUILTIN: Builtin[] = [
     },
   },
 ];
+const TOOL_LABELS: Record<string, string> = { brave: "BraveSearch API", calculadora: "Calculator", exa: "Exa Search", google: "Google Custom Search", searchapi: "SearchApi", searxng: "SearXNG", serpapi: "Serp API", serper: "Serper", tavily: "Tavily", arxiv: "arXiv", wolfram: "Wolfram Alpha", ler_pagina: "Ler página", requisicao_http: "Requisição HTTP", extrair_json: "Extrair JSON", data_hora: "Data e hora", executar_fluxo: "Executar fluxo" };
 export function builtinTools(): ToolInfo[] {
-  return BUILTIN.map(({ id, name, description, schema, category, credential, setup, available }) => ({
+  return BUILTIN.map(({ id, name, label, description, schema, category, credential, setup, available }) => ({
     id,
     name,
+    label: label || TOOL_LABELS[name] || name,
     description,
     schema,
     category,
     configured: !available || available(),
-    credentials: credential ? TOOL_CREDENTIALS[credential] : undefined,
+    credentials: credential ? TOOL_CREDENTIALS[credential].map((c) => ({ ...c, definido: !!getConfig(c.chave), valor: c.secret ? undefined : getConfig(c.chave) })) : undefined,
     setup,
   }));
 }
@@ -365,7 +370,7 @@ export async function listTools(): Promise<ToolGroup[]> {
     const group: ToolGroup = { id: "mcp:" + s.prefixo, name: s.nome, kind: "mcp", tools: [] };
     try {
       const c = await conexaoMCP(s.prefixo);
-      if (!c) throw new Error("Autorize este servidor em Conexões.");
+      if (!c) throw new Error("Autorize este servidor na gestão de ferramentas do Agente.");
       group.tools = (await listarFerramentas(conectar(c.url, c.token))).map((t) => ({
         id: `mcp:${s.prefixo}:${t.nome}`,
         name: t.nome,
@@ -391,7 +396,9 @@ export async function resolveTools(ids: string[]): Promise<AgentTool[]> {
     if (id.startsWith("interno:")) {
       const b = BUILTIN.find((t) => t.id === id);
       if (!b || (b.available && !b.available()))
-        throw new FlowError(`A ferramenta “${toolShortName(id)}” não está disponível. Confira em Conexões.`);
+        throw new FlowError(`A ferramenta “${toolShortName(id)}” não está disponível. Confira as credenciais no Agente.`);
+      const toolkit = await resolveServiceToolkit(b.name);
+      if (toolkit) { out.push(...toolkit); continue; }
       out.push({ name: b.name, description: b.description, schema: b.schema, call: (args) => b.call((args || {}) as Record<string, unknown>) });
       continue;
     }
@@ -400,7 +407,7 @@ export async function resolveTools(ids: string[]): Promise<AgentTool[]> {
   }
   for (const [prefix, names] of byServer) {
     const c = await conexaoMCP(prefix).catch(() => undefined);
-    if (!c) throw new FlowError("Um servidor de ferramentas do bloco não está conectado. Confira em Conexões.");
+    if (!c) throw new FlowError("Um servidor de ferramentas do bloco não está conectado. Confira as credenciais no Agente.");
     const conn = conectar(c.url, c.token);
     const remote = await listarFerramentas(conn);
     for (const name of names) {
@@ -417,10 +424,19 @@ export async function resolveTools(ids: string[]): Promise<AgentTool[]> {
       });
     }
   }
-  return out;
+  const seen = new Set<string>();
+  return out.map((t, index) => {
+    const base = t.name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 55) || "tool";
+    let name = base, suffix = index;
+    while (seen.has(name)) name = `${base}_${suffix++}`;
+    seen.add(name);
+    return { ...t, name };
+  });
 }
 export async function callTool(id: string, args: unknown) {
-  const [tool] = await resolveTools([id]);
+  const resolved = await resolveTools([id]);
+  if (resolved.length > 1) throw new FlowError("Use este conjunto de ferramentas em um bloco Agente.");
+  const [tool] = resolved;
   if (!tool) throw new FlowError("Escolha a ferramenta a executar.");
   return tool.call(args);
 }

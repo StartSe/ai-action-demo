@@ -7,8 +7,9 @@ export async function GET(req: Request) {
 }
 export async function PUT(req: Request) {
   return api(async () => {
-    const campos = (await body(req)).campos as Record<string, unknown> | undefined;
-    salvarCampos(campos);
+    const b = await body(req);
+    const campos = b.campos as Record<string, unknown> | undefined;
+    salvarCampos(campos, b.aceiteWhatsApp);
     // Ao salvar o WhatsApp, o endereço de avisos é cadastrado no provedor (Z-API e ZapperHub).
     let aviso: string | null = null;
     if (campos && Object.keys(campos).some((k) => /^(WHATSAPP_|ZAPI_|ZAPPERHUB_)/.test(k))) {

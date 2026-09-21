@@ -50,7 +50,7 @@ test("interpreta avisos dos três provedores e ignora grupos e mensagens própri
   assert.equal(wa.interpretarRecebido("nada"), null);
 });
 test("envia pelo provedor escolhido com as credenciais salvas", async () => {
-  salvarCampos({ WHATSAPP_PROVEDOR: "zapi", ZAPI_INSTANCE_ID: "inst", ZAPI_TOKEN: "tok", ZAPI_CLIENT_TOKEN: "cli" });
+  salvarCampos({ WHATSAPP_PROVEDOR: "zapi", ZAPI_INSTANCE_ID: "inst", ZAPI_TOKEN: "tok", ZAPI_CLIENT_TOKEN: "cli" }, { provedor: "zapi", versao: "2026-09-20" });
   let m = mockFetch(() => ({ messageId: "1" }));
   try {
     await wa.enviarMensagem("+55 (11) 99999-0000", "Olá!");
@@ -70,7 +70,7 @@ test("envia pelo provedor escolhido com as credenciais salvas", async () => {
   } finally {
     m.restore();
   }
-  salvarCampos({ WHATSAPP_PROVEDOR: "zapperhub", ZAPPERHUB_KEY: "k-1", ZAPPERHUB_URL: "https://api.zapperapi.com/" });
+  salvarCampos({ WHATSAPP_PROVEDOR: "zapperhub", ZAPPERHUB_KEY: "k-1", ZAPPERHUB_URL: "https://api.zapperapi.com/" }, { provedor: "zapperhub", versao: "2026-09-20" });
   m = mockFetch(() => ({ success: true }));
   try {
     await wa.enviarMensagem("5511999990000", "Oi");
@@ -96,7 +96,7 @@ test("aviso recebido executa o fluxo publicado e responde pelo mesmo número", a
   g.nodes[1].data.config.text = "Recebemos: {{input}}";
   store.saveFlow(f.id, { name: f.name, description: "", graph: g });
   store.publishFlow(f.id);
-  salvarCampos({ WHATSAPP_PROVEDOR: "zapi", ZAPI_INSTANCE_ID: "inst", ZAPI_TOKEN: "tok", ZAPI_CLIENT_TOKEN: "cli" });
+  salvarCampos({ WHATSAPP_PROVEDOR: "zapi", ZAPI_INSTANCE_ID: "inst", ZAPI_TOKEN: "tok", ZAPI_CLIENT_TOKEN: "cli" }, { provedor: "zapi", versao: "2026-09-20" });
   setConfig("WHATSAPP_FLOW_ID", f.id);
   const m = mockFetch(() => ({ messageId: "1" }));
   try {
@@ -114,4 +114,11 @@ test("aviso recebido executa o fluxo publicado e responde pelo mesmo número", a
     m.restore();
     setConfig("WHATSAPP_FLOW_ID", null);
   }
+});
+
+test("conexão não oficial antiga não envia nem processa sem aceite", async () => {
+  setConfig("WHATSAPP_PROVEDOR", "zapi");
+  setConfig("WHATSAPP_ACEITE", null);
+  await assert.rejects(() => wa.enviarMensagem("5511999990000", "Oi"), /Conecte o WhatsApp/);
+  assert.equal(await webhook.processar({ de: "5511999990000", texto: "Oi", nome: "Ana", provedor: "zapi" }), null);
 });

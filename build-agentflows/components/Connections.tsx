@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { Flow } from "@/lib/flow-types";
 import { Icon, StudioShell, request } from "./StudioUI";
+import { ChatGPTUsage } from "./ChatGPTUsage";
+import { WhatsAppTerms } from "./WhatsAppTerms";
 import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
 type CampoStatus = {
   chave: string;
@@ -25,6 +27,7 @@ type Status = {
     campos: CampoStatus[];
     aviso: string;
     verificacao: string;
+    aceite: { versao: string; provedor: string; data: string } | null;
   };
   elevenlabs: {
     configurado: boolean;
@@ -100,7 +103,7 @@ export function Connections() {
   const [busy, setBusy] = useState("");
   const [results, setResults] = useState<Record<string, Resultado>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [novo, setNovo] = useState({ nome: "", url: "", codigo: "" });
+  const [acceptedProvider, setAcceptedProvider] = useState("");
   const load = useCallback(async () => {
     const [s, f] = await Promise.all([
       request<Status>("/api/conexoes"),
@@ -147,7 +150,7 @@ export function Connections() {
     const campos: Record<string, string | null> = { ...extra };
     for (const k of keys) if (k in drafts) campos[k] = drafts[k] === "" ? null : drafts[k];
     await act("save", async () => {
-      const s = await request<Status & { aviso?: string | null }>("/api/conexoes", "PUT", { campos });
+      const s = await request<Status & { aviso?: string | null }>("/api/conexoes", "PUT", { campos, aceiteWhatsApp: acceptedProvider ? { provedor: acceptedProvider, versao: "2026-09-20" } : undefined });
       setStatus(s);
       setDrafts((d) => {
         const next = { ...d };
@@ -209,7 +212,7 @@ export function Connections() {
           <div>
             <div className="studio-breadcrumb">Workspace / Conexões</div>
             <h1>Conexões</h1>
-            <p>Modelos de IA, ferramentas e canais que seus agentes podem usar.</p>
+            <p>Modelos de IA e canais que seus agentes podem usar.</p>
           </div>
         </header>
         {error && (
@@ -223,7 +226,7 @@ export function Connections() {
             title="ChatGPT"
             badge="Principal"
             connected={!!connection?.account}
-            description="Sua assinatura ChatGPT executa os agentes. Sem chave, sem custo extra."
+            description="Execute seus agentes com os modelos e limites da sua assinatura."
           >
             {connection?.account ? (
               <p>
@@ -234,6 +237,7 @@ export function Connections() {
             ) : (
               <p>Conecte uma vez pelo código de dispositivo; a conta fica nesta instalação.</p>
             )}
+            {connection?.account && <ChatGPTUsage />}
             <div className="studio-actions">
               <button className="studio-button primary" onClick={() => setConnect(true)}>
                 {connection?.account ? "Gerenciar conexão" : "Conectar ChatGPT"}
@@ -244,7 +248,7 @@ export function Connections() {
             icon={<Icon name="link" size={22} />}
             title="OpenRouter"
             connected={!!status?.openrouter.conectado}
-            description="Mais de 500 modelos de 80 provedores em uma conta. Escolha o modelo bloco a bloco."
+            description="Escolha modelos de diferentes provedores para cada agente."
           >
             {status?.openrouter.conectado ? (
               <>
@@ -286,101 +290,6 @@ export function Connections() {
                 </div>
               </>
             )}
-          </Card>
-          <Card
-            icon={<Icon name="tool" size={22} />}
-            title="Ferramentas (MCP)"
-            connected={!!status?.mcp.some((s) => s.autorizado)}
-            description="Servidores de ferramentas que os agentes podem usar: CRM, planilhas, sistemas internos."
-          >
-            {status?.mcp.length ? (
-              <ul className="mcp-list">
-                {status.mcp.map((s) => (
-                  <li key={s.prefixo}>
-                    <span className={"run-status-dot " + (s.autorizado ? "completed" : "")} />
-                    <div>
-                      <strong>{s.nome}</strong>
-                      <small>{s.url}</small>
-                      {result("mcp:" + s.prefixo)}
-                    </div>
-                    <div className="mcp-actions">
-                      {!s.autorizado && (
-                        <a className="studio-button" href={`/api/conexoes/mcp/${s.prefixo}`}>
-                          Autorizar
-                        </a>
-                      )}
-                      <button
-                        className="studio-button subtle"
-                        disabled={busy === "test:mcp:" + s.prefixo}
-                        onClick={() => test("mcp:" + s.prefixo)}
-                      >
-                        Testar
-                      </button>
-                      <button
-                        className="studio-button subtle danger"
-                        disabled={!!busy}
-                        onClick={() =>
-                          act("rm", async () => {
-                            await request("/api/conexoes/mcp/" + s.prefixo, "DELETE");
-                            await load();
-                            setNotice(`“${s.nome}” removido.`);
-                          })
-                        }
-                      >
-                        Remover
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>Nenhum servidor ainda. Adicione o endereço MCP do serviço e autorize em um clique.</p>
-            )}
-            <details className="node-tools">
-              <summary>Adicionar servidor</summary>
-              <label>
-                Nome
-                <input
-                  value={novo.nome}
-                  maxLength={60}
-                  placeholder="Ex.: CRM"
-                  onChange={(e) => setNovo({ ...novo, nome: e.target.value })}
-                />
-              </label>
-              <label>
-                Endereço
-                <input
-                  type="url"
-                  value={novo.url}
-                  placeholder="https://seu-servico/mcp"
-                  onChange={(e) => setNovo({ ...novo, url: e.target.value })}
-                />
-              </label>
-              <label>
-                Código de acesso (opcional)
-                <input
-                  type="password"
-                  autoComplete="off"
-                  value={novo.codigo}
-                  onChange={(e) => setNovo({ ...novo, codigo: e.target.value })}
-                />
-                <small>Sem código, use o botão Autorizar depois de adicionar.</small>
-              </label>
-              <button
-                className="studio-button primary"
-                disabled={!!busy || !novo.nome.trim() || !novo.url.trim()}
-                onClick={() =>
-                  act("add", async () => {
-                    await request("/api/conexoes/mcp", "POST", novo);
-                    setNovo({ nome: "", url: "", codigo: "" });
-                    await load();
-                    setNotice("Servidor adicionado.");
-                  })
-                }
-              >
-                Adicionar
-              </button>
-            </details>
           </Card>
           <Card
             icon={<Icon name="chat" size={22} />}
@@ -430,10 +339,11 @@ export function Connections() {
                     )}
                   </div>
                 )}
+                <WhatsAppTerms provider={provedor} acceptance={status.whatsapp.aceite} checked={acceptedProvider === provedor} onChange={(checked) => setAcceptedProvider(checked ? provedor : "")} />
                 <div className="studio-actions">
                   <button
                     className="studio-button primary"
-                    disabled={busy === "save"}
+                    disabled={busy === "save" || (["zapi", "zapperhub"].includes(provedor) && acceptedProvider !== provedor && status.whatsapp.aceite?.provedor !== provedor)}
                     onClick={() =>
                       save(status.whatsapp.campos.map((c) => c.chave))
                     }

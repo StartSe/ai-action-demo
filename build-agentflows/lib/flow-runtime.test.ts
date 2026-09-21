@@ -340,3 +340,25 @@ test("LLM sem mensagem recebe a conversa e depois o resultado anterior", async (
   const c = { prompt: "Contexto: {{input}}" };
   assert.equal(runtime.message(c, r), "Contexto: Pedido atrasado");
 });
+
+test("dois agentes reutilizam a mesma ferramenta com seleção independente e sem credenciais no fluxo", async () => {
+  const original = bridge.run;
+  const seen: string[][] = [];
+  bridge.run = async ({ tools = [] }) => {
+    seen.push(tools.map((t) => t.name));
+    const calc = tools.find((t) => t.name === "calculadora")!;
+    return calc.call({ expressao: "6 * 7" });
+  };
+  try {
+    const start = block("start", "start", 0, 0), one = block("agent", "one", 0, 0), two = block("agent", "two", 0, 0), end = block("end", "end", 0, 0);
+    one.data.config.tools = "interno:calculadora,interno:data_hora";
+    two.data.config.tools = "interno:calculadora";
+    end.data.config.text = "{{last}}";
+    const f = flow({ nodes: [start, one, two, end], edges: [{ id: "1", source: "start", target: "one" }, { id: "2", source: "one", target: "two" }, { id: "3", source: "two", target: "end" }] });
+    const run = await runtime.startRun(f.id, "Calcule", false, false);
+    assert.equal(run.status, "completed");
+    assert.equal(run.output, "42");
+    assert.deepEqual(seen, [["calculadora", "data_hora"], ["calculadora"]]);
+    assert.equal(run.trace.filter((t) => t.label === "Ferramenta: calculadora").length, 2);
+  } finally { bridge.run = original; }
+});

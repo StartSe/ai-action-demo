@@ -85,6 +85,7 @@ export function FlowEditor({ id }: { id: string }) {
   const [pendingInput, setPendingInput] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [demo, setDemo] = useState(false);
+  const [openrouterConnected, setOpenrouterConnected] = useState(false);
   const [snap, setSnap] = useState(false);
   const [dots, setDots] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -96,6 +97,16 @@ export function FlowEditor({ id }: { id: string }) {
   const [dark, setDark] = useState(false);
   const [voice, setVoice] = useState({ voz: false, ligacao: false });
   const { connection, setConnection } = useChatGPT();
+  const aiConnected = !!connection?.account || openrouterConnected;
+  const effectiveDemo = demo && !aiConnected;
+  useEffect(() => {
+    const refresh = () => {
+      void request<{ openrouter: { conectado: boolean } }>("/api/conexoes").then((s) => setOpenrouterConnected(s.openrouter.conectado)).catch(() => {});
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, []);
   useEffect(() => {
     let alive = true;
     void request<Flow>("/api/flows/" + id)
@@ -415,7 +426,7 @@ export function FlowEditor({ id }: { id: string }) {
       updateRun(
         await request<Run>("/api/flows/" + id + "/run", "POST", {
           input,
-          demo,
+          demo: effectiveDemo,
         }),
       );
     } catch (e) {
@@ -815,6 +826,10 @@ export function FlowEditor({ id }: { id: string }) {
             editar
           </div>
           <div className="canvas-right-actions">
+            {chat && <>
+              <IconButton icon="eraser" label="Limpar conversa" disabled={!session.length || running} onClick={() => setClearChat(true)} />
+              <IconButton icon="expand" label={expanded ? "Reduzir" : "Expandir"} active={expanded} onClick={() => setExpanded(!expanded)} />
+            </>}
             <button
               className={"chat-fab" + (chat ? " active" : "")}
               title={chat ? "Fechar chat" : "Testar Agentflow"}
@@ -832,8 +847,9 @@ export function FlowEditor({ id }: { id: string }) {
               session={session}
               pendingInput={pendingInput}
               running={running}
-              demo={demo}
-              connected={!!connection?.account}
+              demo={effectiveDemo}
+              connected={aiConnected}
+              providerLabel={connection?.account ? "ChatGPT · usa os limites da sua assinatura" : "OpenRouter · uso conforme o modelo escolhido"}
               expanded={expanded}
               voice={voice.voz}
               flowId={id}
@@ -841,9 +857,6 @@ export function FlowEditor({ id }: { id: string }) {
               onSend={(text) => void execute(text)}
               onChange={updateRun}
               onConnect={() => setConnect(true)}
-              onClose={() => setChat(false)}
-              onClear={() => setClearChat(true)}
-              onExpand={() => setExpanded(!expanded)}
             />
           )}
         </div>
@@ -882,7 +895,7 @@ export function FlowEditor({ id }: { id: string }) {
                       <strong>{r.input.slice(0, 70)}</strong>
                       <small>
                         {new Date(r.createdAt).toLocaleString("pt-BR")} ·{" "}
-                        {r.demo ? "Demonstração" : "ChatGPT"}
+                        {r.demo ? "Demonstração" : "Execução real"}
                       </small>
                     </span>
                     <span>

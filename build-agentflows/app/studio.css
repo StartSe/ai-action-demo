@@ -3286,3 +3286,41 @@
     max-width: 160px;
   }
 }
+
+/* Conexões e controles do chat */
+.connections-grid { align-items: start; }
+.connections-grid > .connection-card:nth-child(-n+2) { align-self: stretch; }
+.connection-card { display: flex; flex-direction: column; min-width: 0; }
+.connection-card > header { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+.connection-state { grid-column: 2; justify-self: start; margin-left: 0; }
+.connection-body { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.connection-body > .studio-actions { margin-top: auto; }
+.connection-body > .node-fields { align-content: start; }
+.whatsapp-terms { padding: 14px; border: 1px solid var(--studio-line); border-radius: 10px; background: var(--studio-bg); }
+.whatsapp-terms h3 { font-weight: 700; margin-bottom: 8px; }
+.whatsapp-terms p { margin-bottom: 8px; line-height: 1.6; }
+.whatsapp-terms .terms-check { display: flex; flex-direction: row; align-items: flex-start; gap: 8px; font-weight: 600; }
+.whatsapp-terms input { width: auto; margin-top: 4px; }
+.chatgpt-usage { border-top: 1px solid var(--studio-line); padding-top: 10px; }
+.usage-title, .usage-window > div { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.usage-window { margin: 10px 0; }
+.usage-window progress { width: 100%; height: 8px; accent-color: var(--studio-primary); }
+.chatgpt-usage small { color: var(--studio-muted); }
+.canvas-right-actions .studio-icon-button { width: 43px; height: 43px; background: var(--studio-surface); border: 1px solid var(--studio-line); border-radius: 12px; }
+@media (max-width: 700px) { .connections-grid { grid-template-columns: minmax(0, 1fr); } }
+.node-field, .tool-picker { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.node-field > input, .node-field > select, .node-field > textarea, .tool-picker > input { border: 1px solid var(--studio-line); border-radius: 8px; padding: 10px 12px; background: var(--studio-bg); color: var(--studio-text); width: 100%; }
+.tool-picker > p, .tool-picker > small { color: var(--studio-muted); font-size: 12px; }
+.tool-choice { display: inline-flex; gap: 2px; }
+.tool-choice small { margin-left: 4px; font-size: 9px; }
+.tool-setup { display: flex; flex-direction: column; gap: 12px; }
+.tool-server-details { border-top: 1px solid var(--studio-line); padding-top: 12px; }
+.tool-server-details > summary { cursor: pointer; font-weight: 650; }
+.tool-servers { display: grid; gap: 16px; margin-top: 12px; }
+.tool-server-row { display: grid; gap: 6px; border-bottom: 1px solid var(--studio-line); padding-bottom: 12px; }
+.tool-server-row small { overflow-wrap: anywhere; }
+
+.usage-window progress { appearance: none; border: 0; border-radius: 6px; overflow: hidden; background: var(--studio-line); }
+.usage-window progress::-webkit-progress-bar { background: var(--studio-line); }
+.usage-window progress::-webkit-progress-value { background: var(--studio-primary); }
+.usage-window progress::-moz-progress-bar { background: var(--studio-primary); }

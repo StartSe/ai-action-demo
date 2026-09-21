@@ -9,7 +9,7 @@ const { getConfig, setConfig } = await import("./store");
 const c = await import("./conexoes");
 test.after(() => rmSync(dir, { recursive: true, force: true }));
 test("salvar campos aceita só chaves conhecidas e preserva segredos mascarados", () => {
-  c.salvarCampos({ WHATSAPP_PROVEDOR: "zapi", ZAPI_TOKEN: "segredo-123456" });
+  c.salvarCampos({ WHATSAPP_PROVEDOR: "zapi", ZAPI_TOKEN: "segredo-123456" }, { provedor: "zapi", versao: "2026-09-20" });
   assert.equal(getConfig("ZAPI_TOKEN"), "segredo-123456");
   c.salvarCampos({ ZAPI_TOKEN: "segr••••3456" });
   assert.equal(getConfig("ZAPI_TOKEN"), "segredo-123456");
@@ -54,4 +54,31 @@ test("provedor do WhatsApp e estado das conexões", async () => {
   assert.equal(s.elevenlabs.ligacao, false);
   assert.equal(s.openrouter.conectado, false);
   assert.equal(s.elevenlabs.campos[0].mascarado, "sk_1••••7890");
+});
+
+test("aceite não oficial é específico por provedor, versionado e obrigatório antes de gravar", () => {
+  setConfig("WHATSAPP_ACEITE", null);
+  setConfig("WHATSAPP_PROVEDOR", "meta");
+  const fields = { WHATSAPP_PROVEDOR: "zapi", ZAPI_TOKEN: "novo" };
+  assert.throws(() => c.salvarCampos(fields), /aceite os termos/);
+  assert.equal(getConfig("WHATSAPP_PROVEDOR"), "meta");
+  assert.throws(() => c.salvarCampos(fields, { provedor: "zapperhub", versao: "2026-09-20" }), /aceite/);
+  assert.throws(() => c.salvarCampos(fields, { provedor: "zapi", versao: "antiga" }), /aceite/);
+  c.salvarCampos(fields, { provedor: "zapi", versao: "2026-09-20" });
+  assert.equal(c.aceiteWhatsAppAtual()?.provedor, "zapi");
+  assert.ok(c.aceiteWhatsAppAtual()?.data);
+  assert.throws(() => c.salvarCampos({ WHATSAPP_PROVEDOR: "zapperhub" }), /aceite/);
+  c.salvarCampos({ WHATSAPP_PROVEDOR: "meta" });
+  assert.throws(() => c.salvarCampos({ TOOL_TAVILY_KEY: "should-not-save", INVALID: "x" }), /desconhecido/);
+  assert.equal(getConfig("TOOL_TAVILY_KEY"), undefined);
+});
+test("editar servidor preserva vínculo dos agentes e troca de endereço invalida a autorização", async () => {
+  const server = c.adicionarServidorMCP("Antes", "https://a.example/mcp", "token-a");
+  c.atualizarServidorMCP(server.prefixo, "Depois", "https://a.example/mcp");
+  assert.equal(c.servidorMCP(server.prefixo).nome, "Depois");
+  assert.equal(getConfig(`${server.prefixo}_CODIGO`), "token-a");
+  c.atualizarServidorMCP(server.prefixo, "Depois", "https://b.example/mcp", "token-b");
+  assert.equal(c.servidorMCP(server.prefixo).url, "https://b.example/mcp");
+  assert.equal(getConfig(`${server.prefixo}_CODIGO`), "token-b");
+  c.removerServidorMCP(server.prefixo);
 });

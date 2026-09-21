@@ -1,13 +1,13 @@
 // Autorizar (OAuth do servidor MCP) e remover um servidor de ferramentas.
-import { removerServidorMCP, servidorMCP } from "@/lib/conexoes";
+import { removerServidorMCP, servidorMCP, atualizarServidorMCP } from "@/lib/conexoes";
 import { iniciarAutorizacao } from "@/lib/mcp-oauth";
 import { baseUrl } from "@/lib/setup-comum";
-import { api } from "@/lib/flow-api";
+import { api, body } from "@/lib/flow-api";
 type C = { params: Promise<{ prefixo: string }> };
 export async function GET(req: Request, c: C) {
   const { prefixo } = await c.params;
   const voltar = (erro: string) =>
-    Response.redirect(`${baseUrl(req)}/conexoes?erro=${encodeURIComponent(erro)}`, 302);
+    Response.redirect(`${baseUrl(req)}/ferramentas?erro=${encodeURIComponent(erro)}`, 302);
   try {
     const s = servidorMCP(prefixo);
     const redirectUri = `${baseUrl(req)}/api/conexoes/mcp/${prefixo}/callback`;
@@ -32,4 +32,8 @@ export async function DELETE(_: Request, c: C) {
     removerServidorMCP((await c.params).prefixo);
     return { ok: true };
   });
+}
+
+export async function PUT(req: Request, c: C) {
+  return api(async () => { const b = await body(req); atualizarServidorMCP((await c.params).prefixo, b.nome, b.url, b.codigo); return { ok: true }; });
 }

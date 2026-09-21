@@ -182,3 +182,15 @@ Concluída na versão 0.4.0, com testes e verificação visual por Playwright.
   MCP em Conexões.
 - Ferramentas que exigem navegador ou execução de código (Web Browser, Code
   Interpreter).
+
+# Rodada 4 (20/09/2026): conexões, limites e ferramentas — 0.5.0
+
+- Remover ferramentas de Conexões e alinhar os quatro cartões.
+- Mostrar termos StartSe para WhatsApp não oficial e registrar o aceite por provedor.
+- Ocultar exemplos e simulação do chat com IA conectada; centralizar limpar, expandir e fechar no topo.
+- Consultar limites e renovação da assinatura pelo protocolo oficial do Codex.
+- Completar as 24 ferramentas solicitadas, mantendo as existentes; seleção por agente e credencial compartilhada por serviço.
+- Gerenciar credenciais e servidores no Agente, com edição, autorização, teste e remoção.
+- Testes de contratos, motor com dois agentes, navegador desktop/celular, lint, build e verificadores da suíte antes de publicar na main.
+
+As limitações das rodadas anteriores sobre Gmail, Google/Microsoft, Browserless, Slack, E2B e arquivos foram superadas por esta rodada. Configuração, ações e limites atuais estão documentados no README.

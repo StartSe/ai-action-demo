@@ -7,6 +7,8 @@ import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
 
+import { normalizeUsage } from "./account-usage";
+
 type Json = Record<string, unknown>;
 type Message = {
   id?: number | string;
@@ -295,6 +297,10 @@ export class ChatGPTBridge {
       login: this.login,
       error: this.loginError,
     };
+  }
+  async usage() {
+    if (!(await this.account()).account) throw new Error("Conecte sua conta ChatGPT para consultar os limites.");
+    return normalizeUsage(await this.rpc("account/rateLimits/read"));
   }
   async beginLogin(): Promise<DeviceLogin> {
     await this.start();
