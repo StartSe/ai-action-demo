@@ -15,6 +15,8 @@ Transforma vídeos públicos do YouTube, PDFs, páginas e textos em mapas mentai
 
 O exemplo é identificado como demonstração e não simula uma resposta de IA. Fontes reais exigem conexão. A conversa usa o mapa e uma seleção de trechos relevantes; não é uma busca exaustiva em todos os documentos.
 
+A versão instalada aparece no header da biblioteca e do editor, inclusive no celular. O indicador e `/api/health` usam a mesma versão de `package.json`.
+
 ## Executar localmente
 
 Node 22.13+ (ou 24) e Python 3.10+.

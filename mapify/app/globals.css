@@ -358,6 +358,27 @@ small,
   font-weight: 550;
   color: #6a6278;
 }
+.app-version {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding: 3px 7px;
+  border: 1px solid #e6ddf2;
+  border-radius: 6px;
+  background: #f8f5fc;
+  color: #795b91;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.library-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
 .connection-pill {
   display: flex;
   align-items: center;
@@ -1246,6 +1267,13 @@ textarea {
   gap: 20px;
   border-bottom: 1px solid var(--line);
   background: #fff;
+}
+.editor-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  flex-shrink: 0;
 }
 .editor-brand .logo {
   font-size: 23px;
@@ -2223,6 +2251,13 @@ textarea {
     height: 55px;
     padding: 0 20px;
     font-size: 10px;
+  }
+  .library-top .breadcrumb,
+  .library-top .breadcrumb-divider {
+    display: none;
+  }
+  .library-top-actions {
+    gap: 8px;
   }
   .library-content {
     padding: 0 20px;

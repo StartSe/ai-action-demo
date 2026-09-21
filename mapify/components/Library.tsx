@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Logo, Icon, IconButton, ErrorBox, request } from "./ui";
 import { CreateMap } from "./CreateMap";
 import { Connections } from "./Connections";
+import { AppVersion } from "./AppVersion";
 import {
   colors,
   sourceLabels,
@@ -202,14 +203,17 @@ export function Library() {
               {filter === "favorite" ? "Favoritos" : "Biblioteca"}
             </strong>
           </div>
-          <button
-            className="connection-pill"
-            onClick={() => setConnections(true)}
-          >
-            <span className={"status-dot" + (connected ? " online" : "")} />
-            {connected ? "IA conectada" : "Conectar IA"}
-            <Icon name="link" size={15} />
-          </button>
+          <div className="library-top-actions">
+            <AppVersion />
+            <button
+              className="connection-pill"
+              onClick={() => setConnections(true)}
+            >
+              <span className={"status-dot" + (connected ? " online" : "")} />
+              {connected ? "IA conectada" : "Conectar IA"}
+              <Icon name="link" size={15} />
+            </button>
+          </div>
         </header>
         <div className="library-content">
           <section className="welcome">

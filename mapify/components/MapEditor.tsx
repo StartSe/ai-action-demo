@@ -5,6 +5,7 @@ import Link from "next/link";
 import { MapCanvas } from "./MapCanvas";
 import { Icon, IconButton, Logo, Modal, ErrorBox, request } from "./ui";
 import { Connections } from "./Connections";
+import { AppVersion } from "./AppVersion";
 import { demoMap } from "@/lib/demo";
 import {
   findNode,
@@ -321,6 +322,7 @@ export function MapEditor({ id }: { id: string }) {
           }}
         >
           <Logo />
+          <AppVersion />
         </Link>
         <span className="header-separator" />
         <div className="map-heading">

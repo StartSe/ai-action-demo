@@ -1,3 +1,5 @@
+import { version } from "@/package.json";
+
 export function GET() {
-  return Response.json({ ok: true, app: "mapify", version: "1.0.2" });
+  return Response.json({ ok: true, app: "mapify", version });
 }

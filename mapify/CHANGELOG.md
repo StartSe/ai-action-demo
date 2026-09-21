@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.3 — 2026-09-21
+
+- Versão do app visível no header da biblioteca e do editor de mapas, inclusive no celular.
+- O indicador da interface e `/api/health` leem a versão de `package.json`, evitando divergências entre a tela e o diagnóstico da instalação.
+
 ## 1.0.2 — 2026-09-21
 
 - Registrada a validação do vídeo `1QNsdr-Qx_I` com a biblioteca não oficial `youtube-transcript-api`: extração local bem-sucedida, com 1.949 caracteres agrupados em três trechos; consulta pelo Render bloqueada pelo YouTube.
