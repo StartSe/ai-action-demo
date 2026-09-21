@@ -9,6 +9,7 @@
 // scorecard. Este módulo só guarda estado.
 import { agora, banco, gerarId } from "./banco";
 import { semearDemonstracao } from "./semear-demo";
+import { periodoPadrao } from "./prazo-convite";
 
 export type StatusEntrevista = "convidada" | "aberta" | "em_andamento" | "concluida" | "avaliada" | "expirada" | "cancelada";
 /** Os três níveis da conversa (D3): agente da ElevenLabs, voz do navegador, texto. Nulo até a sala abrir. */
@@ -39,6 +40,8 @@ export type Entrevista = {
   abertaEm?: string;
   iniciadaEm?: string;
   concluidaEm?: string;
+  /** Início da disponibilidade do convite, diferente do início real da conversa. */
+  iniciaEm?: string;
   expiraEm?: string;
   /** Id do parecer em lib/historico.ts (o link /r/<id>), preenchido quando a avaliação termina. */
   resultadoId?: string;
@@ -74,6 +77,7 @@ type LinhaEntrevista = {
   abertaEm: string | null;
   iniciadaEm: string | null;
   concluidaEm: string | null;
+  iniciaEm: string | null;
   expiraEm: string | null;
   resultadoId: string | null;
   parecerStatus: string | null;
@@ -116,6 +120,7 @@ function linhaParaEntrevista(l: LinhaEntrevista): Entrevista {
     abertaEm: l.abertaEm ?? undefined,
     iniciadaEm: l.iniciadaEm ?? undefined,
     concluidaEm: l.concluidaEm ?? undefined,
+    iniciaEm: l.iniciaEm ?? l.convidadaEm ?? l.criadoEm,
     expiraEm: l.expiraEm ?? undefined,
     resultadoId: l.resultadoId ?? undefined,
     parecerStatus: PARECER_STATUS.includes(l.parecerStatus as ParecerStatus) ? (l.parecerStatus as ParecerStatus) : "nao_pedido",
@@ -147,7 +152,7 @@ function linhaParaMensagem(l: LinhaMensagem): MensagemEntrevista {
  */
 export function expirarVencidas(): void {
   banco()
-    .prepare("UPDATE entrevistas SET status = 'expirada' WHERE status IN ('convidada', 'aberta') AND expiraEm IS NOT NULL AND expiraEm < ?")
+    .prepare("UPDATE entrevistas SET status = 'expirada' WHERE status IN ('convidada', 'aberta') AND expiraEm IS NOT NULL AND expiraEm <= ?")
     .run(agora());
 }
 
@@ -162,6 +167,7 @@ export function criar({
   vagaId,
   candidatoId,
   codigo,
+  iniciaEm,
   expiraEm,
   exemplo = false,
   status = "convidada",
@@ -169,6 +175,7 @@ export function criar({
   vagaId: string;
   candidatoId: string;
   codigo?: string;
+  iniciaEm?: string;
   expiraEm?: string;
   exemplo?: boolean;
   status?: StatusEntrevista;
@@ -178,12 +185,13 @@ export function criar({
 
   const id = gerarId();
   const momento = agora();
+  const periodo = periodoPadrao(new Date(momento));
   banco()
     .prepare(
-      `INSERT INTO entrevistas (id, vagaId, candidatoId, codigo, status, convidadaEm, expiraEm, exemplo, criadoEm)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO entrevistas (id, vagaId, candidatoId, codigo, status, convidadaEm, iniciaEm, expiraEm, exemplo, criadoEm)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(id, vagaId, candidatoId, codigo ?? null, status, momento, expiraEm ?? null, exemplo ? 1 : 0, momento);
+    .run(id, vagaId, candidatoId, codigo ?? null, status, momento, iniciaEm ?? periodo.iniciaEm, expiraEm ?? periodo.expiraEm, exemplo ? 1 : 0, momento);
   const entrevista = obter(id);
   if (!entrevista) throw new Error("A entrevista recém-criada não foi encontrada no banco.");
   return entrevista;
@@ -276,10 +284,10 @@ export function mudarStatus(id: string, status: StatusEntrevista, extras: { nive
 }
 
 /** Define o código do link público depois que o convite foi criado (US-013). */
-export function definirCodigo(id: string, codigo: string, expiraEm?: string): Entrevista | null {
+export function definirCodigo(id: string, codigo: string, expiraEm?: string, iniciaEm?: string): Entrevista | null {
   const { changes } = banco()
-    .prepare("UPDATE entrevistas SET codigo = ?, expiraEm = COALESCE(?, expiraEm) WHERE id = ?")
-    .run(codigo, expiraEm ?? null, id);
+    .prepare("UPDATE entrevistas SET codigo = ?, expiraEm = COALESCE(?, expiraEm), iniciaEm = COALESCE(?, iniciaEm) WHERE id = ?")
+    .run(codigo, expiraEm ?? null, iniciaEm ?? null, id);
   return Number(changes) > 0 ? obter(id) : null;
 }
 

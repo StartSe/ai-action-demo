@@ -3,8 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { Room, RoomEvent, Track, ParticipantKind, type RemoteParticipant } from "livekit-client";
 import { MicrofoneEntrevista } from "@/lib/microfone-entrevista";
 import type { Troca } from "@/lib/types";
+import { useConfirmacao } from "./ui";
+import { AVISO_ENCERRAMENTO } from "@/lib/avisos-entrevista";
 
 export function SalaLiveKit({ codigo, tentativaAtual = 1, cargo, onFinalizar, onTexto }: { codigo: string; tentativaAtual?: number; cargo: string; onFinalizar: (falas: Troca[]) => Promise<void>; onTexto: () => void }) {
+  const { confirmar, Dialogo } = useConfirmacao();
+  const confirmando = useRef(false);
   const microfone = useRef<MicrofoneEntrevista | null>(null);
   const [agenteFalando, setAgenteFalando] = useState(false);
   const [pausaManual, setPausaManual] = useState(false);
@@ -112,7 +116,15 @@ export function SalaLiveKit({ codigo, tentativaAtual = 1, cargo, onFinalizar, on
     catch { setErro("Não foi possível enviar. Seu texto continua aqui para tentar de novo."); }
     finally { setEnviando(false); }
   }
+  async function encerrar() {
+    if (confirmando.current) return;
+    confirmando.current = true;
+    try {
+      if (await confirmar(AVISO_ENCERRAMENTO, { confirmarRotulo: "Encerrar", cancelarRotulo: "Continuar a conversa" })) await onFinalizar(falas.current);
+    } finally { confirmando.current = false; }
+  }
   return <section className="card !p-0 overflow-hidden" aria-label="Conversa com a entrevistadora">
+    {Dialogo}
     <header className="px-6 pt-6 flex justify-between gap-4 items-start"><div><h1 className="font-bold text-lg">Sua entrevista</h1><p className="text-sm text-muted">{cargo}</p></div><span className="text-xs text-muted">{progresso}</span></header>
     <div className="px-6 py-8 text-center">
       <div aria-hidden="true" className={`mx-auto size-28 rounded-full bg-gradient-to-br from-violet-300 via-purple-600 to-indigo-900 shadow-[0_0_55px_12px_rgba(139,92,246,0.25)] ${conectado && !mudo ? "motion-safe:animate-pulse" : ""}`} />
@@ -127,7 +139,7 @@ export function SalaLiveKit({ codigo, tentativaAtual = 1, cargo, onFinalizar, on
       {historico.length > 1 && <details className="mt-5"><summary className="cursor-pointer text-sm text-accent font-semibold">Ver conversa anterior</summary><ol className="mt-3 space-y-3 max-h-60 overflow-auto">{historico.slice(0, -1).map((item, i) => <li key={i} className="text-sm"><strong>{item.papel === "candidato" ? "Você" : "Entrevistadora"}: </strong>{item.texto}</li>)}</ol></details>}
     </div>
     <footer className="border-t border-line p-5 space-y-4">
-      <div className="flex items-center justify-center gap-3 flex-wrap"><button type="button" className="btn-primary !w-auto" aria-pressed={mudo} disabled={!conectado || microfoneOcupado} onClick={() => void (agenteFalando ? interromper() : alternarMicrofone())}>{agenteFalando ? "Interromper e falar" : pausaManual ? "Ativar microfone" : "Pausar microfone"}</button><button className="btn-ghost" disabled={!historico.some((f) => f.papel === "candidato")} onClick={() => void onFinalizar(falas.current)}>Encerrar entrevista</button></div>
+      <div className="flex items-center justify-center gap-3 flex-wrap"><button type="button" className="btn-primary !w-auto" aria-pressed={mudo} disabled={!conectado || microfoneOcupado} onClick={() => void (agenteFalando ? interromper() : alternarMicrofone())}>{agenteFalando ? "Interromper e falar" : pausaManual ? "Ativar microfone" : "Pausar microfone"}</button><button className="btn-ghost" disabled={!historico.some((f) => f.papel === "candidato")} onClick={() => void encerrar()}>Encerrar entrevista</button></div>
       <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void enviarTexto(); }}><input className="input min-w-0" aria-label="Responder por texto" placeholder="Se preferir, escreva sua resposta" value={texto} maxLength={5000} onChange={(e) => { setTexto(e.target.value); void controleDaConversa("digitando").catch(() => {}); }} /><button className="btn-ghost" disabled={!conectado || enviando || !texto.trim()}>Enviar</button></form>
     </footer>
   </section>;

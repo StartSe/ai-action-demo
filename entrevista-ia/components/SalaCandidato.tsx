@@ -15,6 +15,7 @@ import { carregarConversaComRecuperacao } from "@/lib/carregar-conversa";
 //     configura nada e não recebe recado de quem administra o app.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Aviso, ErrorBox, lerErro, useConfirmacao, type ErroLido } from "./ui";
+import { AVISO_ENCERRAMENTO } from "@/lib/avisos-entrevista";
 import { criarPausaDespedida } from "@/lib/pausa-despedida";
 import { criarEscuta, type SessaoEscuta } from "@/lib/escuta";
 import type { CodigoErroIA } from "@/lib/ai";
@@ -541,7 +542,7 @@ export function SalaCandidato({
 
   async function onEncerrar() {
     if (encerrando) return;
-    const confirmado = await confirmar("Quer encerrar a entrevista agora? As respostas que você já deu são enviadas do mesmo jeito.", {
+    const confirmado = await confirmar(AVISO_ENCERRAMENTO, {
       confirmarRotulo: "Encerrar",
       cancelarRotulo: "Continuar a conversa",
     });

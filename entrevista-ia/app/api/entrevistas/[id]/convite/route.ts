@@ -26,6 +26,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     progresso,
     entrevistaId: id,
     expiraEmDias: corpo?.expiraEmDias,
+    iniciaEm: corpo?.iniciaEm,
+    expiraEm: corpo?.expiraEm,
     origem: baseUrl(req),
     remetente: sessaoAtual(req)?.nome,
   }));

@@ -16,6 +16,8 @@
 //     nível 2 a qualquer momento, sem perder a entrevista.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SalaCandidato, type PropsSalaCandidato } from "./SalaCandidato";
+import { useConfirmacao } from "./ui";
+import { AVISO_ENCERRAMENTO } from "@/lib/avisos-entrevista";
 
 const SCRIPT_ID = "elevenlabs-convai-script";
 const SCRIPT_SRC = "https://unpkg.com/@elevenlabs/convai-widget-embed";
@@ -110,12 +112,16 @@ export function SalaAgenteCandidato({
   }, [aguardando, codigo]);
 
   const conversarPorAqui = useCallback(() => setFase("navegador"), []);
-  const encerrar = useCallback(() => setAguardando(true), []);
+  const { confirmar, Dialogo } = useConfirmacao();
+  async function encerrar() {
+    if (await confirmar(AVISO_ENCERRAMENTO, { confirmarRotulo: "Encerrar", cancelarRotulo: "Continuar a conversa" })) setAguardando(true);
+  }
 
   if (fase === "navegador") return <SalaCandidato {...navegador} />;
 
   return (
     <div className="room reveal">
+      {Dialogo}
       <div className="room-head">
         <div className="avatar">
           <span>E</span>

@@ -40,6 +40,7 @@ export async function POST(req: Request) {
   if (entrevistaId) {
     const entrevista = obterEntrevista(entrevistaId);
     if (!entrevista) return Response.json({ error: "Essa entrevista não existe mais." }, { status: 404 });
+    if (entrevista.iniciaEm && Date.parse(entrevista.iniciaEm) > Date.now()) return Response.json({ error: "Aguarde o início do período da entrevista para ligar." }, { status: 403 });
     if (entrevista.status !== "convidada" && entrevista.status !== "aberta") {
       return Response.json(
         { error: "Esta entrevista já saiu da espera: só dá para ligar enquanto o candidato ainda não conversou." },

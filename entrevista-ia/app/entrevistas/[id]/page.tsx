@@ -10,6 +10,7 @@
 // Esta tela substitui `/r/<resultadoId>` como destino das listas. `/r/[id]` continua abrindo o
 // parecer (links já copiados, o Histórico), só que sem o cabeçalho, a decisão e as ações daqui.
 import Link from "next/link";
+import { dataDoPrazo, PRAZO_PADRAO } from "@/lib/prazo-convite";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { ConteudoParecer } from "@/components/ConteudoParecer";
@@ -102,7 +103,7 @@ export default function Page() {
   async function reabrir() {
     if (!entrevista || reabrindo) return;
     const tentativa = entrevista.tentativa;
-    if (!await confirmar("Reabrir a entrevista? A conversa, o parecer e a decisão atuais serão apagados. A pessoa poderá começar novamente pelo mesmo link, válido por mais 15 dias.", { confirmarRotulo: "Reabrir entrevista" })) return;
+    if (!await confirmar(`Reabrir a entrevista? A conversa, o parecer e a decisão atuais serão apagados. A pessoa poderá começar novamente pelo mesmo link, válido por mais ${PRAZO_PADRAO} dias.`, { confirmarRotulo: "Reabrir entrevista" })) return;
     setReabrindo(true);
     setErroTela(null);
     try {
@@ -187,9 +188,13 @@ export default function Page() {
                   <ChipSituacao entrevista={entrevista} />
                   {entrevista.exemplo && <Chip nivel="cinza">Exemplo</Chip>}
                 </div>
+                {entrevista.iniciaEm && entrevista.expiraEm && <p className="text-sm text-muted mt-3">Período da entrevista: de {dataDoPrazo(entrevista.iniciaEm)} até {dataDoPrazo(entrevista.expiraEm)} (horário de Brasília).</p>}
               </div>
 
               <div className="no-print flex flex-wrap items-center gap-2 max-sm:w-full max-sm:justify-between">
+                {entrevista.codigo && ["convidada", "aberta", "expirada"].includes(entrevista.status) && (
+                  <button type="button" className="btn-ghost !h-11 !py-0 !text-sm" onClick={() => setConvite({ entrevistaId: entrevista.id, reenviar: false })}>Ver convite e período</button>
+                )}
                 <button type="button" className="btn-ghost !h-11 !py-0 !text-sm" onClick={() => setAtribuindo(true)}>
                   Nova entrevista
                 </button>
@@ -279,7 +284,7 @@ export default function Page() {
         />
       )}
       {convite && (
-        <DialogoConvite entrevistaId={convite.entrevistaId} reenviar={convite.reenviar} onFechar={() => setConvite(null)} />
+        <DialogoConvite entrevistaId={convite.entrevistaId} reenviar={convite.reenviar} onFechar={() => setConvite(null)} onMudou={recarregar} />
       )}
       {ligacao && entrevista && (
         <DialogoLigar

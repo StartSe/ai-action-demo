@@ -59,6 +59,8 @@ export default async function Page({ params }: PageProps<"/entrevista/[token]">)
       nome={nome}
       vaga={vaga}
       duracaoMin={duracaoMin}
+      iniciaEm={resultado.entrevista?.iniciaEm}
+      expiraEm={resultado.entrevista?.expiraEm}
       livekit={Boolean(resultado.entrevista) && livekitConfigurado()}
       vozLigada={ttsEnabled()}
       retomando={resultado.entrevista?.status === "em_andamento"}

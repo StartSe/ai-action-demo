@@ -184,6 +184,12 @@ A criação ou renovação do convite permite até 90 segundos para preparar o r
 
 Um timeout antes dos cabeçalhos ou durante a leitura do corpo da resposta é convertido em `tempo_esgotado`, com orientação para tentar novamente ou trocar o modelo. O link continua condicionado à conclusão do roteiro. Testes cobrem ambos os caminhos de timeout e a manutenção do prazo entre tentativas; uma resposta simulada com corpo atrasado em 30 segundos valida a geração além do limite antigo.
 
+### Período e avisos da entrevista (0.9.0)
+
+Novos convites começam na data e hora atuais e terminam em 7 dias. Em **Ver convite e período**, o gestor pode editar o início e o fim antes da conversa começar. O convite e as boas-vindas mostram o período; a edição usa o fuso do dispositivo e a mensagem compartilhada identifica o horário de Brasília. O link não libera a entrevista antes do início e expira no fim para quem ainda não começou. Uma conversa em andamento pode ser concluída sem interrupção pelo prazo. Convites existentes mantêm a validade já salva, inclusive ao abrir o reenvio; convites vencidos são renovados em 7 dias.
+
+Antes de começar, o candidato recebe a orientação de procurar um ambiente calmo e tranquilo. Encerrar manualmente exige confirmar que não será possível iniciar novamente, tanto na sala por texto/voz do navegador quanto no LiveKit. A reabertura continua sendo uma ação exclusiva do gestor e também usa o prazo padrão de 7 dias.
+
 
 ### Condução da entrevista e parecer (0.4.5)
 

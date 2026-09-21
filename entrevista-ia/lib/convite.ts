@@ -24,7 +24,8 @@ import {
   obterPorCodigo,
   type Entrevista,
 } from "./entrevistas";
-import { AGRADECIMENTO_APOIO, data } from "./formato";
+import { AGRADECIMENTO_APOIO } from "./formato";
+import { dataDoPrazo, validarPeriodo, type PeriodoConvite } from "./prazo-convite";
 import { contarRespostas, criar, encerrar, expirou, obter as obterFormulario, type ParametrosPublicos } from "./formularios";
 import { getConfig } from "./store";
 import type { Vaga as VagaDaSala } from "./types";
@@ -35,8 +36,7 @@ import { obter as obterVaga } from "./vagas";
 export const TIPO_CONVITE = "entrevista";
 export const TIPO_CONVITE_ANTIGO = "scorecard";
 
-export const PRAZOS_VALIDOS = [7, 15, 30];
-export const PRAZO_PADRAO = 15;
+export { PRAZOS_VALIDOS, PRAZO_PADRAO, prazoValido } from "./prazo-convite";
 
 const MARCA = "E";
 export const NOME_PUBLICO = "Entrevistadora IA";
@@ -53,6 +53,7 @@ export type Convite = {
   /** A mensagem pronta, com o link dentro — a mesma que o envio por e-mail usa. */
   mensagem: string;
   assunto: string;
+  iniciaEm?: string;
   expiraEm?: string;
   candidatoNome: string;
   candidatoEmail?: string;
@@ -64,11 +65,6 @@ export type Convite = {
 };
 
 export type ResultadoConvite = { ok: true; convite: Convite } | { ok: false; erro: string; status: number; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string } };
-
-export function prazoValido(bruto: unknown): number {
-  const dias = Number(bruto);
-  return PRAZOS_VALIDOS.includes(dias) ? dias : PRAZO_PADRAO;
-}
 
 /** Há canal de e-mail conectado (caixa própria, Resend ou SMTP)? `lib/notificacoes.ts` é copiado sem
  * alterar entre os apps e não expõe essa pergunta; a resposta é montada aqui. */
@@ -98,6 +94,7 @@ export function mensagemConvite({
   cargo,
   duracaoMin,
   link,
+  iniciaEm,
   expiraEm,
   remetente,
 }: {
@@ -105,12 +102,13 @@ export function mensagemConvite({
   cargo: string;
   duracaoMin: number;
   link: string;
+  iniciaEm?: string;
   expiraEm?: string;
   remetente?: string;
 }): string {
   const primeiroNome = candidatoNome.trim().split(/\s+/)[0] || "Olá";
   const prazo = expiraEm
-    ? `O link vale até ${data(expiraEm)} e pode ser usado uma vez só.`
+    ? `A entrevista fica disponível ${iniciaEm ? `de ${dataDoPrazo(iniciaEm)} ` : ""}até ${dataDoPrazo(expiraEm)} (horário de Brasília). O link pode ser usado uma vez só.`
     : "O link pode ser usado uma vez só.";
   const linhas = [
     `${primeiroNome}, tudo bem?`,
@@ -118,6 +116,8 @@ export function mensagemConvite({
     `Queremos seguir com você no processo da vaga de ${cargo}. O próximo passo é uma conversa com a nossa entrevistadora de inteligência artificial: cerca de ${duracaoMin} minutos por voz, no seu celular ou computador, no horário que preferir.`,
     "",
     `É só abrir este link: ${link}`,
+    "",
+    "Antes de começar, procure um ambiente calmo e tranquilo, sem ruídos ou interrupções. Ao encerrar a entrevista, você não poderá iniciá-la novamente.",
     "",
     `Sobre a conversa: ela é gravada e analisada por inteligência artificial para apoiar a nossa decisão, e também consultamos informações públicas sobre você na internet. ${prazo}`,
     "",
@@ -152,10 +152,12 @@ function montar(entrevista: Entrevista, codigo: string, origem: string, remetent
         cargo: vaga.cargo,
         duracaoMin: vaga.duracaoMin,
         link,
+        iniciaEm: entrevista.iniciaEm,
         expiraEm: entrevista.expiraEm,
         remetente,
       }),
       assunto: `Conversa sobre a vaga de ${vaga.cargo}`,
+      iniciaEm: entrevista.iniciaEm,
       expiraEm: entrevista.expiraEm,
       candidatoNome: candidato.nome,
       candidatoEmail: candidato.email,
@@ -177,12 +179,16 @@ function montar(entrevista: Entrevista, codigo: string, origem: string, remetent
 export async function convidar({
   entrevistaId,
   expiraEmDias,
+  iniciaEm,
+  expiraEm,
   origem,
   remetente,
   progresso,
 }: {
   entrevistaId: string;
   expiraEmDias?: unknown;
+  iniciaEm?: unknown;
+  expiraEm?: unknown;
   origem: string;
   remetente?: string;
   progresso?: AoProgressoConvite;
@@ -190,6 +196,12 @@ export async function convidar({
   progresso?.("dados");
   const entrevista = obterEntrevista(entrevistaId);
   if (!entrevista) return { ok: false, erro: "Essa entrevista não existe mais.", status: 404 };
+  if (["em_andamento", "concluida", "avaliada"].includes(entrevista.status)) {
+    return { ok: false, erro: "O período só pode ser alterado antes de a entrevista começar.", status: 409 };
+  }
+  let periodo: PeriodoConvite;
+  try { periodo = validarPeriodo({ iniciaEm, expiraEm, expiraEmDias }); }
+  catch (err) { return { ok: false, erro: (err as Error).message, status: 400 }; }
   if (entrevista.status === "cancelada") {
     return { ok: false, erro: "Este convite foi cancelado. Adicione o candidato à vaga de novo para convidá-lo.", status: 400 };
   }
@@ -218,12 +230,13 @@ export async function convidar({
   // Revalida depois da IA: o gestor pode ter cancelado durante a preparação.
   const vigente = obterEntrevista(entrevista.id);
   if (!vigente || vigente.status === "cancelada") return { ok: false, erro: "Esta entrevista foi cancelada durante a preparação.", status: 409 };
+  if (["em_andamento", "concluida", "avaliada"].includes(vigente.status)) return { ok: false, erro: "A entrevista já começou. O período não pode mais ser alterado.", status: 409 };
+  try { validarPeriodo(periodo); }
+  catch (err) { return { ok: false, erro: (err as Error).message, status: 400 }; }
 
   const vagaAtual = obterVaga(vigente.vagaId);
   if (!vagaAtual || vagaAtual.status === "encerrada") return { ok: false, erro: "A vaga foi encerrada durante a preparação. Reabra a vaga antes de gerar o convite.", status: 409 };
   progresso?.("link");
-  const dias = prazoValido(expiraEmDias);
-  const expiraEm = new Date(Date.now() + dias * 24 * 60 * 60 * 1000).toISOString();
   const precisaDeLinkNovo = !vigente.codigo || vigente.status === "expirada" || !obterFormulario(vigente.codigo);
 
   let codigo = vigente.codigo as string;
@@ -241,8 +254,8 @@ export async function convidar({
     codigo = criar({ tipo: TIPO_CONVITE, campos: [], parametros, limite: 1 });
   }
 
-  definirCodigo(entrevista.id, codigo, expiraEm);
-  if (entrevista.status === "expirada") mudarStatus(entrevista.id, "convidada");
+  definirCodigo(entrevista.id, codigo, periodo.expiraEm, periodo.iniciaEm);
+  if (vigente.status === "expirada") mudarStatus(entrevista.id, "convidada");
 
   const atualizada = obterEntrevista(entrevista.id);
   if (!atualizada) return { ok: false, erro: "Essa entrevista não existe mais.", status: 404 };
@@ -267,6 +280,8 @@ export async function atribuirEConvidar({
   vagaId,
   candidatoId,
   expiraEmDias,
+  iniciaEm,
+  expiraEm,
   origem,
   remetente,
   progresso,
@@ -274,6 +289,8 @@ export async function atribuirEConvidar({
   vagaId: string;
   candidatoId: string;
   expiraEmDias?: unknown;
+  iniciaEm?: unknown;
+  expiraEm?: unknown;
   origem: string;
   remetente?: string;
   progresso?: AoProgressoConvite;
@@ -286,8 +303,11 @@ export async function atribuirEConvidar({
   }
   if (!obterCandidato(candidatoId)) return { ok: false, erro: "Esse candidato não existe mais.", status: 404 };
 
-  const entrevista = criarEntrevista({ vagaId, candidatoId });
-  const resultado = await convidar({ entrevistaId: entrevista.id, expiraEmDias, origem, remetente, progresso });
+  let periodo: PeriodoConvite;
+  try { periodo = validarPeriodo({ iniciaEm, expiraEm, expiraEmDias }); }
+  catch (err) { return { ok: false, erro: (err as Error).message, status: 400 }; }
+  const entrevista = criarEntrevista({ vagaId, candidatoId, ...periodo });
+  const resultado = await convidar({ entrevistaId: entrevista.id, ...periodo, origem, remetente, progresso });
   if (!resultado.ok) return resultado;
   return { ok: true, entrevista: obterEntrevista(entrevista.id)!, convite: resultado.convite };
 }
@@ -306,7 +326,7 @@ export function cancelarConvite(entrevistaId: string): Entrevista | null {
  * `concluida` é o único que não é má notícia: a conversa aconteceu e quem volta ao endereço vê a
  * mesma tela de agradecimento do fim da entrevista (US-021). Dizer "este link já foi usado" a quem
  * acabou de responder a oito perguntas soa como se a entrevista tivesse se perdido. */
-export type MotivoFechado = "invalido" | "expirado" | "usado" | "cancelado" | "concluida";
+export type MotivoFechado = "invalido" | "expirado" | "usado" | "cancelado" | "concluida" | "agendada";
 
 export type SalaPublica = {
   marca: string;
@@ -325,7 +345,7 @@ export const DURACAO_PADRAO = 15;
 export type ResolucaoConvite =
   | { ok: true; sala: SalaPublica }
   /** `nome` só vem com `motivo: "concluida"`: é o nome do agradecimento ("Obrigado, Bruno."). */
-  | { ok: false; motivo: MotivoFechado; nome?: string };
+  | { ok: false; motivo: MotivoFechado; nome?: string; iniciaEm?: string };
 
 /**
  * O que existe por trás de um código de link público — a única porta das quatro rotas públicas.
@@ -376,6 +396,9 @@ export function resolverConvite(codigo: string): ResolucaoConvite {
   if (concluida) return { ok: false, motivo: "concluida", nome: candidato.nome };
 
   if (entrevista.status === "expirada" || expirou(formulario)) return { ok: false, motivo: "expirado" };
+  if (entrevista.status !== "em_andamento" && entrevista.iniciaEm && Date.parse(entrevista.iniciaEm) > Date.now()) {
+    return { ok: false, motivo: "agendada", iniciaEm: entrevista.iniciaEm };
+  }
 
   return {
     ok: true,
@@ -398,6 +421,11 @@ export function resolverConvite(codigo: string): ResolucaoConvite {
 /** As frases que a tela pública mostra em cada motivo. Ficam aqui para a página e as rotas dizerem a
  * mesma coisa sobre o mesmo link. */
 export const FECHADO: Record<MotivoFechado, { titulo: string; descricao: string; status: number }> = {
+  agendada: {
+    titulo: "Esta entrevista ainda não está disponível",
+    descricao: "Aguarde a data e o horário de início informados no convite.",
+    status: 403,
+  },
   invalido: {
     titulo: "Este link não existe",
     descricao: "Confira se o endereço foi copiado inteiro, ou peça um link novo a quem enviou este convite.",
