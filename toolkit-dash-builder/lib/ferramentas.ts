@@ -9,7 +9,11 @@ import type { Meta } from "./ai";
 
 export const NOME_SERVIDOR = "toolkit-dash-builder";
 
-const link = (id: string) => `${enderecoPublico() ?? ""}/r/${id}`;
+/** Link absoluto para abrir o painel no app; undefined quando o endereço público ainda não é conhecido (sem APP_URL em produção). */
+function link(id: string): string | undefined {
+  const base = enderecoPublico();
+  return base ? `${base}/r/${id}` : undefined;
+}
 
 export const FERRAMENTAS: Ferramenta[] = [
   {
@@ -29,7 +33,8 @@ export const FERRAMENTAS: Ferramenta[] = [
       if (!descricao || descricao.trim().length < 10) throw new Error("Descreva o painel com pelo menos 10 letras.");
       if (descricao.length > 1000) throw new Error("Descreva o painel em até 1.000 caracteres.");
       const r = await gerarPainel({ descricao, esclarecimentos }, { guardar });
-      return { painel: r.painel, id: r.id, link: r.id ? link(r.id) : undefined, demo: r.demo, reaproveitado: r.reaproveitado };
+      const endereco = r.id ? link(r.id) : undefined;
+      return { painel: r.painel, id: r.id, link: endereco, demo: r.demo, reaproveitado: r.reaproveitado, ...(r.id && !endereco ? { aviso: "Endereço público do app não configurado: defina APP_URL ou o campo em Configurações para receber links absolutos." } : {}) };
     },
   },
   {

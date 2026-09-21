@@ -188,6 +188,7 @@ export default function Page() {
   /** Passo anterior à geração: a heurística local (e, no caso duvidoso, a IA) decide se vale perguntar algo. */
   async function avaliarEGerar(texto: string) {
     if (emAndamento.current) return;
+    emAndamento.current = true;
     setEstado({ fase: "carregando", descricao: texto });
     let perguntas: PerguntaEsclarecimento[] = [];
     try {
@@ -202,6 +203,8 @@ export default function Page() {
       }
     } catch {
       // O esclarecimento é um passo opcional de qualidade: qualquer falha segue direto para a geração.
+    } finally {
+      emAndamento.current = false;
     }
     if (perguntas.length > 0) {
       setEstado({ fase: "esclarecendo", descricao: texto, perguntas });

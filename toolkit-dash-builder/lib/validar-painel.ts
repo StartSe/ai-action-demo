@@ -36,7 +36,9 @@ const texto = (v: unknown, maximo: number): string => (typeof v === "string" ? v
 function numero(v: unknown): number | undefined {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim()) {
-    const n = Number(v.replace(/\./g, "").replace(",", "."));
+    // "1.250,5" (pt-BR) → 1250.5; "18.5" (JSON como texto) → 18.5; "18,5" → 18.5.
+    const texto = v.trim().replace(/^R\$\s*/, "").replace(/%$/, "");
+    const n = Number(texto.includes(",") ? texto.replace(/\./g, "").replace(",", ".") : texto);
     if (Number.isFinite(n)) return n;
   }
   return undefined;

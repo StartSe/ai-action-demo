@@ -16,7 +16,7 @@ export function Esclarecimento({ perguntas, onGerar, onPular, gerando }: { pergu
       <p className="text-muted text-sm mb-5">{perguntas.length === 1 ? "Uma pergunta rápida" : `${perguntas.length} perguntas rápidas`}. Responda o que souber ou pule direto para a geração.</p>
       <div className="flex flex-col gap-5">
         {perguntas.map((p, i) => {
-          const campoId = `esclarecimento-${p.id || i}`;
+          const campoId = `esclarecimento-${i}`; // pelo índice: a IA pode repetir o mesmo id em duas perguntas
           const atual = respostas[p.pergunta] ?? "";
           return (
             <div key={campoId}>
