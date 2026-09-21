@@ -1,9 +1,10 @@
+import { getConfig } from "./store";
 import { pertenceAoSite } from "./pesquisa";
 import { lerPesquisa } from "./pesquisa-store";
 import { brightDataConectada, enriquecerMarkdown } from "./brightdata";
 // Motor de geração do radar de sinais. Reaproveitado por app/api/radar/route.ts, por lib/rotinas-do-app.ts
 // (rotina semanal) e por lib/ferramentas.ts (ferramenta MCP montar_radar) — nunca duplicar este prompt/lógica.
-import { aiEnabled, askJSON, meta, modelName } from "./ai";
+import { aiProvider, ErroIA, aiEnabled, askJSON, meta, modelName } from "./ai";
 import { registrarResposta } from "./andamento";
 import { buscarDetalhado, ErroBusca, type Achado } from "./busca";
 import { esperar, radarDemo } from "./demo";
@@ -118,8 +119,12 @@ export type OpcoesRadar = {
 
 /** Gera o radar (demo, ou busca real + síntese via IA quando conectada) e devolve junto a proveniência (meta). */
 export async function montarRadar(dados: DadosRadar, { rodada }: OpcoesRadar = {}): Promise<Radar & { meta: ReturnType<typeof meta> }> {
-  if (!aiEnabled()) {
+  if (!(await aiEnabled())) {
+    if (getConfig("RADAR_OCULTAR_EXEMPLOS") === "1") throw new ErroIA("chave_ausente", "Conecte a IA em Configurações para gerar seu radar.", 401, { rotulo: "Conectar a IA", url: "/setup#ia" });
+    if (aiProvider() === "chatgpt") throw new ErroIA("chave_ausente", "Conecte sua conta ChatGPT em Configurações para analisar seus temas.", 401, { rotulo: "Conectar a IA", url: "/setup#ia" });
     await esperar(1300);
+    // Uma limpeza pode acontecer enquanto a demonstração estava sendo montada.
+    if (getConfig("RADAR_OCULTAR_EXEMPLOS") === "1") throw new ErroIA("chave_ausente", "Os exemplos foram removidos. Conecte a IA para gerar seu radar.", 401, { rotulo: "Conectar a IA", url: "/setup#ia" });
     const insumo = "temas acompanhados e período informado";
     return { ...radarDemo(dados.periodoDias), meta: meta({ demo: true, insumo }) };
   }

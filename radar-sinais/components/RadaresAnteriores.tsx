@@ -1,15 +1,17 @@
 "use client";
 // Lista compacta dos últimos radares salvos (GET /api/radar), no fim de /radar: abre o radar salvo
 // (/r/[id]) ou refaz a pesquisa com os mesmos temas. Não é um item de menu, por decisão de 19/09/2026.
+import { DadosTeste } from "./DadosTeste";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { data } from "@/lib/formato";
 import type { DadosRadar } from "@/lib/types";
 
-type Item = { id: string; titulo: string; criadoEm: string; entrada: DadosRadar };
+type Item = { id: string; titulo: string; criadoEm: string; demo: boolean; entrada: DadosRadar };
 
-export function RadaresAnteriores({ atual, atualizadoEm }: { atual?: string; atualizadoEm?: string }) {
+export function RadaresAnteriores({ atual, atualizadoEm, aoRemoverExemplos }: { atual?: string; atualizadoEm?: string; aoRemoverExemplos?: () => void }) {
   const [itens, setItens] = useState<Item[] | null>(null);
+  const [revisao, setRevisao] = useState(0);
   const [falhou, setFalhou] = useState(false);
   useEffect(() => {
     let ativo = true;
@@ -18,8 +20,9 @@ export function RadaresAnteriores({ atual, atualizadoEm }: { atual?: string; atu
       .then((d) => { if (ativo) setItens(d.itens ?? []); })
       .catch(() => { if (ativo) setFalhou(true); });
     return () => { ativo = false; };
-  }, [atualizadoEm]);
-  if (falhou || !itens || itens.length === 0) return null;
+  }, [atualizadoEm, revisao]);
+  if (falhou) return <p role="alert" className="mt-4">Não foi possível carregar os radares anteriores.</p>;
+  if (!itens) return null;
   return (
     <section id="anteriores" className="mt-6">
       <h2 className="section-title">Radares anteriores</h2>
@@ -31,7 +34,7 @@ export function RadaresAnteriores({ atual, atualizadoEm }: { atual?: string; atu
               <span className="flex-1 min-w-[200px]">
                 <span className="block font-semibold text-ink leading-snug">{r.entrada.temas.join(" · ")}</span>
                 <span className="text-xs text-muted">
-                  {data(r.criadoEm, { comHora: true })} · últimos {r.entrada.periodoDias} dias{r.id === atual ? " · este radar" : ""}
+                  {data(r.criadoEm, { comHora: true })} · últimos {r.entrada.periodoDias} dias{r.id === atual ? " · este radar" : ""}{r.demo ? " · demonstração" : ""}
                 </span>
               </span>
               <span className="flex gap-3 shrink-0">
@@ -42,6 +45,8 @@ export function RadaresAnteriores({ atual, atualizadoEm }: { atual?: string; atu
           );
         })}
       </ul>
+      {itens.length === 0 && <p className="text-sm text-muted">Nenhum radar salvo.</p>}
+      <DadosTeste key={atualizadoEm} aoRemover={() => { setRevisao(v => v + 1); aoRemoverExemplos?.(); }} />
     </section>
   );
 }

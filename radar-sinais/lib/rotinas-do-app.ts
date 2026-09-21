@@ -38,6 +38,7 @@ function tituloNormalizado(s: Sinal): string {
 }
 
 registrarExecutor(TIPO_RADAR_SEMANAL.tipo, async (rotina: Rotina) => {
+  if (!(await aiEnabled())) throw new Error("Conecte a IA em Configurações para monitorar fontes reais.");
   const titulo = "Radar semanal dos seus temas";
   const parametros = rotina.parametros as Partial<DadosRadar> | undefined;
   const temas = Array.isArray(parametros?.temas) ? parametros.temas.map((t) => String(t).trim()).filter(Boolean) : [];
@@ -74,7 +75,7 @@ registrarExecutor(TIPO_RADAR_SEMANAL.tipo, async (rotina: Rotina) => {
 });
 
 registrarExecutor(TIPO_MONITORAMENTO, async (rotina: Rotina) => {
-  if (!aiEnabled()) throw new Error("Conecte a IA em Configurações para monitorar fontes reais.");
+  if (!(await aiEnabled())) throw new Error("Conecte a IA em Configurações para monitorar fontes reais.");
   const dados = validarMonitoramento(rotina.parametros);
   const { meta, ...radar } = await montarRadar(dados);
   if (meta.demo) throw new Error("O monitoramento não envia dados de demonstração.");

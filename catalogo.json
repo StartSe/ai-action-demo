@@ -228,7 +228,7 @@
       ],
       "problema": "Movimentos do mercado chegam tarde e dispersos.",
       "ia": "Monitora termos cadastrados na web, gera grafos interativos e envia insights de negócio às 8h, 16h e 20h, com horários configuráveis.",
-      "integracoes": "IA (OpenRouter). Exa, Tavily e Bright Data (Search Engine e Scraper as Markdown, MCP HTTP com pro=1). E-mail ou Slack para alertas. Fontes públicas sem chave também disponíveis.",
+      "integracoes": "IA via OpenRouter ou assinatura ChatGPT. Exa, Tavily e Bright Data (Search Engine e Scraper as Markdown, MCP HTTP com pro=1). E-mail ou Slack para alertas. Fontes públicas sem chave também disponíveis.",
       "acento": "#0a707f",
       "porta": 3011,
       "captura": "capturas/radar-sinais.png",
@@ -241,7 +241,8 @@
       "plano": "starter",
       "discoGB": 1,
       "discoGuarda": "a configuração, a conta, os termos monitorados, as rotinas e os radares",
-      "independente": true
+      "independente": true,
+      "versao": "0.2.0"
     },
     {
       "id": "bussola-ia",

@@ -12,14 +12,14 @@ import { MODELOS_GRATUITOS, type ProximoPasso } from "@/lib/modelos";
 export type UsuarioTopbar = { nome: string; email: string };
 export type NotificacaoTopbar = { id: string; texto: string; url?: string };
 
-export type Status = { ai: boolean; demo: boolean; model: string; integrations?: Record<string, boolean>; setup?: { pronto: boolean; url: string }; usuario?: UsuarioTopbar | null; proximos?: ProximoPasso[] };
+export type Status = { ai: boolean; exemplos?: boolean; demo: boolean; model: string; integrations?: Record<string, boolean>; setup?: { pronto: boolean; url: string }; usuario?: UsuarioTopbar | null; proximos?: ProximoPasso[] };
 
 export function useStatus() {
   const [status, setStatus] = useState<Status | null>(null);
   const [erro, setErro] = useState(false);
   const router = useRouter();
   useEffect(() => {
-    fetch("/api/status")
+    const carregar = () => fetch("/api/status")
       .then((r) => {
         if (r.status === 401) {
           router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
@@ -29,6 +29,10 @@ export function useStatus() {
       })
       .then((d) => d && setStatus(d))
       .catch(() => setErro(true));
+    void carregar();
+    window.addEventListener("radar-conexoes", carregar);
+    window.addEventListener("radar-dados", carregar);
+    return () => { window.removeEventListener("radar-conexoes", carregar); window.removeEventListener("radar-dados", carregar); };
   }, [router]);
   return { status, erro };
 }
@@ -75,9 +79,9 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
   useFecharAoClicarFora(contaAberto, contaRef, setContaAberto);
   useFecharAoClicarFora(menuAberto, menuRef, setMenuAberto);
 
-  const texto = erro ? "Servidor indisponível" : !status ? "Verificando IA" : status.ai ? "IA conectada" : "Modo demonstração · conectar";
+  const texto = erro ? "Servidor indisponível" : !status ? "Verificando IA" : status.ai ? "IA conectada" : status.exemplos === false ? "Conectar a IA" : "Modo demonstração · conectar";
   const demo = status ? !status.ai : false;
-  const estadoChip = erro || !status ? "pendente" : status.ai ? "conectado" : "demonstracao";
+  const estadoChip = erro || !status ? "pendente" : status.ai ? "conectado" : status.exemplos === false ? "pendente" : "demonstracao";
   const badge = (
     <span className={`chip-status chip-status-${estadoChip} min-w-[128px] justify-center max-md:min-w-0 max-md:px-2 max-md:text-[11px]`}>
       {texto}
@@ -125,7 +129,7 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
               )}
             </div>
           ) : demo ? (
-            <Link href="/setup#openrouter" className="cursor-pointer">{badge}</Link>
+            <Link href="/setup#ia" className="cursor-pointer">{badge}</Link>
           ) : proximos.length > 0 ? (
             <div className="relative" ref={popoverRef}>
               <button type="button" className="cursor-pointer" aria-haspopup="dialog" aria-expanded={popoverAberto} onClick={() => setPopoverAberto((v) => !v)}>
@@ -525,7 +529,7 @@ export function Origem({ meta, demoTexto }: { meta: Meta; demoTexto?: string }) 
   return (
     <p className="text-muted text-[13px] mb-4" title={meta.model}>
       {demoTexto ?? `Exemplo ilustrativo a partir de ${meta.insumo}.`}{" "}
-      <Link href="/setup#openrouter" className="font-semibold text-accent underline underline-offset-2">
+      <Link href="/setup#ia" className="font-semibold text-accent underline underline-offset-2">
         {demoTexto ? "Conectar a IA" : "Conecte a IA para usar os seus dados"}
       </Link>
     </p>

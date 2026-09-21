@@ -4,18 +4,33 @@
 
 # Radar de Sinais
 
+Versão **0.2.0**. Veja as [notas de versão](CHANGELOG.md).
+
 Radar de sinais de mercado gerado por IA a partir dos temas que você acompanha, agrupados por força e tendência e conectados entre si. Área: Estratégia, Inovação.
 
 ## O que resolve
 Movimentos do mercado chegam tarde e dispersos. Este app junta o que saiu no período sobre os temas acompanhados, agrupa em sinais (com força, tendência e o que fazer em cada um) e mostra as conexões entre eles.
 
-Como funciona: o motor de busca (`lib/busca.ts`) consulta em paralelo as fontes sem chave (Hacker News, Reddit, GitHub e Google Notícias, este em português do Brasil) e, quando Exa, Tavily ou Bright Data estão conectadas, também notícias em português e conteúdo geral da web. A Bright Data usa MCP HTTP com `pro=1`, `search_engine` e `scrape_as_markdown` (até quatro páginas por radar). Cada fonte é isolada: uma que falhar (o Reddit, por exemplo, bloqueia endereços de nuvem) não derruba a rodada, e a tela diz quais fontes entraram ("Hacker News, GitHub, Google Notícias; Reddit indisponível") antes e depois de montar o radar. Quando o Reddit retorna HTTP 403, o radar registra um aviso e pausa novas consultas a ele por 15 minutos por processo; depois volta a tentar automaticamente. A IA agrupa o que foi encontrado em sinais com força, tendência e o que fazer, e só cita fontes que de fato vieram da busca; quando nenhum achado sustenta um sinal, o radar sai vazio e explica o motivo. Sem IA conectada, o radar é um exemplo (`lib/demo.ts`) com fontes marcadas como "(exemplo)" e links para a página de cada veículo. O grafo de nós e arestas é desenhado por `components/Grafo.tsx` (arestas em SVG, nós em HTML) com layout de força próprio em `lib/grafo-layout.ts`, sem biblioteca externa; as leituras cruzadas (`conexoes`), a força (calculada só pela quantidade e diversidade de fontes reais) e a tendência de cada sinal aparecem no mapa e no painel ao lado. O monitoramento diário salva termos, setor, período, horários e fuso no SQLite. Cada rodada gera um radar novo e entrega resumo, ações sugeridas e fontes por e-mail ou Slack. Rotinas semanais antigas permanecem compatíveis.
+Como funciona: o motor de busca (`lib/busca.ts`) consulta em paralelo as fontes sem chave (Hacker News, Reddit, GitHub e Google Notícias, este em português do Brasil) e, quando Exa, Tavily ou Bright Data estão conectadas, também notícias em português e conteúdo geral da web. A Bright Data usa MCP HTTP com `pro=1`, `search_engine` e `scrape_as_markdown` (até quatro páginas por radar). Cada fonte é isolada: uma que falhar (o Reddit, por exemplo, bloqueia endereços de nuvem) não derruba a rodada, e a tela diz quais fontes entraram ("Hacker News, GitHub, Google Notícias; Reddit indisponível") antes e depois de montar o radar. Quando o Reddit retorna HTTP 403, o radar registra um aviso e pausa novas consultas a ele por 15 minutos por processo; depois volta a tentar automaticamente. A IA agrupa o que foi encontrado em sinais com força, tendência e o que fazer, e só cita fontes que de fato vieram da busca; quando nenhum achado sustenta um sinal, o radar sai vazio e explica o motivo. Sem IA conectada, enquanto a demonstração estiver habilitada, o radar é um exemplo (`lib/demo.ts`) com fontes marcadas como "(exemplo)" e links para a página de cada veículo. O grafo de nós e arestas é desenhado por `components/Grafo.tsx` (arestas em SVG, nós em HTML) com layout de força próprio em `lib/grafo-layout.ts`, sem biblioteca externa; as leituras cruzadas (`conexoes`), a força (calculada só pela quantidade e diversidade de fontes reais) e a tendência de cada sinal aparecem no mapa e no painel ao lado. O monitoramento diário salva termos, setor, período, horários e fuso no SQLite. Cada rodada gera um radar novo e entrega resumo, ações sugeridas e fontes por e-mail ou Slack. Rotinas semanais antigas permanecem compatíveis.
 
 ## Stack
-Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão.
+Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter (modelo gratuito por padrão) ou assinatura ChatGPT, com escolha explícita do provedor.
 
 ## Configuração inicial (sem variáveis de ambiente)
-Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave, escolhe o modelo e testa a conexão. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar, o app roda em modo demonstração com um radar de exemplo.
+Abra `/setup` → **Conectar IA** e escolha:
+
+- **OpenRouter:** conecte por OAuth ou cole uma chave, escolha o modelo e teste a conexão.
+- **ChatGPT:** clique em **Conectar com ChatGPT**, abra a página oficial e informe o código mostrado. Se solicitado, habilite o login por código de dispositivo nas configurações de segurança do ChatGPT. A conexão utiliza o [Codex App Server oficial](https://developers.openai.com/codex/app-server), na mesma versão do build-agentflows (`@openai/codex` 0.155.1). O uso depende do acesso e dos limites da conta. Modelos são listados pela conta; Automático usa a escolha do provedor.
+
+O provedor escolhido atende à síntese, às chamadas MCP e aos monitoramentos. Falhas no ChatGPT não acionam OpenRouter nem geram exemplos como resultado. A escolha fica em SQLite, as chaves do OpenRouter permanecem cifradas, e a sessão ChatGPT fica isolada em `DATA_DIR/chatgpt` (preserve o disco de dados). O processo de IA usa ambiente restrito, sem acesso às credenciais das demais integrações, e análises sem terminal, arquivos ou navegador.
+
+### Dados de teste
+
+Conectar uma integração não apaga registros. Ao conectar a IA, Início e Radar deixam de mostrar o mapa ilustrativo e passam a exibir o último radar real ou o convite para gerar o primeiro.
+
+Em **Configurações → Dados de teste**, ou ao final de **Radar → Radares anteriores**, use **Remover dados de teste** e confirme. Isso exclui somente radares com `meta.demo: true` e oculta a demonstração também após recarregar ou desconectar a IA. Conta, temas, fontes, integrações, monitoramentos, resultados reais e registros antigos sem essa marca são preservados. Testes feitos com IA real não são classificados automaticamente como demonstração.
+
+Antes da conexão e da limpeza, o app oferece um radar ilustrativo. Depois de remover os exemplos, é necessário conectar a IA para gerar novos radares.
 
 ## Primeiro acesso
 Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
@@ -65,6 +80,8 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 |---|---|
 | `DATA_DIR` | Pasta do banco SQLite. Padrão `./data` (Docker: `/app/data`). |
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
+| `AI_PROVIDER` | `openrouter` (padrão) ou `chatgpt`. Prefira selecionar na tela. |
+| `CHATGPT_MODEL` | Opcional. Modelo da conta ChatGPT; vazio usa Automático. |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Alternativa ao setup. Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
 | `EXA_API_KEY` | Opcional. Amplia a busca para notícias em português e a web em geral. Obtenha em https://dashboard.exa.ai/api-keys. Sem ela (e sem Tavily), o radar usa só Hacker News, Reddit, GitHub e Google Notícias. |
@@ -99,7 +116,11 @@ components/AcessoMCP.tsx cartão do /setup para gerar/revogar o acesso MCP
 lib/store.ts            configuração em SQLite (node:sqlite), com variáveis de ambiente como prioridade
 lib/setup-comum.ts      tipos do setup e integração OpenRouter (compartilhado)
 lib/integracoes.ts      integrações que este app precisa
-lib/ai.ts               cliente OpenRouter (askText, askJSON, askWithTools)
+lib/ai.ts               seleção do provedor e síntese via OpenRouter ou ChatGPT
+lib/chatgpt.ts          conector do Codex App Server com sessão isolada
+lib/radar-historico.ts  último radar real e limpeza seletiva de exemplos
+components/ConexaoIA.tsx escolha de provedor, login e modelo ChatGPT
+components/DadosTeste.tsx limpeza de demonstrações com confirmação
 lib/mcp.ts              protocolo MCP (JSON-RPC 2.0), código de acesso e limite de chamadas
 lib/ferramentas.ts      ferramentas expostas via MCP (montar_radar)
 lib/radar.ts            lógica de geração do radar, usada pela rota HTTP e pela ferramenta MCP
@@ -121,7 +142,7 @@ render.yaml             blueprint do Render (runtime image)
 
 ## Monitoramento diário
 
-1. Conecte OpenRouter e o canal de notificações em `/setup`. Opcionalmente conecte Tavily, Exa e/ou Bright Data; o teste da Bright Data verifica as duas ferramentas MCP.
+1. Conecte OpenRouter ou ChatGPT e o canal de notificações em `/setup`. Opcionalmente conecte Tavily, Exa e/ou Bright Data; o teste da Bright Data verifica as duas ferramentas MCP.
 2. Cadastre até 12 temas, o setor e o período em Temas (`/termos`).
 3. Em **Monitoramento diário**, mantenha `08:00, 16:00, 20:00` ou escolha até 12 horários. O fuso padrão é `America/Sao_Paulo`, independente do relógio do servidor.
 4. Clique em **Monitorar estes temas**. Use **Editar** para carregar os temas e horários no formulário, **Pausar/Retomar**, **Executar agora** ou **Excluir**. Os radares completos, com grafos e fontes, ficam em "Radares anteriores" no fim de `/radar`.
@@ -132,6 +153,6 @@ O gatilho autenticado `POST /api/rotinas/executar` também pode ser chamado por 
 
 ## Validação
 
-`npm test` cobre validação de temas/horários, fusos, slots, recuperação, execução concorrente, o fluxo integrado de cadastro, MCP HTTP/SSE, busca, Markdown, síntese, fontes, grafo, histórico e alerta usando serviços simulados, além do layout do grafo (`tests/grafo-layout.test.ts`) e da ordenação/resumo dos sinais (`tests/sinais.test.ts`). `npm run lint` e `npm run build` verificam o projeto. Chamadas reais aos provedores e entrega externa exigem credenciais da instância.
+`npm test` cobre validação de temas/horários, fusos, slots, recuperação, execução concorrente, o fluxo integrado de cadastro, MCP HTTP/SSE, busca, Markdown, síntese, fontes, grafo, histórico e alerta usando serviços simulados, além do layout do grafo (`tests/grafo-layout.test.ts`) e da ordenação/resumo dos sinais (`tests/sinais.test.ts`). `npm run lint` e `npm run build` verificam o projeto. Os testes adicionais verificam limpeza seletiva, preservação dos demais dados, seleção de IA sem fallback, geração e proveniência via ChatGPT com fontes simuladas, login/cancelamento/erros pelo protocolo de subprocesso. O build standalone inclui o binário oficial. Chamadas reais aos provedores e entrega externa exigem credenciais da instância; o login completo em conta ChatGPT real não faz parte dos testes automatizados.
 
 Referências: [Bright Data MCP](https://docs.brightdata.com/ai/mcp-server/overview), [cliente MCP HTTP](https://docs.brightdata.com/cn/ai/mcp-server/integrations/llamaindex).

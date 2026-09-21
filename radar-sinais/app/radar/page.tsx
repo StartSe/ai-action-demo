@@ -102,8 +102,10 @@ export default function Page() {
     }
   }
 
-  const radar = resultado?.radar ?? demo;
-  const real = Boolean(resultado && !resultado.meta.demo);
+  const mostrarExemplo = status?.exemplos === true;
+  const exibido = resultado?.meta.demo && !mostrarExemplo ? undefined : resultado;
+  const radar: Radar = exibido?.radar ?? (mostrarExemplo ? demo : { periodoDias: dados.periodoDias, sinais: [], nos: [], arestas: [], conexoes: [] });
+  const real = Boolean(exibido && !exibido.meta.demo);
   const resumo = resumoRadar(radar);
   const etapas = useMemo(
     () => ["Consultando as fontes…", respondidas.length ? `Já responderam: ${respondidas.join(", ")}.` : "Aguardando as fontes…", "Conectando os sinais…"],
@@ -117,7 +119,7 @@ export default function Page() {
         <header className="flex flex-wrap items-start justify-between gap-4 mb-4">
           <div className="min-w-0">
             <h1 className="text-2xl font-extrabold tracking-tight">Radar de sinais</h1>
-            <p className="text-sm text-ink mt-1 font-medium">{resumo.frase}</p>
+            <p className="text-sm text-ink mt-1 font-medium">{!exibido && !mostrarExemplo ? "Escolha seus temas e gere seu primeiro radar." : resumo.frase}</p>
             {real && resultado && <p className="text-[13px] text-muted mt-0.5">{linhaConfianca(radar, resultado.meta.geradoEm)}</p>}
           </div>
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
@@ -163,14 +165,14 @@ export default function Page() {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3 text-sm">
           {real && resultado ? (
             <span className="chip-neutral">Atualizado em {data(resultado.meta.geradoEm, { comHora: true })}</span>
-          ) : (
-            <Origem meta={resultado?.meta ?? META_EXEMPLO} />
-          )}
+          ) : mostrarExemplo ? (
+            <Origem meta={exibido?.meta ?? META_EXEMPLO} />
+          ) : null}
           {!resultado && <Link href="/termos" className="btn-link">Definir meus temas</Link>}
-          {resultado?.id && (
+          {exibido?.id && (
             <span className="flex flex-wrap gap-2 md:ml-auto">
-              <a href={`/imprimir/${resultado.id}`} target="_blank" rel="noopener noreferrer" className="btn-ghost !py-1.5 !text-[13px]">Imprimir</a>
-              <CopyButton rotulo="Copiar link" texto={() => `${location.origin}/r/${resultado.id}`} />
+              <a href={`/imprimir/${exibido.id}`} target="_blank" rel="noopener noreferrer" className="btn-ghost !py-1.5 !text-[13px]">Imprimir</a>
+              <CopyButton rotulo="Copiar link" texto={() => `${location.origin}/r/${exibido.id}`} />
             </span>
           )}
         </div>
@@ -183,10 +185,10 @@ export default function Page() {
             </div>
           )}
           <div className={carregando ? "opacity-40 pointer-events-none" : ""} aria-busy={carregando}>
-            <ConteudoRadar radar={radar} aoAmpliar={radar.periodoDias < 90 ? () => montar(undefined, { periodoDias: 90 }) : undefined} />
+            {!exibido && !mostrarExemplo ? <Empty ilustracao={null} titulo="Seu radar começa aqui" descricao="Escolha os temas que deseja acompanhar e clique em Atualizar radar." /> : <ConteudoRadar radar={radar} aoAmpliar={radar.periodoDias < 90 ? () => montar(undefined, { periodoDias: 90 }) : undefined} />}
           </div>
         </div>
-        {resultado && <Proveniencia resultado={resultado} />}
+        {exibido && <Proveniencia resultado={exibido} />}
         <MaisDetalhes titulo="Para a equipe técnica">
           <button
             type="button"
@@ -203,7 +205,7 @@ export default function Page() {
             Baixar dados do mapa (JSON)
           </button>
         </MaisDetalhes>
-        <RadaresAnteriores atual={resultado?.id} atualizadoEm={resultado?.meta.geradoEm} />
+        <RadaresAnteriores atual={exibido?.id} atualizadoEm={resultado?.meta.geradoEm} aoRemoverExemplos={() => setResultado(r => r?.meta.demo ? undefined : r)} />
       </main>
     </>
   );

@@ -1,5 +1,7 @@
 "use client";
-// Tela de configuração inicial, gerada a partir de lib/integracoes.ts. Compartilhada pela suíte: copie sem alterar.
+// Configuração do Radar: IA com dois provedores, fontes e dados de teste.
+import { ConexaoIA } from "./ConexaoIA";
+import { DadosTeste } from "./DadosTeste";
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState, type ReactNode } from "react";
@@ -81,7 +83,7 @@ export function SetupPage({
   const [aberta, setAberta] = useState<string | null>(null);
   useEffect(() => {
     const abrirHash = () => {
-      if (location.hash) setAberta(location.hash.slice(1));
+      if (location.hash) setAberta(["ia", "chatgpt"].includes(location.hash.slice(1)) ? "openrouter" : location.hash.slice(1));
     };
     const t = setTimeout(abrirHash, 0);
     window.addEventListener("hashchange", abrirHash);
@@ -135,15 +137,15 @@ export function SetupPage({
             <div>
               <strong>1. Conecte a inteligência artificial</strong>
               <p className="text-muted mt-1">
-                {dados?.pronto
+                {status?.ai
                   ? "IA configurada. Você já pode analisar seus temas."
-                  : "Use sua conta OpenRouter para gerar os sinais."}
+                  : "Use sua conta OpenRouter ou ChatGPT para gerar os sinais."}
               </p>
               <button
                 className="btn-link mt-2"
                 onClick={() => setAberta("openrouter")}
               >
-                {dados?.pronto ? "Revisar conexão" : "Conectar IA"}
+                {status?.ai ? "Revisar conexão" : "Conectar IA"}
               </button>
             </div>
             <div>
@@ -169,7 +171,7 @@ export function SetupPage({
               {dados?.integracoes.map((i, indice) => (
                 <div
                   key={i.id}
-                  id={i.id}
+                  id={i.id === "openrouter" ? "ia" : i.id}
                   className="card !shadow-none overflow-hidden"
                 >
                   <button
@@ -196,9 +198,9 @@ export function SetupPage({
                       </p>
                     </div>
                     <span
-                      className={`text-xs ${i.configurada ? "text-ok" : "text-muted"}`}
+                      className={`text-xs ${(i.id === "openrouter" ? status?.ai : i.configurada) ? "text-ok" : "text-muted"}`}
                     >
-                      {i.configurada
+                      {(i.id === "openrouter" ? status?.ai : i.configurada)
                         ? "Configurado"
                         : i.obrigatoria
                           ? "Conectar"
@@ -213,7 +215,9 @@ export function SetupPage({
                       id={`conexao-${i.id}`}
                       className="border-t border-line"
                     >
-                      <CartaoIntegracao
+                      {i.id === "openrouter" ? <ConexaoIA aoSalvar={carregar}>
+                        <CartaoIntegracao integracao={i} numero={indice + 1} aoSalvar={carregar} />
+                      </ConexaoIA> : <CartaoIntegracao
                         integracao={i}
                         numero={indice + 1}
                         aoSalvar={carregar}
@@ -222,7 +226,7 @@ export function SetupPage({
                             ? dados.caixasEmail
                             : undefined
                         }
-                      />
+                      />}
                     </div>
                   )}
                 </div>
@@ -236,6 +240,7 @@ export function SetupPage({
           <section>
             <h2 className="font-bold mb-3">Preferências da pesquisa</h2>
             {children}
+            <DadosTeste />
           </section>
         </div>
         <footer className="flex flex-wrap gap-4 justify-between items-center mt-6 border-t border-line pt-4">

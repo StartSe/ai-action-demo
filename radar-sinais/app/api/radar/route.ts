@@ -1,3 +1,4 @@
+import { ultimoRadarReal } from "@/lib/radar-historico";
 import { respostaErro } from "@/lib/ai";
 import { encerrarRodada, rodadaValida } from "@/lib/andamento";
 import { apagarTodos, listarPorTipo, salvar } from "@/lib/historico";
@@ -37,10 +38,10 @@ export async function POST(req: Request) {
 /** Últimos radares salvos (com os temas, para "Refazer com estes temas") para a lista "Últimos resultados". */
 export async function GET(req: Request) {
   if (new URL(req.url).searchParams.get("ultimo") === "1") {
-    const ultimo = listarPorTipo<DadosRadar, Radar, { demo: boolean }>("radar", 30).find(r => !r.meta.demo);
+    const ultimo = ultimoRadarReal();
     return Response.json(ultimo ? { radar: ultimo.saida, dados: ultimo.entrada, meta: ultimo.meta, id: ultimo.id } : null);
   }
-  const itens = listarPorTipo<DadosRadar, Radar>("radar", 10).map((r) => ({ id: r.id, titulo: r.titulo, criadoEm: r.criadoEm, entrada: r.entrada }));
+  const itens = listarPorTipo<DadosRadar, Radar, { demo: boolean }>("radar", 10).map((r) => ({ id: r.id, titulo: r.titulo, criadoEm: r.criadoEm, demo: r.meta.demo === true, entrada: r.entrada }));
   return Response.json({ itens });
 }
 

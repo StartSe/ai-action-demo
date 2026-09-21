@@ -5,7 +5,7 @@ import { enviar, type Canal } from "./notificacoes";
 import { conectar, listarFerramentas, type FerramentaMCP } from "./mcp-cliente";
 import { conexaoAutorizada } from "./mcp-oauth";
 import { MODELO_AUTOMATICO, MODELOS_GRATUITOS, MODELOS_VISAO, type Opcao, type ProximoPasso } from "./modelos";
-import { DEFAULT_MODEL, interpretarFalha, modelName } from "./ai";
+import { DEFAULT_MODEL, interpretarFalha, openRouterModelName } from "./ai";
 import { contaConectada, credenciaisDoApp as credenciaisAppEmail } from "./email-envio";
 
 export type { Opcao, ProximoPasso };
@@ -268,7 +268,7 @@ export function openrouter({
       }
       const data = (await r.json()) as { data?: { limit?: number | null; usage?: number; is_free_tier?: boolean } };
 
-      const modelo = modelName();
+      const modelo = openRouterModelName();
       const resposta = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${chave}`, "Content-Type": "application/json" },

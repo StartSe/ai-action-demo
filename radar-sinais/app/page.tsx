@@ -3,13 +3,13 @@ import { redirect } from "next/navigation";
 import { Topbar } from "@/components/ui";
 import { Grafo } from "@/components/Grafo";
 import { SinalChips } from "@/components/SinalChips";
-import { listarPorTipo } from "@/lib/historico";
+import { exemplosVisiveis, ultimoRadarReal } from "@/lib/radar-historico";
 import { lerPesquisa } from "@/lib/pesquisa-store";
 import { radarDemo } from "@/lib/demo";
-import { aiEnabled, modelName, type Meta } from "@/lib/ai";
+import { aiEnabled, modelName } from "@/lib/ai";
 import { DESTINO_CONECTAR_IA, DESTINO_RADAR, DESTINO_TEMAS } from "@/lib/destinos";
 import { ordenarSinais, resumoRadar } from "@/lib/sinais";
-import type { DadosRadar, Radar } from "@/lib/types";
+import type { Radar } from "@/lib/types";
 import { data } from "@/lib/formato";
 export const dynamic = "force-dynamic";
 
@@ -25,9 +25,10 @@ export default async function Page({ searchParams }: PageProps<"/">) {
     redirect(`${DESTINO_RADAR}?${query}`);
   }
   const pesquisa = lerPesquisa();
-  const iaLigada = aiEnabled();
-  const ultimo = listarPorTipo<DadosRadar, Radar, Meta>("radar", 30).find((h) => !h.meta.demo);
-  const radar = ultimo?.saida || radarDemo(30);
+  const iaLigada = await aiEnabled();
+  const ultimo = ultimoRadarReal();
+  const exemplo = exemplosVisiveis(iaLigada);
+  const radar: Radar = ultimo?.saida || (exemplo ? radarDemo(30) : { periodoDias: 30, sinais: [], nos: [], arestas: [], conexoes: [] });
   const termos = pesquisa.termos.filter((t) => t.ativo).length;
   const resumo = resumoRadar(radar);
   const emFoco = ordenarSinais(radar.sinais).slice(0, 3);
@@ -41,11 +42,11 @@ export default async function Page({ searchParams }: PageProps<"/">) {
     { valor: String(resumo.fortes), rotulo: "Sinais fortes" },
     { valor: String(resumo.subindo), rotulo: "Subindo" },
     { valor: String(resumo.leituras), rotulo: "Leituras" },
-    ultimo ? { valor: data(ultimo.criadoEm), rotulo: "Última atualização" } : { valor: "Exemplo", rotulo: "Dados ilustrativos" },
+    ultimo ? { valor: data(ultimo.criadoEm), rotulo: "Última atualização" } : { valor: exemplo ? "Exemplo" : "—", rotulo: exemplo ? "Dados ilustrativos" : "Última atualização" },
   ];
   return (
     <>
-      <Topbar marca="R" nome="Radar de Sinais" area="Estratégia" status={{ ai: iaLigada, demo: !iaLigada, model: modelName() }} />
+      <Topbar marca="R" nome="Radar de Sinais" area="Estratégia" status={{ ai: iaLigada, demo: !iaLigada, exemplos: exemplo, model: modelName() }} />
       <main className="max-w-[1300px] mx-auto px-5 py-8">
         <header className="flex flex-wrap items-end justify-between gap-5 mb-6">
           <div className="max-w-2xl">
@@ -67,15 +68,16 @@ export default async function Page({ searchParams }: PageProps<"/">) {
           <section className="card p-5 min-w-0">
             <div className="flex flex-wrap justify-between gap-2 items-center mb-4">
               <h2 className="font-bold">Seu radar</h2>
-              <span className="text-xs text-muted">{ultimo ? `Atualizado em ${data(ultimo.criadoEm, { comHora: true })}` : "Demonstração · dados ilustrativos"}</span>
+              <span className="text-xs text-muted">{ultimo ? `Atualizado em ${data(ultimo.criadoEm, { comHora: true })}` : exemplo ? "Demonstração · dados ilustrativos" : "Nenhum radar gerado"}</span>
             </div>
-            <Grafo nos={radar.nos} arestas={radar.arestas} sinais={radar.sinais} destinoDoNo={`${DESTINO_RADAR}?foco=`} />
+            {!ultimo && !exemplo && <p className="py-12 text-center text-muted">Seu radar está pronto para começar. Escolha seus temas e gere a primeira análise.</p>}
+            {(ultimo || exemplo) && <Grafo nos={radar.nos} arestas={radar.arestas} sinais={radar.sinais} destinoDoNo={`${DESTINO_RADAR}?foco=`} />}
             <Link href={DESTINO_RADAR} className="btn-link text-sm inline-block mt-3">Explorar o mapa completo</Link>
           </section>
           <aside className="space-y-4">
             <section className="card p-5">
               <h2 className="font-bold mb-1">Em foco</h2>
-              <p className="text-xs text-muted mb-2">{ultimo ? "Os sinais mais fortes da última pesquisa" : "Exemplos do que você pode investigar"}</p>
+              <p className="text-xs text-muted mb-2">{ultimo ? "Os sinais mais fortes da última pesquisa" : exemplo ? "Exemplos do que você pode investigar" : "Os sinais aparecerão após sua primeira pesquisa"}</p>
               {emFoco.map((s) => (
                 <Link key={s.id} href={`${DESTINO_RADAR}?foco=${encodeURIComponent(s.id)}`} className="block border-t border-line py-3 text-sm hover:text-accent">
                   <span className="block leading-snug">{s.titulo}</span>

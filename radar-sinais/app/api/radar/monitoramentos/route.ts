@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   let parametros: Monitoramento;
   try { parametros = validarMonitoramento(corpo); }
   catch (e) { return Response.json({ error: (e as Error).message }, { status: 400 }); }
-  if (!aiEnabled()) return Response.json({ error: "Conecte a IA em Configurações antes de ativar o monitoramento." }, { status: 400 });
+  if (!(await aiEnabled())) return Response.json({ error: "Conecte a IA em Configurações antes de ativar o monitoramento." }, { status: 400 });
   const canal = getConfig("NOTIFICACOES_CANAL") === "slack" ? "slack" : "email";
   const motivo = motivoCanalIndisponivel(canal);
   const destino = canal === "email" ? getConfig("NOTIFICACOES_DESTINO") : undefined;

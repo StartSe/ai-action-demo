@@ -24,5 +24,11 @@
   },
   "prospeccao-ia": {
     "components/setup.tsx": "Aceita a propriedade navegacao para manter os cinco destinos do workspace também em Configurações. Oculta Notificações nos cartões, nas sugestões e no progresso de configuração."
+  },
+  "radar-sinais": {
+    "lib/ai.ts": "Seleção explícita entre OpenRouter e ChatGPT pelo Codex App Server; disponibilidade assíncrona da conta, síntese e modelo de ontologia próprios do Radar.",
+    "lib/setup-comum.ts": "O teste do OpenRouter usa seu próprio modelo mesmo quando o provedor selecionado é ChatGPT.",
+    "app/api/setup/route.ts": "Prontidão usa a conta de IA selecionada (OpenRouter ou ChatGPT), sem exigir OpenRouter quando ChatGPT está ativo.",
+    "app/api/status/route.ts": "Status da IA selecionada, sugestão única de conexão e visibilidade dos exemplos respeitam a conta e a limpeza dos dados de teste."
   }
 }

@@ -1,0 +1,58 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const dir = mkdtempSync(join(tmpdir(), "radar-cleanup-"));
+process.env.DATA_DIR = dir;
+delete process.env.OPENROUTER_API_KEY;
+delete process.env.AI_PROVIDER;
+test.after(() => rmSync(dir, { recursive: true, force: true }));
+
+test("limpeza seletiva preserva dados reais, conta, integrações, temas e monitoramentos", async () => {
+  const { salvar, obter } = await import("../lib/historico");
+  const { setConfig, getConfig, abrirBanco } = await import("../lib/store");
+  const { ultimoRadarReal, exemplosVisiveis } = await import("../lib/radar-historico");
+  const { DELETE, GET } = await import("../app/api/radar/exemplos/route");
+  const radar = { periodoDias: 30, sinais: [], nos: [], arestas: [], conexoes: [] };
+  const entrada = { temas: ["Meu tema"], periodoDias: 30 };
+  const criar = (demo: boolean, tipo = "radar") => salvar({ tipo, titulo: "Teste", entrada, saida: radar, meta: { demo } });
+  const real = criar(false);
+  const outro = criar(true, "outro-tipo");
+  const legado = salvar({ tipo: "radar", titulo: "Legado sem proveniência", entrada, saida: radar, meta: {} });
+  const ambiguo = salvar({ tipo: "radar", titulo: "Marca numérica não é demonstração", entrada, saida: radar, meta: { demo: 1 } });
+  const exemplos = Array.from({ length: 40 }, () => criar(true));
+  setConfig("OPENROUTER_API_KEY", "credencial-preservada");
+  setConfig("RADAR_PESQUISA", JSON.stringify(entrada));
+  // As tabelas reais de conta e rotinas também devem continuar intocadas.
+  const { criarConta } = await import("../lib/conta");
+  criarConta({ nome: "Pessoa teste", email: "cleanup@example.com", senha: "SenhaForte123!" });
+  const { criar: criarRotina } = await import("../lib/rotinas");
+  criarRotina({ tipo: "radar-diario", frequencia: "diaria", hora: "08:00", canal: "email", destino: "cleanup@example.com", parametros: entrada });
+  const banco = abrirBanco();
+  const antesConta = banco.prepare("SELECT * FROM usuarios").all();
+  const antesRotinas = banco.prepare("SELECT * FROM rotinas").all();
+  assert.equal(ultimoRadarReal()?.id, real, "encontra radar real mesmo atrás de mais de 30 exemplos");
+  assert.equal(exemplosVisiveis(true), false, "conectar IA esconde o exemplo sem excluir histórico");
+  assert.equal((await (await GET()).json()).total, 40);
+  assert.equal((await (await DELETE()).json()).removidos, 40);
+  for (const id of exemplos) assert.equal(obter(id), null);
+  for (const id of [real, outro, legado, ambiguo]) assert.ok(obter(id));
+  assert.equal(getConfig("OPENROUTER_API_KEY"), "credencial-preservada");
+  assert.deepEqual(JSON.parse(getConfig("RADAR_PESQUISA")!), entrada);
+  assert.deepEqual(banco.prepare("SELECT * FROM usuarios").all(), antesConta);
+  assert.deepEqual(banco.prepare("SELECT * FROM rotinas").all(), antesRotinas);
+  assert.equal(exemplosVisiveis(false), false, "a remoção esconde a vitrine mesmo sem IA");
+  assert.equal((await (await DELETE()).json()).removidos, 0, "limpeza idempotente");
+  setConfig("OPENROUTER_API_KEY", null);
+  const { POST } = await import("../app/api/radar/route");
+  const response = await POST(new Request("http://localhost/api/radar", { method: "POST", body: JSON.stringify(entrada) }));
+  assert.equal(response.status, 401, "não recria exemplos após a limpeza");
+  setConfig("RADAR_OCULTAR_EXEMPLOS", null);
+  const emAndamento = POST(new Request("http://localhost/api/radar", { method: "POST", body: JSON.stringify(entrada) }));
+  await new Promise(resolve => setTimeout(resolve, 30));
+  await DELETE();
+  assert.equal((await emAndamento).status, 401, "uma demonstração em andamento não desfaz a limpeza");
+  assert.equal((await (await GET()).json()).total, 0);
+});

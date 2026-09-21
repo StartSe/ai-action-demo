@@ -6,6 +6,7 @@ import { openrouter, NOTIFICACOES, type Integracao } from "./setup-comum";
 NOTIFICACOES.beneficio = "Entrega resumos e novos sinais por e-mail ou Slack";
 
 const OPENROUTER = openrouter({ beneficio: "Liga a IA que agrupa os achados em sinais" });
+if (OPENROUTER.oauth) OPENROUTER.oauth.rotulo = "Conectar com OpenRouter";
 
 /** Mensagem do teste de conexão de uma fonte com chave, sem status HTTP cru na tela. */
 async function testarFonte(nome: string, pedido: () => Promise<Response>): Promise<{ ok: boolean; mensagem: string }> {

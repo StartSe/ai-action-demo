@@ -1,3 +1,4 @@
+import { aiEnabled } from "@/lib/ai";
 import { INTEGRACOES } from "@/lib/integracoes";
 import { statusIntegracoes } from "@/lib/setup-comum";
 import { setConfig } from "@/lib/store";
@@ -5,7 +6,7 @@ import { setConfig } from "@/lib/store";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return Response.json(await statusIntegracoes(INTEGRACOES));
+  return Response.json({ ...(await statusIntegracoes(INTEGRACOES)), pronto: await aiEnabled() });
 }
 
 /** Salva valores. Chave com valor "" é ignorada (mantém o atual); null apaga. */
@@ -21,5 +22,5 @@ export async function PUT(req: Request) {
     setConfig(chave, valor);
     salvos++;
   }
-  return Response.json({ salvos, ...(await statusIntegracoes(INTEGRACOES)) });
+  return Response.json({ salvos, ...(await statusIntegracoes(INTEGRACOES)), pronto: await aiEnabled() });
 }
