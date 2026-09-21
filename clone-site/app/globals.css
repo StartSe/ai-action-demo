@@ -106,3 +106,10 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
 .clone-dialogo-conteudo { display: flex; flex-direction: column; height: 100%; overflow: hidden; border-radius: 12px; background: var(--color-bg); }
 .clone-dialogo-corpo { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
 @media (max-width: 767px) { .clone-dialogo { padding: 8px; } }
+
+/* Chip "Gerando" da lista de sites (components/MeusSites.tsx): o ponto pulsante diz que algo está acontecendo
+   agora, no mesmo âmbar do chip de status "demonstração" do cabeçalho. Para sem movimento em reduced-motion. */
+.chip-gerando { display: inline-flex; align-items: center; gap: 6px; }
+.chip-gerando::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 999px; background: #b7791f; animation: pulsar 1.2s ease-in-out infinite; }
+@keyframes pulsar { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.7); } }
+@media (prefers-reduced-motion: reduce) { .chip-gerando::before { animation: none; } }

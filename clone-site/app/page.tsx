@@ -1,53 +1,51 @@
 "use client";
-
+// Tela inicial: "Criar um site" à esquerda (três caminhos: clonar uma referência, pelo endereço do site ou
+// descrevendo a empresa; mais a marca) e "Meus sites" à direita, com estado por site. Criar não espera a
+// geração: o site entra no topo da lista em "Gerando" e a pessoa pode sair da tela (o sino avisa ao terminar).
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Aviso, Dropzone, ErrorBox, Field, Hero, Loading, MaisDetalhes, Origem, Passos, Privacidade, ResultHead, Row, Stage, Topbar, data, lerErro, useScrollToResult, useStatus, type PassoIndicador } from "@/components/ui";
-import { EditorPagina } from "@/components/EditorPagina";
-import { EntregarPagina } from "@/components/EntregarPagina";
+import { Aviso, Dropzone, Field, Hero, MaisDetalhes, Passos, Privacidade, Row, Stage, lerErro, type PassoIndicador } from "@/components/ui";
 import { AmpliarImagem } from "@/components/Ampliar";
-import { PreviaPagina } from "@/components/PreviaPagina";
-import type { CodigoErroIA, Meta } from "@/lib/ai";
-import type { Marca, Pagina, Stack } from "@/lib/types";
+import { MeusSites, buscarSites } from "@/components/MeusSites";
+import { TopbarSite } from "@/components/TopbarSite";
+import type { OrigemProjeto, Projeto, Stack } from "@/lib/types";
 
-type ItemHistorico = { id: string; tipo: string; titulo: string; criadoEm: string };
-
-type Formulario = { stack: Stack; instrucoes: string; marcaNome: string; corPrimaria: string; corSecundaria: string };
+type Aba = OrigemProjeto | "endereco";
+type Formulario = { nomeSite: string; stack: Stack; instrucoes: string; marcaNome: string; corPrimaria: string; corSecundaria: string; briefing: string };
 
 const FORMATOS: { valor: Stack; rotulo: string }[] = [
   { valor: "html-tailwind", rotulo: "HTML com Tailwind" },
   { valor: "html-css", rotulo: "HTML com CSS" },
 ];
 
-const VAZIO: Formulario = { stack: "html-tailwind", instrucoes: "", marcaNome: "", corPrimaria: "", corSecundaria: "" };
+const ABAS: { valor: Aba; rotulo: string }[] = [
+  { valor: "referencia", rotulo: "Clonar uma referência" },
+  { valor: "endereco", rotulo: "Pelo endereço do site" },
+  { valor: "briefing", rotulo: "Descrever a empresa" },
+];
+
+const VAZIO: Formulario = { nomeSite: "", stack: "html-tailwind", instrucoes: "", marcaNome: "", corPrimaria: "", corSecundaria: "", briefing: "" };
 
 /** Marca do exemplo (a captura de exemplo mora em public/exemplo-referencia.png). */
-const EXEMPLO: Formulario = { stack: "html-tailwind", instrucoes: "", marcaNome: "Nimbus Finanças", corPrimaria: "#0f766e", corSecundaria: "#f59e0b" };
+const EXEMPLO: Formulario = { ...VAZIO, nomeSite: "Nimbus Finanças", marcaNome: "Nimbus Finanças", corPrimaria: "#0f766e", corSecundaria: "#f59e0b" };
 const ARQUIVO_EXEMPLO = "/exemplo-referencia.png";
 
 const LIMITE_MB = 5;
-const ETAPAS_CARREGANDO = ["Lendo a captura...", "Reconhecendo a estrutura da página...", "Escrevendo o código com a sua marca...", "Conferindo o arquivo gerado..."];
 const COR_HEX = /^#[0-9a-f]{6}$/i;
+const MINIMO_BRIEFING = 20;
 
 // Textos do hero (economia de texto: título ≤ 8 palavras, apoio ≤ 20, itens ≤ 5 de até 6 palavras — ver CLAUDE.md).
 const PROMESSA = {
   sobretitulo: "Marketing e Produto",
-  titulo: "A sua página em minutos",
-  apoio: "Envie a captura de uma página e receba a sua versão, na sua marca.",
-  itens: [
-    "Página pronta em um arquivo",
-    "Textos em português, na sua marca",
-    "Prévia no computador e no celular",
-    "Link público para compartilhar",
-    "Ajustes por instrução, sem código",
-  ],
+  titulo: "O site da sua empresa, no ar hoje",
+  apoio: "Clone uma referência ou descreva a empresa. Um agente edita, publica e mede o site com você.",
 };
 
 const PASSOS: PassoIndicador[] = [
-  { titulo: "Referência", apoio: "A captura que você gosta" },
-  { titulo: "Marca", apoio: "Nome e cores" },
-  { titulo: "Página", apoio: "Prévia e link no ar" },
+  { titulo: "Referência ou briefing", apoio: "De onde o site nasce" },
+  { titulo: "Marca e imagens", apoio: "Nome, cores e logo" },
+  { titulo: "No ar com o agente", apoio: "Link, edições e métricas" },
 ];
 
 function IconeReferencia() {
@@ -69,15 +67,7 @@ function IconeMarca() {
   );
 }
 
-function IconeItem() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0 mt-0.5" aria-hidden="true">
-      <path d="M5 12.5 9.5 17 19 7" />
-    </svg>
-  );
-}
-
-/** Cartão de entrada com ícone circular e título, no lugar da coluna única de campos crus. */
+/** Cartão de entrada com ícone circular e título. */
 function CartaoEntrada({ icone, titulo, children }: { icone: ReactNode; titulo: string; children: ReactNode }) {
   return (
     <div className="card p-5 mb-3 [&>details:last-child]:mb-0">
@@ -90,30 +80,6 @@ function CartaoEntrada({ icone, titulo, children }: { icone: ReactNode; titulo: 
   );
 }
 
-/** Prévia de "o que você vai receber", exibida no lugar do resultado antes de gerar a primeira página. */
-function Previa({ itens }: { itens: string[] }) {
-  return (
-    <div className="card p-7 max-md:p-5 h-full min-h-[420px] max-md:min-h-0 flex flex-col justify-center">
-      <h2 className="font-bold text-[15px] mb-4">O que você vai receber</h2>
-      <ul className="flex flex-col gap-3">
-        {itens.map((it) => (
-          <li key={it} className="flex items-start gap-2.5 text-sm text-ink-2">
-            <IconeItem />
-            <span>{it}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-type Tentativa = { imagem: string; form: Formulario };
-type Estado =
-  | { fase: "vazio" }
-  | { fase: "carregando" }
-  | { fase: "erro"; mensagem: string; codigo?: CodigoErroIA; acao?: { rotulo: string; url: string }; tentativa?: Tentativa }
-  | { fase: "pronto"; pagina: Pagina; meta: Meta; id: string; referencia?: string };
-
 function lerComoDataUrl(arquivo: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const leitor = new FileReader();
@@ -123,63 +89,53 @@ function lerComoDataUrl(arquivo: File): Promise<string> {
   });
 }
 
-async function buscarHistorico(): Promise<ItemHistorico[]> {
-  const resposta = await fetch("/api/pagina");
-  if (!resposta.ok) throw new Error("Não foi possível carregar o histórico.");
-  const corpo = await resposta.json();
-  if (!Array.isArray(corpo.itens)) throw new Error("Histórico indisponível.");
-  return corpo.itens;
-}
-
-function montarMarca(f: Formulario): Marca | undefined {
+function montarMarca(f: Formulario) {
   const nome = f.marcaNome.trim();
   const corPrimaria = f.corPrimaria.trim();
   const corSecundaria = f.corSecundaria.trim();
   if (!nome && !corPrimaria && !corSecundaria) return undefined;
-  const marca: Marca = { nome, corPrimaria };
-  if (corSecundaria) marca.corSecundaria = corSecundaria;
-  return marca;
+  return { nome, corPrimaria, ...(corSecundaria ? { corSecundaria } : {}) };
 }
 
+type AvisoTela = { tom: "ok" | "warn" | "danger"; texto: string; acao?: { rotulo: string; url: string } };
+
 export default function Page() {
-  const { status, erro } = useStatus();
   const router = useRouter();
+  const [aba, setAba] = useState<Aba>("referencia");
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [captura, setCaptura] = useState<string | null>(null);
   const [endereco, setEndereco] = useState("");
   const [buscandoEndereco, setBuscandoEndereco] = useState(false);
   const [servicoConectado, setServicoConectado] = useState<boolean | null>(null);
   const [form, setForm] = useState<Formulario>(VAZIO);
-  const [avisoArquivo, setAvisoArquivo] = useState<{ tom: "warn" | "danger"; texto: string; acao?: { rotulo: string; url: string } } | null>(null);
-  const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
-  const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
+  const [nomeDigitado, setNomeDigitado] = useState(false);
+  const [aviso, setAviso] = useState<AvisoTela | null>(null);
+  const [criando, setCriando] = useState(false);
+  const [preparando, setPreparando] = useState(false);
+  const [sites, setSites] = useState<Projeto[] | null>(null);
   const autoEnviado = useRef(false);
   const leituraAtual = useRef(0);
-  const gerando = useRef(false);
-  const [preparando, setPreparando] = useState(false);
-  const [erroHistorico, setErroHistorico] = useState(false);
-
-  useScrollToResult(estado.fase === "pronto");
 
   useEffect(() => {
-    buscarHistorico().then((itens) => { setHistorico(itens); setErroHistorico(false); }).catch(() => setErroHistorico(true));
     fetch("/api/captura").then((r) => r.json()).then((r) => setServicoConectado(Boolean(r.servicoConectado))).catch(() => setServicoConectado(false));
   }, []);
 
-  function apagarHistorico() {
-    if (!window.confirm("Apagar todas as páginas salvas? Essa ação não pode ser desfeita.")) return;
-    fetch("/api/pagina", { method: "DELETE" })
-      .then(async (r) => { if (!r.ok) throw new Error((await lerErro(r)).mensagem); return buscarHistorico().then((itens) => { setHistorico(itens); setErroHistorico(false); }); })
-      .catch(() => setErroHistorico(true));
-  }
-
-  const set = (campo: keyof Formulario) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [campo]: e.target.value }));
+  const set = (campo: keyof Formulario) => (e: { target: { value: string } }) => {
+    const valor = e.target.value;
+    setForm((f) => {
+      const proximo = { ...f, [campo]: valor };
+      // O nome do site acompanha o nome da marca até a pessoa digitar um nome próprio.
+      if (campo === "marcaNome" && !nomeDigitado) proximo.nomeSite = valor;
+      return proximo;
+    });
+    if (campo === "nomeSite") setNomeDigitado(valor.trim().length > 0);
+  };
 
   async function escolherArquivo(f: File | null) {
-    if (!f || gerando.current || preparando || buscandoEndereco) return;
-    setAvisoArquivo(null);
-    if (!/^image\/(png|jpeg)$/.test(f.type)) { setAvisoArquivo({ tom: "danger", texto: captura ? "Envie uma imagem PNG ou JPG. A referência anterior foi mantida." : "Envie uma imagem PNG ou JPG." }); return; }
-    if (f.size > LIMITE_MB * 1024 * 1024) { setAvisoArquivo({ tom: "danger", texto: `A captura passa de ${LIMITE_MB} MB. Reduza a imagem e envie de novo.` }); return; }
+    if (!f || criando || preparando || buscandoEndereco) return;
+    setAviso(null);
+    if (!/^image\/(png|jpeg)$/.test(f.type)) { setAviso({ tom: "danger", texto: captura ? "Envie uma imagem PNG ou JPG. A referência anterior foi mantida." : "Envie uma imagem PNG ou JPG." }); return; }
+    if (f.size > LIMITE_MB * 1024 * 1024) { setAviso({ tom: "danger", texto: `A captura passa de ${LIMITE_MB} MB. Reduza a imagem e envie de novo.` }); return; }
     const leitura = ++leituraAtual.current;
     setPreparando(true);
     try {
@@ -188,77 +144,93 @@ export default function Page() {
       setArquivo(f);
       setCaptura(imagem);
     } catch {
-      if (leitura === leituraAtual.current) setAvisoArquivo({ tom: "danger", texto: "Não foi possível ler a imagem. Escolha o arquivo novamente." });
+      if (leitura === leituraAtual.current) setAviso({ tom: "danger", texto: "Não foi possível ler a imagem. Escolha o arquivo novamente." });
     } finally {
       if (leitura === leituraAtual.current) setPreparando(false);
     }
   }
 
-  /** "ou cole um endereço": uma imagem publicada é baixada direto; um site vira captura pelo serviço de /setup. */
-  async function trazerDoEndereco() {
-    if (!endereco.trim()) { setAvisoArquivo({ tom: "danger", texto: "Cole o endereço da captura ou do site de referência." }); return; }
-    if (gerando.current || buscandoEndereco) return;
+  /** Aba "Pelo endereço do site": uma imagem publicada é baixada direto; um site vira captura pelo serviço configurado. */
+  async function trazerDoEndereco(): Promise<string | null> {
+    if (!endereco.trim()) { setAviso({ tom: "danger", texto: "Cole o endereço do site de referência, começando com https://." }); return null; }
     const leitura = ++leituraAtual.current;
     setBuscandoEndereco(true);
-    setAvisoArquivo(null);
+    setAviso(null);
     try {
       const r = await fetch("/api/captura", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: endereco }) });
       if (!r.ok) {
         const info = await lerErro(r);
-        if (r.status === 401 && info.codigo === "sem_sessao") { router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`); return; }
-        setAvisoArquivo({ tom: "danger", texto: info.mensagem, acao: info.acao });
-        return;
+        if (r.status === 401 && info.codigo === "sem_sessao") { router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`); return null; }
+        setAviso({ tom: "danger", texto: info.mensagem, acao: info.acao });
+        return null;
       }
       const resposta = await r.json();
-      if (leitura !== leituraAtual.current) return;
+      if (leitura !== leituraAtual.current) return null;
       setArquivo(null);
       setCaptura(resposta.imagem);
-      setAvisoArquivo({ tom: "warn", texto: resposta.origem === "site" ? "Captura pronta a partir do site." : "Captura pronta a partir do endereço." });
+      setAviso({ tom: "ok", texto: resposta.origem === "site" ? "Captura pronta a partir do site." : "Captura pronta a partir do endereço." });
+      return resposta.imagem as string;
     } catch (e) {
-      setAvisoArquivo({ tom: "danger", texto: (await lerErro(e)).mensagem });
+      setAviso({ tom: "danger", texto: (await lerErro(e)).mensagem });
+      return null;
     } finally {
       setBuscandoEndereco(false);
     }
   }
 
-  async function gerar(imagem: string, f: Formulario) {
-    if (gerando.current) return;
-    gerando.current = true;
-    setAvisoArquivo(null);
-    setEstado({ fase: "carregando" });
+  /** Cria o site e dispara a geração; a tela não espera: o site entra no topo de "Meus sites" em "Gerando". */
+  async function criar(origem: OrigemProjeto, f: Formulario, imagem?: string) {
+    if (criando) return;
+    setCriando(true);
+    setAviso(null);
     try {
-      const r = await fetch("/api/pagina", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imagem, stack: f.stack, instrucoes: f.instrucoes, marca: montarMarca(f) }),
-      });
+      const corpo = {
+        nome: f.nomeSite.trim() || f.marcaNome.trim() || undefined,
+        origem,
+        imagem,
+        briefing: origem === "briefing" ? f.briefing.trim() : undefined,
+        stack: f.stack,
+        instrucoes: f.instrucoes,
+        marca: montarMarca(f),
+        gerar: true,
+      };
+      const r = await fetch("/api/sites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
       if (!r.ok) {
-        // lerErro lê { error, codigo, acao } da rota (respostaErro) e nunca deixa status HTTP cru chegar à tela.
         const info = await lerErro(r);
-        if (r.status === 401 && info.codigo === "sem_sessao") {
-          router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
-          return;
-        }
-        setEstado({ fase: "erro", mensagem: info.mensagem, codigo: info.codigo as CodigoErroIA | undefined, acao: info.acao, tentativa: { imagem, form: f } });
+        if (r.status === 401 && info.codigo === "sem_sessao") { router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`); return; }
+        setAviso({ tom: "danger", texto: info.mensagem, acao: info.acao });
         return;
       }
-      const resposta = await r.json();
-      setEstado({ fase: "pronto", pagina: resposta.pagina, meta: resposta.meta, id: resposta.id, referencia: imagem });
-      buscarHistorico().then((itens) => { setHistorico(itens); setErroHistorico(false); }).catch(() => setErroHistorico(true));
+      const { projeto } = (await r.json()) as { projeto: Projeto };
+      setSites((lista) => [projeto, ...(lista ?? []).filter((s) => s.id !== projeto.id)]);
+      setForm(VAZIO);
+      setNomeDigitado(false);
+      setArquivo(null);
+      setCaptura(null);
+      setEndereco("");
+      setAviso({ tom: "ok", texto: `Estamos criando «${projeto.nome}». Você pode sair desta tela: avisamos no sino quando ficar pronto.` });
+      const stage = document.getElementById("stage");
+      if (stage && window.matchMedia("(max-width: 767px)").matches && !new URLSearchParams(location.search).get("captura")) stage.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (e) {
-      const info = await lerErro(e);
-      setEstado({ fase: "erro", mensagem: info.mensagem, tentativa: { imagem, form: f } });
+      setAviso({ tom: "danger", texto: (await lerErro(e)).mensagem });
     } finally {
-      gerando.current = false;
+      setCriando(false);
     }
   }
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (gerando.current || preparando || buscandoEndereco) return;
-    if ([form.corPrimaria, form.corSecundaria].some((cor) => cor.trim() && !COR_HEX.test(cor.trim()))) { setAvisoArquivo({ tom: "danger", texto: "Use seis dígitos nas cores, como #792a3f, ou escolha pela paleta." }); return; }
-    if (!captura) { setAvisoArquivo({ tom: "danger", texto: "Envie a captura da página de referência antes de gerar." }); return; }
-    gerar(captura, form);
+    if (criando || preparando || buscandoEndereco) return;
+    if ([form.corPrimaria, form.corSecundaria].some((cor) => cor.trim() && !COR_HEX.test(cor.trim()))) { setAviso({ tom: "danger", texto: "Use seis dígitos nas cores, como #792a3f, ou escolha pela paleta." }); return; }
+    if (aba === "briefing") {
+      if (form.briefing.trim().length < MINIMO_BRIEFING) { setAviso({ tom: "danger", texto: "Conte em pelo menos uma frase o que a empresa faz e o que o site precisa ter." }); return; }
+      await criar("briefing", form);
+      return;
+    }
+    let imagem = captura;
+    if (aba === "endereco" && !imagem) imagem = await trazerDoEndereco();
+    if (!imagem) { if (aba === "referencia") setAviso({ tom: "danger", texto: "Envie a captura da página de referência antes de criar o site." }); return; }
+    await criar("referencia", form, imagem);
   }
 
   async function capturaDeExemplo(): Promise<string> {
@@ -267,26 +239,29 @@ export default function Page() {
     return lerComoDataUrl(new File([await r.blob()], "referencia-exemplo.png", { type: "image/png" }));
   }
 
-  /** Preenche para revisão antes de disparar uma geração. */
+  /** Preenche para revisão antes de criar. */
   async function usarExemplo() {
-    if (gerando.current) return;
+    if (criando) return;
     setPreparando(true);
     const leitura = ++leituraAtual.current;
     try {
       const imagem = await capturaDeExemplo();
       if (leitura !== leituraAtual.current) return;
+      setAba("referencia");
       setForm(EXEMPLO);
+      setNomeDigitado(true);
       setArquivo(null);
       setCaptura(imagem);
-      setAvisoArquivo(null);
+      setAviso(null);
+      document.getElementById("criar-site")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch {
-      setAvisoArquivo({ tom: "danger", texto: "A captura de exemplo não está disponível. Envie a sua." });
+      setAviso({ tom: "danger", texto: "A captura de exemplo não está disponível. Envie a sua." });
     } finally {
       setPreparando(false);
     }
   }
 
-  // Atalho para demonstrações: /?exemplo=1 carrega a captura de exemplo, preenche a marca e envia.
+  // Atalho para demonstrações: /?exemplo=1 carrega a captura de exemplo, preenche a marca e cria o site.
   useEffect(() => {
     if (autoEnviado.current) return;
     if (new URLSearchParams(location.search).get("exemplo") === "1") {
@@ -294,21 +269,35 @@ export default function Page() {
       setTimeout(() => {
         setForm(EXEMPLO);
         capturaDeExemplo()
-          .then((imagem) => { setCaptura(imagem); gerar(imagem, EXEMPLO); })
-          .catch((e) => setEstado({ fase: "erro", mensagem: e instanceof Error ? e.message : "Erro inesperado." }));
+          .then((imagem) => { setCaptura(imagem); return criar("referencia", EXEMPLO, imagem); })
+          .catch(async (e) => setAviso({ tom: "danger", texto: (await lerErro(e)).mensagem }));
       }, 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- roda uma única vez ao abrir a página
   }, []);
 
-  const carregando = estado.fase === "carregando";
+  const ocupado = criando || preparando || buscandoEndereco;
   const corPrimariaValida = COR_HEX.test(form.corPrimaria) ? form.corPrimaria : "#792a3f";
   const corSecundariaValida = COR_HEX.test(form.corSecundaria) ? form.corSecundaria : "#bc342f";
-  const passoAtual = estado.fase === "pronto" ? 3 : captura ? 2 : 1;
+  const temSites = Boolean(sites && sites.length);
+  const passoAtual = temSites ? 3 : captura || form.briefing.trim().length >= MINIMO_BRIEFING ? 2 : 1;
+  const podeCriar = aba === "briefing" ? form.briefing.trim().length >= MINIMO_BRIEFING : aba === "endereco" ? Boolean(captura || endereco.trim()) : Boolean(captura);
+
+  const statusTexto = preparando
+    ? "Preparando a referência..."
+    : buscandoEndereco
+      ? "Buscando a captura. Isso pode levar até 90 segundos."
+      : criando
+        ? "Criando o site..."
+        : aba === "briefing"
+          ? form.briefing.trim().length < MINIMO_BRIEFING ? "Conte o que a empresa faz para começar." : "Confira a marca e crie o site."
+          : !captura
+            ? aba === "endereco" ? "Cole o endereço e crie: a captura é feita sozinha." : "Escolha uma referência para começar."
+            : "Confira a referência e a marca antes de criar.";
 
   return (
     <>
-      <Topbar marca="C" nome="Clone de Site" area="Marketing e Produto" status={status} erro={erro} resumo="Modo demonstração: a página exibida é um exemplo." usuario={status?.usuario} />
+      <TopbarSite />
 
       <Hero sobretitulo={PROMESSA.sobretitulo} titulo={PROMESSA.titulo} apoio={PROMESSA.apoio} segmento="Marketing">
         <Passos passos={PASSOS} atual={passoAtual} />
@@ -316,167 +305,137 @@ export default function Page() {
 
       <main className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-8 pt-5 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10 max-w-[1400px] mx-auto [&>*]:min-w-0">
         <div>
-          <form onSubmit={onSubmit}>
-            <fieldset disabled={carregando || preparando || buscandoEndereco} className="min-w-0">
-            <CartaoEntrada icone={<IconeReferencia />} titulo="A referência">
-              <Field label="Captura da página" htmlFor="captura">
-                <div className="dropzone-baixa"><Dropzone id="captura" accept="image/png,image/jpeg" tiposLabel="A página inteira, em PNG ou JPG" maxSizeMB={LIMITE_MB} arquivo={arquivo} onArquivo={escolherArquivo} /></div>
-                {captura && (
-                  <div className="mt-2.5 flex items-center gap-3">
-                    <AmpliarImagem src={captura} />
-                    <span className="text-sm text-ink-2">Referência pronta</span>
-                    <button type="button" className="btn-link text-[13px]" onClick={() => { leituraAtual.current++; setArquivo(null); setCaptura(null); setAvisoArquivo(null); }}>Trocar a captura</button>
+          <form onSubmit={onSubmit} id="criar-site">
+            <fieldset disabled={ocupado} className="min-w-0">
+              <CartaoEntrada icone={<IconeReferencia />} titulo="Criar um site">
+                <div role="tablist" aria-label="De onde o site nasce" className="flex gap-1 p-1 border border-line rounded-[10px] bg-surface mb-4 max-md:flex-col">
+                  {ABAS.map((a) => (
+                    <button
+                      key={a.valor}
+                      type="button"
+                      role="tab"
+                      aria-selected={aba === a.valor}
+                      className={`flex-1 px-3 py-2 rounded-lg text-[13.5px] font-bold cursor-pointer transition-colors ${aba === a.valor ? "bg-accent text-white" : "text-ink hover:bg-bg"}`}
+                      onClick={() => { setAba(a.valor); setAviso(null); }}
+                    >
+                      {a.rotulo}
+                    </button>
+                  ))}
+                </div>
+
+                {aba === "referencia" && (
+                  <Field label="Captura da página de referência" htmlFor="captura">
+                    <div className="dropzone-baixa"><Dropzone id="captura" accept="image/png,image/jpeg" tiposLabel="A página inteira, em PNG ou JPG" maxSizeMB={LIMITE_MB} arquivo={arquivo} onArquivo={escolherArquivo} /></div>
+                    {captura && (
+                      <div className="mt-2.5 flex items-center gap-3">
+                        <AmpliarImagem src={captura} />
+                        <span className="text-sm text-ink-2">Referência pronta</span>
+                        <button type="button" className="btn-link text-[13px]" onClick={() => { leituraAtual.current++; setArquivo(null); setCaptura(null); setAviso(null); }}>Trocar a captura</button>
+                      </div>
+                    )}
+                  </Field>
+                )}
+
+                {aba === "endereco" && (
+                  <>
+                    <Field label="Endereço do site de referência" htmlFor="endereco" hint="Cole o endereço completo, começando com https://. A captura é feita sozinha.">
+                      <div className="flex gap-2 max-md:flex-col">
+                        <input id="endereco" type="url" className="input flex-1 min-w-0" placeholder="https://..." value={endereco} onChange={(e) => { setEndereco(e.target.value); if (captura && !arquivo) setCaptura(null); }} />
+                        <button type="button" className="btn-ghost shrink-0 max-w-full whitespace-normal" disabled={buscandoEndereco || criando} onClick={trazerDoEndereco}>
+                          {buscandoEndereco ? "Buscando..." : "Ver a captura"}
+                        </button>
+                      </div>
+                    </Field>
+                    {captura && (
+                      <div className="mb-4 flex items-center gap-3">
+                        <AmpliarImagem src={captura} />
+                        <span className="text-sm text-ink-2">Captura pronta</span>
+                      </div>
+                    )}
+                    {servicoConectado === false && <p className="text-muted text-[13px] mb-3">Para capturar um site pelo endereço, <Link className="btn-link" href="/setup#captura">conecte o serviço de captura</Link>. Ou envie uma imagem em &ldquo;Clonar uma referência&rdquo;.</p>}
+                  </>
+                )}
+
+                {aba === "briefing" && (
+                  <Field label="O que a empresa faz, para quem e o que o site precisa ter" htmlFor="briefing" hint="Quanto mais concreto, melhor: produtos, diferenciais, público, cidade, chamada principal.">
+                    <textarea id="briefing" className="input min-h-28 resize-y" placeholder="Ex.: clínica odontológica em Curitiba, foco em implantes e atendimento no mesmo dia; quero destacar a avaliação gratuita e o WhatsApp." value={form.briefing} onChange={set("briefing")} />
+                  </Field>
+                )}
+
+                {aviso && (
+                  <div className="mb-1">
+                    <Aviso tom={aviso.tom} acao={aviso.acao}>{aviso.texto}</Aviso>
                   </div>
                 )}
-              </Field>
+              </CartaoEntrada>
 
-              <Field
-                label="Ou cole um endereço"
-                htmlFor="endereco"
-                hint="Cole o endereço completo, começando com https://."
-              >
-                <div className="flex gap-2 max-md:flex-col">
-                  <input id="endereco" type="url" className="input flex-1 min-w-0" placeholder="https://..." value={endereco} onChange={(e) => setEndereco(e.target.value)} />
-                  <button type="button" className="btn-ghost shrink-0 max-w-full whitespace-normal" disabled={buscandoEndereco || carregando} onClick={trazerDoEndereco}>
-                    {buscandoEndereco ? "Buscando..." : "Trazer"}
-                  </button>
-                </div>
-              </Field>
-              {servicoConectado === false && <p className="text-muted text-[13px] mb-3">Para capturar um site pelo endereço, <Link className="btn-link" href="/setup#captura">conecte o serviço de captura</Link>. Você também pode enviar uma imagem.</p>}
-              {avisoArquivo && (
-                <div className="mb-4">
-                  <Aviso tom={avisoArquivo.tom} acao={avisoArquivo.acao}>{avisoArquivo.texto}</Aviso>
-                </div>
-              )}
-            </CartaoEntrada>
+              <CartaoEntrada icone={<IconeMarca />} titulo="A sua marca">
+                <Row>
+                  <Field label="Nome da marca" htmlFor="marcaNome">
+                    <input id="marcaNome" className="input" placeholder="Entra no lugar do nome da referência" value={form.marcaNome} onChange={set("marcaNome")} />
+                  </Field>
+                  <Field label="Cor principal" htmlFor="corPrimaria">
+                    <div className="flex gap-2 items-center">
+                      <input id="corPrimaria" className="input" placeholder="#0f766e" value={form.corPrimaria} onChange={set("corPrimaria")} />
+                      <input type="color" aria-label="Escolher a cor principal" className="w-11 h-11 shrink-0 rounded-[10px] border border-line bg-white cursor-pointer" value={corPrimariaValida} onChange={set("corPrimaria")} />
+                    </div>
+                  </Field>
+                </Row>
+                <Field label="Nome do site" htmlFor="nomeSite" hint="Como ele aparece em Meus sites e no endereço público.">
+                  <input id="nomeSite" className="input" placeholder="Ex.: Landing de lançamento" value={form.nomeSite} onChange={set("nomeSite")} />
+                </Field>
+                <MaisDetalhes>
+                  <Field label="Cor secundária (opcional)" htmlFor="corSecundaria">
+                    <div className="flex gap-2 items-center">
+                      <input id="corSecundaria" className="input" placeholder="#f59e0b" value={form.corSecundaria} onChange={set("corSecundaria")} />
+                      <input type="color" aria-label="Escolher a cor secundária" className="w-11 h-11 shrink-0 rounded-[10px] border border-line bg-white cursor-pointer" value={corSecundariaValida} onChange={set("corSecundaria")} />
+                    </div>
+                  </Field>
+                  <Field label="O que mudar em relação à referência (opcional)" htmlFor="instrucoes">
+                    <textarea id="instrucoes" className="input min-h-20 resize-y" placeholder="Ex.: troque o formulário de contato por um botão de WhatsApp; deixe o cabeçalho escuro." value={form.instrucoes} onChange={set("instrucoes")} />
+                  </Field>
+                  <Field label="Formato do arquivo" htmlFor="formato" hint="Tailwind facilita ajustes rápidos; CSS puro não depende de nada externo.">
+                    <select id="formato" className="input" value={form.stack} onChange={set("stack")}>
+                      {FORMATOS.map((f) => <option key={f.valor} value={f.valor}>{f.rotulo}</option>)}
+                    </select>
+                  </Field>
+                </MaisDetalhes>
+              </CartaoEntrada>
 
-            <CartaoEntrada icone={<IconeMarca />} titulo="A sua marca">
-              <Row>
-                <Field label="Nome da marca" htmlFor="marcaNome">
-                  <input id="marcaNome" className="input" placeholder="Entra no lugar do nome da referência" value={form.marcaNome} onChange={set("marcaNome")} />
-                </Field>
-                <Field label="Cor principal" htmlFor="corPrimaria">
-                  <div className="flex gap-2 items-center">
-                    <input id="corPrimaria" className="input" placeholder="#0f766e" value={form.corPrimaria} onChange={set("corPrimaria")} />
-                    <input type="color" aria-label="Escolher a cor principal" className="w-11 h-11 shrink-0 rounded-[10px] border border-line bg-white cursor-pointer" value={corPrimariaValida} onChange={set("corPrimaria")} />
-                  </div>
-                </Field>
-              </Row>
-              <MaisDetalhes>
-                <Field label="Cor secundária (opcional)" htmlFor="corSecundaria">
-                  <div className="flex gap-2 items-center">
-                    <input id="corSecundaria" className="input" placeholder="#f59e0b" value={form.corSecundaria} onChange={set("corSecundaria")} />
-                    <input type="color" aria-label="Escolher a cor secundária" className="w-11 h-11 shrink-0 rounded-[10px] border border-line bg-white cursor-pointer" value={corSecundariaValida} onChange={set("corSecundaria")} />
-                  </div>
-                </Field>
-                <Field label="O que mudar em relação à referência (opcional)" htmlFor="instrucoes">
-                  <textarea id="instrucoes" className="input min-h-20 resize-y" placeholder="Ex.: troque o formulário de contato por um botão de WhatsApp; deixe o cabeçalho escuro." value={form.instrucoes} onChange={set("instrucoes")} />
-                </Field>
-                <Field label="Formato do arquivo" htmlFor="formato" hint="Tailwind facilita ajustes rápidos; CSS puro não depende de nada externo.">
-                  <select id="formato" className="input" value={form.stack} onChange={set("stack")}>
-                    {FORMATOS.map((f) => <option key={f.valor} value={f.valor}>{f.rotulo}</option>)}
-                  </select>
-                </Field>
-              </MaisDetalhes>
-            </CartaoEntrada>
-
-            <button type="submit" className="btn-primary" disabled={carregando || preparando || buscandoEndereco || !captura}>{carregando ? "Gerando a página" : "Gerar a página"}</button>
-            <button type="button" className="btn-secundario mt-2" disabled={carregando} onClick={usarExemplo}>Preencher com um exemplo</button>
+              <button type="submit" className="btn-primary" disabled={ocupado || !podeCriar}>{criando ? "Criando o site" : "Criar o site"}</button>
+              <button type="button" className="btn-secundario mt-2" disabled={ocupado} onClick={usarExemplo}>Preencher com um exemplo</button>
             </fieldset>
-            <p role="status" className="text-muted text-[13px] mt-2">{preparando ? "Preparando a referência..." : buscandoEndereco ? "Buscando a captura. Isso pode levar até 90 segundos." : !captura ? "Escolha uma referência para começar." : status?.demo ? "Demonstração: será gerada uma página ilustrativa, sem ler a sua captura." : "Confira a referência e a marca antes de gerar."}</p>
+            <p role="status" className="text-muted text-[13px] mt-2">{statusTexto}</p>
           </form>
 
           <div className="card p-5 mt-4">
-            <Privacidade detalhe="A captura é usada só para gerar a página e não fica salva. O código gerado fica neste app até você apagar." />
-
-            <MaisDetalhes titulo="Últimos resultados">
-              {erroHistorico ? <p role="alert" className="text-danger text-sm">Não foi possível carregar as páginas salvas. <Link className="btn-link" href="/historico">Abrir histórico</Link></p> : historico === null ? (
-                <p className="text-muted text-sm">Carregando...</p>
-              ) : historico.length === 0 ? (
-                <p className="text-muted text-sm">Nenhuma página salva ainda.</p>
-              ) : (
-                <>
-                  <ul className="flex flex-col gap-1.5 text-sm mb-3">
-                    {historico.slice(0, 3).map((h) => (
-                      <li key={h.id} className="flex justify-between gap-3">
-                        <Link href={`/r/${h.id}`} className="text-accent-ink font-semibold hover:underline truncate">{h.titulo}</Link>
-                        <span className="text-muted shrink-0">{data(h.criadoEm)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="flex items-center gap-4">
-                    <Link href="/historico" className="btn-link text-[13px]">Ver todos</Link>
-                    <button type="button" className="btn-ghost" onClick={apagarHistorico}>Apagar tudo</button>
-                  </div>
-                </>
-              )}
-            </MaisDetalhes>
+            <Privacidade detalhe="A captura fica guardada só até o site ficar pronto e é apagada em seguida. Se falhar, ela permanece para você tentar de novo, até apagar o site. Logo, imagens e o código ficam neste app até você apagar." />
           </div>
         </div>
 
         <Stage>
-          {estado.fase === "vazio" && <Previa itens={PROMESSA.itens} />}
-          {estado.fase === "carregando" && (
-            <div className="flex flex-col gap-3">
-              <Loading etapas={ETAPAS_CARREGANDO} />
-              <p role="status" className="text-muted text-[13px] text-center">Mantenha esta aba aberta até a página ficar pronta.</p>
-              {status?.ai && <p className="text-muted text-[13px] text-center">Isso leva de 1 a 2 minutos com o modelo gratuito.</p>}
-            </div>
-          )}
-          {estado.fase === "erro" && (
-            <ErrorBox
-              mensagem={estado.mensagem}
-              codigo={estado.codigo}
-              acao={estado.acao}
-              onTentarNovamente={estado.tentativa ? () => gerar(estado.tentativa!.imagem, estado.tentativa!.form) : undefined}
-            />
-          )}
-          {estado.fase === "pronto" && <Resultado key={estado.id} pagina={estado.pagina} meta={estado.meta} id={estado.id} referencia={estado.referencia} />}
+          <MeusSites
+            sites={sites}
+            aoMudar={setSites}
+            aoPreencherExemplo={usarExemplo}
+            rodape={temSites ? (
+              <div className="flex items-center gap-4 pt-1">
+                <Link href="/historico" className="btn-link text-[13px]">Ver o histórico</Link>
+                <button
+                  type="button"
+                  className="btn-link !text-muted text-[13px]"
+                  onClick={() => {
+                    if (!window.confirm("Apagar todos os sites e páginas salvos? Essa ação não pode ser desfeita.")) return;
+                    fetch("/api/pagina", { method: "DELETE" }).then(() => buscarSites()).then(setSites).catch(() => {});
+                  }}
+                >
+                  Apagar tudo
+                </button>
+              </div>
+            ) : undefined}
+          />
         </Stage>
       </main>
     </>
-  );
-}
-
-function rotuloFormato(html: string): string {
-  return /cdn\.tailwindcss\.com/.test(html) ? "HTML com Tailwind" : "HTML com CSS";
-}
-
-/** Resultado completo (cabeçalho, proveniência, prévia e editor de versões), reaproveitado pela página /r/[id]. */
-export function Resultado({ pagina: inicial, meta: metaInicial, id, referencia }: { pagina: Pagina; meta: Meta; id: string; referencia?: string }) {
-  // A página muda a cada edição/volta de versão sem sair da tela; a proveniência exibida passa a ser a da última mudança.
-  const [pagina, setPagina] = useState<Pagina>(inicial);
-  const [meta, setMeta] = useState<Meta>(metaInicial);
-  const atual = pagina.versoes[pagina.versoes.length - 1];
-  const modeloGratuito = !meta.demo && meta.model.endsWith(":free");
-  return (
-    <article className="reveal" data-id={id} data-versao={atual.n}>
-      {/* Subtítulo sem o nome da marca: ele já está no título da página gerada, logo acima. */}
-      <ResultHead titulo={pagina.titulo} subtitulo={`Versão ${atual.n} · ${rotuloFormato(atual.html)}`}>
-        <EntregarPagina id={id} titulo={pagina.titulo} html={atual.html} versao={atual.n} />
-      </ResultHead>
-      {/* A faixa logo abaixo é que explica o que aconteceu e o que fazer; aqui fica só a proveniência. */}
-      <Origem meta={meta} demoTexto="Exemplo ilustrativo, sem usar inteligência artificial." />
-
-      {meta.demo && (
-        <div className="mb-4">
-          <Aviso>
-            Esta é uma página de exemplo fixa: a sua captura não foi lida.{" "}
-            <a className="btn-link text-[13px]" href="/setup#openrouter">Conecte a inteligência artificial para gerar a sua versão</a>
-          </Aviso>
-        </div>
-      )}
-      {modeloGratuito && (
-        <div className="mb-4">
-          <Aviso>
-            Gerado com o modelo gratuito.{" "}
-            <a className="btn-link text-[13px]" href="/setup#qualidade-da-pagina">Para páginas mais fiéis, troque o modelo que lê a captura</a>
-          </Aviso>
-        </div>
-      )}
-
-      <PreviaPagina key={atual.n} html={atual.html} titulo={pagina.titulo} referencia={referencia} />
-      <EditorPagina pagina={pagina} demo={meta.demo} onAtualizada={(nova, novaMeta) => { setPagina(nova); if (novaMeta) setMeta(novaMeta); }} />
-    </article>
   );
 }

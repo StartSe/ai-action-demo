@@ -5,7 +5,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { Chip, Empty, Topbar, data, useStatus } from "@/components/ui";
+import { Chip, Empty, data, useStatus } from "@/components/ui";
+import { TopbarSite } from "@/components/TopbarSite";
 
 type ItemHistorico = { id: string; tipo: string; titulo: string; resumo: string; criadoEm: string };
 
@@ -26,7 +27,7 @@ function IconeHistorico() {
 }
 
 export default function Page() {
-  const { status, erro } = useStatus();
+  const { status } = useStatus();
   const router = useRouter();
   const [itens, setItens] = useState<ItemHistorico[] | null>(null);
   const [busca, setBusca] = useState("");
@@ -44,7 +45,7 @@ export default function Page() {
 
   return (
     <>
-      <Topbar marca="C" nome="Clone de Site" area="Marketing e Produto" status={status} erro={erro} usuario={status?.usuario} />
+      <TopbarSite />
 
       <main className="max-w-[860px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
         <h1 className="titulo-painel mb-1.5">Histórico</h1>

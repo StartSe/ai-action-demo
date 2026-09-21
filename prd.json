@@ -37,7 +37,7 @@
         "Lint, tsc e verificar-jargao passam; verificar no navegador em 1400x900 e 390 px: criar pelo exemplo, ir a /setup durante gerando, voltar e ver o cartão atualizado; falhou com motivo"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "US-002 da PRD. Absorve as US-004/US-006 da PRD anterior (tela por projeto, sino)."
     },
     {
