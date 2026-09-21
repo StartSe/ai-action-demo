@@ -65,12 +65,10 @@ export function layoutTree(root: MindNode, collapsed: Set<string> = new Set()) {
     collapsed: collapsed.has(root.id),
   });
   if (!collapsed.has(root.id)) {
-    const split = Math.ceil(root.children.length / 2);
     for (const side of ["right", "left"] as const) {
-      const group =
-        side === "right"
-          ? root.children.slice(0, split)
-          : root.children.slice(split);
+      const group = root.children.filter(
+        (_, i) => i % 2 === (side === "right" ? 0 : 1),
+      );
       let cursor =
         NODE_HEIGHT / 2 - group.reduce((h, c) => h + height(c), 0) / 2;
       group.forEach((child, i) => {
@@ -79,7 +77,7 @@ export function layoutTree(root: MindNode, collapsed: Set<string> = new Set()) {
           child,
           side === "right" ? 330 : -330,
           cursor + h / 2 - NODE_HEIGHT / 2,
-          colors[(i + (side === "left" ? split : 0)) % colors.length],
+          colors[(i * 2 + (side === "left" ? 1 : 0)) % colors.length],
           side,
           root.id,
         );

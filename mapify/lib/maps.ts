@@ -148,6 +148,7 @@ export function recoverJobs() {
         error:
           "O servidor reiniciou durante a geração. Envie a fonte novamente.",
         phase: "Geração interrompida",
+        updatedAt: new Date().toISOString(),
       });
   }
 }

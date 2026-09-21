@@ -50,11 +50,36 @@ export type MapCard = Pick<
   MindMap,
   "id" | "title" | "summary" | "createdAt" | "updatedAt" | "favorite" | "demo"
 > & { kind: SourceKind; nodes: number; branches: string[] };
+export type JobStage = "source" | "organizing" | "branches" | "saving";
+export type JobPreview = {
+  kind: SourceKind;
+  title: string;
+  url?: string;
+  root?: MindNode;
+};
+export type GenerationPatch = {
+  stage?: JobStage;
+  preview?: JobPreview;
+  sourceSegments?: number;
+  receivedCharacters?: number;
+};
+export type GenerationProgress = (
+  phase: string,
+  value: number,
+  patch?: GenerationPatch,
+) => void;
 export type Job = {
   id: string;
   status: "running" | "done" | "error" | "cancelled";
   phase: string;
   progress: number;
+  stage?: JobStage;
+  preview?: JobPreview;
+  events?: { at: string; text: string }[];
+  sourceSegments?: number;
+  receivedCharacters?: number;
+  updatedAt?: string;
+  heartbeatAt?: string;
   error?: string;
   mapId?: string;
   createdAt: string;

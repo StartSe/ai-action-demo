@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { GenerationView } from "./GenerationView";
+import { youtubeId } from "@/lib/youtube-link";
 import { Modal, Icon, ErrorBox, request } from "./ui";
 import { sourceLabels, type SourceKind, type Job } from "@/lib/types";
 export function CreateMap({
@@ -24,47 +26,86 @@ export function CreateMap({
   const [job, setJob] = useState<Job | null>(null);
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const onCreatedRef = useRef(onCreated);
+  useEffect(() => {
+    onCreatedRef.current = onCreated;
+  }, [onCreated]);
   useEffect(() => {
     const id = localStorage.getItem("mapify-job");
     if (id)
-      request<Job>(`/api/jobs/${id}`)
-        .then((j) => {
-          setJob(j);
-          if (j.status !== "running") {
-            localStorage.removeItem("mapify-job");
-            if (j.mapId) onCreated(j.mapId);
-            else if (j.error) setError(j.error);
-          }
-        })
-        .catch(() => localStorage.removeItem("mapify-job"));
-  }, [onCreated]);
+      setJob({
+        id,
+        status: "running",
+        phase: "Retomando sua geração…",
+        progress: 0,
+        createdAt: new Date().toISOString(),
+      });
+  }, []);
+  const jobId = job?.id,
+    jobStatus = job?.status;
   useEffect(() => {
-    if (!job || job.status !== "running") return;
+    if (!jobId || jobStatus !== "running") return;
     let live = true;
-    const timer = setInterval(() => {
-      request<Job>(`/api/jobs/${job.id}`)
-        .then((j) => {
-          if (!live) return;
-          setJob(j);
-          if (j.status !== "running") {
-            localStorage.removeItem("mapify-job");
-            setBusy(false);
-            if (j.mapId) onCreated(j.mapId);
-            else setError(j.error || "A geração foi interrompida.");
-          }
-        })
-        .catch((e) => {
-          if (live)
-            setError(
-              `Não foi possível atualizar o andamento. A geração pode continuar no servidor. ${e.message}`,
-            );
+    let timer: ReturnType<typeof setTimeout>;
+    let controller: AbortController;
+    async function poll() {
+      controller = new AbortController();
+      try {
+        const response = await fetch(`/api/jobs/${jobId}`, {
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(10000),
+          ]),
+          cache: "no-store",
         });
-    }, 1500);
+        const data = await response.json();
+        if (!live) return;
+        if (!response.ok) {
+          if (response.status === 404) {
+            setJob((old) =>
+              old
+                ? {
+                    ...old,
+                    status: "error",
+                    phase: "Geração não encontrada",
+                    error:
+                      "Esta geração não está mais disponível. Tente novamente.",
+                  }
+                : null,
+            );
+            localStorage.removeItem("mapify-job");
+            window.dispatchEvent(new Event("mapia-job"));
+            return;
+          }
+          throw new Error(data.error);
+        }
+        const next = data as Job;
+        setJob(next);
+        setError("");
+        if (next.status !== "running") {
+          localStorage.removeItem("mapify-job");
+          window.dispatchEvent(new Event("mapia-job"));
+          setBusy(false);
+          setCancelling(false);
+          if (next.mapId) onCreatedRef.current(next.mapId);
+          return;
+        }
+      } catch {
+        if (live)
+          setError(
+            "A conexão foi interrompida. Tentando atualizar o andamento; a geração pode continuar no servidor.",
+          );
+      }
+      if (live) timer = setTimeout(poll, 750);
+    }
+    void poll();
     return () => {
       live = false;
-      clearInterval(timer);
+      clearTimeout(timer);
+      controller?.abort();
     };
-  }, [job, onCreated]);
+  }, [jobId, jobStatus]);
   function chooseFile(f?: File) {
     if (!f) return;
     if (f.size > 15 * 1024 * 1024) {
@@ -81,6 +122,27 @@ export function CreateMap({
   async function submit() {
     setBusy(true);
     setError("");
+    const videoId = ["youtube", "web"].includes(kind) ? youtubeId(url) : null;
+    if (kind === "youtube" && !videoId) {
+      setError("Use um link válido de um vídeo do YouTube.");
+      setBusy(false);
+      return;
+    }
+    setJob({
+      id: "",
+      status: "running",
+      phase: "Preparando sua fonte",
+      progress: 0,
+      stage: "source",
+      createdAt: new Date().toISOString(),
+      preview: {
+        kind: videoId ? "youtube" : kind,
+        title: videoId
+          ? "Seu vídeo do YouTube"
+          : file?.name || sourceLabels[kind],
+        url: videoId ? `https://www.youtube.com/watch?v=${videoId}` : undefined,
+      },
+    });
     try {
       const form = new FormData();
       form.set("kind", kind);
@@ -94,46 +156,60 @@ export function CreateMap({
       if (!res.ok) throw new Error(data.error);
       localStorage.setItem("mapify-job", data.id);
       setJob(data);
+      window.dispatchEvent(new Event("mapia-job"));
     } catch (e) {
-      setError((e as Error).message);
+      setJob((old) =>
+        old
+          ? {
+              ...old,
+              status: "error",
+              phase: "Não foi possível iniciar",
+              updatedAt: new Date().toISOString(),
+              error: (e as Error).message,
+            }
+          : null,
+      );
       setBusy(false);
     }
   }
-  const running = job?.status === "running";
   return (
     <Modal
-      title={running ? "Seu mapa está tomando forma" : "O que vamos explorar?"}
+      title={
+        job
+          ? job.status === "running"
+            ? "Seu mapa está tomando forma"
+            : "Vamos continuar de onde paramos"
+          : "O que vamos explorar?"
+      }
       onClose={onClose}
       wide
+      className={job ? "generation-modal" : ""}
     >
-      {running ? (
-        <div className="generation">
-          <span className="generation-mark">
-            <Icon name="map" size={38} />
-          </span>
-          <h3>{job.phase}</h3>
-          <p>
-            Estamos encontrando os conceitos e conectando as ideias da sua
-            fonte.
-          </p>
-          <progress max="100" value={job.progress} />
-          <small>
-            {job.progress}% · Você pode fechar esta janela e voltar depois.
-          </small>
-          <ErrorBox error={error} />
-          <button
-            className="secondary"
-            onClick={async () => {
-              try {
-                await request(`/api/jobs/${job.id}`, "DELETE");
-              } catch (e) {
-                setError((e as Error).message);
-              }
-            }}
-          >
-            Cancelar geração
-          </button>
-        </div>
+      {job ? (
+        <GenerationView
+          job={job}
+          error={error}
+          cancelling={cancelling}
+          onClose={onClose}
+          onEdit={() => {
+            if (job.preview?.url) {
+              setUrl(job.preview.url);
+              setKind(job.preview.kind);
+            }
+            setError(job.error || "");
+            setJob(null);
+            setBusy(false);
+          }}
+          onCancel={async () => {
+            setCancelling(true);
+            try {
+              await request(`/api/jobs/${job.id}`, "DELETE");
+            } catch (e) {
+              setError((e as Error).message);
+              setCancelling(false);
+            }
+          }}
+        />
       ) : (
         <>
           <p className="muted">Traga o conteúdo. A IA encontra as conexões.</p>

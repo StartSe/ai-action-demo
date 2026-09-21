@@ -89,6 +89,17 @@ export function Library({
   const [sort, setSort] = useState("recent");
   const [list, setList] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [pendingJob, setPendingJob] = useState(false);
+  useEffect(() => {
+    const check = () => setPendingJob(!!localStorage.getItem("mapify-job"));
+    check();
+    window.addEventListener("mapia-job", check);
+    window.addEventListener("storage", check);
+    return () => {
+      window.removeEventListener("mapia-job", check);
+      window.removeEventListener("storage", check);
+    };
+  }, []);
   const refresh = useCallback(() => {
     request<MapCard[]>("/api/maps")
       .then(setMaps)
@@ -140,6 +151,14 @@ export function Library({
           <Icon name="plus" size={18} />
           Novo mapa
         </button>
+        {pendingJob && (
+          <button
+            className="pending-generation"
+            onClick={() => setCreate("youtube")}
+          >
+            <Icon name="clock" size={16} /> Acompanhar geração
+          </button>
+        )}
         <span className="nav-label">Seu espaço</span>
         <nav>
           <button

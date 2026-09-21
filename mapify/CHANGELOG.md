@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0 — 2026-09-21
+
+- Geração em canvas desde o envio, com thumbnail do YouTube no centro e ramificações surgindo conforme ChatGPT ou OpenRouter transmite a resposta. A thumbnail permanece no editor.
+- Etapas reais de análise, organização, construção e revisão, com tempo decorrido, trechos recebidos, tópicos e histórico de atividade; removida a porcentagem estimada da interface.
+- Leitura incremental da análise Gemini, sem expor etapas de raciocínio. Respostas incompletas ou interrompidas nunca são salvas como mapas concluídos.
+- Prévia persistida, acompanhamento pela biblioteca, retomada após fechar/recarregar a página e cancelamento. Falhas preservam a prévia e oferecem ajuste da fonte.
+- Ramos mantêm lado e cor durante a construção; enquadramento automático pode ser retomado após navegar no canvas. Layout responsivo e respeito à preferência por movimento reduzido.
+
 ## 1.2.1 — 2026-09-21
 
 - Configuração do YouTube simplificada para vídeos públicos com Gemini; removidos o formulário OAuth e a seleção de modos. Configurações antigas de canal não alteram a importação.

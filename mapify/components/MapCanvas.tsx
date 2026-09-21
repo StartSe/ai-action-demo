@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useEffect, type CSSProperties } from "react";
+import { useMemo, useEffect, useState, type CSSProperties } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -17,6 +17,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { layoutTree } from "@/lib/layout";
 import type { MindNode } from "@/lib/types";
+import { youtubeThumbnail } from "@/lib/youtube-link";
 import { Icon } from "./ui";
 type Data = {
   label: string;
@@ -27,14 +28,19 @@ type Data = {
   count: number;
   collapsed: boolean;
   toggle: () => void;
+  thumbnail?: string;
+  loading?: boolean;
 };
 type MapNode = Node<Data>;
 function TopicNode({ data, selected }: NodeProps<MapNode>) {
+  const [failed, setFailed] = useState(false);
   return (
     <div
       className={
         "topic-node" +
         (data.root ? " root-node" : "") +
+        (data.thumbnail ? " video-root" : "") +
+        (data.loading ? " growing-root" : "") +
         (selected ? " selected" : "")
       }
       style={{ "--branch-color": data.color } as CSSProperties}
@@ -43,6 +49,22 @@ function TopicNode({ data, selected }: NodeProps<MapNode>) {
         type="target"
         position={data.side === "right" ? Position.Left : Position.Right}
       />
+      {data.thumbnail && (
+        <div className="video-thumbnail">
+          {failed ? (
+            <Icon name="youtube" size={40} />
+          ) : (
+            // YouTube thumbnails are public and the URL is built from a validated ID.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={data.thumbnail}
+              alt="Miniatura do vídeo"
+              onError={() => setFailed(true)}
+              referrerPolicy="no-referrer"
+            />
+          )}
+        </div>
+      )}
       {data.root && (
         <span className="root-eyebrow">
           <Icon name="spark" size={12} />
@@ -87,6 +109,9 @@ function Canvas({
   selected,
   fitKey,
   focusId,
+  sourceUrl,
+  generating = false,
+  onInteract,
 }: {
   root: MindNode;
   collapsed: Set<string>;
@@ -95,16 +120,20 @@ function Canvas({
   selected: string | null;
   fitKey: number;
   focusId: string | null;
+  sourceUrl?: string;
+  generating?: boolean;
+  onInteract?: () => void;
 }) {
   const flow = useReactFlow();
   const width = useStore((state) => state.width);
   const height = useStore((state) => state.height);
   const { nodes, edges } = useMemo(() => {
     const layout = layoutTree(root, collapsed);
+    const thumbnail = youtubeThumbnail(sourceUrl);
     const nodes: MapNode[] = layout.map((n) => ({
       id: n.node.id,
       type: "topic",
-      position: { x: n.x, y: n.y },
+      position: { x: n.x, y: n.y - (n.root && thumbnail ? 67 : 0) },
       selected: n.node.id === selected,
       data: {
         label: n.node.label,
@@ -115,6 +144,8 @@ function Canvas({
         count: n.node.children.length,
         collapsed: n.collapsed,
         toggle: () => onToggle(n.node.id),
+        thumbnail: n.root ? thumbnail : undefined,
+        loading: n.root && generating,
       },
     }));
     const edges: Edge[] = layout
@@ -128,10 +159,16 @@ function Canvas({
         style: { stroke: n.color, strokeWidth: 1.6, opacity: 0.7 },
       }));
     return { nodes, edges };
-  }, [root, collapsed, onToggle, selected]);
+  }, [root, collapsed, onToggle, selected, sourceUrl, generating]);
   useEffect(() => {
     const timer = setTimeout(() => {
-      void flow.fitView({ padding: 0.15, duration: 300, maxZoom: 1 });
+      void flow.fitView({
+        padding: 0.15,
+        duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? 0
+          : 300,
+        maxZoom: 1,
+      });
     }, 90);
     return () => clearTimeout(timer);
   }, [fitKey, flow, width, height]);
@@ -152,6 +189,9 @@ function Canvas({
       nodeTypes={nodeTypes}
       onNodeClick={(_e, node) => onSelect(node.id)}
       onPaneClick={() => onSelect("")}
+      onMoveStart={(event) => {
+        if (event) onInteract?.();
+      }}
       nodesDraggable={false}
       nodesConnectable={false}
       elementsSelectable

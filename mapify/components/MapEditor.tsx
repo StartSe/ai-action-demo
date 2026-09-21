@@ -528,6 +528,7 @@ export function MapEditor({ id }: { id: string }) {
         )}
         <main className="canvas-area">
           <MapCanvas
+            sourceUrl={map.source.url}
             root={map.root}
             collapsed={collapsed}
             onToggle={toggle}

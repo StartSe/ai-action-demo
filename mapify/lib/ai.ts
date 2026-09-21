@@ -1,6 +1,7 @@
 import { getConfig } from "./store";
 import { chatGPT } from "./chatgpt";
 import { AppError } from "./api";
+import { sseData } from "./streaming";
 export type AIConfig = { provider: "chatgpt" | "openrouter"; model: string };
 export function aiConfig(): AIConfig {
   return {
@@ -19,6 +20,7 @@ export async function ask(
   signal?: AbortSignal,
   config = aiConfig(),
   fetcher = fetch,
+  onText?: (text: string) => void,
 ): Promise<string> {
   if (config.provider === "chatgpt")
     return chatGPT().run({
@@ -26,19 +28,21 @@ export async function ask(
       prompt,
       model: config.model || undefined,
       signal,
+      onText,
     });
   const key = getConfig("OPENROUTER_API_KEY");
   if (!key)
     throw new AppError(
       "Conecte o ChatGPT ou o OpenRouter em Conexões para gerar seu mapa.",
     );
+  const combined = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(180000)])
+    : AbortSignal.timeout(180000);
   const response = await fetcher(
     "https://openrouter.ai/api/v1/chat/completions",
     {
       method: "POST",
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(180000)])
-        : AbortSignal.timeout(180000),
+      signal: combined,
       headers: {
         Authorization: `Bearer ${key}`,
         "Content-Type": "application/json",
@@ -52,6 +56,7 @@ export async function ask(
           { role: "user", content: prompt },
         ],
         max_tokens: 10000,
+        ...(onText ? { stream: true } : {}),
       }),
     },
   );
@@ -65,8 +70,55 @@ export async function ask(
             ? "O modelo atingiu seu limite. Espere um pouco ou escolha outro modelo."
             : "O provedor não concluiu a resposta. Tente novamente.",
     );
+  if (
+    onText &&
+    response.headers.get("content-type")?.includes("text/event-stream")
+  ) {
+    let text = "",
+      done = false,
+      stopped = false;
+    for await (const data of sseData(response, combined)) {
+      if (data === "[DONE]") {
+        done = true;
+        break;
+      }
+      let chunk;
+      try {
+        chunk = JSON.parse(data);
+      } catch {
+        throw new AppError("O provedor enviou uma resposta inválida.");
+      }
+      const choice = chunk.choices?.[0];
+      if (
+        chunk.error ||
+        ["error", "content_filter"].includes(choice?.finish_reason)
+      )
+        throw new AppError(
+          "O provedor interrompeu a geração. Tente novamente.",
+        );
+      if (choice?.finish_reason === "length")
+        throw new AppError(
+          "A resposta ficou incompleta. Escolha um mapa mais resumido ou outro modelo.",
+        );
+      if (choice?.finish_reason === "stop") stopped = true;
+      if (typeof choice?.delta?.content === "string") {
+        text += choice.delta.content;
+        onText(text);
+      }
+    }
+    combined.throwIfAborted();
+    if (!done || !stopped || !text.trim())
+      throw new AppError(
+        "A conexão com a IA terminou antes de concluir o mapa. Tente novamente.",
+      );
+    return text;
+  }
   const data = await response.json();
-  if (data.error)
+  combined.throwIfAborted();
+  if (
+    data.error ||
+    ["error", "content_filter"].includes(data.choices?.[0]?.finish_reason)
+  )
     throw new AppError(
       "O provedor interrompeu a resposta. Tente outro modelo.",
     );
@@ -79,6 +131,7 @@ export async function ask(
     throw new AppError(
       "O modelo devolveu uma resposta vazia. Tente outro modelo.",
     );
+  onText?.(text);
   return text;
 }
 export function parseJSON(text: string) {

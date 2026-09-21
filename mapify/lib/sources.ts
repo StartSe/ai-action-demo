@@ -1,9 +1,10 @@
+import { youtubeId } from "./youtube-link";
 import { load } from "cheerio";
 import { extractText } from "unpdf";
-import { download, publicUrl } from "./network";
+import { download } from "./network";
 import { AppError } from "./api";
 import { analyzeYouTubeVideo } from "./gemini-video";
-import type { Source, Segment } from "./types";
+import type { Source, Segment, GenerationProgress } from "./types";
 export const MAX_CHARACTERS = 160000;
 function finish(source: Omit<Source, "characters">): Source {
   const segments = source.segments.filter((s) => s.text.trim());
@@ -83,18 +84,7 @@ export async function pdfSource(
     );
   }
 }
-export function youtubeId(input: string): string | null {
-  const url = publicUrl(input);
-  const host = url.hostname.replace(/^www\./, "");
-  const value =
-    host === "youtu.be"
-      ? url.pathname.slice(1).split("/")[0]
-      : ["youtube.com", "m.youtube.com"].includes(host)
-        ? url.searchParams.get("v") ||
-          url.pathname.match(/^\/(?:shorts|embed|live)\/([^/]+)/)?.[1]
-        : null;
-  return value && /^[\w-]{11}$/.test(value) ? value : null;
-}
+export { youtubeId } from "./youtube-link";
 export function captionSegments(
   items: { text: string; start: number }[],
 ): Segment[] {
@@ -123,18 +113,43 @@ export function captionSegments(
 export async function youtubeSource(
   url: string,
   signal?: AbortSignal,
-  progress?: (phase: string, value: number) => void,
+  progress?: GenerationProgress,
 ): Promise<Source> {
   const id = youtubeId(url);
   if (!id) throw new AppError("Use um link válido de um vídeo do YouTube.");
   progress?.("Analisando o vídeo com Gemini", 12);
-  return analyzeYouTubeVideo(id, signal);
+  return analyzeYouTubeVideo(
+    id,
+    signal,
+    undefined,
+    fetch,
+    progress
+      ? (value) => {
+          progress(
+            value.segments
+              ? `Analisando ${value.segments} trechos do vídeo`
+              : "Lendo áudio e imagens do vídeo",
+            20,
+            {
+              stage: "source",
+              sourceSegments: value.segments,
+              receivedCharacters: value.characters,
+              preview: {
+                kind: "youtube",
+                url: `https://www.youtube.com/watch?v=${id}`,
+                title: value.title || "Seu vídeo do YouTube",
+              },
+            },
+          );
+        }
+      : undefined,
+  );
 }
 export async function linkSource(
   input: string,
   kind: string,
   signal?: AbortSignal,
-  progress?: (phase: string, value: number) => void,
+  progress?: GenerationProgress,
 ) {
   if (kind === "youtube" || youtubeId(input))
     return youtubeSource(input, signal, progress);

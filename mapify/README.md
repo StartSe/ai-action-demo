@@ -12,12 +12,21 @@ Transforma vídeos públicos do YouTube, PDFs, páginas e textos em mapas mentai
 2. Explore o mapa de exemplo ou abra **Configurações → Inteligência artificial**.
 3. Conecte ChatGPT por código de dispositivo ou informe uma chave OpenRouter. Escolha o modelo ou mantenha Automático.
 4. Para vídeos públicos de qualquer canal, abra **Configurações → YouTube**, cadastre uma chave Gemini e clique em **Validar e salvar chave**. Depois crie um mapa com YouTube, PDF, página web ou texto, escolhendo detalhe e foco.
-5. Navegue com zoom e arraste, recolha ramos, edite tópicos e notas, adicione subtemas e consulte referências à fonte. As alterações são salvas automaticamente.
-6. Converse sobre o conteúdo e exporte em PNG, SVG, Markdown ou JSON. A biblioteca oferece busca, favoritos, duplicação e exclusão.
+5. Acompanhe a análise e a construção no canvas: a thumbnail aparece ao enviar um vídeo e as ramificações chegam durante a resposta da IA. Pode fechar a janela e voltar por **Acompanhar geração** na biblioteca.
+6. Navegue com zoom e arraste, recolha ramos, edite tópicos e notas, adicione subtemas e consulte referências à fonte. As alterações são salvas automaticamente.
+7. Converse sobre o conteúdo e exporte em PNG, SVG, Markdown ou JSON. A biblioteca oferece busca, favoritos, duplicação e exclusão.
 
 O exemplo é identificado como demonstração e não simula uma resposta de IA. Fontes reais exigem conexão. A conversa usa o mapa e uma seleção de trechos relevantes; não é uma busca exaustiva em todos os documentos.
 
 A versão instalada aparece no header da biblioteca e do editor, inclusive no celular. O indicador e `/api/health` usam a mesma versão de `package.json`.
+
+## Geração progressiva
+
+A tela mostra a fonte no centro desde o envio, as etapas em andamento, o tempo decorrido e os tópicos efetivamente recebidos. Gemini transmite notas da análise por SSE; somente texto de `model_output` é considerado, sem exibir raciocínio interno. Depois da extração e da organização da fonte, ChatGPT ou OpenRouter transmite a estrutura do mapa. As ramificações aparecem assim que seus títulos chegam completos. A primeira etapa ainda pode levar minutos em vídeos longos: a confirmação periódica do servidor indica disponibilidade, não progresso do provedor.
+
+A prévia fica no job do servidor e o navegador consulta o andamento sem requisições sobrepostas. Fechar ou recarregar a página permite acompanhar a mesma geração. Mover o canvas pausa o enquadramento automático; **Acompanhar mapa** o retoma. Cancelamentos e erros preservam a prévia na janela, mas só uma resposta completa e validada cria um mapa na biblioteca. Após reinício do servidor, a geração é marcada como interrompida e precisa ser solicitada novamente. A extensão de navegador não faz parte desta versão.
+
+Validação da v1.3.0: testes de contrato com streams simulados, fragmentação UTF-8, cancelamento, respostas incompletas, erros de provedor e persistência de prévias. Testes no navegador usam provedores simulados para verificar a evolução visual antes da conclusão; não medem a latência real do Gemini nem alteram a exigência de créditos do projeto Google.
 
 ## Executar localmente
 

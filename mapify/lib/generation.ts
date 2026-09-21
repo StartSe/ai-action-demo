@@ -2,7 +2,16 @@ import { randomUUID } from "node:crypto";
 import { ask, aiConfig, connected, parseJSON, type AIConfig } from "./ai";
 import { AppError } from "./api";
 import { createMap, saveJob, getJob, recoverJobs, validateTree } from "./maps";
-import { sourceDescription, type Job, type Source } from "./types";
+import {
+  sourceDescription,
+  countNodes,
+  type Job,
+  type Source,
+  type GenerationProgress,
+  type JobPreview,
+  type GenerationPatch,
+} from "./types";
+import { mapPreview, stableNodeIds } from "./map-preview";
 const state = globalThis as typeof globalThis & {
   mapifyJobs?: Map<string, AbortController>;
 };
@@ -36,16 +45,28 @@ export async function generate(
   detail: string,
   focus: string,
   signal: AbortSignal,
-  progress: (phase: string, value: number) => void,
+  progress: GenerationProgress,
   config: AIConfig,
+  progressive = false,
 ) {
+  const preview: JobPreview = {
+    kind: source.kind,
+    title: source.title,
+    url: source.url,
+  };
+  const refs = new Set(source.segments.map((s) => s.id));
+  progress("Fonte recebida · organizando as ideias", 35, {
+    stage: "organizing",
+    preview,
+    sourceSegments: source.segments.length,
+  });
   const chunks = sourceChunks(source);
   const notes: string[] = [];
   if (chunks.length > 1) {
     for (let i = 0; i < chunks.length; i++) {
       progress(
         `Lendo parte ${i + 1} de ${chunks.length}`,
-        20 + Math.round((45 * i) / chunks.length),
+        35 + Math.round((25 * i) / chunks.length),
       );
       notes.push(
         await ask(
@@ -57,26 +78,44 @@ export async function generate(
       );
     }
   } else notes.push(chunks[0]);
-  progress("Conectando as ideias", 76);
+  progress("Construindo as ramificações", 70, {
+    stage: "branches",
+    receivedCharacters: 0,
+  });
+  let lastPreview = 0;
+  const onText = progressive
+    ? (text: string) => {
+        if (Date.now() - lastPreview < 200) return;
+        lastPreview = Date.now();
+        const root = mapPreview(text, refs);
+        progress("Construindo as ramificações", 75, {
+          receivedCharacters: text.length,
+          ...(root ? { preview: { ...preview, root } } : {}),
+        });
+      }
+    : undefined;
   const result = parseJSON(
     await ask(
       `${grounding} Crie um mapa mental hierárquico. Retorne apenas JSON: {"title":"título breve","summary":"síntese de 2 frases","root":{"label":"tema central","note":"explicação","refs":[],"children":[{"label":"conceito","note":"explicação útil","refs":["id de trecho real"],"children":[]}]}}. Cada nó deve ter label, note, refs e children. Labels até 80 caracteres, notas até 600. Use 4 a 7 ramos principais e até ${detail === "deep" ? "100 tópicos, 4 níveis" : detail === "brief" ? "22 tópicos, 2 níveis" : "55 tópicos, 3 níveis"}. As referências devem existir na fonte. Não repita conceitos.`,
       `Título da fonte: ${source.title}\n${sourceDescription(source)}\nFoco desejado: ${focus || "Compreender os pontos principais e suas relações"}\n<fonte>\n${notes.join("\n\n")}\n</fonte>`,
       signal,
       config,
+      fetch,
+      onText,
     ),
   );
   if (typeof result.title !== "string" || typeof result.summary !== "string")
     throw new AppError("A IA retornou um mapa incompleto. Tente novamente.");
-  const root = validateTree(
-    result.root,
-    new Set(source.segments.map((s) => s.id)),
-  );
+  const root = stableNodeIds(validateTree(result.root, refs));
   if (root.children.length < 2)
     throw new AppError(
       "O mapa retornado não tem ramificações suficientes. Tente outro modelo.",
     );
   signal.throwIfAborted();
+  progress(`Revisando ${countNodes(root)} tópicos e salvando o mapa`, 96, {
+    stage: "saving",
+    preview: { ...preview, title: result.title, root },
+  });
   const now = new Date().toISOString();
   return createMap({
     id: randomUUID(),
@@ -96,10 +135,11 @@ export async function generate(
 export async function startJob(
   extract: (
     signal: AbortSignal,
-    progress: (phase: string, value: number) => void,
+    progress: GenerationProgress,
   ) => Promise<Source>,
   detail: string,
   focus: string,
+  preview?: JobPreview,
 ) {
   const active = workers();
   if (active.size >= 2)
@@ -123,28 +163,51 @@ export async function startJob(
     status: "running",
     phase: "Lendo a fonte",
     progress: 8,
+    stage: "source",
+    preview,
+    events: [
+      { at: new Date().toISOString(), text: "Fonte enviada para análise" },
+    ],
+    updatedAt: new Date().toISOString(),
+    heartbeatAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
   };
   active.set(job.id, controller);
   saveJob(job);
   const timer = setTimeout(() => controller.abort(), 12 * 60 * 1000);
+  const heartbeat = setInterval(() => {
+    job.heartbeatAt = new Date().toISOString();
+    saveJob(job);
+  }, 5000);
+  const update: GenerationProgress = (
+    phase,
+    progress,
+    patch?: GenerationPatch,
+  ) => {
+    controller.signal.throwIfAborted();
+    const now = new Date().toISOString();
+    if (job.phase !== phase)
+      job.events = [...(job.events || []), { at: now, text: phase }].slice(-16);
+    Object.assign(job, patch, {
+      phase,
+      progress,
+      updatedAt: now,
+      heartbeatAt: now,
+    });
+    saveJob(job);
+  };
   void (async () => {
     try {
-      const source = await extract(controller.signal, (phase, progress) => {
-        Object.assign(job, { phase, progress });
-        saveJob(job);
-      });
+      const source = await extract(controller.signal, update);
       controller.signal.throwIfAborted();
       const map = await generate(
         source,
         detail,
         focus,
         controller.signal,
-        (phase, progress) => {
-          Object.assign(job, { phase, progress });
-          saveJob(job);
-        },
+        update,
         config,
+        true,
       );
       Object.assign(job, {
         status: "done",
@@ -166,6 +229,13 @@ export async function startJob(
       });
     } finally {
       clearTimeout(timer);
+      clearInterval(heartbeat);
+      job.updatedAt = new Date().toISOString();
+      job.heartbeatAt = job.updatedAt;
+      job.events = [
+        ...(job.events || []),
+        { at: job.updatedAt, text: job.phase },
+      ].slice(-16);
       saveJob(job);
       active.delete(job.id);
     }
