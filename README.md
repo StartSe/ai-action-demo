@@ -95,6 +95,8 @@ Tudo parte de um push na `main` deste repositório (privado, `StartSe/ai-action-
 
 Para recuperar uma publicação cancelada, execute o workflow na `main` atual com o campo `app` preenchido (por exemplo, `gh workflow run publicar.yml --ref main -f app=mapify`). Isso reconstrói somente o app selecionado e publica o catálogo atual. O ID deve existir em `catalogo.json` e não pode ser combinado com "Reconstruir todas". A execução manual sem ID preserva o comportamento de reconstruir todas as imagens.
 
+A publicação usa `concurrency.queue: max` para manter até 100 execuções pendentes e processá-las uma por vez. Isso evita que um novo push descarte uma publicação que ainda aguardava a fila, como ocorre com a configuração padrão de uma única execução pendente.
+
 Catálogo público: https://startse.github.io/ai-action-app-deploy/ (filtro por área, botão "Publicar no Render" por app, comando `docker run` copiável).
 
 `catalogo.json` é a fonte única: nome, áreas, textos, cor de acento, porta e URL de demonstração de cada app. Depois de alterar, rode `node scripts/gerar-deploy.mjs` para atualizar os `render.yaml` versionados aqui (o workflow faz o mesmo antes de publicar).
