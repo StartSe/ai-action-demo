@@ -177,6 +177,14 @@ function criarTabelas(d: DatabaseSync): void {
     criadoEm TEXT NOT NULL
   )`);
   d.exec("CREATE INDEX IF NOT EXISTS idx_mensagens_entrevista ON mensagens_entrevista (entrevistaId, criadoEm)");
+  // `passo` nasceu na 0.8.0: o que a entrevistadora DECIDIU naquela fala ("pergunta:3", "followup",
+  // "continuar"...), gravado por lib/roteiro.ts. Desde que o modelo passou a interpretar a resposta,
+  // repassar a transcrição só pelas regras não devolveria o mesmo caminho; com o passo gravado, devolve.
+  // Falas antigas (NULL) continuam sendo lidas pelas regras.
+  garantirColuna(d, "mensagens_entrevista", "passo");
+  // `memoria` (0.8.0): as anotações da entrevistadora por pergunta, em JSON — a memória de trabalho da
+  // conversa (lib/roteiro.ts). Zerada quando o gestor reabre a entrevista.
+  garantirColuna(d, "entrevistas", "memoria");
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -30,10 +30,12 @@ import { obter as obterCandidato } from "./candidatos";
 import { obterCultura } from "./cultura";
 import { esperar, followUpDemo, roteiroDemo } from "./demo";
 import {
+  lerMemoria,
   lerRoteiro,
   mudarStatus,
   obter as obterEntrevista,
   registrarMensagem,
+  salvarMemoria,
   salvarRoteiro,
   transcricao,
   type NivelVoz,
@@ -434,11 +436,22 @@ export function roteiroEmTexto(plano: Roteiro): string {
 // A condução
 // ---------------------------------------------------------------------------------------------
 
-/** A resposta foi curta demais para sustentar alguma coisa? É a única condição do follow-up. */
+/** A resposta foi curta demais para sustentar alguma coisa? É a regra de reserva do follow-up: vale
+ * quando o modelo não disse se a resposta merece aprofundamento (ou não respondeu). */
 export function respostaVaga(texto: string): boolean {
   const limpo = texto.replace(/\s+/g, " ").trim();
   if (!limpo) return false;
   return limpo.split(" ").length <= PALAVRAS_RESPOSTA_VAGA;
+}
+
+/** Quem diz que não sabe ou prefere não responder não ganha um pedido de exemplo: insistir constrange. */
+function preferePular(resposta: string): boolean {
+  return /(?:não (?:sei|tenho experiência|quero responder)|prefiro não|pode pular)/i.test(resposta);
+}
+
+/** A REGRA do aprofundamento, usada quando o modelo não decidiu: resposta curta e a pessoa não pediu para pular. */
+function aprofundarPelaRegra(resposta: string): boolean {
+  return respostaVaga(resposta) && !preferePular(resposta);
 }
 
 export type PassoRoteiro =
@@ -447,11 +460,43 @@ export type PassoRoteiro =
   | { tipo: "continuar" }
   | { tipo: "duvida"; retomar?: PerguntaRoteiro }
   | { tipo: "followup"; bloco: BlocoRoteiro }
-  | { tipo: "pergunta" | "retomar"; indice: number; pergunta: PerguntaRoteiro };
+  | { tipo: "retomar"; indice: number; pergunta: PerguntaRoteiro }
+  /** `coberta` é a pergunta planejada que ficou para trás porque a conversa já a tinha respondido. */
+  | { tipo: "pergunta"; indice: number; pergunta: PerguntaRoteiro; coberta?: number };
+
+/**
+ * O que uma fala gravada precisa lembrar do passo para a posição ser refeita: o tipo e, numa pergunta,
+ * o índice. É o que vai na coluna `passo` de `mensagens_entrevista` (`passoEmTexto`) e volta por
+ * `lerPassoGravado`. Falas anteriores à 0.8.0 não têm passo e são lidas pelas regras (`decidirPasso`).
+ */
+export type PassoGravado = { tipo: PassoRoteiro["tipo"]; indice?: number; coberta?: number };
+
+const TIPOS_DE_PASSO: PassoRoteiro["tipo"][] = ["encerrar", "continuar", "duvida", "followup", "retomar", "pergunta"];
+
+export function passoEmTexto(passo: PassoRoteiro): string {
+  if (passo.tipo !== "pergunta") return passo.tipo;
+  return passo.coberta === undefined ? `pergunta:${passo.indice}` : `pergunta:${passo.indice};coberta:${passo.coberta}`;
+}
+
+export function lerPassoGravado(texto: string | undefined): PassoGravado | null {
+  if (!texto) return null;
+  const [cabeca, ...resto] = texto.split(";");
+  const [tipo, indice] = cabeca.split(":");
+  if (!TIPOS_DE_PASSO.includes(tipo as PassoRoteiro["tipo"])) return null;
+  if (tipo !== "pergunta") return { tipo: tipo as PassoRoteiro["tipo"] };
+  const n = Number(indice);
+  if (!Number.isInteger(n) || n < 0) return null;
+  const coberta = resto.find((r) => r.startsWith("coberta:"));
+  const c = coberta ? Number(coberta.slice("coberta:".length)) : NaN;
+  return Number.isInteger(c) ? { tipo: "pergunta", indice: n, coberta: c } : { tipo: "pergunta", indice: n };
+}
 
 type Posicao = { indice: number; feitas: number; followUps: number[]; ultimoPasso?: PassoRoteiro["tipo"] };
 
 /**
+ * As REGRAS da condução: o que decide o passo quando o modelo não está conectado, não respondeu a
+ * tempo, ou quando a fala foi gravada antes de os passos serem guardados (ver `posicaoNoRoteiro`).
+ *
  * Os pedidos do candidato vêm ANTES de qualquer outra leitura da resposta (lib/pedidos-candidato.ts).
  * "Pode repetir?" não é uma resposta vaga a aprofundar nem uma dúvida sobre a vaga; "espera, não
  * terminei" tampouco. Aprofundamentos não gastam perguntas principais. Cada pergunta pode ganhar um
@@ -469,9 +514,8 @@ export function decidirPasso({ plano, posicao, resposta }: {
   if (anterior && pedeContinuar(resposta)) return { tipo: "continuar" };
   if (temDuvidaSobreVaga(resposta)) return { tipo: "duvida", retomar: indice < plano.perguntas.length ? anterior : undefined };
   if (indice >= plano.perguntas.length) return { tipo: "encerrar" };
-  const preferePular = /(?:não (?:sei|tenho experiência|quero responder)|prefiro não|pode pular)/i.test(resposta);
   if (resposta && anterior && anterior.bloco !== "encerramento" &&
-      !followUps.includes(indice - 1) && !preferePular && respostaVaga(resposta)) {
+      !followUps.includes(indice - 1) && aprofundarPelaRegra(resposta)) {
     return { tipo: "followup", bloco: anterior.bloco };
   }
   return { tipo: "pergunta", indice, pergunta: plano.perguntas[indice] };
@@ -483,23 +527,40 @@ export function decidirPasso({ plano, posicao, resposta }: {
  * a ficar pendente e é feita de novo depois da continuação. Não vale para a primeira pergunta (não
  * havia resposta em curso) nem para um aprofundamento (ele já cumpriu o papel dele: dar mais espaço).
  */
-function recuaAoContinuar(passo: PassoRoteiro, posicao: Posicao): boolean {
+function recuaAoContinuar(passo: PassoGravado, posicao: Posicao): boolean {
   return passo.tipo === "continuar" && posicao.ultimoPasso === "pergunta" && posicao.indice >= 2;
 }
 
 /** O indicador acompanha o roteiro, não o número de falas ou de aprofundamentos. */
-function indiceDoPasso(passo: PassoRoteiro, posicao: Posicao): number {
-  if (passo.tipo === "pergunta") return passo.indice + 1;
+function indiceDoPasso(passo: PassoGravado, posicao: Posicao): number {
+  if (passo.tipo === "pergunta" && passo.indice !== undefined) return passo.indice + 1;
   return recuaAoContinuar(passo, posicao) ? posicao.indice - 1 : posicao.indice;
+}
+
+function aplicarPasso(posicao: Posicao, passo: PassoGravado, plano: Roteiro): void {
+  if (passo.tipo === "followup") {
+    posicao.followUps.push(posicao.indice - 1);
+    posicao.feitas++;
+  } else if (passo.tipo === "pergunta" && passo.indice !== undefined) {
+    posicao.indice = Math.min(passo.indice, plano.perguntas.length - 1) + 1;
+    posicao.feitas++;
+  } else if (recuaAoContinuar(passo, posicao)) {
+    posicao.indice--;
+    posicao.feitas--;
+  }
+  posicao.ultimoPasso = passo.tipo;
 }
 
 /**
  * Onde a conversa está, deduzido da transcrição.
  *
- * A posição não é guardada em lugar nenhum de propósito: `decidirPasso` é determinística, então
- * repassar a conversa desde o começo devolve exatamente o mesmo caminho. Um estado a mais para
- * gravar seria um estado a mais para sair do lugar quando a sala caísse no meio de um turno — e é a
- * mesma função que serve à prévia do gestor, que não grava nada.
+ * A posição não é guardada em lugar nenhum de propósito: repassar a conversa desde o começo devolve
+ * exatamente o mesmo caminho. O que cada fala da entrevistadora lembra é o PASSO que cumpriu
+ * (`Troca.passo`, gravado desde a 0.8.0): desde que o modelo passou a interpretar a resposta, só as
+ * regras não bastariam para refazer o caminho — uma resposta de trinta palavras que o modelo achou
+ * completa seguiu para a próxima pergunta, e as regras a aprofundariam. Falas sem passo (anteriores,
+ * ou de uma conversa que o modelo não conduziu) continuam sendo lidas por `decidirPasso`, que é
+ * determinística. É a mesma função que serve à prévia do gestor, que não grava nada.
  */
 export function posicaoNoRoteiro(plano: Roteiro, falas: Troca[], numeroPerguntas: number): Posicao & { ultimaResposta: string } {
   const posicao: Posicao = { indice: 0, feitas: 0, followUps: [] };
@@ -509,38 +570,116 @@ export function posicaoNoRoteiro(plano: Roteiro, falas: Troca[], numeroPerguntas
       resposta = fala.texto;
       continue;
     }
-    const passo = decidirPasso({ plano, posicao, resposta, numeroPerguntas });
-    if (passo.tipo === "followup") {
-      posicao.followUps.push(posicao.indice - 1);
-      posicao.feitas++;
-    } else if (passo.tipo === "pergunta") {
-      posicao.indice = passo.indice + 1;
-      posicao.feitas++;
-    } else if (recuaAoContinuar(passo, posicao)) {
-      posicao.indice--;
-      posicao.feitas--;
-    }
-    posicao.ultimoPasso = passo.tipo;
+    const passo = lerPassoGravado(fala.passo) ?? decidirPasso({ plano, posicao, resposta, numeroPerguntas });
+    aplicarPasso(posicao, passo, plano);
     resposta = "";
   }
   return { ...posicao, ultimaResposta: resposta };
 }
 
-const SYSTEM_FALA = `Você é a entrevistadora de IA que conduz uma entrevista de triagem por voz, em português do Brasil.
+/** A posição ANTES da última fala da entrevistadora e o passo que ela cumpriu — o gravado, ou o que as
+ * regras deduzem para uma fala antiga. É o que a sala precisa para redesenhar a conversa sem gastar turno. */
+function estadoAposUltimaFala(plano: Roteiro, falas: Troca[], numeroPerguntas: number): { posicao: Posicao & { ultimaResposta: string }; passo: PassoGravado } {
+  const posicao = posicaoNoRoteiro(plano, falas.slice(0, -1), numeroPerguntas);
+  const ultima = falas[falas.length - 1];
+  const passo = lerPassoGravado(ultima?.passo) ?? decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas });
+  return { posicao, passo };
+}
 
-O roteiro já foi planejado e quem decide o próximo passo é o sistema, não você: a sua parte é escrever a fala deste turno, no tom pedido.
+// ---------------------------------------------------------------------------------------------
+// A memória de trabalho
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * As anotações da entrevistadora: uma linha por pergunta respondida ("P3 (requisitos): liderou time de
+ * suporte com 60 contas; sem número de resultado"), escritas pelo modelo no MESMO pedido que escreve a
+ * fala e guardadas em `entrevistas.memoria`. São a memória de trabalho da conversa — o que permite à
+ * transição citar o que a pessoa disse três perguntas atrás e perceber que a próxima pergunta planejada
+ * já foi respondida. A transcrição continua sendo a verdade; as notas são um resumo dela.
+ */
+export type Memoria = { notas: string[] };
+const MAX_NOTAS = 40;
+const LIMITE_NOTA = 240;
+const SEM_MEMORIA: Memoria = { notas: [] };
+
+/** Uma memória gravada num formato que este código não conhece nunca derruba a sala. */
+export function lerMemoriaGravada(cru: string | null | undefined): Memoria {
+  if (!cru) return SEM_MEMORIA;
+  try {
+    const dados = JSON.parse(cru) as Partial<Memoria>;
+    return { notas: normalizarNotas(dados?.notas) };
+  } catch (err) {
+    console.error("Memória da conversa ilegível no banco; seguindo sem anotações.", err);
+    return SEM_MEMORIA;
+  }
+}
+
+function normalizarNotas(bruto: unknown): string[] {
+  if (!Array.isArray(bruto)) return [];
+  return bruto
+    .map((n) => corte(n, LIMITE_NOTA))
+    .filter(Boolean)
+    .slice(-MAX_NOTAS);
+}
+
+/** As notas que o modelo devolveu, aceitas só quando não perderam nada do que já estava anotado: um
+ * modelo que devolve a lista mais curta esqueceu de copiar, e quem esquece não apaga a memória. */
+function mesclarNotas(anteriores: string[], devolvidas: string[]): string[] {
+  return devolvidas.length >= anteriores.length ? devolvidas : anteriores;
+}
+
+// ---------------------------------------------------------------------------------------------
+// A interpretação do turno
+// ---------------------------------------------------------------------------------------------
+
+/** O que o modelo diz que a última fala do candidato É. As regras (lib/pedidos-candidato.ts,
+ * lib/duvidas-vaga.ts) pegam as formas explícitas antes; o modelo pega as outras. */
+export type Intencao = "resposta" | "repetir" | "continuar" | "duvida" | "pular" | "ja_respondida";
+const INTENCOES: Intencao[] = ["resposta", "repetir", "continuar", "duvida", "pular", "ja_respondida"];
+
+export type Interpretacao = {
+  intencao: Intencao;
+  /** Só em "resposta". `undefined` quando o modelo não disse: vale a regra de tamanho. */
+  aprofundar?: boolean;
+  /** A próxima pergunta planejada já foi respondida pelo que a pessoa disse até aqui. */
+  proximaJaCoberta: boolean;
+  /** A fala escrita pelo modelo: o aprofundamento, ou a transição para a pergunta planejada. */
+  fala: string;
+  notas: string[];
+};
+
+const SYSTEM_TURNO = `Você é a entrevistadora de IA que conduz uma entrevista de triagem por voz, em português do Brasil.
+
+O roteiro já foi planejado e é o sistema que o aplica. Neste turno você faz três coisas: diz o que a última fala do candidato É, escreve a sua próxima fala e atualiza as suas anotações.
+
+"intencao" — o que a última fala do candidato é:
+- "resposta": ele respondeu à pergunta (bem ou mal, completa ou não).
+- "repetir": não ouviu ou não entendeu e quer ouvir a pergunta de novo.
+- "continuar": pediu um momento para pensar ou avisou que ainda não terminou de responder.
+- "duvida": fez uma pergunta sobre a vaga, a empresa ou o processo.
+- "pular": disse que não sabe, que prefere não responder ou pediu para pular.
+- "ja_respondida": disse que já respondeu isso antes.
+
+"aprofundar" — só quando "intencao" for "resposta": true se a resposta ficou genérica, curta ou sem uma situação real de trabalho, e o sistema informar que ainda há aprofundamento disponível; false se ela já trouxe situação, ação e resultado, ou se a pessoa mostrou que não quer ou não sabe ir além.
+
+"proximaJaCoberta" — true SOMENTE quando o que a pessoa já disse na conversa responde claramente a próxima pergunta planejada (informada abaixo). Na dúvida, false. Nunca para a abertura nem para o encerramento.
+
+"fala" — a sua fala, curta (no máximo 3 frases), para ser OUVIDA, no tom pedido:
+- Com "aprofundar" true: a pergunta de aprofundamento, ligada ao que a pessoa acabou de dizer, sem repetir a pergunta anterior com outras palavras.
+- Nos outros casos em que houver próxima pergunta planejada: SOMENTE uma breve transição ligada à última resposta — pode retomar algo que a pessoa disse antes na conversa ("você comentou que...") —, sem perguntas: o sistema acrescenta a pergunta planejada. Para "pular" e "ja_respondida", a transição acolhe e segue ("Sem problema, vamos adiante."). Sem transição útil, fala vazia. Nunca anuncie o encerramento nesta transição.
+- Sem próxima pergunta planejada (o roteiro terminou): fala vazia — a despedida já está escrita.
+- Para "repetir", "continuar" e "duvida": fala vazia — o sistema responde.
+
+"notas" — as suas anotações, uma linha por pergunta já respondida. Copie as anteriores na ordem e, quando a fala for "resposta", "pular" ou "ja_respondida", acrescente UMA linha para a pergunta que acabou de ser respondida, no formato "P<número> (<bloco>): o que a pessoa disse, em até 25 palavras; o que ficou em aberto". Só o que foi dito, nada inferido. Para "repetir", "continuar" e "duvida", devolva as anteriores sem mudar.
 
 Regras:
-- Uma fala curta, no máximo 3 frases, para ser OUVIDA.
-- Quando a instrução for "faça a próxima pergunta do roteiro", escreva SOMENTE uma breve transição ligada à última resposta, sem perguntas. O sistema acrescentará a pergunta planejada. Se não houver uma transição útil, devolva fala vazia. Nunca anuncie o encerramento nesta transição.
-- Quando a instrução for "aprofunde a última resposta", peça um exemplo concreto do que o candidato acabou de dizer, sem mudar de assunto e sem repetir a pergunta anterior com outras palavras.
-- Se o candidato tiver feito uma pergunta, responda em UMA frase, só com os fatos da vaga listados abaixo, e siga com a pergunta do turno. Se a resposta não estiver nos fatos, diga que quem responde isso é o time de recrutamento. Nunca invente benefício, salário, horário, etapa nem prazo.
 - Nunca mencione nota, avaliação, parecer nem que a conversa está sendo analisada.
 - Nunca diga que pesquisou o candidato na internet e nunca cite um perfil público: "Vi no seu LinkedIn que..." está proibido. Citar o currículo é permitido: "Você comentou no currículo que...".
 - Nunca cite o nome da competência cultural que a pergunta quer observar.
+- Nunca invente benefício, salário, horário, etapa nem prazo; quem responde isso é o sistema, com os fatos da vaga.
 - Não repita a saudação: só a primeira fala da entrevista cumprimenta.
 
-Formato de saída (JSON): {"fala": "texto da fala"}`;
+Formato de saída (JSON): {"intencao":"resposta|repetir|continuar|duvida|pular|ja_respondida","aprofundar":true|false,"proximaJaCoberta":true|false,"fala":"","notas":[""]}`;
 
 /** Os únicos fatos que a entrevistadora pode dizer sobre a vaga. O que não está aqui, ela não sabe. */
 export function fatosDaVaga(ctx: ContextoRoteiro): string[] {
@@ -558,76 +697,122 @@ export function fatosDaVaga(ctx: ContextoRoteiro): string[] {
   ].filter((f): f is string => Boolean(f));
 }
 
-function conversaNoPrompt(falas: Troca[]): string {
+/** Com anotações, as falas antigas já estão resumidas nelas e o prompt carrega só as recentes. */
+function conversaNoPrompt(falas: Troca[], quantas = MAX_FALAS_NO_PROMPT): string {
   if (!falas.length) return "(nenhuma troca ainda)";
-  const recentes = falas.slice(-MAX_FALAS_NO_PROMPT);
+  const recentes = falas.slice(-quantas);
   const ultimaResposta = recentes.findLastIndex((f) => f.papel === "candidato");
   return recentes
     .map((f, i) => `${f.papel === "entrevistadora" ? "Entrevistadora" : "Candidato"}: ${corte(f.texto, i === ultimaResposta ? LIMITE_ULTIMA_RESPOSTA_NO_PROMPT : LIMITE_FALA_ANTERIOR_NO_PROMPT)}`)
     .join("\n");
 }
 
-async function escreverFala({
-  ctx,
-  plano,
-  falas,
-  passo,
-  primeira,
-}: {
+function construirPromptTurno({ ctx, plano, falas, posicao, memoria }: {
   ctx: ContextoRoteiro;
   plano: Roteiro;
   falas: Troca[];
-  passo: Exclude<PassoRoteiro, { tipo: "encerrar" | "duvida" | "continuar" }>;
-  primeira: boolean;
-}): Promise<string> {
-  const instrucao =
-    passo.tipo === "followup"
-      ? "Instrução deste turno: aprofunde a última resposta, pedindo um exemplo concreto."
-      : `Instrução deste turno: faça a próxima pergunta do roteiro.\nPergunta planejada: ${passo.pergunta.pergunta}${passo.pergunta.foco ? `\nO que ela quer descobrir (NÃO diga isto em voz alta): ${passo.pergunta.foco}` : ""}`;
-
-  const prompt = [
+  posicao: Posicao;
+  memoria: Memoria;
+}): string {
+  const anterior = plano.perguntas[posicao.indice - 1];
+  const proxima = plano.perguntas[posicao.indice];
+  const aprofundamentoDisponivel = Boolean(anterior) && anterior.bloco !== "encerramento" && !posicao.followUps.includes(posicao.indice - 1);
+  return [
     "Fatos da vaga (o ÚNICO que você pode afirmar sobre ela):",
     fatosDaVaga(ctx).map((f) => `- ${f}`).join("\n"),
     "",
     "Roteiro planejado:",
     roteiroEmTexto(plano),
     "",
-    "Conversa até agora:",
-    conversaNoPrompt(falas),
+    "Suas anotações até aqui:",
+    memoria.notas.length ? memoria.notas.map((n) => `- ${n}`).join("\n") : "(nenhuma ainda)",
     "",
-    instrucao,
-    primeira ? "Esta é a primeira fala da entrevista: cumprimente em uma frase antes de perguntar." : "A entrevista já começou: não cumprimente de novo.",
+    "Conversa recente (a última fala é a do candidato, que você vai interpretar):",
+    conversaNoPrompt(falas, memoria.notas.length ? MAX_FALAS_COM_NOTAS : MAX_FALAS_NO_PROMPT),
+    "",
+    anterior ? `Última pergunta feita: nº ${posicao.indice} [${ROTULO_BLOCO[anterior.bloco]}]: ${anterior.pergunta}` : "Nenhuma pergunta foi feita ainda.",
+    `Aprofundamento ainda disponível para ela: ${aprofundamentoDisponivel ? "sim" : "não"}`,
+    proxima
+      ? `Próxima pergunta planejada: nº ${posicao.indice + 1} [${ROTULO_BLOCO[proxima.bloco]}]: ${proxima.pergunta}`
+      : "Não há próxima pergunta planejada: o roteiro terminou e a despedida já está escrita.",
     `Tom: ${ctx.tom}`,
     ctx.candidato.primeiroNome ? `Nome do candidato: ${ctx.candidato.primeiroNome}` : "Não há nome de candidato: não invente um.",
     "",
-    "Escreva a fala.",
+    "Interprete a última fala do candidato, escreva a sua fala e atualize as anotações.",
   ].join("\n");
+}
 
-  const resposta = await askJSON<{ fala?: unknown }>({ system: SYSTEM_FALA, prompt, maxTokens: 400, limiteMs: 8000 });
-  const fala = corte(resposta?.fala, passo.tipo === "pergunta" ? 180 : LIMITE_FALA);
-  if (passo.tipo === "pergunta") {
-    // O texto gerado não pode trocar o tópico, omitir a pergunta ou encerrar a conversa.
-    const transicao = /[?]|(?:encerr|termin|obrigad.*tempo|próxim[oa]s? passos)/i.test(fala) ? "" : fala;
-    return [transicao, passo.pergunta.pergunta].filter(Boolean).join(" ");
-  }
-  return fala;
+const MAX_FALAS_COM_NOTAS = 10;
+
+/** UMA chamada de modelo por turno: interpretar a resposta, escrever a fala e anotar. */
+async function interpretarTurno(args: { ctx: ContextoRoteiro; plano: Roteiro; falas: Troca[]; posicao: Posicao; memoria: Memoria }): Promise<Interpretacao> {
+  const bruto = await askJSON<Record<string, unknown>>({ system: SYSTEM_TURNO, prompt: construirPromptTurno(args), maxTokens: 700, limiteMs: 9000 });
+  const dados = (bruto ?? {}) as Record<string, unknown>;
+  const intencao = INTENCOES.includes(dados.intencao as Intencao) ? (dados.intencao as Intencao) : "resposta";
+  return {
+    intencao,
+    aprofundar: typeof dados.aprofundar === "boolean" ? dados.aprofundar : undefined,
+    proximaJaCoberta: dados.proximaJaCoberta === true,
+    fala: corte(dados.fala),
+    notas: mesclarNotas(args.memoria.notas, normalizarNotas(dados.notas)),
+  };
 }
 
 /**
- * A fala deste turno, com o modelo quando ele está conectado e com o plano quando não está.
- *
- * O modelo aqui **escreve**, não decide: o passo já veio resolvido. Quando ele falha, a pergunta
- * planejada sai do jeito que foi escrita — uma entrevista que trava no meio custa muito mais ao
- * candidato do que uma pergunta menos costurada com a resposta anterior.
+ * O passo a partir do que o modelo entendeu — com as MESMAS garantias das regras: um aprofundamento por
+ * pergunta, nunca no encerramento, o roteiro nunca anda para trás nem pula a abertura ou o encerramento,
+ * e o fim só chega depois da última pergunta. O modelo interpreta; quem decide continua sendo o código.
+ */
+export function passoDaInterpretacao(plano: Roteiro, posicao: Posicao, resposta: string, interp: Interpretacao): PassoRoteiro {
+  const { indice, followUps } = posicao;
+  const anterior = plano.perguntas[indice - 1];
+  const fim = indice >= plano.perguntas.length;
+  if (interp.intencao === "repetir" && anterior) return { tipo: "retomar", indice: indice - 1, pergunta: anterior };
+  if (interp.intencao === "continuar" && anterior) return { tipo: "continuar" };
+  if (interp.intencao === "duvida") return { tipo: "duvida", retomar: fim ? undefined : anterior };
+  if (fim) return { tipo: "encerrar" };
+  const aprofundar = interp.intencao === "resposta" && (interp.aprofundar ?? aprofundarPelaRegra(resposta));
+  if (aprofundar && anterior && anterior.bloco !== "encerramento" && !followUps.includes(indice - 1)) {
+    return { tipo: "followup", bloco: anterior.bloco };
+  }
+  const proxima = plano.perguntas[indice];
+  const podeCobrir = interp.proximaJaCoberta && indice < plano.perguntas.length - 1 && proxima.bloco !== "abertura" && proxima.bloco !== "encerramento";
+  if (podeCobrir) return { tipo: "pergunta", indice: indice + 1, pergunta: plano.perguntas[indice + 1], coberta: indice };
+  return { tipo: "pergunta", indice, pergunta: proxima };
+}
+
+/** A transição escrita pelo modelo não pode trocar o tópico, omitir a pergunta nem encerrar a conversa. */
+function transicaoSegura(fala: string): string {
+  const curta = corte(fala, 180);
+  return /[?]|(?:encerr|termin|obrigad.*tempo|próxim[oa]s? passos)/i.test(curta) ? "" : curta;
+}
+
+/** O que sai quando não há modelo para escrever: a pergunta do plano, do jeito que foi escrita. */
+function textoDeReserva(passo: PassoRoteiro, plano: Roteiro): string {
+  switch (passo.tipo) {
+    case "encerrar": return plano.despedida;
+    case "followup": return followUpDemo();
+    case "continuar": return FALA_CONTINUAR;
+    case "pergunta": return passo.pergunta.pergunta;
+    case "retomar": return `Claro. ${passo.pergunta.pergunta}`;
+    case "duvida": return "Não tenho essa informação confirmada no cadastro da vaga. O time de recrutamento poderá esclarecer essa dúvida.";
+  }
+}
+
+/**
+ * A fala dos passos que o código responde sozinho — dúvida, repetição, pausa — e da conversa sem
+ * modelo (demonstração), mais a saudação da primeira pergunta. Para os demais passos com o modelo
+ * conectado, quem escreve é `interpretarTurno`; aqui sai o texto de reserva.
  */
 async function falaDoPasso(args: {
   ctx: ContextoRoteiro;
   plano: Roteiro;
   falas: Troca[];
-  passo: Exclude<PassoRoteiro, { tipo: "encerrar" }>;
+  passo: PassoRoteiro;
   primeira: boolean;
 }): Promise<string> {
   const { passo } = args;
+  if (passo.tipo === "encerrar") return args.plano.despedida;
   if (passo.tipo === "duvida") {
     const pergunta = args.falas.findLast(f => f.papel === "candidato")?.texto ?? "";
     const resposta = responderDuvidaDaVaga(args.ctx, pergunta);
@@ -635,13 +820,13 @@ async function falaDoPasso(args: {
     return `${resposta} ${passo.retomar ? `Retomando a nossa conversa: ${passo.retomar.pergunta}` : "Tem mais alguma dúvida sobre a vaga?"}`;
   }
   if (passo.tipo === "continuar") return FALA_CONTINUAR;
-  const reserva = passo.tipo === "followup" ? followUpDemo() : passo.pergunta.pergunta;
+  const reserva = textoDeReserva(passo, args.plano);
   if (passo.tipo === "retomar") {
     // Repete o que foi DITO por último, não o que estava no plano: se a última fala foi um
     // aprofundamento ("pode dar um exemplo?"), é ele que a pessoa não ouviu. Quando a última fala
     // continha a pergunta planejada (a saudação da abertura, a resposta a uma dúvida), sai só a pergunta.
     const ultima = args.falas.findLast((f) => f.papel === "entrevistadora")?.texto ?? "";
-    const repetir = ultima && ultima !== FALA_CONTINUAR && !ultima.includes(reserva) ? ultima : reserva;
+    const repetir = ultima && ultima !== FALA_CONTINUAR && !ultima.includes(passo.pergunta.pergunta) ? ultima : passo.pergunta.pergunta;
     return `Claro. ${repetir}`;
   }
   if (!aiEnabled()) {
@@ -653,12 +838,57 @@ async function falaDoPasso(args: {
   if (args.primeira && passo.tipo === "pergunta") {
     return `Olá${args.ctx.candidato.primeiroNome ? `, ${args.ctx.candidato.primeiroNome}` : ""}! Vamos conversar por cerca de ${args.ctx.duracaoMin} minutos. Fique à vontade para pensar e contar exemplos com calma. Se precisar de um momento, é só dizer; se não ouvir bem, peça para eu repetir. ${reserva}`;
   }
-  try {
-    return (await escreverFala({ ...args, passo })) || reserva;
-  } catch (err) {
-    console.error("A entrevistadora não conseguiu escrever a fala deste turno; seguindo pelo roteiro planejado.", err);
-    return reserva;
+  return reserva;
+}
+
+/** O texto de um passo decidido a partir da interpretação do modelo. */
+async function textoDoPasso(args: { ctx: ContextoRoteiro; plano: Roteiro; falas: Troca[]; passo: PassoRoteiro; interpretacao: Interpretacao }): Promise<string> {
+  const { passo, interpretacao, plano } = args;
+  switch (passo.tipo) {
+    case "encerrar":
+      return plano.despedida;
+    case "followup":
+      // O modelo só escreveu um aprofundamento se decidiu aprofundar; se a regra de reserva decidiu por
+      // ele, a fala é uma transição e não serve. Uma pergunta se reconhece pela interrogação.
+      return /\?/.test(interpretacao.fala) ? interpretacao.fala : followUpDemo();
+    case "pergunta":
+      return [transicaoSegura(interpretacao.fala), passo.pergunta.pergunta].filter(Boolean).join(" ");
+    default:
+      return falaDoPasso({ ctx: args.ctx, plano, falas: args.falas, passo, primeira: false });
   }
+}
+
+type Turno = { passo: PassoRoteiro; texto: string; memoria: Memoria; posicao: Posicao & { ultimaResposta: string } };
+
+/**
+ * Um turno inteiro: onde a conversa está, o que a última fala do candidato é, o que a entrevistadora
+ * diz e o que ela anota.
+ *
+ * As regras vêm primeiro e resolvem sozinhas o que é explícito ("pode repetir", "só um momento", "qual
+ * é o salário"): são rápidas e não dependem do modelo. O resto — se a resposta merece aprofundamento, se
+ * um "acho que não peguei" é um pedido de repetição, a transição — é do modelo, em UMA chamada. Quando o
+ * modelo falha ou demora, valem as regras e a pergunta do plano sai do jeito que foi escrita: uma
+ * entrevista que trava no meio custa muito mais ao candidato do que uma pergunta menos costurada.
+ */
+async function conduzirTurno({ ctx, plano, falas, memoria }: { ctx: ContextoRoteiro; plano: Roteiro; falas: Troca[]; memoria: Memoria }): Promise<Turno> {
+  const posicao = posicaoNoRoteiro(plano, falas, ctx.numeroPerguntas);
+  const resposta = posicao.ultimaResposta;
+  const porRegra = decidirPasso({ plano, posicao, resposta, numeroPerguntas: ctx.numeroPerguntas });
+  const primeira = posicao.feitas === 0;
+  const pedidoPorRegra = porRegra.tipo === "retomar" || porRegra.tipo === "continuar" || porRegra.tipo === "duvida";
+  if (!aiEnabled() || primeira || !resposta || pedidoPorRegra) {
+    return { passo: porRegra, texto: await falaDoPasso({ ctx, plano, falas, passo: porRegra, primeira }), memoria, posicao };
+  }
+  let interpretacao: Interpretacao | null = null;
+  try {
+    interpretacao = await interpretarTurno({ ctx, plano, falas, posicao, memoria });
+  } catch (err) {
+    console.error("A entrevistadora não conseguiu interpretar a resposta deste turno; seguindo pelas regras e pelo roteiro planejado.", err);
+  }
+  if (!interpretacao) return { passo: porRegra, texto: textoDeReserva(porRegra, plano), memoria, posicao };
+  const passo = passoDaInterpretacao(plano, posicao, resposta, interpretacao);
+  const texto = await textoDoPasso({ ctx, plano, falas, passo, interpretacao });
+  return { passo, texto, memoria: { notas: interpretacao.notas }, posicao };
 }
 
 /** O que a sala recebe a cada turno. `transcricao` vem junto porque a conversa mora no servidor: a
@@ -672,8 +902,19 @@ export type Fala = {
   transcricao: Troca[];
 };
 
-function comoTrocas(falas: { papel: string; texto: string }[]): Troca[] {
-  return falas.map((f) => ({ papel: f.papel === "candidato" ? "candidato" : "entrevistadora", texto: f.texto }));
+function comoTrocas(falas: { papel: string; texto: string; passo?: string }[]): Troca[] {
+  return falas.map((f) => (f.passo ? { papel: f.papel === "candidato" ? "candidato" : "entrevistadora", texto: f.texto, passo: f.passo } : { papel: f.papel === "candidato" ? "candidato" : "entrevistadora", texto: f.texto }));
+}
+
+function falaDoTurno(turno: Turno, plano: Roteiro, falas: Troca[]): Fala {
+  const passo = passoEmTexto(turno.passo);
+  return {
+    pergunta: turno.texto,
+    encerrar: turno.passo.tipo === "encerrar",
+    indice: indiceDoPasso(turno.passo, turno.posicao),
+    total: plano.perguntas.length,
+    transcricao: [...falas, { papel: "entrevistadora", texto: turno.texto, passo }],
+  };
 }
 
 /**
@@ -748,8 +989,7 @@ async function executarProximaFala(
   // pergunta de quem está sendo entrevistado e deixaria a anterior sem resposta na transcrição.
   const agora = falas[falas.length - 1];
   if ((!resposta || repetida) && agora?.papel === "entrevistadora") {
-    const posicao = posicaoNoRoteiro(plano, falas.slice(0, -1), ctx.numeroPerguntas);
-    const passo = decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas: ctx.numeroPerguntas });
+    const { posicao, passo } = estadoAposUltimaFala(plano, falas, ctx.numeroPerguntas);
     return {
       pergunta: agora.texto,
       encerrar: passo.tipo === "encerrar",
@@ -759,22 +999,13 @@ async function executarProximaFala(
     };
   }
 
-  const posicao = posicaoNoRoteiro(plano, falas, ctx.numeroPerguntas);
-  const passo = decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas: ctx.numeroPerguntas });
-  const texto =
-    passo.tipo === "encerrar"
-      ? plano.despedida
-      : await falaDoPasso({ ctx, plano, falas, passo, primeira: posicao.feitas === 0 });
+  const memoria = lerMemoriaGravada(lerMemoria(entrevistaId));
+  const turno = await conduzirTurno({ ctx, plano, falas, memoria });
 
   if (tentativa !== undefined) conferirTentativa(entrevistaId, tentativa);
-  registrarMensagem({ entrevistaId, papel: "entrevistadora", texto });
-  return {
-    pergunta: texto,
-    encerrar: passo.tipo === "encerrar",
-    indice: indiceDoPasso(passo, posicao),
-    total: plano.perguntas.length,
-    transcricao: [...falas, { papel: "entrevistadora", texto }],
-  };
+  registrarMensagem({ entrevistaId, papel: "entrevistadora", texto: turno.texto, passo: passoEmTexto(turno.passo) });
+  if (turno.memoria !== memoria) salvarMemoria(entrevistaId, JSON.stringify(turno.memoria));
+  return falaDoTurno(turno, plano, falas);
 }
 
 /**
@@ -797,9 +1028,13 @@ export async function conversaAtual(entrevistaId: string): Promise<Fala | null> 
   const plano = await roteiroDaEntrevista(entrevistaId, ctx);
 
   const ultima = falas[falas.length - 1];
-  const anteriores = ultima.papel === "entrevistadora" ? falas.slice(0, -1) : falas;
-  const posicao = posicaoNoRoteiro(plano, anteriores, ctx.numeroPerguntas);
-  const passo = decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas: ctx.numeroPerguntas });
+  const { posicao, passo } =
+    ultima.papel === "entrevistadora"
+      ? estadoAposUltimaFala(plano, falas, ctx.numeroPerguntas)
+      : (() => {
+          const posicao = posicaoNoRoteiro(plano, falas, ctx.numeroPerguntas);
+          return { posicao, passo: decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas: ctx.numeroPerguntas }) as PassoGravado };
+        })();
   return {
     pergunta: ultima.papel === "entrevistadora" ? ultima.texto : "",
     encerrar: passo.tipo === "encerrar",
@@ -840,20 +1075,15 @@ export async function proximaFalaDaPrevia(vaga: Vaga, historico: Troca[]): Promi
   return falaAvulsa(ctx, await planoEmCache(`${vaga.id}:${vaga.atualizadoEm}`, ctx), historico);
 }
 
-/** A próxima fala de uma conversa que não tem entrevista no banco: a prévia do gestor e os links
- * antigos (tipo `scorecard`), que carregam a conversa no próprio navegador. */
+/**
+ * A próxima fala de uma conversa que não tem entrevista no banco: a prévia do gestor e os links
+ * antigos (tipo `scorecard`), que carregam a conversa no próprio navegador. Sem banco não há memória
+ * de trabalho guardada: as anotações começam vazias a cada turno, e o passo de cada fala viaja na
+ * própria transcrição (`Troca.passo`), que o navegador devolve inteira no turno seguinte.
+ */
 export async function falaAvulsa(ctx: ContextoRoteiro, plano: Roteiro, historico: Troca[]): Promise<Fala> {
-  const posicao = posicaoNoRoteiro(plano, historico, ctx.numeroPerguntas);
-  const passo = decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas: ctx.numeroPerguntas });
-  const texto =
-    passo.tipo === "encerrar" ? plano.despedida : await falaDoPasso({ ctx, plano, falas: historico, passo, primeira: posicao.feitas === 0 });
-  return {
-    pergunta: texto,
-    encerrar: passo.tipo === "encerrar",
-    indice: indiceDoPasso(passo, posicao),
-    total: plano.perguntas.length,
-    transcricao: [...historico, { papel: "entrevistadora", texto }],
-  };
+  const turno = await conduzirTurno({ ctx, plano, falas: historico, memoria: SEM_MEMORIA });
+  return falaDoTurno(turno, plano, historico);
 }
 
 /**

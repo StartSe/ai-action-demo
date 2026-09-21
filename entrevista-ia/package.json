@@ -1,6 +1,6 @@
 {
   "name": "entrevista-ia",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "scripts": {
     "dev": "node --import tsx scripts/servico.ts --dev",

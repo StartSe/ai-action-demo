@@ -56,6 +56,9 @@ export type MensagemEntrevista = {
   texto: string;
   /** Segundos desde o início da conversa, quando a sala souber medir. */
   segundo?: number;
+  /** O passo do roteiro que esta fala da entrevistadora cumpriu (lib/roteiro.ts, `passoEmTexto`).
+   * Vazio nas falas do candidato e nas gravadas antes da 0.8.0. */
+  passo?: string;
   criadoEm: string;
 };
 
@@ -80,7 +83,7 @@ type LinhaEntrevista = {
   criadoEm: string;
 };
 
-type LinhaMensagem = { id: string; entrevistaId: string; papel: string; texto: string; segundo: number | null; criadoEm: string };
+type LinhaMensagem = { id: string; entrevistaId: string; papel: string; texto: string; segundo: number | null; passo?: string | null; criadoEm: string };
 
 const STATUS: StatusEntrevista[] = ["convidada", "aberta", "em_andamento", "concluida", "avaliada", "expirada", "cancelada"];
 const NIVEIS: NivelVoz[] = ["agente", "navegador", "texto"];
@@ -130,6 +133,7 @@ function linhaParaMensagem(l: LinhaMensagem): MensagemEntrevista {
     papel: l.papel === "candidato" ? "candidato" : "entrevistadora",
     texto: l.texto,
     segundo: l.segundo ?? undefined,
+    passo: l.passo ?? undefined,
     criadoEm: l.criadoEm,
   };
 }
@@ -284,18 +288,30 @@ export function registrarMensagem({
   papel,
   texto,
   segundo,
+  passo,
 }: {
   entrevistaId: string;
   papel: PapelMensagem;
   texto: string;
   segundo?: number;
+  passo?: string;
 }): MensagemEntrevista {
   const id = gerarId();
   const criadoEm = agora();
   banco()
-    .prepare("INSERT INTO mensagens_entrevista (id, entrevistaId, papel, texto, segundo, criadoEm) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(id, entrevistaId, papel, texto, segundo ?? null, criadoEm);
-  return { id, entrevistaId, papel, texto, segundo, criadoEm };
+    .prepare("INSERT INTO mensagens_entrevista (id, entrevistaId, papel, texto, segundo, passo, criadoEm) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run(id, entrevistaId, papel, texto, segundo ?? null, passo ?? null, criadoEm);
+  return { id, entrevistaId, papel, texto, segundo, passo, criadoEm };
+}
+
+/** A memória de trabalho da conversa (lib/roteiro.ts), em JSON. `null` enquanto não há anotações. */
+export function lerMemoria(id: string): string | null {
+  const linha = banco().prepare("SELECT memoria FROM entrevistas WHERE id = ?").get(id) as { memoria: string | null } | undefined;
+  return linha?.memoria ?? null;
+}
+
+export function salvarMemoria(id: string, memoria: string): void {
+  banco().prepare("UPDATE entrevistas SET memoria = ? WHERE id = ?").run(memoria, id);
 }
 
 /**

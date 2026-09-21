@@ -26,10 +26,10 @@ import { aiEnabled, askJSON, meta, modelName } from "./ai";
 import { obter as obterCandidato, obterCvTexto } from "./candidatos";
 import { obterCultura } from "./cultura";
 import { esperar, parecerDemo } from "./demo";
-import { lerRoteiro, obter as obterEntrevista, registrarResultado, transcricao } from "./entrevistas";
+import { lerMemoria, lerRoteiro, obter as obterEntrevista, registrarResultado, transcricao } from "./entrevistas";
 import { faixaSalarial } from "./formato";
 import { salvar } from "./historico";
-import { decidirPasso, fichaParaEntrevista, posicaoNoRoteiro } from "./roteiro";
+import { decidirPasso, fichaParaEntrevista, posicaoNoRoteiro, lerMemoriaGravada } from "./roteiro";
 import { obter as obterVaga } from "./vagas";
 import type {
   AderenciaRequisito,
@@ -100,6 +100,9 @@ export type ContextoAvaliacao = {
   fichaWeb: ItemFichaRoteiro[];
   divergencias: DivergenciaFicha[];
   falas: Troca[];
+  /** As anotações que a entrevistadora fez durante a conversa, uma por pergunta (lib/roteiro.ts,
+   * `Memoria`). Um resumo dela; a transcrição prevalece. Vazio nas conversas conduzidas sem modelo. */
+  notas?: string[];
   /** Quantas perguntas a entrevistadora chegou a fazer: o teto do campo `pergunta`. */
   perguntasFeitas: number;
   /** A conversa acabou antes do combinado. Deduzido, nunca recebido. */
@@ -155,7 +158,7 @@ export function contextoDaAvaliacao(entrevistaId: string): ContextoAvaliacao & {
   const vaga = obterVaga(entrevista.vagaId);
   if (!vaga) throw new Error(`A vaga da entrevista ${entrevistaId} não existe mais.`);
 
-  const falas: Troca[] = transcricao(entrevistaId).map((m) => ({ papel: m.papel, texto: m.texto }));
+  const falas: Troca[] = transcricao(entrevistaId).map((m) => (m.passo ? { papel: m.papel, texto: m.texto, passo: m.passo } : { papel: m.papel, texto: m.texto }));
   const respostas = falas.filter((f) => f.papel === "candidato").length;
   if (respostas < MINIMO_DE_RESPOSTAS) {
     throw new Error(`A entrevista ${entrevistaId} tem ${respostas} resposta(s): pouco para avaliar.`);
@@ -182,6 +185,7 @@ export function contextoDaAvaliacao(entrevistaId: string): ContextoAvaliacao & {
     fichaWeb: daFicha.filter((i) => i.origem === "web"),
     divergencias: candidato.ficha?.divergencias ?? [],
     falas,
+    notas: lerMemoriaGravada(lerMemoria(entrevistaId)).notas,
     perguntasFeitas: falas.filter((f) => f.papel === "entrevistadora").length,
     parcial: entrevistaParcial(entrevistaId, vaga.numeroPerguntas, falas),
   };
@@ -262,6 +266,15 @@ Formato de saída (JSON):
 
 /** A conversa com as perguntas numeradas — a mesma numeração que a tela do parecer usa nas âncoras
  * `#pergunta-N`, e a que o modelo devolve no campo `pergunta`. */
+/** As anotações que a entrevistadora fez durante a conversa (lib/roteiro.ts). São um resumo dela, por
+ * pergunta, e entram DEPOIS da transcrição, com a ressalva de que a transcrição prevalece: o parecer
+ * ganha o que a entrevistadora percebeu no momento (o que ficou em aberto, a pergunta já coberta por
+ * outra resposta) sem trocar a fonte primária por um resumo. */
+export function notasNoPrompt(ctx: { notas?: string[] }): string {
+  if (!ctx.notas?.length) return "";
+  return `\n\nAnotações da entrevistadora durante a conversa (resumo dela, por pergunta; quando divergir da transcrição, vale a transcrição):\n${ctx.notas.map((n) => `- ${n}`).join("\n")}`;
+}
+
 export function transcricaoNumerada(falas: Troca[]): string {
   if (!falas.length) return "(nenhuma troca)";
   let n = 0;
@@ -373,7 +386,7 @@ export async function extrairFatos(ctx: ContextoAvaliacao, opcoes: OpcoesAvaliac
 Candidato: ${ctx.candidato.nome}
 
 Transcrição da entrevista (as perguntas estão numeradas):
-${transcricaoNumerada(ctx.falas)}
+${transcricaoNumerada(ctx.falas)}${notasNoPrompt(ctx)}
 
 Liste os fatos que o candidato declarou.`;
 
@@ -451,7 +464,7 @@ ${fichaNoPrompt(ctx.fichaWeb)}
 ${ctx.divergencias.length ? `\nPontos em que currículo e perfil público já divergiam:\n${ctx.divergencias.map((d) => `- ${d.campo}: currículo diz "${d.cv}", outra fonte diz "${d.web}"`).join("\n")}` : ""}
 
 Transcrição da entrevista (as perguntas estão numeradas):
-${transcricaoNumerada(ctx.falas)}
+${transcricaoNumerada(ctx.falas)}${notasNoPrompt(ctx)}
 
 Faça o cruzamento.`;
 
@@ -544,7 +557,7 @@ O que bate e o que não bate com o currículo e com o perfil público:
 ${cruzamento.consistencia.map((c) => `- ${c.afirmacao} → ${c.situacao} (${c.fonte}): ${c.detalhe}`).join("\n") || "(nada comparável)"}
 
 Transcrição da entrevista (as perguntas estão numeradas):
-${transcricaoNumerada(ctx.falas)}
+${transcricaoNumerada(ctx.falas)}${notasNoPrompt(ctx)}
 
 Escreva o parecer.`;
 

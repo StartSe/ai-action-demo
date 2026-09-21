@@ -38,7 +38,7 @@ export async function reabrirEntrevista(id: string, tentativa: number) {
           JSON.stringify(formulario?.parametros ?? { entrevistaId: id, titulo: `Entrevista para ${vaga.cargo}` }), momento);
       db.prepare(`UPDATE entrevistas SET tentativa = tentativa + 1, status = 'convidada',
         convidadaEm = ?, expiraEm = ?, abertaEm = NULL, iniciadaEm = NULL, concluidaEm = NULL,
-        nivelVoz = NULL, resultadoId = NULL, parecerStatus = 'nao_pedido', decisao = NULL, decisaoEm = NULL
+        nivelVoz = NULL, resultadoId = NULL, parecerStatus = 'nao_pedido', decisao = NULL, decisaoEm = NULL, memoria = NULL
         WHERE id = ?`).run(momento, prazo, id);
       db.exec("COMMIT");
     } catch (err) { db.exec("ROLLBACK"); throw err; }

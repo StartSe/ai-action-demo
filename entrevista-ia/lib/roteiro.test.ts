@@ -19,7 +19,7 @@ import { describe, it } from "node:test";
 // lib/roteiro.ts), então a variável é definida ANTES dos imports do app, que são dinâmicos.
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "entrevista-roteiro-"));
 
-const { contextoDaVagaAntiga, decidirPasso, fatosDaVaga, fichaParaEntrevista, normalizarRoteiro, pontosAEsclarecer, posicaoNoRoteiro, respostaVaga } =
+const { contextoDaVagaAntiga, decidirPasso, fatosDaVaga, fichaParaEntrevista, normalizarRoteiro, pontosAEsclarecer, posicaoNoRoteiro, respostaVaga, passoEmTexto, lerPassoGravado, passoDaInterpretacao, lerMemoriaGravada } =
   await import("./roteiro");
 const { roteiroDemo } = await import("./demo");
 
@@ -384,5 +384,92 @@ describe("contextoDaVagaAntiga", () => {
     assert.equal(ctx.faixaSalarial, undefined);
     assert.equal(ctx.candidato.primeiroNome, "João");
     assert.equal(ctx.numeroPerguntas, 5);
+  });
+});
+
+describe("o passo gravado em cada fala (0.8.0)", () => {
+  const plano = roteiroDemo(contexto({ numeroPerguntas: 8 }));
+
+  it("vai e volta do texto guardado no banco, e ignora o que não reconhece", () => {
+    assert.equal(passoEmTexto({ tipo: "pergunta", indice: 3, pergunta: plano.perguntas[3] }), "pergunta:3");
+    assert.equal(passoEmTexto({ tipo: "pergunta", indice: 4, pergunta: plano.perguntas[4], coberta: 3 }), "pergunta:4;coberta:3");
+    assert.equal(passoEmTexto({ tipo: "followup", bloco: "requisitos" }), "followup");
+    assert.deepEqual(lerPassoGravado("pergunta:4;coberta:3"), { tipo: "pergunta", indice: 4, coberta: 3 });
+    assert.deepEqual(lerPassoGravado("continuar"), { tipo: "continuar" });
+    assert.equal(lerPassoGravado("pergunta:x"), null);
+    assert.equal(lerPassoGravado("qualquer coisa"), null);
+    assert.equal(lerPassoGravado(undefined), null);
+  });
+
+  it("a posição segue o passo gravado, não a regra, quando os dois discordam", () => {
+    // Resposta de sete palavras: a regra aprofundaria; o modelo seguiu para a pergunta 2 e gravou isso.
+    const falas = [
+      { papel: "entrevistadora" as const, texto: plano.perguntas[0].pergunta, passo: "pergunta:0" },
+      { papel: "candidato" as const, texto: "Sim, três anos com HubSpot em PMEs." },
+      { papel: "entrevistadora" as const, texto: plano.perguntas[1].pergunta, passo: "pergunta:1" },
+      { papel: "candidato" as const, texto: LONGA },
+    ];
+    const gravada = posicaoNoRoteiro(plano, falas, 8);
+    assert.equal(gravada.indice, 2);
+    assert.deepEqual(gravada.followUps, []);
+    const pelasRegras = posicaoNoRoteiro(plano, falas.map(({ papel, texto }) => ({ papel, texto })), 8);
+    assert.equal(pelasRegras.indice, 1, "sem o passo, a regra teria lido a segunda fala como aprofundamento");
+    assert.deepEqual(pelasRegras.followUps, [0]);
+  });
+
+  it("uma pergunta coberta anda o roteiro em dois", () => {
+    const falas = [
+      { papel: "entrevistadora" as const, texto: plano.perguntas[0].pergunta, passo: "pergunta:0" },
+      { papel: "candidato" as const, texto: LONGA },
+      { papel: "entrevistadora" as const, texto: plano.perguntas[2].pergunta, passo: "pergunta:2;coberta:1" },
+      { papel: "candidato" as const, texto: LONGA },
+    ];
+    assert.equal(posicaoNoRoteiro(plano, falas, 8).indice, 3);
+  });
+});
+
+describe("passoDaInterpretacao", () => {
+  const plano = roteiroDemo(contexto({ numeroPerguntas: 8 }));
+  const base = { proximaJaCoberta: false, fala: "", notas: [] as string[] };
+
+  it("respeita as garantias das regras: um aprofundamento por pergunta, nunca no encerramento", () => {
+    const posicao = { indice: 2, feitas: 2, followUps: [1] };
+    assert.equal(passoDaInterpretacao(plano, posicao, "Sim.", { ...base, intencao: "resposta", aprofundar: true }).tipo, "pergunta", "a pergunta 2 já teve aprofundamento");
+    const ultima = { indice: 8, feitas: 8, followUps: [] };
+    assert.equal(passoDaInterpretacao(plano, ultima, "Não, obrigada.", { ...base, intencao: "resposta", aprofundar: true }).tipo, "encerrar");
+    assert.equal(passoDaInterpretacao(plano, ultima, "E quais são os benefícios?", { ...base, intencao: "duvida" }).tipo, "duvida");
+  });
+
+  it("sem 'aprofundar' do modelo, vale a regra de tamanho", () => {
+    const posicao = { indice: 2, feitas: 2, followUps: [] };
+    assert.equal(passoDaInterpretacao(plano, posicao, "Sim.", { ...base, intencao: "resposta" }).tipo, "followup");
+    assert.equal(passoDaInterpretacao(plano, posicao, LONGA, { ...base, intencao: "resposta" }).tipo, "pergunta");
+    assert.equal(passoDaInterpretacao(plano, posicao, "Sim.", { ...base, intencao: "resposta", aprofundar: false }).tipo, "pergunta");
+  });
+
+  it("'pular' e 'já respondida' nunca aprofundam; 'já coberta' não pula a abertura nem o encerramento", () => {
+    const posicao = { indice: 2, feitas: 2, followUps: [] };
+    assert.equal(passoDaInterpretacao(plano, posicao, "Não sei.", { ...base, intencao: "pular" }).tipo, "pergunta");
+    const coberta = passoDaInterpretacao(plano, posicao, LONGA, { ...base, intencao: "resposta", aprofundar: false, proximaJaCoberta: true });
+    assert.equal(coberta.tipo === "pergunta" && coberta.indice, 3);
+    assert.equal(coberta.tipo === "pergunta" && coberta.coberta, 2);
+    const penultima = passoDaInterpretacao(plano, { indice: 7, feitas: 7, followUps: [] }, LONGA, { ...base, intencao: "resposta", aprofundar: false, proximaJaCoberta: true });
+    assert.equal(penultima.tipo === "pergunta" && penultima.indice, 7, "o encerramento nunca é coberto");
+    const inicio = passoDaInterpretacao(plano, { indice: 0, feitas: 0, followUps: [] }, "", { ...base, intencao: "resposta", proximaJaCoberta: true });
+    assert.equal(inicio.tipo === "pergunta" && inicio.indice, 0, "a abertura nunca é coberta");
+  });
+
+  it("'repetir' e 'continuar' vindos do modelo viram os mesmos passos das regras", () => {
+    const posicao = { indice: 2, feitas: 2, followUps: [] };
+    assert.equal(passoDaInterpretacao(plano, posicao, "Hum, não sei se entendi direito.", { ...base, intencao: "repetir" }).tipo, "retomar");
+    assert.equal(passoDaInterpretacao(plano, posicao, "Ainda estou pensando aqui.", { ...base, intencao: "continuar" }).tipo, "continuar");
+  });
+});
+
+describe("a memória gravada", () => {
+  it("lê o JSON guardado e nunca derruba a sala com um formato estranho", () => {
+    assert.deepEqual(lerMemoriaGravada(null), { notas: [] });
+    assert.deepEqual(lerMemoriaGravada("{isso não é json"), { notas: [] });
+    assert.deepEqual(lerMemoriaGravada(JSON.stringify({ notas: ["P1: ok", 42, ""] })), { notas: ["P1: ok"] });
   });
 });
