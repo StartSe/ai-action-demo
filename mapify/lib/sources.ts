@@ -1,12 +1,9 @@
 import { load } from "cheerio";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { join } from "node:path";
 import { extractText } from "unpdf";
 import { download, publicUrl } from "./network";
 import { AppError } from "./api";
+import { fetchCaptions } from "./youtube";
 import type { Source, Segment } from "./types";
-const exec = promisify(execFile);
 export const MAX_CHARACTERS = 160000;
 function finish(source: Omit<Source, "characters">): Source {
   const segments = source.segments.filter((s) => s.text.trim());
@@ -26,13 +23,11 @@ export function textSource(text: string, title = "Minhas anotações"): Source {
     kind: "text",
     title,
     segments:
-      text
-        .match(/[\s\S]{1,4000}/g)
-        ?.map((text, i) => ({
-          id: `s${i + 1}`,
-          label: `Trecho ${i + 1}`,
-          text,
-        })) || [],
+      text.match(/[\s\S]{1,4000}/g)?.map((text, i) => ({
+        id: `s${i + 1}`,
+        label: `Trecho ${i + 1}`,
+        text,
+      })) || [],
   });
 }
 export function htmlSource(html: string, url: string): Source {
@@ -132,19 +127,7 @@ export async function youtubeSource(
   const id = youtubeId(url);
   if (!id)
     throw new AppError("Use um link válido de um vídeo público do YouTube.");
-  let data;
-  try {
-    const result = await exec(
-      process.env.PYTHON_PATH || "python3",
-      [join(process.cwd(), "scripts/transcript.py"), id],
-      { timeout: 45000, maxBuffer: 2 * 1024 * 1024, signal },
-    );
-    data = JSON.parse(result.stdout);
-  } catch {
-    throw new AppError(
-      "O YouTube não liberou a transcrição. O vídeo pode não ter legendas ou bloquear este servidor. Cole a transcrição na opção Texto para continuar.",
-    );
-  }
+  const captions = await fetchCaptions(id, signal);
   let title = "Vídeo do YouTube";
   try {
     const response = await fetch(
@@ -159,7 +142,7 @@ export async function youtubeSource(
     kind: "youtube",
     title,
     url: `https://www.youtube.com/watch?v=${id}`,
-    segments: captionSegments(data.segments || []),
+    segments: captionSegments(captions),
   });
 }
 export async function linkSource(

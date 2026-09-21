@@ -1,11 +1,13 @@
 {
   "name": "mapify",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "setup:youtube": "node scripts/setup-youtube.mjs",
+    "check:youtube": "node --import ./scripts/gancho-ts.mjs scripts/check-youtube.mjs",
     "lint": "eslint --ignore-pattern 'data/**'",
     "test": "node --import ./scripts/gancho-ts.mjs --test lib/*.test.ts"
   },

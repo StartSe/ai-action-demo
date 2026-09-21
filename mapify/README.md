@@ -21,12 +21,25 @@ Node 22.13+ (ou 24) e Python 3.10+.
 
 ```sh
 npm ci
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-PYTHON_PATH=.venv/bin/python npm run dev -- --port 3021
+npm run setup:youtube
+npm run dev -- --port 3021
 ```
 
 Abra http://localhost:3021. Sem Python, PDF, web e texto continuam disponíveis; YouTube precisa da dependência Python. Credenciais são configuradas na interface. Variáveis de ambiente opcionais estão em `.env.example` e têm prioridade sobre valores salvos.
+
+O extrator detecta `.venv` automaticamente. `PYTHON_PATH` só é necessário para usar outro ambiente Python; no Docker já está definido. Para verificar um vídeo sem gastar créditos de IA, execute:
+
+```sh
+npm run check:youtube -- 'https://www.youtube.com/watch?v=1QNsdr-Qx_I'
+```
+
+### Legendas públicas e bloqueio no Render
+
+Um vídeo público pode ter legendas acessíveis no navegador e, ainda assim, o YouTube bloquear consultas feitas pelo IP do servidor. A [documentação do extrator](https://github.com/jdepoix/youtube-transcript-api#working-around-ip-bans-requestblocked-or-ipblocked-exception) descreve essa limitação em provedores de nuvem. ChatGPT e OpenRouter não participam do download das legendas.
+
+O Mapify distingue bloqueio de IP, ausência de legendas, vídeo restrito, verificação adicional, timeout e dependências Python ausentes. Em caso de bloqueio no Render, configure **Environment → YOUTUBE_PROXY_URL** com a URL de um proxy residencial autorizado, incluindo as credenciais fornecidas pelo provedor, e aplique a atualização. A configuração é lida apenas no servidor. O proxy pode ter custo e também pode ser bloqueado; não há garantia de acesso a todo vídeo. A alternativa sem proxy é copiar **Mostrar transcrição** no YouTube e colar na opção **Texto**.
+
+Se o erro mencionar instalação, rode `npm run setup:youtube` localmente. O contêiner já inclui a dependência; nesse caso confira se o serviço usa a imagem atual e o `PYTHON_PATH` padrão do Dockerfile.
 
 ```sh
 npm test

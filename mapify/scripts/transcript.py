@@ -2,16 +2,28 @@
 import json
 import os
 import sys
-from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api.proxies import GenericProxyConfig
 
 try:
+    # Imports are inside the error boundary so a missing dependency is not
+    # incorrectly reported as unavailable captions by the application.
+    from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound
+    from youtube_transcript_api.proxies import GenericProxyConfig
+    from requests import Session
+
+    class TimedSession(Session):
+        def request(self, *args, **kwargs):
+            kwargs.setdefault('timeout', (8, 12))
+            return super().request(*args, **kwargs)
+
     proxy = os.environ.get('YOUTUBE_PROXY_URL')
-    api = YouTubeTranscriptApi(proxy_config=GenericProxyConfig(http_url=proxy, https_url=proxy)) if proxy else YouTubeTranscriptApi()
+    api = YouTubeTranscriptApi(
+        http_client=TimedSession(),
+        proxy_config=GenericProxyConfig(http_url=proxy, https_url=proxy) if proxy else None,
+    )
     tracks = api.list(sys.argv[1])
     try:
         track = tracks.find_transcript(['pt', 'pt-BR', 'en', 'en-US', 'es'])
-    except Exception:
+    except NoTranscriptFound:
         track = next(iter(tracks))
     data = track.fetch()
     print(json.dumps({'segments': data.to_raw_data(), 'language': data.language}, ensure_ascii=False))
