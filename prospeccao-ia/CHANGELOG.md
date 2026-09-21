@@ -1,5 +1,11 @@
 # Notas de versão
 
+## 0.5.2 — 2026-09-21
+
+- Todo candidato com URL de perfil do LinkedIn selecionado para verificação passa pela leitura `web_data_linkedin_person_profile` quando a ação está disponível, mesmo quando a busca ou o dataset já trouxe cargo, empresa e contexto detalhado.
+- Reaproveita leituras em cache por até 24 horas, evita repetir o enriquecimento e mantém os limites de consultas, tempo e cancelamento. Sem a ação disponível, preserva o contexto existente e as alternativas de pesquisa.
+- Testes cobrem contexto prévio do dataset, reaproveitamento entre prospecções, ação indisponível e distinção entre perfil pessoal e página de empresa.
+
 ## 0.5.1 — 2026-09-21
 
 - Enriquecimento não encerra apenas por já haver nome, cargo e empresa: prioriza LinkedIn Person Profile para obter contexto profissional adicional, reaproveitando perfis detalhados já coletados.

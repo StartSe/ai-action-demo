@@ -87,10 +87,37 @@ test("enriquecimento por perfil e busca nominal", async t => {
     assert.deepEqual(chamadas.filter(c => c.acao === "search_engine" || c.acao.endsWith("_search")).map(c => c.acao), ["search_engine", "exa_search"]);
     assert.equal(alvo.pessoa?.cargo, "Diretora de marketing");
   });
-  await t.test("perfil detalhado já coletado é reaproveitado sem novas consultas", async () => {
-    configurar("brightdata"); alvo = item("ana-cache");
-    alvo.conteudoPerfil = JSON.stringify({ name: "Ana Silva", url: alvo.url, about: bio });
+  await t.test("perfil detalhado vindo do dataset também recebe leitura pelo Person Profile", async () => {
+    configurar("brightdata"); modo = "rico"; alvo = item("ana-dataset-rico");
+    const contextoAnterior = "Histórico profissional encontrado no dataset. ".repeat(4);
+    alvo.conteudoPerfil = JSON.stringify({ name: "Ana Silva", url: alvo.url, about: contextoAnterior });
+    await completarPerfis([alvo], "dataset-rico", acoes, () => false);
+    assert.deepEqual(chamadas.map(c => c.acao), ["web_data_linkedin_person_profile"]);
+    assert.ok(alvo.conteudoPerfil?.includes(contextoAnterior));
+    assert.ok(alvo.conteudoPerfil?.includes(bio));
+    assert.equal(alvo.perfilPesquisado, true);
+  });
+  await t.test("leitura de perfil já feita é reaproveitada do cache em outra prospecção", async () => {
+    configurar("brightdata"); modo = "rico"; alvo = item("ana-cache");
     await completarPerfis([alvo], "cache", acoes, () => false);
+    assert.deepEqual(chamadas.map(c => c.acao), ["web_data_linkedin_person_profile"]);
+    chamadas.length = 0;
+    alvo = item("ana-cache");
+    await completarPerfis([alvo], "outro-cache", acoes, () => false);
+    assert.equal(chamadas.length, 0);
+    assert.ok(alvo.conteudoPerfil?.includes(bio));
+  });
+  await t.test("contexto completo é preservado quando a action não está disponível", async () => {
+    configurar("searchapi"); alvo = item("ana-sem-action");
+    alvo.conteudoPerfil = JSON.stringify({ name: "Ana Silva", url: alvo.url, about: bio });
+    await completarPerfis([alvo], "sem-action", [], () => false);
+    assert.equal(chamadas.length, 0);
+    assert.ok(alvo.conteudoPerfil.includes(bio));
+  });
+  await t.test("perfil de empresa não aciona Person Profile só por ter contexto completo", async () => {
+    configurar("brightdata"); alvo = { ...item("ana-empresa"), url: "https://www.linkedin.com/company/exemplo" };
+    alvo.conteudoPerfil = JSON.stringify({ about: bio });
+    await completarPerfis([alvo], "empresa", acoes, () => false);
     assert.equal(chamadas.length, 0);
   });
   await t.test("homônimos, prefixos de URL e páginas sem vínculo não contaminam o perfil", () => {

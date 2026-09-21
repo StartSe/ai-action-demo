@@ -166,7 +166,10 @@ async function aprofundarPerfil(item: ResultadoBuscaWeb, id: string, acoes: Ferr
 }
 
 async function completarPerfil(item: ResultadoBuscaWeb, id: string, acoes: FerramentaMCP[], cancelada: () => boolean) {
-  if (item.perfilPesquisado || (completo(item) && temContexto(item)) || cancelada()) return;
+  if (item.perfilPesquisado || cancelada()) return;
+  // Contexto de uma busca ou dataset não substitui a leitura do perfil pelo endereço conhecido.
+  const consultarLinkedin = perfilLinkedin(item.url) && acoes.some(a => a.nome === "web_data_linkedin_person_profile");
+  if (!consultarLinkedin && completo(item) && temContexto(item)) return;
   try { await aprofundarPerfil(item, id, acoes, cancelada); }
   finally { if (!cancelada()) item.perfilPesquisado = true; }
 }
