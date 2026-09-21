@@ -1,4 +1,4 @@
-# Cowork FPEA — v0.2.0
+# Cowork FPEA — v0.2.1
 
 Seu estrategista para criar predições baseadas em dados, explorar cenários e orientar decisões financeiras.
 
@@ -61,6 +61,8 @@ docker compose up --build
 ```
 
 Abra `http://localhost:3022`. O volume `dados` preserva banco, chave mestra, planilhas e a sessão ChatGPT. Faça backup de **todo** o diretório, inclusive `chave-mestra`.
+
+A imagem final instala `ca-certificates`: o binário nativo do Codex precisa dos certificados HTTPS do sistema para gerar o código de conexão do ChatGPT. Os testes de protocolo usam uma fixture e não verificam essa dependência; valide também a geração e o cancelamento do código no contêiner, sem precisar autorizar uma conta.
 
 ## Publicar imagem e deploy no Render
 

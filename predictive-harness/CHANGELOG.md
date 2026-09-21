@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.2.1 — 21/09/2026
+
+- A imagem de produção instala `ca-certificates`, como no Mapify, para que o binário nativo do Codex tenha os certificados HTTPS necessários ao solicitar o código de conexão do ChatGPT. É preciso reconstruir e implantar a imagem para aplicar a correção.
+
 ## 0.2.0 — 21/09/2026
 
 - **O produto vira um agente de FP&A**: a unidade econômica é a turma, e a tela passa de "dados / conversa / harness" para **Base e premissas / Conversa / Como cheguei aqui**.

@@ -491,7 +491,7 @@
       "plano": "starter",
       "discoGB": 1,
       "discoGuarda": "planilhas, premissas por produto, conversas, decisões do harness, conta e credenciais",
-      "versao": "0.2.0",
+      "versao": "0.2.1",
       "aposPublicar": "Crie sua conta e explore a escola de negócios de exemplo: contribuição por turma, cenário de nova turma, meta reversa de marketing e ponto de equilíbrio. Em Configurações conecte o ChatGPT e o OpenRouter (o Jev vive nele). Depois envie suas planilhas de matrículas, custos e marketing e confirme o papel de cada coluna."
     },
     {
