@@ -1,16 +1,35 @@
-import { aiEnabled, modelName, visionEnabled } from "@/lib/ai";
+import { aiEnabled, aiProvider, modelName, visionEnabled } from "@/lib/ai";
 import { sessaoAtual } from "@/lib/conta";
 import { INTEGRACOES } from "@/lib/integracoes";
-import { calcularProximos, integracaoConfigurada } from "@/lib/setup-comum";
-import { statusExtra } from "@/lib/status-do-app";
+import { integracaoConfigurada } from "@/lib/setup-comum";
 
 export const dynamic = "force-dynamic";
-
 export async function GET(req: Request) {
-  const pronto = INTEGRACOES.filter((i) => i.obrigatoria).every(integracaoConfigurada);
-  const usuario = sessaoAtual(req);
-  const proximos = calcularProximos(INTEGRACOES);
-  const integrations: Record<string, boolean> = Object.fromEntries(INTEGRACOES.map((i) => [i.id, integracaoConfigurada(i)]));
-  Object.assign(integrations, statusExtra());
-  return Response.json({ ai: aiEnabled(), demo: !aiEnabled(), model: modelName(), vision: visionEnabled(), integrations, setup: { pronto, url: "/setup" }, usuario, proximos });
+  const ai = await aiEnabled();
+  const integrations = Object.fromEntries(
+    INTEGRACOES.map((i) => [i.id, integracaoConfigurada(i)]),
+  );
+  if (aiProvider() === "chatgpt") integrations.chatgpt = ai;
+  return Response.json(
+    {
+      ai,
+      demo: !ai,
+      model: modelName(),
+      vision: visionEnabled(),
+      integrations,
+      setup: { pronto: ai, url: "/setup" },
+      usuario: sessaoAtual(req),
+      proximos: ai
+        ? []
+        : [
+            {
+              id: "ia",
+              titulo: "Conectar IA",
+              beneficio: "Use ChatGPT ou OpenRouter nos seus agentes",
+              url: "/setup#integracoes",
+            },
+          ],
+    },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }

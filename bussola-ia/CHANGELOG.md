@@ -1,5 +1,15 @@
 # Notas de versão
 
+## 0.3.0 — 2026-09-20
+
+- Conexão com assinatura ChatGPT por código de dispositivo, com cancelamento, conta conectada, modelos e desconexão, usando o protocolo oficial já adotado no build-agentflows.
+- Seleção explícita entre ChatGPT e OpenRouter para criação de questionários e análise pelos agentes, sem troca automática de provedor em falhas.
+- Remoção do quadro externo de tarefas, acesso por assistentes, rotinas, notificações e seção técnica das configurações, com retirada dos atalhos no painel e na análise.
+- Agendador desativado e URLs antigas das integrações removidas retornando HTTP 410; assessments, respostas e planos de ação preservados.
+- Sessão ChatGPT incluída no volume persistente e binário oficial incluído na imagem de produção.
+
+Validação: lint, build, 16 testes de unidade, 16 testes de navegador e 5 testes do catálogo. Pacote standalone validado com o binário oficial e sessão isolada. Login e geração com assinatura são simulados nos testes; uso real exige autorização da conta.
+
 ## 0.2.1 — 2026-09-20
 
 - Catálogo público e índices principais atualizados com o painel do gestor para assessments por empresa, área e time, identidade verde e versão visível.

@@ -587,7 +587,6 @@ export function PainelGestor({
               <span>
                 <span className="live-dot" /> Atualização a cada 30 segundos
               </span>
-              <Link href="/setup#notificacoes">Configurar notificações ↗</Link>
             </div>
           </section>
           {tela === "visao" && (

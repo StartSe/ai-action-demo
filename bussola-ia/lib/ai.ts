@@ -1,5 +1,5 @@
-// Camada única de acesso à IA via OpenRouter (API compatível com OpenAI).
-// Sem OPENROUTER_API_KEY o app entra em modo demonstração (ver lib/demo.ts).
+// Provedor escolhido em Configurações. Nunca alterna contas após uma falha.
+import { chatGPT } from "./chatgpt";
 
 import { getConfig } from "./store";
 import { MODELO_AUTOMATICO, MODELOS_VISAO } from "./modelos";
@@ -44,7 +44,7 @@ export class ErroIA extends Error {
   }
 }
 
-const ACAO_CONECTAR_IA = { rotulo: "Conectar a IA", url: "/setup#openrouter" };
+const ACAO_CONECTAR_IA = { rotulo: "Conectar a IA", url: "/setup#integracoes" };
 const ACAO_TROCAR_MODELO = { rotulo: "Trocar o modelo", url: "/setup#openrouter" };
 const ACAO_ADICIONAR_CREDITOS = { rotulo: "Adicionar créditos", url: "https://openrouter.ai/settings/credits" };
 
@@ -121,8 +121,14 @@ async function chamarOpenRouter(body: Record<string, unknown>): Promise<Response
   }
 }
 
-export function aiEnabled(): boolean {
-  return Boolean(apiKey());
+export function aiProvider(): "openrouter" | "chatgpt" {
+  return getConfig("AI_PROVIDER") === "chatgpt" ? "chatgpt" : "openrouter";
+}
+
+export async function aiEnabled(): Promise<boolean> {
+  if (aiProvider() === "openrouter") return Boolean(apiKey());
+  try { return Boolean((await chatGPT().account()).account); }
+  catch { return false; }
 }
 
 /** As tarefas que podem usar modelos diferentes. "padrao" é tudo o que o app gera no dia a dia;
@@ -138,13 +144,18 @@ function escolhido(chave: string): string | undefined {
 /** Modelo da tarefa. `avaliacao` cai para o modelo da tarefa padrão quando ninguém escolheu um
  * específico — mesmo desenho de visionModelName()/OPENROUTER_MODEL_VISAO. */
 export function modelName(tarefa: TarefaIA = "padrao"): string {
+  if (aiProvider() === "chatgpt") return getConfig("CHATGPT_MODEL") || "ChatGPT · automático";
+  return openRouterModelName(tarefa);
+}
+
+export function openRouterModelName(tarefa: TarefaIA = "padrao"): string {
   const padrao = escolhido("OPENROUTER_MODEL") || DEFAULT_MODEL;
   if (tarefa === "avaliacao") return escolhido("OPENROUTER_MODEL_AVALIACAO") || padrao;
   return padrao;
 }
 
 export function visionEnabled(): boolean {
-  return aiEnabled();
+  return aiProvider() === "openrouter" && Boolean(apiKey());
 }
 
 export function visionModelName(): string {
@@ -164,6 +175,13 @@ type Message = { role: "system" | "user" | "assistant"; content: string };
 
 /** `model` troca o modelo só desta chamada (ex.: modelName("avaliacao")); sem ele vale o modelo padrão. */
 export async function askText({ system, prompt, maxTokens = 4000, temperature = 0.4, model }: { system: string; prompt: string; maxTokens?: number; temperature?: number; model?: string }): Promise<string> {
+  if (aiProvider() === "chatgpt") {
+    try {
+      return await chatGPT().run({ system, prompt, model: getConfig("CHATGPT_MODEL") });
+    } catch {
+      throw new ErroIA("provedor_fora", "O ChatGPT não concluiu a resposta. Confira a conexão e os limites da sua conta em Configurações e tente novamente.", 502, ACAO_CONECTAR_IA);
+    }
+  }
   const messages: Message[] = [{ role: "system", content: system }, { role: "user", content: prompt }];
   const escolha = model || modelName();
   const fallbacks = (getConfig("OPENROUTER_FALLBACK_MODELS") || FALLBACK_MODELS.join(",")).split(",").map((m) => m.trim()).filter(Boolean);
@@ -201,6 +219,7 @@ export async function askVision({
   maxTokens?: number;
   temperature?: number;
 }): Promise<string> {
+  if (aiProvider() === "chatgpt") throw new ErroIA("sem_visao", "A conexão ChatGPT deste app recebe apenas texto.", 400);
   const messages: VisionMessage[] = [
     { role: "system", content: system },
     { role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: imagem } }] },
@@ -289,6 +308,12 @@ export async function askWithTools({
   maxIterations?: number;
 }): Promise<string> {
   const fallbacks = (getConfig("OPENROUTER_FALLBACK_MODELS") || FALLBACK_MODELS.join(",")).split(",").map((m) => m.trim()).filter(Boolean);
+  if (aiProvider() === "chatgpt") {
+    return chatGPT().run({ system, prompt: JSON.stringify(messages), model: getConfig("CHATGPT_MODEL"), tools: tools.map(t => ({
+      name: t.function.name, description: t.function.description, schema: t.function.parameters,
+      call: async args => JSON.stringify(await executeTool(t.function.name, args as Record<string, unknown>)),
+    })) });
+  }
   const historico: ToolMessage[] = [{ role: "system", content: system }, ...messages];
 
   for (let iteracao = 0; iteracao < maxIterations; iteracao++) {

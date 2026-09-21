@@ -1,38 +1,32 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ConexaoChatGPT } from "./ConexaoChatGPT";
+import type { EstadoChatGPT, PreferenciasIA } from "@/lib/conexao-ia-types";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MaisDetalhes, useStatus } from "./ui";
 import { EstruturaObservatorio } from "./observatorio/EstruturaObservatorio";
-import { Icone, type NomeIcone } from "./observatorio/Icone";
+import { Icone } from "./observatorio/Icone";
 import { requisitar } from "@/lib/http-cliente";
 import type {
   CampoStatus,
   IntegracaoStatus,
   Opcao,
-  StatusCaixasEmail,
-  StatusEnderecoPublico,
 } from "@/lib/setup-comum";
 
 type Resposta = {
   integracoes: IntegracaoStatus[];
   pronto: boolean;
-  enderecoPublico: StatusEnderecoPublico;
-  caixasEmail: StatusCaixasEmail;
+  ia: PreferenciasIA;
+  chatgpt: EstadoChatGPT;
 };
-const ICONE_POR_ID: Record<string, NomeIcone> = {
-  openrouter: "spark",
-  notificacoes: "people",
-  "mcp-tarefas": "layers",
-};
-
-export function SetupPage({ children }: { children?: ReactNode }) {
+export function SetupPage() {
   const { status, erro } = useStatus();
   const [dados, setDados] = useState<Resposta | null>(null);
   const [aviso, setAviso] = useState<{
     tipo: "ok" | "erro";
     texto: string;
   } | null>(null);
-  const carregar = () =>
+  const carregar = useCallback(() =>
     requisitar<Resposta>("/api/setup")
       .then((d) => {
         setDados(d);
@@ -43,7 +37,7 @@ export function SetupPage({ children }: { children?: ReactNode }) {
           tipo: "erro",
           texto: "Não foi possível carregar a configuração. Tente novamente.",
         }),
-      );
+      ), []);
   const ancoraVisitada = useRef(false);
   useEffect(() => {
     if (!dados || ancoraVisitada.current) return;
@@ -52,7 +46,7 @@ export function SetupPage({ children }: { children?: ReactNode }) {
     if (id) document.getElementById(id)?.scrollIntoView({ block: "start" });
   }, [dados]);
   const conectadas =
-    dados?.integracoes.filter((i) => i.configurada).length ?? 0;
+    (dados?.integracoes.filter((i) => i.configurada).length ?? 0) + Number(Boolean(dados?.chatgpt.account));
   useEffect(() => {
     const t = setTimeout(async () => {
       await carregar();
@@ -67,7 +61,7 @@ export function SetupPage({ children }: { children?: ReactNode }) {
         history.replaceState(null, "", `/setup${location.hash}`);
     }, 0);
     return () => clearTimeout(t);
-  }, []);
+  }, [carregar]);
   return (
     <EstruturaObservatorio
       ativo="setup"
@@ -127,7 +121,7 @@ export function SetupPage({ children }: { children?: ReactNode }) {
             <small>INTEGRAÇÕES</small>
             <strong>
               {dados
-                ? `${conectadas} de ${dados.integracoes.length} conectadas`
+                ? `${conectadas} de ${dados.integracoes.length + 1} conectadas`
                 : "Carregando…"}
             </strong>
             <p>Você decide o que faz sentido conectar</p>
@@ -139,17 +133,11 @@ export function SetupPage({ children }: { children?: ReactNode }) {
           </span>
           <div>
             <small>SEU CONTROLE</small>
-            <strong>Chaves protegidas</strong>
-            <p>Cifradas no servidor deste app</p>
+            <strong>Conexões protegidas</strong>
+            <p>Credenciais guardadas neste app</p>
           </div>
         </div>
       </div>
-      <nav className="settings-jump" aria-label="Seções de configurações">
-        <a href="#integracoes">Integrações</a>
-        <a href="#assistentes">Seu assistente</a>
-        <a href="#rotinas">Rotinas</a>
-        <a href="#tecnico">Avançado</a>
-      </nav>
       <div className="settings-grid">
         <div className="settings-content">
           <section id="integracoes" aria-labelledby="titulo-integracoes">
@@ -166,48 +154,15 @@ export function SetupPage({ children }: { children?: ReactNode }) {
               </div>
             )}
             <div className="settings-stack">
+              {dados && <ConexaoChatGPT estado={dados.chatgpt} preferencias={dados.ia} aoAtualizar={carregar} />}
               {dados?.integracoes.map((i) => (
                 <CartaoIntegracao
                   key={i.id}
                   integracao={i}
                   aoSalvar={carregar}
-                  caixasEmail={
-                    i.id === "notificacoes" ? dados.caixasEmail : undefined
-                  }
                 />
               ))}
             </div>
-          </section>
-          {children}
-          <section id="tecnico" className="card settings-technical">
-            <MaisDetalhes titulo="Para a equipe técnica">
-              <p className="text-muted text-[13px]">
-                Variáveis de ambiente, quando existirem, têm prioridade sobre o
-                que é salvo aqui.
-              </p>
-              {dados && (
-                <CampoEnderecoPublico
-                  status={dados.enderecoPublico}
-                  aoSalvar={carregar}
-                />
-              )}
-              {dados && (
-                <ul className="mt-4 flex flex-col gap-1 text-[13px] text-muted">
-                  {dados.integracoes.flatMap((i) =>
-                    i.campos
-                      .filter((c) => c.definido)
-                      .map((c) => (
-                        <li key={c.chave}>
-                          <code>{c.chave}</code>:{" "}
-                          {c.origem === "env"
-                            ? "variável de ambiente"
-                            : "salvo neste app"}
-                        </li>
-                      )),
-                  )}
-                </ul>
-              )}
-            </MaisDetalhes>
           </section>
         </div>
         <aside className="settings-aside">
@@ -232,8 +187,8 @@ export function SetupPage({ children }: { children?: ReactNode }) {
             <Icone nome="shield" />
             <h3>Você está no comando.</h3>
             <p>
-              As chaves ficam cifradas no servidor deste app e aparecem
-              mascaradas depois de salvas.
+              A sessão do ChatGPT fica no servidor deste app. As chaves do
+              OpenRouter ficam cifradas e aparecem mascaradas depois de salvas.
             </p>
             <p>
               Ao usar uma integração, o app envia os dados necessários
@@ -246,82 +201,12 @@ export function SetupPage({ children }: { children?: ReactNode }) {
   );
 }
 
-// Campo "Endereço público do app" ("Para a equipe técnica"): mostra o valor detectado sozinho a partir
-// do host da primeira rotina/lembrete/formulário/pedido criado (ver lib/setup-comum.ts:registrarEnderecoPublico)
-// e permite corrigir à mão (domínio próprio, proxy que o app não enxerga).
-function CampoEnderecoPublico({
-  status,
-  aoSalvar,
-}: {
-  status: StatusEnderecoPublico;
-  aoSalvar: () => void;
-}) {
-  const [valor, setValor] = useState(status.valor ?? "");
-  const [salvando, setSalvando] = useState(false);
-  const [aviso, setAviso] = useState("");
-
-  async function salvar() {
-    setSalvando(true);
-    setAviso("");
-    try {
-      const r = await fetch("/api/setup", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ valores: { APP_URL: valor.trim() } }),
-      });
-      if (!r.ok) throw new Error("Falha ao salvar.");
-      setAviso("Salvo.");
-      aoSalvar();
-    } catch {
-      setAviso("Não foi possível salvar. Tente de novo.");
-    } finally {
-      setSalvando(false);
-    }
-  }
-
-  return (
-    <div className="mt-3 pt-3 border-t border-line">
-      <label className="text-[13px] font-semibold" htmlFor="app-url">
-        Endereço público do app
-      </label>
-      <p className="text-muted text-[12.5px] mb-1.5">
-        {status.valor
-          ? "Detectado sozinho. Usado nos links de e-mail e Slack das rotinas."
-          : "Ainda não detectado: abra o app pelo endereço publicado uma vez, ou informe abaixo."}
-        {status.origem === "env" &&
-          " Vem de variável de ambiente: tem prioridade sobre o que for salvo aqui."}
-      </p>
-      <div className="flex gap-2 flex-wrap items-center">
-        <input
-          id="app-url"
-          className="input flex-1 min-w-0 basis-[220px]"
-          value={valor}
-          onChange={(e) => setValor(e.target.value)}
-          placeholder="https://meu-app.exemplo.com"
-          disabled={status.origem === "env"}
-        />
-        <button
-          type="button"
-          className="btn-secundario !w-auto"
-          onClick={salvar}
-          disabled={salvando || status.origem === "env" || !valor.trim()}
-        >
-          {salvando ? "Salvando" : "Corrigir"}
-        </button>
-      </div>
-      {aviso && <p className="text-[12.5px] text-muted mt-1">{aviso}</p>}
-    </div>
-  );
-}
-
 function CartaoIntegracao({
   integracao: i,
   aoSalvar,
-  caixasEmail,
 }: {
   integracao: IntegracaoStatus;
   aoSalvar: () => void;
-  caixasEmail?: StatusCaixasEmail;
 }) {
   const [valores, setValores] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
@@ -416,7 +301,7 @@ function CartaoIntegracao({
     c.visivelQuando.valores.includes(
       valoresAtuais[c.visivelQuando.campo] ?? "",
     );
-  const passos = i.oauth ? [] : passosSetup(i, valoresAtuais);
+  const passos = i.oauth ? [] : passosSetup(i);
   const camposPrincipais = i.campos.filter(
     (c) => !c.avancado && campoVisivel(c),
   );
@@ -486,9 +371,9 @@ function CartaoIntegracao({
     >
       <div className="flex items-start gap-3.5 mb-4">
         <span
-          className={`setup-icon ${i.id === "openrouter" ? "mint" : i.id === "notificacoes" ? "peach" : "lavender"}`}
+          className="setup-icon mint"
         >
-          <Icone nome={ICONE_POR_ID[i.id] ?? "link"} size={23} />
+          <Icone nome="spark" size={23} />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -583,9 +468,6 @@ function CartaoIntegracao({
               ))}
             </ol>
           )}
-          {caixasEmail && (
-            <ConectarCaixasEmail status={caixasEmail} aoMudar={aoSalvar} />
-          )}
           {campos}
           {opcoesAvancadas}
           <div className="flex items-center gap-3 flex-wrap justify-end max-md:flex-col max-md:items-stretch mt-4">
@@ -637,112 +519,7 @@ function CartaoIntegracao({
   );
 }
 
-/** Botões "Conectar meu Gmail"/"Conectar meu Outlook" do cartão "Notificações" (US-024): envia os avisos
- * pela própria caixa da pessoa em vez do Resend/SMTP genérico. Some por completo quando a equipe técnica
- * não definiu as credenciais do app daquele provedor — nunca mostra um botão que vai falhar. */
-function ConectarCaixasEmail({
-  status,
-  aoMudar,
-}: {
-  status: StatusCaixasEmail;
-  aoMudar: () => void;
-}) {
-  if (!status.gmail.disponivel && !status.outlook.disponivel) return null;
-  return (
-    <div className="flex flex-col gap-2 mb-4">
-      {status.gmail.disponivel && (
-        <CaixaEmail
-          nome="Gmail"
-          url="/api/setup/oauth/google"
-          status={status.gmail}
-          aoMudar={aoMudar}
-        />
-      )}
-      {status.outlook.disponivel && (
-        <CaixaEmail
-          nome="Outlook"
-          url="/api/setup/oauth/microsoft"
-          status={status.outlook}
-          aoMudar={aoMudar}
-        />
-      )}
-    </div>
-  );
-}
-
-function CaixaEmail({
-  nome,
-  url,
-  status,
-  aoMudar,
-}: {
-  nome: string;
-  url: string;
-  status: { conta?: string };
-  aoMudar: () => void;
-}) {
-  const [desconectando, setDesconectando] = useState(false);
-  const [erro, setErro] = useState("");
-
-  async function desconectar() {
-    setDesconectando(true);
-    setErro("");
-    try {
-      await requisitar(url, { method: "PUT" });
-      aoMudar();
-    } catch {
-      setErro("Não foi possível desconectar esta conta. Tente novamente.");
-    } finally {
-      setDesconectando(false);
-    }
-  }
-
-  if (status.conta) {
-    return (
-      <div className="flex items-center gap-3 flex-wrap">
-        <span className="chip-positivo">Conectado como {status.conta}</span>
-        {erro && (
-          <p role="alert" className="text-sm text-danger">
-            {erro}
-          </p>
-        )}
-        <button
-          type="button"
-          className="btn-ghost !w-auto"
-          onClick={desconectar}
-          disabled={desconectando}
-        >
-          {desconectando ? "Desconectando" : "Desconectar"}
-        </button>
-      </div>
-    );
-  }
-  return (
-    <a href={url} className="btn-secundario !w-auto">
-      Conectar meu {nome}
-    </a>
-  );
-}
-
-/** Passo a passo de até três passos, gerado a partir do link para obter a chave. A ajuda do primeiro
- * campo não entra aqui: ela já aparece sob o próprio campo (`CampoSetup`), repeti-la duplicaria o texto.
- * Uma integração sem nenhum campo secreto (ex.: as cotações de câmbio do custos-ia) não tem chave para colar:
- * o último passo fala em preencher os campos. Notificações tem um passo a passo próprio por canal, porque
- * o caminho (Resend/SMTP para e-mail, webhook para Slack) muda por completo conforme a escolha. */
-function passosSetup(
-  i: IntegracaoStatus,
-  valoresAtuais: Record<string, string>,
-): string[] {
-  if (i.id === "notificacoes") {
-    const canal = valoresAtuais.NOTIFICACOES_CANAL || "email";
-    return canal === "slack"
-      ? [
-          "No Slack, crie um webhook de entrada em Aplicativos › Incoming Webhooks e cole a URL abaixo.",
-        ]
-      : [
-          "Conecte seu Gmail ou Outlook acima; sem isso, crie uma chave gratuita do Resend ou preencha o SMTP em Opções avançadas.",
-        ];
-  }
+function passosSetup(i: IntegracaoStatus): string[] {
   // Integração que já funciona sozinha (todos os campos são `avancado`, ex.: o câmbio automático do
   // custos-ia) não tem nada a preencher: mandar "Preencha os campos abaixo" com a grade vazia logo
   // embaixo seria uma instrução falsa.
@@ -758,7 +535,7 @@ function passosSetup(
   return passos.slice(0, 3);
 }
 
-/** Campo `select` com poucas opções fixas (ex.: canal das Notificações) vira um par de botões lado a
+/** Campo `select` com poucas opções fixas vira um par de botões lado a
  * lado em vez de um menu suspenso — mais rápido de ler e de escolher quando só há 2 ou 3 alternativas.
  * `select`s com mais opções (ex.: modelo de IA) continuam como `select`. */
 const LIMITE_BOTOES = 3;

@@ -72,7 +72,7 @@ export async function gerarQuestionarioParaSetor({
   grupoNome?: string;
 }): Promise<{ questionario: Questionario; meta: Meta }> {
   const s = setor.trim() || "geral";
-  if (!aiEnabled()) {
+  if (!(await aiEnabled())) {
     await esperar(500);
     const questionario = questionarioAdaptadoDemo(s);
     if (objetivo?.trim()) {
@@ -191,7 +191,7 @@ export async function analisarAvaliacao({
   let extra: RespostaAnaliseIA;
   let origemLeitura: Analise["origemLeitura"] = "ia";
   let avisoIA: string | undefined;
-  if (!aiEnabled()) {
+  if (!(await aiEnabled())) {
     extra = automatica();
     origemLeitura = "automatica";
   } else {

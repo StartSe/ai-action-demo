@@ -1,5 +1,9 @@
 @AGENTS.md
 
+## Conexões simplificadas (0.3.0)
+
+ChatGPT por dispositivo e OpenRouter são as únicas conexões disponíveis. `AI_PROVIDER` governa o Arquiteto e a análise; `aiEnabled()` agora é assíncrono. Não use o modelo ChatGPT para testar o OpenRouter: `openRouterModelName()` é específico para esse teste. Credenciais ChatGPT ficam isoladas em `DATA_DIR/chatgpt` e o binário oficial acompanha o standalone. Recursos de quadro externo, assistentes MCP, rotinas e notificações foram retirados, inclusive o agendador; suas URLs antigas respondem 410. As notas históricas abaixo sobre esses recursos não descrevem o produto atual.
+
 ## Observatório de inovação (setembro de 2026)
 
 As notas abaixo são históricas. A interface atual substitui a antiga tela de duas colunas pelo painel do gestor, com oficina e sala de análise em `components/observatorio`. Consulte `PLANO-EXPERIENCIA.md` e os testes antes de usar orientações antigas sobre layout, cópias idênticas ou fronteiras de histórias.

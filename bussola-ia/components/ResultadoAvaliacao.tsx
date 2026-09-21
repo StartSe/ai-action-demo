@@ -12,15 +12,12 @@ import {
   SeloIA,
   Section,
   data,
-  lerErro,
   numero,
-  useStatus,
-  type ErroLido,
 } from "@/components/ui";
 import { conselhoAutomatico } from "@/lib/conselho";
 import { GraficoMaturidade } from "@/components/GraficoMaturidade";
 import type { Meta } from "@/lib/ai";
-import type { Analise, Avaliacao, MediaDimensao } from "@/lib/types";
+import type { Avaliacao, MediaDimensao } from "@/lib/types";
 /** CSV das respostas recebidas, uma linha por respondente e uma coluna por pergunta do questionário. */
 function respostasParaCSV(avaliacao: Avaliacao): string {
   const perguntas = avaliacao.questionario.perguntas;
@@ -153,14 +150,7 @@ export function Resultado({
         </div>
       )}
 
-      <ConteudoAvaliacao
-        avaliacao={avaliacao}
-        acoesPassos={
-          id && analise ? (
-            <EnviarAoQuadro id={id} analise={analise} />
-          ) : undefined
-        }
-      />
+      <ConteudoAvaliacao avaliacao={avaliacao} />
 
       {leituraAutomatica ? (
         <p className="text-center mt-6">
@@ -170,107 +160,6 @@ export function Resultado({
         <SeloIA demo={meta.demo} />
       )}
     </article>
-  );
-}
-
-type EnvioPasso = {
-  indice: number;
-  passo: string;
-  ok: boolean;
-  mensagem: string;
-};
-
-/** "Enviar próximos passos ao quadro": cada passo vira um cartão no quadro de tarefas conectado (MCP). Três estados:
- * status carregando → nada; quadro conectado → botão; senão → link para conectar em Configurações. */
-export function EnviarAoQuadro({
-  id,
-  analise,
-}: {
-  id: string;
-  analise: Analise;
-}) {
-  const { status } = useStatus();
-  const [enviando, setEnviando] = useState(false);
-  const [noQuadro, setNoQuadro] = useState<number[]>(
-    analise.passosNoQuadro ?? [],
-  );
-  const [resultados, setResultados] = useState<EnvioPasso[] | null>(null);
-  const [erroEnvio, setErroEnvio] = useState<ErroLido | null>(null);
-
-  if (!status) return null;
-  const conectado = Boolean(status.integrations?.mcpTarefas);
-  const total = analise.proximosPassos.length;
-  const todosEnviados = noQuadro.length >= total;
-
-  async function enviar() {
-    setEnviando(true);
-    setErroEnvio(null);
-    setResultados(null);
-    try {
-      const r = await fetch(`/api/bussola/${id}/quadro`, { method: "POST" });
-      if (!r.ok) {
-        setErroEnvio(await lerErro(r));
-        return;
-      }
-      const d = (await r.json()) as {
-        avaliacao: Avaliacao;
-        resultados: EnvioPasso[];
-      };
-      setResultados(d.resultados);
-      setNoQuadro(d.avaliacao.analise?.passosNoQuadro ?? []);
-    } catch (e) {
-      setErroEnvio(await lerErro(e));
-    } finally {
-      setEnviando(false);
-    }
-  }
-
-  return (
-    <div className="no-print mt-4 flex flex-col gap-3">
-      {conectado ? (
-        todosEnviados ? (
-          <p className="text-muted text-sm">
-            Os {total} passos já estão no quadro de tarefas.
-          </p>
-        ) : (
-          <div className="flex items-center gap-3 flex-wrap">
-            <button
-              type="button"
-              className="btn-ghost !w-auto"
-              onClick={enviar}
-              disabled={enviando}
-            >
-              {enviando ? "Enviando..." : "Enviar próximos passos ao quadro"}
-            </button>
-            {noQuadro.length > 0 && (
-              <span className="text-muted text-[13px]">
-                {noQuadro.length} de {total} já no quadro
-              </span>
-            )}
-          </div>
-        )
-      ) : (
-        <a href="/setup#mcp-tarefas" className="btn-ghost !w-auto">
-          Enviar próximos passos ao quadro
-        </a>
-      )}
-      {resultados && (
-        <ul className="flex flex-col gap-1 text-[13px]">
-          {resultados.map((r) => (
-            <li key={r.indice} className={r.ok ? "text-ok" : "text-danger"}>
-              {r.ok ? "Criado no quadro: " : "Não enviado: "}
-              {r.passo}
-              {!r.ok && ` (${r.mensagem})`}
-            </li>
-          ))}
-        </ul>
-      )}
-      {erroEnvio && (
-        <Aviso tom="danger" acao={erroEnvio.acao}>
-          {erroEnvio.mensagem}
-        </Aviso>
-      )}
-    </div>
   );
 }
 

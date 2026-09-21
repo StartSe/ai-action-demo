@@ -7,7 +7,7 @@ export async function consultarConselho(
   contexto?: ContextoAssessment,
 ): Promise<ParecerAgente[]> {
   const base = conselhoAutomatico(analise, total, contexto);
-  if (!aiEnabled() || analise.origemLeitura !== "ia") return base;
+  if (!(await aiEnabled()) || analise.origemLeitura !== "ia") return base;
   const prompt = JSON.stringify({
     contexto,
     totalRespostas: total,

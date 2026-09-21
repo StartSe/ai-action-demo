@@ -1,6 +1,6 @@
 # Blueprint de publicação de Bússola de IA (especificação: https://render.com/docs/blueprint-spec)
 # Imagem pública publicada pelo GitHub Actions em ghcr.io/startse/bussola-ia:latest.
-# Este app exige o plano 0.5c-512mb (pago) e cria um disco de 1 GB em /app/data, onde ficam a conta, as configurações, os questionários, os assessments, as respostas, os diagnósticos e os planos de ação.
+# Este app exige o plano 0.5c-512mb (pago) e cria um disco de 1 GB em /app/data, onde ficam a conta, as configurações, a sessão ChatGPT, os questionários, os assessments, as respostas, os diagnósticos e os planos de ação.
 # Nenhuma chave é necessária aqui.
 services:
   - type: web
@@ -14,7 +14,7 @@ services:
     envVars:
       - key: PORT
         value: "10000"
-    # A conta, as configurações, os questionários, os assessments, as respostas, os diagnósticos e os planos de ação ficam em /app/data e sobrevivem a deploys.
+    # A conta, as configurações, a sessão ChatGPT, os questionários, os assessments, as respostas, os diagnósticos e os planos de ação ficam em /app/data e sobrevivem a deploys.
     disk:
       name: bussola-ia-dados
       mountPath: /app/data

@@ -4,7 +4,6 @@ import { Entregar } from "@/components/ui";
 import {
   avaliacaoParaTexto,
   baixarRespostasCSV,
-  EnviarAoQuadro,
 } from "@/components/ResultadoAvaliacao";
 import { conselhoAutomatico } from "@/lib/conselho";
 import { calcularMediasPorArea } from "@/lib/analise-bussola";
@@ -432,7 +431,6 @@ export function SalaAnalise({
               </p>
             </div>
           </div>
-          {id && <EnviarAoQuadro id={id} analise={an} />}
         </section>
       )}
       {aba === "evidencias" && (

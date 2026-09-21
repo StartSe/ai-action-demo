@@ -1,16 +1,5 @@
-// Gera, mostra o estado e revoga o código de acesso usado pelo endpoint MCP (app/mcp/route.ts).
-import { codigoAtivo, codigoMascarado, gerarCodigo, revogarCodigo } from "@/lib/mcp";
-
-export async function GET() {
-  return Response.json({ ativo: Boolean(codigoAtivo()), mascarado: codigoMascarado() });
-}
-
-export async function POST() {
-  const codigo = gerarCodigo();
-  return Response.json({ codigo });
-}
-
-export async function DELETE() {
-  revogarCodigo();
-  return Response.json({ ok: true });
-}
+// Integração removida do Bússola. URLs antigas não executam ações.
+const removido = () => Response.json({ error: "Este recurso foi removido do Bússola de IA." }, { status: 410 });
+export const GET = removido;
+export const POST = removido;
+export const DELETE = removido;
