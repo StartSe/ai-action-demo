@@ -1,5 +1,5 @@
 import { apagarQualificacaoProfunda } from "./qualificacao-profunda-store";
-import { apagarConsultas, consultasDaProspeccao } from "./pesquisa-registro";
+import { apagarConsultas, consultasDaProspeccao, decisoesDaPesquisa } from "./pesquisa-registro";
 // Workspace de prospecção: tabelas próprias para produto, ICP, prospecção, conta,
 // lead e abordagem, no mesmo app.sqlite de lib/store.ts (ver abrirBanco()).
 // Cada entidade expõe criar/listar/obter/atualizar/apagar; nenhuma rota monta SQL.
@@ -61,6 +61,7 @@ function banco(): DatabaseSync {
     concluido_em TEXT
   )`);
   try { d.exec(`ALTER TABLE prospeccoes ADD COLUMN demo INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
+  try { d.exec(`ALTER TABLE prospeccoes ADD COLUMN tempos_etapas TEXT NOT NULL DEFAULT '{}'`); } catch { /* coluna já existe */ }
   d.exec(`CREATE INDEX IF NOT EXISTS idx_prospeccoes_produto ON prospeccoes (produto_id)`);
   d.exec(`CREATE TABLE IF NOT EXISTS contas (
     id TEXT PRIMARY KEY,
@@ -228,13 +229,13 @@ export function apagarICP(id: string): void {
 
 // --- Prospecções --------------------------------------------------------------
 
-type LinhaProspeccao = { id: string; produto_id: string; icp_id: string; modo: string; criterios: string; estado: string; etapa: string | null; erro: string | null; demo: number; criado_em: string; concluido_em: string | null };
+type LinhaProspeccao = { id: string; produto_id: string; icp_id: string; modo: string; criterios: string; estado: string; etapa: string | null; tempos_etapas: string; erro: string | null; demo: number; criado_em: string; concluido_em: string | null };
 
 function linhaParaProspeccao(l: LinhaProspeccao): Prospeccao {
   return {
     id: l.id, produtoId: l.produto_id, icpId: l.icp_id, modo: l.modo as Prospeccao["modo"],
     criterios: JSON.parse(l.criterios), estado: l.estado as Prospeccao["estado"], etapa: l.etapa, erro: l.erro,
-    demo: l.demo === 1, criadoEm: l.criado_em, concluidoEm: l.concluido_em,
+    demo: l.demo === 1, criadoEm: l.criado_em, concluidoEm: l.concluido_em, temposEtapas: JSON.parse(l.tempos_etapas),
   };
 }
 
@@ -243,9 +244,10 @@ export function criarProspeccao(dados: NovaProspeccao, em?: Date): Prospeccao {
   const criadoEm = (em ?? new Date()).toISOString();
   const concluidoEm = dados.concluidoEm ?? null;
   const demo = dados.demo ?? false;
-  banco().prepare("INSERT INTO prospeccoes (id, produto_id, icp_id, modo, criterios, estado, etapa, erro, demo, criado_em, concluido_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(id, dados.produtoId, dados.icpId, dados.modo, JSON.stringify(dados.criterios), dados.estado, dados.etapa, dados.erro, demo ? 1 : 0, criadoEm, concluidoEm);
-  return { id, criadoEm, ...dados, demo, concluidoEm };
+  const temposEtapas = dados.estado === "executando" && dados.etapa ? { [dados.etapa]: { inicio: criadoEm } } : {};
+  banco().prepare("INSERT INTO prospeccoes (id, produto_id, icp_id, modo, criterios, estado, etapa, erro, demo, criado_em, concluido_em, tempos_etapas) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, dados.produtoId, dados.icpId, dados.modo, JSON.stringify(dados.criterios), dados.estado, dados.etapa, dados.erro, demo ? 1 : 0, criadoEm, concluidoEm, JSON.stringify(temposEtapas));
+  return { id, criadoEm, ...dados, demo, concluidoEm, temposEtapas };
 }
 
 export function listarProspeccoes(produtoId?: string): Prospeccao[] {
@@ -260,10 +262,23 @@ export function obterProspeccao(id: string): Prospeccao | null {
   return linha ? linhaParaProspeccao(linha) : null;
 }
 
-export function atualizarProspeccao(id: string, dados: Partial<NovaProspeccao>): Prospeccao | null {
+export function atualizarProspeccao(id: string, dados: Partial<NovaProspeccao>, em = new Date()): Prospeccao | null {
+  const anterior = obterProspeccao(id);
+  if (!anterior) return null;
+  const agora = em.toISOString();
+  const tempos = anterior.temposEtapas ?? {};
+  const mudouEtapa = dados.etapa !== undefined && dados.etapa !== anterior.etapa;
+  const encerrando = anterior.estado === "executando" && dados.estado !== undefined && dados.estado !== "executando";
+  if ((mudouEtapa || encerrando) && anterior.etapa && tempos[anterior.etapa] && !tempos[anterior.etapa].fim) {
+    tempos[anterior.etapa].fim = dados.concluidoEm ?? agora;
+  }
+  if (mudouEtapa && dados.etapa && (dados.estado ?? anterior.estado) === "executando") {
+    tempos[dados.etapa] = { inicio: agora };
+  }
   const { set, valores } = montarSet({
     modo: dados.modo, criterios: dados.criterios && JSON.stringify(dados.criterios), estado: dados.estado,
-    etapa: dados.etapa, erro: dados.erro, concluido_em: dados.concluidoEm,
+    etapa: dados.etapa, erro: dados.erro, concluido_em: dados.concluidoEm !== undefined ? dados.concluidoEm : encerrando ? agora : undefined,
+    tempos_etapas: mudouEtapa || encerrando ? JSON.stringify(tempos) : undefined,
   });
   if (set) banco().prepare(`UPDATE prospeccoes SET ${set} WHERE id = ?`).run(...valores, id);
   return obterProspeccao(id);
@@ -299,6 +314,7 @@ export function obterAndamento(id: string) {
     contas,
     leads,
     consultas: consultasDaProspeccao(id),
+    decisoes: decisoesDaPesquisa(id),
     contasEncontradas: contas.length,
     leadsEncontrados: leads.length,
   };
@@ -336,9 +352,8 @@ export const MENSAGEM_EXECUCAO_TRAVADA = "A execução não terminou a tempo (ma
  */
 export function recuperarProspeccoesTravadas(limiteMinutos = 30): void {
   const corte = new Date(Date.now() - limiteMinutos * 60 * 1000).toISOString();
-  banco()
-    .prepare("UPDATE prospeccoes SET estado = 'falhou', erro = ? WHERE estado = 'executando' AND criado_em < ?")
-    .run(MENSAGEM_EXECUCAO_TRAVADA, corte);
+  const travadas = banco().prepare("SELECT id FROM prospeccoes WHERE estado = 'executando' AND criado_em < ?").all(corte) as { id: string }[];
+  for (const { id } of travadas) atualizarProspeccao(id, { estado: "falhou", erro: MENSAGEM_EXECUCAO_TRAVADA });
 }
 
 // --- Contas (empresas) --------------------------------------------------------------

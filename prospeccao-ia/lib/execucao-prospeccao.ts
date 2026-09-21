@@ -1,7 +1,7 @@
 // Prospecção em cinco etapas, com dados persistidos a cada avanço e resultados parciais preservados.
 // Descoberta combina as fontes conectadas; a qualificação exige evidência para cada critério.
 // Empresa única mantém seleção explícita. Demonstração só ocorre sem fontes reais conectadas.
-import { ETAPAS_PROSPECCAO } from "./execucao-etapas";
+import { ETAPAS_PROSPECCAO, etapasDaProspeccao } from "./execucao-etapas";
 import { consultasDaProspeccao } from "./pesquisa-registro";
 import { buscarNaWeb, descobertaAtiva, ErroDescoberta, lerPagina, perfilDePessoa, TetoConsultasAtingido } from "./descoberta";
 import type { ResultadoBuscaWeb } from "./descoberta";
@@ -470,11 +470,13 @@ async function adicionarPessoasDaConta(prospeccaoId: string, conta: Conta, produ
     : resultado.itens.map(item => ({ ...pessoaDoResultado(item), linkedin: item.url, item }));
   let criados = 0;
   for (const candidato of candidatos) {
+    if (foiCancelada(prospeccaoId)) return;
     if (criados >= TETO_PESSOAS_CHAVE || !candidato.nome) continue;
     const chave = chaveLead(candidato.nome, conta.nome, candidato.linkedin);
     if (jaVistos.has(chave)) continue;
     jaVistos.add(chave);
     const conteudo = candidato.item ? await conteudoDaPessoa(candidato.item, prospeccaoId) : "";
+    if (foiCancelada(prospeccaoId)) return;
     const evidenciasPessoa = avaliarCriterios(conteudo, [{ criterio: "Empresa atual", valor: conta.nome }]);
     criarLead({
       prospeccaoId, contaId: conta.id, nome: candidato.nome, cargo: candidato.cargo, empresa: conta.nome, cidade: conta.cidade,
@@ -489,7 +491,9 @@ async function adicionarPessoasDaConta(prospeccaoId: string, conta: Conta, produ
 
 /** Usa só conteúdo coletado; falha de leitura conserva o trecho real e a origem da busca. */
 async function conteudoDaPessoa(item: ResultadoBuscaWeb, prospeccaoId: string): Promise<string> {
+  if (item.conteudoPerfil) return item.conteudoPerfil;
   const trecho = [item.titulo, item.resumo].filter(Boolean).join(". ");
+  if (item.pessoa?.cargo && item.pessoa.empresa) return trecho;
   if (!descobertaAtiva()) return trecho;
   try { return (await perfilDePessoa(item.url, prospeccaoId, trecho)).conteudo; }
   catch { return trecho; }
@@ -708,6 +712,7 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
     : resultado.itens;
   let criados = 0;
   for (const item of candidatos) {
+    if (foiCancelada(prospeccaoId)) return;
     if (criados >= TETO_PESSOAS_MODO) break;
     const pessoa = pessoaDoResultado(item);
     if (!pessoa.nome) continue;
@@ -715,6 +720,7 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
     if (jaVistos.has(chave)) continue;
     jaVistos.add(chave);
     const conteudo = resultado.demo ? conteudoDemoDaCandidata(0, segmento, porte, localizacao, undefined) : await conteudoDaPessoa(item, prospeccaoId);
+    if (foiCancelada(prospeccaoId)) return;
     let conta: Conta | undefined;
     if (pessoa.empresa) {
       const identidade = pessoa.empresa.trim().toLowerCase();
@@ -728,6 +734,7 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
         const evidenciaEmpresa = await avaliarComOutros(institucional || conteudo, [
           { criterio: "Segmento", valor: segmento }, { criterio: "Porte", valor: porte }, { criterio: "Localização", valor: localizacao },
         ], icp);
+        if (foiCancelada(prospeccaoId)) return;
         conta = criarConta({ prospeccaoId, nome: pessoa.empresa, site, setor: null, porte: null, cidade: null,
           fit: calcularFit(evidenciaEmpresa), evidencias: evidenciaEmpresa,
           sinais: sinaisEncontrados(institucional || conteudo, icp?.sinais ?? [], site || item.url, resultado.consultadoEm),
@@ -736,6 +743,7 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
       }
     }
     const evidencias = [...(conta?.evidencias ?? await avaliarComOutros(conteudo, [{ criterio: "Segmento", valor: segmento }, { criterio: "Porte", valor: porte }], icp)), ...avaliarCriterios(conteudo, [{ criterio: "Cargo", valor: cargo }, { criterio: "Localização da pessoa", valor: localizacao }])];
+    if (foiCancelada(prospeccaoId)) return;
     criarLead({ prospeccaoId, contaId: conta?.id ?? null, nome: pessoa.nome, cargo: pessoa.cargo, empresa: pessoa.empresa,
       cidade: item.pessoa?.cidade || null, linkedin: item.url || null,
       fonte: resultado.demo ? null : `${(item.fontes ?? ["busca pública"]).join(", ")} · ${item.url} · ${data(resultado.consultadoEm, { comAno: true })}`,
@@ -825,13 +833,10 @@ export function criarProspeccaoValidada(dados: { produtoId: string; icpId: strin
   return { ok: true, prospeccao };
 }
 
-/** Estado gravado pelo momento em que a checagem ocorre (nunca cacheado): uma "Cancelar" (US-014) só tem
- * efeito de verdade quando chega ENTRE duas etapas — hoje o pipeline inteiro roda no mesmo tick (nenhuma
- * etapa faz I/O real, ver comentário de topo), então na prática a checagem quase nunca encontra
- * "cancelada" a tempo; ela existe para o momento em que a US-015 trouxer I/O de rede de verdade entre as
- * etapas, e é o que faz um cancelamento não reverter para "pronta"/apagar o que já foi encontrado. */
+/** Relê o estado antes de novas etapas e gravações. Cancelamento, exclusão ou encerramento
+ * impedem que uma resposta tardia retome a execução e recrie resultados. */
 function foiCancelada(prospeccaoId: string): boolean {
-  return obterProspeccao(prospeccaoId)?.estado === "cancelada";
+  return obterProspeccao(prospeccaoId)?.estado !== "executando";
 }
 
 /** Exportada para a rotina "Oportunidades novas" (US-040, lib/rotinas-do-app.ts) poder AGUARDAR o
@@ -850,24 +855,31 @@ export async function executarPipeline(prospeccaoId: string): Promise<void> {
     obterProduto(prospeccao.produtoId);
     const icp = obterICP(prospeccao.icpId);
     const jornada: Jornada = icp?.jornada ?? "b2b";
+    const etapasAtivas = etapasDaProspeccao(prospeccao.modo, jornada);
 
     // Etapa 2: procurando empresas compatíveis.
     if (foiCancelada(prospeccaoId)) return;
-    rotuloEtapaAtual = ETAPAS_PROSPECCAO[1].rotulo;
-    atualizarProspeccao(prospeccaoId, { etapa: ETAPAS_PROSPECCAO[1].chave });
-    await etapaProcurarEmpresas(prospeccaoId, prospeccao.modo, jornada, prospeccao.criterios, icp);
+    if (etapasAtivas.includes(ETAPAS_PROSPECCAO[1])) {
+      rotuloEtapaAtual = ETAPAS_PROSPECCAO[1].rotulo;
+      atualizarProspeccao(prospeccaoId, { etapa: ETAPAS_PROSPECCAO[1].chave });
+      await etapaProcurarEmpresas(prospeccaoId, prospeccao.modo, jornada, prospeccao.criterios, icp);
+    }
 
     // Etapa 3: pesquisa complementar de sinais públicos com origem e data.
     if (foiCancelada(prospeccaoId)) return;
-    rotuloEtapaAtual = ETAPAS_PROSPECCAO[2].rotulo;
-    atualizarProspeccao(prospeccaoId, { etapa: ETAPAS_PROSPECCAO[2].chave });
-    await analisarSinais(prospeccaoId, prospeccao.criterios, icp);
+    if (etapasAtivas.includes(ETAPAS_PROSPECCAO[2])) {
+      rotuloEtapaAtual = ETAPAS_PROSPECCAO[2].rotulo;
+      atualizarProspeccao(prospeccaoId, { etapa: ETAPAS_PROSPECCAO[2].chave });
+      await analisarSinais(prospeccaoId, prospeccao.criterios, icp);
+    }
 
     // Etapa 4: encontrando pessoas-chave (não roda em "empresas" puro).
     if (foiCancelada(prospeccaoId)) return;
-    rotuloEtapaAtual = ETAPAS_PROSPECCAO[3].rotulo;
-    atualizarProspeccao(prospeccaoId, { etapa: ETAPAS_PROSPECCAO[3].chave });
-    if (deveCriarPessoas(prospeccao.modo)) await etapaEncontrarPessoas(prospeccaoId, prospeccao.modo, jornada, prospeccao.criterios, prospeccao.produtoId, icp);
+    if (deveCriarPessoas(prospeccao.modo)) {
+      rotuloEtapaAtual = ETAPAS_PROSPECCAO[3].rotulo;
+      atualizarProspeccao(prospeccaoId, { etapa: ETAPAS_PROSPECCAO[3].chave });
+      await etapaEncontrarPessoas(prospeccaoId, prospeccao.modo, jornada, prospeccao.criterios, prospeccao.produtoId, icp);
+    }
 
     // Etapa 5: qualificando oportunidades.
     if (foiCancelada(prospeccaoId)) return;

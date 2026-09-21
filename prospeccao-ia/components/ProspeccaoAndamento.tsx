@@ -5,18 +5,18 @@
 // enquanto a aba está visível (document.visibilityState === "visible") e só enquanto o estado é
 // "executando" — mesmo padrão de components/ConexaoWhatsApp.tsx (whatsapp-atendente): o efeito depende
 // do ESTADO (primitivo), não do objeto inteiro de andamento, para não reiniciar o intervalo a cada poll.
-import type { ConsultaPesquisa } from "@/lib/pesquisa-registro";
-import { useCallback, useEffect, useRef, useState } from "react";
+import type { ConsultaPesquisa, DecisaoPesquisa } from "@/lib/pesquisa-registro";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Aviso, Chip, DataTable, Topbar, data, useConfirmacao, useStatus, lerErro, type Coluna } from "@/components/ui";
 import { ExploracaoEmpresa } from "@/components/ExploracaoEmpresa";
+import { NOMES_FONTES, nomeAcaoPesquisa, ProgressoProspeccao } from "@/components/ProgressoProspeccao";
 import { baixarCSV } from "@/lib/exportacao";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 import { funilContagens, motivoPapel, ordenarLeadsPorPrioridade, sinalAntigo, sinalMaisRecente, type FunilContagens } from "@/lib/qualificacao";
-import { NIVEL_CHIP_EVIDENCIA, ORDEM_MOTIVOS_DESCARTE, ORDEM_STATUS_LEAD, ROTULO_FIT, ROTULO_MODO, ROTULO_MOTIVO_DESCARTE, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA, ROTULO_STATUS_LEAD, nomeProspeccao, recorteProspeccao } from "@/lib/rotulos";
-import { ETAPAS_PROSPECCAO } from "@/lib/execucao-etapas";
+import { NIVEL_CHIP_EVIDENCIA, ORDEM_MOTIVOS_DESCARTE, ORDEM_STATUS_LEAD, ROTULO_FIT, ROTULO_MODO, ROTULO_MOTIVO_DESCARTE, ROTULO_PAPEL, ROTULO_RESULTADO_EVIDENCIA, ROTULO_STATUS_LEAD, recorteProspeccao } from "@/lib/rotulos";
 import type { Conta, Evidencia, Jornada, LeadProspeccao, MotivoDescarte, Prospeccao, SinalProspeccao, StatusLead } from "@/lib/types";
 
 /** Chip de papel no processo de decisão (US-026): mostra o rótulo (ou nada, para "desconhecido") com o
@@ -368,6 +368,7 @@ function construirColunasLeads(opcoes: {
 
 type Andamento = {
   consultas?: ConsultaPesquisa[];
+  decisoes?: DecisaoPesquisa[];
   prospeccao: Prospeccao;
   produtoNome: string;
   icpNome: string;
@@ -392,37 +393,68 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
   const [cancelando, setCancelando] = useState(false);
   const [erroCancelar, setErroCancelar] = useState<string | null>(null);
   const [apagando, setApagando] = useState(false);
+  const [erroApagar, setErroApagar] = useState<string | null>(null);
+  const [erroAtualizacao, setErroAtualizacao] = useState<string | null>(null);
+  const [semSessao, setSemSessao] = useState(false);
+  const [ultimoContato, setUltimoContato] = useState<number | null>(null);
+  const [tentativa, setTentativa] = useState(0);
   const [buscandoPessoasId, setBuscandoPessoasId] = useState<string | null>(null);
   const [erroVerPessoas, setErroVerPessoas] = useState<string | null>(null);
   const [apagandoPessoaId, setApagandoPessoaId] = useState<string | null>(null);
   const [enviandoCRMId, setEnviandoCRMId] = useState<string | null>(null);
   const [erroCRM, setErroCRM] = useState<string | null>(null);
+  const [erroAcaoPessoa, setErroAcaoPessoa] = useState<string | null>(null);
   const [aba, setAba] = useState<AbaFunil>("descobertos");
 
-  const carregar = useCallback(() => {
-    fetch(`/api/prospeccoes/${prospeccaoId}/andamento`)
-      .then(async (r) => {
-        if (r.status === 404) {
-          setNaoEncontrada(true);
-          return;
-        }
-        const dados = (await r.json()) as Andamento;
-        setAndamento(dados);
-      })
-      .catch(() => { /* próxima consulta tenta de novo; a tela mantém o último andamento conhecido */ });
-  }, [prospeccaoId]);
-
   useEffect(() => {
-    carregar();
-  }, [carregar]);
-
-  useEffect(() => {
-    if (andamento?.prospeccao.estado !== "executando") return;
-    const id = setInterval(() => {
-      if (document.visibilityState === "visible") carregar();
-    }, INTERVALO_POLL_MS);
-    return () => clearInterval(id);
-  }, [andamento?.prospeccao.estado, carregar]);
+    let desmontado = false;
+    let ocupado = false;
+    let terminou = false;
+    let proxima: ReturnType<typeof setTimeout> | undefined;
+    let requisicao: AbortController | undefined;
+    async function carregar() {
+      if (desmontado || ocupado || terminou) return;
+      clearTimeout(proxima);
+      ocupado = true;
+      requisicao = new AbortController();
+      const limite = setTimeout(() => requisicao?.abort(), 15000);
+      let intervalo = INTERVALO_POLL_MS;
+      try {
+        const r = await fetch(`/api/prospeccoes/${prospeccaoId}/andamento`, { signal: requisicao.signal, cache: "no-store" });
+        if (desmontado) return;
+        if (r.status === 404) { setNaoEncontrada(true); terminou = true; return; }
+        if (r.status === 401) { setSemSessao(true); terminou = true; }
+        if (!r.ok) throw new Error((await lerErro(r)).mensagem);
+        const dados = await r.json() as Andamento;
+        if (desmontado) return;
+        if (dados.prospeccao?.id !== prospeccaoId || !Array.isArray(dados.leads) || !Array.isArray(dados.contas)) throw new Error("Não foi possível ler o andamento. Tente atualizar novamente.");
+        // Uma resposta iniciada antes do cancelamento não pode voltar a tela para executando.
+        setAndamento(anterior => anterior?.prospeccao.id === prospeccaoId && anterior.prospeccao.estado !== "executando" && dados.prospeccao.estado === "executando" ? anterior : dados);
+        setErroAtualizacao(null);
+        setSemSessao(false);
+        setUltimoContato(Date.now());
+        terminou = dados.prospeccao.estado !== "executando";
+      } catch (e) {
+        if (!desmontado) setErroAtualizacao(e instanceof Error && e.name !== "AbortError" && e.name !== "TypeError" ? e.message : "Não conseguimos atualizar o andamento. Verifique sua conexão; tentaremos novamente automaticamente.");
+        intervalo = 5000;
+      } finally {
+        clearTimeout(limite);
+        ocupado = false;
+        if (!desmontado && !terminou) proxima = setTimeout(() => { if (document.visibilityState === "visible") void carregar(); }, intervalo);
+      }
+    }
+    const aoVoltar = () => { if (document.visibilityState === "visible") void carregar(); };
+    void carregar();
+    document.addEventListener("visibilitychange", aoVoltar);
+    window.addEventListener("online", aoVoltar);
+    return () => {
+      desmontado = true;
+      clearTimeout(proxima);
+      requisicao?.abort();
+      document.removeEventListener("visibilitychange", aoVoltar);
+      window.removeEventListener("online", aoVoltar);
+    };
+  }, [prospeccaoId, tentativa]);
 
   async function repetir() {
     if (!andamento || repetindo) return;
@@ -510,11 +542,19 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
   }
 
   async function apagar() {
+    if (apagando) return;
     const ok = await confirmar("Apagar esta prospecção? As empresas, pessoas e abordagens encontradas aqui somem junto.", { confirmarRotulo: "Apagar" });
     if (!ok) return;
     setApagando(true);
-    await fetch(`/api/prospeccoes/${prospeccaoId}`, { method: "DELETE" });
-    router.push("/prospeccoes");
+    setErroApagar(null);
+    try {
+      const r = await fetch(`/api/prospeccoes/${prospeccaoId}`, { method: "DELETE" });
+      if (!r.ok) throw new Error((await lerErro(r)).mensagem);
+      router.push("/prospeccoes");
+    } catch (e) {
+      setErroApagar(e instanceof Error && e.name !== "TypeError" ? e.message : "Não foi possível excluir a prospecção. Verifique sua conexão e tente novamente.");
+      setApagando(false);
+    }
   }
 
   /** "Apagar dados desta pessoa" (US-021, jornada B2C): apaga o lead e as abordagens dele por completo,
@@ -523,9 +563,14 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
     const ok = await confirmar("Apagar os dados desta pessoa? A ação não pode ser desfeita.", { confirmarRotulo: "Apagar" });
     if (!ok) return;
     setApagandoPessoaId(leadId);
-    await fetch(`/api/leads/${leadId}`, { method: "DELETE" });
-    setAndamento((a) => (a ? { ...a, leads: a.leads.filter((l) => l.id !== leadId) } : a));
-    setApagandoPessoaId(null);
+    setErroAcaoPessoa(null);
+    try {
+      const r = await fetch(`/api/leads/${leadId}`, { method: "DELETE" });
+      if (!r.ok) throw new Error((await lerErro(r)).mensagem);
+      setAndamento(a => a ? { ...a, leads: a.leads.filter(l => l.id !== leadId), leadsEncontrados: a.leads.filter(l => l.id !== leadId).length } : a);
+    } catch (e) {
+      setErroAcaoPessoa(e instanceof Error && e.name !== "TypeError" ? e.message : "Não foi possível excluir esta pessoa. Tente novamente.");
+    } finally { setApagandoPessoaId(null); }
   }
 
   /** "Mudar status"/"Descartar" do menu "•••" (US-033/US-034): `PUT /api/leads/[id]` com `{ status }` (mais
@@ -533,10 +578,15 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
    * a única escrita de status fora do pipeline. */
   async function mudarStatusLead(leadId: string, status: StatusLead, motivo?: MotivoDescarte) {
     const corpo = status === "descartado" ? { status, motivo } : { status };
-    const r = await fetch(`/api/leads/${leadId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
-    if (!r.ok) return;
-    const atualizado = (await r.json()) as LeadProspeccao;
-    setAndamento((a) => (a ? { ...a, leads: a.leads.map((l) => (l.id === leadId ? atualizado : l)) } : a));
+    setErroAcaoPessoa(null);
+    try {
+      const r = await fetch(`/api/leads/${leadId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+      if (!r.ok) throw new Error((await lerErro(r)).mensagem);
+      const atualizado = (await r.json()) as LeadProspeccao;
+      setAndamento((a) => (a ? { ...a, leads: a.leads.map((l) => (l.id === leadId ? atualizado : l)) } : a));
+    } catch (e) {
+      setErroAcaoPessoa(e instanceof Error && e.name !== "TypeError" ? e.message : "Não foi possível salvar a alteração desta pessoa. Tente novamente.");
+    }
   }
 
   /** "Enviar para o CRM" do menu "•••" (US-033): mesma rota já usada por `AbordagemLead.tsx` (US-032). */
@@ -580,8 +630,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
     baixarCSV(cabecalho, linhas, "leads.csv");
   }
 
-  const indiceEtapaAtual = andamento ? ETAPAS_PROSPECCAO.findIndex((e) => e.chave === andamento.prospeccao.etapa) : -1;
-  const nomeDaProspeccao = andamento ? nomeProspeccao(andamento.produtoNome, andamento.prospeccao.modo, andamento.prospeccao.criterios) : "";
+  const nomeDaProspeccao = andamento ? `${({ pessoas: "Pessoas", empresas: "Empresas", empresa_unica: "Pesquisa de empresa", oportunidades: "Oportunidades" })[andamento.prospeccao.modo]} para ${andamento.produtoNome}` : "";
   const recorte = andamento ? recorteProspeccao(andamento.prospeccao.modo, andamento.prospeccao.criterios) : "";
   const funil = andamento ? funilContagens(andamento.leads) : null;
   const leadsFiltrados = andamento ? leadsNaAba(andamento.leads, aba) : [];
@@ -610,71 +659,72 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
           <Aviso tom="danger" acao={{ rotulo: "Nova prospecção", url: "/prospeccoes/nova" }}>
             Esta prospecção não existe mais.
           </Aviso>
+        ) : !andamento && erroAtualizacao ? (
+          <div role="alert">
+            <Aviso tom="danger" acao={semSessao ? { rotulo: "Entrar novamente", url: `/entrar?next=${encodeURIComponent(`/prospeccoes/${prospeccaoId}`)}` } : { rotulo: "Tentar novamente", onClick: () => setTentativa(t => t + 1) }}>
+              <p className="font-semibold mb-1">Não foi possível carregar a prospecção</p>
+              {erroAtualizacao}
+            </Aviso>
+          </div>
         ) : !andamento ? (
-          <div className="card p-6 flex flex-col gap-4" aria-hidden="true">
+          <div className="card p-6 flex flex-col gap-4" role="status" aria-label="Carregando prospecção">
+            <p className="text-sm text-muted">Carregando sua prospecção…</p>
             {[0, 1, 2].map((i) => (
               <span key={i} className="skeleton block w-full h-11" />
             ))}
           </div>
         ) : (
           <>
-            <div className="flex items-baseline justify-between gap-4 flex-wrap mb-1.5">
-              <h1 className="titulo-painel !mb-0">{nomeDaProspeccao}</h1>
-              <button type="button" className="btn-link text-[13px] text-danger" onClick={apagar} disabled={apagando}>
-                {apagando ? "Apagando…" : "Apagar"}
-              </button>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap mb-2">
-              <Chip nivel="neutral">{ROTULO_MODO[andamento.prospeccao.modo]}</Chip>
-              {andamento.prospeccao.demo && <Chip nivel="cinza">Exemplo</Chip>}
-              <span className="text-[13px] text-muted">{data(andamento.prospeccao.criadoEm, { comAno: true })}</span>
-            </div>
-            <p className="text-[13px] text-muted mb-5 line-clamp-2">
-              {andamento.produtoNome} · {andamento.icpNome}
-              {recorte && ` · ${recorte}`}
-              {" · "}
-              <Link href={`/produtos/${andamento.prospeccao.produtoId}/icps/${andamento.prospeccao.icpId}`} className="btn-link text-[13px]">Editar perfil ideal</Link>
-            </p>
+            <Link href="/prospeccoes" className="inline-flex items-center gap-2 text-sm text-muted hover:text-accent-ink mb-5 min-h-8">← Prospecções</Link>
+            <header className="mb-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <h1 className="text-2xl md:text-[28px] leading-tight font-extrabold tracking-tight break-words line-clamp-2" title={nomeDaProspeccao}>{nomeDaProspeccao}</h1>
+                  <div className="flex items-center gap-2 flex-wrap mt-3">
+                    <Chip nivel="neutral">{ROTULO_MODO[andamento.prospeccao.modo]}</Chip>
+                    {andamento.prospeccao.demo && <Chip nivel="cinza">Exemplo</Chip>}
+                    <span className="text-xs text-muted">Criada em {data(andamento.prospeccao.criadoEm, { comAno: true })}</span>
+                  </div>
+                </div>
+                <button type="button" className="size-11 shrink-0 grid place-items-center rounded-xl border border-line text-muted hover:text-danger hover:border-danger/30 hover:bg-danger/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50" onClick={apagar} disabled={apagando} aria-label={apagando ? "Excluindo prospecção" : "Excluir prospecção"} title="Excluir prospecção">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" /></svg>
+                </button>
+              </div>
+              <details className="mt-4 rounded-xl border border-line bg-surface px-4 py-3">
+                <summary className="text-sm cursor-pointer"><span className="font-semibold">Perfil e critérios</span><span className="text-muted ml-2">Ver detalhes da busca</span></summary>
+                <div className="mt-3 text-sm leading-relaxed break-words">
+                  <p className="font-semibold mb-1">{andamento.icpNome}</p>
+                  {recorte && <p className="text-muted">{recorte}</p>}
+                  <Link href={`/produtos/${andamento.prospeccao.produtoId}/icps/${andamento.prospeccao.icpId}`} className="btn-link inline-block mt-3 text-sm">Editar perfil ideal</Link>
+                </div>
+              </details>
+            </header>
+            {erroApagar && <div role="alert" className="mb-4"><Aviso tom="danger">{erroApagar}</Aviso></div>}
+            {erroAtualizacao && <div role="alert" className="mb-4"><Aviso tom="warn" acao={semSessao ? { rotulo: "Entrar novamente", url: `/entrar?next=${encodeURIComponent(`/prospeccoes/${prospeccaoId}`)}` } : { rotulo: "Atualizar agora", onClick: () => setTentativa(t => t + 1) }}>
+              <p className="font-semibold mb-1">O andamento pode estar desatualizado</p>
+              {erroAtualizacao}
+            </Aviso></div>}
+            {andamento.prospeccao.estado !== "rascunho" && <ProgressoProspeccao prospeccao={andamento.prospeccao} jornada={andamento.jornada} consultas={andamento.consultas ?? []} decisoes={andamento.decisoes ?? []} contas={andamento.contasEncontradas} pessoas={andamento.leadsEncontrados} ultimoContato={ultimoContato} semAtualizacao={!!erroAtualizacao} cancelando={cancelando} onCancelar={cancelar} />}
+            {erroCancelar && <div role="alert" className="mb-4"><Aviso tom="danger">{erroCancelar}</Aviso></div>}
+            {erroAcaoPessoa && <div role="alert" className="mb-4"><Aviso tom="danger">{erroAcaoPessoa}</Aviso></div>}
             {funil && funil.encontrados > 0 && <FunilResumo funil={funil} aba={filtraLeads ? aba : undefined} onAba={filtraLeads ? setAba : undefined} />}
 
-            {(andamento.prospeccao.estado === "executando" || andamento.prospeccao.estado === "pronta") && (
-              <div className="card p-6 flex flex-col gap-4 mb-4">
-                <ol className="flex flex-col gap-3">
-                  {ETAPAS_PROSPECCAO.map((etapa, i) => {
-                    const concluida = andamento.prospeccao.estado === "pronta" || i < indiceEtapaAtual;
-                    const atual = andamento.prospeccao.estado === "executando" && i === indiceEtapaAtual;
-                    return (
-                      <li key={etapa.chave} className="flex items-center gap-3">
-                        <span
-                          className={`shrink-0 w-5 h-5 rounded-full grid place-items-center text-[11px] font-bold ${
-                            concluida ? "bg-ok text-white" : atual ? "border-2 border-accent" : "border-2 border-line"
-                          }`}
-                          aria-hidden="true"
-                        >
-                          {concluida ? "✓" : ""}
-                        </span>
-                        <span className={concluida ? "text-ink" : atual ? "text-ink font-semibold" : "text-muted"}>{etapa.rotulo}</span>
-                        {atual && <span className="text-[12px] text-accent-ink" aria-live="polite">Em andamento…</span>}
-                      </li>
-                    );
-                  })}
-                </ol>
-                <p className="text-[13px] text-muted">
-                  {andamento.contasEncontradas} empresas · {andamento.leadsEncontrados} pessoas encontradas até agora
-                </p>
-              </div>
+            {!!andamento.decisoes?.length && (
+              <details className="card px-5 py-4 mb-4">
+                <summary className="text-sm font-semibold cursor-pointer">Como a pesquisa foi conduzida</summary>
+                <ol className="mt-4 space-y-3 text-sm text-muted">{andamento.decisoes.map(d => <li key={d.id} className="border-l-2 border-line pl-3"><time className="text-xs tabular-nums mr-2" dateTime={d.criadoEm}>{new Date(d.criadoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</time>{d.mensagem}</li>)}</ol>
+              </details>
             )}
-
             {!!andamento.consultas?.length && (
-              <details className="card p-5 mb-4" open={andamento.prospeccao.estado === "falhou" || (!andamento.leadsEncontrados && !andamento.contasEncontradas && andamento.prospeccao.estado === "pronta")}>
+              <details id="fontes-consultadas" className="card p-5 mb-4 scroll-mt-6" open={andamento.prospeccao.estado === "falhou" || (!andamento.leadsEncontrados && !andamento.contasEncontradas && andamento.prospeccao.estado === "pronta")}>
                 <summary className="font-semibold text-sm cursor-pointer">Fontes consultadas · {andamento.consultas.length} consultas</summary>
                 <p className="text-xs text-muted mt-3">Os resultados das fontes são candidatos. A lista final considera critérios, evidências e contatos já encontrados.</p>
                 <ul className="mt-3 flex flex-col gap-3">
                   {andamento.consultas.map(c => (
                     <li key={c.id} className="text-sm border-t border-line pt-3">
                       <div className="flex justify-between gap-3 flex-wrap">
-                        <span className="font-semibold">{({ brightdata: "Bright Data", exa: "Exa", tavily: "Tavily", searchapi: "SearchAPI", prospecthalo: "ProspectHalo", apollo: "Fonte anterior" } as Record<string, string>)[c.fonte] ?? c.fonte} · {c.acao === "busca" || c.acao === "search_engine" || c.acao === "prospecthalo_find_leads" ? "Busca" : "Leitura e enriquecimento"}</span>
-                        <span className={c.estado === "falhou" || c.estado === "limite" ? "text-danger" : "text-muted"}>{c.estado === "pendente" ? "Qualificação em andamento" : c.estado === "consultando" ? "Consultando…" : c.estado === "falhou" ? "Falha na consulta" : c.estado === "limite" ? "Limite atingido" : c.estado === "vazia" ? "Sem resultados" : `${c.quantidade} resultado(s)`}</span>
+                        <span className="font-semibold">{NOMES_FONTES[c.fonte] ?? c.fonte} · {nomeAcaoPesquisa(c.acao)}</span>
+                        <span className={c.estado === "falhou" || c.estado === "limite" ? "text-danger" : "text-muted"}>{c.estado === "pendente" ? "Qualificação em andamento" : c.estado === "consultando" ? (andamento.prospeccao.estado === "executando" ? "Consultando…" : "Sem conclusão registrada") : c.estado === "falhou" ? "Falha na consulta" : c.estado === "limite" ? "Limite atingido" : c.estado === "vazia" ? "Sem resultados" : `${c.quantidade} resultado(s)`}</span>
                       </div>
                       <p className="text-xs text-muted mt-1 break-words">{c.consulta}</p>
                       {c.mensagem && <p className="text-xs text-danger mt-1">{c.mensagem}</p>}
@@ -684,21 +734,12 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
               </details>
             )}
 
-            {andamento.prospeccao.estado === "executando" && (
-              <div className="flex flex-col gap-3">
-                <button type="button" className="btn-ghost self-start !w-auto" onClick={cancelar} disabled={cancelando}>
-                  {cancelando ? "Cancelando…" : "Cancelar"}
-                </button>
-                {erroCancelar && <Aviso tom="danger">{erroCancelar}</Aviso>}
-              </div>
-            )}
-
             {andamento.prospeccao.estado === "pronta" && (
               <div className="flex flex-col gap-3">
-                <p className="font-semibold text-[15px]">{andamento.prospeccao.erro ? "Prospecção concluída com ressalvas" : "Prospecção concluída"}</p>
+                <h2 className="font-bold text-lg">Próximo passo</h2>
                 {andamento.prospeccao.erro && <Aviso tom="warn">{andamento.prospeccao.erro}</Aviso>}
                 <p className="text-[13px] text-muted">
-                  {andamento.contasEncontradas} empresas e {andamento.leadsEncontrados} pessoas encontradas.
+                  {andamento.consultas?.some(c => c.estado === "pendente") ? "O ProspectHalo ainda está preparando candidatos. Use Consultar resultados pendentes para recuperar a mesma busca e confira os perfis já disponíveis." : andamento.leadsEncontrados > 0 ? "Confira os perfis encontrados, valide as evidências e abra uma pessoa para preparar uma abordagem personalizada." : andamento.contasEncontradas > 0 ? "Confira as empresas e use Ver pessoas para encontrar quem decide em cada uma." : "Revise os cargos, amplie a localização ou simplifique os critérios antes de tentar novamente."}
                 </p>
 
                 {andamento.prospeccao.modo === "empresas" && (
@@ -826,27 +867,32 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                   </div>
                 )}
 
-                <div className="flex items-center gap-3.5">
+                <div className="flex items-center flex-wrap gap-3.5">
                   <Link href="/leads" className="btn-link text-[13px]">Ver leads</Link>
+                  <Link href={`/prospeccoes/nova?produtoId=${andamento.prospeccao.produtoId}&icpId=${andamento.prospeccao.icpId}`} className="btn-link text-[13px]">Ajustar critérios</Link>
                   <button type="button" className="btn-link text-[13px]" onClick={repetir} disabled={repetindo}>
-                    {repetindo ? "Repetindo…" : "Repetir prospecção"}
+                    {repetindo ? "Iniciando…" : andamento.consultas?.some(c => c.estado === "pendente") ? "Consultar resultados pendentes" : "Repetir prospecção"}
                   </button>
                 </div>
                 {erroRepetir && <Aviso tom="danger">{erroRepetir}</Aviso>}
               </div>
             )}
 
-            {andamento.prospeccao.estado === "falhou" && (
+            {(andamento.prospeccao.estado === "falhou" || andamento.prospeccao.estado === "cancelada") && (
               <div className="flex flex-col gap-3">
-                <Aviso tom="danger" acao={{ rotulo: repetindo ? "Repetindo…" : "Repetir", onClick: repetir }}>
-                  {andamento.prospeccao.erro ?? "Não foi possível concluir esta prospecção."}
+                <Aviso tom={andamento.prospeccao.estado === "falhou" ? "danger" : "warn"}>
+                  {andamento.prospeccao.erro ?? "A busca foi cancelada. Os resultados encontrados até aqui foram preservados."}
                 </Aviso>
-                {erroRepetir && <Aviso tom="danger">{erroRepetir}</Aviso>}
+                <p className="text-sm text-muted">Confira as fontes e os critérios antes de repetir. Uma nova busca será criada, preservando este histórico.</p>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button type="button" className="btn-ghost !text-sm" onClick={repetir} disabled={repetindo}>{repetindo ? "Iniciando…" : "Tentar novamente"}</button>
+                  <Link href={`/prospeccoes/nova?produtoId=${andamento.prospeccao.produtoId}&icpId=${andamento.prospeccao.icpId}`} className="btn-link text-sm">Ajustar critérios</Link>
+                  <Link href="/setup" className="btn-link text-sm">Verificar conexões</Link>
+                  {andamento.leads.length > 0 && <Link href="/leads" className="btn-link text-sm">Ver pessoas já encontradas</Link>}
+                </div>
+                {andamento.contas.length > 0 && <div className="card p-4"><p className="text-sm font-semibold mb-2">Empresas encontradas antes da interrupção</p><ul className="text-sm text-muted space-y-2">{andamento.contas.map(c => <li key={c.id}>{c.nome}</li>)}</ul></div>}
+                {erroRepetir && <div role="alert"><Aviso tom="danger">{erroRepetir}</Aviso></div>}
               </div>
-            )}
-
-            {andamento.prospeccao.estado === "cancelada" && (
-              <Aviso tom="warn">Esta prospecção foi cancelada.</Aviso>
             )}
           </>
         )}

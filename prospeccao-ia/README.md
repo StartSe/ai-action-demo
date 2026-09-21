@@ -56,11 +56,17 @@ A pontuação sugerida soma **60 pontos para critérios do ICP/personas e 40 par
 
 Validação automatizada usa fornecedores simulados, incluindo falhas, geração concorrente, retomada da tela, reinício do processo, remoção do lead e pontuação sem evidências. As telas foram verificadas em desktop e celular; chamadas reais dependem das chaves e permissões das contas conectadas.
 
-## Pesquisa complementar e ProspectHalo MCP — versão 0.4.0
+## Pesquisa adaptativa e acompanhamento — versão 0.5.0
 
 Conecte somente as fontes que deseja usar em Configurações. Exa oferece os modos automático, rápido, profundo (padrão) e profundo com raciocínio; Tavily oferece básico ou avançado (padrão). Cada cartão permite salvar a chave, testar a conexão e limitar consultas por prospecção. Os testes de conexão também consomem a cota do fornecedor.
 
-A busca web consulta **Exa, Bright Data, Tavily e SearchAPI** quando conectadas e dentro dos respectivos limites, mesmo se a primeira já trouxer resultados. Intercala os candidatos entre fornecedores, unifica URLs e conserva trechos complementares. A leitura de uma página usa Bright Data, Exa ou Tavily; trechos reais da busca servem como evidência limitada se a leitura não funcionar.
+A descoberta B2B de pessoas trabalha em **rodadas de até duas fontes**: ProspectHalo, dataset e Search Engine da Bright Data, Exa, Tavily e SearchAPI. Intercala resultados e unifica URLs. Para de consultar novas fontes quando há candidatos suficientes com contexto do cargo e da empresa; isso não equivale a qualificá-los. Se faltar informação, continua por outras fontes. A busca geral de empresas e sinais também consulta fontes em pares e combina os resultados.
+
+Com a IA conectada, uma revisão do plano pode reordenar as fontes restantes e propor até duas formas equivalentes de escrever o cargo. IDs fora das opções conectadas são rejeitados. Sem IA ou em caso de falha, a ordem padrão continua funcionando. Há no máximo oito estratégias de descoberta; não são iniciadas novas rodadas após três minutos. As chamadas já iniciadas respeitam seus próprios prazos.
+
+A verificação de perfis usa dois trabalhadores. Cargo e empresa já explícitos em dados estruturados são reaproveitados. Para lacunas, tenta LinkedIn Person Profile/Markdown, LinkedIn People Search por nome (se anunciado no catálogo e com os parâmetros exigidos), Exa Contents e Tavily Extract. Não repete uma leitura já registrada para o mesmo endereço. Homônimos só são associados pelo mesmo URL de perfil; extração por IA exige nome, cargo e empresa em citação literal verificável. Novos perfis deixam de ser agendados após cinco minutos.
+
+Exa usa a categoria `people` para perfis; Tavily combina trechos relevantes e conteúdo Markdown, com extração avançada; SearchAPI usa Google com operadores de busca e variações de consulta. Outras APIs dos fornecedores não são acionadas indiscriminadamente. Os tetos de cada fonte continuam valendo.
 
 Para contatos B2B, o ProspectHalo complementa a web e o dataset da Bright Data. O fluxo usa `list_dataset_fields` antes de montar filtros e só usa o dataset quando todos os filtros têm correspondência. Pessoas e empresas recebem evidências; sem confirmação de todos os critérios avaliados, o contato permanece pesquisado. A etapa de sinais também pesquisa notícias e páginas além do site institucional.
 
@@ -70,7 +76,7 @@ As ferramentas de contexto, ICP, contas LinkedIn, buscas e leitura de leads tamb
 
 Apollo fica oculto e não recebe novas chamadas, mesmo que uma chave antiga esteja salva. Registros históricos continuam legíveis.
 
-O acompanhamento mostra fontes consultadas, resultados candidatos, falhas e limites. Falha de fornecedor não aparece como busca concluída vazia; resultados parciais recebem ressalvas. Uma fonte real conectada nunca é substituída por dados de demonstração. Rotinas e notificações permanecem ocultas na interface.
+O acompanhamento mostra uma hierarquia compacta, contexto expansível, exclusão com confirmação, trabalho atual, decisões de pesquisa, fontes consultadas, resultados candidatos, falhas e limites. Os horários de início e fim de cada etapa ficam no banco, inclusive após recarregar ou cancelar. As estimativas são referências iniciais aproximadas, não médias históricas nem contagem regressiva garantida. Dados antigos sem horário não recebem tempos inventados. A interface avisa se a etapa ultrapassar a estimativa ou se a atualização falhar, tenta reconectar e oferece ações para ajustar critérios, verificar conexões e repetir. Falha de fornecedor não aparece como busca concluída vazia; resultados parciais recebem ressalvas. Uma fonte real conectada nunca é substituída por dados de demonstração. Rotinas e notificações permanecem ocultas na interface.
 
 Os testes automatizados simulam as APIs externas, incluindo autenticação recusada, limites, respostas vazias e troca entre fontes. A validação com uma conta real depende das chaves salvas em Configurações.
 

@@ -1,5 +1,13 @@
 # Notas de versão
 
+## 0.5.0 — 2026-09-21
+
+- Tela de andamento com título compacto, contexto expansível, exclusão por ícone e confirmação, etapas por tipo de busca, tempos persistidos e estimativas aproximadas. Mostra trabalho atual, fontes, atraso e próximos passos para resultado vazio, parcial, cancelamento ou falha.
+- Atualização resiliente: prazo por requisição, novas tentativas sem sobreposição, aviso de dados desatualizados, reconexão e tratamento de sessão expirada. Falhas ao excluir ou alterar pessoas preservam os dados exibidos.
+- Pesquisa B2B adaptativa em rodadas de duas fontes: ProspectHalo MCP, dataset e Search Engine da Bright Data, Exa People Search, Tavily e SearchAPI. Para a descoberta quando há contexto suficiente; a IA pode reordenar fontes e sugerir até duas variações de cargo, sem alterar os critérios de qualificação.
+- Verificação de perfis em dois trabalhadores, com LinkedIn Person Profile, LinkedIn People Search por nome conforme o catálogo MCP, Markdown, Exa Contents e Tavily Extract. Reaproveita informações completas, evita leituras repetidas e só associa registros ao mesmo perfil. Extração por IA exige citação verificável.
+- Histórico das decisões de pesquisa, limites de consultas e de novas rodadas, preservação de resultados parciais e interrupção após cancelamento. APIs externas validadas com respostas simuladas; a validação de qualidade com fornecedores reais depende das credenciais do ambiente.
+
 ## 0.4.0 — 2026-09-21
 
 - Mensagens com descrição e aplicações do produto, contexto da empresa, fontes, citações e lacunas explícitas. Abertura concreta, hipótese sem afirmação indevida e pergunta específica substituem o convite genérico padrão.

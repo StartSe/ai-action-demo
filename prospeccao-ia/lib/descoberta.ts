@@ -142,7 +142,7 @@ export function descobertaAtiva(): boolean {
 export async function listarAcoesPesquisa(): Promise<FerramentaMCP[]> {
   const opcionais = fontesOpcionais();
   const acoes: FerramentaMCP[] = opcionais.flatMap(fonte => [
-    { nome: `${fonte}_search`, descricao: `Pesquisa na web via ${FONTES[fonte]}.`, schema: { type: "object", properties: { consulta: { type: "string" }, pagina: { type: "integer", minimum: 0, maximum: 4 } }, required: ["consulta"] } },
+    { nome: `${fonte}_search`, descricao: `Pesquisa na web via ${FONTES[fonte]}. Exa permite focar em pessoas, empresas e notícias; Tavily permite notícias; SearchAPI aceita operadores Google como site:, intitle:, aspas e OR.`, schema: { type: "object", properties: { consulta: { type: "string" }, pagina: { type: "integer", minimum: 0, maximum: 4 }, categoria: { type: "string", enum: ["people", "company", "news"] } }, required: ["consulta"] } },
     ...(fonte === "searchapi" ? [] : [{ nome: `${fonte}_read`, descricao: `Lê uma página pública via ${FONTES[fonte]}.`, schema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } }]),
   ]);
   if (prospectHaloAtivo()) {
@@ -166,7 +166,9 @@ export async function executarAcaoPesquisa(nome: string, argumentos: Record<stri
       const consulta = typeof argumentos.consulta === "string" ? argumentos.consulta.trim() : "";
       const pagina = argumentos.pagina ?? 0;
       if (!consulta || !Number.isInteger(pagina) || Number(pagina) < 0 || Number(pagina) > 4) throw new ErroDescoberta("servico_fora", "Informe uma consulta e uma página válida (0 a 4).", 400);
-      return consultarOpcional(fonte, "busca", consulta, prospeccaoId, () => buscarFonte(fonte, consulta, Number(pagina)));
+      const categoria = argumentos.categoria;
+      if (categoria !== undefined && categoria !== "people" && categoria !== "company" && categoria !== "news") throw new ErroDescoberta("servico_fora", "Informe uma categoria de pesquisa válida.", 400);
+      return consultarOpcional(fonte, "busca", consulta, prospeccaoId, () => buscarFonte(fonte, consulta, Number(pagina), undefined, categoria));
     }
     if (fonte === "searchapi") throw new ErroDescoberta("servico_fora", "SearchAPI oferece busca; use outra fonte para leitura.", 400);
     const url = typeof argumentos.url === "string" ? argumentos.url : "";
@@ -211,7 +213,7 @@ async function consultarOpcional<T extends string | ResultadoBuscaWeb[]>(fonte: 
 
 // --- Busca na web --------------------------------------------------------------------------------
 
-export type ResultadoBuscaWeb = { titulo: string; url: string; resumo: string; fontes?: string[]; pessoa?: { nome: string; cargo: string; empresa: string; cidade: string; site: string } };
+export type ResultadoBuscaWeb = { titulo: string; url: string; resumo: string; fontes?: string[]; conteudoPerfil?: string; pessoa?: { nome: string; cargo: string; empresa: string; cidade: string; site: string } };
 
 /** Intercala fornecedores para que o corte de candidatos não favoreça apenas a primeira fonte. */
 export function combinarResultados(lotes: ResultadoBuscaWeb[][]): ResultadoBuscaWeb[] {
@@ -224,6 +226,9 @@ export function combinarResultados(lotes: ResultadoBuscaWeb[][]): ResultadoBusca
       try {
         const u = new URL(item.url);
         u.hash = ""; u.hostname = u.hostname.replace(/^www\./, "");
+        if ((u.hostname === "linkedin.com" || u.hostname.endsWith(".linkedin.com")) && u.pathname.startsWith("/in/")) {
+          u.hostname = "linkedin.com"; u.pathname = u.pathname.toLowerCase(); u.search = "";
+        }
         for (const k of [...u.searchParams.keys()]) if (/^utm_|^(trk|trackingId|gclid|fbclid)$/.test(k)) u.searchParams.delete(k);
         chave = `${u.hostname}${u.pathname.replace(/\/$/, "")}${u.search}`;
       } catch { continue; }
@@ -231,6 +236,8 @@ export function combinarResultados(lotes: ResultadoBuscaWeb[][]): ResultadoBusca
       if (!anterior) unicos.set(chave, { ...item });
       else {
         anterior.fontes = [...new Set([...(anterior.fontes ?? []), ...(item.fontes ?? [])])];
+        if (!anterior.pessoa && item.pessoa) anterior.pessoa = item.pessoa;
+        if (!anterior.conteudoPerfil && item.conteudoPerfil) anterior.conteudoPerfil = item.conteudoPerfil;
         if (item.resumo && !anterior.resumo.includes(item.resumo)) anterior.resumo = [anterior.resumo, item.resumo].filter(Boolean).join("\n").slice(0, 12000);
       }
     }
@@ -253,8 +260,9 @@ export async function buscarNaWeb(consulta: string, pagina = 0, prospeccaoId?: s
   const fontes = [...(opcionais.includes("exa") ? ["exa" as const] : []), ...(brightDataAtiva() ? ["brightdata" as const] : []), ...opcionais.filter(f => f !== "exa")];
   let ultimaFalha: unknown;
   const lotes: ResultadoBuscaWeb[][] = [];
-  for (const fonte of fontes) {
-    try {
+  // Duas fontes por vez: falhas isoladas não descartam respostas válidas.
+  for (let i = 0; i < fontes.length; i += 2) {
+    const respostas = await Promise.allSettled(fontes.slice(i, i + 2).map(async fonte => {
       const itens = fonte === "brightdata"
         ? resultadosOrganicos(await executarAcaoPesquisa("search_engine", { query: consulta, engine: "google", ...(pagina > 0 ? { cursor: String(pagina) } : {}) }, prospeccaoId))
         : await consultarOpcional(fonte, "busca", consulta, prospeccaoId, () => buscarFonte(fonte, consulta, pagina));
@@ -265,8 +273,12 @@ export async function buscarNaWeb(consulta: string, pagina = 0, prospeccaoId?: s
           return (url.hostname === alvo.hostname || url.hostname.endsWith(`.${alvo.hostname}`)) && url.pathname.startsWith(alvo.pathname);
         } catch { return false; }
       }) : itens;
-      lotes.push(filtrados.map(item => ({ ...item, fontes: [fonte] })));
-    } catch (erro) { ultimaFalha = erro; }
+      return filtrados.map(item => ({ ...item, fontes: [fonte] }));
+    }));
+    for (const resposta of respostas) {
+      if (resposta.status === "fulfilled") lotes.push(resposta.value);
+      else ultimaFalha = resposta.reason;
+    }
   }
   const itens = combinarResultados(lotes);
   if (itens.length) return { itens, origem, consultadoEm, demo: false };

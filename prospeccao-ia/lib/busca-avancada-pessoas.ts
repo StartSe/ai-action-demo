@@ -46,12 +46,12 @@ export function perfisDoDataset(hits: unknown): RespostaBusca["itens"] {
     if (!nome) return [];
     const cargo = texto(dados.position) || texto(dados.job_title);
     const empresa = texto(dados.current_company_name) || texto(objeto(dados.current_company).name) || texto(dados.company_name);
-    return [{ titulo: [nome, cargo, empresa].filter(Boolean).join(" - "), url, resumo: [texto(dados.about), texto(dados.location), texto(dados.city), texto(dados.country_code)].filter(Boolean).join(" · ").slice(0, 3000) }];
+    return [{ pessoa: { nome, cargo, empresa, cidade: texto(dados.location) || texto(dados.city), site: texto(objeto(dados.current_company).website) }, conteudoPerfil: JSON.stringify(dados).slice(0, 12000), titulo: [nome, cargo, empresa].filter(Boolean).join(" - "), url, resumo: [texto(dados.about), texto(dados.location), texto(dados.city), texto(dados.country_code)].filter(Boolean).join(" · ").slice(0, 3000) }];
   });
 }
 
 /** Busca estruturada primeiro; indisponibilidade, campos incompatíveis ou lista vazia usam a web. */
-export async function buscarPessoasAvancada(consulta: string, filtros: FiltrosPessoas, prospeccaoId: string): Promise<RespostaBusca> {
+export async function buscarPessoasAvancada(consulta: string, filtros: FiltrosPessoas, prospeccaoId: string, somenteDataset = false): Promise<RespostaBusca> {
   let resultadoDataset: RespostaBusca | undefined;
   if (brightDataAtiva()) {
     try {
@@ -83,6 +83,7 @@ export async function buscarPessoasAvancada(consulta: string, filtros: FiltrosPe
       // executarAcaoPesquisa já registra a falha sem expor credenciais. A web é a alternativa.
     }
   }
+  if (somenteDataset) return resultadoDataset ?? { itens: [], origem: "Bright Data · base de perfis públicos", consultadoEm: new Date().toISOString(), demo: false };
   try {
     const web = await buscarNaWeb(consulta, 0, prospeccaoId);
     return resultadoDataset ? { ...web, itens: combinarResultados([resultadoDataset.itens, web.itens]) } : web;

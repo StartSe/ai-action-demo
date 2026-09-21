@@ -136,12 +136,13 @@ export interface Prospeccao {
   criterios: Record<string, unknown>;
   estado: EstadoProspeccao;
   etapa: string | null;
+  temposEtapas?: import("./andamento-prospeccao").TemposEtapas;
   erro: string | null;
   demo: boolean;
   criadoEm: string;
   concluidoEm: string | null;
 }
-export type NovaProspeccao = Omit<Prospeccao, "id" | "criadoEm" | "concluidoEm" | "demo"> & { concluidoEm?: string | null; demo?: boolean };
+export type NovaProspeccao = Omit<Prospeccao, "id" | "criadoEm" | "concluidoEm" | "demo" | "temposEtapas"> & { concluidoEm?: string | null; demo?: boolean };
 
 /** Conta = empresa descoberta numa prospecção B2B (nome próprio para não colidir com a conta de administrador de lib/conta.ts). */
 export interface Conta {
