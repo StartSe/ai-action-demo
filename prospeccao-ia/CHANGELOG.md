@@ -1,5 +1,11 @@
 # Notas de versão
 
+## 0.5.1 — 2026-09-21
+
+- Enriquecimento não encerra apenas por já haver nome, cargo e empresa: prioriza LinkedIn Person Profile para obter contexto profissional adicional, reaproveitando perfis detalhados já coletados.
+- Perfil indisponível ou raso aciona até duas buscas por nome completo entre aspas e endereço do LinkedIn nas fontes conectadas. Só incorpora conteúdo que retorna o mesmo perfil e o nome completo, mantendo a origem e evitando homônimos.
+- Preserva cidade e site ao complementar os dados, evita repetir consultas e respeita cancelamento e limites existentes. Testes simulam perfil completo, busca nominal, falhas, homônimos, cache e cancelamento.
+
 ## 0.5.0 — 2026-09-21
 
 - Tela de andamento com título compacto, contexto expansível, exclusão por ícone e confirmação, etapas por tipo de busca, tempos persistidos e estimativas aproximadas. Mostra trabalho atual, fontes, atraso e próximos passos para resultado vazio, parcial, cancelamento ou falha.

@@ -213,7 +213,7 @@ async function consultarOpcional<T extends string | ResultadoBuscaWeb[]>(fonte: 
 
 // --- Busca na web --------------------------------------------------------------------------------
 
-export type ResultadoBuscaWeb = { titulo: string; url: string; resumo: string; fontes?: string[]; conteudoPerfil?: string; pessoa?: { nome: string; cargo: string; empresa: string; cidade: string; site: string } };
+export type ResultadoBuscaWeb = { titulo: string; url: string; resumo: string; fontes?: string[]; conteudoPerfil?: string; contextoProfissional?: boolean; perfilPesquisado?: boolean; pessoa?: { nome: string; cargo: string; empresa: string; cidade: string; site: string } };
 
 /** Intercala fornecedores para que o corte de candidatos não favoreça apenas a primeira fonte. */
 export function combinarResultados(lotes: ResultadoBuscaWeb[][]): ResultadoBuscaWeb[] {
