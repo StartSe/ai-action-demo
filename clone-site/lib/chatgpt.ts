@@ -141,7 +141,7 @@ export class ChatGPTBridge {
       await this.rpc("initialize", {
         clientInfo: {
           name: "clone_site",
-          title: "Clone de Site",
+          title: "Site Cowork",
           version: "1.0.0",
         },
         capabilities: { experimentalApi: true },
@@ -243,7 +243,7 @@ export class ChatGPTBridge {
         id: m.id,
         error: {
           code: -32601,
-          message: "Esta operação não está habilitada no Clone de Site.",
+          message: "Esta operação não está habilitada no Site Cowork.",
         },
       });
       return;

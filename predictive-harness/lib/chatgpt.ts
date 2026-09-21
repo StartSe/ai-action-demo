@@ -142,7 +142,7 @@ export class ChatGPTBridge {
       await this.rpc("initialize", {
         clientInfo: {
           name: "predictive_harness",
-          title: "Predictive Harness",
+          title: "Cowork FPEA",
           version: "1.0.0",
         },
         capabilities: { experimentalApi: true },
@@ -244,7 +244,7 @@ export class ChatGPTBridge {
         id: m.id,
         error: {
           code: -32601,
-          message: "Esta operação não está habilitada no Predictive Harness.",
+          message: "Esta operação não está habilitada no Cowork FPEA.",
         },
       });
       return;

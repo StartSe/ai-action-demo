@@ -24,7 +24,11 @@
         "formulario",
         "rotina"
       ],
-      "demo": null
+      "demo": null,
+      "plano": "0.5c-512mb",
+      "discoGB": 1,
+      "discoGuarda": "a conta, as configurações, os PDIs, as entregas, as autoavaliações e os check-ins",
+      "versao": "0.1.0"
     },
     {
       "id": "agente-kanban",
@@ -268,7 +272,10 @@
         "plano": "0.5c-512mb",
         "discoGB": 1,
         "discoGuarda": "a conta, as configurações, a sessão ChatGPT, os questionários, os assessments, as respostas, os diagnósticos e os planos de ação"
-      }
+      },
+      "plano": "0.5c-512mb",
+      "discoGB": 1,
+      "discoGuarda": "a conta, as configurações, a sessão ChatGPT, os questionários, os assessments, as respostas, os diagnósticos e os planos de ação"
     },
     {
       "id": "simulador-vendas",
@@ -316,13 +323,13 @@
     },
     {
       "id": "clone-site",
-      "nome": "Clone de Site",
+      "nome": "Site Cowork",
       "areas": [
         "Marketing",
         "Produto"
       ],
-      "problema": "Montar uma página nova do zero leva semanas entre briefing, agência e ajustes.",
-      "ia": "Lê a captura, o endereço de um site ou o briefing e constrói a página seção a seção, mostrando o progresso; um agente edita ao vivo na prévia, publica e lê as métricas.",
+      "problema": "Criar, hospedar e melhorar o site exige coordenar criação, tecnologia e estratégia.",
+      "ia": "Seu colaborador cuida da criação, hospedagem e estratégia do site: constrói páginas, ajusta a marca, publica e acompanha métricas para propor melhorias.",
       "integracoes": "IA (OpenRouter ou ChatGPT). Opcional: publicação na Netlify e domínio próprio no Render.",
       "acento": "#792a3f",
       "porta": 3015,
@@ -333,26 +340,10 @@
       ],
       "demo": null,
       "independente": true,
-      "versao": "0.3.0"
-    },
-    {
-      "id": "prospeccao-linkedin",
-      "nome": "Prospecção no LinkedIn",
-      "areas": [
-        "Vendas"
-      ],
-      "problema": "Prospectar no LinkedIn consome horas por dia entre buscar perfis e escrever mensagem por mensagem.",
-      "ia": "A partir do cliente ideal, monta a lista de leads com sinal de intenção e escreve a sequência de mensagens de cada um.",
-      "integracoes": "IA (OpenRouter) para as mensagens; Prospect Halo (servidor MCP com OAuth) para buscar leads no seu LinkedIn e enviar as mensagens aprovadas; CRM (MCP) para mandar os leads escolhidos; Notificações (e-mail ou Slack) para receber leads novos toda semana. Sem o Prospect Halo, lista de exemplo.",
-      "acento": "#0a63c2",
-      "porta": 3016,
-      "captura": "capturas/prospeccao-linkedin.png",
-      "capacidades": [
-        "artefato",
-        "mcp",
-        "rotina"
-      ],
-      "demo": null
+      "versao": "0.3.0",
+      "plano": "0.5c-512mb",
+      "discoGB": 1,
+      "discoGuarda": "a conta, as configurações, a sessão ChatGPT, os sites, as versões das páginas e as imagens"
     },
     {
       "id": "videos-campanha",
@@ -480,13 +471,13 @@
     },
     {
       "id": "predictive-harness",
-      "nome": "Predictive Harness",
+      "nome": "Cowork FPEA",
       "areas": [
         "Finanças",
         "Gestão"
       ],
-      "problema": "Decidir se abre uma turma, quanto gastar em marketing ou onde está a margem depende de planilha refeita à mão, e resposta de IA sem conta verificável não entra em comitê.",
-      "ia": "Agente de planejamento financeiro por turma: você pergunta \"e se abrirmos uma turma?\", o motor faz a conta com premissas visíveis e editáveis, o modelo só escreve a leitura e o Jev decide e confere cada etapa.",
+      "problema": "Transformar dados em predições e decisões financeiras exige análises e cenários refeitos à mão.",
+      "ia": "Seu estrategista cria predições baseadas em dados e explora cenários financeiros, com premissas visíveis, cálculos verificáveis e decisões conferidas pelo Jev.",
       "integracoes": "ChatGPT por assinatura e OpenRouter (obrigatório: é onde vive o Jev, o modelo de decisões da TypeSafe). Disco persistente no Render.",
       "acento": "#2f4fb8",
       "porta": 3022,

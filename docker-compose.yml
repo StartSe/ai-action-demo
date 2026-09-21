@@ -116,13 +116,6 @@ services:
     ports: ["3015:10000"]
     volumes: [clone-site-dados:/app/data]
 
-  prospeccao-linkedin:
-    <<: *app
-    build: ./prospeccao-linkedin
-    image: ghcr.io/startse/prospeccao-linkedin:latest
-    ports: ["3016:10000"]
-    volumes: [prospeccao-linkedin-dados:/app/data]
-
   videos-campanha:
     <<: *app
     build: ./videos-campanha
@@ -186,7 +179,6 @@ volumes:
   simulador-vendas-dados:
   custos-ia-dados:
   clone-site-dados:
-  prospeccao-linkedin-dados:
   videos-campanha-dados:
   automl-pocket-dados:
   build-agentflows-dados:

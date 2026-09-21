@@ -64,19 +64,6 @@
   ],
   "contrasteBranco": 5.75
  },
- "prospeccao-linkedin": {
-  "segmento": "Vendas",
-  "acento": "#0a63c2",
-  "acento2": "#2047f3",
-  "soft": "#e7eff9",
-  "ink": "#083768",
-  "hsl": [
-   211,
-   90,
-   40
-  ],
-  "contrasteBranco": 5.87
- },
  "prospeccao-ia": {
   "segmento": "Vendas",
   "acento": "#0b5789",

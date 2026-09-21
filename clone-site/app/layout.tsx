@@ -5,8 +5,8 @@ import "./globals.css";
 const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: "Clone de Site · IA para Executivos",
-  description: "Transforme a captura de uma página de referência em uma página sua, em HTML, com a sua marca.",
+  title: "Site Cowork · IA para Executivos",
+  description: "Seu colaborador para criação, hospedagem e estratégia do site. Crie páginas, publique e acompanhe os resultados.",
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };

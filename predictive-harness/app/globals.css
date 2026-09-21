@@ -245,7 +245,7 @@ details pre { background: #f7f8fc; padding: 10px; border-radius: 8px; overflow: 
   .workspace.mostrar-harness .coluna.harness { display: flex; }
   .workspace.mostrar-harness .coluna.conversa { display: none; }
   .topbar { padding: 0 10px; gap: 4px; }
-  .topbar .titulo, .topbar .rotulo, .topbar .grow .chip, .topbar .app-version { display: none; }
+  .topbar .titulo, .topbar .rotulo, .topbar .grow .chip { display: none; }
   .topbar .secondary { padding: 8px; }
   .logo.compact { font-size: 14px; }
   .cartoes, .form-row, .harness-resumo, .teste-jev { grid-template-columns: 1fr; }
@@ -360,3 +360,6 @@ details pre { background: #f7f8fc; padding: 10px; border-radius: 8px; overflow: 
   .planilha-detalhe .coluna-item { grid-template-columns: 1fr; }
   .planilha-detalhe .coluna-item select { grid-row: auto; }
 }
+
+.logo-wordmark { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.logo .app-version { padding: 0; border: 0; background: transparent; font-weight: 500; }

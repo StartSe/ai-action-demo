@@ -9,7 +9,6 @@ import { Base } from "./Base";
 import { Conversa } from "./Conversa";
 import { ComoCheguei } from "./ComoCheguei";
 import { Icon, IconButton, Logo, request } from "./ui";
-import { AppVersion } from "./AppVersion";
 type Status = { ai: boolean; demo: boolean; harness: boolean; integrations: { chatgpt: boolean; openrouter: boolean; jev: boolean } };
 export function Workspace() {
   const params = useSearchParams();
@@ -58,8 +57,7 @@ export function Workspace() {
       <header className="topbar">
         <Link href="/" aria-label="Início"><Logo compact /></Link>
         <div className="grow">
-          <span className="titulo">· Agente de FP&A</span>
-          <AppVersion />
+          <span className="titulo">· Estratégia baseada em dados</span>
           {status && (
             <span className={"chip " + (status.harness ? "ok" : "warn")}>
               <Icon name={status.harness ? "check" : "info"} size={12} /> {status.harness ? "Harness ligado" : status.integrations.jev ? "Jev pronto · falta o modelo de conversa" : status.ai ? "Modelo pronto · falta o OpenRouter (Jev)" : "Demonstração"}

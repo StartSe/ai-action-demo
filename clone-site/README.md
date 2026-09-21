@@ -1,4 +1,8 @@
-# Clone de Site
+# Site Cowork
+
+Seu colaborador para criação, hospedagem e estratégia do site.
+
+Os identificadores técnicos `clone-site` (pasta, imagem e serviço) continuam iguais para preservar as instalações e os volumes existentes.
 
 O site da sua empresa, no ar hoje — e um agente que cuida dele depois. Área: Marketing e Produto.
 
@@ -51,7 +55,7 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 - Publicar com um clique: https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-clone-site (o `render.yaml` desta pasta é gerado a partir do `catalogo.json` da raiz; não edite à mão).
 - Rodar sem construir: `docker run --rm -p 3015:10000 -v clone-site-dados:/app/data ghcr.io/startse/clone-site:latest` e abra http://localhost:3015.
 - Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
-- Health check em `/api/health`. No plano free o disco é efêmero: sites, imagens e configuração se perdem a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
+- Health check em `/api/health`. O Blueprint individual e o da suíte usam o plano pago `0.5c-512mb`, com disco de 1 GB em `/app/data` para manter conta, configurações, sessão ChatGPT, sites, versões e imagens entre reinícios e deploys. No Docker Compose, esse diretório também tem volume persistente.
 
 ## Sites: projetos com estado, geração em segundo plano e link por slug
 Toda página nasce como um **site** (`lib/projetos.ts`, tabela `projetos`): nome, marca, origem (`referencia`, `endereco` ou `briefing`), estado (`rascunho` → `gerando` → `pronto` | `falhou`; `falhou` → `gerando` em "Tentar de novo") e um `slug` legível, único na instância, derivado do nome. A página com as versões continua no histórico (`resultados`, tipo `pagina`); o site guarda `paginaId` e `versaoPublicada`.

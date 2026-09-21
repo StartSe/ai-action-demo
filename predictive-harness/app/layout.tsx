@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 export const metadata: Metadata = {
-  title: "Predictive Harness · IA para Executivos",
-  description: "Agente de FP&A: cenários por turma com premissas visíveis. O motor faz a conta, o modelo escreve, o Jev decide e verifica cada resposta.",
+  title: "Cowork FPEA · IA para Executivos",
+  description: "Seu estrategista para criar predições baseadas em dados. Explore cenários financeiros com premissas visíveis, cálculos verificáveis e decisões auditáveis.",
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (

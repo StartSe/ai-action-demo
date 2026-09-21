@@ -17,11 +17,11 @@ export default function Login() {
       <section className="auth-story">
         <Logo />
         <div>
-          <span className="eyebrow">Agente de FP&A com decisões auditáveis</span>
+          <span className="eyebrow">Seu estrategista de predições baseadas em dados</span>
           <h1>
-            A IA pensa e escreve.
+            Transforme dados em predições.
             <br />
-            <em>O harness decide e confere.</em>
+            <em>Planeje seu próximo movimento.</em>
           </h1>
           <p>Envie matrículas, custos e marketing, pergunte “e se abrirmos uma turma?” e veja a conta com premissas visíveis, a fórmula e cada decisão do caminho.</p>
           <div className="auth-flow">
@@ -35,7 +35,7 @@ export default function Login() {
             </div>
           </div>
         </div>
-        <small>Predictive Harness · IA para Executivos / StartSe</small>
+        <small>Cowork FPEA · IA para Executivos / StartSe</small>
       </section>
       <section className="auth-form">
         <div>

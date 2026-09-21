@@ -43,7 +43,7 @@ export async function perguntar({ system, prompt, forte = false, maxTokens = 300
     headers: {
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
-      "X-Title": "Predictive Harness",
+      "X-Title": "Cowork FPEA",
       "HTTP-Referer": "https://github.com/StartSe/ai-action-demo",
     },
     body: JSON.stringify({

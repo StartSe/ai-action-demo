@@ -14,9 +14,9 @@ import type { Projeto } from "@/lib/types";
 
 // Textos do hero (economia de texto: título ≤ 8 palavras, apoio ≤ 20 — ver CLAUDE.md).
 const PROMESSA = {
-  sobretitulo: "Marketing e Produto",
-  titulo: "O site da sua empresa, no ar hoje",
-  apoio: "Cole um endereço, solte uma captura ou descreva a empresa. Refine depois conversando com o agente.",
+  sobretitulo: "Criação, hospedagem e estratégia",
+  titulo: "Um colaborador para cuidar do seu site",
+  apoio: "Da criação à hospedagem e à estratégia: converse com seu colaborador para construir, publicar e melhorar seu site.",
 };
 
 export default function Page() {

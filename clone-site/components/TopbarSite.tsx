@@ -5,7 +5,7 @@
 import { Topbar, useStatus } from "./ui";
 import { useAvisos } from "./useAvisos";
 
-export const MARCA_APP = { marca: "C", nome: "Clone de Site", area: "Marketing e Produto" } as const;
+export const MARCA_APP = { marca: "S", nome: "Site Cowork", area: "Criação, hospedagem e estratégia" } as const;
 export const RESUMO_DEMO = "Modo demonstração: o site exibido é um exemplo.";
 
 export function TopbarSite() {

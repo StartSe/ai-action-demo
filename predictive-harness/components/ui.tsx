@@ -1,4 +1,5 @@
 "use client";
+import { AppVersion } from "./AppVersion";
 import { useEffect, useRef, type ReactNode } from "react";
 export function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
@@ -96,7 +97,7 @@ export function Logo({ compact = false }: { compact?: boolean }) {
       <span className="logo-mark">
         <Icon name="harness" size={compact ? 19 : 23} />
       </span>
-      Predictive Harness
+      <span className="logo-wordmark">Cowork FPEA<AppVersion /></span>
     </span>
   );
 }

@@ -27,6 +27,7 @@ export function MarcaBussola() {
       </span>
       <div>
         bússola<span>INOVAÇÃO + INTELIGÊNCIA</span>
+        <small className="obs-version" aria-label={`Versão ${version}`}>v{version}</small>
       </div>
     </Link>
   );
@@ -193,8 +194,7 @@ export function EstruturaObservatorio({
           {children}
           <footer className="obs-footer">
             <span>
-              BÚSSOLA <span aria-label={`Versão ${version}`}>v{version}</span>{" "}
-              <i>/</i> clareza para transformar.
+              BÚSSOLA <i>/</i> clareza para transformar.
             </span>
             <span>
               Feito para quem move o futuro <span>↗</span>

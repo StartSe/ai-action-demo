@@ -1,7 +1,7 @@
-# Blueprint de publicação de Predictive Harness (especificação: https://render.com/docs/blueprint-spec)
+# Blueprint de publicação de Cowork FPEA (especificação: https://render.com/docs/blueprint-spec)
 # Imagem pública publicada pelo GitHub Actions em ghcr.io/startse/predictive-harness:latest.
-# Este app exige o plano starter (pago) e cria um disco de 1 GB em /app/data, onde ficam planilhas, conversas, decisões do harness, conta e credenciais.
-# Crie sua conta, explore a planilha de exemplo e abra Configurações para conectar o ChatGPT e o OpenRouter (o Jev vive nele). Depois envie uma planilha CSV ou JSON e pergunte.
+# Este app exige o plano starter (pago) e cria um disco de 1 GB em /app/data, onde ficam planilhas, premissas por produto, conversas, decisões do harness, conta e credenciais.
+# Crie sua conta e explore a escola de negócios de exemplo: contribuição por turma, cenário de nova turma, meta reversa de marketing e ponto de equilíbrio. Em Configurações conecte o ChatGPT e o OpenRouter (o Jev vive nele). Depois envie suas planilhas de matrículas, custos e marketing e confirme o papel de cada coluna.
 services:
   - type: web
     name: predictive-harness
@@ -14,7 +14,7 @@ services:
     envVars:
       - key: PORT
         value: "10000"
-    # Planilhas, conversas, decisões do harness, conta e credenciais ficam em /app/data e sobrevivem a deploys.
+    # Planilhas, premissas por produto, conversas, decisões do harness, conta e credenciais ficam em /app/data e sobrevivem a deploys.
     disk:
       name: predictive-harness-dados
       mountPath: /app/data

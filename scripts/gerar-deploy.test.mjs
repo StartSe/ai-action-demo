@@ -24,7 +24,11 @@ function gerar(t, alterar = () => {}) {
 }
 
 test("publica opções gratuita e persistente sem duplicar o app ou alterar a suíte", (t) => {
-  const { resultado, ler, catalogo } = gerar(t);
+  const { resultado, ler, catalogo } = gerar(t, (app) => {
+    delete app.plano;
+    delete app.discoGB;
+    delete app.discoGuarda;
+  });
   assert.equal(resultado.status, 0, resultado.stderr);
   const gratuito = ler("publico/deploy-bussola-ia/render.yaml");
   const persistente = ler("publico/deploy-bussola-ia-persistente/render.yaml");
@@ -64,5 +68,32 @@ for (const [caso, alterar] of [
     const { resultado } = gerar(t, alterar);
     assert.notEqual(resultado.status, 0);
     assert.match(resultado.stderr, /persistencia exige plano pago válido/);
+  });
+}
+
+for (const id of ["bussola-ia", "pdi-time", "predictive-harness", "clone-site"]) {
+  test(`${id}: mantém disco na instalação individual e na suíte`, (t) => {
+    const { resultado, ler, catalogo } = gerar(t);
+    assert.equal(resultado.status, 0, resultado.stderr);
+    const app = catalogo.apps.find((a) => a.id === id);
+    assert.notEqual(app.plano, "free");
+    assert.equal(app.discoGB, 1);
+    const disco = `    disk:\n      name: ${id}-dados\n      mountPath: /app/data\n      sizeGB: 1`;
+    for (const caminho of [`${id}/render.yaml`, `publico/deploy-${id}/render.yaml`, "render.yaml", "publico/main/render.yaml"]) {
+      const servico = ler(caminho).split("  - type: web\n").find((s) => s.startsWith(`    name: ${id}\n`));
+      assert.ok(servico, `${caminho}: serviço ausente`);
+      assert.ok(servico.includes(`    plan: ${app.plano}\n`), caminho);
+      assert.ok(servico.includes(disco), caminho);
+    }
+    const readme = ler(`publico/deploy-${id}/README.md`);
+    assert.match(readme, /Exige plano pago/);
+    assert.doesNotMatch(readme, /Teste gratuito, sem volume/);
+    const linha = ler("publico/main/README.md").split("\n").find((l) => l.includes(`/tree/deploy-${id})`));
+    assert.ok(linha);
+    assert.doesNotMatch(linha, /Teste gratuito, sem volume/);
+    if (id === "bussola-ia") {
+      assert.equal(ler("bussola-ia/render.yaml"), ler("bussola-ia/render-persistente.yaml"));
+      assert.equal(ler("publico/deploy-bussola-ia/render.yaml"), ler("publico/deploy-bussola-ia-persistente/render.yaml"));
+    }
   });
 }

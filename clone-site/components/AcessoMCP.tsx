@@ -125,7 +125,7 @@ export function AcessoMCP() {
           <ol className="text-[13px] text-muted list-decimal pl-5 space-y-1">
             <li>Abra Configurações → Conectores → &quot;Adicionar conector personalizado&quot; → &quot;Editar configuração&quot;.</li>
             <li>Clique em &quot;Copiar configuração&quot; abaixo e cole no arquivo que abrir.</li>
-            <li>Salve e reinicie o Claude Desktop: o Clone de Site aparece na lista de conectores.</li>
+            <li>Salve e reinicie o Claude Desktop: o Site Cowork aparece na lista de conectores.</li>
           </ol>
         </div>
         <div>
@@ -133,7 +133,7 @@ export function AcessoMCP() {
           <ol className="text-[13px] text-muted list-decimal pl-5 space-y-1">
             <li>Abra Configurações → Conectores → &quot;Criar&quot; (conector personalizado).</li>
             <li>Cole o Endereço acima em &quot;URL&quot; e, em &quot;Autenticação&quot;, escolha &quot;Chave de acesso&quot; e cole o código gerado acima.</li>
-            <li>Salve: o Clone de Site aparece nas ferramentas disponíveis dentro da conversa.</li>
+            <li>Salve: o Site Cowork aparece nas ferramentas disponíveis dentro da conversa.</li>
           </ol>
         </div>
       </div>

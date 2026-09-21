@@ -1,4 +1,8 @@
-# Predictive Harness — v0.2.0
+# Cowork FPEA — v0.2.0
+
+Seu estrategista para criar predições baseadas em dados, explorar cenários e orientar decisões financeiras.
+
+Os identificadores técnicos `predictive-harness` (pasta, imagem e serviço) continuam iguais para preservar as instalações e os volumes existentes.
 
 Agente de **FP&A** (planejamento e análise financeira) por conversa, com a unidade econômica da empresa sendo a **turma**. Você pergunta "se abrirmos uma nova turma, o que acontece com a margem do trimestre?"; um **motor determinístico** faz a conta com premissas visíveis e editáveis, o modelo de linguagem só traduz a pergunta e escreve a leitura, e o **Jev** (System One model da TypeSafe, servido pelo OpenRouter) decide e verifica cada etapa do caminho. Aplicação independente da suíte **IA para Executivos**, com as conexões no padrão do Build Agentflows. A proposta e o pivô estão em [PLANO.md](PLANO.md).
 
@@ -86,7 +90,7 @@ Nada é obrigatório: as conexões são feitas na tela. Variáveis, quando defin
 - `lib/conversa.ts`: o laço do harness, turno a turno, com registro de cada decisão.
 - `lib/planilhas.ts`: leitura de CSV e JSON, perfil, agregados para o LLM, classificação pelo Jev e persistência.
 - `lib/ai.ts`: o modelo de linguagem (ChatGPT pelo Codex App Server ou OpenRouter), sem fallback entre provedores.
-- `lib/chatgpt.ts`, `lib/store.ts`, `lib/conta.ts`, `proxy.ts`: infraestrutura da suíte, copiada do Mapify.
+- `lib/chatgpt.ts`, `lib/store.ts`, `lib/conta.ts`, `proxy.ts`: infraestrutura da suíte, copiada do Mapia.
 - `lib/demo.ts`: as três planilhas da escola de negócios de exemplo e as quatro respostas de demonstração, calculadas pelo motor a partir delas.
 - `components/Workspace.tsx`, `Base.tsx`, `Conversa.tsx`, `Cartoes.tsx`, `ComoCheguei.tsx`: a tela de três colunas.
 - `components/Configuracoes.tsx`, `app/api/conexoes/*`, `app/api/chatgpt/*`: conexões.

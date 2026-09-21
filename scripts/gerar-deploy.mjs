@@ -100,7 +100,7 @@ const aposPublicar = (app) =>
   app.aposPublicar ?? "Depois de publicar, abra o app e clique em Configurações (`/setup`) para conectar a IA.";
 const comandoDocker = (app) =>
   `docker run --rm -p ${app.porta}:10000 -v ${app.id}-dados:/app/data ${imagem(app)}`;
-const opcoesPersistencia = (app) => app.persistencia
+const opcoesPersistencia = (app) => app.persistencia && !pago(app)
   ? `\n**Escolha a instalação:** [Teste gratuito, sem volume](${urlPublicar(app)}) · [Com volume de ${app.persistencia.discoGB} GB (pago)](${urlPublicar(comPersistencia(app))}). O volume mantém ${app.persistencia.discoGuarda} entre reinícios e atualizações. Sem volume, esses dados podem se perder.\n`
   : "";
 
@@ -176,7 +176,7 @@ function readmePublico() {
   const linhas = cat.apps
     .map(
       (a) =>
-        `| [${a.nome}${a.versao ? ` v${a.versao}` : ""}](${repoPublicoUrl}/tree/${branchDeploy(a)}) | ${a.areas.join(", ")} | ${a.problema}${pago(a) ? ` **Exige plano pago (${plano(a)}).**` : ""} | [${a.persistencia ? "Teste gratuito, sem volume" : "Publicar este app"}](${urlPublicar(a)})${a.persistencia ? ` · [Com volume de ${a.persistencia.discoGB} GB (pago)](${urlPublicar(comPersistencia(a))})` : ""} |`
+        `| [${a.nome}${a.versao ? ` v${a.versao}` : ""}](${repoPublicoUrl}/tree/${branchDeploy(a)}) | ${a.areas.join(", ")} | ${a.problema}${pago(a) ? ` **Exige plano pago (${plano(a)}).**` : ""} | [${a.persistencia && !pago(a) ? "Teste gratuito, sem volume" : "Publicar este app"}](${urlPublicar(a)})${a.persistencia && !pago(a) ? ` · [Com volume de ${a.persistencia.discoGB} GB (pago)](${urlPublicar(comPersistencia(a))})` : ""} |`
     )
     .join("\n");
   // Com mais de um app pago, "é a exceção" (no singular, uma vez por app) deixa de fazer sentido: a
@@ -218,7 +218,7 @@ ${comandoDocker(cat.apps[0])}
 
 - Ao clicar em Publicar, você entra (ou cria uma conta gratuita) no serviço de hospedagem e confirma. O app é criado na sua conta, não na nossa.
 - Nenhuma chave é pedida na publicação. Depois, abra o app, clique em Configurações (\`/setup\`) e conecte a IA e as integrações em um minuto.
-- Sem volume persistente, contas, configurações e respostas podem se perder em reinícios e atualizações. Na Bússola de IA, escolha a instalação com volume para manter esses dados. O volume exige plano pago: [discos persistentes no Render](https://render.com/docs/disks). A instalação da suíte usa a opção gratuita da Bússola, sem volume.
+- Sem volume persistente, contas, configurações e respostas podem se perder em reinícios e atualizações. Os apps com disco configurado mantêm os dados em /app/data tanto na instalação individual quanto na suíte. O volume exige plano pago: [discos persistentes no Render](https://render.com/docs/disks).
 - Se você já publicou este app antes, o serviço de hospedagem pergunta entre associar ao serviço existente ou criar tudo de novo. Associar é o normal: ele atualiza o que já está no ar e mantém o mesmo endereço. Criar de novo faz uma segunda instalação, com outro endereço.${avisoPagos}
 `;
 }

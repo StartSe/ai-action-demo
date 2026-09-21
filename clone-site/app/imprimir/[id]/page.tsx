@@ -17,7 +17,7 @@ export default async function Page({ params }: PageProps<"/imprimir/[id]">) {
     <div className="print-sheet max-w-[1100px] mx-auto px-8 py-10 max-md:px-4">
       <ImprimirAoCarregar />
       <header className="mb-6 pb-4 border-b border-line">
-        <div className="text-[13px] font-semibold text-muted">Clone de Site</div>
+        <div className="text-[13px] font-semibold text-muted">Site Cowork</div>
         <h1 className="text-2xl font-extrabold tracking-[-0.01em]">{registro.saida.titulo}</h1>
         <div className="text-muted text-sm">{data(new Date())} · Versão {atual.n}</div>
       </header>

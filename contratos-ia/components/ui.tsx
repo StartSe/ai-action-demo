@@ -94,12 +94,19 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
 
   return (
     <>
-      <header className="no-print flex items-center gap-4 max-md:gap-2 px-8 py-3.5 max-md:px-4 max-md:py-3 bg-surface border-b border-line">
+      <header className={`no-print flex items-center gap-4 max-md:gap-2 px-8 py-3.5 max-md:px-4 max-md:py-3 bg-surface border-b border-line${process.env.NEXT_PUBLIC_APP_VERSION ? " max-md:flex-wrap" : ""}`}>
         <div className="flex items-center gap-3 min-w-0">
           <div className="shrink-0 w-[34px] h-[34px] max-md:w-[30px] max-md:h-[30px] rounded-[9px] bg-accent text-white grid place-items-center font-extrabold text-[15px] max-md:text-[13px] tracking-tight">{marca}</div>
           <div className="min-w-0">
             <div className="font-bold text-[15px] max-md:text-sm max-md:leading-tight truncate">{nome}</div>
-            <div className="text-ink-2 text-[13px] max-md:hidden truncate">{area}</div>
+            {process.env.NEXT_PUBLIC_APP_VERSION ? (
+              <div className="flex items-center gap-2 text-ink-2">
+                <span className="text-[13px] max-md:hidden truncate">{area}</span>
+                <span className="shrink-0 text-[10px] leading-tight tabular-nums" aria-label={`Versão ${process.env.NEXT_PUBLIC_APP_VERSION}`}>v{process.env.NEXT_PUBLIC_APP_VERSION}</span>
+              </div>
+            ) : (
+              <div className="text-ink-2 text-[13px] max-md:hidden truncate">{area}</div>
+            )}
           </div>
         </div>
 
@@ -111,7 +118,7 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
           ))}
         </nav>
 
-        <div className="flex items-center gap-2 max-md:gap-1.5 shrink-0 min-w-0">
+        <div className={`flex items-center gap-2 max-md:gap-1.5 shrink-0 min-w-0${process.env.NEXT_PUBLIC_APP_VERSION ? " max-[380px]:flex-wrap max-[380px]:max-w-full" : ""}`}>
           {demo && resumo ? (
             <div className="relative" ref={popoverRef}>
               <button type="button" className="cursor-pointer" aria-haspopup="dialog" aria-expanded={popoverAberto} onClick={() => setPopoverAberto((v) => !v)}>
