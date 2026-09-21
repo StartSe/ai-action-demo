@@ -24,7 +24,13 @@ export interface Posicao {
 /** indicador — um número grande com comparação e, opcionalmente, meta. */
 export interface DadosIndicador {
   valor: number;
-  anterior: number;
+  /**
+   * Valor do período anterior, para a variação. Opcional desde os dados externos: quando o painel
+   * vem de uma planilha sem coluna de data não existe período anterior, e o cartão então omite a
+   * linha de comparação em vez de repetir o próprio valor (variação de 0% seria mentira).
+   * O caminho da IA continua obrigado a preenchê-lo pelo prompt.
+   */
+  anterior?: number;
   formato: Formato;
   /** Só para formato "moeda". Sempre "R$" nesta versão. */
   prefixo?: string;

@@ -63,9 +63,10 @@ function pontos(lista: unknown, rotuloDoTipo: string, titulo: string, maximo: nu
 function dadosIndicador(d: Bruto): DadosIndicador | null {
   const valor = numero(d.valor);
   const anterior = numero(d.anterior);
-  if (valor === undefined || anterior === undefined) return null;
+  if (valor === undefined) return null;
   const meta = numero(d.meta);
-  const dados: DadosIndicador = { valor, anterior, formato: formato(d.formato) };
+  const dados: DadosIndicador = { valor, formato: formato(d.formato) };
+  if (anterior !== undefined) dados.anterior = anterior;
   if (dados.formato === "moeda") dados.prefixo = "R$";
   if (meta !== undefined && meta > 0) dados.meta = meta;
   if (d.direcaoBoa === "diminuir" || d.direcaoBoa === "aumentar") dados.direcaoBoa = d.direcaoBoa;

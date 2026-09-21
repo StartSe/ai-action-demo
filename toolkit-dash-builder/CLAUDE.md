@@ -16,3 +16,35 @@
 - **Gotcha do `verificar-jargao.mjs` que pegou aqui:** o link "Conectar a IA em 1 minuto" do aviso de números de exemplo (`ResultadoPainel.tsx`) precisa ser um `<a href="/setup#openrouter">` com o `href` como atributo literal — a regex de atributos técnicos só remove `href="..."`; a mesma URL numa prop `acao={{ url }}` do `Aviso` contaria como jargão.
 - **Limitação conhecida dos gráficos de série:** o eixo Y começa em zero (marcas máximo, metade e zero, como o PRD pede) e valores negativos são desenhados no zero (`Math.max(v, 0)` em `GraficoSerie`/`GraficoBarras`); o valor correto continua no `title` e no texto `sr-only`. Se um painel de fluxo de caixa com mês negativo virar caso real, o ajuste é uma linha de base deslocada quando `min < 0`.
 - **Sem rotina e sem formulário na v1:** `lib/rotinas-do-app.ts` tem `TIPOS_ROTINA = []`, `components/Rotinas.tsx` não existe (como no `videos-campanha`) e `app/api/f/[token]/route.ts` não importa nenhum módulo de callback. A infraestrutura (`lib/rotinas.ts`, `app/api/rotinas`, `instrumentation.ts`, `lib/formularios.ts`, `app/f`) continua copiada e ociosa.
+
+## Dados externos (planilha)
+
+- **A IA não escreve número quando há planilha.** Ela recebe só o perfil das colunas (`perfilDeDados()`,
+  nunca as linhas) e devolve a *receita* de cada componente; `lib/agregar.ts` calcula em cima das linhas
+  reais. `validarReceitas()` descarta toda receita que cite coluna inexistente ou tipo incompatível, então
+  o que sobra é garantidamente calculável. Sem essa separação a IA escreveria números parecidos com os do
+  usuário — plausíveis e errados, o pior defeito possível neste app.
+- **Sem chave de IA o recurso não cai em demonstração.** `receitasAutomaticas()` monta o recorte pela
+  tipagem das colunas; os números continuam saindo do arquivo. Cair em `painelDemo()` aqui seria mentir
+  para quem acabou de mandar a própria planilha. A tela marca o recorte automático e o rodapé diz
+  "Calculado do seu arquivo, sem IA".
+- **`Origem` e `SeloIA` são sobrescritos em `ResultadoPainel` no recorte automático.** Os dois vêm de
+  `components/ui.tsx`, arquivo `[PRODUTO]` comparado byte a byte com o `pdi-time`, e diriam "Gerado com IA"
+  num painel onde nenhuma IA foi chamada. A exceção mora em `ResultadoPainel.tsx` (arquivo do app), não em
+  `ui.tsx`. `scripts/verificar-padrao.sh` continua verde.
+- **`DadosIndicador.anterior` virou opcional.** Planilha sem coluna de data não tem período anterior;
+  `CartaoIndicador` omite a linha de comparação em vez de repetir o próprio valor (uma variação de 0% seria
+  falsa). O caminho da IA segue obrigado a preencher pelo prompt, e `validarPainel` deixou de descartar o
+  componente por falta de `anterior`.
+- **`INSUMO_PLANILHA` mora em `lib/planilha.ts`, não em `lib/painel-dados.ts`.** Quem lê é o Client Component
+  `ResultadoPainel`, e `painel-dados.ts` importa `lib/historico.ts` (`node:sqlite`) — importar de lá
+  puxaria o SQLite para o bundle do navegador. Como a marca viaja no `meta.insumo` gravado com o painel,
+  `/r/[id]` e `/imprimir/[id]` acertam o aviso sem reabrir o arquivo.
+- **`.xlsx` não é lido de propósito.** É um zip de XML e um leitor próprio seria grande demais para o ganho,
+  contra a filosofia de zero dependência de `lib/store.ts` e `lib/mcp.ts`. `detectarFormato()` reconhece o
+  arquivo pelos bytes (`PK`) e devolve a frase que manda salvar como CSV.
+- **Ambiguidade de `1.234`.** Com um separador só, três dígitos à direita são milhar e uma ou duas casas são
+  decimal — regra que acerta `12,5` e `1.234` mas erra um `1.234` que queira dizer 1,234. É o compromisso
+  certo para planilha brasileira; se aparecer caso real, a saída é decidir por coluna e não por célula.
+- **Primeiro app da suíte com `npm test`.** `lib/planilha.test.ts` e `lib/agregar.test.ts` (vitest, 35 testes)
+  cobrem formato de número e data, separador, aspas, tipagem e cada agregação. O resto do app segue sem teste.

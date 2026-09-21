@@ -127,7 +127,12 @@ export function painelParaTexto(painel: EspecPainel): string {
   for (const c of painel.componentes) {
     switch (c.tipo) {
       case "indicador":
-        linhas.push(`${c.titulo}: ${formatar(c.dados.valor, c.dados.formato)} (anterior ${formatar(c.dados.anterior, c.dados.formato)}, ${variacaoTexto(variacao(c.dados.valor, c.dados.anterior))})`);
+        // Sem `anterior` (painel vindo de planilha sem coluna de data) não há comparação a escrever.
+        linhas.push(
+          c.dados.anterior === undefined
+            ? `${c.titulo}: ${formatar(c.dados.valor, c.dados.formato)}`
+            : `${c.titulo}: ${formatar(c.dados.valor, c.dados.formato)} (anterior ${formatar(c.dados.anterior, c.dados.formato)}, ${variacaoTexto(variacao(c.dados.valor, c.dados.anterior))})`,
+        );
         break;
       case "linha":
       case "area":

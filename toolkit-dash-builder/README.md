@@ -3,10 +3,31 @@
 Painel de indicadores gerado por IA a partir de uma frase: indicadores com comparação, gráfico de tendência, ranking, distribuição e tabela, com números de exemplo do mercado brasileiro, prontos para ajustar conversando e imprimir. Área: Dados e Gestão.
 
 ## O que resolve
-O gestor sabe o que quer acompanhar, mas não sabe quais indicadores pedir nem como montar o painel. Este app identifica o setor do pedido, escolhe os indicadores que um analista escolheria, monta os gráficos e preenche com números de exemplo plausíveis. O resultado é o passo anterior ao BI: uma especificação pronta para quem for construir o painel com dado real.
+O gestor sabe o que quer acompanhar, mas não sabe quais indicadores pedir nem como montar o painel. Este app identifica o setor do pedido, escolhe os indicadores que um analista escolheria, monta os gráficos e preenche os números.
+
+Há dois caminhos, e eles entregam coisas diferentes:
+
+1. **Sem arquivo** — os números são de exemplo. A entrega é a *especificação* do painel: quais indicadores, quais gráficos, qual layout. É o passo anterior ao BI.
+2. **Com a sua planilha** (`Usar os seus dados`) — os números são **calculados a partir do seu arquivo**. A entrega é o painel de verdade.
 
 ## Stack
 Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão. Gráficos feitos à mão em SVG (sem biblioteca).
+
+## Usar os seus dados (planilha)
+Na tela inicial, no cartão **Usar os seus dados**, envie um CSV (ou arraste o arquivo). O app lê o arquivo, mostra cada coluna com o tipo que reconheceu (número, data ou texto) para você conferir antes de gerar, e monta o painel com os números reais.
+
+**A IA nunca escreve um número.** Ela recebe só a lista de colunas — nome, tipo e estatística, nunca as linhas — e devolve a *receita* de cada componente: qual coluna agrupar, qual agregar e qual conta fazer (soma, média, contagem, mínimo, máximo, distintos). Quem calcula é o servidor, em `lib/agregar.ts`, percorrendo as linhas do arquivo. Um número escrito pela IA seria descartado pelo validador. Essa separação é o ponto do recurso: um número inventado que se parece com o seu é pior do que número nenhum.
+
+Sem chave de IA o recurso **continua funcionando**: `receitasAutomaticas()` escolhe o recorte pela forma das colunas (a medida em dinheiro vira indicador, a coluna de data vira tendência, a categoria com poucos valores vira ranking e distribuição). O painel avisa na tela que o recorte foi automático. Com a IA conectada o recorte fica melhor e passa a obedecer ao que você escreveu no campo de texto.
+
+Detalhes que importam:
+
+- **Formato:** CSV, TSV ou separado por `;` ou `|` — o separador é descoberto sozinho. Aspas, quebra de linha dentro do campo e o BOM do Excel são tratados. `.xlsx` **não** é lido: o app reconhece o arquivo e pede para salvar como CSV.
+- **Números:** `R$ 21.572,39`, `1,234.56`, `12,5%` e `(1.500,00)` (negativo entre parênteses) são todos entendidos. Dinheiro e percentual são reconhecidos pelo cabeçalho e pelos valores, e definem o formato na tela.
+- **Datas:** `21/09/2026`, `2026-09-21`, `09/2026` e `Set/2026`. A série temporal agrupa por dia, mês, trimestre ou ano.
+- **Limites:** 8 MB por arquivo, 50 mil linhas e 60 colunas. Acima disso o arquivo é lido até o teto e a tela avisa.
+- **Comparação:** um indicador só mostra variação quando há coluna de data — aí ele compara o último período com o anterior. Sem data, mostra o total do arquivo e **omite** a linha de comparação, em vez de mostrar 0%.
+- **Guarda:** a planilha fica no mesmo `app.sqlite` por 30 dias, para o painel poder ser reaberto por `/r/<id>` e impresso. Depois é apagada sozinha.
 
 ## Configuração inicial (sem variáveis de ambiente)
 Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave, escolhe o modelo e testa a conexão. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar, o app roda em modo demonstração com quatro painéis de exemplo (vendas, financeiro, marketing e assinaturas), escolhidos pelas palavras do pedido.
@@ -76,9 +97,17 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 
 Nenhuma credencial de suíte com sufixo `_APP` é usada: este app não conecta caixa de e-mail. O `Dockerfile` é cópia idêntica do `pdi-time` (com os `ARG` de `GOOGLE_*_APP`/`MICROSOFT_*_APP`) porque o workflow passa os mesmos `build-args` a todos os apps; sem valor, os botões simplesmente não aparecem em `/setup`.
 
+## Testes
+```bash
+npm test     # vitest run
+```
+Cobrem a leitura da planilha (formatos de número e data, separador, aspas, tipagem das colunas) e o
+motor de agregação (cada agregação conferida contra um valor calculado à mão). É o código onde um
+erro não quebra a tela — entrega um painel bonito com a conta errada.
+
 ## Estrutura
 ```
-app/page.tsx                    tela única (chips, campo, esclarecimento, carregando, painel, conversa de ajuste)
+app/page.tsx                    tela única (chips, campo, envio de planilha, esclarecimento, carregando, painel, conversa de ajuste)
 app/api/painel/route.ts         POST gerar (aceita forcar) · GET listar · DELETE apagar tudo
 app/api/painel/[id]/route.ts    GET obter · PUT gravar o estado do Desfazer · DELETE apagar um
 app/api/painel/esclarecer/      POST avaliar o pedido (heurística local, depois IA)
@@ -105,6 +134,13 @@ lib/validar-painel.ts           validador/reparador da especificação
 lib/formatar.ts                 moeda/número/percentual em pt-BR e CSV
 lib/cache-painel.ts             cache por hash do pedido (24 h)
 lib/demo.ts                     os quatro painéis de exemplo e as respostas de demonstração
+lib/planilha.ts                 leitura de CSV/TSV, tipagem das colunas e perfil para a IA
+lib/receita.ts                  a "receita" de um componente (quais colunas, qual agregação) e sua validação
+lib/agregar.ts                  o motor de cálculo: receita + linhas do arquivo -> números do painel
+lib/painel-dados.ts             painel a partir da planilha (prompt de receitas + recorte automático sem IA)
+lib/dados-store.ts              guarda a planilha enviada por 30 dias
+app/api/dados/route.ts          POST envia a planilha e devolve o perfil das colunas
+components/EnvioPlanilha.tsx    envio do arquivo e conferência das colunas antes de gerar
 lib/ferramentas.ts              ferramentas expostas via MCP
 lib/ai.ts                       cliente OpenRouter (compartilhado)
 Dockerfile                      build multi-stage com saída standalone

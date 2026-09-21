@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { Aviso, ErrorBox, Hero, Loading, MaisDetalhes, Passos, Topbar, data, lerErro, useConfirmacao, useStatus, type PassoIndicador } from "@/components/ui";
 import { BannerObservacoes } from "@/components/BannerObservacoes";
 import { ChipsArea, CHIPS_AREA } from "@/components/ChipsArea";
+import { EnvioPlanilha, type PlanilhaEnviada } from "@/components/EnvioPlanilha";
 import { ConversaRefino } from "@/components/ConversaRefino";
 import { Esclarecimento } from "@/components/Esclarecimento";
 import { ResultadoPainel } from "@/components/ResultadoPainel";
@@ -98,6 +99,8 @@ export default function Page() {
   const router = useRouter();
   const { confirmar, Dialogo } = useConfirmacao();
   const [descricao, setDescricao] = useState("");
+  /** Planilha enviada. Com ela o painel sai dos dados reais; sem ela, dos números de exemplo. */
+  const [planilha, setPlanilha] = useState<PlanilhaEnviada | null>(null);
   const [avisoCampo, setAvisoCampo] = useState<string | null>(null);
   const [estado, setEstado] = useState<Estado>({ fase: "vazio" });
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null);
@@ -165,7 +168,8 @@ export default function Page() {
     const { signal, limpar } = abortavel(LIMITE_GERACAO_MS);
     try {
       const url = erroForcado ? `/api/painel?erro=${erroForcado}` : "/api/painel";
-      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...pedido, forcar }), signal });
+      const corpo = { ...pedido, forcar, dadosId: planilha?.id };
+      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo), signal });
       if (!r.ok) {
         const info = await lerErro(r);
         if (sessaoExpirou(r, info)) return;
@@ -216,6 +220,13 @@ export default function Page() {
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     const texto = descricao.trim();
+    // Com planilha na mão o arquivo já diz o que existe: a descrição vira opcional e o gate de
+    // esclarecimento não faz sentido (não há o que perguntar sobre um setor — as colunas são estas).
+    if (planilha) {
+      setAvisoCampo(null);
+      gerar({ descricao: texto });
+      return;
+    }
     if (texto.length < MINIMO_DESCRICAO) {
       setAvisoCampo("Descreva com um pouco mais de detalhe (pelo menos 10 letras).");
       campoRef.current?.focus();
@@ -346,31 +357,45 @@ export default function Page() {
     <div className="no-print">
       <form onSubmit={onSubmit}>
         <fieldset disabled={carregando || estado.fase === "esclarecendo"} className="min-w-0">
+          <EnvioPlanilha
+            planilha={planilha}
+            onEnviada={setPlanilha}
+            onRemover={() => setPlanilha(null)}
+            desabilitado={carregando}
+          />
           <div className="card p-5 mb-3">
             <div className="flex items-center gap-2.5 mb-3">
               <div className="w-9 h-9 rounded-full bg-accent-soft text-accent grid place-items-center shrink-0"><IconePainel /></div>
               <h2 className="font-bold text-[15px]">O que você quer acompanhar</h2>
             </div>
-            <p className="text-[12.5px] text-muted mb-2">Comece por uma área ou escreva do seu jeito.</p>
-            <div className="mb-3"><ChipsArea onEscolher={escolherChip} desabilitado={carregando} escolhido={chipEscolhido} /></div>
-            <label htmlFor="descricao" className="text-[13px] font-semibold block mb-1.5">Descreva o painel que você quer acompanhar</label>
+            {planilha ? (
+              <p className="text-[12.5px] text-muted mb-2">Opcional: diga o recorte que interessa e o painel se organiza em volta dele.</p>
+            ) : (
+              <>
+                <p className="text-[12.5px] text-muted mb-2">Comece por uma área ou escreva do seu jeito.</p>
+                <div className="mb-3"><ChipsArea onEscolher={escolherChip} desabilitado={carregando} escolhido={chipEscolhido} /></div>
+              </>
+            )}
+            <label htmlFor="descricao" className="text-[13px] font-semibold block mb-1.5">
+              {planilha ? "O que interessa nesses dados (opcional)" : "Descreva o painel que você quer acompanhar"}
+            </label>
             <textarea
               id="descricao"
               ref={campoRef}
               className="input min-h-28 resize-y"
-              placeholder="Ex.: painel de vendas com receita do mês, ticket médio, conversão do funil e ranking de vendedores"
+              placeholder={planilha ? "Ex.: quero acompanhar a receita por vendedor e por canal" : "Ex.: painel de vendas com receita do mês, ticket médio, conversão do funil e ranking de vendedores"}
               value={descricao}
               autoFocus
               onChange={(e) => mudarDescricao(e.target.value)}
               onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }}
             />
             <div className="flex justify-between gap-3 mt-1.5 text-[12.5px] text-muted">
-              <span>Quanto mais específico, melhor o painel.</span>
+              <span>{planilha ? "Deixe em branco para o painel mais completo possível." : "Quanto mais específico, melhor o painel."}</span>
               <span aria-live="polite">{descricao.length}/{MAXIMO_DESCRICAO}</span>
             </div>
             {avisoCampo && <div className="mt-3"><Aviso tom="warn">{avisoCampo}</Aviso></div>}
           </div>
-          <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Gerando…" : "Gerar painel"}</button>
+          <button type="submit" className="btn-primary" disabled={carregando}>{carregando ? "Gerando…" : planilha ? "Gerar painel com os meus dados" : "Gerar painel"}</button>
           <p className="text-[12.5px] text-muted text-center mt-2">Ctrl+Enter também envia</p>
         </fieldset>
         {carregando && <p role="status" className="text-sm text-accent-ink mt-3">Gerando seu painel. Aguarde nesta página.</p>}
