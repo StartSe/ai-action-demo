@@ -152,6 +152,12 @@ services:
     ports: ["3020:10000"]
     volumes: [daily-second-brain-dados:/app/data]
 
+  mapify:
+    build: ./mapify
+    image: ghcr.io/startse/mapify:latest
+    ports: ["3021:10000"]
+    volumes: [mapify-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -173,3 +179,4 @@ volumes:
   automl-pocket-dados:
   build-agentflows-dados:
   daily-second-brain-dados:
+  mapify-dados:
