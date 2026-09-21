@@ -588,3 +588,220 @@ test("diagnóstico distingue modelo sem chamada de erro do Zapier e oculta crede
   ).json();
   assert.equal(detail.events.at(-1).message, "Etapa 204");
 });
+
+test("excluir fonte de coleta com falha remove irmãos pendentes, histórico, diagnósticos e espelhos", async () => {
+  const { existsSync } = await import("node:fs");
+  const { save, message, messages } = await import("./brain");
+  const { removalPlan, removeItems } = await import("./removal");
+  fixture.state.failOrganization = true;
+  await newTask();
+  const task = await runNext();
+  const first = task.sources[0];
+  const sibling = save({
+    kind: "raw",
+    title: "Outra leitura",
+    content: "Outro conteúdo",
+  });
+  captureDb()
+    .prepare(
+      "INSERT INTO capture_steps(taskId,key,name,args,content,sourceId,created) VALUES(?,?,?,?,?,?,?)",
+    )
+    .run(
+      task.id,
+      "sibling",
+      "slack_channel_history",
+      "{}",
+      "",
+      sibling.id,
+      new Date().toISOString(),
+    );
+  message("assistant", "Conversa preservada", [first]);
+  const input = { sourceIds: [first] };
+  const plan = removalPlan(input);
+  assert.deepEqual(new Set(plan.sourceIds), new Set([first, sibling.id]));
+  assert.ok(existsSync(join(dir, "vault/raw", first + ".md")));
+  removeItems(input, plan.token);
+  assert.throws(() => captureTask(task.id), /não encontrada/);
+  for (const table of ["capture_events", "capture_steps"])
+    assert.equal(
+      captureDb()
+        .prepare(`SELECT count(*) n FROM ${table} WHERE taskId=?`)
+        .get(task.id)?.n,
+      0,
+    );
+  for (const id of [first, sibling.id]) {
+    assert.throws(() => note(id), /não encontrada/);
+    assert.equal(
+      captureDb()
+        .prepare("SELECT count(*) n FROM revisions WHERE note_id=?")
+        .get(id)?.n,
+      0,
+    );
+    assert.equal(existsSync(join(dir, "vault/raw", id + ".md")), false);
+  }
+  assert.deepEqual(messages().at(-1)?.sources, []);
+  assert.equal(messages().at(-1)?.content, "Conversa preservada");
+});
+
+test("exclusão preserva wiki parcial e fontes usadas, incluindo versões anteriores", async () => {
+  const { save, markOrganized } = await import("./brain");
+  const { removalPlan, removeItems } = await import("./removal");
+  fixture.state.failOrganization = true;
+  await newTask();
+  const task = await runNext();
+  const raw = task.sources[0];
+  const page = save({
+    kind: "wiki",
+    title: "Decisão preservada",
+    content: "Decisão",
+    sources: [raw],
+  });
+  markOrganized(raw);
+  const pending = save({ kind: "raw", title: "Pendente", content: "Pendente" });
+  captureDb()
+    .prepare(
+      "INSERT INTO capture_steps(taskId,key,name,args,content,sourceId,created) VALUES(?,?,?,?,?,?,?)",
+    )
+    .run(
+      task.id,
+      "pending",
+      "slack_channel_history",
+      "{}",
+      "",
+      pending.id,
+      new Date().toISOString(),
+    );
+  assert.throws(() => removalPlan({ sourceIds: [raw] }), /em uso/);
+  const plan = removalPlan({ taskIds: [task.id] });
+  assert.equal(plan.preserved, 1);
+  removeItems({ taskIds: [task.id] }, plan.token);
+  assert.equal(note(page.id).content, "Decisão");
+  assert.equal(note(raw).status, "organized");
+  assert.throws(() => note(pending.id));
+  const referenced = save({
+    kind: "raw",
+    title: "Fonte em versão anterior",
+    content: "Preservar",
+  });
+  const version = save({
+    kind: "wiki",
+    title: "Página com versão",
+    content: "Antes",
+    sources: [referenced.id],
+  });
+  save({ ...version, content: "Depois", sources: [] });
+  assert.throws(() => removalPlan({ sourceIds: [referenced.id] }), /em uso/);
+});
+
+test("exclusão em andamento revoga o worker sem permitir fontes ou eventos tardios", async () => {
+  const { removalPlan, removeItems } = await import("./removal");
+  let release!: () => void;
+  fixture.state.gate = new Promise<void>((r) => {
+    release = r;
+  });
+  const queued = await newTask();
+  const task = claimCapture("delete-worker")!;
+  const pending = runCapture(task, "delete-worker");
+  for (let i = 0; !fixture.state.dataCalls && i < 400; i++)
+    await new Promise((r) => setTimeout(r, 5));
+  assert.equal(fixture.state.dataCalls, 1);
+  const selection = { taskIds: [queued.id] };
+  const plan = removalPlan(selection);
+  assert.equal(plan.running, 1);
+  removeItems(selection, plan.token);
+  release();
+  await pending;
+  assert.equal(notes().length, 0);
+  for (const table of ["capture_steps", "capture_events"])
+    assert.equal(
+      captureDb()
+        .prepare(`SELECT count(*) n FROM ${table} WHERE taskId=?`)
+        .get(task.id)?.n,
+      0,
+    );
+  assert.throws(() => captureTask(task.id));
+});
+
+test("exclusão exige plano atual, protege concluídas e não apaga agendamentos nem repetições", async () => {
+  const { save } = await import("./brain");
+  const { removalPlan, removeItems } = await import("./removal");
+  const { captureSchedule } = await import("./captures");
+  await newTask();
+  const completed = await runNext();
+  assert.throws(() => removalPlan({ taskIds: [completed.id] }), /concluídas/);
+  const raw = save({ kind: "raw", title: "Texto", content: "Original" });
+  assert.throws(() => removeItems({ sourceIds: [raw.id] }, "stale"), /mudaram/);
+  assert.equal(note(raw.id).content, "Original");
+  const schedule = saveSchedule(
+    instruction,
+    { frequency: "daily", time: "09:00", timezone: "UTC", weekday: 1 },
+    await collectionAccess(),
+  );
+  const task = enqueueCapture(instruction, await collectionAccess(), {
+    scheduleId: schedule.id,
+  });
+  const child = enqueueCapture(instruction, await collectionAccess(), {
+    parentId: task.id,
+  });
+  const selected = { taskIds: [task.id] };
+  removeItems(selected, removalPlan(selected).token);
+  assert.equal(captureSchedule(schedule.id).id, schedule.id);
+  assert.equal(captureTask(child.id).parentId, null);
+  const { POST: brainPost } = await import("../app/api/brain/route");
+  const request = (data: unknown) =>
+    brainPost(
+      new Request("http://localhost/api/brain", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    );
+  const preview = await (
+    await request({ action: "preview-delete", sourceIds: [raw.id] })
+  ).json();
+  assert.equal(
+    (
+      await request({
+        action: "delete",
+        sourceIds: [raw.id],
+        token: preview.token,
+      })
+    ).status,
+    200,
+  );
+  assert.throws(() => note(raw.id));
+  assert.throws(() => removalPlan({ sourceIds: Array(101).fill("x") }), /100/);
+});
+
+test("cascata inclui fontes pendentes dependentes e protege a cadeia usada pela wiki", async () => {
+  const { save } = await import("./brain");
+  const { removalPlan, removeItems } = await import("./removal");
+  const base = save({ kind: "raw", title: "Fonte base", content: "Base" });
+  const dependent = save({
+    kind: "raw",
+    title: "Fonte dependente",
+    content: "Depende da base",
+    sources: [base.id],
+  });
+  const plan = removalPlan({ sourceIds: [base.id] });
+  assert.deepEqual(new Set(plan.sourceIds), new Set([base.id, dependent.id]));
+  removeItems({ sourceIds: [base.id] }, plan.token);
+  assert.throws(() => note(dependent.id));
+  const original = save({
+    kind: "raw",
+    title: "Fonte protegida",
+    content: "Base",
+  });
+  const middle = save({
+    kind: "raw",
+    title: "Fonte intermediária",
+    content: "Referência",
+    sources: [original.id],
+  });
+  save({
+    kind: "wiki",
+    title: "Wiki da cadeia",
+    content: "Conhecimento",
+    sources: [middle.id],
+  });
+  assert.throws(() => removalPlan({ sourceIds: [original.id] }), /em uso/);
+});

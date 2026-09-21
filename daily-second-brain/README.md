@@ -1,17 +1,19 @@
-# Daily Second Brain · v1.3.0
+# Daily Second Brain · v1.4.0
 
 Uma memória pessoal conectada: capture o que chega, transforme em conhecimento e converse para criar novos resultados. A experiência combina um observatório de ideias com páginas Markdown, fontes rastreáveis, regras próprias e um assistente por texto ou voz.
 
 A versão instalada aparece abaixo do logo Daily no menu lateral. No celular, toque em **Abrir menu** para vê-la. O número acompanha a versão do pacote e também está disponível em `/api/health`.
 
-Em **Coletas e rotinas**, use **Coletar** para uma instrução nova, **Histórico** para acompanhar execuções e **Rotinas** para gerenciar agendamentos. No Histórico, abra **Ver diagnóstico da coleta** para consultar modelo, ferramentas autorizadas, tentativas de leitura no Zapier, tempos e erros. **Copiar diagnóstico** facilita o suporte sem incluir credenciais. Coletas antigas não têm registros retroativos; repetir a instrução gera um novo diagnóstico.
+O menu tem **Início**, **Entrada**, **Biblioteca**, **Conversar** e **Ajustes**. Entrada reúne a caixa de entrada e as coletas; Biblioteca reúne wiki, mapa e artefatos; Ajustes reúne primeiros passos, conexões e regras.
+
+Em **Entrada → Coletas e rotinas**, use **Coletar** para uma instrução nova, **Histórico** para acompanhar execuções e **Rotinas** para gerenciar agendamentos. No Histórico, abra **Ver diagnóstico da coleta** para consultar modelo, ferramentas autorizadas, tentativas de leitura no Zapier, tempos e erros. **Copiar diagnóstico** facilita o suporte sem incluir credenciais. Coletas antigas não têm registros retroativos; repetir a instrução gera um novo diagnóstico.
 
 O ChatGPT usa o executor interno de ferramentas do Codex App Server. Modelos que exigem code mode precisam do host habilitado; terminal, ambientes de execução, navegação e delegação continuam desabilitados. A validação usa o binário instalado com um provedor local simulado, sem credenciais e sem chamadas a contas reais.
 
 **raw → wiki → outputs → raw**
 
 - **Coletas e rotinas:** descreva o que buscar nas ferramentas conectadas. Daily coleta em segundo plano, guarda os originais e organiza a wiki. Acompanhe as etapas e abra as fontes e páginas geradas; repita uma instrução recente ou agende uma recorrência.
-- **Caixa de entrada:** recebe as coletas automaticamente. Também permite colar textos ou importar `.md`, `.txt`, `.csv` e `.json` de até 100 KB. A fonte original permanece imutável.
+- **Caixa de entrada:** recebe as coletas automaticamente. Também permite colar textos ou importar `.md`, `.txt`, `.csv` e `.json` de até 100 KB. A tabela mostra conteúdo, origem, situação e data, com busca, filtros e 15 fontes por página. Coletas Slack abrem mensagens com autor, texto e data; o conteúdo original fica nos detalhes, inclusive em coletas anteriores à v1.4.0. O original permanece imutável enquanto guardado.
 - **Wiki:** o assistente organiza cada fonte, conecta ideias com `[[wikilinks]]`, evita títulos duplicados e atualiza páginas relacionadas. Edições e restaurações guardam revisões. Renomear uma página atualiza os links de wiki e outputs.
 - **Mapa:** navegue pelas conexões reais entre páginas. Mostra até 28 páginas recentes; a wiki e a busca continuam disponíveis para todo o acervo.
 - **Conversas:** recuperação por relevância e recência, com até 12 fontes por interação e histórico recente. A tela mostra o contexto consultado; referências clicáveis permitem conferir o raciocínio.
@@ -38,15 +40,21 @@ Consultas conhecidas do Slack, incluindo **Find Public Channel**, **Retrieve Thr
 
 ## Configuração e uma coleta do Slack
 
-1. Crie sua conta. O guia abre automaticamente em uma memória nova e pode ser retomado pelo menu **Configuração**.
+1. Crie sua conta. O guia abre automaticamente e pode ser retomado em **Ajustes → Primeiros passos**.
 2. Conecte ChatGPT ou OpenRouter e use **Testar IA e continuar**. O teste faz uma chamada real ao provedor escolhido.
-3. Conecte o Zapier e habilite a leitura de mensagens/histórico do Slack. Confira as ferramentas de coleta; escolha somente ações de consulta.
-4. Revise as regras de organização. ElevenLabs é opcional.
-5. Peça, por exemplo: **“Obter as 4 últimas mensagens do canal do Slack tech-academy (C04KTMS2GEL) e organizar os pontos na wiki.”** Ajuste o canal para uma fonte acessível à sua conta.
+3. Use **Inserir meu primeiro texto** para começar sem outro aplicativo. Guarde uma nota, abra a fonte e escolha **Organizar na wiki**.
+4. Para coletar do Slack, abra **Quero coletar de aplicativos · opcional**, conecte o Zapier e selecione suas ferramentas de leitura. Use **Continuar com aplicativos** e peça, por exemplo: **“Obter as 4 últimas mensagens do canal do Slack tech-academy (C04KTMS2GEL) e organizar os pontos na wiki.”** Ajuste o canal para sua conta. Personalizar regras e conectar voz são opcionais.
 
 O pedido entra na fila e a tela mostra leitura das fontes e organização. A aba pode ser fechada. Ao concluir, abra as páginas criadas e confira os originais. **Repetir instrução** busca informações atuais em uma nova execução; **Retomar coleta** após falha reutiliza leituras já salvas e continua a organização.
 
 Em **Agendar**, escolha todos os dias, dias úteis ou um dia da semana, horário e fuso IANA. A próxima execução é exibida ao salvar. Rotinas podem ser editadas, pausadas, retomadas e excluídas sem apagar o histórico. Coletas e chamadas utilizam os limites/créditos dos provedores conectados.
+
+### Excluir pendências
+
+Na caixa de entrada, exclua uma fonte ou selecione várias (até 100 por solicitação). No histórico de coletas, use **Excluir coleta** ou **Excluir falhas desta página**. A confirmação mostra o alcance: fontes ainda pendentes, coleta associada, etapas, diagnósticos, revisões e arquivos locais. Excluir uma fonte de coleta também remove suas fontes irmãs pendentes para impedir recriação ao retomar. Coletas na fila ou em execução são interrompidas; respostas tardias não gravam novos itens.
+
+Páginas da wiki, fontes já organizadas ou referenciadas pela memória (inclusive versões anteriores) e rotinas agendadas ficam preservadas. A exclusão não pode ser desfeita e não altera o Slack ou outros aplicativos. Rotinas ativas podem criar novas coletas futuras; pause-as em **Rotinas** quando necessário. O servidor confere o plano novamente na confirmação e recusa a exclusão se os itens mudaram.
+
 
 ### Execução persistente
 
@@ -119,3 +127,5 @@ node ../scripts/verificar-jargao.mjs daily-second-brain
 `tests/captures-browser.mjs`, após o build, inicia o servidor standalone com banco temporário e respostas controladas para os serviços externos. Percorre o primeiro acesso inteiro, fecha a aba antes da conclusão, repete a instrução, cria/edita/pausa uma rotina e reinicia o processo para verificar execução agendada sem navegador. Valida também os layouts em 1440 px e 390 px. Nenhuma chamada real ao Slack é feita pelos testes.
 
 `tests/capture-controls-browser.mjs` valida seleção múltipla e em lote, confirmação e falha ao salvar, persistência após recarregar, histórico com 75 coletas e paginação de 23 rotinas, incluindo edição e exclusão na última página. Usa somente serviços simulados.
+
+Validação da experiência v1.4: `PLAYWRIGHT_MODULE=/caminho/playwright/index.mjs node tests/ux-browser.mjs` cobre início por texto, navegação, 10 mensagens Slack antigas, exclusão em cascata/seleção em lote, paginação e celular, com provedores locais simulados.

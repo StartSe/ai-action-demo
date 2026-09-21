@@ -1,5 +1,7 @@
 import { api, body, string, BrainError } from "@/lib/api";
 import { state, save, note, revisions, db, clearDemo } from "@/lib/brain";
+import { removalPlan, removeItems } from "@/lib/removal";
+import { captureSources } from "@/lib/captures";
 import { seed } from "@/lib/demo";
 import { setConfig } from "@/lib/store";
 import { organize, chat, artifact } from "@/lib/agent";
@@ -8,13 +10,19 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   return api(() => {
     const id = new URL(req.url).searchParams.get("revisions");
-    return id ? revisions(id) : state();
+    return id
+      ? revisions(id)
+      : { ...state(), sourceCaptures: captureSources() };
   });
 }
 export async function POST(req: Request) {
   return api(async () => {
     const b = await body(req);
     switch (b.action) {
+      case "preview-delete":
+        return removalPlan(b);
+      case "delete":
+        return removeItems(b, string(b.token, 100));
       case "seed":
         seed();
         return state();

@@ -74,18 +74,17 @@ try {
   await page.getByText("Histórico preservado", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Restaurar", exact: true }).click();
   await page.getByRole("button", { name: "Fechar", exact: true }).click();
-  await page.getByRole("button", { name: "Caixa de entrada" }).click();
+  await page.getByRole("button", { name: /^Entrada/ }).click();
   await page
-    .getByRole("button", { name: /Reflexão · menos informação/ })
+    .locator("button.source-open")
+    .filter({ hasText: "Reflexão · menos informação" })
     .click();
   await page.getByRole("button", { name: "Organizar na wiki" }).click();
   await page
     .getByRole("button", { name: "Editar", exact: true })
     .waitFor({ timeout: 60000 });
   await page.getByRole("button", { name: "Fechar", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Conversar com Daily", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Conversar", exact: true }).click();
   await page.getByLabel("Mensagem para Daily").fill("Que conexões você vê?");
   await page.getByRole("button", { name: "Enviar mensagem" }).click();
   await page
@@ -110,6 +109,7 @@ try {
   await page.getByRole("button", { name: "Voltar à memória" }).click();
   await page.getByRole("button", { name: "Organizar na wiki" }).waitFor();
   await page.getByRole("button", { name: "Fechar", exact: true }).click();
+  await page.getByRole("button", { name: "Ajustes", exact: true }).click();
   await page
     .getByRole("button", { name: "Regras da memória", exact: true })
     .click();
@@ -138,9 +138,15 @@ try {
       "O piloto deve começar na segunda-feira. Responsável: equipe de produto.",
     );
   await page.getByRole("button", { name: "Guardar na memória" }).click();
-  await page.getByRole("button", { name: /Memória real de teste/ }).waitFor();
+  await page
+    .locator("button.source-open, button.note-card")
+    .filter({ hasText: "Memória real de teste" })
+    .waitFor();
   await page.getByLabel("Buscar na memória").fill("segunda-feira");
-  await page.getByRole("button", { name: /Memória real de teste/ }).waitFor();
+  await page
+    .locator("button.source-open, button.note-card")
+    .filter({ hasText: "Memória real de teste" })
+    .waitFor();
   await page.getByRole("button", { name: "Limpar busca" }).click();
   const state = await (await context.request.get(base + "/api/brain")).json();
   assert.ok(state.notes.find((n) => n.title === "Memória real de teste"));
@@ -155,6 +161,7 @@ try {
     data: { action: "capture", title: "blocked", content: "x" },
   });
   assert.equal(attack.status(), 403);
+  await page.getByRole("button", { name: "Ajustes", exact: true }).click();
   await page.getByRole("button", { name: "Conexões", exact: true }).click();
   await page
     .getByRole("heading", { name: "Mais conexões. Mais contexto." })
@@ -167,7 +174,7 @@ try {
     fullPage: true,
     timeout: 10000,
   });
-  await page.getByRole("button", { name: "Visão do dia", exact: true }).click();
+  await page.getByRole("button", { name: "Início", exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({
     path: out + "/mobile.png",
@@ -180,7 +187,7 @@ try {
     ),
   );
   await page.getByRole("button", { name: "Abrir menu" }).click();
-  await page.getByRole("button", { name: "Minha wiki", exact: true }).click();
+  await page.getByRole("button", { name: "Biblioteca", exact: true }).click();
   await page
     .getByRole("heading", { name: "Conhecimento que se conecta." })
     .waitFor();

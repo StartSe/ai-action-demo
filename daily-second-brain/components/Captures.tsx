@@ -12,6 +12,7 @@ import {
 } from "@/lib/capture-types";
 import type { Note } from "@/lib/types";
 import { Icon } from "./Icons";
+import { RemoveItems } from "./RemoveItems";
 import { CaptureDiagnostics } from "./CaptureDiagnostics";
 import { useFeedback } from "./Toast";
 import { request } from "./client";
@@ -137,7 +138,7 @@ export function CaptureComposer({
               ? "O que você quer trazer para a memória?"
               : schedule
                 ? "Editar agendamento"
-                : "Dê uma missão ao Daily."}
+                : "O que você quer coletar?"}
           </h2>
           <p>
             Descreva a fonte e o que importa. Daily coleta, preserva o original
@@ -383,6 +384,7 @@ export function Captures({
   const [notice, setNotice] = useState("");
   useFeedback(notice, error);
   const [paging, setPaging] = useState(false);
+  const [removal, setRemoval] = useState<{ taskIds: string[] } | null>(null);
   const [tab, setTab] = useState("collect");
   async function changePage(query: Partial<CaptureQuery>) {
     setPaging(true);
@@ -434,17 +436,24 @@ export function Captures({
   const recent = state.recentInstructions;
   return (
     <div className="captures-page" ref={top}>
+      {removal && (
+        <RemoveItems
+          selection={removal}
+          close={() => setRemoval(null)}
+          done={async () => {
+            await refresh();
+            setNotice("Coletas e fontes pendentes excluídas.");
+          }}
+        />
+      )}
       <div className="page-heading row-heading">
         <div>
           <span className="eyebrow">
             <span className="live-dot" />
             MEMÓRIA EM MOVIMENTO
           </span>
-          <h1>Deixe as informações virem até você.</h1>
-          <p>
-            Uma instrução agora. Conhecimento conectado enquanto você segue o
-            dia.
-          </p>
+          <h1>Coletas e rotinas</h1>
+          <p>Escolha o que buscar. Daily traz as fontes e organiza sua wiki.</p>
         </div>
         <button className="button" onClick={manual}>
           <Icon name="edit" size={16} />
@@ -594,6 +603,20 @@ export function Captures({
             </p>
           </div>
         )}
+        {state.tasks.some((t) => t.status === "failed") && (
+          <button
+            className="text-button danger-text clear-failed"
+            onClick={() =>
+              setRemoval({
+                taskIds: state.tasks
+                  .filter((t) => t.status === "failed")
+                  .map((t) => t.id),
+              })
+            }
+          >
+            Excluir falhas desta página
+          </button>
+        )}
         <div className="capture-task-list">
           {state.tasks.map((t) => (
             <article
@@ -677,6 +700,16 @@ export function Captures({
                 </div>
               )}
               <CaptureDiagnostics task={t} />
+              {t.status !== "done" && (
+                <button
+                  className="text-button danger-text"
+                  disabled={!!busy}
+                  onClick={() => setRemoval({ taskIds: [t.id] })}
+                >
+                  <Icon name="trash" size={15} />
+                  Excluir coleta
+                </button>
+              )}
               <div className="capture-task-actions">
                 {["queued", "running"].includes(t.status) ? (
                   <button

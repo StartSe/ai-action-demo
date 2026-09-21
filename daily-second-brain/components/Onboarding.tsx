@@ -14,11 +14,6 @@ const steps = [
     icon: "plug",
     detail: "De onde vêm as memórias",
   },
-  {
-    title: "Dar sua direção",
-    icon: "settings",
-    detail: "Como organizar suas ideias",
-  },
   { title: "Primeira coleta", icon: "spark", detail: "Do pedido à sua wiki" },
 ];
 export function Onboarding({
@@ -36,7 +31,7 @@ export function Onboarding({
   updateSetup: (s: SetupState) => void;
   finish: (destination: "home" | "captures" | "manual") => void | Promise<void>;
 }) {
-  const [step, setStep] = useState(setup.step);
+  const [step, setStep] = useState(setup.step === 3 ? 4 : setup.step);
   const [draft, setDraft] = useState(rules);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -50,11 +45,6 @@ export function Onboarding({
             action: "verify-ai",
           }),
         );
-      if (target > step && step === 3)
-        await request("/api/brain", "POST", {
-          action: "rules",
-          content: draft,
-        });
       updateSetup(
         await request<SetupState>("/api/onboarding", "POST", {
           action: "step",
@@ -78,6 +68,12 @@ export function Onboarding({
           action: "defer",
         }),
       );
+      if (destination === "manual" && setup.aiVerified)
+        updateSetup(
+          await request<SetupState>("/api/onboarding", "POST", {
+            action: "complete",
+          }),
+        );
       await finish(destination);
     } catch (e) {
       setError((e as Error).message);
@@ -92,8 +88,8 @@ export function Onboarding({
           <span className="eyebrow">BEM-VINDO AO SEU SEGUNDO CÉREBRO</span>
           <h1>Sua memória começa aqui.</h1>
           <p>
-            Conecte sua inteligência, escolha suas fontes e deixe Daily cuidar
-            da organização.
+            Conecte a IA e guarde seu primeiro texto. Você pode adicionar
+            aplicativos e rotinas quando precisar.
           </p>
         </div>
         <span className="onboarding-orb">
@@ -101,25 +97,28 @@ export function Onboarding({
         </span>
       </div>
       <nav className="onboarding-steps" aria-label="Etapas da configuração">
-        {steps.map((s, i) => (
-          <button
-            key={s.title}
-            aria-current={step === i + 1 ? "step" : undefined}
-            disabled={busy || i + 1 > step}
-            className={
-              step === i + 1 ? "active" : i + 1 < step ? "complete" : ""
-            }
-            onClick={() => void move(i + 1)}
-          >
-            <span>
-              {i + 1 < step ? <Icon name="check" size={17} /> : `0${i + 1}`}
-            </span>
-            <div>
-              <strong>{s.title}</strong>
-              <small>{s.detail}</small>
-            </div>
-          </button>
-        ))}
+        {steps.map((s, i) => {
+          const target = [1, 2, 4][i];
+          return (
+            <button
+              key={s.title}
+              aria-current={step === target ? "step" : undefined}
+              disabled={busy || target > step}
+              className={
+                step === target ? "active" : target < step ? "complete" : ""
+              }
+              onClick={() => void move(target)}
+            >
+              <span>
+                {target < step ? <Icon name="check" size={17} /> : `0${i + 1}`}
+              </span>
+              <div>
+                <strong>{s.title}</strong>
+                <small>{s.detail}</small>
+              </div>
+            </button>
+          );
+        })}
       </nav>
       {error && (
         <p className="error" role="alert">
@@ -151,65 +150,55 @@ export function Onboarding({
         )}
         {step === 2 && (
           <>
-            <div className="onboarding-intro">
-              <h2>Traga o contexto do seu dia.</h2>
-              <p>
-                No Zapier, conecte o Slack e habilite a leitura de mensagens ou
-                histórico de canal. Também pode usar Gmail, Drive e outras
-                fontes. Depois, salve a conexão abaixo e confira as ferramentas
-                de coleta.
-              </p>
-              <a
-                href="https://mcp.zapier.com"
-                target="_blank"
-                rel="noreferrer"
-                className="text-button"
+            <div className="manual-start">
+              <Icon name="file" size={25} />
+              <div>
+                <h2>Comece com um texto</h2>
+                <p>
+                  Cole uma nota ou conversa e organize sua primeira página. Não
+                  precisa conectar outro aplicativo.
+                </p>
+              </div>
+              <button
+                className="button primary"
+                disabled={busy}
+                onClick={() => void defer("manual")}
               >
-                Abrir minhas conexões no Zapier <Icon name="arrow" size={14} />
-              </a>
+                Inserir meu primeiro texto <Icon name="arrow" size={16} />
+              </button>
             </div>
-            <Connections
-              focus="zapier"
-              settings={settings}
-              update={updateSettings}
-            />
-            <button
-              className="text-button"
-              disabled={busy}
-              onClick={() => void defer("manual")}
-            >
-              Prefiro começar com texto
-            </button>
-          </>
-        )}
-        {step === 3 && (
-          <>
-            <div className="onboarding-intro">
-              <h2>Uma memória com seus princípios.</h2>
-              <p>
-                Estas regras orientam a wiki e as respostas. Já deixamos uma
-                base pronta; ajuste o que for importante para você.
-              </p>
-            </div>
-            <label>
-              Regras iniciais da memória
-              <textarea
-                rows={12}
-                maxLength={12000}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-              />
-            </label>
-            <details className="optional-voice">
-              <summary>
-                <Icon name="volume" size={17} />
-                Quero falar e ouvir respostas <span>Opcional</span>
-              </summary>
+            <details className="connect-later">
+              <summary>Quero coletar de aplicativos · opcional</summary>
+              <div className="onboarding-intro">
+                <h2>Traga o contexto do seu dia.</h2>
+                <p>
+                  No Zapier, conecte o Slack e habilite a leitura de mensagens
+                  ou histórico de canal. Também pode usar Gmail, Drive e outras
+                  fontes. Depois, salve a conexão abaixo e confira as
+                  ferramentas de coleta.
+                </p>
+                <a
+                  href="https://mcp.zapier.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-button"
+                >
+                  Abrir minhas conexões no Zapier{" "}
+                  <Icon name="arrow" size={14} />
+                </a>
+              </div>
               <Connections
-                focus="voice"
+                focus="zapier"
                 settings={settings}
                 update={updateSettings}
               />
+              <button
+                className="text-button"
+                disabled={busy}
+                onClick={() => void defer("manual")}
+              >
+                Prefiro começar com texto
+              </button>
             </details>
           </>
         )}
@@ -241,13 +230,45 @@ export function Onboarding({
           </>
         )}
       </div>
+      <details className="setup-optional">
+        <summary>Personalizar como Daily organiza · opcional</summary>
+        <label>
+          Regras iniciais da memória
+          <textarea
+            rows={8}
+            maxLength={12000}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+        </label>
+        <button
+          className="button"
+          disabled={busy || !draft.trim()}
+          onClick={async () => {
+            setBusy(true);
+            setError("");
+            try {
+              await request("/api/brain", "POST", {
+                action: "rules",
+                content: draft,
+              });
+            } catch (e) {
+              setError((e as Error).message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Salvar regras
+        </button>
+      </details>
       <footer className="onboarding-footer">
         <div>
           {step > 1 && (
             <button
               className="button"
               disabled={busy}
-              onClick={() => void move(step - 1)}
+              onClick={() => void move(step === 4 ? 2 : 1)}
             >
               Voltar
             </button>
@@ -266,10 +287,9 @@ export function Onboarding({
             disabled={
               busy ||
               (step === 1 && !setup.aiConnected) ||
-              (step === 2 && (!setup.zapier || setup.readTools < 1)) ||
-              (step === 3 && !draft.trim())
+              (step === 2 && (!setup.zapier || setup.readTools < 1))
             }
-            onClick={() => void move(step + 1)}
+            onClick={() => void move(step === 2 ? 4 : 2)}
           >
             {busy
               ? step === 1
@@ -277,16 +297,16 @@ export function Onboarding({
                 : "Salvando…"
               : step === 1 && !setup.aiVerified
                 ? "Testar IA e continuar"
-                : step === 3
-                  ? "Salvar regras e continuar"
+                : step === 2
+                  ? "Continuar com aplicativos"
                   : "Continuar"}
             <Icon name="arrow" size={16} />
           </button>
         )}
       </footer>
       <p className="onboarding-hint">
-        Seu progresso fica salvo. Você pode retomar em Configuração a
-        qualquer momento.
+        Seu progresso fica salvo. Você pode retomar em Ajustes → Primeiros
+        passos a qualquer momento.
       </p>
     </div>
   );

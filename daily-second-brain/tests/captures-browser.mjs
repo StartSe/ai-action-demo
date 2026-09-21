@@ -115,6 +115,9 @@ try {
   await waitFor(() => aiNext.isEnabled());
   await aiNext.click();
   await page
+    .getByText("Quero coletar de aplicativos · opcional", { exact: true })
+    .click();
+  await page
     .getByRole("heading", { name: "Traga o contexto do seu dia." })
     .waitFor();
   await page
@@ -163,18 +166,23 @@ try {
       await page.getByRole("checkbox", { name: new RegExp(name) }).isChecked(),
     );
   await page.screenshot({ path: join(out, "slack-tools.png"), fullPage: true });
-  const next = page.getByRole("button", { name: "Continuar", exact: true });
+  const next = page.getByRole("button", {
+    name: "Continuar com aplicativos",
+    exact: true,
+  });
   await waitFor(() => next.isEnabled());
   await next.click();
   await page
-    .getByRole("heading", { name: "Uma memória com seus princípios." })
-    .waitFor();
+    .getByText("Personalizar como Daily organiza · opcional", { exact: true })
+    .click();
   await page
     .getByLabel("Regras iniciais da memória")
     .fill(
       "# Minha memória\nPreservar decisões, responsáveis e fontes. Identificar hipóteses.",
     );
-  await page.getByRole("button", { name: "Salvar regras e continuar" }).click();
+  await page
+    .getByRole("button", { name: "Salvar regras", exact: true })
+    .click();
   await page
     .getByRole("heading", { name: "Agora, dê a primeira missão." })
     .waitFor();
@@ -192,9 +200,7 @@ try {
   await page.getByRole("button", { name: "Coletar e organizar" }).click();
   const queued = await (await queuedResponse).json();
   assert.equal(queued.status, "queued");
-  await page
-    .getByRole("heading", { name: "Deixe as informações virem até você." })
-    .waitFor();
+  await page.getByRole("heading", { name: "Coletas e rotinas" }).waitFor();
   await page.close();
   // There is no page, polling client or request to awaken the worker here.
   await new Promise((r) => setTimeout(r, 7000));
@@ -283,15 +289,13 @@ try {
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   );
-  const notifications = await page
-    .locator(".toast")
-    .evaluateAll((items) =>
-      items.map((item) => ({
-        x: item.getBoundingClientRect().x,
-        right: item.getBoundingClientRect().right,
-        width: item.getBoundingClientRect().width,
-      })),
-    );
+  const notifications = await page.locator(".toast").evaluateAll((items) =>
+    items.map((item) => ({
+      x: item.getBoundingClientRect().x,
+      right: item.getBoundingClientRect().right,
+      width: item.getBoundingClientRect().width,
+    })),
+  );
   for (const item of notifications)
     assert.ok(item.x >= 0 && item.right <= 390, JSON.stringify(item));
   await page.screenshot({

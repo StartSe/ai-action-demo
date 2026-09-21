@@ -71,7 +71,11 @@ export function storedTask(id: string): StoredTask {
   return task as unknown as StoredTask;
 }
 export function captureEvent(id: string, event: Diagnostic) {
-  const task = storedTask(id);
+  const task = captureDb()
+    .prepare("SELECT attempts FROM capture_tasks WHERE id=?")
+    .get(id);
+  // A removed collection must not recreate diagnostic records from an in-flight call.
+  if (!task) return;
   captureDb()
     .prepare(
       "INSERT INTO capture_events(taskId,created,attempt,stage,level,message) VALUES(?,?,?,?,?,?)",
@@ -479,4 +483,23 @@ export function existingStep(id: string, key: string) {
 }
 export function stepContent(step: CaptureStep) {
   return step.sourceId ? note(step.sourceId).content : step.content;
+}
+
+export function captureSources() {
+  const rows = captureDb()
+    .prepare(
+      `SELECT s.sourceId,t.id,t.instruction,t.status
+    FROM capture_steps s JOIN capture_tasks t ON t.id=s.taskId WHERE s.sourceId IS NOT NULL`,
+    )
+    .all();
+  return Object.fromEntries(
+    rows.map((r) => [
+      String(r.sourceId),
+      {
+        id: String(r.id),
+        instruction: String(r.instruction),
+        status: String(r.status),
+      },
+    ]),
+  );
 }

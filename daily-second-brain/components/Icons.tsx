@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 const paths: Record<string, string> = {
+  trash: "M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7",
   brain:
     "M12 4c-3-5-8 0-6 3-5 1-4 7-1 8-1 5 5 7 7 3m0-14c3-5 8 0 6 3 5 1 4 7 1 8 1 5-5 7-7 3V4M8 8l4 3 4-3M8 16l4-3 4 3",
   home: "m3 10 9-7 9 7v10H3V10m6 10v-7h6v7",

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { sourcePreview } from "./source-preview";
 import { BrainError } from "./api";
 import { note, save, rules } from "./brain";
 import { organize } from "./agent";
@@ -211,11 +212,17 @@ export async function runCapture(task: StoredTask, owner: string) {
           };
           if (DISCOVERY_TOOLS.has(t.name)) record(null);
           else {
+            const sourceContent = `## Instrução da coleta\n${task.instruction}\n\n## Origem\nFerramenta: ${t.name}\nObtido em: ${created}\nArgumentos: ${JSON.stringify(args)}\n\n## Conteúdo original\n${content}`;
+            const preview = sourcePreview({
+              title: "Coleta",
+              content: sourceContent,
+              tags: ["coleta"],
+            });
             const source = save(
               {
                 kind: "raw",
-                title: `Coleta · ${task.instruction.slice(0, 110)}`,
-                content: `## Instrução da coleta\n${task.instruction}\n\n## Origem\nFerramenta: ${t.name}\nObtido em: ${created}\nArgumentos: ${JSON.stringify(args)}\n\n## Conteúdo original\n${content}`,
+                title: preview.title.slice(0, 140),
+                content: sourceContent,
                 tags: ["coleta", "zapier"],
               },
               (n) => record(n.id),

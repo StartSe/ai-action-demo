@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0 — 2026-09-21
+
+- Simplifica o menu em Início, Entrada, Biblioteca, Conversar e Ajustes, com abas para as seções relacionadas.
+- Troca os cards da entrada por tabela com prévia do conteúdo, origem, situação, busca, filtros, seleção e paginação.
+- Mostra mensagens Slack com autor, texto e data, inclusive em fontes antigas; mantém o original completo nos detalhes e dá títulos descritivos às novas leituras.
+- Permite excluir fontes pendentes e coletas com falha, canceladas ou em andamento, individualmente ou em lote. A confirmação mostra o alcance da cascata; wiki e fontes utilizadas ficam preservadas. A execução removida não pode gravar resultados tardios.
+- Encurta a configuração para três etapas, com início por texto e aplicativos/regras opcionais, e adiciona orientação de uso na página inicial.
+- Valida exclusão concorrente, proteção de versões, leitura de fontes antigas e fluxos desktop/celular.
+
 ## 1.3.0 — 2026-09-21
 
 - Corrige o executor do ChatGPT para modelos que chamam ferramentas por code mode; teste com o App Server real reproduz o bloqueio e confirma a execução após a correção.

@@ -343,12 +343,12 @@ svg {
   font-weight: 650;
   margin: 0 12px 15px;
 }
-nav {
+.sidebar nav {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
-nav button {
+.sidebar nav button {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -360,16 +360,16 @@ nav button {
   border-radius: 7px;
   transition: background 0.2s;
 }
-nav button:hover {
+.sidebar nav button:hover {
   background: #ffffff06;
   color: #ddd4f5;
 }
-nav button.active {
+.sidebar nav button.active {
   background: #9984e914;
   color: #c9b9ff;
   box-shadow: inset 2px 0 #ae97fb;
 }
-nav button em {
+.sidebar nav button em {
   margin-left: auto;
   font-size: 9px;
   font-style: normal;
@@ -377,7 +377,7 @@ nav button em {
   padding: 2px 6px;
   border-radius: 4px;
 }
-nav button .little-dot {
+.sidebar nav button .little-dot {
   margin-left: auto;
   width: 5px;
   height: 5px;
@@ -2192,7 +2192,7 @@ nav button .little-dot {
   .capture-button kbd {
     display: none;
   }
-  nav button {
+  .sidebar nav button {
     font-size: 10px;
     gap: 9px;
     padding: 10px;
@@ -3814,4 +3814,302 @@ nav button .little-dot {
   height: auto;
   padding: 3px 7px;
   white-space: nowrap;
+}
+
+/* Grouped workspace navigation and compact, readable sources. */
+.section-nav {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+.section-nav button {
+  color: var(--muted);
+  padding: 9px 14px;
+  border-radius: 7px;
+}
+.section-nav button.active {
+  color: var(--purple);
+  background: var(--color-accent-soft);
+}
+.start-path {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 24px 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.start-path button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 20px;
+}
+.start-path button + button {
+  border-left: 1px solid var(--line);
+}
+.start-path button > span {
+  border: 1px solid #524674;
+  color: var(--purple);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.start-path small {
+  display: block;
+  color: var(--muted);
+  line-height: 1.7;
+  margin-top: 5px;
+}
+.start-path button > svg {
+  margin-left: auto;
+}
+.inbox-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 24px 0 18px;
+}
+.inbox-toolbar label {
+  margin: 0;
+}
+.inbox-search {
+  flex: 1;
+  min-width: 180px;
+}
+.inbox-toolbar select {
+  width: auto;
+}
+.table-scroll {
+  position: relative;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.source-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.source-table caption {
+  text-align: left;
+  padding: 16px;
+  color: var(--muted);
+}
+.source-table th {
+  font-size: 11px;
+  color: #b3b1c1;
+  font-weight: 600;
+  background: #1a1b24;
+}
+.source-table td,
+.source-table th {
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.source-table tr:last-child td {
+  border-bottom: 0;
+}
+.source-table td {
+  color: #b8b6c5;
+  font-size: 12px;
+  vertical-align: top;
+}
+.source-table tbody tr:hover {
+  background: #ffffff03;
+}
+.inbox-table {
+  min-width: 740px;
+  table-layout: fixed;
+}
+.inbox-table th:nth-child(2) {
+  width: auto;
+}
+.inbox-table th:nth-child(3) {
+  width: 82px;
+}
+.inbox-table th:nth-child(4) {
+  width: 142px;
+}
+.inbox-table th:nth-child(5) {
+  width: 96px;
+}
+.inbox-table th:last-child {
+  width: 52px;
+}
+.source-table .check-cell {
+  width: 42px;
+  padding-right: 0;
+}
+.check-cell input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--purple);
+  cursor: pointer;
+}
+.source-open {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0;
+}
+.source-open strong {
+  color: var(--text);
+  display: block;
+  font-size: 13px;
+  margin-bottom: 7px;
+}
+.source-open span {
+  color: #b0aebd;
+  line-height: 1.7;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.source-instruction {
+  display: block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 16px;
+  background: var(--color-accent-soft);
+  border-radius: 9px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.inbox-pagination {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 18px;
+  margin-top: 20px;
+}
+.danger-text {
+  color: #ffaaaa;
+}
+.button.danger {
+  background: #702c39;
+  color: #fff0f0;
+  border-color: #a34554;
+}
+.removal-dialog p {
+  margin: 18px 0;
+}
+.removal-dialog .button-row {
+  margin-top: 25px;
+}
+.clear-failed {
+  margin-bottom: 18px;
+}
+.source-text,
+.message-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+}
+.message-table {
+  min-width: 560px;
+}
+.message-table td:first-child {
+  width: 85px;
+}
+.message-table td:last-child {
+  width: 135px;
+}
+.message-table .message-text {
+  color: var(--text);
+}
+.source-original {
+  margin-top: 26px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+.source-original summary,
+.connect-later summary,
+.setup-optional summary {
+  cursor: pointer;
+  color: #beb5df;
+  padding: 8px 0;
+}
+.source-original pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+  color: var(--muted);
+  max-height: 440px;
+  overflow: auto;
+  font-size: 11px;
+}
+.manual-start {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 24px;
+  border: 1px solid #51446d;
+  background: #211c30;
+  border-radius: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.manual-start > div {
+  flex: 1;
+  min-width: 210px;
+}
+.manual-start p {
+  color: #b6afc7;
+  margin-top: 8px;
+}
+.manual-start > button {
+  align-self: center;
+}
+.setup-optional {
+  margin: 24px 0;
+}
+.setup-optional label {
+  margin-top: 18px;
+}
+.onboarding-steps {
+  grid-template-columns: repeat(3, 1fr);
+}
+@media (max-width: 800px) {
+  .start-path {
+    grid-template-columns: 1fr;
+  }
+  .start-path button + button {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .inbox-toolbar .text-button {
+    width: 100%;
+  }
+  .section-nav {
+    gap: 2px;
+  }
+  .section-nav button {
+    padding: 9px 10px;
+    font-size: 12px;
+  }
+  .onboarding-steps {
+    grid-template-columns: 1fr;
+  }
 }

@@ -338,7 +338,7 @@ try {
   assert.equal(await page.locator(".memory-flow").count(), 0);
   const configuration = page
     .locator(".sidebar")
-    .getByRole("button", { name: "Configuração", exact: true });
+    .getByRole("button", { name: "Ajustes", exact: true });
   await configuration.scrollIntoViewIfNeeded();
   const configBox = await configuration.boundingBox();
   assert.ok(

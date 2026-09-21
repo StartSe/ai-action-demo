@@ -9,6 +9,10 @@ import { Markdown } from "./Markdown";
 import { Connections } from "./Connections";
 import { request } from "./client";
 import { Captures } from "./Captures";
+import { Inbox } from "./Inbox";
+import { SourceContent } from "./SourceContent";
+import { RemoveItems } from "./RemoveItems";
+import { sourcePreview } from "@/lib/source-preview";
 import { Onboarding } from "./Onboarding";
 import {
   EMPTY_CAPTURE_STATE,
@@ -29,13 +33,45 @@ type View =
   | "setup"
   | "rules";
 const NAV: { id: View; label: string; icon: string }[] = [
-  { id: "home", label: "Visão do dia", icon: "sun" },
+  { id: "home", label: "Início", icon: "sun" },
   { id: "captures", label: "Coletas e rotinas", icon: "zap" },
   { id: "graph", label: "Mapa da memória", icon: "graph" },
   { id: "raw", label: "Caixa de entrada", icon: "inbox" },
   { id: "wiki", label: "Minha wiki", icon: "book" },
   { id: "outputs", label: "Artefatos", icon: "spark" },
   { id: "chat", label: "Conversar com Daily", icon: "chat" },
+];
+const GROUPS: { label: string; icon: string; view: View; members: View[] }[] = [
+  { label: "Início", icon: "sun", view: "home", members: ["home"] },
+  {
+    label: "Entrada",
+    icon: "inbox",
+    view: "raw",
+    members: ["raw", "captures"],
+  },
+  {
+    label: "Biblioteca",
+    icon: "book",
+    view: "wiki",
+    members: ["wiki", "graph", "outputs"],
+  },
+  { label: "Conversar", icon: "chat", view: "chat", members: ["chat"] },
+];
+const SUBNAV = [
+  [
+    { id: "raw", label: "Caixa de entrada" },
+    { id: "captures", label: "Coletas e rotinas" },
+  ],
+  [
+    { id: "wiki", label: "Minha wiki" },
+    { id: "graph", label: "Mapa da memória" },
+    { id: "outputs", label: "Artefatos" },
+  ],
+  [
+    { id: "setup", label: "Primeiros passos" },
+    { id: "connections", label: "Conexões" },
+    { id: "rules", label: "Regras da memória" },
+  ],
 ];
 const LABELS = {
   raw: "Fonte original",
@@ -114,6 +150,7 @@ export function Brain() {
   const [notice, setNotice] = useState("");
   useFeedback(notice, error);
   const [capture, setCapture] = useState(false);
+  const [removal, setRemoval] = useState<{ sourceIds: string[] } | null>(null);
   const [selected, setSelected] = useState<Note | null>(null);
   const [editing, setEditing] = useState(false);
   const [history, setHistory] = useState<Note[] | null>(null);
@@ -432,54 +469,62 @@ export function Brain() {
   function cards(list: Note[], compact = false) {
     return (
       <div className={compact ? "note-list" : "note-grid"}>
-        {list.map((n) => (
-          <button
-            key={n.id}
-            className={`note-card ${n.kind}`}
-            onClick={() => open(n)}
-          >
-            <span className="note-card-icon">
-              <Icon
-                name={
-                  n.kind === "wiki"
-                    ? "book"
-                    : n.kind === "outputs"
-                      ? "spark"
-                      : "file"
-                }
-                size={18}
-              />
-            </span>
-            <div>
-              <span className="note-overline">
-                {LABELS[n.kind]}
-                {n.demo ? " · exemplo" : ""}
+        {list.map((n) => {
+          const preview = n.kind === "raw" ? sourcePreview(n) : null;
+          return (
+            <button
+              key={n.id}
+              className={`note-card ${n.kind}`}
+              onClick={() => open(n)}
+            >
+              <span className="note-card-icon">
+                <Icon
+                  name={
+                    n.kind === "wiki"
+                      ? "book"
+                      : n.kind === "outputs"
+                        ? "spark"
+                        : "file"
+                  }
+                  size={18}
+                />
               </span>
-              <h3>{n.title}</h3>
-              {!compact && (
-                <p>{n.content.replace(/[#*\[\]]/g, "").slice(0, 135)}…</p>
-              )}
-              <div className="note-meta">
-                <span>{date(n.updated)}</span>
-                {n.tags.slice(0, 2).map((t) => (
-                  <span key={t} className="tag">
-                    {t}
-                  </span>
-                ))}
-                {n.kind === "raw" && (
-                  <span
-                    className={
-                      n.status === "inbox" ? "pending-tag" : "ready-tag"
-                    }
-                  >
-                    {n.status === "inbox" ? "A organizar" : "Na wiki"}
-                  </span>
+              <div>
+                <span className="note-overline">
+                  {LABELS[n.kind]}
+                  {n.demo ? " · exemplo" : ""}
+                </span>
+                <h3>{preview?.title || n.title}</h3>
+                {!compact && (
+                  <p>
+                    {(preview?.text || n.content)
+                      .replace(/[#*\[\]]/g, "")
+                      .slice(0, 135)}
+                    …
+                  </p>
                 )}
+                <div className="note-meta">
+                  <span>{date(n.updated)}</span>
+                  {n.tags.slice(0, 2).map((t) => (
+                    <span key={t} className="tag">
+                      {t}
+                    </span>
+                  ))}
+                  {n.kind === "raw" && (
+                    <span
+                      className={
+                        n.status === "inbox" ? "pending-tag" : "ready-tag"
+                      }
+                    >
+                      {n.status === "inbox" ? "A organizar" : "Na wiki"}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-            <Icon name="chevron" size={15} />
-          </button>
-        ))}
+              <Icon name="chevron" size={15} />
+            </button>
+          );
+        })}
       </div>
     );
   }
@@ -527,45 +572,35 @@ export function Brain() {
           <Icon name="plus" size={17} /> Capturar memória <kbd>N</kbd>
         </button>
         <span className="nav-label">MEU ESPAÇO</span>
-        <nav>
-          {NAV.map((n) => (
+        <nav aria-label="Menu principal">
+          {GROUPS.map((n) => (
             <button
-              key={n.id}
-              className={view === n.id ? "active" : ""}
-              onClick={() => go(n.id)}
+              key={n.view}
+              className={n.members.includes(view) ? "active" : ""}
+              aria-current={n.members.includes(view) ? "page" : undefined}
+              onClick={() => go(n.view)}
             >
               <Icon name={n.icon} size={18} />
               <span>{n.label}</span>
-              {n.id === "raw" && inbox.length > 0 && <em>{inbox.length}</em>}
-              {n.id === "captures" && captures.activeCount > 0 && (
+              {n.view === "raw" && inbox.length > 0 && <em>{inbox.length}</em>}
+              {n.view === "raw" && captures.activeCount > 0 && (
                 <span className="live-dot" />
               )}
             </button>
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <nav>
+          <nav aria-label="Preferências">
             <button
-              className={view === "setup" ? "active" : ""}
-              onClick={() => go("setup")}
+              className={
+                ["setup", "connections", "rules"].includes(view) ? "active" : ""
+              }
+              onClick={() =>
+                go(setup?.status === "complete" ? "connections" : "setup")
+              }
             >
-              <Icon name="sun" size={18} />
-              Configuração
-            </button>
-            <button
-              className={view === "connections" ? "active" : ""}
-              onClick={() => go("connections")}
-            >
-              <Icon name="plug" size={18} />
-              Conexões
-              <span className="little-dot" />
-            </button>
-            <button
-              className={view === "rules" ? "active" : ""}
-              onClick={() => go("rules")}
-            >
-              <Icon name="settings" size={18} />
-              Regras da memória
+              <Icon name="settings" size={18} /> Ajustes
+              {setup?.status !== "complete" && <span className="little-dot" />}
             </button>
           </nav>
           <div className="profile">
@@ -614,7 +649,7 @@ export function Brain() {
                 (view === "connections"
                   ? "Conexões"
                   : view === "setup"
-                    ? "Configuração"
+                    ? "Primeiros passos"
                     : "Regras da memória")}
             </strong>
           </span>
@@ -676,6 +711,40 @@ export function Brain() {
           </main>
         ) : (
           <main className={`main view-${view}`}>
+            {SUBNAV.filter((group) => group.some((tab) => tab.id === view)).map(
+              (group) => (
+                <nav
+                  className="section-nav"
+                  aria-label="Seções"
+                  key={group[0].id}
+                >
+                  {group.map((tab) => (
+                    <button
+                      key={tab.id}
+                      aria-current={view === tab.id ? "page" : undefined}
+                      className={view === tab.id ? "active" : ""}
+                      onClick={() => go(tab.id as View)}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </nav>
+              ),
+            )}
+            {view === "raw" && (
+              <Inbox
+                notes={notes}
+                captures={state.sourceCaptures}
+                open={open}
+                refresh={refreshCaptures}
+                collect={() => go("captures")}
+                manual={() => {
+                  setCaptureTitle("");
+                  setCaptureContent("");
+                  setCapture(true);
+                }}
+              />
+            )}
             {view === "home" && (
               <>
                 <div className="home-heading">
@@ -718,11 +787,13 @@ export function Brain() {
                     <Icon name="brain" size={22} />
                     <div>
                       <strong>
-                        Prepare sua memória para trabalhar com você.
+                        {setup?.aiVerified
+                          ? "Sua IA está pronta. Traga a primeira memória."
+                          : "Comece por aqui: conecte sua IA."}
                       </strong>
                       <p>
-                        Conecte a IA, escolha suas fontes e inicie uma coleta
-                        guiada.
+                        Um texto já basta para começar. Aplicativos e rotinas
+                        podem vir depois.
                       </p>
                     </div>
                     <button className="button" onClick={() => go("setup")}>
@@ -730,6 +801,40 @@ export function Brain() {
                     </button>
                   </div>
                 )}
+                <div className="start-path" aria-label="Como usar o Daily">
+                  {[
+                    {
+                      number: "1",
+                      title: "Traga uma memória",
+                      text: "Cole um texto ou colete de um aplicativo.",
+                      target: "raw",
+                    },
+                    {
+                      number: "2",
+                      title: "Encontre na biblioteca",
+                      text: "Leia a wiki e acompanhe as fontes.",
+                      target: "wiki",
+                    },
+                    {
+                      number: "3",
+                      title: "Converse e crie",
+                      text: "Faça perguntas e transforme ideias em ação.",
+                      target: "chat",
+                    },
+                  ].map((step) => (
+                    <button
+                      key={step.number}
+                      onClick={() => go(step.target as View)}
+                    >
+                      <span>{step.number}</span>
+                      <div>
+                        <strong>{step.title}</strong>
+                        <small>{step.text}</small>
+                      </div>
+                      <Icon name="arrow" size={15} />
+                    </button>
+                  ))}
+                </div>
                 <button
                   className="capture-home-banner"
                   onClick={() => go("captures")}
@@ -958,7 +1063,7 @@ export function Brain() {
                 </div>
               </>
             )}
-            {(["raw", "wiki", "outputs"] as string[]).includes(view) && (
+            {(["wiki", "outputs"] as string[]).includes(view) && (
               <>
                 <div className="page-heading row-heading">
                   <div>
@@ -1319,8 +1424,13 @@ export function Brain() {
                 notes={notes}
                 refresh={refreshCaptures}
                 paginate={paginateCaptures}
-                ready={setup ? setup.aiConnected && settings.zapier : true}
-                configure={() => go("connections")}
+                ready={
+                  !!setup &&
+                  setup.aiConnected &&
+                  settings.zapier &&
+                  setup.readTools > 0
+                }
+                configure={() => go("setup")}
                 manual={() => {
                   setCaptureTitle("");
                   setCaptureContent("");
@@ -1446,6 +1556,17 @@ export function Brain() {
           </main>
         )}
       </div>
+      {removal && (
+        <RemoveItems
+          selection={removal}
+          close={() => setRemoval(null)}
+          done={async () => {
+            setSelected(null);
+            await refreshCaptures();
+            setNotice("Itens excluídos da entrada.");
+          }}
+        />
+      )}
       {clearingDemo && (
         <Dialog
           label="Limpar exemplo"
@@ -1717,7 +1838,11 @@ export function Brain() {
             </form>
           ) : (
             <>
-              <h1 className="document-title">{selected.title}</h1>
+              <h1 className="document-title">
+                {selected.kind === "raw"
+                  ? sourcePreview(selected).title
+                  : selected.title}
+              </h1>
               <div className="document-actions">
                 {selected.kind === "raw" ? (
                   selected.status === "inbox" && (
@@ -1736,6 +1861,16 @@ export function Brain() {
                   <button className="button" onClick={() => setEditing(true)}>
                     <Icon name="edit" size={16} />
                     Editar
+                  </button>
+                )}
+                {selected.kind === "raw" && selected.status === "inbox" && (
+                  <button
+                    className="button subtle danger-text"
+                    disabled={!!busy}
+                    onClick={() => setRemoval({ sourceIds: [selected.id] })}
+                  >
+                    <Icon name="trash" size={16} />
+                    Excluir fonte
                   </button>
                 )}
                 <a
@@ -1782,7 +1917,15 @@ export function Brain() {
                   </button>
                 )}
               </div>
-              <Markdown content={selected.content} notes={notes} open={open} />
+              {selected.kind === "raw" ? (
+                <SourceContent note={selected} notes={notes} open={open} />
+              ) : (
+                <Markdown
+                  content={selected.content}
+                  notes={notes}
+                  open={open}
+                />
+              )}
               {history && (
                 <div className="revision-list">
                   <h3>Histórico preservado</h3>

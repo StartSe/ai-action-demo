@@ -29,6 +29,10 @@ export type Action = {
 };
 export type BrainState = {
   notes: Note[];
+  sourceCaptures?: Record<
+    string,
+    { id: string; instruction: string; status: string }
+  >;
   messages: Message[];
   actions: Action[];
   rules: string;
