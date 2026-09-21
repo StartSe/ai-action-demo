@@ -94,6 +94,7 @@ export function GenerationView({
           sourceUrl={job.preview?.url}
           generating={running}
           onInteract={interact}
+          autoFit={follow}
         />
         <div className="generation-caption">
           <span className={running ? "live-dot" : ""} />

@@ -112,6 +112,7 @@ function Canvas({
   sourceUrl,
   generating = false,
   onInteract,
+  autoFit = true,
 }: {
   root: MindNode;
   collapsed: Set<string>;
@@ -123,6 +124,7 @@ function Canvas({
   sourceUrl?: string;
   generating?: boolean;
   onInteract?: () => void;
+  autoFit?: boolean;
 }) {
   const flow = useReactFlow();
   const width = useStore((state) => state.width);
@@ -161,6 +163,7 @@ function Canvas({
     return { nodes, edges };
   }, [root, collapsed, onToggle, selected, sourceUrl, generating]);
   useEffect(() => {
+    if (!autoFit) return;
     const timer = setTimeout(() => {
       void flow.fitView({
         padding: 0.15,
@@ -171,7 +174,7 @@ function Canvas({
       });
     }, 90);
     return () => clearTimeout(timer);
-  }, [fitKey, flow, width, height]);
+  }, [fitKey, flow, width, height, autoFit]);
   useEffect(() => {
     if (focusId) {
       const n = flow.getNode(focusId);
