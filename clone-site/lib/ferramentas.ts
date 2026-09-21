@@ -7,7 +7,47 @@ import { aguardarGeracao, criar, iniciarGeracao, paginaDoProjeto } from "./proje
 
 export const NOME_SERVIDOR = "clone-site";
 
+/** Cria o site (referência ou briefing), gera em segundo plano e espera o fim — o que as ferramentas devolvem ao assistente. */
+async function criarEEsperar(dados: Parameters<typeof criar>[0]) {
+  const criado = criar(dados);
+  iniciarGeracao(criado.id);
+  const projeto = await aguardarGeracao(criado.id);
+  const salva = projeto.estado === "pronto" ? paginaDoProjeto(projeto) : null;
+  if (!salva) throw new Error(projeto.erro?.mensagem ?? "Não foi possível gerar o site desta vez. Tente de novo.");
+  const { pagina, meta } = salva;
+  const atual = pagina.versoes[pagina.versoes.length - 1];
+  return { id: pagina.id, projetoId: projeto.id, slug: projeto.slug, nome: projeto.nome, titulo: pagina.titulo, link: `/sites/${projeto.id}`, linkPublicado: `/s/${projeto.slug}`, versao: atual.n, demo: meta.demo, html: atual.html };
+}
+
+const SCHEMA_MARCA = {
+  type: "object",
+  description: "Marca a aplicar no site (opcional)",
+  properties: {
+    nome: { type: "string", description: "Nome da empresa ou do produto" },
+    corPrimaria: { type: "string", description: "Cor principal em hexadecimal, ex.: #0f766e" },
+    corSecundaria: { type: "string", description: "Cor secundária em hexadecimal (opcional)" },
+  },
+};
+
 export const FERRAMENTAS: Ferramenta[] = [
+  {
+    nome: "criar_site",
+    descricao: "Cria um site do zero (arquivo HTML único, em português) a partir de um briefing: o que a empresa faz, para quem e o que o site precisa ter. Devolve o id e o slug do site, o link no app (/sites/<projetoId>), o link público (/s/<slug>) e o HTML.",
+    schema: {
+      type: "object",
+      properties: {
+        nome: { type: "string", description: "Nome do site (ex.: o nome da empresa)" },
+        briefing: { type: "string", description: "O que a empresa faz, para quem, diferenciais e o que o site precisa ter (mínimo 20 caracteres)" },
+        marca: SCHEMA_MARCA,
+        formato: { type: "string", enum: ["html-tailwind", "html-css"], description: "html-tailwind (padrão) ou html-css" },
+      },
+      required: ["briefing"],
+    },
+    async executar(args) {
+      const { nome, briefing, marca, formato } = args as { nome?: unknown; briefing?: unknown; marca?: unknown; formato?: unknown };
+      return criarEEsperar({ nome, origem: "briefing", briefing, marca, stack: formato });
+    },
+  },
   {
     nome: "gerar_pagina",
     descricao: "Cria um site (arquivo HTML único, em português) a partir da captura de tela de uma página de referência, aplicando o nome e as cores da marca informada. Devolve o id da página, o id e o slug do site, o título, o link do site no app (/sites/<projetoId>), o link público publicado (/s/<slug>, HTML puro) e o HTML gerado.",
@@ -37,14 +77,7 @@ export const FERRAMENTAS: Ferramenta[] = [
       // Endereço terminado em .png/.jpg é a própria captura; qualquer outro é o site a fotografar pelo serviço.
       const imagem = pareceImagem(imagem_url) ? await baixarImagem(imagem_url) : await capturarSite(imagem_url);
       // Toda página nasce como um site (lib/projetos.ts): cria, gera em segundo plano e espera o fim aqui.
-      const criado = criar({ origem: "referencia", imagem, stack: formato, instrucoes, marca });
-      iniciarGeracao(criado.id);
-      const projeto = await aguardarGeracao(criado.id);
-      const salva = projeto.estado === "pronto" ? paginaDoProjeto(projeto) : null;
-      if (!salva) throw new Error(projeto.erro?.mensagem ?? "Não foi possível gerar a página desta vez. Tente de novo.");
-      const { pagina, meta } = salva;
-      const atual = pagina.versoes[pagina.versoes.length - 1];
-      return { id: pagina.id, projetoId: projeto.id, slug: projeto.slug, titulo: pagina.titulo, link: `/sites/${projeto.id}`, linkPublicado: `/s/${projeto.slug}`, versao: atual.n, demo: meta.demo, html: atual.html };
+      return criarEEsperar({ origem: "referencia", imagem, stack: formato, instrucoes, marca });
     },
   },
   {

@@ -144,11 +144,12 @@ function entradaSalva(pedido: Pedido, tamanhoImagem: number): EntradaPagina {
 }
 
 /** Salva a página no histórico (tipo "pagina") e devolve o id, que também vira o id da própria página. */
-function salvarPagina(pedido: Pedido, tamanhoImagem: number, html: string, metaGerada: Meta): Pagina {
-  const versao: Versao = { n: 1, html, instrucao: "Página gerada a partir da captura", criadoEm: new Date().toISOString() };
+function salvarPagina(pedido: Pedido, tamanhoImagem: number, html: string, metaGerada: Meta, briefing?: string): Pagina {
+  const versao: Versao = { n: 1, html, instrucao: briefing ? "Site criado a partir do briefing" : "Página gerada a partir da captura", criadoEm: new Date().toISOString() };
   const titulo = tituloDaPagina(html, pedido.marca);
   const semId: Omit<Pagina, "id"> = { titulo, versoes: [versao], ...(pedido.marca ? { marca: pedido.marca } : {}) };
-  const id = salvar({ tipo: "pagina", titulo, entrada: entradaSalva(pedido, tamanhoImagem), saida: { id: "", ...semId }, meta: metaGerada });
+  const entrada: EntradaPagina = { ...entradaSalva(pedido, tamanhoImagem), ...(briefing ? { briefing } : {}) };
+  const id = salvar({ tipo: "pagina", titulo, entrada, saida: { id: "", ...semId }, meta: metaGerada });
   const pagina: Pagina = { id, ...semId };
   atualizarSaida(id, pagina);
   return pagina;
@@ -195,6 +196,97 @@ export async function gerarPagina(pedido: Pedido): Promise<{ demo: boolean; pagi
   const html = sanitizarHtml(extrairHtml(resposta), pedido.stack);
   const metaGerada: Meta = { ...meta({ demo: false, insumo: INSUMO }), model: visionModelName() };
   const pagina = salvarPagina(pedido, imagem.tamanho, html, metaGerada);
+  return { demo: false, pagina, meta: metaGerada, id: pagina.id };
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Criar do zero a partir de um briefing (sem captura): a estrutura padrão de uma landing, textos da empresa.
+// Portado da ideia do "create/text" do screenshot-to-code, com as mesmas regras de arquivo único da suíte.
+// ---------------------------------------------------------------------------------------------------------
+
+export const INSUMO_BRIEFING = "briefing da empresa e cores da marca";
+
+const ESTRUTURA_BRIEFING = `Estrutura da página (nesta ordem, cada bloco em uma <section> ou tag semântica própria):
+1. Cabeçalho (<header>) com o nome ou logo da marca à esquerda e um menu curto com âncoras para as seções.
+2. Herói com um título forte de até 12 palavras, uma frase de apoio e um botão principal (a chamada mais importante para esse negócio) e um secundário.
+3. Três a seis benefícios ou serviços, cada um com título curto, uma frase e um ícone simples (bloco arredondado na cor da marca ou caractere).
+4. "Como funciona" em três passos numerados.
+5. Prova social: dois ou três depoimentos plausíveis (nomes e cargos fictícios, sem citar empresas reais) ou números de resultado.
+6. Chamada final com o botão principal repetido.
+7. Rodapé (<footer>) com nome da marca, contato e direitos autorais.
+Escreva textos concretos para o negócio descrito no briefing, em português do Brasil, sem frases genéricas de "soluções inovadoras".`;
+
+const REGRAS_BRIEFING = `- Não invente dados que o briefing não deu (endereço, telefone, preços): use rótulos neutros como "Fale com a gente" e, no rodapé, o nome da marca com um texto de contato curto.
+- Use as cores da marca nos botões, destaques e blocos que substituem imagens. Onde caberia uma foto, coloque um bloco (<div>) preenchido com a cor principal, com role="img" e aria-label descrevendo em português a foto que caberia ali — a menos que o pedido traga imagens da empresa, que devem ser usadas com <img> nesses lugares.
+- Repita os elementos quantas vezes for preciso (se são 6 benefícios, escreva os 6). Não escreva comentários no HTML.
+- Use fontes do Google Fonts (<link> em https://fonts.googleapis.com). Não carregue nada de outras origens além do Google Fonts e do Tailwind.
+- Não inclua nenhum <script> além do permitido para o formato. Não use onclick nem outros atributos de evento.
+- A página deve funcionar bem no celular (largura de 390 px) e no computador.
+- Devolva somente o código completo, começando em <html> e terminando em </html>, sem markdown, sem \`\`\` e sem explicações antes ou depois.`;
+
+export const SYSTEM_BRIEFING_TAILWIND = `Você é um desenvolvedor front-end e redator especialista em páginas de empresas, com Tailwind CSS.
+Você recebe um briefing (o que a empresa faz, para quem, o que o site precisa ter) e constrói uma página completa, em um único arquivo HTML, usando Tailwind e HTML puro, sem JavaScript próprio.
+
+Regras:
+- Inclua o Tailwind exatamente com esta linha no <head>: <script src="https://cdn.tailwindcss.com"></script>. Esse é o único <script> permitido.
+- Use classes utilitárias do Tailwind para todo o estilo; um <style> pequeno só é aceitável para cores da marca e para a família de fonte.
+${REGRAS_BRIEFING}
+
+${ESTRUTURA_BRIEFING}`;
+
+export const SYSTEM_BRIEFING_CSS = `Você é um desenvolvedor front-end e redator especialista em páginas de empresas, com HTML e CSS.
+Você recebe um briefing (o que a empresa faz, para quem, o que o site precisa ter) e constrói uma página completa, em um único arquivo HTML, com todo o CSS escrito à mão dentro de uma única tag <style> no <head>, sem nenhuma biblioteca e sem nenhum <script>.
+
+Regras:
+- Nenhum <script> é permitido neste formato.
+- Use CSS moderno (flexbox, grid, variáveis CSS) e uma media query para telas até 768 px.
+${REGRAS_BRIEFING}
+
+${ESTRUTURA_BRIEFING}`;
+
+export type PedidoBriefing = { briefing: string; stack: Stack; marca?: Marca; instrucoes?: string; /** Bloco "Imagens da empresa" já montado (US-004); vazio quando não há assets. */ blocoAssets?: string };
+
+/** Bloco do usuário para a criação pelo briefing: a empresa, a marca, as imagens e o formato. */
+export function montarPromptBriefing(pedido: PedidoBriefing): string {
+  const linhas = [`Crie a página da empresa a partir deste briefing:\n${pedido.briefing.trim()}`];
+  if (pedido.marca?.nome || pedido.marca?.corPrimaria) {
+    linhas.push(`Marca: ${pedido.marca.nome || "não informada"}. Cor principal: ${pedido.marca.corPrimaria || "escolha uma cor sóbria"}.${pedido.marca.corSecundaria ? ` Cor secundária: ${pedido.marca.corSecundaria}.` : ""}`);
+  } else {
+    linhas.push("Nenhuma marca foi informada: escolha uma cor sóbria e use o nome da empresa citado no briefing (ou um nome neutro).");
+  }
+  if (pedido.blocoAssets?.trim()) linhas.push(pedido.blocoAssets.trim());
+  if (pedido.instrucoes?.trim()) linhas.push(`Instruções adicionais de quem pediu a página:\n${pedido.instrucoes.trim()}`);
+  linhas.push(`Formato: ${pedido.stack === "html-css" ? "HTML com CSS próprio em <style>" : "HTML com Tailwind pela CDN"}.`);
+  return linhas.join("\n\n");
+}
+
+/**
+ * Cria o site do zero a partir do briefing (texto), salva no histórico e devolve com a proveniência.
+ * Passa pelo motor de texto (OpenRouter ou ChatGPT, lib/motor.ts) — não precisa de visão. Em demonstração,
+ * a landing fixa ganha o título com a primeira frase do briefing.
+ */
+export async function gerarDoBriefing(pedido: PedidoBriefing): Promise<{ demo: boolean; pagina: Pagina; meta: Meta; id: string }> {
+  const briefing = pedido.briefing.trim();
+  if (briefing.length < 20) throw new ErroDePedido("Conte em pelo menos uma frase o que a empresa faz e o que o site precisa ter.");
+  const base: Pedido = { imagem: "", stack: pedido.stack, ...(pedido.instrucoes?.trim() ? { instrucoes: pedido.instrucoes.trim() } : {}), ...(pedido.marca ? { marca: pedido.marca } : {}) };
+
+  if (!aiEnabled()) {
+    await esperar(1400);
+    const html = paginaDemo({ ...base, briefing });
+    const metaGerada = meta({ demo: true, insumo: INSUMO_BRIEFING });
+    const pagina = salvarPagina(base, 0, html, metaGerada, briefing);
+    return { demo: true, pagina, meta: metaGerada, id: pagina.id };
+  }
+
+  const resposta = await askText({
+    system: pedido.stack === "html-css" ? SYSTEM_BRIEFING_CSS : SYSTEM_BRIEFING_TAILWIND,
+    prompt: montarPromptBriefing({ ...pedido, briefing }),
+    maxTokens: 12000,
+    temperature: 0.4,
+  });
+  const html = sanitizarHtml(extrairHtml(resposta), pedido.stack);
+  const metaGerada = meta({ demo: false, insumo: INSUMO_BRIEFING });
+  const pagina = salvarPagina(base, 0, html, metaGerada, briefing);
   return { demo: false, pagina, meta: metaGerada, id: pagina.id };
 }
 

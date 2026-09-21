@@ -384,15 +384,32 @@ function landingCss(marca: Marca): string {
 `;
 }
 
-/** Landing fictícia completa, na marca informada (ou na marca de exemplo), no formato pedido. */
-export function paginaDemo(pedido: Pick<Pedido, "stack" | "marca">): string {
+/** Primeira frase do briefing (até 90 caracteres), para o herói de demonstração falar da empresa certa. */
+export function fraseDoBriefing(briefing: string): string {
+  const primeira = briefing.trim().split(/(?<=[.!?])\s+|\n+/)[0]?.trim() ?? "";
+  const semPonto = primeira.replace(/[.!?]+$/, "");
+  const frase = semPonto.length > 90 ? `${semPonto.slice(0, 87).trimEnd()}...` : semPonto;
+  return frase ? frase.charAt(0).toUpperCase() + frase.slice(1) : "";
+}
+
+/**
+ * Landing fictícia completa, na marca informada (ou na marca de exemplo), no formato pedido. Com `briefing`,
+ * o título do herói e o <title> citam a primeira frase do que a empresa faz; o resto continua a landing fixa.
+ */
+export function paginaDemo(pedido: Pick<Pedido, "stack" | "marca"> & { briefing?: string }): string {
   const marca: Marca = {
     nome: pedido.marca?.nome?.trim() || MARCA_DEMO.nome,
     corPrimaria: pedido.marca?.corPrimaria || MARCA_DEMO.corPrimaria,
     corSecundaria: pedido.marca?.corSecundaria || MARCA_DEMO.corSecundaria,
   };
   const stack: Stack = pedido.stack === "html-css" ? "html-css" : "html-tailwind";
-  return stack === "html-css" ? landingCss(marca) : landingTailwind(marca);
+  let html = stack === "html-css" ? landingCss(marca) : landingTailwind(marca);
+  const frase = pedido.briefing ? fraseDoBriefing(pedido.briefing) : "";
+  if (frase) {
+    html = html.replace(/(<h1\b[^>]*>)[\s\S]*?(<\/h1>)/i, `$1${escaparHtml(frase)}.$2`);
+    html = html.replace(/(<title>)[\s\S]*?(<\/title>)/i, `$1${escaparHtml(marca.nome)} · ${escaparHtml(frase)}$2`);
+  }
+  return html;
 }
 
 // Em modo demonstração, cada edição aplica mudanças fixas e visíveis, para mostrar o fluxo de versões:

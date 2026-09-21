@@ -8,7 +8,7 @@
 // aba aberta e para "Tentar de novo" sem reenviar) e é apagada em seguida.
 import crypto from "node:crypto";
 import { ErroIA, type Meta } from "./ai";
-import { ACAO_ESCOLHER_MODELO, ErroDePedido, gerarPagina, normalizarMarca, normalizarStack, validarImagem } from "./gerador";
+import { ACAO_ESCOLHER_MODELO, ErroDePedido, gerarDoBriefing, gerarPagina, normalizarMarca, normalizarStack, validarImagem } from "./gerador";
 import { apagar as apagarResultado, obter as obterResultado } from "./historico";
 import { abrirBanco } from "./store";
 import type { EntradaPagina, ErroProjeto, EstadoProjeto, Marca, OrigemProjeto, Pagina, Projeto, Stack, Versao } from "./types";
@@ -334,8 +334,7 @@ async function executarGeracao(id: string): Promise<void> {
   try {
     let pagina: Pagina;
     if (p.origem === "briefing") {
-      // Ganha o gerador próprio na US-003 (lib/gerador.ts:gerarDoBriefing); até lá, a falha é explicada.
-      throw new ErroDePedido("Criar o site pelo briefing chega na próxima etapa. Por enquanto, envie a captura de uma referência.");
+      pagina = (await gerarDoBriefing({ briefing: p.briefing ?? "", stack: p.stack, marca: p.marca, instrucoes: p.instrucoes })).pagina;
     } else {
       const imagem = imagemDe(id);
       if (!imagem) throw new ErroDePedido("A captura deste site não está mais guardada. Crie o site de novo.");

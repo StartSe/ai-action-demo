@@ -52,7 +52,7 @@
         "Lint e tsc passam; verificar pela aba \"Descrever a empresa\" em demonstração"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "US-003 da PRD. Até a US-005, chama askText; depois passa por lib/motor.ts."
     },
     {

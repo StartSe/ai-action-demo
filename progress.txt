@@ -43,3 +43,12 @@ Trabalho feito num worktree separado (../ai-action-demo-clone-site), criado a pa
   - **`react-hooks/refs` (eslint-plugin-react-hooks 7) proíbe `ref.current = x` no corpo do componente.** Para um callback estável (um `setState` do pai) basta colocá-lo nas dependências do efeito; o "ref espelho" só é necessário para callbacks instáveis, e aí a atribuição vai num `useEffect`.
   - **Um Server Component (`/r/[id]`) que precisa do sino usa um Client Component casca (`TopbarSite`)** em vez de receber `notificacoes` por props: o hook de consulta periódica só roda no cliente.
 ---
+
+## 20/09/2026 - US-003 - Criar do zero a partir de um briefing
+- `lib/gerador.ts`: `SYSTEM_BRIEFING_TAILWIND`/`SYSTEM_BRIEFING_CSS` (regras de arquivo único da suíte + a estrutura padrão de landing em sete blocos), `montarPromptBriefing` (aceita `blocoAssets` para a US-004) e `gerarDoBriefing()` (motor de texto — `askText` até a US-005 trocar por `lib/motor.ts`; demonstração com `paginaDemo({ briefing })`). `salvarPagina` grava `entrada.briefing` e a instrução da versão 1 vira "Site criado a partir do briefing".
+- `lib/demo.ts`: `fraseDoBriefing()` (primeira frase, até 90 caracteres) entra no `<h1>` e no `<title>` da landing fixa. `lib/projetos.ts:executarGeracao` escolhe o gerador pela origem. `lib/ferramentas.ts`: ferramenta MCP `criar_site(nome, briefing, marca?, formato?)` e o helper `criarEEsperar` compartilhado com `gerar_pagina`.
+- Verificado no standalone (demonstração): o site "Clínica Vida" que tinha falhado na US-002 foi gerado por "Tentar de novo" (202 → pronto, título e h1 com a frase do briefing); `criar_site` pelo MCP devolveu id, slug `padaria-sol`, links e HTML.
+- **Learnings for future iterations:**
+  - **Um site que falhou por "recurso ainda não existe" fica no banco esperando a etapa seguinte** — "Tentar de novo" reaproveita o briefing/captura guardados, então a US seguinte pode ser verificada em cima dos registros que a anterior deixou em `falhou`.
+  - **`Pedido` exige `imagem`; para o briefing basta `imagem: ""`** na hora de salvar (a entrada gravada nunca leva a imagem, só `tamanhoImagem`).
+---
