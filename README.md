@@ -88,10 +88,12 @@ Dica para demonstrações: abra `http://localhost:3000/?exemplo=1` e o app preen
 
 Tudo parte de um push na `main` deste repositório (privado, `StartSe/ai-action-demo`). O workflow `.github/workflows/publicar.yml`:
 
-1. Descobre quais pastas de app mudaram e constrói só essas imagens (rodar à mão com "Reconstruir todas" refaz as dezoito).
+1. Descobre quais pastas de app mudaram e constrói só essas imagens. Na execução manual, informe o ID de um app para republicá-lo ou use "Reconstruir todas" para refazer as imagens do catálogo.
 2. Publica cada imagem em `ghcr.io/startse/<app>:latest` (e na tag do commit) usando o token do próprio Actions, sem segredo extra.
 3. Regenera o repositório **público** `StartSe/ai-action-app-deploy` a partir de `catalogo.json`: o branch `main` recebe a página do catálogo (GitHub Pages) e o Blueprint da suíte; cada app ganha um branch `deploy-<app>` com o seu Blueprint. Ninguém edita esse repositório à mão.
-4. Confere se as dezoito imagens estão públicas e avisa no resumo do job quando alguma ainda está privada.
+4. Confere se as imagens do catálogo estão públicas e avisa no resumo do job quando alguma ainda está privada.
+
+Para recuperar uma publicação cancelada, execute o workflow na `main` atual com o campo `app` preenchido (por exemplo, `gh workflow run publicar.yml --ref main -f app=mapify`). Isso reconstrói somente o app selecionado e publica o catálogo atual. O ID deve existir em `catalogo.json` e não pode ser combinado com "Reconstruir todas". A execução manual sem ID preserva o comportamento de reconstruir todas as imagens.
 
 Catálogo público: https://startse.github.io/ai-action-app-deploy/ (filtro por área, botão "Publicar no Render" por app, comando `docker run` copiável).
 

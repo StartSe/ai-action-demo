@@ -2,13 +2,17 @@ name: Publicar imagens e catálogo
 
 # A cada push na main: constrói só as imagens dos apps cuja pasta mudou, publica em ghcr.io/startse/<app>
 # e regenera o repositório público (Blueprints do Render + página do catálogo).
-# Rodar à mão com "Reconstruir todas" marcado reconstrói as imagens dos 18 apps do catálogo.
+# A execução manual permite republicar um app específico ou reconstruir todas as imagens.
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
     inputs:
+      app:
+        description: "ID do app a republicar (ex.: mapify; vazio usa o comportamento de reconstruir todas)"
+        type: string
+        default: ""
       todos:
         description: "Reconstruir todas as imagens"
         type: boolean
@@ -36,11 +40,22 @@ jobs:
           fetch-depth: 0
       - id: lista
         env:
+          APP_ALVO: ${{ github.event_name == 'workflow_dispatch' && inputs.app || '' }}
           TODOS: ${{ github.event_name == 'workflow_dispatch' && inputs.todos }}
           ANTES: ${{ github.event.before }}
         run: |
           APPS="$(jq -r '.apps[].id' catalogo.json | sort)"
-          if [ "$TODOS" = "true" ] || [ -z "$ANTES" ] || [ "$ANTES" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$ANTES" 2>/dev/null; then
+          if [ -n "$APP_ALVO" ]; then
+            if [ "$TODOS" = "true" ]; then
+              echo "::error::Escolha um app específico ou a opção de reconstruir todas, não os dois."
+              exit 1
+            fi
+            if ! jq -e --arg app "$APP_ALVO" '.apps | any(.id == $app)' catalogo.json > /dev/null; then
+              echo "::error::O app solicitado não existe no catálogo."
+              exit 1
+            fi
+            LISTA="$APP_ALVO"
+          elif [ "$TODOS" = "true" ] || [ -z "$ANTES" ] || [ "$ANTES" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$ANTES" 2>/dev/null; then
             LISTA="$APPS"
           else
             ALTERADOS="$(git diff --name-only "$ANTES" "$GITHUB_SHA" | cut -d/ -f1 | sort -u)"
