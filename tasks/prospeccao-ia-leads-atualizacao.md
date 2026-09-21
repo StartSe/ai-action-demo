@@ -1,0 +1,20 @@
+# Leads, atualização dos contatos e Bright Data — 0.7.0
+
+## Requisitos e implementação
+
+1. **Melhorar a tela da captura.** A tabela anterior escondia cargo/empresa, deixava a descrição inteira do perfil ideal expandir as linhas e exibia 46 pessoas de uma vez. A nova tela apresenta identidade profissional, origem limitada a duas linhas, busca por nome/cargo/empresa sem acentos, filtros agrupados, ordenação e páginas de 20 pessoas. Seleção com ações úteis, CSV completo dos resultados ou da seleção, foto/iniciais, indicação correta de abordagem existente e atualização sem perder a lista em falhas. No celular, cartões com largura limitada e filtros complementares expansíveis.
+2. **Atualizar o contato existente.** A identidade é o LinkedIn canônico no mesmo produto. A descoberta nos modos de pessoas/empresa/oportunidades passa pelo mesmo ponto de criação/atualização. A pesquisa aprofundada também atualiza a ficha. Nome, cargo, empresa, cidade, avatar, contexto profissional, fontes, evidências e sinais são incorporados. Campos vazios e leituras mais antigas/fracas não substituem dados confirmados. A data real de uma leitura em cache é preservada. Decisões comerciais, criação, vínculos à prospecção original e mensagens salvas são preservados; troca de cargo ou empresa elimina o fit anterior e não deixa a ficha depender da conta criada pela nova busca.
+3. **Priorizar Bright Data.** As rotas de Search Engine e Search Dataset têm prioridade explícita. O dataset descobre os campos antes de filtrar. Person Profile participa da conferência entre rodadas; Markdown e HTML são alternativas da mesma fonte antes dos fornecedores externos. A IA não pode reordenar fontes alternativas para a frente da Bright Data. Ferramentas são usadas conforme o catálogo anunciado pela conexão. A busca geral também começa pela Bright Data.
+
+## Evidências
+
+- `tests/empresa-alvo.test.ts`: repetição preenche cargo ausente preservando seleção; dataset + web + cinco perfis suficientes não acionam Exa, Tavily, SearchAPI ou ProspectHalo conectados.
+- `tests/leads-atualizacao.test.ts`: mesma identidade regional, atualização de cargo/empresa/local/foto/contexto, preservação de papel manual/status/CRM/hipótese/mensagem salva, resposta antiga/fraca/vazia, homônimo, cancelamento e exclusão da pesquisa posterior sem quebrar conta/ficha.
+- `tests/brightdata-prioridade.test.ts`: prioridade resiste ao replanejamento; perfil de outra pessoa não é usado; falha do Markdown é recuperada pelo HTML sem scripts; resultado suficiente evita fonte alternativa.
+- `tests/qualificacao-profunda.test.ts`: a leitura nova preenche cargo, empresa, cidade e contexto na ficha existente; preserva status comercial e comportamento de execução em segundo plano.
+- 135 testes, TypeScript/build de produção, lint sem erros (aviso preexistente de imagem no setup), verificadores de padrão/jargão e diff sem espaços inválidos.
+- Navegador com 46 contatos e origem longa: linhas limitadas, 20 por página, link de abordagem existente, navegação pelo endereço, pesquisa sem acentos, reset de página, recarga, seleção, CSV, seleção fora do filtro, falha preservando a tabela, atualização de dados visível e celular sem rolagem horizontal. APIs de login/health locais reais; dados da lista e falhas simulados. Um teste adicional usou SQLite e APIs reais do app local: criação de contato, reencontro com dados atualizados, uma única ficha, atualização visível na lista e no detalhe, contexto profissional renderizado e decisões comerciais preservadas. Total: 17 cenários de navegador/integração local.
+
+## Limites verificados
+
+Não há credenciais de fornecedores reais no ambiente local. As integrações foram verificadas com respostas simuladas; não se afirma uma busca autenticada real. Registros de homônimos/diferentes produtos não são mesclados. Duplicatas históricas não são apagadas automaticamente. O endereço da instalação usada pelo usuário continua desconhecido; publicar imagem/catálogo não comprova atualização dessa instalação. O pipeline tem redeploy do Render desativado.

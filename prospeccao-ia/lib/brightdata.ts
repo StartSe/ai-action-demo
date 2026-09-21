@@ -22,7 +22,7 @@ function cliente(chave = getConfig("BRIGHTDATA_API_KEY")) {
 
 /** Só ferramentas de consulta; o catálogo completo de dados públicos permanece acessível. */
 function acaoDePesquisa(nome: string): boolean {
-  return ["search_engine", "search_engine_batch", "scrape_as_markdown", "scrape_batch", "search_dataset", "list_dataset_fields", "discover"].includes(nome)
+  return ["search_engine", "search_engine_batch", "scrape_as_markdown", "scrape_as_html", "scrape_batch", "search_dataset", "list_dataset_fields", "discover"].includes(nome)
     || nome.startsWith("web_data_");
 }
 

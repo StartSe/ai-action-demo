@@ -6,7 +6,7 @@ import { perfilLinkedin } from "./perfil-linkedin";
 import { avaliarVinculoEmpresa } from "./vinculo-empresa";
 export { perfilLinkedin } from "./perfil-linkedin";
 
-export type RotaPesquisa = { id: string; nome: string; executar: (cargoAlternativo?: string) => Promise<ResultadoBuscaWeb[]> };
+export type RotaPesquisa = { preferencial?: boolean; id: string; nome: string; executar: (cargoAlternativo?: string) => Promise<ResultadoBuscaWeb[]> };
 export const normalizarPesquisa = (texto: string) => texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 
 /** Descoberta suficiente não equivale a qualificação: os critérios completos são avaliados depois. */
@@ -48,7 +48,8 @@ export async function pesquisarEmRodadas(opcoes: {
   prepararCandidatos?: (itens: ResultadoBuscaWeb[]) => Promise<ResultadoBuscaWeb[]>;
   refinar?: (restantes: RotaPesquisa[], encontrados: number) => Promise<{ ordem: string[]; cargos: string[] } | null>;
 }): Promise<ResultadoBuscaWeb[]> {
-  const fila = [...opcoes.rotas];
+  const prioridade = (a: RotaPesquisa, b: RotaPesquisa) => Number(!!b.preferencial) - Number(!!a.preferencial);
+  const fila = [...opcoes.rotas].sort(prioridade);
   let itens: ResultadoBuscaWeb[] = [];
   let falha: unknown;
   let refinou = false;
@@ -56,7 +57,8 @@ export async function pesquisarEmRodadas(opcoes: {
   let chamadas = 0;
   const inicio = Date.now();
   while (fila.length && chamadas < 8 && Date.now() - inicio < 180000 && !opcoes.interrompida()) {
-    const rodada = fila.splice(0, 2);
+    const mesmoGrupo = fila.filter(r => !!r.preferencial === !!fila[0].preferencial).length;
+    const rodada = fila.splice(0, Math.min(2, mesmoGrupo));
     registrarDecisao(opcoes.prospeccaoId, `Buscando candidatos em ${rodada.map(r => r.nome).join(" e ")}${rodada.length > 1 ? ", em paralelo" : ""}.`);
     const respostas = await Promise.allSettled(rodada.map(async r => {
       const encontrados = (await r.executar()).filter(i => perfilLinkedin(i.url));
@@ -84,7 +86,7 @@ export async function pesquisarEmRodadas(opcoes: {
       refinou = true;
       const plano = await opcoes.refinar(fila, completos);
       if (plano) {
-        fila.sort((a, b) => (plano.ordem.includes(a.id) ? plano.ordem.indexOf(a.id) : 99) - (plano.ordem.includes(b.id) ? plano.ordem.indexOf(b.id) : 99));
+        fila.sort((a, b) => prioridade(a, b) || (plano.ordem.includes(a.id) ? plano.ordem.indexOf(a.id) : 99) - (plano.ordem.includes(b.id) ? plano.ordem.indexOf(b.id) : 99));
         variacoes = plano.cargos;
         registrarDecisao(opcoes.prospeccaoId, "A pesquisa foi reorganizada para completar os dados faltantes, mantendo os critérios originais.");
       }

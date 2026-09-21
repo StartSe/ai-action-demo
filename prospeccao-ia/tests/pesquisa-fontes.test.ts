@@ -80,14 +80,14 @@ test("fontes opcionais e integração com a prospecção", async t => {
       assert.equal(consultasDaProspeccao(`so-${fonte}`)[0].fonte, fonte);
     }
   });
-  await t.test("Exa vazio → Bright Data falha → Tavily vazio → SearchAPI encontra", async () => {
+  await t.test("Bright Data falha → Exa vazio → Tavily vazio → SearchAPI encontra", async () => {
     conectar("exa", "brightdata", "tavily", "searchapi");
     vazios.add("exa"); vazios.add("tavily"); falhas.brightdata = 401;
     const r = await buscarNaWeb("site:linkedin.com/in Diretor Brasil", 0, "fallback");
     assert.equal(r.itens.length, 1);
     const registros = consultasDaProspeccao("fallback");
-    assert.deepEqual(registros.map(r => r.fonte), ["exa", "brightdata", "tavily", "searchapi"]);
-    assert.deepEqual(registros.map(r => r.estado), ["vazia", "falhou", "vazia", "concluida"]);
+    assert.deepEqual(registros.map(r => r.fonte), ["brightdata", "exa", "tavily", "searchapi"]);
+    assert.deepEqual(registros.map(r => r.estado), ["falhou", "vazia", "vazia", "concluida"]);
     assert.equal(JSON.stringify(registros).includes("segredo-teste"), false);
   });
   await t.test("todas vazias diferem de autenticação, limite, rede e resposta inválida", async () => {

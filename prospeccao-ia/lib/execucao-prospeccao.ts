@@ -9,14 +9,14 @@ import { data } from "./formato";
 import { ErroProspectHalo, prospectHaloAtivo } from "./prospecthalo";
 import { pesquisarPessoas } from "./pesquisa-pessoas";
 import { avaliarVinculoEmpresa, mesmaEmpresa } from "./vinculo-empresa";
-import { registrarReencontro } from "./pesquisa-reencontros";
-import { retirarCandidatoParcial } from "./pesquisa-parciais";
+import { incorporarPerfil } from "./pesquisa-perfis";
+import { salvarPessoaEncontrada, dadosDoPerfil } from "./leads-enriquecimento";
 import { perfilLinkedin } from "./perfil-linkedin";
 import { avaliarCriterios, calcularFit, dominioDe, inferirPapel, resumoDaPagina, sinaisEncontrados, sinalAntigo } from "./qualificacao";
 import { avaliarCriterioInterpretativo, gerarHipoteseDor } from "./qualificacao-ia";
 import { QUANTIDADES_EMPRESAS } from "./rotulos";
 import { termoSensivel } from "./sensivel";
-import { atualizarConta, atualizarLead, atualizarProspeccao, criarConta, criarLead, criarProspeccao, leadsDoProduto, listarContas, listarLeads, obterICP, obterProduto, obterProspeccao } from "./workspace";
+import { atualizarConta, atualizarLead, atualizarProspeccao, criarConta, criarProspeccao, listarContas, listarLeads, obterICP, obterProduto, obterProspeccao } from "./workspace";
 import type { Conta, Evidencia, ICP, Jornada, ModoProspeccao, Prospeccao, SinalProspeccao } from "./types";
 
 const MODOS_PROSPECCAO_VALIDOS: ModoProspeccao[] = ["empresas", "pessoas", "empresa_unica", "oportunidades"];
@@ -468,7 +468,6 @@ async function buscarPessoasChaveUnica(prospeccaoId: string, conta: Conta, produ
 }
 
 async function adicionarPessoasDaConta(prospeccaoId: string, conta: Conta, produtoId: string, personas: string[], status: "novo" | "pesquisado"): Promise<void> {
-  const anteriores = new Map(leadsDoProduto(produtoId).map(l => [chaveLead(l.nome, l.empresa, l.linkedin), l]));
   const jaVistos = new Set<string>();
   const resultado = conta.demo
     ? { itens: [] as ResultadoBuscaWeb[], demo: true, consultadoEm: new Date().toISOString() }
@@ -484,20 +483,15 @@ async function adicionarPessoasDaConta(prospeccaoId: string, conta: Conta, produ
     const chave = chaveLead(candidato.nome, conta.nome, candidato.linkedin);
     if (jaVistos.has(chave)) continue;
     jaVistos.add(chave);
-    const anterior = anteriores.get(chave);
-    if (anterior) {
-      registrarReencontro(prospeccaoId, anterior.id);
-      retirarCandidatoParcial(prospeccaoId, candidato.linkedin);
-      continue;
-    }
     const conteudo = candidato.item ? await conteudoDaPessoa(candidato.item, prospeccaoId) : "";
     if (foiCancelada(prospeccaoId)) return;
     const evidenciasPessoa: Evidencia[] = resultado.demo ? avaliarCriterios(conteudo, [{ criterio: "Empresa atual", valor: conta.nome }])
       : [{ criterio: "Empresa atual", valor: vinculo!.empresa!, resultado: "atende", trecho: vinculo!.trecho }];
     const cargo = candidato.cargo && mesmaEmpresa(candidato.cargo, conta.nome) ? null : candidato.cargo;
-    criarLead({
+    salvarPessoaEncontrada({
       prospeccaoId, contaId: conta.id, nome: candidato.nome, cargo, empresa: resultado.demo ? conta.nome : vinculo!.empresa!, cidade: candidato.item?.pessoa?.cidade || (resultado.demo ? conta.cidade : null),
       linkedin: candidato.linkedin, fonte: resultado.demo ? null : `${(candidato.item?.fontes ?? ["busca pública"]).join(", ")} · ${candidato.linkedin}`,
+      ...dadosDoPerfil(candidato.item, resultado.consultadoEm),
       avatarUrl: candidato.item?.avatarUrl,
       papel: inferirPapel(cargo, personas), fit: conta.fit,
       evidencias: [...conta.evidencias, ...evidenciasPessoa], sinais: conta.sinais, hipotese: null,
@@ -545,10 +539,10 @@ const TETO_PESSOAS_MODO = 10;
  * pessoa isoladamente, sem conta. Só vira `LeadProspeccao` quem sobra com pelo menos um sinal depois do
  * filtro "somente recentes" — mesma regra de `buscarOportunidadesEmpresas`. Papel sempre "desconhecido"
  * (B2C não classifica papel de decisão; a qualificação completa desta jornada é da US-021). */
-async function buscarPessoasOportunidadesB2C(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null, produtoId: string): Promise<void> {
+async function buscarPessoasOportunidadesB2C(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null): Promise<void> {
   const { sinaisAlvo, recorte, somenteRecentes } = sinaisERecorte(criterios, icp);
   if (sinaisAlvo.length === 0) return;
-  const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
+  const jaVistos = new Set<string>();
 
   const consulta = ["site:linkedin.com/in", recorte, ...sinaisAlvo].filter(Boolean).join(" ");
   let resultado;
@@ -596,13 +590,19 @@ async function buscarPessoasOportunidadesB2C(prospeccaoId: string, criterios: Re
       demoFinal = perfil.demo;
     }
 
+    const perfilEncontrado = resultado.itens.find(i => i.url === candidato.linkedin);
+    if (perfilEncontrado && !demoFinal) {
+      perfilEncontrado.conteudoPerfilAtual = conteudo; perfilEncontrado.perfilConsultadoEm = consultadoEm;
+      try { incorporarPerfil(perfilEncontrado, JSON.parse(conteudo)); } catch { /* Sem campos estruturados, conserva apenas o contexto público. */ }
+    }
     const sinais = filtrarSinaisRecentes(sinaisEncontrados(conteudo, sinaisAlvo, origem, consultadoEm), somenteRecentes);
     if (sinais.length === 0) continue;
     jaVistos.add(chave);
     const evidencias = avaliarCriterios(conteudo, [{ criterio: "Localização", valor: recorte }]);
-    criarLead({
-      prospeccaoId, contaId: null, nome: candidato.nome, cargo: candidato.cargo, empresa: null,
-      cidade: recorte || null, linkedin: candidato.linkedin,
+    salvarPessoaEncontrada({
+      prospeccaoId, contaId: null, nome: perfilEncontrado?.pessoa?.nome || candidato.nome, cargo: perfilEncontrado?.pessoa?.cargo || candidato.cargo, empresa: perfilEncontrado?.pessoa?.empresa || null,
+      cidade: perfilEncontrado?.pessoa?.cidade || (demoFinal ? recorte || null : null), linkedin: candidato.linkedin,
+      ...dadosDoPerfil(perfilEncontrado, consultadoEm), avatarUrl: perfilEncontrado?.avatarUrl,
       fonte: demoFinal ? null : origemPessoa(dominioDe(candidato.linkedin), consultadoEm),
       papel: "desconhecido", fit: calcularFit(evidencias), evidencias, sinais, hipotese: null,
       status: "pesquisado", noCRM: false, demo: demoFinal,
@@ -630,13 +630,13 @@ function conteudoDemoDaPessoaB2C(indice: number, ocupacao: string, localizacao: 
  * que a condição de entrada é evidência (fit), não sinal. Sinais do ICP ainda são extraídos quando
  * aparecem no texto (alimentam a coluna "Sinal" da lista), mas continuam sem ser condição de entrada.
  * Papel sempre "desconhecido" (B2C não classifica papel de decisão). */
-async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null, produtoId: string): Promise<void> {
+async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null): Promise<void> {
   const localizacao = textoCriterio(criterios, "localizacao");
   const ocupacao = textoCriterio(criterios, "ocupacao");
   const contexto = textoCriterio(criterios, "contexto");
   const interesses = Array.isArray(criterios.interesses) ? criterios.interesses.filter((s): s is string => typeof s === "string") : [];
   const sinaisAlvo = icp?.sinais ?? [];
-  const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
+  const jaVistos = new Set<string>();
 
   const consulta = ["site:linkedin.com/in", ocupacao, localizacao, ...interesses].filter(Boolean).join(" ");
   let resultado;
@@ -684,6 +684,11 @@ async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, 
     }
 
     jaVistos.add(chave);
+    const perfilEncontrado = resultado.itens.find(i => i.url === candidato.linkedin);
+    if (perfilEncontrado && !demo) {
+      perfilEncontrado.conteudoPerfilAtual = conteudo; perfilEncontrado.perfilConsultadoEm = consultadoEm;
+      try { incorporarPerfil(perfilEncontrado, JSON.parse(conteudo)); } catch { /* Sem campos estruturados, conserva apenas o contexto público. */ }
+    }
     const evidenciasBase = avaliarCriterios(conteudo, [
       { criterio: "Localização", valor: localizacao },
       { criterio: "Ocupação", valor: ocupacao },
@@ -699,9 +704,10 @@ async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, 
     // a evidência em vez de sinal.
     if (!evidencias.some((e) => e.resultado !== "nao_verificavel")) continue;
     const sinais = sinaisEncontrados(conteudo, sinaisAlvo, origem, consultadoEm);
-    criarLead({
-      prospeccaoId, contaId: null, nome: candidato.nome, cargo: candidato.cargo, empresa: null,
-      cidade: localizacao || null, linkedin: candidato.linkedin,
+    salvarPessoaEncontrada({
+      prospeccaoId, contaId: null, nome: perfilEncontrado?.pessoa?.nome || candidato.nome, cargo: perfilEncontrado?.pessoa?.cargo || candidato.cargo, empresa: perfilEncontrado?.pessoa?.empresa || null,
+      cidade: perfilEncontrado?.pessoa?.cidade || (demo ? localizacao || null : null), linkedin: candidato.linkedin,
+      ...dadosDoPerfil(perfilEncontrado, consultadoEm), avatarUrl: perfilEncontrado?.avatarUrl,
       fonte: demo ? null : origemPessoa(dominioDe(candidato.linkedin), consultadoEm),
       papel: "desconhecido", fit: calcularFit(evidencias), evidencias, sinais, hipotese: null,
       status: "pesquisado", noCRM: false, demo,
@@ -724,7 +730,7 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
   const porte = textoCriterio(criterios, "porte") || icp?.criterios.porte || "";
   const resultado = await pesquisarPessoas({ cargo, empresa, segmento, localizacao, porte, outros: icp?.criterios.outros,
     proposta: obterProduto(produtoId)?.propostaValor, quantidade: TETO_PESSOAS_MODO }, prospeccaoId);
-  const jaVistos = new Set(leadsDoProduto(produtoId).map(l => chaveLead(l.nome, l.empresa, l.linkedin)));
+  const jaVistos = new Set<string>();
   const contas = new Map<string, Conta>();
   const candidatos = resultado.demo
     ? pessoasChaveDemo().map((p, i) => ({ titulo: `${p.nome} - ${p.cargo} - ${nomeEmpresaFicticia(segmento, i)}`, url: "", resumo: "" } as ResultadoBuscaWeb))
@@ -763,8 +769,9 @@ async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string
     }
     const evidencias = [...(conta?.evidencias ?? await avaliarComOutros(conteudo, [{ criterio: "Segmento", valor: segmento }, { criterio: "Porte", valor: porte }], icp)), ...avaliarCriterios(conteudo, [{ criterio: "Cargo", valor: cargo }, { criterio: "Localização da pessoa", valor: localizacao }])];
     if (foiCancelada(prospeccaoId)) return;
-    criarLead({ prospeccaoId, contaId: conta?.id ?? null, nome: pessoa.nome, cargo: pessoa.cargo, empresa: pessoa.empresa,
+    salvarPessoaEncontrada({ prospeccaoId, contaId: conta?.id ?? null, nome: pessoa.nome, cargo: pessoa.cargo, empresa: pessoa.empresa,
       cidade: item.pessoa?.cidade || null, linkedin: item.url || null,
+      ...dadosDoPerfil(item, resultado.consultadoEm),
       avatarUrl: item.avatarUrl,
       fonte: resultado.demo ? null : `${(item.fontes ?? ["busca pública"]).join(", ")} · ${item.url} · ${data(resultado.consultadoEm, { comAno: true })}`,
       papel: inferirPapel(pessoa.cargo, icp?.personas ?? []), fit: calcularFit(evidencias), evidencias,
@@ -785,12 +792,12 @@ async function etapaEncontrarPessoas(prospeccaoId: string, modo: ModoProspeccao,
   }
   if (modo === "pessoas") {
     if (jornada === "b2b") await buscarPessoasReais(prospeccaoId, criterios, icp, produtoId);
-    else await buscarPessoasB2C(prospeccaoId, criterios, icp, produtoId);
+    else await buscarPessoasB2C(prospeccaoId, criterios, icp);
     return;
   }
   // modo === "oportunidades" (único caso restante)
   if (jornada === "b2b") await buscarPessoasOportunidadesEmpresas(prospeccaoId, produtoId, icp?.personas ?? []);
-  else await buscarPessoasOportunidadesB2C(prospeccaoId, criterios, icp, produtoId);
+  else await buscarPessoasOportunidadesB2C(prospeccaoId, criterios, icp);
 }
 
 /** Etapa 5: promove os leads recém-criados de "pesquisado" para "qualificado" (fit/evidências já vêm

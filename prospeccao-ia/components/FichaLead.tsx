@@ -167,6 +167,8 @@ export function FichaLead({ leadId, onLeadAtualizado, layout = "painel" }: { lea
           </div>
           {lead.fit && <Chip nivel={lead.fit}>{ROTULO_FIT[lead.fit]}</Chip>}
         </div>
+        {lead.pesquisadoEm && <p className="text-xs text-muted mt-2">Dados conferidos em {new Date(lead.pesquisadoEm).toLocaleString("pt-BR")}</p>}
+        {lead.resumoProfissional && <details className="mt-3"><summary className="text-sm font-semibold text-accent-ink cursor-pointer">Contexto profissional coletado</summary><p className="text-sm text-muted whitespace-pre-wrap break-words mt-2">{lead.resumoProfissional}</p></details>}
         {lead.linkedin && (
           <a href={lead.linkedin} target="_blank" rel="noopener noreferrer" className="text-[12px] text-accent-ink hover:underline">
             Ver perfil
@@ -174,7 +176,9 @@ export function FichaLead({ leadId, onLeadAtualizado, layout = "painel" }: { lea
         )}
       </div>
   );
-  const qualificacao = <QualificacaoProfunda key={lead.id} leadId={lead.id} status={lead.status} aoQualificar={() => alterarStatus("qualificado")} />;
+  const qualificacao = <QualificacaoProfunda aoDadosAtualizados={() => {
+    void fetch(`/api/leads/${leadId}`).then(async r => { if (r.ok) { const novos = await r.json() as FichaDados; setDados(novos); onLeadAtualizado?.(novos.lead); } }).catch(() => setErroLista("Os dados foram pesquisados, mas a ficha não pôde ser atualizada. Recarregue a página."));
+  }} key={lead.id} leadId={lead.id} status={lead.status} aoQualificar={() => alterarStatus("qualificado")} />;
   const situacao = (
     <div className="flex flex-col gap-4">
       {jornada === "b2b" && (

@@ -1,7 +1,7 @@
 // Contrato oficial: brightdata/brightdata-mcp, search_dataset_schema.js e server.js.
-import { brightDataAtiva } from "./brightdata";
+import { brightDataAtiva, listarAcoesBrightData } from "./brightdata";
 import { urlAvatarPublico } from "./avatar-pessoa";
-import { buscarNaWeb, combinarResultados, executarAcaoPesquisa, listarAcoesPesquisa, type RespostaBusca } from "./descoberta";
+import { buscarNaWeb, combinarResultados, executarAcaoPesquisa, type RespostaBusca } from "./descoberta";
 
 export const DATASET_PESSOAS = "gd_l1viktl72bvl7bjuj0";
 export type FiltrosPessoas = { cargo?: string; empresa?: string; localizacao?: string; setor?: string };
@@ -56,7 +56,7 @@ export async function buscarPessoasAvancada(consulta: string, filtros: FiltrosPe
   let resultadoDataset: RespostaBusca | undefined;
   if (brightDataAtiva()) {
     try {
-      const acoes = await listarAcoesPesquisa();
+      const acoes = await listarAcoesBrightData();
       if (acoes.some(a => a.nome === "search_dataset") && acoes.some(a => a.nome === "list_dataset_fields")) {
         const campos = await executarAcaoPesquisa("list_dataset_fields", { dataset_id: DATASET_PESSOAS }, prospeccaoId);
         const filtro = filtroPessoas(Array.isArray(campos) ? campos.filter(c => typeof c?.name === "string") : [], filtros);

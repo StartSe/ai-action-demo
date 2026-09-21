@@ -36,6 +36,7 @@ function contextoQualificacao(lead: LeadProspeccao, conta: Conta | null) {
   linhas.push(`Nome: ${lead.nome}`);
   if (lead.cargo) linhas.push(`Cargo: ${lead.cargo}`);
   if (lead.empresa) linhas.push(`Empresa: ${lead.empresa}`);
+  if (lead.resumoProfissional) linhas.push(`Contexto profissional público coletado (${lead.pesquisadoEm || "data não registrada"}; fonte: ${lead.linkedin || lead.fonte || "perfil público"}): ${lead.resumoProfissional.slice(0, 4000)}`);
   if (lead.fit) linhas.push(`Aderência ao perfil ideal: ${ROTULO_FIT[lead.fit]}`);
   const papelRotulo = ROTULO_PAPEL[lead.papel];
   if (papelRotulo) linhas.push(`Papel na decisão: ${papelRotulo}`);

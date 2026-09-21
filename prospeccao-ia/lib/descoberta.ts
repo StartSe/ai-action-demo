@@ -4,6 +4,7 @@
 // search_dataset e web_data_*). Catálogo e schemas são descobertos por tools/list.
 import { prospectHaloAtivo, listarAcoesProspectHalo, executarAcaoProspectHalo } from "./prospecthalo";
 import { perfilLinkedin } from "./perfil-linkedin";
+import { textoDeHtml } from "./texto-html";
 import { buscarFonte, lerFonte, fontesOpcionais, FONTES, ErroFonte, type FonteOpcional } from "./pesquisa-fontes";
 import { registrarConsulta, concluirConsulta, limiteDaFonte } from "./pesquisa-registro";
 import type { DatabaseSync } from "node:sqlite";
@@ -218,7 +219,7 @@ async function consultarOpcional<T extends string | ResultadoBuscaWeb[]>(fonte: 
 
 // --- Busca na web --------------------------------------------------------------------------------
 
-export type ResultadoBuscaWeb = { titulo: string; url: string; resumo: string; fontes?: string[]; avatarUrl?: string | null; conteudoPerfil?: string; conteudoPerfilAtual?: string; contextoProfissional?: boolean; perfilPesquisado?: boolean; pessoa?: { nome: string; cargo: string; empresa: string; cidade: string; site: string } };
+export type ResultadoBuscaWeb = { titulo: string; url: string; resumo: string; fontes?: string[]; avatarUrl?: string | null; conteudoPerfil?: string; conteudoPerfilAtual?: string; perfilConsultadoEm?: string; contextoProfissional?: boolean; perfilPesquisado?: boolean; pessoa?: { nome: string; cargo: string; empresa: string; cidade: string; site: string } };
 
 /** Intercala fornecedores para que o corte de candidatos não favoreça apenas a primeira fonte. */
 export function combinarResultados(lotes: ResultadoBuscaWeb[][]): ResultadoBuscaWeb[] {
@@ -263,15 +264,21 @@ export async function buscarNaWeb(consulta: string, pagina = 0, prospeccaoId?: s
     return { itens: resultadosBuscaDemo(consulta), origem, consultadoEm, demo: true };
   }
   const opcionais = fontesOpcionais();
-  const fontes = [...(opcionais.includes("exa") ? ["exa" as const] : []), ...(brightDataAtiva() ? ["brightdata" as const] : []), ...opcionais.filter(f => f !== "exa")];
+  const fontes = opcionais;
   let ultimaFalha: unknown;
+  if (brightDataAtiva()) {
+    try {
+      const itens = resultadosOrganicos(await executarAcaoPesquisa("search_engine", { query: consulta, engine: "google", ...(pagina > 0 ? { cursor: String(pagina) } : {}) }, prospeccaoId));
+      const site = /site:([^\s]+)/i.exec(consulta)?.[1];
+      const pertinentes = site ? itens.filter(i => { try { const alvo = new URL(`https://${site}`), url = new URL(i.url); return (url.hostname === alvo.hostname || url.hostname.endsWith(`.${alvo.hostname}`)) && url.pathname.startsWith(alvo.pathname); } catch { return false; } }) : itens;
+      if (pertinentes.length) return { itens: pertinentes.map(i => ({ ...i, fontes: ["brightdata"] })), origem, consultadoEm, demo: false };
+    } catch (erro) { ultimaFalha = erro; }
+  }
   const lotes: ResultadoBuscaWeb[][] = [];
   // Duas fontes por vez: falhas isoladas não descartam respostas válidas.
   for (let i = 0; i < fontes.length; i += 2) {
     const respostas = await Promise.allSettled(fontes.slice(i, i + 2).map(async fonte => {
-      const itens = fonte === "brightdata"
-        ? resultadosOrganicos(await executarAcaoPesquisa("search_engine", { query: consulta, engine: "google", ...(pagina > 0 ? { cursor: String(pagina) } : {}) }, prospeccaoId))
-        : await consultarOpcional(fonte, "busca", consulta, prospeccaoId, () => buscarFonte(fonte, consulta, pagina));
+      const itens = await consultarOpcional(fonte, "busca", consulta, prospeccaoId, () => buscarFonte(fonte, consulta, pagina));
       const site = /site:([^\s]+)/i.exec(consulta)?.[1];
       const filtrados = site ? itens.filter(item => {
         try {
@@ -309,17 +316,20 @@ export function conteudoEstruturado(resultado: unknown): string | undefined {
 
 /** Reaproveita `cache_paginas` quando a URL já foi lida há menos de 24h (sem nova chamada à Bright
  * Data, sem contar consulta nenhuma); senão lê de verdade e grava o resultado no cache. */
-async function lerConteudoBrightData(url: string, prospeccaoId?: string): Promise<string> {
-  const emCache = lerCache(url);
+export async function lerConteudoBrightData(url: string, prospeccaoId?: string, leituraNova = false): Promise<string> {
+  const emCache = leituraNova ? null : lerCache(url);
   if (emCache !== null) return emCache;
   const acao = acaoParaUrl(url);
   let conteudo: string | undefined;
   let estruturado = false;
+  const acoes = await listarAcoesBrightData();
   if (acao !== "scrape_as_markdown") {
-    const acoes = await listarAcoesPesquisa();
     if (acoes.some(f => f.nome === acao)) {
       try {
-        conteudo = conteudoEstruturado(await executarAcaoPesquisa(acao, { url }, prospeccaoId));
+        const resultado = await executarAcaoPesquisa(acao, { url }, prospeccaoId);
+        const perfil = perfilLinkedin(url);
+        const registros = Array.isArray(resultado) ? resultado : [resultado];
+        conteudo = conteudoEstruturado(perfil ? registros.filter(r => r && typeof r === "object" && (!r.url && !r.linkedin_url || perfilLinkedin(r.url || r.linkedin_url) === perfil)) : resultado);
         estruturado = !!conteudo;
       }
       catch (erro) {
@@ -329,9 +339,16 @@ async function lerConteudoBrightData(url: string, prospeccaoId?: string): Promis
     }
   }
   if (!conteudo) {
-    const markdown = await executarAcaoPesquisa("scrape_as_markdown", { url }, prospeccaoId);
-    // Um envelope vazio ou objeto de erro não é conteúdo de uma página.
-    if (typeof markdown === "string") conteudo = markdown;
+    for (const alternativa of ["scrape_as_markdown", "scrape_as_html"]) {
+      if (!acoes.some(a => a.nome === alternativa)) continue;
+      try {
+        const leitura = await executarAcaoPesquisa(alternativa, { url }, prospeccaoId);
+        if (typeof leitura === "string") conteudo = alternativa === "scrape_as_html" ? textoDeHtml(leitura) : leitura;
+        if (conteudo?.trim()) break;
+      } catch (erro) {
+        if (erro instanceof TetoConsultasAtingido) throw erro;
+      }
+    }
   }
   if (!conteudo?.trim()) throw new ErroDescoberta("sem_resultado", "Não foi possível ler o conteúdo dessa página.", 404);
   // Cortar JSON no meio invalida até os campos de identidade/empresa que vieram completos.
@@ -371,7 +388,8 @@ export async function lerPagina(url: string, prospeccaoId?: string, resumoAltern
     return { conteudo: conteudoPaginaDemo(url), origem: url, consultadoEm, demo: true };
   }
   const conteudo = await lerConteudo(url, prospeccaoId, resumoAlternativo);
-  return { conteudo, origem: url, consultadoEm, demo: false };
+  const cache = banco().prepare("SELECT lido_em FROM cache_paginas WHERE url = ? AND conteudo = ?").get(url, conteudo) as { lido_em: string } | undefined;
+  return { conteudo, origem: url, consultadoEm: cache?.lido_em || consultadoEm, demo: false };
 }
 
 /** Perfil público: dados estruturados da rede quando disponíveis, com fallback para Markdown. */
@@ -381,7 +399,8 @@ export async function perfilDePessoa(url: string, prospeccaoId?: string, resumoA
     return { conteudo: perfilPessoaDemo(url), origem: url, consultadoEm, demo: true };
   }
   const conteudo = await lerConteudo(url, prospeccaoId, resumoAlternativo);
-  return { conteudo, origem: url, consultadoEm, demo: false };
+  const cache = banco().prepare("SELECT lido_em FROM cache_paginas WHERE url = ? AND conteudo = ?").get(url, conteudo) as { lido_em: string } | undefined;
+  return { conteudo, origem: url, consultadoEm: cache?.lido_em || consultadoEm, demo: false };
 }
 
 // --- Descoberta em lote ---------------------------------------------------------------------------

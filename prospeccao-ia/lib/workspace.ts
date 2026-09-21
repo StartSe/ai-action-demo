@@ -108,6 +108,9 @@ function banco(): DatabaseSync {
   try { d.exec(`ALTER TABLE leads ADD COLUMN papel_manual INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
   try { d.exec(`ALTER TABLE leads ADD COLUMN motivo_descarte TEXT`); } catch { /* coluna já existe */ }
   try { d.exec(`ALTER TABLE leads ADD COLUMN avatar_url TEXT`); } catch { /* coluna já existe */ }
+  for (const coluna of ["resumo_profissional TEXT", "pesquisado_em TEXT", "qualidade_dados INTEGER NOT NULL DEFAULT 0"]) {
+    try { d.exec(`ALTER TABLE leads ADD COLUMN ${coluna}`); } catch { /* coluna já existe */ }
+  }
   d.exec(`CREATE INDEX IF NOT EXISTS idx_leads_prospeccao ON leads (prospeccao_id)`);
   d.exec(`CREATE INDEX IF NOT EXISTS idx_leads_conta ON leads (conta_id)`);
   d.exec(`CREATE TABLE IF NOT EXISTS abordagens (
@@ -341,8 +344,10 @@ export function listarLeadsComContexto() {
     }),
   );
   const sitePorConta = new Map(listarContas().map((c) => [c.id, c.site] as const));
+  const comAbordagem = new Set((banco().prepare("SELECT DISTINCT lead_id FROM abordagens").all() as { lead_id: string }[]).map(a => a.lead_id));
   const leads = listarLeads().map((l) => ({
     ...l,
+    temAbordagem: comAbordagem.has(l.id),
     prospeccaoNome: nomesPorProspeccao.get(l.prospeccaoId) ?? "Prospecção",
     site: l.contaId ? (sitePorConta.get(l.contaId) ?? null) : null,
   }));
@@ -421,6 +426,7 @@ export function apagarConta(id: string): void {
 // --- Leads (pessoas) --------------------------------------------------------------
 
 type LinhaLead = {
+  resumo_profissional: string | null; pesquisado_em: string | null; qualidade_dados: number;
   avatar_url: string | null;
   id: string; prospeccao_id: string; conta_id: string | null; nome: string; cargo: string | null; empresa: string | null; cidade: string | null;
   linkedin: string | null; fonte: string | null; papel: string; fit: string | null; evidencias: string; sinais: string; hipotese: string | null;
@@ -429,6 +435,7 @@ type LinhaLead = {
 
 function linhaParaLead(l: LinhaLead): LeadProspeccao {
   return {
+    resumoProfissional: l.resumo_profissional, pesquisadoEm: l.pesquisado_em, qualidadeDados: l.qualidade_dados,
     avatarUrl: urlAvatarPublico(l.avatar_url),
     id: l.id, prospeccaoId: l.prospeccao_id, contaId: l.conta_id, nome: l.nome, cargo: l.cargo, empresa: l.empresa, cidade: l.cidade,
     linkedin: l.linkedin, fonte: l.fonte, papel: l.papel as LeadProspeccao["papel"], papelManual: l.papel_manual === 1, fit: l.fit as LeadProspeccao["fit"],
@@ -449,8 +456,9 @@ export function criarLead(dados: NovoLeadProspeccao, em?: Date): LeadProspeccao 
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, dados.prospeccaoId, dados.contaId, dados.nome, dados.cargo, dados.empresa, dados.cidade, dados.linkedin, dados.fonte, dados.papel, dados.fit,
       JSON.stringify(dados.evidencias), JSON.stringify(dados.sinais), dados.hipotese, dados.status, dados.noCRM ? 1 : 0, demo ? 1 : 0, papelManual ? 1 : 0, motivoDescarte, agora, agora, avatarUrl);
+  banco().prepare("UPDATE leads SET resumo_profissional = ?, pesquisado_em = ?, qualidade_dados = ? WHERE id = ?").run(dados.resumoProfissional ?? null, dados.pesquisadoEm ?? null, dados.qualidadeDados ?? 0, id);
   retirarCandidatoParcial(dados.prospeccaoId, dados.linkedin);
-  return { id, criadoEm: agora, atualizadoEm: agora, ...dados, demo, papelManual, motivoDescarte, avatarUrl };
+  return obterLead(id)!;
 }
 
 export function listarLeads(prospeccaoId?: string): LeadProspeccao[] {
@@ -467,6 +475,7 @@ export function obterLead(id: string): LeadProspeccao | null {
 
 export function atualizarLead(id: string, dados: Partial<NovoLeadProspeccao>, em?: Date): LeadProspeccao | null {
   const { set, valores } = montarSet({
+    resumo_profissional: dados.resumoProfissional, pesquisado_em: dados.pesquisadoEm, qualidade_dados: dados.qualidadeDados,
     avatar_url: dados.avatarUrl === undefined ? undefined : urlAvatarPublico(dados.avatarUrl),
     conta_id: dados.contaId, nome: dados.nome, cargo: dados.cargo, empresa: dados.empresa, cidade: dados.cidade, linkedin: dados.linkedin,
     fonte: dados.fonte, papel: dados.papel, fit: dados.fit, evidencias: dados.evidencias && JSON.stringify(dados.evidencias),

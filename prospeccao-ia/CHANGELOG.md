@@ -1,5 +1,14 @@
 # Notas de versão
 
+## 0.7.0 — 2026-09-21
+
+- Leads com cargo, empresa e localização junto do nome, origem compacta, busca sem acentos, filtros compartilháveis, ordenação e páginas de 20 pessoas. Cartões no celular e filtros complementares recolhidos. A seleção da página oferece exportação, indica contatos fora do filtro e mantém a ação de CRM.
+- Lista atualizada em segundo plano, com recuperação de falhas sem apagar os dados visíveis. “Ver abordagem” reflete uma mensagem salva, independentemente do status comercial.
+- Contatos reencontrados incorporam dados profissionais, foto, contexto, fontes, evidências e sinais à ficha existente. Respostas antigas ou incompletas não degradam os dados; status, papel manual, CRM e mensagens salvas permanecem. A qualificação aprofundada também atualiza o perfil e a ficha exibe a data e o contexto coletado.
+- Bright Data primeiro: Search Engine e Search Dataset nas primeiras rodadas, Person Profile na conferência e Markdown/HTML como alternativas de leitura. Outros fornecedores são consultados para lacunas/falhas. O planejador preserva a prioridade, e respostas de outro LinkedIn são rejeitadas.
+
+Validação: 135 testes automatizados com fornecedores simulados, build de produção, lint sem erros e 17 cenários de navegador e integração local com 46 leads, desktop/celular, paginação, seleção, exportação, recarga e recuperação de falhas. Detalhes em `../tasks/prospeccao-ia-leads-atualizacao.md`.
+
 ## 0.6.1 — 2026-09-21
 
 - Pesquisa por empresa exige evidência de vínculo antes de salvar a pessoa. Resultados de outras empresas não preenchem vagas, e a empresa procurada não é copiada como evidência. A conferência ocorre entre rodadas, permitindo recuperar perfis pertinentes após resultados irrelevantes.

@@ -117,11 +117,13 @@ test("regressão: explorar StartSe nunca preenche vagas com pessoas de outras em
   await t.test("repetir reconhece os mesmos contatos sem duplicação nem mudança comercial", async () => {
     cenario = "repetida"; const ids = base();
     const primeira = await executar(ids);
-    ws.atualizarLead(primeira.leads[0].id, { status: "selecionado" });
+    ws.atualizarLead(primeira.leads[0].id, { status: "selecionado", cargo: null });
     const segunda = await executar(ids);
     assert.equal(segunda.leads.length, 0); assert.equal(segunda.reencontrados.length, 5);
     assert.equal(ws.leadsDoProduto(ids.produtoId).length, 5);
     assert.equal(ws.obterLead(primeira.leads[0].id)!.status, "selecionado");
+    assert.equal(ws.obterLead(primeira.leads[0].id)!.cargo, "Diretora");
+    assert.ok(ws.obterLead(primeira.leads[0].id)!.resumoProfissional);
     assert.equal(segunda.candidatos.length, 0);
     ws.apagarProspeccao(primeira.prospeccao.id);
     assert.equal(ws.obterAndamento(segunda.prospeccao.id)!.reencontrados.length, 0);
@@ -134,9 +136,11 @@ test("regressão: explorar StartSe nunca preenche vagas com pessoas de outras em
     cenario = "dataset";
     setConfig("EXA_API_KEY", null); setConfig("BRIGHTDATA_API_KEY", "teste-empresa-dataset");
     const chamadas: { nome: string; args: Record<string, unknown> }[] = [];
+    let contradizer = true, externas = 0;
     const registro = (i: number, empresa = "StartSe") => ({ name: `Pessoa Dataset ${i}`, url: url("correto", i), position: "Diretora", current_company_name: empresa, about: texto(`Pessoa Dataset ${i}`, empresa) });
     abrirBanco().prepare("INSERT INTO cache_paginas (url, conteudo, lido_em) VALUES (?, ?, ?)").run(url("correto", 0), JSON.stringify([{ ...registro(0), about: texto("Pessoa Dataset 0").repeat(50) }]).slice(0, 8000), new Date().toISOString());
     const mock = t.mock.method(global, "fetch", async (_input: string | URL | Request, init?: RequestInit) => {
+      if (new URL(String(_input)).hostname !== "mcp.brightdata.com") { externas++; throw new Error("Fonte alternativa desnecessária"); }
       const body = JSON.parse(String(init?.body || "{}"));
       let result: unknown;
       if (body.method === "initialize") result = { protocolVersion: "2025-03-26", capabilities: {}, serverInfo: { name: "teste", version: "1" } };
@@ -149,7 +153,7 @@ test("regressão: explorar StartSe nunca preenche vagas com pessoas de outras em
         else if (nome === "search_dataset") dados = { hits: [registro(9, "Outra Empresa"), ...Array.from({ length: 5 }, (_, i) => registro(i))] };
         else if (nome === "web_data_linkedin_person_profile") {
           const i = Number(String(args.url).split("-").at(-1));
-          dados = [{ ...registro(i, i === 0 ? "Outra Empresa" : "StartSe"), about: texto(`Pessoa Dataset ${i}`).repeat(50) }];
+          dados = [{ ...registro(i, i === 0 && contradizer ? "Outra Empresa" : "StartSe"), about: texto(`Pessoa Dataset ${i}`).repeat(50) }];
         } else if (nome === "scrape_as_markdown") dados = "StartSe, escola de negócios e educação executiva.";
         else dados = { organic: String(args.query).includes("site institucional") ? [{ title: "StartSe", link: "https://dataset.startse.test", description: "StartSe, escola de negócios." }] : [] };
         result = { content: [{ type: "text", text: typeof dados === "string" ? dados : JSON.stringify(dados) }] };
@@ -164,6 +168,14 @@ test("regressão: explorar StartSe nunca preenche vagas com pessoas de outras em
       assert.equal(chamadas.filter(c => c.nome === "web_data_linkedin_person_profile").length, 5);
       assert.ok(!chamadas.some(c => c.nome === "web_data_linkedin_person_profile" && String(c.args.url).endsWith("-9")));
       assert.ok(r.candidatos.every(c => !c.url.endsWith("-0") && !c.url.endsWith("-9")));
-    } finally { mock.mock.restore(); setConfig("BRIGHTDATA_API_KEY", null); }
+      cenario = "dataset-suficiente"; contradizer = false; chamadas.length = 0;
+      for (const chave of ["EXA_API_KEY", "TAVILY_API_KEY", "SEARCHAPI_API_KEY", "PROSPECTHALO_API_KEY"]) setConfig(chave, "alternativa-conectada");
+      const suficiente = await executar();
+      assert.equal(suficiente.leads.length, 5);
+      assert.equal(externas, 0, "Bright Data suficiente não consulta fornecedores alternativos");
+      assert.ok(chamadas.some(c => c.nome === "search_dataset"));
+      assert.ok(chamadas.some(c => c.nome === "search_engine"));
+      assert.equal(chamadas.filter(c => c.nome === "web_data_linkedin_person_profile").length, 5);
+    } finally { mock.mock.restore(); for (const chave of ["BRIGHTDATA_API_KEY", "EXA_API_KEY", "TAVILY_API_KEY", "SEARCHAPI_API_KEY", "PROSPECTHALO_API_KEY"]) setConfig(chave, null); }
   });
 });

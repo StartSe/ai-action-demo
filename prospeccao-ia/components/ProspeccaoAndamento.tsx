@@ -722,7 +722,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
             {mostrarParciais && <ResultadosParciais candidatos={candidatos} leads={andamento.prospeccao.estado === "pronta" ? [] : andamento.leads} contas={andamento.prospeccao.estado === "pronta" ? [] : andamento.contas} executando={andamento.prospeccao.estado === "executando"} />}
             {reencontrados.length > 0 && <section className="card p-5 mb-5" aria-labelledby="titulo-reencontrados">
               <h2 id="titulo-reencontrados" className="font-bold text-lg">Contatos já encontrados · {reencontrados.length}</h2>
-              <p className="text-sm text-muted mt-2 mb-4">Estes perfis apareceram novamente. Mantivemos a ficha e o histórico existentes, sem duplicar os contatos.</p>
+              <p className="text-sm text-muted mt-2 mb-4">Estes perfis apareceram novamente. Atualizamos os dados encontrados na ficha existente e preservamos o histórico e as decisões comerciais.</p>
               <ul className="space-y-3">{reencontrados.map(lead => <li key={lead.id} className="flex items-center gap-3">
                 <AvatarPessoa nome={lead.nome} url={lead.avatarUrl} />
                 <div className="min-w-0"><p className="text-sm font-semibold break-words">{lead.nome}</p><p className="text-xs text-muted break-words">{[lead.cargo, lead.empresa].filter(Boolean).join(" · ")}</p><Link href={`/leads/${lead.id}`} className="text-xs text-accent-ink hover:underline">Abrir ficha existente</Link></div>

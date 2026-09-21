@@ -38,7 +38,7 @@ test("qualificação profunda: fontes sociais, nota verificável e trabalho em b
     else {
       const acao = body.params.name; acoes.push(acao); await bloqueio;
       const data = acao === "search_engine" ? { organic: [{ title: "Outro Rodrigo", link: "https://www.linkedin.com/posts/homonimo_123", description: trecho }, { title: "Post do Rodrigo", link: post, description: trecho }] }
-        : acao === "web_data_linkedin_person_profile" ? (erroPerfil ? [{ error: "not found" }] : [{ about: trecho, instagram: semInstagram ? null : instagram }])
+        : acao === "web_data_linkedin_person_profile" ? (erroPerfil ? [{ error: "not found" }] : [{ name: "Rodrigo Silva", url: body.params.arguments.url, position: "Diretor de inovação", current_company_name: "Empresa Atual", location: "São Paulo", about: trecho, instagram: semInstagram ? null : instagram }])
         : acao === "web_data_instagram_profiles" ? [{ bio: trecho, posts: ["https://www.instagram.com/p/ABC123/"] }]
         : [{ content: trecho }];
       result = { content: [{ type: "text", text: JSON.stringify(data) }] };
@@ -58,6 +58,10 @@ test("qualificação profunda: fontes sociais, nota verificável e trabalho em b
     const job = qualificacaoAtual(lead.id)!;
     assert.equal(job.estado, "pronta"); assert.equal(job.resultado?.pontuacao, 100); assert.equal(job.resultado?.cobertura, 100);
     assert.equal(ws.obterLead(lead.id)?.status, "pesquisado"); assert.equal(chamadasIA, 1);
+    assert.equal(ws.obterLead(lead.id)?.cargo, "Diretor de inovação");
+    assert.equal(ws.obterLead(lead.id)?.empresa, "Empresa Atual");
+    assert.equal(ws.obterLead(lead.id)?.cidade, "São Paulo");
+    assert.equal(ws.obterLead(lead.id)?.resumoProfissional, trecho);
     assert.deepEqual(acoes, ["web_data_linkedin_person_profile", "search_engine", "web_data_linkedin_posts", "web_data_instagram_profiles", "web_data_instagram_posts"]);
     assert.equal(job.fontes.some(f => f.url.includes("homonimo")), false);
     const recarregada = await GET(new Request(req(lead.id).url), params(lead.id));

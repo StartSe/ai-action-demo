@@ -128,6 +128,7 @@ async function aprofundarPerfil(item: ResultadoBuscaWeb, id: string, acoes: Ferr
     } catch { /* Texto público será avaliado abaixo. */ }
     if (texto.trim() && texto !== item.resumo) {
       item.conteudoPerfilAtual = texto;
+      item.perfilConsultadoEm = leitura.consultadoEm;
       anexarConteudo(item, texto);
       const fontesLidas = consultasDaProspeccao(id).filter(c => c.consulta === item.url && c.estado === "concluida").map(c => c.fonte);
       item.fontes = [...new Set([...(item.fontes ?? []), ...fontesLidas])];

@@ -31,7 +31,7 @@ test("estratégia de coleta: dataset, fontes complementares e leitura resiliente
     else if (body.method === "tools/list") result = { tools: ["list_dataset_fields", "search_dataset", "search_engine", "scrape_as_markdown", "web_data_linkedin_person_profile"].map(name => ({ name, inputSchema: { type: "object" } })) };
     else {
       const nome = body.params.name; acoes.push(nome);
-      if (falharPerfil && nome === "web_data_linkedin_person_profile") return new Response("", { status: 503 });
+      if (falharPerfil && ["web_data_linkedin_person_profile", "scrape_as_markdown"].includes(nome)) return new Response("", { status: 503 });
       const dados = nome === "list_dataset_fields" ? [{ name: "position", type: "text" }, { name: "country_code", type: "text" }]
         : nome === "search_dataset" ? { hits: [{ _source: { name: "Ana Dataset", position: "Diretora", current_company_name: "Exemplo", url: "https://www.linkedin.com/in/ana-dataset", about: conteudo } }] }
         : nome === "search_engine" ? { organic: [{ title: "Bia Web - Diretora - Exemplo", link: "https://www.linkedin.com/in/bia-web", description: conteudo }] }
@@ -72,7 +72,7 @@ test("estratégia de coleta: dataset, fontes complementares e leitura resiliente
     assert.ok(acoes.filter(a => a === "exa_search").length >= 2);
     assert.ok(r.contas.some(c => c.sinais.some(s => s.tipo === "sinal" && s.origem === "https://exemplo.test/" || s.origem === "https://exemplo.test")));
   });
-  await t.test("falha do perfil Bright Data continua pela Exa na qualificação profunda", async () => {
+  await t.test("falha do perfil e Markdown Bright Data continua pela Exa na qualificação profunda", async () => {
     setConfig("BRIGHTDATA_API_KEY", "teste"); setConfig("EXA_API_KEY", "teste"); falharPerfil = true; acoes.length = 0;
     const p = criar("pessoas");
     const lead = ws.criarLead({ prospeccaoId: p.id, contaId: null, nome: "Ana", cargo: "Diretora", empresa: "Exemplo", cidade: null, linkedin: "https://www.linkedin.com/in/ana-nova/", fonte: "Pesquisa", papel: "decisor", fit: null, evidencias: [], sinais: [], hipotese: null, status: "pesquisado", noCRM: false, demo: false });

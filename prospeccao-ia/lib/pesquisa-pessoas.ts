@@ -27,20 +27,20 @@ export async function pesquisarPessoas(c: CriteriosProspectHalo, prospeccaoId: s
     resumo: [p.cargo, p.empresa, p.setor, p.porte, p.cidade, p.sinal].filter(Boolean).join(". "), fontes: ["prospecthalo"], pessoa: p,
   })) });
   if (acoes.some(a => a.nome === "search_dataset") && acoes.some(a => a.nome === "list_dataset_fields")) rotas.push({
-    id: "brightdata_dataset", nome: "Bright Data · base de perfis", executar: async () => (await buscarPessoasAvancada(consulta(), { cargo: c.cargo, empresa: c.empresa, setor: c.segmento, localizacao: c.localizacao }, prospeccaoId, true)).itens,
+    preferencial: true, id: "brightdata_dataset", nome: "Bright Data · base de perfis", executar: async () => (await buscarPessoasAvancada(consulta(), { cargo: c.cargo, empresa: c.empresa, setor: c.segmento, localizacao: c.localizacao }, prospeccaoId, true)).itens,
   });
   for (const fonte of fontesOpcionais()) rotas.push({ id: fonte, nome: FONTES[fonte], executar: async alternativo => {
     const itens = await executarAcaoPesquisa(`${fonte}_search`, { consulta: fonte === "exa" ? consultaPessoas(c, "semantica", alternativo) : consulta(alternativo), categoria: "people" }, prospeccaoId) as ResultadoBuscaWeb[];
     return itens.map(i => ({ ...i, fontes: [fonte] }));
   } });
-  if (brightDataAtiva()) rotas.splice(Math.min(2, rotas.length), 0, { id: "brightdata_web", nome: "Bright Data · busca web", executar: async alternativo => resultadosOrganicos(await executarAcaoPesquisa("search_engine", { query: consulta(alternativo), engine: "google" }, prospeccaoId)).map(i => ({ ...i, fontes: ["brightdata"] })) });
+  if (brightDataAtiva()) rotas.splice(Math.min(2, rotas.length), 0, { preferencial: true, id: "brightdata_web", nome: "Bright Data · busca web", executar: async alternativo => resultadosOrganicos(await executarAcaoPesquisa("search_engine", { query: consulta(alternativo), engine: "google" }, prospeccaoId)).map(i => ({ ...i, fontes: ["brightdata"] })) });
   // A busca geral indexada complementa o índice people, mantendo a empresa obrigatória.
   if (c.empresa && fontesOpcionais().includes("exa")) rotas.unshift({ id: "exa_web", nome: "Exa · perfis da empresa na web", executar: async () =>
     (await executarAcaoPesquisa("exa_search", { consulta: consulta() }, prospeccaoId) as ResultadoBuscaWeb[]).map(i => ({ ...i, fontes: ["exa"] })),
   });
   if (c.empresa) {
     const fonte = brightDataAtiva() ? "brightdata" : fontesOpcionais().find(f => f === "searchapi") || fontesOpcionais()[0];
-    if (fonte) rotas.push({ id: "empresa_sem_cargo", nome: "Pesquisa pelo vínculo com a empresa", executar: async () => {
+    if (fonte) rotas.push({ preferencial: fonte === "brightdata", id: "empresa_sem_cargo", nome: "Pesquisa pelo vínculo com a empresa", executar: async () => {
       const query = consultaPessoas(c, "web", undefined, true);
       const itens = fonte === "brightdata" ? resultadosOrganicos(await executarAcaoPesquisa("search_engine", { query, engine: "google" }, prospeccaoId))
         : await executarAcaoPesquisa(`${fonte}_search`, { consulta: query }, prospeccaoId) as ResultadoBuscaWeb[];
@@ -78,10 +78,12 @@ export async function pesquisarPessoas(c: CriteriosProspectHalo, prospeccaoId: s
   };
   const itens = await pesquisarEmRodadas({ rotas, alvo, cargo: c.cargo, empresa: c.empresa, prospeccaoId, interrompida: cancelada,
     aoEncontrar: publicar,
-    prepararCandidatos: c.empresa ? verificarEmpresa : undefined,
+    prepararCandidatos: c.empresa ? verificarEmpresa : async encontrados => {
+      await completarPerfis(encontrados.slice(0, alvo), prospeccaoId, acoes, cancelada, atualizar);
+      return encontrados;
+    },
     refinar: (restantes, encontrados) => refinarPlano({ ...c }, restantes, encontrados),
   });
-  if (!cancelada() && !c.empresa) await completarPerfis(itens.slice(0, alvo), prospeccaoId, acoes, cancelada, atualizar);
   const selecionados = c.empresa ? itens.filter(i => avaliarVinculoEmpresa(i, c.empresa!).estado === "confirmado").slice(0, alvo) : itens;
   for (const item of selecionados) {
     if (c.empresa) preencherCabecalhoConfirmado(item, c.empresa);
