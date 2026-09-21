@@ -1,4 +1,4 @@
-# PRD — `toolkit-dash-builder` ("Painel em Minutos") v1
+# PRD — `toolkit-dash-builder` ("Painel Pronto") v1.1 — refinado após validação (2026-09-21)
 
 App número 20 da suíte **IA para Executivos** (`StartSe/ai-action-demo`). Recriação, dentro do
 padrão da suíte, do produto "AI Dash Builder" gerado no Lovable.
@@ -6,15 +6,23 @@ padrão da suíte, do produto "AI Dash Builder" gerado no Lovable.
 - Análise do original: [`00-analise-projeto-original.md`](00-analise-projeto-original.md)
 - Recorte de funcionalidades e core: [`02-funcionalidades-e-core.md`](02-funcionalidades-e-core.md)
 - Padrão obrigatório: [`../../PADRAO.md`](../../PADRAO.md) · app de referência: [`../../pdi-time/`](../../pdi-time/) · armadilhas registradas: [`../../pdi-time/CLAUDE.md`](../../pdi-time/CLAUDE.md)
+- Validação (Fase 4): [`03-validacao-prd.md`](03-validacao-prd.md) · registro do refinamento (Fase 5): [`04-refinamento-prd.md`](04-refinamento-prd.md)
 
 | | |
 |---|---|
 | Id da pasta / do catálogo / da imagem | `toolkit-dash-builder` |
-| Nome de exibição | **Painel em Minutos** |
+| Nome de exibição | **Painel Pronto** — *única decisão humana ainda pendente: confirmar com Renato antes do primeiro push* (ver P1, seção 11) |
 | Áreas | Dados, Gestão |
 | Porta local | **3020** (próxima livre; 3019 é `build-agentflows`) |
-| Acento | `#a5540d` (segmento novo "Dados") |
+| Acento | `#a5540d` (segmento novo **"Dados"** na paleta; nos componentes a ilustração usa `segmento="Gestão"` — ver 8.4) |
 | Capacidades na v1 | `artefato`, `mcp` |
+
+### Histórico de revisões
+
+| Versão | Data | O que mudou |
+|---|---|---|
+| v1 | 2026-09-21 | Primeira versão completa (Fase 3). |
+| **v1.1** | 2026-09-21 | Refinado após a validação independente da Fase 4 ([`03-validacao-prd.md`](03-validacao-prd.md)): 3 achados bloqueantes, 5 altos, 9 médios e 4 baixos aplicados (um sub-item do achado 20 não aplicado, por estar errado — ver [`04-refinamento-prd.md`](04-refinamento-prd.md)); P1–P6 fechadas; nome de exibição trocado de "Painel em Minutos" para "Painel Pronto" (evita a família falsa com "Posts em Minutos"). A numeração das seções não mudou. |
 
 ---
 
@@ -72,13 +80,13 @@ com os indicadores certos do seu setor — pronto para ajustar conversando e imp
 |---|---|---|---|
 | M1 | Tempo do primeiro painel em modo demonstração | ≤ 3 s do clique ao painel na tela | `esperar(1200)` + render; cronometrar na verificação |
 | M2 | Tempo do primeiro painel com IA conectada (modelo gratuito) | ≤ 45 s no p90 | medir 10 gerações reais, 10 prompts distintos |
-| M3 | Taxa de painel válido na primeira tentativa da IA | ≥ 90 % (sem precisar do retry de `askJSON`) | contar `resposta_invalida` em 20 gerações |
-| M4 | Painel gerado passa nas regras de composição | 100 % (5 a 8 componentes, sem sobreposição, soma de largura por linha ≤ 4) | validador do servidor (RF-06) rejeita e conta |
+| M3 | Taxa de painel com **≥ 5 componentes válidos na primeira chamada** da IA | ≥ 90 % (sem precisar da segunda tentativa própria de `gerarPainel`, RF-06 a4) | em 20 gerações reais, contar as que registraram `[painel] segunda tentativa` no log do servidor |
+| M4 | Painel gerado passa nas regras de composição | 100 % (≥ 5 componentes válidos depois da segunda tentativa, sem sobreposição, soma de largura por linha ≤ 4) | validador do servidor (RF-06) conserta e registra em `console.warn`; `resposta_invalida` só quando sobram menos de 3 componentes |
 | M5 | Refinamento não altera componente não pedido | 100 % (a restauração do original garante) | 15 pedidos de refinamento, conferir os IDs não declarados |
 | M6 | Tempo de um refinamento | ≤ 25 s no p90 | medir 10 refinamentos |
 | M7 | Texto sem jargão e sem erro de acentuação | `verificar-jargao.mjs` sai 0; revisão manual de 20 painéis gerados sem erro de acento | script + leitura |
 | M8 | Acessibilidade do acento | contraste ≥ 4,5:1 contra branco | `verificar-paleta.mjs` sai 0 |
-| M9 | Economia de cota | prompt repetido em até 24 h não chama a IA | conferir no log que a segunda chamada é cache |
+| M9 | Economia de cota | prompt repetido em até 24 h não chama a IA (salvo "Gerar outra versão", que ignora o cache de propósito) | conferir no log que a segunda chamada é cache |
 | M10 | App sobe e responde sem nenhuma variável de ambiente | `/api/health`, `/api/status`, `/` e uma geração completa em demonstração | build `standalone` + `curl` |
 
 ### Não-objetivos da v1
@@ -114,10 +122,12 @@ cliente.
 4. **Gera.** Clica em "Gerar painel" (ou `Ctrl+Enter`).
 5. **(Opcional) Esclarecimento.** Se o texto fosse curto ou vago, apareceria um cartão com 1 a 3
    perguntas, cada uma com 2 a 4 chips de resposta, e um botão "Pular e gerar agora". Com o prompt
-   do chip, a heurística local reconhece termos suficientes e o passo é pulado sem nenhuma chamada.
+   do chip, a heurística local reconhece radicais de domínio suficientes (RF-04) e o passo é pulado
+   sem nenhuma chamada.
 6. **Espera com contexto.** O checklist avança sozinho: "Identificando o setor do seu pedido…" →
-   "Escolhendo os indicadores certos…" → "Montando os gráficos…" → "Gerando números de exemplo…".
-   Em demonstração são ~1,2 s; com IA, 20 a 40 s.
+   "Escolhendo os indicadores certos…" → "Montando os gráficos…" → "Gerando números de exemplo… com
+   modelo gratuito isso pode levar até um minuto". Em demonstração são ~1,2 s; com IA, 20 a 40 s (é
+   na quarta frase que a tela fica esperando, por isso ela avisa da espera longa).
 7. **Vê o painel.** Quatro cartões de indicador na primeira linha (com variação contra o período
    anterior), dois gráficos na segunda, uma distribuição e uma tabela na terceira. Acima da grade,
    um aviso discreto: "Números de exemplo, para você validar o formato do painel."
@@ -126,8 +136,10 @@ cliente.
    com exatamente essas duas mudanças e uma frase do que foi feito. O botão "Desfazer" está ao lado.
 9. **Analisa.** Clica em "Analisar" e recebe até três observações curtas sobre o painel (uma
    anomalia, uma tendência, uma sugestão), num banner dispensável.
-10. **Leva embora.** "Salvar" grava no histórico; "Imprimir" abre `/imprimir/[id]` já formatado para
-    A4; "Copiar dados da tabela" põe o CSV na área de transferência.
+10. **Leva embora.** O painel já foi salvo no histórico no momento da geração (RF-13, sem botão
+    "Salvar", como no `pdi-time`); "Imprimir" abre `/imprimir/[id]` já formatado para A4; "Copiar
+    dados da tabela" põe o CSV na área de transferência; "Gerar outra versão" pede um painel novo para
+    o mesmo pedido, ignorando o cache (RF-12 a5).
 11. **Volta depois.** Em `/historico` encontra o painel pelo título e reabre em `/r/[id]`.
 
 ### Jornada secundária — conectar a IA (Renata, segunda visita)
@@ -169,33 +181,63 @@ Oito chips acima do campo: Vendas, Financeiro, Marketing, Operações, SaaS, E-c
 Clicar substitui o conteúdo do campo por um prompt completo daquela área e devolve o foco ao campo,
 com o cursor no fim.
 
+**Os oito textos** (constante `CHIPS_AREA` em `components/ChipsArea.tsx`; são estes, palavra por
+palavra — os da origem foram descartados porque usam "Dashboard", "CAC, CPL, ROAS", "SLA",
+"throughput", "MRR, churn, runway" e "headcount, turnover", tudo proibido pela seção 8.5):
+
+| Chip | Texto (15 a 35 palavras; ≥ 4 indicadores nomeados; ≥ 3 radicais da lista de domínio) |
+|---|---|
+| Vendas | Painel de vendas com receita do mês, ticket médio, taxa de conversão do funil, ranking de vendedores e tendência de receita nos últimos 6 meses. |
+| Financeiro | Painel financeiro com receita, despesas, margem líquida, fluxo de caixa mensal e distribuição de gastos por categoria. |
+| Marketing | Painel de marketing com custo por lead, custo de aquisição de cliente, retorno sobre anúncios, tráfego por canal nos últimos 6 meses e ranking de campanhas por conversão. |
+| Operações | Painel de operações com nível de serviço cumprido, tempo médio de atendimento, chamados resolvidos por dia, satisfação (NPS) e distribuição de chamados por tipo. |
+| SaaS | Painel de assinaturas com receita recorrente mensal, cancelamento, novos clientes, expansão de receita, meses de caixa e crescimento nos últimos 6 meses. |
+| E-commerce | Painel de loja virtual com receita, ticket médio, taxa de conversão, produtos mais vendidos, vendas por estado e tendência de vendas dia a dia. |
+| Agência | Painel de agência com receita por cliente, horas faturadas, ocupação da equipe, projetos em andamento e ranking de clientes por receita. |
+| RH | Painel de pessoas com número de colaboradores, rotatividade, satisfação interna, distribuição por área, contratações e desligamentos e tempo médio de contratação. |
+
 *Aceite:*
-- a1. Os oito prompts têm entre 15 e 35 palavras e citam ao menos 4 indicadores nomeados.
+- a1. Os oito prompts são exatamente os da tabela acima: têm entre 15 e 35 palavras e citam ao
+  menos 4 indicadores nomeados (verificável lendo a tabela).
 - a2. Clicar num chip nunca dispara a geração sozinho.
-- a3. Nenhum chip usa jargão proibido por `verificar-jargao.mjs`.
+- a3. Nenhum chip usa jargão proibido por `verificar-jargao.mjs` nem sigla fora de NPS (seção 8.5).
+- a4. Os oito textos devolvem `false` em `precisaEsclarecerLocal()` (RF-04 a8): nenhum chip passa
+  pelo gate de esclarecimento.
 
 ---
 
 **RF-03 — Atalhos de demonstração**
-`?exemplo=1` preenche com o prompt de Vendas e envia sozinho; `?captura=1` desliga a rolagem
-automática até o resultado.
+`?exemplo=1` preenche com o prompt do chip **Vendas** (RF-02) e envia sozinho; `?captura=1` desliga
+a rolagem automática até o resultado. É este fluxo que `.github/workflows/publicar.yml` fotografa
+(`/?exemplo=1&captura=1`, Chrome headless, 1200×800, `--virtual-time-budget=8000`) para a prévia do
+catálogo público — por isso ele tem de ser **determinístico**: a mesma imagem a cada build.
 
 *Aceite:*
 - a1. `/?exemplo=1` abre, preenche e mostra o painel sem nenhum clique.
 - a2. O efeito marca um `useRef` antes de agendar o `setTimeout(…, 0)` e **não** registra
   `clearTimeout` no cleanup (`PADRAO.md:30`: em `next dev`, o Strict Mode mataria o atalho).
 - a3. `/?exemplo=1&captura=1` não rola a página.
+- a4. `?exemplo=1` **não** chama `POST /api/painel/esclarecer`: vai direto para `POST /api/painel`
+  (o gate nunca pode abrir um questionário na prévia do catálogo).
+- a5. Determinismo da captura: em modo demonstração (o contêiner de captura sobe sem chave e com
+  `CONTA_DESLIGADA=1`), o prompt de Vendas cai sempre no painel `vendas` de `lib/demo.ts` (7.4), a
+  espera é fixa (`esperar(1200)`), o `Loading` respeita `--force-prefers-reduced-motion` (fica na
+  primeira etapa) e nenhuma animação além do `reveal` roda. Resultado: a imagem mostra o painel
+  comercial completo, com o aviso de números de exemplo, dentro dos 8 s de orçamento do Chrome.
 
 ---
 
 **RF-04 — Gate de esclarecimento**
 Antes de gerar, o servidor decide se o pedido precisa de esclarecimento. Primeiro a heurística local
-(sem IA); só no caso duvidoso a IA é consultada.
+(sem IA, por **radicais distintos** com fronteira de palavra — seção 6.3); só no caso duvidoso a IA
+é consultada, e é ela quem decide se pergunta.
 
 *Aceite:*
-- a1. Prompt com menos de 30 caracteres sempre vai para esclarecimento.
-- a2. Prompt com 3 ou mais termos da lista de domínio nunca vai para esclarecimento (nenhuma chamada
-  de IA é feita nesse passo).
+- a1. Prompt com menos de 30 caracteres **ou** com menos de 3 radicais distintos da lista de domínio
+  vai para **avaliação**: a IA é consultada e decide se pergunta (pode responder
+  `precisaEsclarecer: false`); em demonstração, as perguntas fixas de `esclarecimentoDemo()`.
+- a2. Prompt com 3 ou mais radicais distintos da lista de domínio nunca vai para esclarecimento
+  (nenhuma chamada de IA é feita nesse passo).
 - a3. Quando há perguntas, a resposta é `{ precisaEsclarecer: true, perguntas: [...] }` com 1 a 3
   perguntas, cada uma com 2 a 4 sugestões.
 - a4. A tela mostra as perguntas com as sugestões como chips clicáveis e um campo livre por pergunta.
@@ -204,6 +246,10 @@ Antes de gerar, o servidor decide se o pedido precisa de esclarecimento. Primeir
   `\n\nDetalhes adicionais:\n- <pergunta>: <resposta>`.
 - a7. Em demonstração, o gate usa apenas a heurística local e um conjunto fixo de perguntas de
   exemplo (nunca fica indisponível).
+- a8. Os oito prompts dos chips (RF-02) devolvem `false` em `precisaEsclarecerLocal()`; "painel de
+  vendas para minha empresa" (35 caracteres, mas só **1** radical distinto: `vend`) e "plano de RH"
+  (< 30 caracteres; e `ano` dentro de "plano" **não** conta, porque a comparação é por palavra
+  inteira) devolvem `true`. Teste escrito na Etapa 7.
 
 ---
 
@@ -214,10 +260,19 @@ Antes de gerar, o servidor decide se o pedido precisa de esclarecimento. Primeir
 - a1. Sem chave de IA: espera de 900 a 1.500 ms e devolve um dos painéis de `lib/demo.ts`, escolhido
   por palavra-chave do prompt, com `meta.demo === true`.
 - a2. Com chave: chama `askJSON<EspecPainel>` com o system prompt da seção 6.1 e
-  `maxTokens: 8000`.
-- a3. A resposta sempre traz `{ demo, painel, meta, id? }`.
+  `maxTokens: 8000`; se o validador (RF-06) deixar menos de 5 componentes, `gerarPainel` faz **uma
+  segunda chamada própria** (RF-06 a4) antes de desistir.
+- a3. A resposta sempre traz `{ demo, painel, meta, id, reaproveitado }` (`id` sempre presente: o
+  painel é salvo na geração, RF-13 a1; `reaproveitado: true` quando veio do cache, RF-12).
 - a4. Falha de IA volta por `respostaErro(err)` com mensagem em português e sem detalhe técnico.
-- a5. A tela de erro mostra o pedido original do usuário e um botão "Tentar novamente".
+- a5. A tela de erro mostra o pedido original do usuário em itálico (`<p className="italic
+  text-muted">` **acima** do `ErrorBox`, que não tem slot para isso) e o botão **"Tentar de novo"**
+  do próprio `ErrorBox` (`onTentarNovamente`; o rótulo é fixo em `components/ui.tsx:423`).
+- a6. O cliente envia com `AbortController` e limite de **120 s**; ao estourar, mostra `ErrorBox` com
+  "A IA demorou demais para responder. Tente de novo ou troque o modelo em Configurações." e o botão
+  de tentar de novo (`lib/ai.ts` é `[INFRA]` e não tem `signal`; o limite fica no cliente).
+- a7. O corpo aceita `forcar?: boolean`: com `true`, o cache (RF-12) é ignorado e a IA é chamada de
+  novo — é o que o botão "Gerar outra versão" envia.
 
 ---
 
@@ -228,13 +283,24 @@ A especificação devolvida pela IA passa por um validador no servidor antes de 
 - a1. Componentes com `tipo` desconhecido são descartados.
 - a2. Componentes sem os campos obrigatórios do seu tipo são descartados.
 - a3. Sobra mais de 8 componentes → mantém os 8 primeiros por ordem de posição.
-- a4. Sobra menos de 3 componentes válidos → erro `resposta_invalida` (a chamada é repetida uma vez
-  por `askJSON` antes disso).
+- a4. Sobra menos de **5** componentes válidos → `gerarPainel` chama `askJSON` **uma segunda vez**,
+  com o prompt do usuário acrescido de `\n\nA resposta anterior veio incompleta ou fora do formato.
+  Devolva um painel completo, com 5 a 8 componentes válidos.` e registra `[painel] segunda tentativa`
+  no log; se depois da segunda validação ainda sobrarem menos de **3**, lança
+  `new ErroIA("resposta_invalida", "A IA devolveu uma resposta que não deu para usar. Tente de novo
+  ou descreva o painel de outro jeito.", 502)`. Essa segunda tentativa é **do `gerarPainel`**, não
+  do `askJSON`: o `askJSON` de `lib/ai.ts` só repete quando o JSON não faz *parse*; um JSON válido
+  com 2 componentes volta na primeira chamada e o validador não tem a quem pedir de novo.
 - a5. IDs duplicados ou ausentes são reatribuídos como `c1`, `c2`, … na ordem de posição.
 - a6. Posições sobrepostas ou com soma de largura > 4 numa linha são reempacotadas da esquerda para
-  a direita, mantendo a ordem original.
-- a7. Séries com mais de 12 pontos são cortadas em 12; distribuições com mais de 8 fatias, em 8;
-  tabelas com mais de 10 linhas, em 10, e com mais de 6 colunas, em 6.
+  a direita, mantendo a ordem original. Quando a linha não tem espaço, o validador **acrescenta uma
+  linha** (nunca descarta por falta de espaço; o limite de 4 linhas é alvo do prompt, não regra do
+  validador). Na **geração** o reempacotamento vale para todos os componentes; no **refinamento**
+  (RF-09 a6) só move os componentes cujo id está em `componentesAlterados` ou que são novos — os
+  demais mantêm a `posicao` do original (senão o validador viraria uma fonte de mudança não pedida).
+- a7. Séries com mais de 12 pontos são cortadas em 12; distribuições com mais de **6** fatias têm o
+  excedente agrupado numa fatia "Outros" (somando os valores); tabelas com mais de 10 linhas, em 10,
+  e com mais de 6 colunas, em 6.
 - a8. O validador nunca lança: ele conserta ou descarta, e registra o que fez com `console.warn`.
 
 ---
@@ -243,9 +309,15 @@ A especificação devolvida pela IA passa por um validador no servidor antes de 
 Durante a geração, o `Loading({ etapas })` de `components/ui.tsx` mostra o checklist avançando.
 
 *Aceite:*
-- a1. Quatro etapas, avançando por tempo decorrido.
+- a1. Quatro etapas, avançando por tempo decorrido (1.200 ms cada, o intervalo do `Loading`):
+  "Identificando o setor do seu pedido…" · "Escolhendo os indicadores certos…" · "Montando os
+  gráficos…" · "Gerando números de exemplo… com modelo gratuito isso pode levar até um minuto".
 - a2. O texto do pedido continua visível durante a espera.
 - a3. Em demonstração, o checklist não pisca nem "pula" (a espera de 1,2 s cobre a primeira etapa).
+- a4. A **quarta** frase é a de espera longa, porque o intervalo do `Loading` para em 3,6 s e é nela
+  que a tela fica com IA de verdade (20 a 60 s). A **primeira** frase faz sentido sozinha: com
+  `prefers-reduced-motion` o `Loading` não avança (`ui.tsx:345`) e a captura do catálogo roda com
+  `--force-prefers-reduced-motion`.
 
 ---
 
@@ -254,7 +326,8 @@ Grade responsiva de 4 colunas (desktop), 2 (tablet) e 1 (celular), com os compon
 `posicao.linha` e depois `posicao.coluna`.
 
 *Aceite:*
-- a1. Os seis tipos renderizam: `indicador`, `linha`, `area`, `barra`, `pizza`/`rosca`, `tabela`.
+- a1. Os **sete tipos** renderizam por **seis renderizadores**: `indicador`, `linha`/`area`, `barra`,
+  `pizza`/`rosca` (duas apresentações da mesma distribuição), `tabela`.
 - a2. Nenhum gráfico usa biblioteca externa.
 - a3. A cor das séries vem de `--color-accent` (e `--color-accent-2` para a segunda série ou para o
   destaque); nenhuma cor é escrita à mão no JSX além dos cinzas já tokenizados.
@@ -262,6 +335,10 @@ Grade responsiva de 4 colunas (desktop), 2 (tablet) e 1 (celular), com os compon
 - a5. Não há rolagem horizontal da página em nenhuma largura de 320 px para cima.
 - a6. `indicador` mostra o valor formatado em `pt-BR`, a variação percentual contra `anterior` com
   sinal e cor (`ok`/`danger`/`neutro`) e, se houver `meta`, uma barra de progresso.
+- a7. Coluna de tabela com `tipo: "data"`: valor que casa `/^\d{4}-\d{2}-\d{2}$/` é formatado por
+  `data(new Date(\`${valor}T00:00:00\`))` (hora local; `new Date("AAAA-MM-DD")` é meia-noite UTC e
+  no Brasil mostra o dia anterior — armadilha US-070 do `CLAUDE.md` do `pdi-time`); valor que não
+  casa é exibido como texto.
 
 ---
 
@@ -270,17 +347,25 @@ Grade responsiva de 4 colunas (desktop), 2 (tablet) e 1 (celular), com os compon
 uma mensagem curta e a lista dos componentes alterados.
 
 *Aceite:*
-- a1. Todo componente cujo id **não** está em `componentesAlterados` volta idêntico ao original,
-  mesmo que a IA o tenha alterado (restauração pelo validador anti-deriva).
-- a2. Componentes com id novo (não existente no original) são aceitos como acréscimo.
+- a1. Todo componente cujo id **não** está em `componentesAlterados` volta idêntico ao original —
+  **inclusive a `posicao`** e o índice na lista —, mesmo que a IA o tenha alterado (restauração pelo
+  validador anti-deriva, 6.2).
+- a2. Componentes com id novo (não existente no original) são aceitos como acréscimo — **salvo** se
+  forem iguais (ignorando `id` e `posicao`) a um componente original que sumiu: nesse caso é um id
+  renomeado pela IA e o original é devolvido no lugar (sem duplicar conteúdo).
 - a3. Um componente removido pela IA só some se seu id estiver em `componentesAlterados`.
 - a4. A resposta traz `mensagem` (uma frase, em português) exibida na conversa.
 - a5. Se a IA devolver `{ esclarecimento: "..." }`, a pergunta aparece na conversa e o painel não
   muda.
-- a6. O painel resultante passa pelo mesmo validador do RF-06.
+- a6. O painel resultante passa pelo mesmo validador do RF-06, em modo refinamento: o
+  reempacotamento só move componentes declarados ou novos (RF-06 a6).
 - a7. Em demonstração, o refinamento aplica uma transformação determinística de exemplo e explica que
   é exemplo.
 - a8. O histórico da conversa mostra o que foi pedido e o que foi feito, em ordem.
+- a9. O cliente envia com `AbortController` e limite de **90 s**; ao estourar, a mensagem de
+  demora do RF-05 a6 aparece na conversa e o painel não muda.
+- a10. A chamada usa `maxTokens: 8000` (o refinamento devolve o painel inteiro; com o padrão de 4.000
+  de `askText` o JSON truncaria e `askJSON` queimaria duas chamadas por pedido).
 
 ---
 
@@ -291,12 +376,15 @@ Botão "Desfazer" ao lado da conversa, restaurando o painel anterior ao último 
 - a1. Pilha em memória no cliente com os 5 últimos estados.
 - a2. Desabilitado quando a pilha está vazia.
 - a3. Desfazer não chama a IA.
+- a4. Desfazer **persiste** o estado restaurado no painel salvo: `PUT /api/painel/[id]` com
+  `{ painel }` (sem IA; passa por `validarPainel` e chama `atualizarSaida`). Sem isso, "Imprimir" e
+  `/r/[id]` mostrariam a versão refinada, diferente da que está na tela.
 
 ---
 
 **RF-11 — Observações do painel (insights)**
-Botão "Analisar" acima do painel. `POST /api/painel/insights` recebe a especificação e devolve até 3
-observações.
+Botão "Analisar" acima do painel. `POST /api/painel/observacoes` recebe a especificação e devolve até
+3 observações.
 
 *Aceite:*
 - a1. Nunca é chamado automaticamente após a geração.
@@ -305,6 +393,8 @@ observações.
 - a3. O banner some ao ser fechado e não volta até a próxima análise.
 - a4. As mensagens se referem ao painel ("no exemplo gerado…"), nunca afirmam fatos sobre a empresa.
 - a5. Em demonstração, devolve três observações de exemplo coerentes com o painel mostrado.
+- a6. A chamada usa `maxTokens: 1200`; o cliente envia com `AbortController` e limite de **45 s**
+  (ao estourar, a mensagem de demora do RF-05 a6 no lugar do banner).
 
 ---
 
@@ -319,15 +409,26 @@ salvo com o mesmo hash há menos de 24 h, ele é reaproveitado sem chamar a IA.
 - a3. Um pedido com 24 h e 1 min de idade não é reaproveitado.
 - a4. O cache nunca atravessa o modo: painel gerado em demonstração não é servido depois que a IA é
   conectada, e vice-versa.
+- a5. O botão **"Gerar outra versão"** (visível no estado `pronto`) envia `forcar: true` e ignora o
+  cache — quem não gostou do painel recebe outro, e o apresentador consegue mostrar variação.
+- a6. Um painel **refinado não serve de cache**: `refinarPainel` grava `saida.refinadoEm = <ISO>`
+  (campo opcional de `EspecPainel` que a IA nunca preenche — mesmo padrão de `PDI.acompanhamento`,
+  US-070 do `CLAUDE.md` do `pdi-time`) e `lib/cache-painel.ts` ignora resultados com `refinadoEm`.
+  Sem isso, `atualizarSaida` sobrescreve só a `saida` e o pedido idêntico seguinte receberia o painel
+  já mutilado por refinamentos de outra sessão como se fosse a geração original.
 
 ---
 
 **RF-13 — Salvar, listar, reabrir e apagar**
-O painel é salvo em `lib/historico.ts` com `tipo: "painel"`.
+O painel é salvo em `lib/historico.ts` com `tipo: "painel"`, **sempre na geração** (como o
+`pdi-time` com `SENSIVEL = false`: `idSalvo` sem opt-in). Não existe botão "Salvar" na tela; o
+parâmetro `guardar` existe **só** na ferramenta MCP `criar_painel` (padrão `true`).
 
 *Aceite:*
-- a1. `POST /api/painel` com `guardar: true` salva e devolve `id`.
-- a2. Cada refinamento bem-sucedido de um painel salvo chama `atualizarSaida(id, painel)`.
+- a1. `POST /api/painel` salva sempre e devolve `id` na resposta; `Entregar` recebe o `id` desde a
+  geração ("Copiar link" e "Imprimir" disponíveis de imediato).
+- a2. Cada refinamento bem-sucedido de um painel salvo chama `atualizarSaida(id, painel)` com
+  `painel.refinadoEm` preenchido (RF-12 a6); Desfazer persiste por `PUT /api/painel/[id]` (RF-10 a4).
 - a3. `/historico` lista os painéis com título e data, com filtro por texto no cliente.
 - a4. `/r/[id]` abre o painel salvo em página própria; id inexistente cai em `not-found`.
 - a5. "Apagar tudo" pede confirmação por `useConfirmacao()` (nunca `window.confirm`, salvo a exceção
@@ -340,11 +441,18 @@ O painel é salvo em `lib/historico.ts` com `tipo: "painel"`.
 
 *Aceite:*
 - a1. Abre já com o diálogo de impressão (`ImprimirAoCarregar.tsx`).
-- a2. Todos os componentes aparecem, inclusive os gráficos (SVG e `div` imprimem; nada depende de
-  `canvas`).
+- a2. Todos os componentes aparecem, inclusive os gráficos. Toda barra pintada (barras de
+  `GraficoBarras`, barra de meta do `CartaoIndicador`) é um `<rect>` em SVG com `fill`, nunca um
+  `div` com `bg-accent`: o Chrome não imprime cor de fundo por padrão e um `div` sairia em branco no
+  PDF; `fill`/`stroke` de SVG imprimem. Por segurança adicional, o bloco de impressão de
+  `globals.css` liga `print-color-adjust: exact` na `.print-sheet` (7.8). Nada depende de `canvas`.
 - a3. O aviso de "números de exemplo" aparece no rodapé impresso.
-- a4. Limitação conhecida e aceita: tabela longa pode paginar mal em A4 (bug já registrado no
-  `CLAUDE.md` do `pdi-time`); por isso a tabela é limitada a 10 linhas.
+- a4. Em `modo="impressao"`, `TabelaPainel` **não** usa o `DataTable` (que na largura útil do A4 cai
+  no modo cartão e pagina uma linha por página — limitação US-020 do `CLAUDE.md` do `pdi-time`):
+  renderiza um `<table>` HTML próprio e simples, ocupando a **linha inteira** da grade de impressão
+  (`grid-column: 1 / -1`), com as 10 linhas no máximo.
+- a5. No PDF gerado pelo Chrome com as opções padrão (sem "Gráficos de fundo" marcado), barras,
+  fatias, linha e barra de meta estão visíveis e a tabela cabe em uma página.
 
 ---
 
@@ -363,7 +471,10 @@ Tudo funciona sem nenhuma chave.
 
 *Aceite:*
 - a1. `/api/status` devolve `demo: true` e a `Topbar` mostra o chip clicável de demonstração.
-- a2. `DemoNotice` mostra uma frase e o link "Conectar a IA em 1 minuto".
+- a2. A `Topbar` recebe `resumo="Painel de exemplo, sem usar IA. Conecte a IA para gerar a partir do
+  seu pedido."` e o popover do chip de demonstração mostra essa frase e o link "Conectar a IA em 1
+  minuto" (`ui.tsx:115-123`). Não existe componente `DemoNotice` em `components/ui.tsx` — o
+  `PADRAO.md:25,28` ainda cita o nome, mas está desatualizado nesse ponto; não criar um.
 - a3. `SeloIA` mostra "Exemplo, sem usar IA".
 - a4. Os quatro painéis de exemplo têm a mesma forma da resposta real (mesma quantidade de
   componentes, mesmos formatos) — a tela não sabe em qual modo está.
@@ -385,9 +496,12 @@ Tudo funciona sem nenhuma chave.
 `POST /mcp` expõe quatro ferramentas.
 
 *Aceite:*
-- a1. `criar_painel({ descricao, guardar? })` → mesma função da rota HTTP.
-- a2. `refinar_painel({ id, pedido })` → refina um painel salvo e grava o resultado.
-- a3. `listar_paineis({ limite? })` → títulos, datas e ids.
+- a1. `criar_painel({ descricao, esclarecimentos?, guardar? })` → mesma função da rota HTTP;
+  `guardar` vale `true` por padrão e é o único lugar onde existe.
+- a2. `refinar_painel({ id, pedido })` → refina um painel salvo e grava o resultado (com
+  `refinadoEm`).
+- a3. `listar_paineis({ limite? })` → títulos, datas e ids, **filtrando `tipo === "painel"`**
+  (`listar()` de `historico.ts` devolve todos os tipos).
 - a4. `obter_painel({ id })` → a especificação completa e o link `/r/[id]`.
 - a5. Nenhuma delas duplica prompt ou lógica: todas chamam as funções de `lib/painel.ts`.
 
@@ -410,6 +524,9 @@ Vem do padrão, sem alteração.
 - a2. Título do hero ≤ 8 palavras; frase de apoio ≤ 20 palavras; lista de prévia ≤ 5 itens de ≤ 6
   palavras; no máximo uma linha de ajuda por campo.
 - a3. Nenhum texto visível usa "dashboard", "KPI", "componente", "spec", "layout" ou "mock".
+- a4. Textos fixos da tela: botão de erro "Tentar de novo" (rótulo do `ErrorBox`), botão "Gerar outra
+  versão", frase de demora "A IA demorou demais para responder. Tente de novo ou troque o modelo em
+  Configurações.", `resumo` da `Topbar` do RF-16 a2.
 
 ### 4.2 Fora de escopo na v1
 Fonte de dados real (CSV, planilha, CRM, webhook); binding assistido; alertas por indicador;
@@ -431,7 +548,10 @@ da regra de idioma da suíte.
 // lib/types.ts — tipos do domínio de toolkit-dash-builder.
 // Nenhum import node:*: este arquivo é lido também pelo client component app/page.tsx.
 
-/** Os seis tipos de componente que a IA pode gerar. Não existe outro. */
+/**
+ * Os SETE tipos de componente que a IA pode gerar. Não existe outro.
+ * "pizza" e "rosca" são duas apresentações da mesma distribuição (mesmo `dados`, mesmo renderizador).
+ */
 export type TipoComponente = "indicador" | "linha" | "area" | "barra" | "pizza" | "rosca" | "tabela";
 
 /** Como um número é escrito na tela. */
@@ -480,7 +600,7 @@ export interface DadosSerie {
   pontos: Ponto[];
 }
 
-/** pizza e rosca — 3 a 8 fatias. */
+/** pizza e rosca — 3 a 6 fatias (o validador agrupa o excedente em "Outros"). */
 export interface DadosDistribuicao {
   formato: Formato;
   prefixo?: string;
@@ -526,6 +646,14 @@ export interface EspecPainel {
   setor: string;
   /** 5 a 8 componentes. */
   componentes: ComponentePainel[];
+  /**
+   * Data ISO do último refinamento. Preenchido SÓ por `refinarPainel()` (nunca pela IA, que não
+   * conhece o campo) e gravado junto com a `saida` por `atualizarSaida`. Um painel com `refinadoEm`
+   * é excluído do cache por hash (RF-12 a6): `atualizarSaida` sobrescreve só a `saida`, então sem
+   * esta marca um pedido idêntico receberia o painel já refinado como se fosse a geração original.
+   * Mesmo padrão de `PDI.acompanhamento` (US-070 do CLAUDE.md do pdi-time).
+   */
+  refinadoEm?: string;
 }
 
 /** O pedido do usuário, guardado como `entrada` no histórico. */
@@ -553,7 +681,7 @@ export interface RespostaRefinamento {
   painel: EspecPainel;
   /** Uma frase sobre o que foi feito. */
   mensagem: string;
-  /** Ids alterados; "NOVO" para os acrescentados. */
+  /** Ids alterados, removidos ou acrescentados (o id do componente novo, como o prompt exige). */
   componentesAlterados: string[];
 }
 
@@ -575,7 +703,18 @@ export interface Fala {
 ### 5.2 Regras de posição e grade
 
 - A grade tem **4 colunas** no desktop (`lg`), 2 no tablet (`md`) e 1 no celular.
-- `largura` vira `lg:col-span-{1..4}` e `md:col-span-{1..2}` (largura 3 e 4 viram 2 no tablet).
+- `largura` vira classe por um **mapa estático** — no Tailwind 4 só entra no CSS a classe escrita
+  literalmente no código; `` `lg:col-span-${n}` `` não gera nada:
+
+  ```ts
+  export const LARGURA_CLASSE: Record<1 | 2 | 3 | 4, string> = {
+    1: "lg:col-span-1 md:col-span-1",
+    2: "lg:col-span-2 md:col-span-2",
+    3: "lg:col-span-3 md:col-span-2",
+    4: "lg:col-span-4 md:col-span-2",
+  };
+  ```
+  (largura 3 e 4 viram 2 no tablet.)
 - Ordenação de render: `linha` crescente, depois `coluna` crescente.
 - Em cada linha, a soma das larguras é no máximo 4; intervalos `[coluna, coluna+largura)` não se
   sobrepõem. O validador (RF-06) reempacota o que vier errado, da esquerda para a direita.
@@ -587,7 +726,9 @@ export interface Fala {
   | 1 | 1 gráfico de tendência (`linha` ou `area`) + 1 comparativo (`barra`) | 2 + 2 |
   | 2 | 1 distribuição (`pizza` ou `rosca`) + 1 `tabela` (opcional) | 2 + 2, ou tabela sozinha com 4 |
 
-- Máximo de **4 linhas** (0 a 3). Componente com `linha > 3` é movido para a última linha com espaço.
+- **4 linhas** (0 a 3) é o **alvo do prompt**, não uma regra do validador: componente com `linha > 3`
+  é movido para a última linha com espaço e, se nenhuma tiver espaço, o validador **acrescenta uma
+  linha** ao fim (nunca descarta um componente válido por falta de lugar).
 
 ### 5.3 Limites
 
@@ -596,14 +737,18 @@ export interface Fala {
 | Componentes por painel | 5 | 8 | Legibilidade e tamanho da resposta da IA |
 | Indicadores na linha 0 | 3 | 4 | Layout canônico |
 | Pontos de uma série | 4 | 12 | 12 meses é o caso mais longo útil; acima disso o rótulo não cabe no celular |
-| Fatias de uma distribuição | 3 | 8 | Acima de 8 a pizza fica ilegível |
+| Fatias de uma distribuição | 3 | 6 | Fatias se diferenciam só por opacidade do acento; com 8, os degraus ficam em ~8,6 pontos e fatias vizinhas se confundem (e somem no preto e branco). Com 6, degraus de 12 pontos. O validador agrupa o excedente em "Outros" |
 | Linhas de tabela | 3 | 10 | Impressão em A4 (limitação conhecida do `DataTable`) |
 | Colunas de tabela | 3 | 6 | Celular |
 | Título do painel | — | 60 caracteres | Cabe na `ResultHead` e no histórico |
 | Título de componente | — | 40 caracteres | Cabe no cabeçalho do cartão sem truncar no celular |
 | Resumo do painel | — | 25 palavras | Regra de economia de texto do `PADRAO.md` |
 | Descrição do pedido | 10 | 1.000 caracteres | Evita prompt vazio e prompt gigante |
-| `maxTokens` da geração | — | 8.000 | Um painel de 8 componentes com séries de 12 pontos e tabela de 10×6 cabe em ~6 mil |
+| `maxTokens` da geração | — | 8.000 | Um painel de 8 componentes com séries de 12 pontos e tabela de 10×6 cabe em ~6 mil (estimativa generosa: o painel canônico tem ~1.500; medir na Etapa 5 e registrar no `CLAUDE.md`) |
+| `maxTokens` do refinamento | — | 8.000 | Devolve o painel inteiro; com o padrão de 4.000 de `askText` o JSON truncaria |
+| `maxTokens` das observações | — | 1.200 | Três frases curtas em JSON |
+| `maxTokens` do esclarecimento | — | 600 | Até 3 perguntas com 4 sugestões |
+| Tempo limite no cliente (`AbortController`) | — | 120 s geração · 90 s refinamento · 45 s observações | `lib/ai.ts` é `[INFRA]` e não aceita `signal`; sem limite uma chamada travada no modelo gratuito deixaria o `Loading` parado para sempre |
 
 ### 5.4 O que foi resolvido em relação à origem
 
@@ -639,8 +784,10 @@ IMPORTANTE — Idioma: escreva sempre em português do Brasil com acentuação c
 
 > Nota de implementação: `askJSON()` de `lib/ai.ts` já acrescenta ao system a instrução "Responda
 > somente com JSON válido, sem comentários e sem blocos de código markdown", usa `temperature: 0.2` e
-> repete a chamada uma vez se o parse falhar. Ainda assim os prompts repetem a exigência de JSON
-> estrito, porque a redundância derruba a variância de modelos gratuitos.
+> repete a chamada uma vez **se o parse falhar** — e só nesse caso. Um JSON válido com conteúdo fora
+> do esquema (2 componentes, tipos inventados) volta na primeira chamada; a segunda tentativa para
+> esse caso é do próprio `gerarPainel()` (RF-06 a4, 7.2). Ainda assim os prompts repetem a exigência
+> de JSON estrito, porque a redundância derruba a variância de modelos gratuitos.
 
 ### 6.1 Geração do painel — `SYSTEM_PAINEL`
 
@@ -675,7 +822,7 @@ FORMATO DA RESPOSTA (JSON estrito, sem markdown, sem cercas de código, sem come
   "componentes": [ /* 5 a 8 componentes */ ]
 }
 
-TIPOS DE COMPONENTE (são estes SEIS e mais nenhum: "indicador", "linha", "area", "barra", "pizza", "rosca", "tabela"):
+TIPOS DE COMPONENTE (são estes SETE e mais nenhum: "indicador", "linha", "area", "barra", "pizza", "rosca", "tabela" — "pizza" e "rosca" são duas apresentações da mesma distribuição):
 
 1. indicador — um número grande com comparação contra o período anterior.
 {
@@ -706,7 +853,11 @@ Use "meta": <número> apenas quando a pessoa pedir meta ou objetivo. Use "direca
     "prefixo": "R$",
     "pontos": [
       { "rotulo": "Jan", "valor": 320000 },
-      { "rotulo": "Fev", "valor": 358000 }
+      { "rotulo": "Fev", "valor": 358000 },
+      { "rotulo": "Mar", "valor": 341000 },
+      { "rotulo": "Abr", "valor": 402000 },
+      { "rotulo": "Mai", "valor": 388000 },
+      { "rotulo": "Jun", "valor": 487000 }
     ]
   }
 }
@@ -783,7 +934,7 @@ REGRAS DOS NÚMEROS DE EXEMPLO (RÍGIDAS):
 - Os números são fictícios, mas têm de ser realistas para uma empresa brasileira de médio porte: receita mensal entre R$ 50 mil e R$ 5 milhões.
 - Séries temporais: 6 pontos (Jan a Jun, ou os últimos 6 meses), com variação natural entre eles — nunca uma sequência perfeitamente crescente nem números redondos demais.
 - Tabelas: de 3 a 10 linhas e de 3 a 6 colunas.
-- Pizza e rosca: de 3 a 8 fatias, somando um todo coerente.
+- Pizza e rosca: de 3 a 6 fatias, somando um todo coerente (agrupe o resto em "Outros" se precisar).
 - Barras de ranking: de 5 a 8 itens, JÁ ORDENADOS do maior para o menor, com o título começando por "Top N ".
 - Nomes de pessoas brasileiros e variados (Ana Silva, Carlos Souza, Mariana Costa, Pedro Lima, Juliana Alves, Rafael Nunes).
 - Cidades e estados brasileiros (São Paulo, Rio de Janeiro, Belo Horizonte, Curitiba, Recife, Porto Alegre).
@@ -838,11 +989,11 @@ REGRAS CRÍTICAS:
 5. Preserve TODOS os ids existentes. NUNCA renomeie um id.
 6. Devolva o painel completo, com o MÍNIMO de alterações.
 7. Um componente não mencionado tem de voltar IDÊNTICO ao original: mesmo tipo, mesmo título, mesma posição e exatamente os mesmos dados.
-8. Respeite os mesmos limites da geração: 5 a 8 componentes, grade de 4 colunas, soma de largura por linha no máximo 4, indicadores na linha 0 com largura 1.
+8. Respeite os mesmos limites da geração: 5 a 8 componentes, grade de 4 colunas, soma de largura por linha no máximo 4. Um indicador ACRESCENTADO vai para a linha 0, com largura 1, se lá houver coluna livre; senão vai para a última linha, com largura 1.
 
 EXEMPLOS DE COMPORTAMENTO CORRETO:
 - "troque o gráfico de barras por pizza" → mude SOMENTE aquele componente para "pizza", convertendo os pontos em fatias. Todo o resto idêntico.
-- "acrescente um indicador de ticket médio" → acrescente UM componente novo na linha 0, se houver espaço, ou na primeira linha com espaço. Não toque em nada existente.
+- "acrescente um indicador de ticket médio" → acrescente UM componente novo, com id novo (o próximo da sequência), na linha 0 se houver coluna livre; senão na última linha. Não toque em nada existente.
 - "tire a tabela" → remova SOMENTE o componente do tipo "tabela". Mantenha todo o resto.
 - "mude o título do painel" → altere SOMENTE o campo "titulo" do painel. Os componentes ficam idênticos e "componentesAlterados" volta vazio.
 - "os valores estão baixos demais" → ajuste os números SOMENTE dos componentes que a pessoa citou; se ela não citou nenhum, pergunte em "esclarecimento".
@@ -923,11 +1074,29 @@ Devolva o painel COMPLETO. Altere SOMENTE o que a pessoa pediu. Todos os outros 
 };
 ```
 
-**Validação anti-deriva** (`lib/painel.ts`, porte direto de `validateRefinement` da origem com o
-vocabulário novo):
+**Validação anti-deriva** (`lib/painel.ts`, porte de `validateRefinement` da origem com o
+vocabulário novo e três acréscimos: restauração dos componentes sumidos **no índice original**,
+detecção de **id renomeado** e comparação estrutural `igual()` definida aqui — a origem usava
+`deepEqual` e não restaurava removidos):
 
 ```ts
-/** Devolve o painel refinado com todo componente não declarado restaurado do original. */
+/** Igualdade estrutural com chaves ordenadas (JSON.stringify puro depende da ordem das chaves). */
+function ordenarChaves(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(ordenarChaves);
+  if (v && typeof v === "object") {
+    return Object.fromEntries(Object.keys(v as object).sort().map((k) => [k, ordenarChaves((v as Record<string, unknown>)[k])]));
+  }
+  return v;
+}
+export const igual = (a: unknown, b: unknown) => JSON.stringify(ordenarChaves(a)) === JSON.stringify(ordenarChaves(b));
+
+/** O componente sem `id` e sem `posicao`: é isso que se compara para reconhecer um id renomeado. */
+const semIdentidade = ({ id: _id, posicao: _p, ...resto }: ComponentePainel) => resto;
+
+/**
+ * Devolve o painel refinado com todo componente não declarado restaurado do original
+ * (conteúdo E posição), os sumidos reinseridos no índice original e ids renomeados desfeitos.
+ */
 export function validarRefinamento(
   original: EspecPainel,
   refinado: EspecPainel,
@@ -936,15 +1105,26 @@ export function validarRefinamento(
   const porId = new Map(original.componentes.map((c) => [c.id, c]));
   const restaurados: string[] = [];
   const declarados = new Set(alterados);
+  const idsRefinados = new Set(refinado.componentes.map((c) => c.id));
+  const sumidos = original.componentes.filter((c) => !idsRefinados.has(c.id));
 
-  const componentes = refinado.componentes.map((novo) => {
+  const componentes: ComponentePainel[] = refinado.componentes.map((novo) => {
     const antigo = porId.get(novo.id);
-    if (!antigo) return novo;                                   // componente acrescentado
+    if (!antigo) {
+      // Id desconhecido: acréscimo de verdade OU um original renomeado pela IA (c3 -> c9 com o mesmo conteúdo).
+      const renomeado = sumidos.find((s) => igual(semIdentidade(s), semIdentidade(novo)));
+      if (renomeado) {
+        console.warn(`[refinar] id "${novo.id}" é "${renomeado.id}" renomeado; original devolvido.`);
+        sumidos.splice(sumidos.indexOf(renomeado), 1);
+        return renomeado;
+      }
+      return novo;
+    }
     if (declarados.size > 0) {
       if (!declarados.has(novo.id) && !igual(antigo, novo)) {
         console.warn(`[refinar] componente "${novo.id}" mudou sem ser declarado; original restaurado.`);
         restaurados.push(novo.id);
-        return antigo;
+        return antigo;                                          // conteúdo E posicao do original
       }
       return novo;
     }
@@ -956,53 +1136,78 @@ export function validarRefinamento(
     return novo;
   });
 
-  // Componente sumido sem ser declarado volta para o painel, na posição original.
-  for (const antigo of original.componentes) {
-    if (!componentes.some((c) => c.id === antigo.id) && !declarados.has(antigo.id)) {
-      componentes.push(antigo);
-      restaurados.push(antigo.id);
-    }
+  // Componente sumido sem ser declarado volta para o painel, no ÍNDICE original (não no fim),
+  // para que o reempacotamento do validador não mova os vizinhos.
+  for (const antigo of sumidos) {
+    if (declarados.has(antigo.id)) continue;                    // remoção pedida: fica removido
+    const indice = original.componentes.indexOf(antigo);
+    componentes.splice(Math.min(indice, componentes.length), 0, antigo);
+    restaurados.push(antigo.id);
   }
 
   return { painel: { ...refinado, componentes }, restaurados };
 }
 ```
 
+Depois disso o painel passa por `validarPainel(painel, { modo: "refinamento", moviveis })`, com
+`moviveis` = ids em `componentesAlterados` ∪ ids novos: só esses podem ter a `posicao` alterada pelo
+reempacotamento (RF-06 a6); os demais mantêm a `posicao` do original — a posição é parte do
+componente, e M5 conta como falha um componente não pedido que troque de linha ou coluna.
+
 ### 6.3 Gate de esclarecimento — `SYSTEM_ESCLARECER`
 
-Antes de qualquer chamada, a **heurística local** (`lib/esclarecer.ts`, sem IA):
+Antes de qualquer chamada, a **heurística local** (`lib/esclarecer.ts`, sem IA). Ela conta
+**radicais distintos** com fronteira de palavra — não substrings: a heurística da origem
+(`clarify.ts`) fazia `includes()` sobre uma lista com pares singular/plural, de modo que "painel de
+vendas para minha empresa" somava `venda` + `vendas` = 2 acertos e passava sem pergunta, e "plano de
+RH" casava `ano` dentro de "plano".
 
 ```ts
-const TERMOS_DOMINIO = [
-  "vendas", "venda", "receita", "faturamento", "lucro", "margem", "ticket",
-  "cliente", "clientes", "lead", "leads", "conversao", "conversão", "funil", "proposta",
-  "campanha", "retorno", "aquisicao", "aquisição", "canal", "trafego", "tráfego",
-  "estoque", "inventario", "inventário", "giro", "produto", "produtos", "categoria",
-  "projeto", "projetos", "tarefa", "prazo", "entrega", "entregas",
-  "financeiro", "fluxo", "caixa", "despesa", "despesas", "custo", "custos", "orcamento", "orçamento",
-  "marketing", "engajamento", "assinatura", "assinaturas", "cancelamento", "churn", "recorrente",
-  "rh", "pessoas", "colaborador", "colaboradores", "rotatividade", "contratacao", "contratação",
-  "juridico", "jurídico", "processo", "contrato", "contratos",
-  "atendimento", "chamado", "chamados", "satisfacao", "satisfação", "nps",
-  "meta", "metas", "indicador", "indicadores", "objetivo",
-  "mensal", "diario", "diário", "semanal", "trimestre", "trimestral", "ano", "anual",
-  "regiao", "região", "estado", "loja", "lojas", "vendedor", "vendedores", "equipe", "time",
+/** Radicais de domínio (sem acento, minúsculos). Um token conta quando COMEÇA por um radical. */
+const RADICAIS_DOMINIO = [
+  "vend", "receit", "fatur", "lucr", "margem", "ticket",
+  "client", "lead", "convers", "funil", "propost", "oportunidad",
+  "campanh", "retorn", "aquisic", "canal", "canais", "trafeg", "anunci",
+  "estoqu", "inventar", "giro", "produt", "categori",
+  "projet", "taref", "praz", "entreg", "ocupac", "hora",
+  "financ", "flux", "caix", "despes", "cust", "orcament", "inadimpl",
+  "marketing", "engajament", "assinatur", "cancelament", "churn", "recorrent", "expans",
+  "rh", "pessoa", "colaborador", "rotatividad", "contratac", "desligament",
+  "juridic", "process", "contrat",
+  "atendiment", "chamad", "satisfac", "nps", "servic",
+  "meta", "indicador", "objetiv",
+  "mensal", "mes", "diari", "dia", "semanal", "trimestr", "anual",
+  "regi", "estad", "loj", "vendedor", "equip", "time",
 ];
 
-/** true = precisa perguntar. Espelha a heurística da origem, com a lista ampliada. */
+const normalizar = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+/** true = precisa avaliar (a IA decide se pergunta; em demonstração, as perguntas fixas). */
 export function precisaEsclarecerLocal(descricao: string): boolean {
-  const texto = descricao.toLowerCase();
-  if (texto.trim().length < 30) return true;
-  let acertos = 0;
-  for (const termo of TERMOS_DOMINIO) {
-    if (texto.includes(termo)) acertos++;
-    if (acertos >= 3) return false;
+  const texto = normalizar(descricao).trim();
+  if (texto.length < 30) return true;
+  const tokens = texto.split(/[^a-z0-9]+/).filter(Boolean);
+  const radicais = new Set<string>();
+  for (const token of tokens) {
+    // Radical curto (rh, nps, dia, mes) só casa a palavra inteira ou o plural; os demais casam por prefixo.
+    const radical = RADICAIS_DOMINIO.find((r) =>
+      r.length <= 3 ? token === r || token === `${r}s` || token === `${r}es` : token.startsWith(r),
+    );
+    if (radical) radicais.add(radical);
   }
-  return acertos < 2;
+  return radicais.size < 3;
 }
 ```
 
-Só quando `precisaEsclarecerLocal()` devolve `true` a IA é chamada, com este system:
+Regra: **< 30 caracteres ou < 3 radicais distintos → consultar a IA** (em demonstração, as perguntas
+fixas de `esclarecimentoDemo()`); **≥ 3 radicais → gerar direto**, sem chamada. Casos de teste
+obrigatórios (Etapa 7): os oito chips do RF-02 → `false`; "painel de vendas para minha empresa" →
+`true` (1 radical); "plano de RH" → `true` (curto; `ano` em "plano" não conta); "faz um painel pra
+mim" → `true`. Radicais de até 3 letras (`rh`, `nps`, `dia`, `mes`) casam só a palavra inteira ou o
+plural, para "mesa", "mesmo" e "diante" não contarem.
+
+Só quando `precisaEsclarecerLocal()` devolve `true` a IA é chamada (`maxTokens: 600`), com este
+system:
 
 ```
 <IDIOMA>
@@ -1132,25 +1337,28 @@ toolkit-dash-builder/
 ├─ AGENTS.md                      [INFRA-ish] reescrito pelo próprio next dev; copiar
 ├─ CLAUDE.md                      [PRÓPRIO] @AGENTS.md + as notas deste app (nasce vazio de notas)
 ├─ README.md                      [PRÓPRIO] mesmas seções do de referência; tabela de variáveis só com OPENROUTER_*
-├─ Dockerfile                     [PRÓPRIO] cópia; REMOVER os ARG/ENV de GOOGLE_*_APP e MICROSOFT_*_APP (não usa caixa de e-mail)
-├─ docker-compose.yml             [PRÓPRIO] porta 3020:10000, volume nomeado dados:/app/data
+├─ Dockerfile                     [PRÓPRIO] cópia IDÊNTICA à do pdi-time, inclusive os ARG/ENV de GOOGLE_*_APP e MICROSOFT_*_APP
+│                                  (o workflow passa os quatro build-args a todos os apps; sem valor, lib/email-envio.ts só esconde os botões)
+├─ docker-compose.yml             [PRÓPRIO] cópia; só a porta (3020:10000) e o nome do volume (toolkit-dash-builder-dados:/app/data) mudam
 ├─ render.yaml                    [GERADO] nunca à mão: node scripts/gerar-deploy.mjs
 ├─ next.config.ts                 [INFRA] { output: "standalone" }, cópia
 ├─ postcss.config.mjs             [INFRA] cópia
 ├─ eslint.config.mjs              [INFRA] cópia sem alterar
 ├─ tsconfig.json                  [INFRA] cópia
-├─ package.json                   [PRÓPRIO] só o "name" muda; @types/node ^22; REMOVER "nodemailer" (não há notificação na v1)
+├─ package.json                   [PRÓPRIO] só o "name" muda. NADA MAIS: nodemailer e @types/nodemailer FICAM (lib/notificacoes.ts,
+│                                  que é [INFRA] e copiado byte a byte, faz `await import("nodemailer")`; sem eles o `next build` falha no type-check)
 ├─ proxy.ts                       [INFRA] cópia sem alterar; nenhuma rota nova entra na lista pública
 ├─ instrumentation.ts             [INFRA] cópia (limpa expirados na subida; o agendador fica ocioso sem rotina)
-├─ .env.example                   [PRÓPRIO] só alternativas opcionais (OPENROUTER_API_KEY, DATA_DIR, APP_URL, CHAVE_MESTRA)
+├─ .env.example                   [PRÓPRIO] cópia idêntica à do pdi-time (todas opcionais; nenhuma linha é removida)
 ├─ .gitignore / .dockerignore     [INFRA] cópia (ignoram data/)
 ├─ app/
-│  ├─ layout.tsx                  [PRÓPRIO] só metadata.title = "Painel em Minutos · IA para Executivos" e description
+│  ├─ layout.tsx                  [PRÓPRIO] só metadata.title = "Painel Pronto · IA para Executivos" e description
 │  ├─ globals.css                 [PRODUTO] cópia; trocar só as 4 cores do @theme; CSS do app depois de /* Específico deste app */
 │  ├─ painel.css                  [PRÓPRIO] NOVO: grade de 4 colunas, cartão de componente, estilos de impressão
 │  ├─ icon.svg                    [GERADO] node scripts/gerar-icones.mjs
 │  ├─ page.tsx                    [PRÓPRIO] REESCRITO: tela única (chips, campo, esclarecimento, carregando, painel, conversa)
-│  ├─ setup/page.tsx              [PRÓPRIO] <SetupPage marca="P" nome="Painel em Minutos" area="Dados" segmento="Dados" /> + <AcessoMCP/>
+│  ├─ setup/page.tsx              [PRÓPRIO] <SetupPage marca="P" nome="Painel Pronto" area="Dados e Gestão" segmento="Gestão" /> + <AcessoMCP/>
+│  │                               (segmento="Gestão" é o tipo Segmento de lib/ilustracao.ts, que não tem "Dados"; ver 8.4)
 │  ├─ conta/page.tsx              [PRÓPRIO] só marca/nome/área (divergência registrada em scripts/padrao-excecoes.json)
 │  ├─ entrar/page.tsx             [PRÓPRIO] idem
 │  ├─ historico/page.tsx          [PRÓPRIO] idem, listando painéis (tipo "painel")
@@ -1165,16 +1373,17 @@ toolkit-dash-builder/
 │  └─ api/
 │     ├─ health/route.ts          [INFRA] {ok:true}
 │     ├─ status/route.ts          [INFRA] cópia sem alterar (monta integrations a partir de INTEGRACOES + statusExtra)
-│     ├─ setup/**                 [INFRA] cópia sem alterar (GET/PUT, testar, OAuth do OpenRouter)
-│     │                            REMOVER as pastas oauth/google, oauth/microsoft e oauth/mcp (não há integração que use)
+│     ├─ setup/**                 [INFRA] cópia sem alterar, INCLUSIVE oauth/google, oauth/microsoft e oauth/mcp (rotas compartilhadas;
+│     │                            verificar-padrao.sh percorre a pasta arquivo a arquivo e devolve "ausente" antes de olhar as exceções;
+│     │                            sem credencial _APP os botões simplesmente não aparecem em /setup — é assim em videos-campanha e bussola-ia)
 │     ├─ conta/**                 [INFRA] cópia sem alterar
 │     ├─ historico/route.ts       [INFRA] cópia sem alterar
 │     ├─ rotinas/**               [INFRA] cópia sem alterar (infraestrutura obrigatória, sem tipo de rotina na v1)
 │     ├─ mcp/token/route.ts       [INFRA] cópia sem alterar
 │     ├─ f/[token]/route.ts       [PRÓPRIO] molde mínimo; nenhum registrarCallback na v1
 │     └─ painel/                  [PRÓPRIO] NOVO: as rotas de domínio (o app/api/pdi/** some)
-│        ├─ route.ts                 POST gerar · GET listar · DELETE apagar tudo
-│        ├─ [id]/route.ts            GET obter um painel salvo · DELETE apagar um
+│        ├─ route.ts                 POST gerar (aceita forcar) · GET listar · DELETE apagar tudo
+│        ├─ [id]/route.ts            GET obter um painel salvo · PUT gravar o estado do Desfazer (sem IA) · DELETE apagar um
 │        ├─ esclarecer/route.ts      POST avaliar o pedido (heurística local, depois IA)
 │        ├─ refinar/route.ts         POST refinar um painel
 │        └─ observacoes/route.ts     POST analisar o painel
@@ -1183,14 +1392,14 @@ toolkit-dash-builder/
 │  ├─ setup.tsx                   [PRODUTO] cópia sem alterar
 │  ├─ conta.tsx                   [PRODUTO] cópia sem alterar
 │  ├─ AcessoMCP.tsx               [PRÓPRIO] cópia; trocar só a lista de ferramentas citadas
-│  ├─ Rotinas.tsx                 REMOVER (sem rotina na v1)
+│  ├─ Rotinas.tsx                 REMOVER (sem rotina na v1; o cartão "Rotinas" não é renderizado em /setup — como videos-campanha)
 │  ├─ BuscarEntregas.tsx / DialogoAutoavaliacao.tsx / LembrarCheckins.tsx   REMOVER (domínio do pdi-time)
 │  ├─ Painel.tsx                  [PRÓPRIO] NOVO: a grade e o despacho por tipo de componente
-│  ├─ CartaoIndicador.tsx         [PRÓPRIO] NOVO: número grande, variação, barra de meta
-│  ├─ GraficoSerie.tsx            [PRÓPRIO] NOVO: linha e área (SVG), molde de financas-ia/GraficoMeses.tsx
-│  ├─ GraficoBarras.tsx           [PRÓPRIO] NOVO: vertical e horizontal (div), molde de financas-ia/GraficoCategorias.tsx
-│  ├─ GraficoRosca.tsx            [PRÓPRIO] NOVO: pizza e rosca (SVG, arcos)
-│  ├─ TabelaPainel.tsx            [PRÓPRIO] NOVO: embrulho de DataTable com formatação por tipo de coluna
+│  ├─ CartaoIndicador.tsx         [PRÓPRIO] NOVO: número grande, variação, barra de meta (a barra é <rect> SVG, imprime)
+│  ├─ GraficoSerie.tsx            [PRÓPRIO] NOVO: linha e área (SVG só com geometria + texto em HTML), molde de financas-ia/GraficoMeses.tsx
+│  ├─ GraficoBarras.tsx           [PRÓPRIO] NOVO: vertical e horizontal (barras como <rect> SVG; rótulos em HTML), molde de financas-ia/GraficoCategorias.tsx
+│  ├─ GraficoRosca.tsx            [PRÓPRIO] NOVO: pizza e rosca (SVG, circle + stroke-dasharray; até 6 fatias)
+│  ├─ TabelaPainel.tsx            [PRÓPRIO] NOVO: na tela, embrulho de DataTable; em modo="impressao", <table> próprio de largura total
 │  ├─ ChipsArea.tsx               [PRÓPRIO] NOVO: os 8 chips de sugestão
 │  ├─ Esclarecimento.tsx          [PRÓPRIO] NOVO: perguntas com chips + "Pular e gerar agora"
 │  ├─ ConversaRefino.tsx          [PRÓPRIO] NOVO: histórico da conversa + campo + desfazer
@@ -1212,15 +1421,16 @@ toolkit-dash-builder/
 │  ├─ status-do-app.ts            [PRÓPRIO] REESCRITO: statusExtra() devolve {} (nada além das integrações)
 │  ├─ ferramentas.ts              [PRÓPRIO] REESCRITO: NOME_SERVIDOR = "toolkit-dash-builder" + 4 ferramentas
 │  ├─ rotinas-do-app.ts           [PRÓPRIO] REESCRITO: TIPOS_ROTINA = [] (sem rotina na v1)
-│  ├─ notificacoes-do-app.ts      REMOVER (sem notificação na v1)
+│  ├─ notificacoes-do-app.ts      REMOVER (sem notificação na v1; no pdi-time só lib/pdi.ts, lib/status-do-app.ts e app/api/pdi/checkins o importam, todos próprios)
 │  ├─ types.ts                    [PRÓPRIO] REESCRITO: os tipos da seção 5
 │  ├─ demo.ts                     [PRÓPRIO] REESCRITO: esperar() + 4 painéis + refinamento e observações de exemplo
 │  ├─ painel.ts                   [PRÓPRIO] NOVO: SYSTEM_PAINEL, SYSTEM_REFINAR, SYSTEM_OBSERVACOES,
-│  │                               gerarPainel(), refinarPainel(), observarPainel(), validarRefinamento()
+│  │                               gerarPainel() (com a segunda tentativa própria), refinarPainel() (grava refinadoEm),
+│  │                               observarPainel(), validarRefinamento(), igual()
 │  ├─ esclarecer.ts               [PRÓPRIO] NOVO: TERMOS_DOMINIO, precisaEsclarecerLocal(), SYSTEM_ESCLARECER, esclarecer()
 │  ├─ validar-painel.ts           [PRÓPRIO] NOVO: o validador/reparador do RF-06 (sem import node:*)
 │  ├─ formatar.ts                 [PRÓPRIO] NOVO: moeda/número/percentual em pt-BR, compacto, variação (sem import node:*)
-│  ├─ cache-painel.ts             [PRÓPRIO] NOVO: hashPedido() + busca no histórico (RF-12)
+│  ├─ cache-painel.ts             [PRÓPRIO] NOVO: hashPedido() + busca no histórico (RF-12; ignora saida.refinadoEm; respeita forcar)
 │  └─ pdi.ts / autoavaliacoes.ts / checkins.ts / entregas-quadro.ts   REMOVER (domínio do pdi-time)
 └─ public/
    ├─ ilustracoes/pessoa-*.webp            [PRODUTO] cópia (acervo por segmento)
@@ -1248,9 +1458,11 @@ Correspondência com os nomes do enunciado da tarefa: `/api/gerar` → `POST /ap
 {
   "descricao": "Painel de vendas com receita, ticket médio, conversão do funil e ranking de vendedores",
   "esclarecimentos": { "Qual período interessa mais?": "Últimos 6 meses" },
-  "guardar": true
+  "forcar": false
 }
 ```
+`forcar` (opcional, padrão `false`): `true` ignora o cache e chama a IA de novo — é o que "Gerar
+outra versão" envia. Não existe `guardar` na rota HTTP: o painel é **sempre** salvo (RF-13).
 
 *Resposta 200:*
 ```json
@@ -1268,8 +1480,30 @@ Correspondência com os nomes do enunciado da tarefa: `/api/gerar` → `POST /ap
 `ErroIA`.
 
 *Regras:* valida tamanho (10 a 1.000) → monta `PedidoPainel` → calcula o hash → consulta o cache
-(RF-12) → em demonstração devolve de `lib/demo.ts` → senão `askJSON<EspecPainel>` com
-`maxTokens: 8000` → `validarPainel()` → `salvar()` quando `guardar`.
+(RF-12; pulado com `forcar: true`; ignora resultados com `saida.refinadoEm`) → em demonstração
+devolve de `lib/demo.ts` → senão `gerarPainel()`:
+
+```ts
+// lib/painel.ts — o caminho com IA de gerarPainel(), resumido
+const MINIMO_BOM = 5, MINIMO_ACEITAVEL = 3;
+let bruto = await askJSON<EspecPainel>({ system: SYSTEM_PAINEL, prompt: PROMPT_PAINEL(pedido), maxTokens: 8000 });
+let painel = validarPainel(bruto);
+if (painel.componentes.length < MINIMO_BOM) {
+  console.warn(`[painel] segunda tentativa: sobraram ${painel.componentes.length} componentes válidos`);
+  const reforco = "\n\nA resposta anterior veio incompleta ou fora do formato. Devolva um painel completo, com 5 a 8 componentes válidos.";
+  bruto = await askJSON<EspecPainel>({ system: SYSTEM_PAINEL, prompt: PROMPT_PAINEL(pedido) + reforco, maxTokens: 8000 });
+  const segundo = validarPainel(bruto);
+  if (segundo.componentes.length > painel.componentes.length) painel = segundo;
+}
+if (painel.componentes.length < MINIMO_ACEITAVEL) {
+  throw new ErroIA("resposta_invalida", "A IA devolveu uma resposta que não deu para usar. Tente de novo ou descreva o painel de outro jeito.", 502);
+}
+```
+
+→ `salvar({ tipo: "painel", titulo, resumo, entrada: pedido, saida: painel, meta })` **sempre** →
+devolve `{ demo, painel, meta, id, reaproveitado }`. (No pior caso são quatro chamadas ao modelo:
+duas do `gerarPainel` × o retry de *parse* do `askJSON`; é aceitável porque só acontece com resposta
+ruim, e M3 mede quantas vezes a segunda tentativa foi necessária.)
 
 ---
 
@@ -1286,6 +1520,14 @@ Correspondência com os nomes do enunciado da tarefa: `/api/gerar` → `POST /ap
 #### `GET /api/painel/[id]` — obter um painel salvo
 *Resposta:* `{ "painel": EspecPainel, "pedido": PedidoPainel, "meta": Meta, "criadoEm": "..." }`,
 ou `404` `{ "error": "Este painel não existe mais." }`.
+
+#### `PUT /api/painel/[id]` — gravar um estado sem IA (Desfazer)
+*Pedido:* `{ "painel": EspecPainel }`
+*Resposta:* `{ "ok": true, "painel": EspecPainel }` (o painel depois de `validarPainel`), ou `404`.
+*Regras:* não chama a IA; passa o corpo por `validarPainel()`; mantém `refinadoEm` como veio no corpo
+(o estado restaurado de um painel refinado continua fora do cache); chama `atualizarSaida(id, painel)`.
+Usada pelo botão "Desfazer" (RF-10 a4) para que `/r/[id]` e `/imprimir/[id]` mostrem o que está na
+tela. `400` quando `painel` não tem componentes.
 
 #### `DELETE /api/painel/[id]` — apagar um
 *Resposta:* `{ "ok": true }`.
@@ -1311,9 +1553,10 @@ ou `404` `{ "error": "Este painel não existe mais." }`.
 consultada e `"demo"` em modo demonstração. Quando não precisa esclarecer:
 `{ "precisaEsclarecer": false, "perguntas": [], "origem": "local" }`.
 
-*Regra:* nunca chama a IA quando `precisaEsclarecerLocal()` devolve `false`. Falha da IA neste passo
-**não** bloqueia: cai para `{ precisaEsclarecer: false }` e a geração segue (é um passo opcional de
-qualidade, não uma etapa obrigatória).
+*Regra:* nunca chama a IA quando `precisaEsclarecerLocal()` devolve `false`; quando chama, usa
+`maxTokens: 600`. Falha da IA neste passo **não** bloqueia: cai para `{ precisaEsclarecer: false }`
+e a geração segue (é um passo opcional de qualidade, não uma etapa obrigatória). O atalho
+`?exemplo=1` não passa por aqui (RF-03 a4).
 
 ---
 
@@ -1348,7 +1591,11 @@ tela não os mostra, mas eles vão para o `console.warn` do servidor e ajudam na
 ```
 
 *Erros:* `400` quando `pedido` tem menos de 3 caracteres ou `painel` não tem componentes.
-Quando `id` é informado e o refinamento deu certo, o servidor chama `atualizarSaida(id, painel)`.
+
+*Regras:* `askJSON<RespostaRefinamento>` com `maxTokens: 8000` (o painel volta inteiro) →
+`validarRefinamento(original, refinado, componentesAlterados)` → `validarPainel(..., { modo:
+"refinamento", moviveis })` → `painel.refinadoEm = new Date().toISOString()` → quando `id` é
+informado, `atualizarSaida(id, painel)`. O `refinadoEm` é o que tira este painel do cache (RF-12 a6).
 
 ---
 
@@ -1356,7 +1603,11 @@ Quando `id` é informado e o refinamento deu certo, o servidor chama `atualizarS
 
 *Pedido:* `{ "painel": EspecPainel }`
 *Resposta:* `{ "demo": false, "observacoes": [ { "tipo": "tendencia", "mensagem": "..." } ], "meta": { ... } }`
-No máximo 3; a resposta é cortada em 3 no servidor mesmo que a IA mande mais.
+No máximo 3; a resposta é cortada em 3 no servidor mesmo que a IA mande mais. `askJSON` com
+`maxTokens: 1200`.
+
+Resumo dos `maxTokens` por rota (tabela 5.3): geração **8.000** · refinamento **8.000** · observações
+**1.200** · esclarecimento **600**. Nenhuma rota fica no padrão de 4.000 de `askText` por omissão.
 
 ---
 
@@ -1388,14 +1639,15 @@ Uso da tabela `resultados` (colunas já existentes: `id`, `tipo`, `titulo`, `res
 | `titulo` | `EspecPainel.titulo` |
 | `resumo` | `EspecPainel.resumo` (alimenta `/historico` sem abrir o painel) |
 | `entrada` | JSON de `PedidoPainel` — `{ descricao, esclarecimentos, hash }` |
-| `saida` | JSON de `EspecPainel` — atualizado a cada refinamento por `atualizarSaida(id, ...)` |
+| `saida` | JSON de `EspecPainel` — atualizado a cada refinamento (com `refinadoEm`) e a cada Desfazer por `atualizarSaida(id, ...)` |
 | `meta` | `{ demo, model, geradoEm, insumo }` de `meta()` de `lib/ai.ts` |
 | `expiraEm` | nulo (`SENSIVEL = false`: painel não guarda dado pessoal, não expira) |
 
 **Cache por hash (RF-12)** — sem tabela nova: `lib/cache-painel.ts` usa
 `listarPorTipo<PedidoPainel, EspecPainel>("painel", 50)` de `lib/historico.ts` e procura o primeiro
-resultado cujo `entrada.hash` bata, cujo `criadoEm` tenha menos de 24 h e cujo `meta.demo` seja igual
-ao modo atual. Com 50 resultados por consulta e um `JSON.parse` por linha, o custo é irrelevante na
+resultado cujo `entrada.hash` bata, cujo `criadoEm` tenha menos de 24 h, cujo `meta.demo` seja igual
+ao modo atual **e cuja `saida` não tenha `refinadoEm`** (um painel já refinado não representa mais o
+pedido original). Com `forcar: true` a busca nem é feita. Com 50 resultados por consulta e um `JSON.parse` por linha, o custo é irrelevante na
 escala de uma instância. Se um dia virar gargalo, a evolução é uma coluna indexada em `resultados` —
 mas isso mudaria um arquivo `[INFRA]` e exigiria replicação para os 19 apps, então fica registrado
 como decisão consciente de **não** fazer agora.
@@ -1417,7 +1669,8 @@ export function hashPedido(pedido: PedidoPainel): string {
 export function esperar(ms = 1200) { return new Promise((r) => setTimeout(r, ms)); }
 ```
 
-Quatro painéis completos, cada um com 6 a 8 componentes, cobrindo os seis tipos:
+Quatro painéis completos, cada um com 6 a 8 componentes, cobrindo os sete tipos (rosca em três,
+pizza no financeiro; nenhuma distribuição com mais de 6 fatias):
 
 | Chave | Título | Setor | Palavras-chave que o selecionam | Componentes |
 |---|---|---|---|---|
@@ -1449,7 +1702,7 @@ Toda rota segue o padrão do `pdi-time`:
 
 ```ts
 try {
-  const resultado = await gerarPainel(pedido, { guardar });
+  const resultado = await gerarPainel(pedido, { forcar }); // a rota HTTP salva sempre; `guardar` só existe no MCP
   return Response.json(resultado);
 } catch (err) {
   return respostaErro(err);
@@ -1464,13 +1717,22 @@ try {
   (dizer "em Configurações").
 - Erro de validação de entrada é 400 com frase em português, escrito na própria rota.
 - Na tela, `lerErro()` de `components/ui.tsx` lê `{mensagem, codigo, acao}`; `codigo: "sem_sessao"`
-  navega para `/entrar?next=…`; o resto vai para o `ErrorBox`, **junto com o pedido original em
-  itálico e o botão "Tentar novamente"** (sacada 2.14).
+  navega para `/entrar?next=…`; o resto vai para o `ErrorBox`, **com o pedido original em itálico
+  renderizado acima dele** (`<p className="italic text-muted">`; o `ErrorBox` não tem slot para isso)
+  **e o botão "Tentar de novo"** (rótulo fixo do `ErrorBox`, `ui.tsx:423`, via `onTentarNovamente`)
+  — sacada 2.14.
+- Tempo limite no **cliente** (`lib/ai.ts` é `[INFRA]` e faz `fetch` sem `signal`): `AbortController`
+  com 120 s na geração, 90 s no refinamento e 45 s nas observações. Ao estourar, `ErrorBox` com "A IA
+  demorou demais para responder. Tente de novo ou troque o modelo em Configurações." e o botão de
+  tentar de novo. Sem isso, uma chamada travada no modelo gratuito deixaria o `Loading` parado na
+  última etapa para sempre.
 - Atalho de demonstração para capturar a tela de erro, só fora de produção:
   `POST /api/painel?erro=sem_credito` lança `interpretarFalha(new Response(null, {status:402}), "")`
   — mesmo padrão já usado em `pdi-time/app/api/pdi/route.ts`.
-- Falha específica do `askJSON` em `resposta_invalida` depois do retry: a mensagem na tela é "A IA
-  devolveu uma resposta que não deu para usar. Tente de novo ou descreva o painel de outro jeito."
+- `resposta_invalida` — tanto a do `askJSON` (JSON que não faz *parse* duas vezes) quanto a do
+  `gerarPainel` (menos de 3 componentes válidos depois da segunda tentativa, RF-06 a4): a mensagem na
+  tela é "A IA devolveu uma resposta que não deu para usar. Tente de novo ou descreva o painel de
+  outro jeito."
 
 ### 7.6 Ferramentas MCP — `lib/ferramentas.ts`
 
@@ -1480,10 +1742,50 @@ export const NOME_SERVIDOR = "toolkit-dash-builder";
 
 | Ferramenta | Argumentos | O que faz | Chama |
 |---|---|---|---|
-| `criar_painel` | `descricao` (obrigatório), `esclarecimentos?` (objeto), `guardar?` (booleano, padrão `true`) | Gera o painel a partir da descrição e devolve a especificação, o `id` e o link `/r/<id>` | `gerarPainel()` de `lib/painel.ts` |
-| `refinar_painel` | `id` (obrigatório), `pedido` (obrigatório) | Refina um painel salvo, grava com `atualizarSaida` e devolve o painel novo e o que mudou | `refinarPainel()` |
-| `listar_paineis` | `limite?` (padrão 10, máximo 50) | Lista os painéis salvos com id, título, resumo e data | `listar()` de `lib/historico.ts` |
+| `criar_painel` | `descricao` (obrigatório), `esclarecimentos?` (objeto), `guardar?` (booleano, padrão `true` — o único lugar onde `guardar` existe) | Gera o painel a partir da descrição e devolve a especificação, o `id` e o link `/r/<id>` | `gerarPainel()` de `lib/painel.ts` |
+| `refinar_painel` | `id` (obrigatório), `pedido` (obrigatório) | Refina um painel salvo, grava com `atualizarSaida` (com `refinadoEm`) e devolve o painel novo e o que mudou | `refinarPainel()` |
+| `listar_paineis` | `limite?` (padrão 10, máximo 50) | Lista os painéis salvos com id, título, resumo e data — **filtrando `tipo === "painel"`** (`listar()` devolve todos os tipos) | `listar()` de `lib/historico.ts` |
 | `obter_painel` | `id` (obrigatório) | Devolve a especificação completa, o pedido original e o link `/r/<id>` | `obter()` de `lib/historico.ts` |
+
+Esqueleto no formato de `pdi-time/lib/ferramentas.ts:9-33` (`schema` é JSON Schema com `required`;
+`executar` valida os argumentos e lança `Error` com frase em português — `lib/mcp.ts` serializa o
+retorno como texto JSON, então devolver objetos com `painel` e `link` funciona):
+
+```ts
+// lib/ferramentas.ts
+import { gerarPainel, refinarPainel } from "./painel";
+import { listar, obter } from "./historico";
+import { enderecoPublico } from "./setup-comum";
+import type { Ferramenta } from "./mcp";
+import type { EspecPainel, PedidoPainel } from "./types";
+
+export const NOME_SERVIDOR = "toolkit-dash-builder";
+
+const link = (id: string) => `${enderecoPublico()}/r/${id}`;
+
+export const FERRAMENTAS: Ferramenta[] = [
+  {
+    nome: "criar_painel",
+    descricao: "Gera um painel de indicadores completo (indicadores, gráficos e tabela, com números de exemplo) a partir de uma descrição em português do que a pessoa quer acompanhar.",
+    schema: {
+      type: "object",
+      properties: {
+        descricao: { type: "string", description: "O que o painel deve acompanhar (10 a 1.000 caracteres)" },
+        esclarecimentos: { type: "object", description: "Opcional: pergunta -> resposta, para detalhar o pedido", additionalProperties: { type: "string" } },
+        guardar: { type: "boolean", description: "Salvar no histórico (padrão: sim)" },
+      },
+      required: ["descricao"],
+    },
+    async executar(args) {
+      const { descricao, esclarecimentos, guardar = true } = args as { descricao?: string; esclarecimentos?: Record<string, string>; guardar?: boolean };
+      if (!descricao || descricao.trim().length < 10) throw new Error("Descreva o painel com pelo menos 10 letras.");
+      const r = await gerarPainel({ descricao, esclarecimentos }, { guardar });
+      return { painel: r.painel, id: r.id, link: r.id ? link(r.id) : undefined, demo: r.demo };
+    },
+  },
+  // refinar_painel, listar_paineis (filtra tipo === "painel") e obter_painel seguem o mesmo molde.
+];
+```
 
 Nenhuma delas duplica prompt ou lógica: as quatro chamam as mesmas funções que as rotas HTTP, como
 `PADRAO.md:79` exige. O link absoluto sai de `enderecoPublico()` de `lib/setup-comum.ts`, nunca de
@@ -1496,14 +1798,17 @@ própria no `verificar-jargao.mjs`).
 
 ```ts
 // Este app não tem tarefa agendada na v1: o painel é gerado sob demanda e os números são de exemplo,
-// então não há o que resumir nem sobre o que alertar. A infraestrutura de lib/rotinas.ts continua
-// copiada e funcionando (o /setup mostra o cartão vazio), pronta para quando existir dado real.
+// então não há o que resumir nem sobre o que alertar. A infraestrutura (lib/rotinas.ts,
+// app/api/rotinas, instrumentation.ts) continua copiada e ociosa, pronta para quando existir dado
+// real; o cartão "Rotinas" NÃO é renderizado em /setup (components/Rotinas.tsx foi removido, como
+// no videos-campanha, que também não tem a capacidade "rotina").
 import type { TipoRotina } from "./rotinas";
 
 export const TIPOS_ROTINA: TipoRotina[] = [];
 ```
 
-E `capacidades` em `catalogo.json` não lista `"rotina"`.
+E `capacidades` em `catalogo.json` não lista `"rotina"`. `instrumentation.ts:9` importa
+`@/lib/rotinas-do-app`, então o arquivo precisa existir mesmo com a lista vazia.
 
 ### 7.8 Impressão — `/imprimir/[id]`
 
@@ -1515,18 +1820,45 @@ mais `<ImprimirAoCarregar />`.
 - Rodapé: "Números de exemplo, gerados para validar o formato do painel." e a proveniência
   (`Origem`, com modelo e data).
 - A grade de impressão é de 2 colunas (A4 retrato), com `break-inside: avoid` em cada cartão, no
-  bloco `/* Específico deste app */` de `globals.css`.
-- Os gráficos são `div` e SVG: imprimem direto, sem `canvas` e sem biblioteca.
-- Limitação aceita: tabela longa pagina mal em A4 (bug registrado no `CLAUDE.md` do `pdi-time`);
-  daí o limite de 10 linhas do RF-06/5.3.
+  bloco `/* Específico deste app */` de `globals.css` — que também liga a impressão de cor:
+
+  ```css
+  /* Específico deste app */
+  @media print {
+    .print-sheet { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .print-sheet .painel-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .print-sheet .painel-tabela { grid-column: 1 / -1; }
+  }
+  ```
+  (`globals.css` é comparado ignorando só as quatro cores de acento, mas o bloco depois do marcador
+  `/* Específico deste app */` é livre — é assim que os outros apps acrescentam CSS.)
+- **Toda cor que precisa aparecer no papel é `fill`/`stroke` de SVG**, nunca `background` de `div`:
+  o Chrome não imprime fundo por padrão (a opção "Gráficos de fundo" vem desmarcada) e `print-color-adjust`
+  é só a segunda rede de segurança. Barras de `GraficoBarras` e a barra de meta do `CartaoIndicador`
+  são `<rect>`; linha, área e fatias já são SVG. Nada de `canvas`, nada de biblioteca.
+- **Tabela em modo impressão:** `TabelaPainel` com `modo="impressao"` renderiza um `<table>` HTML
+  próprio e simples (cabeçalho + até 10 linhas, formatação por tipo de coluna, sem `DataTable`) que
+  ocupa a **linha inteira** da grade (`grid-column: 1 / -1`). Motivo: na largura útil do A4 o
+  `DataTable` cai no modo cartão (`ui.tsx:678`, `<table className="max-md:hidden …">`) e uma tabela
+  de 10 × 6 vira 60 pares rótulo/valor mais altos que a página; `break-inside: avoid` a empurraria
+  inteira para a página seguinte (limitação US-020 do `CLAUDE.md` do `pdi-time`). Com a tabela na
+  largura total e 10 linhas, ela cabe em uma página (RF-14 a5).
+- O que se imprime é a `saida` salva — por isso Desfazer persiste por `PUT /api/painel/[id]`
+  (RF-10 a4): sem isso o PDF sairia diferente da tela.
 
 ### 7.9 Tela `/setup`
 
 ```tsx
 // app/setup/page.tsx
-<SetupPage marca="P" nome="Painel em Minutos" area="Dados" segmento="Dados" />
+<SetupPage marca="P" nome="Painel Pronto" area="Dados e Gestão" segmento="Gestão" />
 <AcessoMCP />
 ```
+
+`segmento="Gestão"`, e não `"Dados"`: a prop é do tipo `Segmento` de `lib/ilustracao.ts:6-14`
+(`"RH" | "Marketing" | "Vendas" | "Financeiro" | "Atendimento" | "Estratégia" | "Gestão" |
+"Jurídico"`), arquivo `[PRODUTO]` comparado byte a byte — `"Dados"` não compila. "Gestão" não tem
+ilustração de pessoa (só o `.blob-acento`), como em `agente-kanban` e `reunioes-ia`. O segmento
+**da paleta** (`tasks/paleta-segmentos.json`) continua "Dados"; são dois conceitos (8.4).
 
 ```ts
 // lib/integracoes.ts (íntegra)
@@ -1567,22 +1899,28 @@ novo na `Topbar`: `lib/navegacao.ts` segue com Início, Histórico e Configuraç
 | `vazio` | `Hero` + `Passos` à esquerda, formulário (chips + campo + botão), `Stage` com `Empty` convidativo à direita | enviar o formulário |
 | `esclarecendo` | `Esclarecimento` no lugar do `Empty`: 1 a 3 perguntas com chips, campo livre por pergunta, botões "Gerar painel" e "Pular e gerar agora" | responder ou pular |
 | `carregando` | `Loading({ etapas })` com o pedido visível | resposta do servidor |
-| `pronto` | Painel em largura total, com `ResultHead`, `Aviso` de números de exemplo, `BannerObservacoes` (quando houver), grade, `ConversaRefino` abaixo e `Entregar`/`Origem`/`SeloIA` no rodapé | novo pedido, refinamento ou "Começar de novo" |
-| `erro` | `ErrorBox` com a mensagem traduzida, o pedido original em itálico e "Tentar novamente" | tentar de novo |
+| `pronto` | Painel em largura total, com `ResultHead`, `Aviso` de números de exemplo, `BannerObservacoes` (quando houver), grade, `ConversaRefino` abaixo (com "Desfazer"), botão "Gerar outra versão" e `Entregar` (já com `id`)/`Origem`/`SeloIA` no rodapé | novo pedido, refinamento, "Gerar outra versão" ou "Começar de novo" |
+| `erro` | `<p className="italic text-muted">` com o pedido original, acima do `ErrorBox` com a mensagem traduzida e o botão "Tentar de novo" | tentar de novo |
 
-**Layout.** Nos estados `vazio`, `esclarecendo` e `carregando`, a estrutura é a do padrão:
-`Workspace` com `Panel` à esquerda e `Stage` à direita. No estado `pronto`, o painel passa a ocupar
-a largura inteira e o formulário recolhe para uma linha resumida no topo ("Painel comercial do mês ·
-alterar pedido"), com a conversa de refinamento em faixa abaixo da grade. Isso mantém o app dentro
-da regra de tela única e resolve a legibilidade de uma grade de 4 colunas — ver o risco 8 do
-documento de core (se na implementação a forma não couber no padrão, a saída formal é
-`"independente": true` em `catalogo.json`, não uma exceção silenciosa).
+**Layout (decisão P4, fechada).** Nos estados `vazio`, `esclarecendo`, `carregando` e `erro`, a
+estrutura é a do padrão: `Workspace` com `Panel` à esquerda e `Stage` à direita. No estado `pronto`,
+um `<main>` próprio de largura total substitui o `Workspace`: o painel ocupa a largura inteira e o
+formulário recolhe para uma linha resumida no topo ("Painel comercial do mês · alterar pedido"), com
+a conversa de refinamento em faixa abaixo da grade. Isso cabe na regra de tela única **sem**
+`"independente": true`: o padrão exige uma tela e nenhum destino novo na `Topbar` (`PADRAO.md:28-29`)
+e `scripts/verificar-padrao.sh:76-84` não compara `app/page.tsx` (só `ui.tsx`, `setup.tsx`,
+`conta.tsx`, `navegacao.ts`, `ilustracao.ts`, `globals.css` e os ícones). Precedente:
+`financas-ia/app/page.tsx:349` já usa um `<main className="grid lg:grid-cols-2 …">` próprio no lugar
+do `Workspace`. Registrar a decisão no `CLAUDE.md` do app. O `Hero` da fase `vazio` recebe
+`segmento="Gestão"` (8.4).
 
 **Home (fase `vazio`), textos medidos contra os cinco limites do `PADRAO.md`:**
 - Sobretítulo: "Painel de indicadores".
 - Título (≤ 8 palavras): **"Seu painel pronto em trinta segundos"** — 6 palavras.
 - Apoio (≤ 20 palavras): **"Descreva o que você quer acompanhar: a IA escolhe os indicadores do seu setor e monta o painel."** — 18 palavras.
-- Passos (3): "Descreva o painel" · "A IA escolhe os indicadores" · "Ajuste conversando".
+- Passos (3), no formato `{ titulo, apoio }` que `Passos` exige (`ui.tsx:244-248`; `apoio` ≤ 6
+  palavras): "Descreva o painel" · *em uma frase, do seu jeito* — "A IA escolhe os indicadores" ·
+  *os que um analista escolheria* — "Ajuste conversando" · *troque, acrescente, tire*.
 - Prévia do que vem (≤ 5 itens de ≤ 6 palavras): "Indicadores com comparação" · "Gráfico de tendência" · "Ranking do período" · "Distribuição por categoria" · "Tabela detalhada".
 - Uma linha de ajuda no campo: "Quanto mais específico, melhor o painel."
 
@@ -1597,15 +1935,19 @@ com rótulo à esquerda e valor à direita).
 
 | Componente | Tipos que atende | Técnica | Tema e acento |
 |---|---|---|---|
-| `CartaoIndicador.tsx` | `indicador` | `div`: número grande, variação com seta textual (▲/▼ não: usar "+12,4%" com cor), barra de meta opcional | número em `text-ink`; variação em `text-ok` / `text-danger` / `text-muted` conforme `direcaoBoa`; barra de meta com `bg-accent` sobre `bg-accent-soft` |
-| `GraficoSerie.tsx` | `linha`, `area` | SVG com `viewBox` de largura fixa e altura fixa em px (nunca escalado), `polyline` para a linha e `path` fechado com `fill` semi-transparente para a área; eixo Y com 3 marcas; pontos com `<title>` para o valor | traço em `var(--color-accent)`, preenchimento da área com o mesmo acento a 14 % de opacidade; grade em `--color-line` |
-| `GraficoBarras.tsx` | `barra` | `div` puro. `vertical`: grade CSS com `minmax(0,1fr)` por ponto e altura percentual; `horizontal`: linhas com rótulo à esquerda (largura fixa, `truncate` + `title`), barra `flex-1` e valor à direita | barras em `bg-accent`; a maior em `bg-accent` cheia e as demais a 70 % de opacidade, para dar hierarquia sem inventar cor |
-| `GraficoRosca.tsx` | `pizza`, `rosca` | SVG: um `circle` por fatia com `stroke-dasharray`/`stroke-dashoffset` (nada de cálculo de arco por `path`), `rosca` com o total formatado no centro; legenda ao lado com quadradinho, rótulo e percentual | as fatias variam a opacidade de `var(--color-accent)` de 100 % a 40 % em degraus iguais, com a menor fatia em `--color-line`; **nenhuma paleta de 8 cores** (a origem usava; aqui a identidade é o acento do app) |
-| `TabelaPainel.tsx` | `tabela` | Embrulho do `DataTable` de `components/ui.tsx` (que já vira blocos rotulados no celular), com formatação por `ColunaTabela.tipo` | herda o tema; nenhum estilo próprio |
+| `CartaoIndicador.tsx` | `indicador` | `div` para o número grande e a variação (seta textual não: usar "+12,4%" com cor); a **barra de meta é um SVG** de altura fixa (`width="100%"`, `height={6}`, `viewBox="0 0 100 6"`, `preserveAspectRatio="none"`) com dois `<rect>`: trilho e progresso — imprime, ao contrário de um `div` com fundo | número em `text-ink`; variação em `text-ok` / `text-danger` / `text-muted` conforme `direcaoBoa`; `<rect>` do progresso com `fill="var(--color-accent)"`, trilho com `var(--color-accent-soft)` |
+| `GraficoSerie.tsx` | `linha`, `area` | O SVG contém **só geometria** (`polyline` da série, `path` fechado da área, linhas de grade): `width="100%"`, `height={ALTURA}` fixa em px, `viewBox="0 0 100 ALTURA"`, `preserveAspectRatio="none"` e `vector-effect="non-scaling-stroke"` no traço. Eixo Y (3 marcas), rótulos do eixo X e o valor do último ponto ficam em **HTML**, numa grade `minmax(0,1fr)` alinhada ao SVG, como em `financas-ia/components/GraficoMeses.tsx:37-96`. **Sem `<circle>` por ponto** (deformaria com `preserveAspectRatio="none"`); a leitura ponto a ponto vai no `<p className="sr-only">` e no `title` da coluna HTML. Funciona em Server Component (`/r/[id]`, `/imprimir/[id]`): nada mede largura no cliente | traço em `var(--color-accent)`, preenchimento da área com o mesmo acento a 14 % de opacidade; grade em `--color-line` |
+| `GraficoBarras.tsx` | `barra` | Barras como **`<rect>` em SVG** (imprimem), rótulos e valores em HTML. `vertical`: grade CSS com `minmax(0,1fr)` por ponto, cada coluna com um SVG `width="100%"` `height={ALTURA}` `viewBox="0 0 100 ALTURA"` `preserveAspectRatio="none"` e um `<rect>` de altura proporcional; `horizontal`: linhas com rótulo à esquerda (largura fixa, `truncate` + `title`), SVG `flex-1` de altura fixa com um `<rect>` de largura proporcional, e valor à direita | `fill="var(--color-accent)"`; a maior barra a 100 % e as demais com `fill-opacity` 0,7, para dar hierarquia sem inventar cor |
+| `GraficoRosca.tsx` | `pizza`, `rosca` | SVG: um `circle` por fatia com `stroke-dasharray`/`stroke-dashoffset` (nada de cálculo de arco por `path`), **até 6 fatias** (o validador agrupa o excedente em "Outros"), `rosca` com o total formatado no centro; legenda ao lado com quadradinho, rótulo, **valor formatado e percentual** | a maior fatia começa em `var(--color-accent)` cheio e as demais descem em degraus de **≥ 12 pontos** de opacidade (100 / 88 / 76 / 64 / 52 / 40 %); **nenhuma paleta de 8 cores** (a origem usava; aqui a identidade é o acento do app) |
+| `TabelaPainel.tsx` | `tabela` | Na tela: embrulho do `DataTable` de `components/ui.tsx` (que já vira blocos rotulados no celular), com formatação por `ColunaTabela.tipo` (datas por `formatarData`, 8.3). Em `modo="impressao"`: `<table>` HTML próprio e simples ocupando a linha inteira da grade (7.8) | herda o tema; nenhum estilo próprio além do da impressão |
 
 Regras comuns a todos:
-- **Altura fixa em px**, nunca dentro de um `viewBox` escalado — senão o rótulo fica ilegível em
-  largura pequena (armadilha já registrada no `financas-ia`).
+- **Altura fixa em px e texto fora do SVG.** O cartão varia de ~300 px (celular) a ~640 px (largura
+  2 no desktop) e as páginas `/r/[id]` e `/imprimir/[id]` são Server Components — não há
+  `ResizeObserver` para medir. Por isso o SVG só carrega geometria (esticada com
+  `preserveAspectRatio="none"` e traço com `vector-effect="non-scaling-stroke"`) e todo texto (eixos,
+  rótulos, valores) fica em HTML ao lado, na mesma grade: um SVG com texto dentro de um `viewBox`
+  escalado ou estoura o cartão ou deforma a letra (armadilha já registrada no `financas-ia`).
 - **`Intl` compacto com espaço trocado.** `notation: "compact"` do `Intl` usa espaço não separável
   (` `, ` `), que não quebra linha e estoura coluna estreita: trocar por espaço comum
   antes de ir para a tela (`lib/formatar.ts`).
@@ -1616,7 +1958,9 @@ Regras comuns a todos:
 - **Acessibilidade:** cada gráfico tem um `<p className="sr-only">` com a leitura em texto ("Receita
   por mês: janeiro R$ 320 mil, fevereiro R$ 358 mil, ..."), que também é o que um leitor de tela e a
   busca do navegador encontram.
-- **Impressão:** nenhum gráfico depende de `canvas`; todos são `div` e SVG e imprimem direto.
+- **Impressão:** nenhum gráfico depende de `canvas`; toda cor que precisa sair no papel é
+  `fill`/`stroke` de SVG (barras, barra de meta, linha, área, fatias), porque fundo de `div` não
+  imprime por padrão (7.8, RF-14).
 
 ### 8.3 Formatação (`lib/formatar.ts`)
 
@@ -1649,6 +1993,17 @@ export function tomDaVariacao(v: number, direcaoBoa: "aumentar" | "diminuir" = "
   const bom = direcaoBoa === "aumentar" ? v > 0 : v < 0;
   return bom ? ("ok" as const) : ("danger" as const);
 }
+
+/**
+ * Coluna de tabela do tipo "data" (AAAA-MM-DD). `new Date("2026-07-15")` é meia-noite UTC e, no fuso
+ * do Brasil, mostra 14/07 — armadilha US-070 do CLAUDE.md do pdi-time. Com "T00:00:00" vira hora local.
+ * Valor que não casa o formato é devolvido como texto, sem tentar interpretar.
+ */
+export function formatarData(valor: string | number): string {
+  const texto = String(valor);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(texto)) return texto;
+  return data(new Date(`${texto}T00:00:00`)); // data() de lib/formato.ts
+}
 ```
 
 ### 8.4 Acento
@@ -1678,7 +2033,19 @@ catálogo, para `scripts/verificar-paleta.mjs` passar):
 }
 ```
 
-**Por que este acento.** Segmento novo, **Dados**, porque nenhum app do padrão ocupa esse território
+**"Dados" na paleta, "Gestão" na ilustração — são dois conceitos com o mesmo nome.** O *segmento da
+paleta* é o campo `segmento` de `tasks/paleta-segmentos.json`: texto livre, só usado por
+`scripts/verificar-paleta.mjs` para exigir ΔE ≥ 10 entre segmentos diferentes (não há lista fixa).
+Aqui ele é **"Dados"**, novo. O *`Segmento` de ilustração* é o tipo de `lib/ilustracao.ts:6-14`
+(`"RH" | "Marketing" | "Vendas" | "Financeiro" | "Atendimento" | "Estratégia" | "Gestão" |
+"Jurídico"`), arquivo `[PRODUTO]` comparado byte a byte, exigido por `SetupPage`
+(`components/setup.tsx:48`) e `Hero` (`components/ui.tsx:225`). Ele não tem "Dados", e acrescentar
+seria registrar uma exceção ao padrão por causa de uma ilustração. Por isso os componentes usam
+**`segmento="Gestão"`** — segmento sem ilustração de pessoa (só o `.blob-acento`), como
+`agente-kanban` e `reunioes-ia`. Precedente do mesmo desacoplamento: `voz-do-cliente` tem área
+"Experiência do Cliente e Marketing" e usa `segmento="Marketing"`. Registrar no `CLAUDE.md` do app.
+
+**Por que este acento.** Segmento novo na paleta, **Dados**, porque nenhum app do padrão ocupa esse território
 (o `automl-pocket` tem `padrao: "proprio"` e fica fora da paleta). Os 18 acentos atuais se
 distribuem em quatro faixas de matiz — verdes e teais 140–199, azuis 204–230, violetas 248–275 e
 magentas 300–344 — e **toda a faixa 0–139 está livre**. A varredura de candidatos (matiz 15–50,
@@ -1746,12 +2113,16 @@ atrapalha a captura headless — ver a nota de `--force-prefers-reduced-motion` 
 
 ### 9.2 Entrada em `catalogo.json`
 
-Acrescentar ao fim do array `apps` (o `id` tem de ser igual ao nome da pasta):
+Acrescentar ao fim do array `apps` (o `id` tem de ser igual ao nome da pasta). Decisão P2 fechada:
+áreas `["Dados", "Gestão"]` ("Dados" já existe como área no catálogo, pelo `automl-pocket`, então
+não cria filtro novo) e os textos abaixo, que separam este app do `financas-ia` pela pergunta que
+cada um responde ("não sei quais indicadores pedir" contra "tenho a planilha"). O `nome` é o único
+campo que ainda depende de confirmação humana (P1).
 
 ```json
 {
   "id": "toolkit-dash-builder",
-  "nome": "Painel em Minutos",
+  "nome": "Painel Pronto",
   "areas": [
     "Dados",
     "Gestão"
@@ -1777,10 +2148,13 @@ Acrescentar ao fim do array `apps` (o `id` tem de ser igual ao nome da pasta):
 comentado). O gerador valida os campos novos e falha com mensagem clara se faltar algum. Validar o
 gerador com `node --test scripts/gerar-deploy.test.mjs`.
 
-Plano: **`free`**. O app não precisa de disco persistente para funcionar (o modo demonstração roda
-sem nada e a chave pode ser reconectada), então não entra `plano` nem `discoGB`. Se o time quiser
-oferecer persistência como opção, o caminho é `persistencia: { "plano": "0.5c-512mb", "discoGB": 1,
-"discoGuarda": "a chave da IA e os painéis salvos" }` — decisão do time, fora do escopo da v1.
+Plano: **`free`, sem `persistencia`** (decisão P6, fechada). O app não precisa de disco persistente
+para funcionar: o modo demonstração roda sem nada, a chave pode ser reconectada em um clique e o
+valor do app é regenerável (painel em 30 s, sem dado do usuário). Dezesseis dos dezenove apps estão
+assim. O `README.md` do app traz a frase padrão do gerador ("No plano free o disco é efêmero…",
+`scripts/gerar-deploy.mjs:148-149`). Reavaliar junto com a fonte de dados real da v2, quando houver
+algo a perder; o caminho então será `persistencia: { "plano": "0.5c-512mb", "discoGB": 1,
+"discoGuarda": "a chave da IA e os painéis salvos" }`.
 
 ### 9.4 Ícone
 `node scripts/gerar-icones.mjs` gera `toolkit-dash-builder/app/icon.svg` a partir do `acento` do
@@ -1801,8 +2175,12 @@ Nenhuma obrigatória (`PADRAO.md:49`). Tabela do `README.md` do app:
 | `PORT` | Porta do servidor. O Render define `10000`. | — |
 | `CONTA_DESLIGADA` | Só no contêiner efêmero de captura de prévia. Nunca em instância real. | — |
 
-Nenhuma credencial de suíte com sufixo `_APP` é usada: este app não conecta caixa de e-mail, então
-os `ARG`/`ENV` de `GOOGLE_*_APP` e `MICROSOFT_*_APP` saem do `Dockerfile`.
+Nenhuma credencial de suíte com sufixo `_APP` é usada: este app não conecta caixa de e-mail. Mesmo
+assim o `Dockerfile` é **cópia idêntica** do `pdi-time`, com os `ARG`/`ENV` de `GOOGLE_*_APP` e
+`MICROSOFT_*_APP`: o workflow passa os quatro `build-args` a todos os apps
+(`.github/workflows/publicar.yml:85-89`), o `buildx` só avisa sobre argumento não consumido, e
+`lib/email-envio.ts:31` (`[INFRA]`) sem valor apenas esconde os botões em `/setup`. Menos arquivos
+diferentes do `pdi-time` = menos manutenção.
 
 ### 9.6 Publicação
 Push na `main` → `.github/workflows/publicar.yml` constrói a imagem, publica em
@@ -1824,29 +2202,36 @@ repetidos abaixo quando há algo específico a olhar.
 ---
 
 **Etapa 1 — Esqueleto do app a partir do `pdi-time`**
-`cp -r pdi-time toolkit-dash-builder`; apagar o domínio do PDI (`lib/pdi.ts`, `lib/autoavaliacoes.ts`,
-`lib/checkins.ts`, `lib/entregas-quadro.ts`, `lib/notificacoes-do-app.ts`, `app/api/pdi/**`, os
-quatro componentes de domínio, `components/Rotinas.tsx`); trocar `package.json` (`name`), remover
-`nodemailer`, `app/layout.tsx` (`metadata`), `app/globals.css` (as 4 cores), `docker-compose.yml`
-(porta 3020), `Dockerfile` (tirar os `ARG`/`ENV` de Google/Microsoft), `.env.example`; acrescentar a
-entrada em `catalogo.json` e em `tasks/paleta-segmentos.json`; rodar `node scripts/gerar-deploy.mjs`
-e `node scripts/gerar-icones.mjs`; acrescentar o serviço ao `docker-compose.yml` da raiz e a linha à
-tabela de portas do `README.md` da raiz. `app/page.tsx` fica temporariamente com um "em construção".
+`cp -r pdi-time toolkit-dash-builder`; apagar **só** o domínio do PDI (`lib/pdi.ts`,
+`lib/autoavaliacoes.ts`, `lib/checkins.ts`, `lib/entregas-quadro.ts`, `lib/notificacoes-do-app.ts`,
+`app/api/pdi/**`, os quatro componentes de domínio, `components/Rotinas.tsx`); trocar `package.json`
+(**só** o `name` — `nodemailer` e `@types/nodemailer` ficam), `app/layout.tsx` (`metadata`),
+`app/globals.css` (as 4 cores), `docker-compose.yml` (porta 3020 e nome do volume); `Dockerfile` e
+`.env.example` ficam **idênticos** aos do `pdi-time`; **nada** sai de `app/api/setup/**` (inclusive
+`oauth/google`, `oauth/microsoft`, `oauth/mcp`); `app/setup/page.tsx` com `segmento="Gestão"`;
+acrescentar a entrada em `catalogo.json` e em `tasks/paleta-segmentos.json` (**juntas**, a regra 1 da
+paleta exige); rodar `node scripts/gerar-deploy.mjs` e `node scripts/gerar-icones.mjs`; acrescentar o
+serviço ao `docker-compose.yml` da raiz (e corrigir o comentário "3001 a 3018" da linha 2 para
+"3001 a 3020") e a linha à tabela de portas do `README.md` da raiz. `app/page.tsx` fica
+temporariamente com um "em construção".
 
-*Como verificar:* `npm install && npm run build`; `node scripts/verificar-paleta.mjs` (sai 0);
-`node scripts/verificar-padrao.sh` (sai 0, o app novo já entra na comparação);
+*Como verificar:* `npm install && npm run build` (o type-check passa porque `nodemailer` ficou);
+`node scripts/verificar-paleta.mjs` (sai 0); `scripts/verificar-padrao.sh` (é bash, não Node; sai 0
+— o app novo já entra na comparação, e nenhuma pasta INFRA pode estar "ausente");
 `git diff --stat` não toca nenhum outro app.
 
 ---
 
 **Etapa 2 — Tipos, formatação e validador**
-`lib/types.ts` (seção 5.1), `lib/formatar.ts` (8.3) e `lib/validar-painel.ts` (RF-06). Nenhum import
-`node:*` nos três.
+`lib/types.ts` (seção 5.1, com `refinadoEm?`), `lib/formatar.ts` (8.3, com `formatarData`) e
+`lib/validar-painel.ts` (RF-06, com `{ modo, moviveis }` e `LARGURA_CLASSE`). Nenhum import `node:*`
+nos três.
 
 *Como verificar:* `npx tsc --noEmit`; um teste manual rápido com
-`node --experimental-strip-types` chamando o validador com quatro entradas ruins (tipo
-desconhecido, id duplicado, linha estourando a largura 4, série de 30 pontos) e conferindo o
-conserto.
+`node --experimental-strip-types` chamando o validador com seis entradas ruins (tipo desconhecido,
+id duplicado, linha estourando a largura 4, série de 30 pontos, rosca de 9 fatias → 6 com "Outros",
+componente em `linha: 7` sem espaço → linha acrescentada) e conferindo o conserto;
+`formatarData("2026-07-15")` devolve "15/07" com `TZ=America/Sao_Paulo`.
 
 ---
 
@@ -1857,14 +2242,16 @@ pode cair para a v2 se apertar). Alimentados por um painel fixo escrito à mão.
 
 *Como verificar:* uma página temporária renderizando os quatro painéis de exemplo; capturar em
 1400×900, 768×1000 e 390×2600 com `shot.mjs` e **abrir as imagens**; conferir que não há rolagem
-horizontal, que nenhum rótulo é cortado sem `title` e que a cor vem só do acento;
-`node scripts/verificar-jargao.mjs toolkit-dash-builder` (sai 0).
+horizontal, que nenhum rótulo é cortado sem `title` e que a cor vem só do acento; imprimir a página
+temporária em PDF pelo Chrome **com as opções padrão** e conferir que barras, fatias e barra de meta
+aparecem (são `<rect>`/`circle` SVG); `node scripts/verificar-jargao.mjs toolkit-dash-builder` (sai 0).
 
 ---
 
 **Etapa 4 — `lib/demo.ts` com os quatro painéis**
-Escrever os quatro painéis completos (6 a 8 componentes cada, cobrindo os seis tipos), a escolha por
-palavra-chave, `esclarecimentoDemo`, `refinamentoDemo` e `observacoesDemo`.
+Escrever os quatro painéis completos (6 a 8 componentes cada, cobrindo os sete tipos, nenhuma
+distribuição com mais de 6 fatias), a escolha por palavra-chave, `esclarecimentoDemo`,
+`refinamentoDemo` e `observacoesDemo`.
 
 *Como verificar:* os quatro renderizam na página temporária sem nenhum campo faltando;
 `validarPainel()` não conserta nada em nenhum deles (se consertar, o exemplo está fora do padrão que
@@ -1873,27 +2260,36 @@ o prompt pede); leitura em voz alta de todos os textos procurando acento faltand
 ---
 
 **Etapa 5 — Geração: `lib/painel.ts` + `POST /api/painel`**
-`SYSTEM_PAINEL`, `PROMPT_PAINEL`, `gerarPainel()` (com o caminho de demonstração primeiro), a rota,
-o cache (`lib/cache-painel.ts`) e a gravação no histórico.
+`SYSTEM_PAINEL`, `PROMPT_PAINEL`, `gerarPainel()` (com o caminho de demonstração primeiro e a
+segunda tentativa própria do RF-06 a4), a rota (com `forcar`), o cache (`lib/cache-painel.ts`,
+ignorando `refinadoEm`) e a gravação no histórico **sempre** (`id` em toda resposta).
 
 *Como verificar:* build `standalone` de verdade —
 `cp -r public .next/standalone/; cp -r .next/static .next/standalone/.next/;`
 `DATA_DIR=/tmp/dash-dados PORT=3020 HOSTNAME=127.0.0.1 node --disable-warning=ExperimentalWarning .next/standalone/server.js &`
 — e `curl` em `/api/health`, `/api/status` (`demo:true`), `POST /api/painel` com quatro prompts
 diferentes (conferir que cada um cai no painel de exemplo certo), `POST /api/painel` com 5
-caracteres (400 com mensagem), `GET /api/painel` e `DELETE /api/painel`. Depois, com
-`OPENROUTER_API_KEY` de verdade: 10 gerações, medindo M2, M3 e M4 e conferindo o consumo de tokens
-contra o `maxTokens: 8000`.
+caracteres (400 com mensagem), o mesmo pedido duas vezes (`reaproveitado: true` na segunda) e uma
+terceira com `forcar: true` (`reaproveitado: false`), `GET /api/painel` e `DELETE /api/painel`.
+Depois, com `OPENROUTER_API_KEY` de verdade: 10 gerações, medindo M2, M3 (quantas precisaram de
+`[painel] segunda tentativa`) e M4, e **medindo os tokens reais de um painel** para registrar no
+`CLAUDE.md` do app se os 8.000 de `maxTokens` são folga ou aperto.
 
 ---
 
 **Etapa 6 — Tela principal: fases `vazio`, `carregando`, `pronto`, `erro`**
-`app/page.tsx` com `Hero`, `Passos`, `ChipsArea`, campo, `ETAPAS_CARREGANDO`, render do painel,
-`Entregar`/`Origem`/`SeloIA`, `ErrorBox` com o pedido em itálico, e os atalhos `?exemplo=1` /
-`?captura=1`.
+`app/page.tsx` com `Hero` (`segmento="Gestão"`), `Passos` (com `apoio`), `ChipsArea` (os oito
+textos do RF-02), campo, `ETAPAS_CARREGANDO` (a quarta é a frase de espera longa), `Topbar` com o
+`resumo` do RF-16 a2, render do painel em `<main>` próprio de largura total, "Gerar outra versão",
+`Entregar` (com `id`)/`Origem`/`SeloIA`, `ErrorBox` com o pedido em itálico acima e "Tentar de novo",
+`AbortController` de 120 s, e os atalhos `?exemplo=1` / `?captura=1` (sem passar pelo gate).
 
-*Como verificar:* `/?exemplo=1` preenche e gera sozinho; `/?exemplo=1&captura=1` não rola; medir os
-cinco limites de texto e registrar as contagens no `CLAUDE.md` do app; capturar desktop vazio
+*Como verificar:* `/?exemplo=1` preenche e gera sozinho **sem** chamar `/api/painel/esclarecer`
+(conferir na aba de rede); `/?exemplo=1&captura=1` não rola; simular a captura do workflow
+(`google-chrome --headless=new --window-size=1200,800 --force-prefers-reduced-motion
+--virtual-time-budget=8000 --screenshot=... "http://localhost:3020/?exemplo=1&captura=1"` com
+`CONTA_DESLIGADA=1`) e **abrir a imagem**: tem de mostrar o painel comercial, não um questionário nem
+o `Loading`; medir os cinco limites de texto e registrar as contagens no `CLAUDE.md` do app; capturar desktop vazio
 (1400×900), desktop com exemplo (1400×1500, espera 5000) e celular (390×2600, `mobile 1`), **abrir
 as três imagens** e corrigir o que estiver feio; `npm run lint` (atenção ao
 `react-hooks/exhaustive-deps` com funções irmãs — inline em vez de extrair, nota 2 do `CLAUDE.md` do
@@ -1905,21 +2301,29 @@ as três imagens** e corrigir o que estiver feio; `npm run lint` (atenção ao
 `lib/esclarecer.ts`, `POST /api/painel/esclarecer`, `components/Esclarecimento.tsx` e a fase
 `esclarecendo`.
 
-*Como verificar:* `curl` com "faz um painel" (perguntas, `origem: "local"` ou `"ia"`), com o prompt
-do chip de Vendas (`precisaEsclarecer:false`, `origem:"local"`, **sem nenhuma chamada de IA** —
-conferir no log) e com um prompt de 25 caracteres. Na tela: responder por chip, responder por texto,
-e o botão "Pular e gerar agora". Falha simulada da IA neste passo não pode bloquear a geração.
+*Como verificar:* um teste com `node --experimental-strip-types` chamando `precisaEsclarecerLocal()`
+com os **oito textos dos chips** (todos `false`), "painel de vendas para minha empresa" (`true`),
+"plano de RH" (`true`) e "faz um painel pra mim" (`true`) — RF-04 a8; `curl` com "faz um painel"
+(perguntas, `origem: "local"` ou `"ia"`), com o prompt do chip de Vendas (`precisaEsclarecer:false`,
+`origem:"local"`, **sem nenhuma chamada de IA** — conferir no log) e com um prompt de 25 caracteres.
+Na tela: responder por chip, responder por texto, e o botão "Pular e gerar agora". Falha simulada da
+IA neste passo não pode bloquear a geração.
 
 ---
 
 **Etapa 8 — Refinamento e desfazer**
-`refinarPainel()`, `validarRefinamento()`, `POST /api/painel/refinar`,
-`components/ConversaRefino.tsx`, a pilha de desfazer e `atualizarSaida`.
+`refinarPainel()` (`maxTokens: 8000`, grava `refinadoEm`), `validarRefinamento()` (com `igual`,
+renome de id e reinserção no índice original), `POST /api/painel/refinar`, `PUT /api/painel/[id]`,
+`components/ConversaRefino.tsx`, a pilha de desfazer (persistindo pelo `PUT`) e `atualizarSaida`.
 
 *Como verificar:* 15 pedidos de refinamento reais (trocar tipo, acrescentar indicador, remover
-tabela, mudar título, mudar números, pedido ambíguo) medindo M5 e M6; conferir no log quantos
-componentes foram restaurados por deriva; confirmar que um pedido ambíguo volta como
-`esclarecimento` sem mudar o painel; desfazer restaura o estado anterior sem chamar a IA.
+tabela, mudar título, mudar números, pedido ambíguo) medindo M5 (**posição incluída**: um componente
+não pedido que troque de linha ou coluna conta como falha) e M6; conferir no log quantos componentes
+foram restaurados por deriva e quantos ids renomeados foram desfeitos; confirmar que um pedido
+ambíguo volta como `esclarecimento` sem mudar o painel; desfazer restaura o estado anterior sem
+chamar a IA **e** `/r/[id]` passa a mostrar o estado restaurado; repetir o pedido original em
+`POST /api/painel` depois de um refinamento e conferir que o cache **não** devolve o painel refinado
+(`reaproveitado: false`).
 
 ---
 
@@ -1927,17 +2331,22 @@ componentes foram restaurados por deriva; confirmar que um pedido ambíguo volta
 `POST /api/painel/observacoes`, `components/BannerObservacoes.tsx`, `/r/[id]`, `/imprimir/[id]`, os
 dois botões de copiar.
 
-*Como verificar:* gerar, salvar, abrir `/historico`, abrir `/r/[id]`, imprimir em PDF pelo navegador
-e **abrir o PDF** conferindo que os gráficos saíram e que o rodapé de "números de exemplo" está lá;
-colar o CSV copiado no Excel e conferir separador e decimal; `/r/<id inexistente>` cai em
-`not-found`.
+*Como verificar:* gerar (já salvo), abrir `/historico`, abrir `/r/[id]`, imprimir em PDF pelo Chrome
+**com as opções padrão** (sem marcar "Gráficos de fundo") e **abrir o PDF** conferindo que barras,
+fatias, linha e barra de meta saíram, que a tabela está em uma página na largura total e que o rodapé
+de "números de exemplo" está lá (RF-14 a5); uma tabela com data confere o dia certo com
+`TZ=America/Sao_Paulo`; colar o CSV copiado no Excel e conferir separador e decimal;
+`/r/<id inexistente>` cai em `not-found`.
 
 ---
 
 **Etapa 10 — MCP, `/setup`, README, CLAUDE.md e verificação final**
 `lib/ferramentas.ts` com as quatro ferramentas, `lib/integracoes.ts`, `lib/status-do-app.ts`,
-`lib/rotinas-do-app.ts`, `components/AcessoMCP.tsx`, `app/setup/page.tsx`, `README.md` no formato do
-de referência e `CLAUDE.md` com as notas aprendidas no caminho.
+`lib/rotinas-do-app.ts`, `components/AcessoMCP.tsx`, `app/setup/page.tsx` (`segmento="Gestão"`),
+`README.md` no formato do de referência (com a frase do disco efêmero do plano `free`) e `CLAUDE.md`
+com as notas aprendidas no caminho — no mínimo: a distinção segmento da paleta × `Segmento` de
+ilustração (8.4), a decisão do `<main>` próprio na fase `pronto` (P4), os tokens reais medidos na
+Etapa 5 e as contagens dos limites de texto.
 
 *Como verificar:* a lista completa do `PADRAO.md:95-99` —
 `npm install` · `npm run lint` (zero) · `npm run build` (zero) ·
@@ -1956,32 +2365,41 @@ capturas de `/` e `/setup` em desktop e celular, **abertas e revisadas**; encerr
 
 ## 11. Perguntas abertas e hipóteses assumidas
 
-### Perguntas abertas (precisam de decisão humana antes ou durante a implementação)
+### Perguntas abertas — fechadas na Fase 5 (só P1 continua aguardando confirmação humana)
 
-**P1. O nome e o id definitivos.** A pasta é `toolkit-dash-builder` porque foi assim que o trabalho
-foi encomendado, mas o id vira o nome da imagem (`ghcr.io/startse/toolkit-dash-builder`), o
-`NOME_SERVIDOR` do MCP e o branch público de deploy — mudar depois do primeiro build é caro. O PRD
-assume o nome de exibição **"Painel em Minutos"**. *Confirmar o par id/nome antes do primeiro push.*
+**P1. O nome e o id definitivos — FECHADA, com uma confirmação pendente.** O id fica
+`toolkit-dash-builder`: o custo de mudar é alto (nome da imagem `ghcr.io/startse/toolkit-dash-builder`,
+`NOME_SERVIDOR` do MCP, branch público de deploy) e o id não aparece na tela. O nome de exibição
+passa a **"Painel Pronto"**: o catálogo já tem **"Posts em Minutos"** (`catalogo.json:76`,
+`posts-sociais`) e dois apps "X em Minutos" lado a lado soariam como uma família que não existe;
+`marca="P"` continua valendo. **Esta é a única decisão humana ainda pendente do PRD: Renato confirma
+"Painel Pronto" antes do primeiro push.** Se preferir outro nome, muda só o `nome` do catálogo, o
+`metadata.title`, o `nome` da `SetupPage`/`Topbar` e o `README.md` — nada de código.
 
-**P2. As áreas no catálogo e a fronteira com `financas-ia`.** O PRD propõe `["Dados", "Gestão"]` e
-textos que separam pela pergunta que cada app responde. *Validar os textos com o time.*
+**P2. As áreas no catálogo e a fronteira com `financas-ia` — FECHADA.** `["Dados", "Gestão"]` e os
+textos de 9.2 (ajustados ao nome novo). "Dados" já existe como área (`automl-pocket`), não cria
+filtro novo; o `problema` escrito pela pergunta ("não sabe quais indicadores pedir") separa bem do
+`financas-ia` ("tenho a planilha").
 
-**P3. O segmento novo "Dados" na paleta.** Criar um segmento para um app só é uma decisão de
-identidade visual da suíte, não só deste PRD. A alternativa seria encaixar em "Gestão" (azuis
-217–230), mas aí o ΔE ≥ 6 dentro do segmento ficaria apertado com três apps já lá, e o painel
-perderia a cor quente que os gráficos pedem. *Confirmar com quem cuida da paleta.*
+**P3. O segmento novo "Dados" na paleta — FECHADA.** Aprovado. `scripts/verificar-paleta.mjs` não
+tem lista fixa de segmentos — só exige ΔE ≥ 10 contra os outros, e o acento tem 48,3. A objeção real
+nunca foi a paleta, e sim o tipo `Segmento` de ilustração (`lib/ilustracao.ts`): nos componentes usa-se
+**`segmento="Gestão"`**; a distinção está documentada em 8.4 e vai para o `CLAUDE.md` do app.
 
-**P4. A forma da tela no estado "pronto" cabe na regra de tela única?** O PRD assume que sim (painel
-em largura total, conversa em faixa abaixo). Se na etapa 6 ficar claro que não, a saída formal é
-`"independente": true` em `catalogo.json`, como o `whatsapp-atendente`. *Decidir com a tela na mão.*
+**P4. A forma da tela no estado "pronto" cabe na regra de tela única? — FECHADA.** Sim, **sem**
+`"independente": true`. `Workspace`/`Panel`/`Stage` nas fases `vazio`, `esclarecendo`, `carregando` e
+`erro`; um `<main>` próprio de largura total na fase `pronto` (8.1). O padrão não compara
+`app/page.tsx`, e `financas-ia` já tem precedente.
 
-**P5. `pizza`/`rosca` entram na v1?** O PRD assume que sim, mas é o componente mais caro de fazer à
-mão e o último da ordem de implementação. *Se o cronograma apertar, cortar e ajustar o prompt para
-não oferecer o tipo.*
+**P5. `pizza`/`rosca` entram na v1? — FECHADA.** Sim. Com `stroke-dasharray` em `<circle>` são ~60
+linhas, e cortar custaria mais (os quatro painéis de demonstração, o layout canônico e o prompt
+teriam de mudar). Condições: máximo de **6 fatias** (excedente em "Outros"), degraus de opacidade
+**≥ 12 pontos**, legenda com valor e percentual. Continua sendo o último da ordem de implementação;
+se cair, cai junto com a mudança do prompt, nunca só o componente.
 
-**P6. Persistência no Render.** No plano gratuito o disco é efêmero: a chave da IA e os painéis
-salvos somem a cada deploy. O PRD assume plano `free` (é o padrão da suíte). *Perguntar se este app
-merece a opção `persistencia` no catálogo.*
+**P6. Persistência no Render — FECHADA.** Plano **`free`, sem `persistencia`** na v1 (9.3). O valor
+do app é regenerável e o modo demonstração cobre a instância que perdeu a chave. Reavaliar com a
+fonte de dados real da v2.
 
 ### Hipóteses assumidas (decididas aqui; mudar exige revisar o PRD)
 
@@ -1998,5 +2416,11 @@ merece a opção `persistencia` no catálogo.*
 | H9 | `maxTokens: 8000` na geração | Um painel de 8 componentes com séries de 12 pontos e tabela de 10×6 cabe em ~6 mil; medir na etapa 5 |
 | H10 | Vocabulário de tela sem "dashboard", "KPI" e "componente" | `scripts/verificar-jargao.mjs` e a regra de PT-BR do `PADRAO.md` |
 | H11 | O refinamento devolve o painel completo (não um conjunto de operações) | É o desenho que se sabe que funciona; trocar é evolução da v2 (risco 5 do core) |
-| H12 | Acento `#a5540d`, segmento "Dados" | Seção 8.4; validado contra as cinco regras de `scripts/verificar-paleta.mjs` |
+| H12 | Acento `#a5540d`, segmento "Dados" na paleta | Seção 8.4; validado contra as cinco regras de `scripts/verificar-paleta.mjs` (contraste 5,42; ΔE mínimo 48,3) |
 | H13 | Porta 3020 | Próxima livre; 3019 é `build-agentflows` |
+| H14 | O painel é salvo **sempre** na geração; não há botão "Salvar"; `guardar` existe só no MCP | Padrão do `pdi-time` com `SENSIVEL = false` (`lib/pdi.ts:31-34`); `Entregar` só oferece link e impressão quando há `id`; Desfazer persiste por `PUT /api/painel/[id]` |
+| H15 | `segmento="Gestão"` em `SetupPage` e `Hero` (sem ilustração de pessoa); "Dados" só na paleta | `Segmento` de `lib/ilustracao.ts` não tem "Dados" e o arquivo é `[PRODUTO]`, comparado byte a byte (8.4) |
+| H16 | Distribuições com **6 fatias no máximo**; excedente vira "Outros" | Fatias diferenciadas só por opacidade do acento precisam de degraus ≥ 12 pontos para serem legíveis (e sobreviverem ao preto e branco) |
+| H17 | `gerarPainel` tem segunda tentativa própria (< 5 componentes válidos); erro só abaixo de 3; `maxTokens` 8.000/8.000/1.200/600 | `askJSON` só repete no erro de *parse* (`lib/ai.ts:225-242`); `askText` usa 4.000 por padrão |
+| H18 | Painel refinado não serve de cache (`refinadoEm`); "Gerar outra versão" envia `forcar: true` | `atualizarSaida` sobrescreve só a `saida` (`lib/historico.ts:75-78`); sem isso o cache devolveria painéis mutilados e nunca uma versão nova |
+| H19 | Toda cor impressa é `fill`/`stroke` de SVG; tabela de impressão é `<table>` próprio de largura total | O Chrome não imprime fundo de `div` por padrão; o `DataTable` cai no modo cartão em A4 (US-020) |
