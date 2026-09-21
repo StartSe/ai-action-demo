@@ -8,6 +8,7 @@ import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
 
 import { normalizeUsage } from "./account-usage";
+import { APP_VERSION } from "./version";
 
 type Json = Record<string, unknown>;
 type Message = {
@@ -143,7 +144,7 @@ export class ChatGPTBridge {
         clientInfo: {
           name: "daily_second_brain",
           title: "Daily Second Brain",
-          version: "1.1.0",
+          version: APP_VERSION,
         },
         capabilities: { experimentalApi: true },
       });

@@ -10,6 +10,7 @@ import { request } from "./client";
 import { Captures } from "./Captures";
 import { Onboarding } from "./Onboarding";
 import type { CaptureState, SetupState } from "@/lib/capture-types";
+import { APP_VERSION } from "@/lib/version";
 type View =
   | "home"
   | "graph"
@@ -458,8 +459,10 @@ export function Brain() {
           </span>
           <span>
             daily<small>SECOND BRAIN</small>
+            <span className="version" aria-label={`Versão ${APP_VERSION}`}>
+              v{APP_VERSION}
+            </span>
           </span>
-          <span className="version">v1</span>
         </Link>
         <button
           className="capture-button"

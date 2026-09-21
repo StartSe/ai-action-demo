@@ -4,6 +4,7 @@ import { getConfig } from "./store";
 import { BrainError } from "./api";
 import { actions, db, propose, save } from "./brain";
 import type { AgentTool } from "./chatgpt";
+import { APP_VERSION } from "./version";
 export function validateZapier(value: string) {
   let u: URL;
   try {
@@ -25,7 +26,7 @@ export async function zapierClient(signal?: AbortSignal) {
   const url = getConfig("ZAPIER_MCP_URL");
   if (!url) throw new BrainError("Conecte o Zapier em Conexões.");
   const token = getConfig("ZAPIER_MCP_TOKEN");
-  const c = new Client({ name: "daily-second-brain", version: "1.1.1" });
+  const c = new Client({ name: "daily-second-brain", version: APP_VERSION });
   try {
     await c.connect(
       new StreamableHTTPClientTransport(new URL(validateZapier(url)), {

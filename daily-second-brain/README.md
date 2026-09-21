@@ -1,6 +1,8 @@
-# Daily Second Brain · v1.1.1
+# Daily Second Brain · v1.1.2
 
 Uma memória pessoal conectada: capture o que chega, transforme em conhecimento e converse para criar novos resultados. A experiência combina um observatório de ideias com páginas Markdown, fontes rastreáveis, regras próprias e um assistente por texto ou voz.
+
+A versão instalada aparece abaixo do logo Daily no menu lateral. No celular, toque em **Abrir menu** para vê-la. O número acompanha a versão do pacote e também está disponível em `/api/health`.
 
 **raw → wiki → outputs → raw**
 

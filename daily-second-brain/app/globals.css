@@ -296,13 +296,18 @@ svg {
   border-radius: 13px;
 }
 .brand .version {
-  font-size: 8px;
+  display: block;
+  width: fit-content;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: nowrap;
   border: 1px solid #38323f;
-  color: #9a8cae;
+  color: #c5b9df;
   padding: 3px 5px;
   border-radius: 4px;
-  margin-left: auto;
-  align-self: flex-start;
 }
 .capture-button {
   display: flex;

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.2 — 2026-09-21
+
+- Exibe a versão completa abaixo do logo Daily no menu lateral, inclusive no menu do celular.
+- Usa a versão do pacote na interface, em `/api/health` e nas conexões ChatGPT e Zapier para manter os números sincronizados.
+
 ## 1.1.1 — 2026-09-21
 
 - Permite selecionar consultas conhecidas do Slack mesmo quando o Zapier as marca como ações; mantém seleção explícita, verificação de permissões e confirmação de escrita no chat.
