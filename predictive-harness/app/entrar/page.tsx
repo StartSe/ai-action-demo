@@ -17,19 +17,20 @@ export default function Login() {
       <section className="auth-story">
         <Logo />
         <div>
-          <span className="eyebrow">Análise de dados por conversa</span>
+          <span className="eyebrow">Agente de FP&A com decisões auditáveis</span>
           <h1>
             A IA pensa e escreve.
             <br />
             <em>O harness decide e confere.</em>
           </h1>
-          <p>Envie uma planilha, pergunte em português e veja cada decisão do caminho: intenção, risco, verificação dos números.</p>
+          <p>Envie matrículas, custos e marketing, pergunte “e se abrirmos uma turma?” e veja a conta com premissas visíveis, a fórmula e cada decisão do caminho.</p>
           <div className="auth-flow">
             <span>Pergunta</span>
             <i />
             <div>
               <b>Triagem pelo Jev</b>
-              <b>Resposta pelo ChatGPT</b>
+              <b>Conta no motor, com premissas</b>
+              <b>Leitura pelo ChatGPT</b>
               <b>Verificação pelo Jev</b>
             </div>
           </div>
@@ -42,7 +43,7 @@ export default function Login() {
             <Icon name="spark" size={15} /> Decisões rápidas, respostas verificadas
           </span>
           <h2>{exists === false ? "Crie a conta desta instalação" : "Bem-vindo de volta"}</h2>
-          <p>{exists === false ? "Uma conta administrativa por instalação. Depois, conecte ChatGPT e OpenRouter." : "Entre para continuar analisando suas planilhas."}</p>
+          <p>{exists === false ? "Uma conta administrativa por instalação. Depois, conecte ChatGPT e OpenRouter." : "Entre para continuar planejando com a sua base."}</p>
           <form
             onSubmit={async (e) => {
               e.preventDefault();
@@ -79,7 +80,7 @@ export default function Login() {
               {busy ? "Entrando…" : exists ? "Entrar" : "Criar minha conta"}
             </button>
           </form>
-          <small className="auth-note">Uma planilha de exemplo já vem pronta. Conecte a IA quando quiser perguntar qualquer coisa.</small>
+          <small className="auth-note">Uma escola de negócios de exemplo já vem pronta. Conecte a IA quando quiser perguntar qualquer coisa.</small>
         </div>
       </section>
     </main>

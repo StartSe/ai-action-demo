@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 export const metadata: Metadata = {
   title: "Predictive Harness · IA para Executivos",
-  description: "Análise de dados por conversa: o ChatGPT raciocina e escreve, o Jev decide rápido e verifica cada resposta.",
+  description: "Agente de FP&A: cenários por turma com premissas visíveis. O motor faz a conta, o modelo escreve, o Jev decide e verifica cada resposta.",
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (

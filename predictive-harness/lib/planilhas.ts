@@ -7,7 +7,8 @@ import path from "node:path";
 import { abrirBanco } from "./store";
 import { AppError } from "./api";
 import { decidir, escolha, sim, jevDisponivel, type Pergunta } from "./jev";
-import type { Coluna, Planilha, Qualidade, TipoBase, TipoSemantico } from "./types";
+import { papeisHeuristicos, papelDaPlanilha, perguntasPapeis, PAPEIS_VALIDOS } from "./papeis";
+import type { Coluna, PapelFPA, Planilha, Qualidade, TipoBase, TipoSemantico } from "./types";
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 const PASTA = path.join(DATA_DIR, "planilhas");
@@ -194,7 +195,7 @@ export function perfilar(cabecalho: string[], linhas: Linha[], linhasVazias: num
     const distintos = contagem.size;
     const exemplos = [...contagem.keys()].slice(0, 3).map((v) => v.slice(0, 40));
     const mediaTamanho = cheios.length ? cheios.reduce((a, v) => a + v.length, 0) / cheios.length : 0;
-    const col: Coluna = { nome, tipo, semantico: "categoria", origem: "heuristica", confianca: null, alvoPrevisao: null, dadoPessoal: null, nulos: valores.length - cheios.length, distintos, exemplos };
+    const col: Coluna = { nome, tipo, semantico: "categoria", origem: "heuristica", confianca: null, alvoPrevisao: null, dadoPessoal: null, nulos: valores.length - cheios.length, distintos, exemplos, papel: "nenhum", papelOrigem: "heuristica", papelConfianca: null };
     if (tipo === "numero") {
       const nums = cheios.map(paraNumero).filter((n): n is number => n !== null);
       if (nums.length) {
@@ -216,6 +217,7 @@ export function perfilar(cabecalho: string[], linhas: Linha[], linhasVazias: num
     col.dadoPessoal = NOME.pessoal.test(nome) ? 0.9 : 0.05;
     return col;
   });
+  papeisHeuristicos(colunas).forEach((papel, i) => (colunas[i].papel = papel));
   const chaves = linhas.map((l) => cabecalho.map((c) => l[c]).join("\u0001"));
   const duplicadas = chaves.length - new Set(chaves).size;
   const avisos: string[] = [];
@@ -317,6 +319,7 @@ export function perguntasClassificacao(colunas: Coluna[]): Record<string, Pergun
     perguntas[`alvo_${i}`] = { type: "noul", instructions: `A coluna \`colunas[${i}]\` ("${c.nome}") é algo que uma empresa quereria prever (um alvo plausível de previsão, como receita, demanda, cancelamento ou atraso)?` };
     perguntas[`pessoal_${i}`] = { type: "noul", instructions: `A coluna \`colunas[${i}]\` ("${c.nome}") contém dado pessoal que identifica uma pessoa (nome, e-mail, CPF, telefone, endereço)?` };
   });
+  Object.assign(perguntas, perguntasPapeis(colunas));
   return perguntas;
 }
 export async function classificarComJev(p: Planilha, signal?: AbortSignal): Promise<Planilha> {
@@ -333,15 +336,47 @@ export async function classificarComJev(p: Planilha, signal?: AbortSignal): Prom
     const semantico = t.valor && t.valor in CRITERIOS_TIPO ? (t.valor as TipoSemantico) : c.semantico;
     const alvoP = sim(d, `alvo_${i}`).probabilidade;
     const pessoal = sim(d, `pessoal_${i}`).probabilidade;
-    return { ...c, semantico: t.baixa && t.valor === null ? c.semantico : semantico, origem: "jev" as const, confianca: t.confianca, alvoPrevisao: alvoP ?? c.alvoPrevisao, dadoPessoal: pessoal ?? c.dadoPessoal };
+    const pj = escolha(d, `papel_${i}`);
+    // Papel confirmado pela pessoa nunca é sobrescrito pelo Jev; baixa confiança mantém a heurística.
+    const papel = c.papelOrigem === "confirmado" ? c.papel : pj.valor && PAPEIS_VALIDOS.includes(pj.valor as PapelFPA) && !pj.baixa ? (pj.valor as PapelFPA) : c.papel;
+    return { ...c, semantico: t.baixa && t.valor === null ? c.semantico : semantico, origem: "jev" as const, confianca: t.confianca, alvoPrevisao: alvoP ?? c.alvoPrevisao, dadoPessoal: pessoal ?? c.dadoPessoal, papel, papelOrigem: c.papelOrigem === "confirmado" ? c.papelOrigem : pj.valor ? ("jev" as const) : c.papelOrigem, papelConfianca: pj.confianca };
   });
+  const unicas = garantirPapeisUnicos(colunas);
   return {
     ...p,
-    colunas,
+    colunas: unicas,
+    papelPlanilha: papelDaPlanilha(unicas),
     classificacao: "jev",
     aviso: p.colunas.length > COLUNAS_JEV ? `Só as ${COLUNAS_JEV} primeiras colunas foram classificadas pelo Jev; as demais seguem a heurística local.` : null,
     harness: { quando: new Date().toISOString(), latenciaMs: d.latenciaMs, tokens: d.tokens, custoUsd: d.custoUsd, caminho: d.caminho, colunas: alvo.length },
   };
+}
+
+/** Papéis que só cabem em uma coluna: fica o de maior confiança, os demais voltam a "nenhum". */
+const PAPEIS_UNICOS: PapelFPA[] = ["receita", "desconto", "produto", "turma", "alunos", "data", "canal", "custo_fixo", "custo_variavel", "marketing"];
+export function garantirPapeisUnicos(colunas: Coluna[]): Coluna[] {
+  const saida = colunas.map((c) => ({ ...c }));
+  for (const papel of PAPEIS_UNICOS) {
+    const idx = saida.map((c, i) => (c.papel === papel ? i : -1)).filter((i) => i >= 0);
+    if (idx.length <= 1) continue;
+    const peso = (i: number) => (saida[i].papelOrigem === "confirmado" ? 2 : 0) + (saida[i].papelConfianca ?? 0.5);
+    const fica = idx.sort((a, b) => peso(b) - peso(a))[0];
+    for (const i of idx) if (i !== fica) saida[i] = { ...saida[i], papel: "nenhum" };
+  }
+  return saida;
+}
+/** A pessoa confirma (ou corrige) o papel de cada coluna; o mapeamento passa a valer sobre Jev e heurística. */
+export function definirPapeis(id: string, papeis: Record<string, string>): Planilha {
+  const p = obterPlanilha(id);
+  if (p.demo) throw new AppError("As planilhas de exemplo já vêm mapeadas. Envie as suas para mapear as colunas.", 409);
+  const colunas = p.colunas.map((c) => {
+    const novo = papeis[c.nome];
+    if (novo === undefined) return c;
+    if (!PAPEIS_VALIDOS.includes(novo as PapelFPA)) throw new AppError(`Papel "${novo}" não existe para a coluna "${c.nome}".`);
+    return { ...c, papel: novo as PapelFPA, papelOrigem: "confirmado" as const };
+  });
+  const unicas = garantirPapeisUnicos(colunas);
+  return salvarPlanilha({ ...p, colunas: unicas, papelPlanilha: papelDaPlanilha(unicas), mapeamentoConfirmado: true });
 }
 
 // --- Persistência ----------------------------------------------------------------------------------
@@ -353,14 +388,21 @@ function db() {
   return b;
 }
 const cacheLinhas = new Map<string, Linha[]>();
+/** Planilhas gravadas pela v0.1.0 não têm papéis: recebem a heurística ao serem lidas. */
+function normalizar(p: Planilha): Planilha {
+  if (p.colunas.every((c) => c.papel) && p.papelPlanilha) return p;
+  const papeis = papeisHeuristicos(p.colunas);
+  const colunas = p.colunas.map((c, i) => ({ ...c, papel: c.papel || papeis[i], papelOrigem: c.papelOrigem || ("heuristica" as const), papelConfianca: c.papelConfianca ?? null }));
+  return { ...p, colunas, papelPlanilha: p.papelPlanilha || papelDaPlanilha(colunas), mapeamentoConfirmado: p.mapeamentoConfirmado ?? false };
+}
 export function listarPlanilhas(): Planilha[] {
   const rows = db().prepare("SELECT json FROM planilhas ORDER BY criado_em DESC").all() as { json: string }[];
-  return rows.map((r) => JSON.parse(r.json) as Planilha);
+  return rows.map((r) => normalizar(JSON.parse(r.json) as Planilha));
 }
 export function obterPlanilha(id: string): Planilha {
   const row = db().prepare("SELECT json FROM planilhas WHERE id = ?").get(id) as { json: string } | undefined;
   if (!row) throw new AppError("Planilha não encontrada.", 404);
-  return JSON.parse(row.json) as Planilha;
+  return normalizar(JSON.parse(row.json) as Planilha);
 }
 export function salvarPlanilha(p: Planilha) {
   db().prepare("INSERT INTO planilhas (id, json, criado_em) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json").run(p.id, JSON.stringify(p), p.criadoEm);
@@ -396,7 +438,10 @@ export async function criarPlanilha({ nome, texto, formato, demo = false, classi
     classificacao: demo ? "exemplo" : "heuristica",
     harness: null,
     aviso: null,
+    papelPlanilha: papelDaPlanilha(colunas),
+    mapeamentoConfirmado: demo,
   };
+  if (demo) p.colunas = p.colunas.map((c) => ({ ...c, papelOrigem: "exemplo" as const }));
   cacheLinhas.set(id, linhas);
   if (classificar && jevDisponivel()) {
     try {

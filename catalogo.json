@@ -482,11 +482,11 @@
       "id": "predictive-harness",
       "nome": "Predictive Harness",
       "areas": [
-        "Dados",
+        "Finanças",
         "Gestão"
       ],
-      "problema": "Perguntar aos dados exige analista, e respostas de IA sem verificação não inspiram confiança.",
-      "ia": "Converse com a planilha: o ChatGPT raciocina e escreve, o Jev decide rápido em cada etapa e verifica se os números batem, com cada decisão visível.",
+      "problema": "Decidir se abre uma turma, quanto gastar em marketing ou onde está a margem depende de planilha refeita à mão, e resposta de IA sem conta verificável não entra em comitê.",
+      "ia": "Agente de planejamento financeiro por turma: você pergunta \"e se abrirmos uma turma?\", o motor faz a conta com premissas visíveis e editáveis, o modelo só escreve a leitura e o Jev decide e confere cada etapa.",
       "integracoes": "ChatGPT por assinatura e OpenRouter (obrigatório: é onde vive o Jev, o modelo de decisões da TypeSafe). Disco persistente no Render.",
       "acento": "#2f4fb8",
       "porta": 3022,
@@ -499,9 +499,9 @@
       "independente": true,
       "plano": "starter",
       "discoGB": 1,
-      "discoGuarda": "planilhas, conversas, decisões do harness, conta e credenciais",
-      "versao": "0.1.0",
-      "aposPublicar": "Crie sua conta, explore a planilha de exemplo e abra Configurações para conectar o ChatGPT e o OpenRouter (o Jev vive nele). Depois envie uma planilha CSV ou JSON e pergunte."
+      "discoGuarda": "planilhas, premissas por produto, conversas, decisões do harness, conta e credenciais",
+      "versao": "0.2.0",
+      "aposPublicar": "Crie sua conta e explore a escola de negócios de exemplo: contribuição por turma, cenário de nova turma, meta reversa de marketing e ponto de equilíbrio. Em Configurações conecte o ChatGPT e o OpenRouter (o Jev vive nele). Depois envie suas planilhas de matrículas, custos e marketing e confirme o papel de cada coluna."
     },
     {
       "id": "precificador",

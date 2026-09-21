@@ -28,35 +28,45 @@ test("números em formato brasileiro e americano, moeda e percentual", () => {
   assert.equal(pl.paraData("2025-03-15T10:00:00Z"), "2025-03-15");
 });
 test("perfil: tipos, semântica heurística, período e qualidade", () => {
-  const csv = demo.gerarCSVExemplo();
+  const csv = demo.gerarCSVsExemplo().matriculas;
   const { cabecalho, linhas, linhasVazias } = pl.parseCSV(csv);
-  assert.equal(linhas.length, 24 * 5 * 3);
-  const { colunas, periodo, qualidade } = pl.perfilar(cabecalho, linhas, linhasVazias);
+  assert.ok(linhas.length > 800, `${linhas.length} matrículas`);
+  const { colunas, periodo } = pl.perfilar(cabecalho, linhas, linhasVazias);
   const por = Object.fromEntries(colunas.map((c) => [c.nome, c]));
   assert.equal(por.data.semantico, "data");
-  assert.equal(por.regiao.semantico, "geografia");
+  assert.equal(por.produto.semantico, "categoria");
+  assert.equal(por.turma.semantico, "categoria");
   assert.equal(por.canal.semantico, "categoria");
-  assert.equal(por.receita.semantico, "moeda");
-  assert.equal(por.unidades.semantico, "quantidade");
   assert.equal(por.desconto_pct.semantico, "percentual");
-  assert.equal(por.vendedor_id.tipo, "texto");
-  assert.equal(periodo?.inicio, "2024-01-01");
-  assert.equal(periodo?.fim, "2025-12-01");
-  assert.equal(qualidade.duplicadas, 0);
-  assert.ok(typeof por.receita.soma === "number" && por.receita.soma > 0);
+  assert.equal(por.valor_pago.semantico, "moeda");
+  assert.equal(periodo?.inicio.slice(0, 7), "2024-01");
+  assert.equal(periodo?.fim.slice(0, 7), "2025-12");
+  assert.ok(typeof por.valor_pago.soma === "number" && por.valor_pago.soma > 0);
 });
 test("resumo para a IA traz totais por mês, por categoria e variação, sem linhas", async () => {
-  const p = await pl.criarPlanilha({ nome: "Exemplo", texto: demo.gerarCSVExemplo(), formato: "csv", demo: true, classificar: false });
-  assert.equal(p.classificacao, "exemplo");
+  const p = await pl.criarPlanilha({ nome: "Exemplo", texto: demo.gerarCSVsExemplo().matriculas, formato: "csv", classificar: false });
+  assert.equal(p.classificacao, "heuristica");
+  assert.equal(p.papelPlanilha, "matriculas");
+  assert.ok(!p.mapeamentoConfirmado, "uma planilha nova espera a confirmação dos papéis");
   const resumo = pl.resumoParaIA(p, pl.lerLinhas(p));
   assert.match(resumo, /Totais por mês \(data\)/);
   assert.match(resumo, /2025-12 \|/);
-  assert.match(resumo, /Totais por regiao/);
-  assert.match(resumo, /Variação de receita por regiao/);
-  assert.ok(!resumo.includes("V001"), "identificadores de linha não vão para a IA");
+  assert.match(resumo, /Totais por produto/);
+  assert.match(resumo, /Variação de valor_pago por produto/);
   assert.ok(resumo.length < 9100);
   assert.equal(pl.listarPlanilhas()[0].id, p.id);
-  assert.equal(pl.obterPlanilha(p.id).linhas, 360);
+  assert.equal(pl.obterPlanilha(p.id).linhas, p.linhas);
+  // A pessoa corrige um papel; o mapeamento passa a valer sobre a heurística e o papel único é garantido.
+  const corrigida = pl.definirPapeis(p.id, { canal: "nenhum", turma: "produto" });
+  const por = Object.fromEntries(corrigida.colunas.map((c) => [c.nome, c]));
+  assert.equal(por.canal.papel, "nenhum");
+  assert.equal(por.turma.papel, "produto");
+  assert.equal(por.turma.papelOrigem, "confirmado");
+  assert.equal(por.produto.papel, "nenhum", "só uma coluna pode ser o produto; a confirmada vence");
+  assert.throws(() => pl.definirPapeis(p.id, { canal: "inventado" }), /não existe/);
+  const demoP = await pl.criarPlanilha({ nome: "Exemplo demo", texto: demo.gerarCSVsExemplo().custos, formato: "csv", demo: true, classificar: false });
+  assert.throws(() => pl.definirPapeis(demoP.id, { produto: "nenhum" }), /planilhas de exemplo já vêm mapeadas/);
+  pl.removerPlanilha(demoP.id);
   pl.removerPlanilha(p.id);
   assert.throws(() => pl.obterPlanilha(p.id), /não encontrada/);
 });
@@ -67,18 +77,13 @@ test("JSON com lista de objetos vira planilha; limites e erros claros", async ()
   await assert.rejects(() => pl.criarPlanilha({ nome: "v", texto: "", formato: "csv", classificar: false }), /vazio/);
   await assert.rejects(() => pl.criarPlanilha({ nome: "v", texto: "[1,2]", formato: "json", classificar: false }), /objeto/);
 });
-test("respostas de exemplo são calculadas a partir dos dados gerados", () => {
-  const { linhas } = pl.parseCSV(demo.gerarCSVExemplo());
-  const r = demo.respostaExemplo(demo.CONVERSAS_EXEMPLO[0].pergunta, linhas);
-  assert.ok(r && r.exemplo && r.texto.includes("Sudeste"));
-  assert.ok(r!.decisoes!.every((d) => d.exemplo));
-  assert.equal(demo.respostaExemplo("outra coisa", linhas), null);
-});
-test("perguntas de classificação: três por coluna, tipos válidos", () => {
+test("perguntas de classificação: quatro por coluna (tipo, alvo, pessoal e papel), tipos válidos", () => {
   const { cabecalho, linhas } = pl.parseCSV("a;b\n1;x\n2;y");
   const { colunas } = pl.perfilar(cabecalho, linhas, 0);
   const q = pl.perguntasClassificacao(colunas);
-  assert.deepEqual(Object.keys(q), ["tipo_0", "alvo_0", "pessoal_0", "tipo_1", "alvo_1", "pessoal_1"]);
+  assert.deepEqual(Object.keys(q).sort(), ["alvo_0", "alvo_1", "papel_0", "papel_1", "pessoal_0", "pessoal_1", "tipo_0", "tipo_1"]);
   assert.equal(q.tipo_0.type, "choice");
   assert.equal(q.alvo_0.type, "noul");
+  assert.equal(q.papel_0.type, "choice");
+  assert.ok("custo_fixo" in (q.papel_0 as { criteria: Record<string, string> }).criteria);
 });

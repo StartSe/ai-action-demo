@@ -7,9 +7,11 @@ código é seguro, se a resposta bate com os números, qual gráfico cabe, quand
 chamar um humano. Referência conceitual:
 [Building a harness with Jev (LangChain)](https://www.langchain.com/blog/building-a-harness-with-jev).
 
-Status: proposta, versão 0.1.0 (21/09/2026). Nada foi criado além deste arquivo; a entrada em
-`catalogo.json`, o `docker-compose.yml` e a pasta do app só entram quando a
-proposta for aprovada.
+Status: a rodada 1 (v0.1.0) e a rodada 2 (v0.2.0) estão publicadas em 21/09/2026.
+A §11 define o pivô do produto para **agente de FP&A**, com o plano de UI e UX; a
+§11.8 registra a execução da rodada 2, concluída. A próxima é a rodada 3
+(§11.6): cenários salvos e comparação, plano contra realizado, exportar, MCP e
+formulário público.
 
 ## 1. Por que "harness" e não "mais um chat com dados"
 
@@ -288,3 +290,284 @@ uma escolha entre opções fechadas.
   vai ao LLM de qualquer forma: só perfil, agregados e a saída do código. Falta
   decidir se colunas classificadas como identificador são mascaradas também na
   saída do código antes de virar resposta.
+
+## 11. Pivô: agente de FP&A (proposta de 21/09/2026)
+
+### 11.1 Avaliação: sim, e é o encaixe certo
+
+"Conversar com uma planilha" é uma capacidade; **FP&A** (planejamento e análise
+financeira) é um trabalho com dono, ritual e pergunta recorrente: "se eu fizer X,
+o que acontece com a margem?". A arquitetura da rodada 1 já é a de um agente de
+FP&A, só faltava dizer isso na tela:
+
+- O harness existe porque número em FP&A precisa ser **auditável**. Um CFO não
+  aceita "o modelo estimou": aceita "ticket médio histórico de R$ 4.900 × 28
+  alunos − custo fixo da turma de R$ 38 mil". A verificação do Jev (números batem
+  com a base) e a linha "Base: ..." viram o coração do produto, não um extra.
+- "Predictive" ganha sentido concreto: **cenário e projeção**, não "IA que
+  adivinha". A pergunta do exemplo, "se abrir uma nova turma do produto A, qual
+  a contribuição para a margem final?", é um cenário sobre drivers, e drivers
+  são exatamente o que o Jev classifica bem (escolhas fechadas, rápidas).
+- Ele complementa os dois apps de dados da suíte sem se sobrepor: o
+  `financas-ia` olha para trás (despesas do mês), o `automl-pocket` treina
+  modelos; o agente de FP&A olha para frente com premissas explícitas.
+- Para a StartSe o domínio é natural: produtos são cursos e imersões, a unidade
+  econômica é a **turma** (cohort), e as perguntas do dia a dia são ocupação,
+  ticket, CAC por aluno, custo fixo por turma e margem de contribuição.
+
+A condição para funcionar: **cenário não sai de uma planilha de vendas sozinha**.
+Precisa de um modelo de drivers (premissas). Então a mudança de UX não é
+cosmética: sai o par "planilha + pergunta" e entra o trio **base histórica +
+premissas + cenário**. A IA nunca faz a conta; um motor determinístico faz, com
+as premissas visíveis e editáveis, e a IA traduz a pergunta em cenário e explica
+o resultado. É isso que torna o agente "estratégico" sem virar "chutador".
+
+### 11.2 O que muda no laço do harness
+
+O laço da §4 continua; três estações ganham conteúdo de FP&A.
+
+```
+mensagem
+  ▼
+[1] Triagem ............ Jev, uma chamada
+      tipo_pergunta   choice  descritiva | diagnostica | cenario | previsao | meta_reversa | risco | conceito | fora
+      drivers_*       noul    fan-out: envolve ticket? alunos por turma? custo fixo? custo variável? marketing/CAC?
+                              desconto? cancelamento? (uma pergunta por driver, todas de uma vez)
+      horizonte       choice  mes | trimestre | semestre | ano
+      premissas_ok    noul    a base + premissas salvas bastam para calcular?
+      impacto         score   decisão de baixo | médio | alto impacto (alto → pede validação humana)
+  ▼
+[2] Roteamento ......... código
+      descritiva/diagnostica → agregados da base (como hoje)
+      cenario/meta_reversa   → LLM traduz a pergunta em uma ESPECIFICAÇÃO DE CENÁRIO (JSON fechado:
+                               produto, turmas novas, alunos por turma, ticket, desconto, custo fixo,
+                               custo variável, CAC, horizonte); campos vazios viram "premissas faltantes"
+      premissas_ok baixo     → cartão "Faltam N premissas" em vez de resposta
+  ▼
+[3] Motor de FP&A ...... código determinístico (lib/fpa.ts), nunca o LLM
+      margem de contribuição por turma, ponto de equilíbrio em alunos, contribuição do cenário,
+      impacto na margem final do período, sensibilidade ±10% nos 3 drivers mais sensíveis,
+      meta reversa (quanto de CAC cabe para manter X% de margem)
+  ▼
+[4] Narrativa .......... LLM escreve a leitura executiva a partir do resultado do motor (só esses números)
+  ▼
+[5] Verificação ........ Jev: números batem com o motor? premissa implícita não declarada? recomendação
+                         pede validação? qual visual (cascata | comparação | sensibilidade | tabela)?
+```
+
+O LLM passa a ter duas tarefas fechadas (traduzir pergunta → especificação; e
+narrar resultado → texto) e nenhuma conta. Se a especificação não valida, o
+agente pergunta, em vez de assumir em silêncio.
+
+### 11.3 Modelo de dados de FP&A
+
+Entidades mínimas, mapeadas a partir das planilhas que a empresa já tem:
+
+| Entidade | De onde vem | Exemplo StartSe |
+|---|---|---|
+| Produto | coluna categórica | Imersão A, Programa B |
+| Turma (cohort) | coluna de turma/edição ou data de início | Turma 12, mar/2026 |
+| Matrícula | linha de venda: data, produto, turma, ticket, desconto, canal | uma venda |
+| Custo fixo por turma | planilha de custos ou premissa | sala, professor, produção |
+| Custo variável por aluno | planilha de custos ou premissa | material, plataforma, comissão |
+| Marketing | gasto por período/produto/canal, ou premissa de CAC | mídia, eventos |
+| Meta / plano | planilha de orçamento (rodada 3) | meta de receita do trimestre |
+
+O **mapeamento de papéis** reaproveita a classificação de colunas pelo Jev
+(§2): além do tipo semântico, cada coluna recebe um papel de FP&A (`receita`,
+`desconto`, `custo_fixo`, `custo_variavel`, `marketing`, `produto`, `turma`,
+`alunos`, `data`, `canal`, `nenhum`), uma pergunta `choice` por coluna, na mesma
+chamada. A pessoa confirma o mapeamento em um passo, e o motor passa a saber
+onde estão receita e custo.
+
+**Premissas** têm sempre três origens possíveis, mostradas na tela: *da base*
+(calculada do histórico, ex.: média de 28 alunos por turma), *informada* (a
+pessoa digitou) e *sugerida* (o LLM propôs a partir do contexto, com o Jev
+pontuando plausibilidade; nunca entra num cálculo sem confirmação). Premissas são
+salvas por produto e viram o "livro de premissas" da empresa.
+
+### 11.4 UI: o que muda na tela
+
+A estrutura de três colunas fica; o conteúdo muda de "dados / conversa / harness"
+para **base e premissas / conversa / como cheguei aqui**.
+
+```
+┌ Predictive Harness · Agente de FP&A ──────────── [Base] [Como cheguei aqui] [Configurações] ┐
+│ BASE E PREMISSAS      │ CONVERSA                              │ COMO CHEGUEI AQUI          │
+│                       │                                       │                            │
+│ Planilhas             │ Pergunta ▸ "Se abrirmos uma nova       │ Premissas usadas           │
+│  ▸ vendas_2025 (base) │   turma do produto A em março, qual a  │  alunos/turma  28  da base │
+│  ▸ custos_turmas      │   contribuição para a margem do tri?"  │  ticket      4.900 da base │
+│  + mapear papéis      │                                       │  custo fixo 38.000 informada│
+│                       │ ┌ Cenário: nova turma do produto A ┐  │  CAC/aluno    620  sugerida│
+│ Produtos e turmas     │ │ Receita         R$ 137.200         │  ─────────────────────────  │
+│  Produto A  12 turmas │ │ Custo variável  R$  21.000         │ Fórmula                    │
+│  Produto B   7 turmas │ │ Marketing       R$  17.360         │  contribuição = receita −   │
+│                       │ │ Custo fixo      R$  38.000         │  var − mkt − fixo           │
+│ Premissas do Produto A│ │ Contribuição    R$  60.840  44,3%  │  ─────────────────────────  │
+│  alunos/turma   28 ✎  │ │ Margem do tri  31,2% → 33,0%       │ Decisões do harness        │
+│  ticket      4.900 ✎  │ └ Base: matrículas 2024-25, custos ─┘ │  tipo: cenário      96%    │
+│  desconto      8% ✎   │ ┌ Sensibilidade ──────────────────┐   │  drivers: alunos, ticket,  │
+│  custo fixo 38.000 ✎  │ │ alunos −20% ....... R$ 33.400   │   │    CAC, fixo                │
+│  custo var.    750 ✎  │ │ ticket −10% ....... R$ 47.100   │   │  premissas: faltou CAC     │
+│  CAC/aluno     620 ✎  │ │ CAC +30% .......... R$ 55.600   │   │  impacto: médio → ok       │
+│                       │ └──────────────────────────────────┘   │  números batem: sim 97%    │
+│ Cenários salvos       │ Leitura: abrir a turma adiciona 1,8 p.p.│  visual: cascata           │
+│  ▸ Turma extra mar/26 │ à margem do trimestre; o risco está na │                            │
+│  ▸ Mkt +30%           │ ocupação: abaixo de 19 alunos a turma  │ [Ajustar premissa e        │
+│                       │ não se paga.                            │  recalcular]               │
+│                       │ [Salvar cenário] [Comparar] [Exportar]  │                            │
+│                       │ Próximas: "E se forem duas turmas?"     │                            │
+│                       │ "Quanto de mkt cabe mantendo 33%?"      │                            │
+│                       │ ┌ Pergunte ao seu analista de FP&A... ┐ │                            │
+└───────────────────────┴───────────────────────────────────────┴────────────────────────────┘
+```
+
+Mudanças concretas, por área:
+
+**Coluna esquerda: Base e premissas**
+- "Dados" vira "Base e premissas". Planilhas continuam no topo, agora com o
+  papel de cada uma (matrículas, custos, marketing) e o botão "Mapear papéis".
+- Bloco **Produtos e turmas** detectado a partir do mapeamento (contagem de
+  turmas, alunos médios, ticket médio, margem histórica por produto).
+- Bloco **Premissas do produto selecionado**: lista editável em linha (lápis),
+  cada uma com a origem (da base / informada / sugerida) e a data. Um botão
+  "Recalcular com a base" restaura o histórico.
+- Bloco **Cenários salvos**: nome, data, um número-resumo (contribuição), e
+  "Comparar" para pôr dois lado a lado no centro.
+
+**Coluna central: Conversa**
+- Cartões tipados por resposta, além do texto: **Cenário** (base vs cenário,
+  linha a linha até a contribuição e o efeito na margem do período),
+  **Sensibilidade** (três barras: o que mais move o resultado), **Ponto de
+  equilíbrio** (alunos mínimos), **Comparação de cenários** (duas colunas),
+  **Premissas faltantes** (formulário curto pré-preenchido com o histórico e o
+  botão "Usar histórico"), **Recomendação** com o selo "pede validação" quando
+  o Jev marcar impacto alto. Gráficos são SVG determinístico do motor
+  (cascata para cenário, barras para sensibilidade), nunca imagem gerada.
+- Perguntas sugeridas passam a ser **estratégicas e por categoria**, com base no
+  mapeamento: *Diagnóstico* ("Qual produto tem a melhor margem de contribuição
+  por turma?"), *Cenário* ("Se abrirmos uma nova turma do produto A em março,
+  qual a contribuição para a margem do trimestre?"), *Meta reversa* ("Quanto
+  posso gastar em marketing por aluno e manter 30% de margem?"), *Risco*
+  ("Com quantos alunos a turma deixa de se pagar?").
+- Estado vazio: "Comece com uma pergunta estratégica" + as quatro categorias;
+  sem planilha de custos, o agente avisa que cenários usarão premissas
+  informadas e oferece o modelo de planilha de custos para download.
+- Toda resposta de cenário traz "Salvar cenário", "Comparar" e "Exportar"
+  (Markdown e CSV na rodada 2; PDF e XLSX depois).
+
+**Coluna direita: Como cheguei aqui** (o Harness, renomeado para o executivo)
+- Três blocos em ordem: **Premissas usadas** (com origem; qualquer uma é
+  editável ali mesmo e recalcula o cartão), **Fórmula** (a conta em uma linha,
+  em português, com os números substituídos) e **Decisões do harness** (as
+  decisões do Jev como hoje, com probabilidade e confiança).
+- Botão **Ajustar premissa e recalcular**: muda só a premissa, roda só o motor,
+  atualiza o cartão sem nova chamada de LLM (rápido e sem custo). Uma nova
+  narrativa só é pedida se a pessoa clicar em "Reescrever leitura".
+
+**Topo e copy**
+- Título da tela: "Predictive Harness · Agente de FP&A". Chip de estado
+  continua ("Harness ligado" / "Demonstração").
+- Linguagem executiva e sem jargão: "margem de contribuição", "ponto de
+  equilíbrio", "premissa", "cenário". Nada de "driver", "spec", "what-if" na
+  tela. O glossário fica num "?" ao lado de cada termo, uma frase cada.
+- A linha "Base: ..." de toda resposta passa a listar também as premissas com a
+  origem, ex.: "Base: matrículas 2024-25 (ticket, alunos/turma); custo fixo
+  informado por você em 21/09".
+
+**Configurações**: sem mudança de estrutura. Entra um cartão "Empresa" com
+moeda, início do ano fiscal e a margem-alvo padrão (usada nas metas reversas).
+
+### 11.5 Modo demonstração de FP&A
+
+A planilha de exemplo passa a ser de uma escola de negócios fictícia: matrículas
+por produto, turma, data, ticket e desconto (24 meses), mais uma planilha de
+custos por turma e uma de marketing por mês. As perguntas roteirizadas viram as
+quatro categorias acima, com o cenário de "nova turma do produto A" já salvo e
+uma comparação pronta. Como hoje, os números da demonstração são calculados da
+própria base, nunca inventados.
+
+### 11.6 Rodadas revisadas
+
+2. **Agente de FP&A, primeiro corte.** Mapeamento de papéis pelo Jev (uma
+   pergunta a mais por coluna), entidades Produto e Turma, livro de premissas
+   por produto (três origens), motor `lib/fpa.ts` (margem de contribuição,
+   ponto de equilíbrio, cenário de novas turmas, impacto na margem do período,
+   sensibilidade, meta reversa de CAC e de ticket), tradução pergunta →
+   especificação de cenário com validação e cartão "Faltam premissas",
+   cartões Cenário, Sensibilidade e Ponto de equilíbrio em SVG, coluna "Como
+   cheguei aqui" com premissas, fórmula e recálculo local, sugestões por
+   categoria, demonstração de FP&A, nova copy. Testes do motor com casos
+   fechados (a conta certa é a conta certa, sem IA).
+3. **Planejamento.** Cenários salvos e comparação lado a lado, plano vs real
+   (upload do orçamento e análise de variação por produto e mês), exportar
+   Markdown, CSV e PDF, cartão Empresa em Configurações, MCP (`simular_cenario`,
+   `margem_por_produto`) e formulário público para a equipe enviar planilhas.
+4. **Fora do motor.** O que a §5 previa: código em sandbox para perguntas que
+   o motor não cobre (o Jev decide "cabe no motor?" antes), busca na web para
+   benchmarks (CAC e ticket de mercado, com fonte), previsão de ocupação com
+   intervalo, XLSX e geração de imagem para o slide do comitê.
+
+### 11.7 Riscos específicos do pivô
+
+- **Premissa errada com cara de certeza.** Mitigação: origem sempre visível,
+  sensibilidade em todo cenário, e o Jev marcando "premissa implícita não
+  declarada" na verificação.
+- **Custos não estão em planilha.** Muitas empresas só têm vendas. Por isso
+  cenário funciona com premissas informadas desde o primeiro dia, e a planilha
+  de custos é um upgrade, não um pré-requisito.
+- **Tradução pergunta → especificação.** É a única etapa em que o LLM produz
+  estrutura; a especificação é validada campo a campo (tipos, faixas, produto
+  existente) e, se falhar, o agente pergunta. Nunca se assume em silêncio.
+- **Escopo de FP&A é grande.** O corte da rodada 2 é a unidade econômica da
+  turma. Fluxo de caixa, DRE completa e consolidação ficam fora até haver
+  demanda.
+
+### 11.8 Execução da rodada 2 (v0.2.0, iniciada em 21/09/2026)
+
+Ordem de construção, cada passo com teste ou verificação própria:
+
+1. **Motor** `lib/fpa.ts`: premissas tipadas e validadas, contribuição por
+   turma, ponto de equilíbrio, cenário de novas turmas com impacto na margem do
+   período, sensibilidade (variação adversa de 10% em cada premissa, ranqueada),
+   meta reversa (marketing por aluno, ticket, alunos, custo fixo, desconto) e a
+   fórmula em português com os números substituídos. `lib/fpa.test.ts` com casos
+   fechados: a conta certa é a conta certa, sem IA.
+2. **Base** `lib/base.ts`: papel de FP&A por coluna (heurística local e uma
+   pergunta `choice` por coluna na mesma chamada do Jev), papel da planilha
+   (matrículas, custos, marketing), produtos e turmas detectados, premissas "da
+   base" com o detalhe de onde vieram, livro de premissas em SQLite (informadas
+   sobrepõem a base) e o trimestre de referência para o impacto na margem.
+   `lib/base.test.ts`.
+3. **Demonstração** `lib/demo.ts`: escola de negócios fictícia com três
+   planilhas (matrículas de 24 meses, custos por turma, marketing por mês) e
+   quatro perguntas roteirizadas (diagnóstico, cenário, meta reversa, risco)
+   respondidas pelo motor com os números da própria base.
+4. **Laço** `lib/conversa.ts`: conversa da base (não mais de uma planilha),
+   triagem de FP&A pelo Jev (tipo da pergunta, drivers em fan-out, horizonte,
+   premissas bastam, impacto, dado pessoal), tradução pergunta → especificação
+   fechada pelo LLM com validação campo a campo, cartão "Faltam premissas" com
+   sugestões pontuadas pelo Jev, motor, narrativa só com os números do motor,
+   verificação (números batem, premissa implícita, pede validação, visual) e
+   recálculo local sem LLM. Rotas em `app/api/base/*`.
+5. **Tela**: coluna "Base e premissas" (planilhas com papel, mapeamento de
+   papéis, produtos e turmas, premissas editáveis com origem), cartões tipados
+   em SVG (cascata, sensibilidade, ponto de equilíbrio, meta reversa, premissas
+   faltantes) e coluna "Como cheguei aqui" (premissas usadas, fórmula,
+   decisões, ajustar e recalcular). Copy executiva, sem jargão.
+6. **Fechamento**: `npm test`, `npm run lint`, `npm run build`, servidor
+   standalone com `curl` nas rotas, capturas de tela (desktop e celular),
+   README, CHANGELOG, CLAUDE.md, `catalogo.json` e commit `feat(predictive-harness)`.
+
+Resultado da rodada 2 (v0.2.0): os seis passos da §11.8 foram entregues. O motor
+`lib/fpa.ts` e o `lib/base.ts` nasceram com teste próprio (`fpa.test.ts`,
+`base.test.ts`, `conversa.test.ts`; 30 provas no total, sem gastar crédito), a
+tela de três colunas virou Base e premissas / Conversa / Como cheguei aqui, e a
+demonstração passou a ser a escola de negócios com quatro perguntas por
+categoria. Duas decisões que fugiram do texto original: o cartão de premissas
+faltantes traz a sugestão do LLM com a plausibilidade pontuada pelo Jev (em vez
+de só um formulário vazio), e os gráficos rolam na horizontal no celular em vez
+de encolher o texto do SVG. Continua por confirmar, como na rodada 1, o
+comportamento do Jev com chave real: endpoint vigente, calibração em português e
+a qualidade da tradução pergunta → especificação.

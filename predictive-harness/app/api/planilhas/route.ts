@@ -1,14 +1,10 @@
-// Planilhas: lista (garantindo a de exemplo) e envio por multipart (CSV ou JSON, até 20 MB).
+// Planilhas: lista (garantindo as de exemplo) e envio por multipart (CSV ou JSON, até 20 MB).
 import { api, AppError } from "@/lib/api";
 import { criarPlanilha, LIMITE_BYTES } from "@/lib/planilhas";
 import { garantirExemplo } from "@/lib/exemplo";
-import { sugestoesIniciais } from "@/lib/conversa";
 export const dynamic = "force-dynamic";
 export async function GET() {
-  return api(async () => {
-    const planilhas = await garantirExemplo();
-    return { planilhas: planilhas.map((p) => ({ ...p, sugestoes: sugestoesIniciais(p) })) };
-  });
+  return api(async () => ({ planilhas: await garantirExemplo() }));
 }
 export async function POST(req: Request) {
   return api(async () => {
@@ -21,7 +17,6 @@ export async function POST(req: Request) {
     const formato = ext === "json" ? "json" : ext === "csv" || ext === "txt" || ext === "tsv" ? "csv" : null;
     if (!formato) throw new AppError(ext === "xlsx" || ext === "xls" ? "Planilhas do Excel chegam na próxima versão. Exporte como CSV (Arquivo › Salvar como › CSV UTF-8)." : "Formato não reconhecido. Envie CSV ou JSON.");
     const texto = Buffer.from(await arquivo.arrayBuffer()).toString("utf8");
-    const p = await criarPlanilha({ nome: nome.replace(/\.[^.]+$/, ""), texto, formato });
-    return { planilha: { ...p, sugestoes: sugestoesIniciais(p) } };
+    return { planilha: await criarPlanilha({ nome: nome.replace(/\.[^.]+$/, ""), texto, formato }) };
   });
 }

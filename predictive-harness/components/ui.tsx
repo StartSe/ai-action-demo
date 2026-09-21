@@ -76,6 +76,7 @@ export function Icon({ name, size = 20 }: { name: string; size?: number }) {
         <path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
       </>
     ),
+    edit: <path d="M4 20h4l10-10-4-4L4 16v4zM13 7l4 4" />,
     eye: (
       <>
         <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
