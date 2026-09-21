@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { ToastRegion } from "@/components/Toast";
 const font = localFont({
   src: "./fonts/manrope-latin.woff2",
   variable: "--font-manrope",
@@ -19,7 +20,10 @@ export const viewport: Viewport = {
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" className={font.variable}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <ToastRegion />
+      </body>
     </html>
   );
 }

@@ -1,5 +1,13 @@
 export type CaptureStatus =
   "queued" | "running" | "done" | "failed" | "cancelled";
+export type CaptureEvent = {
+  id: number;
+  created: string;
+  attempt: number;
+  stage: string;
+  level: "info" | "error";
+  message: string;
+};
 export type CaptureTask = {
   id: string;
   instruction: string;

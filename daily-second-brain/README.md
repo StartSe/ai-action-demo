@@ -1,8 +1,12 @@
-# Daily Second Brain · v1.2.0
+# Daily Second Brain · v1.3.0
 
 Uma memória pessoal conectada: capture o que chega, transforme em conhecimento e converse para criar novos resultados. A experiência combina um observatório de ideias com páginas Markdown, fontes rastreáveis, regras próprias e um assistente por texto ou voz.
 
 A versão instalada aparece abaixo do logo Daily no menu lateral. No celular, toque em **Abrir menu** para vê-la. O número acompanha a versão do pacote e também está disponível em `/api/health`.
+
+Em **Coletas e rotinas**, use **Coletar** para uma instrução nova, **Histórico** para acompanhar execuções e **Rotinas** para gerenciar agendamentos. No Histórico, abra **Ver diagnóstico da coleta** para consultar modelo, ferramentas autorizadas, tentativas de leitura no Zapier, tempos e erros. **Copiar diagnóstico** facilita o suporte sem incluir credenciais. Coletas antigas não têm registros retroativos; repetir a instrução gera um novo diagnóstico.
+
+O ChatGPT usa o executor interno de ferramentas do Codex App Server. Modelos que exigem code mode precisam do host habilitado; terminal, ambientes de execução, navegação e delegação continuam desabilitados. A validação usa o binário instalado com um provedor local simulado, sem credenciais e sem chamadas a contas reais.
 
 **raw → wiki → outputs → raw**
 

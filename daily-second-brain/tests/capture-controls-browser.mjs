@@ -236,6 +236,18 @@ try {
     );
   d.close();
   await page.goto(base + "/?view=captures");
+  await page.getByRole("tab", { name: "Coletar", exact: true }).waitFor();
+  assert.ok(await page.locator(".capture-history").isHidden());
+  assert.ok(await page.locator(".capture-schedules").isHidden());
+  await page.screenshot({ path: join(out, "collect-tab.png"), fullPage: true });
+  await page.getByRole("tab", { name: "Coletar", exact: true }).focus();
+  await page.keyboard.press("ArrowRight");
+  assert.equal(
+    await page
+      .getByRole("tab", { name: /Histórico/ })
+      .getAttribute("aria-selected"),
+    "true",
+  );
   const history = page.locator(".capture-history"),
     schedules = page.locator(".capture-schedules");
   const pages = history.getByRole("navigation", {
@@ -272,12 +284,13 @@ try {
     .waitFor();
   await page.getByLabel("Filtrar coletas").selectOption("all");
   await pages.getByText("Página 1 de 8").waitFor();
+  await page.getByRole("tab", { name: "Rotinas", exact: true }).click();
   for (let i = 2; i <= 3; i++) {
     await routines.getByRole("button", { name: "Próxima" }).click();
     await routines.getByText(`Página ${i} de 3`).waitFor();
   }
   assert.equal(await schedules.locator("article").count(), 3);
-  await pages.getByText("Página 1 de 8").waitFor();
+  assert.ok(await pages.getByText("Página 1 de 8").isHidden());
   const oldest = schedules.locator("article").filter({
     has: page.getByRole("heading", {
       name: "Rotina de teste 1",
@@ -290,7 +303,7 @@ try {
     .getByRole("button", { name: "Salvar agendamento", exact: true })
     .click();
   await page
-    .getByRole("status")
+    .locator(".toast")
     .filter({ hasText: "Agendamento salvo." })
     .waitFor();
   await schedules
@@ -309,7 +322,7 @@ try {
           .pagination.schedules.total === total,
     );
     await page
-      .getByRole("status")
+      .locator(".toast")
       .filter({ hasText: "Agendamento excluído." })
       .waitFor();
     await until(
@@ -321,6 +334,17 @@ try {
   assert.equal(await schedules.locator("article").count(), 10);
   await routines.scrollIntoViewIfNeeded();
   await page.screenshot({ path: join(out, "pagination-desktop.png") });
+  await page.setViewportSize({ width: 1280, height: 520 });
+  assert.equal(await page.locator(".memory-flow").count(), 0);
+  const configuration = page
+    .locator(".sidebar")
+    .getByRole("button", { name: "Configuração", exact: true });
+  await configuration.scrollIntoViewIfNeeded();
+  const configBox = await configuration.boundingBox();
+  assert.ok(
+    configBox && configBox.y >= 0 && configBox.y + configBox.height <= 520,
+  );
+  await page.screenshot({ path: join(out, "sidebar-short-screen.png") });
   await page.setViewportSize({ width: 390, height: 900 });
   await routines.scrollIntoViewIfNeeded();
   const box = await routines.boundingBox();

@@ -20,6 +20,7 @@ const paths: Record<string, string> = {
   mic: "M9 5a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0V5m-4 6v1a7 7 0 0 0 14 0v-1m-7 8v3m-4 0h8",
   volume: "M11 3 5 8H2v8h3l6 5V3m4 5a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14",
   file: "M5 2h9l5 5v15H5V2m9 0v6h5M8 12h8m-8 4h6",
+  info: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m0 4v2m0 3v5",
   check: "m4 12 5 5L20 6",
   download: "M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5",
   upload: "M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5",

@@ -9,6 +9,18 @@ import { createRequire } from "node:module";
 
 import { normalizeUsage } from "./account-usage";
 import { APP_VERSION } from "./version";
+import { diagnosticText, type OnDiagnostic } from "./diagnostics";
+
+// Some models require code mode to invoke dynamic tools. This isolated runtime
+// can only call the supplied callbacks; terminal and environment tools stay off.
+export const CHATGPT_TOOL_CONFIG = {
+  "features.shell_tool": false,
+  "features.unified_exec": false,
+  "features.code_mode": true,
+  "features.code_mode_host": true,
+  "features.multi_agent": false,
+  web_search: "disabled",
+};
 
 type Json = Record<string, unknown>;
 type Message = {
@@ -42,6 +54,7 @@ type ActiveTurn = {
   tools: AgentTool[];
   calls: number;
   onText?: (text: string) => void;
+  onDiagnostic?: OnDiagnostic;
   timer: ReturnType<typeof setTimeout>;
 };
 
@@ -99,18 +112,10 @@ export class ChatGPTBridge {
               "stdio://",
               "-c",
               'cli_auth_credentials_store="file"',
-              "-c",
-              "features.shell_tool=false",
-              "-c",
-              "features.unified_exec=false",
-              "-c",
-              "features.code_mode=false",
-              "-c",
-              "features.code_mode_host=false",
-              "-c",
-              "features.multi_agent=false",
-              "-c",
-              'web_search="disabled"',
+              ...Object.entries(CHATGPT_TOOL_CONFIG).flatMap(([key, value]) => [
+                "-c",
+                `${key}=${JSON.stringify(value)}`,
+              ]),
             ],
             { cwd: this.workspace, env, stdio: "pipe" },
           );
@@ -125,7 +130,16 @@ export class ChatGPTBridge {
           /* non-protocol output is ignored, never sent to the browser */
         }
       });
-      child.stderr.on("data", () => {});
+      createInterface({ input: child.stderr }).on("line", (line) => {
+        const text = diagnosticText(line.replace(/\x1b\[[0-9;]*m/g, ""));
+        if (/error|failed|disabled|unavailable/i.test(text))
+          for (const turn of this.turns.values())
+            turn.onDiagnostic?.({
+              stage: "Executor ChatGPT",
+              level: "error",
+              message: `Registro do servidor ChatGPT (pode abranger outros turnos): ${text}`,
+            });
+      });
       child.once("error", () => {
         if (this.child === child)
           this.failed(
@@ -212,7 +226,7 @@ export class ChatGPTBridge {
       if (m.method === "item/tool/call" && turn) {
         const tool = turn.tools.find((t) => t.name === p.tool);
         try {
-          if (!tool || ++turn.calls > 12)
+          if (!tool || ++turn.calls > 16)
             throw new Error(
               "Ferramenta não autorizada ou limite de chamadas atingido.",
             );
@@ -225,6 +239,11 @@ export class ChatGPTBridge {
             },
           });
         } catch (e) {
+          turn.onDiagnostic?.({
+            stage: "Ferramenta ChatGPT",
+            level: "error",
+            message: diagnosticText(e),
+          });
           this.send({
             id: m.id,
             result: {
@@ -241,6 +260,11 @@ export class ChatGPTBridge {
         return;
       }
       // No filesystem, shell, external approval or browser interaction from an agent block.
+      turn?.onDiagnostic?.({
+        stage: "Executor ChatGPT",
+        level: "error",
+        message: `Solicitação não suportada: ${m.method}.`,
+      });
       this.send({
         id: m.id,
         error: {
@@ -352,6 +376,7 @@ export class ChatGPTBridge {
     tools = [],
     signal,
     onText,
+    onDiagnostic,
   }: {
     system: string;
     prompt: string;
@@ -359,35 +384,37 @@ export class ChatGPTBridge {
     tools?: AgentTool[];
     signal?: AbortSignal;
     onText?: (text: string) => void;
+    onDiagnostic?: OnDiagnostic;
   }): Promise<string> {
     await this.start();
     if (!(await this.account()).account)
       throw new Error("Conecte sua conta ChatGPT para executar este agente.");
     if (signal?.aborted) throw new Error("Execução cancelada.");
-    const r = await this.rpc<{ thread: { id: string } }>("thread/start", {
-      ...(model ? { model } : {}),
-      cwd: this.workspace,
-      approvalPolicy: "never",
-      sandbox: "read-only",
-      ephemeral: true,
-      environments: [],
-      baseInstructions:
-        "Você executa uma etapa de um fluxo de agentes. Responda em português. Use somente as ferramentas explicitamente fornecidas. Não use terminal, arquivos, navegador ou outras capacidades do sistema.",
-      developerInstructions: system,
-      dynamicTools: tools.map((t) => ({
-        type: "function",
-        name: t.name,
-        description: t.description,
-        inputSchema: t.schema,
-      })),
-      config: {
-        "features.shell_tool": false,
-        "features.unified_exec": false,
-        "features.code_mode": false,
-        "features.code_mode_host": false,
-        "features.multi_agent": false,
-        web_search: "disabled",
+    const r = await this.rpc<{ thread: { id: string }; model?: string }>(
+      "thread/start",
+      {
+        ...(model ? { model } : {}),
+        cwd: this.workspace,
+        approvalPolicy: "never",
+        sandbox: "read-only",
+        ephemeral: true,
+        environments: [],
+        baseInstructions:
+          "Você executa uma etapa de um fluxo de agentes. Responda em português. Use somente as ferramentas explicitamente fornecidas. Não use terminal, arquivos, navegador ou outras capacidades do sistema.",
+        developerInstructions: system,
+        dynamicTools: tools.map((t) => ({
+          type: "function",
+          name: t.name,
+          description: t.description,
+          inputSchema: t.schema,
+          deferLoading: false,
+        })),
+        config: CHATGPT_TOOL_CONFIG,
       },
+    );
+    onDiagnostic?.({
+      stage: "Modelo",
+      message: `ChatGPT · ${r.model || model || "padrão da conta"} · ${tools.length} ferramenta(s) fornecida(s). Executor de ferramentas habilitado.`,
     });
     const id = r.thread.id;
     return new Promise<string>((resolve, reject) => {
@@ -419,6 +446,7 @@ export class ChatGPTBridge {
         tools,
         calls: 0,
         onText,
+        onDiagnostic,
         timer,
       });
       signal?.addEventListener("abort", abort, { once: true });

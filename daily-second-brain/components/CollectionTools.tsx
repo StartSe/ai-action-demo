@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CaptureTool } from "@/lib/capture-types";
 import { request } from "./client";
+import { useFeedback } from "./Toast";
 import { Icon } from "./Icons";
 
 export function CollectionTools() {
@@ -11,6 +12,7 @@ export function CollectionTools() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [feedback, setFeedback] = useState("");
+  useFeedback(feedback, error);
   const feedbackRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (feedback || error)

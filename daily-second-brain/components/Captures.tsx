@@ -12,6 +12,8 @@ import {
 } from "@/lib/capture-types";
 import type { Note } from "@/lib/types";
 import { Icon } from "./Icons";
+import { CaptureDiagnostics } from "./CaptureDiagnostics";
+import { useFeedback } from "./Toast";
 import { request } from "./client";
 
 function date(value: string, timezone?: string) {
@@ -81,6 +83,7 @@ export function CaptureComposer({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  useFeedback(notice, error);
   const input = useRef<HTMLTextAreaElement>(null);
   return (
     <form
@@ -378,7 +381,9 @@ export function Captures({
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  useFeedback(notice, error);
   const [paging, setPaging] = useState(false);
+  const [tab, setTab] = useState("collect");
   async function changePage(query: Partial<CaptureQuery>) {
     setPaging(true);
     setError("");
@@ -422,6 +427,7 @@ export function Captures({
     scheduling = false,
     schedule?: CaptureSchedule,
   ) {
+    setTab("collect");
     setComposer((c) => ({ key: c.key + 1, initial, scheduling, schedule }));
     top.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -445,56 +451,109 @@ export function Captures({
           Inserir texto
         </button>
       </div>
-      <CaptureComposer
-        key={composer.key}
-        initial={composer.initial}
-        schedule={composer.schedule}
-        scheduling={composer.scheduling}
-        ready={ready}
-        configure={configure}
-        done={async (task) => {
-          await paginate(
-            task
-              ? { taskPage: 1, filter: "all" }
-              : composer.schedule
-                ? {}
-                : { schedulePage: 1 },
-          );
-          await refresh();
-        }}
-      />
-      {composer.schedule && (
-        <button
-          className="text-button"
-          onClick={() => setComposer((c) => ({ key: c.key + 1 }))}
-        >
-          Fechar edição do agendamento
-        </button>
-      )}
-      {recent.length > 0 && (
-        <div className="recent-instructions">
-          <span className="eyebrow">INSTRUÇÕES RECENTES</span>
-          <div>
-            {recent.map((text) => (
-              <button key={text} onClick={() => edit(text)} title={text}>
-                <Icon name="refresh" size={14} />
-                <span>{text}</span>
-              </button>
-            ))}
+      <div
+        className="capture-tabs"
+        role="tablist"
+        aria-label="Coletas e rotinas"
+      >
+        {[
+          { id: "collect", label: "Coletar" },
+          { id: "history", label: "Histórico" },
+          { id: "schedules", label: "Rotinas" },
+        ].map((item, index, all) => (
+          <button
+            key={item.id}
+            id={`tab-${item.id}`}
+            role="tab"
+            aria-selected={tab === item.id}
+            aria-controls={`panel-${item.id}`}
+            tabIndex={tab === item.id ? 0 : -1}
+            onClick={() => setTab(item.id)}
+            onKeyDown={(e) => {
+              const next =
+                e.key === "ArrowRight"
+                  ? (index + 1) % all.length
+                  : e.key === "ArrowLeft"
+                    ? (index + all.length - 1) % all.length
+                    : e.key === "Home"
+                      ? 0
+                      : e.key === "End"
+                        ? all.length - 1
+                        : -1;
+              if (next >= 0) {
+                e.preventDefault();
+                setTab(all[next].id);
+                document.getElementById(`tab-${all[next].id}`)?.focus();
+              }
+            }}
+          >
+            {item.label}
+            {item.id === "history" && state.activeCount > 0 && (
+              <span className="count">{state.activeCount} em andamento</span>
+            )}
+          </button>
+        ))}
+      </div>
+      <section
+        id="panel-collect"
+        role="tabpanel"
+        aria-labelledby="tab-collect"
+        hidden={tab !== "collect"}
+      >
+        <CaptureComposer
+          key={composer.key}
+          initial={composer.initial}
+          schedule={composer.schedule}
+          scheduling={composer.scheduling}
+          ready={ready}
+          configure={configure}
+          done={async (task) => {
+            await paginate(
+              task
+                ? { taskPage: 1, filter: "all" }
+                : composer.schedule
+                  ? {}
+                  : { schedulePage: 1 },
+            );
+            await refresh();
+            setTab(task ? "history" : "schedules");
+          }}
+        />
+        {composer.schedule && (
+          <button
+            className="text-button"
+            onClick={() => setComposer((c) => ({ key: c.key + 1 }))}
+          >
+            Fechar edição do agendamento
+          </button>
+        )}
+        {recent.length > 0 && (
+          <div className="recent-instructions">
+            <span className="eyebrow">INSTRUÇÕES RECENTES</span>
+            <div>
+              {recent.map((text) => (
+                <button key={text} onClick={() => edit(text)} title={text}>
+                  <Icon name="refresh" size={14} />
+                  <span>{text}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </section>
       {error && (
         <p className="error" role="alert">
           {error}
         </p>
       )}
-      {notice && (
-        <p className="notice" role="status">
-          {notice}
-        </p>
-      )}
-      <section className="capture-history" aria-busy={paging}>
+      <section
+        id="panel-history"
+        role="tabpanel"
+        aria-labelledby="tab-history"
+        hidden={tab !== "history"}
+        className="capture-history"
+        aria-busy={paging}
+      >
         <div className="section-heading">
           <div>
             <Icon name="clock" size={18} />
@@ -617,6 +676,7 @@ export function Captures({
                   </details>
                 </div>
               )}
+              <CaptureDiagnostics task={t} />
               <div className="capture-task-actions">
                 {["queued", "running"].includes(t.status) ? (
                   <button
@@ -671,13 +731,23 @@ export function Captures({
           change={(taskPage) => void changePage({ taskPage })}
         />
       </section>
-      <section className="capture-schedules" aria-busy={paging}>
+      <section
+        id="panel-schedules"
+        role="tabpanel"
+        aria-labelledby="tab-schedules"
+        hidden={tab !== "schedules"}
+        className="capture-schedules"
+        aria-busy={paging}
+      >
         <div className="section-heading">
           <div>
             <Icon name="refresh" size={18} />
-            <h2>Suas recorrências</h2>
+            <h2>Suas rotinas</h2>
             <span className="count">{state.pagination.schedules.total}</span>
           </div>
+          <button className="button" onClick={() => edit("", true)}>
+            Nova rotina
+          </button>
         </div>
         {!state.schedules.length && (
           <div className="inline-empty">

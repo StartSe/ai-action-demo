@@ -1,7 +1,7 @@
 // Deterministic provider responses for contract and browser tests. The app
 // never imports this module. No real Slack or Zapier account is used.
 export function captureProviders(fallback = globalThis.fetch) {
-  /** @type {{mode: string, dataCalls: number, toolCalls: Array<{name: string, arguments: Record<string, unknown>}>, aiRequests: Array<{messages: Array<{role: string, content: string}>, tools?: Array<{function: {name: string, description: string}}>}>, failOrganization: boolean, failRead: boolean, gate: Promise<void> | null, unknownRead: boolean, slackActions: boolean, extraReadTools: number, toolPageSize: number}} */
+  /** @type {{mode: string, dataCalls: number, toolCalls: Array<{name: string, arguments: Record<string, unknown>}>, aiRequests: Array<{messages: Array<{role: string, content: string}>, tools?: Array<{function: {name: string, description: string}}>}>, failOrganization: boolean, failRead: boolean, skipTools: boolean, gate: Promise<void> | null, unknownRead: boolean, slackActions: boolean, extraReadTools: number, toolPageSize: number}} */
   const state = {
     mode: "managed",
     dataCalls: 0,
@@ -9,6 +9,7 @@ export function captureProviders(fallback = globalThis.fetch) {
     aiRequests: [],
     failOrganization: false,
     failRead: false,
+    skipTools: false,
     gate: null,
     unknownRead: false,
     slackActions: false,
@@ -175,7 +176,10 @@ export function captureProviders(fallback = globalThis.fetch) {
             ? {
                 isError: true,
                 content: [
-                  { type: "text", text: "PRIVATE_PROVIDER_ERROR_TOKEN" },
+                  {
+                    type: "text",
+                    text: "Slack missing_scope: channels:history. token=PRIVATE_PROVIDER_ERROR_TOKEN",
+                  },
                 ],
               }
             : {
@@ -219,6 +223,13 @@ export function captureProviders(fallback = globalThis.fetch) {
         );
       }
       if (req.tools?.length) {
+        if (state.skipTools)
+          return answer(
+            JSON.stringify({
+              complete: false,
+              summary: "O executor de ferramentas está desativado.",
+            }),
+          );
         const history = req.messages.filter((m) => m.role === "tool");
         if (history.some((m) => String(m.content).includes('"error"')))
           return answer(

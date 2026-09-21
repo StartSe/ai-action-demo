@@ -1,6 +1,7 @@
 import { chatGPT, type AgentTool } from "./chatgpt";
 import { getConfig } from "./store";
 import { BrainError } from "./api";
+import { diagnosticText, type OnDiagnostic } from "./diagnostics";
 export function provider() {
   return getConfig("BRAIN_PROVIDER") === "openrouter"
     ? "openrouter"
@@ -16,6 +17,7 @@ export async function generate(
   prompt: string,
   tools: AgentTool[] = [],
   signal?: AbortSignal,
+  options: { onDiagnostic?: OnDiagnostic } = {},
 ): Promise<string> {
   const timeout = AbortSignal.any([
     AbortSignal.timeout(180000),
@@ -28,6 +30,7 @@ export async function generate(
       tools,
       signal: timeout,
       model: getConfig("CHATGPT_MODEL") || undefined,
+      onDiagnostic: options.onDiagnostic,
     });
   const key = getConfig("OPENROUTER_API_KEY");
   if (!key)
@@ -39,6 +42,10 @@ export async function generate(
     { role: "user", content: prompt },
   ];
   for (let round = 0; round < 8; round++) {
+    options.onDiagnostic?.({
+      stage: "Modelo",
+      message: `OpenRouter · ${getConfig("OPENROUTER_MODEL") || "openrouter/auto"} · rodada ${round + 1} · ${tools.length} ferramenta(s) fornecida(s).`,
+    });
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       signal: timeout,
@@ -65,16 +72,27 @@ export async function generate(
           : {}),
       }),
     });
-    if (!res.ok)
+    if (!res.ok) {
+      const detail = await res.json().catch(() => null);
       throw new BrainError(
         res.status === 402
           ? "O OpenRouter está sem créditos."
           : res.status === 401
             ? "Confira a chave do OpenRouter em Conexões."
-            : "O OpenRouter não respondeu. Tente novamente.",
+            : `OpenRouter HTTP ${res.status}: ${diagnosticText(detail?.error?.message || res.statusText || "Falha na chamada ao modelo")}`,
         502,
       );
+    }
     const data = await res.json();
+    if (data.error)
+      throw new BrainError(
+        `OpenRouter: ${diagnosticText(data.error.message || "Falha do provedor")}`,
+        502,
+      );
+    options.onDiagnostic?.({
+      stage: "Modelo",
+      message: `Resposta recebida${data.model ? ` de ${data.model}` : ""}. ${data?.choices?.[0]?.message?.tool_calls?.length || 0} chamada(s) de ferramenta nesta rodada.`,
+    });
     const m = data?.choices?.[0]?.message;
     if (!m) throw new BrainError("A IA devolveu uma resposta vazia.", 502);
     if (!m.tool_calls?.length) {
@@ -88,9 +106,13 @@ export async function generate(
       try {
         if (!tool) throw Error("Ferramenta indisponível");
         content = await tool.call(JSON.parse(call.function.arguments || "{}"));
-      } catch {
-        content =
-          "Não foi possível preparar essa ação. Verifique os argumentos.";
+      } catch (e) {
+        content = `Não foi possível preparar a ferramenta: ${diagnosticText(e)}`;
+        options.onDiagnostic?.({
+          stage: "Ferramenta",
+          level: "error",
+          message: content,
+        });
       }
       messages.push({ role: "tool", tool_call_id: call.id, content });
     }

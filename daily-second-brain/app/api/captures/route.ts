@@ -2,6 +2,7 @@ import { api, body, string, BrainError } from "@/lib/api";
 import {
   captureState,
   captureTask,
+  captureEvents,
   captureSchedule,
   enqueueCapture,
   cancelCapture,
@@ -22,7 +23,7 @@ export async function GET(req: Request) {
     const q = new URL(req.url).searchParams;
     const id = q.get("id");
     return id
-      ? captureTask(id)
+      ? { ...captureTask(id), events: captureEvents(id) }
       : captureState({
           taskPage: Number(q.get("taskPage") ?? 1),
           schedulePage: Number(q.get("schedulePage") ?? 1),

@@ -4,6 +4,8 @@ import { BrainError, string } from "./api";
 import { connected } from "./motor";
 import { captureAccess, type CaptureAccess } from "./capture-permissions";
 import { recurrence, nextOccurrence } from "./recurrence";
+import { diagnosticText, type Diagnostic } from "./diagnostics";
+import type { CaptureEvent } from "./capture-types";
 import type {
   CaptureTask,
   CaptureSchedule,
@@ -41,6 +43,12 @@ export function captureDb() {
         access TEXT NOT NULL, owner TEXT, leaseUntil TEXT
       );
       CREATE INDEX IF NOT EXISTS capture_queue ON capture_tasks(status,created);
+      CREATE TABLE IF NOT EXISTS capture_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, taskId TEXT NOT NULL,
+        created TEXT NOT NULL, attempt INTEGER NOT NULL, stage TEXT NOT NULL,
+        level TEXT NOT NULL, message TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS capture_events_task ON capture_events(taskId,id);
       CREATE TABLE IF NOT EXISTS capture_steps (
         taskId TEXT NOT NULL, key TEXT NOT NULL, name TEXT NOT NULL, args TEXT NOT NULL,
         content TEXT NOT NULL, sourceId TEXT, pageId TEXT, created TEXT NOT NULL,
@@ -61,6 +69,34 @@ export function storedTask(id: string): StoredTask {
     .get(id);
   if (!task) throw new BrainError("Coleta não encontrada.", 404);
   return task as unknown as StoredTask;
+}
+export function captureEvent(id: string, event: Diagnostic) {
+  const task = storedTask(id);
+  captureDb()
+    .prepare(
+      "INSERT INTO capture_events(taskId,created,attempt,stage,level,message) VALUES(?,?,?,?,?,?)",
+    )
+    .run(
+      id,
+      new Date().toISOString(),
+      task.attempts,
+      event.stage,
+      event.level || "info",
+      diagnosticText(event.message),
+    );
+  captureDb()
+    .prepare(
+      "DELETE FROM capture_events WHERE taskId=? AND id NOT IN (SELECT id FROM capture_events WHERE taskId=? ORDER BY id DESC LIMIT 200)",
+    )
+    .run(id, id);
+}
+export function captureEvents(id: string): CaptureEvent[] {
+  storedTask(id);
+  return captureDb()
+    .prepare(
+      "SELECT id,created,attempt,stage,level,message FROM capture_events WHERE taskId=? ORDER BY id",
+    )
+    .all(id) as CaptureEvent[];
 }
 export function taskSteps(id: string): CaptureStep[] {
   return captureDb()
@@ -214,6 +250,7 @@ export function enqueueCapture(
     options.parentId || null,
     JSON.stringify(access),
   );
+  captureEvent(id, { stage: "Fila", message: "Coleta adicionada à fila." });
   return captureTask(id);
 }
 export function cancelCapture(id: string) {
@@ -225,6 +262,11 @@ export function cancelCapture(id: string) {
     )
     .run(now, now, id);
   if (!result.changes) throw new BrainError("Essa coleta já terminou.", 409);
+  captureEvent(id, {
+    stage: "Cancelamento",
+    message:
+      "Coleta cancelada pelo usuário. Resultados salvos foram preservados.",
+  });
   return captureTask(id);
 }
 export function retryCapture(id: string) {
@@ -236,6 +278,10 @@ export function retryCapture(id: string) {
     .run(new Date().toISOString(), id);
   if (!result.changes)
     throw new BrainError("Só é possível retomar uma coleta que falhou.", 409);
+  captureEvent(id, {
+    stage: "Retomada",
+    message: "Coleta recolocada na fila; leituras salvas serão reaproveitadas.",
+  });
   return captureTask(id);
 }
 export function saveSchedule(

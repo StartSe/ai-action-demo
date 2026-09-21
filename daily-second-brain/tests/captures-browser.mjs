@@ -150,7 +150,10 @@ try {
   await page
     .getByRole("button", { name: "Salvar ferramentas de coleta" })
     .click();
-  await page.getByText("Ferramentas de coleta salvas.").waitFor();
+  await page
+    .locator(".collection-tools")
+    .getByText("Ferramentas de coleta salvas.")
+    .waitFor();
   await page.getByRole("button", { name: "Atualizar ferramentas" }).click();
   await page
     .getByText("Conexão verificada. Escolha as leituras que Daily pode usar.")
@@ -201,6 +204,10 @@ try {
   assert.equal(collected.status, "done", collected.error);
   assert.equal(collected.sources.length, 1);
   assert.equal(collected.pages.length, 1);
+  assert.ok(
+    collected.events.some((e) => e.message.includes("Enviando tools/call")),
+  );
+  assert.ok(collected.events.some((e) => e.stage === "Conclusão"));
   const brain = await (await context.request.get(base + "/api/brain")).json();
   assert.ok(brain.rules.includes("Identificar hipóteses"));
   assert.ok(
@@ -215,7 +222,14 @@ try {
   page = await context.newPage();
   track(page);
   await page.goto(base + "/?view=captures");
+  await page.getByRole("tab", { name: "Histórico" }).click();
   await page.getByText("Concluída", { exact: true }).waitFor();
+  await page.getByText("Ver diagnóstico da coleta", { exact: true }).click();
+  await page.getByText(/Enviando tools\/call/).waitFor();
+  await page.screenshot({
+    path: join(out, "capture-diagnostics.png"),
+    fullPage: true,
+  });
   await page
     .getByRole("button", { name: "Decisões de tech-academy", exact: true })
     .click();
@@ -250,10 +264,15 @@ try {
     .click();
   await page.getByLabel("Repetir", { exact: true }).selectOption("weekdays");
   await page.getByRole("button", { name: "Salvar agendamento" }).click();
-  await page.getByText(/Agendamento salvo/).waitFor();
+  await page
+    .locator(".toast")
+    .filter({ hasText: "Agendamento salvo" })
+    .waitFor();
+  await page.getByRole("tab", { name: "Coletar", exact: true }).click();
   await page
     .getByRole("button", { name: "Fechar edição do agendamento" })
     .click();
+  await page.getByRole("tab", { name: "Rotinas", exact: true }).click();
   await page.screenshot({
     path: join(out, "captures-desktop.png"),
     fullPage: true,
@@ -264,6 +283,17 @@ try {
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   );
+  const notifications = await page
+    .locator(".toast")
+    .evaluateAll((items) =>
+      items.map((item) => ({
+        x: item.getBoundingClientRect().x,
+        right: item.getBoundingClientRect().right,
+        width: item.getBoundingClientRect().width,
+      })),
+    );
+  for (const item of notifications)
+    assert.ok(item.x >= 0 && item.right <= 390, JSON.stringify(item));
   await page.screenshot({
     path: join(out, "captures-mobile.png"),
     fullPage: true,

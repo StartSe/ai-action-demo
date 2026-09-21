@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0 — 2026-09-21
+
+- Corrige o executor do ChatGPT para modelos que chamam ferramentas por code mode; teste com o App Server real reproduz o bloqueio e confirma a execução após a correção.
+- Separa Coletas e rotinas nas abas Coletar, Histórico e Rotinas, com navegação por teclado.
+- Registra horários, modelo, autorização, chamadas MCP, respostas e falhas em diagnóstico persistente por coleta, com cópia e ocultação de credenciais.
+- Remove o bloco raw → wiki → outputs do menu e permite rolar a barra lateral em telas baixas.
+- Adiciona toasts de sucesso e erro para coletas, rotinas e ferramentas, incluindo conclusão e falha de coletas acompanhadas.
+
 ## 1.2.0 — 2026-09-21
 
 - Paginação independente de coletas e rotinas, com 10 registros por página, totais e filtros em todo o histórico.

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BrainState, Note, Settings } from "@/lib/types";
+import { useFeedback, toast } from "./Toast";
 import { Icon } from "./Icons";
 import { Graph } from "./Graph";
 import { Markdown } from "./Markdown";
@@ -95,6 +96,7 @@ export function Brain() {
     filter: "all",
   });
   const captureRequest = useRef(0);
+  const taskStatuses = useRef(new Map<string, string>());
   const [setup, setSetup] = useState<SetupState | null>(null);
   const captureVersion = useRef("");
   const [settings, setSettings] = useState<Settings>({
@@ -110,6 +112,7 @@ export function Brain() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  useFeedback(notice, error);
   const [capture, setCapture] = useState(false);
   const [selected, setSelected] = useState<Note | null>(null);
   const [editing, setEditing] = useState(false);
@@ -145,6 +148,23 @@ export function Brain() {
       schedulePage: s.pagination.schedules.page,
       filter: s.filter,
     };
+    for (const task of s.tasks) {
+      const previous = taskStatuses.current.get(task.id);
+      if (previous && ["queued", "running"].includes(previous)) {
+        if (task.status === "done")
+          toast("Coleta concluída. Suas fontes já estão organizadas na wiki.");
+        if (task.status === "failed")
+          toast(
+            "A coleta precisa de atenção. Abra Histórico → Ver diagnóstico da coleta para consultar o motivo.",
+            true,
+          );
+      }
+      taskStatuses.current.set(task.id, task.status);
+    }
+    if (taskStatuses.current.size > 1000)
+      taskStatuses.current = new Map(
+        s.tasks.map((task) => [task.id, task.status]),
+      );
     setCaptures(s);
     const version = JSON.stringify([
       s.activeCount,
@@ -524,17 +544,6 @@ export function Brain() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="memory-flow">
-            <span>INFORMAÇÃO VIRA AÇÃO</span>
-            <div>
-              <i />
-              raw <Icon name="arrow" size={12} />
-              <i />
-              wiki <Icon name="arrow" size={12} />
-              <i />
-              outputs
-            </div>
-          </div>
           <nav>
             <button
               className={view === "setup" ? "active" : ""}
@@ -639,12 +648,6 @@ export function Brain() {
             >
               <Icon name="close" size={16} />
             </button>
-          </div>
-        )}
-        {notice && (
-          <div className="toast" role="status">
-            <Icon name="check" size={17} />
-            {notice}
           </div>
         )}
         {!state || initializing ? (

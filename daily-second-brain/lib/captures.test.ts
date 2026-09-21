@@ -12,6 +12,8 @@ const { setConfig } = await import("./store");
 const { db, notes, note, revisions } = await import("./brain");
 const {
   captureDb,
+  captureEvents,
+  captureEvent,
   collectionAccess,
   enqueueCapture,
   captureTask,
@@ -294,6 +296,11 @@ test("falha da ferramenta não é sucesso nem vaza resposta privada; repetir cri
   const failed = await runNext();
   assert.equal(failed.status, "failed");
   assert.equal(failed.sources.length, 0);
+  assert.match(failed.error, /missing_scope: channels:history/);
+  assert.match(
+    JSON.stringify(captureEvents(failed.id)),
+    /Enviando tools\/call/,
+  );
   assert.ok(!failed.error.includes("PRIVATE_PROVIDER_ERROR_TOKEN"));
   fixture.state.failRead = false;
   const res = await POST(
@@ -542,4 +549,42 @@ test("autoriza todas as consultas de um catálogo paginado com mais de 50 ferram
   assert.equal(fixture.state.toolCalls[0].name, "archive_read_60");
   await saveCaptureTools([]);
   assert.equal((await captureToolCatalog()).filter((t) => t.allowed).length, 0);
+});
+
+test("diagnóstico distingue modelo sem chamada de erro do Zapier e oculta credenciais", async () => {
+  fixture.state.skipTools = true;
+  const queued = await newTask();
+  const task = await runNext();
+  assert.equal(task.status, "failed");
+  assert.equal(fixture.state.dataCalls, 0);
+  assert.match(task.error, /Nenhuma chamada de leitura foi enviada ao Zapier/);
+  assert.ok(!task.error.includes("executor de ferramentas está desativado"));
+  const events = captureEvents(queued.id);
+  assert.ok(events.some((e) => e.stage === "Permissões"));
+  assert.ok(
+    events.some(
+      (e) => e.stage === "Modelo" && e.message.includes("openrouter/auto"),
+    ),
+  );
+  assert.ok(!events.some((e) => e.message.includes("Enviando tools/call")));
+  captureEvent(task.id, {
+    stage: "Teste",
+    message:
+      "Bearer ABC123 https://mcp.zapier.com/private?secret=xyz test-key token=PRIVATE_PROVIDER_ERROR_TOKEN",
+  });
+  const text = JSON.stringify(captureEvents(task.id));
+  for (const secret of [
+    "ABC123",
+    "test-key",
+    "xyz",
+    "PRIVATE_PROVIDER_ERROR_TOKEN",
+  ])
+    assert.ok(!text.includes(secret), secret);
+  for (let i = 0; i < 205; i++)
+    captureEvent(task.id, { stage: "Teste", message: `Etapa ${i}` });
+  assert.equal(captureEvents(task.id).length, 200);
+  const detail = await (
+    await GET(new Request(`http://localhost/api/captures?id=${task.id}`))
+  ).json();
+  assert.equal(detail.events.at(-1).message, "Etapa 204");
 });

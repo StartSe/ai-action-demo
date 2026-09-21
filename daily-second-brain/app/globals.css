@@ -261,6 +261,9 @@ svg {
   background: #15161d;
   border-right: 1px solid var(--line);
   padding: 27px 17px 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
   display: flex;
   flex-direction: column;
   z-index: 30;
@@ -383,42 +386,10 @@ nav button .little-dot {
 }
 .sidebar-bottom {
   margin-top: auto;
-  padding-top: 35px;
+  padding-top: 20px;
 }
-.memory-flow {
-  border: 1px solid #2c2b36;
-  border-radius: 9px;
-  padding: 13px 11px;
-  margin: 12px 3px 20px;
-  background: radial-gradient(ellipse at top, #76659a10, transparent);
-}
-.memory-flow > span {
-  color: #77717f;
-  letter-spacing: 1.2px;
-  font-size: 7px;
-}
-.memory-flow > div {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 9px;
-  color: #b1aabf;
-  margin-top: 11px;
-}
-.memory-flow i {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #d2aa74;
-}
-.memory-flow i:nth-of-type(2) {
-  background: #a592e6;
-}
-.memory-flow i:nth-of-type(3) {
-  background: #84c6b0;
-}
-.memory-flow svg {
-  color: #615a6e;
+.sidebar > * {
+  flex-shrink: 0;
 }
 .profile {
   margin: 18px -17px 0;
@@ -3707,4 +3678,140 @@ nav button .little-dot {
   .collection-tools .section-heading {
     flex-wrap: wrap;
   }
+}
+
+/* Coletas: uma tarefa por aba, com diagnóstico sob demanda. */
+[hidden] {
+  display: none !important;
+}
+.capture-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 5px;
+  background: #181922;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+.capture-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  color: #aaa5b6;
+  font-size: 13px;
+}
+.capture-tabs button[aria-selected="true"] {
+  background: #a797ed20;
+  color: #d1c5ff;
+  box-shadow: inset 0 0 0 1px #a797ed44;
+}
+.capture-tabs button:focus-visible {
+  outline: 2px solid #b7a6fa;
+  outline-offset: 2px;
+}
+.capture-diagnostics {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  font-size: 12px;
+}
+.capture-diagnostics summary {
+  cursor: pointer;
+  color: #b9ace2;
+  padding: 4px 0;
+}
+.diagnostic-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+.diagnostic-heading small {
+  overflow-wrap: anywhere;
+  color: #aaa5b6;
+}
+.diagnostic-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 360px;
+  overflow-y: auto;
+  background: #101118;
+  border-radius: 8px;
+}
+.diagnostic-events li {
+  display: flex;
+  gap: 16px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.diagnostic-events time {
+  color: #aaa5b6;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.diagnostic-events strong {
+  color: #c9bfdf;
+}
+.diagnostic-events p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.diagnostic-events .diagnostic-error p {
+  color: #eea9b1;
+}
+.toast-region {
+  position: fixed;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  right: 24px;
+  width: min(480px, calc(100vw - 32px));
+  display: grid;
+  gap: 10px;
+  z-index: 150;
+  pointer-events: none;
+}
+.toast-region .toast {
+  width: 100%;
+  min-width: 0;
+  position: static;
+  transform: none;
+  max-width: 100%;
+  pointer-events: auto;
+  padding: 14px 16px;
+}
+.toast-region .toast > span {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.toast-error {
+  border-color: #b2576388;
+  background: #33212a;
+  color: #f4bbc2;
+}
+@media (max-width: 700px) {
+  .toast-region {
+    right: 16px;
+    bottom: 16px;
+  }
+  .capture-tabs button {
+    padding: 12px 6px;
+    flex-wrap: wrap;
+  }
+  .capture-tabs .count {
+    font-size: 9px;
+  }
+}
+
+.capture-tabs .count {
+  width: auto;
+  height: auto;
+  padding: 3px 7px;
+  white-space: nowrap;
 }
