@@ -135,7 +135,7 @@
         "Lint, tsc e verificar-jargao passam; verificar: 3 curls em /s/<slug> (um com User-Agent de celular) → 3 visitas, 1 no celular; Aplicar gera versão"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "US-008 da PRD."
     },
     {

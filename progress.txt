@@ -98,3 +98,13 @@ Trabalho feito num worktree separado (../ai-action-demo-clone-site), criado a pa
   - **Toda mudança de um pedido do agente vira UMA versão, salva no fim** (`salvarSeAlterado`); a ferramenta `publicar` chama a mesma função antes, para publicar o que acabou de mudar.
   - **Regex de demonstração tem de casar a conjugação real** ("publique", "publica", "publicar" → `\bpubli`); testar com a frase do atalho da tela, não com o infinitivo.
 ---
+
+## 20/09/2026 - US-008 - Métricas de visitas e sugestões do agente
+- Novo `lib/metricas.ts`: tabela `visitas` (dia local, hora, origem = host do Referer sem www ou "direto", dispositivo por User-Agent, caminho); `registrarVisita(projetoId, req)` ignora robôs (`bot|crawl|spider|preview|HeadlessChrome|curl/|…`) e `?previa=1`; `resumo(projetoId, 7|30)` com série por dia preenchida, celular × computador, top 5 origens e variação contra o período anterior; `resumoEmTexto` (uma frase) para o agente e o resumo semanal. `/s/[id]` registra a visita só ao servir HTML de um projeto; `apagar` do projeto leva as visitas.
+- Novo `lib/sugestoes.ts`: `sugerir(projetoId, forcar)` → 3 `{ titulo, motivo, instrucao }` via `gerarJSON` do motor a partir de `resumirHtml` (títulos, botões, 200 caracteres por seção), marca/briefing e métricas de 30 dias; três sugestões fixas em demonstração; cache de 24 h por versão em `config` (`SUGESTOES_<id>_<n>`). Rotas `GET /api/sites/[id]/metricas?dias=` e `GET /api/sites/[id]/sugestoes[?forcar=1]`.
+- `components/PainelMetricas.tsx`: três destaques (Visitas, No celular, Contra os N dias antes), barras por dia em CSS (`role="img"` com a série no `aria-label`), "De onde vieram", alternador 7/30, estado vazio, bloco "O que o agente sugere" (carrega sob demanda, Aplicar → `pedidoExterno` do `ChatAgente`, Pedir novas sugestões). O agente passou a ler `resumoEmTexto` de verdade (`ver_metricas` e o system).
+- Verificado no standalone: 6 aberturas de `/s/cafe-aroma` (2 computador, 1 iPhone com Referer do Instagram, 1 Googlebot, 1 `?previa=1`, 1 curl sem UA) → 3 visitas, 1 no celular, origens direto/instagram.com/l.instagram.com; sugestões de demonstração para a versão 9; "Como estão as visitas do site?" no chat devolveu a frase com os números; captura 1400 px do painel com barras e as três sugestões.
+- **Learnings for future iterations:**
+  - **Contar visita no próprio `route.ts` que serve o HTML é gratuito e sem dependência**: o `Referer` e o `User-Agent` já chegam na requisição; o filtro de robôs precisa incluir `curl/` (senão os próprios testes por curl viram visitas).
+  - **Uma sugestão vira ação com um estado `{ texto, chave }` no pai**: o chat dispara uma vez por `chave` (`useRef` com a última tratada), sem prop drilling de função de envio.
+---

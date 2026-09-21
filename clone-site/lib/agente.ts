@@ -7,6 +7,7 @@ import crypto from "node:crypto";
 import { listar as listarAssets } from "./assets";
 import { edicaoDemo, esperar } from "./demo";
 import { ErroDePedido, novaVersao, paginaAtual } from "./gerador";
+import { resumoEmTexto } from "./metricas";
 import { executarComFerramentas, iaDisponivel, type FerramentaAgente } from "./motor";
 import { obter as obterProjeto, paginaDoProjeto, ProjetoNaoEncontrado, publicar as publicarProjeto } from "./projetos";
 import { abrirBanco } from "./store";
@@ -143,11 +144,8 @@ export function inserirImagem(html: string, url: string, alt: string, onde: stri
 
 export type RespostaAgente = { resposta: string; versoes: number[]; publicou: boolean; passos: string[]; pagina: Pagina; projeto: Projeto; mensagens: Mensagem[] };
 
-/** O resumo de métricas que o agente conhece; trocado pelo real na US-008 (lib/metricas.ts). */
-let resumoMetricas: (projetoId: string, dias: number) => Promise<string> | string = () => "Ainda sem métricas: o site acabou de ir ao ar ou ninguém abriu o link.";
-export function registrarMetricas(fn: typeof resumoMetricas): void {
-  resumoMetricas = fn;
-}
+/** O resumo de métricas que o agente conhece (lib/metricas.ts), em uma frase. */
+const resumoMetricas = (projetoId: string, dias: number): string => resumoEmTexto(projetoId, dias);
 
 function montarSystem(projeto: Projeto, pagina: Pagina, metricas: string): string {
   const atual = pagina.versoes[pagina.versoes.length - 1];
@@ -296,7 +294,7 @@ export async function conversar(projetoId: string, textoBruto: unknown): Promise
     const querMetrica = /m[ée]tric|visita|acess|quantas pessoas|como est[aá]/i.test(texto);
     if (querMetrica && !querPublicar) {
       passos.push("ver_metricas");
-      resposta = `Sem a inteligência artificial conectada eu só consigo ler os números: ${await resumoMetricas(projeto.id, 7)}`;
+      resposta = `Sem a inteligência artificial conectada eu só consigo ler os números: ${resumoMetricas(projeto.id, 7)}`;
     } else {
       passos.push("editar_trecho");
       html = edicaoDemo(html, salva.pagina.versoes.length + 1);
@@ -310,7 +308,7 @@ export async function conversar(projetoId: string, textoBruto: unknown): Promise
       resposta = `Apliquei uma mudança de exemplo na versão ${versoes[0]} (sem a inteligência artificial conectada, a alteração é ilustrativa e não segue o seu pedido).${publicou ? " Publiquei essa versão no link do site." : " Ela está em rascunho: publique quando quiser."}`;
     }
   } else {
-    const metricas = await resumoMetricas(projeto.id, 7);
+    const metricas = resumoMetricas(projeto.id, 7);
     const system = montarSystem(projeto, salva.pagina, metricas);
     const mensagens = [...historicoAnterior.map((m) => ({ papel: m.papel, texto: m.texto })), { papel: "pessoa" as const, texto }];
     const textoFinal = await executarComFerramentas({ system, mensagens, ferramentas, aoChamar: (nome) => passos.push(nome) });

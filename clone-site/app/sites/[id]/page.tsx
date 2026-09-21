@@ -10,6 +10,7 @@ import { Aviso, ErrorBox, Loading, Origem, lerErro } from "@/components/ui";
 import { ChatAgente } from "@/components/ChatAgente";
 import { ChipEstado, INTERVALO_ACOMPANHAMENTO_MS, TempoGerando } from "@/components/MeusSites";
 import { PainelImagens } from "@/components/PainelImagens";
+import { PainelMetricas } from "@/components/PainelMetricas";
 import { PreviaPagina } from "@/components/PreviaPagina";
 import { rotuloFormato } from "@/components/ResultadoPagina";
 import { TopbarSite } from "@/components/TopbarSite";
@@ -29,6 +30,8 @@ export default function Page() {
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [selecionada, setSelecionada] = useState<number | null>(null);
+  // Instrução vinda de "Aplicar" numa sugestão: vai para o chat do agente.
+  const [pedidoExterno, setPedidoExterno] = useState<{ texto: string; chave: number } | null>(null);
   const gerando = detalhe?.projeto.estado === "gerando";
 
   useEffect(() => {
@@ -168,12 +171,14 @@ export default function Page() {
                   <ChatAgente
                     projetoId={p.id}
                     demo={detalhe.meta.demo}
+                    pedidoExterno={pedidoExterno}
                     aoResponder={({ pagina: nova, projeto: novo }) => aoAtualizar({ pagina: nova, projeto: novo })}
                     aoSelecionarVersao={setSelecionada}
                   />
                   <LinkPublico projeto={p} aoAtualizar={aoAtualizar} />
                   <PainelVersoes projeto={p} pagina={pagina} selecionada={versaoSelecionada.n} aoSelecionar={setSelecionada} aoAtualizar={aoAtualizar} />
                   <PainelImagens projetoId={p.id} />
+                  <PainelMetricas projetoId={p.id} publicado={p.estado === "pronto"} versaoAtual={ultima.n} aoAplicar={(instrucao) => setPedidoExterno({ texto: instrucao, chave: Date.now() })} />
                 </aside>
               </div>
             )}

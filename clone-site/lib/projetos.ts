@@ -9,6 +9,7 @@
 import crypto from "node:crypto";
 import { ErroIA, type Meta } from "./ai";
 import { apagarDoProjeto as apagarAssetsDoProjeto, listar as listarAssets, montarBlocoAssets } from "./assets";
+import { apagarDoProjeto as apagarVisitasDoProjeto } from "./metricas";
 import { ACAO_ESCOLHER_MODELO, ErroDePedido, gerarDoBriefing, gerarPagina, normalizarMarca, normalizarStack, validarImagem, type OpcoesAssets } from "./gerador";
 import { apagar as apagarResultado, obter as obterResultado } from "./historico";
 import { abrirBanco } from "./store";
@@ -264,6 +265,7 @@ export function apagar(id: string): void {
   if (!p) return;
   if (p.paginaId) apagarResultado(p.paginaId);
   apagarAssetsDoProjeto(id);
+  apagarVisitasDoProjeto(id);
   db().prepare("DELETE FROM projetos WHERE id = ?").run(id);
 }
 
