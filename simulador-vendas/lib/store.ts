@@ -75,14 +75,21 @@ function decifrar(valorCifrado: string): string | undefined {
 function abrir(): DatabaseSync {
   if (db) return db;
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  db = new DatabaseSync(path.join(DATA_DIR, "app.sqlite"));
-  db.exec("PRAGMA busy_timeout = 5000");
-  db.exec(`CREATE TABLE IF NOT EXISTS config (
+  const conexao = new DatabaseSync(path.join(DATA_DIR, "app.sqlite"));
+  try {
+    conexao.exec("PRAGMA busy_timeout = 5000");
+    conexao.exec("PRAGMA journal_mode = WAL");
+    conexao.exec(`CREATE TABLE IF NOT EXISTS config (
     chave TEXT PRIMARY KEY,
     valor TEXT NOT NULL,
     atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
-  )`);
-  return db;
+    )`);
+    db = conexao;
+    return db;
+  } catch (err) {
+    conexao.close();
+    throw err;
+  }
 }
 
 /** Mesmo arquivo app.sqlite para todo o app: config, conta e sessões (lib/conta.ts). */

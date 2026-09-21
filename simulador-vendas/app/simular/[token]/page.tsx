@@ -1,4 +1,4 @@
-import { livekitConfigurado } from "@/lib/livekit";
+import { livekitDisponivel } from "@/lib/livekit";
 import { prepararRoteiro } from "@/lib/roteiro";
 // Sala de treino pública: o link que o gestor manda para o time inteiro (/simular/<código>).
 //
@@ -185,7 +185,7 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
     const personagem = prepararRoteiro(aberta, simulacao).cliente;
     const objetivo = prepararRoteiro(aberta, simulacao).objetivo;
     const nivel2: PropsSalaVoz = {
-      livekit: livekitConfigurado() && simulacao.permiteVoz,
+      livekit: livekitDisponivel() && simulacao.permiteVoz,
       codigo: token,
       marca: MARCA,
       nome: NOME_APP,

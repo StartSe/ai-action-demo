@@ -103,7 +103,7 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
   const chamada = useConversaLivekit(codigo, {
     estado: guardarEstado,
     fala: fala => setFalas(atuais => [...atuais, fala]),
-    erro: mensagem => { setErro(mensagem); ativaRef.current = false; setAtiva(false); },
+    erro: mensagem => { setErro(mensagem); setFalhaLivekit(true); ativaRef.current = false; setAtiva(false); },
   });
   function guardarEstado(novo: EstadoConversa) { estadoRef.current = novo; if (montadaRef.current) setEstado(novo); }
   function pararAudio() {

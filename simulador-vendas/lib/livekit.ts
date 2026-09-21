@@ -2,10 +2,14 @@ import { JobStatus, TrackSource } from "@livekit/protocol";
 import { AccessToken, AgentDispatchClient, RoomServiceClient } from "livekit-server-sdk";
 import { getConfig } from "./store";
 import type { Sessao } from "./sessoes";
+import { recursosVoz } from "./recursos-voz.mjs";
 
 export const NOME_AGENTE = "simulador-vendas";
 export function livekitConfigurado(): boolean {
   return ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "ELEVENLABS_API_KEY", "OPENROUTER_API_KEY"].every(k => Boolean(getConfig(k)));
+}
+export function livekitDisponivel(): boolean {
+  return recursosVoz().permiteAgente && livekitConfigurado();
 }
 export function nomeSala(sessaoId: string) { return `treino-${sessaoId}`; }
 function credenciais() {

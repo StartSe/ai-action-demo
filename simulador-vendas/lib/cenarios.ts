@@ -2,27 +2,24 @@
 // painel antes de colar a conversa. Usa o mesmo arquivo SQLite de lib/store.ts, em uma tabela própria.
 // Os 3 cenários prontos são semeados de forma idempotente (ids fixos + INSERT OR IGNORE) na primeira
 // leitura do app: rodar a semeadura várias vezes nunca duplica os cenários.
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
+import { abrirBanco } from "./store";
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
 import type { Cenario } from "./types";
 
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 let db: DatabaseSync | null = null;
 let semeado = false;
 
 function abrir(): DatabaseSync {
   if (db) return db;
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  db = new DatabaseSync(path.join(DATA_DIR, "app.sqlite"));
-  db.exec(`CREATE TABLE IF NOT EXISTS cenarios (
+  const d = abrirBanco();
+  d.exec(`CREATE TABLE IF NOT EXISTS cenarios (
     id TEXT PRIMARY KEY,
     titulo TEXT NOT NULL,
     cenario TEXT NOT NULL,
     criadoEm TEXT NOT NULL
   )`);
-  return db;
+  return db = d;
 }
 
 type Linha = { id: string; titulo: string; cenario: string; criadoEm: string };

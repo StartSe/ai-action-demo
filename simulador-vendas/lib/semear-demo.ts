@@ -459,12 +459,10 @@ export function semearDemonstracao(): void {
     if (temSessoesDeExemplo()) return;
     if (!bancoVirgem()) return;
 
-    // A estrutura vai numa transação só (e a avaliação fica fora): `salvarResultado` escreve pela
-    // conexão própria de lib/historico.ts, para o mesmo arquivo, e encontraria o banco ocupado se uma
-    // transação nossa estivesse aberta.
+    // A estrutura vai numa transação curta; a avaliação de cada sessão fica fora.
     const d = banco();
     try {
-      d.exec("BEGIN");
+      d.exec("BEGIN IMMEDIATE");
       semearEstrutura();
       d.exec("COMMIT");
     } catch (err) {

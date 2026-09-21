@@ -211,7 +211,9 @@ npm run agent:start
 
 Os dois processos precisam usar o mesmo diretório de trabalho e `DATA_DIR` (SQLite e arquivo `chave-mestra`). Se usar `CHAVE_MESTRA` por ambiente, defina a mesma nos dois processos. Variáveis de ambiente precisam ser fornecidas aos dois processos; o comando `tsx` não carrega `.env.local` automaticamente. Reinicie o serviço de voz após alterar credenciais do LiveKit. O servidor deve permitir conexões de saída aos três provedores, e o navegador precisa de HTTPS (ou localhost) para o microfone.
 
-Com Docker, execute `docker compose up --build -d` e configure as conexões no app. A imagem Debian inicia o site e o serviço de voz no mesmo contêiner, compartilhando `/app/data`; isso também vale para o blueprint do Render. O serviço de voz aguarda as credenciais e é reiniciado se parar. O serviço mantém apenas um processo de chamada pré-aquecido, em vez do padrão de até quatro. Se o LiveKit não responder, a tela oferece a voz do navegador. Uma chamada real depende de credenciais válidas, acesso ao microfone e recursos disponíveis na instância.
+Com Docker, execute `docker compose up --build -d` e configure as conexões no app. A imagem Debian compartilha `/app/data` entre site e serviço de voz; isso também vale para o blueprint do Render. Em instâncias com menos de 2 GiB de memória, como o Starter de 512 MB, o serviço de voz local não é iniciado: a conversa usa o reconhecimento de fala do navegador, as respostas do OpenRouter e o áudio do ElevenLabs, quando configurados. A mesma verificação de memória controla o processo e a tela, mesmo com credenciais LiveKit salvas.
+
+Com pelo menos 2 GiB, o serviço LiveKit aguarda as credenciais e é reiniciado se parar. Mantém um processo de chamada pré-aquecido. Esse limite é uma margem de proteção, não uma garantia para chamadas simultâneas: o SDK também carrega inferência local antes da primeira conversa. Monitore a memória para dimensionar a instância. Se o agente não responder ou desconectar durante a conversa, a tela oferece a voz do navegador. Uma chamada real depende de credenciais válidas, acesso ao microfone e recursos disponíveis na instância.
 
 Na conversa, um toque abre o microfone. É possível interromper o cliente falando, pausar o microfone e digitar sem trocar de sessão. As falas são gravadas pelo worker no servidor e reutilizadas na avaliação; ao encerrar, o navegador aguarda o worker fechar a conversa antes de pedir a avaliação. Uma reconexão reutiliza o histórico e o roteiro. Sem as três integrações configuradas, continua disponível o modo anterior de voz do navegador e a demonstração.
 
@@ -249,3 +251,11 @@ O fluxo LiveKit publica o microfone antes de aguardar a prontidão do agente, co
 ### Reconhecimento de fala no navegador (0.4.2)
 
 A sala confirma o início do reconhecimento antes de mostrar “Estou ouvindo você” e explica falhas de conexão, captura ou permissão. É possível reiniciar a voz sem recarregar a página. Falas finais consecutivas são preservadas, e pausas ou cancelamentos não deixam o envio preso nem interrompem uma nova tentativa. A correção foi validada em 21 testes de voz, incluindo transcrição real pelo Chrome com áudio sintético, além de TypeScript, lint e build de produção.
+
+### Memória e acesso ao banco (0.4.3)
+
+Instâncias com menos de 2 GiB usam a voz do navegador e não iniciam o agente LiveKit local, mesmo com as credenciais configuradas. As respostas da IA e o áudio ElevenLabs continuam disponíveis. A queda de um agente encerra o estado de escuta e permite reconectar ou selecionar a voz do navegador.
+
+As conexões SQLite do app passam a compartilhar WAL e espera por bloqueios desde a inicialização. A criação e migração das tabelas reservam a escrita antes de consultar o esquema e só ficam marcadas como concluídas após o commit. Isso corrige o caso reproduzido de `database is locked` na limpeza inicial e permite nova tentativa após uma falha, preservando os dados existentes.
+
+Validação: 33 testes, incluindo contenção real entre processos, migração concorrente, recuperação do agente e transcrição real no Chrome; TypeScript, lint dos arquivos alterados e build de produção. No teste local do servidor de produção com o limite informado simulado em 512 MiB e cinco credenciais fictícias configuradas, o navegador abriu o microfone sem acionar LiveKit e 20 verificações de saúde responderam 200. Esse teste verifica a seleção do modo de voz, não impõe um limite físico de memória nem substitui a validação no Render.

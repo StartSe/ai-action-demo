@@ -5,8 +5,8 @@
 //
 //  1. **Uma conexão.** Trinta vendedores no mesmo link significam trinta sessões simultâneas. Cada
 //     `new DatabaseSync(...)` é uma conexão a mais disputando o mesmo arquivo; uma conexão só (a de
-//     lib/store.ts, via `abrirBanco()`) serializa as escritas dentro do processo e tira o
-//     SQLITE_BUSY da mesa. As tabelas antigas continuam com as conexões delas — não é preciso mexer.
+//     lib/store.ts, via `abrirBanco()`) serializa as escritas e elimina a disputa entre conexões do
+//     mesmo processo. Outros processos aguardam pelo busy_timeout.
 //  2. **Cinco tabelas que se referenciam.** Produto ← Simulação ← Sessão → Participante, mais as
 //     fontes e as mensagens. Espalhar os `CREATE TABLE` por cinco arquivos faria a ordem de criação
 //     depender de qual módulo foi importado primeiro.
@@ -29,9 +29,18 @@ let preparado = false;
 export function banco(): DatabaseSync {
   const d = abrirBanco();
   if (preparado) return d;
-  preparado = true;
-  criarTabelas(d);
-  migrar(d);
+  // Reserva a escrita antes das consultas da migração. Duas inicializações não podem
+  // conferir a mesma coluna e tentar criá-la simultaneamente, nem promover um snapshot antigo.
+  d.exec("BEGIN IMMEDIATE");
+  try {
+    criarTabelas(d);
+    migrar(d);
+    d.exec("COMMIT");
+    preparado = true;
+  } catch (err) {
+    d.exec("ROLLBACK");
+    throw err;
+  }
   return d;
 }
 
@@ -86,14 +95,6 @@ function renomearSessoesDeTreino(d: DatabaseSync): void {
 }
 
 function criarTabelas(d: DatabaseSync): void {
-  // WAL: leitor não bloqueia escritor. Persistente no próprio arquivo, então basta pedir uma vez, de
-  // qualquer conexão — vale também para as tabelas antigas, que têm conexões próprias.
-  try {
-    d.exec("PRAGMA journal_mode = WAL");
-  } catch (err) {
-    console.error("Não foi possível ligar o modo WAL do banco; seguindo no modo padrão.", err);
-  }
-
   renomearSessoesDeTreino(d);
 
   d.exec(`CREATE TABLE IF NOT EXISTS produtos (
@@ -237,23 +238,10 @@ function dificuldadeDoCenario(c: CenarioAntigo): "facil" | "realista" | "dificil
  * Toda inserção é `INSERT OR IGNORE` com id/código já conhecido, então rodar de novo nunca duplica.
  */
 function migrar(d: DatabaseSync): void {
-  try {
-    d.exec("BEGIN");
-    garantirProdutoExemplo(d);
-    migrarCenarios(d);
-    migrarVendedores(d);
-    migrarSalas(d);
-    d.exec("COMMIT");
-  } catch (err) {
-    try {
-      d.exec("ROLLBACK");
-    } catch {
-      // nada em curso para desfazer
-    }
-    // O app precisa subir mesmo se a migração falhar: sem ela as telas novas ficam vazias, com ela
-    // quebrando o app inteiro ninguém consegue nem entrar para investigar.
-    console.error("Falha ao migrar salas/vendedores/cenários para o modelo de Produto → Simulação → Sessão.", err);
-  }
+  garantirProdutoExemplo(d);
+  migrarCenarios(d);
+  migrarVendedores(d);
+  migrarSalas(d);
 }
 
 /** Quantas linhas uma tabela antiga ainda tem para migrar; tabela que não existe conta como zero. */
