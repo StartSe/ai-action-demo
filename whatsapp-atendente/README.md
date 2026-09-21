@@ -2,6 +2,8 @@
 
 Atendente de IA que responde clientes no WhatsApp com base no que a empresa informa, e passa para uma pessoa quando não sabe. Área: Atendimento e Vendas.
 
+Versão atual: **0.2.0**. A versão aparece discretamente no cabeçalho e no final de Configurações, a partir do `package.json`. Veja as mudanças no [histórico de versões](CHANGELOG.md).
+
 ## O que resolve
 Clientes perguntam as mesmas coisas no WhatsApp fora do horário de atendimento. Este app configura um atendente virtual que responde só com base na sua base de conhecimento (produtos, preços, prazos, políticas e perguntas frequentes) e, quando não sabe a resposta, aplica a regra que você escolher (avisar que uma pessoa vai responder, pedir e-mail e telefone, ou indicar o site). Quem cuida do atendimento acompanha tudo em cinco telas: Início (o dia de hoje), Conversas (assumir e responder pelo número real), Assistente (configurar, testar e conectar), Relatórios e Configurações.
 
@@ -10,6 +12,8 @@ Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com mod
 
 ## Configuração inicial
 Nenhuma variável de ambiente é obrigatória. Abra `/setup` no navegador para conectar tudo; as chaves ficam salvas em SQLite (`DATA_DIR/app.sqlite`, padrão `./data`) e sobrevivem a reinícios. Antes de conectar qualquer coisa, o app já abre em **modo demonstração**, com nove conversas de exemplo de uma clínica: dá para percorrer as cinco telas sem configurar nada.
+
+Os blocos “Rotinas”, “Usar dentro do seu assistente” e “Ajustes do servidor” ficam ocultos em Configurações. Rotinas e acessos já configurados continuam funcionando. O endereço público segue sendo detectado automaticamente; para defini-lo no servidor, use `APP_URL`.
 
 1. Abra `/setup` e conecte a **inteligência artificial (OpenRouter)** — em um clique ou colando uma chave gerada em [openrouter.ai/keys](https://openrouter.ai/keys). Sem isso, o atendente responde com um buscador local na base de conhecimento.
 2. Abra `/assistente` e configure o atendente: nome, objetivo, tom, o que ele precisa saber e o que fazer quando não souber. O passo "Testar" conversa com ele no celular da tela antes de qualquer número real entrar no ar.
@@ -58,11 +62,12 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 - Os três avisos da z-api (mensagem recebida, número conectado, número desconectado) são cadastrados sozinhos: ao salvar as credenciais em `/setup` e, depois disso, sempre que o endereço público ou a chave da URL mudar (`garantirWebhooks`, conferido a cada leitura do estado da conexão). Nunca é preciso colar endereço no painel da z-api.
 
 ## Variáveis de ambiente (opcionais)
-Nenhuma é obrigatória — tudo pode ser configurado em `/setup`. Variáveis de ambiente, quando definidas, têm prioridade sobre o que foi salvo no setup.
+Nenhuma é obrigatória. As integrações podem ser configuradas em `/setup`; ajustes do servidor usam as variáveis abaixo. Variáveis de ambiente, quando definidas, têm prioridade sobre o que foi salvo no setup.
 
 | Variável | Descrição |
 |---|---|
 | `DATA_DIR` | Onde fica o banco `app.sqlite` (configuração, conversas e mensagens). Padrão `./data` (`/app/data` no Docker). |
+| `APP_URL` | Endereço público do app para links e avisos. Detectado automaticamente quando não definido; o ajuste manual fica no servidor. |
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa à conexão em `/setup`. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Modelo padrão `nvidia/nemotron-3-super-120b-a12b:free` (gratuito). |

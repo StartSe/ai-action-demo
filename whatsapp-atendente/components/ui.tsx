@@ -1,5 +1,5 @@
 "use client";
-// Componentes visuais compartilhados pela suíte. Copie este arquivo para cada app sem alterar.
+// Componentes visuais próprios deste app (independente da suíte; ver CLAUDE.md).
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
@@ -8,6 +8,7 @@ import { numero, data } from "@/lib/formato";
 import { NAVEGACAO, type ItemNavegacao } from "@/lib/navegacao";
 import { ilustracaoDoSegmento, type Segmento } from "@/lib/ilustracao";
 import { MODELOS_GRATUITOS, type ProximoPasso } from "@/lib/modelos";
+import { Versao } from "./Versao";
 
 export type UsuarioTopbar = { nome: string; email: string };
 export type NotificacaoTopbar = { id: string; texto: string; url?: string };
@@ -85,7 +86,7 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
   const demo = status ? !status.ai : false;
   const estadoChip = erro || !status ? "pendente" : status.ai ? "conectado" : "demonstracao";
   const badge = (
-    <span className={`chip-status chip-status-${estadoChip} min-w-[128px] justify-center max-md:min-w-0 max-md:px-2 max-md:text-[11px]`}>
+    <span className={`chip-status chip-status-${estadoChip} min-w-[128px] justify-center max-lg:min-w-0 max-lg:px-2 max-lg:text-[11px]`}>
       {texto}
       {estadoChip === "demonstracao" && (
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" /></svg>
@@ -100,16 +101,19 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
 
   return (
     <>
-      <header className="no-print flex items-center gap-4 max-md:gap-2 px-8 py-3.5 max-md:px-4 max-md:py-3 bg-surface border-b border-line">
+      <header className="no-print flex items-center gap-4 max-lg:grid max-lg:grid-cols-[minmax(0,1fr)_auto_auto] max-lg:gap-2 px-8 py-3.5 max-lg:px-4 max-lg:py-3 bg-surface border-b border-line">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="shrink-0 w-[34px] h-[34px] max-md:w-[30px] max-md:h-[30px] rounded-[9px] bg-accent text-white grid place-items-center font-extrabold text-[15px] max-md:text-[13px] tracking-tight">{marca}</div>
+          <div className="shrink-0 w-[34px] h-[34px] max-lg:w-[30px] max-lg:h-[30px] rounded-[9px] bg-accent text-white grid place-items-center font-extrabold text-[15px] max-lg:text-[13px] tracking-tight">{marca}</div>
           <div className="min-w-0">
-            <div className="font-bold text-[15px] max-md:text-sm max-md:leading-tight truncate">{nome}</div>
-            <div className="text-ink-2 text-[13px] max-md:hidden truncate">{area}</div>
+            <div className="font-bold text-[15px] max-lg:text-sm max-lg:leading-tight truncate">{nome}</div>
+            <div className="flex items-baseline gap-2 min-w-0">
+              <span className="text-ink-2 text-[13px] max-lg:hidden truncate">{area}</span>
+              <Versao />
+            </div>
           </div>
         </div>
 
-        <nav className="hidden md:flex items-center gap-6 flex-1 justify-center min-w-0">
+        <nav className="hidden lg:flex items-center gap-6 flex-1 justify-center min-w-0">
           {navegacao.map((item) => (
             <Link key={item.href} href={item.href} className={`inline-flex items-center gap-1.5 text-[14px] font-semibold pb-1 border-b-2 ${ativo(item.href) ? "text-accent border-accent" : "text-ink-2 border-transparent hover:text-ink"}`}>
               {item.rotulo}
@@ -118,52 +122,54 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
           ))}
         </nav>
 
-        <div className="flex items-center gap-2 max-md:gap-1.5 shrink-0 min-w-0">
-          {demo && resumo ? (
-            <div className="relative" ref={popoverRef}>
-              <button type="button" className="cursor-pointer" aria-haspopup="dialog" aria-expanded={popoverAberto} onClick={() => setPopoverAberto((v) => !v)}>
-                {badge}
-              </button>
-              {popoverAberto && (
-                <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-72 max-md:w-64 card p-4 text-[13.5px] text-ink">
-                  <p className="mb-3">{resumo}</p>
-                  <Link href="/setup" className="font-bold text-accent underline underline-offset-2" onClick={() => setPopoverAberto(false)}>Conectar a IA em 1 minuto</Link>
-                </div>
-              )}
-            </div>
-          ) : demo ? (
-            <Link href="/setup#openrouter" className="cursor-pointer">{badge}</Link>
-          ) : proximos.length > 0 ? (
-            <div className="relative" ref={popoverRef}>
-              <button type="button" className="cursor-pointer" aria-haspopup="dialog" aria-expanded={popoverAberto} onClick={() => setPopoverAberto((v) => !v)}>
-                {badge}
-              </button>
-              {popoverAberto && (
-                <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-72 max-md:w-64 card p-1.5 text-[13.5px] text-ink">
-                  <p className="font-bold px-3 pt-2 pb-1">Faz mais com...</p>
-                  {proximos.map((p) => (
-                    <Link key={p.id} href={p.url} className="block px-3 py-2 rounded-md hover:bg-accent-soft" onClick={() => setPopoverAberto(false)}>
-                      <span className="block font-semibold text-ink">{p.titulo}</span>
-                      <span className="block text-ink-2 text-[12.5px]">{p.beneficio}</span>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : badge}
+        <div className="flex items-center gap-2 max-lg:contents shrink-0 min-w-0">
+          <div className="max-lg:col-span-3 max-lg:row-start-2">
+            {demo && resumo ? (
+              <div className="relative" ref={popoverRef}>
+                <button type="button" className="cursor-pointer" aria-haspopup="dialog" aria-expanded={popoverAberto} onClick={() => setPopoverAberto((v) => !v)}>
+                  {badge}
+                </button>
+                {popoverAberto && (
+                  <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-72 max-lg:w-64 card p-4 text-[13.5px] text-ink">
+                    <p className="mb-3">{resumo}</p>
+                    <Link href="/setup" className="font-bold text-accent underline underline-offset-2" onClick={() => setPopoverAberto(false)}>Conectar a IA em 1 minuto</Link>
+                  </div>
+                )}
+              </div>
+            ) : demo ? (
+              <Link href="/setup#openrouter" className="cursor-pointer">{badge}</Link>
+            ) : proximos.length > 0 ? (
+              <div className="relative" ref={popoverRef}>
+                <button type="button" className="cursor-pointer" aria-haspopup="dialog" aria-expanded={popoverAberto} onClick={() => setPopoverAberto((v) => !v)}>
+                  {badge}
+                </button>
+                {popoverAberto && (
+                  <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-72 max-lg:w-64 card p-1.5 text-[13.5px] text-ink">
+                    <p className="font-bold px-3 pt-2 pb-1">Faz mais com...</p>
+                    {proximos.map((p) => (
+                      <Link key={p.id} href={p.url} className="block px-3 py-2 rounded-md hover:bg-accent-soft" onClick={() => setPopoverAberto(false)}>
+                        <span className="block font-semibold text-ink">{p.titulo}</span>
+                        <span className="block text-ink-2 text-[12.5px]">{p.beneficio}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : badge}
+          </div>
 
-          <Link href="/setup" aria-label="Configurações" className="md:hidden shrink-0 w-[30px] h-[30px] rounded-full grid place-items-center hover:bg-bg">
+          <Link href="/setup" aria-label="Configurações" className="lg:hidden shrink-0 w-[30px] h-[30px] rounded-full grid place-items-center hover:bg-bg">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" /><path d="M19.4 13.5a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V19a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H4a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H10a1.65 1.65 0 0 0 1-1.51V4a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V10a1.65 1.65 0 0 0 1.51 1H20a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></svg>
           </Link>
 
           {notificacoes && notificacoes.length > 0 && (
-            <div className="relative max-md:hidden" ref={sinoRef}>
+            <div className="relative max-lg:hidden" ref={sinoRef}>
               <button type="button" className="relative w-8 h-8 grid place-items-center rounded-full hover:bg-bg cursor-pointer" aria-haspopup="dialog" aria-expanded={sinoAberto} aria-label={`${notificacoes.length} avisos`} onClick={() => setSinoAberto((v) => !v)}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6Z" /><path d="M10 19a2 2 0 0 0 4 0" /></svg>
                 <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold grid place-items-center">{notificacoes.length}</span>
               </button>
               {sinoAberto && (
-                <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-80 max-md:w-64 card p-1.5 text-[13.5px] text-ink">
+                <div role="dialog" className="absolute right-0 top-[calc(100%+8px)] z-20 w-80 max-lg:w-64 card p-1.5 text-[13.5px] text-ink">
                   {notificacoes.map((n) =>
                     n.url ? (
                       <Link key={n.id} href={n.url} className="block px-3 py-2 rounded-md hover:bg-accent-soft" onClick={() => setSinoAberto(false)}>{n.texto}</Link>
@@ -177,7 +183,7 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
           )}
 
           {usuario && (
-            <div className="relative max-md:hidden" ref={contaRef}>
+            <div className="relative max-lg:hidden" ref={contaRef}>
               <button type="button" className="w-8 h-8 rounded-full bg-accent text-white grid place-items-center font-bold text-[12.5px] cursor-pointer" aria-haspopup="dialog" aria-expanded={contaAberto} aria-label="Sua conta" onClick={() => setContaAberto((v) => !v)}>
                 {iniciaisDe(usuario.nome)}
               </button>
@@ -191,7 +197,7 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
             </div>
           )}
 
-          <button type="button" className="md:hidden shrink-0 inline-flex items-center gap-1 h-[30px] px-2 rounded-field border border-line bg-surface text-ink text-[12px] font-semibold cursor-pointer" aria-haspopup="dialog" aria-expanded={menuAberto} onClick={() => setMenuAberto(true)}>
+          <button type="button" className="lg:hidden shrink-0 inline-flex items-center gap-1 h-[30px] px-2 rounded-field border border-line bg-surface text-ink text-[12px] font-semibold cursor-pointer" aria-haspopup="dialog" aria-expanded={menuAberto} onClick={() => setMenuAberto(true)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
             Menu
           </button>
@@ -199,7 +205,7 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
       </header>
 
       {menuAberto && (
-        <div className="md:hidden fixed inset-0 z-30">
+        <div className="lg:hidden fixed inset-0 z-30">
           <div className="absolute inset-0 bg-black/30" onClick={() => setMenuAberto(false)} />
           <div ref={menuRef} role="dialog" aria-label="Menu" className="absolute top-0 right-0 bottom-0 w-[80%] max-w-[300px] bg-surface p-5 flex flex-col gap-1 shadow-card overflow-y-auto">
             <button type="button" className="self-end text-ink-2 mb-3 cursor-pointer" aria-label="Fechar menu" onClick={() => setMenuAberto(false)}>
