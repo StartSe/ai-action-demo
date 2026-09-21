@@ -25,7 +25,7 @@ export function transcriptError(code: string): AppError {
     case "RequestBlocked":
     case "IpBlocked":
       return new AppError(
-        "O YouTube bloqueou a consulta feita pelo servidor do Mapify. Isso pode acontecer mesmo com legendas públicas, especialmente no Render. Configure YOUTUBE_PROXY_URL com um proxy residencial no ambiente do serviço ou cole a transcrição na opção Texto.",
+        "O YouTube bloqueou a consulta feita pelo servidor do Mapify. Isso pode acontecer mesmo com legendas públicas, especialmente no Render. Para vídeos que sua conta pode editar, conecte o YouTube em Configurações. Para outros vídeos, configure YOUTUBE_PROXY_URL com um proxy residencial ou cole a transcrição na opção Texto.",
         503,
       );
     case "TranscriptsDisabled":
@@ -36,7 +36,7 @@ export function transcriptError(code: string): AppError {
     case "AgeRestricted":
     case "VideoUnplayable":
       return new AppError(
-        "O YouTube restringiu o acesso a este vídeo. O Mapify só lê legendas acessíveis sem login. Cole uma transcrição que você possa acessar na opção Texto.",
+        "O YouTube restringiu o acesso a este vídeo pela leitura pública. Para vídeos que sua conta pode editar, conecte o YouTube em Configurações. Você também pode colar a transcrição na opção Texto.",
       );
     case "VideoUnavailable":
       return new AppError(

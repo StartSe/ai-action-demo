@@ -214,7 +214,7 @@ export function CreateMap({
               />
               <small>
                 {kind === "youtube"
-                  ? "Vídeos públicos com legendas manuais ou automáticas."
+                  ? "Com YouTube conectado em Configurações, use vídeos que sua conta pode editar e que tenham legendas. Sem conexão, tentamos as legendas públicas."
                   : "Artigos, landing pages e PDFs públicos. Páginas que exigem login não podem ser lidas."}
               </small>
             </label>

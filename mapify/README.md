@@ -27,7 +27,7 @@ npm run setup:youtube
 npm run dev -- --port 3021
 ```
 
-Abra http://localhost:3021. Sem Python, PDF, web e texto continuam disponíveis; YouTube precisa da dependência Python. Credenciais são configuradas na interface. Variáveis de ambiente opcionais estão em `.env.example` e têm prioridade sobre valores salvos.
+Abra http://localhost:3021. A API oficial do YouTube, PDF, web e texto não precisam de Python. A leitura pública sem conexão Google usa a dependência Python. Credenciais são configuradas na interface. Variáveis de ambiente opcionais estão em `.env.example` e têm prioridade sobre valores salvos.
 
 O extrator detecta `.venv` automaticamente. `PYTHON_PATH` só é necessário para usar outro ambiente Python; no Docker já está definido. Para verificar um vídeo sem gastar créditos de IA, execute:
 
@@ -35,7 +35,25 @@ O extrator detecta `.venv` automaticamente. `PYTHON_PATH` só é necessário par
 npm run check:youtube -- 'https://www.youtube.com/watch?v=1QNsdr-Qx_I'
 ```
 
-### Legendas públicas e bloqueio no Render
+### Conectar o YouTube oficial por OAuth
+
+Abra **Configurações → YouTube**. O responsável pela instalação prepara o cliente Google uma vez:
+
+1. Crie ou escolha um projeto Google Cloud e ative **YouTube Data API v3**.
+2. Configure o consentimento no **Google Auth Platform**. Em modo de teste, adicione a conta que fará a autorização em **Público-alvo → Usuários de teste**.
+3. Crie um cliente OAuth do tipo **Aplicativo da Web**. Cadastre exatamente a URL de retorno exibida pelo Mapify. Nesta instalação: `https://mapify-0r8o.onrender.com/api/youtube/oauth/callback`; localmente: `http://localhost:3021/api/youtube/oauth/callback`.
+4. Salve o ID e o segredo do cliente nos campos protegidos do Mapify. Não use a senha da conta Google nem uma chave simples de API.
+5. Clique em **Conectar YouTube**, escolha a conta/canal autorizado e conceda a permissão. O navegador volta ao Mapify com o estado da conexão. **Verificar conexão** consulta o canal; a permissão de um vídeo específico é validada ao importá-lo.
+
+O método oficial [`captions.download`](https://developers.google.com/youtube/v3/docs/captions/download) exige permissão para **editar o vídeo**. O escopo obrigatório `youtube.force-ssl` é amplo na tela de consentimento; o Mapify usa somente consultas de canal e leitura/download de legendas, sem editar ou excluir conteúdo. A conexão Google não libera legendas de outros canais e não substitui a conexão com a IA.
+
+Com a conta conectada, as importações usam `captions.list` e `captions.download` da API oficial. A aplicação mantém os timestamps, renova o token automaticamente e distingue autorização expirada/revogada, cota excedida, ausência de legendas e falta de permissão. Uma falha oficial não alterna silenciosamente para o extrator público. **Desconectar YouTube** remove os tokens locais e solicita a revogação ao Google; importações seguintes voltam ao modo público.
+
+O fluxo usa a biblioteca oficial `google-auth-library`, estado aleatório de uso único e validade de dez minutos, cookie HttpOnly vinculado ao navegador e PKCE. Segredo, tokens e estado ficam cifrados no SQLite. As respostas da configuração nunca retornam tokens ou o segredo. Alterar o cliente exige autorizar novamente.
+
+Como alternativa ao cadastro pela interface, defina **ambas** `YOUTUBE_CLIENT_ID` e `YOUTUBE_CLIENT_SECRET` no servidor. Não são incluídas na imagem. A origem pública usa `APP_URL`, depois `RENDER_EXTERNAL_URL`, ou os cabeçalhos do proxy; `APP_URL` pode fixar um domínio personalizado. Use HTTPS em produção. Clientes Google em teste ou com autorização revogada podem exigir nova conexão; siga as políticas e a verificação de consentimento do Google para distribuir a integração.
+
+### Legendas públicas e bloqueio no Render (sem OAuth)
 
 Um vídeo público pode ter legendas acessíveis no navegador e, ainda assim, o YouTube bloquear consultas feitas pelo IP do servidor. A [documentação do extrator](https://github.com/jdepoix/youtube-transcript-api#working-around-ip-bans-requestblocked-or-ipblocked-exception) descreve essa limitação em provedores de nuvem. ChatGPT e OpenRouter não participam do download das legendas.
 
@@ -64,7 +82,7 @@ Uma conta administrativa por instalação; não é um serviço multiusuário. Co
 
 ## Fontes e limites
 
-- **YouTube:** lê legendas públicas manuais ou automáticas com `youtube-transcript-api`, preservando timestamps. Vídeos privados, sem legendas ou bloqueados pelo YouTube não podem ser extraídos. IPs de datacenter podem ser bloqueados: use um proxy autorizado em `YOUTUBE_PROXY_URL` ou cole a transcrição na aba Texto. Não usa cookies do navegador.
+- **YouTube:** com OAuth conectado, lê as legendas disponíveis pela API oficial nos vídeos que a conta pode editar. Sem conexão, tenta legendas públicas manuais ou automáticas com `youtube-transcript-api`; IPs de datacenter podem ser bloqueados. Não gera legendas a partir de áudio. Preserva timestamps e não reutiliza cookies do navegador. A opção Texto continua disponível quando a importação não é possível.
 - **PDF:** upload ou URL pública, até 15 MB, extração por página. PDFs escaneados precisam de OCR antes do upload; PDFs protegidos precisam ser desbloqueados.
 - **Web:** HTML público renderizado pelo servidor, extraído sem scripts, menus e rodapés. Sites que exigem JavaScript, login ou bloqueiam leitura podem exigir colar o texto.
 - **Texto:** entre 80 e 160.000 caracteres. O mesmo teto de caracteres se aplica às demais fontes, com erro explícito quando excedido. Conteúdos longos são processados em partes; não há truncamento silencioso da fonte.

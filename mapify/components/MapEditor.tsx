@@ -383,7 +383,7 @@ export function MapEditor({ id }: { id: string }) {
           )}
           <IconButton
             icon="settings"
-            label="Conexões de IA"
+            label="Configurações e conexões"
             onClick={() => setConnections(true)}
           />
         </div>

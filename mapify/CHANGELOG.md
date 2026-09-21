@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 — 2026-09-21
+
+- Configurações com seção YouTube: cadastro do cliente Google, URL de retorno copiável, autorização OAuth, verificação do canal e desconexão.
+- Importação de legendas pela API oficial para vídeos que a conta conectada pode editar, com timestamps e mensagens específicas de cota, autorização e permissão.
+- Renovação de tokens, armazenamento cifrado, PKCE e proteção de retorno por estado de uso único vinculado ao navegador. A leitura pública permanece disponível sem conexão Google.
+
 ## 1.0.3 — 2026-09-21
 
 - Versão do app visível no header da biblioteca e do editor de mapas, inclusive no celular.

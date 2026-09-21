@@ -3,6 +3,8 @@ import { extractText } from "unpdf";
 import { download, publicUrl } from "./network";
 import { AppError } from "./api";
 import { fetchCaptions } from "./youtube";
+import { youtubeIntegration } from "./youtube-oauth";
+import { officialCaptions } from "./youtube-official";
 import type { Source, Segment } from "./types";
 export const MAX_CHARACTERS = 160000;
 function finish(source: Omit<Source, "characters">): Source {
@@ -125,9 +127,11 @@ export async function youtubeSource(
   signal?: AbortSignal,
 ): Promise<Source> {
   const id = youtubeId(url);
-  if (!id)
-    throw new AppError("Use um link válido de um vídeo público do YouTube.");
-  const captions = await fetchCaptions(id, signal);
+  if (!id) throw new AppError("Use um link válido de um vídeo do YouTube.");
+  const youtube = await youtubeIntegration();
+  const captions = youtube.hasConnection()
+    ? await officialCaptions(id, youtube, signal)
+    : await fetchCaptions(id, signal);
   let title = "Vídeo do YouTube";
   try {
     const response = await fetch(

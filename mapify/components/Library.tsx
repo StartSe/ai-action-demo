@@ -69,13 +69,17 @@ export function MiniMap({ index = 0 }: { index?: number }) {
     </svg>
   );
 }
-export function Library() {
+export function Library({
+  youtubeResult,
+}: {
+  youtubeResult?: { connected?: boolean; error?: string };
+}) {
   const router = useRouter();
   const [maps, setMaps] = useState<MapCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [create, setCreate] = useState<SourceKind | null>(null);
-  const [connections, setConnections] = useState(false);
+  const [connections, setConnections] = useState(!!youtubeResult);
   const [connected, setConnected] = useState(false);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -177,7 +181,7 @@ export function Library() {
           </div>
           <button className="account-link" onClick={() => setConnections(true)}>
             <span className={"status-dot" + (connected ? " online" : "")} />
-            {connected ? "IA conectada" : "Modo de exploração"}
+            Configurações
             <Icon name="settings" size={17} />
           </button>
           <div className="sidebar-footer">
@@ -495,7 +499,11 @@ export function Library() {
       )}
       {connections && (
         <Connections
-          onClose={() => setConnections(false)}
+          youtubeResult={youtubeResult}
+          onClose={() => {
+            setConnections(false);
+            if (youtubeResult) window.history.replaceState(null, "", "/");
+          }}
           onSaved={refreshConnection}
         />
       )}
