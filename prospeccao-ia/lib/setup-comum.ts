@@ -1,11 +1,14 @@
 // Tipos e utilitários do setup inicial. Compartilhado por toda a suíte: copie sem alterar.
 // A lista de integrações de cada app fica em lib/integracoes.ts.
+// Divergências deste app, registradas em scripts/padrao-excecoes.json: o teste do OpenRouter usa o modelo
+// do OpenRouter mesmo com a conta ChatGPT ativa (lib/ai.ts:openRouterModelName) e o menu de modelos vem
+// de lib/modelos.ts:organizarModelos (grupo "Mais usados" com GPT, Gemini, Claude...).
 import { getConfig, mascarar, origemConfig, setConfig } from "./store";
 import { enviar, type Canal } from "./notificacoes";
 import { conectar, listarFerramentas, type FerramentaMCP } from "./mcp-cliente";
 import { conexaoAutorizada } from "./mcp-oauth";
-import { MODELO_AUTOMATICO, MODELOS_GRATUITOS, MODELOS_VISAO, type Opcao, type ProximoPasso } from "./modelos";
-import { DEFAULT_MODEL, interpretarFalha, modelName } from "./ai";
+import { MODELO_AUTOMATICO, MODELOS_GRATUITOS, MODELOS_VISAO, organizarModelos, type ModeloCatalogo, type Opcao, type ProximoPasso } from "./modelos";
+import { DEFAULT_MODEL, interpretarFalha, openRouterModelName } from "./ai";
 import { contaConectada, credenciaisDoApp as credenciaisAppEmail } from "./email-envio";
 
 export type { Opcao, ProximoPasso };
@@ -165,28 +168,16 @@ export function registrarEnderecoPublico(req: Request): void {
 // fixa de lib/modelos.ts é só a rede de segurança de quem ainda não salvou chave (ou de um catálogo que
 // não respondeu): o que a pessoa escolhe em /setup vem do provedor, não do código.
 const CACHE_MODELOS_MS = 60 * 60 * 1000;
-/** Quantos modelos de cada grupo entram no menu: o catálogo tem centenas, e uma lista que ninguém
- * consegue percorrer é tão inútil quanto uma lista fixa. Os maiores de contexto primeiro. */
-const MODELOS_POR_GRUPO = 12;
 let cacheModelosDinamicos: { expiraEm: number; modelos: Opcao[] } | null = null;
 
-type ModeloCatalogo = { id: string; name?: string; context_length?: number };
-
+/** A curadoria do catálogo mora em lib/modelos.ts:organizarModelos — recomendado, gratuitos, "Mais usados"
+ * (GPT, Gemini, Claude...) e os demais pagos — para ser pura e testável (tests/modelos.test.ts). */
 async function modelosDinamicos(chave: string): Promise<Opcao[]> {
   if (cacheModelosDinamicos && cacheModelosDinamicos.expiraEm > Date.now()) return cacheModelosDinamicos.modelos;
   const r = await fetch("https://openrouter.ai/api/v1/models", { headers: { Authorization: `Bearer ${chave}` } });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const data = (await r.json()) as { data?: ModeloCatalogo[] };
-  const catalogo = data.data ?? [];
-  const porContexto = (a: ModeloCatalogo, b: ModeloCatalogo) => (b.context_length ?? 0) - (a.context_length ?? 0);
-  const opcao = (m: ModeloCatalogo, grupo: Opcao["grupo"]): Opcao => ({ valor: m.id, rotulo: m.name || m.id, grupo });
-  const gratuito = (m: ModeloCatalogo) => m.id.endsWith(":free");
-  const recomendado = catalogo.find((m) => m.id === DEFAULT_MODEL);
-  const modelos: Opcao[] = [
-    ...(recomendado ? [opcao(recomendado, "recomendado")] : []),
-    ...catalogo.filter((m) => gratuito(m) && m.id !== DEFAULT_MODEL).sort(porContexto).slice(0, MODELOS_POR_GRUPO).map((m) => opcao(m, "gratuito")),
-    ...catalogo.filter((m) => !gratuito(m)).sort(porContexto).slice(0, MODELOS_POR_GRUPO).map((m) => opcao(m, "pago")),
-  ];
+  const modelos = organizarModelos(data.data ?? [], DEFAULT_MODEL);
   if (modelos.length === 0) throw new Error("catálogo vazio");
   cacheModelosDinamicos = { expiraEm: Date.now() + CACHE_MODELOS_MS, modelos };
   return modelos;
@@ -252,7 +243,7 @@ export function openrouter({
         opcional: true,
         padrao: MODELO_AUTOMATICO,
         opcoes: [automaticoPadrao, ...MODELOS_GRATUITOS],
-        ajuda: 'Automático já funciona. Se aparecer "sem crédito" ou "limite diário", troque por outro gratuito ou adicione créditos.',
+        ajuda: 'Automático já funciona. Em "Mais usados" estão GPT, Gemini e Claude, que exigem créditos; se aparecer "sem crédito" ou "limite diário", troque por um gratuito.',
         opcoesDinamicas: async (config) => opcoesDeModelo(config.OPENROUTER_API_KEY, automaticoPadrao),
       },
       ...camposAvaliacao,
@@ -268,7 +259,7 @@ export function openrouter({
       }
       const data = (await r.json()) as { data?: { limit?: number | null; usage?: number; is_free_tier?: boolean } };
 
-      const modelo = modelName();
+      const modelo = openRouterModelName();
       const resposta = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${chave}`, "Content-Type": "application/json" },

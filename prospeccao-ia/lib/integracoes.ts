@@ -3,7 +3,9 @@ import { testarFonte, type FonteOpcional } from "./pesquisa-fontes";
 import { testarBrightData } from "./brightdata";
 import { MCP_CRM, NOTIFICACOES, openrouter, type Integracao } from "./setup-comum";
 
-const OPENROUTER = openrouter({ beneficio: "Liga a IA que escreve a abordagem de cada lead" });
+const OPENROUTER = openrouter({ beneficio: "Liga a IA que qualifica os leads e escreve a abordagem de cada um" });
+// Com a conta ChatGPT como alternativa (components/ConexaoIA.tsx), o botão precisa dizer qual conta conecta.
+if (OPENROUTER.oauth) OPENROUTER.oauth.rotulo = "Conectar com OpenRouter";
 
 // Título sem nome de fornecedor (o cartão é "o que isso faz por você"); a Apollo aparece na descrição
 // e no link, que é onde a pessoa precisa saber onde criar a conta.

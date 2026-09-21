@@ -1,6 +1,6 @@
 {
   "name": "prospeccao-ia",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -10,6 +10,7 @@
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
+    "@openai/codex": "0.155.1",
     "next": "16.3.5",
     "nodemailer": "^10.0.9",
     "react": "19.2.8",

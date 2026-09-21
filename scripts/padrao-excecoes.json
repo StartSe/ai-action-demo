@@ -23,7 +23,12 @@
     "app/api/setup/testar/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT."
   },
   "prospeccao-ia": {
-    "components/setup.tsx": "Aceita a propriedade navegacao para manter os cinco destinos do workspace também em Configurações. Oculta Notificações nos cartões, nas sugestões e no progresso de configuração."
+    "lib/ai.ts": "Seleção explícita entre OpenRouter e ChatGPT pelo Codex App Server (aiProvider); aiEnabled assíncrona pela conta conectada; askText/askJSON/askWithTools roteados pela conta, sem fallback entre elas.",
+    "lib/modelos.ts": "Curadoria do catálogo de modelos (organizarModelos, grupo \"Mais usados\" com GPT, Gemini, Claude...) e rede de segurança com os mesmos pagos pedidos pela equipe de Vendas.",
+    "lib/setup-comum.ts": "O menu de modelos vem de lib/modelos.ts:organizarModelos e o teste do OpenRouter usa o modelo do OpenRouter mesmo com a conta ChatGPT ativa.",
+    "app/api/setup/route.ts": "Prontidão usa a conta de IA selecionada (OpenRouter ou ChatGPT), sem exigir chave do OpenRouter quando o ChatGPT está conectado.",
+    "app/api/status/route.ts": "Status da IA pela conta selecionada, sugestão única de conexão enquanto nenhuma está ligada e Notificações fora das sugestões, porque este app esconde esse cartão.",
+    "components/setup.tsx": "Aceita a propriedade navegacao para manter os cinco destinos do workspace também em Configurações; oculta Notificações; embute a escolha da conta de IA (components/ConexaoIA.tsx) no cartão Inteligência artificial e relê /api/status depois de cada mudança."
   },
   "radar-sinais": {
     "lib/ai.ts": "Seleção explícita entre OpenRouter e ChatGPT pelo Codex App Server; disponibilidade assíncrona da conta, síntese e modelo de ontologia próprios do Radar.",

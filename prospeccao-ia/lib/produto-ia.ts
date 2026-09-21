@@ -58,7 +58,7 @@ export async function sugerirProdutoDoSite(entradaBruta: string, progresso: (eta
   const ehEndereco = pareceEndereco(entrada);
   let contexto = entrada;
   signal?.throwIfAborted();
-  if (!aiEnabled()) {
+  if (!(await aiEnabled())) {
     progresso("demonstracao");
     await esperar(1100);
     return { demo: true, sugestao: SUGESTAO_DEMO, meta: meta({ demo: true, insumo: "exemplo ilustrativo" }) };

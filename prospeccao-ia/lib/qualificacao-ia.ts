@@ -25,7 +25,7 @@ export async function avaliarCriterioInterpretativo(conteudo: string, criterio: 
   const v = (valor || "").trim();
   if (!v) return null;
 
-  if (!aiEnabled()) {
+  if (!(await aiEnabled())) {
     return { criterio, valor: v, resultado: contemTermo(conteudo, v) ? "atende" : "nao_verificavel" };
   }
 
@@ -83,7 +83,7 @@ export async function gerarHipoteseDor(sinais: SinalProspeccao[], dores: string[
   const dataSinal = data(sinalPrincipal.data, { comAno: true });
   const doresSeguras = jornada === "b2c" ? dores.filter((d) => !termoSensivel(d)) : dores;
 
-  if (!aiEnabled()) {
+  if (!(await aiEnabled())) {
     const dor = doresSeguras[0];
     return dor
       ? `Pode estar enfrentando ${dor.charAt(0).toLowerCase()}${dor.slice(1)}, a julgar por “${sinalPrincipal.descricao}” (${dataSinal}).`

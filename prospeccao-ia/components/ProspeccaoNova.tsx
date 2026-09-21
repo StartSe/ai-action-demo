@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Aviso, Chip, Field, Topbar, lerErro, useStatus } from "@/components/ui";
+import { Aviso, Chip, Field, Passos, Topbar, lerErro, useStatus, type PassoIndicador } from "@/components/ui";
 import { NAVEGACAO_PROSPECCAO } from "@/lib/navegacao-prospeccao";
 import { CriteriosProspeccaoForm, criteriosIniciais, type CriteriosBusca } from "@/components/CriteriosProspeccao";
 import { DESCRICAO_JORNADA, DESCRICAO_MODO, MODOS_POR_JORNADA, ROTULO_ACAO_MODO, ROTULO_JORNADA, ROTULO_MODO } from "@/lib/rotulos";
@@ -19,11 +19,19 @@ import type { ICP, Jornada, ModoProspeccao, Produto } from "@/lib/types";
 const TOTAL_PASSOS = 4;
 const VOLTAR_PARA_AQUI = "/prospeccoes/nova";
 const JORNADAS = ["b2b", "b2c"] as const;
-const SUBTITULO_PASSO: Partial<Record<number, string>> = {
-  1: "Produto e perfil ideal",
-  2: "Quem você quer encontrar",
-  3: "Como encontrar oportunidades",
-  4: "Critérios da busca",
+// Indicador de progresso compartilhado (components/ui.tsx:Passos) no lugar do "Passo X de 4" em texto:
+// a pessoa vê onde está e o que falta sem ler uma frase. A orientação abaixo dele muda por passo.
+const PASSOS: PassoIndicador[] = [
+  { titulo: "Produto", apoio: "e perfil ideal" },
+  { titulo: "Quem encontrar", apoio: "empresas ou pessoas" },
+  { titulo: "Tipo de busca", apoio: "como procurar" },
+  { titulo: "Critérios", apoio: "recorte e sinais" },
+];
+const ORIENTACAO_PASSO: Record<number, string> = {
+  1: "Escolha o produto e o perfil ideal que guiam esta busca.",
+  2: "Empresas e decisores, ou pessoas físicas?",
+  3: "Escolha como a busca vai encontrar oportunidades.",
+  4: "Revise o recorte antes de iniciar. Nada aqui altera o perfil salvo.",
 };
 
 type ProdutoComICPs = Produto & { icps: ICP[] };
@@ -174,8 +182,11 @@ export function ProspeccaoNova() {
       <Topbar marca="P" nome="Prospecção com IA" area="Vendas" status={status} erro={erro} usuario={status?.usuario} navegacao={NAVEGACAO_PROSPECCAO} />
 
       <main className="max-w-[720px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
-        <h1 className="titulo-painel mb-1.5">Nova prospecção</h1>
-        <p className="apoio mb-6">Passo {passo} de {TOTAL_PASSOS}{SUBTITULO_PASSO[passo] ? ` · ${SUBTITULO_PASSO[passo]}` : ""}</p>
+        <h1 className="titulo-painel mb-3">Nova prospecção</h1>
+        <div className="mb-6 flex flex-col gap-2">
+          <Passos passos={PASSOS} atual={passo} />
+          <p className="apoio">{ORIENTACAO_PASSO[passo]}</p>
+        </div>
 
         {passo === 4 ? (
           !produtoSelecionado || !icpEfetivo || !modoEfetivo ? (

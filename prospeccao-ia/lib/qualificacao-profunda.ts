@@ -124,7 +124,7 @@ async function executar(job: QualificacaoProfunda, instagram?: string) {
     } else aviso("Instagram não consultado: nenhum perfil vinculado. Você pode informar um perfil confirmado.");
     etapa("avaliacao");
     if (!job.fontes.length) throw new Error("Não foi possível obter conteúdo público para avaliar este lead. Confira os perfis e as conexões.");
-    if (!aiEnabled()) throw new Error("Fontes coletadas. Conecte a IA em Configurações para sugerir a pontuação.");
+    if (!(await aiEnabled())) throw new Error("Fontes coletadas. Conecte a IA em Configurações para sugerir a pontuação.");
     const criteriosICP = Object.entries(icp.criterios).flatMap(([chave, valor]) => {
       const texto = Array.isArray(valor) ? valor.join(", ") : typeof valor === "string" ? valor : "";
       return texto.trim() && !termoSensivel(texto) ? [`${chave}: ${texto}`] : [];

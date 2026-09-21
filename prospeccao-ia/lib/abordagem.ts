@@ -56,7 +56,7 @@ export async function escreverAbordagem({
 }): Promise<{ demo: boolean; abordagem: Abordagem; meta: ReturnType<typeof meta> }> {
   const insumo = "dados do lead e a proposta enviada";
 
-  if (!aiEnabled()) {
+  if (!(await aiEnabled())) {
     await esperar(1100);
     return {
       demo: true,

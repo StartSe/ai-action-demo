@@ -66,7 +66,7 @@ export async function gerarEstrategia(lead: LeadProspeccao, conta: Conta | null,
   const sinalPrincipal = [...lead.sinais].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())[0];
   const dorIcp = icp?.dores[0];
 
-  if (!aiEnabled()) {
+  if (!(await aiEnabled())) {
     await esperar(700);
     return {
       objetivo: "Agendar uma conversa de 15 a 20 minutos",
@@ -137,7 +137,7 @@ export async function gerarMensagens(lead: LeadProspeccao, produto: Produto, est
   const remetenteNome = getConfig("REMETENTE_NOME") || "";
   const remetenteEmpresa = getConfig("REMETENTE_EMPRESA") || "";
 
-  if (!aiEnabled()) {
+  if (!(await aiEnabled())) {
     await esperar(700);
     return mensagensDemo(lead, produto, estrategia, remetenteNome, remetenteEmpresa);
   }
@@ -227,7 +227,7 @@ export async function gerarOuObterAbordagem(leadId: string, aoProgresso?: (etapa
     const mensagens = await gerarMensagens(lead, produto, estrategia);
     progresso("salvando");
     if (!contextoDoLead(leadId)) return null;
-    const abordagem = criarAbordagem({ leadId, estrategia, ...mensagens, variacao: null, demo: !aiEnabled() });
+    const abordagem = criarAbordagem({ leadId, estrategia, ...mensagens, variacao: null, demo: !(await aiEnabled()) });
     return { lead: promoverParaSelecionado(lead), abordagem };
   })();
   geracoes.set(leadId, estado);
@@ -320,7 +320,7 @@ export async function regenerarMensagem(
   const remetenteEmpresa = getConfig("REMETENTE_EMPRESA") || "";
   const gancho = direcao === "outro_sinal" && sinalEscolhido ? sinalEscolhido.descricao : estrategia.gancho;
 
-  if (!aiEnabled()) {
+  if (!(await aiEnabled())) {
     await esperar(500);
     return mensagemDemoCanal(lead, produto, estrategia, canal, direcao, gancho, remetenteNome, remetenteEmpresa);
   }
