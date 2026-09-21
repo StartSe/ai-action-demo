@@ -21,11 +21,11 @@ export function validateZapier(value: string) {
     throw new BrainError("Use a URL HTTPS fornecida pelo Zapier MCP.");
   return u.toString();
 }
-async function client() {
+export async function zapierClient(signal?: AbortSignal) {
   const url = getConfig("ZAPIER_MCP_URL");
   if (!url) throw new BrainError("Conecte o Zapier em Conexões.");
   const token = getConfig("ZAPIER_MCP_TOKEN");
-  const c = new Client({ name: "daily-second-brain", version: "1.0.2" });
+  const c = new Client({ name: "daily-second-brain", version: "1.1.0" });
   try {
     await c.connect(
       new StreamableHTTPClientTransport(new URL(validateZapier(url)), {
@@ -38,6 +38,7 @@ async function client() {
             ...init,
             signal: AbortSignal.any([
               AbortSignal.timeout(30000),
+              ...(signal ? [signal] : []),
               ...(init?.signal ? [init.signal] : []),
             ]),
           }),
@@ -53,7 +54,7 @@ async function client() {
   }
 }
 export async function listTools() {
-  const c = await client();
+  const c = await zapierClient();
   try {
     const all = [];
     let cursor: string | undefined;
@@ -97,7 +98,7 @@ export async function execute(id: string) {
   if (!claim.changes) throw new BrainError("Essa ação já foi processada.", 409);
   let c: Client | undefined;
   try {
-    c = await client();
+    c = await zapierClient();
     const r = await c.callTool({ name: a.name, arguments: a.args }, undefined, {
       timeout: 60000,
     });

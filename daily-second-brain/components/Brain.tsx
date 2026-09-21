@@ -7,6 +7,9 @@ import { Graph } from "./Graph";
 import { Markdown } from "./Markdown";
 import { Connections } from "./Connections";
 import { request } from "./client";
+import { Captures } from "./Captures";
+import { Onboarding } from "./Onboarding";
+import type { CaptureState, SetupState } from "@/lib/capture-types";
 type View =
   | "home"
   | "graph"
@@ -15,9 +18,12 @@ type View =
   | "outputs"
   | "chat"
   | "connections"
+  | "captures"
+  | "setup"
   | "rules";
 const NAV: { id: View; label: string; icon: string }[] = [
   { id: "home", label: "Visão do dia", icon: "sun" },
+  { id: "captures", label: "Coletas e rotinas", icon: "zap" },
   { id: "graph", label: "Mapa da memória", icon: "graph" },
   { id: "raw", label: "Caixa de entrada", icon: "inbox" },
   { id: "wiki", label: "Minha wiki", icon: "book" },
@@ -74,7 +80,14 @@ function Dialog({
   );
 }
 export function Brain() {
+  const [initializing, setInitializing] = useState(true);
   const [state, setState] = useState<BrainState | null>(null);
+  const [captures, setCaptures] = useState<CaptureState>({
+    tasks: [],
+    schedules: [],
+  });
+  const [setup, setSetup] = useState<SetupState | null>(null);
+  const captureVersion = useRef("");
   const [settings, setSettings] = useState<Settings>({
     provider: "chatgpt",
     model: "",
@@ -111,6 +124,19 @@ export function Brain() {
     setState(s);
     return s;
   }, []);
+  const loadCaptures = useCallback(async () => {
+    const s = await request<CaptureState>("/api/captures");
+    setCaptures(s);
+    const version = JSON.stringify(
+      s.tasks.map((t) => [t.id, t.sources, t.pages, t.status]),
+    );
+    if (captureVersion.current && captureVersion.current !== version)
+      await load();
+    captureVersion.current = version;
+  }, [load]);
+  const refreshCaptures = useCallback(async () => {
+    await Promise.all([loadCaptures(), load()]);
+  }, [loadCaptures, load]);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -127,6 +153,8 @@ export function Brain() {
             "outputs",
             "chat",
             "connections",
+            "captures",
+            "setup",
             "rules",
           ].includes(tab)
         )
@@ -141,14 +169,44 @@ export function Brain() {
           setState(s);
           setSettings(c);
         }
+        await loadCaptures();
+        const intro = await request<SetupState>("/api/onboarding");
+        if (!cancelled) {
+          setSetup(intro);
+          if (intro.status === "new" && !tab && q.get("exemplo") !== "1")
+            setView("setup");
+        }
       } catch (e) {
         if (!cancelled) setError((e as Error).message);
+      } finally {
+        if (!cancelled) setInitializing(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadCaptures]);
+  useEffect(() => {
+    const timer = setInterval(() => void loadCaptures().catch(() => {}), 5000);
+    return () => clearInterval(timer);
+  }, [loadCaptures]);
+  useEffect(() => {
+    if (view !== "setup") return;
+    const timer = setInterval(
+      () =>
+        void request<SetupState>("/api/onboarding")
+          .then(setSetup)
+          .catch(() => {}),
+      3000,
+    );
+    return () => clearInterval(timer);
+  }, [view]);
+  useEffect(() => {
+    if (view === "captures" || view === "setup")
+      void request<SetupState>("/api/onboarding")
+        .then(setSetup)
+        .catch(() => {});
+  }, [view]);
   useEffect(() => {
     if (notice) {
       const t = setTimeout(() => setNotice(""), 5000);
@@ -181,9 +239,8 @@ export function Brain() {
       )
         return;
       e.preventDefault();
-      setCaptureTitle("");
-      setCaptureContent("");
-      setCapture(true);
+      setView("captures");
+      historyReplace("captures");
     }
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
@@ -408,10 +465,7 @@ export function Brain() {
           className="capture-button"
           aria-label="Capturar memória"
           onClick={() => {
-            setCapture(true);
-            setCaptureTitle("");
-            setCaptureContent("");
-            setMobile(false);
+            go("captures");
           }}
         >
           <Icon name="plus" size={17} /> Capturar memória <kbd>N</kbd>
@@ -427,6 +481,10 @@ export function Brain() {
               <Icon name={n.icon} size={18} />
               <span>{n.label}</span>
               {n.id === "raw" && inbox.length > 0 && <em>{inbox.length}</em>}
+              {n.id === "captures" &&
+                captures.tasks.some((t) =>
+                  ["queued", "running"].includes(t.status),
+                ) && <span className="live-dot" />}
             </button>
           ))}
         </nav>
@@ -443,6 +501,13 @@ export function Brain() {
             </div>
           </div>
           <nav>
+            <button
+              className={view === "setup" ? "active" : ""}
+              onClick={() => go("setup")}
+            >
+              <Icon name="sun" size={18} />
+              Primeiro acesso
+            </button>
             <button
               className={view === "connections" ? "active" : ""}
               onClick={() => go("connections")}
@@ -502,7 +567,11 @@ export function Brain() {
             Meu espaço <Icon name="chevron" size={12} />
             <strong>
               {NAV.find((n) => n.id === view)?.label ||
-                (view === "connections" ? "Conexões" : "Regras da memória")}
+                (view === "connections"
+                  ? "Conexões"
+                  : view === "setup"
+                    ? "Primeiro acesso"
+                    : "Regras da memória")}
             </strong>
           </span>
           <div className="topbar-right">
@@ -543,7 +612,7 @@ export function Brain() {
             {notice}
           </div>
         )}
-        {!state ? (
+        {!state || initializing ? (
           <div className="loading">
             <div className="loading-orb" />
             <p>Conectando sua memória…</p>
@@ -606,6 +675,45 @@ export function Brain() {
                     </button>
                   </div>
                 )}
+                {setup?.status !== "complete" && (
+                  <div className="setup-banner">
+                    <Icon name="brain" size={22} />
+                    <div>
+                      <strong>
+                        Prepare sua memória para trabalhar com você.
+                      </strong>
+                      <p>
+                        Conecte a IA, escolha suas fontes e inicie uma coleta
+                        guiada.
+                      </p>
+                    </div>
+                    <button className="button" onClick={() => go("setup")}>
+                      Configurar primeiro acesso <Icon name="arrow" size={14} />
+                    </button>
+                  </div>
+                )}
+                <button
+                  className="capture-home-banner"
+                  onClick={() => go("captures")}
+                >
+                  <span className="mini-orb">
+                    <Icon name="zap" size={23} />
+                  </span>
+                  <span>
+                    <strong>
+                      {captures.tasks.some((t) =>
+                        ["queued", "running"].includes(t.status),
+                      )
+                        ? "Daily está cuidando das suas coletas."
+                        : "Peça ao Daily para buscar e organizar."}
+                    </strong>
+                    <small>
+                      Slack, e-mails e outras fontes → sua wiki. Uma vez ou
+                      todos os dias.
+                    </small>
+                  </span>
+                  <Icon name="arrow" size={19} />
+                </button>
                 <div className="stats">
                   {[
                     {
@@ -1169,6 +1277,56 @@ export function Brain() {
             {view === "connections" && (
               <Connections settings={settings} update={setSettings} />
             )}
+            {view === "captures" && (
+              <Captures
+                state={captures}
+                notes={notes}
+                refresh={refreshCaptures}
+                ready={setup ? setup.aiConnected && settings.zapier : true}
+                configure={() => go("connections")}
+                manual={() => {
+                  setCaptureTitle("");
+                  setCaptureContent("");
+                  setCapture(true);
+                }}
+                open={(id) => {
+                  const n = notes.find((n) => n.id === id);
+                  if (n) open(n);
+                  else
+                    void act("open", async () => {
+                      const s = await load();
+                      const found = s.notes.find((n) => n.id === id);
+                      if (found) open(found);
+                    });
+                }}
+              />
+            )}
+            {view === "setup" &&
+              (setup ? (
+                <Onboarding
+                  setup={setup}
+                  settings={settings}
+                  rules={state.rules}
+                  updateSetup={setSetup}
+                  updateSettings={(s) => {
+                    setSettings(s);
+                    void request<SetupState>("/api/onboarding")
+                      .then(setSetup)
+                      .catch(() => {});
+                  }}
+                  finish={async (destination) => {
+                    await refreshCaptures();
+                    go(destination === "manual" ? "raw" : destination);
+                    if (destination === "manual") {
+                      setCaptureTitle("");
+                      setCaptureContent("");
+                      setCapture(true);
+                    }
+                  }}
+                />
+              ) : (
+                <p>Preparando seus primeiros passos…</p>
+              ))}
             {view === "rules" && (
               <div className="rules-page">
                 <div className="page-heading">

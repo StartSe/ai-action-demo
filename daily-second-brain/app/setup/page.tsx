@@ -1,4 +1,4 @@
 import { redirect } from "next/navigation";
 export default function Page() {
-  redirect("/?view=connections");
+  redirect("/?view=setup");
 }

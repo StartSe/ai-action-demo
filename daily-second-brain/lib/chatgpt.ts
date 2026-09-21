@@ -143,7 +143,7 @@ export class ChatGPTBridge {
         clientInfo: {
           name: "daily_second_brain",
           title: "Daily Second Brain",
-          version: "1.0.2",
+          version: "1.1.0",
         },
         capabilities: { experimentalApi: true },
       });

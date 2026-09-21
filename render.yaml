@@ -341,7 +341,7 @@ services:
     envVars:
       - key: PORT
         value: "10000"
-    # Fontes originais, wiki, artefatos, conversas, revisões, conta e credenciais ficam em /app/data e sobrevivem a deploys.
+    # Fontes originais, wiki, artefatos, conversas, revisões, fila de coletas, agendamentos, conta e credenciais ficam em /app/data e sobrevivem a deploys.
     disk:
       name: daily-second-brain-dados
       mountPath: /app/data

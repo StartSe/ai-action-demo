@@ -34,6 +34,19 @@ try {
     await page.getByRole("button", { name: "Entrar", exact: true }).click();
   }
   console.log("Auth submitted");
+  await page.waitForFunction(() =>
+    /Sua mente,|Sua memória começa aqui/.test(
+      document.querySelector("h1")?.textContent || "",
+    ),
+  );
+  if (
+    await page
+      .getByRole("heading", { name: "Sua memória começa aqui." })
+      .isVisible()
+  )
+    await page
+      .getByRole("button", { name: "Continuar depois", exact: true })
+      .click();
   await page.getByRole("heading", { name: "Sua mente, expandida." }).waitFor();
   console.log("Home ready");
   await page.getByRole("button", { name: "Explorar com um exemplo" }).click();
@@ -112,6 +125,9 @@ try {
   assert.equal(exported.headers()["content-type"], "application/zip");
   await page
     .getByRole("button", { name: "Capturar memória", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Inserir texto", exact: true })
     .click();
   await page
     .getByLabel("Um título para reencontrar")

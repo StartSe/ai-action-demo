@@ -81,17 +81,20 @@ export function mirror(n: Note) {
   writeFileSync(path + ".tmp", markdown(n), { mode: 0o600 });
   renameSync(path + ".tmp", path);
 }
-export function save(input: {
-  kind: Kind;
-  title: string;
-  content: string;
-  tags?: string[];
-  sources?: string[];
-  demo?: boolean;
-  id?: string;
-  revision?: number;
-  status?: string;
-}): Note {
+export function save(
+  input: {
+    kind: Kind;
+    title: string;
+    content: string;
+    tags?: string[];
+    sources?: string[];
+    demo?: boolean;
+    id?: string;
+    revision?: number;
+    status?: string;
+  },
+  onSaved?: (n: Note) => void,
+): Note {
   const old = input.id ? note(input.id) : undefined;
   if (old && input.revision !== old.revision)
     throw new BrainError(
@@ -180,6 +183,7 @@ export function save(input: {
         .prepare("INSERT INTO revisions VALUES(?,?,?)")
         .run(item.id, item.revision, JSON.stringify(item));
     }
+    onSaved?.(n);
     db().exec("COMMIT");
   } catch (e) {
     db().exec("ROLLBACK");

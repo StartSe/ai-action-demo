@@ -1,7 +1,7 @@
 # Blueprint de publicação de Daily Second Brain (especificação: https://render.com/docs/blueprint-spec)
 # Imagem pública publicada pelo GitHub Actions em ghcr.io/startse/daily-second-brain:latest.
-# Este app exige o plano starter (pago) e cria um disco de 1 GB em /app/data, onde ficam fontes originais, wiki, artefatos, conversas, revisões, conta e credenciais.
-# Crie sua conta, explore a memória de exemplo e abra Conexões para conectar ChatGPT ou OpenRouter. Zapier e ElevenLabs são opcionais.
+# Este app exige o plano starter (pago) e cria um disco de 1 GB em /app/data, onde ficam fontes originais, wiki, artefatos, conversas, revisões, fila de coletas, agendamentos, conta e credenciais.
+# Crie sua conta e siga o primeiro acesso: conecte ChatGPT ou OpenRouter, configure as leituras do Zapier, revise suas regras e peça a primeira coleta. ElevenLabs é opcional.
 services:
   - type: web
     name: daily-second-brain
@@ -14,7 +14,7 @@ services:
     envVars:
       - key: PORT
         value: "10000"
-    # Fontes originais, wiki, artefatos, conversas, revisões, conta e credenciais ficam em /app/data e sobrevivem a deploys.
+    # Fontes originais, wiki, artefatos, conversas, revisões, fila de coletas, agendamentos, conta e credenciais ficam em /app/data e sobrevivem a deploys.
     disk:
       name: daily-second-brain-dados
       mountPath: /app/data

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0 — 2026-09-21
+
+- Captura agêntica por instrução: usa leituras autorizadas do Zapier, preserva fontes raw e organiza a wiki em segundo plano.
+- Fila persistente com progresso, resultados, cancelamento, retomada após falha e repetição de instruções recentes.
+- Recorrências diárias, em dias úteis ou semanais, com horário, fuso, edição e pausa. O servidor executa sem depender de uma aba aberta.
+- Primeiro acesso guiado com teste da IA, conexão e permissões de coleta do Zapier, regras, voz opcional e primeira instrução.
+- Compatibilidade com ferramentas individuais do Zapier e o modo agêntico com descoberta e executor de leitura.
+
 ## 1.0.2 — 2026-09-21
 
 - Isola exemplos fictícios do contexto de IA quando existem memórias próprias.

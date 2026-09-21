@@ -1,10 +1,11 @@
-# Daily Second Brain · v1.0.2
+# Daily Second Brain · v1.1.0
 
 Uma memória pessoal conectada: capture o que chega, transforme em conhecimento e converse para criar novos resultados. A experiência combina um observatório de ideias com páginas Markdown, fontes rastreáveis, regras próprias e um assistente por texto ou voz.
 
 **raw → wiki → outputs → raw**
 
-- **Caixa de entrada:** cole textos ou importe `.md`, `.txt`, `.csv` e `.json` de até 100 KB. A fonte original permanece imutável.
+- **Coletas e rotinas:** descreva o que buscar nas ferramentas conectadas. Daily coleta em segundo plano, guarda os originais e organiza a wiki. Acompanhe as etapas e abra as fontes e páginas geradas; repita uma instrução recente ou agende uma recorrência.
+- **Caixa de entrada:** recebe as coletas automaticamente. Também permite colar textos ou importar `.md`, `.txt`, `.csv` e `.json` de até 100 KB. A fonte original permanece imutável.
 - **Wiki:** o assistente organiza cada fonte, conecta ideias com `[[wikilinks]]`, evita títulos duplicados e atualiza páginas relacionadas. Edições e restaurações guardam revisões. Renomear uma página atualiza os links de wiki e outputs.
 - **Mapa:** navegue pelas conexões reais entre páginas. Mostra até 28 páginas recentes; a wiki e a busca continuam disponíveis para todo o acervo.
 - **Conversas:** recuperação por relevância e recência, com até 12 fontes por interação e histórico recente. A tela mostra o contexto consultado; referências clicáveis permitem conferir o raciocínio.
@@ -23,7 +24,29 @@ O exemplo é opt-in, com conteúdos fictícios e respostas claramente demonstrat
 | Zapier MCP | Coleta e ações em Gmail, Drive, Notion, Slack e ferramentas configuradas pelo usuário | Crie o servidor no Zapier, habilite ferramentas e salve sua URL e token opcional. “Testar e ver ferramentas” consulta o servidor real. |
 | ElevenLabs | Falar para escrever e ouvir respostas | Salve a chave e opcionalmente a voz. Transcrição é revisada antes do envio. Até 60 s/15 MB por gravação; leitura de até 2.500 caracteres. |
 
-Zapier é a integração agregadora recomendada para a v1: reduz a quantidade de credenciais e conectores específicos. O assistente prepara a ação com os argumentos e aguarda confirmação; o servidor executa uma única vez e grava o resultado em raw. Falhas/interrupções pedem conferência no serviço antes de repetir, pois uma chamada externa pode ter sido concluída sem resposta. Não há sincronização automática nem agendador na v1. Coleta sob demanda evita importar informação sem intenção. Ferramentas disponíveis dependem da configuração da conta Zapier.
+Zapier centraliza as fontes. Em **Coletas e rotinas**, o pedido autoriza as leituras selecionadas em Conexões, sem pedir confirmação a cada mensagem lida. Os resultados são salvos em raw e organizados automaticamente na wiki conforme o pedido e as regras. Ferramentas de escrita não são fornecidas ao agente de coleta. No chat, ações externas continuam sendo preparadas para confirmação explícita; resultados confirmados entram em raw.
+
+O modo agêntico do Zapier é atendido pelas ferramentas oficiais `inspect_zapier_actions`, `discover_zapier_actions`, `list_zapier_connections` e `execute_zapier_read_action`. No modo gerenciado, ferramentas declaradas como leitura pelo servidor são reconhecidas; ferramentas sem classificação precisam ser selecionadas pelo usuário em **Ferramentas de coleta**. A escolha fica vinculada ao servidor e à definição da ferramenta. Mudanças de conexão ou permissões são verificadas novamente na execução. Habilite as ações desejadas no Zapier; a coleta não habilita novas ações nem executa código externo. [Referência oficial dos modos do Zapier](https://docs.zapier.com/mcp/overview/how-tools-work).
+
+## Primeiro acesso e uma coleta do Slack
+
+1. Crie sua conta. O guia abre automaticamente em uma memória nova e pode ser retomado pelo menu **Primeiro acesso**.
+2. Conecte ChatGPT ou OpenRouter e use **Testar IA e continuar**. O teste faz uma chamada real ao provedor escolhido.
+3. Conecte o Zapier e habilite a leitura de mensagens/histórico do Slack. Confira as ferramentas de coleta; escolha somente ações de consulta.
+4. Revise as regras de organização. ElevenLabs é opcional.
+5. Peça, por exemplo: **“Obter as 4 últimas mensagens do canal do Slack tech-academy (C04KTMS2GEL) e organizar os pontos na wiki.”** Ajuste o canal para uma fonte acessível à sua conta.
+
+O pedido entra na fila e a tela mostra leitura das fontes e organização. A aba pode ser fechada. Ao concluir, abra as páginas criadas e confira os originais. **Repetir instrução** busca informações atuais em uma nova execução; **Retomar coleta** após falha reutiliza leituras já salvas e continua a organização.
+
+Em **Agendar**, escolha todos os dias, dias úteis ou um dia da semana, horário e fuso IANA. A próxima execução é exibida ao salvar. Rotinas podem ser editadas, pausadas, retomadas e excluídas sem apagar o histórico. Coletas e chamadas utilizam os limites/créditos dos provedores conectados.
+
+### Execução persistente
+
+O worker inicia com o servidor Next.js via `instrumentation.ts`, consulta a fila a cada 3 segundos e executa uma coleta por vez. Fila, etapas e recorrências ficam no SQLite do disco persistente. Não depende de visitas à página, cron externo ou uma requisição HTTP longa. Requer o servidor Node/Render em execução; hospedagem que suspende o processo não executa durante a suspensão.
+
+Após reinício, tarefas com lease expirado (90 segundos) são retomadas, até três tentativas automáticas. Cada leitura concluída guarda uma etapa e sua fonte na mesma transação; a organização também grava a página e o progresso juntos. Cancelar interrompe novos resultados e preserva o que já foi salvo. O limite por execução é de 8 minutos e 16 leituras, com até 90 KB de resposta por chamada; pedidos maiores devem ser divididos.
+
+Ocorrências perdidas durante indisponibilidade são consolidadas em uma coleta ao retornar, e execuções da mesma rotina não se sobrepõem. Os horários respeitam o fuso informado: horários inexistentes na entrada do horário de verão são pulados; horários duplicados na saída executam apenas uma vez por dia. O histórico exibe as 60 coletas mais recentes; os registros anteriores permanecem no banco.
 
 A voz é por turnos (gravar → revisar → enviar → ouvir), sem ligação telefônica ou conversa full duplex. Leitura de PDFs, imagens, áudio anexado, crawling de URLs e embeddings não estão nesta versão; textos desses materiais podem ser colados ou obtidos pelas ferramentas Zapier.
 
@@ -38,7 +61,7 @@ npm ci
 npm run dev -- --port 3020
 ```
 
-Crie a conta em `/conta` e abra Conexões. Nenhuma variável é obrigatória. Uma conta administrativa e um acervo por instância; não é um serviço multiusuário.
+Crie a conta em `/conta` e siga o primeiro acesso. Nenhuma variável é obrigatória. Uma conta administrativa e um acervo por instância; não é um serviço multiusuário.
 
 ```sh
 docker compose up --build
@@ -51,7 +74,7 @@ docker compose up --build
 
 O push em `main` executa o workflow da suíte: constrói `ghcr.io/startse/daily-second-brain`, publica tags `latest` e SHA, captura a interface e atualiza o catálogo público e o branch `deploy-daily-second-brain`. Blueprint gerado a partir de `catalogo.json`: plano Starter, disco de 1 GB em `/app/data`, porta 10000 e `/api/health`. Uma instância instalada no Render é criada a partir desse Blueprint; a publicação do catálogo por si só não cria uma instância na conta de um usuário.
 
-O processo usa usuário não root. `/app/data` contém `app.sqlite`, chave mestra, sessão ChatGPT isolada e espelho Markdown `vault/`. SQLite é a fonte de verdade. O ZIP é gerado do banco, mesmo se um espelho em disco falhar. Não edite os espelhos esperando importação automática. Para backup completo, pare o serviço e copie todo o volume, incluindo a chave mestra. O ZIP é uma exportação de conhecimento: não contém conta, credenciais nem conversas.
+O processo usa usuário não root. `/app/data` contém `app.sqlite` (incluindo fila, agendamentos e progresso do primeiro acesso), chave mestra, sessão ChatGPT isolada e espelho Markdown `vault/`. SQLite é a fonte de verdade. O ZIP é gerado do banco, mesmo se um espelho em disco falhar. Não edite os espelhos esperando importação automática. Para backup completo, pare o serviço e copie todo o volume, incluindo a chave mestra. O ZIP é uma exportação de conhecimento: não contém conta, credenciais, conversas, fila ou agendamentos.
 
 ## Configuração alternativa por ambiente
 
@@ -84,3 +107,5 @@ node ../scripts/verificar-jargao.mjs daily-second-brain
 ```
 
 `tests/browser.mjs` valida conta, captura, organização, edição/restauração, chat, artefatos, reciclagem, regras, exportação, busca e layout móvel em um servidor com banco temporário vazio. Configure `PLAYWRIGHT_MODULE` para o pacote Playwright instalado e `TEST_BASE_URL` para o servidor. Gera capturas em `TEST_ARTIFACTS` (padrão `/tmp/daily-brain-review`). Testes de integração usam respostas controladas dos provedores; acesso real depende das credenciais conectadas pelo usuário.
+
+`tests/captures-browser.mjs`, após o build, inicia o servidor standalone com banco temporário e respostas controladas para os serviços externos. Percorre o primeiro acesso inteiro, fecha a aba antes da conclusão, repete a instrução, cria/edita/pausa uma rotina e reinicia o processo para verificar execução agendada sem navegador. Valida também os layouts em 1440 px e 390 px. Nenhuma chamada real ao Slack é feita pelos testes.

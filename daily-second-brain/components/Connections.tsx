@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Settings } from "@/lib/types";
 import { request } from "./client";
 import { Icon } from "./Icons";
+import { CollectionTools } from "./CollectionTools";
 type Account = {
   account: { email?: string; planType?: string } | null;
   login: { verificationUrl: string; userCode: string } | null;
@@ -12,30 +13,31 @@ type Account = {
 export function Connections({
   settings,
   update,
+  focus,
 }: {
   settings: Settings;
   update: (s: Settings) => void;
+  focus?: "ai" | "zapier" | "voice";
 }) {
   const [account, setAccount] = useState<Account | null>(null);
   const [models, setModels] = useState<{ id: string; name: string }[]>([]);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [tools, setTools] = useState<{ name: string; description?: string }[]>(
-    [],
-  );
+  const [toolsVersion, setToolsVersion] = useState(0);
   const loadAccount = useCallback(
     async () => setAccount(await request<Account>("/api/chatgpt")),
     [],
   );
   useEffect(() => {
+    if (focus && focus !== "ai") return;
     void request<Account>("/api/chatgpt")
       .then(setAccount)
       .catch((e) => setError(e.message));
     void request<{ id: string; name: string }[]>("/api/settings?models=1")
       .then(setModels)
       .catch(() => {});
-  }, [loadAccount]);
+  }, [loadAccount, focus]);
   useEffect(() => {
     if (!account?.login) return;
     const timer = setInterval(
@@ -58,6 +60,8 @@ export function Connections({
   }
   async function save(data: Record<string, unknown>) {
     update(await request<Settings>("/api/settings", "PUT", data));
+    if ("ZAPIER_MCP_URL" in data || "ZAPIER_MCP_TOKEN" in data)
+      setToolsVersion((v) => v + 1);
     setNotice("Conexão salva.");
   }
   function form(e: React.FormEvent<HTMLFormElement>, key: string) {
@@ -74,7 +78,7 @@ export function Connections({
     });
   }
   return (
-    <div className="connections">
+    <div className={`connections ${focus ? `focus-${focus}` : ""}`}>
       <div className="page-heading">
         <span className="eyebrow">SEU ECOSSISTEMA</span>
         <h1>Mais conexões. Mais contexto.</h1>
@@ -93,7 +97,7 @@ export function Connections({
           {notice}
         </div>
       )}
-      <section className="connection-card">
+      <section className="connection-card connection-ai">
         <div className="connection-title">
           <span className="connection-logo purple">
             <Icon name="brain" size={25} />
@@ -282,7 +286,7 @@ export function Connections({
         )}
       </section>
       <div className="connections-grid">
-        <section className="connection-card">
+        <section className="connection-card connection-zapier">
           <div className="connection-title">
             <span className="connection-logo orange">
               <Icon name="zap" size={25} />
@@ -294,8 +298,9 @@ export function Connections({
             <span className={`status-dot ${settings.zapier ? "on" : ""}`} />
           </div>
           <p>
-            Traga contexto de Gmail, Drive, Notion, Slack e outros apps. Prepare
-            ações no chat e revise antes de executar.
+            Traga contexto de Gmail, Drive, Notion e Slack. Habilite as
+            ferramentas de leitura no Zapier e escolha abaixo quais Daily pode
+            usar nas coletas.
           </p>
           <form onSubmit={(e) => form(e, "zapier")}>
             <label>
@@ -333,20 +338,6 @@ export function Connections({
             <div className="button-row">
               <button
                 className="text-button"
-                disabled={!!busy}
-                onClick={() =>
-                  void act("tools", async () => {
-                    setTools(
-                      await request("/api/brain", "POST", { action: "tools" }),
-                    );
-                    setNotice("Conexão verificada. Ferramentas carregadas.");
-                  })
-                }
-              >
-                {busy === "tools" ? "Consultando…" : "Testar e ver ferramentas"}
-              </button>
-              <button
-                className="text-button"
                 onClick={() =>
                   void act("remove", () =>
                     save({ ZAPIER_MCP_URL: null, ZAPIER_MCP_TOKEN: null }),
@@ -357,22 +348,15 @@ export function Connections({
               </button>
             </div>
           )}
-          {tools.length > 0 && (
-            <div className="tool-list">
-              {tools.map((t) => (
-                <div key={t.name}>
-                  <Icon name="plug" size={15} />
-                  <span>{t.name}</span>
-                </div>
-              ))}
-            </div>
+          {settings.zapier && (!focus || focus === "zapier") && (
+            <CollectionTools key={toolsVersion} />
           )}
           <small>
-            Configure as ferramentas permitidas no Zapier. Os resultados
-            aprovados entram na Caixa de entrada.
+            Os resultados das coletas ficam na Caixa de entrada, com as fontes
+            originais, e são organizados automaticamente na wiki.
           </small>
         </section>
-        <section className="connection-card">
+        <section className="connection-card connection-voice">
           <div className="connection-title">
             <span className="connection-logo teal">
               <Icon name="volume" size={25} />
