@@ -32,9 +32,18 @@
   },
   "radar-sinais": {
     "lib/ai.ts": "Seleção explícita entre OpenRouter e ChatGPT pelo Codex App Server; disponibilidade assíncrona da conta, síntese e modelo de ontologia próprios do Radar.",
-    "lib/setup-comum.ts": "O teste do OpenRouter usa seu próprio modelo mesmo quando o provedor selecionado é ChatGPT.",
+    "lib/setup-comum.ts": "IA selecionada e remoção das notificações e conexões de e-mail solicitada na versão 0.3.0.",
     "app/api/setup/route.ts": "Prontidão usa a conta de IA selecionada (OpenRouter ou ChatGPT), sem exigir OpenRouter quando ChatGPT está ativo.",
-    "app/api/status/route.ts": "Status da IA selecionada, sugestão única de conexão e visibilidade dos exemplos respeitam a conta e a limpeza dos dados de teste."
+    "app/api/status/route.ts": "Status da IA selecionada, sugestão única de conexão e visibilidade dos exemplos respeitam a conta e a limpeza dos dados de teste.",
+    "lib/notificacoes.ts": "Módulo reservado sem funções: notificações removidas por solicitação explícita.",
+    "lib/email-envio.ts": "Módulo reservado sem funções: envio e OAuth de e-mail removidos por solicitação explícita.",
+    "lib/rotinas.ts": "Monitoramentos com fuso, proteção contra concorrência e gravação interna sem notificações, inclusive nas agendas legadas.",
+    "app/api/rotinas/route.ts": "Cadastro de agendas centralizado por radar; antiga criação de notificações desativada.",
+    "app/api/setup/oauth/google/route.ts": "OAuth de e-mail desativado com resposta 410; notificações removidas por solicitação explícita.",
+    "app/api/setup/oauth/google/callback/route.ts": "OAuth de e-mail desativado com resposta 410; notificações removidas por solicitação explícita.",
+    "app/api/setup/oauth/microsoft/route.ts": "OAuth de e-mail desativado com resposta 410; notificações removidas por solicitação explícita.",
+    "app/api/setup/oauth/microsoft/callback/route.ts": "OAuth de e-mail desativado com resposta 410; notificações removidas por solicitação explícita.",
+    "lib/mcp-cliente.ts": "Cliente Streamable HTTP existente do Radar: inicialização, sessão e SSE exigidos pelo MCP Bright Data; cobertura em tests/fluxo.test.ts."
   },
   "clone-site": {
     "app/api/status/route.ts": "Motor de IA escolhido entre OpenRouter (chave) e ChatGPT (assinatura pelo Codex App Server) em /setup#ia: ai/demo seguem lib/motor.ts:iaDisponivel() (async), integrations.chatgpt informa a conta conectada e o OpenRouter deixa de ser próximo passo obrigatório quando o ChatGPT responde (a leitura de captura continua só pelo OpenRouter, ver vision). Precedente: radar-sinais.",

@@ -1,4 +1,5 @@
 import { chamar, conectar, listarFerramentas, type ConexaoMCP } from "./mcp-cliente";
+import { normalizarPagina } from "./pesquisa";
 import { getConfig } from "./store";
 import type { Achado } from "./busca";
 
@@ -29,10 +30,7 @@ export async function testarBrightData(config: Record<string, string | undefined
 /** Só URLs públicas HTTP(S) retornadas pela busca podem seguir para o scraper. */
 export function urlPublica(valor: unknown): valor is string {
   if (typeof valor !== "string") return false;
-  try {
-    const u = new URL(valor);
-    return ["https:", "http:"].includes(u.protocol) && !u.username && !u.password && u.hostname.includes(".") && !/^(localhost|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(u.hostname) && !u.hostname.endsWith(".local");
-  } catch { return false; }
+  try { normalizarPagina(valor); return true; } catch { return false; }
 }
 
 export async function buscarBrightData(consulta: string, dias: number): Promise<Achado[]> {
@@ -51,11 +49,21 @@ export async function buscarBrightData(consulta: string, dias: number): Promise<
   } catch { throw new Error("Bright Data Search Engine indisponível. Confira token, cota e permissões em Configurações."); }
 }
 
+export async function scrapeBrightData(url: string): Promise<string> {
+  const token = getConfig("BRIGHTDATA_API_TOKEN");
+  if (!token) throw new Error("Conecte a Bright Data.");
+  try {
+    const markdown = await chamar(cliente(token), "scrape_as_markdown", { url: normalizarPagina(url) });
+    if (typeof markdown !== "string" || !markdown.trim()) throw new Error("Página vazia");
+    return markdown.slice(0, 12000);
+  } catch { throw new Error("A Bright Data não conseguiu ler esta página."); }
+}
+
 /** Enriquece no máximo quatro achados por radar, inclusive de Exa/Tavily; falhas não descartam a busca. */
 export async function enriquecerMarkdown(achados: Achado[]): Promise<{ achados: Achado[]; falhou: boolean }> {
   const token = getConfig("BRIGHTDATA_API_TOKEN");
   if (!token || !achados.length) return { achados, falhou: false };
-  const escolhidos = achados.filter(a => urlPublica(a.url)).slice(0, 4);
+  const escolhidos = achados.filter(a => urlPublica(a.url) && a.fonte !== "firecrawl" && a.fonte !== "brightdata-markdown").slice(0, 4);
   let falhou = false;
   const trechos = new Map<string, string>();
   await Promise.all(escolhidos.map(async a => {

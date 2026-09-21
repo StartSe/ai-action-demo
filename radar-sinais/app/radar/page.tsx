@@ -1,8 +1,11 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Topbar, useStatus, lerErro, ErrorBox, Aviso, Loading, Empty, MaisDetalhes, CopyButton, Origem, type ErroLido } from "@/components/ui";
 import { Grafo, grafoParaJSON } from "@/components/Grafo";
+import { ChatRadar } from "@/components/ChatRadar";
+import { RadarWorkspace } from "@/components/RadarWorkspace";
+import type { CadastroRadar } from "@/lib/radares";
 import { RadaresAnteriores } from "@/components/RadaresAnteriores";
 import { radarDemo } from "@/lib/demo";
 import { data } from "@/lib/formato";
@@ -17,60 +20,50 @@ const META_EXEMPLO: Meta = { demo: true, model: "", geradoEm: "1970-01-01T00:00:
 
 export default function Page() {
   const { status, erro } = useStatus();
-  const [dados, setDados] = useState<DadosRadar>({ temas: [], periodoDias: 30 });
+  return <><Topbar marca="R" nome="Radar de Sinais" area="Estratégia" status={status} erro={erro} usuario={status?.usuario} /><main className="max-w-[1500px] mx-auto px-4 md:px-6 py-5"><RadarWorkspace>{cadastro => <RadarAtual cadastro={cadastro} />}</RadarWorkspace></main></>;
+}
+function RadarAtual({ cadastro }: { cadastro: CadastroRadar }) {
+  const { status } = useStatus();
+  const [dados, setDados] = useState<DadosRadar>({ radarId: cadastro.id, temas: cadastro.pesquisa.termos.filter(t => t.ativo).map(t => t.termo), periodoDias: cadastro.pesquisa.periodoDias, setor: cadastro.pesquisa.setor });
   const [resultado, setResultado] = useState<ResultadoDados>();
-  const [editando, setEditando] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState("");
   const [erroBusca, setErroBusca] = useState<ErroLido | null>(null);
   const [respondidas, setRespondidas] = useState<string[]>([]);
-  const iniciou = useRef(false);
   const ocupado = useRef(false);
   const demo = useMemo(() => radarDemo(30), []);
 
-  function carregarInicial() {
-    const params = new URLSearchParams(location.search);
+  const carregarInicial = useCallback(() => {
     setErroCarga("");
-    fetch("/api/radar/pesquisa")
+    fetch(`/api/radar/pesquisa?radarId=${cadastro.id}`)
       .then(async (r) => {
         if (!r.ok) throw new Error("Não foi possível carregar seus temas.");
         const { pesquisa } = await r.json();
-        if (params.get("temas")) return;
         setDados({
+          radarId: cadastro.id,
           temas: pesquisa.termos.filter((t: { ativo: boolean }) => t.ativo).map((t: { termo: string }) => t.termo),
           periodoDias: pesquisa.periodoDias,
           setor: pesquisa.setor,
         });
       })
       .catch((e) => setErroCarga(e.message));
-    if (!params.get("exemplo"))
-      fetch("/api/radar?ultimo=1")
+    if (!new URLSearchParams(location.search).get("exemplo"))
+      fetch(`/api/radar?ultimo=1&radarId=${cadastro.id}`)
         .then(async (r) => {
           if (!r.ok) throw new Error("Não foi possível carregar o último radar.");
           return r.json();
         })
         .then((r) => { if (r) setResultado((atual) => atual || r); })
         .catch((e) => setErroCarga(e.message));
-  }
+  }, [cadastro.id]);
 
-  useEffect(() => {
-    if (iniciou.current) return;
-    iniciou.current = true;
-    const params = new URLSearchParams(location.search);
-    carregarInicial();
-    if (params.get("temas")) {
-      const periodo = Number(params.get("periodo"));
-      const d = { temas: params.get("temas")!.split("\n").filter(Boolean), periodoDias: [7, 30, 90].includes(periodo) ? periodo : 30, setor: params.get("setor") || undefined };
-      setTimeout(() => { setDados(d); setEditando(true); }, 0);
-    }
-  }, []);
+  useEffect(() => { const timer = setTimeout(carregarInicial, 0); return () => clearTimeout(timer); }, [carregarInicial]);
 
   async function montar(e?: FormEvent, ajuste?: Partial<DadosRadar>) {
     e?.preventDefault();
     if (ocupado.current) return;
     const base = { ...dados, ...ajuste };
     if (!base.temas.some((t) => t.trim())) {
-      setEditando(true);
       setErroBusca({ mensagem: "Adicione ao menos um tema para pesquisar." });
       return;
     }
@@ -79,7 +72,7 @@ export default function Page() {
     setCarregando(true);
     setErroBusca(null);
     setRespondidas([]);
-    const entrada = { ...base, temas: base.temas.map((t) => t.trim()).filter(Boolean) };
+    const entrada = { ...base, radarId: cadastro.id, temas: base.temas.map((t) => t.trim()).filter(Boolean) };
     const rodada = `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
     const timer = setInterval(() => {
       fetch(`/api/radar/andamento?rodada=${rodada}`)
@@ -92,7 +85,6 @@ export default function Page() {
       if (!r.ok) throw await lerErro(r);
       const v = await r.json();
       setResultado({ ...v, dados: entrada });
-      setEditando(false);
     } catch (e) {
       setErroBusca(e && typeof e === "object" && "mensagem" in e ? (e as ErroLido) : await lerErro(e));
     } finally {
@@ -114,44 +106,20 @@ export default function Page() {
 
   return (
     <>
-      <Topbar marca="R" nome="Radar de Sinais" area="Estratégia" status={status} erro={erro} usuario={status?.usuario} />
-      <main className="max-w-[1500px] mx-auto px-4 md:px-6 py-5">
+
         <header className="flex flex-wrap items-start justify-between gap-4 mb-4">
           <div className="min-w-0">
-            <h1 className="text-2xl font-extrabold tracking-tight">Radar de sinais</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight">{cadastro.nome}</h1>
             <p className="text-sm text-ink mt-1 font-medium">{!exibido && !mostrarExemplo ? "Escolha seus temas e gere seu primeiro radar." : resumo.frase}</p>
             {real && resultado && <p className="text-[13px] text-muted mt-0.5">{linhaConfianca(radar, resultado.meta.geradoEm)}</p>}
           </div>
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
-            <button type="button" className="btn-ghost !py-2 !text-sm flex-1 md:flex-none" onClick={() => setEditando(!editando)} aria-expanded={editando}>
-              Editar pesquisa
-            </button>
+            <Link className="btn-ghost !py-2 !text-sm flex-1 md:flex-none" href={`/termos?radarId=${cadastro.id}`}>Editar temas e fontes</Link>
             <button type="button" className="btn-primary !w-auto !h-10 !text-sm flex-1 md:flex-none" disabled={carregando} onClick={() => montar()}>
               {carregando ? "Pesquisando…" : "Atualizar radar"}
             </button>
           </div>
         </header>
-        {editando && (
-          <form onSubmit={montar} className="card p-4 mb-4 grid md:grid-cols-[2fr_1fr_1fr_auto] gap-3 items-end">
-            <label className="text-xs font-semibold">
-              Temas, um por linha
-              <textarea className="input mt-1 !text-sm" aria-label="Temas que você acompanha" required maxLength={2400} value={dados.temas.join("\n")} onChange={(e) => setDados({ ...dados, temas: e.target.value.split("\n") })} />
-            </label>
-            <label className="text-xs font-semibold">
-              Período
-              <select className="input mt-1 !text-sm" value={dados.periodoDias} onChange={(e) => setDados({ ...dados, periodoDias: Number(e.target.value) })}>
-                {[7, 30, 90].map((d) => (
-                  <option value={d} key={d}>Últimos {d} dias</option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs font-semibold">
-              Setor
-              <input className="input mt-1 !text-sm" value={dados.setor || ""} maxLength={200} onChange={(e) => setDados({ ...dados, setor: e.target.value })} />
-            </label>
-            <button className="btn-primary !w-full md:!w-auto !h-10 !text-sm" disabled={carregando}>Pesquisar</button>
-          </form>
-        )}
         {erroCarga && (
           <div className="mb-4">
             <Aviso tom="warn" acao={{ rotulo: "Tentar de novo", onClick: carregarInicial }}>{erroCarga}</Aviso>
@@ -168,7 +136,7 @@ export default function Page() {
           ) : mostrarExemplo ? (
             <Origem meta={exibido?.meta ?? META_EXEMPLO} />
           ) : null}
-          {!resultado && <Link href="/termos" className="btn-link">Definir meus temas</Link>}
+          {!resultado && <Link href={`/termos?radarId=${cadastro.id}`} className="btn-link">Definir meus temas</Link>}
           {exibido?.id && (
             <span className="flex flex-wrap gap-2 md:ml-auto">
               <a href={`/imprimir/${exibido.id}`} target="_blank" rel="noopener noreferrer" className="btn-ghost !py-1.5 !text-[13px]">Imprimir</a>
@@ -185,7 +153,7 @@ export default function Page() {
             </div>
           )}
           <div className={carregando ? "opacity-40 pointer-events-none" : ""} aria-busy={carregando}>
-            {!exibido && !mostrarExemplo ? <Empty ilustracao={null} titulo="Seu radar começa aqui" descricao="Escolha os temas que deseja acompanhar e clique em Atualizar radar." /> : <ConteudoRadar radar={radar} aoAmpliar={radar.periodoDias < 90 ? () => montar(undefined, { periodoDias: 90 }) : undefined} />}
+            {!exibido && !mostrarExemplo ? <Empty ilustracao={null} titulo="Seu radar começa aqui" descricao="Escolha os temas que deseja acompanhar e clique em Atualizar radar." /> : <ConteudoRadar key={exibido?.id || "demo"} resultadoId={real ? exibido?.id : undefined} radar={radar} aoAmpliar={radar.periodoDias < 90 ? () => montar(undefined, { periodoDias: 90 }) : undefined} />}
           </div>
         </div>
         {exibido && <Proveniencia resultado={exibido} />}
@@ -205,8 +173,7 @@ export default function Page() {
             Baixar dados do mapa (JSON)
           </button>
         </MaisDetalhes>
-        <RadaresAnteriores atual={exibido?.id} atualizadoEm={resultado?.meta.geradoEm} aoRemoverExemplos={() => setResultado(r => r?.meta.demo ? undefined : r)} />
-      </main>
+        <RadaresAnteriores radarId={cadastro.id} atual={exibido?.id} atualizadoEm={resultado?.meta.geradoEm} aoRemoverExemplos={() => setResultado(r => r?.meta.demo ? undefined : r)} />
     </>
   );
 }
@@ -243,13 +210,13 @@ export function Resultado({ radar, dados, meta, id, mostrarRefazer = false }: Re
         <div className="flex flex-wrap gap-2">
           {id && <a href={`/imprimir/${id}`} target="_blank" rel="noopener noreferrer" className="btn-ghost !py-1.5 !text-[13px]">Imprimir</a>}
           {mostrarRefazer && (
-            <Link className="btn-ghost !py-1.5 !text-[13px]" href={`/radar?${new URLSearchParams({ temas: dados.temas.join("\n"), periodo: String(dados.periodoDias), setor: dados.setor || "" })}`}>
+            <Link className="btn-ghost !py-1.5 !text-[13px]" href={`/radar?radarId=${dados.radarId || ""}`}>
               Atualizar pesquisa
             </Link>
           )}
         </div>
       </div>
-      <ConteudoRadar radar={radar} />
+      <ConteudoRadar radar={radar} resultadoId={!meta.demo ? id : undefined} />
       <Proveniencia resultado={{ radar, dados, meta }} />
     </>
   );
@@ -268,7 +235,7 @@ function IlustracaoVazio() {
   );
 }
 
-export function ConteudoRadar({ radar, impressao = false, aoAmpliar }: { radar: Radar; impressao?: boolean; aoAmpliar?: () => void }) {
+export function ConteudoRadar({ radar, impressao = false, aoAmpliar, resultadoId }: { resultadoId?: string; radar: Radar; impressao?: boolean; aoAmpliar?: () => void }) {
   const nos = useMemo(
     () => [
       ...radar.nos,
@@ -280,18 +247,18 @@ export function ConteudoRadar({ radar, impressao = false, aoAmpliar }: { radar: 
   );
   if (!radar.sinais.length)
     return (
-      <Empty
+      <><Empty
         ilustracao={<IlustracaoVazio />}
         titulo="Nenhum sinal encontrado neste período"
         descricao="Experimente temas mais específicos ou amplie o período da pesquisa."
         acao={aoAmpliar ? "Ampliar para 90 dias" : undefined}
         onAcao={aoAmpliar}
         acaoSecundaria={{ rotulo: "Editar temas", url: "/termos" }}
-      />
+      />{resultadoId && !impressao && <ChatRadar key={resultadoId} resultadoId={resultadoId} />}</>
     );
   return (
     <>
-      <Grafo nos={nos} arestas={radar.arestas} sinais={radar.sinais} conexoes={radar.conexoes} explorador={!impressao} animar={!impressao} estatico={impressao} />
+      <Grafo resultadoId={!impressao ? resultadoId : undefined} nos={nos} arestas={radar.arestas} sinais={radar.sinais} conexoes={radar.conexoes} explorador={!impressao} animar={!impressao} estatico={impressao} />
       {impressao && (
         <>
           {radar.conexoes?.length > 0 && (

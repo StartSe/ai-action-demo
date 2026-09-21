@@ -1,5 +1,19 @@
 # Notas de versão
 
+## 0.3.0 — 2026-09-20
+
+- Radares nomeados com temas, fontes, páginas e histórico separados; seletor persistente, criação e renomeação. O histórico passa a se chamar **Análises deste radar**.
+- Migração transacional dos resultados e agendas existentes por temas e setor, preservando identificadores e links. Rascunhos de configuração são mantidos durante a sessão ao alternar radares.
+- Artigos da StartSe incluídos por padrão, com consulta pública direcionada e priorização nas buscas por site.
+- SearchAPI disponível nas integrações, com busca Google por tema, período e site.
+- Cadastro de páginas específicas com leitura direta via Bright Data MCP (`scrape_as_markdown`) ou Firecrawl, inclusive parâmetros da URL; falhas individuais aparecem na proveniência.
+- Chat flutuante com uma analista de grafos e sinais. Contexto recuperado da análise salva, referências validadas e botões para destacar pontos no mapa.
+- Tela cheia com grafo em destaque e painel translúcido de leituras/sinais que pode ser exibido ou ocultado. Grafos pequenos exibem os rótulos dos pontos.
+- Remoção de notificações, canais de e-mail/Slack e conexões de e-mail. Monitoramentos continuam executando e salvando análises no app, inclusive agendas legadas, sem entrega externa.
+- Versão atualizada no pacote, catálogo e health check; imagem sem dependências ou credenciais de envio de e-mail.
+
+Validação: 39 testes automatizados, lint, TypeScript, build de produção com Webpack, verificadores de padrão/jargão/paleta e navegação em desktop/celular com serviços simulados. Nenhuma credencial paga foi usada. Detalhes em `../tasks/radar-sinais-0.3.0.md`.
+
 ## 0.2.0 — 2026-09-20
 
 - Escolha entre OpenRouter e ChatGPT em Conectar IA, com login por código, seleção de modelo e desconexão da conta ChatGPT.

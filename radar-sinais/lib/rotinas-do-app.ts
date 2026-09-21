@@ -1,3 +1,4 @@
+import { obterRadar } from "./radares";
 import { aiEnabled } from "./ai";
 import { TIPO_MONITORAMENTO, validarMonitoramento } from "./monitoramento";
 // Tipos de rotina deste app: cada um sabe gerar o resultado entregue por notificação (lib/rotinas.ts).
@@ -55,10 +56,10 @@ registrarExecutor(TIPO_RADAR_SEMANAL.tipo, async (rotina: Rotina) => {
   const anterior = listarPorTipo<DadosRadar, Radar>("radar", 50).find((r) => chavePerfil(r.entrada.temas, r.entrada.setor) === perfil);
   const titulosAnteriores = new Set((anterior?.saida.sinais ?? []).map(tituloNormalizado));
 
-  const { meta, ...radar } = await montarRadar({ temas, periodoDias: 7, setor });
+  const { meta, ...radar } = await montarRadar({ radarId: parametros?.radarId, temas, periodoDias: 7, setor });
 
   const tituloSalvo = `Radar de sinais: ${temas.slice(0, 2).join(", ")}${temas.length > 2 ? "..." : ""}`;
-  const resultadoId = salvar({ tipo: "radar", titulo: tituloSalvo, entrada: { temas, periodoDias: 7, setor }, saida: radar, meta });
+  const resultadoId = salvar({ tipo: "radar", titulo: tituloSalvo, entrada: { radarId: obterRadar(parametros?.radarId).id, temas, periodoDias: 7, setor }, saida: radar, meta });
 
   const novos = radar.sinais.filter((s) => !titulosAnteriores.has(tituloNormalizado(s)));
   const continuamFortes = radar.sinais.filter((s) => titulosAnteriores.has(tituloNormalizado(s)) && s.forca === "alta");
@@ -76,7 +77,9 @@ registrarExecutor(TIPO_RADAR_SEMANAL.tipo, async (rotina: Rotina) => {
 
 registrarExecutor(TIPO_MONITORAMENTO, async (rotina: Rotina) => {
   if (!(await aiEnabled())) throw new Error("Conecte a IA em Configurações para monitorar fontes reais.");
-  const dados = validarMonitoramento(rotina.parametros);
+  const agenda = validarMonitoramento(rotina.parametros);
+  const cadastro = obterRadar(agenda.radarId);
+  const dados = validarMonitoramento({ ...agenda, radarId: cadastro.id, temas: cadastro.pesquisa.termos.filter(t => t.ativo).map(t => t.termo), setor: cadastro.pesquisa.setor, periodoDias: cadastro.pesquisa.periodoDias });
   const { meta, ...radar } = await montarRadar(dados);
   if (meta.demo) throw new Error("O monitoramento não envia dados de demonstração.");
   const titulo = `Radar: ${dados.temas.join(", ")}`;

@@ -7,6 +7,9 @@ export const NOMES_FONTE: Record<IdFonteBusca, string> = {
   github: "GitHub",
   googlenews: "Google Notícias",
   exa: "Exa",
+  startse: "StartSe · Artigos",
+  searchapi: "SearchAPI",
+  firecrawl: "Firecrawl",
   grok: "Grok · X Search",
   tavily: "Tavily",
   brightdata: "Bright Data Search Engine",
@@ -14,7 +17,7 @@ export const NOMES_FONTE: Record<IdFonteBusca, string> = {
 };
 
 /** Fontes que trazem notícias em português (com chave): sem nenhuma delas, o radar convida a conectar uma. */
-export const FONTES_COM_CHAVE: IdFonteBusca[] = ["exa", "tavily", "brightdata"];
+export const FONTES_COM_CHAVE: IdFonteBusca[] = ["exa", "tavily", "brightdata", "searchapi"];
 
 /** "Hacker News, GitHub; Reddit indisponível" — as que respondem primeiro, depois as que falharam. Fontes sem chave ficam de fora. */
 export function descreverFontes(fontes: EstadoFonte[]): string {

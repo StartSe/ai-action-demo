@@ -1,3 +1,4 @@
+import { coletarPaginas } from "./paginas";
 import { getConfig } from "./store";
 import { pertenceAoSite } from "./pesquisa";
 import { lerPesquisa } from "./pesquisa-store";
@@ -129,7 +130,7 @@ export async function montarRadar(dados: DadosRadar, { rodada }: OpcoesRadar = {
     return { ...radarDemo(dados.periodoDias), meta: meta({ demo: true, insumo }) };
   }
 
-  const pesquisa = lerPesquisa();
+  const pesquisa = lerPesquisa(dados.radarId);
   const iniciadaEm = new Date().toISOString();
   // Tema puro e tema + setor, sem repetir consultas idênticas.
   const consultas = [...new Set(dados.temas.flatMap((tema) => [tema, dados.setor ? `${tema} ${dados.setor}` : tema]))];
@@ -140,20 +141,21 @@ export async function montarRadar(dados: DadosRadar, { rodada }: OpcoesRadar = {
   const resultados: PromiseSettledResult<Awaited<ReturnType<typeof buscarDetalhado>>>[] = [];
   for (let i = 0; i < tarefas.length; i += 3) resultados.push(...await Promise.allSettled(tarefas.slice(i, i + 3).map(t => buscarDetalhado({ ...t, dias: dados.periodoDias, aoResponder, provedores: pesquisa.provedores }))));
 
-  const avisos: string[] = [];
-  const achadosBrutos: Achado[] = [];
-  const fontesPorConsulta: EstadoFonte[][] = [];
+  const paginas = await coletarPaginas(pesquisa.paginas ?? [], aoResponder);
+  const avisos: string[] = [...paginas.avisos];
+  const achadosBrutos: Achado[] = [...paginas.achados];
+  const fontesPorConsulta: EstadoFonte[][] = paginas.fontes.length ? [paginas.fontes] : [];
   resultados.forEach((r, i) => {
     if (r.status === "fulfilled") {
       achadosBrutos.push(...r.value.achados);
       fontesPorConsulta.push(r.value.fontes);
       if (tarefas[i].site && !r.value.achados.length) avisos.push(`Nenhuma evidência recente encontrada em ${tarefas[i].site}.`);
     } else {
-      if (tarefas[i].site) avisos.push(`Não foi possível consultar ${tarefas[i].site}. Habilite e configure Exa, Tavily ou Bright Data.`);
+      if (tarefas[i].site) avisos.push(`Não foi possível consultar ${tarefas[i].site}. Habilite e configure SearchAPI, Exa, Tavily ou Bright Data.`);
       console.error(`Consulta de busca "${tarefas[i].consulta}" falhou:`, r.reason);
     }
   });
-  if (fontesPorConsulta.length === 0) {
+  if (!fontesPorConsulta.flat().some(f => f.estado === "ok")) {
     const primeiraFalha = resultados.find(r => r.status === "rejected");
     if (primeiraFalha?.status === "rejected" && primeiraFalha.reason instanceof ErroBusca) throw primeiraFalha.reason;
     throw new ErroBusca("Nenhuma fonte de busca respondeu agora. Tente novamente em alguns minutos.");
@@ -161,13 +163,13 @@ export async function montarRadar(dados: DadosRadar, { rodada }: OpcoesRadar = {
   const fontes = consolidarFontes(fontesPorConsulta);
 
   const sites = pesquisa.fontes.filter(f => f.ativa).map(f => f.url);
-  const priorizado = (a: Achado) => sites.some(site => pertenceAoSite(a.url, site));
+  const priorizado = (a: Achado) => (pesquisa.paginas ?? []).some(p => p.ativa && p.url === a.url) || sites.some(site => pertenceAoSite(a.url, site));
   const selecionados = mesclarAchados(achadosBrutos).sort((a, b) => Number(priorizado(b)) - Number(priorizado(a)) || b.pontuacao - a.pontuacao).slice(0, MAXIMO_ACHADOS_PROMPT);
   const enriquecido = pesquisa.provedores.includes("brightdata") ? await enriquecerMarkdown(selecionados) : { achados: selecionados, falhou: false };
   const achados = enriquecido.achados;
   if (pesquisa.provedores.includes("brightdata") && brightDataConectada() && achados.length) fontes.push({ id: "brightdata-markdown", nome: NOMES_FONTE["brightdata-markdown"], estado: enriquecido.falhou ? "indisponivel" : "ok" });
   const listaAchados = achados.map((a, i) => `${i + 1}. [${NOMES_FONTE[a.fonte]}] "${a.titulo}" — ${a.veiculo}, ${a.publicadoEm.slice(0, 10) || "data não informada"}\n   url: ${a.url}\n   trecho: ${a.trecho || "(sem trecho)"}`).join("\n");
-  const prompt = `Temas acompanhados:\n${dados.temas.map((t) => `- ${t}`).join("\n")}\n\nPeríodo: últimos ${dados.periodoDias} dias.${dados.setor ? `\nSetor da empresa: ${dados.setor}.` : ""}\n\nAchados encontrados na busca:\n${listaAchados}\n\nMonte o radar de sinais a partir desses achados.`;
+  const prompt = `Temas acompanhados:\n${dados.temas.map((t) => `- ${t}`).join("\n")}\n\nPeríodo: últimos ${dados.periodoDias} dias. Páginas monitoradas são retratos atuais, sem data de publicação comprovada; não afirme que houve mudança sem evidência comparativa.${dados.setor ? `\nSetor da empresa: ${dados.setor}.` : ""}\n\nAchados encontrados na busca:\n${listaAchados}\n\nMonte o radar de sinais a partir desses achados.`;
 
   // Sem nenhum achado não há o que a IA agrupar: devolve um radar vazio (a tela explica) sem gastar a chamada.
   const bruto = achados.length > 0 ? await askJSON<Radar>({ system: SYSTEM, prompt, maxTokens: 6000, model: modelName("ontologia") }) : null;

@@ -11,7 +11,7 @@ test("cadastro persistente valida limites, evita duplicatas e distingue domínio
   const api = await import("../app/api/radar/pesquisa/route");
   const pesquisa = { ...PESQUISA_PADRAO, termos: [{ termo: "IA", categoria: "Tecnologia", ativo: true }], fontes: [{ nome: "Referência", url: "startse.com/artigos", ativa: true }] };
   assert.equal((await api.PUT(new Request("http://localhost", { method: "PUT", body: JSON.stringify(pesquisa) }))).status, 200);
-  const salvo = (await (await api.GET()).json()).pesquisa;
+  const salvo = (await (await api.GET(new Request("http://localhost/api/radar/pesquisa"))).json()).pesquisa;
   assert.equal(salvo.fontes[0].url, "https://startse.com/artigos");
   assert.equal(salvo.termos[0].termo, "IA");
   assert.throws(() => validarPesquisa({ ...pesquisa, provedores: [] }));
@@ -118,7 +118,8 @@ test("radar reabre a última pesquisa real e Redis não integra a configuração
   assert.ok(INTEGRACOES.every(i => i.id !== "redis" && i.campos.every(c => !c.chave.startsWith("UPSTASH_"))));
   const req = new Request("http://localhost/api/radar?ultimo=1");
   assert.equal(await (await GET(req)).json(), null);
-  const entrada = { temas: ["IA"], periodoDias: 7 };
+  const { obterRadar } = await import("../lib/radares");
+  const entrada = { radarId: obterRadar().id, temas: ["IA"], periodoDias: 7 };
   const saida = { periodoDias: 7, sinais: [], nos: [], arestas: [], conexoes: [] };
   const id = salvar({ tipo: "radar", titulo: "Real", entrada, saida, meta: { demo: false, model: "teste", geradoEm: "2026-09-19", insumo: "teste" } });
   salvar({ tipo: "radar", titulo: "Exemplo posterior", entrada, saida, meta: { demo: true } });

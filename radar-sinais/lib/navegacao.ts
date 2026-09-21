@@ -5,6 +5,6 @@ export type ItemNavegacao = { rotulo: string; href: string };
 export const NAVEGACAO: ItemNavegacao[] = [
   { rotulo: "Início", href: "/" },
   { rotulo: "Temas", href: "/termos" },
-  { rotulo: "Radar", href: "/radar" },
+  { rotulo: "Meus radares", href: "/radar" },
   { rotulo: "Configurações", href: "/setup" },
 ];

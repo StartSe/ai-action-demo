@@ -5,6 +5,8 @@ export async function register() {
     const { limparExpirados: limparFormulariosExpirados } = await import("@/lib/formularios");
     limparFormulariosExpirados();
 
+    const { listarRadares } = await import("@/lib/radares");
+    listarRadares(); // Migra vínculos antes de iniciar agendas antigas.
     await import("@/lib/rotinas-do-app");
     const { executarVencidas } = await import("@/lib/rotinas");
     setInterval(() => {

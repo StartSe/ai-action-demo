@@ -107,3 +107,22 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   .plano-suave, .dica-grafo, .no-grafo { transition: none; animation: none; }
 }
 @media print { .halo-pulso, .dica-grafo { display: none; } }
+
+/* Radares nomeados, exploração imersiva e conversa contextual. */
+.radar-switcher { padding: 1rem 1.25rem; border: 1px solid var(--color-line); border-radius: 1rem; background: var(--color-surface); }
+.grafo-area-ampliada { position: relative; }
+.grafo-mapa-ampliado { height: calc(100dvh - 145px); min-height: 300px; }
+.grafo-painel-flutuante { position: absolute; top: 1rem; right: 1rem; width: 320px; max-height: calc(100dvh - 235px); overflow: auto; border: 1px solid var(--color-line); border-radius: 1rem; padding: 1rem; background: color-mix(in srgb, var(--color-surface) 82%, transparent); backdrop-filter: blur(12px); box-shadow: 0 12px 40px #00000012; }
+.grafo-painel-flutuante > * { max-height: none; }
+.chat-radar { position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: .6rem; }
+.chat-radar-botao { background: var(--color-accent); color: white; padding: .8rem 1.2rem; border-radius: 2rem; font-size: .875rem; font-weight: 600; box-shadow: 0 8px 28px #00000024; cursor: pointer; }
+.chat-radar-painel { width: min(400px, calc(100vw - 2rem)); background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 1rem; box-shadow: 0 15px 60px #00000026; overflow: hidden; display: flex; flex-direction: column; max-height: min(680px, calc(100dvh - 100px)); }
+.chat-radar-mensagens { padding: 1rem; min-height: 160px; overflow: auto; overscroll-behavior: contain; }
+.chat-mensagem { border-radius: .75rem; padding: .85rem; margin-bottom: .75rem; overflow-wrap: anywhere; background: var(--color-bg); }
+.chat-mensagem.usuario { background: var(--color-accent-soft); margin-left: 1.5rem; }
+@media (max-width: 640px) {
+  .grafo-tela-cheia { padding: .6rem; }
+  .grafo-mapa-ampliado { height: calc(100dvh - 205px); }
+  .grafo-painel-flutuante { width: min(300px, calc(100% - 1rem)); top: .5rem; right: .5rem; max-height: 38dvh; padding: .75rem; }
+  .chat-radar { right: .75rem; bottom: .75rem; }
+}

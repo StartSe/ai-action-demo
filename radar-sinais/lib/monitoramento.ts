@@ -18,7 +18,8 @@ export function validarMonitoramento(valor: unknown): Monitoramento {
   const periodoDias = v.periodoDias ?? 7;
   if (![7, 30, 90].includes(periodoDias)) throw new Error("Período inválido.");
   if (v.setor !== undefined && (typeof v.setor !== "string" || v.setor.length > 200)) throw new Error("Setor inválido.");
-  return { temas, horarios: [...new Set(horarios)].sort(), fuso, periodoDias, setor: v.setor?.trim() || undefined };
+  if (v.radarId !== undefined && (typeof v.radarId !== "string" || !v.radarId || v.radarId.length > 80)) throw new Error("Radar inválido.");
+  return { radarId: v.radarId, temas, horarios: [...new Set(horarios)].sort(), fuso, periodoDias, setor: v.setor?.trim() || undefined };
 }
 
 function relogio(data: Date, fuso: string): string {

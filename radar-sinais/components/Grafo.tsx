@@ -11,6 +11,7 @@
 // as posições vivas moram em estado derivado (`posicoes` = layout final + arrastos) e as refs só são
 // lidas em handlers e efeitos; (3) `nos`/`arestas` precisam ter identidade estável entre renders do
 // pai (useMemo em quem chama), senão o layout recalcula e a acomodação reinicia a cada render.
+import { ChatRadar } from "./ChatRadar";
 import { useRouter } from "next/navigation";
 import {
   forwardRef,
@@ -262,7 +263,9 @@ export function Grafo({
   animar = true,
   estatico = false,
   destinoDoNo,
+  resultadoId,
 }: {
+  resultadoId?: string;
   nos: No[];
   arestas: Aresta[];
   sinais: Sinal[];
@@ -317,6 +320,7 @@ export function Grafo({
   const [busca, setBusca] = useState("");
   const [tipo, setTipo] = useState("todos");
   const [ampliado, setAmpliado] = useState(false);
+  const [mostrarPainel, setMostrarPainel] = useState(true);
 
   const mapa = useRef<HTMLDivElement>(null);
   const painel = useRef<HTMLDivElement>(null);
@@ -478,6 +482,7 @@ export function Grafo({
   }, []);
 
   const focarNo = useCallback((id: string) => {
+    setMostrarPainel(true);
     setSelecionado(id);
     setPairado(null);
     enquadrarEm([id], Math.max(vistaRef.current.zoom, 1.2));
@@ -706,6 +711,7 @@ export function Grafo({
       router.push(`${destinoRef.current}${encodeURIComponent(id)}`);
       return;
     }
+    setMostrarPainel(true);
     setSelecionado((atual) => (atual === id ? null : id));
     setDestaque(null);
     setConexaoFixa(null);
@@ -769,7 +775,7 @@ export function Grafo({
       aria-label={ampliado ? "Explorar mapa em tela cheia" : undefined}
       onKeyDown={(e) => {
         if (!ampliado || e.key !== "Tab") return;
-        const elementos = [...(painel.current?.querySelectorAll<HTMLElement>("button:not([disabled]), input, select, a[href]") || [])].filter(
+        const elementos = [...(painel.current?.querySelectorAll<HTMLElement>("button:not([disabled]), input, textarea, select, a[href]") || [])].filter(
           (el) => el.getClientRects().length,
         );
         const primeiro = elementos[0], ultimo = elementos[elementos.length - 1];
@@ -781,7 +787,7 @@ export function Grafo({
           primeiro?.focus();
         }
       }}
-      className={ampliado ? "fixed inset-0 z-50 bg-bg p-4 overflow-auto" : explorador ? "card p-3 md:p-4" : ""}
+      className={ampliado ? "grafo-tela-cheia fixed inset-0 z-50 bg-bg p-4 overflow-auto" : explorador ? "card p-3 md:p-4" : ""}
     >
       <p className="sr-only" aria-live="polite">{anuncio}</p>
       {!estatico && <div className="no-print flex flex-wrap items-center gap-2 mb-3">
@@ -798,6 +804,7 @@ export function Grafo({
               <option value="ator">Atores</option>
               <option value="tecnologia">Tecnologias</option>
             </select>
+            <button type="button" className="btn-ghost !py-2 !text-sm" aria-expanded={mostrarPainel} onClick={() => setMostrarPainel(!mostrarPainel)}>{mostrarPainel ? "Ocultar leituras e sinais" : "Exibir leituras e sinais"}</button>
             <button data-expandir type="button" className="btn-ghost !py-2 !text-sm" onClick={() => setAmpliado(!ampliado)}>
               {ampliado ? "Sair da tela cheia" : "Tela cheia"}
             </button>
@@ -814,13 +821,13 @@ export function Grafo({
           {resultadosBusca.length === 0 && <span className="text-sm text-muted">Nenhum ponto encontrado.</span>}
         </div>
       )}
-      <div className={explorador ? "grid lg:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start" : "flex flex-col gap-4"}>
+      <div className={ampliado ? "grafo-area-ampliada" : explorador && mostrarPainel ? "grid lg:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start" : "flex flex-col gap-4"}>
         <div className="min-w-0">
           <div
             ref={mapa}
             role="group"
             aria-label="Mapa interativo de sinais"
-            className={`relative w-full min-w-0 overflow-hidden rounded-xl border border-line bg-surface touch-none cursor-grab active:cursor-grabbing ${explorador ? "h-[62vh] min-h-[420px] max-h-[760px]" : "h-[420px] max-md:h-[360px]"}`}
+            className={`relative w-full min-w-0 overflow-hidden rounded-xl border border-line bg-surface touch-none cursor-grab active:cursor-grabbing ${ampliado ? "grafo-mapa-ampliado" : explorador ? "h-[62vh] min-h-[420px] max-h-[760px]" : "h-[420px] max-md:h-[360px]"}`}
             style={{
               backgroundImage: "radial-gradient(color-mix(in srgb, var(--color-accent) 22%, transparent) 1px, transparent 1px)",
               backgroundSize: "22px 22px",
@@ -877,6 +884,7 @@ export function Grafo({
                 if (!p) return null;
                 const sinal = no.tipo === "sinal" ? mapaDeSinais.get(no.id) : undefined;
                 const rotulo: PropsNo["rotulo"] =
+                  (explorador && nos.length <= 24) ||
                   no.tipo === "tema" ||
                   no.id === selecionado ||
                   (vizinhosDoSelecionado?.has(no.id) ?? false) ||
@@ -966,8 +974,8 @@ export function Grafo({
           </p>}
         </div>
 
-        {explorador && (
-          <PainelLateral
+        {explorador && mostrarPainel && (
+          <div className={ampliado ? "grafo-painel-flutuante" : "min-w-0"}><PainelLateral
             ref={detalhe}
             aba={aba}
             setAba={setAba}
@@ -987,9 +995,10 @@ export function Grafo({
               acenderConexao(c.indice, true);
               enquadrarEm(c.nos);
             }}
-          />
+          /></div>
         )}
       </div>
+      {resultadoId && <ChatRadar key={resultadoId} resultadoId={resultadoId} foco={selecionado || undefined} aoFocar={id => { focarNo(id); setMostrarPainel(true); }} />}
     </div>
   );
 }

@@ -4,12 +4,18 @@ import Link from "next/link";
 import {
   COLETORES,
   normalizarSite,
+  normalizarPagina,
+  validarPesquisa,
+  type PaginaMonitorada,
   type Pesquisa,
   type TermoPesquisa,
 } from "@/lib/pesquisa";
 import { Monitoramentos } from "./Monitoramentos";
 
-export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
+export function PesquisaEditor({ modo, radarId }: { modo: "termos" | "fontes" | "todos"; radarId?: string }) {
+  const urlPesquisa = `/api/radar/pesquisa?radarId=${radarId || ""}`;
+  const [pagina, setPagina] = useState("");
+  const [extrator, setExtrator] = useState<PaginaMonitorada["provedor"]>("brightdata");
   const [pesquisa, setPesquisa] = useState<Pesquisa>();
   const [conectados, setConectados] = useState<string[]>([]);
   const [termo, setTermo] = useState("");
@@ -20,13 +26,16 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
   const [salvando, setSalvando] = useState(false);
   const [alterado, setAlterado] = useState(false);
   useEffect(() => {
-    fetch("/api/radar/pesquisa")
+    fetch(urlPesquisa)
       .then(async (r) => {
         if (!r.ok) throw new Error("Não foi possível carregar a pesquisa.");
         return r.json();
       })
       .then((d) => {
-        setPesquisa(d.pesquisa);
+        let rascunho;
+        try { const salvo = sessionStorage.getItem(`radar-rascunho-${radarId}`); if (salvo) rascunho = validarPesquisa(JSON.parse(salvo)); } catch { /* rascunho inválido ou armazenamento indisponível */ }
+        setPesquisa(rascunho || d.pesquisa);
+        if (rascunho) { setAlterado(true); setMensagem("Rascunho recuperado. Salve para usar estas alterações nas análises."); }
         setConectados(
           d.coletores
             .filter((p: { configurado: boolean }) => p.configurado)
@@ -34,10 +43,10 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
         );
       })
       .catch((e) => setMensagem(e.message));
-  }, []);
+  }, [urlPesquisa, radarId]);
   useEffect(() => {
     const atualizar = () =>
-      fetch("/api/radar/pesquisa")
+      fetch(urlPesquisa)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           if (d)
@@ -50,7 +59,14 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
         .catch(() => null);
     window.addEventListener("radar-conexoes", atualizar);
     return () => window.removeEventListener("radar-conexoes", atualizar);
-  }, []);
+  }, [urlPesquisa, radarId]);
+  useEffect(() => {
+    if (!pesquisa) return;
+    try {
+      if (alterado) sessionStorage.setItem(`radar-rascunho-${radarId}`, JSON.stringify(pesquisa));
+      else sessionStorage.removeItem(`radar-rascunho-${radarId}`);
+    } catch { /* o cadastro no servidor continua disponível */ }
+  }, [pesquisa, alterado, radarId]);
   function editar(p: Pesquisa) {
     setPesquisa(p);
     setAlterado(true);
@@ -60,7 +76,7 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
     setSalvando(true);
     setMensagem("");
     try {
-      const r = await fetch("/api/radar/pesquisa", {
+      const r = await fetch(urlPesquisa, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(pesquisa),
@@ -135,7 +151,7 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
   const temas = pesquisa.termos.filter((t) => t.ativo).map((t) => t.termo);
   return (
     <div className="space-y-5" aria-busy={salvando}>
-      {modo === "termos" ? (
+      {modo !== "fontes" && (
         <>
           <section className="card !shadow-none p-4">
             <h2 className="text-base font-bold mb-4">Adicionar tema</h2>
@@ -265,7 +281,8 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
             </div>
           </section>
         </>
-      ) : (
+      )}
+      {modo !== "termos" && (
         <>
           <details className="card !shadow-none p-4" id="fontes-pesquisa">
             <summary className="font-semibold text-sm cursor-pointer">
@@ -330,7 +347,7 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
           <section className="card !shadow-none p-4">
             <h2 className="text-base font-bold">Sites de referência</h2>
             <p className="text-sm text-muted mt-1 mb-4">
-              Opcional. Priorize seus sites com Exa, Tavily ou Bright Data.
+              Opcional. Priorize seus sites com SearchAPI, Exa, Tavily ou Bright Data.
             </p>
             <form
               className="flex gap-3"
@@ -386,6 +403,27 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
           </section>
         </>
       )}
+      {modo !== "termos" && <section className="card !shadow-none p-4">
+        <h2 className="text-base font-bold">Páginas para monitorar</h2>
+        <p className="text-sm text-muted mt-1 mb-4">Leia o conteúdo destas páginas a cada análise, mesmo que não apareçam nos resultados da busca. Até 8 páginas por radar. Conecte a ferramenta escolhida em Configurações.</p>
+        <form className="flex flex-wrap gap-3 items-end" onSubmit={e => {
+          e.preventDefault();
+          try {
+            const url = normalizarPagina(pagina), paginas = pesquisa.paginas ?? [];
+            if (paginas.length >= 8 || paginas.some(p => p.url === url)) throw new Error("Cadastre até 8 páginas diferentes.");
+            editar({ ...pesquisa, paginas: [...paginas, { url, nome: new URL(url).hostname, ativa: true, provedor: extrator }] }); setPagina("");
+          } catch (e) { setMensagem((e as Error).message); }
+        }}>
+          <label className="text-sm flex-1 min-w-40">Endereço da página<input className="input mt-1" value={pagina} onChange={e => setPagina(e.target.value)} placeholder="https://empresa.com/produto" maxLength={1500} required /></label>
+          <label className="text-sm">Ferramenta<select className="input mt-1" value={extrator} onChange={e => setExtrator(e.target.value as PaginaMonitorada["provedor"])}><option value="brightdata">Bright Data</option><option value="firecrawl">Firecrawl</option></select></label>
+          <button className="btn-primary !w-auto">Adicionar página</button>
+        </form>
+        <ul className="mt-4 divide-y divide-line">{(pesquisa.paginas ?? []).map((p, i) => <li key={p.url} className="py-3 flex flex-wrap gap-3 items-center text-sm">
+          <label className="flex gap-2 flex-1 min-w-0"><input type="checkbox" checked={p.ativa} onChange={e => editar({ ...pesquisa, paginas: pesquisa.paginas!.map((v, j) => i === j ? { ...v, ativa: e.target.checked } : v) })}/><span className="break-all">{p.url}</span></label>
+          <select className="input !w-auto !text-xs" aria-label={`Ferramenta de ${p.url}`} value={p.provedor} onChange={e => editar({ ...pesquisa, paginas: pesquisa.paginas!.map((v, j) => i === j ? { ...v, provedor: e.target.value as PaginaMonitorada["provedor"] } : v) })}><option value="brightdata">Bright Data</option><option value="firecrawl">Firecrawl</option></select>
+          <button className="btn-link" aria-label={`Remover página ${p.url}`} onClick={() => editar({ ...pesquisa, paginas: pesquisa.paginas!.filter((_, j) => j !== i) })}>Remover</button>
+        </li>)}</ul>
+      </section>}
       <section className="card !shadow-none p-4">
         <h2 className="font-bold text-lg mb-4">Contexto da pesquisa</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 [&>*]:min-w-0 gap-4">
@@ -417,7 +455,7 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
           </label>
         </div>
       </section>
-      {(modo === "termos" || alterado || mensagem) && (
+      {(modo !== "fontes" || alterado || mensagem) && (
         <div className="flex flex-wrap items-center gap-4">
           <button
             type="button"
@@ -432,35 +470,26 @@ export function PesquisaEditor({ modo }: { modo: "termos" | "fontes" }) {
               (alterado ? "Alterações ainda não salvas" : "Tudo salvo")}
           </span>
           {!alterado && temas.length > 0 && (
-            <Link href="/radar" className="btn-link">
+            <Link href={`/radar?radarId=${radarId || ""}`} className="btn-link">
               Abrir o radar
             </Link>
           )}
         </div>
       )}
-      {modo === "termos" && (
+      {modo !== "fontes" && (
         <details className="card !shadow-none p-4">
           <summary className="font-semibold text-sm cursor-pointer">
             Acompanhamento automático
           </summary>
           <Monitoramentos
+            desabilitado={alterado}
             dados={{
+              radarId,
               temas,
               periodoDias: pesquisa.periodoDias,
               setor: pesquisa.setor,
             }}
-            onEditar={(d) =>
-              editar({
-                ...pesquisa,
-                termos: d.temas.map((termo) => ({
-                  termo,
-                  categoria: "Outros",
-                  ativo: true,
-                })),
-                periodoDias: d.periodoDias,
-                setor: d.setor || "",
-              })
-            }
+
           />
         </details>
       )}

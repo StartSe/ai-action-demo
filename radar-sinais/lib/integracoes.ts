@@ -1,9 +1,11 @@
 import { testarBrightData } from "./brightdata";
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 // A busca na web (Exa ou Tavily) é usada só por este app, por isso mora aqui e não em lib/setup-comum.ts.
-import { openrouter, NOTIFICACOES, type Integracao } from "./setup-comum";
+import { consultarSearchAPI } from "./searchapi";
+import { scrapeFirecrawl } from "./paginas";
+import { openrouter, type Integracao } from "./setup-comum";
 
-NOTIFICACOES.beneficio = "Entrega resumos e novos sinais por e-mail ou Slack";
+
 
 const OPENROUTER = openrouter({ beneficio: "Liga a IA que agrupa os achados em sinais" });
 if (OPENROUTER.oauth) OPENROUTER.oauth.rotulo = "Conectar com OpenRouter";
@@ -89,4 +91,18 @@ export const GROK: Integracao = {
   campos: [{ chave: "XAI_API_KEY", rotulo: "Chave xAI", tipo: "secret", opcional: true }, { chave: "XAI_SEARCH_MODEL", rotulo: "Modelo de busca", tipo: "text", padrao: "grok-4.6", opcional: true }], campoConectado: "XAI_API_KEY",
   testar: config => testarFonte("xAI", () => fetch("https://api.x.ai/v1/models", { headers: { Authorization: `Bearer ${config.XAI_API_KEY}` }, signal: AbortSignal.timeout(10000) })),
 };
-export const INTEGRACOES: Integracao[] = [OPENROUTER, BUSCA_WEB, BRIGHTDATA, GROK, NOTIFICACOES];
+export const SEARCHAPI: Integracao = {
+  id: "searchapi", titulo: "SearchAPI", beneficio: "Pesquisa o Google e seus sites de referência",
+  descricao: "Busca por tema, período e site, incluindo os artigos da StartSe.", obrigatoria: false,
+  link: { url: "https://www.searchapi.io", rotulo: "Obter chave da SearchAPI" },
+  campos: [{ chave: "SEARCHAPI_API_KEY", rotulo: "Chave da SearchAPI", tipo: "secret", opcional: true }], campoConectado: "SEARCHAPI_API_KEY",
+  testar: async config => { try { await consultarSearchAPI("StartSe", 30, config.SEARCHAPI_API_KEY); return { ok: true, mensagem: "SearchAPI conectada." }; } catch { return { ok: false, mensagem: "Confira a chave e a cota da SearchAPI." }; } },
+};
+export const FIRECRAWL: Integracao = {
+  id: "firecrawl", titulo: "Firecrawl", beneficio: "Lê as páginas que você escolheu monitorar",
+  descricao: "Extrai o conteúdo atual das páginas em cada análise do radar.", obrigatoria: false,
+  link: { url: "https://www.firecrawl.dev/app/api-keys", rotulo: "Obter chave do Firecrawl" },
+  campos: [{ chave: "FIRECRAWL_API_KEY", rotulo: "Chave do Firecrawl", tipo: "secret", opcional: true }], campoConectado: "FIRECRAWL_API_KEY",
+  testar: async config => { try { await scrapeFirecrawl("https://www.startse.com/artigos/", config.FIRECRAWL_API_KEY); return { ok: true, mensagem: "Firecrawl conectado e leitura testada." }; } catch { return { ok: false, mensagem: "Confira a chave e a cota do Firecrawl." }; } },
+};
+export const INTEGRACOES: Integracao[] = [OPENROUTER, SEARCHAPI, BUSCA_WEB, BRIGHTDATA, FIRECRAWL, GROK];

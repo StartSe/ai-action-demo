@@ -1,3 +1,4 @@
+import { consultarSearchAPI, ChaveSearchAPIRecusada } from "./searchapi";
 import { buscarComCache } from "./cache-busca";
 import { COLETORES } from "./pesquisa";
 import { buscarGrok } from "./grok";
@@ -228,7 +229,7 @@ function tavilyApiKey(): string | undefined {
 
 /** Alguma fonte com chave (Exa ou Tavily) está conectada. */
 export function buscaWebConectada(): boolean {
-  return Boolean(exaApiKey() || tavilyApiKey() || brightDataConectada());
+  return Boolean(exaApiKey() || tavilyApiKey() || brightDataConectada() || getConfig("SEARCHAPI_API_KEY"));
 }
 
 function veiculoDaUrl(url: string, padrao: string): string {
@@ -300,7 +301,14 @@ const TAVILY: Provedor = {
 };
 
 /** Ordem de consulta e de exibição. Fontes sem chave primeiro; as com chave só entram quando conectadas. */
-const PROVEDORES: Provedor[] = [{ id: "grok", comChave: true, disponivel: () => Boolean(getConfig("XAI_API_KEY")), buscar: buscarGrok }, HACKERNEWS, REDDIT, GITHUB, GOOGLENEWS, EXA, TAVILY, { id: "brightdata", comChave: true, disponivel: brightDataConectada, buscar: buscarBrightData }];
+const STARTSE: Provedor = {
+  id: "startse", comChave: false, disponivel: () => true,
+  async buscar(consulta, dias) {
+    const resultados = await GOOGLENEWS.buscar(`${consulta} site:startse.com/artigos`, dias);
+    return resultados.filter(a => /startse/i.test(a.veiculo)).map(a => ({ ...a, fonte: "startse" as const }));
+  },
+};
+const PROVEDORES: Provedor[] = [STARTSE, { id: "searchapi", comChave: true, disponivel: () => Boolean(getConfig("SEARCHAPI_API_KEY")), buscar: consultarSearchAPI }, { id: "grok", comChave: true, disponivel: () => Boolean(getConfig("XAI_API_KEY")), buscar: buscarGrok }, HACKERNEWS, REDDIT, GITHUB, GOOGLENEWS, EXA, TAVILY, { id: "brightdata", comChave: true, disponivel: brightDataConectada, buscar: buscarBrightData }];
 
 /** Mantém parâmetros que identificam documentos; remove apenas rastreamento. */
 export function normalizarUrl(url: string): string {
@@ -364,7 +372,7 @@ export type ResultadoBusca = { achados: Achado[]; fontes: EstadoFonte[] };
  * (a tela mostra "já responderam: ..." enquanto espera). Cada provedor roda isolado: uma falha só gera console.error.
  */
 export async function buscarDetalhado({ consulta, dias, aoResponder, provedores, site }: { consulta: string; dias: number; aoResponder?: (fonte: string) => void; provedores?: IdFonteBusca[]; site?: string }): Promise<ResultadoBusca> {
-  const selecionados = PROVEDORES.filter(p => (!provedores || provedores.includes(p.id)) && (!site || ["exa", "tavily", "brightdata"].includes(p.id)));
+  const selecionados = PROVEDORES.filter(p => (!provedores || provedores.includes(p.id)) && (!site || ["exa", "tavily", "brightdata", "searchapi"].includes(p.id) || (p.id === "startse" && pertenceAoSite(site, "https://startse.com/artigos"))));
   const disponiveis = selecionados.filter(p => p.disponivel());
   if (!disponiveis.length) throw new ErroBusca("Nenhum buscador selecionado está configurado. Revise as fontes em Configurações.");
   const resultados = await Promise.allSettled(
@@ -372,7 +380,7 @@ export async function buscarDetalhado({ consulta, dias, aoResponder, provedores,
       const query = site ? `${consulta} site:${new URL(site).hostname}${new URL(site).pathname.replace(/\/$/, "")}` : consulta;
       const campo = COLETORES.find(c => c.id === p.id)?.chave;
       const resultado = await buscarComCache([p.id, query, dias, campo ? getConfig(campo) : "publico", p.id === "grok" ? getConfig("XAI_SEARCH_MODEL") : ""], () => p.buscar(query, dias));
-      const achados = filtrarPeriodo(resultado.achados, dias).filter(a => !site || pertenceAoSite(a.url, site));
+      const achados = filtrarPeriodo(resultado.achados, dias).filter(a => !site || pertenceAoSite(a.url, site) || (p.id === "startse" && pertenceAoSite(site, "https://startse.com/artigos")));
       aoResponder?.(NOMES_FONTE[p.id]);
       return { ...resultado, achados };
     })
@@ -387,7 +395,7 @@ export async function buscarDetalhado({ consulta, dias, aoResponder, provedores,
       return { ...estadoDe(p, "ok"), cache: res.value.cache, coletadoEm: res.value.coletadoEm };
     }
     if (!(res.reason instanceof RedditBloqueado)) console.error(`Provedor de busca "${p.id}" falhou:`, res.reason);
-    const estado: EstadoFonte["estado"] = res.reason instanceof ChaveRecusada ? "chave_recusada" : "indisponivel";
+    const estado: EstadoFonte["estado"] = (res.reason instanceof ChaveRecusada || res.reason instanceof ChaveSearchAPIRecusada) ? "chave_recusada" : "indisponivel";
     ultimoEstado.set(p.id, { estado, em: Date.now() });
     return estadoDe(p, estado);
   });

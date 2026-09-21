@@ -1,5 +1,5 @@
-import { version } from "@/package.json";
+import pacote from "@/package.json";
 
 export async function GET() {
-  return Response.json({ ok: true, version });
+  return Response.json({ ok: true, version: pacote.version });
 }

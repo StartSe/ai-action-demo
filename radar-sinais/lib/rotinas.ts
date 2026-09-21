@@ -1,16 +1,11 @@
-// Rotinas: tarefas agendadas (diária/semanal/mensal/única) que o app executa sozinho, entregando o
-// resultado por notificação (lib/notificacoes.ts). Usa o mesmo arquivo SQLite de lib/store.ts. Copie
-// este arquivo para cada app sem alterar; o que cada `tipo` de rotina faz é registrado por
-// lib/rotinas-do-app.ts (arquivo próprio de cada app, não compartilhado).
+// Rotinas locais: executam e salvam análises sem entrega externa, inclusive agendas legadas.
 import { monitoramentoDevido, TIPO_MONITORAMENTO, type Monitoramento } from "./monitoramento";
 import { DatabaseSync } from "node:sqlite";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { caixaConectada } from "./email-envio";
-import { enviar, type Canal } from "./notificacoes";
+type Canal = "interno" | "email" | "slack"; // valores legados continuam legíveis; nenhuma entrega externa.
 import { getAllConfig, getConfig, mascarar, setConfig } from "./store";
-import { enderecoPublico } from "./setup-comum";
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 let db: DatabaseSync | null = null;
@@ -158,16 +153,6 @@ export type TipoRotina<P = unknown> = {
   validar?: (parametros: P, config: Record<string, string | undefined>) => string | undefined;
 };
 
-/** Motivo pelo qual o canal escolhido ainda não consegue entregar (nenhuma credencial configurada para ele), ou undefined quando pode enviar. */
-export function motivoCanalIndisponivel(canal: Canal): string | undefined {
-  if (canal === "slack") {
-    return getConfig("NOTIFICACOES_SLACK_WEBHOOK") ? undefined : "Configure o webhook do Slack em Notificações antes de criar uma rotina por esse canal.";
-  }
-  // Uma caixa própria conectada (Gmail/Outlook, US-024) também entrega por e-mail, não só Resend/SMTP.
-  const temEmail = Boolean(caixaConectada("gmail") || caixaConectada("outlook") || getConfig("NOTIFICACOES_RESEND_API_KEY") || getConfig("NOTIFICACOES_SMTP_HOST"));
-  return temEmail ? undefined : "Conecte seu Gmail ou Outlook, ou configure o Resend ou o SMTP, em Notificações antes de criar uma rotina por e-mail.";
-}
-
 /** Roda o `validar` do tipo escolhido (quando existe) contra os parâmetros recebidos. */
 export function validarParametrosTipo(tipo: string, parametros: unknown, tipos: TipoRotina[]): string | undefined {
   const def = tipos.find((t) => t.tipo === tipo);
@@ -248,23 +233,9 @@ async function executarComLock(r: Rotina): Promise<{ id: string; ok: boolean; me
     return { id: r.id, ok: false, mensagem };
   }
   try {
-    const resultado = await executor(r);
-    if (resultado.enviar === false) {
-      marcarSucesso(r.id, agora);
-      return { id: r.id, ok: true, mensagem: "Nada para avisar desta vez." };
-    }
-    const base = enderecoPublico();
-    if (!base && resultado.resultadoId) console.error(`Rotina "${r.tipo}": endereço público desconhecido, link omitido do aviso.`);
-    const envio = await enviar({
-      canal: r.canal,
-      destino: r.destino ?? undefined,
-      titulo: resultado.titulo,
-      texto: resultado.texto,
-      link: base && resultado.resultadoId ? `${base}/r/${resultado.resultadoId}` : undefined,
-    });
-    if (envio.ok) marcarSucesso(r.id, agora);
-    else marcarFalha(r.id, agora, envio.mensagem);
-    return { id: r.id, ok: envio.ok, mensagem: envio.mensagem };
+    await executor(r);
+    marcarSucesso(r.id, agora);
+    return { id: r.id, ok: true, mensagem: "Análise salva no histórico deste radar." };
   } catch (err) {
     console.error(`Falha ao executar a rotina "${r.tipo}":`, err);
     const mensagem = err instanceof Error && err.message ? err.message : "Não foi possível concluir esta rotina agora. Tente executar de novo em Configurações.";

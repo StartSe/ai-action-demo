@@ -5,6 +5,6 @@ import { estadoDasFontes } from "@/lib/busca";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  return Response.json({ fontes: await estadoDasFontes(lerPesquisa().provedores) });
+export async function GET(req: Request) {
+  return Response.json({ fontes: await estadoDasFontes(lerPesquisa(new URL(req.url).searchParams.get("radarId") || undefined).provedores) });
 }

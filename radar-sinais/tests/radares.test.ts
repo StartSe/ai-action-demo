@@ -1,0 +1,54 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { PESQUISA_PADRAO } from "../lib/pesquisa";
+import type { DadosRadar } from "../lib/types";
+const dir = mkdtempSync(`${tmpdir()}/radar-cadastros-`);
+process.env.DATA_DIR = dir;
+test.after(() => rmSync(dir, { recursive: true, force: true }));
+
+test("migra temas, resultados e agendas por perfil uma única vez, preservando conta e dados", async () => {
+  const { setConfig, getConfig } = await import("../lib/store");
+  const { salvar, obter } = await import("../lib/historico");
+  const { criar, obter: obterRotina } = await import("../lib/rotinas");
+  const pesquisa = { ...PESQUISA_PADRAO, fontes: [], termos: [{ termo: "Educação", categoria: "Mercado", ativo: true }] };
+  setConfig("RADAR_PESQUISA", JSON.stringify(pesquisa)); setConfig("credencial", "preservar");
+  const saida = { periodoDias: 30, sinais: [], nos: [], arestas: [], conexoes: [] };
+  const a = salvar({ tipo: "radar", titulo: "Educação", entrada: { temas: ["Educação"], periodoDias: 30 }, saida, meta: { demo: false } });
+  const b = salvar({ tipo: "radar", titulo: "Finanças", entrada: { temas: ["Finanças"], periodoDias: 7 }, saida, meta: { demo: false } });
+  const rotina = criar({ tipo: "radar-diario", hora: "08:00", frequencia: "diaria", canal: "slack", parametros: { temas: ["Finanças"], periodoDias: 7, horarios: ["08:00"], fuso: "UTC" } });
+  const semanal = criar({ tipo: "radar-semanal", hora: "08:00", frequencia: "semanal", canal: "email", parametros: { temas: ["Logística"] } });
+  const { listarRadares, obterRadar, analisesRadar } = await import("../lib/radares");
+  assert.equal(listarRadares().length, 3);
+  const entradaA = obter<DadosRadar>(a)!.entrada, entradaB = obter<DadosRadar>(b)!.entrada;
+  assert.notEqual(entradaA.radarId, entradaB.radarId);
+  assert.equal((obterRotina<DadosRadar>(rotina)!.parametros).radarId, entradaB.radarId);
+  assert.equal(obterRadar(obterRotina<DadosRadar>(semanal)!.parametros.radarId).pesquisa.termos[0].termo, "Logística", "migra agenda semanal sem período");
+  assert.equal(obterRadar(entradaB.radarId).pesquisa.termos[0].termo, "Finanças");
+  assert.equal(obterRadar(entradaA.radarId).pesquisa.fontes[0].nome, "StartSe · Artigos");
+  assert.deepEqual(analisesRadar(entradaA.radarId!).map(r => r.id), [a]);
+  assert.equal(listarRadares().length, 3); assert.equal(getConfig("credencial"), "preservar");
+  assert.equal(JSON.parse(getConfig("RADAR_PESQUISA")!).fontes.length, 0, "configuração legada preservada");
+});
+
+test("novos radares isolam temas, páginas e resultados; renomear preserva os vínculos", async () => {
+  const { criarRadar, atualizarPesquisa, obterRadar, renomearRadar, analisesRadar } = await import("../lib/radares");
+  const { salvar } = await import("../lib/historico");
+  const api = await import("../app/api/radar/route");
+  const a = criarRadar("Concorrentes"), b = criarRadar("Tecnologia");
+  const pesquisa = { ...a.pesquisa, termos: [{ termo: "Robótica", categoria: "Tecnologia", ativo: true }], paginas: [{ url: "https://empresa.com/produto?id=123", nome: "Produto", ativa: true, provedor: "firecrawl" }] };
+  atualizarPesquisa(a.id, pesquisa);
+  assert.equal(obterRadar(a.id).pesquisa.paginas?.[0].url, pesquisa.paginas[0].url);
+  assert.equal(obterRadar(b.id).pesquisa.termos.length, 0); assert.equal(obterRadar(b.id).pesquisa.paginas?.length, 0);
+  const saida = { periodoDias: 7, sinais: [], nos: [], arestas: [], conexoes: [] };
+  const idA = salvar({ tipo: "radar", titulo: "A", entrada: { radarId: a.id, temas: ["Robótica"], periodoDias: 7 }, saida, meta: { demo: false } });
+  for (let i = 0; i < 45; i++) salvar({ tipo: "radar", titulo: "B", entrada: { radarId: b.id, temas: ["Outra pesquisa"], periodoDias: 7 }, saida, meta: { demo: false } });
+  renomearRadar(a.id, "Robôs industriais");
+  assert.equal(obterRadar(a.id).nome, "Robôs industriais");
+  const ultimo = await (await api.GET(new Request(`http://localhost/api/radar?ultimo=1&radarId=${a.id}`))).json();
+  assert.equal(ultimo.id, idA, "filtra pelo radar antes do limite");
+  assert.equal(analisesRadar(a.id).length, 1);
+  assert.equal((await api.GET(new Request("http://localhost/api/radar?radarId=inexistente"))).status, 404);
+  assert.throws(() => criarRadar(" "));
+});

@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { obterRadar } from "@/lib/radares";
 import { notFound } from "next/navigation";
 import { Topbar } from "@/components/ui";
 import { obter } from "@/lib/historico";
@@ -10,10 +12,12 @@ export default async function Page({ params }: PageProps<"/r/[id]">) {
   const registro = obter<DadosRadar, Radar, Meta>(id);
   if (!registro || registro.tipo !== "radar") notFound();
 
+  const cadastro = obterRadar(registro.entrada.radarId);
   return (
     <>
       <Topbar marca="R" nome="Radar de Sinais" area="Estratégia" status={{ ai: !registro.meta.demo, demo: registro.meta.demo, model: registro.meta.model }} />
       <main className="max-w-[1500px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
+        <p className="mb-4 text-sm"><Link className="btn-link" href={`/radar?radarId=${cadastro.id}`}>← {cadastro.nome} · Todas as análises</Link></p>
         {/* mostrarRefazer: daqui (histórico) dá para voltar à tela inicial já montando o radar destes temas. */}
         <Resultado radar={registro.saida} dados={registro.entrada} meta={registro.meta} id={id} mostrarRefazer />
       </main>
