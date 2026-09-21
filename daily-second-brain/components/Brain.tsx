@@ -94,6 +94,7 @@ export function Brain() {
   const [history, setHistory] = useState<Note[] | null>(null);
   const [prompt, setPrompt] = useState("");
   const [artifact, setArtifact] = useState(false);
+  const [clearingDemo, setClearingDemo] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [recording, setRecording] = useState(false);
   const [ruleDraft, setRuleDraft] = useState<string | null>(null);
@@ -1213,6 +1214,25 @@ export function Brain() {
                     </button>
                   </footer>
                 </div>
+                {notes.some((n) => n.demo) && (
+                  <div className="export-card">
+                    <Icon name="spark" size={26} />
+                    <div>
+                      <h3>Espaço para suas próprias ideias.</h3>
+                      <p>
+                        Remova as memórias fictícias quando terminar de
+                        explorar. Fontes usadas por suas memórias pessoais serão
+                        preservadas.
+                      </p>
+                    </div>
+                    <button
+                      className="button"
+                      onClick={() => setClearingDemo(true)}
+                    >
+                      Limpar exemplo
+                    </button>
+                  </div>
+                )}
                 <div className="export-card">
                   <Icon name="download" size={26} />
                   <div>
@@ -1231,6 +1251,49 @@ export function Brain() {
           </main>
         )}
       </div>
+      {clearingDemo && (
+        <Dialog
+          label="Limpar exemplo"
+          close={() => !busy && setClearingDemo(false)}
+        >
+          <span className="eyebrow">SUAS MEMÓRIAS FICAM</span>
+          <h2>Limpar memórias de exemplo?</h2>
+          <p className="muted">
+            Somente notas, páginas e artefatos fictícios serão removidos. Suas
+            memórias, regras e conversas permanecem. Exemplos usados como fonte
+            de uma memória pessoal também ficam.
+          </p>
+          <div className="button-row">
+            <button
+              className="button primary"
+              disabled={!!busy}
+              onClick={() =>
+                void act("clear-demo", async () => {
+                  const result = await request<{
+                    removed: number;
+                    preserved: number;
+                  }>("/api/brain", "POST", { action: "clear-demo" });
+                  await load();
+                  setClearingDemo(false);
+                  setNotice(
+                    `${result.removed} exemplos removidos.${result.preserved ? ` ${result.preserved} preservados por serem fontes de memórias pessoais.` : ""}`,
+                  );
+                })
+              }
+            >
+              Sim, limpar exemplo
+            </button>
+            <button className="button" onClick={() => setClearingDemo(false)}>
+              Manter exemplos
+            </button>
+          </div>
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+        </Dialog>
+      )}
       {capture && (
         <Dialog
           label="Capturar memória"

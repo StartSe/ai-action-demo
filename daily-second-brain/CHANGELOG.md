@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.2 — 2026-09-21
+
+- Isola exemplos fictícios do contexto de IA quando existem memórias próprias.
+- Permite limpar exemplos em Regras da memória, preservando fontes usadas por documentos pessoais.
+
 ## 1.0.1 — 2026-09-21
 
 - Atualiza transcrição para Scribe v2, conforme a remoção do Scribe v1 anunciada pela ElevenLabs.

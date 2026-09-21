@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync, renameSync } from "node:fs";
+import { mkdirSync, writeFileSync, renameSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { abrirBanco, getConfig } from "./store";
 import { BrainError, string } from "./api";
@@ -209,6 +209,46 @@ export function markOrganized(id: string) {
   db()
     .prepare("UPDATE notes SET status='organized' WHERE id=? AND kind='raw'")
     .run(id);
+}
+export function clearDemo() {
+  const all = notes();
+  const keep = new Set(all.filter((n) => !n.demo).flatMap((n) => n.sources));
+  let previous = -1;
+  while (previous !== keep.size) {
+    previous = keep.size;
+    for (const n of all)
+      if (keep.has(n.id)) n.sources.forEach((id) => keep.add(id));
+  }
+  const removed = all.filter((n) => n.demo && !keep.has(n.id));
+  db().exec("BEGIN IMMEDIATE");
+  try {
+    for (const n of removed) {
+      db().prepare("DELETE FROM revisions WHERE note_id=?").run(n.id);
+      db().prepare("DELETE FROM notes WHERE id=?").run(n.id);
+    }
+    db().exec("COMMIT");
+  } catch (e) {
+    db().exec("ROLLBACK");
+    throw e;
+  }
+  for (const n of removed) {
+    try {
+      unlinkSync(
+        join(
+          process.env.DATA_DIR || join(process.cwd(), "data"),
+          "vault",
+          n.kind,
+          n.id + ".md",
+        ),
+      );
+    } catch {
+      /* The database remains authoritative. */
+    }
+  }
+  return {
+    removed: removed.length,
+    preserved: all.filter((n) => n.demo && keep.has(n.id)).length,
+  };
 }
 export function message(
   role: Message["role"],

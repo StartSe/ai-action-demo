@@ -1,4 +1,4 @@
-# Daily Second Brain · v1.0.1
+# Daily Second Brain · v1.0.2
 
 Uma memória pessoal conectada: capture o que chega, transforme em conhecimento e converse para criar novos resultados. A experiência combina um observatório de ideias com páginas Markdown, fontes rastreáveis, regras próprias e um assistente por texto ou voz.
 
@@ -12,7 +12,7 @@ Uma memória pessoal conectada: capture o que chega, transforme em conhecimento 
 - **Regras:** edite `REGRAS.md` pela interface. As regras acompanham organização, conversa e geração.
 - **Portabilidade:** exporte uma página ou um ZIP com raw/wiki/outputs e regras. Abra a pasta como cofre no Obsidian; aliases ligam títulos aos arquivos de identificador estável.
 
-O exemplo é opt-in, com conteúdos fictícios e respostas claramente demonstrativas. Abra `/?exemplo=1` ou use “Explorar com um exemplo”. Conteúdo próprio exige uma IA conectada; falhas do provedor nunca são substituídas por uma resposta simulada.
+O exemplo é opt-in, com conteúdos fictícios e respostas claramente demonstrativas. Abra `/?exemplo=1` ou use “Explorar com um exemplo”. Quando existem memórias próprias, exemplos ficam fora do contexto da IA. Em Regras da memória, você pode limpar os exemplos; fontes usadas por documentos pessoais são preservadas. Conteúdo próprio exige uma IA conectada; falhas do provedor nunca são substituídas por uma resposta simulada.
 
 ## Conexões
 

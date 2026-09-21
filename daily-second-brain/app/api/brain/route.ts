@@ -1,5 +1,5 @@
 import { api, body, string, BrainError } from "@/lib/api";
-import { state, save, note, revisions, db } from "@/lib/brain";
+import { state, save, note, revisions, db, clearDemo } from "@/lib/brain";
 import { seed } from "@/lib/demo";
 import { setConfig } from "@/lib/store";
 import { organize, chat, artifact } from "@/lib/agent";
@@ -18,6 +18,8 @@ export async function POST(req: Request) {
       case "seed":
         seed();
         return state();
+      case "clear-demo":
+        return clearDemo();
       case "capture":
         return save({
           kind: "raw",

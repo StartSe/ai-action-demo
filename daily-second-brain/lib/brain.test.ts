@@ -16,6 +16,7 @@ const {
   propose,
   actions,
   db,
+  clearDemo,
 } = await import("./brain");
 const { setConfig, getConfig } = await import("./store");
 const { organize, chat, artifact } = await import("./agent");
@@ -149,6 +150,12 @@ test("Zapier só aceita servidor oficial HTTPS e ação nunca executa sem aprova
 test("organização, chat e artefato usam provedor selecionado, preservam fontes e falham sem inventar resultado", async () => {
   setConfig("BRAIN_PROVIDER", "openrouter");
   setConfig("OPENROUTER_API_KEY", "test-key");
+  const example = save({
+    kind: "wiki",
+    title: "Pesquisa fictícia",
+    content: "EXEMPLO_NAO_USAR_COMO_FATO",
+    demo: true,
+  });
   const original = globalThis.fetch;
   const raw = save({
     kind: "raw",
@@ -185,6 +192,9 @@ test("organização, chat e artefato usam provedor selecionado, preservam fontes
     );
     assert.equal(out.kind, "outputs");
     assert.ok(out.sources.includes(wiki.id));
+    assert.ok(!out.sources.includes(example.id));
+    assert.ok(!m.sources.includes(example.id));
+    assert.ok(!JSON.stringify(requests).includes("EXEMPLO_NAO_USAR_COMO_FATO"));
     const second = save({
       kind: "raw",
       title: "Outra pesquisa",
@@ -198,6 +208,40 @@ test("organização, chat e artefato usam provedor selecionado, preservam fontes
   } finally {
     globalThis.fetch = original;
   }
+});
+test("limpar exemplos preserva memórias próprias e a cadeia de fontes usada por elas", () => {
+  const source = save({
+    kind: "raw",
+    title: "Fonte fictícia protegida",
+    content: "Exemplo",
+    demo: true,
+  });
+  const parent = save({
+    kind: "wiki",
+    title: "Exemplo citado",
+    content: "Exemplo",
+    sources: [source.id],
+    demo: true,
+  });
+  const personal = save({
+    kind: "outputs",
+    title: "Minha análise do exemplo",
+    content: "Analisei esta hipótese.",
+    sources: [parent.id],
+  });
+  const disposable = save({
+    kind: "raw",
+    title: "Exemplo descartável",
+    content: "Exemplo",
+    demo: true,
+  });
+  const result = clearDemo();
+  assert.ok(result.removed >= 1);
+  assert.ok(result.preserved >= 2);
+  assert.throws(() => note(disposable.id), /não encontrada/);
+  assert.equal(note(personal.id).content, personal.content);
+  assert.equal(note(source.id).content, source.content);
+  assert.equal(note(parent.id).sources[0], source.id);
 });
 test("protocolo MCP descobre ferramentas, prepara aprovação e coleta uma vez", async () => {
   setConfig("ZAPIER_MCP_URL", "https://mcp.zapier.com/api/mcp/s/fixture");
