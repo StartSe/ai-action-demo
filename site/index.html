@@ -73,9 +73,9 @@
   .card[hidden] { display: none; }
   .previa { position: relative; aspect-ratio: 16 / 10; border-radius: 10px; overflow: hidden; background: var(--realce); display: flex; align-items: center; justify-content: center; }
   .previa svg { width: 30%; height: 30%; color: var(--suave); opacity: .55; }
-  .previa img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+  .previa img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; }
   .previa.tem-imagem svg { display: none; }
-  .previa.tem-imagem img { display: block; }
+  .previa.tem-imagem img { opacity: 1; }
   .areas { display: flex; flex-wrap: wrap; gap: 6px; }
   .area { font-size: .82rem; font-weight: 600; color: var(--suave); background: var(--realce); padding: 3px 10px; border-radius: 999px; }
   .area.pago { color: var(--acento); border: 1px solid var(--acento); background: transparent; }
