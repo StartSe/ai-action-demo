@@ -14,11 +14,12 @@ export function GraficoRosca({ dados, titulo, rosca }: { dados: DadosDistribuica
   if (fatias.length === 0 || total <= 0) return <p className="text-muted text-sm">Sem fatias suficientes para o gráfico.</p>;
   const { raio, traco } = rosca ? GEOMETRIA.rosca : GEOMETRIA.pizza;
   // Cada fatia começa onde a anterior terminou: o offset é 25 (topo do círculo) menos o acumulado até ela.
-  const arcos = fatias.reduce<{ pct: number; offset: number; opacidade: number }[]>((lista, f, i) => {
-    const acumulado = lista.reduce((s, a) => s + a.pct, 0);
-    lista.push({ pct: (f.valor / total) * 100, offset: 25 - acumulado, opacidade: OPACIDADES[i] ?? 0.4 });
-    return lista;
-  }, []);
+  const arcos: { pct: number; offset: number; opacidade: number }[] = [];
+  for (let i = 0, acumulado = 0; i < fatias.length; i++) {
+    const pct = (fatias[i].valor / total) * 100;
+    arcos.push({ pct, offset: 25 - acumulado, opacidade: OPACIDADES[i] ?? 0.4 });
+    acumulado += pct;
+  }
   return (
     <div className="flex items-center gap-5 max-md:gap-4 flex-wrap">
       <div className="relative w-[136px] h-[136px] shrink-0">

@@ -1,6 +1,6 @@
 // POST gera um painel (aceita `forcar` para ignorar o cache) · GET lista os salvos · DELETE apaga tudo.
 import { interpretarFalha, respostaErro } from "@/lib/ai";
-import { apagarTodos, listar } from "@/lib/historico";
+import { apagarTodos, listarPorTipo } from "@/lib/historico";
 import { gerarPainel } from "@/lib/painel";
 import { lerPedido } from "@/lib/pedido";
 
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 
 /** Últimos painéis salvos (só o tipo deste app), para a lista "Últimos painéis" na tela. */
 export async function GET() {
-  return Response.json({ itens: listar(30).filter((r) => r.tipo === "painel").slice(0, 10) });
+  return Response.json({ itens: listarPorTipo("painel", 10).map(({ id, tipo, titulo, resumo, criadoEm }) => ({ id, tipo, titulo, resumo, criadoEm })) });
 }
 
 /** Apaga todo o histórico salvo (botão "Apagar tudo"). */

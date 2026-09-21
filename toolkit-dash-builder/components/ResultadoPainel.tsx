@@ -1,6 +1,7 @@
 "use client";
 // Cabeçalho, aviso de números de exemplo, grade e rodapé do painel. Usado pela tela principal (fase "pronto")
 // e por /r/[id]; recebe os botões extras e a conversa como nós prontos, para servir também a um Server Component.
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { Aviso, Entregar, Origem, ResultHead, SeloIA } from "./ui";
 import { Painel } from "./Painel";
@@ -33,7 +34,7 @@ export function ResultadoPainel({ painel, meta, id, acoes, antes, depois }: { pa
       <Origem meta={meta} />
       <div className="mb-5">
         <Aviso tom="warn">
-          Números de exemplo, para você validar o formato do painel.{meta.demo && <> <a className="font-semibold underline underline-offset-2" href="/setup#openrouter">Conectar a IA em 1 minuto</a> para gerar a partir do seu pedido.</>}
+          Números de exemplo, para você validar o formato do painel.{meta.demo && <> <Link className="font-semibold underline underline-offset-2" href="/setup#openrouter">Conectar a IA em 1 minuto</Link> para gerar a partir do seu pedido.</>}
         </Aviso>
       </div>
       {antes}

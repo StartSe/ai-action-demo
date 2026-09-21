@@ -1,6 +1,6 @@
 // Ferramentas expostas via app/mcp/route.ts para assistentes de IA (Claude, ChatGPT etc.).
 // Nenhuma duplica prompt ou lógica: todas chamam as mesmas funções das rotas HTTP (lib/painel.ts, lib/historico.ts).
-import { listar, obter } from "./historico";
+import { listarPorTipo, obter } from "./historico";
 import type { Ferramenta } from "./mcp";
 import { gerarPainel, refinarPainel } from "./painel";
 import { enderecoPublico } from "./setup-comum";
@@ -66,9 +66,8 @@ export const FERRAMENTAS: Ferramenta[] = [
     async executar(args) {
       const { limite = 10 } = args as { limite?: number };
       const n = Math.max(1, Math.min(50, Math.floor(Number(limite) || 10)));
-      // listar() devolve todos os tipos; filtra "painel" e pede uma margem para o limite valer depois do filtro.
-      const itens = listar(n * 3).filter((r) => r.tipo === "painel").slice(0, n);
-      return { paineis: itens.map((r) => ({ id: r.id, titulo: r.titulo, resumo: r.resumo, criadoEm: r.criadoEm, link: link(r.id) })) };
+      // listarPorTipo filtra "painel" no próprio SQL (listar() devolveria todos os tipos).
+      return { paineis: listarPorTipo("painel", n).map((r) => ({ id: r.id, titulo: r.titulo, resumo: r.resumo, criadoEm: r.criadoEm, link: link(r.id) })) };
     },
   },
   {

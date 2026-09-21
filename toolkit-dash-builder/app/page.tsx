@@ -123,6 +123,13 @@ export default function Page() {
     if (window.innerWidth < 1024 || estado.fase === "pronto") area?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" });
   }, [estado.fase]);
 
+  /** 401 com codigo "sem_sessao": a sessão expirou com a aba aberta; volta para a tela de entrar. */
+  function sessaoExpirou(r: Response, info: { codigo?: string }) {
+    if (r.status !== 401 || info.codigo !== "sem_sessao") return false;
+    router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
+    return true;
+  }
+
   function carregarHistorico() {
     fetch("/api/painel").then((r) => { if (!r.ok) throw new Error(); return r.json(); }).then((r) => { setHistorico(r.itens); setErroHistorico(false); }).catch(() => setErroHistorico(true));
   }
@@ -161,10 +168,7 @@ export default function Page() {
       const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...pedido, forcar }), signal });
       if (!r.ok) {
         const info = await lerErro(r);
-        if (r.status === 401 && info.codigo === "sem_sessao") {
-          router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
-          return;
-        }
+        if (sessaoExpirou(r, info)) return;
         setEstado({ fase: "erro", mensagem: info.mensagem, codigo: info.codigo as CodigoErroIA | undefined, acao: info.acao, pedido, forcar });
         return;
       }
@@ -250,10 +254,7 @@ export default function Page() {
       const r = await fetch("/api/painel/refinar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ painel, pedido: texto, id }), signal });
       if (!r.ok) {
         const info = await lerErro(r);
-        if (r.status === 401 && info.codigo === "sem_sessao") {
-          router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
-          return;
-        }
+        if (sessaoExpirou(r, info)) return;
         setErroRefino({ mensagem: info.mensagem, acao: info.acao });
         return;
       }
@@ -299,10 +300,7 @@ export default function Page() {
       const r = await fetch("/api/painel/observacoes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ painel: estado.painel }), signal });
       if (!r.ok) {
         const info = await lerErro(r);
-        if (r.status === 401 && info.codigo === "sem_sessao") {
-          router.push(`/entrar?next=${encodeURIComponent(location.pathname)}`);
-          return;
-        }
+        if (sessaoExpirou(r, info)) return;
         setErroAnalise(info.mensagem);
         return;
       }

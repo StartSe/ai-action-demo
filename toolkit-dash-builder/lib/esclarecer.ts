@@ -1,6 +1,7 @@
 // Gate de esclarecimento (RF-04): primeiro a heurística local, sem IA; só no caso duvidoso a IA decide se pergunta.
 import { aiEnabled, askJSON } from "./ai";
 import { esclarecimentoDemo } from "./demo";
+import { normalizar } from "./formatar";
 import { IDIOMA } from "./idioma";
 import type { PerguntaEsclarecimento, RespostaEsclarecimento } from "./types";
 
@@ -20,8 +21,6 @@ export const RADICAIS_DOMINIO = [
   "mensal", "mes", "diari", "dia", "semanal", "trimestr", "anual",
   "regi", "estad", "loj", "vendedor", "equip", "time",
 ];
-
-const normalizar = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 /** true = precisa avaliar (a IA decide se pergunta; em demonstração, as perguntas fixas). */
 export function precisaEsclarecerLocal(descricao: string): boolean {

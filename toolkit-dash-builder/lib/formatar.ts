@@ -9,6 +9,9 @@ const NUMERO = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
 const NUMERO_COMPACTO = new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 });
 const PERCENTUAL = new Intl.NumberFormat("pt-BR", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
+/** Sem acentos e em minúsculas: base das comparações por palavra (gate, escolha do exemplo, rótulos curtos). */
+export const normalizar = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
 /** O compacto do Intl usa espaço NÃO separável, que estoura coluna estreita (ver financas-ia). */
 const semEspacoDuro = (s: string) => s.replace(/[  ]/g, " ");
 
@@ -72,7 +75,7 @@ const MESES_CURTOS: Record<string, string> = {
 /** Rótulo curto para o celular: "Janeiro" vira "jan", "Ana Silva" vira "Ana"; o texto completo fica no title. */
 export function rotuloCurto(rotulo: string): string {
   const limpo = rotulo.trim();
-  const chave = limpo.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const chave = normalizar(limpo);
   if (MESES_CURTOS[chave]) return MESES_CURTOS[chave];
   const primeira = limpo.split(/\s+/)[0];
   return primeira.length > 8 ? `${primeira.slice(0, 7)}…` : primeira;
@@ -99,7 +102,7 @@ export function csvDoPainel(painel: EspecPainel): string {
   for (const c of painel.componentes) {
     switch (c.tipo) {
       case "indicador":
-        blocos.push(`${celulaCsv(c.titulo)};Valor;Anterior\n;${celulaCsv(c.dados.valor)};${celulaCsv(c.dados.anterior)}`);
+        blocos.push(`Indicador;Valor;Anterior\n${celulaCsv(c.titulo)};${celulaCsv(c.dados.valor)};${celulaCsv(c.dados.anterior)}`);
         break;
       case "linha":
       case "area":

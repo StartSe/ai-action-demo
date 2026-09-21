@@ -2,6 +2,7 @@
 // Cartão do gate de esclarecimento (RF-04): 1 a 3 perguntas, cada uma com chips e um campo livre, e o botão
 // "Pular e gerar agora", que gera com o pedido original.
 import { useState } from "react";
+import { BotaoChip } from "./ChipsArea";
 import type { PerguntaEsclarecimento } from "@/lib/types";
 
 export function Esclarecimento({ perguntas, onGerar, onPular, gerando }: { perguntas: PerguntaEsclarecimento[]; onGerar: (respostas: Record<string, string>) => void; onPular: () => void; gerando: boolean }) {
@@ -21,14 +22,9 @@ export function Esclarecimento({ perguntas, onGerar, onPular, gerando }: { pergu
             <div key={campoId}>
               <label htmlFor={campoId} className="text-[13px] font-semibold block mb-2">{p.pergunta}</label>
               <div className="flex flex-wrap gap-2 mb-2" role="group" aria-label={`Sugestões para: ${p.pergunta}`}>
-                {p.sugestoes.map((s) => {
-                  const ativo = atual === s;
-                  return (
-                    <button key={s} type="button" disabled={gerando} onClick={() => responder(p.pergunta, ativo ? "" : s)} className={`px-3 py-1.5 rounded-chip text-[13px] font-semibold border transition-colors disabled:opacity-60 ${ativo ? "bg-accent-soft border-accent text-accent-ink" : "bg-surface border-line text-ink hover:bg-bg"}`}>
-                      {s}
-                    </button>
-                  );
-                })}
+                {p.sugestoes.map((s) => (
+                  <BotaoChip key={s} ativo={atual === s} desabilitado={gerando} onClick={() => responder(p.pergunta, atual === s ? "" : s)}>{s}</BotaoChip>
+                ))}
               </div>
               <input id={campoId} className="input" placeholder="Ou escreva com suas palavras" value={atual} disabled={gerando} onChange={(e) => responder(p.pergunta, e.target.value)} />
             </div>

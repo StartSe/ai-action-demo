@@ -463,7 +463,7 @@ export type ResultadoRefinamento =
 export async function refinarPainel(original: EspecPainel, pedido: string, id?: string): Promise<ResultadoRefinamento> {
   const demo = !aiEnabled();
   const base = validarPainel(original);
-  let resposta: RespostaRefinamento & { esclarecimento?: string };
+  let resposta: RespostaRefinamento;
   if (demo) {
     await esperar(1200);
     resposta = refinamentoDemo(base, pedido);
@@ -476,7 +476,8 @@ export async function refinarPainel(original: EspecPainel, pedido: string, id?: 
       throw new ErroIA("resposta_invalida", MENSAGEM_INVALIDA, 502);
     }
     resposta = {
-      painel: validarPainel({ ...bruto.painel, componentes: bruto.painel.componentes }, { modo: "refinamento", moviveis: base.componentes.map((c) => c.id) }),
+      // Só saneia tipos e campos aqui; posição e deriva são tratadas abaixo, depois de validarRefinamento.
+      painel: validarPainel(bruto.painel),
       mensagem: typeof bruto.mensagem === "string" && bruto.mensagem.trim() ? bruto.mensagem.trim() : "Pronto, ajustei o painel.",
       componentesAlterados: Array.isArray(bruto.componentesAlterados) ? bruto.componentesAlterados.filter((x): x is string => typeof x === "string") : [],
     };

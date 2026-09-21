@@ -12,23 +12,21 @@ export const CHIPS_AREA: { area: string; texto: string }[] = [
   { area: "RH", texto: "Painel de pessoas com número de colaboradores, rotatividade, satisfação interna, distribuição por área, contratações e desligamentos e tempo médio de contratação." },
 ];
 
+/** Botão em forma de chip (sugestão clicável), usado pelos chips de área e pelas respostas do esclarecimento. */
+export function BotaoChip({ ativo, desabilitado, onClick, children }: { ativo: boolean; desabilitado?: boolean; onClick: () => void; children: string }) {
+  return (
+    <button type="button" disabled={desabilitado} onClick={onClick} className={`px-3 py-1.5 rounded-chip text-[13px] font-semibold border transition-colors disabled:opacity-60 ${ativo ? "bg-accent-soft border-accent text-accent-ink" : "bg-surface border-line text-ink hover:bg-bg"}`}>
+      {children}
+    </button>
+  );
+}
+
 export function ChipsArea({ onEscolher, desabilitado = false, escolhido }: { onEscolher: (texto: string) => void; desabilitado?: boolean; escolhido?: string }) {
   return (
     <div className="flex flex-wrap gap-2" role="group" aria-label="Sugestões por área">
-      {CHIPS_AREA.map((chip) => {
-        const ativo = escolhido === chip.texto;
-        return (
-          <button
-            key={chip.area}
-            type="button"
-            disabled={desabilitado}
-            onClick={() => onEscolher(chip.texto)}
-            className={`px-3 py-1.5 rounded-chip text-[13px] font-semibold border transition-colors disabled:opacity-60 ${ativo ? "bg-accent-soft border-accent text-accent-ink" : "bg-surface border-line text-ink hover:bg-bg"}`}
-          >
-            {chip.area}
-          </button>
-        );
-      })}
+      {CHIPS_AREA.map((chip) => (
+        <BotaoChip key={chip.area} ativo={escolhido === chip.texto} desabilitado={desabilitado} onClick={() => onEscolher(chip.texto)}>{chip.area}</BotaoChip>
+      ))}
     </div>
   );
 }

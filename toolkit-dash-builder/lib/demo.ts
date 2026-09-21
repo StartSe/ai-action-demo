@@ -1,6 +1,6 @@
 // Respostas de exemplo usadas quando não há chave de IA configurada. Têm a MESMA forma da resposta
 // real, para app/page.tsx nunca precisar saber em qual modo está.
-import { formatar, variacao, variacaoTexto } from "./formatar";
+import { formatar, normalizar, variacao, variacaoTexto } from "./formatar";
 import type { ComponentePainel, EspecPainel, Observacao, RespostaEsclarecimento, RespostaRefinamento } from "./types";
 
 export function esperar(ms = 1200) {
@@ -156,7 +156,6 @@ const PALAVRAS_CHAVE: Record<ChaveDemo, string[]> = {
   assinatura: ["assinatura", "assinaturas", "recorrente", "cancelamento", "churn", "mensalidade", "plano", "planos", "retencao", "saas"],
 };
 
-const normalizar = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const clonar = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
 /** Escolhe o painel de exemplo pela contagem de palavras-chave; empate ou nenhum acerto devolve "vendas". */
