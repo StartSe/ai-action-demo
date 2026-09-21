@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 — 2026-09-21
+
+- Atualiza transcrição para Scribe v2, conforme a remoção do Scribe v1 anunciada pela ElevenLabs.
+- Adiciona testes dos contratos de transcrição e síntese, limites de texto e erros sem exposição de credenciais.
+
 ## 1.0.0 — 2026-09-21
 
 - Observatório da memória com grafo, núcleo animado, busca global e experiência responsiva.

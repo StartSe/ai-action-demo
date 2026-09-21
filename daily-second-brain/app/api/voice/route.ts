@@ -10,7 +10,7 @@ export async function POST(req: Request) {
         throw Error("Envie um áudio de até 15 MB.");
       const data = new FormData();
       data.set("file", file, "audio.webm");
-      data.set("model_id", "scribe_v1");
+      data.set("model_id", "scribe_v2");
       data.set("language_code", "por");
       const r = await voice("speech-to-text", { method: "POST", body: data });
       return { text: (await r.json()).text };

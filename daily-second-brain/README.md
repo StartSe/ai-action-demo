@@ -1,4 +1,4 @@
-# Daily Second Brain · v1.0.0
+# Daily Second Brain · v1.0.1
 
 Uma memória pessoal conectada: capture o que chega, transforme em conhecimento e converse para criar novos resultados. A experiência combina um observatório de ideias com páginas Markdown, fontes rastreáveis, regras próprias e um assistente por texto ou voz.
 
