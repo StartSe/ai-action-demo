@@ -7,6 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Aviso, ErrorBox, Loading, lerErro } from "@/components/ui";
 import { ChipEstado, INTERVALO_ACOMPANHAMENTO_MS, TempoGerando } from "@/components/MeusSites";
+import { PainelImagens } from "@/components/PainelImagens";
 import { Resultado } from "@/components/ResultadoPagina";
 import { TopbarSite } from "@/components/TopbarSite";
 import type { CodigoErroIA, Meta } from "@/lib/ai";
@@ -118,7 +119,15 @@ export default function Page() {
             )}
 
             {p.estado === "pronto" && detalhe?.pagina && detalhe.meta && (
-              <Resultado key={detalhe.pagina.versoes.length} pagina={detalhe.pagina} meta={detalhe.meta} id={detalhe.pagina.id} />
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-6 [&>*]:min-w-0">
+                <Resultado key={detalhe.pagina.versoes.length} pagina={detalhe.pagina} meta={detalhe.meta} id={detalhe.pagina.id} />
+                <aside className="flex flex-col gap-4 lg:pt-1">
+                  <PainelImagens projetoId={p.id} />
+                </aside>
+              </div>
+            )}
+            {p.estado !== "pronto" && p.estado !== "gerando" && (
+              <div className="mt-6 max-w-[520px]"><PainelImagens projetoId={p.id} /></div>
             )}
           </>
         )}

@@ -20,7 +20,7 @@ const REGRAS_COMUNS = `- Reproduza a estrutura, o alinhamento, os espaçamentos,
 - Escreva TODOS os textos em português do Brasil. Se a referência estiver em outro idioma, traduza. Se um texto for de outra empresa (nome, slogan, produto, depoimento), substitua por um texto equivalente e plausível para a marca informada, mantendo o tamanho parecido para não quebrar o layout.
 - Repita os elementos quantas vezes for preciso para bater com a captura. Se há 6 cartões, escreva os 6. NUNCA escreva comentários como "<!-- repita para os outros itens -->" no lugar do código: escreva o código completo.
 - Não escreva nenhum comentário no HTML.
-- Fotos, ilustrações, logotipos e ícones de terceiros NÃO devem ser copiados nem carregados de outros sites: no lugar de cada imagem, coloque um bloco (<div>) com as mesmas dimensões e posição, preenchido com a cor principal da marca, com role="img" e um aria-label descrevendo em português o que a imagem mostrava (ex.: "Foto de uma equipe reunida em volta de uma mesa"). Ícones pequenos podem ser blocos arredondados na cor da marca ou caracteres simples.
+- Fotos, ilustrações, logotipos e ícones de terceiros NÃO devem ser copiados nem carregados de outros sites: no lugar de cada imagem, coloque um bloco (<div>) com as mesmas dimensões e posição, preenchido com a cor principal da marca, com role="img" e um aria-label descrevendo em português o que a imagem mostrava (ex.: "Foto de uma equipe reunida em volta de uma mesa"). Ícones pequenos podem ser blocos arredondados na cor da marca ou caracteres simples. Exceção: quando o pedido trouxer "Imagens da empresa", use essas imagens (com <img> e os endereços exatos) no lugar dos blocos correspondentes — o logo no lugar do logotipo da referência, as fotos onde a referência tinha fotos.
 - Use fontes do Google Fonts (<link> em https://fonts.googleapis.com) para chegar perto da tipografia da captura.
 - Não inclua nenhum <script> além do permitido para o formato. Não use onclick nem outros atributos de evento. Não carregue nada de outras origens além do Google Fonts e do Tailwind.
 - A página deve funcionar bem no celular (largura de 390 px) e no computador.
@@ -43,7 +43,7 @@ Regras:
 ${REGRAS_COMUNS}`;
 
 /** Bloco do pedido do usuário que acompanha a imagem: marca, instruções e formato. */
-export function montarPrompt(pedido: Pick<Pedido, "instrucoes" | "marca" | "stack">): string {
+export function montarPrompt(pedido: Pick<Pedido, "instrucoes" | "marca" | "stack">, blocoAssets?: string): string {
   const linhas = ["Gere a página a partir desta captura de referência."];
   if (pedido.marca?.nome || pedido.marca?.corPrimaria) {
     linhas.push(
@@ -52,6 +52,7 @@ export function montarPrompt(pedido: Pick<Pedido, "instrucoes" | "marca" | "stac
   } else {
     linhas.push("Nenhuma marca foi informada: mantenha as cores da referência e use um nome de empresa fictício e neutro nos textos.");
   }
+  if (blocoAssets?.trim()) linhas.push(blocoAssets.trim());
   if (pedido.instrucoes?.trim()) linhas.push(`Instruções adicionais de quem pediu a página:\n${pedido.instrucoes.trim()}`);
   linhas.push(`Formato: ${pedido.stack === "html-css" ? "HTML com CSS próprio em <style>" : "HTML com Tailwind pela CDN"}.`);
   return linhas.join("\n\n");
@@ -175,13 +176,16 @@ export async function lerCaptura(opcoes: { system: string; prompt: string; image
 }
 
 /** Gera a página a partir do pedido (captura + formato + marca + instruções), salva e devolve com a proveniência. */
-export async function gerarPagina(pedido: Pedido): Promise<{ demo: boolean; pagina: Pagina; meta: Meta; id: string }> {
+/** Imagens do cliente que entram nos prompts e na demonstração (montadas por lib/assets.ts a partir do projeto). */
+export type OpcoesAssets = { blocoAssets?: string; demoAssets?: { logoUrl?: string; imagens?: { url: string; descricao: string }[] } };
+
+export async function gerarPagina(pedido: Pedido, opcoes: OpcoesAssets = {}): Promise<{ demo: boolean; pagina: Pagina; meta: Meta; id: string }> {
   const imagem = validarImagem(pedido.imagem);
   if (!imagem.ok) throw new Error(imagem.erro);
 
   if (!visionEnabled()) {
     await esperar(1400);
-    const html = paginaDemo(pedido);
+    const html = paginaDemo({ ...pedido, ...opcoes.demoAssets });
     const metaGerada = meta({ demo: true, insumo: INSUMO });
     const pagina = salvarPagina(pedido, imagem.tamanho, html, metaGerada);
     return { demo: true, pagina, meta: metaGerada, id: pagina.id };
@@ -189,7 +193,7 @@ export async function gerarPagina(pedido: Pedido): Promise<{ demo: boolean; pagi
 
   const resposta = await lerCaptura({
     system: pedido.stack === "html-css" ? SYSTEM_CSS : SYSTEM_TAILWIND,
-    prompt: montarPrompt(pedido),
+    prompt: montarPrompt(pedido, opcoes.blocoAssets),
     imagem: pedido.imagem,
     maxTokens: 12000,
   });
@@ -265,14 +269,14 @@ export function montarPromptBriefing(pedido: PedidoBriefing): string {
  * Passa pelo motor de texto (OpenRouter ou ChatGPT, lib/motor.ts) — não precisa de visão. Em demonstração,
  * a landing fixa ganha o título com a primeira frase do briefing.
  */
-export async function gerarDoBriefing(pedido: PedidoBriefing): Promise<{ demo: boolean; pagina: Pagina; meta: Meta; id: string }> {
+export async function gerarDoBriefing(pedido: PedidoBriefing, opcoes: OpcoesAssets = {}): Promise<{ demo: boolean; pagina: Pagina; meta: Meta; id: string }> {
   const briefing = pedido.briefing.trim();
   if (briefing.length < 20) throw new ErroDePedido("Conte em pelo menos uma frase o que a empresa faz e o que o site precisa ter.");
   const base: Pedido = { imagem: "", stack: pedido.stack, ...(pedido.instrucoes?.trim() ? { instrucoes: pedido.instrucoes.trim() } : {}), ...(pedido.marca ? { marca: pedido.marca } : {}) };
 
   if (!aiEnabled()) {
     await esperar(1400);
-    const html = paginaDemo({ ...base, briefing });
+    const html = paginaDemo({ ...base, briefing, ...opcoes.demoAssets });
     const metaGerada = meta({ demo: true, insumo: INSUMO_BRIEFING });
     const pagina = salvarPagina(base, 0, html, metaGerada, briefing);
     return { demo: true, pagina, meta: metaGerada, id: pagina.id };
@@ -280,7 +284,7 @@ export async function gerarDoBriefing(pedido: PedidoBriefing): Promise<{ demo: b
 
   const resposta = await askText({
     system: pedido.stack === "html-css" ? SYSTEM_BRIEFING_CSS : SYSTEM_BRIEFING_TAILWIND,
-    prompt: montarPromptBriefing({ ...pedido, briefing }),
+    prompt: montarPromptBriefing({ ...pedido, briefing, blocoAssets: pedido.blocoAssets ?? opcoes.blocoAssets }),
     maxTokens: 12000,
     temperature: 0.4,
   });
@@ -318,11 +322,12 @@ Regras:
 ${REGRAS_EDICAO}`;
 
 /** Bloco do usuário para a edição: a instrução, a marca (para as cores certas) e o HTML atual. */
-export function montarPromptEdicao(html: string, instrucao: string, marca?: Marca): string {
+export function montarPromptEdicao(html: string, instrucao: string, marca?: Marca, blocoAssets?: string): string {
   const linhas = [`Instrução de mudança:\n${instrucao.trim()}`];
   if (marca?.nome || marca?.corPrimaria) {
     linhas.push(`Marca da página: ${marca.nome || "não informada"}. Cor principal: ${marca.corPrimaria}.${marca.corSecundaria ? ` Cor secundária: ${marca.corSecundaria}.` : ""}`);
   }
+  if (blocoAssets?.trim()) linhas.push(blocoAssets.trim());
   linhas.push(`Código atual da página:\n${html}`);
   return linhas.join("\n\n");
 }
@@ -381,7 +386,7 @@ function gravarVersao(pagina: Pagina, versao: Versao): Pagina {
  * outra versão) e grava uma versão nova. Em modo demonstração, aplica mudanças fixas visíveis (ver lib/demo.ts).
  * `rotulo` é o texto curto que fica na lista "Versões" quando a instrução enviada à IA é longa (ex.: troca de textos).
  */
-export async function editarPagina(id: string, instrucao: string, htmlBase?: string, rotulo?: string): Promise<{ demo: boolean; pagina: Pagina; meta: Meta; versao: Versao }> {
+export async function editarPagina(id: string, instrucao: string, htmlBase?: string, rotulo?: string, blocoAssets?: string): Promise<{ demo: boolean; pagina: Pagina; meta: Meta; versao: Versao }> {
   const { pagina, stack } = carregarPagina(id);
   const atual = pagina.versoes[pagina.versoes.length - 1];
   const base = htmlBase?.trim() ? sanitizarHtml(extrairHtml(htmlBase), stack) : atual.html;
@@ -396,7 +401,7 @@ export async function editarPagina(id: string, instrucao: string, htmlBase?: str
   } else {
     const resposta = await askText({
       system: stack === "html-css" ? SYSTEM_EDICAO_CSS : SYSTEM_EDICAO_TAILWIND,
-      prompt: montarPromptEdicao(base, instrucao, pagina.marca),
+      prompt: montarPromptEdicao(base, instrucao, pagina.marca, blocoAssets),
       maxTokens: 12000,
       temperature: 0.2,
     });

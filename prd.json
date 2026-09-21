@@ -69,7 +69,7 @@
         "Lint e tsc passam; verificar no navegador: logo no cabeçalho da prévia, fotos nos blocos, /s/<slug> sem bloqueio de CSP"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "US-004 da PRD."
     },
     {

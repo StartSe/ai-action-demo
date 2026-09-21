@@ -8,6 +8,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { Aviso, Dropzone, Field, Hero, MaisDetalhes, Passos, Privacidade, Row, Stage, lerErro, type PassoIndicador } from "@/components/ui";
 import { AmpliarImagem } from "@/components/Ampliar";
 import { MeusSites, buscarSites } from "@/components/MeusSites";
+import { SeletorImagens, enviarPendentes, type ImagemPendente } from "@/components/PainelImagens";
 import { TopbarSite } from "@/components/TopbarSite";
 import type { OrigemProjeto, Projeto, Stack } from "@/lib/types";
 
@@ -113,6 +114,7 @@ export default function Page() {
   const [criando, setCriando] = useState(false);
   const [preparando, setPreparando] = useState(false);
   const [sites, setSites] = useState<Projeto[] | null>(null);
+  const [imagens, setImagens] = useState<ImagemPendente[]>([]);
   const autoEnviado = useRef(false);
   const leituraAtual = useRef(0);
 
@@ -178,8 +180,11 @@ export default function Page() {
     }
   }
 
-  /** Cria o site e dispara a geração; a tela não espera: o site entra no topo de "Meus sites" em "Gerando". */
-  async function criar(origem: OrigemProjeto, f: Formulario, imagem?: string) {
+  /**
+   * Cria o site, envia o logo e as imagens e dispara a geração; a tela não espera: o site entra no topo de
+   * "Meus sites" em "Gerando". As imagens vão entre criar e gerar, para o gerador já conhecê-las.
+   */
+  async function criar(origem: OrigemProjeto, f: Formulario, imagem?: string, pendentes: ImagemPendente[] = []) {
     if (criando) return;
     setCriando(true);
     setAviso(null);
@@ -192,7 +197,7 @@ export default function Page() {
         stack: f.stack,
         instrucoes: f.instrucoes,
         marca: montarMarca(f),
-        gerar: true,
+        gerar: pendentes.length === 0,
       };
       const r = await fetch("/api/sites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
       if (!r.ok) {
@@ -201,14 +206,26 @@ export default function Page() {
         setAviso({ tom: "danger", texto: info.mensagem, acao: info.acao });
         return;
       }
-      const { projeto } = (await r.json()) as { projeto: Projeto };
+      let { projeto } = (await r.json()) as { projeto: Projeto };
+      let falhasImagens: string[] = [];
+      if (pendentes.length) {
+        falhasImagens = await enviarPendentes(projeto.id, pendentes);
+        const g = await fetch(`/api/sites/${projeto.id}/gerar`, { method: "POST" });
+        if (g.ok || g.status === 409) projeto = ((await g.json()) as { projeto: Projeto }).projeto;
+        else setAviso({ tom: "danger", texto: (await lerErro(g)).mensagem });
+      }
       setSites((lista) => [projeto, ...(lista ?? []).filter((s) => s.id !== projeto.id)]);
       setForm(VAZIO);
       setNomeDigitado(false);
       setArquivo(null);
       setCaptura(null);
       setEndereco("");
-      setAviso({ tom: "ok", texto: `Estamos criando «${projeto.nome}». Você pode sair desta tela: avisamos no sino quando ficar pronto.` });
+      setImagens([]);
+      setAviso(
+        falhasImagens.length
+          ? { tom: "warn", texto: `«${projeto.nome}» está sendo criado, mas ${falhasImagens.length === 1 ? "uma imagem não entrou" : `${falhasImagens.length} imagens não entraram`}: ${falhasImagens[0]}` }
+          : { tom: "ok", texto: `Estamos criando «${projeto.nome}». Você pode sair desta tela: avisamos no sino quando ficar pronto.` }
+      );
       const stage = document.getElementById("stage");
       if (stage && window.matchMedia("(max-width: 767px)").matches && !new URLSearchParams(location.search).get("captura")) stage.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (e) {
@@ -224,13 +241,13 @@ export default function Page() {
     if ([form.corPrimaria, form.corSecundaria].some((cor) => cor.trim() && !COR_HEX.test(cor.trim()))) { setAviso({ tom: "danger", texto: "Use seis dígitos nas cores, como #792a3f, ou escolha pela paleta." }); return; }
     if (aba === "briefing") {
       if (form.briefing.trim().length < MINIMO_BRIEFING) { setAviso({ tom: "danger", texto: "Conte em pelo menos uma frase o que a empresa faz e o que o site precisa ter." }); return; }
-      await criar("briefing", form);
+      await criar("briefing", form, undefined, imagens);
       return;
     }
     let imagem = captura;
     if (aba === "endereco" && !imagem) imagem = await trazerDoEndereco();
     if (!imagem) { if (aba === "referencia") setAviso({ tom: "danger", texto: "Envie a captura da página de referência antes de criar o site." }); return; }
-    await criar("referencia", form, imagem);
+    await criar("referencia", form, imagem, imagens);
   }
 
   async function capturaDeExemplo(): Promise<string> {
@@ -384,6 +401,9 @@ export default function Page() {
                 <Field label="Nome do site" htmlFor="nomeSite" hint="Como ele aparece em Meus sites e no endereço público.">
                   <input id="nomeSite" className="input" placeholder="Ex.: Landing de lançamento" value={form.nomeSite} onChange={set("nomeSite")} />
                 </Field>
+                <div className="mb-4">
+                  <SeletorImagens pendentes={imagens} onChange={setImagens} desabilitado={ocupado} />
+                </div>
                 <MaisDetalhes>
                   <Field label="Cor secundária (opcional)" htmlFor="corSecundaria">
                     <div className="flex gap-2 items-center">

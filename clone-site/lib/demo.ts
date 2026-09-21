@@ -396,7 +396,7 @@ export function fraseDoBriefing(briefing: string): string {
  * Landing fictícia completa, na marca informada (ou na marca de exemplo), no formato pedido. Com `briefing`,
  * o título do herói e o <title> citam a primeira frase do que a empresa faz; o resto continua a landing fixa.
  */
-export function paginaDemo(pedido: Pick<Pedido, "stack" | "marca"> & { briefing?: string }): string {
+export function paginaDemo(pedido: Pick<Pedido, "stack" | "marca"> & { briefing?: string; logoUrl?: string; imagens?: { url: string; descricao: string }[] }): string {
   const marca: Marca = {
     nome: pedido.marca?.nome?.trim() || MARCA_DEMO.nome,
     corPrimaria: pedido.marca?.corPrimaria || MARCA_DEMO.corPrimaria,
@@ -409,7 +409,38 @@ export function paginaDemo(pedido: Pick<Pedido, "stack" | "marca"> & { briefing?
     html = html.replace(/(<h1\b[^>]*>)[\s\S]*?(<\/h1>)/i, `$1${escaparHtml(frase)}.$2`);
     html = html.replace(/(<title>)[\s\S]*?(<\/title>)/i, `$1${escaparHtml(marca.nome)} · ${escaparHtml(frase)}$2`);
   }
-  return html;
+  return aplicarAssetsDemo(html, marca, pedido.logoUrl, pedido.imagens ?? []);
+}
+
+/**
+ * Imagens do cliente na landing de demonstração: o logo entra no lugar do quadradinho colorido do cabeçalho
+ * (e do rodapé, quando houver o mesmo padrão) e as fotos ocupam, na ordem, os blocos grandes (herói, tela do
+ * produto) e depois os dos benefícios — o mesmo que o gerador pede à IA com o bloco "Imagens da empresa".
+ */
+function aplicarAssetsDemo(html: string, marca: Marca, logoUrl?: string, imagens: { url: string; descricao: string }[] = []): string {
+  let saida = html;
+  const alt = escaparHtml(marca.nome);
+  if (logoUrl) {
+    const src = escaparHtml(logoUrl);
+    // Tailwind: <span class="w-8 h-8 rounded-lg bg-marca inline-block"></span>; CSS: <a class="logo"><span></span>
+    saida = saida.replace(/<span class="w-8 h-8 rounded-lg bg-marca inline-block"><\/span>/g, `<img src="${src}" alt="${alt}" class="h-9 w-auto">`);
+    saida = saida.replace(/(<a href="#" class="logo">)<span><\/span>/g, `$1<img src="${src}" alt="${alt}" style="height:36px;width:auto">`);
+  }
+  let i = 0;
+  // Blocos grandes primeiro (herói e tela do produto), depois os ícones dos benefícios: role="img" com aria-label.
+  const ordem = [/<div class="imagem rounded-2xl[^"]*" role="img" aria-label="([^"]*)">([\s\S]*?)<\/div>/g, /<div class="imagem imagem-heroi" role="img" aria-label="([^"]*)">[\s\S]*?<\/div>/g, /<div class="imagem" role="img" aria-label="([^"]*)"><\/div>/g, /<div class="imagem w-12 h-12 rounded-xl mb-5" role="img" aria-label="([^"]*)"><\/div>/g];
+  for (const regex of ordem) {
+    saida = saida.replace(regex, (bloco: string) => {
+      const img = imagens[i];
+      if (!img) return bloco;
+      i++;
+      const classe = /class="([^"]*)"/.exec(bloco)?.[1] ?? "imagem";
+      const grande = /rounded-2xl|imagem-heroi|^imagem$/.test(classe);
+      const estilo = grande ? "object-fit:cover;width:100%;" : "object-fit:cover;";
+      return `<img src="${escaparHtml(img.url)}" alt="${escaparHtml(img.descricao || marca.nome)}" class="${classe.replace(/\bimagem\b/, "").trim()} block" style="${estilo}">`;
+    });
+  }
+  return saida;
 }
 
 // Em modo demonstração, cada edição aplica mudanças fixas e visíveis, para mostrar o fluxo de versões:

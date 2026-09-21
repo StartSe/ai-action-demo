@@ -52,3 +52,14 @@ Trabalho feito num worktree separado (../ai-action-demo-clone-site), criado a pa
   - **Um site que falhou por "recurso ainda não existe" fica no banco esperando a etapa seguinte** — "Tentar de novo" reaproveita o briefing/captura guardados, então a US seguinte pode ser verificada em cima dos registros que a anterior deixou em `falhou`.
   - **`Pedido` exige `imagem`; para o briefing basta `imagem: ""`** na hora de salvar (a entrada gravada nunca leva a imagem, só `tamanhoImagem`).
 ---
+
+## 20/09/2026 - US-004 - Logo e imagens do cliente
+- Novo `lib/assets.ts` (tabela `assets`, base64; `detectarMime` pelos bytes — PNG/JPG/WEBP — ou pelo texto para SVG, recusando script/eventos/foreignObject; um só logo, até 12 imagens, 2 MB; `montarBlocoAssets` monta o bloco "Imagens da empresa" dos prompts). Rotas `GET|POST /api/sites/[id]/imagens` (multipart), `DELETE .../[assetId]` e a pública `GET /s/[id]/a/[assetId]` (cache 1 h, nosniff, CSP para SVG).
+- `lib/gerador.ts`: `OpcoesAssets { blocoAssets, demoAssets }` em `gerarPagina`/`gerarDoBriefing`; `montarPrompt`/`montarPromptEdicao`/`editarPagina` aceitam o bloco; REGRAS_COMUNS ganhou a exceção "quando o pedido trouxer Imagens da empresa, use-as". `lib/projetos.ts:opcoesAssetsDe(id)` monta as opções na geração; `apagar` leva os assets. `lib/demo.ts:aplicarAssetsDemo` troca o quadradinho do cabeçalho pelo logo e os blocos `.imagem` (grandes primeiro) pelas fotos.
+- UI: `components/PainelImagens.tsx` com `SeletorImagens` (formulário de criação: logo + até 6 imagens com descrição, enviadas entre `POST /api/sites` sem `gerar` e `POST .../gerar`) e `PainelImagens` (workspace: lista/adiciona/remove). `/sites/[id]` ganhou a coluna lateral com o painel.
+- Verificado no standalone (demonstração): logo SVG 201, SVG com `<script>` 400, duas fotos PNG 201; o asset público sai com `image/svg+xml`, `public, max-age=3600`, `nosniff` e CSP restrita; o site gerado usa `<img>` do logo (h-9) e das fotos (object-fit cover); `/s/cafe-aroma` renderiza com as imagens e sem violação de CSP no console (o único 404 é o favicon, pré-existente). Capturas 1400 px do workspace com o painel e do formulário com o seletor.
+- **Learnings for future iterations:**
+  - **Rota dinâmica nova = `npx next typegen` antes do `tsc`**: `RouteContext<"/nova/rota">` falha com "does not satisfy the constraint AppRouteHandlerRoutes" até os tipos serem regenerados; não é erro de código.
+  - **`Response` com `Buffer` reclama de tipo em Next 16**: passar `new Uint8Array(buffer)` como corpo.
+  - **Miniatura de arquivo local/asset do próprio app usa `<img>` com `eslint-disable-next-line @next/next/no-img-element`** (a regra é aviso, mas o comentário registra a decisão): `next/image` não otimiza URL de objeto nem rota dinâmica com cache próprio.
+---

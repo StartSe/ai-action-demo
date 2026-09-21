@@ -8,7 +8,8 @@
 // aba aberta e para "Tentar de novo" sem reenviar) e é apagada em seguida.
 import crypto from "node:crypto";
 import { ErroIA, type Meta } from "./ai";
-import { ACAO_ESCOLHER_MODELO, ErroDePedido, gerarDoBriefing, gerarPagina, normalizarMarca, normalizarStack, validarImagem } from "./gerador";
+import { apagarDoProjeto as apagarAssetsDoProjeto, listar as listarAssets, montarBlocoAssets } from "./assets";
+import { ACAO_ESCOLHER_MODELO, ErroDePedido, gerarDoBriefing, gerarPagina, normalizarMarca, normalizarStack, validarImagem, type OpcoesAssets } from "./gerador";
 import { apagar as apagarResultado, obter as obterResultado } from "./historico";
 import { abrirBanco } from "./store";
 import type { EntradaPagina, ErroProjeto, EstadoProjeto, Marca, OrigemProjeto, Pagina, Projeto, Stack, Versao } from "./types";
@@ -251,11 +252,12 @@ export function editarPedido(id: string, dados: { marca?: unknown; instrucoes?: 
   return obterOuFalhar(id);
 }
 
-/** Apaga o projeto e a página do histórico (o link /s/<slug> passa a responder 404). */
+/** Apaga o projeto, a página do histórico e as imagens (o link /s/<slug> passa a responder 404). */
 export function apagar(id: string): void {
   const p = obter(id);
   if (!p) return;
   if (p.paginaId) apagarResultado(p.paginaId);
+  apagarAssetsDoProjeto(id);
   db().prepare("DELETE FROM projetos WHERE id = ?").run(id);
 }
 
@@ -306,6 +308,17 @@ export function publicar(id: string, n?: unknown): { projeto: Projeto; versao: V
 // Geração em segundo plano
 // ---------------------------------------------------------------------------------------------------------
 
+/** Logo e imagens do site, no formato que os geradores e o agente esperam (prompt + demonstração). */
+export function opcoesAssetsDe(projetoId: string): OpcoesAssets {
+  const assets = listarAssets(projetoId);
+  if (!assets.length) return {};
+  const logo = assets.find((a) => a.papel === "logo");
+  return {
+    blocoAssets: montarBlocoAssets(projetoId),
+    demoAssets: { logoUrl: logo?.url, imagens: assets.filter((a) => a.papel === "imagem").map((a) => ({ url: a.url, descricao: a.descricao || a.nome })) },
+  };
+}
+
 /** Traduz qualquer falha da geração para o formato gravado no projeto: nunca o corpo do provedor. */
 function erroDe(err: unknown): ErroProjeto {
   if (err instanceof ErroIA) {
@@ -333,12 +346,13 @@ async function executarGeracao(id: string): Promise<void> {
   if (!p || p.estado !== "gerando") return;
   try {
     let pagina: Pagina;
+    const opcoes = opcoesAssetsDe(id);
     if (p.origem === "briefing") {
-      pagina = (await gerarDoBriefing({ briefing: p.briefing ?? "", stack: p.stack, marca: p.marca, instrucoes: p.instrucoes })).pagina;
+      pagina = (await gerarDoBriefing({ briefing: p.briefing ?? "", stack: p.stack, marca: p.marca, instrucoes: p.instrucoes }, opcoes)).pagina;
     } else {
       const imagem = imagemDe(id);
       if (!imagem) throw new ErroDePedido("A captura deste site não está mais guardada. Crie o site de novo.");
-      pagina = (await gerarPagina({ imagem, stack: p.stack, instrucoes: p.instrucoes, marca: p.marca })).pagina;
+      pagina = (await gerarPagina({ imagem, stack: p.stack, instrucoes: p.instrucoes, marca: p.marca }, opcoes)).pagina;
     }
     const t = agora();
     const nomeFinal = p.nome === NOME_AUTOMATICO ? pagina.titulo.slice(0, 80) : p.nome;

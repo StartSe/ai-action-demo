@@ -64,6 +64,11 @@ sqlite3 data/app.sqlite "select estado, versaoPublicada, imagem is null from pro
 curl -s http://localhost:3000/s/<slug> | head -3                                                            # a versão publicada, sem sessão
 ```
 
+## Logo e imagens do cliente
+Cada site aceita um logo e até 12 imagens (PNG, JPG, WEBP ou SVG sem script; até 2 MB cada), enviados no formulário de criação (até 6 na hora, o resto depois) ou no painel "Imagens" do site (`lib/assets.ts`, tabela `assets`, `GET|POST /api/sites/<id>/imagens`, `DELETE /api/sites/<id>/imagens/<assetId>`). Os arquivos são servidos em `/s/<idDoProjeto>/a/<assetId>` (público como o site, cache de 1 h, `nosniff`; SVG com CSP que não executa nada) — um endereço absoluto que funciona na prévia, no link `/s/<slug>` e no domínio próprio. O gerador e o agente recebem o bloco "Imagens da empresa" (`montarBlocoAssets`) e usam `<img>` com esses endereços: o logo no cabeçalho e no rodapé, as fotos onde a referência tinha imagens; onde faltar imagem, continua o bloco na cor da marca. Em demonstração, a landing fixa recebe o logo e as fotos nos mesmos lugares.
+
+Importante: a lista de origens da CSP de `/s/` (`lib/publicacao.ts`, `img-src 'self' data: https:`) e o que `sanitizarHtml` deixa passar andam juntas — ao liberar qualquer origem nova no sanitizador, atualize a CSP.
+
 ## Edições por instrução e versões
 Abaixo da prévia, o campo "O que mudar" envia a instrução (e o HTML que a tela está mostrando) em `POST /api/pagina/<id>/editar`. `lib/gerador.ts:editarPagina` usa o prompt de atualização do screenshot-to-code (devolver o arquivo inteiro mudando só o que foi pedido), passa a resposta pela mesma extração e sanitização da geração e grava uma `Versao` nova na página; a prévia mostra sempre a última versão. O botão "Trocar os textos pelos da minha empresa" abre o campo "O que a empresa faz" e envia `{ empresa }`: o servidor monta a instrução pré-pronta (`instrucaoTrocarTextos`) e grava na versão só o rótulo curto "Textos trocados pelos da empresa: ...".
 
