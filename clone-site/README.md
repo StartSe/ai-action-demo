@@ -43,6 +43,27 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 
 A prévia é um `<iframe sandbox="allow-scripts" srcDoc=...>`: o HTML gerado roda numa origem opaca, sem acesso a cookies, armazenamento nem ao próprio app. `allow-scripts` é necessário porque o Tailwind pela CDN é um script; sem ele, o formato Tailwind apareceria sem estilo.
 
+## Sites: projetos com estado, geração em segundo plano e link por slug
+Desde 20/09/2026 toda página nasce como um **site** (`lib/projetos.ts`, tabela `projetos` no mesmo `app.sqlite`): nome, marca, origem (`referencia` ou `briefing`), estado (`rascunho` → `gerando` → `pronto` | `falhou`; `falhou` → `gerando` em "Tentar de novo") e um `slug` legível, único na instância, derivado do nome (`clinica-sao-lucas`, `clinica-sao-lucas-2`…). A página com as versões continua no histórico (`resultados`, tipo `pagina`); o site guarda `paginaId` e `versaoPublicada`.
+
+- A geração corre **em segundo plano**: `POST /api/sites/<id>/gerar` responde `202` na hora e a tela consulta `GET /api/sites/<id>` a cada 5 s. Fechar a aba não perde nada.
+- A captura fica guardada na linha do site só até `pronto` (para gerar sem a aba aberta e para "Tentar de novo" sem reenviar) e é apagada em seguida. Em `falhou` ela permanece, com o motivo em português (`erro.mensagem`, `erro.codigo`, `erro.acao`), até a pessoa apagar o site.
+- Na subida do servidor, todo site em `gerando` vira `falhou` ("O servidor reiniciou durante a geração"); a cada 60 s, quem passou de 15 minutos em `gerando` também.
+- `/s/<slug>` (ou `/s/<id>`) serve a **versão publicada** (`POST /api/sites/<id>/publicar` com `{ n }`; a versão 1 é publicada sozinha ao ficar pronto). Edições criam versões novas sem mexer no que está no ar até a próxima publicação. Um id de página antigo, sem site, continua servindo a última versão.
+- `POST /api/pagina` e a ferramenta MCP `gerar_pagina` continuam existindo: criam o site, geram e esperam o fim, devolvendo também `projetoId` e `slug`.
+
+Rotas: `POST /api/sites` (cria; `gerar: true` já dispara), `GET /api/sites?estado=`, `GET|PATCH|DELETE /api/sites/<id>` (`PATCH`: `nome`, `slug`; `marca`/`instrucoes`/`briefing`/`stack` só em `rascunho`/`falhou`), `POST /api/sites/<id>/gerar`, `POST /api/sites/<id>/publicar`, `POST /api/sites/<id>/visto`, `GET /api/sites/avisos` (sino do cabeçalho).
+
+Teste rápido, com o app rodando e a sessão em um cookie (`-b cookies.txt`):
+```bash
+IMG="data:image/png;base64,$(base64 -i public/exemplo-referencia.png | tr -d '\n')"
+jq -n --arg img "$IMG" '{nome:"Loja Aurora",origem:"referencia",imagem:$img,marca:{nome:"Loja Aurora",corPrimaria:"#0f766e"},gerar:true}' \
+  | curl -s -b cookies.txt -H "Content-Type: application/json" -d @- http://localhost:3000/api/sites      # 201, estado "gerando" em < 1 s
+curl -s -b cookies.txt http://localhost:3000/api/sites/<id>                                                 # repita até estado "pronto"
+sqlite3 data/app.sqlite "select estado, versaoPublicada, imagem is null from projetos where id='<id>'"       # pronto|1|1
+curl -s http://localhost:3000/s/<slug> | head -3                                                            # a versão publicada, sem sessão
+```
+
 ## Edições por instrução e versões
 Abaixo da prévia, o campo "O que mudar" envia a instrução (e o HTML que a tela está mostrando) em `POST /api/pagina/<id>/editar`. `lib/gerador.ts:editarPagina` usa o prompt de atualização do screenshot-to-code (devolver o arquivo inteiro mudando só o que foi pedido), passa a resposta pela mesma extração e sanitização da geração e grava uma `Versao` nova na página; a prévia mostra sempre a última versão. O botão "Trocar os textos pelos da minha empresa" abre o campo "O que a empresa faz" e envia `{ empresa }`: o servidor monta a instrução pré-pronta (`instrucaoTrocarTextos`) e grava na versão só o rótulo curto "Textos trocados pelos da empresa: ...".
 

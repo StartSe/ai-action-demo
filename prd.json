@@ -1,510 +1,173 @@
 {
   "project": "IA para Executivos (ai-action-demo)",
-  "branchName": "ralph/entrevista-ia-vagas-candidatos-entrevistas",
-  "fonte": "tasks/prd-entrevista-ia-vagas-candidatos-entrevistas.md — leia a história completa lá antes de implementar (decisões D1–D13, premissas P1–P9, Technical Considerations e Open Questions); o prd.json traz o resumo. A coluna `notes` de cada história diz de qual US da PRD ela veio.",
-  "description": "Entrevistadora IA reorganizada em torno de Vaga → Candidato → Entrevista: a pessoa de RH cadastra a cultura da empresa uma vez, abre vagas (cargo, salário, desafios, requisitos, competências culturais), cadastra candidatos (a IA lê o currículo, pesquisa na web pela Bright Data via MCP e preenche a ficha com a origem de cada campo; currículo sempre acima da web; homônimos decididos pelo gestor), atribui à vaga e envia o link; o candidato conversa por voz no navegador em três níveis (agente ElevenLabs → voz do navegador → texto); o gestor recebe um parecer técnico e cultural com consistência entre conversa, currículo e perfil público, registra a decisão, compara candidatos e acompanha o processo em Início e Relatórios. Escopo: só entrevista-ia/ (mais a entrada dele em catalogo.json). Fonte: tasks/prd-entrevista-ia-vagas-candidatos-entrevistas.md.",
-  "planningSessionId": "ce447a6d-34cc-45a3-8cbf-eef2faa04ea8",
+  "branchName": "ralph/clone-site-agente-sites",
+  "fonte": "tasks/prd-clone-site-agente-sites.md — leia a história completa lá antes de implementar (premissas P1–P11, Goals, Technical Considerations, Non-Goals); o prd.json traz o resumo dos critérios.",
+  "description": "Clone de Site reorganizado em torno de Site = projeto com estado (rascunho, gerando, pronto, falhou), geração em segundo plano, link único por slug, versão publicada separada do rascunho, assets do cliente (logo e fotos) usados na geração, criação por referência/endereço/briefing, agente com ferramentas (edita por trecho, troca imagem, publica, lê métricas) numa conversa, métricas de visitas e sugestões aplicáveis, domínio personalizado servido pela própria instância (com automação opcional pela API do Render) e motor de IA escolhido entre OpenRouter e ChatGPT (Codex App Server, como no build-agentflows). Escopo: só clone-site/ (mais catalogo.json e as exceções em scripts/). Fonte: tasks/prd-clone-site-agente-sites.md.",
+  "planningSessionId": "1ce8c684-a084-4731-b913-633292d0c526",
   "userStories": [
     {
       "id": "US-001",
-      "title": "O app vira independente e ganha os seis destinos",
-      "description": "As a pessoa de RH, I want ver no cabeçalho os seis lugares do app so that eu saiba onde abrir vaga, cadastrar candidato e ver resultado, mesmo antes das telas ficarem prontas.",
+      "title": "Sites como projetos com estado, geração em segundo plano e link por slug",
+      "description": "As a executivo, I want que cada site seja um projeto com nome, estado e link próprio so that eu volte depois, saiba se ainda está gerando ou por que falhou e compartilhe um endereço legível.",
       "acceptanceCriteria": [
-        "`catalogo.json`: a entrada de `entrevista-ia` ganha `\"independente\": true`; `scripts/verificar-padrao.sh` passa a conferir só `INFRA` e `ESTRUTURA` para este app (o modelo já existe, nenhuma mudança no script)",
-        "`entrevista-ia/CLAUDE.md` registra a data (18/09/2026) e o commit a partir do qual `components/ui.tsx`, `components/setup.tsx`, `components/conta.tsx`, `lib/navegacao.ts`, `lib/ilustracao.ts` e `app/globals.css` passam a ser próprios do app",
-        "`lib/navegacao.ts` (agora próprio) exporta Início `/`, Vagas `/vagas`, Candidatos `/candidatos`, Entrevistas `/entrevistas`, Relatórios `/relatorios`, Configurações `/setup`; \"Histórico\" sai do cabeçalho e passa a ser linkado só de Relatórios (\"Relatórios anteriores\")",
-        "`app/vagas/page.tsx`, `app/candidatos/page.tsx`, `app/entrevistas/page.tsx`, `app/relatorios/page.tsx` existem, são client components, usam o mesmo `Topbar` e mostram um `Empty` com a ação que leva ao que já funciona enquanto a história de cada uma não chega — nenhuma rota devolve 404",
-        "`proxy.ts` não muda: as quatro páginas nascem privadas; `/entrevista/*` e `/api/entrevista/candidato/*` continuam públicas (D10)",
-        "O item ativo do cabeçalho reflete a rota atual nas seis páginas; lint e build passam; verificar no navegador (cabeçalho nas seis rotas, desktop e celular com o menu recolhido)",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+        "`lib/types.ts`: `EstadoProjeto`, `OrigemProjeto` e `Projeto { id, nome, slug, estado, origem, stack, instrucoes?, briefing?, marca?, tamanhoImagem, paginaId?, versaoPublicada?, dominio?, erro?, criadoEm, atualizadoEm, terminadoEm?, vistoEm? }` (sem a imagem)",
+        "Novo `lib/projetos.ts` (tabela `projetos` no mesmo app.sqlite, com `imagem TEXT NULL` e slug único): criar (slug gerado do nome, sufixo -2/-3 quando repetido), obter, obterPorSlug, listar (sem imagem), renomear, definirSlug, apagar (página do histórico junto), marcarVisto, publicar(id, n), imagemDe",
+        "`iniciarGeracao(id)` só de rascunho/falhou; `executarGeracao` roda sem await, grava pronto+paginaId+versaoPublicada=1 e apaga a imagem, ou falhou com erro em português (mensagem/codigo/acao) mantendo a imagem; `encerrarAbandonados()` na subida (instrumentation.ts) e no laço de 60 s (15 min)",
+        "Rotas `app/api/sites/**`: POST (cria; `gerar: true` dispara), GET lista `?estado=`, GET/PATCH/DELETE `[id]` (GET inclui pagina e meta quando pronto), POST `[id]/gerar` (202; 409 se já gerando), POST `[id]/publicar` ({n}), POST `[id]/visto`, GET `avisos` (NotificacaoTopbar)",
+        "`app/s/[id]/route.ts` resolve slug ou id de projeto (serve `versaoPublicada`) e, por compatibilidade, id de página antiga (última versão)",
+        "`POST /api/pagina` e a ferramenta MCP `gerar_pagina` passam a criar o projeto, gerar e aguardar internamente, devolvendo a resposta atual mais `projetoId` e `slug`",
+        "Demonstração mantém `esperar(1400)` em `gerando`",
+        "`npm run lint` e `npx tsc --noEmit` passam; README documenta o teste por curl (202 em menos de 1 s, imagem IS NULL ao ficar pronto, /s/<slug> servindo a versão publicada)"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Fase 0: fundação (independência, navegação e modelo de dados) · PRD US-001"
+      "notes": "US-001 da PRD. Base de dados de tudo o que vem depois. Absorve a US-003 da PRD anterior (tasks/prd-clone-site-projetos.md)."
     },
     {
       "id": "US-002",
-      "title": "Vaga, Candidato e Entrevista no banco",
-      "description": "As a app, I want guardar vaga, candidato, entrevista e a conversa em tabelas próprias so that dez candidatos na mesma vaga gerem dez históricos independentes e nada dependa do título digitado.",
+      "title": "Tela inicial \"Meus sites\" e criação por referência, endereço ou briefing",
+      "description": "As a executivo, I want abrir o app e ver meus sites com estado, e criar um novo em três caminhos (captura, endereço do site, ou descrever a empresa) so that eu comece em segundos e saiba onde está cada coisa.",
       "acceptanceCriteria": [
-        "`lib/vagas.ts`: tabela `vagas` (`id`, `cargo`, `area`, `senioridade` `estagio|junior|pleno|senior|lideranca`, `modelo` `presencial|hibrido|remoto`, `local`, `salarioMin`, `salarioMax` (inteiros em reais, nulos quando \"a combinar\"), `salarioACombinar` 0/1, `desafios` texto, `requisitos` texto (um por linha), `competenciasCulturais` JSON (lista de `{ id, nome, descricao, origem: \"empresa\"|\"vaga\" }`), `tom` `acolhedor|objetivo`, `numeroPerguntas` 6 a 12 (padrão 8), `duracaoMin` 10 a 30 (padrão 15), `perguntaPretensao` 0/1, `status` `aberta|encerrada`, `exemplo` 0/1, `criadoEm`, `atualizadoEm`), com `criar`/`listar({status?})`/`obter`/`atualizar`/`mudarStatus`/`apagar`",
-        "`lib/candidatos.ts`: tabela `candidatos` (`id`, `nome`, `email`, `telefone`, `cidade`, `linkedinUrl`, `termoBusca`, `ficha` JSON — ver US-009 da PRD —, `cvNome`, `cvTipo`, `cvTexto`, `cvArquivo` BLOB (até 5 MB), `pesquisaStatus` `nao_pedida|pendente|em_andamento|concluida|sem_resultado|falhou`, `pesquisaEm`, `identidadeConfirmada` 0/1, `exemplo` 0/1, `criadoEm`, `atualizadoEm`) e `fontes_candidato` (`id`, `candidatoId`, `tipo` `cv|linkedin|busca|pagina`, `url`, `titulo`, `resumo`, `conteudo` (texto normalizado, cortado em 20 mil caracteres), `coletadoEm`), com `criar`/`listar({busca?})`/`obter`/`atualizar`/`apagar` (apaga fontes, entrevistas e mensagens do candidato na mesma transação) e `adicionarFonte`/`listarFontes`",
-        "`lib/entrevistas.ts`: tabela `entrevistas` (`id`, `vagaId`, `candidatoId`, `codigo` — o token do link em `lib/formularios.ts` —, `status` `convidada|aberta|em_andamento|concluida|avaliada|expirada|cancelada`, `nivelVoz` `agente|navegador|texto` (nulo até a sala abrir), `convidadaEm`, `abertaEm`, `iniciadaEm`, `concluidaEm`, `expiraEm`, `resultadoId` (id do parecer em `lib/historico.ts`), `decisao` `avancar|aguardar|reprovar` (nula até o gestor decidir), `decisaoEm`, `exemplo` 0/1, `criadoEm`) e `mensagens_entrevista` (`id`, `entrevistaId`, `papel` `entrevistadora|candidato`, `texto`, `segundo`, `criadoEm`), com `criar`, `obter`, `obterPorCodigo`, `listar({vagaId?, candidatoId?, status?, periodo?})`, `mudarStatus`, `registrarMensagem`, `transcricao(entrevistaId)`, `registrarResultado`, `decidir`, `cancelar`, `expirarVencidas()` (chamada na leitura, não por tarefa agendada)",
-        "Uma entrevista é única por par (`vagaId`, `candidatoId`) enquanto não estiver `cancelada` ou `expirada`; tentar criar outra devolve a existente",
-        "Migração dos dados antigos, uma vez na subida: cada scorecard salvo em `lib/historico.ts` (tipos `entrevista` e `scorecard`) vira uma `Vaga` (agrupada pelo título normalizado, `requisitos` copiados, demais campos vazios, `status: \"encerrada\"`), um `Candidato` (pelo nome) e uma `Entrevista` `avaliada` com `resultadoId` apontando para o registro antigo; nada em `historico` é apagado nem alterado (o padrão da suíte é nunca apagar dado de banco existente); `/r/[id]` continua abrindo os três tipos antigos",
-        "Testes com `curl` num servidor standalone e `DATA_DIR` em `/tmp`: criar vaga, dois candidatos e duas entrevistas; reiniciar o servidor; conferir que tudo continua lá; conferir que a segunda criação do mesmo par devolve a mesma entrevista; apagar o candidato e conferir que as entrevistas dele sumiram",
-        "Lint e build passam",
-        "Typecheck passes"
+        "`app/page.tsx` reescrita: Hero com PROMESSA nova dentro dos limites (título ≤ 8 palavras, apoio ≤ 20, 5 itens ≤ 6), Passos (Referência ou briefing · Marca e imagens · No ar com o agente); cartão \"Criar um site\" com três abas (Clonar uma referência · Pelo endereço do site · Descrever a empresa) e o cartão \"A sua marca\" (nome do site, marca, cores, instruções, formato); botão \"Criar o site\"",
+        "Stage à direita = \"Meus sites\": lista de projetos com Chip de estado (Rascunho, Gerando com ponto pulsante, No ar, Falhou), nome, marca, data, link para /sites/[id] e \"Abrir o link\" quando publicado; Empty com \"Preencher com um exemplo\"; cartão em gerando mostra \"Gerando há X min Y s\" e atualiza a cada 5 s",
+        "Enviar = `POST /api/sites` com `gerar: true`, sem esperar: o site aparece no topo em gerando, o formulário limpa e um Aviso diz que pode sair da tela; pronto vira \"No ar\" com link; falhou mostra motivo, ação e \"Tentar de novo\" (nada reenviado)",
+        "\"Preencher com um exemplo\" preenche sem enviar; `/?exemplo=1` preenche e envia; `?captura=1` desliga a rolagem",
+        "Sino: `components/useAvisos.ts` (GET /api/sites/avisos ao montar e a cada 15 s, pausa com document.hidden) passado como `notificacoes` ao Topbar em todas as telas do app; `document.title` ganha \"(N) \"",
+        "Texto de Privacidade reescrito (captura guardada só até ficar pronto; logo, imagens e código ficam até apagar)",
+        "Lint, tsc e verificar-jargao passam; verificar no navegador em 1400x900 e 390 px: criar pelo exemplo, ir a /setup durante gerando, voltar e ver o cartão atualizado; falhou com motivo"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Fase 0: fundação (independência, navegação e modelo de dados) · PRD US-002"
+      "passes": false,
+      "notes": "US-002 da PRD. Absorve as US-004/US-006 da PRD anterior (tela por projeto, sino)."
     },
     {
       "id": "US-003",
-      "title": "Cultura da empresa em Configurações",
-      "description": "As a pessoa de RH, I want cadastrar uma vez o que a empresa valoriza so that toda entrevista avalie cultura com os mesmos critérios, sem eu digitar de novo a cada vaga.",
+      "title": "Criar do zero a partir de um briefing",
+      "description": "As a executivo sem referência em mãos, I want descrever a empresa e receber um site completo so that eu não dependa de uma captura de outro site.",
       "acceptanceCriteria": [
-        "`lib/cultura.ts`: tipo `Cultura = { valores: { id, nome, descricao }[] (até 6), comportamentos: string (o que se espera no dia a dia), naoCombina: string (o que não funciona aqui), atualizadoEm }`, guardado em `lib/store.ts` sob a chave `CULTURA_EMPRESA` (JSON) com `obterCultura()`/`salvarCultura()`; `culturaDemo()` em `lib/demo.ts` (quatro valores plausíveis de uma empresa de serviços B2B) usada quando nada foi salvo ainda, marcada como exemplo",
-        "Cartão próprio \"Cultura da empresa\" (`components/CulturaEmpresa.tsx`) registrado em `app/setup/page.tsx` abaixo do `<SetupPage />`, antes de `AcessoMCP`: lista de valores (nome curto + uma frase), dois campos de texto, botão \"Salvar\"; uma linha de apoio dizendo que a entrevistadora usa isso para perguntar e avaliar cultura",
-        "Rotas `GET/PUT /api/cultura` (privadas), com validação (nome de valor até 40 caracteres, descrição até 200, textos até 1.000) e 400 com mensagem clara",
-        "\"Gerar a partir de um texto\": o gestor cola a página \"Sobre nós\"/código de cultura e a IA propõe os valores e os dois textos (`askJSON`, modelo padrão); em modo demonstração devolve `culturaDemo()`; o gestor revisa antes de salvar",
-        "Sem cultura salva, `Início` mostra o passo \"Cadastre a cultura da empresa\" em \"Comece em 3 passos\" (US-022 da PRD) e a vaga nova avisa que está usando a cultura de exemplo",
-        "Lint e build passam; verificar no navegador",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+        "`lib/gerador.ts`: `SYSTEM_BRIEFING_TAILWIND`/`SYSTEM_BRIEFING_CSS` e `gerarDoBriefing({ briefing, marca, stack, instrucoes, assets })` com a estrutura padrão de landing (cabeçalho com logo/nome, herói, benefícios, como funciona, prova, chamada final, rodapé), mesma extração/sanitização, salvo no histórico com `entrada.briefing`",
+        "`executarGeracao` escolhe `gerarPagina` (referencia) ou `gerarDoBriefing` (briefing)",
+        "`lib/demo.ts:paginaDemo` aceita o briefing: título e chamada do herói citam a primeira frase (até 90 caracteres)",
+        "Ferramenta MCP `criar_site(nome, briefing, marca?, formato?)` reaproveitando lib/projetos.ts",
+        "Lint e tsc passam; verificar pela aba \"Descrever a empresa\" em demonstração"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "Fase 0: fundação (independência, navegação e modelo de dados) · PRD US-003"
+      "passes": false,
+      "notes": "US-003 da PRD. Até a US-005, chama askText; depois passa por lib/motor.ts."
     },
     {
       "id": "US-004",
-      "title": "Dados de exemplo no modo demonstração",
-      "description": "As a executivo avaliando o app, I want ver as telas cheias de vagas, candidatos e pareceres plausíveis mesmo sem conectar nada so that eu entenda o que o app faz antes de decidir conectar a IA.",
+      "title": "Logo e imagens do cliente",
+      "description": "As a executivo, I want enviar o logo e fotos da minha empresa so that o site saia com a minha marca de verdade, não com blocos coloridos.",
       "acceptanceCriteria": [
-        "`lib/semear-demo.ts`: na primeira leitura de qualquer lista com as tabelas vazias, grava (uma vez) a vaga \"Analista de Customer Success\" (requisitos do `EXEMPLO` atual, faixa 5.500 a 7.000, híbrido em São Paulo, desafios em três frases, quatro competências culturais da `culturaDemo()`), três candidatos (Bruno Alves, Camila Rocha, Diego Martins) com fichas completas (campos de origem `cv` e `web`, uma divergência em Camila, fontes com URLs de exemplo `https://exemplo.com/...`), três entrevistas `avaliadas` com pareceres de exemplo (`parecerDemo`, US-019 da PRD) de recomendações diferentes, e uma entrevista `convidada` para um quarto candidato (Fernanda Lima), tudo com `exemplo = 1`",
-        "As datas são relativas a \"agora\" (últimos 14 dias), para o Início e os Relatórios terem forma",
-        "Quando a primeira vaga real é criada, as vagas de exemplo (e as entrevistas delas) são apagadas; quando o primeiro candidato real é criado, os candidatos de exemplo (e as entrevistas deles) são apagados — registrado no log",
-        "Toda lista mostra o chip \"Exemplo\" nos itens de exemplo e, quando só existem itens de exemplo, um `AvisoExemplo` de uma frase com a ação para `/setup#openrouter` (componente `components/AvisoExemplo.tsx`, mesmo desenho do `simulador-vendas`)",
-        "Configurações ganha \"Apagar os dados de exemplo\" (com confirmação) no cartão do OpenRouter, que recria o estado inicial vazio",
-        "Lint e build passam",
-        "Typecheck passes"
+        "`lib/assets.ts`: tabela `assets` (papel logo|imagem, mime PNG/JPG/WEBP/SVG, até 2 MB, até 12 por site, um só logo), adicionar/listar (sem dados)/obter/apagar, `urlDoAsset(projetoId, id)` = `/s/<projetoId>/a/<id>`",
+        "Rotas GET/POST `/api/sites/[id]/imagens` (multipart: arquivo, papel, descricao), DELETE `/api/sites/[id]/imagens/[assetId]`; `GET /s/[id]/a/[assetId]` público com cache de 1 h, nosniff e CSP restrita para SVG",
+        "Prompts de geração (captura e briefing) e de edição recebem o bloco \"Imagens da empresa\" (`montarBlocoAssets`): logo no cabeçalho e rodapé, imagens onde a referência tinha fotos, blocos na cor da marca onde faltar",
+        "CSP de `/s/` ganha 'self' em img-src; README anota que sanitização e CSP andam juntas",
+        "Formulário de criação ganha \"Logo da empresa\" e \"Fotos e imagens\" (até 6, com descrição), enviados entre o POST /api/sites e o gerar; painel Imagens no workspace lista, adiciona e remove",
+        "Demonstração usa o logo no cabeçalho e as imagens nos blocos",
+        "Lint e tsc passam; verificar no navegador: logo no cabeçalho da prévia, fotos nos blocos, /s/<slug> sem bloqueio de CSP"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "Fase 0: fundação (independência, navegação e modelo de dados) · PRD US-004"
+      "passes": false,
+      "notes": "US-004 da PRD."
     },
     {
       "id": "US-005",
-      "title": "Lista de vagas e cadastro de vaga",
-      "description": "As a pessoa de RH, I want abrir uma vaga com cargo, salário, desafios, requisitos e competências culturais so that a entrevistadora saiba exatamente o que avaliar e o candidato saiba do que se trata.",
+      "title": "Conexão ChatGPT e escolha do motor de IA",
+      "description": "As a executivo com assinatura ChatGPT, I want conectar minha conta e usá-la no lugar do OpenRouter so that eu não precise de outra chave, como já faço no Build Agentflows.",
       "acceptanceCriteria": [
-        "`/vagas`: cartões (não tabela) com cargo, área, senioridade, modelo e local, faixa salarial (\"R$ 5.500 a R$ 7.000\" ou \"A combinar\"), contagem de candidatos por status (convidados, concluídas, avaliadas), chip de status; filtro Abertas/Encerradas/Todas; botão \"Abrir vaga\"; estado vazio com \"Preencher com um exemplo\"",
-        "`/vagas/nova` e `/vagas/[id]/editar` (`components/FormularioVaga.tsx`): campos principais cargo, área, senioridade, modelo, local, faixa salarial (mín/máx com \"A combinar\"), desafios dos primeiros meses (texto, até 1.500 caracteres, uma linha de ajuda: \"O que essa pessoa precisa resolver nos primeiros meses\"), requisitos (um por linha); em `MaisDetalhes` (\"Entrevista\"): competências culturais (caixas com as da empresa marcadas por padrão + \"Adicionar competência desta vaga\"), tom, número de perguntas (6 a 12), duração estimada (10 a 30 min), \"Perguntar pretensão salarial\" (ligado por padrão quando há faixa)",
-        "Validação no servidor (`POST/PUT /api/vagas`): cargo e requisitos obrigatórios; mínimo ≤ máximo; perguntas e duração dentro dos limites; 400 com mensagem clara",
-        "Salário é digitado como número com máscara de milhar e guardado como inteiro; `lib/formato.ts` ganha `moeda(valor)`",
-        "Lint e build passam; verificar no navegador (lista vazia, lista com exemplo, formulário em 1400 e 390)",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+        "`@openai/codex@0.155.1` no package.json; `lib/chatgpt.ts` copiado do build-agentflows com clientInfo clone_site e mensagens adaptadas; `run()` aceita tools (dynamicTools), onText e signal",
+        "`app/api/chatgpt/route.ts` (GET estado+modelos, POST inicia login por código, DELETE cancel/logout) como no radar-sinais",
+        "`lib/motor.ts`: `provedor()` (IA_PROVEDOR openrouter|chatgpt), `iaDisponivel()`, `gerarTexto()`, `executarComFerramentas()` (askWithTools ou chatGPT().run com dynamicTools), `visaoDisponivel()`; erros do ChatGPT viram ErroIA provedor_fora com ação /setup#ia",
+        "`editarPagina`, `gerarDoBriefing`, agente e sugestões usam lib/motor.ts; captura continua em askVision e, com ChatGPT sem chave do OpenRouter, gera em demonstração com aviso \"Para ler capturas, conecte também o OpenRouter\"",
+        "`app/api/ia/route.ts` (GET/PUT provedor+modelo) e `components/ConexaoIA.tsx` (cartão id=\"ia\" em /setup antes de QualidadePagina; rádio OpenRouter/ChatGPT; código de dispositivo, modelo, desconectar); `scripts/jargao-excecoes.json` ganha clone-site: [\"OpenRouter\"]",
+        "`app/api/status/route.ts` considera iaDisponivel() (exceção registrada em scripts/padrao-excecoes.json) e `statusExtra()` expõe integrations.chatgpt",
+        "Dockerfile não muda além do comentário; README explica os dois caminhos",
+        "Lint, tsc e build passam; verificar no navegador: /setup#ia alterna, inicia login (código aparece) e cancela"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "Fase 1: Vagas · PRD US-005"
+      "passes": false,
+      "notes": "US-005 da PRD. lib/ai.ts (INFRA) não muda: a escolha mora em lib/motor.ts."
     },
     {
       "id": "US-006",
-      "title": "Vaga a partir de uma descrição colada",
-      "description": "As a gestor da área, I want colar a descrição da vaga que já tenho so that o formulário venha preenchido e eu só revise.",
+      "title": "Workspace do site: prévia, versões, publicar, imagens, link",
+      "description": "As a executivo, I want abrir um site e ver, num lugar só, a prévia, o que está publicado, as versões, as imagens e o link so that eu opere o site sem procurar nada.",
       "acceptanceCriteria": [
-        "No topo de `/vagas/nova`, \"Colar uma descrição pronta\": textarea (até 8 mil caracteres) e botão \"Preencher a vaga\"; `POST /api/vagas/estruturar` chama `askJSON` (modelo padrão) e devolve os campos de `Vaga` que conseguiu inferir, mais `competenciasCulturais` sugeridas cruzando a descrição com a cultura da empresa",
-        "O formulário é preenchido com o que voltou, o gestor edita e salva normalmente; campos não inferidos ficam vazios (nunca inventados: o prompt manda deixar `null`)",
-        "Em modo demonstração devolve a vaga de exemplo depois de `esperar(1200)`",
-        "`Loading` com etapas (\"Lendo a descrição...\", \"Separando requisitos e desafios...\", \"Escolhendo competências culturais...\")",
-        "Lint e build passam; verificar no navegador",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+        "`app/sites/[id]/page.tsx` (client, consulta a cada 5 s em gerando): nome editável em linha, Chip de estado, bloco de link (/s/<slug> absoluto, Copiar, Abrir, Trocar o endereço com validação), POST visto ao abrir",
+        "Duas colunas no desktop (prévia da versão selecionada à esquerda; painéis Agente, Versões, Imagens, Métricas, Domínio à direita), empilhado no celular",
+        "Versões: número, instrução, hora, marcador Publicada, Ver, \"Publicar esta\" (POST publicar), \"Voltar para esta\"; faixa \"Há mudanças ainda não publicadas\" com \"Publicar a versão N\" quando a última difere da publicada",
+        "Estados rascunho (Gerar o site / Editar o pedido via ?site=<id>), gerando (Loading + contador + aviso), falhou (ErrorBox + Tentar de novo + Editar o pedido), pronto (workspace completo); \"Apagar site\" com window.confirm apaga página, assets e métricas",
+        "`EntregarPagina` em /r/[id] de página com projeto mostra \"Abrir o site\" (link para /sites/[projetoId])",
+        "Lint, tsc e verificar-jargao passam; verificar em 1400x900 e 390 px: publicar a 1, gerar a 2 (voltar), faixa de não publicadas, publicar a 2 e conferir /s/<slug>"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "Fase 1: Vagas · PRD US-006"
+      "passes": false,
+      "notes": "US-006 da PRD. Painéis Agente/Métricas/Domínio nascem aqui como lugar e ganham conteúdo nas US-007/008/009."
     },
     {
       "id": "US-007",
-      "title": "Página da vaga",
-      "description": "As a pessoa de RH, I want abrir uma vaga e ver quem está em cada etapa so that eu conduza o processo dessa vaga de um lugar só.",
+      "title": "O agente do site: conversa que edita, troca imagens e publica",
+      "description": "As a executivo, I want pedir mudanças em português a um assistente que conhece o meu site so that eu não precise de formulário nem de agência para cada ajuste.",
       "acceptanceCriteria": [
-        "`/vagas/[id]`: cabeçalho com cargo, chips (senioridade, modelo, local, faixa), status e ações \"Editar\", \"Encerrar vaga\"/\"Reabrir\", \"Testar a entrevista\" (D11), \"Adicionar candidato\"",
-        "Bloco \"O que a entrevistadora vai avaliar\": requisitos, desafios e competências culturais, em três colunas no desktop e empilhado no celular",
-        "Bloco \"Candidatos\": tabela (`DataTable`) com nome, status da entrevista (chip), nota e recomendação quando avaliada, decisão do gestor, data; ações por linha \"Ver parecer\", \"Reenviar convite\", \"Cancelar\"; botão \"Comparar candidatos\" quando há duas ou mais avaliadas (US-021 da PRD)",
-        "\"Adicionar candidato\" abre um diálogo que busca em candidatos já cadastrados (por nome) ou leva a `/candidatos/novo?vaga=<id>`; escolher um candidato cria a entrevista e abre o diálogo do convite (US-013 da PRD)",
-        "\"Testar a entrevista\" abre a `Sala` atual em modo prévia (texto, gestor digita), sem gravar nada e sem parecer, com um aviso de uma frase: \"Prévia do roteiro. Nada aqui é salvo.\"",
-        "Encerrar vaga cancela as entrevistas ainda `convidadas` (com confirmação que diz quantas) e mantém as demais",
-        "Lint e build passam; verificar no navegador",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+        "`lib/agente.ts`: tabela `mensagens`; `conversar(projetoId, texto)` com system (papel, marca, assets, versão atual e publicada, métricas de 7 dias, regras) e últimas 12 mensagens; ferramentas ver_pagina, editar_trecho ({edicoes:[{antigo,novo}]}, casamento exato, tudo ou nada, erro claro), reescrever_pagina, trocar_imagem, listar_imagens, publicar, ver_metricas; até 8 rodadas; versão nova por edição com a instrução da pessoa; versaoN anotada na mensagem",
+        "`POST /api/sites/[id]/agente` ({texto} ≤ 2000) devolve {resposta, versoes, pagina, publicou}; GET últimas 50 mensagens; DELETE limpa; demonstração responde texto fixo e grava edicaoDemo; \"publique\" publica de verdade",
+        "`components/ChatAgente.tsx`: mensagens (Versão N clicável seleciona a prévia), campo \"Peça uma mudança\" (Enter envia, Shift+Enter quebra), três atalhos quando vazio, estado \"O agente está trabalhando…\" com passos traduzidos, erro inline com Tentar de novo",
+        "MCP: `editar_pagina` passa a chamar conversar; nova `publicar_site(id, n?)`",
+        "Lint, tsc e verificar-jargao passam; verificar no navegador (demonstração): três pedidos, três versões, \"publique\" atualiza /s/<slug>; com IA real, \"troque o título\" usa editar_trecho (log do servidor)"
       ],
       "priority": 7,
-      "passes": true,
-      "notes": "Fase 1: Vagas · PRD US-007"
+      "passes": false,
+      "notes": "US-007 da PRD. Edição por trecho portada do edit_file do screenshot-to-code."
     },
     {
       "id": "US-008",
-      "title": "Lista de candidatos e cadastro com currículo",
-      "description": "As a pessoa de RH, I want cadastrar um candidato pelo nome e enviar o currículo dele so that a IA leia o currículo e eu não digite o que já está no arquivo.",
+      "title": "Métricas de visitas e sugestões do agente",
+      "description": "As a executivo, I want saber quantas pessoas abriram meu site, de onde e em que aparelho, e receber sugestões do que melhorar so that o site trabalhe para mim depois de publicado.",
       "acceptanceCriteria": [
-        "`/candidatos`: busca por nome, lista com nome, cidade, cargo atual (da ficha), origem da ficha (chips \"CV\", \"Web\"), número de entrevistas e a última vaga; botão \"Cadastrar candidato\"",
-        "`/candidatos/novo` (`components/FormularioCandidato.tsx`): nome completo (obrigatório), currículo (`.pdf`, `.docx` ou `.txt`, até 5 MB, opcional), e em `MaisDetalhes` (\"Para a pesquisa na web\") e-mail, telefone, cidade, endereço do perfil no LinkedIn, termo de busca (uma linha de ajuda: \"Empresa atual, cargo ou cidade, para achar a pessoa certa\"); com `?vaga=<id>` o candidato salvo já é atribuído à vaga e o convite abre em seguida",
-        "`POST /api/candidatos` recebe `formData`; PDF é lido com `unpdf` (`extractText`, como em `contratos-ia`); `.txt` direto; `.docx` conforme Open Questions (até decidir, aceita e avisa \"Formato ainda não lido: cole o texto\"); o texto extraído vai para `cvTexto` (cortado em 60 mil caracteres) e o arquivo para `cvArquivo`",
-        "Currículo sem texto legível (PDF só imagem) não bloqueia: salva o arquivo, deixa `cvTexto` vazio e a tela diz \"Não conseguimos ler o texto deste arquivo\" com a opção de colar o texto",
-        "`GET /api/candidatos/[id]/cv` devolve o arquivo original (privado) para o gestor abrir",
-        "Lint e build passam; verificar no navegador",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+        "`lib/metricas.ts`: tabela `visitas` (dia, hora, origem, dispositivo, caminho); `registrarVisita(projetoId, req)` ignora robôs e ?previa=1; `resumo(projetoId, dias)` → total, porDia, celular/computador, origens top 5, comparado ao período anterior",
+        "`/s/[id]` registra visita só ao servir HTML de projeto, sem esperar",
+        "`GET /api/sites/[id]/metricas?dias=7|30`; painel Métricas: três Destaque, barras por dia em CSS puro, \"De onde vieram\", alternador 7/30, estado vazio",
+        "`lib/sugestoes.ts:sugerir(projetoId)` → 3 {titulo, motivo, instrucao} via motor (askJSON) com HTML resumido + marca + métricas; demonstração fixa; cache de 24 h por versão em config",
+        "`GET /api/sites/[id]/sugestoes` (?forcar=1); bloco \"O que o agente sugere\" com \"Aplicar\" (manda a instrução ao chat) e \"Pedir novas sugestões\"",
+        "Ferramenta ver_metricas devolve o resumo real; system do agente recebe os 7 dias",
+        "Lint, tsc e verificar-jargao passam; verificar: 3 curls em /s/<slug> (um com User-Agent de celular) → 3 visitas, 1 no celular; Aplicar gera versão"
       ],
       "priority": 8,
-      "passes": true,
-      "notes": "Fase 2: Candidatos · PRD US-008"
+      "passes": false,
+      "notes": "US-008 da PRD."
     },
     {
       "id": "US-009",
-      "title": "Ficha do candidato a partir do currículo",
-      "description": "As a pessoa de RH, I want que a ficha do candidato apareça preenchida a partir do currículo so that eu revise em vez de transcrever.",
+      "title": "Domínio personalizado",
+      "description": "As a executivo, I want que www.minhaempresa.com.br abra o meu site so that o link não tenha o nome do app.",
       "acceptanceCriteria": [
-        "`lib/ficha.ts`: tipo `Ficha` com campos `resumo`, `cargoAtual`, `empresaAtual`, `cidade`, `anosExperiencia`, `experiencias[]` (`{ empresa, cargo, inicio, fim, descricao }`), `formacao[]`, `competencias[]`, `idiomas[]`, `links[]`, `pretensaoSalarial`, `disponibilidade`, `observacoes`; **cada campo é `{ valor, origem: \"cv\"|\"web\"|\"gestor\", fonteId? }`** (listas guardam a origem por item)",
-        "`extrairDoCurriculo(cvTexto)` chama `askJSON` (modelo padrão) com regras: só o que está escrito, `null` para o que não está, datas no formato que aparecem; devolve a `Ficha` com tudo em origem `cv`; a fonte `cv` é registrada em `fontes_candidato`",
-        "Roda no `POST /api/candidatos` quando há `cvTexto`, antes de responder (até 20 s; passou disso, salva sem ficha e a tela oferece \"Ler o currículo de novo\")",
-        "Em modo demonstração devolve a ficha de exemplo do candidato correspondente (ou uma genérica)",
-        "`mesclar(fichaAtual, novaFicha, origem)` em `lib/ficha.ts` aplica D5: `gestor` nunca é sobrescrito; `cv` sobrescreve `web`; `web` só preenche vazio; conflitos `cv` × `web` vão para `divergencias[]` (`{ campo, cv, web, fonteId }`)",
-        "Testes com `node --test` em `lib/ficha.test.ts` cobrindo as regras de mesclagem (o único arquivo de teste unitário do app; roda em `npm run lint`? não — roda com `node --test lib/*.test.ts` registrado no `CLAUDE.md`)",
-        "Lint e build passam",
-        "Typecheck passes"
+        "`lib/projetos.ts`: `definirDominio(id, dominio|null)` (hostname válido, minúsculas, único) e `projetoDoDominio(host)` (sem porta; cache de 60 s)",
+        "`proxy.ts`: antes das outras regras, Host de um projeto → rewrite de qualquer caminho fora de /_next/ e /s/ para /s/<projetoId>, sem sessão; exceção registrada em scripts/padrao-excecoes.json com o motivo; o resto do arquivo idêntico ao pdi-time",
+        "Integração opcional \"Hospedagem (Render)\" em lib/integracoes.ts (RENDER_API_KEY, RENDER_SERVICE_ID, testar via GET /v1/services/{id}); `lib/render.ts` cadastrarDominio/estadoDominio com erros traduzidos",
+        "Rotas GET/PUT/DELETE `/api/sites/[id]/dominio`; painel Domínio: campo, \"Usar este domínio\", passo a passo em três itens, estado (Aguardando verificação / Verificado / Hospedagem não conectada), link para /setup#render",
+        "README seção \"Domínio personalizado\" (uma instância vários sites, exigências do Render, passo a passo, automação, alternativa uma instância por site)",
+        "Verificação: curl -H \"Host: meusite.exemplo.com\" devolve o HTML publicado; outro Host continua redirecionando a raiz para /entrar; verificar-padrao.sh sai 0 com a exceção aceita"
       ],
       "priority": 9,
-      "passes": true,
-      "notes": "Fase 2: Candidatos · PRD US-009"
+      "passes": false,
+      "notes": "US-009 da PRD."
     },
     {
       "id": "US-010",
-      "title": "Conectar a pesquisa na web (Bright Data) em Configurações",
-      "description": "As a administrador do app, I want colar um token da Bright Data e testar a conexão so that a pesquisa de candidatos funcione sem a equipe técnica.",
+      "title": "Resumo semanal, MCP, documentação, catálogo e verificação final",
+      "description": "As a mantenedor da suíte, I need o app documentado, com rotina semanal e ferramentas MCP completas, e tudo verificado so that o ciclo feche sem quebrar o padrão.",
       "acceptanceCriteria": [
-        "`lib/integracoes.ts` ganha `BRIGHTDATA: Integracao` (id `brightdata`, título \"Pesquisa de candidatos na web\", benefício \"Encontra o perfil público do candidato para completar a ficha\", `obrigatoria: false`, `link` para a página de tokens da Bright Data com rótulo \"Obter o token da Bright Data\", `notaConexao` em duas frases: exige conta na Bright Data; sem isso a ficha fica só com o currículo), campos `BRIGHTDATA_API_TOKEN` (`secret`, principal) e, em Opções avançadas, `BRIGHTDATA_MCP_URL` (`text`, padrão o endereço do servidor remoto da Bright Data, conferido na documentação) e `BRIGHTDATA_MODO_PRO` (`select` Desligado/Ligado, ajuda: \"Ligue se a sua conta tiver as ferramentas de perfil do LinkedIn\")",
-        "`lib/pesquisa-cliente.ts`: `conexaoBrightData()` monta `{ url, token }` a partir dos três valores (a forma de passar o token — cabeçalho ou parâmetro do endereço — é conferida na documentação e registrada no `CLAUDE.md`) e usa `conectar`/`listarFerramentas`/`chamar` de `lib/mcp-cliente.ts`; `ferramentasDisponiveis()` com cache de 10 minutos; `pesquisaEnabled()`",
-        "`testar(config)` lista as ferramentas e confere as quatro que a US-011 da PRD usa (busca, página como Markdown, perfil do LinkedIn, conjunto de dados); devolve `ok: true` com \"Conectado. N ferramentas disponíveis.\" ou `ok: false` dizendo qual falta e que talvez precise do modo avançado; 401 → \"O token foi recusado. Confira se copiou o token inteiro.\"",
-        "`GET /api/status` passa a informar `integrations.pesquisa`",
-        "`lib/acoes.ts` ganha `ACAO_PESQUISA = { rotulo: \"Conectar a pesquisa na web em Configurações\", url: \"/setup#brightdata\" }`",
-        "README: tabela de variáveis ganha as três chaves com o link de onde obter",
-        "Lint e build passam; verificar no navegador (`/setup` em 1400 e 390)",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
+        "`lib/rotinas-do-app.ts` registra `resumo-site` (parâmetros {projetoId}, validar) e `lib/resumo-site.ts` executa (visitas dos 7 dias, comparação, origem principal, primeira sugestão, link absoluto para /sites/[id]); catalogo.json ganha \"rotina\"; no painel Métricas, \"Receber este resumo toda semana\" cria a rotina via POST /api/rotinas",
+        "`lib/ferramentas.ts` completo: criar_site, gerar_pagina, editar_pagina (via agente), publicar_site, metricas_site, listar_sites; AcessoMCP lista as ferramentas",
+        "`clone-site/CLAUDE.md` com as notas de decisão desta rodada; `README.md` reescrito (jornada, telas, três caminhos, agente, publicar × rascunho, métricas, domínio, IA, MCP, variáveis, estrutura)",
+        "`catalogo.json`: ia/integracoes atualizados, capacidades [artefato, mcp, rotina], versao 0.2.0; `node scripts/gerar-deploy.mjs` sem erro",
+        "Verificação: lint, tsc, build, verificar-jargao, verificar-padrao (sem exceção sem uso), verificar-paleta; standalone com conta por curl: health, status, criar por briefing em demonstração, agente, publicar, /s/<slug>, métrica registrada, Host personalizado; capturas 1400x900 e 390 px anotadas no progress.txt"
       ],
       "priority": 10,
-      "passes": true,
-      "notes": "Fase 2: Candidatos · PRD US-010"
-    },
-    {
-      "id": "US-011",
-      "title": "Pesquisar o candidato na web — coleta pela Bright Data",
-      "description": "As a app, I want buscar o candidato na web e trazer as páginas certas so that a consolidação da ficha tenha material confiável, dentro de um orçamento.",
-      "acceptanceCriteria": [
-        "`lib/pesquisa.ts`: `coletar(candidatoId)` monta a consulta com nome completo + `termoBusca` + `empresaAtual`/`cargoAtual`/`cidade` da ficha do currículo, nessa ordem de prioridade",
-        "Se `linkedinUrl` existe, chama a ferramenta de perfil do LinkedIn direto; senão chama a busca (o nome que `tools/list` devolver) e separa os resultados em \"perfil do LinkedIn\", \"outras páginas da pessoa\" (portfólio, GitHub, publicações, notícias) e \"ruído\", por regras de domínio e casamento do nome",
-        "Traz o perfil do LinkedIn pela ferramenta de perfil quando houver endereço e até 3 outras páginas como Markdown",
-        "Orçamento (P9): no máximo 6 chamadas, 60 s no total (`AbortSignal.timeout`), cada conteúdo cortado em 20 mil caracteres; estourou → devolve o que já coletou com `parcial: true` e o motivo no log, nunca na tela",
-        "Cada página trazida vira uma `fonte_candidato` com `url`, `titulo`, `resumo` (vazio até a consolidação) e `conteudo`",
-        "Sem `cvTexto` e sem `termoBusca` e sem `linkedinUrl`, a coleta não roda: `pesquisaStatus: \"nao_pedida\"`",
-        "Falhas da Bright Data (401, cota esgotada, 5xx, ferramenta ausente) são traduzidas em `lib/pesquisa-cliente.ts` no mesmo formato de `interpretarFalhaElevenLabs`; o token nunca aparece em log",
-        "Teste com um servidor MCP descartável local (`http.createServer` respondendo `initialize`, `tools/list` e `tools/call` com fixtures) cobrindo: uma pessoa clara; busca vazia; ferramenta ausente; 401; estouro de tempo",
-        "Lint e build passam",
-        "Typecheck passes"
-      ],
-      "priority": 11,
-      "passes": true,
-      "notes": "Fase 2: Candidatos · PRD US-011 (1/2)"
-    },
-    {
-      "id": "US-012",
-      "title": "Pesquisar o candidato na web — consolidação, identidade e mesclagem",
-      "description": "As a pessoa de RH, I want que o que foi coletado vire uma ficha web com origem e confiança, e que homônimos fiquem para eu decidir so that a entrevistadora parta de dados da pessoa certa.",
-      "acceptanceCriteria": [
-        "`pesquisarCandidato(candidatoId)` roda em segundo plano (disparada pela rota, sem esperar a resposta), muda `pesquisaStatus` para `em_andamento`, chama `coletar()` e depois a consolidação: a IA (`askJSON`, modelo padrão) devolve uma `Ficha` de origem `web` com `confianca` 0 a 1 por campo, um `resumo` de duas frases por fonte e uma lista `identidadesPossiveis[]` (`{ nome, descricao, url, bate: string[], naoBate: string[] }`) quando há mais de uma pessoa plausível",
-        "Regra de identidade (D6): uma só pessoa plausível com `confianca` média ≥ 0,7 → `identidadeConfirmada = 1` e a ficha web é mesclada com `mesclar()` (D5); senão `identidadeConfirmada = 0`, a ficha web fica guardada em `ficha.web` mas **não mesclada**",
-        "A ficha web referencia `fonteId` por campo; os `resumo` das fontes são gravados em `fontes_candidato`",
-        "`pesquisaStatus` final: `concluida`, `sem_resultado` (coleta sem nenhuma página plausível) ou `falhou`; `pesquisaEm` gravado",
-        "Em modo demonstração (`!aiEnabled()` ou `!pesquisaEnabled()`): sem pesquisa conectada, `pesquisaStatus: \"nao_pedida\"` e a resposta traz `ACAO_PESQUISA`; com pesquisa conectada mas sem IA, a consolidação usa a ficha de exemplo marcada como exemplo",
-        "`POST /api/candidatos/[id]/pesquisar` (privada) dispara ou repete a pesquisa; `GET /api/candidatos/[id]` devolve `pesquisaStatus` para a tela sondar a cada 3 s enquanto `pendente|em_andamento`",
-        "Teste com o mesmo servidor MCP descartável da história anterior cobrindo homônimos (fica sem mesclar) e pessoa clara (mescla, CV vence a web nos conflitos)",
-        "Lint e build passam",
-        "Typecheck passes"
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": "Fase 2: Candidatos · PRD US-011 (2/2)"
-    },
-    {
-      "id": "US-013",
-      "title": "Tela do candidato: ficha editável com origem, fontes e divergências",
-      "description": "As a pessoa de RH, I want ver a ficha do candidato com a origem de cada informação, corrigir o que estiver errado e confirmar quem é a pessoa so that a entrevistadora parta de dados que eu confio.",
-      "acceptanceCriteria": [
-        "`/candidatos/[id]`: cabeçalho com nome, cargo e empresa atuais, cidade, chips de origem presentes (\"CV\", \"Web\", \"Editado por você\"), status da pesquisa em uma frase (\"Pesquisando na web...\", \"Pesquisa concluída em 18/09\", \"Não encontramos a pessoa na web\", \"A pesquisa não deu certo\" + \"Pesquisar de novo\"), ações \"Editar ficha\", \"Pesquisar de novo\", \"Abrir currículo\", \"Atribuir a uma vaga\", \"Apagar candidato\"",
-        "Ficha em seções (Resumo, Experiência, Formação, Competências, Idiomas, Links, Pretensão e disponibilidade, Observações), cada valor com um chip pequeno de origem e, quando `web`, um link \"fonte\" para a URL",
-        "Bloco \"Confirme quem é a pessoa\" quando `identidadeConfirmada = 0` e há `identidadesPossiveis`: até três cartões com nome, descrição, link, \"Bate com: ...\" e \"Não bate com: ...\"; botões \"É esta pessoa\" (mescla a ficha web dessa identidade, marca confirmada) e \"Nenhuma destas\" (descarta a ficha web, marca confirmada sem web)",
-        "Bloco \"Divergências entre o currículo e a web\" quando `divergencias[]` não está vazio: campo, o que diz o currículo, o que diz a web, fonte; ação \"Manter o currículo\" (padrão, já aplicado) ou \"Usar o da web\" (vira origem `gestor` com o valor da web — foi uma escolha da pessoa)",
-        "\"Editar ficha\": todos os campos editáveis inline; o que o gestor muda vira origem `gestor` (D5) e nunca é sobrescrito por nova pesquisa nem por novo currículo",
-        "Bloco \"Entrevistas\": lista das entrevistas do candidato (vaga, status, nota, decisão, data) com \"Ver parecer\"",
-        "\"Apagar candidato\" pede confirmação que diz o que vai junto (ficha, currículo, N entrevistas e pareceres) e chama `DELETE /api/candidatos/[id]`",
-        "Nenhuma palavra proibida por P7 na tela (`scripts/verificar-jargao.mjs` passa; a variável que carrega o código do link chama-se `codigo`, ver gotcha da US-058 no `CLAUDE.md`)",
-        "Lint e build passam; verificar no navegador (ficha completa, homônimos, divergências, sem pesquisa conectada — 1400 e 390)",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
-      ],
-      "priority": 13,
-      "passes": true,
-      "notes": "Fase 2: Candidatos · PRD US-012"
-    },
-    {
-      "id": "US-014",
-      "title": "Atribuir à vaga e enviar o convite",
-      "description": "As a pessoa de RH, I want atribuir um candidato a uma vaga e mandar o link em um passo so that o candidato receba um convite claro, com prazo, e eu saiba que enviei.",
-      "acceptanceCriteria": [
-        "`POST /api/entrevistas` `{ vagaId, candidatoId, expiraEmDias }` cria a entrevista `convidada`, gera o link via `criar()` de `lib/formularios.ts` (`tipo: \"entrevista\"`, `limite: 1`, `parametros: { marca, nome, titulo, descricao, entrevistaId }`) e devolve `{ id, codigo, link }`; prazos válidos 7, 15 e 30 dias (padrão 15)",
-        "Diálogo do convite (`components/DialogoConvite.tsx`, substitui `DialogoLinkCandidato.tsx`): link com \"Copiar link\", mensagem pronta com \"Copiar convite\" (nome do candidato, cargo, empresa, o que esperar — \"uma conversa por voz de cerca de N minutos, no seu celular ou computador, no horário que preferir\" —, o aviso de gravação e análise por IA e de consulta a informações públicas (D12), o prazo e o uso único), e \"Enviar por e-mail\" quando `lib/notificacoes.ts` tem canal de e-mail conectado e o candidato tem e-mail (usa `enviar()` com o convite; sucesso vira `Aviso` verde; falha vira `Aviso` com a mensagem de negócio já traduzida pela notificação)",
-        "\"Reenviar convite\" (na vaga, no candidato e em Entrevistas): estende `expiraEm` pelo mesmo prazo, reabre o diálogo com o mesmo link (o código não muda enquanto o link não foi usado); em `expirada`, gera um link novo e a entrevista volta para `convidada`",
-        "\"Cancelar\" muda para `cancelada` e `encerrar()` o link; o link cancelado responde \"Este convite foi cancelado. Fale com quem enviou.\" na tela pública",
-        "`app/entrevista/[token]/page.tsx` e as rotas de `app/api/entrevista/candidato/[token]/*` aceitam `tipo` `entrevista` (novo) e `scorecard` (links antigos, até expirarem, com o comportamento atual); o `CLAUDE.md` registra a data em que o tipo antigo pode ser removido (90 dias)",
-        "Lint e build passam; verificar no navegador",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
-      ],
-      "priority": 14,
-      "passes": true,
-      "notes": "Fase 3: convite e entrevista do candidato · PRD US-013"
-    },
-    {
-      "id": "US-015",
-      "title": "Tela Entrevistas",
-      "description": "As a pessoa de RH, I want ver todos os convites e entrevistas em um lugar, por status so that eu saiba quem ainda não respondeu, quem concluiu e o que falta avaliar.",
-      "acceptanceCriteria": [
-        "`/entrevistas`: abas por status (Aguardando o candidato = `convidada|aberta`, Em andamento, Concluídas = `concluida|avaliada` sem decisão, Decididas, Expiradas e canceladas), filtro por vaga, busca por nome, período (7, 30, 90 dias, tudo)",
-        "Linhas com candidato, vaga, status (chip), como foi (voz natural, voz do navegador, texto — só quando já abriu), nota e recomendação (quando avaliada), decisão, \"há N dias\"; ações por linha conforme o status: \"Reenviar\", \"Cancelar\", \"Abrir parecer\", \"Decidir\"",
-        "Entrevistas `concluida` (transcrição salva, parecer ainda não pronto) mostram \"Preparando o parecer...\" e a linha sonda a cada 5 s até `avaliada`",
-        "`expirarVencidas()` roda na leitura da lista",
-        "Estado vazio por aba, com a ação certa (\"Abra uma vaga\", \"Convide um candidato\")",
-        "Lint e build passam; verificar no navegador",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
-      ],
-      "priority": 15,
-      "passes": true,
-      "notes": "Fase 3: convite e entrevista do candidato · PRD US-014"
-    },
-    {
-      "id": "US-016",
-      "title": "O roteiro da entrevista",
-      "description": "As a entrevistadora de IA, I want conhecer a vaga, a cultura e a ficha do candidato so that eu pergunte sobre o que importa e aprofunde o que precisa ser esclarecido.",
-      "acceptanceCriteria": [
-        "`lib/roteiro.ts`: `montarContexto(entrevistaId)` reúne `Vaga` (cargo, desafios, requisitos, faixa se `perguntaPretensao`), `Cultura` + `competenciasCulturais` da vaga, e a `Ficha` do candidato **só com campos de origem `cv` e `gestor`, mais `web` quando `identidadeConfirmada = 1`** (D6), junto das `divergencias[]` como \"pontos a esclarecer\"",
-        "`planejarRoteiro(contexto)` (uma chamada `askJSON`, modelo padrão, na abertura da sala, guardada em `entrevistas.roteiro` JSON) devolve os blocos na ordem: abertura (1 pergunta sobre trajetória e interesse), currículo e pontos a esclarecer (1 a 2), requisitos (2 a 4, um por requisito prioritário), desafios da vaga (1 a 2, situacionais: \"como você atacaria...\"), cultura (1 a 2 por competência escolhida, situacionais, sem citar o nome do valor), pretensão e disponibilidade (1, se ligado), encerramento (espaço para perguntas do candidato + despedida) — o total respeita `numeroPerguntas`",
-        "`proximaFala(entrevistaId, ultimaResposta)` substitui `proximaPergunta`: segue o roteiro, faz follow-up quando a resposta foi vaga (uma vez por bloco, sem estourar o total), responde brevemente a uma pergunta do candidato sobre a vaga **só com o que está na vaga** (salário só a faixa, se `perguntaPretensao`; nunca inventa benefício), e nunca menciona nota, avaliação, currículo pesquisado ou perfil público de forma que constranja (\"Vi no seu LinkedIn que...\" é proibido; \"Você comentou no currículo que...\" é permitido)",
-        "A conversa mora no servidor: cada fala vai para `mensagens_entrevista` (`registrarMensagem`) e o navegador manda só a última resposta; recarregar não perde nada",
-        "`SYSTEM_PERGUNTA`/`SYSTEM_AVALIAR` atuais saem de `lib/entrevista.ts`; o que a prévia do gestor (D11) usa é o mesmo `lib/roteiro.ts` com um candidato vazio",
-        "Em modo demonstração: roteiro fixo derivado da vaga (`roteiroDemo`), com uma pergunta cultural e uma de desafio reconhecíveis",
-        "Lint e build passam",
-        "Typecheck passes"
-      ],
-      "priority": 16,
-      "passes": true,
-      "notes": "Fase 3: convite e entrevista do candidato · PRD US-015"
-    },
-    {
-      "id": "US-017",
-      "title": "Boas-vindas do candidato, teste de microfone e retomada",
-      "description": "As a candidato, I want entender o que vai acontecer antes de começar e poder recarregar sem perder a conversa so that eu entre na entrevista tranquilo.",
-      "acceptanceCriteria": [
-        "`components/BoasVindas.tsx` (antes da sala): marca e nome da empresa, \"Olá, {primeiro nome}\", cargo, \"cerca de N minutos\", como funciona em três linhas (você fala, a entrevistadora responde, pode digitar se preferir), o aviso de gravação/análise por IA/consulta pública (D12) e o botão \"Começar a entrevista\" — o toque nele é o gesto que libera áudio e microfone",
-        "Teste de microfone de uma frase (\"Diga 'olá' para testarmos\") com a transcrição aparecendo; sem permissão ou sem `SpeechRecognition` (P5), segue para a sala em modo texto com a frase certa e o convite a abrir no Chrome",
-        "`lib/sessao-candidato.ts`: cookie assinado por link (HMAC com a chave mestra de `lib/store.ts`, só `entrevistaId` e `codigo`, `HttpOnly`, `SameSite=Lax`, validade igual ao link), mesmo desenho de `simulador-vendas/lib/sessao-vendedor.ts`; `lib/sala-do-candidato.ts` faz a conferência única das rotas públicas (link existe, não expirou, não cancelado, entrevista aberta)",
-        "Status: abrir a página → `aberta` (`abertaEm`); um segundo aparelho com o mesmo link enquanto `em_andamento` vê \"Esta entrevista está em andamento em outro aparelho\"",
-        "`app/entrevista/[token]/page.tsx` decide no servidor o nível de voz (agente conectado → `agente`; senão `navegador`) e renderiza boas-vindas → sala; links do tipo antigo `scorecard` continuam no comportamento atual",
-        "Todos os textos falam com o **candidato**: nenhuma frase manda configurar nada, nenhuma menciona gestor, nota ou Configurações",
-        "Lint e build passam; verificar no navegador primeiro no celular (390, com toque) e depois em 1400",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
-      ],
-      "priority": 17,
-      "passes": true,
-      "notes": "Fase 3: convite e entrevista do candidato · PRD US-016 (1/2)"
-    },
-    {
-      "id": "US-018",
-      "title": "A sala do candidato por voz do navegador (nível 2)",
-      "description": "As a candidato, I want conversar falando, com a entrevistadora respondendo em voz alta so that a entrevista pareça uma conversa, não um formulário.",
-      "acceptanceCriteria": [
-        "`components/SalaCandidato.tsx` (substitui o uso de `Sala.tsx` na rota pública; `Sala.tsx` fica só para a prévia do gestor): modo mãos livres (escuta, silêncio de 2 s encerra o turno, mesma trava anti-laço da `SalaVoz` do `simulador-vendas`), botão \"Segurar para falar\" como alternativa, \"Prefiro digitar\" sempre visível, indicador \"Ouvindo / Pensando / Falando\", progresso \"Pergunta 3 de 8\", \"Encerrar entrevista\" (com confirmação) disponível depois da segunda resposta",
-        "`POST /api/entrevista/candidato/[token]/falar` recebe só a última resposta, grava em `mensagens_entrevista` e devolve a próxima fala de `proximaFala()` (US-015 da PRD) com `encerrar` quando for a despedida; primeira resposta → `em_andamento` com `nivelVoz` registrado",
-        "Fala: `GET /api/entrevista/candidato/[token]/voz` gera o áudio no servidor (ElevenLabs, quando `ELEVENLABS_API_KEY` existe; a chave nunca vai para o navegador) e devolve; sem a chave, `speechSynthesis` com voz `pt-BR`; falha de voz nunca interrompe (regra já existente em `lib/voz.ts`)",
-        "Recarregar a página continua da pergunta atual, com a conversa vinda do servidor (`GET /api/entrevista/candidato/[token]/conversa`)",
-        "Falha da IA no meio da conversa fica INLINE na sala com \"Tentar de novo\", sem apagar as falas já trocadas (regra da US-039)",
-        "Lint e build passam; verificar no navegador primeiro no celular (390, com toque) e depois em 1400: conversa por voz, texto, retomada, microfone negado",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
-      ],
-      "priority": 18,
-      "passes": true,
-      "notes": "Fase 3: convite e entrevista do candidato · PRD US-016 (2/2)"
-    },
-    {
-      "id": "US-019",
-      "title": "A sala com o agente conversacional da ElevenLabs (nível 1)",
-      "description": "As a candidato, I want uma conversa em que eu possa falar naturalmente e até interromper so that a entrevista pareça uma ligação de verdade — quando a empresa conectou essa voz.",
-      "acceptanceCriteria": [
-        "`lib/integracoes.ts`: o cartão \"Ligação telefônica automática\" vira \"Agente conversacional da ElevenLabs\" (id `elevenlabs-agente`), com `ELEVENLABS_AGENT_ID` como campo principal (lista carregada da conta), `ELEVENLABS_PHONE_NUMBER_ID` e `ELEVENLABS_WEBHOOK_SECRET` em Opções avançadas; o benefício diz que **sem isso a entrevista já é por voz** e que o agente torna a conversa mais natural e permite interromper; o passo a passo de criar o agente lista as variáveis dinâmicas que o app envia",
-        "Quando o agente está conectado (decidido no servidor em `app/entrevista/[token]/page.tsx`), a sala carrega o widget `<elevenlabs-convai>` com as variáveis da **entrevista**: `entrevista_id`, `candidato` (primeiro nome), `cargo`, `empresa`, `roteiro` (o plano da US-015 da PRD em texto), `duracao_minutos` (`components/SalaAgenteCandidato.tsx`, mesmo desenho de `simulador-vendas/components/SalaAgente.tsx`)",
-        "Se o widget não carregar em 10 s, a sala cai sozinha para o nível 2 sem o candidato escolher nada; \"Prefiro conversar por aqui\" leva ao nível 2 a qualquer momento sem perder a entrevista",
-        "Ao encerrar no agente, a sala mostra \"Recebendo a sua conversa...\" e sonda `GET /api/entrevista/candidato/[token]/estado` a cada 5 s por até 90 s até a transcrição chegar (próxima história); passou disso, mostra o agradecimento mesmo assim",
-        "Lint e build passam; verificar no navegador (queda para o nível 2 com o script bloqueado)",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
-      ],
-      "priority": 19,
-      "passes": true,
-      "notes": "Fase 3: convite e entrevista do candidato · PRD US-017 (1/2)"
-    },
-    {
-      "id": "US-020",
-      "title": "Aviso de pós-conversa da ElevenLabs e ligação telefônica",
-      "description": "As a app, I want receber a transcrição do agente assim que a conversa termina so that a entrevista feita pelo agente (no navegador ou por telefone) seja avaliada como qualquer outra.",
-      "acceptanceCriteria": [
-        "`app/webhook/elevenlabs/route.ts` (pública pela regra `/webhook/*` já existente; HMAC no formato `t=,v0=` com `crypto.timingSafeEqual`, janela de 30 min, cópia do padrão do `simulador-vendas`): casa o evento de pós-conversa por `entrevista_id`, grava a transcrição em `mensagens_entrevista`, muda para `concluida` e dispara a avaliação (US-019 da PRD); sem segredo configurado recusa 401 com mensagem clara; responde 2xx rápido e processa depois",
-        "`components/WebhookElevenLabs.tsx` em `/setup` mostra o endereço a colar na ElevenLabs em \"Dados para a equipe técnica\"",
-        "A ligação telefônica (`/api/ligar`) continua funcionando com o mesmo agente e número, agora acionada de dentro de uma entrevista `convidada` (\"Ligar para o candidato agora\", na página da vaga e em Entrevistas), com as mesmas variáveis dinâmicas da entrevista; a transcrição chega pelo mesmo aviso",
-        "Teste com `curl` assinando um corpo de exemplo com o segredo: assinatura válida grava e muda o status; inválida ou fora da janela recusa; `entrevista_id` desconhecido responde 2xx e registra no log",
-        "Lint e build passam",
-        "Typecheck passes"
-      ],
-      "priority": 20,
-      "passes": true,
-      "notes": "Fase 3: convite e entrevista do candidato · PRD US-017 (2/2)"
-    },
-    {
-      "id": "US-021",
-      "title": "Encerramento, agradecimento e o que acontece depois",
-      "description": "As a candidato, I want saber que terminei e o que vem depois so that eu feche a página tranquilo; as a pessoa de RH, I want que o parecer comece a ser preparado sozinho.",
-      "acceptanceCriteria": [
-        "A despedida da entrevistadora (US-015 da PRD) marca `concluida`, o cookie de retomada é invalidado e a tela mostra \"Obrigado, {nome}. Sua entrevista foi enviada.\" com \"A equipe de recrutamento vai analisar e entrar em contato.\" — nunca nota, nunca parecer",
-        "Voltar ao link depois de concluída mostra a mesma tela de agradecimento (não \"link já usado\")",
-        "`concluida` dispara `avaliarEntrevista(entrevistaId)` (US-019 da PRD) em segundo plano; falha deixa `concluida` e a tela do gestor oferece \"Preparar o parecer de novo\"",
-        "Entrevista encerrada pelo candidato antes do fim (botão \"Encerrar entrevista\") com ao menos duas respostas é avaliada normalmente, com o parecer dizendo que foi parcial; com menos de duas, fica `concluida` sem parecer e a linha em Entrevistas diz \"Encerrada cedo demais para avaliar\"",
-        "Lint e build passam; verificar no navegador",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
-      ],
-      "priority": 21,
-      "passes": true,
-      "notes": "Fase 3: convite e entrevista do candidato · PRD US-018"
-    },
-    {
-      "id": "US-022",
-      "title": "O parecer agêntico",
-      "description": "As a gestor, I want um parecer que cruze a conversa com a vaga, a cultura e a ficha do candidato so that eu decida sem ler a transcrição inteira.",
-      "acceptanceCriteria": [
-        "`lib/avaliacao.ts`: `avaliarEntrevista(entrevistaId)` em três passos, cada um uma chamada `askJSON` com `model: modelName(\"avaliacao\")` (o app passa `avaliacao: true` para `openrouter()` e ganha o seletor \"Modelo para avaliação\" em `/setup`): (1) **extração** — fatos declarados na conversa (experiências, números, ferramentas, decisões, pretensão, disponibilidade), cada um com o número da pergunta de origem; (2) **cruzamento** — para cada fato, bate ou não com o currículo e com a ficha web confirmada (`confirmado|divergente|nao_verificavel`), e para cada requisito e competência cultural, a evidência mais forte; (3) **parecer** — a saída final abaixo",
-        "Tipo `Parecer`: `notaGeral` 0 a 10, `recomendacao` (`avançar|avaliar com o gestor|não avançar`), `resumo` (3 frases), `aderencia` (`{ requisito, situacao: atende|parcial|nao_atende|nao_abordado, evidencia, pergunta? }[]`), `tecnico` (`{ criterio, nota, evidencia, pergunta? }[]`, 3 a 6), `cultura` (`{ competencia, nota, evidencia, pergunta? }[]`, uma por competência da vaga), `consistencia` (`{ afirmacao, fonte: cv|web, situacao, detalhe }[]`), `pontosFortes[]` (até 4), `pontosAtencao[]` (até 4), `proximaEtapa` (`{ perguntas: string[] (até 5), foco: string }`), `pretensao` (`{ valor?, dentroDaFaixa?: boolean }`), `parcial: boolean`",
-        "Regras no prompt: só o que foi dito e o que está na ficha; nota cultural só com evidência comportamental (sem evidência → `nota: null` e \"não abordado\"); nenhuma inferência sobre idade, gênero, origem, religião, deficiência, aparência ou família, mesmo que apareçam na conversa (lista explícita no system prompt, com a instrução de ignorar); `recomendacao` nunca é `avançar` com algum requisito prioritário `nao_atende`",
-        "O parecer é salvo em `lib/historico.ts` (`tipo: \"parecer\"`, `entrada: { entrevistaId, vagaId, candidatoId }`, `saida: Parecer`, `meta`), `registrarResultado` liga o id à entrevista e o status vira `avaliada`",
-        "`parecerDemo(contexto)` em `lib/demo.ts` deriva evidências reais da transcrição (como `scorecardDemo` faz hoje) e preenche cultura e consistência com base na ficha de exemplo",
-        "Custo registrado no `CLAUDE.md`: uma entrevista de 8 perguntas são ~10 chamadas curtas de roteiro (~300 tokens de saída cada) mais três de avaliação (~1.500, ~1.500 e ~2.500 tokens)",
-        "Testado com `curl` numa entrevista de exemplo em modo demonstração e, com chave real, numa transcrição gravada em `tasks/fixtures/` (não é obrigatório na verificação automática)",
-        "Lint e build passam",
-        "Typecheck passes"
-      ],
-      "priority": 22,
-      "passes": true,
-      "notes": "Fase 4: análise para o gestor · PRD US-019"
-    },
-    {
-      "id": "US-023",
-      "title": "A tela do parecer",
-      "description": "As a gestor, I want abrir o parecer e ver primeiro o que decide, depois o detalhe, e registrar minha decisão so that a decisão fique no app e não no e-mail.",
-      "acceptanceCriteria": [
-        "`/entrevistas/[id]` (privada; `/r/[id]` continua abrindo pareceres e os tipos antigos, para links já copiados): cabeçalho com nome do candidato (link para a ficha), cargo (link para a vaga), data, como foi (voz natural/navegador/texto, duração), ações `Entregar` (PDF, copiar texto, imprimir) e \"Nova entrevista com este candidato\"",
-        "Primeira dobra: `Destaque` com a nota geral (tom pela recomendação, como hoje), chip da recomendação, `resumo`, e o bloco **\"Sua decisão\"** com três botões (Avançar, Aguardar, Reprovar) que gravam `decisao`/`decisaoEm` via `POST /api/entrevistas/[id]/decidir`; a decisão tomada aparece como chip e pode ser mudada",
-        "Seções, nesta ordem: \"Aderência à vaga\" (requisitos com chip atende/parcial/não atende/não abordado e evidência), \"Avaliação técnica\" (tabela como hoje, evidência linkando `#pergunta-N`), \"Cultura\" (uma linha por competência, nota e evidência; \"não abordado\" em cinza), \"O que bate e o que não bate\" (consistência: confirmado em verde, divergente em âmbar, não verificável em cinza, com a fonte), \"Pontos fortes\" / \"Pontos de atenção\", \"Para a próxima etapa\" (perguntas sugeridas e foco), \"Pretensão salarial\" (só quando dita: valor e dentro/fora da faixa), e `<details>` \"Ver a conversa completa\" com as perguntas numeradas",
-        "Parecer `parcial` mostra um `Aviso` no topo: \"Entrevista encerrada antes do fim: o parecer cobre só o que foi conversado.\"",
-        "Seção \"Ligar para o candidato\" (já existe) fica no rodapé, só quando o agente está conectado",
-        "`parecerParaTexto()` para copiar/PDF; `/imprimir/[id]` renderiza o mesmo conteúdo sem ações",
-        "Lint e build passam; verificar no navegador (1400 e 390; parecer completo e parcial)",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
-      ],
-      "priority": 23,
-      "passes": true,
-      "notes": "Fase 4: análise para o gestor · PRD US-020"
-    },
-    {
-      "id": "US-024",
-      "title": "Comparar candidatos da vaga",
-      "description": "As a gestor, I want ver os candidatos de uma vaga lado a lado, inclusive em cultura so that eu escolha quem avança com os mesmos critérios para todos.",
-      "acceptanceCriteria": [
-        "`/vagas/[id]/comparar`: tabela ordenada por nota com candidato, nota, recomendação da IA, decisão do gestor, aderência (N de M requisitos atendidos), cultura (média das competências com nota), consistência (N divergências); caixas para escolher até **três** e o bloco \"Lado a lado\" com resumo, requisitos (chips), competências culturais (notas), pontos fortes e de atenção e perguntas para a próxima etapa",
-        "Botões de decisão por candidato dentro da comparação (mesma rota da US-020 da PRD)",
-        "`gerarRanking()` e o tipo `ranking` do histórico saem: a comparação é calculada na leitura (nada de IA, nada salvo); `Entregar` oferece PDF e copiar texto da comparação",
-        "Lint e build passam; verificar no navegador",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
-      ],
-      "priority": 24,
-      "passes": true,
-      "notes": "Fase 4: análise para o gestor · PRD US-021"
-    },
-    {
-      "id": "US-025",
-      "title": "Início",
-      "description": "As a pessoa de RH, I want abrir o app e ver o que precisa de mim hoje so that eu não procure em quatro telas.",
-      "acceptanceCriteria": [
-        "`lib/inicio.ts` (cálculo puro sobre o banco, nenhuma chamada de IA): quatro indicadores dos últimos 30 dias com variação sobre os 30 anteriores — Vagas abertas, Aguardando o candidato, Entrevistas concluídas, Para você decidir (avaliadas sem decisão); `valor: null` quando \"ainda não dá para dizer\" e `variacao: null` quando não há com o que comparar (regra do `simulador-vendas/lib/inicio.ts`)",
-        "\"Precisa de você\": lista de até 6 itens em ordem de urgência — pareceres sem decisão (mais antigos primeiro), candidatos com identidade a confirmar, convites que expiram em até 3 dias, pesquisas que falharam; cada item leva direto à tela certa",
-        "\"Vagas abertas\": até 3 cartões com cargo, candidatos por status e \"Ver vaga\"; \"Ver todas\"",
-        "\"Comece em 3 passos\" (só quando falta algo): Cadastre a cultura da empresa → Abra uma vaga → Convide um candidato; marcados conforme existirem dados reais",
-        "O hero atual (título grande, ilustração e `Passos`) sai do Início; a ilustração do segmento fica só no estado vazio; `PROMESSA` vira o título da tela de boas-vindas do candidato e do catálogo",
-        "Lint e build passam; verificar no navegador (vazio, só exemplo, com dados reais — 1400 e 390)",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
-      ],
-      "priority": 25,
-      "passes": true,
-      "notes": "Fase 4: análise para o gestor · PRD US-022"
-    },
-    {
-      "id": "US-026",
-      "title": "Relatórios",
-      "description": "As a pessoa de RH, I want números do processo por vaga e período, exportáveis so that eu mostre à liderança se a triagem por IA está funcionando.",
-      "acceptanceCriteria": [
-        "`lib/relatorios.ts`: `relatorio({ vagaId?, de, ate })` devolve funil (convidados, abriram, concluíram, avaliadas, decididas por decisão), tempo médio do convite à conclusão (em horas; mediana também), taxa de conclusão (concluídas ÷ convidadas), nota média, distribuição de recomendações da IA e de decisões do gestor, distribuição por como foi (voz natural, navegador, texto), e a lista das entrevistas do período",
-        "`/relatorios`: filtros de vaga (todas ou uma) e período (7, 30, 90 dias, personalizado); quatro indicadores; funil em barras horizontais (SVG); distribuição de recomendações e decisões em barras; tabela das entrevistas; \"Relatórios anteriores\" leva a `/historico`",
-        "\"Exportar planilha\" baixa um CSV (`;` como separador, UTF-8 com BOM, datas `dd/mm/aaaa`) com uma linha por entrevista do período (candidato, vaga, status, convite, conclusão, horas, como foi, nota, recomendação, decisão); \"Imprimir\" usa `/imprimir/relatorio?...` no padrão de impressão da suíte",
-        "\"Salvar este relatório\" grava um registro `tipo: \"relatorio\"` no histórico com os números e o período, para comparação futura à mão",
-        "Lint e build passam; verificar no navegador",
-        "Typecheck passes",
-        "Verify in browser: abrir as telas tocadas em desktop 1400x1000 e celular 390, conferir que não há erro de console nem rolagem horizontal"
-      ],
-      "priority": 26,
-      "passes": true,
-      "notes": "Fase 5: relatórios, integrações e fechamento · PRD US-023"
-    },
-    {
-      "id": "US-027",
-      "title": "MCP e rotina semanal",
-      "description": "As a gestor que usa um assistente de IA, I want consultar vagas e pareceres e criar convites de dentro do assistente so that o app entre no meu fluxo; e quero um resumo semanal por e-mail.",
-      "acceptanceCriteria": [
-        "`lib/ferramentas.ts`: `listar_vagas({status?})`, `listar_candidatos_da_vaga({vaga_id})` (com status, nota, recomendação e decisão), `obter_parecer({entrevista_id})` (substitui `obter_scorecard`, que continua como apelido aceitando ids antigos), `criar_convite({vaga_id, candidato_id, expira_em_dias?})` (devolve o link e a mensagem pronta), `pesquisar_candidato({candidato_id})` (dispara a pesquisa; devolve o status) — todas reaproveitando `lib/vagas.ts`/`lib/entrevistas.ts`/`lib/pesquisa.ts`, nada de lógica nova na ferramenta",
-        "`lib/rotinas-do-app.ts` registra `resumo-semanal`: por vaga aberta, convites enviados, entrevistas concluídas, pareceres aguardando decisão e o melhor candidato da semana, entregue por `lib/notificacoes.ts`; a rotina aparece em `components/Rotinas.tsx` (copiado do `simulador-vendas`) em Configurações",
-        "`catalogo.json`: `capacidades` ganha `\"rotina\"`; textos `problema`, `ia` e `integracoes` atualizados",
-        "Lint e build passam; teste manual com o MCP Inspector registrado no `CLAUDE.md`",
-        "Typecheck passes"
-      ],
-      "priority": 27,
-      "passes": true,
-      "notes": "Fase 5: relatórios, integrações e fechamento · PRD US-024"
-    },
-    {
-      "id": "US-028",
-      "title": "Fechamento — modo demonstração completo, textos, catálogo e documentação",
-      "description": "As a mantenedor da suíte, I want o app inteiro coerente na primeira impressão e documentado so that quem abrir o catálogo entenda o que ele faz e quem for mexer no código saiba onde tudo está.",
-      "acceptanceCriteria": [
-        "Percurso completo em modo demonstração sem nenhuma chave: Início → vaga de exemplo → candidato de exemplo (ficha, divergência, fontes) → convite → link do candidato no celular (boas-vindas, voz do navegador, texto) → parecer → comparação → relatório; nenhuma tela quebrada, nenhum erro de console, nenhuma rolagem horizontal em 390",
-        "`?exemplo=1` passa a abrir o Início já semeado e `?exemplo=1&captura=1` a página da vaga de exemplo com candidatos (é o que o catálogo captura)",
-        "Contagem de texto (P7) em todas as telas novas; `scripts/verificar-jargao.mjs entrevista-ia` e `scripts/verificar-paleta.mjs` passam; `scripts/verificar-padrao.sh` sai 0 (camada `INFRA` intacta)",
-        "`README.md` reescrito: o que resolve (a jornada em um parágrafo), as seis telas, integrações (IA obrigatória para sair do demo; ElevenLabs voz e agente, opcionais; Bright Data, opcional; e-mail para convites, opcional), tabela de variáveis completa, estrutura de pastas",
-        "`CLAUDE.md`: decisões deste PRD, datas de conferência das documentações (ElevenLabs, Bright Data), formato do token da Bright Data, gotchas novos (nome `codigo`, `fetch` numa linha, tipo antigo `scorecard` até quando)",
-        "Verificação obrigatória do `PADRAO.md` (lint, build, standalone com `curl` nas rotas, capturas de `/`, `/vagas/[id]`, `/candidatos/[id]`, `/entrevista/<código>` e `/setup` em 1400x1000 e 390)",
-        "Typecheck passes"
-      ],
-      "priority": 28,
-      "passes": true,
-      "notes": "Fase 5: relatórios, integrações e fechamento · PRD US-025"
+      "passes": false,
+      "notes": "US-010 da PRD. Fecha a rodada."
     }
   ]
 }
