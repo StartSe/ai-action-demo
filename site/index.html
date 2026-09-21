@@ -79,6 +79,8 @@
   .areas { display: flex; flex-wrap: wrap; gap: 6px; }
   .area { font-size: .82rem; font-weight: 600; color: var(--suave); background: var(--realce); padding: 3px 10px; border-radius: 999px; }
   .area.pago { color: var(--acento); border: 1px solid var(--acento); background: transparent; }
+  .area.disco { background: #e6f4ea; color: #1e6b3a; }
+  .area.versao { background: #eef0f4; color: #4a5468; font-variant-numeric: tabular-nums; }
   .card h2 { font-size: 1.45rem; line-height: 1.15; letter-spacing: -0.015em; margin: 0; font-weight: 800; }
   .problema { margin: 0; font-size: 1.02rem; }
   dl { margin: 0; display: grid; gap: 10px; padding-top: 8px; border-top: 1px solid var(--linha); }
@@ -326,10 +328,11 @@
       img.src = app.captura;
     }
     $(".areas", el).innerHTML = app.areas.map((a) => `<span class="area">${a}</span>`).join("") +
-      (ePago(app) ? `<span class="area pago">Plano pago</span>` : "");
+      (ePago(app) ? `<span class="area pago">Plano pago</span>` : "") +
+      (app.discoGB ? `<span class="area disco" title="Os dados ficam em um disco persistente e sobrevivem a atualizações">Disco de ${app.discoGB} GB</span>` : "");
     if (app.versao) {
       const versao = document.createElement("span");
-      versao.className = "area";
+      versao.className = "area versao";
       versao.textContent = `v${app.versao}`;
       $(".areas", el).appendChild(versao);
     }

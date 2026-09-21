@@ -6,6 +6,7 @@
 - Escolha entre instalação gratuita de teste e instalação paga com volume persistente de 1 GB no Render.
 - Blueprint dedicado com disco em `/app/data`, preservando o banco, a chave de criptografia, as contas, as respostas e os planos de ação.
 - Gerador publica automaticamente a alternativa `deploy-bussola-ia-persistente` e seus links de instalação.
+- Publicação preserva as versões e os indicadores de disco já disponíveis no catálogo dos demais apps.
 
 Validação: 5 testes do gerador, 10 testes de unidade, 15 testes de navegador, lint e build. Catálogo conferido em 1440 e 390 px, com troca dos links gratuito/pago e verificação de acessibilidade.
 

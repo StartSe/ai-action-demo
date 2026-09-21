@@ -55,6 +55,9 @@ for (const app of cat.apps) {
   if (app.discoNome !== undefined && !/^[a-z0-9-]+$/.test(app.discoNome ?? "")) {
     throw new Error(`${app.id}: discoNome precisa ser um texto com letras minúsculas, números e hífens`);
   }
+  if (app.versao !== undefined && !/^\d+\.\d+\.\d+$/.test(String(app.versao))) {
+    throw new Error(`${app.id}: versao precisa estar no formato X.Y.Z`);
+  }
   if (app.discoGuarda !== undefined && typeof app.discoGuarda !== "string") {
     throw new Error(`${app.id}: discoGuarda precisa ser um texto`);
   }
@@ -146,7 +149,7 @@ Após publicar, abra o app, crie a conta e conecte a IA em /setup.`
 As chaves ficam em SQLite em /app/data. No plano free o disco é efêmero e a configuração se perde a cada deploy.`;
   return (
     cabecalho(
-      `Blueprint de publicação de ${app.nome}${app.versao ? ` v${app.versao}` : ""} (especificação: https://render.com/docs/blueprint-spec)
+      `Blueprint de publicação de ${app.nome} (especificação: https://render.com/docs/blueprint-spec)
 Imagem pública publicada pelo GitHub Actions em ${imagem(app)}.
 ${nota}`
     ) +

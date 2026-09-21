@@ -1,4 +1,4 @@
-# Blueprint de publicação de Bússola de IA v0.2.1 (especificação: https://render.com/docs/blueprint-spec)
+# Blueprint de publicação de Bússola de IA (especificação: https://render.com/docs/blueprint-spec)
 # Imagem pública publicada pelo GitHub Actions em ghcr.io/startse/bussola-ia:latest.
 # Este app exige o plano 0.5c-512mb (pago) e cria um disco de 1 GB em /app/data, onde ficam a conta, as configurações, os questionários, os assessments, as respostas, os diagnósticos e os planos de ação.
 # Nenhuma chave é necessária aqui.

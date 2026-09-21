@@ -422,7 +422,8 @@
       "independente": true,
       "plano": "starter",
       "discoGB": 1,
-      "discoGuarda": "fluxos, versões publicadas, execuções, aprovações pendentes, conta e credenciais"
+      "discoGuarda": "fluxos, versões publicadas, execuções, aprovações pendentes, conta e credenciais",
+      "versao": "0.4.0"
     }
   ]
 }

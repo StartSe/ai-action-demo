@@ -1,4 +1,4 @@
-# Blueprint de publicação de Bússola de IA v0.2.1 (especificação: https://render.com/docs/blueprint-spec)
+# Blueprint de publicação de Bússola de IA (especificação: https://render.com/docs/blueprint-spec)
 # Imagem pública publicada pelo GitHub Actions em ghcr.io/startse/bussola-ia:latest.
 # Instalação gratuita de teste, sem volume: contas, configurações e respostas podem se perder em reinícios e atualizações.
 # Para manter os dados, use a opção com volume (pago): https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-bussola-ia-persistente.
