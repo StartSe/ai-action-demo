@@ -240,6 +240,21 @@ describe("decidirPasso", () => {
   it("encerra quando o total acabou", () => {
     assert.equal(decidirPasso({ plano, posicao: { indice: 8, feitas: 8, followUps: [] }, resposta: "", numeroPerguntas: 8 }).tipo, "encerrar");
   });
+
+  it("repete a pergunta quando a pessoa pede de qualquer jeito, antes de aprofundar ou de tratar como dúvida", () => {
+    const posicao = { indice: 2, feitas: 2, followUps: [] as never[] };
+    for (const pedido of ["pode repetir a pergunta", "Você pode repetir?", "não escutei", "Qual era a pergunta?", "hã", "Não entendi, pode repetir?"]) {
+      const passo = decidirPasso({ plano, posicao, resposta: pedido, numeroPerguntas: 8 });
+      assert.equal(passo.tipo, "retomar", pedido);
+      assert.equal(passo.tipo === "retomar" && passo.indice, 1, pedido);
+    }
+  });
+
+  it("devolve a palavra quando a pessoa pede um momento ou avisa que não terminou", () => {
+    for (const pedido of ["espera, não terminei", "Só um momento.", "deixa eu pensar"]) {
+      assert.equal(decidirPasso({ plano, posicao: { indice: 2, feitas: 2, followUps: [] }, resposta: pedido, numeroPerguntas: 8 }).tipo, "continuar", pedido);
+    }
+  });
 });
 
 describe("posicaoNoRoteiro", () => {
@@ -268,6 +283,52 @@ describe("posicaoNoRoteiro", () => {
     assert.deepEqual(posicao.followUps, [0]);
   });
 
+  it("repetição e pausa não andam no plano nem gastam o aprofundamento", () => {
+    const falas = [
+      { papel: "entrevistadora" as const, texto: plano.perguntas[0].pergunta },
+      { papel: "candidato" as const, texto: "pode repetir" },
+      { papel: "entrevistadora" as const, texto: `Claro. ${plano.perguntas[0].pergunta}` },
+      { papel: "candidato" as const, texto: "só um momento" },
+      { papel: "entrevistadora" as const, texto: "Claro, sem pressa. Pode continuar." },
+      { papel: "candidato" as const, texto: LONGA },
+    ];
+    const posicao = posicaoNoRoteiro(plano, falas, 8);
+    assert.equal(posicao.indice, 1);
+    assert.equal(posicao.feitas, 1);
+    assert.deepEqual(posicao.followUps, []);
+    assert.equal(posicao.ultimaResposta, LONGA);
+  });
+
+  it("'não terminei' logo depois de uma pergunta nova devolve essa pergunta à fila", () => {
+    // Pergunta 1 → resposta cortada cedo pelo fim de fala → pergunta 2 saiu → "espera" → continuação.
+    const falas = [
+      { papel: "entrevistadora" as const, texto: plano.perguntas[0].pergunta },
+      { papel: "candidato" as const, texto: LONGA },
+      { papel: "entrevistadora" as const, texto: plano.perguntas[1].pergunta },
+      { papel: "candidato" as const, texto: "espera, eu não terminei" },
+      { papel: "entrevistadora" as const, texto: "Claro, sem pressa. Pode continuar." },
+      { papel: "candidato" as const, texto: LONGA },
+    ];
+    const posicao = posicaoNoRoteiro(plano, falas, 8);
+    assert.equal(posicao.indice, 1, "a pergunta 2 volta a ficar pendente");
+    assert.equal(posicao.feitas, 1);
+    const passo = decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas: 8 });
+    assert.equal(passo.tipo, "pergunta");
+    assert.equal(passo.tipo === "pergunta" && passo.pergunta.pergunta, plano.perguntas[1].pergunta, "e é feita de novo");
+  });
+
+  it("'não terminei' na primeira pergunta não volta para a saudação nem para antes do plano", () => {
+    const falas = [
+      { papel: "entrevistadora" as const, texto: plano.perguntas[0].pergunta },
+      { papel: "candidato" as const, texto: "espera" },
+    ];
+    const posicao = posicaoNoRoteiro(plano, falas, 8);
+    assert.equal(decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas: 8 }).tipo, "continuar");
+    const depois = posicaoNoRoteiro(plano, [...falas, { papel: "entrevistadora" as const, texto: "Claro, sem pressa. Pode continuar." }], 8);
+    assert.equal(depois.indice, 1);
+    assert.equal(depois.feitas, 1);
+  });
+
   it("uma conversa com respostas curtas cobre TODO o roteiro antes de encerrar", () => {
     let falas: { papel: "entrevistadora" | "candidato"; texto: string }[] = [];
     const perguntas: string[] = [];
@@ -277,7 +338,7 @@ describe("posicaoNoRoteiro", () => {
       const passo = decidirPasso({ plano, posicao, resposta: posicao.ultimaResposta, numeroPerguntas: 8 });
       if (passo.tipo === "encerrar") break;
       assert.notEqual(passo.tipo, "duvida");
-      const texto = passo.tipo === "followup" || passo.tipo === "duvida" ? "Pode detalhar?" : passo.pergunta.pergunta;
+      const texto = passo.tipo === "followup" || passo.tipo === "duvida" || passo.tipo === "continuar" ? "Pode detalhar?" : passo.pergunta.pergunta;
       perguntas.push(texto);
       falas = [...falas, { papel: "entrevistadora", texto }, { papel: "candidato", texto: "Sim." }];
     }

@@ -635,7 +635,7 @@ export function SalaCandidato({
               </svg>
             </button>
             <p className="text-muted text-[12.5px] text-center">
-              {estado === "falando" ? "Microfone pausado durante a fala. Toque para interromper e falar." : manual ? (estado === "ouvindo" ? "Gravando. Toque novamente para parar e revisar sua resposta." : "Toque para gravar, sem segurar. Revise o texto antes de enviar.") : "Mãos livres: após 4 segundos de silêncio, sua resposta é enviada automaticamente."}
+              {estado === "falando" ? "Microfone pausado durante a fala. Toque para interromper e falar." : manual ? (estado === "ouvindo" ? "Gravando. Toque novamente para parar e revisar sua resposta." : "Toque para gravar, sem segurar. Revise o texto antes de enviar.") : "Mãos livres: alguns segundos de silêncio enviam a resposta. Precisa pensar? Diga \"só um momento\". Não ouviu? Peça para repetir."}
             </p>
             <button type="button" className="btn-ghost !w-auto text-[13px]" disabled={estado !== "parado" || !!digitado.trim()} onClick={() => setEscuta(manual ? "livre" : "toque")}>
               {manual ? "Usar envio automático por silêncio" : "Revisar antes de enviar"}

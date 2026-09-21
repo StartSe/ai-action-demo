@@ -56,8 +56,11 @@ export const MINIMO_DE_RESPOSTAS = 2;
 
 /** Quanto de cada coisa vai no prompt. A entrevista inteira cabe folgado; o currículo é cortado
  * porque no cruzamento ele viaja junto com a conversa e com a ficha. */
-const LIMITE_FALA = 1_200;
-const LIMITE_TRANSCRICAO = 18_000;
+/** Uma resposta falada de dois minutos tem perto de 2.000 caracteres: o corte por fala precisa caber
+ * isso, senão o parecer julga a metade do que a pessoa disse. O teto da transcrição inteira comporta
+ * doze perguntas com aprofundamentos respondidas nesse tamanho. */
+const LIMITE_FALA = 2_400;
+const LIMITE_TRANSCRICAO = 36_000;
 const LIMITE_CV = 8_000;
 
 /** O que a tela mostra quando a conversa não deu com que avaliar uma competência. A frase é a mesma

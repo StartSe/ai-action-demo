@@ -102,6 +102,8 @@ lib/cultura.ts                        a cultura da empresa (um registro por inst
 lib/curriculo.ts lib/ficha.ts         ler o currículo e montar a ficha com a origem de cada campo
 lib/pesquisa-cliente.ts lib/pesquisa.ts   falar com a Bright Data e conduzir a rodada de pesquisa
 lib/roteiro.ts lib/conclusao.ts       planejar e conduzir a conversa; encerrá-la por uma porta só
+lib/pedidos-candidato.ts              o que o candidato pede no meio da conversa: repetir e continuar
+lib/conducao-voz.ts lib/escuta.ts     quando a pessoa terminou de falar (sala LiveKit e navegador)
 lib/avaliacao.ts                      o parecer em três passos (extrair, cruzar, redigir)
 lib/sala-do-candidato.ts lib/sessao-candidato.ts   quem pode entrar na sala e em que aparelho
 lib/voz.ts lib/agente.ts              ElevenLabs: voz, ligação e as variáveis do agente
@@ -189,7 +191,7 @@ O padrão de texto no OpenRouter é `openai/gpt-5.4-mini` (usa créditos). Uma e
 
 As perguntas principais são percorridas na ordem. Aprofundamentos não consomem o total nem substituem tópicos: cada pergunta pode receber um pedido de exemplo quando a resposta for curta. Pedidos de repetição mantêm a posição. O planejamento incompleto é refeito antes de liberar o convite. Nas falas intermediárias, a IA escreve a transição e o sistema preserva o texto da pergunta planejada.
 
-O adaptador LiveKit persiste os turnos; por isso a geração antecipada (`preemptiveGeneration`) fica desativada. A detecção de fim de fala dá mais espaço às pausas e filtra interrupções curtas. No modo mãos livres do navegador, uma pausa de quatro segundos encerra a resposta; o fechamento espontâneo do reconhecimento tenta retomar a escuta preservando o texto.
+O adaptador LiveKit persiste os turnos; por isso a geração antecipada (`preemptiveGeneration`) fica desativada. A detecção de fim de fala dá mais espaço às pausas e filtra interrupções curtas. No modo mãos livres do navegador, uma pausa encerra a resposta (a janela passou a variar na 0.7.0; ver "Memória da conversa e pedidos do candidato"); o fechamento espontâneo do reconhecimento tenta retomar a escuta preservando o texto.
 
 O parecer organiza nota e síntese lado a lado, alinha os botões e reúne as ações de compartilhamento em um popover. Aprofundamentos não fazem uma entrevista interrompida ser considerada completa. Respostas vazias da IA recebem uma tentativa adicional dentro do prazo original.
 
@@ -206,3 +208,24 @@ A entrevistadora responde dúvidas durante e ao final da conversa, inclusive sal
 Na voz, o microfone pausa durante a fala da entrevistadora e volta automaticamente depois. **Interromper e falar** permite tomar a palavra manualmente; a pausa voluntária do microfone continua sendo respeitada. No navegador, o envio por silêncio passa a ser o padrão, com opção de revisar antes de enviar.
 
 O encerramento espera o áudio da despedida terminar e mais 8 segundos. Falar, digitar ou interromper nesse intervalo mantém a conversa aberta. O mesmo cuidado vale na sala LiveKit e na voz do navegador.
+
+### Memória da conversa e pedidos do candidato (0.7.0)
+
+Duas queixas motivaram esta versão: respostas longas eram cortadas no meio (a entrevistadora tomava a palavra numa pausa para pensar e o resto da resposta virava "resposta" à pergunta seguinte), e pedir para repetir a pergunta não funcionava (a frase era tratada como resposta vaga, e a entrevistadora pedia "um exemplo concreto" de "pode repetir").
+
+**A memória da conversa é a transcrição no servidor**, como antes; o que mudou é o quanto dela chega a cada leitura. A fala de cada turno recebe a última resposta quase inteira (até 2.400 caracteres) e as anteriores resumidas, até 24 falas. O parecer lê até 2.400 caracteres por fala e 36.000 no total — uma resposta falada de dois minutos tem perto de 2.000 caracteres, e o limite anterior (1.200) mandava o modelo julgar a metade do que a pessoa disse.
+
+**O candidato conduz o ritmo com quatro pedidos, todos reconhecidos por regra, sem depender do modelo** (`lib/pedidos-candidato.ts` e `lib/duvidas-vaga.ts`):
+
+| Pedido | Exemplos | O que acontece |
+|---|---|---|
+| Repetir | "pode repetir a pergunta", "não escutei", "qual era a pergunta", "hã?", "cortou" | A entrevistadora repete a **última fala real** (a pergunta ou o aprofundamento), e a conversa fica onde estava. |
+| Continuar | "espera", "só um momento", "deixa eu pensar", "não terminei" | Ela devolve a palavra ("Claro, sem pressa. Pode continuar."). Se uma pergunta nova tinha acabado de sair, ela volta à fila e é feita de novo depois. |
+| Dúvida sobre a vaga | "qual é o salário", "é híbrido?" | Responde só com o que está cadastrado e retoma a pergunta (desde a 0.6.0). |
+| Pular | "prefiro não responder", "não sei" | Segue para a próxima pergunta, sem aprofundar (desde a 0.4.5). |
+
+A saudação da primeira fala avisa que dá para pedir um momento e para repetir; as duas salas repetem o aviso abaixo do microfone. Um pedido precisa ser a fala inteira ou quase: "Eu tive que repetir o treinamento" e "Deixa eu pensar, foi em 2019 quando..." são respostas.
+
+**Fim da fala.** Na sala LiveKit, o agente passa a usar o detector de fim de turno do SDK (`inference.TurnDetector`, modelo `turn-detector-v1` servido pelo gateway da LiveKit, com queda automática para o `turn-detector-v1-mini` local; os dois entendem português). Ele ouve o áudio e estima se a frase acabou: quando acabou, a entrevistadora responde em 0,7 segundo; quando a pessoa vai continuar, espera até 6 segundos. Sem credenciais para construí-lo, a sala volta ao silêncio puro com os mesmos prazos. No navegador, a janela de silêncio do modo mãos livres varia: 4 segundos numa resposta curta, 6 quando ela já passou de 40 palavras, mais 1,5 segundo se a frase terminou em vírgula ou num conector ("porque", "e aí"). Pensar antes de começar a falar não fecha mais o microfone (o navegador desiste a cada ~8 segundos de silêncio; a sala religa a escuta até seis vezes), e os fechamentos espontâneos do reconhecimento só contam como falha quando não trazem texto novo em seguida — antes, três fechamentos, o normal numa resposta de dois minutos, derrubavam a conversa para o teclado.
+
+O detector de fim de turno foi conferido contra a API do SDK 1.9.0 e pelos testes automatizados, não contra o serviço real (não havia credenciais nesta máquina). Numa instalação com LiveKit conectado, confira no log do agente qual modelo o detector está usando e ouça uma resposta com pausas antes de convidar candidatos.

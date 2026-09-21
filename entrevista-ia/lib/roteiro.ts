@@ -1,4 +1,5 @@
 import { temDuvidaSobreVaga, responderDuvidaDaVaga } from "./duvidas-vaga";
+import { pedeContinuar, pedeRepeticao } from "./pedidos-candidato";
 import { conferirTentativa } from "./tentativa";
 import { comTurnoExclusivo } from "./trava-entrevista";
 // O roteiro da entrevista (US-016): o que a entrevistadora sabe antes de abrir a boca, o plano que
@@ -63,6 +64,18 @@ export const PALAVRAS_RESPOSTA_VAGA = 40;
  * corte existe para uma transcrição estranhamente longa não virar um pedido gigante. */
 const MAX_FALAS_NO_PROMPT = 24;
 const LIMITE_FALA = 600;
+
+/**
+ * Quanto de CADA fala entra no prompt do turno. A última resposta vai quase inteira — é a ela que a
+ * transição se refere, e cortá-la é a forma mais rápida de a entrevistadora "não entender" quem falou
+ * por dois minutos. As anteriores entram resumidas pelo corte: o que importa delas já foi respondido,
+ * e um prompt que cresce com cada resposta longa é o que estoura os 8 segundos do turno.
+ */
+const LIMITE_FALA_ANTERIOR_NO_PROMPT = 500;
+const LIMITE_ULTIMA_RESPOSTA_NO_PROMPT = 2400;
+
+/** O que a entrevistadora diz quando a pessoa pede um momento ou avisa que não terminou. */
+export const FALA_CONTINUAR = "Claro, sem pressa. Pode continuar.";
 
 const ROTULO_BLOCO: Record<BlocoRoteiro, string> = {
   abertura: "abertura",
@@ -430,14 +443,20 @@ export function respostaVaga(texto: string): boolean {
 
 export type PassoRoteiro =
   | { tipo: "encerrar" }
+  /** A pessoa pediu um momento ou avisou que não terminou: a palavra volta para ela, nada anda. */
+  | { tipo: "continuar" }
   | { tipo: "duvida"; retomar?: PerguntaRoteiro }
   | { tipo: "followup"; bloco: BlocoRoteiro }
   | { tipo: "pergunta" | "retomar"; indice: number; pergunta: PerguntaRoteiro };
 
-type Posicao = { indice: number; feitas: number; followUps: number[] };
+type Posicao = { indice: number; feitas: number; followUps: number[]; ultimoPasso?: PassoRoteiro["tipo"] };
 
-/** Aprofundamentos não gastam perguntas principais. Cada pergunta pode ganhar um
- * aprofundamento; só encerramos depois de percorrer todo o plano e ouvir a resposta final. */
+/**
+ * Os pedidos do candidato vêm ANTES de qualquer outra leitura da resposta (lib/pedidos-candidato.ts).
+ * "Pode repetir?" não é uma resposta vaga a aprofundar nem uma dúvida sobre a vaga; "espera, não
+ * terminei" tampouco. Aprofundamentos não gastam perguntas principais. Cada pergunta pode ganhar um
+ * aprofundamento; só encerramos depois de percorrer todo o plano e ouvir a resposta final.
+ */
 export function decidirPasso({ plano, posicao, resposta }: {
   plano: Roteiro;
   posicao: Posicao;
@@ -446,9 +465,8 @@ export function decidirPasso({ plano, posicao, resposta }: {
 }): PassoRoteiro {
   const { indice, followUps } = posicao;
   const anterior = plano.perguntas[indice - 1];
-  if (anterior && resposta.trim().split(/\s+/).length <= 16 && /^(?:(?:desculp[ae]|oi)[,.!?]?\s*)?(?:pode(?:ria)? repetir|repita|não (?:ouvi|entendi)|qual (?:era|foi) a pergunta)/i.test(resposta.trim())) {
-    return { tipo: "retomar", indice: indice - 1, pergunta: anterior };
-  }
+  if (anterior && pedeRepeticao(resposta)) return { tipo: "retomar", indice: indice - 1, pergunta: anterior };
+  if (anterior && pedeContinuar(resposta)) return { tipo: "continuar" };
   if (temDuvidaSobreVaga(resposta)) return { tipo: "duvida", retomar: indice < plano.perguntas.length ? anterior : undefined };
   if (indice >= plano.perguntas.length) return { tipo: "encerrar" };
   const preferePular = /(?:não (?:sei|tenho experiência|quero responder)|prefiro não|pode pular)/i.test(resposta);
@@ -459,9 +477,20 @@ export function decidirPasso({ plano, posicao, resposta }: {
   return { tipo: "pergunta", indice, pergunta: plano.perguntas[indice] };
 }
 
+/**
+ * "Espera, não terminei" logo depois de uma pergunta nova significa que a pergunta saiu cedo demais:
+ * a pessoa ainda estava respondendo a anterior quando o fim da fala foi detectado. Essa pergunta volta
+ * a ficar pendente e é feita de novo depois da continuação. Não vale para a primeira pergunta (não
+ * havia resposta em curso) nem para um aprofundamento (ele já cumpriu o papel dele: dar mais espaço).
+ */
+function recuaAoContinuar(passo: PassoRoteiro, posicao: Posicao): boolean {
+  return passo.tipo === "continuar" && posicao.ultimoPasso === "pergunta" && posicao.indice >= 2;
+}
+
 /** O indicador acompanha o roteiro, não o número de falas ou de aprofundamentos. */
 function indiceDoPasso(passo: PassoRoteiro, posicao: Posicao): number {
-  return passo.tipo === "pergunta" ? passo.indice + 1 : posicao.indice;
+  if (passo.tipo === "pergunta") return passo.indice + 1;
+  return recuaAoContinuar(passo, posicao) ? posicao.indice - 1 : posicao.indice;
 }
 
 /**
@@ -487,7 +516,11 @@ export function posicaoNoRoteiro(plano: Roteiro, falas: Troca[], numeroPerguntas
     } else if (passo.tipo === "pergunta") {
       posicao.indice = passo.indice + 1;
       posicao.feitas++;
+    } else if (recuaAoContinuar(passo, posicao)) {
+      posicao.indice--;
+      posicao.feitas--;
     }
+    posicao.ultimoPasso = passo.tipo;
     resposta = "";
   }
   return { ...posicao, ultimaResposta: resposta };
@@ -527,9 +560,10 @@ export function fatosDaVaga(ctx: ContextoRoteiro): string[] {
 
 function conversaNoPrompt(falas: Troca[]): string {
   if (!falas.length) return "(nenhuma troca ainda)";
-  return falas
-    .slice(-MAX_FALAS_NO_PROMPT)
-    .map((f) => `${f.papel === "entrevistadora" ? "Entrevistadora" : "Candidato"}: ${f.texto}`)
+  const recentes = falas.slice(-MAX_FALAS_NO_PROMPT);
+  const ultimaResposta = recentes.findLastIndex((f) => f.papel === "candidato");
+  return recentes
+    .map((f, i) => `${f.papel === "entrevistadora" ? "Entrevistadora" : "Candidato"}: ${corte(f.texto, i === ultimaResposta ? LIMITE_ULTIMA_RESPOSTA_NO_PROMPT : LIMITE_FALA_ANTERIOR_NO_PROMPT)}`)
     .join("\n");
 }
 
@@ -543,7 +577,7 @@ async function escreverFala({
   ctx: ContextoRoteiro;
   plano: Roteiro;
   falas: Troca[];
-  passo: Exclude<PassoRoteiro, { tipo: "encerrar" | "duvida" }>;
+  passo: Exclude<PassoRoteiro, { tipo: "encerrar" | "duvida" | "continuar" }>;
   primeira: boolean;
 }): Promise<string> {
   const instrucao =
@@ -593,25 +627,34 @@ async function falaDoPasso(args: {
   passo: Exclude<PassoRoteiro, { tipo: "encerrar" }>;
   primeira: boolean;
 }): Promise<string> {
-  if (args.passo.tipo === "duvida") {
+  const { passo } = args;
+  if (passo.tipo === "duvida") {
     const pergunta = args.falas.findLast(f => f.papel === "candidato")?.texto ?? "";
     const resposta = responderDuvidaDaVaga(args.ctx, pergunta);
     if (resposta.endsWith("?")) return resposta;
-    return `${resposta} ${args.passo.retomar ? `Retomando a nossa conversa: ${args.passo.retomar.pergunta}` : "Tem mais alguma dúvida sobre a vaga?"}`;
+    return `${resposta} ${passo.retomar ? `Retomando a nossa conversa: ${passo.retomar.pergunta}` : "Tem mais alguma dúvida sobre a vaga?"}`;
   }
-  const reserva = args.passo.tipo === "followup" ? followUpDemo() : args.passo.pergunta.pergunta;
-  if (args.passo.tipo === "retomar") return `Claro. ${reserva}`;
+  if (passo.tipo === "continuar") return FALA_CONTINUAR;
+  const reserva = passo.tipo === "followup" ? followUpDemo() : passo.pergunta.pergunta;
+  if (passo.tipo === "retomar") {
+    // Repete o que foi DITO por último, não o que estava no plano: se a última fala foi um
+    // aprofundamento ("pode dar um exemplo?"), é ele que a pessoa não ouviu. Quando a última fala
+    // continha a pergunta planejada (a saudação da abertura, a resposta a uma dúvida), sai só a pergunta.
+    const ultima = args.falas.findLast((f) => f.papel === "entrevistadora")?.texto ?? "";
+    const repetir = ultima && ultima !== FALA_CONTINUAR && !ultima.includes(reserva) ? ultima : reserva;
+    return `Claro. ${repetir}`;
+  }
   if (!aiEnabled()) {
     await esperar(500);
     return reserva;
   }
   // O roteiro já contém a primeira pergunta. Reformulá-la exigia outra chamada
   // ao provedor antes de a pessoa conseguir começar.
-  if (args.primeira && args.passo.tipo === "pergunta") {
-    return `Olá${args.ctx.candidato.primeiroNome ? `, ${args.ctx.candidato.primeiroNome}` : ""}! Vamos conversar por cerca de ${args.ctx.duracaoMin} minutos. Fique à vontade para pensar e contar exemplos com calma. ${reserva}`;
+  if (args.primeira && passo.tipo === "pergunta") {
+    return `Olá${args.ctx.candidato.primeiroNome ? `, ${args.ctx.candidato.primeiroNome}` : ""}! Vamos conversar por cerca de ${args.ctx.duracaoMin} minutos. Fique à vontade para pensar e contar exemplos com calma. Se precisar de um momento, é só dizer; se não ouvir bem, peça para eu repetir. ${reserva}`;
   }
   try {
-    return (await escreverFala({ ...args, passo: args.passo })) || reserva;
+    return (await escreverFala({ ...args, passo })) || reserva;
   } catch (err) {
     console.error("A entrevistadora não conseguiu escrever a fala deste turno; seguindo pelo roteiro planejado.", err);
     return reserva;

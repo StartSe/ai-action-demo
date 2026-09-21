@@ -117,7 +117,7 @@ export function SalaLiveKit({ codigo, tentativaAtual = 1, cargo, onFinalizar, on
     <div className="px-6 py-8 text-center">
       <div aria-hidden="true" className={`mx-auto size-28 rounded-full bg-gradient-to-br from-violet-300 via-purple-600 to-indigo-900 shadow-[0_0_55px_12px_rgba(139,92,246,0.25)] ${conectado && !mudo ? "motion-safe:animate-pulse" : ""}`} />
       <p role="status" className="font-semibold mt-7">{erro ? "Vamos retomar sua conversa" : estado}</p>
-      <p className="text-sm text-muted mt-2">{agenteFalando ? "O microfone fica pausado durante a fala e volta automaticamente depois. Para falar antes, toque em Interromper." : pausaManual ? "Microfone pausado por você" : "Pode falar no seu ritmo."}</p>
+      <p className="text-sm text-muted mt-2">{agenteFalando ? "O microfone fica pausado durante a fala e volta automaticamente depois. Para falar antes, toque em Interromper." : pausaManual ? "Microfone pausado por você" : "Pode falar no seu ritmo. Precisa pensar? Diga \"só um momento\". Não ouviu? Peça para repetir."}</p>
       {precisaAudio && <button className="btn-ghost mt-3" onClick={() => void sala.current?.startAudio().then(() => setPrecisaAudio(false))}>Ativar áudio</button>}
     </div>
     <div className="px-6 pb-6">

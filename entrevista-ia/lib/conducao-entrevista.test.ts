@@ -13,7 +13,7 @@ const { RoteiroLLM } = await import("../agents/roteiro-llm");
 const { criar: criarVaga } = await import("./vagas");
 const { criar: criarCandidato } = await import("./candidatos");
 const { criar, salvarRoteiro, transcricao } = await import("./entrevistas");
-const { proximaFala, conversaAtual, planejarRoteiro, contextoDaVaga } = await import("./roteiro");
+const { proximaFala, conversaAtual, planejarRoteiro, contextoDaVaga, FALA_CONTINUAR } = await import("./roteiro");
 const { contextoDaAvaliacao } = await import("./avaliacao");
 const { modelName } = await import("./ai");
 const { abrirBanco } = await import("./store");
@@ -75,6 +75,47 @@ test("pedir repetição mantém a pergunta e o espaço de aprofundamento", async
   assert.equal(aprofundamento.indice, 1);
   assert.equal(aprofundamento.encerrar, false);
   assert.equal((await proximaFala(entrevista.id, "Não sei responder.", 3)).indice, 2);
+});
+
+test("pedidos de repetição em várias formas repetem a ÚLTIMA fala, inclusive um aprofundamento", async t => {
+  t.mock.method(globalThis, "fetch", async (_url: unknown, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body));
+    return Response.json({ choices: [{ message: { content: JSON.stringify({ fala: body.messages[1].content.includes("Instrução deste turno: aprofunde") ? "Pode contar um exemplo concreto disso?" : "Entendi." }) } }] });
+  });
+  const { entrevista } = preparar();
+  const primeira = await proximaFala(entrevista.id);
+  let ordem = 0;
+  for (const pedido of ["Você pode repetir a pergunta?", "não escutei", "hã"]) {
+    const repeticao = await proximaFala(entrevista.id, pedido, ++ordem);
+    assert.equal(repeticao.indice, primeira.indice, pedido);
+    assert.equal(repeticao.pergunta, `Claro. ${perguntas[0].pergunta}`, pedido);
+    assert.equal(repeticao.encerrar, false);
+  }
+  const aprofundamento = await proximaFala(entrevista.id, "Trabalhei com atendimento.", ++ordem);
+  assert.equal(aprofundamento.pergunta, "Pode contar um exemplo concreto disso?");
+  const repetida = await proximaFala(entrevista.id, "Desculpa, pode repetir?", ++ordem);
+  assert.equal(repetida.pergunta, "Claro. Pode contar um exemplo concreto disso?", "repete o aprofundamento, não a pergunta do plano");
+  assert.equal(repetida.indice, 1);
+  const seguinte = await proximaFala(entrevista.id, "Prefiro não responder.", ++ordem);
+  assert.equal(seguinte.indice, 2);
+  assert.deepEqual(await conversaAtual(entrevista.id), seguinte);
+});
+
+test("'não terminei' devolve a palavra e refaz a pergunta que saiu cedo demais", async t => {
+  t.mock.method(globalThis, "fetch", async () => Response.json({ choices: [{ message: { content: '{"fala":"Entendi."}' } }] }));
+  const { entrevista } = preparar();
+  await proximaFala(entrevista.id);
+  const longa = "Trabalhei quatro anos com atendimento a clientes B2B e hoje lidero o time de suporte, cuidando de uma carteira de sessenta contas; redesenhei os processos, treinei os colegas e medi os resultados toda semana para reduzir o tempo de resolução e a perda de clientes da carteira.";
+  const segunda = await proximaFala(entrevista.id, longa, 1);
+  assert.equal(segunda.indice, 2);
+  const pausa = await proximaFala(entrevista.id, "Espera, eu não terminei.", 2);
+  assert.equal(pausa.pergunta, FALA_CONTINUAR);
+  assert.equal(pausa.indice, 1, "o indicador volta para a pergunta que estava sendo respondida");
+  assert.equal(pausa.encerrar, false);
+  const retomada = await proximaFala(entrevista.id, `${longa} E foi isso que me trouxe até aqui.`, 3);
+  assert.equal(retomada.indice, 2);
+  assert.ok(retomada.pergunta.includes(perguntas[1].pergunta), "a pergunta 2 é feita de novo");
+  assert.deepEqual(await conversaAtual(entrevista.id), retomada);
 });
 
 test("transição gerada não substitui a pergunta principal por despedida", async t => {
