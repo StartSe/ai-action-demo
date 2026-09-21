@@ -41,6 +41,10 @@ O Mapify distingue bloqueio de IP, ausência de legendas, vídeo restrito, verif
 
 Se o erro mencionar instalação, rode `npm run setup:youtube` localmente. O contêiner já inclui a dependência; nesse caso confira se o serviço usa a imagem atual e o `PYTHON_PATH` padrão do Dockerfile.
 
+**Validação em 21/09/2026:** o vídeo [`1QNsdr-Qx_I`](https://www.youtube.com/watch?v=1QNsdr-Qx_I) foi extraído localmente pela biblioteca `youtube-transcript-api`, retornando 1.949 caracteres agrupados em três trechos com timestamps. O mesmo vídeo, testado na instalação do Render com a versão 1.0.1, retornou bloqueio de consulta pelo YouTube. Esse resultado confirma que as legendas estavam públicas; o acesso depende também do servidor que faz a consulta. É um registro do teste, não uma garantia de disponibilidade futura.
+
+A biblioteca `youtube-transcript-api` é independente e não é a API oficial do YouTube. O método oficial [`captions.download`](https://developers.google.com/youtube/v3/docs/captions/download) exige autenticação OAuth e permissão para editar o vídeo. Assim, uma chave da YouTube Data API não resolve a importação de legendas de vídeos públicos de outros canais.
+
 ```sh
 npm test
 npm run lint

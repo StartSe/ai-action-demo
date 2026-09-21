@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2 — 2026-09-21
+
+- Registrada a validação do vídeo `1QNsdr-Qx_I` com a biblioteca não oficial `youtube-transcript-api`: extração local bem-sucedida, com 1.949 caracteres agrupados em três trechos; consulta pelo Render bloqueada pelo YouTube.
+- Esclarecido no README que a API oficial de legendas exige uma conta autorizada a editar o vídeo e não substitui o extrator para vídeos de outros canais.
+- Atualizados versão do pacote, endpoint de saúde e catálogo. Esta versão mantém o diagnóstico da 1.0.1; não remove o bloqueio do YouTube ao servidor.
+
 ## 1.0.1 — 2026-09-21
 
 - A importação do YouTube informa a causa da falha: bloqueio do servidor, legendas ausentes, vídeo restrito, verificação adicional, timeout, proxy ou instalação incompleta. Erros internos deixam de aparecer como ausência de transcrição.
