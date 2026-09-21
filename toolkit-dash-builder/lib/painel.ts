@@ -3,6 +3,7 @@
 import { aiEnabled, askJSON, ErroIA, meta, type Meta } from "./ai";
 import { buscarNoCache, hashPedido } from "./cache-painel";
 import { esperar, observacoesDemo, painelDemo, refinamentoDemo } from "./demo";
+import { juntarEsclarecimentos } from "./esclarecer";
 import { atualizarSaida, salvar } from "./historico";
 import { IDIOMA } from "./idioma";
 import type { ComponentePainel, EspecPainel, Observacao, PedidoPainel, RespostaRefinamento } from "./types";
@@ -356,7 +357,7 @@ export async function gerarPainel(entrada: PedidoPainel, opts: { forcar?: boolea
   let painel: EspecPainel;
   if (demo) {
     await esperar(1200);
-    painel = painelDemo(pedido.descricao);
+    painel = painelDemo(juntarEsclarecimentos(pedido.descricao, pedido.esclarecimentos ?? {}));
   } else {
     let bruto = await askJSON<EspecPainel>({ system: SYSTEM_PAINEL, prompt: PROMPT_PAINEL(pedido), maxTokens: 8000 });
     painel = validarPainel(bruto);

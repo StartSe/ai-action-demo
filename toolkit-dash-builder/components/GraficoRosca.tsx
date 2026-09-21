@@ -4,13 +4,15 @@ import { formatar } from "@/lib/formatar";
 import type { DadosDistribuicao } from "@/lib/types";
 
 const OPACIDADES = [1, 0.88, 0.76, 0.64, 0.52, 0.4];
-const RAIO = 15.9155; // circunferência = 100, então dasharray fala em percentual
+// pathLength="100" normaliza a circunferência: o dasharray fala em percentual seja qual for o raio.
+// Na pizza o traço vai do centro à borda (r = 10,5 e traço 21 cabem no viewBox de 42); na rosca é um anel.
+const GEOMETRIA = { pizza: { raio: 10.5, traco: 21 }, rosca: { raio: 17, traco: 7 } };
 
 export function GraficoRosca({ dados, titulo, rosca }: { dados: DadosDistribuicao; titulo: string; rosca: boolean }) {
   const fatias = [...dados.fatias].filter((f) => f.valor > 0).sort((a, b) => b.valor - a.valor).slice(0, 6);
   const total = fatias.reduce((s, f) => s + f.valor, 0);
   if (fatias.length === 0 || total <= 0) return <p className="text-muted text-sm">Sem fatias suficientes para o gráfico.</p>;
-  const espessura = rosca ? 7 : RAIO * 2;
+  const { raio, traco } = rosca ? GEOMETRIA.rosca : GEOMETRIA.pizza;
   // Cada fatia começa onde a anterior terminou: o offset é 25 (topo do círculo) menos o acumulado até ela.
   const arcos = fatias.reduce<{ pct: number; offset: number; opacidade: number }[]>((lista, f, i) => {
     const acumulado = lista.reduce((s, a) => s + a.pct, 0);
@@ -22,7 +24,7 @@ export function GraficoRosca({ dados, titulo, rosca }: { dados: DadosDistribuica
       <div className="relative w-[136px] h-[136px] shrink-0">
         <svg viewBox="0 0 42 42" width="136" height="136" aria-hidden="true">
           {arcos.map((a, i) => (
-            <circle key={i} cx="21" cy="21" r={RAIO} fill="transparent" stroke="var(--color-accent)" strokeOpacity={a.opacidade} strokeWidth={espessura} strokeDasharray={`${a.pct} ${100 - a.pct}`} strokeDashoffset={a.offset} />
+            <circle key={i} cx="21" cy="21" r={raio} pathLength={100} fill="transparent" stroke="var(--color-accent)" strokeOpacity={a.opacidade} strokeWidth={traco} strokeDasharray={`${a.pct} ${100 - a.pct}`} strokeDashoffset={a.offset} />
           ))}
         </svg>
         {rosca && (
@@ -32,7 +34,7 @@ export function GraficoRosca({ dados, titulo, rosca }: { dados: DadosDistribuica
           </div>
         )}
       </div>
-      <ul className="flex-1 min-w-[150px] flex flex-col gap-1.5 text-[12.5px]">
+      <ul className="flex-1 min-w-[200px] flex flex-col gap-1.5 text-[12.5px]">
         {fatias.map((f, i) => (
           <li key={`${f.rotulo}-${i}`} className="flex items-center gap-2 min-w-0">
             <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" className="shrink-0"><rect width="10" height="10" rx="2" fill="var(--color-accent)" fillOpacity={arcos[i].opacidade} /></svg>
