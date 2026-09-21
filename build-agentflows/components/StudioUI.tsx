@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { version } from "../package.json";
 export type IconName =
   | "flows"
   | "runs"
@@ -385,7 +386,7 @@ export function StudioShell({
               <Icon name="logout" size={17} />
             </button>
           </div>
-          <small>Build Agentflows</small>
+          <small>Build Agentflows {version}</small>
         </div>
       </aside>
       <div className="studio-content">{children}</div>
