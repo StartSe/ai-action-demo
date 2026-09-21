@@ -1,0 +1,113 @@
+# Painel Pronto
+
+Painel de indicadores gerado por IA a partir de uma frase: indicadores com comparação, gráfico de tendência, ranking, distribuição e tabela, com números de exemplo do mercado brasileiro, prontos para ajustar conversando e imprimir. Área: Dados e Gestão.
+
+## O que resolve
+O gestor sabe o que quer acompanhar, mas não sabe quais indicadores pedir nem como montar o painel. Este app identifica o setor do pedido, escolhe os indicadores que um analista escolheria, monta os gráficos e preenche com números de exemplo plausíveis. O resultado é o passo anterior ao BI: uma especificação pronta para quem for construir o painel com dado real.
+
+## Stack
+Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão. Gráficos feitos à mão em SVG (sem biblioteca).
+
+## Configuração inicial (sem variáveis de ambiente)
+Abra `/setup` no navegador. Lá você conecta a IA com um clique ("Conectar com OpenRouter", fluxo OAuth) ou colando uma chave, escolhe o modelo e testa a conexão. Tudo fica salvo em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), sem precisar de `.env`. Até conectar, o app roda em modo demonstração com quatro painéis de exemplo (vendas, financeiro, marketing e assinaturas), escolhidos pelas palavras do pedido.
+
+## Primeiro acesso
+Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
+
+## Rodar localmente
+```bash
+npm install
+npm run dev             # http://localhost:3000 e depois http://localhost:3000/setup
+```
+Abra `/?exemplo=1` para preencher com o pedido de Vendas e gerar sozinho.
+
+## Rodar com Docker
+```bash
+docker compose up --build   # http://localhost:3020
+```
+
+## Imagem pública e deploy no Render
+A imagem é construída e publicada pelo GitHub Actions do repositório da suíte a cada push na `main`: `ghcr.io/startse/toolkit-dash-builder:latest`. Não é preciso construir nem publicar à mão.
+
+- Publicar com um clique: https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-toolkit-dash-builder (o `render.yaml` desta pasta é gerado a partir do `catalogo.json` da raiz; não edite à mão).
+- Rodar no seu computador sem construir: `docker run --rm -p 3020:10000 -v toolkit-dash-builder-dados:/app/data ghcr.io/startse/toolkit-dash-builder:latest` e abra http://localhost:3020.
+- Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
+- O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração se perde a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
+
+## Como funciona
+1. **Descreva** o painel em uma frase (ou clique num dos oito chips por área: Vendas, Financeiro, Marketing, Operações, SaaS, E-commerce, Agência, RH).
+2. **Esclarecimento** (só quando o pedido é curto ou vago): uma heurística local decide, sem IA, se vale perguntar; no caso duvidoso a IA faz de 1 a 3 perguntas com respostas sugeridas. "Pular e gerar agora" está sempre disponível.
+3. **Geração**: a IA identifica o setor, escolhe de 5 a 8 componentes (indicadores, linha/área, barras, pizza/rosca, tabela) e preenche com números de exemplo. Um validador no servidor conserta o que vier fora do formato (tipos desconhecidos, posições sobrepostas, séries longas demais) e pede uma segunda tentativa quando sobram menos de 5 componentes.
+4. **Ajuste conversando**: "troque o gráfico de barras por pizza", "acrescente ticket médio", "tire a tabela". Só os componentes que você citou mudam; o resto volta idêntico (validação anti-deriva). "Desfazer" restaura os 5 últimos estados.
+5. **Analisar**: até três observações sobre o painel (anomalia, tendência, sugestão), sempre sobre os números de exemplo, nunca sobre a sua empresa.
+6. **Leve embora**: o painel é salvo na geração; "Baixar PDF" abre `/imprimir/<id>` em A4; "Copiar dados da tabela" e "Copiar números do painel" põem CSV (`;` e vírgula decimal) na área de transferência; `/historico` lista tudo e `/r/<id>` reabre.
+
+Um pedido repetido em até 24 h reaproveita o painel salvo sem chamar a IA; "Gerar outra versão" ignora esse cache de propósito.
+
+## Usar dentro de um assistente de IA (MCP)
+O app expõe `POST /mcp`, um endpoint MCP (Model Context Protocol) próprio sobre JSON-RPC 2.0, para que assistentes como Claude ou ChatGPT chamem as ferramentas `criar_painel`, `refinar_painel`, `listar_paineis` e `obter_painel` diretamente. Gere um código de acesso no cartão "Usar dentro do seu assistente" em `/setup` e configure o assistente com o endereço (`https://<seu-app>/mcp`) e o código como `Authorization: Bearer <código>`.
+
+Decisão de implementação: protocolo implementado à mão em `lib/mcp.ts` (JSON-RPC 2.0: `initialize`, `tools/list`, `tools/call`), em vez do pacote `@modelcontextprotocol/sdk` — mesma filosofia de `lib/store.ts` (SQLite sem dependências externas). Rate limit de 60 chamadas por minuto por código, em memória.
+
+```bash
+curl -X POST https://<seu-app>/mcp \
+  -H "Authorization: Bearer <código>" -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+### Testar com o MCP Inspector
+```bash
+npx @modelcontextprotocol/inspector
+```
+Escolha o transporte "Streamable HTTP", cole `http://localhost:3000/mcp` (ou o endereço do deploy) em URL e adicione o cabeçalho `Authorization: Bearer <código>` em "Custom Headers". A aba "Tools" deve listar as quatro ferramentas; `criar_painel` com uma descrição devolve o mesmo objeto (painel, id e link) que a rota `/api/painel` produz.
+
+## Variáveis de ambiente (todas opcionais)
+Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando definidas, têm prioridade sobre o que foi salvo.
+| Variável | Para quê | Onde obter |
+|---|---|---|
+| `OPENROUTER_API_KEY` | Liga a IA. Alternativa a conectar em Configurações. | https://openrouter.ai/keys |
+| `OPENROUTER_MODEL` | Força um modelo específico. Sem ela, o app escolhe (`nvidia/nemotron-3-super-120b-a12b:free`). | https://openrouter.ai/models |
+| `APP_URL` | Endereço público, para os links que o app gera (ex.: nas ferramentas MCP). | a URL da instância |
+| `DATA_DIR` | Onde fica o banco. Padrão `./data`; no Docker, `/app/data`. | — |
+| `CHAVE_MESTRA` | Chave de 32 bytes em base64 que cifra as chaves guardadas. Sem ela, o app gera uma e guarda em `<DATA_DIR>/chave-mestra`. | gerada pela equipe técnica |
+| `NOVA_SENHA_ADMIN` | Redefine a senha da conta na próxima subida; pode ser removida depois. | — |
+| `PORT` | Porta do servidor. O Render e o Docker usam `10000`. | — |
+| `CONTA_DESLIGADA` | Só no contêiner efêmero de captura de prévia. Nunca em instância real. | — |
+
+Nenhuma credencial de suíte com sufixo `_APP` é usada: este app não conecta caixa de e-mail. O `Dockerfile` é cópia idêntica do `pdi-time` (com os `ARG` de `GOOGLE_*_APP`/`MICROSOFT_*_APP`) porque o workflow passa os mesmos `build-args` a todos os apps; sem valor, os botões simplesmente não aparecem em `/setup`.
+
+## Estrutura
+```
+app/page.tsx                    tela única (chips, campo, esclarecimento, carregando, painel, conversa de ajuste)
+app/api/painel/route.ts         POST gerar (aceita forcar) · GET listar · DELETE apagar tudo
+app/api/painel/[id]/route.ts    GET obter · PUT gravar o estado do Desfazer · DELETE apagar um
+app/api/painel/esclarecer/      POST avaliar o pedido (heurística local, depois IA)
+app/api/painel/refinar/         POST ajustar um painel
+app/api/painel/observacoes/     POST analisar o painel
+app/r/[id]/page.tsx             reabre um painel salvo
+app/imprimir/[id]/page.tsx      folha A4 (grade de 2 colunas, tabela em largura total)
+app/mcp/route.ts                endpoint MCP (JSON-RPC 2.0) para assistentes de IA
+app/setup/page.tsx              configuração inicial (chave, OAuth, teste de conexão, acesso MCP)
+components/Painel.tsx           grade de 4 colunas e despacho por tipo de componente
+components/CartaoIndicador.tsx  número grande, variação e barra de meta (SVG)
+components/GraficoSerie.tsx     linha e área (SVG só com geometria; texto em HTML)
+components/GraficoBarras.tsx    barras verticais e horizontais (<rect> em SVG)
+components/GraficoRosca.tsx     pizza e rosca (circle + stroke-dasharray, até 6 fatias)
+components/TabelaPainel.tsx     tabela (DataTable na tela; <table> próprio na impressão)
+components/ChipsArea.tsx        os oito chips de sugestão por área
+components/Esclarecimento.tsx   perguntas com chips + "Pular e gerar agora"
+components/ConversaRefino.tsx   conversa de ajuste + Desfazer
+components/BannerObservacoes.tsx até 3 observações, dispensável
+lib/types.ts                    tipos do domínio (EspecPainel, ComponentePainel...)
+lib/painel.ts                   prompts, gerarPainel, refinarPainel, observarPainel, validarRefinamento
+lib/esclarecer.ts               heurística local + prompt do gate
+lib/validar-painel.ts           validador/reparador da especificação
+lib/formatar.ts                 moeda/número/percentual em pt-BR e CSV
+lib/cache-painel.ts             cache por hash do pedido (24 h)
+lib/demo.ts                     os quatro painéis de exemplo e as respostas de demonstração
+lib/ferramentas.ts              ferramentas expostas via MCP
+lib/ai.ts                       cliente OpenRouter (compartilhado)
+Dockerfile                      build multi-stage com saída standalone
+docker-compose.yml              sobe este app isolado (porta 3020)
+render.yaml                     blueprint do Render (gerado)
+```
