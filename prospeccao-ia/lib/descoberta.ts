@@ -3,6 +3,7 @@
 // Referência: https://github.com/brightdata/brightdata-mcp (search_engine, scrape_as_markdown,
 // search_dataset e web_data_*). Catálogo e schemas são descobertos por tools/list.
 import { prospectHaloAtivo, listarAcoesProspectHalo, executarAcaoProspectHalo } from "./prospecthalo";
+import { perfilLinkedin } from "./perfil-linkedin";
 import { buscarFonte, lerFonte, fontesOpcionais, FONTES, ErroFonte, type FonteOpcional } from "./pesquisa-fontes";
 import { registrarConsulta, concluirConsulta, limiteDaFonte } from "./pesquisa-registro";
 import type { DatabaseSync } from "node:sqlite";
@@ -48,6 +49,10 @@ function lerCache(url: string): string | null {
   if (!linha) return null;
   const lidoEm = new Date(linha.lido_em).getTime();
   if (!Number.isFinite(lidoEm) || Date.now() - lidoEm >= VALIDADE_CACHE_MS) return null;
+  // Versões anteriores podiam gravar JSON de perfis truncado. Refaça somente essas leituras.
+  if (/^\s*\[\s*\{/.test(linha.conteudo)) {
+    try { JSON.parse(linha.conteudo); } catch { return null; }
+  }
   return linha.conteudo;
 }
 
@@ -213,7 +218,7 @@ async function consultarOpcional<T extends string | ResultadoBuscaWeb[]>(fonte: 
 
 // --- Busca na web --------------------------------------------------------------------------------
 
-export type ResultadoBuscaWeb = { titulo: string; url: string; resumo: string; fontes?: string[]; avatarUrl?: string | null; conteudoPerfil?: string; contextoProfissional?: boolean; perfilPesquisado?: boolean; pessoa?: { nome: string; cargo: string; empresa: string; cidade: string; site: string } };
+export type ResultadoBuscaWeb = { titulo: string; url: string; resumo: string; fontes?: string[]; avatarUrl?: string | null; conteudoPerfil?: string; conteudoPerfilAtual?: string; contextoProfissional?: boolean; perfilPesquisado?: boolean; pessoa?: { nome: string; cargo: string; empresa: string; cidade: string; site: string } };
 
 /** Intercala fornecedores para que o corte de candidatos não favoreça apenas a primeira fonte. */
 export function combinarResultados(lotes: ResultadoBuscaWeb[][]): ResultadoBuscaWeb[] {
@@ -230,7 +235,7 @@ export function combinarResultados(lotes: ResultadoBuscaWeb[][]): ResultadoBusca
           u.hostname = "linkedin.com"; u.pathname = u.pathname.toLowerCase(); u.search = "";
         }
         for (const k of [...u.searchParams.keys()]) if (/^utm_|^(trk|trackingId|gclid|fbclid)$/.test(k)) u.searchParams.delete(k);
-        chave = `${u.hostname}${u.pathname.replace(/\/$/, "")}${u.search}`;
+        chave = perfilLinkedin(item.url) || `${u.hostname}${u.pathname.replace(/\/$/, "")}${u.search}`;
       } catch { continue; }
       const anterior = unicos.get(chave);
       if (!anterior) unicos.set(chave, { ...item });
@@ -309,10 +314,14 @@ async function lerConteudoBrightData(url: string, prospeccaoId?: string): Promis
   if (emCache !== null) return emCache;
   const acao = acaoParaUrl(url);
   let conteudo: string | undefined;
+  let estruturado = false;
   if (acao !== "scrape_as_markdown") {
     const acoes = await listarAcoesPesquisa();
     if (acoes.some(f => f.nome === acao)) {
-      try { conteudo = conteudoEstruturado(await executarAcaoPesquisa(acao, { url }, prospeccaoId)); }
+      try {
+        conteudo = conteudoEstruturado(await executarAcaoPesquisa(acao, { url }, prospeccaoId));
+        estruturado = !!conteudo;
+      }
       catch (erro) {
         if (erro instanceof TetoConsultasAtingido || (erro instanceof ErroDescoberta && ["chave_recusada", "limite_do_plano"].includes(erro.codigo))) throw erro;
         // Falha da extração específica: tenta a leitura pública da mesma página.
@@ -325,7 +334,9 @@ async function lerConteudoBrightData(url: string, prospeccaoId?: string): Promis
     if (typeof markdown === "string") conteudo = markdown;
   }
   if (!conteudo?.trim()) throw new ErroDescoberta("sem_resultado", "Não foi possível ler o conteúdo dessa página.", 404);
-  const limitado = conteudo.trim().slice(0, LIMITE_CONTEUDO);
+  // Cortar JSON no meio invalida até os campos de identidade/empresa que vieram completos.
+  // Os consumidores limitam o contexto textual depois de interpretar os campos estruturados.
+  const limitado = estruturado ? conteudo.trim() : conteudo.trim().slice(0, LIMITE_CONTEUDO);
   gravarCache(url, limitado);
   return limitado;
 }

@@ -2,7 +2,8 @@
 export function perfilLinkedin(url: string): string | null {
   try {
     const u = new URL(url);
-    if (u.protocol !== "https:" || !(u.hostname === "linkedin.com" || u.hostname.endsWith(".linkedin.com")) || !/^\/in\/[^/]+\/?$/.test(u.pathname) || u.username || u.password) return null;
-    return `https://www.linkedin.com${u.pathname.replace(/\/$/, "").toLowerCase()}`;
+    const caminho = u.pathname.match(/^\/in\/([^/]+)(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/?$/i);
+    if (u.protocol !== "https:" || !(u.hostname === "linkedin.com" || u.hostname.endsWith(".linkedin.com")) || !caminho || u.username || u.password) return null;
+    return `https://www.linkedin.com/in/${caminho[1].toLowerCase()}`;
   } catch { return null; }
 }

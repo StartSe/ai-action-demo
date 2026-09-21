@@ -8,6 +8,10 @@ import type { ResultadoBuscaWeb } from "./descoberta";
 import { data } from "./formato";
 import { ErroProspectHalo, prospectHaloAtivo } from "./prospecthalo";
 import { pesquisarPessoas } from "./pesquisa-pessoas";
+import { avaliarVinculoEmpresa, mesmaEmpresa } from "./vinculo-empresa";
+import { registrarReencontro } from "./pesquisa-reencontros";
+import { retirarCandidatoParcial } from "./pesquisa-parciais";
+import { perfilLinkedin } from "./perfil-linkedin";
 import { avaliarCriterios, calcularFit, dominioDe, inferirPapel, resumoDaPagina, sinaisEncontrados, sinalAntigo } from "./qualificacao";
 import { avaliarCriterioInterpretativo, gerarHipoteseDor } from "./qualificacao-ia";
 import { QUANTIDADES_EMPRESAS } from "./rotulos";
@@ -429,6 +433,8 @@ async function analisarSinais(prospeccaoId: string, criterios: Record<string, un
  * em lib/leads-vistos.ts, só que pela identidade da PESSOA, não pelo perfil da busca. */
 function chaveLead(nome: string, empresa: string | null, linkedin: string | null): string {
   if (linkedin?.trim()) {
+    const perfil = perfilLinkedin(linkedin);
+    if (perfil) return `linkedin:${perfil}`;
     try { const u = new URL(linkedin); return `linkedin:${u.hostname.replace(/^www\./, "")}${u.pathname.replace(/\/$/, "")}`.toLowerCase(); }
     catch { return `linkedin:${linkedin.trim().toLowerCase()}`; }
   }
@@ -462,7 +468,8 @@ async function buscarPessoasChaveUnica(prospeccaoId: string, conta: Conta, produ
 }
 
 async function adicionarPessoasDaConta(prospeccaoId: string, conta: Conta, produtoId: string, personas: string[], status: "novo" | "pesquisado"): Promise<void> {
-  const jaVistos = new Set(leadsDoProduto(produtoId).map(l => chaveLead(l.nome, l.empresa, l.linkedin)));
+  const anteriores = new Map(leadsDoProduto(produtoId).map(l => [chaveLead(l.nome, l.empresa, l.linkedin), l]));
+  const jaVistos = new Set<string>();
   const resultado = conta.demo
     ? { itens: [] as ResultadoBuscaWeb[], demo: true, consultadoEm: new Date().toISOString() }
     : await pesquisarPessoas({ empresa: conta.nome, cargo: personas.join(" ou "), quantidade: TETO_PESSOAS_CHAVE }, prospeccaoId);
@@ -472,17 +479,27 @@ async function adicionarPessoasDaConta(prospeccaoId: string, conta: Conta, produ
   for (const candidato of candidatos) {
     if (foiCancelada(prospeccaoId)) return;
     if (criados >= TETO_PESSOAS_CHAVE || !candidato.nome) continue;
+    const vinculo = candidato.item ? avaliarVinculoEmpresa(candidato.item, conta.nome) : null;
+    if (!resultado.demo && vinculo?.estado !== "confirmado") continue;
     const chave = chaveLead(candidato.nome, conta.nome, candidato.linkedin);
     if (jaVistos.has(chave)) continue;
     jaVistos.add(chave);
+    const anterior = anteriores.get(chave);
+    if (anterior) {
+      registrarReencontro(prospeccaoId, anterior.id);
+      retirarCandidatoParcial(prospeccaoId, candidato.linkedin);
+      continue;
+    }
     const conteudo = candidato.item ? await conteudoDaPessoa(candidato.item, prospeccaoId) : "";
     if (foiCancelada(prospeccaoId)) return;
-    const evidenciasPessoa = avaliarCriterios(conteudo, [{ criterio: "Empresa atual", valor: conta.nome }]);
+    const evidenciasPessoa: Evidencia[] = resultado.demo ? avaliarCriterios(conteudo, [{ criterio: "Empresa atual", valor: conta.nome }])
+      : [{ criterio: "Empresa atual", valor: vinculo!.empresa!, resultado: "atende", trecho: vinculo!.trecho }];
+    const cargo = candidato.cargo && mesmaEmpresa(candidato.cargo, conta.nome) ? null : candidato.cargo;
     criarLead({
-      prospeccaoId, contaId: conta.id, nome: candidato.nome, cargo: candidato.cargo, empresa: conta.nome, cidade: conta.cidade,
+      prospeccaoId, contaId: conta.id, nome: candidato.nome, cargo, empresa: resultado.demo ? conta.nome : vinculo!.empresa!, cidade: candidato.item?.pessoa?.cidade || (resultado.demo ? conta.cidade : null),
       linkedin: candidato.linkedin, fonte: resultado.demo ? null : `${(candidato.item?.fontes ?? ["busca pública"]).join(", ")} · ${candidato.linkedin}`,
       avatarUrl: candidato.item?.avatarUrl,
-      papel: inferirPapel(candidato.cargo, personas), fit: conta.fit,
+      papel: inferirPapel(cargo, personas), fit: conta.fit,
       evidencias: [...conta.evidencias, ...evidenciasPessoa], sinais: conta.sinais, hipotese: null,
       status, noCRM: false, demo: resultado.demo,
     });
@@ -700,11 +717,12 @@ function origemPessoa(dominio: string | null, consultadoEm: string): string | nu
 
 /** B2B: combina contatos e pesquisa pública, lê perfis e qualifica empresa e pessoa. */
 async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null, produtoId: string): Promise<void> {
+  const empresa = textoCriterio(criterios, "empresa");
   const cargo = textoCriterio(criterios, "cargo") || icp?.personas.join(" ou ") || "";
   const segmento = textoCriterio(criterios, "segmento") || icp?.criterios.setor || "";
   const localizacao = textoCriterio(criterios, "localizacao") || icp?.criterios.localizacao || "";
   const porte = textoCriterio(criterios, "porte") || icp?.criterios.porte || "";
-  const resultado = await pesquisarPessoas({ cargo, segmento, localizacao, porte, outros: icp?.criterios.outros,
+  const resultado = await pesquisarPessoas({ cargo, empresa, segmento, localizacao, porte, outros: icp?.criterios.outros,
     proposta: obterProduto(produtoId)?.propostaValor, quantidade: TETO_PESSOAS_MODO }, prospeccaoId);
   const jaVistos = new Set(leadsDoProduto(produtoId).map(l => chaveLead(l.nome, l.empresa, l.linkedin)));
   const contas = new Map<string, Conta>();

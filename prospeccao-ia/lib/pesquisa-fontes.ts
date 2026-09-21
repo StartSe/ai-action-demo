@@ -1,5 +1,6 @@
 // Adaptadores das fontes opcionais. Nunca devolvem conteúdo de erro nem credenciais do provedor.
 import { getConfig } from "./store";
+import { perfilLinkedin } from "./perfil-linkedin";
 export type FonteOpcional = "exa" | "tavily" | "searchapi";
 export type ItemPesquisa = { titulo: string; url: string; resumo: string };
 export const FONTES = { exa: "Exa", tavily: "Tavily", searchapi: "SearchAPI" } as const;
@@ -80,7 +81,9 @@ export async function lerFonte(fonte: "exa" | "tavily", url: string): Promise<st
   const dados = fonte === "exa"
     ? await requisitar(fonte, "https://api.exa.ai/contents", { urls: [url], text: { maxCharacters: 8000 } })
     : await requisitar(fonte, "https://api.tavily.com/extract", { urls: [url], extract_depth: "advanced", format: "markdown" });
-  const texto = itensDe(fonte, dados)[0]?.resumo;
+  const perfil = perfilLinkedin(url);
+  const itens = itensDe(fonte, dados);
+  const texto = (perfil ? itens.find(i => perfilLinkedin(i.url) === perfil) : itens[0])?.resumo;
   if (!texto) throw new ErroFonte(FONTES[fonte], "resposta_invalida", `${FONTES[fonte]} não conseguiu ler essa página.`);
   return texto;
 }

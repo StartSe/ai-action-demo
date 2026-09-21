@@ -373,6 +373,7 @@ function construirColunasLeads(opcoes: {
 }
 
 type Andamento = {
+  reencontrados?: LeadProspeccao[];
   candidatos?: CandidatoParcial[];
   consultas?: ConsultaPesquisa[];
   decisoes?: DecisaoPesquisa[];
@@ -641,6 +642,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
   const recorte = andamento ? recorteProspeccao(andamento.prospeccao.modo, andamento.prospeccao.criterios) : "";
   const funil = andamento ? funilContagens(andamento.leads) : null;
   const candidatos = andamento?.candidatos ?? [];
+  const reencontrados = andamento?.reencontrados ?? [];
   const mostrarParciais = !!andamento && andamento.prospeccao.estado !== "rascunho" && (andamento.prospeccao.estado !== "pronta" || (!!andamento.prospeccao.erro && candidatos.length > 0));
   const leadsFiltrados = andamento ? leadsNaAba(andamento.leads, aba) : [];
   // Os números do funil viram abas só quando há uma lista de leads abaixo para filtrar.
@@ -713,11 +715,19 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
               <p className="font-semibold mb-1">O andamento pode estar desatualizado</p>
               {erroAtualizacao}
             </Aviso></div>}
-            {andamento.prospeccao.estado !== "rascunho" && <ProgressoProspeccao prospeccao={andamento.prospeccao} jornada={andamento.jornada} consultas={andamento.consultas ?? []} decisoes={andamento.decisoes ?? []} contas={andamento.contasEncontradas} pessoas={andamento.leadsEncontrados + (mostrarParciais ? candidatos.length : 0)} ultimoContato={ultimoContato} semAtualizacao={!!erroAtualizacao} cancelando={cancelando} onCancelar={cancelar} />}
+            {andamento.prospeccao.estado !== "rascunho" && <ProgressoProspeccao prospeccao={andamento.prospeccao} jornada={andamento.jornada} consultas={andamento.consultas ?? []} decisoes={andamento.decisoes ?? []} contas={andamento.contasEncontradas} pessoas={andamento.leadsEncontrados + reencontrados.length + (mostrarParciais ? candidatos.length : 0)} ultimoContato={ultimoContato} semAtualizacao={!!erroAtualizacao} cancelando={cancelando} onCancelar={cancelar} />}
             {erroCancelar && <div role="alert" className="mb-4"><Aviso tom="danger">{erroCancelar}</Aviso></div>}
             {erroAcaoPessoa && <div role="alert" className="mb-4"><Aviso tom="danger">{erroAcaoPessoa}</Aviso></div>}
             {funil && funil.encontrados > 0 && <FunilResumo funil={funil} aba={filtraLeads ? aba : undefined} onAba={filtraLeads ? setAba : undefined} />}
             {mostrarParciais && <ResultadosParciais candidatos={candidatos} leads={andamento.prospeccao.estado === "pronta" ? [] : andamento.leads} contas={andamento.prospeccao.estado === "pronta" ? [] : andamento.contas} executando={andamento.prospeccao.estado === "executando"} />}
+            {reencontrados.length > 0 && <section className="card p-5 mb-5" aria-labelledby="titulo-reencontrados">
+              <h2 id="titulo-reencontrados" className="font-bold text-lg">Contatos já encontrados · {reencontrados.length}</h2>
+              <p className="text-sm text-muted mt-2 mb-4">Estes perfis apareceram novamente. Mantivemos a ficha e o histórico existentes, sem duplicar os contatos.</p>
+              <ul className="space-y-3">{reencontrados.map(lead => <li key={lead.id} className="flex items-center gap-3">
+                <AvatarPessoa nome={lead.nome} url={lead.avatarUrl} />
+                <div className="min-w-0"><p className="text-sm font-semibold break-words">{lead.nome}</p><p className="text-xs text-muted break-words">{[lead.cargo, lead.empresa].filter(Boolean).join(" · ")}</p><Link href={`/leads/${lead.id}`} className="text-xs text-accent-ink hover:underline">Abrir ficha existente</Link></div>
+              </li>)}</ul>
+            </section>}
 
             {!!andamento.decisoes?.length && (
               <details className="card px-5 py-4 mb-4">
@@ -749,7 +759,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                 <h2 className="font-bold text-lg">Próximo passo</h2>
                 {andamento.prospeccao.erro && <Aviso tom="warn">{andamento.prospeccao.erro}</Aviso>}
                 <p className="text-[13px] text-muted">
-                  {andamento.consultas?.some(c => c.estado === "pendente") ? "O ProspectHalo ainda está preparando candidatos. Use Consultar resultados pendentes para recuperar a mesma busca e confira os perfis já disponíveis." : andamento.leadsEncontrados > 0 ? "Confira os perfis encontrados, valide as evidências e abra uma pessoa para preparar uma abordagem personalizada." : andamento.contasEncontradas > 0 ? "Confira as empresas e use Ver pessoas para encontrar quem decide em cada uma." : "Revise os cargos, amplie a localização ou simplifique os critérios antes de tentar novamente."}
+                  {andamento.consultas?.some(c => c.estado === "pendente") ? "O ProspectHalo ainda está preparando candidatos. Use Consultar resultados pendentes para recuperar a mesma busca e confira os perfis já disponíveis." : andamento.leadsEncontrados > 0 || reencontrados.length > 0 ? "Confira os perfis encontrados, valide as evidências e abra uma pessoa para preparar uma abordagem personalizada." : andamento.prospeccao.modo === "empresa_unica" ? "Não foi possível confirmar novos vínculos profissionais com esta empresa. Confira as fontes ou ajuste os critérios antes de repetir." : andamento.contasEncontradas > 0 ? "Confira as empresas e use Ver pessoas para encontrar quem decide em cada uma." : "Revise os cargos, amplie a localização ou simplifique os critérios antes de tentar novamente."}
                 </p>
 
                 {andamento.prospeccao.modo === "empresas" && (
@@ -831,6 +841,7 @@ export function ProspeccaoAndamento({ prospeccaoId }: { prospeccaoId: string }) 
                     <ExploracaoEmpresa
                       conta={andamento.contas[0]}
                       leads={andamento.leads}
+                      reencontrados={reencontrados.length}
                       prospeccaoId={prospeccaoId}
                       icpPersonas={andamento.icpPersonas}
                       onLeadsAtualizados={(leads) => setAndamento((a) => (a ? { ...a, leads } : a))}

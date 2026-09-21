@@ -3,6 +3,7 @@ import { apagarConsultas, consultasDaProspeccao, decisoesDaPesquisa } from "./pe
 import { apagarCandidatosParciais, candidatosDaPesquisa, retirarCandidatoParcial } from "./pesquisa-parciais";
 import { perfilLinkedin } from "./perfil-linkedin";
 import { urlAvatarPublico } from "./avatar-pessoa";
+import { idsReencontrados, apagarReencontros } from "./pesquisa-reencontros";
 // Workspace de prospecção: tabelas próprias para produto, ICP, prospecção, conta,
 // lead e abordagem, no mesmo app.sqlite de lib/store.ts (ver abrirBanco()).
 // Cada entidade expõe criar/listar/obter/atualizar/apagar; nenhuma rota monta SQL.
@@ -289,7 +290,8 @@ export function atualizarProspeccao(id: string, dados: Partial<NovaProspeccao>, 
 }
 
 export function apagarProspeccao(id: string): void {
-  for (const lead of listarLeads(id)) apagarQualificacaoProfunda(lead.id);
+  for (const lead of listarLeads(id)) { apagarQualificacaoProfunda(lead.id); apagarReencontros(lead.id, true); }
+  apagarReencontros(id);
   apagarConsultas(id);
   apagarCandidatosParciais(id);
   banco().prepare("DELETE FROM abordagens WHERE lead_id IN (SELECT id FROM leads WHERE prospeccao_id = ?)").run(id);
@@ -319,6 +321,7 @@ export function obterAndamento(id: string) {
     icpPersonas: icp?.personas ?? [],
     contas,
     leads,
+    reencontrados: idsReencontrados(id).map(obterLead).filter((l): l is LeadProspeccao => !!l),
     candidatos: candidatosDaPesquisa(id).filter(c => !perfisComLead.has(c.url)),
     consultas: consultasDaProspeccao(id),
     decisoes: decisoesDaPesquisa(id),
@@ -478,6 +481,7 @@ export function atualizarLead(id: string, dados: Partial<NovoLeadProspeccao>, em
 }
 
 export function apagarLead(id: string): void {
+  apagarReencontros(id, true);
   apagarQualificacaoProfunda(id);
   banco().prepare("DELETE FROM abordagens WHERE lead_id = ?").run(id);
   banco().prepare("DELETE FROM leads WHERE id = ?").run(id);

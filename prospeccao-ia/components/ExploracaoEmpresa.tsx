@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { PainelLateral } from "@/components/PainelLateral";
 import { FichaLead } from "@/components/FichaLead";
+import { AvatarPessoa } from "@/components/AvatarPessoa";
 import { Aviso, Chip } from "@/components/ui";
 import { motivoPapel } from "@/lib/qualificacao";
 import { ROTULO_FIT, ROTULO_PAPEL } from "@/lib/rotulos";
@@ -20,12 +21,14 @@ const STATUS_JA_NA_PROSPECCAO = new Set(["selecionado", "qualificado", "abordado
 export function ExploracaoEmpresa({
   conta,
   leads,
+  reencontrados = 0,
   prospeccaoId,
   icpPersonas,
   onLeadsAtualizados,
 }: {
   conta: Conta;
   leads: LeadProspeccao[];
+  reencontrados?: number;
   prospeccaoId: string;
   icpPersonas: string[];
   onLeadsAtualizados: (leads: LeadProspeccao[]) => void;
@@ -115,7 +118,7 @@ export function ExploracaoEmpresa({
       <div className="card p-5 flex flex-col gap-3">
         <p className="font-semibold text-[14px]">Pessoas que vale conhecer</p>
         {leads.length === 0 ? (
-          <Aviso tom="warn">Não encontramos pessoas públicas ligadas a esta empresa.</Aviso>
+          <Aviso tom="warn">{reencontrados ? "Nenhum contato novo nesta busca. Os perfis já encontrados estão disponíveis nas fichas acima." : "Não foi possível confirmar pessoas com vínculo atual com esta empresa nas fontes consultadas."}</Aviso>
         ) : (
           <>
             <div className="flex flex-col gap-2.5">
@@ -133,6 +136,7 @@ export function ExploracaoEmpresa({
                       onChange={() => alternarSelecao(lead.id)}
                       aria-label={`Selecionar ${lead.nome}`}
                     />
+                    <AvatarPessoa nome={lead.nome} url={lead.avatarUrl} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold text-[14px]">{lead.nome}</p>

@@ -3,6 +3,7 @@ import { comPrazoIA } from "./ia-prazo";
 import { combinarResultados, type ResultadoBuscaWeb } from "./descoberta";
 import { registrarDecisao } from "./pesquisa-registro";
 import { perfilLinkedin } from "./perfil-linkedin";
+import { avaliarVinculoEmpresa } from "./vinculo-empresa";
 export { perfilLinkedin } from "./perfil-linkedin";
 
 export type RotaPesquisa = { id: string; nome: string; executar: (cargoAlternativo?: string) => Promise<ResultadoBuscaWeb[]> };
@@ -15,6 +16,7 @@ export function candidatosComContexto(itens: ResultadoBuscaWeb[], cargo?: string
     const partes = item.titulo.split("|")[0].split(/\s[-–]\s/);
     const papel = item.pessoa?.cargo || partes[1];
     const companhia = item.pessoa?.empresa || partes[2];
+    if (empresa) return avaliarVinculoEmpresa(item, empresa).estado === "confirmado";
     if (!papel || !companhia) return false;
     const contexto = normalizarPesquisa([item.titulo, item.resumo, item.conteudoPerfil].filter(Boolean).join(" "));
     const cargos = (cargo || "").split(/\s+(?:ou|or)\s+|;/i).map(normalizarPesquisa).filter(Boolean);
@@ -43,6 +45,7 @@ export async function pesquisarEmRodadas(opcoes: {
   rotas: RotaPesquisa[]; alvo: number; cargo?: string; empresa?: string; prospeccaoId: string;
   interrompida: () => boolean;
   aoEncontrar?: (itens: ResultadoBuscaWeb[]) => void;
+  prepararCandidatos?: (itens: ResultadoBuscaWeb[]) => Promise<ResultadoBuscaWeb[]>;
   refinar?: (restantes: RotaPesquisa[], encontrados: number) => Promise<{ ordem: string[]; cargos: string[] } | null>;
 }): Promise<ResultadoBuscaWeb[]> {
   const fila = [...opcoes.rotas];
@@ -69,9 +72,11 @@ export async function pesquisarEmRodadas(opcoes: {
     }
     itens = combinarResultados(lotes);
     if (opcoes.interrompida()) break;
+    if (opcoes.prepararCandidatos) itens = await opcoes.prepararCandidatos(itens);
+    if (opcoes.interrompida()) break;
     const completos = candidatosComContexto(itens, opcoes.cargo, opcoes.empresa);
     if (completos >= opcoes.alvo) {
-      registrarDecisao(opcoes.prospeccaoId, `Encontramos ${completos} candidatos com cargo e empresa. A descoberta parou para evitar consultas redundantes; as evidências ainda serão qualificadas.`);
+      registrarDecisao(opcoes.prospeccaoId, `Encontramos ${completos} candidatos ${opcoes.empresa ? `com vínculo com ${opcoes.empresa}` : "com cargo e empresa"}. A descoberta parou para evitar consultas redundantes; as evidências ainda serão qualificadas.`);
       break;
     }
     registrarDecisao(opcoes.prospeccaoId, `${itens.length} perfis únicos encontrados; ${completos} com contexto de cargo e empresa para a busca. ${fila.length ? "Vamos consultar outras fontes para completar a pesquisa." : "Vamos conferir as lacunas dos perfis disponíveis."}`);
@@ -96,6 +101,7 @@ export async function pesquisarEmRodadas(opcoes: {
         const encontrados = (await web.executar(cargo)).filter(i => perfilLinkedin(i.url));
         if (!opcoes.interrompida()) opcoes.aoEncontrar?.(encontrados);
         itens = combinarResultados([itens, encontrados]);
+        if (!opcoes.interrompida() && opcoes.prepararCandidatos) itens = await opcoes.prepararCandidatos(itens);
       } catch (e) { falha = e; }
       if (candidatosComContexto(itens, opcoes.cargo, opcoes.empresa) >= opcoes.alvo) break;
     }

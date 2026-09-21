@@ -6,11 +6,14 @@ import { buscarProspectHalo, prospectHaloAtivo, type CriteriosProspectHalo } fro
 import { pesquisarEmRodadas, refinarPlano, type RotaPesquisa } from "./pesquisa-adaptativa";
 import { completarPerfis } from "./pesquisa-perfis";
 import { obterProspeccao } from "./workspace";
-import { registrarCandidatosParciais } from "./pesquisa-parciais";
+import { registrarCandidatosParciais, retirarCandidatoParcial } from "./pesquisa-parciais";
+import { registrarDecisao } from "./pesquisa-registro";
+import { consultaPessoas } from "./consulta-pessoas";
+import { avaliarVinculoEmpresa, ordenarParaEmpresa, preencherCabecalhoConfirmado } from "./vinculo-empresa";
 
 /** Agente de busca: descoberta em rodadas, replanejamento por lacunas e verificação limitada de perfis. */
 export async function pesquisarPessoas(c: CriteriosProspectHalo, prospeccaoId: string): Promise<RespostaBusca> {
-  const consulta = (alternativo?: string) => ["site:linkedin.com/in", alternativo ? `(${c.cargo || ""} OR ${alternativo})` : c.cargo, c.empresa && `"${c.empresa}"`, c.segmento, c.localizacao].filter(Boolean).join(" ");
+  const consulta = (alternativo?: string) => consultaPessoas(c, "web", alternativo);
   if (!descobertaAtiva() && !prospectHaloAtivo()) return buscarNaWeb(consulta(), 0, prospeccaoId);
   const vinculada = !!obterProspeccao(prospeccaoId);
   const cancelada = () => vinculada && obterProspeccao(prospeccaoId)?.estado !== "executando";
@@ -27,16 +30,61 @@ export async function pesquisarPessoas(c: CriteriosProspectHalo, prospeccaoId: s
     id: "brightdata_dataset", nome: "Bright Data · base de perfis", executar: async () => (await buscarPessoasAvancada(consulta(), { cargo: c.cargo, empresa: c.empresa, setor: c.segmento, localizacao: c.localizacao }, prospeccaoId, true)).itens,
   });
   for (const fonte of fontesOpcionais()) rotas.push({ id: fonte, nome: FONTES[fonte], executar: async alternativo => {
-    const itens = await executarAcaoPesquisa(`${fonte}_search`, { consulta: consulta(alternativo), categoria: "people" }, prospeccaoId) as ResultadoBuscaWeb[];
+    const itens = await executarAcaoPesquisa(`${fonte}_search`, { consulta: fonte === "exa" ? consultaPessoas(c, "semantica", alternativo) : consulta(alternativo), categoria: "people" }, prospeccaoId) as ResultadoBuscaWeb[];
     return itens.map(i => ({ ...i, fontes: [fonte] }));
   } });
   if (brightDataAtiva()) rotas.splice(Math.min(2, rotas.length), 0, { id: "brightdata_web", nome: "Bright Data · busca web", executar: async alternativo => resultadosOrganicos(await executarAcaoPesquisa("search_engine", { query: consulta(alternativo), engine: "google" }, prospeccaoId)).map(i => ({ ...i, fontes: ["brightdata"] })) });
+  // A busca geral indexada complementa o índice people, mantendo a empresa obrigatória.
+  if (c.empresa && fontesOpcionais().includes("exa")) rotas.unshift({ id: "exa_web", nome: "Exa · perfis da empresa na web", executar: async () =>
+    (await executarAcaoPesquisa("exa_search", { consulta: consulta() }, prospeccaoId) as ResultadoBuscaWeb[]).map(i => ({ ...i, fontes: ["exa"] })),
+  });
+  if (c.empresa) {
+    const fonte = brightDataAtiva() ? "brightdata" : fontesOpcionais().find(f => f === "searchapi") || fontesOpcionais()[0];
+    if (fonte) rotas.push({ id: "empresa_sem_cargo", nome: "Pesquisa pelo vínculo com a empresa", executar: async () => {
+      const query = consultaPessoas(c, "web", undefined, true);
+      const itens = fonte === "brightdata" ? resultadosOrganicos(await executarAcaoPesquisa("search_engine", { query, engine: "google" }, prospeccaoId))
+        : await executarAcaoPesquisa(`${fonte}_search`, { consulta: query }, prospeccaoId) as ResultadoBuscaWeb[];
+      return itens.map(i => ({ ...i, fontes: [fonte] }));
+    } });
+  }
   const alvo = Math.max(1, Math.min(25, c.quantidade ?? 10));
+  const publicar = (encontrados: ResultadoBuscaWeb[]) => {
+    if (!vinculada || cancelada()) return;
+    registrarCandidatosParciais(prospeccaoId, c.empresa ? ordenarParaEmpresa(encontrados, c.empresa) : encontrados);
+  };
+  const atualizar = (item: ResultadoBuscaWeb, fase: "verificando" | "analisando") => {
+    if (!vinculada || cancelada()) return;
+    if (c.empresa && avaliarVinculoEmpresa(item, c.empresa).estado === "divergente") retirarCandidatoParcial(prospeccaoId, item.url);
+    else registrarCandidatosParciais(prospeccaoId, [item], fase);
+  };
+  let verificados = 0;
+  const tentados = new Set<string>();
+  const inicio = Date.now();
+  const verificarEmpresa = async (encontrados: ResultadoBuscaWeb[]) => {
+    const candidatos = ordenarParaEmpresa(encontrados, c.empresa!);
+    for (const item of candidatos) preencherCabecalhoConfirmado(item, c.empresa!);
+    const restantes = candidatos.filter(i => !i.perfilPesquisado && !tentados.has(i.url));
+    while (restantes.length && verificados < Math.min(25, alvo * 3) && Date.now() - inicio < 300000 && !cancelada()) {
+      const confirmados = candidatos.filter(i => (i.perfilPesquisado || tentados.has(i.url)) && avaliarVinculoEmpresa(i, c.empresa!).estado === "confirmado").length;
+      if (confirmados >= alvo) break;
+      const lote = restantes.splice(0, Math.min(2, alvo - confirmados));
+      for (const item of lote) tentados.add(item.url);
+      verificados += lote.length;
+      await completarPerfis(lote, prospeccaoId, acoes, cancelada, atualizar);
+    }
+    const pertinentes = candidatos.filter(i => avaliarVinculoEmpresa(i, c.empresa!).estado !== "divergente");
+    registrarDecisao(prospeccaoId, `${pertinentes.filter(i => avaliarVinculoEmpresa(i, c.empresa!).estado === "confirmado").length} perfis com vínculo confirmado com ${c.empresa}. Perfis de outras empresas não entram na lista.`);
+    return pertinentes;
+  };
   const itens = await pesquisarEmRodadas({ rotas, alvo, cargo: c.cargo, empresa: c.empresa, prospeccaoId, interrompida: cancelada,
-    aoEncontrar: encontrados => { if (vinculada) registrarCandidatosParciais(prospeccaoId, encontrados); },
+    aoEncontrar: publicar,
+    prepararCandidatos: c.empresa ? verificarEmpresa : undefined,
     refinar: (restantes, encontrados) => refinarPlano({ ...c }, restantes, encontrados),
   });
-  if (!cancelada()) await completarPerfis(itens.slice(0, alvo), prospeccaoId, acoes, cancelada,
-    (item, fase) => { if (vinculada) registrarCandidatosParciais(prospeccaoId, [item], fase); });
-  return { itens, origem: [...new Set(itens.flatMap(i => i.fontes ?? []))].join(" · "), consultadoEm: new Date().toISOString(), demo: false };
+  if (!cancelada() && !c.empresa) await completarPerfis(itens.slice(0, alvo), prospeccaoId, acoes, cancelada, atualizar);
+  const selecionados = c.empresa ? itens.filter(i => avaliarVinculoEmpresa(i, c.empresa!).estado === "confirmado").slice(0, alvo) : itens;
+  for (const item of selecionados) {
+    if (c.empresa) preencherCabecalhoConfirmado(item, c.empresa);
+  }
+  return { itens: selecionados, origem: [...new Set(selecionados.flatMap(i => i.fontes ?? []))].join(" · "), consultadoEm: new Date().toISOString(), demo: false };
 }

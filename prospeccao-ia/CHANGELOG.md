@@ -1,5 +1,15 @@
 # Notas de versão
 
+## 0.6.1 — 2026-09-21
+
+- Pesquisa por empresa exige evidência de vínculo antes de salvar a pessoa. Resultados de outras empresas não preenchem vagas, e a empresa procurada não é copiada como evidência. A conferência ocorre entre rodadas, permitindo recuperar perfis pertinentes após resultados irrelevantes.
+- Consultas distinguem busca web e Exa People; cargos padrão de descoberta e uma alternativa focada só na empresa recuperam a cobertura da exploração sem personas.
+- Leitura atual de perfil prevalece sobre títulos antigos. Respostas estruturadas longas da Bright Data permanecem como JSON válido; cache legado truncado é refeito. Leituras Exa/Tavily exigem o mesmo endereço de LinkedIn solicitado.
+- Pesquisas repetidas mostram contatos já encontrados com acesso à ficha existente, sem duplicar ou alterar a seleção anterior. Variantes regionais e de idioma do LinkedIn são unificadas.
+- A lista de pessoas da empresa mostra avatar público ou iniciais.
+
+Validação: 125 testes automatizados com fornecedores simulados, build de produção, lint sem erros, verificadores da suíte e navegador em desktop/celular. Diagnóstico e limites em `../tasks/prospeccao-ia-regressao-empresa.md`.
+
 ## 0.6.0 — 2026-09-21
 
 - Resultados parciais aparecem durante a prospecção. Na descoberta B2B, cada fonte publica seus candidatos assim que responde, sem aguardar a outra consulta paralela ou o enriquecimento de todos os perfis.
