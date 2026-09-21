@@ -164,6 +164,12 @@ services:
     ports: ["3022:10000"]
     volumes: [predictive-harness-dados:/app/data]
 
+  precificador:
+    build: ./precificador
+    image: ghcr.io/startse/precificador:latest
+    ports: ["3023:10000"]
+    volumes: [precificador-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -187,3 +193,4 @@ volumes:
   daily-second-brain-dados:
   mapify-dados:
   predictive-harness-dados:
+  precificador-dados:

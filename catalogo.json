@@ -502,6 +502,27 @@
       "discoGuarda": "planilhas, conversas, decisões do harness, conta e credenciais",
       "versao": "0.1.0",
       "aposPublicar": "Crie sua conta, explore a planilha de exemplo e abra Configurações para conectar o ChatGPT e o OpenRouter (o Jev vive nele). Depois envie uma planilha CSV ou JSON e pergunte."
+    },
+    {
+      "id": "precificador",
+      "nome": "Precificador",
+      "areas": [
+        "Financeiro"
+      ],
+      "problema": "O dono do negócio desconfia que está cobrando errado e não sabe em qual item está perdendo dinheiro.",
+      "ia": "Conversa para montar o negócio, lê o corredor de preço de cada item e responde sobre a carteira consultando os números de verdade.",
+      "integracoes": "IA (OpenRouter); avisos por e-mail ou Slack são opcionais.",
+      "acento": "#0d7754",
+      "porta": 3023,
+      "captura": "capturas/precificador.png",
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "formulario",
+        "rotina"
+      ],
+      "independente": true,
+      "demo": null
     }
   ]
 }
