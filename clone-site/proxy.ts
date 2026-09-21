@@ -2,6 +2,11 @@
 // (`/f/**`, `/api/f/**`, dado sensível servido por token); (2) exige a sessão da conta
 // administrativa em toda tela/rota fora da lista pública abaixo. Copie sem alterar ao replicar.
 //
+// DIVERGÊNCIA DE PROPÓSITO DESTE APP (registrada em scripts/padrao-excecoes.json): domínio personalizado.
+// Quando o Host da requisição é o domínio cadastrado em um site (lib/projetos.ts:projetoDoDominio), a instância
+// serve a versão publicada dele na raiz — qualquer caminho fora de /_next/ e /s/ é reescrito para /s/<projetoId>,
+// sem exigir sessão (é o site público da empresa, não o app). O restante do arquivo é idêntico ao do pdi-time.
+//
 // Cada rota pública tem seu próprio mecanismo de autenticação — nenhuma delas depende do
 // cookie de sessão:
 // - `/f/*`, `/api/f/*`            formulário público por link (o token já está na própria URL)
@@ -31,6 +36,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { existeConta, sessaoAtual } from "@/lib/conta";
+import { projetoDoDominio } from "@/lib/projetos";
 
 function rotaPublica(pathname: string, metodo: string): boolean {
   if (pathname === "/mcp") return metodo === "POST";
@@ -53,6 +59,23 @@ function rotaPublica(pathname: string, metodo: string): boolean {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Domínio personalizado: o Host é de um site → a raiz (e qualquer outro caminho) vira a versão publicada dele.
+  if (!pathname.startsWith("/_next/") && !pathname.startsWith("/s/")) {
+    let projetoId: string | null = null;
+    try {
+      projetoId = projetoDoDominio(request.headers.get("x-forwarded-host") ?? request.headers.get("host"));
+    } catch (err) {
+      console.error("Falha ao resolver o domínio personalizado", err);
+    }
+    if (projetoId) {
+      const destino = request.nextUrl.clone();
+      destino.pathname = `/s/${projetoId}`;
+      destino.search = "";
+      return NextResponse.rewrite(destino);
+    }
+  }
+
   const semCache = pathname.startsWith("/f/") || pathname.startsWith("/api/f/");
 
   function permitir() {

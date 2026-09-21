@@ -3,3 +3,4 @@
 // e mantém o caminho fora dos componentes varridos por scripts/verificar-jargao.mjs.
 export const ACAO_CONECTAR_IA = { rotulo: "Conectar a IA", url: "/setup#ia" };
 export const ACAO_CONECTAR_OPENROUTER = { rotulo: "Conectar o OpenRouter", url: "/setup#openrouter" };
+export const ACAO_CONECTAR_HOSPEDAGEM = { rotulo: "Conectar a hospedagem", url: "/setup#render" };

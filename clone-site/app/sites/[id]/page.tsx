@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { Aviso, ErrorBox, Loading, Origem, lerErro } from "@/components/ui";
 import { ChatAgente } from "@/components/ChatAgente";
 import { ChipEstado, INTERVALO_ACOMPANHAMENTO_MS, TempoGerando } from "@/components/MeusSites";
+import { PainelDominio } from "@/components/PainelDominio";
 import { PainelImagens } from "@/components/PainelImagens";
 import { PainelMetricas } from "@/components/PainelMetricas";
 import { PreviaPagina } from "@/components/PreviaPagina";
@@ -179,6 +180,7 @@ export default function Page() {
                   <PainelVersoes projeto={p} pagina={pagina} selecionada={versaoSelecionada.n} aoSelecionar={setSelecionada} aoAtualizar={aoAtualizar} />
                   <PainelImagens projetoId={p.id} />
                   <PainelMetricas projetoId={p.id} publicado={p.estado === "pronto"} versaoAtual={ultima.n} aoAplicar={(instrucao) => setPedidoExterno({ texto: instrucao, chave: Date.now() })} />
+                  <PainelDominio projeto={p} aoAtualizar={(novo) => aoAtualizar({ projeto: novo })} />
                 </aside>
               </div>
             )}

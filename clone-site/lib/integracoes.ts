@@ -2,6 +2,7 @@
 // A IA é obrigatória (lê a captura e escreve a página); o serviço de captura é opcional e só serve para
 // quem prefere colar o endereço do site em vez de enviar a imagem.
 import { CHAVE_CAPTURA, urlDoServico } from "./captura";
+import { CHAVE_RENDER, CHAVE_SERVICO_RENDER, testarRender } from "./render";
 import { openrouter, type Integracao } from "./setup-comum";
 
 // O modelo que lê a captura decide a fidelidade da página, então não fica escondido no cartão genérico da
@@ -40,4 +41,20 @@ const CAPTURA: Integracao = {
   },
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, CAPTURA];
+// Opcional: com a chave da hospedagem, o app cadastra sozinho o domínio próprio de cada site no serviço do Render
+// (painel "Domínio próprio" do workspace); sem ela, a tela dá o passo a passo manual.
+const RENDER: Integracao = {
+  id: "render",
+  titulo: "Hospedagem (Render)",
+  descricao: "Com a chave da sua conta no Render e o identificador deste serviço, o app cadastra o domínio próprio de cada site sozinho, sem você abrir o painel da hospedagem.",
+  beneficio: "Cadastra o domínio do site na hospedagem sozinho",
+  obrigatoria: false,
+  link: { url: "https://dashboard.render.com/u/settings#api-keys", rotulo: "Criar uma chave no Render" },
+  campos: [
+    { chave: CHAVE_RENDER, rotulo: "Chave da conta", tipo: "secret", placeholder: "rnd_...", ajuda: "Em Account Settings, API Keys." },
+    { chave: CHAVE_SERVICO_RENDER, rotulo: "Identificador deste serviço", tipo: "text", placeholder: "srv-...", ajuda: "Começa com srv-; está no endereço do serviço no painel do Render." },
+  ],
+  testar: testarRender,
+};
+
+export const INTEGRACOES: Integracao[] = [OPENROUTER, CAPTURA, RENDER];

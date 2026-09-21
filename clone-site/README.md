@@ -76,6 +76,15 @@ Cada site aceita um logo e até 12 imagens (PNG, JPG, WEBP ou SVG sem script; at
 
 Importante: a lista de origens da CSP de `/s/` (`lib/publicacao.ts`, `img-src 'self' data: https:`) e o que `sanitizarHtml` deixa passar andam juntas — ao liberar qualquer origem nova no sanitizador, atualize a CSP.
 
+## Domínio personalizado
+Cada site pode ter um domínio próprio (`www.minhaempresa.com.br`), no painel "Domínio próprio" do workspace (`PUT|GET|DELETE /api/sites/<id>/dominio`, `lib/projetos.ts:definirDominio`). A estratégia é **uma instância servindo vários sites**: quando o `Host` da requisição é o domínio cadastrado em um site, `proxy.ts` (divergência registrada em `scripts/padrao-excecoes.json`) reescreve a raiz — e qualquer caminho fora de `/_next/` e `/s/` — para `/s/<projetoId>`, sem exigir sessão. Os assets continuam em `/s/<projetoId>/a/<assetId>`, que já é público, então a mesma página funciona no link do app e no domínio.
+
+Do lado da hospedagem, o Render precisa saber que o domínio pertence a este serviço (Settings › Custom Domains; domínio próprio exige um plano pago do serviço) e o provedor do domínio precisa de um `CNAME` de `www` apontando para `<seu-app>.onrender.com`. Com a integração opcional **"Hospedagem (Render)"** conectada em `/setup#render` (`RENDER_API_KEY` e `RENDER_SERVICE_ID`, `lib/render.ts`), o app cadastra o domínio no serviço sozinho ao salvar (`POST /v1/services/{id}/custom-domains`) e mostra o estado da verificação; sem ela, a tela dá o passo a passo manual. A verificação e o certificado levam de minutos a 1 hora; o link `/s/<slug>` continua funcionando enquanto isso.
+
+Alternativa não implementada: **uma instância por site** — subir outra cópia da imagem (`docker run ... ghcr.io/startse/clone-site:latest`) com `APP_URL` no domínio da empresa. Funciona, mas multiplica instâncias e contas; a rota pelo `Host` cobre o caso comum.
+
+Teste local: `curl -H "Host: www.meusite.exemplo.com" http://127.0.0.1:3000/` devolve o HTML publicado do site com esse domínio; outro `Host` continua redirecionando a raiz para `/entrar`.
+
 ## Edições por instrução e versões
 Abaixo da prévia, o campo "O que mudar" envia a instrução (e o HTML que a tela está mostrando) em `POST /api/pagina/<id>/editar`. `lib/gerador.ts:editarPagina` usa o prompt de atualização do screenshot-to-code (devolver o arquivo inteiro mudando só o que foi pedido), passa a resposta pela mesma extração e sanitização da geração e grava uma `Versao` nova na página; a prévia mostra sempre a última versão. O botão "Trocar os textos pelos da minha empresa" abre o campo "O que a empresa faz" e envia `{ empresa }`: o servidor monta a instrução pré-pronta (`instrucaoTrocarTextos`) e grava na versão só o rótulo curto "Textos trocados pelos da empresa: ...".
 

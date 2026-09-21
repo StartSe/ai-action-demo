@@ -32,6 +32,7 @@
     "app/api/status/route.ts": "Status da IA selecionada, sugestão única de conexão e visibilidade dos exemplos respeitam a conta e a limpeza dos dados de teste."
   },
   "clone-site": {
-    "app/api/status/route.ts": "Motor de IA escolhido entre OpenRouter (chave) e ChatGPT (assinatura pelo Codex App Server) em /setup#ia: ai/demo seguem lib/motor.ts:iaDisponivel() (async), integrations.chatgpt informa a conta conectada e o OpenRouter deixa de ser próximo passo obrigatório quando o ChatGPT responde (a leitura de captura continua só pelo OpenRouter, ver vision). Precedente: radar-sinais."
+    "app/api/status/route.ts": "Motor de IA escolhido entre OpenRouter (chave) e ChatGPT (assinatura pelo Codex App Server) em /setup#ia: ai/demo seguem lib/motor.ts:iaDisponivel() (async), integrations.chatgpt informa a conta conectada e o OpenRouter deixa de ser próximo passo obrigatório quando o ChatGPT responde (a leitura de captura continua só pelo OpenRouter, ver vision). Precedente: radar-sinais.",
+    "proxy.ts": "Domínio personalizado: quando o Host da requisição é o domínio cadastrado em um site (lib/projetos.ts:projetoDoDominio, cache de 60 s), a instância serve a versão publicada dele na raiz — qualquer caminho fora de /_next/ e /s/ é reescrito para /s/<projetoId>, sem sessão (é o site público da empresa). O restante do arquivo é idêntico ao pdi-time. Estratégia registrada em tasks/prd-clone-site-agente-sites.md (P5)."
   }
 }

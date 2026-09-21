@@ -151,7 +151,7 @@
         "Verificação: curl -H \"Host: meusite.exemplo.com\" devolve o HTML publicado; outro Host continua redirecionando a raiz para /entrar; verificar-padrao.sh sai 0 com a exceção aceita"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "US-009 da PRD."
     },
     {

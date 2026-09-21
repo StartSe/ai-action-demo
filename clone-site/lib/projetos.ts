@@ -233,6 +233,54 @@ export function definirSlug(id: string, slug: unknown): Projeto {
   return obterOuFalhar(id);
 }
 
+// ---------------------------------------------------------------------------------------------------------
+// Domínio personalizado: quando o Host da requisição é o domínio de um projeto, proxy.ts serve a versão
+// publicada dele na raiz. Cache de 60 s para não consultar o banco a cada asset.
+// ---------------------------------------------------------------------------------------------------------
+
+const DOMINIO_VALIDO = /^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/;
+// Curto de propósito: o proxy (bundle do middleware) e as rotas são módulos separados no Next, então o cache de um não é
+// invalidado pelo outro — 5 s é o atraso máximo entre salvar o domínio e ele responder, e ainda poupa o banco a cada asset.
+const CACHE_DOMINIO_MS = 5_000;
+let cacheDominios: { at: number; mapa: Map<string, string> } | null = null;
+
+/** "https://WWW.Minha-Empresa.com.br/" → "www.minha-empresa.com.br"; lança ErroDePedido quando não é um domínio. */
+export function normalizarDominio(bruto: unknown): string {
+  let texto = typeof bruto === "string" ? bruto.trim().toLowerCase() : "";
+  texto = texto.replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/:\d+$/, "").replace(/\.$/, "");
+  if (!DOMINIO_VALIDO.test(texto)) throw new ErroDePedido("Informe um domínio válido, como www.minhaempresa.com.br (sem https:// e sem barras).");
+  return texto;
+}
+
+/** Grava (ou remove, com null) o domínio próprio do site; único entre os projetos. */
+export function definirDominio(id: string, dominio: unknown): Projeto {
+  obterOuFalhar(id);
+  if (dominio === null || dominio === "" || dominio === undefined) {
+    db().prepare("UPDATE projetos SET dominio = NULL, atualizadoEm = ? WHERE id = ?").run(agora(), id);
+  } else {
+    const limpo = normalizarDominio(dominio);
+    const dono = db().prepare("SELECT id FROM projetos WHERE dominio = ? AND id != ?").get(limpo, id) as { id: string } | undefined;
+    if (dono) throw new ErroDePedido("Esse domínio já está em uso por outro site desta instalação.");
+    db().prepare("UPDATE projetos SET dominio = ?, atualizadoEm = ? WHERE id = ?").run(limpo, agora(), id);
+  }
+  cacheDominios = null;
+  return obterOuFalhar(id);
+}
+
+/** O id do projeto dono do Host (sem porta; aceita com e sem "www."), ou null. Cache de 60 s em memória. */
+export function projetoDoDominio(hostBruto: string | null | undefined): string | null {
+  if (!hostBruto) return null;
+  const host = hostBruto.toLowerCase().split(":")[0].replace(/\.$/, "");
+  if (!host.includes(".") || /^(localhost|\d+\.\d+\.\d+\.\d+)$/.test(host)) return null;
+  if (!cacheDominios || Date.now() - cacheDominios.at > CACHE_DOMINIO_MS) {
+    const linhas = db().prepare("SELECT id, dominio FROM projetos WHERE dominio IS NOT NULL").all() as { id: string; dominio: string }[];
+    cacheDominios = { at: Date.now(), mapa: new Map(linhas.map((l) => [l.dominio, l.id])) };
+  }
+  const mapa = cacheDominios.mapa;
+  const semWww = host.replace(/^www\./, "");
+  return mapa.get(host) ?? mapa.get(semWww) ?? mapa.get(`www.${semWww}`) ?? null;
+}
+
 /** Campos do pedido que só podem mudar antes de gerar (ou depois de uma falha). */
 export function editarPedido(id: string, dados: { marca?: unknown; instrucoes?: unknown; briefing?: unknown; stack?: unknown }): Projeto {
   const p = obterOuFalhar(id);
