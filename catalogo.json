@@ -267,7 +267,7 @@
         "formulario"
       ],
       "demo": null,
-      "versao": "0.3.0",
+      "versao": "0.3.1",
       "persistencia": {
         "plano": "0.5c-512mb",
         "discoGB": 1,

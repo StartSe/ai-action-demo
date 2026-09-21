@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QUESTIONARIO_MODELO } from "@/lib/modelo";
 import type { ContextoAssessment, Questionario } from "@/lib/types";
 import type { Meta } from "@/lib/ai";
@@ -8,6 +8,7 @@ import { EditorPerguntas } from "@/components/EditorPerguntas";
 import { DialogoLinkAvaliacao } from "@/components/DialogoLinkAvaliacao";
 import { Icone } from "./Icone";
 import { requisitar } from "@/lib/http-cliente";
+import { ProgressoOperacao } from "./ProgressoOperacao";
 const objetivos = [
   "Ganhar eficiência",
   "Criar novos produtos",
@@ -15,6 +16,27 @@ const objetivos = [
   "Escalar o uso de IA",
 ];
 type Salvo = { id: string; titulo: string };
+type Operacao = "gerar" | "abrir" | "salvar";
+const operacoes = {
+  gerar: {
+    titulo: "Construindo seu questionário",
+    descricao:
+      "Aguardando as perguntas do Arquiteto. Os campos ficam bloqueados durante a espera; você poderá revisar tudo em seguida.",
+    falha: "Não foi possível construir o questionário.",
+  },
+  abrir: {
+    titulo: "Abrindo questionário da biblioteca",
+    descricao:
+      "Aguarde o carregamento das perguntas. Seu contexto será mantido.",
+    falha: "Não foi possível abrir o questionário.",
+  },
+  salvar: {
+    titulo: "Salvando questionário",
+    descricao:
+      "Aguarde a confirmação antes de continuar editando ou criar o link.",
+    falha: "Não foi possível confirmar o salvamento.",
+  },
+};
 export function Oficina({
   ai,
   aoPublicar,
@@ -35,7 +57,10 @@ export function Oficina({
     structuredClone(QUESTIONARIO_MODELO),
   );
   const [fase, setFase] = useState<"contexto" | "revisao">("contexto");
-  const [ocupado, setOcupado] = useState(false);
+  const [operacao, setOperacao] = useState<Operacao | null>(null);
+  const ocupado = operacao !== null;
+  const pedido = useRef<AbortController | null>(null);
+  const feedbackRef = useRef<HTMLDivElement>(null);
   const [erro, setErro] = useState("");
   const [aviso, setAviso] = useState("");
   const [origem, setOrigem] = useState<"ia" | "modelo" | "salvo">("modelo");
@@ -45,22 +70,76 @@ export function Oficina({
   const [salvos, setSalvos] = useState<Salvo[]>([]);
   const [discoEfemero, setDiscoEfemero] = useState(false);
   useEffect(() => {
-    requisitar<{ itens: Salvo[] }>("/api/bussola/questionarios")
+    const controlador = new AbortController();
+    const signal = AbortSignal.any([
+      controlador.signal,
+      AbortSignal.timeout(15_000),
+    ]);
+    requisitar<{ itens: Salvo[] }>("/api/bussola/questionarios", { signal })
       .then((d) => setSalvos(d.itens))
       .catch(() => {});
-    requisitar<{ discoEfemero: boolean }>("/api/bussola/link")
+    requisitar<{ discoEfemero: boolean }>("/api/bussola/link", { signal })
       .then((d) => setDiscoEfemero(d.discoEfemero))
       .catch(() => {});
+    return () => {
+      controlador.abort();
+      pedido.current?.abort();
+    };
   }, []);
+  useEffect(() => {
+    if ((erro || aviso) && feedbackRef.current?.getClientRects().length) {
+      feedbackRef.current.focus();
+    }
+  }, [erro, aviso]);
   const campo = <K extends keyof ContextoAssessment>(
     k: K,
     v: ContextoAssessment[K],
   ) => setContexto((c) => ({ ...c, [k]: v }));
-  async function gerar(comIA: boolean) {
+  function editarQuestionario(novo: Questionario) {
+    setQ(novo);
+    setAviso("");
+  }
+  async function executar(
+    tipo: Operacao,
+    tarefa: (signal: AbortSignal) => Promise<void>,
+  ) {
+    if (pedido.current) return;
+    const controlador = new AbortController();
+    pedido.current = controlador;
     setErro("");
     setAviso("");
-    setOcupado(true);
+    setOperacao(tipo);
+    // A geração pode incluir duas chamadas de até 180 s; as operações locais têm prazo menor.
+    const signal = AbortSignal.any([
+      controlador.signal,
+      AbortSignal.timeout(tipo === "gerar" ? 390_000 : 30_000),
+    ]);
     try {
+      await tarefa(signal);
+    } catch (e) {
+      if (!controlador.signal.aborted) {
+        setErro(
+          `${operacoes[tipo].falha} ${(e as Error).message} Seu preenchimento foi mantido.`,
+        );
+      }
+    } finally {
+      if (pedido.current === controlador) {
+        pedido.current = null;
+        setOperacao(null);
+      }
+    }
+  }
+  function cancelarEspera() {
+    pedido.current?.abort();
+    pedido.current = null;
+    setOperacao(null);
+    setAviso(
+      "Espera cancelada. Seu contexto foi mantido e a resposta desta tentativa será ignorada. Você pode ajustar os campos ou usar o questionário modelo.",
+    );
+  }
+  async function gerar(comIA: boolean) {
+    if (pedido.current) return;
+    await executar("gerar", async (signal) => {
       if (comIA) {
         const d = await requisitar<{ questionario: Questionario; meta: Meta }>(
           "/api/bussola/questionario",
@@ -68,66 +147,71 @@ export function Oficina({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(contexto),
+            signal,
           },
         );
         setQ(d.questionario);
         setOrigem(d.meta.demo ? "modelo" : "ia");
+        setAviso(
+          d.meta.demo
+            ? "Questionário pronto a partir do modelo, sem geração por IA. Revise as perguntas antes de criar o link."
+            : "Questionário criado com IA. Revise as perguntas e, quando estiver pronto, crie o link para o grupo.",
+        );
       } else {
         setQ(structuredClone(QUESTIONARIO_MODELO));
         setOrigem("modelo");
+        setAviso(
+          "Questionário modelo pronto para revisão. Ajuste as perguntas ao seu grupo antes de criar o link.",
+        );
       }
       setFase("revisao");
       setDim(0);
-    } catch (e) {
-      setErro((e as Error).message);
-    } finally {
-      setOcupado(false);
-    }
+    });
   }
   async function salvar() {
+    if (pedido.current) return;
+    setAviso("");
     if (!validarQuestionario(q)) {
       setErro("Revise o título, as dimensões e as perguntas antes de salvar.");
       return;
     }
-    setOcupado(true);
-    setErro("");
-    try {
-      await requisitar("/api/bussola/questionarios", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ titulo: q.titulo, questionario: q }),
-      });
-      const d = await requisitar<{ itens: Salvo[] }>(
+    await executar("salvar", async (signal) => {
+      const salvo = await requisitar<{ id: string }>(
         "/api/bussola/questionarios",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ titulo: q.titulo, questionario: q }),
+          signal,
+        },
       );
-      setSalvos(d.itens);
+      setSalvos((itens) => [
+        { id: salvo.id, titulo: q.titulo.trim() },
+        ...itens.filter((item) => item.id !== salvo.id),
+      ]);
       setAviso("Questionário salvo na biblioteca.");
-    } catch (e) {
-      setErro((e as Error).message);
-    } finally {
-      setOcupado(false);
-    }
+    });
   }
   async function abrir(id: string) {
     if (!id) return;
-    setErro("");
-    setOcupado(true);
-    try {
+    await executar("abrir", async (signal) => {
       const d = await requisitar<{ questionario: Questionario }>(
         `/api/bussola/questionarios/${id}`,
+        { signal },
       );
       setQ(d.questionario);
       setOrigem("salvo");
       setFase("revisao");
       setDim(0);
-    } catch (e) {
-      setErro((e as Error).message);
-    } finally {
-      setOcupado(false);
-    }
+      setAviso(
+        "Questionário da biblioteca aberto. Revise as perguntas para este grupo antes de criar o link.",
+      );
+    });
   }
   function publicar() {
+    if (pedido.current) return;
     setErro("");
+    setAviso("");
     if (!validarQuestionario(q)) {
       setErro(
         "Há perguntas incompletas ou dimensões inválidas. Revise o questionário.",
@@ -142,17 +226,26 @@ export function Oficina({
   const minutos = Math.max(2, Math.ceil((q.perguntas.length * 15) / 60));
   return (
     <div className="workshop">
-      <div className="workshop-steps">
-        <span className={fase === "contexto" ? "active" : "done"}>
+      <div className="workshop-steps" aria-label="Etapas da criação">
+        <span
+          className={fase === "contexto" ? "active" : "done"}
+          aria-current={fase === "contexto" ? "step" : undefined}
+        >
           <b>{fase === "revisao" ? <Icone nome="check" size={14} /> : "01"}</b>
           Contexto do grupo
         </span>
         <i />
-        <span className={fase === "revisao" ? "active" : ""}>
+        <span
+          className={dialogo ? "done" : fase === "revisao" ? "active" : ""}
+          aria-current={fase === "revisao" && !dialogo ? "step" : undefined}
+        >
           <b>02</b>Construção e revisão
         </span>
         <i />
-        <span>
+        <span
+          className={dialogo ? "active" : ""}
+          aria-current={dialogo ? "step" : undefined}
+        >
           <b>03</b>Convidar o grupo
         </span>
       </div>
@@ -172,18 +265,49 @@ export function Oficina({
               </h2>
             </div>
             <span className="status-tag">
-              {fase === "contexto" ? "Rascunho" : "Revisão"}
+              {operacao === "gerar"
+                ? "Em construção"
+                : operacao === "abrir"
+                  ? "Carregando"
+                  : operacao === "salvar"
+                    ? "Salvando"
+                    : fase === "contexto"
+                      ? "Rascunho"
+                      : "Revisão"}
             </span>
           </div>
-          {erro && (
-            <div className="obs-alert error" role="alert">
-              {erro}
+          {(erro || aviso) && (
+            <div
+              className={`workshop-feedback ${erro ? "error" : "success"}`}
+              ref={feedbackRef}
+              tabIndex={-1}
+            >
+              <Icone nome={erro ? "refresh" : "check"} size={20} />
+              <div role={erro ? "alert" : "status"} aria-atomic="true">
+                <strong>
+                  {erro
+                    ? "Vamos tentar de novo?"
+                    : fase === "revisao"
+                      ? "Tudo pronto para o próximo passo"
+                      : "Você pode continuar"}
+                </strong>
+                <p>{erro || aviso}</p>
+                {erro && fase === "contexto" && (
+                  <p>
+                    Tente novamente abaixo ou continue com o questionário
+                    modelo.
+                  </p>
+                )}
+              </div>
             </div>
           )}
-          {aviso && (
-            <div className="obs-alert" role="status">
-              {aviso}
-            </div>
+          {operacao && (
+            <ProgressoOperacao
+              key={operacao}
+              titulo={operacoes[operacao].titulo}
+              descricao={operacoes[operacao].descricao}
+              aoCancelar={operacao === "gerar" ? cancelarEspera : undefined}
+            />
           )}
           {fase === "contexto" ? (
             <form
@@ -192,186 +316,205 @@ export function Oficina({
                 void gerar(true);
               }}
             >
-              <fieldset className="scope-picker">
-                <legend>Escopo do assessment</legend>
-                {(["empresa", "area"] as const).map((g) => (
-                  <label
-                    key={g}
-                    className={contexto.grupoTipo === g ? "active" : ""}
-                  >
-                    <input
-                      type="radio"
-                      name="grupoTipo"
-                      value={g}
-                      checked={contexto.grupoTipo === g}
-                      onChange={() => campo("grupoTipo", g)}
-                    />
-                    <Icone nome={g === "empresa" ? "layers" : "people"} />
-                    <strong>
-                      {g === "empresa" ? "Empresa inteira" : "Uma área ou time"}
-                    </strong>
-                    <small>
-                      {g === "empresa"
-                        ? "Uma visão da organização"
-                        : "Um olhar para o seu grupo"}
-                    </small>
-                  </label>
-                ))}
-              </fieldset>
-              <div className="obs-fields">
-                <label>
-                  Nome da empresa
-                  <input
-                    required
-                    maxLength={200}
-                    autoComplete="organization"
-                    placeholder="Ex.: Horizonte"
-                    value={empresa}
-                    onChange={(e) => setEmpresa(e.target.value)}
-                  />
-                </label>
-                {contexto.grupoTipo === "area" && (
+              <fieldset
+                className="workshop-controls"
+                disabled={ocupado}
+                aria-busy={ocupado}
+                aria-label="Contexto do assessment"
+              >
+                <fieldset className="scope-picker">
+                  <legend>Escopo do assessment</legend>
+                  {(["empresa", "area"] as const).map((g) => (
+                    <label
+                      key={g}
+                      className={contexto.grupoTipo === g ? "active" : ""}
+                    >
+                      <input
+                        type="radio"
+                        name="grupoTipo"
+                        value={g}
+                        checked={contexto.grupoTipo === g}
+                        onChange={() => campo("grupoTipo", g)}
+                      />
+                      <Icone nome={g === "empresa" ? "layers" : "people"} />
+                      <strong>
+                        {g === "empresa"
+                          ? "Empresa inteira"
+                          : "Uma área ou time"}
+                      </strong>
+                      <small>
+                        {g === "empresa"
+                          ? "Uma visão da organização"
+                          : "Um olhar para o seu grupo"}
+                      </small>
+                    </label>
+                  ))}
+                </fieldset>
+                <div className="obs-fields">
                   <label>
-                    Nome da área
+                    Nome da empresa
                     <input
                       required
-                      maxLength={120}
-                      placeholder="Ex.: Marketing e crescimento"
-                      value={contexto.grupoNome}
-                      onChange={(e) => campo("grupoNome", e.target.value)}
+                      maxLength={200}
+                      autoComplete="organization"
+                      placeholder="Ex.: Horizonte"
+                      value={empresa}
+                      onChange={(e) => setEmpresa(e.target.value)}
                     />
                   </label>
-                )}
-                <label>
-                  Título do assessment
-                  <input
-                    required
-                    maxLength={200}
-                    placeholder="Ex.: Nosso próximo horizonte"
-                    value={titulo}
-                    onChange={(e) => setTitulo(e.target.value)}
-                  />
-                </label>
-                <div className="field-pair">
+                  {contexto.grupoTipo === "area" && (
+                    <label>
+                      Nome da área
+                      <input
+                        required
+                        maxLength={120}
+                        placeholder="Ex.: Marketing e crescimento"
+                        value={contexto.grupoNome}
+                        onChange={(e) => campo("grupoNome", e.target.value)}
+                      />
+                    </label>
+                  )}
                   <label>
-                    Setor da empresa
+                    Título do assessment
                     <input
                       required
-                      maxLength={150}
-                      placeholder="Ex.: Varejo, educação, tecnologia"
-                      value={contexto.setor}
-                      onChange={(e) => campo("setor", e.target.value)}
+                      maxLength={200}
+                      placeholder="Ex.: Nosso próximo horizonte"
+                      value={titulo}
+                      onChange={(e) => setTitulo(e.target.value)}
                     />
                   </label>
+                  <div className="field-pair">
+                    <label>
+                      Setor da empresa
+                      <input
+                        required
+                        maxLength={150}
+                        placeholder="Ex.: Varejo, educação, tecnologia"
+                        value={contexto.setor}
+                        onChange={(e) => campo("setor", e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Meta de participantes
+                      <input
+                        type="number"
+                        required
+                        min={1}
+                        max={100000}
+                        step={1}
+                        placeholder="Ex.: 25"
+                        value={contexto.participantes ?? ""}
+                        onChange={(e) =>
+                          campo(
+                            "participantes",
+                            e.target.value ? Number(e.target.value) : undefined,
+                          )
+                        }
+                      />
+                    </label>
+                  </div>
+                  <p className="small-note">
+                    A meta acompanha a participação. O limite de respostas é
+                    definido ao gerar o link.
+                  </p>
                   <label>
-                    Meta de participantes
-                    <input
-                      type="number"
+                    Porte <span>(opcional)</span>
+                    <select
+                      value={contexto.porte}
+                      onChange={(e) => campo("porte", e.target.value)}
+                    >
+                      <option value="">Selecione o porte</option>
+                      <option>Até 50 pessoas</option>
+                      <option>51 a 200 pessoas</option>
+                      <option>201 a 1.000 pessoas</option>
+                      <option>Mais de 1.000 pessoas</option>
+                    </select>
+                  </label>
+                  <fieldset className="mission-picker">
+                    <legend>Qual movimento você quer destravar?</legend>
+                    <div>
+                      {objetivos.map((o) => (
+                        <button
+                          type="button"
+                          key={o}
+                          aria-pressed={contexto.objetivo === o}
+                          onClick={() => campo("objetivo", o)}
+                        >
+                          {o}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <label>
+                    Missão do assessment
+                    <textarea
                       required
-                      min={1}
-                      max={100000}
-                      step={1}
-                      placeholder="Ex.: 25"
-                      value={contexto.participantes ?? ""}
-                      onChange={(e) =>
-                        campo(
-                          "participantes",
-                          e.target.value ? Number(e.target.value) : undefined,
-                        )
-                      }
+                      maxLength={1000}
+                      value={contexto.objetivo}
+                      onChange={(e) => campo("objetivo", e.target.value)}
+                      rows={3}
+                      placeholder="Descreva o que você quer descobrir com seu grupo."
                     />
                   </label>
                 </div>
-                <p className="small-note">
-                  A meta acompanha a participação. O limite de respostas é
-                  definido ao gerar o link.
-                </p>
-                <label>
-                  Porte <span>(opcional)</span>
-                  <select
-                    value={contexto.porte}
-                    onChange={(e) => campo("porte", e.target.value)}
-                  >
-                    <option value="">Selecione o porte</option>
-                    <option>Até 50 pessoas</option>
-                    <option>51 a 200 pessoas</option>
-                    <option>201 a 1.000 pessoas</option>
-                    <option>Mais de 1.000 pessoas</option>
-                  </select>
-                </label>
-                <fieldset className="mission-picker">
-                  <legend>Qual movimento você quer destravar?</legend>
-                  <div>
-                    {objetivos.map((o) => (
-                      <button
-                        type="button"
-                        key={o}
-                        aria-pressed={contexto.objetivo === o}
-                        onClick={() => campo("objetivo", o)}
-                      >
-                        {o}
-                      </button>
-                    ))}
-                  </div>
-                </fieldset>
-                <label>
-                  Missão do assessment
-                  <textarea
-                    required
-                    maxLength={1000}
-                    value={contexto.objetivo}
-                    onChange={(e) => campo("objetivo", e.target.value)}
-                    rows={3}
-                    placeholder="Descreva o que você quer descobrir com seu grupo."
-                  />
-                </label>
-              </div>
-              <div className="workshop-actions">
-                <button
-                  type="submit"
-                  className="obs-btn primary"
-                  disabled={ocupado}
-                >
-                  <Icone nome="spark" size={17} />
-                  {ocupado
-                    ? "Preparando perguntas…"
-                    : "Construir com o Arquiteto"}
-                </button>
-                <button
-                  type="button"
-                  className="text-link"
-                  disabled={ocupado}
-                  onClick={(e) => {
-                    const f = e.currentTarget.form;
-                    if (f?.reportValidity()) void gerar(false);
-                  }}
-                >
-                  Usar questionário modelo <span>↗</span>
-                </button>
-              </div>
-              {salvos.length > 0 && (
-                <label className="library-select">
-                  Ou comece com um questionário salvo
-                  <select
-                    value=""
+                <div className="workshop-actions">
+                  <button
+                    type="submit"
+                    className="obs-btn primary"
                     disabled={ocupado}
-                    onChange={(e) => {
+                  >
+                    <Icone nome="spark" size={17} />
+                    {operacao === "gerar"
+                      ? "Construindo questionário…"
+                      : "Construir com o Arquiteto"}
+                  </button>
+                  <button
+                    type="button"
+                    className="text-link"
+                    disabled={ocupado}
+                    onClick={(e) => {
                       const f = e.currentTarget.form;
-                      if (f?.reportValidity()) void abrir(e.target.value);
+                      if (f?.reportValidity()) void gerar(false);
                     }}
                   >
-                    <option value="">Escolher na biblioteca</option>
-                    {salvos.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.titulo}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+                    Usar questionário modelo <span>↗</span>
+                  </button>
+                </div>
+                <p className="small-note">
+                  {ai
+                    ? "A criação com IA pode levar alguns minutos. Depois, você revisa as perguntas antes de compartilhar."
+                    : "Sem IA conectada, o Arquiteto usa o modelo com adaptação das perguntas abertas. Você revisa tudo antes de compartilhar."}
+                </p>
+                {salvos.length > 0 && (
+                  <label className="library-select">
+                    Ou comece com um questionário salvo
+                    <select
+                      value=""
+                      disabled={ocupado}
+                      onChange={(e) => {
+                        const f = e.currentTarget.form;
+                        if (f?.reportValidity()) void abrir(e.target.value);
+                      }}
+                    >
+                      <option value="">Escolher na biblioteca</option>
+                      {salvos.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.titulo}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </fieldset>
             </form>
           ) : (
-            <div className="questionnaire-review">
+            <fieldset
+              className="questionnaire-review workshop-controls"
+              disabled={ocupado}
+              aria-busy={ocupado}
+              aria-label="Revisão do questionário"
+            >
               <div className="review-context">
                 <span className="group-avatar">
                   <Icone nome="people" />
@@ -390,7 +533,11 @@ export function Oficina({
                 </div>
                 <button
                   className="text-link"
-                  onClick={() => setFase("contexto")}
+                  onClick={() => {
+                    setFase("contexto");
+                    setErro("");
+                    setAviso("");
+                  }}
                 >
                   Ajustar contexto
                 </button>
@@ -440,7 +587,7 @@ export function Oficina({
                         value={p.texto}
                         maxLength={2000}
                         onChange={(e) =>
-                          setQ({
+                          editarQuestionario({
                             ...q,
                             perguntas: q.perguntas.map((v) =>
                               v.id === p.id
@@ -469,7 +616,7 @@ export function Oficina({
                 <EditorPerguntas
                   questionario={q}
                   onChange={(novo) => {
-                    setQ(novo);
+                    editarQuestionario(novo);
                     setDim(0);
                   }}
                 />
@@ -479,7 +626,9 @@ export function Oficina({
                 <input
                   maxLength={200}
                   value={q.titulo}
-                  onChange={(e) => setQ({ ...q, titulo: e.target.value })}
+                  onChange={(e) =>
+                    editarQuestionario({ ...q, titulo: e.target.value })
+                  }
                 />
               </label>
               <div className="workshop-actions">
@@ -496,14 +645,16 @@ export function Oficina({
                   onClick={() => void salvar()}
                   disabled={ocupado}
                 >
-                  Salvar questionário
+                  {operacao === "salvar"
+                    ? "Salvando questionário…"
+                    : "Salvar questionário"}
                 </button>
               </div>
               <p className="small-note">
                 O link só será criado no próximo passo. Você escolhe o prazo e
                 compartilha com o grupo.
               </p>
-            </div>
+            </fieldset>
           )}
         </section>
         <aside className="workshop-agents">
@@ -519,8 +670,8 @@ export function Oficina({
             </p>
             <div className="architect-status">
               <span className="live-dot" />
-              {ocupado
-                ? "Preparando proposta"
+              {operacao
+                ? operacoes[operacao].titulo
                 : fase === "revisao"
                   ? "Proposta disponível"
                   : ai
@@ -538,14 +689,11 @@ export function Oficina({
                 <small>Desenho do assessment</small>
               </div>
             </div>
-            <div className="agent-bubble" aria-live="polite">
-              {ocupado ? (
+            <div className="agent-bubble">
+              {operacao ? (
                 <>
                   <span className="loading-orbit" />
-                  <p>
-                    Estou preparando as perguntas com o contexto informado. Você
-                    poderá revisar cada uma antes de criar o link.
-                  </p>
+                  <p>{operacoes[operacao].descricao}</p>
                 </>
               ) : fase === "revisao" ? (
                 <>

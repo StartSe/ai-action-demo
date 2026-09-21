@@ -1,6 +1,6 @@
 # Bússola de IA
 
-Versão **0.3.0** · [Notas da versão](./CHANGELOG.md).
+Versão **0.3.1** · [Notas da versão](./CHANGELOG.md).
 
 Um observatório de inovação com IA para o gestor acompanhar assessments de **empresas, áreas e times**, da criação das perguntas ao plano de ação.
 
@@ -8,6 +8,7 @@ Um observatório de inovação com IA para o gestor acompanhar assessments de **
 
 - **Painel do gestor:** indicadores calculados das coletas, busca, filtros por tipo de grupo/status, meta de participação, prazos, respostas e último diagnóstico de cada assessment. Atualiza a cada 30 segundos enquanto a página está visível.
 - **Oficina de criação:** informe empresa, área (opcional), setor, meta e missão. O Arquiteto adapta as perguntas usando IA quando conectada; sem conexão, usa um modelo com adaptação limitada às perguntas abertas. O revisor de cobertura usa regras automáticas. Revise as perguntas por dimensão, personalize no editor completo e salve na biblioteca antes de gerar o link.
+- **Feedback da criação:** campos bloqueados durante geração, abertura, salvamento e criação do link; mensagens por operação, tempo de espera e aviso de demora. É possível cancelar a espera pelo Arquiteto sem perder o contexto, ignorando respostas tardias. Falhas mantêm o preenchimento. Após criar o link e fechar a confirmação, a Oficina começa limpa para o próximo assessment.
 - **Jornada do participante:** uma dimensão por etapa, escala de 1 a 5 com controles acessíveis, navegação para revisar respostas e recuperação de falhas de envio sem apagar o preenchimento. Não solicita nome nem e-mail. Área e cargo são opcionais; o gestor pode consultar as respostas.
 - **Sala de análise:** radar interativo, forças/lacunas, comparação entre áreas e respostas abertas. O Analista interpreta os sinais; o Crítico questiona a amostra e os pressupostos; o Estrategista propõe experimentos. Cada perspectiva informa a origem (IA ou regras automáticas) e as dimensões usadas como evidência.
 - **Da leitura à ação:** simule uma mudança de nota no laboratório de cenários (hipótese aritmética, sem alterar o diagnóstico), registre ações concluídas no plano e exporte relatório por impressão/PDF, texto ou CSV. Ações concluídas são persistidas por diagnóstico.

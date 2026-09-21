@@ -3,7 +3,9 @@
 // com prazo e limite de respostas configuráveis, e mostra o link pronto para copiar. Antes de criar,
 // avisa sobre o endereço (o link circula fora do app) e sobre o disco efêmero do plano gratuito (US-029).
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Aviso, CopyButton, lerErro } from "./ui";
+import { Aviso, CopyButton } from "./ui";
+import { requisitar } from "@/lib/http-cliente";
+import { ProgressoOperacao } from "./observatorio/ProgressoOperacao";
 import type { ContextoAssessment, Questionario } from "@/lib/types";
 
 type Props = {
@@ -39,14 +41,20 @@ export function DialogoLinkAvaliacao({
   const [link, setLink] = useState("");
   const [mensagemErro, setMensagemErro] = useState("");
   const caixaRef = useRef<HTMLDialogElement>(null);
+  const pedido = useRef<AbortController | null>(null);
+  const feedbackRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const dialog = caixaRef.current;
     dialog?.showModal();
     return () => {
+      pedido.current?.abort();
       dialog?.close();
     };
   }, []);
+  useEffect(() => {
+    if (fase === "pronto" || fase === "erro") feedbackRef.current?.focus();
+  }, [fase]);
 
   function manterFoco(e: React.KeyboardEvent<HTMLDialogElement>) {
     if (e.key !== "Tab") return;
@@ -69,6 +77,10 @@ export function DialogoLinkAvaliacao({
 
   async function gerar(e: FormEvent) {
     e.preventDefault();
+    if (pedido.current) return;
+    const controlador = new AbortController();
+    pedido.current = controlador;
+    setMensagemErro("");
     setFase("gerando");
     try {
       const corpo = {
@@ -79,24 +91,29 @@ export function DialogoLinkAvaliacao({
         expiraEmDias: Number(expiraEmDias),
         limite: limite === "sem-limite" ? null : Number(limite),
       };
-      const r = await fetch("/api/bussola/link", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(corpo),
-      });
-      if (!r.ok) {
-        setMensagemErro((await lerErro(r)).mensagem);
-        setFase("erro");
-        return;
-      }
-      const resposta = (await r.json()) as { codigo: string; url?: string };
+      const resposta = await requisitar<{ codigo: string; url?: string }>(
+        "/api/bussola/link",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(corpo),
+          signal: AbortSignal.any([
+            controlador.signal,
+            AbortSignal.timeout(30_000),
+          ]),
+        },
+      );
       // O servidor monta o endereço a partir do pedido (baseUrl), o mesmo que rotinas e e-mails vão usar.
       setLink(resposta.url || `${location.origin}/f/${resposta.codigo}`);
       setFase("pronto");
       aoCriar();
     } catch (err) {
-      setMensagemErro((await lerErro(err)).mensagem);
-      setFase("erro");
+      if (!controlador.signal.aborted) {
+        setMensagemErro((err as Error).message);
+        setFase("erro");
+      }
+    } finally {
+      if (pedido.current === controlador) pedido.current = null;
     }
   }
 
@@ -121,6 +138,13 @@ export function DialogoLinkAvaliacao({
 
       {fase === "pronto" ? (
         <div className="flex flex-col gap-4">
+          <div role="status" tabIndex={-1} ref={feedbackRef}>
+            <Aviso tom="ok">
+              <strong>Link criado com sucesso.</strong> Copie e compartilhe com
+              o grupo. Ao fechar, a Oficina ficará pronta para um novo
+              assessment.
+            </Aviso>
+          </div>
           <div className="flex items-center gap-2 flex-wrap">
             <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[220px]">
               {link}
@@ -148,76 +172,94 @@ export function DialogoLinkAvaliacao({
         </div>
       ) : (
         <form onSubmit={gerar}>
-          <div className="flex flex-col gap-1.5 mb-4">
-            <label
-              htmlFor="expiraEmDiasLinkAvaliacao"
-              className="text-[13px] font-semibold"
-            >
-              O link expira em
-            </label>
-            <select
-              id="expiraEmDiasLinkAvaliacao"
-              className="input"
-              value={expiraEmDias}
-              onChange={(e) => setExpiraEmDias(e.target.value)}
-            >
-              <option value="7">7 dias</option>
-              <option value="30">30 dias</option>
-              <option value="90">90 dias</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1.5 mb-4">
-            <label
-              htmlFor="limiteLinkAvaliacao"
-              className="text-[13px] font-semibold"
-            >
-              Limite de respostas
-            </label>
-            <select
-              id="limiteLinkAvaliacao"
-              className="input"
-              value={limite}
-              onChange={(e) => setLimite(e.target.value)}
-            >
-              <option value="10">10 respostas</option>
-              <option value="50">50 respostas</option>
-              <option value="200">200 respostas</option>
-              <option value="sem-limite">Sem limite</option>
-            </select>
-          </div>
-
-          {discoEfemero && (
-            <div className="mb-4">
-              <Aviso tom="warn">
-                No plano gratuito sem disco, as respostas se perdem quando o app
-                reinicia. Analise assim que chegarem ou peça à equipe técnica um
-                disco em &ldquo;/app/data&rdquo;.
+          {fase === "gerando" && (
+            <ProgressoOperacao
+              titulo="Criando link de avaliação"
+              descricao="Aguarde a confirmação. O prazo e o limite de respostas ficam bloqueados durante a criação."
+            />
+          )}
+          {fase === "erro" && (
+            <div className="mb-4" role="alert" tabIndex={-1} ref={feedbackRef}>
+              <Aviso tom="danger">
+                <strong>Não foi possível confirmar a criação do link.</strong>{" "}
+                {mensagemErro} Suas escolhas foram mantidas. Se a conexão caiu,
+                confira o painel de assessments antes de tentar novamente para
+                evitar criar dois links.
               </Aviso>
             </div>
           )}
-
-          {fase === "erro" && (
-            <div className="mb-4">
-              <Aviso tom="danger">{mensagemErro}</Aviso>
+          <fieldset
+            className="workshop-controls"
+            disabled={fase === "gerando"}
+            aria-busy={fase === "gerando"}
+            aria-label="Configurações do link"
+          >
+            <div className="flex flex-col gap-1.5 mb-4">
+              <label
+                htmlFor="expiraEmDiasLinkAvaliacao"
+                className="text-[13px] font-semibold"
+              >
+                O link expira em
+              </label>
+              <select
+                id="expiraEmDiasLinkAvaliacao"
+                className="input"
+                value={expiraEmDias}
+                onChange={(e) => setExpiraEmDias(e.target.value)}
+              >
+                <option value="7">7 dias</option>
+                <option value="30">30 dias</option>
+                <option value="90">90 dias</option>
+              </select>
             </div>
-          )}
-          <div className="flex gap-2.5">
-            <button
-              type="submit"
-              className="btn-primary !w-auto flex-1"
-              disabled={fase === "gerando"}
-            >
-              {fase === "gerando" ? "Gerando" : "Gerar link"}
-            </button>
-            <button
-              type="button"
-              className="btn-ghost"
-              disabled={fase === "gerando"}
-              onClick={onFechar}
-            >
-              Cancelar
-            </button>
-          </div>
+            <div className="flex flex-col gap-1.5 mb-4">
+              <label
+                htmlFor="limiteLinkAvaliacao"
+                className="text-[13px] font-semibold"
+              >
+                Limite de respostas
+              </label>
+              <select
+                id="limiteLinkAvaliacao"
+                className="input"
+                value={limite}
+                onChange={(e) => setLimite(e.target.value)}
+              >
+                <option value="10">10 respostas</option>
+                <option value="50">50 respostas</option>
+                <option value="200">200 respostas</option>
+                <option value="sem-limite">Sem limite</option>
+              </select>
+            </div>
+
+            {discoEfemero && (
+              <div className="mb-4">
+                <Aviso tom="warn">
+                  No plano gratuito sem disco, as respostas se perdem quando o
+                  app reinicia. Analise assim que chegarem ou peça à equipe
+                  técnica um disco em &ldquo;/app/data&rdquo;.
+                </Aviso>
+              </div>
+            )}
+
+            <div className="flex gap-2.5">
+              <button
+                type="submit"
+                className="btn-primary !w-auto flex-1"
+                disabled={fase === "gerando"}
+              >
+                {fase === "gerando" ? "Criando link…" : "Gerar link"}
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={fase === "gerando"}
+                onClick={onFechar}
+              >
+                Cancelar
+              </button>
+            </div>
+          </fieldset>
         </form>
       )}
     </dialog>

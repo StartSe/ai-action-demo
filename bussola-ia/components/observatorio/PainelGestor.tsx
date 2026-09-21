@@ -45,6 +45,7 @@ export function PainelGestor({
   const [ocupado, setOcupado] = useState(false);
   const [atualizando, setAtualizando] = useState(true);
   const [aviso, setAviso] = useState("");
+  const [novaOficina, setNovaOficina] = useState(0);
   const { status } = useStatus();
   const { confirmar, Dialogo } = useConfirmacao();
   const router = useRouter();
@@ -647,8 +648,10 @@ export function PainelGestor({
       )}
       <div hidden={tela !== "oficina"}>
         <Oficina
+          key={novaOficina}
           ai={Boolean(status?.ai)}
           aoPublicar={() => {
+            setNovaOficina((versao) => versao + 1);
             void carregar();
             navegar("assessments");
             setAviso(

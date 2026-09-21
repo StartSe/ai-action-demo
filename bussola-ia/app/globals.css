@@ -1680,6 +1680,83 @@ body {
   font-size: 20px;
   margin-top: 8px;
 }
+.workshop-controls {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.workshop-controls:disabled :is(input, textarea, select) {
+  background: #f0f2eb;
+  color: #62705a;
+  cursor: wait;
+}
+.workshop-controls:disabled label {
+  cursor: wait;
+}
+.operation-progress,
+.workshop-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  margin-bottom: 22px;
+  border: 1px solid #c6d6b6;
+  border-radius: 10px;
+  background: #f0f6e9;
+  color: #2c5039;
+  font-size: 13px;
+  line-height: 1.6;
+  scroll-margin: 24px;
+}
+.operation-progress:focus-visible,
+.workshop-feedback:focus-visible {
+  outline: 3px solid #599079;
+  outline-offset: 4px;
+}
+.operation-progress .loading-orbit {
+  width: 24px;
+  height: 24px;
+  margin: 2px 0 0;
+  flex-shrink: 0;
+}
+.operation-progress-copy {
+  min-width: 0;
+  flex: 1;
+}
+.operation-progress strong,
+.workshop-feedback strong {
+  display: block;
+  font-size: 14px;
+}
+.operation-progress p,
+.workshop-feedback p {
+  margin-top: 5px;
+}
+.operation-progress .operation-delay {
+  margin-top: 12px;
+  font-weight: 500;
+}
+.operation-timer {
+  display: block;
+  margin-top: 12px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.operation-progress .text-link {
+  display: inline-block;
+  margin-top: 10px;
+  text-decoration: underline;
+}
+.workshop-feedback > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.workshop-feedback.error {
+  background: #fff4f0;
+  border-color: #ecd2c6;
+  color: #8e4936;
+}
 .scope-picker {
   display: grid;
   grid-template-columns: 1fr 1fr;
