@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Aviso, ErrorBox, Loading, Origem, lerErro } from "@/components/ui";
-import { EditorPagina } from "@/components/EditorPagina";
+import { ChatAgente } from "@/components/ChatAgente";
 import { ChipEstado, INTERVALO_ACOMPANHAMENTO_MS, TempoGerando } from "@/components/MeusSites";
 import { PainelImagens } from "@/components/PainelImagens";
 import { PreviaPagina } from "@/components/PreviaPagina";
@@ -163,10 +163,14 @@ export default function Page() {
                   </div>
                   <Origem meta={detalhe.meta} demoTexto="Exemplo ilustrativo, sem usar inteligência artificial." />
                   <PreviaPagina key={versaoSelecionada.n} html={versaoSelecionada.html} titulo={pagina.titulo} />
-                  {/* Até o agente chegar (US-007), as edições por instrução continuam aqui. */}
-                  <EditorPagina pagina={pagina} demo={detalhe.meta.demo} onAtualizada={(nova) => { aoAtualizar({ pagina: nova }); setSelecionada(nova.versoes[nova.versoes.length - 1].n); }} />
                 </div>
                 <aside className="flex flex-col gap-4">
+                  <ChatAgente
+                    projetoId={p.id}
+                    demo={detalhe.meta.demo}
+                    aoResponder={({ pagina: nova, projeto: novo }) => aoAtualizar({ pagina: nova, projeto: novo })}
+                    aoSelecionarVersao={setSelecionada}
+                  />
                   <LinkPublico projeto={p} aoAtualizar={aoAtualizar} />
                   <PainelVersoes projeto={p} pagina={pagina} selecionada={versaoSelecionada.n} aoSelecionar={setSelecionada} aoAtualizar={aoAtualizar} />
                   <PainelImagens projetoId={p.id} />

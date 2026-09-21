@@ -1,9 +1,10 @@
 // Ferramentas expostas via app/mcp/route.ts para assistentes de IA (Claude, ChatGPT etc.).
 // Cada app da suíte declara as suas aqui, reaproveitando a mesma lógica das rotas normais (lib/gerador.ts).
 import { baixarImagem, capturarSite, pareceImagem } from "./captura";
-import { editarPagina, normalizarInstrucao, normalizarMarca } from "./gerador";
+import { editarPeloAgente } from "./agente";
+import { normalizarInstrucao, normalizarMarca } from "./gerador";
 import type { Ferramenta } from "./mcp";
-import { aguardarGeracao, criar, iniciarGeracao, paginaDoProjeto } from "./projetos";
+import { aguardarGeracao, criar, iniciarGeracao, obterPorSlug, paginaDoProjeto, publicar } from "./projetos";
 
 export const NOME_SERVIDOR = "clone-site";
 
@@ -82,20 +83,37 @@ export const FERRAMENTAS: Ferramenta[] = [
   },
   {
     nome: "editar_pagina",
-    descricao: "Aplica uma mudança, descrita em português, sobre uma página já gerada (ex.: 'deixe o cabeçalho escuro', 'troque o formulário por um botão de WhatsApp', 'reescreva os textos para uma clínica odontológica'). Devolve o arquivo inteiro atualizado como uma versão nova, mantendo as anteriores.",
+    descricao: "Pede ao agente do site uma mudança em português (ex.: 'deixe o cabeçalho escuro', 'coloque o logo no topo', 'reescreva os textos para uma clínica odontológica'). O agente edita por trecho e grava uma versão nova em rascunho (o link público só muda com publicar_site). Devolve a resposta do agente, a versão criada e o HTML atual.",
     schema: {
       type: "object",
       properties: {
-        id: { type: "string", description: "Id da página, devolvido por gerar_pagina" },
-        instrucao: { type: "string", description: "O que mudar na página, em português" },
+        id: { type: "string", description: "Id ou slug do site (devolvido por criar_site/gerar_pagina)" },
+        instrucao: { type: "string", description: "O que mudar no site, em português" },
       },
       required: ["id", "instrucao"],
     },
     async executar(args) {
       const { id, instrucao } = args as { id?: unknown; instrucao?: unknown };
-      if (!id || typeof id !== "string") throw new Error("Informe o id da página (devolvido por gerar_pagina).");
-      const { pagina, meta, versao } = await editarPagina(id.trim(), normalizarInstrucao(instrucao));
-      return { id: pagina.id, titulo: pagina.titulo, link: `/r/${pagina.id}`, linkPublicado: `/s/${pagina.id}`, versao: versao.n, totalVersoes: pagina.versoes.length, demo: meta.demo, html: versao.html };
+      const projeto = typeof id === "string" ? obterPorSlug(id.trim()) : null;
+      if (!projeto) throw new Error("Informe o id ou o slug do site (devolvido por criar_site ou gerar_pagina).");
+      const r = await editarPeloAgente(projeto.id, normalizarInstrucao(instrucao));
+      return { id: r.pagina.id, projetoId: r.projeto.id, slug: r.projeto.slug, resposta: r.resposta, versao: r.versao.n, versoesCriadas: r.versoes, publicou: r.publicou, totalVersoes: r.pagina.versoes.length, link: `/sites/${r.projeto.id}`, linkPublicado: `/s/${r.projeto.slug}`, html: r.versao.html };
+    },
+  },
+  {
+    nome: "publicar_site",
+    descricao: "Publica uma versão do site no link público (/s/<slug>). Sem `n`, publica a versão mais recente.",
+    schema: {
+      type: "object",
+      properties: { id: { type: "string", description: "Id ou slug do site" }, n: { type: "integer", description: "Número da versão (opcional)" } },
+      required: ["id"],
+    },
+    async executar(args) {
+      const { id, n } = args as { id?: unknown; n?: unknown };
+      const projeto = typeof id === "string" ? obterPorSlug(id.trim()) : null;
+      if (!projeto) throw new Error("Informe o id ou o slug do site.");
+      const { projeto: novo, versao } = publicar(projeto.id, n ?? undefined);
+      return { projetoId: novo.id, slug: novo.slug, versaoPublicada: versao.n, linkPublicado: `/s/${novo.slug}` };
     },
   },
 ];

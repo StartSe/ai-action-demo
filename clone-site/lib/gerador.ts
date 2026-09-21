@@ -83,12 +83,15 @@ const TAILWIND_CDN = /^https:\/\/cdn\.tailwindcss\.com(\/|\?|$)/i;
 
 /** Remove todo <script> que não seja o Tailwind pela CDN (inclusive scripts inline), atributos de evento e links javascript:. */
 export function sanitizarHtml(html: string, stack: Stack): string {
-  let saida = html.replace(/<script\b([^>]*)>[\s\S]*?<\/script\s*>/gi, (bloco, atributos: string) => {
-    if (stack !== "html-tailwind") return "";
+  const ehTailwind = (atributos: string) => {
+    if (stack !== "html-tailwind") return false;
     const src = /\bsrc\s*=\s*["']([^"']+)["']/i.exec(atributos)?.[1];
-    return src && TAILWIND_CDN.test(src) ? `<script src="https://cdn.tailwindcss.com"></script>` : "";
-  });
-  saida = saida.replace(/<script\b[^>]*\/?>/gi, "");
+    return Boolean(src && TAILWIND_CDN.test(src));
+  };
+  let saida = html.replace(/<script\b([^>]*)>[\s\S]*?<\/script\s*>/gi, (bloco, atributos: string) => (ehTailwind(atributos) ? `<script src="https://cdn.tailwindcss.com"></script>` : ""));
+  // Tags <script> soltas (sem fechamento ou autofechadas) também saem — menos a do Tailwind que a passada acima
+  // acabou de deixar (a regra antiga apagava a abertura dela e a página perdia todo o estilo: bug corrigido em 20/09/2026).
+  saida = saida.replace(/<script\b([^>]*)\/?>/gi, (tag: string, atributos: string) => (ehTailwind(atributos) ? tag : ""));
   // Sem molduras aninhadas nem objetos embutidos: a prévia e a página publicada só carregam o que o HTML declara.
   saida = saida.replace(/<(iframe|object|embed|base)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "").replace(/<(iframe|object|embed|base)\b[^>]*\/?>/gi, "");
   saida = saida.replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
@@ -418,6 +421,23 @@ export async function editarPagina(id: string, instrucao: string, htmlBase?: str
   const versao: Versao = { n, html, instrucao: (rotulo || instrucao).trim().slice(0, 300), criadoEm: new Date().toISOString() };
   const nova = gravarVersao(pagina, versao);
   return { demo: metaGerada.demo, pagina: nova, meta: metaGerada, versao };
+}
+
+/** A página salva com o formato detectado — para o agente (lib/agente.ts) ler o HTML atual sem repetir a lógica de carga. */
+export function paginaAtual(id: string): { pagina: Pagina; stack: Stack; atual: Versao } {
+  const { pagina, stack } = carregarPagina(id);
+  return { pagina, stack, atual: pagina.versoes[pagina.versoes.length - 1] };
+}
+
+/**
+ * Grava uma versão nova a partir de um HTML já pronto (o agente edita por trecho e devolve o arquivo inteiro):
+ * passa pela mesma extração/sanitização da geração. `instrucao` é o rótulo curto da lista de versões.
+ */
+export function novaVersao(id: string, html: string, instrucao: string): { pagina: Pagina; versao: Versao } {
+  const { pagina, stack } = carregarPagina(id);
+  const limpo = sanitizarHtml(extrairHtml(html), stack);
+  const versao: Versao = { n: proximoNumero(pagina), html: limpo, instrucao: instrucao.trim().slice(0, 300) || "Mudança feita pelo agente", criadoEm: new Date().toISOString() };
+  return { pagina: gravarVersao(pagina, versao), versao };
 }
 
 /** "Voltar para esta": copia o HTML da versão n como uma versão nova, sem apagar as intermediárias. */

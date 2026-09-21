@@ -118,7 +118,7 @@
         "Lint, tsc e verificar-jargao passam; verificar no navegador (demonstração): três pedidos, três versões, \"publique\" atualiza /s/<slug>; com IA real, \"troque o título\" usa editar_trecho (log do servidor)"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "US-007 da PRD. Edição por trecho portada do edit_file do screenshot-to-code."
     },
     {
