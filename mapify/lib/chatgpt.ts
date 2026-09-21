@@ -142,7 +142,7 @@ export class ChatGPTBridge {
       await this.rpc("initialize", {
         clientInfo: {
           name: "mapify",
-          title: "Mapify",
+          title: "Mapia",
           version: "1.0.0",
         },
         capabilities: { experimentalApi: true },
@@ -244,7 +244,7 @@ export class ChatGPTBridge {
         id: m.id,
         error: {
           code: -32601,
-          message: "Esta operação não está habilitada no Mapify.",
+          message: "Esta operação não está habilitada no Mapia.",
         },
       });
       return;

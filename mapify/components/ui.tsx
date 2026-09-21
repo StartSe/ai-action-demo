@@ -124,7 +124,7 @@ export function Logo() {
       <span className="logo-mark">
         <Icon name="map" size={23} />
       </span>
-      mapify<span className="logo-dot">.</span>
+      mapia<span className="logo-dot">.</span>
     </span>
   );
 }

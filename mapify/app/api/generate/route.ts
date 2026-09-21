@@ -28,12 +28,12 @@ export async function POST(req: Request) {
     const bytes =
       file instanceof File ? new Uint8Array(await file.arrayBuffer()) : null;
     return startJob(
-      async (signal) =>
+      async (signal, progress) =>
         kind === "pdf" && bytes
           ? pdfSource(bytes, (file as File).name)
           : kind === "text"
             ? textSource(text)
-            : linkSource(url, kind, signal),
+            : linkSource(url, kind, signal, progress),
       detail,
       focus,
     );

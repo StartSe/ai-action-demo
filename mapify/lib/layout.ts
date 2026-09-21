@@ -138,5 +138,5 @@ export function svgMap(root: MindNode) {
         .join("")}</text></g>`;
     })
     .join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${minX} ${minY} ${width} ${height}"><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="#faf9fd"/>${edges}${boxes}<text x="${minX + 25}" y="${minY + height - 20}" fill="#777183" font-size="12" font-family="Arial,sans-serif">Mapify · ${esc(root.label)}</text></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${minX} ${minY} ${width} ${height}"><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="#faf9fd"/>${edges}${boxes}<text x="${minX + 25}" y="${minY + height - 20}" fill="#777183" font-size="12" font-family="Arial,sans-serif">Mapia · ${esc(root.label)}</text></svg>`;
 }

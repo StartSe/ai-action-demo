@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { ask, aiConfig, connected, parseJSON, type AIConfig } from "./ai";
 import { AppError } from "./api";
 import { createMap, saveJob, getJob, recoverJobs, validateTree } from "./maps";
-import type { Job, Source } from "./types";
+import { sourceDescription, type Job, type Source } from "./types";
 const state = globalThis as typeof globalThis & {
   mapifyJobs?: Map<string, AbortController>;
 };
@@ -61,7 +61,7 @@ export async function generate(
   const result = parseJSON(
     await ask(
       `${grounding} Crie um mapa mental hierárquico. Retorne apenas JSON: {"title":"título breve","summary":"síntese de 2 frases","root":{"label":"tema central","note":"explicação","refs":[],"children":[{"label":"conceito","note":"explicação útil","refs":["id de trecho real"],"children":[]}]}}. Cada nó deve ter label, note, refs e children. Labels até 80 caracteres, notas até 600. Use 4 a 7 ramos principais e até ${detail === "deep" ? "100 tópicos, 4 níveis" : detail === "brief" ? "22 tópicos, 2 níveis" : "55 tópicos, 3 níveis"}. As referências devem existir na fonte. Não repita conceitos.`,
-      `Título da fonte: ${source.title}\nFoco desejado: ${focus || "Compreender os pontos principais e suas relações"}\n<fonte>\n${notes.join("\n\n")}\n</fonte>`,
+      `Título da fonte: ${source.title}\n${sourceDescription(source)}\nFoco desejado: ${focus || "Compreender os pontos principais e suas relações"}\n<fonte>\n${notes.join("\n\n")}\n</fonte>`,
       signal,
       config,
     ),
@@ -94,7 +94,10 @@ export async function generate(
   });
 }
 export async function startJob(
-  extract: (signal: AbortSignal) => Promise<Source>,
+  extract: (
+    signal: AbortSignal,
+    progress: (phase: string, value: number) => void,
+  ) => Promise<Source>,
   detail: string,
   focus: string,
 ) {
@@ -127,7 +130,10 @@ export async function startJob(
   const timer = setTimeout(() => controller.abort(), 12 * 60 * 1000);
   void (async () => {
     try {
-      const source = await extract(controller.signal);
+      const source = await extract(controller.signal, (phase, progress) => {
+        Object.assign(job, { phase, progress });
+        saveJob(job);
+      });
       controller.signal.throwIfAborted();
       const map = await generate(
         source,

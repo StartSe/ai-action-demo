@@ -67,7 +67,7 @@ export async function download(
           ? AbortSignal.any([signal, AbortSignal.timeout(25000)])
           : AbortSignal.timeout(25000),
         headers: {
-          "User-Agent": "Mapify/1.0 (+public-content-reader)",
+          "User-Agent": "Mapia/1.0 (+public-content-reader)",
           Accept: "text/html,application/pdf,text/plain",
           "Accept-Encoding": "identity",
         },

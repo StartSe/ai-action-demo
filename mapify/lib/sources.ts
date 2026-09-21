@@ -5,6 +5,7 @@ import { AppError } from "./api";
 import { fetchCaptions } from "./youtube";
 import { youtubeIntegration } from "./youtube-oauth";
 import { officialCaptions } from "./youtube-official";
+import { analyzeYouTubeVideo, youtubeMode } from "./gemini-video";
 import type { Source, Segment } from "./types";
 export const MAX_CHARACTERS = 160000;
 function finish(source: Omit<Source, "characters">): Source {
@@ -125,13 +126,20 @@ export function captionSegments(
 export async function youtubeSource(
   url: string,
   signal?: AbortSignal,
+  progress?: (phase: string, value: number) => void,
 ): Promise<Source> {
   const id = youtubeId(url);
   if (!id) throw new AppError("Use um link válido de um vídeo do YouTube.");
-  const youtube = await youtubeIntegration();
-  const captions = youtube.hasConnection()
-    ? await officialCaptions(id, youtube, signal)
-    : await fetchCaptions(id, signal);
+  const mode = await youtubeMode();
+  if (mode === "gemini") {
+    progress?.("Analisando o vídeo com Gemini", 12);
+    return analyzeYouTubeVideo(id, signal);
+  }
+  progress?.("Lendo as legendas do vídeo", 12);
+  const captions =
+    mode === "oauth"
+      ? await officialCaptions(id, await youtubeIntegration(), signal)
+      : await fetchCaptions(id, signal);
   let title = "Vídeo do YouTube";
   try {
     const response = await fetch(
@@ -153,9 +161,10 @@ export async function linkSource(
   input: string,
   kind: string,
   signal?: AbortSignal,
+  progress?: (phase: string, value: number) => void,
 ) {
   if (kind === "youtube" || youtubeId(input))
-    return youtubeSource(input, signal);
+    return youtubeSource(input, signal, progress);
   const result = await download(input, signal);
   if (
     result.type.includes("application/pdf") ||

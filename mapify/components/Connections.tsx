@@ -7,12 +7,16 @@ export function Connections({
   onClose,
   onSaved,
   youtubeResult,
+  initialSection = "ai",
 }: {
   onClose: () => void;
   onSaved: () => void;
   youtubeResult?: { connected?: boolean; error?: string };
+  initialSection?: "ai" | "youtube";
 }) {
-  const [section, setSection] = useState(youtubeResult ? "youtube" : "ai");
+  const [section, setSection] = useState(
+    youtubeResult ? "youtube" : initialSection,
+  );
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
   const [provider, setProvider] = useState<"chatgpt" | "openrouter">(
     "openrouter",
@@ -131,7 +135,7 @@ export function Connections({
           </div>
           {provider === "chatgpt" ? (
             <div className="connection-card">
-              <h3>Seu ChatGPT, no Mapify</h3>
+              <h3>Seu ChatGPT, no Mapia</h3>
               <p>
                 Entre com uma assinatura que inclua acesso ao Codex. O uso segue
                 os limites da sua conta.

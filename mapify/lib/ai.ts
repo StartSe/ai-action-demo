@@ -42,7 +42,7 @@ export async function ask(
       headers: {
         Authorization: `Bearer ${key}`,
         "Content-Type": "application/json",
-        "X-Title": "Mapify",
+        "X-Title": "Mapia",
         "HTTP-Referer": "https://github.com/StartSe/ai-action-demo",
       },
       body: JSON.stringify({

@@ -12,6 +12,7 @@ import {
   updateNode,
   countNodes,
   sourceLabels,
+  sourceDescription,
   type MindMap,
   type MindNode,
 } from "@/lib/types";
@@ -241,7 +242,7 @@ export function MapEditor({ id }: { id: string }) {
         new Blob(
           [
             markdown(map.root) +
-              `\n## Fonte\n${map.source.title}\n${map.source.url || ""}\n`,
+              `\n## Fonte\n${map.source.title}\n${map.source.url || ""}\n${sourceDescription(map.source)}\n`,
           ],
           { type: "text/markdown" },
         ),
@@ -763,6 +764,11 @@ export function MapEditor({ id }: { id: string }) {
                   <Icon name={map.source.kind} />
                 </span>
                 <h3>{map.source.title}</h3>
+                {sourceDescription(map.source) && (
+                  <p className="source-analysis-note">
+                    {sourceDescription(map.source)}
+                  </p>
+                )}
                 {map.source.url && (
                   <a
                     className="text-link"
@@ -828,7 +834,7 @@ export function MapEditor({ id }: { id: string }) {
                   )}
                   {map.messages.map((m, i) => (
                     <div key={i} className={`chat-message ${m.role}`}>
-                      <strong>{m.role === "user" ? "Você" : "Mapify"}</strong>
+                      <strong>{m.role === "user" ? "Você" : "Mapia"}</strong>
                       <p>{m.text}</p>
                     </div>
                   ))}

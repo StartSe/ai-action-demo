@@ -25,13 +25,13 @@ export function transcriptError(code: string): AppError {
     case "RequestBlocked":
     case "IpBlocked":
       return new AppError(
-        "O YouTube bloqueou a consulta feita pelo servidor do Mapify. Isso pode acontecer mesmo com legendas públicas, especialmente no Render. Para vídeos que sua conta pode editar, conecte o YouTube em Configurações. Para outros vídeos, configure YOUTUBE_PROXY_URL com um proxy residencial ou cole a transcrição na opção Texto.",
+        "O YouTube bloqueou a consulta feita pelo servidor do Mapia. Isso pode acontecer mesmo com legendas públicas, especialmente no Render. Para vídeos públicos de qualquer canal, configure Gemini em Configurações → YouTube. Para vídeos que sua conta pode editar, use YouTube OAuth. Você também pode colar a transcrição na opção Texto.",
         503,
       );
     case "TranscriptsDisabled":
     case "NoTranscriptFound":
       return new AppError(
-        "O YouTube não retornou legendas para este vídeo. Confira se a opção Mostrar transcrição aparece no YouTube; se aparecer, copie o texto para a opção Texto do Mapify.",
+        "O YouTube não retornou legendas para este vídeo. Confira se a opção Mostrar transcrição aparece no YouTube; se aparecer, copie o texto para a opção Texto do Mapia.",
       );
     case "AgeRestricted":
     case "VideoUnplayable":
@@ -44,14 +44,14 @@ export function transcriptError(code: string): AppError {
       );
     case "PoTokenRequired":
       return new AppError(
-        "O YouTube exige uma verificação adicional para baixar as legendas deste vídeo. Copie a transcrição disponível no YouTube para a opção Texto do Mapify.",
+        "O YouTube exige uma verificação adicional para baixar as legendas deste vídeo. Copie a transcrição disponível no YouTube para a opção Texto do Mapia.",
         503,
       );
     case "PythonUnavailable":
     case "ModuleNotFoundError":
     case "ImportError":
       return new AppError(
-        "A extração do YouTube não está instalada corretamente neste Mapify. Na pasta mapify, execute npm run setup:youtube e reinicie o app. No Render, publique novamente a imagem atualizada.",
+        "A extração do YouTube não está instalada corretamente neste Mapia. Na pasta mapify, execute npm run setup:youtube e reinicie o app. No Render, publique novamente a imagem atualizada.",
         503,
       );
     case "ProxyError":

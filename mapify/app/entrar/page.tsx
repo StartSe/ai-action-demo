@@ -36,7 +36,7 @@ export default function Login() {
             </div>
           </div>
         </div>
-        <small>Mapify · IA para Executivos / StartSe</small>
+        <small>Mapia · IA para Executivos / StartSe</small>
       </section>
       <section className="auth-form">
         <div>
@@ -50,7 +50,7 @@ export default function Login() {
           </h2>
           <p>
             {exists === false
-              ? "Crie a conta de acesso desta instalação do Mapify."
+              ? "Crie a conta de acesso desta instalação do Mapia."
               : "Entre para continuar explorando seus mapas."}
           </p>
           <form
@@ -117,7 +117,7 @@ export default function Login() {
               {busy
                 ? "Entrando…"
                 : exists
-                  ? "Entrar no Mapify"
+                  ? "Entrar no Mapia"
                   : "Criar minha conta"}
             </button>
           </form>

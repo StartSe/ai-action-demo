@@ -26,7 +26,7 @@ test("YouTube usa a venv local automaticamente e respeita PYTHON_PATH explícito
 test("erros do YouTube distinguem bloqueio, legendas ausentes, verificação, proxy e instalação", () => {
   for (const code of ["RequestBlocked", "IpBlocked"]) {
     assert.match(transcriptError(code).message, /mesmo com legendas públicas/);
-    assert.match(transcriptError(code).message, /YOUTUBE_PROXY_URL/);
+    assert.match(transcriptError(code).message, /configure Gemini/);
   }
   assert.match(
     transcriptError("TranscriptsDisabled").message,
@@ -64,7 +64,7 @@ test("protocolo do subprocesso preserva legendas, classifica falhas e não vaza 
     ]);
 
     for (const [code, expected] of [
-      ["RequestBlocked", /servidor do Mapify/],
+      ["RequestBlocked", /servidor do Mapia/],
       ["TranscriptsDisabled", /não retornou legendas/],
       ["ModuleNotFoundError", /setup:youtube/],
     ] as const) {

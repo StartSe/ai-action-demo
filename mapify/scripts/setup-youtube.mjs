@@ -26,5 +26,5 @@ run(
   ["-m", "pip", "install", "-r", "requirements.txt"],
 );
 console.log(
-  "Extrator do YouTube instalado. O Mapify detecta .venv automaticamente.",
+  "Extrator do YouTube instalado. O Mapia detecta .venv automaticamente.",
 );

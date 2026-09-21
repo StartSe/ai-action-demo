@@ -1,4 +1,4 @@
-# Blueprint de publicação de Mapify (especificação: https://render.com/docs/blueprint-spec)
+# Blueprint de publicação de Mapia (especificação: https://render.com/docs/blueprint-spec)
 # Imagem pública publicada pelo GitHub Actions em ghcr.io/startse/mapify:latest.
 # Este app exige o plano starter (pago) e cria um disco de 1 GB em /app/data, onde ficam mapas, fontes, conversas, conta e credenciais.
 # Crie sua conta, explore um mapa de exemplo e abra Conectar IA para usar sua assinatura ChatGPT ou uma chave OpenRouter. Depois importe uma fonte para gerar seu primeiro mapa.

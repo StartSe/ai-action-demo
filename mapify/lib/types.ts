@@ -12,7 +12,18 @@ export type Source = {
   url?: string;
   segments: Segment[];
   characters: number;
+  analysis?: {
+    provider: "gemini";
+    model: string;
+    createdAt: string;
+    durationSeconds: number;
+  };
 };
+export function sourceDescription(source: Source): string {
+  return source.analysis?.provider === "gemini"
+    ? "Análise do vídeo gerada pelo Gemini, em paráfrases. Não é uma transcrição literal. As referências de tempo são aproximadas; confira os trechos no vídeo original."
+    : "";
+}
 export type MindNode = {
   id: string;
   label: string;

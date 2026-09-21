@@ -11,7 +11,7 @@ export function CreateMap({
   initial?: SourceKind;
   onClose: () => void;
   onCreated: (id: string) => void;
-  onConnect: () => void;
+  onConnect: (section?: "ai" | "youtube") => void;
 }) {
   const [kind, setKind] = useState<SourceKind>(initial);
   const [text, setText] = useState("");
@@ -214,10 +214,18 @@ export function CreateMap({
               />
               <small>
                 {kind === "youtube"
-                  ? "Com YouTube conectado em Configurações, use vídeos que sua conta pode editar e que tenham legendas. Sem conexão, tentamos as legendas públicas."
+                  ? "Para vídeos públicos de qualquer canal, configure o Gemini em Configurações → YouTube. O app usa a forma de importação escolhida lá."
                   : "Artigos, landing pages e PDFs públicos. Páginas que exigem login não podem ser lidas."}
               </small>
             </label>
+          )}
+          {kind === "youtube" && (
+            <button
+              className="text-button"
+              onClick={() => onConnect("youtube")}
+            >
+              Configurar análise de vídeos
+            </button>
           )}
           <div className="form-row">
             <label>
@@ -245,7 +253,7 @@ export function CreateMap({
           </div>
           <ErrorBox error={error} />
           {error.includes("Conecte") && (
-            <button className="text-button" onClick={onConnect}>
+            <button className="text-button" onClick={() => onConnect("ai")}>
               Abrir conexões
             </button>
           )}

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0 — 2026-09-21
+
+- O aplicativo passa a se chamar **Mapia**, com nova marca na navegação, login, título da página, versão, mensagens e exportações. Identificadores técnicos e dados existentes são preservados.
+- Análise de vídeos públicos de qualquer canal pela API Gemini, recebendo o link como entrada de vídeo e produzindo notas com referências de tempo aproximadas.
+- Configuração cifrada da chave em Configurações → YouTube, modelo ajustável, teste de vídeo com prévia e seleção explícita entre Gemini, OAuth e legendas públicas experimentais.
+- Gemini passa a ser o modo selecionado ao salvar a chave, mesmo com OAuth conectado. Erros não causam troca silenciosa de provedor.
+- Fonte, exportação e contexto da IA distinguem análise gerada de transcrição literal. Validação de tempos e respostas incompletas, limites de tamanho, cancelamento e erros específicos de chave, cota e modelo.
+
 ## 1.1.0 — 2026-09-21
 
 - Configurações com seção YouTube: cadastro do cliente Google, URL de retorno copiável, autorização OAuth, verificação do canal e desconexão.

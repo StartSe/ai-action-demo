@@ -1030,6 +1030,7 @@ textarea {
   border-color: #d9c6fa;
 }
 .youtube-settings h3,
+.gemini-video-settings h3,
 .youtube-actions {
   display: flex;
   align-items: center;
@@ -1066,6 +1067,20 @@ textarea {
 .youtube-setup input {
   min-width: 0;
   width: 100%;
+}
+.gemini-video-settings .youtube-setup {
+  background: #fff;
+}
+.gemini-video-settings .youtube-actions {
+  margin-top: 12px;
+}
+.source-analysis-note {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f5efff;
+  font-size: 13px;
+  line-height: 1.6;
 }
 .provider-tabs button {
   display: grid;

@@ -480,7 +480,7 @@ export class YouTubeOAuth {
       } catch {
         return {
           message:
-            "Conexão removida do Mapify. O Google não confirmou a revogação; remova também o acesso em myaccount.google.com/connections.",
+            "Conexão removida do Mapia. O Google não confirmou a revogação; remova também o acesso em myaccount.google.com/connections.",
         };
       }
     }

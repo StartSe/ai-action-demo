@@ -2,6 +2,7 @@ import { api, body, string, AppError } from "@/lib/api";
 import { getMap, saveMap } from "@/lib/maps";
 import { ask } from "@/lib/ai";
 import { grounding, relevantContext } from "@/lib/generation";
+import { sourceDescription } from "@/lib/types";
 export const dynamic = "force-dynamic";
 export async function POST(
   req: Request,
@@ -22,6 +23,7 @@ export async function POST(
         mapa: { title: map.title, summary: map.summary, root: map.root },
         historico: map.messages.slice(-8),
         trechos: relevantContext(map.source, question),
+        naturezaDaFonte: sourceDescription(map.source),
         pergunta: question,
       }),
       req.signal,

@@ -80,6 +80,9 @@ export function Library({
   const [error, setError] = useState("");
   const [create, setCreate] = useState<SourceKind | null>(null);
   const [connections, setConnections] = useState(!!youtubeResult);
+  const [connectionSection, setConnectionSection] = useState<"ai" | "youtube">(
+    "ai",
+  );
   const [connected, setConnected] = useState(false);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -482,7 +485,7 @@ export function Library({
           <footer className="library-footer">
             <Icon name="book" size={14} />
             Cada conexão é uma nova forma de aprender.
-            <span>Mapify / StartSe</span>
+            <span>Mapia / StartSe</span>
           </footer>
         </div>
       </main>
@@ -491,8 +494,9 @@ export function Library({
           initial={create}
           onClose={() => setCreate(null)}
           onCreated={openMap}
-          onConnect={() => {
+          onConnect={(section = "ai") => {
             setCreate(null);
+            setConnectionSection(section);
             setConnections(true);
           }}
         />
@@ -500,8 +504,10 @@ export function Library({
       {connections && (
         <Connections
           youtubeResult={youtubeResult}
+          initialSection={connectionSection}
           onClose={() => {
             setConnections(false);
+            setConnectionSection("ai");
             if (youtubeResult) window.history.replaceState(null, "", "/");
           }}
           onSaved={refreshConnection}

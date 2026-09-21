@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 export const metadata: Metadata = {
-  title: "Mapify · Conecte suas ideias",
+  title: "Mapia · Conecte suas ideias",
   description:
     "Transforme vídeos, PDFs e páginas em mapas mentais interativos com IA.",
 };

@@ -454,7 +454,7 @@
     },
     {
       "id": "mapify",
-      "nome": "Mapify",
+      "nome": "Mapia",
       "areas": [
         "Gestão",
         "Educação",
@@ -462,7 +462,7 @@
       ],
       "problema": "Vídeos, PDFs e páginas acumulam informação difícil de organizar e aplicar.",
       "ia": "Transforma fontes em mapas mentais interativos com referências, edição visual e conversa sobre o conteúdo.",
-      "integracoes": "ChatGPT por assinatura ou OpenRouter; transcrições públicas do YouTube, PDFs, páginas web e texto.",
+      "integracoes": "ChatGPT por assinatura ou OpenRouter; Gemini para vídeos públicos do YouTube, OAuth do próprio canal, PDFs, páginas web e texto.",
       "acento": "#7954c9",
       "porta": 3021,
       "captura": "capturas/mapify.png",
@@ -475,8 +475,8 @@
       "plano": "starter",
       "discoGB": 1,
       "discoGuarda": "mapas, fontes, conversas, conta e credenciais",
-      "versao": "1.1.0",
-      "aposPublicar": "Crie sua conta, explore um mapa de exemplo e abra Configurações para conectar sua assinatura ChatGPT ou uma chave OpenRouter. Em YouTube, configure o cliente Google e autorize sua conta para importar legendas dos vídeos que você pode editar. Depois importe uma fonte para gerar seu primeiro mapa."
+      "versao": "1.2.0",
+      "aposPublicar": "Crie sua conta e abra Configurações para conectar ChatGPT ou OpenRouter. Em YouTube, salve uma chave Gemini para analisar vídeos públicos de qualquer canal e teste o link antes de criar seu mapa."
     },
     {
       "id": "predictive-harness",
