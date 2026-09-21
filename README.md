@@ -25,6 +25,7 @@ Dezenove apps independentes, cada um resolvendo um problema específico do dia a
 | 17 | [Vídeos de Campanha](videos-campanha/) | Marketing | Produzir um vídeo curto por campanha leva semanas e gastar créditos às cegas custa caro | Propõe três conceitos com roteiro por cena e gera o vídeo a partir da imagem do produto, mostrando o custo antes | Higgsfield (servidor MCP com OAuth) |
 | 18 | [AutoML](automl-pocket/) | Dados, Financeiro e Vendas | Prever churn, fraude ou vendas a partir de planilhas depende de um cientista de dados que não existe | Treina sozinho modelos de classificação, regressão e previsão de séries e explica o resultado em português | nenhuma: aprendizado de máquina local (scikit-learn, XGBoost). **Exceção ao padrão: web + worker Python + Redis numa imagem única, plano pago no Render** |
 | 19 | [Build Agentflows v0.7.0](build-agentflows/) | Gestão | Orquestrar tarefas de IA entre agentes e sistemas | Editor visual com agentes, condições, ferramentas, aprovação humana e versões publicadas | OpenRouter, ferramentas MCP e HTTP; execução por MCP e HTTP autenticado. Disco persistente no Render |
+| 20 | [Painel Pronto](toolkit-dash-builder/) | Dados e Gestão | O gestor sabe o que quer acompanhar, mas não sabe quais indicadores pedir | Identifica o setor do pedido, escolhe os indicadores, monta os gráficos e preenche com números de exemplo; ajuste por conversa e impressão | só OpenRouter (os números são de exemplo) |
 
 Ideias mapeadas e deixadas para uma segunda rodada: copiloto de OKRs com check-in semanal, análise de concorrentes a partir de sites e redes, triagem de currículos contra a descrição da vaga, gerador de propostas comerciais a partir do CRM, resumo diário de e-mails e Slack para a diretoria.
 
@@ -59,7 +60,7 @@ Cada app guarda sua configuração em um volume Docker próprio, então as chave
 | 3013 | simulador-vendas | | 3014 | custos-ia |
 | 3015 | clone-site | | 3016 | prospeccao-linkedin |
 | 3017 | videos-campanha | | 3018 | automl-pocket |
-| 3019 | build-agentflows | | | |
+| 3019 | build-agentflows | | 3020 | toolkit-dash-builder |
 
 Um app só: `docker compose up --build pdi-time`, ou dentro da pasta do app `docker compose up --build`.
 
@@ -156,7 +157,7 @@ README.md              este arquivo
 PADRAO.md              padrão técnico e visual seguido por 17 dos 19 apps (automl-pocket tem estrutura própria)
 catalogo.json          fonte única: apps, áreas, textos, cor, porta (alimenta render.yaml, página e branches de deploy)
 render.yaml            blueprint da suíte completa (gerado)
-docker-compose.yml     sobe os 19 apps localmente (portas 3001 a 3019); com `docker compose pull` usa as imagens do GHCR
+docker-compose.yml     sobe os 20 apps localmente (portas 3001 a 3020); com `docker compose pull` usa as imagens do GHCR
 site/index.html        página do catálogo publicada no GitHub Pages do repositório público
 scripts/               gerar-deploy.mjs (gera render.yaml e a pasta publico/), publicar-publico.sh (envia ao repo público), verificar-padrao.sh (compara os apps com pdi-time; exceções em padrao-excecoes.json) e verificar-jargao.mjs (jargão técnico na tela; exceções em jargao-excecoes.json)
 .github/workflows/     publicar.yml: constrói as imagens alteradas e atualiza o repositório público

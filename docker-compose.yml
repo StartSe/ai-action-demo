@@ -1,5 +1,5 @@
 # Sobe a suíte inteira: docker compose up --build   (ou docker compose pull && docker compose up, sem construir nada)
-# Cada app fica em uma porta: 3001 a 3018 (veja a tabela no README).
+# Cada app fica em uma porta: 3001 a 3020 (veja a tabela no README).
 # Nenhuma variável é obrigatória: abra http://localhost:30XX/setup em cada app para conectar a IA e as integrações.
 # As chaves ficam em SQLite dentro do volume de cada app e sobrevivem a reinícios.
 # Um .env na raiz é opcional (copie de .env.example); variáveis de ambiente têm prioridade sobre o setup.
@@ -145,6 +145,12 @@ services:
     image: ghcr.io/startse/build-agentflows:latest
     ports: ["3019:10000"]
     volumes: [build-agentflows-dados:/app/data]
+  toolkit-dash-builder:
+    <<: *app
+    build: ./toolkit-dash-builder
+    image: ghcr.io/startse/toolkit-dash-builder:latest
+    ports: ["3020:10000"]
+    volumes: [toolkit-dash-builder-dados:/app/data]
 
 volumes:
   pdi-time-dados:
@@ -166,3 +172,4 @@ volumes:
   videos-campanha-dados:
   automl-pocket-dados:
   build-agentflows-dados:
+  toolkit-dash-builder-dados:

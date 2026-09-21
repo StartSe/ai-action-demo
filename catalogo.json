@@ -426,6 +426,25 @@
       "discoGB": 1,
       "discoGuarda": "fluxos, versões publicadas, execuções, aprovações pendentes, conta e credenciais",
       "versao": "0.7.0"
+    },
+    {
+      "id": "toolkit-dash-builder",
+      "nome": "Painel Pronto",
+      "areas": [
+        "Dados",
+        "Gestão"
+      ],
+      "problema": "O gestor sabe o que quer acompanhar, mas não sabe quais indicadores pedir nem como montar o painel.",
+      "ia": "Identifica o setor do pedido, escolhe os indicadores certos, monta os gráficos e preenche com números de exemplo do mercado brasileiro.",
+      "integracoes": "IA (OpenRouter). Nenhuma outra: os números são de exemplo.",
+      "acento": "#a5540d",
+      "porta": 3020,
+      "captura": "capturas/toolkit-dash-builder.png",
+      "capacidades": [
+        "artefato",
+        "mcp"
+      ],
+      "demo": null
     }
   ]
 }

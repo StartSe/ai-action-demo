@@ -232,5 +232,18 @@
       25
     ],
     "contrasteBranco": 11.89
+  },
+  "toolkit-dash-builder": {
+    "segmento": "Dados",
+    "acento": "#a5540d",
+    "acento2": "#edb90c",
+    "soft": "#f9efe7",
+    "ink": "#5e3008",
+    "hsl": [
+      28,
+      85,
+      35
+    ],
+    "contrasteBranco": 5.42
   }
 }
