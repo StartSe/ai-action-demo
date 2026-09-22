@@ -1,5 +1,5 @@
 import { getConfig, setConfig, temConfigSalva } from "@/lib/estado";
-import { LIMITE_PERGUNTA, LIMITE_SAUDACAO, MAX_PERGUNTAS, MIDIA_PADRAO, type Config, type ConfigMidia } from "@/lib/types";
+import { FERRAMENTAS_PADRAO, LIMITE_PERGUNTA, LIMITE_SAUDACAO, MAX_PERGUNTAS, MIDIA_PADRAO, type Config, type ConfigFerramentas, type ConfigMidia } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   const body = (await req.json().catch(() => ({}))) as Partial<Config>;
-  const { negocio, atendente, objetivo, objetivoTexto, tom, tomTexto, saudacao, perguntasSugeridas, horario, baseConhecimento, naoSei, fraseFalha, midia, fraseSemMidia } = body;
+  const { negocio, atendente, objetivo, objetivoTexto, tom, tomTexto, saudacao, perguntasSugeridas, horario, baseConhecimento, naoSei, fraseFalha, midia, ferramentas, fraseSemMidia } = body;
   if (!negocio || !String(negocio).trim() || !atendente || !String(atendente).trim() || !baseConhecimento || !String(baseConhecimento).trim()) {
     return Response.json({ error: "Preencha ao menos o nome do negócio, o nome do atendente e a base de conhecimento." }, { status: 400 });
   }
@@ -55,6 +55,13 @@ export async function PUT(req: Request) {
     imagem: typeof midia?.imagem === "boolean" ? midia.imagem : MIDIA_PADRAO.imagem,
     documento: typeof midia?.documento === "boolean" ? midia.documento : MIDIA_PADRAO.documento,
   };
+  // E para os interruptores da seção Ferramentas: ausentes, vale o padrão (o atendente usa o que já
+  // estiver conectado e não pede dados do cliente por conta própria).
+  const ferramentasEscolhidas: ConfigFerramentas = {
+    coletarContato: typeof ferramentas?.coletarContato === "boolean" ? ferramentas.coletarContato : FERRAMENTAS_PADRAO.coletarContato,
+    agenda: typeof ferramentas?.agenda === "boolean" ? ferramentas.agenda : FERRAMENTAS_PADRAO.agenda,
+    sistemas: typeof ferramentas?.sistemas === "boolean" ? ferramentas.sistemas : FERRAMENTAS_PADRAO.sistemas,
+  };
   const textoSemMidia = String(fraseSemMidia || "").trim();
   const novo: Config = {
     negocio: String(negocio).trim(),
@@ -70,6 +77,7 @@ export async function PUT(req: Request) {
     naoSei: NAO_SEI.includes(naoSei as Config["naoSei"]) ? (naoSei as Config["naoSei"]) : "humano",
     ...(textoFalha ? { fraseFalha: textoFalha } : {}),
     midia: midiaEscolhida,
+    ferramentas: ferramentasEscolhidas,
     ...(textoSemMidia ? { fraseSemMidia: textoSemMidia } : {}),
   };
   return Response.json(setConfig(novo));

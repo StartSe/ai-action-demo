@@ -87,7 +87,7 @@ test("atendimento usa trechos recuperados e explica ausência de agenda no promp
   };
   const { responder } = await import("../lib/atendente");
   const resultado = await responder({ numero: "teste-rag", texto: "Qual é a garantia do ORION?", origem: "whatsapp", config: {
-    negocio: "Loja", atendente: "Ana", objetivo: "agendamentos", tom: "profissional", horario: "9h às 18h", baseConhecimento: "Atendemos em São Paulo.", naoSei: "humano", midia: { audio: true, imagem: true, documento: true },
+    negocio: "Loja", atendente: "Ana", objetivo: "agendamentos", tom: "profissional", horario: "9h às 18h", baseConhecimento: "Atendemos em São Paulo.", naoSei: "humano", midia: { audio: true, imagem: true, documento: true }, ferramentas: { coletarContato: false, agenda: true, sistemas: true },
   } });
   assert.match(system, /politicas.txt/);
   assert.match(system, /sessenta dias/);
@@ -140,7 +140,7 @@ test("atendimento executa agenda pelo loop de ferramentas e recebe confirmação
   };
   const { responder } = await import("../lib/atendente");
   const r = await responder({ numero: "teste-agenda", texto: "Confirmo dia 20/09 às 9h, São Paulo, 30 minutos, somente eu.", config: {
-    negocio: "Clínica", atendente: "Ana", objetivo: "agendamentos", tom: "profissional", horario: "9h às 18h", baseConhecimento: "Consultas com duração de trinta minutos.", naoSei: "humano", midia: { audio: true, imagem: true, documento: true },
+    negocio: "Clínica", atendente: "Ana", objetivo: "agendamentos", tom: "profissional", horario: "9h às 18h", baseConhecimento: "Consultas com duração de trinta minutos.", naoSei: "humano", midia: { audio: true, imagem: true, documento: true }, ferramentas: { coletarContato: false, agenda: true, sistemas: true },
   } });
   assert.equal(criacoes, 1);
   assert.equal(chamadasIA, 2);

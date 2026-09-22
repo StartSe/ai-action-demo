@@ -259,3 +259,11 @@ const CONTEXTO_COMPARACAO: Record<PeriodoMetricas, string> = {
 export function contextoComparacao(periodo: PeriodoMetricas): string {
   return CONTEXTO_COMPARACAO[periodo] ?? CONTEXTO_COMPARACAO[PERIODO_PADRAO];
 }
+
+/**
+ * O link do cartão "Consultar a agenda" (components/CartaoFerramenta.tsx) quando ela ainda não foi
+ * conectada. Ele mora aqui, e não no JSX, pela mesma razão de `ACAO_CONECTAR_NUMERO` estar em
+ * lib/demo.ts: `scripts/verificar-jargao.mjs` procura "/setup" em texto de `components/*.tsx` que não
+ * seja atributo, e uma `url:` escrita direto no componente reprovaria. Em `lib/*.ts` isso não acontece.
+ */
+export const ACAO_CONECTAR_AGENDA = { url: "/setup#mcp-agenda", rotulo: "Conectar em Configurações" };

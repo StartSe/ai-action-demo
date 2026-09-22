@@ -159,7 +159,7 @@
         "Lint e build passam; verificar no navegador (cartões nos dois estados de conexão; desktop e celular)"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-009 (Fase 2)"
     },
     {

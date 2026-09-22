@@ -101,6 +101,27 @@ export const MIDIA_PADRAO: ConfigMidia = { audio: true, imagem: true, documento:
 /** O que o cliente recebe quando o atendente não consegue entender o que ele mandou (lib/midia.ts). */
 export const FRASE_SEM_MIDIA_PADRAO = "Ainda não consigo ouvir áudios nem abrir arquivos por aqui. Pode me escrever?";
 
+/**
+ * O que o atendente pode fazer além de escrever, ligado e desligado na seção Ferramentas do passo 1 do
+ * Assistente. "Pedir ajuda de uma pessoa" não está aqui de propósito: transferir é o que impede o
+ * atendente de inventar uma resposta, e desligar isso deixaria o cliente sem saída — é sempre ligado.
+ * `agenda` e `sistemas` valem por cima da conexão: desligados, as ferramentas não são nem oferecidas ao
+ * modelo, mesmo com a agenda ou o sistema da empresa conectados (lib/atendente.ts).
+ */
+export interface ConfigFerramentas {
+  /** Pedir o nome no começo da conversa e um contato de retorno ao transferir (só prompt, sem ferramenta). */
+  coletarContato: boolean;
+  /** Oferecer as ferramentas da agenda conectada (lib/agenda.ts) ao atendente. */
+  agenda: boolean;
+  /** Oferecer as ferramentas dos sistemas da empresa (lib/empresa-mcp.ts) ao atendente. */
+  sistemas: boolean;
+}
+
+/** O que está ligado quando ninguém mexeu: o atendente usa o que já estiver conectado, mas não pede
+ * dados do cliente por conta própria (pedir nome e contato é escolha de quem atende, não padrão).
+ * Mora aqui, e não em lib/atendente.ts, pela mesma razão de MIDIA_PADRAO: o formulário precisa dele. */
+export const FERRAMENTAS_PADRAO: ConfigFerramentas = { coletarContato: false, agenda: true, sistemas: true };
+
 /** Tetos da saudação e das perguntas de teste: o campo, o contador da tela e a validação da rota leem
  * daqui, para os três nunca discordarem sobre o que cabe. */
 export const LIMITE_SAUDACAO = 240;
@@ -137,6 +158,8 @@ export interface Config {
   fraseFalha?: string;
   /** Tipos de anexo que o atendente tenta entender antes de responder; ausente vale MIDIA_PADRAO. */
   midia: ConfigMidia;
+  /** O que o atendente pode fazer além de escrever; ausente vale FERRAMENTAS_PADRAO. */
+  ferramentas: ConfigFerramentas;
   /**
    * O que o cliente recebe quando ele mandou só um anexo que o atendente não conseguiu entender
    * (tipo desligado, formato fora da lista, falha do modelo). Vazio = FRASE_SEM_MIDIA_PADRAO.

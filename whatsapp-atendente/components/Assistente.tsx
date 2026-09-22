@@ -24,16 +24,17 @@ import {
 } from "./ui";
 import { Celular, horaAtual, saudacaoPadrao, type AoSalvarBase, type BolhaChat } from "./Celular";
 import { usePersonaBrief } from "./PersonaBrief";
+import { CartaoFerramenta, EstadoFerramenta, Interruptor } from "./CartaoFerramenta";
 import { ConexaoWhatsApp } from "./ConexaoWhatsApp";
 import { formatarTelefone } from "@/lib/telefone";
 import type { RespostaConexao } from "@/app/api/whatsapp/conexao/route";
 import type { ParBase } from "@/lib/base";
 import { ehModeloDeBase, modeloDeBase } from "@/lib/base-modelo";
 import { PERGUNTAS_EXEMPLO, configExemplo } from "@/lib/demo";
-import { OBJETIVOS, TONS, rotuloObjetivo, rotuloTom } from "@/lib/rotulos";
+import { ACAO_CONECTAR_AGENDA, OBJETIVOS, TONS, rotuloObjetivo, rotuloTom } from "@/lib/rotulos";
 import { FRASE_FALHA_PADRAO } from "@/lib/transferencia";
 import type { Sugestao } from "@/lib/sugestoes";
-import { LIMITE_SAUDACAO, MIDIA_PADRAO, type Config, type ConfigMidia, type PersonaGerada } from "@/lib/types";
+import { FERRAMENTAS_PADRAO, LIMITE_SAUDACAO, MIDIA_PADRAO, type Config, type ConfigFerramentas, type ConfigMidia, type PersonaGerada } from "@/lib/types";
 
 const PASSOS: PassoIndicador[] = [
   { titulo: "Configurar", apoio: "Defina quem é o seu agente" },
@@ -41,7 +42,7 @@ const PASSOS: PassoIndicador[] = [
   { titulo: "Conectar", apoio: "Conecte seu WhatsApp" },
 ];
 
-const CONFIG_VAZIA: Config = { negocio: "", atendente: "", objetivo: "atendimento", tom: "profissional", horario: "", baseConhecimento: "", naoSei: "humano", midia: { ...MIDIA_PADRAO } };
+const CONFIG_VAZIA: Config = { negocio: "", atendente: "", objetivo: "atendimento", tom: "profissional", horario: "", baseConhecimento: "", naoSei: "humano", midia: { ...MIDIA_PADRAO }, ferramentas: { ...FERRAMENTAS_PADRAO } };
 
 /** Primeira vez no passo 1: os campos do negócio começam vazios e a base já vem com o modelo do objetivo
  * padrão (lib/base-modelo.ts), para a pessoa trocar os marcadores em vez de encarar um campo em branco.
@@ -108,6 +109,7 @@ function assinaturaConfig(c: Config): string {
     c.naoSei,
     (c.fraseFalha ?? "").trim(),
     c.midia,
+    c.ferramentas,
   ]);
 }
 
@@ -157,31 +159,6 @@ function Grupo({ titulo, colunas = 2, children }: { titulo: string; colunas?: 2 
       <legend className="text-[13px] font-semibold mb-2">{titulo}</legend>
       <div className={`grid gap-2.5 max-md:grid-cols-1 ${colunas === 3 ? "grid-cols-3" : "grid-cols-2"}`}>{children}</div>
     </fieldset>
-  );
-}
-
-/**
- * Uma escolha de sim ou não com cara de interruptor: um `checkbox` de verdade por baixo (foco, teclado e
- * leitor de tela saem de graça) com o desenho por cima. A US-009 leva este mesmo par para os cartões da
- * seção Ferramentas; até lá ele vive aqui.
- */
-function Interruptor({ id, titulo, apoio, ligado, onMudar }: { id: string; titulo: string; apoio: string; ligado: boolean; onMudar: (v: boolean) => void }) {
-  return (
-    <label htmlFor={id} className="flex items-start gap-3 cursor-pointer">
-      <input id={id} type="checkbox" className="sr-only peer" checked={ligado} onChange={(e) => onMudar(e.target.checked)} />
-      {/* O botão redondo é irmão do <input> só no desenho: quem manda na posição dele é o estado, não uma
-          variante `peer-checked` — ela só alcança irmãos diretos, e ele é neto. O anel de foco, esse sim,
-          vem do `peer` (a caixa está escondida, e sem ele ninguém veria onde o teclado parou). */}
-      <span
-        className={`mt-0.5 w-9 h-5 shrink-0 rounded-full transition-colors relative peer-focus-visible:outline-[3px] peer-focus-visible:outline-accent-soft ${ligado ? "bg-accent" : "bg-line"}`}
-      >
-        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${ligado ? "left-[18px]" : "left-0.5"}`} />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-[13.5px] font-semibold">{titulo}</span>
-        <span className="block text-[12px] text-muted">{apoio}</span>
-      </span>
-    </label>
   );
 }
 
@@ -242,6 +219,11 @@ export function Assistente() {
     setConfig((c) => ({ ...c, midia: { ...(c.midia ?? MIDIA_PADRAO), [tipo]: ligado } }));
   }
 
+  /** Liga ou desliga uma ferramenta do atendente; as outras continuam como estavam. */
+  function setFerramenta(qual: keyof ConfigFerramentas, ligado: boolean) {
+    setConfig((c) => ({ ...c, ferramentas: { ...(c.ferramentas ?? FERRAMENTAS_PADRAO), [qual]: ligado } }));
+  }
+
   /** Trocar o objetivo troca o modelo da base — mas só enquanto ele estiver intocado. Qualquer edição da
    * pessoa (ou um texto que ela mesma colou) congela o campo onde está: o modelo nunca apaga trabalho. */
   function escolherObjetivo(objetivo: Config["objetivo"]) {
@@ -276,6 +258,12 @@ export function Assistente() {
   // O formulário difere do que está gravado? É o que acende a barra do rodapé e o aviso de sair da
   // página. Enquanto a configuração não chegou do banco não há com o que comparar.
   const alterado = configDoBanco !== null && assinaturaConfig(configDoBanco) !== assinaturaConfig(config);
+
+  // O que já está conectado, lido de `GET /api/status` (a mesma fonte do chip do cabeçalho): é isso que
+  // separa "Conectada" de "Falta conectar" nos cartões da agenda e dos sistemas da empresa. Enquanto o
+  // status não chegou, os dois aparecem como não conectados — nunca como conectados por engano.
+  const agendaConectada = Boolean(status?.integrations?.["mcp-agenda"]);
+  const sistemasConectados = Boolean(status?.integrations?.["mcp-empresa"]);
 
   const { Cartao: CartaoPersona, Painel: PainelPersona } = usePersonaBrief({
     baseAtual: config.baseConhecimento,
@@ -724,9 +712,6 @@ export function Assistente() {
                     />
                   ))}
                 </Grupo>
-                {config.objetivo === "agendamentos" && (
-                  <Aviso tom="warn">Para consultar horários e marcar, <a href="/setup#mcp-agenda" className="underline font-semibold">conecte sua agenda</a>. Sem ferramentas de agenda disponíveis, o atendente coleta preferências e encaminha à equipe, sem confirmar reserva.</Aviso>
-                )}
                 {config.objetivo === "outro" && (
                   <Field label="Em uma linha, o que ele deve fazer?" htmlFor="objetivoTexto">
                     <input
@@ -861,35 +846,95 @@ export function Assistente() {
               </Secao>
 
               <Secao {...SECOES[4]}>
-                <div className="rounded-card border border-line p-4">
-                  <h3 className="font-bold text-[14px]">Áudios, fotos e arquivos</h3>
-                  <p className="text-[12.5px] text-muted mt-1 mb-3">
-                    Escolha o que o atendente tenta entender antes de responder. O que estiver desligado continua aparecendo na conversa
-                    para a equipe — o atendente é que não vai usar. Ouvir áudios usa o modelo de áudio e gasta créditos por minuto.
-                  </p>
-                  <div className="flex flex-col gap-2">
-                    <Interruptor
-                      id="midia-audio"
-                      titulo="Ouvir áudios"
-                      apoio="Transcreve o que o cliente falou e responde ao conteúdo."
-                      ligado={config.midia.audio}
-                      onMudar={(v) => setMidia("audio", v)}
-                    />
-                    <Interruptor
-                      id="midia-imagem"
-                      titulo="Olhar fotos"
-                      apoio="Descreve a foto (produto, documento, texto legível) antes de responder."
-                      ligado={config.midia.imagem}
-                      onMudar={(v) => setMidia("imagem", v)}
-                    />
-                    <Interruptor
-                      id="midia-documento"
-                      titulo="Ler arquivos"
-                      apoio="Lê PDFs e arquivos de texto que o cliente mandar."
-                      ligado={config.midia.documento}
-                      onMudar={(v) => setMidia("documento", v)}
-                    />
-                  </div>
+                <div className="flex flex-col gap-2.5">
+                  <CartaoFerramenta
+                    icone="pessoa"
+                    titulo="Pedir ajuda de uma pessoa"
+                    apoio="Quando não souber responder, ele encerra com educação e chama alguém da equipe."
+                    ligado
+                    estado={<EstadoFerramenta tom="fixo" texto="Sempre ligado · transfere com o motivo" />}
+                  />
+                  <CartaoFerramenta
+                    icone="contato"
+                    titulo="Coletar contato"
+                    apoio="Pede nome e, se for transferir, e-mail ou telefone."
+                    id="ferramenta-contato"
+                    ligado={config.ferramentas.coletarContato}
+                    onMudar={(v) => setFerramenta("coletarContato", v)}
+                    estado={config.ferramentas.coletarContato ? <EstadoFerramenta tom="ok" texto="Guardado em O que o atendente lembra" /> : undefined}
+                  />
+                  <CartaoFerramenta
+                    icone="agenda"
+                    titulo="Consultar a agenda"
+                    apoio="Vê os horários livres e marca o compromisso na agenda conectada."
+                    id="ferramenta-agenda"
+                    ligado={config.ferramentas.agenda}
+                    onMudar={(v) => setFerramenta("agenda", v)}
+                    estado={
+                      config.ferramentas.agenda ? (
+                        agendaConectada ? (
+                          <EstadoFerramenta tom="ok" texto="Conectada" />
+                        ) : (
+                          <EstadoFerramenta
+                            tom="falta"
+                            texto="Falta conectar. Sem a agenda, ele coleta as preferências e encaminha à equipe, sem confirmar reserva."
+                            link={ACAO_CONECTAR_AGENDA}
+                          />
+                        )
+                      ) : undefined
+                    }
+                  />
+                  <CartaoFerramenta
+                    icone="sistemas"
+                    titulo="Consultar sistemas da empresa"
+                    apoio="Busca pedido, estoque ou cadastro nos sistemas que a empresa já usa."
+                    id="ferramenta-sistemas"
+                    ligado={config.ferramentas.sistemas}
+                    onMudar={(v) => setFerramenta("sistemas", v)}
+                    estado={
+                      config.ferramentas.sistemas ? (
+                        sistemasConectados ? (
+                          <EstadoFerramenta tom="ok" texto="Conectado" />
+                        ) : (
+                          // Sem link para Configurações de propósito: os sistemas da empresa são ligados
+                          // por variável de ambiente, não por um cartão da tela (ver CLAUDE.md), e um
+                          // link para uma página sem esse cartão mandaria a pessoa procurar o que não há.
+                          <EstadoFerramenta tom="falta" texto="Falta conectar. Quem liga um sistema da empresa é a equipe técnica do servidor." />
+                        )
+                      ) : undefined
+                    }
+                  />
+                  <CartaoFerramenta
+                    icone="midia"
+                    titulo="Áudios, fotos e arquivos"
+                    apoio="Escolha o que ele tenta entender antes de responder. Ouvir áudios gasta créditos por minuto."
+                    ligado={config.midia.audio || config.midia.imagem || config.midia.documento}
+                  >
+                    <div className="flex flex-col gap-2 mt-1">
+                      <Interruptor
+                        id="midia-audio"
+                        titulo="Ouvir áudios"
+                        apoio="Transcreve o que o cliente falou e responde ao conteúdo."
+                        ligado={config.midia.audio}
+                        onMudar={(v) => setMidia("audio", v)}
+                      />
+                      <Interruptor
+                        id="midia-imagem"
+                        titulo="Olhar fotos"
+                        apoio="Descreve a foto (produto, documento, texto legível) antes de responder."
+                        ligado={config.midia.imagem}
+                        onMudar={(v) => setMidia("imagem", v)}
+                      />
+                      <Interruptor
+                        id="midia-documento"
+                        titulo="Ler arquivos"
+                        apoio="Lê PDFs e arquivos de texto que o cliente mandar."
+                        ligado={config.midia.documento}
+                        onMudar={(v) => setMidia("documento", v)}
+                      />
+                    </div>
+                    <EstadoFerramenta tom="fixo" texto="O que estiver desligado continua aparecendo na conversa para a equipe." />
+                  </CartaoFerramenta>
                 </div>
               </Secao>
 

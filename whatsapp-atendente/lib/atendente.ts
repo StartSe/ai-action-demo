@@ -106,10 +106,15 @@ function montarSystemPrompt(config: Config): string {
   // A saudação escrita no passo 1 só entra quando existe: vazia, o modelo se apresenta como sempre fez
   // (a reserva de `saudacaoPadrao()` é da tela, que precisa desenhar alguma coisa na prévia).
   const saudacao = config.saudacao?.trim();
+  // "Coletar contato" não é uma ferramenta: é uma instrução a mais no prompt. Quem guarda o que o
+  // cliente disser é a memória do contato, não uma chamada de função — o modelo só precisa perguntar.
+  const coletarContato = config.ferramentas?.coletarContato
+    ? "\nNo começo da conversa, se o cliente ainda não se apresentou, pergunte o nome dele de forma natural. Ao transferir para uma pessoa, peça um e-mail ou telefone para retorno.\n"
+    : "";
   return `Você é ${config.atendente}, atendente virtual da ${config.negocio}, respondendo clientes pelo WhatsApp.
 Seu objetivo em cada conversa: ${descricaoObjetivo(config)}.
 Tom de voz: ${descricaoTom(config)}.
-${saudacao ? `Quando o cliente inicia a conversa (primeira mensagem dele ou primeira depois de resolvida), apresente-se assim: "${saudacao}"\n` : ""}
+${saudacao ? `Quando o cliente inicia a conversa (primeira mensagem dele ou primeira depois de resolvida), apresente-se assim: "${saudacao}"\n` : ""}${coletarContato}
 Responda somente com base nas informações abaixo. Nunca invente preços, prazos, serviços ou políticas que não estejam aqui.
 
 Base de conhecimento:
@@ -141,8 +146,13 @@ ${Object.entries(MOTIVOS_PARA_O_PROMPT)
  * empresa (lib/empresa-mcp.ts) quando alguma estiver conectada e liberada. Devolve o nome da primeira
  * ferramenta chamada (se alguma foi), para a tela e o relatório diário mostrarem "Consultado em X".
  */
-async function perguntarComFerramentas({ system, prompt, maxTokens, usarAgenda = true }: { system: string; prompt: string; maxTokens: number; usarAgenda?: boolean }): Promise<{ texto: string; ferramentaUsada?: string }> {
-  const [empresa, agenda] = await Promise.all([toolsParaAtendente().catch(() => null), usarAgenda ? toolsAgenda().catch(() => null) : Promise.resolve(null)]);
+async function perguntarComFerramentas({ system, prompt, maxTokens, ligadas }: { system: string; prompt: string; maxTokens: number; ligadas: { agenda: boolean; sistemas: boolean } }): Promise<{ texto: string; ferramentaUsada?: string }> {
+  // O interruptor vale POR CIMA da conexão: desligado na seção Ferramentas do Assistente, o conjunto
+  // nem é buscado, então o modelo não recebe aquelas ferramentas mesmo com o serviço conectado.
+  const [empresa, agenda] = await Promise.all([
+    ligadas.sistemas ? toolsParaAtendente().catch(() => null) : Promise.resolve(null),
+    ligadas.agenda ? toolsAgenda().catch(() => null) : Promise.resolve(null),
+  ]);
   system += `
 Regras de agenda: ${agenda ? "Há ferramentas de agenda disponíveis." : "A agenda não está disponível; para pedidos de agendamento, apenas colete preferências e encaminhe à equipe com [TRANSFERIR:fora_do_escopo]."} Nunca afirme disponibilidade sem consulta. Antes de criar um evento, peça confirmação explícita do cliente sobre data, hora, fuso, duração e participantes. Só confirme agendamento após sucesso da ferramenta; erro ou resposta ambígua não é confirmação. Não repita uma criação cujo resultado seja incerto.
 Data atual: ${new Date().toISOString()}.`;
@@ -169,6 +179,12 @@ Data atual: ${new Date().toISOString()}.`;
     },
   });
   return { texto, ferramentaUsada: usadas[0] };
+}
+
+/** Os interruptores da seção Ferramentas, com a reserva para uma configuração gravada antes da US-009
+ * (ausente = ligado, como estava antes de existir interruptor). */
+function ferramentasLigadas(config: Config): { agenda: boolean; sistemas: boolean } {
+  return { agenda: config.ferramentas?.agenda !== false, sistemas: config.ferramentas?.sistemas !== false };
 }
 
 /** Soma as perguntas/respostas aprovadas pela equipe (lib/base.ts) ao texto livre da base de conhecimento. */
@@ -319,7 +335,7 @@ ${documentos}` };
     let bruta: string;
     let usada: string | undefined;
     try {
-      ({ texto: bruta, ferramentaUsada: usada } = await perguntarComFerramentas({ system: montarSystemPrompt(config), prompt, maxTokens: 400 }));
+      ({ texto: bruta, ferramentaUsada: usada } = await perguntarComFerramentas({ system: montarSystemPrompt(config), prompt, maxTokens: 400, ligadas: ferramentasLigadas(config) }));
     } catch (err) {
       // A IA falhou (chave, crédito, serviço fora, rede). No simulador e no MCP o erro sobe e aparece na
       // bolha vermelha — quem está testando precisa vê-lo. Numa conversa real, o cliente não pode ficar
@@ -492,7 +508,9 @@ export async function sugerirResposta(pergunta: string): Promise<{ resposta: str
     return { resposta: 'Configure a chave da IA em /setup para receber uma sugestão automática. Por enquanto, use "Corrigir" para gravar a resposta certa.' };
   const base = comBaseAprovada(getConfig());
   const config = { ...base, baseConhecimento: `${base.baseConhecimento}\n\n${await buscarDocumentos(pergunta)}` };
-  const { texto, ferramentaUsada } = await perguntarComFerramentas({ system: montarSystemPromptSugestao(config), prompt: pergunta, maxTokens: 200, usarAgenda: false });
+  // A sugestão à equipe nunca mexe na agenda: ela é um rascunho para alguém revisar, e consultar
+  // horários (ou criar um evento) por causa de um relatório seria agir sem ninguém ter pedido.
+  const { texto, ferramentaUsada } = await perguntarComFerramentas({ system: montarSystemPromptSugestao(config), prompt: pergunta, maxTokens: 200, ligadas: { agenda: false, sistemas: config.ferramentas?.sistemas !== false } });
   const limpa = limparSaida(texto);
   if (!limpa) {
     console.error("Sugestão da IA descartada (parecia raciocínio, não mensagem):", texto.slice(0, 200));

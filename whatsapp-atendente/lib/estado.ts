@@ -2,7 +2,7 @@
 // persistida em SQLite em uma chave só, para sobreviver a reinícios. As conversas ficam em tabelas próprias (lib/conversas.ts).
 import { configExemplo } from "./demo";
 import { getConfig as getStoreConfig, setConfig as setStoreConfig } from "./store";
-import { LIMITE_PERGUNTA, LIMITE_SAUDACAO, MAX_PERGUNTAS, MIDIA_PADRAO, type Config, type ConfigMidia, type NaoSei, type Objetivo, type Tom } from "./types";
+import { FERRAMENTAS_PADRAO, LIMITE_PERGUNTA, LIMITE_SAUDACAO, MAX_PERGUNTAS, MIDIA_PADRAO, type Config, type ConfigFerramentas, type ConfigMidia, type NaoSei, type Objetivo, type Tom } from "./types";
 
 const CHAVE = "ATENDENTE_CONFIG";
 
@@ -51,6 +51,7 @@ export function migrarConfig(salvo: Partial<Config> & { tom?: string }): Config 
     naoSei: NAO_SEI.includes(base.naoSei) ? base.naoSei : "humano",
     ...(fraseFalha ? { fraseFalha } : {}),
     midia: lerMidia(base.midia),
+    ferramentas: lerFerramentas(base.ferramentas),
     ...(fraseSemMidia ? { fraseSemMidia } : {}),
   };
 }
@@ -63,6 +64,17 @@ function lerPerguntas(salvo: unknown): string[] {
     .map((p) => String(p ?? "").trim().slice(0, LIMITE_PERGUNTA))
     .filter(Boolean)
     .slice(0, MAX_PERGUNTAS);
+}
+
+/** Configuração antiga (sem o campo) e valor malformado caem no padrão: o atendente usa o que já
+ * estiver conectado e não pede dados do cliente por conta própria. */
+function lerFerramentas(salvo: Partial<ConfigFerramentas> | undefined): ConfigFerramentas {
+  if (!salvo || typeof salvo !== "object") return { ...FERRAMENTAS_PADRAO };
+  return {
+    coletarContato: typeof salvo.coletarContato === "boolean" ? salvo.coletarContato : FERRAMENTAS_PADRAO.coletarContato,
+    agenda: typeof salvo.agenda === "boolean" ? salvo.agenda : FERRAMENTAS_PADRAO.agenda,
+    sistemas: typeof salvo.sistemas === "boolean" ? salvo.sistemas : FERRAMENTAS_PADRAO.sistemas,
+  };
 }
 
 /** Configuração antiga (sem o campo) e valor malformado caem no padrão: o atendente entende tudo. */

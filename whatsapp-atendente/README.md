@@ -130,6 +130,7 @@ components/GraficoLinhas.tsx              gráfico em SVG desenhado à mão (sem
 components/ExportarRelatorio.tsx          menu "Exportar" e cartão do relatório diário
 components/ConexaoWhatsApp.tsx            cartão "Conectar o WhatsApp": QR Code e estado ao vivo
 components/PersonaBrief.tsx               "Comece descrevendo seu negócio": gera o atendente e aplica no formulário
+components/CartaoFerramenta.tsx           os cartões com interruptor da seção Ferramentas
 components/Celular.tsx                    celular da tela, com as bolhas da conversa de teste
 components/useEventos.ts                  liga as telas no fluxo de avisos, com consulta de reserva de 30 s
 components/ui.tsx                         componentes visuais deste app (camada de produto própria)
@@ -190,9 +191,18 @@ O formulário do passo 1 é uma pilha de cartões com título e uma frase de apo
 perguntas aparecem na cabeça de quem está criando o atendente: **Quem é** (nome do atendente, nome da
 empresa e a saudação), **O que ele faz** (objetivo), **O que ele sabe** (base de conhecimento,
 documentos e as respostas já aprovadas pela equipe), **Como ele fala** (tom) e **Ferramentas** (o que
-ele tenta entender além de texto). O que raramente se mexe fica recolhido em "Quando ele não souber
+ele consegue fazer além de escrever). O que raramente se mexe fica recolhido em "Quando ele não souber
 responder" (o que fazer, horário de atendimento humano e a frase de reserva para quando o atendente
 fica fora do ar). A coluna da direita traz o índice das cinco seções, a prévia da conversa e a dica.
+
+A seção **Ferramentas** é uma lista de cartões com interruptor, um por coisa que o atendente faz além
+de responder: **Pedir ajuda de uma pessoa** (sempre ligado — transferir é o que impede o atendente de
+inventar uma resposta), **Coletar contato** (pede o nome no começo da conversa e um e-mail ou telefone
+ao transferir), **Consultar a agenda**, **Consultar sistemas da empresa** e **Áudios, fotos e arquivos**.
+Os dois do meio mostram se o serviço está conectado; o da agenda leva a Configurações quando falta
+conectar, e os sistemas da empresa são ligados pela equipe técnica, por variável de ambiente. O
+interruptor vale por cima da conexão: desligado, o atendente não recebe aquelas ferramentas mesmo com o
+serviço conectado.
 
 A **saudação** é como o atendente se apresenta na primeira mensagem de cada conversa nova (até 240
 caracteres). Ela entra no prompt, aparece na prévia e é a primeira bolha do celular no passo "Testar";

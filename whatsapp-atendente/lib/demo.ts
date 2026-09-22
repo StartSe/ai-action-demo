@@ -3,7 +3,7 @@
 // em vez de devolver o trecho da base copiado ao pé da letra.
 import { ASSUNTO_OUTROS, assuntosDoObjetivo, semAcento } from "./assuntos";
 import type { MotivoTransferencia } from "./transferencia";
-import { MIDIA_PADRAO, type Config, type Objetivo, type PapelMensagem, type StatusConversa, type TipoAnexo, type Tom } from "./types";
+import { FERRAMENTAS_PADRAO, MIDIA_PADRAO, type Config, type Objetivo, type PapelMensagem, type StatusConversa, type TipoAnexo, type Tom } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
@@ -191,6 +191,7 @@ export const configExemplo: Config = {
   horario: "segunda a sexta, das 8h às 18h, e aos sábados das 8h ao meio-dia",
   naoSei: "humano",
   midia: { ...MIDIA_PADRAO },
+  ferramentas: { ...FERRAMENTAS_PADRAO },
   baseConhecimento: `Sobre a clínica: a Sorriso Pleno Odontologia fica na Rua das Flores, 120, no Jardim América, em São Paulo. Atendemos há 12 anos com foco em odontologia geral, estética e ortodontia.
 
 Horário de atendimento humano: segunda a sexta, das 8h às 18h, e aos sábados das 8h ao meio-dia. Fora desse horário, o atendente automático continua respondendo.
