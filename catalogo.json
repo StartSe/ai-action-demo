@@ -367,6 +367,24 @@
       "discoGuarda": "a configuração feita em /setup, a conta, as campanhas e os projetos e assets do Creative Flow"
     },
     {
+      "id": "validador-regras-negocio",
+      "nome": "Validador de Regras de Negócio",
+      "areas": [
+        "Gestão"
+      ],
+      "problema": "A ideia de negócio nasce solta, em conversa e anotação dispersa, e ninguém confere se a lógica se sustenta antes de gastar tempo — ou dinheiro — nela.",
+      "ia": "Organiza a ideia descrita em Business Model Canvas e aponta onde a lógica não fecha: segmento e proposta de valor incompatíveis, canal de aquisição que não combina com o ticket médio, estrutura de custo que não é coberta pelo preço declarado.",
+      "integracoes": "IA (OpenRouter).",
+      "acento": "#29279b",
+      "porta": 3016,
+      "captura": "capturas/validador-regras-negocio.png",
+      "capacidades": [
+        "artefato",
+        "mcp"
+      ],
+      "demo": null
+    },
+    {
       "id": "automl-pocket",
       "nome": "AutoML",
       "areas": [

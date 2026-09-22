@@ -1,6 +1,6 @@
 # IA para Executivos
 
-Vinte e dois apps independentes, cada um resolvendo um problema específico do dia a dia de uma empresa com IA em alguma etapa. Feitos para executivos: crie sua conta em 30 segundos, teste com dados de exemplo sem nenhuma chave e publique com um clique, na sua própria conta no Render, a partir de uma imagem Docker pública via Blueprint. Catálogo com botão de um clique: https://startse.github.io/ai-action-app-deploy/
+Vinte e três apps independentes, cada um resolvendo um problema específico do dia a dia de uma empresa com IA em alguma etapa. Feitos para executivos: crie sua conta em 30 segundos, teste com dados de exemplo sem nenhuma chave e publique com um clique, na sua própria conta no Render, a partir de uma imagem Docker pública via Blueprint. Catálogo com botão de um clique: https://startse.github.io/ai-action-app-deploy/
 
 ## Mapa de ideias
 
@@ -45,17 +45,17 @@ Todos seguem o mesmo padrão (detalhes em [PADRAO.md](PADRAO.md)):
 ## Rodar a suíte inteira com Docker Compose
 
 ```bash
-docker compose up --build     # constrói e sobe os 22 apps; depois abra http://localhost:3001/setup (e assim por diante)
+docker compose up --build     # constrói e sobe os 23 apps; depois abra http://localhost:3001/setup (e assim por diante)
 ```
 
 Cada app guarda sua configuração em um volume Docker próprio, então as chaves sobrevivem a reinícios.
 
 | Porta | App | | Porta | App |
 |---|---|---|---|---|
-| 3001 | pdi-time | | 3012 | bussola-ia |
-| 3002 | agente-kanban | | 3013 | simulador-vendas |
-| 3003 | entrevista-ia | | 3014 | custos-ia |
-| 3004 | posts-sociais | | 3015 | clone-site |
+| 3001 | pdi-time | | 3013 | simulador-vendas |
+| 3002 | agente-kanban | | 3014 | custos-ia |
+| 3003 | entrevista-ia | | 3015 | clone-site |
+| 3004 | posts-sociais | | 3016 | validador-regras-negocio |
 | 3005 | prospeccao-ia | | 3017 | videos-campanha |
 | 3006 | whatsapp-atendente | | 3018 | automl-pocket |
 | 3007 | contratos-ia | | 3019 | build-agentflows |
@@ -63,6 +63,7 @@ Cada app guarda sua configuração em um volume Docker próprio, então as chave
 | 3009 | financas-ia | | 3021 | mapify |
 | 3010 | voz-do-cliente | | 3022 | predictive-harness |
 | 3011 | radar-sinais | | 3023 | precificador |
+| 3012 | bussola-ia | | | |
 
 Um app só: `docker compose up --build pdi-time`, ou dentro da pasta do app `docker compose up --build`.
 
@@ -127,7 +128,7 @@ docker login ghcr.io                   # token do GitHub com escopo write:packag
 
 Botão por app e da suíte inteira no catálogo público, ou direto:
 
-- Suíte (22 apps; os planos pagos e discos de cada app estão indicados no catálogo): `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy`
+- Suíte (23 apps; os planos pagos e discos de cada app estão indicados no catálogo): `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy`
 - Um app: `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-<app>`
 - Bússola de IA, PDI do Time, Cowork FPEA e Site Cowork têm disco persistente de 1 GB em `/app/data` no Render, tanto no Blueprint individual quanto no da suíte (plano pago). No Docker Compose, cada app tem seu próprio volume. A versão do app aparece discretamente junto à marca ou no cabeçalho e vem do `package.json`.
 
