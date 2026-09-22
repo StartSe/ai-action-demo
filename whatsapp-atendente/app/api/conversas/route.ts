@@ -1,5 +1,6 @@
 import { aiEnabled, meta } from "@/lib/ai";
 import { inicioDoPeriodo, listarConversas, semearExemplosSeVazio } from "@/lib/conversas";
+import { getConfig } from "@/lib/estado";
 import { WHATSAPP } from "@/lib/integracoes";
 import { lerPeriodo, lerStatus } from "@/lib/rotulos";
 import { integracaoConfigurada } from "@/lib/setup-comum";
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   // Primeira leitura de um app sem conversa nenhuma e sem número conectado: as conversas de exemplo
   // nascem aqui, uma única vez, para as telas não abrirem vazias em uma demonstração.
-  semearExemplosSeVazio({ numeroConectado: integracaoConfigurada(WHATSAPP) });
+  semearExemplosSeVazio({ numeroConectado: integracaoConfigurada(WHATSAPP), atendente: getConfig().atendente });
 
   const params = new URL(req.url).searchParams;
   const desde = inicioDoPeriodo(lerPeriodo(params.get("periodo")));

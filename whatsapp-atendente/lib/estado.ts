@@ -30,6 +30,7 @@ export function migrarConfig(salvo: Partial<Config> & { tom?: string }): Config 
   const tomTexto = tom === "personalizado" ? String(antigo?.tomTexto ?? base.tomTexto ?? "").trim() : "";
   const objetivo = OBJETIVOS.includes(base.objetivo) ? base.objetivo : "atendimento";
   const objetivoTexto = objetivo === "outro" ? String(base.objetivoTexto ?? "").trim() : "";
+  const fraseFalha = String(base.fraseFalha ?? "").trim();
   return {
     negocio: base.negocio,
     atendente: base.atendente,
@@ -40,6 +41,7 @@ export function migrarConfig(salvo: Partial<Config> & { tom?: string }): Config 
     horario: base.horario,
     baseConhecimento: base.baseConhecimento,
     naoSei: NAO_SEI.includes(base.naoSei) ? base.naoSei : "humano",
+    ...(fraseFalha ? { fraseFalha } : {}),
   };
 }
 

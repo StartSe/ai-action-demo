@@ -23,7 +23,9 @@ import {
 import { classificarLocal, esperar, respostaLocal } from "./demo";
 import { toolsParaAtendente } from "./empresa-mcp";
 import { getConfig } from "./estado";
+import { FRASE_FALHA_PADRAO, lerMotivo, MOTIVO_PADRAO, MOTIVOS_PARA_O_PROMPT, rotuloMotivo, semMarcador, type MotivoTransferencia } from "./transferencia";
 import type { CanalOrigem, Config, PerguntaPendente } from "./types";
+import { registrarFalhaEnvio } from "./whatsapp";
 
 /** O tom escolhido, escrito como instrução para a IA; no tom personalizado, o texto é o da pessoa. */
 function descricaoTom(config: Config): string {
@@ -123,7 +125,11 @@ Regras:
       : config.naoSei === "site"
         ? "indique que o cliente consulte o site da empresa para mais detalhes"
         : `avise que um humano vai responder assim que possível (horário de atendimento humano: ${config.horario})`
-  }. Nesses casos, termine a resposta com o marcador [TRANSFERIR] sozinho na última linha.`;
+  }. Nesses casos, termine a resposta com o marcador [TRANSFERIR:motivo] sozinho na última linha, escolhendo o motivo entre:
+${Object.entries(MOTIVOS_PARA_O_PROMPT)
+  .map(([motivo, explicacao]) => `  - ${motivo}: ${explicacao}`)
+  .join("\n")}
+  O marcador vale também quando o cliente pede uma pessoa ou reclama, mesmo que você consiga responder algo: responda com gentileza e termine com o marcador.`;
 }
 
 /**
@@ -134,7 +140,7 @@ Regras:
 async function perguntarComFerramentas({ system, prompt, maxTokens, usarAgenda = true }: { system: string; prompt: string; maxTokens: number; usarAgenda?: boolean }): Promise<{ texto: string; ferramentaUsada?: string }> {
   const [empresa, agenda] = await Promise.all([toolsParaAtendente().catch(() => null), usarAgenda ? toolsAgenda().catch(() => null) : Promise.resolve(null)]);
   system += `
-Regras de agenda: ${agenda ? "Há ferramentas de agenda disponíveis." : "A agenda não está disponível; para pedidos de agendamento, apenas colete preferências e encaminhe à equipe com [TRANSFERIR]."} Nunca afirme disponibilidade sem consulta. Antes de criar um evento, peça confirmação explícita do cliente sobre data, hora, fuso, duração e participantes. Só confirme agendamento após sucesso da ferramenta; erro ou resposta ambígua não é confirmação. Não repita uma criação cujo resultado seja incerto.
+Regras de agenda: ${agenda ? "Há ferramentas de agenda disponíveis." : "A agenda não está disponível; para pedidos de agendamento, apenas colete preferências e encaminhe à equipe com [TRANSFERIR:fora_do_escopo]."} Nunca afirme disponibilidade sem consulta. Antes de criar um evento, peça confirmação explícita do cliente sobre data, hora, fuso, duração e participantes. Só confirme agendamento após sucesso da ferramenta; erro ou resposta ambígua não é confirmação. Não repita uma criação cujo resultado seja incerto.
 Data atual: ${new Date().toISOString()}.`;
   const conjuntos = [empresa, agenda].filter((f) => f !== null);
   const ferramentas = conjuntos.length ? {
@@ -172,6 +178,8 @@ function comBaseAprovada(config: Config): Config {
 export interface RespostaDoAtendente {
   resposta: string | null;
   transferir: boolean;
+  /** Por que transferiu (lib/transferencia.ts); só com `transferir`. */
+  motivo?: MotivoTransferencia | null;
   ferramentaUsada?: string;
   /** A conversa está em atendimento humano: a mensagem foi guardada e quem responde é uma pessoa. */
   atendimentoHumano?: boolean;
@@ -276,6 +284,7 @@ ${documentos}` };
 
   let resposta: string;
   let transferir: boolean;
+  let motivo: MotivoTransferencia | null = null;
   let ferramentaUsada: string | undefined;
   if (aiEnabled()) {
     // historicoRecente já inclui as mensagens recém-gravadas: são as últimas linhas do histórico abaixo.
@@ -284,9 +293,24 @@ ${documentos}` };
       .join("\n");
     const alvo = pendentes.length > 1 ? `às últimas ${pendentes.length} mensagens do cliente, em UMA mensagem só` : "à última mensagem do cliente";
     const prompt = `${historico}\n\nResponda como ${config.atendente} ${alvo}.`;
-    const { texto: bruta, ferramentaUsada: usada } = await perguntarComFerramentas({ system: montarSystemPrompt(config), prompt, maxTokens: 400 });
-    transferir = /\[TRANSFERIR\]\s*$/i.test(bruta.trim());
-    const limpa = limparSaida(bruta.replace(/\[TRANSFERIR\]\s*$/i, ""));
+    let bruta: string;
+    let usada: string | undefined;
+    try {
+      ({ texto: bruta, ferramentaUsada: usada } = await perguntarComFerramentas({ system: montarSystemPrompt(config), prompt, maxTokens: 400 }));
+    } catch (err) {
+      // A IA falhou (chave, crédito, serviço fora, rede). No simulador e no MCP o erro sobe e aparece na
+      // bolha vermelha — quem está testando precisa vê-lo. Numa conversa real, o cliente não pode ficar
+      // no vácuo: ele recebe a frase de reserva, a conversa passa para uma pessoa com o motivo "falha",
+      // e o erro fica no log e em "As mensagens estão chegando?" (registrarFalhaEnvio).
+      if (obterRegistro(numero)?.origem !== "whatsapp") throw err;
+      const detalhe = err instanceof ErroIA ? err.message : "A IA não respondeu.";
+      console.error(`Falha da IA na conversa ${numero}; o cliente recebeu a frase de reserva e a conversa passou para uma pessoa:`, err);
+      registrarFalhaEnvio(`A IA não conseguiu responder a um cliente (${detalhe}). Ele recebeu a frase de reserva e a conversa passou para uma pessoa.`);
+      bruta = `${config.fraseFalha?.trim() || FRASE_FALHA_PADRAO}\n[TRANSFERIR:falha]`;
+    }
+    motivo = lerMotivo(bruta);
+    transferir = motivo !== null;
+    const limpa = limparSaida(semMarcador(bruta));
     if (limpa) {
       resposta = limpa;
       ferramentaUsada = usada;
@@ -298,12 +322,14 @@ ${documentos}` };
       const r = respostaLocal(texto, { ...baseLocal, baseConhecimento: `${baseLocal.baseConhecimento}\n\n${await buscarDocumentos(consulta || texto, "texto")}` });
       resposta = r.resposta;
       transferir = r.transferir;
+      motivo = r.transferir ? MOTIVO_PADRAO : null;
     }
   } else {
     await esperar(700);
     const r = respostaLocal(texto, config);
     resposta = r.resposta;
     transferir = r.transferir;
+    motivo = r.transferir ? MOTIVO_PADRAO : null;
   }
 
   // Segunda conferência, com a resposta pronta: alguém pode ter assumido, ou o cliente escrito de novo,
@@ -311,9 +337,10 @@ ${documentos}` };
   const bloqueioFinal = motivoParaNaoResponder(numero, ultimaId);
   if (bloqueioFinal) return descartar(numero, bloqueioFinal, resposta);
 
-  registrarResposta({ numero, texto: resposta, transferir, ferramentaUsada, tempoRespostaMs: Date.now() - inicio });
+  registrarResposta({ numero, texto: resposta, transferir, motivo, atendente: config.atendente, ferramentaUsada, tempoRespostaMs: Date.now() - inicio });
+  if (motivo) console.log(`Conversa ${numero} passada para uma pessoa: ${rotuloMotivo(motivo)}.`);
 
-  return { resposta, transferir, ferramentaUsada };
+  return { resposta, transferir, motivo, ferramentaUsada };
 }
 
 function descartar(numero: string, motivo: string, resposta?: string): RespostaDoAtendente {

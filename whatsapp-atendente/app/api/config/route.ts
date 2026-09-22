@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   const body = (await req.json().catch(() => ({}))) as Partial<Config>;
-  const { negocio, atendente, objetivo, objetivoTexto, tom, tomTexto, horario, baseConhecimento, naoSei } = body;
+  const { negocio, atendente, objetivo, objetivoTexto, tom, tomTexto, horario, baseConhecimento, naoSei, fraseFalha } = body;
   if (!negocio || !String(negocio).trim() || !atendente || !String(atendente).trim() || !baseConhecimento || !String(baseConhecimento).trim()) {
     return Response.json({ error: "Preencha ao menos o nome do negócio, o nome do atendente e a base de conhecimento." }, { status: 400 });
   }
@@ -34,6 +34,8 @@ export async function PUT(req: Request) {
   const objetivoEscolhido = objetivo ?? "atendimento";
   const tomEscolhido = tom ?? "profissional";
   const textoTom = String(tomTexto || "").trim();
+  // A frase de reserva para quando a IA falha é opcional: vazia, vale a padrão (lib/transferencia.ts).
+  const textoFalha = String(fraseFalha || "").trim();
   const novo: Config = {
     negocio: String(negocio).trim(),
     atendente: String(atendente).trim(),
@@ -44,6 +46,7 @@ export async function PUT(req: Request) {
     horario: String(horario || "").trim(),
     baseConhecimento: String(baseConhecimento).trim(),
     naoSei: NAO_SEI.includes(naoSei as Config["naoSei"]) ? (naoSei as Config["naoSei"]) : "humano",
+    ...(textoFalha ? { fraseFalha: textoFalha } : {}),
   };
   return Response.json(setConfig(novo));
 }

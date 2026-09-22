@@ -10,7 +10,8 @@
  */
 import { conversasExemplo } from "./demo";
 import { abrirBanco, getConfig, setConfig } from "./store";
-import type { CanalOrigem, Conversa, ConversaCompleta, MensagemChat, MensagemDaConversa, PapelMensagem, Periodo, StatusConversa } from "./types";
+import { ehMotivo, MOTIVO_PADRAO, rotuloMotivo, type MotivoTransferencia } from "./transferencia";
+import { PAPEIS_DE_CONVERSA, type CanalOrigem, type Conversa, type ConversaCompleta, type MensagemChat, type MensagemDaConversa, type PapelMensagem, type Periodo, type StatusConversa } from "./types";
 
 /** Quantas mensagens da conversa vão para a IA como memória de curto prazo. */
 export const MAX_HISTORICO = 20;
@@ -31,9 +32,17 @@ type LinhaConversa = {
   exemplo: number;
   nao_lidas: number;
   passou_por_pessoa: number;
+  motivo_transferencia: string | null;
+  esperando_desde: string | null;
   criado_em: string;
   atualizado_em: string;
 };
+
+/**
+ * Trecho de SQL que deixa só as mensagens que são conversa de verdade (cliente, atendente, pessoa):
+ * notas internas e eventos da linha do tempo moram na mesma tabela, mas não são pergunta nem resposta.
+ */
+const SO_CONVERSA = `papel IN (${PAPEIS_DE_CONVERSA.map((p) => `'${p}'`).join(", ")})`;
 
 type LinhaMensagem = {
   id: number;
@@ -69,6 +78,8 @@ function banco() {
       exemplo INTEGER NOT NULL DEFAULT 0,
       nao_lidas INTEGER NOT NULL DEFAULT 0,
       passou_por_pessoa INTEGER NOT NULL DEFAULT 0,
+      motivo_transferencia TEXT NULL,
+      esperando_desde TEXT NULL,
       criado_em TEXT NOT NULL DEFAULT (datetime('now')),
       atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
@@ -99,6 +110,16 @@ function banco() {
       d.exec(`UPDATE conversas SET passou_por_pessoa = 1
         WHERE status IN ('atencao', 'humano')
            OR EXISTS (SELECT 1 FROM mensagens m WHERE m.numero = conversas.numero AND m.papel = 'humano')`);
+    } catch { /* coluna já existe */ }
+    // 0.3.0: por que a IA passou a conversa para uma pessoa, e desde quando o cliente espera por ela.
+    // Conversas antigas já em `atencao` ganham o motivo padrão, para a faixa âmbar não ficar sem frase.
+    try {
+      d.exec(`ALTER TABLE conversas ADD COLUMN motivo_transferencia TEXT NULL`);
+      d.exec(`UPDATE conversas SET motivo_transferencia = '${MOTIVO_PADRAO}' WHERE status = 'atencao'`);
+    } catch { /* coluna já existe */ }
+    try {
+      d.exec(`ALTER TABLE conversas ADD COLUMN esperando_desde TEXT NULL`);
+      d.exec(`UPDATE conversas SET esperando_desde = atualizado_em WHERE status = 'atencao'`);
     } catch { /* coluna já existe */ }
     criado = true;
   }
@@ -165,6 +186,8 @@ function paraRegistro(l: LinhaConversa, ultimaCliente: string | null): ConversaR
     naoLidas: Number(l.nao_lidas),
     criadoEm: paraIso(l.criado_em),
     atualizadoEm: paraIso(l.atualizado_em),
+    motivoTransferencia: ehMotivo(l.motivo_transferencia) ? l.motivo_transferencia : null,
+    esperandoDesde: l.esperando_desde ? paraIso(l.esperando_desde) : null,
   };
 }
 
@@ -197,10 +220,13 @@ export function obterConversa(numero: string): ConversaCompleta | null {
   return { ...registro, mensagens: linhas.map(paraMensagem) };
 }
 
-/** As últimas mensagens da conversa, da mais antiga para a mais recente: a memória de curto prazo da IA. */
+/**
+ * As últimas mensagens da conversa, da mais antiga para a mais recente: a memória de curto prazo da IA.
+ * Notas internas e eventos ficam de fora — a IA nunca os vê.
+ */
 export function historicoRecente(numero: string, limite = MAX_HISTORICO): MensagemChat[] {
   const linhas = banco()
-    .prepare("SELECT papel, texto FROM mensagens WHERE numero = ? ORDER BY id DESC LIMIT ?")
+    .prepare(`SELECT papel, texto FROM mensagens WHERE numero = ? AND ${SO_CONVERSA} ORDER BY id DESC LIMIT ?`)
     .all(numero, limite) as { papel: string; texto: string }[];
   return linhas.reverse().map((l) => ({ papel: l.papel as PapelMensagem, texto: l.texto }));
 }
@@ -280,6 +306,8 @@ export function listarConversas({ desde, status, busca }: FiltroConversas = {}):
         exemplo: registro.exemplo,
         nao_lidas: registro.naoLidas,
         atualizado_em: registro.atualizadoEm,
+        motivoTransferencia: registro.motivoTransferencia,
+        esperandoDesde: registro.esperandoDesde,
       } satisfies Conversa;
     })
     // O status filtrado é o da leitura, então o filtro vem depois do banco, nunca no WHERE.
@@ -306,7 +334,7 @@ export function perguntasDoCliente({ desdeDias }: { desdeDias?: number } = {}): 
   const d = banco();
   const conversas = d.prepare("SELECT * FROM conversas").all() as LinhaConversa[];
   if (conversas.length === 0) return [];
-  const linhas = d.prepare("SELECT * FROM mensagens ORDER BY numero, id").all() as LinhaMensagem[];
+  const linhas = d.prepare(`SELECT * FROM mensagens WHERE ${SO_CONVERSA} ORDER BY numero, id`).all() as LinhaMensagem[];
 
   const porNumero = new Map<string, LinhaMensagem[]>();
   for (const m of linhas) {
@@ -392,6 +420,7 @@ export function garantirConversa({
   exemplo = false,
   assunto = null,
   status = "ia",
+  motivo = null,
   em,
 }: {
   numero: string;
@@ -400,18 +429,21 @@ export function garantirConversa({
   exemplo?: boolean;
   assunto?: string | null;
   status?: StatusConversa;
+  /** Por que a conversa já nasce esperando uma pessoa (só as de exemplo nascem assim). */
+  motivo?: MotivoTransferencia | null;
   /** Momento de criação, para as conversas de exemplo nascerem espalhadas nos últimos dias (US-004). */
   em?: Date;
 }): ConversaRegistro {
   const existente = linha(numero);
   if (!existente) {
     const quando = paraTextoDeBanco(em);
+    const esperando = status === "atencao";
     banco()
       .prepare(
-        `INSERT INTO conversas (numero, nome, origem, status, assunto, exemplo, nao_lidas, passou_por_pessoa, criado_em, atualizado_em)
-         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`
+        `INSERT INTO conversas (numero, nome, origem, status, assunto, exemplo, nao_lidas, passou_por_pessoa, motivo_transferencia, esperando_desde, criado_em, atualizado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`
       )
-      .run(numero, nome, origem, status, assunto, exemplo ? 1 : 0, precisouDePessoa(status) ? 1 : 0, quando, quando);
+      .run(numero, nome, origem, status, assunto, exemplo ? 1 : 0, precisouDePessoa(status) ? 1 : 0, esperando ? (motivo ?? MOTIVO_PADRAO) : null, esperando ? quando : null, quando, quando);
   } else if (nome && !existente.nome) {
     banco().prepare("UPDATE conversas SET nome = ? WHERE numero = ?").run(nome, numero);
   }
@@ -461,6 +493,7 @@ export function registrarMensagemCliente({
   }
   // A primeira conversa real do WhatsApp aposenta a demonstração, antes de qualquer gravação.
   if (origem === "whatsapp") apagarExemplosNaPrimeiraReal();
+  const nova = !linha(numero);
   const atual = garantirConversa({ numero, origem, nome, em });
   const gravado = (linha(numero) as LinhaConversa).status as StatusConversa;
   const status: StatusConversa = gravado === "resolvida" ? "ia" : gravado;
@@ -468,9 +501,15 @@ export function registrarMensagemCliente({
   // A origem de uma conversa de exemplo não muda: ela continua marcada como exemplo até ser apagada.
   const origemFinal = atual.exemplo ? atual.origem : origem;
   const quando = paraTextoDeBanco(em);
+  // Cliente escreveu numa conversa que uma pessoa cuida: a espera por ela começa agora, se ainda não
+  // tinha começado (uma segunda mensagem não reinicia a contagem).
+  const esperando = status === "humano" ? "COALESCE(esperando_desde, ?)" : "esperando_desde";
   banco()
-    .prepare("UPDATE conversas SET status = ?, nao_lidas = ?, origem = ?, atualizado_em = ? WHERE numero = ?")
-    .run(status, naoLidas, origemFinal, quando, numero);
+    .prepare(`UPDATE conversas SET status = ?, nao_lidas = ?, origem = ?, atualizado_em = ?, esperando_desde = ${esperando} WHERE numero = ?`)
+    .run(...(status === "humano" ? [status, naoLidas, origemFinal, quando, quando, numero] : [status, naoLidas, origemFinal, quando, numero]));
+  // Uma conversa que estava resolvida (gravada assim, ou lida assim por ter passado 24 h) reabre: a
+  // linha do tempo marca isso antes da mensagem que reabriu.
+  if (!nova && atual.status === "resolvida") registrarEvento(numero, "Conversa reaberta pelo cliente", em);
   const mensagemId = inserirMensagem({ numero, papel: "cliente", texto, criadoEm: quando, idExterno });
   return { ...(obterRegistro(numero) as ConversaRegistro), mensagemId, duplicada: false };
 }
@@ -485,7 +524,7 @@ export function mensagensSemResposta(numero: string): MensagemRegistro[] {
   const linhas = banco()
     .prepare(
       `SELECT * FROM mensagens WHERE numero = ? AND papel = 'cliente'
-         AND id > COALESCE((SELECT MAX(id) FROM mensagens WHERE numero = ? AND papel <> 'cliente'), 0)
+         AND id > COALESCE((SELECT MAX(id) FROM mensagens WHERE numero = ? AND papel IN ('atendente', 'humano')), 0)
        ORDER BY id`
     )
     .all(numero, numero) as LinhaMensagem[];
@@ -498,11 +537,17 @@ export function ultimaMensagemDoClienteId(numero: string): number | null {
   return l ? Number(l.id) : null;
 }
 
-/** Grava a resposta do atendente virtual: com o marcador de transferência, a conversa passa a precisar de atenção. */
+/**
+ * Grava a resposta do atendente virtual. Com `transferir`, a conversa passa a precisar de atenção: o
+ * motivo e o começo da espera ficam gravados, e a linha do tempo ganha "{atendente} pediu ajuda de uma
+ * pessoa · {motivo}". Sem `transferir`, a IA está cuidando da conversa de novo e os dois campos zeram.
+ */
 export function registrarResposta({
   numero,
   texto,
   transferir = false,
+  motivo,
+  atendente,
   ferramentaUsada,
   tempoRespostaMs,
   em,
@@ -510,14 +555,31 @@ export function registrarResposta({
   numero: string;
   texto: string;
   transferir?: boolean;
+  /** Por que transferiu (lib/transferencia.ts); sem ele, o motivo padrão. Ignorado sem `transferir`. */
+  motivo?: MotivoTransferencia | null;
+  /** Nome do atendente virtual, para o evento da linha do tempo. */
+  atendente?: string;
   ferramentaUsada?: string;
   tempoRespostaMs?: number;
   em?: Date;
 }): void {
   const quando = paraTextoDeBanco(em);
   const status: StatusConversa = transferir ? "atencao" : "ia";
-  banco().prepare(`UPDATE conversas SET status = ?, atualizado_em = ?${marcaDePessoa(status)} WHERE numero = ?`).run(status, quando, numero);
+  const motivoFinal = transferir ? motivo ?? MOTIVO_PADRAO : null;
+  banco()
+    .prepare(`UPDATE conversas SET status = ?, atualizado_em = ?, motivo_transferencia = ?, esperando_desde = ?${marcaDePessoa(status)} WHERE numero = ?`)
+    .run(status, quando, motivoFinal, transferir ? quando : null, numero);
   inserirMensagem({ numero, papel: "atendente", texto, criadoEm: quando, ferramentaUsada, tempoRespostaMs });
+  if (motivoFinal) registrarEvento(numero, `${atendente?.trim() || "O atendente"} pediu ajuda de uma pessoa · ${rotuloMotivo(motivoFinal)}`, em);
+}
+
+/**
+ * Uma linha da linha do tempo ("Você assumiu a conversa", "Marcada como resolvida"). Só existe para
+ * quem olha a conversa na tela: não muda status, não lidas nem `atualizado_em` (a ação que a gerou já
+ * mexeu no que tinha que mexer), não vai para a IA e nunca sai pelo número da empresa.
+ */
+export function registrarEvento(numero: string, texto: string, em?: Date): number {
+  return inserirMensagem({ numero, papel: "evento", texto, criadoEm: paraTextoDeBanco(em) });
 }
 
 /**
@@ -528,7 +590,8 @@ export function registrarResposta({
 export function registrarMensagemHumana(numero: string, texto: string): number {
   garantirConversa({ numero });
   const quando = paraTextoDeBanco();
-  banco().prepare("UPDATE conversas SET status = 'humano', nao_lidas = 0, passou_por_pessoa = 1, atualizado_em = ? WHERE numero = ?").run(quando, numero);
+  // Uma pessoa respondeu: o cliente não está mais esperando por ela.
+  banco().prepare("UPDATE conversas SET status = 'humano', nao_lidas = 0, passou_por_pessoa = 1, esperando_desde = NULL, atualizado_em = ? WHERE numero = ?").run(quando, numero);
   return inserirMensagem({ numero, papel: "humano", texto, criadoEm: quando });
 }
 
@@ -549,27 +612,35 @@ export function marcarLido(numero: string): void {
   banco().prepare("UPDATE conversas SET nao_lidas = 0 WHERE numero = ?").run(numero);
 }
 
-function mudarStatus(numero: string, status: StatusConversa, { zerarNaoLidas = false } = {}): void {
+function mudarStatus(
+  numero: string,
+  status: StatusConversa,
+  { zerarNaoLidas = false, zerarEspera = false, zerarMotivo = false, evento }: { zerarNaoLidas?: boolean; zerarEspera?: boolean; zerarMotivo?: boolean; evento?: string } = {}
+): boolean {
   const d = banco();
-  if (!linha(numero)) return;
-  d.prepare(`UPDATE conversas SET status = ?, atualizado_em = ?${zerarNaoLidas ? ", nao_lidas = 0" : ""}${marcaDePessoa(status)} WHERE numero = ?`).run(
-    status,
-    paraTextoDeBanco(),
-    numero
-  );
+  if (!linha(numero)) return false;
+  const extras = `${zerarNaoLidas ? ", nao_lidas = 0" : ""}${zerarEspera ? ", esperando_desde = NULL" : ""}${zerarMotivo ? ", motivo_transferencia = NULL" : ""}${marcaDePessoa(status)}`;
+  d.prepare(`UPDATE conversas SET status = ?, atualizado_em = ?${extras} WHERE numero = ?`).run(status, paraTextoDeBanco(), numero);
+  if (evento) registrarEvento(numero, evento);
+  return true;
 }
 
-/** Uma pessoa assumiu a conversa: a IA para de responder e as não lidas zeram. */
+/**
+ * Uma pessoa assumiu a conversa: a IA para de responder e as não lidas zeram. A espera do cliente
+ * continua contando — assumir não é responder — e o motivo da transferência fica, para quem abrir a
+ * conversa ainda saber por que ela chegou aqui.
+ */
 export function assumir(numero: string): void {
-  mudarStatus(numero, "humano", { zerarNaoLidas: true });
+  mudarStatus(numero, "humano", { zerarNaoLidas: true, evento: "Você assumiu a conversa" });
 }
 
-export function devolver(numero: string): void {
-  mudarStatus(numero, "ia");
+/** A IA volta a cuidar da conversa: motivo e espera zeram, e a linha do tempo diz para quem ela voltou. */
+export function devolver(numero: string, atendente?: string): void {
+  mudarStatus(numero, "ia", { zerarEspera: true, zerarMotivo: true, evento: `Conversa devolvida para ${atendente?.trim() || "o atendente virtual"}` });
 }
 
 export function resolver(numero: string): void {
-  mudarStatus(numero, "resolvida", { zerarNaoLidas: true });
+  mudarStatus(numero, "resolvida", { zerarNaoLidas: true, zerarEspera: true, evento: "Marcada como resolvida" });
 }
 
 export function apagarConversa(numero: string): void {
@@ -600,25 +671,33 @@ function totalConversas(): number {
  * não está conectado. Devolve quantas gravou (0 quando não era o caso). Só acontece uma vez: depois
  * disso, apagar as conversas de exemplo deixa o app vazio de verdade.
  */
-export function semearExemplosSeVazio({ numeroConectado }: { numeroConectado: boolean }): number {
+export function semearExemplosSeVazio({ numeroConectado, atendente = "Bia" }: { numeroConectado: boolean; atendente?: string }): number {
   if (numeroConectado || getConfig(CHAVE_EXEMPLOS) || totalConversas() > 0) return 0;
   const agora = Date.now();
   for (const c of conversasExemplo()) {
     const inicio = new Date(agora - (c.mensagens[0]?.atras ?? 0) * 60 * 1000);
     const fim = new Date(agora - (c.mensagens[c.mensagens.length - 1]?.atras ?? 0) * 60 * 1000);
-    garantirConversa({ numero: c.numero, nome: c.nome, origem: "exemplo", exemplo: true, assunto: c.assunto, status: c.status, em: inicio });
+    garantirConversa({ numero: c.numero, nome: c.nome, origem: "exemplo", exemplo: true, assunto: c.assunto, status: c.status, motivo: c.motivo, em: inicio });
     for (const m of c.mensagens) {
+      const quando = new Date(agora - m.atras * 60 * 1000);
       inserirMensagem({
         numero: c.numero,
         papel: m.papel,
         texto: m.texto,
-        criadoEm: paraTextoDeBanco(new Date(agora - m.atras * 60 * 1000)),
+        criadoEm: paraTextoDeBanco(quando),
         tempoRespostaMs: m.respostaMs,
       });
+      // A linha do tempo da demonstração: a primeira resposta de uma pessoa é o momento em que ela assumiu.
+      if (m.papel === "humano" && !c.mensagens.slice(0, c.mensagens.indexOf(m)).some((x) => x.papel === "humano")) {
+        registrarEvento(c.numero, "Você assumiu a conversa", quando);
+      }
+    }
+    if (c.status === "atencao") {
+      registrarEvento(c.numero, `${atendente} pediu ajuda de uma pessoa · ${rotuloMotivo(c.motivo ?? MOTIVO_PADRAO)}`, fim);
     }
     banco()
-      .prepare("UPDATE conversas SET nao_lidas = ?, atualizado_em = ? WHERE numero = ?")
-      .run(c.naoLidas ?? 0, paraTextoDeBanco(fim), c.numero);
+      .prepare("UPDATE conversas SET nao_lidas = ?, atualizado_em = ?, esperando_desde = ? WHERE numero = ?")
+      .run(c.naoLidas ?? 0, paraTextoDeBanco(fim), c.status === "atencao" ? paraTextoDeBanco(fim) : null, c.numero);
   }
   setConfig(CHAVE_EXEMPLOS, new Date().toISOString());
   return conversasExemplo().length;

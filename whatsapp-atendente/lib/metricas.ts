@@ -26,7 +26,11 @@
  */
 import { ASSUNTO_OUTROS } from "./assuntos";
 import { bancoDeConversas, isoDeBanco, listarConversas, paraTextoDeBanco } from "./conversas";
-import type { AssuntoMetricas, CanalOrigem, DiaMetricas, Metricas, PeriodoMetricas, StatusConversa, VariacaoMetricas } from "./types";
+import type { MotivoTransferencia } from "./transferencia";
+import { PAPEIS_DE_CONVERSA, type AssuntoMetricas, type CanalOrigem, type DiaMetricas, type Metricas, type PeriodoMetricas, type StatusConversa, type VariacaoMetricas } from "./types";
+
+/** Só as mensagens que são conversa (cliente, atendente, pessoa): notas e eventos não contam como mensagem. */
+const SO_CONVERSA = `m.papel IN (${PAPEIS_DE_CONVERSA.map((p) => `'${p}'`).join(", ")})`;
 
 /** Quantos dias inteiros cada período cobre, contando o de hoje. */
 const DIAS: Record<PeriodoMetricas, number> = { hoje: 1, "7d": 7, "30d": 30 };
@@ -217,6 +221,8 @@ export interface LinhaExportacao {
   resolvidaIA: boolean;
   /** Média das respostas medidas nesta conversa, em milissegundos; 0 quando nenhuma foi medida. */
   tempoMedioMs: number;
+  /** Por que a IA passou a conversa para uma pessoa; nulo quando não passou (ou já foi devolvida). */
+  motivoTransferencia: MotivoTransferencia | null;
 }
 
 type LinhaAgregada = {
@@ -238,9 +244,9 @@ export function linhasParaExportar(periodo: PeriodoMetricas): LinhaExportacao[] 
   const agregadas = bancoDeConversas()
     .prepare(
       `SELECT c.numero,
-              (SELECT MIN(m.criado_em) FROM mensagens m WHERE m.numero = c.numero) AS primeira,
-              (SELECT MAX(m.criado_em) FROM mensagens m WHERE m.numero = c.numero) AS ultima,
-              (SELECT COUNT(*) FROM mensagens m WHERE m.numero = c.numero) AS mensagens,
+              (SELECT MIN(m.criado_em) FROM mensagens m WHERE m.numero = c.numero AND ${SO_CONVERSA}) AS primeira,
+              (SELECT MAX(m.criado_em) FROM mensagens m WHERE m.numero = c.numero AND ${SO_CONVERSA}) AS ultima,
+              (SELECT COUNT(*) FROM mensagens m WHERE m.numero = c.numero AND ${SO_CONVERSA}) AS mensagens,
               (SELECT AVG(m.tempo_resposta_ms) FROM mensagens m
                 WHERE m.numero = c.numero AND m.papel IN ('atendente', 'humano') AND m.tempo_resposta_ms IS NOT NULL) AS tempo,
               CASE WHEN ${RESOLVIDA_PELA_IA} THEN 1 ELSE 0 END AS resolvida
@@ -265,6 +271,7 @@ export function linhasParaExportar(periodo: PeriodoMetricas): LinhaExportacao[] 
         totalMensagens: Number(a.mensagens ?? 0),
         resolvidaIA: Boolean(a.resolvida),
         tempoMedioMs: Math.round(Number(a.tempo ?? 0)),
+        motivoTransferencia: c.motivoTransferencia,
       } satisfies LinhaExportacao;
     });
 }

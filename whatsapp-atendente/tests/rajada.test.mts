@@ -65,8 +65,10 @@ test("três mensagens dentro da janela geram UM send-text, respondendo à sequê
   assert.equal(envios[0].phone, numero);
   assert.ok(envios[0].delayTyping! >= 1 && envios[0].delayTyping! <= 3);
   const conversa = obterConversa(numero)!;
-  assert.deepEqual(conversa.mensagens.map((m) => m.papel), ["cliente", "cliente", "cliente", "atendente"]);
-  assert.equal(conversa.mensagens[3].texto, envios[0].message);
+  // Só a conversa em si: um evento da linha do tempo ("pediu ajuda de uma pessoa", US-002) pode vir depois.
+  const soConversa = conversa.mensagens.filter((m) => m.papel !== "evento");
+  assert.deepEqual(soConversa.map((m) => m.papel), ["cliente", "cliente", "cliente", "atendente"]);
+  assert.equal(soConversa[3].texto, envios[0].message);
   apagarConversa(numero);
 });
 
@@ -78,7 +80,7 @@ test("assumir durante a janela impede a resposta da IA", async () => {
   assumir(numero);
   await esperar(JANELA + 1200);
   assert.equal(envios.length, 0, "a IA não responde por cima de quem assumiu");
-  assert.deepEqual(obterConversa(numero)!.mensagens.map((m) => m.papel), ["cliente"]);
+  assert.deepEqual(obterConversa(numero)!.mensagens.map((m) => m.papel), ["cliente", "evento"], "só a mensagem e o evento de assumir");
   apagarConversa(numero);
 });
 
@@ -92,7 +94,7 @@ test("assumir ENQUANTO a IA escreve descarta a resposta pronta (segunda conferê
   assumir(numero);
   await esperar(1200);
   assert.equal(envios.length, 0);
-  assert.deepEqual(obterConversa(numero)!.mensagens.map((m) => m.papel), ["cliente"]);
+  assert.deepEqual(obterConversa(numero)!.mensagens.map((m) => m.papel), ["cliente", "evento"], "só a mensagem e o evento de assumir");
   apagarConversa(numero);
 });
 

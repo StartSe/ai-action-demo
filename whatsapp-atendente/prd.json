@@ -37,7 +37,7 @@
         "Lint e build passam; verificar no navegador (conversa com eventos e faixa âmbar com motivo; desktop 1400x1000 e celular 390)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-002 (Fase 0)"
     },
     {

@@ -20,6 +20,7 @@ import { Avatar, AvatarAtendente, DesenhoOrigem } from "./ContatoVisual";
 import { ContatoRecolhido, PainelContato, type DadosDoContato } from "./PainelContato";
 import { Aviso, ErrorBox, lerErro, useConfirmacao, type ErroLido } from "./ui";
 import { classeStatus, rotuloContato, rotuloNumero, rotuloStatus } from "@/lib/rotulos";
+import { rotuloMotivo } from "@/lib/transferencia";
 import type { ConversaCompleta, MensagemDaConversa } from "@/lib/types";
 
 /** De quanto em quanto tempo a conversa aberta se atualiza (só com a aba visível). */
@@ -66,6 +67,20 @@ function MarcaEnvio({ claro }: { claro: boolean }) {
     >
       <path d="m5 13 4 4 10-10" />
     </svg>
+  );
+}
+
+/**
+ * Uma linha da linha do tempo ("Você assumiu a conversa", "Bia pediu ajuda de uma pessoa · A base não
+ * tinha a informação"): centralizada e discreta, entre as bolhas, com a hora. Não é uma bolha porque
+ * ninguém a escreveu para ninguém — ela conta o que aconteceu com a conversa.
+ */
+function LinhaEvento({ mensagem }: { mensagem: MensagemDaConversa }) {
+  return (
+    <p className="self-center max-w-[88%] text-center text-[11.5px] text-muted px-3 py-1 rounded-full bg-white/70 shadow-[0_1px_1px_rgba(20,20,50,0.06)]">
+      {mensagem.texto}
+      <span className="ml-1.5 text-[10.5px] text-muted/80 whitespace-nowrap">{horaBolha(mensagem.criadoEm)}</span>
+    </p>
   );
 }
 
@@ -355,6 +370,10 @@ export function ConversaAberta({
   const emAtendimento = conversa.status === "humano";
   const precisaDeAtencao = conversa.status === "atencao";
   const idUltimaIA = [...conversa.mensagens].reverse().find((m) => m.papel === "atendente")?.id;
+  const nomeAtendente = atendente.trim() || "O atendente";
+  // Só as mensagens de verdade formam pares pergunta/resposta: um evento entre a pergunta e a resposta
+  // (ou logo antes de uma pergunta) não pode quebrar o "Aprovar"/"Corrigir" da resposta.
+  const soConversa = conversa.mensagens.filter((m) => m.papel !== "evento" && m.papel !== "nota");
   const dadosDoContato: DadosDoContato = { conversa, agindo, onResolver: () => agir("resolver"), onApagar: apagar };
 
   return (
@@ -389,7 +408,8 @@ export function ConversaAberta({
         {precisaDeAtencao && (
           <div className="px-4 pt-4">
             <Aviso acao={{ rotulo: "Assumir atendimento", onClick: () => agir("assumir") }}>
-              <strong>Intervir na conversa</strong> · O atendente passou esta conversa para uma pessoa.
+              <strong>Intervir na conversa</strong> · {nomeAtendente} passou esta conversa para uma pessoa
+              {conversa.motivoTransferencia && <> · {rotuloMotivo(conversa.motivoTransferencia)}</>}.
             </Aviso>
           </div>
         )}
@@ -401,8 +421,9 @@ export function ConversaAberta({
           {conversa.mensagens.length === 0 ? (
             <p className="m-auto text-[13px] text-muted text-center">Nenhuma mensagem nesta conversa ainda.</p>
           ) : (
-            conversa.mensagens.map((m, i) => {
-              const anterior = conversa.mensagens[i - 1];
+            conversa.mensagens.map((m) => {
+              if (m.papel === "evento") return <LinhaEvento key={m.id} mensagem={m} />;
+              const anterior = soConversa[soConversa.indexOf(m) - 1];
               const daIA = m.papel === "atendente";
               return (
                 <Bolha
@@ -433,7 +454,7 @@ export function ConversaAberta({
             <div className="flex items-center gap-3 flex-wrap">
               <p className="flex-1 min-w-[200px] text-[13px] text-muted">
                 {precisaDeAtencao
-                  ? "O atendente passou esta conversa para uma pessoa. Assuma o atendimento para responder."
+                  ? `${nomeAtendente} passou esta conversa para uma pessoa. Assuma o atendimento para responder.`
                   : "O atendente virtual está cuidando desta conversa. Assuma o atendimento para responder você mesmo, com ou sem a ajuda da IA."}
               </p>
               <button type="button" className="btn-primary !w-auto shrink-0" onClick={() => agir("assumir")} disabled={agindo}>

@@ -1,3 +1,5 @@
+import type { MotivoTransferencia } from "./transferencia";
+
 export type Tom = "profissional" | "amigavel" | "personalizado";
 /** O que o atendente foi criado para fazer; vira uma frase do prompt em lib/atendente.ts. */
 export type Objetivo = "atendimento" | "vendas" | "agendamentos" | "outro";
@@ -11,8 +13,16 @@ export type StatusConversa = "ia" | "atencao" | "humano" | "resolvida";
 /** Janela de tempo dos filtros de Conversas e Relatórios; os rótulos ficam em lib/rotulos.ts. */
 export type Periodo = "hoje" | "7d" | "30d" | "tudo";
 
-/** Quem escreveu a mensagem: o cliente, o atendente virtual ou a pessoa que assumiu a conversa. */
-export type PapelMensagem = "cliente" | "atendente" | "humano";
+/**
+ * Quem escreveu a mensagem: o cliente, o atendente virtual ou a pessoa que assumiu a conversa. Os dois
+ * últimos não são mensagens de ninguém para o cliente: `nota` é uma anotação interna da equipe e
+ * `evento` é uma linha do tempo ("Você assumiu a conversa"). Os dois ficam só na tela — nunca vão
+ * para a IA (`historicoRecente`), não contam como não lidas e nunca saem pelo número da empresa.
+ */
+export type PapelMensagem = "cliente" | "atendente" | "humano" | "nota" | "evento";
+
+/** As mensagens que são conversa de verdade (o que a IA lê e o que conta como pergunta e resposta). */
+export const PAPEIS_DE_CONVERSA: PapelMensagem[] = ["cliente", "atendente", "humano"];
 
 /**
  * Os períodos que os números de Início e Relatórios aceitam (lib/metricas.ts). "Tudo" fica de fora:
@@ -76,6 +86,11 @@ export interface Config {
   horario: string;
   baseConhecimento: string;
   naoSei: NaoSei;
+  /**
+   * O que o cliente recebe quando a IA falha numa conversa real (lib/atendente.ts). Vazio = a frase
+   * padrão de lib/transferencia.ts (`FRASE_FALHA_PADRAO`).
+   */
+  fraseFalha?: string;
 }
 
 /** Uma conversa como as telas leem: os campos da tabela `conversas` mais o resumo das mensagens. */
@@ -97,6 +112,10 @@ export interface Conversa {
   nao_lidas: number;
   /** Momento da última mensagem ou mudança de status, em ISO, para as telas ordenarem e agruparem. */
   atualizado_em: string;
+  /** Por que a IA passou a conversa para uma pessoa (lib/transferencia.ts); nulo enquanto ela não passou. */
+  motivoTransferencia: MotivoTransferencia | null;
+  /** Desde quando o cliente espera uma pessoa, em ISO; nulo quando ninguém está esperando. */
+  esperandoDesde: string | null;
 }
 
 export interface MensagemChat {
@@ -131,6 +150,10 @@ export interface ConversaCompleta {
   naoLidas: number;
   criadoEm: string;
   atualizadoEm: string;
+  /** Por que a IA passou a conversa para uma pessoa (lib/transferencia.ts); nulo enquanto ela não passou. */
+  motivoTransferencia: MotivoTransferencia | null;
+  /** Desde quando o cliente espera uma pessoa, em ISO; nulo quando ninguém está esperando. */
+  esperandoDesde: string | null;
   mensagens: MensagemDaConversa[];
 }
 

@@ -1,5 +1,6 @@
 import { linhasParaExportar, type LinhaExportacao } from "@/lib/metricas";
 import { lerPeriodoMetricas, rotuloContato, rotuloNumero, rotuloOrigem, rotuloStatus } from "@/lib/rotulos";
+import { rotuloMotivo } from "@/lib/transferencia";
 import type { PeriodoMetricas } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ const COLUNAS = [
   "Total de mensagens",
   "Resolvida pela IA",
   "Tempo médio de resposta (segundos)",
+  "Motivo da transferência",
 ];
 
 const SEPARADOR = ";";
@@ -66,6 +68,7 @@ function linhaDaConversa(c: LinhaExportacao): string {
     String(c.totalMensagens),
     c.resolvidaIA ? "Sim" : "Não",
     segundos(c.tempoMedioMs),
+    c.motivoTransferencia ? rotuloMotivo(c.motivoTransferencia) : "",
   ]
     .map(campo)
     .join(SEPARADOR);

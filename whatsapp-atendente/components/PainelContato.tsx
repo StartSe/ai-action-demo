@@ -14,7 +14,7 @@ import { Avatar, DesenhoOrigem } from "./ContatoVisual";
 import { MaisDetalhes } from "./ui";
 import { data, numero as formatarNumero } from "@/lib/formato";
 import { classeStatus, numeroInterno, rotuloContato, rotuloNumero, rotuloOrigem, rotuloStatus } from "@/lib/rotulos";
-import type { ConversaCompleta } from "@/lib/types";
+import { PAPEIS_DE_CONVERSA, type ConversaCompleta } from "@/lib/types";
 
 export interface DadosDoContato {
   conversa: ConversaCompleta;
@@ -37,7 +37,9 @@ function Linha({ rotulo, children }: { rotulo: string; children: ReactNode }) {
 function Conteudo({ conversa, agindo, onResolver, onApagar }: DadosDoContato) {
   const nome = rotuloContato(conversa.numero, conversa.nome);
   const numeroFormatado = rotuloNumero(conversa.numero);
-  const ultima = conversa.mensagens[conversa.mensagens.length - 1];
+  // Só o que é conversa de verdade: eventos da linha do tempo e notas internas não são mensagens.
+  const mensagens = conversa.mensagens.filter((m) => PAPEIS_DE_CONVERSA.includes(m.papel));
+  const ultima = mensagens[mensagens.length - 1];
   const deTeste = conversa.origem === "simulador";
 
   return (
@@ -69,7 +71,7 @@ function Conteudo({ conversa, agindo, onResolver, onApagar }: DadosDoContato) {
         <Linha rotulo="Assunto">{conversa.assunto ?? "Sem classificação ainda"}</Linha>
         <Linha rotulo="Primeiro contato">{data(conversa.criadoEm, { comHora: true })}</Linha>
         <Linha rotulo="Última mensagem">{ultima ? data(ultima.criadoEm, { comHora: true }) : "Nenhuma ainda"}</Linha>
-        <Linha rotulo="Total de mensagens">{formatarNumero(conversa.mensagens.length)}</Linha>
+        <Linha rotulo="Total de mensagens">{formatarNumero(mensagens.length)}</Linha>
       </dl>
 
       <div className="flex flex-col items-start gap-3 mt-4">

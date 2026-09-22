@@ -2,6 +2,7 @@
 // resposta local sem IA: uma busca simples na base de conhecimento, reformulada no tom configurado
 // em vez de devolver o trecho da base copiado ao pé da letra.
 import { ASSUNTO_OUTROS, assuntosDoObjetivo, semAcento } from "./assuntos";
+import type { MotivoTransferencia } from "./transferencia";
 import type { Config, Objetivo, PapelMensagem, StatusConversa, Tom } from "./types";
 
 export function esperar(ms = 900) {
@@ -258,6 +259,8 @@ export interface ConversaExemplo {
   nome: string;
   /** Status gravado. Uma conversa `ia` parada há mais de 24 h é LIDA como resolvida (lib/conversas.ts). */
   status: StatusConversa;
+  /** Por que a IA passou a conversa para uma pessoa (só nas de status `atencao`). */
+  motivo?: MotivoTransferencia;
   assunto: string;
   naoLidas?: number;
   mensagens: MensagemExemplo[];
@@ -304,6 +307,7 @@ export function conversasExemplo(): ConversaExemplo[] {
       numero: "5511987654321",
       nome: "Carlos Menezes",
       status: "atencao",
+      motivo: "sem_informacao",
       assunto: "Preços",
       mensagens: [
         { papel: "cliente", texto: "Bom dia! Quanto custa o clareamento?", atras: 3 * DIA },
@@ -365,6 +369,7 @@ export function conversasExemplo(): ConversaExemplo[] {
       numero: "5511994567890",
       nome: "Luciana Ferraz",
       status: "atencao",
+      motivo: "sem_informacao",
       assunto: "Tratamentos",
       mensagens: [
         { papel: "cliente", texto: "Faço clareamento tendo restauração na frente?", atras: 2 * DIA + 5 * HORA },
