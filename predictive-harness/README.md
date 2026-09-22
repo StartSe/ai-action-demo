@@ -1,4 +1,4 @@
-# Cowork Jev — v0.3.0
+# Cowork Jev — v0.4.0
 
 Seu estrategista para criar predições baseadas em dados, explorar cenários e orientar decisões financeiras.
 
@@ -11,7 +11,7 @@ Agente de **FP&A** (planejamento e análise financeira) por conversa, com a unid
 ## O que faz nesta versão
 
 1. Crie a conta desta instalação ao abrir o app. Uma **escola de negócios de exemplo** já vem pronta: matrículas de 24 meses, custos por turma e marketing por mês, com três produtos e quatro perguntas cujas respostas são calculadas localmente pelo motor e marcadas como exemplo.
-2. Em **Conectores**, envie suas planilhas em XLSX ou CSV (até 20 MB, 200 mil linhas e 120 colunas; JSON e TSV continuam aceitos). No XLSX, escolha a aba antes de importar; o app usa os valores salvos no arquivo, sem executar fórmulas ou macros. Além do perfil de cada coluna (tipo semântico, alvo de previsão, dado pessoal), cada coluna recebe um **papel de FP&A** — receita, desconto, custo fixo, custo variável, marketing, produto, turma, alunos, data, canal ou nenhum — pela heurística local e, ao solicitar **Mapear com o Jev** com o OpenRouter conectado, pela IA. Você confirma o mapeamento em um passo, e o papel da planilha (matrículas, custos, marketing) sai dele.
+2. Em **Fontes de dados**, envie suas planilhas em XLSX ou CSV (até 20 MB, 200 mil linhas e 120 colunas; JSON e TSV continuam aceitos). No XLSX, escolha a aba antes de importar; o app usa os valores salvos no arquivo, sem executar fórmulas ou macros. Além do perfil de cada coluna (tipo semântico, alvo de previsão, dado pessoal), cada coluna recebe um **papel de FP&A** — receita, desconto, custo fixo, custo variável, marketing, produto, turma, alunos, data, canal ou nenhum — pela heurística local e, ao solicitar **Mapear com o Jev** com o OpenRouter conectado, pela IA. Você confirma o mapeamento em um passo, e o papel da planilha (matrículas, custos, marketing) sai dele.
 3. A base vira **produtos e turmas** com as premissas calculadas do histórico: alunos por turma, ticket cheio, desconto médio, custo fixo por turma, custo variável por aluno e marketing por aluno. Cada premissa mostra a origem (**da base**, **informada** por você ou **sugerida** pelo modelo) e é editável; informadas valem sobre as da base em todos os cenários do produto. Valores sugeridos nunca entram numa conta sem confirmação.
 4. Pergunte em português. Cada mensagem percorre o laço do harness:
    - **Triagem (Jev)**: tipo da pergunta (descritiva, diagnóstico, cenário, previsão, meta reversa, risco, conceito, fora), quais premissas estão envolvidas (uma pergunta por premissa, em paralelo), horizonte, se a base basta, impacto da decisão e dado pessoal.
@@ -29,20 +29,20 @@ Fica para as próximas versões (ver PLANO.md): cenários salvos e comparação 
 
 ## Experiência de trabalho
 
-- **Conversa**: Jev é seu analista estratégico. As fontes da conversa ficam visíveis acima das mensagens. “Nova conversa” preserva o histórico; “Limpar mensagens” mantém a conversa e as fontes; “Excluir conversa” remove apenas essa conversa. Ambas as ações destrutivas têm confirmação.
-- **Conectores**: selecione uma fonte de matrículas, uma de custos e uma de marketing. “Analisar seleção” inicia uma conversa com essas fontes; uploads posteriores não alteram sua base. OneDrive e Google Sheets são apenas informativos de “em breve”. A remoção de uma fonte preserva respostas anteriores e exige uma nova seleção para continuar as conversas afetadas.
-- **Livro de premissas**: valores informados sobrepõem os da base para o mesmo produto em qualquer conversa. Em “Como cheguei aqui”, escolha se os valores alterados valem só no cenário atual ou também no livro. Valores salvos podem ser restaurados para a base no livro; recálculos atualizam cartões e fórmulas, com aviso de que a narrativa continua sendo a original.
+- **Conversa**: Jev é seu analista estratégico. As fontes ficam em um botão compacto acima das mensagens. O histórico lateral tem busca, conversas fixadas e recentes; ele pode ser recolhido. “Nova conversa” preserva o histórico; “Limpar mensagens” mantém a conversa e as fontes; “Excluir conversa” remove apenas essa conversa. Ambas as ações destrutivas têm confirmação.
+- **Fontes de dados**: selecione uma fonte de matrículas, uma de custos e uma de marketing. “Analisar seleção” inicia uma conversa com essas fontes; uploads posteriores não alteram sua base. OneDrive e Google Sheets são apenas informativos de “em breve”. A remoção de uma fonte preserva respostas anteriores e exige uma nova seleção para continuar as conversas afetadas.
+- **Livro de premissas**: painel lateral retrátil, com gestão em modal. Valores informados sobrepõem os da base para o mesmo produto em qualquer conversa. Em “Como cheguei aqui”, escolha se os valores alterados valem só no cenário atual ou também no livro. Valores salvos podem ser restaurados para a base no livro; recálculos atualizam cartões e fórmulas, com aviso de que a narrativa continua sendo a original.
 - **Configurações**: modelos, ElevenLabs e informação sobre uso dos dados. A política aplicável depende do provedor/modelo/plano; cabe a quem utiliza avaliar essas condições e ter autorização para enviar dados.
 
 A migração preserva as mensagens existentes na primeira conversa e fixa as fontes que a base usava naquele momento. As fontes são referências aos arquivos desta instalação, não versões imutáveis dos mapeamentos. O banco e os arquivos continuam em `DATA_DIR`.
 
 ## Voz (opcional)
 
-Em Configurações, conecte sua chave ElevenLabs com permissões de leitura de vozes, Speech to Text e Text to Speech. Selecione e salve uma voz em português: as identificadas como brasileiras aparecem primeiro, e a prévia permite conferir o sotaque. Adicione uma voz em português à sua conta caso o catálogo esteja vazio.
+Em Configurações, conecte sua chave ElevenLabs com permissões de leitura de vozes, Speech to Text (Scribe Realtime) e Text to Speech. Selecione e salve uma voz em português: as identificadas como brasileiras aparecem primeiro, e a prévia permite conferir o sotaque. Adicione uma voz em português à sua conta caso o catálogo esteja vazio.
 
-No compositor, toque no microfone, grave por até 60 segundos e conclua ou descarte. O Jev transcreve para revisão antes do envio. Cada resposta tem “Ouvir resposta”, e você pode habilitar leitura automática. Requer navegador com MediaRecorder e acesso ao microfone em HTTPS (ou localhost). Falhas de permissão, conexão, créditos e reprodução aparecem na interface; o texto continua disponível.
+No compositor, toque no microfone para abrir a conversa ao vivo. O círculo indica se Jev está ouvindo, calculando ou falando. Ao fazer uma pausa, a pergunta segue automaticamente para o mesmo motor do chat, com as fontes da conversa. Você pode interromper a fala, pausar o microfone ou encerrar. Perguntas e respostas ficam no histórico. Não há gravação para anexar, revisão de áudio ou upload de arquivo. Requer microfone, Web Audio e HTTPS (ou localhost).
 
-A integração usa os contratos oficiais de [listagem de vozes](https://elevenlabs.io/docs/api-reference/voices/search), [transcrição](https://elevenlabs.io/docs/api-reference/speech-to-text/convert) (`scribe_v2`, idioma `por`) e [síntese](https://elevenlabs.io/docs/api-reference/text-to-speech/convert) (`eleven_multilingual_v2`). As credenciais ficam cifradas no servidor; áudios não são persistidos pelo app. O áudio é enviado à ElevenLabs na transcrição e o texto da resposta é enviado na síntese, com consumo na conta conectada.
+A captura usa [Scribe Realtime pelo SDK oficial](https://elevenlabs.io/docs/eleven-api/resources/libraries/scribe-stt/javascript-scribe) (`scribe_v2_realtime`, idioma `pt`, término de fala por VAD), autenticado por token de uso único emitido no servidor. Cada pergunta aguarda o cálculo do harness; novas falas interrompem a reprodução e entram na sequência. As respostas usam [síntese ElevenLabs](https://elevenlabs.io/docs/api-reference/text-to-speech/convert) (`eleven_multilingual_v2`). A chave fica cifrada no servidor. O áudio é transmitido à ElevenLabs, não é salvo nesta instalação, e há consumo na conta conectada. A qualidade, latência e créditos reais dependem do provedor; testes locais simulam os eventos de serviço e exercitam microfone, conexão e cálculo reais do app.
 
 ## Conexões
 
@@ -116,7 +116,7 @@ Nada é obrigatório: as conexões são feitas na tela. Variáveis, quando defin
 - `components/Configuracoes.tsx`, `app/api/conexoes/*`, `app/api/chatgpt/*`: conexões.
 
 - `lib/sessoes.ts`, `lib/contexto.ts`: histórico e isolamento da seleção de fontes por conversa.
-- `lib/voz.ts`, `app/api/voz`, `components/useVoz.ts`: integração ElevenLabs, gravação e reprodução.
+- `lib/voz.ts`, `app/api/voz`, `components/useVoz.ts`, `components/VozAoVivo.tsx`: integração ElevenLabs, conversa por voz ao vivo e reprodução.
 
 ## Referências
 

@@ -182,7 +182,7 @@ export function Base({ base, jevDisponivel, produtoSelecionado, onProduto, onAtu
           <small className="muted">Toque em um valor para informar o seu. Premissas informadas valem sobre as da base em todos os cenários do produto.</small>
         </section>
       )}
-      {!produto && <div className="empty-state"><Icon name="book" size={28} /><h3>O livro começa com a sua base</h3><p>Selecione uma fonte de matrículas em Conectores para ver as premissas dos produtos.</p></div>}
+      {!produto && <div className="empty-state"><Icon name="book" size={28} /><h3>O livro começa com a sua base</h3><p>Selecione uma fonte de matrículas em Fontes de dados para ver as premissas dos produtos.</p></div>}
       </>}
       {removendo && <Modal title="Excluir fonte?" onClose={() => !busy && setRemovendo(null)}><p>“{removendo.nome}” será excluída desta instalação. As respostas anteriores ficam no histórico, mas conversas que usam esta fonte precisarão de uma nova seleção para continuar.</p><div className="dialog-actions"><button className="secondary" disabled={!!busy} onClick={() => setRemovendo(null)}>Cancelar</button><button className="danger-button" disabled={!!busy} onClick={() => void remover(removendo)}>Excluir fonte</button></div></Modal>}
     </>

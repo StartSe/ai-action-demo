@@ -1,5 +1,5 @@
-import { api, body, AppError, formDataLimitado } from "@/lib/api";
-import { configurarVoz, listarVozes, statusVoz, transcrever, falar } from "@/lib/voz";
+import { api, body, AppError } from "@/lib/api";
+import { configurarVoz, listarVozes, statusVoz, tokenVoz, falar } from "@/lib/voz";
 import { obterMensagem } from "@/lib/conversa";
 import { comConversa } from "@/lib/sessoes";
 export const dynamic = "force-dynamic";
@@ -9,14 +9,12 @@ export async function GET(req: Request) {
 export async function PUT(req: Request) { return api(async () => { await configurarVoz(await body(req)); return statusVoz(); }); }
 export async function POST(req: Request) {
   return api(async () => {
-    if (req.headers.get("content-type")?.startsWith("multipart/form-data")) {
-      if (Number(req.headers.get("content-length")) > 10 * 1024 * 1024 + 65536) throw new AppError("O áudio deve ter até 10 MB.", 413);
-      const f = await formDataLimitado(req, 10 * 1024 * 1024 + 65536, "O áudio deve ter até 10 MB.");
-      const audio = f.get("audio");
-      if (!(audio instanceof File)) throw new AppError("Grave sua pergunta para transcrever.");
-      return { texto: await transcrever(audio, req.signal) };
-    }
+    if (!req.headers.get("content-type")?.startsWith("application/json")) throw new AppError("Use a conversa por voz ao vivo. O envio de áudio não está disponível.", 415);
     const b = await body(req);
+    if (b.tempoReal === true) {
+      if (typeof b.conversaId !== "string") throw new AppError("Selecione uma conversa.");
+      return comConversa(b.conversaId, async () => Response.json(await tokenVoz(req.signal), { headers: { "Cache-Control": "no-store" } }));
+    }
     if (b.previa === true) {
       const vozes = await listarVozes();
       const voz = vozes.find(v => v.id === b.vozId);

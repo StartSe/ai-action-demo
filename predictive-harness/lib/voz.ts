@@ -53,19 +53,12 @@ export async function configurarVoz(b: Record<string, unknown>) {
     setConfig("ELEVENLABS_VOICE_NAME", voz.nome);
   }
 }
-export async function transcrever(arquivo: File, signal?: AbortSignal) {
-  if (!arquivo.size || arquivo.size > 10 * 1024 * 1024) throw new AppError("O áudio deve ter até 10 MB.", 413);
-  if (!/^(audio\/(webm|mp4|mpeg|ogg|wav|x-wav)|video\/webm)(;|$)/i.test(arquivo.type)) throw new AppError("Formato de áudio não suportado.");
-  const form = new FormData();
-  form.set("file", arquivo);
-  form.set("model_id", "scribe_v2");
-  form.set("language_code", "por");
-  form.set("tag_audio_events", "false");
-  const r = await (await chamar("/v1/speech-to-text", { method: "POST", body: form, signal })).json();
-  const texto = typeof r.text === "string" ? r.text.trim() : "";
-  if (!texto) throw new AppError("Não identifiquei fala no áudio. Tente gravar novamente.");
-  if (texto.length > 2000) throw new AppError("A fala excedeu 2.000 caracteres. Grave uma pergunta mais curta.");
-  return texto;
+// Single-use credentials allow microphone streaming without exposing the API key.
+export async function tokenVoz(signal?: AbortSignal) {
+  if (!getConfig("ELEVENLABS_VOICE_ID")) throw new AppError("Selecione a voz padrão nas Configurações.", 409);
+  const r = await (await chamar("/v1/single-use-token/realtime_scribe", { method: "POST", signal })).json();
+  if (typeof r.token !== "string" || !r.token) throw new AppError("Não foi possível iniciar a conversa por voz.", 502);
+  return { token: r.token };
 }
 export async function falar(texto: string, signal?: AbortSignal, vozId?: string) {
   const id = vozId || getConfig("ELEVENLABS_VOICE_ID");

@@ -28,3 +28,11 @@ Conectores importa XLSX com escolha da aba (SheetJS 0.20.3 oficial; diretório Z
 `lib/voz.ts` e `/api/voz` integram ElevenLabs: chave cifrada em `lib/store.ts`, catálogo de vozes em português com brasileiras primeiro, transcrição `scribe_v2` e síntese `eleven_multilingual_v2`. `useVoz.ts` gerencia MediaRecorder, permissões, descarte, limite de 60s e limpeza de tracks/URLs; transcrição passa pelo compositor antes do envio, leitura automática é opcional. O app não persiste áudio; o provedor recebe áudio e texto conforme detalhado nas configurações. Testes de contrato usam fetch simulado; voz real exige credencial e créditos do usuário.
 
 Os testes `experiencia.test.ts` e `voz.test.ts` cobrem importação, limites, isolamento, histórico e contratos da ElevenLabs. Continuam obrigatórios `npm test`, `npm run lint` e `npm run build`.
+
+## Rodada 4 — Espaço de conversa (v0.4.0)
+
+O header mantém Conversa, Fontes de dados e Configurações. `Historico.tsx` mostra busca local, fixadas e recentes no painel esquerdo retrátil; em telas menores usa dialog com foco contido. `lib/sessoes.ts` migra `fixada` e `atualizado_em` sem perder mensagens/fontes. `PATCH /api/conversas` persiste fixação. Popovers nativos permitem Escape e clique fora. O botão de fontes resume a seleção por conversa. `PremissasPanel.tsx` é a leitura lateral retrátil; a gestão abre `Base` em modal e continua global por produto. O compositor usa seta circular e não explica atalhos de teclado.
+
+`VozAoVivo.tsx` substitui MediaRecorder/upload pelo Scribe Realtime (`@elevenlabs/client`), VAD e token efêmero obtido por POST `/api/voz` `{tempoReal:true,conversaId}`. Cada pergunta chama a mesma rota do harness; a resposta calculada é sintetizada. Parcial de fala interrompe reprodução, turnos são serializados e encerramento cancela requests, áudio e captura. Multipart de voz é recusado. Credenciais e números continuam no servidor; os testes de contrato e navegador não substituem avaliação acústica com credencial real.
+
+Verificar também busca com acentos, fixação após reload, exclusão de conversa inativa, recolher/abrir laterais no celular, modal de premissas, popovers pelo teclado e ciclo de voz com WebSocket simulado, áudio de microfone real do navegador, pausa, interrupção, encerramento e erros.

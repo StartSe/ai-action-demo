@@ -130,3 +130,20 @@ test("perfil numérico suporta as 200 mil linhas anunciadas sem exceder a pilha"
   assert.equal(perfil.colunas[0].max, planilhas.LIMITE_LINHAS);
   assert.equal(perfil.colunas[0].soma, 20000100000);
 });
+
+test("fixar persiste e ordena conversas sem alterar fontes nem mensagens", async () => {
+  const a = sessoes.criarConversa([]);
+  const b = sessoes.criarConversa([]);
+  assert.equal(a.fixada, false);
+  assert.equal(sessoes.listarConversas()[0].id, b.id);
+  assert.equal(sessoes.fixarConversa(a.id, true).fixada, true);
+  assert.equal(sessoes.listarConversas()[0].id, a.id);
+  assert.deepEqual(sessoes.obterConversa(a.id).fontes, []);
+  assert.throws(() => sessoes.fixarConversa(a.id, "true"), /Informe/);
+  assert.throws(() => sessoes.fixarConversa("ausente", true), /não encontrada/);
+  sessoes.fixarConversa(a.id, false);
+  assert.equal(sessoes.listarConversas()[0].id, b.id);
+  sessoes.titularConversa(a.id, "Conversa retomada");
+  assert.equal(sessoes.obterConversa(a.id).titulo, "Conversa retomada");
+  assert.ok(sessoes.obterConversa(a.id).atualizadoEm >= a.atualizadoEm);
+});

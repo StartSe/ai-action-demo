@@ -5,7 +5,7 @@ import { Icon, IconButton, Logo } from "./ui";
 export type Aba = "conversa" | "conectores" | "premissas" | "configuracoes";
 export function AppHeader({ ativa, conversaId, onAba, disabled }: { ativa: Aba; conversaId?: string; onAba?: (aba: Aba) => void; disabled?: boolean }) {
   const router = useRouter();
-  const abas = [{ id: "conversa", nome: "Conversa", icone: "chat" }, { id: "conectores", nome: "Conectores", icone: "link" }, { id: "premissas", nome: "Livro de premissas", icone: "book" }, { id: "configuracoes", nome: "Configurações", icone: "settings" }] as const;
+  const abas = [{ id: "conversa", nome: "Conversa", icone: "chat" }, { id: "conectores", nome: "Fontes de dados", icone: "table" }, { id: "configuracoes", nome: "Configurações", icone: "settings" }] as const;
   return <header className="topbar app-header">
     <Link href="/" aria-label="Cowork Jev · início"><Logo compact /></Link>
     <nav aria-label="Navegação principal">{abas.map(a => {

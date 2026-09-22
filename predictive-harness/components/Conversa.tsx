@@ -5,20 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import type { CategoriaPergunta, DadosBase, Mensagem } from "@/lib/types";
 import { ROTULO_CATEGORIA } from "@/lib/types";
 import type { ChavePremissa } from "@/lib/fpa";
-import { useAudio, useGravacao, type StatusVoz } from "./useVoz";
+import { useAudio, type StatusVoz } from "./useVoz";
+import { VozAoVivo } from "./VozAoVivo";
 import { Markdown } from "./Markdown";
 import { Cartoes } from "./Cartoes";
 import { Icon, ErrorBox, request, fmtMs } from "./ui";
 
-const DESCRICAO_CATEGORIA: Record<CategoriaPergunta, string> = {
-  diagnostico: "Onde está a melhor margem, o que pesa mais",
-  cenario: "Se abrirmos uma turma, o que muda na margem",
-  meta_reversa: "Quanto cabe gastar mantendo a meta",
-  risco: "Com quantos alunos deixa de se pagar",
-  descritiva: "O que a base mostra",
-  conceito: "O que significa um termo",
-  outra: "",
-};
 const ICONE_CATEGORIA: Record<CategoriaPergunta, string> = { diagnostico: "gauge", cenario: "spark", meta_reversa: "coins", risco: "shield", descritiva: "table", conceito: "info", outra: "chat" };
 
 export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selecionada, onSelecionar, onVerDecisoes, onMensagens, onBaseMudou, autoPergunta, semRolagem, conversaId, onBusy, onConectores }: {
@@ -42,19 +34,17 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
   const [error, setError] = useState("");
   const [voz, setVoz] = useState<StatusVoz | null>(null);
   const [modoVoz, setModoVoz] = useState(false);
-  const [transcrita, setTranscrita] = useState(false);
   const audio = useAudio();
-  const gravacao = useGravacao(t => { setTexto(anterior => [anterior, t].filter(Boolean).join(" ")); setTranscrita(true); }, setError);
   useEffect(() => { void request<StatusVoz>("/api/voz").then(setVoz).catch(() => {}); }, []);
-  useEffect(() => { onBusy(busy || gravacao.solicitando || gravacao.gravando || gravacao.transcrevendo); }, [busy, gravacao.solicitando, gravacao.gravando, gravacao.transcrevendo, onBusy]);
+  useEffect(() => { onBusy(busy || modoVoz); }, [busy, modoVoz, onBusy]);
   useEffect(() => () => onBusy(false), [onBusy]);
   const fim = useRef<HTMLDivElement>(null);
   const autoEnviado = useRef(false);
   async function enviar(pergunta: string) {
     const p = pergunta.trim();
-    if (!p || busy || gravacao.solicitando || gravacao.gravando || gravacao.transcrevendo) return;
+    if (!p || busy || modoVoz) return;
     if (p.length > 2000) { setError("A pergunta deve ter até 2.000 caracteres."); return; }
-    audio.parar(); setTranscrita(false);
+    audio.parar();
     setBusy(true);
     setError("");
     setTexto("");
@@ -62,7 +52,6 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
       const r = await request<{ pergunta: Mensagem; resposta: Mensagem }>("/api/base/conversa", "POST", { pergunta: p, conversaId });
       onMensagens([...mensagens, r.pergunta, r.resposta]);
       onSelecionar(r.resposta.id);
-      if (modoVoz && voz?.vozId) void audio.ouvir(r.resposta.id, { mensagemId: r.resposta.id, conversaId }).catch(e => setError(e.message));
     } catch (e) {
       setError((e as Error).message);
       setTexto(p);
@@ -103,16 +92,15 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
         )}
         {!mensagens.length && !busy ? (
           <div className="vazio reveal">
-            <span className="welcome-mark"><Icon name="spark" size={32} /></span><span className="eyebrow">DADOS, CONTEXTO E UMA BOA CONVERSA</span><h3>Qual é a próxima decisão?</h3>
-            <p>{semBase ? "Sou o Jev, seu analista estratégico. Selecione uma planilha em Conectores para começarmos pelos seus dados." : `Sou o Jev, seu analista estratégico. Vamos explorar os ${base ? base.produtos.length : 0} produtos da base, testar cenários e entender o que move seus resultados.`}</p>
+            <span className="welcome-mark"><Icon name="spark" size={34} /></span><h3>Olá, sou o Jev<span className="welcome-wave"> ✦</span></h3><h4>Vamos transformar seus dados em decisões?</h4>
+            <p>{semBase ? "Selecione suas fontes de dados para começarmos." : "Explore seus resultados, teste cenários e planeje o próximo passo."}</p>
             {semBase && <button className="primary" onClick={onConectores}><Icon name="upload" size={16} /> Escolher minhas fontes</button>}
             <div className="categorias">
               {iniciais.map((s) => (
                 <button key={s.texto} className="categoria" disabled={busy} onClick={() => void enviar(s.texto)}>
                   <span className="ic"><Icon name={ICONE_CATEGORIA[s.categoria]} size={18} /></span>
                   <span className="rotulo">{ROTULO_CATEGORIA[s.categoria]}</span>
-                  <span className="desc">{DESCRICAO_CATEGORIA[s.categoria]}</span>
-                  <span className="pergunta">{s.texto}</span>
+                  <span className="pergunta">{s.texto}</span><span className="suggestion-arrow"><Icon name="chevron" size={15} /></span>
                 </button>
               ))}
             </div>
@@ -160,6 +148,12 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
           </div>
         )}
       </div>
+      {modoVoz && <VozAoVivo conversaId={conversaId} fontes={base ? [base.matriculas, base.custos, base.marketing].filter(Boolean).length : 0} onClose={() => setModoVoz(false)} onTurno={async (pergunta, signal) => {
+        const r = await request<{ pergunta: Mensagem; resposta: Mensagem }>("/api/base/conversa", "POST", { pergunta, conversaId }, { signal });
+        const historico = await request<{ mensagens: Mensagem[] }>(`/api/base/conversa?conversa=${conversaId}`, undefined, undefined, { signal });
+        onMensagens(historico.mensagens); onSelecionar(r.resposta.id);
+        return r.resposta;
+      }} />}
       <div className="compor">
         <ErrorBox error={error} />
         <form
@@ -173,9 +167,9 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
             maxLength={2000}
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
-            placeholder={pronto ? "Pergunte ao Jev ou use o microfone…" : base?.demo ? "Escolha uma pergunta sugerida ou conecte a IA para perguntar qualquer coisa" : "Conecte a IA em Configurações para perguntar"}
+            placeholder={pronto || base?.demo ? "Como posso te ajudar hoje?" : "Conecte a IA para começar…"}
             rows={1}
-            disabled={busy || gravacao.solicitando || gravacao.gravando || gravacao.transcrevendo}
+            disabled={busy || modoVoz}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -183,15 +177,9 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
               }
             }}
           />
-          {voz?.conectado ? <button type="button" className={"voice-button" + (gravacao.gravando ? " recording" : "")} disabled={busy || gravacao.solicitando || gravacao.transcrevendo} aria-label={gravacao.gravando ? "Concluir gravação" : "Gravar pergunta"} title={gravacao.gravando ? "Concluir gravação" : "Gravar pergunta"} onClick={() => { audio.parar(); if (gravacao.gravando) gravacao.parar(); else void gravacao.gravar(); }}><Icon name={gravacao.gravando ? "stop" : "mic"} size={20} /></button> : <a className="voice-button" href={`/configuracoes?conversa=${conversaId}#voz`} aria-label="Configurar conversa por voz" title="Conectar ElevenLabs para usar voz"><Icon name="mic" size={20} /></a>}
-          <button className="primary" disabled={busy || gravacao.solicitando || gravacao.gravando || gravacao.transcrevendo || !texto.trim()} aria-label="Enviar">
-            <Icon name="send" size={18} /><span>Perguntar</span>
-          </button>
+          {voz?.conectado && voz.vozId ? <button type="button" className="voice-button" disabled={busy || modoVoz} aria-label="Iniciar conversa por voz" title="Conversar por voz" onClick={() => { audio.parar(); setModoVoz(true); }}><Icon name="mic" size={20} /></button> : <a className="voice-button" href={`/configuracoes?conversa=${conversaId}#voz`} aria-label="Configurar conversa por voz" title="Configurar conversa por voz"><Icon name="mic" size={20} /></a>}
+          <button className="primary send-circle" disabled={busy || modoVoz || !texto.trim()} aria-label="Enviar"><Icon name="up" size={21} /></button>
         </form>
-        <div className="composer-status" aria-live="polite">
-          {gravacao.solicitando ? <span>Aguardando acesso ao microfone…</span> : gravacao.gravando ? <><span className="recording-dot" /> Gravando · {gravacao.segundos}s / 60s <button className="text-button" onClick={() => gravacao.parar(true)}>Descartar</button></> : gravacao.transcrevendo ? <><span className="spinner" /> Transcrevendo sua pergunta…</> : transcrita ? <span>Revise a transcrição e envie quando estiver pronta.</span> : <span>Enter para enviar · Shift + Enter para uma nova linha</span>}
-          {voz?.conectado && voz.vozId && <label className="marcar"><input type="checkbox" checked={modoVoz} onChange={e => { setModoVoz(e.target.checked); if (!e.target.checked) audio.parar(); }} /> Ouvir respostas automaticamente</label>}
-        </div>
         <small className="composer-footnote">Cálculos verificáveis, premissas visíveis. <a href={`/configuracoes?conversa=${conversaId}#politica-dados`}>Uso dos dados e modelos</a></small>
       </div>
     </>

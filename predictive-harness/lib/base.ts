@@ -224,7 +224,7 @@ export function montarBase(planilhas: Planilha[], ler: (p: Planilha) => Linha[],
   const proprias = planilhas.filter((p) => !p.demo);
   const ativas = selecao ? planilhas.filter(p => selecao.includes(p.id)) : proprias.length ? proprias : planilhas;
   const avisos: string[] = [];
-  if (selecao?.some(id => !planilhas.some(p => p.id === id))) avisos.push("Uma fonte desta conversa foi excluída. Selecione novas fontes em Conectores para continuar a análise.");
+  if (selecao?.some(id => !planilhas.some(p => p.id === id))) avisos.push("Uma fonte desta conversa foi excluída. Selecione novas fontes em Fontes de dados para continuar a análise.");
   if (!selecao && proprias.length && planilhas.length > proprias.length) avisos.push("As planilhas de exemplo ficam de fora enquanto houver planilhas suas.");
   const escolher = (papel: Planilha["papelPlanilha"]) => ativas.filter((p) => p.papelPlanilha === papel).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))[0] || null;
   const matriculas = escolher("matriculas");

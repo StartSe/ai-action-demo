@@ -194,7 +194,7 @@ export type StatusConexoes = {
   erro?: string;
 };
 /** Resposta de GET /api/base: tudo que a coluna "Base e premissas" e a conversa precisam. */
-export type SessaoConversa = { id: string; titulo: string; fontes: string[]; criadoEm: string };
+export type SessaoConversa = { id: string; titulo: string; fontes: string[]; criadoEm: string; atualizadoEm: string; fixada: boolean };
 export type DadosBase = {
   planilhas: Planilha[];
   matriculas: string | null;

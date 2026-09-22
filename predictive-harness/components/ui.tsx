@@ -16,6 +16,11 @@ export function Icon({ name, size = 20 }: { name: string; size?: number }) {
         <path d="M3 10h18M9 4v16" />
       </>
     ),
+    search: <><circle cx="10" cy="10" r="7" /><path d="m15 15 6 6" /></>,
+    sidebar: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></>,
+    up: <path d="M12 20V4m-6 6 6-6 6 6" />,
+    bookmark: <path d="m8 3 8 0-1 7 4 4H5l4-4-1-7Zm4 11v7" />,
+    micOff: <><path d="m3 3 18 18M9 9v3a3 3 0 0 0 5 2M9 4a3 3 0 0 1 6 1v4M5 10v2a7 7 0 0 0 12 5M19 10v2M12 19v3m-4 0h8" /></>,
     mic: <><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8" /></>,
     volume: <><path d="m11 4-6 5H2v6h3l6 5zM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" /></>,
     stop: <rect x="5" y="5" width="14" height="14" rx="2" />,
