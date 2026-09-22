@@ -175,3 +175,16 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   .list-toolbar { @apply flex flex-wrap items-center justify-between gap-3 mb-4; }
 }
 :where(button, a, input, select, textarea):focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+
+.toast-regiao { position: fixed; z-index: 100; right: 24px; bottom: max(24px, env(safe-area-inset-bottom)); width: min(420px, calc(100vw - 32px)); pointer-events: none; }
+.toast-aviso { display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 18px; background: var(--color-surface); color: var(--color-ink); border-width: 1px; border-radius: 16px; box-shadow: 0 8px 30px #15153024; pointer-events: auto; animation: reveal .2s ease-out both; }
+@media (max-width: 767px) { .toast-regiao { right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); } }
+@media (prefers-reduced-motion: reduce) { .toast-aviso { animation: none; } }
+.tempo-treino { border: 1px solid var(--color-line); border-radius: 16px; padding: 12px 16px; background: var(--color-surface, white); }
+.tempo-treino-final { border-color: #f3d69b; background: #fffbef; }
+.tempo-treino-trilha { margin-top: 10px; height: 3px; border-radius: 99px; overflow: hidden; background: #e8e8e8; }
+.tempo-treino-trilha > div { height: 100%; background: var(--color-accent); }
+.tempo-treino-final .tempo-treino-trilha > div { background: #b67b13; }
+.acerto-treino { display: inline-flex; align-items: center; gap: 6px; color: #17633f; animation: acerto-entrada 350ms ease-out both; }
+@keyframes acerto-entrada { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .acerto-treino { animation: none; } }

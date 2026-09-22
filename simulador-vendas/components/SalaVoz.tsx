@@ -10,6 +10,7 @@ import { frasePerfil } from "@/lib/personas";
 import type { Conversa } from "@/lib/types";
 import type { AvaliacaoSessao } from "@/lib/avaliacao";
 import type { Meta } from "@/lib/ai";
+import { tempoConversa } from "@/lib/tempo-conversa";
 
 type Papel = "vendedor" | "cliente";
 export type Fala = { papel: Papel; texto: string };
@@ -42,6 +43,7 @@ export type PropsSalaVoz = {
   objetivo: string;
   duracaoMin: number;
   iniciadaEm: string;
+  avisoTempoInicial?: boolean;
   falasIniciais: Fala[];
   /** O gestor permitiu treinar falando. */
   porVoz: boolean;
@@ -63,7 +65,7 @@ const ROTULO_ESTADO: Record<EstadoConversa, string> = {
 };
 function relogio(segundos: number) { return `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, "0")}`; }
 
-export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duracaoMin, iniciadaEm, falasIniciais, porVoz, porTexto, vozDoServidor, voz, livekit = false }: PropsSalaVoz) {
+export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duracaoMin, iniciadaEm, avisoTempoInicial = false, falasIniciais, porVoz, porTexto, vozDoServidor, voz, livekit = false }: PropsSalaVoz) {
   const [vozAlternativa, setVozAlternativa] = useState(false);
   const [falhaLivekit, setFalhaLivekit] = useState(false);
   const usarLivekit = livekit && !vozAlternativa;
@@ -93,13 +95,18 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
   const audioPedidoRef = useRef<AbortController | null>(null);
   const audioGeracaoRef = useRef(0);
   const iniciarRef = useRef<(() => Promise<void>) | null>(null);
+  const avisoTempoRef = useRef(avisoTempoInicial);
+  const ultimaTentativaAvisoRef = useRef(0);
   const ultimaDoCliente = [...falas].reverse().find(f => f.papel === "cliente")?.texto ?? "";
   const jaFalou = falas.some(f => f.papel === "vendedor");
   const totalSeg = Math.max(1, duracaoMin) * 60;
-  const restante = useSyncExternalStore(
+  const agora = useSyncExternalStore(
     useCallback((avisar) => { const t = setInterval(avisar, 1000); return () => clearInterval(t); }, []),
-    () => Math.max(0, totalSeg - Math.floor((Date.now() - new Date(iniciadaEm).getTime()) / 1000)), () => totalSeg,
+    () => Math.floor(Date.now() / 1000) * 1000, () => Date.parse(iniciadaEm),
   );
+  const tempo = tempoConversa(iniciadaEm, duracaoMin, agora);
+  const { restante } = tempo;
+  const janelaAviso = Math.floor(tempo.excedido / 15);
   const chamada = useConversaLivekit(codigo, {
     estado: guardarEstado,
     fala: fala => setFalas(atuais => [...atuais, fala]),
@@ -245,7 +252,7 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     }
   }
 
-  async function conversar(texto: string, retomar = false) {
+  async function conversar(texto: string, retomar = false, avisarTempo = false) {
     if (turnoRef.current || fechandoRef.current || !montadaRef.current) return;
     if (usarLivekit) {
       turnoRef.current = true;
@@ -264,26 +271,30 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     guardarEstado("pensando"); setErro(""); setErroTurno(false);
     await pararMicrofone();
     transcriptRef.current = ""; resetTranscript();
-    if (!retomar) setFalas(atuais => [...atuais, { papel: "vendedor", texto }]);
+    if (!retomar && texto) setFalas(atuais => [...atuais, { papel: "vendedor", texto }]);
     let encerrar = false;
     let sucesso = false;
     try {
       const r = await fetch(`/api/salas/${codigo}/conversar`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(retomar ? { retomar: true } : { fala: texto, segundo: Math.floor((Date.now() - new Date(iniciadaEm).getTime()) / 1000) }),
+        body: JSON.stringify(retomar ? { retomar: true } : { fala: texto, avisoTempo: avisarTempo, segundo: Math.floor((Date.now() - new Date(iniciadaEm).getTime()) / 1000) }),
       });
       if (!r.ok) throw new Error((await lerErro(r)).mensagem);
-      const resposta = await r.json() as { texto: string; encerrada?: boolean };
+      const resposta = await r.json() as { texto?: string; encerrada?: boolean; avisoTempo?: boolean };
       if (!montadaRef.current || fechandoRef.current) return;
-      setFalas(atuais => [...atuais, { papel: "cliente", texto: resposta.texto }]);
-      await dizer(resposta.texto);
+      if (resposta.avisoTempo) avisoTempoRef.current = true;
+      if (resposta.texto) {
+        const falaCliente = resposta.texto;
+        setFalas(atuais => [...atuais, { papel: "cliente", texto: falaCliente }]);
+        await dizer(falaCliente);
+      }
       encerrar = Boolean(resposta.encerrada); sucesso = true;
     } catch (err) {
       setErro((await lerErro(err)).mensagem); setErroTurno(true);
       ativaRef.current = false; setAtiva(false);
     } finally { turnoRef.current = false; guardarEstado("parado"); }
     if (!montadaRef.current) return;
-    if (finalizarRef.current || encerrar || Date.now() - new Date(iniciadaEm).getTime() >= totalSeg * 1000) { await pedirResultado(); return; }
+    if (finalizarRef.current || encerrar) { await pedirResultado(); return; }
     if (sucesso && ativaRef.current) await iniciarRef.current?.();
   }
 
@@ -349,8 +360,19 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     window.addEventListener("focus", conferir);
     return () => { controller.abort(); clearInterval(timer); window.removeEventListener("focus", conferir); };
   }, [codigo]);
-  const aoExpirar = useEffectEvent(() => { if (!fim && !fechandoRef.current && !turnoRef.current) void pedirResultado(); });
-  useEffect(() => { if (restante === 0) aoExpirar(); }, [restante]);
+  const orientarEncerramento = useEffectEvent(() => {
+    if (usarLivekit || fim || fechandoRef.current || turnoRef.current || erroTurno || avisoTempoRef.current || !jaFalou) return;
+    // Espera uma pausa; nunca envia uma fala parcial nem apaga o que está sendo digitado.
+    if (digitado.trim() || transcriptRef.current.trim() || !["parado", "ouvindo"].includes(estadoRef.current)) return;
+    if (Date.now() - ultimaTentativaAvisoRef.current < 15000) return;
+    ultimaTentativaAvisoRef.current = Date.now();
+    void conversar("", false, true);
+  });
+  useEffect(() => {
+    if (restante > 0) return;
+    const timer = setTimeout(orientarEncerramento, 3000);
+    return () => clearTimeout(timer);
+  }, [restante, estado, digitado, transcript, janelaAviso]);
   useEffect(() => {
     montadaRef.current = true;
     return () => {
@@ -422,8 +444,14 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
       <header className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-xl bg-accent text-white grid place-items-center font-bold">{marca}</div>
         <h1 className="font-bold flex-1 truncate">{titulo}</h1>
-        <span className={`tabular-nums text-sm ${restante <= 120 ? "text-danger" : "text-muted"}`} aria-label="Tempo restante">{relogio(restante)}</span>
       </header>
+      <div className={`tempo-treino ${tempo.perto ? "tempo-treino-final" : ""}`} aria-label="Tempo da conversa">
+        <div className="flex items-center justify-between gap-3">
+          <div><p className="text-xs font-semibold">{restante === 0 ? "Tempo previsto atingido" : "Tempo restante"}</p><p className="text-xs text-muted mt-0.5">{restante === 0 ? "Combine os próximos pontos e encerre quando estiver pronto." : tempo.perto ? "Hora de encaminhar os próximos passos." : `${duracaoMin} min para orientar sua conversa`}</p></div>
+          <span role="timer" aria-live="off" aria-label={restante === 0 ? "Tempo além do previsto" : "Tempo restante"} className="tabular-nums text-xl font-bold shrink-0">{restante === 0 ? `+${relogio(tempo.excedido)}` : relogio(restante)}</span>
+        </div>
+        <div className="tempo-treino-trilha" aria-hidden="true"><div style={{ width: `${Math.min(100, tempo.decorrido / totalSeg * 100)}%` }} /></div>
+      </div>
       <section className={`card p-6 max-md:p-4 flex flex-col gap-5 ${modo === "voz" ? "sala-conversacional" : ""}`}>
         <div className={modo === "voz" ? "text-center" : "flex items-center gap-3"}>
           {modo === "texto" && <div className="w-12 h-12 rounded-full bg-accent/10 text-accent grid place-items-center font-bold" aria-hidden="true">{cliente.nome.slice(0, 1)}</div>}
@@ -438,7 +466,7 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
           <p className={modo === "voz" ? "text-base leading-relaxed whitespace-pre-wrap text-ink-2" : "text-lg leading-relaxed whitespace-pre-wrap"} aria-live="polite">{ultimaDoCliente || "Quando estiver pronto, apresente-se e comece a conversa."}</p>
           {estado === "falando" && <button className="btn-link text-sm min-h-11" onClick={interromper}>Interromper e falar</button>}
         </div>
-        {!encerrando && <DicaConversa codigo={codigo} turno={falas.length} ultimaFala={ultimaDoCliente} aguardando={falas.at(-1)?.papel === "vendedor"} />}
+        {!encerrando && <DicaConversa codigo={codigo} sessao={`${codigo}:${iniciadaEm}`} turno={falas.length} ultimaFala={ultimaDoCliente} aguardando={falas.at(-1)?.papel === "vendedor"} />}
         {motivoTexto && <p className="text-sm text-muted">{motivoTexto}</p>}
         {falhaLivekit && usarLivekit && browserSupportsSpeechRecognition && <button type="button" className="btn-ghost !w-auto" onClick={() => void usarVozDoNavegador()}>Usar voz do navegador</button>}
         {erro && <Aviso tom="danger" acao={erroTurno ? { rotulo: "Tentar resposta novamente", onClick: () => { if (!turnoRef.current) void conversar("", true); } } : undefined}>{erro}</Aviso>}

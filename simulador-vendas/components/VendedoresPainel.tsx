@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Chip, CopyButton, DataTable, data, numero } from "@/components/ui";
+import { AcoesLink } from "@/components/AcoesLink";
+import { Chip, DataTable, data, numero } from "@/components/ui";
 import type { VendedorPainel } from "@/lib/types";
 
 const ROTULO_TENDENCIA: Record<VendedorPainel["tendencia"], string> = { subindo: "Subindo", estavel: "Estável", caindo: "Caindo" };
@@ -40,7 +41,7 @@ function AcoesVendedor({ vendedor }: { vendedor: VendedorPainel }) {
       </ul>
       <div className="flex items-center gap-2.5 flex-wrap">
         <button type="button" className="btn-ghost" disabled={criandoLink} onClick={criarLinkTreino}>{criandoLink ? "Gerando..." : "Criar link de treino"}</button>
-        {link && <CopyButton texto={() => link} rotulo="Copiar link" />}
+        {link && <AcoesLink href={link} />}
       </div>
       <button type="button" className="btn-link self-start" onClick={() => setAberto(false)}>Fechar</button>
     </div>

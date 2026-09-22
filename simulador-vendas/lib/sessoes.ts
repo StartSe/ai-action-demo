@@ -25,6 +25,7 @@ export type Sessao = {
   modo: ModoSessao;
   status: StatusSessao;
   iniciadaEm?: string;
+  avisoTempoEm?: string;
   encerradaEm?: string;
   duracaoSeg?: number;
   /** Id do registro em lib/historico.ts (o link /r/<id>), preenchido quando a avaliação termina. */
@@ -53,6 +54,7 @@ type LinhaSessao = {
   modo: string;
   status: string;
   iniciadaEm: string | null;
+  avisoTempoEm: string | null;
   encerradaEm: string | null;
   duracaoSeg: number | null;
   resultadoId: string | null;
@@ -89,6 +91,7 @@ function linhaParaSessao(l: LinhaSessao): Sessao {
     modo: (["voz-agente", "voz-navegador", "texto"].includes(l.modo) ? l.modo : "texto") as ModoSessao,
     status: (["preparando", "em_andamento", "encerrada", "avaliada", "abandonada"].includes(l.status) ? l.status : "preparando") as StatusSessao,
     iniciadaEm: l.iniciadaEm ?? undefined,
+    avisoTempoEm: l.avisoTempoEm ?? undefined,
     encerradaEm: l.encerradaEm ?? undefined,
     duracaoSeg: l.duracaoSeg ?? undefined,
     resultadoId: l.resultadoId ?? undefined,
@@ -100,6 +103,11 @@ function linhaParaSessao(l: LinhaSessao): Sessao {
 
 function linhaParaMensagem(l: LinhaMensagem): MensagemSessao {
   return { ...l, papel: l.papel === "cliente" ? "cliente" : "vendedor", segundo: l.segundo ?? undefined };
+}
+
+/** Persiste o aviso para não repeti-lo ao recarregar ou alternar entre voz e texto. */
+export function registrarAvisoTempo(sessaoId: string): void {
+  banco().prepare("UPDATE sessoes_treino SET avisoTempoEm = COALESCE(avisoTempoEm, ?) WHERE id = ? AND status = 'em_andamento'").run(agora(), sessaoId);
 }
 
 /**

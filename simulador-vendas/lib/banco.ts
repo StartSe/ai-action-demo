@@ -183,6 +183,7 @@ function criarTabelas(d: DatabaseSync): void {
   // das duas colunas por ALTER TABLE, senão a primeira avaliação lança "no such column: envioEmail".
   garantirColuna(d, "sessoes_treino", "envioEmail");
   garantirColuna(d, "sessoes_treino", "envioEmailMotivo");
+  garantirColuna(d, "sessoes_treino", "avisoTempoEm");
   // A conversa de exemplo (US-030) é marcada na sessão, e não deduzida da simulação: o link de
   // exemplo é feito para ser usado, e a conversa que alguém de verdade tem nele é real mesmo estando
   // dentro de um treino de exemplo. Sem esta coluna, a primeira conversa de verdade apagaria a si
@@ -198,6 +199,8 @@ function criarTabelas(d: DatabaseSync): void {
     criadoEm TEXT NOT NULL
   )`);
   d.exec("CREATE INDEX IF NOT EXISTS idx_mensagens_sessao ON mensagens_sessao (sessaoId, criadoEm)");
+  d.exec("CREATE TABLE IF NOT EXISTS dicas_treino (mensagemId TEXT PRIMARY KEY REFERENCES mensagens_sessao(id) ON DELETE CASCADE, sessaoId TEXT NOT NULL, texto TEXT NOT NULL, origem TEXT NOT NULL)");
+  garantirColuna(d, "dicas_treino", "acerto");
 }
 
 // ---------------------------------------------------------------------------------------------

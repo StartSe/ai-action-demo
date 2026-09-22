@@ -162,63 +162,10 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
                 <Link href="/" className="btn-primary !w-auto">Ir para o app</Link>
               </div>
             </footer>
-
-            <MaisDetalhes titulo="Para a equipe técnica">
-              <p className="text-muted text-[13px]">Variáveis de ambiente, quando existirem, têm prioridade sobre o que é salvo aqui.</p>
-              <p className="text-muted text-[13px]">Neste plano de hospedagem, o histórico pode se perder ao reiniciar.</p>
-              {dados && <CampoEnderecoPublico status={dados.enderecoPublico} aoSalvar={carregar} />}
-              {dados && (
-                <ul className="mt-2 flex flex-col gap-1 text-[13px] text-muted">
-                  {dados.integracoes.flatMap((i) =>
-                    i.campos.filter((c) => c.definido).map((c) => (
-                      <li key={c.chave}>
-                        <code>{c.chave}</code>: {c.origem === "env" ? "variável de ambiente (tem prioridade sobre o valor salvo aqui)" : "salvo neste app"}
-                      </li>
-                    ))
-                  )}
-                </ul>
-              )}
-            </MaisDetalhes>
           </div>
         </div>
       </main>
     </>
-  );
-}
-
-// Campo "Endereço público do app" ("Para a equipe técnica"): mostra o valor detectado sozinho a partir
-// do host da primeira rotina/lembrete/formulário/pedido criado (ver lib/setup-comum.ts:registrarEnderecoPublico)
-// e permite corrigir à mão (domínio próprio, proxy que o app não enxerga).
-function CampoEnderecoPublico({ status, aoSalvar }: { status: StatusEnderecoPublico; aoSalvar: () => void }) {
-  const [valor, setValor] = useState(status.valor ?? "");
-  const [salvando, setSalvando] = useState(false);
-  const [aviso, setAviso] = useState("");
-
-  async function salvar() {
-    setSalvando(true); setAviso("");
-    try {
-      const r = await fetch("/api/setup", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ valores: { APP_URL: valor.trim() } }) });
-      if (!r.ok) throw new Error("Falha ao salvar.");
-      setAviso("Salvo.");
-      aoSalvar();
-    } catch {
-      setAviso("Não foi possível salvar. Tente de novo.");
-    } finally { setSalvando(false); }
-  }
-
-  return (
-    <div className="mt-3 pt-3 border-t border-line">
-      <label className="text-[13px] font-semibold" htmlFor="app-url">Endereço público do app</label>
-      <p className="text-muted text-[12.5px] mb-1.5">
-        {status.valor ? "Detectado sozinho. Usado nos links de treino e resultados." : "Ainda não detectado: abra o app pelo endereço publicado uma vez, ou informe abaixo."}
-        {status.origem === "env" && " Vem de variável de ambiente: tem prioridade sobre o que for salvo aqui."}
-      </p>
-      <div className="flex gap-2 flex-wrap items-center">
-        <input id="app-url" className="input flex-1 min-w-[240px]" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="https://meu-app.exemplo.com" disabled={status.origem === "env"} />
-        <button type="button" className="btn-secundario !w-auto" onClick={salvar} disabled={salvando || status.origem === "env" || !valor.trim()}>{salvando ? "Salvando" : "Corrigir"}</button>
-      </div>
-      {aviso && <p className="text-[12.5px] text-muted mt-1">{aviso}</p>}
-    </div>
   );
 }
 

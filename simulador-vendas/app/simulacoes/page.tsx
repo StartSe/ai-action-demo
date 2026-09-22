@@ -6,11 +6,12 @@
 // sessões e a nota média. As ações que mexem no treino ficam atrás de um menu; o que ele mais faz
 // (mandar o link e ver o resultado) fica à vista.
 import Link from "next/link";
+import { AcoesLink, useCopiarLink } from "@/components/AcoesLink";
 import { Icone, MenuAcoes } from "@/components/MenuAcoes";
 import { ResumoLista, SemCorrespondencia } from "@/components/ListaGestao";
 import { useCallback, useEffect, useState } from "react";
 import { AvisoExemplo } from "@/components/AvisoExemplo";
-import { Aviso, Chip, Empty, ErrorBox, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
+import { Chip, Empty, ErrorBox, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
 import { METODOLOGIAS } from "@/lib/metodologias";
 import type { Dificuldade, Metodologia, StatusSimulacao } from "@/lib/simulacoes";
 
@@ -69,11 +70,10 @@ export default function Page() {
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [busca, setBusca] = useState("");
-  const [copiado, setCopiado] = useState<{ codigo: string; texto: string } | null>(null);
+  const copiar = useCopiarLink();
   const [editando, setEditando] = useState<string | null>(null);
   const [novoNome, setNovoNome] = useState("");
   const [ocupado, setOcupado] = useState<string | null>(null);
-  const [falhaCopia, setFalhaCopia] = useState(false);
 
   const carregar = useCallback(async () => {
     setErroTela(null);
@@ -121,18 +121,6 @@ export default function Page() {
     finally { setOcupado(null); }
   }
 
-  async function copiar(codigo: string, endereco: string, confirmacao: string) {
-    try {
-      await navigator.clipboard.writeText(endereco);
-      setFalhaCopia(false);
-      setCopiado({ codigo, texto: confirmacao });
-      setTimeout(() => setCopiado(null), 4000);
-    } catch {
-      setFalhaCopia(true);
-      setTimeout(() => setFalhaCopia(false), 4000);
-    }
-  }
-
   /**
    * O convite (US-029) é o caminho de quem prefere **divulgar** o treino a mandar o link direto: quem
    * recebe informa nome e e-mail, entra na lista da equipe e só então recebe o endereço do treino.
@@ -146,7 +134,7 @@ export default function Page() {
       const r = await fetch(`/api/simulacoes/${s.codigo}/convite`, { method: "POST" });
       if (!r.ok) throw r;
       const corpo: { convite: { url: string } } = await r.json();
-      await copiar(s.codigo, corpo.convite.url, "Convite copiado — quem abrir informa nome e e-mail antes de ver o treino");
+      await copiar(corpo.convite.url, "Convite copiado — quem abrir informa nome e e-mail antes de ver o treino");
     } catch (e) {
       setErroTela(await lerErro(e));
     }
@@ -177,7 +165,6 @@ export default function Page() {
         </div>
 
         {erroTela && <div className="mb-5"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao} /><button type="button" className="btn-ghost mt-3" onClick={carregar}>Atualizar lista</button></div>}
-        {falhaCopia && <div className="mb-5"><Aviso tom="danger">Não foi possível copiar automaticamente. Abra o treino e copie o link de lá.</Aviso></div>}
 
         {(itens ?? []).some((s) => s.exemplo) && (
           <AvisoExemplo>
@@ -265,12 +252,11 @@ export default function Page() {
                 </div>
                 <div className="flex gap-3 items-center flex-wrap">
                   <Link href={`/resultados/${s.codigo}`} className="btn-link inline-flex items-center gap-2 min-h-11"><Icone nome="grafico" />Ver resultados</Link>
-                  <button type="button" className="btn-ghost !py-2 text-sm disabled:!cursor-not-allowed" disabled={s.status !== "ativa" || ocupado === s.codigo} onClick={() => copiar(s.codigo, s.url, "Link copiado")}><Icone nome="copiar" />Copiar link</button>
+                  <AcoesLink href={s.url} disabled={s.status !== "ativa" || ocupado === s.codigo} />
                 </div>
               </div>
               {s.status !== "ativa" && <p className="text-sm text-muted mt-3 flex items-center gap-2"><Icone nome={s.status === "pausada" ? "pausar" : "encerrar"} />{s.status === "pausada" ? "Link desativado enquanto o treino estiver pausado. Reative pelo menu de opções." : "Treino encerrado. O link está desativado; os resultados continuam disponíveis."}</p>}
               {s.sessoes === 0 && s.status === "ativa" && <p className="text-xs text-muted mt-2">Criado em {data(s.criadoEm)} · Compartilhe o link para começar a receber resultados.</p>}
-              {copiado?.codigo === s.codigo && <p role="status" className="text-sm font-semibold text-ok mt-3">{copiado.texto}</p>}
             </article>)}
           </div>
           </>

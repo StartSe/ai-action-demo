@@ -198,6 +198,7 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
       objetivo,
       duracaoMin: simulacao.duracaoMin,
       iniciadaEm: aberta.iniciadaEm ?? aberta.criadoEm,
+      avisoTempoInicial: Boolean(aberta.avisoTempoEm),
       // Recarregar a página no meio do treino não apaga a conversa: ela vem do servidor, de onde parou.
       falasIniciais: transcricao(aberta.id).map((m) => ({ papel: m.papel, texto: m.texto })),
       porVoz: simulacao.permiteVoz,

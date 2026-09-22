@@ -26,6 +26,8 @@ Três coisas, nesta ordem. Entender esta sequência é entender o app inteiro:
 Ele abre o link, diz quem é (com Google, com Microsoft ou escrevendo nome e e-mail), lê **quem é o cliente** — nome, cargo, empresa e por que aceitou falar — e começa a conversa. Ele não vê o tipo de cliente antes: isso só é revelado no feedback, senão o treino vira decoreba. No fim ele recebe a nota, o que foi bem, **uma** coisa para fazer diferente e uma frase pronta para usar. Nenhuma tela do vendedor tem menu do app, cabeçalho de gestor ou caminho para as configurações.
 
 ## Conversa por voz
+A duração definida pelo gestor aparece como referência na sala: tempo restante, faixa de progresso e, após o limite, tempo excedido. Ao atingir a duração, o cliente diz que precisa encerrar e pergunta se há pontos para retomarem depois. Na voz contínua, o aviso espera uma pausa; por texto ou voz do navegador, entra na próxima resposta ou em uma pausa sem texto em edição. O aviso fica salvo na sessão. A conversa continua aberta para combinar os próximos passos; **Encerrar e ver resultado** conclui o treino.
+
 A IA do simulador conduz todas as conversas. A ElevenLabs fornece apenas a voz: salve a chave em `/setup`, selecione **Voz do cliente** e ouça uma amostra. A voz escolhida é usada para todos os clientes; o ajuste por perfil muda o ritmo e a expressividade.
 
 A sala usa a Web Speech API do navegador quando a conversa ao vivo pelo LiveKit não está configurada. Um toque inicia o microfone, uma pausa de 1,4 segundo envia a fala e a escuta volta após a resposta. **Enviar fala agora**, **Pausar microfone** e **Interromper e falar** permitem controlar o ritmo sem segurar botões. Texto e voz compartilham a transcrição salva no servidor.
@@ -277,5 +279,14 @@ PLAYWRIGHT_PRODUCTION=1 npm test
 ```
 
 Os testes de gestão incluem pausa e reativação do mesmo link, sessão sem fala, edição e exclusão com confirmação, recuperação de erros e popovers em desktop e celular. O teste opcional de reconhecimento real continua dependendo de `VOZ_TESTE_ARQUIVO`.
+
+### Orientação e compartilhamento (0.6.0)
+
+- Configurações ocultam o bloco “Para a equipe técnica”. A opção de remover exemplos desaparece após uma limpeza bem-sucedida, inclusive ao recarregar ou acessar de outro navegador; dados reais e exemplos vinculados a treinos reais continuam preservados.
+- Copiar link mostra uma confirmação via toast. Abrir link usa uma nova aba. As ações têm ícone e texto nos treinos, convites e resultados; treinos indisponíveis mantêm o compartilhamento desativado.
+- O orientador pode destacar um acerto com evidência na última fala do vendedor. O retorno é silencioso, dura seis segundos, respeita movimento reduzido e aparece no máximo três vezes por sessão, com intervalo mínimo de 45 segundos. Não altera notas, transcrição ou a fala do cliente.
+- O simulador destaca o tempo e orienta o cliente virtual a encerrar naturalmente ao atingir a duração prevista, dando espaço para o vendedor combinar os assuntos da próxima conversa. Texto, voz do navegador e LiveKit compartilham essa regra.
+
+Validação: build de produção, lint e testes de interação e persistência, incluindo o cronômetro, aviso sem repetição, texto em edição, instruções da IA e agente LiveKit com serviços de voz simulados. O teste opcional de reconhecimento real depende de `VOZ_TESTE_ARQUIVO`.
 
 Validação desta versão: 52 testes aprovados no servidor de produção standalone, incluindo capturas e navegação por teclado em 1280 px e 390 px; build com TypeScript aprovado e lint sem erros (um aviso preexistente em `components/setup.tsx`). O teste opcional de voz real não foi executado por depender de `VOZ_TESTE_ARQUIVO`.

@@ -8,6 +8,7 @@ import { obter as obterParticipante, type Participante } from "./participantes";
 import { lerSessaoVendedor } from "./sessao-vendedor";
 import { emAndamento, emPreparacao, obter as obterSessao, tentativasDe, ultimaDe, temFalaDoVendedor, transcricao, type Sessao } from "./sessoes";
 import { obter as obterSimulacao, type Simulacao } from "./simulacoes";
+import { tempoConversa } from "./tempo-conversa";
 
 export type ConversaAberta = { simulacao: Simulacao; participante: Participante; sessao: Sessao };
 
@@ -33,12 +34,7 @@ export function conversaAberta(req: Request, codigo: string, { aceitaEncerrada =
   const doCookie = sessaoVendedor?.sessaoId ? obterSessao(sessaoVendedor.sessaoId) : null;
   const daPessoa = doCookie && doCookie.participanteId === participante.id && doCookie.simulacaoCodigo === codigo ? doCookie : null;
   const sessao = daPessoa ?? emAndamento(codigo, participante.id) ?? (aceitaEncerrada ? ultimaDe(codigo, participante.id) : null);
-  // `aceitaEncerrada` é para a rota do resultado: quando o tempo acaba, a conversa é fechada no mesmo
-  // turno da despedida, e o pedido do resultado chega logo depois — com uma sessão já encerrada, mas
-  // ainda sem avaliação. Sem isso, o vendedor perderia justamente o feedback do treino que completou.
-  // "encerrada" e "avaliada" servem à rota do resultado: quando o tempo acaba, a conversa é fechada no
-  // mesmo turno da despedida, e o pedido do resultado chega logo depois. E quem recarrega a tela do
-  // feedback tem de reler o feedback, não levar um "esta conversa já foi encerrada" na cara.
+  // A rota do resultado aceita reler uma conversa encerrada, inclusive após recarregar o feedback.
   const serve = sessao?.status === "em_andamento" || (aceitaEncerrada && (sessao?.status === "encerrada" || sessao?.status === "avaliada" || (sessao?.status === "abandonada" && !temFalaDoVendedor(transcricao(sessao.id)))));
   if (!sessao || !serve) {
     return Response.json({ error: "Esta conversa já foi encerrada. Abra o link de novo para treinar mais uma vez." }, { status: 409 });
@@ -50,14 +46,10 @@ export function conversaAberta(req: Request, codigo: string, { aceitaEncerrada =
 /**
  * Quantos segundos ainda restam desta conversa, pelo relógio do **servidor**.
  *
- * O cronômetro da tela é só um espelho: quem decide que o tempo acabou é esta função, porque a hora
- * do navegador de quem treina pode estar errada — ou ter sido mexida de propósito para ganhar tempo.
+ * O servidor decide quando orientar o encerramento; o cronômetro da tela é só uma referência.
  */
 export function restanteSeg(sessao: Sessao, duracaoMin: number): number {
-  const inicio = new Date(sessao.iniciadaEm ?? sessao.criadoEm).getTime();
-  const total = Math.max(1, duracaoMin) * 60;
-  const passados = Math.floor((Date.now() - inicio) / 1000);
-  return Math.max(0, total - passados);
+  return tempoConversa(sessao.iniciadaEm ?? sessao.criadoEm, duracaoMin).restante;
 }
 
 /**

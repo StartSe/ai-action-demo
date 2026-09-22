@@ -9,11 +9,12 @@
 // porque a pergunta que o gestor faz aqui é sobre a **pessoa**. Quem separa as duas é o detalhe, na
 // linha do tempo, e quem calcula tudo é `lib/equipe.ts`: nenhum número é montado nesta tela.
 import Link from "next/link";
+import { AcoesLink } from "@/components/AcoesLink";
 import { MenuAcoes } from "@/components/MenuAcoes";
 import { ResumoLista, SemCorrespondencia, normalizarBusca } from "@/components/ListaGestao";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { AvisoExemplo } from "@/components/AvisoExemplo";
-import { Aviso, Chip, CopyButton, Empty, ErrorBox, Field, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
+import { Aviso, Chip, Empty, ErrorBox, Field, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
 
 type PessoaDaEquipe = {
   id: string;
@@ -311,7 +312,7 @@ export default function Page() {
                 {convite && (
                   <div className="flex items-center gap-3 flex-wrap">
                     <code className="bg-bg border border-line px-2 py-1 rounded-md text-[12.5px] break-all flex-1 min-w-[220px]">{convite.url}</code>
-                    <CopyButton texto={() => convite.url} rotulo="Copiar link" />
+                    <AcoesLink href={convite.url} />
                   </div>
                 )}
               </>
