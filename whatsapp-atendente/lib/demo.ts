@@ -386,6 +386,8 @@ export function conversasExemplo(): ConversaExemplo[] {
           },
         },
         { papel: "humano", texto: "Oi, Ana Paula, aqui é a recepção. Consigo te encaixar hoje às 17h30 com a Dra. Helena.", atras: 3 * HORA, respostaMs: 480000 },
+        // A nota interna da demonstração: o cliente nunca a vê, e ela é o que a equipe combina entre si.
+        { papel: "nota", texto: "Encaixei às 17h30 com a Dra. Helena. Avisar a Dra. que o implante é de outra clínica. — Recepção", atras: 3 * HORA - 1 },
         { papel: "cliente", texto: "Perfeito, obrigada! Vou levar a radiografia que fiz na outra clínica.", atras: 2 * HORA },
       ],
     },

@@ -65,3 +65,33 @@ export function lerMotivo(texto: string): MotivoTransferencia | null {
 export function semMarcador(texto: string): string {
   return texto.trim().replace(MARCADOR_NO_FIM, "").trim();
 }
+
+/**
+ * Por que o atendente pediu ajuda, em primeira pessoa: é o que ele escreve na nota interna que deixa
+ * na conversa ao transferir. Diferente de `rotuloMotivo`, que é o rótulo de tela ("A base não tinha a
+ * informação"), esta é a metade de uma frase ("Pedi ajuda porque a base não tinha a informação").
+ */
+const PORQUE_PEDI_AJUDA: Record<MotivoTransferencia, string> = {
+  cliente_pediu: "o cliente pediu para falar com uma pessoa",
+  sem_informacao: "a base não tinha a informação",
+  fora_do_escopo: "o pedido está fora do que eu faço",
+  reclamacao: "o cliente registrou uma reclamação",
+  falha: "não consegui responder",
+};
+
+/** Até onde a pergunta do cliente é citada na nota: o resto vira reticências (a conversa está logo acima). */
+const PERGUNTA_NA_NOTA = 200;
+
+/**
+ * A nota interna que o atendente virtual deixa na conversa ao passar o atendimento para uma pessoa:
+ * por que ele parou e qual era a pergunta, assinada por ele. Ela existe porque quem abre a conversa
+ * depois precisa da razão em texto corrido, ao lado das mensagens — a linha do tempo diz que a
+ * transferência aconteceu, e o cliente nunca vê nenhuma das duas.
+ */
+export function notaDaTransferencia({ motivo, pergunta, atendente }: { motivo: MotivoTransferencia; pergunta?: string | null; atendente?: string }): string {
+  const limpa = (pergunta ?? "").trim().replace(/\s+/g, " ");
+  const citada = limpa.length > PERGUNTA_NA_NOTA ? `${limpa.slice(0, PERGUNTA_NA_NOTA - 1)}…` : limpa;
+  const frases = [`Pedi ajuda porque ${PORQUE_PEDI_AJUDA[motivo]}.`];
+  if (citada) frases.push(`Pergunta: “${citada}”`);
+  return `${frases.join(" ")} — ${atendente?.trim() || "O atendente"}`;
+}

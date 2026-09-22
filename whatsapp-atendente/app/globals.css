@@ -77,6 +77,13 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
      (verde, âmbar, cinza) ainda não usavam. Contraste do texto sobre o fundo: 6,86:1 (AA). */
   .chip-humano { @apply inline-block px-[9px] py-[2px] rounded-full text-xs font-bold bg-[#e8effb] text-[#1c4f9c]; }
 
+  /* Nota interna (components/ConversaAberta.tsx): a anotação que só a equipe vê. O amarelo do papel
+     de recado é o que a separa das três cores da conversa (branco do cliente, verde da resposta) numa
+     olhada — e ela precisa ser inconfundível, porque o erro caro aqui seria alguém achar que o cliente
+     leu o que estava escrito. Contraste do texto (--color-ink) sobre #fff6da: 16,4:1 (AAA); o rótulo em #7a4d00, 6,7:1 (AA). */
+  .bolha-nota { background-color: #fff6da; border: 1px solid #e8d08a; }
+  .campo-nota { background-color: #fffaeb; border-color: #e8d08a; }
+
   /* Fundo da conversa aberta (components/ConversaAberta.tsx): o papel de parede claro que todo mundo
      reconhece do WhatsApp, refeito em CSS — um bege esverdeado com uma trama discreta de pontos. Ele
      existe para a conversa parecer a conversa, e não uma lista de caixas: as bolhas brancas (cliente) e

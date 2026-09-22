@@ -73,7 +73,7 @@ test("registrarResposta com transferência grava atenção, motivo, espera e o e
   assert.equal(c.status, "atencao");
   assert.equal(c.motivoTransferencia, "cliente_pediu");
   assert.ok(c.esperandoDesde, "a espera começa na transferência");
-  assert.deepEqual(c.mensagens.map((m) => m.papel), ["cliente", "atendente", "evento"]);
+  assert.deepEqual(c.mensagens.map((m) => m.papel), ["cliente", "atendente", "evento", "nota"]);
   assert.equal(c.mensagens[2].texto, "Bia pediu ajuda de uma pessoa · O cliente pediu uma pessoa");
   // Eventos não entram na memória da IA nem contam como resposta pendente.
   assert.deepEqual(historicoRecente(numero).map((m) => m.papel), ["cliente", "atendente"]);
@@ -141,7 +141,7 @@ test("IA respondendo com [TRANSFERIR:cliente_pediu] grava atenção, motivo e ev
   const c = obterConversa(numero)!;
   assert.equal(c.status, "atencao");
   assert.equal(c.motivoTransferencia, "cliente_pediu");
-  assert.deepEqual(c.mensagens.map((m) => m.papel), ["cliente", "atendente", "evento"]);
+  assert.deepEqual(c.mensagens.map((m) => m.papel), ["cliente", "atendente", "evento", "nota"]);
   assert.ok(!c.mensagens[1].texto.includes("TRANSFERIR"));
   assert.match(c.mensagens[2].texto, /pediu ajuda de uma pessoa · O cliente pediu uma pessoa$/);
   apagarConversa(numero);
@@ -160,7 +160,7 @@ test("IA devolvendo 500 numa conversa do WhatsApp: frase de reserva, atenção e
   const c = obterConversa(numero)!;
   assert.equal(c.status, "atencao");
   assert.equal(c.motivoTransferencia, "falha");
-  assert.deepEqual(c.mensagens.map((m) => m.papel), ["cliente", "atendente", "evento"]);
+  assert.deepEqual(c.mensagens.map((m) => m.papel), ["cliente", "atendente", "evento", "nota"]);
   assert.equal(c.mensagens[1].texto, FRASE_FALHA_PADRAO);
   assert.match(c.mensagens[2].texto, /Falha ao responder$/);
   assert.match(ultimaFalhaEnvio()?.mensagem ?? "", /A IA não conseguiu responder/);

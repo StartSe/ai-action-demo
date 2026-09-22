@@ -60,6 +60,13 @@ function LinhaConversa({ conversa, selecionada, onEscolher }: { conversa: Conver
           <span className="flex items-center gap-2 mt-1.5">
             <span className={classeStatus(conversa.status)}>{rotuloStatus(conversa.status)}</span>
             {conversa.exemplo ? <span className="chip-cinza">Exemplo</span> : <DesenhoOrigem origem={conversa.origem} />}
+            {conversa.temNotas && (
+              /* A conversa tem anotação da equipe: quem abre a lista vê onde há contexto escrito sem
+                 precisar entrar em cada conversa. O cliente nunca viu nada disso. */
+              <span className="shrink-0 text-[13px] leading-none" title="Esta conversa tem nota interna" aria-label="Esta conversa tem nota interna" role="img">
+                📝
+              </span>
+            )}
             {conversa.nao_lidas > 0 && (
               <span className="ml-auto shrink-0 inline-grid place-items-center min-w-[20px] h-5 px-1.5 rounded-full bg-accent text-white text-[11px] font-bold leading-none">
                 {conversa.nao_lidas}

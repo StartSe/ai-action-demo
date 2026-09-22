@@ -241,7 +241,7 @@
         "Lint e build passam; verificar no navegador (modo nota, bolha amarela, apagar; desktop e celular)"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-014 (Fase 4)"
     },
     {

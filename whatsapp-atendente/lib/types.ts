@@ -214,6 +214,8 @@ export interface Conversa {
   motivoTransferencia: MotivoTransferencia | null;
   /** Desde quando o cliente espera uma pessoa, em ISO; nulo quando ninguém está esperando. */
   esperandoDesde: string | null;
+  /** A conversa tem pelo menos uma nota interna: a lista mostra a marca sem abrir a conversa. */
+  temNotas: boolean;
 }
 
 export interface MensagemChat {
@@ -373,6 +375,13 @@ export interface ContatoLembrado {
 
 /** Teto do que o atendente lembra de um cliente: um parágrafo, não um prontuário. */
 export const LIMITE_MEMORIA = 1200;
+
+/**
+ * Teto de uma nota interna (`papel: "nota"`): cabe o combinado de um atendimento inteiro, e não um
+ * documento. Quem escreve vê o contador no campo, e `POST /api/conversas/[numero]/notas` recusa acima
+ * disso com frase de negócio.
+ */
+export const LIMITE_NOTA = 2000;
 
 /** Entrada/saída de registros antigos do tipo "atendimento" em lib/historico.ts. Desde a US-003 as
  * conversas vivem no banco (lib/conversas.ts) e nada novo é salvo assim; o tipo continua porque

@@ -30,6 +30,7 @@ import { Aviso, ErrorBox, lerErro, useConfirmacao, type ErroLido } from "./ui";
 import { rotuloContato, rotuloNumero } from "@/lib/rotulos";
 import { formatarTelefone } from "@/lib/telefone";
 import { rotuloMotivo } from "@/lib/transferencia";
+import { LIMITE_NOTA } from "@/lib/types";
 import type { Anexo, ConversaCompleta, MensagemDaConversa, StatusEntrega } from "@/lib/types";
 
 /** Teto da altura do campo de escrever: ele cresce com o texto até aqui e depois passa a rolar. */
@@ -246,6 +247,54 @@ function MidiaDoAnexo({ anexo }: { anexo: Anexo }) {
   return <CartaoAnexo icone="📎" titulo="Este tipo de mensagem ainda não aparece aqui" apoio="Abra a conversa no celular da empresa para ver." />;
 }
 
+/**
+ * Uma nota interna: a anotação que só a equipe vê. Ela fica do lado de quem atende (à direita, como as
+ * respostas), mas em amarelo de papel de recado e com o rótulo dizendo o que é — o erro caro desta
+ * tela seria alguém escrever uma nota achando que o cliente a recebeu, ou o contrário.
+ *
+ * "Apagar" aparece ao passar o mouse ou ao chegar pelo teclado (`focus-within`), e nunca fica
+ * escondido de quem navega sem mouse.
+ */
+function BolhaNota({ mensagem, apagando, onApagar }: { mensagem: MensagemDaConversa; apagando: boolean; onApagar: (id: number) => void }) {
+  return (
+    <div className="group flex flex-col gap-1 max-w-[76%] max-md:max-w-[88%] self-end items-end">
+      <div className="bolha-nota px-3 pt-2 pb-[22px] rounded-xl rounded-tr-sm text-[14px] leading-snug relative break-words whitespace-pre-wrap text-ink">
+        <span className="flex items-center gap-1.5 mb-1 text-[11.5px] font-bold text-[#7a4d00]">
+          <span aria-hidden="true">📝</span>
+          Nota interna
+          <span className="font-semibold text-[#7a4d00]/80">só a equipe vê</span>
+        </span>
+        {mensagem.texto}
+        <span className="absolute right-2.5 bottom-1 text-[10px] text-[#7a4d00]/80">{horaBolha(mensagem.criadoEm)}</span>
+      </div>
+      <button
+        type="button"
+        className="text-[11px] font-semibold text-accent-ink underline underline-offset-2 px-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 disabled:opacity-60"
+        onClick={() => onApagar(mensagem.id)}
+        disabled={apagando}
+      >
+        {apagando ? "Apagando…" : "Apagar"}
+      </button>
+    </div>
+  );
+}
+
+/** "Nota interna" ao lado do campo: o mesmo botão no rodapé de uma conversa aberta e de uma resolvida. */
+function BotaoNota({ onAbrir }: { onAbrir: () => void }) {
+  return (
+    <button
+      type="button"
+      className="btn-ghost !w-auto shrink-0 !px-3 !py-2.5 !text-[13px]"
+      onClick={onAbrir}
+      title="Uma anotação para a equipe. O cliente não recebe nada."
+    >
+      <span aria-hidden="true">📝</span>
+      <span className="max-[560px]:hidden">Nota interna</span>
+      <span className="min-[561px]:hidden">Nota</span>
+    </button>
+  );
+}
+
 function Bolha({
   mensagem,
   pergunta,
@@ -367,10 +416,17 @@ export function ConversaAberta({
   const [sugerindo, setSugerindo] = useState(false);
   /** Id da mensagem cujo "Tentar de novo" está em andamento; null quando nenhum. */
   const [reenviandoId, setReenviandoId] = useState<number | null>(null);
+  /** O campo está escrevendo uma nota interna, e não uma resposta para o cliente. */
+  const [modoNota, setModoNota] = useState(false);
+  const [nota, setNota] = useState("");
+  const [salvandoNota, setSalvandoNota] = useState(false);
+  /** Id da nota cujo "Apagar" está em andamento; null quando nenhum. */
+  const [apagandoNotaId, setApagandoNotaId] = useState<number | null>(null);
   const { confirmar, Dialogo } = useConfirmacao();
 
   const corpoRef = useRef<HTMLDivElement>(null);
   const campoRef = useRef<HTMLTextAreaElement>(null);
+  const campoNotaRef = useRef<HTMLTextAreaElement>(null);
   const assinaturaRef = useRef("");
   // A tela de fora é redesenhada a cada atualização da lista: guardar `onMudou` num ref (em vez de
   // nas dependências de `carregar`) é o que impede o temporizador de 10 s de reiniciar a cada render.
@@ -410,6 +466,8 @@ export function ConversaAberta({
     assinaturaRef.current = "";
     const t = setTimeout(() => {
       setTexto("");
+      setNota("");
+      setModoNota(false);
       setErro(null);
       carregar();
     }, 0);
@@ -565,6 +623,66 @@ export function ConversaAberta({
     }
   }
 
+  /** Abre o modo nota e leva o cursor para lá: o rascunho de resposta continua onde estava. */
+  function abrirModoNota() {
+    setModoNota(true);
+    setTimeout(() => campoNotaRef.current?.focus(), 0);
+  }
+
+  /** Volta ao campo de resposta (Esc ou "Cancelar"); o que estava escrito na nota se perde. */
+  function sairDoModoNota() {
+    setModoNota(false);
+    setNota("");
+    setTimeout(() => campoRef.current?.focus(), 0);
+  }
+
+  /**
+   * Salvar a anotação da equipe. Ela não sai pelo número da empresa e não muda quem atende: escrever
+   * uma nota numa conversa que a IA está cuidando deixa a IA cuidando dela — é o contrário do campo de
+   * resposta, e por isso os dois nunca estão abertos ao mesmo tempo.
+   */
+  async function salvarNota() {
+    const limpa = nota.trim();
+    if (!limpa || salvandoNota) return;
+    setSalvandoNota(true);
+    try {
+      const r = await fetch(`/api/conversas/${encodeURIComponent(numero)}/notas`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto: limpa }),
+      });
+      if (!r.ok) throw r;
+      const dados = await r.json();
+      aplicar(dados.conversa);
+      setNota("");
+      setModoNota(false);
+      setErro(null);
+    } catch (e) {
+      setErro(await lerErro(e));
+    } finally {
+      setSalvandoNota(false);
+    }
+  }
+
+  /** Apagar uma nota interna: pergunta antes, porque o que estava anotado não volta. */
+  async function apagarNota(id: number) {
+    if (apagandoNotaId !== null) return;
+    const ok = await confirmar("Apagar esta nota interna? O que estava anotado não volta.", { confirmarRotulo: "Apagar" });
+    if (!ok) return;
+    setApagandoNotaId(id);
+    try {
+      const r = await fetch(`/api/conversas/${encodeURIComponent(numero)}/notas/${id}`, { method: "DELETE" });
+      if (!r.ok) throw r;
+      const dados = await r.json();
+      aplicar(dados.conversa);
+      setErro(null);
+    } catch (e) {
+      setErro(await lerErro(e));
+    } finally {
+      setApagandoNotaId(null);
+    }
+  }
+
   /** "Tentar de novo" de uma bolha que não chegou: o mesmo texto sai de novo e a MESMA bolha muda de estado. */
   /**
    * Corrigir o que o atendente lembra deste cliente (o bloco do painel do contato). A rota grava como
@@ -708,6 +826,7 @@ export function ConversaAberta({
           ) : (
             conversa.mensagens.map((m) => {
               if (m.papel === "evento") return <LinhaEvento key={m.id} mensagem={m} />;
+              if (m.papel === "nota") return <BolhaNota key={m.id} mensagem={m} apagando={apagandoNotaId === m.id} onApagar={apagarNota} />;
               const anterior = soConversa[soConversa.indexOf(m) - 1];
               const daIA = m.papel === "atendente";
               return (
@@ -733,10 +852,55 @@ export function ConversaAberta({
         )}
 
         <div className="border-t border-line p-3">
-          {resolvida ? (
-            /* Conversa resolvida: não há campo. Quem quiser voltar a responder reabre no seletor lá em
-               cima — reabrir é uma decisão, não um efeito de começar a digitar. */
-            <p className="text-[13px] text-muted">Esta conversa está marcada como resolvida. Reabra no alto para voltar a responder.</p>
+          {modoNota ? (
+            /* Modo nota: o campo escreve para a equipe, e não para o cliente. Ele existe em QUALQUER
+               status — inclusive na conversa que a IA está cuidando e na que já foi resolvida —, porque
+               anotar não é intervir: nada é enviado e ninguém assume a conversa. */
+            <div className="campo-nota rounded-card border p-3">
+              <div className="flex items-baseline gap-2 flex-wrap mb-2">
+                <span className="text-[12.5px] font-bold text-[#7a4d00]">
+                  <span aria-hidden="true">📝</span> Nota interna · só a equipe vê
+                </span>
+                <span className="ml-auto text-[11.5px] text-muted">
+                  {nota.length}/{LIMITE_NOTA.toLocaleString("pt-BR")}
+                </span>
+              </div>
+              <textarea
+                ref={campoNotaRef}
+                rows={3}
+                maxLength={LIMITE_NOTA}
+                className="input !py-2.5 text-[14px] resize-none leading-snug w-full"
+                value={nota}
+                aria-label="Escreva a nota interna"
+                placeholder="O que ficou combinado, o que a próxima pessoa precisa saber..."
+                onChange={(e) => setNota(e.target.value)}
+                onKeyDown={(e) => {
+                  // Esc volta para o campo de resposta. Enter quebra a linha: uma nota costuma ter mais
+                  // de uma, e salvar no Enter guardaria metade do que a pessoa ia escrever.
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    sairDoModoNota();
+                  }
+                }}
+              />
+              <div className="flex items-center gap-2 flex-wrap mt-2">
+                <button type="button" className="btn-primary !w-auto" onClick={salvarNota} disabled={salvandoNota || !nota.trim()}>
+                  {salvandoNota ? "Salvando..." : "Salvar nota"}
+                </button>
+                <button type="button" className="btn-ghost !w-auto" onClick={sairDoModoNota} disabled={salvandoNota}>
+                  Cancelar
+                </button>
+                <span className="text-[12px] text-muted">O cliente não recebe esta anotação.</span>
+              </div>
+            </div>
+          ) : resolvida ? (
+            /* Conversa resolvida: não há campo de resposta. Quem quiser voltar a responder reabre no
+               seletor lá em cima — reabrir é uma decisão, não um efeito de começar a digitar. Anotar,
+               esse continua valendo: é comum registrar o combinado depois de encerrar. */
+            <div className="flex items-center gap-3 flex-wrap">
+              <p className="text-[13px] text-muted flex-1 min-w-[200px]">Esta conversa está marcada como resolvida. Reabra no alto para voltar a responder.</p>
+              <BotaoNota onAbrir={abrirModoNota} />
+            </div>
           ) : (
             <>
               {!emAtendimento && (
@@ -763,6 +927,7 @@ export function ConversaAberta({
                     </>
                   )}
                 </button>
+                <BotaoNota onAbrir={abrirModoNota} />
                 <textarea
                   ref={campoRef}
                   rows={1}

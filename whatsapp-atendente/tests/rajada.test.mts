@@ -65,8 +65,9 @@ test("três mensagens dentro da janela geram UM send-text, respondendo à sequê
   assert.equal(envios[0].phone, numero);
   assert.ok(envios[0].delayTyping! >= 1 && envios[0].delayTyping! <= 3);
   const conversa = obterConversa(numero)!;
-  // Só a conversa em si: um evento da linha do tempo ("pediu ajuda de uma pessoa", US-002) pode vir depois.
-  const soConversa = conversa.mensagens.filter((m) => m.papel !== "evento");
+  // Só a conversa em si: o evento da linha do tempo e a nota interna da transferência ("pediu ajuda de
+  // uma pessoa", US-002 e US-014) podem vir depois.
+  const soConversa = conversa.mensagens.filter((m) => m.papel !== "evento" && m.papel !== "nota");
   assert.deepEqual(soConversa.map((m) => m.papel), ["cliente", "cliente", "cliente", "atendente"]);
   assert.equal(soConversa[3].texto, envios[0].message);
   apagarConversa(numero);

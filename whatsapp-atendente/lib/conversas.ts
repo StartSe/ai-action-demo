@@ -13,7 +13,7 @@ import { conversasExemplo } from "./demo";
 import { textoParaIA } from "./midia";
 import { publicar } from "./eventos";
 import { abrirBanco, getConfig, setConfig } from "./store";
-import { ehMotivo, MOTIVO_PADRAO, rotuloMotivo, type MotivoTransferencia } from "./transferencia";
+import { ehMotivo, MOTIVO_PADRAO, notaDaTransferencia, rotuloMotivo, type MotivoTransferencia } from "./transferencia";
 import {
   PAPEIS_DE_CONVERSA,
   type CanalOrigem,
@@ -332,6 +332,7 @@ type LinhaLista = LinhaConversa & {
   ultima_cliente: string | null;
   ultima_cliente_em: string | null;
   ultima_resposta: string | null;
+  tem_notas: number;
 };
 
 /**
@@ -378,7 +379,8 @@ export function listarConversas({ desde, status, busca }: FiltroConversas = {}):
       `SELECT c.*,
         (SELECT texto FROM mensagens m WHERE m.numero = c.numero AND m.papel = 'cliente' ORDER BY m.id DESC LIMIT 1) AS ultima_cliente,
         (SELECT criado_em FROM mensagens m WHERE m.numero = c.numero AND m.papel = 'cliente' ORDER BY m.id DESC LIMIT 1) AS ultima_cliente_em,
-        (SELECT texto FROM mensagens m WHERE m.numero = c.numero AND m.papel IN ('atendente', 'humano') ORDER BY m.id DESC LIMIT 1) AS ultima_resposta
+        (SELECT texto FROM mensagens m WHERE m.numero = c.numero AND m.papel IN ('atendente', 'humano') ORDER BY m.id DESC LIMIT 1) AS ultima_resposta,
+        EXISTS (SELECT 1 FROM mensagens m WHERE m.numero = c.numero AND m.papel = 'nota') AS tem_notas
        FROM conversas c ${onde} ORDER BY c.atualizado_em DESC, c.numero`
     )
     .all(...valores) as LinhaLista[];
@@ -401,6 +403,7 @@ export function listarConversas({ desde, status, busca }: FiltroConversas = {}):
         atualizado_em: registro.atualizadoEm,
         motivoTransferencia: registro.motivoTransferencia,
         esperandoDesde: registro.esperandoDesde,
+        temNotas: Number(l.tem_notas) > 0,
       } satisfies Conversa;
     })
     // O status filtrado é o da leitura, então o filtro vem depois do banco, nunca no WHERE.
@@ -704,7 +707,13 @@ export function registrarResposta({
     .prepare(`UPDATE conversas SET status = ?, atualizado_em = ?, motivo_transferencia = ?, esperando_desde = ?${marcaDePessoa(status)} WHERE numero = ?`)
     .run(status, quando, motivoFinal, transferir ? quando : null, numero);
   const mensagemId = inserirMensagem({ numero, papel: "atendente", texto, criadoEm: quando, ferramentaUsada, tempoRespostaMs, detalhes, statusEntrega: statusInicialDeEnvio(numero) });
-  if (motivoFinal) registrarEvento(numero, `${atendente?.trim() || "O atendente"} pediu ajuda de uma pessoa · ${rotuloMotivo(motivoFinal)}`, em);
+  if (motivoFinal) {
+    registrarEvento(numero, `${atendente?.trim() || "O atendente"} pediu ajuda de uma pessoa · ${rotuloMotivo(motivoFinal)}`, em);
+    // Além do evento, o atendente deixa uma NOTA interna com o motivo e a pergunta que o travou: quem
+    // assume a conversa lê a razão em texto corrido, ao lado das mensagens, sem ter que deduzi-la do
+    // rótulo do motivo. O cliente não vê nenhuma das duas.
+    registrarNota(numero, notaDaTransferencia({ motivo: motivoFinal, pergunta: ultimaPerguntaDoCliente(numero), atendente }), em);
+  }
   // A conversa passou a esperar por uma pessoa: o contador do cabeçalho e o painel do dia mudam junto.
   if (transferir) publicar({ tipo: "atencao", numero });
   return mensagemId;
@@ -717,6 +726,32 @@ export function registrarResposta({
  */
 export function registrarEvento(numero: string, texto: string, em?: Date): number {
   return inserirMensagem({ numero, papel: "evento", texto, criadoEm: paraTextoDeBanco(em) });
+}
+
+/**
+ * Uma anotação da equipe dentro da conversa: só quem abre o app a vê. Ela não é mensagem de ninguém
+ * para ninguém — não sai pelo número da empresa, não conta como não lida, não muda o status nem a
+ * última mensagem da lista, e a IA nunca a lê (`historicoRecente` filtra por papel). Quem a escreve é
+ * a equipe (`POST /api/conversas/[numero]/notas`) ou o próprio atendente virtual ao transferir.
+ */
+export function registrarNota(numero: string, texto: string, em?: Date): number {
+  return inserirMensagem({ numero, papel: "nota", texto, criadoEm: paraTextoDeBanco(em) });
+}
+
+/** Apaga uma nota interna; `false` quando o id não é uma nota desta conversa (outra aba já a apagou). */
+export function apagarNota(numero: string, id: number): boolean {
+  const apagada = banco().prepare("DELETE FROM mensagens WHERE id = ? AND numero = ? AND papel = 'nota'").run(id, numero);
+  if (!apagada.changes) return false;
+  avisarConversa(numero);
+  return true;
+}
+
+/** A última coisa que o cliente escreveu nesta conversa: é a pergunta citada na nota da transferência. */
+function ultimaPerguntaDoCliente(numero: string): string | null {
+  const l = banco().prepare("SELECT texto FROM mensagens WHERE numero = ? AND papel = 'cliente' ORDER BY id DESC LIMIT 1").get(numero) as
+    | { texto: string }
+    | undefined;
+  return l?.texto ?? null;
 }
 
 /** A mesma frase para os dois caminhos de assumir: o seletor "Quem atende" e responder pelo campo. */
@@ -941,7 +976,12 @@ export function semearExemplosSeVazio({ numeroConectado, atendente = "Bia" }: { 
       }
     }
     if (c.status === "atencao") {
-      registrarEvento(c.numero, `${atendente} pediu ajuda de uma pessoa · ${rotuloMotivo(c.motivo ?? MOTIVO_PADRAO)}`, fim);
+      const motivo = c.motivo ?? MOTIVO_PADRAO;
+      registrarEvento(c.numero, `${atendente} pediu ajuda de uma pessoa · ${rotuloMotivo(motivo)}`, fim);
+      // A demonstração mostra a transferência como ela acontece de verdade: o evento na linha do tempo
+      // e a nota interna que o atendente deixa com o motivo e a pergunta que o travou.
+      const pergunta = [...c.mensagens].reverse().find((m) => m.papel === "cliente")?.texto;
+      registrarNota(c.numero, notaDaTransferencia({ motivo, pergunta, atendente }), fim);
     }
     banco()
       .prepare("UPDATE conversas SET nao_lidas = ?, atualizado_em = ?, esperando_desde = ? WHERE numero = ?")

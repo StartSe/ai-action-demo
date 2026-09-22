@@ -100,6 +100,7 @@ app/api/conversas/[numero]/mensagens/**   responder pelo número real da empresa
 app/api/conversas/[numero]/assumir/**     assumir o atendimento (a IA para de responder)
 app/api/conversas/[numero]/devolver/**    devolver o atendimento para a IA
 app/api/conversas/[numero]/resolver/**    marcar a conversa como resolvida
+app/api/conversas/[numero]/notas/**       notas internas: gravar e apagar (o cliente nunca vê)
 app/api/conversas/exemplos/route.ts       apagar de uma vez as conversas de exemplo
 app/api/eventos/route.ts                  fluxo de avisos para as telas (text/event-stream)
 app/api/anexos/[id]/route.ts              serve o áudio, a foto ou o arquivo que o cliente mandou
@@ -122,7 +123,7 @@ app/webhook/zapi/route.ts                 avisos da z-api: mensagem recebida, n�
 app/webhook/route.ts                      webhook da WhatsApp Cloud API (Meta): verificação e mensagens
 components/Inicio.tsx                     tela de Início
 components/Conversas.tsx                  lista de conversas (abas, período, busca)
-components/ConversaAberta.tsx             conversa aberta: responder, assumir e devolver
+components/ConversaAberta.tsx             conversa aberta: responder, assumir, devolver e anotar
 components/SeletorQuemAtende.tsx           seletor "Quem atende" do alto da conversa
 components/PainelContato.tsx              painel do contato ao lado da conversa
 components/Assistente.tsx                 os três passos do Assistente
@@ -324,6 +325,23 @@ o atendente passa a chamar o cliente pelo nome e a anotação aparece como a pri
 que respondeu assim". As colunas "Nome informado", "E-mail" e "Telefone de retorno" da planilha de
 Relatórios vêm daqui. Conversas do celular de teste, do assistente e as de exemplo ficam de fora — as
 de exemplo já nascem com uma anotação escrita à mão, só para a demonstração mostrar o recurso.
+
+### Notas internas
+
+Dentro de cada conversa, o botão **"Nota interna"** (ao lado do campo de resposta) troca o campo para o
+modo de anotação: fundo amarelo, o rótulo "Nota interna · só a equipe vê" e o botão "Salvar nota" (Esc
+volta para a resposta). A nota vira uma bolha amarela na conversa, com a hora e o link "Apagar", que
+pergunta antes.
+
+O que uma nota **não** faz, e é por isso que ela é segura: não sai pelo número da empresa, não muda
+quem está atendendo, não conta como mensagem não lida, não vira a prévia da conversa na lista e nunca
+é lida pela IA. Por isso ela funciona em qualquer estado — inclusive numa conversa que a IA está
+cuidando (anotar não é assumir) e numa já resolvida. Na lista de Conversas, a linha de quem tem
+anotação ganha a marca 📝.
+
+Quando o atendente virtual passa uma conversa para uma pessoa, ele mesmo deixa uma nota com o motivo e
+a pergunta que o travou — "Pedi ajuda porque a base não tinha a informação. Pergunta: '…' — Bia" —,
+além da linha na linha do tempo. Quem assume lê a razão ao lado das mensagens, sem precisar deduzi-la.
 
 ### Documentos e busca para atendimento
 
