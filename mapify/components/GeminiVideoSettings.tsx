@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { ErrorBox, Icon, request } from "./ui";
 import type { GeminiVideoStatus } from "@/lib/gemini-video";
 
@@ -7,13 +7,9 @@ export function GeminiVideoSettings() {
   const [status, setStatus] = useState<GeminiVideoStatus | null>(null);
   const [key, setKey] = useState("");
   const [model, setModel] = useState("");
-  const [url, setUrl] = useState("https://www.youtube.com/watch?v=1QNsdr-Qx_I");
   const [busy, setBusy] = useState(false);
-  const [testing, setTesting] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [preview, setPreview] = useState("");
-  const controller = useRef<AbortController | null>(null);
   useEffect(() => {
     let live = true;
     request<GeminiVideoStatus>("/api/youtube/gemini")
@@ -28,44 +24,18 @@ export function GeminiVideoSettings() {
       });
     return () => {
       live = false;
-      controller.current?.abort();
     };
   }, []);
   async function run(action: () => Promise<void>) {
     setBusy(true);
     setError("");
     setMessage("");
-    setPreview("");
     try {
       await action();
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
-    }
-  }
-  async function testVideo() {
-    const abort = new AbortController();
-    controller.current = abort;
-    setTesting(true);
-    try {
-      const response = await fetch("/api/youtube/gemini", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-        signal: abort.signal,
-      });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || "Não foi possível testar o vídeo.");
-      setMessage(data.message);
-      setPreview(data.preview);
-    } catch (e) {
-      if (abort.signal.aborted) throw new Error("Teste cancelado.");
-      throw e;
-    } finally {
-      controller.current = null;
-      setTesting(false);
     }
   }
   return (
@@ -107,7 +77,7 @@ export function GeminiVideoSettings() {
                   setKey("");
                   setModel(data.model);
                   setMessage(
-                    "Chave validada e salva. Você já pode testar um vídeo público.",
+                    "Chave validada e salva. Crie um novo mapa com o link do seu vídeo.",
                   );
                 });
               }}
@@ -168,9 +138,7 @@ export function GeminiVideoSettings() {
               </details>
               <div className="youtube-actions">
                 <button className="primary" disabled={busy}>
-                  {busy && !testing
-                    ? "Validando no Google…"
-                    : "Validar e salvar chave"}
+                  {busy ? "Validando no Google…" : "Validar e salvar chave"}
                 </button>
                 {status.configured && !status.managed && (
                   <button
@@ -195,41 +163,6 @@ export function GeminiVideoSettings() {
                 )}
               </div>
             </form>
-            {status.configured && (
-              <details className="youtube-setup">
-                <summary>Testar um vídeo</summary>
-                <p>
-                  Confira se o Gemini consegue analisar o link. Este teste usa a
-                  cota do Gemini e não cria um mapa.
-                </p>
-                <label>
-                  Link público para teste
-                  <input
-                    type="url"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    disabled={busy}
-                  />
-                </label>
-                <div className="youtube-actions">
-                  <button
-                    className="secondary"
-                    disabled={busy || !url.trim()}
-                    onClick={() => void run(testVideo)}
-                  >
-                    {testing ? "Analisando vídeo…" : "Testar vídeo com Gemini"}
-                  </button>
-                  {testing && (
-                    <button
-                      className="text-button"
-                      onClick={() => controller.current?.abort()}
-                    >
-                      Cancelar teste
-                    </button>
-                  )}
-                </div>
-              </details>
-            )}
           </>
         )}
       </div>
@@ -238,12 +171,6 @@ export function GeminiVideoSettings() {
         <p className="success" role="status">
           {message}
         </p>
-      )}
-      {preview && (
-        <div className="connection-card">
-          <strong>Prévia da análise</strong>
-          <p>{preview}</p>
-        </div>
       )}
     </section>
   );

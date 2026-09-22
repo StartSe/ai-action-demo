@@ -61,8 +61,7 @@ npm run check:youtube -- 'https://www.youtube.com/watch?v=1QNsdr-Qx_I'
 
 1. Abra **Configurações → YouTube** e use o link **Obter chave no Google AI Studio**.
 2. Cole a chave e clique em **Validar e salvar chave**. O servidor consulta os metadados do modelo no Google para validar autenticação e acesso, sem gerar conteúdo. Só uma validação bem-sucedida salva a chave cifrada. Chaves Standard e Auth (incluindo o formato com ponto) são aceitas; uma tentativa inválida não substitui a configuração anterior. A chave não aparece nas respostas nem é incluída na imagem Docker.
-3. Em **Testar um vídeo**, execute o teste com o link desejado. O vídeo `1QNsdr-Qx_I` já vem preenchido. O teste usa a cota Gemini e mostra uma prévia das notas geradas, sem criar um mapa.
-4. Para gerar o mapa, mantenha ChatGPT ou OpenRouter conectado na aba Inteligência artificial e cole o link em YouTube.
+3. Depois de salvar a chave, crie um **Novo mapa**, escolha YouTube e cole o link do seu vídeo. Mantenha ChatGPT ou OpenRouter conectado na aba Inteligência artificial para gerar o mapa.
 
 A integração usa a [API oficial Gemini Interactions](https://ai.google.dev/api/interactions-api), enviando a URL como entrada de vídeo, com resposta estruturada em JSON e `store: false`. O modelo inicial é `gemini-3.8-flash`; pode ser alterado em **Avançado · modelo de análise**. O recurso de [URLs do YouTube](https://ai.google.dev/gemini-api/docs/video-understanding#youtube) é oferecido pelo Google em prévia, aceita vídeos públicos e tem limites próprios. Vídeos privados ou não listados não são aceitos por esse caminho. A disponibilidade, a cota e os custos dependem do modelo e do projeto Google.
 

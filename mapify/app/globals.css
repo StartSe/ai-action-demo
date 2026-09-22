@@ -1094,6 +1094,7 @@ textarea {
   background: #fff;
 }
 .gemini-video-settings .youtube-actions {
+  justify-content: center;
   margin-top: 12px;
 }
 .source-analysis-note {

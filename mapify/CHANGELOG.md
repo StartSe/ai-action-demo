@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.3 — 2026-09-22
+
+- Botões **Validar e salvar chave** e **Remover chave Gemini** centralizados nas configurações do YouTube, inclusive quando dispostos em linhas separadas no celular.
+- Removida a seção **Testar um vídeo**, o link de exemplo preenchido e a chamada de teste correspondente. Após salvar a chave, a orientação passa a ser criar um novo mapa com o vídeo desejado.
+
 ## 1.4.2 — 2026-09-22
 
 - Hover de **Excluir** com cantos arredondados de 8 px na biblioteca e no editor, seguindo o padrão dos botões de ação.
