@@ -11,16 +11,18 @@
 // painel do contato da US-014: a grade daqui tem duas colunas (lista e conversa), e é a conversa
 // aberta que se divide em duas a partir de 1100 px. O painel mostra a mesma conversa que ela já
 // carregou, então esta tela não consulta nada a mais para desenhá-lo.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AvisoConversasExemplo } from "./AvisoExemplo";
 import { ConversaAberta } from "./ConversaAberta";
 import { Avatar, DesenhoOrigem } from "./ContatoVisual";
 import { ChipsEtiqueta, useFiltroEtiquetas } from "./Etiquetas";
+import { useSomDeAviso } from "./SomDeAviso";
 import { Empty, ErrorBox, IlustracaoConversa, Topbar, lerErro, useStatus, type ErroLido } from "./ui";
+import { useEspera } from "./useEspera";
 import { INTERVALO_RESERVA_MS, useEventos, useRecargaJunta, type EventoDaTela } from "./useEventos";
 import { soConversasDeExemplo } from "@/lib/demo";
-import { navegacaoComContador } from "@/lib/navegacao";
+import { passouDoLimite, textoEspera } from "@/lib/espera";
 import { PERIODOS, PERIODO_PADRAO, classeStatus, horaOuDia, lerPeriodo, previaMensagem, rotuloContato, rotuloPeriodo, rotuloStatus } from "@/lib/rotulos";
 import type { Conversa, Etiqueta, Periodo } from "@/lib/types";
 
@@ -45,27 +47,35 @@ function LinhaConversa({
   conversa,
   selecionada,
   etiquetasDaEmpresa,
+  limiteMin,
   onEscolher,
 }: {
   conversa: Conversa;
   selecionada: boolean;
   etiquetasDaEmpresa: Etiqueta[];
+  limiteMin: number;
   onEscolher: () => void;
 }) {
   const primeiraLinha = previaMensagem(conversa.ultima_mensagem || "").split("\n")[0];
+  // Quem está esperando uma pessoa mostra há quanto tempo, no lugar da hora da última mensagem: a hora
+  // não responde a pergunta que importa nesta lista, que é "faz muito tempo?".
+  const espera = textoEspera(conversa.status, conversa.nao_lidas, conversa.esperandoDesde);
+  const atrasada = espera !== null && passouDoLimite(conversa.esperandoDesde, limiteMin);
   return (
     <li>
       <button
         type="button"
         onClick={onEscolher}
         aria-current={selecionada ? "true" : undefined}
-        className={`w-full text-left flex items-start gap-3 px-4 py-3.5 border-b border-line cursor-pointer transition-colors ${selecionada ? "bg-accent-soft" : "hover:bg-bg"}`}
+        className={`w-full text-left flex items-start gap-3 px-4 py-3.5 border-b border-line cursor-pointer transition-colors border-l-[3px] ${atrasada ? "border-l-danger" : "border-l-transparent"} ${selecionada ? "bg-accent-soft" : "hover:bg-bg"}`}
       >
         <Avatar nome={conversa.nome} />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
             <strong className="min-w-0 flex-1 truncate text-[14.5px]">{rotuloContato(conversa.numero, conversa.nome)}</strong>
-            <span className="shrink-0 text-[12px] text-muted">{horaOuDia(conversa.atualizado_em)}</span>
+            <span className={`shrink-0 text-[12px] ${atrasada ? "text-danger font-bold" : "text-muted"}`}>
+              {espera ?? horaOuDia(conversa.atualizado_em)}
+            </span>
           </span>
           <span className="block truncate text-[13px] text-ink-2 mt-0.5">{primeiraLinha || "Sem mensagem ainda"}</span>
           <span className="flex items-center gap-2 mt-1.5">
@@ -174,6 +184,11 @@ export function Conversas() {
     if (mudancas.etiqueta !== undefined) setEtiqueta(mudancas.etiqueta ?? null);
   }
 
+  // Quem está esperando (o mesmo número do cabeçalho) e o som opcional de aviso. O limite vem de lá
+  // porque ele é da configuração do atendente, e esta tela não carrega a configuração inteira.
+  const { atrasadas, limiteMin } = useEspera();
+  const { Botao: BotaoSom, tocar } = useSomDeAviso();
+
   const carregar = useCallback(async () => {
     const params = new URLSearchParams({ periodo });
     if (aba !== "todas") params.set("status", aba);
@@ -247,9 +262,11 @@ export function Conversas() {
   const aoEvento = useCallback(
     (evento: EventoDaTela) => {
       if (evento.tipo === "conexao") return;
+      // "atencao" é a conversa que acabou de parar esperando uma pessoa: é o momento de avisar.
+      if (evento.tipo === "atencao") tocar();
       recarregar();
     },
-    [recarregar]
+    [recarregar, tocar]
   );
   const { aoVivo, reserva } = useEventos(aoEvento);
 
@@ -261,6 +278,16 @@ export function Conversas() {
     }, INTERVALO_RESERVA_MS);
     return () => clearInterval(t);
   }, [reserva, carregar]);
+
+  // Alguém cruzou o limite enquanto a tela estava aberta: o número de atrasadas é reconferido de minuto
+  // em minuto (components/useEspera.ts), e é a SUBIDA dele que toca — resolver uma conversa faz o
+  // número cair, e cair não é motivo de aviso.
+  const atrasadasAntes = useRef<number | null>(null);
+  useEffect(() => {
+    const antes = atrasadasAntes.current;
+    atrasadasAntes.current = atrasadas;
+    if (antes !== null && atrasadas > antes) tocar();
+  }, [atrasadas, tocar]);
 
   // As etiquetas da conta: a linha de chips que filtra, o diálogo que organiza e a cor de cada chip da
   // lista saem daqui. Uma consulta só para a tela inteira — o painel do contato as recebe por prop.
@@ -283,7 +310,6 @@ export function Conversas() {
         status={status}
         erro={erro}
         usuario={status?.usuario}
-        navegacao={navegacaoComContador(contadores.atencao)}
       />
 
       <main className="max-w-[1400px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
@@ -351,7 +377,10 @@ export function Conversas() {
           />
         ) : (
           <div className="grid gap-5 grid-cols-1 min-[768px]:grid-cols-[320px_minmax(0,1fr)] min-[1100px]:grid-cols-[360px_minmax(0,1fr)] items-start">
-            <div className={`min-[768px]:col-span-2 flex items-center gap-1 border-b border-line overflow-x-auto ${numero ? "max-md:hidden" : ""}`}>
+            {/* As abas rolam na horizontal quando não cabem; o botão de som fica FORA da faixa rolável,
+                senão ele empurraria a largura da página no celular. */}
+            <div className={`min-[768px]:col-span-2 flex items-end gap-2 border-b border-line ${numero ? "max-md:hidden" : ""}`}>
+              <div className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">
               {ABAS.map((a) => (
                 <button
                   key={a.id}
@@ -363,6 +392,8 @@ export function Conversas() {
                   {a.rotulo} <span className="text-[12.5px] font-bold">{contadores[a.id]}</span>
                 </button>
               ))}
+              </div>
+              <span className="shrink-0 pb-1.5">{BotaoSom}</span>
             </div>
 
             {FiltroEtiquetas && <div className={`min-[768px]:col-span-2 -mt-2 ${numero ? "max-md:hidden" : ""}`}>{FiltroEtiquetas}</div>}
@@ -380,6 +411,7 @@ export function Conversas() {
                       conversa={c}
                       selecionada={c.numero === numero}
                       etiquetasDaEmpresa={etiquetasDaEmpresa}
+                      limiteMin={limiteMin}
                       onEscolher={() => irPara({ numero: c.numero })}
                     />
                   ))}

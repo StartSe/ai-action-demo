@@ -23,9 +23,9 @@ import { AvisoConversasExemplo } from "./AvisoExemplo";
 import { Avatar } from "./ContatoVisual";
 import { Indicadores } from "./Indicadores";
 import { DataTable, IlustracaoSegmento, Topbar, useStatus, type Coluna } from "./ui";
+import { useEspera } from "./useEspera";
 import { INTERVALO_RESERVA_MS, useEventos, useRecargaJunta } from "./useEventos";
 import { soConversasDeExemplo } from "@/lib/demo";
-import { navegacaoComContador } from "@/lib/navegacao";
 import { classeStatus, dataPorExtenso, haQuantoTempo, previaMensagem, rotuloContato, rotuloStatus, saudacao } from "@/lib/rotulos";
 import type { Config, Conversa, Metricas } from "@/lib/types";
 
@@ -92,9 +92,9 @@ function CartaoAcao({ href, titulo, apoio, destacado = false }: { href: string; 
 /**
  * O cartão ao lado do título, com a ilustração do segmento e a situação em uma frase. A ordem das três
  * frases é deliberada: sem número conectado nada do que aparece na tela é real, então conectar vem
- * antes de "precisam de você" — o número de conversas esperando já está no cabeçalho, em Conversas.
+ * antes de "precisam de você" — o número de conversas esperando já está no cabeçalho de toda tela.
  */
-function CartaoSituacao({ conectado, assistenteCriado, atencao }: { conectado: boolean; assistenteCriado: boolean; atencao: number }) {
+function CartaoSituacao({ conectado, assistenteCriado, atencao, atrasadas, limiteMin }: { conectado: boolean; assistenteCriado: boolean; atencao: number; atrasadas: number; limiteMin: number }) {
   // A ordem é a da jornada: criar o atendente vem antes de conectar o número, e conectar vem antes de
   // qualquer número de conversa — nada do que a tela mostra é real enquanto esses dois passos faltarem.
   const situacao = !assistenteCriado
@@ -103,7 +103,12 @@ function CartaoSituacao({ conectado, assistenteCriado, atencao }: { conectado: b
     ? { titulo: "Falta conectar o WhatsApp", apoio: "Leia o código com o celular da empresa.", url: "/assistente?passo=3" }
     : atencao > 0
       ? {
-          titulo: atencao === 1 ? "1 conversa precisa de você" : `${atencao} conversas precisam de você`,
+          // Com alguém esperando além do limite, o cartão diz quantos são: "3 conversas precisam de
+          // você" e "1 delas espera há mais de 10 minutos" são urgências diferentes.
+          titulo:
+            atencao === 1
+              ? `1 conversa precisa de você${atrasadas > 0 ? ` · esperando há mais de ${limiteMin} min` : ""}`
+              : `${atencao} conversas precisam de você${atrasadas > 0 ? ` · ${atrasadas} esperando há mais de ${limiteMin} min` : ""}`,
           apoio: "Alguém está esperando uma resposta sua.",
           url: "/conversas?aba=atencao",
         }
@@ -206,6 +211,8 @@ export function Inicio() {
   const conectado = status?.integrations?.whatsapp === true;
   const assistenteCriado = status?.integrations?.assistente === true;
   const atencao = metricas?.atencao.length ?? 0;
+  // Quantas dessas já passaram do limite da operação: o mesmo número (e o mesmo limite) do cabeçalho.
+  const { atrasadas, limiteMin } = useEspera();
   const primeiroNome = (status?.usuario?.nome ?? "").trim().split(/\s+/)[0] ?? "";
   const atendente = config?.atendente || "sua atendente";
   const frase = conectado
@@ -226,7 +233,6 @@ export function Inicio() {
         status={status}
         erro={erro}
         usuario={status?.usuario}
-        navegacao={navegacaoComContador(atencao)}
       />
 
       <main className="max-w-[1400px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
@@ -236,7 +242,7 @@ export function Inicio() {
             <h1 className="titulo-painel mb-1.5">{primeiroNome ? `${saudacao()}, ${primeiroNome}!` : `${saudacao()}!`}</h1>
             <p className="apoio">{frase}</p>
           </div>
-          <CartaoSituacao conectado={conectado} assistenteCriado={assistenteCriado} atencao={atencao} />
+          <CartaoSituacao conectado={conectado} assistenteCriado={assistenteCriado} atencao={atencao} atrasadas={atrasadas} limiteMin={limiteMin} />
         </div>
 
         {mostrar && (

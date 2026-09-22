@@ -8,6 +8,7 @@ import { numero, data } from "@/lib/formato";
 import { NAVEGACAO, type ItemNavegacao } from "@/lib/navegacao";
 import { ilustracaoDoSegmento, type Segmento } from "@/lib/ilustracao";
 import { MODELOS_GRATUITOS, type ProximoPasso } from "@/lib/modelos";
+import { useEspera } from "./useEspera";
 import { Versao } from "./Versao";
 
 export type UsuarioTopbar = { nome: string; email: string };
@@ -57,10 +58,34 @@ function iniciaisDe(nome: string) {
   return nome.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 }
 
-/** Número de pendências ao lado de um item do cabeçalho (ver lib/navegacao.ts): some quando é zero. */
-function ContadorNavegacao({ valor }: { valor?: number }) {
+/**
+ * Número de pendências ao lado de um item do cabeçalho (ver lib/navegacao.ts): some quando é zero e
+ * fica vermelho quando alguém já espera mais do que a operação aceita (lib/espera.ts) — a mesma cor que
+ * a linha da conversa atrasada tem na lista.
+ */
+function ContadorNavegacao({ valor, urgente }: { valor?: number; urgente?: boolean }) {
   if (!valor) return null;
-  return <span className="inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-white text-[11px] font-bold leading-none">{valor}</span>;
+  return (
+    <span className={`inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full text-white text-[11px] font-bold leading-none ${urgente ? "bg-danger" : "bg-accent"}`}>
+      {valor}
+    </span>
+  );
+}
+
+/**
+ * O título da aba avisa quem está em outra janela: "(3) Conversas · Atendente no WhatsApp" enquanto
+ * alguém espera, e o título de sempre quando não espera mais ninguém. O título original é guardado na
+ * primeira vez (e não a cada mudança), senão a primeira troca viraria o "original" das seguintes.
+ */
+function useTituloComPendencias(pendentes: number, nome: string): void {
+  const original = useRef<string | null>(null);
+  useEffect(() => {
+    if (original.current === null) original.current = document.title;
+    document.title = pendentes > 0 ? `(${pendentes}) Conversas · ${nome}` : original.current;
+    return () => {
+      if (original.current !== null) document.title = original.current;
+    };
+  }, [pendentes, nome]);
 }
 
 /** Cabeçalho da suíte: marca à esquerda, navegação ao centro (desktop) e chip de status + sino + conta à direita; no celular a navegação e a conta viram um botão "Menu" com uma folha. */
@@ -81,6 +106,11 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
   useFecharAoClicarFora(sinoAberto, sinoRef, setSinoAberto);
   useFecharAoClicarFora(contaAberto, contaRef, setContaAberto);
   useFecharAoClicarFora(menuAberto, menuRef, setMenuAberto);
+
+  // Quem está esperando uma pessoa: o número ao lado de "Conversas" e o título da aba saem daqui, em
+  // qualquer tela do app — é o cabeçalho que consulta, não cada tela (components/useEspera.ts).
+  const espera = useEspera();
+  useTituloComPendencias(espera.atencao, nome);
 
   const texto = erro ? "Servidor indisponível" : !status ? "Verificando IA" : status.ai ? "IA conectada" : "Modo demonstração · conectar";
   const demo = status ? !status.ai : false;
@@ -117,7 +147,7 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
           {navegacao.map((item) => (
             <Link key={item.href} href={item.href} className={`inline-flex items-center gap-1.5 text-[14px] font-semibold pb-1 border-b-2 ${ativo(item.href) ? "text-accent border-accent" : "text-ink-2 border-transparent hover:text-ink"}`}>
               {item.rotulo}
-              <ContadorNavegacao valor={item.contador} />
+              {item.avisaEspera && <ContadorNavegacao valor={espera.atencao} urgente={espera.atrasadas > 0} />}
             </Link>
           ))}
         </nav>
@@ -214,7 +244,7 @@ export function Topbar({ marca, nome, area, status, erro, resumo, usuario, notif
             {navegacao.map((item) => (
               <Link key={item.href} href={item.href} className={`flex items-center gap-1.5 px-3 py-2.5 rounded-md font-semibold ${ativo(item.href) ? "text-accent bg-accent-soft" : "text-ink"}`} onClick={() => setMenuAberto(false)}>
                 {item.rotulo}
-                <ContadorNavegacao valor={item.contador} />
+                {item.avisaEspera && <ContadorNavegacao valor={espera.atencao} urgente={espera.atrasadas > 0} />}
               </Link>
             ))}
             {usuario && (

@@ -21,7 +21,6 @@ import { ErrorBox, lerErro, Topbar, useStatus, type ErroLido } from "./ui";
 import { ASSUNTO_OUTROS } from "@/lib/assuntos";
 import { soConversasDeExemplo } from "@/lib/demo";
 import { numero as formatarNumero } from "@/lib/formato";
-import { navegacaoComContador } from "@/lib/navegacao";
 import { contextoComparacao, horaOuDia, lerPeriodoMetricas, PERIODOS_METRICAS, PERIODO_PADRAO, previaMensagem, rotuloContato, rotuloPeriodo } from "@/lib/rotulos";
 import type { AssuntoMetricas, Conversa, Metricas, PeriodoMetricas } from "@/lib/types";
 
@@ -196,7 +195,6 @@ export function Relatorios() {
         status={status}
         erro={erro}
         usuario={status?.usuario}
-        navegacao={navegacaoComContador(atencao.length)}
       />
 
       <main className="max-w-[1400px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">

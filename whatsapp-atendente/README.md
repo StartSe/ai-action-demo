@@ -137,6 +137,8 @@ components/CartaoFerramenta.tsx           os cartões com interruptor da seção
 components/PorQueRespondeu.tsx            "Por que respondeu assim": fontes, ferramentas e tempo de cada resposta
 components/RespostasRapidas.tsx           respostas rápidas: o painel do atalho "/" e o diálogo que as cadastra
 components/Etiquetas.tsx                  etiquetas: chips da lista, bloco do painel e a linha que filtra
+components/SomDeAviso.tsx                 botão de alto-falante e o toque gerado sem arquivo
+components/useEspera.ts                   quantas conversas esperam (uma consulta por aba, para o cabeçalho)
 components/Celular.tsx                    celular da tela, com as bolhas da conversa de teste
 components/useEventos.ts                  liga as telas no fluxo de avisos, com consulta de reserva de 30 s
 components/ui.tsx                         componentes visuais deste app (camada de produto própria)
@@ -150,6 +152,7 @@ lib/anexos.ts                             dono da tabela `anexos`: o que o clien
 lib/midia.ts                              transcreve o áudio, descreve a foto e lê o documento para a IA
 lib/memoria.ts                            resumo rolante da conversa e o que o atendente lembra de cada cliente
 lib/etiquetas.ts                          regras das etiquetas (nome, cor da paleta, sugestões), sem banco
+lib/espera.ts                             quem está esperando, há quanto tempo e quando passou do limite
 lib/persona.ts                            monta o atendente a partir do brief (e lê o site, quando informado)
 lib/persona-exemplos.ts                   cinco atendentes prontos (sem IA) e os exemplos do passo 1
 lib/base-modelo.ts                        modelo da base de conhecimento, um por objetivo
@@ -381,6 +384,22 @@ linha de chips filtra por uma delas de cada vez — o filtro fica no endereço (
 sobrevive a recarregar a página e pode ser mandado para alguém. O link **"Organizar"** abre a lista
 completa, com em quantas conversas cada etiqueta está e o "Apagar", que a tira da conta e de todas as
 conversas (as conversas em si continuam onde estão). A planilha de Relatórios tem a coluna "Etiquetas".
+
+### Quem está esperando há muito tempo
+
+Uma conversa que a IA passou para uma pessoa (e que ninguém assumiu), ou que alguém assumiu e o cliente
+voltou a escrever, está **esperando**. Na lista de Conversas, essas linhas trocam a hora da última
+mensagem por **"Esperando há 20 min"**; passado o limite que você escolheu, o texto fica vermelho e a
+linha ganha uma marca vermelha à esquerda. O cabeçalho da conversa aberta mostra o mesmo tempo, e o
+número ao lado de **Conversas**, no topo de qualquer tela, fica vermelho quando alguém passou do limite.
+
+O limite é escolhido no Assistente, no passo 1, em **"Quando ele não souber responder" → "Avisar quando
+alguém espera mais de"**: 5, 10, 30 ou 60 minutos (o padrão é 10).
+
+Enquanto alguém espera, o **título da aba** do navegador vira "(3) Conversas · Atendente no WhatsApp" —
+é o aviso de quem está com o app em outra janela. E o botão de alto-falante, ao lado das abas da lista,
+liga um toque curto quando uma conversa nova passa a esperar ou quando alguma cruza o limite. Ele vem
+desligado, é lembrado neste navegador e não pede permissão nenhuma.
 
 ### Documentos e busca para atendimento
 

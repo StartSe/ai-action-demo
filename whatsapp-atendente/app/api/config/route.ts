@@ -1,4 +1,5 @@
 import { getConfig, setConfig, temConfigSalva } from "@/lib/estado";
+import { lerAvisoEspera } from "@/lib/espera";
 import { FERRAMENTAS_PADRAO, LIMITE_PERGUNTA, LIMITE_SAUDACAO, MAX_PERGUNTAS, MIDIA_PADRAO, type Config, type ConfigFerramentas, type ConfigMidia } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   const body = (await req.json().catch(() => ({}))) as Partial<Config>;
-  const { negocio, atendente, objetivo, objetivoTexto, tom, tomTexto, saudacao, perguntasSugeridas, horario, baseConhecimento, naoSei, fraseFalha, midia, ferramentas, fraseSemMidia } = body;
+  const { negocio, atendente, objetivo, objetivoTexto, tom, tomTexto, saudacao, perguntasSugeridas, horario, baseConhecimento, naoSei, fraseFalha, midia, ferramentas, avisoEsperaMin, fraseSemMidia } = body;
   if (!negocio || !String(negocio).trim() || !atendente || !String(atendente).trim() || !baseConhecimento || !String(baseConhecimento).trim()) {
     return Response.json({ error: "Preencha ao menos o nome do negócio, o nome do atendente e a base de conhecimento." }, { status: 400 });
   }
@@ -62,6 +63,9 @@ export async function PUT(req: Request) {
     agenda: typeof ferramentas?.agenda === "boolean" ? ferramentas.agenda : FERRAMENTAS_PADRAO.agenda,
     sistemas: typeof ferramentas?.sistemas === "boolean" ? ferramentas.sistemas : FERRAMENTAS_PADRAO.sistemas,
   };
+  // O limite de espera é um select fechado: ausente (tela antiga, persona gerada) e valor fora da lista
+  // caem no padrão, nunca em 400 — errar esse campo não pode impedir alguém de salvar o atendente.
+  const limiteEspera = lerAvisoEspera(avisoEsperaMin);
   const textoSemMidia = String(fraseSemMidia || "").trim();
   const novo: Config = {
     negocio: String(negocio).trim(),
@@ -78,6 +82,7 @@ export async function PUT(req: Request) {
     ...(textoFalha ? { fraseFalha: textoFalha } : {}),
     midia: midiaEscolhida,
     ferramentas: ferramentasEscolhidas,
+    avisoEsperaMin: limiteEspera,
     ...(textoSemMidia ? { fraseSemMidia: textoSemMidia } : {}),
   };
   return Response.json(setConfig(novo));

@@ -122,6 +122,19 @@ export interface ConfigFerramentas {
  * Mora aqui, e não em lib/atendente.ts, pela mesma razão de MIDIA_PADRAO: o formulário precisa dele. */
 export const FERRAMENTAS_PADRAO: ConfigFerramentas = { coletarContato: false, agenda: true, sistemas: true };
 
+/**
+ * Quanto tempo alguém pode esperar por uma pessoa antes de a tela avisar, em minutos. É escolha da
+ * operação (uma clínica aceita 30 min, um plantão não aceita 5), então mora na configuração e não numa
+ * constante escondida. Mora aqui, e não em lib/espera.ts, pela mesma razão de MIDIA_PADRAO: o
+ * formulário do Assistente precisa do padrão e não pode importar um módulo que abre banco.
+ */
+export type AvisoEsperaMin = 5 | 10 | 30 | 60;
+
+/** As opções do campo "Avisar quando alguém espera mais de", na ordem em que aparecem. */
+export const AVISOS_ESPERA: AvisoEsperaMin[] = [5, 10, 30, 60];
+
+export const AVISO_ESPERA_PADRAO: AvisoEsperaMin = 10;
+
 /** Tetos da saudação e das perguntas de teste: o campo, o contador da tela e a validação da rota leem
  * daqui, para os três nunca discordarem sobre o que cabe. */
 export const LIMITE_SAUDACAO = 240;
@@ -160,6 +173,8 @@ export interface Config {
   midia: ConfigMidia;
   /** O que o atendente pode fazer além de escrever; ausente vale FERRAMENTAS_PADRAO. */
   ferramentas: ConfigFerramentas;
+  /** A partir de quantos minutos de espera a tela avisa; ausente vale AVISO_ESPERA_PADRAO. */
+  avisoEsperaMin: AvisoEsperaMin;
   /**
    * O que o cliente recebe quando ele mandou só um anexo que o atendente não conseguiu entender
    * (tipo desligado, formato fora da lista, falha do modelo). Vazio = FRASE_SEM_MIDIA_PADRAO.

@@ -35,7 +35,7 @@ import { PERGUNTAS_EXEMPLO, configExemplo } from "@/lib/demo";
 import { ACAO_CONECTAR_AGENDA, OBJETIVOS, TONS, rotuloObjetivo, rotuloTom } from "@/lib/rotulos";
 import { FRASE_FALHA_PADRAO, rotuloMotivo, type MotivoTransferencia } from "@/lib/transferencia";
 import type { Sugestao } from "@/lib/sugestoes";
-import { FERRAMENTAS_PADRAO, LIMITE_SAUDACAO, MIDIA_PADRAO, type Config, type ConfigFerramentas, type ConfigMidia, type PersonaGerada } from "@/lib/types";
+import { AVISO_ESPERA_PADRAO, AVISOS_ESPERA, FERRAMENTAS_PADRAO, LIMITE_SAUDACAO, MIDIA_PADRAO, type AvisoEsperaMin, type Config, type ConfigFerramentas, type ConfigMidia, type PersonaGerada } from "@/lib/types";
 
 const PASSOS: PassoIndicador[] = [
   { titulo: "Configurar", apoio: "Defina quem é o seu agente" },
@@ -43,7 +43,7 @@ const PASSOS: PassoIndicador[] = [
   { titulo: "Conectar", apoio: "Conecte seu WhatsApp" },
 ];
 
-const CONFIG_VAZIA: Config = { negocio: "", atendente: "", objetivo: "atendimento", tom: "profissional", horario: "", baseConhecimento: "", naoSei: "humano", midia: { ...MIDIA_PADRAO }, ferramentas: { ...FERRAMENTAS_PADRAO } };
+const CONFIG_VAZIA: Config = { negocio: "", atendente: "", objetivo: "atendimento", tom: "profissional", horario: "", baseConhecimento: "", naoSei: "humano", midia: { ...MIDIA_PADRAO }, ferramentas: { ...FERRAMENTAS_PADRAO }, avisoEsperaMin: AVISO_ESPERA_PADRAO };
 
 /** Primeira vez no passo 1: os campos do negócio começam vazios e a base já vem com o modelo do objetivo
  * padrão (lib/base-modelo.ts), para a pessoa trocar os marcadores em vez de encarar um campo em branco.
@@ -111,6 +111,7 @@ function assinaturaConfig(c: Config): string {
     (c.fraseFalha ?? "").trim(),
     c.midia,
     c.ferramentas,
+    c.avisoEsperaMin,
   ]);
 }
 
@@ -835,7 +836,7 @@ export function Assistente() {
                 </p>
 
                 <p className="text-[13px] font-semibold mb-2">Adicionar arquivo (opcional)</p>
-                <p className="text-muted text-[12.5px] mb-2">Os documentos são salvos imediatamente e consultados por trechos relevantes, sem ocupar o campo acima. Até 30 arquivos de 200 mil caracteres. Com IA conectada, a busca semântica usa créditos do OpenRouter; se indisponível, usamos palavras-chave. Reenvie o mesmo arquivo para tentar indexá-lo novamente.</p>
+                <p className="text-muted text-[12.5px] mb-2">Os documentos são salvos imediatamente e consultados por trechos relevantes, sem ocupar o campo acima. Até 30 arquivos de 200 mil caracteres. Com IA conectada, a busca por significado usa créditos da IA conectada; se indisponível, usamos palavras-chave. Reenvie o mesmo arquivo para tentar indexá-lo novamente.</p>
                 {documentos.map((d) => <div key={d.id} className="flex items-center justify-between gap-3 text-[13px] mb-2">
                   <span>{d.nome} · {d.trechos} trechos · busca {d.modo}</span>
                   <button type="button" className="underline" disabled={removendo !== null || importando} onClick={() => removerDocumento(d.id)} aria-label={`Remover ${d.nome}`}>{removendo === d.id ? "Removendo…" : "Remover"}</button>
@@ -1048,6 +1049,22 @@ export function Assistente() {
                       value={config.fraseFalha ?? ""}
                       onChange={(e) => setCampo("fraseFalha", e.target.value)}
                     />
+                  </Field>
+                  <Field
+                    label="Avisar quando alguém espera mais de"
+                    htmlFor="avisoEspera"
+                    hint="Passado esse tempo, a conversa fica em vermelho na lista e no cabeçalho."
+                  >
+                    <select
+                      id="avisoEspera"
+                      className="input"
+                      value={config.avisoEsperaMin}
+                      onChange={(e) => setCampo("avisoEsperaMin", Number(e.target.value) as AvisoEsperaMin)}
+                    >
+                      {AVISOS_ESPERA.map((m) => (
+                        <option key={m} value={m}>{m} minutos</option>
+                      ))}
+                    </select>
                   </Field>
                 </MaisDetalhes>
               </div>

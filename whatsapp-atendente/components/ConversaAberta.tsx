@@ -27,7 +27,9 @@ import { INTERVALO_RESERVA_MS, useEventos, useRecargaJunta, type EventoDaTela } 
 import { Avatar, AvatarAtendente, DesenhoOrigem } from "./ContatoVisual";
 import { ContatoRecolhido, PainelContato, type DadosDoContato } from "./PainelContato";
 import { SeletorQuemAtende } from "./SeletorQuemAtende";
+import { useEspera } from "./useEspera";
 import { Aviso, ErrorBox, ITEM_DE_MENU, lerErro, useConfirmacao, useMenuSuspenso, type ErroLido } from "./ui";
+import { passouDoLimite, textoEspera } from "@/lib/espera";
 import { rotuloContato, rotuloNumero } from "@/lib/rotulos";
 import { formatarTelefone } from "@/lib/telefone";
 import { rotuloMotivo } from "@/lib/transferencia";
@@ -416,6 +418,9 @@ export function ConversaAberta({
 }) {
   const [conversa, setConversa] = useState<ConversaCompleta | null>(null);
   const [atendente, setAtendente] = useState("");
+  // O limite de espera da operação vem do mesmo lugar que o contador do cabeçalho (uma consulta por
+  // aba), em vez de esta tela carregar a configuração inteira só por causa de um número.
+  const { limiteMin } = useEspera();
   const [erro, setErro] = useState<ErroLido | null>(null);
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -812,6 +817,10 @@ export function ConversaAberta({
 
   const nome = rotuloContato(conversa.numero, conversa.nome);
   const numeroFormatado = rotuloNumero(conversa.numero);
+  // Há quanto tempo o cliente espera uma pessoa, do lado do seletor de quem atende: quem abre a
+  // conversa vê o mesmo que viu na lista, sem precisar voltar para conferir.
+  const espera = textoEspera(conversa.status, conversa.naoLidas, conversa.esperandoDesde);
+  const esperaAtrasada = espera !== null && passouDoLimite(conversa.esperandoDesde, limiteMin);
   const emAtendimento = conversa.status === "humano";
   const precisaDeAtencao = conversa.status === "atencao";
   const resolvida = conversa.status === "resolvida";
@@ -855,6 +864,9 @@ export function ConversaAberta({
           </div>
           {/* O seletor é o único lugar da tela que troca quem atende, e por isso ele também diz em que
               pé a conversa está — o chip de status que ficava aqui diria a mesma coisa duas vezes. */}
+          {espera && (
+            <span className={`shrink-0 text-[12.5px] font-semibold ${esperaAtrasada ? "text-danger" : "text-muted"}`}>{espera}</span>
+          )}
           <div className="max-[560px]:basis-full">
             <SeletorQuemAtende
               status={conversa.status}

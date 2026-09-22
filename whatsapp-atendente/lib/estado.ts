@@ -1,6 +1,7 @@
 // Configuração do negócio (nome, atendente, objetivo, tom, horário, base de conhecimento, regra de fallback),
 // persistida em SQLite em uma chave só, para sobreviver a reinícios. As conversas ficam em tabelas próprias (lib/conversas.ts).
 import { configExemplo } from "./demo";
+import { lerAvisoEspera } from "./espera";
 import { getConfig as getStoreConfig, setConfig as setStoreConfig } from "./store";
 import { FERRAMENTAS_PADRAO, LIMITE_PERGUNTA, LIMITE_SAUDACAO, MAX_PERGUNTAS, MIDIA_PADRAO, type Config, type ConfigFerramentas, type ConfigMidia, type NaoSei, type Objetivo, type Tom } from "./types";
 
@@ -52,6 +53,7 @@ export function migrarConfig(salvo: Partial<Config> & { tom?: string }): Config 
     ...(fraseFalha ? { fraseFalha } : {}),
     midia: lerMidia(base.midia),
     ferramentas: lerFerramentas(base.ferramentas),
+    avisoEsperaMin: lerAvisoEspera(base.avisoEsperaMin),
     ...(fraseSemMidia ? { fraseSemMidia } : {}),
   };
 }

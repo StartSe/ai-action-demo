@@ -440,6 +440,34 @@ export function listarConversas({ desde, status, busca, etiqueta }: FiltroConver
     .filter((c) => (!status || c.status === status) && (!etiqueta || c.etiquetas.includes(etiqueta)));
 }
 
+/** Uma conversa parada esperando uma pessoa, do jeito mais barato possível: só o que o aviso precisa. */
+export interface EsperaAberta {
+  numero: string;
+  status: StatusConversa;
+  /** Desde quando o cliente espera, em ISO; nulo em conversa antiga, gravada antes da coluna existir. */
+  esperandoDesde: string | null;
+}
+
+/**
+ * Quem está parado esperando uma pessoa AGORA (lib/espera.ts:estaEsperando): a IA pediu ajuda e ninguém
+ * assumiu, ou alguém assumiu e o cliente escreveu de novo. É o que alimenta o contador do cabeçalho, o
+ * título da aba e o som de aviso, consultado de minuto em minuto por aba — por isso não passa por
+ * `listarConversas` (que carrega a última mensagem e as etiquetas de tudo): aqui bastam três colunas.
+ *
+ * O status pode ser lido no `WHERE` sem medo: só `ia` muda na leitura (vira `resolvida` depois de 24 h),
+ * e `atencao`/`humano` são sempre os que estão gravados.
+ */
+export function esperasAbertas(): EsperaAberta[] {
+  const linhas = banco()
+    .prepare(`SELECT numero, status, esperando_desde FROM conversas WHERE status = 'atencao' OR (status = 'humano' AND nao_lidas > 0)`)
+    .all() as { numero: string; status: string; esperando_desde: string | null }[];
+  return linhas.map((l) => ({
+    numero: l.numero,
+    status: l.status as StatusConversa,
+    esperandoDesde: l.esperando_desde ? paraIso(l.esperando_desde) : null,
+  }));
+}
+
 /** Uma pergunta do cliente já gravada, com a resposta que veio logo depois (base de `perguntasPendentes`). */
 export interface PerguntaRegistrada {
   numero: string;
@@ -1118,9 +1146,13 @@ export function semearExemplosSeVazio({ numeroConectado, atendente = "Bia" }: { 
     // As etiquetas da demonstração criam a lista da instância como qualquer outra (a cor vem da paleta,
     // na ordem): quem abre o app pela primeira vez vê os chips na lista e a linha de filtro funcionando.
     if (c.etiquetas?.length) definirEtiquetas(c.numero, c.etiquetas);
+    // Quem está esperando na demonstração espera desde a última mensagem: toda conversa em `atencao`, e
+    // também a que alguém assumiu e o cliente escreveu de novo (lib/espera.ts:estaEsperando). Sem isso,
+    // a lista de exemplo nunca mostraria o "Esperando há ..." de uma conversa em atendimento humano.
+    const esperando = c.status === "atencao" || (c.status === "humano" && (c.naoLidas ?? 0) > 0);
     banco()
       .prepare("UPDATE conversas SET nao_lidas = ?, atualizado_em = ?, esperando_desde = ? WHERE numero = ?")
-      .run(c.naoLidas ?? 0, paraTextoDeBanco(fim), c.status === "atencao" ? paraTextoDeBanco(fim) : null, c.numero);
+      .run(c.naoLidas ?? 0, paraTextoDeBanco(fim), esperando ? paraTextoDeBanco(fim) : null, c.numero);
   }
   setConfig(CHAVE_EXEMPLOS, new Date().toISOString());
   return conversasExemplo().length;

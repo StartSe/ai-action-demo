@@ -288,7 +288,7 @@
         "Lint e build passam; verificar no navegador (lista, cabeçalho, botão de som; desktop e celular)"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-017 (Fase 4)"
     },
     {
