@@ -74,6 +74,7 @@ Nenhuma é obrigatória. As integrações podem ser configuradas em `/setup`; aj
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
 | `OPENROUTER_API_KEY` | Alternativa à conexão em `/setup`. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Modelo padrão `nvidia/nemotron-3-super-120b-a12b:free` (gratuito). |
+| `MODELO_AUDIO` | Modelo que transcreve os áudios dos clientes. Padrão `google/gemini-2.5-flash`; também editável em Configurações. |
 | `ZAPI_INSTANCE_ID` | Identificação da instância na z-api. Alternativa à conexão em `/setup`. |
 | `ZAPI_TOKEN` | Chave da instância na z-api. Alternativa à conexão em `/setup`. |
 | `ZAPI_CLIENT_TOKEN` | Chave de segurança da conta na z-api (vale para todas as instâncias). |
@@ -137,6 +138,7 @@ lib/conversas.ts                          dono das tabelas `conversas` e `mensag
 lib/rajada.ts                             espera de 3 s para responder uma rajada de mensagens de uma vez
 lib/eventos.ts                            emissor dos avisos de mudança (quem escreve publica, as telas escutam)
 lib/anexos.ts                             dono da tabela `anexos`: o que o cliente manda que não é texto
+lib/midia.ts                              transcreve o áudio, descreve a foto e lê o documento para a IA
 lib/transferencia.ts                      motivos de transferência (rótulos, marcador `[TRANSFERIR:motivo]`, frase de reserva)
 lib/metricas.ts                           fonte única dos números de Início e Relatórios
 lib/zapi.ts                               cliente da z-api: estado, QR Code, envio e cadastro dos avisos
@@ -170,8 +172,29 @@ continua na conversa depois disso, só sem o arquivo. Apagar uma conversa apaga 
 Uma reação (o emoji em cima de uma mensagem) não vira mensagem nova, e uma foto de visualização única
 fica registrada mas nunca é copiada.
 
-Os arquivos são servidos por `GET /api/anexos/[id]`, que é privada como todo o painel. Até a US-006
-o atendente virtual não ouve o áudio nem lê a foto: ele recebe o texto entre colchetes.
+Os arquivos são servidos por `GET /api/anexos/[id]`, que é privada como todo o painel.
+
+### O atendente entende o que não é texto
+
+Com a IA conectada, antes de responder o atendente **ouve o áudio, olha a foto e lê o documento** que
+chegaram desde a última resposta (`lib/midia.ts`). O que ele entendeu fica gravado junto do anexo e
+passa a ocupar o lugar da frase entre colchetes no que a IA lê: em vez de "[Áudio de 12 s]", ela recebe
+"[Áudio transcrito] Oi, queria saber o preço da limpeza". Na conversa, a transcrição aparece abaixo do
+áudio e a descrição abaixo da foto, para quem confere uma resposta estranha ver o que o atendente ouviu.
+
+- **Áudio:** transcrição pelo modelo de `MODELO_AUDIO` (padrão `google/gemini-2.5-flash`; troque em
+  Configurações › Ajustes opcionais). Ouvir áudio é cobrado por duração.
+- **Foto:** descrição objetiva pelo modelo de visão já configurado (produto, documento fotografado,
+  texto legível).
+- **Documento:** leitura direta de PDF com texto e de arquivos de texto, cortada em 6.000 caracteres.
+  Planilhas e outros formatos não são lidos.
+
+Cada um dos três tem um interruptor no passo 1 do Assistente ("Áudios, fotos e arquivos"), e todos
+nascem ligados. Quando o cliente manda **só** um anexo que o atendente não conseguiu entender (o tipo
+está desligado, o formato não é aceito, o modelo falhou, ou a IA nem está conectada), ele responde a
+frase de reserva — por padrão "Ainda não consigo ouvir áudios nem abrir arquivos por aqui. Pode me
+escrever?". Se a mesma sequência tiver qualquer outra coisa respondível, o atendente responde a ela
+normalmente e ignora o anexo.
 
 ### Documentos e busca para atendimento
 

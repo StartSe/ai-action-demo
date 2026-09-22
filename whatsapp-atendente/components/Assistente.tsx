@@ -31,7 +31,7 @@ import { ehModeloDeBase, modeloDeBase } from "@/lib/base-modelo";
 import { SUGESTOES, configExemplo } from "@/lib/demo";
 import { OBJETIVOS, TONS, rotuloObjetivo, rotuloTom } from "@/lib/rotulos";
 import type { Sugestao } from "@/lib/sugestoes";
-import type { Config } from "@/lib/types";
+import { MIDIA_PADRAO, type Config, type ConfigMidia } from "@/lib/types";
 
 const PASSOS: PassoIndicador[] = [
   { titulo: "Configurar", apoio: "Defina quem é o seu agente" },
@@ -39,7 +39,7 @@ const PASSOS: PassoIndicador[] = [
   { titulo: "Conectar", apoio: "Conecte seu WhatsApp" },
 ];
 
-const CONFIG_VAZIA: Config = { negocio: "", atendente: "", objetivo: "atendimento", tom: "profissional", horario: "", baseConhecimento: "", naoSei: "humano" };
+const CONFIG_VAZIA: Config = { negocio: "", atendente: "", objetivo: "atendimento", tom: "profissional", horario: "", baseConhecimento: "", naoSei: "humano", midia: { ...MIDIA_PADRAO } };
 
 /** Primeira vez no passo 1: os campos do negócio começam vazios e a base já vem com o modelo do objetivo
  * padrão (lib/base-modelo.ts), para a pessoa trocar os marcadores em vez de encarar um campo em branco.
@@ -110,6 +110,31 @@ function Grupo({ titulo, colunas = 2, children }: { titulo: string; colunas?: 2 
   );
 }
 
+/**
+ * Uma escolha de sim ou não com cara de interruptor: um `checkbox` de verdade por baixo (foco, teclado e
+ * leitor de tela saem de graça) com o desenho por cima. A US-009 leva este mesmo par para os cartões da
+ * seção Ferramentas; até lá ele vive aqui.
+ */
+function Interruptor({ id, titulo, apoio, ligado, onMudar }: { id: string; titulo: string; apoio: string; ligado: boolean; onMudar: (v: boolean) => void }) {
+  return (
+    <label htmlFor={id} className="flex items-start gap-3 cursor-pointer">
+      <input id={id} type="checkbox" className="sr-only peer" checked={ligado} onChange={(e) => onMudar(e.target.checked)} />
+      {/* O botão redondo é irmão do <input> só no desenho: quem manda na posição dele é o estado, não uma
+          variante `peer-checked` — ela só alcança irmãos diretos, e ele é neto. O anel de foco, esse sim,
+          vem do `peer` (a caixa está escondida, e sem ele ninguém veria onde o teclado parou). */}
+      <span
+        className={`mt-0.5 w-9 h-5 shrink-0 rounded-full transition-colors relative peer-focus-visible:outline-[3px] peer-focus-visible:outline-accent-soft ${ligado ? "bg-accent" : "bg-line"}`}
+      >
+        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${ligado ? "left-[18px]" : "left-0.5"}`} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[13.5px] font-semibold">{titulo}</span>
+        <span className="block text-[12px] text-muted">{apoio}</span>
+      </span>
+    </label>
+  );
+}
+
 export function Assistente() {
   const { status, erro } = useStatus();
   const router = useRouter();
@@ -154,6 +179,11 @@ export function Assistente() {
 
   function setCampo<K extends keyof Config>(campo: K, valor: Config[K]) {
     setConfig((c) => ({ ...c, [campo]: valor }));
+  }
+
+  /** Liga ou desliga um tipo de anexo; os outros dois continuam como estavam. */
+  function setMidia(tipo: keyof ConfigMidia, ligado: boolean) {
+    setConfig((c) => ({ ...c, midia: { ...(c.midia ?? MIDIA_PADRAO), [tipo]: ligado } }));
   }
 
   /** Trocar o objetivo troca o modelo da base — mas só enquanto ele estiver intocado. Qualquer edição da
@@ -678,6 +708,37 @@ export function Assistente() {
                     />
                   </Field>
                 )}
+
+                <div className="rounded-card border border-line p-4">
+                  <h3 className="font-bold text-[14px]">Áudios, fotos e arquivos</h3>
+                  <p className="text-[12.5px] text-muted mt-1 mb-3">
+                    Escolha o que o atendente tenta entender antes de responder. O que estiver desligado continua aparecendo na conversa
+                    para a equipe — o atendente é que não vai usar. Ouvir áudios usa o modelo de áudio e gasta créditos por minuto.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <Interruptor
+                      id="midia-audio"
+                      titulo="Ouvir áudios"
+                      apoio="Transcreve o que o cliente falou e responde ao conteúdo."
+                      ligado={config.midia.audio}
+                      onMudar={(v) => setMidia("audio", v)}
+                    />
+                    <Interruptor
+                      id="midia-imagem"
+                      titulo="Olhar fotos"
+                      apoio="Descreve a foto (produto, documento, texto legível) antes de responder."
+                      ligado={config.midia.imagem}
+                      onMudar={(v) => setMidia("imagem", v)}
+                    />
+                    <Interruptor
+                      id="midia-documento"
+                      titulo="Ler arquivos"
+                      apoio="Lê PDFs e arquivos de texto que o cliente mandar."
+                      ligado={config.midia.documento}
+                      onMudar={(v) => setMidia("documento", v)}
+                    />
+                  </div>
+                </div>
 
                 <MaisDetalhes titulo="Quando ele não souber responder">
                   <Field label="O que ele faz" htmlFor="naoSei">

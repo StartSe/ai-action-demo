@@ -21,10 +21,11 @@ import {
   ultimaMensagemDoClienteId,
 } from "./conversas";
 import { classificarLocal, esperar, respostaLocal } from "./demo";
+import { processarMidia, temConteudoParaResponder, textoParaIA } from "./midia";
 import { toolsParaAtendente } from "./empresa-mcp";
 import { getConfig } from "./estado";
 import { FRASE_FALHA_PADRAO, lerMotivo, MOTIVO_PADRAO, MOTIVOS_PARA_O_PROMPT, rotuloMotivo, semMarcador, type MotivoTransferencia } from "./transferencia";
-import type { CanalOrigem, Config, PerguntaPendente } from "./types";
+import { FRASE_SEM_MIDIA_PADRAO, type CanalOrigem, type Config, type PerguntaPendente } from "./types";
 import { registrarFalhaEnvio } from "./whatsapp";
 
 /** O tom escolhido, escrito como instrução para a IA; no tom personalizado, o texto é o da pessoa. */
@@ -272,12 +273,25 @@ export async function responderPendente(
   const bloqueio = motivoParaNaoResponder(numero, ultimaId);
   if (bloqueio) return descartar(numero, bloqueio);
 
-  const pendentes = mensagensSemResposta(numero);
+  let config = comBaseAprovada(configRascunho ?? getConfig());
+
+  let pendentes = mensagensSemResposta(numero);
+  // O áudio, a foto e o arquivo viram texto ANTES de a IA entrar (lib/midia.ts), e o resultado fica
+  // gravado no anexo: a partir daqui, `historicoRecente` já devolve o que o cliente falou no áudio no
+  // lugar de "[Áudio de 12 s]". Sem IA conectada nada é processado — não há com o que ouvir.
+  if (aiEnabled() && pendentes.length > 0) {
+    const entendidos = await processarMidia(pendentes, config);
+    if (entendidos > 0) pendentes = mensagensSemResposta(numero);
+  }
+  // O cliente mandou só anexo, e nenhum deles foi entendido (tipo desligado, formato fora da lista,
+  // falha do modelo, figurinha): não há pergunta para responder, e inventar uma resposta sobre um
+  // conteúdo que ninguém leu seria pior do que dizer a verdade.
+  const semConteudo = pendentes.length > 0 && !temConteudoParaResponder(pendentes);
+
   // Sem pendente (alguém já respondeu por fora), a última mensagem do cliente serve de pergunta.
-  const texto = pendentes.length ? pendentes.map((m) => m.texto).join("\n") : (historicoRecente(numero, 1)[0]?.texto ?? "");
+  const texto = pendentes.length ? pendentes.map(textoParaIA).join("\n") : (historicoRecente(numero, 1)[0]?.texto ?? "");
   const inicio = comecouEm ?? (pendentes[0] ? Date.parse(pendentes[0].criadoEm) : Date.now());
 
-  let config = comBaseAprovada(configRascunho ?? getConfig());
   const consulta = [...historicoRecente(numero, 4).filter((m) => m.papel === "cliente").map((m) => m.texto)].join("\n");
   const documentos = await buscarDocumentos(consulta || texto, aiEnabled() ? "contexto" : "texto");
   config = { ...config, baseConhecimento: `${config.baseConhecimento}
@@ -288,7 +302,11 @@ ${documentos}` };
   let transferir: boolean;
   let motivo: MotivoTransferencia | null = null;
   let ferramentaUsada: string | undefined;
-  if (aiEnabled()) {
+  if (semConteudo) {
+    resposta = config.fraseSemMidia?.trim() || FRASE_SEM_MIDIA_PADRAO;
+    transferir = false;
+    console.log(`Conversa ${numero}: o cliente mandou só anexo e o atendente não conseguiu entender; respondeu a frase de reserva.`);
+  } else if (aiEnabled()) {
     // historicoRecente já inclui as mensagens recém-gravadas: são as últimas linhas do histórico abaixo.
     const historico = historicoRecente(numero, MAX_HISTORICO)
       .map((m) => `${m.papel === "cliente" ? "Cliente" : config.atendente}: ${m.texto}`)
@@ -379,10 +397,11 @@ Regras: use "${ASSUNTO_OUTROS}" somente quando nenhum dos outros servir, e respo
 export async function classificarConversa(numero: string): Promise<string | null> {
   const conversa = obterConversa(numero);
   if (!conversa || conversa.exemplo) return null;
+  // Com a transcrição no lugar do marcador: um áudio não vira uma conversa sobre "[Áudio de 7 s]".
   const textos = conversa.mensagens
     .filter((m) => m.papel === "cliente")
     .slice(0, MAX_MENSAGENS_ASSUNTO)
-    .map((m) => m.texto);
+    .map(textoParaIA);
   if (textos.length === 0) return null;
 
   const config = getConfig();

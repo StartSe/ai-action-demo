@@ -82,6 +82,25 @@ export interface Metricas {
   atencao: Conversa[];
 }
 
+/**
+ * Quais tipos de anexo o atendente tenta entender antes de responder (lib/midia.ts). Desligar um tipo
+ * não esconde o anexo da conversa: ele continua na bolha, só não é lido pela IA — e o cliente recebe
+ * `fraseSemMidia` quando não sobrou mais nada respondível na sequência.
+ */
+export interface ConfigMidia {
+  audio: boolean;
+  imagem: boolean;
+  documento: boolean;
+}
+
+/** O que está ligado quando ninguém mexeu: o atendente entende tudo o que o cliente manda. Mora aqui
+ * (e não em lib/midia.ts, que abre banco e fala com o OpenRouter) para o formulário do Assistente
+ * conseguir importá-lo — mesma razão de PAPEIS_DE_CONVERSA estar neste arquivo. */
+export const MIDIA_PADRAO: ConfigMidia = { audio: true, imagem: true, documento: true };
+
+/** O que o cliente recebe quando o atendente não consegue entender o que ele mandou (lib/midia.ts). */
+export const FRASE_SEM_MIDIA_PADRAO = "Ainda não consigo ouvir áudios nem abrir arquivos por aqui. Pode me escrever?";
+
 export interface Config {
   negocio: string;
   atendente: string;
@@ -99,6 +118,13 @@ export interface Config {
    * padrão de lib/transferencia.ts (`FRASE_FALHA_PADRAO`).
    */
   fraseFalha?: string;
+  /** Tipos de anexo que o atendente tenta entender antes de responder; ausente vale MIDIA_PADRAO. */
+  midia: ConfigMidia;
+  /**
+   * O que o cliente recebe quando ele mandou só um anexo que o atendente não conseguiu entender
+   * (tipo desligado, formato fora da lista, falha do modelo). Vazio = FRASE_SEM_MIDIA_PADRAO.
+   */
+  fraseSemMidia?: string;
 }
 
 /** Uma conversa como as telas leem: os campos da tabela `conversas` mais o resumo das mensagens. */

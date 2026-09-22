@@ -2,7 +2,7 @@
 // persistida em SQLite em uma chave só, para sobreviver a reinícios. As conversas ficam em tabelas próprias (lib/conversas.ts).
 import { configExemplo } from "./demo";
 import { getConfig as getStoreConfig, setConfig as setStoreConfig } from "./store";
-import type { Config, NaoSei, Objetivo, Tom } from "./types";
+import { MIDIA_PADRAO, type Config, type ConfigMidia, type NaoSei, type Objetivo, type Tom } from "./types";
 
 const CHAVE = "ATENDENTE_CONFIG";
 
@@ -31,6 +31,7 @@ export function migrarConfig(salvo: Partial<Config> & { tom?: string }): Config 
   const objetivo = OBJETIVOS.includes(base.objetivo) ? base.objetivo : "atendimento";
   const objetivoTexto = objetivo === "outro" ? String(base.objetivoTexto ?? "").trim() : "";
   const fraseFalha = String(base.fraseFalha ?? "").trim();
+  const fraseSemMidia = String(base.fraseSemMidia ?? "").trim();
   return {
     negocio: base.negocio,
     atendente: base.atendente,
@@ -42,6 +43,18 @@ export function migrarConfig(salvo: Partial<Config> & { tom?: string }): Config 
     baseConhecimento: base.baseConhecimento,
     naoSei: NAO_SEI.includes(base.naoSei) ? base.naoSei : "humano",
     ...(fraseFalha ? { fraseFalha } : {}),
+    midia: lerMidia(base.midia),
+    ...(fraseSemMidia ? { fraseSemMidia } : {}),
+  };
+}
+
+/** Configuração antiga (sem o campo) e valor malformado caem no padrão: o atendente entende tudo. */
+function lerMidia(salvo: Partial<ConfigMidia> | undefined): ConfigMidia {
+  if (!salvo || typeof salvo !== "object") return { ...MIDIA_PADRAO };
+  return {
+    audio: typeof salvo.audio === "boolean" ? salvo.audio : MIDIA_PADRAO.audio,
+    imagem: typeof salvo.imagem === "boolean" ? salvo.imagem : MIDIA_PADRAO.imagem,
+    documento: typeof salvo.documento === "boolean" ? salvo.documento : MIDIA_PADRAO.documento,
   };
 }
 

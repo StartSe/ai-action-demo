@@ -1,5 +1,5 @@
 import { getConfig, setConfig, temConfigSalva } from "@/lib/estado";
-import type { Config } from "@/lib/types";
+import { MIDIA_PADRAO, type Config, type ConfigMidia } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   const body = (await req.json().catch(() => ({}))) as Partial<Config>;
-  const { negocio, atendente, objetivo, objetivoTexto, tom, tomTexto, horario, baseConhecimento, naoSei, fraseFalha } = body;
+  const { negocio, atendente, objetivo, objetivoTexto, tom, tomTexto, horario, baseConhecimento, naoSei, fraseFalha, midia, fraseSemMidia } = body;
   if (!negocio || !String(negocio).trim() || !atendente || !String(atendente).trim() || !baseConhecimento || !String(baseConhecimento).trim()) {
     return Response.json({ error: "Preencha ao menos o nome do negócio, o nome do atendente e a base de conhecimento." }, { status: 400 });
   }
@@ -36,6 +36,13 @@ export async function PUT(req: Request) {
   const textoTom = String(tomTexto || "").trim();
   // A frase de reserva para quando a IA falha é opcional: vazia, vale a padrão (lib/transferencia.ts).
   const textoFalha = String(fraseFalha || "").trim();
+  // O mesmo vale para os interruptores de áudio, foto e arquivo: ausentes, o atendente entende tudo.
+  const midiaEscolhida: ConfigMidia = {
+    audio: typeof midia?.audio === "boolean" ? midia.audio : MIDIA_PADRAO.audio,
+    imagem: typeof midia?.imagem === "boolean" ? midia.imagem : MIDIA_PADRAO.imagem,
+    documento: typeof midia?.documento === "boolean" ? midia.documento : MIDIA_PADRAO.documento,
+  };
+  const textoSemMidia = String(fraseSemMidia || "").trim();
   const novo: Config = {
     negocio: String(negocio).trim(),
     atendente: String(atendente).trim(),
@@ -47,6 +54,8 @@ export async function PUT(req: Request) {
     baseConhecimento: String(baseConhecimento).trim(),
     naoSei: NAO_SEI.includes(naoSei as Config["naoSei"]) ? (naoSei as Config["naoSei"]) : "humano",
     ...(textoFalha ? { fraseFalha: textoFalha } : {}),
+    midia: midiaEscolhida,
+    ...(textoSemMidia ? { fraseSemMidia: textoSemMidia } : {}),
   };
   return Response.json(setConfig(novo));
 }

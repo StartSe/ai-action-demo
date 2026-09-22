@@ -150,9 +150,10 @@ export function SetupPage({ marca, nome, area, segmento, children }: { marca: st
 
             {dados?.secundarias && dados.secundarias.length > 0 && (
               <div className="mt-5">
-                <MaisDetalhes titulo="Avisos por e-mail ou Slack (opcional)">
+                <MaisDetalhes titulo="Ajustes opcionais (avisos, áudios e arquivos)">
                   <p className="text-muted text-[13px] mb-3">
-                    Só para receber o relatório diário e os avisos das rotinas fora do app. O atendente responde clientes sem isto.
+                    Nada aqui é preciso para o atendente responder clientes: são os avisos fora do app (relatório diário e rotinas) e o
+                    modelo que ouve os áudios que os clientes mandam.
                   </p>
                   <div className="flex flex-col gap-5">
                     {dados.secundarias.map((i) => (

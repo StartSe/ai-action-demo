@@ -3,7 +3,7 @@
 // em vez de devolver o trecho da base copiado ao pé da letra.
 import { ASSUNTO_OUTROS, assuntosDoObjetivo, semAcento } from "./assuntos";
 import type { MotivoTransferencia } from "./transferencia";
-import type { Config, Objetivo, PapelMensagem, StatusConversa, TipoAnexo, Tom } from "./types";
+import { MIDIA_PADRAO, type Config, type Objetivo, type PapelMensagem, type StatusConversa, type TipoAnexo, type Tom } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
@@ -188,6 +188,7 @@ export const configExemplo: Config = {
   tom: "profissional",
   horario: "segunda a sexta, das 8h às 18h, e aos sábados das 8h ao meio-dia",
   naoSei: "humano",
+  midia: { ...MIDIA_PADRAO },
   baseConhecimento: `Sobre a clínica: a Sorriso Pleno Odontologia fica na Rua das Flores, 120, no Jardim América, em São Paulo. Atendemos há 12 anos com foco em odontologia geral, estética e ortodontia.
 
 Horário de atendimento humano: segunda a sexta, das 8h às 18h, e aos sábados das 8h ao meio-dia. Fora desse horário, o atendente automático continua respondendo.
@@ -254,6 +255,8 @@ export interface AnexoExemplo {
   segundos?: number;
   /** Legenda escrita pelo cliente; quando existe, ela é o texto da mensagem. */
   legenda?: string;
+  /** O que o atendente ouviu ou viu neste anexo (lib/midia.ts): a demonstração já mostra o recurso. */
+  transcricao?: string;
 }
 
 export interface MensagemExemplo {
@@ -321,7 +324,14 @@ export function conversasExemplo(): ConversaExemplo[] {
           papel: "cliente",
           texto: "[Áudio de 7 s]",
           atras: 4 * HORA - 2,
-          anexo: { tipo: "audio", arquivo: "/exemplos/audio-cliente.ogg", mime: "audio/ogg", nome: "audio-cliente.ogg", segundos: 7 },
+          anexo: {
+            tipo: "audio",
+            arquivo: "/exemplos/audio-cliente.ogg",
+            mime: "audio/ogg",
+            nome: "audio-cliente.ogg",
+            segundos: 7,
+            transcricao: "Oi, é a Ana Paula. A dor piorou muito à noite, quase não dormi. Consigo passar aí hoje ainda, mesmo que seja no fim da tarde?",
+          },
         },
         { papel: "humano", texto: "Oi, Ana Paula, aqui é a recepção. Consigo te encaixar hoje às 17h30 com a Dra. Helena.", atras: 3 * HORA, respostaMs: 480000 },
         { papel: "cliente", texto: "Perfeito, obrigada! Vou levar a radiografia que fiz na outra clínica.", atras: 2 * HORA },
@@ -425,6 +435,7 @@ export function conversasExemplo(): ConversaExemplo[] {
             mime: "image/jpeg",
             nome: "foto-carteirinha.jpg",
             legenda: "Esse é o convênio do meu filho, vocês atendem?",
+            transcricao: "Foto de uma carteirinha de plano odontológico, com o nome do titular, o número da carteirinha e a validade legíveis.",
           },
         },
         { papel: "atendente", texto: "Atendemos esse plano sim, Camila. Na primeira consulta é só levar a carteirinha e um documento com foto.", atras: 3 * DIA + 49, respostaMs: 4100 },

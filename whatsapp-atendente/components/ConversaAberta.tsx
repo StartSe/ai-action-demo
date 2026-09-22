@@ -143,12 +143,58 @@ function CartaoAnexo({ icone, titulo, apoio, acao }: { icone: string; titulo: st
 }
 
 /**
+ * Quantos caracteres cabem, com folga, nas duas linhas que a bolha mostra: acima disso ela oferece
+ * "ver mais". É uma estimativa e não uma medição — medir exigiria um efeito por bolha, e o preço de
+ * errar é só um "ver mais" que abre um texto que já estava inteiro na tela.
+ */
+const CURTO = 130;
+
+/**
+ * O que o atendente entendeu deste anexo (lib/midia.ts): a transcrição do áudio e a descrição da foto.
+ * Fica abaixo da mídia, em texto pequeno, porque é isso que a IA leu para responder — quem confere uma
+ * resposta estranha precisa ver o que ela ouviu. Acima de duas linhas, começa recolhido.
+ */
+function TextoEntendido({ rotulo, texto }: { rotulo: string; texto: string }) {
+  const [aberto, setAberto] = useState(false);
+  const longo = texto.length > CURTO;
+  return (
+    <span className="block text-[11.5px] leading-snug text-muted">
+      <span className={aberto || !longo ? "" : "line-clamp-2"}>
+        <span className="font-semibold">{rotulo}</span> {texto}
+      </span>
+      {longo && (
+        <button type="button" className="font-semibold text-accent-ink underline underline-offset-2" onClick={() => setAberto((v) => !v)}>
+          {aberto ? "ver menos" : "ver mais"}
+        </button>
+      )}
+    </span>
+  );
+}
+
+/** Como cada tipo apresenta o que o atendente entendeu; os demais tipos não mostram nada. */
+const ROTULO_ENTENDIDO: Partial<Record<Anexo["tipo"], string>> = {
+  audio: "Transcrição:",
+  imagem: "O atendente viu:",
+};
+
+/**
  * O que o cliente mandou quando não foi texto. A imagem e a figurinha usam `<img>` de propósito (e não
  * o componente de imagem do Next): o arquivo vem de uma rota privada deste app, com tamanho que só se
  * conhece na hora, e não passa por otimização. Áudio e vídeo carregam só quando alguém aperta o play —
  * uma conversa longa não pode baixar dez arquivos de uma vez.
  */
 function AnexoNaBolha({ anexo }: { anexo: Anexo }) {
+  const rotulo = ROTULO_ENTENDIDO[anexo.tipo];
+  if (!anexo.transcricao || !rotulo) return <MidiaDoAnexo anexo={anexo} />;
+  return (
+    <span className="flex flex-col gap-1">
+      <MidiaDoAnexo anexo={anexo} />
+      <TextoEntendido rotulo={rotulo} texto={anexo.transcricao} />
+    </span>
+  );
+}
+
+function MidiaDoAnexo({ anexo }: { anexo: Anexo }) {
   if (anexo.tipo === "audio") {
     return (
       <span className="flex items-center gap-2">

@@ -130,20 +130,23 @@ export interface AnexoNovo {
   nomeArquivo?: string;
   segundos?: number;
   legenda?: string;
+  /** O que o atendente ouviu ou leu neste anexo; só as conversas de exemplo já nascem com ele
+   * preenchido — nos anexos de verdade quem grava é lib/midia.ts, depois de a IA processar. */
+  transcricao?: string;
   /** Momento da gravação, para as conversas de exemplo nascerem espalhadas nos últimos dias. */
   em?: Date;
 }
 
 /** Grava o anexo e devolve o registro; o arquivo em si é copiado depois, por `baixar`. */
-export function registrarAnexo({ mensagemId, numero, tipo, urlOriginal = "", mime = "", nomeArquivo = "", segundos, legenda, em }: AnexoNovo): AnexoRegistro {
+export function registrarAnexo({ mensagemId, numero, tipo, urlOriginal = "", mime = "", nomeArquivo = "", segundos, legenda, transcricao, em }: AnexoNovo): AnexoRegistro {
   const id = randomBytes(8).toString("hex");
   const quando = (em ?? new Date()).toISOString().slice(0, 19).replace("T", " ");
   banco()
     .prepare(
       `INSERT INTO anexos (id, mensagem_id, tipo, url_original, caminho_local, mime, nome_arquivo, tamanho, segundos, legenda, transcricao, criado_em)
-       VALUES (?, ?, ?, ?, NULL, ?, ?, 0, ?, ?, NULL, ?)`
+       VALUES (?, ?, ?, ?, NULL, ?, ?, 0, ?, ?, ?, ?)`
     )
-    .run(id, mensagemId, tipo, urlOriginal, mime, nomeArquivo, segundos ?? null, legenda ?? null, quando);
+    .run(id, mensagemId, tipo, urlOriginal, mime, nomeArquivo, segundos ?? null, legenda ?? null, transcricao ?? null, quando);
   // A mensagem já avisou as telas quando foi gravada, mas o anexo chega logo depois: sem este segundo
   // aviso, a bolha ficaria só com o texto entre colchetes até a próxima consulta.
   publicar({ tipo: "conversa", numero });
@@ -268,4 +271,39 @@ export function limparAntigos({ forcar = false }: { forcar?: boolean } = {}): nu
   d.prepare("DELETE FROM anexos WHERE criado_em < ?").run(corte);
   console.log(`Limpeza de anexos: ${linhas.length} com mais de ${DIAS_GUARDADOS} dias apagados.`);
   return linhas.length;
+}
+
+// --- Conteúdo do arquivo -------------------------------------------------
+
+/**
+ * O arquivo deste anexo em memória, para a IA ouvir o áudio, olhar a foto ou ler o documento
+ * (lib/midia.ts). Prefere a cópia no disco; sem ela (a cópia ainda está em andamento, ou falhou), busca
+ * no provedor sem guardar nada. Devolve `null` quando não há arquivo nenhum, e nunca derruba quem
+ * chamou: o pior caso é o atendente não entender o anexo.
+ */
+export async function bytesDoAnexo(id: string): Promise<{ dados: Buffer; mime: string } | null> {
+  const anexo = obter(id);
+  if (!anexo || !COM_ARQUIVO.includes(anexo.tipo)) return null;
+  if (anexo.caminhoLocal) {
+    try {
+      return { dados: fs.readFileSync(anexo.caminhoLocal), mime: anexo.mime };
+    } catch (err) {
+      console.error(`Não foi possível ler a cópia do anexo ${id}:`, err instanceof Error ? err.message : err);
+    }
+  }
+  if (!anexo.urlOriginal) return null;
+  const controle = new AbortController();
+  const limite = setTimeout(() => controle.abort(), TEMPO_LIMITE_MS);
+  try {
+    const resposta = await fetch(anexo.urlOriginal, { signal: controle.signal });
+    if (!resposta.ok) throw new Error(`o provedor respondeu ${resposta.status}`);
+    const dados = Buffer.from(await resposta.arrayBuffer());
+    if (dados.length > TAMANHO_MAXIMO) throw new Error(`arquivo grande demais (${Math.round(dados.length / 1024 / 1024)} MB)`);
+    return { dados, mime: mimeLimpo(resposta.headers.get("content-type")) || anexo.mime };
+  } catch (err) {
+    console.error(`Não foi possível buscar o anexo ${id} no provedor:`, err instanceof Error ? err.message : err);
+    return null;
+  } finally {
+    clearTimeout(limite);
+  }
 }

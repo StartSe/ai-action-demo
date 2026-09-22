@@ -107,7 +107,7 @@
         "Lint e build passam; verificar no navegador (transcrição e descrição na bolha; interruptores no Assistente)"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-006 (Fase 1)"
     },
     {

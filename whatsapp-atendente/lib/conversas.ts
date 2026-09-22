@@ -10,6 +10,7 @@
  */
 import { anexosDeMensagens, apagarDeMensagens, registrarAnexo } from "./anexos";
 import { conversasExemplo } from "./demo";
+import { textoParaIA } from "./midia";
 import { publicar } from "./eventos";
 import { abrirBanco, getConfig, setConfig } from "./store";
 import { ehMotivo, MOTIVO_PADRAO, rotuloMotivo, type MotivoTransferencia } from "./transferencia";
@@ -266,12 +267,20 @@ export function obterConversa(numero: string): ConversaCompleta | null {
 /**
  * As últimas mensagens da conversa, da mais antiga para a mais recente: a memória de curto prazo da IA.
  * Notas internas e eventos ficam de fora — a IA nunca os vê.
+ *
+ * O texto de uma mensagem com anexo já entendido vem com a transcrição no lugar do marcador entre
+ * colchetes (lib/midia.ts:textoParaIA): é isso que faz a IA responder ao que o cliente FALOU no áudio,
+ * e não a "[Áudio de 12 s]". Sem transcrição gravada, o texto sai como está.
  */
 export function historicoRecente(numero: string, limite = MAX_HISTORICO): MensagemChat[] {
   const linhas = banco()
-    .prepare(`SELECT papel, texto FROM mensagens WHERE numero = ? AND ${SO_CONVERSA} ORDER BY id DESC LIMIT ?`)
-    .all(numero, limite) as { papel: string; texto: string }[];
-  return linhas.reverse().map((l) => ({ papel: l.papel as PapelMensagem, texto: l.texto }));
+    .prepare(`SELECT id, papel, texto FROM mensagens WHERE numero = ? AND ${SO_CONVERSA} ORDER BY id DESC LIMIT ?`)
+    .all(numero, limite) as { id: number; papel: string; texto: string }[];
+  const anexos = anexosDeMensagens(linhas.map((l) => Number(l.id)));
+  return linhas.reverse().map((l) => ({
+    papel: l.papel as PapelMensagem,
+    texto: textoParaIA({ texto: l.texto, anexos: anexos.get(Number(l.id)) }),
+  }));
 }
 
 function hora(texto: string): string {
@@ -600,7 +609,14 @@ export function mensagensSemResposta(numero: string): MensagemRegistro[] {
        ORDER BY id`
     )
     .all(numero, numero) as LinhaMensagem[];
-  return linhas.map(paraMensagem);
+  // Com os anexos: é sobre esta lista que lib/midia.ts decide o que precisa ser ouvido, olhado ou lido
+  // antes de a IA responder à sequência.
+  const anexos = anexosDeMensagens(linhas.map((l) => Number(l.id)));
+  return linhas.map((l) => {
+    const mensagem = paraMensagem(l);
+    const doAnexo = anexos.get(mensagem.id);
+    return doAnexo ? { ...mensagem, anexos: doAnexo } : mensagem;
+  });
 }
 
 /** Id da última mensagem do cliente nesta conversa; null quando ele nunca escreveu. */
@@ -840,6 +856,7 @@ export function semearExemplosSeVazio({ numeroConectado, atendente = "Bia" }: { 
           nomeArquivo: m.anexo.nome,
           segundos: m.anexo.segundos,
           legenda: m.anexo.legenda,
+          transcricao: m.anexo.transcricao,
           em: quando,
         });
       }
