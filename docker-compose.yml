@@ -163,6 +163,13 @@ services:
     ports: ["3023:10000"]
     volumes: [precificador-dados:/app/data]
 
+  classificador-de-lancamento:
+    <<: *app
+    build: ./classificador-de-lancamento
+    image: ghcr.io/startse/classificador-de-lancamento:latest
+    ports: ["3025:10000"]
+    volumes: [classificador-de-lancamento-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -186,3 +193,4 @@ volumes:
   mapify-dados:
   predictive-harness-dados:
   precificador-dados:
+  classificador-de-lancamento-dados:

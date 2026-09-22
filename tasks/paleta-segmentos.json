@@ -232,5 +232,18 @@
    26
   ],
   "contrasteBranco": 5.55
+ },
+ "classificador-de-lancamento": {
+  "segmento": "Financeiro",
+  "acento": "#0e621c",
+  "acento2": "#0cac56",
+  "soft": "#e7f9ea",
+  "ink": "#085e16",
+  "hsl": [
+   130,
+   75,
+   22
+  ],
+  "contrasteBranco": 7.55
  }
 }

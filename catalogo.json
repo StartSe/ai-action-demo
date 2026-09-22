@@ -514,6 +514,24 @@
       ],
       "independente": true,
       "demo": null
+    },
+    {
+      "id": "classificador-de-lancamento",
+      "nome": "Classificador de Lançamento",
+      "areas": [
+        "Financeiro"
+      ],
+      "problema": "O plano de contas é preenchido no chute e o relatório gerencial não serve pra decisão nenhuma.",
+      "ia": "Classifica lançamentos novos pelo padrão de um histórico já classificado, citando de qual lançamento veio cada categoria e marcando pra revisar o que não tem precedente claro.",
+      "integracoes": "Só a IA (OpenRouter). O vocabulário de categorias vem do CSV do histórico; nada é escrito de volta em ERP ou sistema de origem.",
+      "acento": "#0e621c",
+      "porta": 3025,
+      "captura": "capturas/classificador-de-lancamento.png",
+      "capacidades": [
+        "artefato",
+        "mcp"
+      ],
+      "demo": null
     }
   ]
 }
