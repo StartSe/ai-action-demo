@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.2 — 2026-09-22
+
+- Hover de **Excluir** com cantos arredondados de 8 px na biblioteca e no editor, seguindo o padrão dos botões de ação.
+
 ## 1.4.1 — 2026-09-22
 
 - Ação **Excluir** nos cartões da biblioteca, nas visualizações em grade e lista, inclusive no celular. A lista e os contadores são atualizados após a exclusão.
