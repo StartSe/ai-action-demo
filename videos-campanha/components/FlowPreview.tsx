@@ -1,7 +1,10 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- Local uploads and generated media. */
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Asset } from "@/lib/flow/model";
+import { FlowDialog } from "./FlowFeedback";
+import FlowIcon from "./FlowIcon";
 
 export type MediaAsset = Pick<Asset, "url" | "title" | "kind">;
 
@@ -41,6 +44,7 @@ function Media({
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [expanded, setExpanded] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const media = video.current;
@@ -109,8 +113,69 @@ function Media({
               onError={() => setFailed(true)}
             />
           )}
+          {asset.kind === "image" && ready && interactive && (
+            <button
+              type="button"
+              className="cf-image-expand nodrag nopan"
+              aria-label={`Ver imagem inteira: ${asset.title}`}
+              aria-haspopup="dialog"
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpanded(true);
+              }}
+            >
+              <FlowIcon name="expand" />
+              Ver inteira
+            </button>
+          )}
+          {expanded &&
+            createPortal(
+              <ExpandedImage
+                asset={asset}
+                onClose={() => setExpanded(false)}
+              />,
+              document.body,
+            )}
         </>
       )}
     </div>
+  );
+}
+
+function ExpandedImage({
+  asset,
+  onClose,
+}: {
+  asset: MediaAsset;
+  onClose: () => void;
+}) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <FlowDialog
+      title={`Imagem inteira: ${asset.title}`}
+      className="cf-image-viewer"
+      onClose={onClose}
+      dismissOnBackdrop
+    >
+      <header>
+        <h2>{asset.title}</h2>
+        <button type="button" onClick={onClose} aria-label="Fechar imagem">
+          <FlowIcon name="close" />
+        </button>
+      </header>
+      <div className="cf-image-viewer-media">
+        {failed ? (
+          <p role="alert">
+            Não foi possível carregar a imagem. Feche e tente novamente.
+          </p>
+        ) : (
+          <img
+            src={asset.url}
+            alt={asset.title}
+            onError={() => setFailed(true)}
+          />
+        )}
+      </div>
+    </FlowDialog>
   );
 }

@@ -1,3 +1,5 @@
+> **Versão 0.3.2 — Creative Flows:** opção Ver inteira abre a imagem original em um modal, sem recorte, no editor e no preview público. Veja [comportamento e validação](docs/ux-0.3.2.md).
+
 > **Versão 0.3.1 — Creative Flows:** prompt editável no card Ideia, cabeçalho compacto, cards simplificados e vídeo em cover com autoplay e loop. Veja [ajustes e validação](docs/ux-0.3.1.md).
 
 > **Versão 0.3.0 — Creative Flows:** preview público somente para visualização, sidebar flutuante, barra centralizada e ações de duplicar/ramificar nos cards. Veja [comportamento e validação](docs/ux-0.3.0.md).

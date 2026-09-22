@@ -122,11 +122,13 @@ export function FlowDialog({
   children,
   onClose,
   className = "",
+  dismissOnBackdrop = false,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   className?: string;
+  dismissOnBackdrop?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -143,6 +145,20 @@ export function FlowDialog({
       ref={ref}
       aria-label={title}
       className={`cf-modal cf-dialog ${className}`}
+      onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!dismissOnBackdrop || e.target !== e.currentTarget) return;
+        const box = e.currentTarget.getBoundingClientRect();
+        if (
+          e.clientX < box.left ||
+          e.clientX > box.right ||
+          e.clientY < box.top ||
+          e.clientY > box.bottom
+        )
+          onClose();
+      }}
       onCancel={(e) => {
         e.preventDefault();
         onClose();
