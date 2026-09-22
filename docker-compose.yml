@@ -163,6 +163,12 @@ services:
     ports: ["3023:10000"]
     volumes: [precificador-dados:/app/data]
 
+  analise-de-perda:
+    build: ./analise-de-perda
+    image: ghcr.io/startse/analise-de-perda:latest
+    ports: ["3024:10000"]
+    volumes: [analise-de-perda-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -186,3 +192,4 @@ volumes:
   mapify-dados:
   predictive-harness-dados:
   precificador-dados:
+  analise-de-perda-dados:
