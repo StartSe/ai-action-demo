@@ -253,6 +253,51 @@ export interface Anexo {
   transcricao?: string;
 }
 
+/**
+ * De onde veio uma fonte usada para escrever a resposta: o texto livre da base do Assistente, as
+ * respostas já aprovadas pela equipe, um documento importado, ou o que o atendente lembra do cliente
+ * (memória e resumo da conversa, a partir da US-011/US-012).
+ */
+export type TipoFonte = "base" | "aprovada" | "documento" | "memoria" | "resumo";
+
+/** Uma fonte consultada para escrever a resposta, do jeito que o bloco "Por que respondeu assim" a mostra. */
+export interface FonteDaResposta {
+  tipo: TipoFonte;
+  /** Nome que aparece na linha: o nome do documento, "Base de conhecimento do Assistente"... */
+  nome: string;
+  /** O pedaço de texto que entrou na resposta, já cortado (nunca o documento inteiro). */
+  trecho: string;
+}
+
+/** Uma ferramenta chamada para escrever a resposta (agenda ou sistemas da empresa). */
+export interface FerramentaDaResposta {
+  nome: string;
+  /** A chamada deu certo? Uma ferramenta que falhou continua aparecendo — foi o que a IA tentou. */
+  ok: boolean;
+  /** Resumo curto do que foi consultado (o argumento da chamada), para quem confere a resposta. */
+  resumo: string;
+}
+
+/**
+ * Como esta resposta foi montada: as fontes lidas, as ferramentas chamadas, o motivo da transferência,
+ * o que veio de áudio/foto/arquivo, quanto tempo levou e com que modelo. Gravado junto da mensagem
+ * (coluna `detalhes` de lib/conversas.ts) e mostrado no bloco "Por que respondeu assim" — é o que faz
+ * a pessoa corrigir a base no lugar certo em vez de adivinhar.
+ */
+export interface DetalhesResposta {
+  /** O modelo que escreveu a resposta, ou "sem IA (busca local)" no modo demonstração. */
+  modelo: string;
+  tempoMs: number;
+  fontes: FonteDaResposta[];
+  ferramentas: FerramentaDaResposta[];
+  /** Só quando a resposta passou a conversa para uma pessoa. */
+  transferencia?: { motivo: MotivoTransferencia };
+  /** Que tipos de anexo o atendente leu para responder. */
+  midia?: ("transcricao" | "imagem" | "documento")[];
+  /** Quantas mensagens do cliente esta resposta respondeu de uma vez (a rajada de lib/rajada.ts). */
+  rajada: number;
+}
+
 /** Uma mensagem já gravada, como a conversa aberta e a IA a leem (datas sempre em ISO). */
 export interface MensagemDaConversa extends MensagemChat {
   id: number;
@@ -267,6 +312,8 @@ export interface MensagemDaConversa extends MensagemChat {
   erroEnvio?: string;
   /** O que veio junto da mensagem quando o cliente mandou áudio, foto, arquivo, localização ou contato. */
   anexos?: Anexo[];
+  /** Como esta resposta foi montada (só nas respostas do atendente virtual, e só desde a 0.3.0). */
+  detalhes?: DetalhesResposta;
 }
 
 /**

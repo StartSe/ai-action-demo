@@ -30,9 +30,10 @@ import { formatarTelefone } from "@/lib/telefone";
 import type { RespostaConexao } from "@/app/api/whatsapp/conexao/route";
 import type { ParBase } from "@/lib/base";
 import { ehModeloDeBase, modeloDeBase } from "@/lib/base-modelo";
+import { GRUPOS, cenariosDoObjetivo, motivoEsperado, rotuloGrupo, type Cenario } from "@/lib/cenarios";
 import { PERGUNTAS_EXEMPLO, configExemplo } from "@/lib/demo";
 import { ACAO_CONECTAR_AGENDA, OBJETIVOS, TONS, rotuloObjetivo, rotuloTom } from "@/lib/rotulos";
-import { FRASE_FALHA_PADRAO } from "@/lib/transferencia";
+import { FRASE_FALHA_PADRAO, rotuloMotivo, type MotivoTransferencia } from "@/lib/transferencia";
 import type { Sugestao } from "@/lib/sugestoes";
 import { FERRAMENTAS_PADRAO, LIMITE_SAUDACAO, MIDIA_PADRAO, type Config, type ConfigFerramentas, type ConfigMidia, type PersonaGerada } from "@/lib/types";
 
@@ -162,6 +163,51 @@ function Grupo({ titulo, colunas = 2, children }: { titulo: string; colunas?: 2 
   );
 }
 
+/**
+ * Um cenário de teste do passo 2 (lib/cenarios.ts): a mensagem que o cliente manda, a marca de "este
+ * precisa chamar uma pessoa" e, depois de enviado, o que o atendente fez. O veredito compara o motivo
+ * com o esperado: pedir ajuda pelo motivo errado joga a conversa no lugar errado dos relatórios.
+ */
+function CenarioDeTeste({
+  cenario,
+  resultado,
+  enviando,
+  onEnviar,
+}: {
+  cenario: Cenario;
+  /** `undefined` = ainda não enviado; `null` = respondeu sozinho; motivo = pediu ajuda de uma pessoa. */
+  resultado: MotivoTransferencia | null | undefined;
+  enviando: boolean;
+  onEnviar: () => void;
+}) {
+  const esperado = motivoEsperado(cenario);
+  const veredito = (() => {
+    if (resultado === undefined) return null;
+    if (!esperado) return { tom: "muted" as const, texto: "Testado" };
+    if (resultado === null) return { tom: "danger" as const, texto: "Não chamou ninguém" };
+    if (resultado === esperado) return { tom: "ok" as const, texto: `Chamou uma pessoa pelo motivo certo: ${rotuloMotivo(resultado)}` };
+    return { tom: "warn" as const, texto: `Chamou uma pessoa por outro motivo: ${rotuloMotivo(resultado)}` };
+  })();
+  const cor = veredito?.tom === "ok" ? "text-accent-ink" : veredito?.tom === "danger" ? "text-danger" : veredito?.tom === "warn" ? "text-warn" : "text-muted";
+  return (
+    <div>
+      <button
+        type="button"
+        className="w-full text-left rounded-lg border border-line bg-surface px-3 py-2 text-[13px] cursor-pointer hover:border-accent transition-colors disabled:opacity-60"
+        onClick={onEnviar}
+        disabled={enviando}
+      >
+        <span className="block font-semibold">{cenario.titulo}</span>
+        <span className="block text-muted">“{cenario.mensagem}”</span>
+      </button>
+      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] leading-snug">
+        {esperado && <span className="font-semibold text-warn">Deve chamar uma pessoa</span>}
+        {veredito && <span className={`font-semibold ${cor}`}>{veredito.texto}</span>}
+      </p>
+    </div>
+  );
+}
+
 export function Assistente() {
   const { status, erro } = useStatus();
   const router = useRouter();
@@ -191,6 +237,8 @@ export function Assistente() {
   const [criandoLinkSugestoes, setCriandoLinkSugestoes] = useState(false);
   const [tratandoSugestao, setTratandoSugestao] = useState<string | null>(null);
   const [avisoTeste, setAvisoTeste] = useState<ErroLido | null>(null);
+  /** O que aconteceu com cada cenário já enviado: o motivo com que pediu ajuda, ou `null` (respondeu sozinho). */
+  const [resultadoCenario, setResultadoCenario] = useState<Record<string, MotivoTransferencia | null>>({});
   const carregouBase = useRef(false);
   const rolouParaConhecimento = useRef(false);
 
@@ -376,7 +424,7 @@ export function Assistente() {
    * na lista de Conversas com o rótulo Simulador), e o corpo NÃO leva a configuração: o passo 1 salva
    * antes de trazer a pessoa para cá, então o que está sendo testado é o atendente de verdade.
    */
-  async function enviarTeste(textoBruto: string) {
+  async function enviarTeste(textoBruto: string, cenarioId?: string) {
     const texto = textoBruto.trim();
     if (!texto) return;
     setMensagens((m) => [...m, { papel: "cliente", texto, hora: horaAtual() }, { papel: "atendente", texto: "digitando...", pendente: true }]);
@@ -394,8 +442,11 @@ export function Assistente() {
         const semPendente = m.filter((x) => !x.pendente);
         // Sem resposta: a conversa foi assumida por uma pessoa e a IA não responde por ela.
         if (!resposta.resposta) return semPendente;
-        return [...semPendente, { papel: "atendente", texto: resposta.resposta, transferido: resposta.transferir, ferramentaUsada: resposta.ferramentaUsada, hora: horaAtual() }];
+        return [...semPendente, { papel: "atendente", texto: resposta.resposta, transferido: resposta.transferir, detalhes: resposta.detalhes, hora: horaAtual() }];
       });
+      // O cartão "O que testar" marca o cenário: um caso que deveria terminar com uma pessoa e não
+      // terminou é exatamente o que a pessoa precisa ver antes de colocar o atendente no WhatsApp.
+      if (cenarioId) setResultadoCenario((r) => ({ ...r, [cenarioId]: resposta.detalhes?.transferencia?.motivo ?? resposta.motivo ?? null }));
     } catch (err) {
       const info = await lerErro(err);
       setMensagens((m) => [...m.filter((x) => !x.pendente), { papel: "atendente", texto: info.mensagem, erro: true, acao: info.acao, hora: horaAtual() }]);
@@ -549,6 +600,9 @@ export function Assistente() {
   // As perguntas do passo 2 e a prévia do passo 1 saem da configuração; sem nenhuma escrita, valem as
   // da empresa de exemplo (a US-010 troca esta reserva pelos cenários de cada objetivo).
   const perguntasTeste = config.perguntasSugeridas?.length ? config.perguntasSugeridas : PERGUNTAS_EXEMPLO;
+  // Os cenários vêm do objetivo escolhido: quem vende testa pagamento e prazo, quem marca horários
+  // testa remarcação. Os dois casos que devem terminar com uma pessoa estão em todos eles.
+  const cenarios = cenariosDoObjetivo(config.objetivo);
   const saudacaoAtual = config.saudacao?.trim() || saudacaoPadrao(config.atendente, config.negocio);
 
   const previa: BolhaChat[] = [
@@ -650,6 +704,37 @@ export function Assistente() {
                 <p className="text-muted text-[12.5px] mt-3.5">
                   Não gostou de uma resposta? Clique em Corrigir e a resposta certa entra na base do atendente.
                 </p>
+
+                {/* Os casos que costumam dar errado (lib/cenarios.ts). Quem acabou de criar o atendente
+                    testa o que já sabe que funciona; é aqui que ele descobre o que falta na base. */}
+                <div className="mt-4 pt-4 border-t border-line">
+                  <h3 className="font-bold text-[14px] mb-1">Cenários que valem testar</h3>
+                  <p className="text-muted text-[12.5px] mb-3">
+                    Dois deles o atendente não deve responder sozinho: ele precisa chamar uma pessoa.
+                  </p>
+                  <div className="flex flex-col gap-3.5">
+                    {GRUPOS.map((grupo) => {
+                      const doGrupo = cenarios.filter((c) => c.grupo === grupo);
+                      if (doGrupo.length === 0) return null;
+                      return (
+                        <div key={grupo}>
+                          <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1.5">{rotuloGrupo(grupo)}</p>
+                          <div className="flex flex-col gap-2">
+                            {doGrupo.map((c) => (
+                              <CenarioDeTeste
+                                key={c.id}
+                                cenario={c}
+                                resultado={c.id in resultadoCenario ? resultadoCenario[c.id] : undefined}
+                                enviando={enviando}
+                                onEnviar={() => enviarTeste(c.mensagem, c.id)}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </aside>
 

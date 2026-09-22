@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { MensagemChat } from "@/lib/types";
+import { PorQueRespondeu } from "./PorQueRespondeu";
+import type { DetalhesResposta, MensagemChat } from "@/lib/types";
 
 /**
  * `hora` é gravada no momento em que a mensagem é enviada/recebida, não recalculada a cada render.
@@ -14,7 +15,8 @@ export type BolhaChat = MensagemChat & {
   acao?: { rotulo: string; url: string };
   pendente?: boolean;
   hora?: string;
-  ferramentaUsada?: string;
+  /** Como o atendente montou a resposta; desenha o "Por que respondeu assim" abaixo da bolha. */
+  detalhes?: DetalhesResposta;
 };
 
 /** Aprova ou corrige a resposta do atendente para o par {pergunta, resposta} entrar na base. */
@@ -200,11 +202,7 @@ export function Celular({
                     {m.acao.rotulo}
                   </a>
                 )}
-                {m.ferramentaUsada && (
-                  <span className="text-[11px] text-muted px-1" title={`Ferramenta consultada: ${m.ferramentaUsada}`}>
-                    Consultado em {m.ferramentaUsada}
-                  </span>
-                )}
+                {m.papel === "atendente" && !m.pendente && !m.erro && <PorQueRespondeu detalhes={m.detalhes} />}
                 {podeAvaliar && pergunta && (
                   <AcoesResposta pergunta={pergunta} resposta={m.texto} onAprovar={onAprovar} onCorrigir={onCorrigir} />
                 )}

@@ -16,6 +16,7 @@
 // caminho literal em qualquer componente.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AcoesResposta, type AoSalvarBase } from "./Celular";
+import { PorQueRespondeu } from "./PorQueRespondeu";
 import { INTERVALO_RESERVA_MS, useEventos, useRecargaJunta, type EventoDaTela } from "./useEventos";
 import { Avatar, AvatarAtendente, DesenhoOrigem } from "./ContatoVisual";
 import { ContatoRecolhido, PainelContato, type DadosDoContato } from "./PainelContato";
@@ -318,10 +319,12 @@ function Bolha({
           )}
         </div>
       )}
-      {mensagem.ferramentaUsada && (
-        <span className="text-[11px] text-muted px-1" title={`Ferramenta consultada: ${mensagem.ferramentaUsada}`}>
-          Consultado em {mensagem.ferramentaUsada}
-        </span>
+      {/* Como a resposta foi montada. Respostas gravadas antes da 0.3.0 não têm os detalhes: delas
+          sobrou só o nome da ferramenta consultada, e é melhor mostrá-lo do que esconder a única
+          pista que existe. */}
+      {daIA && mensagem.detalhes && <PorQueRespondeu detalhes={mensagem.detalhes} />}
+      {daIA && !mensagem.detalhes && mensagem.ferramentaUsada && (
+        <span className="text-[11px] text-muted px-1">Consultou {mensagem.ferramentaUsada} para responder</span>
       )}
       {pergunta && (
         <AcoesResposta

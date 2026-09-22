@@ -175,7 +175,7 @@
         "Lint e build passam; verificar no navegador (bloco expandido no simulador e na conversa, cenários com marcação; desktop e celular)"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-010 (Fase 2)"
     },
     {

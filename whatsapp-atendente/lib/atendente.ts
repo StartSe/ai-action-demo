@@ -3,11 +3,11 @@
 // cliente e responde na mesma chamada (simulador e MCP, que esperam a resposta de volta), e
 // `responderPendente()` responde ao que já está gravado — é o que lib/rajada.ts chama quando a janela
 // de 3 s de uma rajada de mensagens do WhatsApp fecha. Os dois passam pela guarda `podeResponder`.
-import { aiEnabled, askJSON, askText, askWithTools, ErroIA, type ToolMessage } from "./ai";
+import { aiEnabled, askJSON, askText, askWithTools, ErroIA, modelName, type ToolMessage } from "./ai";
 import { ASSUNTO_OUTROS, assuntosDoObjetivo, normalizarAssunto } from "./assuntos";
-import { buscarDocumentos } from "./documentos";
+import { buscarDocumentos, buscarNosDocumentos } from "./documentos";
 import { toolsAgenda } from "./agenda";
-import { baseAprovadaComoTexto } from "./base";
+import { baseAprovadaComoTexto, baseAprovadaRelevante } from "./base";
 import {
   definirAssunto,
   historicoRecente,
@@ -20,12 +20,21 @@ import {
   registrarResposta,
   ultimaMensagemDoClienteId,
 } from "./conversas";
-import { classificarLocal, esperar, respostaLocal } from "./demo";
+import { classificarLocal, esperar, respostaLocal, trechoMaisParecido } from "./demo";
 import { processarMidia, temConteudoParaResponder, textoParaIA } from "./midia";
 import { toolsParaAtendente } from "./empresa-mcp";
 import { getConfig } from "./estado";
 import { FRASE_FALHA_PADRAO, lerMotivo, MOTIVO_PADRAO, MOTIVOS_PARA_O_PROMPT, rotuloMotivo, semMarcador, type MotivoTransferencia } from "./transferencia";
-import { FRASE_SEM_MIDIA_PADRAO, type CanalOrigem, type Config, type PerguntaPendente } from "./types";
+import {
+  FRASE_SEM_MIDIA_PADRAO,
+  type CanalOrigem,
+  type Config,
+  type DetalhesResposta,
+  type FerramentaDaResposta,
+  type FonteDaResposta,
+  type MensagemDaConversa,
+  type PerguntaPendente,
+} from "./types";
 import { registrarFalhaEnvio } from "./whatsapp";
 
 /** O tom escolhido, escrito como instrução para a IA; no tom personalizado, o texto é o da pessoa. */
@@ -141,12 +150,25 @@ ${Object.entries(MOTIVOS_PARA_O_PROMPT)
   O marcador vale também quando o cliente pede uma pessoa ou reclama, mesmo que você consiga responder algo: responda com gentileza e termine com o marcador.`;
 }
 
+/** Resumo curto do que foi consultado numa ferramenta, para o bloco "Por que respondeu assim". */
+const LIMITE_RESUMO_FERRAMENTA = 80;
+
+function resumoDoArgumento(args: Record<string, unknown>): string {
+  const valores = Object.values(args)
+    .filter((v) => v !== null && v !== undefined && v !== "")
+    .map((v) => (typeof v === "object" ? JSON.stringify(v) : String(v)));
+  const texto = valores.join(", ");
+  return texto.length > LIMITE_RESUMO_FERRAMENTA ? `${texto.slice(0, LIMITE_RESUMO_FERRAMENTA - 1)}…` : texto;
+}
+
 /**
  * Chama a IA para uma resposta de texto livre, usando tool use com as ferramentas dos sistemas da
- * empresa (lib/empresa-mcp.ts) quando alguma estiver conectada e liberada. Devolve o nome da primeira
- * ferramenta chamada (se alguma foi), para a tela e o relatório diário mostrarem "Consultado em X".
+ * empresa (lib/empresa-mcp.ts) e da agenda (lib/agenda.ts) quando alguma estiver conectada, liberada e
+ * ligada. Devolve TODAS as ferramentas chamadas (com sucesso ou com erro), na ordem em que foram
+ * chamadas: é o que o bloco "Por que respondeu assim" mostra, e a primeira delas é o "Consultado em X"
+ * que o relatório diário já mostrava.
  */
-async function perguntarComFerramentas({ system, prompt, maxTokens, ligadas }: { system: string; prompt: string; maxTokens: number; ligadas: { agenda: boolean; sistemas: boolean } }): Promise<{ texto: string; ferramentaUsada?: string }> {
+async function perguntarComFerramentas({ system, prompt, maxTokens, ligadas }: { system: string; prompt: string; maxTokens: number; ligadas: { agenda: boolean; sistemas: boolean } }): Promise<{ texto: string; ferramentas: FerramentaDaResposta[] }> {
   // O interruptor vale POR CIMA da conexão: desligado na seção Ferramentas do Assistente, o conjunto
   // nem é buscado, então o modelo não recebe aquelas ferramentas mesmo com o serviço conectado.
   const [empresa, agenda] = await Promise.all([
@@ -165,8 +187,8 @@ Data atual: ${new Date().toISOString()}.`;
       return conjunto.executeTool(nome, args);
     },
   } : null;
-  if (!ferramentas) return { texto: await askText({ system, prompt, maxTokens }) };
-  const usadas: string[] = [];
+  if (!ferramentas) return { texto: await askText({ system, prompt, maxTokens }), ferramentas: [] };
+  const usadas: FerramentaDaResposta[] = [];
   const messages: ToolMessage[] = [{ role: "user", content: prompt }];
   const texto = await askWithTools({
     system,
@@ -174,11 +196,17 @@ Data atual: ${new Date().toISOString()}.`;
     tools: ferramentas.tools,
     maxTokens,
     executeTool: async (nome, args) => {
-      usadas.push(nome);
-      return ferramentas.executeTool(nome, args);
+      const registro: FerramentaDaResposta = { nome, ok: false, resumo: resumoDoArgumento(args) };
+      usadas.push(registro);
+      const resultado = await ferramentas.executeTool(nome, args);
+      // Uma ferramenta que estourou continua na lista com `ok: false` (lib/ai.ts devolve o erro ao
+      // modelo e a conversa segue): a resposta talvez tenha sido escrita SEM aquele dado, e é
+      // justamente isso que quem confere a resposta precisa saber.
+      registro.ok = true;
+      return resultado;
     },
   });
-  return { texto, ferramentaUsada: usadas[0] };
+  return { texto, ferramentas: usadas };
 }
 
 /** Os interruptores da seção Ferramentas, com a reserva para uma configuração gravada antes da US-009
@@ -194,6 +222,79 @@ function comBaseAprovada(config: Config): Config {
   return { ...config, baseConhecimento: `${config.baseConhecimento}\n\nPerguntas já respondidas e aprovadas pela equipe:\n\n${extra}` };
 }
 
+// --- "Por que respondeu assim" ------------------------------------------------------------------
+// Cada resposta do atendente virtual guarda como foi montada (lib/types.ts:DetalhesResposta): as
+// fontes lidas, as ferramentas chamadas, o motivo da transferência, o que veio de áudio/foto/arquivo,
+// o tempo e o modelo. É o que a pessoa abre na bolha para saber ONDE corrigir a base, em vez de
+// adivinhar. Nada aqui é uma medição de dentro do modelo: são as fontes que o app ENVIOU e as
+// ferramentas que ele EXECUTOU — e os textos da tela falam nesses termos.
+
+/** Tamanho do trecho de cada fonte guardado junto da resposta: o suficiente para reconhecer o texto. */
+const LIMITE_TRECHO = 200;
+
+function cortar(texto: string, limite = LIMITE_TRECHO): string {
+  const limpo = texto.replace(/\s+/g, " ").trim();
+  return limpo.length > limite ? `${limpo.slice(0, limite - 1)}…` : limpo;
+}
+
+/** O nome que a tela mostra na linha da base de conhecimento (o campo do passo 1 do Assistente). */
+export const FONTE_BASE = "Base de conhecimento do Assistente";
+/** O nome que a tela mostra na linha das respostas que a equipe aprovou em "Aprovar"/"Corrigir". */
+export const FONTE_APROVADA = "Respostas aprovadas pela equipe";
+
+/** Quantas respostas aprovadas entram na lista de fontes: as mais parecidas, para a linha não virar uma lista. */
+const MAX_APROVADAS_NAS_FONTES = 2;
+
+/**
+ * As fontes desta resposta. A base de conhecimento entra SEMPRE (ela vai inteira no prompt, e é onde
+ * a pessoa corrige); os trechos de documento entram os que a busca escolheu; as respostas aprovadas
+ * entram quando alguma casou por palavras com a pergunta (lib/base.ts:baseAprovadaRelevante) — a base
+ * aprovada também vai inteira ao modelo, então isto é uma pista do que casou, não uma medição.
+ */
+function montarFontes({
+  pergunta,
+  baseConhecimento,
+  trechos,
+}: {
+  pergunta: string;
+  baseConhecimento: string;
+  trechos: { nome: string; numero: number; texto: string }[];
+}): FonteDaResposta[] {
+  const fontes: FonteDaResposta[] = [];
+  // A base vai INTEIRA no prompt, então ela é sempre uma fonte. O trecho mostrado é o MAIS PARECIDO
+  // com a pergunta (lib/demo.ts:trechoMaisParecido), não uma afirmação de qual parte o modelo usou —
+  // isso ninguém tem como saber, e o que a pessoa precisa é saber onde mexer. Sem nenhum trecho
+  // parecido, a linha fica só com o nome e o link de editar, em vez de citar um pedaço qualquer.
+  if (baseConhecimento.trim()) {
+    const { trecho, bastante } = trechoMaisParecido(baseConhecimento, pergunta);
+    fontes.push({ tipo: "base", nome: FONTE_BASE, trecho: trecho && bastante ? cortar(trecho) : "" });
+  }
+  for (const par of baseAprovadaRelevante(pergunta).slice(0, MAX_APROVADAS_NAS_FONTES)) {
+    fontes.push({ tipo: "aprovada", nome: FONTE_APROVADA, trecho: cortar(`${par.pergunta} → ${par.resposta}`) });
+  }
+  for (const t of trechos) {
+    fontes.push({ tipo: "documento", nome: t.nome, trecho: cortar(t.texto) });
+  }
+  return fontes;
+}
+
+/** Que tipos de anexo o atendente conseguiu ler nesta sequência de mensagens (lib/midia.ts). */
+function midiaLida(mensagens: MensagemDaConversa[]): DetalhesResposta["midia"] {
+  const tipos = new Set<NonNullable<DetalhesResposta["midia"]>[number]>();
+  for (const m of mensagens) {
+    for (const a of m.anexos ?? []) {
+      if (!a.transcricao) continue;
+      if (a.tipo === "audio") tipos.add("transcricao");
+      else if (a.tipo === "imagem") tipos.add("imagem");
+      else if (a.tipo === "documento") tipos.add("documento");
+    }
+  }
+  return tipos.size ? [...tipos] : undefined;
+}
+
+/** O que a linha discreta do bloco mostra no lugar do nome do modelo quando não houve IA nenhuma. */
+export const SEM_IA = "sem IA (busca local)";
+
 /** O que `responder()` e `responderPendente()` devolvem. `resposta: null` = nada foi enviado ao cliente. */
 export interface RespostaDoAtendente {
   resposta: string | null;
@@ -207,6 +308,8 @@ export interface RespostaDoAtendente {
   descartada?: string;
   /** Id da resposta gravada, para quem envia pelo número real marcar depois se ela saiu (`enviada`) ou não (`falhou`). */
   mensagemId?: number;
+  /** Como a resposta foi montada, para o bloco "Por que respondeu assim" do simulador e da conversa. */
+  detalhes?: DetalhesResposta;
 }
 
 /**
@@ -292,7 +395,11 @@ export async function responderPendente(
   const bloqueio = motivoParaNaoResponder(numero, ultimaId);
   if (bloqueio) return descartar(numero, bloqueio);
 
-  let config = comBaseAprovada(configRascunho ?? getConfig());
+  // Quando o atendente COMEÇOU a escrever: é este o tempo que o bloco "Por que respondeu assim"
+  // mostra, sem a espera da rajada (que já está no tempo de resposta gravado na conversa).
+  const comecouAEscrever = Date.now();
+  const configSalva = configRascunho ?? getConfig();
+  let config = comBaseAprovada(configSalva);
 
   let pendentes = mensagensSemResposta(numero);
   // O áudio, a foto e o arquivo viram texto ANTES de a IA entrar (lib/midia.ts), e o resultado fica
@@ -312,7 +419,8 @@ export async function responderPendente(
   const inicio = comecouEm ?? (pendentes[0] ? Date.parse(pendentes[0].criadoEm) : Date.now());
 
   const consulta = [...historicoRecente(numero, 4).filter((m) => m.papel === "cliente").map((m) => m.texto)].join("\n");
-  const documentos = await buscarDocumentos(consulta || texto, aiEnabled() ? "contexto" : "texto");
+  // Uma busca só: o texto formatado vai para o prompt e os trechos escolhidos viram as fontes da tela.
+  const { trechos, texto: documentos } = await buscarNosDocumentos(consulta || texto, aiEnabled() ? "contexto" : "texto");
   config = { ...config, baseConhecimento: `${config.baseConhecimento}
 
 ${documentos}` };
@@ -321,9 +429,15 @@ ${documentos}` };
   let transferir: boolean;
   let motivo: MotivoTransferencia | null = null;
   let ferramentaUsada: string | undefined;
+  let ferramentas: FerramentaDaResposta[] = [];
+  let modelo = aiEnabled() ? modelName() : SEM_IA;
+  /** Trecho da base escolhido pela busca sem IA; com IA não há como saber qual parte o modelo usou. */
+  let trechoLocal: string | undefined;
   if (semConteudo) {
     resposta = config.fraseSemMidia?.trim() || FRASE_SEM_MIDIA_PADRAO;
     transferir = false;
+    // Nem a IA foi chamada: a frase é do app, e o bloco da bolha precisa dizer isso.
+    modelo = SEM_IA;
     console.log(`Conversa ${numero}: o cliente mandou só anexo e o atendente não conseguiu entender; respondeu a frase de reserva.`);
   } else if (aiEnabled()) {
     // historicoRecente já inclui as mensagens recém-gravadas: são as últimas linhas do histórico abaixo.
@@ -333,9 +447,9 @@ ${documentos}` };
     const alvo = pendentes.length > 1 ? `às últimas ${pendentes.length} mensagens do cliente, em UMA mensagem só` : "à última mensagem do cliente";
     const prompt = `${historico}\n\nResponda como ${config.atendente} ${alvo}.`;
     let bruta: string;
-    let usada: string | undefined;
+    let usadas: FerramentaDaResposta[] = [];
     try {
-      ({ texto: bruta, ferramentaUsada: usada } = await perguntarComFerramentas({ system: montarSystemPrompt(config), prompt, maxTokens: 400, ligadas: ferramentasLigadas(config) }));
+      ({ texto: bruta, ferramentas: usadas } = await perguntarComFerramentas({ system: montarSystemPrompt(config), prompt, maxTokens: 400, ligadas: ferramentasLigadas(config) }));
     } catch (err) {
       // A IA falhou (chave, crédito, serviço fora, rede). No simulador e no MCP o erro sobe e aparece na
       // bolha vermelha — quem está testando precisa vê-lo. Numa conversa real, o cliente não pode ficar
@@ -346,22 +460,28 @@ ${documentos}` };
       console.error(`Falha da IA na conversa ${numero}; o cliente recebeu a frase de reserva e a conversa passou para uma pessoa:`, err);
       registrarFalhaEnvio(`A IA não conseguiu responder a um cliente (${detalhe}). Ele recebeu a frase de reserva e a conversa passou para uma pessoa.`);
       bruta = `${config.fraseFalha?.trim() || FRASE_FALHA_PADRAO}\n[TRANSFERIR:falha]`;
+      // A frase de reserva é do app, não do modelo: quem abrir a bolha precisa ler isso, e não um
+      // nome de modelo que não escreveu nada.
+      modelo = SEM_IA;
     }
     motivo = lerMotivo(bruta);
     transferir = motivo !== null;
     const limpa = limparSaida(semMarcador(bruta));
     if (limpa) {
       resposta = limpa;
-      ferramentaUsada = usada;
+      ferramentas = usadas;
+      ferramentaUsada = usadas[0]?.nome;
     } else {
       // O modelo devolveu raciocínio em vez de mensagem (acontece com os modelos gratuitos). Mandar isso
       // ao cliente seria pior do que responder pela base: o caminho sem IA assume, e fica o registro.
       console.error("Resposta da IA descartada (parecia raciocínio, não mensagem):", bruta.slice(0, 200));
       const baseLocal = comBaseAprovada(configRascunho ?? getConfig());
-      const r = respostaLocal(texto, { ...baseLocal, baseConhecimento: `${baseLocal.baseConhecimento}\n\n${await buscarDocumentos(consulta || texto, "texto")}` });
+      const r = respostaLocal(texto, { ...baseLocal, baseConhecimento: `${baseLocal.baseConhecimento}\n\n${trechos.map((t) => t.texto).join("\n\n")}` });
       resposta = r.resposta;
       transferir = r.transferir;
       motivo = r.transferir ? MOTIVO_PADRAO : null;
+      modelo = SEM_IA;
+      trechoLocal = r.trecho;
     }
   } else {
     await esperar(700);
@@ -369,6 +489,7 @@ ${documentos}` };
     resposta = r.resposta;
     transferir = r.transferir;
     motivo = r.transferir ? MOTIVO_PADRAO : null;
+    trechoLocal = r.trecho;
   }
 
   // Segunda conferência, com a resposta pronta: alguém pode ter assumido, ou o cliente escrito de novo,
@@ -376,10 +497,22 @@ ${documentos}` };
   const bloqueioFinal = motivoParaNaoResponder(numero, ultimaId);
   if (bloqueioFinal) return descartar(numero, bloqueioFinal, resposta);
 
-  const mensagemId = registrarResposta({ numero, texto: resposta, transferir, motivo, atendente: config.atendente, ferramentaUsada, tempoRespostaMs: Date.now() - inicio });
+  const detalhes: DetalhesResposta = {
+    modelo,
+    tempoMs: Date.now() - comecouAEscrever,
+    // Sem IA, a única fonte é o trecho que a busca local escolheu; a base inteira não foi lida por ninguém.
+    fontes: trechoLocal
+      ? [{ tipo: "base", nome: FONTE_BASE, trecho: cortar(trechoLocal) }]
+      : montarFontes({ pergunta: texto, baseConhecimento: configSalva.baseConhecimento, trechos }),
+    ferramentas,
+    ...(motivo ? { transferencia: { motivo } } : {}),
+    ...(midiaLida(pendentes) ? { midia: midiaLida(pendentes) } : {}),
+    rajada: Math.max(1, pendentes.length),
+  };
+  const mensagemId = registrarResposta({ numero, texto: resposta, transferir, motivo, atendente: config.atendente, ferramentaUsada, detalhes, tempoRespostaMs: Date.now() - inicio });
   if (motivo) console.log(`Conversa ${numero} passada para uma pessoa: ${rotuloMotivo(motivo)}.`);
 
-  return { resposta, transferir, motivo, ferramentaUsada, mensagemId };
+  return { resposta, transferir, motivo, ferramentaUsada, mensagemId, detalhes };
 }
 
 function descartar(numero: string, motivo: string, resposta?: string): RespostaDoAtendente {
@@ -510,11 +643,11 @@ export async function sugerirResposta(pergunta: string): Promise<{ resposta: str
   const config = { ...base, baseConhecimento: `${base.baseConhecimento}\n\n${await buscarDocumentos(pergunta)}` };
   // A sugestão à equipe nunca mexe na agenda: ela é um rascunho para alguém revisar, e consultar
   // horários (ou criar um evento) por causa de um relatório seria agir sem ninguém ter pedido.
-  const { texto, ferramentaUsada } = await perguntarComFerramentas({ system: montarSystemPromptSugestao(config), prompt: pergunta, maxTokens: 200, ligadas: { agenda: false, sistemas: config.ferramentas?.sistemas !== false } });
+  const { texto, ferramentas } = await perguntarComFerramentas({ system: montarSystemPromptSugestao(config), prompt: pergunta, maxTokens: 200, ligadas: { agenda: false, sistemas: config.ferramentas?.sistemas !== false } });
   const limpa = limparSaida(texto);
   if (!limpa) {
     console.error("Sugestão da IA descartada (parecia raciocínio, não mensagem):", texto.slice(0, 200));
     throw new ErroIA("resposta_invalida", "A IA respondeu em um formato inesperado. Tente de novo; se repetir, troque para um modelo pago em Configurações.", 502);
   }
-  return { resposta: limpa, ferramentaUsada };
+  return { resposta: limpa, ferramentaUsada: ferramentas[0]?.nome };
 }

@@ -6,7 +6,7 @@
  */
 import { numero } from "./formato";
 import { formatarTelefone } from "./telefone";
-import type { CanalOrigem, Objetivo, Periodo, PeriodoMetricas, StatusConversa, Tom } from "./types";
+import type { CanalOrigem, Objetivo, Periodo, PeriodoMetricas, StatusConversa, TipoFonte, Tom } from "./types";
 
 const ROTULOS_ORIGEM: Record<CanalOrigem, string> = {
   simulador: "Simulador",
@@ -267,3 +267,40 @@ export function contextoComparacao(periodo: PeriodoMetricas): string {
  * seja atributo, e uma `url:` escrita direto no componente reprovaria. Em `lib/*.ts` isso não acontece.
  */
 export const ACAO_CONECTAR_AGENDA = { url: "/setup#mcp-agenda", rotulo: "Conectar em Configurações" };
+
+/**
+ * Um desenho por tipo de fonte do bloco "Por que respondeu assim" (components/PorQueRespondeu.tsx).
+ * `Record` completo: somar um tipo a `TipoFonte` passa a cobrar o desenho aqui, em vez de deixar uma
+ * linha sem nada na tela.
+ */
+const DESENHOS_FONTE: Record<TipoFonte, string> = {
+  base: "📋",
+  aprovada: "✅",
+  documento: "📄",
+  memoria: "🧠",
+  resumo: "📝",
+};
+
+export function desenhoFonte(tipo: TipoFonte): string {
+  return DESENHOS_FONTE[tipo] ?? DESENHOS_FONTE.base;
+}
+
+/** Como a linha da mídia lida aparece no bloco "Por que respondeu assim". */
+const MIDIA_LIDA: Record<"transcricao" | "imagem" | "documento", string> = {
+  transcricao: "Ouviu o áudio do cliente",
+  imagem: "Olhou a foto do cliente",
+  documento: "Leu o arquivo do cliente",
+};
+
+export function rotuloMidiaLida(tipo: "transcricao" | "imagem" | "documento"): string {
+  return MIDIA_LIDA[tipo] ?? MIDIA_LIDA.documento;
+}
+
+/** Quanto o atendente levou para escrever a resposta, curto ("menos de 1 s", "1,4 s", "12 s"). */
+export function tempoCurto(ms: number): string {
+  const segundos = ms / 1000;
+  // "0,0 s" pareceria um erro de medição; abaixo de um segundo, o que importa é que foi imediato.
+  if (segundos < 1) return "menos de 1 s";
+  if (segundos < 10) return `${segundos.toFixed(1).replace(".", ",")} s`;
+  return `${Math.round(segundos)} s`;
+}

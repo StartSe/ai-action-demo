@@ -3,7 +3,8 @@
 // em vez de devolver o trecho da base copiado ao pé da letra.
 import { ASSUNTO_OUTROS, assuntosDoObjetivo, semAcento } from "./assuntos";
 import type { MotivoTransferencia } from "./transferencia";
-import { FERRAMENTAS_PADRAO, MIDIA_PADRAO, type Config, type Objetivo, type PapelMensagem, type StatusConversa, type TipoAnexo, type Tom } from "./types";
+import { MODELOS_GRATUITOS } from "./modelos";
+import { FERRAMENTAS_PADRAO, MIDIA_PADRAO, type Config, type DetalhesResposta, type Objetivo, type PapelMensagem, type StatusConversa, type TipoAnexo, type Tom } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
@@ -90,11 +91,19 @@ function reformular(trecho: string, tom: Tom): string {
 }
 
 /** Resposta sem IA: busca o trecho da base de conhecimento com mais palavras em comum com a pergunta. */
-export function respostaLocal(texto: string, config: Config): { resposta: string; transferir: boolean } {
-  const candidatos = trechos(config.baseConhecimento);
-  const tokensPergunta = normalizar(texto);
-  // Exige que ao menos metade das palavras relevantes da pergunta apareçam no trecho,
-  // para não casar por uma única palavra comum (ex.: "cirurgia" aparecendo por acaso em outro assunto).
+/**
+ * O trecho da base de conhecimento mais parecido com a pergunta, por palavras em comum, e se ele é
+ * parecido o BASTANTE para responder (metade das palavras relevantes da pergunta, no mínimo uma — sem
+ * isso, uma palavra comum por acaso em outro assunto casaria).
+ *
+ * Duas coisas diferentes usam esta escolha: `respostaLocal`, que responde por ela quando não há IA, e
+ * o bloco "Por que respondeu assim" (lib/atendente.ts), que mostra o trecho mais parecido para a
+ * pessoa saber ONDE mexer na base. No segundo caso ele NÃO é uma afirmação sobre o que o modelo usou
+ * (a base vai inteira no prompt): é o pedaço que tem a ver com a pergunta.
+ */
+export function trechoMaisParecido(base: string, pergunta: string): { trecho: string | null; bastante: boolean } {
+  const candidatos = trechos(base);
+  const tokensPergunta = normalizar(pergunta);
   const limite = Math.max(1, Math.ceil(tokensPergunta.length * 0.5));
   let melhor: string | null = null;
   let melhorScore = 0;
@@ -107,10 +116,17 @@ export function respostaLocal(texto: string, config: Config): { resposta: string
       melhor = trecho;
     }
   }
-  if (!melhor || melhorScore < limite) {
+  return { trecho: melhor, bastante: Boolean(melhor) && melhorScore >= limite };
+}
+
+export function respostaLocal(texto: string, config: Config): { resposta: string; transferir: boolean; trecho?: string } {
+  const { trecho: melhor, bastante } = trechoMaisParecido(config.baseConhecimento, texto);
+  if (!melhor || !bastante) {
     return { resposta: mensagemNaoSei(config), transferir: true };
   }
-  return { resposta: reformular(melhor, config.tom), transferir: false };
+  // O trecho escolhido volta junto: sem IA, é ele a única "fonte" da resposta, e é o que o bloco
+  // "Por que respondeu assim" mostra (lib/atendente.ts).
+  return { resposta: reformular(melhor, config.tom), transferir: false, trecho: melhor };
 }
 
 // --- Assunto da conversa sem IA ---------------------------------------------------------------
@@ -270,6 +286,11 @@ export interface MensagemExemplo {
   /** Quantos minutos antes de "agora" a mensagem chegou: é o que espalha as conversas pelos últimos 7 dias. */
   atras: number;
   /**
+   * Como esta resposta foi montada (o bloco "Por que respondeu assim" da bolha). Só em algumas
+   * respostas de exemplo: a demonstração mostra o recurso antes de existir qualquer chave de IA.
+   */
+  detalhes?: DetalhesResposta;
+  /**
    * Quanto o atendente levou para escrever esta resposta, em milissegundos (só nas respostas). É o que
    * alimenta o "tempo médio de resposta" de lib/metricas.ts no modo demonstração: `atras` é contado em
    * minutos e não daria para expressar os poucos segundos que a IA leva. A resposta escrita por uma
@@ -299,6 +320,25 @@ const DIA = 24 * HORA;
  * Souza parada há três dias, que a leitura mostra como "Resolvida". As outras três são duas
  * "Precisa de atenção" e uma "Em atendimento humano", com uma mensagem ainda não lida.
  */
+/** O modelo que o app usa quando ninguém escolheu outro: é o que a demonstração mostra na linha do fim. */
+const MODELO_DEMONSTRACAO = MODELOS_GRATUITOS[0]!.valor;
+
+/**
+ * Os detalhes de uma resposta de exemplo ("Por que respondeu assim"). As conversas de exemplo existem
+ * para mostrar o app funcionando antes de qualquer chave: sem isto, o recurso só apareceria depois de
+ * a pessoa conectar a IA e receber a primeira mensagem de verdade.
+ */
+function detalhesExemplo({ trecho, tempoMs, motivo }: { trecho: string; tempoMs: number; motivo?: MotivoTransferencia }): DetalhesResposta {
+  return {
+    modelo: MODELO_DEMONSTRACAO,
+    tempoMs,
+    fontes: [{ tipo: "base", nome: "Base de conhecimento do Assistente", trecho }],
+    ferramentas: [],
+    ...(motivo ? { transferencia: { motivo } } : {}),
+    rajada: 1,
+  };
+}
+
 export function conversasExemplo(): ConversaExemplo[] {
   return [
     {
@@ -310,7 +350,16 @@ export function conversasExemplo(): ConversaExemplo[] {
         { papel: "cliente", texto: "Oi! Vocês têm horário para limpeza esta semana?", atras: 50 },
         { papel: "atendente", texto: "Claro! Temos quinta às 9h e sexta às 14h. Qual fica melhor para você?", atras: 49, respostaMs: 2400 },
         { papel: "cliente", texto: "Quinta às 9h está ótimo.", atras: 46 },
-        { papel: "atendente", texto: "Perfeito, Mariana. Anotei quinta às 9h para a limpeza. Se precisar mudar, avise com pelo menos 4 horas de antecedência.", atras: 45, respostaMs: 3100 },
+        {
+          papel: "atendente",
+          texto: "Perfeito, Mariana. Anotei quinta às 9h para a limpeza. Se precisar mudar, avise com pelo menos 4 horas de antecedência.",
+          atras: 45,
+          respostaMs: 3100,
+          detalhes: detalhesExemplo({
+            trecho: "Cancelamento e remarcação: pedimos aviso com pelo menos 4 horas de antecedência. Faltas sem aviso podem gerar cobrança de 50% do valor da consulta.",
+            tempoMs: 3100,
+          }),
+        },
       ],
     },
     {
@@ -355,6 +404,11 @@ export function conversasExemplo(): ConversaExemplo[] {
           texto: "Essa pergunta é melhor respondida por alguém da equipe. Já vou encaminhar para um atendente humano falar com você (segunda a sexta, das 8h às 18h).",
           atras: 3 * HORA,
           respostaMs: 5200,
+          detalhes: detalhesExemplo({
+            trecho: "Formas de pagamento: dinheiro, PIX, cartão de crédito em até 12x sem juros e convênios odontológicos (Odontoprev e Amil Dental).",
+            tempoMs: 5200,
+            motivo: "sem_informacao",
+          }),
         },
       ],
     },
@@ -365,7 +419,16 @@ export function conversasExemplo(): ConversaExemplo[] {
       assunto: "Horário de atendimento",
       mensagens: [
         { papel: "cliente", texto: "Vocês abrem no sábado?", atras: 6 * HORA + 2 },
-        { papel: "atendente", texto: "Sim! Aos sábados atendemos das 8h ao meio-dia.", atras: 6 * HORA, respostaMs: 3500 },
+        {
+          papel: "atendente",
+          texto: "Sim! Aos sábados atendemos das 8h ao meio-dia.",
+          atras: 6 * HORA,
+          respostaMs: 3500,
+          detalhes: detalhesExemplo({
+            trecho: "Horário de atendimento humano: segunda a sexta, das 8h às 18h, e aos sábados das 8h ao meio-dia.",
+            tempoMs: 3500,
+          }),
+        },
       ],
     },
     {

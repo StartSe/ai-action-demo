@@ -19,6 +19,7 @@ import {
   type CanalOrigem,
   type Conversa,
   type ConversaCompleta,
+  type DetalhesResposta,
   type MensagemChat,
   type MensagemDaConversa,
   type PapelMensagem,
@@ -69,6 +70,7 @@ type LinhaMensagem = {
   id_externo: string | null;
   status_entrega: string | null;
   erro_envio: string | null;
+  detalhes: string | null;
 };
 
 // Os dois tipos que saem deste arquivo moram em lib/types.ts (arquivo client-safe, sem node:sqlite):
@@ -109,7 +111,8 @@ function banco() {
       tempo_resposta_ms INTEGER NULL,
       id_externo TEXT NULL,
       status_entrega TEXT NULL,
-      erro_envio TEXT NULL
+      erro_envio TEXT NULL,
+      detalhes TEXT NULL
     )`);
     d.exec(`CREATE INDEX IF NOT EXISTS mensagens_por_conversa ON mensagens (numero, id)`);
     // Bancos anteriores à 0.3.0 não têm `id_externo` (o id da mensagem no canal, para o mesmo aviso
@@ -127,6 +130,11 @@ function banco() {
     } catch { /* coluna já existe */ }
     try {
       d.exec(`ALTER TABLE mensagens ADD COLUMN erro_envio TEXT NULL`);
+    } catch { /* coluna já existe */ }
+    // 0.3.0 (US-010): como a resposta foi montada (fontes, ferramentas, tempo, modelo), em JSON. As
+    // respostas anteriores ficam NULL e simplesmente não mostram o "Por que respondeu assim".
+    try {
+      d.exec(`ALTER TABLE mensagens ADD COLUMN detalhes TEXT NULL`);
     } catch { /* coluna já existe */ }
     // Bancos criados antes da US-015 não têm a coluna; ALTER TABLE falha de propósito quando ela já existe.
     // A primeira vez recupera o passado pelo que dá para saber: o status atual e as respostas escritas por
@@ -237,7 +245,19 @@ function paraMensagem(l: LinhaMensagem): MensagemRegistro {
     tempoRespostaMs: l.tempo_resposta_ms === null ? undefined : Number(l.tempo_resposta_ms),
     statusEntrega: ehStatusEntrega(l.status_entrega) ? l.status_entrega : undefined,
     erroEnvio: l.erro_envio ?? undefined,
+    detalhes: lerDetalhes(l.detalhes),
   };
+}
+
+/** Os detalhes gravados em JSON; `undefined` na resposta antiga (coluna nula) e no JSON que não abre. */
+function lerDetalhes(bruto: string | null): DetalhesResposta | undefined {
+  if (!bruto) return undefined;
+  try {
+    return JSON.parse(bruto) as DetalhesResposta;
+  } catch (err) {
+    console.error("Não foi possível ler os detalhes de uma resposta:", err);
+    return undefined;
+  }
 }
 
 /** Uma mensagem desta conversa pelo id; null quando não existe ou é de outra conversa. */
@@ -459,6 +479,7 @@ function inserirMensagem({
   tempoRespostaMs,
   idExterno,
   statusEntrega,
+  detalhes,
 }: {
   numero: string;
   papel: PapelMensagem;
@@ -468,12 +489,13 @@ function inserirMensagem({
   tempoRespostaMs?: number;
   idExterno?: string;
   statusEntrega?: StatusEntrega;
+  detalhes?: DetalhesResposta;
 }): number {
   const gravada = banco()
     .prepare(
-      "INSERT INTO mensagens (numero, papel, texto, criado_em, ferramenta_usada, tempo_resposta_ms, id_externo, status_entrega) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO mensagens (numero, papel, texto, criado_em, ferramenta_usada, tempo_resposta_ms, id_externo, status_entrega, detalhes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
-    .run(numero, papel, texto, criadoEm ?? paraTextoDeBanco(), ferramentaUsada ?? null, tempoRespostaMs ?? null, idExterno ?? null, statusEntrega ?? null);
+    .run(numero, papel, texto, criadoEm ?? paraTextoDeBanco(), ferramentaUsada ?? null, tempoRespostaMs ?? null, idExterno ?? null, statusEntrega ?? null, detalhes ? JSON.stringify(detalhes) : null);
   avisarConversa(numero);
   return Number(gravada.lastInsertRowid);
 }
@@ -638,6 +660,7 @@ export function registrarResposta({
   atendente,
   ferramentaUsada,
   tempoRespostaMs,
+  detalhes,
   em,
 }: {
   numero: string;
@@ -649,6 +672,8 @@ export function registrarResposta({
   atendente?: string;
   ferramentaUsada?: string;
   tempoRespostaMs?: number;
+  /** Como a resposta foi montada (lib/atendente.ts), para o bloco "Por que respondeu assim". */
+  detalhes?: DetalhesResposta;
   em?: Date;
 }): number {
   const quando = paraTextoDeBanco(em);
@@ -657,7 +682,7 @@ export function registrarResposta({
   banco()
     .prepare(`UPDATE conversas SET status = ?, atualizado_em = ?, motivo_transferencia = ?, esperando_desde = ?${marcaDePessoa(status)} WHERE numero = ?`)
     .run(status, quando, motivoFinal, transferir ? quando : null, numero);
-  const mensagemId = inserirMensagem({ numero, papel: "atendente", texto, criadoEm: quando, ferramentaUsada, tempoRespostaMs, statusEntrega: statusInicialDeEnvio(numero) });
+  const mensagemId = inserirMensagem({ numero, papel: "atendente", texto, criadoEm: quando, ferramentaUsada, tempoRespostaMs, detalhes, statusEntrega: statusInicialDeEnvio(numero) });
   if (motivoFinal) registrarEvento(numero, `${atendente?.trim() || "O atendente"} pediu ajuda de uma pessoa · ${rotuloMotivo(motivoFinal)}`, em);
   // A conversa passou a esperar por uma pessoa: o contador do cabeçalho e o painel do dia mudam junto.
   if (transferir) publicar({ tipo: "atencao", numero });
@@ -843,6 +868,7 @@ export function semearExemplosSeVazio({ numeroConectado, atendente = "Bia" }: { 
         texto: m.texto,
         criadoEm: paraTextoDeBanco(quando),
         tempoRespostaMs: m.respostaMs,
+        detalhes: m.detalhes,
       });
       // O áudio e a foto da demonstração apontam para arquivos do próprio app (public/exemplos): nada
       // é baixado de fora, e a conversa mostra os dois tipos antes de o número da empresa existir.

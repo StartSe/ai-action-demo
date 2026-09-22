@@ -18,14 +18,16 @@ export async function POST(req: Request) {
   // O simulador testa o rascunho que a pessoa está editando no painel, não só a configuração já salva.
   const configRascunho: Config | undefined = config ? { ...getConfig(), ...config } : undefined;
   try {
-    const { resposta, transferir, motivo, ferramentaUsada, atendimentoHumano } = await responder({ numero, texto: textoLimpo, origem: "simulador", config: configRascunho });
+    const { resposta, transferir, motivo, atendimentoHumano, detalhes } = await responder({ numero, texto: textoLimpo, origem: "simulador", config: configRascunho });
     // Com a resposta pronta, o assunto da conversa (para os relatórios), sem segurar esta resposta.
     classificarEmSegundoPlano(numero);
     const metaGerada = meta({ demo: !aiEnabled(), insumo: "mensagens do cliente e a base de conhecimento configurada" });
     // As conversas agora vivem no banco (lib/conversas.ts) e sobrevivem a um reinício: não há mais
     // snapshot da lista salvo no histórico a cada mensagem. A lista atualizada volta junto da resposta
     // só para a tela não precisar de um segundo fetch.
-    return Response.json({ resposta, transferir, motivo: motivo ?? null, ferramentaUsada, atendimentoHumano, conversas: listarConversas(), meta: metaGerada });
+    // `detalhes` é o que o bloco "Por que respondeu assim" da bolha desenha (o antigo `ferramentaUsada`
+    // virou uma das linhas dele).
+    return Response.json({ resposta, transferir, motivo: motivo ?? null, detalhes, atendimentoHumano, conversas: listarConversas(), meta: metaGerada });
   } catch (err) {
     return responderErro(err, "Não foi possível gerar a resposta agora. Tente de novo.");
   }

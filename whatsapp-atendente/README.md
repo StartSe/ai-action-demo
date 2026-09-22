@@ -131,6 +131,7 @@ components/ExportarRelatorio.tsx          menu "Exportar" e cartão do relatóri
 components/ConexaoWhatsApp.tsx            cartão "Conectar o WhatsApp": QR Code e estado ao vivo
 components/PersonaBrief.tsx               "Comece descrevendo seu negócio": gera o atendente e aplica no formulário
 components/CartaoFerramenta.tsx           os cartões com interruptor da seção Ferramentas
+components/PorQueRespondeu.tsx            "Por que respondeu assim": fontes, ferramentas e tempo de cada resposta
 components/Celular.tsx                    celular da tela, com as bolhas da conversa de teste
 components/useEventos.ts                  liga as telas no fluxo de avisos, com consulta de reserva de 30 s
 components/ui.tsx                         componentes visuais deste app (camada de produto própria)
@@ -145,6 +146,7 @@ lib/midia.ts                              transcreve o áudio, descreve a foto e
 lib/persona.ts                            monta o atendente a partir do brief (e lê o site, quando informado)
 lib/persona-exemplos.ts                   cinco atendentes prontos (sem IA) e os exemplos do passo 1
 lib/base-modelo.ts                        modelo da base de conhecimento, um por objetivo
+lib/cenarios.ts                           cenários de teste por objetivo (inclusive os que devem chamar uma pessoa)
 lib/transferencia.ts                      motivos de transferência (rótulos, marcador `[TRANSFERIR:motivo]`, frase de reserva)
 lib/metricas.ts                           fonte única dos números de Início e Relatórios
 lib/zapi.ts                               cliente da z-api: estado, QR Code, envio e cadastro dos avisos
@@ -252,6 +254,27 @@ está desligado, o formato não é aceito, o modelo falhou, ou a IA nem está co
 frase de reserva — por padrão "Ainda não consigo ouvir áudios nem abrir arquivos por aqui. Pode me
 escrever?". Se a mesma sequência tiver qualquer outra coisa respondível, o atendente responde a ela
 normalmente e ignora o anexo.
+
+### Por que respondeu assim, e os cenários de teste
+
+Toda resposta do atendente virtual guarda **como ela foi montada** (coluna `detalhes` de `mensagens`,
+em JSON): as fontes que o app enviou junto da pergunta (a base de conhecimento, com o trecho mais
+parecido com a pergunta; as respostas já aprovadas que casaram por palavras; cada trecho de documento
+escolhido pela busca), as ferramentas que ele executou (com sucesso ou com erro, e um resumo do que
+foi consultado), o motivo de ter chamado uma pessoa, o que ele leu de áudio, foto ou arquivo, quantas
+mensagens a rajada juntou, quanto tempo levou e com que modelo. Abaixo de cada bolha do atendente, no
+simulador e na conversa aberta, o link **"Por que respondeu assim"** abre isso
+(`components/PorQueRespondeu.tsx`); as linhas da base e dos documentos levam para
+`/assistente#conhecimento`, que é onde se corrige. Nada ali é medição de dentro do modelo: são as
+fontes ENVIADAS e as ferramentas EXECUTADAS — é o que dá para afirmar com honestidade. Sem IA
+conectada, o modelo aparece como "sem IA (busca local)" e a fonte é o trecho que a busca escolheu.
+Respostas gravadas antes da 0.3.0 não têm os detalhes e não mostram o link.
+
+O cartão "O que testar" do passo 2 do Assistente mostra as perguntas da configuração e, abaixo,
+**seis cenários por objetivo** (`lib/cenarios.ts`): perguntas do dia a dia, um dado que costuma faltar
+(preço, prazo, endereço), um pedido fora do que o atendente faz e um cliente pedindo uma pessoa. Os
+dois últimos vêm marcados com "Deve chamar uma pessoa" e, depois de enviados, o cartão diz se ele
+chamou — e se foi pelo motivo certo, comparando com o motivo esperado daquele cenário.
 
 ### Documentos e busca para atendimento
 
