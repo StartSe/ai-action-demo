@@ -156,3 +156,11 @@ test("o desligamento do processo fecha todas as conexões abertas", async () => 
   assert.equal(conexoesAbertas(), 0);
   assert.equal(assinantes(), 0);
 });
+
+test("na prévia do catálogo (?captura=1) a tela não abre fluxo nenhum", async () => {
+  const { fluxoDesligado } = await import("../components/useEventos");
+  assert.equal(fluxoDesligado("?exemplo=1&captura=1"), true, "a captura é uma foto: um fluxo aberto a deixaria pendurada");
+  assert.equal(fluxoDesligado("?captura=1"), true);
+  assert.equal(fluxoDesligado(""), false, "o uso normal continua escutando o servidor");
+  assert.equal(fluxoDesligado("?numero=5511988887777"), false);
+});

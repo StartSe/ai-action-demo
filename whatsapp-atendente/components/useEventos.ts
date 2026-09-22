@@ -31,6 +31,17 @@ const FALHAS_ATE_RESERVA = 3;
 
 const TIPOS = ["conversa", "conexao", "atencao"] as const;
 
+/**
+ * A prévia do catálogo (`?exemplo=1&captura=1`, o workflow de publicação) é uma FOTO: o Chromium
+ * headless só salva a imagem quando a página para de carregar, e um `text/event-stream` nunca termina
+ * — com o fluxo aberto a captura ficava pendurada até alguém cancelar a execução. Na captura a tela
+ * nasce completa e nada muda enquanto ela é tirada, então não há o que escutar. Sem fluxo e sem falha,
+ * `reserva` também fica em `false`: nenhuma consulta de reserva atrás da foto.
+ */
+export function fluxoDesligado(busca: string): boolean {
+  return new URLSearchParams(busca).has("captura");
+}
+
 type Estado = { aoVivo: boolean; reserva: boolean };
 
 const ouvintes = new Set<(evento: EventoDaTela) => void>();
@@ -59,6 +70,7 @@ function fecharFluxo(): void {
 
 function abrirFluxo(): void {
   if (fonte || ouvintes.size === 0 || typeof document === "undefined" || document.hidden) return;
+  if (fluxoDesligado(location.search)) return;
   const nova = new EventSource("/api/eventos");
   fonte = nova;
 
