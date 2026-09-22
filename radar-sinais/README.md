@@ -1,20 +1,20 @@
 # Radar de Sinais
 
-Versão **0.3.0** — [notas de versão](CHANGELOG.md).
+Versão **0.4.0** — [notas de versão](CHANGELOG.md).
 
 O Radar reúne evidências do mercado, organiza sinais e mostra suas relações em um grafo. Cada radar tem nome, temas, contexto, fontes, páginas monitoradas e histórico próprios.
 
 ## Fluxo de uso
 
-1. Crie sua conta no primeiro acesso. Em **Configurações**, conecte OpenRouter ou ChatGPT.
-2. Em **Meus radares**, crie um radar com um nome como “IA na educação”. Use o seletor para alternar entre cadastros e **Renomear** para mudar um nome.
-3. Abra **Temas, fontes e páginas**. Cadastre até 12 temas, o setor e o período (7, 30 ou 90 dias). Escolha buscadores e até seis sites de referência. Os artigos da StartSe já estão incluídos.
-4. Adicione até oito **Páginas para monitorar**, escolhendo Bright Data ou Firecrawl para cada uma. O endereço completo, inclusive parâmetros que identificam o conteúdo, é preservado.
-5. Salve as configurações e clique em **Atualizar radar**. Cada execução salva uma análise; **Análises deste radar** reúne as rodadas anteriores desse cadastro.
-6. Explore o grafo com zoom, arraste, filtros e seleção de pontos. Em **Tela cheia**, leituras e sinais ficam em um painel translúcido sobre o mapa; **Ocultar/Exibir leituras e sinais** controla sua visibilidade.
-7. Use **Conversar com a analista** para interpretar os sinais e relações da análise aberta. As respostas podem apontar fontes e destacar nós no mapa.
+1. Crie sua conta e conecte OpenRouter ou ChatGPT em **Configurações**.
+2. Em **+ Novo radar**, preencha nome, palavras-chave e contexto no modal. **Fontes e páginas** permite escolher buscadores, sites e URLs para leitura direta. **Editar radar** abre o mesmo formulário com o cadastro completo.
+3. Com **Acompanhar diariamente** marcado, temas salvos e IA conectada, a agenda é criada automaticamente para 08:00 em `America/Sao_Paulo`. A sincronização roda no servidor mesmo com o navegador fechado. Agendas existentes mantêm seus horários e pausas.
+4. A analista desdobra as palavras-chave em buscas de adoção, resultados e riscos, consulta as fontes habilitadas, lê páginas e condensa as evidências. **Sobre esta pesquisa** mostra as consultas e eventuais limitações.
+5. Use **Radar ativo** para alternar entre cadastros. Na tela inicial, os cartões selecionam o radar exibido; mapa, leituras, destaques e acompanhamento usam esse cadastro.
+6. Marque sinais **Em foco** ou **Possível hype** e sinalize artigos importantes com a estrela. Essas escolhas orientam as próximas buscas, a síntese e o chat. Hype é uma hipótese para investigar, nunca uma conclusão automática.
+7. Abra o balão **Conversar com o radar** para conversar por texto ou voz. O nome do radar aparece discretamente e sua memória permanece ao recarregar ou abrir outra análise desse mesmo radar.
 
-A seleção do radar é mantida no navegador e pode ser compartilhada pelo parâmetro `radarId` da URL. Análises salvas continuam acessíveis em `/r/[id]` e podem ser impressas em `/imprimir/[id]`.
+Os resultados continuam disponíveis em `/r/[id]` e podem ser impressos em `/imprimir/[id]`. A seleção no explorador é mantida no navegador e compartilhada por `radarId` na URL.
 
 ## Fontes e leitura de páginas
 
@@ -30,17 +30,21 @@ A síntese cita somente URLs recebidas da coleta; referências inventadas são d
 
 ## Analista do Radar
 
-O chat usa a mesma conexão de IA escolhida em Configurações. O servidor recupera a análise pelo identificador salvo: temas, setor, sinais, fontes, nós, arestas, leituras e ponto selecionado. Cada análise tem sua própria conversa na sessão da tela; trocar de análise ou radar reinicia a conversa. Mensagens não são persistidas no banco.
+O chat usa a mesma conexão de IA escolhida em Configurações. A conversa fica no SQLite por cadastro de radar, com fontes, referências ao mapa, data e canal (texto/voz). Abrir outra análise do mesmo cadastro recupera a memória. Outros radares têm conversas separadas. A tela recupera as últimas 100 mensagens; a IA recebe as últimas 24, a análise aberta e até cinco análises recentes, com sinais e leituras datados, além dos destaques da pessoa. Não há memória ilimitada no contexto do modelo.
 
-A agente distingue evidências de hipóteses e não consulta novas páginas durante a conversa. Links de fontes e botões de nós são validados contra o resultado salvo. O chat exige uma análise real, conta autenticada e IA conectada; dados de demonstração não são usados como evidência real.
+O servidor resolve todos os dados pelos identificadores salvos. Referências e links retornados pela IA são filtrados contra o contexto; nós antigos apontam para a análise de origem. Uma trava por radar evita respostas concorrentes misturadas. Perguntas e respostas são gravadas juntas somente após uma resposta válida.
+
+**Voz em tempo real:** conecte a ElevenLabs, selecione uma voz em português e verifique o acesso a Agents em **Configurações → Conversa por voz**. A chave precisa de leitura de vozes e leitura/escrita de Agents. A verificação prepara um agente privado e testa a autorização de sessão. O navegador recebe somente uma URL assinada temporária. O protocolo WebSocket e a captura PCM via AudioWorklet seguem a experiência do predictive-harness, dentro do balão. Perguntas sobre o radar chamam o mesmo motor do chat; resultados e fontes ficam salvos. Fechar, trocar de radar ou encerrar libera microfone, áudio e conexão. HTTPS ou localhost são necessários para o microfone.
+
+Ao usar voz, áudio e contexto são enviados à ElevenLabs; o provedor de IA escolhido analisa as perguntas. A gravação de áudio do agente é desativada na configuração criada pelo app. As condições de retenção do serviço dependem da conta.
 
 ## Monitoramento automático
 
-Em **Temas, fontes e páginas → Acompanhamento automático**, escolha horários e fuso. O padrão é 08:00, 16:00 e 20:00 em `America/Sao_Paulo`. Há uma agenda diária por radar. Salve as configurações antes de ativá-la; cada execução usa os temas, fontes e páginas atuais desse radar.
+**Acompanhamento diário**, no início e no explorador, mostra horários, estado, pausa/retomada e **Histórico de atualizações**. Cada tentativa registra origem, início, término, status, falha e link da análise concluída. O histórico mostra as últimas 50 execuções, sem apagar as anteriores. **Pesquisar agora** enfileira a pesquisa, responde imediatamente e continua em segundo plano; os registros são consultados a cada cinco segundos. O explorador recebe a nova análise ao terminar uma rodada.
 
-**Notificações foram removidas.** Nenhum e-mail ou mensagem Slack é enviado, inclusive por agendas antigas. O resultado fica no histórico do radar. É possível editar horários, pausar, retomar, executar agora ou excluir a agenda.
+O servidor verifica a agenda a cada minuto e também na inicialização. Após uma interrupção executa apenas a rodada pendente mais recente. A fila manual é persistente; o lock SQLite impede concorrência da mesma agenda e é renovado enquanto o trabalho roda. Um lease sem renovação expira após 30 minutos; a execução interrompida permanece no histórico. Três falhas seguidas pausam a agenda. O gatilho autenticado `POST /api/rotinas/executar` também permanece disponível.
 
-O servidor precisa permanecer ativo. O agendador verifica a cada minuto; após interrupção executa apenas a rodada pendente mais recente. O lock no SQLite evita execução simultânea e expira após 30 minutos em caso de queda. Três falhas seguidas pausam a agenda. O gatilho autenticado `POST /api/rotinas/executar` permanece disponível.
+Não há notificações externas. O servidor e o volume de dados precisam permanecer ativos; a agenda não depende da aba do navegador. A instalação é um servidor Node/Docker persistente, não uma função serverless de curta duração.
 
 ## Migração e persistência
 
@@ -48,7 +52,7 @@ Na primeira execução da versão 0.3.0, temas e fontes existentes viram o cadas
 
 SQLite, chave mestra e sessão ChatGPT ficam em `DATA_DIR` (padrão `./data`). Preserve esse volume entre publicações. Chaves ficam cifradas em repouso. Variáveis de ambiente têm prioridade sobre valores salvos na interface; veja [.env.example](.env.example).
 
-**Dados de teste:** em Configurações ou no fim do histórico, **Remover dados de teste** exclui exclusivamente análises com `meta.demo: true` e oculta a demonstração após recarregar. Cadastros, resultados reais, conta e integrações são preservados. Ao conectar IA, o app mostra resultados reais ou o convite para gerar a primeira análise.
+**Dados de teste:** no fim do histórico, **Remover dados de teste** exclui exclusivamente análises com `meta.demo: true` e oculta a demonstração após recarregar. Cadastros, resultados reais, conta e integrações são preservados. Ao conectar IA, o app mostra resultados reais ou o convite para gerar a primeira análise.
 
 ## Conexão de IA
 
@@ -81,6 +85,8 @@ O GitHub Actions constrói e publica a imagem ao receber alterações na `main`.
 
 ## Validação
 
-A suíte cobre migração e isolamento de radares, busca StartSe/SearchAPI, leitura de páginas, validação de fontes, conversa contextual, agendas sem notificações, autenticação de IA, limpeza de exemplos e grafo. Serviços externos são simulados nos testes. A validação visual de produção cobre desktop e celular; detalhes em [tasks/radar-sinais-0.3.0.md](../tasks/radar-sinais-0.3.0.md).
+A suíte cobre migração, isolamento, memória entre análises, planejamento das buscas, destaques, fila e recuperação de execuções, permissões de voz, captura de áudio, fontes e grafo. Serviços externos são simulados. `tests/browser.mjs` exercita desktop/celular, persistência, trabalho em segundo plano, conversa por voz via WebSocket simulado e liberação do microfone. Use `PLAYWRIGHT_MODULE` para indicar uma instalação de Playwright e `RADAR_BASE_URL` para apontar ao servidor de teste. O preload `tests/fixtures/services.mjs` deve ser usado somente em testes. Detalhes em [tasks/radar-sinais-0.4.0.md](../tasks/radar-sinais-0.4.0.md).
 
 Referências: [SearchAPI Google](https://www.searchapi.io/docs/google), [Firecrawl Scrape](https://docs.firecrawl.dev/api-reference/endpoint/scrape), [Bright Data MCP](https://docs.brightdata.com/ai/mcp-server/overview), [Codex App Server](https://developers.openai.com/codex/app-server).
+
+Referência de voz: [ElevenLabs WebSocket](https://elevenlabs.io/docs/eleven-agents/libraries/web-sockets).

@@ -61,7 +61,7 @@ export interface Radar {
   fontes?: EstadoFonte[];
   /** Quantos achados a busca trouxe antes da IA agrupar (explica um radar com 0 sinais). */
   totalAchados?: number;
-  coleta?: { iniciadaEm: string; consultas: number; semData: number; sitesPriorizados: string[]; avisos?: string[] };
+  coleta?: { planejamento?: "ia" | "basico"; buscas?: string[]; iniciadaEm: string; consultas: number; semData: number; sitesPriorizados: string[]; avisos?: string[] };
 }
 
 export interface DadosRadar {

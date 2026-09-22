@@ -36,13 +36,14 @@
     "components/setup.tsx": "Aceita a propriedade navegacao para manter os cinco destinos do workspace também em Configurações; oculta Notificações; embute a escolha da conta de IA (components/ConexaoIA.tsx) no cartão Inteligência artificial e relê /api/status depois de cada mudança."
   },
   "radar-sinais": {
+    "app/api/rotinas/[id]/executar-agora/route.ts": "Enfileira execução persistente e usa after para trabalho em segundo plano; devolve 202 e permite acompanhar pelo histórico do radar.",
     "lib/ai.ts": "Seleção explícita entre OpenRouter e ChatGPT pelo Codex App Server; disponibilidade assíncrona da conta, síntese e modelo de ontologia próprios do Radar.",
     "lib/setup-comum.ts": "IA selecionada e remoção das notificações e conexões de e-mail solicitada na versão 0.3.0.",
     "app/api/setup/route.ts": "Prontidão usa a conta de IA selecionada (OpenRouter ou ChatGPT), sem exigir OpenRouter quando ChatGPT está ativo.",
     "app/api/status/route.ts": "Status da IA selecionada, sugestão única de conexão e visibilidade dos exemplos respeitam a conta e a limpeza dos dados de teste.",
     "lib/notificacoes.ts": "Módulo reservado sem funções: notificações removidas por solicitação explícita.",
     "lib/email-envio.ts": "Módulo reservado sem funções: envio e OAuth de e-mail removidos por solicitação explícita.",
-    "lib/rotinas.ts": "Monitoramentos com fuso, proteção contra concorrência e gravação interna sem notificações, inclusive nas agendas legadas.",
+    "lib/rotinas.ts": "Monitoramentos com fuso, fila persistente, histórico de execuções e recuperação de leases interrompidos, sem notificações, inclusive nas agendas legadas.",
     "app/api/rotinas/route.ts": "Cadastro de agendas centralizado por radar; antiga criação de notificações desativada.",
     "app/api/setup/oauth/google/route.ts": "OAuth de e-mail desativado com resposta 410; notificações removidas por solicitação explícita.",
     "app/api/setup/oauth/google/callback/route.ts": "OAuth de e-mail desativado com resposta 410; notificações removidas por solicitação explícita.",

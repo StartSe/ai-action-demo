@@ -69,7 +69,7 @@ test("página monitorada chega à síntese mesmo sem resultados da busca", async
   global.fetch = async (input, init) => {
     if (String(input).includes("github")) return Response.json({ items: [] });
     if (String(input).includes("firecrawl")) return Response.json({ success: true, data: { markdown: "# Página monitorada de produto específico" } });
-    const b = JSON.parse(String(init?.body)); assert.match(b.messages[1].content, /Página monitorada de produto específico/); assert.match(b.messages[1].content, /retratos atuais/);
+    const b = JSON.parse(String(init?.body)); if (b.messages[0].content.includes("Você planeja buscas")) return Response.json({ choices: [{ message: { content: JSON.stringify({ buscas: JSON.parse(b.messages[1].content).palavrasChave.map((tema: string) => ({ tema, consultas: [tema + " adoção", tema + " riscos"] })) }) } }] }); assert.match(b.messages[1].content, /Página monitorada de produto específico/); assert.match(b.messages[1].content, /retratos atuais/);
     return Response.json({ choices: [{ message: { content: JSON.stringify({ sinais: [{ id: "s", titulo: "Produto", resumo: "Evidência", tendencia: "estavel", temas: ["Produto"], oQueFazer: "Validar", fontes: [{ url }] }], nos: [], arestas: [], conexoes: [] }) } }] });
   };
   const { montarRadar } = await import("../lib/radar");

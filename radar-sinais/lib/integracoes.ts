@@ -30,21 +30,26 @@ async function testarFonte(nome: string, pedido: () => Promise<Response>): Promi
 /** Cartão único com duas chaves alternativas: basta uma para o radar ganhar notícias em português e páginas da web. O id continua "exa" para /setup#exa. */
 export const BUSCA_WEB: Integracao = {
   id: "exa",
-  titulo: "Notícias em português e web (Exa ou Tavily)",
+  titulo: "Busca na Web",
   beneficio: "Traz notícias em português e páginas da web para o radar",
-  descricao: "Sem chave, o radar já consulta Hacker News, Reddit, GitHub e Google Notícias. Uma chave da Exa ou da Tavily acrescenta notícias em português e páginas da web com trechos relevantes. Basta uma das duas.",
+  descricao: "SearchAPI, Exa e Tavily pesquisam temas e sites de referência. Conecte uma ou mais opções. As fontes públicas continuam disponíveis sem chave.",
   obrigatoria: false,
   link: { url: "https://dashboard.exa.ai/api-keys", rotulo: "Obter uma chave da Exa" },
   campos: [
+    { chave: "SEARCHAPI_API_KEY", rotulo: "Chave da SearchAPI", tipo: "secret", opcional: true, ajuda: "Pesquisa Google. Obtenha sua chave em searchapi.io." },
     { chave: "EXA_API_KEY", rotulo: "Chave da Exa", tipo: "secret", opcional: true, placeholder: "•••••••••••••••••", ajuda: "Fica em API Keys, no painel da Exa (dashboard.exa.ai)." },
     { chave: "TAVILY_API_KEY", rotulo: "Chave da Tavily", tipo: "secret", opcional: true, placeholder: "tvly-...", ajuda: "Alternativa à Exa; fica em API Keys, no painel da Tavily (app.tavily.com)." },
   ],
-  campoConectado: ["EXA_API_KEY", "TAVILY_API_KEY"],
+  campoConectado: ["SEARCHAPI_API_KEY", "EXA_API_KEY", "TAVILY_API_KEY"],
   testar: async (config) => {
     const exa = config.EXA_API_KEY;
     const tavily = config.TAVILY_API_KEY;
-    if (!exa && !tavily) return { ok: false, mensagem: "Nenhuma chave salva ainda. Cole a chave da Exa ou da Tavily." };
+    if (!exa && !tavily && !config.SEARCHAPI_API_KEY) return { ok: false, mensagem: "Nenhuma chave salva ainda. Cole a chave da SearchAPI, Exa ou Tavily." };
     const resultados: { ok: boolean; mensagem: string }[] = [];
+    if (config.SEARCHAPI_API_KEY) {
+      try { await consultarSearchAPI("StartSe", 30, config.SEARCHAPI_API_KEY); resultados.push({ ok: true, mensagem: "SearchAPI conectada." }); }
+      catch { resultados.push({ ok: false, mensagem: "Confira a chave e a cota da SearchAPI." }); }
+    }
     if (exa) {
       resultados.push(
         await testarFonte("Exa", () =>
@@ -105,4 +110,4 @@ export const FIRECRAWL: Integracao = {
   campos: [{ chave: "FIRECRAWL_API_KEY", rotulo: "Chave do Firecrawl", tipo: "secret", opcional: true }], campoConectado: "FIRECRAWL_API_KEY",
   testar: async config => { try { await scrapeFirecrawl("https://www.startse.com/artigos/", config.FIRECRAWL_API_KEY); return { ok: true, mensagem: "Firecrawl conectado e leitura testada." }; } catch { return { ok: false, mensagem: "Confira a chave e a cota do Firecrawl." }; } },
 };
-export const INTEGRACOES: Integracao[] = [OPENROUTER, SEARCHAPI, BUSCA_WEB, BRIGHTDATA, FIRECRAWL, GROK];
+export const INTEGRACOES: Integracao[] = [OPENROUTER, BUSCA_WEB, BRIGHTDATA, FIRECRAWL, GROK];

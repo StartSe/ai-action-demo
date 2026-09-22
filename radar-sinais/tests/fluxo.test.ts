@@ -33,6 +33,7 @@ global.fetch = async (input, init) => {
     return new Response(`event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", id: corpo.id, result })}\n\n`, { headers: { "content-type": "text/event-stream", "Mcp-Session-Id": "sessao-teste" } });
   }
   if (url.includes("openrouter.ai")) {
+    if (corpo.messages[0].content.includes("Você planeja buscas")) return Response.json({ choices: [{ message: { content: JSON.stringify({ buscas: JSON.parse(corpo.messages[1].content).palavrasChave.map((tema: string) => ({ tema, consultas: [tema + " adoção", tema + " riscos"] })) }) } }] });
     assert.match(JSON.stringify(corpo), /Empresas investem em IA no varejo/);
     return Response.json({ choices: [{ message: { content: JSON.stringify({ sinais: [{ id: "s1", titulo: "IA no varejo", resumo: "Nova demanda", tendencia: "estavel", temas: ["IA"], oQueFazer: "Validar um piloto com clientes", fontes: [{ url: "https://example.com/mercado" }, { url: "https://inventada.test" }] }], nos: [{ id: "t1", rotulo: "IA", tipo: "tema", peso: 5 }, { id: "s1", rotulo: "IA no varejo", tipo: "sinal", peso: 4 }], arestas: [{ origem: "t1", destino: "s1", relacao: "oportunidade", peso: 3 }], conexoes: [] }) } }] });
   }
@@ -59,7 +60,7 @@ test("cadastro → pesquisa MCP → Markdown → síntese → histórico/grafo s
   const criado = await api.POST(req({ temas: ["IA"] }));
   assert.equal(criado.status, 201);
   const { id } = await criado.json();
-  assert.deepEqual((rotinas.obter(id)?.parametros as { horarios: string[] }).horarios, ["08:00", "16:00", "20:00"]);
+  assert.deepEqual((rotinas.obter(id)?.parametros as { horarios: string[] }).horarios, ["08:00"]);
   assert.equal((await api.POST(req({ temas: ["IA"] }))).status, 409);
   assert.equal((await api.POST(req({ id, temas: ["IA"], horarios: ["09:30"], fuso: "UTC" }))).status, 200);
   const { abrirBanco } = await import("../lib/store");
@@ -72,7 +73,7 @@ test("cadastro → pesquisa MCP → Markdown → síntese → histórico/grafo s
   assert.equal(radar.sinais[0].fontes.length, 1, "descarta fonte inventada");
   assert.equal(radar.nos.length, 2);
   assert.equal(radar.arestas.length, 1);
-  assert.equal(chamadas.filter(c => c.method === "tools/call" && c.params.name === "search_engine").length, 1, "não duplica consulta sem setor");
+  assert.equal(chamadas.filter(c => c.method === "tools/call" && c.params.name === "search_engine").length, 3, "busca tema e duas consultas desdobradas sem duplicar");
   const { coletarPaginas } = await import("../lib/paginas");
   const paginas = await coletarPaginas([{ url: "https://example.com/pagina?id=2", nome: "Página específica", ativa: true, provedor: "brightdata" }]);
   assert.equal(paginas.achados[0].url, "https://example.com/pagina?id=2");

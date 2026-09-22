@@ -1,44 +1,73 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import type { MensagemRadar } from "@/lib/chat-radar";
+import type { MensagemSalva } from "@/lib/chat-memoria";
 import type { Fonte, No } from "@/lib/types";
-type Mensagem = MensagemRadar & { fontes?: Fonte[]; nos?: No[] };
+import { pedidoJSON } from "@/lib/pedido-json";
+import { RadarMarca, VozIcone } from "./RadarMarca";
+import { VozRadar } from "./VozRadar";
+type Conversa = { nome: string; radarId: string; mensagens: MensagemSalva[]; analises: number };
+type Resposta = { resposta: string; fontes: Fonte[]; nos: No[]; mensagens: MensagemSalva[] };
 export function ChatRadar({ resultadoId, foco, aoFocar }: { resultadoId: string; foco?: string; aoFocar?: (id: string) => void }) {
   const [aberto, setAberto] = useState(false);
-  const [mensagens, setMensagens] = useState<Mensagem[]>([]);
+  const [modoVoz, setModoVoz] = useState(false);
+  const [conversa, setConversa] = useState<Conversa>();
   const [texto, setTexto] = useState("");
-  const [ocupado, setOcupado] = useState(false);
+  const [pendente, setPendente] = useState("");
   const [erro, setErro] = useState("");
+  const [revisao, setRevisao] = useState(0);
   const controle = useRef<AbortController | null>(null);
+  const campo = useRef<HTMLTextAreaElement>(null);
   const fim = useRef<HTMLDivElement>(null);
   const botao = useRef<HTMLButtonElement>(null);
   useEffect(() => () => controle.current?.abort(), []);
-  useEffect(() => { fim.current?.scrollIntoView({ block: "nearest" }); }, [mensagens, ocupado, aberto]);
-  function fechar() { setAberto(false); botao.current?.focus(); }
-  async function perguntar(pergunta = texto) {
-    if (!pergunta.trim() || controle.current) return;
-    const historico: Mensagem[] = [...mensagens, { papel: "usuario", texto: pergunta.trim() }];
+  useEffect(() => {
+    if (!aberto) return;
+    const ac = new AbortController();
+    pedidoJSON<Conversa>(`/api/radar/chat?resultadoId=${resultadoId}`, { signal: ac.signal }).then(c => { setConversa(c); setErro(""); }).catch(e => { if (!ac.signal.aborted) setErro(e.message); });
+    return () => ac.abort();
+  }, [aberto, resultadoId, revisao]);
+  useEffect(() => { fim.current?.scrollIntoView({ block: "nearest" }); }, [conversa, pendente, aberto, modoVoz]);
+  const pronta = Boolean(conversa);
+  useEffect(() => { if (aberto && pronta && !modoVoz) campo.current?.focus({ preventScroll: true }); }, [aberto, pronta, modoVoz]);
+  useEffect(() => {
+    if (!aberto) return;
+    const escapar = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || document.querySelector("dialog[open]")) return;
+      e.preventDefault(); e.stopImmediatePropagation(); setModoVoz(false); setAberto(false); botao.current?.focus();
+    };
+    document.addEventListener("keydown", escapar, true);
+    return () => document.removeEventListener("keydown", escapar, true);
+  }, [aberto]);
+  function fechar() { setModoVoz(false); setAberto(false); botao.current?.focus(); }
+  async function perguntar(pergunta = texto, signal?: AbortSignal) {
+    if (!pergunta.trim() || controle.current) throw new Error("Aguarde a resposta anterior.");
     const ac = new AbortController(); controle.current = ac;
-    setOcupado(true); setErro(""); setTexto(""); setMensagens(historico);
+    setErro(""); setTexto(""); setPendente(pergunta);
     try {
-      const r = await fetch("/api/radar/chat", { method: "POST", headers: { "Content-Type": "application/json" }, signal: ac.signal, body: JSON.stringify({ resultadoId, foco, mensagens: historico.slice(-11).map(({ papel, texto }) => ({ papel, texto })) }) });
-      const d = await r.json(); if (!r.ok) throw new Error(d.error || "Não foi possível conversar agora.");
-      setMensagens([...historico, { papel: "agente", texto: d.resposta, fontes: d.fontes, nos: d.nos }]);
-    } catch (e) { if (!ac.signal.aborted) { setMensagens(mensagens); setTexto(pergunta); setErro((e as Error).message); } }
-    finally { controle.current = null; if (!ac.signal.aborted) setOcupado(false); }
+      const d = await pedidoJSON<Resposta>("/api/radar/chat", { method: "POST", signal: signal ? AbortSignal.any([signal, ac.signal]) : ac.signal, body: JSON.stringify({ resultadoId, foco, pergunta, canal: signal ? "voz" : "texto" }) });
+      setConversa(c => c ? { ...c, mensagens: [...c.mensagens, ...d.mensagens] } : c);
+      return JSON.stringify({ resposta: d.resposta, fontes: d.fontes, nos: d.nos });
+    } catch (e) {
+      if (!ac.signal.aborted && !signal?.aborted) { setTexto(pergunta); setErro((e as Error).message); }
+      throw e;
+    } finally { controle.current = null; setPendente(""); }
   }
+  const enviar = (p = texto) => { void perguntar(p).catch(() => {}); };
   return <div className="chat-radar no-print" onKeyDown={e => { if (aberto && e.key === "Escape") { e.stopPropagation(); fechar(); } }}>
-    {aberto && <section className="chat-radar-painel" role="region" aria-label="Conversa com a Analista do Radar">
-      <header className="flex justify-between items-center p-4 border-b border-line"><div><h2 className="font-bold">Analista do Radar</h2><p className="text-xs text-muted">Contexto: a análise aberta e o ponto selecionado</p></div><button className="btn-ghost !px-3" aria-label="Fechar conversa" onClick={fechar}>×</button></header>
-      <div className="chat-radar-mensagens" role="log" aria-live="polite">
-        {!mensagens.length && <><p className="text-sm text-muted">Explore conexões, questione os sinais e encontre próximos passos com base nas fontes desta análise.</p><div className="flex flex-col gap-2 mt-4">{["Quais sinais merecem atenção primeiro?", "Que conexões do grafo explicam uma oportunidade?", "Que evidências ainda precisamos validar?"].map(p => <button className="text-left text-sm p-3 rounded-lg border border-line hover:bg-accent-soft" key={p} onClick={() => perguntar(p)}>{p}</button>)}</div></>}
-        {mensagens.map((m, i) => <article key={i} className={`chat-mensagem ${m.papel}`}><p className="text-xs font-semibold mb-1">{m.papel === "usuario" ? "Você" : "Analista"}</p><p className="whitespace-pre-wrap text-sm">{m.texto}</p>{!!m.nos?.length && aoFocar && <div className="flex flex-wrap gap-2 mt-2">{m.nos.map(n => <button className="btn-link text-xs text-left" key={n.id} onClick={() => aoFocar(n.id)}>Ver no mapa: {n.rotulo}</button>)}</div>}{!!m.fontes?.length && <ul className="text-xs mt-3 space-y-2">{m.fontes.map(f => <li key={f.url}><a className="btn-link" href={f.url} target="_blank" rel="noopener noreferrer">{f.titulo}</a></li>)}</ul>}</article>)}
-        {ocupado && <p className="text-sm text-muted" role="status">Analisando as conexões…</p>}
-        <div ref={fim} />
-      </div>
-      {erro && <p role="alert" className="text-sm px-4 pb-2">{erro}</p>}
-      <form className="flex gap-2 border-t border-line p-3" onSubmit={e => { e.preventDefault(); void perguntar(); }}><label className="sr-only" htmlFor="pergunta-radar">Pergunta sobre o radar</label><textarea id="pergunta-radar" autoFocus className="input !text-sm !min-h-16 resize-none" rows={2} maxLength={4000} required value={texto} onChange={e => setTexto(e.target.value)} placeholder="Pergunte sobre esta análise…" /><button className="btn-primary !w-auto !px-3 self-end" disabled={ocupado || !texto.trim()}>Enviar</button></form>
+    {aberto && <section id="conversa-radar" className="chat-radar-painel" role="region" aria-label="Conversa com a Analista do Radar">
+      <header className="chat-radar-header"><div className="flex items-center gap-2"><RadarMarca /><div><h2>Analista do Radar</h2><p title={conversa?.nome}>{conversa ? `Você está no radar ${conversa.nome}` : "Carregando a memória…"}</p></div></div><button className="radar-icon-button" aria-label="Minimizar conversa" onClick={fechar}>−</button></header>
+      {modoVoz ? <VozRadar resultadoId={resultadoId} aoPerguntar={perguntar} aoFechar={() => { setModoVoz(false); setRevisao(v => v + 1); }} /> : <>
+        <div className="chat-radar-mensagens" role="log" aria-live="polite" aria-busy={!!pendente}>
+          {conversa && !conversa.mensagens.length && !pendente && <div className="chat-radar-welcome"><div className="radar-wordmark"><RadarMarca tamanho={44} /><span>radar</span></div><h3>Olá!</h3><p>Explore conexões, questione os sinais e descubra seus próximos passos.</p><div className="chat-suggestions">{["Quais sinais merecem atenção primeiro?", "O que é oportunidade e o que pode ser hype?"].map(p => <button key={p} onClick={() => enviar(p)}>{p}<span aria-hidden="true">↗</span></button>)}</div><small>Leituras, fontes e análises deste radar entram na conversa.</small></div>}
+          {conversa?.mensagens.map(m => <article key={m.id} className={`chat-mensagem ${m.papel}`}><p className="sr-only">{m.papel === "usuario" ? "Você" : "Analista"}</p>{m.papel === "agente" && <span className="chat-agent-mark"><RadarMarca tamanho={19} /></span>}<div><p className="whitespace-pre-wrap">{m.texto}</p>{!!m.nos?.length && <div className="chat-references">{m.nos.map(n => m.resultadoId === resultadoId && aoFocar ? <button className="btn-link" key={n.id} onClick={() => aoFocar(n.id)}>Ver no mapa: {n.rotulo}</button> : <a className="btn-link" key={n.id} href={`/r/${m.resultadoId}?foco=${encodeURIComponent(n.id)}`}>{n.rotulo} ↗</a>)}</div>}{!!m.fontes?.length && <details className="chat-sources"><summary>{m.fontes.length} {m.fontes.length === 1 ? "fonte" : "fontes"}</summary>{m.fontes.map(f => <a key={f.url} href={f.url} target="_blank" rel="noopener noreferrer">{f.titulo} ↗</a>)}</details>}{m.canal === "voz" && <small className="text-muted">Conversa por voz</small>}</div></article>)}
+          {pendente && <><article className="chat-mensagem usuario"><p>{pendente}</p></article><p className="chat-thinking" role="status"><span /> Consultando sinais e leituras…</p></>}
+          {!conversa && !erro && <p className="text-sm text-muted" role="status">Recuperando sua conversa…</p>}
+          <div ref={fim} />
+        </div>
+        {erro && <p role="alert" className="chat-error">{erro} {!conversa && <button className="btn-link" onClick={() => setRevisao(v => v + 1)}>Tentar novamente</button>}</p>}
+        <div className="chat-composer-wrap"><form className="chat-composer" onSubmit={e => { e.preventDefault(); enviar(); }}><label className="sr-only" htmlFor="pergunta-radar">Pergunta sobre o radar</label><textarea ref={campo} id="pergunta-radar" autoFocus rows={1} maxLength={4000} disabled={!conversa} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Pergunte ao seu radar…" onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (texto.trim() && !pendente) enviar(); } }} /><div className="chat-composer-actions"><button type="button" className="chat-voice-button" title="Conversar por voz" aria-label="Iniciar conversa por voz" disabled={!!pendente || !conversa} onClick={() => setModoVoz(true)}><VozIcone /></button>{texto.trim() && <button className="chat-send-button" disabled={!!pendente || !conversa} aria-label="Enviar pergunta"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m5 12 7-7 7 7M12 5v15"/></svg></button>}</div></form><p className="chat-memory-note">Memória deste radar · {conversa?.analises || 0} análises em contexto</p></div>
+      </>}
     </section>}
-    <button ref={botao} type="button" className="chat-radar-botao" aria-expanded={aberto} onClick={() => aberto ? fechar() : setAberto(true)}>{aberto ? "Fechar conversa" : "✦ Conversar com a analista"}</button>
+    <button ref={botao} type="button" className={`chat-radar-botao ${aberto ? "aberto" : ""}`} aria-label={aberto ? "Fechar conversa" : "Conversar com a analista"} aria-expanded={aberto} aria-controls={aberto ? "conversa-radar" : undefined} onClick={() => aberto ? fechar() : setAberto(true)}>{aberto ? <span aria-hidden="true">×</span> : <><RadarMarca tamanho={26} /><span>Conversar com o radar</span></>}</button>
   </div>;
 }
