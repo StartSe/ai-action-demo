@@ -113,12 +113,16 @@ export function provedorAtivo(): ProvedorWhatsApp | null {
 
 // --- Envio -----------------------------------------------------------------------------------
 
+/** O que o envio devolve: o id da mensagem no provedor, quando ele dá um (a z-api dá; a Meta fica sem). */
+export type EnvioAceito = { idExterno?: string };
+
 /**
- * Manda a resposta do atendente de volta pelo número real, pelo provedor configurado. Lança
+ * Manda a resposta do atendente de volta pelo número real, pelo provedor configurado, e devolve o id
+ * que o provedor deu à mensagem (é por ele que os avisos de "entregue"/"lida" chegam depois). Lança
  * ErroWhatsApp já traduzido; quem chama decide se mostra na tela (simulador) ou só registra (webhook,
  * que responde ao provedor na hora).
  */
-export async function enviarMensagem(para: string, texto: string): Promise<void> {
+export async function enviarMensagem(para: string, texto: string): Promise<EnvioAceito> {
   const provedor = provedorAtivo();
   if (!provedor) {
     throw new ErroWhatsApp("sem_numero", "O número da empresa ainda não está conectado. Conecte o WhatsApp em Configurações para responder clientes de verdade.", 400);
@@ -127,7 +131,8 @@ export async function enviarMensagem(para: string, texto: string): Promise<void>
   return enviarPelaMeta(para, texto);
 }
 
-async function enviarPelaMeta(para: string, texto: string): Promise<void> {
+/** Pela Meta não há aviso de entrega neste app, então o id da mensagem não é guardado: a bolha para em "enviada". */
+async function enviarPelaMeta(para: string, texto: string): Promise<EnvioAceito> {
   const codigo = getConfig("WHATSAPP_TOKEN");
   const numeroId = getConfig("WHATSAPP_PHONE_NUMBER_ID");
   let resposta: Response;
@@ -145,6 +150,7 @@ async function enviarPelaMeta(para: string, texto: string): Promise<void> {
   if (!resposta.ok) {
     throw interpretarFalhaMeta(resposta.status, await resposta.text().catch(() => ""));
   }
+  return {};
 }
 
 /** Confere se o número responde, para o botão "Testar conexão" do cartão de Configurações. */

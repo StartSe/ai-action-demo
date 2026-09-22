@@ -1,5 +1,6 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
 import { randomBytes } from "node:crypto";
+import { MODELOS_AUDIO, MODELO_AUDIO_PADRAO } from "./midia";
 import { NOTIFICACOES, openrouter, integracaoMCP, type Integracao } from "./setup-comum";
 import { getConfig, setConfig } from "./store";
 import { conferirNumero } from "./whatsapp";
@@ -98,7 +99,36 @@ export const AGENDA = integracaoMCP({
     return { ok: true, mensagem: `Agenda disponível. Ferramentas autorizadas: ${nomes.join(", ")}.` };
   },
 });
-export const INTEGRACOES: Integracao[] = [OPENROUTER, WHATSAPP, AGENDA, NOTIFICACOES];
+
+/**
+ * Cartão próprio para o ajuste fino de quem já está rodando: qual modelo ouve os áudios dos clientes
+ * (lib/midia.ts). Ele é uma integração à parte, e não um campo do cartão do OpenRouter, porque aquele
+ * cartão (`openrouter()` de lib/setup-comum.ts) é idêntico nos 17 apps e não aceita campo extra de um
+ * app só. Ligar e desligar áudio, foto e arquivo é no Assistente, junto do resto do atendente — aqui
+ * fica só a escolha do modelo, que é decisão de custo.
+ */
+const MIDIA: Integracao = {
+  id: "midia",
+  titulo: "Áudios, fotos e arquivos",
+  beneficio: "Escolhe o modelo que ouve os áudios dos clientes",
+  descricao:
+    "O atendente já ouve os áudios, olha as fotos e lê os documentos que o cliente manda, usando a mesma chave de IA. Ouvir áudio é cobrado por duração: troque o modelo aqui se quiser um mais barato ou mais preciso. Para ligar e desligar cada tipo, vá ao Assistente.",
+  obrigatoria: false,
+  campos: [
+    {
+      chave: "MODELO_AUDIO",
+      rotulo: "Modelo que ouve áudios",
+      tipo: "select",
+      opcional: true,
+      avancado: true,
+      padrao: MODELO_AUDIO_PADRAO,
+      opcoes: MODELOS_AUDIO,
+      ajuda: "Só modelos que aceitam áudio aparecem aqui. Sem escolha, vale o padrão.",
+    },
+  ],
+};
+
+export const INTEGRACOES: Integracao[] = [OPENROUTER, WHATSAPP, AGENDA, NOTIFICACOES, MIDIA];
 
 /**
  * Integrações que saem dos cartões numerados de /setup e vão para um bloco recolhido no fim da página.
@@ -106,7 +136,7 @@ export const INTEGRACOES: Integracao[] = [OPENROUTER, WHATSAPP, AGENDA, NOTIFICA
  * atenção de quem chegou para fazer uma coisa: pôr o atendente no ar. Avisos por e-mail ou Slack são um
  * ajuste de quem já está rodando, não um passo da configuração inicial.
  */
-export const SECUNDARIAS: Integracao[] = [NOTIFICACOES];
+export const SECUNDARIAS: Integracao[] = [NOTIFICACOES, MIDIA];
 
 /** O que o cartão genérico de /setup desenha em destaque: tudo menos quem tem cartão próprio ou é secundária. */
 export const GENERICAS: Integracao[] = INTEGRACOES.filter(
