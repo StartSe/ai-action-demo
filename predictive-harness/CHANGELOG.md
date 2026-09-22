@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## 0.3.0 — 22/09/2026
+
+- Cowork Jev: persona de analista estratégico e navegação por Conversa, Conectores, Livro de premissas e Configurações, com layout responsivo.
+- Conectores de planilhas com arrastar e soltar, XLSX com escolha de aba, CSV e limite de 20 MB. OneDrive e Google Sheets sinalizados como em breve. A importação é local; mapeamento com IA só quando solicitado.
+- Seleção explícita de fontes por conversa, sem substituir a base ao importar arquivos novos. Histórico persistente, nova conversa sem apagar a anterior e confirmações distintas para limpar mensagens, excluir conversa e excluir fonte.
+- Interpretação da IA em painel contextual; alcance dos ajustes explícito entre cenário atual e livro de premissas, com confirmação de salvamento. Perguntas de acompanhamento preservadas.
+- ElevenLabs opcional: credencial cifrada, catálogo de vozes em português priorizando sotaque brasileiro, prévia, gravação de até 60 segundos, revisão da transcrição e leitura das respostas.
+- Configurações explicam os dados enviados a cada provedor e a responsabilidade de quem utiliza sobre as políticas do modelo selecionado.
+
 ## 0.2.1 — 21/09/2026
 
 - A imagem de produção instala `ca-certificates`, como no Mapify, para que o binário nativo do Codex tenha os certificados HTTPS necessários ao solicitar o código de conexão do ChatGPT. É preciso reconstruir e implantar a imagem para aplicar a correção.

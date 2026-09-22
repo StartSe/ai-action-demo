@@ -102,7 +102,7 @@ export async function decidir(state: unknown, questions: Record<string, Pergunta
         Authorization: `Bearer ${chave}`,
         "Content-Type": "application/json",
         "HTTP-Referer": "https://github.com/StartSe/ai-action-demo",
-        "X-Title": "Cowork FPEA",
+        "X-Title": "Cowork Jev",
       },
       body: JSON.stringify({ model: JEV_MODELO, state, questions }),
       signal: opcoes.signal ? AbortSignal.any([opcoes.signal, AbortSignal.timeout(20000)]) : AbortSignal.timeout(20000),

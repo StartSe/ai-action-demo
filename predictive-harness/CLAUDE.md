@@ -17,3 +17,14 @@ Gráficos são SVG desenhados do resultado do motor, nunca imagem gerada, com a 
 Demonstração: `lib/demo.ts` gera três planilhas de uma escola de negócios fictícia e responde quatro perguntas roteirizadas (uma por categoria) pelo próprio motor, com decisões marcadas `exemplo: true`. Perguntas livres em demonstração devolvem 409. O cenário de exemplo mostra a margem do trimestre **caindo** 0,9 p.p. ao abrir a turma: é a conta correta (a turma rende menos que a média da base) e é bom que o agente não diga só "sim".
 
 Verificar: `npm test` (30 provas), `npm run lint`, `npm run build`, servidor standalone com `curl` em `/api/health`, `/api/status`, `/api/base`, `/api/base/conversa` (pergunta sugerida em demo e 409 em pergunta livre), `/api/base/premissas`, `/api/base/recalcular`, `/api/planilhas` (upload multipart) e `/api/planilhas/<id>/papeis`. `scripts/verificar-padrao.sh`, `verificar-jargao.mjs` e `verificar-paleta.mjs` pulam apps com `padrao: "proprio"`. Sem chave real do OpenRouter, o endpoint do Jev, a calibração em português e a qualidade da tradução pergunta → especificação continuam por confirmar (risco registrado no PLANO.md).
+
+
+## Rodada 3 — Cowork Jev (v0.3.0)
+
+A interface agora tem abas no header: Conversa, Conectores, Livro de premissas e Configurações. `lib/sessoes.ts` mantém histórico e seleção explícita de fontes por conversa; `lib/contexto.ts` usa AsyncLocalStorage para propagar essa seleção e o ID às operações do motor e de mensagens. Os registros antigos em `planilha_id = "base"` ficam na primeira conversa. O livro continua por produto e sua aplicação entre conversas está explícita na UI.
+
+Conectores importa XLSX com escolha da aba (SheetJS 0.20.3 oficial; diretório ZIP validado via yauzl), CSV, JSON e TSV. O limite continua em 20 MB, inclusive para multipart sem Content-Length; uma aba convertida também fica limitada. Importação usa heurística local; classificação externa é solicitada no botão Mapear com o Jev. OneDrive e Google Sheets são informativos de em breve.
+
+`lib/voz.ts` e `/api/voz` integram ElevenLabs: chave cifrada em `lib/store.ts`, catálogo de vozes em português com brasileiras primeiro, transcrição `scribe_v2` e síntese `eleven_multilingual_v2`. `useVoz.ts` gerencia MediaRecorder, permissões, descarte, limite de 60s e limpeza de tracks/URLs; transcrição passa pelo compositor antes do envio, leitura automática é opcional. O app não persiste áudio; o provedor recebe áudio e texto conforme detalhado nas configurações. Testes de contrato usam fetch simulado; voz real exige credencial e créditos do usuário.
+
+Os testes `experiencia.test.ts` e `voz.test.ts` cobrem importação, limites, isolamento, histórico e contratos da ElevenLabs. Continuam obrigatórios `npm test`, `npm run lint` e `npm run build`.

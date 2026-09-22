@@ -199,8 +199,8 @@ export function perfilar(cabecalho: string[], linhas: Linha[], linhasVazias: num
     if (tipo === "numero") {
       const nums = cheios.map(paraNumero).filter((n): n is number => n !== null);
       if (nums.length) {
-        col.min = Math.min(...nums);
-        col.max = Math.max(...nums);
+        col.min = nums.reduce((min, n) => Math.min(min, n), Infinity);
+        col.max = nums.reduce((max, n) => Math.max(max, n), -Infinity);
         col.soma = nums.reduce((a, b) => a + b, 0);
         col.media = col.soma / nums.length;
       }

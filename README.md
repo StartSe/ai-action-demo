@@ -26,7 +26,7 @@ Vinte e dois apps independentes, cada um resolvendo um problema específico do d
 | 18 | [Build Agentflows v0.8.1](build-agentflows/) | Gestão | Orquestrar tarefas de IA entre agentes e sistemas | Editor visual com agentes, condições, ferramentas, aprovação humana e versões publicadas | OpenRouter, ferramentas MCP e HTTP; execução por MCP e HTTP autenticado. Disco persistente no Render |
 | 19 | [Daily Second Brain v1.3.0](daily-second-brain/) | Gestão | Memórias e decisões dispersas | Coletas agênticas agendadas, wiki conectada, grafo, chat e voz | ChatGPT, OpenRouter, Zapier MCP e ElevenLabs. Disco persistente no Render |
 | 20 | [Mapia v1.3.0](mapify/) | Gestão, Educação e Produto | Conteúdo difícil de conectar e aplicar | Mapas mentais interativos com fontes, edição e conversa | ChatGPT por assinatura ou OpenRouter; YouTube público com Gemini, PDF, web e texto. Disco persistente no Render |
-| 21 | [Cowork FPEA v0.2.1](predictive-harness/) | Dados e Gestão | Perguntar aos dados exige analista, e respostas de IA sem verificação não inspiram confiança | Conversa com a planilha: o ChatGPT escreve, o Jev (System One) tria, roteia e verifica cada resposta, com as decisões visíveis | ChatGPT por assinatura e OpenRouter (Jev). Disco persistente no Render |
+| 21 | [Cowork Jev v0.3.0](predictive-harness/) | Dados e Gestão | Perguntar aos dados exige analista, e respostas de IA sem verificação não inspiram confiança | Conversa com a planilha: o ChatGPT escreve, o Jev (System One) tria, roteia e verifica cada resposta, com as decisões visíveis | ChatGPT por assinatura e OpenRouter (Jev). Disco persistente no Render |
 
 Ideias mapeadas e deixadas para uma segunda rodada: copiloto de OKRs com check-in semanal, análise de concorrentes a partir de sites e redes, triagem de currículos contra a descrição da vaga, gerador de propostas comerciais a partir do CRM, resumo diário de e-mails e Slack para a diretoria.
 
@@ -129,7 +129,7 @@ Botão por app e da suíte inteira no catálogo público, ou direto:
 
 - Suíte (22 apps; os planos pagos e discos de cada app estão indicados no catálogo): `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy`
 - Um app: `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-<app>`
-- Bússola de IA, PDI do Time, Cowork FPEA e Site Cowork têm disco persistente de 1 GB em `/app/data` no Render, tanto no Blueprint individual quanto no da suíte (plano pago). No Docker Compose, cada app tem seu próprio volume. A versão do app aparece discretamente junto à marca ou no cabeçalho e vem do `package.json`.
+- Bússola de IA, PDI do Time, Cowork Jev e Site Cowork têm disco persistente de 1 GB em `/app/data` no Render, tanto no Blueprint individual quanto no da suíte (plano pago). No Docker Compose, cada app tem seu próprio volume. A versão do app aparece discretamente junto à marca ou no cabeçalho e vem do `package.json`.
 
 Depois do deploy, abra `https://<nome>.onrender.com/setup` e conecte a IA e as integrações. O plano `free` hiberna após inatividade. Sem volume persistente, contas, configurações e respostas podem se perder em reinícios e atualizações. Para a Bússola, a opção com volume já configura o disco; nos demais apps sem disco, ative o bloco `disk` e use um plano pago.
 

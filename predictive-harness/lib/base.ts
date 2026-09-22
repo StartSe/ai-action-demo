@@ -1,6 +1,7 @@
 // A base de FP&A: as planilhas com papel (matrículas, custos, marketing) viram produtos e turmas,
 // premissas "da base" com o detalhe de onde vieram, o livro de premissas (informadas sobrepõem a base)
 // e o trimestre de referência para medir o impacto de um cenário na margem do período.
+import { contexto } from "./contexto";
 import { abrirBanco } from "./store";
 import { AppError } from "./api";
 import { listarPlanilhas, lerLinhas, paraNumero, paraData, type Linha } from "./planilhas";
@@ -219,11 +220,12 @@ export function baselineTrimestre(base: Omit<Base, "baseline" | "avisos" | "demo
 }
 
 // --- Montagem ------------------------------------------------------------------------------------------
-export function montarBase(planilhas: Planilha[], ler: (p: Planilha) => Linha[]): Base {
+export function montarBase(planilhas: Planilha[], ler: (p: Planilha) => Linha[], selecao?: string[]): Base {
   const proprias = planilhas.filter((p) => !p.demo);
-  const ativas = proprias.length ? proprias : planilhas;
+  const ativas = selecao ? planilhas.filter(p => selecao.includes(p.id)) : proprias.length ? proprias : planilhas;
   const avisos: string[] = [];
-  if (proprias.length && planilhas.length > proprias.length) avisos.push("As planilhas de exemplo ficam de fora enquanto houver planilhas suas.");
+  if (selecao?.some(id => !planilhas.some(p => p.id === id))) avisos.push("Uma fonte desta conversa foi excluída. Selecione novas fontes em Conectores para continuar a análise.");
+  if (!selecao && proprias.length && planilhas.length > proprias.length) avisos.push("As planilhas de exemplo ficam de fora enquanto houver planilhas suas.");
   const escolher = (papel: Planilha["papelPlanilha"]) => ativas.filter((p) => p.papelPlanilha === papel).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))[0] || null;
   const matriculas = escolher("matriculas");
   const custos = escolher("custos");
@@ -239,7 +241,7 @@ export function montarBase(planilhas: Planilha[], ler: (p: Planilha) => Linha[])
   return { ...parcial, baseline, avisos: [...new Set(avisos)], demo: ativas.length > 0 && ativas.every((p) => p.demo) };
 }
 export function carregarBase(): Base {
-  return montarBase(listarPlanilhas(), lerLinhas);
+  return montarBase(listarPlanilhas(), lerLinhas, contexto.getStore()?.fontes);
 }
 export function premissasDeTodos(base: Base): PremissasProduto[] {
   return base.produtos.map((p) => {
