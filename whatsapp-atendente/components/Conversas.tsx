@@ -20,7 +20,7 @@ import { Empty, ErrorBox, IlustracaoConversa, Topbar, lerErro, useStatus, type E
 import { INTERVALO_RESERVA_MS, useEventos, useRecargaJunta, type EventoDaTela } from "./useEventos";
 import { soConversasDeExemplo } from "@/lib/demo";
 import { navegacaoComContador } from "@/lib/navegacao";
-import { PERIODOS, PERIODO_PADRAO, classeStatus, horaOuDia, lerPeriodo, rotuloContato, rotuloPeriodo, rotuloStatus } from "@/lib/rotulos";
+import { PERIODOS, PERIODO_PADRAO, classeStatus, horaOuDia, lerPeriodo, previaMensagem, rotuloContato, rotuloPeriodo, rotuloStatus } from "@/lib/rotulos";
 import type { Conversa, Periodo } from "@/lib/types";
 
 /** As três abas da lista; "todas" não filtra nada, as outras duas valem um status da conversa. */
@@ -41,7 +41,7 @@ function lerAba(valor: string | null): Aba {
 }
 
 function LinhaConversa({ conversa, selecionada, onEscolher }: { conversa: Conversa; selecionada: boolean; onEscolher: () => void }) {
-  const primeiraLinha = (conversa.ultima_mensagem || "").split("\n")[0];
+  const primeiraLinha = previaMensagem(conversa.ultima_mensagem || "").split("\n")[0];
   return (
     <li>
       <button

@@ -3,7 +3,7 @@
 // em vez de devolver o trecho da base copiado ao pé da letra.
 import { ASSUNTO_OUTROS, assuntosDoObjetivo, semAcento } from "./assuntos";
 import type { MotivoTransferencia } from "./transferencia";
-import type { Config, Objetivo, PapelMensagem, StatusConversa, Tom } from "./types";
+import type { Config, Objetivo, PapelMensagem, StatusConversa, TipoAnexo, Tom } from "./types";
 
 export function esperar(ms = 900) {
   return new Promise((r) => setTimeout(r, ms));
@@ -240,9 +240,27 @@ export const ACAO_CONECTAR_NUMERO = { rotulo: "Conectar o número da empresa", u
 export const ROTULO_APAGAR_EXEMPLOS = "Apagar as conversas de exemplo";
 export const CONFIRMAR_APAGAR_EXEMPLOS = "Apagar as conversas de exemplo? Elas não voltam, e as telas ficam vazias até o primeiro cliente escrever.";
 
+/**
+ * O áudio ou a foto de uma conversa de exemplo. O arquivo mora em `public/exemplos` e a demonstração
+ * nunca baixa nada de fora: o endereço guardado é o do próprio app (lib/conversas.ts:semearExemplosSeVazio).
+ */
+export interface AnexoExemplo {
+  tipo: TipoAnexo;
+  /** Endereço do arquivo dentro do app, como "/exemplos/audio-cliente.ogg". */
+  arquivo: string;
+  mime: string;
+  nome: string;
+  /** Duração do áudio, em segundos. */
+  segundos?: number;
+  /** Legenda escrita pelo cliente; quando existe, ela é o texto da mensagem. */
+  legenda?: string;
+}
+
 export interface MensagemExemplo {
   papel: PapelMensagem;
   texto: string;
+  /** O que veio junto desta mensagem quando ela não foi só texto. */
+  anexo?: AnexoExemplo;
   /** Quantos minutos antes de "agora" a mensagem chegou: é o que espalha as conversas pelos últimos 7 dias. */
   atras: number;
   /**
@@ -299,6 +317,12 @@ export function conversasExemplo(): ConversaExemplo[] {
         { papel: "cliente", texto: "Fiz um implante em outra clínica e está doendo. Vocês avaliam?", atras: 1 * DIA + 2 * HORA },
         { papel: "atendente", texto: "Sinto muito, Ana Paula. Avaliamos sim: a consulta de avaliação custa R$ 120 e fica gratuita para quem fechar tratamento.", atras: 1 * DIA + 2 * HORA - 1, respostaMs: 4200 },
         { papel: "cliente", texto: "Consigo hoje? A dor aumentou à noite.", atras: 4 * HORA },
+        {
+          papel: "cliente",
+          texto: "[Áudio de 7 s]",
+          atras: 4 * HORA - 2,
+          anexo: { tipo: "audio", arquivo: "/exemplos/audio-cliente.ogg", mime: "audio/ogg", nome: "audio-cliente.ogg", segundos: 7 },
+        },
         { papel: "humano", texto: "Oi, Ana Paula, aqui é a recepção. Consigo te encaixar hoje às 17h30 com a Dra. Helena.", atras: 3 * HORA, respostaMs: 480000 },
         { papel: "cliente", texto: "Perfeito, obrigada! Vou levar a radiografia que fiz na outra clínica.", atras: 2 * HORA },
       ],
@@ -391,6 +415,19 @@ export function conversasExemplo(): ConversaExemplo[] {
       mensagens: [
         { papel: "cliente", texto: "Boa tarde! Meu filho tem 4 anos, vocês atendem crianças?", atras: 6 * DIA },
         { papel: "atendente", texto: "Boa tarde! Atendemos odontopediatria a partir dos 2 anos de idade.", atras: 6 * DIA - 2, respostaMs: 2800 },
+        {
+          papel: "cliente",
+          texto: "Esse é o convênio do meu filho, vocês atendem?",
+          atras: 3 * DIA + 50,
+          anexo: {
+            tipo: "imagem",
+            arquivo: "/exemplos/foto-carteirinha.jpg",
+            mime: "image/jpeg",
+            nome: "foto-carteirinha.jpg",
+            legenda: "Esse é o convênio do meu filho, vocês atendem?",
+          },
+        },
+        { papel: "atendente", texto: "Atendemos esse plano sim, Camila. Na primeira consulta é só levar a carteirinha e um documento com foto.", atras: 3 * DIA + 49, respostaMs: 4100 },
         { papel: "cliente", texto: "Ótimo. Consigo marcar para a terça da semana que vem?", atras: 3 * DIA + 40 },
         { papel: "atendente", texto: "Consigo sim: terça às 15h com a odontopediatra. Posso confirmar?", atras: 3 * DIA + 39, respostaMs: 5200 },
         { papel: "cliente", texto: "Obrigado pelo atendimento!", atras: 3 * DIA + 35 },

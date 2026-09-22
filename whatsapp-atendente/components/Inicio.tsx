@@ -26,7 +26,7 @@ import { DataTable, IlustracaoSegmento, Topbar, useStatus, type Coluna } from ".
 import { INTERVALO_RESERVA_MS, useEventos, useRecargaJunta } from "./useEventos";
 import { soConversasDeExemplo } from "@/lib/demo";
 import { navegacaoComContador } from "@/lib/navegacao";
-import { classeStatus, dataPorExtenso, haQuantoTempo, rotuloContato, rotuloStatus, saudacao } from "@/lib/rotulos";
+import { classeStatus, dataPorExtenso, haQuantoTempo, previaMensagem, rotuloContato, rotuloStatus, saudacao } from "@/lib/rotulos";
 import type { Config, Conversa, Metricas } from "@/lib/types";
 
 /** Quantas conversas a tabela "Conversas recentes" mostra antes do link "Ver todas". */
@@ -59,7 +59,7 @@ const COLUNAS: Coluna<Conversa>[] = [
     titulo: "Última mensagem",
     papel: "resumo",
     linhas: 2,
-    render: (c) => <span className="text-ink-2">{c.ultima_mensagem || "Sem mensagem ainda"}</span>,
+    render: (c) => <span className="text-ink-2">{previaMensagem(c.ultima_mensagem) || "Sem mensagem ainda"}</span>,
   },
   {
     chave: "status",

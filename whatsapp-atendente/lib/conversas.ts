@@ -8,6 +8,7 @@
  * `datetime('now')`), o que deixa comparar e ordenar por texto. Para fora deste arquivo elas sempre
  * saem em ISO.
  */
+import { anexosDeMensagens, apagarDeMensagens, registrarAnexo } from "./anexos";
 import { conversasExemplo } from "./demo";
 import { publicar } from "./eventos";
 import { abrirBanco, getConfig, setConfig } from "./store";
@@ -249,7 +250,17 @@ export function obterConversa(numero: string): ConversaCompleta | null {
   const registro = obterRegistro(numero);
   if (!registro) return null;
   const linhas = banco().prepare("SELECT * FROM mensagens WHERE numero = ? ORDER BY id").all(numero) as LinhaMensagem[];
-  return { ...registro, mensagens: linhas.map(paraMensagem) };
+  // Os anexos (lib/anexos.ts) vêm numa consulta só, e não uma por bolha: é o áudio, a foto ou o
+  // arquivo que o cliente mandou, e sem eles a conversa mostraria só o texto entre colchetes.
+  const anexos = anexosDeMensagens(linhas.map((l) => Number(l.id)));
+  return {
+    ...registro,
+    mensagens: linhas.map((l) => {
+      const mensagem = paraMensagem(l);
+      const doAnexo = anexos.get(mensagem.id);
+      return doAnexo ? { ...mensagem, anexos: doAnexo } : mensagem;
+    }),
+  };
 }
 
 /**
@@ -771,6 +782,9 @@ export function resolver(numero: string): void {
 
 export function apagarConversa(numero: string): void {
   const d = banco();
+  // Os anexos saem junto (com os arquivos no disco): apagar a conversa tem que apagar mesmo o áudio e
+  // a foto que o cliente mandou, não só as linhas que apontavam para eles.
+  apagarDeMensagens((d.prepare("SELECT id FROM mensagens WHERE numero = ?").all(numero) as { id: number }[]).map((l) => Number(l.id)));
   d.prepare("DELETE FROM mensagens WHERE numero = ?").run(numero);
   d.prepare("DELETE FROM conversas WHERE numero = ?").run(numero);
   avisarConversa(numero);
@@ -807,13 +821,28 @@ export function semearExemplosSeVazio({ numeroConectado, atendente = "Bia" }: { 
     garantirConversa({ numero: c.numero, nome: c.nome, origem: "exemplo", exemplo: true, assunto: c.assunto, status: c.status, motivo: c.motivo, em: inicio });
     for (const m of c.mensagens) {
       const quando = new Date(agora - m.atras * 60 * 1000);
-      inserirMensagem({
+      const mensagemId = inserirMensagem({
         numero: c.numero,
         papel: m.papel,
         texto: m.texto,
         criadoEm: paraTextoDeBanco(quando),
         tempoRespostaMs: m.respostaMs,
       });
+      // O áudio e a foto da demonstração apontam para arquivos do próprio app (public/exemplos): nada
+      // é baixado de fora, e a conversa mostra os dois tipos antes de o número da empresa existir.
+      if (m.anexo) {
+        registrarAnexo({
+          mensagemId,
+          numero: c.numero,
+          tipo: m.anexo.tipo,
+          urlOriginal: m.anexo.arquivo,
+          mime: m.anexo.mime,
+          nomeArquivo: m.anexo.nome,
+          segundos: m.anexo.segundos,
+          legenda: m.anexo.legenda,
+          em: quando,
+        });
+      }
       // A linha do tempo da demonstração: a primeira resposta de uma pessoa é o momento em que ela assumiu.
       if (m.papel === "humano" && !c.mensagens.slice(0, c.mensagens.indexOf(m)).some((x) => x.papel === "humano")) {
         registrarEvento(c.numero, "Você assumiu a conversa", quando);
@@ -835,6 +864,10 @@ export function apagarExemplos(): number {
   const d = banco();
   const quantas = contarExemplos();
   const numeros = (d.prepare("SELECT numero FROM conversas WHERE exemplo = 1").all() as { numero: string }[]).map((l) => l.numero);
+  const mensagens = d
+    .prepare("SELECT id FROM mensagens WHERE numero IN (SELECT numero FROM conversas WHERE exemplo = 1)")
+    .all() as { id: number }[];
+  apagarDeMensagens(mensagens.map((l) => Number(l.id)));
   d.prepare("DELETE FROM mensagens WHERE numero IN (SELECT numero FROM conversas WHERE exemplo = 1)").run();
   d.prepare("DELETE FROM conversas WHERE exemplo = 1").run();
   for (const n of numeros) avisarConversa(n);

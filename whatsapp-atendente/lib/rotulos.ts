@@ -104,6 +104,28 @@ export function numeroInterno(numero: string): boolean {
   return numero in NUMEROS_INTERNOS;
 }
 
+/**
+ * Como a última mensagem aparece nas listas quando ela foi um áudio, uma foto ou um arquivo. O que
+ * está gravado é o texto derivado que o webhook montou ("[Áudio de 12 s]"); aqui ele vira a prévia
+ * curta que o WhatsApp também usa ("🎤 Áudio (0:12)"). Uma mensagem com legenda nunca passa por aqui:
+ * o texto dela é a própria legenda.
+ */
+export function previaMensagem(texto: string): string {
+  const limpo = (texto || "").trim();
+  const audio = limpo.match(/^\[Áudio(?: de (\d+) s)?\]$/);
+  if (audio) {
+    const segundos = Number(audio[1] ?? 0);
+    return segundos ? `🎤 Áudio (${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, "0")})` : "🎤 Áudio";
+  }
+  if (/^\[Imagem(?: de visualização única)?\]$/.test(limpo)) return "📷 Imagem";
+  if (/^\[Vídeo(?: de \d+ s)?\]$/.test(limpo)) return "🎬 Vídeo";
+  if (/^\[Documento: .*\]$/.test(limpo)) return "📄 Documento";
+  if (limpo === "[Figurinha]") return "🙂 Figurinha";
+  if (/^\[Localização: .*\]$/.test(limpo)) return "📍 Localização";
+  if (/^\[Contato: .*\]$/.test(limpo)) return "👤 Contato";
+  return limpo;
+}
+
 /** Uma escolha do formulário do Assistente: o que o cartão diz em cima e a linha de apoio embaixo. */
 export type Escolha = { titulo: string; apoio: string };
 

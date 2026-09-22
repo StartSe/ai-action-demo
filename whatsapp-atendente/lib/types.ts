@@ -131,6 +131,38 @@ export interface MensagemChat {
   texto: string;
 }
 
+/**
+ * O que o cliente mandou quando não foi texto (lib/anexos.ts). `outro` é a rede de segurança: um tipo
+ * de mensagem que o WhatsApp tenha e este app ainda não desenhe aparece como um aviso honesto, nunca
+ * como uma conversa com um buraco.
+ */
+export type TipoAnexo = "audio" | "imagem" | "video" | "documento" | "figurinha" | "localizacao" | "contato" | "outro";
+
+/**
+ * Um anexo de uma mensagem, do jeito que a bolha o desenha. O caminho da cópia no disco fica de fora
+ * de propósito: quem quer o arquivo passa pela rota `/api/anexos/[id]`, que é privada.
+ */
+export interface Anexo {
+  id: string;
+  tipo: TipoAnexo;
+  /**
+   * Endereço que a bolha usa: a cópia servida pelo próprio app nos tipos que são arquivo, o link do
+   * mapa na localização e vazio no contato (que não tem o que abrir).
+   */
+  url: string;
+  mime: string;
+  /** Nome do arquivo; nos cartões sem arquivo é o título (o endereço da localização, o nome do contato). */
+  nomeArquivo: string;
+  /** Tamanho do arquivo em bytes; 0 enquanto a cópia não foi feita (ou quando não há arquivo). */
+  tamanho: number;
+  /** Duração do áudio ou do vídeo, em segundos. */
+  segundos?: number;
+  /** Legenda escrita pelo cliente; nos cartões sem arquivo é a segunda linha (o telefone do contato). */
+  legenda?: string;
+  /** O que o atendente ouviu ou leu neste anexo, quando a IA conseguiu processá-lo. */
+  transcricao?: string;
+}
+
 /** Uma mensagem já gravada, como a conversa aberta e a IA a leem (datas sempre em ISO). */
 export interface MensagemDaConversa extends MensagemChat {
   id: number;
@@ -143,6 +175,8 @@ export interface MensagemDaConversa extends MensagemChat {
   statusEntrega?: StatusEntrega;
   /** A frase de negócio do provedor quando `statusEntrega === "falhou"`. */
   erroEnvio?: string;
+  /** O que veio junto da mensagem quando o cliente mandou áudio, foto, arquivo, localização ou contato. */
+  anexos?: Anexo[];
 }
 
 /**

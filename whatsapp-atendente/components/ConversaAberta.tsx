@@ -21,8 +21,9 @@ import { Avatar, AvatarAtendente, DesenhoOrigem } from "./ContatoVisual";
 import { ContatoRecolhido, PainelContato, type DadosDoContato } from "./PainelContato";
 import { Aviso, ErrorBox, lerErro, useConfirmacao, type ErroLido } from "./ui";
 import { classeStatus, rotuloContato, rotuloNumero, rotuloStatus } from "@/lib/rotulos";
+import { formatarTelefone } from "@/lib/telefone";
 import { rotuloMotivo } from "@/lib/transferencia";
-import type { ConversaCompleta, MensagemDaConversa, StatusEntrega } from "@/lib/types";
+import type { Anexo, ConversaCompleta, MensagemDaConversa, StatusEntrega } from "@/lib/types";
 
 /** Teto da altura do campo de escrever: ele cresce com o texto até aqui e depois passa a rolar. */
 const ALTURA_MAXIMA_CAMPO = 132;
@@ -116,6 +117,82 @@ function LinhaEvento({ mensagem }: { mensagem: MensagemDaConversa }) {
   );
 }
 
+/** Duração de um áudio ou vídeo como o WhatsApp mostra: "0:07", "1:42". */
+function duracao(segundos: number): string {
+  return `${Math.floor(segundos / 60)}:${String(Math.round(segundos) % 60).padStart(2, "0")}`;
+}
+
+/** Moldura dos anexos que são um cartão (arquivo, localização, contato) e não uma mídia para tocar. */
+function CartaoAnexo({ icone, titulo, apoio, acao }: { icone: string; titulo: string; apoio?: string; acao?: { rotulo: string; href: string } }) {
+  return (
+    <div className="flex items-center gap-2.5 rounded-lg bg-black/5 px-2.5 py-2 min-w-[190px] max-w-full">
+      <span aria-hidden="true" className="text-[20px] leading-none">
+        {icone}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-semibold text-[13px] break-words">{titulo}</span>
+        {apoio && <span className="block text-[11.5px] text-muted">{apoio}</span>}
+      </span>
+      {acao && (
+        <a className="text-[12px] font-semibold text-accent-ink underline underline-offset-2 shrink-0" href={acao.href} target="_blank" rel="noreferrer">
+          {acao.rotulo}
+        </a>
+      )}
+    </div>
+  );
+}
+
+/**
+ * O que o cliente mandou quando não foi texto. A imagem e a figurinha usam `<img>` de propósito (e não
+ * o componente de imagem do Next): o arquivo vem de uma rota privada deste app, com tamanho que só se
+ * conhece na hora, e não passa por otimização. Áudio e vídeo carregam só quando alguém aperta o play —
+ * uma conversa longa não pode baixar dez arquivos de uma vez.
+ */
+function AnexoNaBolha({ anexo }: { anexo: Anexo }) {
+  if (anexo.tipo === "audio") {
+    return (
+      <span className="flex items-center gap-2">
+        <audio controls preload="none" src={anexo.url} className="h-9 w-[240px] max-w-full max-md:w-[200px]" />
+        {anexo.segundos ? <span className="text-[11px] text-muted shrink-0">{duracao(anexo.segundos)}</span> : null}
+      </span>
+    );
+  }
+  if (anexo.tipo === "imagem") {
+    return (
+      <a href={anexo.url} target="_blank" rel="noreferrer" className="block">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={anexo.url} alt={anexo.legenda || "Foto enviada pelo cliente"} className="rounded-lg max-w-[260px] w-full h-auto" />
+      </a>
+    );
+  }
+  if (anexo.tipo === "video") {
+    return <video controls preload="none" src={anexo.url} className="rounded-lg max-w-[260px] w-full h-auto" />;
+  }
+  if (anexo.tipo === "figurinha") {
+    return (
+      /* eslint-disable-next-line @next/next/no-img-element */
+      <img src={anexo.url} alt="Figurinha enviada pelo cliente" className="w-24 h-24 object-contain" />
+    );
+  }
+  if (anexo.tipo === "documento") {
+    return <CartaoAnexo icone="📄" titulo={anexo.nomeArquivo || "Arquivo"} apoio={anexo.legenda} acao={{ rotulo: "Abrir", href: anexo.url }} />;
+  }
+  if (anexo.tipo === "localizacao") {
+    return (
+      <CartaoAnexo
+        icone="📍"
+        titulo={anexo.nomeArquivo || "Localização"}
+        apoio={anexo.legenda}
+        acao={anexo.url ? { rotulo: "Ver no mapa", href: anexo.url } : undefined}
+      />
+    );
+  }
+  if (anexo.tipo === "contato") {
+    return <CartaoAnexo icone="👤" titulo={anexo.nomeArquivo || "Contato"} apoio={anexo.legenda ? formatarTelefone(anexo.legenda) : undefined} />;
+  }
+  return <CartaoAnexo icone="📎" titulo="Este tipo de mensagem ainda não aparece aqui" apoio="Abra a conversa no celular da empresa para ver." />;
+}
+
 function Bolha({
   mensagem,
   pergunta,
@@ -143,6 +220,10 @@ function Bolha({
   // A marcação de "não chegou" vem do banco (`statusEntrega`), não de um estado da tela: recarregar a
   // página ou abrir em outro aparelho mostra a mesma bolha vermelha, e "Tentar de novo" parte dela.
   const naoEntregue = !doCliente && mensagem.statusEntrega === "falhou";
+  const anexos = mensagem.anexos ?? [];
+  // O texto entre colchetes ("[Áudio de 12 s]") existe para as listas e para a IA; quando o anexo em si
+  // está desenhado, repeti-lo só polui a bolha. A legenda escrita pelo cliente, essa continua.
+  const soAnexo = anexos.length > 0 && /^\[[^\]]*\]$/.test(mensagem.texto.trim());
   // As três cores repetem a conversa que a pessoa já conhece do WhatsApp: a mensagem que chegou é
   // branca à esquerda, a que saiu é verde à direita. O verde escuro separa o que uma pessoa escreveu
   // do que a IA respondeu — as duas saem pelo mesmo número, e confundi-las é o erro caro aqui.
@@ -162,7 +243,14 @@ function Bolha({
             {daIA && <span className="font-semibold text-muted">Assistente de IA</span>}
           </span>
         )}
-        {mensagem.texto}
+        {anexos.length > 0 && (
+          <div className="flex flex-col gap-1.5 mb-1">
+            {anexos.map((a) => (
+              <AnexoNaBolha key={a.id} anexo={a} />
+            ))}
+          </div>
+        )}
+        {!soAnexo && mensagem.texto}
         <span className={`absolute right-2.5 bottom-1 flex items-center gap-1 text-[10px] ${doHumano ? "text-white/75" : "text-muted"}`}>
           {horaBolha(mensagem.criadoEm)}
           {!doCliente && !naoEntregue && <MarcaEnvio status={mensagem.statusEntrega} claro={doHumano} />}

@@ -100,6 +100,7 @@ app/api/conversas/[numero]/devolver/**    devolver o atendimento para a IA
 app/api/conversas/[numero]/resolver/**    marcar a conversa como resolvida
 app/api/conversas/exemplos/route.ts       apagar de uma vez as conversas de exemplo
 app/api/eventos/route.ts                  fluxo de avisos para as telas (text/event-stream)
+app/api/anexos/[id]/route.ts              serve o áudio, a foto ou o arquivo que o cliente mandou
 app/api/metricas/route.ts                 números de Início e Relatórios, por período
 app/api/metricas/exportar/route.ts        planilha do período (CSV para o Excel em português)
 app/api/relatorio-diario/route.ts         agenda (ou consulta) a rotina do relatório das 8h
@@ -135,6 +136,7 @@ lib/atendente.ts                          pipeline de resposta: IA ou buscador l
 lib/conversas.ts                          dono das tabelas `conversas` e `mensagens` (node:sqlite), inclusive o status de entrega
 lib/rajada.ts                             espera de 3 s para responder uma rajada de mensagens de uma vez
 lib/eventos.ts                            emissor dos avisos de mudança (quem escreve publica, as telas escutam)
+lib/anexos.ts                             dono da tabela `anexos`: o que o cliente manda que não é texto
 lib/transferencia.ts                      motivos de transferência (rótulos, marcador `[TRANSFERIR:motivo]`, frase de reserva)
 lib/metricas.ts                           fonte única dos números de Início e Relatórios
 lib/zapi.ts                               cliente da z-api: estado, QR Code, envio e cadastro dos avisos
@@ -153,6 +155,23 @@ Dockerfile                                build multi-stage com saída standalon
 docker-compose.yml                        sobe este app isolado, com volume para os dados
 render.yaml                               blueprint do Render (runtime image)
 ```
+
+### Áudio, foto e arquivo que o cliente manda
+
+O cliente pode mandar áudio, imagem, vídeo, documento, figurinha, localização ou contato: tudo entra
+na conversa. A mensagem fica com a legenda que ele escreveu — ou com uma frase entre colchetes quando
+não há legenda ("[Áudio de 12 s]", "[Documento: contrato.pdf]") — e o arquivo em si é copiado para
+`DATA_DIR/anexos` em segundo plano, com limite de 16 MB por arquivo e 30 segundos de espera. Quando a
+cópia falha, a conversa continua mostrando o anexo pelo endereço temporário do provedor.
+
+Os arquivos ocupam o disco de 1 GB do serviço no Render, então **o app guarda anexos por 90 dias**: a
+limpeza roda na subida e de 6 em 6 horas dentro do laço de rotinas (`instrumentation.ts`). A mensagem
+continua na conversa depois disso, só sem o arquivo. Apagar uma conversa apaga os anexos dela na hora.
+Uma reação (o emoji em cima de uma mensagem) não vira mensagem nova, e uma foto de visualização única
+fica registrada mas nunca é copiada.
+
+Os arquivos são servidos por `GET /api/anexos/[id]`, que é privada como todo o painel. Até a US-006
+o atendente virtual não ouve o áudio nem lê a foto: ele recebe o texto entre colchetes.
 
 ### Documentos e busca para atendimento
 

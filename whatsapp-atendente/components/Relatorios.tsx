@@ -22,7 +22,7 @@ import { ASSUNTO_OUTROS } from "@/lib/assuntos";
 import { soConversasDeExemplo } from "@/lib/demo";
 import { numero as formatarNumero } from "@/lib/formato";
 import { navegacaoComContador } from "@/lib/navegacao";
-import { contextoComparacao, horaOuDia, lerPeriodoMetricas, PERIODOS_METRICAS, PERIODO_PADRAO, rotuloContato, rotuloPeriodo } from "@/lib/rotulos";
+import { contextoComparacao, horaOuDia, lerPeriodoMetricas, PERIODOS_METRICAS, PERIODO_PADRAO, previaMensagem, rotuloContato, rotuloPeriodo } from "@/lib/rotulos";
 import type { AssuntoMetricas, Conversa, Metricas, PeriodoMetricas } from "@/lib/types";
 
 /** Quantas barras o cartão "Principais assuntos" desenha, contando a de "Outros". */
@@ -112,7 +112,7 @@ function ListaDeAtencao({ conversas }: { conversas: Conversa[] }) {
                 <span className="shrink-0 text-[12px] text-muted">{horaOuDia(c.atualizado_em)}</span>
               </span>
               <span className="block truncate text-[13px] text-ink-2 mt-0.5">
-                {(c.ultima_mensagem || "").split("\n")[0] || "Sem mensagem ainda"}
+                {previaMensagem(c.ultima_mensagem || "").split("\n")[0] || "Sem mensagem ainda"}
               </span>
               <span className="inline-block chip-media mt-1.5">Aguardando</span>
             </span>

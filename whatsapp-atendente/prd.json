@@ -89,7 +89,7 @@
         "Lint e build passam sem aviso novo de `img`; verificar no navegador (conversa com os sete tipos; desktop e celular)"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-005 (Fase 1: mídia)"
     },
     {
