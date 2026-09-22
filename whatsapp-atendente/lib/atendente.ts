@@ -1,11 +1,25 @@
 // Pipeline de resposta do atendente: memória de conversa por número (lib/conversas.ts, em SQLite)
-// + IA (com fallback local sem chave).
+// + IA (com fallback local sem chave). Dois caminhos entram aqui: `responder()` grava a mensagem do
+// cliente e responde na mesma chamada (simulador e MCP, que esperam a resposta de volta), e
+// `responderPendente()` responde ao que já está gravado — é o que lib/rajada.ts chama quando a janela
+// de 3 s de uma rajada de mensagens do WhatsApp fecha. Os dois passam pela guarda `podeResponder`.
 import { aiEnabled, askJSON, askText, askWithTools, ErroIA, type ToolMessage } from "./ai";
 import { ASSUNTO_OUTROS, assuntosDoObjetivo, normalizarAssunto } from "./assuntos";
 import { buscarDocumentos } from "./documentos";
 import { toolsAgenda } from "./agenda";
 import { baseAprovadaComoTexto } from "./base";
-import { definirAssunto, historicoRecente, MAX_HISTORICO, obterConversa, obterRegistro, perguntasDoCliente, registrarMensagemCliente, registrarResposta } from "./conversas";
+import {
+  definirAssunto,
+  historicoRecente,
+  MAX_HISTORICO,
+  mensagensSemResposta,
+  obterConversa,
+  obterRegistro,
+  perguntasDoCliente,
+  registrarMensagemCliente,
+  registrarResposta,
+  ultimaMensagemDoClienteId,
+} from "./conversas";
 import { classificarLocal, esperar, respostaLocal } from "./demo";
 import { toolsParaAtendente } from "./empresa-mcp";
 import { getConfig } from "./estado";
@@ -154,12 +168,52 @@ function comBaseAprovada(config: Config): Config {
   return { ...config, baseConhecimento: `${config.baseConhecimento}\n\nPerguntas já respondidas e aprovadas pela equipe:\n\n${extra}` };
 }
 
+/** O que `responder()` e `responderPendente()` devolvem. `resposta: null` = nada foi enviado ao cliente. */
+export interface RespostaDoAtendente {
+  resposta: string | null;
+  transferir: boolean;
+  ferramentaUsada?: string;
+  /** A conversa está em atendimento humano: a mensagem foi guardada e quem responde é uma pessoa. */
+  atendimentoHumano?: boolean;
+  /** A resposta não saiu, e por quê (motivo já escrito no log): mensagem repetida, alguém assumiu, mensagem nova. */
+  descartada?: string;
+}
+
+/**
+ * A IA ainda pode responder a esta conversa, considerando a mensagem do cliente que originou a
+ * resposta? Devolve o motivo para NÃO responder, ou `null` quando pode. É a guarda contra corrida
+ * entre a IA e uma pessoa: entre a chegada da mensagem e a resposta pronta passam segundos, e nesse
+ * meio tempo alguém pode ter assumido ("Assumir atendimento"), marcado como resolvida, ou o cliente
+ * pode ter escrito de novo — nesse último caso a resposta pronta já está velha, e a rajada
+ * (lib/rajada.ts) responde à sequência inteira em seguida.
+ */
+export function motivoParaNaoResponder(numero: string, ultimaMensagemId: number): string | null {
+  const registro = obterRegistro(numero);
+  if (!registro) return "a conversa não existe mais";
+  if (registro.status === "humano") return "uma pessoa assumiu a conversa";
+  if (registro.status === "resolvida") return "a conversa foi marcada como resolvida";
+  const ultima = ultimaMensagemDoClienteId(numero);
+  if (ultima !== null && ultima > ultimaMensagemId) return "chegou mensagem nova do cliente";
+  return null;
+}
+
+/** Conferido DUAS vezes em `responderPendente`: antes de chamar a IA e imediatamente antes de gravar/enviar. */
+export function podeResponder(numero: string, ultimaMensagemId: number): boolean {
+  return motivoParaNaoResponder(numero, ultimaMensagemId) === null;
+}
+
+/**
+ * Grava a mensagem do cliente e responde na mesma chamada: é o contrato do simulador e do MCP, que
+ * precisam da resposta de volta. Os webhooks NÃO usam esta função: eles gravam a mensagem, esperam a
+ * janela de rajada (lib/rajada.ts) e chamam `responderPendente`.
+ */
 export async function responder({
   numero,
   texto,
   origem = "simulador",
   nome,
-  config: configRascunho,
+  config,
+  idExterno,
 }: {
   numero: string;
   texto: string;
@@ -168,14 +222,52 @@ export async function responder({
   nome?: string;
   /** Configuração ainda não salva (testada no simulador antes de clicar em "Salvar"); sem ela, usa a configuração salva. */
   config?: Config;
-}): Promise<{ resposta: string | null; transferir: boolean; ferramentaUsada?: string; atendimentoHumano?: boolean }> {
-  let config = comBaseAprovada(configRascunho ?? getConfig());
+  /** Id da mensagem no canal, para o mesmo aviso entregue duas vezes não virar duas respostas. */
+  idExterno?: string;
+}): Promise<RespostaDoAtendente> {
   const comecouEm = Date.now();
-  const conversa = registrarMensagemCliente({ numero, texto, origem, nome });
+  const conversa = registrarMensagemCliente({ numero, texto, origem, nome, idExterno });
+  if (conversa.duplicada) {
+    console.log(`Mensagem repetida do canal ignorada (${numero}, id ${idExterno}).`);
+    return { resposta: null, transferir: false, descartada: "mensagem repetida" };
+  }
   // Conversa assumida por uma pessoa: a mensagem fica guardada e contada como não lida, e quem
   // responde é ela. A IA só volta a responder quando a conversa for devolvida.
   if (conversa.status === "humano") return { resposta: null, transferir: false, atendimentoHumano: true };
+  return responderPendente(numero, { config, ultimaMensagemId: conversa.mensagemId, comecouEm });
+}
 
+/**
+ * Responde ao que o cliente escreveu desde a última resposta (uma ou várias mensagens, numa resposta
+ * só) e grava a resposta. `podeResponder` é conferido duas vezes — antes de chamar a IA e logo antes de
+ * gravar —, e uma resposta descartada vai para o log com o motivo, nunca para o cliente.
+ */
+export async function responderPendente(
+  numero: string,
+  {
+    config: configRascunho,
+    ultimaMensagemId,
+    comecouEm,
+  }: {
+    config?: Config;
+    /** A mensagem do cliente que originou esta resposta; por padrão, a última gravada. */
+    ultimaMensagemId?: number;
+    /** Quando a pergunta chegou, para o tempo de resposta; por padrão, a data da primeira mensagem sem resposta. */
+    comecouEm?: number;
+  } = {}
+): Promise<RespostaDoAtendente> {
+  const ultimaId = ultimaMensagemId ?? ultimaMensagemDoClienteId(numero);
+  if (ultimaId === null) return { resposta: null, transferir: false, descartada: "o cliente ainda não escreveu" };
+
+  const bloqueio = motivoParaNaoResponder(numero, ultimaId);
+  if (bloqueio) return descartar(numero, bloqueio);
+
+  const pendentes = mensagensSemResposta(numero);
+  // Sem pendente (alguém já respondeu por fora), a última mensagem do cliente serve de pergunta.
+  const texto = pendentes.length ? pendentes.map((m) => m.texto).join("\n") : (historicoRecente(numero, 1)[0]?.texto ?? "");
+  const inicio = comecouEm ?? (pendentes[0] ? Date.parse(pendentes[0].criadoEm) : Date.now());
+
+  let config = comBaseAprovada(configRascunho ?? getConfig());
   const consulta = [...historicoRecente(numero, 4).filter((m) => m.papel === "cliente").map((m) => m.texto)].join("\n");
   const documentos = await buscarDocumentos(consulta || texto, aiEnabled() ? "contexto" : "texto");
   config = { ...config, baseConhecimento: `${config.baseConhecimento}
@@ -186,11 +278,12 @@ ${documentos}` };
   let transferir: boolean;
   let ferramentaUsada: string | undefined;
   if (aiEnabled()) {
-    // historicoRecente já inclui a mensagem recém-gravada: é a última linha do histórico abaixo.
+    // historicoRecente já inclui as mensagens recém-gravadas: são as últimas linhas do histórico abaixo.
     const historico = historicoRecente(numero, MAX_HISTORICO)
       .map((m) => `${m.papel === "cliente" ? "Cliente" : config.atendente}: ${m.texto}`)
       .join("\n");
-    const prompt = `${historico}\n\nResponda como ${config.atendente} à última mensagem do cliente.`;
+    const alvo = pendentes.length > 1 ? `às últimas ${pendentes.length} mensagens do cliente, em UMA mensagem só` : "à última mensagem do cliente";
+    const prompt = `${historico}\n\nResponda como ${config.atendente} ${alvo}.`;
     const { texto: bruta, ferramentaUsada: usada } = await perguntarComFerramentas({ system: montarSystemPrompt(config), prompt, maxTokens: 400 });
     transferir = /\[TRANSFERIR\]\s*$/i.test(bruta.trim());
     const limpa = limparSaida(bruta.replace(/\[TRANSFERIR\]\s*$/i, ""));
@@ -213,9 +306,19 @@ ${documentos}` };
     transferir = r.transferir;
   }
 
-  registrarResposta({ numero, texto: resposta, transferir, ferramentaUsada, tempoRespostaMs: Date.now() - comecouEm });
+  // Segunda conferência, com a resposta pronta: alguém pode ter assumido, ou o cliente escrito de novo,
+  // enquanto a IA pensava. O que foi descartado fica no log, nunca chega ao cliente.
+  const bloqueioFinal = motivoParaNaoResponder(numero, ultimaId);
+  if (bloqueioFinal) return descartar(numero, bloqueioFinal, resposta);
+
+  registrarResposta({ numero, texto: resposta, transferir, ferramentaUsada, tempoRespostaMs: Date.now() - inicio });
 
   return { resposta, transferir, ferramentaUsada };
+}
+
+function descartar(numero: string, motivo: string, resposta?: string): RespostaDoAtendente {
+  console.log(`Resposta da IA descartada (${numero}): ${motivo}.${resposta ? ` Texto: ${resposta.slice(0, 120)}` : ""}`);
+  return { resposta: null, transferir: false, atendimentoHumano: motivo === "uma pessoa assumiu a conversa", descartada: motivo };
 }
 
 // --- Assunto da conversa -----------------------------------------------------------------------

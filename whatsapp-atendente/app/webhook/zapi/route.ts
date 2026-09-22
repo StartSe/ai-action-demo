@@ -8,15 +8,17 @@
 // nunca para a resposta: quem está tentando adivinhar a chave não pode saber em que passo errou.
 //
 // Formatos conferidos na documentação oficial em 17/09/2026 (https://developer.z-api.io/webhooks):
-//   ReceivedCallback     { instanceId, phone, fromMe, isGroup, isNewsletter, senderName, text: { message } }
+//   ReceivedCallback     { instanceId, messageId, phone, fromMe, isGroup, isNewsletter, isEdit, waitingMessage,
+//                          senderName, text: { message } }  (campos reconferidos em 22/09/2026, página
+//                          "Exemplos de retorno de Ao receber")
 //   ConnectedCallback    { instanceId, type, connected, phone, momment }
 //   DisconnectedCallback { instanceId, type, disconnected, error, momment }
 import { timingSafeEqual } from "node:crypto";
 import { aiEnabled } from "@/lib/ai";
-import { classificarEmSegundoPlano, responder } from "@/lib/atendente";
-import { limparTestesSeConfigurado } from "@/lib/conversas";
+import { limparTestesSeConfigurado, registrarMensagemCliente } from "@/lib/conversas";
+import { agendarResposta } from "@/lib/rajada";
 import { getConfig } from "@/lib/store";
-import { enviarMensagem, ErroWhatsApp, registrarFalhaEnvio, registrarRecebida } from "@/lib/whatsapp";
+import { registrarRecebida } from "@/lib/whatsapp";
 import { gravarConexao } from "@/lib/zapi";
 
 export const dynamic = "force-dynamic";
@@ -24,11 +26,14 @@ export const dynamic = "force-dynamic";
 interface AvisoZapi {
   type?: string;
   instanceId?: string;
+  messageId?: string;
   phone?: string;
   fromMe?: boolean;
   isGroup?: boolean;
   isNewsletter?: boolean;
   isStatusReply?: boolean;
+  isEdit?: boolean;
+  waitingMessage?: boolean;
   senderName?: string;
   text?: { message?: string };
   connected?: boolean;
@@ -92,8 +97,18 @@ async function processarMensagem(aviso: AvisoZapi) {
   if (aviso.fromMe || aviso.isGroup || aviso.isNewsletter || aviso.isStatusReply) return;
 
   const de = aviso.phone;
-  const texto = aviso.text?.message?.trim();
   if (!de) return;
+  // Edição de uma mensagem já respondida e o aviso de "aguardando a mensagem" (o conteúdo ainda não
+  // chegou ao aparelho) não são mensagens novas: responder a eles seria responder duas vezes.
+  if (aviso.isEdit) {
+    console.log(`Aviso da z-api ignorado (mensagem editada), de ${de}, id ${aviso.messageId ?? "?"}.`);
+    return;
+  }
+  if (aviso.waitingMessage) {
+    console.log(`Aviso da z-api ignorado (aguardando a mensagem chegar), de ${de}, id ${aviso.messageId ?? "?"}.`);
+    return;
+  }
+  const texto = aviso.text?.message?.trim();
   if (!texto) {
     // Áudio, imagem, documento, localização: fora do escopo deste app. Fica no log para a equipe
     // técnica conseguir explicar por que aquele cliente não recebeu resposta.
@@ -104,19 +119,16 @@ async function processarMensagem(aviso: AvisoZapi) {
   // Registrado antes de qualquer processamento: "chegou mensagem do número real" é o que o cartão de
   // diagnóstico precisa saber, mesmo que a resposta falhe logo depois.
   registrarRecebida(de);
-  const { resposta } = await responder({ numero: de, texto, origem: "whatsapp", nome: aviso.senderName });
-  // Conversa assumida por uma pessoa: a mensagem foi guardada, mas quem responde é ela.
-  if (!resposta) return;
-  try {
-    await enviarMensagem(de, resposta);
-  } catch (err) {
-    // A z-api já recebeu o 200; aqui só sobra registrar o motivo em linguagem de negócio, para
-    // "Dados para a equipe técnica" conseguir explicar por que o cliente não recebeu resposta.
-    const mensagem = err instanceof ErroWhatsApp ? err.message : "Não foi possível enviar a resposta pelo número da empresa.";
-    if (!(err instanceof ErroWhatsApp)) console.error("Falha inesperada ao responder pelo WhatsApp:", err);
-    registrarFalhaEnvio(mensagem);
+  // A mensagem é gravada na hora; a resposta espera a janela de rajada (lib/rajada.ts): o mesmo aviso
+  // entregue duas vezes pela z-api vira UMA mensagem (`messageId`), e três mensagens seguidas viram
+  // UMA resposta.
+  const conversa = registrarMensagemCliente({ numero: de, texto, origem: "whatsapp", nome: aviso.senderName, idExterno: aviso.messageId });
+  if (conversa.duplicada) {
+    console.log(`Aviso da z-api repetido ignorado, de ${de}, id ${aviso.messageId}.`);
+    return;
   }
-  // Depois de a resposta sair: o assunto da conversa, para os relatórios. Só na primeira resposta de
-  // cada conversa, e sem ninguém esperar por ela (lib/atendente.ts).
-  classificarEmSegundoPlano(de);
+  // Conversa assumida por uma pessoa: a mensagem foi guardada (e contada como não lida), mas quem
+  // responde é ela — a IA nem entra na fila.
+  if (conversa.status === "humano") return;
+  agendarResposta(de, "whatsapp");
 }

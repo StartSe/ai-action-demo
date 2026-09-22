@@ -9,7 +9,9 @@
 //   GET  status                     → { connected, error, smartphoneConnected }
 //   GET  qr-code/image              → { value: "data:image/png;base64,..." } (ou { challenge } quando o
 //                                      aparelho exige chave de acesso; aqui isso conta como "sem código")
-//   POST send-text  { phone, message }        → { zaapId, messageId, id }
+//   POST send-text  { phone, message, delayTyping }  → { zaapId, messageId, id }
+//                                     (`delayTyping`: segundos de "Digitando..." antes de enviar, 1 a 15;
+//                                      reconferido em 22/09/2026 em /message/send-text)
 //   GET  disconnect                 → { value: true }
 //   GET  restart                    → { value: true }
 //   PUT  update-webhook-received     { value }  → { value: true }
@@ -207,9 +209,18 @@ export async function qrCode(): Promise<string | null> {
   return valor.startsWith("data:") ? valor : `data:image/png;base64,${valor}`;
 }
 
+/**
+ * Segundos de "Digitando..." que o cliente vê antes da resposta chegar: proporcional ao tamanho do
+ * texto, entre 1 s e 3 s. Uma resposta que aparece no mesmo instante da pergunta denuncia o robô; três
+ * segundos é o teto para não parecer que ninguém está lá.
+ */
+export function segundosDigitando(texto: string): number {
+  return Math.min(3, Math.max(1, Math.ceil(texto.length / 80)));
+}
+
 /** Manda a resposta do atendente pelo número real. Lança ErroWhatsApp já traduzido. */
 export async function enviarTexto(para: string, texto: string): Promise<void> {
-  const dados = await chamar("send-text", { metodo: "POST", corpo: { phone: soDigitos(para), message: texto } });
+  const dados = await chamar("send-text", { metodo: "POST", corpo: { phone: soDigitos(para), message: texto, delayTyping: segundosDigitando(texto) } });
   // A z-api às vezes responde 200 com { error: "..." } em vez de um status de erro.
   if (!dados.messageId && !dados.zaapId && typeof dados.error === "string") {
     throw interpretarFalhaZapi(200, dados.error);

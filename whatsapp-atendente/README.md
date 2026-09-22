@@ -59,6 +59,7 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 - O health check responde em `/api/health`.
 - **Este app é publicado no plano `starter` (pago), com um disco de 1 GB em `/app/data`** (já no `render.yaml`). Sem disco, cada reinício do serviço apaga o SQLite: a conexão do número, as conversas e a conta se perdem, o app volta ao modo demonstração e a chave da URL dos avisos da z-api muda — a z-api continua chamando a URL antiga e as mensagens deixam de chegar, sem erro na tela. Para publicar assim mesmo no plano gratuito, defina as chaves como variáveis de ambiente (a tabela abaixo): elas têm prioridade sobre o banco e sobrevivem a qualquer reinício. As conversas, essas, só o disco preserva.
 - **No formulário do Render, "Associate existing services" x "Create all as new services":** a escolha é do painel, não do `render.yaml` — o Render casa o Blueprint com um serviço já existente pelo campo `name`, e não há opção no arquivo para forçar um ou outro. Com o serviço `whatsapp-atendente` já publicado, **associar é o certo**: é assim que o disco é acrescentado e o plano atualizado no mesmo serviço, mantendo o endereço. "Create all as new services" cria um segundo serviço (o Render acrescenta um sufixo ao nome) com outro endereço — só use se quiser mesmo duas instalações. Para publicar dois apps diferentes, cada um tem seu próprio Blueprint (branch `deploy-<app>`), então não há conflito.
+- Mensagens seguidas do mesmo cliente recebem **uma resposta só**: o atendente espera 3 s depois da última mensagem antes de responder ao conjunto, um aviso repetido da z-api não vira mensagem duplicada (dedupe pelo `messageId`), e se alguém da equipe assumir a conversa nesse meio tempo a resposta da IA é descartada (fica só no log). Antes de cada resposta o cliente vê "Digitando..." por 1 a 3 s, proporcional ao tamanho do texto (`delayTyping` da z-api).
 - Os três avisos da z-api (mensagem recebida, número conectado, número desconectado) são cadastrados sozinhos: ao salvar as credenciais em `/setup` e, depois disso, sempre que o endereço público ou a chave da URL mudar (`garantirWebhooks`, conferido a cada leitura do estado da conexão). Nunca é preciso colar endereço no painel da z-api.
 
 ## Variáveis de ambiente (opcionais)
@@ -128,6 +129,7 @@ components/setup.tsx                      tela de configuração inicial (camada
 lib/ai.ts                                 cliente OpenRouter (askText, askJSON), chave via lib/store
 lib/atendente.ts                          pipeline de resposta: IA ou buscador local, regra de transferência
 lib/conversas.ts                          dono das tabelas `conversas` e `mensagens` (node:sqlite)
+lib/rajada.ts                             espera de 3 s para responder uma rajada de mensagens de uma vez
 lib/metricas.ts                           fonte única dos números de Início e Relatórios
 lib/zapi.ts                               cliente da z-api: estado, QR Code, envio e cadastro dos avisos
 lib/whatsapp.ts                           despacha entre z-api e Meta, e traduz as falhas da Meta

@@ -1,0 +1,38 @@
+# Ralph Progress Log
+Started: Tue Sep 22 2026
+Rodada: Atendente no WhatsApp 0.3.0 — resiliência, mídia, persona por brief, "por que respondeu assim", memória por contato e painel de atendimento (ralph/whatsapp-atendente-qualidade-ux)
+Fonte: tasks/prd-whatsapp-atendente-qualidade-ux.md (20 histórias em 6 fases; a coluna notes de cada história diz de qual US da PRD ela veio)
+A rodada anterior ("clone-site-agente-sites", 10 histórias, todas concluídas, trabalhada no worktree ../ai-action-demo-clone-site) está em archive/2026-09-22-clone-site-agente-sites/. As rodadas anteriores deste app estão em archive/2026-09-18-whatsapp-atendente-telas/ e archive/2026-09-17-onboarding-erros-conta/. Leia a seção "Codebase Patterns" desses progress.txt e o whatsapp-atendente/CLAUDE.md antes da primeira história.
+Antes de começar: confira a branch (`git branch --show-current`), crie a branch da rodada a partir da main e nunca use `git add -A` (o checkout pode ter alterações de outro app).
+
+---
+
+## Codebase Patterns
+
+- **Camada INFRA não muda nesta rodada** (`lib/ai.ts`, `lib/store.ts`, `lib/modelos.ts`, `lib/setup-comum.ts`, `proxy.ts`, `app/api/status|setup|conta|rotinas|historico`, `app/mcp`, `app/f`). Tudo o que precisar de IA fora de `askText`/`askJSON`/`askVision`/`askWithTools` nasce em módulo próprio do app (`lib/midia.ts`, `lib/persona.ts`, `lib/memoria.ts`), chamando o OpenRouter diretamente como `lib/documentos.ts` faz com embeddings. Divergência de propósito em arquivo INFRA só com entrada em `scripts/padrao-excecoes.json`.
+- **Esquema:** colunas novas via `ALTER TABLE` dentro de `try` (padrão de `passou_por_pessoa` em `lib/conversas.ts`); tabelas novas em módulo próprio com `CREATE TABLE IF NOT EXISTS` na primeira chamada, no mesmo `app.sqlite` por `abrirBanco()`. `lib/conversas.ts` continua o único que escreve em `conversas`/`mensagens`.
+- **Tipos de tela em `lib/types.ts`** (client-safe, sem `node:sqlite`); rótulos de valores do banco em `lib/rotulos.ts` como `Record` completo, nunca ternário na tela.
+- **Jargão:** `scripts/verificar-jargao.mjs` varre `app/page.tsx`, `components/*.tsx` (menos `setup.tsx`) e `lib/*.ts`. Texto de tela fica em `components/` (não em `app/<rota>/page.tsx`) de propósito, para ser varrido. Um componente varrido não pode importar de caminho com "setup" no nome.
+- **Testes sem conta real:** z-api falsa com `http.createServer` + `ZAPI_BASE_URL`; IA falsa trocando `global.fetch` para `openrouter.ai`; `node --test tests/*.test.mts` (`npm test`).
+- **Verificação em navegador:** `npm run build` → `cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/` → `DATA_DIR=/tmp/whatsapp-atendente-dados PORT=<porta livre ≥ 3115> HOSTNAME=127.0.0.1 node --disable-warning=ExperimentalWarning .next/standalone/server.js &` → criar conta por `curl -X POST /api/conta` → capturas desktop 1400x1000 e celular 390 com Playwright/Chromium. A porta 3000 é de outro projeto. O `placeholder` de campos não aparece nas capturas deste Chromium: texto de campo desligado é desenhado, não só `placeholder`.
+- **Barra de endereço é a fonte da verdade das telas** (`history.pushState` + `popstate`, nunca `useSearchParams`); componente que consulta sozinho e avisa a tela de fora guarda a prop de retorno num `ref`.
+
+---
+
+## 2026-09-22 — US-001: Mensagens únicas, rajadas agrupadas e guarda contra corrida
+- `lib/conversas.ts`: coluna `mensagens.id_externo` (CREATE + `ALTER TABLE` em `try` + índice único parcial `WHERE id_externo IS NOT NULL`); `registrarMensagemCliente({ idExterno })` devolve `MensagemClienteRegistrada` (conversa + `mensagemId` + `duplicada`) e ignora em silêncio um id já gravado; novas leituras `mensagensSemResposta(numero)` e `ultimaMensagemDoClienteId(numero)`.
+- `lib/atendente.ts`: `responder()` (simulador/MCP, grava e responde na mesma chamada) passou a delegar para a nova `responderPendente(numero, { config, ultimaMensagemId, comecouEm })`, que responde à sequência inteira do cliente desde a última resposta e confere `podeResponder`/`motivoParaNaoResponder` DUAS vezes (antes da IA e antes de gravar). Retorno tipado `RespostaDoAtendente` (`resposta: null` + `descartada: <motivo>` quando nada sai). Prompt pede "UMA mensagem só" quando há mais de uma pendente.
+- Novo `lib/rajada.ts`: `agendarResposta(numero, origem, { janelaMs })` com `Map` de temporizadores por número, `JANELA_RAJADA_MS = 3000`, proteção para janela que fecha com resposta ainda em andamento (`emAndamento`/`pendenteDepois`), envio por `enviarMensagem` com `registrarFalhaEnvio` no catch e `classificarEmSegundoPlano` depois.
+- `app/webhook/zapi/route.ts` e `app/webhook/route.ts`: gravam e agendam (não chamam mais `responder()`); z-api passa `messageId` e descarta `isEdit`/`waitingMessage` com log; Meta passa `msg.id`.
+- `lib/zapi.ts`: `segundosDigitando()` (1–3 s, `ceil(tamanho/80)`) enviado como `delayTyping` no `send-text` (documentação reconferida em 22/09/2026: segundos, 1 a 15, padrão 0).
+- `tests/rajada.test.mts` (7 testes: dedupe, rajada → um `send-text`, assumir na janela, assumir DURANTE a geração, `podeResponder`, simulador síncrono + repetida por id, `delayTyping`). `npm test` = 13/13.
+- `README.md` (linha do comportamento + `lib/rajada.ts` no mapa) e `CLAUDE.md` (cinco notas 0.3.0/US-001).
+- Verificação: `tsc --noEmit`, `npm run lint` (só o warning pré-existente de `<img>`), `npm run build` ok. Ponta a ponta no standalone (`:3141`, `DATA_DIR=/tmp/wa-dados-us001`, credenciais da z-api por env + `ZAPI_BASE_URL=http://127.0.0.1:3140` apontando para `/tmp/wa-us001/zapi-falsa.mjs`): três avisos em 1 s → UM `send-text` (com `delayTyping: 3` e `Client-Token`), uma mensagem `atendente` depois de três `cliente`; mesmo aviso duas vezes → uma mensagem no banco e log "repetido ignorado"; `POST /assumir` 0,5 s depois do aviso → zero `send-text`, status `humano`, log "descartada: uma pessoa assumiu"; `isEdit`/`waitingMessage` → nenhuma conversa criada, dois logs. Sem tela nova: não há captura.
+- Pré-existentes, NÃO desta história: `verificar-jargao.mjs` aponta "OpenRouter" em `components/Assistente.tsx:645` (arquivo intocado, último commit 8d1c712 na main); `verificar-padrao.sh` sai 1 por divergências em `bussola-ia`, `entrevista-ia`, `simulador-vendas`, `videos-campanha` e `lib/mcp-cliente.ts` deste app (também intocado). Vale resolver na US-020 (verificação final) ou fora do Ralph.
+- **Learnings for future iterations:**
+  - `tsx` não estava em `node_modules` no checkout: `npm ci` antes de `npm test` na primeira iteração de uma máquina.
+  - A z-api falsa em `http.createServer` precisa recortar o caminho depois de `/instances/<id>/token/<tok>/` — são CINCO segmentos antes (`split("/").slice(5)`); com `slice(6)` toda chamada vira caminho vazio e o `send-text` "some" da contagem enquanto o app acha que enviou (o fake devolvia `{ value: true }` e `enviarTexto` só lança quando vem `error`). Quando a contagem der zero sem erro no log do servidor, desconfie do fake antes do app.
+  - `tempoRespostaMs` de uma resposta por rajada inclui a janela de 3 s (é o tempo que o cliente esperou de verdade); no simulador continua sendo medido do `Date.now()` de antes de gravar, com precisão de ms.
+  - Sem `config` salva o standalone responde pela clínica de exemplo: "Oi / preço / limpeza" cai em transferência (`atencao`) e "horário de atendimento" acha o trecho da base. Para um teste ponta a ponta previsível, pergunte algo que esteja na base de exemplo.
+  - Fila em memória + status calculado na leitura: `motivoParaNaoResponder` lê `obterRegistro` (status já efetivo), então "resolvida" por 24 h nunca bloqueia uma resposta a mensagem recém-chegada (a mensagem reabre como `ia` antes).
+---

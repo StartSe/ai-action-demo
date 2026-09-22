@@ -43,6 +43,7 @@ type LinhaMensagem = {
   criado_em: string;
   ferramenta_usada: string | null;
   tempo_resposta_ms: number | null;
+  id_externo: string | null;
 };
 
 // Os dois tipos que saem deste arquivo moram em lib/types.ts (arquivo client-safe, sem node:sqlite):
@@ -78,9 +79,18 @@ function banco() {
       texto TEXT NOT NULL,
       criado_em TEXT NOT NULL DEFAULT (datetime('now')),
       ferramenta_usada TEXT NULL,
-      tempo_resposta_ms INTEGER NULL
+      tempo_resposta_ms INTEGER NULL,
+      id_externo TEXT NULL
     )`);
     d.exec(`CREATE INDEX IF NOT EXISTS mensagens_por_conversa ON mensagens (numero, id)`);
+    // Bancos anteriores à 0.3.0 não têm `id_externo` (o id da mensagem no canal, para o mesmo aviso
+    // entregue duas vezes virar UMA mensagem). ALTER TABLE falha de propósito quando a coluna já existe.
+    try {
+      d.exec(`ALTER TABLE mensagens ADD COLUMN id_externo TEXT NULL`);
+    } catch { /* coluna já existe */ }
+    // Índice único PARCIAL: só as mensagens que vieram de um canal têm id externo; as do simulador,
+    // do MCP e as respostas ficam NULL, e NULL não conta para a unicidade.
+    d.exec(`CREATE UNIQUE INDEX IF NOT EXISTS mensagens_id_externo ON mensagens (id_externo) WHERE id_externo IS NOT NULL`);
     // Bancos criados antes da US-015 não têm a coluna; ALTER TABLE falha de propósito quando ela já existe.
     // A primeira vez recupera o passado pelo que dá para saber: o status atual e as respostas escritas por
     // uma pessoa (padrão de lib/rotinas.ts).
@@ -353,6 +363,7 @@ function inserirMensagem({
   criadoEm,
   ferramentaUsada,
   tempoRespostaMs,
+  idExterno,
 }: {
   numero: string;
   papel: PapelMensagem;
@@ -360,11 +371,17 @@ function inserirMensagem({
   criadoEm?: string;
   ferramentaUsada?: string;
   tempoRespostaMs?: number;
+  idExterno?: string;
 }): number {
   const gravada = banco()
-    .prepare("INSERT INTO mensagens (numero, papel, texto, criado_em, ferramenta_usada, tempo_resposta_ms) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(numero, papel, texto, criadoEm ?? paraTextoDeBanco(), ferramentaUsada ?? null, tempoRespostaMs ?? null);
+    .prepare("INSERT INTO mensagens (numero, papel, texto, criado_em, ferramenta_usada, tempo_resposta_ms, id_externo) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run(numero, papel, texto, criadoEm ?? paraTextoDeBanco(), ferramentaUsada ?? null, tempoRespostaMs ?? null, idExterno ?? null);
   return Number(gravada.lastInsertRowid);
+}
+
+/** A mensagem já gravada com este id do canal, se o mesmo aviso já tiver chegado antes. */
+function mensagemPorIdExterno(idExterno: string): { id: number; numero: string } | undefined {
+  return banco().prepare("SELECT id, numero FROM mensagens WHERE id_externo = ?").get(idExterno) as { id: number; numero: string } | undefined;
 }
 
 /** Cria a conversa se ela ainda não existir e devolve o registro atual. */
@@ -401,10 +418,24 @@ export function garantirConversa({
   return obterRegistro(numero) as ConversaRegistro;
 }
 
+/** O que `registrarMensagemCliente` devolve: a conversa, o id da mensagem e se ela já estava gravada. */
+export type MensagemClienteRegistrada = ConversaRegistro & {
+  /** Id da mensagem gravada (ou da já existente, quando `duplicada`). */
+  mensagemId: number;
+  /**
+   * O mesmo aviso do canal já tinha chegado (mesmo `idExterno`): nada foi gravado e ninguém deve
+   * responder de novo. A z-api reenvia o aviso quando a resposta demora, e a Meta também.
+   */
+  duplicada: boolean;
+};
+
 /**
  * Grava uma mensagem do cliente e devolve o status da conversa depois dela. Uma conversa resolvida
  * reabre como atendida pela IA; uma em atendimento humano continua humana e soma uma não lida (é o
  * que faz a IA não responder, em lib/atendente.ts).
+ *
+ * Com `idExterno` (o id da mensagem no canal), uma mensagem que já exista é ignorada em silêncio: a
+ * conversa volta como está, com `duplicada: true`, sem gravar nada e sem mexer em não lidas ou datas.
  */
 export function registrarMensagemCliente({
   numero,
@@ -412,13 +443,22 @@ export function registrarMensagemCliente({
   origem = "simulador",
   nome,
   em,
+  idExterno,
 }: {
   numero: string;
   texto: string;
   origem?: CanalOrigem;
   nome?: string;
   em?: Date;
-}): ConversaRegistro {
+  idExterno?: string;
+}): MensagemClienteRegistrada {
+  if (idExterno) {
+    const existente = mensagemPorIdExterno(idExterno);
+    if (existente) {
+      const registro = obterRegistro(existente.numero) as ConversaRegistro;
+      return { ...registro, mensagemId: existente.id, duplicada: true };
+    }
+  }
   // A primeira conversa real do WhatsApp aposenta a demonstração, antes de qualquer gravação.
   if (origem === "whatsapp") apagarExemplosNaPrimeiraReal();
   const atual = garantirConversa({ numero, origem, nome, em });
@@ -431,8 +471,31 @@ export function registrarMensagemCliente({
   banco()
     .prepare("UPDATE conversas SET status = ?, nao_lidas = ?, origem = ?, atualizado_em = ? WHERE numero = ?")
     .run(status, naoLidas, origemFinal, quando, numero);
-  inserirMensagem({ numero, papel: "cliente", texto, criadoEm: quando });
-  return obterRegistro(numero) as ConversaRegistro;
+  const mensagemId = inserirMensagem({ numero, papel: "cliente", texto, criadoEm: quando, idExterno });
+  return { ...(obterRegistro(numero) as ConversaRegistro), mensagemId, duplicada: false };
+}
+
+/**
+ * As mensagens do cliente que ainda não receberam resposta: tudo o que ele escreveu depois da última
+ * mensagem do atendente (ou de uma pessoa), da mais antiga para a mais recente. É a "sequência" que a
+ * IA responde de uma vez depois de uma rajada (lib/rajada.ts); vazia quando a última mensagem da
+ * conversa não é do cliente.
+ */
+export function mensagensSemResposta(numero: string): MensagemRegistro[] {
+  const linhas = banco()
+    .prepare(
+      `SELECT * FROM mensagens WHERE numero = ? AND papel = 'cliente'
+         AND id > COALESCE((SELECT MAX(id) FROM mensagens WHERE numero = ? AND papel <> 'cliente'), 0)
+       ORDER BY id`
+    )
+    .all(numero, numero) as LinhaMensagem[];
+  return linhas.map(paraMensagem);
+}
+
+/** Id da última mensagem do cliente nesta conversa; null quando ele nunca escreveu. */
+export function ultimaMensagemDoClienteId(numero: string): number | null {
+  const l = banco().prepare("SELECT id FROM mensagens WHERE numero = ? AND papel = 'cliente' ORDER BY id DESC LIMIT 1").get(numero) as { id: number } | undefined;
+  return l ? Number(l.id) : null;
 }
 
 /** Grava a resposta do atendente virtual: com o marcador de transferência, a conversa passa a precisar de atenção. */
