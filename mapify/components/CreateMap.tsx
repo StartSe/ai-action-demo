@@ -314,7 +314,7 @@ export function CreateMap({
                 <option value="balanced">
                   Equilibrado · Ideias e detalhes
                 </option>
-                <option value="deep">Aprofundado · Mais conexões</option>
+                <option value="deep">Aprofundado · Exemplos e relações</option>
               </select>
             </label>
             <label>
@@ -327,6 +327,12 @@ export function CreateMap({
               />
             </label>
           </div>
+          {detail === "deep" && (
+            <p className="detail-help">
+              Cada ramo é analisado em detalhe, com exemplos e referências da
+              fonte. A geração leva mais tempo e usa mais chamadas de IA.
+            </p>
+          )}
           <ErrorBox error={error} />
           {error.includes("Conecte") && (
             <button className="text-button" onClick={() => onConnect("ai")}>

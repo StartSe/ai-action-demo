@@ -28,6 +28,18 @@ A prévia fica no job do servidor e o navegador consulta o andamento sem requisi
 
 Validação da v1.3.0: testes de contrato com streams simulados, fragmentação UTF-8, cancelamento, respostas incompletas, erros de provedor e persistência de prévias. Testes no navegador usam provedores simulados para verificar a evolução visual antes da conclusão; não medem a latência real do Gemini nem alteram a exigência de créditos do projeto Google.
 
+## Níveis de detalhe (v1.4.0)
+
+- **Essencial:** até 22 tópicos e 2 níveis abaixo do centro, para visão rápida.
+- **Equilibrado:** até 55 tópicos e 3 níveis abaixo do centro, com ideias e exemplos.
+- **Aprofundado:** primeiro organiza de 2 a 7 ramos conforme a fonte; depois relê a fonte integral para detalhar cada ramo em uma chamada dedicada. Até 120 tópicos e 4 níveis abaixo do centro, preservando exemplos, ações, ferramentas, condições e resultados nos labels visíveis. Fontes curtas geram mapas menores, sem preencher cotas artificiais. Cada folha deve referenciar um trecho existente.
+
+O aprofundado faz uma chamada de planejamento e uma por ramo, além da análise Gemini para YouTube. Isso demanda mais tempo e uso do provedor. A fonte completa é enviada a cada chamada, inclusive quando ultrapassa o tamanho usado para resumir fontes nos outros níveis; escolha um modelo com janela de contexto compatível com a sua fonte. O limite geral do job continua em 12 minutos. Falhas ou cancelamentos preservam a prévia, sem salvar o plano como mapa concluído e sem repetir chamadas automaticamente.
+
+Desde o envio, o indicador animado de leitura sinaliza a espera até os primeiros ramos. A animação não representa uma porcentagem concluída. Durante o aprofundamento, o contador mostra apenas ramos efetivamente concluídos. A preferência por movimento reduzido desativa as animações.
+
+Validação: testes automatizados do fluxo completo com provedores simulados, fonte longa sem perda de detalhes, referências, limites, cancelamento e falha após um ramo concluído. A qualidade factual e a cobertura de um vídeo específico ainda dependem da análise recebida e do modelo conectado; os testes de contrato não medem a qualidade de uma resposta real da IA.
+
 ## Executar localmente
 
 Node 22.13+ (ou 24).

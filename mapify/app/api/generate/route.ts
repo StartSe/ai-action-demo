@@ -19,6 +19,8 @@ export async function POST(req: Request) {
     const url = String(form.get("url") || "");
     const file = form.get("file");
     const detail = String(form.get("detail") || "balanced");
+    if (!["brief", "balanced", "deep"].includes(detail))
+      throw new AppError("Escolha um nível de detalhe válido.");
     const focus = String(form.get("focus") || "").slice(0, 1000);
     if (text.length > MAX_CHARACTERS)
       throw new AppError("Use até 160 mil caracteres.");

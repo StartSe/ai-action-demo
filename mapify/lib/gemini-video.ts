@@ -447,7 +447,7 @@ export async function analyzeYouTubeVideo(
             { type: "video", uri: `https://www.youtube.com/watch?v=${id}` },
             {
               type: "text",
-              text: "Organize uma análise para gerar um mapa mental. Informe a duração total em segundos e até 180 trechos em ordem cronológica. Cada trecho deve ter entre 80 e 2400 caracteres, início e fim em segundos dentro da duração do vídeo. Cubra os principais temas em paráfrases detalhadas e fiéis. O título deve ter até 180 caracteres.",
+              text: "Organize uma análise detalhada para gerar um mapa mental. Informe a duração total em segundos e até 180 trechos em ordem cronológica. Cada trecho deve ter entre 80 e 2400 caracteres, início e fim em segundos dentro da duração do vídeo. Registre separadamente cada demonstração, argumento ou mudança de assunto, incluindo o final do vídeo. Para cada demonstração, preserve o pedido, a ação executada, as ferramentas ou objetos usados, o resultado observado e os ajustes solicitados, quando presentes. Preserve nomes próprios, números, formatos de arquivo, comparações, condições e limitações, sem resumir várias ações em uma categoria genérica. Diferencie o que foi demonstrado do que foi apenas afirmado ou imaginado. Inclua informação relevante visível na tela e no áudio; não infira capacidades não demonstradas. Cubra os temas em paráfrases detalhadas e fiéis, sem preencher lacunas com conhecimento externo. O título deve identificar o assunto específico e ter até 180 caracteres.",
             },
           ],
           response_format: {
