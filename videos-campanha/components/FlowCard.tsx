@@ -123,6 +123,7 @@ export type FlowNodeData = Block["data"] & {
   onReview?: () => void;
   onBranch?: () => void;
   onDuplicate?: () => void;
+  onPromptChange?: (prompt: string) => void;
   jobError?: string;
   startedAt?: string;
   locked?: boolean;
@@ -136,15 +137,6 @@ export default function CreativeNode({
   const problem = ["failed", "uncertain", "submitting"].includes(
     data.status || "",
   );
-  const state = loading
-    ? "Gerando"
-    : problem
-      ? "Atenção"
-      : data.dirty
-        ? "Atualizar"
-        : data.asset
-          ? "Pronto"
-          : "Aguardando";
   const model = MODELS.find((m) => m.id === data.model);
   return (
     <article
@@ -163,15 +155,6 @@ export default function CreativeNode({
           <FlowIcon name={data.kind} />
         </span>
         <strong>{data.title}</strong>
-        {data.kind !== "idea" && (
-          <span
-            className={`cf-card-status ${loading ? "is-loading" : problem ? "is-error" : data.asset && !data.dirty ? "is-complete" : ""}`}
-            role="status"
-          >
-            <i />
-            {state}
-          </span>
-        )}
         {!data.readOnly && (
           <FlowCardMenu
             title={data.title}
@@ -184,9 +167,24 @@ export default function CreativeNode({
         )}
       </header>
       {data.kind === "idea" ? (
-        <p className="cf-idea">
-          {data.prompt || "Descreva sua campanha. O que vamos criar?"}
-        </p>
+        data.readOnly ? (
+          <p className="cf-idea">
+            {data.prompt || "Descreva sua campanha. O que vamos criar?"}
+          </p>
+        ) : (
+          <textarea
+            className="cf-idea cf-idea-input nodrag nopan nowheel"
+            aria-label={`Prompt de ${data.title}`}
+            placeholder="Descreva sua campanha. O que vamos criar?"
+            value={data.prompt}
+            maxLength={10000}
+            rows={5}
+            disabled={data.locked}
+            onChange={(e) => data.onPromptChange?.(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          />
+        )
       ) : loading ? (
         <Generating
           kind={data.kind}
@@ -216,46 +214,47 @@ export default function CreativeNode({
           </button>
         </div>
       )}
-      <footer>
-        {!["idea", "output"].includes(data.kind) && (
-          <>
-            <span className="cf-card-model" title={model?.name}>
-              {model?.name}
-            </span>
-            <span>{data.ratio}</span>
+      {data.kind !== "idea" && (
+        <footer>
+          {!["idea", "output"].includes(data.kind) && (
+            <>
+              <span className="cf-card-model" title={model?.name}>
+                {model?.name}
+              </span>
+              <span>{data.ratio}</span>
+              <span>
+                {data.resolution || model?.resolutions[0]}
+                {data.kind === "video" ? ` · ${data.duration}s` : ""}
+              </span>
+            </>
+          )}
+          {data.kind === "output" && (
             <span>
-              {data.resolution || model?.resolutions[0]}
-              {data.kind === "video" ? ` · ${data.duration}s` : ""}
+              {data.asset
+                ? "Pronto para sua campanha"
+                : "Conecte o resultado para entregar"}
             </span>
-          </>
-        )}
-        {data.kind === "idea" && <span>O início de tudo</span>}
-        {data.kind === "output" && (
-          <span>
-            {data.asset
-              ? "Pronto para sua campanha"
-              : "Conecte o resultado para entregar"}
-          </span>
-        )}
-        {!data.readOnly && data.asset && (
-          <a
-            className="cf-card-download nodrag nopan"
-            href={
-              data.asset.url +
-              (data.asset.url.startsWith("/api/flow-assets/")
-                ? "?download=1"
-                : "")
-            }
-            download
-            title="Baixar arquivo"
-            aria-label={`Baixar ${data.title}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <FlowIcon name="download" />
-          </a>
-        )}
-      </footer>
-      {!data.readOnly && !["idea", "output"].includes(data.kind) && (
+          )}
+          {!data.readOnly && data.asset && (
+            <a
+              className="cf-card-download nodrag nopan"
+              href={
+                data.asset.url +
+                (data.asset.url.startsWith("/api/flow-assets/")
+                  ? "?download=1"
+                  : "")
+              }
+              download
+              title="Baixar arquivo"
+              aria-label={`Baixar ${data.title}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <FlowIcon name="download" />
+            </a>
+          )}
+        </footer>
+      )}
+      {!data.readOnly && data.kind !== "idea" && (
         <div className="cf-node-actions">
           {loading ? (
             <button
@@ -281,11 +280,13 @@ export default function CreativeNode({
               }}
             >
               <FlowIcon name="idea" />
-              {data.status === "failed"
-                ? "Tentar novamente"
-                : data.asset
-                  ? "Gerar novamente"
-                  : "Gerar"}
+              {data.kind === "output"
+                ? "Preparar entrega"
+                : data.status === "failed"
+                  ? "Tentar novamente"
+                  : data.asset
+                    ? "Gerar novamente"
+                    : "Gerar"}
             </button>
           )}
         </div>

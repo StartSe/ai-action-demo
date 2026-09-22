@@ -375,13 +375,13 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
     );
   }
 
-  function patch(data: Partial<Block["data"]>) {
+  function patch(data: Partial<Block["data"]>, id = selected) {
     const p = live.current;
-    if (!p || !selected) return;
+    if (!p || !id || runLock.current || uploadLock.current) return;
     change({
       ...p,
       nodes: p.nodes.map((n) =>
-        n.id === selected
+        n.id === id
           ? {
               ...n,
               data: {
@@ -652,7 +652,12 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
   );
   return (
     <div className={`cf-app ${view === "editor" ? "cf-editor-open" : ""}`}>
-      <header className="cf-top">
+      <header className={`cf-top ${view === "editor" ? "cf-top-compact" : ""}`}>
+        {view === "editor" ? (
+          <button className="cf-brand cf-brand-logo" aria-label="Creative Flows — voltar aos projetos" onClick={() => navigate("projects")}>
+            <span><FlowIcon name="idea" width={21} height={21} /></span>
+          </button>
+        ) : <>
         <Link href="/" className="cf-brand">
           <span><FlowIcon name="idea" width={23} height={23} /></span>
           <div>
@@ -681,6 +686,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
           }}>Configurações</button>
         </nav>
         {loaded && !connected && !higgsfieldConnected && <span className="cf-demo-badge">✧ Modo demonstração</span>}
+        </>}
       </header>
       <FlowToasts messages={messages} dismiss={dismiss} />
       {view === "projects" && (
@@ -866,7 +872,8 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                   data: {
                     ...n.data, asset: assetFor(n.data.assetId),
                     locked: busy, onRemove: () => removeBlock(n.id),
-                    onRun: () => { setSelected(n.id); setConfirmRun(n.id); },
+                    onRun: () => { setSelected(n.id); if (n.data.kind === "output") void run(n.id); else setConfirmRun(n.id); },
+                    onPromptChange: (prompt: string) => patch({ prompt }, n.id),
                     onReview: () => setSelected(n.id),
                     onBranch: () => derive(n.id, "branch"),
                     onDuplicate: () => derive(n.id, "duplicate"),
@@ -940,10 +947,6 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                   zoomable
                 />
               </ReactFlow>
-              <div className="cf-canvas-tip">
-                Arraste para organizar · Um ponto de saída pode conectar vários blocos · Duplo clique na
-                linha para remover
-              </div>
               <div className="cf-toolbar" role="toolbar" aria-label="Adicionar etapa">
                 <span className="cf-toolbar-plus" aria-hidden="true"><FlowIcon name="plus" /></span>
                 {(Object.keys(LABELS) as Kind[]).map((k) => (
@@ -1193,22 +1196,6 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                     Remover etapa
                   </button>
                 </fieldset>
-                </div>
-                <div className="cf-inspector-action">                  {node.data.kind !== "idea" && (
-                    <button
-                      disabled={busy || Boolean(nodeIssue) || Boolean(nodeJob && ["pending", "uncertain", "submitting"].includes(nodeJob.status))}
-                      className="cf-primary cf-full"
-                      onClick={() =>
-                        node.data.kind === "output"
-                          ? run(node.id)
-                          : setConfirmRun(node.id)
-                      }
-                    >
-                      {node.data.kind === "output"
-                        ? "Preparar entrega"
-                        : nodeJob?.status === "failed" ? "↻ Tentar novamente" : `✦ Gerar ${LABELS[node.data.kind].toLowerCase()}`}
-                    </button>
-                  )}
                 </div>
               </aside>
             )}

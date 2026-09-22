@@ -1,3 +1,5 @@
+> **Versão 0.3.1 — Creative Flows:** prompt editável no card Ideia, cabeçalho compacto, cards simplificados e vídeo em cover com autoplay e loop. Veja [ajustes e validação](docs/ux-0.3.1.md).
+
 > **Versão 0.3.0 — Creative Flows:** preview público somente para visualização, sidebar flutuante, barra centralizada e ações de duplicar/ramificar nos cards. Veja [comportamento e validação](docs/ux-0.3.0.md).
 
 > **Versão 0.2.0:** escolha de modelos com descrições, carregamento e recuperação de erros, toasts e vídeos com autoplay/loop no bloco. Veja o [mapa de melhorias e validação](docs/ux-0.2.0.md).
