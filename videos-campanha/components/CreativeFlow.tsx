@@ -2,8 +2,13 @@
 /* eslint-disable @next/next/no-img-element -- Assets include user uploads, data URLs and external provider outputs. */
 import Link from "next/link";
 import DeleteConfirmation from "./DeleteConfirmation";
+import Preview from "./FlowPreview";
+import FlowModelPicker from "./FlowModelPicker";
+import { FlowDialog, FlowSkeleton, FlowToasts, useFlowMessages } from "./FlowFeedback";
+import { generationPlan, modelSettings, MODEL_HELP } from "@/lib/flow/experience";
+import { version } from "@/package.json";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useEffectEvent, useId, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -37,53 +42,28 @@ import {
 } from "@/lib/flow/model";
 import type { Job } from "@/lib/flow/store";
 async function api(url: string, init?: RequestInit) {
-  const r = await fetch(url, init);
-  const data = await r.json();
-  if (!r.ok) throw new Error(data.error || "Não foi possível concluir.");
+  let r: Response;
+  try { r = await fetch(url, { ...init, signal: init?.signal ?? AbortSignal.timeout(120000) }); }
+  catch { throw new Error("Não foi possível conectar. Verifique sua conexão e tente novamente."); }
+  let data;
+  try { data = await r.json(); }
+  catch { throw new Error("O servidor não respondeu como esperado. Tente novamente em instantes."); }
+  if (!data || typeof data !== "object") throw new Error("O servidor não respondeu como esperado. Tente novamente em instantes.");
+  if (!r.ok) throw new Error(data.error || "Não foi possível concluir. Tente novamente.");
   return data;
 }
-function Preview({ asset }: { asset?: Asset }) {
-  return asset ? (
-    asset.kind === "video" ? (
-      <video
-        className="nodrag nowheel"
-        controls
-        src={asset.url}
-        preload="metadata"
-      />
-    ) : (
-      <img src={asset.url} alt={asset.title} />
-    )
-  ) : (
-    <div className="cf-empty-media">
-      <span>✧</span>
-      <small>Sua próxima criação começa aqui</small>
-    </div>
-  );
-}
-const PHASES: Partial<Record<Kind, string[]>> = {
-  video: ["Preparando a cena", "Compondo os quadros", "Renderizando o movimento", "Finalizando os detalhes"],
-  image: ["Interpretando o prompt", "Compondo a imagem", "Refinando os detalhes"],
-  transform: ["Lendo a referência", "Aplicando a transformação", "Refinando os detalhes"],
-};
-/* Estado de geração do bloco: substitui o preview enquanto o pedido está na fila.
- * As fases são só ritmo visual (o provedor não informa progresso); o que é real é
- * "Enviando ao modelo" (status "sending") contra "na fila" (status "pending").
- * A barra avança com uma curva de tempo estimada (--cf-eta) e estaciona perto do fim
- * até a resposta chegar — nunca chega a 100% sozinha. */
-const ETA: Partial<Record<Kind, string>> = { video: "150s", image: "35s", transform: "35s" };
-function Generating({ kind, status, asset }: { kind: Kind; status?: string; asset?: Asset }) {
-  const phases = PHASES[kind] ?? PHASES.image!;
-  const [step, setStep] = useState(0);
+function Generating({ kind, status, asset, startedAt }: { kind: Kind; status?: string; asset?: Asset; startedAt?: string }) {
+  const [elapsed, setElapsed] = useState(0);
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   useEffect(() => {
-    const t = setInterval(() => setStep((s) => (s + 1) % phases.length), 4500);
+    const start = startedAt ? Date.parse(startedAt) : Date.now();
+    const t = setInterval(() => setElapsed(Math.max(0, Math.floor((Date.now() - start) / 1000))), 1000);
     return () => clearInterval(t);
-  }, [phases.length]);
-  const title = kind === "video" ? "Gerando seu vídeo…" : kind === "transform" ? "Transformando sua imagem…" : "Gerando sua imagem…";
-  const hint = kind === "video" ? "Isso pode levar alguns minutos. Você será avisado quando estiver pronto." : "Isso pode levar alguns segundos. Você será avisado quando estiver pronto.";
+  }, [startedAt]);
+  const title = status === "sending" ? "Enviando ao modelo…" : kind === "video" ? "Gerando seu vídeo…" : kind === "transform" ? "Transformando sua imagem…" : "Gerando sua imagem…";
+  const hint = elapsed >= 120 ? "Ainda aguardando o resultado. Você não precisa enviar de novo." : "O tempo varia conforme o modelo e a fila. Avisaremos aqui quando terminar.";
   return (
-    <div className="cf-generating" style={{ "--cf-eta": ETA[kind] ?? ETA.image } as CSSProperties}>
+    <div className="cf-generating">
       {asset && (asset.kind === "video" ? <video src={asset.url} muted preload="metadata" aria-hidden="true" /> : <img src={asset.url} alt="" aria-hidden="true" />)}
       <svg className="cf-waves" viewBox="0 0 400 200" preserveAspectRatio="none" aria-hidden="true">
         <defs>
@@ -115,7 +95,8 @@ function Generating({ kind, status, asset }: { kind: Kind; status?: string; asse
           <em /><em /><em />
         </span>
         <strong>{title}</strong>
-        <small key={status === "sending" ? "sending" : step}>{status === "sending" ? "Enviando ao modelo" : phases[step]}</small>
+        <small>{status === "sending" ? "Preparando a solicitação" : "Pedido recebido · aguardando resultado"}</small>
+        <span className="cf-elapsed">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} decorridos</span>
         <span className="cf-progress" aria-hidden="true"><i /></span>
         <em>{hint}</em>
       </div>
@@ -125,7 +106,7 @@ function Generating({ kind, status, asset }: { kind: Kind; status?: string; asse
 function CreativeNode({
   data,
   selected,
-}: NodeProps<Block["data"] & { asset?: Asset; onRemove?: () => void; onCancel?: () => void; locked?: boolean }>) {
+}: NodeProps<Block["data"] & { asset?: Asset; onRemove?: () => void; onCancel?: () => void; onRun?: () => void; onReview?: () => void; onModel?: () => void; jobError?: string; startedAt?: string; locked?: boolean }>) {
   const loading = data.status === "pending" || data.status === "sending";
   const problem = ["failed", "uncertain", "submitting"].includes(data.status || "");
   const state = loading ? "Gerando…" : problem ? "Geração precisa de atenção" : data.dirty ? "Precisa atualizar" : data.asset ? "Concluído" : "Aguardando geração";
@@ -141,7 +122,7 @@ function CreativeNode({
           <span aria-hidden="true">{loading ? "⚙" : problem ? "!" : data.dirty ? "↻" : data.asset ? "✓" : "···"}</span>
         </span>
         {loading ? (
-          <button className="cf-node-cancel nodrag nopan" title="A execução para depois desta geração" onClick={(event) => { event.stopPropagation(); data.onCancel?.(); }}>Cancelar</button>
+          <button className="cf-node-cancel nodrag nopan" title="A execução para depois desta geração" onClick={(event) => { event.stopPropagation(); data.onCancel?.(); }}>Pausar sequência</button>
         ) : (
           <button className="cf-node-delete nodrag nopan" aria-label={`Excluir bloco ${data.title}`} title="Excluir bloco" disabled={data.locked} onClick={(event) => { event.stopPropagation(); data.onRemove?.(); }}>×</button>
         )}
@@ -151,23 +132,19 @@ function CreativeNode({
           {data.prompt || "Descreva sua campanha. O que vamos criar?"}
         </p>
       ) : loading ? (
-        <Generating kind={data.kind} status={data.status} asset={data.asset} />
+        <Generating kind={data.kind} status={data.status} asset={data.asset} startedAt={data.startedAt} />
       ) : (
-        <Preview asset={data.asset} />
+        <Preview asset={data.asset} autoPlay />
       )}
+      {problem && <div className="cf-node-problem"><p>{data.jobError || "Esta geração precisa de atenção."}</p><button className="nodrag nopan" onClick={(e) => { e.stopPropagation(); data.onReview?.(); }}>Ver como resolver</button></div>}
       <footer>
-        <span>
-          {data.kind === "idea"
-            ? "O início de tudo"
-            : data.kind === "output"
-              ? "Pronto para sua campanha"
-              : MODELS.find((m) => m.id === data.model)?.name}
-        </span>
-        <span>
-          {data.kind === "video" ? `${data.duration}s · ` : ""}
-          {data.kind !== "idea" && data.ratio}
-        </span>
+        {["idea", "output"].includes(data.kind) ? <span>{data.kind === "idea" ? "O início de tudo" : data.asset ? "Pronto para sua campanha" : "Conecte o resultado para entregar"}</span> : <button className="nodrag nopan cf-node-model" disabled={data.locked} onClick={(e) => { e.stopPropagation(); data.onModel?.(); }} title="Escolher modelo">{MODELS.find((m) => m.id === data.model)?.name}⌄</button>}
+        {data.kind !== "idea" && <span>{data.kind === "video" ? `${data.duration}s · ` : ""}{data.ratio}</span>}
       </footer>
+      {!["idea", "output"].includes(data.kind) && !loading && <div className="cf-node-actions">
+        <button className="nodrag nopan" disabled={data.locked || ["uncertain", "submitting"].includes(data.status || "")} onClick={(e) => { e.stopPropagation(); data.onRun?.(); }}>{data.status === "failed" ? "↻ Tentar novamente" : data.asset ? "✦ Gerar novamente" : "✦ Gerar"}</button>
+        {data.asset && <a className="nodrag nopan" href={data.asset.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>Abrir ↗</a>}
+      </div>}
       {data.kind !== "output" && (
         <Handle type="source" position={Position.Right} />
       )}
@@ -189,14 +166,21 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
   const [higgsfieldConnected, setHiggsfieldConnected] = useState(false);
   const [connected, setConnected] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { messages, dismiss, notify, setError, setNotice } = useFlowMessages();
+  const [loadError, setLoadError] = useState("");
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [modelPicker, setModelPicker] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const uploadLock = useRef(false);
+  const [trackingIssue, setTrackingIssue] = useState(false);
+  const [sequence, setSequence] = useState<{ index: number; total: number; title: string } | null>(null);
   const [saved, setSaved] = useState("Salvo");
   const [recipes, setRecipes] = useState(false);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [edgeKind, setEdgeKind] = useState<"input" | "context">("input");
-  const [busy, setBusy] = useState(false);
+  const [generating, setBusy] = useState(false);
+  const busy = generating || uploading;
   const [projectJobs, setProjectJobs] = useState<Job[]>([]);
   const [remoteId, setRemoteId] = useState("");
   const [deletion, setDeletion] = useState<{ kind: "project" | "block"; id: string; title: string; projectId: string } | null>(null);
@@ -245,8 +229,10 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
   }, []);
   useEffect(() => {
     mounted.current = true;
+    let active = true;
     Promise.all([api("/api/flows"), api("/api/flow-assets")])
       .then(([p, a]) => {
+        if (!active) return;
         setProjects(p.projects);
         setConnected(p.connected);
         setHiggsfieldConnected(Boolean(p.higgsfieldConnected));
@@ -262,12 +248,13 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
         }
         setLoaded(true);
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => { if (active) setLoadError(e.message); });
     return () => {
+      active = false;
       mounted.current = false;
       stop.current = true;
     };
-  }, [initialProjectId]);
+  }, [initialProjectId, loadAttempt, setError]);
   useEffect(() => {
     if (!current) return;
     const timer = setTimeout(() => {
@@ -277,7 +264,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
       });
     }, 800);
     return () => clearTimeout(timer);
-  }, [current, persist]);
+  }, [current, persist, setError]);
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (saved !== "Salvo ✓" && saved !== "Salvo") {
@@ -313,7 +300,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
     [change],
   );
   const open = async (p: Project) => {
-    if (runLock.current) {
+    if (runLock.current || uploadLock.current) {
       setNotice("Aguarde a geração atual antes de trocar de projeto.");
       return;
     }
@@ -327,13 +314,19 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
     live.current = p;
     setCurrent(p);
     setSelected(null);
+    setProjectJobs([]);
+    setTrackingIssue(false);
     setView("editor");
     window.history.replaceState(null, "", `/projetos/${encodeURIComponent(p.id)}`);
     setTimeout(() => instance?.fitView({ padding: 0.2 }), 80);
+    runLock.current = true;
+    setBusy(true);
+    let jobsLoaded = false;
     try {
       const { jobs } = await api(
         `/api/flow-generate?projectId=${encodeURIComponent(p.id)}`,
       );
+      jobsLoaded = true;
       setProjectJobs(jobs);
       const seen = new Set<string>();
       const pending: Job[] = [];
@@ -342,6 +335,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
         seen.add(j.nodeId);
         if (j.status === "completed" && j.asset) acceptGeneration(j);
         if (j.status === "pending") pending.push(j);
+        if (j.status === "failed") setError(j.error || "Uma geração falhou. Selecione a etapa para tentar novamente.");
         if (["uncertain", "submitting"].includes(j.status))
           setError(
             "Há uma geração sem confirmação. Confira o histórico MuAPI antes de reenviar.",
@@ -351,14 +345,20 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
         runLock.current = true;
         setBusy(true);
         try {
-          await Promise.all(pending.map((j) => poll(j)));
+          const results = await Promise.allSettled(pending.map((j) => poll(j)));
+          const failed = results.find((result) => result.status === "rejected");
+          if (failed?.status === "rejected") throw failed.reason;
         } finally {
           runLock.current = false;
           setBusy(false);
         }
       }
     } catch (e) {
+      if (!jobsLoaded) setTrackingIssue(true);
       setError((e as Error).message);
+    } finally {
+      runLock.current = false;
+      setBusy(false);
     }
   };
   const restoreProject = useEffectEvent((p: Project) => { void open(p); });
@@ -411,6 +411,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
   }
   async function poll(initial: Job): Promise<Asset> {
     let latest = initial;
+    let failures = 0;
     while (mounted.current) {
       const snapshot = latest;
       setProjectJobs((list) => [
@@ -419,6 +420,8 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
       ]);
       if (snapshot.status === "completed" && snapshot.asset) {
         acceptGeneration(snapshot);
+        setTrackingIssue(false);
+        notify(`${snapshot.title}: ${snapshot.kind === "video" ? "vídeo pronto" : "imagem pronta"}.`, "success", { label: "Ver resultado", run: () => { setSelected(snapshot.nodeId); instance?.fitView({ nodes: [{ id: snapshot.nodeId }], padding: 0.6, duration: 300 }); } });
         return snapshot.asset;
       }
       if (["failed", "uncertain", "submitting"].includes(snapshot.status)) {
@@ -438,9 +441,17 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
         );
       }
       await new Promise((r) => setTimeout(r, 3500));
-      latest = (
-        await api(`/api/flow-generate?id=${encodeURIComponent(snapshot.id)}`)
-      ).job;
+      if (!mounted.current) break;
+      try {
+        latest = (await api(`/api/flow-generate?id=${encodeURIComponent(snapshot.id)}`, { signal: AbortSignal.timeout(60000) })).job;
+        failures = 0;
+        setTrackingIssue(false);
+      } catch {
+        if (!mounted.current) break;
+        setTrackingIssue(true);
+        failures++;
+        if (failures >= 3) throw new Error("Não foi possível atualizar o andamento. Sua geração foi preservada. Use Retomar acompanhamento para consultar o resultado.");
+      }
     }
     throw new Error(
       "Acompanhamento interrompido. Reabra o projeto para continuar.",
@@ -524,11 +535,16 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
     }
   }
   async function run(target: string) {
-    if (runLock.current) return;
+    if (runLock.current || uploadLock.current) return;
+    if (live.current) {
+      const plan = generationPlan(live.current, target, assets);
+      if (plan.issue) { setSelected(plan.issue.nodeId); setError(plan.issue.message); setConfirmRun(null); return; }
+    }
     runLock.current = true;
     setBusy(true);
     stop.current = false;
     setError("");
+    setTrackingIssue(false);
     setConfirmRun(null);
     try {
       const p = live.current;
@@ -537,6 +553,8 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
       const ordered = order(p);
       const todo =
         target === "all" ? ordered : ordered.filter((n) => n.id === target);
+      const total = todo.filter((n) => !["idea", "output"].includes(n.data.kind) && !(target === "all" && n.data.assetId && !n.data.dirty)).length;
+      let index = 0;
       for (const original of todo) {
         if (stop.current) break;
         const latest = live.current!;
@@ -563,7 +581,8 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
           continue;
         }
         await persist(latest);
-        setNotice(`Gerando ${n.data.title}…`);
+        setSequence({ index: ++index, total, title: n.data.title });
+        if (index === 1) setNotice("Geração iniciada. Acompanhe o resultado no bloco.");
         setSendingId(n.id);
         const result = await api("/api/flow-generate", {
           method: "POST",
@@ -596,6 +615,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
       setError((e as Error).message);
     } finally {
       setSendingId(null);
+      setSequence(null);
       setBusy(false);
       runLock.current = false;
       if (live.current)
@@ -607,6 +627,9 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
     }
   }
   async function recover(j: Job, requestId?: string) {
+    if (runLock.current || uploadLock.current) return;
+    runLock.current = true;
+    setBusy(true);
     try {
       const result = await api("/api/flow-generate", {
         method: "PATCH",
@@ -635,25 +658,37 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
     }
   }
   async function upload(file?: File) {
-    if (!file) return;
+    if (!file || uploadLock.current || runLock.current) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size === 0 || file.size > 10 * 1024 * 1024) {
+      setError("Envie JPG, PNG ou WebP de até 10 MB.");
+      return;
+    }
+    uploadLock.current = true;
+    setUploading(true);
+    const projectId = live.current?.id;
+    const nodeId = selected;
     try {
       const form = new FormData();
       form.set("file", file);
-      if (current) form.set("projectId", current.id);
-      const { asset } = await api("/api/flow-assets", {
-        method: "POST",
-        body: form,
-      });
+      if (projectId) form.set("projectId", projectId);
+      const { asset } = await api("/api/flow-assets", { method: "POST", body: form });
       setAssets((list) => [asset, ...list]);
-      if (selected && current) attach(asset, selected, current.id);
-      patch({ assetId: asset.id, referenceId: asset.id });
-      setNotice("Imagem adicionada à biblioteca.");
-    } catch (e) {
-      setError((e as Error).message);
-    }
+      const p = live.current;
+      if (nodeId && p && p.id === projectId) {
+        change({ ...p, nodes: p.nodes.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, assetId: n.data.kind === "video" ? n.data.assetId : asset.id, referenceId: asset.id, dirty: n.data.kind === "video", selectionVersion: (n.data.selectionVersion || 0) + 1 } } : n) });
+      }
+      notify("Imagem adicionada à biblioteca.", "success");
+    } catch (e) { setError((e as Error).message); }
+    finally { uploadLock.current = false; setUploading(false); }
+  }
+  async function resumeTracking() {
+    if (runLock.current || !live.current) return;
+    setTrackingIssue(false);
+    setError("");
+    await open(live.current);
   }
   async function navigate(v: "projects" | "assets") {
-    if (runLock.current) {
+    if (runLock.current || uploadLock.current) {
       setNotice("Aguarde a geração atual antes de sair do fluxo.");
       return;
     }
@@ -690,6 +725,11 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
   const references = current && node ? referencePlan(current, node.id) : [];
   const model = MODELS.find((m) => m.id === node?.data.model);
   const assetFor = (id?: string) => assets.find((a) => a.id === id);
+  const plan = current && confirmRun ? generationPlan(current, confirmRun, assets) : null;
+  const nodeJob = projectJobs.find((j) => j.nodeId === node?.id);
+  const unsettled = projectJobs.some((j, i) => projectJobs.findIndex((other) => other.nodeId === j.nodeId) === i && ["pending", "uncertain", "submitting"].includes(j.status));
+  const nodeIssue = current && node && !["idea", "output"].includes(node.data.kind) ? generationPlan(current, node.id, assets).issue : null;
+  const visibleAssets = picker ? assets.filter((a) => a.kind === "image") : assets;
   const visibleProjects = projects.filter(
     (p) =>
       (filter === "all" || p.finished === (filter === "done")) &&
@@ -702,7 +742,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
           <span>V</span>
           <div>
             <strong>Vídeos de Campanha</strong>
-            <small>Creative Flow</small>
+            <small>Creative Flow · v{version}</small>
           </div>
         </Link>
         <nav aria-label="Navegação principal">
@@ -727,23 +767,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
         </nav>
         {loaded && !connected && !higgsfieldConnected && <span className="cf-demo-badge">✧ Modo demonstração</span>}
       </header>
-      {(error || notice) && (
-        <div
-          className={`cf-toast ${error ? "error" : ""}`}
-          role={error ? "alert" : "status"}
-        >
-          <span>{error || notice}</span>
-          <button
-            aria-label="Fechar mensagem"
-            onClick={() => {
-              setError("");
-              setNotice("");
-            }}
-          >
-            ×
-          </button>
-        </div>
-      )}
+      <FlowToasts messages={messages} dismiss={dismiss} />
       {view === "projects" && (
         <main className="cf-home">
           <div className="cf-heading">
@@ -752,7 +776,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
               <h1>Seu próximo grande criativo.</h1>
               <p>Crie, conecte e transforme ideias em imagens e vídeos.</p>
             </div>
-            <button className="cf-primary" onClick={() => setRecipes(true)}>
+            <button className="cf-primary" disabled={!loaded} onClick={() => setRecipes(true)}>
               ＋ Novo projeto
             </button>
           </div>
@@ -765,6 +789,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
             {RECIPES.slice(1, 4).map((r) => (
               <button
                 key={r.id}
+                disabled={!loaded}
                 onClick={() => {
                   open(recipe(r.id));
                 }}
@@ -802,8 +827,8 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
               </button>
             ))}
           </div>
-          {!loaded ? (
-            <p>Carregando projetos…</p>
+          {loadError ? <div className="cf-load-error" role="alert"><h2>Não foi possível carregar seus projetos.</h2><p>{loadError}</p><button className="cf-primary" onClick={() => { setLoadError(""); setLoadAttempt((n) => n + 1); }}>Tentar carregar novamente</button></div> : !loaded ? (
+            <FlowSkeleton label="Carregando projetos e biblioteca…" />
           ) : (
             <div className="cf-project-grid">
               <button className="cf-new-card" onClick={() => setRecipes(true)}>
@@ -818,7 +843,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                     <button onClick={() => open(p)}>
                       <div className="cf-project-cover">
                         {own[0] ? (
-                          <Preview asset={own[0]} />
+                          <Preview asset={own[0]} interactive={false} />
                         ) : (
                           <div className="cf-cover-flow">
                             <i>✧</i>
@@ -867,6 +892,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
               })}
             </div>
           )}
+          {loaded && projects.length > 0 && visibleProjects.length === 0 && <p className="cf-no-results">Nenhum projeto encontrado. <button onClick={() => { setQuery(""); setFilter("all"); }}>Limpar filtros</button></p>}
           <Link className="cf-legacy" href="/briefing">
             Abrir gerador de conceitos e campanhas anteriores ↗
           </Link>
@@ -895,12 +921,12 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
             <button disabled={busy} onClick={() => void shareProject(current)} title="Copiar link do projeto">Compartilhar ↗</button>
             <button
               className="cf-primary"
-              disabled={busy}
+              disabled={busy || unsettled}
               onClick={() => setConfirmRun("all")}
             >
-              ▷ {busy ? "Gerando…" : "Gerar tudo"}
+              ▷ {uploading ? "Enviando imagem…" : generating ? "Gerando…" : "Gerar tudo"}
             </button>
-            {busy && (
+            {generating && (
               <button
                 onClick={() => {
                   stop.current = true;
@@ -911,6 +937,10 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
               </button>
             )}
           </div>
+          {(generating || trackingIssue || unsettled || uploading) && <div className={`cf-run-status ${trackingIssue ? "has-issue" : ""}`} role="status">
+            <span>{uploading ? "Enviando imagem…" : trackingIssue ? generating ? "Conexão interrompida. Tentando atualizar o andamento…" : "Acompanhamento interrompido. A geração já enviada foi preservada." : generating ? sequence ? `Etapa ${sequence.index} de ${sequence.total} · ${sequence.title}` : "Acompanhando geração em andamento…" : "Há uma geração aguardando confirmação. Selecione o bloco para verificar."}</span>
+            {!generating && (trackingIssue || projectJobs.some((j) => j.status === "pending")) && <button onClick={() => void resumeTracking()}>Retomar acompanhamento</button>}
+          </div>}
           <div className="cf-editor-body">
             <div className="cf-canvas">
               <ReactFlow
@@ -921,8 +951,13 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                   data: {
                     ...n.data, asset: assetFor(n.data.assetId),
                     locked: busy, onRemove: () => removeBlock(n.id),
+                    onRun: () => { setSelected(n.id); setConfirmRun(n.id); },
+                    onReview: () => setSelected(n.id),
+                    onModel: () => { setSelected(n.id); setModelPicker(true); },
+                    startedAt: projectJobs.find((j) => j.nodeId === n.id)?.createdAt,
+                    jobError: projectJobs.find((j) => j.nodeId === n.id)?.error,
                     onCancel: () => { stop.current = true; setNotice("A execução vai parar após a geração atual."); },
-                    status: sendingId === n.id ? "sending" : projectJobs.find((j) => j.nodeId === n.id)?.status === "pending" ? "pending" : n.data.status,
+                    status: sendingId === n.id ? "sending" : (() => { const j = projectJobs.find((j) => j.nodeId === n.id); return j && ["pending", "failed", "uncertain", "submitting"].includes(j.status) ? j.status : n.data.status; })(),
                   },
                 }))}
                 edges={current.edges.map((e) => ({
@@ -1055,37 +1090,19 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                   )}
                   {!["idea", "output"].includes(node.data.kind) && (
                     <>
-                      <label>
-                        Modelo
-                        <select
-                          value={node.data.model}
-                          onChange={(e) => {
-                            const m = MODELS.find(
-                              (m) => m.id === e.target.value,
-                            )!;
-                            patch({
-                              model: m.id,
-                              ratio: m.ratios[0],
-                              resolution: m.resolutions[0],
-                              duration: m.durations[0] || node.data.duration,
-                            });
-                          }}
-                        >
-                          {MODELS.filter((m) =>
-                            m.kinds.includes(node.data.kind),
-                          ).map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                      <div className="cf-model-field">
+                        <span>Modelo</span>
+                        <button className="cf-model-trigger" onClick={() => setModelPicker(true)} aria-haspopup="dialog"><strong>{model?.name || "Escolher modelo"}</strong><span>Trocar ⌄</span></button>
+                        <p>{MODEL_HELP[node.data.model]?.description}</p>
+                        <small>{MODEL_HELP[node.data.model]?.references}</small>
+                      </div>
                       <label>
                         Formato
                         <div className="cf-ratios">
                           {model?.ratios.map((r) => (
                             <button
                               key={r}
+                              aria-pressed={node.data.ratio === r}
                               className={node.data.ratio === r ? "active" : ""}
                               onClick={() => patch({ ratio: r })}
                             >
@@ -1097,7 +1114,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                       {node.data.kind === "video" && (
                         <label>
                           Duração
-                          <select value={node.data.duration} onChange={(e) => patch({ duration: Number(e.target.value) })}>
+                          <select aria-label="Duração" value={node.data.duration} onChange={(e) => patch({ duration: Number(e.target.value) })}>
                             {model?.durations.map((d) => <option key={d} value={d}>{d} segundos</option>)}
                           </select>
                         </label>
@@ -1197,11 +1214,12 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                       )}
                       <div className="cf-upload-actions">
                         <label className="cf-upload">
-                          ↑ Enviar imagem
+                          {uploading ? "Enviando imagem…" : "↑ Enviar imagem"}
                           <input
                             type="file"
+                            disabled={busy}
                             accept="image/png,image/jpeg,image/webp"
-                            onChange={(e) => upload(e.target.files?.[0])}
+                            onChange={(e) => { void upload(e.target.files?.[0]); e.target.value = ""; }}
                           />
                         </label>
                         <button onClick={() => setPicker(true)}>
@@ -1240,8 +1258,11 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                       )}
                     </>
                   )}
+                  {nodeJob?.status === "failed" && <div className="cf-inline-issue" role="status"><strong>A geração não foi concluída.</strong><p>{nodeJob.error || "Revise os parâmetros e tente novamente."}</p></div>}
+                  {nodeIssue && !busy && <p className="cf-inline-issue">{nodeIssue.message}</p>}
                   {node.data.kind !== "idea" && (
                     <button
+                      disabled={Boolean(nodeIssue) || Boolean(nodeJob && ["pending", "uncertain", "submitting"].includes(nodeJob.status))}
                       className="cf-primary cf-full"
                       onClick={() =>
                         node.data.kind === "output"
@@ -1251,13 +1272,13 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                     >
                       {node.data.kind === "output"
                         ? "Preparar entrega"
-                        : `✦ Gerar ${LABELS[node.data.kind].toLowerCase()}`}
+                        : nodeJob?.status === "failed" ? "↻ Tentar novamente" : `✦ Gerar ${LABELS[node.data.kind].toLowerCase()}`}
                     </button>
                   )}
                   {projectJobs
                     .filter(
                       (j) =>
-                        j.nodeId === node.id &&
+                        j.id === nodeJob?.id &&
                         ["uncertain", "submitting"].includes(j.status),
                     )
                     .map((j) => (
@@ -1342,17 +1363,19 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                 <button onClick={() => setPicker(false)}>× Fechar</button>
               ) : (
                 <label className="cf-primary cf-upload">
-                  ↑ Enviar imagem
+                  {uploading ? "Enviando imagem…" : "↑ Enviar imagem"}
                   <input
                     type="file"
+                    disabled={busy}
                     accept="image/png,image/jpeg,image/webp"
-                    onChange={(e) => upload(e.target.files?.[0])}
+                    onChange={(e) => { void upload(e.target.files?.[0]); e.target.value = ""; }}
                   />
                 </label>
               )}
             </div>
+            {!loaded && !loadError && <FlowSkeleton label="Carregando biblioteca…" />}
             <div className="cf-assets-grid">
-              {assets.map((a) => (
+              {visibleAssets.map((a) => (
                 <article className="cf-asset" key={a.id}>
                   <Preview asset={a} />
                   <div>
@@ -1366,8 +1389,8 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                         className="cf-primary"
                         onClick={() => {
                           if (current && selected) {
-                            attach(a, selected, current.id);
-                            patch({ assetId: a.id, referenceId: a.id });
+                            patch({ ...(node?.data.kind !== "video" ? { assetId: a.id } : {}), dirty: node?.data.kind === "video", referenceId: a.id });
+                            notify("Imagem de referência selecionada.", "success");
                           }
                           setPicker(false);
                         }}
@@ -1383,7 +1406,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                 </article>
               ))}
             </div>
-            {!assets.length && (
+            {loaded && !visibleAssets.length && (
               <div className="cf-empty-library">
                 <span>▧</span>
                 <h2>Espaço para suas melhores ideias.</h2>
@@ -1429,46 +1452,28 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
           </section>
         </div>
       )}
+      {modelPicker && node && <FlowModelPicker node={node} onClose={() => setModelPicker(false)} onSelect={(id) => {
+        const settings = modelSettings(node.data, id);
+        patch(settings);
+        setModelPicker(false);
+        const adjusted = settings.ratio !== node.data.ratio || settings.duration !== node.data.duration || settings.resolution !== (node.data.resolution || model?.resolutions[0]);
+        notify(adjusted ? "Modelo alterado. Os parâmetros incompatíveis foram ajustados; revise antes de gerar." : "Modelo alterado. Suas escolhas foram mantidas.");
+      }} />}
       {confirmRun && (
-        <div className="cf-modal-backdrop">
-          <section
-            className="cf-modal cf-confirm"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Confirmar geração"
-          >
-            <h2>
-              {connected
-                ? "Tudo pronto para criar?"
-                : !higgsfieldConnected ? "Modo demonstração" : "Este modelo utiliza MuAPI"}
-            </h2>
-            <p>
-              {connected
-                ? "A geração usa o saldo da sua conta MuAPI. O custo depende do modelo e dos parâmetros. Ao gerar tudo, somente etapas novas ou desatualizadas serão geradas."
-                : !higgsfieldConnected ? "Você pode explorar receitas, montar ramificações e salvar seu fluxo. Para gerar com este modelo, configure a MuAPI em Configurações." : "Sua conta Higgsfield está autorizada, mas seus modelos ainda estão em integração. Para gerar com os modelos atuais do editor, configure também a MuAPI."}
-            </p>
-            {connected && (
-              <p>
-                Mantenha esta aba aberta para executar a sequência. Se sair,
-                reabra o projeto para acompanhar a geração já enviada.
-              </p>
-            )}
+        <FlowDialog title="Confirmar geração" className="cf-confirm" onClose={() => setConfirmRun(null)}>
+            <h2>{connected ? "Tudo pronto para criar?" : "Conecte a MuAPI para gerar"}</h2>
+            {connected ? <>
+              <p>{plan?.steps.length || 0} {plan?.steps.length === 1 ? "geração" : "gerações"} nesta execução. Etapas já atualizadas serão reutilizadas em Gerar tudo.</p>
+              <ul className="cf-generation-summary">{plan?.steps.map((n) => <li key={n.id}><strong>{n.data.title}</strong><span>{MODELS.find((m) => m.id === n.data.model)?.name}</span><small>{n.data.ratio} · {n.data.resolution || MODELS.find((m) => m.id === n.data.model)?.resolutions[0]}{n.data.kind === "video" ? ` · ${n.data.duration}s` : ""}</small></li>)}</ul>
+              <p>A MuAPI cobra pelo modelo e pelos parâmetros escolhidos. O provedor não informa o preço antecipadamente nesta integração.</p>
+              {confirmRun === "all" && <p>Mantenha a aba aberta para executar a sequência. Pausar interrompe as próximas etapas; a geração enviada continua.</p>}
+            </> : <p>{higgsfieldConnected ? "O Higgsfield está autorizado. Os modelos deste editor usam a MuAPI, que precisa ser conectada em Configurações." : "Você pode montar e salvar seu fluxo. Para criar imagens e vídeos, conecte sua conta em Configurações."}</p>}
+            {plan?.issue && <div className="cf-inline-issue" role="alert"><strong>{plan.issue.title}</strong><p>{plan.issue.message}</p><button onClick={() => { setSelected(plan.issue!.nodeId); setConfirmRun(null); }}>Revisar etapa</button></div>}
             <div className="cf-confirm-actions">
-              <button onClick={() => setConfirmRun(null)}>
-                Voltar ao fluxo
-              </button>
-              {connected ? (
-                <button className="cf-primary" onClick={() => run(confirmRun)}>
-                  Confirmar e gerar
-                </button>
-              ) : (
-                <Link className="cf-primary" href="/setup#muapi">
-                  Abrir Configurações ↗
-                </Link>
-              )}
+              <button onClick={() => setConfirmRun(null)}>Voltar ao fluxo</button>
+              {connected ? <button className="cf-primary" disabled={Boolean(plan?.issue) || busy || unsettled} onClick={() => run(confirmRun)}>{plan?.steps.length ? "Confirmar e gerar" : "Atualizar fluxo"}</button> : <button className="cf-primary" onClick={async () => { try { if (live.current) await persist(live.current); router.push("/setup#muapi"); } catch (e) { setError((e as Error).message); } }}>Abrir Configurações ↗</button>}
             </div>
-          </section>
-        </div>
+        </FlowDialog>
       )}
       {deletion && <DeleteConfirmation kind={deletion.kind} title={deletion.title} onCancel={() => setDeletion(null)} onConfirm={confirmDeletion} />}
     </div>

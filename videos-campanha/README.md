@@ -1,3 +1,5 @@
+> **Versão 0.2.0:** escolha de modelos com descrições, carregamento e recuperação de erros, toasts e vídeos com autoplay/loop no bloco. Veja o [mapa de melhorias e validação](docs/ux-0.2.0.md).
+
 > **Creative Flow:** a página inicial agora usa projetos com blocos conectáveis, receitas e biblioteca global de assets. Consulte [uso, arquitetura e validação](docs/creative-flow.md). O fluxo de briefing descrito abaixo permanece em `/briefing`.
 
 # Vídeos de Campanha

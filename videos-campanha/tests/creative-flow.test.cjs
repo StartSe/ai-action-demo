@@ -606,3 +606,45 @@ test("demonstração termina com qualquer provedor, sem depender do OpenRouter",
     if (originalKey !== undefined) process.env.MUAPI_API_KEY = originalKey;
   }
 });
+
+test("trocar modelo preserva escolhas compatíveis e ajusta somente as incompatíveis", () => {
+  const { modelSettings } = require("../lib/flow/experience.ts");
+  const video = model.block("video", 0);
+  Object.assign(video.data, { ratio: "9:16", resolution: "720p", duration: 8 });
+  assert.deepEqual(modelSettings(video.data, "wan2.2"), { model: "wan2.2", ratio: "9:16", resolution: "720p", duration: 8 });
+  assert.deepEqual(modelSettings(video.data, "kling-v2.1-standard-i2v"), { model: "kling-v2.1-standard-i2v", ratio: "9:16", resolution: "Automática", duration: 5 });
+  assert.throws(() => modelSettings(video.data, "nano-banana-2"), /incompatível/);
+});
+
+test("prévia de geração valida toda a sequência antes de cobrar e não altera o projeto", () => {
+  const { generationPlan } = require("../lib/flow/experience.ts");
+  const p = model.recipe("product");
+  p.nodes[0].data.prompt = "Campanha de verão";
+  const before = structuredClone(p);
+  const plan = generationPlan(p, "all", []);
+  assert.equal(plan.issue, null);
+  assert.deepEqual(plan.steps.map((n) => n.data.kind), ["image", "video"]);
+  assert.deepEqual(p, before);
+  assert.match(generationPlan(p, p.nodes[2].id, []).issue.message, /primeiro/);
+  p.nodes[2].data.model = "kling-v2.1-standard-i2v";
+  p.nodes[2].data.duration = 8;
+  const invalid = generationPlan(p, "all", []);
+  assert.equal(invalid.issue.nodeId, p.nodes[2].id);
+  assert.match(invalid.issue.message, /5 segundos/);
+});
+
+test("prévia bloqueia prompt vazio, excesso de referências e vídeo usado como imagem", () => {
+  const { generationPlan } = require("../lib/flow/experience.ts");
+  const p = model.recipe("product");
+  p.nodes[0].data.prompt = "";
+  p.nodes[1].data.prompt = "";
+  assert.match(generationPlan(p, "all", []).issue.message, /prompt/);
+  p.nodes[0].data.prompt = "Produto de verão";
+  p.nodes[1].data.assetId = "ready";
+  const ready = { id: "ready", kind: "video", url: "https://example.test/video.webm" };
+  assert.match(generationPlan(p, "all", [ready]).issue.message, /apenas imagens/);
+  ready.kind = "image";
+  assert.deepEqual(generationPlan(p, "all", [ready]).steps.map((n) => n.data.kind), ["video"]);
+  Object.assign(p.nodes[2].data, { model: "kling-v2.1-standard-i2v", duration: 5, referenceId: "extra" });
+  assert.match(generationPlan(p, "all", [ready, { ...ready, id: "extra" }]).issue.message, /até 1/);
+});

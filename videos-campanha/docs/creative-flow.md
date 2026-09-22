@@ -13,7 +13,7 @@ A home agora organiza campanhas em projetos visuais. O gerador anterior continua
 7. Gere uma etapa ou **Gerar tudo**. A confirmação informa que a conta do provedor será cobrada. Mantenha a aba aberta para executar a sequência; recarregar interrompe a sequência local, mas reabrir o projeto retoma o acompanhamento das solicitações já enviadas. Depois, Gerar tudo continua as etapas restantes.
 8. Output seleciona o resultado de uma única entrada direta conectada para entrega. Abra/baixe o arquivo pelo painel ou pela biblioteca global.
 
-Cada bloco mostra uma engrenagem durante o envio/geração e um check verde quando o asset está pronto. Resultados desatualizados mostram ↻; falhas conhecidas mostram um alerta.
+Cada bloco mostra o envio ou a espera pelo resultado com tempo decorrido, e um check verde quando o asset está pronto. O vídeo pronto toca automaticamente em loop, sem som, com controles para pausar e ouvir. A preferência de reduzir movimento desliga o autoplay. Resultados desatualizados mostram ↻; falhas conhecidas mostram um alerta.
 
 Uma imagem pode alimentar várias ramificações. Selecione a imagem e clique em **Criar ramificação de vídeo** para cada alternativa, ou arraste o mesmo ponto de saída até vários destinos. Os novos blocos são posicionados sem sobreposição e cada um tem seu próprio modelo. Gerar tudo percorre as ramificações em sequência e reutiliza imagens prontas.
 

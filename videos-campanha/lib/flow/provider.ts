@@ -2,7 +2,8 @@ import { readFile } from "node:fs/promises";
 import { assetPath } from "./media";
 import { assets } from "./store";
 import { getConfig } from "../store";
-import { MODELS, type Block } from "./model";
+import { type Block } from "./model";
+import { validateSettings } from "./experience";
 export class MuapiRejected extends Error {}
 const BASE = "https://api.muapi.ai/api/v1";
 export async function muapi(
@@ -63,22 +64,7 @@ export async function mediaUrl(url: string) {
   return result.url;
 }
 export function payload(node: Block, prompt: string, images: string[]) {
-  const m = MODELS.find(
-    (m) => m.id === node.data.model && m.kinds.includes(node.data.kind),
-  );
-  if (!m) throw new Error("Modelo incompatível com esta etapa.");
-  if (!m.ratios.includes(node.data.ratio))
-    throw new Error("Formato não suportado pelo modelo.");
-  if (images.length > m.maxImages)
-    throw new Error(
-      `Este modelo aceita até ${m.maxImages} imagens. Desmarque referências no contexto.`,
-    );
-  if (node.data.kind === "transform" && !images.length)
-    throw new Error("Conecte ou selecione uma imagem para transformar.");
-  if (node.data.resolution && !m.resolutions.includes(node.data.resolution))
-    throw new Error("Resolução não suportada pelo modelo.");
-  if (node.data.kind === "video" && !m.durations.includes(node.data.duration))
-    throw new Error(`Este modelo aceita vídeos de ${m.durations.join(", ")} segundos.`);
+  validateSettings(node, images.length);
   if (node.data.model === "kling-v2.1-standard-i2v") {
     if (!images.length) throw new Error("Conecte uma imagem para gerar com Kling.");
     return {
