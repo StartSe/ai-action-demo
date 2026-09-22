@@ -28,12 +28,26 @@ describe("indicador", () => {
     expect(c.dados.anterior).toBeUndefined(); // sem data não existe período anterior
   });
 
-  it("com coluna de data, compara o último mês com o anterior", () => {
+  it("não compara quando o último período está pela metade", () => {
+    // O arquivo vai de 15/01 a 05/03: março só tem cinco dias. Comparar esse pedaço com fevereiro
+    // inteiro mede a janela, não o negócio — num recorte real de 30 dias isso deu +2818%.
     const r: Receita = { id: "c1", titulo: "No mês", posicao, tipo: "indicador", coluna: "valor", agregacao: "soma", colunaData: "data", periodo: "mes" };
     const c = calcular(r, dados);
     if (c?.tipo !== "indicador") throw new Error("tipo inesperado");
-    expect(c.dados.valor).toBe(500); // março
-    expect(c.dados.anterior).toBe(700); // fevereiro: 300+400
+    expect(c.dados.valor).toBe(500); // março, o período mais recente
+    expect(c.dados.anterior).toBeUndefined();
+  });
+
+  it("compara quando os dois períodos estão inteiros no arquivo", () => {
+    const meses = lerPlanilha(
+      ["Data;Valor", "01/01/2026;100", "31/01/2026;200", "01/02/2026;300", "28/02/2026;400"].join("\n"),
+      "m.csv",
+    );
+    const r: Receita = { id: "c1", titulo: "No mês", posicao, tipo: "indicador", coluna: "valor", agregacao: "soma", colunaData: "data", periodo: "mes" };
+    const c = calcular(r, meses);
+    if (c?.tipo !== "indicador") throw new Error("tipo inesperado");
+    expect(c.dados.valor).toBe(700); // fevereiro: 300+400
+    expect(c.dados.anterior).toBe(300); // janeiro: 100+200
   });
 
   it("conta linhas sem precisar de coluna numérica", () => {

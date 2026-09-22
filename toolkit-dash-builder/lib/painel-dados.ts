@@ -19,7 +19,7 @@ import {
   SYSTEM_EDITAR_RECEITAS,
   type EdicaoReceitas,
 } from "./refinar-receitas";
-import { validarReceitas, type EspecReceitas, type Receita, type ReceitaSemIdentidade } from "./receita";
+import { validarReceitas, type EspecReceitas, type Periodo, type Receita, type ReceitaSemIdentidade } from "./receita";
 import type { EspecPainel } from "./types";
 
 /**
@@ -127,16 +127,59 @@ function afinidade(coluna: ColunaDados, descricao: string): number {
 
 /** Uma coluna de texto serve de categoria quando repete o bastante para agrupar. */
 function categorias(dados: Dados, descricao = ""): ColunaDados[] {
-  return dados.colunas
+  const candidatas = dados.colunas
     .filter((c) => c.tipo === "texto" && c.distintos >= 2 && c.distintos <= 20 && c.distintos < dados.linhas.length)
-    .sort((a, b) => afinidade(b, descricao) - afinidade(a, descricao) || a.distintos - b.distintos);
+    // Depois da afinidade vem o preenchimento: uma coluna com 40% das células vazias rende um
+    // gráfico dominado por "(sem valor)". Ela só é escolhida quando a pessoa pediu pelo nome.
+    .sort((a, b) => afinidade(b, descricao) - afinidade(a, descricao) || b.preenchidos - a.preenchidos || a.distintos - b.distintos);
+  return semRepetidas(dados, candidatas);
+}
+
+/**
+ * O período que faz a série render: 30 dias agrupados por mês viram dois pontos e nenhum gráfico.
+ * A escolha sai da distância entre a primeira e a última data do arquivo.
+ */
+function periodoDaJanela(dados: Dados, coluna: ColunaDados): Periodo {
+  let min: string | null = null;
+  let max: string | null = null;
+  for (const linha of dados.linhas) {
+    const v = linha[coluna.chave];
+    if (typeof v !== "string" || !/^\d{4}/.test(v)) continue;
+    if (min === null || v < min) min = v;
+    if (max === null || v > max) max = v;
+  }
+  if (!min || !max) return "mes";
+  const dias = (Date.parse(`${max.slice(0, 10)}T00:00:00Z`) - Date.parse(`${min.slice(0, 10)}T00:00:00Z`)) / 86_400_000;
+  if (!Number.isFinite(dias)) return "mes";
+  if (dias <= 62) return "dia";
+  if (dias <= 730) return "mes";
+  if (dias <= 1825) return "trimestre";
+  return "ano";
+}
+
+/**
+ * Duas colunas com exatamente as mesmas células não rendem dois gráficos diferentes. Acontece de
+ * verdade: uma exportação com o cabeçalho "Turma" repetido gerou barra e rosca idênticas, e empurrou
+ * para fora a coluna que a pessoa tinha pedido no texto.
+ */
+function mesmasCelulas(dados: Dados, a: ColunaDados, b: ColunaDados): boolean {
+  if (a.preenchidos !== b.preenchidos || a.distintos !== b.distintos) return false;
+  return dados.linhas.every((l) => l[a.chave] === l[b.chave]);
+}
+
+/** Tira da lista as colunas que repetem o conteúdo de uma anterior. */
+function semRepetidas(dados: Dados, colunas: ColunaDados[]): ColunaDados[] {
+  const saida: ColunaDados[] = [];
+  for (const c of colunas) if (!saida.some((j) => mesmasCelulas(dados, j, c))) saida.push(c);
+  return saida;
 }
 
 /** Colunas numéricas que valem um indicador: citada no pedido primeiro, depois dinheiro. */
 function medidas(dados: Dados, descricao = ""): ColunaDados[] {
-  return dados.colunas
+  const candidatas = dados.colunas
     .filter((c) => c.tipo === "numero" && c.preenchidos > 0)
     .sort((a, b) => afinidade(b, descricao) - afinidade(a, descricao) || Number(Boolean(b.moeda)) - Number(Boolean(a.moeda)));
+  return semRepetidas(dados, candidatas);
 }
 
 /**
@@ -144,23 +187,25 @@ function medidas(dados: Dados, descricao = ""): ColunaDados[] {
  * analista, mas é honesta: todo número sai das linhas do arquivo.
  */
 export function receitasAutomaticas(dados: Dados, descricao: string): EspecReceitas {
-  const datas = dados.colunas.filter((c) => c.tipo === "data");
+  const datas = dados.colunas.filter((c) => c.tipo === "data" && c.preenchidos > 0);
   const cats = categorias(dados, descricao);
   const nums = medidas(dados, descricao);
   const principal = nums[0];
   const data = datas[0];
+  const periodo: Periodo | undefined = data ? periodoDaJanela(dados, data) : undefined;
+  const rotuloPeriodo = periodo === "dia" ? " no dia" : periodo === "trimestre" ? " no trimestre" : periodo === "ano" ? " no ano" : " no mês";
   const componentes: ReceitaSemIdentidade[] = [];
   const nomeArquivo = dados.nome.replace(/\.[^.]+$/, "");
 
   // Indicadores. Com coluna de data o cartão mostra o ÚLTIMO mês (e compara com o anterior), então o
   // título precisa dizer "no mês" — chamar de "Total" o recorte de um mês seria errado na tela.
-  const sufixo = data ? " no mês" : "";
+  const sufixo = data ? rotuloPeriodo : "";
   if (principal) {
-    componentes.push({ tipo: "indicador", titulo: `${principal.rotulo}${sufixo}`.slice(0, 40), coluna: principal.chave, agregacao: principal.percentual ? "media" : "soma", colunaData: data?.chave, periodo: data ? "mes" : undefined });
+    componentes.push({ tipo: "indicador", titulo: `${principal.rotulo}${sufixo}`.slice(0, 40), coluna: principal.chave, agregacao: principal.percentual ? "media" : "soma", colunaData: data?.chave, periodo });
   }
-  componentes.push({ tipo: "indicador", titulo: `Registros${sufixo}`.slice(0, 40), agregacao: "contagem", colunaData: data?.chave, periodo: data ? "mes" : undefined });
+  componentes.push({ tipo: "indicador", titulo: `Registros${sufixo}`.slice(0, 40), agregacao: "contagem", colunaData: data?.chave, periodo });
   if (principal) {
-    componentes.push({ tipo: "indicador", titulo: `${principal.rotulo} médio${sufixo}`.slice(0, 40), coluna: principal.chave, agregacao: "media", colunaData: data?.chave, periodo: data ? "mes" : undefined });
+    componentes.push({ tipo: "indicador", titulo: `${principal.rotulo} médio${sufixo}`.slice(0, 40), coluna: principal.chave, agregacao: "media", colunaData: data?.chave, periodo });
   }
   if (cats[0]) {
     componentes.push({ tipo: "indicador", titulo: `${cats[0].rotulo} distintos`.slice(0, 40), coluna: cats[0].chave, agregacao: "distintos" });
@@ -172,11 +217,12 @@ export function receitasAutomaticas(dados: Dados, descricao: string): EspecRecei
   if (data) {
     componentes.push({
       tipo: "linha",
-      titulo: principal ? `${principal.rotulo} por mês`.slice(0, 40) : "Registros por mês",
+      titulo: (principal ? `${principal.rotulo} por ${periodo === "dia" ? "dia" : periodo === "ano" ? "ano" : periodo === "trimestre" ? "trimestre" : "mês"}` : `Registros por ${periodo === "dia" ? "dia" : "mês"}`).slice(0, 40),
       agruparPor: data.chave,
-      periodo: "mes",
+      periodo,
       coluna: principal?.chave,
       agregacao: principal ? "soma" : "contagem",
+      limite: periodo === "dia" ? 31 : 12,
     });
   }
 

@@ -53,6 +53,41 @@ function balde(iso: string, periodo: Periodo): { chave: string; rotulo: string }
   return { chave: `${ano}-${mes}-${dia}`, rotulo: `${dia}/${mes}` };
 }
 
+/** Primeiro e último dia (AAAA-MM-DD) que o balde cobre. */
+function limitesDoBalde(chave: string, periodo: Periodo): { inicio: string; fim: string } {
+  const ano = Number(chave.slice(0, 4));
+  const ultimoDia = (a: number, m: number) => new Date(Date.UTC(a, m, 0)).getUTCDate();
+  const iso = (a: number, m: number, d: number) => `${a}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  if (periodo === "ano" || chave.length === 4) return { inicio: iso(ano, 1, 1), fim: iso(ano, 12, 31) };
+  if (chave.includes("-T")) {
+    const t = Number(chave.slice(-1));
+    const primeiroMes = (t - 1) * 3 + 1;
+    return { inicio: iso(ano, primeiroMes, 1), fim: iso(ano, primeiroMes + 2, ultimoDia(ano, primeiroMes + 2)) };
+  }
+  const mes = Number(chave.slice(5, 7));
+  if (chave.length === 7) return { inicio: iso(ano, mes, 1), fim: iso(ano, mes, ultimoDia(ano, mes)) };
+  return { inicio: chave, fim: chave };
+}
+
+/** Completa uma data parcial ("2026", "2026-09") para o começo ou o fim do período que ela nomeia. */
+const inicioDe = (iso: string) => (iso.length === 4 ? `${iso}-01-01` : iso.length === 7 ? `${iso}-01` : iso);
+const fimDe = (iso: string) => (iso.length === 4 ? `${iso}-12-31` : iso.length === 7 ? `${iso}-31` : iso);
+
+/** Menor e maior data presentes numa coluna, já normalizadas para AAAA-MM-DD. */
+function intervaloDaColuna(dados: Dados, chave: string): { min: string; max: string } | null {
+  let min: string | null = null;
+  let max: string | null = null;
+  for (const linha of dados.linhas) {
+    const v = linha[chave];
+    if (typeof v !== "string" || !/^\d{4}/.test(v)) continue;
+    const i = inicioDe(v);
+    const f = fimDe(v);
+    if (min === null || i < min) min = i;
+    if (max === null || f > max) max = f;
+  }
+  return min && max ? { min, max } : null;
+}
+
 function comoTexto(v: Celula): string {
   if (v === null || v === undefined || v === "") return SEM_VALOR;
   return String(v);
@@ -164,11 +199,23 @@ export function calcular(receita: Receita, dados: Dados): ComponentePainel | nul
     let valor: number;
     let anterior: number | undefined;
     if (colunaData && colunaData.tipo === "data") {
-      // Compara o último período fechado com o imediatamente anterior.
-      const serie = agrupar(dados, colunaData, receita.coluna, receita.agregacao, receita.periodo ?? "mes", "rotulo");
+      const periodo = receita.periodo ?? "mes";
+      const serie = agrupar(dados, colunaData, receita.coluna, receita.agregacao, periodo, "rotulo");
       if (serie.length === 0) return null;
       valor = serie[serie.length - 1].valor;
-      anterior = serie.length > 1 ? serie[serie.length - 2].valor : undefined;
+      // Só compara baldes que o arquivo cobre por inteiro. Um recorte de 30 dias agrupado por mês
+      // rende dois meses pela metade (23–31/08 contra 01–22/09): a variação daí é artefato da
+      // janela, não do negócio — medido, deu +2818%. Sem os dois completos, o cartão não compara.
+      if (serie.length > 1) {
+        const intervalo = intervaloDaColuna(dados, colunaData.chave);
+        const chaves = [...new Set(dados.linhas.map((l) => (typeof l[colunaData.chave] === "string" ? balde(l[colunaData.chave] as string, periodo)?.chave : null)).filter((c): c is string => Boolean(c)))].sort();
+        const doisUltimos = chaves.slice(-2);
+        const completos = intervalo !== null && doisUltimos.length === 2 && doisUltimos.every((c) => {
+          const { inicio, fim } = limitesDoBalde(c, periodo);
+          return intervalo.min <= inicio && intervalo.max >= fim;
+        });
+        if (completos) anterior = serie[serie.length - 2].valor;
+      }
     } else {
       const valores = dados.linhas.map((l) => (receita.coluna ? l[receita.coluna] : 1));
       valor = duasCasas(aplicar(valores, receita.agregacao, receita.coluna));

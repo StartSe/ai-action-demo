@@ -11,7 +11,9 @@ export const LARGURA_CLASSE: Record<1 | 2 | 3 | 4, string> = {
 };
 
 export const MAXIMO_COMPONENTES = 8;
-export const MAXIMO_PONTOS = 12;
+// 31 e não 12: uma série diária de um mês é o caso mais comum de dado externo, e cortá-la em 12
+// pontos escondia dois terços da janela. Os gráficos SVG desenham 31 pontos sem aperto.
+export const MAXIMO_PONTOS = 31;
 export const MAXIMO_FATIAS = 6;
 export const MAXIMO_LINHAS_TABELA = 10;
 export const MAXIMO_COLUNAS_TABELA = 6;
