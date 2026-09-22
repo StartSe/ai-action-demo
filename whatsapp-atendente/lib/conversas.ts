@@ -49,6 +49,8 @@ type LinhaConversa = {
   passou_por_pessoa: number;
   motivo_transferencia: string | null;
   esperando_desde: string | null;
+  resumo: string | null;
+  resumo_ate_id: number | null;
   criado_em: string;
   atualizado_em: string;
 };
@@ -98,6 +100,8 @@ function banco() {
       passou_por_pessoa INTEGER NOT NULL DEFAULT 0,
       motivo_transferencia TEXT NULL,
       esperando_desde TEXT NULL,
+      resumo TEXT NULL,
+      resumo_ate_id INTEGER NULL,
       criado_em TEXT NOT NULL DEFAULT (datetime('now')),
       atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
@@ -154,6 +158,15 @@ function banco() {
     try {
       d.exec(`ALTER TABLE conversas ADD COLUMN esperando_desde TEXT NULL`);
       d.exec(`UPDATE conversas SET esperando_desde = atualizado_em WHERE status = 'atencao'`);
+    } catch { /* coluna já existe */ }
+    // 0.3.0 (US-011): o resumo do começo de uma conversa longa e até que mensagem ele já cobre
+    // (lib/memoria.ts). Conversas antigas ficam sem resumo e o ganham na primeira vez que passarem do
+    // tamanho do histórico — não há o que recuperar do passado aqui.
+    try {
+      d.exec(`ALTER TABLE conversas ADD COLUMN resumo TEXT NULL`);
+    } catch { /* coluna já existe */ }
+    try {
+      d.exec(`ALTER TABLE conversas ADD COLUMN resumo_ate_id INTEGER NULL`);
     } catch { /* coluna já existe */ }
     criado = true;
   }
@@ -222,6 +235,7 @@ function paraRegistro(l: LinhaConversa, ultimaCliente: string | null): ConversaR
     atualizadoEm: paraIso(l.atualizado_em),
     motivoTransferencia: ehMotivo(l.motivo_transferencia) ? l.motivo_transferencia : null,
     esperandoDesde: l.esperando_desde ? paraIso(l.esperando_desde) : null,
+    resumo: l.resumo?.trim() ? l.resumo : null,
   };
 }
 
@@ -773,6 +787,26 @@ export function atualizarEntrega(idExterno: string, status: Exclude<StatusEntreg
  */
 export function definirAssunto(numero: string, assunto: string): void {
   banco().prepare("UPDATE conversas SET assunto = ? WHERE numero = ?").run(assunto, numero);
+  avisarConversa(numero);
+}
+
+/**
+ * O resumo do começo desta conversa e até que mensagem ele já cobre (lib/memoria.ts o escreve com a
+ * IA). `ateId` é 0 quando ainda não há resumo nenhum: toda mensagem da conversa é "não resumida".
+ */
+export function resumoDaConversa(numero: string): { resumo: string | null; ateId: number } {
+  const l = linha(numero);
+  return { resumo: l?.resumo?.trim() ? l.resumo : null, ateId: Number(l?.resumo_ate_id ?? 0) };
+}
+
+/**
+ * Grava o resumo do começo da conversa. Não encosta em `atualizado_em` (mesma razão de `definirAssunto`
+ * e `marcarLido`: resumir não é novidade na conversa e não pode fazê-la pular para o topo da lista), e
+ * nada o apaga além de apagar a conversa inteira — uma conversa resolvida que o cliente reabre continua
+ * com o que já tinha sido combinado.
+ */
+export function definirResumo(numero: string, resumo: string, ateId: number): void {
+  banco().prepare("UPDATE conversas SET resumo = ?, resumo_ate_id = ? WHERE numero = ?").run(resumo, ateId, numero);
   avisarConversa(numero);
 }
 

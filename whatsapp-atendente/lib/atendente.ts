@@ -18,9 +18,11 @@ import {
   perguntasDoCliente,
   registrarMensagemCliente,
   registrarResposta,
+  resumoDaConversa,
   ultimaMensagemDoClienteId,
 } from "./conversas";
 import { classificarLocal, esperar, respostaLocal, trechoMaisParecido } from "./demo";
+import { FONTE_RESUMO, MENSAGENS_COM_RESUMO } from "./memoria";
 import { processarMidia, temConteudoParaResponder, textoParaIA } from "./midia";
 import { toolsParaAtendente } from "./empresa-mcp";
 import { getConfig } from "./estado";
@@ -255,12 +257,18 @@ function montarFontes({
   pergunta,
   baseConhecimento,
   trechos,
+  resumo,
 }: {
   pergunta: string;
   baseConhecimento: string;
   trechos: { nome: string; numero: number; texto: string }[];
+  /** O resumo do começo da conversa (lib/memoria.ts), quando ele entrou no prompt. */
+  resumo?: string | null;
 }): FonteDaResposta[] {
   const fontes: FonteDaResposta[] = [];
+  // O resumo vem primeiro porque é o mais específico daquela conversa: quem abre a bolha quer saber,
+  // antes de tudo, o que o atendente achava que já tinha sido combinado.
+  if (resumo) fontes.push({ tipo: "resumo", nome: FONTE_RESUMO, trecho: cortar(resumo) });
   // A base vai INTEIRA no prompt, então ela é sempre uma fonte. O trecho mostrado é o MAIS PARECIDO
   // com a pergunta (lib/demo.ts:trechoMaisParecido), não uma afirmação de qual parte o modelo usou —
   // isso ninguém tem como saber, e o que a pessoa precisa é saber onde mexer. Sem nenhum trecho
@@ -425,6 +433,12 @@ export async function responderPendente(
 
 ${documentos}` };
 
+  // O que o atendente lembra do começo desta conversa (lib/memoria.ts). Só existe em conversa longa, e
+  // é escrito em segundo plano depois de uma resposta — nunca aqui, que é o caminho do cliente esperando.
+  const { resumo } = resumoDaConversa(numero);
+  /** O resumo só é fonte quando entrou mesmo no prompt: sem IA, ninguém o leu. */
+  let resumoUsado: string | null = null;
+
   let resposta: string;
   let transferir: boolean;
   let motivo: MotivoTransferencia | null = null;
@@ -440,12 +454,15 @@ ${documentos}` };
     modelo = SEM_IA;
     console.log(`Conversa ${numero}: o cliente mandou só anexo e o atendente não conseguiu entender; respondeu a frase de reserva.`);
   } else if (aiEnabled()) {
-    // historicoRecente já inclui as mensagens recém-gravadas: são as últimas linhas do histórico abaixo.
-    const historico = historicoRecente(numero, MAX_HISTORICO)
+    // Numa conversa longa, o começo já não cabe no histórico: ele vai como resumo (lib/memoria.ts), e
+    // aí bastam as últimas 12 mensagens inteiras. Sem resumo, tudo como antes.
+    const historico = historicoRecente(numero, resumo ? MENSAGENS_COM_RESUMO : MAX_HISTORICO)
       .map((m) => `${m.papel === "cliente" ? "Cliente" : config.atendente}: ${m.texto}`)
       .join("\n");
     const alvo = pendentes.length > 1 ? `às últimas ${pendentes.length} mensagens do cliente, em UMA mensagem só` : "à última mensagem do cliente";
-    const prompt = `${historico}\n\nResponda como ${config.atendente} ${alvo}.`;
+    resumoUsado = resumo;
+    const comeco = resumo ? `Resumo do começo desta conversa: ${resumo}\n\n` : "";
+    const prompt = `${comeco}${historico}\n\nResponda como ${config.atendente} ${alvo}.`;
     let bruta: string;
     let usadas: FerramentaDaResposta[] = [];
     try {
@@ -503,7 +520,7 @@ ${documentos}` };
     // Sem IA, a única fonte é o trecho que a busca local escolheu; a base inteira não foi lida por ninguém.
     fontes: trechoLocal
       ? [{ tipo: "base", nome: FONTE_BASE, trecho: cortar(trechoLocal) }]
-      : montarFontes({ pergunta: texto, baseConhecimento: configSalva.baseConhecimento, trechos }),
+      : montarFontes({ pergunta: texto, baseConhecimento: configSalva.baseConhecimento, trechos, resumo: resumoUsado }),
     ferramentas,
     ...(motivo ? { transferencia: { motivo } } : {}),
     ...(midiaLida(pendentes) ? { midia: midiaLida(pendentes) } : {}),

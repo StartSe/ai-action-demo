@@ -74,6 +74,20 @@ function Conteudo({ conversa, agindo, onResolver, onApagar }: DadosDoContato) {
         <Linha rotulo="Total de mensagens">{formatarNumero(mensagens.length)}</Linha>
       </dl>
 
+      {/* O que o atendente lembra do começo de uma conversa longa (lib/memoria.ts). Recolhido porque é
+          um parágrafo, e só aparece quando existe — conversa curta não tem começo esquecido. Aqui é só
+          leitura: corrigir o que ele lembra é assunto da memória do contato, não deste resumo. */}
+      {conversa.resumo && (
+        <div className="mt-4">
+          <MaisDetalhes titulo="Resumo da conversa">
+            <p className="text-[13px] leading-relaxed text-ink">{conversa.resumo}</p>
+            <p className="text-[12px] text-muted mt-2">
+              O atendente escreve este resumo sozinho quando a conversa fica longa, e o usa para não perder o que foi combinado no começo.
+            </p>
+          </MaisDetalhes>
+        </div>
+      )}
+
       <div className="flex flex-col items-start gap-3 mt-4">
         {conversa.status !== "resolvida" && (
           <button type="button" className="btn-ghost" onClick={onResolver} disabled={agindo}>

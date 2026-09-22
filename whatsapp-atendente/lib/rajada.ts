@@ -16,6 +16,7 @@
  */
 import { classificarEmSegundoPlano, responderPendente } from "./atendente";
 import { marcarEnviada, marcarFalhaEnvio } from "./conversas";
+import { atualizarResumoEmSegundoPlano } from "./memoria";
 import type { CanalOrigem } from "./types";
 import { enviarMensagem, ErroWhatsApp, registrarFalhaEnvio } from "./whatsapp";
 
@@ -59,8 +60,10 @@ async function fecharJanela(numero: string, origem: CanalOrigem, janelaMs: numbe
     const { resposta, descartada, mensagemId } = await responderPendente(numero);
     if (resposta) {
       await enviar(numero, resposta, mensagemId);
-      // Depois de a resposta sair: o assunto da conversa, para os relatórios (lib/atendente.ts).
+      // Depois de a resposta sair: o assunto da conversa, para os relatórios (lib/atendente.ts), e o
+      // resumo do começo de uma conversa longa, que a próxima resposta vai usar (lib/memoria.ts).
       classificarEmSegundoPlano(numero);
+      atualizarResumoEmSegundoPlano(numero);
     } else if (descartada === "chegou mensagem nova do cliente" && !temporizadores.has(numero) && !pendenteDepois.has(numero)) {
       // A mensagem nova chegou sem reagendar (não deveria acontecer, mas a rajada não pode deixar o
       // cliente sem resposta): abre a janela de novo.

@@ -191,7 +191,7 @@
         "Lint e build passam; verificar no navegador (bloco do resumo no painel)"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-011 (Fase 3: memória)"
     },
     {

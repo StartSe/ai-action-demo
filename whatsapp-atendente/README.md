@@ -143,6 +143,7 @@ lib/rajada.ts                             espera de 3 s para responder uma rajad
 lib/eventos.ts                            emissor dos avisos de mudança (quem escreve publica, as telas escutam)
 lib/anexos.ts                             dono da tabela `anexos`: o que o cliente manda que não é texto
 lib/midia.ts                              transcreve o áudio, descreve a foto e lê o documento para a IA
+lib/memoria.ts                            resumo rolante do começo de uma conversa longa
 lib/persona.ts                            monta o atendente a partir do brief (e lê o site, quando informado)
 lib/persona-exemplos.ts                   cinco atendentes prontos (sem IA) e os exemplos do passo 1
 lib/base-modelo.ts                        modelo da base de conhecimento, um por objetivo
@@ -275,6 +276,23 @@ O cartão "O que testar" do passo 2 do Assistente mostra as perguntas da configu
 (preço, prazo, endereço), um pedido fora do que o atendente faz e um cliente pedindo uma pessoa. Os
 dois últimos vêm marcados com "Deve chamar uma pessoa" e, depois de enviados, o cartão diz se ele
 chamou — e se foi pelo motivo certo, comparando com o motivo esperado daquele cenário.
+
+### Conversa longa sem perder o começo
+
+Uma conversa de WhatsApp não termina: o cliente volta no dia seguinte e continua de onde parou. A
+memória de curto prazo do atendente são as últimas 20 mensagens, e numa conversa comprida o começo —
+onde o cliente disse o que queria, para quando e por quanto — cai fora dessa janela.
+
+Passando de 20 mensagens, o app escreve sozinho um **resumo do começo da conversa** (`lib/memoria.ts`,
+guardado na coluna `resumo` de `conversas`, até 600 caracteres): tudo o que está antes das últimas 12
+mensagens vira um parágrafo, e a resposta seguinte vai com o resumo mais essas 12 mensagens inteiras.
+O resumo é reescrito quando há pelo menos 8 mensagens novas ainda não resumidas, sempre mesclando o
+anterior, e sempre **depois** de uma resposta sair — o cliente nunca espera por ele, e uma falha só
+vai para o log. Sem IA conectada nada é resumido.
+
+O texto aparece em "Resumo da conversa", no painel do contato, só para leitura. Marcar a conversa como
+resolvida (ou o cliente reabri-la) não apaga o resumo; apagar a conversa apaga. Quando ele entra na
+resposta, aparece como a primeira fonte do bloco "Por que respondeu assim".
 
 ### Documentos e busca para atendimento
 

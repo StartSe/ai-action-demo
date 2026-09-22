@@ -337,6 +337,11 @@ export interface ConversaCompleta {
   motivoTransferencia: MotivoTransferencia | null;
   /** Desde quando o cliente espera uma pessoa, em ISO; nulo quando ninguém está esperando. */
   esperandoDesde: string | null;
+  /**
+   * O resumo do começo de uma conversa longa (lib/memoria.ts), usado no prompt no lugar das mensagens
+   * mais antigas e mostrado no painel do contato; nulo enquanto a conversa couber inteira no histórico.
+   */
+  resumo: string | null;
   mensagens: MensagemDaConversa[];
 }
 
