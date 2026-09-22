@@ -125,7 +125,7 @@
         "Lint e build passam; verificar no navegador (cartão, geração, painel, versões, aplicar com confirmação; desktop e celular)"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-007 (Fase 2: Assistente com apoio da IA)"
     },
     {

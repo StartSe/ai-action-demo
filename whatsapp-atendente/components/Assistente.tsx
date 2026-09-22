@@ -23,6 +23,7 @@ import {
   type PassoIndicador,
 } from "./ui";
 import { Celular, horaAtual, saudacaoPadrao, type AoSalvarBase, type BolhaChat } from "./Celular";
+import { usePersonaBrief } from "./PersonaBrief";
 import { ConexaoWhatsApp } from "./ConexaoWhatsApp";
 import { formatarTelefone } from "@/lib/telefone";
 import type { RespostaConexao } from "@/app/api/whatsapp/conexao/route";
@@ -31,7 +32,7 @@ import { ehModeloDeBase, modeloDeBase } from "@/lib/base-modelo";
 import { SUGESTOES, configExemplo } from "@/lib/demo";
 import { OBJETIVOS, TONS, rotuloObjetivo, rotuloTom } from "@/lib/rotulos";
 import type { Sugestao } from "@/lib/sugestoes";
-import { MIDIA_PADRAO, type Config, type ConfigMidia } from "@/lib/types";
+import { MIDIA_PADRAO, type Config, type ConfigMidia, type PersonaGerada } from "@/lib/types";
 
 const PASSOS: PassoIndicador[] = [
   { titulo: "Configurar", apoio: "Defina quem é o seu agente" },
@@ -143,6 +144,9 @@ export function Assistente() {
   const [passo, setPasso] = useState(1);
   const [config, setConfig] = useState<Config>(CONFIG_VAZIA);
   const [carregando, setCarregando] = useState(true);
+  // Já existe um atendente configurado? É o que decide se o cartão de descrever o negócio nasce aberto
+  // (primeira vez) ou recolhido (quem só veio ajustar não precisa recomeçar do zero).
+  const [configSalva, setConfigSalva] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erroConfig, setErroConfig] = useState<ErroLido | null>(null);
   const [importando, setImportando] = useState(false);
@@ -196,6 +200,31 @@ export function Assistente() {
     }));
   }
 
+  /**
+   * "Aplicar" do atendente gerado: preenche o formulário e NÃO salva. A saudação gerada fica de fora
+   * porque ainda não é um campo da configuração (ela chega na US-008); até lá ela vive na prévia do
+   * painel de resultado.
+   */
+  function aplicarPersona(persona: PersonaGerada) {
+    setConfig((c) => ({
+      ...c,
+      atendente: persona.atendente,
+      negocio: persona.negocio,
+      objetivo: persona.objetivo,
+      objetivoTexto: persona.objetivo === "outro" ? persona.objetivoTexto ?? "" : "",
+      tom: persona.tom,
+      tomTexto: persona.tom === "personalizado" ? persona.tomTexto ?? "" : "",
+      baseConhecimento: persona.baseConhecimento,
+    }));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  const { Cartao: CartaoPersona, Painel: PainelPersona } = usePersonaBrief({
+    baseAtual: config.baseConhecimento,
+    temConfigSalva: configSalva,
+    onAplicar: aplicarPersona,
+  });
+
   /** 401 com codigo "sem_sessao" significa sessão expirada: a tela de entrar resolve, o ErrorBox não. */
   function sessaoExpirada(r: Response, info: ErroLido) {
     if (r.status !== 401 || info.codigo !== "sem_sessao") return false;
@@ -215,6 +244,7 @@ export function Assistente() {
         return false;
       }
       setConfig(await r.json());
+      setConfigSalva(true);
       return true;
     } catch (e) {
       setErroConfig(await lerErro(e));
@@ -394,6 +424,7 @@ export function Assistente() {
       }
       try {
         const salva = (await fetch("/api/config").then((r) => r.json())) as Config & { salvo?: boolean };
+        setConfigSalva(Boolean(salva.salvo));
         setConfig(salva.salvo ? salva : CONFIG_INICIAL);
       } catch {
         // Sem resposta, o formulário abre com o modelo e a pessoa preenche por cima.
@@ -609,6 +640,7 @@ export function Assistente() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-6 [&>*]:min-w-0">
             <form onSubmit={aoEnviar}>
+              {CartaoPersona}
               <div className="card p-5 mb-3">
                 <Row>
                   <Field label="Nome do atendente" htmlFor="atendenteNome">
@@ -767,6 +799,7 @@ export function Assistente() {
             </form>
 
             <aside className="lg:sticky lg:top-6 self-start">
+              {PainelPersona}
               <div className="card p-5">
                 <h2 className="font-bold text-[15px] mb-3">Seu atendente, do seu jeito</h2>
                 <Celular previa nome={config.atendente} negocio={config.negocio} mensagens={previa} />

@@ -127,6 +127,30 @@ export interface Config {
   fraseSemMidia?: string;
 }
 
+/**
+ * O atendente que a IA propôs a partir de duas frases sobre o negócio (lib/persona.ts). Não é uma
+ * `Config`: é um rascunho para a pessoa revisar no passo 1 do Assistente, com o que foi decidido
+ * escrito em linguagem de negócio. Nada disso é salvo até ela clicar em "Salvar e testar o atendente".
+ */
+export interface PersonaGerada {
+  atendente: string;
+  negocio: string;
+  objetivo: Objetivo;
+  /** O que ele faz, escrito em uma linha; só vem quando `objetivo === "outro"`. */
+  objetivoTexto?: string;
+  tom: Tom;
+  /** Estilo de resposta em uma linha; só vem quando `tom === "personalizado"`. */
+  tomTexto?: string;
+  /** Como o atendente se apresenta, em uma frase (a tela usa na prévia; vira campo na US-008). */
+  saudacao: string;
+  /** A base no formato de lib/base-modelo.ts, com [MARCADORES] só onde o brief não deu o dado. */
+  baseConhecimento: string;
+  /** Três perguntas que um cliente desse negócio faria de verdade. */
+  perguntasSugeridas: string[];
+  /** Três frases curtas dizendo o que foi decidido e por quê ("Tom amigável porque você atende famílias"). */
+  decisoes: string[];
+}
+
 /** Uma conversa como as telas leem: os campos da tabela `conversas` mais o resumo das mensagens. */
 export interface Conversa {
   numero: string;

@@ -108,6 +108,7 @@ app/api/relatorio-diario/route.ts         agenda (ou consulta) a rotina do relat
 app/api/whatsapp/conexao/route.ts         estado da conexão do número e QR Code (?qr=1)
 app/api/whatsapp/webhook-info/route.ts    valores técnicos da conexão, para "Para a equipe técnica"
 app/api/simular/route.ts                  simulador de conversa (celular do passo "Testar")
+app/api/assistente/persona/route.ts       monta o atendente a partir da descrição do negócio (não salva)
 app/api/base/route.ts                     base de respostas aprovadas pela equipe
 app/api/pendentes/route.ts                perguntas sem resposta boa nos últimos dias
 app/api/sugestoes/route.ts                link e fila de sugestões de resposta da equipe
@@ -128,6 +129,7 @@ components/Indicadores.tsx                os quatro números, compartilhados por
 components/GraficoLinhas.tsx              gráfico em SVG desenhado à mão (sem biblioteca)
 components/ExportarRelatorio.tsx          menu "Exportar" e cartão do relatório diário
 components/ConexaoWhatsApp.tsx            cartão "Conectar o WhatsApp": QR Code e estado ao vivo
+components/PersonaBrief.tsx               "Comece descrevendo seu negócio": gera o atendente e aplica no formulário
 components/Celular.tsx                    celular da tela, com as bolhas da conversa de teste
 components/useEventos.ts                  liga as telas no fluxo de avisos, com consulta de reserva de 30 s
 components/ui.tsx                         componentes visuais deste app (camada de produto própria)
@@ -139,6 +141,9 @@ lib/rajada.ts                             espera de 3 s para responder uma rajad
 lib/eventos.ts                            emissor dos avisos de mudança (quem escreve publica, as telas escutam)
 lib/anexos.ts                             dono da tabela `anexos`: o que o cliente manda que não é texto
 lib/midia.ts                              transcreve o áudio, descreve a foto e lê o documento para a IA
+lib/persona.ts                            monta o atendente a partir do brief (e lê o site, quando informado)
+lib/persona-exemplos.ts                   cinco atendentes prontos (sem IA) e os exemplos do passo 1
+lib/base-modelo.ts                        modelo da base de conhecimento, um por objetivo
 lib/transferencia.ts                      motivos de transferência (rótulos, marcador `[TRANSFERIR:motivo]`, frase de reserva)
 lib/metricas.ts                           fonte única dos números de Início e Relatórios
 lib/zapi.ts                               cliente da z-api: estado, QR Code, envio e cadastro dos avisos
@@ -157,6 +162,27 @@ Dockerfile                                build multi-stage com saída standalon
 docker-compose.yml                        sobe este app isolado, com volume para os dados
 render.yaml                               blueprint do Render (runtime image)
 ```
+
+### O atendente montado a partir de duas frases
+
+O passo 1 do Assistente abre com **"Comece descrevendo seu negócio"**: a pessoa escreve o que faz, para
+quem e como atende (ou clica num dos cinco exemplos), opcionalmente informa o endereço do site, e
+recebe o atendente montado — nome, empresa, objetivo, tom, saudação, base de conhecimento e três
+perguntas de cliente para testar. O painel ao lado mostra **o que foi decidido e por quê**, a prévia da
+conversa e a base gerada.
+
+Duas regras valem sempre:
+
+- **Nada de dado inventado.** Preço, prazo, endereço e telefone que não estiverem na descrição (nem no
+  site) continuam como `[MARCADORES]` na base, para serem trocados antes de salvar.
+- **"Aplicar" não salva.** Ele só preenche o formulário; quem salva continua sendo "Salvar e testar o
+  atendente". Aplicar por cima de um texto já escrito pede confirmação, e cada geração vira uma versão
+  numerada (guardada na aba) que pode ser revista no seletor "Versão N · mais recente".
+
+Sem IA conectada, o app devolve **um dos cinco atendentes de exemplo** (clínica odontológica, loja de
+roupas, imobiliária, escola de cursos e restaurante), escolhido pelas palavras da descrição, e diz na
+primeira linha que aquilo é um exemplo. Quando o endereço do site não pode ser lido (fora do ar, muito
+lento, endereço interno), a geração segue com um aviso, usando só a descrição.
 
 ### Áudio, foto e arquivo que o cliente manda
 
