@@ -215,7 +215,7 @@ export function Celular({
         <form onSubmit={submit} className="flex gap-2 p-2.5 bg-[#f0f0f0] border-t border-line shrink-0">
           <input
             className="flex-1 min-w-0 rounded-full border border-line px-3.5 py-2.5 bg-white outline-none focus:border-accent focus:ring-[3px] focus:ring-accent-soft"
-            placeholder="Digite uma pergunta do cliente..."
+            placeholder="Escreva como um cliente"
             autoComplete="off"
             value={valor}
             onChange={(e) => onValorChange?.(e.target.value)}

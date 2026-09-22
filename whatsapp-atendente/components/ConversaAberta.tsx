@@ -864,8 +864,12 @@ export function ConversaAberta({
           </div>
           {/* O seletor é o único lugar da tela que troca quem atende, e por isso ele também diz em que
               pé a conversa está — o chip de status que ficava aqui diria a mesma coisa duas vezes. */}
+          {/* No celular a espera desce para uma linha só dela: ao lado do nome, ela espremia o contato
+              até sobrar "Carlos Me…" — o nome de quem está do outro lado vem antes. */}
           {espera && (
-            <span className={`shrink-0 text-[12.5px] font-semibold ${esperaAtrasada ? "text-danger" : "text-muted"}`}>{espera}</span>
+            <span className={`shrink-0 text-[12.5px] font-semibold max-[560px]:basis-full max-[560px]:order-last ${esperaAtrasada ? "text-danger" : "text-muted"}`}>
+              {espera}
+            </span>
           )}
           <div className="max-[560px]:basis-full">
             <SeletorQuemAtende
@@ -984,7 +988,11 @@ export function ConversaAberta({
                 </p>
               )}
 
-              <div className="relative flex items-end gap-2 max-[560px]:flex-wrap">
+              {/* A linha quebra SEMPRE que não couber: com a coluna da conversa estreita (a grade de
+                  três colunas em 1100 px e o botão longo "Assumir e enviar"), um campo que só encolhe
+                  fica com duas palavras de largura e corta o próprio texto. Com `flex-wrap` e uma
+                  largura mínima no campo, ele desce para a linha de baixo junto com o botão de enviar. */}
+              <div className="relative flex items-end gap-2 flex-wrap">
                 {/* O painel do atalho "/" abre POR CIMA, ancorado nesta linha: ele não pode empurrar o
                     campo para baixo enquanto a pessoa escreve. */}
                 {PainelRapidas}
@@ -1038,7 +1046,7 @@ export function ConversaAberta({
                 <textarea
                   ref={campoRef}
                   rows={1}
-                  className="input !py-2.5 text-[14px] resize-none min-h-[44px] leading-snug flex-1 min-w-0 max-[560px]:order-first max-[560px]:basis-full"
+                  className="input !py-2.5 text-[14px] resize-none min-h-[44px] leading-snug grow shrink min-w-0 min-[561px]:basis-56 max-[560px]:order-first max-[560px]:basis-full"
                   value={texto}
                   aria-label="Escreva a resposta"
                   placeholder="Escreva a resposta"
@@ -1058,7 +1066,7 @@ export function ConversaAberta({
                     }
                   }}
                 />
-                <button type="button" className="btn-primary !w-auto shrink-0 max-[560px]:flex-1" onClick={enviar} disabled={enviando || !texto.trim()}>
+                <button type="button" className="btn-primary !w-auto shrink-0 ml-auto max-[560px]:flex-1" onClick={enviar} disabled={enviando || !texto.trim()}>
                   {enviando ? "Enviando..." : emAtendimento ? "Enviar" : "Assumir e enviar"}
                 </button>
               </div>

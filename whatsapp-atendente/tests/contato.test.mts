@@ -160,6 +160,27 @@ test("editar pela rota marca 'pessoa', e a IA passa a só acrescentar", async ()
   apagarConversa(numero);
 });
 
+test("o mesmo acréscimo duas vezes não é escrito duas vezes na anotação", async () => {
+  const numero = "55110000409";
+  await conversar(numero, 4);
+  await comIA(() => atualizarMemoria(numero));
+  await putContato(pedido({ memoria: "Cliente antigo da casa." }), params(numero));
+
+  acrescimoDaIA = "Vai trazer o irmão na próxima.";
+  await conversar(numero, 4, "depois");
+  const primeira = await comIA(() => atualizarMemoria(numero));
+  assert.match(primeira?.memoria ?? "", /Vai trazer o irmão na próxima\./);
+
+  // A IA repete o mesmo fato (é o que um modelo faz quando a conversa continua no mesmo assunto):
+  // a anotação não pode crescer com a mesma frase a cada atendimento.
+  await conversar(numero, 4, "mais");
+  assert.equal(await comIA(() => atualizarMemoria(numero)), null, "nada de novo: não vale gravar nem mexer na data");
+  const texto = obterContato(numero)?.memoria ?? "";
+  assert.equal(texto.split("Vai trazer o irmão na próxima.").length - 1, 1, "o acréscimo repetido é descartado");
+  assert.match(texto, /^Cliente antigo da casa\./, "e o que a pessoa escreveu continua na frente");
+  apagarConversa(numero);
+});
+
 test("'Apagar memória' zera; apagar a conversa apaga o contato junto", async () => {
   const numero = "55110000405";
   await conversar(numero, 4);

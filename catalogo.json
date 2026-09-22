@@ -126,7 +126,7 @@
         "Vendas"
       ],
       "problema": "Perguntas repetidas chegam fora do horário e ninguém acompanha o que foi respondido.",
-      "ia": "Responde com o conhecimento da empresa, avisa quando o cliente precisa de uma pessoa e mostra o dia em números.",
+      "ia": "Responde texto, áudio e fotos com o conhecimento da empresa, lembra cada cliente, explica cada resposta e avisa quando precisa de uma pessoa.",
       "integracoes": "WhatsApp por QR Code (z-api) ou WhatsApp Cloud API (Meta).",
       "acento": "#0e7c6a",
       "porta": 3006,

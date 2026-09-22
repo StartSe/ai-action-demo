@@ -335,7 +335,7 @@
         "Lint e build passam"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-020 (Fase 5: encerramento)"
     }
   ]

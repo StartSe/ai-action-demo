@@ -12,7 +12,8 @@
     "app/api/setup/oauth/microsoft/callback/route.ts": "idem"
   },
   "whatsapp-atendente": {
-    "app/api/setup/route.ts": "Duas divergências de propósito: (1) depois de salvar as três credenciais da z-api, cadastra sozinho na instância o endereço dos avisos (lib/zapi.ts:configurarWebhooks), tirando do caminho da pessoa copiar esse endereço à mão no painel da z-api; (2) o WhatsApp sai da lista genérica do GET e vai em comCartaoProprio, porque components/ConexaoWhatsApp.tsx já desenha o cartão dele inteiro (QR Code, estado, desconectar) — mesmo desenho que custos-ia usa com Gmail e Outlook"
+    "app/api/setup/route.ts": "Duas divergências de propósito: (1) depois de salvar as três credenciais da z-api, cadastra sozinho na instância o endereço dos avisos (lib/zapi.ts:configurarWebhooks), tirando do caminho da pessoa copiar esse endereço à mão no painel da z-api; (2) o WhatsApp sai da lista genérica do GET e vai em comCartaoProprio, porque components/ConexaoWhatsApp.tsx já desenha o cartão dele inteiro (QR Code, estado, desconectar) — mesmo desenho que custos-ia usa com Gmail e Outlook",
+    "lib/mcp-cliente.ts": "Duas proteções de propósito no atendimento a cliente: (1) tempo limite de 15 s em cada chamada ao servidor MCP, para uma consulta pendurada não segurar a resposta ao cliente; (2) o isError da ferramenta vira erro de verdade, com a instrução de não confirmar a operação nem repetir uma criação sem conferir"
   },
   "build-agentflows": {
     "app/api/setup/route.ts": "Produto focado em fluxos, com login exclusivo ChatGPT; configuração e integrações antigas da suíte desativadas por solicitação explícita.",

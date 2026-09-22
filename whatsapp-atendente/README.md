@@ -2,7 +2,7 @@
 
 Atendente de IA que responde clientes no WhatsApp com base no que a empresa informa, e passa para uma pessoa quando não sabe. Área: Atendimento e Vendas.
 
-Versão atual: **0.2.0**. A versão aparece discretamente no cabeçalho e no final de Configurações, a partir do `package.json`. Veja as mudanças no [histórico de versões](CHANGELOG.md).
+Versão atual: **0.3.0**. A versão aparece discretamente no cabeçalho e no final de Configurações, a partir do `package.json`. Veja as mudanças no [histórico de versões](CHANGELOG.md).
 
 ## O que resolve
 Clientes perguntam as mesmas coisas no WhatsApp fora do horário de atendimento. Este app configura um atendente virtual que responde só com base na sua base de conhecimento (produtos, preços, prazos, políticas e perguntas frequentes) e, quando não sabe a resposta, aplica a regra que você escolher (avisar que uma pessoa vai responder, pedir e-mail e telefone, ou indicar o site). Quem cuida do atendimento acompanha tudo em cinco telas: Início (o dia de hoje), Conversas (assumir e responder pelo número real), Assistente (configurar, testar e conectar), Relatórios e Configurações.
@@ -101,6 +101,10 @@ app/api/conversas/[numero]/assumir/**     assumir o atendimento (a IA para de re
 app/api/conversas/[numero]/devolver/**    devolver o atendimento para a IA
 app/api/conversas/[numero]/resolver/**    marcar a conversa como resolvida
 app/api/conversas/[numero]/notas/**       notas internas: gravar e apagar (o cliente nunca vê)
+app/api/conversas/[numero]/contato/**      o que o atendente lembra deste cliente: salvar e apagar
+app/api/conversas/[numero]/etiquetas/**   as etiquetas desta conversa (a lista inteira, nunca "some uma")
+app/api/conversas/[numero]/sugerir/**     rascunho de resposta da IA para uma pessoa revisar (não envia)
+app/api/conversas/esperando/route.ts      quantas conversas esperam uma pessoa (contador do cabeçalho)
 app/api/conversas/exemplos/route.ts       apagar de uma vez as conversas de exemplo
 app/api/eventos/route.ts                  fluxo de avisos para as telas (text/event-stream)
 app/api/anexos/[id]/route.ts              serve o áudio, a foto ou o arquivo que o cliente mandou
@@ -112,6 +116,9 @@ app/api/whatsapp/webhook-info/route.ts    valores técnicos da conexão, para "P
 app/api/simular/route.ts                  simulador de conversa (celular do passo "Testar")
 app/api/assistente/persona/route.ts       monta o atendente a partir da descrição do negócio (não salva)
 app/api/base/route.ts                     base de respostas aprovadas pela equipe
+app/api/base/arquivo/route.ts             lê um arquivo e acrescenta o texto à base de conhecimento
+app/api/etiquetas/**                      etiquetas da conta: lista com quantos usos e apagar de todas
+app/api/respostas-rapidas/**              as frases de sempre, com atalho: cadastrar, corrigir e apagar
 app/api/pendentes/route.ts                perguntas sem resposta boa nos últimos dias
 app/api/sugestoes/route.ts                link e fila de sugestões de resposta da equipe
 app/api/status/route.ts                   informa ao frontend se a IA e o WhatsApp estão conectados
@@ -178,6 +185,20 @@ docker-compose.yml                        sobe este app isolado, com volume para
 render.yaml                               blueprint do Render (runtime image)
 ```
 
+As tabelas vivem todas no mesmo `app.sqlite` (`DATA_DIR`), cada uma com um único dono:
+
+| Tabela | Dono | O que guarda |
+|---|---|---|
+| `conversas` | `lib/conversas.ts` | uma linha por número: status, não lidas, assunto, `motivo_transferencia`, `esperando_desde`, `passou_por_pessoa`, `etiquetas` (JSON), `resumo` e `resumo_ate_id` |
+| `mensagens` | `lib/conversas.ts` | cada mensagem, com `papel` (cliente, atendente, humano, nota, evento), `id_externo` (o id no canal), `status_entrega`/`erro_envio` e `detalhes` (o "por que respondeu assim") |
+| `anexos` | `lib/anexos.ts` | o que o cliente manda e não é texto, ligado à mensagem pelo id, com a cópia do arquivo e a `transcricao` |
+| `contatos` | `lib/memoria.ts` | o que o atendente lembra de cada cliente, entre conversas (parágrafo, nome informado, e-mail e telefone de retorno) |
+| `respostas_rapidas` | `lib/respostas-rapidas.ts` | as frases de sempre, com o atalho digitado depois da barra |
+| `config` | `lib/store.ts` | a configuração do atendente, as chaves das integrações e as marcas internas do app |
+
+Colunas novas nascem por `ALTER TABLE` dentro de um `try`, então um banco de uma versão anterior
+continua abrindo sem migração manual.
+
 ### O atendente montado a partir de duas frases
 
 O passo 1 do Assistente abre com **"Comece descrevendo seu negócio"**: a pessoa escreve o que faz, para
@@ -228,6 +249,25 @@ Nada é salvo enquanto a pessoa escreve: assim que o formulário fica diferente 
 barra no rodapé diz **"Alterações não salvas"**, com "Descartar" (volta ao salvo) e "Salvar e testar o
 atendente". Sair da página com alterações pendentes pede confirmação, e o passo "Testar" sempre testa o
 que está gravado — nunca o rascunho.
+
+### Tempo real
+
+As telas do painel se atualizam **sozinhas**, sem recarregar e sem ninguém apertar nada: mensagem nova
+do cliente, resposta que saiu, mudança de quem atende, etiqueta, nota, conversa apagada e o estado da
+conexão do número aparecem em segundo ou dois. Quem escreve no banco publica um aviso, o app entrega
+esses avisos por um fluxo aberto (`GET /api/eventos`, um por aba do navegador) e a tela consulta de
+novo só o que mudou — o aviso nunca carrega os dados junto.
+
+Quando o fluxo cai (rede instável, servidor reiniciando), o app tenta reconectar com espera crescente e,
+depois de três falhas, volta a consultar **de 30 em 30 segundos**: nada trava, só fica menos imediato. O
+rodapé da lista de Conversas diz em qual dos dois estados ele está ("Atualizando em tempo real" ou
+"Atualizando a cada 30 segundos"). Com a aba escondida o fluxo fecha sozinho, e reabre ao voltar.
+
+Na conversa, cada mensagem que sai pelo número da empresa mostra em que pé está: relógio (saindo), um
+tique (enviada), dois tiques (entregue no aparelho do cliente) e dois tiques coloridos (lida). Os dois
+últimos dependem dos avisos da z-api; pela Cloud API da Meta a marca para em "enviada". A mensagem que
+não chegou fica com borda vermelha, a explicação da falha e o botão "Tentar de novo", que reenvia o
+mesmo texto na mesma linha da conversa.
 
 ### Áudio, foto e arquivo que o cliente manda
 
