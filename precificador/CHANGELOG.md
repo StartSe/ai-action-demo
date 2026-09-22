@@ -3,6 +3,24 @@
 A versão aparece para quem usa o app no rodapé de **Configurações**, e para quem opera em
 `GET /api/health`. Sobe junto no `package.json` e aqui, na mesma mudança.
 
+## 1.2.1 — 2026-09-21
+
+Endurecimento, sem mudança de comportamento para quem usa o app.
+
+- **Cabeçalhos de segurança em toda resposta** (`next.config.ts`). O app não tinha nenhum: dava para
+  embutir a tela inteira num iframe de outro site, que é como um golpe de clique disfarçado começa.
+  Agora vão `Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options`,
+  `Referrer-Policy`, `Permissions-Policy` e `Strict-Transport-Security`.
+- A CSP não abre exceção para nenhuma origem externa, e isso é possível porque nada na tela vem de
+  fora: a fonte Manrope é baixada no build pelo `next/font`, as ilustrações moram em `public/`, e as
+  chamadas à IA e à busca saem do servidor, nunca do navegador. Sobra `'unsafe-inline'` em
+  `script-src`, que é o preço de não ter nonce — o nonce teria que nascer no `proxy.ts`, que é
+  infraestrutura da suíte e não se altera aqui.
+- **O README ganhou uma seção de Segurança**, porque a parte mais importante não é código: a conta é
+  de quem criar primeiro, e um app publicado sem disco perde a conta a cada publicação — a tela de
+  cadastro reabre para quem tiver o endereço. Estava documentado como perda de dados; é também um
+  risco de alguém tomar o app.
+
 ## 1.2.0 — 2026-09-21
 
 - **O assistente passa a responder sobre os itens que você já tem.** Até aqui a conversa só sabia
