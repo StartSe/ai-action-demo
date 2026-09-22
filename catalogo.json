@@ -514,6 +514,25 @@
       ],
       "independente": true,
       "demo": null
+    },
+    {
+      "id": "follow-up-de-decisao",
+      "nome": "Follow-up de Decisão",
+      "areas": [
+        "Gestão"
+      ],
+      "problema": "A decisão foi tomada na reunião e ninguém sabe se saiu do papel.",
+      "ia": "Cadastra as ações combinadas (ou extrai da ata colada, sem inventar dono nem prazo) e cobra automaticamente quem ainda deve algo antes do prazo vencer.",
+      "integracoes": "IA (OpenRouter) para extrair ações do texto colado. Notificações (e-mail ou Slack) para a cobrança automática, opcional.",
+      "acento": "#2363a4",
+      "porta": 3026,
+      "captura": "capturas/follow-up-de-decisao.png",
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "rotina"
+      ],
+      "demo": null
     }
   ]
 }
