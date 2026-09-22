@@ -48,3 +48,13 @@
   certo para planilha brasileira; se aparecer caso real, a saída é decidir por coluna e não por célula.
 - **Primeiro app da suíte com `npm test`.** `lib/planilha.test.ts` e `lib/agregar.test.ts` (vitest, 35 testes)
   cobrem formato de número e data, separador, aspas, tipagem e cada agregação. O resto do app segue sem teste.
+- **Refino fechado em painel de planilha.** `refinarPainel()` pede à IA um painel novo com os números
+  escritos por ela, e `refinamentoDemo()` acrescenta um indicador de exemplo fixo (R$ 487.000). Aplicado
+  a um painel calculado da planilha, isso troca dado real por número inventado — com o aviso "números
+  calculados a partir do seu arquivo" ainda na tela. Medido: um "acrescente um indicador" trocou
+  "Canal distintos" por "Receita contra a meta = 487000". Enquanto o refino não souber editar a
+  *receita* e recalcular, `app/api/painel/refinar` recusa com 409 (`refino_indisponivel_com_dados`) e a
+  tela troca a conversa por um aviso. A origem é lida do resultado salvo (`meta.insumo`), nunca de um
+  campo do corpo — o cliente não decide se pode reescrever o próprio dado.
+- **`observacoesDemo()` continua valendo com dado real**: ela calcula a partir do próprio painel, então
+  os fatos saem certos. Só o texto ("Neste exemplo, ...") fala como se fosse exemplo. Aresta conhecida.

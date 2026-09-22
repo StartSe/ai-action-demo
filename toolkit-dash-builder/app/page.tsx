@@ -7,6 +7,7 @@ import { Aviso, ErrorBox, Hero, Loading, MaisDetalhes, Passos, Topbar, data, ler
 import { BannerObservacoes } from "@/components/BannerObservacoes";
 import { ChipsArea, CHIPS_AREA } from "@/components/ChipsArea";
 import { EnvioPlanilha, type PlanilhaEnviada } from "@/components/EnvioPlanilha";
+import { INSUMO_PLANILHA } from "@/lib/planilha";
 import { ConversaRefino } from "@/components/ConversaRefino";
 import { Esclarecimento } from "@/components/Esclarecimento";
 import { ResultadoPainel } from "@/components/ResultadoPainel";
@@ -492,9 +493,20 @@ export default function Page() {
               </>
             }
             depois={
-              <div className="mt-6">
-                <ConversaRefino falas={falas} onEnviar={refinar} enviando={refinando} onDesfazer={desfazer} podeDesfazer={pilha.length > 0} erro={erroRefino} />
-              </div>
+              // O ajuste conversando reescreve os números (ver app/api/painel/refinar/route.ts):
+              // num painel calculado da planilha ele trocaria dado real por número de exemplo.
+              estado.meta.insumo.startsWith(INSUMO_PLANILHA) ? (
+                <div className="mt-6 no-print">
+                  <Aviso tom="warn">
+                    O ajuste conversando ainda não vale para painel feito da sua planilha: ele reescreveria os números.
+                    Para mudar o recorte, clique em &ldquo;Alterar pedido&rdquo; e descreva de outro jeito.
+                  </Aviso>
+                </div>
+              ) : (
+                <div className="mt-6">
+                  <ConversaRefino falas={falas} onEnviar={refinar} enviando={refinando} onDesfazer={desfazer} podeDesfazer={pilha.length > 0} erro={erroRefino} />
+                </div>
+              )
             }
           />
         </main>
