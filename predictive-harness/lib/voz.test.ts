@@ -12,6 +12,7 @@ const { abrirBanco } = await import("./store");
 const fetchReal = globalThis.fetch;
 const chamadas: { url: string; init?: RequestInit }[] = [];
 let recusar = false;
+let signedUrl = "wss://api.elevenlabs.io/v1/convai/conversation?token=temporary";
 globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
   const url = String(input); chamadas.push({ url, init });
   if (recusar) return Response.json({ detail: "sensitive provider error" }, { status: 401 });
@@ -19,7 +20,9 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
     { voice_id: "vozPT", name: "Português", labels: { accent: "portuguese" } },
     { voice_id: "vozBR", name: "Brasileira", labels: { accent: "brazilian" } },
   ], has_more: false });
-  if (url.endsWith("/single-use-token/realtime_scribe")) return Response.json({ token: "single-use-test-token" });
+  if (url.endsWith("/convai/tools")) return Response.json({ id: "tool-" + chamadas.length });
+  if (url.endsWith("/agents/create")) return Response.json({ agent_id: "private-agent" });
+  if (url.includes("get-signed-url")) return Response.json({ signed_url: signedUrl });
   return new Response(new Uint8Array([73, 68, 51]), { headers: { "Content-Type": "audio/mpeg" } });
 }) as typeof fetch;
 test.after(() => { globalThis.fetch = fetchReal; rmSync(dir, { recursive: true, force: true }); });
@@ -43,11 +46,28 @@ test("conexão verifica chave, cifra segredo e prioriza vozes brasileiras", asyn
   assert.equal(voz.statusVoz().vozId, "vozBR");
 });
 
-test("fala e token de uso único usam os contratos da ElevenLabs sem expor credencial", async () => {
-  const token = await voz.tokenVoz();
-  assert.deepEqual(token, { token: "single-use-test-token" });
-  assert.equal(chamadas.at(-1)!.init!.method, "POST");
+test("agente privado prepara ferramentas uma vez e emite sessões sem expor credencial", async () => {
+  const results = await Promise.all([voz.sessaoVoz(), voz.sessaoVoz()]);
+  assert.deepEqual(results, [{ signedUrl }, { signedUrl }]);
+  await voz.sessaoVoz();
+  const agentes = chamadas.filter(c => c.url.endsWith("/agents/create"));
+  const tools = chamadas.filter(c => c.url.endsWith("/convai/tools"));
+  assert.equal(agentes.length, 1);
+  assert.equal(tools.length, 2);
+  assert.deepEqual(tools.map(c => JSON.parse(String(c.init!.body)).tool_config.name), ["analisar_dados", "mostrar_analise"]);
+  const config = JSON.parse(String(agentes[0].init!.body));
+  assert.equal(config.platform_settings.auth.enable_auth, true);
+  assert.equal(config.platform_settings.privacy.record_voice, false);
+  assert.equal(config.conversation_config.agent.language, "pt");
+  assert.equal(config.conversation_config.agent.prompt.tool_ids.length, 2);
+  assert.equal(config.conversation_config.tts.voice_id, "vozBR");
+  assert.equal(config.conversation_config.asr.user_input_audio_format, "pcm_16000");
+  assert.ok(config.conversation_config.conversation.client_events.includes("conversation_initiation_metadata"));
+  assert.ok(config.conversation_config.conversation.client_events.includes("ping"));
   assert.ok((chamadas.at(-1)!.init!.headers as Record<string, string>)["xi-api-key"]);
+  signedUrl = "wss://untrusted.example/session";
+  await assert.rejects(voz.sessaoVoz(), /endereço inválido/);
+  signedUrl = "wss://api.elevenlabs.io/v1/convai/conversation?token=temporary";
   const audio = await voz.falar("Sua **margem** é de 30%.");
   assert.equal(audio.headers.get("content-type"), "audio/mpeg");
   assert.equal(audio.headers.get("cache-control"), "no-store");
@@ -74,13 +94,17 @@ test("voz ao vivo exige conversa válida e não aceita upload de áudio", async 
   assert.equal(upload.status, 415);
   const res = await route.POST(new Request("http://localhost/api/voz", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tempoReal: true, conversaId: "inexistente" }) }));
   assert.equal(res.status, 404);
-  await assert.rejects(voz.tokenVoz(), /Selecione a voz padrão/);
+  await assert.rejects(voz.sessaoVoz(), /Conecte a ElevenLabs/);
   await voz.configurarVoz({ chave: "test-secret-elevenlabs-987654321", vozId: "vozBR" });
   const { criarConversa } = await import("./sessoes");
   const conversa = criarConversa([]);
   const live = await route.POST(new Request("http://localhost/api/voz", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tempoReal: true, conversaId: conversa.id }) }));
   assert.equal(live.status, 200);
   assert.equal(live.headers.get("cache-control"), "no-store");
-  assert.deepEqual(await live.json(), { token: "single-use-test-token" });
+  const data = await live.json();
+  assert.equal(data.signedUrl, signedUrl);
+  assert.deepEqual(JSON.parse(data.contexto).historico, []);
+  assert.deepEqual(JSON.parse(data.contexto).fontes, []);
+  assert.ok(!JSON.stringify(data).includes("test-secret"));
 
 });

@@ -10,6 +10,7 @@ function db() {
   b.exec(`CREATE TABLE IF NOT EXISTS conversas (id TEXT PRIMARY KEY, titulo TEXT NOT NULL, fontes TEXT NOT NULL, criado_em TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS mensagens (id TEXT PRIMARY KEY, planilha_id TEXT NOT NULL, json TEXT NOT NULL, criado_em TEXT NOT NULL);`);
   const colunas = b.prepare("PRAGMA table_info(conversas)").all();
+  if (!colunas.some(c => c.name === "titulo_manual")) b.exec("ALTER TABLE conversas ADD COLUMN titulo_manual INTEGER NOT NULL DEFAULT 0");
   if (!colunas.some(c => c.name === "fixada")) b.exec("ALTER TABLE conversas ADD COLUMN fixada INTEGER NOT NULL DEFAULT 0");
   if (!colunas.some(c => c.name === "atualizado_em")) {
     b.exec("ALTER TABLE conversas ADD COLUMN atualizado_em TEXT");
@@ -62,7 +63,7 @@ export function excluirConversa(id: string) {
 }
 export function titularConversa(id: string, titulo: string) {
   db().prepare("UPDATE conversas SET atualizado_em = ? WHERE id = ?").run(new Date().toISOString(), id);
-  db().prepare("UPDATE conversas SET titulo = ? WHERE id = ? AND titulo IN ('Nova conversa', 'Primeira conversa')").run(titulo.slice(0, 70), id);
+  db().prepare("UPDATE conversas SET titulo = ? WHERE id = ? AND titulo_manual = 0 AND titulo IN ('Nova conversa', 'Primeira conversa')").run(titulo.slice(0, 70), id);
 }
 export function comConversa<T>(id: string, fn: () => T): T {
   const c = obterConversa(id);
@@ -73,5 +74,14 @@ export function fixarConversa(id: string, fixada: unknown) {
   if (typeof fixada !== "boolean") throw new AppError("Informe se a conversa deve ficar fixada.");
   obterConversa(id);
   db().prepare("UPDATE conversas SET fixada = ? WHERE id = ?").run(Number(fixada), id);
+  return obterConversa(id);
+}
+
+export function renomearConversa(id: string, titulo: unknown) {
+  if (typeof titulo !== "string") throw new AppError("Informe um nome para a conversa.");
+  const nome = titulo.trim().replace(/\s+/g, " ");
+  if (!nome || nome.length > 100) throw new AppError("O nome da conversa deve ter entre 1 e 100 caracteres.");
+  obterConversa(id);
+  db().prepare("UPDATE conversas SET titulo = ?, titulo_manual = 1 WHERE id = ?").run(nome, id);
   return obterConversa(id);
 }

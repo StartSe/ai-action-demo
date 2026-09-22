@@ -147,3 +147,41 @@ test("fixar persiste e ordena conversas sem alterar fontes nem mensagens", async
   assert.equal(sessoes.obterConversa(a.id).titulo, "Conversa retomada");
   assert.ok(sessoes.obterConversa(a.id).atualizadoEm >= a.atualizadoEm);
 });
+
+
+test("renomear mantém fontes, mensagens e fixação; título manual resiste à primeira pergunta", async () => {
+  const demos = planilhas.listarPlanilhas().filter(p => p.demo).map(p => p.id);
+  const c = sessoes.criarConversa(demos);
+  sessoes.fixarConversa(c.id, true);
+  sessoes.renomearConversa(c.id, "  Nova   conversa  ");
+  await sessoes.comConversa(c.id, () => conversa.executarTurno(CONVERSAS_EXEMPLO[1].pergunta));
+  assert.equal(sessoes.obterConversa(c.id).titulo, "Nova conversa");
+  const route = await import("../app/api/conversas/route");
+  const patch = (dados: unknown) => route.PATCH(new Request("http://localhost/api/conversas", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(dados) }));
+  assert.equal((await patch({ id: c.id, titulo: "Revisão do trimestre" })).status, 200);
+  assert.equal(sessoes.obterConversa(c.id).titulo, "Revisão do trimestre");
+  assert.equal(sessoes.obterConversa(c.id).fixada, true);
+  assert.deepEqual(sessoes.obterConversa(c.id).fontes, demos);
+  assert.equal(sessoes.comConversa(c.id, conversa.listarMensagens).length, 2);
+  for (const titulo of [null, " ", "x".repeat(101)]) assert.equal((await patch({ id: c.id, titulo })).status, 400);
+  assert.equal((await patch({ id: "ausente", titulo: "Válido" })).status, 404);
+  assert.equal((await patch({ id: c.id, titulo: "Válido", fixada: true })).status, 400);
+});
+
+test("contexto de voz só contém fontes e cálculos da conversa selecionada", async () => {
+  const { contextoVoz } = await import("./voz-contexto");
+  const demos = planilhas.listarPlanilhas().filter(p => p.demo).map(p => p.id);
+  const a = sessoes.criarConversa(demos);
+  const b = sessoes.criarConversa([]);
+  const turno = await sessoes.comConversa(a.id, () => conversa.executarTurno(CONVERSAS_EXEMPLO[1].pergunta));
+  const ca = JSON.parse(sessoes.comConversa(a.id, contextoVoz));
+  const cb = JSON.parse(sessoes.comConversa(b.id, contextoVoz));
+  assert.equal(ca.fontes.length, 3);
+  assert.deepEqual(ca.perguntasDeExemplo, CONVERSAS_EXEMPLO.map(c => c.pergunta));
+  assert.equal(ca.historico.length, 2);
+  assert.deepEqual(ca.historico[1].cartoes, turno.resposta.cartoes);
+  assert.deepEqual(cb.fontes, []);
+  assert.deepEqual(cb.produtos, []);
+  assert.deepEqual(cb.historico, []);
+  assert.ok(!JSON.stringify(cb).includes(turno.resposta.id));
+});

@@ -16,6 +16,7 @@ export function Icon({ name, size = 20 }: { name: string; size?: number }) {
         <path d="M3 10h18M9 4v16" />
       </>
     ),
+    waveform: <path d="M4 10v4m4-7v10m4-14v18m4-15v12m4-8v4" />,
     search: <><circle cx="10" cy="10" r="7" /><path d="m15 15 6 6" /></>,
     sidebar: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></>,
     up: <path d="M12 20V4m-6 6 6-6 6 6" />,

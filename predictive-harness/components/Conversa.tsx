@@ -13,9 +13,10 @@ import { Icon, ErrorBox, request, fmtMs } from "./ui";
 
 const ICONE_CATEGORIA: Record<CategoriaPergunta, string> = { diagnostico: "gauge", cenario: "spark", meta_reversa: "coins", risco: "shield", descritiva: "table", conceito: "info", outra: "chat" };
 
-export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selecionada, onSelecionar, onVerDecisoes, onMensagens, onBaseMudou, autoPergunta, semRolagem, conversaId, onBusy, onConectores }: {
+export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selecionada, onSelecionar, onVerDecisoes, onMensagens, onBaseMudou, autoPergunta, semRolagem, conversaId, onBusy, onConectores, onVozAtiva }: {
   conversaId: string;
   onBusy: (busy: boolean) => void;
+  onVozAtiva: (ativo: boolean) => void;
   onConectores: () => void;
   base: DadosBase | null;
   mensagens: Mensagem[];
@@ -37,6 +38,7 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
   const audio = useAudio();
   useEffect(() => { void request<StatusVoz>("/api/voz").then(setVoz).catch(() => {}); }, []);
   useEffect(() => { onBusy(busy || modoVoz); }, [busy, modoVoz, onBusy]);
+  useEffect(() => { onVozAtiva(modoVoz); return () => onVozAtiva(false); }, [modoVoz, onVozAtiva]);
   useEffect(() => () => onBusy(false), [onBusy]);
   const fim = useRef<HTMLDivElement>(null);
   const autoEnviado = useRef(false);
@@ -79,6 +81,12 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
   const iniciais = base?.sugestoes || [];
   const pronto = harnessPronto && conversaPronta;
   const semBase = !!base && !base.matriculas;
+  if (modoVoz) return <VozAoVivo conversaId={conversaId} base={base} mensagens={mensagens} onVerDecisoes={onVerDecisoes} onClose={() => setModoVoz(false)} onTurno={async (pergunta, signal) => {
+    const r = await request<{ pergunta: Mensagem; resposta: Mensagem }>("/api/base/conversa", "POST", { pergunta, conversaId }, { signal });
+    const historico = await request<{ mensagens: Mensagem[] }>(`/api/base/conversa?conversa=${conversaId}`, undefined, undefined, { signal });
+    onMensagens(historico.mensagens); onSelecionar(r.resposta.id);
+    return r.resposta;
+  }} />;
   return (
     <>
       <div className="rolagem">
@@ -97,10 +105,9 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
             {semBase && <button className="primary" onClick={onConectores}><Icon name="upload" size={16} /> Escolher minhas fontes</button>}
             <div className="categorias">
               {iniciais.map((s) => (
-                <button key={s.texto} className="categoria" disabled={busy} onClick={() => void enviar(s.texto)}>
+                <button key={s.texto} className="categoria" title={s.texto} disabled={busy} onClick={() => void enviar(s.texto)}>
                   <span className="ic"><Icon name={ICONE_CATEGORIA[s.categoria]} size={18} /></span>
-                  <span className="rotulo">{ROTULO_CATEGORIA[s.categoria]}</span>
-                  <span className="pergunta">{s.texto}</span><span className="suggestion-arrow"><Icon name="chevron" size={15} /></span>
+                                    <span className="pergunta">{({ diagnostico: "Qual produto tem a melhor margem?", cenario: "E se abrirmos mais uma turma?", meta_reversa: "Quanto podemos gastar em marketing?", risco: "Qual é o ponto de equilíbrio?" } as Partial<Record<CategoriaPergunta, string>>)[s.categoria] || s.texto}</span><span className="suggestion-arrow"><Icon name="chevron" size={15} /></span>
                 </button>
               ))}
             </div>
@@ -148,12 +155,6 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
           </div>
         )}
       </div>
-      {modoVoz && <VozAoVivo conversaId={conversaId} fontes={base ? [base.matriculas, base.custos, base.marketing].filter(Boolean).length : 0} onClose={() => setModoVoz(false)} onTurno={async (pergunta, signal) => {
-        const r = await request<{ pergunta: Mensagem; resposta: Mensagem }>("/api/base/conversa", "POST", { pergunta, conversaId }, { signal });
-        const historico = await request<{ mensagens: Mensagem[] }>(`/api/base/conversa?conversa=${conversaId}`, undefined, undefined, { signal });
-        onMensagens(historico.mensagens); onSelecionar(r.resposta.id);
-        return r.resposta;
-      }} />}
       <div className="compor">
         <ErrorBox error={error} />
         <form
@@ -177,7 +178,7 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
               }
             }}
           />
-          {voz?.conectado && voz.vozId ? <button type="button" className="voice-button" disabled={busy || modoVoz} aria-label="Iniciar conversa por voz" title="Conversar por voz" onClick={() => { audio.parar(); setModoVoz(true); }}><Icon name="mic" size={20} /></button> : <a className="voice-button" href={`/configuracoes?conversa=${conversaId}#voz`} aria-label="Configurar conversa por voz" title="Configurar conversa por voz"><Icon name="mic" size={20} /></a>}
+          {voz?.conectado && voz.vozId ? <button type="button" className="voice-button voice-launch" disabled={busy || modoVoz} aria-label="Iniciar conversa por voz" title="Conversar por voz" onClick={() => { audio.parar(); setModoVoz(true); }}><Icon name="waveform" size={22} /></button> : <a className="voice-button voice-launch" href={`/configuracoes?conversa=${conversaId}#voz`} aria-label="Configurar conversa por voz" title="Configurar conversa por voz"><Icon name="waveform" size={22} /></a>}
           <button className="primary send-circle" disabled={busy || modoVoz || !texto.trim()} aria-label="Enviar"><Icon name="up" size={21} /></button>
         </form>
         <small className="composer-footnote">Cálculos verificáveis, premissas visíveis. <a href={`/configuracoes?conversa=${conversaId}#politica-dados`}>Uso dos dados e modelos</a></small>

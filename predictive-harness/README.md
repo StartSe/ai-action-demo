@@ -1,4 +1,4 @@
-# Cowork Jev — v0.4.0
+# Cowork Jev — v0.5.0
 
 Seu estrategista para criar predições baseadas em dados, explorar cenários e orientar decisões financeiras.
 
@@ -22,14 +22,14 @@ Agente de **FP&A** (planejamento e análise financeira) por conversa, com a unid
    - **Verificação (Jev)**: os números batem com o motor? há premissa implícita não declarada? pede validação humana? que visual cabe? Se não batem, o modelo reescreve uma vez.
    - **Próximas perguntas**: cinco candidatas, o Jev ranqueia, ficam três.
 5. O painel **Interpretação da IA · Como cheguei aqui** mostra as premissas usadas com a origem, a **fórmula em português com os números substituídos** e todas as decisões do Jev com probabilidade e confiança. Ajustar uma premissa ali **recalcula na hora, só no motor**: sem custo e sem chamada ao modelo.
-6. A versão instalada aparece ao lado do título, para saber o que está no ar sem abrir o console.
+6. A versão instalada aparece junto ao logo no menu lateral, para saber o que está no ar sem abrir o console.
 7. Os cartões são SVG desenhados a partir dos números do motor, nunca imagem gerada: cascata do cenário, sensibilidade, ponto de equilíbrio e meta reversa, cada um com a tabela equivalente ao lado.
 
 Fica para as próximas versões (ver PLANO.md): cenários salvos e comparação lado a lado, plano contra realizado, exportar, MCP, formulário público, execução de código para o que o motor não cobre, busca na web para referências de mercado.
 
 ## Experiência de trabalho
 
-- **Conversa**: Jev é seu analista estratégico. As fontes ficam em um botão compacto acima das mensagens. O histórico lateral tem busca, conversas fixadas e recentes; ele pode ser recolhido. “Nova conversa” preserva o histórico; “Limpar mensagens” mantém a conversa e as fontes; “Excluir conversa” remove apenas essa conversa. Ambas as ações destrutivas têm confirmação.
+- **Conversa**: Jev é seu analista estratégico. As fontes ficam em um botão compacto acima das mensagens. O menu lateral reúne logo, busca e uma lista compacta de conversas fixadas e recentes; ele pode ser recolhido. Renomeie pelo título ou pelo menu de cada conversa. Configurações e Sair ficam no rodapé, sem header global. As sugestões iniciais e de acompanhamento ocupam menos espaço. “Nova conversa” preserva o histórico; “Limpar mensagens” mantém a conversa e as fontes; “Excluir conversa” remove apenas essa conversa. Ambas as ações destrutivas têm confirmação.
 - **Fontes de dados**: selecione uma fonte de matrículas, uma de custos e uma de marketing. “Analisar seleção” inicia uma conversa com essas fontes; uploads posteriores não alteram sua base. OneDrive e Google Sheets são apenas informativos de “em breve”. A remoção de uma fonte preserva respostas anteriores e exige uma nova seleção para continuar as conversas afetadas.
 - **Livro de premissas**: painel lateral retrátil, com gestão em modal. Valores informados sobrepõem os da base para o mesmo produto em qualquer conversa. Em “Como cheguei aqui”, escolha se os valores alterados valem só no cenário atual ou também no livro. Valores salvos podem ser restaurados para a base no livro; recálculos atualizam cartões e fórmulas, com aviso de que a narrativa continua sendo a original.
 - **Configurações**: modelos, ElevenLabs e informação sobre uso dos dados. A política aplicável depende do provedor/modelo/plano; cabe a quem utiliza avaliar essas condições e ter autorização para enviar dados.
@@ -38,11 +38,13 @@ A migração preserva as mensagens existentes na primeira conversa e fixa as fon
 
 ## Voz (opcional)
 
-Em Configurações, conecte sua chave ElevenLabs com permissões de leitura de vozes, Speech to Text (Scribe Realtime) e Text to Speech. Selecione e salve uma voz em português: as identificadas como brasileiras aparecem primeiro, e a prévia permite conferir o sotaque. Adicione uma voz em português à sua conta caso o catálogo esteja vazio.
+Em Configurações, conecte sua chave ElevenLabs com permissões de leitura de vozes, Text to Speech e ElevenLabs Agents (agentes, ferramentas e conversas). Selecione e salve uma voz em português: as identificadas como brasileiras aparecem primeiro, e a prévia permite conferir o sotaque.
 
-No compositor, toque no microfone para abrir a conversa ao vivo. O círculo indica se Jev está ouvindo, calculando ou falando. Ao fazer uma pausa, a pergunta segue automaticamente para o mesmo motor do chat, com as fontes da conversa. Você pode interromper a fala, pausar o microfone ou encerrar. Perguntas e respostas ficam no histórico. Não há gravação para anexar, revisão de áudio ou upload de arquivo. Requer microfone, Web Audio e HTTPS (ou localhost).
+No compositor, toque no botão preto com ondas para iniciar a conversa com IA. A digitação fica desativada durante a sessão; gráficos, tabelas, premissas e análises anteriores permanecem interativos. Você pode interromper a fala, pausar o microfone ou encerrar para voltar ao chat. As perguntas enviadas ao motor e suas respostas ficam no histórico. Requer microfone, Web Audio e HTTPS (ou localhost).
 
-A captura usa [Scribe Realtime pelo SDK oficial](https://elevenlabs.io/docs/eleven-api/resources/libraries/scribe-stt/javascript-scribe) (`scribe_v2_realtime`, idioma `pt`, término de fala por VAD), autenticado por token de uso único emitido no servidor. Cada pergunta aguarda o cálculo do harness; novas falas interrompem a reprodução e entram na sequência. As respostas usam [síntese ElevenLabs](https://elevenlabs.io/docs/api-reference/text-to-speech/convert) (`eleven_multilingual_v2`). A chave fica cifrada no servidor. O áudio é transmitido à ElevenLabs, não é salvo nesta instalação, e há consumo na conta conectada. A qualidade, latência e créditos reais dependem do provedor; testes locais simulam os eventos de serviço e exercitam microfone, conexão e cálculo reais do app.
+O servidor prepara um [agente privado ElevenLabs](https://elevenlabs.io/docs/eleven-agents/api-reference/agents/create), reutilizado pela instalação enquanto a voz e a credencial forem as mesmas, com gravação de voz desativada. O diálogo usa Gemini 2.5 Flash; a fala usa a voz escolhida e Eleven Flash v2.5. As [ferramentas de cliente](https://elevenlabs.io/docs/eleven-agents/customization/tools/client-tools) consultam o motor existente e exibem análises da conversa atual. Toda conta continua no motor; o agente recebe contexto e resultados calculados, sem acesso a arquivos brutos ou outras conversas. O modo de demonstração continua limitado às quatro perguntas sugeridas; sem OpenRouter, perguntas livres não são calculadas.
+
+A chave fica cifrada no servidor; o navegador recebe uma URL de sessão assinada e transmite PCM16 por WebSocket. O app não persiste áudio. O uso consome a conta ElevenLabs e, quando há análise, os provedores já configurados no harness. Testes locais cobrem contratos e eventos simulados do provedor, captura de áudio do navegador, cancelamento e o motor real. Qualidade acústica, latência e cobrança precisam ser conferidas com a conta conectada.
 
 ## Conexões
 
@@ -116,7 +118,7 @@ Nada é obrigatório: as conexões são feitas na tela. Variáveis, quando defin
 - `components/Configuracoes.tsx`, `app/api/conexoes/*`, `app/api/chatgpt/*`: conexões.
 
 - `lib/sessoes.ts`, `lib/contexto.ts`: histórico e isolamento da seleção de fontes por conversa.
-- `lib/voz.ts`, `app/api/voz`, `components/useVoz.ts`, `components/VozAoVivo.tsx`: integração ElevenLabs, conversa por voz ao vivo e reprodução.
+- `lib/voz.ts`, `app/api/voz`, `lib/voz-contexto.ts`, `components/SessaoVoz.ts`, `components/VozAoVivo.tsx`, `public/jev-audio-worklet.js`: integração ElevenLabs, conversa por voz ao vivo e reprodução.
 
 ## Referências
 

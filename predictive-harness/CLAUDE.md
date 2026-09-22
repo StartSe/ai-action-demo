@@ -36,3 +36,12 @@ O header mantém Conversa, Fontes de dados e Configurações. `Historico.tsx` mo
 `VozAoVivo.tsx` substitui MediaRecorder/upload pelo Scribe Realtime (`@elevenlabs/client`), VAD e token efêmero obtido por POST `/api/voz` `{tempoReal:true,conversaId}`. Cada pergunta chama a mesma rota do harness; a resposta calculada é sintetizada. Parcial de fala interrompe reprodução, turnos são serializados e encerramento cancela requests, áudio e captura. Multipart de voz é recusado. Credenciais e números continuam no servidor; os testes de contrato e navegador não substituem avaliação acústica com credencial real.
 
 Verificar também busca com acentos, fixação após reload, exclusão de conversa inativa, recolher/abrir laterais no celular, modal de premissas, popovers pelo teclado e ciclo de voz com WebSocket simulado, áudio de microfone real do navegador, pausa, interrupção, encerramento e erros.
+
+
+## Rodada 5 — Navegação compacta e IA por voz (v0.5.0)
+
+O header global sai; o menu lateral reúne logo, navegação, busca, títulos sem datas, ações de fixar/renomear/excluir e Configurações/Sair no rodapé. Sugestões iniciais e follow-ups são compactos. `PATCH /api/conversas` renomeia títulos de 1 a 100 caracteres; a migração `titulo_manual` impede o primeiro turno de sobrescrever um nome escolhido. Configurações compartilha o mesmo Workspace.
+
+Voz usa ElevenLabs Agents via WebSocket autenticado por URL assinada. `lib/voz.ts` provisiona e reutiliza um agente privado com ferramentas cliente, idioma português, voz escolhida, gravação desativada e prompt que exige o motor para números. `analisar_dados` chama a rota existente; `mostrar_analise` aceita somente mensagens desta conversa. Contexto contém fontes selecionadas, agregados e as últimas mensagens com cartões, nunca arquivos brutos. A tela substitui o chat por gráficos e controles de voz, sem modal bloqueando os dados. Premissas continuam editáveis por ação explícita da pessoa, com recálculo local e atualização de contexto do agente.
+
+`SessaoVoz.ts` possui o ciclo completo de microfone, Web Audio, worklet PCM16, WebSocket, cancelamento, interrupção e ferramentas serializadas. Encerrar libera também microfone concedido depois do cancelamento. Contratos do provedor são simulados nos testes; a validação acústica e de latência real exige credencial e créditos. Rodar os testes, lint, build e validar desktop/celular, renomeação persistida, sidebar, configurações/logout, áudio e ferramentas com WebSocket de teste antes de publicar.

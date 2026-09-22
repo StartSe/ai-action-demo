@@ -1,5 +1,6 @@
 import { api, body, AppError } from "@/lib/api";
-import { configurarVoz, listarVozes, statusVoz, tokenVoz, falar } from "@/lib/voz";
+import { configurarVoz, listarVozes, statusVoz, sessaoVoz, falar } from "@/lib/voz";
+import { contextoVoz } from "@/lib/voz-contexto";
 import { obterMensagem } from "@/lib/conversa";
 import { comConversa } from "@/lib/sessoes";
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export async function POST(req: Request) {
     const b = await body(req);
     if (b.tempoReal === true) {
       if (typeof b.conversaId !== "string") throw new AppError("Selecione uma conversa.");
-      return comConversa(b.conversaId, async () => Response.json(await tokenVoz(req.signal), { headers: { "Cache-Control": "no-store" } }));
+      return comConversa(b.conversaId, async () => Response.json({ ...await sessaoVoz(req.signal), contexto: contextoVoz() }, { headers: { "Cache-Control": "no-store" } }));
     }
     if (b.previa === true) {
       const vozes = await listarVozes();

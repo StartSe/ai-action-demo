@@ -1,9 +1,9 @@
 import { Suspense } from "react";
-import { Configuracoes } from "@/components/Configuracoes";
+import { Workspace } from "@/components/Workspace";
 export default function Page() {
   return (
     <Suspense fallback={null}>
-      <Configuracoes />
+      <Workspace inicial="configuracoes" />
     </Suspense>
   );
 }

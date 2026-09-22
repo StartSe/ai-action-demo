@@ -1,6 +1,5 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { AppHeader } from "./AppHeader";
 import { VozConfiguracoes } from "./VozConfiguracoes";
 import { useSearchParams } from "next/navigation";
 import type { StatusConexoes } from "@/lib/types";
@@ -51,9 +50,8 @@ export function Configuracoes() {
   }
   const s = status;
   return (
-    <div className="pagina">
-      <AppHeader ativa="configuracoes" conversaId={params.get("conversa") || undefined} />
-      <main className="pagina-conteudo">
+    <div className="settings-view">
+      <div className="pagina-conteudo">
         <h1>Configurações</h1>
         <p>Escolha quem escreve as respostas, conecte a voz do Jev e entenda como seus dados são utilizados.</p>
         <ErrorBox error={erro} />
@@ -200,8 +198,8 @@ export function Configuracoes() {
         </section>
         <div className="secao-titulo"><Icon name="volume" size={18} /><div><h2>Voz do Jev</h2><p>Uma conversa em português, no seu ritmo.</p></div></div>
         <VozConfiguracoes />
-        <section className="cartao largo data-policy" id="politica-dados"><header><h3><Icon name="shield" size={18} /> Seus dados e os modelos de IA</h3></header><p><strong>O tratamento dos dados depende do provedor, do modelo e do plano escolhidos.</strong> Cabe a quem utiliza o Cowork Jev avaliar essas políticas e ter autorização para enviar os dados, especialmente informações pessoais ou confidenciais.</p><p>Conversa configurada: <strong>{s?.provider === "openrouter" ? "OpenRouter" : "ChatGPT"} · {s?.model || "modelo automático"}</strong>{s?.modelForte ? `; análises complexas: ${s.modelForte}` : ""}. A triagem e a verificação também usam o Jev pelo OpenRouter.</p><p>Os arquivos ficam nesta instalação. A análise envia perguntas, trechos do histórico, nomes de produtos, agregados e premissas aos provedores. Ao usar “Mapear com o Jev”, nomes e exemplos de valores das colunas podem ser enviados ao OpenRouter. O envio de planilhas usa leitura local até você solicitar esse mapeamento.</p><p>Com voz ativada, a ElevenLabs recebe o áudio para transcrever e o texto da resposta para gerar a fala. Não há garantia única de retenção ou uso para treinamento: consulte as condições da sua conta e de cada provedor.</p><div className="policy-links"><a href="https://openai.com/policies/privacy-policy/" target="_blank" rel="noreferrer">Política da OpenAI ↗</a><a href="https://openrouter.ai/privacy" target="_blank" rel="noreferrer">Política do OpenRouter ↗</a><a href="https://elevenlabs.io/privacy-policy" target="_blank" rel="noreferrer">Política da ElevenLabs ↗</a></div></section>
-      </main>
+        <section className="cartao largo data-policy" id="politica-dados"><header><h3><Icon name="shield" size={18} /> Seus dados e os modelos de IA</h3></header><p><strong>O tratamento dos dados depende do provedor, do modelo e do plano escolhidos.</strong> Cabe a quem utiliza o Cowork Jev avaliar essas políticas e ter autorização para enviar os dados, especialmente informações pessoais ou confidenciais.</p><p>Conversa configurada: <strong>{s?.provider === "openrouter" ? "OpenRouter" : "ChatGPT"} · {s?.model || "modelo automático"}</strong>{s?.modelForte ? `; análises complexas: ${s.modelForte}` : ""}. A triagem e a verificação também usam o Jev pelo OpenRouter.</p><p>Os arquivos ficam nesta instalação. A análise envia perguntas, trechos do histórico, nomes de produtos, agregados e premissas aos provedores. Ao usar “Mapear com o Jev”, nomes e exemplos de valores das colunas podem ser enviados ao OpenRouter. O envio de planilhas usa leitura local até você solicitar esse mapeamento.</p><p>Com voz ativada, a ElevenLabs recebe o áudio, o contexto da conversa e os resultados calculados para conduzir o diálogo e gerar a fala. Não há garantia única de retenção ou uso para treinamento: consulte as condições da sua conta e de cada provedor.</p><div className="policy-links"><a href="https://openai.com/policies/privacy-policy/" target="_blank" rel="noreferrer">Política da OpenAI ↗</a><a href="https://openrouter.ai/privacy" target="_blank" rel="noreferrer">Política do OpenRouter ↗</a><a href="https://elevenlabs.io/privacy-policy" target="_blank" rel="noreferrer">Política da ElevenLabs ↗</a></div></section>
+      </div>
     </div>
   );
 }
