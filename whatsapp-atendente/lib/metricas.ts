@@ -26,6 +26,7 @@
  */
 import { ASSUNTO_OUTROS } from "./assuntos";
 import { bancoDeConversas, isoDeBanco, listarConversas, paraTextoDeBanco } from "./conversas";
+import { contatosDe } from "./memoria";
 import type { MotivoTransferencia } from "./transferencia";
 import { PAPEIS_DE_CONVERSA, type AssuntoMetricas, type CanalOrigem, type DiaMetricas, type Metricas, type PeriodoMetricas, type StatusConversa, type VariacaoMetricas } from "./types";
 
@@ -223,6 +224,10 @@ export interface LinhaExportacao {
   tempoMedioMs: number;
   /** Por que a IA passou a conversa para uma pessoa; nulo quando não passou (ou já foi devolvida). */
   motivoTransferencia: MotivoTransferencia | null;
+  /** O que o cliente informou de si ao longo das conversas (lib/memoria.ts); nulo quando não informou. */
+  nomeInformado: string | null;
+  email: string | null;
+  telefoneRetorno: string | null;
 }
 
 type LinhaAgregada = {
@@ -256,10 +261,14 @@ export function linhasParaExportar(periodo: PeriodoMetricas): LinhaExportacao[] 
     .all(paraTextoDeBanco(atual.inicio), paraTextoDeBanco(atual.fim)) as LinhaAgregada[];
 
   const porNumero = new Map(agregadas.map((l) => [l.numero, l]));
+  // O que o atendente lembra de cada cliente vem numa consulta só (lib/memoria.ts é o dono da tabela):
+  // é o nome, o e-mail e o telefone que ele mesmo informou, que é o que a equipe leva para o CRM.
+  const contatos = contatosDe(agregadas.map((l) => l.numero));
   return listarConversas()
     .filter((c) => porNumero.has(c.numero))
     .map((c) => {
       const a = porNumero.get(c.numero) as LinhaAgregada;
+      const contato = contatos.get(c.numero);
       return {
         numero: c.numero,
         nome: c.nome,
@@ -272,6 +281,9 @@ export function linhasParaExportar(periodo: PeriodoMetricas): LinhaExportacao[] 
         resolvidaIA: Boolean(a.resolvida),
         tempoMedioMs: Math.round(Number(a.tempo ?? 0)),
         motivoTransferencia: c.motivoTransferencia,
+        nomeInformado: contato?.nomeInformado ?? null,
+        email: contato?.email ?? null,
+        telefoneRetorno: contato?.telefoneRetorno ?? null,
       } satisfies LinhaExportacao;
     });
 }

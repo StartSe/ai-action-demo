@@ -514,6 +514,39 @@ export function conversasExemplo(): ConversaExemplo[] {
   ];
 }
 
+/** O que o atendente lembra de um cliente de exemplo (lib/memoria.ts), para o painel do contato. */
+export interface ContatoExemplo {
+  numero: string;
+  nomeInformado?: string;
+  email?: string;
+  telefoneRetorno?: string;
+  memoria: string;
+}
+
+/**
+ * Duas das nove conversas de exemplo já nascem com o que o atendente lembra do cliente: a demonstração
+ * precisa mostrar o recurso antes de existir qualquer chave de IA. Os textos são o que uma recepção
+ * anotaria — preferência de horário, o que ficou combinado, como falar com a pessoa — e nunca o que o
+ * prompt de lib/memoria.ts proíbe (saúde, documento, senha, cartão, opinião sobre o cliente).
+ */
+export function contatosExemplo(): ContatoExemplo[] {
+  return [
+    {
+      numero: "5511988761234",
+      nomeInformado: "Mariana Costa",
+      memoria:
+        "Se apresentou como Mariana. Prefere horários de manhã e agendou uma limpeza para quinta às 9h. Já sabe que remarcações precisam de aviso com 4 horas de antecedência.",
+    },
+    {
+      numero: "5511997654321",
+      nomeInformado: "Camila Souza",
+      email: "camila.souza@exemplo.com.br",
+      memoria:
+        "Marca as consultas para o filho, de 4 anos. Tem plano odontológico e já enviou a carteirinha. Prefere terça à tarde e pediu para ser avisada por e-mail.",
+    },
+  ];
+}
+
 /**
  * true quando a lista tem só conversas de exemplo — é quando as telas mostram o aviso acima. Recebe
  * qualquer lista com o campo `exemplo` (registros antigos de `/r/[id]` não têm o campo e contam como

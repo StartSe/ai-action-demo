@@ -22,7 +22,7 @@ import {
   ultimaMensagemDoClienteId,
 } from "./conversas";
 import { classificarLocal, esperar, respostaLocal, trechoMaisParecido } from "./demo";
-import { FONTE_RESUMO, MENSAGENS_COM_RESUMO } from "./memoria";
+import { FONTE_MEMORIA, FONTE_RESUMO, MENSAGENS_COM_RESUMO, obterContato } from "./memoria";
 import { processarMidia, temConteudoParaResponder, textoParaIA } from "./midia";
 import { toolsParaAtendente } from "./empresa-mcp";
 import { getConfig } from "./estado";
@@ -31,6 +31,7 @@ import {
   FRASE_SEM_MIDIA_PADRAO,
   type CanalOrigem,
   type Config,
+  type ContatoLembrado,
   type DetalhesResposta,
   type FerramentaDaResposta,
   type FonteDaResposta,
@@ -113,10 +114,15 @@ function pareceRaciocinio(texto: string): boolean {
   return marcas.filter((m) => m.test(inicio)).length >= 2;
 }
 
-function montarSystemPrompt(config: Config): string {
+function montarSystemPrompt(config: Config, contato?: ContatoLembrado | null): string {
   // A saudação escrita no passo 1 só entra quando existe: vazia, o modelo se apresenta como sempre fez
   // (a reserva de `saudacaoPadrao()` é da tela, que precisa desenhar alguma coisa na prévia).
   const saudacao = config.saudacao?.trim();
+  // O que o atendente já sabe deste cliente (lib/memoria.ts): é isto que faz quem volta não precisar
+  // repetir o que combinou semana passada. Vai no `system` junto das outras informações que ele pode
+  // usar, e nunca como se fosse mensagem do cliente.
+  const memoria = contato?.memoria.trim();
+  const nomeDoCliente = contato?.nomeInformado?.trim();
   // "Coletar contato" não é uma ferramenta: é uma instrução a mais no prompt. Quem guarda o que o
   // cliente disser é a memória do contato, não uma chamada de função — o modelo só precisa perguntar.
   const coletarContato = config.ferramentas?.coletarContato
@@ -125,7 +131,7 @@ function montarSystemPrompt(config: Config): string {
   return `Você é ${config.atendente}, atendente virtual da ${config.negocio}, respondendo clientes pelo WhatsApp.
 Seu objetivo em cada conversa: ${descricaoObjetivo(config)}.
 Tom de voz: ${descricaoTom(config)}.
-${saudacao ? `Quando o cliente inicia a conversa (primeira mensagem dele ou primeira depois de resolvida), apresente-se assim: "${saudacao}"\n` : ""}${coletarContato}
+${saudacao ? `Quando o cliente inicia a conversa (primeira mensagem dele ou primeira depois de resolvida), apresente-se assim: "${saudacao}"\n` : ""}${nomeDoCliente ? `Este cliente se chama ${nomeDoCliente}: chame-o pelo nome ao cumprimentá-lo, e nunca pergunte o nome dele de novo.\n` : ""}${memoria ? `O que você já sabe sobre este cliente (de conversas anteriores): ${memoria}\nUse isso para não pedir de novo o que ele já disse; se algo aqui contradisser o que ele escrever agora, vale o que ele está dizendo agora.\n` : ""}${coletarContato}
 Responda somente com base nas informações abaixo. Nunca invente preços, prazos, serviços ou políticas que não estejam aqui.
 
 Base de conhecimento:
@@ -258,16 +264,21 @@ function montarFontes({
   baseConhecimento,
   trechos,
   resumo,
+  memoria,
 }: {
   pergunta: string;
   baseConhecimento: string;
   trechos: { nome: string; numero: number; texto: string }[];
   /** O resumo do começo da conversa (lib/memoria.ts), quando ele entrou no prompt. */
   resumo?: string | null;
+  /** O que o atendente lembra deste cliente (lib/memoria.ts), quando entrou no prompt. */
+  memoria?: string | null;
 }): FonteDaResposta[] {
   const fontes: FonteDaResposta[] = [];
-  // O resumo vem primeiro porque é o mais específico daquela conversa: quem abre a bolha quer saber,
-  // antes de tudo, o que o atendente achava que já tinha sido combinado.
+  // As duas primeiras linhas são o que o atendente já sabia antes de ler a pergunta, na ordem em que
+  // ele soube: primeiro o cliente (que atravessa todas as conversas dele), depois o começo desta.
+  // Quem abre a bolha quer saber, antes de tudo, o que o atendente achava que já estava combinado.
+  if (memoria) fontes.push({ tipo: "memoria", nome: FONTE_MEMORIA, trecho: cortar(memoria) });
   if (resumo) fontes.push({ tipo: "resumo", nome: FONTE_RESUMO, trecho: cortar(resumo) });
   // A base vai INTEIRA no prompt, então ela é sempre uma fonte. O trecho mostrado é o MAIS PARECIDO
   // com a pergunta (lib/demo.ts:trechoMaisParecido), não uma afirmação de qual parte o modelo usou —
@@ -438,6 +449,10 @@ ${documentos}` };
   const { resumo } = resumoDaConversa(numero);
   /** O resumo só é fonte quando entrou mesmo no prompt: sem IA, ninguém o leu. */
   let resumoUsado: string | null = null;
+  // O que o atendente lembra DESTE CLIENTE, das conversas anteriores (lib/memoria.ts). Também é
+  // anotado em segundo plano, e também só vira fonte quando entra mesmo no prompt.
+  const contato = obterContato(numero);
+  let memoriaUsada: string | null = null;
 
   let resposta: string;
   let transferir: boolean;
@@ -461,12 +476,13 @@ ${documentos}` };
       .join("\n");
     const alvo = pendentes.length > 1 ? `às últimas ${pendentes.length} mensagens do cliente, em UMA mensagem só` : "à última mensagem do cliente";
     resumoUsado = resumo;
+    memoriaUsada = contato?.memoria.trim() || null;
     const comeco = resumo ? `Resumo do começo desta conversa: ${resumo}\n\n` : "";
     const prompt = `${comeco}${historico}\n\nResponda como ${config.atendente} ${alvo}.`;
     let bruta: string;
     let usadas: FerramentaDaResposta[] = [];
     try {
-      ({ texto: bruta, ferramentas: usadas } = await perguntarComFerramentas({ system: montarSystemPrompt(config), prompt, maxTokens: 400, ligadas: ferramentasLigadas(config) }));
+      ({ texto: bruta, ferramentas: usadas } = await perguntarComFerramentas({ system: montarSystemPrompt(config, contato), prompt, maxTokens: 400, ligadas: ferramentasLigadas(config) }));
     } catch (err) {
       // A IA falhou (chave, crédito, serviço fora, rede). No simulador e no MCP o erro sobe e aparece na
       // bolha vermelha — quem está testando precisa vê-lo. Numa conversa real, o cliente não pode ficar
@@ -520,7 +536,7 @@ ${documentos}` };
     // Sem IA, a única fonte é o trecho que a busca local escolheu; a base inteira não foi lida por ninguém.
     fontes: trechoLocal
       ? [{ tipo: "base", nome: FONTE_BASE, trecho: cortar(trechoLocal) }]
-      : montarFontes({ pergunta: texto, baseConhecimento: configSalva.baseConhecimento, trechos, resumo: resumoUsado }),
+      : montarFontes({ pergunta: texto, baseConhecimento: configSalva.baseConhecimento, trechos, resumo: resumoUsado, memoria: memoriaUsada }),
     ferramentas,
     ...(motivo ? { transferencia: { motivo } } : {}),
     ...(midiaLida(pendentes) ? { midia: midiaLida(pendentes) } : {}),

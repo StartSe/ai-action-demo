@@ -342,8 +342,37 @@ export interface ConversaCompleta {
    * mais antigas e mostrado no painel do contato; nulo enquanto a conversa couber inteira no histórico.
    */
   resumo: string | null;
+  /**
+   * O que o atendente lembra DESTE CLIENTE, de todas as conversas dele (lib/memoria.ts). Diferente do
+   * `resumo`, que é só desta conversa. Quem preenche é a rota (a tabela `contatos` tem outro dono),
+   * então `lib/conversas.ts` sempre devolve `null` aqui — ver lib/memoria.ts:comContato.
+   */
+  contato: ContatoLembrado | null;
   mensagens: MensagemDaConversa[];
 }
+
+/** Quem escreveu por último o que o atendente lembra: a IA sozinha, ou alguém da equipe corrigindo. */
+export type AutorDaMemoria = "ia" | "pessoa";
+
+/**
+ * O que o atendente guarda de um cliente entre uma conversa e outra: o nome como ele se apresentou,
+ * um e-mail e um telefone de retorno quando ele os informou, e um parágrafo com o que for útil no
+ * próximo atendimento. É visível e editável no painel do contato — nada aqui é escondido de quem
+ * atende, e nada daqui é obrigatório.
+ */
+export interface ContatoLembrado {
+  nomeInformado: string | null;
+  email: string | null;
+  telefoneRetorno: string | null;
+  /** O parágrafo em si; string vazia quando ainda não há nada anotado. */
+  memoria: string;
+  /** Quando esta anotação mudou pela última vez, em ISO. */
+  atualizadoEm: string;
+  atualizadoPor: AutorDaMemoria;
+}
+
+/** Teto do que o atendente lembra de um cliente: um parágrafo, não um prontuário. */
+export const LIMITE_MEMORIA = 1200;
 
 /** Entrada/saída de registros antigos do tipo "atendimento" em lib/historico.ts. Desde a US-003 as
  * conversas vivem no banco (lib/conversas.ts) e nada novo é salvo assim; o tipo continua porque

@@ -17,6 +17,9 @@ export const dynamic = "force-dynamic";
 const COLUNAS = [
   "Nome",
   "Telefone",
+  "Nome informado",
+  "E-mail",
+  "Telefone de retorno",
   "Origem",
   "Situação",
   "Assunto",
@@ -60,6 +63,11 @@ function linhaDaConversa(c: LinhaExportacao): string {
   return [
     rotuloContato(c.numero, c.nome),
     rotuloNumero(c.numero),
+    // O que o cliente informou de si nas conversas (lib/memoria.ts): vem depois do nome do canal e do
+    // número, porque é o mesmo assunto — quem é a pessoa do outro lado.
+    c.nomeInformado ?? "",
+    c.email ?? "",
+    c.telefoneRetorno ?? "",
     rotuloOrigem(c.origem),
     rotuloStatus(c.status),
     c.assunto ?? "",

@@ -557,6 +557,45 @@ export function ConversaAberta({
   }
 
   /** "Tentar de novo" de uma bolha que não chegou: o mesmo texto sai de novo e a MESMA bolha muda de estado. */
+  /**
+   * Corrigir o que o atendente lembra deste cliente (o bloco do painel do contato). A rota grava como
+   * escrito por uma PESSOA — a IA para de reescrever por sete dias — e devolve a conversa já atualizada,
+   * como todas as outras ações desta tela.
+   */
+  async function salvarMemoria(memoria: string) {
+    try {
+      const r = await fetch(`/api/conversas/${encodeURIComponent(numero)}/contato`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memoria }),
+      });
+      if (!r.ok) throw r;
+      const dados = await r.json();
+      aplicar(dados.conversa);
+      setErro(null);
+    } catch (e) {
+      setErro(await lerErro(e));
+    }
+  }
+
+  /** "Apagar memória": o atendente esquece este cliente, mas a conversa continua onde está. */
+  async function apagarMemoria() {
+    const ok = await confirmar("Apagar o que o atendente lembra deste cliente? As mensagens da conversa continuam aqui.", { confirmarRotulo: "Apagar" });
+    if (!ok) return;
+    setAgindo(true);
+    try {
+      const r = await fetch(`/api/conversas/${encodeURIComponent(numero)}/contato`, { method: "DELETE" });
+      if (!r.ok) throw r;
+      const dados = await r.json();
+      aplicar(dados.conversa);
+      setErro(null);
+    } catch (e) {
+      setErro(await lerErro(e));
+    } finally {
+      setAgindo(false);
+    }
+  }
+
   async function reenviar(mensagemId: number) {
     if (reenviandoId !== null) return;
     setReenviandoId(mensagemId);
@@ -595,7 +634,14 @@ export function ConversaAberta({
   // Só as mensagens de verdade formam pares pergunta/resposta: um evento entre a pergunta e a resposta
   // (ou logo antes de uma pergunta) não pode quebrar o "Aprovar"/"Corrigir" da resposta.
   const soConversa = conversa.mensagens.filter((m) => m.papel !== "evento" && m.papel !== "nota");
-  const dadosDoContato: DadosDoContato = { conversa, agindo, onResolver: () => agir("resolver"), onApagar: apagar };
+  const dadosDoContato: DadosDoContato = {
+    conversa,
+    agindo,
+    onResolver: () => agir("resolver"),
+    onApagar: apagar,
+    onSalvarMemoria: salvarMemoria,
+    onApagarMemoria: apagarMemoria,
+  };
 
   return (
     // A partir de 1100 px a conversa e o painel do contato dividem esta caixa em duas colunas; abaixo

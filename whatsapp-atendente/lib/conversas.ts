@@ -79,8 +79,12 @@ type LinhaMensagem = {
 // a conversa aberta é desenhada por um Client Component, e uma definição só evita que o formato do
 // banco e o formato da tela andem em ritmos diferentes.
 
-/** Uma conversa como ela está no banco, sem as mensagens (para isso, veja `obterConversa`). */
-export type ConversaRegistro = Omit<ConversaCompleta, "mensagens">;
+/**
+ * Uma conversa como ela está no banco, sem as mensagens (para isso, veja `obterConversa`). O contato
+ * fica de fora porque a tabela `contatos` tem outro dono (lib/memoria.ts): quem junta os dois é a
+ * rota, por `comContato`, e não uma consulta cruzada daqui.
+ */
+export type ConversaRegistro = Omit<ConversaCompleta, "mensagens" | "contato">;
 
 export type MensagemRegistro = MensagemDaConversa;
 
@@ -290,6 +294,9 @@ export function obterConversa(numero: string): ConversaCompleta | null {
   const anexos = anexosDeMensagens(linhas.map((l) => Number(l.id)));
   return {
     ...registro,
+    // O que o atendente lembra deste cliente mora noutra tabela, com outro dono: quem preenche esta
+    // linha é a rota (lib/memoria.ts:comContato), para este arquivo não consultar `contatos`.
+    contato: null,
     mensagens: linhas.map((l) => {
       const mensagem = paraMensagem(l);
       const doAnexo = anexos.get(mensagem.id);

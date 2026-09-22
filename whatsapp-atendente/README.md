@@ -143,7 +143,7 @@ lib/rajada.ts                             espera de 3 s para responder uma rajad
 lib/eventos.ts                            emissor dos avisos de mudança (quem escreve publica, as telas escutam)
 lib/anexos.ts                             dono da tabela `anexos`: o que o cliente manda que não é texto
 lib/midia.ts                              transcreve o áudio, descreve a foto e lê o documento para a IA
-lib/memoria.ts                            resumo rolante do começo de uma conversa longa
+lib/memoria.ts                            resumo rolante da conversa e o que o atendente lembra de cada cliente
 lib/persona.ts                            monta o atendente a partir do brief (e lê o site, quando informado)
 lib/persona-exemplos.ts                   cinco atendentes prontos (sem IA) e os exemplos do passo 1
 lib/base-modelo.ts                        modelo da base de conhecimento, um por objetivo
@@ -293,6 +293,35 @@ vai para o log. Sem IA conectada nada é resumido.
 O texto aparece em "Resumo da conversa", no painel do contato, só para leitura. Marcar a conversa como
 resolvida (ou o cliente reabri-la) não apaga o resumo; apagar a conversa apaga. Quando ele entra na
 resposta, aparece como a primeira fonte do bloco "Por que respondeu assim".
+
+### O que o atendente guarda sobre cada cliente
+
+O resumo acima morre com a conversa. O que **atravessa** as conversas de um mesmo número é a memória do
+contato (tabela `contatos`, em `lib/memoria.ts`): um parágrafo de até 1.200 caracteres, mais o nome
+como o cliente se apresentou, um e-mail e um telefone de retorno — sempre os que ele mesmo informou.
+
+**O que entra:** como ele se apresentou, o que prefere, o que já comprou ou agendou, o que ficou
+pendente e o contato que ele deu para retorno. Até cinco fatos, escritos pela IA depois de a resposta
+sair (nunca antes: o cliente não espera por isso), quando há pelo menos 4 mensagens novas dele desde a
+última anotação — ou quando a conversa é marcada como resolvida, que é a última chance de guardar o
+que foi combinado.
+
+**O que nunca entra:** informação de saúde, documentos (CPF, RG, passaporte), senhas, dados de cartão
+ou de conta, e opinião do atendente sobre o cliente. O pedido à IA proíbe as cinco coisas, e o
+parágrafo inteiro fica à vista de quem atende justamente para que isso seja conferível.
+
+**Como editar e apagar:** o bloco "O que o atendente lembra", no painel do contato, mostra o texto,
+quando ele mudou e quem escreveu ("pela IA" ou "por você"). "Editar" abre o campo com contador e
+"Salvar" grava como escrito por uma pessoa — e a partir daí, por sete dias, a IA só **acrescenta** ao
+que você escreveu, nunca reescreve por cima. "Apagar memória" esquece o cliente e pergunta antes;
+apagar a conversa apaga a memória junto. Nada disso é enviado para fora: fica no mesmo `app.sqlite` do
+resto do app, no disco da sua instância.
+
+Quando a memória existe, ela entra no início do pedido à IA ("O que você já sabe sobre este cliente…"),
+o atendente passa a chamar o cliente pelo nome e a anotação aparece como a primeira fonte do bloco "Por
+que respondeu assim". As colunas "Nome informado", "E-mail" e "Telefone de retorno" da planilha de
+Relatórios vêm daqui. Conversas do celular de teste, do assistente e as de exemplo ficam de fora — as
+de exemplo já nascem com uma anotação escrita à mão, só para a demonstração mostrar o recurso.
 
 ### Documentos e busca para atendimento
 

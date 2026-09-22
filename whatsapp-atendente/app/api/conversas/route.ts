@@ -1,7 +1,8 @@
 import { aiEnabled, meta } from "@/lib/ai";
-import { inicioDoPeriodo, listarConversas, semearExemplosSeVazio } from "@/lib/conversas";
+import { contarExemplos, inicioDoPeriodo, listarConversas, semearExemplosSeVazio } from "@/lib/conversas";
 import { getConfig } from "@/lib/estado";
 import { WHATSAPP } from "@/lib/integracoes";
+import { sincronizarContatosDeExemplo } from "@/lib/memoria";
 import { lerPeriodo, lerStatus } from "@/lib/rotulos";
 import { integracaoConfigurada } from "@/lib/setup-comum";
 
@@ -19,6 +20,9 @@ export async function GET(req: Request) {
   // Primeira leitura de um app sem conversa nenhuma e sem número conectado: as conversas de exemplo
   // nascem aqui, uma única vez, para as telas não abrirem vazias em uma demonstração.
   semearExemplosSeVazio({ numeroConectado: integracaoConfigurada(WHATSAPP), atendente: getConfig().atendente });
+  // O que o atendente lembra dos clientes de exemplo acompanha as conversas de exemplo: lib/memoria.ts
+  // é o dono da tabela `contatos`, então quem junta as duas coisas é a rota, e não lib/conversas.ts.
+  sincronizarContatosDeExemplo(contarExemplos() > 0);
 
   const params = new URL(req.url).searchParams;
   const desde = inicioDoPeriodo(lerPeriodo(params.get("periodo")));
