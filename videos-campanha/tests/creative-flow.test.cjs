@@ -648,3 +648,96 @@ test("prévia bloqueia prompt vazio, excesso de referências e vídeo usado como
   Object.assign(p.nodes[2].data, { model: "kling-v2.1-standard-i2v", duration: 5, referenceId: "extra" });
   assert.match(generationPlan(p, "all", [ready, { ...ready, id: "extra" }]).issue.message, /até 1/);
 });
+
+test("duplicar mantém entradas e arquivo, sem reutilizar o trabalho ou compartilhar campos mutáveis", () => {
+  const { deriveBlock } = require("../lib/flow/editing.ts");
+  const p = model.recipe("product");
+  const source = p.nodes[1];
+  Object.assign(source.data, { prompt: "Produto ao sol", assetId: "ready-duplicate", lastJobId: "paid-job", status: "pending" });
+  const result = deriveBlock(p, source.id, "duplicate");
+  const duplicate = result.project.nodes.at(-1);
+  assert.notEqual(duplicate.id, source.id);
+  assert.equal(duplicate.data.assetId, source.data.assetId);
+  assert.equal(duplicate.data.lastJobId, undefined);
+  assert.equal(duplicate.data.status, "completed");
+  assert.equal(result.project.edges.find((e) => e.target === duplicate.id).source, p.nodes[0].id);
+  assert.equal(result.project.edges.filter((e) => e.source === duplicate.id).length, 0);
+  duplicate.data.excluded.push("different");
+  assert.deepEqual(source.data.excluded, []);
+  assert.equal(p.nodes.length, 4);
+  model.validateProject(result.project);
+});
+
+test("ramificações de imagem criam vídeo; variações de vídeo reutilizam as imagens de entrada", () => {
+  const { deriveBlock } = require("../lib/flow/editing.ts");
+  const p = model.recipe("product");
+  const branch = deriveBlock(p, p.nodes[1].id, "branch");
+  const video = branch.project.nodes.at(-1);
+  assert.equal(video.data.kind, "video");
+  assert.equal(branch.project.edges.find((e) => e.target === video.id).source, p.nodes[1].id);
+  p.nodes[2].data.assetId = "ready-video";
+  const variation = deriveBlock(p, p.nodes[2].id, "branch");
+  assert.equal(variation.project.nodes.at(-1).data.assetId, undefined);
+  assert.equal(variation.project.edges.find((e) => e.target === variation.nodeId).source, p.nodes[1].id);
+  assert.throws(() => deriveBlock(p, p.nodes[3].id, "branch"), /entrega/);
+  model.validateProject(branch.project);
+  model.validateProject(variation.project);
+});
+
+test("preview público publica só o canvas e suas mídias, mantendo alterações posteriores privadas", async () => {
+  const { publishCanvas, sharedCanvas } = require("../lib/flow/share.ts");
+  const { saveUpload } = require("../lib/flow/media.ts");
+  const publicMedia = require("../app/api/flow-preview/[token]/assets/[id]/route.ts");
+  const p = model.recipe("product");
+  p.nodes[0].data.prompt = "Ideia compartilhada";
+  Object.assign(p.nodes[1].data, { assetId: "shared-image", referenceId: "private-reference", lastJobId: "private-job-id" });
+  store.save(p);
+  store.addAsset({ id: "shared-image", projectId: p.id, nodeId: p.nodes[1].id, kind: "image", title: "Imagem pública", prompt: "PRIVATE ASSET PROMPT", url: "/api/flow-assets/shared-image/file", mimeType: "image/png", createdAt: new Date().toISOString() });
+  store.addAsset({ id: "private-reference", projectId: p.id, nodeId: "", kind: "image", title: "Não publicada", url: "https://example.test/private-image", prompt: "", createdAt: new Date().toISOString() });
+  await saveUpload("shared-image", Buffer.from("shared-file-bytes"));
+  const published = publishCanvas(p.id);
+  const token = published.path.split("/").at(-1);
+  assert.match(token, /^[\w-]{43}$/);
+  const shared = sharedCanvas(token);
+  assert.equal(shared.media.length, 1);
+  const body = JSON.stringify(shared.canvas);
+  assert.match(body, /Ideia compartilhada/);
+  assert.doesNotMatch(body, /PRIVATE ASSET PROMPT|private-reference|private-job-id|api\/flow-assets|projectId|revision/);
+  let response = await publicMedia.GET(new Request("http://test/public-file", { headers: { Range: "bytes=0-5" } }), { params: Promise.resolve({ token, id: "shared-image" }) });
+  assert.equal(response.status, 206);
+  assert.equal(await response.text(), "shared");
+  response = await publicMedia.GET(new Request("http://test/public-file"), { params: Promise.resolve({ token, id: "private-reference" }) });
+  assert.equal(response.status, 404);
+  response = await publicMedia.GET(new Request("http://test/public-file"), { params: Promise.resolve({ token: "x".repeat(43), id: "shared-image" }) });
+  assert.equal(response.status, 404);
+  const latest = store.project(p.id);
+  latest.title = "Título ainda privado";
+  store.save(latest);
+  assert.equal(sharedCanvas(token).canvas.title, p.title);
+  assert.equal(publishCanvas(p.id).path, published.path);
+  assert.equal(sharedCanvas(token).canvas.title, "Título ainda privado");
+  store.remove(p.id);
+  assert.equal(sharedCanvas(token), undefined);
+});
+
+test("exceção pública permite apenas leitura do preview e da mídia autorizada", () => {
+  const { isPreviewRead } = require("../lib/flow/preview-model.ts");
+  const token = "a".repeat(43);
+  assert.equal(isPreviewRead(`/preview/${token}`, "GET"), true);
+  assert.equal(isPreviewRead(`/api/flow-preview/${token}/assets/image-id`, "HEAD"), true);
+  for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+    assert.equal(isPreviewRead(`/preview/${token}`, method), false);
+    assert.equal(isPreviewRead(`/api/flow-preview/${token}/assets/image-id`, method), false);
+  }
+  for (const path of ["/api/flow-share", "/api/flows", "/api/flow-assets/image-id/file", `/preview/${token}/edit`, "/preview/invalid"]) assert.equal(isPreviewRead(path, "GET"), false);
+});
+
+test("download de arquivo envia attachment com nome seguro e preserva conteúdo", async () => {
+  const { serveAsset } = require("../lib/flow/serve-media.ts");
+  const { saveUpload } = require("../lib/flow/media.ts");
+  await saveUpload("download-test", Buffer.from("download bytes"));
+  const r = await serveAsset(new Request("http://test/file?download=1"), { id: "download-test", title: 'Vídeo "final"', kind: "video", mimeType: "video/mp4", url: "" });
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get("Content-Disposition"), /^attachment; filename\*=UTF-8''V%C3%ADdeo%20%22final%22.mp4$/);
+  assert.equal(await r.text(), "download bytes");
+});

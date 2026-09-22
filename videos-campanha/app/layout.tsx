@@ -5,7 +5,7 @@ import "./globals.css";
 const manrope = localFont({ src: "./fonts/manrope-latin.woff2", variable: "--font-manrope", weight: "200 800", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Vídeos de Campanha · IA para Executivos",
+  title: "Creative Flows · IA para Executivos",
   description: "Crie campanhas conectando ideias, imagens e vídeos em um fluxo visual.",
 };
 

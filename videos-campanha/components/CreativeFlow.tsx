@@ -1,23 +1,22 @@
 "use client";
-/* eslint-disable @next/next/no-img-element -- Assets include user uploads, data URLs and external provider outputs. */
 import Link from "next/link";
+import CreativeNode from "./FlowCard";
+import FlowIcon from "./FlowIcon";
 import DeleteConfirmation from "./DeleteConfirmation";
 import Preview from "./FlowPreview";
 import FlowModelPicker from "./FlowModelPicker";
 import { FlowDialog, FlowSkeleton, FlowToasts, useFlowMessages } from "./FlowFeedback";
 import { generationPlan, modelSettings, MODEL_HELP } from "@/lib/flow/experience";
+import { deriveBlock, freePosition } from "@/lib/flow/editing";
 import { version } from "@/package.json";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useEffectEvent, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import ReactFlow, {
   Background,
   Controls,
   MiniMap,
-  Handle,
-  Position,
   applyNodeChanges,
   applyEdgeChanges,
-  type NodeProps,
   type Connection,
   type ReactFlowInstance,
 } from "reactflow";
@@ -51,105 +50,6 @@ async function api(url: string, init?: RequestInit) {
   if (!data || typeof data !== "object") throw new Error("O servidor não respondeu como esperado. Tente novamente em instantes.");
   if (!r.ok) throw new Error(data.error || "Não foi possível concluir. Tente novamente.");
   return data;
-}
-function Generating({ kind, status, asset, startedAt }: { kind: Kind; status?: string; asset?: Asset; startedAt?: string }) {
-  const [elapsed, setElapsed] = useState(0);
-  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
-  useEffect(() => {
-    const start = startedAt ? Date.parse(startedAt) : Date.now();
-    const t = setInterval(() => setElapsed(Math.max(0, Math.floor((Date.now() - start) / 1000))), 1000);
-    return () => clearInterval(t);
-  }, [startedAt]);
-  const title = status === "sending" ? "Enviando ao modelo…" : kind === "video" ? "Gerando seu vídeo…" : kind === "transform" ? "Transformando sua imagem…" : "Gerando sua imagem…";
-  const hint = elapsed >= 120 ? "Ainda aguardando o resultado. Você não precisa enviar de novo." : "O tempo varia conforme o modelo e a fila. Avisaremos aqui quando terminar.";
-  return (
-    <div className="cf-generating">
-      {asset && (asset.kind === "video" ? <video src={asset.url} muted preload="metadata" aria-hidden="true" /> : <img src={asset.url} alt="" aria-hidden="true" />)}
-      <svg className="cf-waves" viewBox="0 0 400 200" preserveAspectRatio="none" aria-hidden="true">
-        <defs>
-          <linearGradient id={`cfw1${uid}`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#f7bfe6" stopOpacity=".7" />
-            <stop offset="1" stopColor="#dccbfb" stopOpacity=".45" />
-          </linearGradient>
-          <linearGradient id={`cfw2${uid}`} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stopColor="#ffffff" stopOpacity=".85" />
-            <stop offset="1" stopColor="#f3d2ef" stopOpacity=".5" />
-          </linearGradient>
-        </defs>
-        <path d="M0 118 C70 60 150 175 250 108 S375 40 400 66 L400 200 L0 200 Z" fill={`url(#cfw1${uid})`} />
-        <path d="M0 165 C90 105 200 205 300 142 S372 96 400 118 L400 200 L0 200 Z" fill={`url(#cfw2${uid})`} />
-      </svg>
-      <div className="cf-generating-body">
-        <span className="cf-spark" aria-hidden="true">
-          <i /><i />
-          <svg viewBox="0 0 64 64">
-            <defs>
-              <linearGradient id={`cfs${uid}`} x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stopColor="#f22baa" />
-                <stop offset="1" stopColor="#7b3fe4" />
-              </linearGradient>
-            </defs>
-            <path d="M32 3 C34.5 21 43 29.5 61 32 C43 34.5 34.5 43 32 61 C29.5 43 21 34.5 3 32 C21 29.5 29.5 21 32 3 Z" fill={`url(#cfs${uid})`} />
-            <path d="M32 14 C33.2 24.5 39.5 30.8 50 32 C39.5 33.2 33.2 39.5 32 50 C30.8 39.5 24.5 33.2 14 32 C24.5 30.8 30.8 24.5 32 14 Z" fill="#fff" opacity=".55" />
-          </svg>
-          <em /><em /><em />
-        </span>
-        <strong>{title}</strong>
-        <small>{status === "sending" ? "Preparando a solicitação" : "Pedido recebido · aguardando resultado"}</small>
-        <span className="cf-elapsed">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} decorridos</span>
-        <span className="cf-progress" aria-hidden="true"><i /></span>
-        <em>{hint}</em>
-      </div>
-    </div>
-  );
-}
-function CreativeNode({
-  data,
-  selected,
-}: NodeProps<Block["data"] & { asset?: Asset; onRemove?: () => void; onCancel?: () => void; onRun?: () => void; onReview?: () => void; onModel?: () => void; jobError?: string; startedAt?: string; locked?: boolean }>) {
-  const loading = data.status === "pending" || data.status === "sending";
-  const problem = ["failed", "uncertain", "submitting"].includes(data.status || "");
-  const state = loading ? "Gerando…" : problem ? "Geração precisa de atenção" : data.dirty ? "Precisa atualizar" : data.asset ? "Concluído" : "Aguardando geração";
-  return (
-    <article aria-busy={loading} className={`cf-node ${selected ? "is-selected" : ""}`}>
-      {data.kind !== "idea" && (
-        <Handle type="target" position={Position.Left} />
-      )}
-      <header>
-        <span className={`cf-icon ${data.kind}`}>{ICONS[data.kind]}</span>
-        <strong>{data.title}</strong>
-        <span className={`cf-node-state ${loading ? "is-loading" : problem ? "is-error" : data.asset && !data.dirty ? "is-complete" : ""}`} role="status" aria-label={state} title={state}>
-          <span aria-hidden="true">{loading ? "⚙" : problem ? "!" : data.dirty ? "↻" : data.asset ? "✓" : "···"}</span>
-        </span>
-        {loading ? (
-          <button className="cf-node-cancel nodrag nopan" title="A execução para depois desta geração" onClick={(event) => { event.stopPropagation(); data.onCancel?.(); }}>Pausar sequência</button>
-        ) : (
-          <button className="cf-node-delete nodrag nopan" aria-label={`Excluir bloco ${data.title}`} title="Excluir bloco" disabled={data.locked} onClick={(event) => { event.stopPropagation(); data.onRemove?.(); }}>×</button>
-        )}
-      </header>
-      {data.kind === "idea" ? (
-        <p className="cf-idea">
-          {data.prompt || "Descreva sua campanha. O que vamos criar?"}
-        </p>
-      ) : loading ? (
-        <Generating kind={data.kind} status={data.status} asset={data.asset} startedAt={data.startedAt} />
-      ) : (
-        <Preview asset={data.asset} autoPlay />
-      )}
-      {problem && <div className="cf-node-problem"><p>{data.jobError || "Esta geração precisa de atenção."}</p><button className="nodrag nopan" onClick={(e) => { e.stopPropagation(); data.onReview?.(); }}>Ver como resolver</button></div>}
-      <footer>
-        {["idea", "output"].includes(data.kind) ? <span>{data.kind === "idea" ? "O início de tudo" : data.asset ? "Pronto para sua campanha" : "Conecte o resultado para entregar"}</span> : <button className="nodrag nopan cf-node-model" disabled={data.locked} onClick={(e) => { e.stopPropagation(); data.onModel?.(); }} title="Escolher modelo">{MODELS.find((m) => m.id === data.model)?.name}⌄</button>}
-        {data.kind !== "idea" && <span>{data.kind === "video" ? `${data.duration}s · ` : ""}{data.ratio}</span>}
-      </footer>
-      {!["idea", "output"].includes(data.kind) && !loading && <div className="cf-node-actions">
-        <button className="nodrag nopan" disabled={data.locked || ["uncertain", "submitting"].includes(data.status || "")} onClick={(e) => { e.stopPropagation(); data.onRun?.(); }}>{data.status === "failed" ? "↻ Tentar novamente" : data.asset ? "✦ Gerar novamente" : "✦ Gerar"}</button>
-        {data.asset && <a className="nodrag nopan" href={data.asset.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>Abrir ↗</a>}
-      </div>}
-      {data.kind !== "output" && (
-        <Handle type="source" position={Position.Right} />
-      )}
-    </article>
-  );
 }
 const nodeTypes = { creative: CreativeNode };
 export default function CreativeFlow({ initialProjectId }: { initialProjectId?: string } = {}) {
@@ -186,6 +86,9 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
   const [deletion, setDeletion] = useState<{ kind: "project" | "block"; id: string; title: string; projectId: string } | null>(null);
   const [confirmRun, setConfirmRun] = useState<string | null>(null);
   const [picker, setPicker] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const sharingLock = useRef(false);
+  const [shareLink, setShareLink] = useState("");
   const [instance, setInstance] = useState<ReactFlowInstance | null>(null);
   const revisions = useRef(new Map<string, number>());
   const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -385,13 +288,27 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
   }
 
   async function shareProject(p: Project) {
+    if (sharingLock.current) return;
+    sharingLock.current = true;
+    setSharing(true);
     try {
       const savedProject = await persist(live.current?.id === p.id ? live.current : p);
-      const url = new URL(`/projetos/${encodeURIComponent(savedProject.id)}`, window.location.origin).href;
-      try {
-        await navigator.clipboard.writeText(url);
-        setNotice("Link copiado. Quem abrir precisa entrar na conta deste app.");
-      } catch { window.prompt("Copie o link. É necessário entrar na conta deste app:", url); }
+      const result = await api("/api/flow-share", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: savedProject.id }) });
+      const url = new URL(result.path, window.location.origin).href;
+      setShareLink(url);
+      try { await navigator.clipboard.writeText(url); notify("Link público copiado. O canvas pode ser visto sem login.", "success"); }
+      catch { setNotice("Seu preview está pronto. Copie o link para compartilhar."); }
+    } catch (e) { setError((e as Error).message); }
+    finally { sharingLock.current = false; setSharing(false); }
+  }
+  function derive(id: string, action: "duplicate" | "branch") {
+    if (!live.current || busy) return;
+    try {
+      const result = deriveBlock(live.current, id, action);
+      change(result.project);
+      setSelected(result.nodeId);
+      notify(action === "duplicate" ? "Etapa duplicada." : "Ramificação criada.", "success");
+      setTimeout(() => instance?.fitView({ padding: 0.2, duration: 300 }), 80);
     } catch (e) { setError((e as Error).message); }
   }
   function acceptGeneration(j: Job) {
@@ -485,9 +402,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
     const n = block(kind, p.nodes.length);
     const source = p.nodes.find((n) => n.id === selected) || p.nodes.at(-1);
     if (source) {
-      n.position = { x: source.position.x + 350, y: source.position.y };
-      while (p.nodes.some((b) => Math.abs(b.position.x - n.position.x) < 300 && Math.abs(b.position.y - n.position.y) < 290))
-        n.position.y += 310;
+      n.position = freePosition(p, { x: source.position.x + 410, y: source.position.y });
     }
     change({
       ...p,
@@ -739,10 +654,10 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
     <div className={`cf-app ${view === "editor" ? "cf-editor-open" : ""}`}>
       <header className="cf-top">
         <Link href="/" className="cf-brand">
-          <span>V</span>
+          <span><FlowIcon name="idea" width={23} height={23} /></span>
           <div>
-            <strong>Vídeos de Campanha</strong>
-            <small>Creative Flow · v{version}</small>
+            <strong>Creative Flows</strong>
+            <small>Imagens e vídeos · v{version}</small>
           </div>
         </Link>
         <nav aria-label="Navegação principal">
@@ -918,13 +833,13 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
               <p>Da ideia ao vídeo. Crie, conecte e gere seus assets com IA.</p>
             </div>
             <span className="cf-save">{saved}</span>
-            <button disabled={busy} onClick={() => void shareProject(current)} title="Copiar link do projeto">Compartilhar ↗</button>
+            <button className="cf-head-action cf-share-button" disabled={busy || sharing} onClick={() => void shareProject(current)} title="Compartilhar preview público"><FlowIcon name="share" />{sharing ? "Compartilhando…" : "Compartilhar"}</button>
             <button
-              className="cf-primary"
+              className="cf-primary cf-head-action"
               disabled={busy || unsettled}
               onClick={() => setConfirmRun("all")}
             >
-              ▷ {uploading ? "Enviando imagem…" : generating ? "Gerando…" : "Gerar tudo"}
+              <FlowIcon name="video" />{uploading ? "Enviando imagem…" : generating ? "Gerando…" : "Gerar tudo"}
             </button>
             {generating && (
               <button
@@ -953,7 +868,8 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                     locked: busy, onRemove: () => removeBlock(n.id),
                     onRun: () => { setSelected(n.id); setConfirmRun(n.id); },
                     onReview: () => setSelected(n.id),
-                    onModel: () => { setSelected(n.id); setModelPicker(true); },
+                    onBranch: () => derive(n.id, "branch"),
+                    onDuplicate: () => derive(n.id, "duplicate"),
                     startedAt: projectJobs.find((j) => j.nodeId === n.id)?.createdAt,
                     jobError: projectJobs.find((j) => j.nodeId === n.id)?.error,
                     onCancel: () => { stop.current = true; setNotice("A execução vai parar após a geração atual."); },
@@ -1028,33 +944,23 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                 Arraste para organizar · Um ponto de saída pode conectar vários blocos · Duplo clique na
                 linha para remover
               </div>
-              <div className="cf-toolbar">
-                <span>＋ Adicionar etapa:</span>
+              <div className="cf-toolbar" role="toolbar" aria-label="Adicionar etapa">
+                <span className="cf-toolbar-plus" aria-hidden="true"><FlowIcon name="plus" /></span>
                 {(Object.keys(LABELS) as Kind[]).map((k) => (
                   <button key={k} disabled={busy} onClick={() => add(k)}>
-                    <b>{ICONS[k]}</b>
+                    <FlowIcon name={k} />
                     {LABELS[k]}
                   </button>
                 ))}
-                <select
-                  aria-label="Tipo de conexão"
-                  value={edgeKind}
-                  onChange={(e) =>
-                    setEdgeKind(e.target.value as "input" | "context")
-                  }
-                >
-                  <option value="input">Entrada direta</option>
-                  <option value="context">Referência / contexto</option>
-                </select>
+
               </div>
             </div>
             {node && (
               <aside key={`${current.id}:${node.id}`} className="cf-inspector" aria-label="Detalhes da etapa">
                 <header>
-                  <h2>
-                    <span>{ICONS[node.data.kind]}</span>{" "}
-                    {LABELS[node.data.kind]}
-                  </h2>
+                  <span className={`cf-icon ${node.data.kind}`}><FlowIcon name={node.data.kind} /></span>
+                  <input className="cf-inspector-title" aria-label="Nome da etapa" value={node.data.title} maxLength={100} disabled={busy} onChange={(e) => patch({ title: e.target.value })} />
+                  {node.data.assetId && !node.data.dirty && <span className="cf-inspector-ready" title="Pronto"><FlowIcon name="check" /></span>}
                   <button
                     aria-label="Fechar detalhes"
                     onClick={() => setSelected(null)}
@@ -1064,55 +970,37 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                 </header>
                 <div className="cf-inspector-scroll">
                 <fieldset disabled={busy}>
-                  {["image", "transform"].includes(node.data.kind) && (
-                    <div className="cf-branch-actions">
-                      <button className="cf-secondary" onClick={() => add("video", true)}>⑂ Criar ramificação de vídeo</button>
-                      <p className="cf-muted">Reutilize esta imagem em várias opções. Escolha um modelo em cada bloco de vídeo.</p>
-                    </div>
-                  )}
-                  <label>
-                    Nome da etapa
-                    <input
-                      value={node.data.title}
-                      maxLength={100}
-                      onChange={(e) => patch({ title: e.target.value })}
-                    />
-                  </label>
                   {node.data.kind !== "output" && (
                     <label>
                       {node.data.kind === "idea" ? "Sua ideia" : "Prompt"}
                       <textarea
-                        rows={5}
+                        rows={4}
                         value={node.data.prompt}
                         maxLength={10000}
                         placeholder="Descreva o que você imagina…"
                         onChange={(e) => patch({ prompt: e.target.value })}
                       />
+                      <small className="cf-prompt-count">{node.data.prompt.length.toLocaleString("pt-BR")}/10.000</small>
                     </label>
                   )}
                   {!["idea", "output"].includes(node.data.kind) && (
                     <>
                       <div className="cf-model-field">
-                        <span>Modelo</span>
+                        <span title={MODEL_HELP[node.data.model]?.description}>Modelo <span className="cf-field-help" aria-label={MODEL_HELP[node.data.model]?.description}>ⓘ</span></span>
                         <button className="cf-model-trigger" onClick={() => setModelPicker(true)} aria-haspopup="dialog"><strong>{model?.name || "Escolher modelo"}</strong><span>Trocar ⌄</span></button>
-                        <p>{MODEL_HELP[node.data.model]?.description}</p>
-                        <small>{MODEL_HELP[node.data.model]?.references}</small>
+
                       </div>
-                      <label>
-                        Formato
-                        <div className="cf-ratios">
-                          {model?.ratios.map((r) => (
-                            <button
-                              key={r}
-                              aria-pressed={node.data.ratio === r}
-                              className={node.data.ratio === r ? "active" : ""}
-                              onClick={() => patch({ ratio: r })}
-                            >
-                              {r}
-                            </button>
-                          ))}
-                        </div>
+                      <label>Proporção
+                        <select aria-label="Proporção" value={node.data.ratio} onChange={(e) => patch({ ratio: e.target.value })}>
+                          {model?.ratios.map((r) => <option key={r} value={r}>{r}{r === "1:1" ? " (Quadrado)" : r === "16:9" ? " (Horizontal)" : r === "9:16" ? " (Vertical)" : ""}</option>)}
+                        </select>
                       </label>
+                      <div className="cf-parameter-row">
+                        <label>Resolução
+                          <select aria-label="Resolução" value={node.data.resolution || model?.resolutions[0]} onChange={(e) => patch({ resolution: e.target.value })}>
+                            {model?.resolutions.map((r) => <option key={r}>{r}</option>)}
+                          </select>
+                        </label>
                       {node.data.kind === "video" && (
                         <label>
                           Duração
@@ -1121,42 +1009,14 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                           </select>
                         </label>
                       )}
-                      <details>
-                        <summary>Avançado</summary>
-                        <label>
-                          Resolução
-                          <select
-                            value={
-                              node.data.resolution || model?.resolutions[0]
-                            }
-                            onChange={(e) =>
-                              patch({ resolution: e.target.value })
-                            }
-                          >
-                            {model?.resolutions.map((r) => (
-                              <option key={r}>{r}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <p>
-                          {"Referências: "}
-                          {node.data.kind === "video"
-                            ? node.data.model === "veo3.1-reference"
-                              ? "Até 3 referências visuais. Formato definido pelo modelo."
-                              : model?.maxImages === 1
-                                ? "Uma imagem obrigatória como quadro inicial."
-                              : "Até 2 imagens: primeiro e último frame. Para contexto visual, escolha Veo · Referências."
-                            : "Até 14 imagens de referência."}
-                        </p>
-                      </details>
+                      </div>
+
                     </>
                   )}
                   {node.data.kind !== "idea" && (
                     <>
-                      <div className="cf-context-head">
-                        <h3>Contexto herdado</h3>
-                        <span>{refs.length}</span>
-                      </div>
+                      <details className="cf-context-details" open>
+                      <summary>Referências e contexto <span>{refs.length}</span></summary>
                       <label className="cf-check">
                         <input
                           type="checkbox"
@@ -1228,6 +1088,12 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                           ▧ Biblioteca
                         </button>
                       </div>
+                      <label className="cf-connection-kind">Novas conexões
+                        <select aria-label="Tipo de conexão" value={edgeKind} onChange={(e) => setEdgeKind(e.target.value as "input" | "context")}>
+                          <option value="input">Entrada direta</option><option value="context">Referência / contexto</option>
+                        </select>
+                      </label>
+                      </details>
                       {node.data.dirty && node.data.assetId && (
                         <p className="cf-stale">
                           ↻ Esta etapa mudou. Gere novamente para atualizar o
@@ -1235,7 +1101,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                         </p>
                       )}
                       {node.data.assetId && (
-                        <div className="cf-attached">
+                        <details className="cf-attached"><summary>Arquivo desta etapa</summary>
                           <Preview asset={assetFor(node.data.assetId)} />
                           <button
                             onClick={() =>
@@ -1254,29 +1120,14 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                             rel="noreferrer"
                             download
                           >
-                            Abrir / baixar ↗
+                            Baixar arquivo
                           </a>
-                        </div>
+                        </details>
                       )}
                     </>
                   )}
                   {nodeJob?.status === "failed" && <div className="cf-inline-issue" role="status"><strong>A geração não foi concluída.</strong><p>{nodeJob.error || "Revise os parâmetros e tente novamente."}</p></div>}
                   {nodeIssue && !busy && <p className="cf-inline-issue">{nodeIssue.message}</p>}
-                  {node.data.kind !== "idea" && (
-                    <button
-                      disabled={Boolean(nodeIssue) || Boolean(nodeJob && ["pending", "uncertain", "submitting"].includes(nodeJob.status))}
-                      className="cf-primary cf-full"
-                      onClick={() =>
-                        node.data.kind === "output"
-                          ? run(node.id)
-                          : setConfirmRun(node.id)
-                      }
-                    >
-                      {node.data.kind === "output"
-                        ? "Preparar entrega"
-                        : nodeJob?.status === "failed" ? "↻ Tentar novamente" : `✦ Gerar ${LABELS[node.data.kind].toLowerCase()}`}
-                    </button>
-                  )}
                   {projectJobs
                     .filter(
                       (j) =>
@@ -1342,6 +1193,22 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                     Remover etapa
                   </button>
                 </fieldset>
+                </div>
+                <div className="cf-inspector-action">                  {node.data.kind !== "idea" && (
+                    <button
+                      disabled={busy || Boolean(nodeIssue) || Boolean(nodeJob && ["pending", "uncertain", "submitting"].includes(nodeJob.status))}
+                      className="cf-primary cf-full"
+                      onClick={() =>
+                        node.data.kind === "output"
+                          ? run(node.id)
+                          : setConfirmRun(node.id)
+                      }
+                    >
+                      {node.data.kind === "output"
+                        ? "Preparar entrega"
+                        : nodeJob?.status === "failed" ? "↻ Tentar novamente" : `✦ Gerar ${LABELS[node.data.kind].toLowerCase()}`}
+                    </button>
+                  )}
                 </div>
               </aside>
             )}
@@ -1477,6 +1344,13 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
             </div>
         </FlowDialog>
       )}
+      {shareLink && <FlowDialog title="Compartilhar preview" className="cf-share-dialog" onClose={() => setShareLink("")}>
+        <button className="cf-modal-close" aria-label="Fechar compartilhamento" onClick={() => setShareLink("")}>×</button>
+        <p className="cf-eyebrow">LINK PÚBLICO</p><h2>Compartilhe seu canvas</h2>
+        <p>Quem tiver o link pode visualizar esta versão do fluxo, sem entrar na conta. Para atualizar o preview após editar, compartilhe novamente.</p>
+        <label className="cf-share-link">Link do preview<input readOnly value={shareLink} onFocus={(e) => e.target.select()} /></label>
+        <div className="cf-confirm-actions"><a href={shareLink} target="_blank" rel="noreferrer">Ver preview ↗</a><button className="cf-primary" onClick={async () => { try { await navigator.clipboard.writeText(shareLink); setShareLink(""); notify("Link público copiado.", "success"); } catch { setNotice("Selecione o campo e copie o link."); } }}>Copiar link</button></div>
+      </FlowDialog>}
       {deletion && <DeleteConfirmation kind={deletion.kind} title={deletion.title} onCancel={() => setDeletion(null)} onConfirm={confirmDeletion} />}
     </div>
   );

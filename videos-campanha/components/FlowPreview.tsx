@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import type { Asset } from "@/lib/flow/model";
 
+export type MediaAsset = Pick<Asset, "url" | "title" | "kind">;
+
 export default function FlowPreview({
   asset,
   autoPlay = false,
   interactive = true,
 }: {
-  asset?: Asset;
+  asset?: MediaAsset;
   autoPlay?: boolean;
   interactive?: boolean;
 }) {
@@ -32,7 +34,7 @@ function Media({
   autoPlay,
   interactive,
 }: {
-  asset: Asset;
+  asset: MediaAsset;
   autoPlay: boolean;
   interactive: boolean;
 }) {
@@ -71,9 +73,6 @@ function Media({
               >
                 Recarregar prévia
               </button>
-              <a href={asset.url} target="_blank" rel="noreferrer">
-                Abrir arquivo ↗
-              </a>
             </>
           )}
         </div>

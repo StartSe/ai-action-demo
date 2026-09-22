@@ -673,3 +673,598 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
 .cf-editor-body > .cf-inspector {
   grid-row: 1/4;
 }
+
+/* Creative Flows 0.3: compact cards and a floating editing panel. */
+.cf-workspace > .cf-editor-head {
+  grid-column: 1 / -1;
+  padding: 18px 24px;
+  gap: 14px;
+  background: transparent;
+}
+.cf-editor-head > .cf-head-action,
+.cf-editor-head > .cf-head-action:not(.cf-primary) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 156px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  padding: 0 15px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.cf-editor-head > .cf-share-button {
+  color: #29213e;
+  border: 1px solid #e9e4ee;
+  background: #ffffffeb;
+  box-shadow: 0 3px 12px #21113604;
+}
+.cf-editor-head > .cf-head-action svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.cf-editor-open > .cf-workspace.has-inspector {
+  grid-template-columns: minmax(0, 1fr) 352px;
+}
+.cf-editor-body > .cf-inspector {
+  grid-column: 2;
+  grid-row: 3;
+  width: auto;
+  margin: 4px 18px 18px 0;
+  border: 1px solid #e8e2ef;
+  border-radius: 18px;
+  background: #ffffffdf;
+  backdrop-filter: blur(18px);
+  box-shadow: 0 12px 40px #39255408;
+}
+.cf-inspector > header {
+  padding: 18px 18px 10px;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+}
+.cf-inspector
+  > header
+  input.cf-inspector-title:not([type="checkbox"]):not([type="file"]) {
+  min-width: 0;
+  flex: 1;
+  width: 100%;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 4px 0;
+  margin: 0;
+  color: #242039;
+  background: transparent;
+  border-color: transparent;
+  border-radius: 4px;
+}
+.cf-inspector > header .cf-inspector-title:focus {
+  border-color: #cc199d;
+}
+.cf-inspector-ready {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #e2f5e9;
+  color: #1d7a4f;
+  flex-shrink: 0;
+}
+.cf-inspector-ready svg {
+  width: 16px;
+  height: 16px;
+}
+.cf-inspector-scroll {
+  padding: 16px 18px 8px;
+}
+.cf-inspector label:not(.cf-check):not(.cf-ref):not(.cf-upload) {
+  color: #373049;
+  font-size: 12px;
+  margin-bottom: 17px;
+  font-weight: 650;
+}
+.cf-inspector textarea,
+.cf-inspector select {
+  border: 1px solid #e5dfea;
+  background: #ffffffb8;
+  color: #373049;
+  font-size: 12px;
+  border-radius: 9px;
+}
+.cf-inspector textarea {
+  min-height: 105px;
+}
+.cf-prompt-count {
+  display: block;
+  text-align: right;
+  color: #9b91a7;
+  font-size: 10px;
+  font-weight: 400;
+  margin-top: 5px;
+}
+.cf-model-field {
+  margin-bottom: 17px;
+}
+.cf-model-field > span {
+  color: #373049;
+  font-size: 12px;
+  font-weight: 650;
+}
+.cf-model-trigger {
+  min-height: 38px;
+  padding: 8px 10px;
+  border-color: #e5dfea;
+  background: #ffffffb8;
+}
+.cf-model-trigger strong {
+  font-weight: 500;
+}
+.cf-model-trigger > span {
+  font-size: 0;
+}
+.cf-model-trigger > span:after {
+  content: "⌄";
+  font-size: 15px;
+  color: #797087;
+}
+.cf-field-help {
+  color: #8a7f99;
+  font-size: 12px;
+  margin-left: 3px;
+  cursor: help;
+}
+.cf-parameter-row {
+  display: flex;
+  gap: 12px;
+}
+.cf-parameter-row > label {
+  flex: 1;
+  min-width: 0;
+}
+.cf-inspector .cf-context-details {
+  border: 0;
+  margin: 5px 0 16px;
+  color: #575064;
+}
+.cf-context-details > summary {
+  color: #373049;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 14px;
+}
+.cf-context-details > summary > span {
+  font-weight: 400;
+  color: #9c91a8;
+  margin-left: 4px;
+}
+.cf-inspector .cf-ref {
+  background: linear-gradient(110deg, #f7f3fa, #fbf9fd);
+  border-color: #f0ebf4;
+  color: #625671;
+  padding: 10px;
+}
+.cf-ref input {
+  accent-color: #cc199d;
+}
+.cf-ref small {
+  color: #978aa1;
+}
+.cf-inspector .cf-connection-kind {
+  margin: 12px 0 0;
+  color: #8c7e97;
+  font-size: 10px;
+}
+.cf-inspector .cf-connection-kind select {
+  font-size: 11px;
+  padding: 7px 9px;
+}
+.cf-inspector .cf-attached {
+  border-top: 1px solid #eee7f2;
+  padding-top: 12px;
+  margin: 12px 0;
+}
+.cf-attached > summary {
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.cf-inspector .cf-attached > .cf-media {
+  margin-top: 8px;
+}
+.cf-inspector-action {
+  padding: 14px 18px 18px;
+  border-top: 1px solid #eee7f299;
+  background: #ffffffb5;
+  flex-shrink: 0;
+}
+.cf-inspector-action:empty {
+  display: none;
+}
+.cf-inspector-action > button {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+.cf-toolbar {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  bottom: 24px;
+  max-width: calc(100% - 36px);
+  width: max-content;
+  border-radius: 999px;
+  padding: 8px;
+  gap: 3px;
+  flex-wrap: nowrap;
+  box-shadow: 0 8px 28px #2811390a;
+  background: #ffffffed;
+  backdrop-filter: blur(14px);
+  border: 1px solid #e7e4f0;
+}
+.cf-toolbar > .cf-toolbar-plus {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  margin: 0 10px 0 2px;
+  background: var(--gradiente-acento);
+  color: white;
+  border-radius: 50%;
+}
+.cf-toolbar-plus svg {
+  width: 24px;
+  height: 24px;
+}
+.cf-toolbar button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #352b47;
+  font-size: 12px;
+  font-weight: 650;
+  height: 40px;
+  gap: 8px;
+  padding: 0 13px;
+  white-space: nowrap;
+}
+.cf-toolbar button svg {
+  color: #d8189c;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.cf-toolbar button:hover {
+  background: #f9eaf5;
+}
+.cf-node {
+  width: 320px;
+  padding: 15px;
+  border: 1px solid #e7e4ef;
+  border-radius: 18px;
+  box-shadow: 0 7px 24px #33234607;
+}
+.cf-node header {
+  gap: 9px;
+  margin-bottom: 13px;
+}
+.cf-node header strong {
+  font-size: 13px;
+}
+.cf-node .cf-icon {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+}
+.cf-node .cf-icon svg {
+  width: 23px;
+  height: 23px;
+}
+.cf-node .cf-media {
+  height: 200px;
+  border-radius: 11px;
+}
+.cf-node .cf-media > img {
+  object-fit: cover;
+  height: 100%;
+}
+.cf-node .cf-media > video {
+  height: 100%;
+}
+.cf-card-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  color: #8b7e98;
+  border-radius: 8px;
+  background: #f7f3fa;
+  padding: 5px 7px;
+  white-space: nowrap;
+}
+.cf-card-status > i {
+  width: 5px;
+  height: 5px;
+  background: currentColor;
+  border-radius: 50%;
+}
+.cf-card-status.is-complete {
+  color: #148151;
+  background: #eaf7f0;
+}
+.cf-card-status.is-error {
+  color: #a04b31;
+  background: #fff0e9;
+}
+.cf-card-status.is-loading {
+  color: #b12189;
+  background: #fcecf8;
+}
+.cf-card-menu-trigger {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 30px;
+  border: 1px solid #eee8f4;
+  border-radius: 9px;
+  background: #fff;
+  color: #504360;
+}
+.cf-card-menu-trigger svg {
+  width: 18px;
+  height: 18px;
+}
+.cf-card-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: 220px;
+  padding: 6px;
+  border: 1px solid #e7deee;
+  border-radius: 14px;
+  box-shadow: 0 15px 45px #2a163026;
+  background: #fff;
+  color: #2e223f;
+}
+.cf-card-menu button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  font-size: 13px;
+  border: 0;
+  border-radius: 8px;
+  text-align: left;
+  background: transparent;
+}
+.cf-card-menu button:hover {
+  background: #faf1f8;
+}
+.cf-card-menu button svg {
+  width: 19px;
+  height: 19px;
+}
+.cf-card-menu button:first-child:hover {
+  background: #fff0f1;
+  color: #b42318;
+}
+.cf-card-prompt {
+  font-size: 12px;
+  color: #51445f;
+  line-height: 1.7;
+  margin: 12px 2px 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+.cf-node footer {
+  border-top: 1px solid #eee8f3;
+  padding-top: 11px;
+  margin-top: 12px;
+  gap: 5px;
+  justify-content: flex-start;
+}
+.cf-node footer > span {
+  font-size: 9px;
+  padding: 5px 6px;
+  color: #665871;
+  background: #fefcfe;
+}
+.cf-node footer > .cf-card-model {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cf-card-download {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 27px;
+  margin-left: auto;
+  color: #5e496e;
+  border: 1px solid #ede5f2;
+  border-radius: 7px;
+}
+.cf-card-download svg {
+  width: 16px;
+  height: 16px;
+}
+.cf-node-actions {
+  margin-top: 10px;
+  justify-content: flex-end;
+}
+.cf-node-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  padding: 7px 10px;
+}
+.cf-node-actions button svg {
+  width: 14px;
+  height: 14px;
+}
+.cf-share-link {
+  display: block;
+  color: #5e506b;
+  font-size: 12px;
+  margin-top: 18px;
+}
+.cf-share-link input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 12px;
+  border: 1px solid #e3d9eb;
+  background: #fcf9fd;
+  border-radius: 9px;
+  color: #51435e;
+  font-size: 12px;
+}
+.cf-public-canvas {
+  position: relative;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+}
+.cf-preview-label {
+  position: absolute;
+  z-index: 5;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #ffffffed;
+  border: 1px solid #e9e2ef;
+  border-radius: 12px;
+  padding: 12px 16px;
+  box-shadow: 0 5px 20px #20112d08;
+  max-width: calc(100% - 40px);
+  pointer-events: none;
+}
+.cf-preview-label > svg {
+  color: #cc199d;
+  flex-shrink: 0;
+}
+.cf-preview-label h1 {
+  font-size: 14px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cf-preview-label span {
+  color: #8c7e99;
+  font-size: 11px;
+}
+.cf-preview-hint {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 80px);
+  text-align: center;
+  font-size: 11px;
+  color: #8b7c98;
+  pointer-events: none;
+}
+.cf-public-canvas .react-flow__controls {
+  bottom: 20px;
+}
+.cf-preview-missing {
+  display: grid;
+  place-content: center;
+  gap: 12px;
+  min-height: 100dvh;
+  text-align: center;
+  padding: 24px;
+}
+.cf-preview-missing h1 {
+  font-size: 26px;
+  font-weight: 700;
+}
+@media (max-width: 1100px) {
+  .cf-editor-open > .cf-workspace.has-inspector {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+  .cf-toolbar button {
+    padding: 0 9px;
+    gap: 6px;
+    font-size: 11px;
+  }
+  .cf-toolbar > .cf-toolbar-plus {
+    margin-right: 3px;
+  }
+}
+@media (max-width: 760px) {
+  .cf-editor-open > .cf-workspace.has-inspector {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cf-workspace > .cf-editor-head {
+    padding: 12px 16px;
+    gap: 10px;
+  }
+  .cf-editor-head > div {
+    flex-basis: calc(100% - 48px);
+  }
+  .cf-editor-head > .cf-head-action,
+  .cf-editor-head > .cf-head-action:not(.cf-primary) {
+    width: calc(50% - 5px);
+    height: 40px;
+    font-size: 11px;
+    padding: 0 10px;
+  }
+  .cf-editor-body > .cf-inspector {
+    position: absolute;
+    top: 4px;
+    right: 12px;
+    bottom: 14px;
+    width: min(334px, calc(100vw - 24px));
+    margin: 0;
+    z-index: 6;
+  }
+  .cf-toolbar {
+    bottom: 18px;
+    padding: 6px;
+    max-width: calc(100% - 24px);
+  }
+  .cf-toolbar > .cf-toolbar-plus {
+    width: 30px;
+    height: 30px;
+    margin: 0;
+  }
+  .cf-toolbar-plus svg {
+    width: 18px;
+    height: 18px;
+  }
+  .cf-toolbar button {
+    height: 38px;
+    padding: 0 7px;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 9px;
+    justify-content: center;
+  }
+  .cf-toolbar button svg {
+    width: 18px;
+    height: 18px;
+  }
+  .cf-preview-label {
+    top: 12px;
+    left: 12px;
+    max-width: calc(100% - 24px);
+  }
+}
