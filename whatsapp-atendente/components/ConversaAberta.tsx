@@ -22,11 +22,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AcoesResposta, type AoSalvarBase } from "./Celular";
 import { PorQueRespondeu } from "./PorQueRespondeu";
+import { useRespostasRapidas } from "./RespostasRapidas";
 import { INTERVALO_RESERVA_MS, useEventos, useRecargaJunta, type EventoDaTela } from "./useEventos";
 import { Avatar, AvatarAtendente, DesenhoOrigem } from "./ContatoVisual";
 import { ContatoRecolhido, PainelContato, type DadosDoContato } from "./PainelContato";
 import { SeletorQuemAtende } from "./SeletorQuemAtende";
-import { Aviso, ErrorBox, lerErro, useConfirmacao, type ErroLido } from "./ui";
+import { Aviso, ErrorBox, ITEM_DE_MENU, lerErro, useConfirmacao, useMenuSuspenso, type ErroLido } from "./ui";
 import { rotuloContato, rotuloNumero } from "@/lib/rotulos";
 import { formatarTelefone } from "@/lib/telefone";
 import { rotuloMotivo } from "@/lib/transferencia";
@@ -434,6 +435,34 @@ export function ConversaAberta({
   useEffect(() => {
     onMudouRef.current = onMudou;
   }, [onMudou]);
+
+  const { aberto: menuAberto, setAberto: setMenuAberto, menuRef: menuCampoRef } = useMenuSuspenso();
+  // O nome que `{nome}` recebe é o que o cliente disse chamar-se (ou o que o canal informou), nunca o
+  // número formatado: "Oi, +55 11 98765-4321!" não é jeito de começar uma resposta.
+  const nomeDoCliente = conversa?.contato?.nomeInformado || conversa?.nome || "";
+  const {
+    Painel: PainelRapidas,
+    Dialogo: DialogoRapidas,
+    aoTeclar: teclaRapida,
+    abrirGestao: abrirRespostasRapidas,
+  } = useRespostasRapidas({
+    texto,
+    nome: nomeDoCliente,
+    atendente,
+    onInserir: (frase) => {
+      setTexto(frase);
+      // O campo só cresce sozinho no `onChange`, e inserir uma frase pronta não passa por lá: sem
+      // esta linha a resposta escolhida apareceria cortada na altura de uma linha.
+      setTimeout(() => {
+        const el = campoRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(frase.length, frase.length);
+        el.style.height = "auto";
+        el.style.height = `${Math.min(el.scrollHeight, ALTURA_MAXIMA_CAMPO)}px`;
+      }, 0);
+    },
+  });
 
   const aplicar = useCallback((nova: ConversaCompleta) => {
     setConversa(nova);
@@ -912,7 +941,10 @@ export function ConversaAberta({
                 </p>
               )}
 
-              <div className="flex items-end gap-2 max-[560px]:flex-wrap">
+              <div className="relative flex items-end gap-2 max-[560px]:flex-wrap">
+                {/* O painel do atalho "/" abre POR CIMA, ancorado nesta linha: ele não pode empurrar o
+                    campo para baixo enquanto a pessoa escreve. */}
+                {PainelRapidas}
                 <button
                   type="button"
                   className="btn-ghost !w-auto shrink-0 !px-3 !py-2.5 !text-[13px]"
@@ -928,6 +960,38 @@ export function ConversaAberta({
                   )}
                 </button>
                 <BotaoNota onAbrir={abrirModoNota} />
+                <div className="relative shrink-0" ref={menuCampoRef}>
+                  <button
+                    type="button"
+                    className="btn-ghost !w-auto !px-3 !py-2.5 !text-[13px]"
+                    aria-haspopup="menu"
+                    aria-expanded={menuAberto}
+                    aria-label="Mais opções para responder"
+                    onClick={() => setMenuAberto((v) => !v)}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <circle cx="5" cy="12" r="2" />
+                      <circle cx="12" cy="12" r="2" />
+                      <circle cx="19" cy="12" r="2" />
+                    </svg>
+                  </button>
+                  {menuAberto && (
+                    <div role="menu" className="absolute left-0 bottom-[calc(100%+8px)] z-20 w-60 card p-1.5 text-[13.5px]">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={ITEM_DE_MENU}
+                        onClick={() => {
+                          setMenuAberto(false);
+                          abrirRespostasRapidas();
+                        }}
+                      >
+                        Respostas rápidas
+                        <span className="block text-[12px] text-muted">Escreva “/” no campo para usar.</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <textarea
                   ref={campoRef}
                   rows={1}
@@ -942,6 +1006,9 @@ export function ConversaAberta({
                     el.style.height = `${Math.min(el.scrollHeight, ALTURA_MAXIMA_CAMPO)}px`;
                   }}
                   onKeyDown={(e) => {
+                    // Com o painel de respostas rápidas aberto, as setas, o Enter e o Esc são dele:
+                    // Enter escolhe a frase em vez de enviar o que ainda é só o atalho digitado.
+                    if (teclaRapida(e)) return;
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       enviar();
@@ -971,6 +1038,7 @@ export function ConversaAberta({
       </div>
 
       {Dialogo}
+      {DialogoRapidas}
     </div>
   );
 }

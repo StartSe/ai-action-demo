@@ -3,6 +3,7 @@ import { contarExemplos, inicioDoPeriodo, listarConversas, semearExemplosSeVazio
 import { getConfig } from "@/lib/estado";
 import { WHATSAPP } from "@/lib/integracoes";
 import { sincronizarContatosDeExemplo } from "@/lib/memoria";
+import { sincronizarRespostasRapidasDeExemplo } from "@/lib/respostas-rapidas";
 import { lerPeriodo, lerStatus } from "@/lib/rotulos";
 import { integracaoConfigurada } from "@/lib/setup-comum";
 
@@ -22,7 +23,10 @@ export async function GET(req: Request) {
   semearExemplosSeVazio({ numeroConectado: integracaoConfigurada(WHATSAPP), atendente: getConfig().atendente });
   // O que o atendente lembra dos clientes de exemplo acompanha as conversas de exemplo: lib/memoria.ts
   // é o dono da tabela `contatos`, então quem junta as duas coisas é a rota, e não lib/conversas.ts.
-  sincronizarContatosDeExemplo(contarExemplos() > 0);
+  const temExemplos = contarExemplos() > 0;
+  sincronizarContatosDeExemplo(temExemplos);
+  // As respostas rápidas de demonstração seguem a mesma regra: nascem e somem com as conversas de exemplo.
+  sincronizarRespostasRapidasDeExemplo(temExemplos);
 
   const params = new URL(req.url).searchParams;
   const desde = inicioDoPeriodo(lerPeriodo(params.get("periodo")));

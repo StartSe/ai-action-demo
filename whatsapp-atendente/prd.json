@@ -256,7 +256,7 @@
         "Lint e build passam; verificar no navegador (painel com \"/\", inserção com variável, diálogo de gestão; desktop e celular)"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-015 (Fase 4)"
     },
     {

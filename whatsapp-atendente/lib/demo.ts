@@ -557,3 +557,26 @@ export function contatosExemplo(): ContatoExemplo[] {
 export function soConversasDeExemplo(conversas: { exemplo?: boolean }[]): boolean {
   return conversas.length > 0 && conversas.every((c) => c.exemplo === true);
 }
+
+/**
+ * As três respostas rápidas da demonstração (US-015). Nascem com as conversas de exemplo e somem com
+ * elas (lib/respostas-rapidas.ts:sincronizarRespostasRapidasDeExemplo), para o atalho "/" ter o que
+ * mostrar antes de a equipe cadastrar a primeira. São da mesma clínica de `configExemplo`, e duas
+ * delas usam as variáveis, que é como se aprende que elas existem.
+ */
+export function respostasRapidasExemplo(): { atalho: string; texto: string }[] {
+  return [
+    {
+      atalho: "horario",
+      texto: "Oi, {nome}! Atendemos de segunda a sexta, das 8h às 18h, e aos sábados das 8h ao meio-dia.",
+    },
+    {
+      atalho: "endereco",
+      texto: "Estamos na Rua das Flores, 120, Jardim América, em São Paulo. Tem estacionamento conveniado no prédio ao lado, com desconto para pacientes.",
+    },
+    {
+      atalho: "obrigado",
+      texto: "Obrigada pelo contato, {nome}! Qualquer outra dúvida, é só chamar por aqui. — {atendente}",
+    },
+  ];
+}

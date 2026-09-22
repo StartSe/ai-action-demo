@@ -383,6 +383,27 @@ export const LIMITE_MEMORIA = 1200;
  */
 export const LIMITE_NOTA = 2000;
 
+/**
+ * Uma frase pronta que a equipe reaproveita no campo de resposta, chamada pelo atalho depois de uma
+ * barra ("/horario"). O texto pode deixar em aberto `{nome}` (o contato) e `{atendente}` (o nome do
+ * atendente da empresa), trocados na hora de inserir — ver lib/atalhos.ts.
+ */
+export interface RespostaRapida {
+  id: number;
+  atalho: string;
+  texto: string;
+  criadoEm: string;
+  /** Nasceu junto das conversas de exemplo e some junto com elas. */
+  exemplo: boolean;
+}
+
+/** Teto do texto de uma resposta rápida: uma mensagem de WhatsApp, não um documento. */
+export const LIMITE_TEXTO_RAPIDO = 1000;
+
+/** Tamanho do atalho (o que vem depois da barra): curto o bastante para valer a pena digitar. */
+export const MIN_ATALHO = 2;
+export const LIMITE_ATALHO = 30;
+
 /** Entrada/saída de registros antigos do tipo "atendimento" em lib/historico.ts. Desde a US-003 as
  * conversas vivem no banco (lib/conversas.ts) e nada novo é salvo assim; o tipo continua porque
  * `/r/[id]` e `/imprimir/[id]` precisam abrir os registros já gerados. */

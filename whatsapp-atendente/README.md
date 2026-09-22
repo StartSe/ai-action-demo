@@ -135,6 +135,7 @@ components/ConexaoWhatsApp.tsx            cartão "Conectar o WhatsApp": QR Code
 components/PersonaBrief.tsx               "Comece descrevendo seu negócio": gera o atendente e aplica no formulário
 components/CartaoFerramenta.tsx           os cartões com interruptor da seção Ferramentas
 components/PorQueRespondeu.tsx            "Por que respondeu assim": fontes, ferramentas e tempo de cada resposta
+components/RespostasRapidas.tsx           respostas rápidas: o painel do atalho "/" e o diálogo que as cadastra
 components/Celular.tsx                    celular da tela, com as bolhas da conversa de teste
 components/useEventos.ts                  liga as telas no fluxo de avisos, com consulta de reserva de 30 s
 components/ui.tsx                         componentes visuais deste app (camada de produto própria)
@@ -152,6 +153,8 @@ lib/persona-exemplos.ts                   cinco atendentes prontos (sem IA) e os
 lib/base-modelo.ts                        modelo da base de conhecimento, um por objetivo
 lib/cenarios.ts                           cenários de teste por objetivo (inclusive os que devem chamar uma pessoa)
 lib/transferencia.ts                      motivos de transferência (rótulos, marcador `[TRANSFERIR:motivo]`, frase de reserva)
+lib/respostas-rapidas.ts                  dono da tabela `respostas_rapidas`: as frases de sempre, com atalho
+lib/atalhos.ts                            regras do atalho e das variáveis `{nome}`/`{atendente}` (arquivo folha)
 lib/metricas.ts                           fonte única dos números de Início e Relatórios
 lib/zapi.ts                               cliente da z-api: estado, QR Code, envio e cadastro dos avisos
 lib/whatsapp.ts                           despacha entre z-api e Meta, e traduz as falhas da Meta
@@ -342,6 +345,23 @@ anotação ganha a marca 📝.
 Quando o atendente virtual passa uma conversa para uma pessoa, ele mesmo deixa uma nota com o motivo e
 a pergunta que o travou — "Pedi ajuda porque a base não tinha a informação. Pergunta: '…' — Bia" —,
 além da linha na linha do tempo. Quem assume lê a razão ao lado das mensagens, sem precisar deduzi-la.
+
+### Respostas rápidas
+
+As frases que a equipe repete todo dia ficam guardadas com um **atalho**. No campo de resposta de uma
+conversa, uma barra no começo (`/`) abre o painel com todas elas; o que vem depois da barra filtra a
+lista pelo atalho e pelo texto, as setas escolhem, **Enter** insere a frase no campo e **Esc** fecha.
+Nada é enviado sozinho: a frase entra no campo para ser revisada e enviada como qualquer outra.
+
+O texto pode deixar duas coisas em aberto, trocadas na hora de inserir: `{nome}` vira o nome do cliente
+(ou "você", quando ainda não se sabe o nome dele) e `{atendente}` vira o nome do seu atendente.
+
+O botão **"…"** ao lado do campo abre "Respostas rápidas": a lista com "Editar" e "Apagar" e o
+formulário de uma nova. O atalho é normalizado ao salvar (a barra da frente, o acento e o espaço saem:
+"/Horário de Atendimento" vira `horario-de-atendimento`), aceita de 2 a 30 caracteres entre letras,
+números e hífen, não pode repetir, e o texto cabe em 1.000 caracteres. Em modo demonstração, três
+respostas (`/horario`, `/endereco`, `/obrigado`) nascem com as conversas de exemplo e somem com elas —
+uma apagada à mão não volta, e uma editada pela equipe deixa de ser de demonstração.
 
 ### Documentos e busca para atendimento
 
