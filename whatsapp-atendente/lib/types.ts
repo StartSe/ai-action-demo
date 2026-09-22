@@ -25,6 +25,14 @@ export type PapelMensagem = "cliente" | "atendente" | "humano" | "nota" | "event
 export const PAPEIS_DE_CONVERSA: PapelMensagem[] = ["cliente", "atendente", "humano"];
 
 /**
+ * Até onde uma mensagem que saiu pelo número da empresa chegou (lib/conversas.ts): `enviando` enquanto
+ * o app ainda não recebeu a confirmação do provedor, `enviada` quando ele aceitou, `entregue` e `lida`
+ * quando o aviso de status da z-api chegou, `falhou` quando o provedor recusou. Nulo para o que nunca
+ * saiu por um número real (simulador, exemplo, assistente por MCP) e para mensagens anteriores à 0.3.0.
+ */
+export type StatusEntrega = "enviando" | "enviada" | "entregue" | "lida" | "falhou";
+
+/**
  * Os períodos que os números de Início e Relatórios aceitam (lib/metricas.ts). "Tudo" fica de fora:
  * todo número desta tela vem com a comparação com o período anterior de mesmo tamanho, e "tudo" não
  * tem anterior.
@@ -131,6 +139,10 @@ export interface MensagemDaConversa extends MensagemChat {
   ferramentaUsada?: string;
   /** Quanto o atendente levou entre receber a pergunta e gravar esta resposta. */
   tempoRespostaMs?: number;
+  /** Até onde a mensagem chegou ao cliente; só existe no que saiu por um número real. */
+  statusEntrega?: StatusEntrega;
+  /** A frase de negócio do provedor quando `statusEntrega === "falhou"`. */
+  erroEnvio?: string;
 }
 
 /**

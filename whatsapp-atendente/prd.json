@@ -54,7 +54,7 @@
         "Lint e build passam; verificar no navegador (os cinco estados na bolha; desktop e celular)"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-003 (Fase 0)"
     },
     {

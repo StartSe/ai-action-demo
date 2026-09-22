@@ -23,6 +23,7 @@ Os blocos “Rotinas”, “Usar dentro do seu assistente” e “Ajustes do ser
    - Em `/setup`, no cartão "Número de WhatsApp da empresa", cole os três valores e salve. Ao salvar, o app cadastra sozinho na z-api o endereço por onde ela avisa este app.
    - No cartão "Conectar o WhatsApp" (ainda em `/setup`, ou no passo "Conectar" do `/assistente`), aponte a câmera do WhatsApp da empresa para o **QR Code** que aparece na tela: em **Aparelhos conectados › Conectar um aparelho**.
    - Assim que o número conecta, o cartão passa a mostrar o número e a data da conexão, e as conversas de exemplo somem na primeira mensagem real.
+   - Cada mensagem que sai pelo número mostra, na conversa aberta, até onde chegou — como no WhatsApp: relógio (enviando), um tique (enviada), dois tiques (entregue) e dois tiques na cor do app (lida). Isso vem do aviso de status que o app cadastra sozinho na z-api. Quando o envio falha, a bolha fica vermelha com o motivo e um "Tentar de novo".
 
 Documentação da z-api: https://developer.z-api.io
 
@@ -93,7 +94,7 @@ app/historico/page.tsx                    relatórios anteriores (fora do cabeç
 app/api/config/route.ts                   GET/PUT da configuração do atendente (objetivo, tom, base)
 app/api/conversas/route.ts                lista de conversas, com abas, período e busca
 app/api/conversas/[numero]/route.ts       GET uma conversa (zera as não lidas) / DELETE apagar
-app/api/conversas/[numero]/mensagens/**   responder pelo número real da empresa
+app/api/conversas/[numero]/mensagens/**   responder pelo número real da empresa; `[id]/reenviar` = "Tentar de novo"
 app/api/conversas/[numero]/assumir/**     assumir o atendimento (a IA para de responder)
 app/api/conversas/[numero]/devolver/**    devolver o atendimento para a IA
 app/api/conversas/[numero]/resolver/**    marcar a conversa como resolvida
@@ -129,7 +130,7 @@ components/ui.tsx                         componentes visuais deste app (camada 
 components/setup.tsx                      tela de configuração inicial (camada de produto própria)
 lib/ai.ts                                 cliente OpenRouter (askText, askJSON), chave via lib/store
 lib/atendente.ts                          pipeline de resposta: IA ou buscador local, regra de transferência
-lib/conversas.ts                          dono das tabelas `conversas` e `mensagens` (node:sqlite)
+lib/conversas.ts                          dono das tabelas `conversas` e `mensagens` (node:sqlite), inclusive o status de entrega
 lib/rajada.ts                             espera de 3 s para responder uma rajada de mensagens de uma vez
 lib/transferencia.ts                      motivos de transferência (rótulos, marcador `[TRANSFERIR:motivo]`, frase de reserva)
 lib/metricas.ts                           fonte única dos números de Início e Relatórios

@@ -1,5 +1,5 @@
-// Avisos da z-api (z-api.io): mensagem recebida, número conectado e número desconectado chegam todos
-// nesta rota, que separa os casos pelo campo `type` do corpo.
+// Avisos da z-api (z-api.io): mensagem recebida, número conectado, número desconectado e status de uma
+// mensagem enviada (entregue/lida) chegam todos nesta rota, que separa os casos pelo campo `type`.
 //
 // Rota pública em proxy.ts (regra `/webhook/**` já existente): quem chama é a z-api, de um servidor
 // dela, sem cookie de sessão. A autenticação é própria e tem duas camadas: a chave secreta de 32 bytes
@@ -13,12 +13,17 @@
 //                          "Exemplos de retorno de Ao receber")
 //   ConnectedCallback    { instanceId, type, connected, phone, momment }
 //   DisconnectedCallback { instanceId, type, disconnected, error, momment }
+//   MessageStatusCallback { instanceId, type, status, ids, momment, phone, phoneDevice, isGroup }
+//                          (conferido em 22/09/2026 em /webhooks/on-whatsapp-message-status-changes; `status`
+//                          é SENT | RECEIVED | READ | READ_BY_ME | PLAYED e `ids` são os `messageId` que o
+//                          `send-text` devolveu)
 import { timingSafeEqual } from "node:crypto";
 import { aiEnabled } from "@/lib/ai";
-import { limparTestesSeConfigurado, registrarMensagemCliente } from "@/lib/conversas";
+import { atualizarEntrega, limparTestesSeConfigurado, registrarMensagemCliente } from "@/lib/conversas";
 import { agendarResposta } from "@/lib/rajada";
 import { getConfig } from "@/lib/store";
 import { registrarRecebida } from "@/lib/whatsapp";
+import type { StatusEntrega } from "@/lib/types";
 import { gravarConexao } from "@/lib/zapi";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +44,21 @@ interface AvisoZapi {
   connected?: boolean;
   disconnected?: boolean;
   error?: string;
+  status?: string;
+  ids?: string[];
 }
+
+/**
+ * O status da z-api traduzido para o da mensagem no banco. `READ_BY_ME` (a equipe leu no celular da
+ * empresa uma mensagem do cliente) não diz nada sobre o que o cliente recebeu e fica de fora; `PLAYED`
+ * é o "lida" de um áudio.
+ */
+const STATUS_DA_ZAPI: Record<string, Exclude<StatusEntrega, "enviando" | "falhou">> = {
+  SENT: "enviada",
+  RECEIVED: "entregue",
+  READ: "lida",
+  PLAYED: "lida",
+};
 
 export async function POST(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -88,7 +107,25 @@ async function processarAviso(aviso: AvisoZapi) {
     gravarConexao({ conectado: false, em });
     return;
   }
+  if (aviso.type === "MessageStatusCallback") return processarStatus(aviso);
   if (aviso.type === "ReceivedCallback") return processarMensagem(aviso);
+}
+
+/**
+ * Até onde uma mensagem que este app mandou chegou. Só avança (lib/conversas.ts:atualizarEntrega): os
+ * avisos podem chegar fora de ordem, e "lida" nunca volta a "entregue". Um id que o app não conhece é
+ * o normal para o que a equipe manda direto do celular da empresa — fica só no log, em nível baixo.
+ */
+function processarStatus(aviso: AvisoZapi) {
+  const status = aviso.status ? STATUS_DA_ZAPI[aviso.status] : undefined;
+  if (!status) {
+    if (aviso.status !== "READ_BY_ME") console.debug(`Aviso de status da z-api ignorado (${aviso.status ?? "sem status"}).`);
+    return;
+  }
+  for (const id of aviso.ids ?? []) {
+    if (typeof id !== "string" || !id) continue;
+    if (!atualizarEntrega(id, status)) console.debug(`Status ${aviso.status} da z-api para uma mensagem que não passou pelo app (id ${id}).`);
+  }
 }
 
 async function processarMensagem(aviso: AvisoZapi) {

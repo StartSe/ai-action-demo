@@ -15,6 +15,7 @@
  * da PRD). Reiniciar o processo no meio de uma janela perde a resposta pendente — limite conhecido.
  */
 import { classificarEmSegundoPlano, responderPendente } from "./atendente";
+import { marcarEnviada, marcarFalhaEnvio } from "./conversas";
 import type { CanalOrigem } from "./types";
 import { enviarMensagem, ErroWhatsApp, registrarFalhaEnvio } from "./whatsapp";
 
@@ -55,9 +56,9 @@ async function fecharJanela(numero: string, origem: CanalOrigem, janelaMs: numbe
   }
   emAndamento.add(numero);
   try {
-    const { resposta, descartada } = await responderPendente(numero);
+    const { resposta, descartada, mensagemId } = await responderPendente(numero);
     if (resposta) {
-      await enviar(numero, resposta);
+      await enviar(numero, resposta, mensagemId);
       // Depois de a resposta sair: o assunto da conversa, para os relatórios (lib/atendente.ts).
       classificarEmSegundoPlano(numero);
     } else if (descartada === "chegou mensagem nova do cliente" && !temporizadores.has(numero) && !pendenteDepois.has(numero)) {
@@ -71,14 +72,21 @@ async function fecharJanela(numero: string, origem: CanalOrigem, janelaMs: numbe
   }
 }
 
-async function enviar(numero: string, resposta: string): Promise<void> {
+/**
+ * Manda a resposta pelo número real e grava na mensagem o que aconteceu: `enviada` com o id que o
+ * provedor deu (é por ele que "entregue" e "lida" chegam depois) ou `falhou` com a frase de negócio —
+ * a bolha da conversa aberta desenha os dois, e "Tentar de novo" parte do `falhou`.
+ */
+async function enviar(numero: string, resposta: string, mensagemId?: number): Promise<void> {
   try {
-    await enviarMensagem(numero, resposta);
+    const { idExterno } = await enviarMensagem(numero, resposta);
+    if (mensagemId !== undefined) marcarEnviada(mensagemId, idExterno);
   } catch (err) {
     // O canal já recebeu o 200; aqui só sobra registrar o motivo em linguagem de negócio, para
     // "Dados para a equipe técnica" conseguir explicar por que o cliente não recebeu resposta.
     const mensagem = err instanceof ErroWhatsApp ? err.message : "Não foi possível enviar a resposta pelo número da empresa.";
     if (!(err instanceof ErroWhatsApp)) console.error("Falha inesperada ao responder pelo WhatsApp:", err);
     registrarFalhaEnvio(mensagem);
+    if (mensagemId !== undefined) marcarFalhaEnvio(mensagemId, mensagem);
   }
 }

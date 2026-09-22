@@ -14,9 +14,14 @@
 //                                      reconferido em 22/09/2026 em /message/send-text)
 //   GET  disconnect                 → { value: true }
 //   GET  restart                    → { value: true }
-//   PUT  update-webhook-received     { value }  → { value: true }
-//   PUT  update-webhook-connected    { value }  → { value: true }
-//   PUT  update-webhook-disconnected { value }  → { value: true }
+//   PUT  update-webhook-received       { value }  → { value: true }
+//   PUT  update-webhook-connected      { value }  → { value: true }
+//   PUT  update-webhook-disconnected   { value }  → { value: true }
+//   PUT  update-webhook-message-status { value }  → { value: true }
+//                                     (conferido em 22/09/2026 em /webhooks/on-whatsapp-message-status-changes:
+//                                      é o aviso `MessageStatusCallback` { instanceId, status, ids, momment,
+//                                      phone, type, isGroup }, com status SENT | RECEIVED | READ | READ_BY_ME |
+//                                      PLAYED, tratado em app/webhook/zapi/route.ts)
 //
 // A documentação atual não tem mais `restore-session` (o nome citado na PRD desta rodada): o endereço
 // equivalente hoje é `restart`, e é ele que `reiniciarSessao()` chama.
@@ -218,13 +223,18 @@ export function segundosDigitando(texto: string): number {
   return Math.min(3, Math.max(1, Math.ceil(texto.length / 80)));
 }
 
-/** Manda a resposta do atendente pelo número real. Lança ErroWhatsApp já traduzido. */
-export async function enviarTexto(para: string, texto: string): Promise<void> {
+/**
+ * Manda a resposta do atendente pelo número real e devolve o id que a z-api deu à mensagem — é por ele
+ * que os avisos de status (`MessageStatusCallback`) dizem depois se ela foi entregue e lida. Lança
+ * ErroWhatsApp já traduzido.
+ */
+export async function enviarTexto(para: string, texto: string): Promise<{ idExterno?: string }> {
   const dados = await chamar("send-text", { metodo: "POST", corpo: { phone: soDigitos(para), message: texto, delayTyping: segundosDigitando(texto) } });
   // A z-api às vezes responde 200 com { error: "..." } em vez de um status de erro.
   if (!dados.messageId && !dados.zaapId && typeof dados.error === "string") {
     throw interpretarFalhaZapi(200, dados.error);
   }
+  return { idExterno: typeof dados.messageId === "string" && dados.messageId ? dados.messageId : undefined };
 }
 
 /** Só os dígitos, no formato que a z-api exige (DDI + DDD + número, sem máscara). */
@@ -243,20 +253,32 @@ export async function reiniciarSessao(): Promise<void> {
 }
 
 /**
- * Cadastra na instância os três avisos que este app precisa receber: mensagem recebida, número
- * conectado e número desconectado. Todos apontam para a mesma rota, que separa os casos pelo corpo.
- * Chamado logo depois de salvar as credenciais em Configurações — a pessoa nunca faz isso à mão.
+ * Os avisos que este app precisa receber da instância: mensagem recebida, número conectado, número
+ * desconectado e status de mensagem (entregue/lida). Todos apontam para a mesma rota, que separa os
+ * casos pelo campo `type`. Somar um aviso aqui basta para `garantirWebhooks` recadastrar as instâncias
+ * já conectadas: a lista faz parte da marca guardada em `ZAPI_AVISOS_CADASTRADOS`.
+ */
+const AVISOS = ["update-webhook-received", "update-webhook-connected", "update-webhook-disconnected", "update-webhook-message-status"] as const;
+
+/**
+ * Cadastra na instância todos os avisos de `AVISOS`, no endereço deste app. Chamado logo depois de
+ * salvar as credenciais em Configurações e por `garantirWebhooks` — a pessoa nunca faz isso à mão.
  */
 export async function configurarWebhooks(urlBase: string): Promise<void> {
   const value = enderecoAvisos(urlBase);
-  for (const caminho of ["update-webhook-received", "update-webhook-connected", "update-webhook-disconnected"]) {
+  for (const caminho of AVISOS) {
     await chamar(caminho, { metodo: "PUT", corpo: { value } });
   }
-  setConfig(CHAVE_AVISOS_CADASTRADOS, value);
+  setConfig(CHAVE_AVISOS_CADASTRADOS, marcaDosAvisos(value));
 }
 
-/** Último endereço de avisos que este app cadastrou na instância — a memória de `garantirWebhooks`. */
+/** Última lista de avisos + endereço que este app cadastrou na instância — a memória de `garantirWebhooks`. */
 const CHAVE_AVISOS_CADASTRADOS = "ZAPI_AVISOS_CADASTRADOS";
+
+/** O que fica gravado como "já cadastrado": a lista de avisos E o endereço — mudar qualquer um dos dois recadastra. */
+function marcaDosAvisos(endereco: string): string {
+  return `${AVISOS.join(",")} ${endereco}`;
+}
 
 /**
  * Garante que a instância está avisando ESTE app, no endereço de agora. Existe porque `configurarWebhooks`
@@ -266,14 +288,16 @@ const CHAVE_AVISOS_CADASTRADOS = "ZAPI_AVISOS_CADASTRADOS";
  *   - o app mudou de endereço público (domínio novo, outro serviço);
  *   - a chave da URL dos avisos foi gerada de novo (o banco é apagado a cada reinício quando não há
  *     disco, como no plano gratuito do Render) — a z-api continua chamando com a chave velha, e a rota
- *     responde 401 em silêncio, por desenho.
+ *     responde 401 em silêncio, por desenho;
+ *   - uma versão nova do app passou a precisar de um aviso a mais (o de status de mensagem, na 0.3.0):
+ *     a marca gravada inclui a lista de avisos, então a instância antiga é recadastrada sozinha.
  * Só fala com a z-api quando o endereço mudou, então pode ser chamada em toda leitura do estado da
  * conexão. Nunca derruba quem chamou: falhar aqui só escreve no log.
  */
 export async function garantirWebhooks(urlBase: string): Promise<void> {
   if (!credenciais()) return;
   const desejado = enderecoAvisos(urlBase);
-  if (getConfig(CHAVE_AVISOS_CADASTRADOS) === desejado) return;
+  if (getConfig(CHAVE_AVISOS_CADASTRADOS) === marcaDosAvisos(desejado)) return;
   try {
     await configurarWebhooks(urlBase);
     console.log("Avisos da z-api cadastrados para", desejado.split("?")[0]);

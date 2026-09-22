@@ -11,7 +11,18 @@
 import { conversasExemplo } from "./demo";
 import { abrirBanco, getConfig, setConfig } from "./store";
 import { ehMotivo, MOTIVO_PADRAO, rotuloMotivo, type MotivoTransferencia } from "./transferencia";
-import { PAPEIS_DE_CONVERSA, type CanalOrigem, type Conversa, type ConversaCompleta, type MensagemChat, type MensagemDaConversa, type PapelMensagem, type Periodo, type StatusConversa } from "./types";
+import {
+  PAPEIS_DE_CONVERSA,
+  type CanalOrigem,
+  type Conversa,
+  type ConversaCompleta,
+  type MensagemChat,
+  type MensagemDaConversa,
+  type PapelMensagem,
+  type Periodo,
+  type StatusConversa,
+  type StatusEntrega,
+} from "./types";
 
 /** Quantas mensagens da conversa vão para a IA como memória de curto prazo. */
 export const MAX_HISTORICO = 20;
@@ -53,6 +64,8 @@ type LinhaMensagem = {
   ferramenta_usada: string | null;
   tempo_resposta_ms: number | null;
   id_externo: string | null;
+  status_entrega: string | null;
+  erro_envio: string | null;
 };
 
 // Os dois tipos que saem deste arquivo moram em lib/types.ts (arquivo client-safe, sem node:sqlite):
@@ -91,7 +104,9 @@ function banco() {
       criado_em TEXT NOT NULL DEFAULT (datetime('now')),
       ferramenta_usada TEXT NULL,
       tempo_resposta_ms INTEGER NULL,
-      id_externo TEXT NULL
+      id_externo TEXT NULL,
+      status_entrega TEXT NULL,
+      erro_envio TEXT NULL
     )`);
     d.exec(`CREATE INDEX IF NOT EXISTS mensagens_por_conversa ON mensagens (numero, id)`);
     // Bancos anteriores à 0.3.0 não têm `id_externo` (o id da mensagem no canal, para o mesmo aviso
@@ -102,6 +117,14 @@ function banco() {
     // Índice único PARCIAL: só as mensagens que vieram de um canal têm id externo; as do simulador,
     // do MCP e as respostas ficam NULL, e NULL não conta para a unicidade.
     d.exec(`CREATE UNIQUE INDEX IF NOT EXISTS mensagens_id_externo ON mensagens (id_externo) WHERE id_externo IS NOT NULL`);
+    // 0.3.0 (US-003): até onde a mensagem que saiu pelo número da empresa chegou, e por que não saiu.
+    // Mensagens anteriores ficam NULL (um tique na tela): ninguém sabe se elas chegaram.
+    try {
+      d.exec(`ALTER TABLE mensagens ADD COLUMN status_entrega TEXT NULL`);
+    } catch { /* coluna já existe */ }
+    try {
+      d.exec(`ALTER TABLE mensagens ADD COLUMN erro_envio TEXT NULL`);
+    } catch { /* coluna já existe */ }
     // Bancos criados antes da US-015 não têm a coluna; ALTER TABLE falha de propósito quando ela já existe.
     // A primeira vez recupera o passado pelo que dá para saber: o status atual e as respostas escritas por
     // uma pessoa (padrão de lib/rotinas.ts).
@@ -209,7 +232,15 @@ function paraMensagem(l: LinhaMensagem): MensagemRegistro {
     criadoEm: paraIso(l.criado_em),
     ferramentaUsada: l.ferramenta_usada ?? undefined,
     tempoRespostaMs: l.tempo_resposta_ms === null ? undefined : Number(l.tempo_resposta_ms),
+    statusEntrega: ehStatusEntrega(l.status_entrega) ? l.status_entrega : undefined,
+    erroEnvio: l.erro_envio ?? undefined,
   };
+}
+
+/** Uma mensagem desta conversa pelo id; null quando não existe ou é de outra conversa. */
+export function obterMensagem(numero: string, id: number): MensagemRegistro | null {
+  const l = banco().prepare("SELECT * FROM mensagens WHERE numero = ? AND id = ?").get(numero, id) as LinhaMensagem | undefined;
+  return l ? paraMensagem(l) : null;
 }
 
 /** A conversa inteira, da mensagem mais antiga para a mais recente; null quando o número não existe. */
@@ -392,6 +423,7 @@ function inserirMensagem({
   ferramentaUsada,
   tempoRespostaMs,
   idExterno,
+  statusEntrega,
 }: {
   numero: string;
   papel: PapelMensagem;
@@ -400,11 +432,24 @@ function inserirMensagem({
   ferramentaUsada?: string;
   tempoRespostaMs?: number;
   idExterno?: string;
+  statusEntrega?: StatusEntrega;
 }): number {
   const gravada = banco()
-    .prepare("INSERT INTO mensagens (numero, papel, texto, criado_em, ferramenta_usada, tempo_resposta_ms, id_externo) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .run(numero, papel, texto, criadoEm ?? paraTextoDeBanco(), ferramentaUsada ?? null, tempoRespostaMs ?? null, idExterno ?? null);
+    .prepare(
+      "INSERT INTO mensagens (numero, papel, texto, criado_em, ferramenta_usada, tempo_resposta_ms, id_externo, status_entrega) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    .run(numero, papel, texto, criadoEm ?? paraTextoDeBanco(), ferramentaUsada ?? null, tempoRespostaMs ?? null, idExterno ?? null, statusEntrega ?? null);
   return Number(gravada.lastInsertRowid);
+}
+
+/**
+ * Com que status uma mensagem que acabou de ser escrita para o cliente nasce: `enviando` quando a
+ * conversa é de um número real (o envio vem logo depois da gravação e vai confirmar ou falhar), e
+ * nenhum nos outros canais — no simulador, no assistente por MCP e nas conversas de exemplo a
+ * mensagem nunca sai do app, e um status ali diria algo que não aconteceu.
+ */
+function statusInicialDeEnvio(numero: string): StatusEntrega | undefined {
+  return linha(numero)?.origem === "whatsapp" ? "enviando" : undefined;
 }
 
 /** A mensagem já gravada com este id do canal, se o mesmo aviso já tiver chegado antes. */
@@ -562,15 +607,16 @@ export function registrarResposta({
   ferramentaUsada?: string;
   tempoRespostaMs?: number;
   em?: Date;
-}): void {
+}): number {
   const quando = paraTextoDeBanco(em);
   const status: StatusConversa = transferir ? "atencao" : "ia";
   const motivoFinal = transferir ? motivo ?? MOTIVO_PADRAO : null;
   banco()
     .prepare(`UPDATE conversas SET status = ?, atualizado_em = ?, motivo_transferencia = ?, esperando_desde = ?${marcaDePessoa(status)} WHERE numero = ?`)
     .run(status, quando, motivoFinal, transferir ? quando : null, numero);
-  inserirMensagem({ numero, papel: "atendente", texto, criadoEm: quando, ferramentaUsada, tempoRespostaMs });
+  const mensagemId = inserirMensagem({ numero, papel: "atendente", texto, criadoEm: quando, ferramentaUsada, tempoRespostaMs, statusEntrega: statusInicialDeEnvio(numero) });
   if (motivoFinal) registrarEvento(numero, `${atendente?.trim() || "O atendente"} pediu ajuda de uma pessoa · ${rotuloMotivo(motivoFinal)}`, em);
+  return mensagemId;
 }
 
 /**
@@ -592,7 +638,59 @@ export function registrarMensagemHumana(numero: string, texto: string): number {
   const quando = paraTextoDeBanco();
   // Uma pessoa respondeu: o cliente não está mais esperando por ela.
   banco().prepare("UPDATE conversas SET status = 'humano', nao_lidas = 0, passou_por_pessoa = 1, esperando_desde = NULL, atualizado_em = ? WHERE numero = ?").run(quando, numero);
-  return inserirMensagem({ numero, papel: "humano", texto, criadoEm: quando });
+  return inserirMensagem({ numero, papel: "humano", texto, criadoEm: quando, statusEntrega: statusInicialDeEnvio(numero) });
+}
+
+// --- Entrega das mensagens enviadas -----------------------------------------------------------
+// O que saiu pelo número da empresa passa por `enviando` → `enviada` (o provedor aceitou) → `entregue`
+// (chegou ao aparelho) → `lida`, ou cai em `falhou`. Os dois primeiros passos o app sabe sozinho
+// (o retorno do `send-text`); os dois seguintes chegam pelo aviso de status da z-api
+// (app/webhook/zapi/route.ts), pelo `id_externo` que o envio devolveu. A Meta não tem esse aviso aqui,
+// então uma mensagem dela para em `enviada`.
+
+/** Ordem dos status: um aviso só avança a entrega, nunca volta (o `READ` chega antes do `RECEIVED` às vezes). */
+const ORDEM_ENTREGA: Record<StatusEntrega, number> = { falhou: 0, enviando: 0, enviada: 1, entregue: 2, lida: 3 };
+
+function ehStatusEntrega(valor: string | null): valor is StatusEntrega {
+  return valor !== null && valor in ORDEM_ENTREGA;
+}
+
+/**
+ * O provedor aceitou a mensagem: `enviada`, com o id que ele deu a ela (é por esse id que os avisos de
+ * status chegam). Um id que já esteja em outra mensagem (não deveria acontecer; o índice é único) não
+ * pode deixar esta em `enviando` para sempre: ela fica `enviada` sem id, e o caso vai para o log.
+ */
+export function marcarEnviada(mensagemId: number, idExterno?: string): void {
+  const d = banco();
+  try {
+    d.prepare("UPDATE mensagens SET status_entrega = 'enviada', id_externo = COALESCE(?, id_externo), erro_envio = NULL WHERE id = ?").run(idExterno ?? null, mensagemId);
+  } catch (err) {
+    console.error(`O id ${idExterno} do provedor já pertence a outra mensagem; a mensagem ${mensagemId} fica enviada sem id.`, err);
+    d.prepare("UPDATE mensagens SET status_entrega = 'enviada', erro_envio = NULL WHERE id = ?").run(mensagemId);
+  }
+}
+
+/** O provedor recusou (ou a rede caiu): `falhou`, com a frase de negócio que a bolha mostra abaixo da mensagem. */
+export function marcarFalhaEnvio(mensagemId: number, erro: string): void {
+  banco().prepare("UPDATE mensagens SET status_entrega = 'falhou', erro_envio = ? WHERE id = ?").run(erro, mensagemId);
+}
+
+/**
+ * Um aviso de status do canal para a mensagem com este id externo. Só avança: `lida` nunca volta para
+ * `entregue`, mesmo que os avisos cheguem fora de ordem. Devolve `false` quando nenhuma mensagem tem
+ * esse id — o que acontece com o que a equipe manda direto do celular da empresa, que não passou pelo app.
+ */
+export function atualizarEntrega(idExterno: string, status: Exclude<StatusEntrega, "enviando" | "falhou">): boolean {
+  // Só o que saiu pelo número da empresa: o id de uma mensagem do cliente também mora em `id_externo`,
+  // e um aviso sobre ela (não deveria vir, mas o canal é externo) não pode ganhar status de entrega.
+  const atual = banco()
+    .prepare("SELECT id, status_entrega FROM mensagens WHERE id_externo = ? AND papel IN ('atendente', 'humano')")
+    .get(idExterno) as { id: number; status_entrega: string | null } | undefined;
+  if (!atual) return false;
+  const de = ehStatusEntrega(atual.status_entrega) ? atual.status_entrega : "enviando";
+  if (ORDEM_ENTREGA[status] <= ORDEM_ENTREGA[de]) return true;
+  banco().prepare("UPDATE mensagens SET status_entrega = ?, erro_envio = NULL WHERE id = ?").run(status, atual.id);
+  return true;
 }
 
 /**

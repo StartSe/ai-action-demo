@@ -21,7 +21,7 @@ import { ContatoRecolhido, PainelContato, type DadosDoContato } from "./PainelCo
 import { Aviso, ErrorBox, lerErro, useConfirmacao, type ErroLido } from "./ui";
 import { classeStatus, rotuloContato, rotuloNumero, rotuloStatus } from "@/lib/rotulos";
 import { rotuloMotivo } from "@/lib/transferencia";
-import type { ConversaCompleta, MensagemDaConversa } from "@/lib/types";
+import type { ConversaCompleta, MensagemDaConversa, StatusEntrega } from "@/lib/types";
 
 /** De quanto em quanto tempo a conversa aberta se atualiza (só com a aba visível). */
 const INTERVALO_MS = 10_000;
@@ -44,28 +44,62 @@ function assinaturaDe(c: ConversaCompleta): string {
   return `${c.status}|${c.atualizadoEm}|${c.mensagens.length}|${c.naoLidas}`;
 }
 
+/** O que cada estado de entrega mostra ao lado da hora (a frase vai para o leitor de tela e o `title`). */
+const ROTULO_ENTREGA: Record<StatusEntrega, string> = {
+  enviando: "Enviando",
+  enviada: "Enviada pelo número da empresa",
+  entregue: "Entregue ao cliente",
+  lida: "Lida pelo cliente",
+  falhou: "Não chegou ao cliente",
+};
+
 /**
- * Marca de envio da bolha, ao lado da hora. Um tique só, e nunca os dois: o app sabe que a mensagem foi
- * aceita para envio pelo número da empresa, e NÃO sabe se ela chegou ao aparelho do cliente nem se foi
- * lida (nem a z-api nem a Meta avisam isso por aqui). Dois tiques azuis, como no WhatsApp, diriam algo
- * que ninguém conferiu. Quando o envio falha, quem conta a história é o aviso vermelho abaixo da bolha.
+ * Marca de envio da bolha, ao lado da hora, como no WhatsApp: relógio enquanto o envio ainda não foi
+ * confirmado, um tique quando o provedor aceitou, dois tiques cinza quando chegou ao aparelho e dois
+ * tiques no acento quando o cliente leu. A marca só diz o que o app CONFERIU: os dois tiques vêm do
+ * aviso de status da z-api (app/webhook/zapi/route.ts), e uma mensagem sem status (anterior à 0.3.0,
+ * enviada pela Meta, ou de uma conversa de teste) fica com um tique — ninguém sabe se ela chegou.
+ * Quando o envio falha, quem conta a história é o aviso vermelho abaixo da bolha, não a marca.
  */
-function MarcaEnvio({ claro }: { claro: boolean }) {
+function MarcaEnvio({ status, claro }: { status: StatusEntrega | undefined; claro: boolean }) {
+  const efetivo: Exclude<StatusEntrega, "falhou"> = !status || status === "falhou" ? "enviada" : status;
+  const rotulo = ROTULO_ENTREGA[efetivo];
+  const base = claro ? "text-white/75" : "text-muted";
+  const cor = efetivo === "lida" ? (claro ? "text-accent-2" : "text-accent") : base;
+  const comum = {
+    width: 15,
+    height: 14,
+    viewBox: "0 0 26 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2.4,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    role: "img",
+    "aria-label": rotulo,
+  };
+  if (efetivo === "enviando") {
+    return (
+      <svg {...comum} className={base} data-entrega="enviando">
+        <title>{rotulo}</title>
+        <circle cx="13" cy="12" r="8.5" />
+        <path d="M13 7.5V12l3 2" />
+      </svg>
+    );
+  }
+  if (efetivo === "enviada") {
+    return (
+      <svg {...comum} className={base} data-entrega="enviada">
+        <title>{rotulo}</title>
+        <path d="m6 13 4 4 10-10" />
+      </svg>
+    );
+  }
   return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={claro ? "text-white/75" : "text-muted"}
-      role="img"
-      aria-label="Enviada pelo número da empresa"
-    >
-      <path d="m5 13 4 4 10-10" />
+    <svg {...comum} className={cor} data-entrega={efetivo}>
+      <title>{rotulo}</title>
+      <path d="m2 13 4 4 9-9" />
+      <path d="m11 15.5 1.5 1.5 10-10" />
     </svg>
   );
 }
@@ -88,22 +122,29 @@ function Bolha({
   mensagem,
   pergunta,
   autor,
-  naoEntregue,
+  reenviando,
   corrigindo,
   onSalvarBase,
+  onReenviar,
 }: {
   mensagem: MensagemDaConversa;
   /** Pergunta do cliente logo antes desta resposta; sem ela não há par para aprovar. */
   pergunta?: string;
   /** Nome de quem escreveu, mostrado dentro da bolha (o atendente virtual ou a pessoa da equipe). */
   autor?: string;
-  naoEntregue: boolean;
+  /** "Tentar de novo" desta bolha está em andamento. */
+  reenviando: boolean;
   corrigindo: boolean;
   onSalvarBase: AoSalvarBase;
+  /** "Tentar de novo" de uma mensagem que não chegou ao cliente (só existe em conversa do WhatsApp). */
+  onReenviar?: (mensagemId: number) => void;
 }) {
   const doCliente = mensagem.papel === "cliente";
   const daIA = mensagem.papel === "atendente";
   const doHumano = mensagem.papel === "humano";
+  // A marcação de "não chegou" vem do banco (`statusEntrega`), não de um estado da tela: recarregar a
+  // página ou abrir em outro aparelho mostra a mesma bolha vermelha, e "Tentar de novo" parte dela.
+  const naoEntregue = !doCliente && mensagem.statusEntrega === "falhou";
   // As três cores repetem a conversa que a pessoa já conhece do WhatsApp: a mensagem que chegou é
   // branca à esquerda, a que saiu é verde à direita. O verde escuro separa o que uma pessoa escreveu
   // do que a IA respondeu — as duas saem pelo mesmo número, e confundi-las é o erro caro aqui.
@@ -126,10 +167,25 @@ function Bolha({
         {mensagem.texto}
         <span className={`absolute right-2.5 bottom-1 flex items-center gap-1 text-[10px] ${doHumano ? "text-white/75" : "text-muted"}`}>
           {horaBolha(mensagem.criadoEm)}
-          {!doCliente && !naoEntregue && <MarcaEnvio claro={doHumano} />}
+          {!doCliente && !naoEntregue && <MarcaEnvio status={mensagem.statusEntrega} claro={doHumano} />}
         </span>
       </div>
-      {naoEntregue && <span className="text-[11px] font-semibold text-danger px-1">Esta mensagem não chegou ao cliente.</span>}
+      {naoEntregue && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1">
+          <span className="text-[11px] font-semibold text-danger">Esta mensagem não chegou ao cliente.</span>
+          {mensagem.erroEnvio && <span className="text-[11px] text-muted">{mensagem.erroEnvio}</span>}
+          {onReenviar && (
+            <button
+              type="button"
+              className="text-[11px] font-semibold text-accent-ink underline underline-offset-2 disabled:opacity-60"
+              onClick={() => onReenviar(mensagem.id)}
+              disabled={reenviando}
+            >
+              {reenviando ? "Enviando de novo…" : "Tentar de novo"}
+            </button>
+          )}
+        </div>
+      )}
       {mensagem.ferramentaUsada && (
         <span className="text-[11px] text-muted px-1" title={`Ferramenta consultada: ${mensagem.ferramentaUsada}`}>
           Consultado em {mensagem.ferramentaUsada}
@@ -174,8 +230,8 @@ export function ConversaAberta({
   const [sugerindo, setSugerindo] = useState(false);
   /** Acabou de clicar em "Assumir atendimento": o campo, que só existe com a conversa assumida, recebe o foco ao aparecer. */
   const focarAoAssumirRef = useRef(false);
-  /** Ids das mensagens que foram gravadas mas não saíram pelo número da empresa. */
-  const [naoEntregues, setNaoEntregues] = useState<number[]>([]);
+  /** Id da mensagem cujo "Tentar de novo" está em andamento; null quando nenhum. */
+  const [reenviandoId, setReenviandoId] = useState<number | null>(null);
   const { confirmar, Dialogo } = useConfirmacao();
 
   const corpoRef = useRef<HTMLDivElement>(null);
@@ -213,14 +269,13 @@ export function ConversaAberta({
     [numero, aplicar]
   );
 
-  // Conversa nova na tela: tudo o que era da anterior (rascunho, erro, bolhas não entregues) sai junto.
-  // A carga sai do corpo do efeito por um setTimeout(0), mesmo padrão de components/setup.tsx.
+  // Conversa nova na tela: tudo o que era da anterior (rascunho, erro) sai junto. A carga sai do corpo
+  // do efeito por um setTimeout(0), mesmo padrão de components/setup.tsx.
   useEffect(() => {
     assinaturaRef.current = "";
     const t = setTimeout(() => {
       setTexto("");
       setErro(null);
-      setNaoEntregues([]);
       carregar();
     }, 0);
     return () => clearTimeout(t);
@@ -336,24 +391,41 @@ export function ConversaAberta({
         error?: string;
         codigo?: string;
         acao?: { rotulo: string; url: string };
-        mensagemComErro?: number;
       };
       // A mensagem é gravada antes de sair pelo número: mesmo com falha de envio ela já está na
-      // conversa, então o campo esvazia e o que ficou por entregar aparece marcado na bolha.
+      // conversa (marcada como `falhou` no banco), então o campo esvazia e a bolha vermelha aparece.
       if (dados.conversa) {
         aplicar(dados.conversa);
         setTexto("");
       }
-      if (r.ok) {
-        setErro(null);
-      } else {
-        setErro({ mensagem: dados.error ?? FALHA_ENVIO, codigo: dados.codigo, acao: dados.acao });
-        if (typeof dados.mensagemComErro === "number") setNaoEntregues((antes) => [...antes, dados.mensagemComErro as number]);
-      }
+      if (r.ok) setErro(null);
+      else setErro({ mensagem: dados.error ?? FALHA_ENVIO, codigo: dados.codigo, acao: dados.acao });
     } catch (e) {
       setErro(await lerErro(e));
     } finally {
       setEnviando(false);
+    }
+  }
+
+  /** "Tentar de novo" de uma bolha que não chegou: o mesmo texto sai de novo e a MESMA bolha muda de estado. */
+  async function reenviar(mensagemId: number) {
+    if (reenviandoId !== null) return;
+    setReenviandoId(mensagemId);
+    try {
+      const r = await fetch(`/api/conversas/${encodeURIComponent(numero)}/mensagens/${mensagemId}/reenviar`, { method: "POST" });
+      const dados = (await r.json().catch(() => ({}))) as {
+        conversa?: ConversaCompleta;
+        error?: string;
+        codigo?: string;
+        acao?: { rotulo: string; url: string };
+      };
+      if (dados.conversa) aplicar(dados.conversa);
+      if (r.ok) setErro(null);
+      else setErro({ mensagem: dados.error ?? FALHA_ENVIO, codigo: dados.codigo, acao: dados.acao });
+    } catch (e) {
+      setErro(await lerErro(e));
+    } finally {
+      setReenviandoId(null);
     }
   }
 
@@ -431,9 +503,10 @@ export function ConversaAberta({
                   mensagem={m}
                   pergunta={daIA && anterior?.papel === "cliente" ? anterior.texto : undefined}
                   autor={daIA ? atendente.trim() || "Seu atendente" : m.papel === "humano" ? "Você" : undefined}
-                  naoEntregue={naoEntregues.includes(m.id)}
+                  reenviando={reenviandoId === m.id}
                   corrigindo={corrigirUltima && m.id === idUltimaIA}
                   onSalvarBase={salvarBase}
+                  onReenviar={conversa.origem === "whatsapp" ? reenviar : undefined}
                 />
               );
             })

@@ -185,6 +185,8 @@ export interface RespostaDoAtendente {
   atendimentoHumano?: boolean;
   /** A resposta não saiu, e por quê (motivo já escrito no log): mensagem repetida, alguém assumiu, mensagem nova. */
   descartada?: string;
+  /** Id da resposta gravada, para quem envia pelo número real marcar depois se ela saiu (`enviada`) ou não (`falhou`). */
+  mensagemId?: number;
 }
 
 /**
@@ -337,10 +339,10 @@ ${documentos}` };
   const bloqueioFinal = motivoParaNaoResponder(numero, ultimaId);
   if (bloqueioFinal) return descartar(numero, bloqueioFinal, resposta);
 
-  registrarResposta({ numero, texto: resposta, transferir, motivo, atendente: config.atendente, ferramentaUsada, tempoRespostaMs: Date.now() - inicio });
+  const mensagemId = registrarResposta({ numero, texto: resposta, transferir, motivo, atendente: config.atendente, ferramentaUsada, tempoRespostaMs: Date.now() - inicio });
   if (motivo) console.log(`Conversa ${numero} passada para uma pessoa: ${rotuloMotivo(motivo)}.`);
 
-  return { resposta, transferir, motivo, ferramentaUsada };
+  return { resposta, transferir, motivo, ferramentaUsada, mensagemId };
 }
 
 function descartar(numero: string, motivo: string, resposta?: string): RespostaDoAtendente {
