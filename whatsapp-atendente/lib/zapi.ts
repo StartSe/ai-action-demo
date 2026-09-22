@@ -27,6 +27,7 @@
 // equivalente hoje é `restart`, e é ele que `reiniciarSessao()` chama.
 import { randomBytes } from "node:crypto";
 import { ErroWhatsApp, type CodigoErroWhatsApp } from "./erro-whatsapp";
+import { publicar } from "./eventos";
 import { getConfig, setConfig } from "./store";
 
 /** Base da z-api. A variável só existe para os testes locais apontarem para uma z-api falsa. */
@@ -86,6 +87,9 @@ export function gravarConexao(conexao: ConexaoWhatsApp): void {
   const numero = conexao.numero ?? (conexao.conectado ? anterior?.numero : undefined);
   const nome = conexao.nome ?? (conexao.conectado ? anterior?.nome : undefined);
   setConfig(CHAVE_CONEXAO, JSON.stringify({ ...conexao, numero, nome } satisfies ConexaoWhatsApp));
+  // As telas só precisam saber quando o estado MUDA: a consulta de 30 s do cabeçalho grava a mesma
+  // conexão várias vezes por minuto, e avisar a cada gravação viraria uma recarga por consulta.
+  if (anterior?.conectado !== conexao.conectado || anterior?.numero !== numero) publicar({ tipo: "conexao" });
 }
 
 // --- Tradução das falhas -----------------------------------------------------------------------

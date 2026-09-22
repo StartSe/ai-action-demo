@@ -9,6 +9,7 @@
  * saem em ISO.
  */
 import { conversasExemplo } from "./demo";
+import { publicar } from "./eventos";
 import { abrirBanco, getConfig, setConfig } from "./store";
 import { ehMotivo, MOTIVO_PADRAO, rotuloMotivo, type MotivoTransferencia } from "./transferencia";
 import {
@@ -415,6 +416,20 @@ function marcaDePessoa(status: StatusConversa): string {
   return precisouDePessoa(status) ? ", passou_por_pessoa = 1" : "";
 }
 
+/**
+ * Avisa as telas abertas de que esta conversa mudou (lib/eventos.ts). Toda escrita deste arquivo passa
+ * por aqui: é o que faz uma mensagem nova aparecer na hora, em vez de esperar a próxima consulta.
+ */
+function avisarConversa(numero: string | undefined | null): void {
+  if (numero) publicar({ tipo: "conversa", numero });
+}
+
+/** A qual conversa esta mensagem pertence — os avisos de entrega chegam pelo id da mensagem, não pelo número. */
+function numeroDaMensagem(mensagemId: number): string | undefined {
+  const l = banco().prepare("SELECT numero FROM mensagens WHERE id = ?").get(mensagemId) as { numero: string } | undefined;
+  return l?.numero;
+}
+
 function inserirMensagem({
   numero,
   papel,
@@ -439,6 +454,7 @@ function inserirMensagem({
       "INSERT INTO mensagens (numero, papel, texto, criado_em, ferramenta_usada, tempo_resposta_ms, id_externo, status_entrega) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .run(numero, papel, texto, criadoEm ?? paraTextoDeBanco(), ferramentaUsada ?? null, tempoRespostaMs ?? null, idExterno ?? null, statusEntrega ?? null);
+  avisarConversa(numero);
   return Number(gravada.lastInsertRowid);
 }
 
@@ -616,6 +632,8 @@ export function registrarResposta({
     .run(status, quando, motivoFinal, transferir ? quando : null, numero);
   const mensagemId = inserirMensagem({ numero, papel: "atendente", texto, criadoEm: quando, ferramentaUsada, tempoRespostaMs, statusEntrega: statusInicialDeEnvio(numero) });
   if (motivoFinal) registrarEvento(numero, `${atendente?.trim() || "O atendente"} pediu ajuda de uma pessoa · ${rotuloMotivo(motivoFinal)}`, em);
+  // A conversa passou a esperar por uma pessoa: o contador do cabeçalho e o painel do dia mudam junto.
+  if (transferir) publicar({ tipo: "atencao", numero });
   return mensagemId;
 }
 
@@ -668,11 +686,13 @@ export function marcarEnviada(mensagemId: number, idExterno?: string): void {
     console.error(`O id ${idExterno} do provedor já pertence a outra mensagem; a mensagem ${mensagemId} fica enviada sem id.`, err);
     d.prepare("UPDATE mensagens SET status_entrega = 'enviada', erro_envio = NULL WHERE id = ?").run(mensagemId);
   }
+  avisarConversa(numeroDaMensagem(mensagemId));
 }
 
 /** O provedor recusou (ou a rede caiu): `falhou`, com a frase de negócio que a bolha mostra abaixo da mensagem. */
 export function marcarFalhaEnvio(mensagemId: number, erro: string): void {
   banco().prepare("UPDATE mensagens SET status_entrega = 'falhou', erro_envio = ? WHERE id = ?").run(erro, mensagemId);
+  avisarConversa(numeroDaMensagem(mensagemId));
 }
 
 /**
@@ -684,12 +704,13 @@ export function atualizarEntrega(idExterno: string, status: Exclude<StatusEntreg
   // Só o que saiu pelo número da empresa: o id de uma mensagem do cliente também mora em `id_externo`,
   // e um aviso sobre ela (não deveria vir, mas o canal é externo) não pode ganhar status de entrega.
   const atual = banco()
-    .prepare("SELECT id, status_entrega FROM mensagens WHERE id_externo = ? AND papel IN ('atendente', 'humano')")
-    .get(idExterno) as { id: number; status_entrega: string | null } | undefined;
+    .prepare("SELECT id, numero, status_entrega FROM mensagens WHERE id_externo = ? AND papel IN ('atendente', 'humano')")
+    .get(idExterno) as { id: number; numero: string; status_entrega: string | null } | undefined;
   if (!atual) return false;
   const de = ehStatusEntrega(atual.status_entrega) ? atual.status_entrega : "enviando";
   if (ORDEM_ENTREGA[status] <= ORDEM_ENTREGA[de]) return true;
   banco().prepare("UPDATE mensagens SET status_entrega = ?, erro_envio = NULL WHERE id = ?").run(status, atual.id);
+  avisarConversa(atual.numero);
   return true;
 }
 
@@ -700,6 +721,7 @@ export function atualizarEntrega(idExterno: string, status: Exclude<StatusEntreg
  */
 export function definirAssunto(numero: string, assunto: string): void {
   banco().prepare("UPDATE conversas SET assunto = ? WHERE numero = ?").run(assunto, numero);
+  avisarConversa(numero);
 }
 
 /**
@@ -707,7 +729,11 @@ export function definirAssunto(numero: string, assunto: string): void {
  * uma conversa não é novidade nela, e mexer na data a faria pular para o topo da lista a cada leitura.
  */
 export function marcarLido(numero: string): void {
+  // O aviso só sai quando havia algo por ler: abrir a conversa recarrega a tela, que abre a conversa de
+  // novo — sem esta guarda, a leitura se avisaria sem fim.
+  const tinha = (linha(numero)?.nao_lidas ?? 0) > 0;
   banco().prepare("UPDATE conversas SET nao_lidas = 0 WHERE numero = ?").run(numero);
+  if (tinha) avisarConversa(numero);
 }
 
 function mudarStatus(
@@ -720,6 +746,8 @@ function mudarStatus(
   const extras = `${zerarNaoLidas ? ", nao_lidas = 0" : ""}${zerarEspera ? ", esperando_desde = NULL" : ""}${zerarMotivo ? ", motivo_transferencia = NULL" : ""}${marcaDePessoa(status)}`;
   d.prepare(`UPDATE conversas SET status = ?, atualizado_em = ?${extras} WHERE numero = ?`).run(status, paraTextoDeBanco(), numero);
   if (evento) registrarEvento(numero, evento);
+  avisarConversa(numero);
+  if (status === "atencao") publicar({ tipo: "atencao", numero });
   return true;
 }
 
@@ -745,6 +773,7 @@ export function apagarConversa(numero: string): void {
   const d = banco();
   d.prepare("DELETE FROM mensagens WHERE numero = ?").run(numero);
   d.prepare("DELETE FROM conversas WHERE numero = ?").run(numero);
+  avisarConversa(numero);
 }
 
 // --- Conversas de exemplo ------------------------------------------------
@@ -805,8 +834,10 @@ export function semearExemplosSeVazio({ numeroConectado, atendente = "Bia" }: { 
 export function apagarExemplos(): number {
   const d = banco();
   const quantas = contarExemplos();
+  const numeros = (d.prepare("SELECT numero FROM conversas WHERE exemplo = 1").all() as { numero: string }[]).map((l) => l.numero);
   d.prepare("DELETE FROM mensagens WHERE numero IN (SELECT numero FROM conversas WHERE exemplo = 1)").run();
   d.prepare("DELETE FROM conversas WHERE exemplo = 1").run();
+  for (const n of numeros) avisarConversa(n);
   setConfig(CHAVE_EXEMPLOS, new Date().toISOString());
   return quantas;
 }

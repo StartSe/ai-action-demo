@@ -17,6 +17,7 @@ import { AvisoConversasExemplo } from "./AvisoExemplo";
 import { ConversaAberta } from "./ConversaAberta";
 import { Avatar, DesenhoOrigem } from "./ContatoVisual";
 import { Empty, ErrorBox, IlustracaoConversa, Topbar, lerErro, useStatus, type ErroLido } from "./ui";
+import { INTERVALO_RESERVA_MS, useEventos, useRecargaJunta, type EventoDaTela } from "./useEventos";
 import { soConversasDeExemplo } from "@/lib/demo";
 import { navegacaoComContador } from "@/lib/navegacao";
 import { PERIODOS, PERIODO_PADRAO, classeStatus, horaOuDia, lerPeriodo, rotuloContato, rotuloPeriodo, rotuloStatus } from "@/lib/rotulos";
@@ -84,6 +85,19 @@ function LinhasFalsas() {
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * Rodapé da lista: diz de onde vem o que está na tela. Com o fluxo de avisos de pé, uma mensagem nova
+ * aparece no instante em que chega; sem ele, a lista volta a consultar de tempos em tempos.
+ */
+function ComoAtualiza({ aoVivo }: { aoVivo: boolean }) {
+  return (
+    <p className="flex items-center gap-2 px-4 py-2.5 border-t border-line text-[12px] text-muted">
+      <span aria-hidden="true" className={`w-2 h-2 rounded-full ${aoVivo ? "bg-ok" : "bg-[#b9bfcc]"}`} />
+      {aoVivo ? "Atualizando em tempo real" : "Atualizando a cada 30 segundos"}
+    </p>
   );
 }
 
@@ -195,6 +209,27 @@ export function Conversas() {
     return () => clearTimeout(t);
   }, [pronto, carregar]);
 
+  // Tempo real: qualquer mudança em qualquer conversa mexe na lista (última mensagem, status, não
+  // lidas, contador das abas), então ela recarrega em qualquer aviso que não seja o da conexão.
+  const recarregar = useRecargaJunta(carregar);
+  const aoEvento = useCallback(
+    (evento: EventoDaTela) => {
+      if (evento.tipo === "conexao") return;
+      recarregar();
+    },
+    [recarregar]
+  );
+  const { aoVivo, reserva } = useEventos(aoEvento);
+
+  // Reserva: sem o fluxo de avisos, a lista volta a consultar sozinha, só com a aba visível.
+  useEffect(() => {
+    if (!reserva) return;
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") carregar();
+    }, INTERVALO_RESERVA_MS);
+    return () => clearInterval(t);
+  }, [reserva, carregar]);
+
   const lista = itens ?? [];
   const vazioDeVerdade = pronto && itens !== null && contadores.todas === 0 && !busca;
 
@@ -301,6 +336,7 @@ export function Conversas() {
                   ))}
                 </ul>
               )}
+              {itens !== null && <ComoAtualiza aoVivo={aoVivo} />}
             </section>
 
             <section className={`min-w-0 ${numero ? "" : "max-md:hidden"}`} aria-label="Conversa">

@@ -99,6 +99,7 @@ app/api/conversas/[numero]/assumir/**     assumir o atendimento (a IA para de re
 app/api/conversas/[numero]/devolver/**    devolver o atendimento para a IA
 app/api/conversas/[numero]/resolver/**    marcar a conversa como resolvida
 app/api/conversas/exemplos/route.ts       apagar de uma vez as conversas de exemplo
+app/api/eventos/route.ts                  fluxo de avisos para as telas (text/event-stream)
 app/api/metricas/route.ts                 números de Início e Relatórios, por período
 app/api/metricas/exportar/route.ts        planilha do período (CSV para o Excel em português)
 app/api/relatorio-diario/route.ts         agenda (ou consulta) a rotina do relatório das 8h
@@ -126,12 +127,14 @@ components/GraficoLinhas.tsx              gráfico em SVG desenhado à mão (sem
 components/ExportarRelatorio.tsx          menu "Exportar" e cartão do relatório diário
 components/ConexaoWhatsApp.tsx            cartão "Conectar o WhatsApp": QR Code e estado ao vivo
 components/Celular.tsx                    celular da tela, com as bolhas da conversa de teste
+components/useEventos.ts                  liga as telas no fluxo de avisos, com consulta de reserva de 30 s
 components/ui.tsx                         componentes visuais deste app (camada de produto própria)
 components/setup.tsx                      tela de configuração inicial (camada de produto própria)
 lib/ai.ts                                 cliente OpenRouter (askText, askJSON), chave via lib/store
 lib/atendente.ts                          pipeline de resposta: IA ou buscador local, regra de transferência
 lib/conversas.ts                          dono das tabelas `conversas` e `mensagens` (node:sqlite), inclusive o status de entrega
 lib/rajada.ts                             espera de 3 s para responder uma rajada de mensagens de uma vez
+lib/eventos.ts                            emissor dos avisos de mudança (quem escreve publica, as telas escutam)
 lib/transferencia.ts                      motivos de transferência (rótulos, marcador `[TRANSFERIR:motivo]`, frase de reserva)
 lib/metricas.ts                           fonte única dos números de Início e Relatórios
 lib/zapi.ts                               cliente da z-api: estado, QR Code, envio e cadastro dos avisos

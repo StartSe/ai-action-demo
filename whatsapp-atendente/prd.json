@@ -72,7 +72,7 @@
         "Lint e build passam; verificar no navegador (mensagem nova sem recarga; indicador nos dois estados)"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-004 (Fase 0)"
     },
     {

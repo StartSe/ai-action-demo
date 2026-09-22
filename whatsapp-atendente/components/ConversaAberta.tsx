@@ -4,8 +4,8 @@
 //
 // Quem manda no que aparece é sempre o servidor: toda ação devolve a conversa já atualizada
 // (`aplicar`), e não existe um "otimismo" local que mostre um status que o banco não confirmou. A
-// conversa também se recarrega sozinha a cada 10 s enquanto a aba está visível, que é o que faz a
-// resposta de um cliente aparecer sem ninguém apertar nada.
+// A conversa se atualiza sozinha: o servidor avisa quando algo muda nela (components/useEventos.ts) e
+// ela recarrega na hora. Sem o fluxo de avisos de pé, ela volta a consultar de tempos em tempos.
 //
 // A coluna da direita (o painel do contato, components/PainelContato.tsx) é desenhada daqui, e não
 // pela tela de fora: ela mostra a MESMA conversa que já está neste estado e age por estas mesmas
@@ -16,15 +16,13 @@
 // caminho literal em qualquer componente.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AcoesResposta, type AoSalvarBase } from "./Celular";
+import { INTERVALO_RESERVA_MS, useEventos, useRecargaJunta, type EventoDaTela } from "./useEventos";
 import { Avatar, AvatarAtendente, DesenhoOrigem } from "./ContatoVisual";
 import { ContatoRecolhido, PainelContato, type DadosDoContato } from "./PainelContato";
 import { Aviso, ErrorBox, lerErro, useConfirmacao, type ErroLido } from "./ui";
 import { classeStatus, rotuloContato, rotuloNumero, rotuloStatus } from "@/lib/rotulos";
 import { rotuloMotivo } from "@/lib/transferencia";
 import type { ConversaCompleta, MensagemDaConversa, StatusEntrega } from "@/lib/types";
-
-/** De quanto em quanto tempo a conversa aberta se atualiza (só com a aba visível). */
-const INTERVALO_MS = 10_000;
 
 /** Teto da altura do campo de escrever: ele cresce com o texto até aqui e depois passa a rolar. */
 const ALTURA_MAXIMA_CAMPO = 132;
@@ -281,14 +279,28 @@ export function ConversaAberta({
     return () => clearTimeout(t);
   }, [carregar]);
 
-  // Recarga automática: só enquanto a aba está visível, para uma aba esquecida aberta não ficar
-  // consultando o servidor a noite inteira.
+  // Tempo real: o servidor avisa que ESTA conversa mudou (mensagem nova, entrega, status) e ela
+  // recarrega em silêncio — sem piscar, porque `carregar(true)` não apaga o que já está na tela.
+  const recarregar = useRecargaJunta(useCallback(() => carregar(true), [carregar]));
+  const aoEvento = useCallback(
+    (evento: EventoDaTela) => {
+      if (evento.tipo === "conexao" || evento.numero !== numero) return;
+      recarregar();
+    },
+    [numero, recarregar]
+  );
+  const { reserva } = useEventos(aoEvento);
+
+  // Reserva: sem o fluxo de avisos (proxy que corta, servidor reiniciando), a conversa volta a
+  // consultar sozinha, só enquanto a aba está visível — uma aba esquecida aberta não deve consultar
+  // o servidor a noite inteira.
   useEffect(() => {
+    if (!reserva) return;
     const t = setInterval(() => {
       if (document.visibilityState === "visible") carregar(true);
-    }, INTERVALO_MS);
+    }, INTERVALO_RESERVA_MS);
     return () => clearInterval(t);
-  }, [carregar]);
+  }, [reserva, carregar]);
 
   // A conversa abre rolada até o fim (é onde está a mensagem que importa), e continua assim a cada
   // mensagem nova.

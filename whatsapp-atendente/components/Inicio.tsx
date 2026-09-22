@@ -23,6 +23,7 @@ import { AvisoConversasExemplo } from "./AvisoExemplo";
 import { Avatar } from "./ContatoVisual";
 import { Indicadores } from "./Indicadores";
 import { DataTable, IlustracaoSegmento, Topbar, useStatus, type Coluna } from "./ui";
+import { INTERVALO_RESERVA_MS, useEventos, useRecargaJunta } from "./useEventos";
 import { soConversasDeExemplo } from "@/lib/demo";
 import { navegacaoComContador } from "@/lib/navegacao";
 import { classeStatus, dataPorExtenso, haQuantoTempo, rotuloContato, rotuloStatus, saudacao } from "@/lib/rotulos";
@@ -187,6 +188,20 @@ export function Inicio() {
     if (!mostrar) return;
     carregar();
   }, [mostrar, carregar]);
+
+  // Tempo real: o painel do dia (conversas esperando, números de hoje, últimas conversas) muda a cada
+  // mensagem que chega, então qualquer aviso o recarrega — inclusive o da conexão do número.
+  const recarregar = useRecargaJunta(carregar);
+  const { reserva } = useEventos(recarregar);
+
+  // Reserva: sem o fluxo de avisos, o painel volta a consultar sozinho, só com a aba visível.
+  useEffect(() => {
+    if (!mostrar || !reserva) return;
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") carregar();
+    }, INTERVALO_RESERVA_MS);
+    return () => clearInterval(t);
+  }, [mostrar, reserva, carregar]);
 
   const conectado = status?.integrations?.whatsapp === true;
   const assistenteCriado = status?.integrations?.assistente === true;
