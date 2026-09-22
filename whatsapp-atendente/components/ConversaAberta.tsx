@@ -1,6 +1,11 @@
 "use client";
-// Coluna do meio de Conversas: a conversa inteira, com o que a pessoa pode fazer nela — assumir,
-// responder pelo número da empresa, devolver para a IA e marcar como resolvida.
+// Coluna do meio de Conversas: a conversa inteira, com o que a pessoa pode fazer nela — trocar quem
+// atende, responder pelo número da empresa e marcar como resolvida.
+//
+// Intervir aqui é como responder no celular: o campo de resposta está sempre à mão (menos na conversa
+// resolvida) e ENVIAR já assume a conversa — o servidor grava `humano` na própria gravação da
+// mensagem. O seletor "Quem atende" do cabeçalho é o caminho explícito para a mesma troca, nos dois
+// sentidos.
 //
 // Quem manda no que aparece é sempre o servidor: toda ação devolve a conversa já atualizada
 // (`aplicar`), e não existe um "otimismo" local que mostre um status que o banco não confirmou. A
@@ -20,8 +25,9 @@ import { PorQueRespondeu } from "./PorQueRespondeu";
 import { INTERVALO_RESERVA_MS, useEventos, useRecargaJunta, type EventoDaTela } from "./useEventos";
 import { Avatar, AvatarAtendente, DesenhoOrigem } from "./ContatoVisual";
 import { ContatoRecolhido, PainelContato, type DadosDoContato } from "./PainelContato";
+import { SeletorQuemAtende } from "./SeletorQuemAtende";
 import { Aviso, ErrorBox, lerErro, useConfirmacao, type ErroLido } from "./ui";
-import { classeStatus, rotuloContato, rotuloNumero, rotuloStatus } from "@/lib/rotulos";
+import { rotuloContato, rotuloNumero } from "@/lib/rotulos";
 import { formatarTelefone } from "@/lib/telefone";
 import { rotuloMotivo } from "@/lib/transferencia";
 import type { Anexo, ConversaCompleta, MensagemDaConversa, StatusEntrega } from "@/lib/types";
@@ -358,13 +364,7 @@ export function ConversaAberta({
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [agindo, setAgindo] = useState(false);
-  // Como a pessoa quer escrever esta resposta: pedindo um rascunho à IA (e revisando antes de enviar) ou
-  // do zero. A escolha é só da tela — quem envia é sempre a pessoa, pelos dois caminhos, e nada sai do
-  // app sem ela clicar em "Enviar".
-  const [modoResposta, setModoResposta] = useState<"ia" | "manual">("ia");
   const [sugerindo, setSugerindo] = useState(false);
-  /** Acabou de clicar em "Assumir atendimento": o campo, que só existe com a conversa assumida, recebe o foco ao aparecer. */
-  const focarAoAssumirRef = useRef(false);
   /** Id da mensagem cujo "Tentar de novo" está em andamento; null quando nenhum. */
   const [reenviandoId, setReenviandoId] = useState<number | null>(null);
   const { confirmar, Dialogo } = useConfirmacao();
@@ -447,14 +447,8 @@ export function ConversaAberta({
     if (el) el.scrollTop = el.scrollHeight;
   }, [quantasMensagens, numero]);
 
-  // O campo de resposta é montado só quando a conversa está em atendimento humano: o foco pedido pelo
-  // "Assumir atendimento" precisa esperar essa montagem, e por isso mora aqui, não dentro de `agir`.
-  const status = conversa?.status;
-  useEffect(() => {
-    if (!focarAoAssumirRef.current || status !== "humano") return;
-    focarAoAssumirRef.current = false;
-    campoRef.current?.focus();
-  }, [status]);
+  // O campo de resposta existe em qualquer status que não seja `resolvida`, então o foco de quem
+  // acabou de assumir pela primeira vez é pedido em `agir`, logo depois da resposta do servidor.
 
   const salvarBase: AoSalvarBase = (pergunta, resposta) => {
     fetch("/api/base", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pergunta, resposta }) }).catch((e) =>
@@ -470,12 +464,27 @@ export function ConversaAberta({
       const dados = await r.json();
       aplicar(dados.conversa);
       setErro(null);
-      if (acao === "assumir") focarAoAssumirRef.current = true;
+      if (acao === "assumir") campoRef.current?.focus();
     } catch (e) {
       setErro(await lerErro(e));
     } finally {
       setAgindo(false);
     }
+  }
+
+  /**
+   * Devolver a conversa para o atendente virtual. O que estiver escrito e não enviado se perde junto
+   * com a vez de responder: quando há rascunho no campo, pergunta antes.
+   */
+  async function devolverParaIA() {
+    if (texto.trim()) {
+      const ok = await confirmar("Devolver esta conversa para o atendente virtual? O que você escreveu e não enviou se perde.", {
+        confirmarRotulo: "Devolver",
+      });
+      if (!ok) return;
+      setTexto("");
+    }
+    await agir("devolver");
   }
 
   /**
@@ -629,6 +638,7 @@ export function ConversaAberta({
   const numeroFormatado = rotuloNumero(conversa.numero);
   const emAtendimento = conversa.status === "humano";
   const precisaDeAtencao = conversa.status === "atencao";
+  const resolvida = conversa.status === "resolvida";
   const idUltimaIA = [...conversa.mensagens].reverse().find((m) => m.papel === "atendente")?.id;
   const nomeAtendente = atendente.trim() || "O atendente";
   // Só as mensagens de verdade formam pares pergunta/resposta: um evento entre a pergunta e a resposta
@@ -653,7 +663,7 @@ export function ConversaAberta({
       </div>
 
       <div className="card flex flex-col overflow-hidden">
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-line">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-line flex-wrap">
           <button type="button" className="btn-link shrink-0 min-[768px]:hidden" onClick={onVoltar}>
             Voltar
           </button>
@@ -663,18 +673,26 @@ export function ConversaAberta({
               {nome}
               <DesenhoOrigem origem={conversa.origem} />
             </p>
-            <p className="text-[13px] text-muted flex items-center gap-2 flex-wrap">
-              {numeroFormatado !== nome && <span>{numeroFormatado}</span>}
-              <span className={classeStatus(conversa.status)}>{rotuloStatus(conversa.status)}</span>
-            </p>
+            {numeroFormatado !== nome && <p className="text-[13px] text-muted truncate">{numeroFormatado}</p>}
           </div>
-          {/* "Assumir atendimento" não fica aqui: ele mora no rodapé, no lugar do campo de resposta, que é
-              onde a pessoa procura quando quer escrever (e na faixa âmbar, dentro do próprio aviso). */}
+          {/* O seletor é o único lugar da tela que troca quem atende, e por isso ele também diz em que
+              pé a conversa está — o chip de status que ficava aqui diria a mesma coisa duas vezes. */}
+          <div className="max-[560px]:basis-full">
+            <SeletorQuemAtende
+              status={conversa.status}
+              atendente={atendente}
+              agindo={agindo}
+              onAssumir={() => agir("assumir")}
+              onDevolver={devolverParaIA}
+            />
+          </div>
         </div>
 
         {precisaDeAtencao && (
           <div className="px-4 pt-4">
-            <Aviso acao={{ rotulo: "Assumir atendimento", onClick: () => agir("assumir") }}>
+            {/* Sem botão: assumir é o seletor logo acima, ou simplesmente escrever no campo. O aviso
+                ficou só com o que ele sabe e o seletor não diz — por que a conversa chegou aqui. */}
+            <Aviso>
               <strong>Intervir na conversa</strong> · {nomeAtendente} passou esta conversa para uma pessoa
               {conversa.motivoTransferencia && <> · {rotuloMotivo(conversa.motivoTransferencia)}</>}.
             </Aviso>
@@ -715,55 +733,40 @@ export function ConversaAberta({
         )}
 
         <div className="border-t border-line p-3">
-          {!emAtendimento ? (
-            /* Enquanto a IA cuida da conversa não há o que digitar: em vez de abas e um campo desligados
-               (que pareciam um jeito de responder que "não funcionava"), o rodapé diz o que falta e
-               oferece o próprio botão de assumir, no lugar em que a pessoa procura para escrever. */
-            <div className="flex items-center gap-3 flex-wrap">
-              <p className="flex-1 min-w-[200px] text-[13px] text-muted">
-                {precisaDeAtencao
-                  ? `${nomeAtendente} passou esta conversa para uma pessoa. Assuma o atendimento para responder.`
-                  : "O atendente virtual está cuidando desta conversa. Assuma o atendimento para responder você mesmo, com ou sem a ajuda da IA."}
-              </p>
-              <button type="button" className="btn-primary !w-auto shrink-0" onClick={() => agir("assumir")} disabled={agindo}>
-                {agindo ? "Assumindo..." : "Assumir atendimento"}
-              </button>
-            </div>
+          {resolvida ? (
+            /* Conversa resolvida: não há campo. Quem quiser voltar a responder reabre no seletor lá em
+               cima — reabrir é uma decisão, não um efeito de começar a digitar. */
+            <p className="text-[13px] text-muted">Esta conversa está marcada como resolvida. Reabra no alto para voltar a responder.</p>
           ) : (
             <>
-              {/* As duas abas escolhem só COMO a resposta é escrita (rascunho da IA ou do zero); quem envia é
-                  sempre a pessoa. Elas só existem com a conversa assumida, junto com o campo. */}
-              <div className="flex gap-1 mb-2.5" role="tablist" aria-label="Como responder">
-                {([["ia", "Responder como IA"], ["manual", "Responder manualmente"]] as const).map(([valor, rotulo]) => (
-                  <button
-                    key={valor}
-                    type="button"
-                    role="tab"
-                    aria-selected={modoResposta === valor}
-                    className={`px-3 py-1.5 rounded-field text-[13px] font-semibold transition-colors ${
-                      modoResposta === valor ? "bg-accent-soft text-accent-ink" : "text-muted hover:bg-bg"
-                    }`}
-                    onClick={() => setModoResposta(valor)}
-                  >
-                    {rotulo}
-                  </button>
-                ))}
-              </div>
-
-              {modoResposta === "ia" && (
-                <div className="flex items-center gap-3 flex-wrap mb-2.5">
-                  <button type="button" className="btn-ghost !w-auto !py-2 !text-[13px]" onClick={pedirSugestao} disabled={sugerindo}>
-                    {sugerindo ? "Escrevendo..." : "Escrever com a IA"}
-                  </button>
-                  <span className="text-[12.5px] text-muted">O rascunho aparece no campo abaixo. Nada é enviado antes de você conferir.</span>
-                </div>
+              {!emAtendimento && (
+                /* Com a IA no comando, o campo continua à mão: escrever é o jeito mais natural de
+                   intervir. A linha avisa o que acontece ao enviar, e o botão repete isso no rótulo —
+                   ninguém assume uma conversa sem saber. */
+                <p className="text-[12.5px] text-muted mb-2">
+                  Ao enviar, você assume a conversa e {nomeAtendente} para de responder até você devolver.
+                </p>
               )}
 
-              <div className="flex items-end gap-2">
+              <div className="flex items-end gap-2 max-[560px]:flex-wrap">
+                <button
+                  type="button"
+                  className="btn-ghost !w-auto shrink-0 !px-3 !py-2.5 !text-[13px]"
+                  onClick={pedirSugestao}
+                  disabled={sugerindo}
+                  title="A IA escreve um rascunho no campo. Nada é enviado antes de você conferir."
+                >
+                  {sugerindo ? "Escrevendo..." : (
+                    <>
+                      <span className="max-[560px]:hidden">Escrever com a IA</span>
+                      <span className="min-[561px]:hidden">Rascunho</span>
+                    </>
+                  )}
+                </button>
                 <textarea
                   ref={campoRef}
                   rows={1}
-                  className="input !py-2.5 text-[14px] resize-none min-h-[44px] leading-snug flex-1 min-w-0"
+                  className="input !py-2.5 text-[14px] resize-none min-h-[44px] leading-snug flex-1 min-w-0 max-[560px]:order-first max-[560px]:basis-full"
                   value={texto}
                   aria-label="Escreva a resposta"
                   placeholder="Escreva a resposta"
@@ -780,18 +783,19 @@ export function ConversaAberta({
                     }
                   }}
                 />
-                <button type="button" className="btn-primary !w-auto shrink-0" onClick={enviar} disabled={enviando || !texto.trim()}>
-                  {enviando ? "Enviando..." : "Enviar"}
+                <button type="button" className="btn-primary !w-auto shrink-0 max-[560px]:flex-1" onClick={enviar} disabled={enviando || !texto.trim()}>
+                  {enviando ? "Enviando..." : emAtendimento ? "Enviar" : "Assumir e enviar"}
                 </button>
               </div>
-              <div className="flex gap-4 flex-wrap mt-2.5 px-1">
-                <button type="button" className="btn-link" onClick={() => agir("devolver")} disabled={agindo}>
-                  Devolver para a IA
-                </button>
-                <button type="button" className="btn-link" onClick={() => agir("resolver")} disabled={agindo}>
-                  Marcar como resolvida
-                </button>
-              </div>
+
+              {emAtendimento && (
+                /* "Devolver para a IA" saiu daqui: quem devolve é o seletor do cabeçalho. */
+                <div className="flex gap-4 flex-wrap mt-2.5 px-1">
+                  <button type="button" className="btn-link" onClick={() => agir("resolver")} disabled={agindo}>
+                    Marcar como resolvida
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>

@@ -225,7 +225,7 @@
         "Lint e build passam; verificar no navegador (seletor nos quatro status, campo sempre visível, \"Assumir e enviar\"; desktop e celular)"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-013 (Fase 4: painel de atendimento)"
     },
     {

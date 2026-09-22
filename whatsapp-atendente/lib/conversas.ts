@@ -719,6 +719,9 @@ export function registrarEvento(numero: string, texto: string, em?: Date): numbe
   return inserirMensagem({ numero, papel: "evento", texto, criadoEm: paraTextoDeBanco(em) });
 }
 
+/** A mesma frase para os dois caminhos de assumir: o seletor "Quem atende" e responder pelo campo. */
+const EVENTO_ASSUMIU = "Você assumiu a conversa";
+
 /**
  * Grava a resposta escrita por uma pessoa: a conversa fica (ou passa a ficar) em atendimento humano.
  * Devolve o id da mensagem gravada — a tela precisa dele para marcar a bolha quando o envio pelo
@@ -726,6 +729,11 @@ export function registrarEvento(numero: string, texto: string, em?: Date): numbe
  */
 export function registrarMensagemHumana(numero: string, texto: string): number {
   garantirConversa({ numero });
+  // Responder JÁ é assumir: quem escreve pelo número da empresa passa a cuidar da conversa, e a linha
+  // do tempo registra isso do mesmo jeito que registraria um clique no seletor "Quem atende" — quem
+  // abrir a conversa depois precisa saber a partir de onde a IA parou de responder.
+  const assumindoAgora = linha(numero)?.status !== "humano";
+  if (assumindoAgora) registrarEvento(numero, EVENTO_ASSUMIU);
   const quando = paraTextoDeBanco();
   // Uma pessoa respondeu: o cliente não está mais esperando por ela.
   banco().prepare("UPDATE conversas SET status = 'humano', nao_lidas = 0, passou_por_pessoa = 1, esperando_desde = NULL, atualizado_em = ? WHERE numero = ?").run(quando, numero);
@@ -850,7 +858,7 @@ function mudarStatus(
  * conversa ainda saber por que ela chegou aqui.
  */
 export function assumir(numero: string): void {
-  mudarStatus(numero, "humano", { zerarNaoLidas: true, evento: "Você assumiu a conversa" });
+  mudarStatus(numero, "humano", { zerarNaoLidas: true, evento: EVENTO_ASSUMIU });
 }
 
 /** A IA volta a cuidar da conversa: motivo e espera zeram, e a linha do tempo diz para quem ela voltou. */

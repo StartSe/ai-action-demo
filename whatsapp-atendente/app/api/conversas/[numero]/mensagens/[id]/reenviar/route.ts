@@ -1,5 +1,6 @@
 import { CONVERSA_SUMIU, enviarEGravar } from "../../../comum";
 import { obterConversa, obterMensagem, obterRegistro } from "@/lib/conversas";
+import { comContato } from "@/lib/memoria";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export async function POST(_req: Request, { params }: Parametros) {
     return Response.json({ error: "Essa mensagem não está mais aqui." }, { status: 404 });
   }
   if (mensagem.statusEntrega !== "falhou") {
-    return Response.json({ error: "Essa mensagem já saiu pelo número da empresa.", conversa: obterConversa(numero) }, { status: 409 });
+    return Response.json({ error: "Essa mensagem já saiu pelo número da empresa.", conversa: comContato(obterConversa(numero)) }, { status: 409 });
   }
   if (conversa.origem !== "whatsapp") {
     return Response.json({ error: "Essa conversa não veio do WhatsApp: a mensagem só existe dentro do app." }, { status: 400 });
@@ -31,5 +32,5 @@ export async function POST(_req: Request, { params }: Parametros) {
 
   const falha = await enviarEGravar(numero, mensagem.texto, mensagem.id);
   if (falha) return falha;
-  return Response.json({ conversa: obterConversa(numero), mensagemId: mensagem.id });
+  return Response.json({ conversa: comContato(obterConversa(numero)), mensagemId: mensagem.id });
 }

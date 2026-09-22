@@ -62,6 +62,7 @@ A imagem é construída e publicada pelo GitHub Actions do repositório da suít
 - **No formulário do Render, "Associate existing services" x "Create all as new services":** a escolha é do painel, não do `render.yaml` — o Render casa o Blueprint com um serviço já existente pelo campo `name`, e não há opção no arquivo para forçar um ou outro. Com o serviço `whatsapp-atendente` já publicado, **associar é o certo**: é assim que o disco é acrescentado e o plano atualizado no mesmo serviço, mantendo o endereço. "Create all as new services" cria um segundo serviço (o Render acrescenta um sufixo ao nome) com outro endereço — só use se quiser mesmo duas instalações. Para publicar dois apps diferentes, cada um tem seu próprio Blueprint (branch `deploy-<app>`), então não há conflito.
 - Mensagens seguidas do mesmo cliente recebem **uma resposta só**: o atendente espera 3 s depois da última mensagem antes de responder ao conjunto, um aviso repetido da z-api não vira mensagem duplicada (dedupe pelo `messageId`), e se alguém da equipe assumir a conversa nesse meio tempo a resposta da IA é descartada (fica só no log). Antes de cada resposta o cliente vê "Digitando..." por 1 a 3 s, proporcional ao tamanho do texto (`delayTyping` da z-api).
 - Quando o atendente passa a conversa para uma pessoa, ele diz **por quê**: o cliente pediu uma pessoa, a base não tinha a informação, o pedido está fora do que ele faz, ou reclamação. O motivo aparece na faixa "Intervir na conversa", na linha do tempo da conversa (junto com "Você assumiu a conversa", "Devolvida para {atendente}", "Marcada como resolvida", "Reaberta pelo cliente") e na planilha de Relatórios. Se a IA falhar numa conversa real, o cliente não fica no vácuo: recebe uma frase de reserva ("Um momento, vou chamar uma pessoa da equipe para te ajudar.", ajustável em `fraseFalha` da configuração) e a conversa passa para uma pessoa com o motivo "Falha ao responder".
+- **Intervir numa conversa é como responder no celular:** o campo de resposta está sempre à mão e **enviar já assume** a conversa (o botão diz "Assumir e enviar"); o atendente virtual para de responder até você devolver. Quem atende também se troca em um clique no seletor do alto da conversa ({atendente} ↔ Você), e uma conversa resolvida tem "Reabrir" no mesmo lugar. Cada troca fica na linha do tempo.
 - Os três avisos da z-api (mensagem recebida, número conectado, número desconectado) são cadastrados sozinhos: ao salvar as credenciais em `/setup` e, depois disso, sempre que o endereço público ou a chave da URL mudar (`garantirWebhooks`, conferido a cada leitura do estado da conexão). Nunca é preciso colar endereço no painel da z-api.
 
 ## Variáveis de ambiente (opcionais)
@@ -121,7 +122,8 @@ app/webhook/zapi/route.ts                 avisos da z-api: mensagem recebida, n�
 app/webhook/route.ts                      webhook da WhatsApp Cloud API (Meta): verificação e mensagens
 components/Inicio.tsx                     tela de Início
 components/Conversas.tsx                  lista de conversas (abas, período, busca)
-components/ConversaAberta.tsx             conversa aberta: assumir, responder e devolver
+components/ConversaAberta.tsx             conversa aberta: responder, assumir e devolver
+components/SeletorQuemAtende.tsx           seletor "Quem atende" do alto da conversa
 components/PainelContato.tsx              painel do contato ao lado da conversa
 components/Assistente.tsx                 os três passos do Assistente
 components/Relatorios.tsx                 tela de Relatórios
