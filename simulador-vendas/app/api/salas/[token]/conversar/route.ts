@@ -1,3 +1,4 @@
+import { obter as obterSimulacao } from "@/lib/simulacoes";
 import { prepararRoteiro } from "@/lib/roteiro";
 // Uma fala do vendedor na sala de treino (app/simular/[código]): devolve a próxima fala do cliente.
 //
@@ -31,6 +32,8 @@ function clienteMudo(err: unknown): Response {
 
 export async function POST(req: Request, { params }: RouteContext<"/api/salas/[token]/conversar">) {
   const { token } = await params;
+  const simulacaoAtual = obterSimulacao(token);
+  if (simulacaoAtual && simulacaoAtual.status !== "ativa") return Response.json({ error: simulacaoAtual.status === "pausada" ? "Este treino está pausado. Aguarde a reativação por quem enviou o link." : "Este treino foi encerrado." }, { status: 409 });
   const corpo = (await req.json().catch(() => null)) as { fala?: unknown; segundo?: unknown; tempoAcabou?: unknown; retomar?: unknown; transcricao?: unknown } | null;
 
   if (Array.isArray(corpo?.transcricao)) return turnoDaSalaAntiga(token, corpo.transcricao as LinhaTranscricao[]);
@@ -72,6 +75,9 @@ export async function POST(req: Request, { params }: RouteContext<"/api/salas/[t
     return clienteMudo(err);
   }
 
+  // A geração pode demorar; o gestor pode ter pausado ou apagado o treino nesse intervalo.
+  const aindaAberta = conversaAberta(req, token);
+  if (aindaAberta instanceof Response) return aindaAberta;
   const mensagem = registrarMensagem({ sessaoId: sessao.id, papel: "cliente", texto, segundo });
   // Com o tempo esgotado a conversa fecha aqui, na despedida: quem treinou não precisa clicar em nada
   // para a sessão ficar consistente, e o resultado é pedido logo depois pela rota de encerramento.

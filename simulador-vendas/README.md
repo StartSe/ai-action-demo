@@ -259,3 +259,23 @@ Instâncias com menos de 2 GiB usam a voz do navegador e não iniciam o agente L
 As conexões SQLite do app passam a compartilhar WAL e espera por bloqueios desde a inicialização. A criação e migração das tabelas reservam a escrita antes de consultar o esquema e só ficam marcadas como concluídas após o commit. Isso corrige o caso reproduzido de `database is locked` na limpeza inicial e permite nova tentativa após uma falha, preservando os dados existentes.
 
 Validação: 33 testes, incluindo contenção real entre processos, migração concorrente, recuperação do agente e transcrição real no Chrome; TypeScript, lint dos arquivos alterados e build de produção. No teste local do servidor de produção com o limite informado simulado em 512 MiB e cinco credenciais fictícias configuradas, o navegador abriu o microfone sem acionar LiveKit e 20 verificações de saúde responderam 200. Esse teste verifica a seleção do modo de voz, não impõe um limite físico de memória nem substitui a validação no Render.
+
+### Gestão de treinos e resultados (0.5.0)
+
+Produtos, Simulações, Equipe e Resultados têm busca, indicadores e listas adaptadas ao celular. As opções ficam em popovers com ícones, navegação por teclado, fechamento por Escape e clique fora. Criar treino ganha destaque. O gestor pode renomear e apagar treinos, editar pessoas e consultar seus detalhes sem abrir uma tabela extensa. Exclusões pedem confirmação e explicam o destino das avaliações.
+
+Treinos pausados ou encerrados desativam o compartilhamento e a interação. Quem abre o link vê um aviso; uma sala já aberta confere a disponibilidade a cada cinco segundos e o agente de voz confere a cada dois segundos. Reativar mantém o mesmo endereço. As rotas antigas também respeitam a pausa.
+
+Conversas sem fala do vendedor (inclusive texto vazio ou só espaços) ficam fora das listas de resultados, médias, indicadores, históricos de treino e avaliações pendentes. Encerrar sem falar não consome uma tentativa. A regra vale também para registros antigos, sem apagar os dados. Exemplos só são removidos quando o vendedor efetivamente fala.
+
+Para validar a versão de produção com banco temporário e navegador Chromium:
+
+```sh
+npm run lint
+npm run build
+PLAYWRIGHT_PRODUCTION=1 npm test
+```
+
+Os testes de gestão incluem pausa e reativação do mesmo link, sessão sem fala, edição e exclusão com confirmação, recuperação de erros e popovers em desktop e celular. O teste opcional de reconhecimento real continua dependendo de `VOZ_TESTE_ARQUIVO`.
+
+Validação desta versão: 52 testes aprovados no servidor de produção standalone, incluindo capturas e navegação por teclado em 1280 px e 390 px; build com TypeScript aprovado e lint sem erros (um aviso preexistente em `components/setup.tsx`). O teste opcional de voz real não foi executado por depender de `VOZ_TESTE_ARQUIVO`.

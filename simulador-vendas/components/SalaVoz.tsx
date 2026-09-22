@@ -329,6 +329,26 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
     const timer = setTimeout(aoPararSemFala, 1000);
     return () => clearTimeout(timer);
   }, [listening, transcript, estado, usarLivekit]);
+  const verificarDisponibilidade = useEffectEvent(async (signal: AbortSignal) => {
+    if (fim || fechandoRef.current) return;
+    try {
+      const r = await fetch(`/api/salas/${codigo}/disponibilidade`, { cache: "no-store", signal });
+      if (!r.ok) return;
+      const corpo = await r.json();
+      if (signal.aborted || !["pausada", "encerrada", "indisponivel"].includes(corpo.status)) return;
+      // Recarregar desmonta a sala, interrompe o áudio e mostra o aviso público do servidor.
+      fechandoRef.current = true;
+      pausar();
+      try { await chamada.desconectar(); } finally { window.location.reload(); }
+    } catch { /* Uma falha de rede passageira será conferida novamente. */ }
+  });
+  useEffect(() => {
+    const controller = new AbortController();
+    const conferir = () => { void verificarDisponibilidade(controller.signal); };
+    const timer = setInterval(conferir, 5000);
+    window.addEventListener("focus", conferir);
+    return () => { controller.abort(); clearInterval(timer); window.removeEventListener("focus", conferir); };
+  }, [codigo]);
   const aoExpirar = useEffectEvent(() => { if (!fim && !fechandoRef.current && !turnoRef.current) void pedirResultado(); });
   useEffect(() => { if (restante === 0) aoExpirar(); }, [restante]);
   useEffect(() => {
@@ -384,10 +404,10 @@ export function SalaVoz({ codigo, marca, nome, titulo, cliente, objetivo, duraca
         ) : (
           <ConversaRegistrada
             codigo={codigo}
-            titulo="Conversa registrada"
+            titulo={fim.semConversa ? "Nenhuma fala registrada" : "Conversa registrada"}
             descricao={
               fim.semConversa
-                ? "Você encerrou antes de falar com o cliente, então não há o que avaliar desta vez."
+                ? "Não identificamos nenhuma fala sua. Esta conversa não conta como tentativa nem entra nos resultados. Confira o microfone e tente novamente."
                 : "Seu gestor vai comentar com você."
             }
             tentativas={tentativas}

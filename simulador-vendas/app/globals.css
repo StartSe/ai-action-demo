@@ -166,3 +166,12 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
 @media (prefers-reduced-motion: reduce) {
   .orbe-palco *, .orbe-palco[data-estado] .orbe-anel { animation: none; transition: none; }
 }
+
+@layer components {
+  .gestao-main { @apply max-w-[1180px] mx-auto px-8 pt-8 pb-14 max-md:px-4 max-md:pt-5; }
+  .action-trigger { @apply inline-flex items-center justify-center w-11 h-11 shrink-0 rounded-field border border-line bg-surface text-muted hover:bg-accent-soft hover:text-accent-ink cursor-pointer disabled:opacity-50 disabled:cursor-wait; }
+  .action-popover { @apply fixed m-0 w-[232px] max-h-[calc(100dvh-24px)] overflow-y-auto bg-surface border border-line rounded-field p-1.5 shadow-xl; }
+  .action-item { @apply flex items-center gap-3 w-full min-h-11 px-3 py-2 text-left text-sm font-medium rounded-lg hover:bg-bg focus:bg-accent-soft cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed; }
+  .list-toolbar { @apply flex flex-wrap items-center justify-between gap-3 mb-4; }
+}
+:where(button, a, input, select, textarea):focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }

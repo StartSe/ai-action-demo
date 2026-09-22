@@ -63,6 +63,20 @@ type LinhaSessao = {
 
 type LinhaMensagem = { id: string; sessaoId: string; papel: string; texto: string; segundo: number | null; criadoEm: string };
 
+/** Uma fala vazia (incluindo espaços e quebras de linha) não constitui participação. */
+export function temFalaDoVendedor(falas: { papel: string; texto: string }[]): boolean {
+  return falas.some(f => f.papel === "vendedor" && f.texto.trim().length > 0);
+}
+
+// Aplicado na leitura, inclusive aos registros antigos: silêncio nunca vira resultado ou tentativa.
+function comFala(alias = "sessoes_treino"): string {
+  return `EXISTS (SELECT 1 FROM mensagens_sessao m WHERE m.sessaoId = ${alias}.id
+    AND m.papel = 'vendedor' AND length(trim(m.texto, char(9, 10, 13, 32, 160))) > 0)`;
+}
+function conversaValida(alias = "sessoes_treino"): string {
+  return `${alias}.status NOT IN ('preparando', 'abandonada') AND ${comFala(alias)}`;
+}
+
 /** Uma sessão aberta e nunca iniciada vira abandonada depois disto (calculado na leitura, US-014). */
 const MINUTOS_ATE_ABANDONAR = 30;
 
@@ -196,20 +210,9 @@ export function obter(id: string): Sessao | null {
   return linha ? linhaParaSessao(linha) : null;
 }
 
-/**
- * O vendedor clicou em "Começar conversa": a sessão sai de "preparando" e o cronômetro começa.
- *
- * É aqui — e não em `abrir` — que as conversas de exemplo (US-030) saem de cena: quem abre o link, vê
- * quem é o cliente e fecha a aba não conversou, e apagar o exemplo nesse momento deixaria o painel
- * vazio sem nada real para pôr no lugar. A pergunta ao banco vem antes da remoção para a sessão aberta
- * do dia a dia não pagar uma varredura depois que o exemplo já foi embora.
- */
+/** O cronômetro começa aqui; os exemplos só saem quando houver fala do vendedor. */
 export function iniciar(id: string, modo?: ModoSessao): Sessao | null {
   const d = banco();
-  if (temSessoesDeExemplo()) {
-    const propria = d.prepare("SELECT exemplo FROM sessoes_treino WHERE id = ?").get(id) as { exemplo: number } | undefined;
-    if (propria && propria.exemplo !== 1) removerSessoesDeExemplo();
-  }
   if (modo) d.prepare("UPDATE sessoes_treino SET modo = ? WHERE id = ?").run(modo, id);
   d.prepare("UPDATE sessoes_treino SET status = 'em_andamento', iniciadaEm = ? WHERE id = ? AND iniciadaEm IS NULL").run(agora(), id);
   return obter(id);
@@ -226,6 +229,11 @@ export function registrarMensagem({
   texto: string;
   segundo?: number;
 }): MensagemSessao {
+  if (papel === "vendedor" && texto.trim() && temSessoesDeExemplo()) {
+    const propria = banco().prepare("SELECT exemplo FROM sessoes_treino WHERE id = ?").get(sessaoId) as { exemplo: number } | undefined;
+    if (propria && propria.exemplo !== 1) removerSessoesDeExemplo();
+  }
+  texto = texto.trim();
   const id = gerarId();
   const criadoEm = agora();
   banco()
@@ -259,6 +267,7 @@ export function ultimasMensagens(sessaoId: string, quantas: number): MensagemSes
 export function encerrar(id: string, { status = "encerrada", duracaoSeg }: { status?: StatusSessao; duracaoSeg?: number } = {}): Sessao | null {
   const sessao = obter(id);
   if (!sessao) return null;
+  if (!temFalaDoVendedor(transcricao(id))) status = "abandonada";
   const fim = agora();
   const inicio = sessao.iniciadaEm ?? sessao.criadoEm;
   const medida = Math.max(0, Math.round((new Date(fim).getTime() - new Date(inicio).getTime()) / 1000));
@@ -292,7 +301,7 @@ export function registrarEnvioEmail(id: string, status: StatusEnvioEmail, motivo
  */
 export function falhasDeEnvioEmail(limite = 20): Sessao[] {
   const linhas = banco()
-    .prepare("SELECT * FROM sessoes_treino WHERE envioEmail = 'falhou' ORDER BY encerradaEm DESC LIMIT ?")
+    .prepare(`SELECT * FROM sessoes_treino WHERE ${conversaValida()} AND envioEmail = 'falhou' ORDER BY encerradaEm DESC LIMIT ?`)
     .all(limite) as LinhaSessao[];
   return linhas.map(linhaParaSessao);
 }
@@ -300,7 +309,7 @@ export function falhasDeEnvioEmail(limite = 20): Sessao[] {
 export function listarPorSimulacao(simulacaoCodigo: string, limite = 500): Sessao[] {
   marcarAbandonadas();
   const linhas = banco()
-    .prepare("SELECT * FROM sessoes_treino WHERE simulacaoCodigo = ? ORDER BY criadoEm DESC LIMIT ?")
+    .prepare(`SELECT * FROM sessoes_treino WHERE ${conversaValida()} AND simulacaoCodigo = ? ORDER BY criadoEm DESC LIMIT ?`)
     .all(simulacaoCodigo, limite) as LinhaSessao[];
   return linhas.map(linhaParaSessao);
 }
@@ -308,7 +317,7 @@ export function listarPorSimulacao(simulacaoCodigo: string, limite = 500): Sessa
 export function listarPorParticipante(participanteId: string, limite = 500): Sessao[] {
   marcarAbandonadas();
   const linhas = banco()
-    .prepare("SELECT * FROM sessoes_treino WHERE participanteId = ? ORDER BY criadoEm DESC LIMIT ?")
+    .prepare(`SELECT * FROM sessoes_treino WHERE ${conversaValida()} AND participanteId = ? ORDER BY criadoEm DESC LIMIT ?`)
     .all(participanteId, limite) as LinhaSessao[];
   return linhas.map(linhaParaSessao);
 }
@@ -332,7 +341,7 @@ export function contarPorPersona(simulacaoCodigo: string): Record<string, number
 export function tentativasDe(simulacaoCodigo: string, participanteId: string): number {
   marcarAbandonadas();
   const linha = banco()
-    .prepare("SELECT COUNT(*) AS total FROM sessoes_treino WHERE simulacaoCodigo = ? AND participanteId = ? AND status <> 'abandonada'")
+    .prepare(`SELECT COUNT(*) AS total FROM sessoes_treino WHERE simulacaoCodigo = ? AND participanteId = ? AND status <> 'abandonada' AND (status IN ('preparando', 'em_andamento') OR ${comFala()})`)
     .get(simulacaoCodigo, participanteId) as { total: number } | undefined;
   return linha?.total ?? 0;
 }
@@ -347,7 +356,7 @@ export function tentativasDe(simulacaoCodigo: string, participanteId: string): n
  */
 export function conversasSemAvaliacao(): number {
   const linha = banco()
-    .prepare("SELECT COUNT(*) AS total FROM sessoes_treino WHERE modo = 'voz-agente' AND status = 'encerrada' AND resultadoId IS NULL")
+    .prepare(`SELECT COUNT(*) AS total FROM sessoes_treino WHERE ${conversaValida()} AND modo = 'voz-agente' AND status = 'encerrada' AND resultadoId IS NULL`)
     .get() as { total: number } | undefined;
   return linha?.total ?? 0;
 }
@@ -356,14 +365,13 @@ export function conversasSemAvaliacao(): number {
  * As conversas que terminaram e não têm avaliação — é a lista de "Avaliação pendente" do gestor
  * (US-018), com o "Tentar de novo" que roda o avaliador de novo sobre a transcrição já gravada.
  *
- * Uma conversa cai aqui quando a IA falhou no fim do treino (fila cheia, chave sem crédito) ou quando
- * o aviso de pós-conversa do agente nunca chegou. Nos dois casos a conversa está gravada e não se
- * perde: o que falta é o julgamento dela.
+ * Uma conversa cai aqui quando há fala do vendedor e a IA falhou no fim do treino.
+ * Sem fala não há avaliação pendente, mesmo em sessões gravadas por versões anteriores.
  */
 export function pendentesDeAvaliacao(limite = 50): Sessao[] {
   marcarAbandonadas();
   const linhas = banco()
-    .prepare("SELECT * FROM sessoes_treino WHERE status = 'encerrada' AND resultadoId IS NULL ORDER BY encerradaEm DESC LIMIT ?")
+    .prepare(`SELECT * FROM sessoes_treino WHERE ${conversaValida()} AND status = 'encerrada' AND resultadoId IS NULL ORDER BY encerradaEm DESC LIMIT ?`)
     .all(limite) as LinhaSessao[];
   return linhas.map(linhaParaSessao);
 }
@@ -384,7 +392,8 @@ export function resumoPorSimulacao(): Record<string, { sessoes: number; reais: n
     .prepare(
       `SELECT simulacaoCodigo, COUNT(*) AS sessoes, SUM(CASE WHEN exemplo = 0 THEN 1 ELSE 0 END) AS reais,
               COUNT(DISTINCT participanteId) AS participantes, MAX(criadoEm) AS ultimaSessao
-         FROM sessoes_treino GROUP BY simulacaoCodigo`,
+         FROM sessoes_treino
+        WHERE ${conversaValida()} GROUP BY simulacaoCodigo`,
     )
     .all() as { simulacaoCodigo: string; sessoes: number; reais: number; participantes: number; ultimaSessao: string | null }[];
   return Object.fromEntries(
@@ -402,7 +411,7 @@ export function resumoPorSimulacao(): Record<string, { sessoes: number; reais: n
  */
 export function treinosPorParticipante(): Record<string, number> {
   const linhas = banco()
-    .prepare("SELECT participanteId, COUNT(DISTINCT simulacaoCodigo) AS treinos FROM sessoes_treino GROUP BY participanteId")
+    .prepare(`SELECT participanteId, COUNT(DISTINCT simulacaoCodigo) AS treinos FROM sessoes_treino WHERE ${conversaValida()} GROUP BY participanteId`)
     .all() as { participanteId: string; treinos: number }[];
   return Object.fromEntries(linhas.map((l) => [l.participanteId, l.treinos]));
 }
@@ -429,7 +438,7 @@ export function notaMediaPorSimulacao(): Record<string, { nota: number; avaliada
       `SELECT s.simulacaoCodigo AS codigo, r.saida AS saida
          FROM sessoes_treino s
          JOIN resultados r ON r.id = s.resultadoId
-        WHERE s.resultadoId IS NOT NULL`,
+        WHERE ${conversaValida("s")} AND s.resultadoId IS NOT NULL`,
     )
     .all() as { codigo: string; saida: string }[];
 
@@ -484,7 +493,7 @@ export function melhorSessaoDe(simulacaoCodigo: string, participanteId: string):
       `SELECT s.id AS sessaoId, s.resultadoId AS resultadoId, r.saida AS saida
          FROM sessoes_treino s
          JOIN resultados r ON r.id = s.resultadoId
-        WHERE s.simulacaoCodigo = ? AND s.participanteId = ? AND s.resultadoId IS NOT NULL`,
+        WHERE ${conversaValida("s")} AND s.simulacaoCodigo = ? AND s.participanteId = ? AND s.resultadoId IS NOT NULL`,
     )
     .all(simulacaoCodigo, participanteId) as { sessaoId: string; resultadoId: string; saida: string }[];
 
@@ -522,11 +531,11 @@ export function historicoDe(simulacaoCodigo: string, participanteId: string): Se
         ? `SELECT s.*, r.saida AS saida
              FROM sessoes_treino s
              LEFT JOIN resultados r ON r.id = s.resultadoId
-            WHERE s.simulacaoCodigo = ? AND s.participanteId = ? AND s.status NOT IN ('preparando', 'abandonada')
+            WHERE ${conversaValida("s")} AND s.simulacaoCodigo = ? AND s.participanteId = ?
             ORDER BY s.criadoEm DESC`
         : `SELECT s.*, NULL AS saida
              FROM sessoes_treino s
-            WHERE s.simulacaoCodigo = ? AND s.participanteId = ? AND s.status NOT IN ('preparando', 'abandonada')
+            WHERE ${conversaValida("s")} AND s.simulacaoCodigo = ? AND s.participanteId = ?
             ORDER BY s.criadoEm DESC`,
     )
     .all(simulacaoCodigo, participanteId) as (LinhaSessao & { saida: string | null })[];
@@ -555,7 +564,7 @@ export function avaliacoesDaSimulacao(simulacaoCodigo: string): { sessao: Sessao
       `SELECT s.*, r.saida AS saida
          FROM sessoes_treino s
          JOIN resultados r ON r.id = s.resultadoId
-        WHERE s.simulacaoCodigo = ? AND s.resultadoId IS NOT NULL
+        WHERE ${conversaValida("s")} AND s.simulacaoCodigo = ? AND s.resultadoId IS NOT NULL
         ORDER BY s.criadoEm ASC`,
     )
     .all(simulacaoCodigo) as (LinhaSessao & { saida: string })[];
@@ -590,7 +599,7 @@ export function avaliacoesDosParticipantes(participanteIds: string[], desde: str
               r.saida AS saida
          FROM sessoes_treino s
          JOIN resultados r ON r.id = s.resultadoId
-        WHERE s.participanteId IN (${marcadores})
+        WHERE ${conversaValida("s")} AND s.participanteId IN (${marcadores})
           AND s.resultadoId IS NOT NULL
           AND COALESCE(s.encerradaEm, s.criadoEm) >= ?
         ORDER BY quando ASC`,
@@ -617,7 +626,7 @@ export function resumoPorParticipante(): Record<string, { sessoes: number; ultim
     .prepare(
       `SELECT participanteId, COUNT(*) AS sessoes, MAX(COALESCE(encerradaEm, criadoEm)) AS ultima
          FROM sessoes_treino
-        WHERE status NOT IN ('preparando', 'abandonada')
+        WHERE ${conversaValida()}
         GROUP BY participanteId`,
     )
     .all() as { participanteId: string; sessoes: number; ultima: string | null }[];
@@ -633,7 +642,7 @@ export function resumoPorParticipante(): Record<string, { sessoes: number; ultim
       `SELECT s.participanteId AS participanteId, r.saida AS saida
          FROM sessoes_treino s
          JOIN resultados r ON r.id = s.resultadoId
-        WHERE s.resultadoId IS NOT NULL AND s.status NOT IN ('preparando', 'abandonada')`,
+        WHERE ${conversaValida("s")} AND s.resultadoId IS NOT NULL`,
     )
     .all() as { participanteId: string; saida: string }[];
 
@@ -669,11 +678,11 @@ export function sessoesComNotaDe(participanteId: string, limite = 200): SessaoCo
         ? `SELECT s.*, r.saida AS saida
              FROM sessoes_treino s
              LEFT JOIN resultados r ON r.id = s.resultadoId
-            WHERE s.participanteId = ? AND s.status NOT IN ('preparando', 'abandonada')
+            WHERE ${conversaValida("s")} AND s.participanteId = ?
             ORDER BY COALESCE(s.encerradaEm, s.criadoEm) DESC LIMIT ?`
         : `SELECT s.*, NULL AS saida
              FROM sessoes_treino s
-            WHERE s.participanteId = ? AND s.status NOT IN ('preparando', 'abandonada')
+            WHERE ${conversaValida("s")} AND s.participanteId = ?
             ORDER BY COALESCE(s.encerradaEm, s.criadoEm) DESC LIMIT ?`,
     )
     .all(participanteId, limite) as (LinhaSessao & { saida: string | null })[];
@@ -715,7 +724,7 @@ export function movimentoEntre(desde: string, ate: string): MovimentoDoPeriodo {
               COUNT(DISTINCT participanteId) AS vendedores,
               COUNT(DISTINCT simulacaoCodigo) AS simulacoes
          FROM sessoes_treino
-        WHERE status NOT IN ('preparando', 'abandonada') AND criadoEm >= ? AND criadoEm < ?`,
+        WHERE ${conversaValida()} AND criadoEm >= ? AND criadoEm < ?`,
     )
     .get(desde, ate) as { sessoes: number; vendedores: number; simulacoes: number };
 
@@ -731,7 +740,7 @@ export function movimentoEntre(desde: string, ate: string): MovimentoDoPeriodo {
       `SELECT r.saida AS saida
          FROM sessoes_treino s
          JOIN resultados r ON r.id = s.resultadoId
-        WHERE s.resultadoId IS NOT NULL AND s.status NOT IN ('preparando', 'abandonada')
+        WHERE ${conversaValida("s")} AND s.resultadoId IS NOT NULL
           AND s.criadoEm >= ? AND s.criadoEm < ?`,
     )
     .all(desde, ate) as { saida: string }[];
@@ -772,11 +781,11 @@ export function sessoesDesde(desde: string): { sessao: Sessao; saida: string | n
     ? `SELECT s.*, r.saida AS saida
          FROM sessoes_treino s
          LEFT JOIN resultados r ON r.id = s.resultadoId
-        WHERE s.status NOT IN ('preparando', 'abandonada') AND s.criadoEm >= ?
+        WHERE ${conversaValida("s")} AND s.criadoEm >= ?
         ORDER BY s.criadoEm ASC`
     : `SELECT s.*, NULL AS saida
          FROM sessoes_treino s
-        WHERE s.status NOT IN ('preparando', 'abandonada') AND s.criadoEm >= ?
+        WHERE ${conversaValida("s")} AND s.criadoEm >= ?
         ORDER BY s.criadoEm ASC`;
 
   const linhas = d.prepare(consulta).all(desde) as (LinhaSessao & { saida: string | null })[];

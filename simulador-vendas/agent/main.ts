@@ -32,7 +32,7 @@ export default defineAgent({
     session.on(voice.AgentSessionEventTypes.ConversationItemAdded, ({ item }) => {
       if (item.type !== "message" || !item.textContent || ids.has(item.id)) return;
       if (item.role !== "user" && item.role !== "assistant") return;
-      if (obterSessao(sessao.id)?.status !== "em_andamento") return;
+      if (obterSessao(sessao.id)?.status !== "em_andamento" || obterSimulacao(sessao.simulacaoCodigo)?.status !== "ativa") return;
       registrarMensagem({ sessaoId: sessao.id, papel: item.role === "user" ? "vendedor" : "cliente", texto: item.textContent,
         segundo: Math.max(0, Math.floor((Date.now() - Date.parse(sessao.iniciadaEm!)) / 1000)) });
       ids.add(item.id);
@@ -51,7 +51,10 @@ export default defineAgent({
     });
     await session.start({ agent: new voice.Agent({ instructions: roteiro.instrucoes, chatCtx }), room: ctx.room, inputOptions: { participantIdentity: dono, textEnabled: true, closeOnDisconnect: false } });
     const prazo = setTimeout(() => { void session.close(); }, restanteSeg(sessao, simulacao.duracaoMin) * 1000);
-    ctx.addShutdownCallback(async () => { clearTimeout(prazo); await session.close(); });
+    const disponibilidade = setInterval(() => {
+      if (obterSimulacao(sessao.simulacaoCodigo)?.status !== "ativa") void session.close();
+    }, 2000);
+    ctx.addShutdownCallback(async () => { clearTimeout(prazo); clearInterval(disponibilidade); await session.close(); });
   },
 });
 

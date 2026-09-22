@@ -1,3 +1,4 @@
+import { obter as obterSimulacao } from "@/lib/simulacoes";
 // O convite público de um treino (US-029): um link que coleta nome e e-mail e devolve o endereço do
 // treino, para quem prefere divulgar o treino em vez de mandar o link direto.
 //
@@ -16,6 +17,8 @@ export async function GET(req: Request, { params }: RouteContext<"/api/simulacoe
 
 export async function POST(req: Request, { params }: RouteContext<"/api/simulacoes/[codigo]/convite">) {
   const { codigo } = await params;
+  const simulacao = obterSimulacao(codigo);
+  if (simulacao && simulacao.status !== "ativa") return Response.json({ error: "Reative o treino antes de compartilhar o convite." }, { status: 409 });
   // O convite guarda o endereço do treino dentro do texto de confirmação, então a instalação precisa
   // saber o próprio endereço antes de criá-lo — é a mesma requisição real que ensina isso.
   registrarEnderecoPublico(req);

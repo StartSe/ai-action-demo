@@ -9,9 +9,11 @@
 // porque a pergunta que o gestor faz aqui é sobre a **pessoa**. Quem separa as duas é o detalhe, na
 // linha do tempo, e quem calcula tudo é `lib/equipe.ts`: nenhum número é montado nesta tela.
 import Link from "next/link";
+import { MenuAcoes } from "@/components/MenuAcoes";
+import { ResumoLista, SemCorrespondencia, normalizarBusca } from "@/components/ListaGestao";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { AvisoExemplo } from "@/components/AvisoExemplo";
-import { Aviso, Chip, CopyButton, DataTable, Empty, ErrorBox, Field, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
+import { Aviso, Chip, CopyButton, Empty, ErrorBox, Field, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
 
 type PessoaDaEquipe = {
   id: string;
@@ -80,7 +82,7 @@ function IconeEquipe() {
  * cada uma tem a lista inteira de conversas dela; trazer todas de uma vez seria a tela pesada para
  * responder uma pergunta que se faz sobre uma pessoa por vez.
  */
-function Detalhe({ pessoa, onApagar }: { pessoa: PessoaDaEquipe; onApagar: (p: PessoaDaEquipe) => void }) {
+function Detalhe({ pessoa }: { pessoa: PessoaDaEquipe }) {
   const [aberto, setAberto] = useState(false);
   const [itens, setItens] = useState<ItemDaLinhaDoTempo[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -99,14 +101,14 @@ function Detalhe({ pessoa, onApagar }: { pessoa: PessoaDaEquipe; onApagar: (p: P
 
   if (!aberto) {
     return (
-      <button type="button" className="btn-link text-[13px]" onClick={abrir}>
+      <button type="button" className="btn-link text-sm min-h-11" onClick={abrir}>
         Ver detalhes
       </button>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2 text-[13px] min-w-[280px]">
+    <div className="flex flex-col gap-3 text-sm mt-4 pt-4 border-t border-line">
       <div>
         <span className="text-muted">Treinos: </span>
         <strong>{contagem(pessoa.sessoes, "conversa", "conversas")}</strong>
@@ -156,7 +158,6 @@ function Detalhe({ pessoa, onApagar }: { pessoa: PessoaDaEquipe; onApagar: (p: P
 
       <div className="flex items-center gap-4 flex-wrap">
         <Link href={`/equipe/analisar?pessoa=${pessoa.id}`} className="btn-link">Analisar uma conversa real</Link>
-        <button type="button" className="btn-link !text-danger" onClick={() => onApagar(pessoa)}>Apagar</button>
       </div>
       <button type="button" className="btn-link self-start" onClick={() => setAberto(false)}>Fechar</button>
     </div>
@@ -174,10 +175,14 @@ export default function Page() {
   const [convidando, setConvidando] = useState(false);
   const [codigoConvite, setCodigoConvite] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [busca, setBusca] = useState("");
+  const [filtro, setFiltro] = useState("todos");
+  const [editando, setEditando] = useState<string | null>(null);
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
 
   const carregar = useCallback(async () => {
+    setErroTela(null);
     try {
       const r = await fetch("/api/equipe");
       if (!r.ok) throw r;
@@ -216,8 +221,8 @@ export default function Page() {
     setSalvando(true);
     setErroTela(null);
     try {
-      const r = await fetch("/api/equipe", {
-        method: "POST",
+      const r = await fetch(editando ? `/api/equipe/${editando}` : "/api/equipe", {
+        method: editando ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nome: nome.trim(), email: email.trim() || undefined }),
       });
@@ -225,6 +230,7 @@ export default function Page() {
       setNome("");
       setEmail("");
       setCadastrando(false);
+      setEditando(null);
       await carregar();
     } catch (e) {
       setErroTela(await lerErro(e));
@@ -255,20 +261,24 @@ export default function Page() {
     }
   }
 
+  const visiveis = (itens ?? []).filter(p => {
+    const atividade = p.sessoes + p.conversasReais > 0;
+    return (filtro === "todos" || (filtro === "com-atividade" ? atividade : !atividade)) && normalizarBusca(`${p.nome} ${p.email}`).includes(normalizarBusca(busca.trim()));
+  });
   const convite = simulacoes.find((s) => s.codigo === codigoConvite) ?? null;
 
   return (
     <>
       <Topbar marca="S" nome="Simulador de Vendas" area="Vendas" status={status} erro={erro} usuario={status?.usuario} />
 
-      <main className="max-w-[980px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
+      <main className="gestao-main">
         <div className="flex items-start justify-between gap-4 mb-6 max-md:flex-col max-md:gap-3">
           <div>
             <h1 className="titulo-painel mb-1.5">Equipe</h1>
             <p className="apoio">Quem já treinou, como cada um foi e o que analisar em seguida.</p>
           </div>
           {!cadastrando && (
-            <button type="button" className="btn-primary !w-auto shrink-0 max-md:!w-full" onClick={() => setCadastrando(true)}>
+            <button type="button" className="btn-primary !w-auto shrink-0 max-md:!w-full" onClick={() => { setNome(""); setEmail(""); setEditando(null); setCadastrando(true); }}>
               + Cadastrar pessoa
             </button>
           )}
@@ -310,8 +320,8 @@ export default function Page() {
         )}
 
         {cadastrando && (
-          <form className="card p-5 mb-5" onSubmit={salvar}>
-            <h2 className="font-bold text-[15px] mb-3.5">Nova pessoa</h2>
+          <form id="form-pessoa" className="card p-5 mb-5" onSubmit={salvar}>
+            <h2 className="font-bold text-[15px] mb-3.5">{editando ? "Editar pessoa" : "Nova pessoa"}</h2>
             <div className="grid grid-cols-2 max-md:grid-cols-1 gap-3">
               <Field label="Nome" htmlFor="pessoa-nome">
                 <input id="pessoa-nome" className="input" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Ana Souza" autoFocus />
@@ -324,7 +334,7 @@ export default function Page() {
               <button type="submit" className="btn-primary !w-auto" disabled={!nome.trim() || salvando}>
                 {salvando ? "Salvando..." : "Salvar pessoa"}
               </button>
-              <button type="button" className="btn-ghost !w-auto" onClick={() => setCadastrando(false)}>Cancelar</button>
+              <button type="button" className="btn-ghost !w-auto" disabled={salvando} onClick={() => { setCadastrando(false); setEditando(null); }}>Cancelar</button>
             </div>
           </form>
         )}
@@ -335,53 +345,52 @@ export default function Page() {
           </AvisoExemplo>
         )}
 
+        {itens && itens.length > 0 && <>
+          <ResumoLista itens={[
+            { rotulo: "Pessoas na equipe", valor: itens.length },
+            { rotulo: "Com atividade", valor: itens.filter(p => p.sessoes + p.conversasReais > 0).length },
+            { rotulo: "Ainda sem atividade", valor: itens.filter(p => p.sessoes + p.conversasReais === 0).length, detalhe: "Convide para o próximo treino" },
+          ]} />
+          <div className="list-toolbar">
+            <input className="input md:!w-[360px]" type="search" aria-label="Buscar pessoa" placeholder="Buscar por nome ou e-mail" value={busca} onChange={e => setBusca(e.target.value)} />
+            <select className="input md:!w-auto" aria-label="Atividade da equipe" value={filtro} onChange={e => setFiltro(e.target.value)}><option value="todos">Toda a equipe</option><option value="com-atividade">Com atividade</option><option value="sem-atividade">Sem atividade</option></select>
+          </div>
+          <p className="text-xs text-muted mb-3" role="status">{visiveis.length} de {itens.length} pessoas</p>
+        </>}
         {itens === null ? (
-          <p className="text-muted text-sm">Carregando...</p>
-        ) : itens.length === 0 ? (
+          <p role="status" className="text-muted text-sm">Carregando equipe...</p>
+        ) : erroTela && itens.length === 0 ? <button className="btn-ghost" onClick={carregar}>Tentar novamente</button> : itens.length === 0 ? (
           <Empty
             ilustracao={<IconeEquipe />}
             titulo="Ninguém treinou ainda"
             descricao="Envie o link de um treino para o time: cada pessoa que abrir aparece aqui, com a nota e a última atividade. Você também pode cadastrar alguém agora."
             acao="Cadastrar a primeira pessoa"
-            onAcao={() => setCadastrando(true)}
+            onAcao={() => { setEditando(null); setNome(""); setEmail(""); setCadastrando(true); }}
           />
         ) : (
-          <DataTable
-            colunas={[
-              { chave: "nome", titulo: "Pessoa", papel: "titulo", render: (p: PessoaDaEquipe) => <strong>{p.nome}</strong> },
-              // O chip do exemplo é coluna própria (papel "chip") em vez de vir junto do nome: no
-              // celular o `DataTable` põe o que tem papel "chip" à direita do título do cartão, que é
-              // onde ele precisa estar — dentro do nome ele empurraria o nome para fora da linha.
-              ...(itens.some((p) => p.exemplo)
-                ? [{ chave: "exemplo", titulo: "Origem", papel: "chip" as const, render: (p: PessoaDaEquipe) => (p.exemplo ? <Chip nivel="neutral">Exemplo</Chip> : null) }]
-                : []),
-              { chave: "email", titulo: "E-mail", render: (p: PessoaDaEquipe) => p.email || "—" },
-              {
-                chave: "sessoes",
-                titulo: "Sessões",
-                render: (p: PessoaDaEquipe) => (
-                  <>
-                    {p.sessoes}
-                    {p.conversasReais > 0 && (
-                      <span className="text-muted">{` + ${p.conversasReais} real${p.conversasReais === 1 ? "" : "is"}`}</span>
-                    )}
-                  </>
-                ),
-              },
-              {
-                chave: "notaMedia",
-                titulo: "Nota média",
-                papel: "chip",
-                render: (p: PessoaDaEquipe) => <Chip nivel={TOM_DO_CHIP[tomDaNota(p.notaMedia)]}>{nota(p.notaMedia)}</Chip>,
-              },
-              { chave: "ultimaAtividade", titulo: "Última atividade", render: (p: PessoaDaEquipe) => (p.ultimaAtividade ? data(p.ultimaAtividade) : "Nunca treinou") },
-              // `key` pelo id da pessoa, e não pela posição: a lista muda quando alguém é apagado, e
-              // `DataTable` numera as linhas pelo índice — sem isto o detalhe aberto (com a linha do
-              // tempo já carregada) sobrevive à remoção e reaparece na linha de outra pessoa.
-              { chave: "detalhe", titulo: "Detalhes", render: (p: PessoaDaEquipe) => <Detalhe key={p.id} pessoa={p} onApagar={apagar} /> },
-            ]}
-            linhas={itens}
-          />
+          visiveis.length === 0 ? <SemCorrespondencia onLimpar={() => { setBusca(""); setFiltro("todos"); }} /> : <div className="flex flex-col gap-3">
+            {visiveis.map(p => <article key={p.id} className="card p-5">
+              <div className="flex items-start gap-3">
+                <span aria-hidden="true" className="hidden sm:grid place-items-center w-11 h-11 shrink-0 rounded-full bg-accent-soft text-accent-ink font-bold">{p.nome.split(/\s+/).slice(0, 2).map(n => n[0]).join("")}</span>
+                <div className="flex-1 min-w-0">
+                  <h2 className="font-bold text-base break-words">{p.nome} {p.exemplo && <Chip nivel="neutral">Exemplo</Chip>}</h2>
+                  <p className="text-sm text-muted break-all">{p.email || "Sem e-mail cadastrado"}</p>
+                </div>
+                <MenuAcoes rotulo={`Opções de ${p.nome}`} itens={[
+                  { rotulo: "Editar pessoa", icone: "editar", onClick: () => { setEditando(p.id); setNome(p.nome); setEmail(p.email); setCadastrando(true); requestAnimationFrame(() => { document.getElementById("form-pessoa")?.scrollIntoView({ block: "center" }); document.getElementById("pessoa-nome")?.focus(); }); } },
+                  { rotulo: "Analisar conversa", icone: "grafico", href: `/equipe/analisar?pessoa=${p.id}` },
+                  { rotulo: "Apagar pessoa", icone: "apagar", perigo: true, onClick: () => void apagar(p) },
+                ]} />
+              </div>
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-4 text-sm">
+                <span><strong>{p.sessoes}</strong> <span className="text-muted">treinos realizados</span></span>
+                {p.conversasReais > 0 && <span><strong>{p.conversasReais}</strong> <span className="text-muted">conversas reais</span></span>}
+                <span className="flex items-center gap-2"><span className="text-muted">Nota média</span><Chip nivel={TOM_DO_CHIP[tomDaNota(p.notaMedia)]}>{nota(p.notaMedia)}</Chip></span>
+                <span className="text-muted">{p.ultimaAtividade ? `Última atividade: ${data(p.ultimaAtividade)}` : "Ainda não treinou"}</span>
+              </div>
+              <Detalhe key={p.id} pessoa={p} />
+            </article>)}
+          </div>
         )}
       </main>
       {Dialogo}

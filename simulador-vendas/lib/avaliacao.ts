@@ -24,7 +24,7 @@ import { agruparCriterios, criteriosDe, GRUPOS, metodologia, type Criterio, type
 import { obter as obterParticipante } from "./participantes";
 import { persona as obterPersona, rotulo } from "./personas";
 import { obter as obterProduto, type ConhecimentoProduto } from "./produtos";
-import { obter as obterSessao, registrarResultado, transcricao, type MensagemSessao } from "./sessoes";
+import { obter as obterSessao, registrarResultado, temFalaDoVendedor, transcricao, type MensagemSessao } from "./sessoes";
 import { obter as obterSimulacao, type Dificuldade, type Simulacao } from "./simulacoes";
 import type { Conversa, LinhaTranscricao } from "./types";
 
@@ -363,7 +363,7 @@ export async function avaliarSessao(sessaoId: string): Promise<SessaoAvaliada | 
   if (!simulacao) return null;
 
   const falas = transcricao(sessao.id);
-  if (!falas.some((f) => f.papel === "vendedor")) return null;
+  if (!temFalaDoVendedor(falas)) return null;
 
   const produto = obterProduto(simulacao.produtoId);
   const participante = obterParticipante(sessao.participanteId);
