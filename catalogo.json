@@ -513,7 +513,10 @@
         "rotina"
       ],
       "independente": true,
-      "demo": null
+      "demo": null,
+      "plano": "starter",
+      "discoGB": 1,
+      "discoGuarda": "a conta, as configurações, o negócio, os custos fixos, os canais, os itens com suas fichas e o histórico de preço"
     }
   ]
 }
