@@ -514,6 +514,24 @@
       ],
       "independente": true,
       "demo": null
+    },
+    {
+      "id": "analise-de-perda",
+      "nome": "Análise de Perda",
+      "areas": [
+        "Vendas"
+      ],
+      "problema": "\"Perdemos por preço\" é a resposta padrão do time comercial, e quase nunca é a verdadeira.",
+      "ia": "Lê as notas de perda do CRM em texto livre e agrupa pelo motivo real, com a nota que comprova cada grupo.",
+      "integracoes": "Só a IA (OpenRouter) agrupa as notas. Nenhuma integração escreve de volta no CRM.",
+      "acento": "#145ecc",
+      "porta": 3024,
+      "captura": "capturas/analise-de-perda.png",
+      "capacidades": [
+        "artefato",
+        "mcp"
+      ],
+      "demo": null
     }
   ]
 }

@@ -232,5 +232,18 @@
    26
   ],
   "contrasteBranco": 5.55
+ },
+ "analise-de-perda": {
+  "segmento": "Vendas",
+  "acento": "#145ecc",
+  "acento2": "#3447f4",
+  "soft": "#e7eef9",
+  "ink": "#0a377b",
+  "hsl": [
+   216,
+   82,
+   44
+  ],
+  "contrasteBranco": 6
  }
 }
