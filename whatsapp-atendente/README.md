@@ -184,6 +184,27 @@ roupas, imobiliária, escola de cursos e restaurante), escolhido pelas palavras 
 primeira linha que aquilo é um exemplo. Quando o endereço do site não pode ser lido (fora do ar, muito
 lento, endereço interno), a geração segue com um aviso, usando só a descrição.
 
+### O passo Configurar, em cinco blocos
+
+O formulário do passo 1 é uma pilha de cartões com título e uma frase de apoio, na ordem em que as
+perguntas aparecem na cabeça de quem está criando o atendente: **Quem é** (nome do atendente, nome da
+empresa e a saudação), **O que ele faz** (objetivo), **O que ele sabe** (base de conhecimento,
+documentos e as respostas já aprovadas pela equipe), **Como ele fala** (tom) e **Ferramentas** (o que
+ele tenta entender além de texto). O que raramente se mexe fica recolhido em "Quando ele não souber
+responder" (o que fazer, horário de atendimento humano e a frase de reserva para quando o atendente
+fica fora do ar). A coluna da direita traz o índice das cinco seções, a prévia da conversa e a dica.
+
+A **saudação** é como o atendente se apresenta na primeira mensagem de cada conversa nova (até 240
+caracteres). Ela entra no prompt, aparece na prévia e é a primeira bolha do celular no passo "Testar";
+em branco, ele se apresenta pelo nome e pelo da empresa. As **perguntas de teste** (até cinco) são os
+atalhos do cartão "O que testar" — vêm do atendente gerado e podem ser substituídas; sem nenhuma, valem
+as da empresa de exemplo.
+
+Nada é salvo enquanto a pessoa escreve: assim que o formulário fica diferente do que está gravado, uma
+barra no rodapé diz **"Alterações não salvas"**, com "Descartar" (volta ao salvo) e "Salvar e testar o
+atendente". Sair da página com alterações pendentes pede confirmação, e o passo "Testar" sempre testa o
+que está gravado — nunca o rascunho.
+
 ### Áudio, foto e arquivo que o cliente manda
 
 O cliente pode mandar áudio, imagem, vídeo, documento, figurinha, localização ou contato: tudo entra

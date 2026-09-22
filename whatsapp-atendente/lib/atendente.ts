@@ -103,10 +103,13 @@ function pareceRaciocinio(texto: string): boolean {
 }
 
 function montarSystemPrompt(config: Config): string {
+  // A saudação escrita no passo 1 só entra quando existe: vazia, o modelo se apresenta como sempre fez
+  // (a reserva de `saudacaoPadrao()` é da tela, que precisa desenhar alguma coisa na prévia).
+  const saudacao = config.saudacao?.trim();
   return `Você é ${config.atendente}, atendente virtual da ${config.negocio}, respondendo clientes pelo WhatsApp.
 Seu objetivo em cada conversa: ${descricaoObjetivo(config)}.
 Tom de voz: ${descricaoTom(config)}.
-
+${saudacao ? `Quando o cliente inicia a conversa (primeira mensagem dele ou primeira depois de resolvida), apresente-se assim: "${saudacao}"\n` : ""}
 Responda somente com base nas informações abaixo. Nunca invente preços, prazos, serviços ou políticas que não estejam aqui.
 
 Base de conhecimento:

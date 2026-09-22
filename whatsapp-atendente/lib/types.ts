@@ -101,6 +101,12 @@ export const MIDIA_PADRAO: ConfigMidia = { audio: true, imagem: true, documento:
 /** O que o cliente recebe quando o atendente não consegue entender o que ele mandou (lib/midia.ts). */
 export const FRASE_SEM_MIDIA_PADRAO = "Ainda não consigo ouvir áudios nem abrir arquivos por aqui. Pode me escrever?";
 
+/** Tetos da saudação e das perguntas de teste: o campo, o contador da tela e a validação da rota leem
+ * daqui, para os três nunca discordarem sobre o que cabe. */
+export const LIMITE_SAUDACAO = 240;
+export const LIMITE_PERGUNTA = 120;
+export const MAX_PERGUNTAS = 5;
+
 export interface Config {
   negocio: string;
   atendente: string;
@@ -110,6 +116,17 @@ export interface Config {
   tom: Tom;
   /** Estilo de resposta escrito pela pessoa; só existe quando `tom === "personalizado"`. */
   tomTexto?: string;
+  /**
+   * Como o atendente se apresenta na primeira mensagem de uma conversa (até LIMITE_SAUDACAO). Vazia,
+   * vale a reserva de `saudacaoPadrao()` (components/Celular.tsx) na prévia e nenhuma instrução extra
+   * no prompt — o modelo se apresenta como sempre fez.
+   */
+  saudacao?: string;
+  /**
+   * As perguntas que o passo "Testar" oferece em um clique (até MAX_PERGUNTAS, cada uma até
+   * LIMITE_PERGUNTA). Ausente, o passo 2 usa as perguntas da empresa de exemplo.
+   */
+  perguntasSugeridas?: string[];
   horario: string;
   baseConhecimento: string;
   naoSei: NaoSei;
@@ -141,7 +158,7 @@ export interface PersonaGerada {
   tom: Tom;
   /** Estilo de resposta em uma linha; só vem quando `tom === "personalizado"`. */
   tomTexto?: string;
-  /** Como o atendente se apresenta, em uma frase (a tela usa na prévia; vira campo na US-008). */
+  /** Como o atendente se apresenta, em uma frase; vira `Config.saudacao` quando a pessoa aplica. */
   saudacao: string;
   /** A base no formato de lib/base-modelo.ts, com [MARCADORES] só onde o brief não deu o dado. */
   baseConhecimento: string;

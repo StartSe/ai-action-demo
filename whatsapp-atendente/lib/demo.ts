@@ -174,18 +174,20 @@ export function classificarLocal(textos: string[], objetivo: Objetivo): string {
 }
 
 /**
- * Perguntas de cliente que o app oferece como atalho: uma que a base responde (preço), uma sobre
- * horário e uma de propósito fora do que a clínica faz, para mostrar o que acontece quando o
- * atendente não sabe. Ficam aqui, e não na tela, porque o Assistente usa a primeira na prévia do
- * passo 1 e as três como botões no passo 2.
+ * Perguntas de cliente que a empresa de exemplo oferece como atalho: uma que a base responde (preço),
+ * uma sobre horário e uma de propósito fora do que a clínica faz, para mostrar o que acontece quando o
+ * atendente não sabe. Elas são as `perguntasSugeridas` de `configExemplo` — quem configurou o próprio
+ * atendente tem as dele, e o passo 2 só cai nestas quando a configuração não traz nenhuma.
  */
-export const SUGESTOES = ["Quanto custa o clareamento dental?", "Vocês atendem aos sábados?", "Fazem cirurgia cardíaca?"];
+export const PERGUNTAS_EXEMPLO = ["Quanto custa o clareamento dental?", "Vocês atendem aos sábados?", "Fazem cirurgia cardíaca?"];
 
 export const configExemplo: Config = {
   negocio: "Sorriso Pleno Odontologia",
   atendente: "Bia",
   objetivo: "atendimento",
   tom: "profissional",
+  saudacao: "Olá! Eu sou Bia, da Sorriso Pleno Odontologia. Posso falar sobre tratamentos, preços e horários. Como posso ajudar?",
+  perguntasSugeridas: [...PERGUNTAS_EXEMPLO],
   horario: "segunda a sexta, das 8h às 18h, e aos sábados das 8h ao meio-dia",
   naoSei: "humano",
   midia: { ...MIDIA_PADRAO },

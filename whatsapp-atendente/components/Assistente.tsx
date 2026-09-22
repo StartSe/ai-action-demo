@@ -29,10 +29,11 @@ import { formatarTelefone } from "@/lib/telefone";
 import type { RespostaConexao } from "@/app/api/whatsapp/conexao/route";
 import type { ParBase } from "@/lib/base";
 import { ehModeloDeBase, modeloDeBase } from "@/lib/base-modelo";
-import { SUGESTOES, configExemplo } from "@/lib/demo";
+import { PERGUNTAS_EXEMPLO, configExemplo } from "@/lib/demo";
 import { OBJETIVOS, TONS, rotuloObjetivo, rotuloTom } from "@/lib/rotulos";
+import { FRASE_FALHA_PADRAO } from "@/lib/transferencia";
 import type { Sugestao } from "@/lib/sugestoes";
-import { MIDIA_PADRAO, type Config, type ConfigMidia, type PersonaGerada } from "@/lib/types";
+import { LIMITE_SAUDACAO, MIDIA_PADRAO, type Config, type ConfigMidia, type PersonaGerada } from "@/lib/types";
 
 const PASSOS: PassoIndicador[] = [
   { titulo: "Configurar", apoio: "Defina quem é o seu agente" },
@@ -61,6 +62,54 @@ Limpeza: R$ 150
 Clareamento dental a laser: R$ 900 em 3 sessões
 
 Atendemos de segunda a sexta, das 8h às 18h, e aos sábados das 8h ao meio-dia.`;
+
+/**
+ * As cinco partes do passo 1, na ordem em que aparecem. A lista é a fonte única: os cartões saem daqui e
+ * o índice da coluna da direita também, então uma seção nova nunca fica de fora do índice. O id de "O que
+ * ele sabe" é `conhecimento` porque `/assistente#conhecimento` (o atalho "Adicionar conhecimento" do
+ * Início) aponta para ele desde a US-016.
+ */
+const SECOES = [
+  { id: "quem-e", titulo: "Quem é", apoio: "O nome que o cliente vê e a frase com que o atendente começa a conversa." },
+  { id: "o-que-faz", titulo: "O que ele faz", apoio: "O objetivo de cada conversa: é o que orienta o atendente quando o cliente não é direto." },
+  { id: "conhecimento", titulo: "O que ele sabe", apoio: "O atendente só responde com o que estiver aqui. Nada fora disso é inventado." },
+  { id: "como-fala", titulo: "Como ele fala", apoio: "O jeito das respostas: mais formal, mais próximo, ou do jeito que você escrever." },
+  { id: "ferramentas", titulo: "Ferramentas", apoio: "O que o atendente consegue fazer além de escrever." },
+];
+
+/** Um bloco do passo 1: cartão com título, frase de apoio e o id que o índice usa como âncora. */
+function Secao({ id, titulo, apoio, children }: { id: string; titulo: string; apoio: string; children: ReactNode }) {
+  return (
+    <section id={id} aria-label={titulo} className="card p-5 mb-3 scroll-mt-24">
+      <h2 className="font-bold text-[15px]">{titulo}</h2>
+      <p className="text-muted text-[12.5px] mt-1 mb-4">{apoio}</p>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * O que seria salvo desta configuração, em texto. É isso que a barra "Alterações não salvas" compara com
+ * o que está no banco — e por isso campo ausente e campo em branco dão no mesmo: escrever e apagar de
+ * novo não é alteração, e um espaço a mais no fim também não (a rota corta os dois antes de gravar).
+ */
+function assinaturaConfig(c: Config): string {
+  return JSON.stringify([
+    c.negocio.trim(),
+    c.atendente.trim(),
+    c.objetivo,
+    c.objetivo === "outro" ? (c.objetivoTexto ?? "").trim() : "",
+    c.tom,
+    c.tom === "personalizado" ? (c.tomTexto ?? "").trim() : "",
+    (c.saudacao ?? "").trim(),
+    (c.perguntasSugeridas ?? []).map((p) => p.trim()).filter(Boolean),
+    c.horario.trim(),
+    c.baseConhecimento.trim(),
+    c.naoSei,
+    (c.fraseFalha ?? "").trim(),
+    c.midia,
+  ]);
+}
 
 /**
  * Frase do cartão "Tudo pronto". O nome do atendente é escrito pela pessoa e pode não estar preenchido;
@@ -147,6 +196,9 @@ export function Assistente() {
   // Já existe um atendente configurado? É o que decide se o cartão de descrever o negócio nasce aberto
   // (primeira vez) ou recolhido (quem só veio ajustar não precisa recomeçar do zero).
   const [configSalva, setConfigSalva] = useState(false);
+  // A última configuração que veio do banco: é com ela que o formulário é comparado para a barra
+  // "Alterações não salvas" aparecer, e é para ela que "Descartar" volta.
+  const [configDoBanco, setConfigDoBanco] = useState<Config | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erroConfig, setErroConfig] = useState<ErroLido | null>(null);
   const [importando, setImportando] = useState(false);
@@ -201,9 +253,9 @@ export function Assistente() {
   }
 
   /**
-   * "Aplicar" do atendente gerado: preenche o formulário e NÃO salva. A saudação gerada fica de fora
-   * porque ainda não é um campo da configuração (ela chega na US-008); até lá ela vive na prévia do
-   * painel de resultado.
+   * "Aplicar" do atendente gerado: preenche o formulário e NÃO salva. A saudação e as perguntas de teste
+   * entram junto (são campos da configuração desde a US-008), e quem grava tudo continua sendo o
+   * "Salvar e testar o atendente".
    */
   function aplicarPersona(persona: PersonaGerada) {
     setConfig((c) => ({
@@ -214,10 +266,16 @@ export function Assistente() {
       objetivoTexto: persona.objetivo === "outro" ? persona.objetivoTexto ?? "" : "",
       tom: persona.tom,
       tomTexto: persona.tom === "personalizado" ? persona.tomTexto ?? "" : "",
+      saudacao: persona.saudacao,
+      perguntasSugeridas: persona.perguntasSugeridas,
       baseConhecimento: persona.baseConhecimento,
     }));
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
+
+  // O formulário difere do que está gravado? É o que acende a barra do rodapé e o aviso de sair da
+  // página. Enquanto a configuração não chegou do banco não há com o que comparar.
+  const alterado = configDoBanco !== null && assinaturaConfig(configDoBanco) !== assinaturaConfig(config);
 
   const { Cartao: CartaoPersona, Painel: PainelPersona } = usePersonaBrief({
     baseAtual: config.baseConhecimento,
@@ -243,7 +301,9 @@ export function Assistente() {
         setErroConfig(info);
         return false;
       }
-      setConfig(await r.json());
+      const gravada = (await r.json()) as Config;
+      setConfig(gravada);
+      setConfigDoBanco(gravada);
       setConfigSalva(true);
       return true;
     } catch (e) {
@@ -259,6 +319,16 @@ export function Assistente() {
     if (!(await salvar(config))) return;
     if (destino.current === "inicio") router.push("/");
     else irPara(2);
+  }
+
+  /** "Descartar" da barra de alterações: o formulário volta ao que está gravado. Não dá para desfazer,
+   * então pergunta antes. */
+  async function descartar() {
+    if (!configDoBanco) return;
+    const ok = await confirmar("Descartar as alterações? O formulário volta ao que está salvo.", { confirmarRotulo: "Descartar" });
+    if (!ok) return;
+    setConfig(configDoBanco);
+    setErroConfig(null);
   }
 
   /** Documentos são persistidos separadamente da configuração do formulário. */
@@ -418,17 +488,20 @@ export function Assistente() {
         setCarregando(false);
         if (await salvar(configExemplo)) {
           irPara(2);
-          await enviarTeste(SUGESTOES[0]);
+          await enviarTeste(PERGUNTAS_EXEMPLO[0]);
         }
         return;
       }
       try {
         const salva = (await fetch("/api/config").then((r) => r.json())) as Config & { salvo?: boolean };
         setConfigSalva(Boolean(salva.salvo));
-        setConfig(salva.salvo ? salva : CONFIG_INICIAL);
+        const inicial = salva.salvo ? salva : CONFIG_INICIAL;
+        setConfig(inicial);
+        setConfigDoBanco(inicial);
       } catch {
         // Sem resposta, o formulário abre com o modelo e a pessoa preenche por cima.
         setConfig(CONFIG_INICIAL);
+        setConfigDoBanco(CONFIG_INICIAL);
       } finally {
         setCarregando(false);
       }
@@ -457,10 +530,11 @@ export function Assistente() {
     (document.getElementById("baseConhecimento") as HTMLTextAreaElement | null)?.focus({ preventScroll: true });
   }, [carregando, passo]);
 
-  // A base aprovada e as sugestões da equipe só aparecem no passo 2: são buscadas quando a pessoa
-  // chega nele, uma única vez, e não na abertura da tela (quem está no passo 1 nunca as vê).
+  // A base aprovada e as sugestões da equipe moram na seção "O que ele sabe" (passo 1) e a contagem
+  // delas está no título: são buscadas na primeira vez que a pessoa está num passo que as mostra, e não
+  // na abertura da tela (quem está no passo 3, conectando o número, nunca as vê).
   useEffect(() => {
-    if (passo !== 2 || carregouBase.current) return;
+    if (passo === 3 || carregouBase.current) return;
     carregouBase.current = true;
     fetch("/api/base").then((r) => r.json()).then((r) => setBase(r.itens)).catch(() => setBase([]));
     fetch("/api/sugestoes")
@@ -469,18 +543,39 @@ export function Assistente() {
       .catch(() => { setSugestoesCodigo(null); setSugestoes([]); });
   }, [passo]);
 
+  // Sair da página com o formulário diferente do que está gravado pede confirmação do navegador. O
+  // efeito só existe enquanto há o que perder: sem alteração, nenhum ouvinte fica pendurado.
+  useEffect(() => {
+    if (!alterado) return;
+    function aoSair(e: BeforeUnloadEvent) {
+      e.preventDefault();
+    }
+    window.addEventListener("beforeunload", aoSair);
+    return () => window.removeEventListener("beforeunload", aoSair);
+  }, [alterado]);
+
   const conectado = conexao?.estado === "conectado";
+  /** A barra do rodapé é do passo 1: é lá que o formulário existe. */
+  const barraAlteracoes = passo === 1 && alterado;
+
+  // As perguntas do passo 2 e a prévia do passo 1 saem da configuração; sem nenhuma escrita, valem as
+  // da empresa de exemplo (a US-010 troca esta reserva pelos cenários de cada objetivo).
+  const perguntasTeste = config.perguntasSugeridas?.length ? config.perguntasSugeridas : PERGUNTAS_EXEMPLO;
+  const saudacaoAtual = config.saudacao?.trim() || saudacaoPadrao(config.atendente, config.negocio);
 
   const previa: BolhaChat[] = [
-    { papel: "atendente", texto: saudacaoPadrao(config.atendente, config.negocio) },
-    { papel: "cliente", texto: SUGESTOES[0] },
+    { papel: "atendente", texto: saudacaoAtual },
+    ...(perguntasTeste[0] ? [{ papel: "cliente" as const, texto: perguntasTeste[0] }] : []),
   ];
 
   return (
     <>
       <Topbar marca="W" nome="Atendente no WhatsApp" area="Atendimento e Vendas" status={status} erro={erro} usuario={status?.usuario} />
 
-      <main className="max-w-[1400px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
+      {/* Com a barra de alterações no rodapé, a página ganha espaço embaixo para o último botão do
+          formulário não ficar escondido atrás dela. O espaçamento é escolhido de uma vez (e não somado
+          a um `pb` fixo): duas classes da mesma propriedade e da mesma variante brigariam no CSS. */}
+      <main className={`max-w-[1400px] mx-auto px-8 pt-7 max-md:px-4 max-md:pt-5 ${barraAlteracoes ? "pb-28 max-md:pb-36" : "pb-12 max-md:pb-10"}`}>
         <div className="mb-6">
           <Passos passos={PASSOS} atual={passo} onIr={irPara} />
         </div>
@@ -531,6 +626,7 @@ export function Assistente() {
                 <Celular
                   nome={config.atendente}
                   negocio={config.negocio}
+                  saudacao={config.saudacao}
                   mensagens={mensagens}
                   valor={valor}
                   onValorChange={setValor}
@@ -545,8 +641,140 @@ export function Assistente() {
                   </button>
                 </p>
               </div>
+            </div>
 
-              <div className="card p-5 mb-3">
+            <aside className="lg:sticky lg:top-6 self-start">
+              <div className="card p-5">
+                <h2 className="font-bold text-[15px] mb-3">O que testar</h2>
+                <div className="flex flex-col gap-2 items-start">
+                  {perguntasTeste.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      className="bg-accent-soft text-accent-ink rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-left cursor-pointer border-0 hover:bg-accent-soft/70 transition-colors disabled:opacity-60"
+                      onClick={() => enviarTeste(s)}
+                      disabled={enviando}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-muted text-[12.5px] mt-3.5">
+                  Não gostou de uma resposta? Clique em Corrigir e a resposta certa entra na base do atendente.
+                </p>
+              </div>
+            </aside>
+
+            {/* Terceiro item da grade: no desktop cai sozinho na linha de baixo da primeira coluna; no
+                celular fica depois do cartão "O que testar", que é o que faz o teste andar. */}
+            <div className="flex items-center justify-between gap-3 flex-wrap lg:col-start-1">
+              <button type="button" className="btn-link text-[14px]" onClick={() => irPara(1)}>
+                Voltar e ajustar
+              </button>
+              <button type="button" className="btn-primary !w-auto" onClick={() => irPara(3)}>
+                Colocar no WhatsApp
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-6 [&>*]:min-w-0">
+            <form id="form-atendente" onSubmit={aoEnviar}>
+              {CartaoPersona}
+
+              <Secao {...SECOES[0]}>
+                <Row>
+                  <Field label="Nome do atendente" htmlFor="atendenteNome">
+                    <input id="atendenteNome" className="input" required placeholder="Bia" value={config.atendente} onChange={(e) => setCampo("atendente", e.target.value)} />
+                  </Field>
+                  <Field label="Nome da empresa" htmlFor="negocio">
+                    <input id="negocio" className="input" required placeholder="Sorriso Pleno Odontologia" value={config.negocio} onChange={(e) => setCampo("negocio", e.target.value)} />
+                  </Field>
+                </Row>
+
+                <Field
+                  label="Como ele se apresenta"
+                  htmlFor="saudacao"
+                  hint="É a primeira mensagem de cada conversa nova. Em branco, ele se apresenta pelo nome e pelo da empresa."
+                >
+                  <textarea
+                    id="saudacao"
+                    className="input min-h-[74px] resize-y"
+                    maxLength={LIMITE_SAUDACAO}
+                    placeholder={saudacaoPadrao(config.atendente, config.negocio)}
+                    value={config.saudacao ?? ""}
+                    onChange={(e) => setCampo("saudacao", e.target.value)}
+                  />
+                </Field>
+                <p className="-mt-3 text-right text-muted text-[12.5px]" aria-live="polite">
+                  {(config.saudacao ?? "").length}/{LIMITE_SAUDACAO}
+                </p>
+              </Secao>
+
+              <Secao {...SECOES[1]}>
+                <Grupo titulo="Escolha o objetivo principal">
+                  {OBJETIVOS.map((o) => (
+                    <CartaoEscolha
+                      key={o}
+                      grupo="objetivo"
+                      valor={o}
+                      titulo={rotuloObjetivo(o).titulo}
+                      apoio={rotuloObjetivo(o).apoio}
+                      selecionado={config.objetivo === o}
+                      onEscolher={() => escolherObjetivo(o)}
+                    />
+                  ))}
+                </Grupo>
+                {config.objetivo === "agendamentos" && (
+                  <Aviso tom="warn">Para consultar horários e marcar, <a href="/setup#mcp-agenda" className="underline font-semibold">conecte sua agenda</a>. Sem ferramentas de agenda disponíveis, o atendente coleta preferências e encaminha à equipe, sem confirmar reserva.</Aviso>
+                )}
+                {config.objetivo === "outro" && (
+                  <Field label="Em uma linha, o que ele deve fazer?" htmlFor="objetivoTexto">
+                    <input
+                      id="objetivoTexto"
+                      className="input"
+                      required
+                      placeholder="receber pedidos de orçamento e passar para a equipe"
+                      value={config.objetivoTexto ?? ""}
+                      onChange={(e) => setCampo("objetivoTexto", e.target.value)}
+                    />
+                  </Field>
+                )}
+              </Secao>
+
+              {/* O id desta seção é a âncora de `/assistente#conhecimento` (US-016): a página é um Client
+                  Component e o campo só existe depois da carga, então quem rola até aqui é o efeito de
+                  `hash` lá em cima, não o navegador. */}
+              <Secao {...SECOES[2]}>
+                <Field
+                  label="O que ele precisa saber?"
+                  htmlFor="baseConhecimento"
+                  hint="O atendente não inventa nada fora daqui. Troque o que está entre colchetes pelos dados da sua empresa e apague o que não usar."
+                >
+                  <textarea
+                    id="baseConhecimento"
+                    className="input min-h-[190px] resize-y"
+                    required
+                    maxLength={LIMITE_BASE}
+                    placeholder={PLACEHOLDER_BASE}
+                    value={config.baseConhecimento}
+                    onChange={(e) => setCampo("baseConhecimento", e.target.value)}
+                  />
+                </Field>
+                <p className="-mt-3 mb-4 text-right text-muted text-[12.5px]" aria-live="polite">
+                  {config.baseConhecimento.length.toLocaleString("pt-BR")}/{LIMITE_BASE.toLocaleString("pt-BR")}
+                </p>
+
+                <p className="text-[13px] font-semibold mb-2">Adicionar arquivo (opcional)</p>
+                <p className="text-muted text-[12.5px] mb-2">Os documentos são salvos imediatamente e consultados por trechos relevantes, sem ocupar o campo acima. Até 30 arquivos de 200 mil caracteres. Com IA conectada, a busca semântica usa créditos do OpenRouter; se indisponível, usamos palavras-chave. Reenvie o mesmo arquivo para tentar indexá-lo novamente.</p>
+                {documentos.map((d) => <div key={d.id} className="flex items-center justify-between gap-3 text-[13px] mb-2">
+                  <span>{d.nome} · {d.trechos} trechos · busca {d.modo}</span>
+                  <button type="button" className="underline" disabled={removendo !== null || importando} onClick={() => removerDocumento(d.id)} aria-label={`Remover ${d.nome}`}>{removendo === d.id ? "Removendo…" : "Remover"}</button>
+                </div>)}
+                <Dropzone id="arquivo-base" accept={ACEITA_ARQUIVO} tiposLabel="PDF, TXT" maxSizeMB={10} arquivo={null} onArquivo={importarArquivo} />
+                {importando && <p className="text-muted text-[12.5px] mt-2">Lendo e indexando o arquivo...</p>}
+                {avisoImportacao && <div className="mt-3"><Aviso tom={avisoImportacao.tom}>{avisoImportacao.texto}</Aviso></div>}
+
+                <div className="mt-5">
                 <MaisDetalhes titulo={`Respostas aprovadas pela equipe${base?.length ? ` (${base.length})` : ""}`}>
                   {base === null ? (
                     <p className="text-muted text-sm">Carregando...</p>
@@ -601,133 +829,23 @@ export function Assistente() {
 
                   {avisoTeste && <div className="mt-3.5"><Aviso tom="danger" acao={avisoTeste.acao}>{avisoTeste.mensagem}</Aviso></div>}
                 </MaisDetalhes>
-              </div>
-            </div>
-
-            <aside className="lg:sticky lg:top-6 self-start">
-              <div className="card p-5">
-                <h2 className="font-bold text-[15px] mb-3">O que testar</h2>
-                <div className="flex flex-col gap-2 items-start">
-                  {SUGESTOES.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      className="bg-accent-soft text-accent-ink rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-left cursor-pointer border-0 hover:bg-accent-soft/70 transition-colors disabled:opacity-60"
-                      onClick={() => enviarTeste(s)}
-                      disabled={enviando}
-                    >
-                      {s}
-                    </button>
-                  ))}
                 </div>
-                <p className="text-muted text-[12.5px] mt-3.5">
-                  Não gostou de uma resposta? Clique em Corrigir e a resposta certa entra na base do atendente.
-                </p>
-              </div>
-            </aside>
+              </Secao>
 
-            {/* Terceiro item da grade: no desktop cai sozinho na linha de baixo da primeira coluna; no
-                celular fica depois do cartão "O que testar", que é o que faz o teste andar. */}
-            <div className="flex items-center justify-between gap-3 flex-wrap lg:col-start-1">
-              <button type="button" className="btn-link text-[14px]" onClick={() => irPara(1)}>
-                Voltar e ajustar
-              </button>
-              <button type="button" className="btn-primary !w-auto" onClick={() => irPara(3)}>
-                Colocar no WhatsApp
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-6 [&>*]:min-w-0">
-            <form onSubmit={aoEnviar}>
-              {CartaoPersona}
-              <div className="card p-5 mb-3">
-                <Row>
-                  <Field label="Nome do atendente" htmlFor="atendenteNome">
-                    <input id="atendenteNome" className="input" required placeholder="Bia" value={config.atendente} onChange={(e) => setCampo("atendente", e.target.value)} />
-                  </Field>
-                  <Field label="Nome da empresa" htmlFor="negocio">
-                    <input id="negocio" className="input" required placeholder="Sorriso Pleno Odontologia" value={config.negocio} onChange={(e) => setCampo("negocio", e.target.value)} />
-                  </Field>
-                </Row>
-
-                <Grupo titulo="O que ele deve fazer?">
-                  {OBJETIVOS.map((o) => (
+              <Secao {...SECOES[3]}>
+                <Grupo titulo="Escolha o tom das respostas" colunas={3}>
+                  {TONS.map((t) => (
                     <CartaoEscolha
-                      key={o}
-                      grupo="objetivo"
-                      valor={o}
-                      titulo={rotuloObjetivo(o).titulo}
-                      apoio={rotuloObjetivo(o).apoio}
-                      selecionado={config.objetivo === o}
-                      onEscolher={() => escolherObjetivo(o)}
+                      key={t}
+                      grupo="tom"
+                      valor={t}
+                      titulo={rotuloTom(t).titulo}
+                      apoio={rotuloTom(t).apoio}
+                      selecionado={config.tom === t}
+                      onEscolher={() => setCampo("tom", t)}
                     />
                   ))}
                 </Grupo>
-                {config.objetivo === "agendamentos" && (
-                  <Aviso tom="warn">Para consultar horários e marcar, <a href="/setup#mcp-agenda" className="underline font-semibold">conecte sua agenda</a>. Sem ferramentas de agenda disponíveis, o atendente coleta preferências e encaminha à equipe, sem confirmar reserva.</Aviso>
-                )}
-                {config.objetivo === "outro" && (
-                  <Field label="Em uma linha, o que ele deve fazer?" htmlFor="objetivoTexto">
-                    <input
-                      id="objetivoTexto"
-                      className="input"
-                      required
-                      placeholder="receber pedidos de orçamento e passar para a equipe"
-                      value={config.objetivoTexto ?? ""}
-                      onChange={(e) => setCampo("objetivoTexto", e.target.value)}
-                    />
-                  </Field>
-                )}
-
-                {/* `#conhecimento` é a âncora do atalho "Adicionar conhecimento" do Início (US-016): a
-                    página é um Client Component e o passo 1 só existe depois da carga, então quem rola
-                    até aqui é o efeito de `hash` abaixo, não o navegador. */}
-                <span id="conhecimento" className="block scroll-mt-24" />
-                <Field
-                  label="O que ele precisa saber?"
-                  htmlFor="baseConhecimento"
-                  hint="O atendente não inventa nada fora daqui. Troque o que está entre colchetes pelos dados da sua empresa e apague o que não usar."
-                >
-                  <textarea
-                    id="baseConhecimento"
-                    className="input min-h-[190px] resize-y"
-                    required
-                    maxLength={LIMITE_BASE}
-                    placeholder={PLACEHOLDER_BASE}
-                    value={config.baseConhecimento}
-                    onChange={(e) => setCampo("baseConhecimento", e.target.value)}
-                  />
-                </Field>
-                <p className="-mt-3 mb-4 text-right text-muted text-[12.5px]" aria-live="polite">
-                  {config.baseConhecimento.length.toLocaleString("pt-BR")}/{LIMITE_BASE.toLocaleString("pt-BR")}
-                </p>
-
-                <p className="text-[13px] font-semibold mb-2">Adicionar arquivo (opcional)</p>
-                <p className="text-muted text-[12.5px] mb-2">Os documentos são salvos imediatamente e consultados por trechos relevantes, sem ocupar o campo acima. Até 30 arquivos de 200 mil caracteres. Com IA conectada, a busca semântica usa créditos do OpenRouter; se indisponível, usamos palavras-chave. Reenvie o mesmo arquivo para tentar indexá-lo novamente.</p>
-                {documentos.map((d) => <div key={d.id} className="flex items-center justify-between gap-3 text-[13px] mb-2">
-                  <span>{d.nome} · {d.trechos} trechos · busca {d.modo}</span>
-                  <button type="button" className="underline" disabled={removendo !== null || importando} onClick={() => removerDocumento(d.id)} aria-label={`Remover ${d.nome}`}>{removendo === d.id ? "Removendo…" : "Remover"}</button>
-                </div>)}
-                <Dropzone id="arquivo-base" accept={ACEITA_ARQUIVO} tiposLabel="PDF, TXT" maxSizeMB={10} arquivo={null} onArquivo={importarArquivo} />
-                {importando && <p className="text-muted text-[12.5px] mt-2">Lendo e indexando o arquivo...</p>}
-                {avisoImportacao && <div className="mt-3"><Aviso tom={avisoImportacao.tom}>{avisoImportacao.texto}</Aviso></div>}
-
-                <div className="mt-5">
-                  <Grupo titulo="Tom de resposta" colunas={3}>
-                    {TONS.map((t) => (
-                      <CartaoEscolha
-                        key={t}
-                        grupo="tom"
-                        valor={t}
-                        titulo={rotuloTom(t).titulo}
-                        apoio={rotuloTom(t).apoio}
-                        selecionado={config.tom === t}
-                        onEscolher={() => setCampo("tom", t)}
-                      />
-                    ))}
-                  </Grupo>
-                </div>
                 {config.tom === "personalizado" && (
                   <Field label="Em uma linha, como ele deve falar?" htmlFor="tomTexto">
                     <input
@@ -740,7 +858,9 @@ export function Assistente() {
                     />
                   </Field>
                 )}
+              </Secao>
 
+              <Secao {...SECOES[4]}>
                 <div className="rounded-card border border-line p-4">
                   <h3 className="font-bold text-[14px]">Áudios, fotos e arquivos</h3>
                   <p className="text-[12.5px] text-muted mt-1 mb-3">
@@ -771,7 +891,9 @@ export function Assistente() {
                     />
                   </div>
                 </div>
+              </Secao>
 
+              <div className="card p-5 mb-3">
                 <MaisDetalhes titulo="Quando ele não souber responder">
                   <Field label="O que ele faz" htmlFor="naoSei">
                     <select id="naoSei" className="input" value={config.naoSei} onChange={(e) => setCampo("naoSei", e.target.value as Config["naoSei"])}>
@@ -782,6 +904,20 @@ export function Assistente() {
                   </Field>
                   <Field label="Horário de atendimento humano" htmlFor="horario">
                     <input id="horario" className="input" placeholder="segunda a sexta, das 8h às 18h" value={config.horario} onChange={(e) => setCampo("horario", e.target.value)} />
+                  </Field>
+                  <Field
+                    label="O que dizer quando o atendente ficar fora do ar"
+                    htmlFor="fraseFalha"
+                    hint={`Em branco, o cliente recebe: "${FRASE_FALHA_PADRAO}"`}
+                  >
+                    <input
+                      id="fraseFalha"
+                      className="input"
+                      maxLength={300}
+                      placeholder={FRASE_FALHA_PADRAO}
+                      value={config.fraseFalha ?? ""}
+                      onChange={(e) => setCampo("fraseFalha", e.target.value)}
+                    />
                   </Field>
                 </MaisDetalhes>
               </div>
@@ -799,10 +935,24 @@ export function Assistente() {
             </form>
 
             <aside className="lg:sticky lg:top-6 self-start">
+              {/* O índice só existe no desktop: no celular esta coluna vem DEPOIS do formulário, e um
+                  índice no fim da página não leva ninguém a lugar nenhum. */}
+              <nav aria-label="Seções desta página" className="card p-4 mb-3 max-lg:hidden">
+                <p className="text-[13px] font-semibold mb-2">Nesta página</p>
+                <ul className="flex flex-col gap-1.5 text-[13px]">
+                  {SECOES.map((s) => (
+                    <li key={s.id}>
+                      <a href={`#${s.id}`} className="text-muted hover:text-accent-ink hover:underline">
+                        {s.titulo}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
               {PainelPersona}
               <div className="card p-5">
                 <h2 className="font-bold text-[15px] mb-3">Seu atendente, do seu jeito</h2>
-                <Celular previa nome={config.atendente} negocio={config.negocio} mensagens={previa} />
+                <Celular previa nome={config.atendente} negocio={config.negocio} saudacao={config.saudacao} mensagens={previa} />
               </div>
               <div className="mt-3">
                 <Dica>Você pode testar diferentes mensagens no próximo passo para ajustar as respostas do seu atendente.</Dica>
@@ -811,6 +961,30 @@ export function Assistente() {
           </div>
         )}
       </main>
+
+      {barraAlteracoes && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface shadow-[0_-6px_20px_rgba(20,20,50,0.12)]">
+          <div className="max-w-[1400px] mx-auto px-8 py-3 flex items-center justify-between gap-3 max-md:px-4 max-md:flex-col max-md:items-stretch max-md:gap-2">
+            <p className="text-[13.5px] font-semibold max-md:text-center">Alterações não salvas</p>
+            <div className="flex items-center gap-3 max-md:justify-between">
+              <button type="button" className="btn-link text-[14px]" onClick={descartar} disabled={salvando}>
+                Descartar
+              </button>
+              {/* O botão vive fora do <form>, mas continua sendo o submit dele (atributo `form`): é o que
+                  mantém a validação do navegador nos campos obrigatórios. */}
+              <button
+                type="submit"
+                form="form-atendente"
+                className="btn-primary !w-auto max-md:flex-1"
+                disabled={salvando}
+                onClick={() => (destino.current = "teste")}
+              >
+                {salvando ? "Salvando" : "Salvar e testar o atendente"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {Dialogo}
     </>
   );

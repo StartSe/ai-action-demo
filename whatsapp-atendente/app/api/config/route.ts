@@ -1,5 +1,5 @@
 import { getConfig, setConfig, temConfigSalva } from "@/lib/estado";
-import { MIDIA_PADRAO, type Config, type ConfigMidia } from "@/lib/types";
+import { LIMITE_PERGUNTA, LIMITE_SAUDACAO, MAX_PERGUNTAS, MIDIA_PADRAO, type Config, type ConfigMidia } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   const body = (await req.json().catch(() => ({}))) as Partial<Config>;
-  const { negocio, atendente, objetivo, objetivoTexto, tom, tomTexto, horario, baseConhecimento, naoSei, fraseFalha, midia, fraseSemMidia } = body;
+  const { negocio, atendente, objetivo, objetivoTexto, tom, tomTexto, saudacao, perguntasSugeridas, horario, baseConhecimento, naoSei, fraseFalha, midia, fraseSemMidia } = body;
   if (!negocio || !String(negocio).trim() || !atendente || !String(atendente).trim() || !baseConhecimento || !String(baseConhecimento).trim()) {
     return Response.json({ error: "Preencha ao menos o nome do negócio, o nome do atendente e a base de conhecimento." }, { status: 400 });
   }
@@ -30,6 +30,19 @@ export async function PUT(req: Request) {
   }
   if (objetivo === "outro" && !String(objetivoTexto || "").trim()) {
     return Response.json({ error: "Escreva em uma linha o que o atendente deve fazer." }, { status: 400 });
+  }
+  // A saudação e as perguntas de teste são opcionais, mas têm teto: o campo da tela mostra o contador e
+  // a rota confia nele tanto quanto em quem chama por fora (a persona gerada, por exemplo).
+  const textoSaudacao = String(saudacao || "").trim();
+  if (textoSaudacao.length > LIMITE_SAUDACAO) {
+    return Response.json({ error: `A saudação precisa ter até ${LIMITE_SAUDACAO} caracteres.` }, { status: 400 });
+  }
+  const perguntas = Array.isArray(perguntasSugeridas) ? perguntasSugeridas.map((p) => String(p ?? "").trim()).filter(Boolean) : [];
+  if (perguntas.length > MAX_PERGUNTAS) {
+    return Response.json({ error: `Deixe no máximo ${MAX_PERGUNTAS} perguntas de teste.` }, { status: 400 });
+  }
+  if (perguntas.some((p) => p.length > LIMITE_PERGUNTA)) {
+    return Response.json({ error: `Cada pergunta de teste precisa ter até ${LIMITE_PERGUNTA} caracteres.` }, { status: 400 });
   }
   const objetivoEscolhido = objetivo ?? "atendimento";
   const tomEscolhido = tom ?? "profissional";
@@ -50,6 +63,8 @@ export async function PUT(req: Request) {
     ...(objetivoEscolhido === "outro" ? { objetivoTexto: String(objetivoTexto).trim() } : {}),
     tom: tomEscolhido,
     ...(tomEscolhido === "personalizado" && textoTom ? { tomTexto: textoTom } : {}),
+    ...(textoSaudacao ? { saudacao: textoSaudacao } : {}),
+    ...(perguntas.length ? { perguntasSugeridas: perguntas } : {}),
     horario: String(horario || "").trim(),
     baseConhecimento: String(baseConhecimento).trim(),
     naoSei: NAO_SEI.includes(naoSei as Config["naoSei"]) ? (naoSei as Config["naoSei"]) : "humano",

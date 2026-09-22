@@ -142,7 +142,7 @@
         "Lint e build passam; verificar no navegador (cinco seções, índice, barra, prévia; desktop e celular; `/assistente#conhecimento` continua rolando até a base)"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-008 (Fase 2)"
     },
     {

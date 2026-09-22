@@ -266,7 +266,7 @@ function ResultadoPersona({
   return (
     <section
       aria-label="Atendente gerado"
-      className="card p-5 mb-3 border-accent max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-20 max-lg:mb-0 max-lg:max-h-[82vh] max-lg:overflow-y-auto max-lg:rounded-b-none max-lg:shadow-[0_-8px_24px_rgba(0,0,0,0.18)]"
+      className="card p-5 mb-3 border-accent max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-20 max-lg:mb-0 max-lg:max-h-[82vh] max-lg:overflow-y-auto max-lg:rounded-b-none max-lg:pb-24 max-lg:shadow-[0_-8px_24px_rgba(0,0,0,0.18)]"
     >
       <div className="flex items-start justify-between gap-3 mb-2">
         <h2 className="font-bold text-[15px]">Seu atendente está pronto para revisar</h2>
