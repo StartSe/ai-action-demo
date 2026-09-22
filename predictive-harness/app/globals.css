@@ -783,3 +783,6 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   .chat-layout .vazio > p { display: none; }
   .chat-layout .categorias { margin-top: 16px; }
 }
+
+#voz .chip.ok { color: #08704c; }
+#voz .chip.warn { color: #825414; }

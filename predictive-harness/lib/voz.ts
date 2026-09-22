@@ -1,11 +1,25 @@
 import { createHash } from "node:crypto";
 import { AppError } from "./api";
+import { erroElevenLabs } from "./voz-erros";
 import { getConfig, setConfig, mascarar, origemConfig } from "./store";
 export type Voz = { id: string; nome: string; brasileira: boolean };
 type VozAPI = { voice_id: string; name: string; labels?: Record<string, string>; verified_languages?: { language: string; locale?: string; accent?: string }[] };
 const ENDERECO = "https://api.elevenlabs.io";
+export type VerificacaoVoz = { estado: "nao_verificada" | "pronta" | "erro"; mensagem?: string; verificadoEm?: string };
+function assinaturaConexao(chave = getConfig("ELEVENLABS_API_KEY"), vozId = getConfig("ELEVENLABS_VOICE_ID")) {
+  return createHash("sha256").update(`${chave || ""}:${vozId || ""}`).digest("hex");
+}
+function verificacaoVoz(): VerificacaoVoz {
+  try {
+    const salvo = JSON.parse(getConfig("ELEVENLABS_VOICE_CHECK") || "{}");
+    if (salvo.assinatura === assinaturaConexao() && (salvo.estado === "pronta" || salvo.estado === "erro")) {
+      return { estado: salvo.estado, mensagem: salvo.mensagem, verificadoEm: salvo.verificadoEm };
+    }
+  } catch { /* Older installations have not verified Agents access yet. */ }
+  return { estado: "nao_verificada" };
+}
 export function statusVoz() {
-  return { conectado: !!getConfig("ELEVENLABS_API_KEY"), mascarado: mascarar(getConfig("ELEVENLABS_API_KEY")), origem: origemConfig("ELEVENLABS_API_KEY"), vozId: getConfig("ELEVENLABS_VOICE_ID") || "", vozNome: getConfig("ELEVENLABS_VOICE_NAME") || "", idioma: "pt-BR" };
+  return { conectado: !!getConfig("ELEVENLABS_API_KEY"), mascarado: mascarar(getConfig("ELEVENLABS_API_KEY")), origem: origemConfig("ELEVENLABS_API_KEY"), vozId: getConfig("ELEVENLABS_VOICE_ID") || "", vozNome: getConfig("ELEVENLABS_VOICE_NAME") || "", idioma: "pt-BR", conversa: verificacaoVoz() };
 }
 async function chamar(caminho: string, init: RequestInit = {}, chave = getConfig("ELEVENLABS_API_KEY")) {
   if (!chave) throw new AppError("Conecte a ElevenLabs em Configurações para usar voz.", 409);
@@ -13,7 +27,7 @@ async function chamar(caminho: string, init: RequestInit = {}, chave = getConfig
   let res: Response;
   try { res = await fetch(ENDERECO + caminho, { ...init, headers: { ...init.headers, "xi-api-key": chave }, signal }); }
   catch { throw new AppError("Não foi possível acessar a ElevenLabs. Tente novamente.", 502); }
-  if (!res.ok) throw new AppError(res.status === 401 || res.status === 403 ? "A ElevenLabs recusou a credencial ou a permissão. Confira as permissões de vozes, síntese e ElevenLabs Agents (agentes, ferramentas e conversas)." : res.status === 429 ? "Limite da ElevenLabs atingido. Confira os créditos da sua conta e tente novamente." : "A ElevenLabs não concluiu o pedido. Confira sua conta e tente novamente.", 502);
+  if (!res.ok) throw await erroElevenLabs(res, caminho);
   return res;
 }
 export function normalizarVoz(v: VozAPI): Voz {
@@ -35,7 +49,7 @@ export async function listarVozes(chave?: string): Promise<Voz[]> {
 export async function configurarVoz(b: Record<string, unknown>) {
   if (b.desconectar === true) {
     if (origemConfig("ELEVENLABS_API_KEY") === "env") throw new AppError("Remova a variável de ambiente para desconectar.");
-    for (const k of ["ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID", "ELEVENLABS_VOICE_NAME", "ELEVENLABS_AGENT_CONFIG"]) setConfig(k, null);
+    for (const k of ["ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID", "ELEVENLABS_VOICE_NAME", "ELEVENLABS_AGENT_CONFIG", "ELEVENLABS_VOICE_CHECK"]) setConfig(k, null);
     return;
   }
   const chave = typeof b.chave === "string" && b.chave.trim() ? b.chave.trim() : undefined;
@@ -45,11 +59,13 @@ export async function configurarVoz(b: Record<string, unknown>) {
   if (b.vozId && !voz) throw new AppError("Escolha uma voz disponível em português na sua conta.");
   if (chave) {
     if (origemConfig("ELEVENLABS_API_KEY") === "env") throw new AppError("A credencial é definida por variável de ambiente.");
+    setConfig("ELEVENLABS_VOICE_CHECK", null);
     setConfig("ELEVENLABS_API_KEY", chave);
     setConfig("ELEVENLABS_VOICE_ID", null);
     setConfig("ELEVENLABS_VOICE_NAME", null);
   }
   if (voz) {
+    if (voz.id !== getConfig("ELEVENLABS_VOICE_ID")) setConfig("ELEVENLABS_VOICE_CHECK", null);
     setConfig("ELEVENLABS_VOICE_ID", voz.id);
     setConfig("ELEVENLABS_VOICE_NAME", voz.nome);
   }
@@ -75,11 +91,12 @@ async function prepararAgente(chave: string, vozId: string) {
   const existente = preparacoes.get(assinatura);
   if (existente) return existente;
   const preparar = (async () => {
-    const toolIds: string[] = [];
-    for (const tool_config of ferramentas) {
+    const toolIds: string[] = salvo.assinatura === assinatura && Array.isArray(salvo.toolIds) ? salvo.toolIds.filter((id): id is string => typeof id === "string" && !!id).slice(0, ferramentas.length) : [];
+    for (const tool_config of ferramentas.slice(toolIds.length)) {
       const r = await (await chamar("/v1/convai/tools", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool_config }) }, chave)).json();
       if (typeof r.id !== "string" || !r.id) throw new AppError("Não foi possível preparar as ferramentas da conversa por voz.", 502);
       toolIds.push(r.id);
+      setConfig("ELEVENLABS_AGENT_CONFIG", JSON.stringify({ assinatura, toolIds }));
     }
     const config = {
       name: `Cowork Jev · ${REVISAO_AGENTE}`,
@@ -105,12 +122,28 @@ export async function sessaoVoz(signal?: AbortSignal) {
   const vozId = getConfig("ELEVENLABS_VOICE_ID");
   if (!chave) throw new AppError("Conecte a ElevenLabs em Configurações para conversar por voz.", 409);
   if (!vozId) throw new AppError("Selecione a voz padrão nas Configurações.", 409);
-  const agentId = await prepararAgente(chave, vozId);
-  const r = await (await chamar(`/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`, { signal }, chave)).json();
-  let url: URL;
-  try { url = new URL(r.signed_url); } catch { throw new AppError("Não foi possível abrir a sessão de voz.", 502); }
-  if (url.protocol !== "wss:" || url.hostname !== "api.elevenlabs.io") throw new AppError("A sessão de voz retornou um endereço inválido.", 502);
-  return { signedUrl: url.toString() };
+  const assinatura = assinaturaConexao(chave, vozId);
+  const registrar = (resultado: VerificacaoVoz) => {
+    if (assinatura === assinaturaConexao()) setConfig("ELEVENLABS_VOICE_CHECK", JSON.stringify({ assinatura, ...resultado, verificadoEm: new Date().toISOString() }));
+  };
+  try {
+    const agentId = await prepararAgente(chave, vozId);
+    const r = await (await chamar(`/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`, { signal }, chave)).json();
+    let url: URL;
+    try { url = new URL(r.signed_url); } catch { throw new AppError("Não foi possível abrir a sessão de voz.", 502); }
+    if (url.protocol !== "wss:" || url.hostname !== "api.elevenlabs.io") throw new AppError("A sessão de voz retornou um endereço inválido.", 502);
+    registrar({ estado: "pronta" });
+    return { signedUrl: url.toString() };
+  } catch (e) {
+    if (!signal?.aborted) registrar({ estado: "erro", mensagem: e instanceof AppError ? e.message : "Não foi possível verificar a conversa por voz. Tente novamente." });
+    throw e;
+  }
+}
+/** Exercises the same provisioning/session authorization as live voice, without opening audio. */
+export async function verificarVoz(signal?: AbortSignal) {
+  try { await sessaoVoz(signal); }
+  catch (e) { if (signal?.aborted || !(e instanceof AppError) || e.status === 409) throw e; }
+  return statusVoz();
 }
 export async function falar(texto: string, signal?: AbortSignal, vozId?: string) {
   const id = vozId || getConfig("ELEVENLABS_VOICE_ID");

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-export type StatusVoz = { conectado: boolean; mascarado: string | null; origem: string | null; vozId: string; vozNome: string; vozes?: { id: string; nome: string; brasileira: boolean }[] };
+export type StatusVoz = { conversa?: { estado: "nao_verificada" | "pronta" | "erro"; mensagem?: string; verificadoEm?: string }; conectado: boolean; mascarado: string | null; origem: string | null; vozId: string; vozNome: string; vozes?: { id: string; nome: string; brasileira: boolean }[] };
 export function useAudio() {
   const [tocando, setTocando] = useState<string | null>(null);
   const [preparando, setPreparando] = useState(false);

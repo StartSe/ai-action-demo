@@ -491,7 +491,7 @@
       "plano": "starter",
       "discoGB": 1,
       "discoGuarda": "planilhas, premissas por produto, conversas, decisões do harness, conta e credenciais",
-      "versao": "0.5.0",
+      "versao": "0.5.1",
       "aposPublicar": "Crie sua conta e explore a escola de negócios de exemplo: contribuição por turma, cenário de nova turma, meta reversa de marketing e ponto de equilíbrio. Em Configurações conecte o ChatGPT e o OpenRouter (o Jev vive nele). Em Fontes de dados, importe XLSX ou CSV (até 20 MB), confirme o papel das colunas e selecione as fontes da conversa. O histórico tem busca e conversas fixadas; premissas ficam no painel retrátil. Configure a ElevenLabs para conversar por voz ao vivo."
     },
     {

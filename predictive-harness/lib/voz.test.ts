@@ -12,9 +12,11 @@ const { abrirBanco } = await import("./store");
 const fetchReal = globalThis.fetch;
 const chamadas: { url: string; init?: RequestInit }[] = [];
 let recusar = false;
+let falha: { caminho: string; status: number; detail: unknown } | null = null;
 let signedUrl = "wss://api.elevenlabs.io/v1/convai/conversation?token=temporary";
 globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
   const url = String(input); chamadas.push({ url, init });
+  if (falha && url.includes(falha.caminho)) return Response.json({ detail: falha.detail }, { status: falha.status });
   if (recusar) return Response.json({ detail: "sensitive provider error" }, { status: 401 });
   if (url.includes("/v2/voices")) return Response.json({ voices: [
     { voice_id: "vozPT", name: "Português", labels: { accent: "portuguese" } },
@@ -34,6 +36,7 @@ test("conexão verifica chave, cifra segredo e prioriza vozes brasileiras", asyn
   const status = voz.statusVoz();
   assert.equal(status.conectado, true);
   assert.equal(status.vozId, "");
+  assert.equal(status.conversa.estado, "nao_verificada");
   assert.ok(!JSON.stringify(status).includes(key));
   const row = abrirBanco().prepare("SELECT valor FROM config WHERE chave = 'ELEVENLABS_API_KEY'").get() as { valor: string };
   assert.match(row.valor, /^v1:/);
@@ -79,11 +82,12 @@ test("agente privado prepara ferramentas uma vez e emite sessões sem expor cred
 
 test("erro do provedor é seguro e desconectar remove a voz e a credencial", async () => {
   recusar = true;
-  await assert.rejects(voz.listarVozes(), e => e instanceof Error && /recusou a credencial/.test(e.message) && !e.message.includes("sensitive"));
+  await assert.rejects(voz.listarVozes(), e => e instanceof Error && /negou acesso/.test(e.message) && !e.message.includes("sensitive"));
   recusar = false;
   await voz.configurarVoz({ desconectar: true });
   assert.equal(voz.statusVoz().conectado, false);
   assert.equal(voz.statusVoz().vozId, "");
+  assert.equal(voz.statusVoz().conversa.estado, "nao_verificada");
   await assert.rejects(voz.falar("Teste"), /Selecione a voz padrão/);
 });
 
@@ -107,4 +111,64 @@ test("voz ao vivo exige conversa válida e não aceita upload de áudio", async 
   assert.deepEqual(JSON.parse(data.contexto).fontes, []);
   assert.ok(!JSON.stringify(data).includes("test-secret"));
 
+});
+
+
+test("salvar voz detecta chave que lista vozes mas não cria ferramentas e permite recuperar sem desconectar", async () => {
+  const route = await import("../app/api/voz/route");
+  await voz.configurarVoz({ chave: "test-restricted-tools-key" });
+  const inicio = chamadas.length;
+  falha = { caminho: "/convai/tools", status: 401, detail: { status: "missing_permissions", message: "Missing convai_write permission; sensitive provider error test-secret" } };
+  const req = (data: unknown) => new Request("http://localhost/api/voz", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+  const saved = await route.PUT(req({ vozId: "vozBR" }));
+  assert.equal(saved.status, 200, "a seleção é preservada mesmo se a verificação falha");
+  const data = await saved.json();
+  assert.equal(data.conectado, true);
+  assert.equal(data.vozId, "vozBR");
+  assert.equal(data.conversa.estado, "erro");
+  assert.match(data.conversa.mensagem, /ferramentas.*convai_write/);
+  assert.ok(!JSON.stringify(data).includes("test-secret"));
+  assert.ok(!JSON.stringify(data).includes("sensitive"));
+  assert.equal(voz.statusVoz().conversa.estado, "erro");
+  falha = null;
+  const verified = await route.POST(req({ verificar: true }));
+  assert.equal(verified.status, 200);
+  const ok = await verified.json();
+  assert.equal(ok.conversa.estado, "pronta");
+  assert.ok(ok.conversa.verificadoEm);
+  assert.equal(ok.conversa.mensagem, undefined);
+  assert.equal(ok.signedUrl, undefined, "teste não envia URL assinada ao navegador");
+  assert.ok(!JSON.stringify(ok).includes("test-restricted"));
+  assert.equal(voz.statusVoz().conversa.estado, "pronta");
+  assert.ok(!chamadas.slice(inicio).some(c => c.url.includes("text-to-speech")), "verificar não gera áudio");
+});
+
+test("negação ao criar agente identifica etapa e nova tentativa reutiliza ferramentas já criadas", async () => {
+  await voz.configurarVoz({ chave: "test-restricted-agent-key", vozId: "vozBR" });
+  const inicio = chamadas.length;
+  falha = { caminho: "/agents/create", status: 403, detail: { status: "missing_permissions", message: "convai_write" } };
+  const denied = await voz.verificarVoz();
+  assert.match(denied.conversa.mensagem!, /agente conversacional/);
+  const tools = () => chamadas.slice(inicio).filter(c => c.url.endsWith("/convai/tools"));
+  assert.equal(tools().length, 2);
+  await voz.verificarVoz();
+  assert.equal(tools().length, 2);
+  falha = null;
+  assert.equal((await voz.verificarVoz()).conversa.estado, "pronta");
+  assert.equal(tools().length, 2);
+});
+
+test("negação ao autorizar sessão não aparece como credencial inválida nem como conversa pronta", async () => {
+  falha = { caminho: "get-signed-url", status: 401, detail: { status: "missing_permissions", message: "convai_read" } };
+  await assert.rejects(voz.sessaoVoz(), /autorizar a sessão.*convai_read/);
+  assert.equal(voz.statusVoz().conectado, true);
+  assert.equal(voz.statusVoz().conversa.estado, "erro");
+  falha = null;
+  await voz.verificarVoz();
+  await voz.configurarVoz({ vozId: "vozPT" });
+  assert.equal(voz.statusVoz().conversa.estado, "nao_verificada");
+  await voz.verificarVoz();
+  await voz.configurarVoz({ chave: "test-replacement-key" });
+  assert.equal(voz.statusVoz().conversa.estado, "nao_verificada");
+  await assert.rejects(voz.verificarVoz(), /Selecione a voz/);
 });

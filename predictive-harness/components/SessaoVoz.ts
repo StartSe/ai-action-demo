@@ -31,10 +31,12 @@ export class SessaoVoz {
       if (!navigator.mediaDevices?.getUserMedia || typeof AudioContext === "undefined") throw new Error("unsupported");
       this.context = new AudioContext();
       void this.context.resume().catch(() => {});
+      // Check provider permissions before requesting access to the microphone.
+      const { signedUrl, contexto } = await request<{ signedUrl: string; contexto: string }>("/api/voz", "POST", { tempoReal: true, conversaId }, { signal: this.abort.signal });
+      if (this.encerrada) return;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
       if (this.encerrada) { stream.getTracks().forEach(t => t.stop()); return; }
       this.stream = stream;
-      const { signedUrl, contexto } = await request<{ signedUrl: string; contexto: string }>("/api/voz", "POST", { tempoReal: true, conversaId }, { signal: this.abort.signal });
       if (this.encerrada) return;
       await this.context.audioWorklet.addModule("/jev-audio-worklet.js");
       if (this.encerrada) return;

@@ -1,4 +1,4 @@
-# Cowork Jev — v0.5.0
+# Cowork Jev — v0.5.1
 
 Seu estrategista para criar predições baseadas em dados, explorar cenários e orientar decisões financeiras.
 
@@ -39,6 +39,10 @@ A migração preserva as mensagens existentes na primeira conversa e fixa as fon
 ## Voz (opcional)
 
 Em Configurações, conecte sua chave ElevenLabs com permissões de leitura de vozes, Text to Speech e ElevenLabs Agents (agentes, ferramentas e conversas). Selecione e salve uma voz em português: as identificadas como brasileiras aparecem primeiro, e a prévia permite conferir o sotaque.
+
+A validação da credencial consulta o catálogo de vozes; isso não garante permissão de Agents. Ao salvar a voz, o app verifica também a preparação das ferramentas, do agente privado e a autorização da sessão. O botão **Verificar conversa por voz** repete essa verificação sem abrir o microfone nem gerar áudio. O status só confirma o acesso após essas etapas; falhas mostram qual operação foi recusada, distinguindo falta de permissão, credencial inválida e cota quando o provedor informa o motivo.
+
+Se a chave lista vozes, mas a conversa é recusada, abra **Developers → API Keys** na ElevenLabs e edite a chave: habilite **Voices: Read**, **Text to Speech** e **ElevenLabs Agents / Conversational AI: Read e Write** (`convai_read` e `convai_write`). Volte ao app e clique em **Verificar conversa por voz**. Não é necessário desconectar para reaplicar as permissões; se precisar de outra chave, use **Trocar credencial**. O acesso ao workspace também precisa permitir as operações. Referência: [permissões das chaves ElevenLabs](https://elevenlabs.io/docs/overview/administration/workspaces/api-keys).
 
 No compositor, toque no botão preto com ondas para iniciar a conversa com IA. A digitação fica desativada durante a sessão; gráficos, tabelas, premissas e análises anteriores permanecem interativos. Você pode interromper a fala, pausar o microfone ou encerrar para voltar ao chat. As perguntas enviadas ao motor e suas respostas ficam no histórico. Requer microfone, Web Audio e HTTPS (ou localhost).
 
