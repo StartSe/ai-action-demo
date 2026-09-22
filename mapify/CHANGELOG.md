@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.1 — 2026-09-22
+
+- Ação **Excluir** nos cartões da biblioteca, nas visualizações em grade e lista, inclusive no celular. A lista e os contadores são atualizados após a exclusão.
+- Exclusão do editor movida para o cabeçalho, acessível sem abrir a estrutura lateral.
+- Confirmação compartilhada com nome do mapa, aviso de remoção das edições e da conversa, opção de manter o mapa e estado de envio que impede cliques repetidos. Erros permanecem no diálogo para permitir nova tentativa.
+
 ## 1.4.0 — 2026-09-22
 
 - Nível aprofundado organiza os temas e detalha cada ramo em uma chamada dedicada, sempre consultando a fonte integral, sem resumos intermediários que eliminem exemplos. Até 120 tópicos e 4 níveis abaixo do centro, conforme a riqueza da fonte.

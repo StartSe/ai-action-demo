@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 export function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
     map: (
@@ -160,14 +160,17 @@ export function Modal({
   onClose,
   wide = false,
   className = "",
+  dismissible = true,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
   className?: string;
+  dismissible?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
     const dialog = ref.current;
     dialog?.showModal();
@@ -176,18 +179,24 @@ export function Modal({
   return (
     <dialog
       ref={ref}
+      aria-labelledby={titleId}
       className={"modal" + (wide ? " wide" : "") + " " + className}
       onCancel={(e) => {
         e.preventDefault();
-        onClose();
+        if (dismissible) onClose();
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (dismissible && e.target === e.currentTarget) onClose();
       }}
     >
       <header>
-        <h2>{title}</h2>
-        <IconButton icon="close" label="Fechar" onClick={onClose} />
+        <h2 id={titleId}>{title}</h2>
+        <IconButton
+          icon="close"
+          label="Fechar"
+          onClick={onClose}
+          disabled={!dismissible}
+        />
       </header>
       <div className="modal-body">{children}</div>
     </dialog>

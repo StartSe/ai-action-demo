@@ -14,7 +14,7 @@ Transforma vídeos públicos do YouTube, PDFs, páginas e textos em mapas mentai
 4. Para vídeos públicos de qualquer canal, abra **Configurações → YouTube**, cadastre uma chave Gemini e clique em **Validar e salvar chave**. Depois crie um mapa com YouTube, PDF, página web ou texto, escolhendo detalhe e foco.
 5. Acompanhe a análise e a construção no canvas: a thumbnail aparece ao enviar um vídeo e as ramificações chegam durante a resposta da IA. Pode fechar a janela e voltar por **Acompanhar geração** na biblioteca.
 6. Navegue com zoom e arraste, recolha ramos, edite tópicos e notas, adicione subtemas e consulte referências à fonte. As alterações são salvas automaticamente.
-7. Converse sobre o conteúdo e exporte em PNG, SVG, Markdown ou JSON. A biblioteca oferece busca, favoritos, duplicação e exclusão.
+7. Converse sobre o conteúdo e exporte em PNG, SVG, Markdown ou JSON. A biblioteca oferece busca, favoritos, duplicação e exclusão. Para apagar um mapa, clique em **Excluir** no cartão (grade ou lista) ou na lixeira do cabeçalho do editor, inclusive no celular. Confirme o nome no diálogo: a exclusão remove o mapa, suas edições e a conversa, sem opção de desfazer.
 
 O exemplo é identificado como demonstração e não simula uma resposta de IA. Fontes reais exigem conexão. A conversa usa o mapa e uma seleção de trechos relevantes; não é uma busca exaustiva em todos os documentos.
 

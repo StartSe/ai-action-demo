@@ -737,6 +737,7 @@ small,
 }
 .map-card-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 13px;
   border-top: 1px solid #f5f2f8;
@@ -750,8 +751,28 @@ small,
   align-items: center;
 }
 .map-card-meta .icon-button {
-  margin-left: auto;
   width: 27px;
+}
+.map-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.delete-map-action {
+  color: #a74b64;
+  font-size: 11px;
+  flex-shrink: 0;
+  padding: 8px;
+  min-height: 36px;
+}
+.delete-map-action:hover {
+  background: #fff0f3;
+  color: #8e304a;
+}
+.delete-map-dialog p {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 .map-card-meta .icon-button svg {
   width: 15px;
@@ -2536,6 +2557,12 @@ textarea {
   }
   .editor-actions .icon-button {
     display: none;
+  }
+  .editor-actions .delete-map-action span {
+    display: none;
+  }
+  .editor-actions .delete-map-action {
+    min-width: 36px;
   }
   .editor-actions .secondary {
     display: none;
