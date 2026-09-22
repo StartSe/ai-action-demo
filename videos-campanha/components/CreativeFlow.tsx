@@ -982,9 +982,11 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                 nodesConnectable={!busy}
                 deleteKeyCode={busy ? null : ["Backspace", "Delete"]}
                 onNodesChange={(changes) => {
-                  if (busy) return;
+                  // React Flow must measure newly mounted nodes even while editing is locked.
+                  const allowed = busy ? changes.filter((c) => c.type === "dimensions") : changes;
+                  if (!allowed.length) return;
                   const p = live.current!;
-                  const nodes = applyNodeChanges(changes, p.nodes) as Block[];
+                  const nodes = applyNodeChanges(allowed, p.nodes) as Block[];
                   change({
                     ...p,
                     nodes,
