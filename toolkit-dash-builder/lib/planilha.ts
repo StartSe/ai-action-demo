@@ -15,8 +15,14 @@ export interface ColunaDados {
   /** O cabeçalho como veio no arquivo, mostrado na tela. */
   rotulo: string;
   tipo: TipoColuna;
-  /** Quantas células não vazias — uma coluna quase vazia não vira componente. */
+  /**
+   * Quantas células viraram valor USÁVEL. Numa coluna numérica, conta só o que converteu: um
+   * "N/A" no meio de mil números não é um preenchimento, é um buraco. Contar antes da conversão
+   * fazia a tela prometer 525 valores numa coluna com 44 nulos.
+   */
   preenchidos: number;
+  /** Células não vazias que NÃO converteram para o tipo da coluna, e por isso viraram nulo. */
+  descartados: number;
   /** Valores distintos, até o teto de CARDINALIDADE_MAXIMA. Define se a coluna serve de categoria. */
   distintos: number;
   /** Só para tipo "numero". */
@@ -296,13 +302,25 @@ export function lerPlanilha(texto: string, nome: string): Dados {
       distintos.add(v);
     }
 
+    // O que de fato converte para o tipo da coluna; o resto é buraco, não preenchimento.
+    const uteis =
+      tipo === "numero" ? valores.filter((v) => lerNumero(v) !== null)
+      : tipo === "data" ? valores.filter((v) => lerData(v) !== null)
+      : valores;
+    const distintosUteis = new Set<string>();
+    for (const v of uteis) {
+      if (distintosUteis.size >= CARDINALIDADE_MAXIMA) break;
+      distintosUteis.add(v);
+    }
+
     const coluna: ColunaDados = {
       chave: c.chave,
       rotulo: c.rotulo,
       tipo,
-      preenchidos: valores.length,
-      distintos: distintos.size,
-      amostra: valores.slice(0, AMOSTRA),
+      preenchidos: uteis.length,
+      descartados: valores.length - uteis.length,
+      distintos: tipo === "texto" ? distintos.size : distintosUteis.size,
+      amostra: uteis.slice(0, AMOSTRA),
     };
     if (tipo === "numero") {
       const nums = valores.map(lerNumero).filter((n): n is number => n !== null);
@@ -364,6 +382,7 @@ export function perfilDeDados(dados: Dados): string {
       if (c.amostra.length) partes.push(`exemplos: ${c.amostra.slice(0, 3).map((v) => `"${v}"`).join(", ")}`);
     }
     partes.push(`${c.preenchidos} de ${dados.linhas.length} preenchidos`);
+    if (c.descartados > 0) partes.push(`${c.descartados} valores não convertidos e ignorados`);
     return partes.join("; ");
   });
   return `Arquivo "${dados.nome}" com ${dados.linhas.length} linhas e ${dados.colunas.length} colunas.\n\nColunas:\n${linhas.join("\n")}`;

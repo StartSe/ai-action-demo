@@ -13,6 +13,8 @@ export interface ColunaLida {
   tipo: TipoColuna;
   preenchidos: number;
   distintos: number;
+  /** Células não vazias que não viraram número/data e ficaram de fora das contas. */
+  descartados: number;
 }
 
 export interface PlanilhaEnviada {
@@ -85,6 +87,10 @@ export function EnvioPlanilha({
   }
 
   if (planilha) {
+    // Dois avisos que valem mais que a lista de chips: coluna vazia não vira nada, e célula que
+    // não converteu sai silenciosamente das somas se ninguém disser.
+    const descartadas = planilha.colunas.filter((c) => c.descartados > 0);
+    const vazias = planilha.colunas.filter((c) => c.preenchidos === 0);
     return (
       <div className="card p-5 mb-3">
         <div className="flex items-start justify-between gap-3 mb-3">
@@ -108,10 +114,26 @@ export function EnvioPlanilha({
           </div>
         )}
 
+        {descartadas.length > 0 && (
+          <div className="mb-3">
+            <Aviso tom="warn">
+              Algumas células não viraram número ou data e ficam de fora das contas:{" "}
+              {descartadas.map((c) => `${c.rotulo} (${c.descartados})`).join(", ")}.
+            </Aviso>
+          </div>
+        )}
+        {vazias.length > 0 && (
+          <div className="mb-3">
+            <Aviso tom="warn">
+              {vazias.length === 1 ? "A coluna" : "As colunas"} {vazias.map((c) => `"${c.rotulo}"`).join(", ")}{" "}
+              {vazias.length === 1 ? "está vazia" : "estão vazias"} e não {vazias.length === 1 ? "vai virar" : "vão virar"} nenhum gráfico.
+            </Aviso>
+          </div>
+        )}
         <p className="text-[12.5px] text-muted mb-2">Confira se as colunas foram entendidas:</p>
         <ul className="flex flex-wrap gap-1.5">
           {planilha.colunas.map((c) => (
-            <li key={c.chave} className={`text-[12px] px-2 py-1 rounded-[7px] ${COR_TIPO[c.tipo]}`} title={`${c.preenchidos} preenchidos · ${c.distintos} valores distintos`}>
+            <li key={c.chave} className={`text-[12px] px-2 py-1 rounded-[7px] ${COR_TIPO[c.tipo]} ${c.preenchidos === 0 ? "opacity-50" : ""}`} title={`${c.preenchidos} preenchidos · ${c.distintos} valores distintos${c.descartados > 0 ? ` · ${c.descartados} ignorados` : ""}`}>
               <span className="font-semibold">{c.rotulo}</span> <span className="opacity-75">{ROTULO_TIPO[c.tipo]}</span>
             </li>
           ))}

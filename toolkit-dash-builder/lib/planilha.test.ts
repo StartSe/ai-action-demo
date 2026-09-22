@@ -114,6 +114,26 @@ describe("lerPlanilha", () => {
     expect(dados.colunas[0].chave).toBe("nome");
   });
 
+  it("conta como preenchido só o que converteu, e reporta o descarte", () => {
+    // Um "N/A" no meio de números não é preenchimento: contar antes da conversão fazia a tela
+    // prometer valores que as somas não usam.
+    // 9 números e 1 "N/A": 90% converte, acima do limiar de 80%, então a coluna segue numérica.
+    const linhas = ["Aulas;Nome", ...[8, 10, 12, 7, 9, 11, 6, 13, 5].map((n, i) => `${n};P${i}`), "N/A;Px"];
+    const dados = lerPlanilha(linhas.join("\n"), "l.csv");
+    const aulas = dados.colunas.find((c) => c.chave === "aulas");
+    expect(aulas?.tipo).toBe("numero");
+    expect(aulas?.preenchidos).toBe(9);
+    expect(aulas?.descartados).toBe(1);
+    expect(dados.linhas.at(-1)?.aulas).toBeNull();
+  });
+
+  it("não conta descarte numa coluna de texto", () => {
+    const dados = lerPlanilha("Nome;Cidade\nAna;Santos\nBruno;", "t.csv");
+    const cidade = dados.colunas.find((c) => c.chave === "cidade");
+    expect(cidade?.preenchidos).toBe(1);
+    expect(cidade?.descartados).toBe(0);
+  });
+
   it("recusa arquivo sem linha de dados e sem colunas separadas", () => {
     expect(() => lerPlanilha("Nome;Valor", "so-cabecalho.csv")).toThrow(/só tem o cabeçalho/);
     expect(() => lerPlanilha("uma coisa só\noutra", "sem-colunas.csv")).toThrow(/colunas separadas/);
