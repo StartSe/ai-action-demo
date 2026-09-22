@@ -10,7 +10,7 @@ import type { Meta } from "@/lib/ai";
 import { INSUMO_PLANILHA } from "@/lib/planilha";
 import type { EspecPainel } from "@/lib/types";
 
-export function ResultadoPainel({ painel, meta, id, acoes, antes, depois }: { painel: EspecPainel; meta: Meta; id?: string; acoes?: ReactNode; antes?: ReactNode; depois?: ReactNode }) {
+export function ResultadoPainel({ painel, meta, id, acoes, antes, depois, grade }: { painel: EspecPainel; meta: Meta; id?: string; acoes?: ReactNode; antes?: ReactNode; depois?: ReactNode; /** Substitui a grade padrão — usado pelo modo de reorganizar, que precisa de cartões arrastáveis. */ grade?: ReactNode }) {
   const [avisoCopia, setAvisoCopia] = useState<"ok" | "falha" | null>(null);
   // A origem viaja no `insumo` gravado com o painel; ver INSUMO_PLANILHA.
   const daPlanilha = meta.insumo.startsWith(INSUMO_PLANILHA);
@@ -63,7 +63,7 @@ export function ResultadoPainel({ painel, meta, id, acoes, antes, depois }: { pa
         )}
       </div>
       {antes}
-      <Painel painel={painel} />
+      {grade ?? <Painel painel={painel} />}
       {depois}
       {recorteAutomatico ? (
         <p className="text-center mt-6"><span className="chip-cinza">Calculado do seu arquivo, sem IA</span></p>

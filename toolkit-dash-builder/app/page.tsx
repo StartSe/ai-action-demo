@@ -8,6 +8,7 @@ import { BannerObservacoes } from "@/components/BannerObservacoes";
 import { ChipsArea, CHIPS_AREA } from "@/components/ChipsArea";
 import { EnvioPlanilha, type PlanilhaEnviada } from "@/components/EnvioPlanilha";
 import { INSUMO_PLANILHA } from "@/lib/planilha";
+import { PainelEditavel } from "@/components/PainelEditavel";
 import { ConversaRefino } from "@/components/ConversaRefino";
 import { Esclarecimento } from "@/components/Esclarecimento";
 import { ResultadoPainel } from "@/components/ResultadoPainel";
@@ -111,6 +112,10 @@ export default function Page() {
   const [pilha, setPilha] = useState<EspecPainel[]>([]);
   const [refinando, setRefinando] = useState(false);
   const [erroRefino, setErroRefino] = useState<{ mensagem: string; acao?: { rotulo: string; url: string } } | null>(null);
+  /** Modo de reorganizar: o painel antes de mexer, para o botão Cancelar devolver o arranjo. */
+  const [editandoLayout, setEditandoLayout] = useState<EspecPainel | null>(null);
+  const [salvandoLayout, setSalvandoLayout] = useState(false);
+  const [erroLayout, setErroLayout] = useState<string | null>(null);
   const [observacoes, setObservacoes] = useState<Observacao[] | null>(null);
   const [analisando, setAnalisando] = useState(false);
   const [erroAnalise, setErroAnalise] = useState<string | null>(null);
@@ -290,6 +295,43 @@ export default function Page() {
   }
 
   /** Restaura o estado anterior ao último ajuste, sem IA, e persiste para /r e a impressão mostrarem o mesmo. */
+  function abrirLayout() {
+    if (estado.fase !== "pronto") return;
+    setErroLayout(null);
+    setEditandoLayout(estado.painel);
+  }
+
+  function cancelarLayout() {
+    const anterior = editandoLayout;
+    setEditandoLayout(null);
+    setErroLayout(null);
+    if (anterior) setEstado((atual) => (atual.fase === "pronto" ? { ...atual, painel: anterior } : atual));
+  }
+
+  /** O arranjo só vale se ficar gravado: o link /r/<id> e a impressão leem o painel salvo. */
+  async function salvarLayout() {
+    if (estado.fase !== "pronto") return;
+    const { id, painel } = estado;
+    if (!id) {
+      setEditandoLayout(null);
+      return;
+    }
+    setSalvandoLayout(true);
+    setErroLayout(null);
+    try {
+      const r = await fetch(`/api/painel/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ painel }) });
+      if (!r.ok) throw new Error();
+      const { painel: gravado } = await r.json();
+      // O servidor revalida a grade: adotar o que ele gravou evita a tela divergir do link salvo.
+      if (gravado) setEstado((atual) => (atual.fase === "pronto" ? { ...atual, painel: gravado } : atual));
+      setEditandoLayout(null);
+    } catch {
+      setErroLayout("Não consegui gravar o arranjo. Ele continua na tela, mas o link e a impressão mostram o anterior.");
+    } finally {
+      setSalvandoLayout(false);
+    }
+  }
+
   async function desfazer() {
     if (estado.fase !== "pronto" || pilha.length === 0) return;
     const [anterior, ...resto] = pilha;
@@ -481,18 +523,36 @@ export default function Page() {
             meta={estado.meta}
             id={estado.id}
             acoes={
-              <>
-                <button type="button" className="btn-ghost" onClick={analisar} disabled={analisando}>{analisando ? "Analisando…" : "Analisar"}</button>
-                <button type="button" className="btn-ghost" onClick={() => gerar(estado.pedido, true)} disabled={carregando}>Gerar outra versão</button>
-              </>
+              editandoLayout ? (
+                <>
+                  <button type="button" className="btn-ghost" onClick={cancelarLayout} disabled={salvandoLayout}>Cancelar</button>
+                  <button type="button" className="btn-primary" onClick={salvarLayout} disabled={salvandoLayout}>{salvandoLayout ? "Salvando…" : "Salvar arranjo"}</button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="btn-ghost" onClick={abrirLayout}>Reorganizar</button>
+                  <button type="button" className="btn-ghost" onClick={analisar} disabled={analisando}>{analisando ? "Analisando…" : "Analisar"}</button>
+                  <button type="button" className="btn-ghost" onClick={() => gerar(estado.pedido, true)} disabled={carregando}>Gerar outra versão</button>
+                </>
+              )
+            }
+            grade={
+              editandoLayout ? (
+                <PainelEditavel
+                  painel={estado.painel}
+                  onMudar={(componentes) => setEstado((atual) => (atual.fase === "pronto" ? { ...atual, painel: { ...atual.painel, componentes } } : atual))}
+                />
+              ) : undefined
             }
             antes={
               <>
+                {erroLayout && <div className="mb-4 no-print"><Aviso tom="danger">{erroLayout}</Aviso></div>}
                 {erroAnalise && <div className="mb-4 no-print"><Aviso tom="danger">{erroAnalise}</Aviso></div>}
                 {observacoes && <BannerObservacoes observacoes={observacoes} demo={estado.meta.demo} onFechar={() => setObservacoes(null)} />}
               </>
             }
             depois={
+              editandoLayout ? null :
               // O ajuste conversando reescreve os números (ver app/api/painel/refinar/route.ts):
               // num painel calculado da planilha ele trocaria dado real por número de exemplo.
               estado.meta.insumo.startsWith(INSUMO_PLANILHA) ? (

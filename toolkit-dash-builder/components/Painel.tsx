@@ -11,7 +11,8 @@ import { TabelaPainel } from "./TabelaPainel";
 
 export type ModoPainel = "tela" | "impressao";
 
-function Corpo({ componente, modo }: { componente: ComponentePainel; modo: ModoPainel }) {
+/** Exportado para `PainelEditavel` desenhar os mesmos cartões no modo de reorganizar, sem duplicar o despacho. */
+export function Corpo({ componente, modo }: { componente: ComponentePainel; modo: ModoPainel }) {
   switch (componente.tipo) {
     case "indicador":
       return <CartaoIndicador dados={componente.dados} titulo={componente.titulo} />;
