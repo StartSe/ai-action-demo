@@ -241,7 +241,7 @@ export function Assistente() {
   /** O que aconteceu com cada cenário já enviado: o motivo com que pediu ajuda, ou `null` (respondeu sozinho). */
   const [resultadoCenario, setResultadoCenario] = useState<Record<string, MotivoTransferencia | null>>({});
   const carregouBase = useRef(false);
-  const rolouParaConhecimento = useRef(false);
+  const rolouParaSecao = useRef(false);
 
   // Passo 3: o estado da conexão do número vem do próprio cartão (ele já consulta de 5 em 5 segundos),
   // para o cartão "Tudo pronto" aparecer no instante em que o celular da empresa lê o código.
@@ -559,15 +559,17 @@ export function Assistente() {
     return () => window.removeEventListener("popstate", aoNavegar);
   }, []);
 
-  // `/assistente#conhecimento`, o atalho "Adicionar conhecimento" do Início: o navegador procura a
-  // âncora antes de a configuração chegar, quando o campo ainda não existe na tela. Quem rola até ele
-  // e o põe em foco é este efeito, uma única vez, depois da carga.
+  // `/assistente#conhecimento` (o atalho "Adicionar conhecimento" do Início) e `#o-que-faz` (a leitura
+  // dos motivos em Relatórios): o navegador procura a âncora antes de a configuração chegar, quando as
+  // seções ainda não existem na tela. Quem rola até elas é este efeito, uma única vez, depois da carga.
+  // Só a seção do conhecimento põe o campo em foco — ali a pessoa veio para escrever.
   useEffect(() => {
-    if (carregando || passo !== 1 || rolouParaConhecimento.current) return;
-    if (location.hash !== "#conhecimento") return;
-    rolouParaConhecimento.current = true;
-    document.getElementById("conhecimento")?.scrollIntoView();
-    (document.getElementById("baseConhecimento") as HTMLTextAreaElement | null)?.focus({ preventScroll: true });
+    if (carregando || passo !== 1 || rolouParaSecao.current) return;
+    const id = location.hash.replace("#", "");
+    if (!SECOES.some((s) => s.id === id)) return;
+    rolouParaSecao.current = true;
+    document.getElementById(id)?.scrollIntoView();
+    if (id === "conhecimento") (document.getElementById("baseConhecimento") as HTMLTextAreaElement | null)?.focus({ preventScroll: true });
   }, [carregando, passo]);
 
   // A base aprovada e as sugestões da equipe moram na seção "O que ele sabe" (passo 1) e a contagem

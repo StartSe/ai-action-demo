@@ -15,6 +15,14 @@
  * - **Tempo médio de resposta**: média de `tempo_resposta_ms` das respostas do atendente (as da IA e as
  *   escritas por uma pessoa) gravadas no período. Respostas sem essa medida ficam de fora da média em
  *   vez de entrarem como zero.
+ * - **Por que pediu ajuda**: as conversas do período que ainda têm um motivo de transferência gravado
+ *   (`conversas.motivo_transferencia`), agrupadas por motivo. O motivo é zerado quando a IA volta a
+ *   responder sozinha e quando alguém devolve a conversa para ela, então isto é "por que o atendente
+ *   precisou de gente nas conversas que passaram por gente", e não um histórico de todas as
+ *   transferências que já aconteceram — uma conversa transferida e devolvida no mesmo dia sai daqui.
+ * - **Não entregues**: mensagens do período que saíram pelo número da empresa e o provedor recusou
+ *   (`status_entrega = 'falhou'`). São mensagens que o cliente não recebeu, e por isso elas aparecem
+ *   como aviso, não como indicador.
  *
  * Os períodos são alinhados à meia-noite: "hoje" é o dia de hoje, "7d" são os sete dias que terminam
  * hoje e "30d", os trinta. É o que faz o gráfico ter barras de dias inteiros e a comparação ser com um
@@ -27,8 +35,8 @@
 import { ASSUNTO_OUTROS } from "./assuntos";
 import { bancoDeConversas, isoDeBanco, listarConversas, paraTextoDeBanco } from "./conversas";
 import { contatosDe } from "./memoria";
-import type { MotivoTransferencia } from "./transferencia";
-import { PAPEIS_DE_CONVERSA, type AssuntoMetricas, type CanalOrigem, type DiaMetricas, type Metricas, type PeriodoMetricas, type StatusConversa, type VariacaoMetricas } from "./types";
+import { ehMotivo, MOTIVOS_TRANSFERENCIA, type MotivoTransferencia } from "./transferencia";
+import { PAPEIS_DE_CONVERSA, type AssuntoMetricas, type CanalOrigem, type DiaMetricas, type Metricas, type MotivoMetricas, type PeriodoMetricas, type StatusConversa, type VariacaoMetricas } from "./types";
 
 /** Só as mensagens que são conversa (cliente, atendente, pessoa): notas e eventos não contam como mensagem. */
 const SO_CONVERSA = `m.papel IN (${PAPEIS_DE_CONVERSA.map((p) => `'${p}'`).join(", ")})`;
@@ -173,6 +181,40 @@ function assuntos({ inicio, fim }: Janela): AssuntoMetricas[] {
 }
 
 /**
+ * Por que a IA pediu ajuda, do motivo mais frequente para o menos. Empate fica com a ordem fixa de
+ * `MOTIVOS_TRANSFERENCIA`, para duas leituras seguidas nunca trocarem as barras de lugar. Um motivo
+ * que o banco não conhece (configuração de outra versão) é ignorado em vez de virar barra sem nome.
+ */
+function motivos({ inicio, fim }: Janela): MotivoMetricas[] {
+  const linhas = bancoDeConversas()
+    .prepare(
+      `SELECT c.motivo_transferencia AS motivo, COUNT(*) AS total
+         FROM conversas c
+        WHERE ${NO_PERIODO} AND c.motivo_transferencia IS NOT NULL AND TRIM(c.motivo_transferencia) <> ''
+        GROUP BY motivo`
+    )
+    .all(paraTextoDeBanco(inicio), paraTextoDeBanco(fim)) as { motivo: string; total: number }[];
+
+  return linhas
+    .filter((l) => ehMotivo(l.motivo))
+    .map((l) => ({ motivo: l.motivo as MotivoTransferencia, total: Number(l.total) }))
+    .sort((a, b) => b.total - a.total || MOTIVOS_TRANSFERENCIA.indexOf(a.motivo) - MOTIVOS_TRANSFERENCIA.indexOf(b.motivo));
+}
+
+/** Quantas mensagens do período o provedor recusou: o cliente não recebeu nenhuma delas. */
+function naoEntregues({ inicio, fim }: Janela): number {
+  const linha = bancoDeConversas()
+    .prepare(
+      `SELECT COUNT(*) AS total
+         FROM mensagens
+        WHERE status_entrega = 'falhou' AND papel IN ('atendente', 'humano')
+          AND criado_em >= ? AND criado_em < ?`
+    )
+    .get(paraTextoDeBanco(inicio), paraTextoDeBanco(fim)) as { total: number | null };
+  return Number(linha.total ?? 0);
+}
+
+/**
  * Todos os números do período, com a comparação com o período anterior de mesmo tamanho.
  *
  * `atencao` é a exceção proposital: ela NÃO é filtrada pelo período. Quem está esperando uma pessoa
@@ -196,6 +238,8 @@ export function calcular(periodo: PeriodoMetricas): Metricas {
     variacao: comparacao,
     porDia: porDia(atual, DIAS[periodo]),
     assuntos: assuntos(atual),
+    motivos: motivos(atual),
+    naoEntregues: naoEntregues(atual),
     atencao: listarConversas({ status: "atencao" }),
   };
 }

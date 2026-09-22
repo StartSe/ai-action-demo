@@ -95,3 +95,43 @@ export function notaDaTransferencia({ motivo, pergunta, atendente }: { motivo: M
   if (citada) frases.push(`Pergunta: “${citada}”`);
   return `${frases.join(" ")} — ${atendente?.trim() || "O atendente"}`;
 }
+
+/**
+ * Os destinos que a leitura do cartão "Por que o atendente pediu ajuda" (Relatórios, US-019) oferece.
+ * Eles moram aqui, e não no JSX, porque `scripts/verificar-jargao.mjs` reprova um endereço de tela
+ * escrito como propriedade dentro de `components/*.tsx` — mesma razão de `ACAO_CONECTAR_NUMERO` estar
+ * em `lib/demo.ts`.
+ */
+const ACAO_COMPLETAR_BASE = { rotulo: "Completar o que ele sabe", url: "/assistente#conhecimento" };
+const ACAO_REVISAR_OBJETIVO = { rotulo: "Revisar o que ele faz", url: "/assistente#o-que-faz" };
+const ACAO_CONFERIR_IA = { rotulo: "Conferir a IA em Configurações", url: "/setup#openrouter" };
+
+export interface LeituraDosMotivos {
+  texto: string;
+  acao?: { rotulo: string; url: string };
+}
+
+/** O que ler quando nenhuma conversa do período parou esperando uma pessoa. */
+export const SEM_TRANSFERENCIAS: LeituraDosMotivos = { texto: "Nenhuma transferência no período." };
+
+/**
+ * O que o motivo mais frequente do período está dizendo, e o que fazer a respeito. Um `Record`
+ * completo: somar um motivo novo vira erro de compilação em vez de cartão sem frase.
+ */
+const LEITURA: Record<MotivoTransferencia, LeituraDosMotivos> = {
+  sem_informacao: { texto: "A maior parte veio de perguntas que a base não cobre. Vale completar em O que ele sabe.", acao: ACAO_COMPLETAR_BASE },
+  fora_do_escopo: { texto: "Muitos clientes pedem algo fora do que o atendente faz. Revise o objetivo.", acao: ACAO_REVISAR_OBJETIVO },
+  cliente_pediu: { texto: "Clientes preferem falar com uma pessoa. Está tudo certo com o atendente." },
+  reclamacao: { texto: "A maior parte veio de reclamações. Vale ler essas conversas antes de mexer no atendente." },
+  falha: { texto: "Houve falhas ao responder. Confira a IA em Configurações.", acao: ACAO_CONFERIR_IA },
+};
+
+/**
+ * A frase de leitura do cartão de motivos: ela olha só para o motivo MAIS FREQUENTE do período (a
+ * primeira barra), porque o cartão existe para apontar um próximo passo, e três conselhos ao mesmo
+ * tempo não apontam nenhum. A lista já chega ordenada de `lib/metricas.ts`.
+ */
+export function leituraDosMotivos(motivos: { motivo: MotivoTransferencia; total: number }[]): LeituraDosMotivos {
+  const dominante = motivos[0];
+  return dominante ? LEITURA[dominante.motivo] : SEM_TRANSFERENCIAS;
+}

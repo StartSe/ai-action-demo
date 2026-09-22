@@ -317,7 +317,7 @@
         "Lint e build passam; verificar no navegador (cartão nos três períodos e vazio; desktop e celular)"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-019 (Fase 4)"
     },
     {

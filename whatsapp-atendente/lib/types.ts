@@ -64,6 +64,12 @@ export interface AssuntoMetricas {
   total: number;
 }
 
+/** Um motivo de transferência e quantas conversas do período pararam por ele. */
+export interface MotivoMetricas {
+  motivo: MotivoTransferencia;
+  total: number;
+}
+
 /**
  * Os números do atendimento em um período, do jeito que Início e Relatórios desenham. Fonte única:
  * lib/metricas.ts, com as definições de cada número documentadas no topo daquele arquivo.
@@ -78,6 +84,10 @@ export interface Metricas {
   /** Todos os dias do período, inclusive os sem conversa nenhuma, para o gráfico não ter buracos. */
   porDia: DiaMetricas[];
   assuntos: AssuntoMetricas[];
+  /** Por que a IA pediu ajuda no período, do motivo mais frequente para o menos (veja lib/metricas.ts). */
+  motivos: MotivoMetricas[];
+  /** Quantas mensagens não chegaram ao cliente no período (o provedor recusou o envio). */
+  naoEntregues: number;
   /** As conversas paradas esperando uma pessoa AGORA; não é filtrada pelo período (veja lib/metricas.ts). */
   atencao: Conversa[];
 }

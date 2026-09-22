@@ -478,7 +478,9 @@ export function conversasExemplo(): ConversaExemplo[] {
       numero: "5511994567890",
       nome: "Luciana Ferraz",
       status: "atencao",
-      motivo: "sem_informacao",
+      // As duas conversas em atenção da demonstração param por motivos DIFERENTES: é o que faz o cartão
+      // "Por que o atendente pediu ajuda" (Relatórios) nascer com mais de uma barra e com uma leitura.
+      motivo: "fora_do_escopo",
       assunto: "Tratamentos",
       mensagens: [
         { papel: "cliente", texto: "Faço clareamento tendo restauração na frente?", atras: 2 * DIA + 5 * HORA },
