@@ -232,5 +232,18 @@
    26
   ],
   "contrasteBranco": 5.55
+ },
+ "follow-up-de-decisao": {
+  "segmento": "Gestão",
+  "acento": "#2363a4",
+  "acento2": "#2b50e3",
+  "soft": "#e7f0f9",
+  "ink": "#0d365e",
+  "hsl": [
+   210,
+   65,
+   39
+  ],
+  "contrasteBranco": 6.19
  }
 }

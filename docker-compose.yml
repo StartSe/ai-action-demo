@@ -163,6 +163,13 @@ services:
     ports: ["3023:10000"]
     volumes: [precificador-dados:/app/data]
 
+  follow-up-de-decisao:
+    <<: *app
+    build: ./follow-up-de-decisao
+    image: ghcr.io/startse/follow-up-de-decisao:latest
+    ports: ["3026:10000"]
+    volumes: [follow-up-de-decisao-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -186,3 +193,4 @@ volumes:
   mapify-dados:
   predictive-harness-dados:
   precificador-dados:
+  follow-up-de-decisao-dados:
