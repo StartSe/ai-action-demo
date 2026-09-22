@@ -4,7 +4,12 @@ import { removalPlan, removeItems } from "@/lib/removal";
 import { captureSources } from "@/lib/captures";
 import { seed } from "@/lib/demo";
 import { setConfig } from "@/lib/store";
-import { organize, chat, artifact } from "@/lib/agent";
+import { chat, artifact } from "@/lib/agent";
+import {
+  enqueueOrganization,
+  processingState,
+  dismissProcessing,
+} from "@/lib/organization";
 import { execute, listTools } from "@/lib/zapier";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
@@ -12,7 +17,11 @@ export async function GET(req: Request) {
     const id = new URL(req.url).searchParams.get("revisions");
     return id
       ? revisions(id)
-      : { ...state(), sourceCaptures: captureSources() };
+      : {
+          ...state(),
+          sourceCaptures: captureSources(),
+          sourceProcessing: processingState(),
+        };
   });
 }
 export async function POST(req: Request) {
@@ -45,7 +54,9 @@ export async function POST(req: Request) {
         });
       }
       case "organize":
-        return organize(string(b.id, 100), req.signal);
+        return enqueueOrganization(b.ids ?? [string(b.id, 100)]);
+      case "dismiss-processing":
+        return dismissProcessing();
       case "chat":
         return chat(string(b.prompt, 6000), req.signal);
       case "artifact":

@@ -30,7 +30,7 @@ const server = spawn(
       PORT: port,
       HOSTNAME: "127.0.0.1",
       CONTA_DESLIGADA: "",
-      BRAIN_WORKER_DISABLED: "1",
+      BRAIN_WORKER_DISABLED: "",
       BRAIN_TEST_EXTRA_TOOLS: "60",
       NODE_OPTIONS: "",
       ZAPIER_MCP_URL: "",
@@ -122,6 +122,10 @@ try {
     .filter({ hasText: "Minha primeira memória" })
     .click();
   await page.getByRole("button", { name: "Organizar na wiki" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Abrir na wiki", exact: true })
+    .click();
   await page.getByRole("button", { name: "Editar", exact: true }).waitFor();
   await page.getByRole("button", { name: "Fechar", exact: true }).click();
   assert.equal(
@@ -163,6 +167,9 @@ try {
       "INSERT INTO capture_events(taskId,created,attempt,stage,level,message) VALUES(?,?,?,?,?,?)",
     ).run(id, iso, 1, "Teste", "info", "Evento da coleta");
   }
+  d.prepare(
+    "UPDATE capture_tasks SET status='running',owner='fixture',leaseUntil='2099-01-01' WHERE id='ux-queued'",
+  ).run();
   for (const n of [legacy, sibling])
     d.prepare(
       "INSERT INTO capture_steps(taskId,key,name,args,content,sourceId,created) VALUES(?,?,?,?,?,?,?)",

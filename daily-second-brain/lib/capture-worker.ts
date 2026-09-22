@@ -3,6 +3,7 @@ import { sourcePreview } from "./source-preview";
 import { BrainError } from "./api";
 import { note, save, rules } from "./brain";
 import { organize } from "./agent";
+import { claimOrganization, runOrganization } from "./organization";
 import { generate } from "./motor";
 import { zapierClient, listClientTools } from "./zapier";
 import type { AgentTool } from "./chatgpt";
@@ -399,6 +400,11 @@ export function startCaptureWorker() {
     worker.busy = true;
     try {
       queueDueSchedules();
+      const organization = claimOrganization(worker.owner);
+      if (organization) {
+        await runOrganization(organization, worker.owner);
+        return;
+      }
       const task = claimCapture(worker.owner);
       if (task) await runCapture(task, worker.owner);
     } catch {

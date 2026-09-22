@@ -395,8 +395,10 @@ export function claimCapture(
       "UPDATE capture_tasks SET status=CASE WHEN attempts<3 THEN 'queued' ELSE 'failed' END,phase='Execução interrompida',error=CASE WHEN attempts<3 THEN '' ELSE 'A coleta foi interrompida repetidamente. Retome quando a conexão estiver estável.' END,updated=?,owner=NULL,leaseUntil=NULL WHERE status='running' AND leaseUntil<=?",
     ).run(iso, iso);
     const active = d
-      .prepare("SELECT id FROM capture_tasks WHERE status='running'")
-      .get();
+      .prepare(
+        "SELECT id FROM capture_tasks WHERE status='running' UNION ALL SELECT id FROM organization_jobs WHERE status='running' AND leaseUntil>? LIMIT 1",
+      )
+      .get(iso);
     const next =
       !active &&
       d

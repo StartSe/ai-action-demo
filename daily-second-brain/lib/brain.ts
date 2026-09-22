@@ -21,6 +21,13 @@ export function db() {
       CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY, role TEXT NOT NULL, content TEXT NOT NULL, sources TEXT NOT NULL, created TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS actions(id TEXT PRIMARY KEY, name TEXT NOT NULL, args TEXT NOT NULL, status TEXT NOT NULL, result TEXT, created TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, started TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS organization_jobs(
+        sourceId TEXT PRIMARY KEY, id TEXT NOT NULL, status TEXT NOT NULL,
+        phase TEXT NOT NULL, error TEXT NOT NULL DEFAULT '', pageId TEXT,
+        created TEXT NOT NULL, updated TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
+        owner TEXT, leaseUntil TEXT, dismissed INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS organization_queue ON organization_jobs(status,created);
     `);
     ready = true;
   }
@@ -209,10 +216,16 @@ export function revisions(id: string) {
       .all(id) as { snapshot: string }[]
   ).map((r) => JSON.parse(r.snapshot) as Note);
 }
-export function markOrganized(id: string) {
+export function markOrganized(id: string, pageId?: string) {
   db()
     .prepare("UPDATE notes SET status='organized' WHERE id=? AND kind='raw'")
     .run(id);
+  if (pageId)
+    db()
+      .prepare(
+        `UPDATE organization_jobs SET status='done',phase='Organizada na wiki',error='',pageId=?,updated=?,owner=NULL,leaseUntil=NULL WHERE sourceId=?`,
+      )
+      .run(pageId, new Date().toISOString(), id);
 }
 export function clearDemo() {
   const all = notes();
@@ -227,6 +240,7 @@ export function clearDemo() {
   db().exec("BEGIN IMMEDIATE");
   try {
     for (const n of removed) {
+      db().prepare("DELETE FROM organization_jobs WHERE sourceId=?").run(n.id);
       db().prepare("DELETE FROM revisions WHERE note_id=?").run(n.id);
       db().prepare("DELETE FROM notes WHERE id=?").run(n.id);
     }

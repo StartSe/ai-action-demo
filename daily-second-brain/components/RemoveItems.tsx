@@ -72,6 +72,12 @@ export function RemoveItems({
               interrompidas.
             </p>
           )}
+          {plan.processing > 0 && (
+            <p>
+              A organização de {plan.processing} fonte(s) na fila ou em
+              andamento será interrompida.
+            </p>
+          )}
           <p className="muted">
             {plan.preserved > 0
               ? `${plan.preserved} fonte(s) já usada(s) na memória serão preservadas. `

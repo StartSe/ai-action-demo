@@ -1,4 +1,4 @@
-# Daily Second Brain · v1.4.0
+# Daily Second Brain · v1.5.0
 
 Uma memória pessoal conectada: capture o que chega, transforme em conhecimento e converse para criar novos resultados. A experiência combina um observatório de ideias com páginas Markdown, fontes rastreáveis, regras próprias e um assistente por texto ou voz.
 
@@ -42,12 +42,22 @@ Consultas conhecidas do Slack, incluindo **Find Public Channel**, **Retrieve Thr
 
 1. Crie sua conta. O guia abre automaticamente e pode ser retomado em **Ajustes → Primeiros passos**.
 2. Conecte ChatGPT ou OpenRouter e use **Testar IA e continuar**. O teste faz uma chamada real ao provedor escolhido.
-3. Use **Inserir meu primeiro texto** para começar sem outro aplicativo. Guarde uma nota, abra a fonte e escolha **Organizar na wiki**.
+3. Use **Inserir meu primeiro texto** para começar sem outro aplicativo. Guarde uma nota e escolha **Organizar** na caixa de entrada. Para várias fontes, marque as caixas e use **Organizar selecionadas**.
 4. Para coletar do Slack, abra **Quero coletar de aplicativos · opcional**, conecte o Zapier e selecione suas ferramentas de leitura. Use **Continuar com aplicativos** e peça, por exemplo: **“Obter as 4 últimas mensagens do canal do Slack tech-academy (C04KTMS2GEL) e organizar os pontos na wiki.”** Ajuste o canal para sua conta. Personalizar regras e conectar voz são opcionais.
 
 O pedido entra na fila e a tela mostra leitura das fontes e organização. A aba pode ser fechada. Ao concluir, abra as páginas criadas e confira os originais. **Repetir instrução** busca informações atuais em uma nova execução; **Retomar coleta** após falha reutiliza leituras já salvas e continua a organização.
 
 Em **Agendar**, escolha todos os dias, dias úteis ou um dia da semana, horário e fuso IANA. A próxima execução é exibida ao salvar. Rotinas podem ser editadas, pausadas, retomadas e excluídas sem apagar o histórico. Coletas e chamadas utilizam os limites/créditos dos provedores conectados.
+
+### Organizar memórias em segundo plano
+
+Na **Caixa de entrada**, use **Organizar** na linha de uma fonte ou selecione várias e clique em **Organizar selecionadas** (até 100 por solicitação e na fila). O botão **Organizar na wiki** dentro da fonte também adiciona à fila e permite fechar o modal imediatamente. Fontes que já estão em uma coleta ativa continuam sob responsabilidade dessa coleta.
+
+O painel **Processamento das memórias**, disponível em todas as seções, mostra quantas fontes terminaram, quantas entraram na wiki e quais falharam. Em **Acompanhar fontes**, consulte a etapa atual e use **Abrir na wiki** ao concluir. Avisos confirmam sucesso ou falha sem mudar a tela em que você está. Os filtros **Em processamento** e **Organização com falha** ajudam a localizar pendências.
+
+Pode fechar o modal, navegar, recarregar ou fechar a aba. O servidor continua trabalhando e o resultado permanece salvo. Uma falha preserva o original e libera a próxima fonte; **Tentar novamente** repete apenas a organização daquela fonte. **Limpar concluídas** recolhe os sucessos do painel; erros permanecem visíveis até serem resolvidos ou suas fontes serem excluídas. Se a conexão com o navegador cair, o painel avisa e tenta atualizar novamente.
+
+A organização usa a mesma execução sequencial das coletas para evitar alterações concorrentes na wiki. A fila de organização tem prioridade entre coletas, sem interromper uma coleta que já começou. Cada fonte tem até 8 minutos de execução. Após reinício, o servidor retoma trabalhos com lease expirado (90 segundos), até três tentativas automáticas; a página da wiki, o estado da fonte e a conclusão são salvos na mesma transação. Requer o servidor Node em execução e disco persistente, como as coletas.
 
 ### Excluir pendências
 
@@ -58,7 +68,7 @@ Páginas da wiki, fontes já organizadas ou referenciadas pela memória (inclusi
 
 ### Execução persistente
 
-O worker inicia com o servidor Next.js via `instrumentation.ts`, consulta a fila a cada 3 segundos e executa uma coleta por vez. Fila, etapas e recorrências ficam no SQLite do disco persistente. Não depende de visitas à página, cron externo ou uma requisição HTTP longa. Requer o servidor Node/Render em execução; hospedagem que suspende o processo não executa durante a suspensão.
+O worker inicia com o servidor Next.js via `instrumentation.ts`, consulta as filas a cada 3 segundos e executa uma organização de fonte ou coleta por vez. Fila, etapas e recorrências ficam no SQLite do disco persistente. Não depende de visitas à página, cron externo ou uma requisição HTTP longa. Requer o servidor Node/Render em execução; hospedagem que suspende o processo não executa durante a suspensão.
 
 Após reinício, tarefas com lease expirado (90 segundos) são retomadas, até três tentativas automáticas. Cada leitura concluída guarda uma etapa e sua fonte na mesma transação; a organização também grava a página e o progresso juntos. Cancelar interrompe novos resultados e preserva o que já foi salvo. O limite por execução é de 8 minutos e 16 leituras, com até 90 KB de resposta por chamada; pedidos maiores devem ser divididos.
 
@@ -129,3 +139,5 @@ node ../scripts/verificar-jargao.mjs daily-second-brain
 `tests/capture-controls-browser.mjs` valida seleção múltipla e em lote, confirmação e falha ao salvar, persistência após recarregar, histórico com 75 coletas e paginação de 23 rotinas, incluindo edição e exclusão na última página. Usa somente serviços simulados.
 
 Validação da experiência v1.4: `PLAYWRIGHT_MODULE=/caminho/playwright/index.mjs node tests/ux-browser.mjs` cobre início por texto, navegação, 10 mensagens Slack antigas, exclusão em cascata/seleção em lote, paginação e celular, com provedores locais simulados.
+
+Validação da experiência v1.5: `PLAYWRIGHT_MODULE=/caminho/playwright/index.mjs node tests/organization-browser.mjs` usa o build standalone e provedores locais simulados. Cobre organização individual e em lote, fechamento do modal e da aba durante execução, navegação livre, erro ao enfileirar com seleção preservada, falha por fonte e nova tentativa, desconexão do acompanhamento, layout móvel e reinício do servidor sem navegador. Os testes de contrato cobrem deduplicação, limite de fila, gravação atômica, lease e exclusão concorrente.
