@@ -98,10 +98,10 @@ export function BlocoEtiquetas({
     void gravar([...etiquetas, nome]);
   }
 
+  // Sem moldura nem título próprios: quem desenha os dois é o bloco do painel do contato (US-018),
+  // e um <h3> aqui repetiria a palavra "Etiquetas" logo abaixo dela mesma.
   return (
-    <section className="mt-4 pt-4 border-t border-line" aria-label="Etiquetas">
-      <h3 className="text-[13px] font-bold mb-2">Etiquetas</h3>
-
+    <div>
       {etiquetas.length > 0 && (
         <ul className="flex flex-wrap gap-1.5 mb-2">
           {etiquetas.map((nome) => (
@@ -177,7 +177,7 @@ export function BlocoEtiquetas({
           {erro}
         </p>
       )}
-    </section>
+    </div>
   );
 }
 

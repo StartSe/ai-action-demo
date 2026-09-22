@@ -356,10 +356,62 @@ export function Field({ label, htmlFor, hint, children }: { label: string; htmlF
   );
 }
 
-/** <details> com o mesmo espaçamento vertical dos Field; agrupa campos secundários fora do fluxo principal do painel. */
-export function MaisDetalhes({ titulo = "Mais detalhes", children }: { titulo?: string; children: ReactNode }) {
+const CHAVE_MAIS_DETALHES = "mais-detalhes:";
+
+/** O que a pessoa abriu ou fechou da última vez; nulo quando ela nunca mexeu neste bloco. */
+function blocoLembrado(chave?: string): boolean | null {
+  if (!chave || typeof window === "undefined") return null;
+  try {
+    const guardado = localStorage.getItem(CHAVE_MAIS_DETALHES + chave);
+    return guardado === null ? null : guardado === "1";
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * <details> com o mesmo espaçamento vertical dos Field; agrupa campos secundários fora do fluxo
+ * principal do painel. Sem nenhuma das duas propriedades abaixo ele nasce fechado e esquece tudo, que
+ * é o que quase toda tela quer de um "Mais detalhes".
+ *
+ * `aberto` muda só o estado INICIAL: o painel do contato abre os blocos no desktop, onde há uma coluna
+ * inteira para eles, e os deixa recolhidos no celular, onde cada bloco aberto empurra a conversa para
+ * baixo. `lembrarComo` guarda a escolha da pessoa em `localStorage`, para ela não repetir a mesma
+ * abertura em cada conversa. A leitura acontece na primeira renderização de propósito: quem usa isso
+ * só existe depois de a conversa chegar por consulta, então não há HTML do servidor para divergir.
+ */
+export function MaisDetalhes({
+  titulo = "Mais detalhes",
+  children,
+  aberto = false,
+  lembrarComo,
+}: {
+  titulo?: string;
+  children: ReactNode;
+  aberto?: boolean;
+  lembrarComo?: string;
+}) {
+  const [abertoAgora, setAbertoAgora] = useState(() => blocoLembrado(lembrarComo) ?? aberto);
   return (
-    <details className="group mb-4">
+    <details
+      className="group mb-4"
+      open={abertoAgora}
+      onToggle={(e) => {
+        const agora = e.currentTarget.open;
+        // O navegador dispara "toggle" também quando o React acaba de definir `open` na montagem, e
+        // gravar aí faria o bloco aberto por padrão no desktop virar a escolha da pessoa para as duas
+        // aparecerem abertas no celular. Só a mudança de verdade conta.
+        if (agora === abertoAgora) return;
+        setAbertoAgora(agora);
+        if (!lembrarComo) return;
+        try {
+          localStorage.setItem(CHAVE_MAIS_DETALHES + lembrarComo, agora ? "1" : "0");
+        } catch {
+          // Navegador sem armazenamento (aba anônima com tudo bloqueado): o bloco abre e fecha igual,
+          // só não lembra na próxima visita.
+        }
+      }}
+    >
       <summary className="text-[13px] font-semibold cursor-pointer select-none marker:content-none flex items-center gap-1.5">
         <span className="text-muted transition-transform group-open:rotate-90">›</span>
         {titulo}

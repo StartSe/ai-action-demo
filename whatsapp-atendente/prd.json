@@ -302,7 +302,7 @@
         "Lint e build passam; verificar no navegador (desktop 1400 e 1100, celular 390)"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-018 (Fase 4)"
     },
     {
