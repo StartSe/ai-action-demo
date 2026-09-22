@@ -29,6 +29,7 @@ const COLUNAS = [
   "Resolvida pela IA",
   "Tempo médio de resposta (segundos)",
   "Motivo da transferência",
+  "Etiquetas",
 ];
 
 const SEPARADOR = ";";
@@ -77,6 +78,9 @@ function linhaDaConversa(c: LinhaExportacao): string {
     c.resolvidaIA ? "Sim" : "Não",
     segundos(c.tempoMedioMs),
     c.motivoTransferencia ? rotuloMotivo(c.motivoTransferencia) : "",
+    // As etiquetas de uma conversa numa célula só, separadas por vírgula: o nome de uma etiqueta nunca
+    // tem vírgula dentro (lib/etiquetas.ts recusa), então quem abrir a planilha consegue separá-las.
+    c.etiquetas.join(", "),
   ]
     .map(campo)
     .join(SEPARADOR);

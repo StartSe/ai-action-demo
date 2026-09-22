@@ -32,7 +32,7 @@ import { rotuloContato, rotuloNumero } from "@/lib/rotulos";
 import { formatarTelefone } from "@/lib/telefone";
 import { rotuloMotivo } from "@/lib/transferencia";
 import { LIMITE_NOTA } from "@/lib/types";
-import type { Anexo, ConversaCompleta, MensagemDaConversa, StatusEntrega } from "@/lib/types";
+import type { Anexo, ConversaCompleta, Etiqueta, MensagemDaConversa, StatusEntrega } from "@/lib/types";
 
 /** Teto da altura do campo de escrever: ele cresce com o texto até aqui e depois passa a rolar. */
 const ALTURA_MAXIMA_CAMPO = 132;
@@ -400,6 +400,8 @@ export function ConversaAberta({
   corrigirUltima,
   onVoltar,
   onMudou,
+  etiquetasDaEmpresa,
+  onEtiquetasMudaram,
 }: {
   numero: string;
   /** Chegou por um link "Corrigir" do relatório diário: a última resposta da IA já abre em edição. */
@@ -407,6 +409,10 @@ export function ConversaAberta({
   onVoltar: () => void;
   /** A lista ao lado precisa saber que o status, a última mensagem ou as não lidas mudaram. */
   onMudou: () => void;
+  /** As etiquetas que a conta já tem, com a cor de cada uma (a tela de fora é quem as consulta). */
+  etiquetasDaEmpresa: Etiqueta[];
+  /** Uma etiqueta nova nasceu nesta conversa: a linha de filtro da lista precisa saber. */
+  onEtiquetasMudaram: () => void;
 }) {
   const [conversa, setConversa] = useState<ConversaCompleta | null>(null);
   const [atendente, setAtendente] = useState("");
@@ -734,6 +740,29 @@ export function ConversaAberta({
     }
   }
 
+  /**
+   * Grava as etiquetas desta conversa (o bloco "Etiquetas" do painel). A lista vai inteira, e não "some
+   * uma"/"soma outra": é o estado final que o painel mostra. Uma etiqueta que a conta ainda não tinha
+   * nasce na rota, então a linha de filtro da lista é avisada para relê-las.
+   */
+  async function salvarEtiquetas(etiquetas: string[]) {
+    try {
+      const r = await fetch(`/api/conversas/${encodeURIComponent(numero)}/etiquetas`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ etiquetas }),
+      });
+      if (!r.ok) throw r;
+      const dados = await r.json();
+      aplicar(dados.conversa);
+      setErro(null);
+      onEtiquetasMudaram();
+      onMudouRef.current();
+    } catch (e) {
+      setErro(await lerErro(e));
+    }
+  }
+
   /** "Apagar memória": o atendente esquece este cliente, mas a conversa continua onde está. */
   async function apagarMemoria() {
     const ok = await confirmar("Apagar o que o atendente lembra deste cliente? As mensagens da conversa continuam aqui.", { confirmarRotulo: "Apagar" });
@@ -798,6 +827,8 @@ export function ConversaAberta({
     onApagar: apagar,
     onSalvarMemoria: salvarMemoria,
     onApagarMemoria: apagarMemoria,
+    etiquetasDaEmpresa,
+    onSalvarEtiquetas: salvarEtiquetas,
   };
 
   return (

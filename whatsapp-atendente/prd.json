@@ -271,7 +271,7 @@
         "Lint e build passam; verificar no navegador (bloco do painel, chips na lista, filtro; desktop e celular)"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-016 (Fase 4)"
     },
     {

@@ -13,8 +13,11 @@ import { conversasExemplo } from "./demo";
 import { textoParaIA } from "./midia";
 import { publicar } from "./eventos";
 import { abrirBanco, getConfig, setConfig } from "./store";
+import { erroDeEtiqueta, normalizarEtiqueta, proximaCor } from "./etiquetas";
 import { ehMotivo, MOTIVO_PADRAO, notaDaTransferencia, rotuloMotivo, type MotivoTransferencia } from "./transferencia";
 import {
+  MAX_ETIQUETAS,
+  MAX_ETIQUETAS_POR_CONVERSA,
   PAPEIS_DE_CONVERSA,
   type CanalOrigem,
   type Conversa,
@@ -24,6 +27,8 @@ import {
   type MensagemDaConversa,
   type PapelMensagem,
   type Periodo,
+  type Etiqueta,
+  type EtiquetaEmUso,
   type StatusConversa,
   type StatusEntrega,
 } from "./types";
@@ -51,6 +56,7 @@ type LinhaConversa = {
   esperando_desde: string | null;
   resumo: string | null;
   resumo_ate_id: number | null;
+  etiquetas: string;
   criado_em: string;
   atualizado_em: string;
 };
@@ -106,6 +112,7 @@ function banco() {
       esperando_desde TEXT NULL,
       resumo TEXT NULL,
       resumo_ate_id INTEGER NULL,
+      etiquetas TEXT NOT NULL DEFAULT '[]',
       criado_em TEXT NOT NULL DEFAULT (datetime('now')),
       atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
@@ -171,6 +178,12 @@ function banco() {
     } catch { /* coluna já existe */ }
     try {
       d.exec(`ALTER TABLE conversas ADD COLUMN resumo_ate_id INTEGER NULL`);
+    } catch { /* coluna já existe */ }
+    // 0.3.0 (US-016): as etiquetas da equipe nesta conversa, em JSON (`["orçamento"]`). A lista de
+    // etiquetas da instância, com a cor de cada uma, mora na chave `ETIQUETAS` (getConfig/setConfig):
+    // aqui ficam só os nomes, para renomear ou recolorir uma etiqueta não obrigar a reescrever linha.
+    try {
+      d.exec(`ALTER TABLE conversas ADD COLUMN etiquetas TEXT NOT NULL DEFAULT '[]'`);
     } catch { /* coluna já existe */ }
     criado = true;
   }
@@ -240,7 +253,20 @@ function paraRegistro(l: LinhaConversa, ultimaCliente: string | null): ConversaR
     motivoTransferencia: ehMotivo(l.motivo_transferencia) ? l.motivo_transferencia : null,
     esperandoDesde: l.esperando_desde ? paraIso(l.esperando_desde) : null,
     resumo: l.resumo?.trim() ? l.resumo : null,
+    etiquetas: lerEtiquetas(l.etiquetas),
   };
+}
+
+/** Os nomes gravados na coluna; lista vazia quando a conversa é anterior à coluna ou o JSON não abre. */
+function lerEtiquetas(bruto: string | null): string[] {
+  if (!bruto) return [];
+  try {
+    const lista = JSON.parse(bruto) as unknown;
+    return Array.isArray(lista) ? lista.filter((n): n is string => typeof n === "string") : [];
+  } catch (err) {
+    console.error("Não foi possível ler as etiquetas de uma conversa:", err);
+    return [];
+  }
 }
 
 function linha(numero: string): LinhaConversa | undefined {
@@ -357,10 +383,12 @@ export interface FiltroConversas {
   status?: StatusConversa;
   /** Casa com o número, o nome do contato ou o texto de qualquer mensagem da conversa. */
   busca?: string;
+  /** Só as conversas com esta etiqueta (uma por vez, como a linha de chips da tela). */
+  etiqueta?: string;
 }
 
 /** As conversas da mais recente para a mais antiga, com a última pergunta e a última resposta de cada. */
-export function listarConversas({ desde, status, busca }: FiltroConversas = {}): Conversa[] {
+export function listarConversas({ desde, status, busca, etiqueta }: FiltroConversas = {}): Conversa[] {
   const condicoes: string[] = [];
   const valores: (string | number)[] = [];
   if (desde) {
@@ -404,10 +432,12 @@ export function listarConversas({ desde, status, busca }: FiltroConversas = {}):
         motivoTransferencia: registro.motivoTransferencia,
         esperandoDesde: registro.esperandoDesde,
         temNotas: Number(l.tem_notas) > 0,
+        etiquetas: registro.etiquetas,
       } satisfies Conversa;
     })
-    // O status filtrado é o da leitura, então o filtro vem depois do banco, nunca no WHERE.
-    .filter((c) => !status || c.status === status);
+    // O status filtrado é o da leitura, então o filtro vem depois do banco, nunca no WHERE. A etiqueta
+    // é filtrada aqui pelo mesmo motivo prático: os nomes moram num JSON, não numa coluna por etiqueta.
+    .filter((c) => (!status || c.status === status) && (!etiqueta || c.etiquetas.includes(etiqueta)));
 }
 
 /** Uma pergunta do cliente já gravada, com a resposta que veio logo depois (base de `perguntasPendentes`). */
@@ -840,6 +870,108 @@ export function definirAssunto(numero: string, assunto: string): void {
   avisarConversa(numero);
 }
 
+// --- Etiquetas ------------------------------------------------------------------------------
+//
+// Duas coisas, no mesmo assunto: a LISTA da instância (o nome e a cor de cada etiqueta que a equipe
+// já criou, na chave `ETIQUETAS`) e as etiquetas DE CADA CONVERSA (só os nomes, na coluna JSON). A
+// lista não é um cadastro que alguém preencha antes: uma etiqueta nasce na primeira vez que é escrita
+// no painel do contato, e a cor vem da paleta, na ordem (lib/etiquetas.ts).
+
+const CHAVE_ETIQUETAS = "ETIQUETAS";
+
+/** As etiquetas da instância, na ordem em que foram criadas (que é a ordem das cores da paleta). */
+export function etiquetasDaEmpresa(): Etiqueta[] {
+  const bruto = getConfig(CHAVE_ETIQUETAS);
+  if (!bruto) return [];
+  try {
+    const lista = JSON.parse(bruto) as unknown;
+    if (!Array.isArray(lista)) return [];
+    return lista
+      .filter((e): e is Etiqueta => Boolean(e) && typeof (e as Etiqueta).nome === "string")
+      .map((e, i) => ({ nome: e.nome, cor: e.cor ?? proximaCor(i) }));
+  } catch (err) {
+    console.error("Não foi possível ler a lista de etiquetas:", err);
+    return [];
+  }
+}
+
+/** As etiquetas da instância com quantas conversas usam cada uma (a linha de filtro e o diálogo). */
+export function etiquetasEmUso(): EtiquetaEmUso[] {
+  const linhas = banco().prepare("SELECT etiquetas FROM conversas").all() as { etiquetas: string }[];
+  const contagem = new Map<string, number>();
+  for (const l of linhas) {
+    for (const nome of lerEtiquetas(l.etiquetas)) contagem.set(nome, (contagem.get(nome) ?? 0) + 1);
+  }
+  return etiquetasDaEmpresa().map((e) => ({ ...e, usos: contagem.get(e.nome) ?? 0 }));
+}
+
+function gravarEtiquetasDaEmpresa(lista: Etiqueta[]): void {
+  setConfig(CHAVE_ETIQUETAS, JSON.stringify(lista));
+}
+
+/**
+ * O que impede estas etiquetas de serem gravadas nesta conversa, em uma frase de negócio — ou `null`
+ * quando elas podem. Confere o tamanho de cada nome, o teto por conversa e o teto da instância (as
+ * que ainda não existem seriam criadas agora).
+ */
+export function erroDeEtiquetas(nomes: string[]): string | null {
+  if (nomes.length > MAX_ETIQUETAS_POR_CONVERSA) return `Até ${MAX_ETIQUETAS_POR_CONVERSA} etiquetas por conversa.`;
+  for (const nome of nomes) {
+    const erro = erroDeEtiqueta(nome);
+    if (erro) return erro;
+  }
+  const existentes = etiquetasDaEmpresa().map((e) => e.nome);
+  const novas = nomes.filter((n) => !existentes.includes(n)).length;
+  if (existentes.length + novas > MAX_ETIQUETAS) {
+    return `Já são ${MAX_ETIQUETAS} etiquetas nesta conta. Apague alguma antes de criar outra.`;
+  }
+  return null;
+}
+
+/**
+ * Grava as etiquetas desta conversa, criando na lista da instância as que ainda não existem (com a
+ * cor seguinte da paleta). Como `definirAssunto`, não encosta em `atualizado_em`: etiquetar não é
+ * novidade na conversa e não pode fazê-la pular para o topo da lista. Quem chama já validou por
+ * `erroDeEtiquetas`; os nomes chegam já normalizados, e os repetidos saem aqui.
+ */
+export function definirEtiquetas(numero: string, nomes: string[]): string[] {
+  const limpos: string[] = [];
+  for (const bruto of nomes) {
+    const nome = normalizarEtiqueta(bruto);
+    if (nome && !limpos.includes(nome)) limpos.push(nome);
+  }
+  const daEmpresa = etiquetasDaEmpresa();
+  for (const nome of limpos) {
+    if (daEmpresa.some((e) => e.nome === nome)) continue;
+    daEmpresa.push({ nome, cor: proximaCor(daEmpresa.length) });
+  }
+  gravarEtiquetasDaEmpresa(daEmpresa);
+  banco().prepare("UPDATE conversas SET etiquetas = ? WHERE numero = ?").run(JSON.stringify(limpos), numero);
+  avisarConversa(numero);
+  return limpos;
+}
+
+/**
+ * Apaga uma etiqueta da instância e de todas as conversas em que ela estava (a tela pergunta antes,
+ * com a contagem). Devolve de quantas conversas ela saiu; 0 quando ela não existia.
+ */
+export function apagarEtiqueta(nome: string): number {
+  const alvo = normalizarEtiqueta(nome);
+  gravarEtiquetasDaEmpresa(etiquetasDaEmpresa().filter((e) => e.nome !== alvo));
+  const linhas = banco().prepare("SELECT numero, etiquetas FROM conversas").all() as { numero: string; etiquetas: string }[];
+  let quantas = 0;
+  for (const l of linhas) {
+    const atuais = lerEtiquetas(l.etiquetas);
+    if (!atuais.includes(alvo)) continue;
+    banco()
+      .prepare("UPDATE conversas SET etiquetas = ? WHERE numero = ?")
+      .run(JSON.stringify(atuais.filter((n) => n !== alvo)), l.numero);
+    avisarConversa(l.numero);
+    quantas += 1;
+  }
+  return quantas;
+}
+
 /**
  * O resumo do começo desta conversa e até que mensagem ele já cobre (lib/memoria.ts o escreve com a
  * IA). `ateId` é 0 quando ainda não há resumo nenhum: toda mensagem da conversa é "não resumida".
@@ -983,6 +1115,9 @@ export function semearExemplosSeVazio({ numeroConectado, atendente = "Bia" }: { 
       const pergunta = [...c.mensagens].reverse().find((m) => m.papel === "cliente")?.texto;
       registrarNota(c.numero, notaDaTransferencia({ motivo, pergunta, atendente }), fim);
     }
+    // As etiquetas da demonstração criam a lista da instância como qualquer outra (a cor vem da paleta,
+    // na ordem): quem abre o app pela primeira vez vê os chips na lista e a linha de filtro funcionando.
+    if (c.etiquetas?.length) definirEtiquetas(c.numero, c.etiquetas);
     banco()
       .prepare("UPDATE conversas SET nao_lidas = ?, atualizado_em = ?, esperando_desde = ? WHERE numero = ?")
       .run(c.naoLidas ?? 0, paraTextoDeBanco(fim), c.status === "atencao" ? paraTextoDeBanco(fim) : null, c.numero);

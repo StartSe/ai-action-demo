@@ -16,10 +16,11 @@
 // `ConversaAberta` — o diálogo de confirmação e a atualização da conversa moram lá, num lugar só.
 import { useState, type ReactNode } from "react";
 import { Avatar, DesenhoOrigem } from "./ContatoVisual";
+import { BlocoEtiquetas } from "./Etiquetas";
 import { MaisDetalhes } from "./ui";
 import { data, numero as formatarNumero } from "@/lib/formato";
 import { classeStatus, haQuantoTempo, numeroInterno, rotuloContato, rotuloNumero, rotuloOrigem, rotuloStatus } from "@/lib/rotulos";
-import { LIMITE_MEMORIA, PAPEIS_DE_CONVERSA, type ContatoLembrado, type ConversaCompleta } from "@/lib/types";
+import { LIMITE_MEMORIA, PAPEIS_DE_CONVERSA, type ContatoLembrado, type ConversaCompleta, type Etiqueta } from "@/lib/types";
 
 export interface DadosDoContato {
   conversa: ConversaCompleta;
@@ -31,6 +32,10 @@ export interface DadosDoContato {
   onSalvarMemoria: (memoria: string) => Promise<void>;
   /** "Apagar memória": pergunta antes (o diálogo vive em ConversaAberta) e esquece este cliente. */
   onApagarMemoria: () => void;
+  /** As etiquetas que a conta já tem (com a cor de cada uma), para os chips e para as sugestões. */
+  etiquetasDaEmpresa: Etiqueta[];
+  /** Grava a lista inteira de etiquetas desta conversa (a rota devolve a conversa já atualizada). */
+  onSalvarEtiquetas: (etiquetas: string[]) => Promise<void>;
 }
 
 function Linha({ rotulo, children }: { rotulo: string; children: ReactNode }) {
@@ -124,7 +129,7 @@ function Memoria({ contato, agindo, onSalvarMemoria, onApagarMemoria }: Pick<Dad
 }
 
 /** O conteúdo em si; as duas aparências abaixo só o embrulham. */
-function Conteudo({ conversa, agindo, onResolver, onApagar, onSalvarMemoria, onApagarMemoria }: DadosDoContato) {
+function Conteudo({ conversa, agindo, onResolver, onApagar, onSalvarMemoria, onApagarMemoria, etiquetasDaEmpresa, onSalvarEtiquetas }: DadosDoContato) {
   const contato = conversa.contato;
   // O nome que o cliente deu ao atendente vale mais que o do canal: o WhatsApp mostra o que a pessoa
   // escreveu no perfil dela ("Casa", "Jr"), e quem se apresentou como "Paulo Andrade" é o Paulo.
@@ -152,6 +157,10 @@ function Conteudo({ conversa, agindo, onResolver, onApagar, onSalvarMemoria, onA
           {rotuloOrigem(conversa.origem)}
         </span>
       </div>
+
+      {/* As etiquetas vêm logo abaixo de quem é o contato: elas são o que a equipe escreveu sobre esta
+          conversa, e é por elas que ela vai procurá-la depois na lista. */}
+      <BlocoEtiquetas etiquetas={conversa.etiquetas} daEmpresa={etiquetasDaEmpresa} agindo={agindo} onSalvar={onSalvarEtiquetas} />
 
       <dl className="mt-4">
         <Linha rotulo="Nome">{nome}</Linha>

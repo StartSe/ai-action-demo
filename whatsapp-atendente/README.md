@@ -136,6 +136,7 @@ components/PersonaBrief.tsx               "Comece descrevendo seu negócio": ger
 components/CartaoFerramenta.tsx           os cartões com interruptor da seção Ferramentas
 components/PorQueRespondeu.tsx            "Por que respondeu assim": fontes, ferramentas e tempo de cada resposta
 components/RespostasRapidas.tsx           respostas rápidas: o painel do atalho "/" e o diálogo que as cadastra
+components/Etiquetas.tsx                  etiquetas: chips da lista, bloco do painel e a linha que filtra
 components/Celular.tsx                    celular da tela, com as bolhas da conversa de teste
 components/useEventos.ts                  liga as telas no fluxo de avisos, com consulta de reserva de 30 s
 components/ui.tsx                         componentes visuais deste app (camada de produto própria)
@@ -148,6 +149,7 @@ lib/eventos.ts                            emissor dos avisos de mudança (quem e
 lib/anexos.ts                             dono da tabela `anexos`: o que o cliente manda que não é texto
 lib/midia.ts                              transcreve o áudio, descreve a foto e lê o documento para a IA
 lib/memoria.ts                            resumo rolante da conversa e o que o atendente lembra de cada cliente
+lib/etiquetas.ts                          regras das etiquetas (nome, cor da paleta, sugestões), sem banco
 lib/persona.ts                            monta o atendente a partir do brief (e lê o site, quando informado)
 lib/persona-exemplos.ts                   cinco atendentes prontos (sem IA) e os exemplos do passo 1
 lib/base-modelo.ts                        modelo da base de conhecimento, um por objetivo
@@ -362,6 +364,23 @@ formulário de uma nova. O atalho é normalizado ao salvar (a barra da frente, o
 números e hífen, não pode repetir, e o texto cabe em 1.000 caracteres. Em modo demonstração, três
 respostas (`/horario`, `/endereco`, `/obrigado`) nascem com as conversas de exemplo e somem com elas —
 uma apagada à mão não volta, e uma editada pela equipe deixa de ser de demonstração.
+
+### Etiquetas
+
+Além do assunto (que o atendente escolhe sozinho de uma lista fixa), a equipe pode marcar uma conversa
+com as palavras dela — "orçamento", "reclamação", "VIP". No painel do contato, o bloco **"Etiquetas"**
+mostra as desta conversa (cada uma com um "×" que a tira) e um campo que soma outra: escreva a palavra
+e tecle **Enter**. Enquanto você digita, as etiquetas que a conta já tem aparecem abaixo para serem
+escolhidas — é o que impede a mesma ideia de virar "orçamento", "Orçamento" e "orcamento" separadas.
+
+São até **5 etiquetas por conversa** e **20 na conta**. Não há cadastro a preencher antes: a etiqueta
+nasce na primeira vez que é escrita, e a cor vem de uma paleta fixa de seis tons, na ordem.
+
+Na lista de Conversas, cada linha mostra até duas etiquetas (o resto vira "+2") e, acima da lista, uma
+linha de chips filtra por uma delas de cada vez — o filtro fica no endereço (`?etiqueta=`), então ele
+sobrevive a recarregar a página e pode ser mandado para alguém. O link **"Organizar"** abre a lista
+completa, com em quantas conversas cada etiqueta está e o "Apagar", que a tira da conta e de todas as
+conversas (as conversas em si continuam onde estão). A planilha de Relatórios tem a coluna "Etiquetas".
 
 ### Documentos e busca para atendimento
 

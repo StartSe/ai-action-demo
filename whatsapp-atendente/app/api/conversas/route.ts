@@ -1,5 +1,6 @@
 import { aiEnabled, meta } from "@/lib/ai";
 import { contarExemplos, inicioDoPeriodo, listarConversas, semearExemplosSeVazio } from "@/lib/conversas";
+import { normalizarEtiqueta } from "@/lib/etiquetas";
 import { getConfig } from "@/lib/estado";
 import { WHATSAPP } from "@/lib/integracoes";
 import { sincronizarContatosDeExemplo } from "@/lib/memoria";
@@ -32,8 +33,11 @@ export async function GET(req: Request) {
   const desde = inicioDoPeriodo(lerPeriodo(params.get("periodo")));
   const busca = params.get("q") ?? undefined;
   const status = lerStatus(params.get("status"));
+  // A etiqueta filtra junto do período e da busca (e antes dos contadores das abas): ela é um recorte
+  // da lista, e não uma aba — quem filtra por "orçamento" quer ver quantas dessas precisam de atenção.
+  const etiqueta = normalizarEtiqueta(params.get("etiqueta") ?? "") || undefined;
 
-  const doPeriodo = listarConversas({ desde, busca });
+  const doPeriodo = listarConversas({ desde, busca, etiqueta });
   const contadores = {
     todas: doPeriodo.length,
     humano: doPeriodo.filter((c) => c.status === "humano").length,

@@ -228,6 +228,8 @@ export interface LinhaExportacao {
   nomeInformado: string | null;
   email: string | null;
   telefoneRetorno: string | null;
+  /** As etiquetas que a equipe pôs nesta conversa (lib/etiquetas.ts); lista vazia quando não há nenhuma. */
+  etiquetas: string[];
 }
 
 type LinhaAgregada = {
@@ -284,6 +286,7 @@ export function linhasParaExportar(periodo: PeriodoMetricas): LinhaExportacao[] 
         nomeInformado: contato?.nomeInformado ?? null,
         email: contato?.email ?? null,
         telefoneRetorno: contato?.telefoneRetorno ?? null,
+        etiquetas: c.etiquetas,
       } satisfies LinhaExportacao;
     });
 }

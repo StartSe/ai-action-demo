@@ -216,6 +216,8 @@ export interface Conversa {
   esperandoDesde: string | null;
   /** A conversa tem pelo menos uma nota interna: a lista mostra a marca sem abrir a conversa. */
   temNotas: boolean;
+  /** As etiquetas da equipe nesta conversa (lib/etiquetas.ts); a lista mostra as duas primeiras. */
+  etiquetas: string[];
 }
 
 export interface MensagemChat {
@@ -350,6 +352,8 @@ export interface ConversaCompleta {
    * então `lib/conversas.ts` sempre devolve `null` aqui — ver lib/memoria.ts:comContato.
    */
   contato: ContatoLembrado | null;
+  /** As etiquetas da equipe nesta conversa (lib/etiquetas.ts); só nomes, a cor vem da lista da instância. */
+  etiquetas: string[];
   mensagens: MensagemDaConversa[];
 }
 
@@ -403,6 +407,33 @@ export const LIMITE_TEXTO_RAPIDO = 1000;
 /** Tamanho do atalho (o que vem depois da barra): curto o bastante para valer a pena digitar. */
 export const MIN_ATALHO = 2;
 export const LIMITE_ATALHO = 30;
+
+/**
+ * As seis cores de etiqueta da paleta fixa (as classes `.etiqueta-*` de app/globals.css). Uma etiqueta
+ * nova recebe a cor seguinte da lista, em ordem: ninguém escolhe cor, porque escolher cor é trabalho
+ * que não ajuda a separar conversa nenhuma.
+ */
+export type CorEtiqueta = "azul" | "verde" | "ambar" | "roxo" | "rosa" | "cinza";
+
+/** Uma palavra da equipe para separar conversas do jeito dela ("orçamento", "reclamação", "VIP"). */
+export interface Etiqueta {
+  nome: string;
+  cor: CorEtiqueta;
+}
+
+/** Quantas conversas da instância usam esta etiqueta hoje (`GET /api/etiquetas`). */
+export interface EtiquetaEmUso extends Etiqueta {
+  usos: number;
+}
+
+/** Cinco por conversa: mais que isso deixa de separar e vira decoração na linha da lista. */
+export const MAX_ETIQUETAS_POR_CONVERSA = 5;
+
+/** Vinte por instância: a linha de filtro precisa caber na tela e ser lida de uma vez. */
+export const MAX_ETIQUETAS = 20;
+
+/** Tamanho do nome de uma etiqueta: uma palavra ou duas, nunca uma frase. */
+export const LIMITE_ETIQUETA = 24;
 
 /** Entrada/saída de registros antigos do tipo "atendimento" em lib/historico.ts. Desde a US-003 as
  * conversas vivem no banco (lib/conversas.ts) e nada novo é salvo assim; o tipo continua porque

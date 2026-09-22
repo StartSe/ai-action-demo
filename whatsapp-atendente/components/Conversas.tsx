@@ -16,12 +16,13 @@ import { useRouter } from "next/navigation";
 import { AvisoConversasExemplo } from "./AvisoExemplo";
 import { ConversaAberta } from "./ConversaAberta";
 import { Avatar, DesenhoOrigem } from "./ContatoVisual";
+import { ChipsEtiqueta, useFiltroEtiquetas } from "./Etiquetas";
 import { Empty, ErrorBox, IlustracaoConversa, Topbar, lerErro, useStatus, type ErroLido } from "./ui";
 import { INTERVALO_RESERVA_MS, useEventos, useRecargaJunta, type EventoDaTela } from "./useEventos";
 import { soConversasDeExemplo } from "@/lib/demo";
 import { navegacaoComContador } from "@/lib/navegacao";
 import { PERIODOS, PERIODO_PADRAO, classeStatus, horaOuDia, lerPeriodo, previaMensagem, rotuloContato, rotuloPeriodo, rotuloStatus } from "@/lib/rotulos";
-import type { Conversa, Periodo } from "@/lib/types";
+import type { Conversa, Etiqueta, Periodo } from "@/lib/types";
 
 /** As três abas da lista; "todas" não filtra nada, as outras duas valem um status da conversa. */
 type Aba = "todas" | "humano" | "atencao";
@@ -40,7 +41,17 @@ function lerAba(valor: string | null): Aba {
   return ABAS.some((a) => a.id === valor) ? (valor as Aba) : "todas";
 }
 
-function LinhaConversa({ conversa, selecionada, onEscolher }: { conversa: Conversa; selecionada: boolean; onEscolher: () => void }) {
+function LinhaConversa({
+  conversa,
+  selecionada,
+  etiquetasDaEmpresa,
+  onEscolher,
+}: {
+  conversa: Conversa;
+  selecionada: boolean;
+  etiquetasDaEmpresa: Etiqueta[];
+  onEscolher: () => void;
+}) {
   const primeiraLinha = previaMensagem(conversa.ultima_mensagem || "").split("\n")[0];
   return (
     <li>
@@ -73,6 +84,13 @@ function LinhaConversa({ conversa, selecionada, onEscolher }: { conversa: Conver
               </span>
             )}
           </span>
+          {/* As etiquetas ficam numa linha própria: na de cima já estão o status, a origem e a marca de
+              nota, e um quarto grupo de chips ali deixaria de ser lido. */}
+          {conversa.etiquetas.length > 0 && (
+            <span className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+              <ChipsEtiqueta nomes={conversa.etiquetas} daEmpresa={etiquetasDaEmpresa} />
+            </span>
+          )}
         </span>
       </button>
     </li>
@@ -133,29 +151,34 @@ export function Conversas() {
   // escolhida abre já em edição. Ele fica no endereço (não some ao trocar de conversa) porque é a
   // barra de endereço que manda nesta tela.
   const [corrigir, setCorrigir] = useState(false);
+  /** A etiqueta escolhida na linha de chips; `null` quando a lista não está filtrada por nenhuma. */
+  const [etiqueta, setEtiqueta] = useState<string | null>(null);
   const [itens, setItens] = useState<Conversa[] | null>(null);
   const [contadores, setContadores] = useState<Contadores>(SEM_CONVERSAS);
   const [erroLista, setErroLista] = useState<ErroLido | null>(null);
 
   /** O endereço é a fonte da verdade da lista: toda escolha passa por aqui antes de virar estado. */
-  function irPara(mudancas: { periodo?: Periodo; aba?: Aba; busca?: string; numero?: string | null }) {
+  function irPara(mudancas: { periodo?: Periodo; aba?: Aba; busca?: string; numero?: string | null; etiqueta?: string | null }) {
     const params = new URLSearchParams(location.search);
     const escrever = (chave: string, valor: string) => (valor ? params.set(chave, valor) : params.delete(chave));
     if (mudancas.periodo !== undefined) escrever("periodo", mudancas.periodo);
     if (mudancas.aba !== undefined) escrever("aba", mudancas.aba === "todas" ? "" : mudancas.aba);
     if (mudancas.busca !== undefined) escrever("q", mudancas.busca);
     if (mudancas.numero !== undefined) escrever("numero", mudancas.numero ?? "");
+    if (mudancas.etiqueta !== undefined) escrever("etiqueta", mudancas.etiqueta ?? "");
     history.pushState(null, "", `${location.pathname}${params.toString() ? `?${params}` : ""}`);
     if (mudancas.periodo !== undefined) setPeriodo(mudancas.periodo);
     if (mudancas.aba !== undefined) setAba(mudancas.aba);
     if (mudancas.busca !== undefined) setBusca(mudancas.busca);
     if (mudancas.numero !== undefined) setNumero(mudancas.numero ?? null);
+    if (mudancas.etiqueta !== undefined) setEtiqueta(mudancas.etiqueta ?? null);
   }
 
   const carregar = useCallback(async () => {
     const params = new URLSearchParams({ periodo });
     if (aba !== "todas") params.set("status", aba);
     if (busca) params.set("q", busca);
+    if (etiqueta) params.set("etiqueta", etiqueta);
     try {
       const r = await fetch(`/api/conversas?${params}`);
       if (!r.ok) throw r;
@@ -167,7 +190,7 @@ export function Conversas() {
       setItens([]);
       setErroLista(await lerErro(e));
     }
-  }, [periodo, aba, busca]);
+  }, [periodo, aba, busca, etiqueta]);
 
   // Abertura da tela: o que vale é o que está na barra de endereço. A carga inicial sai do corpo do
   // efeito por um setTimeout(0), mesmo padrão de components/setup.tsx (regra set-state-in-effect).
@@ -181,6 +204,7 @@ export function Conversas() {
       setDigitado(termo);
       setNumero(params.get("numero"));
       setCorrigir(params.get("corrigir") === "1");
+      setEtiqueta(params.get("etiqueta"));
       setPronto(true);
     }, 0);
   }, []);
@@ -196,6 +220,7 @@ export function Conversas() {
       setDigitado(termo);
       setNumero(params.get("numero"));
       setCorrigir(params.get("corrigir") === "1");
+      setEtiqueta(params.get("etiqueta"));
     }
     window.addEventListener("popstate", aoNavegar);
     return () => window.removeEventListener("popstate", aoNavegar);
@@ -237,8 +262,17 @@ export function Conversas() {
     return () => clearInterval(t);
   }, [reserva, carregar]);
 
+  // As etiquetas da conta: a linha de chips que filtra, o diálogo que organiza e a cor de cada chip da
+  // lista saem daqui. Uma consulta só para a tela inteira — o painel do contato as recebe por prop.
+  const {
+    daEmpresa: etiquetasDaEmpresa,
+    recarregar: recarregarEtiquetas,
+    Filtro: FiltroEtiquetas,
+    Dialogo: DialogoEtiquetas,
+  } = useFiltroEtiquetas({ ativa: etiqueta, onFiltrar: (nome) => irPara({ etiqueta: nome }) });
+
   const lista = itens ?? [];
-  const vazioDeVerdade = pronto && itens !== null && contadores.todas === 0 && !busca;
+  const vazioDeVerdade = pronto && itens !== null && contadores.todas === 0 && !busca && !etiqueta;
 
   return (
     <>
@@ -331,15 +365,23 @@ export function Conversas() {
               ))}
             </div>
 
+            {FiltroEtiquetas && <div className={`min-[768px]:col-span-2 -mt-2 ${numero ? "max-md:hidden" : ""}`}>{FiltroEtiquetas}</div>}
+
             <section className={`card overflow-hidden ${numero ? "max-md:hidden" : ""}`} aria-label="Lista de conversas">
               {itens === null ? (
                 <LinhasFalsas />
               ) : lista.length === 0 ? (
-                <p className="px-4 py-8 text-center text-[13px] text-muted">Nenhuma conversa com esses filtros. Experimente outro período ou limpe a busca.</p>
+                <p className="px-4 py-8 text-center text-[13px] text-muted">Nenhuma conversa com esses filtros. Experimente outro período, outra etiqueta ou limpe a busca.</p>
               ) : (
                 <ul className="max-h-[calc(100vh-280px)] max-md:max-h-none overflow-y-auto [&>li:last-child>button]:border-b-0">
                   {lista.map((c) => (
-                    <LinhaConversa key={c.numero} conversa={c} selecionada={c.numero === numero} onEscolher={() => irPara({ numero: c.numero })} />
+                    <LinhaConversa
+                      key={c.numero}
+                      conversa={c}
+                      selecionada={c.numero === numero}
+                      etiquetasDaEmpresa={etiquetasDaEmpresa}
+                      onEscolher={() => irPara({ numero: c.numero })}
+                    />
                   ))}
                 </ul>
               )}
@@ -354,6 +396,8 @@ export function Conversas() {
                   corrigirUltima={corrigir}
                   onVoltar={() => irPara({ numero: null })}
                   onMudou={carregar}
+                  etiquetasDaEmpresa={etiquetasDaEmpresa}
+                  onEtiquetasMudaram={recarregarEtiquetas}
                 />
               ) : (
                 <SemConversa />
@@ -362,6 +406,7 @@ export function Conversas() {
           </div>
         )}
       </main>
+      {DialogoEtiquetas}
     </>
   );
 }

@@ -308,6 +308,11 @@ export interface ConversaExemplo {
   motivo?: MotivoTransferencia;
   assunto: string;
   naoLidas?: number;
+  /**
+   * As etiquetas da equipe nesta conversa (US-016). Duas conversas de exemplo já nascem etiquetadas:
+   * é o que mostra o recurso (os chips na lista e a linha de filtro) antes de alguém criar a primeira.
+   */
+  etiquetas?: string[];
   mensagens: MensagemExemplo[];
 }
 
@@ -397,6 +402,7 @@ export function conversasExemplo(): ConversaExemplo[] {
       status: "atencao",
       motivo: "sem_informacao",
       assunto: "Preços",
+      etiquetas: ["orçamento"],
       mensagens: [
         { papel: "cliente", texto: "Bom dia! Quanto custa o clareamento?", atras: 3 * DIA },
         { papel: "atendente", texto: "Bom dia! O clareamento dental a laser sai por R$ 900, em 3 sessões.", atras: 3 * DIA - 1, respostaMs: 2800 },
@@ -490,6 +496,7 @@ export function conversasExemplo(): ConversaExemplo[] {
       nome: "Camila Souza",
       status: "ia",
       assunto: "Agendamentos",
+      etiquetas: ["retorno"],
       mensagens: [
         { papel: "cliente", texto: "Boa tarde! Meu filho tem 4 anos, vocês atendem crianças?", atras: 6 * DIA },
         { papel: "atendente", texto: "Boa tarde! Atendemos odontopediatria a partir dos 2 anos de idade.", atras: 6 * DIA - 2, respostaMs: 2800 },
