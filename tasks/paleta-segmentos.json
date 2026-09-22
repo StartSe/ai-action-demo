@@ -235,15 +235,15 @@
   },
   "toolkit-dash-builder": {
     "segmento": "Dados",
-    "acento": "#a5540d",
-    "acento2": "#edb90c",
-    "soft": "#f9efe7",
-    "ink": "#5e3008",
+    "acento": "#098609",
+    "acento2": "#0bcb45",
+    "soft": "#e7f9e7",
+    "ink": "#085e08",
     "hsl": [
-      28,
-      85,
-      35
+      120,
+      88,
+      28
     ],
-    "contrasteBranco": 5.42
+    "contrasteBranco": 4.75
   }
 }

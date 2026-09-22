@@ -262,7 +262,11 @@ export function montarPainel(espec: EspecReceitas, dados: Dados): EspecPainel {
     .map((r) => calcular(r, dados))
     .filter((c): c is ComponentePainel => c !== null);
 
-  const indicadores = calculados.filter((c) => c.tipo === "indicador").slice(0, 4);
+  const todosIndicadores = calculados.filter((c) => c.tipo === "indicador");
+  const indicadores = todosIndicadores.slice(0, 4);
+  // Do 5º em diante o indicador não cabe na linha 0; vai para o fim junto com as séries que sobraram.
+  // Descartar em silêncio faria o ajuste dizer "acrescentei" sem nada aparecer na tela.
+  const indicadoresExtras = todosIndicadores.slice(4);
   const series = calculados.filter((c) => c.tipo === "linha" || c.tipo === "area" || c.tipo === "barra");
   const distribuicoes = calculados.filter((c) => c.tipo === "pizza" || c.tipo === "rosca");
   const tabelas = calculados.filter((c) => c.tipo === "tabela").slice(0, 1);
@@ -288,10 +292,15 @@ export function montarPainel(espec: EspecReceitas, dados: Dados): EspecPainel {
   } else if (dist) por(dist, 2, 0, 4);
   else if (tab) por(tab, 2, 0, 4);
 
-  // Linha 3: o que sobrou das séries, respeitando o teto de 8 componentes.
-  series.slice(2, 4).forEach((c, i) => {
-    if (componentes.length < 8) por(c, 3, i * 2, 2);
-  });
+  // Linha 3: o que sobrou — séries extras (largura 2) e indicadores extras (largura 1), empacotados
+  // da esquerda para a direita e respeitando o teto de 8 componentes.
+  let coluna3 = 0;
+  for (const c of [...series.slice(2, 4), ...indicadoresExtras]) {
+    const largura: 1 | 2 = c.tipo === "indicador" ? 1 : 2;
+    if (componentes.length >= 8 || coluna3 + largura > 4) break;
+    por(c, 3, coluna3, largura);
+    coluna3 += largura;
+  }
 
   return {
     titulo: espec.titulo,

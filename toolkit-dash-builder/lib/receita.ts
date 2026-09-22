@@ -102,6 +102,15 @@ function agregacao(v: unknown, padrao: Agregacao = "soma"): Agregacao {
   return AGREGACOES.includes(v as Agregacao) ? (v as Agregacao) : padrao;
 }
 
+/**
+ * Somar uma coluna de percentual não significa nada: 12% + 8% não é 20% de coisa alguma. O total
+ * de descontos de mil pedidos daria "550,8%" na tela. Média é a única leitura defensável, então a
+ * soma é corrigida aqui — vale para a escolha da IA e para a automática.
+ */
+function agregacaoDaColuna(agg: Agregacao, coluna: ColunaDados | undefined): Agregacao {
+  return agg === "soma" && coluna?.percentual ? "media" : agg;
+}
+
 function periodo(v: unknown): Periodo | undefined {
   return PERIODOS.includes(v as Periodo) ? (v as Periodo) : undefined;
 }
@@ -141,7 +150,7 @@ export function validarReceitas(bruto: unknown, dados: Dados): EspecReceitas {
         ...base,
         tipo,
         coluna: alvo?.chave,
-        agregacao: agg,
+        agregacao: agregacaoDaColuna(agg, alvo),
         colunaData: data?.chave,
         periodo: periodo(c.periodo) ?? (data ? "mes" : undefined),
         direcaoBoa: c.direcaoBoa === "diminuir" ? "diminuir" : "aumentar",
@@ -180,6 +189,7 @@ export function validarReceitas(bruto: unknown, dados: Dados): EspecReceitas {
     }
 
     if (tipo === "pizza" || tipo === "rosca") {
+      // Distribuição de percentual não faz sentido nem com média: some as partes de um todo.
       componentes.push({ ...base, tipo, agruparPor: grupo.chave, coluna: alvo?.chave, agregacao: agg, limite: inteiro(c.limite, 3, 6) ?? 6 });
     } else {
       const ehData = grupo.tipo === "data";
@@ -189,7 +199,7 @@ export function validarReceitas(bruto: unknown, dados: Dados): EspecReceitas {
         agruparPor: grupo.chave,
         periodo: ehData ? (periodo(c.periodo) ?? "mes") : undefined,
         coluna: alvo?.chave,
-        agregacao: agg,
+        agregacao: agregacaoDaColuna(agg, alvo),
         orientacao: c.orientacao === "horizontal" ? "horizontal" : "vertical",
         limite: inteiro(c.limite, 3, 12) ?? 12,
         ordenar: c.ordenar === "valor" || (!ehData && tipo === "barra") ? "valor" : "rotulo",

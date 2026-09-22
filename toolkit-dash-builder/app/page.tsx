@@ -341,7 +341,7 @@ export default function Page() {
     setFalas((f) => [...f, { autor: "ia", texto: "Desfeito: o painel voltou ao estado anterior.", em: new Date().toISOString() }]);
     if (id) {
       try {
-        await fetch(`/api/painel/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ painel: anterior }) });
+        await fetch(`/api/painel/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ painel: anterior, desfazerReceitas: true }) });
       } catch {
         setErroRefino({ mensagem: "O painel voltou na tela, mas não conseguimos gravar essa versão. O link e a impressão podem mostrar a versão ajustada." });
       }
@@ -552,17 +552,7 @@ export default function Page() {
               </>
             }
             depois={
-              editandoLayout ? null :
-              // O ajuste conversando reescreve os números (ver app/api/painel/refinar/route.ts):
-              // num painel calculado da planilha ele trocaria dado real por número de exemplo.
-              estado.meta.insumo.startsWith(INSUMO_PLANILHA) ? (
-                <div className="mt-6 no-print">
-                  <Aviso tom="warn">
-                    O ajuste conversando ainda não vale para painel feito da sua planilha: ele reescreveria os números.
-                    Para mudar o recorte, clique em &ldquo;Alterar pedido&rdquo; e descreva de outro jeito.
-                  </Aviso>
-                </div>
-              ) : (
+              editandoLayout ? null : (
                 <div className="mt-6">
                   <ConversaRefino falas={falas} onEnviar={refinar} enviando={refinando} onDesfazer={desfazer} podeDesfazer={pilha.length > 0} erro={erroRefino} />
                 </div>

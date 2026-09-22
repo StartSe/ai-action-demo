@@ -1,5 +1,6 @@
 // GET obtém um painel salvo · PUT grava um estado sem IA (Desfazer) · DELETE apaga um.
 import type { Meta } from "@/lib/ai";
+import { desfazerReceitas } from "@/lib/dados-store";
 import { apagar, atualizarSaida, obter } from "@/lib/historico";
 import type { EspecPainel, PedidoPainel } from "@/lib/types";
 import { validarPainel } from "@/lib/validar-painel";
@@ -18,12 +19,15 @@ export async function PUT(req: Request, { params }: RouteContext<"/api/painel/[i
   const { id } = await params;
   const registro = obter<PedidoPainel, EspecPainel, Meta>(id);
   if (!registro || registro.tipo !== "painel") return NAO_EXISTE();
-  const corpo = (await req.json().catch(() => ({}))) as { painel?: unknown };
+  const corpo = (await req.json().catch(() => ({}))) as { painel?: unknown; desfazerReceitas?: unknown };
   const painel = validarPainel(corpo.painel);
   if (painel.componentes.length === 0) {
     return Response.json({ error: "O painel enviado não tem nenhum cartão ou gráfico." }, { status: 400 });
   }
   atualizarSaida(id, painel);
+  // Num painel de planilha o Desfazer também volta a receita: senão o próximo ajuste partiria da
+  // versão nova, que já saiu da tela (ver lib/dados-store.ts).
+  if (corpo.desfazerReceitas === true) desfazerReceitas(id);
   return Response.json({ ok: true, painel });
 }
 

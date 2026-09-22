@@ -97,13 +97,25 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 
 Nenhuma credencial de suíte com sufixo `_APP` é usada: este app não conecta caixa de e-mail. O `Dockerfile` é cópia idêntica do `pdi-time` (com os `ARG` de `GOOGLE_*_APP`/`MICROSOFT_*_APP`) porque o workflow passa os mesmos `build-args` a todos os apps; sem valor, os botões simplesmente não aparecem em `/setup`.
 
+## Organizar o painel
+No painel pronto, **Reorganizar** deixa arrastar um cartão sobre outro para trocar a ordem e usar − / + para mudar a largura (1 a 4 colunas). **Salvar arranjo** grava: o link `/r/<id>` e a impressão passam a mostrar o arranjo escolhido. O arrasto nativo não funciona em toque, então os botões existem também para celular, e o teclado responde (setas movem, Shift + setas redimensionam).
+
+## Ajustar conversando
+Funciona nos dois tipos de painel, por caminhos diferentes:
+
+- **Painel de exemplo:** a IA reescreve o painel, como antes.
+- **Painel da sua planilha:** a IA (ou, sem chave, um editor por palavra-chave) muda a **receita**, e o servidor recalcula do arquivo. Nunca reescreve número.
+
+Sem chave de IA o editor reconhece: trocar o tipo de um gráfico ("troque a barra por rosca"), tirar um cartão ("tire a tabela"), acrescentar um indicador ("acrescente o total de desconto"), mudar o período ("por trimestre") e mudar o agrupamento ("agrupe por UF"). O que não reconhece ele diz que não reconheceu, em vez de fazer algo aproximado.
+
 ## Testes
 ```bash
 npm test     # vitest run
 ```
-Cobrem a leitura da planilha (formatos de número e data, separador, aspas, tipagem das colunas) e o
-motor de agregação (cada agregação conferida contra um valor calculado à mão). É o código onde um
-erro não quebra a tela — entrega um painel bonito com a conta errada.
+Cobrem a leitura da planilha (formatos de número e data, separador, aspas, tipagem das colunas), o
+motor de agregação (cada agregação conferida contra um valor calculado à mão), as operações de
+layout (invariantes da grade) e o editor de receitas sem IA. É o código onde um erro não quebra a
+tela — entrega um painel bonito com a conta errada.
 
 ## Estrutura
 ```
@@ -137,7 +149,10 @@ lib/demo.ts                     os quatro painéis de exemplo e as respostas de 
 lib/planilha.ts                 leitura de CSV/TSV, tipagem das colunas e perfil para a IA
 lib/receita.ts                  a "receita" de um componente (quais colunas, qual agregação) e sua validação
 lib/agregar.ts                  o motor de cálculo: receita + linhas do arquivo -> números do painel
-lib/painel-dados.ts             painel a partir da planilha (prompt de receitas + recorte automático sem IA)
+lib/painel-dados.ts             painel a partir da planilha (prompt de receitas + recorte automático sem IA) e o ajuste
+lib/refinar-receitas.ts         ajuste do painel de planilha: edita a receita (com IA ou por palavra-chave)
+lib/layout.ts                   mover, redimensionar e reempacotar a grade
+components/PainelEditavel.tsx   a grade no modo de reorganizar (arrastar, botões e teclado)
 lib/dados-store.ts              guarda a planilha enviada por 30 dias
 app/api/dados/route.ts          POST envia a planilha e devolve o perfil das colunas
 components/EnvioPlanilha.tsx    envio do arquivo e conferência das colunas antes de gerar

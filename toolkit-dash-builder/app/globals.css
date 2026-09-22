@@ -5,10 +5,10 @@
    tasks/paleta-segmentos.json (ver scripts/verificar-paleta.mjs). O resto (fundo, superfícies, texto,
    linha, raios, sombra) é igual nos dezessete apps. */
 @theme {
-  --color-accent: #a5540d;
-  --color-accent-2: #edb90c;
-  --color-accent-soft: #f9efe7;
-  --color-accent-ink: #5e3008;
+  --color-accent: #098609;
+  --color-accent-2: #0bcb45;
+  --color-accent-soft: #e7f9e7;
+  --color-accent-ink: #085e08;
   --color-bg: #f7f7fb;
   --color-surface: #ffffff;
   --color-surface-2: #fbfaff;
@@ -93,7 +93,29 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   .print-sheet .chip-neutral { background: none; border: 1px solid currentColor; }
 }
 /* Específico deste app */
+
+/* Faixa de degradê no topo de cada cartão: é o que dá identidade de painel à grade inteira, usando
+   o mesmo --gradiente-acento do botão primário. Fica só na tela — no papel, uma faixa colorida por
+   cartão gasta tinta sem informar nada, e o Chrome não imprime fundo de div por padrão. */
+.painel-cartao { position: relative; overflow: hidden; }
+.painel-cartao::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background-image: var(--gradiente-acento);
+}
+
+/* Título do painel no mesmo degradê, como assinatura da tela de resultado. */
+.titulo-degrade {
+  background-image: var(--gradiente-acento);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 @media print {
+  .painel-cartao::before { display: none; }
   /* Barras, fatias e barra de meta são fill/stroke de SVG e imprimem sozinhas; isto é a segunda rede de segurança. */
   .print-sheet { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .print-sheet .painel-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }

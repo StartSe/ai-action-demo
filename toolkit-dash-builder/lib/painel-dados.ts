@@ -8,11 +8,31 @@
 // só pela tipagem das colunas. É o caminho que faz a planilha valer alguma coisa já no primeiro uso.
 import { aiEnabled, askJSON, meta, type Meta } from "./ai";
 import { montarPainel } from "./agregar";
-import { salvar } from "./historico";
+import { guardarReceitas } from "./dados-store";
+import { atualizarSaida, salvar } from "./historico";
 import { IDIOMA } from "./idioma";
 import { INSUMO_PLANILHA, perfilDeDados, type ColunaDados, type Dados } from "./planilha";
+import {
+  editarReceitasSemIA,
+  lerEdicaoDaIA,
+  PROMPT_EDITAR_RECEITAS,
+  SYSTEM_EDITAR_RECEITAS,
+  type EdicaoReceitas,
+} from "./refinar-receitas";
 import { validarReceitas, type EspecReceitas, type Receita, type ReceitaSemIdentidade } from "./receita";
 import type { EspecPainel } from "./types";
+
+/**
+ * O que fica gravado como `entrada` do painel de planilha. As receitas NÃO moram aqui: `entrada` é
+ * escrita uma vez por `salvar()` e `lib/historico.ts` é arquivo INFRA, sem gravador de entrada. Elas
+ * ficam em `receitas_painel` (lib/dados-store.ts), que o ajuste conversando lê e regrava.
+ */
+export type EntradaDados = {
+  descricao: string;
+  dadosId?: string;
+  arquivo: string;
+  linhas: number;
+};
 
 
 
@@ -136,7 +156,7 @@ export function receitasAutomaticas(dados: Dados, descricao: string): EspecRecei
   // título precisa dizer "no mês" — chamar de "Total" o recorte de um mês seria errado na tela.
   const sufixo = data ? " no mês" : "";
   if (principal) {
-    componentes.push({ tipo: "indicador", titulo: `${principal.rotulo}${sufixo}`.slice(0, 40), coluna: principal.chave, agregacao: "soma", colunaData: data?.chave, periodo: data ? "mes" : undefined });
+    componentes.push({ tipo: "indicador", titulo: `${principal.rotulo}${sufixo}`.slice(0, 40), coluna: principal.chave, agregacao: principal.percentual ? "media" : "soma", colunaData: data?.chave, periodo: data ? "mes" : undefined });
   }
   componentes.push({ tipo: "indicador", titulo: `Registros${sufixo}`.slice(0, 40), agregacao: "contagem", colunaData: data?.chave, periodo: data ? "mes" : undefined });
   if (principal) {
@@ -145,7 +165,7 @@ export function receitasAutomaticas(dados: Dados, descricao: string): EspecRecei
   if (cats[0]) {
     componentes.push({ tipo: "indicador", titulo: `${cats[0].rotulo} distintos`.slice(0, 40), coluna: cats[0].chave, agregacao: "distintos" });
   } else if (nums[1]) {
-    componentes.push({ tipo: "indicador", titulo: `Total de ${nums[1].rotulo}`.slice(0, 40), coluna: nums[1].chave, agregacao: "soma" });
+    componentes.push({ tipo: "indicador", titulo: `${nums[1].percentual ? `${nums[1].rotulo} médio` : `Total de ${nums[1].rotulo}`}`.slice(0, 40), coluna: nums[1].chave, agregacao: nums[1].percentual ? "media" : "soma" });
   }
 
   // Tendência, quando há data.
@@ -225,6 +245,10 @@ export type ResultadoPainelDados = {
   id?: string;
 };
 
+export type ResultadoRefinoDados =
+  | { tipo: "esclarecimento"; mensagem: string }
+  | { tipo: "ok"; painel: EspecPainel; mensagem: string; componentesAlterados: string[]; meta: Meta };
+
 const MINIMO_ACEITAVEL = 3;
 
 /**
@@ -239,6 +263,7 @@ export async function gerarPainelDeDados(
 ): Promise<ResultadoPainelDados> {
   const guardar = opts.guardar ?? true;
   let painel: EspecPainel | null = null;
+  let receitas: EspecReceitas | null = null;
   let automatico = true;
 
   if (aiEnabled()) {
@@ -248,6 +273,7 @@ export async function gerarPainelDeDados(
       const candidato = montarPainel(espec, dados);
       if (candidato.componentes.length >= MINIMO_ACEITAVEL) {
         painel = candidato;
+        receitas = espec;
         automatico = false;
       } else {
         console.warn(`[painel-dados] a IA rendeu ${candidato.componentes.length} componentes válidos; caindo no automático.`);
@@ -258,15 +284,67 @@ export async function gerarPainelDeDados(
     }
   }
 
-  if (!painel) painel = montarPainel(receitasAutomaticas(dados, descricao), dados);
+  if (!painel) {
+    receitas = receitasAutomaticas(dados, descricao);
+    painel = montarPainel(receitas, dados);
+  }
 
   const metaGerada = meta({
     demo: false,
     insumo: `${INSUMO_PLANILHA}${dados.nome}${automatico ? " (recorte automático)" : ""}`,
   });
-  const entrada = { descricao, dadosId: opts.dadosId, arquivo: dados.nome, linhas: dados.linhas.length };
+  const entrada: EntradaDados = { descricao, dadosId: opts.dadosId, arquivo: dados.nome, linhas: dados.linhas.length };
   const id = guardar
     ? salvar({ tipo: "painel", titulo: painel.titulo, resumo: painel.resumo, entrada, saida: painel, meta: metaGerada })
     : undefined;
+  // As receitas ficam em tabela própria, ligadas ao id do painel: é delas que o ajuste parte depois.
+  if (id && receitas && opts.dadosId) guardarReceitas(id, opts.dadosId, receitas);
   return { automatico, painel, meta: metaGerada, id };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Ajuste
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * Ajusta um painel de planilha editando a RECEITA e recalculando das linhas do arquivo. Nunca chama o
+ * refino de lib/painel.ts, que pede números à IA: aqui os valores são do usuário e não se reescrevem.
+ */
+export async function refinarPainelDeDados(
+  dados: Dados,
+  receitas: EspecReceitas,
+  pedido: string,
+  id?: string,
+  dadosId?: string,
+): Promise<ResultadoRefinoDados> {
+  let edicao: EdicaoReceitas;
+  if (aiEnabled()) {
+    try {
+      const bruto = await askJSON<unknown>({
+        system: SYSTEM_EDITAR_RECEITAS,
+        prompt: PROMPT_EDITAR_RECEITAS(receitas, perfilDeDados(dados), pedido),
+        maxTokens: 3000,
+      });
+      edicao = lerEdicaoDaIA(bruto, receitas, dados);
+    } catch (err) {
+      // Falha de IA cai no editor por palavra-chave: pior um ajuste simples que ajuste nenhum.
+      console.warn("[refinar-dados] IA falhou; usando o editor sem IA:", err instanceof Error ? err.message : err);
+      edicao = editarReceitasSemIA(receitas, pedido, dados);
+    }
+  } else {
+    edicao = editarReceitasSemIA(receitas, pedido, dados);
+  }
+
+  if (edicao.tipo === "esclarecimento") return edicao;
+
+  const painel = montarPainel(edicao.receitas, dados);
+  if (painel.componentes.length < MINIMO_ACEITAVEL) {
+    return { tipo: "esclarecimento", mensagem: "Esse ajuste deixaria o painel sem cartões suficientes. Diga de outro jeito." };
+  }
+  painel.refinadoEm = new Date().toISOString();
+  if (id) {
+    if (!atualizarSaida(id, painel)) console.warn(`[refinar-dados] painel ${id} não existe mais; resultado não gravado.`);
+    else if (dadosId) guardarReceitas(id, dadosId, edicao.receitas);
+  }
+  return { tipo: "ok", painel, mensagem: edicao.mensagem, componentesAlterados: edicao.alterados, meta: meta({ demo: false, insumo: `${INSUMO_PLANILHA}${dados.nome} (ajustado)` }) };
 }

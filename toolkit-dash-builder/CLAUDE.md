@@ -58,3 +58,27 @@
   campo do corpo — o cliente não decide se pode reescrever o próprio dado.
 - **`observacoesDemo()` continua valendo com dado real**: ela calcula a partir do próprio painel, então
   os fatos saem certos. Só o texto ("Neste exemplo, ...") fala como se fosse exemplo. Aresta conhecida.
+- **Ajuste de painel de planilha edita a RECEITA, não os números.** `refinarPainelDeDados()` troca a
+  receita e `montarPainel()` recalcula do arquivo. Com chave, a IA reescreve a lista de receitas; sem
+  chave, `editarReceitasSemIA()` cobre trocar tipo, tirar, acrescentar indicador, mudar período e
+  reagrupar — e devolve esclarecimento no que não reconhece, porque mexer no cartão errado é pior que
+  não mexer. As receitas moram em `receitas_painel` (lib/dados-store.ts), com pilha de 5 versões para o
+  Desfazer da tela voltar painel e receita juntos.
+- **Três erros que o editor por palavra-chave cometeu e viraram teste:** "por" casava com o título
+  "Valor da venda por mês" e o ajuste caía no gráfico errado (daí a lista `VAZIAS`); o corte de 3 letras
+  escondia a coluna "UF" (agora 2); e `montarPainel` descartava em silêncio o 5º indicador, fazendo a
+  mensagem dizer "acrescentei" sem nada aparecer (agora o excedente vai para a linha 3).
+- **Percentual nunca é somado.** 12% + 8% não é 20% de nada: somar a coluna de desconto de 1.200 linhas
+  dava "550,8%" na tela. `agregacaoDaColuna()` em `lib/receita.ts` converte soma em média quando a
+  coluna é percentual, valendo para a escolha da IA e para a automática.
+- **O selo do topo em `/r/[id]` fala da instância, não do painel.** Ele saía de `meta.demo`, e um painel
+  de planilha tem `demo: false` (os números são reais) mesmo sem IA: dizia "IA conectada" numa instância
+  sem chave, ao lado do aviso "Sem IA" do próprio painel. Agora lê `aiEnabled()`.
+- **Paleta verde (`hsl(120, 88, 28)`, acento `#098609`).** Escolhida por busca contra
+  `scripts/verificar-paleta.mjs`: contraste 4,75 contra branco e ΔE 23,5 do segmento mais próximo
+  (`custos-ia`, Financeiro), bem acima do mínimo 10 entre segmentos. As quatro cores ficam fora da
+  comparação de `verificar-padrao.sh`; o degradê de cartão mora depois do marcador
+  `/* Específico deste app */` e some na impressão.
+- **Reorganizar: a grade do CSS é de fluxo**, então posição é ordem mais largura. `lib/layout.ts`
+  reempacota e RECUSA o que estouraria a linha 3 — `validarPainel` reempacotaria no servidor e a pessoa
+  salvaria um arranjo recebendo outro.
