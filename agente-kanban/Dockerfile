@@ -32,6 +32,7 @@ RUN addgroup -S app && adduser -S app -G app && mkdir -p /app/data && chown app:
 COPY --from=build /app/public ./public
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/scripts/connect-chatgpt.mjs ./scripts/connect-chatgpt.mjs
 USER app
 # As chaves configuradas em /setup ficam no SQLite em /app/data. Monte um volume aqui para persistir.
 VOLUME ["/app/data"]

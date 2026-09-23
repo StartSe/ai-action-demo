@@ -3,7 +3,7 @@ import { Topbar } from "@/components/ui";
 import type { ResultadoAgente } from "@/lib/agente";
 import type { Meta } from "@/lib/ai";
 import { obter } from "@/lib/historico";
-import { Resultado } from "../../page";
+import { Resultado } from "@/components/LegacyKanban";
 
 export default async function Page({ params }: PageProps<"/r/[id]">) {
   const { id } = await params;

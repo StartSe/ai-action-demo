@@ -32,17 +32,18 @@
     },
     {
       "id": "agente-kanban",
-      "nome": "Agente de Kanban",
+      "nome": "Orbit — Agente de Kanban",
       "areas": [
         "Gestão",
         "RH"
       ],
       "problema": "Operar o quadro de tarefas toma tempo do gestor.",
-      "ia": "Um agente com ferramentas cria, move, comenta e arquiva cartões a partir de comandos em português.",
-      "integracoes": "IA (OpenRouter) para entender o pedido e operar o quadro. Quadro do Trello para o agente mexer no quadro real do time em vez do de exemplo. Notificações (e-mail ou Slack) para o resumo do quadro toda manhã. Quadro de tarefas (MCP) para operar um quadro fora do Trello (Jira, Notion, monday).",
+      "ia": "Agentes cruzam atividades, conversas e objetivos para manter um quadro local, seguindo a skill do time e rotinas configuráveis. Correções humanas orientam as próximas execuções.",
+      "integracoes": "ChatGPT via Codex ou OpenRouter. Zapier MCP para consultar quadros e conversas com ferramentas autorizadas por rotina. Trello e integrações anteriores continuam disponíveis em Configurações avançadas.",
       "acento": "#2e3b7a",
       "porta": 3002,
       "captura": "capturas/agente-kanban.png",
+      "versao": "0.2.0",
       "capacidades": [
         "artefato",
         "mcp",

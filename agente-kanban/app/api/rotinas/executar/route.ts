@@ -2,6 +2,7 @@
 // vencidas quando o plano gratuito hiberna o app e ninguém está com a tela aberta.
 import { autenticar, executarVencidas, extrairCodigo } from "@/lib/rotinas";
 import "@/lib/rotinas-do-app";
+import { runDueRoutines } from "@/lib/workspace-agent";
 
 export async function POST(req: Request) {
   const codigo = extrairCodigo(req);
@@ -9,5 +10,6 @@ export async function POST(req: Request) {
     return Response.json({ error: "Acesso ausente ou inválido. Gere um código de acesso em /setup." }, { status: 401 });
   }
   const executadas = await executarVencidas();
-  return Response.json({ total: executadas.length, executadas });
+  const workspace = await runDueRoutines();
+  return Response.json({ total: executadas.length + workspace.length, executadas, workspace });
 }
