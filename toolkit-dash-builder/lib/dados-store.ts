@@ -27,6 +27,9 @@ function abrir(): DatabaseSync {
     criadoEm TEXT NOT NULL,
     expiraEm TEXT NOT NULL
   )`);
+  // O texto cru fica junto para a pessoa poder corrigir o tipo de uma coluna: reprocessar do zero é
+  // a única forma sem perda (o valor convertido já perdeu o formato original).
+  try { db.exec(`ALTER TABLE planilhas ADD COLUMN texto TEXT NOT NULL DEFAULT ''`); } catch { /* coluna já existe */ }
   // Receitas por painel, em tabela própria: `lib/historico.ts` é arquivo INFRA comparado byte a byte
   // com o pdi-time e não pode ganhar um gravador de `entrada` só para este app. A chave é o id do
   // painel salvo; o ajuste conversando lê daqui, edita e regrava.
@@ -40,14 +43,25 @@ function abrir(): DatabaseSync {
   return db;
 }
 
-export function guardarDados(dados: Dados): string {
+export function guardarDados(dados: Dados, texto: string): string {
   const id = crypto.randomBytes(9).toString("base64url");
   const agora = new Date();
   const expira = new Date(agora.getTime() + DIAS_DE_GUARDA * 86_400_000);
   abrir()
-    .prepare("INSERT INTO planilhas (id, nome, conteudo, linhas, criadoEm, expiraEm) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(id, dados.nome, JSON.stringify(dados), dados.linhas.length, agora.toISOString(), expira.toISOString());
+    .prepare("INSERT INTO planilhas (id, nome, conteudo, texto, linhas, criadoEm, expiraEm) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run(id, dados.nome, JSON.stringify(dados), texto, dados.linhas.length, agora.toISOString(), expira.toISOString());
   return id;
+}
+
+/** Substitui a leitura guardada (usado quando a pessoa corrige o tipo de uma coluna). */
+export function regravarDados(id: string, dados: Dados): void {
+  abrir().prepare("UPDATE planilhas SET conteudo = ?, linhas = ? WHERE id = ?").run(JSON.stringify(dados), dados.linhas.length, id);
+}
+
+/** O texto cru do arquivo, para reprocessar com outro tipo de coluna. */
+export function obterTexto(id: string): string | null {
+  const linha = abrir().prepare("SELECT texto FROM planilhas WHERE id = ?").get(id) as { texto: string } | undefined;
+  return linha?.texto || null;
 }
 
 export function obterDados(id: string): Dados | null {

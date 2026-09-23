@@ -82,3 +82,24 @@
 - **Reorganizar: a grade do CSS é de fluxo**, então posição é ordem mais largura. `lib/layout.ts`
   reempacota e RECUSA o que estouraria a linha 3 — `validarPainel` reempacotaria no servidor e a pessoa
   salvaria um arranjo recebendo outro.
+- **Coluna de código não é medida.** Quatro sinais em `pareceIdentificador()` (lib/planilha.ts): cabeçalho
+  da lista `PALAVRAS_IDENTIFICADOR`, zero à esquerda, inteiro de 4 dígitos entre 1900 e 2100 (ano é
+  dimensão), e — o mais fraco — 20+ linhas de inteiros todos distintos e todos ≥ 1.000. O piso de mil
+  evita confundir quantidade com chave primária; "número" e "conta" ficam FORA da lista de palavras
+  porque aparecem em medidas legítimas. Medido antes disto: "Total de CEP = 15.753" e `01310` virando 1310.
+- **O indicador fala do último período FECHADO.** `calcular()` descarta os baldes que o arquivo não cobre
+  inteiros e usa os dois últimos completos. Um recorte de 30 dias agrupado por mês rende 23–31/08 contra
+  01–22/09 e rendia +2818%. Sem nenhum fechado, mostra o mais recente sem comparar.
+- **Prosa não é categoria.** `comprimentoMedio` acima de 40 tira a coluna da escolha de agrupamento: uma
+  coluna de observação livre tem poucos valores distintos e rendia "receita por observação".
+- **Nada de `Math.min(...lista)` sobre dados do usuário.** Cada item vira um argumento e a pilha estoura
+  por volta de 130 mil — perto demais do teto de 50 mil linhas, ainda mais com a pilha funda do servidor.
+  Use `extremos()` de lib/planilha.ts. Os usos que sobraram em `lib/ai.ts` e `lib/demo.ts` são de arrays
+  limitados (posições de JSON, 8 componentes).
+- **Codificação: UTF-8 estrito com queda para windows-1252**, e não iso-8859-1 — os dois só diferem na
+  faixa 0x80–0x9F, que é onde o Excel põe aspas curvas e travessão; iso-8859-1 traria controle no lugar.
+- **O texto cru do arquivo fica guardado** (coluna `texto` de `planilhas`) só para a correção manual de
+  tipo: reconverter o valor já convertido seria perda, porque "R$ 21.572,39" virou 21572.39 e não dá para
+  saber que era dinheiro. Custa dobrar o armazenamento por planilha, dentro dos 30 dias de guarda.
+- **Tipo forçado vence os quatro sinais de código** (`PATCH /api/dados/[id]`): quem manda é quem conhece
+  o dado. Nenhuma heurística acerta todo arquivo, e sem a correção manual a pessoa via o erro sem saída.

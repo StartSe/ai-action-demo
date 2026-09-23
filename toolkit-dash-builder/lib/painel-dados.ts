@@ -125,10 +125,14 @@ function afinidade(coluna: ColunaDados, descricao: string): number {
   return palavras.filter((p) => alvo.includes(p)).length;
 }
 
-/** Uma coluna de texto serve de categoria quando repete o bastante para agrupar. */
+/** Acima disto o texto é frase, não rótulo de categoria. "Indicação de cliente" tem 20. */
+const COMPRIMENTO_MAXIMO_ROTULO = 40;
+
+/** Uma coluna de texto serve de categoria quando repete o bastante para agrupar E é um rótulo curto. */
 function categorias(dados: Dados, descricao = ""): ColunaDados[] {
   const candidatas = dados.colunas
     .filter((c) => c.tipo === "texto" && c.distintos >= 2 && c.distintos <= 20 && c.distintos < dados.linhas.length)
+    .filter((c) => (c.comprimentoMedio ?? 0) <= COMPRIMENTO_MAXIMO_ROTULO)
     // Depois da afinidade vem o preenchimento: uma coluna com 40% das células vazias rende um
     // gráfico dominado por "(sem valor)". Ela só é escolhida quando a pessoa pediu pelo nome.
     .sort((a, b) => afinidade(b, descricao) - afinidade(a, descricao) || b.preenchidos - a.preenchidos || a.distintos - b.distintos);

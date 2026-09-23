@@ -2,7 +2,7 @@
 // componente do painel, lendo as linhas reais da planilha. Toda conta que aparece na tela nasce aqui.
 // Determinístico e sem IA — é o que garante que o número no cartão é o número do seu arquivo.
 // Sem import node:*.
-import type { Celula, ColunaDados, Dados } from "./planilha";
+import { extremos, type Celula, type ColunaDados, type Dados } from "./planilha";
 import type { Agregacao, EspecReceitas, Periodo, Receita } from "./receita";
 import type {
   ComponentePainel,
@@ -115,9 +115,9 @@ function aplicar(valores: Celula[], agregacao: Agregacao, chaveValor?: string): 
     case "media":
       return numeros.reduce((s, n) => s + n, 0) / numeros.length;
     case "minimo":
-      return Math.min(...numeros);
+      return extremos(numeros)?.min ?? 0;
     case "maximo":
-      return Math.max(...numeros);
+      return extremos(numeros)?.max ?? 0;
     default:
       // Exaustivo: `chaveValor` só existe para a mensagem de erro não ficar muda.
       throw new Error(`Agregação desconhecida em ${chaveValor ?? "coluna"}`);
@@ -204,19 +204,27 @@ export function calcular(receita: Receita, dados: Dados): ComponentePainel | nul
       const periodo = receita.periodo ?? "mes";
       const serie = agrupar(dados, colunaData, receita.coluna, receita.agregacao, periodo, "rotulo");
       if (serie.length === 0) return null;
-      valor = serie[serie.length - 1].valor;
-      // Só compara baldes que o arquivo cobre por inteiro. Um recorte de 30 dias agrupado por mês
-      // rende dois meses pela metade (23–31/08 contra 01–22/09): a variação daí é artefato da
-      // janela, não do negócio — medido, deu +2818%. Sem os dois completos, o cartão não compara.
-      if (serie.length > 1) {
-        const intervalo = intervaloDaColuna(dados, colunaData.chave);
-        const chaves = [...new Set(dados.linhas.map((l) => (typeof l[colunaData.chave] === "string" ? balde(l[colunaData.chave] as string, periodo)?.chave : null)).filter((c): c is string => Boolean(c)))].sort();
-        const doisUltimos = chaves.slice(-2);
-        const completos = intervalo !== null && doisUltimos.length === 2 && doisUltimos.every((c) => {
-          const { inicio, fim } = limitesDoBalde(c, periodo);
-          return intervalo.min <= inicio && intervalo.max >= fim;
-        });
-        if (completos) anterior = serie[serie.length - 2].valor;
+
+      // O cartão fala do último período FECHADO, não do que está em curso. Um arquivo que termina
+      // no meio de um trimestre mostraria um pedaço comparado com um trimestre inteiro — a variação
+      // daí mede a janela, não o negócio (num recorte real de 30 dias isso rendeu +2818%).
+      // `agrupar` ordena por chave para coluna de data, então `serie` e `chaves` andam juntas.
+      const intervalo = intervaloDaColuna(dados, colunaData.chave);
+      const chaves = [...new Set(dados.linhas.map((l) => (typeof l[colunaData.chave] === "string" ? balde(l[colunaData.chave] as string, periodo)?.chave : null)).filter((c): c is string => Boolean(c)))].sort();
+      const fechado = (i: number) => {
+        if (!intervalo || !chaves[i]) return false;
+        const { inicio, fim } = limitesDoBalde(chaves[i], periodo);
+        return intervalo.min <= inicio && intervalo.max >= fim;
+      };
+      const indicesFechados = serie.map((_, i) => i).filter(fechado);
+      if (indicesFechados.length >= 2) {
+        valor = serie[indicesFechados[indicesFechados.length - 1]].valor;
+        anterior = serie[indicesFechados[indicesFechados.length - 2]].valor;
+      } else if (indicesFechados.length === 1) {
+        valor = serie[indicesFechados[0]].valor;
+      } else {
+        // Nenhum período fechado (arquivo curto demais): mostra o mais recente, sem comparar.
+        valor = serie[serie.length - 1].valor;
       }
     } else {
       const valores = dados.linhas.map((l) => (receita.coluna ? l[receita.coluna] : 1));

@@ -2,7 +2,7 @@
 // A tela usa o resumo para mostrar o que foi lido ANTES de gerar o painel: a pessoa confere se as
 // colunas foram entendidas (tipo e quantidade) em vez de descobrir no gráfico errado.
 import { guardarDados } from "@/lib/dados-store";
-import { detectarFormato, ErroPlanilha, lerPlanilha, resumoDeDados, TAMANHO_MAXIMO } from "@/lib/planilha";
+import { decodificar, detectarFormato, ErroPlanilha, lerPlanilha, resumoDeDados, TAMANHO_MAXIMO } from "@/lib/planilha";
 
 export async function POST(req: Request) {
   let arquivo: File | null = null;
@@ -24,15 +24,16 @@ export async function POST(req: Request) {
   if (incompativel) return Response.json({ error: incompativel }, { status: 415 });
 
   try {
-    const texto = new TextDecoder("utf-8").decode(bytes);
-    const dados = lerPlanilha(texto, arquivo.name);
-    const id = guardarDados(dados);
+    const { texto, codificacao } = decodificar(bytes);
+    const dados = lerPlanilha(texto, arquivo.name, codificacao);
+    const id = guardarDados(dados, texto);
     return Response.json({
       id,
       nome: dados.nome,
       linhas: dados.linhas.length,
       totalLinhas: dados.totalLinhas,
       truncado: dados.truncado,
+      codificacao: dados.codificacao,
       resumo: resumoDeDados(dados),
       // Só o perfil das colunas volta para a tela: as linhas ficam no servidor.
       colunas: dados.colunas.map((c) => ({ chave: c.chave, rotulo: c.rotulo, tipo: c.tipo, preenchidos: c.preenchidos, distintos: c.distintos, descartados: c.descartados, identificador: c.identificador ?? false })),

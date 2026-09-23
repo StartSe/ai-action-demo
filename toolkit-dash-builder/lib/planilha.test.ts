@@ -2,7 +2,7 @@
 // que parece certo é o pior defeito possível neste app. Daí os testes concentrarem os formatos que
 // aparecem numa exportação brasileira de verdade.
 import { describe, expect, it } from "vitest";
-import { detectarFormato, lerData, lerNumero, lerPlanilha } from "./planilha";
+import { decodificar, detectarFormato, lerData, lerNumero, lerPlanilha } from "./planilha";
 
 describe("lerNumero", () => {
   it("lê o formato brasileiro com milhar e decimal", () => {
@@ -163,9 +163,61 @@ describe("lerPlanilha", () => {
     expect(dados.colunas.map((c) => c.tipo)).toEqual(["numero", "numero"]);
   });
 
+  it("mede o comprimento do texto, que separa rótulo de prosa", () => {
+    // Uma coluna de observação livre tem poucos valores distintos e passaria por categoria,
+    // rendendo uma rosca de "receita por observação".
+    const dados = lerPlanilha(
+      ["Canal;Observação", "Indicação;cliente veio pelo evento da semana passada e pediu proposta", "Eventos;cliente veio pelo evento da semana passada e pediu proposta"].join("\n"),
+      "o.csv",
+    );
+    const canal = dados.colunas.find((c) => c.chave === "canal");
+    const obs = dados.colunas.find((c) => c.chave === "observacao");
+    expect(canal?.comprimentoMedio).toBeLessThan(40);
+    expect(obs?.comprimentoMedio).toBeGreaterThan(40);
+  });
+
   it("recusa arquivo sem linha de dados e sem colunas separadas", () => {
     expect(() => lerPlanilha("Nome;Valor", "so-cabecalho.csv")).toThrow(/só tem o cabeçalho/);
     expect(() => lerPlanilha("uma coisa só\noutra", "sem-colunas.csv")).toThrow(/colunas separadas/);
+  });
+});
+
+describe("decodificar", () => {
+  it("lê UTF-8 quando os bytes são válidos", () => {
+    const bytes = new TextEncoder().encode("Canal;Valor\nIndicação;10");
+    const { texto, codificacao } = decodificar(bytes);
+    expect(codificacao).toBe("utf-8");
+    expect(texto).toContain("Indicação");
+  });
+
+  it("cai para windows-1252 no CSV que o Excel salva", () => {
+    // "Indicação" em windows-1252: ç = 0xE7, ã = 0xE3. Em UTF-8 estrito esses bytes são inválidos.
+    const bytes = Uint8Array.from([
+      0x43, 0x61, 0x6e, 0x61, 0x6c, 0x3b, 0x56, 0x61, 0x6c, 0x6f, 0x72, 0x0a, // "Canal;Valor\n"
+      0x49, 0x6e, 0x64, 0x69, 0x63, 0x61, 0xe7, 0xe3, 0x6f, 0x3b, 0x31, 0x30, // "Indicaç ão;10"
+    ]);
+    const { texto, codificacao } = decodificar(bytes);
+    expect(codificacao).toBe("windows-1252");
+    expect(texto).toContain("Indicação");
+  });
+
+  it("preserva as aspas curvas que o Excel põe na faixa do windows-1252", () => {
+    // 0x93 e 0x94 são aspas curvas em windows-1252 e caracteres de controle em iso-8859-1.
+    const bytes = Uint8Array.from([0x41, 0x3b, 0x93, 0x42, 0x94]);
+    const { texto } = decodificar(bytes);
+    expect(texto).toBe("A;“B”");
+  });
+
+  it("a coluna decodificada vira categoria com o acento certo", () => {
+    const bytes = Uint8Array.from([
+      0x43, 0x61, 0x6e, 0x61, 0x6c, 0x3b, 0x56, 0x61, 0x6c, 0x6f, 0x72, 0x0a,
+      0x49, 0x6e, 0x64, 0x69, 0x63, 0x61, 0xe7, 0xe3, 0x6f, 0x3b, 0x31, 0x30, 0x0a,
+      0x45, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x73, 0x3b, 0x32, 0x30,
+    ]);
+    const { texto, codificacao } = decodificar(bytes);
+    const dados = lerPlanilha(texto, "e.csv", codificacao);
+    expect(dados.codificacao).toBe("windows-1252");
+    expect(dados.linhas[0].canal).toBe("Indicação");
   });
 });
 

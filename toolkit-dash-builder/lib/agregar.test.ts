@@ -28,13 +28,22 @@ describe("indicador", () => {
     expect(c.dados.anterior).toBeUndefined(); // sem data não existe período anterior
   });
 
-  it("não compara quando o último período está pela metade", () => {
-    // O arquivo vai de 15/01 a 05/03: março só tem cinco dias. Comparar esse pedaço com fevereiro
-    // inteiro mede a janela, não o negócio — num recorte real de 30 dias isso deu +2818%.
+  it("ignora o período em curso e mostra o último fechado", () => {
+    // O arquivo vai de 15/01 a 05/03: janeiro começa cortado e março tem cinco dias. Só fevereiro
+    // está inteiro, então é ele que o cartão mostra — e não há com o que comparar.
     const r: Receita = { id: "c1", titulo: "No mês", posicao, tipo: "indicador", coluna: "valor", agregacao: "soma", colunaData: "data", periodo: "mes" };
     const c = calcular(r, dados);
     if (c?.tipo !== "indicador") throw new Error("tipo inesperado");
-    expect(c.dados.valor).toBe(500); // março, o período mais recente
+    expect(c.dados.valor).toBe(700); // fevereiro: 300+400
+    expect(c.dados.anterior).toBeUndefined();
+  });
+
+  it("sem nenhum período fechado, mostra o mais recente sem comparar", () => {
+    const curto = lerPlanilha(["Data;Valor", "10/02/2026;100", "11/02/2026;200"].join("\n"), "c.csv");
+    const r: Receita = { id: "c1", titulo: "No mês", posicao, tipo: "indicador", coluna: "valor", agregacao: "soma", colunaData: "data", periodo: "mes" };
+    const c = calcular(r, curto);
+    if (c?.tipo !== "indicador") throw new Error("tipo inesperado");
+    expect(c.dados.valor).toBe(300);
     expect(c.dados.anterior).toBeUndefined();
   });
 

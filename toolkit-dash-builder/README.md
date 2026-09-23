@@ -23,10 +23,15 @@ Sem chave de IA o recurso **continua funcionando**: `receitasAutomaticas()` esco
 Detalhes que importam:
 
 - **Formato:** CSV, TSV ou separado por `;` ou `|` — o separador é descoberto sozinho. Aspas, quebra de linha dentro do campo e o BOM do Excel são tratados. `.xlsx` **não** é lido: o app reconhece o arquivo e pede para salvar como CSV.
+- **Codificação:** tenta UTF-8; se os bytes não forem válidos, relê como Windows-1252 (o que o Excel em português escreve) e avisa na tela. Sem isso, "Indicação" chegava ilegível.
+- **Colunas de código** (CEP, CPF, CNPJ, id, telefone, matrícula, ano) são lidas como texto, não como número: o `01310` mantém o zero à esquerda e nenhuma delas entra numa soma. Antes disso o painel exibia "Total de CEP".
+- **Errou o tipo?** Cada coluna tem um seletor na tela de conferência: troque para número, data ou texto e o arquivo é relido na hora.
+- **Células que não convertem** (um `N/A` numa coluna numérica) viram vazio, e a tela diz quantas foram — elas não entram nas contas.
 - **Números:** `R$ 21.572,39`, `1,234.56`, `12,5%` e `(1.500,00)` (negativo entre parênteses) são todos entendidos. Dinheiro e percentual são reconhecidos pelo cabeçalho e pelos valores, e definem o formato na tela.
 - **Datas:** `21/09/2026`, `2026-09-21`, `09/2026` e `Set/2026`. A série temporal agrupa por dia, mês, trimestre ou ano.
-- **Limites:** 8 MB por arquivo, 50 mil linhas e 60 colunas. Acima disso o arquivo é lido até o teto e a tela avisa.
-- **Comparação:** um indicador só mostra variação quando há coluna de data — aí ele compara o último período com o anterior. Sem data, mostra o total do arquivo e **omite** a linha de comparação, em vez de mostrar 0%.
+- **Limites:** 8 MB por arquivo, 50 mil linhas e 60 colunas. Acima disso o arquivo é lido até o teto e a tela avisa. Medido no teto (50 mil linhas, 7,1 MB): envio em 0,7–1,6 s, painel em 0,4 s, ajuste em 0,25 s, memória de pico 228 MB.
+- **Comparação:** o indicador fala do último período **fechado**, e compara com o fechado anterior. Um arquivo que termina no meio do mês mostraria um pedaço contra um mês inteiro — num recorte de 30 dias isso rendia +2818%, que media a janela e não o negócio. Sem nenhum período fechado, mostra o mais recente sem comparar; sem coluna de data, mostra o total do arquivo e omite a comparação.
+- **Período do gráfico** sai da janela do arquivo: até 62 dias por dia, até 2 anos por mês, até 5 anos por trimestre, acima disso por ano.
 - **Guarda:** a planilha fica no mesmo `app.sqlite` por 30 dias, para o painel poder ser reaberto por `/r/<id>` e impresso. Depois é apagada sozinha.
 
 ## Configuração inicial (sem variáveis de ambiente)

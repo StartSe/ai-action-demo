@@ -25,11 +25,13 @@ export interface PlanilhaEnviada {
   linhas: number;
   totalLinhas: number;
   truncado: boolean;
+  codificacao: "utf-8" | "windows-1252";
   resumo: string;
   colunas: ColunaLida[];
 }
 
 const ROTULO_TIPO: Record<TipoColuna, string> = { numero: "número", data: "data", texto: "texto" };
+const TIPOS: TipoColuna[] = ["numero", "data", "texto"];
 const COR_TIPO: Record<TipoColuna, string> = {
   numero: "bg-accent-soft text-accent-ink",
   data: "bg-[#e8eefc] text-[#274690]",
@@ -60,6 +62,28 @@ export function EnvioPlanilha({
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [arrastando, setArrastando] = useState(false);
+  const [corrigindo, setCorrigindo] = useState(false);
+
+  /** Manda o tipo escolhido à mão e adota a releitura que o servidor devolve. */
+  async function corrigirTipo(chave: string, tipo: TipoColuna) {
+    if (!planilha) return;
+    setCorrigindo(true);
+    setErro(null);
+    try {
+      const r = await fetch(`/api/dados/${planilha.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipos: { [chave]: tipo } }),
+      });
+      const resposta = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(resposta.error || "Não consegui mudar o tipo desta coluna.");
+      onEnviada(resposta as PlanilhaEnviada);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não consegui mudar o tipo desta coluna.");
+    } finally {
+      setCorrigindo(false);
+    }
+  }
 
   async function enviar(arquivo: File) {
     setEnviando(true);
@@ -133,6 +157,14 @@ export function EnvioPlanilha({
             </Aviso>
           </div>
         )}
+        {planilha.codificacao !== "utf-8" && (
+          <div className="mb-3">
+            <Aviso tom="ok">
+              O arquivo não estava em UTF-8; li como Windows-1252, que é o que o Excel escreve. Confira se os acentos
+              abaixo estão certos.
+            </Aviso>
+          </div>
+        )}
         {codigos.length > 0 && (
           <div className="mb-3">
             <Aviso tom="ok">
@@ -141,15 +173,35 @@ export function EnvioPlanilha({
             </Aviso>
           </div>
         )}
-        <p className="text-[12.5px] text-muted mb-2">Confira se as colunas foram entendidas:</p>
+        <p className="text-[12.5px] text-muted mb-2">
+          Confira se as colunas foram entendidas. Errou alguma? Troque o tipo ali mesmo.
+        </p>
         <ul className="flex flex-wrap gap-1.5">
           {planilha.colunas.map((c) => (
-            <li key={c.chave} className={`text-[12px] px-2 py-1 rounded-[7px] ${COR_TIPO[c.tipo]} ${c.preenchidos === 0 ? "opacity-50" : ""}`} title={`${c.preenchidos} preenchidos · ${c.distintos} valores distintos${c.descartados > 0 ? ` · ${c.descartados} ignorados` : ""}`}>
-              <span className="font-semibold">{c.rotulo}</span>{" "}
-              <span className="opacity-75">{c.identificador ? "código" : ROTULO_TIPO[c.tipo]}</span>
+            <li
+              key={c.chave}
+              className={`text-[12px] pl-2 pr-1 py-1 rounded-[7px] flex items-center gap-1 ${COR_TIPO[c.tipo]} ${c.preenchidos === 0 ? "opacity-50" : ""}`}
+              title={`${c.preenchidos} preenchidos · ${c.distintos} valores distintos${c.descartados > 0 ? ` · ${c.descartados} ignorados` : ""}`}
+            >
+              <span className="font-semibold">{c.rotulo}</span>
+              <label className="sr-only" htmlFor={`tipo-${c.chave}`}>{`Tipo da coluna ${c.rotulo}`}</label>
+              <select
+                id={`tipo-${c.chave}`}
+                className="bg-transparent border-0 text-[12px] opacity-75 cursor-pointer focus-visible:outline-[2px] focus-visible:outline-accent rounded-[5px] py-0 pr-4"
+                value={c.tipo}
+                disabled={desabilitado || corrigindo}
+                onChange={(e) => corrigirTipo(c.chave, e.target.value as TipoColuna)}
+              >
+                {TIPOS.map((t) => (
+                  <option key={t} value={t}>
+                    {t === "texto" && c.identificador ? "código" : ROTULO_TIPO[t]}
+                  </option>
+                ))}
+              </select>
             </li>
           ))}
         </ul>
+        {corrigindo && <p className="text-[12px] text-muted mt-2" role="status">Relendo o arquivo…</p>}
       </div>
     );
   }

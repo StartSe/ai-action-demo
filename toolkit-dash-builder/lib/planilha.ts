@@ -31,6 +31,12 @@ export interface ColunaDados {
   soma?: number;
   /** Até 5 valores reais, para o perfil que vai à IA e para a prévia na tela. */
   amostra: Array<string | number>;
+  /**
+   * Comprimento médio das células de texto. Serve para separar rótulo de prosa: uma coluna de
+   * observação livre tem poucos valores distintos e passaria por categoria, rendendo uma rosca de
+   * "receita por observação". Rótulo real é curto ("Indicação", "SP", "Produto 20").
+   */
+  comprimentoMedio?: number;
   /** Heurística de cabeçalho: a coluna parece dinheiro. Vira formato "moeda" com prefixo "R$". */
   moeda?: boolean;
   /** Heurística de cabeçalho ou de valores com "%": vira formato "percentual". */
@@ -55,6 +61,8 @@ export interface Dados {
   totalLinhas: number;
   /** true quando o arquivo foi cortado em LINHAS_MAXIMAS. */
   truncado: boolean;
+  /** Como os bytes foram lidos. "windows-1252" significa que o arquivo não era UTF-8. */
+  codificacao: Codificacao;
 }
 
 /**
@@ -73,6 +81,22 @@ const AMOSTRA = 5;
 
 export class ErroPlanilha extends Error {}
 
+/**
+ * Menor e maior de uma lista, por laço. `Math.min(...lista)` passa cada item como argumento e
+ * estoura a pilha por volta de 130 mil — perto demais do teto de 50 mil linhas, ainda mais com a
+ * pilha já funda dentro do servidor. Um arquivo grande derrubaria a requisição inteira.
+ */
+export function extremos(numeros: number[]): { min: number; max: number } | null {
+  if (numeros.length === 0) return null;
+  let min = numeros[0];
+  let max = numeros[0];
+  for (const n of numeros) {
+    if (n < min) min = n;
+    if (n > max) max = n;
+  }
+  return { min, max };
+}
+
 // ---------------------------------------------------------------------------------------------------
 // Formato do arquivo
 // ---------------------------------------------------------------------------------------------------
@@ -86,6 +110,28 @@ export function detectarFormato(nome: string, bytes: Uint8Array): string | null 
   }
   if (bytes[0] === 0x25 && bytes[1] === 0x50) return "Isto é um PDF. Envie a planilha em CSV."; // "%P"
   return null;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Codificação
+// ---------------------------------------------------------------------------------------------------
+
+export type Codificacao = "utf-8" | "windows-1252";
+
+/**
+ * Decodifica os bytes do arquivo. Tenta UTF-8 em modo estrito; se algum byte for inválido, cai para
+ * windows-1252 — que é o que o Excel no Windows escreve ao "Salvar como CSV" em português. Sem esta
+ * queda, "Indicação" chegava como "Indica√ß√£o" e a coluna inteira ficava ilegível.
+ *
+ * windows-1252 e não iso-8859-1: os dois só diferem na faixa 0x80–0x9F, onde o Excel põe aspas
+ * curvas e travessão. Decodificar como iso-8859-1 traria caracteres de controle no lugar deles.
+ */
+export function decodificar(bytes: Uint8Array): { texto: string; codificacao: Codificacao } {
+  try {
+    return { texto: new TextDecoder("utf-8", { fatal: true }).decode(bytes), codificacao: "utf-8" };
+  } catch {
+    return { texto: new TextDecoder("windows-1252").decode(bytes), codificacao: "windows-1252" };
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -282,7 +328,8 @@ function pareceIdentificador(rotulo: string, valores: string[]): boolean {
   // Regra estrutural, a mais fraca das quatro: exige volume, unicidade total E valores grandes.
   // Sem o piso de 1.000, uma coluna de quantidade com poucos registros e valores distintos ("12
   // aulas", "7 aulas") seria confundida com chave primária e sairia dos gráficos.
-  return numeros.length >= 20 && new Set(numeros).size === numeros.length && Math.min(...numeros) >= 1000;
+  const faixa = extremos(numeros);
+  return numeros.length >= 20 && new Set(numeros).size === numeros.length && faixa !== null && faixa.min >= 1000;
 }
 
 const PALAVRAS_MOEDA = /receita|valor|pre[cç]o|custo|faturamento|venda|ticket|sal[aá]rio|gasto|despesa|lucro|margem|r\$|total|montante|pagamento|investimento/i;
@@ -296,7 +343,19 @@ const PALAVRAS_PERCENTUAL = /%|percent|taxa|convers[aã]o|propor[cç][aã]o/i;
  * Lê o conteúdo de um CSV/TSV e devolve os dados já tipados por coluna.
  * O tipo de cada coluna sai por maioria: 80% das células não vazias precisam converter para o tipo.
  */
-export function lerPlanilha(texto: string, nome: string): Dados {
+/**
+ * Tipo escolhido à mão para uma coluna, por chave. Nenhuma heurística acerta todo arquivo, e sem
+ * isto a pessoa via o erro e não tinha o que fazer. O tipo forçado vale mesmo contra os quatro
+ * sinais de código: quem manda é quem conhece o dado.
+ */
+export type TiposForcados = Record<string, TipoColuna>;
+
+export function lerPlanilha(
+  texto: string,
+  nome: string,
+  codificacao: Codificacao = "utf-8",
+  forcados: TiposForcados = {},
+): Dados {
   const semBom = texto.charCodeAt(0) === 0xfeff ? texto.slice(1) : texto;
   const cruas = quebrarLinhas(semBom);
   if (cruas.length === 0) throw new ErroPlanilha("O arquivo está vazio.");
@@ -330,9 +389,10 @@ export function lerPlanilha(texto: string, nome: string): Dados {
     const datas = valores.filter((v) => lerData(v) !== null).length;
     const total = valores.length || 1;
     // Data vem antes de número: "2026" e "09/2026" convertem para os dois, e data é a leitura útil.
-    let tipo: TipoColuna = datas / total >= 0.8 ? "data" : numeros / total >= 0.8 ? "numero" : "texto";
+    const forcado = forcados[c.chave];
+    let tipo: TipoColuna = forcado ?? (datas / total >= 0.8 ? "data" : numeros / total >= 0.8 ? "numero" : "texto");
     // Um código que parece número vira texto: preserva o valor e sai da conta de somar.
-    const ehCodigo = tipo === "numero" && pareceIdentificador(c.rotulo, valores);
+    const ehCodigo = !forcado && tipo === "numero" && pareceIdentificador(c.rotulo, valores);
     if (ehCodigo) tipo = "texto";
 
     const distintos = new Set<string>();
@@ -362,10 +422,14 @@ export function lerPlanilha(texto: string, nome: string): Dados {
       amostra: uteis.slice(0, AMOSTRA),
     };
     if (ehCodigo) coluna.identificador = true;
+    if (tipo === "texto" && valores.length > 0) {
+      coluna.comprimentoMedio = valores.reduce((soma, v) => soma + v.length, 0) / valores.length;
+    }
     if (tipo === "numero") {
       const nums = valores.map(lerNumero).filter((n): n is number => n !== null);
-      coluna.min = nums.length ? Math.min(...nums) : undefined;
-      coluna.max = nums.length ? Math.max(...nums) : undefined;
+      const faixa = extremos(nums);
+      coluna.min = faixa?.min;
+      coluna.max = faixa?.max;
       coluna.soma = nums.reduce((s, n) => s + n, 0);
       coluna.amostra = nums.slice(0, AMOSTRA);
       const pareceMoeda = PALAVRAS_MOEDA.test(c.rotulo) || valores.some((v) => /R\$/i.test(v));
@@ -399,6 +463,7 @@ export function lerPlanilha(texto: string, nome: string): Dados {
     linhas,
     totalLinhas: cruas.length - 1,
     truncado: cruas.length - 1 > brutas.length,
+    codificacao,
   };
 }
 
