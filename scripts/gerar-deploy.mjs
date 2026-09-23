@@ -316,6 +316,11 @@ for (const app of instalacoes) {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "render.yaml"), renderApp(app));
   writeFileSync(join(dir, "README.md"), readmeBranch(app));
+  // Os sites do Site Cowork usam um build público mínimo, sem acesso ao código privado do app.
+  if (app.id === "clone-site") {
+    mkdirSync(join(dir, "site-build"), { recursive: true });
+    copyFileSync(join(raiz, "clone-site", "deploy", "render-site", "build.mjs"), join(dir, "site-build", "build.mjs"));
+  }
 }
 
 console.log(`render.yaml da suíte, ${instalacoes.length} Blueprints de app e publico/ (main + ${instalacoes.length} branches) gerados.`);

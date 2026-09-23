@@ -6,6 +6,9 @@
 //            numa bolha flutuante (components/ChatAgente.tsx): enquanto ele trabalha, a prévia mostra o rascunho ao vivo.
 // Publicar é explícito: a prévia da última versão pode diferir do que está no ar.
 import Link from "next/link";
+import { EditorTelaCheia } from "@/components/EditorTelaCheia";
+import { MateriaisProjeto } from "@/components/MateriaisProjeto";
+import { HistoricoPublicacoes } from "@/components/HistoricoPublicacoes";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BolhaAgente, ChatAgente } from "@/components/ChatAgente";
@@ -15,6 +18,7 @@ import { PainelDominio } from "@/components/PainelDominio";
 import { PainelImagens } from "@/components/PainelImagens";
 import { PainelMarca } from "@/components/PainelMarca";
 import { PainelMetricas } from "@/components/PainelMetricas";
+import { PainelRender } from "@/components/PainelRender";
 import { PainelNetlify } from "@/components/PainelNetlify";
 import { PreviaPagina } from "@/components/PreviaPagina";
 import { ListaEtapas, ProgressoGeracao } from "@/components/ProgressoGeracao";
@@ -27,13 +31,14 @@ import { data } from "@/lib/formato";
 import type { Pagina, Projeto } from "@/lib/types";
 
 type Detalhe = { projeto: Projeto; pagina: Pagina | null; meta: Meta | null; htmlParcial: string | null };
-type Aba = "previa" | "versoes" | "imagens" | "marca" | "metricas" | "publicacao";
+type Aba = "materiais" | "previa" | "versoes" | "imagens" | "marca" | "metricas" | "publicacao";
 
 const ABAS: { valor: Aba; rotulo: string }[] = [
   { valor: "previa", rotulo: "Prévia" },
   { valor: "versoes", rotulo: "Versões" },
   { valor: "imagens", rotulo: "Imagens" },
   { valor: "marca", rotulo: "Marca" },
+  { valor: "materiais", rotulo: "Materiais" },
   { valor: "metricas", rotulo: "Métricas" },
   { valor: "publicacao", rotulo: "Publicação" },
 ];
@@ -48,6 +53,7 @@ export default function Page() {
   const [detalhe, setDetalhe] = useState<Detalhe | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [editorAberto, setEditorAberto] = useState(false);
   const [selecionada, setSelecionada] = useState<number | null>(null);
   // Atalhos de URL: ?aba=<nome> abre numa aba; ?agente=1 abre o agente (demonstrações e capturas).
   const [aba, setAba] = useState<Aba>(() => (ABAS.some((a) => a.valor === parametros.get("aba")) ? (parametros.get("aba") as Aba) : "previa"));
@@ -103,7 +109,7 @@ export default function Page() {
 
   async function apagar() {
     if (!detalhe) return;
-    if (!window.confirm(`Apagar o site «${detalhe.projeto.nome}»? O link público, as versões e as imagens deixam de existir. Essa ação não pode ser desfeita.`)) return;
+    if (!window.confirm(`Apagar o site «${detalhe.projeto.nome}»? O link público, as versões e as imagens deixam de existir. Essa ação não pode ser desfeita.${detalhe.projeto.render || detalhe.projeto.netlify ? " Publicações externas continuam ativas: remova-as no painel do Render ou da Netlify." : ""}`)) return;
     setOcupado(true);
     try {
       const r = await fetch(`/api/sites/${id}`, { method: "DELETE" });
@@ -142,7 +148,7 @@ export default function Page() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-3 flex-wrap">
                   <NomeEditavel projeto={p} aoAtualizar={aoAtualizar} />
-                  <ChipEstado estado={p.estado} />
+                  <ChipEstado estado={p.estado} publicado={Boolean(p.versaoPublicada || p.render?.versao || p.netlify?.versao)} />
                   {trabalhando && <span className="faixa-ao-vivo">Editando ao vivo</span>}
                 </div>
                 <p className="text-muted text-[13px] mt-1">
@@ -151,7 +157,7 @@ export default function Page() {
                 </p>
               </div>
               <div className="flex items-center gap-3 flex-wrap shrink-0">
-                {p.estado === "pronto" && <a href={`/s/${p.slug}`} target="_blank" rel="noopener noreferrer" className="btn-compacto">Ver no ar<Icone nome="externo" tamanho={14} /></a>}
+                {(p.versaoPublicada || p.render?.versao || p.netlify?.versao) && <a href={p.render?.versao ? p.render.url : p.netlify?.versao ? p.netlify.url : `/s/${p.slug}`} target="_blank" rel="noopener noreferrer" className="btn-compacto">Ver no ar<Icone nome="externo" tamanho={14} /></a>}
                 <button type="button" className="btn-link !text-muted text-[13px]" disabled={ocupado} onClick={apagar}>Apagar site</button>
               </div>
             </header>
@@ -208,8 +214,9 @@ export default function Page() {
                 {aba === "previa" && (
                   <div className="flex flex-col gap-4">
                     <FaixaPublicacao projeto={p} pagina={pagina} selecionada={versaoSelecionada.n} aoAtualizar={aoAtualizar} />
+                    <div><button className="btn-compacto-primario" disabled={trabalhando} onClick={() => setEditorAberto(true)}>Editar página em tela cheia</button></div>
                     <Origem meta={detalhe.meta} demoTexto="Exemplo ilustrativo, sem usar inteligência artificial." />
-                    <PreviaPagina key={htmlAoVivo ? "ao-vivo" : versaoSelecionada.n} html={htmlAoVivo ?? versaoSelecionada.html} titulo={htmlAoVivo ? `${pagina.titulo} (rascunho ao vivo)` : pagina.titulo} alturaComputador={760} />
+                    <PreviaPagina aoAmpliar={() => setEditorAberto(true)} key={htmlAoVivo ? "ao-vivo" : versaoSelecionada.n} html={htmlAoVivo ?? versaoSelecionada.html} titulo={htmlAoVivo ? `${pagina.titulo} (rascunho ao vivo)` : pagina.titulo} alturaComputador={760} />
                     {p.progresso?.etapas?.length ? (
                       <MaisDetalhes titulo="Como este site foi construído">
                         <ListaEtapas etapas={p.progresso.etapas} compacta />
@@ -223,7 +230,7 @@ export default function Page() {
                     <PainelVersoes projeto={p} pagina={pagina} selecionada={versaoSelecionada.n} aoSelecionar={(n) => { setSelecionada(n); }} aoAtualizar={aoAtualizar} />
                     <div className="flex flex-col gap-4">
                       <FaixaPublicacao projeto={p} pagina={pagina} selecionada={versaoSelecionada.n} aoAtualizar={aoAtualizar} />
-                      <PreviaPagina key={versaoSelecionada.n} html={versaoSelecionada.html} titulo={`${pagina.titulo} · versão ${versaoSelecionada.n}`} alturaComputador={640} />
+                      <PreviaPagina aoAmpliar={() => setEditorAberto(true)} key={versaoSelecionada.n} html={versaoSelecionada.html} titulo={`${pagina.titulo} · versão ${versaoSelecionada.n}`} alturaComputador={640} />
                     </div>
                   </div>
                 )}
@@ -242,24 +249,29 @@ export default function Page() {
                 {aba === "marca" && (
                   <div className="grid grid-cols-1 lg:grid-cols-[440px_minmax(0,1fr)] gap-6 [&>*]:min-w-0">
                     <PainelMarca projeto={p} aoAtualizar={(novo) => aoAtualizar({ projeto: novo })} aoAplicar={pedirAoAgente} />
-                    <PreviaPagina key={`marca-${versaoSelecionada.n}`} html={htmlAoVivo ?? versaoSelecionada.html} titulo={pagina.titulo} alturaComputador={560} />
+                    <PreviaPagina aoAmpliar={() => setEditorAberto(true)} key={`marca-${versaoSelecionada.n}`} html={htmlAoVivo ?? versaoSelecionada.html} titulo={pagina.titulo} alturaComputador={560} />
                   </div>
                 )}
 
+                {aba === "materiais" && <MateriaisProjeto projetoId={p.id} aoAplicar={pedirAoAgente} />}
+
                 {aba === "metricas" && (
                   <div className="max-w-[720px]">
-                    <PainelMetricas projetoId={p.id} publicado={p.estado === "pronto"} versaoAtual={ultima.n} aoAplicar={pedirAoAgente} />
+                    <PainelMetricas projetoId={p.id} publicado={Boolean(p.versaoPublicada)} versaoAtual={ultima.n} aoAplicar={pedirAoAgente} />
                   </div>
                 )}
 
                 {aba === "publicacao" && (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 [&>*]:min-w-0 max-w-[1100px]">
                     <LinkPublico projeto={p} aoAtualizar={aoAtualizar} />
+                    <PainelRender projeto={p} versao={pagina.versoes.at(-1)!.n} aoAtualizar={(novo) => aoAtualizar({ projeto: novo })} />
                     <PainelNetlify projeto={p} aoAtualizar={(novo) => aoAtualizar({ projeto: novo })} />
+                    <div className="lg:col-span-2"><HistoricoPublicacoes projeto={p} aoAtualizar={(novo) => aoAtualizar({ projeto: novo })} aoVer={(n) => { setSelecionada(n); setAba("versoes"); }} /></div>
                     <div className="lg:col-span-2"><PainelDominio projeto={p} aoAtualizar={(novo) => aoAtualizar({ projeto: novo })} /></div>
                   </div>
                 )}
 
+                {editorAberto ? <EditorTelaCheia htmlAoVivo={htmlAoVivo} trabalhando={trabalhando} projetoId={p.id} versao={versaoSelecionada} ultimaVersao={ultima.n} titulo={pagina.titulo} aoSalvar={(nova) => { aoAtualizar({ pagina: nova }); setSelecionada(nova.versoes.at(-1)!.n); }} aoFechar={() => setEditorAberto(false)}>
                 <BolhaAgente aberto={chatAberto} trabalhando={trabalhando} onClick={() => setChatAberto(true)} />
                 <ChatAgente
                   projetoId={p.id}
@@ -272,6 +284,20 @@ export default function Page() {
                   aoPrevia={setHtmlAoVivo}
                   aoTrabalhando={setTrabalhando}
                 />
+                </EditorTelaCheia> : <>
+                <BolhaAgente aberto={chatAberto} trabalhando={trabalhando} onClick={() => setChatAberto(true)} />
+                <ChatAgente
+                  projetoId={p.id}
+                  demo={detalhe.meta.demo}
+                  aberto={chatAberto}
+                  aoFechar={() => setChatAberto(false)}
+                  pedidoExterno={pedidoExterno}
+                  aoResponder={({ pagina: nova, projeto: novo }) => aoAtualizar({ pagina: nova, projeto: novo })}
+                  aoSelecionarVersao={(n) => { setSelecionada(n); if (semCaptura) setAba("previa"); }}
+                  aoPrevia={setHtmlAoVivo}
+                  aoTrabalhando={setTrabalhando}
+                />
+                </>}
               </>
             )}
           </>

@@ -41,6 +41,8 @@ import { projetoDoDominio } from "@/lib/projetos";
 function rotaPublica(pathname: string, metodo: string): boolean {
   if (pathname === "/mcp") return metodo === "POST";
   if (pathname === "/api/health") return true;
+  // Capacidade de leitura de um único pacote imutável, conferida na própria rota.
+  if (/^\/api\/releases\/[a-f0-9]{64}$/.test(pathname)) return metodo === "GET";
   if (pathname === "/api/rotinas/executar") return true;
   if (pathname === "/setup/trello") return true;
   if (pathname === "/conta" || pathname === "/entrar") return true;

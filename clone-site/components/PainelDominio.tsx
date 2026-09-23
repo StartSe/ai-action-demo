@@ -23,7 +23,7 @@ export function PainelDominio({ projeto, aoAtualizar }: { projeto: Projeto; aoAt
       .then((d) => { if (ativo) setEstado(d); })
       .catch(async (e) => { if (ativo) setErro((await lerErro(e)).mensagem); });
     return () => { ativo = false; };
-  }, [projeto.id, projeto.dominio]);
+  }, [projeto.id, projeto.dominio, projeto.render?.siteId]);
 
   async function salvar(e: FormEvent) {
     e.preventDefault();

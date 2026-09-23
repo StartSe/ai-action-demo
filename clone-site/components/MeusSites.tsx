@@ -11,12 +11,12 @@ import type { EstadoProjeto, Projeto } from "@/lib/types";
 
 export const INTERVALO_ACOMPANHAMENTO_MS = 4000;
 
-export const ROTULO_ESTADO: Record<EstadoProjeto, string> = { rascunho: "Rascunho", gerando: "Gerando", pronto: "No ar", falhou: "Falhou" };
+export const ROTULO_ESTADO: Record<EstadoProjeto, string> = { rascunho: "Rascunho", gerando: "Gerando", pronto: "Pronto para revisar", falhou: "Falhou" };
 const CLASSE_ESTADO: Record<EstadoProjeto, string> = { rascunho: "chip-cinza", gerando: "chip-media chip-gerando", pronto: "chip-positivo", falhou: "chip-alta" };
 const ROTULO_ORIGEM = { referencia: "pela captura", endereco: "pelo endereço", briefing: "pela descrição" } as const;
 
-export function ChipEstado({ estado }: { estado: EstadoProjeto }) {
-  return <span className={CLASSE_ESTADO[estado]}>{ROTULO_ESTADO[estado]}</span>;
+export function ChipEstado({ estado, publicado = false }: { estado: EstadoProjeto; publicado?: boolean }) {
+  return <span className={CLASSE_ESTADO[estado]}>{estado === "pronto" && publicado ? "No ar" : ROTULO_ESTADO[estado]}</span>;
 }
 
 /** "Gerando há 1 min 12 s", a partir de `atualizadoEm`. Contador real, não estimativa. */
@@ -78,7 +78,7 @@ function Miniatura({ s }: { s: Projeto }) {
   }
   return (
     <div className="miniatura-site">
-      <iframe title={`Miniatura de ${s.nome}`} src={`/s/${s.slug}?previa=1&v=${s.versaoPublicada ?? 1}`} sandbox="allow-scripts" loading="lazy" tabIndex={-1} aria-hidden="true" />
+      <iframe title={`Miniatura de ${s.nome}`} src={`/api/sites/${s.id}/previa`} sandbox="allow-scripts" loading="lazy" tabIndex={-1} aria-hidden="true" />
     </div>
   );
 }
@@ -116,7 +116,7 @@ export function MeusSites({ sites, aoMudar, aoPreencherExemplo, rodape }: { site
   }
 
   function apagar(s: Projeto) {
-    if (!window.confirm(`Apagar o site «${s.nome}»? O link público deixa de funcionar. Essa ação não pode ser desfeita.`)) return;
+    if (!window.confirm(`Apagar o site «${s.nome}»? O link público deixa de funcionar. Essa ação não pode ser desfeita.${s.render || s.netlify ? " Publicações externas continuam ativas: remova-as no painel do Render ou da Netlify." : ""}`)) return;
     agir(s.id, "", "DELETE");
   }
 
@@ -151,12 +151,12 @@ export function MeusSites({ sites, aoMudar, aoPreencherExemplo, rodape }: { site
                   <Link href={`/sites/${s.id}`} className="font-bold text-[15px] text-ink hover:underline break-words block truncate">{s.nome}</Link>
                   <p className="text-muted text-[12.5px] truncate">{ROTULO_ORIGEM[s.origem]} · {data(s.criadoEm, { comHora: true })}{s.estado === "gerando" ? <> · <TempoGerando desde={inicioDaGeracao(s)} /></> : null}</p>
                 </div>
-                <ChipEstado estado={s.estado} />
+                <ChipEstado estado={s.estado} publicado={Boolean(s.versaoPublicada || s.render?.versao || s.netlify?.versao)} />
               </div>
               {s.estado === "falhou" && s.erro && <p className="text-danger text-[12.5px] leading-snug">{s.erro.mensagem}</p>}
               <div className="flex items-center gap-3.5 flex-wrap text-[13px] mt-auto pt-1">
                 <Link href={`/sites/${s.id}`} className="btn-link inline-flex items-center gap-1">{s.estado === "gerando" ? "Acompanhar" : "Abrir"}</Link>
-                {s.estado === "pronto" && <a href={`/s/${s.slug}`} target="_blank" rel="noopener noreferrer" className="btn-link inline-flex items-center gap-1">Ver no ar<Icone nome="externo" tamanho={13} /></a>}
+                {(s.versaoPublicada || s.render?.versao || s.netlify?.versao) && <a href={s.render?.versao ? s.render.url : s.netlify?.versao ? s.netlify.url : `/s/${s.slug}`} target="_blank" rel="noopener noreferrer" className="btn-link inline-flex items-center gap-1">Ver no ar<Icone nome="externo" tamanho={13} /></a>}
                 {(s.estado === "falhou" || s.estado === "rascunho") && (
                   <button type="button" className="btn-link" disabled={ocupado === s.id} onClick={() => agir(s.id, "/gerar", "POST")}>
                     {ocupado === s.id ? "Enviando..." : s.estado === "falhou" ? "Tentar de novo" : "Gerar"}

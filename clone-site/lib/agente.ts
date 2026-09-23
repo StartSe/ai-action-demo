@@ -4,6 +4,7 @@
 // resto; `reescrever_pagina` (arquivo inteiro) fica para mudanças estruturais. Todas as mudanças de um pedido
 // viram UMA versão nova (rascunho); publicar é explícito. Corre no motor escolhido (lib/motor.ts).
 import crypto from "node:crypto";
+import { contextoEmpresa } from "./materiais";
 import { listar as listarAssets } from "./assets";
 import { edicaoDemo, esperar } from "./demo";
 import { ErroDePedido, novaVersao, paginaAtual } from "./gerador";
@@ -167,10 +168,11 @@ function montarSystem(projeto: Projeto, pagina: Pagina, metricas: string): strin
 O que você sabe:
 - Marca: ${marca}.
 - Formato do site: arquivo HTML único${/cdn\.tailwindcss\.com/.test(atual.html) ? " com Tailwind pela CDN" : " com CSS próprio em <style>"}.
-- Versão atual (rascunho): ${atual.n}. Versão publicada (no ar): ${projeto.versaoPublicada ?? atual.n}. Link público: /s/${projeto.slug}.
+- Versão atual (rascunho): ${atual.n}. Versão publicada (no ar): ${projeto.versaoPublicada ?? "nenhuma"}. Link público: /s/${projeto.slug}.
 - Imagens da empresa (use exatamente estes endereços em <img src>):
 ${linhasAssets}
 - Métricas dos últimos 7 dias: ${metricas}
+${contextoEmpresa(projeto.id, projeto.briefing)}
 
 Regras:
 - Toda mudança na página passa por ferramentas: editar_trecho para mudanças pontuais (copie o trecho EXATO do código atual em "antigo"), reescrever_pagina só quando a estrutura muda muito, trocar_imagem para colocar uma imagem da empresa. Nunca descreva uma mudança sem executá-la e nunca cole código na resposta.
@@ -202,6 +204,7 @@ export async function conversar(projetoId: string, textoBruto: unknown, eventos:
 
   // Estado de trabalho do pedido: o HTML vai sendo alterado pelas ferramentas e vira uma versão só no fim.
   let html = salva.pagina.versoes[salva.pagina.versoes.length - 1].html;
+  let versaoBase = salva.pagina.versoes[salva.pagina.versoes.length - 1].n;
   let alterado = false;
   let publicou = false;
   const versoes: number[] = [];
@@ -209,7 +212,8 @@ export async function conversar(projetoId: string, textoBruto: unknown, eventos:
 
   const salvarSeAlterado = () => {
     if (!alterado) return;
-    const { versao } = novaVersao(projeto.paginaId!, html, texto);
+    const { versao } = novaVersao(projeto.paginaId!, html, texto, versaoBase);
+    versaoBase = versao.n;
     versoes.push(versao.n);
     html = versao.html;
     alterado = false;

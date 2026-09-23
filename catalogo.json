@@ -331,7 +331,7 @@
       ],
       "problema": "Criar, hospedar e melhorar o site exige coordenar criação, tecnologia e estratégia.",
       "ia": "Seu colaborador cuida da criação, hospedagem e estratégia do site: constrói páginas, ajusta a marca, publica e acompanha métricas para propor melhorias.",
-      "integracoes": "IA (OpenRouter ou ChatGPT). Opcional: publicação na Netlify e domínio próprio no Render.",
+      "integracoes": "ChatGPT por assinatura (recomendado) ou OpenRouter. Publicação na Netlify ou em serviço independente no Render, com histórico e rollback.",
       "acento": "#792a3f",
       "porta": 3015,
       "captura": "capturas/clone-site.png",
@@ -341,7 +341,7 @@
       ],
       "demo": null,
       "independente": true,
-      "versao": "0.3.0",
+      "versao": "0.4.0",
       "plano": "0.5c-512mb",
       "discoGB": 1,
       "discoGuarda": "a conta, as configurações, a sessão ChatGPT, os sites, as versões das páginas e as imagens"

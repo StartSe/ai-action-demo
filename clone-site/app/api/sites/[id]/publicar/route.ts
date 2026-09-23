@@ -9,7 +9,7 @@ export async function POST(req: Request, { params }: RouteContext<"/api/sites/[i
   const { id } = await params;
   try {
     const corpo = await corpoJson(req);
-    const { projeto, versao } = publicar(id, corpo.n);
+    const { projeto, versao } = publicar(id, corpo.n, corpo.rollback === true);
     return Response.json({ projeto, versao: versao.n });
   } catch (err) {
     return respostaErroSites(err);

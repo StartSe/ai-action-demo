@@ -21,8 +21,8 @@ export async function PATCH(req: Request, { params }: RouteContext<"/api/sites/[
     const corpo = await corpoJson(req);
     if (corpo.nome !== undefined) renomear(id, corpo.nome);
     if (corpo.slug !== undefined) definirSlug(id, corpo.slug);
-    const { marca, instrucoes, briefing, stack, url } = corpo;
-    if ([marca, instrucoes, briefing, stack, url].some((v) => v !== undefined)) editarPedido(id, { marca, instrucoes, briefing, stack, url });
+    const { marca, instrucoes, briefing, stack, url, origem, imagem } = corpo;
+    if ([marca, instrucoes, briefing, stack, url, origem, imagem].some((v) => v !== undefined)) editarPedido(id, { marca, instrucoes, briefing, stack, url, origem, imagem });
     const projeto = obter(id);
     if (!projeto) throw new ProjetoNaoEncontrado();
     return Response.json({ projeto });

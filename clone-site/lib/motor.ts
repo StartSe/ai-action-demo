@@ -1,7 +1,5 @@
-// Motor de IA para texto e ferramentas: OpenRouter (lib/ai.ts, chave) ou ChatGPT (lib/chatgpt.ts, assinatura
-// conectada pelo Codex App Server). Único ponto do app que decide entre os dois — lib/ai.ts (INFRA da suíte)
-// não muda. A LEITURA DE CAPTURA continua sempre pelo OpenRouter (askVision): o Codex não recebe imagem aqui.
-// Escolha em /setup#ia (config IA_PROVEDOR: "openrouter" padrão | "chatgpt"; modelo do ChatGPT em CHATGPT_MODEL).
+// Motor de texto, visão e ferramentas: ChatGPT por assinatura ou OpenRouter.
+// Instalações novas recomendam ChatGPT; escolhas existentes são preservadas.
 import { aiEnabled, askText, askWithTools, ErroIA, type ToolDefinition, type ToolMessage } from "./ai";
 import { chatGPT, type AgentTool } from "./chatgpt";
 import { getConfig } from "./store";
@@ -12,7 +10,9 @@ export type Provedor = "openrouter" | "chatgpt";
 export { ACAO_CONECTAR_IA };
 
 export function provedor(): Provedor {
-  return getConfig("IA_PROVEDOR") === "chatgpt" ? "chatgpt" : "openrouter";
+  const escolhido = getConfig("IA_PROVEDOR");
+  if (escolhido === "openrouter" || escolhido === "chatgpt") return escolhido;
+  return aiEnabled() ? "openrouter" : "chatgpt";
 }
 
 /** Nome exibido na proveniência quando o texto veio do ChatGPT. */
@@ -35,9 +35,14 @@ export async function iaDisponivel(): Promise<boolean> {
   return aiEnabled();
 }
 
-/** Ler captura é só OpenRouter: com o ChatGPT escolhido e sem chave, clonar por captura cai em demonstração. */
-export function visaoDisponivel(): boolean {
-  return aiEnabled();
+/** A leitura de imagens acompanha a conexão do provedor principal. */
+export async function visaoDisponivel(): Promise<boolean> {
+  return iaDisponivel();
+}
+
+export async function gerarComImagem({ system, prompt, imagem }: { system: string; prompt: string; imagem: string }): Promise<string> {
+  try { return await chatGPT().run({ system, prompt, image: imagem, model: getConfig("CHATGPT_MODEL") || undefined }); }
+  catch (err) { throw erroChatGPT(err); }
 }
 
 function erroChatGPT(err: unknown): ErroIA {

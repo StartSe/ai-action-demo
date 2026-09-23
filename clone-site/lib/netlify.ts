@@ -7,6 +7,7 @@
 // O envio usa o método de "digest" da Netlify: POST /sites/{id}/deploys com o SHA-1 do arquivo e depois PUT do
 // conteúdo só se a Netlify ainda não o tiver — sem zip, sem dependência. Erros nunca mostram o corpo da resposta.
 import crypto from "node:crypto";
+import { conteudo as conteudoAsset } from "./assets";
 import { getConfig } from "./store";
 import type { Projeto, PublicacaoExterna } from "./types";
 
@@ -82,42 +83,66 @@ async function criarSite(chave: string, slug: string): Promise<Site> {
  * Publica o HTML como o `index.html` de um site na Netlify (cria o site na primeira vez, reaproveita depois) e
  * devolve o endereço. Espera até 45 s pelo processamento; se demorar mais, devolve assim mesmo (a Netlify termina sozinha).
  */
-export async function publicarNaNetlify(projeto: Projeto, html: string, versao: number): Promise<PublicacaoExterna> {
+export function arquivosDaPublicacao(projetoId: string, html: string): Map<string, Buffer> {
+  const arquivos = new Map<string, Buffer>();
+  const extensoes: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/svg+xml": "svg" };
+  const padrao = new RegExp(`/s/${projetoId}/a/([A-Za-z0-9_-]+)`, "g");
+  const pagina = html.replace(padrao, (_url, id: string) => {
+    const asset = conteudoAsset(projetoId, id);
+    if (!asset) throw new Error("Uma imagem usada nesta versão não está mais disponível. Ajuste a imagem antes de publicar.");
+    const caminho = `/assets/${id}.${extensoes[asset.mime] || "bin"}`;
+    arquivos.set(caminho, asset.dados);
+    return caminho;
+  });
+  arquivos.set("/index.html", Buffer.from(pagina, "utf8"));
+  return arquivos;
+}
+
+export async function consultarPublicacao(pub: PublicacaoExterna): Promise<PublicacaoExterna> {
+  if (pub.estado !== "publicando" || !pub.deployId) return pub;
+  const chave = getConfig(CHAVE_NETLIFY);
+  if (!chave) throw new Error("Conecte a Netlify para conferir a publicação.");
+  const atual = await chamar<Deploy>(chave, `/deploys/${encodeURIComponent(pub.deployId)}`, "acompanhar a publicação");
+  if (atual.state === "error") return { ...pub, estado: "falhou" };
+  if (atual.state !== "ready") return pub;
+  return { ...pub, estado: "pronto", versao: pub.versaoPendente, versaoPendente: undefined, publicadoEm: new Date().toISOString() };
+}
+
+export async function publicarNaNetlify(projeto: Projeto, html: string, versao: number, aoIniciar?: (p: PublicacaoExterna) => void): Promise<PublicacaoExterna> {
   const chave = getConfig(CHAVE_NETLIFY);
   if (!chave) throw new Error("A Netlify não está conectada. Conecte em Configurações.");
-
-  let site: Site | null = null;
-  if (projeto.netlify?.siteId) {
-    site = await chamar<Site>(chave, `/sites/${encodeURIComponent(projeto.netlify.siteId)}`, "abrir o site").catch(() => null);
-  }
-  if (!site) site = await criarSite(chave, projeto.slug);
-
-  const conteudo = Buffer.from(html, "utf8");
-  const sha1 = crypto.createHash("sha1").update(conteudo).digest("hex");
-  const deploy = await chamar<Deploy>(chave, `/sites/${encodeURIComponent(site.id)}/deploys`, "iniciar a publicação", {
-    method: "POST",
-    body: JSON.stringify({ files: { "/index.html": sha1 }, draft: false }),
-  });
-  if ((deploy.required ?? []).includes(sha1)) {
-    const r = await fetch(`${API}/deploys/${encodeURIComponent(deploy.id)}/files/index.html`, { method: "PUT", headers: cabecalhos(chave, "application/octet-stream"), body: new Uint8Array(conteudo), signal: AbortSignal.timeout(60_000) }).catch((err) => {
-      console.error("Falha de rede ao enviar o arquivo para a Netlify:", err instanceof Error ? err.message : err);
-      throw new Error("A Netlify não recebeu o arquivo. Tente de novo em um minuto.");
-    });
-    if (!r.ok) throw new Error(traduzirFalha(r.status, await r.text().catch(() => ""), "enviar o arquivo"));
-  }
-
-  const inicio = Date.now();
-  let estado = deploy.state ?? "";
-  while (estado !== "ready" && estado !== "error" && Date.now() - inicio < 45_000) {
-    await new Promise((r) => setTimeout(r, 1500));
-    const atual = await chamar<Deploy>(chave, `/deploys/${encodeURIComponent(deploy.id)}`, "acompanhar a publicação").catch(() => null);
-    if (!atual) break;
-    estado = atual.state ?? "";
-  }
-  if (estado === "error") throw new Error("A Netlify não conseguiu processar a publicação. Tente de novo.");
-
+  // Preparar os arquivos antes de criar recursos externos. Inclui as imagens históricas da versão.
+  const arquivos = arquivosDaPublicacao(projeto.id, html);
+  const site = projeto.netlify?.siteId
+    ? await chamar<Site>(chave, `/sites/${encodeURIComponent(projeto.netlify.siteId)}`, "abrir o site")
+    : await criarSite(chave, projeto.slug);
   const url = site.ssl_url || site.url || `https://${site.name}.netlify.app`;
-  return { siteId: site.id, url, versao, publicadoEm: new Date().toISOString() };
+  const vinculo = { ...projeto.netlify, siteId: site.id, url };
+  aoIniciar?.(vinculo);
+  const digests = Object.fromEntries([...arquivos].map(([caminho, dados]) => [caminho, crypto.createHash("sha1").update(dados).digest("hex")]));
+  const deploy = await chamar<Deploy>(chave, `/sites/${encodeURIComponent(site.id)}/deploys`, "iniciar a publicação", { method: "POST", body: JSON.stringify({ files: digests, draft: false }) });
+  let publicacao: PublicacaoExterna = { ...vinculo, deployId: deploy.id, estado: "publicando", versaoPendente: versao };
+  aoIniciar?.(publicacao);
+  try {
+    const enviados = new Set<string>();
+    for (const [caminho, dados] of arquivos) {
+      const digest = digests[caminho];
+      if (!(deploy.required ?? []).includes(digest) || enviados.has(digest)) continue;
+      const r = await fetch(`${API}/deploys/${encodeURIComponent(deploy.id)}/files${caminho}`, { method: "PUT", headers: cabecalhos(chave, "application/octet-stream"), body: new Uint8Array(dados), signal: AbortSignal.timeout(60_000) });
+      if (!r.ok) throw new Error(traduzirFalha(r.status, "", "enviar os arquivos"));
+      enviados.add(digest);
+    }
+  } catch (err) {
+    aoIniciar?.({ ...publicacao, estado: "falhou" });
+    throw err;
+  }
+  const inicio = Date.now();
+  do {
+    publicacao = await consultarPublicacao(publicacao);
+    if (publicacao.estado !== "publicando") break;
+    await new Promise((r) => setTimeout(r, 1500));
+  } while (Date.now() - inicio < 20_000);
+  return publicacao;
 }
 
 /** Apaga o site na Netlify (ao desfazer a publicação externa). Falha silenciosa: o vínculo local é removido de qualquer jeito. */

@@ -4,13 +4,13 @@
 // era o que fazia "a página veio pela metade"), e a tela acompanha o andamento: a lista de etapas e a prévia
 // parcial são gravadas no projeto (lib/projetos.ts) depois de cada passo.
 //
-// Insumos: captura (visão, só OpenRouter), endereço do site (HTML simplificado por lib/captura.ts, texto) ou
+// Insumos: captura (visão, pelo provedor principal), endereço do site (HTML simplificado por lib/captura.ts, texto) ou
 // briefing (texto). Em demonstração, a landing fixa de lib/demo.ts é montada seção a seção, com pausas, para o
 // fluxo ser o mesmo.
 import { ErroIA, meta, parseJSON, visionModelName, type Meta } from "./ai";
 import { esperar, paginaDemo } from "./demo";
 import { ACAO_ESCOLHER_MODELO, lerCaptura, metaTexto, sanitizarHtml, type OpcoesAssets } from "./gerador";
-import { gerarJSON, gerarTexto, iaDisponivel, visaoDisponivel } from "./motor";
+import { gerarJSON, gerarTexto, iaDisponivel, visaoDisponivel, provedor } from "./motor";
 import type { Referencia } from "./captura";
 import type { EtapaGeracao, Marca, ProgressoGeracao, Stack } from "./types";
 
@@ -24,6 +24,7 @@ export type PedidoConstrucao = {
   stack: Stack;
   marca?: Marca;
   instrucoes?: string;
+  contexto?: string;
   assets?: OpcoesAssets;
 };
 
@@ -99,7 +100,7 @@ const REGRAS_GERAIS = `- Escreva TODOS os textos em português do Brasil. Textos
 - Fotos, ilustrações, logotipos e ícones de terceiros NÃO são copiados nem carregados de outros sites: no lugar de cada imagem, um bloco (<div>) com as mesmas dimensões e posição, preenchido com a cor principal da marca (use var(--primaria)), com role="img" e aria-label descrevendo em português o que a imagem mostrava. Exceção: quando o pedido trouxer "Imagens da empresa", use essas imagens com <img> e os endereços exatos.
 - Nunca escreva comentários no HTML nem placeholders como "<!-- repita -->": escreva o código completo de cada elemento repetido.
 - Nenhum <script>, nenhum atributo de evento (onclick etc.), nada carregado de outras origens além do Google Fonts e do Tailwind.
-- Funciona bem no celular (390 px) e no computador.`;
+- Funciona bem no celular (390 px) e no computador, com hierarquia tipográfica, bom contraste, espaçamento generoso, navegação por âncoras e foco visível. Nunca invente depoimentos, clientes, preços ou resultados.`;
 
 function descreverMarca(marca?: Marca): string {
   if (!marca?.nome && !marca?.corPrimaria) return "Nenhuma marca foi informada: mantenha as cores da referência (ou escolha uma paleta sóbria) e use um nome de empresa fictício e neutro.";
@@ -126,7 +127,7 @@ function blocoDoInsumo(insumo: Insumo): string {
   return "";
 }
 
-const ESTRUTURA_BRIEFING = `Estrutura recomendada quando a referência é só um briefing (nesta ordem): cabeçalho com marca e menu curto; herói com título forte de até 12 palavras, frase de apoio e dois botões; três a seis benefícios ou serviços; "como funciona" em três passos; prova social (depoimentos plausíveis com nomes fictícios ou números); chamada final; rodapé com marca, contato e direitos.`;
+const ESTRUTURA_BRIEFING = `Estrutura recomendada quando a referência é só um briefing (nesta ordem): cabeçalho com marca e menu curto; herói com título forte de até 12 palavras, frase de apoio e dois botões; três a seis benefícios ou serviços; "como funciona" em três passos; prova social somente quando os materiais fornecem depoimentos ou números reais; chamada final; rodapé com marca, contato e direitos.`;
 
 const SYSTEM_PLANO = `Você é um diretor de arte e desenvolvedor front-end. Sua tarefa agora NÃO é escrever a página: é PLANEJAR a reconstrução dela em seções, para outro passo escrever uma seção por vez.
 Devolva SOMENTE um JSON válido, sem markdown, neste formato:
@@ -141,6 +142,8 @@ Regras:
 function promptPlano(pedido: PedidoConstrucao): string {
   const linhas = [`Planeje a reconstrução da página a partir de ${descreverInsumo(pedido.insumo)}.`, descreverMarca(pedido.marca)];
   if (pedido.insumo.tipo === "briefing") linhas.push(ESTRUTURA_BRIEFING);
+  if (pedido.contexto) linhas.push(pedido.contexto);
+  if (pedido.assets?.blocoAssets) linhas.push(pedido.assets.blocoAssets);
   if (pedido.instrucoes?.trim()) linhas.push(`Instruções de quem pediu a página (valem para o plano):\n${pedido.instrucoes.trim()}`);
   const bloco = blocoDoInsumo(pedido.insumo);
   if (bloco) linhas.push(bloco);
@@ -171,6 +174,7 @@ function promptSecao(pedido: PedidoConstrucao, plano: Plano, indice: number, ant
     descreverMarca(pedido.marca),
   ];
   if (pedido.assets?.blocoAssets?.trim()) linhas.push(pedido.assets.blocoAssets.trim());
+  if (pedido.contexto) linhas.push(pedido.contexto);
   if (pedido.instrucoes?.trim()) linhas.push(`Instruções de quem pediu a página:\n${pedido.instrucoes.trim()}`);
   if (anterior) linhas.push(`Final da seção anterior, para manter o mesmo estilo (não repita este trecho):\n${anterior.slice(-700)}`);
   if (pedido.insumo.tipo === "referencia") linhas.push("A captura anexada é a página inteira: localize a parte que corresponde a esta seção e reproduza só ela.");
@@ -344,7 +348,7 @@ async function construirDemo(pedido: PedidoConstrucao, aoProgresso: AoProgresso 
   const { cabeca, secoes } = fatiarBody(html);
   const plano: Plano = {
     titulo: /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]?.trim() ?? "Página de exemplo",
-    paleta: { fundo: "#ffffff", texto: "#0f172a", primaria: pedido.marca?.corPrimaria ?? "#0f766e", secundaria: pedido.marca?.corSecundaria ?? "#f59e0b" },
+    paleta: { fundo: "#ffffff", texto: "#0f172a", primaria: pedido.marca?.corPrimaria || "#0f766e", secundaria: pedido.marca?.corSecundaria ?? "#f59e0b" },
     fontes: { titulos: "Inter", corpo: "Inter" },
     secoes: secoes.map((s, i) => ({ id: slugId(tituloDaFatia(s, i), i), tipo: "outro", titulo: tituloDaFatia(s, i), conteudo: "" })),
   };
@@ -418,7 +422,7 @@ async function pedirSecao(pedido: PedidoConstrucao, plano: Plano, indice: number
  */
 export async function construirSite(pedido: PedidoConstrucao, aoProgresso?: AoProgresso): Promise<Construido> {
   const insumo = pedido.insumo;
-  const temIA = insumo.tipo === "referencia" ? visaoDisponivel() : await iaDisponivel();
+  const temIA = insumo.tipo === "referencia" ? await visaoDisponivel() : await iaDisponivel();
   if (!temIA) return construirDemo(pedido, aoProgresso);
 
   const andamento = new Andamento(aoProgresso, insumo.tipo === "briefing" ? "Entender o briefing" : "Entender a referência");
@@ -449,7 +453,7 @@ export async function construirSite(pedido: PedidoConstrucao, aoProgresso?: AoPr
 
   andamento.iniciar(ID_MONTAGEM, documentoParcial(plano, pedido.stack, prontos, -1));
   const html = sanitizarHtml(montarDocumento(plano, pedido.stack, prontos), pedido.stack);
-  const metaGerada: Meta = insumo.tipo === "referencia" ? { ...meta({ demo: false, insumo: INSUMOS.referencia }), model: visionModelName() } : metaTexto(INSUMOS[insumo.tipo]);
+  const metaGerada: Meta = insumo.tipo === "referencia" && provedor() === "openrouter" ? { ...meta({ demo: false, insumo: INSUMOS.referencia }), model: visionModelName() } : metaTexto(INSUMOS[insumo.tipo]);
   andamento.concluir(ID_MONTAGEM, `${plano.secoes.length} seções, ${Math.round(html.length / 1000)} mil caracteres`, html);
   return { html, meta: metaGerada, demo: false, plano, progresso: andamento.progresso };
 }

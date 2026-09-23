@@ -2,10 +2,10 @@
 // antigos, a última versão de uma página do histórico sem projeto. Cabeçalhos e página 404 ficam aqui para
 // app/s/[id]/route.ts só exportar GET (o Next não aceita outros exports num route.ts).
 import { PaginaNaoEncontrada, versaoAtual } from "./gerador";
-import { obterPorSlug, versaoPublicadaDe } from "./projetos";
+import { obterPorSlug, projetoDaPagina, versaoPublicadaDe } from "./projetos";
 
 /** Mantenha em sincronia com sanitizarHtml (lib/gerador.ts): tudo que o gerador deixa passar precisa estar liberado aqui. 'self' em img-src é para os assets do próprio app (/s/<id>/a/<asset>). */
-export const CSP_SITE = "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src https://cdn.tailwindcss.com 'unsafe-inline'; img-src 'self' data: https:";
+export const CSP_SITE = "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src https://cdn.tailwindcss.com; img-src 'self' data: https:";
 
 export function cabecalhosSite(): Record<string, string> {
   return {
@@ -50,6 +50,7 @@ export function htmlPublicado(slugOuId: string): Publicado | null {
     const publicada = versaoPublicadaDe(projeto);
     return publicada ? { html: publicada.versao.html, projetoId: projeto.id, titulo: publicada.titulo } : null;
   }
+  if (projetoDaPagina(slugOuId)) return null;
   try {
     const { titulo, versao } = versaoAtual(slugOuId);
     return { html: versao.html, titulo };

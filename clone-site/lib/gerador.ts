@@ -4,7 +4,7 @@
 // Os prompts de edição são portados e traduzidos do projeto aberto screenshot-to-code (abi/screenshot-to-code),
 // adaptados para um único arquivo HTML em português e com as imagens de terceiros substituídas por blocos na cor da marca.
 import { askVision, ErroIA, meta, type Meta } from "./ai";
-import { gerarTexto, iaDisponivel, nomeModeloChatGPT, provedor } from "./motor";
+import { gerarTexto, gerarComImagem, iaDisponivel, nomeModeloChatGPT, provedor } from "./motor";
 import { LIMITE_IMAGEM_BYTES } from "./captura";
 import { edicaoDemo, esperar } from "./demo";
 import { atualizarSaida, obter, salvar } from "./historico";
@@ -90,7 +90,7 @@ export function normalizarMarca(bruto: unknown): { marca?: Marca; erro?: string 
   if (corPrimaria && !COR_HEX.test(corPrimaria)) return { erro: "A cor principal precisa estar no formato #RRGGBB (ex.: #0f766e)." };
   if (corSecundaria && !COR_HEX.test(corSecundaria)) return { erro: "A cor secundária precisa estar no formato #RRGGBB (ex.: #f59e0b)." };
   if (!corPrimaria && corSecundaria) return { erro: "Informe a cor principal antes da secundária." };
-  const marca: Marca = { nome, corPrimaria: corPrimaria || "#374151" };
+  const marca: Marca = { nome, corPrimaria };
   if (corSecundaria) marca.corSecundaria = corSecundaria;
   return { marca };
 }
@@ -122,6 +122,7 @@ export function metaTexto(insumo: string): Meta {
  */
 export async function lerCaptura(opcoes: { system: string; prompt: string; imagem: string; maxTokens?: number }): Promise<string> {
   try {
+    if (provedor() === "chatgpt") return await gerarComImagem(opcoes);
     return await askVision({ ...opcoes, temperature: 0.2 });
   } catch (err) {
     if (err instanceof ErroIA && err.codigo === "sem_visao") {
@@ -249,8 +250,7 @@ export async function editarPagina(id: string, instrucao: string, htmlBase?: str
     metaGerada = metaTexto(INSUMO_EDICAO);
   }
 
-  const versao: Versao = { n, html, instrucao: (rotulo || instrucao).trim().slice(0, 300), criadoEm: new Date().toISOString() };
-  const nova = gravarVersao(pagina, versao);
+  const { pagina: nova, versao } = novaVersao(id, html, rotulo || instrucao, atual.n);
   return { demo: metaGerada.demo, pagina: nova, meta: metaGerada, versao };
 }
 
@@ -264,11 +264,16 @@ export function paginaAtual(id: string): { pagina: Pagina; stack: Stack; atual: 
  * Grava uma versão nova a partir de um HTML já pronto (o agente edita por trecho e devolve o arquivo inteiro):
  * passa pela mesma extração/sanitização da geração. `instrucao` é o rótulo curto da lista de versões.
  */
-export function novaVersao(id: string, html: string, instrucao: string): { pagina: Pagina; versao: Versao } {
+export function novaVersao(id: string, html: string, instrucao: string, versaoBase?: number): { pagina: Pagina; versao: Versao } {
   const { pagina, stack } = carregarPagina(id);
+  if (versaoBase !== undefined && pagina.versoes.at(-1)?.n !== versaoBase) throw new ConflitoEdicao();
   const limpo = sanitizarHtml(extrairHtml(html), stack);
   const versao: Versao = { n: proximoNumero(pagina), html: limpo, instrucao: instrucao.trim().slice(0, 300) || "Mudança feita pelo agente", criadoEm: new Date().toISOString() };
   return { pagina: gravarVersao(pagina, versao), versao };
+}
+
+export class ConflitoEdicao extends Error {
+  constructor() { super("O site recebeu outra alteração enquanto você editava. Seu texto foi mantido no editor. Reabra a versão mais recente antes de salvar."); }
 }
 
 /** "Voltar para esta": copia o HTML da versão n como uma versão nova, sem apagar as intermediárias. */
