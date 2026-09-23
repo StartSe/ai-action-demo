@@ -141,6 +141,23 @@ describe("distribuição", () => {
     ]);
   });
 
+  it("não entrega distribuição quando alguma categoria soma negativo", () => {
+    // Fatia negativa não tem como ser desenhada, e filtrá-la esconderia a categoria inteira.
+    const comSaldo = lerPlanilha(["Cat;Saldo", "A;-100", "B;50", "C;80", "D;20"].join("\n"), "s.csv");
+    const r: Receita = { id: "c1", titulo: "x", posicao, tipo: "pizza", agruparPor: "cat", coluna: "saldo", agregacao: "soma" };
+    expect(calcular(r, comSaldo)).toBeNull();
+  });
+
+  it("corta célula de texto gigante na tabela", () => {
+    const gigante = lerPlanilha(["Nome;Valor", `${"x".repeat(500)};10`, "Ana;20"].join("\n"), "g.csv");
+    const r: Receita = { id: "c1", titulo: "t", posicao, tipo: "tabela", colunas: ["nome", "valor"], ordenarPor: "valor", ordem: "desc" };
+    const c = calcular(r, gigante);
+    if (c?.tipo !== "tabela") throw new Error("tipo inesperado");
+    const maior = c.dados.linhas.map((l) => String(l.nome)).sort((a, b) => b.length - a.length)[0];
+    expect(maior.length).toBeLessThanOrEqual(121);
+    expect(maior.endsWith("…")).toBe(true);
+  });
+
   it("agrupa o excedente em Outros respeitando o limite", () => {
     const muitas = lerPlanilha(
       ["Cat;Valor", "a;10", "b;9", "c;8", "d;7", "e;6", "f;5", "g;4"].join("\n"),

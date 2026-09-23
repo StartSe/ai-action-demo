@@ -35,7 +35,7 @@ export async function POST(req: Request) {
       truncado: dados.truncado,
       resumo: resumoDeDados(dados),
       // Só o perfil das colunas volta para a tela: as linhas ficam no servidor.
-      colunas: dados.colunas.map((c) => ({ chave: c.chave, rotulo: c.rotulo, tipo: c.tipo, preenchidos: c.preenchidos, distintos: c.distintos, descartados: c.descartados })),
+      colunas: dados.colunas.map((c) => ({ chave: c.chave, rotulo: c.rotulo, tipo: c.tipo, preenchidos: c.preenchidos, distintos: c.distintos, descartados: c.descartados, identificador: c.identificador ?? false })),
     });
   } catch (err) {
     if (err instanceof ErroPlanilha) return Response.json({ error: err.message }, { status: 422 });

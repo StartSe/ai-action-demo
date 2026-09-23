@@ -15,6 +15,8 @@ export interface ColunaLida {
   distintos: number;
   /** Células não vazias que não viraram número/data e ficaram de fora das contas. */
   descartados: number;
+  /** A coluna é um código (CEP, CPF, id, ano): fica como texto e nunca entra numa soma. */
+  identificador: boolean;
 }
 
 export interface PlanilhaEnviada {
@@ -90,6 +92,7 @@ export function EnvioPlanilha({
     // Dois avisos que valem mais que a lista de chips: coluna vazia não vira nada, e célula que
     // não converteu sai silenciosamente das somas se ninguém disser.
     const descartadas = planilha.colunas.filter((c) => c.descartados > 0);
+    const codigos = planilha.colunas.filter((c) => c.identificador);
     const vazias = planilha.colunas.filter((c) => c.preenchidos === 0);
     return (
       <div className="card p-5 mb-3">
@@ -130,11 +133,20 @@ export function EnvioPlanilha({
             </Aviso>
           </div>
         )}
+        {codigos.length > 0 && (
+          <div className="mb-3">
+            <Aviso tom="ok">
+              {codigos.map((c) => `"${c.rotulo}"`).join(", ")} {codigos.length === 1 ? "foi lida" : "foram lidas"} como código, não como
+              número: {codigos.length === 1 ? "ela serve" : "elas servem"} para agrupar e aparecer na tabela, mas {codigos.length === 1 ? "não entra" : "não entram"} em nenhuma soma.
+            </Aviso>
+          </div>
+        )}
         <p className="text-[12.5px] text-muted mb-2">Confira se as colunas foram entendidas:</p>
         <ul className="flex flex-wrap gap-1.5">
           {planilha.colunas.map((c) => (
             <li key={c.chave} className={`text-[12px] px-2 py-1 rounded-[7px] ${COR_TIPO[c.tipo]} ${c.preenchidos === 0 ? "opacity-50" : ""}`} title={`${c.preenchidos} preenchidos · ${c.distintos} valores distintos${c.descartados > 0 ? ` · ${c.descartados} ignorados` : ""}`}>
-              <span className="font-semibold">{c.rotulo}</span> <span className="opacity-75">{ROTULO_TIPO[c.tipo]}</span>
+              <span className="font-semibold">{c.rotulo}</span>{" "}
+              <span className="opacity-75">{c.identificador ? "código" : ROTULO_TIPO[c.tipo]}</span>
             </li>
           ))}
         </ul>

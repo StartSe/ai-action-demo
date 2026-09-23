@@ -35,6 +35,12 @@ export interface ColunaDados {
   moeda?: boolean;
   /** Heurística de cabeçalho ou de valores com "%": vira formato "percentual". */
   percentual?: boolean;
+  /**
+   * A coluna é um código, não uma medida: CEP, CPF, telefone, id, matrícula, ano. Ela é numérica
+   * na forma, mas somar não significa nada — "Total de CEP" foi o que a sonda produziu antes disto.
+   * Colunas assim ficam como texto, o que também preserva o zero à esquerda ("01310" virava 1310).
+   */
+  identificador?: boolean;
 }
 
 /** Uma célula já convertida: número para colunas numéricas, string para o resto, null quando vazia. */
@@ -249,6 +255,36 @@ export function chaveDe(rotulo: string, jaUsadas: Set<string>): string {
   return chave;
 }
 
+/**
+ * Cabeçalhos que denunciam um código. A lista é curta de propósito: "número" e "conta" ficam de
+ * fora porque aparecem em medidas legítimas ("número de aulas", "contas a receber"). O reconhecimento
+ * estrutural abaixo pega o resto.
+ */
+const PALAVRAS_IDENTIFICADOR = /(^|[^a-z])(ids?|c[oó]d|c[oó]digos?|cep|cpf|cnpj|rg|telefones?|celulares?|fone|whatsapp|matr[ií]culas?|protocolos?|sku|ean|nit|pis|cnae|inscri[cç][aã]o)([^a-z]|$)/i;
+
+/** Zero à esquerda seguido de dígito: nunca é um número, é um código que perderia o zero. */
+const ZERO_A_ESQUERDA = /^0\d/;
+
+/**
+ * Decide se uma coluna numérica é, na verdade, um código. Três sinais, qualquer um basta:
+ * o cabeçalho; zero à esquerda em alguma célula; e o formato de ano (inteiro de 4 dígitos entre
+ * 1900 e 2100), que é dimensão e não medida. Um quarto sinal, mais fraco, exige volume: inteiros
+ * todos distintos em 10 linhas ou mais é a assinatura de uma chave primária.
+ */
+function pareceIdentificador(rotulo: string, valores: string[]): boolean {
+  if (PALAVRAS_IDENTIFICADOR.test(rotulo)) return true;
+  if (valores.some((v) => ZERO_A_ESQUERDA.test(v.trim()))) return true;
+  const numeros = valores.map(lerNumero).filter((n): n is number => n !== null);
+  if (numeros.length === 0) return false;
+  const inteiros = numeros.every((n) => Number.isInteger(n));
+  if (!inteiros) return false;
+  if (numeros.every((n) => n >= 1900 && n <= 2100) && valores.every((v) => v.trim().length === 4)) return true;
+  // Regra estrutural, a mais fraca das quatro: exige volume, unicidade total E valores grandes.
+  // Sem o piso de 1.000, uma coluna de quantidade com poucos registros e valores distintos ("12
+  // aulas", "7 aulas") seria confundida com chave primária e sairia dos gráficos.
+  return numeros.length >= 20 && new Set(numeros).size === numeros.length && Math.min(...numeros) >= 1000;
+}
+
 const PALAVRAS_MOEDA = /receita|valor|pre[cç]o|custo|faturamento|venda|ticket|sal[aá]rio|gasto|despesa|lucro|margem|r\$|total|montante|pagamento|investimento/i;
 const PALAVRAS_PERCENTUAL = /%|percent|taxa|convers[aã]o|propor[cç][aã]o/i;
 
@@ -294,7 +330,10 @@ export function lerPlanilha(texto: string, nome: string): Dados {
     const datas = valores.filter((v) => lerData(v) !== null).length;
     const total = valores.length || 1;
     // Data vem antes de número: "2026" e "09/2026" convertem para os dois, e data é a leitura útil.
-    const tipo: TipoColuna = datas / total >= 0.8 ? "data" : numeros / total >= 0.8 ? "numero" : "texto";
+    let tipo: TipoColuna = datas / total >= 0.8 ? "data" : numeros / total >= 0.8 ? "numero" : "texto";
+    // Um código que parece número vira texto: preserva o valor e sai da conta de somar.
+    const ehCodigo = tipo === "numero" && pareceIdentificador(c.rotulo, valores);
+    if (ehCodigo) tipo = "texto";
 
     const distintos = new Set<string>();
     for (const v of valores) {
@@ -322,6 +361,7 @@ export function lerPlanilha(texto: string, nome: string): Dados {
       distintos: tipo === "texto" ? distintos.size : distintosUteis.size,
       amostra: uteis.slice(0, AMOSTRA),
     };
+    if (ehCodigo) coluna.identificador = true;
     if (tipo === "numero") {
       const nums = valores.map(lerNumero).filter((n): n is number => n !== null);
       coluna.min = nums.length ? Math.min(...nums) : undefined;

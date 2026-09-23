@@ -134,6 +134,35 @@ describe("lerPlanilha", () => {
     expect(cidade?.descartados).toBe(0);
   });
 
+  it("trata coluna de código como texto, preservando o zero à esquerda", () => {
+    // "01310" virava 1310 e ainda aparecia somado num cartão "Total de CEP".
+    const dados = lerPlanilha(["CEP;Cliente;Valor", "01310;Ana;10", "04567;Bruno;20"].join("\n"), "c.csv");
+    const cep = dados.colunas.find((c) => c.chave === "cep");
+    expect(cep?.tipo).toBe("texto");
+    expect(cep?.identificador).toBe(true);
+    expect(dados.linhas[0].cep).toBe("01310");
+  });
+
+  it("reconhece código pelo cabeçalho, mesmo sem zero à esquerda", () => {
+    for (const rotulo of ["ID", "CPF", "CNPJ", "Telefone", "Matrícula", "student_id"]) {
+      const dados = lerPlanilha([`${rotulo};Valor`, "1001;10", "1002;20"].join("\n"), "x.csv");
+      expect(dados.colunas[0].tipo, rotulo).toBe("texto");
+    }
+  });
+
+  it("trata ano de quatro dígitos como dimensão, não como medida", () => {
+    const dados = lerPlanilha(["Ano;Receita", "2024;100", "2025;200", "2026;300"].join("\n"), "a.csv");
+    expect(dados.colunas.find((c) => c.chave === "ano")?.tipo).toBe("texto");
+    expect(dados.colunas.find((c) => c.chave === "receita")?.tipo).toBe("numero");
+  });
+
+  it("não confunde medida legítima com código", () => {
+    // Nomes que contêm palavras vizinhas das da lista, e quantidades pequenas e distintas.
+    const linhas = ["Número de aulas;Quantidade", ...Array.from({ length: 25 }, (_, i) => `${i + 1};${i + 40}`)];
+    const dados = lerPlanilha(linhas.join("\n"), "q.csv");
+    expect(dados.colunas.map((c) => c.tipo)).toEqual(["numero", "numero"]);
+  });
+
   it("recusa arquivo sem linha de dados e sem colunas separadas", () => {
     expect(() => lerPlanilha("Nome;Valor", "so-cabecalho.csv")).toThrow(/só tem o cabeçalho/);
     expect(() => lerPlanilha("uma coisa só\noutra", "sem-colunas.csv")).toThrow(/colunas separadas/);

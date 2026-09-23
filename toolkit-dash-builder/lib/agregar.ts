@@ -18,6 +18,8 @@ import type {
 /** "Outros" agrupa o excedente de uma distribuição, como o validador já fazia com a saída da IA. */
 const OUTROS = "Outros";
 const SEM_VALOR = "(sem valor)";
+/** Uma observação de 5 mil caracteres numa célula estoura a linha da tabela; o resto vira reticência. */
+const MAXIMO_TEXTO_CELULA = 120;
 
 // ---------------------------------------------------------------------------------------------------
 // Formato e rótulos
@@ -232,10 +234,11 @@ export function calcular(receita: Receita, dados: Dados): ComponentePainel | nul
   if (receita.tipo === "pizza" || receita.tipo === "rosca") {
     if (!grupo) return null;
     const coluna = acharColuna(dados, receita.coluna);
-    const fatias = agruparExcedente(
-      agrupar(dados, grupo, receita.coluna, receita.agregacao, undefined, "valor").filter((p) => p.valor > 0),
-      receita.limite ?? 6,
-    );
+    const bruto = agrupar(dados, grupo, receita.coluna, receita.agregacao, undefined, "valor");
+    // Parte de um todo não existe com sinal trocado: uma fatia negativa não tem como ser desenhada,
+    // e filtrá-la em silêncio esconderia a categoria inteira. Melhor não entregar o componente.
+    if (bruto.some((p) => p.valor < 0)) return null;
+    const fatias = agruparExcedente(bruto.filter((p) => p.valor > 0), receita.limite ?? 6);
     if (fatias.length < 2) return null;
     const d: DadosDistribuicao = { formato: formatoDe(coluna, receita.agregacao), fatias };
     if (d.formato === "moeda") d.prefixo = "R$";
@@ -260,7 +263,9 @@ export function calcular(receita: Receita, dados: Dados): ComponentePainel | nul
       const saida: Record<string, string | number> = {};
       for (const c of colunas) {
         const v = l[c.chave];
-        saida[c.chave] = v === null || v === undefined ? "" : v;
+        if (v === null || v === undefined) saida[c.chave] = "";
+        else if (typeof v === "string" && v.length > MAXIMO_TEXTO_CELULA) saida[c.chave] = `${v.slice(0, MAXIMO_TEXTO_CELULA)}…`;
+        else saida[c.chave] = v;
       }
       return saida;
     });
