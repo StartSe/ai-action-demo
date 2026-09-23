@@ -1,5 +1,9 @@
 import { apagarQualificacaoProfunda } from "./qualificacao-profunda-store";
-import { apagarConsultas, consultasDaProspeccao } from "./pesquisa-registro";
+import { apagarConsultas, consultasDaProspeccao, decisoesDaPesquisa } from "./pesquisa-registro";
+import { apagarCandidatosParciais, candidatosDaPesquisa, retirarCandidatoParcial } from "./pesquisa-parciais";
+import { perfilLinkedin } from "./perfil-linkedin";
+import { urlAvatarPublico } from "./avatar-pessoa";
+import { idsReencontrados, apagarReencontros } from "./pesquisa-reencontros";
 // Workspace de prospecção: tabelas próprias para produto, ICP, prospecção, conta,
 // lead e abordagem, no mesmo app.sqlite de lib/store.ts (ver abrirBanco()).
 // Cada entidade expõe criar/listar/obter/atualizar/apagar; nenhuma rota monta SQL.
@@ -61,6 +65,7 @@ function banco(): DatabaseSync {
     concluido_em TEXT
   )`);
   try { d.exec(`ALTER TABLE prospeccoes ADD COLUMN demo INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
+  try { d.exec(`ALTER TABLE prospeccoes ADD COLUMN tempos_etapas TEXT NOT NULL DEFAULT '{}'`); } catch { /* coluna já existe */ }
   d.exec(`CREATE INDEX IF NOT EXISTS idx_prospeccoes_produto ON prospeccoes (produto_id)`);
   d.exec(`CREATE TABLE IF NOT EXISTS contas (
     id TEXT PRIMARY KEY,
@@ -102,6 +107,10 @@ function banco(): DatabaseSync {
   try { d.exec(`ALTER TABLE leads ADD COLUMN demo INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
   try { d.exec(`ALTER TABLE leads ADD COLUMN papel_manual INTEGER NOT NULL DEFAULT 0`); } catch { /* coluna já existe */ }
   try { d.exec(`ALTER TABLE leads ADD COLUMN motivo_descarte TEXT`); } catch { /* coluna já existe */ }
+  try { d.exec(`ALTER TABLE leads ADD COLUMN avatar_url TEXT`); } catch { /* coluna já existe */ }
+  for (const coluna of ["resumo_profissional TEXT", "pesquisado_em TEXT", "qualidade_dados INTEGER NOT NULL DEFAULT 0"]) {
+    try { d.exec(`ALTER TABLE leads ADD COLUMN ${coluna}`); } catch { /* coluna já existe */ }
+  }
   d.exec(`CREATE INDEX IF NOT EXISTS idx_leads_prospeccao ON leads (prospeccao_id)`);
   d.exec(`CREATE INDEX IF NOT EXISTS idx_leads_conta ON leads (conta_id)`);
   d.exec(`CREATE TABLE IF NOT EXISTS abordagens (
@@ -228,13 +237,13 @@ export function apagarICP(id: string): void {
 
 // --- Prospecções --------------------------------------------------------------
 
-type LinhaProspeccao = { id: string; produto_id: string; icp_id: string; modo: string; criterios: string; estado: string; etapa: string | null; erro: string | null; demo: number; criado_em: string; concluido_em: string | null };
+type LinhaProspeccao = { id: string; produto_id: string; icp_id: string; modo: string; criterios: string; estado: string; etapa: string | null; tempos_etapas: string; erro: string | null; demo: number; criado_em: string; concluido_em: string | null };
 
 function linhaParaProspeccao(l: LinhaProspeccao): Prospeccao {
   return {
     id: l.id, produtoId: l.produto_id, icpId: l.icp_id, modo: l.modo as Prospeccao["modo"],
     criterios: JSON.parse(l.criterios), estado: l.estado as Prospeccao["estado"], etapa: l.etapa, erro: l.erro,
-    demo: l.demo === 1, criadoEm: l.criado_em, concluidoEm: l.concluido_em,
+    demo: l.demo === 1, criadoEm: l.criado_em, concluidoEm: l.concluido_em, temposEtapas: JSON.parse(l.tempos_etapas),
   };
 }
 
@@ -243,9 +252,10 @@ export function criarProspeccao(dados: NovaProspeccao, em?: Date): Prospeccao {
   const criadoEm = (em ?? new Date()).toISOString();
   const concluidoEm = dados.concluidoEm ?? null;
   const demo = dados.demo ?? false;
-  banco().prepare("INSERT INTO prospeccoes (id, produto_id, icp_id, modo, criterios, estado, etapa, erro, demo, criado_em, concluido_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(id, dados.produtoId, dados.icpId, dados.modo, JSON.stringify(dados.criterios), dados.estado, dados.etapa, dados.erro, demo ? 1 : 0, criadoEm, concluidoEm);
-  return { id, criadoEm, ...dados, demo, concluidoEm };
+  const temposEtapas = dados.estado === "executando" && dados.etapa ? { [dados.etapa]: { inicio: criadoEm } } : {};
+  banco().prepare("INSERT INTO prospeccoes (id, produto_id, icp_id, modo, criterios, estado, etapa, erro, demo, criado_em, concluido_em, tempos_etapas) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, dados.produtoId, dados.icpId, dados.modo, JSON.stringify(dados.criterios), dados.estado, dados.etapa, dados.erro, demo ? 1 : 0, criadoEm, concluidoEm, JSON.stringify(temposEtapas));
+  return { id, criadoEm, ...dados, demo, concluidoEm, temposEtapas };
 }
 
 export function listarProspeccoes(produtoId?: string): Prospeccao[] {
@@ -260,18 +270,33 @@ export function obterProspeccao(id: string): Prospeccao | null {
   return linha ? linhaParaProspeccao(linha) : null;
 }
 
-export function atualizarProspeccao(id: string, dados: Partial<NovaProspeccao>): Prospeccao | null {
+export function atualizarProspeccao(id: string, dados: Partial<NovaProspeccao>, em = new Date()): Prospeccao | null {
+  const anterior = obterProspeccao(id);
+  if (!anterior) return null;
+  const agora = em.toISOString();
+  const tempos = anterior.temposEtapas ?? {};
+  const mudouEtapa = dados.etapa !== undefined && dados.etapa !== anterior.etapa;
+  const encerrando = anterior.estado === "executando" && dados.estado !== undefined && dados.estado !== "executando";
+  if ((mudouEtapa || encerrando) && anterior.etapa && tempos[anterior.etapa] && !tempos[anterior.etapa].fim) {
+    tempos[anterior.etapa].fim = dados.concluidoEm ?? agora;
+  }
+  if (mudouEtapa && dados.etapa && (dados.estado ?? anterior.estado) === "executando") {
+    tempos[dados.etapa] = { inicio: agora };
+  }
   const { set, valores } = montarSet({
     modo: dados.modo, criterios: dados.criterios && JSON.stringify(dados.criterios), estado: dados.estado,
-    etapa: dados.etapa, erro: dados.erro, concluido_em: dados.concluidoEm,
+    etapa: dados.etapa, erro: dados.erro, concluido_em: dados.concluidoEm !== undefined ? dados.concluidoEm : encerrando ? agora : undefined,
+    tempos_etapas: mudouEtapa || encerrando ? JSON.stringify(tempos) : undefined,
   });
   if (set) banco().prepare(`UPDATE prospeccoes SET ${set} WHERE id = ?`).run(...valores, id);
   return obterProspeccao(id);
 }
 
 export function apagarProspeccao(id: string): void {
-  for (const lead of listarLeads(id)) apagarQualificacaoProfunda(lead.id);
+  for (const lead of listarLeads(id)) { apagarQualificacaoProfunda(lead.id); apagarReencontros(lead.id, true); }
+  apagarReencontros(id);
   apagarConsultas(id);
+  apagarCandidatosParciais(id);
   banco().prepare("DELETE FROM abordagens WHERE lead_id IN (SELECT id FROM leads WHERE prospeccao_id = ?)").run(id);
   banco().prepare("DELETE FROM leads WHERE prospeccao_id = ?").run(id);
   banco().prepare("DELETE FROM contas WHERE prospeccao_id = ?").run(id);
@@ -290,6 +315,7 @@ export function obterAndamento(id: string) {
   const icp = obterICP(prospeccao.icpId);
   const contas = listarContas(id);
   const leads = listarLeads(id);
+  const perfisComLead = new Set(leads.map(l => l.linkedin && perfilLinkedin(l.linkedin)).filter(Boolean));
   return {
     prospeccao,
     produtoNome: produto?.nome ?? "Produto",
@@ -298,7 +324,10 @@ export function obterAndamento(id: string) {
     icpPersonas: icp?.personas ?? [],
     contas,
     leads,
+    reencontrados: idsReencontrados(id).map(obterLead).filter((l): l is LeadProspeccao => !!l),
+    candidatos: candidatosDaPesquisa(id).filter(c => !perfisComLead.has(c.url)),
     consultas: consultasDaProspeccao(id),
+    decisoes: decisoesDaPesquisa(id),
     contasEncontradas: contas.length,
     leadsEncontrados: leads.length,
   };
@@ -315,8 +344,10 @@ export function listarLeadsComContexto() {
     }),
   );
   const sitePorConta = new Map(listarContas().map((c) => [c.id, c.site] as const));
+  const comAbordagem = new Set((banco().prepare("SELECT DISTINCT lead_id FROM abordagens").all() as { lead_id: string }[]).map(a => a.lead_id));
   const leads = listarLeads().map((l) => ({
     ...l,
+    temAbordagem: comAbordagem.has(l.id),
     prospeccaoNome: nomesPorProspeccao.get(l.prospeccaoId) ?? "Prospecção",
     site: l.contaId ? (sitePorConta.get(l.contaId) ?? null) : null,
   }));
@@ -336,9 +367,8 @@ export const MENSAGEM_EXECUCAO_TRAVADA = "A execução não terminou a tempo (ma
  */
 export function recuperarProspeccoesTravadas(limiteMinutos = 30): void {
   const corte = new Date(Date.now() - limiteMinutos * 60 * 1000).toISOString();
-  banco()
-    .prepare("UPDATE prospeccoes SET estado = 'falhou', erro = ? WHERE estado = 'executando' AND criado_em < ?")
-    .run(MENSAGEM_EXECUCAO_TRAVADA, corte);
+  const travadas = banco().prepare("SELECT id FROM prospeccoes WHERE estado = 'executando' AND criado_em < ?").all(corte) as { id: string }[];
+  for (const { id } of travadas) atualizarProspeccao(id, { estado: "falhou", erro: MENSAGEM_EXECUCAO_TRAVADA });
 }
 
 // --- Contas (empresas) --------------------------------------------------------------
@@ -396,6 +426,8 @@ export function apagarConta(id: string): void {
 // --- Leads (pessoas) --------------------------------------------------------------
 
 type LinhaLead = {
+  resumo_profissional: string | null; pesquisado_em: string | null; qualidade_dados: number;
+  avatar_url: string | null;
   id: string; prospeccao_id: string; conta_id: string | null; nome: string; cargo: string | null; empresa: string | null; cidade: string | null;
   linkedin: string | null; fonte: string | null; papel: string; fit: string | null; evidencias: string; sinais: string; hipotese: string | null;
   status: string; no_crm: number; demo: number; papel_manual: number; motivo_descarte: string | null; criado_em: string; atualizado_em: string;
@@ -403,6 +435,8 @@ type LinhaLead = {
 
 function linhaParaLead(l: LinhaLead): LeadProspeccao {
   return {
+    resumoProfissional: l.resumo_profissional, pesquisadoEm: l.pesquisado_em, qualidadeDados: l.qualidade_dados,
+    avatarUrl: urlAvatarPublico(l.avatar_url),
     id: l.id, prospeccaoId: l.prospeccao_id, contaId: l.conta_id, nome: l.nome, cargo: l.cargo, empresa: l.empresa, cidade: l.cidade,
     linkedin: l.linkedin, fonte: l.fonte, papel: l.papel as LeadProspeccao["papel"], papelManual: l.papel_manual === 1, fit: l.fit as LeadProspeccao["fit"],
     evidencias: JSON.parse(l.evidencias) as Evidencia[], sinais: JSON.parse(l.sinais) as SinalProspeccao[], hipotese: l.hipotese,
@@ -417,11 +451,14 @@ export function criarLead(dados: NovoLeadProspeccao, em?: Date): LeadProspeccao 
   const demo = dados.demo ?? false;
   const papelManual = dados.papelManual ?? false;
   const motivoDescarte = dados.motivoDescarte ?? null;
-  banco().prepare(`INSERT INTO leads (id, prospeccao_id, conta_id, nome, cargo, empresa, cidade, linkedin, fonte, papel, fit, evidencias, sinais, hipotese, status, no_crm, demo, papel_manual, motivo_descarte, criado_em, atualizado_em)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+  const avatarUrl = urlAvatarPublico(dados.avatarUrl);
+  banco().prepare(`INSERT INTO leads (id, prospeccao_id, conta_id, nome, cargo, empresa, cidade, linkedin, fonte, papel, fit, evidencias, sinais, hipotese, status, no_crm, demo, papel_manual, motivo_descarte, criado_em, atualizado_em, avatar_url)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(id, dados.prospeccaoId, dados.contaId, dados.nome, dados.cargo, dados.empresa, dados.cidade, dados.linkedin, dados.fonte, dados.papel, dados.fit,
-      JSON.stringify(dados.evidencias), JSON.stringify(dados.sinais), dados.hipotese, dados.status, dados.noCRM ? 1 : 0, demo ? 1 : 0, papelManual ? 1 : 0, motivoDescarte, agora, agora);
-  return { id, criadoEm: agora, atualizadoEm: agora, ...dados, demo, papelManual, motivoDescarte };
+      JSON.stringify(dados.evidencias), JSON.stringify(dados.sinais), dados.hipotese, dados.status, dados.noCRM ? 1 : 0, demo ? 1 : 0, papelManual ? 1 : 0, motivoDescarte, agora, agora, avatarUrl);
+  banco().prepare("UPDATE leads SET resumo_profissional = ?, pesquisado_em = ?, qualidade_dados = ? WHERE id = ?").run(dados.resumoProfissional ?? null, dados.pesquisadoEm ?? null, dados.qualidadeDados ?? 0, id);
+  retirarCandidatoParcial(dados.prospeccaoId, dados.linkedin);
+  return obterLead(id)!;
 }
 
 export function listarLeads(prospeccaoId?: string): LeadProspeccao[] {
@@ -438,6 +475,8 @@ export function obterLead(id: string): LeadProspeccao | null {
 
 export function atualizarLead(id: string, dados: Partial<NovoLeadProspeccao>, em?: Date): LeadProspeccao | null {
   const { set, valores } = montarSet({
+    resumo_profissional: dados.resumoProfissional, pesquisado_em: dados.pesquisadoEm, qualidade_dados: dados.qualidadeDados,
+    avatar_url: dados.avatarUrl === undefined ? undefined : urlAvatarPublico(dados.avatarUrl),
     conta_id: dados.contaId, nome: dados.nome, cargo: dados.cargo, empresa: dados.empresa, cidade: dados.cidade, linkedin: dados.linkedin,
     fonte: dados.fonte, papel: dados.papel, fit: dados.fit, evidencias: dados.evidencias && JSON.stringify(dados.evidencias),
     sinais: dados.sinais && JSON.stringify(dados.sinais), hipotese: dados.hipotese, status: dados.status,
@@ -451,6 +490,7 @@ export function atualizarLead(id: string, dados: Partial<NovoLeadProspeccao>, em
 }
 
 export function apagarLead(id: string): void {
+  apagarReencontros(id, true);
   apagarQualificacaoProfunda(id);
   banco().prepare("DELETE FROM abordagens WHERE lead_id = ?").run(id);
   banco().prepare("DELETE FROM leads WHERE id = ?").run(id);

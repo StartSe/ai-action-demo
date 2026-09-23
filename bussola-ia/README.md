@@ -1,6 +1,6 @@
 # Bússola de IA
 
-Versão **0.3.0** · [Notas da versão](./CHANGELOG.md).
+Versão **0.3.1** · [Notas da versão](./CHANGELOG.md).
 
 Um observatório de inovação com IA para o gestor acompanhar assessments de **empresas, áreas e times**, da criação das perguntas ao plano de ação.
 
@@ -8,6 +8,7 @@ Um observatório de inovação com IA para o gestor acompanhar assessments de **
 
 - **Painel do gestor:** indicadores calculados das coletas, busca, filtros por tipo de grupo/status, meta de participação, prazos, respostas e último diagnóstico de cada assessment. Atualiza a cada 30 segundos enquanto a página está visível.
 - **Oficina de criação:** informe empresa, área (opcional), setor, meta e missão. O Arquiteto adapta as perguntas usando IA quando conectada; sem conexão, usa um modelo com adaptação limitada às perguntas abertas. O revisor de cobertura usa regras automáticas. Revise as perguntas por dimensão, personalize no editor completo e salve na biblioteca antes de gerar o link.
+- **Feedback da criação:** campos bloqueados durante geração, abertura, salvamento e criação do link; mensagens por operação, tempo de espera e aviso de demora. É possível cancelar a espera pelo Arquiteto sem perder o contexto, ignorando respostas tardias. Falhas mantêm o preenchimento. Após criar o link e fechar a confirmação, a Oficina começa limpa para o próximo assessment.
 - **Jornada do participante:** uma dimensão por etapa, escala de 1 a 5 com controles acessíveis, navegação para revisar respostas e recuperação de falhas de envio sem apagar o preenchimento. Não solicita nome nem e-mail. Área e cargo são opcionais; o gestor pode consultar as respostas.
 - **Sala de análise:** radar interativo, forças/lacunas, comparação entre áreas e respostas abertas. O Analista interpreta os sinais; o Crítico questiona a amostra e os pressupostos; o Estrategista propõe experimentos. Cada perspectiva informa a origem (IA ou regras automáticas) e as dimensões usadas como evidência.
 - **Da leitura à ação:** simule uma mudança de nota no laboratório de cenários (hipótese aritmética, sem alterar o diagnóstico), registre ações concluídas no plano e exporte relatório por impressão/PDF, texto ou CSV. Ações concluídas são persistidas por diagnóstico.
@@ -49,9 +50,8 @@ docker compose up --build   # http://localhost:3012
 ## Imagem pública e deploy no Render
 A imagem é construída e publicada pelo GitHub Actions do repositório da suíte a cada push na `main`: `ghcr.io/startse/bussola-ia:latest`. Não é preciso construir nem publicar à mão.
 
-- [Teste gratuito, sem volume](https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-bussola-ia): usa `render.yaml`. Contas, configurações e respostas podem se perder em reinícios e atualizações.
-- [Instalar com volume persistente de 1 GB (plano pago)](https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-bussola-ia-persistente): usa `render-persistente.yaml`, com disco já ativado em `/app/data` e plano `0.5c-512mb`. Mantém a conta, as configurações, os questionários, os assessments, as respostas, os diagnósticos e os planos de ação. O Render cobra pelo serviço e pelo disco; consulte [discos persistentes](https://render.com/docs/disks).
-- As duas opções também estão no [catálogo principal](https://startse.github.io/ai-action-app-deploy/#bussola-ia). Os Blueprints são gerados de `catalogo.json`; não edite à mão. A instalação da suíte inteira usa a opção gratuita da Bússola.
+- [Instalar com volume persistente de 1 GB (plano pago)](https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-bussola-ia): usa `render.yaml`, com disco em `/app/data` e plano `0.5c-512mb`. Mantém a conta, as configurações, a sessão ChatGPT, os questionários, os assessments, as respostas, os diagnósticos e os planos de ação.
+- A instalação da suíte inteira usa o mesmo volume. O [link anterior com persistência](https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-bussola-ia-persistente) continua funcionando. Os Blueprints são gerados de `catalogo.json`; não edite à mão.
 - Rodar no seu computador sem construir: `docker run --rm -p 3012:10000 -v bussola-ia-dados:/app/data ghcr.io/startse/bussola-ia:latest` e abra http://localhost:3012.
 - Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
 - O health check responde em `/api/health` e informa a versão. O Docker define `DATA_DIR=/app/data`; preserve todo esse diretório, incluindo `app.sqlite`, `chave-mestra` e `chatgpt/` (chave de criptografia). Ao atualizar uma instalação que já tem volume, mantenha o mesmo serviço e disco. Criar outra instalação não transfere dados da anterior.

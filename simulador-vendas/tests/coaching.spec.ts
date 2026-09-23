@@ -1,5 +1,16 @@
 import { test, expect } from "./fixtures";
-import { planoBase, pontosFracos, validarPlano } from "../lib/coaching-comum";
+import { acertoBasico, dicaBase, planoBase, pontosFracos, validarAcerto, validarPlano } from "../lib/coaching-comum";
+
+test("acertos exigem evidência da última fala e orientação básica só reconhece descoberta concreta", () => {
+  const fala = "Qual é o maior desafio do seu time?";
+  expect(acertoBasico(fala)?.tipo).toBe("descoberta");
+  expect(acertoBasico("Bom dia, tudo bem?")).toBeUndefined();
+  expect(validarAcerto({ tipo: "valor", evidencia: "Nossa solução resolve tudo" }, fala)).toBeUndefined();
+  expect(validarAcerto({ tipo: "inventado", evidencia: fala }, fala)).toBeUndefined();
+  expect(validarAcerto({ tipo: "descoberta", evidencia: "Qual" }, fala)).toBeUndefined();
+  expect(validarAcerto({ tipo: "descoberta", evidencia: fala }, fala)).toEqual({ tipo: "descoberta", evidencia: fala });
+  expect(dicaBase("Preciso encerrar a ligação. Tem algo para retomarmos depois?")).toContain("proponha uma data para retomar");
+});
 import type { AvaliacaoSessao } from "../lib/avaliacao";
 
 const avaliacao: AvaliacaoSessao = {
@@ -53,7 +64,7 @@ test("orientador consulta treino, mantém dica fora da transcrição e reutiliza
   const simulacao = listar()[0];
   const participante = garantir({ nome: "Teste", email: "coach@example.com" });
   const sessao = abrir({ simulacaoCodigo: simulacao.codigo, participanteId: participante.id, modo: "texto" });
-  registrarMensagem({ sessaoId: sessao.id, papel: "vendedor", texto: "Posso apresentar nossa solução?" });
+  registrarMensagem({ sessaoId: sessao.id, papel: "vendedor", texto: "Qual é o maior desafio do seu time?" });
   const mensagem = registrarMensagem({ sessaoId: sessao.id, papel: "cliente", texto: "Quanto custa?" });
   const contexto = { simulacao, participante, sessao };
   setConfig("OPENROUTER_API_KEY", "teste");
@@ -67,14 +78,17 @@ test("orientador consulta treino, mantém dica fora da transcrição e reutiliza
       const contextoFerramenta = JSON.parse(pedido.messages.find((m: { role: string }) => m.role === "tool").content);
       expect(contextoFerramenta.criterios.length).toBeGreaterThan(0);
       expect(contextoFerramenta.personaId).toBeUndefined();
-      return Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ texto: "Pergunte qual resultado justificaria o investimento." }) } }] });
+      return Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ texto: "Pergunte qual resultado justificaria o investimento.", acerto: { tipo: "descoberta", evidencia: "Qual é o maior desafio do seu time?" } }) } }] });
     };
     const dica = await orientarTurno(contexto, mensagem.id);
     expect(dica.origem).toBe("ia");
+    expect(dica.acerto?.tipo).toBe("descoberta");
     expect(dica.texto.length).toBeLessThanOrEqual(160);
     expect(await orientarTurno(contexto, mensagem.id)).toEqual(dica);
     expect(chamadas).toBe(2);
     expect(transcricao(sessao.id)).toHaveLength(2);
     await expect(orientarTurno(contexto, "mensagem-de-outra-pessoa")).rejects.toThrow();
   } finally { globalThis.fetch = original; setConfig("OPENROUTER_API_KEY", null); }
+  const espontanea = registrarMensagem({ sessaoId: sessao.id, papel: "cliente", texto: "Preciso encerrar a ligação agora." });
+  expect((await orientarTurno(contexto, espontanea.id)).acerto).toBeUndefined();
 });

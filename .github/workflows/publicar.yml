@@ -2,13 +2,17 @@ name: Publicar imagens e catálogo
 
 # A cada push na main: constrói só as imagens dos apps cuja pasta mudou, publica em ghcr.io/startse/<app>
 # e regenera o repositório público (Blueprints do Render + página do catálogo).
-# Rodar à mão com "Reconstruir todas" marcado reconstrói as imagens dos 18 apps do catálogo.
+# A execução manual permite republicar um app específico ou reconstruir todas as imagens.
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
     inputs:
+      app:
+        description: "ID do app a republicar (ex.: mapify; vazio usa o comportamento de reconstruir todas)"
+        type: string
+        default: ""
       todos:
         description: "Reconstruir todas as imagens"
         type: boolean
@@ -16,6 +20,7 @@ on:
 
 concurrency:
   group: publicar
+  queue: max
   cancel-in-progress: false
 
 env:
@@ -36,11 +41,22 @@ jobs:
           fetch-depth: 0
       - id: lista
         env:
+          APP_ALVO: ${{ github.event_name == 'workflow_dispatch' && inputs.app || '' }}
           TODOS: ${{ github.event_name == 'workflow_dispatch' && inputs.todos }}
           ANTES: ${{ github.event.before }}
         run: |
           APPS="$(jq -r '.apps[].id' catalogo.json | sort)"
-          if [ "$TODOS" = "true" ] || [ -z "$ANTES" ] || [ "$ANTES" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$ANTES" 2>/dev/null; then
+          if [ -n "$APP_ALVO" ]; then
+            if [ "$TODOS" = "true" ]; then
+              echo "::error::Escolha um app específico ou a opção de reconstruir todas, não os dois."
+              exit 1
+            fi
+            if ! jq -e --arg app "$APP_ALVO" '.apps | any(.id == $app)' catalogo.json > /dev/null; then
+              echo "::error::O app solicitado não existe no catálogo."
+              exit 1
+            fi
+            LISTA="$APP_ALVO"
+          elif [ "$TODOS" = "true" ] || [ -z "$ANTES" ] || [ "$ANTES" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$ANTES" 2>/dev/null; then
             LISTA="$APPS"
           else
             ALTERADOS="$(git diff --name-only "$ANTES" "$GITHUB_SHA" | cut -d/ -f1 | sort -u)"
@@ -91,8 +107,8 @@ jobs:
           tags: |
             ${{ env.REGISTRO }}/${{ matrix.app }}:latest
             ${{ env.REGISTRO }}/${{ matrix.app }}:${{ github.sha }}
-          # O vínculo com o repositório público faz novos packages herdarem
-          # visibilidade pública sem expor o repositório do código-fonte.
+          # O vínculo herda permissões de acesso, não a visibilidade do pacote.
+          # Cada pacote novo precisa ser definido como Public em Package settings.
           labels: |
             org.opencontainers.image.source=${{ env.REPO_PUBLICO_HTTP }}
             org.opencontainers.image.title=${{ matrix.app }}
@@ -114,7 +130,11 @@ jobs:
             sleep 2
           done
           [ -n "$ok" ] || { echo "app não respondeu em /api/health a tempo"; exit 1; }
-          google-chrome --headless=new --no-sandbox --disable-gpu --window-size=1200,800 \
+          # `timeout` porque o Chromium headless só salva a imagem quando a página para de carregar:
+          # uma conexão que não termina (um `text/event-stream`, por exemplo) o deixa pendurado para
+          # sempre, e sem limite a execução inteira fica presa até alguém cancelar. Estourar aqui é só
+          # um aviso (`continue-on-error`): o catálogo publica sem a prévia deste app.
+          timeout 120 google-chrome --headless=new --no-sandbox --disable-gpu --window-size=1200,800 \
             --run-all-compositor-stages-before-draw --force-prefers-reduced-motion --virtual-time-budget=8000 \
             --screenshot="/tmp/captura-saida/${{ matrix.app }}.png" \
             "http://localhost:3900/?exemplo=1&captura=1"
@@ -146,8 +166,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # Leitura de pacote para distinguir "imagem privada" de "imagem que nunca foi construída":
-      # o manifesto é pedido duas vezes, com token anônimo e com token da execução.
+      # Consulta a visibilidade real pela API e confere o manifesto autenticado
+      # quando o download anônimo falha mesmo após novas tentativas.
       packages: read
     steps:
       - uses: actions/checkout@v4
@@ -191,53 +211,5 @@ jobs:
           GH_ATOR: ${{ github.actor }}
           GH_SENHA: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # O botão "Publicar este app" do catálogo baixa a imagem sem login: uma imagem privada faz o
-          # Render falhar na cara do executivo. Por isso o manifesto é pedido duas vezes:
-          #   anônimo 200                      -> pública, tudo certo;
-          #   anônimo != 200 e autenticado 200 -> a imagem existe, mas o pacote continua privado: ERRO,
-          #                                       porque só uma pessoa da organização pode liberá-la;
-          #   as duas != 200                   -> o pacote ainda não nasceu (app novo, primeiro build
-          #                                       ainda rodando): aviso, não quebra a publicação.
-          ACEITA="application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json"
-          manifesto() { # $1 = app, $2 = token
-            curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $2" -H "Accept: $ACEITA" \
-              "https://ghcr.io/v2/startse/$1/manifests/latest"
-          }
-          PRIVADAS=""
-          AUSENTES=""
-          for app in $(jq -r '.apps[].id' catalogo.json); do
-            ANONIMO="$(curl -s "https://ghcr.io/token?scope=repository:startse/$app:pull" | jq -r '.token // empty')"
-            if [ "$(manifesto "$app" "$ANONIMO")" = "200" ]; then continue; fi
-            NOSSO="$(curl -s -u "$GH_ATOR:$GH_SENHA" "https://ghcr.io/token?scope=repository:startse/$app:pull" | jq -r '.token // empty')"
-            if [ "$(manifesto "$app" "$NOSSO")" = "200" ]; then
-              PRIVADAS="$PRIVADAS $app"
-            else
-              AUSENTES="$AUSENTES $app"
-            fi
-          done
-          if [ -n "$AUSENTES" ]; then
-            {
-              echo "## Imagens que ainda não existem"
-              echo
-              echo "Nenhum build publicou estes pacotes até agora. Se o app é novo, o primeiro build resolve:"
-              echo
-              for p in $AUSENTES; do echo "- \`$p\`"; done
-            } >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning::Imagens ainda não publicadas:$AUSENTES"
-          fi
-          if [ -n "$PRIVADAS" ]; then
-            {
-              echo "## Imagens construídas, mas ainda privadas"
-              echo
-              echo "O botão \"Publicar este app\" do catálogo não funciona com imagem privada. Alguém com acesso à organização precisa abrir https://github.com/orgs/StartSe/packages e, em cada pacote abaixo: Package settings, Change visibility, Public."
-              echo
-              for p in $PRIVADAS; do echo "- \`$p\` — https://github.com/orgs/StartSe/packages/container/$p/settings"; done
-              echo
-              echo "Enquanto isso não for feito, esta publicação continua falhando de propósito."
-            } >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::Estes pacotes foram construídos mas continuam privados e o botão do catálogo não funciona para eles:$PRIVADAS — libere em https://github.com/orgs/StartSe/packages (Package settings, Change visibility, Public)"
-            exit 1
-          fi
-          if [ -z "$AUSENTES" ]; then
-            echo "## Todas as imagens estão públicas" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          node --test scripts/verificar-imagens-publicas.test.mjs
+          node scripts/verificar-imagens-publicas.mjs

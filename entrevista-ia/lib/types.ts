@@ -13,6 +13,9 @@ export interface Vaga {
 export interface Troca {
   papel: Papel;
   texto: string;
+  /** O passo do roteiro que uma fala da entrevistadora cumpriu (lib/roteiro.ts). Só nas falas dela, e
+   * só nas gravadas a partir da 0.8.0; sem ele, a posição é deduzida pelas regras. */
+  passo?: string;
 }
 
 export interface Criterio {

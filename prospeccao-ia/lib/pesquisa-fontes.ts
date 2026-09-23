@@ -1,5 +1,6 @@
 // Adaptadores das fontes opcionais. Nunca devolvem conteúdo de erro nem credenciais do provedor.
 import { getConfig } from "./store";
+import { perfilLinkedin } from "./perfil-linkedin";
 export type FonteOpcional = "exa" | "tavily" | "searchapi";
 export type ItemPesquisa = { titulo: string; url: string; resumo: string };
 export const FONTES = { exa: "Exa", tavily: "Tavily", searchapi: "SearchAPI" } as const;
@@ -54,7 +55,7 @@ function itensDe(fonte: FonteOpcional, dados: Record<string, unknown>): ItemPesq
   if (lista.length && !itens.length) throw new ErroFonte(FONTES[fonte], "resposta_invalida", `${FONTES[fonte]} não trouxe endereços válidos nos resultados.`);
   return itens;
 }
-export async function buscarFonte(fonte: FonteOpcional, consulta: string, pagina = 0, config?: Record<string, string | undefined>): Promise<ItemPesquisa[]> {
+export async function buscarFonte(fonte: FonteOpcional, consulta: string, pagina = 0, config?: Record<string, string | undefined>, categoria?: "people" | "company" | "news"): Promise<ItemPesquisa[]> {
   const chave = config?.[CHAVES[fonte]] ?? getConfig(CHAVES[fonte]);
   if (fonte === "searchapi") {
     const url = new URL("https://www.searchapi.io/api/v1/search");
@@ -67,12 +68,12 @@ export async function buscarFonte(fonte: FonteOpcional, consulta: string, pagina
   const query = consulta.replace(/site:[^\s]+/gi, "").trim();
   if (fonte === "exa") {
     const tipo = config?.EXA_TIPO_BUSCA ?? getConfig("EXA_TIPO_BUSCA") ?? "deep";
-    const body = { query, type: ["auto", "deep-lite", "deep", "deep-reasoning"].includes(tipo) ? tipo : "deep", numResults: Math.min(50, (pagina + 1) * 10), contents: { text: { maxCharacters: 8000 } }, ...(dominio ? { includeDomains: [dominio] } : {}) };
+    const body = { query, type: ["auto", "deep-lite", "deep", "deep-reasoning"].includes(tipo) ? tipo : "deep", numResults: Math.min(50, (pagina + 1) * 10), contents: { text: { maxCharacters: 8000 } }, ...(categoria ? { category: categoria } : {}), ...(dominio ? { includeDomains: [dominio] } : {}) };
     return itensDe(fonte, await requisitar(fonte, "https://api.exa.ai/search", body, chave)).slice(pagina * 10, (pagina + 1) * 10);
   }
   const profundidade = config?.TAVILY_PROFUNDIDADE ?? getConfig("TAVILY_PROFUNDIDADE");
   return itensDe(fonte, await requisitar(fonte, "https://api.tavily.com/search", {
-    query, search_depth: profundidade === "basic" ? "basic" : "advanced", max_results: 20, include_answer: false, include_raw_content: "markdown",
+    query, search_depth: profundidade === "basic" ? "basic" : "advanced", chunks_per_source: 3, max_results: 20, include_answer: false, include_raw_content: "markdown", ...(categoria === "news" ? { topic: "news" } : {}),
     ...(dominio ? { include_domains: [dominio.split("/")[0]] } : {}),
   }, chave)).slice(pagina * 10, (pagina + 1) * 10);
 }
@@ -80,7 +81,9 @@ export async function lerFonte(fonte: "exa" | "tavily", url: string): Promise<st
   const dados = fonte === "exa"
     ? await requisitar(fonte, "https://api.exa.ai/contents", { urls: [url], text: { maxCharacters: 8000 } })
     : await requisitar(fonte, "https://api.tavily.com/extract", { urls: [url], extract_depth: "advanced", format: "markdown" });
-  const texto = itensDe(fonte, dados)[0]?.resumo;
+  const perfil = perfilLinkedin(url);
+  const itens = itensDe(fonte, dados);
+  const texto = (perfil ? itens.find(i => perfilLinkedin(i.url) === perfil) : itens[0])?.resumo;
   if (!texto) throw new ErroFonte(FONTES[fonte], "resposta_invalida", `${FONTES[fonte]} não conseguiu ler essa página.`);
   return texto;
 }

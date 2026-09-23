@@ -1,63 +1,45 @@
-// Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
-// A IA é obrigatória (lê a captura e escreve a página); o serviço de captura é opcional e só serve para
-// quem prefere colar o endereço do site em vez de enviar a imagem.
-import { CHAVE_CAPTURA, urlDoServico } from "./captura";
-import { CHAVE_RENDER, CHAVE_SERVICO_RENDER, testarRender } from "./render";
-import { NOTIFICACOES, openrouter, type Integracao } from "./setup-comum";
+// Integrações que este app precisa. A configuração (/setup, components/Configuracoes.tsx) desenha os cartões
+// a partir desta lista (GET /api/setup) mais as rotas próprias da IA (/api/ia, /api/chatgpt, /api/visao).
+// A IA é obrigatória (OpenRouter por chave ou ChatGPT por assinatura; a leitura de captura é sempre pelo
+// OpenRouter). Hospedagem é opcional: Netlify publica cada site num endereço próprio; Render cria um serviço independente por projeto. Sem serviço de captura por endereço (o app lê o site de referência sozinho,
+// lib/captura.ts) e sem notificações/rotinas (decisão de 21/09/2026).
+import { CHAVE_NETLIFY, oauthNetlifyDisponivel, testarNetlify } from "./netlify";
+import { CHAVE_RENDER, CHAVE_WORKSPACE_RENDER, testarRender } from "./render";
+import { openrouter, type Integracao } from "./setup-comum";
 
-// O modelo que lê a captura decide a fidelidade da página, então não fica escondido no cartão genérico da
-// IA: ele tem cartão próprio em /setup ("Qualidade da página gerada", components/QualidadePagina.tsx), com
-// o teste de leitura de imagem ao lado. Por isso `visao` fica desligado aqui.
+// O modelo que lê a captura fica no cartão do OpenRouter da tela própria de configuração (seletor com "Testar
+// leitura de imagem", app/api/visao/route.ts); por isso `visao` fica desligado no cartão genérico.
 const OPENROUTER = openrouter({ beneficio: "Lê a captura e escreve a sua página" });
 
-const CAPTURA: Integracao = {
-  id: "captura",
-  titulo: "Captura por endereço",
-  descricao: "Com uma conta no ScreenshotOne, o app fotografa a página de referência sozinho: você cola o endereço do site e pula o passo de enviar a imagem.",
-  beneficio: "Gera a página a partir do endereço do site, sem enviar imagem",
+// Opcional: publica o site num endereço próprio da Netlify (HTTPS e domínio próprio grátis pelo painel de lá).
+const NETLIFY: Integracao = {
+  id: "netlify",
+  titulo: "Publicar na Netlify",
+  descricao: "Com a sua conta na Netlify conectada, cada site pode ser publicado num endereço próprio (nome.netlify.app), com HTTPS, fora desta instalação.",
+  beneficio: "Publica cada site num endereço próprio da Netlify, com um clique",
   obrigatoria: false,
-  link: { url: "https://screenshotone.com", rotulo: "Criar uma conta gratuita" },
+  link: { url: "https://app.netlify.com/user/applications#personal-access-tokens", rotulo: "Criar uma chave de acesso na Netlify" },
+  ...(oauthNetlifyDisponivel() ? { oauth: { tipo: "netlify", rotulo: "Conectar com a Netlify", url: "/api/setup/oauth/netlify" } } : {}),
+  notaConexao: "Conta gratuita da Netlify basta.",
   campos: [
-    {
-      chave: CHAVE_CAPTURA,
-      rotulo: "Chave de acesso",
-      tipo: "secret",
-      placeholder: "Cole a chave da sua conta",
-      ajuda: "Fica na área da conta do serviço, em Access key.",
-    },
+    { chave: CHAVE_NETLIFY, rotulo: "Chave de acesso pessoal", tipo: "secret", placeholder: "nfp_...", ajuda: "Na Netlify: User settings, Applications, Personal access tokens, New access token." },
   ],
-  testar: async (config) => {
-    const chave = config[CHAVE_CAPTURA];
-    if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
-    const r = await fetch(urlDoServico(chave, "https://example.com"), { signal: AbortSignal.timeout(90_000) }).catch(() => null);
-    if (!r) return { ok: false, mensagem: "O serviço de captura não respondeu. Tente de novo em um minuto." };
-    if (!r.ok) {
-      console.error("Falha ao testar o serviço de captura:", r.status, (await r.text().catch(() => "")).slice(0, 200));
-      if (r.status === 401 || r.status === 403) return { ok: false, mensagem: "A chave foi recusada. Confira se copiou a chave inteira." };
-      if (r.status === 429) return { ok: false, mensagem: "As capturas do mês acabaram nesse serviço. Amplie o plano para continuar." };
-      return { ok: false, mensagem: "O serviço não conseguiu fotografar a página de teste. Tente de novo em um minuto." };
-    }
-    return { ok: true, mensagem: "Conectado e testado com sucesso. Você já pode colar o endereço de um site." };
-  },
+  testar: testarNetlify,
 };
 
-// Opcional: com a chave da hospedagem, o app cadastra sozinho o domínio próprio de cada site no serviço do Render
-// (painel "Domínio próprio" do workspace); sem ela, a tela dá o passo a passo manual.
+// Cada projeto publica em seu próprio Static Site no workspace conectado.
 const RENDER: Integracao = {
   id: "render",
-  titulo: "Hospedagem (Render)",
-  descricao: "Com a chave da sua conta no Render e o identificador deste serviço, o app cadastra o domínio próprio de cada site sozinho, sem você abrir o painel da hospedagem.",
-  beneficio: "Cadastra o domínio do site na hospedagem sozinho",
+  titulo: "Publicar no Render",
+  descricao: "Cada projeto ganha um serviço independente no Render, com endereço próprio, versões publicadas e restauração pelo histórico.",
+  beneficio: "Publica cada site em seu próprio serviço",
   obrigatoria: false,
   link: { url: "https://dashboard.render.com/u/settings#api-keys", rotulo: "Criar uma chave no Render" },
   campos: [
     { chave: CHAVE_RENDER, rotulo: "Chave da conta", tipo: "secret", placeholder: "rnd_...", ajuda: "Em Account Settings, API Keys." },
-    { chave: CHAVE_SERVICO_RENDER, rotulo: "Identificador deste serviço", tipo: "text", placeholder: "srv-...", ajuda: "Começa com srv-; está no endereço do serviço no painel do Render." },
+    { chave: CHAVE_WORKSPACE_RENDER, rotulo: "Identificador do workspace", tipo: "text", placeholder: "tea-...", ajuda: "Em Workspace Settings no painel do Render. Cada site será criado nesse workspace." },
   ],
   testar: testarRender,
 };
 
-// Avisos (e-mail ou Slack): usados pelo resumo semanal do site (lib/resumo-site.ts, rotina criada no painel Métricas).
-const AVISOS: Integracao = { ...NOTIFICACOES, beneficio: "Envia o resumo semanal de visitas do site por e-mail ou Slack" };
-
-export const INTEGRACOES: Integracao[] = [OPENROUTER, CAPTURA, RENDER, AVISOS];
+export const INTEGRACOES: Integracao[] = [OPENROUTER, NETLIFY, RENDER];

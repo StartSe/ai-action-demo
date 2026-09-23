@@ -1,0 +1,171 @@
+{
+  "source": "https://app.prospecthalo.ai/api/agent/v1/openapi.json",
+  "checkedAt": "2026-09-21",
+  "tools": [
+    {
+      "name": "prospecthalo_get_context",
+      "description": "Workspace readiness in one call: plan, prospect quota usage, whether the ICP is configured, LinkedIn and email connection status, agent counts and limits, and how many lead lists exist. Call this first.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prospecthalo_find_leads",
+      "description": "Find new qualified leads without creating an agent or sending outreach. Ask who the user wants to reach in plain language, preserve every confirmed rule, and explain any choice that may reduce lead volume. Internally, this uses the same protected hydration, exact-fact checks, typed semantic qualification, company evidence, and unknown-safe deferral policy as Adaptive discovery. Unknown evidence, malformed AI output, and provider failures are deferred and never promoted or hard-rejected. This tool never sends outreach. It does not return email addresses because LinkedIn does not expose them. Free LinkedIn accounts are capped at 20 candidates per search. Prospect credits are reconciled to qualified results after checking finishes. If the result is still qualifying, never start the search again. Use prospecthalo_get_search_results with the same searchId and follow its progressStatus, waitingReason, and nextRetryAt. Explain progress to the user in plain language. Use this for one-off lead lists and prospecthalo_create_agent for ongoing discovery and outreach.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "keywords": {
+            "type": "string",
+            "description": "Free-text people search, e.g. 'managing partner immigration law firm'. Provide this or url."
+          },
+          "url": {
+            "type": "string",
+            "description": "A pasted LinkedIn or Sales Navigator search URL to run instead of keywords."
+          },
+          "idealCustomer": {
+            "type": "string",
+            "description": "Required plain-language definition of who counts as a qualified lead. Preserve the user's wording and language. Do not silently broaden it."
+          },
+          "offerContext": {
+            "type": "string",
+            "description": "Optional description of what the user sells this audience and the problem it solves. This helps semantic buyer-relevance classification."
+          },
+          "targetTitles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "description": "Confirmed target roles. Use semantic equivalents and localized titles, not unrelated generic founders or executives."
+          },
+          "targetLocations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 15,
+            "description": "Confirmed target locations. Equivalent localized LinkedIn country and place names are accepted semantically."
+          },
+          "targetCompanyCategories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 12,
+            "description": "Confirmed categories the employer itself must belong to. Serving or advising a category does not make the employer part of it."
+          },
+          "categoricalExclusions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 12,
+            "description": "Confirmed broad exclusions such as recruiters or vendors. These are decided semantically from grounded evidence."
+          },
+          "requiredCriteria": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Optional required rule. Every prospect must match it to become a lead. If ProspectHalo cannot verify it, the prospect will not be returned."
+          },
+          "preferredCriteria": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Optional preferred rule. It improves priority but never excludes an otherwise matching prospect."
+          },
+          "companyHeadcounts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "1-10",
+                "11-50",
+                "51-200",
+                "201-500",
+                "501-1000",
+                "1001-5000",
+                "5001-10000",
+                "10001+"
+              ]
+            },
+            "maxItems": 8,
+            "description": "Optional exact company-size bands. Use these only when the user explicitly states a mandatory size range. Never infer one. Check prospecthalo_list_linkedin_accounts first. Without Sales Navigator, explain that company size is verified after retrieval and may reduce visible lead volume. LinkedIn company-page evidence must confirm it. Missing evidence defers, and a verified mismatch rejects."
+          },
+          "excludeOpenToWork": {
+            "type": "boolean",
+            "description": "Defaults to true. Set false only when job seekers are intentionally part of the audience."
+          },
+          "excludedCompanies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "description": "Exact explicitly named companies to exclude. No substring or phrase inference is used."
+          },
+          "excludedProfileUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "description": "Exact LinkedIn profile URLs to exclude."
+          },
+          "maxResults": {
+            "type": "number",
+            "description": "How many LinkedIn candidates to review, 1 to 100. Free LinkedIn accounts are capped at 20. Only qualified matches consume prospect quota after reconciliation."
+          }
+        },
+        "required": [
+          "idealCustomer"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prospecthalo_get_search_results",
+      "description": "The verified results and current funnel of one ad-hoc LinkedIn search by searchId. Semantic Adaptive searches expose only hydrated qualified matches and report live processed, remaining, rejected, and deferred counts while durable qualification runs. Read progressStatus, waitingReason, and nextRetryAt. A waiting search resumes automatically. Never rerun prospecthalo_find_leads for the same search while status is qualifying. These public LinkedIn profiles have no emails and are not campaign leads.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "searchId": {
+            "type": "string",
+            "description": "The searchId returned by prospecthalo_find_leads or prospecthalo_list_searches."
+          },
+          "limit": {
+            "type": "number",
+            "description": "Max rows, 1 to 100. Default 25."
+          }
+        },
+        "required": [
+          "searchId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prospecthalo_reply_to_lead",
+      "description": "Send a reply in an EXISTING conversation. Sends exactly the text you provide from the user's own account. Never call without showing the user the exact draft and getting an explicit yes. Refuses opted-out prospects, unknown threads, and unhealthy accounts. If the result is held with REPLY_OUTCOME_UNCERTAIN or REPLY_SEND_PENDING, do not retry. ProspectHalo will verify the provider thread first.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chatId": {
+            "type": "string",
+            "description": "The chatId from prospecthalo_list_conversations."
+          },
+          "text": {
+            "type": "string",
+            "description": "The exact reply text to send."
+          }
+        },
+        "required": [
+          "chatId",
+          "text"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

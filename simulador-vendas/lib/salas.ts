@@ -2,19 +2,15 @@
 // o cliente simulado (por texto ou pelo agente de voz da ElevenLabs) e vê a mesma análise do app ao
 // final. Usa o mesmo arquivo SQLite de lib/store.ts, em uma tabela própria; o link dura 30 dias e pode
 // ser reaberto quantas vezes o vendedor quiser (sem limite de usos).
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
+import { abrirBanco } from "./store";
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
-
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 let db: DatabaseSync | null = null;
 
 function abrir(): DatabaseSync {
   if (db) return db;
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  db = new DatabaseSync(path.join(DATA_DIR, "app.sqlite"));
-  db.exec(`CREATE TABLE IF NOT EXISTS salas (
+  const d = abrirBanco();
+  d.exec(`CREATE TABLE IF NOT EXISTS salas (
     codigo TEXT PRIMARY KEY,
     vendedorId TEXT NULL,
     cenarioId TEXT NULL,
@@ -26,11 +22,11 @@ function abrir(): DatabaseSync {
   // Coluna acrescentada depois (US-032): bancos criados antes desta versão ganham a coluna aqui, sem
   // script de migração separado — mesmo padrão de `resumo` em lib/historico.ts.
   try {
-    db.exec("ALTER TABLE salas ADD COLUMN ultimaLigacaoEm TEXT NULL");
-  } catch {
-    // a coluna já existe
+    d.exec("ALTER TABLE salas ADD COLUMN ultimaLigacaoEm TEXT NULL");
+  } catch (err) {
+    if (!(err instanceof Error) || !err.message.includes("duplicate column name")) throw err;
   }
-  return db;
+  return db = d;
 }
 
 export type Sala = {

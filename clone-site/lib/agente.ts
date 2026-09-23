@@ -4,6 +4,7 @@
 // resto; `reescrever_pagina` (arquivo inteiro) fica para mudanças estruturais. Todas as mudanças de um pedido
 // viram UMA versão nova (rascunho); publicar é explícito. Corre no motor escolhido (lib/motor.ts).
 import crypto from "node:crypto";
+import { contextoEmpresa } from "./materiais";
 import { listar as listarAssets } from "./assets";
 import { edicaoDemo, esperar } from "./demo";
 import { ErroDePedido, novaVersao, paginaAtual } from "./gerador";
@@ -144,6 +145,13 @@ export function inserirImagem(html: string, url: string, alt: string, onde: stri
 
 export type RespostaAgente = { resposta: string; versoes: number[]; publicou: boolean; passos: string[]; pagina: Pagina; projeto: Projeto; mensagens: Mensagem[] };
 
+/**
+ * Eventos ao vivo de um pedido, para a tela acompanhar em tempo real (app/api/sites/[id]/agente, resposta em
+ * linhas JSON): cada ferramenta chamada (`passo`) e cada mudança no HTML de trabalho (`previa`, o rascunho
+ * inteiro, antes mesmo de virar versão). Quem não passa callbacks recebe só a resposta final, como antes.
+ */
+export type EventosAgente = { aoPasso?: (nome: string) => void; aoPrevia?: (html: string) => void };
+
 /** O resumo de métricas que o agente conhece (lib/metricas.ts), em uma frase. */
 const resumoMetricas = (projetoId: string, dias: number): string => resumoEmTexto(projetoId, dias);
 
@@ -160,10 +168,11 @@ function montarSystem(projeto: Projeto, pagina: Pagina, metricas: string): strin
 O que você sabe:
 - Marca: ${marca}.
 - Formato do site: arquivo HTML único${/cdn\.tailwindcss\.com/.test(atual.html) ? " com Tailwind pela CDN" : " com CSS próprio em <style>"}.
-- Versão atual (rascunho): ${atual.n}. Versão publicada (no ar): ${projeto.versaoPublicada ?? atual.n}. Link público: /s/${projeto.slug}.
+- Versão atual (rascunho): ${atual.n}. Versão publicada (no ar): ${projeto.versaoPublicada ?? "nenhuma"}. Link público: /s/${projeto.slug}.
 - Imagens da empresa (use exatamente estes endereços em <img src>):
 ${linhasAssets}
 - Métricas dos últimos 7 dias: ${metricas}
+${contextoEmpresa(projeto.id, projeto.briefing)}
 
 Regras:
 - Toda mudança na página passa por ferramentas: editar_trecho para mudanças pontuais (copie o trecho EXATO do código atual em "antigo"), reescrever_pagina só quando a estrutura muda muito, trocar_imagem para colocar uma imagem da empresa. Nunca descreva uma mudança sem executá-la e nunca cole código na resposta.
@@ -181,7 +190,7 @@ const SCHEMA_VAZIO = { type: "object", properties: {} };
  * Um pedido da pessoa → resposta do agente. Grava as duas mensagens; toda mudança feita pelas ferramentas vira
  * UMA versão nova ao fim do pedido (ou antes de publicar, quando a pessoa pediu para publicar).
  */
-export async function conversar(projetoId: string, textoBruto: unknown): Promise<RespostaAgente> {
+export async function conversar(projetoId: string, textoBruto: unknown, eventos: EventosAgente = {}): Promise<RespostaAgente> {
   const texto = typeof textoBruto === "string" ? textoBruto.trim().slice(0, LIMITE_PEDIDO) : "";
   if (!texto) throw new ErroDePedido("Escreva o que você quer mudar ou saber sobre o site.");
   const projeto = obterProjeto(projetoId);
@@ -195,6 +204,7 @@ export async function conversar(projetoId: string, textoBruto: unknown): Promise
 
   // Estado de trabalho do pedido: o HTML vai sendo alterado pelas ferramentas e vira uma versão só no fim.
   let html = salva.pagina.versoes[salva.pagina.versoes.length - 1].html;
+  let versaoBase = salva.pagina.versoes[salva.pagina.versoes.length - 1].n;
   let alterado = false;
   let publicou = false;
   const versoes: number[] = [];
@@ -202,10 +212,17 @@ export async function conversar(projetoId: string, textoBruto: unknown): Promise
 
   const salvarSeAlterado = () => {
     if (!alterado) return;
-    const { versao } = novaVersao(projeto.paginaId!, html, texto);
+    const { versao } = novaVersao(projeto.paginaId!, html, texto, versaoBase);
+    versaoBase = versao.n;
     versoes.push(versao.n);
     html = versao.html;
     alterado = false;
+    eventos.aoPrevia?.(html);
+  };
+  /** Toda ferramenta que mexe no HTML avisa a tela na hora: a prévia muda antes de a versão ser gravada. */
+  const mudou = () => {
+    alterado = true;
+    eventos.aoPrevia?.(html);
   };
 
   const ferramentas: FerramentaAgente[] = [
@@ -229,7 +246,7 @@ export async function conversar(projetoId: string, textoBruto: unknown): Promise
       },
       async executar(args) {
         html = aplicarEdicoes(html, (args.edicoes as Edicao[]) ?? []);
-        alterado = true;
+        mudou();
         return { ok: true, edicoes: (args.edicoes as Edicao[]).length, tamanho: html.length };
       },
     },
@@ -241,7 +258,7 @@ export async function conversar(projetoId: string, textoBruto: unknown): Promise
         const novo = String(args.html ?? "");
         if (!/<html[\s>]/i.test(novo) || !/<\/html>/i.test(novo)) throw new Error("Envie o arquivo inteiro, de <html> até </html>.");
         html = novo;
-        alterado = true;
+        mudou();
         return { ok: true, tamanho: html.length };
       },
     },
@@ -253,7 +270,7 @@ export async function conversar(projetoId: string, textoBruto: unknown): Promise
         const asset = listarAssets(projeto.id).find((a) => a.id === String(args.assetId));
         if (!asset) throw new Error("Imagem não encontrada. Use listar_imagens para ver os ids.");
         html = inserirImagem(html, asset.url, asset.descricao || projeto.marca?.nome || asset.nome, String(args.onde ?? ""));
-        alterado = true;
+        mudou();
         return { ok: true, url: asset.url };
       },
     },
@@ -294,14 +311,18 @@ export async function conversar(projetoId: string, textoBruto: unknown): Promise
     const querMetrica = /m[ée]tric|visita|acess|quantas pessoas|como est[aá]/i.test(texto);
     if (querMetrica && !querPublicar) {
       passos.push("ver_metricas");
+      eventos.aoPasso?.("ver_metricas");
       resposta = `Sem a inteligência artificial conectada eu só consigo ler os números: ${resumoMetricas(projeto.id, 7)}`;
     } else {
       passos.push("editar_trecho");
+      eventos.aoPasso?.("editar_trecho");
       html = edicaoDemo(html, salva.pagina.versoes.length + 1);
-      alterado = true;
+      mudou();
+      await esperar(700);
       salvarSeAlterado();
       if (querPublicar) {
         passos.push("publicar");
+        eventos.aoPasso?.("publicar");
         publicarProjeto(projeto.id);
         publicou = true;
       }
@@ -311,7 +332,7 @@ export async function conversar(projetoId: string, textoBruto: unknown): Promise
     const metricas = resumoMetricas(projeto.id, 7);
     const system = montarSystem(projeto, salva.pagina, metricas);
     const mensagens = [...historicoAnterior.map((m) => ({ papel: m.papel, texto: m.texto })), { papel: "pessoa" as const, texto }];
-    const textoFinal = await executarComFerramentas({ system, mensagens, ferramentas, aoChamar: (nome) => passos.push(nome) });
+    const textoFinal = await executarComFerramentas({ system, mensagens, ferramentas, aoChamar: (nome) => { passos.push(nome); eventos.aoPasso?.(nome); } });
     salvarSeAlterado();
     resposta = textoFinal.trim() || (versoes.length ? `Pronto: a mudança está na versão ${versoes[versoes.length - 1]}.` : "Não fiz nenhuma mudança desta vez. Pode detalhar o que você quer?");
   }

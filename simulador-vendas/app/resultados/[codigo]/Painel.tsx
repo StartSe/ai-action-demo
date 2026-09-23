@@ -122,7 +122,7 @@ function VisaoGeral({ painel, oportunidade }: Resposta) {
           tom={tomDaNota(painel.notaMedia)}
           interpretacao={painel.avaliadas === 0 ? "Nenhuma conversa avaliada ainda" : `Em ${contagem(painel.avaliadas, "conversa avaliada", "conversas avaliadas")}`}
         />
-        <Destaque valor={String(painel.participantes)} rotulo="Participantes" interpretacao="Pessoas que abriram o link" />
+        <Destaque valor={String(painel.participantes)} rotulo="Participantes" interpretacao="Pessoas que conversaram no treino" />
         <Destaque valor={String(painel.sessoes)} rotulo="Sessões" interpretacao="Conversas abertas neste treino" />
         <Destaque
           valor={variacao === null ? "—" : `${variacao > 0 ? "+" : variacao < 0 ? "−" : ""}${nota(Math.abs(variacao))}`}
@@ -182,7 +182,7 @@ export default function Painel({ codigo }: { codigo: string }) {
     <>
       <Topbar marca="S" nome="Simulador de Vendas" area="Vendas" status={status} erro={erro} usuario={status?.usuario} />
 
-      <main className="max-w-[980px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
+      <main className="gestao-main">
         <Link href="/resultados" className="btn-link text-[13px]">
           ← Todos os resultados
         </Link>

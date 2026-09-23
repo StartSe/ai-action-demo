@@ -1,22 +1,8 @@
-import { AcessoMCP } from "@/components/AcessoMCP";
-import { ConexaoIA } from "@/components/ConexaoIA";
-import { QualidadePagina } from "@/components/QualidadePagina";
-import { Rotinas } from "@/components/Rotinas";
-import { SetupPage } from "@/components/setup";
+import { Configuracoes } from "@/components/Configuracoes";
 
+// Tela própria deste app (independente da SetupPage compartilhada): seções "Inteligência artificial" (ChatGPT ×
+// OpenRouter, com o modelo que lê a captura dentro do cartão do OpenRouter), "Hospedagem e publicação" (Netlify e
+// Render) e "Assistente de IA" (MCP), mais "Para a equipe técnica". Sem notificações e sem rotinas.
 export default function Page() {
-  return (
-    <>
-      {/* O motor (OpenRouter × ChatGPT) e o modelo que lê a captura são parte da configuração do app: entram como
-          children (antes do rodapé "Ir para o app"). O cartão do assistente é secundário e fica depois. */}
-      <SetupPage marca="C" nome="Clone de Site" area="Marketing e Produto" segmento="Marketing">
-        <ConexaoIA />
-        <QualidadePagina />
-      </SetupPage>
-      <div className="max-w-[860px] mx-auto px-8 max-md:px-4 pb-16 flex flex-col gap-6">
-        <Rotinas />
-        <AcessoMCP />
-      </div>
-    </>
-  );
+  return <Configuracoes />;
 }

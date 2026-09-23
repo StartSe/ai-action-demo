@@ -1,8 +1,12 @@
 import { comPrazoIA } from "./ia-prazo";
 import { randomUUID } from "node:crypto";
 import { aiEnabled, askJSON } from "./ai";
-import { acaoParaUrl, brightDataAtiva } from "./brightdata";
-import { buscarNaWeb, conteudoEstruturado, descobertaAtiva, executarAcaoPesquisa, lerPagina } from "./descoberta";
+import { brightDataAtiva } from "./brightdata";
+import { buscarNaWeb, descobertaAtiva, executarAcaoPesquisa, lerConteudoBrightData, lerPagina, type ResultadoBuscaWeb } from "./descoberta";
+import { incorporarPerfil } from "./pesquisa-perfis";
+import { dadosDoPerfil, enriquecerLead } from "./leads-enriquecimento";
+import { perfilLinkedin } from "./perfil-linkedin";
+import { fontesOpcionais } from "./pesquisa-fontes";
 import { apagarConsultas } from "./pesquisa-registro";
 import { obterQualificacaoProfunda, salvarQualificacaoProfunda } from "./qualificacao-profunda-store";
 import { termoSensivel } from "./sensivel";
@@ -28,7 +32,8 @@ export function instagramValido(valor: string): string | null {
   } catch { return null; }
 }
 function linkedinValido(valor: string | null): string | null {
-  try { const u = new URL(valor || ""); return u.protocol === "https:" && /^(www\.)?linkedin\.com$/.test(u.hostname) && /^\/in\/[^/]+\/?$/.test(u.pathname) ? `https://www.linkedin.com${u.pathname.replace(/\/$/, "")}/` : null; } catch { return null; }
+  const perfil = perfilLinkedin(valor || "");
+  return perfil ? `${perfil}/` : null;
 }
 function linksNoTexto(texto: string): string[] {
   return [...new Set((texto.match(/https?:\/\/[^\s"<>\\)\]]+/g) ?? []).map(url => url.replace(/[.,;]+$/, "")))];
@@ -78,13 +83,28 @@ async function executar(job: QualificacaoProfunda, instagram?: string) {
       let texto: string;
       if (brightDataAtiva()) {
         // Leitura nova: usa a ação estruturada de cada rede, sem reaproveitar o cache da prospecção.
-        const r = await executarAcaoPesquisa(acaoParaUrl(url), { url }, consultaId);
-        texto = typeof r === "string" ? r : conteudoEstruturado(r) || "";
-        if (!texto || texto === "[]" || texto === "{}") throw new Error();
+        texto = "";
+        try {
+          texto = await lerConteudoBrightData(url, consultaId, true);
+        } catch { /* Segue para as outras fontes conectadas. */ }
+        if (!texto || texto === "[]" || texto === "{}") {
+          for (const fonte of fontesOpcionais().filter(f => f !== "searchapi")) {
+            checar();
+            try { texto = String(await executarAcaoPesquisa(`${fonte}_read`, { url }, consultaId)); if (texto.trim()) break; } catch { /* Tenta a próxima fonte. */ }
+          }
+        }
+        if (!texto?.trim() || texto === "[]" || texto === "{}") throw new Error();
       } else {
         const r = await lerPagina(url, consultaId); if (r.demo) throw new Error(); texto = r.conteudo;
       }
-      job.fontes.push({ url, titulo, texto: texto.slice(0, 12000), consultadoEm: new Date().toISOString() }); salvar();
+      const consultadoEm = new Date().toISOString();
+      const lead = obterLead(job.leadId);
+      if (lead && perfilLinkedin(url) && perfilLinkedin(url) === perfilLinkedin(lead.linkedin || "")) {
+        const item: ResultadoBuscaWeb = { titulo: lead.nome, url, resumo: "", conteudoPerfilAtual: texto, perfilConsultadoEm: consultadoEm };
+        try { incorporarPerfil(item, JSON.parse(texto)); } catch { /* Markdown conserva o contexto sem inventar campos. */ }
+        enriquecerLead(lead.id, { ...item.pessoa, linkedin: url, avatarUrl: item.avatarUrl, ...dadosDoPerfil(item, consultadoEm), fonte: url });
+      }
+      job.fontes.push({ url, titulo, texto: texto.slice(0, 12000), consultadoEm }); salvar();
     } catch { aviso(`Não foi possível ler ${titulo}. Confira a conexão da fonte ou tente novamente.`); }
   };
   try {

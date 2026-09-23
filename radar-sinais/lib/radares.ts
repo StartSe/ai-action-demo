@@ -67,9 +67,9 @@ function nomeValido(nome: unknown): string {
   if (typeof nome !== "string" || !nome.trim() || nome.trim().length > 80) throw new Error("Dê um nome de até 80 caracteres ao radar.");
   return nome.trim();
 }
-export function criarRadar(nome: unknown): CadastroRadar {
-  const titulo = nomeValido(nome), db = banco(), id = randomUUID();
-  db.prepare("INSERT INTO radares VALUES (?, ?, ?, ?)").run(id, titulo, JSON.stringify(PESQUISA_PADRAO), new Date().toISOString());
+export function criarRadar(nome: unknown, valor: unknown = PESQUISA_PADRAO): CadastroRadar {
+  const titulo = nomeValido(nome), pesquisa = validarPesquisa(valor), db = banco(), id = randomUUID();
+  db.prepare("INSERT INTO radares VALUES (?, ?, ?, ?)").run(id, titulo, JSON.stringify(pesquisa), new Date().toISOString());
   return obterRadar(id);
 }
 export function renomearRadar(id: string, nome: unknown): CadastroRadar {
@@ -86,4 +86,12 @@ export function analisesRadar(id: string, limite = 30, somenteReal = false): Res
   obterRadar(id);
   const linhas = banco().prepare(`SELECT id FROM resultados WHERE tipo = 'radar' AND json_extract(entrada, '$.radarId') = ? ${somenteReal ? "AND json_type(meta, '$.demo') = 'false'" : ""} ORDER BY criadoEm DESC, rowid DESC LIMIT ?`).all(id, limite) as { id: string }[];
   return linhas.map(r => obter<DadosRadar, Radar, Meta>(r.id)!);
+}
+
+/** Nome e pesquisa são atualizados juntos, sem deixar um cadastro parcialmente salvo. */
+export function editarRadar(id: string, nome: unknown, valor: unknown): CadastroRadar {
+  obterRadar(id);
+  const titulo = nomeValido(nome), pesquisa = validarPesquisa(valor);
+  banco().prepare("UPDATE radares SET nome = ?, pesquisa = ? WHERE id = ?").run(titulo, JSON.stringify(pesquisa), id);
+  return obterRadar(id);
 }

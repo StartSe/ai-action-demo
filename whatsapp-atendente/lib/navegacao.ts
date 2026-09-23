@@ -4,24 +4,19 @@
 export type ItemNavegacao = {
   rotulo: string;
   href: string;
-  /** Número no acento ao lado do rótulo (conversas esperando uma pessoa); ausente ou 0 não desenha nada. */
-  contador?: number;
+  /**
+   * Este item mostra quantas conversas estão esperando uma pessoa. Quem consulta e desenha o número é o
+   * próprio `Topbar` (components/useEspera.ts): o aviso precisa valer em TODA tela, inclusive nas que
+   * não têm conversa nenhuma na mão, e o título da aba sai do mesmo número.
+   */
+  avisaEspera?: boolean;
 };
 
 /** Um app pode acrescentar um destino próprio passando `navegacao={[...NAVEGACAO, {...}]}` ao Topbar, sem editar o componente. */
 export const NAVEGACAO: ItemNavegacao[] = [
   { rotulo: "Início", href: "/" },
-  { rotulo: "Conversas", href: "/conversas" },
+  { rotulo: "Conversas", href: "/conversas", avisaEspera: true },
   { rotulo: "Assistente", href: "/assistente" },
   { rotulo: "Relatórios", href: "/relatorios" },
   { rotulo: "Configurações", href: "/setup" },
 ];
-
-/**
- * A mesma navegação com o número de conversas que precisam de atenção em "Conversas". Quem já tem esse
- * número na tela (a lista de Conversas, o painel do Início) passa o resultado ao `Topbar`; quem não tem
- * continua usando `NAVEGACAO` e o cabeçalho fica sem contador, em vez de cada tela buscar isso sozinha.
- */
-export function navegacaoComContador(atencao: number): ItemNavegacao[] {
-  return NAVEGACAO.map((item) => (item.href === "/conversas" ? { ...item, contador: atencao } : item));
-}

@@ -32,22 +32,31 @@ export function useConversaLivekit(codigo: string, callbacks: Callbacks) {
       if (!montada.current) throw new Error("Conversa fechada");
       const room = new Room({ adaptiveStream: true, audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       roomRef.current = room;
+      let falhou = false;
+      const falhaDeConexao = () => {
+        if (falhou || encerrando.current || !montada.current || roomRef.current !== room) return;
+        falhou = true;
+        querMicrofone.current = false;
+        roomRef.current = null;
+        cb.current.estado("parado");
+        cb.current.erro("A conexão de voz foi interrompida. Tente novamente ou use a voz do navegador.");
+        void room.disconnect();
+        audios.current.forEach(a => a.remove()); audios.current.clear();
+      };
       const atualizar = (_: unknown, p: Participant) => {
-        if (!p.isAgent || encerrando.current) return;
+        if (!p.isAgent || encerrando.current || roomRef.current !== room) return;
         const estado = p.attributes["lk.agent.state"];
-        cb.current.estado(estado === "speaking" ? "falando" : estado === "thinking" ? "pensando" : room.localParticipant.isMicrophoneEnabled ? "ouvindo" : "parado");
+        cb.current.estado(estado === "initializing" ? "conectando" : estado === "speaking" ? "falando" : estado === "thinking" ? "pensando" : room.localParticipant.isMicrophoneEnabled ? "ouvindo" : "parado");
       };
       room.on(RoomEvent.ParticipantAttributesChanged, atualizar);
+      room.on(RoomEvent.ParticipantDisconnected, p => { if (p.isAgent) falhaDeConexao(); });
       room.on(RoomEvent.TrackSubscribed, track => {
         if (track.kind !== Track.Kind.Audio) return;
         const audio = track.attach(); audio.muted = silencioso.current; audio.hidden = true; document.body.appendChild(audio); audios.current.add(audio);
         void audio.play().catch(() => cb.current.erro("Toque em Iniciar microfone para liberar o áudio."));
       });
       room.on(RoomEvent.TrackUnsubscribed, track => { track.detach().forEach(a => { audios.current.delete(a); a.remove(); }); });
-      room.on(RoomEvent.Disconnected, () => {
-        cb.current.estado("parado");
-        if (!encerrando.current && montada.current) cb.current.erro("A conexão de voz foi interrompida. Toque em Iniciar microfone para reconectar.");
-      });
+      room.on(RoomEvent.Disconnected, falhaDeConexao);
       room.registerTextStreamHandler("lk.transcription", async (reader, info) => {
         try {
           const texto = await reader.readAll();
@@ -72,7 +81,7 @@ export function useConversaLivekit(codigo: string, callbacks: Callbacks) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
         return room;
-      } catch (err) { await room.disconnect(); roomRef.current = null; throw err; }
+      } catch (err) { if (roomRef.current === room) roomRef.current = null; await room.disconnect(); throw err; }
     })().finally(() => { pendente.current = null; });
     return pendente.current;
   }

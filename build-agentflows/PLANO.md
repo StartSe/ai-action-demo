@@ -212,3 +212,12 @@ As limitações das rodadas anteriores sobre Gmail, Google/Microsoft, Browserles
 - Configurações com modelos compactos, limites expansíveis e formulários dos canais recolhidos; compatibilidade da URL anterior.
 - Remoção da busca do seletor OpenRouter; nova versão também no rodapé da sidebar.
 - Testes de anexos, permissões entre fluxos, contratos dos provedores e motor; navegação desktop/celular, tema escuro, lint, build e verificadores da suíte antes do push na main.
+
+# Rodada 7: conversa natural por voz — 0.8.0
+
+- Compositor limpo, mantendo validação de anexos e removendo avisos permanentes, provedor e Ouvir respostas.
+- Botão de conversa por voz, esfera animada, detecção de pausa, envio automático e resposta falada; silenciar, interromper e encerrar.
+- Voz persistida por fluxo no modal do cabeçalho, incluindo cópias, exportação e importação.
+- Continuidade por contexto das últimas seis execuções da conversa; aprovação humana continua explícita.
+- Cancelamento e limpeza do microfone/áudio, respostas tardias ignoradas e estados de erro/repetição.
+- Testes do ciclo de voz e contexto, contratos ElevenLabs, navegador com MediaRecorder/Web Audio reais e áudio sintético; lint, build e verificadores antes de commit/push.

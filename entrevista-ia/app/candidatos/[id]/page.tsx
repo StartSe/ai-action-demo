@@ -94,8 +94,7 @@ export default function Page() {
   const [revisando, setRevisando] = useState(false);
   const [erroFicha, setErroFicha] = useState("");
   const [atribuindo, setAtribuindo] = useState(false);
-  // O convite aberto na tela: `reenviar` diz se abrir já estende o prazo ("Reenviar convite") ou só
-  // mostra o link que acabou de nascer com a atribuição.
+  // O reenvio preserva o período salvo; se o convite venceu, o diálogo renova o prazo.
   const [convite, setConvite] = useState<{ entrevistaId: string; reenviar: boolean } | null>(null);
   const [recado, setRecado] = useState("");
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);

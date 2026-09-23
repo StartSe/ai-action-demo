@@ -1,5 +1,6 @@
 import { linhasParaExportar, type LinhaExportacao } from "@/lib/metricas";
 import { lerPeriodoMetricas, rotuloContato, rotuloNumero, rotuloOrigem, rotuloStatus } from "@/lib/rotulos";
+import { rotuloMotivo } from "@/lib/transferencia";
 import type { PeriodoMetricas } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,9 @@ export const dynamic = "force-dynamic";
 const COLUNAS = [
   "Nome",
   "Telefone",
+  "Nome informado",
+  "E-mail",
+  "Telefone de retorno",
   "Origem",
   "Situação",
   "Assunto",
@@ -24,6 +28,8 @@ const COLUNAS = [
   "Total de mensagens",
   "Resolvida pela IA",
   "Tempo médio de resposta (segundos)",
+  "Motivo da transferência",
+  "Etiquetas",
 ];
 
 const SEPARADOR = ";";
@@ -58,6 +64,11 @@ function linhaDaConversa(c: LinhaExportacao): string {
   return [
     rotuloContato(c.numero, c.nome),
     rotuloNumero(c.numero),
+    // O que o cliente informou de si nas conversas (lib/memoria.ts): vem depois do nome do canal e do
+    // número, porque é o mesmo assunto — quem é a pessoa do outro lado.
+    c.nomeInformado ?? "",
+    c.email ?? "",
+    c.telefoneRetorno ?? "",
     rotuloOrigem(c.origem),
     rotuloStatus(c.status),
     c.assunto ?? "",
@@ -66,6 +77,10 @@ function linhaDaConversa(c: LinhaExportacao): string {
     String(c.totalMensagens),
     c.resolvidaIA ? "Sim" : "Não",
     segundos(c.tempoMedioMs),
+    c.motivoTransferencia ? rotuloMotivo(c.motivoTransferencia) : "",
+    // As etiquetas de uma conversa numa célula só, separadas por vírgula: o nome de uma etiqueta nunca
+    // tem vírgula dentro (lib/etiquetas.ts recusa), então quem abrir a planilha consegue separá-las.
+    c.etiquetas.join(", "),
   ]
     .map(campo)
     .join(SEPARADOR);

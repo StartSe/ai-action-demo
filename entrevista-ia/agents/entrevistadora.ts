@@ -9,6 +9,21 @@ import { configuracaoVoz, NOME_AGENTE } from "../lib/livekit";
 import { obter } from "../lib/entrevistas";
 import { lerRoteiroGravado, proximaFala } from "../lib/roteiro";
 
+/**
+ * O detector de fim de turno (ver lib/conducao-voz.ts): ouve o áudio e estima se a pessoa terminou a
+ * frase, em vez de contar segundos de silêncio. `v1` é o modelo hospedado pela LiveKit (o mesmo
+ * gateway da transcrição); se ele cair, o SDK passa sozinho para o modelo local `v1-mini`, que também
+ * entende português. Se nem construir der certo, a sala segue pelo silêncio puro — pior, mas funciona.
+ */
+function detectorDeFimDeFala(): inference.TurnDetector | "vad" {
+  try {
+    return new inference.TurnDetector({ version: "v1", apiKey: getConfig("LIVEKIT_API_KEY"), apiSecret: getConfig("LIVEKIT_API_SECRET") });
+  } catch (err) {
+    console.error("O detector de fim de fala não pôde ser criado; a sala segue pelo silêncio.", err);
+    return "vad";
+  }
+}
+
 export default defineAgent({
   prewarm: async (proc: JobProcess) => { proc.userData.vad = new inference.VAD({ model: "silero" }); },
   entry: async (ctx: JobContext) => {
@@ -26,7 +41,7 @@ export default defineAgent({
       llm: modelo,
       stt: new inference.STT({ model: "deepgram/nova-3", language: "pt-BR", apiKey: getConfig("LIVEKIT_API_KEY"), apiSecret: getConfig("LIVEKIT_API_SECRET") }),
       tts: new TTS({ ...configuracaoVoz(), language: "pt" }),
-      turnHandling: CONDUCAO_VOZ,
+      turnHandling: { ...CONDUCAO_VOZ, turnDetection: detectorDeFimDeFala() },
     });
     session.on(voice.AgentSessionEventTypes.Error, () => { void enviar({ tipo: "erro", mensagem: "A voz foi interrompida. Reconecte para continuar de onde parou." }); });
     const controle = controlarConversa({ session, room: ctx.room, identidade: `candidato-${id}`, concluir: () => { void enviar({ tipo: "concluida" }); } });

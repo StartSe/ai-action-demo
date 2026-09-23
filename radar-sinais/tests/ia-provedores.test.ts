@@ -57,6 +57,7 @@ test("provedor escolhido governa status, síntese, modelo e erros sem fallback",
       return Response.json({ results: [{ title: "Evidência", url: "https://fonte.com/a", highlights: ["Evidência real coletada"] }] });
     };
     bridge.run = async opts => {
+      if (opts.system.includes("Você planeja buscas")) return JSON.stringify({ buscas: [{ tema: "IA", consultas: ["IA adoção", "IA riscos"] }] });
       assert.match(opts.prompt, /Evidência real coletada/);
       assert.equal(opts.model, "modelo-chat");
       return JSON.stringify({ sinais: [

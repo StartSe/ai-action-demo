@@ -1,19 +1,15 @@
 // Biblioteca de formulários públicos: um link (/f/[token]) que qualquer pessoa preenche sem login,
 // para o app coletar dados de fora (ex.: autoavaliação do colaborador). Usa o mesmo arquivo SQLite
 // de lib/store.ts/lib/historico.ts, em duas tabelas próprias. Copie este arquivo para cada app sem alterar.
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
+import { abrirBanco } from "./store";
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
-
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 let db: DatabaseSync | null = null;
 
 function abrir(): DatabaseSync {
   if (db) return db;
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  db = new DatabaseSync(path.join(DATA_DIR, "app.sqlite"));
-  db.exec(`CREATE TABLE IF NOT EXISTS formularios (
+  const d = abrirBanco();
+  d.exec(`CREATE TABLE IF NOT EXISTS formularios (
     token TEXT PRIMARY KEY,
     tipo TEXT NOT NULL,
     campos TEXT NOT NULL,
@@ -22,14 +18,14 @@ function abrir(): DatabaseSync {
     limite INTEGER NULL,
     criadoEm TEXT NOT NULL
   )`);
-  db.exec(`CREATE TABLE IF NOT EXISTS respostas (
+  d.exec(`CREATE TABLE IF NOT EXISTS respostas (
     id TEXT PRIMARY KEY,
     token TEXT NOT NULL,
     dados TEXT NOT NULL,
     resultadoId TEXT NULL,
     criadoEm TEXT NOT NULL
   )`);
-  return db;
+  return db = d;
 }
 
 /** Um campo declarado pelo app: chave usada em `dados`, rótulo exibido e o tipo de controle na tela pública.

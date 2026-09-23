@@ -53,9 +53,7 @@ export function removerSessoesDeExemplo(): void {
   d.prepare(`DELETE FROM mensagens_sessao WHERE sessaoId IN (${marcadores})`).run(...ids);
   d.prepare(`DELETE FROM sessoes_treino WHERE id IN (${marcadores})`).run(...ids);
 
-  // O resultado mora em `resultados` (lib/historico.ts), que tem conexão própria para o mesmo
-  // `app.sqlite`: os DELETE acima não podem estar dentro de uma transação aberta aqui, senão a outra
-  // conexão encontra o banco ocupado. Por isso nenhum BEGIN neste módulo.
+  // O histórico reutiliza a mesma conexão do banco; a remoção conserva a ordem das referências.
   for (const s of sessoes) {
     if (s.resultadoId) apagarResultado(s.resultadoId);
   }

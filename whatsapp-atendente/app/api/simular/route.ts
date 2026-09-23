@@ -2,6 +2,7 @@ import { responderErro } from "@/app/api/erros";
 import { aiEnabled, meta } from "@/lib/ai";
 import { classificarEmSegundoPlano, responder } from "@/lib/atendente";
 import { listarConversas } from "@/lib/conversas";
+import { atualizarResumoEmSegundoPlano } from "@/lib/memoria";
 import { getConfig } from "@/lib/estado";
 import { apagarTodos, listar } from "@/lib/historico";
 import type { Config } from "@/lib/types";
@@ -18,14 +19,18 @@ export async function POST(req: Request) {
   // O simulador testa o rascunho que a pessoa está editando no painel, não só a configuração já salva.
   const configRascunho: Config | undefined = config ? { ...getConfig(), ...config } : undefined;
   try {
-    const { resposta, transferir, ferramentaUsada, atendimentoHumano } = await responder({ numero, texto: textoLimpo, origem: "simulador", config: configRascunho });
-    // Com a resposta pronta, o assunto da conversa (para os relatórios), sem segurar esta resposta.
+    const { resposta, transferir, motivo, atendimentoHumano, detalhes } = await responder({ numero, texto: textoLimpo, origem: "simulador", config: configRascunho });
+    // Com a resposta pronta, o assunto da conversa (para os relatórios) e o resumo do começo de uma
+    // conversa longa (lib/memoria.ts), sem segurar esta resposta.
     classificarEmSegundoPlano(numero);
+    atualizarResumoEmSegundoPlano(numero);
     const metaGerada = meta({ demo: !aiEnabled(), insumo: "mensagens do cliente e a base de conhecimento configurada" });
     // As conversas agora vivem no banco (lib/conversas.ts) e sobrevivem a um reinício: não há mais
     // snapshot da lista salvo no histórico a cada mensagem. A lista atualizada volta junto da resposta
     // só para a tela não precisar de um segundo fetch.
-    return Response.json({ resposta, transferir, ferramentaUsada, atendimentoHumano, conversas: listarConversas(), meta: metaGerada });
+    // `detalhes` é o que o bloco "Por que respondeu assim" da bolha desenha (o antigo `ferramentaUsada`
+    // virou uma das linhas dele).
+    return Response.json({ resposta, transferir, motivo: motivo ?? null, detalhes, atendimentoHumano, conversas: listarConversas(), meta: metaGerada });
   } catch (err) {
     return responderErro(err, "Não foi possível gerar a resposta agora. Tente de novo.");
   }

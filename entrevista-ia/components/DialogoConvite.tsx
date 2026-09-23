@@ -13,11 +13,7 @@ import { useDialogo } from "./useDialogo";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Aviso, CopyButton, ErrorBox, lerErro, useStatus, type ErroLido } from "./ui";
 import type { Convite } from "@/lib/convite";
-
-/** Os mesmos prazos que o servidor aceita (`PRAZOS_VALIDOS`, lib/convite.ts). A duplicação é
- * deliberada: importar o valor traria o banco para o pacote do navegador. */
-const PRAZOS = [7, 15, 30];
-const PRAZO_PADRAO = 15;
+import { PRAZOS_VALIDOS, PRAZO_PADRAO, dataParaCampo, dataDoPrazo, periodoPadrao, validarPeriodo, type PeriodoConvite } from "@/lib/prazo-convite";
 
 export function DialogoConvite({
   entrevistaId,
@@ -26,7 +22,7 @@ export function DialogoConvite({
   onMudou,
 }: {
   entrevistaId: string;
-  /** Abrir já estendendo o prazo: é o "Reenviar convite" das tabelas. */
+  /** Renova automaticamente apenas convites vencidos; reenvios preservam o período salvo. */
   reenviar?: boolean;
   onFechar: () => void;
   /** Chamado quando o prazo ou o estado da entrevista mudou, para a tela de trás se atualizar. */
@@ -37,6 +33,8 @@ export function DialogoConvite({
   const { progresso, preparar } = usePrepararConvite();
   const [semConvite, setSemConvite] = useState(false);
   const [prazo, setPrazo] = useState("");
+  const [inicio, setInicio] = useState("");
+  const [fim, setFim] = useState("");
   const [ocupado, setOcupado] = useState(true);
   const [erroEnvio, setErroEnvio] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -54,20 +52,28 @@ export function DialogoConvite({
 
 
 
-  const carregar = useCallback(async (gerar = reenviar, dias = PRAZO_PADRAO) => {
+  const carregar = useCallback(async (gerar = false, dias = PRAZO_PADRAO, periodo?: PeriodoConvite) => {
     setOcupado(true); setErroTela(null); setErroEnvio(false); setRecado("");
     try {
       let corpo: { convite: Convite };
+      let mudou = gerar;
       if (gerar) {
-        corpo = await preparar<{ convite: Convite }>(`/api/entrevistas/${entrevistaId}/convite`, { expiraEmDias: dias });
+        corpo = await preparar<{ convite: Convite }>(`/api/entrevistas/${entrevistaId}/convite`, periodo ?? { expiraEmDias: dias });
       } else {
         const r = await fetch(`/api/entrevistas/${entrevistaId}/convite`, { signal: AbortSignal.timeout(15000) });
         setSemConvite(r.status === 409);
         if (!r.ok) throw r;
         corpo = await r.json();
+        if (reenviar && corpo.convite.status === "expirada") {
+          corpo = await preparar<{ convite: Convite }>(`/api/entrevistas/${entrevistaId}/convite`, { expiraEmDias: dias });
+          mudou = true;
+        }
       }
       setConvite(corpo.convite); setSemConvite(false);
-      if (gerar) aoMudar.current?.();
+      const padrao = periodoPadrao();
+      setInicio(dataParaCampo(corpo.convite.iniciaEm ?? padrao.iniciaEm));
+      setFim(dataParaCampo(corpo.convite.expiraEm ?? padrao.expiraEm));
+      if (mudou) aoMudar.current?.();
     } catch (e) { setErroTela(await lerErro(e)); }
     finally { setOcupado(false); setPrazo(""); }
   }, [entrevistaId, reenviar, preparar]);
@@ -81,6 +87,18 @@ export function DialogoConvite({
     setPrazo(String(dias));
     void carregar(true, dias);
   }
+
+  async function salvarPeriodo() {
+    try {
+      const periodo = validarPeriodo({ iniciaEm: new Date(inicio).toISOString(), expiraEm: new Date(fim).toISOString() });
+      await carregar(true, PRAZO_PADRAO, periodo);
+    } catch (e) { setErroTela(await lerErro(e)); }
+  }
+
+  const podeEditarPeriodo = convite && ["convidada", "aberta", "expirada"].includes(convite.status);
+  const periodoAlterado = Boolean(convite && podeEditarPeriodo && (
+    !convite.iniciaEm || !convite.expiraEm || inicio !== dataParaCampo(convite.iniciaEm) || fim !== dataParaCampo(convite.expiraEm)
+  ));
 
   async function enviarPorEmail() {
     setErroEnvio(true);
@@ -124,13 +142,13 @@ export function DialogoConvite({
             <label htmlFor="link-convite" className="text-sm font-semibold">Link exclusivo do candidato</label>
             <div className="flex items-center gap-2 flex-wrap">
               <input id="link-convite" className="input flex-1 min-w-0" readOnly value={convite.link} onFocus={(evento) => evento.currentTarget.select()} />
-              <CopyButton texto={() => convite.link} rotulo="Copiar link" disabled={ocupado} />
+              <CopyButton texto={() => convite.link} rotulo="Copiar link" disabled={ocupado || periodoAlterado} />
             </div>
 
             <div className="flex items-center gap-2.5 flex-wrap">
-              <CopyButton texto={() => convite.mensagem} rotulo="Copiar convite" disabled={ocupado} />
+              <CopyButton texto={() => convite.mensagem} rotulo="Copiar convite" disabled={ocupado || periodoAlterado} />
               {convite.podeEnviarPorEmail && (
-                <button type="button" className="btn-ghost !w-auto" disabled={enviando || ocupado} onClick={() => void enviarPorEmail()}>
+                <button type="button" className="btn-ghost !w-auto" disabled={enviando || ocupado || periodoAlterado} onClick={() => void enviarPorEmail()}>
                   {enviando ? "Enviando..." : "Enviar por e-mail"}
                 </button>
               )}
@@ -146,22 +164,35 @@ export function DialogoConvite({
               <p className="text-sm whitespace-pre-line mt-2.5 text-muted">{convite.mensagem}</p>
             </details>
 
-            <div className="flex flex-col gap-1.5">
+            {podeEditarPeriodo ? <form className="flex flex-col gap-3 border border-line rounded-card p-3.5" onSubmit={(e) => { e.preventDefault(); void salvarPeriodo(); }}>
+              <p className="text-sm font-semibold">Período da entrevista</p>
+              <p className="text-[12.5px] text-muted">Por padrão, começa hoje e termina em 7 dias. Datas e horários no fuso do seu dispositivo.</p>
+              <div className="grid grid-cols-2 max-sm:grid-cols-1 gap-3">
+                <label className="text-[13px] font-semibold" htmlFor="convite-inicio">Início
+                  <input id="convite-inicio" className="input mt-1" type="datetime-local" required value={inicio} disabled={ocupado || enviando} onChange={(e) => setInicio(e.target.value)} />
+                </label>
+                <label className="text-[13px] font-semibold" htmlFor="convite-fim">Fim
+                  <input id="convite-fim" className="input mt-1" type="datetime-local" required min={inicio} value={fim} disabled={ocupado || enviando} onChange={(e) => setFim(e.target.value)} />
+                </label>
+              </div>
+              <button type="submit" className="btn-ghost !w-auto self-start" disabled={ocupado || enviando || !periodoAlterado}>{ocupado ? "Salvando…" : "Salvar período"}</button>
+              {periodoAlterado && <p role="status" className="text-[12.5px] text-muted">Salve o período antes de compartilhar o convite.</p>}
               <label htmlFor="convite-prazo" className="text-[13px] font-semibold">Renovar validade a partir de hoje</label>
               <select
                 id="convite-prazo"
                 className="input"
                 value={prazo}
-                disabled={ocupado}
+                disabled={ocupado || enviando}
                 onChange={(e) => void trocarPrazo(Number(e.target.value))}
               >
                 <option value="">Escolher novo prazo</option>
-                {PRAZOS.map((d) => (
+                {PRAZOS_VALIDOS.map((d) => (
                   <option key={d} value={d}>{d} dias</option>
                 ))}
               </select>
-              <span className="text-[12.5px] text-muted">{convite.expiraEm ? `Válido até ${new Date(convite.expiraEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}. ` : ""}Exclusivo para uma conversa com este candidato.</span>
-            </div>
+              <span className="text-[12.5px] text-muted">Exclusivo para uma conversa com este candidato.</span>
+            </form> : <p className="text-[13px] text-muted">O período não pode ser alterado depois de iniciar ou cancelar a entrevista.</p>}
+            {convite.iniciaEm && convite.expiraEm && <p className="text-[12.5px] text-muted">Período salvo: de {dataDoPrazo(convite.iniciaEm)} até {dataDoPrazo(convite.expiraEm)} (horário de Brasília).</p>}
 
             <p className="text-sm text-muted">Depois de compartilhar, acompanhe a resposta em <Link href={`/entrevistas/${entrevistaId}`} className="btn-link">Ver entrevista</Link>.</p>
             {recado && <Aviso tom="ok">{recado}</Aviso>}

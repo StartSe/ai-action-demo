@@ -12,7 +12,7 @@
 // há o que avaliar, e a sessão vira `abandonada`: dar nota a duas frases seria inventar um resultado,
 // e uma abandonada **não gasta tentativa** (lib/sessoes.ts), então quem mal começou não é penalizado.
 import { avaliarSessao } from "./avaliacao";
-import { encerrar, transcricao, type Sessao } from "./sessoes";
+import { encerrar, temFalaDoVendedor, transcricao, type Sessao } from "./sessoes";
 
 /** Parado por menos que isto, o vendedor volta para a mesma conversa. */
 export const MINUTOS_PARA_RETOMAR = 10;
@@ -42,7 +42,7 @@ export async function retomarOuFechar(sessao: Sessao): Promise<Retomada> {
   const paradaHaMin = (Date.now() - ultimoSinal) / 60000;
   if (paradaHaMin < MINUTOS_PARA_RETOMAR) return "retomada";
 
-  if (falas.length < FALAS_MINIMAS_PARA_AVALIAR || !falas.some((f) => f.papel === "vendedor")) {
+  if (falas.length < FALAS_MINIMAS_PARA_AVALIAR || !temFalaDoVendedor(falas)) {
     encerrar(sessao.id, { status: "abandonada" });
     return "abandonada";
   }

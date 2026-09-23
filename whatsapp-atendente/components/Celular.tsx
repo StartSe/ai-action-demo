@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { MensagemChat } from "@/lib/types";
+import { PorQueRespondeu } from "./PorQueRespondeu";
+import type { DetalhesResposta, MensagemChat } from "@/lib/types";
 
 /**
  * `hora` é gravada no momento em que a mensagem é enviada/recebida, não recalculada a cada render.
@@ -14,7 +15,8 @@ export type BolhaChat = MensagemChat & {
   acao?: { rotulo: string; url: string };
   pendente?: boolean;
   hora?: string;
-  ferramentaUsada?: string;
+  /** Como o atendente montou a resposta; desenha o "Por que respondeu assim" abaixo da bolha. */
+  detalhes?: DetalhesResposta;
 };
 
 /** Aprova ou corrige a resposta do atendente para o par {pergunta, resposta} entrar na base. */
@@ -115,6 +117,7 @@ export function saudacaoPadrao(nome: string, negocio: string): string {
 export function Celular({
   nome,
   negocio,
+  saudacao,
   mensagens,
   valor = "",
   onValorChange,
@@ -126,6 +129,8 @@ export function Celular({
 }: {
   nome: string;
   negocio: string;
+  /** Como o atendente se apresenta (Config.saudacao). Vazia, vale a reserva de `saudacaoPadrao`. */
+  saudacao?: string;
   mensagens: BolhaChat[];
   valor?: string;
   onValorChange?: (v: string) => void;
@@ -138,6 +143,7 @@ export function Celular({
   previa?: boolean;
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
+  const abertura = saudacao?.trim() || saudacaoPadrao(nome, negocio);
 
   useEffect(() => {
     const el = bodyRef.current;
@@ -171,7 +177,7 @@ export function Celular({
         <div ref={bodyRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-2.5 bg-[#e5ddd5]">
           {mensagens.length === 0 && (
             <div className="max-w-[82%] px-3 py-2 rounded-xl text-sm leading-snug shadow-[0_1px_1px_rgba(0,0,0,0.08)] self-start bg-white rounded-bl-[3px]">
-              {saudacaoPadrao(nome, negocio)}
+              {abertura}
             </div>
           )}
           {mensagens.map((m, i) => {
@@ -196,11 +202,7 @@ export function Celular({
                     {m.acao.rotulo}
                   </a>
                 )}
-                {m.ferramentaUsada && (
-                  <span className="text-[11px] text-muted px-1" title={`Ferramenta consultada: ${m.ferramentaUsada}`}>
-                    Consultado em {m.ferramentaUsada}
-                  </span>
-                )}
+                {m.papel === "atendente" && !m.pendente && !m.erro && <PorQueRespondeu detalhes={m.detalhes} />}
                 {podeAvaliar && pergunta && (
                   <AcoesResposta pergunta={pergunta} resposta={m.texto} onAprovar={onAprovar} onCorrigir={onCorrigir} />
                 )}
@@ -213,7 +215,7 @@ export function Celular({
         <form onSubmit={submit} className="flex gap-2 p-2.5 bg-[#f0f0f0] border-t border-line shrink-0">
           <input
             className="flex-1 min-w-0 rounded-full border border-line px-3.5 py-2.5 bg-white outline-none focus:border-accent focus:ring-[3px] focus:ring-accent-soft"
-            placeholder="Digite uma pergunta do cliente..."
+            placeholder="Escreva como um cliente"
             autoComplete="off"
             value={valor}
             onChange={(e) => onValorChange?.(e.target.value)}

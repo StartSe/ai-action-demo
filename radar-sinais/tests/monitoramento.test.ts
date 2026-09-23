@@ -5,11 +5,12 @@ import { monitoramentoDevido, validarMonitoramento } from "../lib/monitoramento"
 const config = validarMonitoramento({ temas: ["IA", "IA", " Varejo "] });
 test("padrão, deduplicação e validação", () => {
   assert.deepEqual(config.temas, ["IA", "Varejo"]);
-  assert.deepEqual(config.horarios, ["08:00", "16:00", "20:00"]);
+  assert.deepEqual(config.horarios, ["08:00"]);
   assert.equal(config.fuso, "America/Sao_Paulo");
   for (const extra of [{ temas: [] }, { horarios: [] }, { horarios: ["24:00"] }, { fuso: "invalido" }, { temas: [1] }]) assert.throws(() => validarMonitoramento({ temas: ["IA"], ...extra }));
 });
 test("executa nos três slots de Brasília, sem antecipar ou repetir", () => {
+  const config = validarMonitoramento({ temas: ["IA"], horarios: ["08:00", "16:00", "20:00"] });
   const criado = "2026-09-18T10:00:00Z";
   assert.equal(monitoramentoDevido(config, null, criado, new Date("2026-09-18T10:59:00Z")), false);
   for (const hora of [11, 19, 23]) {

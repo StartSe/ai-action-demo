@@ -141,7 +141,7 @@ export class ChatGPTBridge {
       await this.rpc("initialize", {
         clientInfo: {
           name: "clone_site",
-          title: "Clone de Site",
+          title: "Site Cowork",
           version: "1.0.0",
         },
         capabilities: { experimentalApi: true },
@@ -243,7 +243,7 @@ export class ChatGPTBridge {
         id: m.id,
         error: {
           code: -32601,
-          message: "Esta operação não está habilitada no Clone de Site.",
+          message: "Esta operação não está habilitada no Site Cowork.",
         },
       });
       return;
@@ -345,6 +345,7 @@ export class ChatGPTBridge {
     tools = [],
     signal,
     onText,
+    image,
   }: {
     system: string;
     prompt: string;
@@ -352,6 +353,7 @@ export class ChatGPTBridge {
     tools?: AgentTool[];
     signal?: AbortSignal;
     onText?: (text: string) => void;
+    image?: string;
   }): Promise<string> {
     await this.start();
     if (!(await this.account()).account)
@@ -421,7 +423,7 @@ export class ChatGPTBridge {
       }
       void this.rpc<{ turn: { id: string } }>("turn/start", {
         threadId: id,
-        input: [{ type: "text", text: prompt }],
+        input: [{ type: "text", text: prompt }, ...(image ? [{ type: "image", url: image }] : [])],
         environments: [],
       })
         .then((result) => {

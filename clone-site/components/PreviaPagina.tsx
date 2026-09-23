@@ -19,7 +19,7 @@ function Moldura({ html, titulo, style, ampliada = false }: { html: string; titu
   </div>;
 }
 
-export function PreviaPagina({ html, titulo, referencia, alturaComputador = 680, alturaCelular = 760 }: { html: string; titulo: string; referencia?: string; alturaComputador?: number; alturaCelular?: number }) {
+export function PreviaPagina({ html, titulo, referencia, alturaComputador = 680, alturaCelular = 760, aoAmpliar }: { html: string; titulo: string; referencia?: string; alturaComputador?: number; alturaCelular?: number; aoAmpliar?: () => void }) {
   const [modo, setModo] = useState<Modo>("computador");
   const celular = modo === "celular";
   const botao = (valor: Modo, rotulo: string) => (
@@ -41,9 +41,9 @@ export function PreviaPagina({ html, titulo, referencia, alturaComputador = 680,
           {botao("computador", "Computador")}
           {botao("celular", "Celular")}
         </div>
-        <Ampliar rotulo="Abrir em tela cheia" titulo={titulo}>
+        {aoAmpliar ? <button className="btn-ghost" onClick={aoAmpliar}>Abrir em tela cheia</button> : <Ampliar rotulo="Abrir em tela cheia" titulo={titulo}>
           <Moldura html={html} titulo={`Prévia ampliada de ${titulo}`} ampliada style={{ width: celular ? LARGURA_CELULAR : "100%", maxWidth: "100%" }} />
-        </Ampliar>
+        </Ampliar>}
         {referencia && (
           <figure className="m-0 shrink-0 max-md:ml-auto">
             <AmpliarImagem src={referencia} />

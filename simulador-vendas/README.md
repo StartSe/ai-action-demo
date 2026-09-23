@@ -26,11 +26,15 @@ Três coisas, nesta ordem. Entender esta sequência é entender o app inteiro:
 Ele abre o link, diz quem é (com Google, com Microsoft ou escrevendo nome e e-mail), lê **quem é o cliente** — nome, cargo, empresa e por que aceitou falar — e começa a conversa. Ele não vê o tipo de cliente antes: isso só é revelado no feedback, senão o treino vira decoreba. No fim ele recebe a nota, o que foi bem, **uma** coisa para fazer diferente e uma frase pronta para usar. Nenhuma tela do vendedor tem menu do app, cabeçalho de gestor ou caminho para as configurações.
 
 ## Conversa por voz
+A duração definida pelo gestor aparece como referência na sala: tempo restante, faixa de progresso e, após o limite, tempo excedido. Ao atingir a duração, o cliente diz que precisa encerrar e pergunta se há pontos para retomarem depois. Na voz contínua, o aviso espera uma pausa; por texto ou voz do navegador, entra na próxima resposta ou em uma pausa sem texto em edição. O aviso fica salvo na sessão. A conversa continua aberta para combinar os próximos passos; **Encerrar e ver resultado** conclui o treino.
+
 A IA do simulador conduz todas as conversas. A ElevenLabs fornece apenas a voz: salve a chave em `/setup`, selecione **Voz do cliente** e ouça uma amostra. A voz escolhida é usada para todos os clientes; o ajuste por perfil muda o ritmo e a expressividade.
 
-A sala usa [react-speech-recognition](https://github.com/JamesBrill/react-speech-recognition). Um toque inicia o microfone, uma pausa de 1,4 segundo envia a fala e a escuta volta após a resposta. **Enviar fala agora**, **Pausar microfone** e **Interromper e falar** permitem controlar o ritmo sem segurar botões. Texto e voz compartilham a transcrição salva no servidor.
+A sala usa a Web Speech API do navegador quando a conversa ao vivo pelo LiveKit não está configurada. Um toque inicia o microfone, uma pausa de 1,4 segundo envia a fala e a escuta volta após a resposta. **Enviar fala agora**, **Pausar microfone** e **Interromper e falar** permitem controlar o ritmo sem segurar botões. Texto e voz compartilham a transcrição salva no servidor.
 
-O reconhecimento depende do suporte do navegador à Web Speech API. A escuta contínua é habilitada apenas onde a biblioteca indica suporte; sem reconhecimento ou permissão do microfone, a conversa oferece texto. Se a ElevenLabs falhar, a síntese do navegador fornece o áudio. Não é necessário criar ou selecionar agentes externos.
+O reconhecimento depende do suporte do navegador à Web Speech API. A tela só indica escuta depois da confirmação do navegador. Falhas de conexão, captura ou permissão oferecem texto e permitem tentar a voz novamente; uma inicialização sem resposta é cancelada após 10 segundos. Cada escuta usa uma instância nova, preservando as palavras finais e permitindo recuperar permissões sem recarregar a página. Se a ElevenLabs falhar, a síntese do navegador fornece o áudio. Não é necessário criar ou selecionar agentes externos.
+
+Os testes de conversa rodam com `npx playwright test tests/conversa.spec.ts tests/voz-fallback.spec.ts`. Para exercitar também o reconhecimento real do Chrome, forneça um WAV curto em português: `VOZ_TESTE_ARQUIVO=/caminho/fala.wav npx playwright test tests/voz-real.spec.ts`. Este teste usa a conexão externa do Chrome, substitui apenas a entrada de áudio pelo arquivo e não abre o microfone físico.
 
 ## Metodologia e avaliação
 O gestor escolhe a régua por treino: **SPIN Selling** (9 critérios), **Venda consultiva** (7 critérios) ou **Personalizada** (o gestor escreve de 3 a 10 critérios). A avaliação devolve uma nota por critério com o **trecho literal da conversa** que a justifica — citação conferida contra a transcrição, não texto de confiança: o que não aparece na conversa é descartado. A nota geral e as notas por momento da conversa são calculadas no app, nunca pedidas à IA, que é o que permite comparar duas pessoas avaliadas em dias diferentes.
@@ -171,7 +175,8 @@ lib/ferramentas.ts         as quatro ferramentas expostas por MCP
 lib/store.ts               configuração em SQLite, com variáveis de ambiente como prioridade
 lib/ai.ts                  cliente OpenRouter (askText, askJSON, askWithTools), com modelo por tarefa
 components/Resultado.tsx   as telas dos quatro formatos de resultado, compartilhadas
-components/SalaVoz.tsx     conversa com react-speech-recognition e voz selecionada
+components/SalaVoz.tsx     conversa e voz selecionada
+components/useReconhecimentoVoz.ts  captura, transcrição e recuperação de falhas do navegador
 components/FeedbackVendedor.tsx  o feedback de quem treinou, nas duas telas que o mostram
 Dockerfile                 build multi-stage com saída standalone
 docker-compose.yml         sobe este app isolado
@@ -208,7 +213,9 @@ npm run agent:start
 
 Os dois processos precisam usar o mesmo diretório de trabalho e `DATA_DIR` (SQLite e arquivo `chave-mestra`). Se usar `CHAVE_MESTRA` por ambiente, defina a mesma nos dois processos. Variáveis de ambiente precisam ser fornecidas aos dois processos; o comando `tsx` não carrega `.env.local` automaticamente. Reinicie o serviço de voz após alterar credenciais do LiveKit. O servidor deve permitir conexões de saída aos três provedores, e o navegador precisa de HTTPS (ou localhost) para o microfone.
 
-Com Docker, execute `docker compose up --build -d` e configure as conexões no app. A imagem Debian inicia o site e o serviço de voz no mesmo contêiner, compartilhando `/app/data`; isso também vale para o blueprint do Render. O serviço de voz aguarda as credenciais e é reiniciado se parar. O serviço mantém apenas um processo de chamada pré-aquecido, em vez do padrão de até quatro. Se o LiveKit não responder, a tela oferece a voz do navegador. Uma chamada real depende de credenciais válidas, acesso ao microfone e recursos disponíveis na instância.
+Com Docker, execute `docker compose up --build -d` e configure as conexões no app. A imagem Debian compartilha `/app/data` entre site e serviço de voz; isso também vale para o blueprint do Render. Em instâncias com menos de 2 GiB de memória, como o Starter de 512 MB, o serviço de voz local não é iniciado: a conversa usa o reconhecimento de fala do navegador, as respostas do OpenRouter e o áudio do ElevenLabs, quando configurados. A mesma verificação de memória controla o processo e a tela, mesmo com credenciais LiveKit salvas.
+
+Com pelo menos 2 GiB, o serviço LiveKit aguarda as credenciais e é reiniciado se parar. Mantém um processo de chamada pré-aquecido. Esse limite é uma margem de proteção, não uma garantia para chamadas simultâneas: o SDK também carrega inferência local antes da primeira conversa. Monitore a memória para dimensionar a instância. Se o agente não responder ou desconectar durante a conversa, a tela oferece a voz do navegador. Uma chamada real depende de credenciais válidas, acesso ao microfone e recursos disponíveis na instância.
 
 Na conversa, um toque abre o microfone. É possível interromper o cliente falando, pausar o microfone e digitar sem trocar de sessão. As falas são gravadas pelo worker no servidor e reutilizadas na avaliação; ao encerrar, o navegador aguarda o worker fechar a conversa antes de pedir a avaliação. Uma reconexão reutiliza o histórico e o roteiro. Sem as três integrações configuradas, continua disponível o modo anterior de voz do navegador e a demonstração.
 
@@ -242,3 +249,44 @@ Escolha **Importar pelo link** ou **Preencher manualmente**. A importação most
 ### Ajustes de voz (0.4.1)
 
 O fluxo LiveKit publica o microfone antes de aguardar a prontidão do agente, como no Entrevistadora IA, evitando uma espera circular na conexão. O agente aguarda o participante e só inicializa a CLI quando executado diretamente. A imagem inclui as bibliotecas de áudio e corrige a propriedade do volume antes de iniciar os processos sem root. O build testa a preservação da chave mestra e das configurações em um volume com proprietário antigo.
+
+### Reconhecimento de fala no navegador (0.4.2)
+
+A sala confirma o início do reconhecimento antes de mostrar “Estou ouvindo você” e explica falhas de conexão, captura ou permissão. É possível reiniciar a voz sem recarregar a página. Falas finais consecutivas são preservadas, e pausas ou cancelamentos não deixam o envio preso nem interrompem uma nova tentativa. A correção foi validada em 21 testes de voz, incluindo transcrição real pelo Chrome com áudio sintético, além de TypeScript, lint e build de produção.
+
+### Memória e acesso ao banco (0.4.3)
+
+Instâncias com menos de 2 GiB usam a voz do navegador e não iniciam o agente LiveKit local, mesmo com as credenciais configuradas. As respostas da IA e o áudio ElevenLabs continuam disponíveis. A queda de um agente encerra o estado de escuta e permite reconectar ou selecionar a voz do navegador.
+
+As conexões SQLite do app passam a compartilhar WAL e espera por bloqueios desde a inicialização. A criação e migração das tabelas reservam a escrita antes de consultar o esquema e só ficam marcadas como concluídas após o commit. Isso corrige o caso reproduzido de `database is locked` na limpeza inicial e permite nova tentativa após uma falha, preservando os dados existentes.
+
+Validação: 33 testes, incluindo contenção real entre processos, migração concorrente, recuperação do agente e transcrição real no Chrome; TypeScript, lint dos arquivos alterados e build de produção. No teste local do servidor de produção com o limite informado simulado em 512 MiB e cinco credenciais fictícias configuradas, o navegador abriu o microfone sem acionar LiveKit e 20 verificações de saúde responderam 200. Esse teste verifica a seleção do modo de voz, não impõe um limite físico de memória nem substitui a validação no Render.
+
+### Gestão de treinos e resultados (0.5.0)
+
+Produtos, Simulações, Equipe e Resultados têm busca, indicadores e listas adaptadas ao celular. As opções ficam em popovers com ícones, navegação por teclado, fechamento por Escape e clique fora. Criar treino ganha destaque. O gestor pode renomear e apagar treinos, editar pessoas e consultar seus detalhes sem abrir uma tabela extensa. Exclusões pedem confirmação e explicam o destino das avaliações.
+
+Treinos pausados ou encerrados desativam o compartilhamento e a interação. Quem abre o link vê um aviso; uma sala já aberta confere a disponibilidade a cada cinco segundos e o agente de voz confere a cada dois segundos. Reativar mantém o mesmo endereço. As rotas antigas também respeitam a pausa.
+
+Conversas sem fala do vendedor (inclusive texto vazio ou só espaços) ficam fora das listas de resultados, médias, indicadores, históricos de treino e avaliações pendentes. Encerrar sem falar não consome uma tentativa. A regra vale também para registros antigos, sem apagar os dados. Exemplos só são removidos quando o vendedor efetivamente fala.
+
+Para validar a versão de produção com banco temporário e navegador Chromium:
+
+```sh
+npm run lint
+npm run build
+PLAYWRIGHT_PRODUCTION=1 npm test
+```
+
+Os testes de gestão incluem pausa e reativação do mesmo link, sessão sem fala, edição e exclusão com confirmação, recuperação de erros e popovers em desktop e celular. O teste opcional de reconhecimento real continua dependendo de `VOZ_TESTE_ARQUIVO`.
+
+### Orientação e compartilhamento (0.6.0)
+
+- Configurações ocultam o bloco “Para a equipe técnica”. A opção de remover exemplos desaparece após uma limpeza bem-sucedida, inclusive ao recarregar ou acessar de outro navegador; dados reais e exemplos vinculados a treinos reais continuam preservados.
+- Copiar link mostra uma confirmação via toast. Abrir link usa uma nova aba. As ações têm ícone e texto nos treinos, convites e resultados; treinos indisponíveis mantêm o compartilhamento desativado.
+- O orientador pode destacar um acerto com evidência na última fala do vendedor. O retorno é silencioso, dura seis segundos, respeita movimento reduzido e aparece no máximo três vezes por sessão, com intervalo mínimo de 45 segundos. Não altera notas, transcrição ou a fala do cliente.
+- O simulador destaca o tempo e orienta o cliente virtual a encerrar naturalmente ao atingir a duração prevista, dando espaço para o vendedor combinar os assuntos da próxima conversa. Texto, voz do navegador e LiveKit compartilham essa regra.
+
+Validação: build de produção, lint e testes de interação e persistência, incluindo o cronômetro, aviso sem repetição, texto em edição, instruções da IA e agente LiveKit com serviços de voz simulados. O teste opcional de reconhecimento real depende de `VOZ_TESTE_ARQUIVO`.
+
+Validação desta versão: 52 testes aprovados no servidor de produção standalone, incluindo capturas e navegação por teclado em 1280 px e 390 px; build com TypeScript aprovado e lint sem erros (um aviso preexistente em `components/setup.tsx`). O teste opcional de voz real não foi executado por depender de `VOZ_TESTE_ARQUIVO`.

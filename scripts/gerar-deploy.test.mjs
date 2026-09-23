@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -18,13 +18,19 @@ function gerar(t, alterar = () => {}) {
   for (const arquivo of ["scripts/gerar-deploy.mjs", "site/index.html"]) {
     copyFileSync(new URL(arquivo, raiz), join(dir, arquivo));
   }
+  mkdirSync(join(dir, "clone-site/deploy/render-site"), { recursive: true });
+  copyFileSync(new URL("clone-site/deploy/render-site/build.mjs", raiz), join(dir, "clone-site/deploy/render-site/build.mjs"));
   writeFileSync(join(dir, "catalogo.json"), JSON.stringify(catalogo));
   const resultado = spawnSync(process.execPath, [join(dir, "scripts/gerar-deploy.mjs")], { encoding: "utf8" });
-  return { resultado, ler: (arquivo) => readFileSync(join(dir, arquivo), "utf8"), catalogo };
+  return { dir, resultado, ler: (arquivo) => readFileSync(join(dir, arquivo), "utf8"), catalogo };
 }
 
 test("publica opções gratuita e persistente sem duplicar o app ou alterar a suíte", (t) => {
-  const { resultado, ler, catalogo } = gerar(t);
+  const { resultado, ler, catalogo } = gerar(t, (app) => {
+    delete app.plano;
+    delete app.discoGB;
+    delete app.discoGuarda;
+  });
   assert.equal(resultado.status, 0, resultado.stderr);
   const gratuito = ler("publico/deploy-bussola-ia/render.yaml");
   const persistente = ler("publico/deploy-bussola-ia-persistente/render.yaml");
@@ -66,3 +72,41 @@ for (const [caso, alterar] of [
     assert.match(resultado.stderr, /persistencia exige plano pago válido/);
   });
 }
+
+for (const id of ["bussola-ia", "pdi-time", "predictive-harness", "clone-site"]) {
+  test(`${id}: mantém disco na instalação individual e na suíte`, (t) => {
+    const { resultado, ler, catalogo } = gerar(t);
+    assert.equal(resultado.status, 0, resultado.stderr);
+    const app = catalogo.apps.find((a) => a.id === id);
+    assert.notEqual(app.plano, "free");
+    assert.equal(app.discoGB, 1);
+    const disco = `    disk:\n      name: ${id}-dados\n      mountPath: /app/data\n      sizeGB: 1`;
+    for (const caminho of [`${id}/render.yaml`, `publico/deploy-${id}/render.yaml`, "render.yaml", "publico/main/render.yaml"]) {
+      const servico = ler(caminho).split("  - type: web\n").find((s) => s.startsWith(`    name: ${id}\n`));
+      assert.ok(servico, `${caminho}: serviço ausente`);
+      assert.ok(servico.includes(`    plan: ${app.plano}\n`), caminho);
+      assert.ok(servico.includes(disco), caminho);
+    }
+    const readme = ler(`publico/deploy-${id}/README.md`);
+    assert.match(readme, /Exige plano pago/);
+    assert.doesNotMatch(readme, /Teste gratuito, sem volume/);
+    const linha = ler("publico/main/README.md").split("\n").find((l) => l.includes(`/tree/deploy-${id})`));
+    assert.ok(linha);
+    assert.doesNotMatch(linha, /Teste gratuito, sem volume/);
+    if (id === "bussola-ia") {
+      assert.equal(ler("bussola-ia/render.yaml"), ler("bussola-ia/render-persistente.yaml"));
+      assert.equal(ler("publico/deploy-bussola-ia/render.yaml"), ler("publico/deploy-bussola-ia-persistente/render.yaml"));
+    }
+  });
+}
+
+
+test("Site Cowork publica somente o build mínimo para serviços independentes", (t) => {
+  const { dir, resultado, ler } = gerar(t);
+  assert.equal(resultado.status, 0, resultado.stderr);
+  assert.deepEqual(readdirSync(join(dir, "publico/deploy-clone-site")).sort(), ["README.md", "render.yaml", "site-build"]);
+  assert.deepEqual(readdirSync(join(dir, "publico/deploy-clone-site/site-build")), ["build.mjs"]);
+  assert.equal(ler("publico/deploy-clone-site/site-build/build.mjs"), readFileSync(new URL("clone-site/deploy/render-site/build.mjs", raiz), "utf8"));
+  const app = JSON.parse(ler("publico/main/catalogo.json")).apps.find((a) => a.id === "clone-site");
+  assert.equal(app.versao, JSON.parse(readFileSync(new URL("clone-site/package.json", raiz), "utf8")).version);
+});

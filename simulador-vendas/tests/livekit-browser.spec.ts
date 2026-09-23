@@ -14,7 +14,7 @@ test.beforeAll(async () => {
       window.fetch = async () => { window.pedidos++; return Response.json({url: "wss://teste", token: "teste"}); };
       window.salas = Room.salas;
       function Harness() {
-        window.chamada = useConversaLivekit("teste", {estado: () => {}, fala: () => {}, erro: () => {}});
+        window.chamada = useConversaLivekit("teste", {estado: e => { window.estado = e; }, fala: () => {}, erro: e => { window.erro = e; }});
         return null;
       }
       const root = createRoot(document.getElementById("root"));
@@ -34,8 +34,8 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => Boolean((window as unknown as Harness).chamada));
 });
 
-type Sala = { state: string; mensagens: string[]; microfones: boolean[]; pronto: () => void };
-type Harness = { chamada: { iniciar: () => Promise<void>; pausar: () => Promise<void>; texto: (texto: string) => Promise<void>; finalizar: () => Promise<void> }; salas: Sala[]; pedidos: number; terminou?: boolean; erro?: string; desmontar: () => void };
+type Sala = { state: string; mensagens: string[]; microfones: boolean[]; pronto: () => void; agenteSaiu: () => void };
+type Harness = { chamada: { iniciar: () => Promise<void>; pausar: () => Promise<void>; texto: (texto: string) => Promise<void>; finalizar: () => Promise<void> }; salas: Sala[]; pedidos: number; terminou?: boolean; erro?: string; estado?: string; desmontar: () => void };
 
 test("texto aguarda o agente e cancela a abertura pendente do microfone", async ({ page }) => {
   await page.evaluate(() => { const w = window as unknown as Harness; void w.chamada.iniciar().catch(() => {}); });
@@ -68,4 +68,20 @@ test("publica o microfone antes de aguardar o agente, sem espera circular", asyn
   // Simula o agente que só consegue terminar a preparação após receber a faixa.
   await page.evaluate(() => (window as unknown as Harness).salas[0].pronto());
   await page.waitForFunction(() => (window as unknown as Harness).terminou);
+});
+
+test("queda do agente encerra a falsa escuta e permite abrir uma conexão nova", async ({ page }) => {
+  await page.evaluate(() => { const w = window as unknown as Harness; void w.chamada.iniciar(); });
+  await page.waitForFunction(() => (window as unknown as Harness).salas[0]?.state === "connected");
+  await page.evaluate(() => (window as unknown as Harness).salas[0].pronto());
+  await page.waitForFunction(() => (window as unknown as Harness).estado === "ouvindo");
+  await page.evaluate(() => (window as unknown as Harness).salas[0].agenteSaiu());
+  await page.waitForFunction(() => (window as unknown as Harness).estado === "parado");
+  expect(await page.evaluate(() => (window as unknown as Harness).erro)).toContain("interrompida");
+  expect(await page.evaluate(() => (window as unknown as Harness).salas[0].state)).toBe("disconnected");
+  await page.evaluate(() => { const w = window as unknown as Harness; void w.chamada.iniciar(); });
+  await page.waitForFunction(() => (window as unknown as Harness).salas[1]?.state === "connected");
+  await page.evaluate(() => (window as unknown as Harness).salas[1].pronto());
+  await page.waitForFunction(() => (window as unknown as Harness).estado === "ouvindo");
+  expect(await page.evaluate(() => (window as unknown as Harness).pedidos)).toBe(2);
 });

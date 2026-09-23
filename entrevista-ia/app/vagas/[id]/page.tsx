@@ -51,8 +51,7 @@ export default function Page() {
   const [vaga, setVaga] = useState<VagaDaPagina | null>(null);
   const [linhas, setLinhas] = useState<LinhaCandidato[] | null>(null);
   const [adicionando, setAdicionando] = useState(false);
-  // O convite aberto na tela: `reenviar` diz se abrir já estende o prazo (quem clicou em "Reenviar
-  // convite") ou só mostra o link que acabou de nascer com a atribuição.
+  // O reenvio preserva o período salvo; se o convite venceu, o diálogo renova o prazo.
   const [convite, setConvite] = useState<{ entrevistaId: string; reenviar: boolean } | null>(null);
   const [ligacao, setLigacao] = useState<LinhaCandidato | null>(null);
   const [recado, setRecado] = useState("");

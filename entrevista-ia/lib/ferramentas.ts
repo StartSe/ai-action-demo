@@ -176,7 +176,9 @@ export const FERRAMENTAS: Ferramenta[] = [
       properties: {
         vaga_id: { type: "string", description: "Id da vaga, devolvido por listar_vagas" },
         candidato_id: { type: "string", description: "Id do candidato, devolvido por listar_candidatos_da_vaga" },
-        expira_em_dias: { type: "number", enum: [7, 15, 30], description: "Por quantos dias o link vale (padrão 15)" },
+        inicia_em: { type: "string", description: "Início do período em ISO 8601 com fuso. Informe junto com expira_em." },
+        expira_em: { type: "string", description: "Fim do período em ISO 8601 com fuso, posterior ao início." },
+        expira_em_dias: { type: "number", enum: [7, 15, 30], description: "Por quantos dias o link vale (padrão 7)" },
       },
       required: ["vaga_id", "candidato_id"],
     },
@@ -191,6 +193,8 @@ export const FERRAMENTAS: Ferramenta[] = [
         vagaId: String(args.vaga_id || "").trim(),
         candidatoId: String(args.candidato_id || "").trim(),
         expiraEmDias: args.expira_em_dias,
+        iniciaEm: args.inicia_em,
+        expiraEm: args.expira_em,
         origem,
       });
       if (!resultado.ok) throw new Error(resultado.erro);
@@ -203,6 +207,7 @@ export const FERRAMENTAS: Ferramenta[] = [
         link: convite.link,
         assunto: convite.assunto,
         mensagem: convite.mensagem,
+        iniciaEm: convite.iniciaEm ?? null,
         expiraEm: convite.expiraEm ?? null,
         duracaoMin: convite.duracaoMin,
       };

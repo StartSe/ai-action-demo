@@ -1,10 +1,11 @@
 // Tradução única dos erros das rotas de sites (app/api/sites/**) para a resposta HTTP da suíte:
 // projeto inexistente → 404, pedido inválido → 400, erro de IA → respostaErro (com codigo/acao), o resto → 500.
 import { respostaErro } from "./ai";
-import { ErroDePedido, PaginaNaoEncontrada } from "./gerador";
+import { ConflitoEdicao, ErroDePedido, PaginaNaoEncontrada } from "./gerador";
 import { ProjetoNaoEncontrado } from "./projetos";
 
 export function respostaErroSites(err: unknown): Response {
+  if (err instanceof ConflitoEdicao) return Response.json({ error: err.message }, { status: 409 });
   if (err instanceof ProjetoNaoEncontrado || err instanceof PaginaNaoEncontrada) return Response.json({ error: err.message }, { status: 404 });
   if (err instanceof ErroDePedido) return Response.json({ error: err.message }, { status: 400 });
   return respostaErro(err);

@@ -1,4 +1,5 @@
 // Integrações que este app precisa. O setup (/setup) é gerado a partir desta lista.
+import { testarProspectHalo } from "./prospecthalo";
 import { testarFonte, type FonteOpcional } from "./pesquisa-fontes";
 import { testarBrightData } from "./brightdata";
 import { MCP_CRM, NOTIFICACOES, openrouter, type Integracao } from "./setup-comum";
@@ -7,36 +8,18 @@ const OPENROUTER = openrouter({ beneficio: "Liga a IA que qualifica os leads e e
 // Com a conta ChatGPT como alternativa (components/ConexaoIA.tsx), o botão precisa dizer qual conta conecta.
 if (OPENROUTER.oauth) OPENROUTER.oauth.rotulo = "Conectar com OpenRouter";
 
-// Título sem nome de fornecedor (o cartão é "o que isso faz por você"); a Apollo aparece na descrição
-// e no link, que é onde a pessoa precisa saber onde criar a conta.
-export const APOLLO: Integracao = {
-  id: "apollo",
-  titulo: "Busca de leads",
-  descricao: "Fonte alternativa de contatos: traz nome, cargo, empresa e LinkedIn da base da Apollo.io a partir do perfil de cliente ideal. Sem ela, a pesquisa de mercado já encontra pessoas por fontes públicas.",
-  beneficio: "Troca os leads de exemplo por contatos reais do seu mercado",
-  obrigatoria: false,
-  link: { url: "https://app.apollo.io/#/settings/integrations/api", rotulo: "Criar conta e obter a chave na Apollo" },
-  campos: [{ chave: "APOLLO_API_KEY", rotulo: "Chave da API", tipo: "secret", placeholder: "•••••••••••••••••", ajuda: "Fica em Settings › Integrations › API, dentro da sua conta da Apollo." }],
-  testar: async (config) => {
-    const chave = config.APOLLO_API_KEY;
-    if (!chave) return { ok: false, mensagem: "Nenhuma chave salva ainda." };
-    let r: Response;
-    try {
-      r = await fetch("https://api.apollo.io/api/v1/auth/health", { headers: { "x-api-key": chave } });
-    } catch (err) {
-      console.error("Apollo: falha de rede no teste de conexão", err);
-      return { ok: false, mensagem: "A busca de leads não respondeu; tente de novo em um minuto." };
-    }
-    if (r.status === 401 || r.status === 403) return { ok: false, mensagem: "A chave foi recusada. Copie de novo em Settings › Integrations › API." };
-    if (!r.ok) {
-      console.error("Apollo: teste de conexão recusado", r.status);
-      return { ok: false, mensagem: "A busca de leads não respondeu; tente de novo em um minuto." };
-    }
-    // O endereço de saúde devolve sucesso mesmo com chave inválida; quem indica se autenticou é "is_logged_in".
-    const data = (await r.json().catch(() => ({}))) as { is_logged_in?: boolean };
-    if (!data.is_logged_in) return { ok: false, mensagem: "A chave foi recusada. Copie de novo em Settings › Integrations › API." };
-    return { ok: true, mensagem: "Conectado. A próxima busca traz contatos reais." };
-  },
+export const PROSPECTHALO: Integracao = {
+  id: "prospecthalo", titulo: "ProspectHalo · busca de contatos",
+  descricao: "Encontra perfis profissionais com os critérios do seu cliente ideal e complementa a pesquisa pública das empresas e pessoas.",
+  beneficio: "Traz contatos para qualificar com evidências públicas", obrigatoria: false,
+  campoConectado: "PROSPECTHALO_API_KEY",
+  link: { url: "https://app.prospecthalo.ai", rotulo: "Abrir o ProspectHalo e obter a chave" },
+  notaConexao: "Conexão MCP. Requer uma conta LinkedIn conectada no ProspectHalo. Buscas consomem a cota do plano; o teste apenas verifica a conexão. Não envia mensagens.",
+  campos: [
+    { chave: "PROSPECTHALO_API_KEY", rotulo: "Chave ou link de conexão", tipo: "secret", placeholder: "••••••••••••••••", ajuda: "No ProspectHalo: Settings › AI agents and MCP › Generate key. Cole a chave ou o link MCP com key. O acesso é salvo de forma protegida." },
+    { chave: "PROSPECTHALO_TETO_CONSULTAS", rotulo: "Limite de consultas por prospecção", tipo: "text", opcional: true, avancado: true, padrao: "10", ajuda: "Inclui buscas e consultas de andamento. Cada busca respeita a quantidade solicitada." },
+  ],
+  testar: testarProspectHalo,
 };
 
 export const BRIGHTDATA: Integracao = {
@@ -79,7 +62,7 @@ function fonteOpcional(id: FonteOpcional, nome: string, descricao: string, url: 
 }
 export const EXA = fonteOpcional("exa", "Exa", "Pesquisa aprofundada para encontrar empresas e pessoas com o perfil desejado.", "https://dashboard.exa.ai/api-keys");
 export const TAVILY = fonteOpcional("tavily", "Tavily", "Pesquisa na web e leitura de páginas para encontrar candidatos e evidências públicas.", "https://app.tavily.com");
-export const SEARCHAPI = fonteOpcional("searchapi", "SearchAPI", "Busca alternativa no Google quando as outras fontes não trouxerem resultados.", "https://www.searchapi.io/dashboard");
+export const SEARCHAPI = fonteOpcional("searchapi", "SearchAPI", "Pesquisa no Google para ampliar e cruzar os resultados das outras fontes.", "https://www.searchapi.io/dashboard");
 
 const CRM: Integracao = {
   ...MCP_CRM,
@@ -91,4 +74,4 @@ const AVISOS: Integracao = {
   beneficio: "Entrega os leads novos da semana a quem cuida das vendas",
 };
 
-export const INTEGRACOES: Integracao[] = [OPENROUTER, APOLLO, BRIGHTDATA, EXA, TAVILY, SEARCHAPI, AVISOS, CRM];
+export const INTEGRACOES: Integracao[] = [OPENROUTER, PROSPECTHALO, BRIGHTDATA, EXA, TAVILY, SEARCHAPI, AVISOS, CRM];

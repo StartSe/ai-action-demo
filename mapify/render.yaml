@@ -1,0 +1,21 @@
+# Blueprint de publicação de Mapia (especificação: https://render.com/docs/blueprint-spec)
+# Imagem pública publicada pelo GitHub Actions em ghcr.io/startse/mapify:latest.
+# Este app exige o plano starter (pago) e cria um disco de 1 GB em /app/data, onde ficam mapas, fontes, conversas, conta e credenciais.
+# Crie sua conta e abra Configurações para conectar ChatGPT ou OpenRouter. Em YouTube, valide e salve uma chave do Google AI Studio para analisar vídeos públicos de qualquer canal. Depois, crie um novo mapa com o link do seu vídeo.
+services:
+  - type: web
+    name: mapify
+    runtime: image
+    image:
+      url: ghcr.io/startse/mapify:latest
+    plan: starter
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "10000"
+    # Mapas, fontes, conversas, conta e credenciais ficam em /app/data e sobrevivem a deploys.
+    disk:
+      name: mapify-dados
+      mountPath: /app/data
+      sizeGB: 1

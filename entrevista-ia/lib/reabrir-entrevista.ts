@@ -4,6 +4,7 @@ import { obter as obterVaga } from "./vagas";
 import { obter as obterFormulario } from "./formularios";
 import { obter as obterResultado } from "./historico";
 import { comTurnoExclusivo } from "./trava-entrevista";
+import { periodoPadrao } from "./prazo-convite";
 
 export class ErroReabertura extends Error {
   status: number;
@@ -26,7 +27,7 @@ export async function reabrirEntrevista(id: string, tentativa: number) {
     obterResultado(e.resultadoId ?? "");
     const db = banco();
     const momento = agora();
-    const prazo = new Date(Date.now() + 15 * 86400000).toISOString();
+    const periodo = periodoPadrao(new Date(momento));
     db.exec("BEGIN IMMEDIATE");
     try {
       db.prepare("DELETE FROM mensagens_entrevista WHERE entrevistaId = ?").run(id);
@@ -37,9 +38,9 @@ export async function reabrirEntrevista(id: string, tentativa: number) {
         ON CONFLICT(token) DO UPDATE SET expiraEm = NULL, limite = 1`).run(e.codigo,
           JSON.stringify(formulario?.parametros ?? { entrevistaId: id, titulo: `Entrevista para ${vaga.cargo}` }), momento);
       db.prepare(`UPDATE entrevistas SET tentativa = tentativa + 1, status = 'convidada',
-        convidadaEm = ?, expiraEm = ?, abertaEm = NULL, iniciadaEm = NULL, concluidaEm = NULL,
-        nivelVoz = NULL, resultadoId = NULL, parecerStatus = 'nao_pedido', decisao = NULL, decisaoEm = NULL
-        WHERE id = ?`).run(momento, prazo, id);
+        convidadaEm = ?, iniciaEm = ?, expiraEm = ?, abertaEm = NULL, iniciadaEm = NULL, concluidaEm = NULL,
+        nivelVoz = NULL, resultadoId = NULL, parecerStatus = 'nao_pedido', decisao = NULL, decisaoEm = NULL, memoria = NULL
+        WHERE id = ?`).run(momento, periodo.iniciaEm, periodo.expiraEm, id);
       db.exec("COMMIT");
     } catch (err) { db.exec("ROLLBACK"); throw err; }
     return obter(id)!;

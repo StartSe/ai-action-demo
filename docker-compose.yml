@@ -1,5 +1,5 @@
 # Sobe a suíte inteira: docker compose up --build   (ou docker compose pull && docker compose up, sem construir nada)
-# Cada app fica em uma porta: 3001 a 3020 (veja a tabela no README).
+# Cada app fica em uma porta: 3001 a 3018 (veja a tabela no README).
 # Nenhuma variável é obrigatória: abra http://localhost:30XX/setup em cada app para conectar a IA e as integrações.
 # As chaves ficam em SQLite dentro do volume de cada app e sobrevivem a reinícios.
 # Um .env na raiz é opcional (copie de .env.example); variáveis de ambiente têm prioridade sobre o setup.
@@ -116,13 +116,6 @@ services:
     ports: ["3015:10000"]
     volumes: [clone-site-dados:/app/data]
 
-  prospeccao-linkedin:
-    <<: *app
-    build: ./prospeccao-linkedin
-    image: ghcr.io/startse/prospeccao-linkedin:latest
-    ports: ["3016:10000"]
-    volumes: [prospeccao-linkedin-dados:/app/data]
-
   videos-campanha:
     <<: *app
     build: ./videos-campanha
@@ -145,11 +138,36 @@ services:
     image: ghcr.io/startse/build-agentflows:latest
     ports: ["3019:10000"]
     volumes: [build-agentflows-dados:/app/data]
+
+  daily-second-brain:
+    build: ./daily-second-brain
+    image: ghcr.io/startse/daily-second-brain:latest
+    ports: ["3020:10000"]
+    volumes: [daily-second-brain-dados:/app/data]
+
+  mapify:
+    build: ./mapify
+    image: ghcr.io/startse/mapify:latest
+    ports: ["3021:10000"]
+    volumes: [mapify-dados:/app/data]
+
+  predictive-harness:
+    build: ./predictive-harness
+    image: ghcr.io/startse/predictive-harness:latest
+    ports: ["3022:10000"]
+    volumes: [predictive-harness-dados:/app/data]
+
+  precificador:
+    build: ./precificador
+    image: ghcr.io/startse/precificador:latest
+    ports: ["3023:10000"]
+    volumes: [precificador-dados:/app/data]
+
   toolkit-dash-builder:
     <<: *app
     build: ./toolkit-dash-builder
     image: ghcr.io/startse/toolkit-dash-builder:latest
-    ports: ["3020:10000"]
+    ports: ["3024:10000"]
     volumes: [toolkit-dash-builder-dados:/app/data]
 
 volumes:
@@ -168,8 +186,11 @@ volumes:
   simulador-vendas-dados:
   custos-ia-dados:
   clone-site-dados:
-  prospeccao-linkedin-dados:
   videos-campanha-dados:
   automl-pocket-dados:
   build-agentflows-dados:
+  daily-second-brain-dados:
+  mapify-dados:
+  predictive-harness-dados:
+  precificador-dados:
   toolkit-dash-builder-dados:

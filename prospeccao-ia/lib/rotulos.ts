@@ -115,6 +115,7 @@ export const ROTULO_CAMPO_ESTRATEGIA: Record<keyof EstrategiaAbordagem, string> 
 // Menu "Regenerar" (US-031): rótulo e ordem de exibição de cada direção. "outro_sinal" abre uma segunda
 // lista (os sinais do próprio lead) em vez de regenerar direto — ver components/AbordagemLead.tsx.
 export const ROTULO_DIRECAO_REGENERACAO: Record<DirecaoRegeneracao, string> = {
+  mais_personalizado: "Mais específico para este lead",
   mais_curto: "Mais curto",
   mais_executivo: "Mais executivo",
   mais_consultivo: "Mais consultivo",
@@ -124,7 +125,7 @@ export const ROTULO_DIRECAO_REGENERACAO: Record<DirecaoRegeneracao, string> = {
 };
 
 export const ORDEM_DIRECOES_REGENERACAO: DirecaoRegeneracao[] = [
-  "mais_curto", "mais_executivo", "mais_consultivo", "sem_pitch", "outro_sinal", "outra_abordagem",
+  "mais_personalizado", "mais_curto", "mais_executivo", "mais_consultivo", "sem_pitch", "outro_sinal", "outra_abordagem",
 ];
 
 // Motivo do descarte (US-034): lista curta pedida junto com "Descartar", mostrada depois na ficha.

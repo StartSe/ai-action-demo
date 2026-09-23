@@ -1,23 +1,25 @@
 "use client";
-// "Meus sites": a lista de projetos com estado (Rascunho, Gerando, No ar, Falhou), atualizada a cada 5 s
-// enquanto algum site estiver gerando. Cada cartão leva ao workspace do site (/sites/[id]); o que falhou mostra
-// o motivo, a ação que resolve e "Tentar de novo" (nada é reenviado: a captura ficou guardada no servidor).
+// "Meus sites": a grade de cartões dos projetos, com miniatura da versão publicada (a página pública /s/<slug>,
+// numa moldura reduzida), estado (Rascunho, Gerando com a etapa atual, No ar, Falhou com o motivo) e as ações.
+// Atualizada a cada 4 s enquanto algum site estiver gerando. Cada cartão leva ao workspace (/sites/[id]).
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { Aviso, Empty, lerErro } from "./ui";
+import { Icone } from "./Icones";
 import { data } from "@/lib/formato";
 import type { EstadoProjeto, Projeto } from "@/lib/types";
 
-export const INTERVALO_ACOMPANHAMENTO_MS = 5000;
+export const INTERVALO_ACOMPANHAMENTO_MS = 4000;
 
-export const ROTULO_ESTADO: Record<EstadoProjeto, string> = { rascunho: "Rascunho", gerando: "Gerando", pronto: "No ar", falhou: "Falhou" };
+export const ROTULO_ESTADO: Record<EstadoProjeto, string> = { rascunho: "Rascunho", gerando: "Gerando", pronto: "Pronto para revisar", falhou: "Falhou" };
 const CLASSE_ESTADO: Record<EstadoProjeto, string> = { rascunho: "chip-cinza", gerando: "chip-media chip-gerando", pronto: "chip-positivo", falhou: "chip-alta" };
+const ROTULO_ORIGEM = { referencia: "pela captura", endereco: "pelo endereço", briefing: "pela descrição" } as const;
 
-export function ChipEstado({ estado }: { estado: EstadoProjeto }) {
-  return <span className={CLASSE_ESTADO[estado]}>{ROTULO_ESTADO[estado]}</span>;
+export function ChipEstado({ estado, publicado = false }: { estado: EstadoProjeto; publicado?: boolean }) {
+  return <span className={CLASSE_ESTADO[estado]}>{estado === "pronto" && publicado ? "No ar" : ROTULO_ESTADO[estado]}</span>;
 }
 
-/** "Gerando há 1 min 12 s", a partir de `atualizadoEm` (marcado ao iniciar a geração). Contador real, não estimativa. */
+/** "Gerando há 1 min 12 s", a partir de `atualizadoEm`. Contador real, não estimativa. */
 export function TempoGerando({ desde }: { desde: string }) {
   const [agora, setAgora] = useState(() => Date.now());
   useEffect(() => {
@@ -27,7 +29,21 @@ export function TempoGerando({ desde }: { desde: string }) {
   const segundos = Math.max(0, Math.floor((agora - new Date(desde).getTime()) / 1000));
   const min = Math.floor(segundos / 60);
   const seg = segundos % 60;
-  return <span role="status">Gerando há {min > 0 ? `${min} min ` : ""}{seg} s</span>;
+  return <span role="status">há {min > 0 ? `${min} min ` : ""}{seg} s</span>;
+}
+
+/** Quando a geração começou: a primeira etapa (atualizadoEm é renovado a cada etapa, então não serve de relógio). */
+export function inicioDaGeracao(p: Projeto): string {
+  return p.progresso?.etapas?.[0]?.iniciadoEm ?? p.atualizadoEm;
+}
+
+/** "Etapa 3 de 8 · Escrevendo «Herói»", a partir do andamento gravado no projeto. */
+export function resumoDoProgresso(p: Projeto): string | null {
+  const etapas = p.progresso?.etapas;
+  if (!etapas?.length) return "Preparando...";
+  const prontas = etapas.filter((e) => e.estado === "pronta").length;
+  const atual = etapas.find((e) => e.estado === "andamento");
+  return `Etapa ${Math.min(prontas + 1, etapas.length)} de ${etapas.length}${atual ? ` · ${atual.titulo}` : ""}`;
 }
 
 export async function buscarSites(): Promise<Projeto[]> {
@@ -49,16 +65,33 @@ function IconeSites() {
   );
 }
 
+/** Miniatura do site publicado: a própria página pública, reduzida a 25%, sem interação. */
+function Miniatura({ s }: { s: Projeto }) {
+  if (s.estado !== "pronto") {
+    return (
+      <div className="miniatura-site" style={s.marca?.corPrimaria ? { background: `linear-gradient(135deg, ${s.marca.corPrimaria}22, ${s.marca.corPrimaria}08)` } : undefined}>
+        <div className="miniatura-site-vazia">
+          {s.estado === "gerando" ? <span className="flex items-center gap-2"><span className="chip-gerando" aria-hidden="true" />{resumoDoProgresso(s)}</span> : s.estado === "falhou" ? "Não ficou pronto" : "Ainda não gerado"}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="miniatura-site">
+      <iframe title={`Miniatura de ${s.nome}`} src={`/api/sites/${s.id}/previa`} sandbox="allow-scripts" loading="lazy" tabIndex={-1} aria-hidden="true" />
+    </div>
+  );
+}
+
 /**
  * Lista controlada de fora: a tela inicial mantém `sites` para colocar o site recém-criado no topo sem esperar
- * a próxima consulta. `aoMudar` recebe a lista atualizada a cada consulta (a cada 5 s enquanto houver "gerando").
+ * a próxima consulta. `aoMudar` recebe a lista atualizada a cada consulta.
  */
 export function MeusSites({ sites, aoMudar, aoPreencherExemplo, rodape }: { sites: Projeto[] | null; aoMudar: (lista: Projeto[]) => void; aoPreencherExemplo?: () => void; rodape?: ReactNode }) {
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const gerando = Boolean(sites?.some((s) => s.estado === "gerando"));
 
-  // `aoMudar` é o setState da tela inicial (identidade estável): entra nas dependências sem re-disparar a consulta.
   useEffect(() => {
     let ativo = true;
     const carregar = () => buscarSites().then((lista) => { if (ativo) { aoMudar(lista); setErro(null); } }).catch(async (e) => { if (ativo) setErro((await lerErro(e)).mensagem); });
@@ -83,7 +116,7 @@ export function MeusSites({ sites, aoMudar, aoPreencherExemplo, rodape }: { site
   }
 
   function apagar(s: Projeto) {
-    if (!window.confirm(`Apagar o site «${s.nome}»? O link público deixa de funcionar. Essa ação não pode ser desfeita.`)) return;
+    if (!window.confirm(`Apagar o site «${s.nome}»? O link público deixa de funcionar. Essa ação não pode ser desfeita.${s.render || s.netlify ? " Publicações externas continuam ativas: remova-as no painel do Render ou da Netlify." : ""}`)) return;
     agir(s.id, "", "DELETE");
   }
 
@@ -94,7 +127,7 @@ export function MeusSites({ sites, aoMudar, aoPreencherExemplo, rodape }: { site
       <Empty
         ilustracao={<IconeSites />}
         titulo="Nenhum site ainda"
-        descricao="Envie a captura de uma referência, cole o endereço de um site ou descreva a empresa. O agente cuida do resto."
+        descricao="Cole o endereço de um site, solte uma captura ou descreva a empresa na caixa acima. O agente cuida do resto."
         acao={aoPreencherExemplo ? "Preencher com um exemplo" : undefined}
         onAcao={aoPreencherExemplo}
       />
@@ -102,42 +135,35 @@ export function MeusSites({ sites, aoMudar, aoPreencherExemplo, rodape }: { site
   }
 
   return (
-    <section aria-label="Meus sites" className="flex flex-col gap-3">
+    <section aria-label="Meus sites" className="flex flex-col gap-4">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="font-bold text-[15px]">Meus sites</h2>
+        <h2 className="font-extrabold text-[20px] tracking-[-0.01em]">Meus sites</h2>
         {sites && <span className="text-muted text-[13px]">{sites.length === 1 ? "1 site" : `${sites.length} sites`}</span>}
       </div>
       {erro && <Aviso tom="danger">{erro}</Aviso>}
-      <ul className="flex flex-col gap-3">
+      <ul className="grade-sites">
         {(sites ?? []).map((s) => (
-          <li key={s.id} className="card p-4 flex flex-col gap-2.5" data-estado={s.estado}>
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div className="min-w-0 flex-1">
-                <Link href={`/sites/${s.id}`} className="font-bold text-[15px] text-ink hover:underline break-words">{s.nome}</Link>
-                <p className="text-muted text-[13px]">
-                  {s.marca?.nome ? `${s.marca.nome} · ` : ""}{s.origem === "briefing" ? "pelo briefing" : "pela referência"} · {data(s.criadoEm, { comHora: true })}
-                </p>
+          <li key={s.id} className="card-site" data-estado={s.estado}>
+            <Link href={`/sites/${s.id}`} aria-label={`Abrir ${s.nome}`} className="block"><Miniatura s={s} /></Link>
+            <div className="p-4 flex flex-col gap-2 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <Link href={`/sites/${s.id}`} className="font-bold text-[15px] text-ink hover:underline break-words block truncate">{s.nome}</Link>
+                  <p className="text-muted text-[12.5px] truncate">{ROTULO_ORIGEM[s.origem]} · {data(s.criadoEm, { comHora: true })}{s.estado === "gerando" ? <> · <TempoGerando desde={inicioDaGeracao(s)} /></> : null}</p>
+                </div>
+                <ChipEstado estado={s.estado} publicado={Boolean(s.versaoPublicada || s.render?.versao || s.netlify?.versao)} />
               </div>
-              <ChipEstado estado={s.estado} />
-            </div>
-
-            {s.estado === "gerando" && (
-              <p className="text-muted text-[13px]"><TempoGerando desde={s.atualizadoEm} /> · Pode sair desta tela: avisamos no sino quando terminar.</p>
-            )}
-
-            {s.estado === "falhou" && s.erro && (
-              <Aviso tom="danger" acao={s.erro.acao}>{s.erro.mensagem}</Aviso>
-            )}
-
-            <div className="flex items-center gap-4 flex-wrap text-[13.5px]">
-              <Link href={`/sites/${s.id}`} className="btn-link">Abrir o site</Link>
-              {s.estado === "pronto" && <a href={`/s/${s.slug}`} target="_blank" rel="noopener noreferrer" className="btn-link">Abrir o link</a>}
-              {(s.estado === "falhou" || s.estado === "rascunho") && (
-                <button type="button" className="btn-link" disabled={ocupado === s.id} onClick={() => agir(s.id, "/gerar", "POST")}>
-                  {ocupado === s.id ? "Enviando..." : s.estado === "falhou" ? "Tentar de novo" : "Gerar o site"}
-                </button>
-              )}
-              <button type="button" className="btn-link !text-muted" disabled={ocupado === s.id} onClick={() => apagar(s)}>Apagar</button>
+              {s.estado === "falhou" && s.erro && <p className="text-danger text-[12.5px] leading-snug">{s.erro.mensagem}</p>}
+              <div className="flex items-center gap-3.5 flex-wrap text-[13px] mt-auto pt-1">
+                <Link href={`/sites/${s.id}`} className="btn-link inline-flex items-center gap-1">{s.estado === "gerando" ? "Acompanhar" : "Abrir"}</Link>
+                {(s.versaoPublicada || s.render?.versao || s.netlify?.versao) && <a href={s.render?.versao ? s.render.url : s.netlify?.versao ? s.netlify.url : `/s/${s.slug}`} target="_blank" rel="noopener noreferrer" className="btn-link inline-flex items-center gap-1">Ver no ar<Icone nome="externo" tamanho={13} /></a>}
+                {(s.estado === "falhou" || s.estado === "rascunho") && (
+                  <button type="button" className="btn-link" disabled={ocupado === s.id} onClick={() => agir(s.id, "/gerar", "POST")}>
+                    {ocupado === s.id ? "Enviando..." : s.estado === "falhou" ? "Tentar de novo" : "Gerar"}
+                  </button>
+                )}
+                <button type="button" className="btn-link !text-muted ml-auto" disabled={ocupado === s.id} onClick={() => apagar(s)}>Apagar</button>
+              </div>
             </div>
           </li>
         ))}

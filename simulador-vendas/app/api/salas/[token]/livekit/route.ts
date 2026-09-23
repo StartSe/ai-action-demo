@@ -1,5 +1,5 @@
-import { conectarLivekit, livekitConfigurado } from "@/lib/livekit";
-import { conversaAberta, restanteSeg } from "@/lib/sala-do-vendedor";
+import { conectarLivekit, livekitDisponivel } from "@/lib/livekit";
+import { conversaAberta } from "@/lib/sala-do-vendedor";
 import { prepararRoteiro } from "@/lib/roteiro";
 import { banco } from "@/lib/banco";
 
@@ -8,8 +8,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   const contexto = conversaAberta(req, token);
   if (contexto instanceof Response) return contexto;
   const { sessao, simulacao } = contexto;
-  if (!simulacao.permiteVoz || !livekitConfigurado()) return Response.json({ error: "A conversa por voz não está disponível neste treino." }, { status: 409 });
-  if (restanteSeg(sessao, simulacao.duracaoMin) === 0) return Response.json({ error: "O tempo desta conversa terminou." }, { status: 409 });
+  if (!simulacao.permiteVoz || !livekitDisponivel()) return Response.json({ error: "O serviço de voz está indisponível. Use a voz do navegador para continuar." }, { status: 409 });
   prepararRoteiro(sessao, simulacao);
   try {
     const conexao = await conectarLivekit(sessao);

@@ -15,6 +15,7 @@ import { carregarConversaComRecuperacao } from "@/lib/carregar-conversa";
 //     configura nada e não recebe recado de quem administra o app.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Aviso, ErrorBox, lerErro, useConfirmacao, type ErroLido } from "./ui";
+import { AVISO_ENCERRAMENTO } from "@/lib/avisos-entrevista";
 import { criarPausaDespedida } from "@/lib/pausa-despedida";
 import { criarEscuta, type SessaoEscuta } from "@/lib/escuta";
 import type { CodigoErroIA } from "@/lib/ai";
@@ -541,7 +542,7 @@ export function SalaCandidato({
 
   async function onEncerrar() {
     if (encerrando) return;
-    const confirmado = await confirmar("Quer encerrar a entrevista agora? As respostas que você já deu são enviadas do mesmo jeito.", {
+    const confirmado = await confirmar(AVISO_ENCERRAMENTO, {
       confirmarRotulo: "Encerrar",
       cancelarRotulo: "Continuar a conversa",
     });
@@ -635,7 +636,7 @@ export function SalaCandidato({
               </svg>
             </button>
             <p className="text-muted text-[12.5px] text-center">
-              {estado === "falando" ? "Microfone pausado durante a fala. Toque para interromper e falar." : manual ? (estado === "ouvindo" ? "Gravando. Toque novamente para parar e revisar sua resposta." : "Toque para gravar, sem segurar. Revise o texto antes de enviar.") : "Mãos livres: após 4 segundos de silêncio, sua resposta é enviada automaticamente."}
+              {estado === "falando" ? "Microfone pausado durante a fala. Toque para interromper e falar." : manual ? (estado === "ouvindo" ? "Gravando. Toque novamente para parar e revisar sua resposta." : "Toque para gravar, sem segurar. Revise o texto antes de enviar.") : "Mãos livres: alguns segundos de silêncio enviam a resposta. Precisa pensar? Diga \"só um momento\". Não ouviu? Peça para repetir."}
             </p>
             <button type="button" className="btn-ghost !w-auto text-[13px]" disabled={estado !== "parado" || !!digitado.trim()} onClick={() => setEscuta(manual ? "livre" : "toque")}>
               {manual ? "Usar envio automático por silêncio" : "Revisar antes de enviar"}

@@ -1,33 +1,36 @@
-// Um treino: ler (para duplicar) e mudar o status (US-012).
-//
-// Pausar, reativar e encerrar são a única forma de tirar um link do ar ou colocá-lo de volta — o link
-// da simulação não expira sozinho (US-011). Por isso o status é o que esta rota altera, e nada mais:
-// mudar o desafio de um treino que o time já começou tornaria as sessões antigas incomparáveis com as
-// novas, e "Duplicar" existe justamente para criar a versão seguinte sem estragar a que já rodou.
-import { obter, mudarStatus, type StatusSimulacao } from "@/lib/simulacoes";
+// Renomear preserva o desafio e a comparabilidade das avaliações; para outro desafio, duplique.
+import { obter, atualizar, apagar, type StatusSimulacao } from "@/lib/simulacoes";
 
 const STATUS: StatusSimulacao[] = ["ativa", "pausada", "encerrada"];
 
 export async function GET(_req: Request, { params }: { params: Promise<{ codigo: string }> }) {
   const { codigo } = await params;
   const simulacao = obter(codigo);
-  if (!simulacao) {
-    return Response.json({ error: "Esse treino não existe mais." }, { status: 404 });
-  }
+  if (!simulacao) return Response.json({ error: "Esse treino não existe mais." }, { status: 404 });
   return Response.json({ simulacao });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ codigo: string }> }) {
   const { codigo } = await params;
-  if (!obter(codigo)) {
-    return Response.json({ error: "Esse treino não existe mais." }, { status: 404 });
+  if (!obter(codigo)) return Response.json({ error: "Esse treino não existe mais." }, { status: 404 });
+  const corpo = await req.json().catch(() => null);
+  if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return Response.json({ error: "Informe o nome ou a situação do treino." }, { status: 400 });
+  const campos: { nome?: string; status?: StatusSimulacao } = {};
+  if (corpo && "nome" in corpo) {
+    if (typeof corpo.nome !== "string" || !corpo.nome.trim() || corpo.nome.trim().length > 160) return Response.json({ error: "Escreva um nome de até 160 caracteres." }, { status: 400 });
+    campos.nome = corpo.nome.trim();
   }
-
-  const corpo = await req.json().catch(() => ({}));
-  const status = String(corpo?.status || "") as StatusSimulacao;
-  if (!STATUS.includes(status)) {
-    return Response.json({ error: "Escolha se o treino fica ativo, pausado ou encerrado." }, { status: 400 });
+  if (corpo && "status" in corpo) {
+    if (!STATUS.includes(corpo.status)) return Response.json({ error: "Escolha se o treino fica ativo, pausado ou encerrado." }, { status: 400 });
+    campos.status = corpo.status;
   }
+  if (!Object.keys(campos).length) return Response.json({ error: "Informe o nome ou a situação do treino." }, { status: 400 });
+  return Response.json({ simulacao: atualizar(codigo, campos) });
+}
 
-  return Response.json({ simulacao: mudarStatus(codigo, status) });
+export async function DELETE(_req: Request, { params }: { params: Promise<{ codigo: string }> }) {
+  const { codigo } = await params;
+  if (!obter(codigo)) return Response.json({ error: "Esse treino não existe mais." }, { status: 404 });
+  apagar(codigo);
+  return Response.json({ ok: true });
 }

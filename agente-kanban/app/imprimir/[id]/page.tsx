@@ -4,7 +4,7 @@ import type { ResultadoAgente } from "@/lib/agente";
 import type { Meta } from "@/lib/ai";
 import { data } from "@/lib/formato";
 import { obter } from "@/lib/historico";
-import { ConteudoQuadro } from "../../page";
+import { ConteudoQuadro } from "@/components/LegacyKanban";
 import { ImprimirAoCarregar } from "./ImprimirAoCarregar";
 
 export default async function Page({ params }: PageProps<"/imprimir/[id]">) {

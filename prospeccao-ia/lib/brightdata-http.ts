@@ -1,4 +1,4 @@
-// Transporte MCP da Bright Data: inicialização, sessão e respostas JSON ou SSE.
+// Transporte MCP de pesquisa (Bright Data e ProspectHalo): inicialização, sessão e respostas JSON ou SSE.
 // Isolado do cliente de CRM para preservar integrações existentes.
 export type ConexaoMCP = { url: string; token?: string };
 export type FerramentaMCP = { nome: string; descricao?: string; schema?: unknown };
@@ -68,7 +68,7 @@ async function enviar(conexao: ConexaoMCP, method: string, params: Record<string
   const id = ++sequencia;
   try {
     const r = await fetch(conexao.url, {
-      method: "POST", headers, cache: "no-store",
+      method: "POST", headers, cache: "no-store", redirect: "error",
       body: JSON.stringify({ jsonrpc: "2.0", ...(notificacao ? {} : { id }), method, params }),
       // A coleta real pode ultrapassar um minuto; controle de sessão deve responder rápido.
       signal: AbortSignal.timeout(method === "tools/call" ? 180000 : 30000),

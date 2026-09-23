@@ -126,3 +126,160 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   .grafo-painel-flutuante { width: min(300px, calc(100% - 1rem)); top: .5rem; right: .5rem; max-height: 38dvh; padding: .75rem; }
   .chat-radar { right: .75rem; bottom: .75rem; }
 }
+
+/* Radar 0.4: cadastro, memória e acompanhamento */
+.radar-switcher { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; padding: 18px 20px 0; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 20px; }
+.radar-switcher-selection { display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 100%; }
+.radar-switcher-mark { color: var(--color-accent); padding: 10px; background: var(--color-accent-soft); border-radius: 14px; }
+.radar-switcher label { min-width: 0; }
+.radar-switcher label > span { display: block; color: var(--color-muted); font-size: 10px; font-weight: 700; letter-spacing: .1em; }
+.radar-switcher select { background: transparent; font-size: 18px; font-weight: 700; max-width: min(480px, 58vw); padding: 3px 22px 3px 0; cursor: pointer; }
+.radar-count { color: var(--color-muted); background: var(--color-bg); border: 1px solid var(--color-line); padding: 2px 7px; border-radius: 8px; font-size: 11px; }
+.radar-switcher nav { width: 100%; display: flex; flex-wrap: wrap; gap: 22px; border-top: 1px solid var(--color-line); padding: 12px 0; font-size: 12px; color: var(--color-muted); }
+.radar-switcher nav a:hover { color: var(--color-accent); }
+.radar-dialog { position: fixed; inset: 0; margin: auto; padding: 0; width: min(680px, calc(100vw - 24px)); max-height: calc(100dvh - 40px); border-radius: 24px; border: 1px solid var(--color-line); color: var(--color-ink); background: var(--color-surface); box-shadow: 0 24px 100px #11132b30; }
+.radar-dialog::backdrop { background: #11132b66; backdrop-filter: blur(5px); }
+.radar-dialog form { display: flex; flex-direction: column; max-height: calc(100dvh - 40px); }
+.radar-dialog-header { display: flex; justify-content: space-between; gap: 16px; padding: 26px 28px 18px; }
+.radar-dialog-header .sobretitulo { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--color-accent); }
+.radar-dialog-header h2 { font-size: 25px; font-weight: 750; letter-spacing: -.04em; margin: 14px 0 6px; }
+.radar-dialog-header p { font-size: 13px; line-height: 1.6; color: var(--color-muted); max-width: 490px; }
+.radar-icon-button { flex-shrink: 0; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; font-size: 24px; cursor: pointer; color: var(--color-muted); }
+.radar-icon-button:hover { background: var(--color-accent-soft); color: var(--color-ink); }
+.radar-dialog-body { overflow-y: auto; overscroll-behavior: contain; padding: 4px 28px 24px; display: flex; flex-direction: column; gap: 20px; min-height: 0; }
+.radar-field { display: flex; flex-direction: column; gap: 8px; font-size: 13px; font-weight: 600; min-width: 0; }
+.radar-field .input { font-weight: 400; font-size: 14px; }
+.field-help { font-size: 11px; line-height: 1.6; color: var(--color-muted); font-weight: 400; }
+.keyword-box { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 10px 12px; border: 1px solid var(--color-line); border-radius: 12px; }
+.keyword-box:focus-within { border-color: var(--color-accent); outline: 3px solid var(--color-accent-soft); }
+.keyword-box > input { flex: 1; min-width: min(250px, 100%); padding: 5px 0; outline: none; font-size: 13px; font-weight: 400; background: transparent; }
+.keyword-chip { display: inline-flex; align-items: center; max-width: 100%; gap: 8px; padding: 4px 9px; border-radius: 7px; font-size: 12px; background: var(--color-accent-soft); color: var(--color-accent-ink); }
+.keyword-chip button:first-child { overflow-wrap: anywhere; text-align: left; }
+.keyword-chip button[aria-pressed="false"] { opacity: .6; }
+.keyword-chip button { cursor: pointer; }
+.radar-config-details { border: 1px solid var(--color-line); border-radius: 12px; padding: 15px; }
+.radar-config-details summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.radar-config-details summary span { color: var(--color-muted); font-size: 11px; font-weight: 400; margin-left: 8px; }
+.source-list li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--color-line); font-size: 12px; }
+.source-list label { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.source-list label span { overflow-wrap: anywhere; }
+.source-list button { padding: 0 7px; font-size: 20px; cursor: pointer; }
+.daily-option { display: flex; align-items: flex-start; gap: 12px; padding: 15px; border-radius: 12px; background: var(--color-accent-soft); cursor: pointer; }
+.daily-option input { margin-top: 3px; accent-color: var(--color-accent); }
+.daily-option strong { display: block; font-size: 13px; }
+.daily-option small { display: block; font-size: 11px; color: var(--color-muted); line-height: 1.6; margin-top: 3px; }
+.radar-dialog-footer { padding: 18px 28px; border-top: 1px solid var(--color-line); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.radar-dialog-footer > p { width: 100%; font-size: 13px; color: var(--color-danger); }
+.radar-dialog-footer .field-help { max-width: 190px; }
+.chat-radar { right: 24px; bottom: 24px; gap: 12px; }
+.chat-radar-botao { background: var(--color-accent); display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 54px; padding: 12px 20px; box-shadow: 0 8px 32px #0a707f30; }
+.chat-radar-botao.aberto { width: 54px; padding: 0; font-size: 32px; font-weight: 300; }
+.chat-radar-painel { width: min(460px, calc(100vw - 32px)); max-height: min(740px, calc(100dvh - 116px)); min-height: 480px; border-radius: 24px; box-shadow: 0 16px 80px #15152b24; }
+.chat-radar-header { display: flex; align-items: center; justify-content: space-between; padding: 17px 20px; border-bottom: 1px solid var(--color-line); flex-shrink: 0; }
+.chat-radar-header svg { color: var(--color-accent); flex-shrink: 0; }
+.chat-radar-header h2 { font-size: 13px; font-weight: 650; }
+.chat-radar-header p { font-size: 10px; margin-top: 3px; color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 310px; }
+.chat-radar-mensagens { flex: 1; min-height: 0; padding: 20px; overflow-x: hidden; }
+.chat-radar-welcome { text-align: center; padding: 14px 0 6px; }
+.radar-wordmark { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 22px; }
+.radar-wordmark svg { color: var(--color-accent); }
+.radar-wordmark span { font-weight: 750; font-size: 38px; letter-spacing: -.05em; }
+.chat-radar-welcome h3 { font-size: 31px; font-weight: 650; letter-spacing: -.04em; margin-bottom: 8px; }
+.chat-radar-welcome > p { color: var(--color-muted); font-size: 14px; line-height: 1.7; max-width: 350px; margin: auto; }
+.chat-suggestions { display: flex; flex-direction: column; gap: 10px; margin: 24px 0 14px; }
+.chat-suggestions button { display: flex; text-align: left; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border: 1px solid #0a707f22; border-radius: 15px; font-size: 13px; line-height: 1.5; background: #0a707f05; cursor: pointer; }
+.chat-suggestions button:hover { background: var(--color-accent-soft); border-color: var(--color-accent); }
+.chat-suggestions span { color: var(--color-accent); }
+.chat-radar-welcome > small { font-size: 10px; color: var(--color-muted); }
+.chat-mensagem { margin: 0 0 22px; font-size: 13px; line-height: 1.75; overflow-wrap: anywhere; }
+.chat-mensagem.usuario { width: fit-content; max-width: 88%; padding: 11px 16px; border-radius: 19px 19px 5px 19px; margin-left: auto; background: var(--color-accent-soft); }
+.chat-mensagem.agente { display: flex; gap: 10px; padding: 0; background: transparent; }
+.chat-agent-mark { flex-shrink: 0; color: var(--color-accent); margin-top: 3px; }
+.chat-references { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; font-size: 11px; }
+.chat-sources { font-size: 11px; margin-top: 8px; color: var(--color-muted); }
+.chat-sources summary { cursor: pointer; }
+.chat-sources a { display: block; margin-top: 6px; color: var(--color-accent); }
+.chat-thinking { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-muted); }
+.chat-thinking span { width: 8px; height: 8px; background: var(--color-accent); border-radius: 50%; animation: radar-thinking 1.5s infinite; }
+@keyframes radar-thinking { 50% { opacity: .3; } }
+.chat-error { padding: 4px 20px 10px; font-size: 12px; color: var(--color-danger); }
+.chat-composer-wrap { flex-shrink: 0; padding: 6px 16px 10px; }
+.chat-composer { display: flex; align-items: flex-end; gap: 8px; padding: 9px 10px 9px 16px; border: 1px solid var(--color-line); border-radius: 24px; background: var(--color-surface); }
+.chat-composer:focus-within { border-color: #0a707f60; box-shadow: 0 0 0 3px #0a707f08; }
+.chat-composer textarea { field-sizing: content; flex: 1; min-width: 0; min-height: 35px; max-height: 140px; padding: 7px 0; resize: none; outline: none; background: transparent; font-size: 13px; line-height: 1.6; }
+.chat-composer-actions { display: flex; gap: 6px; }
+.chat-voice-button, .chat-send-button { display: grid; place-items: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; color: white; background: var(--color-ink); cursor: pointer; }
+.chat-send-button { background: var(--color-accent); }
+.chat-voice-button:disabled, .chat-send-button:disabled { opacity: .4; cursor: default; }
+.chat-memory-note { font-size: 9px; text-align: center; color: var(--color-muted); margin-top: 8px; }
+.radar-voice { display: flex; flex-direction: column; align-items: center; overflow: auto; padding: 30px 24px; text-align: center; flex: 1; }
+.radar-voice-orb { width: 108px; height: 108px; display: grid; place-items: center; border-radius: 50%; background: var(--color-accent-soft); border: 1px solid #0a707f30; box-shadow: 0 0 0 16px #0a707f05; color: var(--color-accent); margin: 20px 0 32px; }
+.radar-voice-orb svg { width: 40px; height: 40px; }
+.radar-voice-orb.falando { animation: radar-thinking 1s infinite; }
+.radar-voice h3 { font-size: 18px; font-weight: 600; }
+.radar-voice-caption { color: var(--color-muted); font-size: 13px; line-height: 1.7; margin: 15px 0 22px; max-height: 180px; overflow-y: auto; }
+.radar-voice [role="alert"] { font-size: 12px; color: var(--color-danger); margin-bottom: 20px; }
+.radar-voice-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.radar-voice-controls button { font-size: 12px; }
+.monitoring-panel { border: 1px solid var(--color-line); background: var(--color-surface); border-radius: 18px; padding: 20px; margin: 24px 0; scroll-margin-top: 90px; }
+.monitoring-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.monitoring-summary h2 { font-size: 14px; font-weight: 650; }
+.monitoring-summary p { color: var(--color-muted); font-size: 11px; margin-top: 6px; }
+.monitoring-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-muted); flex-shrink: 0; }
+.monitoring-dot.ativa { background: var(--color-accent); box-shadow: 0 0 0 4px var(--color-accent-soft); }
+.monitoring-state { font-size: 10px; color: var(--color-accent); background: var(--color-accent-soft); padding: 3px 7px; border-radius: 5px; }
+.monitoring-edit { margin-top: 16px; max-width: 600px; padding-top: 16px; border-top: 1px solid var(--color-line); }
+.monitoring-history { border-top: 1px solid var(--color-line); margin-top: 16px; padding-top: 12px; }
+.monitoring-history summary { cursor: pointer; font-size: 12px; font-weight: 600; }
+.monitoring-history summary > span { color: var(--color-muted); font-weight: 400; margin-left: 8px; }
+.monitoring-history li { display: flex; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--color-line); padding: 13px 0; font-size: 12px; }
+.monitoring-history li > div { flex: 1; min-width: 0; }
+.monitoring-history small { display: block; color: var(--color-muted); font-size: 10px; margin-top: 3px; }
+.monitoring-history li p { font-size: 11px; margin-top: 4px; }
+.monitoring-history > .field-help { margin-top: 14px; }
+.run-status { font-size: 10px; padding: 3px 7px; border-radius: 6px; background: var(--color-accent-soft); color: var(--color-accent); }
+.run-status.falha, .run-status.interrompida { background: #b423180b; color: #b42318; }
+@media (max-width: 600px) {
+  .radar-dialog-header { padding: 20px 18px 16px; }
+  .radar-dialog-header h2 { font-size: 22px; }
+  .radar-dialog-body { padding: 0 18px 18px; }
+  .radar-dialog-footer { padding: 14px 18px; }
+  .radar-dialog-footer .field-help { display: none; }
+  .radar-dialog-footer > div { width: 100%; justify-content: flex-end; }
+  .chat-radar { right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); }
+  .chat-radar-painel { width: calc(100vw - 24px); max-height: calc(100dvh - 92px); min-height: min(490px, calc(100dvh - 92px)); }
+  .chat-radar-header p { max-width: 250px; }
+  .chat-radar-header { padding: 14px 16px; }
+  .chat-radar-mensagens { padding: 16px; }
+  .chat-radar-botao { min-height: 48px; font-size: 12px; }
+  .chat-radar-botao.aberto { height: 48px; width: 48px; }
+  .chat-composer textarea { font-size: 16px; }
+  .radar-switcher { padding: 14px 14px 0; }
+  .radar-switcher > div:nth-child(2) { width: 100%; justify-content: flex-end; }
+  .monitoring-panel { padding: 16px; }
+  .monitoring-summary h2 { font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) { .radar-voice-orb.falando, .chat-thinking span { animation: none; } }
+.radar-highlights { padding: 24px; border: 1px solid var(--color-line); border-radius: 20px; margin: 24px 0; background: var(--color-surface); }
+.radar-highlights > header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+.radar-highlights .sobretitulo { font-size: 9px; letter-spacing: .12em; }
+.radar-highlights h2 { font-size: 21px; font-weight: 700; letter-spacing: -.025em; margin-top: 5px; }
+.radar-highlights header > p { font-size: 12px; color: var(--color-muted); max-width: 300px; line-height: 1.6; }
+.radar-highlights-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.radar-highlights h3 { font-size: 13px; font-weight: 650; margin-bottom: 4px; }
+.highlight-signals article { border-bottom: 1px solid var(--color-line); padding: 16px 0; }
+.highlight-signals article > a { font-size: 13px; font-weight: 550; }
+.highlight-signals article > p { font-size: 10px; color: var(--color-muted); margin: 5px 0 10px; }
+.highlight-signals article > div { display: flex; gap: 8px; }
+.highlight-signals button { border: 1px solid var(--color-line); border-radius: 7px; padding: 4px 9px; font-size: 10px; cursor: pointer; }
+.highlight-signals button[aria-pressed="true"] { background: var(--color-accent-soft); border-color: #0a707f50; color: var(--color-accent); }
+.highlight-articles article { display: flex; align-items: flex-start; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--color-line); }
+.highlight-articles article > div { flex: 1; min-width: 0; }
+.highlight-articles span { display: block; font-size: 10px; color: var(--color-muted); margin-bottom: 5px; }
+.highlight-articles a { font-size: 13px; line-height: 1.6; }
+.highlight-articles button { color: var(--color-accent); font-size: 24px; cursor: pointer; width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; }
+.highlight-articles button:hover { background: var(--color-accent-soft); }
+@media (max-width: 700px) { .radar-highlights { padding: 18px; } .radar-highlights-grid { grid-template-columns: 1fr; } }
+.radar-dialog-body { display: block; }
+.radar-dialog-fields { display: flex; flex-direction: column; gap: 20px; min-inline-size: 0; }
+.radar-dialog-header, .radar-dialog-footer { flex-shrink: 0; }

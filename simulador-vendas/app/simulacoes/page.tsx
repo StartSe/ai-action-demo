@@ -6,10 +6,12 @@
 // sessões e a nota média. As ações que mexem no treino ficam atrás de um menu; o que ele mais faz
 // (mandar o link e ver o resultado) fica à vista.
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { AcoesLink, useCopiarLink } from "@/components/AcoesLink";
+import { Icone, MenuAcoes } from "@/components/MenuAcoes";
+import { ResumoLista, SemCorrespondencia } from "@/components/ListaGestao";
+import { useCallback, useEffect, useState } from "react";
 import { AvisoExemplo } from "@/components/AvisoExemplo";
-import { Aviso, Chip, Empty, ErrorBox, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
+import { Chip, Empty, ErrorBox, Topbar, data, lerErro, useConfirmacao, useStatus, type ErroLido } from "@/components/ui";
 import { METODOLOGIAS } from "@/lib/metodologias";
 import type { Dificuldade, Metodologia, StatusSimulacao } from "@/lib/simulacoes";
 
@@ -55,81 +57,23 @@ function IconeSimulacao() {
   );
 }
 
-/** "3 sessões" / "1 sessão" / "Ninguém treinou ainda": plural resolvido aqui, não no meio do JSX. */
-function contagem(n: number, singular: string, plural: string) {
-  return `${n} ${n === 1 ? singular : plural}`;
-}
-
 /** Texto sem acento e sem maiúscula, para a busca achar "Consultiva" digitando "consultiva". */
 function normalizar(s: string) {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
-/**
- * Menu de ações do cartão. Fecha ao escolher, ao apertar Esc e ao clicar fora — as três saídas que
- * alguém tenta sem pensar. O botão continua sendo um `<button>` (e não um `<details>`) porque cada
- * item aqui executa uma ação, e um `<details>` deixado aberto sugeriria que a escolha ainda não foi feita.
- */
-function MenuAcoes({ rotulo, itens }: { rotulo: string; itens: { rotulo: string; onClick: () => void; perigo?: boolean }[] }) {
-  const [aberto, setAberto] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!aberto) return;
-    function aoTeclar(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setAberto(false);
-        ref.current?.querySelector("button")?.focus();
-      }
-    }
-    function aoClicarFora(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false);
-    }
-    document.addEventListener("keydown", aoTeclar);
-    document.addEventListener("mousedown", aoClicarFora);
-    return () => {
-      document.removeEventListener("keydown", aoTeclar);
-      document.removeEventListener("mousedown", aoClicarFora);
-    };
-  }, [aberto]);
-
-  return (
-    <div className="relative" ref={ref} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setAberto(false); }}>
-      <button type="button" className="btn-link" aria-expanded={aberto} aria-label={rotulo} onClick={() => setAberto((a) => !a)}>
-        Mais ações
-      </button>
-      {aberto && (
-        <div className="absolute right-0 z-20 mt-1.5 min-w-[190px] card p-1.5 shadow-lg max-md:right-auto max-md:left-0">
-          {itens.map((i) => (
-            <button
-              key={i.rotulo}
-              type="button"
-              className={`block w-full text-left text-[13px] px-2.5 py-2 rounded-field hover:bg-bg ${i.perigo ? "text-danger" : ""}`}
-              onClick={() => {
-                setAberto(false);
-                i.onClick();
-              }}
-            >
-              {i.rotulo}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function Page() {
   const { status, erro } = useStatus();
-  const router = useRouter();
   const { confirmar, Dialogo } = useConfirmacao();
 
   const [itens, setItens] = useState<SimulacaoLista[] | null>(null);
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [busca, setBusca] = useState("");
-  const [copiado, setCopiado] = useState<{ codigo: string; texto: string } | null>(null);
-  const [falhaCopia, setFalhaCopia] = useState(false);
+  const copiar = useCopiarLink();
+  const [editando, setEditando] = useState<string | null>(null);
+  const [novoNome, setNovoNome] = useState("");
+  const [ocupado, setOcupado] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setErroTela(null);
@@ -154,35 +98,27 @@ export default function Page() {
       });
   }, []);
 
-  async function mudarStatus(s: SimulacaoLista, novo: StatusSimulacao) {
-    if (novo === "encerrada") {
-      const ok = await confirmar(`Encerrar "${s.nome}"? O link para de abrir para o time e ninguém mais consegue treinar.`, { confirmarRotulo: "Encerrar" });
-      if (!ok) return;
-    }
-    setErroTela(null);
+  async function alterar(s: SimulacaoLista, dados: { status?: StatusSimulacao; nome?: string }) {
+    if (dados.status === "encerrada" && !(await confirmar(`Encerrar "${s.nome}"? O link será desativado e ninguém mais poderá treinar.`, { confirmarRotulo: "Encerrar" }))) return;
+    setOcupado(s.codigo); setErroTela(null);
     try {
-      const r = await fetch(`/api/simulacoes/${s.codigo}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: novo }),
-      });
+      const r = await fetch(`/api/simulacoes/${s.codigo}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(dados) });
       if (!r.ok) throw r;
+      setEditando(null);
       await carregar();
-    } catch (e) {
-      setErroTela(await lerErro(e));
-    }
+    } catch (e) { setErroTela(await lerErro(e)); }
+    finally { setOcupado(null); }
   }
 
-  async function copiar(codigo: string, endereco: string, confirmacao: string) {
+  async function apagar(s: SimulacaoLista) {
+    if (!(await confirmar(`Apagar "${s.nome}"? O link, as sessões e o painel deste treino serão removidos. Avaliações já geradas continuam no Histórico. Esta ação não pode ser desfeita.`, { confirmarRotulo: "Apagar treino" }))) return;
+    setOcupado(s.codigo); setErroTela(null);
     try {
-      await navigator.clipboard.writeText(endereco);
-      setFalhaCopia(false);
-      setCopiado({ codigo, texto: confirmacao });
-      setTimeout(() => setCopiado(null), 4000);
-    } catch {
-      setFalhaCopia(true);
-      setTimeout(() => setFalhaCopia(false), 4000);
-    }
+      const r = await fetch(`/api/simulacoes/${s.codigo}`, { method: "DELETE" });
+      if (!r.ok) throw r;
+      await carregar();
+    } catch (e) { setErroTela(await lerErro(e)); }
+    finally { setOcupado(null); }
   }
 
   /**
@@ -198,7 +134,7 @@ export default function Page() {
       const r = await fetch(`/api/simulacoes/${s.codigo}/convite`, { method: "POST" });
       if (!r.ok) throw r;
       const corpo: { convite: { url: string } } = await r.json();
-      await copiar(s.codigo, corpo.convite.url, "Convite copiado — quem abrir informa nome e e-mail antes de ver o treino");
+      await copiar(corpo.convite.url, "Convite copiado — quem abrir informa nome e e-mail antes de ver o treino");
     } catch (e) {
       setErroTela(await lerErro(e));
     }
@@ -217,19 +153,18 @@ export default function Page() {
     <>
       <Topbar marca="S" nome="Simulador de Vendas" area="Vendas" status={status} erro={erro} usuario={status?.usuario} />
 
-      <main className="max-w-[980px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
+      <main className="gestao-main">
         <div className="flex items-start justify-between gap-4 mb-6 max-md:flex-col max-md:gap-3">
           <div>
             <h1 className="titulo-painel mb-1.5">Simulações</h1>
             <p className="apoio">Um link por treino, para o time inteiro praticar.</p>
           </div>
           <Link href="/simulacoes/nova" className="btn-primary !w-auto shrink-0 text-center max-md:!w-full">
-            + Novo treino
+            <Icone nome="adicionar" /> Criar treino
           </Link>
         </div>
 
         {erroTela && <div className="mb-5"><ErrorBox mensagem={erroTela.mensagem} acao={erroTela.acao} /><button type="button" className="btn-ghost mt-3" onClick={carregar}>Atualizar lista</button></div>}
-        {falhaCopia && <div className="mb-5"><Aviso tom="danger">Não foi possível copiar automaticamente. Abra o treino e copie o link de lá.</Aviso></div>}
 
         {(itens ?? []).some((s) => s.exemplo) && (
           <AvisoExemplo>
@@ -237,6 +172,11 @@ export default function Page() {
           </AvisoExemplo>
         )}
 
+        {itens && itens.length > 0 && <ResumoLista itens={[
+          { rotulo: "Treinos ativos", valor: itens.filter(s => s.status === "ativa").length, detalhe: "Links disponíveis para o time" },
+          { rotulo: "Treinos pausados", valor: itens.filter(s => s.status === "pausada").length },
+          { rotulo: "Conversas realizadas", valor: itens.reduce((total, s) => total + s.sessoes, 0), detalhe: "Com participação do vendedor" },
+        ]} />}
         {itens !== null && itens.length > 0 && (
           <div className="flex items-center justify-between gap-3 mb-5 max-md:flex-col max-md:items-stretch">
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar por situação">
@@ -273,54 +213,53 @@ export default function Page() {
             acaoSecundaria={{ rotulo: "Criar meu primeiro treino", url: "/simulacoes/nova" }}
           />
         ) : visiveis.length === 0 ? (
-          <div className="card p-6 text-center">
-            <p className="font-semibold mb-2">Nenhum treino encontrado</p>
-            <p className="text-muted text-sm mb-4">Tente outro nome ou veja todas as situações.</p>
-            <button className="btn-ghost" onClick={() => { setBusca(""); setFiltro("todas"); }}>Limpar filtros</button>
-          </div>
+          <SemCorrespondencia onLimpar={() => { setBusca(""); setFiltro("todas"); }} />
         ) : (
+          <>
+          <p className="text-xs text-muted mb-3" role="status">{visiveis.length} de {itens.length} treinos</p>
           <div className="flex flex-col gap-3">
-            {visiveis.map((s) => (
-              <article key={s.codigo} className="card px-5 py-4">
-                <div className="flex items-start justify-between gap-3 mb-1.5 max-md:flex-col max-md:items-stretch max-md:gap-1.5">
-                  <div className="min-w-0">
-                    <h2 className="font-bold text-[16px] break-words">{s.nome}</h2>
-                    <p className="text-muted text-sm mt-0.5 break-words">{s.produtoNome}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
-                    {s.exemplo && <Chip nivel="neutral">Exemplo</Chip>}
-                    <Chip nivel="cinza">{METODOLOGIAS[s.metodologia].nome}</Chip>
-                    <Chip nivel="cinza">{DIFICULDADES[s.dificuldade]}</Chip>
+            {visiveis.map(s => <article key={s.codigo} className="card p-5">
+              <div className="flex items-start gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <h2 className="font-bold text-lg break-words"><Link href={`/resultados/${s.codigo}`} className="hover:text-accent-ink">{s.nome}</Link></h2>
                     <Chip nivel={STATUS[s.status].nivel}>{STATUS[s.status].rotulo}</Chip>
+                    {s.exemplo && <Chip nivel="neutral">Exemplo</Chip>}
                   </div>
+                  <p className="text-sm text-muted break-words">{s.produtoNome} · {METODOLOGIAS[s.metodologia].nome} · {DIFICULDADES[s.dificuldade]}</p>
                 </div>
-
-                <p className="text-[13px] text-muted mb-3">
-                  {s.sessoes === 0
-                    ? `Ninguém treinou ainda · criado em ${data(s.criadoEm)}`
-                    : `${contagem(s.participantes, "participante", "participantes")} · ${contagem(s.sessoes, "sessão", "sessões")} · ${
-                        s.notaMedia === null ? "sem nota ainda" : `nota média ${s.notaMedia.toFixed(1).replace(".", ",")}`
-                      }`}
-                </p>
-
-                <div className="flex items-center gap-4 flex-wrap">
-                  <Link href={`/resultados/${s.codigo}`} className="btn-link">Ver resultados</Link>
-                  <button type="button" className="btn-ghost !py-2 text-[13px]" onClick={() => copiar(s.codigo, s.url, "Link copiado")}>Copiar link</button>
-                  <MenuAcoes
-                    rotulo={`Mais ações do treino ${s.nome}`}
-                    itens={[
-                      { rotulo: "Copiar convite", onClick: () => copiarConvite(s) },
-                      ...(s.status === "ativa" ? [{ rotulo: "Pausar", onClick: () => mudarStatus(s, "pausada") }] : []),
-                      ...(s.status === "pausada" ? [{ rotulo: "Reativar", onClick: () => mudarStatus(s, "ativa") }] : []),
-                      { rotulo: "Duplicar", onClick: () => router.push(`/simulacoes/nova?duplicar=${s.codigo}`) },
-                      ...(s.status === "encerrada" ? [] : [{ rotulo: "Encerrar", onClick: () => mudarStatus(s, "encerrada"), perigo: true }]),
-                    ]}
-                  />
-                  {copiado?.codigo === s.codigo && <span role="status" className="text-[13px] font-semibold text-ok">{copiado.texto}</span>}
+                <MenuAcoes rotulo={`Mais ações do treino ${s.nome}`} disabled={ocupado === s.codigo} itens={[
+                  { rotulo: "Editar nome", icone: "editar", onClick: () => { setEditando(s.codigo); setNovoNome(s.nome); } },
+                  { rotulo: "Copiar convite", icone: "pessoa", disabled: s.status !== "ativa", onClick: () => void copiarConvite(s) },
+                  ...(s.status === "ativa" ? [{ rotulo: "Pausar", icone: "pausar" as const, onClick: () => void alterar(s, { status: "pausada" }) }] : []),
+                  ...(s.status === "pausada" ? [{ rotulo: "Reativar", icone: "iniciar" as const, onClick: () => void alterar(s, { status: "ativa" }) }] : []),
+                  { rotulo: "Duplicar treino", icone: "copiar", href: `/simulacoes/nova?duplicar=${s.codigo}` },
+                  ...(s.status === "encerrada" ? [] : [{ rotulo: "Encerrar", icone: "encerrar" as const, onClick: () => void alterar(s, { status: "encerrada" }) }]),
+                  { rotulo: "Apagar treino", icone: "apagar", perigo: true, onClick: () => void apagar(s) },
+                ]} />
+              </div>
+              {editando === s.codigo && <form className="my-4 p-4 bg-bg rounded-field" onSubmit={e => { e.preventDefault(); void alterar(s, { nome: novoNome }); }}>
+                <label className="block text-sm font-semibold mb-2" htmlFor={`nome-${s.codigo}`}>Nome do treino</label>
+                <input id={`nome-${s.codigo}`} className="input" required maxLength={160} autoFocus value={novoNome} onChange={e => setNovoNome(e.target.value)} />
+                <p className="text-xs text-muted mt-2">Para mudar o desafio, duplique o treino e preserve os resultados desta versão.</p>
+                <div className="flex gap-2 mt-3"><button className="btn-primary !w-auto" disabled={!novoNome.trim() || ocupado === s.codigo}>{ocupado === s.codigo ? "Salvando…" : "Salvar nome"}</button><button type="button" className="btn-ghost" disabled={ocupado === s.codigo} onClick={() => setEditando(null)}>Cancelar</button></div>
+              </form>}
+              <div className="flex items-center justify-between gap-4 flex-wrap mt-4 pt-4 border-t border-line">
+                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                  <span><strong className="tabular-nums">{s.participantes}</strong> <span className="text-muted">participantes</span></span>
+                  <span><strong className="tabular-nums">{s.sessoes}</strong> <span className="text-muted">conversas</span></span>
+                  <span><strong className="tabular-nums">{s.notaMedia === null ? "—" : s.notaMedia.toFixed(1).replace(".", ",")}</strong> <span className="text-muted">nota média</span></span>
                 </div>
-              </article>
-            ))}
+                <div className="flex gap-3 items-center flex-wrap">
+                  <Link href={`/resultados/${s.codigo}`} className="btn-link inline-flex items-center gap-2 min-h-11"><Icone nome="grafico" />Ver resultados</Link>
+                  <AcoesLink href={s.url} disabled={s.status !== "ativa" || ocupado === s.codigo} />
+                </div>
+              </div>
+              {s.status !== "ativa" && <p className="text-sm text-muted mt-3 flex items-center gap-2"><Icone nome={s.status === "pausada" ? "pausar" : "encerrar"} />{s.status === "pausada" ? "Link desativado enquanto o treino estiver pausado. Reative pelo menu de opções." : "Treino encerrado. O link está desativado; os resultados continuam disponíveis."}</p>}
+              {s.sessoes === 0 && s.status === "ativa" && <p className="text-xs text-muted mt-2">Criado em {data(s.criadoEm)} · Compartilhe o link para começar a receber resultados.</p>}
+            </article>)}
           </div>
+          </>
         )}
       </main>
       {Dialogo}

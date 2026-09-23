@@ -1,4 +1,9 @@
 {
+  "simulador-vendas": {
+    "lib/store.ts": "Site e agente LiveKit compartilham SQLite: WAL desde a primeira conexão, espera por bloqueios e descarte de conexões cuja inicialização falhou.",
+    "lib/historico.ts": "Reutiliza abrirBanco para evitar conexões sem busy_timeout durante a limpeza na inicialização; erros de migração não são confundidos com coluna existente.",
+    "lib/formularios.ts": "Reutiliza abrirBanco para evitar conexões sem busy_timeout durante a limpeza na inicialização."
+  },
   "custos-ia": {
     "app/api/setup/route.ts": "Gmail e Outlook têm cartão próprio em /setup (components/ConectarEmail.tsx) e saem da lista genérica devolvida pelo GET; continuam em INTEGRACOES para o PUT, o teste e o /api/status",
     "app/api/setup/oauth/google/route.ts": "Já tem seu próprio fluxo de LEITURA da caixa (gmail.readonly, US-021, lib/email.ts) para importar notas fiscais — não é o fluxo de ENVIO de avisos (gmail.send, lib/email-envio.ts) desta história",
@@ -7,7 +12,8 @@
     "app/api/setup/oauth/microsoft/callback/route.ts": "idem"
   },
   "whatsapp-atendente": {
-    "app/api/setup/route.ts": "Duas divergências de propósito: (1) depois de salvar as três credenciais da z-api, cadastra sozinho na instância o endereço dos avisos (lib/zapi.ts:configurarWebhooks), tirando do caminho da pessoa copiar esse endereço à mão no painel da z-api; (2) o WhatsApp sai da lista genérica do GET e vai em comCartaoProprio, porque components/ConexaoWhatsApp.tsx já desenha o cartão dele inteiro (QR Code, estado, desconectar) — mesmo desenho que custos-ia usa com Gmail e Outlook"
+    "app/api/setup/route.ts": "Duas divergências de propósito: (1) depois de salvar as três credenciais da z-api, cadastra sozinho na instância o endereço dos avisos (lib/zapi.ts:configurarWebhooks), tirando do caminho da pessoa copiar esse endereço à mão no painel da z-api; (2) o WhatsApp sai da lista genérica do GET e vai em comCartaoProprio, porque components/ConexaoWhatsApp.tsx já desenha o cartão dele inteiro (QR Code, estado, desconectar) — mesmo desenho que custos-ia usa com Gmail e Outlook",
+    "lib/mcp-cliente.ts": "Duas proteções de propósito no atendimento a cliente: (1) tempo limite de 15 s em cada chamada ao servidor MCP, para uma consulta pendurada não segurar a resposta ao cliente; (2) o isError da ferramenta vira erro de verdade, com a instrução de não confirmar a operação nem repetir uma criação sem conferir"
   },
   "build-agentflows": {
     "app/api/setup/route.ts": "Produto focado em fluxos, com login exclusivo ChatGPT; configuração e integrações antigas da suíte desativadas por solicitação explícita.",
@@ -31,13 +37,14 @@
     "components/setup.tsx": "Aceita a propriedade navegacao para manter os cinco destinos do workspace também em Configurações; oculta Notificações; embute a escolha da conta de IA (components/ConexaoIA.tsx) no cartão Inteligência artificial e relê /api/status depois de cada mudança."
   },
   "radar-sinais": {
+    "app/api/rotinas/[id]/executar-agora/route.ts": "Enfileira execução persistente e usa after para trabalho em segundo plano; devolve 202 e permite acompanhar pelo histórico do radar.",
     "lib/ai.ts": "Seleção explícita entre OpenRouter e ChatGPT pelo Codex App Server; disponibilidade assíncrona da conta, síntese e modelo de ontologia próprios do Radar.",
     "lib/setup-comum.ts": "IA selecionada e remoção das notificações e conexões de e-mail solicitada na versão 0.3.0.",
     "app/api/setup/route.ts": "Prontidão usa a conta de IA selecionada (OpenRouter ou ChatGPT), sem exigir OpenRouter quando ChatGPT está ativo.",
     "app/api/status/route.ts": "Status da IA selecionada, sugestão única de conexão e visibilidade dos exemplos respeitam a conta e a limpeza dos dados de teste.",
     "lib/notificacoes.ts": "Módulo reservado sem funções: notificações removidas por solicitação explícita.",
     "lib/email-envio.ts": "Módulo reservado sem funções: envio e OAuth de e-mail removidos por solicitação explícita.",
-    "lib/rotinas.ts": "Monitoramentos com fuso, proteção contra concorrência e gravação interna sem notificações, inclusive nas agendas legadas.",
+    "lib/rotinas.ts": "Monitoramentos com fuso, fila persistente, histórico de execuções e recuperação de leases interrompidos, sem notificações, inclusive nas agendas legadas.",
     "app/api/rotinas/route.ts": "Cadastro de agendas centralizado por radar; antiga criação de notificações desativada.",
     "app/api/setup/oauth/google/route.ts": "OAuth de e-mail desativado com resposta 410; notificações removidas por solicitação explícita.",
     "app/api/setup/oauth/google/callback/route.ts": "OAuth de e-mail desativado com resposta 410; notificações removidas por solicitação explícita.",

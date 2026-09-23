@@ -1,5 +1,5 @@
 "use client";
-// Bloco de entrega do Clone de Site (substitui o Entregar padrão de ui.tsx, que baixa PDF): o resultado aqui
+// Bloco de entrega do Site Cowork (substitui o Entregar padrão de ui.tsx, que baixa PDF): o resultado aqui
 // é uma página web, então a ação primária é "Publicar link" (mostra o endereço público /s/<id> com Copiar e
 // Abrir) e o menu "Mais" traz "Baixar HTML" (arquivo .html) e "Copiar código". O endereço público é montado
 // só no clique (location.origin não existe no servidor; ver notas em CLAUDE.md sobre hydration).

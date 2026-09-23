@@ -101,6 +101,7 @@ test("termos e fonte cadastrados chegam à síntese e deixam proveniência audit
       if (body.query.includes("site:")) direcionadas++;
       return Response.json({ results: [{ title: "EdTech no Brasil", url: "https://startse.com/artigos/edtech", highlights: ["Evidência do site cadastrado"] }] });
     }
+    if (body.messages[0].content.includes("Você planeja buscas")) return Response.json({ choices: [{ message: { content: JSON.stringify({ buscas: JSON.parse(body.messages[1].content).palavrasChave.map((tema: string) => ({ tema, consultas: [tema + " adoção", tema + " riscos"] })) }) } }] });
     assert.ok(String(url).includes("openrouter.ai")); assert.equal(body.model, "provedor/ontologia");
     assert.match(body.messages[1].content, /Evidência do site cadastrado/); assert.match(body.messages[1].content, /data não informada/);
     return Response.json({ choices: [{ message: { content: JSON.stringify({ sinais: [{ id: "s", titulo: "EdTech", resumo: "Sinal", temas: ["EdTech"], tendencia: "estavel", oQueFazer: "Entrevistar compradores", fontes: [{ url: "https://startse.com/artigos/edtech" }] }], nos: [], arestas: [], conexoes: [] }) } }] });
@@ -108,7 +109,7 @@ test("termos e fonte cadastrados chegam à síntese e deixam proveniência audit
   const { montarRadar } = await import("../lib/radar"); const r = await montarRadar({ temas: ["EdTech"], periodoDias: 7 });
   assert.equal(direcionadas, 1); assert.equal(r.meta.demo, false); assert.equal(r.meta.model, "provedor/ontologia");
   assert.equal(r.sinais[0].fontes[0].url, "https://startse.com/artigos/edtech");
-  assert.equal(r.coleta?.semData, 1); assert.equal(r.coleta?.consultas, 2); assert.deepEqual(r.coleta?.avisos, []);
+  assert.equal(r.coleta?.semData, 1); assert.equal(r.coleta?.consultas, 4); assert.equal(r.coleta?.planejamento, "ia"); assert.deepEqual(r.coleta?.avisos, []);
   delete process.env.OPENROUTER_API_KEY; delete process.env.EXA_API_KEY; delete process.env.OPENROUTER_MODEL_ONTOLOGIA;
 });
 test("radar reabre a última pesquisa real e Redis não integra a configuração pública", async () => {

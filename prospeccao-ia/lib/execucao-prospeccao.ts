@@ -1,64 +1,22 @@
-// Pipeline de execução de uma prospecção (US-013), disparado em segundo plano por POST /api/prospeccoes:
-// `iniciarExecucao` NUNCA é aguardada no caminho da resposta (a rota chama `void iniciarExecucao(id)`),
-// mesmo espírito de `iniciarVideo`/`executarEnvio` em videos-campanha/lib/videos.ts — só que aqui as 5
-// etapas são fixas (ETAPAS_PROSPECCAO), não estados de resposta de um provedor externo.
-//
-// Cada etapa grava `Prospeccao.etapa` = a chave da PRÓPRIA etapa logo no início dela (antes de fazer o
-// trabalho), para o polling (GET /api/prospeccoes/[id]/andamento) mostrar "em andamento" na etapa certa
-// mesmo que o processo morra no meio. Erro em qualquer etapa NUNCA perde o que as etapas anteriores já
-// gravaram (elas já commitaram no banco antes do erro): a prospecção termina `estado: "pronta"` com
-// `erro` preenchido, nunca `"falhou"` (esse estado é só para a recuperação na inicialização — processo
-// reiniciado no meio, ver recuperarProspeccoesTravadas em lib/workspace.ts).
-//
-// Fronteira exata para US-026 substituir sem reler este arquivo inteiro: todo modo/jornada faz
-// descoberta de verdade desde a US-021 — "empresas" (US-017), "empresa_unica" (US-018), "pessoas" em B2B
-// (US-019), "oportunidades" nas duas jornadas (US-020) e "pessoas" em B2C (US-021, a última a sair do
-// fictício). Sinais de intenção do ICP/critérios ainda são lidos e filtrados na etapa 3
-// (`analisarSinais`), mas ela não persiste nada — cada modo real já extrai e persiste seu próprio
-// SinalProspeccao dentro das etapas 2/4 (lib/qualificacao.ts:sinaisEncontrados), então essa função hoje
-// não faz diferença para nenhum modo (mantida simples, sem uso prático).
-//
-// US-024 apertou a qualificação por evidências (fit/evidencias já existiam desde a US-017): "Porte" ganhou
-// comparação NUMÉRICA determinística (lib/qualificacao.ts:avaliarPorte, pode devolver "nao_atende" de
-// verdade agora) e "Outros critérios" (ICP B2B, texto livre) e "Contexto" (critério de busca B2C, texto
-// livre) ganharam avaliação INTERPRETATIVA por IA (lib/qualificacao-ia.ts, `avaliarComOutros` para contas),
-// só nas Contas de `buscarContasReais`/`buscarContaUnicaReal` e nos Leads de `buscarPessoasB2C` — os demais
-// call-sites de `avaliarCriterios` (contaPara em buscarPessoasReais, buscarOportunidadesEmpresas,
-// buscarPessoasOportunidadesB2C) continuam só com os critérios objetivos de sempre, fronteira documentada
-// para não reler o arquivo inteiro achando "esquecimento". "Lead sem nenhuma evidência verificável não
-// entra na lista" (AC da US-024) foi aplicada só em `buscarPessoasB2C` (onde a evidência é da PRÓPRIA
-// pessoa, contra os critérios do perfil) — não em `buscarPessoasChaveUnica`/`buscarPessoasReais`/
-// `buscarPessoasOportunidadesEmpresas`, cujo lead herda `conta.evidencias` (a evidência é da EMPRESA, não
-// da pessoa): aplicar o mesmo filtro ali esconderia toda pessoa de uma conta sem site encontrado,
-// contradizendo a AC da US-018 ("nenhuma pessoa é adicionada sem seleção explícita" pressupõe que ela
-// aparece na lista para poder ser selecionada) e derrubaria o modo "pessoas" B2B inteiro em demonstração
-// (a busca pública nunca qualifica a conta, `contaPara` é chamada com `site: null`).
-//
-// US-028 (qualificação B2C): `buscarPessoasB2C` já usava os critérios da US-006 (Localização/Ocupação/
-// Interesses/Contexto) desde a US-024 — esta história só ACRESCENTOU a recusa de termo de categoria
-// sensível (`omitirEvidenciasSensiveis`, lista fechada em `lib/sensivel.ts`) por cima da evidência já
-// calculada, e uma hipótese de dor específica de B2C (`gerarHipoteseDor(..., jornada)`, "necessidade ou
-// momento", nunca característica pessoal protegida) — nenhuma das duas muda o comportamento B2B.
-//
-// "empresa_unica" (US-018) tem uma particularidade: as pessoas encontradas nascem com status "novo"
-// (não "pesquisado"), então a etapa 5 (que só promove "pesquisado" → "qualificado") NÃO as promove — elas
-// só entram de fato na prospecção quando a pessoa marca a caixa de seleção e confirma "Adicionar à
-// prospecção" (POST /api/prospeccoes/[id]/selecionar-pessoas, status "novo" → "selecionado"). "Nenhuma
-// pessoa é adicionada sem seleção explícita" (AC da US-018) é isso: a tela nunca esconde quem foi
-// encontrado, só não considera ninguém parte da prospecção até a escolha. A etapa 5 GERA A HIPÓTESE DE
-// DOR (US-025) de TODO lead, independente do status — inclusive os "novo" de "empresa_unica", que ela não
-// promove: é por isso que o laço da etapa 5 não filtra por status antes de chamar `gerarHipoteseDor`.
-import { ETAPAS_PROSPECCAO } from "./execucao-etapas";
-import { registrarConsulta, concluirConsulta, consultasDaProspeccao } from "./pesquisa-registro";
+// Prospecção em cinco etapas, com dados persistidos a cada avanço e resultados parciais preservados.
+// Descoberta combina as fontes conectadas; a qualificação exige evidência para cada critério.
+// Empresa única mantém seleção explícita. Demonstração só ocorre sem fontes reais conectadas.
+import { ETAPAS_PROSPECCAO, etapasDaProspeccao } from "./execucao-etapas";
+import { consultasDaProspeccao } from "./pesquisa-registro";
 import { buscarNaWeb, descobertaAtiva, ErroDescoberta, lerPagina, perfilDePessoa, TetoConsultasAtingido } from "./descoberta";
 import type { ResultadoBuscaWeb } from "./descoberta";
 import { data } from "./formato";
-import { ErroApollo, apolloEnabled, buscarLeads, buscarPessoasDaEmpresa } from "./leads";
+import { ErroProspectHalo, prospectHaloAtivo } from "./prospecthalo";
+import { pesquisarPessoas } from "./pesquisa-pessoas";
+import { avaliarVinculoEmpresa, mesmaEmpresa } from "./vinculo-empresa";
+import { incorporarPerfil } from "./pesquisa-perfis";
+import { salvarPessoaEncontrada, dadosDoPerfil } from "./leads-enriquecimento";
+import { perfilLinkedin } from "./perfil-linkedin";
 import { avaliarCriterios, calcularFit, dominioDe, inferirPapel, resumoDaPagina, sinaisEncontrados, sinalAntigo } from "./qualificacao";
 import { avaliarCriterioInterpretativo, gerarHipoteseDor } from "./qualificacao-ia";
 import { QUANTIDADES_EMPRESAS } from "./rotulos";
 import { termoSensivel } from "./sensivel";
-import { atualizarConta, atualizarLead, atualizarProspeccao, criarConta, criarLead, criarProspeccao, leadsDoProduto, listarContas, listarLeads, obterICP, obterProduto, obterProspeccao } from "./workspace";
+import { atualizarConta, atualizarLead, atualizarProspeccao, criarConta, criarProspeccao, listarContas, listarLeads, obterICP, obterProduto, obterProspeccao } from "./workspace";
 import type { Conta, Evidencia, ICP, Jornada, ModoProspeccao, Prospeccao, SinalProspeccao } from "./types";
 
 const MODOS_PROSPECCAO_VALIDOS: ModoProspeccao[] = ["empresas", "pessoas", "empresa_unica", "oportunidades"];
@@ -372,7 +330,7 @@ function pareceEndereco(texto: string): boolean {
  * encontrada/legível, a conta ainda nasce (fit "media", sem evidências) — "explorar" nunca falha por
  * completo só porque a leitura pública não deu certo. */
 // As duas mensagens abaixo marcam uma conta que nasceu SEM informação de página pública: são a condição
-// para a etapa 4 (buscarPessoasChaveUnica) enriquecer `resumo` com o que a Apollo devolver sobre a
+// para a ficha explicar a ausência de dados públicos sobre a
 // organização, sem nunca sobrescrever um resumo real já lido da própria página institucional.
 const RESUMO_SEM_SITE = "Não encontramos uma página pública para confirmar critérios desta empresa.";
 const RESUMO_SITE_ILEGIVEL = "Não foi possível ler a página pública desta empresa.";
@@ -387,7 +345,7 @@ async function buscarContaUnicaReal(prospeccaoId: string, criterios: Record<stri
 
   let site = pareceEndereco(nome) ? (nome.startsWith("http") ? nome : `https://${nome}`) : null;
   let buscaDemo = false;
-  if (!site) {
+  if (!site && (descobertaAtiva() || !prospectHaloAtivo())) {
     try {
       const busca = await buscarNaWeb(`${nome} site institucional`, 0, prospeccaoId);
       buscaDemo = busca.demo;
@@ -447,22 +405,39 @@ async function etapaProcurarEmpresas(prospeccaoId: string, modo: ModoProspeccao,
   // demanda na etapa 4 (buscarPessoasReais).
 }
 
-/** Etapa 3: trabalho real = ler e filtrar os sinais de intenção do ICP e dos critérios recebidos — só
- * para uso do pipeline dos modos que ainda não leem sinal nenhum de verdade (hoje, só "pessoas" em B2C);
- * os modos com descoberta real (empresas/empresa_unica/pessoas-B2B/oportunidades) já extraem e persistem
- * SinalProspeccao dentro das próprias etapas 2/4 (lib/qualificacao.ts:sinaisEncontrados), então esta
- * função não faz diferença para eles — mantida simples e sem persistência aqui. */
-function analisarSinais(criterios: Record<string, unknown>, icp: ICP | null): string[] {
+/** Pesquisa específica de sinais das empresas, além da página institucional inicial. */
+async function analisarSinais(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null): Promise<void> {
   const doCriterio = Array.isArray(criterios.sinais) ? criterios.sinais.filter((s): s is string => typeof s === "string") : [];
-  const doICP = icp?.sinais ?? [];
-  return Array.from(new Set([...doCriterio, ...doICP]));
+  const sinaisAlvo = [...new Set([...doCriterio, ...(icp?.sinais ?? [])])];
+  if (!sinaisAlvo.length || !descobertaAtiva()) return;
+  for (const conta of listarContas(prospeccaoId)) {
+    if (conta.demo || foiCancelada(prospeccaoId)) continue;
+    try {
+      const busca = await buscarNaWeb(`"${conta.nome}" (${sinaisAlvo.map(s => `"${s}"`).join(" OR ")})`, 0, prospeccaoId);
+      const sinais = [...conta.sinais];
+      for (const item of busca.itens.slice(0, 2)) {
+        let conteudo = item.resumo;
+        try { conteudo = (await lerPagina(item.url, prospeccaoId, item.resumo)).conteudo; } catch { /* Conserva somente o trecho obtido. */ }
+        if (!conteudo.toLocaleLowerCase().includes(conta.nome.toLocaleLowerCase())) continue;
+        for (const sinal of filtrarSinaisRecentes(sinaisEncontrados(conteudo, sinaisAlvo, item.url, busca.consultadoEm), Boolean(criterios.somenteRecentes))) {
+          if (!sinais.some(s => s.origem === sinal.origem && s.descricao === sinal.descricao)) sinais.push(sinal);
+        }
+      }
+      atualizarConta(conta.id, { sinais });
+    } catch { /* Falhas de fornecedores já estão no diagnóstico; conserva a pesquisa inicial. */ }
+  }
 }
 
 /** Identidade de um lead para reconhecer "já visto" (US-014): LinkedIn quando existe (mais específico);
  * sem ele, nome + empresa normalizados (minúsculas, sem espaço nas pontas) — mesmo espírito de chavePerfil
  * em lib/leads-vistos.ts, só que pela identidade da PESSOA, não pelo perfil da busca. */
 function chaveLead(nome: string, empresa: string | null, linkedin: string | null): string {
-  if (linkedin && linkedin.trim()) return `linkedin:${linkedin.trim().toLowerCase()}`;
+  if (linkedin?.trim()) {
+    const perfil = perfilLinkedin(linkedin);
+    if (perfil) return `linkedin:${perfil}`;
+    try { const u = new URL(linkedin); return `linkedin:${u.hostname.replace(/^www\./, "")}${u.pathname.replace(/\/$/, "")}`.toLowerCase(); }
+    catch { return `linkedin:${linkedin.trim().toLowerCase()}`; }
+  }
   return `nome:${nome.trim().toLowerCase()}|${String(empresa || "").trim().toLowerCase()}`;
 }
 
@@ -475,6 +450,7 @@ const TETO_PESSOAS_CHAVE = 5;
  * LinkedIn"): descarta o sufixo do serviço (depois do `|`) e lê o primeiro segmento como nome, o segundo
  * (se existir) como cargo. */
 function pessoaDoResultado(item: ResultadoBuscaWeb): { nome: string; cargo: string | null; empresa: string | null } {
+  if (item.pessoa) return item.pessoa;
   const titulo = item.titulo.split("|")[0].trim();
   const partes = titulo.split(/\s[-–]\s/).map((p) => p.trim()).filter(Boolean);
   return { nome: partes[0] || titulo, cargo: partes[1] || null, empresa: partes[2] || null };
@@ -486,74 +462,53 @@ function pessoasChaveDemo(): { nome: string; cargo: string | null; linkedin: str
   return [0, 1, 2].map((i) => ({ nome: nomePessoaFicticia(i), cargo: CARGOS_PESSOA[i % CARGOS_PESSOA.length], linkedin: null }));
 }
 
-/** Etapa 4, modo "empresa_unica" (US-018, Apollo como fonte desde a US-022): busca pessoas ligadas à
- * empresa explorada em vez das pessoas fixas e fictícias dos demais modos — primeiro modo com descoberta
- * real de PESSOAS (contas real desde a mesma história; "empresas"/US-017 já tinha real só para contas).
- * Duas fontes, nunca misturadas na mesma busca (mesmo critério do modo "pessoas", US-019): com a Apollo
- * conectada, ela é a fonte ÚNICA — cargo e nome vêm dos campos ESTRUTURADOS da organização (mais
- * confiáveis que extrair do título de um resultado de busca), e o fato sobre a empresa que a Apollo
- * devolve enriquece `conta.resumo` (exibido na ficha como "Sobre a empresa", nunca como sinal) quando a
- * leitura da página institucional (etapa 2) não achou nada para contar. Sem Apollo, cai na busca pública
- * `site:linkedin.com/in` de sempre. Evidências/sinais continuam herdados da própria conta (a mesma
- * leitura institucional já qualificou a empresa; ler o perfil de cada pessoa também é orçamento que só a
- * US-019 trouxe, e só para o modo "pessoas"). Nasce com `status: "novo"` (não "pesquisado"): só vira parte
- * de fato da prospecção quando selecionada na tela (ver comentário de topo do arquivo). */
+/** Empresa única: contatos de todas as fontes, seleção explícita preservada. */
 async function buscarPessoasChaveUnica(prospeccaoId: string, conta: Conta, produtoId: string, personas: string[]): Promise<void> {
-  const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
-  let candidatos: { nome: string; cargo: string | null; linkedin: string | null }[] = [];
-  let demo = conta.demo;
-  let viaApollo = false;
+  await adicionarPessoasDaConta(prospeccaoId, conta, produtoId, personas, "novo");
+}
 
-  if (conta.demo) {
-    candidatos = pessoasChaveDemo();
-  } else if (apolloEnabled()) {
-    const registro = registrarConsulta(prospeccaoId, "apollo", "busca", conta.nome);
-    try {
-      const resultado = await buscarPessoasDaEmpresa(conta.nome, TETO_PESSOAS_CHAVE);
-      candidatos = resultado.pessoas;
-      concluirConsulta(registro, candidatos.length ? "concluida" : "vazia", candidatos.length);
-      viaApollo = true;
-      if (resultado.sobreEmpresa && (conta.resumo === RESUMO_SEM_SITE || conta.resumo === RESUMO_SITE_ILEGIVEL)) {
-        atualizarConta(conta.id, { resumo: resultado.sobreEmpresa });
-      }
-    } catch (err) {
-      console.error("Falha ao buscar pessoas da empresa via Apollo:", conta.nome, err instanceof Error ? err.message : err);
-      concluirConsulta(registro, "falhou", 0, err instanceof ErroApollo ? err.message : "A busca de contatos não respondeu.");
-      if (!descobertaAtiva()) throw err;
-      candidatos = [];
-    }
-  }
-  if (!candidatos.length && !conta.demo && (!apolloEnabled() || descobertaAtiva())) {
-    viaApollo = false;
-    try {
-      const resultado = await buscarNaWeb(`site:linkedin.com/in "${conta.nome}" (diretor OR gerente OR head OR coordenador)`, 0, prospeccaoId);
-      demo = resultado.demo;
-      candidatos = resultado.demo ? pessoasChaveDemo() : resultado.itens.map((item) => ({ ...pessoaDoResultado(item), linkedin: item.url }));
-    } catch (err) {
-      propagarTeto(err);
-      console.error("Falha ao buscar pessoas-chave de", conta.nome, err instanceof Error ? err.message : err);
-      candidatos = [];
-    }
-  }
-
-  const vistosNestaBusca = new Set<string>();
+async function adicionarPessoasDaConta(prospeccaoId: string, conta: Conta, produtoId: string, personas: string[], status: "novo" | "pesquisado"): Promise<void> {
+  const jaVistos = new Set<string>();
+  const resultado = conta.demo
+    ? { itens: [] as ResultadoBuscaWeb[], demo: true, consultadoEm: new Date().toISOString() }
+    : await pesquisarPessoas({ empresa: conta.nome, cargo: personas.join(" ou "), quantidade: TETO_PESSOAS_CHAVE }, prospeccaoId);
+  const candidatos = resultado.demo ? pessoasChaveDemo().map(p => ({ ...p, item: undefined as ResultadoBuscaWeb | undefined }))
+    : resultado.itens.map(item => ({ ...pessoaDoResultado(item), linkedin: item.url, item }));
   let criados = 0;
   for (const candidato of candidatos) {
-    if (criados >= TETO_PESSOAS_CHAVE) break;
-    if (!candidato.nome) continue;
-    const chave = chaveLead(candidato.nome, conta.nome, candidato.linkedin ?? null);
-    if (jaVistos.has(chave) || vistosNestaBusca.has(chave)) continue;
-    vistosNestaBusca.add(chave);
-    criarLead({
-      prospeccaoId, contaId: conta.id, nome: candidato.nome, cargo: candidato.cargo, empresa: conta.nome, cidade: conta.cidade,
-      linkedin: candidato.linkedin ?? null,
-      fonte: demo ? null : viaApollo ? origemPessoa(conta.site ? dominioDe(conta.site) : null, conta.criadoEm, true) : "busca pública",
-      papel: inferirPapel(candidato.cargo, personas),
-      fit: conta.fit, evidencias: conta.evidencias, sinais: conta.sinais, hipotese: null,
-      status: "novo", noCRM: false, demo,
+    if (foiCancelada(prospeccaoId)) return;
+    if (criados >= TETO_PESSOAS_CHAVE || !candidato.nome) continue;
+    const vinculo = candidato.item ? avaliarVinculoEmpresa(candidato.item, conta.nome) : null;
+    if (!resultado.demo && vinculo?.estado !== "confirmado") continue;
+    const chave = chaveLead(candidato.nome, conta.nome, candidato.linkedin);
+    if (jaVistos.has(chave)) continue;
+    jaVistos.add(chave);
+    const conteudo = candidato.item ? await conteudoDaPessoa(candidato.item, prospeccaoId) : "";
+    if (foiCancelada(prospeccaoId)) return;
+    const evidenciasPessoa: Evidencia[] = resultado.demo ? avaliarCriterios(conteudo, [{ criterio: "Empresa atual", valor: conta.nome }])
+      : [{ criterio: "Empresa atual", valor: vinculo!.empresa!, resultado: "atende", trecho: vinculo!.trecho }];
+    const cargo = candidato.cargo && mesmaEmpresa(candidato.cargo, conta.nome) ? null : candidato.cargo;
+    salvarPessoaEncontrada({
+      prospeccaoId, contaId: conta.id, nome: candidato.nome, cargo, empresa: resultado.demo ? conta.nome : vinculo!.empresa!, cidade: candidato.item?.pessoa?.cidade || (resultado.demo ? conta.cidade : null),
+      linkedin: candidato.linkedin, fonte: resultado.demo ? null : `${(candidato.item?.fontes ?? ["busca pública"]).join(", ")} · ${candidato.linkedin}`,
+      ...dadosDoPerfil(candidato.item, resultado.consultadoEm),
+      avatarUrl: candidato.item?.avatarUrl,
+      papel: inferirPapel(cargo, personas), fit: conta.fit,
+      evidencias: [...conta.evidencias, ...evidenciasPessoa], sinais: conta.sinais, hipotese: null,
+      status, noCRM: false, demo: resultado.demo,
     });
     criados++;
   }
+}
+
+/** Usa só conteúdo coletado; falha de leitura conserva o trecho real e a origem da busca. */
+async function conteudoDaPessoa(item: ResultadoBuscaWeb, prospeccaoId: string): Promise<string> {
+  if (item.conteudoPerfil) return item.conteudoPerfil;
+  const trecho = [item.titulo, item.resumo].filter(Boolean).join(". ");
+  if (item.pessoa?.cargo && item.pessoa.empresa) return trecho;
+  if (!descobertaAtiva()) return trecho;
+  try { return (await perfilDePessoa(item.url, prospeccaoId, trecho)).conteudo; }
+  catch { return trecho; }
 }
 
 /** Etapa 4, modo "oportunidades" em B2B (US-020): pessoas-chave de cada conta encontrada por
@@ -565,40 +520,9 @@ async function buscarPessoasChaveUnica(prospeccaoId: string, conta: Conta, produ
  * contar como lead da prospecção; "oportunidades" não tem essa tela intermediária), e o "já visto"
  * (`jaVistos`) é compartilhado por TODAS as contas do laço, não reiniciado a cada uma. */
 async function buscarPessoasOportunidadesEmpresas(prospeccaoId: string, produtoId: string, personas: string[]): Promise<void> {
-  const contas = listarContas(prospeccaoId).slice(0, TETO_CONTAS_PESSOAS_OPORTUNIDADE);
-  const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
-
-  for (const conta of contas) {
-    let candidatos: { nome: string; cargo: string | null; linkedin: string | null }[] = [];
-    let demo = conta.demo;
-    if (conta.demo) {
-      candidatos = pessoasChaveDemo();
-    } else {
-      try {
-        const resultado = await buscarNaWeb(`site:linkedin.com/in "${conta.nome}" (diretor OR gerente OR head OR coordenador)`, 0, prospeccaoId);
-        demo = resultado.demo;
-        candidatos = resultado.demo ? pessoasChaveDemo() : resultado.itens.map((item) => ({ ...pessoaDoResultado(item), linkedin: item.url }));
-      } catch (err) {
-        propagarTeto(err);
-        console.error("Falha ao buscar pessoas-chave de uma oportunidade:", conta.nome, err instanceof Error ? err.message : err);
-        candidatos = [];
-      }
-    }
-
-    let criadosNaConta = 0;
-    for (const candidato of candidatos) {
-      if (criadosNaConta >= TETO_PESSOAS_CHAVE || !candidato.nome) continue;
-      const chave = chaveLead(candidato.nome, conta.nome, candidato.linkedin ?? null);
-      if (jaVistos.has(chave)) continue;
-      jaVistos.add(chave);
-      criarLead({
-        prospeccaoId, contaId: conta.id, nome: candidato.nome, cargo: candidato.cargo, empresa: conta.nome, cidade: conta.cidade,
-        linkedin: candidato.linkedin ?? null, fonte: demo ? null : "busca pública", papel: inferirPapel(candidato.cargo, personas),
-        fit: conta.fit, evidencias: conta.evidencias, sinais: conta.sinais, hipotese: null,
-        status: "pesquisado", noCRM: false, demo,
-      });
-      criadosNaConta++;
-    }
+  for (const conta of listarContas(prospeccaoId).slice(0, TETO_CONTAS_PESSOAS_OPORTUNIDADE)) {
+    try { await adicionarPessoasDaConta(prospeccaoId, conta, produtoId, personas, "pesquisado"); }
+    catch { /* As falhas já estão registradas; as demais empresas continuam sendo pesquisadas. */ }
   }
 }
 
@@ -615,10 +539,10 @@ const TETO_PESSOAS_MODO = 10;
  * pessoa isoladamente, sem conta. Só vira `LeadProspeccao` quem sobra com pelo menos um sinal depois do
  * filtro "somente recentes" — mesma regra de `buscarOportunidadesEmpresas`. Papel sempre "desconhecido"
  * (B2C não classifica papel de decisão; a qualificação completa desta jornada é da US-021). */
-async function buscarPessoasOportunidadesB2C(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null, produtoId: string): Promise<void> {
+async function buscarPessoasOportunidadesB2C(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null): Promise<void> {
   const { sinaisAlvo, recorte, somenteRecentes } = sinaisERecorte(criterios, icp);
   if (sinaisAlvo.length === 0) return;
-  const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
+  const jaVistos = new Set<string>();
 
   const consulta = ["site:linkedin.com/in", recorte, ...sinaisAlvo].filter(Boolean).join(" ");
   let resultado;
@@ -666,14 +590,20 @@ async function buscarPessoasOportunidadesB2C(prospeccaoId: string, criterios: Re
       demoFinal = perfil.demo;
     }
 
+    const perfilEncontrado = resultado.itens.find(i => i.url === candidato.linkedin);
+    if (perfilEncontrado && !demoFinal) {
+      perfilEncontrado.conteudoPerfilAtual = conteudo; perfilEncontrado.perfilConsultadoEm = consultadoEm;
+      try { incorporarPerfil(perfilEncontrado, JSON.parse(conteudo)); } catch { /* Sem campos estruturados, conserva apenas o contexto público. */ }
+    }
     const sinais = filtrarSinaisRecentes(sinaisEncontrados(conteudo, sinaisAlvo, origem, consultadoEm), somenteRecentes);
     if (sinais.length === 0) continue;
     jaVistos.add(chave);
     const evidencias = avaliarCriterios(conteudo, [{ criterio: "Localização", valor: recorte }]);
-    criarLead({
-      prospeccaoId, contaId: null, nome: candidato.nome, cargo: candidato.cargo, empresa: null,
-      cidade: recorte || null, linkedin: candidato.linkedin,
-      fonte: demoFinal ? null : origemPessoa(dominioDe(candidato.linkedin), consultadoEm, false),
+    salvarPessoaEncontrada({
+      prospeccaoId, contaId: null, nome: perfilEncontrado?.pessoa?.nome || candidato.nome, cargo: perfilEncontrado?.pessoa?.cargo || candidato.cargo, empresa: perfilEncontrado?.pessoa?.empresa || null,
+      cidade: perfilEncontrado?.pessoa?.cidade || (demoFinal ? recorte || null : null), linkedin: candidato.linkedin,
+      ...dadosDoPerfil(perfilEncontrado, consultadoEm), avatarUrl: perfilEncontrado?.avatarUrl,
+      fonte: demoFinal ? null : origemPessoa(dominioDe(candidato.linkedin), consultadoEm),
       papel: "desconhecido", fit: calcularFit(evidencias), evidencias, sinais, hipotese: null,
       status: "pesquisado", noCRM: false, demo: demoFinal,
     });
@@ -700,13 +630,13 @@ function conteudoDemoDaPessoaB2C(indice: number, ocupacao: string, localizacao: 
  * que a condição de entrada é evidência (fit), não sinal. Sinais do ICP ainda são extraídos quando
  * aparecem no texto (alimentam a coluna "Sinal" da lista), mas continuam sem ser condição de entrada.
  * Papel sempre "desconhecido" (B2C não classifica papel de decisão). */
-async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null, produtoId: string): Promise<void> {
+async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null): Promise<void> {
   const localizacao = textoCriterio(criterios, "localizacao");
   const ocupacao = textoCriterio(criterios, "ocupacao");
   const contexto = textoCriterio(criterios, "contexto");
   const interesses = Array.isArray(criterios.interesses) ? criterios.interesses.filter((s): s is string => typeof s === "string") : [];
   const sinaisAlvo = icp?.sinais ?? [];
-  const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
+  const jaVistos = new Set<string>();
 
   const consulta = ["site:linkedin.com/in", ocupacao, localizacao, ...interesses].filter(Boolean).join(" ");
   let resultado;
@@ -754,6 +684,11 @@ async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, 
     }
 
     jaVistos.add(chave);
+    const perfilEncontrado = resultado.itens.find(i => i.url === candidato.linkedin);
+    if (perfilEncontrado && !demo) {
+      perfilEncontrado.conteudoPerfilAtual = conteudo; perfilEncontrado.perfilConsultadoEm = consultadoEm;
+      try { incorporarPerfil(perfilEncontrado, JSON.parse(conteudo)); } catch { /* Sem campos estruturados, conserva apenas o contexto público. */ }
+    }
     const evidenciasBase = avaliarCriterios(conteudo, [
       { criterio: "Localização", valor: localizacao },
       { criterio: "Ocupação", valor: ocupacao },
@@ -769,10 +704,11 @@ async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, 
     // a evidência em vez de sinal.
     if (!evidencias.some((e) => e.resultado !== "nao_verificavel")) continue;
     const sinais = sinaisEncontrados(conteudo, sinaisAlvo, origem, consultadoEm);
-    criarLead({
-      prospeccaoId, contaId: null, nome: candidato.nome, cargo: candidato.cargo, empresa: null,
-      cidade: localizacao || null, linkedin: candidato.linkedin,
-      fonte: demo ? null : origemPessoa(dominioDe(candidato.linkedin), consultadoEm, false),
+    salvarPessoaEncontrada({
+      prospeccaoId, contaId: null, nome: perfilEncontrado?.pessoa?.nome || candidato.nome, cargo: perfilEncontrado?.pessoa?.cargo || candidato.cargo, empresa: perfilEncontrado?.pessoa?.empresa || null,
+      cidade: perfilEncontrado?.pessoa?.cidade || (demo ? localizacao || null : null), linkedin: candidato.linkedin,
+      ...dadosDoPerfil(perfilEncontrado, consultadoEm), avatarUrl: perfilEncontrado?.avatarUrl,
+      fonte: demo ? null : origemPessoa(dominioDe(candidato.linkedin), consultadoEm),
       papel: "desconhecido", fit: calcularFit(evidencias), evidencias, sinais, hipotese: null,
       status: "pesquisado", noCRM: false, demo,
     });
@@ -780,119 +716,67 @@ async function buscarPessoasB2C(prospeccaoId: string, criterios: Record<string, 
   }
 }
 
-/** Origem formatada para a ficha de uma pessoa (AC da US-019: "encontrado em <domínio>, em dd/mm/aaaa").
- * Sem domínio (ex.: contato só por Apollo, sem site da empresa) cai numa frase mais simples — nunca
- * inventa um domínio que a busca não confirmou. */
-function origemPessoa(dominio: string | null, consultadoEm: string, viaApollo: boolean): string | null {
-  if (dominio) return `encontrado em ${dominio}, em ${data(consultadoEm, { comAno: true })}`;
-  return viaApollo ? "encontrado via Apollo" : null;
+/** Origem preservada na ficha, sem inventar domínio ou fornecedor. */
+function origemPessoa(dominio: string | null, consultadoEm: string): string | null {
+  return dominio ? `encontrado em ${dominio}, em ${data(consultadoEm, { comAno: true })}` : null;
 }
 
-/** Modo "pessoas", jornada B2B (US-019): busca pessoas por cargo/empresa-ou-segmento/localização,
- * vinculando cada uma a uma `Conta` (criada sob demanda, com o mesmo cache local por nome — a etapa 2
- * não cria nada para este modo, ver `etapaProcurarEmpresas`). Duas fontes, nunca misturadas na mesma
- * pessoa: com a Apollo conectada, ela é a primeira fonte de CONTATO (`lib/leads.ts:buscarLeads`, mesmo caminho da
- * busca de leads de hoje) e a conta de cada pessoa ainda é qualificada com sinais públicos de verdade
- * (lê a página do site da empresa devolvido pela Apollo, mesma qualificação de `buscarContasReais`); sem
- * contatos novos ou se a Apollo falhar, tenta as fontes de pesquisa conectadas numa busca pública `site:linkedin.com/in`, mesma técnica de
- * `buscarPessoasChaveUnica` (US-018), com fallback de demonstração próprio quando a busca não está
- * conectada (`pessoasChaveDemo`, não o `resultadosBuscaDemo` genérico — que não gera nomes de pessoa). */
+/** B2B: combina contatos e pesquisa pública, lê perfis e qualifica empresa e pessoa. */
 async function buscarPessoasReais(prospeccaoId: string, criterios: Record<string, unknown>, icp: ICP | null, produtoId: string): Promise<void> {
-  const cargo = textoCriterio(criterios, "cargo");
-  const empresaOuSegmento = textoCriterio(criterios, "segmento");
-  const localizacao = textoCriterio(criterios, "localizacao");
-  const sinaisAlvo = icp?.sinais ?? [];
-  const personas = icp?.personas ?? [];
-  const jaVistos = new Set(leadsDoProduto(produtoId).map((l) => chaveLead(l.nome, l.empresa, l.linkedin)));
-  const contasCache = new Map<string, Conta>(listarContas(prospeccaoId).map((c) => [c.nome.trim().toLowerCase(), c]));
-  let criados = 0;
-
-  /** Encontra ou cria a `Conta` de uma empresa citada por uma pessoa; quando o site é conhecido, lê a
-   * página institucional e qualifica por evidências (mesma lógica de `buscarContasReais`) — é isso que
-   * implementa "combinado com os sinais públicos" para quem veio da Apollo. */
-  async function contaPara(nome: string, site: string | null, demoForcado: boolean): Promise<Conta> {
-    const chave = nome.trim().toLowerCase();
-    const existente = contasCache.get(chave);
-    if (existente) return existente;
-    let evidencias: Evidencia[] = [];
-    let sinais: SinalProspeccao[] = [];
-    let demo = demoForcado;
-    if (site) {
-      try {
-        const pagina = await lerPagina(site, prospeccaoId);
-        demo = demo || pagina.demo;
-        const conteudo = pagina.demo ? conteudoDemoDaCandidata(0, empresaOuSegmento, "", localizacao, sinaisAlvo[0]) : pagina.conteudo;
-        evidencias = avaliarCriterios(conteudo, [{ criterio: "Segmento", valor: empresaOuSegmento }, { criterio: "Localização", valor: localizacao }]);
-        sinais = sinaisEncontrados(conteudo, sinaisAlvo, pagina.origem, pagina.consultadoEm);
-      } catch (err) {
-        propagarTeto(err);
-        console.error("Falha ao ler página institucional para qualificar", nome, err instanceof Error ? err.message : err);
-      }
-    }
-    const nova = criarConta({
-      prospeccaoId, nome, site, setor: empresaOuSegmento || null, porte: null, cidade: localizacao || null,
-      fit: evidencias.length ? calcularFit(evidencias) : null, evidencias, sinais, resumo: "", demo,
-    });
-    contasCache.set(chave, nova);
-    return nova;
-  }
-
-  if (apolloEnabled()) {
-    const registro = registrarConsulta(prospeccaoId, "apollo", "busca", [cargo, empresaOuSegmento, localizacao].filter(Boolean).join(" "));
-    let resultado;
-    try {
-      resultado = await buscarLeads({ segmento: empresaOuSegmento, cargo, localizacao, porte: "", proposta: "", quantidade: String(TETO_PESSOAS_MODO) });
-      concluirConsulta(registro, resultado.leads.length ? "concluida" : "vazia", resultado.leads.length);
-    } catch (err) {
-      concluirConsulta(registro, "falhou", 0, err instanceof ErroApollo ? err.message : "A busca de contatos não respondeu.");
-      if (!descobertaAtiva()) throw err;
-      resultado = { leads: [] };
-    }
-    for (const lead of resultado.leads) {
-      if (criados >= TETO_PESSOAS_MODO || !lead.nome) continue;
-      const nomeEmpresa = lead.empresa || empresaOuSegmento || "Empresa não identificada";
-      const chave = chaveLead(lead.nome, nomeEmpresa, lead.linkedin || null);
-      if (jaVistos.has(chave)) continue;
-      jaVistos.add(chave);
-      const conta = await contaPara(nomeEmpresa, lead.site || null, false);
-      criarLead({
-        prospeccaoId, contaId: conta.id, nome: lead.nome, cargo: lead.cargo || cargo || null, empresa: nomeEmpresa,
-        cidade: lead.cidade || localizacao || null, linkedin: lead.linkedin || null,
-        fonte: origemPessoa(conta.site ? dominioDe(conta.site) : null, conta.criadoEm, true),
-        papel: inferirPapel(lead.cargo || cargo || null, personas), fit: conta.fit, evidencias: conta.evidencias, sinais: conta.sinais,
-        hipotese: null, status: "pesquisado", noCRM: false, demo: false,
-      });
-      criados++;
-    }
-    if (criados > 0 || !descobertaAtiva()) return;
-  }
-
-  const consulta = ["site:linkedin.com/in", cargo, empresaOuSegmento, localizacao].filter(Boolean).join(" ");
-  let resultado;
-  try {
-    resultado = await buscarNaWeb(consulta, 0, prospeccaoId);
-  } catch (err) {
-    propagarFalhaBusca(err);
-    console.error("Falha na busca pública de pessoas:", err instanceof Error ? err.message : err);
-    return;
-  }
+  const empresa = textoCriterio(criterios, "empresa");
+  const cargo = textoCriterio(criterios, "cargo") || icp?.personas.join(" ou ") || "";
+  const segmento = textoCriterio(criterios, "segmento") || icp?.criterios.setor || "";
+  const localizacao = textoCriterio(criterios, "localizacao") || icp?.criterios.localizacao || "";
+  const porte = textoCriterio(criterios, "porte") || icp?.criterios.porte || "";
+  const resultado = await pesquisarPessoas({ cargo, empresa, segmento, localizacao, porte, outros: icp?.criterios.outros,
+    proposta: obterProduto(produtoId)?.propostaValor, quantidade: TETO_PESSOAS_MODO }, prospeccaoId);
+  const jaVistos = new Set<string>();
+  const contas = new Map<string, Conta>();
   const candidatos = resultado.demo
-    ? pessoasChaveDemo().map((p, i) => ({ ...p, empresa: nomeEmpresaFicticia(empresaOuSegmento, i) }))
-    : resultado.itens.map((item) => ({ ...pessoaDoResultado(item), linkedin: item.url }));
-  for (const candidato of candidatos) {
-    if (criados >= TETO_PESSOAS_MODO || !candidato.nome) continue;
-    const nomeEmpresa = candidato.empresa || empresaOuSegmento || "Empresa não identificada";
-    const chave = chaveLead(candidato.nome, nomeEmpresa, candidato.linkedin ?? null);
+    ? pessoasChaveDemo().map((p, i) => ({ titulo: `${p.nome} - ${p.cargo} - ${nomeEmpresaFicticia(segmento, i)}`, url: "", resumo: "" } as ResultadoBuscaWeb))
+    : resultado.itens;
+  let criados = 0;
+  for (const item of candidatos) {
+    if (foiCancelada(prospeccaoId)) return;
+    if (criados >= TETO_PESSOAS_MODO) break;
+    const pessoa = pessoaDoResultado(item);
+    if (!pessoa.nome) continue;
+    const chave = chaveLead(pessoa.nome, pessoa.empresa, item.url);
     if (jaVistos.has(chave)) continue;
     jaVistos.add(chave);
-    const conta = await contaPara(nomeEmpresa, null, resultado.demo);
-    criarLead({
-      prospeccaoId, contaId: conta.id, nome: candidato.nome, cargo: candidato.cargo, empresa: nomeEmpresa,
-      cidade: localizacao || null, linkedin: candidato.linkedin ?? null,
-      fonte: resultado.demo ? null : origemPessoa(candidato.linkedin ? dominioDe(candidato.linkedin) : null, resultado.consultadoEm, false),
-      papel: inferirPapel(candidato.cargo, personas), fit: conta.fit, evidencias: conta.evidencias, sinais: conta.sinais,
-      hipotese: null, status: "pesquisado", noCRM: false, demo: resultado.demo,
-    });
+    const conteudo = resultado.demo ? conteudoDemoDaCandidata(0, segmento, porte, localizacao, undefined) : await conteudoDaPessoa(item, prospeccaoId);
+    if (foiCancelada(prospeccaoId)) return;
+    let conta: Conta | undefined;
+    if (pessoa.empresa) {
+      const identidade = pessoa.empresa.trim().toLowerCase();
+      conta = contas.get(identidade);
+      if (!conta) {
+        let institucional = "";
+        const site = item.pessoa?.site || null;
+        if (site && descobertaAtiva()) {
+          try { institucional = (await lerPagina(site, prospeccaoId)).conteudo; } catch { /* O perfil ainda é evidência disponível. */ }
+        }
+        const evidenciaEmpresa = await avaliarComOutros(institucional || conteudo, [
+          { criterio: "Segmento", valor: segmento }, { criterio: "Porte", valor: porte }, { criterio: "Localização", valor: localizacao },
+        ], icp);
+        if (foiCancelada(prospeccaoId)) return;
+        conta = criarConta({ prospeccaoId, nome: pessoa.empresa, site, setor: null, porte: null, cidade: null,
+          fit: calcularFit(evidenciaEmpresa), evidencias: evidenciaEmpresa,
+          sinais: sinaisEncontrados(institucional || conteudo, icp?.sinais ?? [], site || item.url, resultado.consultadoEm),
+          resumo: resumoDaPagina(institucional || conteudo), demo: resultado.demo });
+        contas.set(identidade, conta);
+      }
+    }
+    const evidencias = [...(conta?.evidencias ?? await avaliarComOutros(conteudo, [{ criterio: "Segmento", valor: segmento }, { criterio: "Porte", valor: porte }], icp)), ...avaliarCriterios(conteudo, [{ criterio: "Cargo", valor: cargo }, { criterio: "Localização da pessoa", valor: localizacao }])];
+    if (foiCancelada(prospeccaoId)) return;
+    salvarPessoaEncontrada({ prospeccaoId, contaId: conta?.id ?? null, nome: pessoa.nome, cargo: pessoa.cargo, empresa: pessoa.empresa,
+      cidade: item.pessoa?.cidade || null, linkedin: item.url || null,
+      ...dadosDoPerfil(item, resultado.consultadoEm),
+      avatarUrl: item.avatarUrl,
+      fonte: resultado.demo ? null : `${(item.fontes ?? ["busca pública"]).join(", ")} · ${item.url} · ${data(resultado.consultadoEm, { comAno: true })}`,
+      papel: inferirPapel(pessoa.cargo, icp?.personas ?? []), fit: calcularFit(evidencias), evidencias,
+      sinais: [...(conta?.sinais ?? []), ...sinaisEncontrados(conteudo, icp?.sinais ?? [], item.url, resultado.consultadoEm)],
+      hipotese: null, status: "pesquisado", noCRM: false, demo: resultado.demo });
     criados++;
   }
 }
@@ -908,12 +792,12 @@ async function etapaEncontrarPessoas(prospeccaoId: string, modo: ModoProspeccao,
   }
   if (modo === "pessoas") {
     if (jornada === "b2b") await buscarPessoasReais(prospeccaoId, criterios, icp, produtoId);
-    else await buscarPessoasB2C(prospeccaoId, criterios, icp, produtoId);
+    else await buscarPessoasB2C(prospeccaoId, criterios, icp);
     return;
   }
   // modo === "oportunidades" (único caso restante)
   if (jornada === "b2b") await buscarPessoasOportunidadesEmpresas(prospeccaoId, produtoId, icp?.personas ?? []);
-  else await buscarPessoasOportunidadesB2C(prospeccaoId, criterios, icp, produtoId);
+  else await buscarPessoasOportunidadesB2C(prospeccaoId, criterios, icp);
 }
 
 /** Etapa 5: promove os leads recém-criados de "pesquisado" para "qualificado" (fit/evidências já vêm
@@ -927,7 +811,7 @@ async function etapaQualificar(prospeccaoId: string, icp: ICP | null): Promise<v
   const jornada: Jornada = icp?.jornada ?? "b2b";
   for (const lead of listarLeads(prospeccaoId)) {
     const hipotese = await gerarHipoteseDor(lead.sinais, dores, jornada);
-    const status = lead.status === "pesquisado" ? "qualificado" : lead.status;
+    const status = lead.status === "pesquisado" && lead.evidencias.length > 0 && lead.evidencias.every(e => e.resultado === "atende") ? "qualificado" : lead.status;
     atualizarLead(lead.id, { status, hipotese });
   }
 }
@@ -976,13 +860,10 @@ export function criarProspeccaoValidada(dados: { produtoId: string; icpId: strin
   return { ok: true, prospeccao };
 }
 
-/** Estado gravado pelo momento em que a checagem ocorre (nunca cacheado): uma "Cancelar" (US-014) só tem
- * efeito de verdade quando chega ENTRE duas etapas — hoje o pipeline inteiro roda no mesmo tick (nenhuma
- * etapa faz I/O real, ver comentário de topo), então na prática a checagem quase nunca encontra
- * "cancelada" a tempo; ela existe para o momento em que a US-015 trouxer I/O de rede de verdade entre as
- * etapas, e é o que faz um cancelamento não reverter para "pronta"/apagar o que já foi encontrado. */
+/** Relê o estado antes de novas etapas e gravações. Cancelamento, exclusão ou encerramento
+ * impedem que uma resposta tardia retome a execução e recrie resultados. */
 function foiCancelada(prospeccaoId: string): boolean {
-  return obterProspeccao(prospeccaoId)?.estado === "cancelada";
+  return obterProspeccao(prospeccaoId)?.estado !== "executando";
 }
 
 /** Exportada para a rotina "Oportunidades novas" (US-040, lib/rotinas-do-app.ts) poder AGUARDAR o
@@ -1001,24 +882,31 @@ export async function executarPipeline(prospeccaoId: string): Promise<void> {
     obterProduto(prospeccao.produtoId);
     const icp = obterICP(prospeccao.icpId);
     const jornada: Jornada = icp?.jornada ?? "b2b";
+    const etapasAtivas = etapasDaProspeccao(prospeccao.modo, jornada);
 
     // Etapa 2: procurando empresas compatíveis.
     if (foiCancelada(prospeccaoId)) return;
-    rotuloEtapaAtual = ETAPAS_PROSPECCAO[1].rotulo;
-    atualizarProspeccao(prospeccaoId, { etapa: ETAPAS_PROSPECCAO[1].chave });
-    await etapaProcurarEmpresas(prospeccaoId, prospeccao.modo, jornada, prospeccao.criterios, icp);
+    if (etapasAtivas.includes(ETAPAS_PROSPECCAO[1])) {
+      rotuloEtapaAtual = ETAPAS_PROSPECCAO[1].rotulo;
+      atualizarProspeccao(prospeccaoId, { etapa: ETAPAS_PROSPECCAO[1].chave });
+      await etapaProcurarEmpresas(prospeccaoId, prospeccao.modo, jornada, prospeccao.criterios, icp);
+    }
 
-    // Etapa 3: analisando sinais públicos (sem persistência, ver comentário de topo).
+    // Etapa 3: pesquisa complementar de sinais públicos com origem e data.
     if (foiCancelada(prospeccaoId)) return;
-    rotuloEtapaAtual = ETAPAS_PROSPECCAO[2].rotulo;
-    atualizarProspeccao(prospeccaoId, { etapa: ETAPAS_PROSPECCAO[2].chave });
-    analisarSinais(prospeccao.criterios, icp);
+    if (etapasAtivas.includes(ETAPAS_PROSPECCAO[2])) {
+      rotuloEtapaAtual = ETAPAS_PROSPECCAO[2].rotulo;
+      atualizarProspeccao(prospeccaoId, { etapa: ETAPAS_PROSPECCAO[2].chave });
+      await analisarSinais(prospeccaoId, prospeccao.criterios, icp);
+    }
 
     // Etapa 4: encontrando pessoas-chave (não roda em "empresas" puro).
     if (foiCancelada(prospeccaoId)) return;
-    rotuloEtapaAtual = ETAPAS_PROSPECCAO[3].rotulo;
-    atualizarProspeccao(prospeccaoId, { etapa: ETAPAS_PROSPECCAO[3].chave });
-    if (deveCriarPessoas(prospeccao.modo)) await etapaEncontrarPessoas(prospeccaoId, prospeccao.modo, jornada, prospeccao.criterios, prospeccao.produtoId, icp);
+    if (deveCriarPessoas(prospeccao.modo)) {
+      rotuloEtapaAtual = ETAPAS_PROSPECCAO[3].rotulo;
+      atualizarProspeccao(prospeccaoId, { etapa: ETAPAS_PROSPECCAO[3].chave });
+      await etapaEncontrarPessoas(prospeccaoId, prospeccao.modo, jornada, prospeccao.criterios, prospeccao.produtoId, icp);
+    }
 
     // Etapa 5: qualificando oportunidades.
     if (foiCancelada(prospeccaoId)) return;
@@ -1029,10 +917,11 @@ export async function executarPipeline(prospeccaoId: string): Promise<void> {
     if (foiCancelada(prospeccaoId)) return;
     const consultas = consultasDaProspeccao(prospeccaoId);
     const falhas = consultas.filter(c => c.estado === "falhou" || c.estado === "limite");
+    const pendentes = consultas.some(c => c.estado === "pendente");
     const temResultados = listarContas(prospeccaoId).length > 0 || listarLeads(prospeccaoId).length > 0;
     atualizarProspeccao(prospeccaoId, {
       estado: !temResultados && falhas.length ? "falhou" : "pronta",
-      erro: falhas.length ? (temResultados ? "Algumas fontes não responderam; mantivemos os resultados encontrados. Confira as fontes consultadas abaixo." : "Não foi possível concluir a busca em todas as fontes. Confira as conexões e tente novamente.") : null,
+      erro: pendentes ? "O ProspectHalo ainda está qualificando candidatos. Consulte novamente com os mesmos critérios para recuperar a busca em andamento. Os resultados disponíveis foram mantidos." : falhas.length ? (temResultados ? "Algumas fontes não responderam; mantivemos os resultados encontrados. Confira as fontes consultadas abaixo." : "Não foi possível concluir a busca em todas as fontes. Confira as conexões e tente novamente.") : null,
       concluidoEm: new Date().toISOString(),
     });
   } catch (err) {
@@ -1054,7 +943,7 @@ export async function executarPipeline(prospeccaoId: string): Promise<void> {
     }
     atualizarProspeccao(prospeccaoId, {
       estado: listarContas(prospeccaoId).length || listarLeads(prospeccaoId).length ? "pronta" : "falhou",
-      erro: err instanceof ErroDescoberta || err instanceof ErroApollo ? err.message : `Não foi possível concluir a etapa "${rotuloEtapaAtual}"; os resultados encontrados até aqui foram mantidos.`,
+      erro: err instanceof ErroDescoberta || err instanceof ErroProspectHalo ? err.message : `Não foi possível concluir a etapa "${rotuloEtapaAtual}"; os resultados encontrados até aqui foram mantidos.`,
       concluidoEm: new Date().toISOString(),
     });
   }

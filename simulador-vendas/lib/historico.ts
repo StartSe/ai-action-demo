@@ -1,11 +1,8 @@
 // Histórico de resultados gerados, para reabrir por link (/r/[id]) ou imprimir (/imprimir/[id]).
 // Usa o mesmo arquivo SQLite de lib/store.ts, em uma tabela própria.
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
+import { abrirBanco } from "./store";
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
-
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 let db: DatabaseSync | null = null;
 
 /** Quando true, a rota que salva só deve gravar com opt-in explícito (guardar: true) e por prazo limitado; ver components/ui.tsx OptInGuardar. Vem de lib/sensivel.ts (sem node:sqlite) para poder ser importado também por Client Components. */
@@ -13,9 +10,8 @@ export { SENSIVEL } from "./sensivel";
 
 function abrir(): DatabaseSync {
   if (db) return db;
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  db = new DatabaseSync(path.join(DATA_DIR, "app.sqlite"));
-  db.exec(`CREATE TABLE IF NOT EXISTS resultados (
+  const d = abrirBanco();
+  d.exec(`CREATE TABLE IF NOT EXISTS resultados (
     id TEXT PRIMARY KEY,
     tipo TEXT NOT NULL,
     titulo TEXT NOT NULL DEFAULT '',
@@ -27,8 +23,9 @@ function abrir(): DatabaseSync {
     expiraEm TEXT NULL
   )`);
   // Migração de bancos criados antes da coluna existir (ver app/historico/page.tsx); ignora o erro quando a coluna já existe.
-  try { db.exec(`ALTER TABLE resultados ADD COLUMN resumo TEXT NOT NULL DEFAULT ''`); } catch { /* coluna já existe */ }
-  return db;
+  try { d.exec(`ALTER TABLE resultados ADD COLUMN resumo TEXT NOT NULL DEFAULT ''`); }
+  catch (err) { if (!(err instanceof Error) || !err.message.includes("duplicate column name")) throw err; }
+  return db = d;
 }
 
 export type Resultado<Entrada = unknown, Saida = unknown, Meta = unknown> = {

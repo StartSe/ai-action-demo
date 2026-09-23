@@ -2,8 +2,7 @@
 // mesmo (sem arquivo no repositório e sem dependência nova) e manda ao modelo escolhido. Se ele responder,
 // o modelo lê imagens; se recusar, `lerCaptura` já devolve a frase certa com o botão para trocar o modelo.
 import { deflateSync } from "node:zlib";
-import { ErroIA } from "./ai";
-import { lerCaptura } from "./gerador";
+import { ErroIA, askVision } from "./ai";
 
 const LADO = 48;
 /** Verde escuro à esquerda, branco à direita: uma divisão que qualquer modelo com visão descreve. */
@@ -58,7 +57,7 @@ export function pngDeTeste(): string {
 /** Manda o PNG ao modelo escolhido e devolve a frase que o cartão de /setup exibe. */
 export async function testarLeituraDeImagem(): Promise<{ ok: boolean; mensagem: string }> {
   try {
-    const resposta = await lerCaptura({
+    const resposta = await askVision({
       system: "Você descreve imagens em poucas palavras, em português do Brasil.",
       prompt: "Responda em no máximo cinco palavras: o que aparece nesta imagem?",
       imagem: pngDeTeste(),

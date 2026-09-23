@@ -1,6 +1,8 @@
-# Build Agentflows — v0.7.0
+# Build Agentflows — v0.8.1
 
 Crie fluxos visuais de agentes de IA, teste cada etapa e publique versões que seus sistemas e assistentes podem executar. Aplicação independente da suíte **IA para Executivos**, inspirada na orquestração explícita de [AgentFlow V2 do Flowise](https://docs.flowiseai.com/using-flowise/agentflowv2).
+
+Correção da versão 0.8.1: os botões de enviar mensagem e iniciar conversa por voz permanecem visíveis lado a lado, inclusive com o campo vazio. A dica “Enter para enviar” foi removida; os atalhos Enter e Shift+Enter continuam funcionando.
 
 ## O que resolve
 
@@ -20,7 +22,7 @@ A tela **Configurações** reúne o que os agentes podem usar:
 - **OpenRouter**: conexão em um clique (OAuth PKCE) com mais de 500 modelos de 80 provedores, mais a opção "Automático · OpenRouter" (o OpenRouter escolhe o modelo). O modelo é escolhido bloco a bloco; um bloco em "Automático · ChatGPT" nunca cai para o OpenRouter, e vice-versa. O gerador de fluxos usa o OpenRouter só quando o ChatGPT não está conectado.
 - **Ferramentas no Agente** (catálogo no espírito do Flowise): busca na web (Tavily, SearchApi, Exa, Serper, SerpApi, Brave, Google Custom Search, SearXNG), conhecimento (arXiv, Wolfram Alpha), web e dados (ler página, requisição HTTP sem endereços internos, extrair JSON), utilidades (data e hora, calculadora) e fluxos (executar outro fluxo publicado). WhatsApp e ligações não são ferramentas do Agente: entram no fluxo completo por Implantar. As que precisam de chave pedem a credencial ali mesmo, uma vez para todos os fluxos. Servidores MCP nomeados são gerenciados dentro do Agente: adicionar, editar, autorizar, testar e remover. As ferramentas saíram da tela Configurações.
 - **WhatsApp**: Z-API (QR Code), Meta oficial ou ZapperHub, conectados em Configurações. Z-API e ZapperHub exigem aceite dos termos com a marca StartSe, registrado por provedor, versão e data; a API recusa a gravação sem aceite e conexões antigas precisam aceitar antes de enviar ou processar mensagens. Meta oficial não exige esse aceite. Cada fluxo é vinculado ao número em **Implantar › WhatsApp**: mensagens recebidas em `/webhook/whatsapp?chave=…` executam o fluxo vinculado e a resposta volta pelo mesmo número; o endereço de avisos é cadastrado no provedor ao salvar (na Meta é colado no painel, com a mesma chave como valor de verificação).
-- **ElevenLabs**: só a chave em Configurações. No chat de teste: falar em vez de digitar (transcrição) e ouvir as respostas com a voz escolhida por fluxo. Ligações por voz ficam em **Implantar › Ligações**: agente de conversa, número, segredo do aviso, vínculo do fluxo que recebe a transcrição (aviso assinado em `/webhook/elevenlabs`) e "Ligar agora" para prospecção ativa.
+- **ElevenLabs**: só a chave em Configurações. No chat de teste: ditado e conversa contínua por voz; a voz é escolhida nas configurações do fluxo, pelo título no cabeçalho. Ligações por voz ficam em **Implantar › Ligações**: agente de conversa, número, segredo do aviso, vínculo do fluxo que recebe a transcrição (aviso assinado em `/webhook/elevenlabs`) e "Ligar agora" para prospecção ativa.
 
 ## Stack
 
@@ -178,3 +180,22 @@ A antiga tela Conexões passa a se chamar **Configurações**, em `/configuracoe
 Contratos: [imagens e modalidades no Codex App Server](https://learn.chatgpt.com/docs/app-server), [imagens no OpenRouter](https://openrouter.ai/docs/guides/overview/multimodal/image-understanding) e [modalidades do catálogo OpenRouter](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties).
 
 Validação da versão: 73 testes automatizados, lint, build de produção e verificadores de padrão/jargão. Navegação em desktop, celular e tema escuro com clique externo/Esc, rascunhos, upload real, prévias, colagem, arrastar/soltar, recusa de imagem incompatível e recuperação de falha no envio. O servidor standalone foi verificado com autenticação, PDF, download privado, arquivo de 10 MB, rejeição de excesso e vínculo de anexo entre fluxos. As respostas dos provedores foram controladas; nenhuma conta paga foi usada.
+
+## Conversa por voz (0.8.0)
+
+O compositor deixa de exibir o aviso permanente dos limites de anexos, o nome do provedor no rodapé e a opção **Ouvir respostas**. As regras de anexos e modelos compatíveis continuam sendo validadas; erros aparecem quando necessários. O botão com ondas inicia a conversa por voz; o microfone separado mantém o ditado de uma mensagem para revisão antes de enviar.
+
+1. Conecte um modelo de IA e a ElevenLabs em **Configurações**.
+2. Clique no título do fluxo para abrir **Configurações do fluxo**. Escolha a **Voz do fluxo** e salve. A escolha fica no servidor, acompanha duplicação/exportação/importação e vale ao reabrir em outro navegador. A preferência antiga do navegador é recuperada, quando disponível, até ser salva no fluxo.
+3. Abra o chat, pressione **Iniciar conversa por voz** e permita o microfone. Fale normalmente e faça uma pausa de cerca de um segundo: o áudio é transcrito, executa o fluxo escolhido e a resposta é falada. Ao terminar, o app volta a ouvir automaticamente. É possível digitar durante a conversa.
+4. Use o microfone para silenciar/reativar a captura. Fale durante a resposta ou toque na esfera para interromper a fala; o botão de fechar encerra a conversa. Fechar o chat, pressionar Esc, sair da página ou deixar a aba oculta também libera o microfone e interrompe a reprodução. Nunca há retomada automática do microfone ao reabrir.
+
+A esfera acompanha a atividade e mostra escuta, processamento, resposta, silenciamento e erros. Se o fluxo exigir aprovação humana, a voz pausa e apresenta **Voltar ao chat para aprovar**; nenhuma aprovação é inferida da fala. Uma falha de envio preserva o texto reconhecido para nova tentativa. Encerrar a voz não desfaz ações de uma execução já iniciada: ela continua registrada no histórico, mas sua resposta não será falada após o encerramento.
+
+Cada mensagem falada continua executando os blocos e ferramentas do próprio fluxo, com o provedor escolhido por bloco. A conversa inclui as últimas seis execuções reais concluídas desta sessão, exclusivamente do mesmo fluxo, para perguntas de continuidade. O contexto é limitado a 1.000 caracteres da pergunta e 4.000 da resposta por troca, com indicação de corte; o pedido atual permanece separado e o contexto usado é registrado na execução. Conversas digitadas fora do modo de voz mantêm o comportamento anterior.
+
+A captura usa MediaRecorder e Web Audio, com cancelamento de eco e supressão de ruído solicitados ao navegador. A pausa dispara a transcrição ElevenLabs; depois vêm a execução do fluxo e a síntese da resposta, em trechos para não cortar respostas longas. É uma conversa automática por turnos: a latência depende dessas etapas, sem substituir o fluxo por um agente externo. Cada fala tem até 45 segundos; ao atingir esse tempo, o trecho capturado é enviado para análise e a escuta retorna após a resposta. Áudio bruto é transitório; perguntas e respostas permanecem no histórico. O uso de transcrição e fala segue a conta ElevenLabs conectada.
+
+O microfone exige HTTPS (ou localhost), permissão e suporte do navegador a MediaRecorder/Web Audio. A detecção de pausa e a interrupção por voz dependem do microfone, do ruído ambiente e do cancelamento de eco do navegador; tocar na esfera oferece interrupção direta. Referências: [captura e permissão no navegador](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia), [formatos de gravação](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/isTypeSupported_static) e [transcrição ElevenLabs](https://elevenlabs.io/docs/api-reference/speech-to-text/convert).
+
+Validação da versão: 85 testes automatizados, lint, build e verificadores de padrão/jargão. Playwright em desktop, celular e tema escuro, usando MediaRecorder/Web Audio reais com entrada sintética: vários turnos, contexto, voz salva, pausa, silenciamento, interrupção por fala/toque, clique externo/Esc, permissão negada ou concedida tarde, resposta tardia, falha de execução e de síntese. As respostas de IA e ElevenLabs foram controladas; não houve uso de contas pagas nem gravação do microfone da pessoa.

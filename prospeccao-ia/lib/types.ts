@@ -1,4 +1,4 @@
-export type Fonte = "apollo" | "demo";
+export type Fonte = "apollo" | "prospecthalo" | "pesquisa" | "demo";
 
 export interface DadosBusca {
   segmento: string;
@@ -35,6 +35,7 @@ export interface Abordagem {
 }
 
 export interface ResultadoBusca {
+  avisos?: string[];
   fonte: Fonte;
   leads: Lead[];
   /** Abordagens já escritas para esses leads (rotina "leads novos toda semana"); ausente numa busca manual comum. */
@@ -53,7 +54,7 @@ export type EstadoProspeccao = "rascunho" | "executando" | "pronta" | "falhou" |
 export type Papel = "decisor" | "influenciador" | "champion" | "desconhecido";
 export type StatusLead = "novo" | "pesquisado" | "qualificado" | "selecionado" | "abordado" | "respondeu" | "descartado";
 /** Direção de "Regenerar" (US-031): reescreve só a mensagem do canal aberto na tela, nunca a estratégia. */
-export type DirecaoRegeneracao = "mais_curto" | "mais_executivo" | "mais_consultivo" | "sem_pitch" | "outro_sinal" | "outra_abordagem";
+export type DirecaoRegeneracao = "mais_personalizado" | "mais_curto" | "mais_executivo" | "mais_consultivo" | "sem_pitch" | "outro_sinal" | "outra_abordagem";
 /** Motivo do descarte (US-034), lista curta em vez de texto livre — pedido junto com `status: "descartado"`. */
 export type MotivoDescarte = "fora_do_perfil" | "sem_sinal" | "ja_e_cliente" | "outro";
 
@@ -135,12 +136,13 @@ export interface Prospeccao {
   criterios: Record<string, unknown>;
   estado: EstadoProspeccao;
   etapa: string | null;
+  temposEtapas?: import("./andamento-prospeccao").TemposEtapas;
   erro: string | null;
   demo: boolean;
   criadoEm: string;
   concluidoEm: string | null;
 }
-export type NovaProspeccao = Omit<Prospeccao, "id" | "criadoEm" | "concluidoEm" | "demo"> & { concluidoEm?: string | null; demo?: boolean };
+export type NovaProspeccao = Omit<Prospeccao, "id" | "criadoEm" | "concluidoEm" | "demo" | "temposEtapas"> & { concluidoEm?: string | null; demo?: boolean };
 
 /** Conta = empresa descoberta numa prospecção B2B (nome próprio para não colidir com a conta de administrador de lib/conta.ts). */
 export interface Conta {
@@ -163,6 +165,10 @@ export type NovaConta = Omit<Conta, "id" | "criadoEm" | "atualizadoEm" | "demo">
 
 /** Pessoa descoberta numa prospecção (nome próprio para não colidir com o Lead de lib/types.ts usado pelas rotas antigas). */
 export interface LeadProspeccao {
+  resumoProfissional?: string | null;
+  pesquisadoEm?: string | null;
+  qualidadeDados?: number;
+  avatarUrl?: string | null;
   id: string;
   prospeccaoId: string;
   contaId: string | null;

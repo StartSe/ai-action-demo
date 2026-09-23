@@ -9,8 +9,9 @@ export async function register() {
     listarRadares(); // Migra vínculos antes de iniciar agendas antigas.
     await import("@/lib/rotinas-do-app");
     const { executarVencidas } = await import("@/lib/rotinas");
-    setInterval(() => {
-      executarVencidas().catch((err) => console.error("Falha ao executar rotinas vencidas", err));
-    }, 60_000);
+    const { sincronizarAgendas } = await import("@/lib/agendas-radar");
+    const atualizar = async () => { await sincronizarAgendas(); await executarVencidas(); };
+    void atualizar().catch(err => console.error("Falha ao iniciar monitoramento", err));
+    setInterval(() => { void atualizar().catch(err => console.error("Falha ao executar rotinas vencidas", err)); }, 60_000).unref();
   }
 }

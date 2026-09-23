@@ -29,7 +29,7 @@ async function chamar(caminho: string, init: RequestInit = {}): Promise<Response
     r = await fetch(`${BASE}${caminho}`, {
       ...init,
       headers: { "xi-api-key": k, ...(init.headers || {}) },
-      signal: AbortSignal.timeout(60000),
+      signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(60000)]) : AbortSignal.timeout(60000),
     });
   } catch {
     throw new FlowError("Não foi possível falar com a ElevenLabs agora.", 503);
@@ -48,25 +48,27 @@ export async function vozes(): Promise<{ id: string; nome: string }[]> {
   const d = (await r.json()) as { voices?: { voice_id: string; name: string }[] };
   return (d.voices || []).map((v) => ({ id: v.voice_id, nome: v.name }));
 }
-export async function falar(texto: string, vozEscolhida?: string): Promise<ArrayBuffer> {
+export async function falar(texto: string, vozEscolhida?: string, signal?: AbortSignal): Promise<ArrayBuffer> {
   const t = texto.trim().slice(0, 2500);
   if (!t) throw new FlowError("Nada para falar.");
   const voz = (vozEscolhida || "").replace(/[^a-zA-Z0-9_-]/g, "") || getConfig("ELEVENLABS_VOICE_ID") || VOZ_PADRAO;
   const r = await chamar(`/text-to-speech/${encodeURIComponent(voz)}?output_format=mp3_44100_128`, {
     method: "POST",
+    signal,
     headers: { "Content-Type": "application/json", accept: "audio/mpeg" },
     body: JSON.stringify({ text: t, model_id: MODELO_FALA }),
   });
   return r.arrayBuffer();
 }
-export async function transcrever(audio: Blob): Promise<string> {
+export async function transcrever(audio: Blob, signal?: AbortSignal): Promise<string> {
   if (!audio.size) throw new FlowError("Nenhum áudio recebido.");
   if (audio.size > 15_000_000) throw new FlowError("Áudio grande demais (máximo 15 MB).");
   const form = new FormData();
   form.set("model_id", MODELO_TRANSCRICAO);
   form.set("language_code", "por");
-  form.set("file", audio, "audio.webm");
-  const r = await chamar("/speech-to-text", { method: "POST", body: form });
+  const ext = audio.type.includes("mp4") ? "m4a" : audio.type.includes("ogg") ? "ogg" : audio.type.includes("wav") ? "wav" : "webm";
+  form.set("file", audio, `audio.${ext}`);
+  const r = await chamar("/speech-to-text", { method: "POST", body: form, signal });
   const d = (await r.json()) as { text?: string };
   return (d.text || "").trim();
 }

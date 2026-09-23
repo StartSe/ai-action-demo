@@ -13,6 +13,8 @@
 // gestor, nota ou avaliação. Quem não tem microfone (ou não quer usá-lo) entra na conversa digitando —
 // o caminho por escrito nunca some.
 import { useEffect, useRef, useState } from "react";
+import { AVISO_AMBIENTE } from "@/lib/avisos-entrevista";
+import { dataDoPrazo } from "@/lib/prazo-convite";
 
 /** O que o teste de microfone descobriu sobre este navegador. */
 type Fase = "convite" | "pedindo" | "ouvindo" | "ouviu" | "sem-escuta" | "sem-permissao";
@@ -27,6 +29,8 @@ export function BoasVindas({
   primeiroNome,
   cargo,
   duracaoMin,
+  iniciaEm,
+  expiraEm,
   onPronto,
   livekit = false,
 }: {
@@ -38,6 +42,8 @@ export function BoasVindas({
   primeiroNome: string;
   cargo: string;
   duracaoMin: number;
+  iniciaEm?: string;
+  expiraEm?: string;
   /** A conversa pode começar. `porVoz` é falso quando o navegador não escuta ou o microfone foi negado. */
   onPronto: (opcoes: { porVoz: boolean }) => void;
 }) {
@@ -192,6 +198,13 @@ export function BoasVindas({
         <p className="text-muted mb-5">
           {`Esta é a sua conversa sobre a vaga de ${cargo}. Leva cerca de ${duracaoMin} minutos e você pode fazer agora, do celular ou do computador.`}
         </p>
+
+        {iniciaEm && expiraEm && <p className="text-sm text-muted mb-5">Período da entrevista: de {dataDoPrazo(iniciaEm)} até {dataDoPrazo(expiraEm)} (horário de Brasília).</p>}
+        <div className="rounded-field border border-line bg-bg p-4 mb-5 text-sm">
+          <p className="font-semibold mb-1">Prepare-se para a entrevista</p>
+          <p>{AVISO_AMBIENTE}</p>
+          <p className="mt-2">Reserve cerca de {duracaoMin} minutos. Ao encerrar, você não poderá iniciar a entrevista novamente.</p>
+        </div>
 
         <ul className="flex flex-col gap-2 mb-5 text-[14.5px]">
           <li className="flex gap-2.5">

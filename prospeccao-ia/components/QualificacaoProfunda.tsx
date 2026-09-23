@@ -1,11 +1,14 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Aviso } from "./ui";
 import { ETAPAS_QUALIFICACAO, type QualificacaoProfunda as Pesquisa } from "@/lib/qualificacao-profunda-tipos";
 import type { StatusLead } from "@/lib/types";
 
-export function QualificacaoProfunda({ leadId, status, aoQualificar }: { leadId: string; status: StatusLead; aoQualificar: () => Promise<void> }) {
+export function QualificacaoProfunda({ leadId, status, aoQualificar, aoDadosAtualizados }: { aoDadosAtualizados?: () => void; leadId: string; status: StatusLead; aoQualificar: () => Promise<void> }) {
+  const aoAtualizar = useRef(aoDadosAtualizados);
+  const ultimaAtualizacao = useRef("");
+  useEffect(() => { aoAtualizar.current = aoDadosAtualizados; }, [aoDadosAtualizados]);
   const [pesquisa, setPesquisa] = useState<Pesquisa | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [iniciando, setIniciando] = useState(false);
@@ -22,6 +25,9 @@ export function QualificacaoProfunda({ leadId, status, aoQualificar }: { leadId:
         if (!r.ok) throw new Error("Não foi possível carregar a pesquisa complementar.");
         const dados = await r.json();
         if (ativo) {
+          if (dados.qualificacao && dados.qualificacao.estado !== "executando" && ultimaAtualizacao.current !== dados.qualificacao.atualizadoEm) {
+            ultimaAtualizacao.current = dados.qualificacao.atualizadoEm; aoAtualizar.current?.();
+          }
           setPesquisa(dados.qualificacao); setCarregando(false); setErro(null);
           // Continua acompanhando também quando outro fluxo marca o lead como qualificado.
           timer = setTimeout(consultar, dados.qualificacao?.estado === "executando" ? 1500 : 8000);

@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Recognition and speech synthesis are browser boundaries. The real library, React UI,
+// Recognition and speech synthesis are browser boundaries. The real hook, React UI,
 // persistence, session cookies and routes run unchanged against a temporary SQLite database.
-async function instalarVoz(page: Page, permission = true) {
-  await page.addInitScript(({ permission }) => {
+async function instalarVoz(page: Page, permission = true, inicioAutomatico = true) {
+  await page.addInitScript(({ permission, inicioAutomatico }) => {
     const w = window as unknown as { mockRecognition: MockRecognition; speechCount: number; speechFinish: () => void };
     class MockRecognition {
       continuous = false;
@@ -12,11 +12,13 @@ async function instalarVoz(page: Page, permission = true) {
       onresult?: (event: unknown) => void;
       onend?: () => void;
       onerror?: (event: unknown) => void;
+      onstart?: () => void;
       active = false;
       start() {
         w.mockRecognition = this;
         this.active = true;
         if (!permission) setTimeout(() => { this.onerror?.({ error: "not-allowed" }); this.active = false; this.onend?.(); }, 20);
+        else if (inicioAutomatico) setTimeout(() => this.onstart?.(), 20);
       }
       stop() { this.active = false; setTimeout(() => this.onend?.(), 10); }
       abort() { this.stop(); }
@@ -33,7 +35,7 @@ async function instalarVoz(page: Page, permission = true) {
       speak: (utterance: SpeechSynthesisUtterance) => { w.speechCount++; w.speechFinish = () => utterance.onend?.({} as SpeechSynthesisEvent); },
       cancel: () => {},
     }, configurable: true });
-  }, { permission });
+  }, { permission, inicioAutomatico });
 }
 async function abrirSala(page: Page) {
   const lista = await (await page.request.get("/api/simulacoes")).json();
@@ -48,6 +50,109 @@ async function abrirSala(page: Page) {
 async function falar(page: Page, text: string) {
   await page.evaluate(text => (window as unknown as { mockRecognition: { say: (text: string) => void } }).mockRecognition.say(text), text);
 }
+
+test("só anuncia escuta depois que o navegador inicia o reconhecimento", async ({ page }) => {
+  await instalarVoz(page, true, false);
+  await abrirSala(page);
+  await page.getByRole("button", { name: "Iniciar microfone", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Conectando microfone…");
+  await page.evaluate(() => (window as unknown as { mockRecognition: { onstart: () => void } }).mockRecognition.onstart());
+  await expect(page.getByRole("status")).toHaveText("Estou ouvindo você");
+  await falar(page, "Bom dia, como posso ajudar sua empresa?");
+  await expect(page.getByRole("button", { name: "Interromper e falar" })).toBeVisible();
+});
+
+test("erro de rede do reconhecimento sai da falsa escuta e permite voltar a conversar por voz", async ({ page }) => {
+  await instalarVoz(page);
+  await abrirSala(page);
+  await page.getByRole("button", { name: "Iniciar microfone", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Estou ouvindo você");
+  await page.evaluate(() => (window as unknown as { mockRecognition: { onerror: (e: unknown) => void } }).mockRecognition.onerror({ error: "network" }));
+  await expect(page.getByText(/serviço de reconhecimento de fala/)).toBeVisible();
+  await expect(page.getByLabel("Sua mensagem")).toBeVisible();
+  await page.getByRole("button", { name: "Voltar à voz" }).click();
+  await page.getByRole("button", { name: "Iniciar microfone", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Estou ouvindo você");
+  await falar(page, "Podemos conversar sobre as necessidades da sua empresa?");
+  await expect(page.getByRole("button", { name: "Interromper e falar" })).toBeVisible();
+});
+
+test("resultados finais consecutivos preservam toda a fala e a segunda interação", async ({ page }) => {
+  await instalarVoz(page);
+  await abrirSala(page);
+  await page.getByRole("button", { name: "Iniciar microfone", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Estou ouvindo você");
+  await page.evaluate(() => {
+    const rec = (window as unknown as { mockRecognition: { onresult: (e: unknown) => void } }).mockRecognition;
+    const primeira = Object.assign([{ transcript: "Bom dia.", confidence: 1 }], { isFinal: true });
+    const segunda = Object.assign([{ transcript: "Como funciona o seu processo de vendas?", confidence: 1 }], { isFinal: true });
+    rec.onresult({ resultIndex: 0, results: [primeira] });
+    rec.onresult({ resultIndex: 1, results: [primeira, segunda] });
+  });
+  const primeiro = await page.waitForRequest(r => r.url().endsWith("/conversar"));
+  expect(primeiro.postDataJSON().fala).toBe("Bom dia. Como funciona o seu processo de vendas?");
+  await page.getByRole("button", { name: "Interromper e falar" }).click();
+  await expect(page.getByRole("status")).toHaveText("Estou ouvindo você");
+  const segundo = page.waitForRequest(r => r.url().endsWith("/conversar"));
+  await falar(page, "Qual é o maior desafio do seu time?");
+  expect((await segundo).postDataJSON().fala).toBe("Qual é o maior desafio do seu time?");
+  await expect(page.getByRole("button", { name: "Interromper e falar" })).toBeVisible();
+});
+
+test("reconhecimento que não inicia tem prazo e libera a conversa por texto", async ({ page }) => {
+  await instalarVoz(page, true, false);
+  await abrirSala(page);
+  await page.clock.install();
+  await page.getByRole("button", { name: "Iniciar microfone", exact: true }).click();
+  await page.clock.runFor(11000);
+  await expect(page.getByText(/serviço de reconhecimento de fala não iniciou/)).toBeVisible();
+  await page.getByLabel("Sua mensagem").fill("Bom dia, podemos conversar?");
+  await page.getByRole("button", { name: "Enviar", exact: true }).click();
+  await expect(page.getByText(/Oi, tudo bem\?/).first()).toBeVisible();
+});
+
+test("pausar durante a permissão não ativa o microfone ao chegar confirmação atrasada", async ({ page }) => {
+  await instalarVoz(page, true, false);
+  await abrirSala(page);
+  await page.getByRole("button", { name: "Iniciar microfone", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Conectando microfone…");
+  await page.getByRole("button", { name: "Pausar microfone" }).click();
+  await page.evaluate(() => (window as unknown as { mockRecognition: { onstart?: () => void } }).mockRecognition.onstart?.());
+  await expect(page.getByRole("status")).toHaveText("Microfone pausado");
+  expect(await page.evaluate(() => (window as unknown as { mockRecognition: { active: boolean } }).mockRecognition.active)).toBe(false);
+  await expect(page.getByLabel("Sua mensagem")).toHaveCount(0);
+});
+
+test("parada sem evento final do navegador não deixa o envio preso", async ({ page }) => {
+  await instalarVoz(page);
+  await abrirSala(page);
+  await page.getByRole("button", { name: "Iniciar microfone", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Estou ouvindo você");
+  await falar(page, "Como posso ajudar seu time?");
+  await page.evaluate(() => { (window as unknown as { mockRecognition: { stop: () => void } }).mockRecognition.stop = () => {}; });
+  await page.getByRole("button", { name: "Enviar fala agora" }).click();
+  await expect(page.getByRole("button", { name: "Interromper e falar" })).toBeVisible();
+});
+
+test("reiniciar enquanto uma abertura cancelada termina preserva a nova escuta", async ({ page }) => {
+  await instalarVoz(page, true, false);
+  await abrirSala(page);
+  await page.getByRole("button", { name: "Iniciar microfone", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Conectando microfone…");
+  await page.evaluate(() => {
+    const rec = (window as unknown as { mockRecognition: { abort: () => void; onend?: () => void } }).mockRecognition;
+    rec.abort = () => { setTimeout(() => rec.onend?.(), 500); };
+  });
+  await page.getByRole("button", { name: "Pausar microfone" }).click();
+  await page.getByRole("button", { name: "Iniciar microfone", exact: true }).click();
+  await page.waitForFunction(() => Boolean((window as unknown as { mockRecognition: { onstart?: () => void; onend?: () => void } }).mockRecognition.onend));
+  // O segundo reconhecimento nasce depois do fim do primeiro.
+  await page.waitForFunction(() => !Object.hasOwn((window as unknown as { mockRecognition: object }).mockRecognition, "abort"));
+  await page.evaluate(() => (window as unknown as { mockRecognition: { onstart: () => void } }).mockRecognition.onstart());
+  await expect(page.getByRole("status")).toHaveText("Estou ouvindo você");
+  await falar(page, "Bom dia, podemos conversar?");
+  await expect(page.getByRole("button", { name: "Interromper e falar" })).toBeVisible();
+});
 
 test("configuração oferece voz, sem agentes ou notificações; endpoints antigos não enviam", async ({ page }) => {
   await page.goto("/setup");
@@ -169,9 +274,15 @@ test("dica curta acompanha a fala, persiste ao recarregar e feedback entrega pla
   const dica = page.getByLabel("Orientação do treino");
   await expect(dica).toContainText("Reconheça o tempo curto");
   await page.screenshot({ path: "test-results/conversa-dica.png", fullPage: true, animations: "disabled" });
-  const primeira = await dica.textContent();
+  await expect(dica).toContainText("Boa pergunta para entender o cliente");
+  await page.getByLabel("Sua mensagem").fill("Qual é o maior desafio do seu time?");
+  await page.getByLabel("Sua mensagem").press("Enter");
+  await expect(dica.locator("p")).toContainText("Retome um ponto");
+  await expect(dica).not.toContainText("Boa pergunta para entender o cliente");
+  const primeira = await dica.locator("p").textContent();
   await page.reload();
-  await expect(dica).toHaveText(primeira!);
+  await expect(dica.locator("p")).toHaveText(primeira!);
+  await expect(dica).not.toContainText("Boa pergunta para entender o cliente");
   const acesso = await page.request.post(`/api/salas/${codigo}/dica`, { data: { mensagemId: "outra-pessoa" } });
   expect(acesso.status()).toBe(409);
   await page.getByRole("button", { name: "Encerrar e ver resultado" }).click();
@@ -179,4 +290,39 @@ test("dica curta acompanha a fala, persiste ao recarregar e feedback entrega pla
   await expect(page.getByText("Seu plano de ação rápido", { exact: true })).toBeVisible();
   await expect(page.getByText("Como conferir:", { exact: true }).first()).toBeVisible();
   await page.screenshot({ path: "test-results/feedback-plano.png", fullPage: true, animations: "disabled" });
+});
+
+test("cronômetro preserva texto no limite, avisa em uma pausa e permite a última resposta", async ({ page }) => {
+  await instalarVoz(page);
+  const codigo = await abrirSala(page);
+  await page.getByRole("button", { name: "Prefiro digitar" }).click();
+  await page.getByLabel("Sua mensagem").fill("Olá, podemos falar sobre seu time?");
+  await page.getByRole("button", { name: "Enviar", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Sua vez de escrever");
+  const lista = await (await page.request.get("/api/simulacoes")).json();
+  const sim = lista.itens.find((s: { codigo: string }) => s.codigo === codigo);
+  let avisos = 0;
+  let encerramentos = 0;
+  page.on("request", r => { if (r.url().endsWith("/encerrar")) encerramentos++; });
+  await page.route("**/conversar", route => {
+    if (!route.request().postDataJSON().avisoTempo) return route.continue();
+    avisos++;
+    return route.fulfill({ json: { texto: "Preciso encerrar. Há mais algum ponto para retomarmos depois?", avisoTempo: true, encerrada: false } });
+  });
+  await page.clock.install({ time: Date.now() + sim.duracaoMin * 60000 - 5000 });
+  await page.getByLabel("Sua mensagem").fill("Quero retomar os detalhes na terça-feira.");
+  await page.clock.runFor(10000);
+  await expect(page.getByRole("timer")).toHaveText(/^\+/);
+  await expect(page.getByLabel("Sua mensagem")).toHaveValue("Quero retomar os detalhes na terça-feira.");
+  expect(avisos).toBe(0);
+  expect(encerramentos).toBe(0);
+  await page.getByLabel("Sua mensagem").fill("");
+  await page.clock.runFor(4000);
+  await expect(page.getByText("Preciso encerrar. Há mais algum ponto para retomarmos depois?", { exact: true }).first()).toBeVisible();
+  await page.clock.runFor(20000);
+  expect(avisos).toBe(1);
+  expect(encerramentos).toBe(0);
+  await page.getByLabel("Sua mensagem").fill("Podemos retomar na terça-feira?");
+  await expect(page.getByRole("button", { name: "Enviar", exact: true })).toBeEnabled();
+  await page.screenshot({ path: "test-results/tempo-encerramento.png", fullPage: true });
 });

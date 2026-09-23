@@ -37,6 +37,7 @@ it("somente gestor autenticado reabre; mantém link e substitui todos os dados",
   const { token } = entrar({ email: "gestor@example.com", senha: "SenhaTeste123!" });
   assert.equal((await POST(req(`sessao=${token}`), { params: Promise.resolve({ id }) })).status, 200);
   const atual = e.obter(id)!;
+  assert.equal(Date.parse(atual.expiraEm!) - Date.parse(atual.iniciaEm!), 7 * 86400000);
   assert.equal(atual.tentativa, 2); assert.equal(atual.codigo, codigo); assert.equal(atual.status, "convidada");
   assert.equal(atual.resultadoId, undefined); assert.equal(atual.decisao, undefined); assert.equal(atual.concluidaEm, undefined);
   assert.deepEqual(e.transcricao(id), []); assert.equal(h.obter(resultado), null); assert.equal(f.contarRespostas(codigo), 0);

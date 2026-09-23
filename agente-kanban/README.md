@@ -1,107 +1,127 @@
-# Agente de Kanban
+# Orbit — Kanban gerenciado por agentes
 
-Agente de IA que opera um quadro Kanban (Trello) a partir de comandos em linguagem natural. Área: Gestão e RH.
+Versão **0.2.0**. Veja as novidades no [histórico de versões](CHANGELOG.md).
 
-## O que resolve
-O gestor fala como falaria com uma pessoa do time — "crie um cartão para entrevistar a candidata Paula na quinta e mova o onboarding do Pedro para concluído" — e o agente executa isso direto no quadro: cria, move, comenta e arquiva cartões, sempre conferindo o quadro real antes de agir para não errar o cartão ou a lista.
+Workspace para cruzar conversas, atividades e objetivos do ciclo. Os agentes mantêm um quadro local persistente, seguindo a skill do time e rotinas com prompts, ferramentas e horários configuráveis. Correções humanas entram no contexto dos agentes e podem virar novas regras da skill.
 
-## Stack
-Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript. IA via OpenRouter com modelo gratuito por padrão, usando tool calling para operar o quadro.
+## Rodar
 
-## Configuração inicial
-Nenhuma variável de ambiente é obrigatória. Ao abrir o app pela primeira vez, use o link **Conectar a IA em 1 minuto** (ou vá direto em `/setup`) para conectar:
+Requer Node.js 22.13+ (SQLite nativo) e npm.
 
-- **Inteligência artificial (OpenRouter)**: clique em "Conectar com OpenRouter" para autorizar em um clique, ou cole uma chave gerada em [openrouter.ai/keys](https://openrouter.ai/keys).
-- **Quadro do Trello** (opcional): clique em **Autorizar no Trello** — você é levado ao Trello, autoriza o acesso e volta já com o token salvo — e então escolha o quadro na lista (ela é carregada automaticamente assim que a chave e o token existem). Quando `TRELLO_API_KEY_APP` não está definida na imagem publicada, o cartão avisa na tela que a equipe técnica ainda precisa cadastrar este app no Trello; até lá, o caminho é colar uma chave própria em "Opções avançadas".
-- **Notificações** (opcional): Gmail, Outlook, Slack ou Resend, para receber o resumo do quadro toda manhã.
-- **Quadro de tarefas (MCP)** (opcional): opera um quadro fora do Trello (Jira, Notion, monday) pela mesma conversa.
-
-As chaves ficam gravadas cifradas em SQLite (`DATA_DIR/app.sqlite`, padrão `./data`), nunca aparecem por inteiro na tela depois de salvas (só os 4 primeiros e 4 últimos caracteres) e podem ser trocadas a qualquer momento em `/setup`. Variáveis de ambiente, quando definidas, têm prioridade sobre o que foi salvo ali.
-
-## Primeiro acesso
-Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre com e-mail e senha em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir a variável `NOVA_SENHA_ADMIN` com a nova senha e reiniciar o app uma vez — ela troca a senha da conta existente na subida e pode ser removida depois.
-
-## Rodar localmente
-```bash
+```sh
 npm install
-npm run dev             # http://localhost:3000
+npm run dev
 ```
-Abra `/setup` para conectar a IA e o Trello, ou use o app direto: sem `OPENROUTER_API_KEY`, o agente responde por um interpretador de comandos por palavras-chave (criar, mover, listar, comentar, arquivar), tolerante a acentos, para o app continuar testável sem nenhuma chave. Sem a chave, o token e o quadro do Trello, ele opera um quadro de exemplo em memória com listas "A fazer", "Em andamento" e "Concluído" e cartões de RH plausíveis. Abra `/?exemplo=1` para ver um comando composto (criar e mover cartões) executado sozinho.
 
-## Rodar com Docker
-```bash
-docker compose up --build   # http://localhost:3002
+Abra http://localhost:3000, crie a conta administrativa e entre. A primeira visita cria **dados de exemplo explicitamente identificados**, com todas as rotinas pausadas. **Começar meu quadro** remove apenas cartões de exemplo que ainda não foram editados. Atividades criadas e correções do usuário são preservadas.
+
+O app persiste os dados em `DATA_DIR/app.sqlite` (padrão `./data`). As credenciais de API são cifradas com AES-256-GCM; a chave mestra fica em `DATA_DIR/chave-mestra`, com permissão 0600. Preserve o diretório inteiro nos backups. Uma instalação corresponde a um workspace e uma conta administrativa.
+
+## Fluxo principal
+
+1. **Conexões:** configure OpenRouter ou ChatGPT e conecte seu servidor Zapier MCP.
+2. Habilite as ferramentas que consultam o quadro e as conversas. Escolha separadamente ferramentas que podem enviar perguntas de prazo.
+3. **Skill do time → Construir com o agente:** descreva o processo, incluindo canais, reuniões, horários e restrições. Com IA conectada, o modelo gera a skill e as rotinas usando as ferramentas habilitadas. Sem IA, o app oferece um modelo inicial explicitamente identificado, com horários sugeridos para editar.
+4. Revise os prompts, a recorrência, o fuso e as ferramentas. A publicação salva uma versão da skill e cria ou atualiza as rotinas propostas, pausadas para revisão. O agente pode ajustar rotinas existentes sem duplicá-las; rotinas não incluídas na proposta permanecem como estavam.
+5. Ative as rotinas. **Executar agora** permite conferir o resultado antes de ativar o agendamento.
+6. **Quadro:** acompanhe To do, Doing, Done e Archived. Clique para editar, altere a coluna no formulário ou arraste um cartão. Busca e filtros de prioridade/atraso ajudam na revisão.
+7. **Histórico:** consulte as 100 execuções mais recentes, filtre por rotina/status e abra as etapas, resultados e falhas. O banco preserva as execuções anteriores.
+8. **Skill do time:** revise correções manuais e incorpore aprendizados à skill. O objetivo, as datas e o nome do ciclo são editáveis ali.
+
+## Zapier MCP e fontes
+
+Crie um servidor em https://mcp.zapier.com, conecte as contas desejadas e adicione as ferramentas. Cole a URL secreta de conexão na tela **Conexões**. O cliente usa o SDK MCP oficial, com inicialização do protocolo, Streamable HTTP, negociação de sessão, paginação de ferramentas e tratamento de erros.
+
+Cada ferramenta começa desabilitada. Habilite como **Leitura de informações** apenas ferramentas que consultam dados. Inclua nas rotinas a ferramenta de leitura do board e a de leitura/busca das conversas. As ferramentas do Zapier têm descrições e schemas próprios; os agentes constroem os argumentos a partir deles.
+
+Quando o Zapier declara que uma ação altera dados, o Orbit impede habilitá-la como leitura. Consultas com campos dinâmicos incluem automaticamente os auxiliares de leitura indicados pelo provedor, como a lista de quadros disponíveis. A tela identifica essas dependências; o agente só pode usá-las para consultar campos de ferramentas autorizadas na própria rotina. Desabilitar a consulta principal também remove o acesso herdado pelo auxiliar.
+
+Para **Perguntas de prazo**, mapeie os campos da mensagem e do destinatário da ferramenta. A atividade precisa ter responsável e contato (por exemplo, ID do Slack). O servidor constrói uma pergunta objetiva de prazo e fixa o destinatário; o modelo não escolhe o texto final nem substitui o contato. A rotina deve incluir explicitamente essa ferramenta. Cartões concluídos, arquivados ou com prazo ainda vigente não recebem perguntas. Há no máximo uma tentativa por atividade/dia, inclusive se uma falha de rede deixar o resultado do envio incerto. Ferramentas que não expõem campos separados de mensagem/destinatário não podem enviar perguntas por esse fluxo.
+
+Um Trello configurado em `/setup` também aparece como fonte de leitura nas rotinas. O quadro Orbit é a visão consolidada local; alterações nele **não são replicadas automaticamente aos boards de origem**. Os IDs de origem evitam duplicação e cada alteração do agente exige referência a evidências consultadas na execução ou a um pedido explícito do usuário.
+
+Documentação do provedor: https://docs.zapier.com/mcp/get-started/quickstart
+
+## Modelos
+
+### OpenRouter
+
+Na tela **Conexões**, selecione OpenRouter e salve uma chave ou use a autorização OAuth existente. O modelo é configurável por seu ID no OpenRouter. A chave salva não volta ao navegador. As variáveis `OPENROUTER_API_KEY` e `OPENROUTER_MODEL`, quando definidas, têm prioridade sobre a configuração da tela.
+
+A rotina e o construtor de processos fazem chamadas JSON reais ao modelo escolhido. Sem credencial, executar uma rotina registra uma falha explicativa; não simula uma execução bem-sucedida.
+
+### Assinatura do ChatGPT via Codex
+
+O conector usa o SDK oficial do Codex e um login dedicado à aplicação, separado da configuração pessoal do desenvolvedor. Em **Conexões → ChatGPT → Conectar com ChatGPT**, copie o código, abra a página de autorização da OpenAI e conclua o login. A tela acompanha o resultado automaticamente. O código pode ser retomado ao recarregar a página ou cancelado; o Orbit encerra a espera após dez minutos. Reiniciar o servidor interrompe uma autorização pendente, mas preserva um login já salvo.
+
+O login pela tela usa o protocolo de contas do Codex App Server por stdio. Esse protocolo é experimental; o teste local verifica a inicialização com a versão instalada, sem iniciar login nem chamar modelos. Se o login por dispositivo estiver indisponível, confira sua habilitação nas configurações de segurança do ChatGPT e as políticas do workspace. Como alternativa, no mesmo servidor e usuário que executa o app:
+
+```sh
+npm run connect:chatgpt
 ```
-O volume `dados` persiste o SQLite com a configuração entre reinícios do contêiner.
 
-## Imagem pública e deploy no Render
-A imagem é construída e publicada pelo GitHub Actions do repositório da suíte a cada push na `main`: `ghcr.io/startse/agente-kanban:latest`. Não é preciso construir nem publicar à mão.
+Siga o login por dispositivo no navegador. Tanto a tela quanto o helper guardam a autenticação em `DATA_DIR/codex/auth.json`. Se estiver usando um `DATA_DIR` personalizado, use o mesmo diretório no app e no comando. Depois do login pelo terminal, selecione **ChatGPT** em Conexões e clique em **Verificar conexão**. A disponibilidade do login é mostrada separadamente do sucesso de uma chamada; execute uma rotina para validar o acesso ao modelo. O fluxo pendente fica na memória de uma única instância do servidor; use afinidade de sessão se houver múltiplos processos web.
 
-- Publicar com um clique: https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-agente-kanban (o `render.yaml` desta pasta é gerado a partir do `catalogo.json` da raiz; não edite à mão).
-- Rodar no seu computador sem construir: `docker run --rm -p 3002:10000 -v agente-kanban-dados:/app/data ghcr.io/startse/agente-kanban:latest` e abra http://localhost:3002.
-- Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
-- O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração se perde a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
+O SDK respeita os modelos e limites da assinatura. `KANBAN_CODEX_MODEL` permite selecionar um modelo disponível. O processo do Codex roda em um diretório dedicado, somente leitura, sem shell, busca web, apps, plugins ou subagentes habilitados. As ferramentas de negócio são executadas pelo próprio servidor Orbit, após as verificações da rotina.
 
-## Como obter as credenciais do Trello
-1. Em `/setup`, salve a chave da API do Trello (obtida em [trello.com/power-ups/admin](https://trello.com/power-ups/admin)).
-2. Clique em **Autorizar no Trello**: você é levado ao Trello, autoriza o acesso de leitura e escrita e volta ao app com o token já salvo.
-3. Escolha o quadro na lista — ela é carregada automaticamente a partir da sua conta assim que a chave e o token existem.
-4. O quadro deve ter ao menos as listas onde os cartões vão circular; o agente descobre os IDs das listas e dos cartões sozinho antes de agir (nunca invente um ID).
+Não é uma chave da API OpenAI nem uma conversão da assinatura para créditos de API. Referências oficiais: [autenticação](https://learn.chatgpt.com/docs/auth), [SDK do Codex](https://learn.chatgpt.com/docs/codex-sdk) e [protocolo do App Server](https://learn.chatgpt.com/docs/app-server).
 
-## Outras ferramentas de gestão
-A mesma abordagem serve para Jira, Notion, monday.com ou qualquer board — basta trocar `lib/trello.ts` por um módulo que implemente a mesma interface `ProvedorQuadro` (`lib/quadro.ts`): `listarListas`, `listarCartoes`, `obterQuadro`, `criarCartao`, `moverCartao`, `comentar`, `arquivarCartao`, chamando a API daquela ferramenta — inclusive via um servidor MCP dela, se existir, no lugar de chamadas REST diretas.
+## Agendamentos e operação
 
-## Variáveis de ambiente (opcionais)
-Todas as variáveis abaixo são alternativas ao `/setup` — configure por ali sempre que possível. Quando definidas, têm prioridade sobre o que foi salvo no setup.
+- Frequências diária, dias úteis e semanal; horário `HH:MM` e fuso IANA por rotina, como `America/Sao_Paulo`.
+- O servidor verifica as rotinas a cada minuto enquanto está ativo. Se estiver fora do ar no horário, executa ao voltar **no mesmo dia**, quando elegível. Não repõe dias anteriores.
+- Não executa slots anteriores à criação da rotina. Uma chave única no SQLite impede duplicação de um slot e execução simultânea da mesma rotina, inclusive em processos diferentes.
+- Limite de 12 passos por execução, até 90 segundos por chamada de IA e orçamento total de aproximadamente 4 minutos entre passos. Execuções interrompidas são sinalizadas como falha quando uma nova execução é solicitada após 10 minutos.
+- Edições de cartões, skills e rotinas verificam a revisão: uma tela desatualizada não sobrescreve silenciosamente mudanças mais recentes.
+- O histórico preserva resultados parciais quando uma chamada falha. Uma rotina com ação malsucedida não termina com status de sucesso.
+- Para instalações que hibernam, o gatilho autenticado `POST /api/rotinas/executar` também executa as rotinas Orbit elegíveis. Gere o código em `/setup` e envie `Authorization: Bearer <codigo>`. Configure o agendador externo para chamar a cada minuto.
+- O mesmo arquivo SQLite precisa ser compartilhado pelo processo web e pelo agendador. Para múltiplas réplicas em hosts separados, migre a persistência/claims para um banco compartilhado antes de escalar.
 
-| Variável | Descrição |
-|---|---|
-| `DATA_DIR` | Onde fica o banco `app.sqlite` com a configuração do setup. Padrão `./data` (`/app/data` no Docker). |
-| `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida do app (recurso da equipe técnica; não aparece em `/setup`). |
-| `OPENROUTER_API_KEY` | Ativa o agente com IA real (tool calling). Obtenha em https://openrouter.ai/keys. Sem ela, interpretador de comandos por palavras-chave. |
-| `OPENROUTER_MODEL` | Padrão `nvidia/nemotron-3-super-120b-a12b:free` (gratuito). Qualquer modelo do OpenRouter com suporte a tools funciona. |
-| `OPENROUTER_FALLBACK_MODELS` | Modelos de reserva separados por vírgula. |
-| `TRELLO_API_KEY` | Chave da API do Trello. Obtenha em [trello.com/power-ups/admin](https://trello.com/power-ups/admin). |
-| `TRELLO_API_TOKEN` | Token de acesso do Trello. Gerado automaticamente ao clicar em "Autorizar no Trello" em `/setup`. |
-| `TRELLO_BOARD_ID` | Identificador do quadro a operar. Escolhido na lista em `/setup`, carregada da sua conta. |
-| `TRELLO_API_KEY_APP` | Chave pública do Power-Up desta suíte (equipe técnica, embutida na imagem por `ARG`→`ENV` no `Dockerfile`). Com ela, ninguém precisa colar uma chave própria antes de autorizar. Sem ela, o cartão do Trello avisa isso na tela. |
-| `MCP_TAREFAS_URL` / `MCP_TAREFAS_CODIGO` | Alternativa ao setup. Quadro de tarefas externo (Jira, Notion, monday) operado por MCP no lugar do Trello. |
-| `GOOGLE_CLIENT_ID_APP`, `GOOGLE_CLIENT_SECRET_APP`, `MICROSOFT_CLIENT_ID_APP`, `MICROSOFT_CLIENT_SECRET_APP` | Credenciais da suíte (equipe técnica, embutidas na imagem por `ARG`→`ENV` no `Dockerfile`) que liberam "Conectar meu Gmail"/"Conectar meu Outlook" no cartão Notificações. Sem elas, os botões não aparecem e o cartão segue por Slack, Resend ou SMTP. |
-| `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
+## Produção
 
-Sem a chave, o token e o quadro do Trello (os três juntos), o app usa o quadro de exemplo em memória.
-
-## Estrutura
+```sh
+npm run build
+npm start
+# ou
+docker compose up --build
 ```
-app/page.tsx                          tela única: conversa à esquerda, quadro Kanban à direita
-app/setup/page.tsx                    tela de configuração inicial (IA e Trello)
-app/setup/trello/page.tsx             volta da autorização do Trello (lê o token do fragmento da URL)
-app/api/quadro/route.ts               GET do quadro atual
-app/api/agente/route.ts               POST do comando em linguagem natural
-app/api/status/route.ts               informa ao frontend se a IA e o Trello estão conectados
-app/api/health/route.ts               health check
-app/api/setup/route.ts                GET status da configuração, PUT para salvar/apagar chaves
-app/api/setup/testar/route.ts         testa a conexão de uma integração
-app/api/setup/oauth/openrouter/*      início e volta da autorização em um clique do OpenRouter
-app/api/setup/oauth/trello/route.ts   início da autorização em um clique do Trello
-app/api/erros.ts                      uma resposta de erro só para as rotas do app (traduz a falha do quadro)
-app/conta, app/entrar                 conta de administrador da instância (criar e entrar)
-app/historico                         todos os resultados salvos, com busca por texto
-components/ui.tsx                     componentes visuais compartilhados pela suíte
-components/setup.tsx                  tela genérica de configuração, gerada a partir de lib/integracoes.ts
-components/Chat.tsx                   painel de conversa com o agente
-components/Quadro.tsx                 colunas e cartões do quadro Kanban
-lib/ai.ts                             cliente OpenRouter (askText, askJSON, askWithTools)
-lib/agente.ts                         agente (tool calling com IA, ou interpretador por palavras-chave sem ela)
-lib/quadro.ts                         tipos do domínio, interface ProvedorQuadro e ErroQuadro (falha já traduzida)
-lib/acoes.ts                          "o que fazer agora" de cada aviso/erro, compartilhado entre tela e servidor
-lib/trello.ts                         integração real com a API REST do Trello
-lib/quadro-demo.ts                    quadro de exemplo em memória (fallback sem Trello)
-lib/quadro-mcp.ts                     quadro externo operado por MCP (Jira, Notion, monday)
-lib/integracoes.ts                    integrações deste app (IA, Trello, notificações, quadro por MCP) para o /setup
-lib/setup-comum.ts                    tipos e utilitários do setup inicial (compartilhado pela suíte)
-lib/store.ts                          configuração em SQLite (getConfig/setConfig), alternativa às variáveis de ambiente
-Dockerfile                            build multi-stage com saída standalone
-docker-compose.yml                    sobe este app isolado (porta 3002) com volume para o SQLite
-render.yaml                           blueprint do Render (runtime image)
+
+O Docker mantém `DATA_DIR=/app/data`; use o volume persistente do compose. O login pela tela também funciona no contêiner. Para usar a alternativa pelo terminal, execute como o usuário da aplicação:
+
+```sh
+docker compose exec agente-kanban node scripts/connect-chatgpt.mjs
 ```
+
+Instalações sem disco persistente perdem dados, configuração e login a cada deploy.
+
+Use `npm run build`: o passo `postbuild` remove dados de execução dos arquivos de rastreamento e da cópia standalone. Isso também cobre os rastreamentos de proxy e instrumentation desta versão do Next, que podem incluir o diretório local mesmo com exclusões configuradas. O banco e o login originais permanecem em `DATA_DIR`; não são distribuídos junto do código.
+
+## Verificação
+
+```sh
+npm test                 # domínio, persistência, concorrência, agendamentos e agente com provedores simulados
+npm run lint
+npm run build
+npx playwright install chromium
+npm run test:e2e         # build de produção + servidor isolado na porta 3211 + navegador
+```
+
+Os testes usam bancos temporários, credenciais fictícias e nenhum envio externo. O teste de navegador cobre autenticação, edição e persistência, arrastar cartões, aprendizado da skill, criação/edição de rotinas, histórico de falhas, navegação móvel e estados do login ChatGPT com respostas simuladas. Os testes do gerenciador cobrem conclusão, cancelamento concorrente, expiração e falhas; uma consulta local de conta vazia verifica o protocolo instalado sem abrir uma autorização real.
+
+O teste `tests/scheduled-process.test.mts` percorre a geração e publicação do processo, ativação da rotina, agendamento, consulta ao board e às conversas, criação do cartão e inclusão do aprendizado humano na execução seguinte. Usa o código de produção dos gateways OpenRouter/MCP, motor e persistência, simulando apenas as respostas HTTP externas. Também verifica a deduplicação do horário e o registro de falha quando uma fonte fica indisponível. Ele comprova a ligação entre os componentes; não avalia a qualidade das decisões de um modelo real.
+
+Para apontar a uma instância de teste já isolada, defina `ORBIT_E2E_BASE_URL`; não use uma instância com dados de trabalho. Testes locais não validam credenciais, permissões ou quotas de contas externas reais.
+
+## Estrutura e compatibilidade
+
+- `components/OrbitWorkspace.tsx`, `app/orbit.css`: interface responsiva do workspace.
+- `lib/workspace-store.ts`: cartões, versões, correções, rotinas e histórico em SQLite.
+- `lib/workspace-agent.ts`: construtor de processos, execução com evidências e ferramentas autorizadas.
+- `lib/workspace-ai.ts`: OpenRouter e SDK do Codex.
+- `lib/chatgpt-login.ts`, `lib/codex-auth-client.ts`: autorização ChatGPT por dispositivo e ciclo de vida do processo de login.
+- `lib/workspace-mcp.ts`: conexão, descoberta e chamadas ao Zapier MCP; leitura do Trello direto.
+- `lib/workspace-schedule.ts`: calendário por fuso e identificação dos slots.
+- `app/api/workspace/route.ts`: operações autenticadas, com validação de entrada.
+- `instrumentation.ts`: agendador local; `/api/rotinas/executar`: gatilho externo autenticado.
+
+A conversa anterior com Trello/MCP permanece em `/conversa`. `/setup`, histórico anterior, páginas de resultados, impressão, formulários públicos e MCP de entrada continuam disponíveis. Os resultados e o quadro legado permanecem separados da visão consolidada Orbit. Nenhum dado anterior é apagado pela nova interface.

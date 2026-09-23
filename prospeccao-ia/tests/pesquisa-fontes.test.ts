@@ -8,7 +8,7 @@ test("fontes opcionais e integração com a prospecção", async t => {
   const pasta = mkdtempSync(path.join(tmpdir(), "pesquisa-fontes-"));
   const ambiente = { ...process.env };
   process.env.DATA_DIR = pasta;
-  for (const chave of ["EXA_API_KEY", "TAVILY_API_KEY", "SEARCHAPI_API_KEY", "APOLLO_API_KEY", "BRIGHTDATA_API_KEY", "OPENROUTER_API_KEY"]) delete process.env[chave];
+  for (const chave of ["EXA_API_KEY", "TAVILY_API_KEY", "SEARCHAPI_API_KEY", "APOLLO_API_KEY", "PROSPECTHALO_API_KEY", "BRIGHTDATA_API_KEY", "OPENROUTER_API_KEY"]) delete process.env[chave];
   t.after(() => { process.env = ambiente; rmSync(pasta, { recursive: true, force: true }); });
   const { setConfig } = await import("../lib/store");
   const { buscarFonte, lerFonte, ErroFonte } = await import("../lib/pesquisa-fontes");
@@ -80,14 +80,14 @@ test("fontes opcionais e integração com a prospecção", async t => {
       assert.equal(consultasDaProspeccao(`so-${fonte}`)[0].fonte, fonte);
     }
   });
-  await t.test("Exa vazio → Bright Data falha → Tavily vazio → SearchAPI encontra", async () => {
+  await t.test("Bright Data falha → Exa vazio → Tavily vazio → SearchAPI encontra", async () => {
     conectar("exa", "brightdata", "tavily", "searchapi");
     vazios.add("exa"); vazios.add("tavily"); falhas.brightdata = 401;
     const r = await buscarNaWeb("site:linkedin.com/in Diretor Brasil", 0, "fallback");
     assert.equal(r.itens.length, 1);
     const registros = consultasDaProspeccao("fallback");
-    assert.deepEqual(registros.map(r => r.fonte), ["exa", "brightdata", "tavily", "searchapi"]);
-    assert.deepEqual(registros.map(r => r.estado), ["vazia", "falhou", "vazia", "concluida"]);
+    assert.deepEqual(registros.map(r => r.fonte), ["brightdata", "exa", "tavily", "searchapi"]);
+    assert.deepEqual(registros.map(r => r.estado), ["falhou", "vazia", "vazia", "concluida"]);
     assert.equal(JSON.stringify(registros).includes("segredo-teste"), false);
   });
   await t.test("todas vazias diferem de autenticação, limite, rede e resposta inválida", async () => {
@@ -108,7 +108,7 @@ test("fontes opcionais e integração com a prospecção", async t => {
     await buscarNaWeb("consulta", 0, "limite");
     await buscarNaWeb("outra consulta", 0, "limite");
     assert.equal(chamadas.filter(c => c.url.hostname === "api.exa.ai").length, 1);
-    assert.equal(chamadas.filter(c => c.url.hostname === "api.tavily.com").length, 1);
+    assert.equal(chamadas.filter(c => c.url.hostname === "api.tavily.com").length, 2);
     assert.equal(consultasDaProspeccao("limite").some(c => c.estado === "limite"), true);
     setConfig("EXA_TETO_CONSULTAS", null);
   });
@@ -162,13 +162,12 @@ test("fontes opcionais e integração com a prospecção", async t => {
     const r = await executar("b2c");
     assert.equal(r.leads.length, 1); assert.equal(r.leads[0].demo, false);
   });
-  await t.test("Apollo vazia ou falha permite continuar; nenhuma fonte funciona marca falhou", async () => {
+  await t.test("Apollo salva é ignorada; falha real e busca vazia continuam distintas", async () => {
     conectar("apollo", "exa");
     let r = await executar();
-    assert.equal(r.leads.length, 1); assert.deepEqual(r.consultas.map(c => c.fonte), ["apollo", "exa"]);
-    falhas.apollo = 401;
-    r = await executar();
-    assert.equal(r.leads.length, 1); assert.ok(r.prospeccao.erro);
+    assert.equal(r.leads.length, 1);
+    assert.equal(r.consultas.some(c => c.fonte === "apollo"), false);
+    assert.equal(chamadas.some(c => c.url.hostname.includes("apollo")), false);
     falhas.exa = 429;
     r = await executar();
     assert.equal(r.prospeccao.estado, "falhou"); assert.equal(r.leads.length, 0);
@@ -178,5 +177,12 @@ test("fontes opcionais e integração com a prospecção", async t => {
     assert.equal(r.leads.length, 0);
     r = await executar("b2b", "empresas");
     assert.equal(r.prospeccao.estado, "pronta");
+  });
+  await t.test("todas as fontes conectadas participam mesmo quando a primeira encontra", async () => {
+    conectar("exa", "tavily", "searchapi");
+    const r = await buscarNaWeb("site:linkedin.com/in Diretor", 0, "complementares");
+    assert.equal(r.itens.length, 1);
+    assert.deepEqual(r.itens[0].fontes, ["exa", "tavily", "searchapi"]);
+    assert.deepEqual(consultasDaProspeccao("complementares").map(c => c.fonte), ["exa", "tavily", "searchapi"]);
   });
 });

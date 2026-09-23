@@ -49,14 +49,14 @@ Abra `/?exemplo=1` para preencher com o pedido de Vendas e gerar sozinho.
 
 ## Rodar com Docker
 ```bash
-docker compose up --build   # http://localhost:3020
+docker compose up --build   # http://localhost:3024
 ```
 
 ## Imagem pública e deploy no Render
 A imagem é construída e publicada pelo GitHub Actions do repositório da suíte a cada push na `main`: `ghcr.io/startse/toolkit-dash-builder:latest`. Não é preciso construir nem publicar à mão.
 
 - Publicar com um clique: https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-toolkit-dash-builder (o `render.yaml` desta pasta é gerado a partir do `catalogo.json` da raiz; não edite à mão).
-- Rodar no seu computador sem construir: `docker run --rm -p 3020:10000 -v toolkit-dash-builder-dados:/app/data ghcr.io/startse/toolkit-dash-builder:latest` e abra http://localhost:3020.
+- Rodar no seu computador sem construir: `docker run --rm -p 3024:10000 -v toolkit-dash-builder-dados:/app/data ghcr.io/startse/toolkit-dash-builder:latest` e abra http://localhost:3024.
 - Depois do deploy, abra `https://<seu-app>.onrender.com/setup` e conecte a IA.
 - O health check responde em `/api/health`. No plano free o disco é efêmero: a configuração se perde a cada deploy. Para persistir, adicione um disco em `/app/data` (bloco `disk` comentado no `render.yaml`, plano pago).
 
@@ -164,6 +164,6 @@ components/EnvioPlanilha.tsx    envio do arquivo e conferência das colunas ante
 lib/ferramentas.ts              ferramentas expostas via MCP
 lib/ai.ts                       cliente OpenRouter (compartilhado)
 Dockerfile                      build multi-stage com saída standalone
-docker-compose.yml              sobe este app isolado (porta 3020)
+docker-compose.yml              sobe este app isolado (porta 3024)
 render.yaml                     blueprint do Render (gerado)
 ```

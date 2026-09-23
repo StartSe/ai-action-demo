@@ -24,21 +24,26 @@
         "formulario",
         "rotina"
       ],
-      "demo": null
+      "demo": null,
+      "plano": "0.5c-512mb",
+      "discoGB": 1,
+      "discoGuarda": "a conta, as configurações, os PDIs, as entregas, as autoavaliações e os check-ins",
+      "versao": "0.1.0"
     },
     {
       "id": "agente-kanban",
-      "nome": "Agente de Kanban",
+      "nome": "Orbit — Agente de Kanban",
       "areas": [
         "Gestão",
         "RH"
       ],
       "problema": "Operar o quadro de tarefas toma tempo do gestor.",
-      "ia": "Um agente com ferramentas cria, move, comenta e arquiva cartões a partir de comandos em português.",
-      "integracoes": "IA (OpenRouter) para entender o pedido e operar o quadro. Quadro do Trello para o agente mexer no quadro real do time em vez do de exemplo. Notificações (e-mail ou Slack) para o resumo do quadro toda manhã. Quadro de tarefas (MCP) para operar um quadro fora do Trello (Jira, Notion, monday).",
+      "ia": "Agentes cruzam atividades, conversas e objetivos para manter um quadro local, seguindo a skill do time e rotinas configuráveis. Correções humanas orientam as próximas execuções.",
+      "integracoes": "ChatGPT via Codex ou OpenRouter. Zapier MCP para consultar quadros e conversas com ferramentas autorizadas por rotina. Trello e integrações anteriores continuam disponíveis em Configurações avançadas.",
       "acento": "#2e3b7a",
       "porta": 3002,
       "captura": "capturas/agente-kanban.png",
+      "versao": "0.2.0",
       "capacidades": [
         "artefato",
         "mcp",
@@ -99,7 +104,7 @@
       ],
       "problema": "Cada busca de leads recomeça do zero, sem perfil salvo, evidência ou estratégia antes da mensagem.",
       "ia": "Pesquisa empresas e pessoas pelo perfil ideal salvo, qualifica com evidências e sinais públicos, e escreve a estratégia e as mensagens da abordagem.",
-      "integracoes": "IA (OpenRouter ou assinatura ChatGPT) qualifica os leads, gera a hipótese de dor e escreve a estratégia e as mensagens. Pesquisa de mercado e sinais (Bright Data) é o motor de busca de empresas, pessoas e sinais públicos. Busca de leads (Apollo) continua como fonte alternativa de contatos. Notificações (e-mail ou Slack) avisam as oportunidades novas de uma prospecção salva. CRM (MCP) recebe os leads aprovados.",
+      "integracoes": "IA (OpenRouter ou assinatura ChatGPT) qualifica os leads e escreve mensagens usando o contexto do produto e evidências públicas. ProspectHalo via MCP encontra contatos. Bright Data, Exa, Tavily e SearchAPI complementam a coleta de empresas, pessoas e sinais. CRM (MCP) recebe os leads aprovados.",
       "acento": "#0b5789",
       "porta": 3005,
       "captura": "capturas/prospeccao-ia.png",
@@ -112,7 +117,7 @@
         "rotina"
       ],
       "demo": null,
-      "versao": "0.3.0"
+      "versao": "0.7.0"
     },
     {
       "id": "whatsapp-atendente",
@@ -122,7 +127,7 @@
         "Vendas"
       ],
       "problema": "Perguntas repetidas chegam fora do horário e ninguém acompanha o que foi respondido.",
-      "ia": "Responde com o conhecimento da empresa, avisa quando o cliente precisa de uma pessoa e mostra o dia em números.",
+      "ia": "Responde texto, áudio e fotos com o conhecimento da empresa, lembra cada cliente, explica cada resposta e avisa quando precisa de uma pessoa.",
       "integracoes": "WhatsApp por QR Code (z-api) ou WhatsApp Cloud API (Meta).",
       "acento": "#0e7c6a",
       "porta": 3006,
@@ -228,8 +233,8 @@
         "Inovação"
       ],
       "problema": "Movimentos do mercado chegam tarde e dispersos.",
-      "ia": "Monitora termos cadastrados na web, gera grafos interativos e envia insights de negócio às 8h, 16h e 20h, com horários configuráveis.",
-      "integracoes": "IA via OpenRouter ou assinatura ChatGPT. Exa, Tavily e Bright Data (Search Engine e Scraper as Markdown, MCP HTTP com pro=1). E-mail ou Slack para alertas. Fontes públicas sem chave também disponíveis.",
+      "ia": "Desdobra palavras-chave em buscas, acompanha fontes diariamente em segundo plano e conecta sinais, leituras e artigos em um grafo com histórico e memória por radar.",
+      "integracoes": "IA via OpenRouter ou assinatura ChatGPT. Busca na Web com SearchAPI, Exa e Tavily; Bright Data e Firecrawl leem páginas. Fontes públicas e StartSe sem chave. ElevenLabs para conversa por voz.",
       "acento": "#0a707f",
       "porta": 3011,
       "captura": "capturas/radar-sinais.png",
@@ -241,9 +246,9 @@
       "demo": null,
       "plano": "starter",
       "discoGB": 1,
-      "discoGuarda": "a configuração, a conta, os termos monitorados, as rotinas e os radares",
+      "discoGuarda": "configuração, conta, radares, fontes, análises, destaques, conversas e histórico de execuções",
       "independente": true,
-      "versao": "0.3.0"
+      "versao": "0.4.0"
     },
     {
       "id": "bussola-ia",
@@ -263,12 +268,15 @@
         "formulario"
       ],
       "demo": null,
-      "versao": "0.3.0",
+      "versao": "0.3.1",
       "persistencia": {
         "plano": "0.5c-512mb",
         "discoGB": 1,
         "discoGuarda": "a conta, as configurações, a sessão ChatGPT, os questionários, os assessments, as respostas, os diagnósticos e os planos de ação"
-      }
+      },
+      "plano": "0.5c-512mb",
+      "discoGB": 1,
+      "discoGuarda": "a conta, as configurações, a sessão ChatGPT, os questionários, os assessments, as respostas, os diagnósticos e os planos de ação"
     },
     {
       "id": "simulador-vendas",
@@ -316,43 +324,27 @@
     },
     {
       "id": "clone-site",
-      "nome": "Clone de Site",
+      "nome": "Site Cowork",
       "areas": [
         "Marketing",
         "Produto"
       ],
-      "problema": "Montar uma página nova do zero leva semanas entre briefing, agência e ajustes.",
-      "ia": "Lê a captura de referência ou o briefing e escreve o site com a sua marca e as suas imagens; um agente edita por conversa, publica e lê as métricas.",
-      "integracoes": "IA (OpenRouter ou ChatGPT). Opcional: captura por endereço, hospedagem Render para domínio próprio e avisos por e-mail ou Slack.",
+      "problema": "Criar, hospedar e melhorar o site exige coordenar criação, tecnologia e estratégia.",
+      "ia": "Seu colaborador cuida da criação, hospedagem e estratégia do site: constrói páginas, ajusta a marca, publica e acompanha métricas para propor melhorias.",
+      "integracoes": "ChatGPT por assinatura (recomendado) ou OpenRouter. Publicação na Netlify ou em serviço independente no Render, com histórico e rollback.",
       "acento": "#792a3f",
       "porta": 3015,
       "captura": "capturas/clone-site.png",
       "capacidades": [
         "artefato",
-        "mcp",
-        "rotina"
+        "mcp"
       ],
       "demo": null,
-      "versao": "0.2.0"
-    },
-    {
-      "id": "prospeccao-linkedin",
-      "nome": "Prospecção no LinkedIn",
-      "areas": [
-        "Vendas"
-      ],
-      "problema": "Prospectar no LinkedIn consome horas por dia entre buscar perfis e escrever mensagem por mensagem.",
-      "ia": "A partir do cliente ideal, monta a lista de leads com sinal de intenção e escreve a sequência de mensagens de cada um.",
-      "integracoes": "IA (OpenRouter) para as mensagens; Prospect Halo (servidor MCP com OAuth) para buscar leads no seu LinkedIn e enviar as mensagens aprovadas; CRM (MCP) para mandar os leads escolhidos; Notificações (e-mail ou Slack) para receber leads novos toda semana. Sem o Prospect Halo, lista de exemplo.",
-      "acento": "#0a63c2",
-      "porta": 3016,
-      "captura": "capturas/prospeccao-linkedin.png",
-      "capacidades": [
-        "artefato",
-        "mcp",
-        "rotina"
-      ],
-      "demo": null
+      "independente": true,
+      "versao": "0.4.0",
+      "plano": "0.5c-512mb",
+      "discoGB": 1,
+      "discoGuarda": "a conta, as configurações, a sessão ChatGPT, os sites, as versões das páginas e as imagens"
     },
     {
       "id": "videos-campanha",
@@ -425,7 +417,104 @@
       "plano": "starter",
       "discoGB": 1,
       "discoGuarda": "fluxos, versões publicadas, execuções, aprovações pendentes, conta e credenciais",
-      "versao": "0.7.0"
+      "versao": "0.8.1"
+    },
+    {
+      "id": "daily-second-brain",
+      "nome": "Daily Second Brain",
+      "areas": [
+        "Gestão"
+      ],
+      "problema": "Conhecimento, decisões e ideias ficam dispersos e difíceis de recuperar.",
+      "ia": "Coleta informações por instrução em segundo plano, organiza uma wiki Markdown conectada e cria briefings, planos e insights com referências.",
+      "integracoes": "ChatGPT por assinatura ou OpenRouter; Zapier MCP para leituras agênticas e agendadas; ElevenLabs para voz. Configuração guiada.",
+      "acento": "#8972bc",
+      "porta": 3020,
+      "captura": "capturas/daily-second-brain.png",
+      "capacidades": [
+        "artefato",
+        "rotina"
+      ],
+      "demo": null,
+      "padrao": "proprio",
+      "independente": true,
+      "plano": "starter",
+      "discoGB": 1,
+      "discoGuarda": "fontes originais, wiki, artefatos, conversas, revisões, fila de coletas, agendamentos, conta e credenciais",
+      "versao": "1.5.0",
+      "aposPublicar": "Crie sua conta e siga Ajustes → Primeiros passos: conecte e teste sua IA, depois insira um texto ou conecte um aplicativo. Entrada reúne fontes e coletas; Biblioteca reúne wiki, mapa e artefatos. Zapier, regras personalizadas e voz são opcionais."
+    },
+    {
+      "id": "mapify",
+      "nome": "Mapia",
+      "areas": [
+        "Gestão",
+        "Educação",
+        "Produto"
+      ],
+      "problema": "Vídeos, PDFs e páginas acumulam informação difícil de organizar e aplicar.",
+      "ia": "Transforma fontes em mapas mentais interativos com referências, edição visual e conversa sobre o conteúdo.",
+      "integracoes": "ChatGPT por assinatura ou OpenRouter; Gemini para vídeos públicos do YouTube, PDFs, páginas web e texto.",
+      "acento": "#7954c9",
+      "porta": 3021,
+      "captura": "capturas/mapify.png",
+      "capacidades": [
+        "artefato"
+      ],
+      "demo": null,
+      "padrao": "proprio",
+      "independente": true,
+      "plano": "starter",
+      "discoGB": 1,
+      "discoGuarda": "mapas, fontes, conversas, conta e credenciais",
+      "versao": "1.4.3",
+      "aposPublicar": "Crie sua conta e abra Configurações para conectar ChatGPT ou OpenRouter. Em YouTube, valide e salve uma chave do Google AI Studio para analisar vídeos públicos de qualquer canal. Depois, crie um novo mapa com o link do seu vídeo."
+    },
+    {
+      "id": "predictive-harness",
+      "nome": "Cowork Jev",
+      "areas": [
+        "Finanças",
+        "Gestão"
+      ],
+      "problema": "Transformar dados em predições e decisões financeiras exige análises e cenários refeitos à mão.",
+      "ia": "Seu estrategista cria predições baseadas em dados e explora cenários financeiros, com premissas visíveis, cálculos verificáveis e decisões conferidas pelo Jev.",
+      "integracoes": "ChatGPT por assinatura e OpenRouter (obrigatório: é onde vive o Jev, o modelo de decisões da TypeSafe). Voz opcional pela ElevenLabs. Disco persistente no Render.",
+      "acento": "#2f4fb8",
+      "porta": 3022,
+      "captura": "capturas/predictive-harness.png",
+      "capacidades": [
+        "artefato"
+      ],
+      "demo": null,
+      "padrao": "proprio",
+      "independente": true,
+      "plano": "starter",
+      "discoGB": 1,
+      "discoGuarda": "planilhas, premissas por produto, conversas, decisões do harness, conta e credenciais",
+      "versao": "0.5.1",
+      "aposPublicar": "Crie sua conta e explore a escola de negócios de exemplo: contribuição por turma, cenário de nova turma, meta reversa de marketing e ponto de equilíbrio. Em Configurações conecte o ChatGPT e o OpenRouter (o Jev vive nele). Em Fontes de dados, importe XLSX ou CSV (até 20 MB), confirme o papel das colunas e selecione as fontes da conversa. O histórico tem busca e conversas fixadas; premissas ficam no painel retrátil. Configure a ElevenLabs para conversar por voz ao vivo."
+    },
+    {
+      "id": "precificador",
+      "nome": "Precificador",
+      "areas": [
+        "Financeiro"
+      ],
+      "problema": "O dono do negócio desconfia que está cobrando errado e não sabe em qual item está perdendo dinheiro.",
+      "ia": "Conversa para montar o negócio, lê o corredor de preço de cada item e responde sobre a carteira consultando os números de verdade.",
+      "integracoes": "IA (OpenRouter); avisos por e-mail ou Slack são opcionais.",
+      "acento": "#0d7754",
+      "porta": 3023,
+      "captura": "capturas/precificador.png",
+      "capacidades": [
+        "artefato",
+        "mcp",
+        "formulario",
+        "rotina"
+      ],
+      "independente": true,
+      "demo": null
     },
     {
       "id": "toolkit-dash-builder",
@@ -438,7 +527,7 @@
       "ia": "Identifica o setor do pedido, escolhe os indicadores certos, monta os gráficos e preenche com números de exemplo do mercado brasileiro.",
       "integracoes": "IA (OpenRouter). Nenhuma outra: os números são de exemplo.",
       "acento": "#098609",
-      "porta": 3020,
+      "porta": 3024,
       "captura": "capturas/toolkit-dash-builder.png",
       "capacidades": [
         "artefato",

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { criarEscuta } from "./escuta";
+import { criarEscuta, janelaDeSilencio } from "./escuta";
 
 function preparar(automatico = false) {
   let paradas = 0;
@@ -108,6 +108,62 @@ test("sair da sala cancela microfone, prazos e eventos atrasados", (t) => {
   assert.equal(s.abortos(), 1);
 });
 
+
+test("a janela de silêncio cresce com a resposta e com a frase deixada aberta", () => {
+  assert.equal(janelaDeSilencio("Sim."), 4000);
+  assert.equal(janelaDeSilencio("Eu trabalhei lá porque"), 5500);
+  assert.equal(janelaDeSilencio("Eu trabalhei lá,"), 5500);
+  const longa = Array.from({ length: 45 }, (_, i) => `palavra${i}`).join(" ");
+  assert.equal(janelaDeSilencio(longa), 6000);
+  assert.equal(janelaDeSilencio(`${longa} e`), 7500);
+});
+
+test("mãos livres: pensar antes de começar a falar não fecha o microfone", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const s = preparar(true);
+  s.r.onstart?.();
+  for (let i = 0; i < 3; i++) {
+    s.r.onerror?.({ error: "no-speech" } as SpeechRecognitionErrorEvent);
+    s.r.onend?.();
+    s.r.onstart?.();
+  }
+  assert.deepEqual(s.finais, []);
+  assert.deepEqual(s.falhas, []);
+  s.resultado("Agora sim, minha resposta");
+  t.mock.timers.tick(4000);
+  s.r.onend?.();
+  assert.deepEqual(s.finais, ["Agora sim, minha resposta"]);
+});
+
+test("depois de muitas esperas sem fala nenhuma, devolve a vez com resposta vazia", () => {
+  const s = preparar(true);
+  s.r.onstart?.();
+  for (let i = 0; i < 7; i++) {
+    s.r.onerror?.({ error: "no-speech" } as SpeechRecognitionErrorEvent);
+    s.r.onend?.();
+    s.r.onstart?.();
+  }
+  assert.deepEqual(s.finais, [""]);
+  assert.deepEqual(s.falhas, []);
+});
+
+test("mãos livres: uma resposta longa que o navegador fecha várias vezes continua inteira", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const s = preparar(true);
+  s.r.onstart?.();
+  const partes = ["Comecei em suporte", "depois fui para vendas", "e então liderei um time", "por três anos", "com bons resultados", "em duas empresas", "sempre medindo", "o que importava"];
+  for (const parte of partes) {
+    s.resultado(parte);
+    t.mock.timers.tick(1000);
+    s.r.onend?.();
+    s.r.onstart?.();
+  }
+  assert.deepEqual(s.falhas, [], "oito fechamentos seguidos de texto novo não são falha");
+  assert.equal(s.textos.at(-1), partes.join(" "));
+  t.mock.timers.tick(4000);
+  s.r.onend?.();
+  assert.deepEqual(s.finais, [partes.join(" ")]);
+});
 
 test("fim espontâneo do reconhecimento não envia uma resposta incompleta", (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });

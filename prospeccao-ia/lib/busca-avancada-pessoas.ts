@@ -1,6 +1,7 @@
 // Contrato oficial: brightdata/brightdata-mcp, search_dataset_schema.js e server.js.
-import { brightDataAtiva } from "./brightdata";
-import { buscarNaWeb, executarAcaoPesquisa, listarAcoesPesquisa, TetoConsultasAtingido, type RespostaBusca } from "./descoberta";
+import { brightDataAtiva, listarAcoesBrightData } from "./brightdata";
+import { urlAvatarPublico } from "./avatar-pessoa";
+import { buscarNaWeb, combinarResultados, executarAcaoPesquisa, type RespostaBusca } from "./descoberta";
 
 export const DATASET_PESSOAS = "gd_l1viktl72bvl7bjuj0";
 export type FiltrosPessoas = { cargo?: string; empresa?: string; localizacao?: string; setor?: string };
@@ -46,15 +47,16 @@ export function perfisDoDataset(hits: unknown): RespostaBusca["itens"] {
     if (!nome) return [];
     const cargo = texto(dados.position) || texto(dados.job_title);
     const empresa = texto(dados.current_company_name) || texto(objeto(dados.current_company).name) || texto(dados.company_name);
-    return [{ titulo: [nome, cargo, empresa].filter(Boolean).join(" - "), url, resumo: [texto(dados.about), texto(dados.location), texto(dados.city), texto(dados.country_code)].filter(Boolean).join(" · ").slice(0, 3000) }];
+    return [{ pessoa: { nome, cargo, empresa, cidade: texto(dados.location) || texto(dados.city), site: texto(objeto(dados.current_company).website) }, avatarUrl: urlAvatarPublico(dados.avatar), conteudoPerfil: JSON.stringify(dados).slice(0, 12000), titulo: [nome, cargo, empresa].filter(Boolean).join(" - "), url, resumo: [texto(dados.about), texto(dados.location), texto(dados.city), texto(dados.country_code)].filter(Boolean).join(" · ").slice(0, 3000) }];
   });
 }
 
 /** Busca estruturada primeiro; indisponibilidade, campos incompatíveis ou lista vazia usam a web. */
-export async function buscarPessoasAvancada(consulta: string, filtros: FiltrosPessoas, prospeccaoId: string): Promise<RespostaBusca> {
+export async function buscarPessoasAvancada(consulta: string, filtros: FiltrosPessoas, prospeccaoId: string, somenteDataset = false): Promise<RespostaBusca> {
+  let resultadoDataset: RespostaBusca | undefined;
   if (brightDataAtiva()) {
     try {
-      const acoes = await listarAcoesPesquisa();
+      const acoes = await listarAcoesBrightData();
       if (acoes.some(a => a.nome === "search_dataset") && acoes.some(a => a.nome === "list_dataset_fields")) {
         const campos = await executarAcaoPesquisa("list_dataset_fields", { dataset_id: DATASET_PESSOAS }, prospeccaoId);
         const filtro = filtroPessoas(Array.isArray(campos) ? campos.filter(c => typeof c?.name === "string") : [], filtros);
@@ -74,13 +76,17 @@ export async function buscarPessoasAvancada(consulta: string, filtros: FiltrosPe
             if (!resposta.hits.length || !cursor?.length || cursores.has(JSON.stringify(cursor))) break;
             cursores.add(JSON.stringify(cursor));
           }
-          if (itens.length) return { itens, origem: "Bright Data · base de perfis públicos", consultadoEm: new Date().toISOString(), demo: false };
+          if (itens.length) resultadoDataset = { itens: itens.map(i => ({ ...i, fontes: ["brightdata"] })), origem: "Bright Data · base de perfis públicos", consultadoEm: new Date().toISOString(), demo: false };
         }
       }
-    } catch (erro) {
-      if (erro instanceof TetoConsultasAtingido) throw erro;
+    } catch {
+      // O teto desta fonte não impede a consulta das demais.
       // executarAcaoPesquisa já registra a falha sem expor credenciais. A web é a alternativa.
     }
   }
-  return buscarNaWeb(consulta, 0, prospeccaoId);
+  if (somenteDataset) return resultadoDataset ?? { itens: [], origem: "Bright Data · base de perfis públicos", consultadoEm: new Date().toISOString(), demo: false };
+  try {
+    const web = await buscarNaWeb(consulta, 0, prospeccaoId);
+    return resultadoDataset ? { ...web, itens: combinarResultados([resultadoDataset.itens, web.itens]) } : web;
+  } catch (erro) { if (resultadoDataset) return resultadoDataset; throw erro; }
 }

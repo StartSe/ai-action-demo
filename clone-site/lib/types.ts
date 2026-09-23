@@ -31,7 +31,7 @@ export interface Pagina {
 }
 
 /** O que fica salvo como "entrada" no histórico: o pedido sem a imagem (pesada e sem uso depois de gerar). */
-export type EntradaPagina = Omit<Pedido, "imagem"> & { tamanhoImagem: number; briefing?: string };
+export type EntradaPagina = Omit<Pedido, "imagem"> & { tamanhoImagem: number; briefing?: string; url?: string };
 
 // ---------------------------------------------------------------------------------------------------------
 // Site = projeto (lib/projetos.ts). Um projeto tem nome, marca, origem, estado e aponta para a página
@@ -41,11 +41,42 @@ export type EntradaPagina = Omit<Pedido, "imagem"> & { tamanhoImagem: number; br
 /** rascunho → gerando → pronto | falhou; falhou → gerando ("Tentar de novo"). Nenhuma outra transição. */
 export type EstadoProjeto = "rascunho" | "gerando" | "pronto" | "falhou";
 
-/** De onde o site nasce: da captura de uma página de referência ou de um briefing em texto. */
-export type OrigemProjeto = "referencia" | "briefing";
+/** De onde o site nasce: da captura de uma página de referência, do endereço de um site ou de um briefing em texto. */
+export type OrigemProjeto = "referencia" | "endereco" | "briefing";
 
 /** Falha gravada no projeto, no mesmo formato de ErroIA (lib/ai.ts): mensagem em português, nunca o texto cru do provedor. */
 export type ErroProjeto = { mensagem: string; codigo?: string; acao?: { rotulo: string; url: string } };
+
+/** Uma etapa da construção (lib/construtor.ts): o plano e depois uma seção da página por vez. */
+export type EstadoEtapa = "pendente" | "andamento" | "pronta" | "falhou";
+export interface EtapaGeracao {
+  id: string;
+  titulo: string;
+  estado: EstadoEtapa;
+  /** Uma linha sobre o que a etapa produziu ou por que falhou. */
+  detalhe?: string;
+  iniciadoEm?: string;
+  terminadoEm?: string;
+}
+
+/** O andamento da geração, gravado no projeto a cada etapa: a tela mostra a lista e a prévia parcial. */
+export interface ProgressoGeracao {
+  etapas: EtapaGeracao[];
+  atualizadoEm: string;
+}
+
+/** Publicação em hospedagem externa (Netlify): o site criado lá e a versão que foi enviada. */
+export interface PublicacaoExterna {
+  siteId: string;
+  deployId?: string;
+  estado?: "publicando" | "pronto" | "falhou";
+  versaoPendente?: number;
+  url: string;
+  versao?: number;
+  publicadoEm?: string;
+  iniciadoEm?: string;
+  rollback?: boolean;
+}
 
 /** O projeto devolvido às telas: nunca carrega a imagem (pesada; fica no banco só até `pronto`). */
 export interface Projeto {
@@ -58,6 +89,8 @@ export interface Projeto {
   stack: Stack;
   instrucoes?: string;
   briefing?: string;
+  /** Endereço do site de referência, quando a origem é "endereco". */
+  url?: string;
   marca?: Marca;
   tamanhoImagem: number;
   /** Id da página no histórico (resultados), quando `pronto`. */
@@ -66,6 +99,12 @@ export interface Projeto {
   versaoPublicada?: number;
   /** Domínio próprio (ex.: www.minhaempresa.com.br) que a instância serve na raiz para esse Host. */
   dominio?: string;
+  /** Andamento da última geração (etapas), mantido também depois de pronto para a pessoa rever o que foi feito. */
+  progresso?: ProgressoGeracao;
+  /** Site publicado em hospedagem externa (Netlify). */
+  netlify?: PublicacaoExterna;
+  /** Serviço independente deste projeto no Render. */
+  render?: PublicacaoExterna;
   erro?: ErroProjeto;
   criadoEm: string;
   atualizadoEm: string;

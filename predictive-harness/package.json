@@ -1,0 +1,31 @@
+{
+  "name": "predictive-harness",
+  "version": "0.5.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint --ignore-pattern 'data/**'",
+    "test": "node --import ./scripts/gancho-ts.mjs --test lib/*.test.ts"
+  },
+  "dependencies": {
+    "@elevenlabs/client": "^1.25.0",
+    "@openai/codex": "0.155.1",
+    "next": "16.3.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "yauzl": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/yauzl": "^3.4.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.5",
+    "prettier": "3.6.2",
+    "typescript": "^5"
+  }
+}

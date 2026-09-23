@@ -6,7 +6,7 @@
  */
 import { numero } from "./formato";
 import { formatarTelefone } from "./telefone";
-import type { CanalOrigem, Objetivo, Periodo, PeriodoMetricas, StatusConversa, Tom } from "./types";
+import type { CanalOrigem, Objetivo, Periodo, PeriodoMetricas, StatusConversa, TipoFonte, Tom } from "./types";
 
 const ROTULOS_ORIGEM: Record<CanalOrigem, string> = {
   simulador: "Simulador",
@@ -102,6 +102,28 @@ export function rotuloNumero(numero: string): string {
  * IA) em vez de um telefone de verdade: quem mostra uma linha "Telefone" precisa saber a diferença. */
 export function numeroInterno(numero: string): boolean {
   return numero in NUMEROS_INTERNOS;
+}
+
+/**
+ * Como a última mensagem aparece nas listas quando ela foi um áudio, uma foto ou um arquivo. O que
+ * está gravado é o texto derivado que o webhook montou ("[Áudio de 12 s]"); aqui ele vira a prévia
+ * curta que o WhatsApp também usa ("🎤 Áudio (0:12)"). Uma mensagem com legenda nunca passa por aqui:
+ * o texto dela é a própria legenda.
+ */
+export function previaMensagem(texto: string): string {
+  const limpo = (texto || "").trim();
+  const audio = limpo.match(/^\[Áudio(?: de (\d+) s)?\]$/);
+  if (audio) {
+    const segundos = Number(audio[1] ?? 0);
+    return segundos ? `🎤 Áudio (${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, "0")})` : "🎤 Áudio";
+  }
+  if (/^\[Imagem(?: de visualização única)?\]$/.test(limpo)) return "📷 Imagem";
+  if (/^\[Vídeo(?: de \d+ s)?\]$/.test(limpo)) return "🎬 Vídeo";
+  if (/^\[Documento: .*\]$/.test(limpo)) return "📄 Documento";
+  if (limpo === "[Figurinha]") return "🙂 Figurinha";
+  if (/^\[Localização: .*\]$/.test(limpo)) return "📍 Localização";
+  if (/^\[Contato: .*\]$/.test(limpo)) return "👤 Contato";
+  return limpo;
 }
 
 /** Uma escolha do formulário do Assistente: o que o cartão diz em cima e a linha de apoio embaixo. */
@@ -236,4 +258,49 @@ const CONTEXTO_COMPARACAO: Record<PeriodoMetricas, string> = {
 
 export function contextoComparacao(periodo: PeriodoMetricas): string {
   return CONTEXTO_COMPARACAO[periodo] ?? CONTEXTO_COMPARACAO[PERIODO_PADRAO];
+}
+
+/**
+ * O link do cartão "Consultar a agenda" (components/CartaoFerramenta.tsx) quando ela ainda não foi
+ * conectada. Ele mora aqui, e não no JSX, pela mesma razão de `ACAO_CONECTAR_NUMERO` estar em
+ * lib/demo.ts: `scripts/verificar-jargao.mjs` procura "/setup" em texto de `components/*.tsx` que não
+ * seja atributo, e uma `url:` escrita direto no componente reprovaria. Em `lib/*.ts` isso não acontece.
+ */
+export const ACAO_CONECTAR_AGENDA = { url: "/setup#mcp-agenda", rotulo: "Conectar em Configurações" };
+
+/**
+ * Um desenho por tipo de fonte do bloco "Por que respondeu assim" (components/PorQueRespondeu.tsx).
+ * `Record` completo: somar um tipo a `TipoFonte` passa a cobrar o desenho aqui, em vez de deixar uma
+ * linha sem nada na tela.
+ */
+const DESENHOS_FONTE: Record<TipoFonte, string> = {
+  base: "📋",
+  aprovada: "✅",
+  documento: "📄",
+  memoria: "🧠",
+  resumo: "📝",
+};
+
+export function desenhoFonte(tipo: TipoFonte): string {
+  return DESENHOS_FONTE[tipo] ?? DESENHOS_FONTE.base;
+}
+
+/** Como a linha da mídia lida aparece no bloco "Por que respondeu assim". */
+const MIDIA_LIDA: Record<"transcricao" | "imagem" | "documento", string> = {
+  transcricao: "Ouviu o áudio do cliente",
+  imagem: "Olhou a foto do cliente",
+  documento: "Leu o arquivo do cliente",
+};
+
+export function rotuloMidiaLida(tipo: "transcricao" | "imagem" | "documento"): string {
+  return MIDIA_LIDA[tipo] ?? MIDIA_LIDA.documento;
+}
+
+/** Quanto o atendente levou para escrever a resposta, curto ("menos de 1 s", "1,4 s", "12 s"). */
+export function tempoCurto(ms: number): string {
+  const segundos = ms / 1000;
+  // "0,0 s" pareceria um erro de medição; abaixo de um segundo, o que importa é que foi imediato.
+  if (segundos < 1) return "menos de 1 s";
+  if (segundos < 10) return `${segundos.toFixed(1).replace(".", ",")} s`;
+  return `${Math.round(segundos)} s`;
 }

@@ -13,6 +13,7 @@ import { variaveisDaEntrevista } from "./agente";
 import { FECHADO, type MotivoFechado, type SalaPublica, resolverConvite } from "./convite";
 import { type Entrevista, mudarStatus, obter as obterEntrevista } from "./entrevistas";
 import { cookieSessaoCandidato, lerSessaoCandidato } from "./sessao-candidato";
+import { dataDoPrazo } from "./prazo-convite";
 import { agenteConfigurado, agenteEnabled } from "./voz";
 import type { NivelVoz } from "./entrevistas";
 
@@ -63,7 +64,11 @@ function bloquear(motivo: MotivoBloqueio, nome?: string): SalaBloqueada {
  */
 export function conferirSala(codigo: string, cabecalhoCookie: string | null): ResultadoSala {
   const resolucao = resolverConvite(codigo);
-  if (!resolucao.ok) return bloquear(resolucao.motivo, resolucao.nome);
+  if (!resolucao.ok) {
+    const bloqueio = bloquear(resolucao.motivo, resolucao.nome);
+    if (resolucao.motivo === "agendada" && resolucao.iniciaEm) bloqueio.descricao = `Você poderá começar em ${dataDoPrazo(resolucao.iniciaEm)} (horário de Brasília). Volte a este link a partir desse horário.`;
+    return bloqueio;
+  }
 
   const { entrevistaId } = resolucao.sala;
   const entrevista = entrevistaId ? obterEntrevista(entrevistaId) : null;

@@ -1,6 +1,7 @@
 "use client";
 // Tela de Relatórios: "a IA está resolvendo, e quanto?" respondido com quatro números, um gráfico por
-// dia, os assuntos mais falados e as conversas que ainda esperam uma pessoa.
+// dia, os assuntos mais falados, por que o atendente precisou de gente e as conversas que ainda esperam
+// uma pessoa.
 //
 // Todos os números vêm de `GET /api/metricas?periodo=` (lib/metricas.ts é a fonte única; as definições
 // de cada um estão no topo daquele arquivo). Esta tela não calcula nenhum deles — ela só escolhe o
@@ -17,13 +18,13 @@ import { Avatar } from "./ContatoVisual";
 import { MenuExportar } from "./ExportarRelatorio";
 import { GraficoLinhas } from "./GraficoLinhas";
 import { Indicadores, numerosEmTexto } from "./Indicadores";
-import { ErrorBox, lerErro, Topbar, useStatus, type ErroLido } from "./ui";
+import { Aviso, ErrorBox, lerErro, Topbar, useStatus, type ErroLido } from "./ui";
 import { ASSUNTO_OUTROS } from "@/lib/assuntos";
 import { soConversasDeExemplo } from "@/lib/demo";
 import { numero as formatarNumero } from "@/lib/formato";
-import { navegacaoComContador } from "@/lib/navegacao";
-import { contextoComparacao, horaOuDia, lerPeriodoMetricas, PERIODOS_METRICAS, PERIODO_PADRAO, rotuloContato, rotuloPeriodo } from "@/lib/rotulos";
-import type { AssuntoMetricas, Conversa, Metricas, PeriodoMetricas } from "@/lib/types";
+import { contextoComparacao, horaOuDia, lerPeriodoMetricas, PERIODOS_METRICAS, PERIODO_PADRAO, previaMensagem, rotuloContato, rotuloPeriodo } from "@/lib/rotulos";
+import { leituraDosMotivos, rotuloMotivo } from "@/lib/transferencia";
+import type { AssuntoMetricas, Conversa, Metricas, MotivoMetricas, PeriodoMetricas } from "@/lib/types";
 
 /** Quantas barras o cartão "Principais assuntos" desenha, contando a de "Outros". */
 const MAXIMO_ASSUNTOS = 5;
@@ -53,6 +54,11 @@ function principaisAssuntos(assuntos: AssuntoMetricas[]): AssuntoMetricas[] {
   return sobra > 0 ? [...topo, { assunto: OUTROS, total: sobra }] : topo;
 }
 
+/** Os motivos como as barras os mostram: na ordem que `lib/metricas.ts` já devolve, com o rótulo de tela. */
+function barrasDeMotivo(motivos: MotivoMetricas[]): ItemDeBarra[] {
+  return motivos.map((m) => ({ chave: m.motivo, rotulo: rotuloMotivo(m.motivo), total: m.total }));
+}
+
 /**
  * O que o "Copiar resumo" cola: os quatro números do período e os assuntos, exatamente como a tela
  * mostra (os mesmos rótulos dos indicadores e as mesmas cinco barras).
@@ -67,19 +73,30 @@ function resumoEmTexto(metricas: Metricas | null, periodo: PeriodoMetricas): str
   return linhas.join("\n");
 }
 
-/** Uma barra horizontal por assunto, em CSS: o rótulo e o total em cima, a barra embaixo. */
-function BarrasDeAssunto({ assuntos }: { assuntos: AssuntoMetricas[] }) {
-  const maior = Math.max(...assuntos.map((a) => a.total), 1);
+/** Uma linha de barra: o rótulo que a pessoa lê e quanto ele vale. Os dois cartões de barras usam isto. */
+interface ItemDeBarra {
+  chave: string;
+  rotulo: string;
+  total: number;
+}
+
+/**
+ * Uma barra horizontal por item, em CSS: o rótulo e o total em cima, a barra embaixo. É o mesmo
+ * desenho em "Principais assuntos" e em "Por que o atendente pediu ajuda" — dois cartões que
+ * respondem à mesma pergunta ("o que mais aparece?") não podem ter aparências diferentes.
+ */
+function Barras({ itens }: { itens: ItemDeBarra[] }) {
+  const maior = Math.max(...itens.map((i) => i.total), 1);
   return (
     <ul className="flex flex-col gap-3.5">
-      {assuntos.map((a) => (
-        <li key={a.assunto}>
+      {itens.map((i) => (
+        <li key={i.chave}>
           <div className="flex items-baseline justify-between gap-3 mb-1.5">
-            <span className="text-[14px] font-semibold min-w-0 truncate">{a.assunto}</span>
-            <span className="text-[13px] text-muted shrink-0">{formatarNumero(a.total)}</span>
+            <span className="text-[14px] font-semibold min-w-0 truncate" title={i.rotulo}>{i.rotulo}</span>
+            <span className="text-[13px] text-muted shrink-0">{formatarNumero(i.total)}</span>
           </div>
           <div className="h-2 rounded-full bg-accent-soft overflow-hidden">
-            <div className="h-full rounded-full bg-accent" style={{ width: `${Math.round((a.total / maior) * 100)}%` }} />
+            <div className="h-full rounded-full bg-accent" style={{ width: `${Math.round((i.total / maior) * 100)}%` }} />
           </div>
         </li>
       ))}
@@ -112,7 +129,7 @@ function ListaDeAtencao({ conversas }: { conversas: Conversa[] }) {
                 <span className="shrink-0 text-[12px] text-muted">{horaOuDia(c.atualizado_em)}</span>
               </span>
               <span className="block truncate text-[13px] text-ink-2 mt-0.5">
-                {(c.ultima_mensagem || "").split("\n")[0] || "Sem mensagem ainda"}
+                {previaMensagem(c.ultima_mensagem || "").split("\n")[0] || "Sem mensagem ainda"}
               </span>
               <span className="inline-block chip-media mt-1.5">Aguardando</span>
             </span>
@@ -186,6 +203,9 @@ export function Relatorios() {
   const atencao = metricas?.atencao ?? [];
   const assuntos = principaisAssuntos(metricas?.assuntos ?? []);
   const semClassificacao = assuntos.length === 0 || assuntos.every((a) => a.assunto === OUTROS);
+  const motivos = barrasDeMotivo(metricas?.motivos ?? []);
+  const leitura = leituraDosMotivos(metricas?.motivos ?? []);
+  const naoEntregues = metricas?.naoEntregues ?? 0;
 
   return (
     <>
@@ -196,7 +216,6 @@ export function Relatorios() {
         status={status}
         erro={erro}
         usuario={status?.usuario}
-        navegacao={navegacaoComContador(atencao.length)}
       />
 
       <main className="max-w-[1400px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
@@ -245,6 +264,18 @@ export function Relatorios() {
           <Indicadores metricas={metricas} contexto={contextoComparacao(periodo)} />
         </div>
 
+        {/* Mensagem que não chegou ao cliente é problema de agora, não estatística: por isso ela fica
+            logo abaixo dos números, e leva para as conversas em vez de virar um quinto indicador. */}
+        {naoEntregues > 0 && (
+          <div className="mb-6">
+            <Aviso tom="danger" acao={{ rotulo: "Ver as conversas", url: "/conversas" }}>
+              {naoEntregues === 1
+                ? "1 mensagem não chegou ao cliente no período."
+                : `${formatarNumero(naoEntregues)} mensagens não chegaram ao cliente no período.`}
+            </Aviso>
+          </div>
+        )}
+
         <div className="grid gap-5 items-start grid-cols-1 min-[1100px]:grid-cols-[minmax(0,1fr)_360px]">
           <section className="card px-5 py-[18px] min-w-0" aria-label="Conversas ao longo do tempo">
             <h2 className="section-title">Conversas ao longo do tempo</h2>
@@ -255,23 +286,55 @@ export function Relatorios() {
             )}
           </section>
 
-          <section className="card px-5 py-[18px]" aria-label="Principais assuntos">
-            <h2 className="section-title">Principais assuntos</h2>
-            {metricas === null ? (
-              <div aria-hidden="true">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <span key={i} className="skeleton block w-full mt-4 first:mt-0" />
-                ))}
-              </div>
-            ) : semClassificacao ? (
-              <div className="py-6 text-center text-[13px] text-muted">
-                <p className="text-ink font-bold mb-1">Sem classificação ainda</p>
-                <p>Quando o atendente separar as conversas por assunto, os mais falados aparecem aqui.</p>
-              </div>
-            ) : (
-              <BarrasDeAssunto assuntos={assuntos} />
-            )}
-          </section>
+          {/* Os dois cartões de barras dividem UMA célula da grade, empilhados: postos em células
+              separadas, o segundo cairia na linha de baixo e abriria um vão do tamanho do gráfico. */}
+          <div className="flex flex-col gap-5 min-w-0">
+            <section className="card px-5 py-[18px]" aria-label="Principais assuntos">
+              <h2 className="section-title">Principais assuntos</h2>
+              {metricas === null ? (
+                <div aria-hidden="true">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <span key={i} className="skeleton block w-full mt-4 first:mt-0" />
+                  ))}
+                </div>
+              ) : semClassificacao ? (
+                <div className="py-6 text-center text-[13px] text-muted">
+                  <p className="text-ink font-bold mb-1">Sem classificação ainda</p>
+                  <p>Quando o atendente separar as conversas por assunto, os mais falados aparecem aqui.</p>
+                </div>
+              ) : (
+                <Barras itens={assuntos.map((a) => ({ chave: a.assunto, rotulo: a.assunto, total: a.total }))} />
+              )}
+            </section>
+
+            {/* Logo abaixo de "Principais assuntos": as duas são leituras do que mais apareceu no
+                período, e ler uma depois da outra é o que responde "está faltando o quê?". */}
+            <section className="card px-5 py-[18px]" aria-label="Por que o atendente pediu ajuda">
+              <h2 className="section-title">Por que o atendente pediu ajuda</h2>
+              {metricas === null ? (
+                <div aria-hidden="true">
+                  {[0, 1, 2].map((i) => (
+                    <span key={i} className="skeleton block w-full mt-4 first:mt-0" />
+                  ))}
+                </div>
+              ) : motivos.length === 0 ? (
+                <div className="py-6 text-center text-[13px] text-muted">
+                  <p className="text-ink font-bold mb-1">Nenhuma transferência no período</p>
+                  <p>O atendente respondeu sozinho todas as conversas.</p>
+                </div>
+              ) : (
+                <>
+                  <Barras itens={motivos} />
+                  <div className="mt-4 pt-3.5 border-t border-line">
+                    <p className="text-[13px] text-ink-2">{leitura.texto}</p>
+                    {leitura.acao && (
+                      <a className="btn-link text-[13px] mt-1.5 inline-block" href={leitura.acao.url}>{leitura.acao.rotulo}</a>
+                    )}
+                  </div>
+                </>
+              )}
+            </section>
+          </div>
 
           <section className="card overflow-hidden min-[1100px]:col-span-2" aria-label="Conversas que precisam de atenção">
             <div className="flex items-baseline justify-between gap-4 px-5 pt-[18px] pb-3">

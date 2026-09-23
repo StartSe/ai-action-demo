@@ -1,3 +1,4 @@
+import { obter as obterSimulacao } from "@/lib/simulacoes";
 // Encerra a conversa por texto da sala de simulação pública (app/simular/[token]) e gera a análise:
 // mesma lógica de app/webhook/elevenlabs/route.ts para uma conversa que já chega estruturada.
 import crypto from "node:crypto";
@@ -13,6 +14,8 @@ function gerarId(): string {
 
 export async function POST(req: Request, { params }: RouteContext<"/api/salas/[token]/analisar">) {
   const { token } = await params;
+  const simulacaoAtual = obterSimulacao(token);
+  if (simulacaoAtual && simulacaoAtual.status !== "ativa") return Response.json({ error: simulacaoAtual.status === "pausada" ? "Este treino está pausado. Aguarde a reativação por quem enviou o link." : "Este treino foi encerrado." }, { status: 409 });
   const sala = obterSala(token);
   if (!sala || expirou(sala)) {
     return Response.json({ error: "Esta sala não está mais disponível." }, { status: 404 });
@@ -20,7 +23,7 @@ export async function POST(req: Request, { params }: RouteContext<"/api/salas/[t
 
   const corpo = await req.json().catch(() => null);
   const transcricao = Array.isArray(corpo?.transcricao) ? (corpo.transcricao as LinhaTranscricao[]) : [];
-  if (!transcricao.some((l) => l.papel === "vendedor")) {
+  if (!transcricao.some((l) => l?.papel === "vendedor" && typeof l.texto === "string" && l.texto.trim())) {
     return Response.json({ error: "Converse um pouco antes de encerrar a ligação." }, { status: 400 });
   }
 

@@ -47,6 +47,8 @@ export async function POST(req: Request) {
     vagaId: typeof corpo?.vagaId === "string" ? corpo.vagaId : "",
     candidatoId: typeof corpo?.candidatoId === "string" ? corpo.candidatoId : "",
     expiraEmDias: corpo?.expiraEmDias,
+    iniciaEm: corpo?.iniciaEm,
+    expiraEm: corpo?.expiraEm,
     origem: baseUrl(req),
     remetente: sessaoAtual(req)?.nome,
   }));

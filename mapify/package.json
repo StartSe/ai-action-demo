@@ -1,0 +1,34 @@
+{
+  "name": "mapify",
+  "version": "1.4.3",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "setup:youtube": "node scripts/setup-youtube.mjs",
+    "check:youtube": "node --import ./scripts/gancho-ts.mjs scripts/check-youtube.mjs",
+    "lint": "eslint --ignore-pattern 'data/**'",
+    "test": "node --import ./scripts/gancho-ts.mjs --test lib/*.test.ts"
+  },
+  "dependencies": {
+    "@openai/codex": "0.155.1",
+    "@xyflow/react": "12.11.6",
+    "cheerio": "1.2.0",
+    "google-auth-library": "11.1.0",
+    "ipaddr.js": "2.2.0",
+    "next": "16.3.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "unpdf": "1.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.5",
+    "prettier": "3.6.2",
+    "typescript": "^5"
+  }
+}

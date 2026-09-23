@@ -8,7 +8,7 @@ test("agente indisponível permite abrir microfone com voz do navegador", async 
       import React from "react";
       import { createRoot } from "react-dom/client";
       import { SalaVoz } from "./components/SalaVoz";
-      window.fetch = async url => Response.json(String(url).endsWith('/livekit') ? {url: 'wss://teste', token: 'teste'} : {dica: 'Apresente-se.'});
+      window.fetch = async url => Response.json(String(url).endsWith('/livekit') ? {url: 'wss://teste', token: 'teste'} : String(url).endsWith('/disponibilidade') ? {status: 'ativa'} : {dica: 'Apresente-se.'});
       createRoot(document.getElementById('root')).render(React.createElement(SalaVoz, {
         livekit: true, codigo: 'teste', marca: 'S', nome: 'Teste', titulo: 'Treino', cliente: {nome: 'Cliente', cargo: 'Gestor', empresa: 'Empresa'},
         objetivo: 'Conhecer o cliente', duracaoMin: 10, iniciadaEm: new Date().toISOString(), falasIniciais: [], porVoz: true, porTexto: true, vozDoServidor: false, voz: {rate: 1, pitch: 1}

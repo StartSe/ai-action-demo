@@ -24,6 +24,8 @@ export function EntrevistaCandidato({
   nome,
   vaga,
   duracaoMin,
+  iniciaEm,
+  expiraEm,
   vozLigada,
   livekit = false,
   retomando = false,
@@ -35,6 +37,8 @@ export function EntrevistaCandidato({
   nome: string;
   vaga: Vaga;
   duracaoMin: number;
+  iniciaEm?: string;
+  expiraEm?: string;
   vozLigada: boolean;
   livekit?: boolean;
   /** Este aparelho já começou esta conversa: entra direto na sala. */
@@ -94,6 +98,8 @@ export function EntrevistaCandidato({
         primeiroNome={vaga.candidato.trim().split(/\s+/)[0] || vaga.candidato}
         cargo={vaga.titulo}
         duracaoMin={duracaoMin}
+        iniciaEm={iniciaEm}
+        expiraEm={expiraEm}
         onPronto={({ porVoz: falando }) => {
           setAudioLiberado(true);
           setPorVoz(falando);

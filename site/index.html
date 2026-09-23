@@ -295,14 +295,14 @@
   $("#apoioSuite").textContent = `Um único clique cria os ${quantosSuite} apps na sua conta. Depois, abra cada um e conecte a IA em Configurações.` +
     (pagos.length ? ` ${pagos.map((a) => `${a.nome} exige plano pago (${a.plano})`).join("; ")}; os outros ${POR_EXTENSO[nGratis] || nGratis} são gratuitos.` : "");
   $("#rotuloSuite").textContent = `Publicar os ${quantosSuite} apps`;
-  if (dados.apps.some((a) => naSuite.has(a.id) && a.persistencia)) {
-    $("#apoioSuite").textContent += " A suíte usa a opção gratuita da Bússola, sem volume. Para manter os dados dela, use a opção com volume no cartão do app.";
+  if (dados.apps.some((a) => naSuite.has(a.id) && a.persistencia && !ePago(a))) {
+    $("#apoioSuite").textContent += " Apps gratuitos com opção de persistência usam a instalação sem volume na suíte. Para manter os dados deles, use a opção com volume no cartão do app.";
   }
   if (pagos.length) {
     const aviso = $("#avisoPago");
     aviso.hidden = false;
     aviso.textContent = pagos
-      .map((a) => `${a.nome} é a exceção: exige um plano pago no serviço de hospedagem (${a.plano}) e guarda planilhas e modelos em um disco próprio, então nada se perde entre atualizações.`)
+      .map((a) => `${a.nome} exige plano pago (${a.plano})${a.discoGB ? ` e guarda ${a.discoGuarda || "os dados do app"} em um disco de ${a.discoGB} GB entre atualizações` : ""}.`)
       .join(" ");
   }
 
@@ -346,7 +346,7 @@
     if (ePago(app)) {
       $(".dica", el).textContent = `Plano pago (${app.plano})${app.discoGB ? ` com disco de ${app.discoGB} GB` : ""}. Abre em uma nova aba, na sua conta.`;
     }
-    if (app.persistencia && app.publicarPersistente) {
+    if (app.persistencia && app.publicarPersistente && !ePago(app)) {
       const opcao = $(".persistencia", el);
       const entrada = $("input", opcao);
       const dica = $(".dica", el);

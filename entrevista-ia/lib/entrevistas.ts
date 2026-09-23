@@ -9,6 +9,7 @@
 // scorecard. Este módulo só guarda estado.
 import { agora, banco, gerarId } from "./banco";
 import { semearDemonstracao } from "./semear-demo";
+import { periodoPadrao } from "./prazo-convite";
 
 export type StatusEntrevista = "convidada" | "aberta" | "em_andamento" | "concluida" | "avaliada" | "expirada" | "cancelada";
 /** Os três níveis da conversa (D3): agente da ElevenLabs, voz do navegador, texto. Nulo até a sala abrir. */
@@ -39,6 +40,8 @@ export type Entrevista = {
   abertaEm?: string;
   iniciadaEm?: string;
   concluidaEm?: string;
+  /** Início da disponibilidade do convite, diferente do início real da conversa. */
+  iniciaEm?: string;
   expiraEm?: string;
   /** Id do parecer em lib/historico.ts (o link /r/<id>), preenchido quando a avaliação termina. */
   resultadoId?: string;
@@ -56,6 +59,9 @@ export type MensagemEntrevista = {
   texto: string;
   /** Segundos desde o início da conversa, quando a sala souber medir. */
   segundo?: number;
+  /** O passo do roteiro que esta fala da entrevistadora cumpriu (lib/roteiro.ts, `passoEmTexto`).
+   * Vazio nas falas do candidato e nas gravadas antes da 0.8.0. */
+  passo?: string;
   criadoEm: string;
 };
 
@@ -71,6 +77,7 @@ type LinhaEntrevista = {
   abertaEm: string | null;
   iniciadaEm: string | null;
   concluidaEm: string | null;
+  iniciaEm: string | null;
   expiraEm: string | null;
   resultadoId: string | null;
   parecerStatus: string | null;
@@ -80,7 +87,7 @@ type LinhaEntrevista = {
   criadoEm: string;
 };
 
-type LinhaMensagem = { id: string; entrevistaId: string; papel: string; texto: string; segundo: number | null; criadoEm: string };
+type LinhaMensagem = { id: string; entrevistaId: string; papel: string; texto: string; segundo: number | null; passo?: string | null; criadoEm: string };
 
 const STATUS: StatusEntrevista[] = ["convidada", "aberta", "em_andamento", "concluida", "avaliada", "expirada", "cancelada"];
 const NIVEIS: NivelVoz[] = ["agente", "navegador", "texto"];
@@ -113,6 +120,7 @@ function linhaParaEntrevista(l: LinhaEntrevista): Entrevista {
     abertaEm: l.abertaEm ?? undefined,
     iniciadaEm: l.iniciadaEm ?? undefined,
     concluidaEm: l.concluidaEm ?? undefined,
+    iniciaEm: l.iniciaEm ?? l.convidadaEm ?? l.criadoEm,
     expiraEm: l.expiraEm ?? undefined,
     resultadoId: l.resultadoId ?? undefined,
     parecerStatus: PARECER_STATUS.includes(l.parecerStatus as ParecerStatus) ? (l.parecerStatus as ParecerStatus) : "nao_pedido",
@@ -130,6 +138,7 @@ function linhaParaMensagem(l: LinhaMensagem): MensagemEntrevista {
     papel: l.papel === "candidato" ? "candidato" : "entrevistadora",
     texto: l.texto,
     segundo: l.segundo ?? undefined,
+    passo: l.passo ?? undefined,
     criadoEm: l.criadoEm,
   };
 }
@@ -143,7 +152,7 @@ function linhaParaMensagem(l: LinhaMensagem): MensagemEntrevista {
  */
 export function expirarVencidas(): void {
   banco()
-    .prepare("UPDATE entrevistas SET status = 'expirada' WHERE status IN ('convidada', 'aberta') AND expiraEm IS NOT NULL AND expiraEm < ?")
+    .prepare("UPDATE entrevistas SET status = 'expirada' WHERE status IN ('convidada', 'aberta') AND expiraEm IS NOT NULL AND expiraEm <= ?")
     .run(agora());
 }
 
@@ -158,6 +167,7 @@ export function criar({
   vagaId,
   candidatoId,
   codigo,
+  iniciaEm,
   expiraEm,
   exemplo = false,
   status = "convidada",
@@ -165,6 +175,7 @@ export function criar({
   vagaId: string;
   candidatoId: string;
   codigo?: string;
+  iniciaEm?: string;
   expiraEm?: string;
   exemplo?: boolean;
   status?: StatusEntrevista;
@@ -174,12 +185,13 @@ export function criar({
 
   const id = gerarId();
   const momento = agora();
+  const periodo = periodoPadrao(new Date(momento));
   banco()
     .prepare(
-      `INSERT INTO entrevistas (id, vagaId, candidatoId, codigo, status, convidadaEm, expiraEm, exemplo, criadoEm)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO entrevistas (id, vagaId, candidatoId, codigo, status, convidadaEm, iniciaEm, expiraEm, exemplo, criadoEm)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(id, vagaId, candidatoId, codigo ?? null, status, momento, expiraEm ?? null, exemplo ? 1 : 0, momento);
+    .run(id, vagaId, candidatoId, codigo ?? null, status, momento, iniciaEm ?? periodo.iniciaEm, expiraEm ?? periodo.expiraEm, exemplo ? 1 : 0, momento);
   const entrevista = obter(id);
   if (!entrevista) throw new Error("A entrevista recém-criada não foi encontrada no banco.");
   return entrevista;
@@ -272,10 +284,10 @@ export function mudarStatus(id: string, status: StatusEntrevista, extras: { nive
 }
 
 /** Define o código do link público depois que o convite foi criado (US-013). */
-export function definirCodigo(id: string, codigo: string, expiraEm?: string): Entrevista | null {
+export function definirCodigo(id: string, codigo: string, expiraEm?: string, iniciaEm?: string): Entrevista | null {
   const { changes } = banco()
-    .prepare("UPDATE entrevistas SET codigo = ?, expiraEm = COALESCE(?, expiraEm) WHERE id = ?")
-    .run(codigo, expiraEm ?? null, id);
+    .prepare("UPDATE entrevistas SET codigo = ?, expiraEm = COALESCE(?, expiraEm), iniciaEm = COALESCE(?, iniciaEm) WHERE id = ?")
+    .run(codigo, expiraEm ?? null, iniciaEm ?? null, id);
   return Number(changes) > 0 ? obter(id) : null;
 }
 
@@ -284,18 +296,30 @@ export function registrarMensagem({
   papel,
   texto,
   segundo,
+  passo,
 }: {
   entrevistaId: string;
   papel: PapelMensagem;
   texto: string;
   segundo?: number;
+  passo?: string;
 }): MensagemEntrevista {
   const id = gerarId();
   const criadoEm = agora();
   banco()
-    .prepare("INSERT INTO mensagens_entrevista (id, entrevistaId, papel, texto, segundo, criadoEm) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(id, entrevistaId, papel, texto, segundo ?? null, criadoEm);
-  return { id, entrevistaId, papel, texto, segundo, criadoEm };
+    .prepare("INSERT INTO mensagens_entrevista (id, entrevistaId, papel, texto, segundo, passo, criadoEm) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run(id, entrevistaId, papel, texto, segundo ?? null, passo ?? null, criadoEm);
+  return { id, entrevistaId, papel, texto, segundo, passo, criadoEm };
+}
+
+/** A memória de trabalho da conversa (lib/roteiro.ts), em JSON. `null` enquanto não há anotações. */
+export function lerMemoria(id: string): string | null {
+  const linha = banco().prepare("SELECT memoria FROM entrevistas WHERE id = ?").get(id) as { memoria: string | null } | undefined;
+  return linha?.memoria ?? null;
+}
+
+export function salvarMemoria(id: string, memoria: string): void {
+  banco().prepare("UPDATE entrevistas SET memoria = ? WHERE id = ?").run(memoria, id);
 }
 
 /**

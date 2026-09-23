@@ -29,7 +29,7 @@ function maisMaterial(leads: Lead[], quantos: number): Lead[] {
  */
 function OrigemLeads({ fonte, meta, mostrarLink }: { fonte: Fonte; meta: Meta; mostrarLink: boolean }) {
   if (fonte !== "demo") {
-    return <p className="text-muted text-[13px] mb-4">{`Leads buscados na base da Apollo a partir de ${meta.insumo}, em ${data(meta.geradoEm, { comHora: true })}`}</p>;
+    return <p className="text-muted text-[13px] mb-4">{`Leads encontrados nas fontes conectadas a partir de ${meta.insumo}, em ${data(meta.geradoEm, { comHora: true })}`}</p>;
   }
   return (
     <p className="text-muted text-[13px] mb-4">
@@ -37,7 +37,7 @@ function OrigemLeads({ fonte, meta, mostrarLink }: { fonte: Fonte; meta: Meta; m
       {mostrarLink && (
         <>
           {" "}
-          <Link href="/setup#apollo" className="font-semibold text-accent underline underline-offset-2">Conectar a busca de leads</Link>
+          <Link href="/setup#prospecthalo" className="font-semibold text-accent underline underline-offset-2">Conectar a busca de leads</Link>
         </>
       )}
     </p>

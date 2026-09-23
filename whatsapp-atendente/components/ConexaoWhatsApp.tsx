@@ -22,6 +22,7 @@
 // verificador. O formato dos campos vem do próprio app, em JSON, sem tipo importado.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Aviso, CopyButton, data, MaisDetalhes, useConfirmacao } from "./ui";
+import { useEventos } from "./useEventos";
 import { formatarTelefone } from "@/lib/telefone";
 import type { RespostaConexao } from "@/app/api/whatsapp/conexao/route";
 
@@ -130,6 +131,16 @@ export function ConexaoWhatsApp({
     }, 0);
     return () => clearTimeout(t);
   }, [carregar, carregarCampos, contarExemplos]);
+
+  // O aviso da z-api de que o número conectou (ou caiu) chega ao servidor e vem para cá na hora: o
+  // cartão não precisa esperar a consulta de 5 s para trocar o QR Code pelo "conectado".
+  const aoEvento = useCallback(
+    (evento: { tipo: string }) => {
+      if (evento.tipo === "conexao") carregar(false);
+    },
+    [carregar]
+  );
+  useEventos(aoEvento);
 
   // Espera pelo celular da empresa: é o único estado que muda sozinho, e o único que precisa consultar.
   useEffect(() => {

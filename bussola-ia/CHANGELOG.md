@@ -1,5 +1,13 @@
 # Notas de versão
 
+## 0.3.1 — 2026-09-21
+
+- Oficina com bloqueio dos campos durante as operações, feedback acessível de andamento, sucesso e falha, tempo de espera e cancelamento da espera pelo Arquiteto sem perder o contexto.
+- Salvamento confirma o resultado sem depender de uma segunda consulta à biblioteca; falhas de rede e respostas inesperadas exibem orientações em português.
+- Criação do link bloqueia prazo e limite enquanto processa. Após o sucesso e o fechamento da confirmação, o contexto, as perguntas e os avisos da Oficina são limpos para o próximo assessment. Cancelamento ou falha preservam o rascunho.
+
+Validação: lint, build, 16 testes de unidade e 25 testes de navegador, incluindo geração lenta, cancelamento, recuperação de falhas, acessibilidade e limpeza da Oficina após publicar o link. As chamadas de IA são simuladas nos testes.
+
 ## 0.3.0 — 2026-09-20
 
 - Conexão com assinatura ChatGPT por código de dispositivo, com cancelamento, conta conectada, modelos e desconexão, usando o protocolo oficial já adotado no build-agentflows.
