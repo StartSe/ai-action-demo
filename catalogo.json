@@ -515,6 +515,25 @@
       ],
       "independente": true,
       "demo": null
+    },
+    {
+      "id": "toolkit-dash-builder",
+      "nome": "Painel Pronto",
+      "areas": [
+        "Dados",
+        "Gestão"
+      ],
+      "problema": "O gestor sabe o que quer acompanhar, mas não sabe quais indicadores pedir nem como montar o painel.",
+      "ia": "Identifica o setor do pedido, escolhe os indicadores certos, monta os gráficos e preenche com números de exemplo do mercado brasileiro.",
+      "integracoes": "IA (OpenRouter). Nenhuma outra: os números são de exemplo.",
+      "acento": "#098609",
+      "porta": 3024,
+      "captura": "capturas/toolkit-dash-builder.png",
+      "capacidades": [
+        "artefato",
+        "mcp"
+      ],
+      "demo": null
     }
   ]
 }

@@ -163,6 +163,13 @@ services:
     ports: ["3023:10000"]
     volumes: [precificador-dados:/app/data]
 
+  toolkit-dash-builder:
+    <<: *app
+    build: ./toolkit-dash-builder
+    image: ghcr.io/startse/toolkit-dash-builder:latest
+    ports: ["3024:10000"]
+    volumes: [toolkit-dash-builder-dados:/app/data]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:
@@ -186,3 +193,4 @@ volumes:
   mapify-dados:
   predictive-harness-dados:
   precificador-dados:
+  toolkit-dash-builder-dados:

@@ -27,6 +27,7 @@ Vinte e dois apps independentes, cada um resolvendo um problema específico do d
 | 19 | [Daily Second Brain v1.3.0](daily-second-brain/) | Gestão | Memórias e decisões dispersas | Coletas agênticas agendadas, wiki conectada, grafo, chat e voz | ChatGPT, OpenRouter, Zapier MCP e ElevenLabs. Disco persistente no Render |
 | 20 | [Mapia v1.3.0](mapify/) | Gestão, Educação e Produto | Conteúdo difícil de conectar e aplicar | Mapas mentais interativos com fontes, edição e conversa | ChatGPT por assinatura ou OpenRouter; YouTube público com Gemini, PDF, web e texto. Disco persistente no Render |
 | 21 | [Cowork Jev v0.3.0](predictive-harness/) | Dados e Gestão | Perguntar aos dados exige analista, e respostas de IA sem verificação não inspiram confiança | Conversa com a planilha: o ChatGPT escreve, o Jev (System One) tria, roteia e verifica cada resposta, com as decisões visíveis | ChatGPT por assinatura e OpenRouter (Jev). Disco persistente no Render |
+| 22 | [Painel Pronto](toolkit-dash-builder/) | Dados e Gestão | O gestor sabe o que quer acompanhar, mas não sabe quais indicadores pedir | Envie a planilha e o painel sai com os números dela: indicadores, tendência, ranking, distribuição e tabela, com arrastar para reorganizar e ajuste por conversa | só OpenRouter (opcional: sem chave, o recorte sai da forma das colunas) |
 
 Ideias mapeadas e deixadas para uma segunda rodada: copiloto de OKRs com check-in semanal, análise de concorrentes a partir de sites e redes, triagem de currículos contra a descrição da vaga, gerador de propostas comerciais a partir do CRM, resumo diário de e-mails e Slack para a diretoria.
 
@@ -52,17 +53,18 @@ Cada app guarda sua configuração em um volume Docker próprio, então as chave
 
 | Porta | App | | Porta | App |
 |---|---|---|---|---|
-| 3001 | pdi-time | | 3012 | bussola-ia |
-| 3002 | agente-kanban | | 3013 | simulador-vendas |
-| 3003 | entrevista-ia | | 3014 | custos-ia |
-| 3004 | posts-sociais | | 3015 | clone-site |
-| 3005 | prospeccao-ia | | 3017 | videos-campanha |
-| 3006 | whatsapp-atendente | | 3018 | automl-pocket |
-| 3007 | contratos-ia | | 3019 | build-agentflows |
-| 3008 | reunioes-ia | | 3020 | daily-second-brain |
-| 3009 | financas-ia | | 3021 | mapify |
-| 3010 | voz-do-cliente | | 3022 | predictive-harness |
-| 3011 | radar-sinais | | 3023 | precificador |
+| 3001 | pdi-time | | 3013 | simulador-vendas |
+| 3002 | agente-kanban | | 3014 | custos-ia |
+| 3003 | entrevista-ia | | 3015 | clone-site |
+| 3004 | posts-sociais | | 3017 | videos-campanha |
+| 3005 | prospeccao-ia | | 3018 | automl-pocket |
+| 3006 | whatsapp-atendente | | 3019 | build-agentflows |
+| 3007 | contratos-ia | | 3020 | daily-second-brain |
+| 3008 | reunioes-ia | | 3021 | mapify |
+| 3009 | financas-ia | | 3022 | predictive-harness |
+| 3010 | voz-do-cliente | | 3023 | precificador |
+| 3011 | radar-sinais | | 3024 | toolkit-dash-builder |
+| 3012 | bussola-ia | |  |  |
 
 Um app só: `docker compose up --build pdi-time`, ou dentro da pasta do app `docker compose up --build`.
 
