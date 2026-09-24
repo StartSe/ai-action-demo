@@ -13,6 +13,7 @@ export function ReferenceField({
   type = "text",
   spellCheck,
   ariaLabel,
+  showOnFocus = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -23,11 +24,13 @@ export function ReferenceField({
   type?: string;
   spellCheck?: boolean;
   ariaLabel?: string;
+  showOnFocus?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
   const [query, setQuery] = useState<string | null>(null);
   const [active, setActive] = useState(0);
   const [start, setStart] = useState(0);
+  const replacementEnd = useRef<number | null>(null);
   const options =
     query === null
       ? []
@@ -36,6 +39,7 @@ export function ReferenceField({
         );
   const current = options.length ? Math.min(active, options.length - 1) : 0;
   function detect(text: string, caret: number) {
+    replacementEnd.current = null;
     const before = text.slice(0, caret);
     const open = before.lastIndexOf("{{");
     if (open === -1 || before.slice(open).includes("}}")) {
@@ -50,12 +54,25 @@ export function ReferenceField({
     setStart(open);
     setQuery(q);
   }
+  function showReferences(el: HTMLInputElement | HTMLTextAreaElement) {
+    const caret = el.selectionStart ?? 0;
+    detect(el.value, caret);
+    if (!showOnFocus) return;
+    const before = el.value.slice(0, caret), open = before.lastIndexOf("{{");
+    if (open >= 0 && !before.slice(open).includes("}}")) return;
+    // A click inside an existing reference replaces that reference as a whole.
+    const token = [...el.value.matchAll(/\{\{[^{}]*\}\}/g)].find((match) => match.index <= caret && match.index + match[0].length >= caret);
+    setStart(token ? token.index : caret);
+    replacementEnd.current = token ? token.index + token[0].length : el.selectionEnd ?? caret;
+    setQuery(""); setActive(0);
+  }
   function pick(r: Reference) {
     const el = ref.current;
     const caret = el?.selectionStart ?? value.length;
-    const next = value.slice(0, start) + r.value + value.slice(caret);
+    const next = value.slice(0, start) + r.value + value.slice(replacementEnd.current ?? caret);
     onChange(next);
     setQuery(null);
+    replacementEnd.current = null;
     const pos = start + r.value.length;
     requestAnimationFrame(() => {
       el?.focus();
@@ -90,9 +107,9 @@ export function ReferenceField({
         setQuery(null);
       }
     },
-    onBlur: () => setTimeout(() => setQuery(null), 150),
-    onClick: (e: React.MouseEvent<HTMLTextAreaElement | HTMLInputElement>) =>
-      detect(e.currentTarget.value, e.currentTarget.selectionStart ?? 0),
+    onBlur: () => setQuery(null),
+    onFocus: (e: React.FocusEvent<HTMLTextAreaElement | HTMLInputElement>) => { if (showOnFocus) showReferences(e.currentTarget); },
+    onClick: (e: React.MouseEvent<HTMLTextAreaElement | HTMLInputElement>) => showReferences(e.currentTarget),
   };
   return (
     <div className="reference-field">
@@ -123,10 +140,8 @@ export function ReferenceField({
               role="option"
               aria-selected={i === current}
               className={i === current ? "active" : ""}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                pick(r);
-              }}
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); pick(r); }}
               onMouseEnter={() => setActive(i)}
             >
               <strong>{r.label}</strong>

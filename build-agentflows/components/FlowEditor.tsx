@@ -38,6 +38,7 @@ import { ChatPopup } from "./ChatPopup";
 import { FlowSettingsDialog } from "./FlowSettingsDialog";
 import { IntegrationDialog } from "./IntegrationDialog";
 import { GeneratorDialog } from "./GeneratorDialog";
+import type { FlowMessage } from "@/lib/flow-ai-edit";
 import type { Generated } from "@/lib/flow-generator";
 import { AgentNode, type VisualNode } from "./flow/AgentNode";
 import { AgentEdge, type VisualEdge } from "./flow/AgentEdge";
@@ -99,6 +100,7 @@ export function FlowEditor({ id }: { id: string }) {
   const [pending, setPending] = useState<Pending | null>(null);
   const [info, setInfo] = useState<Kind | null>(null);
   const [generator, setGenerator] = useState(false);
+  const [aiConversation, setAiConversation] = useState<{ flowId: string; messages: FlowMessage[] }>({ flowId: id, messages: [] });
   const [leaving, setLeaving] = useState(false);
   const [clearChat, setClearChat] = useState(false);
   const [dark, setDark] = useState(false);
@@ -290,14 +292,14 @@ export function FlowEditor({ id }: { id: string }) {
     const timer = setTimeout(() => setNotice(""), 3500);
     return () => clearTimeout(timer);
   }, [notice]);
-  function applyGenerated(g: Generated) {
+  function applyGenerated(g: Generated, mode: "new" | "edit") {
     commit(g.graph);
     setFlow({
       ...flow!,
-      name: /^Novo (fluxo|Agentflow)$/i.test(flow!.name) ? g.name : flow!.name,
-      description: flow!.description || g.description,
+      name: id === "new" ? "" : mode === "edit" || /^Novo (fluxo|Agentflow)$/i.test(flow!.name) ? g.name : flow!.name,
+      description: mode === "edit" ? g.description : flow!.description || g.description,
     });
-    setNotice("Fluxo gerado. Revise as instruções de cada bloco e salve.");
+    setNotice(mode === "edit" ? "Ajustes aplicados. Revise e salve o fluxo." : "Fluxo gerado. Revise as instruções de cada bloco e salve.");
     setTimeout(
       () => instance.current?.fitView(FIT_VIEW_OPTIONS),
       60,
@@ -1116,6 +1118,9 @@ export function FlowEditor({ id }: { id: string }) {
       {generator && (
         <GeneratorDialog
           flowId={id}
+          context={{ name: flow?.name || "", description: flow?.description || "", graph }}
+          messages={aiConversation.flowId === id ? aiConversation.messages : []}
+          onMessages={(messages) => setAiConversation({ flowId: id, messages })}
           replaces={graph.nodes.length > 1 || graph.edges.length > 0}
           connected={aiConnected}
           onConnect={() => {

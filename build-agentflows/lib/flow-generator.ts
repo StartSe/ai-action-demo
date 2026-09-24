@@ -3,7 +3,7 @@ import { GENERATOR_MODEL, openRouterKey, runOpenRouter } from "./openrouter";
 import { FlowError, validateGraph } from "./flow-store";
 import { BLOCKS, block, type Graph, type Kind } from "./flow-types";
 import { layout, outputs } from "./flow-graph";
-export type Generated = { name: string; description: string; graph: Graph };
+export type Generated = { name: string; description: string; graph: Graph; summary?: string };
 export type GenerationPhase = "interpreting" | "planning" | "creating" | "repairing";
 export type GenerationEvent = { phase: GenerationPhase } | { result: Generated } | { error: string };
 const KINDS = Object.keys(BLOCKS) as Kind[];

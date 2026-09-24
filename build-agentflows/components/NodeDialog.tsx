@@ -87,6 +87,7 @@ export function NodeDialog({
     [groups, setGroups] = useState<ToolGroup[] | null>(null),
     [savedName, setSavedName] = useState(node.data.label),
     [nameSaved, setNameSaved] = useState(false);
+  const [nameEditing, setNameEditing] = useState(false);
   const [criteria, setCriteria] = useState<Criterion[]>(() => node.data.kind === "condition" ? conditionCriteria(node.data.config) : []);
   const [closeError, setCloseError] = useState("");
   const [variables, setVariables] = useState<{ key: string; value: string }[]>(() => {
@@ -119,7 +120,9 @@ export function NodeDialog({
   // Enter ou o check no título salvam só o nome; o diálogo continua aberto.
   function saveName() {
     const label = draft.data.label.trim();
-    if (!label || label === savedName) return;
+    if (!label) return;
+    setNameEditing(false);
+    if (label === savedName) return;
     onRename(label);
     setSavedName(label);
     setNameSaved(true);
@@ -172,18 +175,17 @@ export function NodeDialog({
   return (
     <Modal
       title={k === "start" ? "Início" :
-        <label className="modal-title-input">
+        <div className="modal-title-input">
           <input
             value={draft.data.label}
             maxLength={100}
             aria-label="Nome do bloco"
+            onClick={() => { setNameEditing(true); setNameSaved(false); }}
             placeholder={BLOCKS[k].label}
-            onChange={(e) =>
-              setDraft({
-                ...draft,
-                data: { ...draft.data, label: e.target.value },
-              })
-            }
+            onChange={(e) => {
+              setNameEditing(true); setNameSaved(false);
+              setDraft({ ...draft, data: { ...draft.data, label: e.target.value } });
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && draft.data.label.trim()) {
                 e.preventDefault();
@@ -196,17 +198,17 @@ export function NodeDialog({
               <Icon name="check" size={14} />
               Nome salvo
             </span>
-          ) : (
+          ) : nameEditing ? (
             <IconButton
               icon="check"
               label="Salvar nome"
               disabled={
-                !draft.data.label.trim() || draft.data.label.trim() === savedName
+                !draft.data.label.trim()
               }
               onClick={saveName}
             />
-          )}
-        </label>
+          ) : null}
+        </div>
       }
       onClose={saveAndClose}
     >
@@ -349,14 +351,13 @@ export function NodeDialog({
         ))}
         {(k === "agent" || k === "llm") && <section className="node-fields node-completion">
           <span className="node-completion-title">Ao concluir esta etapa</span>
-          {updates.map((u, i) => <div className="node-field" key={i}>
-            <label>Variável<select aria-label={`Variável a atualizar ${i + 1}`} value={u.key} onChange={(e) => setUpdates(updates.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}>
+          {updates.map((u, i) => <div className="node-field node-variable-card" role="group" aria-label={`Atualização de variável ${i + 1}`} key={i}>
+            <div className="node-variable-heading"><strong>Variável {i + 1}</strong><IconButton icon="trash" label={`Excluir atualização ${i + 1}`} onClick={() => setUpdates(updates.filter((_, j) => j !== i))} /></div>
+            <label>Nome da variável<select aria-label={`Variável a atualizar ${i + 1}`} value={u.key} onChange={(e) => setUpdates(updates.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}>
               <option value="">Escolha uma variável</option>
-              {[...updateKeys].map((key) => <option key={key} value={key}>{key}</option>)}
+              {[...updateKeys].map((key) => <option key={key} value={key} disabled={updates.some((update, index) => index !== i && update.key === key)}>{key}</option>)}
             </select></label>
-            <label>Novo valor<ReferenceField value={u.value} ariaLabel={`Novo valor ${i + 1}`} onChange={(value) => setUpdates(updates.map((x, j) => j === i ? { ...x, value } : x))} references={[{ value: `{{nodes.${node.id}}}`, label: "Resposta deste agente" }, ...references.filter((r) => r.value !== "{{last}}")]} /></label>
-            <button className="studio-button" onClick={() => setUpdates(updates.map((x, j) => j === i ? { ...x, value: `{{nodes.${node.id}}}` } : x))}>Usar resposta deste agente</button>
-            <button className="studio-button" onClick={() => setUpdates(updates.filter((_, j) => j !== i))}>Remover atualização {i + 1}</button>
+            <label>Novo valor<ReferenceField showOnFocus multiline rows={2} value={u.value} ariaLabel={`Novo valor ${i + 1}`} onChange={(value) => setUpdates(updates.map((x, j) => j === i ? { ...x, value } : x))} references={[{ value: `{{nodes.${node.id}}}`, label: "Resposta deste agente" }, ...references.filter((r) => r.value !== "{{last}}")]} /></label>
           </div>)}
           <button className="studio-button" disabled={!updateKeys.size || updates.length >= updateKeys.size} onClick={() => setUpdates([...updates, { key: [...updateKeys].find((key) => !updates.some((u) => u.key === key)) || "", value: `{{nodes.${node.id}}}` }])}>Atualizar variável de estado</button>
         </section>}

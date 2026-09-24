@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## 0.9.5 — 24/09/2026
+
+- Modal de IA com criação do zero e edição conversacional do fluxo atual, incluindo alterações ainda não salvas.
+- Ajustes pontuais preservam blocos, configurações, posições e conexões não envolvidos no pedido, com prévia e aplicação explícita no canvas.
+- Conversa permite refinar a proposta em sequência e mantém a prévia anterior quando uma solicitação falha.
+- Atualizações de variáveis em Agente e LLM usam cartões como os do Início, com exclusão por ícone e prevenção de variáveis duplicadas.
+- Novo valor oferece referências por clique, teclado e touch, mantendo o formato `{{...}}` e dispensando o botão de usar a resposta do agente.
+- Check do nome do bloco aparece somente durante a edição e fica oculto após a confirmação.
+
 ## 0.9.4 — 24/09/2026
 
 - Geração com IA alterna mensagens durante a espera e mostra o tempo decorrido.
