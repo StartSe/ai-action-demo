@@ -90,3 +90,9 @@ test("imagens chegam ao turno pelo protocolo; modelo sem imagem é recusado", as
     await assert.rejects(() => bridge.run({ system: "", prompt: "Analise", model: "text", images: [image] }), /suporte confirmado/);
   } finally { bridge.models = models; }
 });
+
+test("pesquisa web exige habilitação explícita por execução", async () => {
+  await bridge.beginLogin();
+  assert.equal(await bridge.run({system: "", prompt: "inspect-search"}), "disabled");
+  assert.equal(await bridge.run({system: "", prompt: "inspect-search", webSearch: true}), "live");
+});

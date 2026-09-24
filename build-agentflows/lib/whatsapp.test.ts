@@ -10,6 +10,7 @@ const { salvarCampos, chaveWebhook } = await import("./conexoes");
 const wa = await import("./whatsapp");
 const store = await import("./flow-store");
 const { block } = await import("./flow-types");
+const { processarWhatsApp } = await import("./channel-flows");
 const webhook = await import("../app/webhook/whatsapp/route");
 const { chatGPT } = await import("./chatgpt");
 chatGPT().account = async () => ({
@@ -105,7 +106,7 @@ test("aviso recebido executa o fluxo publicado e responde pelo mesmo número", a
     assert.equal(recusado.status, 401);
     const verificacao = await webhook.GET(new Request(`http://x/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=${chave}&hub.challenge=abc`));
     assert.equal(await verificacao.text(), "abc");
-    const resposta = await webhook.processar({ de: "5511999990000", texto: "Quero um orçamento", provedor: "zapi" });
+    const resposta = await processarWhatsApp({ de: "5511999990000", texto: "Quero um orçamento", provedor: "zapi" });
     assert.equal(resposta, "Recebemos: Quero um orçamento");
     assert.deepEqual(JSON.parse(String(m.calls[0].init?.body)), { phone: "5511999990000", message: "Recebemos: Quero um orçamento" });
     const ok = await webhook.POST(new Request(`http://x/webhook/whatsapp?chave=${chave}`, { method: "POST", body: JSON.stringify({ type: "ReceivedCallback", phone: "55", fromMe: true }) }));
@@ -120,5 +121,5 @@ test("conexão não oficial antiga não envia nem processa sem aceite", async ()
   setConfig("WHATSAPP_PROVEDOR", "zapi");
   setConfig("WHATSAPP_ACEITE", null);
   await assert.rejects(() => wa.enviarMensagem("5511999990000", "Oi"), /Conecte o WhatsApp/);
-  assert.equal(await webhook.processar({ de: "5511999990000", texto: "Oi", nome: "Ana", provedor: "zapi" }), null);
+  assert.equal(await processarWhatsApp({ de: "5511999990000", texto: "Oi", nome: "Ana", provedor: "zapi" }), null);
 });

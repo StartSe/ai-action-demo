@@ -130,7 +130,11 @@ jobs:
             sleep 2
           done
           [ -n "$ok" ] || { echo "app não respondeu em /api/health a tempo"; exit 1; }
-          google-chrome --headless=new --no-sandbox --disable-gpu --window-size=1200,800 \
+          # `timeout` porque o Chromium headless só salva a imagem quando a página para de carregar:
+          # uma conexão que não termina (um `text/event-stream`, por exemplo) o deixa pendurado para
+          # sempre, e sem limite a execução inteira fica presa até alguém cancelar. Estourar aqui é só
+          # um aviso (`continue-on-error`): o catálogo publica sem a prévia deste app.
+          timeout 120 google-chrome --headless=new --no-sandbox --disable-gpu --window-size=1200,800 \
             --run-all-compositor-stages-before-draw --force-prefers-reduced-motion --virtual-time-budget=8000 \
             --screenshot="/tmp/captura-saida/${{ matrix.app }}.png" \
             "http://localhost:3900/?exemplo=1&captura=1"

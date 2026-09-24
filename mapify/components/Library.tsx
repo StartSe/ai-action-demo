@@ -6,6 +6,7 @@ import { Logo, Icon, IconButton, ErrorBox, request } from "./ui";
 import { CreateMap } from "./CreateMap";
 import { Connections } from "./Connections";
 import { AppVersion } from "./AppVersion";
+import { DeleteMapDialog } from "./DeleteMapDialog";
 import {
   colors,
   sourceLabels,
@@ -90,6 +91,8 @@ export function Library({
   const [list, setList] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pendingJob, setPendingJob] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<MapCard | null>(null);
+  const [notice, setNotice] = useState("");
   useEffect(() => {
     const check = () => setPendingJob(!!localStorage.getItem("mapify-job"));
     check();
@@ -381,6 +384,11 @@ export function Library({
               </div>
             </div>
             <ErrorBox error={error} />
+            {notice && (
+              <p className="success" role="status">
+                {notice}
+              </p>
+            )}
             {loading ? (
               <div className="empty-state">
                 <span className="spinner" />
@@ -420,29 +428,41 @@ export function Library({
                             month: "short",
                           })}
                         </span>
-                        <IconButton
-                          icon="star"
-                          label={
-                            map.favorite
-                              ? "Remover dos favoritos"
-                              : "Adicionar aos favoritos"
-                          }
-                          active={map.favorite}
-                          onClick={async () => {
-                            try {
-                              const m = await request<{ revision: number }>(
-                                `/api/maps/${map.id}`,
-                              );
-                              await request(`/api/maps/${map.id}`, "PUT", {
-                                revision: m.revision,
-                                favorite: !map.favorite,
-                              });
-                              refresh();
-                            } catch (e) {
-                              setError((e as Error).message);
+                        <div className="map-card-actions">
+                          <IconButton
+                            icon="star"
+                            label={
+                              map.favorite
+                                ? "Remover dos favoritos"
+                                : "Adicionar aos favoritos"
                             }
-                          }}
-                        />
+                            active={map.favorite}
+                            onClick={async () => {
+                              try {
+                                const m = await request<{ revision: number }>(
+                                  `/api/maps/${map.id}`,
+                                );
+                                await request(`/api/maps/${map.id}`, "PUT", {
+                                  revision: m.revision,
+                                  favorite: !map.favorite,
+                                });
+                                refresh();
+                              } catch (e) {
+                                setError((e as Error).message);
+                              }
+                            }}
+                          />
+                          <button
+                            className="text-button delete-map-action"
+                            aria-label={`Excluir mapa ${map.title}`}
+                            onClick={() => {
+                              setNotice("");
+                              setDeleteTarget(map);
+                            }}
+                          >
+                            <Icon name="trash" size={15} /> Excluir
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </article>
@@ -517,6 +537,19 @@ export function Library({
             setCreate(null);
             setConnectionSection(section);
             setConnections(true);
+          }}
+        />
+      )}
+      {deleteTarget && (
+        <DeleteMapDialog
+          map={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => {
+            setMaps((current) =>
+              current.filter((map) => map.id !== deleteTarget.id),
+            );
+            setNotice(`Mapa “${deleteTarget.title}” excluído.`);
+            setDeleteTarget(null);
           }}
         />
       )}

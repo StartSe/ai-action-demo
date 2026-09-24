@@ -354,6 +354,8 @@ export class ChatGPTBridge {
     images = [],
     signal,
     onText,
+    timeoutMs = 180000,
+    webSearch = false,
   }: {
     system: string;
     prompt: string;
@@ -362,6 +364,8 @@ export class ChatGPTBridge {
     images?: string[];
     signal?: AbortSignal;
     onText?: (text: string) => void;
+    timeoutMs?: number;
+    webSearch?: boolean;
   }): Promise<string> {
     await this.start();
     if (!(await this.account()).account)
@@ -395,7 +399,7 @@ export class ChatGPTBridge {
         "features.code_mode": false,
         "features.code_mode_host": false,
         "features.multi_agent": false,
-        web_search: "disabled",
+        web_search: webSearch ? "live" : "disabled",
       },
     });
     const id = r.thread.id;
@@ -420,7 +424,7 @@ export class ChatGPTBridge {
       };
       const timer = setTimeout(() => {
         abort();
-      }, 180000);
+      }, Math.max(1, Math.min(timeoutMs, 3600000)));
       this.turns.set(id, {
         resolve: (text) => finish(undefined, text),
         reject: (error) => finish(error),

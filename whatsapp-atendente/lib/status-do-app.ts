@@ -1,6 +1,7 @@
 // Chaves derivadas de "/api/status" que não são apenas "esta integração está configurada" (ex.: um
 // recurso ligado por duas integrações juntas, ou um nome de chave diferente do `id` da integração).
 // Próprio de cada app (nunca comparado por scripts/verificar-padrao.sh): vazio quando não há nenhuma.
+import { empresaMcpConfigurado } from "./empresa-mcp";
 import { temConfigSalva } from "./estado";
 import { numeroConectado } from "./whatsapp";
 
@@ -11,5 +12,9 @@ export function statusExtra(): Record<string, boolean> {
   // "assistente" não é uma integração: é o passo do meio da jornada (conectar a IA → criar o atendente →
   // conectar o número). Ele vive aqui para toda tela saber, por `GET /api/status`, qual é o próximo passo
   // de quem está chegando, sem cada uma buscar a configuração por conta própria.
-  return { whatsapp: numeroConectado(), assistente: temConfigSalva() };
+  // "mcp-empresa" também não é uma integração de /setup: conectar um ERP/CRM por MCP confunde quem só
+  // quer o atendente respondendo, então ela liga por variável de ambiente (ajuste de 17/09/2026). O
+  // cartão "Consultar sistemas da empresa" do Assistente precisa saber se há sistema conectado, e é
+  // daqui que ele lê — sem abrir uma consulta própria nem importar lib/empresa-mcp.ts na tela.
+  return { whatsapp: numeroConectado(), assistente: temConfigSalva(), "mcp-empresa": empresaMcpConfigurado() };
 }

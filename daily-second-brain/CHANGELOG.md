@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.0 — 2026-09-22
+
+- Organiza fontes individualmente pela tabela ou em lote, com fila persistente e processamento em segundo plano. O modal pode ser fechado durante a organização.
+- Mostra etapas, total finalizado, sucessos e falhas em um painel disponível durante a navegação, com avisos e links para a wiki.
+- Preserva o andamento após recarregar ou fechar a aba, informa perda de conexão e permite tentar novamente por fonte ou em lote.
+- Retoma tarefas interrompidas após reinício, evita duplicação e grava wiki, fonte e conclusão atomicamente. Exclusão impede resultados tardios.
+- Adiciona testes de fila e cenários de navegador para organização em lote, falhas, retomada, navegação livre e celular.
+
 ## 1.4.0 — 2026-09-21
 
 - Simplifica o menu em Início, Entrada, Biblioteca, Conversar e Ajustes, com abas para as seções relacionadas.

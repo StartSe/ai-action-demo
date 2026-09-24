@@ -12,9 +12,11 @@ Montar e manter um site leva semanas entre briefing, agência e ajustes; depois 
 Aviso mostrado abaixo de toda prévia: use a referência pela estrutura. Textos, marcas e imagens de terceiros são protegidos; troque pelo conteúdo da sua empresa.
 
 ## A jornada
-1. **Criar um site** (tela inicial, `components/CriarSite.tsx`): uma única caixa. Cole o endereço de um site (o app confere que a página abre e mostra o título), solte ou cole a captura de uma página (PNG/JPG até 5 MB) ou descreva a empresa em uma frase (mínimo 20 caracteres). Nada mais é obrigatório: nome, cor, formato e instruções ficam em "Mais opções", recolhido; logo, fotos e ajustes entram depois, pelo agente. Criar leva direto ao acompanhamento.
-2. **Construção etapa a etapa** (`/sites/<id>` em **Gerando**): a lista de etapas (entender a referência, uma por seção, montar a página) e a prévia parcial, que cresce conforme as seções ficam prontas. A pessoa pode sair da tela — o sino avisa quando ficar **No ar** ou **Falhou** (com o motivo, até onde chegou e "Tentar de novo", sem reenviar nada).
-3. **O site pronto**: prévia em largura total com as abas **Prévia**, **Versões** (ver, publicar esta, voltar para esta), **Imagens**, **Marca** (nome e cores, "Aplicar ao site com o agente"), **Métricas** (7/30 dias, barras por dia, origens, "O que o agente sugere" com Aplicar) e **Publicação** (link público, endereço próprio na Netlify, domínio próprio). O **agente** fica numa bolha no canto: "troque o título por…", "coloque o logo no topo", "publique", "como estão as visitas?". Enquanto ele trabalha, a prévia mostra o rascunho mudando ao vivo; toda mudança vira uma versão nova em rascunho e só publica quando a pessoa pede.
+1. **Criar um projeto**: nome, descrição do negócio e materiais da empresa (product book, apresentação ou briefing em TXT, Markdown, DOCX ou PDF). Referência por URL ou captura, logo e cor principal são opcionais. O texto extraído pode ser conferido antes de criar. Limites: 5 documentos, 8 MB por arquivo, 100 mil caracteres no conjunto; PDF com texto selecionável, até 150 páginas. O original é processado em memória; o texto extraído fica no banco do projeto.
+2. **Acompanhar a criação**: planejamento e construção por seção, com prévia parcial. Os documentos orientam o conteúdo; a referência orienta a composição visual. O logo enviado já participa da primeira geração.
+3. **Revisar e editar**: o site pronto ainda é um rascunho. A bolha do assistente está disponível na prévia e no editor em tela cheia. O editor permite clicar em textos, navegar e editar HTML com CodeMirror (sintaxe, busca, desfazer). Salvar cria uma versão sem alterar o que está publicado. Edições concorrentes são detectadas e preservam o conteúdo local do editor.
+4. **Publicar e restaurar**: publique a versão escolhida no link desta instância, na Netlify ou em um serviço independente no Render. A aba Publicação mostra o histórico por destino e permite **Restaurar publicação**. A restauração muda a versão que está no ar e preserva todas as versões e os rascunhos posteriores. Imagens de versões antigas são mantidas para viabilizar o rollback.
+5. **Manter o site**: a aba Materiais permite atualizar o contexto e pedir uma revisão ao agente. Versões, Imagens, Marca, Métricas e Publicação permanecem disponíveis no workspace.
 
 ## Stack
 Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript, SQLite nativo do Node (`node:sqlite`), sem biblioteca de UI. IA por **OpenRouter** (chave; também é quem lê a captura, `askVision`) ou **ChatGPT** (assinatura, pelo Codex App Server oficial, `@openai/codex` fixado em `0.155.1`, como no Build Agentflows). Os prompts de edição foram portados e traduzidos do projeto aberto screenshot-to-code, assim como a ideia do agente que edita por trecho (`edit_file`) em vez de reescrever o arquivo; a construção por seções (`lib/construtor.ts`) é própria deste app.
@@ -22,17 +24,18 @@ Next.js 16 (App Router) + Tailwind CSS 4 + TypeScript, SQLite nativo do Node (`n
 ## Configurações (sem variáveis de ambiente)
 Abra `/setup` (`components/Configuracoes.tsx`, tela própria deste app, no desenho do Build Agentflows). Três seções:
 - **Inteligência artificial**: os cartões **ChatGPT** (assinatura, login por código de dispositivo) e **OpenRouter** (conectar em um clique ou colar a chave; modelo para textos; **modelo que lê a captura**, com "Testar leitura de imagem"). Um dos dois leva o selo **Principal** ("Usar como principal" no outro).
-- **Hospedagem e publicação**: **Publicar na Netlify** (opcional: cada site ganha um endereço próprio lá) e **Domínio próprio no Render** (opcional: cadastra o domínio no serviço desta instância sozinho).
+- **Hospedagem e publicação**: **Publicar na Netlify** (opcional: cada site ganha um endereço próprio lá) e **Publicar no Render** (opcional: cria um Static Site independente para cada projeto, com domínio próprio e rollback).
 - **Assistente de IA**: **Usar dentro do seu assistente** (código de acesso MCP).
 
 Tudo fica em SQLite (`data/app.sqlite`, ou `/app/data` no Docker), cifrado em repouso. Não há mais cartões de notificações nem de rotinas, e a leitura de um site pelo endereço não depende de nenhum serviço de captura.
 
-## OpenRouter ou ChatGPT
-O **Principal** é quem escreve e edita os sites (`app/api/ia/route.ts`, config `IA_PROVEDOR`):
-- **OpenRouter (padrão)**: chave da conta. É também o único caminho para **ler capturas** (`askVision`); por isso o modelo com visão fica dentro do cartão do OpenRouter (`OPENROUTER_MODEL_VISAO`, `app/api/visao/route.ts`).
-- **ChatGPT (assinatura)**: login por código de dispositivo pelo Codex App Server oficial (`lib/chatgpt.ts`). A sessão fica em `DATA_DIR/chatgpt`, sem herdar credenciais da máquina, sem terminal, arquivos ou navegador. Texto (plano e seções pelo briefing ou pelo endereço, edições, agente, sugestões) e ferramentas passam por ele; o modelo é escolhido no cartão (`CHATGPT_MODEL`).
+## ChatGPT ou OpenRouter
+O **ChatGPT é recomendado** e é o padrão de instalações novas sem chave OpenRouter. A preferência explícita e instalações já configuradas com OpenRouter são preservadas.
 
-`lib/motor.ts` é o único ponto que decide entre os dois (`gerarTexto`, `gerarJSON`, `executarComFerramentas`, `iaDisponivel`); `lib/ai.ts` continua o da suíte. Com o ChatGPT escolhido e sem chave do OpenRouter, clonar por captura cai em demonstração e a tela avisa para conectar também o OpenRouter.
+- **ChatGPT (assinatura)**: conexão por código de dispositivo, usando o Codex App Server oficial (`@openai/codex` 0.155.1). Texto, imagens de referência e ferramentas passam pela conta conectada. As sessões ficam em `DATA_DIR/chatgpt`, isoladas das credenciais da máquina, sem ferramentas de terminal, navegador ou arquivos.
+- **OpenRouter**: conexão por OAuth/PKCE ou chave de API, com escolha de modelo de texto e visão. O botão de teste de leitura no cartão testa especificamente o modelo OpenRouter.
+
+`lib/motor.ts` decide o provedor. Sem a conta correspondente conectada, a geração usa um exemplo claramente identificado. Referência do protocolo: [Codex App Server — autenticação e entradas de imagem](https://learn.chatgpt.com/docs/app-server).
 
 ## Primeiro acesso
 Ao abrir o app pela primeira vez você cria uma conta (nome, e-mail e senha) em `/conta`; nas próximas vezes, entre em `/entrar`. Esqueceu a senha? Peça à equipe técnica para definir `NOVA_SENHA_ADMIN` e reiniciar o app uma vez.
@@ -104,22 +107,35 @@ Tudo o que muda num pedido vira **uma** versão nova, em rascunho. A conversa fi
 **Ao vivo**: com `Accept: application/x-ndjson`, o `POST` responde uma linha JSON por evento — `{ tipo: "passo", nome }` a cada ferramenta, `{ tipo: "previa", html }` a cada mudança no rascunho (a prévia da tela troca na hora, antes de a versão ser gravada), `{ tipo: "ping" }` a cada 10 s e `{ tipo: "fim", ...resposta }` ou `{ tipo: "erro" }`. A bolha do agente (`components/ChatAgente.tsx`) usa esse fluxo; o JSON único continua para quem não manda o cabeçalho (MCP, scripts).
 
 ## Publicar × rascunho
-A versão 1 é publicada sozinha ao ficar pronta. Depois, cada edição (agente, "voltar para esta") cria uma versão nova que **não** vai ao ar até "Publicar esta" (painel Versões), "Publicar a versão N" (faixa acima da prévia), o pedido ao agente ou a ferramenta MCP `publicar_site`. O link `/s/<slug>` sempre mostra a publicada.
+A primeira versão fica em rascunho e só é publicada quando a pessoa pede. Depois, cada edição (agente, "voltar para esta") cria uma versão nova que **não** vai ao ar até "Publicar esta" (painel Versões), "Publicar a versão N" (faixa acima da prévia), o pedido ao agente ou a ferramenta MCP `publicar_site`. O link `/s/<slug>` sempre mostra a publicada.
 
 ## Métricas e sugestões
 Cada abertura do link público conta uma visita (`lib/metricas.ts`, tabela `visitas`: dia, hora, origem pelo `Referer`, celular × computador pelo `User-Agent`; robôs e `?previa=1` não contam). O painel "Métricas" mostra 7 ou 30 dias (visitas, % no celular, variação contra o período anterior, barras por dia, de onde vieram); `GET /api/sites/<id>/metricas?dias=`. "O que o agente sugere" (`lib/sugestoes.ts`, `GET /api/sites/<id>/sugestoes`) traz três melhorias para a versão atual, cada uma com "Aplicar" (manda a instrução ao agente); cache de 24 h por versão.
 
 ## Publicar na Netlify
-Além do link desta instalação, cada site pode ir para um endereço próprio na Netlify (aba "Publicação", `lib/netlify.ts`, `GET|POST|DELETE /api/sites/<id>/netlify`). A conta é conectada em `/setup#netlify` por uma **chave de acesso pessoal** (User settings › Applications) ou, quando a equipe técnica registrou um aplicativo OAuth na Netlify e definiu `NETLIFY_CLIENT_ID_APP`, pelo botão "Conectar com a Netlify" (fluxo implícito: a chave volta em `/setup/netlify` e é gravada). Publicar cria o site na Netlify na primeira vez (`<slug>-xxxx.netlify.app`) e envia a versão que está no ar aqui pelo método de digest (SHA-1 do `index.html`, depois o conteúdo só se a Netlify ainda não o tiver — sem zip); as publicações seguintes reaproveitam o mesmo site. Domínio próprio, HTTPS e redirecionamentos se ajustam no painel da Netlify. Por que Netlify: é a hospedagem estática com o caminho mais curto para publicar um arquivo por API e a única das candidatas (Vercel, Cloudflare Pages, GitHub Pages) com OAuth aberto a aplicativos de terceiros sem marketplace; o Render, onde esta instância roda, não publica páginas avulsas.
+A conta é conectada em Configurações por chave de acesso ou OAuth quando `NETLIFY_CLIENT_ID_APP` está configurado. `POST /api/sites/<id>/netlify` publica a versão que está no ar no link principal, ou `{ n }` para selecionar uma versão. `{ n, rollback: true }` restaura uma versão já publicada nesse destino.
+
+A publicação envia `index.html` e todas as imagens locais usadas pela versão por digest SHA-1. O endereço da Netlify não depende dos arquivos do app. O vínculo do site e o deploy em andamento são persistidos antes de aguardar o provedor. Uma publicação só entra no histórico como concluída quando a Netlify confirma `ready`; o painel consulta o estado enquanto estiver processando, inclusive após reabrir a página. Falhas preservam a versão anteriormente registrada. A retirada do site é uma ação separada.
+
+O histórico (`publicacoes`) registra destino, versão, versão anterior, operação, horário e deploy. A troca da versão e o registro de publicação no banco usam uma transação. Instalações antigas importam somente a publicação atual conhecida; publicações anteriores à atualização não são inventadas.
+
+Referência: [API oficial da Netlify](https://docs.netlify.com/api-and-cli-guides/api-guides/get-started-with-api/).
+
+## Publicar no Render
+Cada projeto usa **um serviço Static Site independente** no workspace conectado. Atualizações e rollback reutilizam esse mesmo serviço; o app principal não recebe o tráfego desses sites.
+
+Conecte `RENDER_API_KEY` e `RENDER_OWNER_ID` em `/setup#render` e configure o endereço público HTTPS do app (`APP_URL`). Na aba Publicação, **Publicar versão N no Render** envia a versão indicada. `POST /api/sites/<id>/render` aceita `{ n }` ou `{ n, rollback: true }`; rollback exige uma versão já publicada nesse destino. `GET` acompanha o deploy e só registra a nova versão quando o Render confirma `live`. Falhas de build mantêm a publicação anterior. Acompanhar novamente funciona depois de fechar a aba ou reiniciar o app.
+
+O pacote imutável de cada versão (HTML e imagens, inclusive imagens arquivadas) fica no SQLite do volume, comprimido e identificado por SHA-256. Durante o build, o Render baixa esse pacote por uma URL aleatória de leitura restrita, confere o hash e grava os arquivos em seu próprio armazenamento. O site publicado funciona mesmo com o app principal desligado. Novas publicações e restaurações feitas pelo app precisam dele disponível para o build.
+
+O serviço usa o repositório público `StartSe/ai-action-app-deploy`, branch `deploy-clone-site`, diretório `site-build`, comando `node build.mjs`, saída `public`, sem auto-deploy por alterações no Git. O workflow da suíte publica somente o script de build junto ao Blueprint; os sites não precisam de acesso ao código privado do app. **A publicação do catálogo precisa concluir antes do primeiro deploy de site.** Forks podem configurar `RENDER_SITE_REPO`, `RENDER_SITE_BRANCH` e `RENDER_SITE_ROOT` no app principal. Os limites de banda, builds e domínios são os da conta conectada.
+
+Referências: [Static Sites](https://render.com/docs/static-sites), [criação de serviços](https://api-docs.render.com/reference/create-service) e [deploy pela API](https://api-docs.render.com/reference/create-deploy).
 
 ## Domínio personalizado
-Cada site pode ter um domínio próprio (`www.minhaempresa.com.br`), no painel "Domínio próprio" (`PUT|GET|DELETE /api/sites/<id>/dominio`). A estratégia é **uma instância servindo vários sites**: quando o `Host` da requisição é o domínio cadastrado em um site, `proxy.ts` (divergência registrada em `scripts/padrao-excecoes.json`) reescreve a raiz — e qualquer caminho fora de `/_next/` e `/s/` — para `/s/<projetoId>`, sem exigir sessão. Os assets continuam em `/s/<projetoId>/a/<assetId>`, então a mesma página funciona no link do app e no domínio.
+Depois de publicar no Render, o painel **Domínio próprio** cadastra o domínio no serviço daquele projeto e informa o CNAME correto. O DNS é configurado no provedor do domínio; certificado e verificação são gerenciados pelo Render. Na Netlify, configure o domínio no painel do site criado lá.
 
-Do lado da hospedagem, o Render precisa saber que o domínio pertence a este serviço (Settings › Custom Domains; domínio próprio exige plano pago do serviço) e o provedor do domínio precisa de um `CNAME` de `www` apontando para `<seu-app>.onrender.com`. Com a integração opcional **"Domínio próprio no Render"** conectada em `/setup#render` (`RENDER_API_KEY` e `RENDER_SERVICE_ID`, `lib/render.ts`), o app cadastra o domínio no serviço sozinho ao salvar e mostra o estado da verificação; sem ela, a tela dá o passo a passo manual. Verificação e certificado levam de minutos a 1 hora; o link `/s/<slug>` continua funcionando.
-
-Alternativa não implementada: **uma instância por site** — subir outra cópia da imagem com `APP_URL` no domínio da empresa. Funciona, mas multiplica instâncias e contas; a rota pelo `Host` cobre o caso comum.
-
-Teste local: `curl -H "Host: www.meusite.exemplo.com" http://127.0.0.1:3000/` devolve o HTML publicado do site com esse domínio; outro `Host` continua redirecionando a raiz para `/entrar`.
+Links locais `/s/<slug>` continuam disponíveis para publicações locais. Instalações antigas podem manter `RENDER_SERVICE_ID` como alternativa de domínio no serviço principal; serviços independentes têm prioridade quando existem. Excluir um projeto remove seus dados locais e histórico, mas não exclui automaticamente os serviços externos.
 
 ## Usar dentro de um assistente de IA (MCP)
 `POST /mcp` (JSON-RPC 2.0, `Authorization: Bearer <código>` gerado em `/setup`, 60 chamadas por minuto). Ferramentas (`lib/ferramentas.ts`): `criar_site(nome, briefing, marca?, formato?)`, `gerar_pagina(imagem_url, instrucoes?, marca?, formato?)` (endereço de uma captura PNG/JPG ou do próprio site de referência), `editar_pagina(id|slug, instrucao)` (pelo agente; versão em rascunho), `publicar_site(id|slug, n?)`, `metricas_site(id|slug, dias?)`, `listar_sites(estado?)`. Protocolo implementado à mão em `lib/mcp.ts` (decisão herdada de `pdi-time`). Teste com `npx @modelcontextprotocol/inspector` (Streamable HTTP, `http://localhost:3000/mcp`, cabeçalho `Authorization`).
@@ -131,14 +147,16 @@ Nada é obrigatório: a configuração é feita em `/setup`. Variáveis, quando 
 | `DATA_DIR` | Pasta do banco SQLite, da chave mestra e da sessão ChatGPT. Padrão `./data` (Docker: `/app/data`). |
 | `APP_URL` | Endereço público do app (links absolutos em e-mails, Slack e no alvo do CNAME). Também gravado por `/setup`. |
 | `NOVA_SENHA_ADMIN` | Redefine a senha da conta administrativa na próxima subida (equipe técnica). |
-| `IA_PROVEDOR` | `openrouter` (padrão) ou `chatgpt`: qual conta é a principal. Alternativa ao selo "Principal" de Configurações. |
+| `IA_PROVEDOR` | `chatgpt` (padrão novo) ou `openrouter`: qual conta é a principal. Alternativa ao selo "Principal" de Configurações. |
 | `CHATGPT_MODEL` | Modelo da conta ChatGPT (vazio = automático). |
 | `OPENROUTER_API_KEY` | Alternativa ao setup. Obtenha em https://openrouter.ai/keys. |
 | `OPENROUTER_MODEL` | Modelo de texto do OpenRouter (plano e seções pelo briefing/endereço, edições, agente). Padrão `nvidia/nemotron-3-super-120b-a12b:free`. |
 | `OPENROUTER_MODEL_VISAO` | Modelo com visão que lê a captura (plano e seções pela captura); padrão `inclusionai/ling-3.0-flash-vl:free`. |
 | `NETLIFY_ACCESS_TOKEN` | Chave de acesso pessoal da Netlify (https://app.netlify.com/user/applications#personal-access-tokens). Alternativa ao cartão. |
 | `NETLIFY_CLIENT_ID_APP` | Credencial da suíte: id do aplicativo OAuth registrado na Netlify pela equipe técnica; liga o botão "Conectar com a Netlify" (redirect `https://<app>/setup/netlify`). Nunca aparece em `/setup`. |
-| `RENDER_API_KEY`, `RENDER_SERVICE_ID` | Domínio próprio no Render: cadastra o domínio dos sites neste serviço sozinho (https://dashboard.render.com/u/settings#api-keys). |
+| `RENDER_API_KEY`, `RENDER_OWNER_ID` | Chave da conta e workspace (`tea-...`) para criar um serviço independente por projeto. |
+| `RENDER_SITE_REPO`, `RENDER_SITE_BRANCH`, `RENDER_SITE_ROOT` | Opcionais para forks; repositório, branch e pasta do script de publicação. |
+| `RENDER_SERVICE_ID` | Compatibilidade com domínios locais de instalações antigas. |
 | `CONTA_DESLIGADA` | `1` trata toda rota como pública (só para o contêiner efêmero de captura do catálogo). |
 | `PORT` | Porta HTTP. O Render e o Docker usam `10000`. |
 
@@ -175,7 +193,9 @@ lib/gerador.ts                  sanitização, título, validações, gravação
 lib/agente.ts                   o agente: ferramentas, edição por trecho, conversa, eventos ao vivo
 lib/motor.ts, lib/chatgpt.ts    escolha do provedor; ponte oficial com o ChatGPT (Codex App Server)
 lib/netlify.ts                  publicação na Netlify (digest, criação do site, OAuth implícito)
-lib/render.ts                   API do Render para o domínio próprio
+lib/render.ts                   Serviços independentes, deploy e domínios no Render
+lib/releases.ts                 Pacotes imutáveis de versões e imagens
+deploy/render-site/build.mjs     Build dos Static Sites independentes
 lib/assets.ts                   logo e imagens; bloco "Imagens da empresa"
 lib/metricas.ts, lib/sugestoes.ts   visitas e sugestões
 lib/publicacao.ts               CSP, 404 e resolução do que está no ar
@@ -183,3 +203,18 @@ lib/demo.ts                     landing fixa e mudanças de demonstração
 lib/ferramentas.ts              ferramentas MCP
 lib/config-tipos.ts, lib/acoes.ts   caminhos e tipos da configuração sem jargão nos componentes
 ```
+
+## Persistência e rollback no Render
+O Blueprint `render.yaml` e o catálogo da suíte já exigem um disco de **1 GB em `/app/data`**, no plano pago. O Docker define `DATA_DIR=/app/data` e o Compose monta um volume no mesmo caminho. SQLite, chave mestra, sessão ChatGPT, materiais extraídos, imagens, versões, conversas e publicações ficam nesse diretório e sobrevivem a reinícios e deploys.
+
+Para um serviço criado manualmente, anexe o disco em `/app/data` antes de usar o app. As publicações no Render criam um serviço Static Site separado por projeto. Esses serviços guardam os arquivos publicados no Render e não precisam de disco próprio; o volume do app mantém os dados e pacotes usados para novas publicações e rollback. O rollback de conteúdo é feito dentro do app; é independente de um rollback da imagem Docker. Um disco anexado em produção deve ser conferido no painel do serviço; a configuração no repositório não comprova o estado de uma instalação já existente. [Documentação de discos do Render](https://render.com/docs/disks).
+
+## Verificação
+```bash
+npm test                 # extração, contexto na geração, versões, rollback, persistência, Netlify, Render e ponte ChatGPT
+npm run lint
+npm run build
+# Com uma instância descartável na porta 3118 e Playwright instalado:
+PLAYWRIGHT_MODULE=/caminho/para/playwright/index.mjs npm run test:browser
+```
+Os testes de integração dos provedores usam respostas controladas e não consomem contas reais. O teste de navegador cria conta, projeto, materiais e publicações em uma instância de teste; não rode contra produção. O teste de persistência abre o mesmo banco em um segundo processo e verifica versões, materiais e histórico.

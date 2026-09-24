@@ -6,8 +6,9 @@
 // link" chama `POST /api/simulacoes`, uma vez. Enquanto a simulação não existe não há link, e um link
 // que aparecesse antes da confirmação seria um treino criado por engano a cada vez que alguém voltasse.
 import Link from "next/link";
+import { AcoesLink } from "@/components/AcoesLink";
 import { useEffect, useRef, useState } from "react";
-import { Aviso, CopyButton, Empty, ErrorBox, Field, Passos, Topbar, lerErro, useStatus, type ErroLido } from "@/components/ui";
+import { Aviso, Empty, ErrorBox, Field, Passos, Topbar, lerErro, useStatus, type ErroLido } from "@/components/ui";
 import { CRITERIOS_MAX, CRITERIOS_MIN, METODOLOGIAS, METODOLOGIAS_LISTA, agruparCriterios, type Metodologia } from "@/lib/metodologias";
 import { PERSONAS, rotulo } from "@/lib/personas";
 import type { Dificuldade, ModoPersona, Simulacao } from "@/lib/simulacoes";
@@ -504,7 +505,7 @@ export default function Page() {
 
             <p className="text-[13px] font-semibold mb-1.5">Link do treino</p>
             <p className="font-mono text-[13px] break-all bg-bg border border-line rounded-field px-[13px] py-[11px] mb-3">{link}</p>
-            <CopyButton texto={() => link} rotulo="Copiar link" />
+            <AcoesLink href={link} />
 
             <p className="text-[12.5px] text-muted mt-2.5">{resumoDasRegras}</p>
 

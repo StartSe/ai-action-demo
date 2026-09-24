@@ -1,18 +1,23 @@
-import { CONVERSA_SUMIU, type ParametroNumero } from "../comum";
-import { responderErro } from "@/app/api/erros";
+import { CONVERSA_SUMIU, enviarEGravar, type ParametroNumero } from "../comum";
 import { obterConversa, obterRegistro, registrarMensagemHumana } from "@/lib/conversas";
-import { enviarMensagem, ErroWhatsApp, registrarFalhaEnvio } from "@/lib/whatsapp";
+import { comContato } from "@/lib/memoria";
 
 export const dynamic = "force-dynamic";
 
 /**
  * A resposta escrita por uma pessoa que assumiu a conversa. A ordem importa: a mensagem é GRAVADA
- * primeiro e só depois sai pelo número da empresa. Se o envio falhar, o que a pessoa escreveu não se
- * perde — ela volta na conversa marcada como não entregue (`mensagemComErro`), e o erro vem com a
- * frase de negócio de `ErroWhatsApp` e o caminho para revisar a conexão do número.
+ * primeiro (como `enviando`) e só depois sai pelo número da empresa; o resultado volta para o banco —
+ * `enviada`, com o id que o provedor deu, ou `falhou`, com a frase de negócio. Se o envio falhar, o que
+ * a pessoa escreveu não se perde: a bolha aparece marcada como não entregue, com "Tentar de novo"
+ * (`mensagens/[id]/reenviar`), e o erro vem com a frase de `ErroWhatsApp` e o caminho para revisar a
+ * conexão do número.
  *
  * Conversa que não veio do WhatsApp (simulador, exemplo ou assistente de IA) não manda nada para
  * fora: ali a mensagem só existe dentro do app.
+ *
+ * Responder é assumir: `registrarMensagemHumana` grava `humano`, zera a espera do cliente e escreve
+ * "Você assumiu a conversa" na linha do tempo quando a conversa ainda não era sua. A tela não precisa
+ * chamar `assumir` antes — o botão dela diz "Assumir e enviar" e uma chamada só faz as duas coisas.
  */
 export async function POST(req: Request, { params }: ParametroNumero) {
   const { numero } = await params;
@@ -26,18 +31,9 @@ export async function POST(req: Request, { params }: ParametroNumero) {
   const mensagemId = registrarMensagemHumana(numero, texto);
 
   if (antes.origem === "whatsapp") {
-    try {
-      await enviarMensagem(numero, texto);
-    } catch (err) {
-      const mensagem = err instanceof ErroWhatsApp ? err.message : "Não foi possível enviar a mensagem pelo número da empresa.";
-      registrarFalhaEnvio(mensagem);
-      // A conversa e o id da mensagem vão junto do erro: a tela mostra a bolha que não saiu em vez de
-      // engolir o que a pessoa escreveu.
-      const recusa = responderErro(err, mensagem);
-      const detalhe = (await recusa.json()) as Record<string, unknown>;
-      return Response.json({ ...detalhe, conversa: obterConversa(numero), mensagemComErro: mensagemId }, { status: recusa.status });
-    }
+    const falha = await enviarEGravar(numero, texto, mensagemId);
+    if (falha) return falha;
   }
 
-  return Response.json({ conversa: obterConversa(numero), mensagemId });
+  return Response.json({ conversa: comContato(obterConversa(numero)), mensagemId });
 }

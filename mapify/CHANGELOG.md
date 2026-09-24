@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.4.3 — 2026-09-22
+
+- Botões **Validar e salvar chave** e **Remover chave Gemini** centralizados nas configurações do YouTube, inclusive quando dispostos em linhas separadas no celular.
+- Removida a seção **Testar um vídeo**, o link de exemplo preenchido e a chamada de teste correspondente. Após salvar a chave, a orientação passa a ser criar um novo mapa com o vídeo desejado.
+
+## 1.4.2 — 2026-09-22
+
+- Hover de **Excluir** com cantos arredondados de 8 px na biblioteca e no editor, seguindo o padrão dos botões de ação.
+
+## 1.4.1 — 2026-09-22
+
+- Ação **Excluir** nos cartões da biblioteca, nas visualizações em grade e lista, inclusive no celular. A lista e os contadores são atualizados após a exclusão.
+- Exclusão do editor movida para o cabeçalho, acessível sem abrir a estrutura lateral.
+- Confirmação compartilhada com nome do mapa, aviso de remoção das edições e da conversa, opção de manter o mapa e estado de envio que impede cliques repetidos. Erros permanecem no diálogo para permitir nova tentativa.
+
+## 1.4.0 — 2026-09-22
+
+- Nível aprofundado organiza os temas e detalha cada ramo em uma chamada dedicada, sempre consultando a fonte integral, sem resumos intermediários que eliminem exemplos. Até 120 tópicos e 4 níveis abaixo do centro, conforme a riqueza da fonte.
+- Instruções priorizam nomes específicos, ações, exemplos, mecanismos, resultados e ressalvas nos tópicos visíveis. A análise do vídeo preserva cada demonstração e distingue o que foi mostrado do que foi apenas afirmado.
+- Cada folha aprofundada exige referência válida. Respostas excessivas, sem detalhes, interrompidas ou com erro não salvam mapas incompletos. Fontes curtas não precisam preencher uma quantidade mínima de tópicos.
+- Feedback de leitura animado desde o envio até os primeiros ramos, com respeito a movimento reduzido. Progresso do aprofundamento mostra a quantidade real de ramos concluídos. A interface avisa sobre o tempo e as chamadas adicionais desse nível.
+- Testes de contrato cobrem fonte longa integral, detalhes visíveis, referências, persistência, cancelamento e falha durante o aprofundamento. Validação visual em desktop e celular usa respostas simuladas.
+
 ## 1.3.0 — 2026-09-21
 
 - Geração em canvas desde o envio, com thumbnail do YouTube no centro e ramificações surgindo conforme ChatGPT ou OpenRouter transmite a resposta. A thumbnail permanece no editor.

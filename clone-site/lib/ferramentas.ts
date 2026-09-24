@@ -18,7 +18,7 @@ async function criarEEsperar(dados: Parameters<typeof criar>[0]) {
   if (!salva) throw new Error(projeto.erro?.mensagem ?? "Não foi possível gerar o site desta vez. Tente de novo.");
   const { pagina, meta } = salva;
   const atual = pagina.versoes[pagina.versoes.length - 1];
-  return { id: pagina.id, projetoId: projeto.id, slug: projeto.slug, nome: projeto.nome, titulo: pagina.titulo, link: `/sites/${projeto.id}`, linkPublicado: `/s/${projeto.slug}`, versao: atual.n, demo: meta.demo, html: atual.html };
+  return { id: pagina.id, projetoId: projeto.id, slug: projeto.slug, nome: projeto.nome, titulo: pagina.titulo, link: `/sites/${projeto.id}`, linkPublicado: projeto.versaoPublicada ? `/s/${projeto.slug}` : null, versao: atual.n, demo: meta.demo, html: atual.html };
 }
 
 const SCHEMA_MARCA = {
@@ -52,7 +52,7 @@ export const FERRAMENTAS: Ferramenta[] = [
   },
   {
     nome: "gerar_pagina",
-    descricao: "Cria um site (arquivo HTML único, em português) a partir de uma página de referência: o endereço público de uma captura de tela (PNG/JPG) ou o endereço do próprio site, que o app lê sozinho. Aplica o nome e as cores da marca informada. Devolve o id da página, o id e o slug do site, o título, o link do site no app (/sites/<projetoId>), o link público publicado (/s/<slug>, HTML puro) e o HTML gerado.",
+    descricao: "Cria um site (arquivo HTML único, em português) a partir de uma página de referência: o endereço público de uma captura de tela (PNG/JPG) ou o endereço do próprio site, que o app lê sozinho. Aplica o nome e as cores da marca informada. Devolve o id da página, o id e o slug do site, o título, o link do site no app (/sites/<projetoId>), o endereço previsto para publicação (/s/<slug>, disponível após publicar_site) e o HTML gerado.",
     schema: {
       type: "object",
       properties: {
@@ -107,7 +107,7 @@ export const FERRAMENTAS: Ferramenta[] = [
     schema: { type: "object", properties: { estado: { type: "string", enum: ["rascunho", "gerando", "pronto", "falhou"], description: "Filtrar por estado (opcional)" } } },
     async executar(args) {
       const { estado } = args as { estado?: unknown };
-      return listar({ estado: typeof estado === "string" ? estado : undefined, limite: 50 }).map((p) => ({ id: p.id, slug: p.slug, nome: p.nome, estado: p.estado, origem: p.origem, versaoPublicada: p.versaoPublicada ?? null, dominio: p.dominio ?? null, criadoEm: p.criadoEm, link: `/sites/${p.id}`, linkPublicado: p.estado === "pronto" ? `/s/${p.slug}` : null, erro: p.erro?.mensagem ?? null }));
+      return listar({ estado: typeof estado === "string" ? estado : undefined, limite: 50 }).map((p) => ({ id: p.id, slug: p.slug, nome: p.nome, estado: p.estado, origem: p.origem, versaoPublicada: p.versaoPublicada ?? null, dominio: p.dominio ?? null, criadoEm: p.criadoEm, link: `/sites/${p.id}`, linkPublicado: p.versaoPublicada ? `/s/${p.slug}` : null, erro: p.erro?.mensagem ?? null }));
     },
   },
   {

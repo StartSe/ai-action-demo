@@ -4,9 +4,13 @@ import type { BrainState, Note } from "@/lib/types";
 import { sourcePreview } from "@/lib/source-preview";
 import { RemoveItems } from "./RemoveItems";
 import { Icon } from "./Icons";
+import { processingActive } from "./Processing";
 export function Inbox({
   notes,
   captures = {},
+  processing = {},
+  organize,
+  queueing,
   open,
   manual,
   collect,
@@ -14,6 +18,9 @@ export function Inbox({
 }: {
   notes: Note[];
   captures?: BrainState["sourceCaptures"];
+  processing?: BrainState["sourceProcessing"];
+  organize: (ids: string[]) => Promise<boolean>;
+  queueing: boolean;
   open: (n: Note) => void;
   manual: () => void;
   collect: () => void;
@@ -32,6 +39,11 @@ export function Inbox({
       (filter === "all" ||
         (filter === "pending" && n.status === "inbox") ||
         (filter === "organized" && n.status === "organized") ||
+        (filter === "processing" &&
+          (processingActive(processing[n.id]) ||
+            ["queued", "running"].includes(capture?.status || ""))) ||
+        (filter === "organization-failed" &&
+          processing[n.id]?.status === "failed") ||
         (filter === "failed" && capture?.status === "failed")) &&
       `${preview.title} ${preview.text} ${capture?.instruction || ""}`
         .toLocaleLowerCase()
@@ -42,8 +54,15 @@ export function Inbox({
   const visible = found.slice((current - 1) * 15, current * 15);
   const removable = (n: Note) =>
     n.status === "inbox" && captures[n.id]?.status !== "done";
+  const canOrganize = (n: Note) =>
+    n.status === "inbox" &&
+    !processingActive(processing[n.id]) &&
+    !["queued", "running"].includes(captures[n.id]?.status || "");
   const selected = selection.filter((id) =>
     rows.some(({ n }) => n.id === id && removable(n)),
+  );
+  const selectedToOrganize = selected.filter((id) =>
+    rows.some(({ n }) => n.id === id && canOrganize(n)),
   );
   const visibleIds = visible
     .filter(({ n }) => removable(n))
@@ -55,8 +74,8 @@ export function Inbox({
           <span className="eyebrow">SUAS FONTES, EM UM SÓ LUGAR</span>
           <h1>Caixa de entrada</h1>
           <p>
-            Leia o que chegou, organize na wiki ou remova o que não precisa
-            guardar.
+            Organize uma fonte ou selecione várias de uma vez. Daily processa em
+            segundo plano e avisa quando terminar.
           </p>
         </div>
         <button className="button primary" onClick={manual}>
@@ -87,6 +106,8 @@ export function Inbox({
           >
             <option value="all">Todas as fontes</option>
             <option value="pending">A organizar</option>
+            <option value="processing">Em processamento</option>
+            <option value="organization-failed">Organização com falha</option>
             <option value="failed">Coletas com falha</option>
             <option value="organized">Na wiki</option>
           </select>
@@ -99,6 +120,18 @@ export function Inbox({
       {selected.length > 0 && (
         <div className="selection-bar" role="status">
           <span>{selected.length} selecionada(s)</span>
+          <button
+            className="button primary"
+            disabled={queueing || !selectedToOrganize.length}
+            onClick={async () => {
+              if (await organize(selectedToOrganize.slice(0, 100)))
+                setSelection([]);
+            }}
+          >
+            {queueing
+              ? "Adicionando à fila…"
+              : `Organizar selecionadas (${Math.min(selectedToOrganize.length, 100)})`}
+          </button>
           <button
             className="text-button danger-text"
             onClick={() => setRemoval({ sourceIds: selected })}
@@ -186,21 +219,31 @@ export function Inbox({
                       className={
                         n.status === "organized"
                           ? "ready-tag"
-                          : capture?.status === "failed"
+                          : processing[n.id]?.status === "failed" ||
+                              capture?.status === "failed"
                             ? "danger-text"
                             : "pending-tag"
                       }
                     >
                       {n.status === "organized"
                         ? "Na wiki"
-                        : capture?.status === "failed"
-                          ? "Coleta com falha"
-                          : ["queued", "running"].includes(
-                                capture?.status || "",
-                              )
-                            ? "Em processamento"
-                            : "A organizar"}
+                        : processingActive(processing[n.id])
+                          ? processing[n.id].phase
+                          : processing[n.id]?.status === "failed"
+                            ? "Organização com falha"
+                            : capture?.status === "failed"
+                              ? "Coleta com falha"
+                              : ["queued", "running"].includes(
+                                    capture?.status || "",
+                                  )
+                                ? "Em processamento"
+                                : "A organizar"}
                     </span>
+                    {processing[n.id]?.error && (
+                      <small className="source-error">
+                        {processing[n.id].error}
+                      </small>
+                    )}
                   </td>
                   <td>
                     <time dateTime={n.created}>
@@ -211,15 +254,44 @@ export function Inbox({
                     </time>
                   </td>
                   <td>
-                    {removable(n) && (
-                      <button
-                        className="icon-button danger-text"
-                        aria-label={`Excluir ${preview.title}`}
-                        onClick={() => setRemoval({ sourceIds: [n.id] })}
-                      >
-                        <Icon name="trash" size={17} />
-                      </button>
-                    )}
+                    <div className="inbox-row-actions">
+                      {canOrganize(n) && (
+                        <button
+                          className="text-button"
+                          disabled={queueing}
+                          aria-label={`${processing[n.id]?.status === "failed" ? "Tentar novamente" : "Organizar"} ${preview.title}`}
+                          onClick={() => void organize([n.id])}
+                        >
+                          <Icon name="spark" size={15} />
+                          {processing[n.id]?.status === "failed"
+                            ? "Tentar novamente"
+                            : "Organizar"}
+                        </button>
+                      )}
+                      {n.status === "organized" && (
+                        <button
+                          className="text-button"
+                          onClick={() => {
+                            const page = notes.find(
+                              (p) =>
+                                p.kind === "wiki" && p.sources.includes(n.id),
+                            );
+                            if (page) open(page);
+                          }}
+                        >
+                          Abrir na wiki
+                        </button>
+                      )}
+                      {removable(n) && (
+                        <button
+                          className="icon-button danger-text"
+                          aria-label={`Excluir ${preview.title}`}
+                          onClick={() => setRemoval({ sourceIds: [n.id] })}
+                        >
+                          <Icon name="trash" size={17} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

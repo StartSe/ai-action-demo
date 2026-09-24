@@ -6,6 +6,7 @@ import { MapCanvas } from "./MapCanvas";
 import { Icon, IconButton, Logo, Modal, ErrorBox, request } from "./ui";
 import { Connections } from "./Connections";
 import { AppVersion } from "./AppVersion";
+import { DeleteMapDialog } from "./DeleteMapDialog";
 import { demoMap } from "@/lib/demo";
 import {
   findNode,
@@ -387,6 +388,18 @@ export function MapEditor({ id }: { id: string }) {
             label="Configurações e conexões"
             onClick={() => setConnections(true)}
           />
+          {id !== "exemplo" && (
+            <button
+              className="text-button delete-map-action"
+              aria-label="Excluir mapa"
+              title="Excluir mapa"
+              disabled={chatBusy || saving}
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Icon name="trash" size={17} />
+              <span>Excluir</span>
+            </button>
+          )}
         </div>
       </header>
       <div className="editor-toolbar">
@@ -514,15 +527,6 @@ export function MapEditor({ id }: { id: string }) {
                 <Icon name="copy" size={16} />
                 Duplicar mapa
               </button>
-              {id !== "exemplo" && (
-                <button
-                  className="text-button danger"
-                  onClick={() => setConfirmDelete(true)}
-                >
-                  <Icon name="trash" size={16} />
-                  Excluir mapa
-                </button>
-              )}
             </div>
           </aside>
         )}
@@ -939,37 +943,15 @@ export function MapEditor({ id }: { id: string }) {
         </Modal>
       )}
       {confirmDelete && (
-        <Modal
-          title="Excluir este mapa?"
+        <DeleteMapDialog
+          map={map}
           onClose={() => setConfirmDelete(false)}
-        >
-          <p>
-            O mapa “{map.title}” e a conversa serão removidos desta instalação.
-          </p>
-          <div className="modal-footer">
-            <button
-              className="secondary"
-              onClick={() => setConfirmDelete(false)}
-            >
-              Manter mapa
-            </button>
-            <button
-              className="primary danger-button"
-              onClick={async () => {
-                try {
-                  await request(`/api/maps/${id}`, "DELETE");
-                  setDirty(false);
-                  router.push("/");
-                } catch (e) {
-                  setError((e as Error).message);
-                  setConfirmDelete(false);
-                }
-              }}
-            >
-              Excluir mapa
-            </button>
-          </div>
-        </Modal>
+          onDeleted={() => {
+            dirtyRef.current = false;
+            setDirty(false);
+            router.replace("/");
+          }}
+        />
       )}
       {connections && (
         <Connections onClose={() => setConnections(false)} onSaved={() => {}} />

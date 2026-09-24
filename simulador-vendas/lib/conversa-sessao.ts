@@ -11,6 +11,7 @@
 import { aiEnabled, askText } from "./ai";
 import { esperar } from "./demo";
 import type { MensagemSessao } from "./sessoes";
+import { AVISO_TEMPO_DEMO, INSTRUCAO_APOS_AVISO, INSTRUCAO_AVISO_TEMPO } from "./tempo-conversa";
 
 /** Quantas falas do fim da conversa vão para o prompt de cada turno (o resto fica gravado, só não é relido). */
 export const FALAS_NO_PROMPT = 20;
@@ -49,19 +50,24 @@ export async function falaDoCliente({
   instrucoes,
   historico,
   despedir = false,
+  faseTempo = "normal",
 }: {
   instrucoes: string;
   historico: MensagemSessao[];
   despedir?: boolean;
+  faseTempo?: "normal" | "avisar" | "concluir";
 }): Promise<string> {
   if (!aiEnabled()) {
     await esperar(700);
     if (despedir) return DESPEDIDA_DEMO;
+    if (faseTempo === "avisar") return AVISO_TEMPO_DEMO;
+    if (faseTempo === "concluir") return "Obrigado por compartilhar. Podemos retomar esses pontos na próxima conversa. Até mais!";
     const turno = historico.filter((m) => m.papel === "cliente").length;
     return ROTEIRO_DEMO[Math.min(turno, ROTEIRO_DEMO.length - 1)];
   }
 
-  const system = despedir ? `${instrucoes}\n\n${INSTRUCAO_DESPEDIDA}` : instrucoes;
+  const orientacaoTempo = despedir ? INSTRUCAO_DESPEDIDA : faseTempo === "avisar" ? INSTRUCAO_AVISO_TEMPO : faseTempo === "concluir" ? INSTRUCAO_APOS_AVISO : "";
+  const system = `${instrucoes}\n\n${orientacaoTempo}`;
   const prompt = `${historicoParaTexto(historico)}\n\nResponda agora como o cliente, só a próxima fala.`;
   const resposta = await askText({ system, prompt, maxTokens: 220, temperature: 0.6 });
   return resposta.trim();

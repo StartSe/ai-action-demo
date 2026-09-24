@@ -23,19 +23,22 @@ export function modelProvider(model?: string) {
 export function ModelPicker({
   value,
   chatModels,
+  connected,
   onChange,
 }: {
   value: string;
   chatModels: ChatModel[];
+  connected: boolean;
   onChange: (v: string) => void;
 }) {
   const [router, setRouter] = useState<RouterModel[] | null>(null);
+  const [routerConnected, setRouterConnected] = useState(false);
   useEffect(() => {
     let alive = true;
     void request<{ conectado: boolean; modelos: RouterModel[] }>(
       "/api/conexoes/modelos",
     )
-      .then((r) => alive && setRouter(r.conectado ? r.modelos : []))
+      .then((r) => { if (alive) { setRouterConnected(r.conectado); setRouter(r.conectado ? r.modelos : []); } })
       .catch(() => alive && setRouter([]));
     return () => {
       alive = false;
@@ -55,7 +58,7 @@ export function ModelPicker({
     <div className="model-picker">
       <select value={value} onChange={(e) => onChange(e.target.value)}>
         <optgroup label="ChatGPT · assinatura (principal)">
-          <option value="">Automático · ChatGPT</option>
+          <option value="">Selecionar modelo de IA</option>
           {chatModels.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name}{m.inputModalities?.includes("image") ? " · imagens" : ""}
@@ -80,13 +83,13 @@ export function ModelPicker({
         ))}
         {!known && <option value={value}>{value} · modelo salvo</option>}
       </select>
-      <small>
+      {(router === null || router.length > 0 || (!connected && !routerConnected)) && <small>
         {router === null
           ? "Consultando conexões…"
           : router.length
             ? `${router.length} modelos do OpenRouter disponíveis além do ChatGPT.`
             : "Conecte o OpenRouter em Configurações para escolher entre mais de 500 modelos."}
-      </small>
+      </small>}
     </div>
   );
 }

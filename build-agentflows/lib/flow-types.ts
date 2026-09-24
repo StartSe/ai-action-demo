@@ -100,6 +100,13 @@ export type Run = {
   version: number;
   status: "running" | "waiting" | "completed" | "failed" | "cancelled";
   demo: boolean;
+  embedSessionId?: string;
+  pageCommandId?: string;
+  activeMs?: number;
+  activeSegmentStartedAt?: number;
+  maxActiveMs?: number;
+  interrupted?: boolean;
+  recoveryAttempts?: number;
   input: string;
   attachments?: Attachment[];
   conversation?: { input: string; output: string }[];

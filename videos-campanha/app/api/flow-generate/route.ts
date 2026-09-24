@@ -8,7 +8,8 @@ import {
   addAsset,
   type Job,
 } from "@/lib/flow/store";
-import { context, generationSignature, referencePlan } from "@/lib/flow/model";
+import { generationSignature } from "@/lib/flow/model";
+import { generationInput } from "@/lib/flow/experience";
 import {
   MuapiRejected,
   mediaUrl,
@@ -35,38 +36,7 @@ export async function POST(req: Request) {
     if (busy) return Response.json({ job: busy });
     if (!["image", "video", "transform"].includes(node.data.kind))
       throw new Error("Esta etapa não gera mídia.");
-    const refs = context(p, nodeId);
-    const all = assets();
-    const lookup = (id: string) => all.find((a) => a.id === id);
-    const missing = refs.find(
-      (n) => n.data.kind !== "idea" && (!n.data.assetId || n.data.dirty),
-    );
-    if (missing)
-      throw new Error(
-        `Gere ou envie o asset de “${missing.data.title}” primeiro.`,
-      );
-    const prompt = [
-      ...refs.filter((n) => n.data.kind === "idea").map((n) => n.data.prompt),
-      node.data.prompt,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-    if (!prompt.trim())
-      throw new Error("Escreva uma ideia ou um prompt antes de gerar.");
-    const references = referencePlan(p, nodeId);
-    const ids = references.map((r) => r.assetId);
-    const images = ids.map((id) => {
-      const a = lookup(id);
-      if (!a) throw new Error("Uma referência não existe mais na biblioteca.");
-      if (a.kind !== "image")
-        throw new Error("Este modelo aceita apenas imagens como referência.");
-      return a.url;
-    });
-    const effectivePrompt =
-      references.length && !["veo3.1-fast", "wan2.2", "kling-v2.1-standard-i2v"].includes(node.data.model)
-        ? `${prompt}\n\nReferências visuais (na ordem enviada):\n${references.map((r, i) => `Imagem ${i + 1}: ${r.role === "input" ? "entrada principal para esta etapa" : "referência de contexto visual"} (${r.title}).`).join("\n")}`
-        : prompt;
-    payload(node, effectivePrompt, images);
+    const { prompt: effectivePrompt, images } = generationInput(p, node, assets());
     current = {
       id,
       projectId,

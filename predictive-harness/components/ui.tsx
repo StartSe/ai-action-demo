@@ -1,6 +1,6 @@
 "use client";
 import { AppVersion } from "./AppVersion";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useId, type ReactNode } from "react";
 export function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
     harness: (
@@ -16,6 +16,18 @@ export function Icon({ name, size = 20 }: { name: string; size?: number }) {
         <path d="M3 10h18M9 4v16" />
       </>
     ),
+    waveform: <path d="M4 10v4m4-7v10m4-14v18m4-15v12m4-8v4" />,
+    search: <><circle cx="10" cy="10" r="7" /><path d="m15 15 6 6" /></>,
+    sidebar: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></>,
+    up: <path d="M12 20V4m-6 6 6-6 6 6" />,
+    bookmark: <path d="m8 3 8 0-1 7 4 4H5l4-4-1-7Zm4 11v7" />,
+    micOff: <><path d="m3 3 18 18M9 9v3a3 3 0 0 0 5 2M9 4a3 3 0 0 1 6 1v4M5 10v2a7 7 0 0 0 12 5M19 10v2M12 19v3m-4 0h8" /></>,
+    mic: <><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8" /></>,
+    volume: <><path d="m11 4-6 5H2v6h3l6 5zM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" /></>,
+    stop: <rect x="5" y="5" width="14" height="14" rx="2" />,
+    book: <><path d="M12 5v16M12 5C8 2 4 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-2-1-6-2-10 1Z" /></>,
+    more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
+    cloud: <path d="M7 18a5 5 0 1 1 0-10 6 6 0 0 1 12 1 4.5 4.5 0 0 1-1 9Z" />,
     plus: <path d="M12 5v14M5 12h14" />,
     close: <path d="m6 6 12 12M6 18 18 6" />,
     check: <path d="m5 12 4 4L19 6" />,
@@ -97,7 +109,7 @@ export function Logo({ compact = false }: { compact?: boolean }) {
       <span className="logo-mark">
         <Icon name="harness" size={compact ? 19 : 23} />
       </span>
-      <span className="logo-wordmark">Cowork FPEA<AppVersion /></span>
+      <span className="logo-wordmark">Cowork Jev<AppVersion /></span>
     </span>
   );
 }
@@ -110,6 +122,7 @@ export function IconButton({ icon, label, onClick, disabled, active }: { icon: s
 }
 export function Modal({ title, children, onClose, wide = false }: { title: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
     const dialog = ref.current;
     dialog?.showModal();
@@ -118,6 +131,7 @@ export function Modal({ title, children, onClose, wide = false }: { title: strin
   return (
     <dialog
       ref={ref}
+      aria-labelledby={titleId}
       className={"modal" + (wide ? " wide" : "")}
       onCancel={(e) => {
         e.preventDefault();
@@ -128,7 +142,7 @@ export function Modal({ title, children, onClose, wide = false }: { title: strin
       }}
     >
       <header>
-        <h2>{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         <IconButton icon="close" label="Fechar" onClick={onClose} />
       </header>
       <div className="modal-body">{children}</div>

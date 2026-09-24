@@ -12,6 +12,7 @@ export type RemovalPlan = {
   taskIds: string[];
   preserved: number;
   running: number;
+  processing: number;
   token: string;
 };
 function ids(input: unknown): string[] {
@@ -113,6 +114,13 @@ export function removalPlan(input: RemovalSelection): RemovalPlan {
     sourceIds: [...sourceIds].sort(),
     taskIds: [...taskIds].sort(),
     preserved,
+    processing: [...sourceIds].filter((id) =>
+      d
+        .prepare(
+          "SELECT id FROM organization_jobs WHERE sourceId=? AND status IN ('queued','running')",
+        )
+        .get(id),
+    ).length,
     running: [...taskIds].filter((id) =>
       ["queued", "running"].includes(storedTask(id).status),
     ).length,
@@ -142,6 +150,7 @@ export function removeItems(input: RemovalSelection, token: string) {
       d.prepare("DELETE FROM capture_tasks WHERE id=?").run(id);
     }
     for (const id of plan.sourceIds) {
+      d.prepare("DELETE FROM organization_jobs WHERE sourceId=?").run(id);
       d.prepare("DELETE FROM revisions WHERE note_id=?").run(id);
       d.prepare("DELETE FROM notes WHERE id=?").run(id);
       d.prepare("DELETE FROM jobs WHERE id=?").run(`organize:${id}`);

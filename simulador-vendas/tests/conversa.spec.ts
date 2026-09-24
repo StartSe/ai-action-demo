@@ -274,9 +274,15 @@ test("dica curta acompanha a fala, persiste ao recarregar e feedback entrega pla
   const dica = page.getByLabel("Orientação do treino");
   await expect(dica).toContainText("Reconheça o tempo curto");
   await page.screenshot({ path: "test-results/conversa-dica.png", fullPage: true, animations: "disabled" });
-  const primeira = await dica.textContent();
+  await expect(dica).toContainText("Boa pergunta para entender o cliente");
+  await page.getByLabel("Sua mensagem").fill("Qual é o maior desafio do seu time?");
+  await page.getByLabel("Sua mensagem").press("Enter");
+  await expect(dica.locator("p")).toContainText("Retome um ponto");
+  await expect(dica).not.toContainText("Boa pergunta para entender o cliente");
+  const primeira = await dica.locator("p").textContent();
   await page.reload();
-  await expect(dica).toHaveText(primeira!);
+  await expect(dica.locator("p")).toHaveText(primeira!);
+  await expect(dica).not.toContainText("Boa pergunta para entender o cliente");
   const acesso = await page.request.post(`/api/salas/${codigo}/dica`, { data: { mensagemId: "outra-pessoa" } });
   expect(acesso.status()).toBe(409);
   await page.getByRole("button", { name: "Encerrar e ver resultado" }).click();
@@ -284,4 +290,39 @@ test("dica curta acompanha a fala, persiste ao recarregar e feedback entrega pla
   await expect(page.getByText("Seu plano de ação rápido", { exact: true })).toBeVisible();
   await expect(page.getByText("Como conferir:", { exact: true }).first()).toBeVisible();
   await page.screenshot({ path: "test-results/feedback-plano.png", fullPage: true, animations: "disabled" });
+});
+
+test("cronômetro preserva texto no limite, avisa em uma pausa e permite a última resposta", async ({ page }) => {
+  await instalarVoz(page);
+  const codigo = await abrirSala(page);
+  await page.getByRole("button", { name: "Prefiro digitar" }).click();
+  await page.getByLabel("Sua mensagem").fill("Olá, podemos falar sobre seu time?");
+  await page.getByRole("button", { name: "Enviar", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Sua vez de escrever");
+  const lista = await (await page.request.get("/api/simulacoes")).json();
+  const sim = lista.itens.find((s: { codigo: string }) => s.codigo === codigo);
+  let avisos = 0;
+  let encerramentos = 0;
+  page.on("request", r => { if (r.url().endsWith("/encerrar")) encerramentos++; });
+  await page.route("**/conversar", route => {
+    if (!route.request().postDataJSON().avisoTempo) return route.continue();
+    avisos++;
+    return route.fulfill({ json: { texto: "Preciso encerrar. Há mais algum ponto para retomarmos depois?", avisoTempo: true, encerrada: false } });
+  });
+  await page.clock.install({ time: Date.now() + sim.duracaoMin * 60000 - 5000 });
+  await page.getByLabel("Sua mensagem").fill("Quero retomar os detalhes na terça-feira.");
+  await page.clock.runFor(10000);
+  await expect(page.getByRole("timer")).toHaveText(/^\+/);
+  await expect(page.getByLabel("Sua mensagem")).toHaveValue("Quero retomar os detalhes na terça-feira.");
+  expect(avisos).toBe(0);
+  expect(encerramentos).toBe(0);
+  await page.getByLabel("Sua mensagem").fill("");
+  await page.clock.runFor(4000);
+  await expect(page.getByText("Preciso encerrar. Há mais algum ponto para retomarmos depois?", { exact: true }).first()).toBeVisible();
+  await page.clock.runFor(20000);
+  expect(avisos).toBe(1);
+  expect(encerramentos).toBe(0);
+  await page.getByLabel("Sua mensagem").fill("Podemos retomar na terça-feira?");
+  await expect(page.getByRole("button", { name: "Enviar", exact: true })).toBeEnabled();
+  await page.screenshot({ path: "test-results/tempo-encerramento.png", fullPage: true });
 });

@@ -6,6 +6,7 @@
 // definições no topo daquele arquivo). Este arquivo só escolhe rótulo, formato e cor.
 import { Destaque } from "./ui";
 import { tempoDeResposta } from "@/lib/rotulos";
+import { rotuloMotivo } from "@/lib/transferencia";
 import { numero } from "@/lib/formato";
 import type { Metricas } from "@/lib/types";
 
@@ -18,16 +19,27 @@ const ROTULOS = {
   resolvidasIA: "Resolvidas pela IA",
   passadasPessoa: "Passadas para uma pessoa",
   tempoMedioMs: "Tempo médio de resposta",
+  motivos: "Por que pediu ajuda",
+  naoEntregues: "Mensagens que não chegaram",
 };
 
-/** Os quatro números em linhas de texto, como o "Copiar resumo" de Relatórios os cola. */
+/**
+ * Os números em linhas de texto, como o "Copiar resumo" de Relatórios os cola. Depois dos quatro
+ * cartões vêm as duas linhas que a tela também mostra quando têm o que dizer: por que o atendente
+ * pediu ajuda (uma linha só, na mesma ordem das barras) e quantas mensagens não chegaram ao cliente.
+ */
 export function numerosEmTexto(metricas: Metricas): string[] {
-  return [
+  const linhas = [
     `${ROTULOS.conversas}: ${numero(metricas.conversas)}`,
     `${ROTULOS.resolvidasIA}: ${numero(metricas.resolvidasIA)}`,
     `${ROTULOS.passadasPessoa}: ${numero(metricas.passadasPessoa)}`,
     `${ROTULOS.tempoMedioMs}: ${tempoDeResposta(metricas.tempoMedioMs)}`,
   ];
+  if (metricas.motivos.length > 0) {
+    linhas.push(`${ROTULOS.motivos}: ${metricas.motivos.map((m) => `${rotuloMotivo(m.motivo)} (${numero(m.total)})`).join("; ")}`);
+  }
+  if (metricas.naoEntregues > 0) linhas.push(`${ROTULOS.naoEntregues}: ${numero(metricas.naoEntregues)}`);
+  return linhas;
 }
 
 /** Enquanto os números não chegam, os quatro cartões já ocupam o lugar deles, sem a tela saltar. */

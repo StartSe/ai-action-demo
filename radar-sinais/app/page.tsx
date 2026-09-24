@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Topbar } from "@/components/ui";
+import { DestaquesRadar } from "@/components/DestaquesRadar";
+import { Monitoramentos } from "@/components/Monitoramentos";
 import { Grafo } from "@/components/Grafo";
 import { SinalChips } from "@/components/SinalChips";
 import { exemplosVisiveis, ultimoRadarReal } from "@/lib/radar-historico";
-import { listarRadares, obterRadar } from "@/lib/radares";
+import { listarRadares, obterRadar, analisesRadar } from "@/lib/radares";
 import { radarDemo } from "@/lib/demo";
 import { aiEnabled, modelName } from "@/lib/ai";
 import { DESTINO_CONECTAR_IA, DESTINO_RADAR, DESTINO_TEMAS } from "@/lib/destinos";
@@ -26,8 +28,9 @@ export default async function Page({ searchParams }: PageProps<"/">) {
   }
   const radares = listarRadares();
   const iaLigada = await aiEnabled();
-  const ultimo = ultimoRadarReal();
-  const cadastro = obterRadar(ultimo?.entrada.radarId);
+  const recente = ultimoRadarReal();
+  const cadastro = obterRadar(typeof params.radarId === "string" && radares.some(r => r.id === params.radarId) ? params.radarId : recente?.entrada.radarId);
+  const ultimo = analisesRadar(cadastro.id, 1, true)[0];
   const pesquisa = cadastro.pesquisa;
   const destino = `${DESTINO_RADAR}?radarId=${cadastro.id}`;
   const exemplo = exemplosVisiveis(iaLigada);
@@ -60,8 +63,8 @@ export default async function Page({ searchParams }: PageProps<"/">) {
           <Link href={proximo.href} className="btn-primary !w-auto">{proximo.rotulo}</Link>
         </header>
         <section className="mb-6" aria-label="Meus radares">
-          <div className="flex justify-between items-center mb-3"><h2 className="font-bold">Meus radares</h2><Link className="btn-link text-sm" href="/radar">Gerenciar radares</Link></div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">{radares.map(r => <Link key={r.id} className="card p-4 hover:border-accent" href={`/radar?radarId=${r.id}`}><strong className="block">{r.nome}</strong><span className="text-xs text-muted">{r.pesquisa.termos.filter(t => t.ativo).map(t => t.termo).join(" · ") || "Adicione temas para começar"}</span></Link>)}</div>
+          <div className="flex justify-between items-center mb-3"><h2 className="font-bold">Meus radares</h2><Link className="btn-link text-sm" href="/radar?novo=1">+ Novo radar</Link></div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">{radares.map(r => <Link key={r.id} aria-current={r.id === cadastro.id ? "true" : undefined} className={`card p-4 hover:border-accent ${r.id === cadastro.id ? "!border-accent !bg-accent-soft" : ""}`} href={`/?radarId=${r.id}`}><strong className="block">{r.nome}</strong><span className="text-xs text-muted">{r.pesquisa.termos.filter(t => t.ativo).map(t => t.termo).join(" · ") || "Adicione temas para começar"}</span></Link>)}</div>
         </section>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           {indicadores.map((i) => (
@@ -111,6 +114,8 @@ export default async function Page({ searchParams }: PageProps<"/">) {
             </section>
           </aside>
         </div>
+        {ultimo && <DestaquesRadar radar={radar} radarId={cadastro.id} resultadoId={ultimo.id} />}
+        <Monitoramentos dados={{ radarId: cadastro.id, temas: pesquisa.termos.filter(t => t.ativo).map(t => t.termo), periodoDias: pesquisa.periodoDias, setor: pesquisa.setor }} />
       </main>
     </>
   );

@@ -6,7 +6,7 @@ import { obter as obterResultado } from "@/lib/historico";
 import { avaliarSessao, type AvaliacaoSessao } from "@/lib/avaliacao";
 import { adjetivosDoCliente, persona, rotulo } from "@/lib/personas";
 import { balancoDeTentativas, conversaAberta } from "@/lib/sala-do-vendedor";
-import { encerrar, transcricao } from "@/lib/sessoes";
+import { encerrar, temFalaDoVendedor, transcricao } from "@/lib/sessoes";
 import { ErroIA } from "@/lib/ai";
 import type { Conversa } from "@/lib/types";
 import type { Meta } from "@/lib/ai";
@@ -59,11 +59,9 @@ export async function POST(req: Request, { params }: RouteContext<"/api/salas/[t
 
   const falas = transcricao(sessao.id);
 
-  // "Encerrar e ver meu resultado" vale a qualquer momento, inclusive antes da primeira fala. Nesse
-  // caso a conversa fecha do mesmo jeito (ela existiu, e o gestor precisa ver que existiu), mas não há
-  // o que avaliar — dar nota a um silêncio seria inventar um resultado.
-  if (!falas.some((f) => f.papel === "vendedor")) {
-    if (sessao.status === "em_andamento") encerrar(sessao.id);
+  // Silêncio não gasta tentativa nem entra no painel ou na fila de avaliação.
+  if (!temFalaDoVendedor(falas)) {
+    encerrar(sessao.id, { status: "abandonada" });
     return Response.json({ semConversa: true, tentativas: balanco() });
   }
 

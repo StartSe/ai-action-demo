@@ -67,9 +67,9 @@ export default function Page() {
       <Hero sobretitulo={PROMESSA.sobretitulo} titulo={PROMESSA.titulo} apoio={PROMESSA.apoio} segmento="Marketing" />
 
       <main className="px-8 pt-2 pb-12 max-md:px-4 max-md:pb-10 max-w-[1400px] mx-auto flex flex-col gap-9">
-        <section aria-label="Criar um site" className="max-w-[860px]">
+        <section aria-label="Criar um site" className="max-w-[1120px]">
           {aviso && <div className="mb-3"><Aviso tom="danger">{aviso}</Aviso></div>}
-          <CriarSite editando={editando} aoCancelarEdicao={() => { setEditando(null); history.replaceState(null, "", "/"); }} />
+          <CriarSite key={editando?.id || "novo"} editando={editando} aoCancelarEdicao={() => { setEditando(null); history.replaceState(null, "", "/"); }} />
         </section>
 
         <MeusSites

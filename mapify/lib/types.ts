@@ -62,6 +62,8 @@ export type GenerationPatch = {
   preview?: JobPreview;
   sourceSegments?: number;
   receivedCharacters?: number;
+  completedBranches?: number;
+  totalBranches?: number;
 };
 export type GenerationProgress = (
   phase: string,
@@ -78,6 +80,8 @@ export type Job = {
   events?: { at: string; text: string }[];
   sourceSegments?: number;
   receivedCharacters?: number;
+  completedBranches?: number;
+  totalBranches?: number;
   updatedAt?: string;
   heartbeatAt?: string;
   error?: string;

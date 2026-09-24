@@ -1,6 +1,8 @@
 "use client";
 // Cadastro por link ou manual; a importação abre a revisão com sugestões editáveis.
 import Link from "next/link";
+import { Icone, MenuAcoes } from "@/components/MenuAcoes";
+import { ResumoLista, SemCorrespondencia, normalizarBusca } from "@/components/ListaGestao";
 import { ProgressoImportacao } from "@/components/ProgressoImportacao";
 import { ErroImportacao, lerImportacao } from "@/lib/ler-importacao";
 import { useRouter } from "next/navigation";
@@ -49,11 +51,14 @@ export default function Page() {
   const [erroTela, setErroTela] = useState<ErroLido | null>(null);
   const [cadastrando, setCadastrando] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [busca, setBusca] = useState("");
+  const [filtro, setFiltro] = useState("todos");
   const [nome, setNome] = useState("");
   const [categoria, setCategoria] = useState("");
   const [descricao, setDescricao] = useState("");
 
   const carregar = useCallback(async () => {
+    setErroTela(null);
     try {
       const r = await fetch("/api/produtos");
       if (!r.ok) throw r;
@@ -130,13 +135,14 @@ export default function Page() {
     }
   }
 
+  const visiveis = (itens ?? []).filter(p => (filtro === "todos" || p.status === filtro) && normalizarBusca(`${p.nome} ${p.categoria ?? ""} ${p.descricao ?? ""}`).includes(normalizarBusca(busca.trim())));
   const temExemplo = itens?.some((p) => p.exemplo) ?? false;
 
   return (
     <>
       <Topbar marca="S" nome="Simulador de Vendas" area="Vendas" status={status} erro={erro} usuario={status?.usuario} />
 
-      <main className="max-w-[980px] mx-auto px-8 pt-7 pb-12 max-md:px-4 max-md:pt-5 max-md:pb-10">
+      <main className="gestao-main">
         <div className="flex items-start justify-between gap-4 mb-6 max-md:flex-col max-md:gap-3">
           <div>
             <h1 className="titulo-painel mb-1.5">Produtos</h1>
@@ -195,9 +201,24 @@ export default function Page() {
           </AvisoExemplo>
         )}
 
+        {!cadastrando && itens && itens.length > 0 && <>
+          <ResumoLista itens={[
+            { rotulo: "Produtos cadastrados", valor: itens.length },
+            { rotulo: "Fichas prontas", valor: itens.filter(p => p.status === "pronto").length },
+            { rotulo: "Fichas em rascunho", valor: itens.filter(p => p.status === "rascunho").length, detalhe: "Complete a ficha para contextualizar o treino" },
+          ]} />
+          <div className="list-toolbar">
+            <input type="search" className="input md:!w-[360px]" aria-label="Buscar produto" placeholder="Buscar por produto ou categoria" value={busca} onChange={e => setBusca(e.target.value)} />
+            <select className="input md:!w-auto" aria-label="Situação da ficha" value={filtro} onChange={e => setFiltro(e.target.value)}>
+              <option value="todos">Todas as fichas</option><option value="pronto">Fichas prontas</option><option value="rascunho">Rascunhos</option>
+            </select>
+          </div>
+          <p className="text-xs text-muted mb-3" role="status">{visiveis.length} de {itens.length} produtos</p>
+        </>}
+
         {!cadastrando && (itens === null ? (
-          <p className="text-muted text-sm">Carregando...</p>
-        ) : itens.length === 0 ? (
+          <p role="status" className="text-muted text-sm">Carregando produtos...</p>
+        ) : erroTela && itens.length === 0 ? <button className="btn-ghost" onClick={carregar}>Tentar novamente</button> : itens.length === 0 ? (
           <Empty
             ilustracao={<IconeProduto />}
             titulo="Nenhum produto cadastrado"
@@ -206,19 +227,23 @@ export default function Page() {
             onAcao={() => setCadastrando(true)}
           />
         ) : (
-          <div className="flex flex-col gap-3">
-            {itens.map((p) => (
-              <article key={p.id} className="card px-5 py-4">
-                <div className="flex items-start justify-between gap-3 mb-1.5 max-md:flex-col max-md:gap-1.5">
+          visiveis.length === 0 ? <SemCorrespondencia onLimpar={() => { setBusca(""); setFiltro("todos"); }} /> : <div className="grid md:grid-cols-2 gap-4">
+            {visiveis.map((p) => (
+              <article key={p.id} className="card p-5 flex flex-col">
+                <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="min-w-0">
-                    <h2 className="font-bold text-[16px] truncate">{p.nome}</h2>
+                    <h2 className="font-bold text-lg break-words"><Link className="hover:text-accent-ink" href={`/produtos/${p.id}`}>{p.nome}</Link></h2>
                     {p.descricao && <p className="text-muted text-sm mt-0.5 line-clamp-2">{p.descricao}</p>}
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {p.exemplo && <Chip nivel="neutral">Exemplo</Chip>}
-                    {p.categoria && <Chip nivel="cinza">{p.categoria}</Chip>}
-                    <Chip nivel={p.status === "pronto" ? "positivo" : "neutro"}>{p.status === "pronto" ? "Ficha pronta" : "Rascunho"}</Chip>
-                  </div>
+                  <MenuAcoes rotulo={`Opções do produto ${p.nome}`} itens={[
+                    { rotulo: "Editar produto", icone: "editar", href: `/produtos/${p.id}` },
+                    { rotulo: "Apagar produto", icone: "apagar", perigo: true, onClick: () => void apagar(p) },
+                  ]} />
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap mb-4">
+                  {p.exemplo && <Chip nivel="neutral">Exemplo</Chip>}
+                  {p.categoria && <Chip nivel="cinza">{p.categoria}</Chip>}
+                  <Chip nivel={p.status === "pronto" ? "positivo" : "neutro"}>{p.status === "pronto" ? "Ficha pronta" : "Rascunho"}</Chip>
                 </div>
 
                 <p className="text-[13px] text-muted mb-3">
@@ -226,10 +251,9 @@ export default function Page() {
                   {contagem(p.simulacoes, "treino", "treinos", "Nenhum treino ainda")} · atualizado em {data(p.atualizadoEm)}
                 </p>
 
-                <div className="flex items-center gap-4 flex-wrap">
-                  <Link href={`/produtos/${p.id}`} className="btn-link">Editar</Link>
-                  <Link href={`/simulacoes/nova?produto=${p.id}`} className="btn-link">Criar treino</Link>
-                  <button type="button" className="btn-link !text-danger" onClick={() => apagar(p)}>Apagar</button>
+                <div className="flex items-center gap-3 flex-wrap border-t border-line pt-4 mt-auto">
+                  <Link href={`/simulacoes/nova?produto=${p.id}`} className="btn-primary !w-auto !h-11"><Icone nome="adicionar" />Criar treino</Link>
+                  <Link href={`/produtos/${p.id}`} className="btn-link inline-flex gap-2 items-center min-h-11"><Icone nome="editar" />Editar ficha</Link>
                 </div>
               </article>
             ))}

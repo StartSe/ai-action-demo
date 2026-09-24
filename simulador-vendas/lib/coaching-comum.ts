@@ -1,6 +1,28 @@
 import type { AvaliacaoSessao, CriterioAvaliado } from "./avaliacao";
 
-export type DicaTreino = { texto: string; origem: "ia" | "orientacao" | "demo" };
+export const ACERTOS_TREINO = {
+  descoberta: "Boa pergunta para entender o cliente",
+  escuta: "Você acolheu o ponto do cliente",
+  valor: "Você conectou valor à necessidade",
+  proximoPasso: "Bom encaminhamento dos próximos passos",
+};
+export type AcertoTreino = { tipo: keyof typeof ACERTOS_TREINO; evidencia: string };
+export type DicaTreino = { texto: string; origem: "ia" | "orientacao" | "demo"; acerto?: AcertoTreino };
+
+/** O elogio precisa apontar um trecho da última fala do vendedor, nunca do cliente. */
+export function validarAcerto(valor: unknown, ultimaFalaVendedor: string): AcertoTreino | undefined {
+  if (!valor || typeof valor !== "object") return;
+  const { tipo, evidencia } = valor as { tipo?: unknown; evidencia?: unknown };
+  if (typeof tipo !== "string" || !Object.hasOwn(ACERTOS_TREINO, tipo) || typeof evidencia !== "string") return;
+  const trecho = evidencia.trim();
+  if (trecho.length < 12 || trecho.length > 200 || trecho.split(/\s+/).length < 3 || !ultimaFalaVendedor.includes(trecho)) return;
+  return { tipo: tipo as AcertoTreino["tipo"], evidencia: trecho };
+}
+
+export function acertoBasico(fala: string): AcertoTreino | undefined {
+  const pergunta = fala.match(/(?:qual|quais|como)\b[^.!?]{8,160}\?/i)?.[0];
+  if (pergunta && /desafio|dificuldade|problema|impacto|afeta|funciona hoje/i.test(pergunta)) return validarAcerto({ tipo: "descoberta", evidencia: pergunta }, fala);
+}
 export type AcaoTreino = { criterioId: string; acao: string; comoMedir: string };
 export type PlanoTreino = { origem: "ia" | "orientacao" | "demo"; acoes: AcaoTreino[] };
 
@@ -39,6 +61,7 @@ export function validarPlano(valor: unknown, avaliacao: AvaliacaoSessao): AcaoTr
   }).slice(0, 3);
 }
 export function dicaBase(ultimaFala: string): string {
+  if (/encerrar|preciso ir|próxima reunião|retomar.*outra conversa/i.test(ultimaFala)) return "Combine os pontos que ficam para depois e proponha uma data para retomar. Agradeça o tempo do cliente.";
   if (/preço|custo|orçamento|caro/i.test(ultimaFala)) return "Antes de discutir desconto, pergunte qual resultado justificaria o investimento para o cliente.";
   if (/prova|número|parecido|promessa/i.test(ultimaFala)) return "Pergunte qual evidência daria segurança para avançar. Use apenas exemplos e números que você conhece.";
   if (/tempo|pressa|reunião/i.test(ultimaFala)) return "Reconheça o tempo curto e faça uma pergunta sobre a principal dificuldade do cliente.";

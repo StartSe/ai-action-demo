@@ -4,7 +4,7 @@ import { data } from "@/lib/formato";
 import { obter } from "@/lib/historico";
 import type { Meta } from "@/lib/ai";
 import type { DadosRadar, Radar } from "@/lib/types";
-import { ConteudoRadar } from "../../radar/page";
+import { ConteudoRadar } from "@/components/ResultadoRadar";
 import { ImprimirAoCarregar } from "./ImprimirAoCarregar";
 
 export default async function Page({ params }: PageProps<"/imprimir/[id]">) {

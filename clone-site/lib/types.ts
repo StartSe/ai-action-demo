@@ -68,9 +68,14 @@ export interface ProgressoGeracao {
 /** Publicação em hospedagem externa (Netlify): o site criado lá e a versão que foi enviada. */
 export interface PublicacaoExterna {
   siteId: string;
+  deployId?: string;
+  estado?: "publicando" | "pronto" | "falhou";
+  versaoPendente?: number;
   url: string;
   versao?: number;
   publicadoEm?: string;
+  iniciadoEm?: string;
+  rollback?: boolean;
 }
 
 /** O projeto devolvido às telas: nunca carrega a imagem (pesada; fica no banco só até `pronto`). */
@@ -98,6 +103,8 @@ export interface Projeto {
   progresso?: ProgressoGeracao;
   /** Site publicado em hospedagem externa (Netlify). */
   netlify?: PublicacaoExterna;
+  /** Serviço independente deste projeto no Render. */
+  render?: PublicacaoExterna;
   erro?: ErroProjeto;
   criadoEm: string;
   atualizadoEm: string;

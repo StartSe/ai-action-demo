@@ -1,11 +1,11 @@
 // Divergência de propósito em relação ao pdi-time (registrada em scripts/padrao-excecoes.json): a IA deste app
 // pode ser o OpenRouter (chave) OU o ChatGPT (assinatura conectada pelo Codex App Server), escolhido em
 // /setup#ia. `ai`/`demo` seguem lib/motor.ts:iaDisponivel(); `integrations.chatgpt` diz se a conta está
-// conectada; `vision` continua sendo "há chave do OpenRouter" (a leitura de captura não muda de provedor).
+// conectada; a leitura de captura também segue o provedor principal.
 import { modelName } from "@/lib/ai";
 import { sessaoAtual } from "@/lib/conta";
 import { INTEGRACOES } from "@/lib/integracoes";
-import { chatgptConectado, iaDisponivel, nomeModeloChatGPT, provedor, visaoDisponivel } from "@/lib/motor";
+import { chatgptConectado, iaDisponivel, nomeModeloChatGPT, provedor } from "@/lib/motor";
 import { calcularProximos, integracaoConfigurada } from "@/lib/setup-comum";
 import { statusExtra } from "@/lib/status-do-app";
 
@@ -23,5 +23,5 @@ export async function GET(req: Request) {
   const integrations: Record<string, boolean> = Object.fromEntries(INTEGRACOES.map((i) => [i.id, integracaoConfigurada(i)]));
   integrations.chatgpt = chatgpt;
   Object.assign(integrations, statusExtra());
-  return Response.json({ ai, demo: !ai, provedor: provedor(), model: usarChatGPT ? nomeModeloChatGPT() : modelName(), vision: visaoDisponivel(), integrations, setup: { pronto, url: "/setup" }, usuario, proximos });
+  return Response.json({ ai, demo: !ai, provedor: provedor(), model: usarChatGPT ? nomeModeloChatGPT() : modelName(), vision: ai, integrations, setup: { pronto, url: "/setup" }, usuario, proximos });
 }

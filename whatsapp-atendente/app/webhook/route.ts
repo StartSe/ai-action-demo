@@ -1,9 +1,10 @@
 // Webhook da WhatsApp Cloud API (Meta): verificação (GET) e recebimento de mensagens (POST).
 // Rota pública em proxy.ts: quem chama é a Meta, sem cookie de sessão; a autenticação é o valor de
 // verificação gerado por este app e cadastrado no painel da Meta.
-import { classificarEmSegundoPlano, responder } from "@/lib/atendente";
+import { registrarMensagemCliente } from "@/lib/conversas";
+import { agendarResposta } from "@/lib/rajada";
 import { getConfig } from "@/lib/store";
-import { enviarMensagem, ErroWhatsApp, registrarFalhaEnvio, registrarRecebida } from "@/lib/whatsapp";
+import { registrarRecebida } from "@/lib/whatsapp";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export async function GET(req: Request) {
 }
 
 interface MensagemWhatsApp {
+  id?: string;
   from?: string;
   type?: string;
   text?: { body?: string };
@@ -57,20 +59,16 @@ async function processarWebhook(body: CorpoWebhook) {
         // Registrado antes de qualquer processamento: "chegou mensagem do número real" é o que o
         // cartão de diagnóstico precisa saber, mesmo que a resposta falhe logo depois.
         registrarRecebida(de);
-        const { resposta } = await responder({ numero: de, texto, origem: "whatsapp" });
-        // Conversa assumida por uma pessoa: a mensagem foi guardada, mas quem responde é ela.
-        if (!resposta) continue;
-        try {
-          await enviarMensagem(de, resposta);
-        } catch (err) {
-          // A Meta já recebeu o 200; aqui só sobra registrar o motivo em linguagem de negócio, para
-          // "Dados para a equipe técnica" conseguir explicar por que o cliente não recebeu resposta.
-          const mensagem = err instanceof ErroWhatsApp ? err.message : "Não foi possível enviar a resposta pelo número da empresa.";
-          if (!(err instanceof ErroWhatsApp)) console.error("Falha inesperada ao responder pelo WhatsApp:", err);
-          registrarFalhaEnvio(mensagem);
+        // A mensagem é gravada na hora; a resposta espera a janela de rajada (lib/rajada.ts), que
+        // responde à sequência inteira de uma vez. O `id` da Meta evita que uma reentrega vire duas
+        // mensagens; uma conversa assumida por uma pessoa guarda a mensagem e não entra na fila.
+        const conversa = registrarMensagemCliente({ numero: de, texto, origem: "whatsapp", idExterno: msg.id });
+        if (conversa.duplicada) {
+          console.log(`Mensagem da Meta repetida ignorada, de ${de}, id ${msg.id}.`);
+          continue;
         }
-        // Depois de a resposta sair: o assunto da conversa, para os relatórios (lib/atendente.ts).
-        classificarEmSegundoPlano(de);
+        if (conversa.status === "humano") continue;
+        agendarResposta(de, "whatsapp");
       }
     }
   }

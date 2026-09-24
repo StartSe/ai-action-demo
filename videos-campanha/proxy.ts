@@ -30,9 +30,11 @@
 // prévia do app para o catálogo; nunca definida em Blueprint nem em instância real).
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isPreviewRead } from "@/lib/flow/preview-model";
 import { existeConta, sessaoAtual } from "@/lib/conta";
 
 function rotaPublica(pathname: string, metodo: string): boolean {
+  if (isPreviewRead(pathname, metodo)) return true;
   if (pathname === "/mcp") return metodo === "POST";
   if (pathname === "/api/health") return true;
   if (pathname === "/api/rotinas/executar") return true;
@@ -58,6 +60,11 @@ export function proxy(request: NextRequest) {
 
   function permitir() {
     const response = NextResponse.next();
+    if (pathname.startsWith("/preview/") || pathname.startsWith("/api/flow-preview/")) {
+      response.headers.set("Cache-Control", "no-store");
+      response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+      response.headers.set("Referrer-Policy", "no-referrer");
+    }
     if (semCache) response.headers.set("Cache-Control", "no-store");
     return response;
   }

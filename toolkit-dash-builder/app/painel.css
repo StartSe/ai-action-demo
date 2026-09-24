@@ -1,0 +1,19 @@
+/* Grade do painel (4 colunas no desktop, 2 no tablet, 1 no celular) e cartões de componente.
+   A largura de cada cartão vem de LARGURA_CLASSE (lib/validar-painel.ts); aqui ficam só o que o Tailwind
+   não expressa bem e os ajustes de impressão que não dependem da .print-sheet. */
+.painel-grade { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 768px) { .painel-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .painel-grade { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.painel-cartao { min-width: 0; display: flex; flex-direction: column; }
+.painel-cartao > .painel-corpo { flex: 1; min-width: 0; }
+
+/* SVGs só de geometria: esticam com o cartão sem deformar o traço. */
+.painel-svg { display: block; width: 100%; }
+.painel-traco { vector-effect: non-scaling-stroke; }
+
+/* Tabela simples do modo impressão (RF-14 a4): sem DataTable, largura total, uma página. */
+.painel-tabela-impressa { width: 100%; border-collapse: collapse; font-size: 12px; }
+.painel-tabela-impressa th, .painel-tabela-impressa td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--color-line); vertical-align: top; }
+.painel-tabela-impressa th { font-weight: 700; color: var(--color-muted); font-size: 11px; }
+.painel-tabela-impressa td.num, .painel-tabela-impressa th.num { text-align: right; white-space: nowrap; }

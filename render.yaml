@@ -1,5 +1,5 @@
-# Blueprint único da suíte IA para Executivos: publica os 22 apps de uma vez.
-# PDI do Time exige o plano 0.5c-512mb (pago); Entrevistadora IA exige o plano standard (pago); Prospecção com IA exige o plano starter (pago); Atendente no WhatsApp exige o plano starter (pago); Radar de Sinais exige o plano starter (pago); Bússola de IA exige o plano 0.5c-512mb (pago); Simulador de Vendas exige o plano starter (pago); Site Cowork exige o plano 0.5c-512mb (pago); Vídeos de Campanha exige o plano starter (pago); AutoML exige o plano standard (pago); Build Agentflows exige o plano starter (pago); Daily Second Brain exige o plano starter (pago); Mapia exige o plano starter (pago); Cowork FPEA exige o plano starter (pago); Precificador exige o plano starter (pago); os outros 7 são gratuitos.
+# Blueprint único da suíte IA para Executivos: publica os 23 apps de uma vez.
+# PDI do Time exige o plano 0.5c-512mb (pago); Entrevistadora IA exige o plano standard (pago); Prospecção com IA exige o plano starter (pago); Atendente no WhatsApp exige o plano starter (pago); Radar de Sinais exige o plano starter (pago); Bússola de IA exige o plano 0.5c-512mb (pago); Simulador de Vendas exige o plano starter (pago); Site Cowork exige o plano 0.5c-512mb (pago); Vídeos de Campanha exige o plano starter (pago); AutoML exige o plano standard (pago); Build Agentflows exige o plano starter (pago); Daily Second Brain exige o plano starter (pago); Mapia exige o plano starter (pago); Cowork Jev exige o plano starter (pago); os outros 9 são gratuitos.
 # Cada app também tem seu próprio Blueprint (branch deploy-<app> em https://github.com/StartSe/ai-action-app-deploy).
 # Imagens públicas publicadas pelo GitHub Actions em ghcr.io/startse/<app>:latest.
 # Nenhuma chave é necessária aqui: após publicar, abra /setup em cada app e conecte a IA.
@@ -186,7 +186,7 @@ services:
     envVars:
       - key: PORT
         value: "10000"
-    # A configuração, a conta, os termos monitorados, as rotinas e os radares ficam em /app/data e sobrevivem a deploys.
+    # Configuração, conta, radares, fontes, análises, destaques, conversas e histórico de execuções ficam em /app/data e sobrevivem a deploys.
     disk:
       name: radar-sinais-dados
       mountPath: /app/data
@@ -380,3 +380,20 @@ services:
       name: precificador-dados
       mountPath: /app/data
       sizeGB: 1
+
+  - type: web
+    name: toolkit-dash-builder
+    runtime: image
+    image:
+      url: ghcr.io/startse/toolkit-dash-builder:latest
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "10000"
+    # Para manter a configuração feita em /setup entre deploys (exige plano pago):
+    # disk:
+    #   name: toolkit-dash-builder-dados
+    #   mountPath: /app/data
+    #   sizeGB: 1

@@ -2,10 +2,8 @@
 // protegida pela chave secreta na URL (?chave=) gerada em Configurações; a Meta também usa essa chave
 // como valor de verificação. Cada mensagem de texto executa o fluxo publicado escolhido em
 // Conexões e a resposta volta pelo mesmo número. Responde 200 na hora e processa em seguida.
-import { getConfig, setConfig } from "@/lib/store";
-import { chaveConfere, enviarMensagem, interpretarRecebido, type Recebida } from "@/lib/whatsapp";
-import { whatsappConfigurado, provedorWhatsApp } from "@/lib/conexoes";
-import { startRun } from "@/lib/flow-runtime";
+import { chaveConfere, interpretarRecebido } from "@/lib/whatsapp";
+import { processarWhatsApp } from "@/lib/channel-flows";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const q = new URL(req.url).searchParams;
@@ -21,28 +19,6 @@ export async function POST(req: Request) {
   }
   const body = await req.json().catch(() => null);
   const recebida = interpretarRecebido(body);
-  if (recebida) processar(recebida).catch((err) => console.error("Erro ao responder no WhatsApp:", err));
+  if (recebida) processarWhatsApp(recebida).catch((err) => console.error("Erro ao responder no WhatsApp:", err));
   return new Response("OK", { status: 200 });
-}
-// Executa o fluxo escolhido em Configurações com o texto recebido e devolve a resposta ao remetente.
-export async function processar(m: Recebida): Promise<string | null> {
-  if (!whatsappConfigurado() || m.provedor !== provedorWhatsApp()) return null;
-  setConfig("WHATSAPP_ULTIMA_RECEBIDA", JSON.stringify({ em: new Date().toISOString(), de: m.de }));
-  const flowId = getConfig("WHATSAPP_FLOW_ID");
-  if (!flowId) return null;
-  let resposta: string;
-  try {
-    const r = await startRun(flowId, m.texto, true);
-    resposta =
-      r.status === "completed"
-        ? r.output
-        : r.status === "waiting"
-          ? "Recebi sua mensagem. Ela está em análise e voltamos em breve."
-          : "Não consegui concluir agora. Tente novamente em instantes.";
-  } catch (err) {
-    console.error("Fluxo do WhatsApp falhou:", err);
-    resposta = "Não consegui concluir agora. Tente novamente em instantes.";
-  }
-  if (resposta.trim()) await enviarMensagem(m.de, resposta);
-  return resposta;
 }

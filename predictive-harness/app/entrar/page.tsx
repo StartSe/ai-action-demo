@@ -35,7 +35,7 @@ export default function Login() {
             </div>
           </div>
         </div>
-        <small>Cowork FPEA · IA para Executivos / StartSe</small>
+        <small>Cowork Jev · IA para Executivos / StartSe</small>
       </section>
       <section className="auth-form">
         <div>

@@ -49,9 +49,12 @@ export async function organize(
     instruction?: string;
     onSaved?: (n: Note) => void;
     onDiagnostic?: OnDiagnostic;
+    onPhase?: (phase: string) => void;
   },
 ) {
   const run = async () => {
+    signal?.throwIfAborted();
+    options?.onPhase?.("Lendo a fonte e suas conexões");
     const source = note(id);
     if (source.kind !== "raw")
       throw new BrainError("Escolha uma fonte da Caixa de entrada.");
@@ -61,17 +64,27 @@ export async function organize(
       (n) => n.kind === "wiki" && n.demo === source.demo,
     );
     if (source.demo && !(await connected())) {
-      const n = save({
-        kind: "wiki",
-        title: source.title.replace(/^Reflexão · /, ""),
-        content: `## Ideia central\n${source.content}\n\n## Conexões para explorar\n[[Ritual diário]] e [[Aprendizado contínuo]].\n\n*Organização de exemplo, sem chamada à IA.*`,
-        tags: source.tags,
-        sources: [id],
-        demo: true,
-      });
-      markOrganized(id);
+      signal?.throwIfAborted();
+      options?.onPhase?.("Salvando na wiki");
+      const n = save(
+        {
+          kind: "wiki",
+          title: source.title.replace(/^Reflexão · /, ""),
+          content: `## Ideia central\n${source.content}\n\n## Conexões para explorar\n[[Ritual diário]] e [[Aprendizado contínuo]].\n\n*Organização de exemplo, sem chamada à IA.*`,
+          tags: source.tags,
+          sources: [id],
+          demo: true,
+        },
+        (saved) => {
+          if (note(id).status === "organized")
+            throw new BrainError("Essa fonte já foi organizada.", 409);
+          options?.onSaved?.(saved);
+          markOrganized(id, saved.id);
+        },
+      );
       return n;
     }
+    options?.onPhase?.("Organizando ideias com a IA");
     const result = json(
       await generate(
         SAFETY +
@@ -102,6 +115,7 @@ export async function organize(
         502,
       );
     signal?.throwIfAborted();
+    options?.onPhase?.("Salvando na wiki");
     const n = save(
       {
         kind: "wiki",
@@ -117,7 +131,7 @@ export async function organize(
         if (note(id).status === "organized")
           throw new BrainError("Essa fonte já foi organizada.", 409);
         options?.onSaved?.(saved);
-        markOrganized(id);
+        markOrganized(id, saved.id);
       },
     );
     return n;

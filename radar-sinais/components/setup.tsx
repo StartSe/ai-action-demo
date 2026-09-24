@@ -1,7 +1,7 @@
 "use client";
 // Configuração do Radar: IA com dois provedores, fontes e dados de teste.
 import { ConexaoIA } from "./ConexaoIA";
-import { DadosTeste } from "./DadosTeste";
+import { VozConfiguracao } from "./VozConfiguracao";
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState, type ReactNode } from "react";
@@ -80,7 +80,7 @@ export function SetupPage({
   const [aberta, setAberta] = useState<string | null>(null);
   useEffect(() => {
     const abrirHash = () => {
-      if (location.hash) setAberta(["ia", "chatgpt"].includes(location.hash.slice(1)) ? "openrouter" : location.hash.slice(1));
+      if (location.hash) setAberta(["ia", "chatgpt"].includes(location.hash.slice(1)) ? "openrouter" : ["searchapi", "busca-web"].includes(location.hash.slice(1)) ? "exa" : location.hash.slice(1));
     };
     const t = setTimeout(abrirHash, 0);
     window.addEventListener("hashchange", abrirHash);
@@ -183,14 +183,14 @@ export function SetupPage({
                         {i.id === "openrouter"
                           ? "Inteligência artificial"
                           : i.id === "exa"
-                            ? "Busca web · Exa ou Tavily"
+                            ? "Busca na Web · SearchAPI, Exa e Tavily"
                             : i.titulo}
                       </strong>
                       <p className="text-xs text-muted mt-1">
                         {i.obrigatoria
                           ? "Essencial para analisar sinais"
                           : i.id === "exa"
-                            ? "Opcional · necessário para priorizar seus sites"
+                            ? "Opcional · pesquise seus temas e sites"
                             : "Opcional · amplie seu radar"}
                       </p>
                     </div>
@@ -230,11 +230,8 @@ export function SetupPage({
               sites. Você não precisa conectar todos os serviços.
             </p>
           </section>
-          <section>
-            <h2 className="font-bold mb-3">Preferências da pesquisa</h2>
-            {children}
-            <DadosTeste />
-          </section>
+          <VozConfiguracao />
+          {children}
         </div>
         <footer className="flex flex-wrap gap-4 justify-between items-center mt-6 border-t border-line pt-4">
           <p className="text-xs text-muted">

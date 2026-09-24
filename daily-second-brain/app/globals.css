@@ -4113,3 +4113,133 @@ svg {
     grid-template-columns: 1fr;
   }
 }
+
+/* Persistent memory processing */
+.processing-panel {
+  margin: 20px 36px 0;
+  padding: 18px 20px;
+  border: 1px solid var(--line, #ded8e7);
+  border-radius: 16px;
+  background: var(--panel);
+}
+.processing-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.processing-summary {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 180px;
+}
+.processing-summary span,
+.processing-panel p {
+  font-size: 13px;
+}
+.processing-panel progress {
+  display: block;
+  width: 100%;
+  height: 6px;
+  margin: 14px 0 10px;
+  accent-color: #8972bc;
+}
+.processing-panel details {
+  margin-top: 12px;
+}
+.processing-panel summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.processing-list {
+  list-style: none;
+  padding: 0;
+  max-height: 290px;
+  overflow-y: auto;
+}
+.processing-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line, #ded8e7);
+}
+.processing-list li > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.processing-list li > button {
+  flex-shrink: 0;
+}
+.processing-title {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.processing-list .muted {
+  font-size: 12px;
+}
+.processing-list .error {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.processing-note {
+  background: #25213c;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.processing-note .text-button {
+  margin-left: 10px;
+}
+.inbox-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.source-error {
+  display: block;
+  min-width: 130px;
+  max-width: 230px;
+  margin-top: 6px;
+  color: #f4a5af;
+}
+.selection-bar {
+  flex-wrap: wrap;
+}
+@media (max-width: 700px) {
+  .processing-panel {
+    margin: 14px 16px 0;
+    padding: 14px;
+  }
+  .processing-list li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.processing-panel progress {
+  appearance: none;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--line);
+}
+.processing-panel progress::-webkit-progress-bar {
+  background: var(--line);
+  border-radius: 4px;
+}
+.processing-panel progress::-webkit-progress-value {
+  background: var(--purple);
+  border-radius: 4px;
+}
+.processing-panel progress::-moz-progress-bar {
+  background: var(--purple);
+  border-radius: 4px;
+}

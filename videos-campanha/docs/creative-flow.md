@@ -1,4 +1,6 @@
-# Creative Flow
+# Creative Flows
+
+A versão 0.3.0 inclui [preview público e os novos controles do editor](ux-0.3.0.md). Compartilhar publica uma cópia do canvas, sem edição e sem exigir login de quem recebe.
 
 A home agora organiza campanhas em projetos visuais. O gerador anterior continua em `/briefing`, com resultados e histórico existentes preservados.
 
@@ -6,14 +8,14 @@ A home agora organiza campanhas em projetos visuais. O gerador anterior continua
 
 1. Abra **Novo projeto** e escolha Em branco, Social Kit, Product Ad, Product Campaign ou Character Consistency.
 2. Edite a ideia da campanha. Adicione imagens, vídeos, transformações e Output pela barra inferior.
-3. Arraste os blocos e conecte os pontos. Uma etapa nova é conectada à selecionada, quando compatível. O seletor da barra escolhe conexão de entrada ou contexto; contexto aparece tracejado. As entradas diretas têm prioridade na ordem de envio; em imagem/edição e vídeo por referências, o prompt também identifica o papel de cada imagem. Duplo clique em uma linha remove a conexão.
+3. Arraste os blocos e conecte os pontos. Uma etapa nova é conectada à selecionada, quando compatível. O seletor em Referências e contexto, na sidebar, escolhe conexão de entrada ou contexto; contexto aparece tracejado. As entradas diretas têm prioridade na ordem de envio; em imagem/edição e vídeo por referências, o prompt também identifica o papel de cada imagem. Duplo clique em uma linha remove a conexão.
 4. Clique em uma etapa para escrever o prompt, escolher modelo, formato, resolução e referências. O contexto anterior é herdado por padrão, mas cada referência pode ser excluída.
 5. Envie uma imagem ou escolha um asset da biblioteca. Não é preciso reenviar o mesmo produto a cada campanha.
 6. Conecte sua chave em **Configurações → MuAPI**, ou defina `MUAPI_API_KEY` no servidor. A chave fica cifrada no armazenamento já usado pelo app e nunca vai para o navegador.
 7. Gere uma etapa ou **Gerar tudo**. A confirmação informa que a conta do provedor será cobrada. Mantenha a aba aberta para executar a sequência; recarregar interrompe a sequência local, mas reabrir o projeto retoma o acompanhamento das solicitações já enviadas. Depois, Gerar tudo continua as etapas restantes.
 8. Output seleciona o resultado de uma única entrada direta conectada para entrega. Abra/baixe o arquivo pelo painel ou pela biblioteca global.
 
-Cada bloco mostra uma engrenagem durante o envio/geração e um check verde quando o asset está pronto. Resultados desatualizados mostram ↻; falhas conhecidas mostram um alerta.
+Cada bloco mostra o envio ou a espera pelo resultado com tempo decorrido, e um check verde quando o asset está pronto. O vídeo pronto toca automaticamente em loop, sem som, com controles para pausar e ouvir. A preferência de reduzir movimento desliga o autoplay. Resultados desatualizados mostram ↻; falhas conhecidas mostram um alerta.
 
 Uma imagem pode alimentar várias ramificações. Selecione a imagem e clique em **Criar ramificação de vídeo** para cada alternativa, ou arraste o mesmo ponto de saída até vários destinos. Os novos blocos são posicionados sem sobreposição e cada um tem seu próprio modelo. Gerar tudo percorre as ramificações em sequência e reutiliza imagens prontas.
 

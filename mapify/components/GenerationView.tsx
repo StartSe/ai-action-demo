@@ -65,8 +65,16 @@ export function GenerationView({
   };
   const count = job.preview?.root ? countNodes(job.preview.root) : 0;
   const stage = stages.findIndex((s) => s.id === (job.stage || "source"));
+  const waiting = running && count <= 1;
+  const activity = !job.id
+    ? "Enviando sua fonte"
+    : job.stage === "source"
+      ? job.preview?.kind === "youtube"
+        ? "Analisando áudio e imagens"
+        : "Lendo o conteúdo da fonte"
+      : "Preparando os primeiros ramos";
   return (
-    <div className="generation-view">
+    <div className={`generation-view${waiting ? " awaiting-branches" : ""}`}>
       <ol className="generation-stages" aria-label="Etapas de geração">
         {stages.map((s, i) => (
           <li
@@ -79,6 +87,34 @@ export function GenerationView({
           </li>
         ))}
       </ol>
+      {waiting && (
+        <div className="generation-warmup" role="status" aria-live="polite">
+          <span className="generation-reader" aria-hidden="true">
+            <Icon name="spark" size={22} />
+          </span>
+          <div>
+            <strong>
+              {cancelling
+                ? "Cancelando geração…"
+                : stale || error
+                  ? "Aguardando atualização"
+                  : activity}
+            </strong>
+            <span>
+              {!job.id
+                ? "Preparando tudo para começar a análise."
+                : job.sourceSegments
+                  ? `${job.sourceSegments} trechos recebidos para organizar as ideias.`
+                  : "Os ramos aparecerão aqui assim que a análise estiver pronta."}
+            </span>
+          </div>
+          <span className="generation-working" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+        </div>
+      )}
       <div
         className="generation-canvas"
         aria-label="Prévia do mapa em construção"
@@ -98,7 +134,11 @@ export function GenerationView({
         />
         <div className="generation-caption">
           <span className={running ? "live-dot" : ""} />
-          {running ? "Mapa em construção" : "Prévia preservada"}
+          {waiting
+            ? "Preparando seu mapa"
+            : running
+              ? "Mapa em construção"
+              : "Prévia preservada"}
           {count > 0 && ` · ${count} tópicos`}
         </div>
         {!follow && (
@@ -120,6 +160,19 @@ export function GenerationView({
             {time}
           </span>
         </div>
+        {!!job.totalBranches && (
+          <div className="generation-branch-progress">
+            <span>
+              {job.completedBranches || 0} de {job.totalBranches} ramos
+              aprofundados
+            </span>
+            <progress
+              aria-label="Ramos aprofundados"
+              value={job.completedBranches || 0}
+              max={job.totalBranches}
+            />
+          </div>
+        )}
         <p>
           {!running
             ? "O mapa ainda não foi concluído. Você pode ajustar a fonte e tentar novamente."
@@ -141,7 +194,9 @@ export function GenerationView({
         </p>
         {running && elapsed >= 25 && count <= 1 && (
           <small className="generation-wait">
-            Esta etapa pode levar alguns minutos em vídeos longos.{" "}
+            {job.preview?.kind === "youtube"
+              ? "A análise do vídeo pode levar alguns minutos."
+              : "Fontes extensas podem levar alguns minutos para analisar."}{" "}
             {job.heartbeatAt && !stale && !error
               ? "O servidor segue respondendo."
               : ""}
@@ -170,7 +225,9 @@ export function GenerationView({
         <div className="generation-actions">
           <small>
             {running
-              ? "Pode fechar esta janela. A geração continua."
+              ? job.id
+                ? "Pode fechar esta janela. A geração continua."
+                : "Aguarde a confirmação do envio."
               : "Nenhum mapa incompleto foi salvo na biblioteca."}
           </small>
           <div>
@@ -183,7 +240,11 @@ export function GenerationView({
                 >
                   Cancelar geração
                 </button>
-                <button className="secondary" onClick={onClose}>
+                <button
+                  className="secondary"
+                  onClick={onClose}
+                  disabled={!job.id}
+                >
                   Continuar depois
                 </button>
               </>

@@ -73,7 +73,7 @@ export function LinkPublico({ projeto, aoAtualizar }: { projeto: Projeto; aoAtua
   useEffect(() => { void Promise.resolve().then(() => setOrigem(window.location.origin)); }, []);
 
   const link = `${origem}/s/${projeto.slug}`;
-  const publicado = projeto.estado === "pronto";
+  const publicado = Boolean(projeto.versaoPublicada);
 
   async function copiar() {
     try {
@@ -104,7 +104,7 @@ export function LinkPublico({ projeto, aoAtualizar }: { projeto: Projeto; aoAtua
     <section className="card p-4 flex flex-col gap-2.5" aria-label="Link público do site">
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <h3 className="font-bold text-[14px]">Link do site</h3>
-        <span className="text-muted text-[12.5px]">{publicado ? `No ar: versão ${projeto.versaoPublicada ?? 1}` : "Vai ao ar quando o site ficar pronto"}</span>
+        <span className="text-muted text-[12.5px]">{publicado ? `No ar: versão ${projeto.versaoPublicada ?? 1}` : "Disponível depois de publicar"}</span>
       </div>
       {!trocando ? (
         <>
@@ -141,7 +141,7 @@ export function FaixaPublicacao({ projeto, pagina, selecionada, aoAtualizar }: {
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const ultima = pagina.versoes[pagina.versoes.length - 1];
-  const publicada = projeto.versaoPublicada ?? ultima.n;
+  const publicada = projeto.versaoPublicada;
 
   async function publicar(n: number) {
     setOcupado(true);
@@ -161,7 +161,7 @@ export function FaixaPublicacao({ projeto, pagina, selecionada, aoAtualizar }: {
     <div className={`rounded-card border px-4 py-3 flex items-center justify-between gap-3 flex-wrap text-[13.5px] ${ultima.n !== publicada ? "border-warn/40 bg-[#fff4e0] text-[#7a4d00]" : "border-line bg-surface text-ink-2"}`} role="status">
       <span>
         {ultima.n !== publicada
-          ? `Há mudanças ainda não publicadas: no ar está a versão ${publicada}, a mais recente é a ${ultima.n}.`
+          ? publicada ? `Há mudanças ainda não publicadas: no ar está a versão ${publicada}, a mais recente é a ${ultima.n}.` : "Seu site está pronto para revisar. Publique quando estiver satisfeito."
           : `A versão ${publicada} é a que está no ar.`}
         {!vendoPublicada && ` Você está vendo a versão ${selecionada}.`}
       </span>
@@ -179,7 +179,7 @@ export function PainelVersoes({ projeto, pagina, selecionada, aoSelecionar, aoAt
   const [erro, setErro] = useState<string | null>(null);
   const versoes = [...pagina.versoes].reverse();
   const ultima = pagina.versoes[pagina.versoes.length - 1];
-  const publicada = projeto.versaoPublicada ?? ultima.n;
+  const publicada = projeto.versaoPublicada;
 
   async function publicar(v: Versao) {
     setOcupado(v.n);
@@ -233,7 +233,7 @@ export function PainelVersoes({ projeto, pagina, selecionada, aoSelecionar, aoAt
               <div className="flex items-center gap-3 flex-wrap">
                 {!ehSelecionada && <button type="button" className="btn-link text-[12.5px]" onClick={() => aoSelecionar(v.n)}>Ver</button>}
                 {!ehPublicada && <button type="button" className="btn-link text-[12.5px]" disabled={ocupado !== null} onClick={() => publicar(v)}>{ocupado === v.n ? "Publicando..." : "Publicar esta"}</button>}
-                {v.n !== ultima.n && <button type="button" className="btn-link text-[12.5px]" disabled={ocupado !== null} onClick={() => voltar(v)}>Voltar para esta</button>}
+                {v.n !== ultima.n && <button type="button" className="btn-link text-[12.5px]" disabled={ocupado !== null} onClick={() => voltar(v)}>Criar rascunho desta versão</button>}
               </div>
             </li>
           );

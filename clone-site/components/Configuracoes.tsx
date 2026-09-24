@@ -2,7 +2,7 @@
 // Configurações deste app (tela própria, no desenho do Build Agentflows): seções com cartões de conexão.
 //  1. Inteligência artificial: ChatGPT (assinatura) e OpenRouter (chave) lado a lado; um deles é o "Principal"
 //     (quem escreve e edita os sites, config IA_PROVEDOR via /api/ia). O modelo que lê a captura mora DENTRO do
-//     cartão do OpenRouter (é sempre ele quem lê imagens), com "Testar leitura de imagem" (/api/visao).
+//     cartão do OpenRouter (modelo de visão específico deste provedor), com "Testar leitura de imagem" (/api/visao).
 //  2. Hospedagem e publicação: Netlify (publica cada site num endereço próprio) e Render (domínio próprio nesta
 //     instância) — cartões genéricos a partir de lib/integracoes.ts (GET /api/setup).
 //  3. Assistente de IA: o acesso por MCP (components/AcessoMCP.tsx).
@@ -150,7 +150,7 @@ function CartaoChatGPT({ preferencia, aoEscolher }: { preferencia: Preferencia |
   }
 
   return (
-    <CartaoConexao id="chatgpt" icone="faisca" titulo="ChatGPT" selo={principal ? "Principal" : undefined} conectado={conectado} descricao="Use a sua assinatura para escrever e editar os sites, dentro dos limites da sua conta.">
+    <CartaoConexao id="chatgpt" icone="faisca" titulo="ChatGPT" selo={principal ? "Recomendado · Principal" : "Recomendado"} conectado={conectado} descricao="Use a sua assinatura para escrever e editar os sites, dentro dos limites da sua conta.">
       <div className="corpo-conexao">
         {!conexao && !erro && <p className="text-muted" role="status">Verificando a conexão...</p>}
         {conexao?.error && <Aviso tom="danger">{conexao.error}</Aviso>}
@@ -199,7 +199,7 @@ function CartaoChatGPT({ preferencia, aoEscolher }: { preferencia: Preferencia |
             </div>
           </>
         )}
-        <p className="dica-conexao">A leitura de capturas passa sempre pelo OpenRouter: para clonar por imagem, conecte também o cartão ao lado.</p>
+        <p className="dica-conexao">Crie e edite com sua assinatura do ChatGPT, incluindo referências por imagem. O uso segue os limites da sua conta.</p>
         {preferencia?.provedorFixo && <p className="dica-conexao">A escolha do principal foi definida pela equipe técnica.</p>}
       </div>
     </CartaoConexao>
@@ -233,7 +233,7 @@ function CartaoOpenRouter({ integracao, preferencia, aoEscolher, aoRecarregar }:
   }
 
   return (
-    <CartaoConexao id="openrouter" icone="elo" titulo="OpenRouter" selo={principal ? "Principal" : undefined} conectado={conectado} descricao="Dezenas de modelos, vários gratuitos. É também quem lê a captura de referência.">
+    <CartaoConexao id="openrouter" icone="elo" titulo="OpenRouter" selo={principal ? "Principal" : undefined} conectado={conectado} descricao="Uma alternativa com vários modelos. Conecte sua conta ou use uma chave de API.">
       <div className="corpo-conexao">
         {!integracao && <p className="text-muted" role="status">Carregando...</p>}
         {erro && <Aviso tom="danger">{erro}</Aviso>}
@@ -444,7 +444,7 @@ export function Configuracoes() {
 
         {aviso && <div className="mb-6"><Aviso tom={aviso.tom}>{aviso.texto}</Aviso></div>}
 
-        <SecaoConfig id="ia" icone="faisca" titulo="Inteligência artificial" descricao="Conecte uma conta (ou as duas) e escolha qual é a principal. A leitura da captura é sempre pelo OpenRouter.">
+        <SecaoConfig id="ia" icone="faisca" titulo="Inteligência artificial" descricao="Recomendamos o ChatGPT para aproveitar sua assinatura. O OpenRouter também pode ser conectado por conta ou chave.">
           <div className="grade-conexoes">
             <CartaoChatGPT preferencia={preferencia} aoEscolher={escolher} />
             <CartaoOpenRouter integracao={openrouter} preferencia={preferencia} aoEscolher={escolher} aoRecarregar={carregar} />

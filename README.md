@@ -16,7 +16,7 @@ Vinte e dois apps independentes, cada um resolvendo um problema específico do d
 | 8 | [Ata Executiva](reunioes-ia/) | Gestão | Reunião acaba sem decisões e responsáveis registrados | Transcreve o áudio e gera ata com ações, prazos e e-mail de follow-up | ElevenLabs Scribe ou OpenAI Whisper (transcrição) |
 | 9 | [Analista Financeiro](financas-ia/) | Financeiro | Planilha de despesas sem tempo de destrinchar | Lê o CSV, mostra os números que importam e responde perguntas | OpenRouter (dados ficam no navegador; só agregados vão para a IA) |
 | 10 | [Voz do Cliente](voz-do-cliente/) | CX e Marketing | Centenas de comentários que ninguém lê | Agrupa por tema, mede sentimento e NPS, prioriza ações | só OpenRouter |
-| 11 | [Radar de Sinais](radar-sinais/) | Estratégia e Inovação | Movimentos do mercado chegam tarde e dispersos | Busca o que saiu no período em Hacker News, Reddit, GitHub e na web, agrupa em sinais com fontes verificadas e mostra as conexões em grafo | Hacker News, Reddit e GitHub sem chave; Exa (opcional) para a web em geral |
+| 11 | [Radar de Sinais](radar-sinais/) | Estratégia e Inovação | Movimentos do mercado chegam tarde e dispersos | Monitora fontes diariamente, conecta sinais em grafos e conversa com memória por radar; focos e artigos importantes orientam a pesquisa | OpenRouter ou ChatGPT; SearchAPI, Exa, Tavily, Bright Data e Firecrawl; fontes públicas e StartSe; voz ElevenLabs |
 | 12 | [Bússola de IA v0.3.1](bussola-ia/) | Estratégia e Gestão | O gestor precisa acompanhar assessments de empresas, áreas e times | Cria questionários, acompanha participação e prazos, analisa respostas em seis dimensões e propõe ações | ChatGPT por assinatura ou OpenRouter; [Render com volume (pago)](https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-bussola-ia-persistente) |
 | 13 | [Simulador de Vendas](simulador-vendas/) | Vendas | O gestor só vê o resultado da venda, não como a conversa foi conduzida | Avalia conversas contra 7 critérios de venda consultiva, treina por texto e voz e resume a equipe por semana | ElevenLabs (sala de treino por voz, com aviso de pós-conversa assinado) |
 | 14 | [Custos de IA](custos-ia/) | Financeiro e TI | O CFO não sabe quanto gasta com ferramentas de IA nem se está no orçamento | Lê notas em PDF, texto ou direto do e-mail, compara com o orçamento e alerta o que estourou | Gmail (OAuth em um clique); câmbio manual |
@@ -26,7 +26,8 @@ Vinte e dois apps independentes, cada um resolvendo um problema específico do d
 | 18 | [Build Agentflows v0.8.1](build-agentflows/) | Gestão | Orquestrar tarefas de IA entre agentes e sistemas | Editor visual com agentes, condições, ferramentas, aprovação humana e versões publicadas | OpenRouter, ferramentas MCP e HTTP; execução por MCP e HTTP autenticado. Disco persistente no Render |
 | 19 | [Daily Second Brain v1.3.0](daily-second-brain/) | Gestão | Memórias e decisões dispersas | Coletas agênticas agendadas, wiki conectada, grafo, chat e voz | ChatGPT, OpenRouter, Zapier MCP e ElevenLabs. Disco persistente no Render |
 | 20 | [Mapia v1.3.0](mapify/) | Gestão, Educação e Produto | Conteúdo difícil de conectar e aplicar | Mapas mentais interativos com fontes, edição e conversa | ChatGPT por assinatura ou OpenRouter; YouTube público com Gemini, PDF, web e texto. Disco persistente no Render |
-| 21 | [Cowork FPEA v0.2.1](predictive-harness/) | Dados e Gestão | Perguntar aos dados exige analista, e respostas de IA sem verificação não inspiram confiança | Conversa com a planilha: o ChatGPT escreve, o Jev (System One) tria, roteia e verifica cada resposta, com as decisões visíveis | ChatGPT por assinatura e OpenRouter (Jev). Disco persistente no Render |
+| 21 | [Cowork Jev v0.3.0](predictive-harness/) | Dados e Gestão | Perguntar aos dados exige analista, e respostas de IA sem verificação não inspiram confiança | Conversa com a planilha: o ChatGPT escreve, o Jev (System One) tria, roteia e verifica cada resposta, com as decisões visíveis | ChatGPT por assinatura e OpenRouter (Jev). Disco persistente no Render |
+| 22 | [Painel Pronto](toolkit-dash-builder/) | Dados e Gestão | O gestor sabe o que quer acompanhar, mas não sabe quais indicadores pedir | Envie a planilha e o painel sai com os números dela: indicadores, tendência, ranking, distribuição e tabela, com arrastar para reorganizar e ajuste por conversa | só OpenRouter (opcional: sem chave, o recorte sai da forma das colunas) |
 
 Ideias mapeadas e deixadas para uma segunda rodada: copiloto de OKRs com check-in semanal, análise de concorrentes a partir de sites e redes, triagem de currículos contra a descrição da vaga, gerador de propostas comerciais a partir do CRM, resumo diário de e-mails e Slack para a diretoria.
 
@@ -52,17 +53,18 @@ Cada app guarda sua configuração em um volume Docker próprio, então as chave
 
 | Porta | App | | Porta | App |
 |---|---|---|---|---|
-| 3001 | pdi-time | | 3012 | bussola-ia |
-| 3002 | agente-kanban | | 3013 | simulador-vendas |
-| 3003 | entrevista-ia | | 3014 | custos-ia |
-| 3004 | posts-sociais | | 3015 | clone-site |
-| 3005 | prospeccao-ia | | 3017 | videos-campanha |
-| 3006 | whatsapp-atendente | | 3018 | automl-pocket |
-| 3007 | contratos-ia | | 3019 | build-agentflows |
-| 3008 | reunioes-ia | | 3020 | daily-second-brain |
-| 3009 | financas-ia | | 3021 | mapify |
-| 3010 | voz-do-cliente | | 3022 | predictive-harness |
-| 3011 | radar-sinais | | 3023 | precificador |
+| 3001 | pdi-time | | 3013 | simulador-vendas |
+| 3002 | agente-kanban | | 3014 | custos-ia |
+| 3003 | entrevista-ia | | 3015 | clone-site |
+| 3004 | posts-sociais | | 3017 | videos-campanha |
+| 3005 | prospeccao-ia | | 3018 | automl-pocket |
+| 3006 | whatsapp-atendente | | 3019 | build-agentflows |
+| 3007 | contratos-ia | | 3020 | daily-second-brain |
+| 3008 | reunioes-ia | | 3021 | mapify |
+| 3009 | financas-ia | | 3022 | predictive-harness |
+| 3010 | voz-do-cliente | | 3023 | precificador |
+| 3011 | radar-sinais | | 3024 | toolkit-dash-builder |
+| 3012 | bussola-ia | |  |  |
 
 Um app só: `docker compose up --build pdi-time`, ou dentro da pasta do app `docker compose up --build`.
 
@@ -129,7 +131,7 @@ Botão por app e da suíte inteira no catálogo público, ou direto:
 
 - Suíte (22 apps; os planos pagos e discos de cada app estão indicados no catálogo): `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy`
 - Um app: `https://render.com/deploy?repo=https://github.com/StartSe/ai-action-app-deploy/tree/deploy-<app>`
-- Bússola de IA, PDI do Time, Cowork FPEA e Site Cowork têm disco persistente de 1 GB em `/app/data` no Render, tanto no Blueprint individual quanto no da suíte (plano pago). No Docker Compose, cada app tem seu próprio volume. A versão do app aparece discretamente junto à marca ou no cabeçalho e vem do `package.json`.
+- Bússola de IA, PDI do Time, Cowork Jev e Site Cowork têm disco persistente de 1 GB em `/app/data` no Render, tanto no Blueprint individual quanto no da suíte (plano pago). No Docker Compose, cada app tem seu próprio volume. A versão do app aparece discretamente junto à marca ou no cabeçalho e vem do `package.json`.
 
 Depois do deploy, abra `https://<nome>.onrender.com/setup` e conecte a IA e as integrações. O plano `free` hiberna após inatividade. Sem volume persistente, contas, configurações e respostas podem se perder em reinícios e atualizações. Para a Bússola, a opção com volume já configura o disco; nos demais apps sem disco, ative o bloco `disk` e use um plano pago.
 

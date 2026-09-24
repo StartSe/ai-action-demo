@@ -5,22 +5,19 @@ import { useEffect, useRef, useState } from "react";
 import type { CategoriaPergunta, DadosBase, Mensagem } from "@/lib/types";
 import { ROTULO_CATEGORIA } from "@/lib/types";
 import type { ChavePremissa } from "@/lib/fpa";
+import { useAudio, type StatusVoz } from "./useVoz";
+import { VozAoVivo } from "./VozAoVivo";
 import { Markdown } from "./Markdown";
 import { Cartoes } from "./Cartoes";
 import { Icon, ErrorBox, request, fmtMs } from "./ui";
 
-const DESCRICAO_CATEGORIA: Record<CategoriaPergunta, string> = {
-  diagnostico: "Onde está a melhor margem, o que pesa mais",
-  cenario: "Se abrirmos uma turma, o que muda na margem",
-  meta_reversa: "Quanto cabe gastar mantendo a meta",
-  risco: "Com quantos alunos deixa de se pagar",
-  descritiva: "O que a base mostra",
-  conceito: "O que significa um termo",
-  outra: "",
-};
 const ICONE_CATEGORIA: Record<CategoriaPergunta, string> = { diagnostico: "gauge", cenario: "spark", meta_reversa: "coins", risco: "shield", descritiva: "table", conceito: "info", outra: "chat" };
 
-export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selecionada, onSelecionar, onVerDecisoes, onMensagens, onBaseMudou, autoPergunta, semRolagem }: {
+export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selecionada, onSelecionar, onVerDecisoes, onMensagens, onBaseMudou, autoPergunta, semRolagem, conversaId, onBusy, onConectores, onVozAtiva }: {
+  conversaId: string;
+  onBusy: (busy: boolean) => void;
+  onVozAtiva: (ativo: boolean) => void;
+  onConectores: () => void;
   base: DadosBase | null;
   mensagens: Mensagem[];
   harnessPronto: boolean;
@@ -36,16 +33,25 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
   const [texto, setTexto] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [voz, setVoz] = useState<StatusVoz | null>(null);
+  const [modoVoz, setModoVoz] = useState(false);
+  const audio = useAudio();
+  useEffect(() => { void request<StatusVoz>("/api/voz").then(setVoz).catch(() => {}); }, []);
+  useEffect(() => { onBusy(busy || modoVoz); }, [busy, modoVoz, onBusy]);
+  useEffect(() => { onVozAtiva(modoVoz); return () => onVozAtiva(false); }, [modoVoz, onVozAtiva]);
+  useEffect(() => () => onBusy(false), [onBusy]);
   const fim = useRef<HTMLDivElement>(null);
   const autoEnviado = useRef(false);
   async function enviar(pergunta: string) {
     const p = pergunta.trim();
-    if (!p || busy) return;
+    if (!p || busy || modoVoz) return;
+    if (p.length > 2000) { setError("A pergunta deve ter até 2.000 caracteres."); return; }
+    audio.parar();
     setBusy(true);
     setError("");
     setTexto("");
     try {
-      const r = await request<{ pergunta: Mensagem; resposta: Mensagem }>("/api/base/conversa", "POST", { pergunta: p });
+      const r = await request<{ pergunta: Mensagem; resposta: Mensagem }>("/api/base/conversa", "POST", { pergunta: p, conversaId });
       onMensagens([...mensagens, r.pergunta, r.resposta]);
       onSelecionar(r.resposta.id);
     } catch (e) {
@@ -70,16 +76,17 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
   useEffect(() => {
     if (!semRolagem) fim.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [mensagens.length, busy, semRolagem]);
-  async function limpar() {
-    if (!mensagens.length || !window.confirm("Limpar esta conversa?")) return;
-    await request("/api/base/conversa", "DELETE");
-    onMensagens([]);
-  }
   const ultima = [...mensagens].reverse().find((m) => m.papel === "assistente");
   const seguintes = ultima?.sugestoes?.length ? ultima.sugestoes : [];
   const iniciais = base?.sugestoes || [];
   const pronto = harnessPronto && conversaPronta;
   const semBase = !!base && !base.matriculas;
+  if (modoVoz) return <VozAoVivo conversaId={conversaId} base={base} mensagens={mensagens} onVerDecisoes={onVerDecisoes} onClose={() => setModoVoz(false)} onTurno={async (pergunta, signal) => {
+    const r = await request<{ pergunta: Mensagem; resposta: Mensagem }>("/api/base/conversa", "POST", { pergunta, conversaId }, { signal });
+    const historico = await request<{ mensagens: Mensagem[] }>(`/api/base/conversa?conversa=${conversaId}`, undefined, undefined, { signal });
+    onMensagens(historico.mensagens); onSelecionar(r.resposta.id);
+    return r.resposta;
+  }} />;
   return (
     <>
       <div className="rolagem">
@@ -88,31 +95,32 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
             <span>
               <Icon name="info" size={14} /> {base.demo ? "Modo demonstração: as perguntas sugeridas são calculadas aqui mesmo, com a base de exemplo." : "Sem a IA conectada, a base só mostra produtos e premissas."}
             </span>
-            <a href="/configuracoes">Conectar ChatGPT e OpenRouter</a>
+            <a href={`/configuracoes?conversa=${conversaId}`}>Conectar ChatGPT e OpenRouter</a>
           </div>
         )}
         {!mensagens.length && !busy ? (
           <div className="vazio reveal">
-            <h3>Comece com uma pergunta estratégica</h3>
-            <p>{semBase ? "Envie a planilha de matrículas em Base e premissas para o agente conhecer seus produtos e turmas." : `${base ? base.produtos.length : 0} ${base?.produtos.length === 1 ? "produto" : "produtos"} na base. A pergunta passa pela triagem do Jev, o motor faz a conta com premissas visíveis e o modelo só escreve a leitura.`}</p>
+            <span className="welcome-mark"><Icon name="spark" size={34} /></span><h3>Olá, sou o Jev<span className="welcome-wave"> ✦</span></h3><h4>Vamos transformar seus dados em decisões?</h4>
+            <p>{semBase ? "Selecione suas fontes de dados para começarmos." : "Explore seus resultados, teste cenários e planeje o próximo passo."}</p>
+            {semBase && <button className="primary" onClick={onConectores}><Icon name="upload" size={16} /> Escolher minhas fontes</button>}
             <div className="categorias">
               {iniciais.map((s) => (
-                <button key={s.texto} className="categoria" disabled={busy} onClick={() => void enviar(s.texto)}>
+                <button key={s.texto} className="categoria" title={s.texto} disabled={busy} onClick={() => void enviar(s.texto)}>
                   <span className="ic"><Icon name={ICONE_CATEGORIA[s.categoria]} size={18} /></span>
-                  <span className="rotulo">{ROTULO_CATEGORIA[s.categoria]}</span>
-                  <span className="desc">{DESCRICAO_CATEGORIA[s.categoria]}</span>
-                  <span className="pergunta">{s.texto}</span>
+                                    <span className="pergunta">{({ diagnostico: "Qual produto tem a melhor margem?", cenario: "E se abrirmos mais uma turma?", meta_reversa: "Quanto podemos gastar em marketing?", risco: "Qual é o ponto de equilíbrio?" } as Partial<Record<CategoriaPergunta, string>>)[s.categoria] || s.texto}</span><span className="suggestion-arrow"><Icon name="chevron" size={15} /></span>
                 </button>
               ))}
             </div>
-            {base && !base.custos && !semBase && <p className="muted small">Sem planilha de custos, os cenários usam custo fixo e variável informados por você. Você pode informar em Base e premissas ou quando o agente pedir.</p>}
+            {base && !base.custos && !semBase && <p className="muted small">Sem planilha de custos, os cenários usam custo fixo e variável informados por você. Você pode informar no Livro de premissas ou quando o agente pedir.</p>}
           </div>
         ) : (
           <div className="mensagens">
             {mensagens.map((m) => (
               <div className={"mensagem " + m.papel} key={m.id}>
                 {m.papel === "assistente" ? (
-                  <div className={"balao" + (selecionada === m.id ? " selecionada" : "")} onClick={() => onSelecionar(m.id)} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onSelecionar(m.id)}>
+                  <div className={"balao" + (selecionada === m.id ? " selecionada" : "")} onClick={() => onSelecionar(m.id)}>
+                    <span className="message-author">Jev</span>
+                    {m.fpa?.recalculadoEm && <p className="recalculation-note">Os cartões foram recalculados. A leitura abaixo se refere aos valores anteriores.</p>}
                     <Markdown texto={m.texto} />
                     {m.cartoes && m.cartoes.length > 0 && <Cartoes cartoes={m.cartoes} onUsarPremissas={pronto ? usarPremissas : undefined} />}
                   </div>
@@ -125,7 +133,8 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
                     {m.exemplo && <span className="chip warn">resposta de exemplo</span>}
                     {m.harness && <span>{m.harness.chamadasJev} decisões do Jev · {fmtMs(m.harness.latenciaTotalMs)}</span>}
                     {m.decisoes?.some((d) => d.baixaConfianca) && <span className="chip warn">alguma decisão com baixa confiança</span>}
-                    <button className="text-button" style={{ padding: 0 }} onClick={() => onVerDecisoes(m.id)}>Como cheguei aqui</button>
+                    <button className="text-button" style={{ padding: 0 }} onClick={() => onVerDecisoes(m.id)}><Icon name="harness" size={13} /> Como cheguei aqui</button>
+                    {voz?.conectado && voz.vozId && <button className="text-button" onClick={() => { if (audio.tocando === m.id) audio.parar(); else void audio.ouvir(m.id, { mensagemId: m.id, conversaId }).catch(e => setError(e.message)); }}><Icon name={audio.tocando === m.id ? "stop" : "volume"} size={13} />{audio.tocando === m.id ? audio.preparando ? "Cancelar áudio" : "Parar áudio" : "Ouvir resposta"}</button>}
                   </div>
                 )}
               </div>
@@ -155,11 +164,13 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
           }}
         >
           <textarea
+            aria-label="Mensagem para Jev"
+            maxLength={2000}
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
-            placeholder={pronto ? "Pergunte ao seu analista de FP&A…" : base?.demo ? "Escolha uma pergunta sugerida ou conecte a IA para perguntar qualquer coisa" : "Conecte a IA em Configurações para perguntar"}
+            placeholder={pronto || base?.demo ? "Como posso te ajudar hoje?" : "Conecte a IA para começar…"}
             rows={1}
-            disabled={busy}
+            disabled={busy || modoVoz}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -167,16 +178,10 @@ export function Conversa({ base, mensagens, harnessPronto, conversaPronta, selec
               }
             }}
           />
-          <button className="primary" disabled={busy || !texto.trim()} aria-label="Enviar">
-            <Icon name="send" size={18} /> Perguntar
-          </button>
+          {voz?.conectado && voz.vozId ? <button type="button" className="voice-button voice-launch" disabled={busy || modoVoz} aria-label="Iniciar conversa por voz" title="Conversar por voz" onClick={() => { audio.parar(); setModoVoz(true); }}><Icon name="waveform" size={22} /></button> : <a className="voice-button voice-launch" href={`/configuracoes?conversa=${conversaId}#voz`} aria-label="Configurar conversa por voz" title="Configurar conversa por voz"><Icon name="waveform" size={22} /></a>}
+          <button className="primary send-circle" disabled={busy || modoVoz || !texto.trim()} aria-label="Enviar"><Icon name="up" size={21} /></button>
         </form>
-        <small>
-          {mensagens.length > 0 && (
-            <button className="text-button" style={{ padding: 0, marginRight: 10 }} onClick={() => void limpar()}>Limpar conversa</button>
-          )}
-          As linhas das planilhas nunca vão para a IA: só produtos, agregados e premissas. A conta é sempre do motor.
-        </small>
+        <small className="composer-footnote">Cálculos verificáveis, premissas visíveis. <a href={`/configuracoes?conversa=${conversaId}#politica-dados`}>Uso dos dados e modelos</a></small>
       </div>
     </>
   );

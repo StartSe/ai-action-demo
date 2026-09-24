@@ -8,6 +8,8 @@ import { numero, data } from "@/lib/formato";
 import { NAVEGACAO, type ItemNavegacao } from "@/lib/navegacao";
 import { ilustracaoDoSegmento, type Segmento } from "@/lib/ilustracao";
 import { MODELOS_GRATUITOS, type ProximoPasso } from "@/lib/modelos";
+import { useCopiarLink } from "./AcoesLink";
+import { Icone } from "./MenuAcoes";
 
 export type UsuarioTopbar = { nome: string; email: string };
 
@@ -729,7 +731,7 @@ export function OptInGuardar({ checked, onChange }: { checked: boolean; onChange
 export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: string; texto: () => string; extras?: { rotulo: string; onClick: () => void }[] }) {
   const [aberto, setAberto] = useState(false);
   const [copiadoTexto, setCopiadoTexto] = useState(false);
-  const [copiadoLink, setCopiadoLink] = useState(false);
+  const copiarLink = useCopiarLink();
   const [falhaCopia, setFalhaCopia] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -777,7 +779,8 @@ export function Entregar({ id, titulo, texto, extras }: { id?: string; titulo: s
             <div role="menu" className="absolute right-0 top-[calc(100%+8px)] z-20 w-56 card p-1.5 text-[13.5px]">
               <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(texto(), setCopiadoTexto)}>{copiadoTexto ? "Copiado" : "Copiar texto"}</button>
               <a role="menuitem" className={`${itemClasse} block`} href={`mailto:?subject=${encodeURIComponent(titulo)}&body=${encodeURIComponent(texto())}`} onClick={() => setAberto(false)}>Enviar por e-mail</a>
-              {link && <button type="button" role="menuitem" className={itemClasse} onClick={() => copiar(link, setCopiadoLink)}>{copiadoLink ? "Copiado" : "Copiar link"}</button>}
+              {link && <button type="button" role="menuitem" className={`${itemClasse} flex items-center gap-2`} onClick={() => { void copiarLink(link); setAberto(false); }}><Icone nome="copiar" />Copiar link</button>}
+              {link && <a role="menuitem" className={`${itemClasse} flex items-center gap-2`} href={link} target="_blank" rel="noopener noreferrer" onClick={() => setAberto(false)}><Icone nome="externo" />Abrir link<span className="sr-only"> em nova aba</span></a>}
               {extras?.map((ex) => (
                 <button key={ex.rotulo} type="button" role="menuitem" className={itemClasse} onClick={() => { ex.onClick(); setAberto(false); }}>{ex.rotulo}</button>
               ))}

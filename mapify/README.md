@@ -14,7 +14,7 @@ Transforma vídeos públicos do YouTube, PDFs, páginas e textos em mapas mentai
 4. Para vídeos públicos de qualquer canal, abra **Configurações → YouTube**, cadastre uma chave Gemini e clique em **Validar e salvar chave**. Depois crie um mapa com YouTube, PDF, página web ou texto, escolhendo detalhe e foco.
 5. Acompanhe a análise e a construção no canvas: a thumbnail aparece ao enviar um vídeo e as ramificações chegam durante a resposta da IA. Pode fechar a janela e voltar por **Acompanhar geração** na biblioteca.
 6. Navegue com zoom e arraste, recolha ramos, edite tópicos e notas, adicione subtemas e consulte referências à fonte. As alterações são salvas automaticamente.
-7. Converse sobre o conteúdo e exporte em PNG, SVG, Markdown ou JSON. A biblioteca oferece busca, favoritos, duplicação e exclusão.
+7. Converse sobre o conteúdo e exporte em PNG, SVG, Markdown ou JSON. A biblioteca oferece busca, favoritos, duplicação e exclusão. Para apagar um mapa, clique em **Excluir** no cartão (grade ou lista) ou na lixeira do cabeçalho do editor, inclusive no celular. Confirme o nome no diálogo: a exclusão remove o mapa, suas edições e a conversa, sem opção de desfazer.
 
 O exemplo é identificado como demonstração e não simula uma resposta de IA. Fontes reais exigem conexão. A conversa usa o mapa e uma seleção de trechos relevantes; não é uma busca exaustiva em todos os documentos.
 
@@ -27,6 +27,18 @@ A tela mostra a fonte no centro desde o envio, as etapas em andamento, o tempo d
 A prévia fica no job do servidor e o navegador consulta o andamento sem requisições sobrepostas. Fechar ou recarregar a página permite acompanhar a mesma geração. Mover o canvas pausa o enquadramento automático; **Acompanhar mapa** o retoma. Cancelamentos e erros preservam a prévia na janela, mas só uma resposta completa e validada cria um mapa na biblioteca. Após reinício do servidor, a geração é marcada como interrompida e precisa ser solicitada novamente. A extensão de navegador não faz parte desta versão.
 
 Validação da v1.3.0: testes de contrato com streams simulados, fragmentação UTF-8, cancelamento, respostas incompletas, erros de provedor e persistência de prévias. Testes no navegador usam provedores simulados para verificar a evolução visual antes da conclusão; não medem a latência real do Gemini nem alteram a exigência de créditos do projeto Google.
+
+## Níveis de detalhe (v1.4.0)
+
+- **Essencial:** até 22 tópicos e 2 níveis abaixo do centro, para visão rápida.
+- **Equilibrado:** até 55 tópicos e 3 níveis abaixo do centro, com ideias e exemplos.
+- **Aprofundado:** primeiro organiza de 2 a 7 ramos conforme a fonte; depois relê a fonte integral para detalhar cada ramo em uma chamada dedicada. Até 120 tópicos e 4 níveis abaixo do centro, preservando exemplos, ações, ferramentas, condições e resultados nos labels visíveis. Fontes curtas geram mapas menores, sem preencher cotas artificiais. Cada folha deve referenciar um trecho existente.
+
+O aprofundado faz uma chamada de planejamento e uma por ramo, além da análise Gemini para YouTube. Isso demanda mais tempo e uso do provedor. A fonte completa é enviada a cada chamada, inclusive quando ultrapassa o tamanho usado para resumir fontes nos outros níveis; escolha um modelo com janela de contexto compatível com a sua fonte. O limite geral do job continua em 12 minutos. Falhas ou cancelamentos preservam a prévia, sem salvar o plano como mapa concluído e sem repetir chamadas automaticamente.
+
+Desde o envio, o indicador animado de leitura sinaliza a espera até os primeiros ramos. A animação não representa uma porcentagem concluída. Durante o aprofundamento, o contador mostra apenas ramos efetivamente concluídos. A preferência por movimento reduzido desativa as animações.
+
+Validação: testes automatizados do fluxo completo com provedores simulados, fonte longa sem perda de detalhes, referências, limites, cancelamento e falha após um ramo concluído. A qualidade factual e a cobertura de um vídeo específico ainda dependem da análise recebida e do modelo conectado; os testes de contrato não medem a qualidade de uma resposta real da IA.
 
 ## Executar localmente
 
@@ -49,8 +61,7 @@ npm run check:youtube -- 'https://www.youtube.com/watch?v=1QNsdr-Qx_I'
 
 1. Abra **Configurações → YouTube** e use o link **Obter chave no Google AI Studio**.
 2. Cole a chave e clique em **Validar e salvar chave**. O servidor consulta os metadados do modelo no Google para validar autenticação e acesso, sem gerar conteúdo. Só uma validação bem-sucedida salva a chave cifrada. Chaves Standard e Auth (incluindo o formato com ponto) são aceitas; uma tentativa inválida não substitui a configuração anterior. A chave não aparece nas respostas nem é incluída na imagem Docker.
-3. Em **Testar um vídeo**, execute o teste com o link desejado. O vídeo `1QNsdr-Qx_I` já vem preenchido. O teste usa a cota Gemini e mostra uma prévia das notas geradas, sem criar um mapa.
-4. Para gerar o mapa, mantenha ChatGPT ou OpenRouter conectado na aba Inteligência artificial e cole o link em YouTube.
+3. Depois de salvar a chave, crie um **Novo mapa**, escolha YouTube e cole o link do seu vídeo. Mantenha ChatGPT ou OpenRouter conectado na aba Inteligência artificial para gerar o mapa.
 
 A integração usa a [API oficial Gemini Interactions](https://ai.google.dev/api/interactions-api), enviando a URL como entrada de vídeo, com resposta estruturada em JSON e `store: false`. O modelo inicial é `gemini-3.8-flash`; pode ser alterado em **Avançado · modelo de análise**. O recurso de [URLs do YouTube](https://ai.google.dev/gemini-api/docs/video-understanding#youtube) é oferecido pelo Google em prévia, aceita vídeos públicos e tem limites próprios. Vídeos privados ou não listados não são aceitos por esse caminho. A disponibilidade, a cota e os custos dependem do modelo e do projeto Google.
 

@@ -108,3 +108,9 @@ export function obterPorEmail(email: string): Participante | null {
 export function apagar(id: string): void {
   banco().prepare("DELETE FROM participantes WHERE id = ?").run(id);
 }
+
+/** Mantém a identidade e todas as conversas ao corrigir os dados cadastrais. */
+export function atualizar(id: string, nome: string, email: string): Participante | null {
+  banco().prepare("UPDATE participantes SET nome = ?, email = ? WHERE id = ?").run(nome.trim(), normalizarEmail(email) || null, id);
+  return obter(id);
+}

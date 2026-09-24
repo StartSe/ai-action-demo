@@ -60,6 +60,8 @@ export type Coluna = {
 };
 export type Qualidade = { duplicadas: number; linhasVazias: number; avisos: string[] };
 export type Planilha = {
+  arquivoOrigem?: string;
+  abaOrigem?: string;
   id: string;
   nome: string;
   formato: "csv" | "json";
@@ -192,6 +194,7 @@ export type StatusConexoes = {
   erro?: string;
 };
 /** Resposta de GET /api/base: tudo que a coluna "Base e premissas" e a conversa precisam. */
+export type SessaoConversa = { id: string; titulo: string; fontes: string[]; criadoEm: string; atualizadoEm: string; fixada: boolean };
 export type DadosBase = {
   planilhas: Planilha[];
   matriculas: string | null;

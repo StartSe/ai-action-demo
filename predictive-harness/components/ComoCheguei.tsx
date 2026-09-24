@@ -18,7 +18,7 @@ const ESTACOES: { id: RegistroDecisao["estacao"]; nome: string; quem: string }[]
 
 type Recalcular = (id: string, ajustes: Partial<Record<ChavePremissa, string>>, salvar: boolean) => Promise<void>;
 
-export function ComoCheguei({ mensagem, onRecalcular }: { mensagem: Mensagem | null; onRecalcular: Recalcular }) {
+export function ComoCheguei({ mensagem, onRecalcular, onLivro }: { mensagem: Mensagem | null; onRecalcular: Recalcular; onLivro: () => void }) {
   if (!mensagem?.decisoes?.length)
     return (
       <div className="harness-vazio">
@@ -26,7 +26,7 @@ export function ComoCheguei({ mensagem, onRecalcular }: { mensagem: Mensagem | n
         <ol>
           <li><b>Premissas usadas</b>, com a origem de cada uma (da base, informada ou sugerida). Você pode ajustar qualquer uma e recalcular na hora, sem chamar o modelo.</li>
           <li><b>Fórmula</b>: a conta em português, com os números substituídos.</li>
-          <li><b>Decisões do harness</b>: o que o Jev decidiu em cada estação, com probabilidade e confiança.</li>
+          <li><b>Decisões do Jev</b>: o que o Jev decidiu em cada estação, com probabilidade e confiança.</li>
         </ol>
         <p>O modelo de linguagem só traduz a pergunta e escreve a leitura. Toda conta é do motor.</p>
       </div>
@@ -35,7 +35,7 @@ export function ComoCheguei({ mensagem, onRecalcular }: { mensagem: Mensagem | n
   const fpa = mensagem.fpa;
   return (
     <>
-      {fpa && <PremissasUsadas key={mensagem.id + (fpa.recalculadoEm || "")} mensagem={mensagem} onRecalcular={onRecalcular} />}
+      {fpa && <PremissasUsadas key={mensagem.id + (fpa.recalculadoEm || "")} mensagem={mensagem} onRecalcular={onRecalcular} onLivro={onLivro} />}
       {fpa && fpa.formula.length > 0 && (
         <section className="bloco">
           <h3>Fórmula</h3>
@@ -46,7 +46,7 @@ export function ComoCheguei({ mensagem, onRecalcular }: { mensagem: Mensagem | n
         </section>
       )}
       <section className="bloco">
-        <h3>Decisões do harness</h3>
+        <h3>Decisões do Jev</h3>
         {h && (
           <div className="harness-resumo">
             <div className="stat"><small>Chamadas ao Jev</small><strong>{h.chamadasJev}</strong></div>
@@ -85,7 +85,7 @@ export function ComoCheguei({ mensagem, onRecalcular }: { mensagem: Mensagem | n
 
 
 /** O formulário fica num filho com `key`: ao trocar de resposta (ou recalcular) ele nasce zerado, sem efeito. */
-function PremissasUsadas({ mensagem, onRecalcular }: { mensagem: Mensagem; onRecalcular: Recalcular }) {
+function PremissasUsadas({ mensagem, onRecalcular, onLivro }: { mensagem: Mensagem; onRecalcular: Recalcular; onLivro: () => void }) {
   const fpa = mensagem.fpa!;
   const [ajustes, setAjustes] = useState<Partial<Record<ChavePremissa, string>>>({});
   const [salvar, setSalvar] = useState(false);
@@ -105,7 +105,7 @@ function PremissasUsadas({ mensagem, onRecalcular }: { mensagem: Mensagem; onRec
   }
   return (
     <section className="bloco">
-      <h3>Premissas usadas</h3>
+      <h3>Premissas usadas · {fpa.produto}</h3><p className="muted small">Ajuste os valores para testar outra hipótese. A origem de cada premissa aparece logo abaixo.</p>
       <div className="premissas usadas">
         {fpa.premissas.map((p) => (
           <label key={p.chave} className={"premissa " + p.origem} title={p.detalhe}>
@@ -121,9 +121,9 @@ function PremissasUsadas({ mensagem, onRecalcular }: { mensagem: Mensagem; onRec
       ) : (
         <div className="acoes-recalculo">
           <button className="primary pequeno" disabled={busy || !mudou} onClick={() => void recalcular()}>
-            {busy ? <span className="spinner" /> : <Icon name="refresh" size={14} />} Ajustar premissa e recalcular
+            {busy ? <span className="spinner" /> : <Icon name="refresh" size={14} />} {salvar ? "Salvar ajustes e recalcular" : "Recalcular este cenário"}
           </button>
-          <label className="marcar"><input type="checkbox" checked={salvar} onChange={(e) => setSalvar(e.target.checked)} /> Salvar no livro de premissas do produto</label>
+          <fieldset className="assumption-scope"><legend>Onde usar os ajustes?</legend><label className="marcar"><input type="radio" name="alcance-premissas" checked={!salvar} disabled={busy} onChange={() => setSalvar(false)} /> Só neste cenário</label><label className="marcar"><input type="radio" name="alcance-premissas" checked={salvar} disabled={busy} onChange={() => setSalvar(true)} /> Salvar no livro de premissas</label><p>{salvar ? `Os valores alterados passam a ser o padrão de ${fpa.produto} nas próximas análises, em qualquer conversa. Você pode restaurar os valores da base no livro.` : "O livro e as próximas análises continuam com os valores atuais."}</p><button className="text-button" disabled={busy} onClick={onLivro}><Icon name="book" size={14} /> Abrir livro de premissas</button></fieldset>
           <small className="muted">Só o motor roda de novo: sem custo e sem chamada ao modelo.</small>
         </div>
       )}

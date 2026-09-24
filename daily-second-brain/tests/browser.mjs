@@ -81,8 +81,10 @@ try {
     .click();
   await page.getByRole("button", { name: "Organizar na wiki" }).click();
   await page
-    .getByRole("button", { name: "Editar", exact: true })
-    .waitFor({ timeout: 60000 });
+    .getByRole("dialog")
+    .getByRole("button", { name: "Abrir na wiki", exact: true })
+    .click({ timeout: 60000 });
+  await page.getByRole("button", { name: "Editar", exact: true }).waitFor();
   await page.getByRole("button", { name: "Fechar", exact: true }).click();
   await page.getByRole("button", { name: "Conversar", exact: true }).click();
   await page.getByLabel("Mensagem para Daily").fill("Que conexões você vê?");

@@ -10,6 +10,7 @@ import { Connections } from "./Connections";
 import { request } from "./client";
 import { Captures } from "./Captures";
 import { Inbox } from "./Inbox";
+import { Processing, processingActive } from "./Processing";
 import { SourceContent } from "./SourceContent";
 import { RemoveItems } from "./RemoveItems";
 import { sourcePreview } from "@/lib/source-preview";
@@ -146,6 +147,11 @@ export function Brain() {
   const [view, setView] = useState<View>("home");
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState("");
+  const [queueing, setQueueing] = useState(false);
+  const queueingRef = useRef(false);
+  const [processingSyncError, setProcessingSyncError] = useState("");
+  const processingStatuses = useRef(new Map<string, string>());
+  const brainRequest = useRef(0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   useFeedback(notice, error);
@@ -169,8 +175,37 @@ export function Brain() {
   const [captureTitle, setCaptureTitle] = useState("");
   const [captureContent, setCaptureContent] = useState("");
   const load = useCallback(async () => {
+    const requestId = ++brainRequest.current;
     const s = await request<BrainState>("/api/brain");
+    if (requestId !== brainRequest.current) return s;
+    let completed = 0,
+      failed = 0;
+    for (const job of Object.values(s.sourceProcessing || {})) {
+      const previous = processingStatuses.current.get(job.id);
+      if (previous && ["queued", "running"].includes(previous)) {
+        if (job.status === "done") completed++;
+        if (job.status === "failed") failed++;
+      }
+    }
+    processingStatuses.current = new Map(
+      Object.values(s.sourceProcessing || {}).map((j) => [j.id, j.status]),
+    );
+    if (completed)
+      toast(
+        `${completed} fonte(s) organizada(s) com sucesso. Abra o resultado no acompanhamento.`,
+      );
+    if (failed)
+      toast(
+        `${failed} fonte(s) não puderam ser organizadas. Consulte o motivo no acompanhamento e tente novamente.`,
+        true,
+      );
+    setProcessingSyncError("");
     setState(s);
+    setSelected((current) =>
+      current?.kind === "raw"
+        ? s.notes.find((n) => n.id === current.id) || null
+        : current,
+    );
     return s;
   }, []);
   const loadCaptures = useCallback(async () => {
@@ -258,6 +293,12 @@ export function Brain() {
         ]);
         if (!cancelled) {
           setState(s);
+          processingStatuses.current = new Map(
+            Object.values(s.sourceProcessing || {}).map((j) => [
+              j.id,
+              j.status,
+            ]),
+          );
           setSettings(c);
         }
         await loadCaptures();
@@ -281,6 +322,27 @@ export function Brain() {
     const timer = setInterval(() => void loadCaptures().catch(() => {}), 5000);
     return () => clearInterval(timer);
   }, [loadCaptures]);
+  useEffect(() => {
+    if (initializing) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        await load();
+      } catch {
+        if (!stopped)
+          setProcessingSyncError(
+            "Não foi possível atualizar o progresso. A fila continua salva; tentando reconectar.",
+          );
+      }
+      if (!stopped) timer = setTimeout(() => void poll(), 3000);
+    };
+    timer = setTimeout(() => void poll(), 3000);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [initializing, load]);
   useEffect(() => {
     if (view !== "setup") return;
     const timer = setInterval(
@@ -367,13 +429,46 @@ export function Brain() {
   async function action(action: string, data: Record<string, unknown> = {}) {
     return request<Note>("/api/brain", "POST", { action, ...data });
   }
-  async function organize(n: Note) {
-    await act("organize", async () => {
-      const wiki = await action("organize", { id: n.id });
-      await load();
-      open(wiki);
-      setNotice("Fonte conectada à sua wiki.");
-    });
+  async function organize(ids: string[]): Promise<boolean> {
+    if (queueingRef.current) return false;
+    queueingRef.current = true;
+    setQueueing(true);
+    try {
+      const result = await request<{
+        queued: number;
+        alreadyProcessing: number;
+        alreadyOrganized: number;
+        sourceProcessing: BrainState["sourceProcessing"];
+      }>("/api/brain", "POST", { action: "organize", ids });
+      for (const job of Object.values(result.sourceProcessing || {})) {
+        if (!processingStatuses.current.has(job.id))
+          processingStatuses.current.set(job.id, job.status);
+      }
+      setState((current) =>
+        current
+          ? { ...current, sourceProcessing: result.sourceProcessing }
+          : current,
+      );
+      toast(
+        result.queued
+          ? `${result.queued} fonte(s) na fila. Você pode fechar o modal e acompanhar o progresso.`
+          : result.alreadyProcessing
+            ? "Essas fontes já estão em processamento."
+            : "Essas fontes já estão na wiki.",
+      );
+      await load().catch(() =>
+        setProcessingSyncError(
+          "A fila foi salva, mas não foi possível atualizar o progresso. Tentando reconectar.",
+        ),
+      );
+      return true;
+    } catch (e) {
+      toast((e as Error).message, true);
+      return false;
+    } finally {
+      queueingRef.current = false;
+      setQueueing(false);
+    }
   }
   async function send(text = prompt) {
     if (!text.trim() || busy) return;
@@ -685,6 +780,30 @@ export function Brain() {
             </button>
           </div>
         )}
+        {state && !initializing && (
+          <Processing
+            jobs={state.sourceProcessing}
+            notes={state.notes}
+            open={open}
+            retry={organize}
+            submitting={queueing}
+            syncError={processingSyncError}
+            refresh={() =>
+              void load().catch(() =>
+                setProcessingSyncError(
+                  "Não foi possível atualizar o progresso. Tentando reconectar.",
+                ),
+              )
+            }
+            dismiss={() =>
+              void request("/api/brain", "POST", {
+                action: "dismiss-processing",
+              })
+                .then(() => load())
+                .catch((e) => toast(e.message, true))
+            }
+          />
+        )}
         {!state || initializing ? (
           <div className="loading">
             <div className="loading-orb" />
@@ -735,6 +854,9 @@ export function Brain() {
               <Inbox
                 notes={notes}
                 captures={state.sourceCaptures}
+                processing={state.sourceProcessing}
+                organize={organize}
+                queueing={queueing}
                 open={open}
                 refresh={refreshCaptures}
                 collect={() => go("captures")}
@@ -1843,18 +1965,69 @@ export function Brain() {
                   ? sourcePreview(selected).title
                   : selected.title}
               </h1>
+              {selected.kind === "raw" &&
+                state?.sourceProcessing?.[selected.id] && (
+                  <p
+                    className={
+                      state.sourceProcessing[selected.id].status === "failed"
+                        ? "error"
+                        : "processing-note"
+                    }
+                    role="status"
+                  >
+                    {state.sourceProcessing[selected.id].error ||
+                      (processingActive(state.sourceProcessing[selected.id])
+                        ? "Processamento em segundo plano. Pode fechar este modal e acompanhar no painel."
+                        : "Fonte organizada com sucesso.")}
+                    {state.sourceProcessing[selected.id].pageId && (
+                      <button
+                        className="text-button"
+                        onClick={() => {
+                          const page = state.notes.find(
+                            (n) =>
+                              n.id ===
+                              state.sourceProcessing?.[selected.id]?.pageId,
+                          );
+                          if (page) open(page);
+                        }}
+                      >
+                        Abrir na wiki
+                      </button>
+                    )}
+                  </p>
+                )}
               <div className="document-actions">
                 {selected.kind === "raw" ? (
                   selected.status === "inbox" && (
                     <button
                       className="button primary"
-                      disabled={!!busy}
-                      onClick={() => void organize(selected)}
+                      disabled={
+                        queueing ||
+                        processingActive(
+                          state?.sourceProcessing?.[selected.id],
+                        ) ||
+                        ["queued", "running"].includes(
+                          state?.sourceCaptures?.[selected.id]?.status || "",
+                        )
+                      }
+                      onClick={() => void organize([selected.id])}
                     >
                       <Icon name="spark" size={16} />
-                      {busy === "organize"
-                        ? "Conectando à wiki…"
-                        : "Organizar na wiki"}
+                      {queueing
+                        ? "Adicionando à fila…"
+                        : processingActive(
+                              state?.sourceProcessing?.[selected.id],
+                            )
+                          ? state?.sourceProcessing?.[selected.id]?.phase
+                          : ["queued", "running"].includes(
+                                state?.sourceCaptures?.[selected.id]?.status ||
+                                  "",
+                              )
+                            ? "Coleta em processamento"
+                            : state?.sourceProcessing?.[selected.id]?.status ===
+                                "failed"
+                              ? "Tentar novamente"
+                              : "Organizar na wiki"}
                     </button>
                   )
                 ) : (

@@ -10,6 +10,7 @@ const { setConfig } = await import("./store");
 const el = await import("./elevenlabs");
 const store = await import("./flow-store");
 const { block } = await import("./flow-types");
+const { processarLigacao } = await import("./channel-flows");
 const webhook = await import("../app/webhook/elevenlabs/route");
 const { chatGPT } = await import("./chatgpt");
 chatGPT().account = async () => ({
@@ -95,7 +96,7 @@ test("fim de ligação executa o fluxo escolhido com a transcrição", async () 
   store.publishFlow(f.id);
   setConfig("ELEVENLABS_FLOW_ID", f.id);
   setConfig("ELEVENLABS_WEBHOOK_SECRET", "segredo");
-  const r = await webhook.processar({ conversationId: "c1", transcricao: "Agente: Olá\nPessoa: Oi", resumo: "Curta", telefone: "+55", variaveis: {} });
+  const r = await processarLigacao({ conversationId: "c1", transcricao: "Agente: Olá\nPessoa: Oi", resumo: "Curta", telefone: "+55", variaveis: {} });
   assert.equal(r?.status, "completed");
   assert.match(r?.output || "", /Registrado: Telefone: \+55\nResumo: Curta\n\nTranscrição:\nAgente: Olá/);
   const corpo = JSON.stringify({ type: "post_call_transcription", data: { conversation_id: "c2", transcript: [] } });

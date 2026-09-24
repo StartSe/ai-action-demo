@@ -32,17 +32,18 @@
     },
     {
       "id": "agente-kanban",
-      "nome": "Agente de Kanban",
+      "nome": "Orbit — Agente de Kanban",
       "areas": [
         "Gestão",
         "RH"
       ],
       "problema": "Operar o quadro de tarefas toma tempo do gestor.",
-      "ia": "Um agente com ferramentas cria, move, comenta e arquiva cartões a partir de comandos em português.",
-      "integracoes": "IA (OpenRouter) para entender o pedido e operar o quadro. Quadro do Trello para o agente mexer no quadro real do time em vez do de exemplo. Notificações (e-mail ou Slack) para o resumo do quadro toda manhã. Quadro de tarefas (MCP) para operar um quadro fora do Trello (Jira, Notion, monday).",
+      "ia": "Agentes cruzam atividades, conversas e objetivos para manter um quadro local, seguindo a skill do time e rotinas configuráveis. Correções humanas orientam as próximas execuções.",
+      "integracoes": "ChatGPT via Codex ou OpenRouter. Zapier MCP para consultar quadros e conversas com ferramentas autorizadas por rotina. Trello e integrações anteriores continuam disponíveis em Configurações avançadas.",
       "acento": "#2e3b7a",
       "porta": 3002,
       "captura": "capturas/agente-kanban.png",
+      "versao": "0.2.0",
       "capacidades": [
         "artefato",
         "mcp",
@@ -126,7 +127,7 @@
         "Vendas"
       ],
       "problema": "Perguntas repetidas chegam fora do horário e ninguém acompanha o que foi respondido.",
-      "ia": "Responde com o conhecimento da empresa, avisa quando o cliente precisa de uma pessoa e mostra o dia em números.",
+      "ia": "Responde texto, áudio e fotos com o conhecimento da empresa, lembra cada cliente, explica cada resposta e avisa quando precisa de uma pessoa.",
       "integracoes": "WhatsApp por QR Code (z-api) ou WhatsApp Cloud API (Meta).",
       "acento": "#0e7c6a",
       "porta": 3006,
@@ -232,8 +233,8 @@
         "Inovação"
       ],
       "problema": "Movimentos do mercado chegam tarde e dispersos.",
-      "ia": "Monitora termos cadastrados na web, gera grafos interativos e envia insights de negócio às 8h, 16h e 20h, com horários configuráveis.",
-      "integracoes": "IA via OpenRouter ou assinatura ChatGPT. Exa, Tavily e Bright Data (Search Engine e Scraper as Markdown, MCP HTTP com pro=1). E-mail ou Slack para alertas. Fontes públicas sem chave também disponíveis.",
+      "ia": "Desdobra palavras-chave em buscas, acompanha fontes diariamente em segundo plano e conecta sinais, leituras e artigos em um grafo com histórico e memória por radar.",
+      "integracoes": "IA via OpenRouter ou assinatura ChatGPT. Busca na Web com SearchAPI, Exa e Tavily; Bright Data e Firecrawl leem páginas. Fontes públicas e StartSe sem chave. ElevenLabs para conversa por voz.",
       "acento": "#0a707f",
       "porta": 3011,
       "captura": "capturas/radar-sinais.png",
@@ -245,9 +246,9 @@
       "demo": null,
       "plano": "starter",
       "discoGB": 1,
-      "discoGuarda": "a configuração, a conta, os termos monitorados, as rotinas e os radares",
+      "discoGuarda": "configuração, conta, radares, fontes, análises, destaques, conversas e histórico de execuções",
       "independente": true,
-      "versao": "0.3.0"
+      "versao": "0.4.0"
     },
     {
       "id": "bussola-ia",
@@ -330,7 +331,7 @@
       ],
       "problema": "Criar, hospedar e melhorar o site exige coordenar criação, tecnologia e estratégia.",
       "ia": "Seu colaborador cuida da criação, hospedagem e estratégia do site: constrói páginas, ajusta a marca, publica e acompanha métricas para propor melhorias.",
-      "integracoes": "IA (OpenRouter ou ChatGPT). Opcional: publicação na Netlify e domínio próprio no Render.",
+      "integracoes": "ChatGPT por assinatura (recomendado) ou OpenRouter. Publicação na Netlify ou em serviço independente no Render, com histórico e rollback.",
       "acento": "#792a3f",
       "porta": 3015,
       "captura": "capturas/clone-site.png",
@@ -340,7 +341,7 @@
       ],
       "demo": null,
       "independente": true,
-      "versao": "0.3.0",
+      "versao": "0.4.0",
       "plano": "0.5c-512mb",
       "discoGB": 1,
       "discoGuarda": "a conta, as configurações, a sessão ChatGPT, os sites, as versões das páginas e as imagens"
@@ -440,7 +441,7 @@
       "plano": "starter",
       "discoGB": 1,
       "discoGuarda": "fontes originais, wiki, artefatos, conversas, revisões, fila de coletas, agendamentos, conta e credenciais",
-      "versao": "1.4.0",
+      "versao": "1.5.0",
       "aposPublicar": "Crie sua conta e siga Ajustes → Primeiros passos: conecte e teste sua IA, depois insira um texto ou conecte um aplicativo. Entrada reúne fontes e coletas; Biblioteca reúne wiki, mapa e artefatos. Zapier, regras personalizadas e voz são opcionais."
     },
     {
@@ -466,19 +467,19 @@
       "plano": "starter",
       "discoGB": 1,
       "discoGuarda": "mapas, fontes, conversas, conta e credenciais",
-      "versao": "1.3.0",
-      "aposPublicar": "Crie sua conta e abra Configurações para conectar ChatGPT ou OpenRouter. Em YouTube, valide e salve uma chave do Google AI Studio para analisar vídeos públicos de qualquer canal e teste o link antes de criar seu mapa."
+      "versao": "1.4.3",
+      "aposPublicar": "Crie sua conta e abra Configurações para conectar ChatGPT ou OpenRouter. Em YouTube, valide e salve uma chave do Google AI Studio para analisar vídeos públicos de qualquer canal. Depois, crie um novo mapa com o link do seu vídeo."
     },
     {
       "id": "predictive-harness",
-      "nome": "Cowork FPEA",
+      "nome": "Cowork Jev",
       "areas": [
         "Finanças",
         "Gestão"
       ],
       "problema": "Transformar dados em predições e decisões financeiras exige análises e cenários refeitos à mão.",
       "ia": "Seu estrategista cria predições baseadas em dados e explora cenários financeiros, com premissas visíveis, cálculos verificáveis e decisões conferidas pelo Jev.",
-      "integracoes": "ChatGPT por assinatura e OpenRouter (obrigatório: é onde vive o Jev, o modelo de decisões da TypeSafe). Disco persistente no Render.",
+      "integracoes": "ChatGPT por assinatura e OpenRouter (obrigatório: é onde vive o Jev, o modelo de decisões da TypeSafe). Voz opcional pela ElevenLabs. Disco persistente no Render.",
       "acento": "#2f4fb8",
       "porta": 3022,
       "captura": "capturas/predictive-harness.png",
@@ -491,8 +492,8 @@
       "plano": "starter",
       "discoGB": 1,
       "discoGuarda": "planilhas, premissas por produto, conversas, decisões do harness, conta e credenciais",
-      "versao": "0.2.1",
-      "aposPublicar": "Crie sua conta e explore a escola de negócios de exemplo: contribuição por turma, cenário de nova turma, meta reversa de marketing e ponto de equilíbrio. Em Configurações conecte o ChatGPT e o OpenRouter (o Jev vive nele). Depois envie suas planilhas de matrículas, custos e marketing e confirme o papel de cada coluna."
+      "versao": "0.5.1",
+      "aposPublicar": "Crie sua conta e explore a escola de negócios de exemplo: contribuição por turma, cenário de nova turma, meta reversa de marketing e ponto de equilíbrio. Em Configurações conecte o ChatGPT e o OpenRouter (o Jev vive nele). Em Fontes de dados, importe XLSX ou CSV (até 20 MB), confirme o papel das colunas e selecione as fontes da conversa. O histórico tem busca e conversas fixadas; premissas ficam no painel retrátil. Configure a ElevenLabs para conversar por voz ao vivo."
     },
     {
       "id": "precificador",
@@ -517,6 +518,25 @@
       "plano": "starter",
       "discoGB": 1,
       "discoGuarda": "a conta, as configurações, o negócio, os custos fixos, os canais, os itens com suas fichas e o histórico de preço"
+    },
+    {
+      "id": "toolkit-dash-builder",
+      "nome": "Painel Pronto",
+      "areas": [
+        "Dados",
+        "Gestão"
+      ],
+      "problema": "O gestor sabe o que quer acompanhar, mas não sabe quais indicadores pedir nem como montar o painel.",
+      "ia": "Identifica o setor do pedido, escolhe os indicadores certos, monta os gráficos e preenche com números de exemplo do mercado brasileiro.",
+      "integracoes": "IA (OpenRouter). Nenhuma outra: os números são de exemplo.",
+      "acento": "#098609",
+      "porta": 3024,
+      "captura": "capturas/toolkit-dash-builder.png",
+      "capacidades": [
+        "artefato",
+        "mcp"
+      ],
+      "demo": null
     }
   ]
 }

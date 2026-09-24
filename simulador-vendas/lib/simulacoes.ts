@@ -191,9 +191,17 @@ export function mudarStatus(codigo: string, status: StatusSimulacao): Simulacao 
 /** Apaga a simulação e as sessões dela (com as mensagens). Os resultados no histórico continuam. */
 export function apagar(codigo: string): void {
   const d = banco();
-  d.prepare("DELETE FROM mensagens_sessao WHERE sessaoId IN (SELECT id FROM sessoes_treino WHERE simulacaoCodigo = ?)").run(codigo);
-  d.prepare("DELETE FROM sessoes_treino WHERE simulacaoCodigo = ?").run(codigo);
-  d.prepare("DELETE FROM simulacoes WHERE codigo = ?").run(codigo);
+  d.exec("BEGIN IMMEDIATE");
+  try {
+    d.prepare("DELETE FROM mensagens_sessao WHERE sessaoId IN (SELECT id FROM sessoes_treino WHERE simulacaoCodigo = ?)").run(codigo);
+    d.prepare("DELETE FROM sessoes_treino WHERE simulacaoCodigo = ?").run(codigo);
+    d.prepare("DELETE FROM simulacoes WHERE codigo = ?").run(codigo);
+    // Um link migrado não pode voltar ao fluxo antigo depois de apagado.
+    if (d.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'salas'").get()) {
+      d.prepare("DELETE FROM salas WHERE codigo = ?").run(codigo);
+    }
+    d.exec("COMMIT");
+  } catch (erro) { d.exec("ROLLBACK"); throw erro; }
 }
 
 /** Quantas simulações dependem de cada produto — o aviso antes de apagar um produto (US-003). */

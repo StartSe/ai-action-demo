@@ -1,5 +1,16 @@
 # Notas de versão
 
+## 0.4.0 — 22/09/2026
+
+- Criação e edição de radares em modal com palavras-chave, contexto, fontes e páginas; seletor compacto e alternância na tela inicial.
+- Planejamento de buscas por IA antes da coleta, com fallback explícito e consultas auditáveis; focos, hipóteses de hype e artigos importantes orientam pesquisa e conversa.
+- Acompanhamento diário ativado ao conectar IA para radares elegíveis; fila persistente, trabalho em segundo plano e histórico de cada tentativa, inclusive falhas e interrupções.
+- Novo balão conversacional com memória persistente por radar, fontes e análises recentes no contexto e referências ao mapa.
+- Conversa em tempo real com ElevenLabs dentro do balão, verificação de permissões, microfone e transcrição. O mesmo motor responde por texto e voz.
+- SearchAPI reunida a Exa e Tavily em Busca na Web. Removida a seção Preferências da pesquisa de Configurações; limpeza de exemplos continua no histórico.
+
+
+
 ## 0.3.0 — 2026-09-20
 
 - Radares nomeados com temas, fontes, páginas e histórico separados; seletor persistente, criação e renomeação. O histórico passa a se chamar **Análises deste radar**.

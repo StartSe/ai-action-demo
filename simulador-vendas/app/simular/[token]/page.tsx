@@ -1,3 +1,4 @@
+import { Icone } from "@/components/MenuAcoes";
 import { livekitDisponivel } from "@/lib/livekit";
 import { prepararRoteiro } from "@/lib/roteiro";
 // Sala de treino pública: o link que o gestor manda para o time inteiro (/simular/<código>).
@@ -34,10 +35,13 @@ export const dynamic = "force-dynamic";
 
 function Indisponivel({ titulo, descricao }: { titulo: string; descricao: string }) {
   return (
-    <main className="min-h-[70vh] flex flex-col items-center justify-center text-center gap-3 px-6">
-      <h1 className="text-2xl font-extrabold">{titulo}</h1>
-      <p className="text-muted max-w-[420px]">{descricao}</p>
-    </main>
+    <Cartao>
+      <div className="flex flex-col items-center text-center gap-4 py-4" role="status">
+        <span aria-hidden="true" className="grid place-items-center w-14 h-14 rounded-full bg-accent-soft text-accent-ink"><Icone nome="pausar" /></span>
+        <h1 className="text-2xl font-extrabold">{titulo}</h1>
+        <p className="text-muted max-w-[420px]">{descricao}</p>
+      </div>
+    </Cartao>
   );
 }
 
@@ -194,6 +198,7 @@ export default async function Page({ params, searchParams }: PageProps<"/simular
       objetivo,
       duracaoMin: simulacao.duracaoMin,
       iniciadaEm: aberta.iniciadaEm ?? aberta.criadoEm,
+      avisoTempoInicial: Boolean(aberta.avisoTempoEm),
       // Recarregar a página no meio do treino não apaga a conversa: ela vem do servidor, de onde parou.
       falasIniciais: transcricao(aberta.id).map((m) => ({ papel: m.papel, texto: m.texto })),
       porVoz: simulacao.permiteVoz,

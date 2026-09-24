@@ -3,6 +3,7 @@
 // verificação (Jev) → próximas perguntas (Jev ranqueia). Perguntas descritivas seguem pelos agregados
 // da base. Cada decisão é registrada e devolvida com a mensagem, para a coluna "Como cheguei aqui".
 // Sem OpenRouter (Jev) o harness não roda.
+import { conversaAtual } from "./contexto";
 import { randomUUID } from "node:crypto";
 import { abrirBanco } from "./store";
 import { AppError } from "./api";
@@ -17,8 +18,7 @@ import { fmtBRL, fmtNum, fmtPctPontos, fmtPp } from "./formato";
 import type { Cartao, CategoriaPergunta, Especificacao, Mensagem, RegistroDecisao, ResumoHarness, Sugestao } from "./types";
 
 const LIMITE_PERGUNTA = 2000;
-/** A conversa é da base inteira, não de uma planilha. */
-const CHAVE_BASE = "base";
+// O contexto da sessão mantém as mensagens junto da seleção de fontes.
 const ROTULO_TIPO: Record<string, string> = {
   descritiva: "Descritiva (o que a base diz)",
   diagnostica: "Diagnóstico (por que e onde)",
@@ -42,20 +42,20 @@ function db() {
   return b;
 }
 export function listarMensagens(): Mensagem[] {
-  const rows = db().prepare("SELECT json FROM mensagens WHERE planilha_id = ? ORDER BY criado_em, rowid").all(CHAVE_BASE) as { json: string }[];
+  const rows = db().prepare("SELECT json FROM mensagens WHERE planilha_id = ? ORDER BY criado_em, rowid").all(conversaAtual()) as { json: string }[];
   return rows.map((r) => JSON.parse(r.json) as Mensagem);
 }
 export function obterMensagem(id: string): Mensagem {
-  const row = db().prepare("SELECT json FROM mensagens WHERE id = ? AND planilha_id = ?").get(id, CHAVE_BASE) as { json: string } | undefined;
+  const row = db().prepare("SELECT json FROM mensagens WHERE id = ? AND planilha_id = ?").get(id, conversaAtual()) as { json: string } | undefined;
   if (!row) throw new AppError("Resposta não encontrada.", 404);
   return JSON.parse(row.json) as Mensagem;
 }
 function gravar(m: Mensagem) {
-  db().prepare("INSERT INTO mensagens (id, planilha_id, json, criado_em) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json").run(m.id, CHAVE_BASE, JSON.stringify(m), m.criadoEm);
+  db().prepare("INSERT INTO mensagens (id, planilha_id, json, criado_em) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json").run(m.id, conversaAtual(), JSON.stringify(m), m.criadoEm);
   return m;
 }
 export function limparConversa() {
-  db().prepare("DELETE FROM mensagens WHERE planilha_id = ?").run(CHAVE_BASE);
+  db().prepare("DELETE FROM mensagens WHERE planilha_id = ?").run(conversaAtual());
 }
 
 // --- Perguntas sugeridas por categoria -----------------------------------------------------------------
@@ -219,6 +219,7 @@ export async function executarTurno(perguntaBruta: unknown, signal?: AbortSignal
   const texto = typeof perguntaBruta === "string" ? perguntaBruta.trim().slice(0, LIMITE_PERGUNTA) : "";
   if (!texto) throw new AppError("Escreva uma pergunta.");
   const base = carregarBase();
+  if (base.avisos.some(a => a.startsWith("Uma fonte desta conversa"))) throw new AppError(base.avisos[0], 409);
   const pergunta: Mensagem = { id: randomUUID(), papel: "usuario", texto, criadoEm: new Date().toISOString() };
 
   // Sem harness (OpenRouter) ou sem LLM: em demonstração respondem as perguntas roteirizadas; fora dela, erro claro.
@@ -265,7 +266,7 @@ export async function executarTurno(perguntaBruta: unknown, signal?: AbortSignal
   if (sensivel.valor) ctx.harness.avisos.push("A pergunta toca em dado pessoal: a resposta usa só agregados, sem listar pessoas.");
   if (premissasOk.valor === false && !premissasOk.baixa && motor) ctx.harness.avisos.push("O Jev avalia que a base pode não bastar; o que faltar aparece como premissa a informar.");
   const categoria = CATEGORIA[tipoFinal] || "outra";
-  const baseCurta = `Você é um analista de FP&A (planejamento financeiro) sênior falando com um executivo brasileiro. Português do Brasil, direto, sem títulos, 1 a 2 parágrafos. Pode usar **negrito**.`;
+  const baseCurta = `Você é Jev, o analista estratégico do Cowork Jev, especialista em FP&A (planejamento financeiro) falando com um executivo brasileiro. Português do Brasil, direto, sem títulos, 1 a 2 parágrafos. Pode usar **negrito**.`;
 
   let resposta = "";
   let cartoes: Cartao[] = [];

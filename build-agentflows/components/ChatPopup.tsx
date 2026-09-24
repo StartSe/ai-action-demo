@@ -140,7 +140,6 @@ export function ChatPopup({
   voiceId,
   onVoiceSettings,
   flowId,
-  onDemo,
   onSend,
   onChange,
   onConnect,
@@ -160,7 +159,6 @@ export function ChatPopup({
   voiceId: string;
   onVoiceSettings: () => void;
   flowId: string;
-  onDemo: (v: boolean) => void;
   onSend: (input: string, attachments: Attachment[], conversational?: boolean) => Promise<Run | null>;
   onChange: (r: Run) => void;
   onConnect: () => void;
@@ -256,7 +254,23 @@ export function ChatPopup({
   }, []);
   useEffect(() => {
     const el = textarea.current;
-    if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 160)}px`; }
+    if (!el) return;
+    const resize = () => {
+      const style = getComputedStyle(el);
+      const maxHeight = 3 * parseFloat(style.lineHeight) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      el.style.height = "auto";
+      el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
+    };
+    resize();
+    let width = el.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (el.clientWidth !== width) {
+        width = el.clientWidth;
+        resize();
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [input, open]);
   async function attach(files: File[]) {
     if (!files.length || uploadLock.current || sendLock.current || running) return;
@@ -357,13 +371,14 @@ export function ChatPopup({
               Envie uma mensagem para testar seus agentes e acompanhar o caminho
               percorrido.
             </p>
-            {!connected && <button
-              onClick={() =>
-                setInput("Meu pedido está atrasado e preciso de ajuda urgente.")
-              }
-            >
-              Usar uma solicitação de exemplo
-            </button>}
+            {!connected && !demo && (
+              <div className="chat-connect">
+                <button type="button" className="studio-button connection-button" onClick={onConnect}>
+                  <Icon name="spark" size={20} />
+                  <span>Conectar ChatGPT</span>
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -395,16 +410,6 @@ export function ChatPopup({
         )}
       </div>}
       <div className="chat-composer">
-        <div className="chat-toggles">
-          {!connected && <label className="demo-toggle">
-            <input
-              type="checkbox"
-              checked={demo}
-              onChange={(e) => onDemo(e.target.checked)}
-            />
-            Simular com respostas de exemplo
-          </label>}
-        </div>
         {voiceError && (
           <p className="studio-error" role="alert">
             {voiceError}
@@ -414,12 +419,6 @@ export function ChatPopup({
         {attachmentError && <p className="studio-error" role="alert">{attachmentError}</p>}
         {issues.length > 0 && <div className="chat-attachment-warning" role="status"><strong>Este fluxo precisa de um modelo que aceite imagens.</strong>{issues.map((issue) => <p key={issue.nodeId}>{issue.label}: {issue.reason}</p>)}<small>Edite o modelo do bloco ou remova as imagens para continuar.</small></div>}
         {demo && attachments.length > 0 && <p className="studio-error" role="alert">Desative a simulação e conecte um modelo para enviar estes anexos.</p>}
-        {!connected && !demo && (
-          <p>
-            Conecte o ChatGPT para executar de verdade.{" "}
-            <button onClick={onConnect}>Conectar</button>
-          </p>
-        )}
         <form
           className={"chat-input-box" + (dragging ? " dragging" : "")}
           onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.stopPropagation(); setDragging(true); } }}

@@ -30,9 +30,14 @@
 // prévia do app para o catálogo; nunca definida em Blueprint nem em instância real).
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { effectiveEmbedOrigins } from "@/lib/embed-security";
+import { embedSettings } from "@/lib/embed-store";
 import { existeConta, sessaoAtual } from "@/lib/conta";
 
 function rotaPublica(pathname: string, metodo: string): boolean {
+  // Embed APIs authenticate signed, scoped tickets; no admin cookie crosses origins.
+  if (pathname === "/embed.js" || /^\/embed\/[a-zA-Z0-9-]+$/.test(pathname)) return true;
+  if (pathname === "/api/embed/token" || pathname === "/api/embed/session" || pathname === "/api/embed/attachments" || /^\/api\/embed\/attachments\/[a-zA-Z0-9-]+$/.test(pathname)) return true;
   if (pathname === "/mcp") return metodo === "POST";
   if (pathname === "/api/health") return true;
   if (pathname === "/api/rotinas/executar") return true;
@@ -57,7 +62,12 @@ export function proxy(request: NextRequest) {
 
   function permitir() {
     const response = NextResponse.next();
-    if (semCache) response.headers.set("Cache-Control", "no-store");
+    if (semCache || pathname.startsWith("/embed/") || pathname.startsWith("/api/embed/")) response.headers.set("Cache-Control", "no-store");
+    if (/^\/embed\/[a-zA-Z0-9-]+$/.test(pathname)) {
+      try { const s = embedSettings(pathname.split("/")[2]); s.origins = effectiveEmbedOrigins(s.origins); response.headers.set("Content-Security-Policy", "frame-ancestors " + (s.enabled && s.origins.length ? s.origins.join(" ") : "'none'") + ";"); }
+      catch { response.headers.set("Content-Security-Policy", "frame-ancestors 'none';"); }
+      response.headers.set("Referrer-Policy", "no-referrer");
+    }
     return response;
   }
 

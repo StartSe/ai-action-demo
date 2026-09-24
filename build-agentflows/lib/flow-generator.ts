@@ -4,20 +4,22 @@ import { FlowError, validateGraph } from "./flow-store";
 import { BLOCKS, block, type Graph, type Kind } from "./flow-types";
 import { layout, outputs } from "./flow-graph";
 export type Generated = { name: string; description: string; graph: Graph };
+export type GenerationPhase = "interpreting" | "planning" | "creating" | "repairing";
+export type GenerationEvent = { phase: GenerationPhase } | { result: Generated } | { error: string };
 const KINDS = Object.keys(BLOCKS) as Kind[];
 // Campos de configuração aceitos por tipo, para o modelo preencher além dos blocos e conexões.
 const FIELDS: Record<Kind, string> = {
   start: "state (JSON com valores de texto, opcional)",
-  llm: "system (instruções), prompt (opcional: em branco o bloco recebe a conversa ou o resultado da etapa anterior; use {{input}}, {{last}}, {{nodes.id}}, {{state.nome}} só quando precisar combinar textos)",
+  llm: "system (instruções), prompt (opcional: em branco o bloco recebe a conversa ou o resultado da etapa anterior; use {{input}}, {{last}}, {{nodes.id}}, {{fluxo.nome}} só quando precisar combinar textos)",
   agent:
-    "system (instruções), prompt (opcional, mesma regra do llm), tools (ids separados por vírgula entre interno:data_hora, interno:calculadora, interno:requisicao_http, interno:executar_fluxo; só se o pedido precisar)",
+    "system (instruções), prompt (opcional, mesma regra do llm), stateUpdates (JSON de lista de {key, value}, atualiza variáveis definidas no início depois da resposta; value aceita {{nodes.id}} da própria etapa), tools (ids separados por vírgula entre interno:data_hora, interno:calculadora, interno:requisicao_http, interno:executar_fluxo; só se o pedido precisar)",
   condition:
     "value (texto a avaliar, ex.: {{last}}), operator (contains | equals | notEquals | greater | empty), compare (valor)",
   state: "key (nome da variável, letras e números), value (ex.: {{last}})",
   http: "url (endereço fixo https), method (GET | POST | PUT | PATCH | DELETE), body (JSON)",
   tool: "tool (nome da ferramenta), args (JSON)",
   approval: "prompt (o que a pessoa deve revisar)",
-  whatsapp: "to (número com DDI e DDD; use {{state.telefone}} ou o número fixo), text (mensagem; use {{last}})",
+  whatsapp: "to (número com DDI e DDD; use {{fluxo.telefone}} ou o número fixo), text (mensagem; use {{last}})",
   call: "to (telefone com DDI e DDD), context (o que o agente de voz deve saber e fazer; use {{last}})",
   loop: "limit (número de 1 a 20)",
   end: "text (resposta final; use {{last}} ou {{nodes.id}})",
@@ -30,11 +32,11 @@ ${KINDS.map((k) => `- ${k} (${BLOCKS[k].label}: ${BLOCKS[k].help}) → ${FIELDS[
 Saídas (handle) de cada tipo: condition e approval têm "yes" e "no"; loop tem "repeat" e "done"; end não tem saída; os demais têm uma única saída (handle omitido).
 
 Regras:
-- Exatamente um bloco start e pelo menos um bloco end.
-- Todo bloco precisa ser alcançável a partir do start e chegar a um end.
-- Cada saída de cada bloco recebe exatamente uma conexão.
+- Exatamente um bloco start, com nome Início. end é opcional: agent e llm sem saída entregam a resposta final.
+- Todo bloco precisa ser alcançável a partir do start e chegar a um end ou agent/llm terminal.
+- Cada saída recebe exatamente uma conexão, exceto agent/llm terminal, que não tem conexão de saída.
 - Só o handle "repeat" de um loop pode voltar a um bloco anterior.
-- Use de 3 a 10 blocos. Prefira agent para tarefas com raciocínio. Não use http nem tool sem o pedido mencionar um serviço ou ferramenta.
+- Use de 2 a 10 blocos. Prefira agent para tarefas com raciocínio. Não use http nem tool sem o pedido mencionar um serviço ou ferramenta.
 - Textos em português do Brasil, claros e sem jargão técnico. Instruções (system) completas e específicas para o caso.
 - ids curtos em minúsculas sem espaços (ex.: "inicio", "analista", "resposta").
 
@@ -76,7 +78,7 @@ export function parseGenerated(answer: string): Generated {
         ? (n.config as Record<string, unknown>)
         : {};
     for (const [k, v] of Object.entries(config))
-      if (Object.hasOwn(b.data.config, k) || k === "tools" || k === "model")
+      if (Object.hasOwn(b.data.config, k) || k === "tools" || k === "model" || (["agent", "llm"].includes(kind) && k === "stateUpdates"))
         b.data.config[k] =
           typeof v === "string" ? v.slice(0, 20000) : JSON.stringify(v);
     return b;
@@ -121,20 +123,26 @@ export async function defaultRunner() {
 export async function generateFlow(
   request: unknown,
   run?: (system: string, prompt: string) => Promise<string>,
+  onProgress?: (phase: GenerationPhase) => void,
 ): Promise<Generated> {
+  onProgress?.("interpreting");
   if (typeof request !== "string" || !request.trim() || request.length > 4000)
     throw new FlowError("Descreva o fluxo em até 4 mil caracteres.");
   run ??= await defaultRunner();
+  onProgress?.("planning");
   const answer = await run(GENERATOR_SYSTEM, request.trim());
+  onProgress?.("creating");
   try {
     return parseGenerated(answer);
   } catch (first) {
     const reason =
       first instanceof Error ? first.message : "resposta inválida";
+    onProgress?.("repairing");
     const retry = await run(
       GENERATOR_SYSTEM,
       `${request.trim()}\n\nA resposta anterior foi recusada: ${reason}\nResposta anterior:\n${answer.slice(0, 6000)}\n\nCorrija e responda somente com o JSON.`,
     );
+    onProgress?.("creating");
     return parseGenerated(retry);
   }
 }

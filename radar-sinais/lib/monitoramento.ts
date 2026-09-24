@@ -1,7 +1,7 @@
 import type { DadosRadar } from "./types";
 
 export const TIPO_MONITORAMENTO = "radar-diario";
-export const HORARIOS_PADRAO = ["08:00", "16:00", "20:00"];
+export const HORARIOS_PADRAO = ["08:00"];
 export const FUSO_PADRAO = "America/Sao_Paulo";
 export type Monitoramento = DadosRadar & { horarios: string[]; fuso: string };
 

@@ -1,7 +1,11 @@
 "use client";
 import { useState } from "react";
+import { useExemplosRemovidos } from "./useExemplosRemovidos";
+import { useToast } from "./Toast";
 import { useConfirmacao } from "./ui";
 export function DadosExemplo() {
+  const { removidos, setRemovidos } = useExemplosRemovidos();
+  const notificar = useToast();
   const { confirmar, Dialogo } = useConfirmacao();
   const [ocupado, setOcupado] = useState(false);
   const [mensagem, setMensagem] = useState("");
@@ -11,11 +15,13 @@ export function DadosExemplo() {
     try {
       const r = await fetch("/api/setup/exemplos", { method: "DELETE" });
       if (!r.ok) throw new Error();
-      setMensagem("Exemplos removidos. Eles não serão recriados ao reiniciar a aplicação.");
+      setRemovidos(true);
+      notificar("Dados de exemplo removidos. Seus dados reais foram preservados.");
       window.dispatchEvent(new Event("configuracao-atualizada"));
     } catch { setMensagem("Não foi possível remover os exemplos. Tente novamente."); }
     finally { setOcupado(false); }
   }
+  if (removidos !== false) return null;
   return <section id="dados" className="card p-5">
     <h2 className="font-bold mb-2">Dados de exemplo</h2>
     <p className="text-sm text-muted mb-4">Remova os produtos, treinos, pessoas e avaliações de demonstração. Dados reais, conexões e exemplos vinculados a treinos reais serão preservados.</p>

@@ -1,67 +1,45 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FUSO_PADRAO, HORARIOS_PADRAO, type Monitoramento } from "@/lib/monitoramento";
 import type { DadosRadar } from "@/lib/types";
-
+import type { ExecucaoRadar } from "@/lib/rotinas";
+import { pedidoJSON } from "@/lib/pedido-json";
 type Item = { id: string; parametros: Monitoramento; ativa: boolean; ultimaExecucao: string | null; ultimaFalha: string | null };
-
+type Estado = { itens: Item[]; execucoes: ExecucaoRadar[] };
+const ROTULOS = { pendente: "Na fila", executando: "Pesquisando", sucesso: "Concluída", falha: "Falhou", interrompida: "Interrompida" };
 export function Monitoramentos({ dados, desabilitado = false }: { desabilitado?: boolean; dados: DadosRadar }) {
-  const [itens, setItens] = useState<Item[]>([]);
+  const ultimaAnalise = useRef<string | null>(null);
+  const [estado, setEstado] = useState<Estado>({ itens: [], execucoes: [] });
+  const [carregando, setCarregando] = useState(true);
   const [horarios, setHorarios] = useState(HORARIOS_PADRAO.join(", "));
   const [fuso, setFuso] = useState(FUSO_PADRAO);
-  const [id, setId] = useState<string>();
+  const [editando, setEditando] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const [mensagem, setMensagem] = useState("");
-  async function carregar() {
-    const r = await fetch(`/api/radar/monitoramentos?radarId=${dados.radarId || ""}`);
-    if (!r.ok) throw new Error("Não foi possível carregar os monitoramentos.");
-    setItens((await r.json()).itens);
-  }
+  const url = `/api/radar/monitoramentos?radarId=${dados.radarId || ""}`;
   useEffect(() => {
     let ativo = true;
-    fetch(`/api/radar/monitoramentos?radarId=${dados.radarId || ""}`).then(async r => {
-      if (!r.ok) throw new Error("Não foi possível carregar os monitoramentos.");
-      return r.json();
-    }).then(v => { if (ativo) setItens(v.itens); }).catch(e => { if (ativo) setMensagem(e.message); });
-    return () => { ativo = false; };
-  }, [dados.radarId]);
-  async function pedido(url: string, method: string, corpo?: unknown) {
+    const atualizar = async () => { try { const d = await pedidoJSON<Estado>(url); if (ativo) {
+      const ultima = d.execucoes.find(e => e.estado === "sucesso")?.resultadoId || "";
+      if (ultimaAnalise.current !== null && ultima && ultima !== ultimaAnalise.current) window.dispatchEvent(new CustomEvent("radar-atualizado", { detail: { radarId: dados.radarId } }));
+      ultimaAnalise.current = ultima; setEstado(d); setCarregando(false);
+    } } catch(e) { if (ativo) { setMensagem((e as Error).message); setCarregando(false); } } };
+    void atualizar(); const timer = setInterval(atualizar, 5000);
+    return () => { ativo = false; clearInterval(timer); };
+  }, [url, dados.radarId]);
+  const rotina = estado.itens[0];
+  const executando = estado.execucoes.some(e => ["pendente", "executando"].includes(e.estado));
+  async function pedido(caminho: string, method: string, corpo?: unknown) {
     setOcupado(true); setMensagem("");
     try {
-      const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: corpo === undefined ? undefined : JSON.stringify(corpo) });
-      const v = await r.json();
-      if (!r.ok || v.ok === false) throw new Error(v.error || v.mensagem || "Não foi possível concluir.");
-      await carregar();
-      setMensagem(v.mensagem || "Monitoramento atualizado.");
-      if (url === "/api/radar/monitoramentos") setId(undefined);
-    } catch (e) { setMensagem((e as Error).message); }
-    finally { setOcupado(false); }
+      const v = await pedidoJSON<{ mensagem?: string }>(caminho, { method, body: corpo === undefined ? undefined : JSON.stringify(corpo) });
+      setEstado(await pedidoJSON<Estado>(url)); setMensagem(v.mensagem || "Acompanhamento atualizado."); setEditando(false);
+    } catch(e) { setMensagem((e as Error).message); } finally { setOcupado(false); }
   }
-  return <section id="monitoramentos" className="card p-5 mt-4">
-    <h2 className="font-bold text-lg">Monitoramento diário</h2>
-    <p className="text-sm text-muted mt-1 mb-4">Atualize este radar automaticamente nos horários que escolher. As análises ficam salvas aqui no app. Padrão: 8h, 16h e 20h, no horário de Brasília.</p>
-    <div className="grid gap-3 sm:grid-cols-2">
-      <label className="text-sm">Horários (separados por vírgula)<input className="input mt-1" value={horarios} onChange={e => setHorarios(e.target.value)} placeholder="08:00, 16:00, 20:00" /></label>
-      <label className="text-sm">Fuso horário<input className="input mt-1" value={fuso} onChange={e => setFuso(e.target.value)} list="fusos-radar" /></label>
-      <datalist id="fusos-radar"><option value="America/Sao_Paulo"/><option value="America/Manaus"/><option value="Europe/Lisbon"/><option value="UTC"/></datalist>
-    </div>
-    <p className="text-xs text-muted my-3">Usa os temas, o setor e o período definidos acima. Conecte a IA em <a href="/setup" className="underline">Configurações</a>.</p>
-    {desabilitado && <p className="text-sm text-muted mb-2">Salve as configurações acima antes de ativar ou editar o acompanhamento.</p>}
-    <button type="button" className="btn-primary" disabled={ocupado || desabilitado || !dados.temas.length} onClick={() => pedido("/api/radar/monitoramentos", "POST", { ...dados, id, horarios: horarios.split(",").map(h => h.trim()), fuso })}>{id ? "Salvar alterações" : "Monitorar estes temas"}</button>
-    {id && <button type="button" className="btn-link mt-2" onClick={() => setId(undefined)}>Cancelar edição</button>}
-    {mensagem && <p role="status" className="text-sm mt-3">{mensagem}</p>}
-    <ul className="mt-4 space-y-4">{itens.map(r => <li key={r.id} className="border-t border-line pt-3">
-      <p className="font-semibold text-sm">Acompanhamento deste radar</p>
-      <p className="text-sm text-muted">{r.ativa ? "Ativo" : "Pausado"} · {r.parametros.horarios.join(", ")} · {r.parametros.fuso}</p>
-      <p className="text-xs text-muted mt-1">{r.ultimaExecucao ? `Última execução: ${new Date(r.ultimaExecucao).toLocaleString("pt-BR", { timeZone: r.parametros.fuso })}` : "Aguardando o próximo horário"}</p>
-      {r.ultimaFalha && <p className="text-sm text-red-700 mt-1">{r.ultimaFalha}</p>}
-      <div className="flex flex-wrap gap-3 mt-2 text-sm">
-        <button disabled={ocupado} type="button" className="btn-link" onClick={() => { setId(r.id); setHorarios(r.parametros.horarios.join(", ")); setFuso(r.parametros.fuso); setMensagem("Edite os horários ou o fuso e salve as alterações."); }}>Editar</button>
-        <button disabled={ocupado} type="button" className="btn-link" onClick={() => pedido(`/api/rotinas/${r.id}`, "PATCH", { ativa: !r.ativa })}>{r.ativa ? "Pausar" : "Retomar"}</button>
-        <button disabled={ocupado} type="button" className="btn-link" onClick={() => pedido(`/api/rotinas/${r.id}/executar-agora`, "POST")}>Executar agora</button>
-        <button disabled={ocupado} type="button" className="btn-link" onClick={() => pedido(`/api/rotinas/${r.id}`, "DELETE")}>Excluir</button>
-      </div>
-    </li>)}</ul>
-    <p className="text-xs text-muted mt-3">Cada rodada salva uma nova análise, listado em <a href={`/radar?radarId=${dados.radarId || ""}#anteriores`} className="underline">Análises deste radar</a>. O servidor precisa permanecer ativo para executar nos horários; após uma interrupção, roda apenas a rodada mais recente.</p>
+  return <section id="monitoramentos" className="monitoring-panel">
+    <div className="monitoring-summary"><div><div className="flex items-center gap-2"><span className={`monitoring-dot ${rotina?.ativa ? "ativa" : ""}`} /><h2>Acompanhamento diário</h2><span className="monitoring-state">{carregando ? "Carregando…" : executando ? "Pesquisando" : rotina ? rotina.ativa ? "Ativo" : "Pausado" : "Aguardando conexão"}</span></div><p>{rotina ? `${rotina.parametros.horarios.join(" · ")} · ${rotina.parametros.fuso} · roda com o app fechado` : "Defina palavras-chave e conecte a IA para começar. As fontes públicas já estão disponíveis."}</p></div><div className="flex flex-wrap gap-3 text-sm">{rotina && <><button type="button" className="btn-link" disabled={ocupado || executando} onClick={() => pedido(`/api/rotinas/${rotina.id}/executar-agora`, "POST")}>{executando ? "Em andamento…" : "Pesquisar agora"}</button><button type="button" className="btn-link" disabled={ocupado} onClick={() => pedido(`/api/rotinas/${rotina.id}`, "PATCH", { ativa: !rotina.ativa })}>{rotina.ativa ? "Pausar" : "Retomar"}</button></>}<button type="button" className="btn-link" onClick={() => { setEditando(!editando); setHorarios(rotina?.parametros.horarios.join(", ") || HORARIOS_PADRAO.join(", ")); setFuso(rotina?.parametros.fuso || FUSO_PADRAO); }}>{editando ? "Fechar ajustes" : "Ajustar horários"}</button></div></div>
+    {editando && <div className="monitoring-edit"><div className="grid sm:grid-cols-2 gap-3"><label className="radar-field">Horários<input className="input" value={horarios} onChange={e => setHorarios(e.target.value)} placeholder="08:00, 16:00" /></label><label className="radar-field">Fuso horário<input className="input" value={fuso} onChange={e => setFuso(e.target.value)} list="fusos-radar" /></label><datalist id="fusos-radar"><option value="America/Sao_Paulo"/><option value="America/Manaus"/><option value="Europe/Lisbon"/><option value="UTC"/></datalist></div><p className="field-help my-3">Separe os horários por vírgula. As rodadas usam sempre os temas e fontes salvos neste radar.</p><button type="button" className="btn-primary !w-auto !h-10" disabled={ocupado || desabilitado || !dados.temas.length} onClick={() => pedido("/api/radar/monitoramentos", "POST", { ...dados, id: rotina?.id, horarios: horarios.split(",").map(h => h.trim()), fuso })}>{rotina ? "Salvar horários" : "Ativar acompanhamento"}</button>{desabilitado && <p className="field-help mt-2">Salve os temas antes de alterar a agenda.</p>}</div>}
+    {mensagem && <p role="status" className="text-sm mt-3">{mensagem}</p>}{rotina?.ultimaFalha && <p role="alert" className="text-sm mt-3">Última tentativa: {rotina.ultimaFalha}</p>}
+    <details className="monitoring-history"><summary>Histórico de atualizações <span>{estado.execucoes.length ? `${estado.execucoes.length} rodadas` : "Nenhuma rodada automática ainda"}</span></summary>{estado.execucoes.length ? <ol>{estado.execucoes.map(e => <li key={e.id}><span className={`run-status ${e.estado}`}>{ROTULOS[e.estado]}</span><div><time>{new Date(e.iniciadaEm).toLocaleString("pt-BR")}</time><small>{e.origem === "agenda" ? "Agenda diária" : "Solicitada por você"}{e.encerradaEm ? ` · ${Math.max(1, Math.round((Date.parse(e.encerradaEm) - Date.parse(e.iniciadaEm)) / 1000))} s` : ""}</small>{e.mensagem && e.estado !== "sucesso" && <p>{e.mensagem}</p>}</div>{e.resultadoId && <a className="btn-link" href={`/r/${e.resultadoId}`}>Ver análise ↗</a>}</li>)}</ol> : <p className="text-sm text-muted py-4">Cada tentativa ficará registrada aqui, inclusive quando uma fonte falhar.</p>}<p className="field-help">O servidor precisa estar ativo. Após uma interrupção, o radar retoma a rodada mais recente. Três falhas seguidas pausam a agenda.</p></details>
   </section>;
 }

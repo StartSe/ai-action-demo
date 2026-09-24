@@ -1,0 +1,26 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+const dir = mkdtempSync(join(tmpdir(), "jev-migracao-"));
+process.env.DATA_DIR = dir;
+const { abrirBanco } = await import("./store");
+const { listarConversas, fixarConversa, criarConversa } = await import("./sessoes");
+test.after(() => rmSync(dir, { recursive: true, force: true }));
+test("migração da v0.3 preserva conversa e mensagens, usa última atividade e aceita novas conversas", () => {
+  const b = abrirBanco();
+  b.exec(`CREATE TABLE conversas (id TEXT PRIMARY KEY, titulo TEXT NOT NULL, fontes TEXT NOT NULL, criado_em TEXT NOT NULL);
+    CREATE TABLE mensagens (id TEXT PRIMARY KEY, planilha_id TEXT NOT NULL, json TEXT NOT NULL, criado_em TEXT NOT NULL);`);
+  b.prepare("INSERT INTO conversas VALUES (?, ?, ?, ?)").run("base", "Histórico original", "[]", "2026-08-01T00:00:00.000Z");
+  b.prepare("INSERT INTO mensagens VALUES (?, ?, ?, ?)").run("m1", "base", '{"texto":"preservado"}', "2026-09-01T00:00:00.000Z");
+  const original = listarConversas()[0];
+  assert.equal(original.titulo, "Histórico original");
+  assert.equal(original.atualizadoEm, "2026-09-01T00:00:00.000Z");
+  assert.equal(original.fixada, false);
+  assert.equal(fixarConversa("base", true).fixada, true);
+  const nova = criarConversa([]);
+  assert.equal(listarConversas()[0].id, "base");
+  assert.notEqual(nova.id, "base");
+  assert.equal(b.prepare("SELECT json FROM mensagens WHERE id = 'm1'").get()?.json, '{"texto":"preservado"}');
+});

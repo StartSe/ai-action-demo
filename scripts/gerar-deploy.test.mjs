@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -18,9 +18,11 @@ function gerar(t, alterar = () => {}) {
   for (const arquivo of ["scripts/gerar-deploy.mjs", "site/index.html"]) {
     copyFileSync(new URL(arquivo, raiz), join(dir, arquivo));
   }
+  mkdirSync(join(dir, "clone-site/deploy/render-site"), { recursive: true });
+  copyFileSync(new URL("clone-site/deploy/render-site/build.mjs", raiz), join(dir, "clone-site/deploy/render-site/build.mjs"));
   writeFileSync(join(dir, "catalogo.json"), JSON.stringify(catalogo));
   const resultado = spawnSync(process.execPath, [join(dir, "scripts/gerar-deploy.mjs")], { encoding: "utf8" });
-  return { resultado, ler: (arquivo) => readFileSync(join(dir, arquivo), "utf8"), catalogo };
+  return { dir, resultado, ler: (arquivo) => readFileSync(join(dir, arquivo), "utf8"), catalogo };
 }
 
 test("publica opções gratuita e persistente sem duplicar o app ou alterar a suíte", (t) => {
@@ -97,3 +99,14 @@ for (const id of ["bussola-ia", "pdi-time", "predictive-harness", "clone-site"])
     }
   });
 }
+
+
+test("Site Cowork publica somente o build mínimo para serviços independentes", (t) => {
+  const { dir, resultado, ler } = gerar(t);
+  assert.equal(resultado.status, 0, resultado.stderr);
+  assert.deepEqual(readdirSync(join(dir, "publico/deploy-clone-site")).sort(), ["README.md", "render.yaml", "site-build"]);
+  assert.deepEqual(readdirSync(join(dir, "publico/deploy-clone-site/site-build")), ["build.mjs"]);
+  assert.equal(ler("publico/deploy-clone-site/site-build/build.mjs"), readFileSync(new URL("clone-site/deploy/render-site/build.mjs", raiz), "utf8"));
+  const app = JSON.parse(ler("publico/main/catalogo.json")).apps.find((a) => a.id === "clone-site");
+  assert.equal(app.versao, JSON.parse(readFileSync(new URL("clone-site/package.json", raiz), "utf8")).version);
+});

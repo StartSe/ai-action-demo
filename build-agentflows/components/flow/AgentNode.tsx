@@ -1,5 +1,5 @@
 "use client";
-import { memo, useState, type CSSProperties } from "react";
+import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   Handle,
   NodeToolbar,
@@ -27,6 +27,16 @@ export const CHEVRON =
   "M12 2c5.523 0 10 4.477 10 10a10 10 0 0 1 -20 0c0 -5.523 4.477 -10 10 -10m-.293 6.293a1 1 0 0 0 -1.414 0l-.083 .094a1 1 0 0 0 .083 1.32l2.292 2.293l-2.292 2.293a1 1 0 0 0 1.414 1.414l3 -3a1 1 0 0 0 0 -1.414z";
 function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
   const [hover, setHover] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showOptions = () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    setHover(true);
+  };
+  const hideOptions = () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setHover(false), 150);
+  };
+  useEffect(() => () => { if (hideTimer.current) clearTimeout(hideTimer.current); }, []);
   const [editing, setEditing] = useState<string | null>(null);
   const outs = outputs(data.kind);
   const finishRename = () => {
@@ -50,10 +60,12 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
         (data.execution ? " execution-" + data.execution : "")
       }
       style={{ "--node-color": NODE_STYLE[data.kind].color } as CSSProperties}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onPointerEnter={(event) => { if (event.pointerType !== "touch") showOptions(); }}
+      onPointerLeave={(event) => { if (event.pointerType !== "touch") hideOptions(); }}
     >
-      <NodeToolbar className="af-toolbar" offset={8}>
+      <NodeToolbar className="af-toolbar" offset={8} isVisible={!!selected || hover}
+        onPointerEnter={(event) => { if (event.pointerType !== "touch") showOptions(); }}
+        onPointerLeave={(event) => { if (event.pointerType !== "touch") hideOptions(); }}>
         <IconButton
           icon="settings"
           label="Editar bloco"
@@ -78,7 +90,7 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
         />
       </NodeToolbar>
       {data.kind !== "start" && (
-        <Handle type="target" position={Position.Left} className="af-handle-in">
+        <Handle type="target" position={Position.Left} className="af-handle-in" title="Entrada: conecte a saída de outro bloco aqui" aria-label={`Entrada de ${data.label}`}>
           <span />
         </Handle>
       )}
@@ -89,8 +101,8 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
         <div className="af-node-text">
           {editing === null ? (
             <span className="af-node-title">
-              <strong>{data.label}</strong>
-              <button
+              <strong>{data.kind === "start" ? "Início" : data.label}</strong>
+              {data.kind !== "start" && <button
                 type="button"
                 className="af-node-pencil nodrag"
                 title="Renomear bloco"
@@ -102,7 +114,7 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
                 onDoubleClick={(e) => e.stopPropagation()}
               >
                 <Icon name="pencil" size={12} />
-              </button>
+              </button>}
             </span>
           ) : (
             <span className="af-node-title">
@@ -174,6 +186,8 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
           position={Position.Right}
           id={o.id || undefined}
           className="af-handle-out"
+          title={data.connected?.includes(o.id) ? "Saída conectada. Selecione a linha para remover a conexão." : "Arraste até a entrada de outro bloco para conectar"}
+          aria-label={`Saída${o.label ? " " + o.label : ""} de ${data.label}`}
           style={{ top: `${(100 * (i + 1)) / (outs.length + 1)}%` }}
         >
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">

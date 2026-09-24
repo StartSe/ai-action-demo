@@ -29,6 +29,7 @@ export type Action = {
 };
 export type BrainState = {
   notes: Note[];
+  sourceProcessing?: Record<string, OrganizationJob>;
   sourceCaptures?: Record<
     string,
     { id: string; instruction: string; status: string }
@@ -36,6 +37,18 @@ export type BrainState = {
   messages: Message[];
   actions: Action[];
   rules: string;
+};
+export type OrganizationJob = {
+  id: string;
+  sourceId: string;
+  status: "queued" | "running" | "done" | "failed";
+  phase: string;
+  error: string;
+  pageId: string | null;
+  created: string;
+  updated: string;
+  attempts: number;
+  dismissed: boolean;
 };
 export type Settings = {
   provider: "chatgpt" | "openrouter";

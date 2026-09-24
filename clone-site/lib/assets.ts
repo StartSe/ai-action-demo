@@ -29,6 +29,8 @@ function db() {
       criadoEm TEXT NOT NULL
     )`);
     d.exec(`CREATE INDEX IF NOT EXISTS assets_projeto ON assets (projetoId, criadoEm)`);
+    const colunas = d.prepare("PRAGMA table_info(assets)").all() as { name: string }[];
+    if (!colunas.some((c) => c.name === "arquivado")) d.exec("ALTER TABLE assets ADD COLUMN arquivado INTEGER NOT NULL DEFAULT 0");
     tabelaPronta = true;
   }
   return d;
@@ -67,9 +69,9 @@ export function adicionar(projetoId: string, { papel, nome, buffer, descricao }:
   if (buffer.byteLength > LIMITE_ASSET_BYTES) throw new ErroDePedido("A imagem passa de 2 MB. Reduza e envie de novo.");
   const mime = detectarMime(buffer);
   if (!mime || !MIMES.has(mime)) throw new ErroDePedido("Envie uma imagem PNG, JPG, WEBP ou SVG (sem script).");
-  const total = (db().prepare("SELECT COUNT(*) AS n FROM assets WHERE projetoId = ? AND papel = 'imagem'").get(projetoId) as { n: number }).n;
+  const total = (db().prepare("SELECT COUNT(*) AS n FROM assets WHERE projetoId = ? AND papel = 'imagem' AND arquivado = 0").get(projetoId) as { n: number }).n;
   if (papelValido === "imagem" && total >= LIMITE_ASSETS_POR_SITE) throw new ErroDePedido(`Cada site aceita até ${LIMITE_ASSETS_POR_SITE} imagens. Apague alguma para enviar outra.`);
-  if (papelValido === "logo") db().prepare("DELETE FROM assets WHERE projetoId = ? AND papel = 'logo'").run(projetoId);
+  if (papelValido === "logo") db().prepare("UPDATE assets SET arquivado = 1 WHERE projetoId = ? AND papel = 'logo'").run(projetoId);
   const id = crypto.randomBytes(9).toString("base64url");
   const nomeLimpo = (typeof nome === "string" && nome.trim() ? nome.trim() : papelValido === "logo" ? "logo" : "imagem").slice(0, 120);
   const descricaoLimpa = (typeof descricao === "string" ? descricao.trim() : "").slice(0, 200);
@@ -79,7 +81,7 @@ export function adicionar(projetoId: string, { papel, nome, buffer, descricao }:
 }
 
 export function listar(projetoId: string): Asset[] {
-  const linhas = db().prepare(`SELECT ${COLUNAS} FROM assets WHERE projetoId = ? ORDER BY CASE papel WHEN 'logo' THEN 0 ELSE 1 END, criadoEm`).all(projetoId) as Linha[];
+  const linhas = db().prepare(`SELECT ${COLUNAS} FROM assets WHERE projetoId = ? AND arquivado = 0 ORDER BY CASE papel WHEN 'logo' THEN 0 ELSE 1 END, criadoEm`).all(projetoId) as Linha[];
   return linhas.map(paraAsset);
 }
 
@@ -95,7 +97,7 @@ export function conteudo(projetoId: string, id: string): { mime: string; dados: 
 }
 
 export function apagar(projetoId: string, id: string): boolean {
-  const { changes } = db().prepare("DELETE FROM assets WHERE id = ? AND projetoId = ?").run(id, projetoId);
+  const { changes } = db().prepare("UPDATE assets SET arquivado = 1 WHERE id = ? AND projetoId = ? AND arquivado = 0").run(id, projetoId);
   return Number(changes) > 0;
 }
 

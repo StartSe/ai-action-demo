@@ -1,17 +1,16 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { Flow } from "@/lib/flow-types";
+import { EmbedSettings } from "./EmbedSettings";
 import { Icon, Modal, request } from "./StudioUI";
 const TABS = [
-  ["publish", "Publicação"],
   ["whatsapp", "WhatsApp"],
   ["calls", "Ligações"],
-  ["curl", "cURL"],
-  ["javascript", "JavaScript"],
-  ["python", "Python"],
-  ["mcp", "Assistentes (MCP)"],
+  ["dev", "Developer"],
+  ["mcp", "Conector MCP"],
 ] as const;
-type Tab = (typeof TABS)[number][0];
+type Tab = "embed" | (typeof TABS)[number][0];
+type DevLanguage = "curl" | "javascript" | "python";
 type CampoStatus = {
   chave: string;
   rotulo: string;
@@ -26,26 +25,23 @@ type Channels = {
   elevenlabs: { configurado: boolean };
   ligacao: { configurada: boolean; fluxo: string | null; campos: CampoStatus[]; aviso: string };
 };
-// Diálogo de implantação no formato do Flowise: publicação, código de acesso e um exemplo por
-// linguagem para chamar a versão publicada do fluxo.
+// Diálogo de implantação: canais, código de acesso e um exemplo por
+// linguagem para chamar a configuração salva do fluxo.
 export function IntegrationDialog({
   flow,
-  save,
-  onChange,
   onClose,
 }: {
   flow: Flow;
-  save: () => Promise<Flow>;
-  onChange: (f: Flow) => void;
   onClose: () => void;
 }) {
+  const [devLanguage, setDevLanguage] = useState<DevLanguage>("curl");
   const [access, setAccess] = useState<{
       ativo: boolean;
       mascarado: string | null;
     } | null>(null),
     [code, setCode] = useState(""),
     [origin, setOrigin] = useState(""),
-    [tab, setTab] = useState<Tab>("publish"),
+    [tab, setTab] = useState<Tab>("embed"),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [copied, setCopied] = useState(""),
@@ -86,8 +82,9 @@ export function IntegrationDialog({
     }
   }
   const url = `${origin}/webhook/flows/${flow.id}`,
-    bearer = code || "SEU_CODIGO";
-  type CodeTab = Exclude<Tab, "publish" | "whatsapp" | "calls">;
+    bearer = code || "SUA_CHAVE_DE_ACESSO";
+  type CodeTab = DevLanguage | "mcp";
+  const codeTab: CodeTab = tab === "mcp" ? "mcp" : devLanguage;
   const snippets: Record<CodeTab, string> = {
     curl: `curl -X POST '${url}' \\
   -H 'Authorization: Bearer ${bearer}' \\
@@ -126,9 +123,10 @@ print(dados["status"], dados["output"])`,
       2,
     ),
   };
-  function copy(text: string, key: string) {
-    void navigator.clipboard.writeText(text);
-    setCopied(key);
+  async function copy(text: string, key: string) {
+    setError(""); setCopied("");
+    try { await navigator.clipboard.writeText(text); setCopied(key); }
+    catch { setError("Não foi possível copiar. Selecione o código e copie manualmente."); }
   }
   async function saveChannel(campos: Record<string, string | null>) {
     await act(async () => {
@@ -141,73 +139,15 @@ print(dados["status"], dados["output"])`,
     id ? flows.find((f) => f.id === id)?.name || "(fluxo removido)" : null;
   const publishHint = !flow.published && (
     <p className="generator-warning">
-      Publique o fluxo na aba Publicação: canais só executam a versão publicada.
+      Salve o fluxo no editor para usar este canal.
     </p>
   );
-  return (
-    <Modal title="Implantar Agentflow" onClose={onClose} wide>
-      <div className="dialog-tabs">
-        {TABS.map(([id, label]) => (
-          <button
-            key={id}
-            className={tab === id ? "active" : ""}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {error && (
-        <p className="studio-error" role="alert">
-          {error}
-        </p>
-      )}
-      {tab === "publish" ? (
-        <>
-          <div className="integration-version">
-            <div>
-              <span
-                className={
-                  "publication-badge " + (flow.published ? "published" : "")
-                }
-              >
-                {flow.published ? "Publicado · v" + flow.version : "Rascunho"}
-              </span>
-              <strong>
-                {flow.published
-                  ? "Versão " + flow.version + " em uso pelas integrações"
-                  : "Este fluxo ainda é um rascunho"}
-              </strong>
-              <p>
-                Integrações executam a versão publicada. Alterações no rascunho
-                não afetam o que já está em uso até você publicar de novo.
-              </p>
-            </div>
-            <button
-              className="studio-button primary"
-              disabled={busy}
-              onClick={() =>
-                act(async () => {
-                  await save();
-                  onChange(
-                    await request<Flow>(
-                      "/api/flows/" + flow.id + "/publish",
-                      "POST",
-                      {},
-                    ),
-                  );
-                })
-              }
-            >
-              <Icon name="upload" size={16} />
-              {flow.published ? "Publicar alterações" : "Publicar fluxo"}
-            </button>
-          </div>
-          <section className="integration-section">
-            <h3>Código de acesso</h3>
+  const accessControls = (
+    <section className="integration-section integration-access">
+            <h3>Chave de acesso</h3>
             <p>
-              O código autentica chamadas HTTP e assistentes conectados. Ele dá
-              acesso a todos os fluxos publicados e às aprovações desta
+              A chave autentica chamadas HTTP e assistentes conectados. Ela dá
+              acesso a todos os fluxos salvos e às aprovações desta
               instalação; compartilhe somente com sistemas autorizados.
             </p>
             {code ? (
@@ -217,14 +157,14 @@ print(dados["status"], dados["output"])`,
                   className="studio-button"
                   onClick={() => copy(code, "code")}
                 >
-                  {copied === "code" ? "Copiado" : "Copiar código"}
+                  {copied === "code" ? "Copiado" : "Copiar chave"}
                 </button>
               </div>
             ) : (
               <p>
                 {access?.ativo
-                  ? "Código ativo: " + access.mascarado
-                  : "Nenhum código de acesso ativo."}
+                  ? "Chave ativa: " + access.mascarado
+                  : "Nenhuma chave de acesso ativa."}
               </p>
             )}
             <div className="studio-actions">
@@ -242,7 +182,7 @@ print(dados["status"], dados["output"])`,
                   })
                 }
               >
-                {access?.ativo ? "Gerar novo código" : "Gerar código"}
+                {access?.ativo ? "Gerar nova chave" : "Gerar chave"}
               </button>
               {access?.ativo && (
                 <button
@@ -256,32 +196,27 @@ print(dados["status"], dados["output"])`,
                     })
                   }
                 >
-                  Revogar acesso
+                  Revogar chave
                 </button>
               )}
             </div>
           </section>
-          {flow.published && (
-            <button
-              className="studio-button subtle danger"
-              disabled={busy}
-              onClick={() =>
-                act(async () =>
-                  onChange(
-                    await request<Flow>(
-                      "/api/flows/" + flow.id + "/publish",
-                      "POST",
-                      { active: false },
-                    ),
-                  ),
-                )
-              }
-            >
-              Desativar publicação
-            </button>
-          )}
-        </>
-      ) : tab === "whatsapp" ? (
+  );
+  return (
+    <Modal title="Implantar Agentflow" onClose={onClose} wide>
+      <div className="dialog-tabs">
+        <button className={tab === "embed" ? "active" : ""} onClick={() => setTab("embed")}>Chat no site</button>
+        <button className={tab !== "embed" ? "active" : ""} onClick={() => setTab("whatsapp")}>Integrações</button>
+      </div>
+      {tab !== "embed" && <nav className="integration-options" aria-label="Tipos de integração">
+        {TABS.map(([id, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{label}</button>)}
+      </nav>}
+      {error && (
+        <p className="studio-error" role="alert">
+          {error}
+        </p>
+      )}
+      {tab === "embed" ? <EmbedSettings flowId={flow.id} published={!!flow.published} origin={origin}/> : tab === "whatsapp" ? (
         <section className="integration-section">
           <h3>Responder no WhatsApp</h3>
           {!channels ? (
@@ -463,38 +398,45 @@ print(dados["status"], dados["output"])`,
           )}
         </section>
       ) : (
+        <>
+        {accessControls}
         <section className="integration-section">
           <div className="integration-code-title">
             <h3>
               {tab === "mcp"
                 ? "Conecte seu assistente"
-                : "Chame a versão publicada"}
+                : "Execute seu fluxo"}
             </h3>
             <button
               className="studio-button subtle"
-              onClick={() => copy(snippets[tab as CodeTab], tab)}
+              disabled={!code}
+              onClick={() => copy(snippets[codeTab], codeTab)}
             >
               <Icon name="copy" size={16} />
-              {copied === tab ? "Copiado" : "Copiar"}
+              {copied === codeTab ? "Copiado" : "Copiar"}
             </button>
           </div>
           <p>
             {tab === "mcp"
-              ? "Cole esta configuração no cliente MCP do seu assistente. Ele passa a listar os fluxos publicados, executar, consultar execuções e responder aprovações."
+              ? "Cole esta configuração no cliente MCP do seu assistente. Ele passa a listar os fluxos salvos, executar, consultar execuções e responder aprovações."
               : "A resposta traz status, output, error, demo e version. Confira status: completed, failed ou waiting (aguardando aprovação)."}
           </p>
-          <pre className="integration-code">{snippets[tab as CodeTab]}</pre>
+          {tab === "dev" && <label className="integration-language">
+            Linguagem
+            <select value={devLanguage} onChange={(event) => setDevLanguage(event.target.value as DevLanguage)}>
+              <option value="curl">cURL</option>
+              <option value="javascript">JavaScript</option>
+              <option value="python">Python</option>
+            </select>
+          </label>}
+          <pre className="integration-code">{snippets[codeTab]}</pre>
           {!flow.published && (
             <p className="generator-warning">
-              Publique o fluxo na aba Publicação antes de usar este exemplo.
-            </p>
-          )}
-          {!code && (
-            <p className="integration-hint">
-              Gere um código de acesso na aba Publicação e substitua SEU_CODIGO.
+              Salve o fluxo no editor antes de usar este exemplo.
             </p>
           )}
         </section>
+        </>
       )}
     </Modal>
   );

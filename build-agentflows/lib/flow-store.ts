@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { abrirBanco } from "./store";
 import {
   BLOCKS,
+  block,
   template,
   type Flow,
   type Graph,
@@ -74,10 +75,12 @@ export function validateGraph(value: unknown, executable = false): Graph {
     edges.add(e.id);
   }
   if (executable) {
+    if (g.nodes.length === 1 && g.nodes[0].data.kind === "start" && g.edges.length === 0)
+      throw new FlowError("Este fluxo tem apenas o bloco Início. Adicione e conecte um Agente ou outro bloco para testar no chat.");
     const starts = g.nodes.filter((n) => n.data.kind === "start");
-    if (starts.length !== 1 || !g.nodes.some((n) => n.data.kind === "end"))
+    if (starts.length !== 1)
       throw new FlowError(
-        "Use exatamente um Início e pelo menos uma Resposta.",
+        "Use exatamente um Início.",
       );
     for (const n of g.nodes) {
       const out = g.edges.filter((e) => e.source === n.id);
@@ -87,7 +90,7 @@ export function validateGraph(value: unknown, executable = false): Graph {
           ? ["yes", "no"]
           : k === "loop"
             ? ["repeat", "done"]
-            : k === "end"
+            : k === "end" || ((k === "agent" || k === "llm") && out.length === 0)
               ? []
               : [null];
       if (
@@ -137,6 +140,13 @@ export function validateGraph(value: unknown, executable = false): Graph {
         throw new FlowError("Escolha a ferramenta a executar.");
       if ((k === "whatsapp" || k === "call") && !c.to?.trim())
         throw new FlowError(`Informe o número em “${n.data.label}”.`);
+      if (k === "agent" || k === "llm") {
+        try {
+          const updates = JSON.parse(c.stateUpdates || "[]");
+          const initial = JSON.parse(starts[0].data.config.state || "{}");
+          if (!Array.isArray(updates) || updates.length > 50 || updates.some((u) => !u || typeof u.key !== "string" || !Object.hasOwn(initial, u.key) || typeof u.value !== "string") || new Set(updates.map((u) => u.key)).size !== updates.length) throw 0;
+        } catch { throw new FlowError("Escolha variáveis definidas no Início para atualizar, sem repetições."); }
+      }
       if (k === "start") {
         try {
           const s = JSON.parse(c.state || "{}");
@@ -167,29 +177,36 @@ export function validateGraph(value: unknown, executable = false): Graph {
       );
     // Every block must have a route to an end; bounded loops may revisit earlier blocks.
     const finishing = new Set(
-      g.nodes.filter((n) => n.data.kind === "end").map((n) => n.id),
+      g.nodes.filter((n) => ["end", "agent", "llm"].includes(n.data.kind) && !g.edges.some((e) => e.source === n.id)).map((n) => n.id),
     );
     for (let i = 0; i < g.nodes.length; i++)
       g.edges.forEach((e) => {
         if (finishing.has(e.target)) finishing.add(e.source);
       });
     if (finishing.size !== g.nodes.length)
-      throw new FlowError("Todo caminho precisa poder chegar a uma Resposta.");
+      throw new FlowError("Todo caminho precisa poder terminar em Agente, LLM ou Resposta.");
   }
-  return structuredClone(g);
+  const result = structuredClone(g);
+  for (const n of result.nodes) if (n.data.kind === "start") n.data.label = "Início";
+  return result;
+}
+// Uma única configuração salva alimenta testes e integrações. Execuções em andamento
+// preservam o grafo capturado ao iniciar; publicações antigas passam a usar o grafo salvo.
+function currentFlow(flow: Flow): Flow {
+  return { ...flow, version: 1, published: flow.published ? structuredClone(flow.graph) : null };
 }
 export function listFlows(): Flow[] {
   return (
     db().prepare("SELECT body FROM flows ORDER BY rowid DESC").all() as {
       body: string;
     }[]
-  ).map((r) => JSON.parse(r.body));
+  ).map((r) => currentFlow(JSON.parse(r.body)));
 }
 export function getFlow(id: string): Flow {
   const row = db().prepare("SELECT body FROM flows WHERE id=?").get(id) as
     { body: string } | undefined;
   if (!row) throw new FlowError("Fluxo não encontrado.", 404);
-  return JSON.parse(row.body);
+  return currentFlow(JSON.parse(row.body));
 }
 function putFlow(f: Flow) {
   db()
@@ -200,18 +217,24 @@ function putFlow(f: Flow) {
   return f;
 }
 export function createFlow(name = "Novo fluxo", example = false) {
+  const graph = example ? template(true) : { nodes: [block("start", "inicio", 0, 0)], edges: [] };
   return putFlow({
     id: randomUUID(),
     name: name.slice(0, 100),
     description: "",
-    graph: template(example),
+    graph,
     published: null,
-    version: 0,
+    version: 1,
     updatedAt: new Date().toISOString(),
   });
 }
+export function createSavedFlow(data: unknown) {
+  return writeFlow({ id: randomUUID(), name: "", description: "", graph: { nodes: [], edges: [] }, published: null, version: 1, updatedAt: new Date().toISOString() }, data);
+}
 export function saveFlow(id: string, data: unknown) {
-  const f = getFlow(id);
+  return writeFlow(getFlow(id), data);
+}
+function writeFlow(f: Flow, data: unknown) {
   if (!data || typeof data !== "object")
     throw new FlowError("Envie os dados do fluxo.");
   const b = data as Partial<Flow>;
@@ -229,14 +252,16 @@ export function saveFlow(id: string, data: unknown) {
     if (typeof b.voiceId !== "string" || !/^[a-zA-Z0-9_-]{0,128}$/.test(b.voiceId)) throw new FlowError("Escolha uma voz válida para o fluxo.");
     f.voiceId = b.voiceId;
   }
+  // Salvar preserva o trabalho em andamento; a execução valida conexões e configuração.
   f.graph = validateGraph(b.graph);
+  f.published = structuredClone(f.graph);
   f.updatedAt = new Date().toISOString();
   return putFlow(f);
 }
 export function publishFlow(id: string, active = true) {
   const f = getFlow(id);
   f.published = active ? validateGraph(f.graph, true) : null;
-  if (active) f.version++;
+  f.version = 1;
   f.updatedAt = new Date().toISOString();
   return putFlow(f);
 }
@@ -299,6 +324,7 @@ export function interruptRuns() {
     .prepare("SELECT body FROM flow_runs WHERE status='running'")
     .all() as { body: string }[]) {
     const r: Run = JSON.parse(row.body);
+    if (r.embedSessionId) continue;
     r.status = "failed";
     r.error =
       "A execução foi interrompida pelo reinício do servidor. Confira as etapas antes de executar novamente.";

@@ -15,8 +15,8 @@ export const COLETORES: { id: IdFonteBusca; nome: string; descricao: string; cha
 export type TermoPesquisa = { termo: string; categoria: string; ativo: boolean };
 export type FontePesquisa = { url: string; nome: string; ativa: boolean };
 export type PaginaMonitorada = { url: string; nome: string; ativa: boolean; provedor: "brightdata" | "firecrawl" };
-export type Pesquisa = { paginas?: PaginaMonitorada[]; termos: TermoPesquisa[]; fontes: FontePesquisa[]; provedores: IdFonteBusca[]; periodoDias: number; setor: string };
-export const PESQUISA_PADRAO: Pesquisa = { termos: [], paginas: [], fontes: [{ url: "https://www.startse.com/artigos", nome: "StartSe · Artigos", ativa: true }], provedores: COLETORES.map(p => p.id), periodoDias: 30, setor: "" };
+export type Pesquisa = { acompanhamento?: boolean; paginas?: PaginaMonitorada[]; termos: TermoPesquisa[]; fontes: FontePesquisa[]; provedores: IdFonteBusca[]; periodoDias: number; setor: string };
+export const PESQUISA_PADRAO: Pesquisa = { acompanhamento: true, termos: [], paginas: [], fontes: [{ url: "https://www.startse.com/artigos", nome: "StartSe · Artigos", ativa: true }], provedores: COLETORES.map(p => p.id), periodoDias: 30, setor: "" };
 
 export function normalizarSite(valor: string): string {
   const u = new URL(/^https?:\/\//i.test(valor) ? valor : `https://${valor}`);
@@ -45,7 +45,8 @@ export function validarPesquisa(valor: unknown): Pesquisa {
   if (!Array.isArray(v.fontes) || v.fontes.length > 6 || v.fontes.some(f => !f || typeof f.url !== "string" || f.url.length > 500 || typeof f.nome !== "string" || f.nome.length > 100 || typeof f.ativa !== "boolean")) throw new Error("Cadastre até 6 sites de referência.");
   if (!Array.isArray(v.provedores) || !v.provedores.length || v.provedores.some(p => !COLETORES.some(c => c.id === p))) throw new Error("Selecione ao menos um buscador.");
   if (![7, 30, 90].includes(v.periodoDias) || typeof v.setor !== "string" || v.setor.length > 200) throw new Error("Período ou setor inválido.");
+  if (v.acompanhamento !== undefined && typeof v.acompanhamento !== "boolean") throw new Error("Acompanhamento inválido.");
   const paginas = v.paginas ?? [];
   if (!Array.isArray(paginas) || paginas.length > 8 || paginas.some(f => !f || typeof f.url !== "string" || f.url.length > 1500 || typeof f.nome !== "string" || f.nome.length > 100 || typeof f.ativa !== "boolean" || !["brightdata", "firecrawl"].includes(f.provedor))) throw new Error("Cadastre até 8 páginas com Bright Data ou Firecrawl.");
-  return { paginas: [...new Map(paginas.map(f => { const url = normalizarPagina(f.url); return [url, { ...f, url, nome: f.nome.trim() || new URL(url).hostname }] as const; })).values()], termos: [...new Map(v.termos.map(t => [t.termo.trim().toLowerCase(), { ...t, termo: t.termo.trim(), categoria: t.categoria.trim() }])).values()], fontes: [...new Map(v.fontes.map(f => { const url = normalizarSite(f.url); return [url, { ...f, url, nome: f.nome.trim() || new URL(url).hostname }] as const; })).values()], provedores: [...new Set(v.provedores)], periodoDias: v.periodoDias, setor: v.setor.trim() };
+  return { acompanhamento: v.acompanhamento ?? true, paginas: [...new Map(paginas.map(f => { const url = normalizarPagina(f.url); return [url, { ...f, url, nome: f.nome.trim() || new URL(url).hostname }] as const; })).values()], termos: [...new Map(v.termos.map(t => [t.termo.trim().toLowerCase(), { ...t, termo: t.termo.trim(), categoria: t.categoria.trim() }])).values()], fontes: [...new Map(v.fontes.map(f => { const url = normalizarSite(f.url); return [url, { ...f, url, nome: f.nome.trim() || new URL(url).hostname }] as const; })).values()], provedores: [...new Set(v.provedores)], periodoDias: v.periodoDias, setor: v.setor.trim() };
 }

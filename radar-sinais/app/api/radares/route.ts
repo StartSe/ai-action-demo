@@ -1,14 +1,17 @@
-import { criarRadar, listarRadares, renomearRadar } from "@/lib/radares";
+import { criarRadar, editarRadar, listarRadares, renomearRadar } from "@/lib/radares";
+import { sincronizarAgendas } from "@/lib/agendas-radar";
 export const dynamic = "force-dynamic";
-export async function GET() { return Response.json({ itens: listarRadares() }); }
+export async function GET() { await sincronizarAgendas(); return Response.json({ itens: listarRadares() }); }
 export async function POST(req: Request) {
-  try { return Response.json({ radar: criarRadar((await req.json()).nome) }, { status: 201 }); }
+  try { const b = await req.json(); const radar = criarRadar(b.nome, b.pesquisa); await sincronizarAgendas(); return Response.json({ radar }, { status: 201 }); }
   catch (e) { return Response.json({ error: (e as Error).message }, { status: 400 }); }
 }
 export async function PATCH(req: Request) {
   try {
-    const { id, nome } = await req.json();
+    const { id, nome, pesquisa } = await req.json();
     if (typeof id !== "string" || !id) throw new Error("Informe o radar.");
-    return Response.json({ radar: renomearRadar(id, nome) });
+    const radar = pesquisa === undefined ? renomearRadar(id, nome) : editarRadar(id, nome, pesquisa);
+    await sincronizarAgendas();
+    return Response.json({ radar });
   } catch (e) { return Response.json({ error: (e as Error).message }, { status: 400 }); }
 }

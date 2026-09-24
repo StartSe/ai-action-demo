@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Flow, Kind } from "@/lib/flow-types";
 import { BLOCKS } from "@/lib/flow-types";
-import { PRESETS, preset, NODE_STYLE } from "@/lib/flow-presets";
+import { PRESETS, NODE_STYLE } from "@/lib/flow-presets";
 import { Icon, IconButton, Modal, StudioShell, request } from "./StudioUI";
 import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
 export function FlowLibrary() {
@@ -75,19 +75,7 @@ export function FlowLibrary() {
     }
   }
   async function create(presetId?: string) {
-    await act(async () => {
-      const p = PRESETS.find((p) => p.id === presetId);
-      const f = await request<Flow>("/api/flows", "POST", {
-        name: p?.name || "Novo Agentflow",
-      });
-      if (p)
-        await request("/api/flows/" + f.id, "PUT", {
-          ...f,
-          description: p.description,
-          graph: preset(p.id),
-        });
-      router.push("/flows/" + f.id);
-    });
+    router.push("/flows/new" + (presetId ? "?preset=" + encodeURIComponent(presetId) : ""));
   }
   async function duplicate(f: Flow) {
     await act(async () => {
@@ -297,13 +285,6 @@ export function FlowLibrary() {
                     <div className="flow-card-symbol">
                       <Icon name="flows" size={22} />
                     </div>
-                    <span
-                      className={
-                        "publication-badge " + (f.published ? "published" : "")
-                      }
-                    >
-                      {f.published ? "Publicado · v" + f.version : "Rascunho"}
-                    </span>
                   </div>
                   <h2>{f.name}</h2>
                   <p>

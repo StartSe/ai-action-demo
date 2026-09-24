@@ -1,11 +1,10 @@
 // Integrações que este app precisa. A configuração (/setup, components/Configuracoes.tsx) desenha os cartões
 // a partir desta lista (GET /api/setup) mais as rotas próprias da IA (/api/ia, /api/chatgpt, /api/visao).
 // A IA é obrigatória (OpenRouter por chave ou ChatGPT por assinatura; a leitura de captura é sempre pelo
-// OpenRouter). Hospedagem é opcional: Netlify publica cada site num endereço próprio; Render cadastra o domínio
-// próprio no serviço desta instância. Sem serviço de captura por endereço (o app lê o site de referência sozinho,
+// OpenRouter). Hospedagem é opcional: Netlify publica cada site num endereço próprio; Render cria um serviço independente por projeto. Sem serviço de captura por endereço (o app lê o site de referência sozinho,
 // lib/captura.ts) e sem notificações/rotinas (decisão de 21/09/2026).
 import { CHAVE_NETLIFY, oauthNetlifyDisponivel, testarNetlify } from "./netlify";
-import { CHAVE_RENDER, CHAVE_SERVICO_RENDER, testarRender } from "./render";
+import { CHAVE_RENDER, CHAVE_WORKSPACE_RENDER, testarRender } from "./render";
 import { openrouter, type Integracao } from "./setup-comum";
 
 // O modelo que lê a captura fica no cartão do OpenRouter da tela própria de configuração (seletor com "Testar
@@ -28,18 +27,17 @@ const NETLIFY: Integracao = {
   testar: testarNetlify,
 };
 
-// Opcional: com a chave da hospedagem, o app cadastra sozinho o domínio próprio de cada site no serviço do Render
-// (painel "Domínio próprio" do workspace); sem ela, a tela dá o passo a passo manual.
+// Cada projeto publica em seu próprio Static Site no workspace conectado.
 const RENDER: Integracao = {
   id: "render",
-  titulo: "Domínio próprio no Render",
-  descricao: "Com a chave da sua conta no Render e o identificador deste serviço, o app cadastra o domínio próprio de cada site sozinho, sem você abrir o painel da hospedagem.",
-  beneficio: "Cadastra o domínio próprio dos sites nesta hospedagem sozinho",
+  titulo: "Publicar no Render",
+  descricao: "Cada projeto ganha um serviço independente no Render, com endereço próprio, versões publicadas e restauração pelo histórico.",
+  beneficio: "Publica cada site em seu próprio serviço",
   obrigatoria: false,
   link: { url: "https://dashboard.render.com/u/settings#api-keys", rotulo: "Criar uma chave no Render" },
   campos: [
     { chave: CHAVE_RENDER, rotulo: "Chave da conta", tipo: "secret", placeholder: "rnd_...", ajuda: "Em Account Settings, API Keys." },
-    { chave: CHAVE_SERVICO_RENDER, rotulo: "Identificador deste serviço", tipo: "text", placeholder: "srv-...", ajuda: "Começa com srv-; está no endereço do serviço no painel do Render." },
+    { chave: CHAVE_WORKSPACE_RENDER, rotulo: "Identificador do workspace", tipo: "text", placeholder: "tea-...", ajuda: "Em Workspace Settings no painel do Render. Cada site será criado nesse workspace." },
   ],
   testar: testarRender,
 };

@@ -1,0 +1,342 @@
+{
+  "project": "IA para Executivos (ai-action-demo)",
+  "branchName": "ralph/whatsapp-atendente-qualidade-ux",
+  "fonte": "tasks/prd-whatsapp-atendente-qualidade-ux.md — leia a história completa lá antes de implementar (Decisões D1–D6, Premissas P1–P8, Goals, Design e Technical Considerations, Non-Goals); o prd.json traz o resumo dos critérios. Leia também whatsapp-atendente/CLAUDE.md e a seção Codebase Patterns dos progress.txt arquivados.",
+  "description": "Atendente no WhatsApp versão 0.3.0: resiliência no caminho crítico (dedupe, rajada de 3 s, guarda contra corrida IA × pessoa, transferência com motivo, falha sem silêncio, status de entrega, tempo real por SSE), mensagens de áudio/imagem/documento recebidas e entendidas pela IA, Assistente com persona gerada por brief, saudação, seções, cartões de ferramentas e \"Por que respondeu assim\", memória por contato e resumo de conversa longa, painel com seletor de quem atende, notas internas, respostas rápidas, etiquetas, avisos de espera e motivos de transferência em Relatórios. Escopo: só whatsapp-atendente/ (mais catalogo.json e exceções em scripts/). Camada INFRA da suíte não muda.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Mensagens únicas, rajadas agrupadas e guarda contra corrida",
+      "description": "As a cliente da empresa, I want que minhas mensagens seguidas recebam uma resposta só, e nunca duas iguais so that a conversa pareça com uma pessoa atenta, não com um robô que responde cada linha.",
+      "acceptanceCriteria": [
+        "`mensagens` ganha `id_externo TEXT NULL` com índice único parcial (`WHERE id_externo IS NOT NULL`); `registrarMensagemCliente` aceita `idExterno` e ignora silenciosamente (devolve o registro atual, sem gravar nem responder) um id já existente; `app/webhook/zapi/route.ts` passa `aviso.messageId` e descarta `isEdit: true` e `waitingMessage: true` com registro no log",
+        "Novo `lib/rajada.ts`: `agendarResposta(numero, origem)` espera `JANELA_RAJADA_MS = 3000` desde a última mensagem do cliente daquele número antes de chamar a IA; mensagem nova dentro da janela reinicia a espera; ao fechar, a IA responde à sequência inteira. Temporizadores por número em memória (`Map`); o webhook grava e devolve 200 antes da espera. Simulador (`POST /api/simular`) e MCP NÃO usam rajada",
+        "`lib/atendente.ts:podeResponder(numero, ultimaMensagemId)` conferido duas vezes (antes de chamar a IA e imediatamente antes de gravar/enviar): falso quando a conversa deixou de ser `ia`/`atencao` ou quando chegou mensagem do cliente com id maior; resposta descartada vai para o log com o motivo (e a rajada reagenda), nunca para o cliente",
+        "`enviarTexto` (`lib/zapi.ts`) passa `delayTyping` proporcional ao tamanho da resposta (1 s a 3 s); `README.md` registra em uma linha",
+        "Teste com a z-api falsa (`http.createServer` local + `ZAPI_BASE_URL`) e `curl` no standalone: três avisos em 1 s para o mesmo número geram UM `send-text`; o mesmo aviso duas vezes gera UMA mensagem no banco; `POST /assumir` durante a janela impede a resposta da IA",
+        "`CLAUDE.md` do app registra a janela de 3 s, o motivo (padrão do Captain/Chatwoot de agrupar antes de responder) e por que simulador e MCP ficam de fora",
+        "Lint e build passam (`npm run lint`, `npm run build`)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "PRD US-001 (Fase 0: fundação de resiliência)"
+    },
+    {
+      "id": "US-002",
+      "title": "Transferência com motivo, falha da IA sem silêncio e linha do tempo da conversa",
+      "description": "As a operador do atendimento, I want saber por que a IA me passou a conversa e ver na própria conversa quem fez o quê so that eu entenda a situação em dois segundos, sem procurar em outro lugar.",
+      "acceptanceCriteria": [
+        "`lib/transferencia.ts` (folha, client-safe): `MotivoTransferencia = \"cliente_pediu\" | \"sem_informacao\" | \"fora_do_escopo\" | \"reclamacao\" | \"falha\"`, `rotuloMotivo()` (Record completo: \"O cliente pediu uma pessoa\", \"A base não tinha a informação\", \"Fora do que o atendente faz\", \"Reclamação ou insatisfação\", \"Falha ao responder\") e `lerMotivo(texto)` que reconhece `[TRANSFERIR]` (→ `sem_informacao`) e `[TRANSFERIR:motivo]`",
+        "`montarSystemPrompt()` instrui a terminar com `[TRANSFERIR:motivo]` sozinho na última linha, com uma linha explicando cada motivo; `responder()` lê o motivo, remove o marcador e grava",
+        "`conversas` ganha `motivo_transferencia TEXT NULL` e `esperando_desde TEXT NULL`: `registrarResposta({ transferir, motivo })` grava os dois ao virar `atencao`; `registrarMensagemCliente` grava `esperando_desde` quando a conversa está em `humano` e o campo está vazio; `registrarMensagemHumana`, `devolver` e `resolver` zeram `esperando_desde`; `devolver` zera também o motivo. `Conversa`/`ConversaCompleta` expõem `motivoTransferencia` e `esperandoDesde`",
+        "Falha da IA numa conversa `origem: \"whatsapp\"` (ErroIA ou qualquer erro em `perguntarComFerramentas`): `responder()` grava e envia `config.fraseFalha` (padrão \"Um momento, vou chamar uma pessoa da equipe para te ajudar.\"), transfere com motivo `falha`, registra o erro no log e em `registrarFalhaEnvio`. No simulador o erro continua na bolha vermelha",
+        "`PapelMensagem` ganha `\"nota\"` e `\"evento\"`. `lib/conversas.ts:registrarEvento(numero, texto)` é chamado por `assumir` (\"Você assumiu a conversa\"), `devolver` (\"Conversa devolvida para {atendente}\"), `resolver` (\"Marcada como resolvida\"), pela transferência (\"{atendente} pediu ajuda de uma pessoa · {rótulo do motivo}\") e pela reabertura automática (\"Conversa reaberta pelo cliente\"). Eventos e notas nunca entram em `historicoRecente()`, não contam em `nao_lidas`, não mudam `ultima_mensagem` e não são enviados",
+        "`ConversaAberta.tsx` desenha `evento` como linha centralizada discreta (texto cinza pequeno com hora) entre as bolhas; a faixa âmbar diz o motivo (\"{atendente} passou esta conversa para uma pessoa · A base não tinha a informação\")",
+        "`lib/metricas.ts:linhasParaExportar` ganha a coluna \"Motivo da transferência\"",
+        "Testado por `curl` com IA falsa (`global.fetch` para openrouter.ai): `[TRANSFERIR:cliente_pediu]` grava `atencao`, motivo e evento; IA devolvendo 500 grava a frase de reserva, `atencao` e motivo `falha`",
+        "Lint e build passam; verificar no navegador (conversa com eventos e faixa âmbar com motivo; desktop 1400x1000 e celular 390)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "PRD US-002 (Fase 0)"
+    },
+    {
+      "id": "US-003",
+      "title": "Status de entrega das mensagens enviadas",
+      "description": "As a operador do atendimento, I want ver se a mensagem que saiu pelo número da empresa foi entregue e lida so that eu não fique sem saber se o cliente recebeu.",
+      "acceptanceCriteria": [
+        "`mensagens` ganha `status_entrega TEXT NULL` (`enviando` | `enviada` | `entregue` | `lida` | `falhou`) e `erro_envio TEXT NULL`; `MensagemDaConversa` expõe `statusEntrega` e `erroEnvio`",
+        "`lib/whatsapp.ts:enviarMensagem` devolve `{ idExterno?: string }` (o `messageId` da z-api; `undefined` na Meta); webhook, `POST /api/conversas/[numero]/mensagens` e a rajada gravam `id_externo` e `status_entrega = \"enviada\"`; falha grava `falhou` e `erro_envio` com a frase de `ErroWhatsApp` (a marcação da bolha passa a vir do banco, não só do estado do React)",
+        "`app/webhook/zapi/route.ts` trata `MessageStatusCallback`: para cada id em `ids`, `lib/conversas.ts:atualizarEntrega(idExterno, status)` mapeia `SENT → enviada`, `RECEIVED → entregue`, `READ`/`PLAYED → lida` e só avança (nunca volta de `lida` para `entregue`); `READ_BY_ME` ignorado; ids desconhecidos em log de nível baixo",
+        "`lib/zapi.ts:configurarWebhooks` cadastra também o aviso de status de mensagem — caminho exato conferido em https://developer.z-api.io e registrado no `CLAUDE.md` com a data; `garantirWebhooks` recadastra quando a lista de avisos mudar (`ZAPI_AVISOS_CADASTRADOS` inclui a versão da lista)",
+        "`MarcaEnvio` desenha: relógio (`enviando`), um tique (`enviada`), dois tiques cinza (`entregue`), dois tiques no acento (`lida`); `falhou` = borda vermelha + \"Esta mensagem não chegou ao cliente\" + botão \"Tentar de novo\" (`POST /api/conversas/[numero]/mensagens/[id]/reenviar`). Mensagens antigas sem status, Meta e conversas de teste: um tique",
+        "Testado com a z-api falsa: `send-text` devolve `messageId`; `READ` seguido de `RECEIVED` deixa `lida`; falha + \"Tentar de novo\" com a z-api voltando deixa `enviada`",
+        "Lint e build passam; verificar no navegador (os cinco estados na bolha; desktop e celular)"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "PRD US-003 (Fase 0)"
+    },
+    {
+      "id": "US-004",
+      "title": "Atualização em tempo real (eventos do servidor com polling de reserva)",
+      "description": "As a operador do atendimento, I want que uma mensagem nova apareça na hora, sem esperar 10 segundos so that eu responda um cliente ansioso antes de ele mandar a segunda mensagem.",
+      "acceptanceCriteria": [
+        "Novo `lib/eventos.ts`: `EventEmitter` em memória com `publicar(evento)`/`assinar(fn)`; eventos `{ tipo: \"conversa\", numero }` (mensagem nova, status, entrega, etiqueta, nota), `{ tipo: \"conexao\" }` e `{ tipo: \"atencao\", numero }`. `lib/conversas.ts`, `lib/zapi.ts:gravarConexao` e a rajada publicam nos pontos de escrita; nenhuma tela publica",
+        "Nova rota privada `GET /api/eventos`: `text/event-stream` com `ReadableStream`, `: ping` a cada 25 s, encerramento limpo no `abort`, sem cache, `dynamic = \"force-dynamic\"`; `Map` de conexões abertas no módulo para fechar tudo no `SIGTERM`",
+        "Novo `components/useEventos.ts`: `EventSource` com reconexão crescente (1, 2, 5, 10 s); após três falhas seguidas avisa o chamador para voltar ao polling com intervalo de 30 s; com o fluxo de pé, os temporizadores de 10 s de `ConversaAberta` e da lista param; só conecta com a aba visível",
+        "`Conversas`, `ConversaAberta`, `Inicio` e `ConexaoWhatsApp` recarregam no evento (lista e conversa aberta só quando o `numero` bate ou o evento é da lista)",
+        "Rodapé da lista de Conversas: \"Atualizando em tempo real\" (ponto verde) ou \"Atualizando a cada 30 segundos\" (ponto cinza); nenhum texto técnico",
+        "Testado no standalone: `curl -N /api/eventos` recebe `: ping` e `event: conversa` quando um aviso da z-api falsa chega; duas abas recebem o mesmo evento; reiniciar o servidor faz a tela reconectar sem erro não tratado no console",
+        "`CLAUDE.md` registra por que SSE e não WebSocket, o ping de 25 s, a reserva de polling e a premissa de um processo só (P8)",
+        "Lint e build passam; verificar no navegador (mensagem nova sem recarga; indicador nos dois estados)"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "PRD US-004 (Fase 0)"
+    },
+    {
+      "id": "US-005",
+      "title": "Receber e mostrar áudio, imagem, documento e os demais tipos",
+      "description": "As a operador do atendimento, I want ver na conversa exatamente o que o cliente mandou, inclusive um áudio ou uma foto so that o painel nunca minta sobre a conversa.",
+      "acceptanceCriteria": [
+        "Nova tabela `anexos` em `lib/anexos.ts` (mesmo app.sqlite): `id` (hex aleatório), `mensagem_id`, `tipo` (`audio` | `imagem` | `video` | `documento` | `figurinha` | `localizacao` | `contato` | `outro`), `url_original`, `caminho_local TEXT NULL`, `mime`, `nome_arquivo`, `tamanho`, `segundos INTEGER NULL`, `legenda TEXT NULL`, `transcricao TEXT NULL`, `criado_em`. `MensagemDaConversa.anexos?: Anexo[]` (sem `caminho_local`)",
+        "`app/webhook/zapi/route.ts` deixa de descartar mensagens sem `text.message`: grava mensagem `cliente` com texto derivado (`legenda` quando houver; senão \"[Áudio de 12 s]\", \"[Imagem]\", \"[Documento: nome.pdf]\", \"[Figurinha]\", \"[Localização: endereço]\", \"[Contato: nome]\") e o anexo, conforme os campos da Premissa P4 (`image`, `audio`, `video`, `document`, `sticker`, `location`, `contact`); `reaction` só log; `viewOnce` grava sem baixar com texto \"[Imagem de visualização única]\"",
+        "`lib/anexos.ts:baixar(anexo)` copia para `DATA_DIR/anexos/<id>` em segundo plano (16 MB, 30 s, `mime` conferido pelo cabeçalho); falha → fica só `url_original`. `GET /api/anexos/[id]` (privada) serve o arquivo local com `Content-Type`, `Content-Disposition: inline`, `Cache-Control: private, max-age=86400`, ou redireciona para `url_original`. `apagarConversa` apaga anexos e arquivos; limpeza de 90 dias no laço de `instrumentation.ts`; `README.md` explica",
+        "`Bolha` desenha: áudio `<audio controls preload=\"none\">` + duração; imagem miniatura ≤ 260 px clicável + legenda; vídeo `<video controls preload=\"none\">` + legenda; documento como cartão (ícone, nome, páginas, \"Abrir\"); figurinha 96 px; localização como cartão com endereço e link `https://maps.google.com/?q=lat,long`; contato como cartão com nome e telefone formatado. O texto derivado entre colchetes não é desenhado quando o anexo é. `lib/rotulos.ts:previaMensagem` dá \"🎤 Áudio (0:12)\", \"📷 Imagem\", \"📄 Documento\" para a lista",
+        "`lib/demo.ts:conversasExemplo()` ganha um áudio e uma imagem em duas conversas (arquivos pequenos em `public/exemplos/`)",
+        "Testado com a z-api falsa servindo `.ogg` e `.jpg`: anexos aparecem, arquivo copiado em `DATA_DIR/anexos`, `GET /api/anexos/[id]` 200 com `Content-Type` certo e 401 sem sessão; apagar a conversa apaga o arquivo",
+        "Lint e build passam sem aviso novo de `img`; verificar no navegador (conversa com os sete tipos; desktop e celular)"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "PRD US-005 (Fase 1: mídia)"
+    },
+    {
+      "id": "US-006",
+      "title": "A IA entende áudio, imagem e documento",
+      "description": "As a cliente da empresa, I want mandar um áudio ou uma foto e ser respondido normalmente so that eu não precise digitar tudo para ser atendido.",
+      "acceptanceCriteria": [
+        "Novo `lib/midia.ts`: `transcreverAudio(anexo)` (OpenRouter chat/completions com parte `{ type: \"input_audio\", input_audio: { data: <base64>, format } }`, modelo de `getConfig(\"MODELO_AUDIO\")` com padrão definido no arquivo e conferido em openrouter.ai/models na implementação, 30 s; devolve texto ou `null`), `descreverImagem(anexo)` (usa `askVision` de `lib/ai.ts`, prompt objetivo para atendimento) e `lerDocumento(anexo)` (`unpdf` para PDF, leitura direta para `text/*`, corte em 6.000 caracteres; outros → `null`). Resultado gravado em `anexos.transcricao`. `lib/ai.ts` e `lib/modelos.ts` NÃO mudam",
+        "`Config` ganha `midia: { audio, imagem, documento }` (padrão tudo ligado; `migrarConfig` preenche) e `fraseSemMidia` (padrão \"Ainda não consigo ouvir áudios nem abrir arquivos por aqui. Pode me escrever?\"). A rajada processa os anexos ligados da sequência com `Promise.allSettled` antes da IA; a transcrição/descrição entra no histórico no lugar do texto derivado (\"[Áudio transcrito] …\"); anexo falho ou desligado: a IA recebe o texto derivado e responde `fraseSemMidia` só se a sequência não tiver mais nada respondível",
+        "Sem IA (`aiEnabled()` falso): nada é processado; `respostaLocal` recebe o texto derivado; mensagem só de anexo recebe `fraseSemMidia`",
+        "Cartão \"Áudios, fotos e arquivos\" na seção Ferramentas do passo 1 (a seção nasce na US-009; até lá o cartão fica no fim do formulário) com os três interruptores e a linha de ajuda \"Ouvir áudios usa o modelo de áudio e gasta créditos por minuto.\"; campo \"Modelo que ouve áudios\" (`MODELO_AUDIO`, `select` com as opções de `lib/midia.ts`) em Opções avançadas de uma integração própria `MIDIA` em `SECUNDARIAS` de `lib/integracoes.ts` (a integração `OPENROUTER` compartilhada não muda)",
+        "`ConversaAberta` mostra \"Transcrição: …\" abaixo de um áudio (expansível acima de duas linhas) e \"O atendente viu: …\" abaixo de uma imagem",
+        "Testado com IA falsa devolvendo transcrição e descrição: a resposta usa o conteúdo; com processamento desligado ou sem chave, o cliente recebe `fraseSemMidia`",
+        "`CLAUDE.md` registra o formato `input_audio`, o modelo padrão e a data da conferência",
+        "Lint e build passam; verificar no navegador (transcrição e descrição na bolha; interruptores no Assistente)"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "PRD US-006 (Fase 1)"
+    },
+    {
+      "id": "US-007",
+      "title": "Gerar a persona a partir de um brief",
+      "description": "As a dona do negócio, I want descrever meu negócio em duas frases e receber o atendente pronto para revisar so that eu não comece com um formulário de marcadores para preencher.",
+      "acceptanceCriteria": [
+        "Novo `lib/persona.ts:gerarPersona({ brief, site? })` → `PersonaGerada = { atendente, negocio, objetivo, objetivoTexto?, tom, tomTexto?, saudacao, baseConhecimento, perguntasSugeridas: string[3], decisoes: string[3] }` via `askJSON`: português do Brasil; base no formato de `lib/base-modelo.ts` do objetivo, preenchendo o que o brief permite e mantendo `[MARCADORES]` só onde faltar dado (nunca inventa preço, prazo, endereço); tom pelo brief; saudação em uma frase; três perguntas de cliente; três `decisoes` em linguagem de negócio (o que decidiu e por quê)",
+        "`lib/persona.ts:lerSite(url)`: só `http(s)`, recusa endereços internos/privados (`localhost`, `127.*`, `10.*`, `192.168.*`, `169.254.*`, `.local`), 10 s, 1 MB, remove `script`/`style`/tags, corta em 20.000 caracteres e soma ao brief; falha vira aviso (\"Não consegui ler o site. Gerei só com a sua descrição.\") e a geração segue",
+        "Sem IA: `lib/persona-exemplos.ts` com cinco personas completas (clínica odontológica, loja de roupas, imobiliária, escola de cursos, restaurante); `gerarPersona` escolhe por palavras (padrão `classificarLocal`) com `decisoes` fixas dizendo que é um exemplo",
+        "`POST /api/assistente/persona` `{ brief, site? }`: brief de 20 a 1.000 caracteres (400 com frase fora disso), chama `gerarPersona`, não salva nada; erros passam por `responderErro`",
+        "Passo 1: cartão \"Comece descrevendo seu negócio\" acima do formulário com `textarea` de três linhas (placeholder da clínica), campo opcional \"Endereço do site\", cinco chips de exemplo que preenchem o brief, botão primário \"Gerar meu atendente\"; `Loading` com etapas (\"Lendo a descrição\", \"Escolhendo tom e objetivo\", \"Montando a base\"); recolhido (\"Gerar de novo com uma descrição\") quando já há configuração salva",
+        "Resultado em painel lateral (`aside` no desktop, folha de baixo no celular): as três `decisoes`, prévia do `Celular` com a saudação, resumo dos campos, base em `MaisDetalhes`; \"Aplicar\" preenche o formulário (confirmação \"Substituir o que já está preenchido?\" quando `ehModeloDeBase` é falso) e \"Gerar de novo\"; versões numeradas em `sessionStorage` (`persona-versoes`) com seletor \"Versão N · mais recente\". Aplicar NÃO salva: a pessoa segue em \"Salvar e testar o atendente\"",
+        "Testado por `curl`: brief curto dá 400; sem chave devolve persona de exemplo; com IA falsa devolve o JSON e ele é aplicado no formulário",
+        "Lint e build passam; verificar no navegador (cartão, geração, painel, versões, aplicar com confirmação; desktop e celular)"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "PRD US-007 (Fase 2: Assistente com apoio da IA)"
+    },
+    {
+      "id": "US-008",
+      "title": "Saudação, perguntas de teste e o passo 1 em seções",
+      "description": "As a dona do negócio, I want ver o passo Configurar organizado em blocos claros e definir como o atendente se apresenta so that eu encontre cada ajuste sem rolar um formulário comprido.",
+      "acceptanceCriteria": [
+        "`Config` ganha `saudacao?: string` (≤ 240) e `perguntasSugeridas?: string[]` (≤ 5, cada ≤ 120); `migrarConfig` deixa ausentes; `PUT /api/config` valida tamanhos (400 com frase). `saudacaoPadrao()` continua como reserva",
+        "A saudação entra no prompt (\"Quando o cliente inicia a conversa … apresente-se assim: …\") e é a primeira bolha do `Celular` na prévia e no passo 2",
+        "`SUGESTOES` fixas saem: o passo 2 usa `config.perguntasSugeridas` e, senão, os cenários por objetivo (US-010; até lá, as três perguntas da `configExemplo`); `configExemplo` ganha saudação e três perguntas",
+        "Passo 1 em cinco cartões com título e apoio, nesta ordem: Quem é (nome do atendente, empresa, saudação com contador `n/240`); O que ele faz (cartões de objetivo + campo do Outro); O que ele sabe (base com contador, documentos + `Dropzone`, e as \"Respostas aprovadas pela equipe\" movidas do passo 2, com contagem no título); Como ele fala (tons + campo do Personalizado); Ferramentas (US-009; até lá, o cartão de mídia da US-006); por último `MaisDetalhes titulo=\"Quando ele não souber responder\"` com `naoSei`, horário, `fraseFalha` (US-002) e limite de espera (US-017, quando existir). Coluna direita mantém prévia e `Dica` e ganha índice `lg:sticky` com as cinco seções como âncoras",
+        "Barra inferior fixa \"Alterações não salvas\" (aparece quando o formulário difere do salvo) com \"Descartar\" e \"Salvar e testar o atendente\"; `beforeunload` pede confirmação com alterações. O passo 2 continua testando só o salvo",
+        "A prévia mostra a saudação digitada e, abaixo, a primeira pergunta sugerida como bolha do cliente",
+        "Lint e build passam; verificar no navegador (cinco seções, índice, barra, prévia; desktop e celular; `/assistente#conhecimento` continua rolando até a base)"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "PRD US-008 (Fase 2)"
+    },
+    {
+      "id": "US-009",
+      "title": "Ferramentas do atendente (cartões com interruptor)",
+      "description": "As a dona do negócio, I want ligar e desligar o que o atendente pode fazer além de responder so that eu veja num lugar só do que ele é capaz e o que falta conectar.",
+      "acceptanceCriteria": [
+        "`Config` ganha `ferramentas: { coletarContato: boolean; agenda: boolean; sistemas: boolean }` (padrão `false`, `true`, `true`; `migrarConfig` preenche). \"Pedir ajuda de uma pessoa\" não tem interruptor: sempre ligado",
+        "Seção Ferramentas do passo 1 com cartões no padrão `FeatureCard` (ícone no acento suave, título, interruptor à direita, apoio de altura fixa, linha de estado quando ligado): Pedir ajuda de uma pessoa (\"Sempre ligado · transfere com o motivo\"); Coletar contato (\"Pede nome e, se for transferir, e-mail ou telefone\" / \"Guardado em O que o atendente lembra\"); Consultar a agenda (\"Conectada\" / \"Falta conectar\" + link \"Conectar em Configurações\" para `/setup#mcp-agenda`, lido de `GET /api/status` `integrations`); Consultar sistemas da empresa (idem, `/setup#mcp-empresa`); Áudios, fotos e arquivos (US-006). Componente próprio `CartaoFerramenta`",
+        "Interruptor de agenda/sistemas desligado faz `perguntarComFerramentas` não oferecer aquelas ferramentas mesmo conectadas; a regra de agenda do prompt depende do interruptor",
+        "`coletarContato` ligado soma ao prompt: pergunta o nome no começo se o cliente não se apresentou; ao transferir, pede e-mail ou telefone para retorno (sem chamada de ferramenta; a memória da US-012 extrai)",
+        "O `Aviso` \"Para consultar horários e marcar, conecte sua agenda\" do objetivo Agendamentos sai do formulário e vira a linha de estado do cartão da agenda",
+        "Verificado por `curl`: com `agenda: false` e agenda conectada, o `system` enviado à IA falsa não lista ferramentas de agenda",
+        "Lint e build passam; verificar no navegador (cartões nos dois estados de conexão; desktop e celular)"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "PRD US-009 (Fase 2)"
+    },
+    {
+      "id": "US-010",
+      "title": "\"Por que respondeu assim\" e cenários de teste",
+      "description": "As a dona do negócio, I want entender de onde veio cada resposta do atendente so that eu corrija a base no lugar certo em vez de adivinhar.",
+      "acceptanceCriteria": [
+        "`mensagens` ganha `detalhes TEXT NULL` (JSON); `lib/types.ts` define `DetalhesResposta = { modelo, tempoMs, fontes: { tipo: \"base\" | \"aprovada\" | \"documento\" | \"memoria\" | \"resumo\"; nome; trecho }[], ferramentas: { nome; ok; resumo }[], transferencia?: { motivo }, midia?: (\"transcricao\" | \"imagem\" | \"documento\")[], rajada: number }`; `MensagemDaConversa.detalhes?`",
+        "`lib/documentos.ts:buscarTrechos(pergunta)` devolve trechos estruturados (`{ nome, numero, texto, score }`) e `buscarDocumentos` vira invólucro. `responder()` monta `detalhes`: trechos de documentos (200 caracteres), \"Base de conhecimento do Assistente\" sempre, \"Respostas aprovadas\" quando uma pergunta aprovada casou por palavras (`baseAprovadaRelevante`), memória/resumo quando entraram, ferramentas com `ok` e resumo de 80 caracteres do argumento, `modelName()`, tempo e tamanho da rajada. `perguntarComFerramentas` devolve todas as ferramentas usadas, não só a primeira. Sem IA: `modelo: \"sem IA (busca local)\"` e o trecho escolhido por `respostaLocal`",
+        "`Celular` (passo 2) e `ConversaAberta` mostram sob cada bolha da IA o link \"Por que respondeu assim\" que expande: uma linha por fonte (ícone, nome, trecho em itálico), uma por ferramenta (\"Consultou a agenda · ok\"), a transferência com motivo, e \"{tempo}s · {modelo}\" discreto. Só em bolhas da IA. O \"Consultado em {ferramenta}\" atual é absorvido. Componente próprio `PorQueRespondeu`",
+        "Fonte documento tem link \"Ver documento\" e fonte base tem \"Editar base\", ambos para `/assistente#conhecimento`",
+        "Novo `lib/cenarios.ts` (folha): seis cenários por objetivo `{ titulo, mensagem }`, sempre com um fora do escopo, um pedido de pessoa e um dado que costuma faltar. Cartão \"O que testar\" do passo 2 mostra as `perguntasSugeridas` e, abaixo, \"Cenários que valem testar\"; os cenários fora do escopo e pedido de pessoa vêm marcados \"deve transferir\" e, depois de enviados, mostram \"Transferiu com o motivo certo\" ou \"Não transferiu\" conforme `detalhes.transferencia`",
+        "Lint e build passam; verificar no navegador (bloco expandido no simulador e na conversa, cenários com marcação; desktop e celular)"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "PRD US-010 (Fase 2)"
+    },
+    {
+      "id": "US-011",
+      "title": "Conversa longa sem perder o começo (resumo rolante)",
+      "description": "As a cliente da empresa, I want que o atendente lembre o que combinamos no começo de uma conversa longa so that eu não precise repetir o que já disse.",
+      "acceptanceCriteria": [
+        "`conversas` ganha `resumo TEXT NULL` e `resumo_ate_id INTEGER NULL`. Novo `lib/memoria.ts:atualizarResumo(numero)`: com mais de `MAX_HISTORICO` (20) mensagens cliente/atendente/humano e ≥ 8 não resumidas, pede à IA (`askJSON`, `maxTokens: 300`) um resumo ≤ 600 caracteres das mensagens anteriores às últimas 12, mesclado com o anterior; grava `resumo` e `resumo_ate_id`. Em segundo plano após a resposta (padrão `classificarEmSegundoPlano`); falha só no log; sem IA nada",
+        "`responder()` inclui \"Resumo do começo desta conversa: …\" quando existe, seguido das últimas 12 mensagens (em vez de 20); `detalhes.fontes` registra `tipo: \"resumo\"`",
+        "`resolver()` e a reabertura não apagam o resumo; `apagarConversa` apaga",
+        "`PainelContato` ganha `MaisDetalhes titulo=\"Resumo da conversa\"` com o texto (só leitura)",
+        "Testado por `curl` com IA falsa: 30 mensagens produzem `resumo` e `resumo_ate_id`; o `prompt` seguinte contém o resumo e 12 mensagens",
+        "Lint e build passam; verificar no navegador (bloco do resumo no painel)"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "PRD US-011 (Fase 3: memória)"
+    },
+    {
+      "id": "US-012",
+      "title": "O que o atendente lembra de cada cliente (memória por contato)",
+      "description": "As a dona do negócio, I want que o atendente reconheça um cliente que volta e que eu possa ver e corrigir o que ele lembra so that o atendimento pareça de alguém que conhece o cliente, sem guardar nada que não deveria.",
+      "acceptanceCriteria": [
+        "Nova tabela `contatos` em `lib/memoria.ts`: `numero` (chave), `nome_informado`, `email`, `telefone_retorno`, `memoria TEXT NOT NULL DEFAULT ''` (≤ 1.200), `atualizado_em`, `atualizado_por` (`ia` | `pessoa`). `ConversaCompleta.contato: { nomeInformado, email, telefoneRetorno, memoria, atualizadoEm, atualizadoPor } | null`",
+        "`atualizarMemoria(numero)` em segundo plano após cada resposta da IA com ≥ 4 mensagens do cliente desde a última atualização (ou ao resolver): `askJSON` (`maxTokens: 300`) com até cinco fatos úteis (nome como se apresentou, preferências, compras/agendamentos, pendências, e-mail/telefone informados), mesclados; proíbe saúde, documentos, senhas, cartão e opiniões sobre o cliente. Se `atualizado_por = \"pessoa\"` nos últimos 7 dias, só acrescenta. Fora: `simulador`, `assistente-ia`, exemplo. Sem IA nada",
+        "`responder()` soma \"O que você já sabe sobre este cliente (de conversas anteriores): …\" quando existe; `detalhes.fontes` registra `tipo: \"memoria\"`; a saudação para cliente com `nome_informado` usa o nome",
+        "`PainelContato`: bloco \"O que o atendente lembra\" com o texto (ou \"Nada ainda. O atendente vai anotar o que for útil para o próximo atendimento.\"), linha \"Atualizado {há quanto tempo} pela IA / por você\", \"Editar\" (textarea `n/1200`) + \"Salvar\" (`PUT /api/conversas/[numero]/contato` `{ memoria, nomeInformado?, email?, telefoneRetorno? }`, grava `pessoa`) e \"Apagar memória\" com confirmação. Linhas Nome, E-mail e Telefone de retorno mostram os dados do contato (nome informado tem prioridade sobre o `senderName`)",
+        "`DELETE /api/conversas/[numero]` apaga o contato junto; `linhasParaExportar` ganha \"Nome informado\", \"E-mail\", \"Telefone de retorno\"",
+        "`README.md` ganha a seção \"O que o atendente guarda sobre cada cliente\" (o que entra, o que nunca entra, como editar e apagar, onde fica)",
+        "Testado por `curl` com IA falsa devolvendo fatos: memória gravada e presente no `system` seguinte; editar pela rota marca `pessoa`; apagar zera",
+        "Lint e build passam; verificar no navegador (bloco vazio, cheio e em edição; desktop e celular)"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "PRD US-012 (Fase 3)"
+    },
+    {
+      "id": "US-013",
+      "title": "Quem atende: seletor no cabeçalho e assumir ao responder",
+      "description": "As a operador do atendimento, I want ver e trocar quem está cuidando da conversa em um clique, e assumir só de responder so that intervir seja tão natural quanto responder no celular.",
+      "acceptanceCriteria": [
+        "Cabeçalho da conversa aberta ganha o seletor \"Quem atende\" (`role=\"radiogroup\"`, componente próprio `SeletorQuemAtende`): {atendente} (selecionado em `ia` e `atencao`, com chip âmbar \"precisa de você\" em `atencao`) e Você (selecionado em `humano`). Você → `assumir`; {atendente} → `devolver` (confirmação de uma frase quando há rascunho). Em `resolvida`: seletor desligado, chip \"Resolvida\" e botão \"Reabrir\" (chama `devolver`)",
+        "Campo de resposta sempre visível quando a conversa não está resolvida. Com a IA no comando, linha acima do campo: \"Ao enviar, você assume a conversa e {atendente} para de responder até você devolver.\" e botão \"Assumir e enviar\" (o servidor já grava `humano` em `registrarMensagemHumana`; a tela só deixa de esconder o campo). Faixa âmbar continua em `atencao` só com o motivo, sem o botão \"Assumir atendimento\"",
+        "\"Marcar como resolvida\" continua como link abaixo do campo em `humano`; \"Devolver para a IA\" sai (o seletor resolve)",
+        "Abas \"Responder como IA / Responder manualmente\" viram um único botão \"Escrever com a IA\" ao lado do campo (rascunho cai no campo, nada é enviado sozinho); o campo aceita \"/\" para respostas rápidas (US-015)",
+        "Verificado por `curl`: mensagem humana numa conversa `ia` grava `humano`, evento \"Você assumiu a conversa\" e zera `esperando_desde`",
+        "Lint e build passam; verificar no navegador (seletor nos quatro status, campo sempre visível, \"Assumir e enviar\"; desktop e celular)"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": "PRD US-013 (Fase 4: painel de atendimento)"
+    },
+    {
+      "id": "US-014",
+      "title": "Notas internas",
+      "description": "As a operador do atendimento, I want deixar uma anotação na conversa que o cliente não vê so that eu registre o combinado e o contexto para mim mesmo ou para quem olhar depois.",
+      "acceptanceCriteria": [
+        "`POST /api/conversas/[numero]/notas` `{ texto }` grava mensagem `papel: \"nota\"` (1 a 2.000 caracteres, 400 fora disso), sem enviar, sem mudar status, `nao_lidas` ou `ultima_mensagem`, publicando evento `conversa`; `DELETE /api/conversas/[numero]/notas/[id]` apaga (confirmação na tela)",
+        "`ConversaAberta`: botão \"Nota interna\" ao lado do campo troca para o modo nota (fundo amarelo claro, rótulo \"Nota interna · só a equipe vê\", botão \"Salvar nota\", Esc volta). Notas são bolhas amarelas à direita com \"Nota interna\", hora e \"Apagar\" no hover/foco. O modo nota funciona em qualquer status e NÃO assume a conversa",
+        "Lista de Conversas mostra ícone de nota quando a conversa tem nota (`temNotas` em `Conversa`, contado na consulta)",
+        "A transferência (US-002) grava também uma nota automática com o motivo e a última pergunta do cliente (\"Pedi ajuda porque a base não tinha a informação. Pergunta: '…'\"), assinada \"{atendente}\"",
+        "`lib/demo.ts` ganha uma nota interna numa conversa de exemplo",
+        "Lint e build passam; verificar no navegador (modo nota, bolha amarela, apagar; desktop e celular)"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": "PRD US-014 (Fase 4)"
+    },
+    {
+      "id": "US-015",
+      "title": "Respostas rápidas com \"/\"",
+      "description": "As a operador do atendimento, I want responder as perguntas de sempre com um atalho so that eu não digite a mesma frase dez vezes por dia.",
+      "acceptanceCriteria": [
+        "Nova tabela `respostas_rapidas` em `lib/respostas-rapidas.ts`: `id`, `atalho` (2 a 30 caracteres, letras/números/hífen, único, minúsculas), `texto` (≤ 1.000), `criado_em`. Rotas `GET/POST /api/respostas-rapidas`, `PUT/DELETE /api/respostas-rapidas/[id]`, 400 com frase para atalho inválido ou repetido. Variáveis `{nome}` (contato ou \"você\") e `{atendente}` trocadas na inserção",
+        "Digitar \"/\" no começo do campo vazio abre painel acima do campo (componente próprio `PainelRespostasRapidas`) filtrado pelo que vem depois da barra (atalho e texto), setas para navegar, Enter insere, Esc fecha; sem respostas: \"Nenhuma resposta rápida ainda\" + \"Criar a primeira\"",
+        "Menu do campo (\"…\", `useMenuSuspenso`) ganha \"Respostas rápidas\": diálogo com lista (atalho, texto cortado, editar, apagar) e formulário de nova resposta; o mesmo diálogo abre de \"Criar a primeira\"",
+        "Em modo demonstração, três respostas rápidas nascem com as conversas de exemplo (`horario`, `endereco`, `obrigado`) e somem com elas",
+        "Lint e build passam; verificar no navegador (painel com \"/\", inserção com variável, diálogo de gestão; desktop e celular)"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": "PRD US-015 (Fase 4)"
+    },
+    {
+      "id": "US-016",
+      "title": "Etiquetas",
+      "description": "As a operador do atendimento, I want marcar conversas com uma palavra minha e filtrar por ela so that eu separe \"orçamento\", \"reclamação\" ou \"VIP\" do meu jeito.",
+      "acceptanceCriteria": [
+        "`conversas` ganha `etiquetas TEXT NOT NULL DEFAULT '[]'` (JSON, até 5 nomes); chave de configuração `ETIQUETAS` com a lista da instância (`{ nome, cor }`, até 20, paleta fixa de seis tons em `globals.css` após `/* Específico deste app */`). `PUT /api/conversas/[numero]/etiquetas` `{ etiquetas }` cria na instância o que não existir (cor seguinte) e grava; `GET /api/etiquetas` lista; `DELETE /api/etiquetas/[nome]` remove da instância e de todas as conversas (confirmação com contagem)",
+        "`PainelContato` ganha bloco \"Etiquetas\" (componente próprio `Etiquetas`): chips coloridos com \"×\", campo \"Adicionar etiqueta\" com sugestões das existentes e Enter para criar; máximo 5 (\"Até 5 etiquetas por conversa\")",
+        "Lista de Conversas mostra até dois chips por linha (resto \"+N\"); abaixo das abas, linha de chips da instância filtra a lista (`?etiqueta=`, uma por vez; `GET /api/conversas` aceita `etiqueta`); filtro ativo com \"×\"",
+        "`linhasParaExportar` ganha \"Etiquetas\"; `lib/demo.ts` marca duas conversas de exemplo (\"orçamento\", \"retorno\")",
+        "Lint e build passam; verificar no navegador (bloco do painel, chips na lista, filtro; desktop e celular)"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": "PRD US-016 (Fase 4)"
+    },
+    {
+      "id": "US-017",
+      "title": "Quem está esperando há muito tempo (avisos de espera)",
+      "description": "As a operador do atendimento, I want ser avisado quando um cliente está esperando uma pessoa há mais tempo do que eu aceito so that ninguém fique sem resposta porque eu estava em outra aba.",
+      "acceptanceCriteria": [
+        "`Config` ganha `avisoEsperaMin: 5 | 10 | 30 | 60` (padrão 10; `migrarConfig` preenche), `select` \"Avisar quando alguém espera mais de\" em \"Quando ele não souber responder\"",
+        "`Conversa` e `ConversaCompleta` expõem `esperandoDesde`. Na lista, conversa em `atencao` (ou `humano` com `nao_lidas > 0`) mostra \"Esperando há {tempo}\" no lugar da hora; passado o limite, texto vermelho e borda esquerda vermelha. O cabeçalho da conversa aberta mostra o mesmo texto ao lado do status",
+        "Contador de `atencao` no item Conversas do `Topbar` fica vermelho quando alguma conversa passou do limite; `document.title` vira \"({n}) Conversas · Atendente no WhatsApp\" enquanto `n > 0` em qualquer tela (efeito no `Topbar`, arquivo próprio do app) e volta ao normal em zero",
+        "Botão de alto-falante ao lado das abas de Conversas (estado em `localStorage`, desligado por padrão) toca um toque curto gerado por `AudioContext` (sem arquivo) no evento `atencao` (US-004) ou quando uma conversa cruza o limite (conferido a cada minuto). Nenhum pedido de permissão de notificação",
+        "Início: cartão de situação diz \"{n} conversas precisam de você · {m} esperando há mais de {limite} min\" quando `m > 0`",
+        "Testado no navegador com uma conversa de exemplo forçada para `esperando_desde` de 20 min atrás: texto vermelho, título da aba e som com o botão ligado",
+        "Lint e build passam; verificar no navegador (lista, cabeçalho, botão de som; desktop e celular)"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": "PRD US-017 (Fase 4)"
+    },
+    {
+      "id": "US-018",
+      "title": "Painel do contato revisado",
+      "description": "As a operador do atendimento, I want o painel do contato organizado em blocos, com o que importa primeiro so that eu leia quem é, o que a IA lembra e o que já foi feito sem rolar.",
+      "acceptanceCriteria": [
+        "`PainelContato` nesta ordem: identidade (avatar, nome, número, chips de status/origem); Etiquetas (US-016); O que o atendente lembra (US-012); Dados do contato (`dl` com Nome informado, E-mail, Telefone de retorno, Assunto, Motivo da transferência quando houver, Primeiro contato, Última mensagem, Total de mensagens); Resumo da conversa (US-011, recolhido); ações (\"Marcar como resolvida\", \"Apagar conversa\"). Cada bloco é um `MaisDetalhes` aberto por padrão no desktop e recolhido no celular, estado lembrado em `localStorage` por bloco",
+        "No celular (`ContatoRecolhido`): identidade + etiquetas + primeira linha da memória; \"Ver tudo\" abre o resto",
+        "Nenhum outro campo editável além de memória, dados do contato e etiquetas (sem observações livres, sem atributos personalizados)",
+        "Lint e build passam; verificar no navegador (desktop 1400 e 1100, celular 390)"
+      ],
+      "priority": 18,
+      "passes": true,
+      "notes": "PRD US-018 (Fase 4)"
+    },
+    {
+      "id": "US-019",
+      "title": "Relatórios: por que a IA precisou de gente",
+      "description": "As a dona do negócio, I want ver por que o atendente transferiu conversas no período so that eu saiba se preciso completar a base, mudar o escopo ou treinar a equipe.",
+      "acceptanceCriteria": [
+        "`Metricas` ganha `motivos: { motivo: MotivoTransferencia; total: number }[]` (conversas do período com `motivo_transferencia`, agrupadas; definição documentada no topo de `lib/metricas.ts`) e `naoEntregues: number` (mensagens `falhou` no período)",
+        "Relatórios ganha o cartão \"Por que o atendente pediu ajuda\": barras horizontais (mesmo componente de \"Principais assuntos\") com `rotuloMotivo`, ordenadas, e frase de leitura por regra: `sem_informacao` dominante → \"A maior parte veio de perguntas que a base não cobre. Vale completar em O que ele sabe.\" (link `/assistente#conhecimento`); `fora_do_escopo` → \"Muitos clientes pedem algo fora do que o atendente faz. Revise o objetivo.\"; `cliente_pediu` → \"Clientes preferem falar com uma pessoa. Está tudo certo com o atendente.\"; `falha` → \"Houve falhas ao responder. Confira a IA em Configurações.\" (link `/setup#openrouter`); vazio → \"Nenhuma transferência no período.\"",
+        "Abaixo dos indicadores, quando `naoEntregues > 0`, `Aviso` \"{n} mensagens não chegaram ao cliente no período\" com link para `/conversas`",
+        "\"Copiar resumo\" (`numerosEmTexto`) inclui uma linha com os motivos; `lib/demo.ts` distribui motivos nas duas conversas de exemplo em `atencao`",
+        "Lint e build passam; verificar no navegador (cartão nos três períodos e vazio; desktop e celular)"
+      ],
+      "priority": 19,
+      "passes": true,
+      "notes": "PRD US-019 (Fase 4)"
+    },
+    {
+      "id": "US-020",
+      "title": "Documentação, catálogo, versão 0.3.0 e verificação final",
+      "description": "As a mantenedor, I want que tudo o que descreve o app reflita esta rodada so that quem publicar ou evoluir o app leia o que ele faz agora.",
+      "acceptanceCriteria": [
+        "`package.json` e `package-lock.json` em `0.3.0`; `CHANGELOG.md` com a entrada 0.3.0 em linguagem de negócio (uma linha por capacidade: mídia, geração da persona, por que respondeu assim, memória, dono da conversa, notas, respostas rápidas, etiquetas, avisos de espera, tempo real, status de entrega, motivos de transferência, rajadas)",
+        "`README.md`: seções para áudios/fotos/arquivos (o que faz, modelo de áudio e custo), \"O que o atendente guarda sobre cada cliente\", \"Tempo real\", tabela de variáveis com `MODELO_AUDIO`, \"Estrutura\" com rotas e tabelas novas (`anexos`, `contatos`, `respostas_rapidas`, colunas novas de `conversas`/`mensagens`)",
+        "`catalogo.json`: `ia` revisado (\"Responde texto, áudio e fotos com o conhecimento da empresa, lembra cada cliente, explica cada resposta e avisa quando precisa de uma pessoa.\"); `node scripts/gerar-deploy.mjs` sem alteração inesperada no `render.yaml`",
+        "`CLAUDE.md` do app: notas desta rodada (janela de rajada, guarda dupla, transição só para a frente da entrega, marcador `[TRANSFERIR:motivo]` em vez de ferramenta, SSE com reserva, regras e limites da memória, formato `input_audio`, política de anexos e limpeza em 90 dias, por que o painel não tem observações nem atributos); notas antigas que deixaram de valer (abas de resposta, campo escondido até assumir, `SUGESTOES` fixas, tique único) reescritas",
+        "`node scripts/verificar-jargao.mjs whatsapp-atendente` passa sem exceção nova (ou com exceção registrada em `scripts/jargao-excecoes.json` só para o campo \"Modelo que ouve áudios\" em Opções avançadas); `scripts/verificar-paleta.mjs` passa; `scripts/verificar-padrao.sh` sai 0 para os 18 apps (nenhum arquivo `INFRA` deste app mudou)",
+        "`tests/` ganha testes `node --test` (padrão `tests/conhecimento-agenda.test.mts`) para `lerMotivo`, a transição de `atualizarEntrega`, a janela de rajada (temporizadores falsos), mesclagem da memória e validação de atalho das respostas rápidas; `npm test` passa",
+        "Verificação completa do `PADRAO.md` no standalone (`/api/health`, `/api/status`, `/api/setup`, rotas novas com entradas inválidas → 400, rotas novas sem sessão → 401); capturas finais de `/`, `/conversas` (anexos, nota, evento, etiquetas, espera), `/assistente` (gerador, seções, ferramentas, passo 2 com \"por que respondeu assim\"), `/relatorios` e `/setup` em desktop e celular, revisadas e corrigidas; `/?exemplo=1&captura=1` continua mostrando o Início cheio",
+        "Lint e build passam"
+      ],
+      "priority": 20,
+      "passes": true,
+      "notes": "PRD US-020 (Fase 5: encerramento)"
+    }
+  ]
+}

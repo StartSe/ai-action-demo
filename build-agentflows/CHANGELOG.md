@@ -1,5 +1,42 @@
 # Histórico de versões
 
+## 0.9.3 — 24/09/2026
+
+- Novos fluxos abrem sem nome e sem gravação automática, apenas com Início centralizado; o primeiro salvamento pede o nome.
+- Salvar preserva blocos, posições e conexões, inclusive fluxos em construção. A validação de execução aparece no chat.
+- Salvamento atualiza a v1 usada pelos testes e integrações, sem ação separada de publicação.
+- Nome editável no header, asterisco para alterações pendentes, ações no menu de configurações e botão Salvar por ícone, com confirmação destacada.
+- Opções dos blocos acessíveis por hover, clique e toque; Agente e LLM com textos mais discretos e avisos de conexão corrigidos.
+- Geração com IA simplificada, campo de descrição ampliado e progresso transmitido pelo servidor, com animação de blocos e conclusão após validação.
+- Integrações agrupadas, geração de chave de acesso no próprio painel e cópia com feedback.
+- Chat no site com modos simples e detalhado, localhost permitido por padrão sem domínios definidos e instalação com feedback de cópia.
+- Preview do chat abre em nova aba e oferece o script de instalação; controles de domínio reutilizados nas configurações.
+
+## 0.9.2 — 24/09/2026
+
+- Conexões sempre visíveis; seta de saída no hover do bloco, com acesso permanente no touch e alvos de toque ampliados.
+- Chat sem simulação ou exemplos, com botão Conectar ChatGPT abaixo da apresentação quando nenhum motor está conectado.
+- Campo de mensagem com uma linha inicial, crescimento até três linhas e rolagem para textos maiores.
+- Modais de blocos aplicam alterações ao fechar ou clicar fora, mantendo a validação e removendo os botões Salvar e Cancelar.
+- Variáveis do Início separadas em cartões com exclusão por ícone.
+- Agente e LLM com seleção de modelo, indicação de conexão e menos avisos.
+- Pesquisa web do ChatGPT ativa automaticamente para Agente e LLM, incluindo fluxos existentes.
+
+## 0.9.1 — 24/09/2026
+
+- Pontos de saída sempre visíveis, linhas com maior contraste e área de entrada ampliada para conectar blocos.
+- Dicas distinguem saídas já conectadas de saídas disponíveis.
+
+## 0.9.0 — 24/09/2026
+
+- Chat incorporado com retomada da conversa, eventos da página, captura de tela, aprovação humana e cancelamento.
+- Execuções persistentes com limite de tempo e revisão de tarefas interrompidas.
+- Início com nome fixo, editor de variáveis e referências `{{fluxo.NomeVariavel}}`, preservando `{{state.nome}}`.
+- Atualização de variáveis ao concluir Agente/LLM e resposta direta em etapas terminais.
+- Modelo como primeiro campo e pesquisa web opcional na conexão ChatGPT.
+- Domínios autorizados em Configurações > Segurança, aplicados ao acesso e ao iframe.
+- Compose para Coolify com volume persistente e documentação de instalação.
+
 ## 0.5.0 — 20/09/2026
 
 - Conexões com quatro cartões alinhados: ChatGPT, OpenRouter, WhatsApp e ElevenLabs.

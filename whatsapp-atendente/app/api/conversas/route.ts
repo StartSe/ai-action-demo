@@ -1,6 +1,10 @@
 import { aiEnabled, meta } from "@/lib/ai";
-import { inicioDoPeriodo, listarConversas, semearExemplosSeVazio } from "@/lib/conversas";
+import { contarExemplos, inicioDoPeriodo, listarConversas, semearExemplosSeVazio } from "@/lib/conversas";
+import { normalizarEtiqueta } from "@/lib/etiquetas";
+import { getConfig } from "@/lib/estado";
 import { WHATSAPP } from "@/lib/integracoes";
+import { sincronizarContatosDeExemplo } from "@/lib/memoria";
+import { sincronizarRespostasRapidasDeExemplo } from "@/lib/respostas-rapidas";
 import { lerPeriodo, lerStatus } from "@/lib/rotulos";
 import { integracaoConfigurada } from "@/lib/setup-comum";
 
@@ -17,14 +21,23 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   // Primeira leitura de um app sem conversa nenhuma e sem número conectado: as conversas de exemplo
   // nascem aqui, uma única vez, para as telas não abrirem vazias em uma demonstração.
-  semearExemplosSeVazio({ numeroConectado: integracaoConfigurada(WHATSAPP) });
+  semearExemplosSeVazio({ numeroConectado: integracaoConfigurada(WHATSAPP), atendente: getConfig().atendente });
+  // O que o atendente lembra dos clientes de exemplo acompanha as conversas de exemplo: lib/memoria.ts
+  // é o dono da tabela `contatos`, então quem junta as duas coisas é a rota, e não lib/conversas.ts.
+  const temExemplos = contarExemplos() > 0;
+  sincronizarContatosDeExemplo(temExemplos);
+  // As respostas rápidas de demonstração seguem a mesma regra: nascem e somem com as conversas de exemplo.
+  sincronizarRespostasRapidasDeExemplo(temExemplos);
 
   const params = new URL(req.url).searchParams;
   const desde = inicioDoPeriodo(lerPeriodo(params.get("periodo")));
   const busca = params.get("q") ?? undefined;
   const status = lerStatus(params.get("status"));
+  // A etiqueta filtra junto do período e da busca (e antes dos contadores das abas): ela é um recorte
+  // da lista, e não uma aba — quem filtra por "orçamento" quer ver quantas dessas precisam de atenção.
+  const etiqueta = normalizarEtiqueta(params.get("etiqueta") ?? "") || undefined;
 
-  const doPeriodo = listarConversas({ desde, busca });
+  const doPeriodo = listarConversas({ desde, busca, etiqueta });
   const contadores = {
     todas: doPeriodo.length,
     humano: doPeriodo.filter((c) => c.status === "humano").length,

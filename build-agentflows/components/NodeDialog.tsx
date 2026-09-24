@@ -7,9 +7,9 @@ import { ReferenceField, type Reference } from "./ReferenceField";
 import { ToolPicker } from "./ToolPicker";
 import { ModelPicker } from "./ModelPicker";
 const fields: Record<Kind, string[]> = {
-  start: ["state"],
-  llm: ["system", "prompt", "model"],
-  agent: ["system", "prompt", "model", "tools"],
+  start: [],
+  llm: ["model", "system", "prompt"],
+  agent: ["model", "system", "prompt", "tools"],
   condition: ["value", "operator", "compare"],
   state: ["key", "value"],
   http: ["url", "method", "body", "credential"],
@@ -21,10 +21,10 @@ const fields: Record<Kind, string[]> = {
   end: ["text"],
 };
 const labels: Record<string, [string, string]> = {
-  system: ["Instruções", "Quem é este agente, o que deve fazer e como responder."],
+  system: ["Instruções", ""],
   prompt: [
     "Mensagem (opcional)",
-    "Em branco, o bloco recebe a conversa ou o resultado da etapa anterior.",
+    "",
   ],
   model: ["Modelo de IA", ""],
   tools: ["Ferramentas e servidores MCP", ""],
@@ -76,6 +76,8 @@ export function NodeDialog({
   onClose,
   onSave,
   onRename,
+  connected,
+  onConnect,
 }: {
   node: Block;
   nodes: Block[];
@@ -83,11 +85,21 @@ export function NodeDialog({
   onClose: () => void;
   onSave: (n: Block) => void;
   onRename: (label: string) => void;
+  connected: boolean;
+  onConnect: () => void;
 }) {
   const [draft, setDraft] = useState(() => structuredClone(node)),
     [groups, setGroups] = useState<ToolGroup[] | null>(null),
     [savedName, setSavedName] = useState(node.data.label),
     [nameSaved, setNameSaved] = useState(false);
+  const [closeError, setCloseError] = useState("");
+  const [variables, setVariables] = useState<{ key: string; value: string }[]>(() => {
+    try { return Object.entries(JSON.parse(node.data.config.state || "{}")).map(([key, value]) => ({ key, value: String(value) })); } catch { return []; }
+  });
+  const [updates, setUpdates] = useState<{ key: string; value: string }[]>(() => {
+    try { const rows = JSON.parse(node.data.config.stateUpdates || "[]"); return Array.isArray(rows) ? rows.filter((u) => u && typeof u.key === "string" && typeof u.value === "string") : []; } catch { return []; }
+  });
+  const invalidVariables = variables.some((v) => !/^[a-zA-Z][a-zA-Z0-9_]{0,60}$/.test(v.key)) || new Set(variables.map((v) => v.key)).size !== variables.length;
   const c = draft.data.config,
     k = draft.data.kind;
   useEffect(() => {
@@ -118,11 +130,16 @@ export function NodeDialog({
     setTimeout(() => setNameSaved(false), 1800);
   }
   function saveAndClose() {
+    if (!draft.data.label.trim() || (k === "start" && invalidVariables) || updates.some((u) => !updateKeys.has(u.key)) || new Set(updates.map((u) => u.key)).size !== updates.length) {
+      setCloseError("Confira o nome do bloco e use nomes únicos e válidos nas variáveis antes de fechar.");
+      return false;
+    }
     onSave({
       ...draft,
-      data: { ...draft.data, label: draft.data.label.trim() },
+      data: { ...draft.data, label: k === "start" ? "Início" : draft.data.label.trim(), config: { ...c, ...(k === "start" ? { state: JSON.stringify(Object.fromEntries(variables.map((v) => [v.key, v.value]))) } : {}), ...(["agent", "llm"].includes(k) ? { stateUpdates: JSON.stringify(updates) } : {}) } },
     });
     onClose();
+    return true;
   }
   const known = new Set((groups || []).flatMap((g) => g.tools.map((t) => t.id)));
   const stateKeys = new Set<string>();
@@ -136,11 +153,13 @@ export function NodeDialog({
         );
       } catch {}
   }
+  const updateKeys = new Set<string>();
+  try { Object.keys(JSON.parse(nodes.find((n) => n.data.kind === "start")?.data.config.state || "{}")).forEach((key) => updateKeys.add(key)); } catch {}
   const references: Reference[] = [
     { value: "{{input}}", label: "Conversa", hint: "o que a pessoa enviou" },
     { value: "{{last}}", label: "Etapa anterior", hint: "resultado do bloco anterior" },
     ...[...stateKeys].map((k) => ({
-      value: `{{state.${k}}}`,
+      value: `{{fluxo.${k}}}`,
       label: "Variável " + k,
     })),
     { value: "{{state.approval}}", label: "Decisão da aprovação", hint: "yes ou no" },
@@ -156,7 +175,7 @@ export function NodeDialog({
   ];
   return (
     <Modal
-      title={
+      title={k === "start" ? "Início" :
         <label className="modal-title-input">
           <input
             value={draft.data.label}
@@ -193,7 +212,7 @@ export function NodeDialog({
           )}
         </label>
       }
-      onClose={onClose}
+      onClose={saveAndClose}
     >
       <div className="node-dialog-type">
         <span style={{ background: NODE_STYLE[k].color }}>
@@ -204,11 +223,23 @@ export function NodeDialog({
           <p>{BLOCKS[k].help}</p>
         </div>
       </div>
-      <p className="reference-tip">
+      {!["start", "agent", "llm"].includes(k) && <p className="reference-tip">
         Digite <code>{"{{"}</code> em qualquer campo para inserir a conversa, o
-        resultado anterior ou uma variável.
-      </p>
+        resultado anterior ou uma variável como <code>{"{{fluxo.Resumo}}"}</code>.
+      </p>}
       <div className="node-fields">
+        {k === "start" && <section className="node-fields">
+          <strong>Variáveis do fluxo</strong>
+          <small>Defina um nome e um valor inicial, que pode ficar em branco. Os agentes podem atualizar esses valores durante o fluxo.</small>
+          {variables.map((v, i) => <div className="node-field node-variable-card" key={i}>
+            <div className="node-variable-heading"><strong>Variável {i + 1}</strong><IconButton icon="trash" label={`Excluir variável ${i + 1}`} onClick={() => setVariables(variables.filter((_, j) => j !== i))} /></div>
+            <label>Nome da variável<input aria-label={`Nome da variável ${i + 1}`} value={v.key} maxLength={61} placeholder="Ex.: Resumo" onChange={(e) => setVariables(variables.map((x, j) => j === i ? { ...x, key: e.target.value } : x))} /></label>
+            <label>Valor inicial<textarea aria-label={`Valor inicial ${i + 1}`} value={v.value} maxLength={20000} rows={2} onChange={(e) => setVariables(variables.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} /></label>
+          </div>)}
+          <button className="studio-button" disabled={variables.length >= 50} onClick={() => setVariables([...variables, { key: "", value: "" }])}>Adicionar variável</button>
+          {invalidVariables && <small role="alert">Use nomes únicos, começando com uma letra, sem espaços ou acentos.</small>}
+        </section>}
+
         {fields[k].map((key) => (
           <div className="node-field" key={key}>
             <span className="field-title">
@@ -217,11 +248,18 @@ export function NodeDialog({
                 : labels[key][0]}
             </span>
             {key === "model" ? (
+              <>
               <ModelPicker
                 value={c[key] || ""}
                 chatModels={models}
+                connected={connected}
                 onChange={(v) => change(key, v)}
               />
+              {!connected && <small>
+                Conecte o ChatGPT para executar de verdade.{" "}
+                <button type="button" className="node-connect-link" onClick={() => { if (saveAndClose()) onConnect(); }}>Conectar</button>
+              </small>}
+              </>
             ) : key === "operator" || key === "method" ? (
               <select
                 value={c[key] || ""}
@@ -267,6 +305,8 @@ export function NodeDialog({
               <ReferenceField
                 multiline
                 rows={key === "system" ? 5 : 3}
+                ariaLabel={labels[key][0]}
+                placeholder={key === "prompt" && (k === "agent" || k === "llm") ? "Define a mensagem desta etapa, sem uma chamada extra à IA. Use {{last}} para incluir a resposta anterior. Em branco, usa a conversa ou o resultado anterior." : undefined}
                 spellCheck={key === "system" || key === "prompt"}
                 value={c[key] || ""}
                 references={references}
@@ -296,19 +336,21 @@ export function NodeDialog({
             )}
           </div>
         ))}
+        {(k === "agent" || k === "llm") && <section className="node-fields node-completion">
+          <span className="node-completion-title">Ao concluir esta etapa</span>
+          {updates.map((u, i) => <div className="node-field" key={i}>
+            <label>Variável<select aria-label={`Variável a atualizar ${i + 1}`} value={u.key} onChange={(e) => setUpdates(updates.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}>
+              <option value="">Escolha uma variável</option>
+              {[...updateKeys].map((key) => <option key={key} value={key}>{key}</option>)}
+            </select></label>
+            <label>Novo valor<ReferenceField value={u.value} ariaLabel={`Novo valor ${i + 1}`} onChange={(value) => setUpdates(updates.map((x, j) => j === i ? { ...x, value } : x))} references={[{ value: `{{nodes.${node.id}}}`, label: "Resposta deste agente" }, ...references.filter((r) => r.value !== "{{last}}")]} /></label>
+            <button className="studio-button" onClick={() => setUpdates(updates.map((x, j) => j === i ? { ...x, value: `{{nodes.${node.id}}}` } : x))}>Usar resposta deste agente</button>
+            <button className="studio-button" onClick={() => setUpdates(updates.filter((_, j) => j !== i))}>Remover atualização {i + 1}</button>
+          </div>)}
+          <button className="studio-button" disabled={!updateKeys.size || updates.length >= updateKeys.size} onClick={() => setUpdates([...updates, { key: [...updateKeys].find((key) => !updates.some((u) => u.key === key)) || "", value: `{{nodes.${node.id}}}` }])}>Atualizar variável de estado</button>
+        </section>}
       </div>
-      <div className="modal-actions">
-        <button className="studio-button" onClick={onClose}>
-          Cancelar
-        </button>
-        <button
-          className="studio-button primary"
-          disabled={!draft.data.label.trim()}
-          onClick={saveAndClose}
-        >
-          Salvar bloco
-        </button>
-      </div>
+      {closeError && <p className="studio-error" role="alert">{closeError}</p>}
     </Modal>
   );
 }
