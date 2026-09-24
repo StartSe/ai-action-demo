@@ -23,22 +23,37 @@ function flow(graph = template()) {
   const f = store.createFlow("Teste");
   return store.saveFlow(f.id, { name: f.name, description: "", graph });
 }
-test("demo executa grafo, referências e preserva versão publicada", async () => {
+test("primeiro salvamento cria o fluxo completo e falhas não deixam registros", () => {
+  const count = store.listFlows().length;
+  assert.throws(() => store.createSavedFlow({ name: "", description: "", graph: template() }));
+  assert.throws(() => store.createSavedFlow({ name: "Inválido", description: "", graph: { nodes: null, edges: [] } }));
+  assert.equal(store.listFlows().length, count);
+  const graph = { nodes: [block("start", "inicio", 0, 0)], edges: [] };
+  const saved = store.createSavedFlow({ name: " Meu fluxo ", description: "", graph });
+  assert.equal(saved.name, "Meu fluxo");
+  assert.equal(saved.graph.nodes.length, 1);
+  assert.deepEqual(store.getFlow(saved.id).graph, graph);
+  assert.deepEqual(saved.published, saved.graph);
+  assert.equal(store.listFlows().length, count + 1);
+  store.deleteFlow(saved.id);
+});
+test("testes e integrações executam o último fluxo salvo como v1", async () => {
   const f = flow();
-  store.publishFlow(f.id);
+  assert.ok(f.published, "Salvar também publica o fluxo");
   const g = template();
-  g.nodes[2].data.config.text = "rascunho";
+  g.nodes[2].data.config.text = "Atualizado";
   store.saveFlow(f.id, { name: "Editado", description: "", graph: g });
   const r = await runtime.startRun(f.id, "Olá", true, true);
   assert.equal(r.status, "completed");
   assert.equal(r.version, 1);
-  assert.match(r.output, /Demonstração/);
+  assert.equal(r.output, "Atualizado");
   assert.equal(r.trace.length, 3);
   const draft = await runtime.startRun(f.id, "Olá", false, true);
-  assert.equal(draft.output, "rascunho");
-  assert.equal(draft.version, 0);
+  assert.equal(draft.output, "Atualizado");
+  assert.equal(draft.version, 1);
+  assert.equal(store.publishFlow(f.id).version, 1);
   store.publishFlow(f.id, false);
-  await assert.rejects(() => runtime.startRun(f.id, "Olá", true), /Publique/);
+  await assert.rejects(() => runtime.startRun(f.id, "Olá", true), /Salve/);
 });
 test("grafo inválido recusa IDs repetidos, conexões incompletas e blocos órfãos", () => {
   const g = template();
@@ -341,6 +356,28 @@ test("LLM sem mensagem recebe a conversa e depois o resultado anterior", async (
   assert.equal(runtime.message(c, r), "Contexto: Pedido atrasado");
 });
 
+test("Mensagem personaliza a chamada da etapa sem iteração extra; last inclui o resultado anterior", async () => {
+  const original = bridge.run;
+  const prompts: string[] = [];
+  bridge.run = async ({ prompt }) => { prompts.push(prompt); return prompts.length === 1 ? "Resposta anterior" : "Resposta revisada"; };
+  try {
+    const graph = template();
+    graph.nodes[1].data.config.prompt = "Analise: {{input}}";
+    const review = block("llm", "revisor", 0, 0);
+    review.data.config.prompt = "Revise: {{last}}";
+    graph.nodes.splice(2, 0, review);
+    graph.edges = [
+      { id: "1", source: "inicio", target: "analista" },
+      { id: "2", source: "analista", target: "revisor" },
+      { id: "3", source: "revisor", target: "resposta" },
+    ];
+    const result = await runtime.startRun(flow(graph).id, "Meu pedido", false, false);
+    assert.equal(result.status, "completed");
+    assert.deepEqual(prompts, ["Analise: Meu pedido", "Revise: Resposta anterior"]);
+    assert.equal(runtime.message({ prompt: "Mensagem independente" }, result), "Mensagem independente");
+  } finally { bridge.run = original; }
+});
+
 test("dois agentes reutilizam a mesma ferramenta com seleção independente e sem credenciais no fluxo", async () => {
   const original = bridge.run;
   const seen: string[][] = [];
@@ -393,10 +430,15 @@ test("recusa variáveis desconhecidas, atualizações duplicadas e agentes desco
   g.nodes.push(block("agent", "solto", 0, 0));
   assert.throws(() => store.validateGraph(g, true), /conectados/);
 });
-test("novo fluxo começa com Início e Agente, sem Resposta obrigatória", () => {
+test("novo fluxo começa somente com Início e salvar preserva o canvas", () => {
   const f = store.createFlow();
-  assert.deepEqual(f.graph.nodes.map((n) => n.data.kind), ["start", "agent"]);
-  store.validateGraph(f.graph, true);
+  assert.deepEqual(f.graph.nodes.map((n) => n.data.kind), ["start"]);
+  assert.deepEqual(f.graph.edges, []);
+  f.graph.nodes[0].position = { x: 123, y: -456 };
+  const expected = structuredClone(f.graph);
+  store.saveFlow(f.id, { name: "Meu fluxo", description: "", graph: f.graph });
+  assert.deepEqual(store.getFlow(f.id).graph, expected);
+  assert.deepEqual(f.graph, expected);
 });
 
 
@@ -422,4 +464,64 @@ test("Agente e LLM pesquisam na web sem configuração, inclusive em fluxos anti
   } finally {
     bridge.run = original;
   }
+});
+
+
+test("salvar rejeita dados corrompidos sem substituir a configuração em uso", () => {
+  const f = flow();
+  const invalid = template();
+  invalid.edges[0].target = "bloco-inexistente";
+  assert.throws(() => store.saveFlow(f.id, { name: "Inválido", description: "", graph: invalid }), /conexão inválida/);
+  assert.deepEqual(store.getFlow(f.id), f);
+});
+
+test("Início sozinho pode ser salvo e reaberto; somente o teste no chat é bloqueado", async () => {
+  const graph = { nodes: [block("start", "inicio", 120, 80)], edges: [] };
+  const f = store.createSavedFlow({ name: "Em construção", description: "", graph });
+  store.saveFlow(f.id, { ...f, graph });
+  assert.deepEqual(store.getFlow(f.id).graph, graph);
+  await assert.rejects(runtime.startRun(f.id, "Olá", false, true), /apenas o bloco Início.*Adicione e conecte/);
+  assert.deepEqual(store.getFlow(f.id).graph, graph);
+});
+
+test("conexões incompletas não impedem salvar, mas impedem executar", async () => {
+  const graph = template();
+  graph.edges = [];
+  const f = store.createSavedFlow({ name: "Em construção", description: "", graph });
+  assert.deepEqual(store.getFlow(f.id).graph, graph);
+  await assert.rejects(runtime.startRun(f.id, "Olá", false, true), /Conecte/);
+});
+
+test("salvar atualiza a v1 sem alterar a execução que já aguarda aprovação", async () => {
+  const g = template();
+  g.nodes[1] = block("approval", "analista", 0, 0);
+  g.edges[1].sourceHandle = "yes";
+  g.nodes[2].data.config.text = "Antes";
+  g.nodes.push(block("end", "no", 0, 0));
+  g.edges.push({ id: "no", source: "analista", target: "no", sourceHandle: "no" });
+  const f = flow(g);
+  const pending = await runtime.startRun(f.id, "Revisar", true, true);
+  assert.equal(pending.status, "waiting");
+  g.nodes[2].data.config.text = "Depois";
+  const saved = store.saveFlow(f.id, { name: f.name, description: "", graph: g });
+  assert.equal(saved.version, 1);
+  assert.deepEqual(saved.published, saved.graph);
+  assert.equal((await runtime.resumeRun(pending.id, "yes")).output, "Antes");
+  const next = await runtime.startRun(f.id, "Revisar", true, true);
+  assert.equal((await runtime.resumeRun(next.id, "yes")).output, "Depois");
+});
+
+test("fluxos existentes usam v1 e o grafo salvo, preservando a API antiga de publicação", async () => {
+  const { abrirBanco } = await import("./store");
+  const f = flow();
+  const oldPublished = structuredClone(f.graph);
+  f.graph.nodes[2].data.config.text = "Conteúdo salvo";
+  abrirBanco().prepare("UPDATE flows SET body=? WHERE id=?").run(JSON.stringify({ ...f, version: 8, published: oldPublished }), f.id);
+  assert.equal(store.getFlow(f.id).version, 1);
+  assert.deepEqual(store.getFlow(f.id).published, f.graph);
+  assert.equal(store.listFlows().find(item => item.id === f.id)?.version, 1);
+  const run = await runtime.startRun(f.id, "Olá", true, true);
+  assert.equal(run.output, "Conteúdo salvo");
+  assert.equal(run.version, 1);
+  assert.equal(store.publishFlow(f.id).version, 1);
 });

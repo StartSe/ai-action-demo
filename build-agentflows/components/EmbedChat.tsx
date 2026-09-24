@@ -9,7 +9,8 @@ class EmbedApiError extends Error {
 }
 type Snapshot = { sessionId: string; turns: EmbedTurn[]; commands: PageCommand[] };
 type Wire = { channel: string; version: number; type: string; [key:string]: unknown };
-export function EmbedChat({ title, welcome }: { title: string; welcome: string }) {
+export function EmbedChat({ title, welcome, displayMode = "detailed" }: { title: string; welcome: string; displayMode?: "detailed" | "simple" }) {
+  const detailed = displayMode === "detailed";
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
@@ -22,6 +23,24 @@ export function EmbedChat({ title, welcome }: { title: string; welcome: string }
   const state = useRef({ token: "", sessionId: "", parent: "", init: null as Wire | null, handled: new Set<string>(), polling: false, handshake: false, pendingMessage: null as {requestId:string; input:string} | null });
   const messages = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = textarea.current;
+    if (!el) return;
+    const resize = () => {
+      const style = getComputedStyle(el);
+      const max = 3 * parseFloat(style.lineHeight) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      el.style.height = "auto";
+      el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+    };
+    resize();
+    let width = el.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (el.clientWidth !== width) { width = el.clientWidth; resize(); }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [draft]);
   function post(type: string, data: Record<string, unknown> = {}) { if (state.current.parent) window.parent.postMessage({ channel: "agentflows", version: 1, type, ...data }, state.current.parent); }
   async function api(payload?: Record<string, unknown>, path = "/api/embed/session", form?: FormData) {
     const res = await fetch(payload || form ? path : path + "?id=" + encodeURIComponent(state.current.sessionId), {
@@ -142,13 +161,13 @@ export function EmbedChat({ title, welcome }: { title: string; welcome: string }
       {snapshot?.turns.map(t => <div className="embed-turn" key={t.id}>
         <div className="embed-message user">{t.input}</div>
         {!!t.attachments?.length && <small className="embed-file-label">{t.attachments.map(a => a.name).join(" · ")}</small>}
-        {t.output && <div className="embed-message assistant">{t.output}</div>}
-        {t.status === "running" && <div className="embed-progress" role="status"><span className="embed-pulse"/><div><strong>{t.activity}</strong><small>{Math.max(0, Math.floor((elapsed - Date.parse(t.createdAt)) / 60000))} min · Você pode continuar usando a página.</small></div></div>}
+        {t.output && (detailed || t.status === "completed" || t.status === "waiting") && <div className="embed-message assistant">{t.output}</div>}
+        {detailed && t.status === "running" && <div className="embed-progress" role="status"><span className="embed-pulse"/><div><strong>{t.activity}</strong><small>{Math.max(0, Math.floor((elapsed - Date.parse(t.createdAt)) / 60000))} min · Você pode continuar usando a página.</small></div></div>}
         {t.status === "waiting" && <div className="embed-approval"><strong>{t.approval === "recovery" ? "Precisamos conferir antes de continuar" : "Sua decisão faz parte do próximo passo"}</strong><p>{t.approval === "recovery" ? t.error : "Revise o resultado acima e escolha como seguir."}</p><div><button disabled={busy || !connected} onClick={() => t.approval === "recovery" ? setConfirmation({runId:t.id, decision:"retry"}) : void decision(t.id, "yes")}>{t.approval === "recovery" ? "Revisar retomada" : "Aprovar e continuar"}</button>{t.approval !== "recovery" && <button className="secondary" disabled={busy || !connected} onClick={() => void decision(t.id, "no")}>Não aprovar</button>}</div></div>}
         {t.status === "failed" && <p className="embed-error">{t.error || "Não foi possível concluir esta tarefa."}</p>}
         {t.status === "cancelled" && <p className="embed-note">Cancelamento solicitado. Novas etapas foram bloqueadas; ações externas já iniciadas podem terminar.</p>}
       </div>)}
-      {snapshot?.commands.map(c => <p key={c.id} className="embed-note" role="status">{PAGE_ACTIONS[c.name as keyof typeof PAGE_ACTIONS] || "Aguardando uma ação na página"}. Confira a solicitação na página.</p>)}
+      {detailed && snapshot?.commands.map(c => <p key={c.id} className="embed-note" role="status">{PAGE_ACTIONS[c.name as keyof typeof PAGE_ACTIONS] || "Aguardando uma ação na página"}. Confira a solicitação na página.</p>)}
     </div>
     {confirmNew && <section className="embed-confirm"><strong>Começar uma nova conversa?</strong><p>{active ? "Conclua ou cancele a tarefa atual antes de começar outra conversa." : "A conversa atual continuará registrada no histórico do fluxo."}</p><button disabled={!!active || busy} onClick={() => void newSession()}>Nova conversa</button><button className="secondary" onClick={() => setConfirmNew(false)}>Voltar</button></section>}
     {confirmation && <section className="embed-confirm"><strong>{confirmation.decision === "cancel" ? "Cancelar a tarefa?" : "Retomar a etapa interrompida?"}</strong><p>{confirmation.decision === "cancel" ? "Vamos interromper o trabalho. Ações já concluídas não serão desfeitas." : "Confira se a ação anterior já aconteceu. Retomar pode repetir efeitos externos e consome uma tentativa."}</p><button disabled={busy} onClick={() => void decision(confirmation.runId, confirmation.decision)}>Confirmar</button><button className="secondary" onClick={() => setConfirmation(null)}>Voltar</button></section>}
@@ -157,7 +176,7 @@ export function EmbedChat({ title, welcome }: { title: string; welcome: string }
     <footer className="embed-footer">
       {active && <button className="embed-stop" disabled={busy} onClick={() => setConfirmation({runId:active.id,decision:"cancel"})}>■ Cancelar tarefa</button>}
       {files.length > 0 && <div className="embed-files">{files.map(f => <button key={f.id} onClick={() => setFiles(files.filter(a => a.id !== f.id))}>{f.name} ×</button>)}</div>}
-      <form onSubmit={e => { e.preventDefault(); void send(); }}><textarea aria-label="Sua mensagem" placeholder={active ? "Acompanhe a tarefa ou responda acima…" : "O que você gostaria de melhorar?"} value={draft} maxLength={20000} disabled={!!active} onChange={e => { setDraft(e.target.value); post("draft", {value:e.target.value}); }} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }}/><div className="embed-compose-actions"><button type="button" aria-label="Anexar arquivo ou captura" disabled={busy || !!active || !connected || files.length >= 5} onClick={() => fileInput.current?.click()}>＋ Anexar</button><button type="submit" disabled={busy || !!active || !connected || !draft.trim()} aria-label="Enviar mensagem">↑</button></div></form>
+      <form onSubmit={e => { e.preventDefault(); void send(); }}><textarea ref={textarea} rows={1} aria-label="Sua mensagem" placeholder={active ? "Acompanhe a tarefa ou responda acima…" : "O que você gostaria de melhorar?"} value={draft} maxLength={20000} disabled={!!active} onChange={e => { setDraft(e.target.value); post("draft", {value:e.target.value}); }} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }}/><div className="embed-compose-actions"><button type="button" aria-label="Anexar arquivo ou captura" disabled={busy || !!active || !connected || files.length >= 5} onClick={() => fileInput.current?.click()}>＋ Anexar</button><button type="submit" disabled={busy || !!active || !connected || !draft.trim()} aria-label="Enviar mensagem">↑</button></div></form>
       <input hidden ref={fileInput} type="file" accept={ATTACHMENT_ACCEPT} onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void act(async () => { if (file.size > 10 * 1024 * 1024) throw new Error("Use um arquivo de até 10 MB."); const a = await upload(file, file.name); setFiles(prev => [...prev, a]); }); }}/>
       <small className="embed-brand">Build Agentflows</small>
     </footer>

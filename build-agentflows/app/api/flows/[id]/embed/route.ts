@@ -9,7 +9,11 @@ export async function PUT(req: Request, c: { params: Promise<{id:string}> }) {
 export async function POST(req: Request, c: { params: Promise<{id:string}> }) {
   return api(async () => {
     const { id } = await c.params, b = await body(req);
-    if (b.action === "preview") return issueEmbedTicket(id, "admin-preview", new URL(req.url).origin);
+    if (b.action === "preview") {
+      if (embedSettings(id).enabled && !hasEmbedKey(id)) rotateEmbedKey(id);
+      const origin = req.headers.get("origin") || new URL(req.url).origin;
+      return issueEmbedTicket(id, "admin-preview", origin);
+    }
     return { key: rotateEmbedKey(id) };
   });
 }

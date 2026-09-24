@@ -1,5 +1,17 @@
 # Histórico de versões
 
+## 0.9.3 — 24/09/2026
+
+- Novos fluxos abrem sem nome e sem gravação automática, apenas com Início centralizado; o primeiro salvamento pede o nome.
+- Salvar preserva blocos, posições e conexões, inclusive fluxos em construção. A validação de execução aparece no chat.
+- Salvamento atualiza a v1 usada pelos testes e integrações, sem ação separada de publicação.
+- Nome editável no header, asterisco para alterações pendentes, ações no menu de configurações e botão Salvar por ícone, com confirmação destacada.
+- Opções dos blocos acessíveis por hover, clique e toque; Agente e LLM com textos mais discretos e avisos de conexão corrigidos.
+- Geração com IA simplificada, campo de descrição ampliado e progresso transmitido pelo servidor, com animação de blocos e conclusão após validação.
+- Integrações agrupadas, geração de chave de acesso no próprio painel e cópia com feedback.
+- Chat no site com modos simples e detalhado, localhost permitido por padrão sem domínios definidos e instalação com feedback de cópia.
+- Preview do chat abre em nova aba e oferece o script de instalação; controles de domínio reutilizados nas configurações.
+
 ## 0.9.2 — 24/09/2026
 
 - Conexões sempre visíveis; seta de saída no hover do bloco, com acesso permanente no touch e alvos de toque ampliados.

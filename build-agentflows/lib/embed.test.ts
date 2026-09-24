@@ -139,3 +139,77 @@ test("Segurança limita origens por interseção e revoga tickets existentes", a
     assert.equal(embed.authenticateEmbed(new Request("https://flows.example", { headers: { Authorization: `Bearer ${x.ticket.token}` } })).subject, "alice");
   } finally { security.saveEmbedSecurity([]); }
 });
+
+test("visualização do chat persiste, mantém compatibilidade e rejeita modos inválidos", () => {
+  const { f } = setup();
+  assert.equal(embed.embedSettings(f.id).displayMode, "detailed");
+  for (const displayMode of ["simple", "detailed"] as const) {
+    embed.saveEmbedSettings(f.id, { ...embed.embedSettings(f.id), displayMode });
+    assert.equal(embed.embedSettings(f.id).displayMode, displayMode);
+  }
+  assert.throws(() => embed.saveEmbedSettings(f.id, { ...embed.embedSettings(f.id), displayMode: "invalid" as "simple" }), /visualização/);
+  const legacy = { ...embed.embedSettings(f.id) };
+  delete legacy.displayMode;
+  abrirBanco().prepare("UPDATE embed_settings SET body=? WHERE flow_id=?").run(JSON.stringify(legacy), f.id);
+  assert.equal(embed.embedSettings(f.id).displayMode, "detailed");
+});
+
+test("lista global restringe domínios do fluxo sem liberar sites não cadastrados", async () => {
+  const security = await import("./embed-security");
+  const { f } = setup();
+  try {
+    security.saveEmbedSecurity(["https://other.example"]);
+    assert.throws(() => embed.issueEmbedTicket(f.id, "alice", "https://crud.example"), /autorizado/);
+    security.saveEmbedSecurity(["https://crud.example"]);
+    assert.ok(embed.issueEmbedTicket(f.id, "alice", "https://crud.example").token);
+    assert.throws(() => security.saveEmbedSecurity(["https://crud.example/path"]), /sem caminhos/);
+    security.saveEmbedSecurity([]);
+    assert.ok(embed.issueEmbedTicket(f.id, "alice", "https://crud.example").token);
+    assert.throws(() => embed.issueEmbedTicket(f.id, "alice", "https://other.example"), /autorizado/);
+  } finally {
+    security.saveEmbedSecurity([]);
+  }
+});
+
+test("chat vazio aceita localhost por padrão, em qualquer porta, sem liberar outros sites", async () => {
+  const security = await import("./embed-security");
+  const f = store.createFlow("Local");
+  store.saveFlow(f.id, { name: f.name, description: "", graph: template() });
+  const defaults = embed.embedSettings(f.id);
+  assert.equal(defaults.enabled, true);
+  embed.saveEmbedSettings(f.id, defaults);
+  assert.equal(embed.hasEmbedKey(f.id), true);
+  try {
+    security.saveEmbedSecurity([]);
+    for (const origin of ["http://localhost", "http://localhost:5173", "https://localhost:8443", "http://127.0.0.1:3000"]) {
+      const ticket = embed.issueEmbedTicket(f.id, "alice", origin);
+      assert.equal(embed.authenticateEmbed(request(ticket.token, {})).origin, origin);
+    }
+    for (const origin of ["https://example.com", "http://localhost.evil.com", "http://localhost:3000/path", "http://user@localhost:3000", "http://localhost:*"]) {
+      assert.throws(() => embed.issueEmbedTicket(f.id, "alice", origin), /autorizado/);
+    }
+    assert.ok(security.effectiveEmbedOrigins([]).includes("http://localhost:*"));
+    security.saveEmbedSecurity(["http://localhost:5173"]);
+    assert.deepEqual(security.effectiveEmbedOrigins([]), ["http://localhost:5173"]);
+    assert.ok(embed.issueEmbedTicket(f.id, "alice", "http://localhost:5173").token);
+    assert.throws(() => embed.issueEmbedTicket(f.id, "alice", "http://localhost:3000"), /autorizado/);
+    security.saveEmbedSecurity([]);
+    embed.saveEmbedSettings(f.id, { ...defaults, origins: ["https://app.example"] });
+    assert.throws(() => embed.issueEmbedTicket(f.id, "alice", "http://localhost:5173"), /autorizado/);
+  } finally { security.saveEmbedSecurity([]); }
+});
+
+test("preview prepara a chave internamente e usa a origem real da página", async () => {
+  const route = await import("../app/api/flows/[id]/embed/route");
+  const f = store.createFlow("Preview local");
+  store.saveFlow(f.id, { name: f.name, description: "", graph: template() });
+  assert.equal(embed.hasEmbedKey(f.id), false);
+  const response = await route.POST(new Request("http://localhost:3000/api/flows/" + f.id + "/embed", {
+    method: "POST", headers: { "Content-Type": "application/json", Origin: "http://127.0.0.1:3000" }, body: JSON.stringify({ action: "preview" }),
+  }), { params: Promise.resolve({ id: f.id }) });
+  assert.equal(response.status, 200);
+  assert.equal(embed.hasEmbedKey(f.id), true);
+  const ticket = await response.json();
+  assert.equal(embed.authenticateEmbed(request(ticket.token, {})).origin, "http://127.0.0.1:3000");
+  assert.equal("key" in ticket, false);
+});

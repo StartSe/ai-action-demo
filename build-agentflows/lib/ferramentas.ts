@@ -20,7 +20,7 @@ export const FERRAMENTAS: Ferramenta[] = [
   {
     nome: "executar_fluxo",
     descricao:
-      "Executa a versão publicada de um fluxo. Pode aguardar aprovação humana.",
+      "Executa o fluxo salvo, quando suas integrações estão ativas. Pode aguardar aprovação humana.",
     schema: {
       type: "object",
       properties: { id: { type: "string" }, input: { type: "string" } },

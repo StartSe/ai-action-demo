@@ -24,7 +24,7 @@ import {
   type Graph,
   type Run,
 } from "@/lib/flow-types";
-import { NODE_STYLE, PALETTE_HIDDEN } from "@/lib/flow-presets";
+import { NODE_STYLE, PALETTE_HIDDEN, preset, PRESETS } from "@/lib/flow-presets";
 import {
   connect as connectGraph,
   connectionProblem,
@@ -44,6 +44,7 @@ import { ConnectionLine } from "./flow/ConnectionLine";
 import type { Attachment } from "@/lib/attachment-types";
 const nodeTypes = { block: AgentNode };
 const edgeTypes = { agent: AgentEdge };
+const FIT_VIEW_OPTIONS = { padding: 0.3, maxZoom: 2 };
 // Conexão iniciada em uma saída e solta no vazio: o próximo bloco nasce já conectado.
 type Pending = {
   source: string;
@@ -72,6 +73,10 @@ export function FlowEditor({ id }: { id: string }) {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [rename, setRename] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [naming, setNaming] = useState(false);
+  const firstName = useRef<((name: string | null) => void) | null>(null);
   const [connect, setConnect] = useState(false);
   const [integration, setIntegration] = useState(false);
   const [chat, setChat] = useState(false);
@@ -134,13 +139,15 @@ export function FlowEditor({ id }: { id: string }) {
   }, []);
   useEffect(() => {
     let alive = true;
-    void request<Flow>("/api/flows/" + id)
+    const selectedPreset = id === "new" ? PRESETS.find((p) => p.id === new URLSearchParams(location.search).get("preset")) : undefined;
+    const draft: Flow = { id: "new", name: "", description: selectedPreset?.description || "", graph: selectedPreset ? preset(selectedPreset.id) : { nodes: [block("start", "inicio", 0, 0)], edges: [] }, published: null, version: 1, updatedAt: "" };
+    void (id === "new" ? Promise.resolve(draft) : request<Flow>("/api/flows/" + id))
       .then((f) => {
         if (alive) {
           let legacyVoice = "";
           try { if (f.voiceId === undefined) legacyVoice = localStorage.getItem("agentflows-voz-" + id) || ""; } catch {}
           setFlow(legacyVoice ? { ...f, voiceId: legacyVoice } : f);
-          if (legacyVoice) setDirty(true);
+          if (legacyVoice || !f.published) setDirty(true);
           setGraph(f.graph);
         }
       })
@@ -197,16 +204,24 @@ export function FlowEditor({ id }: { id: string }) {
   }, [graph, setGraph, setDirty, setUndoCount, setRedoCount]);
   const save = useCallback(async () => {
     if (!flow) throw new Error("Fluxo não carregado.");
-    const saved = await request<Flow>("/api/flows/" + id, "PUT", {
-      name: flow.name,
-      description: flow.description,
-      voiceId: flow.voiceId || "",
-      graph,
+    if (firstName.current) return null;
+    const isNew = flow.id === "new";
+    let name = flow.name;
+    if (isNew) {
+      setNameDraft("");
+      setNaming(true);
+      const chosen = await new Promise<string | null>((resolve) => { firstName.current = resolve; });
+      if (!chosen) return null;
+      name = chosen;
+    }
+    const saved = await request<Flow>(isNew ? "/api/flows" : "/api/flows/" + flow.id, isNew ? "POST" : "PUT", {
+      name, description: flow.description, voiceId: flow.voiceId || "", graph,
     });
+    if (isNew) router.replace("/flows/" + saved.id);
     setFlow(saved);
     setDirty(false);
     return saved;
-  }, [flow, graph, id, setFlow, setDirty]);
+  }, [flow, graph, router, setFlow, setDirty, setNameDraft, setNaming]);
   const act = useCallback(
     async (fn: () => Promise<void>) => {
       setBusy(true);
@@ -234,7 +249,7 @@ export function FlowEditor({ id }: { id: string }) {
         e.preventDefault();
         if (!busy)
           void act(async () => {
-            await save();
+            if (!await save()) return;
             setNotice("Fluxo salvo.");
           });
       }
@@ -283,7 +298,7 @@ export function FlowEditor({ id }: { id: string }) {
     });
     setNotice("Fluxo gerado. Revise as instruções de cada bloco e salve.");
     setTimeout(
-      () => instance.current?.fitView({ padding: 0.3, maxZoom: 1 }),
+      () => instance.current?.fitView(FIT_VIEW_OPTIONS),
       60,
     );
   }
@@ -447,17 +462,18 @@ export function FlowEditor({ id }: { id: string }) {
     setRun(null);
     let timer: ReturnType<typeof setInterval> | undefined;
     try {
-      await save();
+      const saved = await save();
+      if (!saved) return null;
       const from = new Date().toISOString();
       timer = setInterval(() => {
-        void request<Run[]>("/api/runs?flowId=" + id)
+        void request<Run[]>("/api/runs?flowId=" + saved.id)
           .then((items) => {
             const latest = items.find((r) => r.createdAt >= from);
             if (latest) updateRun(latest);
           })
           .catch(() => {});
       }, 800);
-      const result = await request<Run>("/api/flows/" + id + "/run", "POST", {
+      const result = await request<Run>("/api/flows/" + saved.id + "/run", "POST", {
           input,
           demo: false,
           attachments: attachments.map((a) => a.id),
@@ -544,22 +560,45 @@ export function FlowEditor({ id }: { id: string }) {
           }}
         />
         <div className="canvas-title">
-          <button
-            aria-label="Configurações do fluxo"
-            title="Configurações do fluxo"
-            onClick={() => setRename(true)}
-          >
-            <h1>{flow.name}</h1>
-            <Icon name="settings" size={15} />
-          </button>
-          <span>
-            <i className={dirty ? "unsaved" : ""} />
-            {dirty
-              ? "Alterações não salvas"
-              : flow.published
-                ? "Publicado · v" + flow.version
-                : "Rascunho salvo"}
-          </span>
+          {dirty && (
+            <span className="canvas-unsaved" role="img" aria-label="Alterações não salvas" title="Alterações não salvas">*</span>
+          )}
+          {editingName ? (
+            <form className="canvas-name-form" onSubmit={(event) => {
+              event.preventDefault();
+              if (busy || !nameDraft.trim()) return;
+              void act(async () => {
+                const saved = await request<Flow>("/api/flows/" + id, "PUT", {
+                  name: nameDraft.trim(), description: flow.description,
+                  voiceId: flow.voiceId || "", graph: flow.graph,
+                });
+                setFlow(saved);
+                setEditingName(false);
+                setNotice("Nome do fluxo salvo.");
+              });
+            }}>
+              <input aria-label="Nome do fluxo" value={nameDraft} maxLength={100} required autoFocus disabled={busy}
+                onFocus={(event) => event.currentTarget.select()}
+                onChange={(event) => setNameDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") { event.preventDefault(); setEditingName(false); }
+                }} />
+              <button type="submit" className="studio-icon-button" aria-label="Salvar nome do fluxo" title="Salvar nome do fluxo" disabled={busy || !nameDraft.trim()}>
+                <Icon name="check" size={18} />
+              </button>
+            </form>
+          ) : (
+            <>
+              <h1><button className="canvas-name-button" disabled={busy || running} onClick={() => {
+                if (flow.id === "new") { void act(async () => { if (await save()) setNotice("Fluxo salvo."); }); return; }
+                setNameDraft(flow.name); setEditingName(true);
+              }}>{flow.name || "Sem nome"}</button></h1>
+              <IconButton icon="pencil" label="Editar nome do fluxo" disabled={busy || running} onClick={() => {
+                if (flow.id === "new") { void act(async () => { if (await save()) setNotice("Fluxo salvo."); }); return; }
+                setNameDraft(flow.name); setEditingName(true);
+              }} />
+            </>
+          )}
         </div>
         <div className="canvas-header-actions">
           <button
@@ -573,32 +612,31 @@ export function FlowEditor({ id }: { id: string }) {
             <span>{connection?.account ? "ChatGPT" : "Conectar ChatGPT"}</span>
           </button>
           <IconButton
-            icon="runs"
-            label="Histórico do fluxo"
-            active={history}
-            onClick={() => {
-              setHistory(!history);
-              setChat(false);
-            }}
-          />
-          <IconButton
             icon="code"
             label="Implantar fluxo"
-            onClick={() => setIntegration(true)}
+            onClick={() => { if (flow.id === "new") void act(async () => { await save(); }); else setIntegration(true); }}
           />
           <details className="canvas-menu" onClick={(e) => {
             if ((e.target as Element).closest("button")) e.currentTarget.open = false;
           }}>
-            <summary aria-label="Mais ações">
-              <Icon name="more" />
+            <summary aria-label="Configurações e ações do fluxo" title="Configurações e ações do fluxo">
+              <Icon name="settings" />
             </summary>
             <div>
+              <button disabled={flow.id === "new"} onClick={() => { setHistory(!history); setChat(false); }}>
+                <Icon name="runs" size={16} />
+                Execuções
+              </button>
+              <button disabled={flow.id === "new"} onClick={() => setRename(true)}>
+                <Icon name="settings" size={16} />
+                Configurações do fluxo
+              </button>
               <button onClick={exportFlow}>
                 <Icon name="download" size={16} />
                 Exportar fluxo
               </button>
               <button
-                disabled={busy}
+                disabled={busy || flow.id === "new"}
                 onClick={() =>
                   act(async () => {
                     const f = await request<Flow>("/api/flows", "POST", {
@@ -626,16 +664,16 @@ export function FlowEditor({ id }: { id: string }) {
           <button
             className={"studio-button primary save-button" + (dirty ? "" : " saved")}
             disabled={!dirty || busy || running}
+            aria-label="Salvar fluxo"
             title={dirty ? "Salvar alterações" : "Tudo salvo"}
             onClick={() =>
               act(async () => {
-                await save();
+                if (!await save()) return;
                 setNotice("Fluxo salvo.");
               })
             }
           >
             <Icon name="save" size={17} />
-            <span>Salvar</span>
           </button>
         </div>
       </header>
@@ -702,7 +740,7 @@ export function FlowEditor({ id }: { id: string }) {
               if (pending) closePalette();
             }}
             fitView
-            fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
+            fitViewOptions={FIT_VIEW_OPTIONS}
             minZoom={0.25}
             maxZoom={2}
             snapToGrid={snap}
@@ -720,6 +758,7 @@ export function FlowEditor({ id }: { id: string }) {
               <Background gap={16} size={1} color={dark ? "#4a4d5e" : "#aaa"} />
             )}
             <Controls
+              fitViewOptions={FIT_VIEW_OPTIONS}
               position="bottom-center"
               orientation="horizontal"
               showInteractive={false}
@@ -859,10 +898,6 @@ export function FlowEditor({ id }: { id: string }) {
               </div>
             </aside>
           )}
-          <div className="canvas-help">
-            Arraste a seta de um bloco para conectar · clique duas vezes para
-            editar
-          </div>
           <div className="canvas-right-actions">
             {chat && <>
               <IconButton icon="eraser" label="Limpar conversa" disabled={!session.length || running} onClick={() => setClearChat(true)} />
@@ -894,7 +929,7 @@ export function FlowEditor({ id }: { id: string }) {
               expanded={expanded}
               voice={voice.voz}
               voiceId={flow.voiceId || ""}
-              onVoiceSettings={() => setRename(true)}
+              onVoiceSettings={() => { if (flow.id === "new") void act(async () => { await save(); }); else setRename(true); }}
               flowId={id}
               onSend={execute}
               onChange={updateRun}
@@ -964,7 +999,7 @@ export function FlowEditor({ id }: { id: string }) {
         </div>
       )}
       {notice && (
-        <div role="status" className="canvas-toast">
+        <div role="status" className="canvas-toast success">
           <Icon name="check" size={17} />
           {notice}
         </div>
@@ -975,7 +1010,7 @@ export function FlowEditor({ id }: { id: string }) {
           node={node}
           nodes={graph.nodes}
           models={connection?.models || []}
-          connected={!!connection?.account}
+          connected={aiConnected}
           onConnect={() => setConnect(true)}
           onRename={(label) => renameBlock(node.id, label)}
           onClose={() => setEditing(null)}
@@ -1012,7 +1047,7 @@ export function FlowEditor({ id }: { id: string }) {
               disabled={busy}
               onClick={() =>
                 act(async () => {
-                  await save();
+                  if (!await save()) return;
                   router.push("/");
                 })
               }
@@ -1080,7 +1115,7 @@ export function FlowEditor({ id }: { id: string }) {
         <GeneratorDialog
           flowId={id}
           replaces={graph.nodes.length > 1 || graph.edges.length > 0}
-          connected={!!connection?.account}
+          connected={aiConnected}
           onConnect={() => {
             setGenerator(false);
             setConnect(true);
@@ -1098,10 +1133,24 @@ export function FlowEditor({ id }: { id: string }) {
       {integration && (
         <IntegrationDialog
           flow={flow}
-          save={save}
-          onChange={setFlow}
           onClose={() => setIntegration(false)}
         />
+      )}
+      {naming && (
+        <Modal title="Salvar fluxo" className="flow-name-modal" onClose={() => { setNaming(false); firstName.current?.(null); firstName.current = null; }}>
+          <form onSubmit={(event) => {
+            event.preventDefault();
+            if (!nameDraft.trim()) return;
+            setNaming(false); firstName.current?.(nameDraft.trim()); firstName.current = null;
+          }}>
+            <label className="flow-name-field">Nome do fluxo
+              <input aria-label="Nome do fluxo" autoFocus required maxLength={100} value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} placeholder="Dê um nome ao seu fluxo" />
+            </label>
+            <div className="modal-actions">
+              <button type="submit" className="studio-button primary" disabled={!nameDraft.trim()}>Salvar</button>
+            </div>
+          </form>
+        </Modal>
       )}
       {rename && (
         <FlowSettingsDialog flow={flow} voiceAvailable={voice.voz} onClose={() => setRename(false)} onSave={async (settings) => {
@@ -1129,7 +1178,7 @@ export function FlowEditor({ id }: { id: string }) {
               disabled={busy}
               onClick={() =>
                 act(async () => {
-                  await request("/api/flows/" + id, "DELETE");
+                  if (flow.id !== "new") await request("/api/flows/" + id, "DELETE");
                   setDirty(false);
                   router.push("/");
                 })

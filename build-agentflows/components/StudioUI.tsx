@@ -26,6 +26,7 @@ export function useDismissMenus() {
   }, []);
 }
 export type IconName =
+  | "shield"
   | "flows"
   | "runs"
   | "plus"
@@ -81,6 +82,7 @@ export type IconName =
   | "wave"
   | "mic-off";
 const paths: Record<string, ReactNode> = {
+  shield: <><path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7z" /><path d="m8 12 3 3 5-6" /></>,
   flows: (
     <>
       <rect x="3" y="3" width="6" height="6" rx="1.5" />
@@ -300,11 +302,13 @@ export function Modal({
   children,
   onClose,
   wide = false,
+  className = "",
 }: {
   title: ReactNode;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -315,7 +319,7 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      className={"studio-modal" + (wide ? " wide" : "")}
+      className={"studio-modal" + (wide ? " wide" : "") + (className ? " " + className : "")}
       onCancel={(e) => {
         e.preventDefault();
         onClose();

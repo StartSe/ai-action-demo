@@ -7,5 +7,5 @@ export default async function EmbedPage({ params }: { params: Promise<{ id: stri
   let settings;
   try { settings = embedSettings(id); } catch { notFound(); }
   if (!settings.enabled) notFound();
-  return <EmbedChat title={settings.title} welcome={settings.welcome}/>;
+  return <EmbedChat title={settings.title} welcome={settings.welcome} displayMode={settings.displayMode}/>;
 }

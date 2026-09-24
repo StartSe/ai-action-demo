@@ -4,8 +4,8 @@ O usuário conversa normalmente. Configuração técnica fica em **Implantar →
 
 ## Instalação
 
-1. Publique o fluxo. Cadastre as origens exatas autorizadas (por exemplo `https://stage.example.com`), ative o chat e salve.
-2. Gere uma chave do servidor. Guarde-a no backend da aplicação alvo, nunca em HTML, JavaScript público, query strings ou armazenamento do navegador.
+1. Salve o fluxo no editor (o salvamento já publica ou atualiza a v1). Cadastre as origens exatas autorizadas (por exemplo `https://stage.example.com`) e salve o chat; a ativação é automática. Sem domínios no fluxo, localhost e 127.0.0.1 são aceitos em qualquer porta, sujeitos à lista global.
+2. A chave do servidor é criada internamente ao salvar ou abrir o preview. Para provisionar o backend de uma aplicação externa, um administrador pode gerar uma nova chave pela API autenticada: `POST /api/flows/ID_DO_FLUXO/embed`, com corpo `{}`. A resposta contém `key`; essa operação substitui a chave anterior e invalida os tickets existentes. Guarde-a somente no backend da aplicação alvo, nunca no script público.
 3. Implemente `/api/chat-access` na aplicação alvo. Autentique o usuário com a sessão já existente e confira se ele pode usar este fluxo. Não aceite `subject`, `flowId` ou `origin` arbitrários do navegador.
 4. Esse endpoint chama, de servidor para servidor:
 
@@ -43,7 +43,7 @@ Em React, monte no efeito do layout e chame `chat.destroy()` no cleanup. Destrua
 
 A referência da conversa, rascunho e estado aberto/fechado ficam em `sessionStorage` da página hospedeira, separados por origem do serviço e fluxo. As mensagens, aprovações, tarefas e comandos ficam no SQLite do Build Agentflows. O ID da conversa não concede acesso: cada chamada valida o ticket e seu usuário, origem e fluxo. Recarregar restaura o chat; mensagens são identificadas para evitar tarefas duplicadas em novas tentativas de envio.
 
-A API aceita a mensagem e retorna sem aguardar a IA. Um worker local consulta a fila persistida. O widget sincroniza o snapshot por polling curto; não mantém uma requisição de IA aberta durante toda a tarefa. A execução usa a versão publicada capturada ao iniciar.
+A API aceita a mensagem e retorna sem aguardar a IA. Um worker local consulta a fila persistida. O widget sincroniza o snapshot por polling curto; não mantém uma requisição de IA aberta durante toda a tarefa. A execução usa o último fluxo salvo (v1), capturado ao iniciar. Salvar também publica ou atualiza a v1 para as integrações configuradas. Novos salvamentos atualizam as próximas execuções, sem alterar tarefas em andamento.
 
 Uma aprovação humana libera o worker e mantém o checkpoint. Se o servidor reiniciar no meio de uma operação, a tarefa pede revisão antes de repetir a etapa; não há replay automático de efeitos externos. São permitidas até duas retomadas confirmadas por tarefa. O tempo ativo acumulado e o limite de comandos não são zerados ao retomar. Cancelar bloqueia novas etapas, solicita interrupção do modelo e invalida comandos pendentes; efeitos já realizados não são desfeitos.
 
@@ -114,6 +114,6 @@ Use namespace `app.` e nomes curtos. O handler deve validar os argumentos e reto
 
 ## Verificação local
 
-Em **Implantar → Chat no site**, abra **Testar em uma página**. Cadastre também a origem dessa instalação e gere a chave para usar a prévia autenticada. A página de teste tem paginação, seleção, relato de problema e uma ação customizada de exemplo. As execuções usam o fluxo publicado e o provedor real configurado; não simulam respostas de IA.
+Em **Implantar → Chat no site**, abra **Testar em uma página**. Em localhost, a prévia funciona com a lista de domínios vazia e prepara a chave internamente. Em outra origem, cadastre o endereço dessa instalação. O script de instalação também pode ser copiado na página de preview. A página de preview mostra o nome do fluxo e o botão circular para abrir o chat. As execuções usam o último fluxo salvo (v1) e o provedor real configurado; não simulam respostas de IA. Em Chat no Site, escolha a visualização detalhada, com atividades e progresso, ou simplificada, com a resposta final. Aprovações e erros permanecem visíveis nos dois modos.
 
 Testes automatizados: `node --import ./scripts/gancho-ts.mjs --test lib/embed.test.ts lib/flow-runtime.test.ts`.

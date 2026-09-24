@@ -21,10 +21,10 @@ const fields: Record<Kind, string[]> = {
   end: ["text"],
 };
 const labels: Record<string, [string, string]> = {
-  system: ["Instruções", "Quem é este agente, o que deve fazer e como responder."],
+  system: ["Instruções", ""],
   prompt: [
     "Mensagem (opcional)",
-    "Em branco, o bloco recebe a conversa ou o resultado da etapa anterior.",
+    "",
   ],
   model: ["Modelo de IA", ""],
   tools: ["Ferramentas e servidores MCP", ""],
@@ -252,9 +252,10 @@ export function NodeDialog({
               <ModelPicker
                 value={c[key] || ""}
                 chatModels={models}
+                connected={connected}
                 onChange={(v) => change(key, v)}
               />
-              {(!c.model || !connected) && !(c.model || "").startsWith("openrouter:") && <small>
+              {!connected && <small>
                 Conecte o ChatGPT para executar de verdade.{" "}
                 <button type="button" className="node-connect-link" onClick={() => { if (saveAndClose()) onConnect(); }}>Conectar</button>
               </small>}
@@ -304,6 +305,8 @@ export function NodeDialog({
               <ReferenceField
                 multiline
                 rows={key === "system" ? 5 : 3}
+                ariaLabel={labels[key][0]}
+                placeholder={key === "prompt" && (k === "agent" || k === "llm") ? "Define a mensagem desta etapa, sem uma chamada extra à IA. Use {{last}} para incluir a resposta anterior. Em branco, usa a conversa ou o resultado anterior." : undefined}
                 spellCheck={key === "system" || key === "prompt"}
                 value={c[key] || ""}
                 references={references}
@@ -333,8 +336,8 @@ export function NodeDialog({
             )}
           </div>
         ))}
-        {(k === "agent" || k === "llm") && <section className="node-fields">
-          <strong>Ao concluir esta etapa</strong>
+        {(k === "agent" || k === "llm") && <section className="node-fields node-completion">
+          <span className="node-completion-title">Ao concluir esta etapa</span>
           {updates.map((u, i) => <div className="node-field" key={i}>
             <label>Variável<select aria-label={`Variável a atualizar ${i + 1}`} value={u.key} onChange={(e) => setUpdates(updates.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}>
               <option value="">Escolha uma variável</option>

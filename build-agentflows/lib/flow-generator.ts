@@ -4,6 +4,8 @@ import { FlowError, validateGraph } from "./flow-store";
 import { BLOCKS, block, type Graph, type Kind } from "./flow-types";
 import { layout, outputs } from "./flow-graph";
 export type Generated = { name: string; description: string; graph: Graph };
+export type GenerationPhase = "interpreting" | "planning" | "creating" | "repairing";
+export type GenerationEvent = { phase: GenerationPhase } | { result: Generated } | { error: string };
 const KINDS = Object.keys(BLOCKS) as Kind[];
 // Campos de configuração aceitos por tipo, para o modelo preencher além dos blocos e conexões.
 const FIELDS: Record<Kind, string> = {
@@ -121,20 +123,26 @@ export async function defaultRunner() {
 export async function generateFlow(
   request: unknown,
   run?: (system: string, prompt: string) => Promise<string>,
+  onProgress?: (phase: GenerationPhase) => void,
 ): Promise<Generated> {
+  onProgress?.("interpreting");
   if (typeof request !== "string" || !request.trim() || request.length > 4000)
     throw new FlowError("Descreva o fluxo em até 4 mil caracteres.");
   run ??= await defaultRunner();
+  onProgress?.("planning");
   const answer = await run(GENERATOR_SYSTEM, request.trim());
+  onProgress?.("creating");
   try {
     return parseGenerated(answer);
   } catch (first) {
     const reason =
       first instanceof Error ? first.message : "resposta inválida";
+    onProgress?.("repairing");
     const retry = await run(
       GENERATOR_SYSTEM,
       `${request.trim()}\n\nA resposta anterior foi recusada: ${reason}\nResposta anterior:\n${answer.slice(0, 6000)}\n\nCorrija e responda somente com o JSON.`,
     );
+    onProgress?.("creating");
     return parseGenerated(retry);
   }
 }

@@ -90,3 +90,39 @@ test("gerador pede correção uma vez e devolve o fluxo corrigido", async () => 
   );
   await assert.rejects(() => generateFlow(""), /Descreva/);
 });
+
+test("geração transmite etapas reais e só conclui com um grafo validado, sem salvar o rascunho", async () => {
+  const { POST } = await import("../app/api/flows/[id]/generate/route");
+  const { chatGPT } = await import("./chatgpt");
+  const { listFlows } = await import("./flow-store");
+  const bridge = chatGPT(), originalAccount = bridge.account, originalRun = bridge.run;
+  let finish!: (answer: string) => void;
+  const answer = new Promise<string>((resolve) => { finish = resolve; });
+  bridge.account = async () => ({ account: { type: "chatgpt", email: "test@example.com", planType: "plus" }, login: null, error: null });
+  bridge.run = async () => answer;
+  try {
+    const response = await POST(new Request("http://localhost/api/flows/new/generate", {
+      method: "POST", headers: { Accept: "application/x-ndjson" }, body: JSON.stringify({ prompt: "Organizar pedidos" }),
+    }), { params: Promise.resolve({ id: "new" }) });
+    assert.match(response.headers.get("content-type") || "", /application\/x-ndjson/);
+    const reader = response.body!.getReader(), decoder = new TextDecoder();
+    assert.deepEqual(JSON.parse(decoder.decode((await reader.read()).value)), { phase: "interpreting" });
+    assert.deepEqual(JSON.parse(decoder.decode((await reader.read()).value)), { phase: "planning" });
+    finish(good);
+    let remaining = "";
+    while (true) { const chunk = await reader.read(); if (chunk.done) break; remaining += decoder.decode(chunk.value); }
+    const events = remaining.trim().split("\n").map((line) => JSON.parse(line));
+    assert.equal(events[0].phase, "creating");
+    assert.deepEqual(events[1].result, parseGenerated(good));
+    assert.equal(listFlows().length, 0);
+
+    bridge.run = async () => "resposta inválida";
+    const failed = await POST(new Request("http://localhost/api/flows/new/generate", {
+      method: "POST", headers: { Accept: "application/x-ndjson" }, body: JSON.stringify({ prompt: "Organizar pedidos" }),
+    }), { params: Promise.resolve({ id: "new" }) });
+    const failedEvents = (await failed.text()).trim().split("\n").map((line) => JSON.parse(line));
+    assert.ok(failedEvents.some((event) => event.phase === "repairing"));
+    assert.ok(failedEvents.at(-1).error);
+    assert.ok(!failedEvents.some((event) => event.result));
+  } finally { finish(good); bridge.account = originalAccount; bridge.run = originalRun; }
+});

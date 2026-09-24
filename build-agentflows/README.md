@@ -1,6 +1,6 @@
 # Build Agentflows — v0.9.1
 
-Versão 0.9.0: chat embed com eventos e retomada, variáveis compartilhadas no editor, Agente/LLM como etapas finais e controle de domínios. Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
+Versão 0.9.3: novos fluxos sem gravação automática, salvamento sem alterar o canvas, geração com IA com progresso e melhorias no chat embed e nas integrações. Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
 
 Crie fluxos visuais de agentes de IA, teste cada etapa e publique versões que seus sistemas e assistentes podem executar. Aplicação independente da suíte **IA para Executivos**, inspirada na orquestração explícita de [AgentFlow V2 do Flowise](https://docs.flowiseai.com/using-flowise/agentflowv2).
 
@@ -12,7 +12,7 @@ Um quadro visual conecta os blocos: Início, LLM (Assistente), Agente, Condiçã
 
 Um LLM ou Agente com a mensagem em branco recebe automaticamente a conversa (no primeiro passo) ou o resultado da etapa anterior; `{{input}}` não é obrigatório. Ao digitar `{{` em qualquer campo aparece um autocompletar com a conversa, a etapa anterior, as variáveis e os blocos do fluxo.
 
-O editor segue a experiência do Agentflow V2: blocos compactos coloridos, alça de entrada em barra, saídas em seta que aparecem ao passar o mouse, conexões com gradiente entre as cores dos blocos e botão para removê-las, rótulo do ramo (Sim, Não, Repetir, Concluir) junto à origem. Arraste uma saída para outro bloco para conectar; solte no vazio para escolher o próximo bloco já conectado. Cada saída aceita uma conexão e ciclos só existem pela saída Repetir. O botão ✨ abre "O que você quer construir?": o ChatGPT desenha blocos, conexões e instruções a partir de uma descrição, com prévia antes de ir para o quadro. Salvar altera o rascunho; publicar cria uma cópia estável para integrações. Testes usam o rascunho pelo chat no canto superior direito, com histórico da sessão, etapas executadas e aprovação em linha. Cada execução guarda entrada, saída, versão, estado e registro de etapas em SQLite. Aprovações persistem após reinício e aceitam uma única decisão. Execuções que estavam rodando no momento do reinício são marcadas como interrompidas para não repetir ações externas silenciosamente.
+O editor segue a experiência do Agentflow V2: blocos compactos coloridos, alça de entrada em barra, saídas em seta que aparecem ao passar o mouse, conexões com gradiente entre as cores dos blocos e botão para removê-las, rótulo do ramo (Sim, Não, Repetir, Concluir) junto à origem. Arraste uma saída para outro bloco para conectar; solte no vazio para escolher o próximo bloco já conectado. Cada saída aceita uma conexão e ciclos só existem pela saída Repetir. O botão ✨ abre "O que você quer construir?": o ChatGPT desenha blocos, conexões e instruções a partir de uma descrição, com prévia antes de ir para o quadro. Salvar valida e publica ou atualiza uma única versão, v1, usada pelos testes e pelas integrações configuradas. Não há uma ação separada de publicar. Testes usam o último fluxo salvo pelo chat no canto superior direito, com histórico da sessão, etapas executadas e aprovação em linha. Cada execução guarda entrada, saída, versão, estado e registro de etapas em SQLite. Aprovações persistem após reinício e aceitam uma única decisão. Execuções que estavam rodando no momento do reinício são marcadas como interrompidas para não repetir ações externas silenciosamente.
 
 Ao selecionar explicitamente a simulação, os fluxos rodam em demonstração: agentes devolvem respostas ilustrativas e nenhuma chamada HTTP ou ferramenta externa é executada. Com ChatGPT ou OpenRouter conectado, o chat oculta as sugestões e a opção de simulação e envia execuções reais. `/?exemplo=1` cria um exemplo de triagem quando ainda não há fluxos.
 
@@ -59,7 +59,7 @@ O push na `main` publica `ghcr.io/startse/build-agentflows:latest` pelo workflow
 
 ## Integração
 
-Gere um código em **Implantar fluxo**, no cabeçalho do editor. O diálogo tem abas Publicação, cURL, JavaScript, Python e Assistentes (MCP), com exemplos prontos para copiar. Ele autentica tanto MCP quanto HTTP; revogação e rotação valem para os dois. É um acesso administrativo a esta instalação, não uma chave isolada por fluxo.
+Em **Implantar fluxo**, as abas principais são Chat no site e Integrações. Integrações reúne WhatsApp, Ligações, Developer e Conector MCP. Gere o código de acesso diretamente em Developer ou Conector MCP; os exemplos são preenchidos automaticamente. Em Developer, alterne entre cURL, JavaScript e Python para copiar o exemplo. Ele autentica tanto MCP quanto HTTP; revogação e rotação valem para os dois. É um acesso administrativo a esta instalação, não uma chave isolada por fluxo.
 
 ```sh
 curl -X POST 'https://SEU-APP/webhook/flows/ID-DO-FLUXO' \

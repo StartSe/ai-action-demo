@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { abrirBanco } from "./store";
 import {
   BLOCKS,
+  block,
   template,
   type Flow,
   type Graph,
@@ -74,6 +75,8 @@ export function validateGraph(value: unknown, executable = false): Graph {
     edges.add(e.id);
   }
   if (executable) {
+    if (g.nodes.length === 1 && g.nodes[0].data.kind === "start" && g.edges.length === 0)
+      throw new FlowError("Este fluxo tem apenas o bloco Início. Adicione e conecte um Agente ou outro bloco para testar no chat.");
     const starts = g.nodes.filter((n) => n.data.kind === "start");
     if (starts.length !== 1)
       throw new FlowError(
@@ -187,18 +190,23 @@ export function validateGraph(value: unknown, executable = false): Graph {
   for (const n of result.nodes) if (n.data.kind === "start") n.data.label = "Início";
   return result;
 }
+// Uma única configuração salva alimenta testes e integrações. Execuções em andamento
+// preservam o grafo capturado ao iniciar; publicações antigas passam a usar o grafo salvo.
+function currentFlow(flow: Flow): Flow {
+  return { ...flow, version: 1, published: flow.published ? structuredClone(flow.graph) : null };
+}
 export function listFlows(): Flow[] {
   return (
     db().prepare("SELECT body FROM flows ORDER BY rowid DESC").all() as {
       body: string;
     }[]
-  ).map((r) => JSON.parse(r.body));
+  ).map((r) => currentFlow(JSON.parse(r.body)));
 }
 export function getFlow(id: string): Flow {
   const row = db().prepare("SELECT body FROM flows WHERE id=?").get(id) as
     { body: string } | undefined;
   if (!row) throw new FlowError("Fluxo não encontrado.", 404);
-  return JSON.parse(row.body);
+  return currentFlow(JSON.parse(row.body));
 }
 function putFlow(f: Flow) {
   db()
@@ -209,20 +217,24 @@ function putFlow(f: Flow) {
   return f;
 }
 export function createFlow(name = "Novo fluxo", example = false) {
-  const graph = template(example);
-  if (!example) { graph.nodes = graph.nodes.filter((n) => n.data.kind !== "end"); graph.edges = graph.edges.filter((e) => e.target !== "resposta"); }
+  const graph = example ? template(true) : { nodes: [block("start", "inicio", 0, 0)], edges: [] };
   return putFlow({
     id: randomUUID(),
     name: name.slice(0, 100),
     description: "",
     graph,
     published: null,
-    version: 0,
+    version: 1,
     updatedAt: new Date().toISOString(),
   });
 }
+export function createSavedFlow(data: unknown) {
+  return writeFlow({ id: randomUUID(), name: "", description: "", graph: { nodes: [], edges: [] }, published: null, version: 1, updatedAt: new Date().toISOString() }, data);
+}
 export function saveFlow(id: string, data: unknown) {
-  const f = getFlow(id);
+  return writeFlow(getFlow(id), data);
+}
+function writeFlow(f: Flow, data: unknown) {
   if (!data || typeof data !== "object")
     throw new FlowError("Envie os dados do fluxo.");
   const b = data as Partial<Flow>;
@@ -240,14 +252,16 @@ export function saveFlow(id: string, data: unknown) {
     if (typeof b.voiceId !== "string" || !/^[a-zA-Z0-9_-]{0,128}$/.test(b.voiceId)) throw new FlowError("Escolha uma voz válida para o fluxo.");
     f.voiceId = b.voiceId;
   }
+  // Salvar preserva o trabalho em andamento; a execução valida conexões e configuração.
   f.graph = validateGraph(b.graph);
+  f.published = structuredClone(f.graph);
   f.updatedAt = new Date().toISOString();
   return putFlow(f);
 }
 export function publishFlow(id: string, active = true) {
   const f = getFlow(id);
   f.published = active ? validateGraph(f.graph, true) : null;
-  if (active) f.version++;
+  f.version = 1;
   f.updatedAt = new Date().toISOString();
   return putFlow(f);
 }

@@ -17,7 +17,20 @@ export function saveEmbedSecurity(value: unknown) {
   setConfig("EMBED_ALLOWED_ORIGINS", JSON.stringify(origins));
   return { origins };
 }
+const LOCAL_ORIGINS = ["http://localhost:*", "https://localhost:*", "http://127.0.0.1:*", "https://127.0.0.1:*"];
+function isLocalOrigin(origin: string) {
+  try {
+    const url = new URL(origin);
+    return url.origin === origin && ["http:", "https:"].includes(url.protocol) && ["localhost", "127.0.0.1"].includes(url.hostname);
+  } catch { return false; }
+}
 export function effectiveEmbedOrigins(origins: string[]) {
   const global = embedSecurity().origins;
+  if (!origins.length) return global.length ? global.filter(isLocalOrigin) : LOCAL_ORIGINS;
   return global.length ? origins.filter((o) => global.includes(o)) : origins;
+}
+export function isEmbedOriginAllowed(origins: string[], origin: string) {
+  const global = embedSecurity().origins;
+  if (global.length && !global.includes(origin)) return false;
+  return origins.length ? origins.includes(origin) : isLocalOrigin(origin);
 }

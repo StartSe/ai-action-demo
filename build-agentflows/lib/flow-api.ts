@@ -14,7 +14,9 @@ export async function body(req: Request) {
 }
 export async function api(fn: () => unknown | Promise<unknown>) {
   try {
-    return Response.json(await fn(), {
+    const result = await fn();
+    if (result instanceof Response) return result;
+    return Response.json(result, {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (e) {

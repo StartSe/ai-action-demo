@@ -296,10 +296,10 @@ export async function prepareRun(
   const f = getFlow(flowId);
   if (published && !f.published)
     throw new FlowError(
-      "Publique o fluxo antes de usá-lo em uma integração.",
+      "Salve o fluxo antes de usá-lo em uma integração.",
       409,
     );
-  const graph = validateGraph(published ? f.published : f.graph, true);
+  const graph = validateGraph(f.graph, true);
   const attachments = resolveAttachments(flowId, attachmentIds);
   const conversation = conversationHistory(flowId, conversationRunIds);
   if (attachments.length && !reachableAiNodes(graph).length) throw new FlowError("Adicione um bloco de IA ao fluxo para analisar os anexos.");
@@ -315,7 +315,7 @@ export async function prepareRun(
     id: randomUUID(),
     flowId,
     name: f.name,
-    version: published ? f.version : 0,
+    version: 1,
     graph,
     status: "running",
     demo: demo === true,

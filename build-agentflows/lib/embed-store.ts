@@ -1,4 +1,4 @@
-import { effectiveEmbedOrigins, validateEmbedOrigins } from "./embed-security";
+import { isEmbedOriginAllowed, validateEmbedOrigins } from "./embed-security";
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { abrirBanco, getConfig, setConfig } from "./store";
 import { FlowError, getFlow, getRun } from "./flow-store";
@@ -17,17 +17,19 @@ function db() {
 export function embedSettings(flowId: string): EmbedSettings {
   getFlow(flowId);
   const row = db().prepare("SELECT body FROM embed_settings WHERE flow_id=?").get(flowId) as { body: string } | undefined;
-  return row ? JSON.parse(row.body) : { enabled: false, origins: [], title: "Como podemos ajudar?", welcome: "Conte o que você gostaria de melhorar ou resolver.", maxMinutes: 30, maxCommands: 12 };
+  return row ? { displayMode: "detailed", ...JSON.parse(row.body) } : { displayMode: "detailed", enabled: true, origins: [], title: "Como podemos ajudar?", welcome: "Conte o que você gostaria de melhorar ou resolver.", maxMinutes: 30, maxCommands: 12 };
 }
 export function saveEmbedSettings(flowId: string, value: EmbedSettings) {
   getFlow(flowId);
   if (typeof value.enabled !== "boolean" || !Array.isArray(value.origins) || value.origins.length > 20 || typeof value.title !== "string" || value.title.length > 80 || typeof value.welcome !== "string" || value.welcome.length > 500 || !Number.isInteger(value.maxMinutes) || value.maxMinutes < 1 || value.maxMinutes > 60 || !Number.isInteger(value.maxCommands) || value.maxCommands < 1 || value.maxCommands > 30) throw new FlowError("Confira os dados do chat.");
+  if (value.displayMode !== undefined && !["detailed", "simple"].includes(value.displayMode)) throw new FlowError("Escolha uma visualização válida para o chat.");
   let origins: string[];
   try { origins = validateEmbedOrigins(value.origins); }
   catch (e) { throw new FlowError(e instanceof Error ? e.message : "Confira os sites autorizados."); }
-  if (value.enabled && (!origins.length || !getFlow(flowId).published)) throw new FlowError("Publique o fluxo e informe o endereço do site antes de ativar.");
-  const result = { ...value, origins };
+  if (value.enabled && !getFlow(flowId).published) throw new FlowError("Salve o fluxo no editor antes de configurar o chat.");
+  const result = { ...value, displayMode: value.displayMode ?? "detailed", origins };
   db().prepare("INSERT INTO embed_settings VALUES(?,?) ON CONFLICT(flow_id) DO UPDATE SET body=excluded.body").run(flowId, JSON.stringify(result));
+  if (result.enabled && !hasEmbedKey(flowId)) rotateEmbedKey(flowId);
   return result;
 }
 const keyName = (id: string) => "EMBED_KEY_" + id.replaceAll("-", "_");
@@ -40,7 +42,7 @@ export function checkEmbedKey(flowId: string, key: string) {
 export function issueEmbedTicket(flowId: string, subject: unknown, origin: unknown) {
   const settings = embedSettings(flowId), key = getConfig(keyName(flowId));
   if (!settings.enabled || !getFlow(flowId).published || !key) throw new FlowError("O chat não está disponível.", 403);
-  if (typeof subject !== "string" || !subject.trim() || subject.length > 200 || typeof origin !== "string" || !effectiveEmbedOrigins(settings.origins).includes(origin)) throw new FlowError("Usuário ou site não autorizado.", 403);
+  if (typeof subject !== "string" || !subject.trim() || subject.length > 200 || typeof origin !== "string" || !isEmbedOriginAllowed(settings.origins, origin)) throw new FlowError("Usuário ou site não autorizado.", 403);
   const identity: EmbedIdentity = { flowId, subject, origin, exp: Date.now() + 10 * 60_000, generation: createHash("sha256").update(key).digest("hex").slice(0, 12) };
   const payload = Buffer.from(JSON.stringify(identity)).toString("base64url");
   return { token: payload + "." + createHmac("sha256", key).update(payload).digest("base64url"), expiresAt: identity.exp };
@@ -57,7 +59,7 @@ export function authenticateEmbed(req: Request): EmbedIdentity {
     const received = Buffer.from(signature, "base64url");
     if (received.length !== expected.length || !timingSafeEqual(expected, received) || i.exp < Date.now() || typeof i.subject !== "string") throw 0;
     const settings = embedSettings(i.flowId);
-    if (!settings.enabled || !effectiveEmbedOrigins(settings.origins).includes(i.origin) || !getFlow(i.flowId).published) throw 0;
+    if (!settings.enabled || !isEmbedOriginAllowed(settings.origins, i.origin) || !getFlow(i.flowId).published) throw 0;
     return i;
   } catch { throw new FlowError("Sua conexão expirou. Reconecte o chat.", 401); }
 }
