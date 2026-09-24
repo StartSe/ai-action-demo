@@ -71,6 +71,7 @@ function AgentEdgeView({
       <path
         className={
           "af-edge" +
+          (hover ? " hovered" : "") +
           (selected ? " selected" : "") +
           (data?.active ? " active" : "")
         }
@@ -91,9 +92,9 @@ function AgentEdgeView({
             {data.label}
           </span>
         )}
-        {hover && (
+        {(hover || selected) && (
           <div
-            className="af-edge-remove nodrag nopan"
+            className={"af-edge-remove nodrag nopan" + (hover ? " hovered" : "")}
             style={{
               transform: `translate(-50%, -50%) translate(${centerX}px, ${centerY}px)`,
             }}

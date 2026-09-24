@@ -86,7 +86,6 @@ export function FlowEditor({ id }: { id: string }) {
   const [pendingInput, setPendingInput] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [expanded, setExpanded] = useState(false);
-  const [demo, setDemo] = useState(false);
   const [openrouterConnected, setOpenrouterConnected] = useState(false);
   const [snap, setSnap] = useState(false);
   const [dots, setDots] = useState(true);
@@ -100,7 +99,6 @@ export function FlowEditor({ id }: { id: string }) {
   const [voice, setVoice] = useState({ voz: false, ligacao: false });
   const { connection, setConnection } = useChatGPT();
   const aiConnected = !!connection?.account || openrouterConnected;
-  const effectiveDemo = demo && !aiConnected;
   useEffect(() => {
     const dismiss = (event: Event) => {
       const target = event.target;
@@ -461,7 +459,7 @@ export function FlowEditor({ id }: { id: string }) {
       }, 800);
       const result = await request<Run>("/api/flows/" + id + "/run", "POST", {
           input,
-          demo: effectiveDemo,
+          demo: false,
           attachments: attachments.map((a) => a.id),
           ...(conversational ? { conversationRunIds: session.filter((r) => r.status === "completed" && !r.demo).slice(-6).map((r) => r.id) } : {}),
         });
@@ -891,14 +889,13 @@ export function FlowEditor({ id }: { id: string }) {
               chatModels={connection?.models || []}
               error={error}
               running={running}
-              demo={effectiveDemo}
+              demo={false}
               connected={aiConnected}
               expanded={expanded}
               voice={voice.voz}
               voiceId={flow.voiceId || ""}
               onVoiceSettings={() => setRename(true)}
               flowId={id}
-              onDemo={setDemo}
               onSend={execute}
               onChange={updateRun}
               onConnect={() => setConnect(true)}
@@ -978,6 +975,8 @@ export function FlowEditor({ id }: { id: string }) {
           node={node}
           nodes={graph.nodes}
           models={connection?.models || []}
+          connected={!!connection?.account}
+          onConnect={() => setConnect(true)}
           onRename={(label) => renameBlock(node.id, label)}
           onClose={() => setEditing(null)}
           onSave={(n) => {

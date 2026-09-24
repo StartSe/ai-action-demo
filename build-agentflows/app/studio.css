@@ -1270,12 +1270,12 @@
   color: var(--node-color);
   display: grid;
   place-items: center;
-  opacity: 1;
+  opacity: 0;
   transition: opacity 0.2s;
   cursor: crosshair;
 }
 .af-node.hover .af-handle-out,
-.af-node.selected .af-handle-out,
+.af-node:focus-within .af-handle-out,
 .react-flow__handle.af-handle-out.connectingfrom {
   opacity: 1;
 }
@@ -1316,7 +1316,7 @@
 }
 .af-edge-hit:hover + .af-edge,
 .af-edge:hover,
-.af-edge.selected {
+.af-edge.hovered {
   stroke-width: 3;
   opacity: 1;
 }
@@ -3372,7 +3372,7 @@
 .chat-composer .chat-input-box { border: 1px solid var(--studio-line); border-radius: 14px; background: var(--studio-surface); padding: 6px; transition: border-color .15s, box-shadow .15s; }
 .chat-composer .chat-input-box:focus-within, .chat-composer .chat-input-box.dragging { border-color: var(--studio-primary); box-shadow: 0 0 0 3px var(--studio-primary-soft); }
 .chat-composer .chat-input-box.dragging { background: var(--studio-primary-soft); }
-.chat-composer .chat-input-box textarea { display: block; min-height: 50px; max-height: 160px; padding: 10px; border: 0; border-radius: 8px; font-size: 13px; line-height: 1.6; color: var(--studio-ink); background: transparent; box-shadow: none; }
+.chat-composer .chat-input-box textarea { display: block; box-sizing: border-box; min-height: calc(1lh + 12px); max-height: calc(3lh + 12px); padding: 6px 10px; overflow-y: auto; border: 0; border-radius: 8px; font-size: 13px; line-height: 1.6; color: var(--studio-ink); background: transparent; box-shadow: none; }
 .chat-input-actions { display: flex; align-items: center; gap: 6px; padding: 2px; }
 .chat-input-actions .chat-send, .chat-input-actions .chat-mic, .chat-input-actions .chat-attach { position: static; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; }
 .chat-input-actions .chat-mic, .chat-input-actions .chat-attach { color: var(--studio-muted); background: transparent; }
@@ -3483,3 +3483,50 @@
 
 .node-fields label.node-checkbox { display: flex; align-items: center; gap: 8px; }
 .node-fields .node-checkbox input[type="checkbox"] { width: 16px; height: 16px; margin: 0; padding: 0; flex: 0 0 auto; accent-color: var(--studio-purple, #6854db); }
+
+.node-variable-card {
+  padding: 16px;
+  border: 1px solid var(--studio-line);
+  border-radius: 12px;
+  background: var(--studio-bg);
+}
+.node-variable-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--studio-muted);
+  font-size: 12px;
+}
+.node-connect-link {
+  color: var(--studio-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* No touch, a seta de saída fica visível sem depender de hover. */
+.af-edge-remove:not(.hovered) { visibility: hidden; }
+@media (hover: none), (any-pointer: coarse) {
+  .studio-canvas .react-flow__handle.af-handle-out { opacity: 1; }
+  .af-edge-hit { stroke-width: 28; }
+  .af-edge-remove:not(.hovered) { visibility: visible; }
+  .af-edge-remove,
+  .af-edge-remove button { width: 44px; height: 44px; }
+  .af-edge-remove button svg { width: 18px; height: 18px; }
+  .studio-modal .studio-icon-button,
+  .studio-modal .studio-button,
+  .af-toolbar .studio-icon-button { min-width: 44px; min-height: 44px; }
+  .node-connect-link { min-height: 44px; padding: 8px; }
+  .node-fields input,
+  .node-fields select,
+  .node-fields textarea,
+  .chat-composer .chat-input-box textarea { font-size: 16px; }
+}
+
+.chat-connect { display: flex; justify-content: center; margin-top: 16px; }
+.chat-connect .connection-button {
+  margin: 0;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+}

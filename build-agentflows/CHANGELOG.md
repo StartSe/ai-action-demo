@@ -1,5 +1,15 @@
 # Histórico de versões
 
+## 0.9.2 — 24/09/2026
+
+- Conexões sempre visíveis; seta de saída no hover do bloco, com acesso permanente no touch e alvos de toque ampliados.
+- Chat sem simulação ou exemplos, com botão Conectar ChatGPT abaixo da apresentação quando nenhum motor está conectado.
+- Campo de mensagem com uma linha inicial, crescimento até três linhas e rolagem para textos maiores.
+- Modais de blocos aplicam alterações ao fechar ou clicar fora, mantendo a validação e removendo os botões Salvar e Cancelar.
+- Variáveis do Início separadas em cartões com exclusão por ícone.
+- Agente e LLM com seleção de modelo, indicação de conexão e menos avisos.
+- Pesquisa web do ChatGPT ativa automaticamente para Agente e LLM, incluindo fluxos existentes.
+
 ## 0.9.1 — 24/09/2026
 
 - Pontos de saída sempre visíveis, linhas com maior contraste e área de entrada ampliada para conectar blocos.

@@ -398,3 +398,28 @@ test("novo fluxo começa com Início e Agente, sem Resposta obrigatória", () =>
   assert.deepEqual(f.graph.nodes.map((n) => n.data.kind), ["start", "agent"]);
   store.validateGraph(f.graph, true);
 });
+
+
+test("Agente e LLM pesquisam na web sem configuração, inclusive em fluxos antigos", async () => {
+  const original = bridge.run;
+  const searches: (boolean | undefined)[] = [];
+  bridge.run = async (options) => {
+    searches.push(options.webSearch);
+    return "Resposta";
+  };
+  try {
+    for (const kind of ["agent", "llm"] as const) {
+      for (const legacy of [undefined, "false"]) {
+        const start = block("start", "start", 0, 0);
+        const model = block(kind, "model", 200, 0);
+        if (legacy !== undefined) model.data.config.webSearch = legacy;
+        const f = flow({ nodes: [start, model], edges: [{ id: "edge", source: "start", target: "model" }] });
+        const run = await runtime.startRun(f.id, "Pesquise", false, false);
+        assert.equal(run.status, "completed");
+      }
+    }
+    assert.deepEqual(searches, [true, true, true, true]);
+  } finally {
+    bridge.run = original;
+  }
+});
