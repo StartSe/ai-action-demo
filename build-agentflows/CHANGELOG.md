@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.9.1 — 24/09/2026
+
+- Pontos de saída sempre visíveis, linhas com maior contraste e área de entrada ampliada para conectar blocos.
+- Dicas distinguem saídas já conectadas de saídas disponíveis.
+
 ## 0.9.0 — 24/09/2026
 
 - Chat incorporado com retomada da conversa, eventos da página, captura de tela, aprovação humana e cancelamento.

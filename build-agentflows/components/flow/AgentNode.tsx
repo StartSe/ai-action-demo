@@ -78,7 +78,7 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
         />
       </NodeToolbar>
       {data.kind !== "start" && (
-        <Handle type="target" position={Position.Left} className="af-handle-in">
+        <Handle type="target" position={Position.Left} className="af-handle-in" title="Entrada: conecte a saída de outro bloco aqui" aria-label={`Entrada de ${data.label}`}>
           <span />
         </Handle>
       )}
@@ -174,6 +174,8 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
           position={Position.Right}
           id={o.id || undefined}
           className="af-handle-out"
+          title={data.connected?.includes(o.id) ? "Saída conectada. Selecione a linha para remover a conexão." : "Arraste até a entrada de outro bloco para conectar"}
+          aria-label={`Saída${o.label ? " " + o.label : ""} de ${data.label}`}
           style={{ top: `${(100 * (i + 1)) / (outs.length + 1)}%` }}
         >
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">

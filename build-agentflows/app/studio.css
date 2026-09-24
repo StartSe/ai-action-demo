@@ -1233,7 +1233,7 @@
   height: 17px;
 }
 .studio-canvas .react-flow__handle.af-handle-in {
-  width: 5px;
+  width: 20px;
   height: 20px;
   min-width: 0;
   min-height: 0;
@@ -1244,7 +1244,9 @@
 }
 .af-handle-in > span {
   position: absolute;
-  inset: 0;
+  inset: 0 auto 0 50%;
+  width: 5px;
+  transform: translateX(-50%);
   border-radius: 2px;
   background: var(--node-color);
   pointer-events: none;
@@ -1268,7 +1270,7 @@
   color: var(--node-color);
   display: grid;
   place-items: center;
-  opacity: 0;
+  opacity: 1;
   transition: opacity 0.2s;
   cursor: crosshair;
 }
@@ -1305,8 +1307,8 @@
 }
 .af-edge {
   fill: none;
-  stroke-width: 2;
-  opacity: 0.75;
+  stroke-width: 2.5;
+  opacity: 1;
   cursor: pointer;
   transition:
     opacity 0.15s,

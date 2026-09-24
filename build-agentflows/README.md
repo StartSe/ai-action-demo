@@ -1,4 +1,4 @@
-# Build Agentflows — v0.9.0
+# Build Agentflows — v0.9.1
 
 Versão 0.9.0: chat embed com eventos e retomada, variáveis compartilhadas no editor, Agente/LLM como etapas finais e controle de domínios. Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
 
