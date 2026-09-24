@@ -322,6 +322,7 @@ export function FlowEditor({ id }: { id: string }) {
   }
   // Nome incremental como no Flowise: Agente 0, Agente 1, LLM 0...
   function nextLabel(kind: Kind) {
+    if (kind === "start") return "Início";
     const base = shortLabel(kind);
     const used = new Set(graph.nodes.map((n) => n.data.label));
     let i = graph.nodes.filter((n) => n.data.kind === kind).length;
@@ -338,6 +339,7 @@ export function FlowEditor({ id }: { id: string }) {
     setNotice("Bloco duplicado.");
   }
   function renameBlock(id: string, label: string) {
+    if (graph.nodes.find((n) => n.id === id)?.data.kind === "start") return;
     commit({
       ...graph,
       nodes: graph.nodes.map((x) =>

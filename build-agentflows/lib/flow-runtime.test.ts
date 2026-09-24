@@ -362,3 +362,39 @@ test("dois agentes reutilizam a mesma ferramenta com seleção independente e se
     assert.equal(run.trace.filter((t) => t.label === "Ferramenta: calculadora").length, 2);
   } finally { bridge.run = original; }
 });
+
+test("Agente e LLM terminais entregam a resposta e atualizam variáveis compartilhadas", async () => {
+  for (const kind of ["agent", "llm"] as const) {
+    const start = block("start", "inicio", 0, 0), first = block(kind, "primeiro", 0, 0), last = block(kind, "ultimo", 0, 0);
+    start.data.label = "Não pode renomear";
+    start.data.config.state = JSON.stringify({ Resumo: "", Anterior: "inicial" });
+    first.data.config.stateUpdates = JSON.stringify([{ key: "Resumo", value: "{{nodes.primeiro}}" }, { key: "Anterior", value: "{{fluxo.Resumo}}" }]);
+    last.data.config.prompt = "Resumo recebido: {{fluxo.Resumo}}";
+    last.data.config.stateUpdates = JSON.stringify([{ key: "Resumo", value: "{{last}}" }]);
+    const f = flow({ nodes: [start, first, last], edges: [{ id: "a", source: "inicio", target: "primeiro" }, { id: "b", source: "primeiro", target: "ultimo" }] });
+    assert.equal(f.graph.nodes[0].data.label, "Início");
+    store.publishFlow(f.id);
+    const r = await runtime.startRun(f.id, "Olá", true, true);
+    assert.equal(r.status, "completed");
+    assert.match(r.output, /Resumo recebido:/);
+    assert.equal(r.state.Resumo, r.output);
+    assert.equal(r.state.Anterior, ""); // assignments read the same pre-update state
+    assert.equal(runtime.interpolate("{{state.Resumo}}", r), r.output);
+  }
+});
+test("recusa variáveis desconhecidas, atualizações duplicadas e agentes desconectados", () => {
+  const g = template();
+  g.nodes[0].data.config.state = '{"Resumo":""}';
+  g.nodes[1].data.config.stateUpdates = '[{"key":"Ausente","value":"x"}]';
+  assert.throws(() => store.validateGraph(g, true), /variáveis/);
+  g.nodes[1].data.config.stateUpdates = '[{"key":"Resumo","value":"x"},{"key":"Resumo","value":"y"}]';
+  assert.throws(() => store.validateGraph(g, true), /repetições/);
+  delete g.nodes[1].data.config.stateUpdates;
+  g.nodes.push(block("agent", "solto", 0, 0));
+  assert.throws(() => store.validateGraph(g, true), /conectados/);
+});
+test("novo fluxo começa com Início e Agente, sem Resposta obrigatória", () => {
+  const f = store.createFlow();
+  assert.deepEqual(f.graph.nodes.map((n) => n.data.kind), ["start", "agent"]);
+  store.validateGraph(f.graph, true);
+});

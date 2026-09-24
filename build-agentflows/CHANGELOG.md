@@ -1,5 +1,15 @@
 # Histórico de versões
 
+## 0.9.0 — 24/09/2026
+
+- Chat incorporado com retomada da conversa, eventos da página, captura de tela, aprovação humana e cancelamento.
+- Execuções persistentes com limite de tempo e revisão de tarefas interrompidas.
+- Início com nome fixo, editor de variáveis e referências `{{fluxo.NomeVariavel}}`, preservando `{{state.nome}}`.
+- Atualização de variáveis ao concluir Agente/LLM e resposta direta em etapas terminais.
+- Modelo como primeiro campo e pesquisa web opcional na conexão ChatGPT.
+- Domínios autorizados em Configurações > Segurança, aplicados ao acesso e ao iframe.
+- Compose para Coolify com volume persistente e documentação de instalação.
+
 ## 0.5.0 — 20/09/2026
 
 - Conexões com quatro cartões alinhados: ChatGPT, OpenRouter, WhatsApp e ElevenLabs.

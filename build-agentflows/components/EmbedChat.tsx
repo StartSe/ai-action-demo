@@ -1,0 +1,165 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+import type { Attachment } from "@/lib/attachment-types";
+import { ATTACHMENT_ACCEPT } from "@/lib/attachment-types";
+import { PAGE_ACTIONS, type EmbedTurn, type PageCommand } from "@/lib/embed-protocol";
+import "./embed-chat.css";
+class EmbedApiError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
+type Snapshot = { sessionId: string; turns: EmbedTurn[]; commands: PageCommand[] };
+type Wire = { channel: string; version: number; type: string; [key:string]: unknown };
+export function EmbedChat({ title, welcome }: { title: string; welcome: string }) {
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState("");
+  const [connected, setConnected] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [files, setFiles] = useState<Attachment[]>([]);
+  const [confirmNew, setConfirmNew] = useState(false);
+  const [confirmation, setConfirmation] = useState<{ runId:string; decision:string } | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const state = useRef({ token: "", sessionId: "", parent: "", init: null as Wire | null, handled: new Set<string>(), polling: false, handshake: false, pendingMessage: null as {requestId:string; input:string} | null });
+  const messages = useRef<HTMLDivElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  function post(type: string, data: Record<string, unknown> = {}) { if (state.current.parent) window.parent.postMessage({ channel: "agentflows", version: 1, type, ...data }, state.current.parent); }
+  async function api(payload?: Record<string, unknown>, path = "/api/embed/session", form?: FormData) {
+    const res = await fetch(payload || form ? path : path + "?id=" + encodeURIComponent(state.current.sessionId), {
+      method: payload || form ? "POST" : "GET", cache: "no-store", credentials: "omit",
+      headers: { Authorization: "Bearer " + state.current.token, ...(payload ? { "Content-Type": "application/json" } : {}) },
+      body: form || (payload ? JSON.stringify({ sessionId: state.current.sessionId, ...payload }) : undefined),
+    });
+    const data = await res.json();
+    if (!res.ok) { if (res.status === 401) { setConnected(false); post("refreshToken"); } throw new EmbedApiError(data.error || "Não foi possível conectar. Tente novamente.", res.status); }
+    return data;
+  }
+  async function upload(file: Blob, name: string) {
+    const form = new FormData(); form.set("sessionId", state.current.sessionId); form.set("file", file, name);
+    return await api(undefined, "/api/embed/attachments", form) as Attachment;
+  }
+  async function refresh() {
+    if (!state.current.sessionId || state.current.polling) return;
+    state.current.polling = true;
+    const sessionId = state.current.sessionId;
+    try {
+      const s: Snapshot = await api();
+      if (state.current.sessionId !== sessionId) return;
+      setSnapshot(s); setConnected(true);
+      post("cancelCommands", { ids: s.commands.map(c => c.id) });
+      for (const c of s.commands) {
+        if (state.current.handled.has(c.id)) continue;
+        state.current.handled.add(c.id);
+        if (c.status === "delivered") {
+          // A reload must never replay a click whose effect is unknown.
+          await api({ action: "result", commandId: c.id, success: false, result: { error: "A página recarregou durante a ação. O efeito não foi confirmado; não repita automaticamente." } });
+          continue;
+        }
+        await api({ action: "claim", commandId: c.id });
+        post("command", { command: c });
+      }
+    } catch { setConnected(false); }
+    finally { state.current.polling = false; }
+  }
+  useEffect(() => {
+    const parent = new URLSearchParams(location.search).get("parent");
+    if (!parent || window.parent === window) return;
+    try { if (new URL(parent).origin !== parent) return; } catch { return; }
+    state.current.parent = parent;
+    async function receive(event: MessageEvent<Wire>) {
+      if (event.source !== window.parent || event.origin !== parent || event.data?.channel !== "agentflows" || event.data.version !== 1) return;
+      const m = event.data;
+      try {
+        if (m.type === "resetConnection") {
+          state.current.sessionId = ""; state.current.handled.clear(); state.current.pendingMessage = null;
+          setSnapshot(null); setDraft(""); setFiles([]); setConnected(false);
+        } else if (m.type === "init") {
+          if (state.current.handshake) return;
+          state.current.handshake = true;
+          try {
+            state.current.token = String(m.token || ""); state.current.init = m;
+            const s: Snapshot = await api({ action: "connect", origin: parent, sessionId: state.current.sessionId || m.sessionId || "", tabId: m.tabId, capabilities: m.capabilities });
+            state.current.sessionId = s.sessionId; setSnapshot(s); setConnected(true); setError("");
+            post("session", { sessionId: s.sessionId }); post("connected");
+          } finally { state.current.handshake = false; }
+        } else if (m.type === "draft") setDraft(String(m.value || ""));
+        else if (m.type === "connectionError") { setError("Não foi possível conectar. Entre na aplicação e tente novamente."); setConnected(false); }
+        else if (m.type === "heartbeat" && state.current.sessionId) await api({ action: "heartbeat" });
+        else if (m.type === "attachment" && m.file instanceof Blob && state.current.sessionId) {
+          const a = await upload(m.file, String(m.name || "captura.png")); setFiles(prev => prev.length < 5 ? [...prev, a] : prev);
+          await api({ action: "event", name: "page.attachmentShared", data: { attachmentId: a.id } });
+        }
+        else if (m.type === "event" && state.current.sessionId) await api({ action: "event", name: m.name, data: m.data });
+        else if (m.type === "result" && state.current.sessionId) {
+          let result = m.result as Record<string, unknown>;
+          if (result?.blob instanceof Blob) {
+            const a = await upload(result.blob, "captura.png"); result = { attachmentId: a.id, context: result.context };
+          }
+          await api({ action: "result", commandId: m.commandId, success: m.success, result });
+          post("resultAccepted", { commandId: m.commandId, navigate: result?.navigationRequested });
+          await refresh();
+        }
+      } catch (e) {
+        // A cancelled/expired command may finish locally after the server has closed it.
+        if (m.type === "result" && e instanceof EmbedApiError && e.status === 409) return;
+        setError(e instanceof Error ? e.message : "Não foi possível concluir.");
+      }
+    }
+    window.addEventListener("message", receive); post("ready");
+    const timer = setInterval(() => { void refresh(); setElapsed(Date.now()); }, 1200);
+    return () => { clearInterval(timer); window.removeEventListener("message", receive); };
+    // The bridge reads mutable credentials from a ref; listener identity stays stable across messages.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const el = messages.current;
+    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 180) el.scrollTop = el.scrollHeight;
+  }, [snapshot]);
+  const active = snapshot?.turns.findLast(t => t.status === "running" || t.status === "waiting");
+  async function act(fn: () => Promise<void>) { setBusy(true); setError(""); try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível concluir."); } finally { setBusy(false); } }
+  async function send() {
+    if (!draft.trim() || busy || active || !connected) return;
+    await act(async () => {
+      const pending = state.current.pendingMessage;
+      const requestId = pending?.input === draft ? pending.requestId : crypto.randomUUID();
+      state.current.pendingMessage = { requestId, input: draft };
+      await api({ action: "message", input: draft, requestId, attachments: files.map(f => f.id) });
+      state.current.pendingMessage = null; setDraft(""); setFiles([]); post("draft", { value: "" }); await refresh();
+    });
+  }
+  async function decision(runId: string, value: string) { await act(async () => { await api({ action: "decision", runId, decision: value }); setConfirmation(null); await refresh(); }); }
+  async function newSession() {
+    await act(async () => {
+      const init = state.current.init; if (!init) return;
+      const s: Snapshot = await api({ action: "connect", origin: state.current.parent, sessionId: "", tabId: init.tabId, capabilities: init.capabilities });
+      state.current.sessionId = s.sessionId; state.current.handled.clear(); state.current.pendingMessage = null;
+      setSnapshot(s); setDraft(""); setFiles([]); setConfirmNew(false); post("session", { sessionId: s.sessionId }); post("draft", { value: "" });
+    });
+  }
+  return <main className="embed-chat">
+    <header className="embed-header"><span className="embed-avatar" aria-hidden="true">✧</span><div><strong>{title}</strong><small>{connected ? "Aqui para ajudar" : "Conectando…"}</small></div><button title="Nova conversa" aria-label="Nova conversa" onClick={() => setConfirmNew(true)}>＋</button><button title="Fechar conversa" aria-label="Fechar conversa" onClick={() => post("close")}>×</button></header>
+    <div className="embed-messages" ref={messages}>
+      {!snapshot?.turns.length && <div className="embed-welcome"><span aria-hidden="true">✧</span><h1>Vamos melhorar juntos?</h1><p>{welcome}</p><div className="embed-suggestions">Você pode descrever uma melhoria ou mostrar algo que não funcionou.</div></div>}
+      {snapshot?.turns.map(t => <div className="embed-turn" key={t.id}>
+        <div className="embed-message user">{t.input}</div>
+        {!!t.attachments?.length && <small className="embed-file-label">{t.attachments.map(a => a.name).join(" · ")}</small>}
+        {t.output && <div className="embed-message assistant">{t.output}</div>}
+        {t.status === "running" && <div className="embed-progress" role="status"><span className="embed-pulse"/><div><strong>{t.activity}</strong><small>{Math.max(0, Math.floor((elapsed - Date.parse(t.createdAt)) / 60000))} min · Você pode continuar usando a página.</small></div></div>}
+        {t.status === "waiting" && <div className="embed-approval"><strong>{t.approval === "recovery" ? "Precisamos conferir antes de continuar" : "Sua decisão faz parte do próximo passo"}</strong><p>{t.approval === "recovery" ? t.error : "Revise o resultado acima e escolha como seguir."}</p><div><button disabled={busy || !connected} onClick={() => t.approval === "recovery" ? setConfirmation({runId:t.id, decision:"retry"}) : void decision(t.id, "yes")}>{t.approval === "recovery" ? "Revisar retomada" : "Aprovar e continuar"}</button>{t.approval !== "recovery" && <button className="secondary" disabled={busy || !connected} onClick={() => void decision(t.id, "no")}>Não aprovar</button>}</div></div>}
+        {t.status === "failed" && <p className="embed-error">{t.error || "Não foi possível concluir esta tarefa."}</p>}
+        {t.status === "cancelled" && <p className="embed-note">Cancelamento solicitado. Novas etapas foram bloqueadas; ações externas já iniciadas podem terminar.</p>}
+      </div>)}
+      {snapshot?.commands.map(c => <p key={c.id} className="embed-note" role="status">{PAGE_ACTIONS[c.name as keyof typeof PAGE_ACTIONS] || "Aguardando uma ação na página"}. Confira a solicitação na página.</p>)}
+    </div>
+    {confirmNew && <section className="embed-confirm"><strong>Começar uma nova conversa?</strong><p>{active ? "Conclua ou cancele a tarefa atual antes de começar outra conversa." : "A conversa atual continuará registrada no histórico do fluxo."}</p><button disabled={!!active || busy} onClick={() => void newSession()}>Nova conversa</button><button className="secondary" onClick={() => setConfirmNew(false)}>Voltar</button></section>}
+    {confirmation && <section className="embed-confirm"><strong>{confirmation.decision === "cancel" ? "Cancelar a tarefa?" : "Retomar a etapa interrompida?"}</strong><p>{confirmation.decision === "cancel" ? "Vamos interromper o trabalho. Ações já concluídas não serão desfeitas." : "Confira se a ação anterior já aconteceu. Retomar pode repetir efeitos externos e consome uma tentativa."}</p><button disabled={busy} onClick={() => void decision(confirmation.runId, confirmation.decision)}>Confirmar</button><button className="secondary" onClick={() => setConfirmation(null)}>Voltar</button></section>}
+    {snapshot && !connected && <p className="embed-note" role="status">Reconectando à conversa… sua tarefa continua no servidor.</p>}
+    {error && <div className="embed-error" role="alert">{error}<button className="secondary" onClick={() => { setError(""); post("refreshToken"); }}>Reconectar</button></div>}
+    <footer className="embed-footer">
+      {active && <button className="embed-stop" disabled={busy} onClick={() => setConfirmation({runId:active.id,decision:"cancel"})}>■ Cancelar tarefa</button>}
+      {files.length > 0 && <div className="embed-files">{files.map(f => <button key={f.id} onClick={() => setFiles(files.filter(a => a.id !== f.id))}>{f.name} ×</button>)}</div>}
+      <form onSubmit={e => { e.preventDefault(); void send(); }}><textarea aria-label="Sua mensagem" placeholder={active ? "Acompanhe a tarefa ou responda acima…" : "O que você gostaria de melhorar?"} value={draft} maxLength={20000} disabled={!!active} onChange={e => { setDraft(e.target.value); post("draft", {value:e.target.value}); }} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }}/><div className="embed-compose-actions"><button type="button" aria-label="Anexar arquivo ou captura" disabled={busy || !!active || !connected || files.length >= 5} onClick={() => fileInput.current?.click()}>＋ Anexar</button><button type="submit" disabled={busy || !!active || !connected || !draft.trim()} aria-label="Enviar mensagem">↑</button></div></form>
+      <input hidden ref={fileInput} type="file" accept={ATTACHMENT_ACCEPT} onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void act(async () => { if (file.size > 10 * 1024 * 1024) throw new Error("Use um arquivo de até 10 MB."); const a = await upload(file, file.name); setFiles(prev => [...prev, a]); }); }}/>
+      <small className="embed-brand">Build Agentflows</small>
+    </footer>
+  </main>;
+}

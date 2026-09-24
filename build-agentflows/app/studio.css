@@ -3478,3 +3478,6 @@
 @keyframes voice-breathe { 50% { transform: scale(.93); opacity: .7; } }
 @media (prefers-reduced-motion: reduce) { .voice-orb, .voice-orb span { animation: none !important; transition: none; } }
 @media (max-height: 650px) { .voice-conversation { gap: 12px; padding: 16px; } .voice-orb { width: 88px; height: 88px; min-height: 88px; margin-top: 4px; } .voice-status { min-height: 35px; } }
+
+.node-fields label.node-checkbox { display: flex; align-items: center; gap: 8px; }
+.node-fields .node-checkbox input[type="checkbox"] { width: 16px; height: 16px; margin: 0; padding: 0; flex: 0 0 auto; accent-color: var(--studio-purple, #6854db); }

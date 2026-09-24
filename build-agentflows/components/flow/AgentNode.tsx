@@ -89,8 +89,8 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
         <div className="af-node-text">
           {editing === null ? (
             <span className="af-node-title">
-              <strong>{data.label}</strong>
-              <button
+              <strong>{data.kind === "start" ? "Início" : data.label}</strong>
+              {data.kind !== "start" && <button
                 type="button"
                 className="af-node-pencil nodrag"
                 title="Renomear bloco"
@@ -102,7 +102,7 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
                 onDoubleClick={(e) => e.stopPropagation()}
               >
                 <Icon name="pencil" size={12} />
-              </button>
+              </button>}
             </span>
           ) : (
             <span className="af-node-title">

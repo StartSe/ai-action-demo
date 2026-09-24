@@ -1,8 +1,10 @@
-# Build Agentflows — v0.8.1
+# Build Agentflows — v0.9.0
+
+Versão 0.9.0: chat embed com eventos e retomada, variáveis compartilhadas no editor, Agente/LLM como etapas finais e controle de domínios. Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
 
 Crie fluxos visuais de agentes de IA, teste cada etapa e publique versões que seus sistemas e assistentes podem executar. Aplicação independente da suíte **IA para Executivos**, inspirada na orquestração explícita de [AgentFlow V2 do Flowise](https://docs.flowiseai.com/using-flowise/agentflowv2).
 
-Correção da versão 0.8.1: os botões de enviar mensagem e iniciar conversa por voz permanecem visíveis lado a lado, inclusive com o campo vazio. A dica “Enter para enviar” foi removida; os atalhos Enter e Shift+Enter continuam funcionando.
+Na versão 0.8.1: os botões de enviar mensagem e iniciar conversa por voz permanecem visíveis lado a lado, inclusive com o campo vazio. A dica “Enter para enviar” foi removida; os atalhos Enter e Shift+Enter continuam funcionando.
 
 ## O que resolve
 

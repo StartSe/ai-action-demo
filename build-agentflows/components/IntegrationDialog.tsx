@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { Flow } from "@/lib/flow-types";
+import { EmbedSettings } from "./EmbedSettings";
 import { Icon, Modal, request } from "./StudioUI";
 const TABS = [
   ["publish", "Publicação"],
+  ["embed", "Chat no site"],
   ["whatsapp", "WhatsApp"],
   ["calls", "Ligações"],
   ["curl", "cURL"],
@@ -87,7 +89,7 @@ export function IntegrationDialog({
   }
   const url = `${origin}/webhook/flows/${flow.id}`,
     bearer = code || "SEU_CODIGO";
-  type CodeTab = Exclude<Tab, "publish" | "whatsapp" | "calls">;
+  type CodeTab = Exclude<Tab, "publish" | "embed" | "whatsapp" | "calls">;
   const snippets: Record<CodeTab, string> = {
     curl: `curl -X POST '${url}' \\
   -H 'Authorization: Bearer ${bearer}' \\
@@ -162,7 +164,7 @@ print(dados["status"], dados["output"])`,
           {error}
         </p>
       )}
-      {tab === "publish" ? (
+      {tab === "embed" ? <EmbedSettings flowId={flow.id} published={!!flow.published} origin={origin}/> : tab === "publish" ? (
         <>
           <div className="integration-version">
             <div>

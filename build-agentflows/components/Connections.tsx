@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { Flow } from "@/lib/flow-types";
 import { Icon, StudioShell, request } from "./StudioUI";
+import { EmbedSecurity } from "./EmbedSecurity";
 import { ChatGPTUsage } from "./ChatGPTUsage";
 import { WhatsAppTerms } from "./WhatsAppTerms";
 import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
@@ -400,6 +401,7 @@ export function Connections() {
             )}
           </Card>
         </div>
+        <EmbedSecurity />
       </main>
       {notice && (
         <div role="status" className="canvas-toast studio-toast">
