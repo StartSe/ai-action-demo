@@ -1263,7 +1263,7 @@
   height: 20px;
   min-width: 0;
   min-height: 0;
-  right: -10px;
+  right: 0;
   border: 0;
   border-radius: 50%;
   background: var(--studio-surface);
