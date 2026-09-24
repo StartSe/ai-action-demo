@@ -369,17 +369,17 @@ services:
     runtime: image
     image:
       url: ghcr.io/startse/precificador:latest
-    plan: free
+    plan: starter
     region: oregon
     healthCheckPath: /api/health
     envVars:
       - key: PORT
         value: "10000"
-    # Para manter a configuração feita em /setup entre deploys (exige plano pago):
-    # disk:
-    #   name: precificador-dados
-    #   mountPath: /app/data
-    #   sizeGB: 1
+    # A conta, as configurações, o negócio, os custos fixos, os canais, os itens com suas fichas e o histórico de preço ficam em /app/data e sobrevivem a deploys.
+    disk:
+      name: precificador-dados
+      mountPath: /app/data
+      sizeGB: 1
 
   - type: web
     name: toolkit-dash-builder

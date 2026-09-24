@@ -69,9 +69,34 @@ O repositório já tem tudo o que o Render precisa. Como ele é privado, o camin
 
 Nenhuma variável precisa ser preenchida para publicar. Depois que subir, abra **Configurações** e conecte a IA em um clique.
 
-**Sobre o plano e o disco.** O Blueprint vem com um disco de 1 GB em `/app/data` e `plan: starter`, porque disco exige plano pago. No plano gratuito não existe disco: o app funciona, mas a conta, a configuração e os itens se perdem a cada publicação — para isso, troque `plan` para `free` e comente o bloco `disk`. O próprio app detecta essa situação e avisa na tela de conta.
+**Sobre o plano e o disco.** O Blueprint vem com um disco de 1 GB em `/app/data` e `plan: starter`, porque disco exige plano pago. No plano gratuito não existe disco: o app funciona, mas a conta, a configuração e os itens se perdem a cada publicação — para isso, troque `plan` para `free` e comente o bloco `disk`. O próprio app detecta essa situação e avisa na tela de conta. Perder os itens é o menor dos dois problemas: sem a conta, a tela de cadastro reabre para quem tiver o endereço — ver **Segurança**, abaixo.
 
 O build foi conferido a partir de um clone limpo do repositório, que é exatamente o que o Render faz: a imagem sobe, `/api/health` responde `{"ok":true,"version":"1.0.0"}` e os dados sobrevivem à recriação do contêiner com o disco montado.
+
+## Segurança
+
+O app é de **uma conta só**, a do dono. Vale saber como essa conta nasce, porque o desenho tem uma janela:
+
+- **A primeira pessoa que abrir o app cria a conta.** Não existe senha de fábrica nem convite: quem chega primeiro em `/conta` vira o administrador. Publicou? Abra e crie a sua conta antes de passar o endereço adiante.
+- **Sem disco, essa janela reabre a cada publicação.** O banco vive em `/app/data`; se ele some, some junto a conta, e a tela de cadastro volta a aceitar qualquer visitante. Esse é o motivo de segurança para manter o bloco `disk` do `render.yaml`; não perder os itens é o motivo menor.
+- **Esqueceu a senha?** Suba com `NOVA_SENHA_ADMIN`, entre, e remova a variável. A troca encerra todas as sessões abertas.
+
+Fora isso, já vem tudo fechado:
+
+| O quê | Como |
+|---|---|
+| Rotas | Tudo exige sessão. As exceções estão comentadas uma a uma no topo do `proxy.ts`, e cada uma tem autenticação própria |
+| Senha | `scrypt` com sal por conta, conferida em tempo constante. Mínimo de 8 caracteres com maiúscula, minúscula, número e especial |
+| Sessão | Token de 32 bytes aleatórios, guardado como SHA-256 — o banco não tem como devolver o seu token. Cookie `HttpOnly`, `SameSite=Lax`, e `Secure` quando a página chega por https |
+| Chaves das integrações | Cifradas em repouso com AES-256-GCM. A tela e a API só mostram mascarado (`sk-a••••f9e2`) |
+| `/mcp` e gatilho de rotina | Código de 32 bytes por `Bearer`, comparado em tempo constante, com teto de 60 chamadas por minuto |
+| Tentativa de senha | Cinco por e-mail, depois um minuto de espera |
+| Navegador | CSP sem nenhuma origem externa, `frame-ancestors 'none'`, `nosniff`, `Referrer-Policy` e HSTS — ver `next.config.ts` |
+| Contêiner | Roda como usuário sem privilégio e não carrega chave nenhuma na imagem |
+
+**As cinco ferramentas que a IA enxerga são todas de leitura** — nenhuma grava. É de propósito: o assistente lê páginas da internet, e texto de fora não pode virar preço alterado no seu banco.
+
+A `CHAVE_MESTRA` merece uma nota. Sem ela no ambiente, o app gera uma e guarda em `DATA_DIR/chave-mestra`, ao lado do banco que ela cifra — o que protege uma cópia solta do `.sqlite`, não quem já tem o disco inteiro. Definindo `CHAVE_MESTRA` na configuração do Render, a chave passa a viver longe do banco.
 
 ## Conectar a IA
 
