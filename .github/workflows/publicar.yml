@@ -142,7 +142,7 @@ jobs:
     # !cancelled() é obrigatório: sem uma função de status, o Actions pula este job sempre que
     # "imagens" é pulado (push que só muda catálogo, página ou README), e o repositório público
     # ficava desatualizado.
-    if: ${{ !cancelled() && needs.mudancas.result == 'success' && (needs.imagens.result == 'success' || needs.imagens.result == 'skipped') }}
+    if: ${{ !cancelled() && needs.mudancas.result == 'success' && (needs.imagens.result == 'success' || needs.imagens.result == 'skipped') && github.event_name != 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
