@@ -14,7 +14,7 @@ const FIELDS: Record<Kind, string> = {
   agent:
     "system (instruções), prompt (opcional, mesma regra do llm), stateUpdates (JSON de lista de {key, value}, atualiza variáveis definidas no início depois da resposta; value aceita {{nodes.id}} da própria etapa), tools (ids separados por vírgula entre interno:data_hora, interno:calculadora, interno:requisicao_http, interno:executar_fluxo; só se o pedido precisar)",
   condition:
-    "value (texto a avaliar, ex.: {{last}}), operator (contains | equals | notEquals | greater | empty), compare (valor)",
+    'criteria (lista de critérios: [{"id":"criterion_1","value":"{{last}}","operator":"contains","compare":"urgente"}]). Operadores: equals, contains, notEquals, notContains, greater, greaterOrEqual, less, lessOrEqual, empty, notEmpty',
   state: "key (nome da variável, letras e números), value (ex.: {{last}})",
   http: "url (endereço fixo https), method (GET | POST | PUT | PATCH | DELETE), body (JSON)",
   tool: "tool (nome da ferramenta), args (JSON)",
@@ -29,11 +29,12 @@ export const GENERATOR_SYSTEM = `Você desenha fluxos de agentes de IA para exec
 Tipos de bloco disponíveis (kind) e seus campos de config:
 ${KINDS.map((k) => `- ${k} (${BLOCKS[k].label}: ${BLOCKS[k].help}) → ${FIELDS[k]}`).join("\n")}
 
-Saídas (handle) de cada tipo: condition e approval têm "yes" e "no"; loop tem "repeat" e "done"; end não tem saída; os demais têm uma única saída (handle omitido).
+Saídas (handle) de cada tipo: condition tem uma saída para cada criteria.id e a saída final "no" para nenhum critério atendido; approval tem "yes" e "no"; loop tem "repeat" e "done"; end não tem saída; os demais têm uma única saída (handle omitido).
 
 Regras:
 - Exatamente um bloco start, com nome Início. end é opcional: agent e llm sem saída entregam a resposta final.
 - Todo bloco precisa ser alcançável a partir do start e chegar a um end ou agent/llm terminal.
+- Condições avaliam critérios em ordem, seguem o primeiro atendido e usam "no" caso nenhum seja atendido. Cada critério tem id único, diferente de "no", e a condição deve ter pelo menos um critério.
 - Cada saída recebe exatamente uma conexão, exceto agent/llm terminal, que não tem conexão de saída.
 - Só o handle "repeat" de um loop pode voltar a um bloco anterior.
 - Use de 2 a 10 blocos. Prefira agent para tarefas com raciocínio. Não use http nem tool sem o pedido mencionar um serviço ou ferramenta.
@@ -41,7 +42,7 @@ Regras:
 - ids curtos em minúsculas sem espaços (ex.: "inicio", "analista", "resposta").
 
 Formato:
-{"name": "Nome do fluxo", "description": "Uma frase", "nodes": [{"id": "inicio", "kind": "start", "label": "Início", "config": {}}], "edges": [{"source": "inicio", "target": "analista"}, {"source": "cond", "target": "x", "handle": "yes"}]}`;
+{"name": "Nome do fluxo", "description": "Uma frase", "nodes": [{"id": "inicio", "kind": "start", "label": "Início", "config": {}}], "edges": [{"source": "inicio", "target": "analista"}, {"source": "cond", "target": "x", "handle": "criterion_1"}]}`;
 type Raw = {
   name?: unknown;
   description?: unknown;
@@ -78,7 +79,7 @@ export function parseGenerated(answer: string): Generated {
         ? (n.config as Record<string, unknown>)
         : {};
     for (const [k, v] of Object.entries(config))
-      if (Object.hasOwn(b.data.config, k) || k === "tools" || k === "model" || (["agent", "llm"].includes(kind) && k === "stateUpdates"))
+      if (Object.hasOwn(b.data.config, k) || (kind === "condition" && k === "criteria") || k === "tools" || k === "model" || (["agent", "llm"].includes(kind) && k === "stateUpdates"))
         b.data.config[k] =
           typeof v === "string" ? v.slice(0, 20000) : JSON.stringify(v);
     return b;
@@ -88,10 +89,11 @@ export function parseGenerated(answer: string): Generated {
     .map((e: Record<string, unknown>) => {
       const source = text(e.source, 80),
         target = text(e.target, 80);
-      const kind = nodes.find((n) => n.id === source)?.data.kind;
+      const node = nodes.find((n) => n.id === source);
+      const kind = node?.data.kind;
       // Saída única: qualquer handle informado é ignorado; ramificação: handle obrigatório.
       const handle =
-        kind && outputs(kind).length > 1
+        kind && outputs(kind, node?.data.config).length > 1
           ? text(e.handle ?? e.sourceHandle, 20)
           : null;
       return { source, target, handle };

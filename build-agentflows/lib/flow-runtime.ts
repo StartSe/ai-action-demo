@@ -1,3 +1,4 @@
+import { conditionCriteria, matchesCriterion, FALLBACK_HANDLE } from "./flow-conditions";
 import { pageTools } from "./embed-tools";
 import { cancelCommands, getSession } from "./embed-store";
 import { attachmentContext, resolveAttachments, markAttachmentsUsed } from "./attachments";
@@ -144,21 +145,8 @@ export async function execute(r: Run): Promise<Run> {
         r.state[c.key] = output;
       }
       if (k === "condition") {
-        const v = interpolate(c.value, r),
-          expected = interpolate(c.compare, r);
-        const yes =
-          c.operator === "equals"
-            ? v === expected
-            : c.operator === "notEquals"
-              ? v !== expected
-              : c.operator === "greater"
-                ? Number(v) > Number(expected)
-                : c.operator === "empty"
-                  ? !v.trim()
-                  : v
-                      .toLocaleLowerCase()
-                      .includes(expected.toLocaleLowerCase());
-        handle = yes ? "yes" : "no";
+        const matched = conditionCriteria(c).find((row) => matchesCriterion(row.operator, interpolate(row.value, r), interpolate(row.compare, r)));
+        handle = matched?.id || FALLBACK_HANDLE;
       }
       if (k === "loop")
         handle = r.visits[n.id] <= Number(c.limit) ? "repeat" : "done";

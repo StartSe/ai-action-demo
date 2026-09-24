@@ -29,6 +29,7 @@ import {
   connect as connectGraph,
   connectionProblem,
   outputLabel,
+  outputs,
 } from "@/lib/flow-graph";
 import { Icon, IconButton, Modal, request, useDismissMenus } from "./StudioUI";
 import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
@@ -525,7 +526,7 @@ export function FlowEditor({ id }: { id: string }) {
       data: {
         sourceColor: from ? NODE_STYLE[from].color : "#6557d2",
         targetColor: to ? NODE_STYLE[to].color : "#6557d2",
-        label: from ? outputLabel(from, e.sourceHandle) : "",
+        label: from ? outputLabel(from, e.sourceHandle, graph.nodes.find((n) => n.id === e.source)?.data.config) : "",
         active: running && run?.next === e.target,
       },
     };
@@ -1018,6 +1019,7 @@ export function FlowEditor({ id }: { id: string }) {
             commit({
               ...graph,
               nodes: graph.nodes.map((x) => (x.id === n.id ? n : x)),
+              edges: graph.edges.filter((edge) => edge.source !== n.id || outputs(n.data.kind, n.data.config).some((output) => output.id === (edge.sourceHandle || null))),
             });
             setNotice("Bloco atualizado. Salve o fluxo para manter.");
           }}
@@ -1093,7 +1095,7 @@ export function FlowEditor({ id }: { id: string }) {
             </div>
           </div>
           <p>
-            {outputLabel(info, "yes")
+            {info === "condition" ? "Adicione critérios para criar saídas numeradas. O primeiro critério atendido define o caminho; a última saída recebe os demais casos." : outputLabel(info, "yes")
               ? `Este bloco tem duas saídas (${outputLabel(info, "yes")} e ${outputLabel(info, "no")}). Conecte cada uma ao próximo passo.`
               : info === "loop"
                 ? "Repetir volta a uma etapa anterior pela saída Repetir até o limite e então segue pela saída Concluir."

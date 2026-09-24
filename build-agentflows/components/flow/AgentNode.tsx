@@ -2,6 +2,7 @@
 import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   Handle,
+  useUpdateNodeInternals,
   NodeToolbar,
   Position,
   type Node,
@@ -25,7 +26,7 @@ export type VisualNode = Node<VisualData, "block">;
 // Seta em círculo usada nas saídas (mesmo desenho do Flowise Agentflows v2).
 export const CHEVRON =
   "M12 2c5.523 0 10 4.477 10 10a10 10 0 0 1 -20 0c0 -5.523 4.477 -10 10 -10m-.293 6.293a1 1 0 0 0 -1.414 0l-.083 .094a1 1 0 0 0 .083 1.32l2.292 2.293l-2.292 2.293a1 1 0 0 0 1.414 1.414l3 -3a1 1 0 0 0 0 -1.414z";
-function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
+function AgentNodeView({ id, data, selected }: NodeProps<VisualNode>) {
   const [hover, setHover] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showOptions = () => {
@@ -38,7 +39,10 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
   };
   useEffect(() => () => { if (hideTimer.current) clearTimeout(hideTimer.current); }, []);
   const [editing, setEditing] = useState<string | null>(null);
-  const outs = outputs(data.kind);
+  const outs = outputs(data.kind, data.config);
+  const updateNodeInternals = useUpdateNodeInternals();
+  const outputSignature = outs.map((output) => output.id).join(',');
+  useEffect(() => { updateNodeInternals(id); }, [id, outputSignature, updateNodeInternals]);
   const finishRename = () => {
     const label = (editing ?? "").trim();
     if (label && label !== data.label) data.rename?.(label);
@@ -55,11 +59,12 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
     <div
       className={
         "af-node" +
+        (data.kind === "condition" ? " af-condition" : "") +
         (selected ? " selected" : "") +
         (hover ? " hover" : "") +
         (data.execution ? " execution-" + data.execution : "")
       }
-      style={{ "--node-color": NODE_STYLE[data.kind].color } as CSSProperties}
+      style={{ "--node-color": NODE_STYLE[data.kind].color, "--output-count": outs.length } as CSSProperties}
       onPointerEnter={(event) => { if (event.pointerType !== "touch") showOptions(); }}
       onPointerLeave={(event) => { if (event.pointerType !== "touch") hideOptions(); }}
     >
@@ -186,7 +191,7 @@ function AgentNodeView({ data, selected }: NodeProps<VisualNode>) {
           position={Position.Right}
           id={o.id || undefined}
           className="af-handle-out"
-          title={data.connected?.includes(o.id) ? "Saída conectada. Selecione a linha para remover a conexão." : "Arraste até a entrada de outro bloco para conectar"}
+          title={data.kind === "condition" ? `Saída ${i + 1}: ${i === outs.length - 1 ? "quando nenhum critério é atendido" : `critério ${i + 1}`}` : data.connected?.includes(o.id) ? "Saída conectada. Selecione a linha para remover a conexão." : "Arraste até a entrada de outro bloco para conectar"}
           aria-label={`Saída${o.label ? " " + o.label : ""} de ${data.label}`}
           style={{ top: `${(100 * (i + 1)) / (outs.length + 1)}%` }}
         >

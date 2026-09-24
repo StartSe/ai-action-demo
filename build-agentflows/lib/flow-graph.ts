@@ -1,12 +1,12 @@
+import { conditionCriteria, FALLBACK_HANDLE } from "./flow-conditions";
 import type { Graph, Kind, Link } from "./flow-types";
 export type Output = { id: string | null; label: string };
 // Saídas de cada tipo de bloco, na ordem em que aparecem no lado direito.
-export function outputs(kind: Kind): Output[] {
-  if (kind === "condition")
-    return [
-      { id: "yes", label: "Sim" },
-      { id: "no", label: "Não" },
-    ];
+export function outputs(kind: Kind, config: Record<string, string> = {}): Output[] {
+  if (kind === "condition") {
+    const criteria = conditionCriteria(config);
+    return [...criteria.map((row, index) => ({ id: row.id, label: String(index + 1) })), { id: FALLBACK_HANDLE, label: String(criteria.length + 1) }];
+  }
   if (kind === "approval")
     return [
       { id: "yes", label: "Aprovar" },
@@ -20,8 +20,8 @@ export function outputs(kind: Kind): Output[] {
   if (kind === "end") return [];
   return [{ id: null, label: "" }];
 }
-export function outputLabel(kind: Kind, handle?: string | null) {
-  return outputs(kind).find((o) => o.id === (handle || null))?.label || "";
+export function outputLabel(kind: Kind, handle?: string | null, config: Record<string, string> = {}) {
+  return outputs(kind, config).find((o) => o.id === (handle || null))?.label || "";
 }
 export type Candidate = {
   source: string;
@@ -57,8 +57,8 @@ export function connectionProblem(g: Graph, c: Candidate): string | null {
   if (!source || !target) return "Bloco não encontrado.";
   if (target.data.kind === "start") return "O Início não recebe conexões.";
   const handle = c.sourceHandle || null;
-  if (!outputs(source.data.kind).some((o) => o.id === handle))
-    return "A Resposta encerra o fluxo e não tem saída.";
+  if (!outputs(source.data.kind, source.data.config).some((o) => o.id === handle))
+    return source.data.kind === "condition" ? "Esta saída não existe mais. Confira os critérios do bloco." : "A Resposta encerra o fluxo e não tem saída.";
   if (
     g.edges.some(
       (e) => e.source === c.source && (e.sourceHandle || null) === handle,

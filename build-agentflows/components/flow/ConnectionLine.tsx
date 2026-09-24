@@ -17,7 +17,7 @@ export function ConnectionLine({
 }: ConnectionLineComponentProps<VisualNode>) {
   const kind = fromNode?.data.kind;
   const color = kind ? NODE_STYLE[kind].color : "#6557d2";
-  const label = kind ? outputLabel(kind, fromHandle?.id) : "";
+  const label = kind ? outputLabel(kind, fromHandle?.id, fromNode.data.config) : "";
   const [path] = getBezierPath({
     sourceX: fromX,
     sourceY: fromY,

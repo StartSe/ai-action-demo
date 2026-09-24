@@ -18,7 +18,7 @@ export const BLOCKS = {
   condition: {
     label: "Condição",
     icon: "◇",
-    help: "Escolhe o caminho conforme uma comparação.",
+    help: "Escolhe o caminho pelo primeiro critério atendido.",
   },
   state: {
     label: "Atualizar estado",

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { conditionCriteria, COMPARISONS, type Criterion } from "@/lib/flow-conditions";
 import { BLOCKS, type Block, type Kind } from "@/lib/flow-types";
 import { NODE_STYLE } from "@/lib/flow-presets";
 import { Icon, IconButton, Modal, request } from "./StudioUI";
@@ -10,7 +11,7 @@ const fields: Record<Kind, string[]> = {
   start: [],
   llm: ["model", "system", "prompt"],
   agent: ["model", "system", "prompt", "tools"],
-  condition: ["value", "operator", "compare"],
+  condition: [],
   state: ["key", "value"],
   http: ["url", "method", "body", "credential"],
   tool: ["tool", "args"],
@@ -49,13 +50,7 @@ const labels: Record<string, [string, string]> = {
 };
 const TEXTAREAS = ["system", "prompt", "state", "body", "args", "text", "context"];
 const REFERENCES = ["system", "prompt", "value", "compare", "body", "args", "text", "to", "context"];
-const COMPARISONS: [string, string][] = [
-  ["contains", "Contém"],
-  ["equals", "É igual a"],
-  ["notEquals", "É diferente de"],
-  ["greater", "É maior que"],
-  ["empty", "Está vazio"],
-];
+
 
 type ToolInfo = {
   id: string;
@@ -92,6 +87,7 @@ export function NodeDialog({
     [groups, setGroups] = useState<ToolGroup[] | null>(null),
     [savedName, setSavedName] = useState(node.data.label),
     [nameSaved, setNameSaved] = useState(false);
+  const [criteria, setCriteria] = useState<Criterion[]>(() => node.data.kind === "condition" ? conditionCriteria(node.data.config) : []);
   const [closeError, setCloseError] = useState("");
   const [variables, setVariables] = useState<{ key: string; value: string }[]>(() => {
     try { return Object.entries(JSON.parse(node.data.config.state || "{}")).map(([key, value]) => ({ key, value: String(value) })); } catch { return []; }
@@ -136,7 +132,7 @@ export function NodeDialog({
     }
     onSave({
       ...draft,
-      data: { ...draft.data, label: k === "start" ? "Início" : draft.data.label.trim(), config: { ...c, ...(k === "start" ? { state: JSON.stringify(Object.fromEntries(variables.map((v) => [v.key, v.value]))) } : {}), ...(["agent", "llm"].includes(k) ? { stateUpdates: JSON.stringify(updates) } : {}) } },
+      data: { ...draft.data, label: k === "start" ? "Início" : draft.data.label.trim(), config: { ...c, ...(k === "condition" ? { criteria: JSON.stringify(criteria) } : {}), ...(k === "start" ? { state: JSON.stringify(Object.fromEntries(variables.map((v) => [v.key, v.value]))) } : {}), ...(["agent", "llm"].includes(k) ? { stateUpdates: JSON.stringify(updates) } : {}) } },
     });
     onClose();
     return true;
@@ -238,6 +234,21 @@ export function NodeDialog({
           </div>)}
           <button className="studio-button" disabled={variables.length >= 50} onClick={() => setVariables([...variables, { key: "", value: "" }])}>Adicionar variável</button>
           {invalidVariables && <small role="alert">Use nomes únicos, começando com uma letra, sem espaços ou acentos.</small>}
+        </section>}
+
+        {k === "condition" && <section className="condition-criteria">
+          <p>O primeiro critério atendido define o caminho. Quando nenhum é atendido, o fluxo segue pela última saída.</p>
+          {criteria.map((row, index) => <div className="condition-criterion" key={row.id}>
+            <div className="condition-criterion-heading"><span>Critério {index + 1} <small>Saída {index + 1}</small></span>
+              <IconButton icon="trash" label={`Remover critério ${index + 1}`} disabled={criteria.length === 1} onClick={() => setCriteria(criteria.filter((item) => item.id !== row.id))} />
+            </div>
+            <label>Valor a avaliar<ReferenceField ariaLabel={`Valor do critério ${index + 1}`} value={row.value} references={references} placeholder="Ex.: {{last}}" onChange={(value) => setCriteria(criteria.map((item) => item.id === row.id ? { ...item, value } : item))} /></label>
+            <label>Comparação<select aria-label={`Comparação do critério ${index + 1}`} value={row.operator} onChange={(event) => setCriteria(criteria.map((item) => item.id === row.id ? { ...item, operator: event.target.value } : item))}>
+              {COMPARISONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select></label>
+            {!['empty', 'notEmpty'].includes(row.operator) && <label>Comparar com<ReferenceField ariaLabel={`Comparar critério ${index + 1} com`} value={row.compare} references={references} placeholder="Texto ou valor" onChange={(compare) => setCriteria(criteria.map((item) => item.id === row.id ? { ...item, compare } : item))} /></label>}
+          </div>)}
+          <button className="studio-button" disabled={criteria.length >= 119} onClick={() => setCriteria([...criteria, { id: 'criterion_' + crypto.randomUUID(), value: '{{last}}', operator: 'equals', compare: '' }])}><Icon name="plus" size={16} />Adicionar critério</button>
         </section>}
 
         {fields[k].map((key) => (

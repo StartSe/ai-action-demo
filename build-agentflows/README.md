@@ -1,6 +1,6 @@
-# Build Agentflows — v0.9.1
+# Build Agentflows — v0.9.4
 
-Versão 0.9.3: novos fluxos sem gravação automática, salvamento sem alterar o canvas, geração com IA com progresso e melhorias no chat embed e nas integrações. Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
+Versão 0.9.4: condições com critérios e saídas dinâmicas, caminho alternativo automático e mensagens de progresso durante a geração com IA. Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
 
 Crie fluxos visuais de agentes de IA, teste cada etapa e publique versões que seus sistemas e assistentes podem executar. Aplicação independente da suíte **IA para Executivos**, inspirada na orquestração explícita de [AgentFlow V2 do Flowise](https://docs.flowiseai.com/using-flowise/agentflowv2).
 

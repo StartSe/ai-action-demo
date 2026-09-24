@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## 0.9.4 — 24/09/2026
+
+- Geração com IA alterna mensagens durante a espera e mostra o tempo decorrido.
+- Condições com critérios adicionáveis, comparadores de texto e número e saídas numeradas; o primeiro critério atendido define o caminho.
+- Última saída automática quando nenhum critério é atendido, com mínimo de duas saídas e preservação dos fluxos antigos Sim/Não.
+- Remover um critério elimina somente a conexão correspondente, preservando as demais e o caminho automático.
+- Geração por IA e execução compatíveis com condições de múltiplas saídas.
+- Hover e foco visíveis no header, com áreas iguais para Implantar e Configurações e alvos ampliados no touch.
+
 ## 0.9.3 — 24/09/2026
 
 - Novos fluxos abrem sem nome e sem gravação automática, apenas com Início centralizado; o primeiro salvamento pede o nome.

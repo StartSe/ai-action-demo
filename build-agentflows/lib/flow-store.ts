@@ -1,3 +1,5 @@
+import { conditionCriteria, COMPARISONS } from "./flow-conditions";
+import { outputs } from "./flow-graph";
 import { randomUUID } from "node:crypto";
 import { abrirBanco } from "./store";
 import {
@@ -58,6 +60,9 @@ export function validateGraph(value: unknown, executable = false): Graph {
       throw new FlowError(
         "Há um bloco inválido ou repetido. Confira o arquivo importado.",
       );
+    if (n.data.kind === "condition") {
+      try { conditionCriteria(n.data.config); } catch (error) { throw new FlowError((error as Error).message); }
+    }
     ids.add(n.id);
   }
   const edges = new Set<string>();
@@ -69,7 +74,7 @@ export function validateGraph(value: unknown, executable = false): Graph {
       !ids.has(e.source) ||
       !ids.has(e.target) ||
       (e.sourceHandle != null &&
-        !["yes", "no", "repeat", "done"].includes(e.sourceHandle))
+        !outputs(g.nodes.find((n) => n.id === e.source)!.data.kind, g.nodes.find((n) => n.id === e.source)!.data.config).some((o) => o.id === e.sourceHandle))
     )
       throw new FlowError("Há uma conexão inválida.");
     edges.add(e.id);
@@ -85,14 +90,7 @@ export function validateGraph(value: unknown, executable = false): Graph {
     for (const n of g.nodes) {
       const out = g.edges.filter((e) => e.source === n.id);
       const k = n.data.kind;
-      const handles =
-        k === "condition" || k === "approval"
-          ? ["yes", "no"]
-          : k === "loop"
-            ? ["repeat", "done"]
-            : k === "end" || ((k === "agent" || k === "llm") && out.length === 0)
-              ? []
-              : [null];
+      const handles = (k === "agent" || k === "llm") && out.length === 0 ? [] : outputs(k, n.data.config).map((o) => o.id);
       if (
         out.length !== handles.length ||
         handles.some(
@@ -114,9 +112,7 @@ export function validateGraph(value: unknown, executable = false): Graph {
         throw new FlowError("A repetição deve ter entre 1 e 20 passagens.");
       if (
         k === "condition" &&
-        !["contains", "equals", "notEquals", "greater", "empty"].includes(
-          c.operator,
-        )
+        !conditionCriteria(c).every((row) => COMPARISONS.some(([operator]) => operator === row.operator))
       )
         throw new FlowError("Escolha uma comparação válida.");
       if (k === "http") {

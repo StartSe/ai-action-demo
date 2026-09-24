@@ -4,6 +4,7 @@ import type { Generated, GenerationEvent, GenerationPhase } from "@/lib/flow-gen
 import { NODE_STYLE } from "@/lib/flow-presets";
 import { Icon, Modal } from "./StudioUI";
 
+const WAITING_MESSAGES = ["A IA está preparando seu fluxo.", "A descrição orienta os blocos e as instruções de cada agente.", "Fluxos mais detalhados podem levar um pouco mais de tempo.", "Os blocos aparecerão aqui quando a geração terminar."];
 const PHASE_LABELS = {
   interpreting: "Interpretando sua descrição…",
   planning: "Planejando o fluxo e as instruções…",
@@ -17,6 +18,7 @@ export function GeneratorDialog({ flowId, replaces, connected, onConnect, onClos
   onClose: () => void; onApply: (g: Generated) => void;
 }) {
   const [prompt, setPrompt] = useState("");
+  const [elapsed, setElapsed] = useState(0);
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<GenerationPhase>("interpreting");
   const [error, setError] = useState("");
@@ -24,11 +26,18 @@ export function GeneratorDialog({ flowId, replaces, connected, onConnect, onClos
   const pending = useRef<AbortController | null>(null);
   useEffect(() => () => pending.current?.abort(), []);
 
+  useEffect(() => {
+    if (!busy) return;
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [busy]);
+
   async function generate() {
     if (pending.current || !prompt.trim() || !connected) return;
     const controller = new AbortController();
     pending.current = controller;
-    setBusy(true); setError(""); setResult(null); setPhase("interpreting");
+    setElapsed(0); setBusy(true); setError(""); setResult(null); setPhase("interpreting");
     try {
       const response = await fetch(`/api/flows/${flowId}/generate`, {
         method: "POST", signal: controller.signal,
@@ -75,6 +84,7 @@ export function GeneratorDialog({ flowId, replaces, connected, onConnect, onClos
             ))}
           </div>
           <strong className="generator-phase" role="status">{PHASE_LABELS[result ? "complete" : phase]}</strong>
+          {busy && <div className="generator-waiting"><p role="status" key={Math.floor(elapsed / 6)}>{WAITING_MESSAGES[Math.floor(elapsed / 6) % WAITING_MESSAGES.length]}</p><small>Tempo decorrido: {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")}</small></div>}
           <ol className="generator-steps" aria-label="Etapas da geração">
             {["Interpretação", "Planejamento", "Blocos e conexões"].map((label, index) => (
               <li key={label} className={index < current ? "done" : index === current ? "active" : ""} aria-current={index === current ? "step" : undefined}>
