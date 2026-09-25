@@ -1,6 +1,6 @@
-# Build Agentflows — v0.13.2
+# Build Agentflows — v0.13.3
 
-Versão 0.13.2: seção Fluxo Agêntico e busca sem contador lateral. Histórico com validação das respostas da API. Inclui upload por arrastar e soltar, revisão em modal amplo, credenciais compartilhadas de embeddings, menu Credenciais e paginação de execuções no servidor. Veja a [comparação de recursos e preparação dos serviços](KNOWLEDGE-FLOWISE.md). Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
+Versão 0.13.3: exclusão das bases por ícone vermelho ao lado do status. Seção Fluxo Agêntico e busca sem contador lateral. Histórico com validação das respostas da API. Inclui upload por arrastar e soltar, revisão em modal amplo, credenciais compartilhadas de embeddings, menu Credenciais e paginação de execuções no servidor. Veja a [comparação de recursos e preparação dos serviços](KNOWLEDGE-FLOWISE.md). Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
 
 Crie fluxos visuais de agentes de IA, teste cada etapa e publique versões que seus sistemas e assistentes podem executar. Aplicação independente da suíte **IA para Executivos**, inspirada na orquestração explícita de [AgentFlow V2 do Flowise](https://docs.flowiseai.com/using-flowise/agentflowv2).
 

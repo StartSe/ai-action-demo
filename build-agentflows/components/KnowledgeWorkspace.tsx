@@ -349,13 +349,21 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
               <div className="knowledge-base-grid">
                 {visible.map((b) => (
                   <article key={b.id}>
-                    <Link href={`/knowledge/${b.id}`}>
-                      <div className="knowledge-section-title">
-                        <span className="knowledge-symbol">
-                          <Icon name="book" size={22} />
-                        </span>
+                    <div className="knowledge-card-header">
+                      <span className="knowledge-symbol">
+                        <Icon name="book" size={22} />
+                      </span>
+                      <div className="knowledge-card-actions">
                         <Status base={b} />
+                        <IconButton
+                          icon="trash"
+                          label={`Excluir base ${b.name}`}
+                          disabled={locked}
+                          onClick={() => setDeleteBase(b)}
+                        />
                       </div>
+                    </div>
+                    <Link href={`/knowledge/${b.id}`}>
                       <h2>{b.name}</h2>
                       <p>
                         {b.description ||
@@ -369,12 +377,6 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
                       </div>
                       <small>Atualizada em {time(b.updatedAt)}</small>
                     </Link>
-                    <IconButton
-                      icon="trash"
-                      label={`Excluir base ${b.name}`}
-                      disabled={locked}
-                      onClick={() => setDeleteBase(b)}
-                    />
                   </article>
                 ))}
               </div>

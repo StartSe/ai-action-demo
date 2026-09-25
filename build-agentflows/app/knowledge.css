@@ -94,8 +94,24 @@
 }
 .knowledge-base-grid > article > a {
   display: block;
-  padding: 22px;
+  padding: 0 22px 22px;
   color: var(--studio-ink);
+}
+.knowledge-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 22px 22px 0;
+}
+.knowledge-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.knowledge-card-actions > .studio-icon-button {
+  flex-shrink: 0;
+  color: #c45360;
 }
 .knowledge-base-grid h2 {
   margin-top: 20px;
@@ -110,11 +126,6 @@
 .knowledge-base-grid small {
   color: var(--studio-muted);
   font-size: 11px;
-}
-.knowledge-base-grid > article > .studio-icon-button {
-  position: absolute;
-  right: 12px;
-  bottom: 10px;
 }
 .knowledge-card-stats {
   display: flex;

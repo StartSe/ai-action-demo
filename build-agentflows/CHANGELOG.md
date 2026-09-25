@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.13.3 — 25/09/2026
+
+- Ícone de exclusão das bases de conhecimento em vermelho, à direita do status no cabeçalho do card.
+
 ## 0.13.2 — 25/09/2026
 
 - Seção Agentflows renomeada para Fluxo Agêntico, com navegação, busca e ações usando a mesma nomenclatura.
