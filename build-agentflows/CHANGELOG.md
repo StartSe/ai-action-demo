@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.14.1 — 25/09/2026
+
+- Campo Local do índice removido da configuração do Faiss; o armazenamento continua sendo administrado automaticamente por base e versão.
+
 ## 0.14.0 — 25/09/2026
 
 - Busca configurável por base: Top K, similaridade mínima e herança no teste e no Agente, com substituição opcional. Alterar apenas a busca mantém os vetores publicados e não exige reindexação.

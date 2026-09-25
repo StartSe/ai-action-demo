@@ -260,10 +260,6 @@ export function KnowledgeIndexFields({
             {vector.provider === "postgres" && field.key === "tableName" && <small>Até 22 caracteres. Acrescentamos um identificador por base e versão para impedir sobreposição.</small>}
           </label>
         ))}
-        {vector.provider === "faiss" && <label>Local do índice
-          <input readOnly value={storage?.provider === "faiss" ? storage.location : "DATA_DIR/knowledge-faiss/<base e versão>"} />
-          <small>{storage?.provider === "faiss" ? "Caminho da versão publicada." : "O caminho definitivo é criado ao indexar."} Cada base e cada versão usam uma pasta própria.</small>
-        </label>}
         {vector.provider === "postgres" && storage?.provider === "postgres" && <label>Tabela da versão publicada<input readOnly value={storage.location} /><small>O prefixo recebe um sufixo automático para isolar bases e versões.</small></label>}
         <KnowledgeRetrievalFields config={config} onChange={retrieval => onChange({ ...config, retrieval })} />
         <p className="knowledge-note">

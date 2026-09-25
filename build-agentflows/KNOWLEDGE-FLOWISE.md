@@ -1,6 +1,6 @@
 # Base de Conhecimento — comparação com Flowise
 
-Revisão da versão 0.14.0, em 25/09/2026. Referência: código local de `Flowise-main/packages/components/nodes` (documentloaders, embeddings, vectorstores e recordmanager) e catálogo `packages/components/models.json`.
+Revisão da versão 0.14.1, em 25/09/2026. Referência: código local de `Flowise-main/packages/components/nodes` (documentloaders, embeddings, vectorstores e recordmanager) e catálogo `packages/components/models.json`.
 
 A jornada principal está contemplada: extrair documentos, revisar e dividir o texto, gerar embeddings, indexar, evitar processamento repetido, consultar e entregar os trechos ao Agente. Os campos avançados não têm paridade integral com o Flowise.
 
@@ -80,7 +80,7 @@ Os 37 logos foram copiados do Flowise local, com atribuição e licença em `pub
 
 | Referência | Refinamento no app | Diferença intencional / limite |
 | --- | --- | --- |
-| Faiss — Base Path / Top K | Caminho real da versão publicada, Top K salvo na base e aplicado no teste/Agente. | Caminho administrado automaticamente para evitar sobrescrita; não carrega índices externos. |
+| Faiss — Base Path / Top K | Armazenamento automático, sem campo de caminho na interface; Top K salvo na base e aplicado no teste/Agente. | Caminho administrado automaticamente para evitar sobrescrita; não carrega índices externos. |
 | OpenAI — credencial, modelo, Strip New Lines, Batch Size, Timeout, Base Path | Disponíveis; URL do serviço corresponde à conexão de embedding. | Credencial compartilhada e cifrada. |
 | OpenAI — Dimensions / Encoding Format | Dimensões reduzidas para text-embedding-3; float/base64 na API. | Demais modelos/provedores mantêm dimensões do catálogo. |
 | OpenAI — Base Options | Não adicionado. | Cabeçalhos arbitrários exigem um contrato próprio para guardar segredos e impedir sobreposição da autenticação. |
