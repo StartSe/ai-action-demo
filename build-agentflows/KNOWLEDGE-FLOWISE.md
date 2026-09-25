@@ -1,6 +1,6 @@
 # Base de Conhecimento — comparação com Flowise
 
-Revisão da versão 0.14.1, em 25/09/2026. Referência: código local de `Flowise-main/packages/components/nodes` (documentloaders, embeddings, vectorstores e recordmanager) e catálogo `packages/components/models.json`.
+Revisão da versão 0.15.0, em 25/09/2026. Referência: código local de `Flowise-main/packages/components/nodes` (documentloaders, embeddings, vectorstores e recordmanager) e catálogo `packages/components/models.json`.
 
 A jornada principal está contemplada: extrair documentos, revisar e dividir o texto, gerar embeddings, indexar, evitar processamento repetido, consultar e entregar os trechos ao Agente. Os campos avançados não têm paridade integral com o Flowise.
 
@@ -12,7 +12,7 @@ A jornada principal está contemplada: extrair documentos, revisar e dividir o t
 | Divisão | Divisores recursivo e por caracteres, tamanho, sobreposição e separador; edição de conteúdo/metadados dos trechos. | Não inclui todos os divisores especializados, por tokens e semânticos do Flowise. |
 | Embeddings | Gemini, OpenAI, VoyageAI e Ollama, com logos e listas de modelos. Credenciais compartilhadas no menu Credenciais. Dimensões automáticas ou reduzidas nos modelos OpenAI text-embedding-3, transporte float/base64 para OpenAI, URL configurável, credencial, lote, timeout e remoção opcional de quebras de linha. | Não há cabeçalhos arbitrários, task type manual ou ajustes de GPU/threads do Ollama. Recuperação usa documento/query conforme o provedor. |
 | Vector Store | Os 11 serviços abaixo recebem vetores reais e participam da consulta e exclusão. Top K e similaridade mínima salvos na base e herdados pelo teste/Agente; filtro de metadados Faiss/Postgres; ranking cosseno, euclidiano e produto interno no Postgres. | Não expõe MMR, busca híbrida, reranking, operadores arbitrários no filtro nem todos os ajustes de índices de cada serviço. |
-| Record Manager | SQLite e Postgres, com logos, hash do conteúdo/configuração, reaproveitamento de embeddings e limpeza da versão anterior. Postgres permite credencial reutilizável, host/banco/porta/SSL, timeouts, tabela e namespace. | Limpeza completa por versão. Não expõe modos `none`/`incremental` nem `sourceIdKey` do Flowise. SQLite usa o banco persistente do app; fonte/base são identificadas automaticamente. |
+| Record Manager | SQLite e Postgres, com logos, hash do conteúdo/configuração, reaproveitamento de embeddings e limpeza da versão anterior. Postgres permite credencial reutilizável, host/banco/porta/SSL, timeouts, tabela e namespace. | Limpeza nenhuma, incremental ou completa (padrão), com identificação automática da fonte ou chave de metadados na incremental. SQLite usa o banco persistente do app. Exclusão explícita de fonte/base sempre remove seus dados. |
 | Consulta no Agente | Recupera os trechos da versão publicada e pode incluir referências na resposta, com ChatGPT e OpenRouter. | É necessário salvar e indexar a configuração; uma falha na nova indexação preserva os dados da versão anterior, mas a consulta exige a base novamente indexada e pronta. |
 
 ## Modelos e dimensões
@@ -56,9 +56,20 @@ Coleções/tabelas/namespaces são gerados pelo app para isolar bases e versões
 
 Os trechos e vetores também permanecem no SQLite do app para controle de versões, metadados e reaproveitamento. Portanto, configurar um banco remoto **não elimina a necessidade de persistir `DATA_DIR`**. A ordenação usa a estratégia escolhida (Postgres) ou cosseno (demais serviços). O limiar e a pontuação exibida sempre usam similaridade de cosseno dos vetores armazenados.
 
+## Limpeza do Record Manager
+
+- **Nenhuma:** preserva conteúdo anterior e adiciona as versões atuais; reindexar os mesmos trechos não os duplica. Trechos antigos continuam disponíveis para consulta.
+- **Incremental:** substitui os trechos das fontes presentes na indexação, preservando as ausentes. Por padrão, usa o ID da fonte cadastrada. Para distinguir documentos de um mesmo extrator (por exemplo, páginas de um site), informe em Opções avançadas uma chave dos metadados como `source`. Todos os trechos atuais e anteriores precisam conter um texto ou número nessa chave; valores ausentes impedem a indexação sem publicar dados parciais.
+- **Completa (padrão):** sincroniza com todos os trechos atuais, removendo conteúdo ausente e versões anteriores. Também permite publicar um índice vazio depois de remover todos os trechos.
+
+A retenção é aplicada ao conteúdo da nova geração. Os arquivos/tabelas da geração anterior continuam sendo removidos após a publicação, em qualquer modo. Se o modelo ou preparação dos embeddings mudar, o conteúdo retido recebe novos embeddings compatíveis.
+
+Excluir uma fonte ou base explicitamente sempre remove seus dados, independentemente do modo de limpeza. A exclusão da base exige digitar seu nome na interface. O histórico persistente de gerações é consultado mesmo após trocar de banco vetorial: Faiss → Postgres → excluir remove as pastas Faiss ainda pendentes e as tabelas Postgres. Se uma limpeza falhar, a base e as referências permanecem para repetir a exclusão. O volume compartilhado `DATA_DIR` e os dados das demais bases são preservados.
+
 ## Validação
 
 - Suíte automatizada: extração, persistência, credenciais, publicação, reindexação, busca, exclusão e execução do Agente, além dos contratos de embeddings e bancos vetoriais.
+- Modos de limpeza: indexação e consulta com Faiss real e Record Managers SQLite/Postgres; retenção, atualização, repetição sem duplicatas, chave de metadados, troca de modelo e recuperação de falha. Migração Faiss → Postgres e exclusão testadas antes/depois de indexar, inclusive falha de permissão na pasta antiga e nova tentativa de exclusão, preservando outra base.
 - Faiss nativo: gravação em disco, leitura, busca e exclusão de IDs; carregamento e busca também verificados na imagem Docker Alpine standalone.
 - Postgres + pgvector e Chroma: serviços reais descartáveis, com indexação, consulta, reaproveitamento no Record Manager Postgres, remoção da geração anterior e exclusão de fonte/base.
 - SQL de preparação do Supabase: executado no Postgres com pgvector, incluindo busca e isolamento por filtro.
@@ -89,7 +100,7 @@ Os 37 logos foram copiados do Flowise local, com atribuição e licença em `pub
 | Postgres — Distance Strategy / Top K / Metadata Filter | Três rankings, Top K herdável e filtro por igualdade antes do limite. | Sem operadores SQL/JSON arbitrários ou interpolação de variáveis; similaridade mínima continua sendo cosseno. |
 | Postgres — Additional Configuration | Timeouts e SSL expostos por campos validados. | Não aceita um objeto TypeORM arbitrário; o app usa o driver pg. |
 | Postgres — File Upload | Upload permanece na etapa Documentos, com revisão e publicação. | Arquivos enviados no chat não entram automaticamente na base compartilhada. |
-| Record Manager — Cleanup / SourceId Key | Limpeza completa por geração; IDs de fonte administrados pelo app. | Modos none/incremental e chave manual não expostos. |
+| Record Manager — Cleanup / SourceId Key | Nenhuma, incremental e completa; identificação automática ou chave de metadados na incremental. | Padrão completa, preservando bases existentes. Exclusão explícita sempre purga dados; a indexação considera todas as fontes revisadas da base. |
 
 Protocolo das opções OpenAI conferido na [referência oficial de embeddings](https://developers.openai.com/api/reference/resources/embeddings/methods/create) e no [guia de dimensões](https://developers.openai.com/api/docs/guides/embeddings). Os testes HTTP usam respostas controladas, sem consumo de créditos de provedores externos.
 

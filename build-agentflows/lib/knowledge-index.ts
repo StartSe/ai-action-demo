@@ -1,3 +1,4 @@
+import { retainedKnowledgeChunks } from "./knowledge-cleanup";
 import { matchesMetadata, validatedRetrieval } from "./knowledge-retrieval";
 import { embedKnowledge } from "./knowledge-embeddings";
 export { embedKnowledge, validateVectors } from "./knowledge-embeddings";
@@ -157,11 +158,19 @@ export async function indexKnowledge(baseId: string) {
   return withKnowledgeLock(baseId, async () => {
     const base = getKnowledgeBase(baseId);
     const sources = listKnowledgeSources(baseId);
-    const chunks = listKnowledgeChunks(baseId);
-    if (!chunks.length || sources.some((s) => s.status !== "processed"))
+    const incoming = listKnowledgeChunks(baseId);
+    const previous = snapshot(baseId);
+    if ((!incoming.length && !previous) || sources.some((s) => s.status !== "processed"))
       throw new FlowError("Extraia e revise todas as fontes antes de indexar.");
     const config = indexKnowledgeConfig(baseId);
-    const previous = snapshot(baseId);
+    const priorRows = previous ? knowledgeDb().prepare(
+      "SELECT hash,body FROM knowledge_vectors WHERE base_id=? AND generation=?",
+    ).all(baseId, previous.generation) as { hash: string; body: string }[] : [];
+    const priorRecords = priorRows.map(row => ({ hash: row.hash, record: JSON.parse(row.body) as VectorRecord }));
+    const retained = retainedKnowledgeChunks(config.recordManager, incoming, priorRecords.map(({ record }) => record.chunk));
+    const chunks = [...incoming, ...retained];
+    const sourceNames = new Map(priorRecords.map(({ record }) => [record.chunk.sourceId, record.sourceName]));
+    for (const source of sources) sourceNames.set(source.id, source.name);
     const run: IndexRun = {
       id: randomUUID(),
       baseId,
@@ -195,12 +204,8 @@ export async function indexKnowledge(baseId: string) {
             )
           : new Map<string, number[]>();
       if (config.recordManager.provider === "sqlite" && previous) {
-        for (const row of d
-          .prepare(
-            "SELECT hash,body FROM knowledge_vectors WHERE base_id=? AND generation=?",
-          )
-          .all(baseId, previous.generation) as { hash: string; body: string }[])
-          existing.set(row.hash, (JSON.parse(row.body) as VectorRecord).vector);
+        for (const { hash, record } of priorRecords)
+          existing.set(hash, record.vector);
       }
       const records: { hash: string; record: VectorRecord }[] = [];
       const pending = new Map<string, Chunk[]>();
@@ -213,7 +218,7 @@ export async function indexKnowledge(baseId: string) {
             record: {
               chunk,
               vector,
-              sourceName: sources.find((s) => s.id === chunk.sourceId)!.name,
+              sourceName: sourceNames.get(chunk.sourceId)!,
             },
           });
           run.reused++;
@@ -246,7 +251,7 @@ export async function indexKnowledge(baseId: string) {
               record: {
                 chunk,
                 vector: vectors[i],
-                sourceName: sources.find((s) => s.id === chunk.sourceId)!.name,
+                sourceName: sourceNames.get(chunk.sourceId)!,
               },
             });
           run.embedded++;
@@ -254,25 +259,27 @@ export async function indexKnowledge(baseId: string) {
         }
         saveKnowledgeRun(run);
       }
-      const dimensions = records[0].record.vector.length;
+      const dimensions = records[0]?.record.vector.length ?? previous?.dimensions ?? 0;
       if (records.some(({ record }) => record.vector.length !== dimensions))
         throw new FlowError(
           "O modelo retornou dimensões diferentes. Use outro modelo ou desative o reaproveitamento para reindexar.",
         );
-      setConfig(secretKey(generation), JSON.stringify(config.vectorStore));
-      await writeVectorGeneration(
-        config.vectorStore,
-        { baseId, generation, dimensions },
-        records.map(({ record }) => ({
-          id: record.chunk.id,
-          vector: record.vector,
-          sourceId: record.chunk.sourceId,
-          content: record.chunk.pageContent,
-          metadata: record.chunk.metadata,
-        })),
-        signal,
-      );
-      if (config.recordManager.provider === "postgres") {
+      if (records.length) {
+        setConfig(secretKey(generation), JSON.stringify(config.vectorStore));
+        await writeVectorGeneration(
+          config.vectorStore,
+          { baseId, generation, dimensions },
+          records.map(({ record }) => ({
+            id: record.chunk.id,
+            vector: record.vector,
+            sourceId: record.chunk.sourceId,
+            content: record.chunk.pageContent,
+            metadata: record.chunk.metadata,
+          })),
+          signal,
+        );
+      }
+      if (config.recordManager.provider === "postgres" && records.length) {
         setConfig(
           recordSecretKey(generation),
           JSON.stringify(config.recordManager),
@@ -389,6 +396,8 @@ export async function queryKnowledge(
     throw new FlowError(
       "Informe uma consulta de até 20.000 caracteres, 1 a 20 resultados e pontuação entre -1 e 1.",
     );
+  if (!knowledgeDb().prepare("SELECT 1 FROM knowledge_vectors WHERE base_id=? AND generation=? LIMIT 1").get(baseId, current.generation))
+    return [];
   const config = indexKnowledgeConfig(baseId);
   const [vector] = await embedKnowledge(
     config.embeddings,
@@ -513,6 +522,6 @@ export async function removeKnowledgeSource(baseId: string, sourceId: string) {
 
 export function knowledgeStorageLocation(baseId: string) {
   const current = snapshot(baseId);
-  if (!current) return undefined;
+  if (!current || !getConfig(secretKey(current.generation))) return undefined;
   return vectorStorageLocation(current.config.vectorStore, { baseId, generation: current.generation, dimensions: current.dimensions });
 }

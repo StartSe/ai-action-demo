@@ -43,5 +43,7 @@ export function indexingConfigIdentity(config: IndexConfig) {
   normalized.vectorStore.options ??= {};
   normalized.recordManager.namespace ||= "agentflows";
   normalized.recordManager.tableName ||= "agentflows_records";
+  normalized.recordManager.cleanup ??= "full";
+  normalized.recordManager.sourceIdKey ||= undefined;
   return JSON.stringify(normalized);
 }

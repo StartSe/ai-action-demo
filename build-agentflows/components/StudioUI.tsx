@@ -266,19 +266,21 @@ export function IconButton({
   onClick,
   disabled = false,
   active = false,
+  danger = false,
 }: {
   icon: IconName;
   label: string;
   onClick: () => void;
   disabled?: boolean;
   active?: boolean;
+  danger?: boolean;
 }) {
   return (
     <button
       type="button"
       title={label}
       aria-label={label}
-      className={"studio-icon-button" + (active ? " active" : "")}
+      className={"studio-icon-button" + (active ? " active" : "") + (danger ? " danger" : "")}
       disabled={disabled}
       onClick={onClick}
     >

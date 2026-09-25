@@ -313,6 +313,8 @@ export function KnowledgeIndexFields({
             ...config,
             recordManager: {
               provider: id as "sqlite" | "postgres",
+              cleanup: record.cleanup ?? "full",
+              sourceIdKey: record.sourceIdKey,
               namespace: "agentflows",
               tableName: "agentflows_records",
             },
@@ -339,6 +341,30 @@ export function KnowledgeIndexFields({
         </>
       )}
       {record.provider !== "none" && (
+        <>
+        <label>
+          Tipo de limpeza
+          <select value={record.cleanup ?? "full"} onChange={e => recordChange({ cleanup: e.target.value as "none" | "incremental" | "full" })}>
+            <option value="none">Nenhuma</option>
+            <option value="incremental">Incremental</option>
+            <option value="full">Completa</option>
+          </select>
+          <small>
+            {record.cleanup === "none"
+              ? "Mantém o conteúdo anterior e adiciona as novas versões. Trechos antigos continuam disponíveis nas consultas."
+              : record.cleanup === "incremental"
+                ? "Substitui os trechos das fontes presentes nesta indexação. Fontes ausentes são preservadas no índice."
+                : "Sincroniza o índice com todos os trechos atuais da base, removendo versões antigas e conteúdo ausente."}
+          </small>
+        </label>
+        {record.cleanup === "incremental" && <details>
+          <summary>Opções avançadas</summary>
+          <label>
+            Chave de identificação da fonte
+            <input value={record.sourceIdKey || ""} maxLength={200} placeholder="Automática" onChange={e => recordChange({ sourceIdKey: e.target.value })} />
+            <small>Deixe em branco para usar a fonte cadastrada. Para distinguir documentos da mesma fonte, informe uma chave presente nos metadados de todos os trechos, como source. O valor deve ser um texto ou número estável.</small>
+          </label>
+        </details>}
         <div className="knowledge-choice-note">
           <div>
             <strong>Atualizações sem trabalho repetido</strong>
@@ -347,12 +373,13 @@ export function KnowledgeIndexFields({
               conteúdo, modelo ou preparação do texto geram novos vetores.
             </p>
             <p>
-              A limpeza é completa: ao publicar uma nova versão, os trechos
-              removidos deixam de aparecer nas consultas. As bases são isoladas
-              automaticamente.
+              A limpeza escolhida é aplicada ao reindexar. Excluir uma fonte
+              pelo botão de exclusão sempre remove seus trechos do índice,
+              independentemente deste modo. As bases são isoladas automaticamente.
             </p>
           </div>
         </div>
+        </>
       )}
     </>
   );

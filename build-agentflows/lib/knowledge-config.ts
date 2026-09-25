@@ -195,6 +195,13 @@ export function validatedIndexConfig(
   for (const key of ["schema", "tableName", "queryName"])
     if (options[key]) sqlIdentifier(options[key]);
   const namespace = c.recordManager.namespace || "agentflows";
+  const cleanup = c.recordManager.cleanup === undefined ? "full" : c.recordManager.cleanup;
+  if (!["none", "incremental", "full"].includes(cleanup))
+    throw new FlowError("Escolha um tipo de limpeza válido para o Record Manager.");
+  if (c.recordManager.sourceIdKey !== undefined &&
+    (typeof c.recordManager.sourceIdKey !== "string" || c.recordManager.sourceIdKey.length > 200 ||
+      ["__proto__", "constructor", "prototype"].includes(c.recordManager.sourceIdKey.trim())))
+    throw new FlowError("Use uma chave de metadados válida, com até 200 caracteres.");
   if (typeof namespace !== "string" || namespace.length > 100)
     throw new FlowError("Use um namespace de até 100 caracteres.");
   let retrieval;
@@ -225,6 +232,8 @@ export function validatedIndexConfig(
     },
     recordManager: {
       provider: c.recordManager.provider,
+      cleanup,
+      sourceIdKey: c.recordManager.sourceIdKey?.trim() || undefined,
       postgres: c.recordManager.provider === "postgres" ? c.recordManager.postgres : undefined,
       configured: !!secrets.recordConnection,
       namespace,

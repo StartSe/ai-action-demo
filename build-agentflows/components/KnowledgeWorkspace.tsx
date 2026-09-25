@@ -62,6 +62,7 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
     [name, setName] = useState(""),
     [description, setDescription] = useState(""),
     [deleteBase, setDeleteBase] = useState<KnowledgeBase | null>(null),
+    [deleteConfirmation, setDeleteConfirmation] = useState(""),
     [sourceDialog, setSourceDialog] = useState<KnowledgeSource | "new" | null>(
       null,
     ),
@@ -244,8 +245,9 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
                 <IconButton
                   icon="trash"
                   label="Excluir base de conhecimento"
+                  danger
                   disabled={locked}
-                  onClick={() => setDeleteBase(base)}
+                  onClick={() => { setDeleteConfirmation(""); setError(""); setDeleteBase(base); }}
                 />
               </>
             ) : (
@@ -359,8 +361,9 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
                         <IconButton
                           icon="trash"
                           label={`Excluir base ${b.name}`}
+                          danger
                           disabled={locked}
-                          onClick={() => setDeleteBase(b)}
+                          onClick={() => { setDeleteConfirmation(""); setError(""); setDeleteBase(b); }}
                         />
                       </div>
                     </div>
@@ -772,9 +775,8 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
                     configDirty ||
                     (base.config.embeddings.provider !== "ollama" &&
                       !base.config.embeddings.configured) ||
-                    !sources.length ||
                     sources.some((s) => s.status !== "processed") ||
-                    !base.chunks
+                    (!base.chunks && !base.indexedAt)
                   }
                   onClick={() =>
                     void act("Indexando a base…", async () => {
@@ -877,9 +879,26 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
           }}
         >
           <p>
-            Os documentos, fragmentos e vetores desta base serão excluídos. Esta
-            ação não pode ser desfeita.
+            Os documentos, fragmentos e vetores desta base serão excluídos,
+            incluindo índices locais e versões anteriores em outros bancos.
+            Esta ação não pode ser desfeita.
           </p>
+          <form className="knowledge-form" onSubmit={e => {
+            e.preventDefault();
+            if (busy || deleteConfirmation !== deleteBase.name) return;
+            void act("Excluindo base…", async () => {
+              await request(`/api/knowledge/${deleteBase.id}`, "DELETE");
+              setDeleteBase(null);
+              setDeleteConfirmation("");
+              if (id) router.push("/knowledge");
+              else setNotice("Base excluída.");
+            });
+          }}>
+          <label>
+            Digite o nome da base para confirmar
+            <input autoComplete="off" spellCheck={false} value={deleteConfirmation} disabled={!!busy} onChange={e => setDeleteConfirmation(e.target.value)} />
+            <small>Digite exatamente: <strong>{deleteBase.name}</strong></small>
+          </label>
           {error && (
             <p className="studio-error" role="alert">
               {error}
@@ -887,27 +906,15 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
           )}
           <div className="knowledge-form-actions">
             <button
-              className="studio-button"
-              disabled={!!busy}
-              onClick={() => setDeleteBase(null)}
+              type="submit"
+              className="studio-button destructive"
+              disabled={!!busy || deleteConfirmation !== deleteBase.name}
             >
-              Cancelar
-            </button>
-            <button
-              className="studio-button"
-              disabled={!!busy}
-              onClick={() =>
-                void act("Excluindo base…", async () => {
-                  await request(`/api/knowledge/${deleteBase.id}`, "DELETE");
-                  setDeleteBase(null);
-                  if (id) router.push("/knowledge");
-                  else setNotice("Base excluída.");
-                })
-              }
-            >
-              Excluir base
+              <Icon name="trash" size={16} />
+              {busy ? "Excluindo…" : "Excluir base"}
             </button>
           </div>
+          </form>
         </Modal>
       )}
       {deleteSource && (

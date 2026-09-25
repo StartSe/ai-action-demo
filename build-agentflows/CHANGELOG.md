@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 0.15.0 — 25/09/2026
+
+- Record Manager com limpeza nenhuma, incremental ou completa, identificação automática ou chave de metadados e retenção aplicada às consultas.
+- Exclusão de base com ícones e botão vermelhos, confirmação pelo nome e fechamento pelo header, sem botão Cancelar.
+- Validação da limpeza de índices locais ao migrar Faiss para Postgres e excluir a base, incluindo recuperação de falhas e isolamento entre bases.
+
 ## 0.14.2 — 25/09/2026
 
 - Endereço do serviço de embeddings movido para Opções avançadas, mantendo os padrões dos provedores e as conexões já configuradas.

@@ -98,6 +98,8 @@ export type IndexConfig = {
   };
   recordManager: {
     provider: "none" | "sqlite" | "postgres";
+    cleanup?: "none" | "incremental" | "full";
+    sourceIdKey?: string;
     connectionString?: string;
     configured?: boolean;
     namespace?: string;
