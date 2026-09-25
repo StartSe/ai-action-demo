@@ -7,7 +7,7 @@ import {
   listKnowledgeSources,
   updateKnowledgeBase,
 } from "@/lib/knowledge-store";
-import { deleteKnowledgeBase } from "@/lib/knowledge-index";
+import { deleteKnowledgeBase, knowledgeStorageLocation } from "@/lib/knowledge-index";
 type Context = { params: Promise<{ id: string }> };
 export const dynamic = "force-dynamic";
 export async function GET(_req: Request, context: Context) {
@@ -23,6 +23,7 @@ export async function GET(_req: Request, context: Context) {
     ).n;
     return {
       base,
+      storage: knowledgeStorageLocation(id),
       sources: listKnowledgeSources(id),
       runs: listKnowledgeRuns(id),
       usages: knowledgeBaseUsages(id),

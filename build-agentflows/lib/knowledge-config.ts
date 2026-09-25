@@ -1,3 +1,5 @@
+import { validatedPostgres, postgresConnectionString } from "./knowledge-postgres";
+import { validatedRetrieval } from "./knowledge-retrieval";
 import { resolveEmbeddingCredential } from "./tool-credential-store";
 import { FlowError } from "./flow-store";
 import { knowledgeUrl } from "./knowledge-http";
@@ -6,6 +8,7 @@ import {
   VECTOR_PROVIDERS,
   SQL_VECTOR_PROVIDERS,
   VECTOR_OPTIONS,
+  embeddingDimensions,
 } from "./knowledge-providers";
 import type { IndexConfig } from "./knowledge-types";
 export function sqlIdentifier(value: string) {
@@ -57,6 +60,14 @@ export function validatedIndexConfig(
   )
     throw new FlowError("Escolha um modelo de embedding válido.");
   c.embeddings.model = c.embeddings.model.trim();
+  const maximumDimensions = embeddingDimensions({ ...c.embeddings, dimensions: undefined });
+  if (c.embeddings.dimensions !== undefined && (
+    c.embeddings.provider !== "openai" || !["text-embedding-3-small", "text-embedding-3-large"].includes(c.embeddings.model) ||
+    !Number.isInteger(c.embeddings.dimensions) || c.embeddings.dimensions < 1 || c.embeddings.dimensions > (maximumDimensions || 0)
+  )) throw new FlowError("Dimensões personalizadas estão disponíveis para text-embedding-3-small e text-embedding-3-large, até o tamanho padrão do modelo.");
+  if (c.embeddings.encodingFormat !== undefined && (c.embeddings.provider !== "openai" || !["float", "base64"].includes(c.embeddings.encodingFormat)))
+    throw new FlowError("Escolha float ou base64 para os embeddings OpenAI.");
+
   for (const url of [c.embeddings.url, c.vectorStore.url])
     if (typeof url !== "string" || url.length > 2000)
       throw new FlowError("Confira os endereços dos serviços.");
@@ -138,6 +149,14 @@ export function validatedIndexConfig(
     !secrets.vectorKey
   )
     throw new FlowError("Informe a chave do banco vetorial.");
+  if (c.vectorStore.provider === "postgres" && c.vectorStore.postgres) {
+    c.vectorStore.postgres = validatedPostgres(c.vectorStore.postgres);
+    secrets.vectorConnection = postgresConnectionString(c.vectorStore.postgres);
+  }
+  if (c.recordManager.provider === "postgres" && c.recordManager.postgres) {
+    c.recordManager.postgres = validatedPostgres(c.recordManager.postgres);
+    secrets.recordConnection = postgresConnectionString(c.recordManager.postgres);
+  }
   if (SQL_VECTOR_PROVIDERS.includes(c.vectorStore.provider)) {
     if (!secrets.vectorConnection)
       throw new FlowError("Informe a conexão do banco vetorial.");
@@ -165,12 +184,25 @@ export function validatedIndexConfig(
       throw new FlowError("Confira as opções do banco vetorial.");
     if (value?.trim()) options[field.key] = value.trim();
   }
+  if (c.vectorStore.provider === "postgres") {
+    if (options.tableName && options.tableName.length > 22) throw new FlowError("Use um prefixo de tabela com até 22 caracteres; a base e a versão recebem um sufixo automático.");
+    if (options.contentColumnName) {
+      sqlIdentifier(options.contentColumnName);
+      if (["id", "source_id", "metadata", "embedding"].includes(options.contentColumnName.toLowerCase())) throw new FlowError("O nome da coluna de conteúdo está reservado.");
+    }
+    if (options.batchSize && (!Number.isInteger(Number(options.batchSize)) || Number(options.batchSize) < 1 || Number(options.batchSize) > 1000)) throw new FlowError("Use lotes de gravação entre 1 e 1.000 registros.");
+  }
   for (const key of ["schema", "tableName", "queryName"])
     if (options[key]) sqlIdentifier(options[key]);
   const namespace = c.recordManager.namespace || "agentflows";
   if (typeof namespace !== "string" || namespace.length > 100)
     throw new FlowError("Use um namespace de até 100 caracteres.");
+  let retrieval;
+  try { retrieval = validatedRetrieval(c.retrieval); } catch (e) { throw new FlowError((e as Error).message); }
+  if (Object.keys(retrieval.metadataFilter || {}).length && !["local", "faiss", "postgres"].includes(c.vectorStore.provider)) throw new FlowError("O filtro de metadados está disponível para Faiss e Postgres.");
+  if (retrieval.distanceStrategy !== "cosine" && c.vectorStore.provider !== "postgres") throw new FlowError("As estratégias Euclidiana e Produto interno estão disponíveis para Postgres.");
   const config: IndexConfig = {
+    retrieval,
     embeddings: {
       provider: c.embeddings.provider,
       model: c.embeddings.model,
@@ -180,6 +212,8 @@ export function validatedIndexConfig(
       batchSize: c.embeddings.batchSize,
       timeout: c.embeddings.timeout,
       stripNewLines: !!c.embeddings.stripNewLines,
+      dimensions: c.embeddings.dimensions,
+      encodingFormat: c.embeddings.encodingFormat,
     },
     vectorStore: {
       provider: c.vectorStore.provider,
@@ -187,9 +221,11 @@ export function validatedIndexConfig(
       configured: !!secrets.vectorKey,
       connectionConfigured: !!secrets.vectorConnection,
       options,
+      postgres: c.vectorStore.provider === "postgres" ? c.vectorStore.postgres : undefined,
     },
     recordManager: {
       provider: c.recordManager.provider,
+      postgres: c.recordManager.provider === "postgres" ? c.recordManager.postgres : undefined,
       configured: !!secrets.recordConnection,
       namespace,
       tableName: sqlIdentifier(

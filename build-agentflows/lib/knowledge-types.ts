@@ -44,7 +44,23 @@ export type KnowledgeSource = {
   updatedAt: string;
   error?: string;
 };
+export type PostgresConnection = {
+  host: string;
+  database: string;
+  port: number;
+  ssl: boolean;
+  credentialId: string;
+  connectionTimeout?: number;
+  queryTimeout?: number;
+};
+export type RetrievalConfig = {
+  topK: number;
+  minScore: number;
+  metadataFilter?: Record<string, unknown> | string;
+  distanceStrategy?: "cosine" | "euclidean" | "innerProduct";
+};
 export type IndexConfig = {
+  retrieval?: RetrievalConfig;
   embeddings: {
     provider: "openai" | "ollama" | "gemini" | "voyage";
     model: string;
@@ -55,6 +71,8 @@ export type IndexConfig = {
     batchSize?: number;
     timeout?: number;
     stripNewLines?: boolean;
+    dimensions?: number;
+    encodingFormat?: "float" | "base64";
   };
   vectorStore: {
     provider:
@@ -75,6 +93,7 @@ export type IndexConfig = {
     configured?: boolean;
     connectionString?: string;
     connectionConfigured?: boolean;
+    postgres?: PostgresConnection;
     options?: Record<string, string>;
   };
   recordManager: {
@@ -83,6 +102,7 @@ export type IndexConfig = {
     configured?: boolean;
     namespace?: string;
     tableName?: string;
+    postgres?: PostgresConnection;
   };
 };
 export type KnowledgeBase = {
@@ -124,6 +144,7 @@ export const DEFAULT_SPLITTER: SplitterConfig = {
   separator: "\n\n",
 };
 export const DEFAULT_INDEX: IndexConfig = {
+  retrieval: { topK: 4, minScore: 0, distanceStrategy: "cosine" },
   embeddings: {
     provider: "openai",
     model: "text-embedding-3-small",

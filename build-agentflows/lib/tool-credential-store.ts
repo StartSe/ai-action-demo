@@ -105,7 +105,7 @@ export function deleteToolCredential(id: string) {
   const r = row(id);
   if (r.id.startsWith("default:") && schema(r.provider).some((f) => process.env[f.chave]?.trim())) throw new FlowError("A conexão padrão está definida no servidor e não pode ser removida aqui.");
   const database = db();
-  if (database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='knowledge_bases'").get() && database.prepare("SELECT 1 FROM knowledge_bases WHERE json_extract(body,'$.config.embeddings.credentialId')=?").get(id))
+  if (database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='knowledge_bases'").get() && database.prepare("SELECT 1 FROM knowledge_bases WHERE json_extract(body,'$.config.embeddings.credentialId')=? OR json_extract(body,'$.config.vectorStore.postgres.credentialId')=? OR json_extract(body,'$.config.recordManager.postgres.credentialId')=?").get(id, id, id))
     throw new FlowError("Esta credencial está em uso por uma base de conhecimento. Troque a conexão da base antes de excluí-la.", 409);
   const used = listFlows().some((flow) => flow.graph.nodes.some((node) => readToolCards(node.data.config.tools || "", node.data.config.toolCards).some((card) => card.credentialId === id)));
   if (used) throw new FlowError("Esta credencial está em uso. Troque a conexão nos agentes antes de excluí-la.", 409);
@@ -145,4 +145,11 @@ export function resolveEmbeddingCredential(id: string, provider: IndexConfig["em
   const data = values(r);
   if (!configured(r.provider, data)) throw new FlowError("Revise a credencial do serviço de embeddings.");
   return { apiKey: data[embeddingCredentialKey(provider)] || undefined, url: data[embeddingCredentialUrl(provider)] };
+}
+
+export function resolvePostgresCredential(id: string) {
+  const r = row(id);
+  if (r.provider !== "knowledge_postgres" || !configured(r.provider, values(r))) throw new FlowError("Escolha uma credencial PostgreSQL válida para a base de conhecimento.");
+  const data = values(r);
+  return { user: data.KNOWLEDGE_POSTGRES_USER, password: data.KNOWLEDGE_POSTGRES_PASSWORD };
 }

@@ -7,8 +7,8 @@ export async function POST(req: Request, context: Context) {
     return queryKnowledge(
       (await context.params).id,
       input.query,
-      input.topK ?? 4,
-      input.minScore ?? 0,
+      input.topK,
+      input.minScore,
       req.signal,
     );
   });

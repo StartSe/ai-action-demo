@@ -1,6 +1,6 @@
 # Base de Conhecimento — comparação com Flowise
 
-Revisão da versão 0.13.0, em 25/09/2026. Referência: código local de `Flowise-main/packages/components/nodes` (documentloaders, embeddings, vectorstores e recordmanager) e catálogo `packages/components/models.json`.
+Revisão da versão 0.14.0, em 25/09/2026. Referência: código local de `Flowise-main/packages/components/nodes` (documentloaders, embeddings, vectorstores e recordmanager) e catálogo `packages/components/models.json`.
 
 A jornada principal está contemplada: extrair documentos, revisar e dividir o texto, gerar embeddings, indexar, evitar processamento repetido, consultar e entregar os trechos ao Agente. Os campos avançados não têm paridade integral com o Flowise.
 
@@ -10,9 +10,9 @@ A jornada principal está contemplada: extrair documentos, revisar e dividir o t
 | --- | --- | --- |
 | Fontes | 20 extratores com os logos da referência, campos por serviço, upload, credenciais cifradas, extração, metadados e revisão dos trechos. | Catálogo limitado às 20 fontes selecionadas. PDF digitalizado exige OCR prévio. Custom Document Loader executa no E2B. |
 | Divisão | Divisores recursivo e por caracteres, tamanho, sobreposição e separador; edição de conteúdo/metadados dos trechos. | Não inclui todos os divisores especializados, por tokens e semânticos do Flowise. |
-| Embeddings | Gemini, OpenAI, VoyageAI e Ollama, com logos e listas de modelos. Credenciais compartilhadas no menu Credenciais. Dimensões automáticas, URL configurável, credencial, lote, timeout e remoção opcional de quebras de linha. | Não há seletor de dimensões, encoding base64, cabeçalhos arbitrários, task type manual ou ajustes de GPU/threads do Ollama. Recuperação usa documento/query conforme o provedor. |
-| Vector Store | Os 11 serviços abaixo recebem vetores reais e participam da consulta e exclusão. Top K, similaridade mínima, metadados e referências do documento. | Busca por similaridade de cosseno. Não expõe MMR, filtros arbitrários do usuário, busca híbrida, reranking nem todos os ajustes de índices de cada serviço. |
-| Record Manager | SQLite e Postgres, com logos, hash do conteúdo/configuração, reaproveitamento de embeddings e limpeza da versão anterior. Postgres permite tabela e namespace. | Limpeza completa por versão. Não expõe modos `none`/`incremental` nem `sourceIdKey` do Flowise. SQLite usa o banco persistente do app; fonte/base são identificadas automaticamente. |
+| Embeddings | Gemini, OpenAI, VoyageAI e Ollama, com logos e listas de modelos. Credenciais compartilhadas no menu Credenciais. Dimensões automáticas ou reduzidas nos modelos OpenAI text-embedding-3, transporte float/base64 para OpenAI, URL configurável, credencial, lote, timeout e remoção opcional de quebras de linha. | Não há cabeçalhos arbitrários, task type manual ou ajustes de GPU/threads do Ollama. Recuperação usa documento/query conforme o provedor. |
+| Vector Store | Os 11 serviços abaixo recebem vetores reais e participam da consulta e exclusão. Top K e similaridade mínima salvos na base e herdados pelo teste/Agente; filtro de metadados Faiss/Postgres; ranking cosseno, euclidiano e produto interno no Postgres. | Não expõe MMR, busca híbrida, reranking, operadores arbitrários no filtro nem todos os ajustes de índices de cada serviço. |
+| Record Manager | SQLite e Postgres, com logos, hash do conteúdo/configuração, reaproveitamento de embeddings e limpeza da versão anterior. Postgres permite credencial reutilizável, host/banco/porta/SSL, timeouts, tabela e namespace. | Limpeza completa por versão. Não expõe modos `none`/`incremental` nem `sourceIdKey` do Flowise. SQLite usa o banco persistente do app; fonte/base são identificadas automaticamente. |
 | Consulta no Agente | Recupera os trechos da versão publicada e pode incluir referências na resposta, com ChatGPT e OpenRouter. | É necessário salvar e indexar a configuração; uma falha na nova indexação preserva os dados da versão anterior, mas a consulta exige a base novamente indexada e pronta. |
 
 ## Modelos e dimensões
@@ -30,6 +30,8 @@ Esses valores ficam no catálogo interno; o usuário escolhe o modelo. A respost
 | Ollama | mxbai-embed-large, bge-m3 | 1024 |
 | Ollama | all-minilm | 384 |
 
+Os valores da tabela são os tamanhos padrão. OpenAI text-embedding-3 aceita dimensões reduzidas na interface; outros provedores mantêm o tamanho do catálogo.
+
 O modelo precisa estar disponível na conta ou instalado no servidor Ollama. Configurações anteriores com modelo personalizado continuam preservadas. As opções legadas de armazenamento local e Record Manager desativado continuam legíveis, mas não aparecem como novos provedores.
 
 Referências dos protocolos: [OpenAI](https://developers.openai.com/api/docs/guides/embeddings), [Gemini](https://ai.google.dev/gemini-api/docs/embeddings), [VoyageAI](https://docs.voyageai.com/docs/embeddings) e [Ollama](https://docs.ollama.com/capabilities/embeddings). Gemini 001 usa `RETRIEVAL_DOCUMENT`/`RETRIEVAL_QUERY`; Gemini 2 usa os prefixos de tarefa próprios do modelo. Voyage usa `input_type`.
@@ -43,7 +45,7 @@ Referências dos protocolos: [OpenAI](https://developers.openai.com/api/docs/gui
 | Faiss | Índice nativo `IndexFlatIP` com vetores normalizados, persistido em `DATA_DIR/knowledge-faiss`. É o padrão para novas bases, sem serviço externo. |
 | MongoDB Atlas | Driver MongoDB, coleção por versão e Atlas Vector Search. Aguarda o índice ficar consultável. Exige Atlas Vector Search e permissão de criar índices de busca. MongoDB sem esse recurso não basta. |
 | Pinecone | API do host de um índice existente, com namespace por versão. Confere dimensões e aguarda visibilidade da gravação. O índice deve usar cosseno e o tamanho do modelo escolhido. |
-| Postgres | Driver `pg` e extensão pgvector, tabela por versão, schema configurável, busca `<=>`. Extensão instalada e permissão de criar tabelas necessárias. |
+| Postgres | Driver `pg` e extensão pgvector, tabela por versão, prefixo/schema/coluna configuráveis, gravação em lotes e busca `<=>`, `<->` ou `<#>` com filtro JSONB parametrizado. Conexão por credencial e campos ou string cifrada. Extensão instalada e permissão de criar tabelas necessárias. |
 | Qdrant | REST, coleção com cosseno, gravação/consulta/exclusão; mantém os nomes e IDs das bases criadas anteriormente. |
 | Weaviate | REST para schema/objetos e GraphQL `nearVector`. Vetores externos, sem vectorizer automático. Valida falhas individuais no lote. |
 | Supabase | PostgREST e função RPC com pgvector. A interface fornece SQL para criar tabela e função conforme o modelo; execute no SQL Editor. Requer chave com leitura/escrita e acesso à função. Ao mudar as dimensões, prepare outra tabela/função compatível. RLS fica habilitado; a aplicação usa filtro de base/versão nas consultas e exclusões. |
@@ -52,7 +54,7 @@ Referências dos protocolos: [OpenAI](https://developers.openai.com/api/docs/gui
 
 Coleções/tabelas/namespaces são gerados pelo app para isolar bases e versões, em vez de escrever em coleções escolhidas livremente. Após a publicação, a versão anterior é removida. Falhas de limpeza permanecem registradas para nova tentativa. As conexões usadas por cada geração ficam cifradas, permitindo limpar o destino antigo mesmo depois de trocar a configuração.
 
-Os trechos e vetores também permanecem no SQLite do app para controle de versões, metadados e reaproveitamento. Portanto, configurar um banco remoto **não elimina a necessidade de persistir `DATA_DIR`**. A ordenação é obtida pelo provedor e os resultados são conferidos com a similaridade de cosseno dos vetores armazenados.
+Os trechos e vetores também permanecem no SQLite do app para controle de versões, metadados e reaproveitamento. Portanto, configurar um banco remoto **não elimina a necessidade de persistir `DATA_DIR`**. A ordenação usa a estratégia escolhida (Postgres) ou cosseno (demais serviços). O limiar e a pontuação exibida sempre usam similaridade de cosseno dos vetores armazenados.
 
 ## Validação
 
@@ -73,3 +75,26 @@ node --import ./scripts/gancho-ts.mjs scripts/verify-knowledge-services.mjs
 O script cria e remove tabelas de teste com prefixo `knowledge_test_`. Não use banco de produção. Os testes unitários usam `npm test`.
 
 Os 37 logos foram copiados do Flowise local, com atribuição e licença em `public/knowledge-icons/`.
+
+## Auditoria dos campos das imagens do Flowise
+
+| Referência | Refinamento no app | Diferença intencional / limite |
+| --- | --- | --- |
+| Faiss — Base Path / Top K | Caminho real da versão publicada, Top K salvo na base e aplicado no teste/Agente. | Caminho administrado automaticamente para evitar sobrescrita; não carrega índices externos. |
+| OpenAI — credencial, modelo, Strip New Lines, Batch Size, Timeout, Base Path | Disponíveis; URL do serviço corresponde à conexão de embedding. | Credencial compartilhada e cifrada. |
+| OpenAI — Dimensions / Encoding Format | Dimensões reduzidas para text-embedding-3; float/base64 na API. | Demais modelos/provedores mantêm dimensões do catálogo. |
+| OpenAI — Base Options | Não adicionado. | Cabeçalhos arbitrários exigem um contrato próprio para guardar segredos e impedir sobreposição da autenticação. |
+| Postgres — credencial, host, database, port, SSL | Campos separados, credencial compartilhada e timeouts; URL cifrada continua compatível. | SSL valida certificados. |
+| Postgres — Table Name / Content Column / Upsert Batch Size | Prefixo de tabela isolado por base/versão, coluna de conteúdo e tamanho do lote funcionais. | Não escreve em tabelas preexistentes do Flowise; a coluna configurável também funciona em nosso driver. |
+| Postgres — Distance Strategy / Top K / Metadata Filter | Três rankings, Top K herdável e filtro por igualdade antes do limite. | Sem operadores SQL/JSON arbitrários ou interpolação de variáveis; similaridade mínima continua sendo cosseno. |
+| Postgres — Additional Configuration | Timeouts e SSL expostos por campos validados. | Não aceita um objeto TypeORM arbitrário; o app usa o driver pg. |
+| Postgres — File Upload | Upload permanece na etapa Documentos, com revisão e publicação. | Arquivos enviados no chat não entram automaticamente na base compartilhada. |
+| Record Manager — Cleanup / SourceId Key | Limpeza completa por geração; IDs de fonte administrados pelo app. | Modos none/incremental e chave manual não expostos. |
+
+Protocolo das opções OpenAI conferido na [referência oficial de embeddings](https://developers.openai.com/api/reference/resources/embeddings/methods/create) e no [guia de dimensões](https://developers.openai.com/api/docs/guides/embeddings). Os testes HTTP usam respostas controladas, sem consumo de créditos de provedores externos.
+
+Regressão adicional com Postgres descartável:
+
+```sh
+KNOWLEDGE_TEST_POSTGRES=postgresql://... node --import ./scripts/gancho-ts.mjs --test lib/knowledge-refinements.test.ts
+```

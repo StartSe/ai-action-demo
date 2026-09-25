@@ -1,4 +1,6 @@
 "use client";
+import { KnowledgePostgresFields } from "./KnowledgePostgresFields";
+import { KnowledgeRetrievalFields } from "./KnowledgeRetrievalFields";
 import type { IndexConfig } from "@/lib/knowledge-types";
 import {
   EMBEDDING_PROVIDERS,
@@ -15,9 +17,11 @@ export function KnowledgeIndexFields({
   step,
   config,
   onChange,
+  storage,
 }: {
   step: number;
   config: IndexConfig;
+  storage?: { provider: string; location: string };
   onChange: (config: IndexConfig) => void;
 }) {
   const embedding = config.embeddings,
@@ -56,7 +60,7 @@ export function KnowledgeIndexFields({
           Modelo
           <select
             value={embedding.model}
-            onChange={(e) => embeddingChange({ model: e.target.value })}
+            onChange={(e) => embeddingChange({ model: e.target.value, dimensions: undefined })}
           >
             {models.map((m) => (
               <option key={m.id} value={m.id}>
@@ -70,7 +74,7 @@ export function KnowledgeIndexFields({
             )}
           </select>
           <small>
-            O tamanho dos vetores é configurado automaticamente para o modelo.
+            Dimensões: {embeddingDimensions(embedding) || "definidas pelo serviço"}. Os modelos OpenAI de terceira geração permitem reduzir esse tamanho.
           </small>
         </label>
         <KnowledgeEmbeddingCredential
@@ -128,6 +132,10 @@ export function KnowledgeIndexFields({
               />
             </label>
           </div>
+          {embedding.provider === "openai" && <div className="knowledge-form-grid">
+            {["text-embedding-3-small", "text-embedding-3-large"].includes(embedding.model) && <label>Dimensões<input type="number" min={1} max={embeddingDimensions({ ...embedding, dimensions: undefined })} placeholder={String(embeddingDimensions({ ...embedding, dimensions: undefined }))} value={embedding.dimensions ?? ""} onChange={e => embeddingChange({ dimensions: e.target.value ? Number(e.target.value) : undefined })} /><small>Deixe em branco para usar o tamanho padrão. Alterar as dimensões exige reindexar.</small></label>}
+            <label>Formato de retorno<select value={embedding.encodingFormat || "float"} onChange={e => embeddingChange({ encodingFormat: e.target.value as "float" | "base64" })}><option value="float">float</option><option value="base64">base64</option></select></label>
+          </div>}
           <label className="knowledge-checkbox">
             <input
               type="checkbox"
@@ -151,6 +159,7 @@ export function KnowledgeIndexFields({
           onChange={(id) =>
             onChange({
               ...config,
+              retrieval: { ...config.retrieval, topK: config.retrieval?.topK ?? 4, minScore: config.retrieval?.minScore ?? 0, metadataFilter: {}, distanceStrategy: "cosine" },
               vectorStore: {
                 provider: id as IndexConfig["vectorStore"]["provider"],
                 url: "",
@@ -159,7 +168,7 @@ export function KnowledgeIndexFields({
             })
           }
         />
-        {SQL_VECTOR_PROVIDERS.includes(vector.provider) ? (
+        {vector.provider === "postgres" ? <KnowledgePostgresFields value={vector} configured={vector.connectionConfigured} onChange={vectorChange} /> : SQL_VECTOR_PROVIDERS.includes(vector.provider) ? (
           <label>
             String de conexão
             <input
@@ -237,6 +246,9 @@ export function KnowledgeIndexFields({
           <label key={field.key}>
             {field.label}
             <input
+              type={field.key === "batchSize" ? "number" : "text"}
+              min={field.key === "batchSize" ? 1 : undefined}
+              max={field.key === "batchSize" ? 1000 : undefined}
               value={vector.options?.[field.key] || ""}
               placeholder={field.placeholder}
               onChange={(e) =>
@@ -245,8 +257,15 @@ export function KnowledgeIndexFields({
                 })
               }
             />
+            {vector.provider === "postgres" && field.key === "tableName" && <small>Até 22 caracteres. Acrescentamos um identificador por base e versão para impedir sobreposição.</small>}
           </label>
         ))}
+        {vector.provider === "faiss" && <label>Local do índice
+          <input readOnly value={storage?.provider === "faiss" ? storage.location : "DATA_DIR/knowledge-faiss/<base e versão>"} />
+          <small>{storage?.provider === "faiss" ? "Caminho da versão publicada." : "O caminho definitivo é criado ao indexar."} Cada base e cada versão usam uma pasta própria.</small>
+        </label>}
+        {vector.provider === "postgres" && storage?.provider === "postgres" && <label>Tabela da versão publicada<input readOnly value={storage.location} /><small>O prefixo recebe um sufixo automático para isolar bases e versões.</small></label>}
+        <KnowledgeRetrievalFields config={config} onChange={retrieval => onChange({ ...config, retrieval })} />
         <p className="knowledge-note">
           {vector.provider === "faiss" || vector.provider === "local"
             ? "O índice fica no volume persistente desta instalação."
@@ -306,23 +325,7 @@ export function KnowledgeIndexFields({
       />
       {record.provider === "postgres" && (
         <>
-          <label>
-            Conexão PostgreSQL
-            <input
-              type="password"
-              autoComplete="new-password"
-              required={!record.configured}
-              value={record.connectionString || ""}
-              placeholder={
-                record.configured
-                  ? "Conexão salva · preencha para substituir"
-                  : "postgresql://usuario:senha@servidor:5432/banco?sslmode=require"
-              }
-              onChange={(e) =>
-                recordChange({ connectionString: e.target.value })
-              }
-            />
-          </label>
+          <KnowledgePostgresFields value={record} configured={record.configured} onChange={recordChange} />
           <label>
             Tabela
             <input

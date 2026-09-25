@@ -1,16 +1,18 @@
+import type { PostgresConnection } from "./knowledge-types";
 import { Client } from "pg";
 import { FlowError } from "./flow-store";
 export async function withKnowledgePostgres<T>(
   connectionString: string,
   fn: (client: Client) => Promise<T>,
   signal?: AbortSignal,
+  options?: PostgresConnection,
 ) {
   signal?.throwIfAborted();
   const client = new Client({
     connectionString,
-    connectionTimeoutMillis: 10000,
-    query_timeout: 120000,
-    statement_timeout: 120000,
+    connectionTimeoutMillis: options?.connectionTimeout ?? 10000,
+    query_timeout: options?.queryTimeout ?? 120000,
+    statement_timeout: options?.queryTimeout ?? 120000,
   });
   const abort = () => {
     void client.end().catch(() => {});

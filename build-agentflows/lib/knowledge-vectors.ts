@@ -1,3 +1,4 @@
+import { currentPostgresConnection } from "./knowledge-postgres";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -6,7 +7,7 @@ import { knowledgeFetch, KnowledgeServiceError } from "./knowledge-http";
 import { FlowError } from "./flow-store";
 import { sqlIdentifier } from "./knowledge-config";
 import { withKnowledgePostgres } from "./knowledge-database";
-import type { IndexConfig } from "./knowledge-types";
+import type { IndexConfig, RetrievalConfig } from "./knowledge-types";
 export type VectorScope = {
   baseId: string;
   generation: string;
@@ -99,7 +100,12 @@ async function chromaId(c: Config, s: VectorScope, signal?: AbortSignal) {
   return r.id;
 }
 const pgTable = (c: Config, s: VectorScope) =>
-  `"${sqlIdentifier(c.options?.schema || "public")}"."${vectorCollection(s)}"`;
+  `"${sqlIdentifier(c.options?.schema || "public")}"."${sqlIdentifier((c.options?.tableName || "kb") + "_" + digest(s))}"`;
+export function vectorStorageLocation(c: Config, s: VectorScope) {
+  if (c.provider === "faiss") return { provider: c.provider, location: faissDirectory(s) };
+  if (c.provider === "postgres") return { provider: c.provider, location: pgTable(c, s) };
+  return undefined;
+}
 async function withMongo<T>(
   c: Config,
   fn: (collection: import("mongodb").Collection) => Promise<T>,
@@ -182,24 +188,21 @@ export async function writeVectorGeneration(
     }
     if (c.provider === "postgres") {
       return withKnowledgePostgres(
-        c.connectionString!,
+        currentPostgresConnection(c),
         async (db) => {
           await db.query(
-            `CREATE TABLE ${pgTable(c, s)} (id text PRIMARY KEY,source_id text NOT NULL,content text,metadata jsonb,embedding vector(${s.dimensions}))`,
+            `CREATE TABLE ${pgTable(c, s)} (id text PRIMARY KEY,source_id text NOT NULL,${'"' + sqlIdentifier(c.options?.contentColumnName || "content") + '"'} text,metadata jsonb,embedding vector(${s.dimensions}))`,
           );
           await db.query("BEGIN");
           try {
-            for (const r of rows) {
+            const batchSize = Number(c.options?.batchSize || 100);
+            if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 1000) throw new FlowError("Use lotes entre 1 e 1.000 registros.");
+            for (let offset = 0; offset < rows.length; offset += batchSize) {
               signal?.throwIfAborted();
+              const batch = rows.slice(offset, offset + batchSize);
               await db.query(
-                `INSERT INTO ${pgTable(c, s)} VALUES($1,$2,$3,$4,$5)`,
-                [
-                  r.id,
-                  r.sourceId,
-                  r.content,
-                  JSON.stringify(r.metadata),
-                  JSON.stringify(r.vector),
-                ],
+                `INSERT INTO ${pgTable(c, s)} VALUES ${batch.map((_, i) => `(${Array.from({ length: 5 }, (_, j) => `$${i * 5 + j + 1}`).join(",")})`).join(",")}`,
+                batch.flatMap(r => [r.id, r.sourceId, r.content.replaceAll("\0", ""), JSON.stringify(r.metadata), JSON.stringify(r.vector)]),
               );
             }
             await db.query("COMMIT");
@@ -209,6 +212,7 @@ export async function writeVectorGeneration(
           }
         },
         signal,
+        c.postgres,
       );
     }
     if (c.provider === "singlestore") {
@@ -520,6 +524,7 @@ export async function queryVectorGeneration(
   vector: number[],
   topK: number,
   signal?: AbortSignal,
+  queryOptions: { allowedIds?: string[]; metadataFilter?: Record<string, unknown>; distanceStrategy?: RetrievalConfig["distanceStrategy"] } = {},
 ): Promise<string[]> {
   return guarded(async () => {
     signal?.throwIfAborted();
@@ -533,22 +538,26 @@ export async function queryVectorGeneration(
       ) as string[];
       if (!ids.length) return [];
       const index = IndexFlatIP.read(join(dir, "index.faiss"));
+      const allowed = queryOptions.allowedIds ? new Set(queryOptions.allowedIds) : undefined;
+      if (allowed && !allowed.size) return [];
       return index
-        .search(normalize(vector), Math.min(topK, ids.length))
+        .search(normalize(vector), allowed ? ids.length : Math.min(topK, ids.length))
         .labels.map((i) => ids[i])
-        .filter(Boolean);
+        .filter(id => !!id && (!allowed || allowed.has(id)))
+        .slice(0, topK);
     }
     if (c.provider === "postgres")
       return withKnowledgePostgres(
-        c.connectionString!,
+        currentPostgresConnection(c),
         async (db) =>
           (
             await db.query(
-              `SELECT id FROM ${pgTable(c, s)} ORDER BY embedding <=> $1::vector LIMIT $2`,
-              [JSON.stringify(vector), topK],
+              `SELECT id FROM ${pgTable(c, s)} WHERE metadata @> $3::jsonb ORDER BY embedding ${queryOptions.distanceStrategy === "euclidean" ? "<->" : queryOptions.distanceStrategy === "innerProduct" ? "<#>" : "<=>"} $1::vector LIMIT $2`,
+              [JSON.stringify(vector), topK, JSON.stringify(queryOptions.metadataFilter || {})],
             )
           ).rows.map((r) => String(r.id)),
         signal,
+        c.postgres,
       );
     if (c.provider === "singlestore")
       return withSingleStore(
@@ -731,7 +740,7 @@ export async function deleteVectorGeneration(
     }
     if (c.provider === "postgres")
       return withKnowledgePostgres(
-        c.connectionString!,
+        currentPostgresConnection(c),
         async (db) => {
           if (!ids) await db.query(`DROP TABLE IF EXISTS ${pgTable(c, s)}`);
           else
@@ -741,6 +750,7 @@ export async function deleteVectorGeneration(
             );
         },
         signal,
+        c.postgres,
       );
     if (c.provider === "singlestore")
       return withSingleStore(

@@ -154,7 +154,7 @@ export const RECORD_PROVIDERS = [
   id: IndexConfig["recordManager"]["provider"];
 })[];
 export function embeddingDimensions(config: IndexConfig["embeddings"]) {
-  return EMBEDDING_PROVIDERS.find((p) => p.id === config.provider)?.models.find(
+  return config.dimensions ?? EMBEDDING_PROVIDERS.find((p) => p.id === config.provider)?.models.find(
     (m) => m.id === config.model,
   )?.dimensions;
 }
@@ -183,7 +183,12 @@ export const VECTOR_OPTIONS: Partial<
       placeholder: "agentflows",
     },
   ],
-  postgres: [{ key: "schema", label: "Schema", placeholder: "public" }],
+  postgres: [
+    { key: "schema", label: "Schema", placeholder: "public" },
+    { key: "tableName", label: "Prefixo da tabela", placeholder: "kb" },
+    { key: "contentColumnName", label: "Coluna de conteúdo", placeholder: "content" },
+    { key: "batchSize", label: "Lote de gravação (Upsert Batch Size)", placeholder: "100" },
+  ],
   supabase: [
     { key: "tableName", label: "Tabela", placeholder: "agentflows_documents" },
     {

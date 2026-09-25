@@ -14,6 +14,7 @@ export const TOOL_CREDENTIALS: Record<string, Credential[]> = {
     { chave: embeddingCredentialKey(p.id), rotulo: "Chave de acesso", secret: true, optional: p.id === "ollama", link: p.id === "openai" ? "https://platform.openai.com/api-keys" : p.id === "gemini" ? "https://aistudio.google.com/apikey" : p.id === "voyage" ? "https://dash.voyageai.com/" : undefined },
     { chave: embeddingCredentialUrl(p.id), rotulo: "Endereço do serviço", defaultValue: p.url },
   ]])) ,
+  knowledge_postgres: [{ chave: "KNOWLEDGE_POSTGRES_USER", rotulo: "Usuário", secret: true }, { chave: "KNOWLEDGE_POSTGRES_PASSWORD", rotulo: "Senha", secret: true }],
   github_mcp: [{ chave: "TOOL_GITHUB_TOKEN", rotulo: "Token do Github", secret: true, link: "https://github.com/settings/tokens" }],
   postgres_mcp: [{ chave: "TOOL_POSTGRES_URL", rotulo: "URL de conexão PostgreSQL", secret: true }],
   custom_mcp: [{ chave: "TOOL_CUSTOM_MCP_URL", rotulo: "URL do servidor MCP" }, { chave: "TOOL_CUSTOM_MCP_TOKEN", rotulo: "Token de acesso", secret: true, optional: true }],
@@ -40,6 +41,7 @@ export const TOOL_CREDENTIALS: Record<string, Credential[]> = {
 export const TOOL_CREDENTIAL_KEYS = Object.values(TOOL_CREDENTIALS).flatMap((l) => l.map((c) => c.chave));
 export const TOOL_CREDENTIAL_LABELS: Record<string, string> = {
   ...Object.fromEntries(EMBEDDING_PROVIDERS.map(p => [embeddingCredentialProvider(p.id), p.name])),
+  knowledge_postgres: "Postgres · Base de Conhecimento",
   github_mcp: "Github MCP", postgres_mcp: "Postgres MCP", custom_mcp: "Custom MCP", composio: "Composio",
   google_workspace: "Google Workspace", microsoft: "Microsoft 365", e2b: "E2B", browserless: "Browserless", slack: "Slack", openapi: "API da empresa",
   tavily: "Tavily", searchapi: "SearchAPI", exa: "Exa", serper: "Serper", serpapi: "SerpAPI", brave: "Brave Search", google: "Google Custom Search", wolfram: "Wolfram Alpha", searxng: "SearXNG",

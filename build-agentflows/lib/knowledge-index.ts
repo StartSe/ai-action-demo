@@ -1,3 +1,4 @@
+import { matchesMetadata, validatedRetrieval } from "./knowledge-retrieval";
 import { embedKnowledge } from "./knowledge-embeddings";
 export { embedKnowledge, validateVectors } from "./knowledge-embeddings";
 import { createHash, randomUUID } from "node:crypto";
@@ -8,6 +9,7 @@ import {
   writeVectorGeneration,
   queryVectorGeneration,
   deleteVectorGeneration,
+  vectorStorageLocation,
 } from "./knowledge-vectors";
 import {
   readManagedRecords,
@@ -60,6 +62,7 @@ function vectorHash(config: IndexConfig, chunk: Chunk) {
     config.embeddings.provider,
     config.embeddings.url,
     config.embeddings.model,
+    ...(config.embeddings.dimensions ? [config.embeddings.dimensions] : []),
     !!config.embeddings.stripNewLines,
     chunk.pageContent,
   ]);
@@ -359,12 +362,15 @@ export function cosineSimilarity(a: number[], b: number[]) {
 export async function queryKnowledge(
   baseId: string,
   query: string,
-  topK = 4,
-  minScore = 0,
+  topK?: number,
+  minScore?: number,
   signal?: AbortSignal,
 ): Promise<KnowledgeHit[]> {
   const base = getKnowledgeBase(baseId);
   const current = snapshot(baseId);
+  const retrieval = validatedRetrieval(base.config.retrieval);
+  topK ??= retrieval.topK;
+  minScore ??= retrieval.minScore;
   if (base.status !== "ready" || !current || current.revision !== base.revision)
     throw new FlowError(
       `A base “${base.name}” precisa ser indexada antes de ser consultada.`,
@@ -399,7 +405,7 @@ export async function queryKnowledge(
       )
       .all(baseId, current.generation) as { body: string }[]
   ).map((row) => JSON.parse(row.body) as VectorRecord);
-  let candidates = records;
+  let candidates = records.filter(record => matchesMetadata(record.chunk.metadata, retrieval.metadataFilter || {}));
   if (config.vectorStore.provider !== "local") {
     const ids = new Set(
       await queryVectorGeneration(
@@ -412,9 +418,14 @@ export async function queryKnowledge(
         vector,
         topK,
         signal,
+        {
+          allowedIds: Object.keys(retrieval.metadataFilter || {}).length ? candidates.map(r => r.chunk.id) : undefined,
+          metadataFilter: retrieval.metadataFilter,
+          distanceStrategy: retrieval.distanceStrategy,
+        },
       ),
     );
-    candidates = records.filter(
+    candidates = candidates.filter(
       (record) =>
         ids.has(record.chunk.id) ||
         (config.vectorStore.provider === "qdrant" &&
@@ -425,9 +436,14 @@ export async function queryKnowledge(
     .map((record) => ({
       record,
       score: cosineSimilarity(vector, record.vector),
+      rank: retrieval.distanceStrategy === "euclidean"
+        ? -Math.sqrt(vector.reduce((sum, v, i) => sum + (v - record.vector[i]) ** 2, 0))
+        : retrieval.distanceStrategy === "innerProduct"
+          ? vector.reduce((sum, v, i) => sum + v * record.vector[i], 0)
+          : cosineSimilarity(vector, record.vector),
     }))
     .filter((r) => r.score >= minScore)
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => b.rank - a.rank)
     .slice(0, topK);
   // A concurrent edit/index must not turn an old result into the current truth.
   if (
@@ -493,4 +509,10 @@ export async function removeKnowledgeSource(baseId: string, sourceId: string) {
     deleteKnowledgeSource(baseId, sourceId, token);
     return { ok: true };
   });
+}
+
+export function knowledgeStorageLocation(baseId: string) {
+  const current = snapshot(baseId);
+  if (!current) return undefined;
+  return vectorStorageLocation(current.config.vectorStore, { baseId, generation: current.generation, dimensions: current.dimensions });
 }

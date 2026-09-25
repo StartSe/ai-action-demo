@@ -7,6 +7,8 @@ import {
   embeddingCredentialUrl,
   embeddingCredentialProvider,
 } from "./embedding-credentials";
+import { postgresConnectionString } from "./knowledge-postgres";
+import { indexingConfigIdentity } from "./knowledge-retrieval";
 import { validatedIndexConfig } from "./knowledge-config";
 import { randomUUID } from "node:crypto";
 import { abrirBanco, getConfig, setConfig } from "./store";
@@ -246,11 +248,11 @@ export function indexKnowledgeConfig(id: string): IndexConfig {
     vectorStore: {
       ...base.config.vectorStore,
       apiKey: secrets.vectorKey,
-      connectionString: secrets.vectorConnection,
+      connectionString: base.config.vectorStore.postgres ? postgresConnectionString(base.config.vectorStore.postgres) : secrets.vectorConnection,
     },
     recordManager: {
       ...base.config.recordManager,
-      connectionString: secrets.recordConnection,
+      connectionString: base.config.recordManager.postgres ? postgresConnectionString(base.config.recordManager.postgres) : secrets.recordConnection,
     },
   };
 }
@@ -271,7 +273,7 @@ export function updateKnowledgeBase(
       base.description = input.description;
     }
     if (input.config !== undefined) {
-      const previous = JSON.stringify(base.config);
+      const previous = indexingConfigIdentity(base.config);
       const result = validatedIndexConfig(
         input.config,
         base.config,
@@ -281,7 +283,7 @@ export function updateKnowledgeBase(
       base.config = result.config;
       migrateEmbeddingCredential(base);
       if (
-        previous !== JSON.stringify(base.config) ||
+        previous !== indexingConfigIdentity(base.config) ||
         input.config.embeddings.apiKey?.trim() ||
         input.config.vectorStore.apiKey?.trim() ||
         input.config.vectorStore.connectionString?.trim() ||

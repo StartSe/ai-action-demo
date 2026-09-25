@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## 0.14.0 — 25/09/2026
+
+- Busca configurável por base: Top K, similaridade mínima e herança no teste e no Agente, com substituição opcional. Alterar apenas a busca mantém os vetores publicados e não exige reindexação.
+- Faiss exibe o caminho da geração publicada, preservando isolamento por base/versão. Faiss e Postgres filtram metadados antes de selecionar os resultados.
+- Postgres com credencial compartilhada de usuário/senha, host, banco, porta, SSL com validação de certificado, tempos limite e compatibilidade com strings de conexão existentes. Vector Store e Record Manager reutilizam a credencial; senhas não são devolvidas à interface.
+- Postgres permite prefixo de tabela, coluna de conteúdo, lote de gravação e estratégias cosseno, euclidiana ou produto interno. Tabelas continuam isoladas por geração; a pontuação mínima é sempre similaridade de cosseno.
+- OpenAI Embeddings permite reduzir dimensões dos modelos text-embedding-3 e escolher float/base64. A troca de dimensões invalida o reaproveitamento dos vetores antigos.
+- Regressão com Faiss nativo, pgvector real, filtros, credenciais, reindexação e limpeza; comparação detalhada da jornada com o Flowise em KNOWLEDGE-FLOWISE.md.
+
 ## 0.13.3 — 25/09/2026
 
 - Ícone de exclusão das bases de conhecimento em vermelho, à direita do status no cabeçalho do card.

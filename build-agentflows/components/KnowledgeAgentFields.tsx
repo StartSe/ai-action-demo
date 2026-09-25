@@ -102,25 +102,28 @@ export function KnowledgeAgentFields({
       {config.knowledgeBase && (
         <details>
           <summary>Ajustar consulta</summary>
+          <small>Deixe em branco para usar a configuração da base. O filtro de metadados e a estratégia de distância seguem a base.</small>
           <div className="knowledge-form-grid">
             <label>
-              Máximo de trechos
+              Top K
               <input
                 type="number"
                 min="1"
                 max="20"
-                value={config.knowledgeTopK || "4"}
+                placeholder={`Padrão da base: ${selected?.config.retrieval?.topK ?? 4}`}
+                value={config.knowledgeTopK || ""}
                 onChange={(e) => onChange("knowledgeTopK", e.target.value)}
               />
             </label>
             <label>
-              Pontuação mínima
+              Similaridade mínima
               <input
                 type="number"
                 min="-1"
                 max="1"
                 step="0.05"
-                value={config.knowledgeMinScore || "0"}
+                placeholder={`Padrão da base: ${selected?.config.retrieval?.minScore ?? 0}`}
+                value={config.knowledgeMinScore || ""}
                 onChange={(e) => onChange("knowledgeMinScore", e.target.value)}
               />
             </label>

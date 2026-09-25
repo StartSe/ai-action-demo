@@ -1,3 +1,4 @@
+import { currentPostgresConnection } from "./knowledge-postgres";
 import type { IndexConfig } from "./knowledge-types";
 import { sqlIdentifier } from "./knowledge-config";
 import { withKnowledgePostgres } from "./knowledge-database";
@@ -24,7 +25,7 @@ export async function readManagedRecords(
   if (!config.connectionString)
     throw new FlowError("Configure a conexão do Record Manager.");
   return withKnowledgePostgres(
-    config.connectionString,
+    currentPostgresConnection(config),
     async (client) => {
       const exists = await client.query("SELECT to_regclass($1) AS name", [
         table(config),
@@ -39,6 +40,7 @@ export async function readManagedRecords(
       );
     },
     signal,
+    config.postgres,
   );
 }
 export async function writeManagedRecords(
@@ -51,7 +53,7 @@ export async function writeManagedRecords(
   if (!config.connectionString)
     throw new FlowError("Configure a conexão do Record Manager.");
   await withKnowledgePostgres(
-    config.connectionString,
+    currentPostgresConnection(config),
     async (client) => {
       await client.query(
         `CREATE TABLE IF NOT EXISTS ${table(config)} (namespace text NOT NULL,base_id text NOT NULL,generation text NOT NULL,chunk_id text NOT NULL,source_id text NOT NULL,hash text NOT NULL,vector jsonb NOT NULL,updated_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(namespace,base_id,generation,chunk_id))`,
@@ -80,6 +82,7 @@ export async function writeManagedRecords(
       }
     },
     signal,
+    config.postgres,
   );
 }
 export async function deleteManagedRecords(
@@ -92,7 +95,7 @@ export async function deleteManagedRecords(
     throw new FlowError(
       "Configure a conexão do Record Manager para concluir a limpeza.",
     );
-  await withKnowledgePostgres(config.connectionString, async (client) => {
+  await withKnowledgePostgres(currentPostgresConnection(config), async (client) => {
     const exists = await client.query("SELECT to_regclass($1) AS name", [
       table(config),
     ]);
@@ -101,5 +104,5 @@ export async function deleteManagedRecords(
       `DELETE FROM ${table(config)} WHERE namespace=$1 AND base_id=$2 AND generation=$3${sourceId ? " AND source_id=$4" : ""}`,
       [namespace(config), baseId, generation, ...(sourceId ? [sourceId] : [])],
     );
-  });
+  }, undefined, config.postgres);
 }

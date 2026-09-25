@@ -24,6 +24,7 @@ type Detail = {
   runs: IndexRun[];
   usages: { id: string; name: string }[];
   cleanupPending: number;
+  storage?: { provider: string; location: string };
 };
 const steps = [
   "Documentos",
@@ -70,8 +71,8 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
     [config, setConfig] = useState<IndexConfig>(structuredClone(DEFAULT_INDEX)),
     [configDirty, setConfigDirty] = useState(false),
     [query, setQuery] = useState(""),
-    [topK, setTopK] = useState(4),
-    [minScore, setMinScore] = useState(0),
+    [topK, setTopK] = useState(""),
+    [minScore, setMinScore] = useState(""),
     [hits, setHits] = useState<KnowledgeHit[] | null>(null),
     [history, setHistory] = useState(false);
   const configuredFor = useRef("");
@@ -160,7 +161,7 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
       );
       setConfig(saved.config);
       setConfigDirty(false);
-      setNotice("Configuração salva. Reindexe para disponibilizar alterações.");
+      setNotice(saved.status === "ready" ? "Configuração salva. As opções de busca já estão em uso." : "Configuração salva. Reindexe para disponibilizar alterações.");
       if (next) setStep(Math.min(step + 1, 4));
     });
   }
@@ -613,6 +614,7 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
                     <KnowledgeIndexFields
                       step={step}
                       config={config}
+                      storage={detail?.storage}
                       onChange={changeConfig}
                     />
                     {configDirty && (
@@ -625,7 +627,7 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
                         className="studio-button"
                         type="button"
                         disabled={locked}
-                        onClick={() => void saveConfig()}
+                        onClick={(e) => { if (e.currentTarget.form?.reportValidity()) void saveConfig(); }}
                       >
                         Salvar configuração
                       </button>
@@ -657,7 +659,7 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
                           await request<KnowledgeHit[]>(
                             `/api/knowledge/${id}/query`,
                             "POST",
-                            { query, topK, minScore },
+                            { query, topK: topK === "" ? undefined : Number(topK), minScore: minScore === "" ? undefined : Number(minScore) },
                           ),
                         );
                       });
@@ -676,27 +678,30 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
                     </label>
                     <details>
                       <summary>Ajustar consulta</summary>
+                      <small>Deixe em branco para usar os valores salvos na base. Filtros e estratégia de distância seguem a configuração da busca.</small>
                       <div className="knowledge-form-grid">
                         <label>
-                          Máximo de resultados
+                          Top K
                           <input
                             type="number"
                             min="1"
                             max="20"
+                            placeholder={`Padrão da base: ${base.config.retrieval?.topK ?? 4}`}
                             value={topK}
-                            onChange={(e) => setTopK(Number(e.target.value))}
+                            onChange={(e) => setTopK(e.target.value)}
                           />
                         </label>
                         <label>
-                          Pontuação mínima
+                          Similaridade mínima
                           <input
                             type="number"
                             min="-1"
                             max="1"
                             step="0.05"
+                            placeholder={`Padrão da base: ${base.config.retrieval?.minScore ?? 0}`}
                             value={minScore}
                             onChange={(e) =>
-                              setMinScore(Number(e.target.value))
+                              setMinScore(e.target.value)
                             }
                           />
                         </label>
@@ -734,7 +739,7 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
                             <strong>
                               {hit.sourceName} · trecho {hit.ordinal}
                             </strong>
-                            <span>Pontuação {hit.score.toFixed(3)}</span>
+                            <span>Similaridade {hit.score.toFixed(3)}</span>
                           </div>
                           <pre>{hit.pageContent}</pre>
                           <details>

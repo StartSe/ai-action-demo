@@ -826,8 +826,9 @@
   border-color: var(--studio-primary);
   background: var(--studio-primary-soft);
 }
-.knowledge-checkbox {
-  display: flex !important;
+.knowledge-form .knowledge-checkbox {
+  display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 10px;
   margin-top: 16px;
@@ -861,3 +862,14 @@
 .knowledge-review-modal > .studio-modal-body { max-height: calc(90dvh - 90px); overflow: auto; }
 .knowledge-review-modal .knowledge-chunks { padding: 0; margin: 0; border: 0; background: transparent; }
 .knowledge-spinner { display: inline-block; width: 15px; height: 15px; flex-shrink: 0; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: studio-spin .8s linear infinite; }
+
+.knowledge-retrieval-fields {
+  display: grid;
+  gap: 16px;
+  border-top: 1px solid var(--studio-line);
+  padding-top: 20px;
+}
+.knowledge-retrieval-fields > p {
+  color: var(--studio-muted);
+  font-size: 12px;
+}

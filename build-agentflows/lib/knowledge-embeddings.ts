@@ -95,7 +95,7 @@ export async function embedKnowledge(
     vectors = validateVectors(response.embeddings, texts.length);
   } else {
     const response = await knowledgeJson<{
-      data: { index: number; embedding: number[] }[];
+      data: { index: number; embedding: number[] | string }[];
     }>(`${config.url}/embeddings`, {
       ...options,
       headers: { Authorization: `Bearer ${config.apiKey}` },
@@ -104,7 +104,7 @@ export async function embedKnowledge(
         input: prepared,
         ...(config.provider === "voyage"
           ? { input_type: purpose, truncation: false }
-          : { encoding_format: "float" }),
+          : { encoding_format: config.encodingFormat || "float" }),
         ...(dimensions &&
         config.provider === "openai" &&
         config.model.startsWith("text-embedding-3-")
@@ -126,7 +126,7 @@ export async function embedKnowledge(
         502,
       );
     vectors = validateVectors(
-      response.data.sort((a, b) => a.index - b.index).map((v) => v.embedding),
+      response.data.sort((a, b) => a.index - b.index).map((v) => decodeEmbedding(v.embedding)),
       texts.length,
     );
   }
@@ -136,4 +136,14 @@ export async function embedKnowledge(
       502,
     );
   return vectors;
+}
+
+function decodeEmbedding(value: number[] | string): number[] {
+  if (typeof value !== "string") return value;
+  if (!value || value.length > 349528 || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value))
+    throw new FlowError("O serviço retornou um embedding base64 inválido.", 502);
+  const bytes = Buffer.from(value, "base64");
+  if (bytes.length % 4 !== 0 || bytes.length === 0 || bytes.toString("base64") !== value)
+    throw new FlowError("O serviço retornou um embedding base64 inválido.", 502);
+  return Array.from({ length: bytes.length / 4 }, (_, i) => bytes.readFloatLE(i * 4));
 }
