@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Run } from "./flow-types";
+import { parseRunPage } from "./run-page";
 const dir=mkdtempSync(join(tmpdir(),"run-pagination-"));process.env.DATA_DIR=dir;
 const {putRun,listRunPage,getRun}=await import("./flow-store");
 const {GET}=await import("../app/api/runs/route");
@@ -14,8 +15,8 @@ test("paginação acessa mais de 100 execuções sem duplicar registros ou envia
   const seen:string[]=[];
   for(let page=1;page<=7;page++){
     const response=await GET(new Request(`http://localhost/api/runs?page=${page}&pageSize=20`));assert.equal(response.status,200);
-    const data=await response.json();assert.equal(data.total,135);assert.equal(data.totalPages,7);assert.ok(data.items.length<=20);
-    for(const r of data.items){seen.push(r.id);assert.ok(r.input.length<=100);assert.equal(r.graph,undefined);assert.equal(r.output,undefined);assert.equal(r.trace,undefined);assert.equal(r.state,undefined);}
+    const data=parseRunPage(await response.json());assert.equal(data.total,135);assert.equal(data.totalPages,7);assert.ok(data.items.length<=20);
+    for(const r of data.items){seen.push(r.id);assert.ok(r.input.length<=100);for(const key of ["graph","output","trace","state"]) assert.equal(key in r,false);}
   }
   assert.equal(new Set(seen).size,135);assert.equal(seen[0],"run-134");assert.equal(seen.at(-1),"run-0");
   assert.ok(getRun("run-0").input.length>100);

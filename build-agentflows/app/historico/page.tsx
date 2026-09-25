@@ -1,17 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { Run, RunPage } from "@/lib/flow-types";
+import { isRunPage, parseRunPage } from "@/lib/run-page";
 import { Icon, Modal, StudioShell } from "@/components/StudioUI";
 import { RunView, RUN_STATUS } from "@/components/RunView";
 import { ChatGPTConnection, useChatGPT } from "@/components/ChatGPTConnection";
 export default function Page() {
-  const [data, setData] = useState<RunPage>({
-    items: [],
-    page: 1,
-    pageSize: 20,
-    total: 0,
-    totalPages: 1,
-  });
+  const [data, setData] = useState<RunPage | null>(null);
+  // Fast Refresh can retain state from the previous, unpaginated version.
+  const runPage = isRunPage(data) ? data : null;
   const [page, setPage] = useState(1),
     [pageSize, setPageSize] = useState(20);
   const [selectedId, setSelectedId] = useState(""),
@@ -30,20 +27,24 @@ export default function Page() {
       try {
         const response = await fetch(
           `/api/runs?page=${page}&pageSize=${pageSize}&status=${filter}`,
-          { signal: controller.signal },
+          { signal: controller.signal, cache: "no-store" },
         );
         const result = await response.json();
         if (!response.ok)
           throw new Error(
-            result.error || "Não foi possível carregar as execuções.",
+            typeof result?.error === "string" ? result.error : "Não foi possível carregar as execuções.",
           );
+        const nextPage = parseRunPage(result);
         if (!controller.signal.aborted) {
-          setData(result);
-          setPage(result.page);
+          setData(nextPage);
+          setPage(nextPage.page);
           setError("");
         }
       } catch (e) {
-        if (!controller.signal.aborted) setError((e as Error).message);
+        if (!controller.signal.aborted) {
+          setData(null);
+          setError((e as Error).message);
+        }
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false);
@@ -134,7 +135,7 @@ export default function Page() {
             <span className="studio-spinner" />
             Carregando execuções…
           </div>
-        ) : !data.items.length ? (
+        ) : !runPage ? null : !runPage.items.length ? (
           <div className="library-empty">
             <Icon name="runs" size={42} />
             <h2>Nenhuma execução encontrada</h2>
@@ -148,7 +149,7 @@ export default function Page() {
               <span>Modo</span>
               <span>Data</span>
             </div>
-            {data.items.map((r) => (
+            {runPage.items.map((r) => (
               <button
                 className="execution-row"
                 key={r.id}
@@ -171,7 +172,7 @@ export default function Page() {
             ))}
           </div>
         )}
-        <nav
+        {runPage && <nav
           className="execution-pagination"
           aria-label="Paginação de execuções"
         >
@@ -194,8 +195,8 @@ export default function Page() {
             </select>
           </label>
           <span aria-live="polite">
-            {data.total
-              ? `${(data.page - 1) * data.pageSize + 1}–${Math.min(data.page * data.pageSize, data.total)} de ${data.total}`
+            {runPage.total
+              ? `${(runPage.page - 1) * runPage.pageSize + 1}–${Math.min(runPage.page * runPage.pageSize, runPage.total)} de ${runPage.total}`
               : "0 execuções"}
           </span>
           <div className="studio-actions">
@@ -207,17 +208,17 @@ export default function Page() {
               Anterior
             </button>
             <span>
-              Página {data.page} de {data.totalPages}
+              Página {runPage.page} de {runPage.totalPages}
             </span>
             <button
               className="studio-button"
-              disabled={loading || page >= data.totalPages}
+              disabled={loading || page >= runPage.totalPages}
               onClick={() => changePage(page + 1)}
             >
               Próxima
             </button>
           </div>
-        </nav>
+        </nav>}
       </main>
       {selectedId && (
         <Modal

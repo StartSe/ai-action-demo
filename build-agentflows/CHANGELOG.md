@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 0.13.1 — 25/09/2026
+
+- Histórico valida a resposta paginada antes de atualizar a tela, impedindo erro ao acessar `items.length` em retornos inválidos ou estados antigos preservados pelo Fast Refresh.
+- Falhas de carregamento exibem aviso e nova tentativa automática, sem apresentar resultados vazios ou totais incorretos.
+- Testes de regressão para respostas legadas, campos ausentes, itens malformados e paginação.
+
 ## 0.13.0 — 25/09/2026
 
 - Upload de fontes por arrastar e soltar, teclado ou clique em toda a área; nome automático igual ao primeiro arquivo. Extrair e revisar salva a configuração, sem campo de nome nem botão adicional de salvar no modal.
