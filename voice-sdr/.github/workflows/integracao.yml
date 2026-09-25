@@ -1,0 +1,100 @@
+name: Integração contínua
+
+# Escada de validação (docs/PRD-implementacao.md seção 9.1).
+# Degraus 1 e 2 rodam em processo a todo envio, e são os mesmos que o laço
+# local roda. O degrau 3 sobe Supabase em container, aplica as migrações sobre
+# banco vazio, exercita a RLS em Postgres de verdade e abre navegador; ele só
+# entra quando a mudança toca supabase/ ou quando o destino é a branch
+# principal. Quem decide é scripts/decisao-do-ci.ts, que tem teste.
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  em-processo:
+    name: Degraus 1 e 2 — em processo
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: npm run check
+        # Dois minutos é o orçamento do degrau de baixo. Estourar é regressão:
+        # o laço autônomo roda esse comando a cada mudança.
+        timeout-minutes: 2
+        run: npm run check
+
+  decidir:
+    name: Decidir o degrau 3
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      completo: ${{ steps.decisao.outputs.completo }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Listar os arquivos tocados
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          TOPO: ${{ github.sha }}
+        # `?` sozinho significa diff indisponível — envio inicial de branch,
+        # histórico raso, força bruta. O script trata isso rodando o degrau 3.
+        run: |
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] \
+            || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo '?' > arquivos-tocados.txt
+          else
+            git diff --name-only "$BASE" "$TOPO" > arquivos-tocados.txt
+          fi
+          cat arquivos-tocados.txt
+      - id: decisao
+        run: node scripts/decidir-degrau-3.ts arquivos-tocados.txt
+
+  degrau-3:
+    name: Degrau 3 — container, Postgres real e navegador
+    needs: [em-processo, decidir]
+    if: needs.decidir.outputs.completo == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: npm ci
+      - name: Instalar navegador
+        # Só quando já existe suíte. Enquanto não existir, baixar o Chromium é
+        # tempo de esteira gasto à toa.
+        if: hashFiles('playwright.config.ts', 'playwright.config.js') != ''
+        run: npx --yes playwright install --with-deps chromium
+      - name: npm run check:full
+        # Sobe o Supabase, faz db reset (todas as migrações sobre banco vazio),
+        # repete os degraus 1 e 2, checa o Deno das funções, roda a travessia
+        # entre contas contra Postgres real e o navegador.
+        run: npm run check:full
+      - name: Derrubar o Supabase
+        if: always()
+        run: supabase stop --no-backup || true

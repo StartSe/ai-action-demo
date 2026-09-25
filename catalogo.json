@@ -537,6 +537,27 @@
         "mcp"
       ],
       "demo": null
+    },
+    {
+      "id": "voice-sdr",
+      "nome": "Voice SDR",
+      "areas": [
+        "Vendas"
+      ],
+      "problema": "Lead novo esfria antes do retorno, a base antiga fica parada e reunião marcada vira falta porque ninguém confirma.",
+      "ia": "Uma SDR por voz liga para o lead, qualifica pelo roteiro da empresa, marca a reunião na agenda do especialista, confirma antes e resgata depois, com transcrição e resumo de cada ligação.",
+      "integracoes": "Supabase da própria empresa para o banco e as rotinas, instalado pelo painel da StartSe. IA (OpenRouter), voz (ElevenLabs) e telefonia (Twilio), ligadas no tutorial. WhatsApp (Z-API), agenda do Google e e-mail (Resend) são opcionais.",
+      "acento": "#bf2630",
+      "porta": 3025,
+      "captura": "capturas/voice-sdr.png",
+      "capacidades": [
+        "artefato",
+        "rotina"
+      ],
+      "demo": null,
+      "padrao": "proprio",
+      "versao": "0.1.0",
+      "aposPublicar": "Abra o app e clique em Instalar pelo painel da StartSe: o painel cria o banco e publica as funções num projeto Supabase seu. Volte ao app, crie a conta de dono e siga o tutorial para ligar a IA, a voz e a telefonia."
     }
   ]
 }

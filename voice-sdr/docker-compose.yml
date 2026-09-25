@@ -1,0 +1,11 @@
+# Só a tela da Voice SDR; o banco e as funções moram no projeto Supabase do cliente (sem volume).
+# Opcional: VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no ambiente fixam o projeto no build.
+services:
+  app:
+    build:
+      context: .
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
+    ports: ["3025:10000"]
+    restart: unless-stopped

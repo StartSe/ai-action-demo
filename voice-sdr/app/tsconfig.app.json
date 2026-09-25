@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "noUncheckedIndexedAccess": true,
+
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@compartilhado/*": ["../supabase/functions/_shared/*"],
+      "@importacao/*": ["../supabase/functions/leads-import/*"],
+      "@voz/*": ["../supabase/functions/voice-catalog/*"],
+      "@publicacao/*": ["../supabase/functions/agent-publish/*"],
+      "@conhecimento/*": ["../supabase/functions/knowledge-sync/*"],
+      "@revisao/*": ["../supabase/functions/call-review/*"],
+      "@ensaio/*": ["../supabase/functions/rehearsal-session/*"],
+      "@sugestoes/*": ["../supabase/functions/onboarding-suggest/*"],
+      "@entrevista/*": ["../supabase/functions/onboarding-interview/*"],
+      "@reset/*": ["../supabase/functions/environment-reset/*"],
+      "@diagnostico/*": ["../supabase/functions/call-diagnose/*"],
+      "@saude/*": ["../supabase/functions/saude/*"]
+    }
+  },
+  "include": ["src"]
+}

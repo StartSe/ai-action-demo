@@ -145,6 +145,10 @@ ${app.aposPublicar ?? "Nenhuma chave é necessária aqui."}`
     ? `Instalação gratuita de teste, sem volume: contas, configurações e respostas podem se perder em reinícios e atualizações.
 Para manter os dados, use a opção com volume (pago): ${urlPublicar(comPersistencia(app))}.
 Após publicar, abra o app, crie a conta e conecte a IA em /setup.`
+    : app.aposPublicar
+    // App gratuito com texto próprio (ex.: voice-sdr, cujos dados moram no Supabase do cliente, sem
+    // /setup nem SQLite): o texto dele vale mais que o genérico, que não se aplicaria.
+    ? app.aposPublicar
     : `Nenhuma chave é necessária aqui: após publicar, abra /setup no app e conecte a IA.
 As chaves ficam em SQLite em /app/data. No plano free o disco é efêmero e a configuração se perde a cada deploy.`;
   return (

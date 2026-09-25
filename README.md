@@ -28,6 +28,7 @@ Vinte e dois apps independentes, cada um resolvendo um problema específico do d
 | 20 | [Mapia v1.3.0](mapify/) | Gestão, Educação e Produto | Conteúdo difícil de conectar e aplicar | Mapas mentais interativos com fontes, edição e conversa | ChatGPT por assinatura ou OpenRouter; YouTube público com Gemini, PDF, web e texto. Disco persistente no Render |
 | 21 | [Cowork Jev v0.3.0](predictive-harness/) | Dados e Gestão | Perguntar aos dados exige analista, e respostas de IA sem verificação não inspiram confiança | Conversa com a planilha: o ChatGPT escreve, o Jev (System One) tria, roteia e verifica cada resposta, com as decisões visíveis | ChatGPT por assinatura e OpenRouter (Jev). Disco persistente no Render |
 | 22 | [Painel Pronto](toolkit-dash-builder/) | Dados e Gestão | O gestor sabe o que quer acompanhar, mas não sabe quais indicadores pedir | Envie a planilha e o painel sai com os números dela: indicadores, tendência, ranking, distribuição e tabela, com arrastar para reorganizar e ajuste por conversa | só OpenRouter (opcional: sem chave, o recorte sai da forma das colunas) |
+| 23 | [Voice SDR v0.1.0](voice-sdr/) | Vendas | Lead novo esfria antes do retorno, base antiga fica parada e reunião marcada vira falta | SDR por voz liga, qualifica pelo roteiro, marca na agenda do especialista, confirma e resgata a reunião | Supabase da própria empresa (banco e funções, instalados pelo painel da StartSe), OpenRouter, ElevenLabs e Twilio; Z-API, Google Agenda e Resend opcionais. **Exceção ao padrão: tela em Vite + React servida por `server.mjs`, sem Next nem SQLite** |
 
 Ideias mapeadas e deixadas para uma segunda rodada: copiloto de OKRs com check-in semanal, análise de concorrentes a partir de sites e redes, triagem de currículos contra a descrição da vaga, gerador de propostas comerciais a partir do CRM, resumo diário de e-mails e Slack para a diretoria.
 
@@ -64,7 +65,7 @@ Cada app guarda sua configuração em um volume Docker próprio, então as chave
 | 3009 | financas-ia | | 3022 | predictive-harness |
 | 3010 | voz-do-cliente | | 3023 | precificador |
 | 3011 | radar-sinais | | 3024 | toolkit-dash-builder |
-| 3012 | bussola-ia | |  |  |
+| 3012 | bussola-ia | | 3025 | voice-sdr |
 
 Um app só: `docker compose up --build pdi-time`, ou dentro da pasta do app `docker compose up --build`.
 
@@ -139,6 +140,10 @@ Depois do deploy, abra `https://<nome>.onrender.com/setup` e conecte a IA e as i
 
 O `automl-pocket/` é web (Next) + worker Python (pandas, scikit-learn, XGBoost) + Redis compartilhando `/app/data` (SQLite, planilhas, modelos). No Render um disco pertence a um só serviço e worker não tem plano gratuito, então o `Dockerfile` da raiz da pasta empacota os três processos numa imagem única, orquestrada por `start.sh` (Redis, `migrate.mjs`, `server.js` e `main.py`; se um processo morrer, o contêiner reinicia). O Blueprint dele usa `plan: standard` (2 GB de memória; o treino com scikit-learn e XGBoost não cabe nos 512 MB do `starter`), disco de 1 GB e `AUTH_SECRET` gerado pelo Render. Sem a variável, `start.sh` cria um segredo e o guarda em `/app/data/auth-secret`, então `docker run` sem `-e` também funciona. Desenvolvimento com os serviços separados: `automl-pocket/docker-compose.yml` e o README de lá.
 
+### Voice SDR: só a tela
+
+O `voice-sdr/` é um monorepo Vite + React (`app/`) cujo banco e funções moram no projeto Supabase de cada cliente (`supabase/`, instalado pelo painel da StartSe a partir de `instalacao.json`). A imagem da suíte leva só a tela: o `Dockerfile` constrói o workspace `app` e o `server.mjs` (Node sem dependência) serve `app/dist` com `/api/health`, `/api/status` e o fallback de SPA. Não há SQLite, `/setup` nem volume; plano `free`. Na primeira abertura a tela mostra "Conectar ao seu Supabase". Veio de `StartSe/toolkit-sarah-voice-sdr` (commit e forma de sincronizar em `voice-sdr/ORIGEM.md`) e tem `padrao: "proprio"`, como o AutoML.
+
 ## Onde obter as chaves
 
 Os links abaixo aparecem também dentro de cada tela `/setup`, ao lado do campo correspondente.
@@ -173,4 +178,5 @@ scripts/               gerar-deploy.mjs (gera render.yaml e a pasta publico/), p
 build-and-push.sh      fallback manual para construir e publicar as 18 imagens
 <app>/                 um projeto Next.js completo por pasta (código, Dockerfile, docker-compose.yml, render.yaml, README)
 automl-pocket/         AutoML: apps/web (Next) + apps/worker (Python) + Dockerfile único e start.sh na raiz
+voice-sdr/             Voice SDR: monorepo Vite (app/) + supabase/ (instalado no Supabase do cliente), server.mjs e Dockerfile na raiz
 ```
