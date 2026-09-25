@@ -1,0 +1,350 @@
+# Configuração do Supabase local do Sarah Voice SDR.
+project_id = "sarah-voice-sdr"
+
+[api]
+enabled = true
+port = 54421
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54422
+shadow_port = 54420
+major_version = 17
+
+[db.pooler]
+enabled = false
+port = 54429
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[studio]
+enabled = true
+port = 54423
+api_url = "http://127.0.0.1"
+
+[inbucket]
+enabled = true
+port = 54424
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:5173"
+additional_redirect_urls = ["http://127.0.0.1:5173"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+secure_password_change = true
+
+[analytics]
+enabled = false
+
+[edge_runtime]
+enabled = true
+policy = "oneshot"
+inspector_port = 8083
+
+# invite-accept resolve o link de convite. Sem verificação de JWT pelo gateway:
+# quem clica no link pode chegar sem sessão, e o 401 cru do gateway não diz nada
+# ao convidado. A função confere o cabeçalho Authorization por conta própria e
+# responde em português (docs/PRD-implementacao.md seção 4.4).
+[functions.invite-accept]
+enabled = true
+verify_jwt = false
+
+# lead-intake é o endereço público de entrada de leads (RF-107). Sem verificação
+# de JWT pelo gateway porque a autenticação é a chave da conta, no cabeçalho
+# `x-intake-key`, e não a sessão: quem chama é o formulário do site de um
+# cliente, que não tem usuário nem token do Supabase. O 401 cru do gateway
+# recusaria todo pedido legítimo. Quem confere a chave é `entrada.ts`, e o
+# limite de taxa por conta está em `limite-de-taxa.ts` (L-02).
+[functions.lead-intake]
+enabled = true
+verify_jwt = false
+
+# inbound-twiml atende a ligação que chega numa linha cujo comportamento não é
+# `agent` (T-14, RF-409). Sem verificação de JWT pelo gateway porque quem chama
+# é a telefonia, no meio de uma ligação em curso: não há usuário, não há sessão
+# e não há token do Supabase do outro lado. A credencial é a assinatura que a
+# operadora calcula sobre o pedido inteiro com o token da conta dela, conferida
+# em `atendimento.ts` por `_shared/telefonia/assinatura.ts` antes de qualquer
+# leitura no banco. Assinatura ausente, malformada e inválida saem pelo mesmo
+# 401. O 401 cru do gateway recusaria toda ligação legítima, e quem ligou
+# ouviria o tom de erro da operadora sem ninguém descobrir por quê.
+[functions.inbound-twiml]
+enabled = true
+verify_jwt = false
+
+# call-init é o webhook de início da conversa (T-14, T-25, RF-408, RF-108). Sem
+# verificação de JWT pelo gateway porque quem chama é o provedor de voz, de
+# servidor para servidor, no meio de uma ligação: não há usuário, não há sessão
+# e não há token do Supabase do outro lado. A credencial é o cabeçalho
+# `x-sarah-webhook-secret` com o segredo derivado da conta de `?conta=`, que
+# `agent-publish` cadastra no workspace da ElevenLabs (o webhook de início dela
+# não é assinado), ou a assinatura sobre o corpo cru com o segredo de webhook da
+# instalação. As duas são conferidas em `contexto.ts` antes de ler o corpo e
+# antes de tocar no banco, e toda combinação que não confere sai pelo mesmo
+# 401. O 401 cru do gateway recusaria toda
+# conversa legítima, e a assistente começaria a falar sem saber com quem — ou, na
+# ligação recebida, sem linha em `calls` para as ferramentas dela encontrarem.
+[functions.call-init]
+enabled = true
+verify_jwt = false
+
+# call-events é o webhook de fim da conversa (T-15, R-05, R-07, RNF-16). Sem
+# verificação de JWT pelo gateway pela razão de call-init: quem chama é o
+# provedor de voz, de servidor para servidor, e não há token do Supabase do
+# outro lado. A credencial é a assinatura sobre o corpo cru, conferida em
+# `eventos.ts` antes de ler o corpo: com o segredo que a ElevenLabs devolveu
+# ao cadastro do webhook da conta de `?conta=` (cofre da conta, única leitura
+# antes da conferência), ou com o segredo da instalação e o anterior aceito
+# por 24 h durante a rotação. O 401 cru do gateway recusaria
+# todo aviso legítimo, e nenhuma ligação seria finalizada pelo aviso — só pela
+# varredura, minutos depois.
+[functions.call-events]
+enabled = true
+verify_jwt = false
+
+# cron-dial é a rotina que consome dial_queue (L-14, T-26). Sem verificação de
+# JWT pelo gateway porque quem chama é o pg_cron, por `disparar_rotina`, e o
+# pedido chega sem `Authorization`: só com o segredo interno lido do Vault no
+# cabeçalho `x-internal-secret`. É ele a credencial, conferido em
+# `despacho.ts` por `_shared/rotinas/portao.ts` antes de qualquer leitura, e
+# variável ausente fecha o portão. O 401 cru do gateway recusaria todo disparo
+# do agendador, e a fila pararia sem erro em lugar nenhum além de `net`.
+[functions.cron-dial]
+enabled = true
+verify_jwt = false
+
+# cron-call-recovery é a varredura de recuperação (seção 4.6, T-26): finaliza o
+# que o aviso do provedor não fechou, encerra a conversa além da duração máxima
+# e aciona o disjuntor. Sem verificação de JWT pelo gateway pela razão de
+# cron-dial: quem chama é o pg_cron, por `disparar_rotina`, sem `Authorization`,
+# só com o segredo interno em `x-internal-secret`. É ele a credencial,
+# conferido em `recuperacao.ts` por `_shared/rotinas/portao.ts` antes de
+# qualquer leitura, e variável ausente fecha o portão.
+[functions.cron-call-recovery]
+enabled = true
+verify_jwt = false
+
+# cron-speed-to-lead enfileira o lead novo do formulário dentro da janela de
+# resposta da conta (RF-610, seção 4.6). Sem verificação de JWT pelo gateway
+# pela razão de cron-dial: quem chama é o pg_cron, por `disparar_rotina`, sem
+# `Authorization`, só com o segredo interno em `x-internal-secret`. É ele a
+# credencial, conferido em `enfileiramento.ts` por `_shared/rotinas/portao.ts`
+# antes de qualquer leitura, e variável ausente fecha o portão.
+[functions.cron-speed-to-lead]
+enabled = true
+verify_jwt = false
+
+# cron-cost-sync busca o preço da telefonia que chega tarde (seção 4.6, T-20,
+# P-07). Sem verificação de JWT pelo gateway pela razão de cron-dial: quem chama
+# é o pg_cron, por `disparar_rotina`, sem `Authorization`, só com o segredo
+# interno em `x-internal-secret`. É ele a credencial, conferido em `custos.ts`
+# por `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente
+# fecha o portão.
+[functions.cron-cost-sync]
+enabled = true
+verify_jwt = false
+
+# cron-credit-watch avisa quando o crédito ou a cota de um provedor cruza o
+# limiar (seção 4.6, RF-612). Sem verificação de JWT pelo gateway pela razão de
+# cron-dial: quem chama é o pg_cron, por `disparar_rotina`, sem
+# `Authorization`, só com o segredo interno em `x-internal-secret`. É ele a
+# credencial, conferido em `credito.ts` por `_shared/rotinas/portao.ts` antes de
+# qualquer leitura, e variável ausente fecha o portão.
+[functions.cron-credit-watch]
+enabled = true
+verify_jwt = false
+
+# cron-retention expurga a gravação e a transcrição no prazo da conta, no
+# Storage e no provedor de voz (seção 4.6, RF-611, P-10). Sem verificação de JWT
+# pelo gateway pela razão de cron-dial: quem chama é o pg_cron, por
+# `disparar_rotina`, sem `Authorization`, só com o segredo interno em
+# `x-internal-secret`. É ele a credencial, conferido em `expurgo.ts` por
+# `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente
+# fecha o portão.
+[functions.cron-retention]
+enabled = true
+verify_jwt = false
+
+# cron-calendar-sync grava a ocupação dos próximos 30 dias de cada calendário
+# conectado em specialist_busy_blocks (seção 4.6, T-10). Sem verificação de JWT
+# pelo gateway pela razão de cron-dial: quem chama é o pg_cron, por
+# `disparar_rotina`, sem `Authorization`, só com o segredo interno em
+# `x-internal-secret`. É ele a credencial, conferido em `sincronizacao.ts` por
+# `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente
+# fecha o portão.
+[functions.cron-calendar-sync]
+enabled = true
+verify_jwt = false
+
+# cron-meeting-invite tenta de novo o convite da reunião por e-mail que não
+# saiu na requisição do agendamento (seção 4.6, RF-509, R-05). Sem verificação
+# de JWT pelo gateway pela razão de cron-dial: quem chama é o pg_cron, por
+# `disparar_rotina`, sem `Authorization`, só com o segredo interno em
+# `x-internal-secret`. É ele a credencial, conferido em `reenvio.ts` por
+# `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente
+# fecha o portão.
+[functions.cron-meeting-invite]
+enabled = true
+verify_jwt = false
+
+# cron-meeting-reminder enfileira a ligação de lembrete das reuniões que
+# começam dentro da janela da conta (seção 4.6, RF-601). Sem verificação de JWT
+# pelo gateway pela razão de cron-dial: quem chama é o pg_cron, por
+# `disparar_rotina`, sem `Authorization`, só com o segredo interno em
+# `x-internal-secret`. É ele a credencial, conferido em `rotina.ts` por
+# `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente
+# fecha o portão.
+[functions.cron-meeting-reminder]
+enabled = true
+verify_jwt = false
+
+# cron-meeting-rescue enfileira a ligação de resgate da falta atestada e esgota
+# a que chegou ao teto (seção 4.6, RF-604, RF-605). Sem verificação de JWT pelo
+# gateway pela razão de cron-dial: quem chama é o pg_cron, por
+# `disparar_rotina`, sem `Authorization`, só com o segredo interno em
+# `x-internal-secret`. É ele a credencial, conferido em `rotina.ts` por
+# `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente
+# fecha o portão.
+[functions.cron-meeting-rescue]
+enabled = true
+verify_jwt = false
+
+# tool-dnc grava o bloqueio pedido dentro da chamada (seção 5, RF-805). Sem
+# verificação de JWT pelo gateway porque quem chama é o provedor de voz, no meio
+# da ligação, sem usuário do Supabase: a credencial é o `x-tool-secret`,
+# HMAC da chave do servidor com a conta (T-18), conferido pelo esqueleto das
+# ferramentas (`_shared/tools/esqueleto.ts`) antes de qualquer leitura por
+# conversa. O 401 cru do gateway calaria a ferramenta e a assistente ficaria sem
+# resposta na linha.
+[functions.tool-dnc]
+enabled = true
+verify_jwt = false
+
+# tool-transfer decide o destino do pedido de humano ou o põe na fila (seção 5,
+# RF-909). Sem verificação de JWT pelo gateway pelo mesmo motivo de tool-dnc:
+# quem chama é o provedor de voz, no meio da ligação, e a credencial é o
+# `x-tool-secret` derivado da conta (T-18), conferido pelo esqueleto antes de
+# qualquer leitura por conversa. O 401 cru do gateway deixaria quem pediu uma
+# pessoa sem resposta nenhuma.
+[functions.tool-transfer]
+enabled = true
+verify_jwt = false
+
+# telephony-connect é o esboço de OAuth com a Twilio e fica desligado sem
+# TWILIO_CONNECT_APP_SID: nenhuma tela o chama, e a telefonia da conta entra
+# pelo Account SID e pelo Auth Token que ela digita (veja o cabeçalho do
+# index.ts). Continua publicado só para o endereço não sumir.
+#
+# tool-qualify registra a qualificação durante a ligação e move o lead no funil
+# (seção 5, RF-203). Sem verificação de JWT pelo gateway pelo mesmo motivo de
+# tool-dnc: quem chama é o provedor de voz, no meio da ligação, sem sessão do
+# Supabase, e a credencial é o `x-tool-secret` derivado da conta (T-18),
+# conferido pelo esqueleto antes de qualquer leitura por conversa. O 401 cru do
+# gateway faria a descoberta terminar sem qualificação registrada.
+[functions.tool-qualify]
+enabled = true
+verify_jwt = false
+
+# tool-availability oferece até quatro horários e os guarda em
+# call_slot_offers (seção 5, RF-505). Sem verificação de JWT pelo gateway pelo
+# mesmo motivo de tool-dnc: quem chama é o provedor de voz, no meio da ligação,
+# e a credencial é o `x-tool-secret` derivado da conta (T-18), conferido pelo
+# esqueleto antes de qualquer leitura por conversa. O 401 cru do gateway
+# deixaria a assistente sem horário nenhum para oferecer.
+[functions.tool-availability]
+enabled = true
+verify_jwt = false
+
+# tool-book-meeting marca a reunião no horário que o lead escolheu entre os
+# oferecidos (seção 5, RF-506). Sem verificação de JWT pelo gateway pelo mesmo
+# motivo de tool-dnc: quem chama é o provedor de voz, no meio da ligação, e a
+# credencial é o `x-tool-secret` derivado da conta (T-18), conferido pelo
+# esqueleto antes de qualquer leitura por conversa. O 401 cru do gateway
+# deixaria o lead que acabou de escolher um horário sem resposta nenhuma.
+[functions.tool-book-meeting]
+enabled = true
+verify_jwt = false
+
+# tool-confirm-meeting confirma a presença na reunião da ligação de lembrete
+# (seção 5, RF-602). Sem verificação de JWT pelo gateway pelo mesmo motivo de
+# tool-dnc: quem chama é o provedor de voz, no meio da ligação, e a credencial é
+# o `x-tool-secret` derivado da conta (T-18), conferido pelo esqueleto antes de
+# qualquer leitura por conversa. O 401 cru do gateway deixaria o lead que
+# acabou de confirmar sem resposta nenhuma.
+[functions.tool-confirm-meeting]
+enabled = true
+verify_jwt = false
+
+# tool-reschedule remarca ou cancela a reunião na mesma ligação de lembrete ou
+# de resgate (seção 5, RF-603). Sem verificação de JWT pelo gateway pelo mesmo
+# motivo de tool-dnc: quem chama é o provedor de voz, no meio da ligação, e a
+# credencial é o `x-tool-secret` derivado da conta (T-18), conferido pelo
+# esqueleto antes de qualquer leitura por conversa. O 401 cru do gateway
+# deixaria o lead que pediu outro horário sem resposta nenhuma.
+[functions.tool-reschedule]
+enabled = true
+verify_jwt = false
+
+# whatsapp-inbound recebe o webhook da Z-API da conta: mensagens recebidas e
+# status das enviadas. Sem verificação de JWT pelo gateway porque quem chama é a
+# Z-API, que não tem usuário do Supabase, não assina o pedido e não aceita
+# cabeçalho próprio. A credencial é o endereço: `?conta=<id>&chave=<HMAC da
+# chave do servidor com 'whatsapp:' + conta>`, conferido em tempo constante por
+# `_shared/whatsapp/endereco.ts` antes de ler o corpo e de tocar no banco, com o
+# mesmo 401 para tudo errado. O 401 cru do gateway recusaria toda mensagem.
+[functions.whatsapp-inbound]
+enabled = true
+verify_jwt = false
+
+# telephony-connect tem três portas no mesmo endereço, e as três se autenticam
+# por conta própria. `GET /retorno` é o navegador voltando do provedor depois
+# do aceite, redirecionado sem cabeçalho nosso: a credencial é o `state`
+# assinado que `emitirEstado` gerou, conferido por `lerRetornoDaAutorizacao`
+# antes de qualquer escrita. `POST /revogacao` é o provedor avisando que a
+# conta desconectou por lá, também sem sessão: a credencial é o identificador
+# da subconta, que só existe numa conexão já registrada. `POST /` (o início)
+# continua exigindo sessão, mas confere o `Authorization` por conta própria
+# neste arquivo, sem depender do gateway. O 401 cru do gateway recusaria todo
+# retorno e toda revogação legítimos, e a conta ficaria com uma conexão que o
+# provedor já desfez do lado dele.
+[functions.telephony-connect]
+enabled = true
+verify_jwt = false
+
+# calendar-callback é a volta do OAuth do calendário do especialista (L-06,
+# RF-507). Sem verificação de JWT pelo gateway porque quem chega é um navegador
+# redirecionado pelo Google, sem `Authorization` nosso: a função confere a
+# credencial por conta própria, e a credencial é o `state` assinado com a chave
+# do servidor que `calendar-connect` emitiu, com validade de dez minutos,
+# conferido em `retorno.ts` antes de qualquer leitura ou escrita. O 401 cru do
+# gateway recusaria toda volta legítima, e nenhum calendário se conectaria.
+# `calendar-connect`, o começo, continua atrás do gateway.
+[functions.calendar-callback]
+enabled = true
+verify_jwt = false
+
+# saude é a conferência da instalação (docs/instalacao.md). Sem verificação de
+# JWT pelo gateway porque quem chama é o instalador do painel, logo depois do
+# deploy e sem credencial nenhuma, e a tela de conexão da interface, antes de
+# existir sessão. O que ela devolve é público: a chave publicável do projeto e
+# dois rótulos de versão. O que ela faz com a chave de serviço é gravar o
+# endereço das funções para as rotinas quando ele falta, sem nunca sobrescrever.
+[functions.saude]
+enabled = true
+verify_jwt = false

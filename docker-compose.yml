@@ -170,6 +170,14 @@ services:
     ports: ["3024:10000"]
     volumes: [toolkit-dash-builder-dados:/app/data]
 
+  # Voice SDR: só a tela. Banco e funções moram no projeto Supabase do cliente, por isso não há
+  # volume: nada fica em /app/data.
+  voice-sdr:
+    <<: *app
+    build: ./voice-sdr
+    image: ghcr.io/startse/voice-sdr:latest
+    ports: ["3025:10000"]
+
 volumes:
   pdi-time-dados:
   agente-kanban-dados:

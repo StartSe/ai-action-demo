@@ -1,0 +1,508 @@
+{
+  "contrato": 2,
+  "destino": "supabase",
+  "entradas": [],
+  "passos": [
+    {
+      "tipo": "sql",
+      "rotulo": "Ligar o agendador e as chamadas de saída do banco",
+      "pasta": "instalacao/preparo",
+      "quantos": 1
+    },
+    {
+      "tipo": "sql",
+      "rotulo": "Criar o banco, parte 1 de 6",
+      "pasta": "instalacao/migracoes/parte-01",
+      "quantos": 20
+    },
+    {
+      "tipo": "sql",
+      "rotulo": "Criar o banco, parte 2 de 6",
+      "pasta": "instalacao/migracoes/parte-02",
+      "quantos": 20
+    },
+    {
+      "tipo": "sql",
+      "rotulo": "Criar o banco, parte 3 de 6",
+      "pasta": "instalacao/migracoes/parte-03",
+      "quantos": 20
+    },
+    {
+      "tipo": "sql",
+      "rotulo": "Criar o banco, parte 4 de 6",
+      "pasta": "instalacao/migracoes/parte-04",
+      "quantos": 20
+    },
+    {
+      "tipo": "sql",
+      "rotulo": "Criar o banco, parte 5 de 6",
+      "pasta": "instalacao/migracoes/parte-05",
+      "quantos": 20
+    },
+    {
+      "tipo": "sql",
+      "rotulo": "Criar o banco, parte 6 de 6",
+      "pasta": "instalacao/migracoes/parte-06",
+      "quantos": 17
+    },
+    {
+      "tipo": "sql",
+      "rotulo": "Registrar a versão instalada",
+      "pasta": "instalacao/registro",
+      "quantos": 1
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função agent-publish",
+      "nome": "agent-publish",
+      "pasta": "instalacao/funcoes/agent-publish",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função calendar-callback",
+      "nome": "calendar-callback",
+      "pasta": "instalacao/funcoes/calendar-callback",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "calendar-callback é a volta do OAuth do calendário do especialista (L-06, RF-507). Sem verificação de JWT pelo gateway porque quem chega é um navegador redirecionado pelo Google, sem `Authorization` nosso: a função confere a credencial por conta própria, e a credencial é o `state` assinado com a chave do servidor que `calendar-connect` emitiu, com validade de dez minutos, conferido em `retorno.ts` antes de qualquer leitura ou escrita. O 401 cru do gateway recusaria toda volta legítima, e nenhum calendário se conectaria. `calendar-connect`, o começo, continua atrás do gateway."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função calendar-connect",
+      "nome": "calendar-connect",
+      "pasta": "instalacao/funcoes/calendar-connect",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função call-audio",
+      "nome": "call-audio",
+      "pasta": "instalacao/funcoes/call-audio",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função call-cancel",
+      "nome": "call-cancel",
+      "pasta": "instalacao/funcoes/call-cancel",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função call-classify",
+      "nome": "call-classify",
+      "pasta": "instalacao/funcoes/call-classify",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função call-diagnose",
+      "nome": "call-diagnose",
+      "pasta": "instalacao/funcoes/call-diagnose",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função call-events",
+      "nome": "call-events",
+      "pasta": "instalacao/funcoes/call-events",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "call-events é o webhook de fim da conversa (T-15, R-05, R-07, RNF-16). Sem verificação de JWT pelo gateway pela razão de call-init: quem chama é o provedor de voz, de servidor para servidor, e não há token do Supabase do outro lado. A credencial é a assinatura sobre o corpo cru, conferida em `eventos.ts` antes de ler o corpo: com o segredo que a ElevenLabs devolveu ao cadastro do webhook da conta de `?conta=` (cofre da conta, única leitura antes da conferência), ou com o segredo da instalação e o anterior aceito por 24 h durante a rotação. O 401 cru do gateway recusaria todo aviso legítimo, e nenhuma ligação seria finalizada pelo aviso — só pela varredura, minutos depois."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função call-finalize",
+      "nome": "call-finalize",
+      "pasta": "instalacao/funcoes/call-finalize",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função call-init",
+      "nome": "call-init",
+      "pasta": "instalacao/funcoes/call-init",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "call-init é o webhook de início da conversa (T-14, T-25, RF-408, RF-108). Sem verificação de JWT pelo gateway porque quem chama é o provedor de voz, de servidor para servidor, no meio de uma ligação: não há usuário, não há sessão e não há token do Supabase do outro lado. A credencial é o cabeçalho `x-sarah-webhook-secret` com o segredo derivado da conta de `?conta=`, que `agent-publish` cadastra no workspace da ElevenLabs (o webhook de início dela não é assinado), ou a assinatura sobre o corpo cru com o segredo de webhook da instalação. As duas são conferidas em `contexto.ts` antes de ler o corpo e antes de tocar no banco, e toda combinação que não confere sai pelo mesmo 401. O 401 cru do gateway recusaria toda conversa legítima, e a assistente começaria a falar sem saber com quem — ou, na ligação recebida, sem linha em `calls` para as ferramentas dela encontrarem."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função call-place",
+      "nome": "call-place",
+      "pasta": "instalacao/funcoes/call-place",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função call-review",
+      "nome": "call-review",
+      "pasta": "instalacao/funcoes/call-review",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função cron-calendar-sync",
+      "nome": "cron-calendar-sync",
+      "pasta": "instalacao/funcoes/cron-calendar-sync",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "cron-calendar-sync grava a ocupação dos próximos 30 dias de cada calendário conectado em specialist_busy_blocks (seção 4.6, T-10). Sem verificação de JWT pelo gateway pela razão de cron-dial: quem chama é o pg_cron, por `disparar_rotina`, sem `Authorization`, só com o segredo interno em `x-internal-secret`. É ele a credencial, conferido em `sincronizacao.ts` por `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente fecha o portão."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função cron-call-recovery",
+      "nome": "cron-call-recovery",
+      "pasta": "instalacao/funcoes/cron-call-recovery",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "cron-call-recovery é a varredura de recuperação (seção 4.6, T-26): finaliza o que o aviso do provedor não fechou, encerra a conversa além da duração máxima e aciona o disjuntor. Sem verificação de JWT pelo gateway pela razão de cron-dial: quem chama é o pg_cron, por `disparar_rotina`, sem `Authorization`, só com o segredo interno em `x-internal-secret`. É ele a credencial, conferido em `recuperacao.ts` por `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente fecha o portão."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função cron-cost-sync",
+      "nome": "cron-cost-sync",
+      "pasta": "instalacao/funcoes/cron-cost-sync",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "cron-cost-sync busca o preço da telefonia que chega tarde (seção 4.6, T-20, P-07). Sem verificação de JWT pelo gateway pela razão de cron-dial: quem chama é o pg_cron, por `disparar_rotina`, sem `Authorization`, só com o segredo interno em `x-internal-secret`. É ele a credencial, conferido em `custos.ts` por `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente fecha o portão."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função cron-credit-watch",
+      "nome": "cron-credit-watch",
+      "pasta": "instalacao/funcoes/cron-credit-watch",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "cron-credit-watch avisa quando o crédito ou a cota de um provedor cruza o limiar (seção 4.6, RF-612). Sem verificação de JWT pelo gateway pela razão de cron-dial: quem chama é o pg_cron, por `disparar_rotina`, sem `Authorization`, só com o segredo interno em `x-internal-secret`. É ele a credencial, conferido em `credito.ts` por `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente fecha o portão."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função cron-dial",
+      "nome": "cron-dial",
+      "pasta": "instalacao/funcoes/cron-dial",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "cron-dial é a rotina que consome dial_queue (L-14, T-26). Sem verificação de JWT pelo gateway porque quem chama é o pg_cron, por `disparar_rotina`, e o pedido chega sem `Authorization`: só com o segredo interno lido do Vault no cabeçalho `x-internal-secret`. É ele a credencial, conferido em `despacho.ts` por `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente fecha o portão. O 401 cru do gateway recusaria todo disparo do agendador, e a fila pararia sem erro em lugar nenhum além de `net`."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função cron-meeting-invite",
+      "nome": "cron-meeting-invite",
+      "pasta": "instalacao/funcoes/cron-meeting-invite",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "cron-meeting-invite tenta de novo o convite da reunião por e-mail que não saiu na requisição do agendamento (seção 4.6, RF-509, R-05). Sem verificação de JWT pelo gateway pela razão de cron-dial: quem chama é o pg_cron, por `disparar_rotina`, sem `Authorization`, só com o segredo interno em `x-internal-secret`. É ele a credencial, conferido em `reenvio.ts` por `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente fecha o portão."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função cron-meeting-reminder",
+      "nome": "cron-meeting-reminder",
+      "pasta": "instalacao/funcoes/cron-meeting-reminder",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "cron-meeting-reminder enfileira a ligação de lembrete das reuniões que começam dentro da janela da conta (seção 4.6, RF-601). Sem verificação de JWT pelo gateway pela razão de cron-dial: quem chama é o pg_cron, por `disparar_rotina`, sem `Authorization`, só com o segredo interno em `x-internal-secret`. É ele a credencial, conferido em `rotina.ts` por `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente fecha o portão."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função cron-meeting-rescue",
+      "nome": "cron-meeting-rescue",
+      "pasta": "instalacao/funcoes/cron-meeting-rescue",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "cron-meeting-rescue enfileira a ligação de resgate da falta atestada e esgota a que chegou ao teto (seção 4.6, RF-604, RF-605). Sem verificação de JWT pelo gateway pela razão de cron-dial: quem chama é o pg_cron, por `disparar_rotina`, sem `Authorization`, só com o segredo interno em `x-internal-secret`. É ele a credencial, conferido em `rotina.ts` por `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente fecha o portão."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função cron-retention",
+      "nome": "cron-retention",
+      "pasta": "instalacao/funcoes/cron-retention",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "cron-retention expurga a gravação e a transcrição no prazo da conta, no Storage e no provedor de voz (seção 4.6, RF-611, P-10). Sem verificação de JWT pelo gateway pela razão de cron-dial: quem chama é o pg_cron, por `disparar_rotina`, sem `Authorization`, só com o segredo interno em `x-internal-secret`. É ele a credencial, conferido em `expurgo.ts` por `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente fecha o portão."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função cron-speed-to-lead",
+      "nome": "cron-speed-to-lead",
+      "pasta": "instalacao/funcoes/cron-speed-to-lead",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "cron-speed-to-lead enfileira o lead novo do formulário dentro da janela de resposta da conta (RF-610, seção 4.6). Sem verificação de JWT pelo gateway pela razão de cron-dial: quem chama é o pg_cron, por `disparar_rotina`, sem `Authorization`, só com o segredo interno em `x-internal-secret`. É ele a credencial, conferido em `enfileiramento.ts` por `_shared/rotinas/portao.ts` antes de qualquer leitura, e variável ausente fecha o portão."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função emergency-stop",
+      "nome": "emergency-stop",
+      "pasta": "instalacao/funcoes/emergency-stop",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função environment-reset",
+      "nome": "environment-reset",
+      "pasta": "instalacao/funcoes/environment-reset",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função inbound-twiml",
+      "nome": "inbound-twiml",
+      "pasta": "instalacao/funcoes/inbound-twiml",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "inbound-twiml atende a ligação que chega numa linha cujo comportamento não é `agent` (T-14, RF-409). Sem verificação de JWT pelo gateway porque quem chama é a telefonia, no meio de uma ligação em curso: não há usuário, não há sessão e não há token do Supabase do outro lado. A credencial é a assinatura que a operadora calcula sobre o pedido inteiro com o token da conta dela, conferida em `atendimento.ts` por `_shared/telefonia/assinatura.ts` antes de qualquer leitura no banco. Assinatura ausente, malformada e inválida saem pelo mesmo 401. O 401 cru do gateway recusaria toda ligação legítima, e quem ligou ouviria o tom de erro da operadora sem ninguém descobrir por quê."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função integrations-status",
+      "nome": "integrations-status",
+      "pasta": "instalacao/funcoes/integrations-status",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função invite-accept",
+      "nome": "invite-accept",
+      "pasta": "instalacao/funcoes/invite-accept",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "invite-accept resolve o link de convite. Sem verificação de JWT pelo gateway: quem clica no link pode chegar sem sessão, e o 401 cru do gateway não diz nada ao convidado. A função confere o cabeçalho Authorization por conta própria e responde em português (docs/PRD-implementacao.md seção 4.4)."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função knowledge-sync",
+      "nome": "knowledge-sync",
+      "pasta": "instalacao/funcoes/knowledge-sync",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função lead-export",
+      "nome": "lead-export",
+      "pasta": "instalacao/funcoes/lead-export",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função lead-intake",
+      "nome": "lead-intake",
+      "pasta": "instalacao/funcoes/lead-intake",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "lead-intake é o endereço público de entrada de leads (RF-107). Sem verificação de JWT pelo gateway porque a autenticação é a chave da conta, no cabeçalho `x-intake-key`, e não a sessão: quem chama é o formulário do site de um cliente, que não tem usuário nem token do Supabase. O 401 cru do gateway recusaria todo pedido legítimo. Quem confere a chave é `entrada.ts`, e o limite de taxa por conta está em `limite-de-taxa.ts` (L-02)."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função leads-import",
+      "nome": "leads-import",
+      "pasta": "instalacao/funcoes/leads-import",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função model-connect",
+      "nome": "model-connect",
+      "pasta": "instalacao/funcoes/model-connect",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função onboarding-interview",
+      "nome": "onboarding-interview",
+      "pasta": "instalacao/funcoes/onboarding-interview",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função onboarding-suggest",
+      "nome": "onboarding-suggest",
+      "pasta": "instalacao/funcoes/onboarding-suggest",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função phone-numbers",
+      "nome": "phone-numbers",
+      "pasta": "instalacao/funcoes/phone-numbers",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função phone-register",
+      "nome": "phone-register",
+      "pasta": "instalacao/funcoes/phone-register",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função playbook-draft",
+      "nome": "playbook-draft",
+      "pasta": "instalacao/funcoes/playbook-draft",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função rehearsal-session",
+      "nome": "rehearsal-session",
+      "pasta": "instalacao/funcoes/rehearsal-session",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função saude",
+      "nome": "saude",
+      "pasta": "instalacao/funcoes/saude",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "saude é a conferência da instalação (docs/instalacao.md). Sem verificação de JWT pelo gateway porque quem chama é o instalador do painel, logo depois do deploy e sem credencial nenhuma, e a tela de conexão da interface, antes de existir sessão. O que ela devolve é público: a chave publicável do projeto e dois rótulos de versão. O que ela faz com a chave de serviço é gravar o endereço das funções para as rotinas quando ele falta, sem nunca sobrescrever."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função telephony-connect",
+      "nome": "telephony-connect",
+      "pasta": "instalacao/funcoes/telephony-connect",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "telephony-connect tem três portas no mesmo endereço, e as três se autenticam por conta própria. `GET /retorno` é o navegador voltando do provedor depois do aceite, redirecionado sem cabeçalho nosso: a credencial é o `state` assinado que `emitirEstado` gerou, conferido por `lerRetornoDaAutorizacao` antes de qualquer escrita. `POST /revogacao` é o provedor avisando que a conta desconectou por lá, também sem sessão: a credencial é o identificador da subconta, que só existe numa conexão já registrada. `POST /` (o início) continua exigindo sessão, mas confere o `Authorization` por conta própria neste arquivo, sem depender do gateway. O 401 cru do gateway recusaria todo retorno e toda revogação legítimos, e a conta ficaria com uma conexão que o provedor já desfez do lado dele."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função tool-availability",
+      "nome": "tool-availability",
+      "pasta": "instalacao/funcoes/tool-availability",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "tool-availability oferece até quatro horários e os guarda em call_slot_offers (seção 5, RF-505). Sem verificação de JWT pelo gateway pelo mesmo motivo de tool-dnc: quem chama é o provedor de voz, no meio da ligação, e a credencial é o `x-tool-secret` derivado da conta (T-18), conferido pelo esqueleto antes de qualquer leitura por conversa. O 401 cru do gateway deixaria a assistente sem horário nenhum para oferecer."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função tool-book-meeting",
+      "nome": "tool-book-meeting",
+      "pasta": "instalacao/funcoes/tool-book-meeting",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "tool-book-meeting marca a reunião no horário que o lead escolheu entre os oferecidos (seção 5, RF-506). Sem verificação de JWT pelo gateway pelo mesmo motivo de tool-dnc: quem chama é o provedor de voz, no meio da ligação, e a credencial é o `x-tool-secret` derivado da conta (T-18), conferido pelo esqueleto antes de qualquer leitura por conversa. O 401 cru do gateway deixaria o lead que acabou de escolher um horário sem resposta nenhuma."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função tool-confirm-meeting",
+      "nome": "tool-confirm-meeting",
+      "pasta": "instalacao/funcoes/tool-confirm-meeting",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "tool-confirm-meeting confirma a presença na reunião da ligação de lembrete (seção 5, RF-602). Sem verificação de JWT pelo gateway pelo mesmo motivo de tool-dnc: quem chama é o provedor de voz, no meio da ligação, e a credencial é o `x-tool-secret` derivado da conta (T-18), conferido pelo esqueleto antes de qualquer leitura por conversa. O 401 cru do gateway deixaria o lead que acabou de confirmar sem resposta nenhuma."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função tool-dnc",
+      "nome": "tool-dnc",
+      "pasta": "instalacao/funcoes/tool-dnc",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "tool-dnc grava o bloqueio pedido dentro da chamada (seção 5, RF-805). Sem verificação de JWT pelo gateway porque quem chama é o provedor de voz, no meio da ligação, sem usuário do Supabase: a credencial é o `x-tool-secret`, HMAC da chave do servidor com a conta (T-18), conferido pelo esqueleto das ferramentas (`_shared/tools/esqueleto.ts`) antes de qualquer leitura por conversa. O 401 cru do gateway calaria a ferramenta e a assistente ficaria sem resposta na linha."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função tool-qualify",
+      "nome": "tool-qualify",
+      "pasta": "instalacao/funcoes/tool-qualify",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "telephony-connect é o esboço de OAuth com a Twilio e fica desligado sem TWILIO_CONNECT_APP_SID: nenhuma tela o chama, e a telefonia da conta entra pelo Account SID e pelo Auth Token que ela digita (veja o cabeçalho do index.ts). Continua publicado só para o endereço não sumir. tool-qualify registra a qualificação durante a ligação e move o lead no funil (seção 5, RF-203). Sem verificação de JWT pelo gateway pelo mesmo motivo de tool-dnc: quem chama é o provedor de voz, no meio da ligação, sem sessão do Supabase, e a credencial é o `x-tool-secret` derivado da conta (T-18), conferido pelo esqueleto antes de qualquer leitura por conversa. O 401 cru do gateway faria a descoberta terminar sem qualificação registrada."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função tool-reschedule",
+      "nome": "tool-reschedule",
+      "pasta": "instalacao/funcoes/tool-reschedule",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "tool-reschedule remarca ou cancela a reunião na mesma ligação de lembrete ou de resgate (seção 5, RF-603). Sem verificação de JWT pelo gateway pelo mesmo motivo de tool-dnc: quem chama é o provedor de voz, no meio da ligação, e a credencial é o `x-tool-secret` derivado da conta (T-18), conferido pelo esqueleto antes de qualquer leitura por conversa. O 401 cru do gateway deixaria o lead que pediu outro horário sem resposta nenhuma."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função tool-transfer",
+      "nome": "tool-transfer",
+      "pasta": "instalacao/funcoes/tool-transfer",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "tool-transfer decide o destino do pedido de humano ou o põe na fila (seção 5, RF-909). Sem verificação de JWT pelo gateway pelo mesmo motivo de tool-dnc: quem chama é o provedor de voz, no meio da ligação, e a credencial é o `x-tool-secret` derivado da conta (T-18), conferido pelo esqueleto antes de qualquer leitura por conversa. O 401 cru do gateway deixaria quem pediu uma pessoa sem resposta nenhuma."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função voice-catalog",
+      "nome": "voice-catalog",
+      "pasta": "instalacao/funcoes/voice-catalog",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função whatsapp-connect",
+      "nome": "whatsapp-connect",
+      "pasta": "instalacao/funcoes/whatsapp-connect",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função whatsapp-inbound",
+      "nome": "whatsapp-inbound",
+      "pasta": "instalacao/funcoes/whatsapp-inbound",
+      "entrada": "index.ts",
+      "verificarJwt": false,
+      "motivoSemJwt": "whatsapp-inbound recebe o webhook da Z-API da conta: mensagens recebidas e status das enviadas. Sem verificação de JWT pelo gateway porque quem chama é a Z-API, que não tem usuário do Supabase, não assina o pedido e não aceita cabeçalho próprio. A credencial é o endereço: `?conta=<id>&chave=<HMAC da chave do servidor com 'whatsapp:' + conta>`, conferido em tempo constante por `_shared/whatsapp/endereco.ts` antes de ler o corpo e de tocar no banco, com o mesmo 401 para tudo errado. O 401 cru do gateway recusaria toda mensagem."
+    },
+    {
+      "tipo": "funcao",
+      "rotulo": "Publicar a função whatsapp-send",
+      "nome": "whatsapp-send",
+      "pasta": "instalacao/funcoes/whatsapp-send",
+      "entrada": "index.ts",
+      "verificarJwt": true
+    },
+    {
+      "tipo": "conferencia",
+      "rotulo": "Conferir que a instalação responde",
+      "funcao": "saude",
+      "caminho": "/",
+      "metodo": "GET",
+      "aceita": [
+        200
+      ],
+      "prova": {
+        "campo": "ok",
+        "igual": true
+      },
+      "nivel": "prova",
+      "revelar": {
+        "campo": "chave",
+        "rotulo": "Chave publicável do projeto"
+      }
+    }
+  ]
+}

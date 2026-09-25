@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.ferramentas.tsbuildinfo",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "noUncheckedIndexedAccess": true,
+
+    "types": ["node"]
+  },
+  // `supabase/functions` entra aqui pela parte portável de cada função, que é
+  // TypeScript de Node como o resto das ferramentas. O `index.ts` de cada
+  // função fica de fora: ele é o adaptador Deno, com `Deno.serve` e import
+  // `npm:`, que este compilador não tem como resolver. Quem o verifica é o
+  // `deno check` de `npm run check:funcoes`, no CI.
+  "include": [
+    "scripts",
+    "testes",
+    "supabase/functions",
+    "vitest.config.ts",
+    "vitest.funcoes.config.ts"
+  ],
+  "exclude": ["supabase/functions/**/index.ts"]
+}

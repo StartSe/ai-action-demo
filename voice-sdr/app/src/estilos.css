@@ -1,0 +1,933 @@
+@import 'tailwindcss';
+
+/* Tokens da interface. A linguagem visual é o design system "Sarah SDR,
+   Crimson + Mint" (v9): tema escuro, carmim para ação e intervenção, menta
+   para progresso, conexão e sucesso. O que foi adotado, o que foi ajustado e
+   o que ficou de fora está em docs/padrao-de-interface.md seção 6.
+
+   Os nomes continuam os de antes (--acento, --texto-apoio, --superficie-cartao):
+   o redesenho troca valores, não nomes, e é isso que o faz chegar a todas as
+   telas pelas mesmas utilitárias (bg-acento, text-texto-apoio). Cada token diz
+   entre parênteses de qual variável do design system ele veio.
+
+   Acento: o carmim do design system, #FF4B55. Não é calculado aqui: vem
+   pronto, com as duas variações do próprio design system.
+     --acento-2      #FF7580 (crimson-2), a ponta clara: hover e foco de botão.
+     --acento-3      #BF2630 (crimson-3), a ponta escura das barras.
+     --acento-repouso  o carmim a 12% sobre a superfície, o fundo do item ativo.
+     --acento-tinta  #FF9399, o carmim legível como texto sobre --acento-repouso
+                     (é a cor do item ativo da navegação no design system).
+
+   Conferência de contraste (WCAG 2.1, texto normal pede 4,5:1, texto grande e
+   componente pedem 3:1). Fundo #081314, superfície #102728, superfície 2
+   #153334, campo #0B2021. Fundo translúcido medido já composto sobre a
+   superfície:
+
+     texto principal #FFF7F7 / fundo            17,87
+     texto principal / superfície                14,82
+     texto principal / superfície 2              12,80
+     texto secundário #D9E4E2 / superfície       12,02
+     texto de apoio #B2C6C4 / fundo              10,57
+     texto de apoio / superfície                  8,76
+     texto de apoio / superfície 2                7,57
+     apoio claro #8AA6A4 / superfície             6,01
+     apoio claro / superfície 2                   5,19
+     desativado #789493 / superfície              4,81   (4,15 na superfície 2:
+                                                          só para o que está
+                                                          desativado, que o AA
+                                                          dispensa)
+     branco #FFFFFF / carmim #FF4B55              3,29   REPROVA para texto
+     tinta #220A0C / carmim                       5,72   (a do botão primário)
+     tinta / #FF8A7D, ponta do gradiente          8,22
+     carmim #FF4B55 / fundo                       5,74
+     carmim / superfície                          4,76
+     acento-tinta #FF9399 / acento-repouso        6,61
+     menta #10B981 / fundo                        7,43
+     menta / superfície                           6,16
+     menta 2 #34D399 / fundo                      9,81
+     menta 2 / superfície                         8,13
+     positivo #34D399 / positivo-fundo            6,65
+     tinta #062019 / menta 2 (botão menta)        8,89
+     atenção #F7C948 / atenção-fundo              8,41
+     perigo #FF8C93 / perigo-fundo                6,55
+     perigo / superfície                          7,02
+     informação #55D9D2 / superfície              9,12
+     texto do campo / campo                      16,01
+     marcador do campo #789493 / campo            5,19
+     borda do controle #3F7A77 / campo            3,43   (componente, 3:1)
+
+   Duas escolhas saem da conferência, e não do design system:
+     1. Texto sobre o carmim é a tinta escura #220A0C, como no próprio design
+        system. Branco sobre #FF4B55 dá 3,29:1 e não passa em texto de 14px.
+     2. A borda de campo, caixa e seletor é #3F7A77, e não a linha #235151 do
+        design system, que fica em 1,76:1 contra a superfície e não deixa ver
+        onde o campo começa. A linha continua em cartão, tabela e divisória,
+        que são decoração. */
+:root {
+  color-scheme: dark;
+
+  /* Cor: fundo e superfícies */
+  --fundo-app: #081314; /* (bg) */
+  --fundo-app-2: #0b191a; /* (bg-2) */
+  --superficie-cartao: #102728; /* (surface) */
+  --superficie-2: #153334; /* (surface-2) */
+  --superficie-3: #1b3d3d; /* (surface-3) */
+  /* O bloco de apoio e o hover moram um degrau acima do cartão. */
+  --superficie-secundaria: var(--superficie-2);
+  /* O fundo afundado do campo, do cabeçalho de tabela e da faixa de filtros:
+     o design system usa quatro tons entre #0A1B1C e #0B2021, e aqui é um só. */
+  --superficie-funda: #0b2021;
+  --borda: #235151; /* (line) */
+  --borda-suave: rgb(35 81 81 / 0.55); /* (line-soft) */
+  --borda-controle: #3f7a77; /* derivada: ver o cabeçalho */
+
+  /* Cor: texto */
+  --texto-principal: #fff7f7; /* (text) */
+  --texto-secundario: #d9e4e2; /* (text-2) */
+  --texto-apoio: #b2c6c4; /* (muted) */
+  --texto-apoio-claro: #8aa6a4; /* entre muted e muted-2, para passar no AA */
+  --texto-desativado: #789493; /* (muted-2) */
+  --texto-sobre-acento: #220a0c; /* a tinta do botão carmim */
+  --texto-sobre-menta: #062019; /* a tinta do botão menta */
+
+  /* Cor: as duas marcas */
+  --carmim: #ff4b55; /* (crimson) */
+  --carmim-2: #ff7580; /* (crimson-2) */
+  --carmim-3: #bf2630; /* (crimson-3) */
+  --carmim-claro: #ff8a7d; /* a ponta do gradiente da marca */
+  --menta: #10b981; /* (mint) */
+  --menta-2: #34d399; /* (mint-2, success) */
+  --menta-3: #047857; /* (mint-3) */
+
+  /* Cor: acento e estados */
+  --acento: var(--carmim);
+  --acento-2: var(--carmim-2);
+  --acento-3: var(--carmim-3);
+  --acento-repouso: rgb(255 75 85 / 0.12);
+  --acento-tinta: #ff9399;
+  --positivo: var(--menta-2);
+  --positivo-fundo: rgb(52 211 153 / 0.1);
+  --positivo-borda: rgb(52 211 153 / 0.26);
+  --atencao: #f7c948; /* (warning) */
+  --atencao-fundo: rgb(247 201 72 / 0.08);
+  --atencao-borda: rgb(247 201 72 / 0.28);
+  /* Perigo é o carmim, como no design system, com o texto num tom mais claro
+     (#FF8C93, o error-text dele) para não se confundir com o botão primário. */
+  --perigo: #ff8c93;
+  --perigo-fundo: rgb(255 75 85 / 0.08);
+  --perigo-fundo-forte: rgb(255 75 85 / 0.16);
+  --perigo-borda: rgb(255 75 85 / 0.3);
+  --informacao: #55d9d2; /* (info) */
+  --informacao-fundo: rgb(85 217 210 / 0.08);
+  --informacao-borda: rgb(85 217 210 / 0.24);
+
+  /* Foco. Campo focado fica menta, como pede a seção 05 do design system:
+     carmim num campo é recusa, e um campo focado não pode parecer errado.
+     Botão e link focados usam a ponta clara do carmim, no contorno. */
+  --foco-de-campo: var(--menta);
+  --anel-de-campo: rgb(16 185 129 / 0.16);
+  --anel-de-recusa: rgb(255 75 85 / 0.16);
+  --foco-de-controle: var(--carmim-2);
+
+  /* Gradientes */
+  --gradiente-acento: linear-gradient(135deg, var(--carmim), var(--carmim-claro));
+  /* O sinal da IA: menta que vira carmim (signal-core.mix, waveform). */
+  --gradiente-sinal: linear-gradient(135deg, var(--menta-2), var(--carmim-2));
+  /* Barra de progresso: o avanço é menta e chega ao carmim (progressbar). */
+  --gradiente-progresso: linear-gradient(90deg, var(--menta), var(--carmim));
+  --gradiente-cartao: linear-gradient(180deg, rgb(16 39 40 / 0.96), rgb(12 29 30 / 0.97));
+  --veu: rgb(1 8 9 / 0.72);
+
+  /* Tipografia */
+  --fonte-corpo: 'Inter', ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --fonte-valor: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo,
+    monospace;
+
+  /* Forma (r-xs, r-sm, r-md, r-lg, r-xl, pill) */
+  --raio-pequeno: 8px;
+  --raio-controle: 10px;
+  --raio-cartao: 14px;
+  --raio-grande: 18px;
+  --raio-maior: 24px;
+  --raio-selo: 999px;
+  --sombra-cartao: 0 8px 20px rgb(0 0 0 / 0.16); /* (shadow-sm) */
+  --sombra-media: 0 18px 44px rgb(0 0 0 / 0.23); /* (shadow-md) */
+  --sombra-alta: 0 28px 90px rgb(0 0 0 / 0.34); /* (shadow-lg) */
+  --sombra-acento: 0 8px 24px rgb(255 75 85 / 0.18);
+
+  /* Estrutura. A barra lateral encolhe com a tela, como no design system:
+     250px, 220px abaixo de 1100px e 78px (só ícones) abaixo de 1024px. */
+  --largura-barra-lateral: 250px;
+  --largura-leitura: 1100px;
+}
+
+@media (width < 1100px) {
+  :root {
+    --largura-barra-lateral: 220px;
+  }
+}
+
+/* O mesmo corte do `lg` do Tailwind, que é o que a barra usa para recolher. */
+@media (width < 64rem) {
+  :root {
+    --largura-barra-lateral: 78px;
+  }
+}
+
+/* Os mesmos tokens como tema do Tailwind. `inline` faz a utilitária apontar
+   para a variável de `:root`, sem duplicar o valor. */
+@theme inline {
+  --color-fundo-app: var(--fundo-app);
+  --color-fundo-app-2: var(--fundo-app-2);
+  --color-superficie-cartao: var(--superficie-cartao);
+  --color-superficie-2: var(--superficie-2);
+  --color-superficie-3: var(--superficie-3);
+  --color-superficie-secundaria: var(--superficie-secundaria);
+  --color-superficie-funda: var(--superficie-funda);
+  --color-borda: var(--borda);
+  --color-borda-suave: var(--borda-suave);
+  --color-borda-controle: var(--borda-controle);
+  --color-texto-principal: var(--texto-principal);
+  --color-texto-secundario: var(--texto-secundario);
+  --color-texto-apoio: var(--texto-apoio);
+  --color-texto-apoio-claro: var(--texto-apoio-claro);
+  --color-texto-desativado: var(--texto-desativado);
+  --color-texto-sobre-acento: var(--texto-sobre-acento);
+  --color-texto-sobre-menta: var(--texto-sobre-menta);
+  --color-carmim: var(--carmim);
+  --color-carmim-2: var(--carmim-2);
+  --color-carmim-3: var(--carmim-3);
+  --color-carmim-claro: var(--carmim-claro);
+  --color-menta: var(--menta);
+  --color-menta-2: var(--menta-2);
+  --color-menta-3: var(--menta-3);
+  --color-acento: var(--acento);
+  --color-acento-2: var(--acento-2);
+  --color-acento-3: var(--acento-3);
+  --color-acento-repouso: var(--acento-repouso);
+  --color-acento-tinta: var(--acento-tinta);
+  --color-positivo: var(--positivo);
+  --color-positivo-fundo: var(--positivo-fundo);
+  --color-positivo-borda: var(--positivo-borda);
+  --color-atencao: var(--atencao);
+  --color-atencao-fundo: var(--atencao-fundo);
+  --color-atencao-borda: var(--atencao-borda);
+  --color-perigo: var(--perigo);
+  --color-perigo-fundo: var(--perigo-fundo);
+  --color-perigo-fundo-forte: var(--perigo-fundo-forte);
+  --color-perigo-borda: var(--perigo-borda);
+  --color-informacao: var(--informacao);
+  --color-informacao-fundo: var(--informacao-fundo);
+  --color-informacao-borda: var(--informacao-borda);
+  --color-foco-de-campo: var(--foco-de-campo);
+  --color-anel-de-campo: var(--anel-de-campo);
+  --color-anel-de-recusa: var(--anel-de-recusa);
+  --color-foco-de-controle: var(--foco-de-controle);
+  --color-veu: var(--veu);
+
+  --font-corpo: var(--fonte-corpo);
+  --font-valor: var(--fonte-valor);
+
+  --radius-pequeno: var(--raio-pequeno);
+  --radius-controle: var(--raio-controle);
+  --radius-cartao: var(--raio-cartao);
+  --radius-grande: var(--raio-grande);
+  --radius-maior: var(--raio-maior);
+  --radius-selo: var(--raio-selo);
+
+  --shadow-cartao: var(--sombra-cartao);
+  --shadow-media: var(--sombra-media);
+  --shadow-alta: var(--sombra-alta);
+  --shadow-acento: var(--sombra-acento);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  overflow-x: clip;
+  background-color: var(--fundo-app);
+}
+
+/* O fundo é explícito, com os dois brilhos do design system nos cantos de
+   cima: carmim à esquerda, menta à direita. `fixed` para os brilhos não
+   rolarem junto com a lista. */
+body {
+  margin: 0;
+  background-color: var(--fundo-app);
+  background-image:
+    radial-gradient(circle at 0 -5%, rgb(255 75 85 / 0.1), transparent 23%),
+    radial-gradient(circle at 100% 0, rgb(16 185 129 / 0.08), transparent 24%);
+  background-attachment: fixed;
+  color: var(--texto-principal);
+  font-family: var(--fonte-corpo);
+  font-size: 15px;
+  line-height: 1.55;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Caixa de marcar, botão de opção e régua ficam menta: marcar é confirmar. */
+  accent-color: var(--menta);
+}
+
+::selection {
+  background: rgb(52 211 153 / 0.24);
+}
+
+/* As classes de estilo, com nome em português. Tailwind v4 não aceita
+   `@apply` de classe personalizada dentro de outra: cada uma se escreve
+   inteira. */
+@layer components {
+  /* (card) Superfície com um degradê de cima para baixo e a linha suave. */
+  .cartao {
+    @apply rounded-cartao border border-borda-suave bg-superficie-cartao bg-[image:var(--gradiente-cartao)] shadow-cartao;
+  }
+
+  /* Bloco de apoio dentro de uma tela: fundo afundado, sem sombra. Serve ao
+     que emoldura o conteúdo sem ser o conteúdo, como a faixa de filtros. */
+  .bloco-secundario {
+    @apply rounded-cartao border border-borda-suave bg-superficie-funda px-4 py-3.5;
+  }
+
+  /* (input, select, textarea) Foco menta, recusa carmim. */
+  .campo {
+    @apply w-full rounded-controle border border-borda-controle bg-superficie-funda px-3 py-2.5 text-texto-principal outline-none transition-[border-color,box-shadow,background-color] duration-150 placeholder:text-texto-desativado hover:border-texto-desativado focus:border-foco-de-campo focus:ring-[3px] focus:ring-anel-de-campo disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:border-borda-controle;
+  }
+
+  .campo-recusado {
+    @apply w-full rounded-controle border border-carmim/70 bg-superficie-funda px-3 py-2.5 text-texto-principal outline-none transition-[border-color,box-shadow,background-color] duration-150 placeholder:text-texto-desativado focus:border-carmim focus:ring-[3px] focus:ring-anel-de-recusa disabled:cursor-not-allowed disabled:opacity-55;
+  }
+
+  /* (btn primary) A ação principal da tela: carmim, com a tinta escura. */
+  .botao-primario {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-controle border border-transparent bg-acento px-4 py-2.5 text-[14px] font-bold text-texto-sobre-acento no-underline shadow-acento transition-[translate,scale,background-color,box-shadow,opacity] duration-150 hover:-translate-y-px hover:bg-acento-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco-de-controle active:translate-y-0 active:scale-[0.99] disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-acento disabled:opacity-45 disabled:shadow-none;
+  }
+
+  /* (btn secondary) */
+  .botao-secundario {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-controle border border-borda bg-superficie-2 px-4 py-2.5 text-[14px] font-semibold text-texto-principal no-underline transition-[translate,scale,background-color,border-color] duration-150 hover:-translate-y-px hover:border-borda-controle hover:bg-superficie-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco-de-controle active:translate-y-0 disabled:translate-y-0 disabled:cursor-not-allowed disabled:border-borda disabled:bg-superficie-2 disabled:text-texto-desativado;
+  }
+
+  /* (btn danger) Ação destrutiva: tingida de carmim, e não cheia, para que
+     "Excluir" não se confunda com a ação principal da tela. */
+  .botao-perigo {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-controle border border-perigo-borda bg-perigo-fundo px-4 py-2.5 text-[14px] font-bold text-perigo no-underline transition-[translate,scale,background-color] duration-150 hover:-translate-y-px hover:bg-perigo-fundo-forte focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco-de-controle active:translate-y-0 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45;
+  }
+
+  /* (btn mint) Confirmação e avanço, como "iniciar ligação". Não compete com
+     o primário: uma tela tem um carmim, e o menta confirma. */
+  .botao-menta {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-controle border border-transparent bg-menta-2 px-4 py-2.5 text-[14px] font-bold text-texto-sobre-menta no-underline transition-[translate,scale,filter] duration-150 hover:-translate-y-px hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-menta-2 active:translate-y-0 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45;
+  }
+
+  /* (btn ghost) */
+  .botao-fantasma {
+    @apply inline-flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-controle border border-transparent bg-transparent px-2.5 py-1.5 text-[13px] font-semibold text-texto-apoio no-underline transition-colors duration-150 hover:bg-superficie-2 hover:text-texto-principal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco-de-controle disabled:cursor-not-allowed disabled:bg-transparent disabled:text-texto-desativado;
+  }
+
+  /* (auth-link, toast-action) Link é menta no design system: carmim fica
+     para a ação que muda alguma coisa. */
+  .botao-link {
+    @apply cursor-pointer border-0 bg-transparent p-0 text-[13px] font-bold text-menta-2 underline-offset-2 hover:underline focus-visible:rounded-[4px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-menta-2 disabled:cursor-not-allowed disabled:text-texto-desativado disabled:no-underline;
+  }
+
+  /* (badge) O selo leva a palavra e o tom; a borda é do tom. */
+  .selo {
+    @apply inline-flex items-center gap-1.5 rounded-selo border border-borda px-2.5 py-1 text-[12px] font-bold whitespace-nowrap;
+  }
+
+  .selo-positivo {
+    @apply border-positivo-borda bg-positivo-fundo text-positivo;
+  }
+
+  .selo-atencao {
+    @apply border-atencao-borda bg-atencao-fundo text-atencao;
+  }
+
+  .selo-perigo {
+    @apply border-perigo-borda bg-perigo-fundo text-perigo;
+  }
+
+  .selo-informacao {
+    @apply border-informacao-borda bg-informacao-fundo text-informacao;
+  }
+
+  .selo-acento {
+    @apply border-acento/25 bg-acento-repouso text-acento-tinta;
+  }
+
+  .selo-neutro {
+    @apply border-borda bg-superficie-funda text-texto-apoio;
+  }
+
+  /* (H1 / 28 / 820) */
+  .titulo-de-tela {
+    @apply text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em] text-texto-principal;
+  }
+
+  /* (kicker) O título de bloco dentro da tela, em menta. Sem caixa alta por
+     CSS: a regra da seção 1 de docs/padrao-de-interface.md continua. */
+  .titulo-de-secao {
+    @apply text-[13px] font-extrabold tracking-[0.02em] text-menta-2;
+  }
+
+  /* (nav-title, onboarding-eyebrow) */
+  .sobretitulo {
+    @apply text-[11px] font-bold tracking-[0.12em] text-texto-apoio-claro;
+  }
+
+  /* (table-wrap, th, td) Uma linha por registro. `separate` com espaço zero,
+     e não `collapse`: com `collapse` o raio da moldura não aparece. A variante
+     em cartões do celular continua de fora (docs/padrao-de-interface.md
+     seção 6). */
+  .tabela {
+    @apply w-full table-auto border-separate border-spacing-0 overflow-hidden rounded-cartao border border-borda-suave bg-superficie-cartao text-left text-[13.5px];
+  }
+
+  .tabela thead th {
+    @apply border-b border-borda-suave bg-superficie-funda px-3.5 py-2.5 text-[11.5px] font-bold tracking-[0.06em] text-texto-apoio-claro;
+  }
+
+  .tabela tbody td {
+    @apply border-b border-borda-suave px-3.5 py-3 align-top text-texto-secundario transition-colors duration-150;
+  }
+
+  .tabela tbody tr:hover td {
+    @apply bg-superficie-2/40;
+  }
+
+  .tabela tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  /* (sk) */
+  .esqueleto {
+    @apply h-[14px] rounded-md bg-[length:200%_100%] bg-[linear-gradient(90deg,var(--superficie-2)_25%,var(--superficie-3)_50%,var(--superficie-2)_75%)];
+    animation: brilho 1.35s linear infinite;
+  }
+
+  /* (overlay) O véu atrás de diálogo e assistente. */
+  .veu {
+    @apply fixed inset-0 flex items-center justify-center bg-veu px-5 py-8 backdrop-blur-[6px];
+    animation: aparecer 0.16s ease-out both;
+  }
+
+  /* (dialog) A caixa do diálogo: um degrau de raio acima do cartão. */
+  .caixa-de-dialogo {
+    @apply rounded-grande border border-borda bg-superficie-funda shadow-alta;
+    animation: entrar-dialogo 0.2s ease-out both;
+  }
+
+  /* (choice-card) Uma opção grande para escolher, como no assistente. O
+     estado escolhido é `aria-pressed` ou a classe `.cartao-de-escolha-ativo`. */
+  .cartao-de-escolha {
+    @apply flex w-full cursor-pointer items-center gap-3.5 rounded-cartao border border-borda bg-white/[0.01] px-4 py-3.5 text-left transition-[translate,scale,border-color,background-color,box-shadow] duration-150 hover:-translate-y-px hover:border-borda-controle hover:bg-white/[0.02] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco-de-controle;
+  }
+
+  .cartao-de-escolha-ativo,
+  .cartao-de-escolha[aria-pressed='true'] {
+    @apply border-acento/60 bg-acento-repouso shadow-[0_0_0_3px_rgb(255_75_85/0.08)];
+  }
+
+  /* (kpi) O número grande de um indicador e o rótulo acima dele. */
+  .rotulo-de-indicador {
+    @apply text-[12.5px] font-semibold text-texto-apoio;
+  }
+
+  .valor-de-indicador {
+    @apply text-[28px] leading-none font-extrabold tracking-[-0.045em] text-texto-principal;
+  }
+
+  /* (kanban-col, kanban-card) A coluna do quadro e o cartão dentro dela. */
+  .coluna-de-quadro {
+    @apply rounded-cartao border border-borda-suave bg-[rgb(9_24_25/0.62)] p-2.5;
+  }
+
+  .cartao-de-quadro {
+    @apply rounded-controle border border-borda-suave bg-superficie-cartao bg-[image:var(--gradiente-cartao)] p-2.5 shadow-[0_8px_18px_rgb(0_0_0/0.1)] transition-[translate,scale,border-color] duration-150 hover:-translate-y-px hover:border-borda-controle;
+  }
+
+  /* Todo dado que se lê como valor: telefone, duração, custo, nota, horário. */
+  .val {
+    font-family: var(--fonte-valor);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+}
+
+@keyframes brilho {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes entrar-dialogo {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes revelar {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* O resultado que entra. */
+.revelar {
+  animation: revelar 0.45s ease-out both;
+}
+
+/*
+ * O assistente de abertura. `surgir` entra um pouco maior que `revelar`, com
+ * uma curva que desacelera no fim; os cartões das sugestões o usam em fila,
+ * com o atraso de cada um no `style`. `pulsar` é a esfera da espera, e
+ * `trocar-frase` é a frase que muda enquanto o modelo escreve.
+ */
+@keyframes surgir {
+  /* Sem deslocar para baixo: dentro de uma caixa que rola, os 12 px a mais
+     da entrada contavam como conteúdo e a barra de rolagem piscava a cada
+     etapa. Encolhido não passa do tamanho de chegada. */
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.surgir {
+  animation: surgir 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* O halo que respira em volta da esfera: menta, porque a espera é a IA
+   trabalhando, e não um alerta. */
+@keyframes pulsar {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgb(52 211 153 / 0.34);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 18px rgb(52 211 153 / 0);
+  }
+}
+
+.pulsar {
+  animation: pulsar 1.8s ease-in-out infinite;
+}
+
+@keyframes trocar-frase {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.trocar-frase {
+  animation: trocar-frase 0.4s ease-out both;
+}
+
+/*
+ * O sinal da IA (motion system do design system, seção 07). Um elemento só:
+ * o núcleo escuro, o ponto no centro (`::after`) e o anel (`::before`), e a
+ * classe de estado diz o que o anel faz. O tamanho é de quem usa (`h-14 w-14`).
+ *
+ *   .sinal                em repouso: flutua e o halo respira
+ *   .sinal-discando       anéis carmim saindo do núcleo
+ *   .sinal-ouvindo        varredura menta girando, núcleo inclinando
+ *   .sinal-falando        ponto menta e carmim, núcleo pulsando
+ *   .sinal-processando    arco girando e brilho que sobe e desce
+ *
+ * Decorativo: quem usa põe `aria-hidden` e diz o estado por escrito ao lado.
+ */
+/* Dentro de `components` para o tamanho de quem usa (`h-4 w-4`) vencer. */
+@layer components {
+  .sinal {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+    border-radius: 999px;
+    border: 1px solid rgb(52 211 153 / 0.24);
+    background:
+      radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.12), transparent 30%),
+      linear-gradient(145deg, var(--superficie-2), var(--superficie-funda));
+    box-shadow:
+      0 12px 30px rgb(0 0 0 / 0.24),
+      inset 0 0 22px rgb(16 185 129 / 0.06);
+    animation: flutuar 3.2s ease-in-out infinite;
+  }
+
+  .sinal::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 18%;
+    height: 18%;
+    border-radius: 999px;
+    transform: translate(-50%, -50%);
+    background: var(--menta-2);
+    box-shadow: 0 0 16px rgb(52 211 153 / 0.45);
+  }
+
+  .sinal::before {
+    content: '';
+    position: absolute;
+    inset: -22%;
+    border-radius: 999px;
+    border: 1px solid rgb(52 211 153 / 0.18);
+    animation: halo 2.8s ease-in-out infinite;
+  }
+
+  .sinal-discando {
+    border-color: rgb(255 75 85 / 0.34);
+    animation: none;
+  }
+
+  .sinal-discando::after {
+    background: var(--carmim-2);
+    box-shadow: 0 0 16px rgb(255 117 128 / 0.45);
+  }
+
+  .sinal-discando::before {
+    border-color: rgb(255 75 85 / 0.4);
+    animation: anel-saindo 1.8s ease-out infinite;
+  }
+
+  .sinal-ouvindo {
+    animation: inclinar 1.55s ease-in-out infinite;
+  }
+
+  .sinal-ouvindo::before {
+    inset: -14%;
+    border: 0;
+    background: conic-gradient(from 0deg, transparent 0 72%, rgb(52 211 153 / 0.24) 82%, rgb(52 211 153 / 0.04) 100%);
+    mask: radial-gradient(circle at center, transparent 62%, black 63%);
+    animation: girar 2.2s linear infinite;
+  }
+
+  .sinal-falando {
+    animation: falar 1.05s ease-in-out infinite;
+  }
+
+  .sinal-falando::after {
+    background: var(--gradiente-sinal);
+    box-shadow: none;
+  }
+
+  .sinal-falando::before {
+    border-color: rgb(255 75 85 / 0.14);
+  }
+
+  .sinal-processando {
+    animation: brilhar 1.1s ease-in-out infinite;
+  }
+
+  .sinal-processando::before {
+    inset: -12%;
+    border: 2px solid transparent;
+    border-top-color: rgb(255 75 85 / 0.55);
+    border-right-color: rgb(52 211 153 / 0.45);
+    animation: girar 1.25s linear infinite;
+  }
+
+  /* (waveform) As barras da voz: cada filho é uma barra. */
+  .onda-de-voz {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 28px;
+  }
+
+  .onda-de-voz > * {
+    display: block;
+    width: 3px;
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--menta-2), var(--carmim));
+    animation: barra-de-voz 0.82s ease-in-out infinite;
+  }
+
+  .onda-de-voz > :nth-child(3n) {
+    animation-delay: 0.18s;
+  }
+
+  .onda-de-voz > :nth-child(4n) {
+    animation-delay: 0.36s;
+  }
+
+  .onda-de-voz > :nth-child(5n) {
+    animation-delay: 0.08s;
+  }
+
+  /* (dots) Três pontos pensando. */
+  .pontos-pensando {
+    display: inline-flex;
+    gap: 6px;
+  }
+
+  .pontos-pensando > * {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--carmim-2);
+    animation: ponto 1s ease-in-out infinite;
+  }
+
+  .pontos-pensando > :nth-child(2) {
+    animation-delay: 0.14s;
+  }
+
+  .pontos-pensando > :nth-child(3) {
+    animation-delay: 0.28s;
+  }
+
+  /* (live-indicator) O ponto de "ao vivo". */
+  .ao-vivo {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: var(--menta-2);
+    animation: ao-vivo 1.5s infinite;
+  }
+
+  /* (spinner) */
+  .giro {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    border: 3px solid var(--borda);
+    border-top-color: var(--menta-2);
+    animation: girar 0.8s linear infinite;
+  }
+}
+
+@keyframes flutuar {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes halo {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+@keyframes anel-saindo {
+  0% {
+    transform: scale(0.72);
+    opacity: 0.78;
+  }
+  100% {
+    transform: scale(1.28);
+    opacity: 0;
+  }
+}
+
+@keyframes inclinar {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  50% {
+    transform: rotate(-4deg);
+  }
+}
+
+@keyframes falar {
+  0%,
+  100% {
+    transform: scale(0.98);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes brilhar {
+  0%,
+  100% {
+    filter: brightness(0.92);
+  }
+  50% {
+    filter: brightness(1.16);
+  }
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes barra-de-voz {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes ponto {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+@keyframes ao-vivo {
+  0% {
+    box-shadow: 0 0 0 0 rgb(52 211 153 / 0.42);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgb(52 211 153 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(52 211 153 / 0);
+  }
+}
+
+/* Movimento reduzido: nada gira, pulsa ou desliza. As transições de hover
+   também saem, e o botão para de subir. */
+@media (prefers-reduced-motion: reduce) {
+  .revelar,
+  .esqueleto,
+  .surgir,
+  .pulsar,
+  .trocar-frase,
+  .veu,
+  .caixa-de-dialogo,
+  .sinal,
+  .sinal::before,
+  .onda-de-voz > *,
+  .pontos-pensando > *,
+  .ao-vivo,
+  .giro {
+    animation: none;
+  }
+
+  .botao-primario,
+  .botao-secundario,
+  .botao-perigo,
+  .botao-menta,
+  .cartao-de-escolha,
+  .cartao-de-quadro {
+    /* O Tailwind v4 move pelas propriedades `translate` e `scale`, e não por
+       `transform`. Fora de camada, esta regra vence o `hover:` da camada. */
+    transition: none;
+    translate: none;
+    scale: none;
+  }
+}
+
+/* Impressão: fundo branco e texto escuro. Os tokens de texto e de superfície
+   são trocados aqui, e todo o resto os segue. */
+@media print {
+  .sem-impressao {
+    display: none !important;
+  }
+
+  :root {
+    color-scheme: light;
+    --fundo-app: #ffffff;
+    --superficie-cartao: #ffffff;
+    --superficie-2: #f4f6f6;
+    --superficie-3: #eaeeee;
+    --superficie-funda: #f7f9f9;
+    --borda: #c9d4d3;
+    --borda-suave: #dde5e4;
+    --texto-principal: #0b1415;
+    --texto-secundario: #26393a;
+    --texto-apoio: #3f5857;
+    --texto-apoio-claro: #4f6766;
+    --texto-desativado: #6b8281;
+    --gradiente-cartao: none;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .cartao {
+    box-shadow: none;
+  }
+}
+
+/*
+ * A barra de rolagem: fina, na cor de apoio do tema, sem trilho. O padrão do
+ * sistema, grosso e claro, destoava no tema escuro, na barra lateral e dentro
+ * dos diálogos. `scrollbar-color` é o padrão novo (Firefox, Chrome 121+); os
+ * seletores `::-webkit-scrollbar` cobrem o Safari.
+ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--texto-apoio) 28%, transparent) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+  background-color: color-mix(in srgb, var(--texto-apoio) 28%, transparent);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--texto-apoio) 50%, transparent);
+}

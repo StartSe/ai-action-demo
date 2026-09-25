@@ -1,0 +1,61 @@
+{
+  "name": "sarah-voice-sdr",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "app"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace app",
+    "build": "npm run build --workspace app",
+    "typecheck": "tsc --build --force && npm run typecheck --workspace app",
+    "lint": "eslint . && npm run lint --workspace app",
+    "test": "npm run test:unit && npm run test:db",
+    "test:unit": "npm run test --workspace app && npm run test:funcoes",
+    "test:funcoes": "vitest run --config vitest.funcoes.config.ts",
+    "test:db": "vitest run",
+    "test:rls": "vitest run testes/banco/travessia-entre-contas.test.ts",
+    "test:rls:postgres": "SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres npm run test:rls",
+    "test:fila": "vitest run testes/banco/fila-concorrencia.test.ts",
+    "test:fila:postgres": "SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres npm run test:fila",
+    "test:guarda": "vitest run testes/banco/guarda-concorrencia.test.ts",
+    "test:guarda:postgres": "SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres npm run test:guarda",
+    "test:retaguarda": "vitest run testes/banco/acionamento-da-retaguarda.test.ts",
+    "test:retaguarda:postgres": "SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres npm run test:retaguarda",
+    "test:agenda": "vitest run testes/concorrencia/agenda-simultanea.test.ts",
+    "test:agenda:postgres": "SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres npm run test:agenda",
+    "test:navegador": "node scripts/testes-de-navegador.ts",
+    "check:estatico": "npm run typecheck && npm run lint && npm run check:sql",
+    "check:processo": "npm run test:unit && npm run test:db",
+    "check": "npm run check:estatico && npm run check:processo",
+    "check:sql": "node scripts/verificar-migracoes.ts",
+    "pacote": "node scripts/pacote-de-instalacao.ts",
+    "check:pacote": "node scripts/pacote-de-instalacao.ts --conferir",
+    "check:sonda": "node scripts/sonda-de-publicacao.ts",
+    "check:contrato": "node scripts/contrato-das-ferramentas.ts",
+    "check:calendario": "node scripts/sonda-do-calendario.ts",
+    "check:convite": "node scripts/sonda-do-convite.ts",
+    "check:full": "supabase start && supabase db reset && npm run check && npm run check:funcoes && npm run test:rls:postgres && npm run test:fila:postgres && npm run test:guarda:postgres && npm run test:retaguarda:postgres && npm run test:agenda:postgres && npm run test:navegador && npm run check:sonda && npm run check:contrato && npm run check:calendario && npm run check:convite",
+    "check:funcoes": "deno check supabase/functions/**/index.ts",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.13.6",
+    "@types/pg": "^8.23.1",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0",
+    "pg": "^8.23.0",
+    "rolldown": "1.2.9",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^5.0.1"
+  }
+}

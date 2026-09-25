@@ -1,0 +1,19 @@
+# O build só precisa de package*.json, app/ e supabase/functions/ (ver Dockerfile).
+node_modules
+**/node_modules
+app/dist
+.vitest
+.claude
+.git
+**/.env
+**/.env.*
+!**/.env.example
+.DS_Store
+npm-debug.log
+*.tsbuildinfo
+docs
+testes
+instalacao
+supabase/migrations
+supabase/snippets
+HANDOFF.md
