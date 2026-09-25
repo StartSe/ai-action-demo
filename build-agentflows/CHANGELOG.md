@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.16.1 — 25/09/2026
+
+- Modal de saída simplificado: removido Continuar editando e botão Salvar e sair renomeado para Salvar.
+
 ## 0.16.0 — 25/09/2026
 
 - Agente e LLM com múltiplas bases em cards no padrão de Ferramentas, descrição de uso, referências e parâmetros de consulta por base.

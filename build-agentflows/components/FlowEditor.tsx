@@ -1034,9 +1034,6 @@ export function FlowEditor({ id }: { id: string }) {
             sair ou descartar o que mudou.
           </p>
           <div className="modal-actions">
-            <button className="studio-button" onClick={() => setLeaving(false)}>
-              Continuar editando
-            </button>
             <button
               className="studio-button danger"
               onClick={() => {
@@ -1056,7 +1053,7 @@ export function FlowEditor({ id }: { id: string }) {
                 })
               }
             >
-              Salvar e sair
+              Salvar
             </button>
           </div>
         </Modal>
