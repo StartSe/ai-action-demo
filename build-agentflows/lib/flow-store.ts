@@ -72,9 +72,9 @@ export function validateGraph(value: unknown, executable = false): Graph {
     }
     if (n.data.kind === "agent" || n.data.kind === "llm") {
       try { memorySettings(n.data.config); } catch (error) { throw new FlowError((error as Error).message); }
+      try { knowledgeSettings(n.data.config); } catch (error) { throw new FlowError((error as Error).message); }
     }
     if (n.data.kind === "agent") {
-      try { knowledgeSettings(n.data.config); } catch (error) { throw new FlowError((error as Error).message); }
       try { validateToolCards(n.data.config.toolCards); } catch (error) { throw new FlowError((error as Error).message); }
     }
     ids.add(n.id);

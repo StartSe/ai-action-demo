@@ -1,6 +1,6 @@
-# Build Agentflows — v0.15.0
+# Build Agentflows — v0.16.0
 
-Versão 0.15.0: modos de limpeza no Record Manager, exclusão de base com confirmação pelo nome, endereço dos embeddings em Opções avançadas, Top K e filtros salvos na base, armazenamento Faiss automático, conexão Postgres por credencial e campos separados, opções de busca/gravação e dimensões/formato dos embeddings OpenAI. Veja a [comparação de recursos e preparação dos serviços](KNOWLEDGE-FLOWISE.md). Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
+Versão 0.16.0: múltiplas bases como ferramentas no Agente e LLM, descrição de uso e referências por base, ícones compactos no canvas, modos de limpeza no Record Manager, exclusão de base com confirmação pelo nome, endereço dos embeddings em Opções avançadas, Top K e filtros salvos na base, armazenamento Faiss automático, conexão Postgres por credencial e campos separados, opções de busca/gravação e dimensões/formato dos embeddings OpenAI. Veja a [comparação de recursos e preparação dos serviços](KNOWLEDGE-FLOWISE.md). Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
 
 Crie fluxos visuais de agentes de IA, teste cada etapa e publique versões que seus sistemas e assistentes podem executar. Aplicação independente da suíte **IA para Executivos**, inspirada na orquestração explícita de [AgentFlow V2 do Flowise](https://docs.flowiseai.com/using-flowise/agentflowv2).
 
@@ -49,7 +49,7 @@ A tela **Configurações** reúne o que os agentes podem usar:
 
 ## Base de Conhecimento
 
-A tela inicial e o menu dão acesso à jornada de fontes, extração, revisão de fragmentos, Embeddings, Vector Store, Record Manager e teste de busca. O bloco Agente pode consultar uma base e incluir ou ocultar as referências encontradas. Veja [a configuração, os 20 extratores e os limites](KNOWLEDGE.md).
+A tela inicial e o menu dão acesso à jornada de fontes, extração, revisão de fragmentos, Embeddings, Vector Store, Record Manager e teste de busca. Agente e LLM aceitam até 10 bases, em cards no padrão de Ferramentas. Cada card define a descrição de uso, as referências e ajustes de busca. O modelo recebe uma ferramenta por base e consulta as que considerar relevantes; os documentos só são recuperados quando a ferramenta é chamada. Os detalhes da etapa mostram as bases oferecidas e cada consulta aparece no histórico com entrada, saída, tempo e status. Veja [a configuração, os 20 extratores e os limites](KNOWLEDGE.md).
 
 ## Stack
 
@@ -158,7 +158,7 @@ O seletor do agente oferece apenas estas 19 ferramentas, em ordem alfabética e 
 
 **Adicionar ferramenta** cria uma linha com busca digitando no próprio seletor. **Parâmetros** reúne apenas as configurações da ferramenta escolhida: credencial, fluxo publicado (Agent as a Tool), fuso horário (CurrentDateTime) ou ações permitidas (MCP, Composio e OpenAPI). A credencial existente pode ser editada pelo ícone ao lado do seletor. **Criar nova credencial** abre um formulário com nome e campos do serviço; segredos salvos não são reapresentados. Feche o bloco e salve o fluxo para persistir as alterações.
 
-O ChatGPT mantém o host de ferramentas habilitado para despachar funções próprias e MCP, com terminal e execução livre de código desativados. Quando o agente tem ferramentas configuradas, a busca nativa fica desativada para que a integração escolhida seja usada. Agentes sem ferramentas e blocos LLM mantêm a busca nativa. Cada chamada configurada é registrada antes de iniciar e atualizada com resultado, duração e estado (`running`, `completed` ou `failed`), incluindo falhas devolvidas ao modelo. O chat e os detalhes da execução exibem esses estados.
+O ChatGPT mantém o host de ferramentas habilitado para despachar funções próprias e MCP, com terminal e execução livre de código desativados. Quando o agente tem ferramentas configuradas, a busca nativa fica desativada para que a integração escolhida seja usada. Agentes e blocos LLM sem ferramentas ou bases configuradas mantêm a busca nativa. Cada chamada configurada é registrada antes de iniciar e atualizada com resultado, duração e estado (`running`, `completed` ou `failed`), incluindo falhas devolvidas ao modelo. O chat e os detalhes da execução exibem esses estados.
 
 Nos conjuntos de ferramentas novos, nenhuma ação fica autorizada antes da seleção. Atualize as ações após conectar a credencial e marque as que o agente pode usar. Agent as a Tool fixa o fluxo escolhido, sem permitir ao modelo substituir o destino; encadeamentos têm limite de cinco chamadas aninhadas. A Composio permite selecionar aplicativo, conta conectada e ações; as chamadas usam a API v3 com a versão retornada na definição da ação.
 

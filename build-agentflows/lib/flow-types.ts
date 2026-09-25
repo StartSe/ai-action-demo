@@ -10,7 +10,7 @@ export const BLOCKS = {
   llm: {
     label: "LLM (Assistente)",
     icon: "✧",
-    help: "Responde com um modelo de IA, sem ferramentas.",
+    help: "Responde com um modelo de IA e consulta as bases de conhecimento configuradas.",
   },
   agent: {
     label: "Agente",
@@ -89,7 +89,7 @@ export type Flow = {
   updatedAt: string;
 };
 export type Trace = {
-  knowledge?: { baseId: string; count: number; references: boolean };
+  knowledge?: { baseId?: string; count: number; references: boolean; available?: { baseId: string; baseName: string; description: string }[]; bases?: { baseId: string; baseName: string; count: number; references: boolean }[] };
   type?: "step" | "tool";
   status?: "running" | "completed" | "failed";
   input?: string;

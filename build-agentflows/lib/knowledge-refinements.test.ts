@@ -50,8 +50,13 @@ test("Top K herdado pelo teste, API e agente; alterações de busca não invalid
   assert.equal((await runtime.queryKnowledge(base.id,"consulta")).length,1);
   const response=await queryApi(new Request("http://local/query",{method:"POST",body:JSON.stringify({query:"consulta"})}),{params:Promise.resolve({id:base.id})});
   assert.equal(response.status,200);assert.equal((await response.json()).length,1);
-  assert.equal((await agentKnowledge({knowledgeBase:base.id},"consulta",new AbortController().signal)).hits.length,1);
-  assert.equal((await agentKnowledge({knowledgeBase:base.id,knowledgeTopK:"2"},"consulta",new AbortController().signal)).hits.length,2);
+  const inherited = await agentKnowledge({knowledgeBase:base.id},new AbortController().signal);
+  assert.equal(inherited.hits.length,0);
+  await inherited.tools[0].call({consulta:"consulta"});
+  assert.equal(inherited.hits.length,1);
+  const overridden = await agentKnowledge({knowledgeBase:base.id,knowledgeTopK:"2"},new AbortController().signal);
+  await overridden.tools[0].call({consulta:"consulta"});
+  assert.equal(overridden.hits.length,2);
   assert.equal(knowledgeSettings({}).topK,undefined);
   assert.equal((await runtime.queryKnowledge(base.id,"consulta",3)).length,3);
   base = store.updateKnowledgeBase(base.id,{config:{...base.config,retrieval:{topK:2,minScore:0,metadataFilter:'{"area":"suporte","nested":{"active":true}}'}}});

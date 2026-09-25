@@ -393,7 +393,9 @@ test("Agente consulta a base com e sem referências e preserva vínculo no fluxo
   });
   let prompt = "";
   chatGPT().run = async (options) => {
-    prompt = options.prompt;
+    assert.equal(options.tools?.length, 1);
+    const result = await options.tools![0].call({consulta:"Qual o prazo do reembolso?"});
+    prompt = options.prompt + result;
     return "Você tem sete dias para pedir reembolso.";
   };
   const graph = template();
@@ -763,6 +765,8 @@ test("OpenRouter recebe os trechos e o retorno das referências permanece opcion
     async (url: string, options: RequestInit) => {
       assert.equal(url, "https://openrouter.ai/api/v1/chat/completions");
       messages = String(options.body);
+      const payload = JSON.parse(messages);
+      if (!payload.messages.some((message: {role:string}) => message.role === "tool")) return Response.json({choices:[{finish_reason:"tool_calls",message:{content:null,tool_calls:[{id:"knowledge",type:"function",function:{name:payload.tools[0].function.name,arguments:JSON.stringify({consulta:"frete"})}}]}}]});
       return new Response(
         JSON.stringify({
           choices: [

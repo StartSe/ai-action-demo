@@ -1191,10 +1191,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.af-pill.tool {
-  height: 20px;
-  font-size: 10px;
-}
+.af-tool-icon { display: inline-grid; place-items: center; width: 27px; height: 27px; flex: 0 0 27px; border-radius: 50%; color: var(--studio-primary); background: #fff9; }
+.af-tool-icon .tool-logo, .af-tool-icon > svg { width: 15px; height: 15px; }
+:root[data-studio-theme="dark"] .af-tool-icon { background: #ffffff1f; color: #b5a8ff; }
+:root[data-studio-theme="dark"] .af-tool-icon:has(img) { background: #ffffffc7; }
 :root[data-studio-theme="dark"] .af-pill {
   background: #ffffff33;
 }

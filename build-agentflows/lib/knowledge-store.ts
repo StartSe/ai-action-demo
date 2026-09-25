@@ -1,3 +1,4 @@
+import { knowledgeBaseIds } from "./knowledge-settings";
 import {
   saveToolCredential,
   resolveEmbeddingCredential,
@@ -573,7 +574,7 @@ export function knowledgeBaseUsages(id: string) {
     .filter((f) =>
       [f.graph, f.published].some((g) =>
         g?.nodes.some(
-          (n) => n.data.kind === "agent" && n.data.config.knowledgeBase === id,
+          (n) => ["agent", "llm"].includes(n.data.kind) && knowledgeBaseIds(n.data.config).includes(id),
         ),
       ),
     )
@@ -584,7 +585,7 @@ export function deleteKnowledgeBaseRecords(id: string, token: string) {
     assertKnowledgeUnlocked(id, token);
     if (knowledgeBaseUsages(id).length)
       throw new FlowError(
-        "Esta base está vinculada a um agente. Remova o vínculo nos fluxos antes de excluir.",
+        "Esta base está vinculada a um bloco Agente ou LLM. Remova o vínculo nos fluxos antes de excluir.",
         409,
       );
     for (const source of listKnowledgeSources(id))

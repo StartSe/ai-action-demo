@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 0.16.0 — 25/09/2026
+
+- Agente e LLM com múltiplas bases em cards no padrão de Ferramentas, descrição de uso, referências e parâmetros de consulta por base.
+- Cada base é oferecida ao modelo como ferramenta independente; busca sob demanda, inclusive em configurações antigas, e registros de entrada, saída, duração e bases disponíveis nos detalhes da execução.
+- Ícones compactos das ferramentas no bloco Agente, com nomes no tooltip e indicador de conhecimento no Agente/LLM.
+
 ## 0.15.0 — 25/09/2026
 
 - Record Manager com limpeza nenhuma, incremental ou completa, identificação automática ou chave de metadados e retenção aplicada às consultas.

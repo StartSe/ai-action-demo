@@ -12,6 +12,9 @@ import type { Block } from "@/lib/flow-types";
 import { NODE_STYLE } from "@/lib/flow-presets";
 import { outputs } from "@/lib/flow-graph";
 import { Icon, IconButton } from "../StudioUI";
+import { ToolLogo } from "../ToolSelect";
+import { toolTitle } from "@/lib/tool-presentation";
+import { knowledgeBaseIds } from "@/lib/knowledge-settings";
 import { modelLabel, modelProvider } from "../ModelPicker";
 export type VisualData = Block["data"] & {
   execution?: string;
@@ -48,13 +51,11 @@ function AgentNodeView({ id, data, selected }: NodeProps<VisualNode>) {
     if (label && label !== data.label) data.rename?.(label);
     setEditing(null);
   };
-  const tools =
-    data.kind === "agent"
-      ? (data.config.tools || "")
-          .split(",")
-          .map((s) => s.trim().split(":").pop() || "")
-          .filter(Boolean)
-      : [];
+  const tools = data.kind === "agent" ? [...new Set((data.config.tools || "").split(",").map(id => id.trim()).filter(Boolean))] : [];
+  let knowledgeCount = 0;
+  if (["agent", "llm"].includes(data.kind)) {
+    try { knowledgeCount = knowledgeBaseIds(data.config).length; } catch { /* Incomplete drafts are validated in the editor. */ }
+  }
   return (
     <div
       className={
@@ -172,14 +173,13 @@ function AgentNodeView({ id, data, selected }: NodeProps<VisualNode>) {
               {data.config.tool.split(":").pop()}
             </span>
           )}
-          {tools.length > 0 && (
+          {(tools.length > 0 || knowledgeCount > 0) && (
             <span className="af-pills">
-              {tools.map((t) => (
-                <span key={t} className="af-pill tool" title={t}>
-                  <Icon name="tool" size={11} />
-                  {t}
-                </span>
-              ))}
+              {tools.map(id => {
+                const title = toolTitle({ id, name: id.split(":").pop() || id });
+                return <span key={id} className="af-tool-icon" title={title} role="img" aria-label={title}><ToolLogo id={id} /></span>;
+              })}
+              {knowledgeCount > 0 && <span className="af-tool-icon" title={`${knowledgeCount} ${knowledgeCount === 1 ? "base de conhecimento" : "bases de conhecimento"}`} role="img" aria-label={`${knowledgeCount} ${knowledgeCount === 1 ? "base de conhecimento" : "bases de conhecimento"}`}><Icon name="book" size={15} /></span>}
             </span>
           )}
         </div>

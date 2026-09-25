@@ -134,7 +134,7 @@ export function NodeDialog({
     setTimeout(() => setNameSaved(false), 1800);
   }
   function saveAndClose() {
-    if (k === "agent") {
+    if (k === "agent" || k === "llm") {
       try { knowledgeSettings(c); } catch (error) {
         setCloseError((error as Error).message);
         return false;
@@ -368,7 +368,7 @@ export function NodeDialog({
             )}
           </div>
         ))}
-        {k === "agent" && <KnowledgeAgentFields config={c} onChange={change} />}
+        {(k === "agent" || k === "llm") && <KnowledgeAgentFields config={c} onChange={change} />}
         {(k === "agent" || k === "llm") && <section className="node-fields node-completion">
           <span className="node-completion-title">Ao concluir esta etapa</span>
           {updates.map((u, i) => <div className="node-field node-variable-card" role="group" aria-label={`Atualização de variável ${i + 1}`} key={i}>

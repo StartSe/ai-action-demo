@@ -475,7 +475,7 @@ export async function deleteKnowledgeBase(baseId: string) {
   return withKnowledgeLock(baseId, async (token) => {
     if (knowledgeBaseUsages(baseId).length)
       throw new FlowError(
-        "Esta base está vinculada a um agente. Remova o vínculo nos fluxos antes de excluir.",
+        "Esta base está vinculada a um bloco Agente ou LLM. Remova o vínculo nos fluxos antes de excluir.",
         409,
       );
     const base = getKnowledgeBase(baseId);
