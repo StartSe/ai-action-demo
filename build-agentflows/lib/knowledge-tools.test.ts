@@ -85,6 +85,10 @@ for(const kind of ["agent","llm"] as const)test(`${kind}: ChatGPT recebe ferrame
   assert.match(tools[0].input!,/prazo de reembolso/);assert.match(tools[0].output,/sete dias/);
   const step=run.trace.find(t=>t.type==="step" && t.nodeId===f.graph.nodes[1].id)!;
   assert.equal(step.knowledge?.available?.length,2);assert.equal(step.knowledge?.count,1);assert.deepEqual(step.knowledge?.bases?.map(b=>b.baseId),[refunds.id]);
+  const saved=flows.getRun(run.id).trace.find(t=>t.type==="step" && t.nodeId===f.graph.nodes[1].id)!;
+  assert.equal(saved.knowledge?.chunks?.length,1);
+  assert.equal(saved.knowledge?.chunks?.[0].pageContent,"O reembolso pode ser solicitado em sete dias.");
+  assert.equal(saved.knowledge?.chunks?.[0].baseId,refunds.id);
   await flows.deleteFlow(f.id);
 });
 
@@ -106,6 +110,7 @@ test("modelo pode consultar várias bases ou nenhuma; OpenRouter usa o ciclo rea
       assert.equal(result.status,"completed");assert.equal(rounds,2);assert.equal(embeddingCalls,before+2);
       assert.equal(result.trace.filter(t=>t.type==="tool").length,2);assert.match(result.output,/Manual Reembolsos/);assert.doesNotMatch(result.output,/Manual Entregas/);
       assert.equal(result.trace.find(t=>t.knowledge)?.knowledge?.bases?.length,2);
+      assert.deepEqual(result.trace.find(t=>t.knowledge)?.knowledge?.chunks?.map(c=>c.baseId),[refunds.id],"Não expõe chunks de bases com referências desativadas");
       mode="none";const next=embeddingCalls;const greeting=await startRun(f.id,"Olá");
       assert.equal(greeting.status,"completed");assert.equal(greeting.output,"Olá!");assert.equal(embeddingCalls,next);assert.equal(greeting.trace.filter(t=>t.type==="tool").length,0);
       await flows.deleteFlow(f.id);

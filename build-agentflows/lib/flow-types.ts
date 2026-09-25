@@ -1,3 +1,4 @@
+import type { KnowledgeReference } from "./knowledge-references";
 import type { TokenUsage } from "./token-usage";
 import type { Attachment } from "./attachment-types";
 import { MEMORY_DEFAULTS } from "./memory-settings";
@@ -89,7 +90,7 @@ export type Flow = {
   updatedAt: string;
 };
 export type Trace = {
-  knowledge?: { baseId?: string; count: number; references: boolean; available?: { baseId: string; baseName: string; description: string }[]; bases?: { baseId: string; baseName: string; count: number; references: boolean }[] };
+  knowledge?: { chunks?: KnowledgeReference[]; baseId?: string; count: number; references: boolean; available?: { baseId: string; baseName: string; description: string }[]; bases?: { baseId: string; baseName: string; count: number; references: boolean }[] };
   type?: "step" | "tool";
   status?: "running" | "completed" | "failed";
   input?: string;

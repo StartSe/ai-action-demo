@@ -7,7 +7,7 @@ import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_FILE_BYTES, MAX_TOTAL_BYTES, ty
 import { imageIssues, type ModelCapability } from "@/lib/model-capabilities";
 import { ChatAttachments } from "./ChatAttachments";
 import type { RouterModel } from "./ModelPicker";
-import { MarkdownContent } from "./MarkdownContent";
+import { ChatEvidence } from "./ChatEvidence";
 import { TraceDetails, TraceRow } from "./TraceDetails";
 import { Icon, request } from "./StudioUI";
 const STATUS: Record<Run["status"], string> = {
@@ -91,7 +91,7 @@ function BotMessage({
           </details>
         )}
         <div className="chat-text">
-          <MarkdownContent>{run.output || (run.status === "running" ? "Pensando…" : "Sem resposta.")}</MarkdownContent>
+          <ChatEvidence run={run} onOpenTool={setSelectedTrace} />
         </div>
         {run.error && (
           <p className="studio-error" role="alert">

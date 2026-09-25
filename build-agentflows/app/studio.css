@@ -3804,6 +3804,27 @@
 .markdown-content table { border-collapse: collapse; min-width: 100%; font-size: .9em; }
 .markdown-content th, .markdown-content td { border: 1px solid var(--studio-line); padding: 8px 10px; text-align: left; }
 .markdown-content th { background: var(--studio-primary-soft); }
+.chat-evidence { margin-top: 18px; white-space: normal; }
+.chat-evidence h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 11px; font-weight: 600; color: var(--studio-muted); }
+.chat-evidence h3 > span { font-size: 10px; font-weight: 500; }
+.chat-evidence-badges { display: flex; flex-wrap: wrap; gap: 7px; }
+.chat-evidence-badge { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 7px 10px; border: 1px solid var(--studio-line); border-radius: 8px; background: var(--studio-panel); color: var(--studio-ink); font: inherit; font-size: 11px; line-height: 1.4; text-align: left; cursor: pointer; }
+.chat-evidence-badge:hover { border-color: var(--studio-primary); background: var(--studio-primary-soft); }
+.chat-evidence-badge:focus-visible { outline: 2px solid var(--studio-primary); outline-offset: 2px; }
+.chat-evidence-badge > svg { color: var(--studio-primary); flex-shrink: 0; }
+.chat-evidence-badge.failed > svg:last-child { color: #da5260; }
+.chat-evidence-badge.running > svg:last-child { color: var(--studio-muted); }
+.chat-evidence-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-evidence-number { color: var(--studio-primary); font-weight: 700; }
+.chunk-reference-info { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; margin: 0 0 22px; }
+.chunk-reference-info div { min-width: 0; }
+.chunk-reference-info dt { color: var(--studio-muted); font-size: 11px; margin-bottom: 5px; }
+.chunk-reference-info dd { margin: 0; color: var(--studio-ink); font-size: 13px; overflow-wrap: anywhere; }
+.chunk-reference-info a { color: var(--studio-primary); text-decoration: underline; text-underline-offset: 3px; }
+.chunk-reference-info a svg { display: inline; margin-left: 5px; }
+.chunk-reference-heading { font-size: 12px; margin: 0 0 10px; }
+.chunk-reference-content { margin: 0; padding: 18px; border: 1px solid var(--studio-line); border-radius: 10px; background: var(--studio-bg); color: var(--studio-ink); white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 13px; line-height: 1.8; }
+@media (max-width: 600px) { .chunk-reference-info { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .trace-payloads { grid-template-columns: 1fr; } .trace-metrics { gap: 6px; } .trace-metrics > div { padding: 10px; } .trace-metrics strong { font-size: 13px; } }
 
 /* Identidade da instalação e conta no menu principal. */

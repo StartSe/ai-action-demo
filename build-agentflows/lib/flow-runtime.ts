@@ -1,4 +1,5 @@
 import { agentKnowledge, knowledgeReferences } from "./knowledge-agent";
+import { referenceChunks } from "./knowledge-references";
 import { addTokenUsage, type TokenUsage } from "./token-usage";
 import { conditionCriteria, matchesCriterion, FALLBACK_HANDLE } from "./flow-conditions";
 import { pageTools } from "./embed-tools";
@@ -77,6 +78,7 @@ async function agent(n: Block, r: Run, signal: AbortSignal, details: Partial<Tra
     if (knowledge.tools.length) details.knowledge = {
       baseId: knowledge.consulted.length === 1 ? knowledge.consulted[0].baseId : undefined,
       count: knowledge.hits.length,
+      chunks: referenceChunks(knowledge.referenceHits),
       references: knowledge.consulted.some(base => base.references),
       bases: knowledge.consulted.map(base => ({ ...base })),
       available: knowledge.tools.map(tool => ({ baseId: tool.baseId, baseName: tool.baseName, description: tool.description })),

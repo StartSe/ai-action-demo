@@ -1,6 +1,6 @@
-# Build Agentflows — v0.16.1
+# Build Agentflows — v0.17.0
 
-Versão 0.16.1: múltiplas bases como ferramentas no Agente e LLM, descrição de uso e referências por base, ícones compactos no canvas, modos de limpeza no Record Manager, exclusão de base com confirmação pelo nome, endereço dos embeddings em Opções avançadas, Top K e filtros salvos na base, armazenamento Faiss automático, conexão Postgres por credencial e campos separados, opções de busca/gravação e dimensões/formato dos embeddings OpenAI. Veja a [comparação de recursos e preparação dos serviços](KNOWLEDGE-FLOWISE.md). Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
+Versão 0.17.0: badges de referências e ferramentas no chat de teste, com modais do chunk completo e dos detalhes de cada chamada; múltiplas bases como ferramentas no Agente e LLM, descrição de uso e referências por base, ícones compactos no canvas, modos de limpeza no Record Manager, exclusão de base com confirmação pelo nome, endereço dos embeddings em Opções avançadas, Top K e filtros salvos na base, armazenamento Faiss automático, conexão Postgres por credencial e campos separados, opções de busca/gravação e dimensões/formato dos embeddings OpenAI. Veja a [comparação de recursos e preparação dos serviços](KNOWLEDGE-FLOWISE.md). Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
 
 Crie fluxos visuais de agentes de IA, teste cada etapa e publique versões que seus sistemas e assistentes podem executar. Aplicação independente da suíte **IA para Executivos**, inspirada na orquestração explícita de [AgentFlow V2 do Flowise](https://docs.flowiseai.com/using-flowise/agentflowv2).
 
@@ -19,6 +19,8 @@ Ao selecionar explicitamente a simulação, os fluxos rodam em demonstração: a
 ## Detalhes das execuções
 
 Clique em uma etapa no chat ou no histórico de execuções para abrir o modal com status, duração, entrada e saída. Chamadas de ferramentas aparecem desde o início e registram sucesso, falha ou interrupção. Seus argumentos e resultados ficam separados, com JSON formatado quando disponível.
+
+No chat de teste, as referências aparecem em badges por chunk, com o conteúdo completo, documento, base e origem em um modal. Os trechos são preservados na execução a partir desta versão, respeitando a opção de referências de cada base; execuções anteriores mantêm as referências em texto. As ferramentas efetivamente chamadas também ganham badges, que abrem entrada, saída, duração e status. O histórico e os canais externos mantêm sua apresentação atual.
 
 Etapas de Agente e LLM registram tokens de entrada, saída, cache e raciocínio quando informados pelo ChatGPT ou OpenRouter. O total agrega as chamadas da etapa, incluindo resumos de memória, sem duplicar notificações cumulativas. Cache e raciocínio são detalhamentos do total, não custos adicionais. Dados incompletos recebem indicação de consumo parcial; execuções antigas ou provedores sem telemetria mostram “Não informado”. O consumo das chamadas do modelo que usam ferramentas pertence à etapa do agente. O registro de entrada do agente não copia o conteúdo dos anexos nem o contexto da página; indica quando esses dados foram enviados separadamente.
 

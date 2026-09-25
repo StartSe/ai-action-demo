@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.17.0 — 25/09/2026
+
+- Chat de teste com badges por chunk retornado, abrindo o conteúdo completo e sua origem em um modal. O texto consultado fica preservado na execução, respeitando referências habilitadas por base.
+- Badges das ferramentas efetivamente chamadas abrem os detalhes de entrada, saída, tempo e status, incluindo falhas e chamadas repetidas. Visualização restrita ao chat de teste.
+
 ## 0.16.1 — 25/09/2026
 
 - Modal de saída simplificado: removido Continuar editando e botão Salvar e sair renomeado para Salvar.

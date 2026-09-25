@@ -319,8 +319,12 @@ export function Modal({
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const el = ref.current;
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     el?.showModal();
-    return () => el?.close();
+    return () => {
+      el?.close();
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+    };
   }, []);
   return (
     <dialog
