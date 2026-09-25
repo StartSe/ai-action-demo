@@ -1,6 +1,6 @@
-# Build Agentflows — v0.14.1
+# Build Agentflows — v0.14.2
 
-Versão 0.14.1: Top K e filtros salvos na base, armazenamento Faiss automático, conexão Postgres por credencial e campos separados, opções de busca/gravação e dimensões/formato dos embeddings OpenAI. Veja a [comparação de recursos e preparação dos serviços](KNOWLEDGE-FLOWISE.md). Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
+Versão 0.14.2: endereço dos embeddings em Opções avançadas, Top K e filtros salvos na base, armazenamento Faiss automático, conexão Postgres por credencial e campos separados, opções de busca/gravação e dimensões/formato dos embeddings OpenAI. Veja a [comparação de recursos e preparação dos serviços](KNOWLEDGE-FLOWISE.md). Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
 
 Crie fluxos visuais de agentes de IA, teste cada etapa e publique versões que seus sistemas e assistentes podem executar. Aplicação independente da suíte **IA para Executivos**, inspirada na orquestração explícita de [AgentFlow V2 do Flowise](https://docs.flowiseai.com/using-flowise/agentflowv2).
 

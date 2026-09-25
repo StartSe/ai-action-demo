@@ -82,30 +82,30 @@ export function KnowledgeIndexFields({
           embedding={embedding}
           onChange={embeddingChange}
         />
-        <label>
-          Endereço do serviço
-          <input
-            required
-            type="url"
-            readOnly={!!embedding.credentialId}
-            value={embedding.url}
-            onChange={(e) =>
-              embeddingChange({
-                url: e.target.value,
-                configured: false,
-                credentialId: undefined,
-                apiKey: "",
-              })
-            }
-          />
-          {embedding.provider === "ollama" && (
-            <small>
-              Instale o modelo escolhido no servidor Ollama antes de indexar.
-            </small>
-          )}
-        </label>
         <details>
           <summary>Opções avançadas</summary>
+          <label>
+            Endereço do serviço
+            <input
+              required
+              type="url"
+              readOnly={!!embedding.credentialId}
+              value={embedding.url}
+              onChange={(e) =>
+                embeddingChange({
+                  url: e.target.value,
+                  configured: false,
+                  credentialId: undefined,
+                  apiKey: "",
+                })
+              }
+            />
+            {embedding.provider === "ollama" && (
+              <small>
+                Instale o modelo escolhido no servidor Ollama antes de indexar.
+              </small>
+            )}
+          </label>
           <div className="knowledge-form-grid">
             <label>
               Tamanho do lote

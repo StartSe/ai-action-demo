@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.14.2 — 25/09/2026
+
+- Endereço do serviço de embeddings movido para Opções avançadas, mantendo os padrões dos provedores e as conexões já configuradas.
+
 ## 0.14.1 — 25/09/2026
 
 - Campo Local do índice removido da configuração do Faiss; o armazenamento continua sendo administrado automaticamente por base e versão.
