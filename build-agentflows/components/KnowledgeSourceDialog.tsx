@@ -1,6 +1,10 @@
 "use client";
 import { useState } from "react";
-import { KNOWLEDGE_LOADERS, knowledgeLoader } from "@/lib/knowledge-catalog";
+import {
+  KNOWLEDGE_LOADERS,
+  knowledgeLoaderIcon,
+  knowledgeLoader,
+} from "@/lib/knowledge-catalog";
 import {
   DEFAULT_SPLITTER,
   type KnowledgeSource,
@@ -126,15 +130,12 @@ export function KnowledgeSourceDialog({
                   }}
                 >
                   <span className="knowledge-symbol">
-                    <Icon
-                      name={
-                        l.accept
-                          ? "paperclip"
-                          : l.id === "plain"
-                            ? "pencil"
-                            : "http"
-                      }
-                      size={19}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={knowledgeLoaderIcon(l.id)}
+                      alt=""
+                      width={32}
+                      height={32}
                     />
                   </span>
                   <span>

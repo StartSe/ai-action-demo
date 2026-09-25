@@ -1,8 +1,19 @@
+import { embedKnowledge } from "./knowledge-embeddings";
+export { embedKnowledge, validateVectors } from "./knowledge-embeddings";
 import { createHash, randomUUID } from "node:crypto";
 import { FlowError } from "./flow-store";
 import { getConfig, setConfig } from "./store";
 import { extractKnowledge, splitDocuments } from "./knowledge-loaders";
-import { knowledgeJson, KnowledgeServiceError } from "./knowledge-http";
+import {
+  writeVectorGeneration,
+  queryVectorGeneration,
+  deleteVectorGeneration,
+} from "./knowledge-vectors";
+import {
+  readManagedRecords,
+  writeManagedRecords,
+  deleteManagedRecords,
+} from "./knowledge-records";
 import {
   deleteKnowledgeBaseRecords,
   deleteKnowledgeSource,
@@ -36,10 +47,8 @@ type IndexSnapshot = {
 const hash = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const secretKey = (generation: string) => `KNOWLEDGE_VECTOR_${generation}`;
-const collection = (baseId: string, generation: string) =>
-  `kb_${baseId.replaceAll("-", "")}_${generation.replaceAll("-", "")}`;
-const pointId = (id: string) =>
-  `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20, 32)}`;
+const recordSecretKey = (generation: string) =>
+  `KNOWLEDGE_RECORD_${generation}`;
 function snapshot(baseId: string): IndexSnapshot | undefined {
   const row = knowledgeDb()
     .prepare("SELECT body FROM knowledge_indexes WHERE base_id=?")
@@ -51,96 +60,9 @@ function vectorHash(config: IndexConfig, chunk: Chunk) {
     config.embeddings.provider,
     config.embeddings.url,
     config.embeddings.model,
+    !!config.embeddings.stripNewLines,
     chunk.pageContent,
   ]);
-}
-export function validateVectors(value: unknown, count: number): number[][] {
-  if (
-    !Array.isArray(value) ||
-    value.length !== count ||
-    !value.length ||
-    value.some(
-      (v) =>
-        !Array.isArray(v) ||
-        !v.length ||
-        v.length > 65536 ||
-        v.length !== value[0].length ||
-        v.some((n: unknown) => typeof n !== "number" || !Number.isFinite(n)) ||
-        v.every((n: number) => n === 0),
-    )
-  )
-    throw new FlowError(
-      "O serviço retornou embeddings inválidos ou incompletos.",
-      502,
-    );
-  return value;
-}
-export async function embedKnowledge(
-  config: IndexConfig["embeddings"],
-  texts: string[],
-  signal?: AbortSignal,
-) {
-  if (!texts.length) return [];
-  if (config.provider === "openai") {
-    if (!config.apiKey)
-      throw new FlowError("Configure a chave do serviço de embeddings.");
-    const response = await knowledgeJson<{
-      data: { index: number; embedding: number[] }[];
-    }>(`${config.url}/embeddings`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${config.apiKey}` },
-      body: { model: config.model, input: texts, encoding_format: "float" },
-      infrastructure: true,
-      signal,
-    });
-    if (
-      !Array.isArray(response.data) ||
-      response.data.length !== texts.length ||
-      new Set(response.data.map((v) => v.index)).size !== texts.length ||
-      response.data.some(
-        (v) =>
-          !Number.isInteger(v.index) || v.index < 0 || v.index >= texts.length,
-      )
-    )
-      throw new FlowError(
-        "O serviço de embeddings retornou posições inválidas.",
-        502,
-      );
-    return validateVectors(
-      response.data.sort((a, b) => a.index - b.index).map((d) => d.embedding),
-      texts.length,
-    );
-  }
-  const response = await knowledgeJson<{ embeddings: number[][] }>(
-    `${config.url}/api/embed`,
-    {
-      method: "POST",
-      headers: config.apiKey
-        ? { Authorization: `Bearer ${config.apiKey}` }
-        : {},
-      body: { model: config.model, input: texts, truncate: false },
-      infrastructure: true,
-      signal,
-    },
-  );
-  return validateVectors(response.embeddings, texts.length);
-}
-async function qdrant(
-  config: IndexConfig["vectorStore"],
-  path: string,
-  method: string,
-  body?: unknown,
-  signal?: AbortSignal,
-) {
-  return knowledgeJson<{
-    result?: { points?: { id: string; score: number }[] };
-  }>(`${config.url}${path}`, {
-    method,
-    body,
-    headers: config.apiKey ? { "api-key": config.apiKey } : {},
-    signal,
-    infrastructure: true,
-  });
 }
 export async function processKnowledgeSource(baseId: string, sourceId: string) {
   return withKnowledgeLock(baseId, async (token) => {
@@ -188,24 +110,16 @@ async function cleanGeneration(baseId: string, generation: string) {
   const configText = getConfig(secretKey(generation));
   if (configText) {
     const config = JSON.parse(configText) as IndexConfig["vectorStore"];
-    if (config.provider === "qdrant") {
-      try {
-        await qdrant(
-          config,
-          `/collections/${collection(baseId, generation)}`,
-          "DELETE",
-          undefined,
-          AbortSignal.timeout(30000),
-        );
-      } catch (error) {
-        if (
-          !(error instanceof KnowledgeServiceError) ||
-          error.upstreamStatus !== 404
-        )
-          throw error;
-      }
-    }
+    await deleteVectorGeneration(
+      config,
+      { baseId, generation, dimensions: 0 },
+      undefined,
+      AbortSignal.timeout(30000),
+    );
   }
+  const recordText = getConfig(recordSecretKey(generation));
+  if (recordText)
+    await deleteManagedRecords(JSON.parse(recordText), baseId, generation);
   knowledgeDb()
     .prepare("DELETE FROM knowledge_vectors WHERE base_id=? AND generation=?")
     .run(baseId, generation);
@@ -213,6 +127,7 @@ async function cleanGeneration(baseId: string, generation: string) {
     .prepare("DELETE FROM knowledge_cleanup WHERE id=? AND base_id=?")
     .run(generation, baseId);
   setConfig(secretKey(generation), null);
+  setConfig(recordSecretKey(generation), null);
 }
 export async function cleanupKnowledge(baseId: string) {
   const active = snapshot(baseId)?.generation;
@@ -267,7 +182,15 @@ export async function indexKnowledge(baseId: string) {
       "{}",
     );
     try {
-      const existing = new Map<string, number[]>();
+      const existing =
+        config.recordManager.provider === "postgres" && previous
+          ? await readManagedRecords(
+              config.recordManager,
+              baseId,
+              previous.generation,
+              signal,
+            )
+          : new Map<string, number[]>();
       if (config.recordManager.provider === "sqlite" && previous) {
         for (const row of d
           .prepare(
@@ -298,8 +221,15 @@ export async function indexKnowledge(baseId: string) {
         }
       }
       const entries = [...pending];
-      for (let offset = 0; offset < entries.length; offset += 32) {
-        const batch = entries.slice(offset, offset + 32);
+      for (
+        let offset = 0;
+        offset < entries.length;
+        offset += config.embeddings.batchSize || 32
+      ) {
+        const batch = entries.slice(
+          offset,
+          offset + (config.embeddings.batchSize || 32),
+        );
         const vectors = await embedKnowledge(
           config.embeddings,
           batch.map(([, group]) => group[0].pageContent),
@@ -326,35 +256,36 @@ export async function indexKnowledge(baseId: string) {
         throw new FlowError(
           "O modelo retornou dimensões diferentes. Use outro modelo ou desative o reaproveitamento para reindexar.",
         );
-      if (config.vectorStore.provider === "qdrant") {
-        setConfig(secretKey(generation), JSON.stringify(config.vectorStore));
-        await qdrant(
-          config.vectorStore,
-          `/collections/${collection(baseId, generation)}`,
-          "PUT",
-          { vectors: { size: dimensions, distance: "Cosine" } },
+      setConfig(secretKey(generation), JSON.stringify(config.vectorStore));
+      await writeVectorGeneration(
+        config.vectorStore,
+        { baseId, generation, dimensions },
+        records.map(({ record }) => ({
+          id: record.chunk.id,
+          vector: record.vector,
+          sourceId: record.chunk.sourceId,
+          content: record.chunk.pageContent,
+          metadata: record.chunk.metadata,
+        })),
+        signal,
+      );
+      if (config.recordManager.provider === "postgres") {
+        setConfig(
+          recordSecretKey(generation),
+          JSON.stringify(config.recordManager),
+        );
+        await writeManagedRecords(
+          config.recordManager,
+          baseId,
+          generation,
+          records.map(({ hash, record }) => ({
+            hash,
+            chunkId: record.chunk.id,
+            sourceId: record.chunk.sourceId,
+            vector: record.vector,
+          })),
           signal,
         );
-        for (let offset = 0; offset < records.length; offset += 64)
-          await qdrant(
-            config.vectorStore,
-            `/collections/${collection(baseId, generation)}/points?wait=true`,
-            "PUT",
-            {
-              points: records
-                .slice(offset, offset + 64)
-                .map(({ record }) => ({
-                  id: pointId(record.chunk.id),
-                  vector: record.vector,
-                  payload: {
-                    baseId,
-                    sourceId: record.chunk.sourceId,
-                    chunkId: record.chunk.id,
-                  },
-                })),
-            },
-            signal,
-          );
       }
       signal.throwIfAborted();
       d.exec("BEGIN IMMEDIATE");
@@ -453,62 +384,51 @@ export async function queryKnowledge(
       "Informe uma consulta de até 20.000 caracteres, 1 a 20 resultados e pontuação entre -1 e 1.",
     );
   const config = indexKnowledgeConfig(baseId);
-  const [vector] = await embedKnowledge(config.embeddings, [query], signal);
+  const [vector] = await embedKnowledge(
+    config.embeddings,
+    [query],
+    signal,
+    "query",
+  );
   if (vector.length !== current.dimensions)
     throw new FlowError("As dimensões do modelo mudaram. Reindexe a base.");
-  let selected: { record: VectorRecord; score: number }[];
-  if (config.vectorStore.provider === "qdrant") {
-    const result = await qdrant(
-      config.vectorStore,
-      `/collections/${collection(baseId, current.generation)}/points/query`,
-      "POST",
-      {
-        query: vector,
-        limit: topK,
-        score_threshold: minScore,
-        with_payload: false,
-        with_vector: false,
-      },
-      signal,
+  const records = (
+    knowledgeDb()
+      .prepare(
+        "SELECT body FROM knowledge_vectors WHERE base_id=? AND generation=?",
+      )
+      .all(baseId, current.generation) as { body: string }[]
+  ).map((row) => JSON.parse(row.body) as VectorRecord);
+  let candidates = records;
+  if (config.vectorStore.provider !== "local") {
+    const ids = new Set(
+      await queryVectorGeneration(
+        config.vectorStore,
+        {
+          baseId,
+          generation: current.generation,
+          dimensions: current.dimensions,
+        },
+        vector,
+        topK,
+        signal,
+      ),
     );
-    const records = new Map(
-      (
-        knowledgeDb()
-          .prepare(
-            "SELECT body FROM knowledge_vectors WHERE base_id=? AND generation=?",
-          )
-          .all(baseId, current.generation) as { body: string }[]
-      ).map((r) => {
-        const v = JSON.parse(r.body) as VectorRecord;
-        return [pointId(v.chunk.id), v];
-      }),
+    candidates = records.filter(
+      (record) =>
+        ids.has(record.chunk.id) ||
+        (config.vectorStore.provider === "qdrant" &&
+          ids.has(record.chunk.id.slice(0, 32))),
     );
-    if (!Array.isArray(result.result?.points))
-      throw new FlowError(
-        "O Vector Store retornou uma resposta inválida.",
-        502,
-      );
-    selected = result.result.points.flatMap((p) => {
-      const record = records.get(String(p.id));
-      return record && Number.isFinite(p.score) && p.score >= minScore
-        ? [{ record, score: p.score }]
-        : [];
-    });
-  } else
-    selected = (
-      knowledgeDb()
-        .prepare(
-          "SELECT body FROM knowledge_vectors WHERE base_id=? AND generation=?",
-        )
-        .all(baseId, current.generation) as { body: string }[]
-    )
-      .map((row) => {
-        const record = JSON.parse(row.body) as VectorRecord;
-        return { record, score: cosineSimilarity(vector, record.vector) };
-      })
-      .filter((r) => r.score >= minScore)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, topK);
+  }
+  const selected = candidates
+    .map((record) => ({
+      record,
+      score: cosineSimilarity(vector, record.vector),
+    }))
+    .filter((r) => r.score >= minScore)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK);
   // A concurrent edit/index must not turn an old result into the current truth.
   if (
     getKnowledgeBase(baseId).revision !== base.revision ||
@@ -556,16 +476,18 @@ export async function removeKnowledgeSource(baseId: string, sourceId: string) {
       const text = getConfig(secretKey(generation));
       if (!text) continue;
       const config = JSON.parse(text) as IndexConfig["vectorStore"];
-      if (config.provider === "qdrant")
-        await qdrant(
-          config,
-          `/collections/${collection(baseId, generation)}/points/delete?wait=true`,
-          "POST",
-          {
-            points: rows
-              .filter((r) => r.generation === generation)
-              .map((r) => pointId(r.chunk_id)),
-          },
+      await deleteVectorGeneration(
+        config,
+        { baseId, generation, dimensions: 0 },
+        rows.filter((r) => r.generation === generation).map((r) => r.chunk_id),
+      );
+      const recordText = getConfig(recordSecretKey(generation));
+      if (recordText)
+        await deleteManagedRecords(
+          JSON.parse(recordText),
+          baseId,
+          generation,
+          sourceId,
         );
     }
     deleteKnowledgeSource(baseId, sourceId, token);

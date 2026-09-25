@@ -253,6 +253,9 @@ export const KNOWLEDGE_LOADERS: LoaderDefinition[] = (
     ),
   ] satisfies LoaderDefinition[]
 ).sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+export function knowledgeLoaderIcon(id: string) {
+  return `/knowledge-icons/loaders-${id}.${id === "firecrawl" ? "png" : "svg"}`;
+}
 export function knowledgeLoader(id: string) {
   return KNOWLEDGE_LOADERS.find((item) => item.id === id);
 }

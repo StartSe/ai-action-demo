@@ -46,19 +46,43 @@ export type KnowledgeSource = {
 };
 export type IndexConfig = {
   embeddings: {
-    provider: "openai" | "ollama";
+    provider: "openai" | "ollama" | "gemini" | "voyage";
     model: string;
     url: string;
     apiKey?: string;
     configured?: boolean;
+    batchSize?: number;
+    timeout?: number;
+    stripNewLines?: boolean;
   };
   vectorStore: {
-    provider: "local" | "qdrant";
+    provider:
+      | "local"
+      | "qdrant"
+      | "chroma"
+      | "elasticsearch"
+      | "faiss"
+      | "mongodb"
+      | "pinecone"
+      | "postgres"
+      | "weaviate"
+      | "supabase"
+      | "singlestore"
+      | "opensearch";
     url: string;
     apiKey?: string;
     configured?: boolean;
+    connectionString?: string;
+    connectionConfigured?: boolean;
+    options?: Record<string, string>;
   };
-  recordManager: { provider: "none" | "sqlite" };
+  recordManager: {
+    provider: "none" | "sqlite" | "postgres";
+    connectionString?: string;
+    configured?: boolean;
+    namespace?: string;
+    tableName?: string;
+  };
 };
 export type KnowledgeBase = {
   id: string;
@@ -104,7 +128,7 @@ export const DEFAULT_INDEX: IndexConfig = {
     model: "text-embedding-3-small",
     url: "https://api.openai.com/v1",
   },
-  vectorStore: { provider: "local", url: "" },
+  vectorStore: { provider: "faiss", url: "" },
   recordManager: { provider: "sqlite" },
 };
 export const KNOWLEDGE_STATUS: Record<KnowledgeBase["status"], string> = {

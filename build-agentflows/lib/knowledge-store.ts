@@ -1,3 +1,4 @@
+import { validatedIndexConfig } from "./knowledge-config";
 import { randomUUID } from "node:crypto";
 import { abrirBanco, getConfig, setConfig } from "./store";
 import { FlowError, listFlows } from "./flow-store";
@@ -13,7 +14,6 @@ import {
   type SplitterConfig,
 } from "./knowledge-types";
 import { validateSplitter, type SourceFile } from "./knowledge-loaders";
-import { knowledgeUrl } from "./knowledge-http";
 
 export function knowledgeDb() {
   const d = abrirBanco();
@@ -183,7 +183,15 @@ export function indexKnowledgeConfig(id: string): IndexConfig {
   return {
     ...base.config,
     embeddings: { ...base.config.embeddings, apiKey: secrets.embeddingKey },
-    vectorStore: { ...base.config.vectorStore, apiKey: secrets.vectorKey },
+    vectorStore: {
+      ...base.config.vectorStore,
+      apiKey: secrets.vectorKey,
+      connectionString: secrets.vectorConnection,
+    },
+    recordManager: {
+      ...base.config.recordManager,
+      connectionString: secrets.recordConnection,
+    },
   };
 }
 export function updateKnowledgeBase(
@@ -203,73 +211,20 @@ export function updateKnowledgeBase(
       base.description = input.description;
     }
     if (input.config !== undefined) {
-      const c = input.config;
-      if (
-        !c ||
-        !c.embeddings ||
-        !c.vectorStore ||
-        !c.recordManager ||
-        !["openai", "ollama"].includes(c.embeddings.provider) ||
-        !["local", "qdrant"].includes(c.vectorStore.provider) ||
-        !["none", "sqlite"].includes(c.recordManager.provider)
-      )
-        throw new FlowError("Escolha configurações válidas de indexação.");
-      c.embeddings.model = title(c.embeddings.model, "O modelo");
-      if (
-        typeof c.embeddings.url !== "string" ||
-        c.embeddings.url.length > 2000 ||
-        typeof c.vectorStore.url !== "string" ||
-        c.vectorStore.url.length > 2000
-      )
-        throw new FlowError("Confira os endereços dos serviços.");
-      knowledgeUrl(c.embeddings.url);
-      if (c.vectorStore.provider === "qdrant") knowledgeUrl(c.vectorStore.url);
-      const secrets = getKnowledgeSecrets(id);
       const previous = JSON.stringify(base.config);
-      // Changing services must never forward an old provider's credential to the new server.
-      if (
-        c.embeddings.provider !== base.config.embeddings.provider ||
-        knowledgeUrl(c.embeddings.url).origin !==
-          knowledgeUrl(base.config.embeddings.url).origin
-      )
-        delete secrets.embeddingKey;
-      if (
-        c.vectorStore.provider !== base.config.vectorStore.provider ||
-        c.vectorStore.url !== base.config.vectorStore.url
-      )
-        delete secrets.vectorKey;
-      for (const [name, value] of [
-        ["embeddingKey", c.embeddings.apiKey],
-        ["vectorKey", c.vectorStore.apiKey],
-      ] as const) {
-        if (
-          value !== undefined &&
-          (typeof value !== "string" || value.length > 12000)
-        )
-          throw new FlowError("Chave de acesso inválida.");
-        if (value?.trim()) secrets[name] = value.trim();
-      }
-      if (c.embeddings.provider === "openai" && !secrets.embeddingKey)
-        throw new FlowError("Informe a chave do serviço de embeddings.");
-      setConfig(secretKey(id), JSON.stringify(secrets));
-      base.config = {
-        embeddings: {
-          provider: c.embeddings.provider,
-          model: c.embeddings.model,
-          url: c.embeddings.url.replace(/\/$/, ""),
-          configured: !!secrets.embeddingKey,
-        },
-        vectorStore: {
-          provider: c.vectorStore.provider,
-          url: c.vectorStore.url.replace(/\/$/, ""),
-          configured: !!secrets.vectorKey,
-        },
-        recordManager: { provider: c.recordManager.provider },
-      };
+      const result = validatedIndexConfig(
+        input.config,
+        base.config,
+        getKnowledgeSecrets(id),
+      );
+      setConfig(secretKey(id), JSON.stringify(result.secrets));
+      base.config = result.config;
       if (
         previous !== JSON.stringify(base.config) ||
-        c.embeddings.apiKey?.trim() ||
-        c.vectorStore.apiKey?.trim()
+        input.config.embeddings.apiKey?.trim() ||
+        input.config.vectorStore.apiKey?.trim() ||
+        input.config.vectorStore.connectionString?.trim() ||
+        input.config.recordManager.connectionString?.trim()
       ) {
         base.revision++;
         base.status = base.chunks ? "dirty" : "empty";

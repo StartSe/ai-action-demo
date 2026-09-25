@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## 0.12.0 — 25/09/2026
+
+- Seletores de fontes, embeddings, bancos vetoriais e Record Managers com logos do Flowise, busca e layout adaptado aos temas do projeto.
+- Quatro provedores únicos de embeddings: Google Gemini, OpenAI, VoyageAI e Ollama, com modelos predefinidos, dimensões automáticas, processamento em lotes e preparação adequada de documentos e consultas.
+- Integrações de indexação, busca e exclusão com Chroma, Elasticsearch, Faiss nativo, MongoDB Atlas, Pinecone, Postgres, Qdrant, Weaviate, Supabase, SingleStore e OpenSearch. Faiss é o padrão das novas bases; configurações anteriores permanecem compatíveis.
+- Record Manager Postgres com tabela/namespace configuráveis, além do SQLite; conexões cifradas e limpeza por geração, inclusive depois de trocar o destino.
+- Comparação com as principais funcionalidades do Flowise em [KNOWLEDGE-FLOWISE.md](KNOWLEDGE-FLOWISE.md), com requisitos e diferenças de cada integração.
+- Validação com Postgres/pgvector e Chroma reais, SQL de preparação Supabase, Faiss nativo no Docker Alpine, contratos das APIs/drivers e revisão visual em desktop e celular. Serviços externos sem credenciais foram validados por contrato, sem homologação em contas reais.
+
 ## 0.11.0 — 25/09/2026
 
 - Base de Conhecimento na tela inicial e na navegação, seguindo a jornada Document Store do Flowise: fontes, extração, revisão dos fragmentos, Embeddings, Vector Store, Record Manager e teste de consulta.

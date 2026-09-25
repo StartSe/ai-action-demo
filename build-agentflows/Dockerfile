@@ -2,7 +2,7 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN apk add --no-cache --virtual .native-build-deps build-base cmake git python3 openblas-dev lapack-dev && npm ci && apk del .native-build-deps
 
 FROM node:22-alpine AS build
 WORKDIR /app
