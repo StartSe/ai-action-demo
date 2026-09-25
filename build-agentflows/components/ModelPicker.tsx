@@ -58,7 +58,7 @@ export function ModelPicker({
     <div className="model-picker">
       <select value={value} onChange={(e) => onChange(e.target.value)}>
         <optgroup label="ChatGPT · assinatura (principal)">
-          <option value="">Selecionar modelo de IA</option>
+          <option value="">Padrão da conexão ChatGPT</option>
           {chatModels.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name}{m.inputModalities?.includes("image") ? " · imagens" : ""}
