@@ -7,10 +7,12 @@ import { Icon, IconButton, Modal, request } from "./StudioUI";
 import { ReferenceField, type Reference } from "./ReferenceField";
 import { ToolPicker } from "./ToolPicker";
 import { ModelPicker } from "./ModelPicker";
+import { memorySettings } from "@/lib/memory-settings";
+import { MemoryFields } from "./MemoryFields";
 const fields: Record<Kind, string[]> = {
   start: [],
-  llm: ["model", "system", "prompt"],
-  agent: ["model", "system", "prompt", "tools"],
+  llm: ["model", "system", "memoryType", "prompt"],
+  agent: ["model", "system", "memoryType", "prompt", "tools"],
   condition: [],
   state: ["key", "value"],
   http: ["url", "method", "body", "credential"],
@@ -23,12 +25,13 @@ const fields: Record<Kind, string[]> = {
 };
 const labels: Record<string, [string, string]> = {
   system: ["Instruções", ""],
+  memoryType: ["Memória", ""],
   prompt: [
     "Mensagem (opcional)",
     "",
   ],
   model: ["Modelo de IA", ""],
-  tools: ["Ferramentas e servidores MCP", ""],
+  tools: ["Ferramentas", ""],
   state: ["Estado inicial", "Objeto JSON com valores de texto, opcional."],
   value: ["Valor", "Texto que será comparado."],
   operator: ["Comparação", ""],
@@ -129,6 +132,12 @@ export function NodeDialog({
     setTimeout(() => setNameSaved(false), 1800);
   }
   function saveAndClose() {
+    if (k === "agent" || k === "llm") {
+      try { memorySettings(c); } catch (error) {
+        setCloseError((error as Error).message);
+        return false;
+      }
+    }
     if (!draft.data.label.trim() || (k === "start" && invalidVariables) || updates.some((u) => !updateKeys.has(u.key)) || new Set(updates.map((u) => u.key)).size !== updates.length) {
       setCloseError("Confira o nome do bloco e use nomes únicos e válidos nas variáveis antes de fechar.");
       return false;
@@ -255,12 +264,14 @@ export function NodeDialog({
 
         {fields[k].map((key) => (
           <div className="node-field" key={key}>
-            <span className="field-title">
+            {key !== "memoryType" && <span className="field-title">
               {k === "approval" && key === "prompt"
                 ? "O que a pessoa deve revisar"
                 : labels[key][0]}
-            </span>
-            {key === "model" ? (
+            </span>}
+            {key === "memoryType" ? (
+              <MemoryFields config={c} onChange={change} />
+            ) : key === "model" ? (
               <>
               <ModelPicker
                 value={c[key] || ""}

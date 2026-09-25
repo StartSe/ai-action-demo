@@ -1,4 +1,6 @@
 import { conditionCriteria, COMPARISONS } from "./flow-conditions";
+import { memorySettings } from "./memory-settings";
+import { validateToolCards } from "./agent-tools";
 import { outputs } from "./flow-graph";
 import { randomUUID } from "node:crypto";
 import { abrirBanco } from "./store";
@@ -62,6 +64,12 @@ export function validateGraph(value: unknown, executable = false): Graph {
       );
     if (n.data.kind === "condition") {
       try { conditionCriteria(n.data.config); } catch (error) { throw new FlowError((error as Error).message); }
+    }
+    if (n.data.kind === "agent" || n.data.kind === "llm") {
+      try { memorySettings(n.data.config); } catch (error) { throw new FlowError((error as Error).message); }
+    }
+    if (n.data.kind === "agent") {
+      try { validateToolCards(n.data.config.toolCards); } catch (error) { throw new FlowError((error as Error).message); }
     }
     ids.add(n.id);
   }

@@ -1,41 +1,31 @@
 "use client";
 import { useState } from "react";
-import type { ToolGroup, ToolInfo } from "@/lib/tools";
-import { request } from "./StudioUI";
-export function ToolCredentialFields({ tool, onSaved }: { tool: ToolInfo; onSaved: (groups: ToolGroup[]) => void }) {
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false), [removing, setRemoving] = useState(false);
-  const [error, setError] = useState(""), [notice, setNotice] = useState("");
-  const fields = tool.credentials || [];
-  const value = (key: string) => draft[key] ?? fields.find((c) => c.chave === key)?.valor ?? "";
-  async function save(deleting = false) {
-    setBusy(true); setError(""); setNotice("");
-    try {
-      const campos = deleting ? Object.fromEntries(fields.map((c) => [c.chave, null]))
-        : Object.fromEntries(Object.entries(draft).filter(([, v]) => v.trim()));
-      onSaved(await request<ToolGroup[]>("/api/tools", "PUT", { campos }));
-      setDraft({}); setRemoving(false);
-      setNotice(deleting ? "Credencial compartilhada removida." : "Configuração salva. Disponível para todos os agentes que usam este serviço.");
-    } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível salvar. Tente novamente."); }
-    finally { setBusy(false); }
-  }
-  if (!fields.length) return <p className="tool-ready"><span>Pronta para usar.</span> Esta ferramenta não precisa de credencial.</p>;
+import type { ToolInfo } from "@/lib/tools";
+import type { SavedToolCredential } from "@/lib/tool-credential-store";
+import { ToolCredentialDialog } from "./ToolCredentialDialog";
+
+export function ToolCredentialFields({ tool, credentialId, credentials, onChange, onSaved }: {
+  tool: ToolInfo; credentialId?: string; credentials: SavedToolCredential[];
+  onChange: (id: string) => void; onSaved: (credential: SavedToolCredential) => void;
+}) {
+  const [editor, setEditor] = useState<"new" | "edit" | null>(null);
+  const available = credentials.filter((c) => c.provider === tool.credentialProvider);
+  const id = credentialId || available.find((c) => c.legacy)?.id || "";
+  const selected = available.find((c) => c.id === id);
+  if (!tool.credentialProvider) return <p className="tool-ready">Pronta para usar. Não precisa conectar uma conta.</p>;
   return <div className="tool-credential-fields">
-    <p>Credencial compartilhada entre os agentes que usam este serviço.</p>
-    {fields.map((c) => <label key={c.chave}>{c.rotulo}
-      <input aria-label={c.rotulo} type={c.secret ? "password" : "text"} autoComplete="off" disabled={busy}
-        placeholder={c.definido ? "Já salva · em branco mantém" : undefined} value={value(c.chave)}
-        onChange={(e) => { setDraft({ ...draft, [c.chave]: e.target.value }); setNotice(""); }} />
-      {(c.ajuda || c.link) && <small>{c.ajuda} {c.link && <a href={c.link} target="_blank" rel="noreferrer">Onde obter</a>}</small>}
-    </label>)}
-    {error && <p className="studio-error" role="alert">{error}</p>}
-    {notice && <p role="status">{notice}</p>}
-    {removing ? <div className="tool-confirm"><p>Remover esta credencial interrompe o acesso ao serviço em todos os agentes.</p><div className="studio-actions">
-      <button type="button" className="studio-button" disabled={busy} onClick={() => setRemoving(false)}>Manter credencial</button>
-      <button type="button" className="studio-button danger" disabled={busy} onClick={() => void save(true)}>Confirmar remoção</button>
-    </div></div> : <div className="studio-actions">
-      <button type="button" className="studio-button primary" disabled={busy || !Object.keys(draft).length || fields.some((c) => !c.optional && !c.definido && !value(c.chave).trim())} onClick={() => void save()}>{busy ? "Salvando…" : "Salvar configuração"}</button>
-      {fields.some((c) => c.definido) && <button type="button" className="studio-button" disabled={busy} onClick={() => setRemoving(true)}>Remover credencial</button>}
-    </div>}
+    <label>Conexão para esta ferramenta<select value={id} onChange={(event) => event.target.value === "new" ? setEditor("new") : onChange(event.target.value)}>
+      <option value="" disabled>Escolha uma credencial</option>
+      {available.map((c) => <option key={c.id} value={c.id}>{c.name}{!c.configured ? " · revisar conexão" : ""}</option>)}
+      {!!id && !selected && <option value={id}>Credencial indisponível</option>}
+      <option value="new">+ Criar nova credencial</option>
+    </select></label>
+    <div className="studio-actions">
+      <button type="button" className="tool-text-button" onClick={() => setEditor("new")}>Nova credencial</button>
+      {selected && <button type="button" className="tool-text-button" onClick={() => setEditor("edit")}>Ver ou editar conexão</button>}
+    </div>
+    {id && !selected && <p className="studio-error" role="alert">Esta credencial não está disponível. Escolha outra conexão.</p>}
+    <small>A conta escolhida será usada por esta ferramenta neste agente.</small>
+    {editor && <ToolCredentialDialog provider={tool.credentialProvider} credential={editor === "edit" ? selected : undefined} onClose={() => setEditor(null)} onSaved={(c) => { onSaved(c); onChange(c.id); setEditor(null); }} />}
   </div>;
 }

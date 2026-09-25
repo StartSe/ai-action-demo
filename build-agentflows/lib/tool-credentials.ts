@@ -28,3 +28,7 @@ export const TOOL_CREDENTIALS: Record<string, Credential[]> = {
   searxng: [{ chave: "TOOL_SEARXNG_URL", rotulo: "Endereço da sua instância SearXNG", ajuda: "Ex.: https://busca.suaempresa.com (com JSON habilitado)." }],
 };
 export const TOOL_CREDENTIAL_KEYS = Object.values(TOOL_CREDENTIALS).flatMap((l) => l.map((c) => c.chave));
+export const TOOL_CREDENTIAL_LABELS: Record<string, string> = {
+  google_workspace: "Google Workspace", microsoft: "Microsoft 365", e2b: "E2B", browserless: "Browserless", slack: "Slack", openapi: "API da empresa",
+  tavily: "Tavily", searchapi: "SearchAPI", exa: "Exa", serper: "Serper", serpapi: "SerpAPI", brave: "Brave Search", google: "Google Custom Search", wolfram: "Wolfram Alpha", searxng: "SearXNG",
+};

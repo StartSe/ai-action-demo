@@ -16,6 +16,19 @@ O editor segue a experiência do Agentflow V2: blocos compactos coloridos, alça
 
 Ao selecionar explicitamente a simulação, os fluxos rodam em demonstração: agentes devolvem respostas ilustrativas e nenhuma chamada HTTP ou ferramenta externa é executada. Com ChatGPT ou OpenRouter conectado, o chat oculta as sugestões e a opção de simulação e envia execuções reais. `/?exemplo=1` cria um exemplo de triagem quando ainda não há fluxos.
 
+## Memória dos agentes
+
+Os blocos **Agente** e **LLM** têm a chave **Ativar memória** e o seletor **Tipo de memória**, abaixo de **Instruções**, com as cores dos temas claro e escuro do projeto. O padrão, inclusive em blocos antigos sem configuração, é memória ativada com **Todas as mensagens**: recebe as interações anteriores fornecidas pela conversa, a entrada atual e as respostas dos agentes já executados. Cada bloco escolhe sua própria memória:
+
+- **Todas as mensagens**: inclui todo esse histórico disponível, sem o antigo recorte de seis interações ou truncamento das perguntas e respostas.
+- **Últimas mensagens**: inclui as últimas N mensagens anteriores (padrão 20), além da mensagem desta etapa. N conta mensagens individuais, não pares de pergunta e resposta.
+- **Resumo da conversa**: faz uma chamada adicional ao modelo do bloco, sem ferramentas, para resumir o histórico antes de responder.
+- **Resumo e mensagens recentes**: resume as mensagens antigas quando o histórico ultrapassa um limite aproximado (padrão 2.000 tokens, estimados por caracteres) e preserva as recentes. Esse limite é um gatilho para resumir o histórico, não um teto do prompt inteiro.
+
+Desligar **Ativar memória** oculta as opções e preserva o tipo e os limites escolhidos para quando for reativada. Sem memória, o bloco não inclui histórico automaticamente; mantém instruções, mensagem da etapa, referências explícitas e anexos.
+
+A mensagem da etapa é o campo **Mensagem**, ou a saída anterior quando ele fica em branco. O histórico usa as respostas concluídas dos agentes, preserva as passagens de loops e não inclui as chamadas internas de ferramentas. Entre interações, o chat reutiliza perguntas e respostas finais; etapas internas de execuções antigas não são reinseridas. A memória não cria persistência adicional das variáveis do fluxo. Chamadas externas precisam fornecer o histórico aceito pela rota; uma execução isolada começa sem interações anteriores. O chat incorporado mantém seu limite de 100 interações por sessão; o validador de histórico aceita até 1.000 interações, sem corte silencioso.
+
 ## Configurações
 
 A tela **Configurações** reúne o que os agentes podem usar:
@@ -131,7 +144,11 @@ Os testes cobrem 45 comportamentos: motor, protocolo ChatGPT com subprocesso sim
 
 O catálogo foi comparado com `flowise/packages/components/nodes/tools`. Todas as ferramentas pedidas estão disponíveis: BraveSearch API, Browserless MCP, Calculator, Code Interpreter by E2B, Exa Search, Gmail, Google Calendar, Google Custom Search, Google Drive, Google Sheets, Microsoft Outlook, Microsoft Teams, OpenAPI Toolkit, Read File, Request Get, Request Post, SearchApi, SearXNG, Serp API, Serper, Slack MCP, Tavily, Web Browser e Write File. As ferramentas anteriores continuam funcionando.
 
-No diálogo de cada Agente, clique em **Adicionar ferramenta**. Cada clique cria um cartão: escolha o serviço e preencha a credencial e os campos pedidos ali mesmo. **Salvar configuração** grava a conexão compartilhada; **Salvar bloco** aplica a seleção ao agente. O cabeçalho de cada cartão permite expandir ou recolher os campos; ao reabrir o Agente, os cartões já configurados começam recolhidos. O app mantém uma credencial compartilhada por serviço nesta instalação (Google Workspace compartilha a conta entre Gmail, Calendar, Drive e Sheets; Microsoft entre Outlook e Teams). Cada agente mantém sua própria lista de permissões. Remover o cartão de uma ferramenta só altera aquele agente; remover sua credencial afeta todos. Segredos ficam cifrados em SQLite e não são incluídos na exportação do fluxo nem devolvidos ao navegador. Uma credencial definida no ambiente precisa ser alterada no ambiente.
+No diálogo de cada Agente, **Adicionar ferramenta** abre um catálogo com busca, categorias e descrições. Ao escolher uma ferramenta, seu cartão é aberto para configurar a conexão. Escolha uma credencial existente ou **Criar nova credencial**, dê um nome à conta e preencha os campos do serviço. A nova credencial é selecionada automaticamente. Os campos opcionais ficam em **Opções avançadas**, e uma conexão salva pode ser editada sem sair do agente. Feche o bloco e use **Salvar** no editor para persistir a seleção.
+
+Em **Configurações › Credenciais das ferramentas**, é possível buscar, criar, editar e excluir conexões. Há várias contas por serviço, e cada cartão guarda apenas o ID da conta escolhida. Credenciais nomeadas ficam cifradas no SQLite; respostas de API, navegador e exportação do fluxo não recebem os segredos. Deixar uma chave em branco ao editar preserva o valor salvo. A execução usa a conta selecionada em um contexto assíncrono isolado, inclusive na renovação OAuth, sem alterar a conexão global nem herdar campos faltantes de outras contas. A exclusão é recusada enquanto a credencial está referenciada por um fluxo salvo ou uma execução em andamento.
+
+As configurações anteriores continuam disponíveis como **Conexão padrão existente**. Fluxos sem seleção explícita mantêm esse acesso. Conexões vindas do ambiente ficam protegidas contra edição e remoção pela tela; é possível cadastrar uma nova credencial independente. Remover uma ferramenta do agente não exclui sua credencial.
 
 | Serviço | Configuração e comportamento |
 | --- | --- |
@@ -154,12 +171,12 @@ Referências: [limites pelo Codex App Server](https://learn.chatgpt.com/docs/app
 
 ## Cartões de ferramentas e servidores (0.6.0)
 
-- **Adicionar ferramenta** cria um cartão com seleção por categoria, descrição, campos obrigatórios e opcionais, configuração compartilhada e estado de disponibilidade. Credenciais já salvas podem ser reutilizadas, alteradas ou removidas dentro do cartão; os segredos nunca são devolvidos ao navegador.
-- **Adicionar servidor MCP** cria outro cartão. Escolha uma conexão existente ou **Cadastrar novo servidor…** e informe nome, endereço e código de acesso, ou autorize a conta após salvar. É possível adicionar vários servidores ao mesmo agente.
+- **Adicionar ferramenta** abre o catálogo pesquisável; a escolha cria um cartão com descrição, seleção de credencial e estado de disponibilidade. A mesma credencial pode ser reutilizada por outros agentes; os segredos nunca são devolvidos ao navegador.
+- **Conectar serviço por MCP** cria outro cartão. Escolha uma conexão existente ou **Cadastrar novo servidor…** e informe nome, endereço e código de acesso, ou autorize a conta após salvar. É possível adicionar vários servidores ao mesmo agente.
 - Cada servidor apresenta suas próprias ações com descrição, busca, seleção individual, **Selecionar todas**, **Desmarcar todas** e **Atualizar ações**. A consulta e os erros são independentes por servidor. Adicionar ou trocar a conexão não autoriza ações automaticamente.
 - A lixeira retira o cartão e suas permissões apenas deste agente. **Editar conexão › Excluir conexão compartilhada** exige confirmação porque afeta todos os agentes que usam aquele servidor.
 - As seleções sobrevivem ao fechamento e à reabertura do fluxo, inclusive servidores adicionados sem nenhuma ação autorizada. Se um serviço estiver fora do ar ou uma ação desaparecer, a seleção anterior continua visível como indisponível até ser removida explicitamente.
-- Fluxos anteriores continuam compatíveis: `config.tools` mantém as permissões usadas pelo motor. `config.toolCards` contém apenas identificadores e a organização dos cartões, sem credenciais. Depois de **Salvar bloco**, use **Salvar** no editor para persistir o fluxo.
+- Fluxos anteriores continuam compatíveis: `config.tools` mantém as permissões usadas pelo motor. `config.toolCards` contém identificadores, organização dos cartões e o ID da credencial escolhida, sem segredos. Depois de fechar o bloco, use **Salvar** no editor para persistir o fluxo.
 
 Validação: 64 testes de comportamento e contratos, lint, build de produção e verificadores de padrão/jargão. Navegação com Playwright em desktop, tema escuro e celular (390 px), usando dados temporários e dois servidores MCP locais: inclusão e recolhimento, campos obrigatórios, falha/repetição da gravação de credencial, ações homônimas com seleção independente, indisponibilidade e recuperação, persistência ao reabrir e servidor sem ações selecionadas. Serviços externos pagos não foram utilizados.
 

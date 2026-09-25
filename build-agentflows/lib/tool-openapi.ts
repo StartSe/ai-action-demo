@@ -1,4 +1,4 @@
-import { getConfig } from "./store";
+import { toolConfig as getConfig } from "./tool-config-context";
 import { fetchText } from "./tools";
 import { publicUrl } from "./tool-services";
 import { FlowError } from "./flow-store";

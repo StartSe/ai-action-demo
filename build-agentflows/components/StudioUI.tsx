@@ -322,6 +322,7 @@ export function Modal({
       className={"studio-modal" + (wide ? " wide" : "") + (className ? " " + className : "")}
       onCancel={(e) => {
         e.preventDefault();
+        e.stopPropagation();
         onClose();
       }}
       onClick={(e) => {

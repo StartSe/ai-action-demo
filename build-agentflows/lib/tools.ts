@@ -8,7 +8,9 @@ import type { AgentTool } from "./chatgpt";
 import { conexaoMCP, servidoresMCP, servidorMCP } from "./conexoes";
 import { conectar, chamar, listarFerramentas } from "./mcp-cliente";
 import { FlowError, listFlows } from "./flow-store";
-import { getConfig } from "./store";
+import { toolConfig as getConfig } from "./tool-config-context";
+import { withToolCredential } from "./tool-credential-store";
+import { readToolCards } from "./agent-tools";
 import { TOOL_CREDENTIALS, type Credential } from "./tool-credentials";
 import { SERVICE_TOOLS, resolveServiceToolkit } from "./tool-services";
 export type ToolInfo = {
@@ -21,6 +23,7 @@ export type ToolInfo = {
   // Ferramenta pronta que ainda precisa de credencial (campos) ou de uma conexão (setup).
   configured?: boolean;
   credentials?: Credential[];
+  credentialProvider?: string;
   setup?: string;
 };
 export type ToolGroup = { id: string; name: string; kind: "builtin" | "mcp"; tools: ToolInfo[]; error?: string };
@@ -356,6 +359,7 @@ export function builtinTools(): ToolInfo[] {
     schema,
     category,
     configured: !available || available(),
+    credentialProvider: credential,
     credentials: credential ? TOOL_CREDENTIALS[credential].map((c) => ({ ...c, definido: !!getConfig(c.chave), valor: c.secret ? undefined : getConfig(c.chave) })) : undefined,
     setup,
   }));
@@ -389,18 +393,20 @@ export function normalizeToolId(id: string) {
   return id.includes(":") ? id : `mcp:FERRAMENTAS:${id}`;
 }
 // Ferramentas prontas para o modelo, a partir dos identificadores marcados no bloco.
-export async function resolveTools(ids: string[]): Promise<AgentTool[]> {
+export async function resolveTools(ids: string[], cardsValue = ""): Promise<AgentTool[]> {
   const wanted = [...new Set(ids.map((s) => s.trim()).filter(Boolean).map(normalizeToolId))];
+  const cards = readToolCards(ids.join(","), cardsValue);
   const out: AgentTool[] = [];
   const byServer = new Map<string, string[]>();
   for (const id of wanted) {
     if (id.startsWith("interno:")) {
       const b = BUILTIN.find((t) => t.id === id);
-      if (!b || (b.available && !b.available()))
+      const credentialId = cards.find((card) => card.kind === "tool" && card.target === id)?.credentialId;
+      if (!b || !withToolCredential(credentialId, b.credential, () => !b.available || b.available()))
         throw new FlowError(`A ferramenta “${toolShortName(id)}” não está disponível. Confira as credenciais no Agente.`);
-      const toolkit = await resolveServiceToolkit(b.name);
-      if (toolkit) { out.push(...toolkit); continue; }
-      out.push({ name: b.name, description: b.description, schema: b.schema, call: (args) => b.call((args || {}) as Record<string, unknown>) });
+      const toolkit = await withToolCredential(credentialId, b.credential, () => resolveServiceToolkit(b.name));
+      if (toolkit) { out.push(...toolkit.map((tool) => ({ ...tool, call: (args: unknown) => withToolCredential(credentialId, b.credential, () => tool.call(args)) }))); continue; }
+      out.push({ name: b.name, description: b.description, schema: b.schema, call: (args) => withToolCredential(credentialId, b.credential, () => b.call((args || {}) as Record<string, unknown>)) });
       continue;
     }
     const [, prefix, ...rest] = id.split(":");

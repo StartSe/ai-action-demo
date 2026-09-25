@@ -18,12 +18,33 @@ const STATUS: Record<Run["status"], string> = {
 function duration(ms: number) {
   return ms < 1000 ? ms + " ms" : (ms / 1000).toFixed(1) + " s";
 }
+function MessageTime({ date, active }: { date: string; active: boolean }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const refresh = () => setNow(Date.now());
+    const initial = setTimeout(refresh, 0);
+    const timer = setInterval(refresh, 30000);
+    return () => { clearTimeout(initial); clearInterval(timer); };
+  }, [active]);
+  const timestamp = new Date(date);
+  if (!Number.isFinite(timestamp.getTime())) return null;
+  const minutes = Math.max(0, Math.floor((now - timestamp.getTime()) / 60000));
+  const hours = Math.floor(minutes / 60), days = Math.floor(hours / 24);
+  const label = minutes < 1 ? "Agora" : minutes < 60 ? `${minutes} min atrás`
+    : hours < 24 ? `${hours} h atrás` : days === 1 ? "Ontem"
+    : days < 7 ? `${days} dias atrás` : timestamp.toLocaleDateString("pt-BR");
+  const full = timestamp.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  return <time dateTime={date} title={full} aria-label={full}>{label}</time>;
+}
 // Resposta do fluxo em formato de balão, com as etapas executadas, o estado e a aprovação em linha.
 function BotMessage({
   run,
+  active,
   onChange,
 }: {
   run: Run;
+  active: boolean;
   onChange: (r: Run) => void;
 }) {
   const [busy, setBusy] = useState(false),
@@ -111,9 +132,8 @@ function BotMessage({
           </div>
         )}
         <footer>
-          <span className={"run-status-dot " + run.status} />
-          {STATUS[run.status]} · {run.demo ? "Demonstração" : "Execução real"}
-          {run.version ? " · v" + run.version : " · rascunho"}
+          <MessageTime date={run.updatedAt || run.createdAt} active={active} />
+          {run.status !== "completed" && <span>{STATUS[run.status]}</span>}
           {["waiting", "running"].includes(run.status) && (
             <button disabled={busy} onClick={() => act("cancel")}>
               Cancelar execução
@@ -387,7 +407,7 @@ export function ChatPopup({
                 <div className="chat-msg user">
                   <div className="chat-bubble"><ChatAttachments items={r.attachments || []} />{r.input}</div>
                 </div>
-                <BotMessage run={r} onChange={onChange} />
+                <BotMessage run={r} active={open} onChange={onChange} />
               </div>
             ))}
             {running && !session.some((r) => r.status === "running") && (

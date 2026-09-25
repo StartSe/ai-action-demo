@@ -24,7 +24,7 @@ test("pergunta de continuidade recebe contexto do mesmo fluxo sem alterar a entr
   assert.equal(second.status, "completed"); assert.equal(second.input, "Qual plano ela escolheu?"); assert.equal(second.conversation?.length, 1);
   const other = createFlow("Outro"); assert.throws(() => conversationHistory(other.id, [first.id]), /deste fluxo/);
   assert.throws(() => conversationHistory(flow.id, [first.id, first.id]), /inválido/);
-  assert.throws(() => conversationHistory(flow.id, Array.from({ length: 7 }, (_, i) => String(i))), /inválido/);
+  assert.throws(() => conversationHistory(flow.id, Array.from({ length: 1001 }, (_, i) => String(i))), /mil interações/);
   const demo = await startRun(flow.id, "Demo", false, true); assert.throws(() => conversationHistory(flow.id, [demo.id]), /concluídas/);
 });
 test("voz pertence ao fluxo, persiste ao reabrir e sobrevive ao salvamento de cliente anterior", () => {

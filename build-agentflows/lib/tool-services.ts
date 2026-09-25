@@ -1,6 +1,6 @@
 import { constants, lstatSync, mkdirSync, openSync, readFileSync, closeSync, writeFileSync, fstatSync } from "node:fs";
 import { resolve, join, dirname, relative, sep } from "node:path";
-import { getConfig, setConfig } from "./store";
+import { toolConfig as getConfig, setToolConfig as setConfig } from "./tool-config-context";
 import { FlowError } from "./flow-store";
 import type { AgentTool } from "./chatgpt";
 import type { Builtin } from "./tools";

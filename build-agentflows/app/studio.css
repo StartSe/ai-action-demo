@@ -253,6 +253,15 @@
 .studio-button.primary:hover {
   filter: brightness(0.95);
 }
+.studio-button.destructive {
+  background: #b63f4c;
+  border-color: #b63f4c;
+  color: white;
+}
+.studio-button.destructive:hover {
+  background: #9e3440;
+  border-color: #9e3440;
+}
 .studio-button.subtle {
   background: transparent;
   border-color: transparent;
@@ -2561,6 +2570,23 @@
   display: grid;
   gap: 18px;
 }
+.node-memory {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid var(--studio-line);
+  border-radius: 14px;
+  background: var(--studio-bg);
+}
+.node-memory-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.node-memory-switch { position: relative; flex: 0 0 44px; width: 44px; height: 26px; padding: 3px; border: 1px solid var(--studio-line); border-radius: 20px; background: var(--studio-muted); }
+.node-memory-switch > span { display: block; width: 18px; height: 18px; border-radius: 50%; background: var(--studio-surface); transform: translateX(0); }
+.node-memory-switch[aria-checked="true"] { background: var(--studio-primary); border-color: var(--studio-primary); }
+.node-memory-switch[aria-checked="true"] > span { transform: translateX(18px); }
+.node-memory-options { display: grid; gap: 8px; margin-top: 8px; padding-top: 14px; border-top: 1px solid var(--studio-line); }
+.node-fields .node-memory input, .node-fields .node-memory select { background: var(--studio-surface); }
+.node-fields .node-memory-options > select, .node-fields .node-memory small { margin-top: 0; }
+.node-memory-options > label:not(:first-child) { margin-top: 8px; }
 .node-fields label {
   font-size: 11px;
   font-weight: 650;
@@ -3668,3 +3694,34 @@
 .generator-message p { margin: 4px 0 0; font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .generator-dialog .generator-summary { margin-bottom: 16px; }
 .generator-dialog .generator-summary .preset-chain { flex-wrap: wrap; }
+
+/* Ferramentas e credenciais: mesmo fundo e acento dos campos do editor. */
+.tool-catalog-dialog { width: min(680px, calc(100vw - 32px)); }
+.tool-catalog-filters { grid-template-columns: minmax(0, 1fr) minmax(150px, .65fr); margin: 18px 0; }
+.tool-catalog-list { display: grid; gap: 8px; max-height: 48vh; overflow-y: auto; padding: 3px; }
+.tool-catalog-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px; text-align: left; border: 1px solid var(--studio-line); border-radius: 12px; background: var(--studio-bg); color: var(--studio-ink); font: inherit; }
+.tool-catalog-item:hover:not(:disabled) { border-color: var(--studio-primary); background: var(--studio-primary-soft); }
+.tool-catalog-item > span:nth-child(2) { flex: 1; min-width: 0; }
+.tool-catalog-item strong, .tool-catalog-item small, .tool-catalog-item em { display: block; }
+.tool-catalog-item small { color: var(--studio-muted); line-height: 1.5; margin-top: 4px; }
+.tool-catalog-item em { color: var(--studio-primary); font-size: 11px; font-style: normal; margin-top: 8px; }
+.tool-catalog-item > svg { flex-shrink: 0; }
+.tool-catalog-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--studio-line); }
+.tool-catalog-footer p { color: var(--studio-muted); font-size: 12px; }
+.credential-dialog { width: min(520px, calc(100vw - 32px)); }
+.credential-dialog > .studio-modal-body > p { margin-top: 0; margin-bottom: 20px; color: var(--studio-muted); }
+.credential-advanced { border: 1px solid var(--studio-line); border-radius: 10px; padding: 12px; background: var(--studio-bg); }
+.credential-advanced summary { cursor: pointer; font-size: 12px; }
+.credential-advanced > div { margin-top: 16px; }
+.credential-manager-card { border: 1px solid var(--studio-line); border-radius: 14px; background: var(--studio-surface); padding: 20px; }
+.credential-manager-toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.credential-manager-toolbar label { font-size: 12px; flex: 1; max-width: 380px; }
+.credential-manager-toolbar input { display: block; margin-top: 6px; width: 100%; border: 1px solid var(--studio-line); border-radius: 8px; padding: 10px 12px; color: var(--studio-ink); background: var(--studio-bg); font: inherit; }
+.credential-manager-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--studio-line); }
+.credential-manager-row > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+.credential-manager-row small { display: block; color: var(--studio-muted); margin-top: 4px; }
+@media (max-width: 600px) {
+  .tool-catalog-filters { grid-template-columns: 1fr; }
+  .tool-catalog-footer, .credential-manager-toolbar, .credential-manager-row { align-items: stretch; flex-direction: column; }
+  .credential-manager-toolbar label { max-width: none; }
+}

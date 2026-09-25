@@ -1,5 +1,12 @@
-// Metadados visuais sem credenciais. A execução continua usando somente config.tools.
-export type ToolCard = { id: string; kind: "tool" | "mcp"; target: string };
+// O bloco guarda apenas o identificador da credencial; segredos ficam no servidor.
+export type ToolCard = { id: string; kind: "tool" | "mcp"; target: string; credentialId?: string };
+export function validateToolCards(encoded: string) {
+  if (!encoded) return;
+  let cards: unknown;
+  try { cards = JSON.parse(encoded); } catch { throw new Error("Confira as ferramentas deste agente."); }
+  if (!Array.isArray(cards) || cards.length > 100 || cards.some((card) => !card || typeof card.id !== "string" || !card.id || !["tool", "mcp"].includes(card.kind) || typeof card.target !== "string" ||
+    (card.credentialId !== undefined && (card.kind !== "tool" || typeof card.credentialId !== "string" || !/^(?:default:[a-z_]+|[a-f0-9-]{36})$/.test(card.credentialId))))) throw new Error("Confira as ferramentas e as credenciais selecionadas neste agente.");
+}
 export function selectedTools(value: string): string[] {
   return [...new Set(value.split(",").map((v) => v.trim()).filter(Boolean)
     .map((v) => v.includes(":") ? v : `mcp:FERRAMENTAS:${v}`))];
@@ -14,7 +21,7 @@ export function readToolCards(value: string, encoded = ""): ToolCard[] {
     if (Array.isArray(parsed)) for (const c of parsed) {
       if (!c || typeof c.id !== "string" || !c.id || !["tool", "mcp"].includes(c.kind) || typeof c.target !== "string") continue;
       if (cards.some((p) => p.id === c.id || (c.target && p.kind === c.kind && p.target === c.target))) continue;
-      cards.push({ id: c.id, kind: c.kind, target: c.target });
+      cards.push({ id: c.id, kind: c.kind, target: c.target, ...(c.kind === "tool" && typeof c.credentialId === "string" && c.credentialId ? { credentialId: c.credentialId } : {}) });
     }
   } catch {}
   // Fluxos anteriores ganham um cartão por ferramenta e por servidor, sem mudar permissões.
@@ -37,6 +44,6 @@ export function replaceToolCard(selected: string[], cards: ToolCard[], id: strin
   if (target && card.kind === "tool") next.push(target);
   return {
     selected: [...new Set(next)],
-    cards: target === null ? cards.filter((c) => c.id !== id) : cards.map((c) => c.id === id ? { ...c, target } : c),
+    cards: target === null ? cards.filter((c) => c.id !== id) : cards.map((c) => c.id === id ? { id: c.id, kind: c.kind, target } : c),
   };
 }

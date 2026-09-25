@@ -480,7 +480,7 @@ export function FlowEditor({ id }: { id: string }) {
           input,
           demo: false,
           attachments: attachments.map((a) => a.id),
-          ...(conversational ? { conversationRunIds: session.filter((r) => r.status === "completed" && !r.demo).slice(-6).map((r) => r.id) } : {}),
+          ...(conversational ? { conversationRunIds: session.filter((r) => r.status === "completed" && !r.demo).map((r) => r.id) } : {}),
         });
       updateRun(result);
       return result;
@@ -1068,11 +1068,8 @@ export function FlowEditor({ id }: { id: string }) {
             histórico do fluxo.
           </p>
           <div className="modal-actions">
-            <button className="studio-button" onClick={() => setClearChat(false)}>
-              Cancelar
-            </button>
             <button
-              className="studio-button primary"
+              className="studio-button destructive"
               onClick={() => {
                 setSession([]);
                 setRun(null);

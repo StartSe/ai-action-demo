@@ -1,4 +1,5 @@
 import type { Attachment } from "./attachment-types";
+import { MEMORY_DEFAULTS } from "./memory-settings";
 export const BLOCKS = {
   start: {
     label: "Início",
@@ -87,6 +88,7 @@ export type Flow = {
   updatedAt: string;
 };
 export type Trace = {
+  type?: "step" | "tool";
   nodeId: string;
   label: string;
   output: string;
@@ -149,6 +151,7 @@ export function block(kind: Kind, id: string, x: number, y: number): Block {
                         prompt: "",
                         model: "",
                         tools: "",
+                        ...MEMORY_DEFAULTS,
                       };
   return {
     id,

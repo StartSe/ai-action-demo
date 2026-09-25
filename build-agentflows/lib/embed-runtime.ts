@@ -20,7 +20,7 @@ export async function sendEmbedMessage(sessionId: string, identity: EmbedIdentit
   if (!Array.isArray(attachmentIds) || attachmentIds.some(id => typeof id !== "string" || !s.attachments.includes(id))) throw new FlowError("Anexo não pertence à conversa.");
   locks.add(s.id);
   try {
-    const history = s.runIds.filter(id => getRun(id).status === "completed").slice(-6);
+    const history = s.runIds.filter(id => getRun(id).status === "completed");
     const r = await prepareRun(s.flowId, input, true, false, attachmentIds, history, { sessionId: s.id, maxActiveMs: embedSettings(s.flowId).maxMinutes * 60_000 });
     attachRun(s.id, requestId, r.id);
     db().prepare("INSERT INTO embed_jobs VALUES(?,'queued')").run(r.id);

@@ -373,7 +373,10 @@ test("Mensagem personaliza a chamada da etapa sem iteração extra; last inclui 
     ];
     const result = await runtime.startRun(flow(graph).id, "Meu pedido", false, false);
     assert.equal(result.status, "completed");
-    assert.deepEqual(prompts, ["Analise: Meu pedido", "Revise: Resposta anterior"]);
+    assert.equal(prompts.length, 2, "Memória completa não faz chamada extra");
+    assert.ok(prompts[0].endsWith("Analise: Meu pedido"));
+    assert.ok(prompts[1].endsWith("Revise: Resposta anterior"));
+    assert.match(prompts[1], /Meu pedido/);
     assert.equal(runtime.message({ prompt: "Mensagem independente" }, result), "Mensagem independente");
   } finally { bridge.run = original; }
 });
