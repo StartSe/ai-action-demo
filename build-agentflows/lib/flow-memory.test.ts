@@ -157,3 +157,24 @@ test("salvamento rejeita tipos e limites inválidos; falhas no resumo não são 
   assert.equal(result.error, "Provedor indisponível");
   assert.equal(result.outputs.b, undefined);
 });
+
+test("chat conserva o nome entre mensagens e inicia sem histórico após limpar a conversa", async () => {
+  const { POST } = await import("../app/api/flows/[id]/run/route");
+  const f = flow(), prompts: string[] = [];
+  bridge.run = async ({ prompt }) => { prompts.push(prompt); return "Resposta do agente"; };
+  const send = async (input: string, conversationRunIds: string[]) => {
+    const response = await POST(new Request(`http://localhost/api/flows/${f.id}/run`, {
+      method: "POST", body: JSON.stringify({ input, conversationRunIds }),
+    }), { params: Promise.resolve({ id: f.id }) });
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  const first = await send("Meu nome é Rafael", []);
+  prompts.length = 0;
+  await send("Sabe meu nome?", [first.id]);
+  assert.equal(prompts.length, 3);
+  for (const prompt of prompts) assert.match(prompt, /Meu nome é Rafael/);
+  prompts.length = 0;
+  await send("Nova conversa", []);
+  for (const prompt of prompts) assert.doesNotMatch(prompt, /Rafael|Sabe meu nome/);
+});
