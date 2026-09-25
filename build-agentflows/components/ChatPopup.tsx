@@ -359,7 +359,7 @@ export function ChatPopup({
     <section
       hidden={!open}
       className={"chat-popup" + (expanded ? " expanded" : "")}
-      aria-label="Testar Agentflow"
+      aria-label="Testar Fluxo Agêntico"
     >
       {voiceMode ? <div className={"voice-conversation " + voiceState.phase} aria-label="Conversa por voz">
         <div className="voice-mode-heading"><Icon name="wave" size={16} />Conversa por voz</div>

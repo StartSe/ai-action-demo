@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.13.2 — 25/09/2026
+
+- Seção Agentflows renomeada para Fluxo Agêntico, com navegação, busca e ações usando a mesma nomenclatura.
+- Contador ao lado da busca removido, preservando o alinhamento dos controles.
+
 ## 0.13.1 — 25/09/2026
 
 - Histórico valida a resposta paginada antes de atualizar a tela, impedindo erro ao acessar `items.length` em retornos inválidos ou estados antigos preservados pelo Fast Refresh.

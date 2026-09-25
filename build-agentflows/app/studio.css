@@ -315,6 +315,9 @@
 .library-toolbar .studio-search {
   width: 320px;
 }
+.flow-library-toolbar .studio-search {
+  margin-right: auto;
+}
 .library-count {
   font-size: 11px;
   color: var(--studio-muted);

@@ -203,7 +203,7 @@ print(dados["status"], dados["output"])`,
           </section>
   );
   return (
-    <Modal title="Implantar Agentflow" onClose={onClose} wide>
+    <Modal title="Implantar Fluxo Agêntico" onClose={onClose} wide>
       <div className="dialog-tabs">
         <button className={tab === "embed" ? "active" : ""} onClick={() => setTab("embed")}>Chat no site</button>
         <button className={tab !== "embed" ? "active" : ""} onClick={() => setTab("whatsapp")}>Integrações</button>

@@ -38,7 +38,7 @@ export function ToolParameters({ tool, card, credentials, onChange, onSaved }: {
   return <div className="tool-parameters-fields">
     <ToolCredentialFields tool={tool} credentialId={card.credentialId} credentials={credentials} onChange={accountChanged} onSaved={onSaved} />
     {tool.name === "executar_fluxo" && <>
-      <label>Agentflow<select value={params.flowId || ""} onChange={(event) => change("flowId", event.target.value)}><option value="">Selecione um fluxo publicado</option>{flows.map((flow) => <option key={flow.id} value={flow.id}>{flow.name}</option>)}{params.flowId && !flows.some((flow) => flow.id === params.flowId) && <option value={params.flowId}>Fluxo indisponível</option>}</select></label>
+      <label>Fluxo Agêntico<select value={params.flowId || ""} onChange={(event) => change("flowId", event.target.value)}><option value="">Selecione um fluxo publicado</option>{flows.map((flow) => <option key={flow.id} value={flow.id}>{flow.name}</option>)}{params.flowId && !flows.some((flow) => flow.id === params.flowId) && <option value={params.flowId}>Fluxo indisponível</option>}</select></label>
       <label>Descrição<textarea rows={2} placeholder="Quando o agente deve usar este fluxo?" value={params.description || ""} onChange={(event) => change("description", event.target.value)} /></label>
     </>}
     {tool.name === "data_hora" && <label>Fuso horário<select value={params.timezone || "America/Sao_Paulo"} onChange={(event) => change("timezone", event.target.value)}>{["America/Sao_Paulo", "America/Manaus", "America/Belem", "America/Fortaleza", "America/Recife", "America/Cuiaba", "America/Rio_Branco", "America/Noronha", "Europe/Lisbon", "UTC"].map((zone) => <option key={zone} value={zone}>{zone}</option>)}</select></label>}

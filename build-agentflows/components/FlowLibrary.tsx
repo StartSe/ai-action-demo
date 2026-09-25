@@ -162,8 +162,8 @@ export function FlowLibrary() {
       <main className="library-page">
         <header className="library-header">
           <div>
-            <div className="studio-breadcrumb">Workspace / Agentflows</div>
-            <h1>Agentflows</h1>
+            <div className="studio-breadcrumb">Workspace / Fluxo Agêntico</div>
+            <h1>Fluxo Agêntico</h1>
             <p>Construa e conecte seus agentes de IA.</p>
           </div>
           <div className="studio-actions">
@@ -181,7 +181,7 @@ export function FlowLibrary() {
               onClick={() => create()}
             >
               <Icon name="plus" size={18} />
-              Novo Agentflow
+              Novo Fluxo Agêntico
             </button>
           </div>
         </header>
@@ -191,12 +191,12 @@ export function FlowLibrary() {
             {error}
           </div>
         )}
-        <div className="library-toolbar">
+        <div className="library-toolbar flow-library-toolbar">
           <label className="studio-search">
             <Icon name="search" size={18} />
             <input
               aria-label="Buscar fluxos"
-              placeholder="Buscar Agentflows"
+              placeholder="Buscar fluxos agênticos"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -204,9 +204,6 @@ export function FlowLibrary() {
               }}
             />
           </label>
-          <span className="library-count">
-            {filtered.length} {filtered.length === 1 ? "fluxo" : "fluxos"}
-          </span>
           <div className="view-toggle">
             <IconButton
               icon="grid"
@@ -461,7 +458,7 @@ export function FlowLibrary() {
         </Modal>
       )}
       {toDelete && (
-        <Modal title="Excluir Agentflow" onClose={() => setToDelete(null)}>
+        <Modal title="Excluir Fluxo Agêntico" onClose={() => setToDelete(null)}>
           <p>
             Excluir “{toDelete.name}”? O histórico de execuções será preservado.
           </p>

@@ -546,7 +546,7 @@ export function FlowEditor({ id }: { id: string }) {
         ) : (
           <>
             <span className="studio-spinner" />
-            Abrindo Agentflow…
+            Abrindo Fluxo Agêntico…
           </>
         )}
       </main>
@@ -908,8 +908,8 @@ export function FlowEditor({ id }: { id: string }) {
             </>}
             <button
               className={"chat-fab" + (chat ? " active" : "")}
-              title={chat ? "Fechar chat" : "Testar Agentflow"}
-              aria-label={chat ? "Fechar chat" : "Testar Agentflow"}
+              title={chat ? "Fechar chat" : "Testar Fluxo Agêntico"}
+              aria-label={chat ? "Fechar chat" : "Testar Fluxo Agêntico"}
               onClick={() => {
                 setChat(!chat);
                 setHistory(false);
@@ -1164,7 +1164,7 @@ export function FlowEditor({ id }: { id: string }) {
       )}
       {confirmDelete && (
         <Modal
-          title="Excluir Agentflow"
+          title="Excluir Fluxo Agêntico"
           onClose={() => setConfirmDelete(false)}
         >
           <p>

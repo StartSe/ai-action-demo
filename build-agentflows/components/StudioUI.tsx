@@ -398,7 +398,7 @@ export function StudioShell({
         <nav>
           <Link className={active === "flows" ? "active" : ""} href="/">
             <Icon name="flows" />
-            Agentflows
+            Fluxo Agêntico
           </Link>
           <Link className={active === "runs" ? "active" : ""} href="/historico">
             <Icon name="runs" />

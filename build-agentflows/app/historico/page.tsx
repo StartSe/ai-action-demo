@@ -103,7 +103,7 @@ export default function Page() {
           <div>
             <div className="studio-breadcrumb">Workspace / Execuções</div>
             <h1>Execuções</h1>
-            <p>Respostas, decisões e cada etapa dos seus Agentflows.</p>
+            <p>Respostas, decisões e cada etapa dos seus fluxos agênticos.</p>
           </div>
           <label className="execution-filter">
             Status
@@ -144,7 +144,7 @@ export default function Page() {
         ) : (
           <div className="executions-table">
             <div className="execution-row table-heading">
-              <span>Agentflow / entrada</span>
+              <span>Fluxo Agêntico / entrada</span>
               <span>Status</span>
               <span>Modo</span>
               <span>Data</span>
