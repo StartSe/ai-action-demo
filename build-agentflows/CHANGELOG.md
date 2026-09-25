@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.17.1 — 25/09/2026
+
+- Removido o acesso à Base de Conhecimento da tela Fluxo Agêntico.
+- Paginação exibida somente quando a lista contém mais de uma página.
+
 ## 0.17.0 — 25/09/2026
 
 - Chat de teste com badges por chunk retornado, abrindo o conteúdo completo e sua origem em um modal. O texto consultado fica preservado na execução, respeitando referências habilitadas por base.
