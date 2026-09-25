@@ -1,7 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import type { SavedToolCredential } from "@/lib/tool-credential-store";
-import { Icon, Modal, request } from "./StudioUI";
+import { CREDENTIAL_TOOL_CATALOG } from "@/lib/tool-presentation";
+import { ToolLogo } from "./ToolSelect";
+import { Icon, IconButton, Modal, request } from "./StudioUI";
 import { ToolCredentialDialog } from "./ToolCredentialDialog";
 
 export function ToolCredentialsManager() {
@@ -23,7 +25,8 @@ export function ToolCredentialsManager() {
     catch (e) { setError(e instanceof Error ? e.message : "Não foi possível excluir a credencial."); }
     finally { setBusy(false); }
   }
-  const shown = items.filter((c) => `${c.name} ${c.providerLabel}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+  const toolFor = (c: SavedToolCredential) => CREDENTIAL_TOOL_CATALOG.find((tool) => tool.provider === c.provider);
+  const shown = items.filter((c) => `${c.name} ${c.providerLabel} ${toolFor(c)?.name || ""}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   return <section className="tool-credentials-manager" id="credenciais">
     <div className="settings-section-heading"><Icon name="link" size={18} /><div><h2>Credenciais das ferramentas</h2><p>Guarde suas conexões e escolha qual conta cada agente usa.</p></div></div>
     <div className="credential-manager-card">
@@ -31,8 +34,8 @@ export function ToolCredentialsManager() {
       {loading && <p role="status">Carregando conexões…</p>}
       {!loading && !items.length && <p>Nenhuma credencial salva. Você também pode criar uma ao adicionar uma ferramenta no agente.</p>}
       {!!items.length && !shown.length && <p>Nenhuma conexão encontrada para essa busca.</p>}
-      {shown.map((c) => <div className="credential-manager-row" key={c.id}><div><strong>{c.name}</strong><small>{c.providerLabel} · {c.configured ? "Credencial salva" : "Revisar conexão"}</small></div><div className="studio-actions">
-        <button type="button" className="studio-button" onClick={() => setEditor(c)}>Editar</button><button type="button" className="tool-text-button" disabled={c.locked} onClick={() => { setError(""); setRemoving(c); }}>Excluir</button>
+      {shown.map((c) => <div className="credential-manager-row" key={c.id}><div className="credential-manager-identity"><ToolLogo id={toolFor(c)?.id || `interno:${c.provider}`} /><div><strong>{c.name}</strong><small>{toolFor(c)?.name || c.providerLabel} · {c.configured ? "Credencial salva" : "Revisar conexão"}</small></div></div><div className="studio-actions">
+        <IconButton icon="pencil" label={`Editar credencial ${c.name}`} onClick={() => setEditor(c)} /><IconButton icon="trash" label={`Excluir credencial ${c.name}`} disabled={c.locked} onClick={() => { setError(""); setRemoving(c); }} />
       </div></div>)}
       {error && !removing && <div role="alert"><p className="studio-error">{error}</p><button type="button" className="tool-text-button" onClick={() => void load()}>Tentar novamente</button></div>}
     </div>

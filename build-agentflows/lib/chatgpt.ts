@@ -7,6 +7,7 @@ import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
 
+import { tokenUsage, type TokenUsage } from "./token-usage";
 import { normalizeUsage } from "./account-usage";
 import type { ModelCapability } from "./model-capabilities";
 
@@ -42,6 +43,7 @@ type ActiveTurn = {
   tools: AgentTool[];
   calls: number;
   onText?: (text: string) => void;
+  onUsage?: (usage: TokenUsage) => void;
   timer: ReturnType<typeof setTimeout>;
 };
 
@@ -106,7 +108,8 @@ export class ChatGPTBridge {
               "-c",
               "features.code_mode=false",
               "-c",
-              "features.code_mode_host=false",
+              // O host também despacha ferramentas dinâmicas, mesmo sem code mode.
+              "features.code_mode_host=true",
               "-c",
               "features.multi_agent=false",
               "-c",
@@ -256,6 +259,10 @@ export class ChatGPTBridge {
         ? null
         : String(p.error || "Não foi possível entrar. Gere um novo código.");
     }
+    if (m.method === "thread/tokenUsage/updated" && turn) {
+      const usage = tokenUsage((p.tokenUsage as Json)?.total, "chatgpt");
+      if (usage) turn.onUsage?.(usage);
+    }
     if (m.method === "item/agentMessage/delta" && turn) {
       turn.text += String(p.delta || "");
       turn.onText?.(turn.text);
@@ -354,6 +361,7 @@ export class ChatGPTBridge {
     images = [],
     signal,
     onText,
+    onUsage,
     timeoutMs = 180000,
     webSearch = false,
   }: {
@@ -364,6 +372,7 @@ export class ChatGPTBridge {
     images?: string[];
     signal?: AbortSignal;
     onText?: (text: string) => void;
+    onUsage?: (usage: TokenUsage) => void;
     timeoutMs?: number;
     webSearch?: boolean;
   }): Promise<string> {
@@ -397,7 +406,7 @@ export class ChatGPTBridge {
         "features.shell_tool": false,
         "features.unified_exec": false,
         "features.code_mode": false,
-        "features.code_mode_host": false,
+        "features.code_mode_host": true,
         "features.multi_agent": false,
         web_search: webSearch ? "live" : "disabled",
       },
@@ -432,6 +441,7 @@ export class ChatGPTBridge {
         tools,
         calls: 0,
         onText,
+        onUsage,
         timer,
       });
       signal?.addEventListener("abort", abort, { once: true });
@@ -470,7 +480,14 @@ export class ChatGPTBridge {
 }
 const globalChat = globalThis as typeof globalThis & {
   agentflowsChatGPT?: ChatGPTBridge;
+  agentflowsChatGPTRevision?: string;
 };
 export function chatGPT() {
+  // O hot reload preserva globais: descarte processos iniciados com o host desativado.
+  if (globalChat.agentflowsChatGPT && globalChat.agentflowsChatGPTRevision !== "tool-host-1") {
+    globalChat.agentflowsChatGPT.close();
+    globalChat.agentflowsChatGPT = undefined;
+  }
+  globalChat.agentflowsChatGPTRevision = "tool-host-1";
   return (globalChat.agentflowsChatGPT ??= new ChatGPTBridge());
 }

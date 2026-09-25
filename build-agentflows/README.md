@@ -1,6 +1,6 @@
-# Build Agentflows — v0.9.4
+# Build Agentflows — v0.10.0
 
-Versão 0.9.4: condições com critérios e saídas dinâmicas, caminho alternativo automático e mensagens de progresso durante a geração com IA. Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
+Versão 0.10.0: detalhes das etapas em modal, consumo de tokens informado pelos provedores, respostas em Markdown e correção das ferramentas dos agentes conectados ao ChatGPT. Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
 
 Crie fluxos visuais de agentes de IA, teste cada etapa e publique versões que seus sistemas e assistentes podem executar. Aplicação independente da suíte **IA para Executivos**, inspirada na orquestração explícita de [AgentFlow V2 do Flowise](https://docs.flowiseai.com/using-flowise/agentflowv2).
 
@@ -15,6 +15,14 @@ Um LLM ou Agente com a mensagem em branco recebe automaticamente a conversa (no 
 O editor segue a experiência do Agentflow V2: blocos compactos coloridos, alça de entrada em barra, saídas em seta que aparecem ao passar o mouse, conexões com gradiente entre as cores dos blocos e botão para removê-las, rótulo do ramo (Sim, Não, Repetir, Concluir) junto à origem. Arraste uma saída para outro bloco para conectar; solte no vazio para escolher o próximo bloco já conectado. Cada saída aceita uma conexão e ciclos só existem pela saída Repetir. O botão ✨ abre "O que você quer construir?": o ChatGPT desenha blocos, conexões e instruções a partir de uma descrição, com prévia antes de ir para o quadro. Salvar valida e publica ou atualiza uma única versão, v1, usada pelos testes e pelas integrações configuradas. Não há uma ação separada de publicar. Testes usam o último fluxo salvo pelo chat no canto superior direito, com histórico da sessão, etapas executadas e aprovação em linha. Cada execução guarda entrada, saída, versão, estado e registro de etapas em SQLite. Aprovações persistem após reinício e aceitam uma única decisão. Execuções que estavam rodando no momento do reinício são marcadas como interrompidas para não repetir ações externas silenciosamente.
 
 Ao selecionar explicitamente a simulação, os fluxos rodam em demonstração: agentes devolvem respostas ilustrativas e nenhuma chamada HTTP ou ferramenta externa é executada. Com ChatGPT ou OpenRouter conectado, o chat oculta as sugestões e a opção de simulação e envia execuções reais. `/?exemplo=1` cria um exemplo de triagem quando ainda não há fluxos.
+
+## Detalhes das execuções
+
+Clique em uma etapa no chat ou no histórico de execuções para abrir o modal com status, duração, entrada e saída. Chamadas de ferramentas aparecem desde o início e registram sucesso, falha ou interrupção. Seus argumentos e resultados ficam separados, com JSON formatado quando disponível.
+
+Etapas de Agente e LLM registram tokens de entrada, saída, cache e raciocínio quando informados pelo ChatGPT ou OpenRouter. O total agrega as chamadas da etapa, incluindo resumos de memória, sem duplicar notificações cumulativas. Cache e raciocínio são detalhamentos do total, não custos adicionais. Dados incompletos recebem indicação de consumo parcial; execuções antigas ou provedores sem telemetria mostram “Não informado”. O consumo das chamadas do modelo que usam ferramentas pertence à etapa do agente. O registro de entrada do agente não copia o conteúdo dos anexos nem o contexto da página; indica quando esses dados foram enviados separadamente.
+
+Respostas no chat e no histórico, além dos textos no modal, aceitam Markdown com títulos, listas, links, tabelas e código. HTML não é executado; imagens em Markdown aparecem como links.
 
 ## Memória dos agentes
 
@@ -145,6 +153,8 @@ Os testes cobrem 45 comportamentos: motor, protocolo ChatGPT com subprocesso sim
 O seletor do agente oferece apenas estas 19 ferramentas, em ordem alfabética e com ícones locais: Agent as a Tool, Arxiv, Brave Search MCP, BraveSearch, Browserless MCP, Calculator, Code Interpreter by E2B, Composio, CurrentDateTime, Custom MCP, Exa AI, Github MCP, Microsoft Teams, OpenAPI Toolkit, Postgres MCP, Search API, Tavily API, Web Scraper Tool e WolframAlpha. Integrações anteriores permanecem executáveis para preservar fluxos salvos.
 
 **Adicionar ferramenta** cria uma linha com busca digitando no próprio seletor. **Parâmetros** reúne apenas as configurações da ferramenta escolhida: credencial, fluxo publicado (Agent as a Tool), fuso horário (CurrentDateTime) ou ações permitidas (MCP, Composio e OpenAPI). A credencial existente pode ser editada pelo ícone ao lado do seletor. **Criar nova credencial** abre um formulário com nome e campos do serviço; segredos salvos não são reapresentados. Feche o bloco e salve o fluxo para persistir as alterações.
+
+O ChatGPT mantém o host de ferramentas habilitado para despachar funções próprias e MCP, com terminal e execução livre de código desativados. Quando o agente tem ferramentas configuradas, a busca nativa fica desativada para que a integração escolhida seja usada. Agentes sem ferramentas e blocos LLM mantêm a busca nativa. Cada chamada configurada é registrada antes de iniciar e atualizada com resultado, duração e estado (`running`, `completed` ou `failed`), incluindo falhas devolvidas ao modelo. O chat e os detalhes da execução exibem esses estados.
 
 Nos conjuntos de ferramentas novos, nenhuma ação fica autorizada antes da seleção. Atualize as ações após conectar a credencial e marque as que o agente pode usar. Agent as a Tool fixa o fluxo escolhido, sem permitir ao modelo substituir o destino; encadeamentos têm limite de cinco chamadas aninhadas. A Composio permite selecionar aplicativo, conta conectada e ações; as chamadas usam a API v3 com a versão retornada na definição da ação.
 

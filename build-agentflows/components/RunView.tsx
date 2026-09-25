@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import type { Run } from "@/lib/flow-types";
+import { MarkdownContent } from "./MarkdownContent";
+import { TraceDetails, TraceRow } from "./TraceDetails";
 import { Icon, request } from "./StudioUI";
 export const RUN_STATUS = {
   running: "Em execução",
@@ -18,6 +20,7 @@ export function RunView({
   onChange?: (r: Run) => void;
   compact?: boolean;
 }) {
+  const [selectedTrace, setSelectedTrace] = useState<number | null>(null);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [tab, setTab] = useState<"output" | "steps" | "state">("output");
@@ -36,6 +39,7 @@ export function RunView({
   }
   return (
     <section className={"studio-run " + (compact ? "compact" : "")}>
+      {selectedTrace !== null && run.trace[selectedTrace] && <TraceDetails trace={run.trace[selectedTrace]} isModel={["agent", "llm"].includes(run.graph.nodes.find((node) => node.id === run.trace[selectedTrace].nodeId)?.data.kind || "")} onClose={() => setSelectedTrace(null)} />}
       <header>
         <div>
           <span className="run-provider">
@@ -81,25 +85,14 @@ export function RunView({
       </div>
       {tab === "output" ? (
         <div className="run-response">
-          {run.output || "Aguardando resposta…"}
+          <MarkdownContent>{run.output || "Aguardando resposta…"}</MarkdownContent>
         </div>
       ) : tab === "state" ? (
         <pre className="run-state">{JSON.stringify(run.state, null, 2)}</pre>
       ) : (
         <div className="run-timeline">
           {run.trace.map((t, i) => (
-            <details key={i}>
-              <summary>
-                <span className="timeline-check">
-                  <Icon name="check" size={12} />
-                </span>
-                <strong>{t.label}</strong>
-                <small>
-                  {t.ms < 1000 ? t.ms + " ms" : (t.ms / 1000).toFixed(1) + " s"}
-                </small>
-              </summary>
-              <pre>{t.output}</pre>
-            </details>
+            <TraceRow key={i} trace={t} onOpen={() => setSelectedTrace(i)} />
           ))}
         </div>
       )}

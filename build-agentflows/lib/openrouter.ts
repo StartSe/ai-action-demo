@@ -1,6 +1,7 @@
 // Execução de um LLM/Agente pelo OpenRouter (mais de 500 modelos), com o mesmo contrato de
 // ferramentas do ChatGPT (lib/chatgpt.ts). A chave vem da conexão em um clique (OAuth PKCE) ou
 // colada em Configurações; o modelo é escolhido bloco a bloco como "openrouter:<provedor/modelo>".
+import { addTokenUsage, tokenUsage, type TokenUsage } from "./token-usage";
 import { interpretarFalha } from "./ai";
 import { getConfig } from "./store";
 import type { AgentTool } from "./chatgpt";
@@ -52,6 +53,7 @@ export async function runOpenRouter({
   images = [],
   signal,
   onText,
+  onUsage,
   fetcher = fetch,
 }: {
   system: string;
@@ -61,6 +63,7 @@ export async function runOpenRouter({
   images?: string[];
   signal?: AbortSignal;
   onText?: (text: string) => void;
+  onUsage?: (usage: TokenUsage) => void;
   fetcher?: typeof fetch;
 }): Promise<string> {
   const key = openRouterKey();
@@ -74,6 +77,8 @@ export async function runOpenRouter({
     { role: "system", content: system },
     { role: "user", content: images.length ? [{ type: "text", text: prompt }, ...images.map((url) => ({ type: "image_url" as const, image_url: { url } }))] : prompt },
   ];
+  let consumed: TokenUsage | undefined;
+  let missingUsage = false;
   for (let round = 0; round < 12; round++) {
     if (signal?.aborted) throw new Error("Execução cancelada.");
     const res = await fetcher("https://openrouter.ai/api/v1/chat/completions", {
@@ -105,6 +110,9 @@ export async function runOpenRouter({
     });
     if (!res.ok) throw interpretarFalha(res, await res.text().catch(() => ""));
     const data = await res.json();
+    const usage = tokenUsage(data?.usage, "openrouter");
+    if (usage) { consumed = addTokenUsage(consumed, usage); consumed.partial = missingUsage || undefined; onUsage?.(consumed); }
+    else { missingUsage = true; if (consumed) { consumed.partial = true; onUsage?.(consumed); } }
     const choice = data?.choices?.[0];
     const msg = choice?.message;
     if (!msg) throw new Error("O modelo devolveu uma resposta vazia. Tente novamente.");

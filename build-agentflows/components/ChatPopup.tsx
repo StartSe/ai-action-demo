@@ -7,6 +7,8 @@ import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_FILE_BYTES, MAX_TOTAL_BYTES, ty
 import { imageIssues, type ModelCapability } from "@/lib/model-capabilities";
 import { ChatAttachments } from "./ChatAttachments";
 import type { RouterModel } from "./ModelPicker";
+import { MarkdownContent } from "./MarkdownContent";
+import { TraceDetails, TraceRow } from "./TraceDetails";
 import { Icon, request } from "./StudioUI";
 const STATUS: Record<Run["status"], string> = {
   running: "Em execução",
@@ -15,9 +17,6 @@ const STATUS: Record<Run["status"], string> = {
   failed: "Falhou",
   cancelled: "Cancelada",
 };
-function duration(ms: number) {
-  return ms < 1000 ? ms + " ms" : (ms / 1000).toFixed(1) + " s";
-}
 function MessageTime({ date, active }: { date: string; active: boolean }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -47,6 +46,7 @@ function BotMessage({
   active: boolean;
   onChange: (r: Run) => void;
 }) {
+  const [selectedTrace, setSelectedTrace] = useState<number | null>(null);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   async function act(action: string, decision?: string) {
@@ -64,6 +64,7 @@ function BotMessage({
   }
   return (
     <div className={"chat-msg bot " + run.status}>
+      {selectedTrace !== null && run.trace[selectedTrace] && <TraceDetails trace={run.trace[selectedTrace]} isModel={["agent", "llm"].includes(run.graph.nodes.find((node) => node.id === run.trace[selectedTrace].nodeId)?.data.kind || "")} onClose={() => setSelectedTrace(null)} />}
       <span className="chat-avatar">
         <Icon name="agent" size={16} />
       </span>
@@ -78,16 +79,7 @@ function BotMessage({
             <ol>
               {run.trace.map((t, i) => (
                 <li key={i}>
-                  <details>
-                    <summary>
-                      <span className="timeline-check">
-                        <Icon name="check" size={10} />
-                      </span>
-                      <strong>{t.label}</strong>
-                      <small>{duration(t.ms)}</small>
-                    </summary>
-                    <pre>{t.output}</pre>
-                  </details>
+                  <TraceRow trace={t} onOpen={() => setSelectedTrace(i)} />
                 </li>
               ))}
             </ol>
@@ -99,8 +91,7 @@ function BotMessage({
           </details>
         )}
         <div className="chat-text">
-          {run.output ||
-            (run.status === "running" ? "Pensando…" : "Sem resposta.")}
+          <MarkdownContent>{run.output || (run.status === "running" ? "Pensando…" : "Sem resposta.")}</MarkdownContent>
         </div>
         {run.error && (
           <p className="studio-error" role="alert">

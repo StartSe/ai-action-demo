@@ -96,3 +96,9 @@ test("pesquisa web exige habilitação explícita por execução", async () => {
   assert.equal(await bridge.run({system: "", prompt: "inspect-search"}), "disabled");
   assert.equal(await bridge.run({system: "", prompt: "inspect-search", webSearch: true}), "live");
 });
+
+test("notificações de tokens preservam os totais cumulativos do turno", async () => {
+  const usage: number[] = [];
+  await bridge.run({ system: "", prompt: "inspect-usage", onUsage: (value) => usage.push(value.total) });
+  assert.deepEqual(usage, [120, 190]);
+});

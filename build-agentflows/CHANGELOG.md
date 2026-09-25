@@ -1,5 +1,15 @@
 # Histórico de versões
 
+## 0.10.0 — 25/09/2026
+
+- Configurações > Credenciais usa o mesmo seletor com busca, nomes e ícones do bloco Agente, limitado às ferramentas que precisam de credencial. Conexões antigas continuam editáveis.
+- Ações de editar e excluir credenciais usam ícones; o botão Salvar domínios fica alinhado à direita.
+- Etapas do chat e do histórico abrem um modal com status, duração, entrada, saída e instruções do agente, seguindo os temas claro e escuro.
+- Tokens informados pelo ChatGPT e OpenRouter aparecem por etapa, incluindo entrada, saída, cache e raciocínio; consumo parcial e dados indisponíveis são identificados.
+- Respostas renderizam Markdown com listas, links, tabelas e blocos de código, sem executar HTML.
+- Corrigido o despacho de ferramentas nativas e MCP no ChatGPT; agentes com ferramentas configuradas priorizam essas integrações sobre a busca nativa.
+- Chamadas de ferramentas registram argumentos, resultado, duração, execução em andamento e falhas, inclusive no cancelamento.
+
 ## 0.9.5 — 24/09/2026
 
 - Modal de IA com criação do zero e edição conversacional do fluxo atual, incluindo alterações ainda não salvas.

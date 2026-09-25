@@ -528,3 +528,89 @@ test("fluxos existentes usam v1 e o grafo salvo, preservando a API antiga de pub
   assert.equal(run.version, 1);
   assert.equal(store.publishFlow(f.id).version, 1);
 });
+
+test("chamadas de ferramenta registram início, duração e falha mesmo quando o modelo segue respondendo", async () => {
+  const original = bridge.run;
+  const graph = template(); graph.nodes[1].data.config.tools = "interno:calculadora";
+  const f = flow(graph);
+  bridge.run = async ({ tools = [], webSearch }) => {
+    assert.equal(webSearch, false, "Busca nativa não substitui as ferramentas escolhidas");
+    const pending = tools[0].call({ expressao: "1/0" });
+    const running = store.listRuns().find((run) => run.flowId === f.id)!;
+    assert.equal(running.trace.find((entry) => entry.type === "tool")?.status, "running");
+    await assert.rejects(() => pending, /não é um número/);
+    const failed = store.getRun(running.id).trace.find((entry) => entry.type === "tool")!;
+    assert.equal(failed.status, "failed");
+    assert.match(failed.output, /não é um número/);
+    assert.ok(failed.ms >= 0);
+    const output = await tools[0].call({ expressao: "6*7" });
+    return output;
+  };
+  try {
+    const run = await runtime.startRun(f.id, "Calcule");
+    assert.equal(run.status, "completed");
+    assert.equal(run.output, "42");
+    assert.deepEqual(run.trace.filter((entry) => entry.type === "tool").map((entry) => entry.status), ["failed", "completed"]);
+    assert.deepEqual(JSON.parse(run.trace.find((entry) => entry.type === "tool")!.input!), { expressao: "1/0" });
+  } finally { bridge.run = original; }
+});
+
+test("detalhes somam resumo e resposta sem duplicar notificações cumulativas e preservam falhas", async () => {
+  const original = bridge.run;
+  const graph = template();
+  Object.assign(graph.nodes[1].data.config, { memoryType: "conversationSummary", prompt: "Analise {{input}}", system: "Instrução registrada" });
+  let calls = 0;
+  bridge.run = async ({ onUsage }) => {
+    calls++;
+    onUsage?.({ input: 10, output: 2, total: 12 });
+    onUsage?.({ input: 20, output: 5, total: 25 });
+    return calls % 2 ? "Resumo da memória" : "Resposta final";
+  };
+  try {
+    const f = flow(graph);
+    const run = await runtime.startRun(f.id, "Olá");
+    const trace = run.trace.find((entry) => entry.nodeId === "analista")!;
+    assert.equal(calls, 2);
+    assert.deepEqual(store.getRun(run.id).trace.find((entry) => entry.nodeId === "analista")!.usage, { input: 40, output: 10, total: 50 });
+    assert.match(trace.input!, /Resumo da memória/);
+    assert.match(trace.input!, /Analise Olá/);
+    assert.equal(trace.instructions, "Instrução registrada");
+    assert.equal(trace.output, "Resposta final");
+    calls = 0;
+    bridge.run = async ({ onUsage }) => {
+      if (++calls === 1) return "Resumo sem telemetria";
+      onUsage?.({ input: 20, output: 5, total: 25 });
+      throw new Error("Falha após consumo");
+    };
+    const failed = await runtime.startRun(f.id, "Outra pergunta");
+    const entry = failed.trace.find((item) => item.nodeId === "analista")!;
+    assert.equal(failed.status, "failed");
+    assert.equal(entry.status, "failed");
+    assert.equal(entry.usage?.total, 25);
+    assert.equal(entry.usage?.partial, true);
+    assert.match(entry.output, /Falha após consumo/);
+  } finally { bridge.run = original; }
+});
+
+test("cancelar a execução encerra o registro da ferramenta em andamento", async () => {
+  const original = bridge.run, fetch0 = globalThis.fetch;
+  const graph = template(); graph.nodes[1].data.config.tools = "interno:ler_pagina";
+  const f = flow(graph);
+  let release: () => void = () => {};
+  const barrier = new Promise<void>((resolve) => { release = resolve; });
+  globalThis.fetch = async () => { await barrier; return new Response("Resultado tardio"); };
+  bridge.run = async ({ tools = [] }) => {
+    const pending = tools[0].call({ url: "https://example.com" });
+    const run = store.listRuns().find((r) => r.flowId === f.id)!;
+    runtime.cancelRun(run.id);
+    release();
+    return pending;
+  };
+  try {
+    const run = await runtime.startRun(f.id, "Leia");
+    assert.equal(run.status, "cancelled");
+    const trace = run.trace.find((entry) => entry.type === "tool")!;
+    assert.equal(trace.status, "failed");
+    assert.match(trace.output, /cancelada/);
+  } finally { release(); bridge.run = original; globalThis.fetch = fetch0; }
+});

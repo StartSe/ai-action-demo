@@ -24,3 +24,14 @@ export function toolTitle(tool: { name: string; label?: string; id?: string }) {
   return AGENT_TOOL_CATALOG.find((item) => item.id === (tool.id || `interno:${tool.name}`))?.name || tool.label || tool.name;
 }
 export function toolIcon(id: string) { return AGENT_TOOL_CATALOG.find((item) => item.id === id)?.icon; }
+
+// Uma credencial Brave atende à ferramenta HTTP e à versão MCP; Teams usa Microsoft.
+const CREDENTIAL_PROVIDERS: Record<string, string> = {
+  brave: "brave", brave_mcp: "brave", browserless: "browserless", e2b: "e2b", composio: "composio",
+  custom_mcp: "custom_mcp", exa: "exa", github_mcp: "github_mcp", teams: "microsoft", openapi: "openapi",
+  postgres_mcp: "postgres_mcp", searchapi: "searchapi", tavily: "tavily", wolfram: "wolfram",
+};
+export const CREDENTIAL_TOOL_CATALOG = AGENT_TOOL_CATALOG.flatMap((tool) => {
+  const provider = CREDENTIAL_PROVIDERS[tool.id.split(":")[1]];
+  return provider ? [{ ...tool, provider }] : [];
+});

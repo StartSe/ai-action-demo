@@ -1,3 +1,4 @@
+import type { TokenUsage } from "./token-usage";
 import type { Attachment } from "./attachment-types";
 import { MEMORY_DEFAULTS } from "./memory-settings";
 export const BLOCKS = {
@@ -89,6 +90,10 @@ export type Flow = {
 };
 export type Trace = {
   type?: "step" | "tool";
+  status?: "running" | "completed" | "failed";
+  input?: string;
+  instructions?: string;
+  usage?: TokenUsage;
   nodeId: string;
   label: string;
   output: string;

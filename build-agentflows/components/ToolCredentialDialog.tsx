@@ -2,13 +2,15 @@
 import { useState } from "react";
 import { TOOL_CREDENTIALS, TOOL_CREDENTIAL_LABELS } from "@/lib/tool-credentials";
 import type { SavedToolCredential } from "@/lib/tool-credential-store";
-import { ToolLogo } from "./ToolSelect";
+import { CREDENTIAL_TOOL_CATALOG } from "@/lib/tool-presentation";
+import { ToolLogo, ToolSelect } from "./ToolSelect";
 import { Icon, Modal, request } from "./StudioUI";
 
 export function ToolCredentialDialog({ provider: initialProvider = "", credential, onSaved, onClose }: {
   provider?: string; credential?: SavedToolCredential; onSaved: (credential: SavedToolCredential) => void; onClose: () => void;
 }) {
   const [provider, setProvider] = useState(credential?.provider || initialProvider);
+  const [tool, setTool] = useState(CREDENTIAL_TOOL_CATALOG.find((item) => item.provider === (credential?.provider || initialProvider))?.id || "");
   const [name, setName] = useState(credential?.name || "");
   const [draft, setDraft] = useState<Record<string, string | null>>({});
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -34,12 +36,9 @@ export function ToolCredentialDialog({ provider: initialProvider = "", credentia
       })}><Icon name={draft[field.chave] === null ? "undo" : "trash"} size={16} /></button>}
     </div>);
   }
-  return <Modal title={provider ? <h2 className="credential-title"><ToolLogo id={`interno:${provider === "microsoft" ? "teams" : provider}`} />{TOOL_CREDENTIAL_LABELS[provider] || provider}</h2> : "Nova credencial"} onClose={() => { if (!busy) onClose(); }} className="credential-dialog">
+  return <Modal title={provider ? <h2 className="credential-title"><ToolLogo id={tool || `interno:${provider}`} />{TOOL_CREDENTIAL_LABELS[provider] || provider}</h2> : "Nova credencial"} onClose={() => { if (!busy) onClose(); }} className="credential-dialog">
     <div className="node-fields">
-      {!credential && !initialProvider ? <select aria-label="Serviço" value={provider} disabled={busy} onChange={(event) => { setProvider(event.target.value); setDraft({}); setError(""); }}>
-        <option value="">Escolha um serviço</option>
-        {Object.entries(TOOL_CREDENTIAL_LABELS).sort((a, b) => a[1].localeCompare(b[1])).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-      </select> : null}
+      {!credential && !initialProvider ? <ToolSelect value={tool} catalog={CREDENTIAL_TOOL_CATALOG} disabled={busy} onChange={(id) => { setTool(id); setProvider(CREDENTIAL_TOOL_CATALOG.find((item) => item.id === id)!.provider); setDraft({}); setError(""); }} /> : null}
       {!!provider && <>
         <input aria-label="Nome da credencial" value={name} maxLength={100} placeholder="Nome da credencial" disabled={busy || credential?.legacy} onChange={(event) => setName(event.target.value)} />
         {fields.find((field) => field.link)?.link && <a className="credential-help" href={fields.find((field) => field.link)!.link} target="_blank" rel="noreferrer">Obter credencial {TOOL_CREDENTIAL_LABELS[provider]}</a>}

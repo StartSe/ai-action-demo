@@ -494,7 +494,7 @@ export function FlowEditor({ id }: { id: string }) {
   }
   const node = graph.nodes.find((n) => n.id === editing);
   const visualNodes: VisualNode[] = graph.nodes.map((n) => {
-    const done = run?.trace.some((t) => t.nodeId === n.id);
+    const done = run?.trace.some((t) => t.nodeId === n.id && t.type !== "tool");
     const current = run?.next === n.id;
     const execution =
       current && ["running", "waiting", "failed"].includes(run?.status || "")

@@ -34,6 +34,7 @@ test("executa ferramentas em ciclo e devolve o texto final com a chave da conexÃ
   setConfig("OPENROUTER_API_KEY", "sk-or-teste");
   const { fetcher, calls } = fakeFetch([
     {
+      usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 },
       choices: [
         {
           finish_reason: "tool_calls",
@@ -47,15 +48,17 @@ test("executa ferramentas em ciclo e devolve o texto final com a chave da conexÃ
         },
       ],
     },
-    { choices: [{ finish_reason: "stop", message: { content: "Resultado: 5" } }] },
+    { usage: { prompt_tokens: 160, completion_tokens: 30, total_tokens: 190 }, choices: [{ finish_reason: "stop", message: { content: "Resultado: 5" } }] },
   ]);
   const texts: string[] = [];
+  const usage: number[] = [];
   const out = await runOpenRouter({
     system: "sys",
     prompt: "some 2 e 3",
     model: "openrouter:openai/gpt-4.1-mini",
     fetcher,
     onText: (t) => texts.push(t),
+    onUsage: (value) => usage.push(value.total),
     tools: [
       {
         name: "soma",
@@ -67,6 +70,7 @@ test("executa ferramentas em ciclo e devolve o texto final com a chave da conexÃ
   });
   assert.equal(out, "Resultado: 5");
   assert.deepEqual(texts, ["Resultado: 5"]);
+  assert.deepEqual(usage, [120, 310]);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].headers.Authorization, "Bearer sk-or-teste");
   assert.equal(calls[0].body.model, "openai/gpt-4.1-mini");
@@ -83,6 +87,20 @@ test("erro do provedor vira mensagem de negÃ³cio", async () => {
     () => runOpenRouter({ system: "", prompt: "oi", model: "openrouter:a/b", fetcher }),
     (e: Error) => e.message.length > 10,
   );
+});
+
+test("consumo incompleto entre rodadas Ã© sinalizado como parcial", async () => {
+  for (const missingFirst of [true, false]) {
+    const known = { prompt_tokens: 100, completion_tokens: 20 };
+    const { fetcher } = fakeFetch([
+      { usage: missingFirst ? undefined : known, choices: [{ finish_reason: "tool_calls", message: { tool_calls: [{ id: "c1", function: { name: "soma", arguments: "{}" } }] } }] },
+      { usage: missingFirst ? known : undefined, choices: [{ message: { content: "Fim" } }] },
+    ]);
+    let latest: { total: number; partial?: boolean } | undefined;
+    await runOpenRouter({ system: "", prompt: "Some", model: "openrouter:test", fetcher, onUsage: (value) => { latest = value; }, tools: [{ name: "soma", description: "Soma", schema: { type: "object" }, call: async () => "2" }] });
+    assert.equal(latest?.total, 120);
+    assert.equal(latest?.partial, true);
+  }
 });
 
 test("catÃ¡logo informa modalidades e envia imagens no conteÃºdo nativo do modelo escolhido", async () => {

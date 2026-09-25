@@ -18,8 +18,8 @@ export function EmbedSecurity() {
         description="Defina os sites autorizados nesta instalação. Esta lista limita os domínios configurados em cada fluxo."
         emptyText="Nenhuma restrição global definida. Valem as permissões de cada fluxo." />
       <div className="security-settings-actions">
-        <button className="studio-button primary" disabled={!ready || busy} onClick={() => void save()}>{busy ? "Salvando…" : "Salvar domínios"}</button>
         {message && <p role="status">{message}</p>}{error && <p className="studio-error" role="alert">{error}</p>}
+        <button className="studio-button primary" disabled={!ready || busy} onClick={() => void save()}>{busy ? "Salvando…" : "Salvar domínios"}</button>
       </div>
     </div>
   </section>;
