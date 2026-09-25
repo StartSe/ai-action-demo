@@ -1,16 +1,14 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { Attachment } from "@/lib/attachment-types";
-import { ATTACHMENT_ACCEPT } from "@/lib/attachment-types";
-import { PAGE_ACTIONS, type EmbedTurn, type PageCommand } from "@/lib/embed-protocol";
+import { type EmbedTurn, type PageCommand } from "@/lib/embed-protocol";
 import "./embed-chat.css";
 class EmbedApiError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 type Snapshot = { sessionId: string; turns: EmbedTurn[]; commands: PageCommand[] };
 type Wire = { channel: string; version: number; type: string; [key:string]: unknown };
-export function EmbedChat({ title, welcome, displayMode = "detailed" }: { title: string; welcome: string; displayMode?: "detailed" | "simple" }) {
-  const detailed = displayMode === "detailed";
+export function EmbedChat({ agentName, avatarUrl, title, welcome }: { agentName: string; avatarUrl: string; title: string; welcome: string }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
@@ -18,11 +16,10 @@ export function EmbedChat({ title, welcome, displayMode = "detailed" }: { title:
   const [busy, setBusy] = useState(false);
   const [files, setFiles] = useState<Attachment[]>([]);
   const [confirmNew, setConfirmNew] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
   const [confirmation, setConfirmation] = useState<{ runId:string; decision:string } | null>(null);
-  const [elapsed, setElapsed] = useState(0);
   const state = useRef({ token: "", sessionId: "", parent: "", init: null as Wire | null, handled: new Set<string>(), polling: false, handshake: false, pendingMessage: null as {requestId:string; input:string} | null });
   const messages = useRef<HTMLDivElement>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const el = textarea.current;
@@ -124,7 +121,7 @@ export function EmbedChat({ title, welcome, displayMode = "detailed" }: { title:
       }
     }
     window.addEventListener("message", receive); post("ready");
-    const timer = setInterval(() => { void refresh(); setElapsed(Date.now()); }, 1200);
+    const timer = setInterval(() => { void refresh(); }, 1200);
     return () => { clearInterval(timer); window.removeEventListener("message", receive); };
     // The bridge reads mutable credentials from a ref; listener identity stays stable across messages.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -154,30 +151,62 @@ export function EmbedChat({ title, welcome, displayMode = "detailed" }: { title:
       setSnapshot(s); setDraft(""); setFiles([]); setConfirmNew(false); post("session", { sessionId: s.sessionId }); post("draft", { value: "" });
     });
   }
+  function tempoRelativo(value: string) {
+    const minutos = Math.max(0, Math.floor((Date.now() - Date.parse(value)) / 60_000));
+    if (minutos < 1) return "agora";
+    if (minutos < 60) return `há ${minutos} min`;
+    const horas = Math.floor(minutos / 60);
+    if (horas < 24) return `há ${horas} h`;
+    const dias = Math.floor(horas / 24);
+    if (dias < 7) return `há ${dias} ${dias === 1 ? "dia" : "dias"}`;
+    return new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  }
+  function marcadorData(value: string) {
+    const data = new Date(value), hoje = new Date();
+    const meiaNoite = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const dias = Math.round((meiaNoite(hoje) - meiaNoite(data)) / 86_400_000);
+    const chave = `${data.getFullYear()}-${data.getMonth()}-${data.getDate()}`;
+    if (dias <= 0) return { chave, texto: "Hoje" };
+    if (dias === 1) return { chave, texto: "Ontem" };
+    if (dias < 7) {
+      const dia = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(data);
+      return { chave, texto: dia[0].toLocaleUpperCase("pt-BR") + dia.slice(1) };
+    }
+    return { chave, texto: new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", year: "numeric" }).format(data) };
+  }
+  let diaAnterior = "";
+  const nomeVisivel = agentName.trim() || "Assistente";
   return <main className="embed-chat">
-    <header className="embed-header"><span className="embed-avatar" aria-hidden="true">✧</span><div><strong>{title}</strong><small>{connected ? "Aqui para ajudar" : "Conectando…"}</small></div><button title="Nova conversa" aria-label="Nova conversa" onClick={() => setConfirmNew(true)}>＋</button><button title="Fechar conversa" aria-label="Fechar conversa" onClick={() => post("close")}>×</button></header>
+    <header className="embed-header"><span className="embed-avatar" aria-hidden="true">{avatarUrl && !avatarError ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setAvatarError(true)}/> : <span className="embed-avatar-initial">{Array.from(nomeVisivel)[0]?.toLocaleUpperCase("pt-BR") || "A"}</span>}</span><div><strong>{nomeVisivel}</strong><small>{title.trim() || (connected ? "Aqui para ajudar" : "Conectando…")}</small></div><button className="embed-header-action embed-clear" title="Limpar conversa" aria-label="Limpar conversa" onClick={() => setConfirmNew(true)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 21 9.6-9.6a2.1 2.1 0 0 0 0-3l-2-2a2.1 2.1 0 0 0-3 0L3 18v3h4Z"/><path d="m5 16 5 5M13 8l4 4M7 21h14"/></svg></button><button className="embed-header-action embed-close" title="Fechar conversa" aria-label="Fechar conversa" onClick={() => post("close")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
     <div className="embed-messages" ref={messages}>
       {!snapshot?.turns.length && <div className="embed-welcome"><span aria-hidden="true">✧</span><h1>Vamos melhorar juntos?</h1><p>{welcome}</p><div className="embed-suggestions">Você pode descrever uma melhoria ou mostrar algo que não funcionou.</div></div>}
-      {snapshot?.turns.map(t => <div className="embed-turn" key={t.id}>
-        <div className="embed-message user">{t.input}</div>
-        {!!t.attachments?.length && <small className="embed-file-label">{t.attachments.map(a => a.name).join(" · ")}</small>}
-        {t.output && (detailed || t.status === "completed" || t.status === "waiting") && <div className="embed-message assistant">{t.output}</div>}
-        {detailed && t.status === "running" && <div className="embed-progress" role="status"><span className="embed-pulse"/><div><strong>{t.activity}</strong><small>{Math.max(0, Math.floor((elapsed - Date.parse(t.createdAt)) / 60000))} min · Você pode continuar usando a página.</small></div></div>}
-        {t.status === "waiting" && <div className="embed-approval"><strong>{t.approval === "recovery" ? "Precisamos conferir antes de continuar" : "Sua decisão faz parte do próximo passo"}</strong><p>{t.approval === "recovery" ? t.error : "Revise o resultado acima e escolha como seguir."}</p><div><button disabled={busy || !connected} onClick={() => t.approval === "recovery" ? setConfirmation({runId:t.id, decision:"retry"}) : void decision(t.id, "yes")}>{t.approval === "recovery" ? "Revisar retomada" : "Aprovar e continuar"}</button>{t.approval !== "recovery" && <button className="secondary" disabled={busy || !connected} onClick={() => void decision(t.id, "no")}>Não aprovar</button>}</div></div>}
-        {t.status === "failed" && <p className="embed-error">{t.error || "Não foi possível concluir esta tarefa."}</p>}
-        {t.status === "cancelled" && <p className="embed-note">Cancelamento solicitado. Novas etapas foram bloqueadas; ações externas já iniciadas podem terminar.</p>}
-      </div>)}
-      {detailed && snapshot?.commands.map(c => <p key={c.id} className="embed-note" role="status">{PAGE_ACTIONS[c.name as keyof typeof PAGE_ACTIONS] || "Aguardando uma ação na página"}. Confira a solicitação na página.</p>)}
+      {snapshot?.turns.map(t => {
+        const entradaDia = marcadorData(t.createdAt);
+        const mostrarEntradaDia = entradaDia.chave !== diaAnterior;
+        diaAnterior = entradaDia.chave;
+        const respostaVisivel = !!t.output && (t.status === "completed" || t.status === "waiting");
+        const respostaHora = t.updatedAt || t.createdAt;
+        const respostaDia = respostaVisivel ? marcadorData(respostaHora) : null;
+        const mostrarRespostaDia = !!respostaDia && respostaDia.chave !== diaAnterior;
+        if (respostaDia) diaAnterior = respostaDia.chave;
+        return <div className="embed-turn" key={t.id}>
+          {mostrarEntradaDia && <div className="embed-date-separator"><span>{entradaDia.texto}</span></div>}
+          <div className="embed-chat-message user"><div className="embed-message user">{t.input}</div><time className="embed-time" dateTime={t.createdAt} title={new Intl.DateTimeFormat("pt-BR", { dateStyle: "full", timeStyle: "short" }).format(new Date(t.createdAt))}>{tempoRelativo(t.createdAt)}</time></div>
+          {respostaVisivel && <>{mostrarRespostaDia && respostaDia && <div className="embed-date-separator"><span>{respostaDia.texto}</span></div>}<div className="embed-chat-message assistant"><div className="embed-message assistant">{t.output}</div><time className="embed-time" dateTime={respostaHora} title={new Intl.DateTimeFormat("pt-BR", { dateStyle: "full", timeStyle: "short" }).format(new Date(respostaHora))}>{tempoRelativo(respostaHora)}</time></div></>}
+          {t.status === "waiting" && <div className="embed-approval"><strong>{t.approval === "recovery" ? "Precisamos conferir antes de continuar" : "Sua decisão faz parte do próximo passo"}</strong><p>{t.approval === "recovery" ? t.error : "Revise o resultado acima e escolha como seguir."}</p><div><button disabled={busy || !connected} onClick={() => t.approval === "recovery" ? setConfirmation({runId:t.id, decision:"retry"}) : void decision(t.id, "yes")}>{t.approval === "recovery" ? "Revisar retomada" : "Aprovar e continuar"}</button>{t.approval !== "recovery" && <button className="secondary" disabled={busy || !connected} onClick={() => void decision(t.id, "no")}>Não aprovar</button>}</div></div>}
+          {t.status === "failed" && <p className="embed-error">{t.error || "Não foi possível concluir esta tarefa."}</p>}
+          {t.status === "cancelled" && <p className="embed-note">Cancelamento solicitado. Novas etapas foram bloqueadas; ações externas já iniciadas podem terminar.</p>}
+        </div>;
+      })}
     </div>
-    {confirmNew && <section className="embed-confirm"><strong>Começar uma nova conversa?</strong><p>{active ? "Conclua ou cancele a tarefa atual antes de começar outra conversa." : "A conversa atual continuará registrada no histórico do fluxo."}</p><button disabled={!!active || busy} onClick={() => void newSession()}>Nova conversa</button><button className="secondary" onClick={() => setConfirmNew(false)}>Voltar</button></section>}
+    {confirmNew && <section className="embed-confirm"><strong>Limpar esta conversa?</strong><p>{active ? "Conclua ou cancele a tarefa atual antes de limpar a conversa." : "A conversa atual continuará registrada no histórico do fluxo."}</p><button disabled={!!active || busy} onClick={() => void newSession()}>Limpar conversa</button><button className="secondary" onClick={() => setConfirmNew(false)}>Voltar</button></section>}
     {confirmation && <section className="embed-confirm"><strong>{confirmation.decision === "cancel" ? "Cancelar a tarefa?" : "Retomar a etapa interrompida?"}</strong><p>{confirmation.decision === "cancel" ? "Vamos interromper o trabalho. Ações já concluídas não serão desfeitas." : "Confira se a ação anterior já aconteceu. Retomar pode repetir efeitos externos e consome uma tentativa."}</p><button disabled={busy} onClick={() => void decision(confirmation.runId, confirmation.decision)}>Confirmar</button><button className="secondary" onClick={() => setConfirmation(null)}>Voltar</button></section>}
     {snapshot && !connected && <p className="embed-note" role="status">Reconectando à conversa… sua tarefa continua no servidor.</p>}
     {error && <div className="embed-error" role="alert">{error}<button className="secondary" onClick={() => { setError(""); post("refreshToken"); }}>Reconectar</button></div>}
     <footer className="embed-footer">
       {active && <button className="embed-stop" disabled={busy} onClick={() => setConfirmation({runId:active.id,decision:"cancel"})}>■ Cancelar tarefa</button>}
       {files.length > 0 && <div className="embed-files">{files.map(f => <button key={f.id} onClick={() => setFiles(files.filter(a => a.id !== f.id))}>{f.name} ×</button>)}</div>}
-      <form onSubmit={e => { e.preventDefault(); void send(); }}><textarea ref={textarea} rows={1} aria-label="Sua mensagem" placeholder={active ? "Acompanhe a tarefa ou responda acima…" : "O que você gostaria de melhorar?"} value={draft} maxLength={20000} disabled={!!active} onChange={e => { setDraft(e.target.value); post("draft", {value:e.target.value}); }} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }}/><div className="embed-compose-actions"><button type="button" aria-label="Anexar arquivo ou captura" disabled={busy || !!active || !connected || files.length >= 5} onClick={() => fileInput.current?.click()}>＋ Anexar</button><button type="submit" disabled={busy || !!active || !connected || !draft.trim()} aria-label="Enviar mensagem">↑</button></div></form>
-      <input hidden ref={fileInput} type="file" accept={ATTACHMENT_ACCEPT} onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void act(async () => { if (file.size > 10 * 1024 * 1024) throw new Error("Use um arquivo de até 10 MB."); const a = await upload(file, file.name); setFiles(prev => [...prev, a]); }); }}/>
+      <form onSubmit={e => { e.preventDefault(); void send(); }}><textarea ref={textarea} rows={1} aria-label="Sua mensagem" placeholder="Digite aqui..." value={draft} maxLength={20000} disabled={!!active} onChange={e => { setDraft(e.target.value); post("draft", {value:e.target.value}); }} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }}/><div className="embed-compose-actions"><button type="submit" disabled={busy || !!active || !connected || !draft.trim()} aria-label="Enviar mensagem">↑</button></div></form>
       <small className="embed-brand">Build Agentflows</small>
     </footer>
   </main>;

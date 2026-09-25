@@ -16,10 +16,10 @@ export type PageCommand = {
   status: "pending" | "delivered" | "completed" | "failed" | "expired" | "cancelled";
   createdAt: number; expiresAt: number; result?: string;
 };
-export type EmbedSettings = { displayMode?: "detailed" | "simple"; enabled: boolean; origins: string[]; title: string; welcome: string; maxMinutes: number; maxCommands: number };
+export type EmbedSettings = { displayMode?: "detailed" | "simple"; enabled: boolean; origins: string[]; agentName?: string; avatarUrl?: string; title: string; welcome: string; maxMinutes: number; maxCommands: number };
 export type EmbedTurn = {
   id: string; input: string; output: string; status: string; error?: string;
-  activity: string; approval?: string; createdAt: string;
+  activity: string; approval?: string; createdAt: string; updatedAt: string;
   attachments?: { id: string; name: string }[];
 };
 export const ACTION_SCHEMA = {

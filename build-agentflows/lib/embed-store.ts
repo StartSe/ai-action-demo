@@ -15,19 +15,26 @@ function db() {
   return d;
 }
 export function embedSettings(flowId: string): EmbedSettings {
-  getFlow(flowId);
+  const flow = getFlow(flowId);
   const row = db().prepare("SELECT body FROM embed_settings WHERE flow_id=?").get(flowId) as { body: string } | undefined;
-  return row ? { displayMode: "detailed", ...JSON.parse(row.body) } : { displayMode: "detailed", enabled: true, origins: [], title: "Como podemos ajudar?", welcome: "Conte o que você gostaria de melhorar ou resolver.", maxMinutes: 30, maxCommands: 12 };
+  const saved = row ? JSON.parse(row.body) : {};
+  return { displayMode: "detailed", enabled: true, origins: [], title: "Como podemos ajudar?", welcome: "Conte o que você gostaria de melhorar ou resolver.", maxMinutes: 30, maxCommands: 12, ...saved, agentName: typeof saved.agentName === "string" && saved.agentName.trim() ? saved.agentName : flow.name.trim() || "Assistente", avatarUrl: typeof saved.avatarUrl === "string" ? saved.avatarUrl : "" };
 }
 export function saveEmbedSettings(flowId: string, value: EmbedSettings) {
-  getFlow(flowId);
-  if (typeof value.enabled !== "boolean" || !Array.isArray(value.origins) || value.origins.length > 20 || typeof value.title !== "string" || value.title.length > 80 || typeof value.welcome !== "string" || value.welcome.length > 500 || !Number.isInteger(value.maxMinutes) || value.maxMinutes < 1 || value.maxMinutes > 60 || !Number.isInteger(value.maxCommands) || value.maxCommands < 1 || value.maxCommands > 30) throw new FlowError("Confira os dados do chat.");
+  const flow = getFlow(flowId);
+  const agentName = value.agentName === undefined ? flow.name.trim() || "Assistente" : typeof value.agentName === "string" ? value.agentName.trim() : "";
+  const avatarUrl = typeof value.avatarUrl === "string" ? value.avatarUrl.trim() : "";
+  if (typeof value.enabled !== "boolean" || !Array.isArray(value.origins) || value.origins.length > 20 || !agentName || agentName.length > 80 || avatarUrl.length > 2048 || typeof value.title !== "string" || value.title.length > 80 || typeof value.welcome !== "string" || value.welcome.length > 500 || !Number.isInteger(value.maxMinutes) || value.maxMinutes < 1 || value.maxMinutes > 60 || !Number.isInteger(value.maxCommands) || value.maxCommands < 1 || value.maxCommands > 30) throw new FlowError("Confira os dados do chat e informe o nome do agente.");
+  if (avatarUrl) {
+    try { const avatar = new URL(avatarUrl); if (avatar.protocol !== "https:" || avatar.username || avatar.password) throw new Error(); }
+    catch { throw new FlowError("Informe um endereço HTTPS válido para o avatar."); }
+  }
   if (value.displayMode !== undefined && !["detailed", "simple"].includes(value.displayMode)) throw new FlowError("Escolha uma visualização válida para o chat.");
   let origins: string[];
   try { origins = validateEmbedOrigins(value.origins); }
   catch (e) { throw new FlowError(e instanceof Error ? e.message : "Confira os sites autorizados."); }
   if (value.enabled && !getFlow(flowId).published) throw new FlowError("Salve o fluxo no editor antes de configurar o chat.");
-  const result = { ...value, displayMode: value.displayMode ?? "detailed", origins };
+  const result = { ...value, agentName, avatarUrl, displayMode: value.displayMode ?? "detailed", origins };
   db().prepare("INSERT INTO embed_settings VALUES(?,?) ON CONFLICT(flow_id) DO UPDATE SET body=excluded.body").run(flowId, JSON.stringify(result));
   if (result.enabled && !hasEmbedKey(flowId)) rotateEmbedKey(flowId);
   return result;

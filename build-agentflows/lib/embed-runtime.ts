@@ -78,7 +78,7 @@ export function sessionSnapshot(sessionId: string) {
   const s = getSession(sessionId);
   const turns: EmbedTurn[] = s.runIds.map(id => {
     const r = getRun(id), n = r.graph.nodes.find(n => n.id === r.next);
-    return { id: r.id, input: r.input, output: r.output, status: r.status, error: r.error, createdAt: r.createdAt,
+    return { id: r.id, input: r.input, output: r.output, status: r.status, error: r.error, createdAt: r.createdAt, updatedAt: r.updatedAt,
       attachments: r.attachments?.map(a => ({ id: a.id, name: a.name })),
       activity: r.interrupted ? "Aguardando revisão para retomar" : r.status === "waiting" ? "Aguardando sua decisão" : r.pageCommandId ? "Aguardando a página" : r.status === "running" ? (n ? n.data.label + " está trabalhando" : "Preparando sua solicitação") : "",
       ...(r.status === "waiting" ? { approval: r.interrupted ? "recovery" : "decision" } : {}),
