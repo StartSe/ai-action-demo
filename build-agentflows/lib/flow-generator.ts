@@ -12,7 +12,7 @@ const FIELDS: Record<Kind, string> = {
   start: "state (JSON com valores de texto, opcional)",
   llm: "system (instruções), prompt (opcional: em branco o bloco recebe a conversa ou o resultado da etapa anterior; use {{input}}, {{last}}, {{nodes.id}}, {{fluxo.nome}} só quando precisar combinar textos)",
   agent:
-    "system (instruções), prompt (opcional, mesma regra do llm), stateUpdates (JSON de lista de {key, value}, atualiza variáveis definidas no início depois da resposta; value aceita {{nodes.id}} da própria etapa), tools (ids separados por vírgula entre interno:data_hora, interno:calculadora, interno:requisicao_http, interno:executar_fluxo; só se o pedido precisar)",
+    "system (instruções), prompt (opcional, mesma regra do llm), stateUpdates (JSON de lista de {key, value}, atualiza variáveis definidas no início depois da resposta; value aceita {{nodes.id}} da própria etapa), tools (ids separados por vírgula entre interno:data_hora, interno:calculadora, interno:ler_pagina, interno:executar_fluxo; só se o pedido precisar)",
   condition:
     'criteria (lista de critérios: [{"id":"criterion_1","value":"{{last}}","operator":"contains","compare":"urgente"}]). Operadores: equals, contains, notEquals, notContains, greater, greaterOrEqual, less, lessOrEqual, empty, notEmpty',
   state: "key (nome da variável, letras e números), value (ex.: {{last}})",

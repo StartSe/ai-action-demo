@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { ToolInfo } from "@/lib/tools";
 import type { SavedToolCredential } from "@/lib/tool-credential-store";
+import { Icon } from "./StudioUI";
 import { ToolCredentialDialog } from "./ToolCredentialDialog";
 
 export function ToolCredentialFields({ tool, credentialId, credentials, onChange, onSaved }: {
@@ -12,20 +13,17 @@ export function ToolCredentialFields({ tool, credentialId, credentials, onChange
   const available = credentials.filter((c) => c.provider === tool.credentialProvider);
   const id = credentialId || available.find((c) => c.legacy)?.id || "";
   const selected = available.find((c) => c.id === id);
-  if (!tool.credentialProvider) return <p className="tool-ready">Pronta para usar. Não precisa conectar uma conta.</p>;
+  if (!tool.credentialProvider) return null;
   return <div className="tool-credential-fields">
-    <label>Conexão para esta ferramenta<select value={id} onChange={(event) => event.target.value === "new" ? setEditor("new") : onChange(event.target.value)}>
+    <div className="credential-select-row"><label>Credencial<select value={id} onChange={(event) => event.target.value === "new" ? setEditor("new") : onChange(event.target.value)}>
       <option value="" disabled>Escolha uma credencial</option>
       {available.map((c) => <option key={c.id} value={c.id}>{c.name}{!c.configured ? " · revisar conexão" : ""}</option>)}
       {!!id && !selected && <option value={id}>Credencial indisponível</option>}
       <option value="new">+ Criar nova credencial</option>
     </select></label>
-    <div className="studio-actions">
-      <button type="button" className="tool-text-button" onClick={() => setEditor("new")}>Nova credencial</button>
-      {selected && <button type="button" className="tool-text-button" onClick={() => setEditor("edit")}>Ver ou editar conexão</button>}
+    {selected && <button type="button" className="studio-icon-button" title="Editar credencial" aria-label="Editar credencial" onClick={() => setEditor("edit")}><Icon name="pencil" size={18} /></button>}
     </div>
     {id && !selected && <p className="studio-error" role="alert">Esta credencial não está disponível. Escolha outra conexão.</p>}
-    <small>A conta escolhida será usada por esta ferramenta neste agente.</small>
     {editor && <ToolCredentialDialog provider={tool.credentialProvider} credential={editor === "edit" ? selected : undefined} onClose={() => setEditor(null)} onSaved={(c) => { onSaved(c); onChange(c.id); setEditor(null); }} />}
   </div>;
 }

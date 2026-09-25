@@ -457,7 +457,7 @@ export function FlowEditor({ id }: { id: string }) {
         : [...list, r],
     );
   }, [setRun, setSession]);
-  async function execute(input: string, attachments: Attachment[], conversational = false): Promise<Run | null> {
+  async function execute(input: string, attachments: Attachment[]): Promise<Run | null> {
     setRunning(true);
     setError("");
     setPendingInput(input);
@@ -480,7 +480,7 @@ export function FlowEditor({ id }: { id: string }) {
           input,
           demo: false,
           attachments: attachments.map((a) => a.id),
-          ...(conversational ? { conversationRunIds: session.filter((r) => r.status === "completed" && !r.demo).map((r) => r.id) } : {}),
+          conversationRunIds: session.filter((r) => r.status === "completed" && !r.demo).map((r) => r.id),
         });
       updateRun(result);
       return result;

@@ -8,6 +8,10 @@ const oauth = (provider: string, label: string, link: string): Credential[] => [
   { chave: `TOOL_${provider}_CLIENT_SECRET`, rotulo: "Segredo do aplicativo (para renovar)", secret: true, optional: true },
 ];
 export const TOOL_CREDENTIALS: Record<string, Credential[]> = {
+  github_mcp: [{ chave: "TOOL_GITHUB_TOKEN", rotulo: "Token do Github", secret: true, link: "https://github.com/settings/tokens" }],
+  postgres_mcp: [{ chave: "TOOL_POSTGRES_URL", rotulo: "URL de conexão PostgreSQL", secret: true }],
+  custom_mcp: [{ chave: "TOOL_CUSTOM_MCP_URL", rotulo: "URL do servidor MCP" }, { chave: "TOOL_CUSTOM_MCP_TOKEN", rotulo: "Token de acesso", secret: true, optional: true }],
+  composio: [{ chave: "TOOL_COMPOSIO_KEY", rotulo: "Chave da Composio", secret: true, link: "https://platform.composio.dev/" }],
   google_workspace: oauth("GOOGLE", "Google", "https://developers.google.com/oauthplayground/"),
   microsoft: [...oauth("MICROSOFT", "Microsoft", "https://developer.microsoft.com/graph/graph-explorer"), { chave: "TOOL_MICROSOFT_TENANT", rotulo: "Diretório da organização (opcional)", optional: true }],
   e2b: [{ chave: "TOOL_E2B_KEY", rotulo: "Chave da E2B", secret: true, link: "https://e2b.dev/dashboard" }],
@@ -29,6 +33,7 @@ export const TOOL_CREDENTIALS: Record<string, Credential[]> = {
 };
 export const TOOL_CREDENTIAL_KEYS = Object.values(TOOL_CREDENTIALS).flatMap((l) => l.map((c) => c.chave));
 export const TOOL_CREDENTIAL_LABELS: Record<string, string> = {
+  github_mcp: "Github MCP", postgres_mcp: "Postgres MCP", custom_mcp: "Custom MCP", composio: "Composio",
   google_workspace: "Google Workspace", microsoft: "Microsoft 365", e2b: "E2B", browserless: "Browserless", slack: "Slack", openapi: "API da empresa",
   tavily: "Tavily", searchapi: "SearchAPI", exa: "Exa", serper: "Serper", serpapi: "SerpAPI", brave: "Brave Search", google: "Google Custom Search", wolfram: "Wolfram Alpha", searxng: "SearXNG",
 };

@@ -179,7 +179,7 @@ export function ChatPopup({
   voiceId: string;
   onVoiceSettings: () => void;
   flowId: string;
-  onSend: (input: string, attachments: Attachment[], conversational?: boolean) => Promise<Run | null>;
+  onSend: (input: string, attachments: Attachment[]) => Promise<Run | null>;
   onChange: (r: Run) => void;
   onConnect: () => void;
 }) {
@@ -226,7 +226,7 @@ export function ChatPopup({
       },
       respond: async (text) => {
         setInput(text);
-        const result = await latest.current.onSend(text, latest.current.attachments, true);
+        const result = await latest.current.onSend(text, latest.current.attachments);
         if (result) { setInput(""); setAttachments([]); }
         return result;
       },

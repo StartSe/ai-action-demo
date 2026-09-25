@@ -151,11 +151,28 @@ export const SERVICE_TOOLS: Builtin[] = [
     try { const execution = await sandbox.runCode(required(a, "codigo"), { language: a.linguagem === "javascript" ? "javascript" : "python", timeoutMs: 45000 }); return JSON.stringify({ resultados: execution.results.map((r) => r.text), saida: execution.logs, erro: execution.error }).slice(0, 50000); }
     finally { await sandbox.kill(); }
   } },
+  ...([
+    ["brave_mcp", "Brave Search MCP", "brave", "TOOL_BRAVE_KEY"],
+    ["postgres_mcp", "Postgres MCP", "postgres_mcp", "TOOL_POSTGRES_URL"],
+    ["github_mcp", "Github MCP", "github_mcp", "TOOL_GITHUB_TOKEN"],
+    ["custom_mcp", "Custom MCP", "custom_mcp", "TOOL_CUSTOM_MCP_URL"],
+    ["composio", "Composio", "composio", "TOOL_COMPOSIO_KEY"],
+  ].map(([name, label, credential, key]): Builtin => ({ id: `interno:${name}`, name, label, credential, category: "Integrações", available: () => !!getConfig(key), description: `Ações disponíveis em ${label}.`, schema: schema({}), call: async () => { throw new FlowError("Use esta ferramenta em um bloco Agente."); } }))),
   ...(["browserless", "slack"] as const).map((service): Builtin => ({ id: `interno:${service}`, name: service, label: service === "browserless" ? "Browserless MCP" : "Slack MCP", category: "Servidores de ferramentas", credential: service, available: () => !!getConfig(`TOOL_${service.toUpperCase()}_TOKEN`), description: service === "browserless" ? "Navegação, captura de páginas e automação pelo Browserless MCP." : "Pesquisa e colaboração no Slack pelo servidor MCP oficial.", schema: schema({}), call: async () => { throw new FlowError("Escolha este conjunto de ferramentas em um bloco Agente."); } })),
   { id: "interno:openapi", name: "openapi", label: "OpenAPI Toolkit", category: "Web e dados", credential: "openapi", available: () => !!getConfig("TOOL_OPENAPI_URL"), description: "Disponibiliza ao agente as operações de uma especificação OpenAPI 3 em JSON, com credencial Bearer opcional.", schema: schema({}), call: async () => { throw new FlowError("Escolha este conjunto de ferramentas em um bloco Agente."); } },
 ];
 
-export async function resolveServiceToolkit(name: string): Promise<AgentTool[] | null> {
+export async function resolveServiceToolkit(name: string, params: Record<string, string> = {}): Promise<AgentTool[] | null> {
+  if (name === "composio") return (await import("./tool-composio")).composioTools(params);
+  if (name === "brave_mcp" || name === "postgres_mcp") {
+    const { localTools } = await import("./tool-mcp");
+    return localTools(name, name === "brave_mcp" ? "brave" : "postgres", getConfig(name === "brave_mcp" ? "TOOL_BRAVE_KEY" : "TOOL_POSTGRES_URL") || "");
+  }
+  if (name === "github_mcp" || name === "custom_mcp") {
+    const { remoteTools } = await import("./tool-mcp");
+    const url = name === "github_mcp" ? "https://api.githubcopilot.com/mcp/" : publicUrl(getConfig("TOOL_CUSTOM_MCP_URL") || "").toString();
+    return remoteTools(name, url, getConfig(name === "github_mcp" ? "TOOL_GITHUB_TOKEN" : "TOOL_CUSTOM_MCP_TOKEN"));
+  }
   if (name === "openapi") return (await import("./tool-openapi")).openApiTools();
   if (name !== "browserless" && name !== "slack") return null;
   const { remoteTools } = await import("./tool-mcp");

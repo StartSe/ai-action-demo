@@ -4,6 +4,7 @@
 // Identificadores guardados no bloco: "interno:<nome>" para as prontas e "mcp:<prefixo>:<nome>"
 // para as de um servidor. Um nome sem prefixo (fluxos da primeira versão) é o servidor antigo
 // "Ferramentas". O nome que o modelo vê é sempre o nome curto da ferramenta.
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { AgentTool } from "./chatgpt";
 import { conexaoMCP, servidoresMCP, servidorMCP } from "./conexoes";
 import { conectar, chamar, listarFerramentas } from "./mcp-cliente";
@@ -160,6 +161,7 @@ export function extractPath(value: unknown, path: string): unknown {
   }
   return cur;
 }
+const flowToolDepth = new AsyncLocalStorage<number>();
 const BUILTIN: Builtin[] = [
   ...SERVICE_TOOLS,
   // Busca na web
@@ -401,11 +403,28 @@ export async function resolveTools(ids: string[], cardsValue = ""): Promise<Agen
   for (const id of wanted) {
     if (id.startsWith("interno:")) {
       const b = BUILTIN.find((t) => t.id === id);
-      const credentialId = cards.find((card) => card.kind === "tool" && card.target === id)?.credentialId;
+      const card = cards.find((card) => card.kind === "tool" && card.target === id);
+      const credentialId = card?.credentialId, params = card?.params || {};
       if (!b || !withToolCredential(credentialId, b.credential, () => !b.available || b.available()))
         throw new FlowError(`A ferramenta “${toolShortName(id)}” não está disponível. Confira as credenciais no Agente.`);
-      const toolkit = await withToolCredential(credentialId, b.credential, () => resolveServiceToolkit(b.name));
-      if (toolkit) { out.push(...toolkit.map((tool) => ({ ...tool, call: (args: unknown) => withToolCredential(credentialId, b.credential, () => tool.call(args)) }))); continue; }
+      const toolkit = await withToolCredential(credentialId, b.credential, () => resolveServiceToolkit(b.name, params));
+      if (toolkit) {
+        const selected = params.actions === undefined ? null : JSON.parse(params.actions) as string[];
+        if (selected && (!Array.isArray(selected) || !selected.length)) throw new FlowError("Selecione ao menos uma ação nos parâmetros da ferramenta.");
+        if (selected?.some((name) => !toolkit.some((tool) => tool.name === name))) throw new FlowError("Uma ação selecionada não está mais disponível. Atualize os parâmetros da ferramenta.");
+        out.push(...toolkit.filter((tool) => !selected || selected.includes(tool.name)).map((tool) => ({ ...tool, call: (args: unknown) => withToolCredential(credentialId, b.credential, () => tool.call(args)) }))); continue; }
+      if (b.name === "executar_fluxo" && params.flowId !== undefined) {
+        if (!params.flowId) throw new FlowError("Selecione um fluxo nos parâmetros de Agent as a Tool.");
+        out.push({ name: b.name, description: params.description || b.description, schema: { type: "object", properties: { entrada: { type: "string" } }, required: ["entrada"] }, call: async (args) => {
+          const depth = flowToolDepth.getStore() || 0;
+          if (depth >= 5) throw new FlowError("Limite de agentes encadeados atingido. Confira se os fluxos chamam uns aos outros.");
+          return flowToolDepth.run(depth + 1, () => b.call({ entrada: (args as { entrada?: string })?.entrada || "", fluxo: params.flowId }));
+        } }); continue;
+      }
+      if (b.name === "data_hora" && params.timezone) {
+        try { new Intl.DateTimeFormat("pt-BR", { timeZone: params.timezone }); } catch { throw new FlowError("Confira o fuso horário da ferramenta."); }
+        out.push({ name: b.name, description: b.description, schema: b.schema, call: async () => { const now = new Date(); return JSON.stringify({ iso: now.toISOString(), local: now.toLocaleString("pt-BR", { timeZone: params.timezone }), fuso: params.timezone }); } }); continue;
+      }
       out.push({ name: b.name, description: b.description, schema: b.schema, call: (args) => withToolCredential(credentialId, b.credential, () => b.call((args || {}) as Record<string, unknown>)) });
       continue;
     }
