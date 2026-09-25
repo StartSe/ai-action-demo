@@ -35,7 +35,8 @@ const namespace = (c: Config, s: VectorScope) =>
   `${c.options?.namespace || "agentflows"}_${digest(s)}`;
 const weaviateClass = (s: VectorScope) => `Kb${digest(s)}`;
 const faissDirectory = (s: VectorScope) =>
-  join(resolve(process.env.DATA_DIR || "data"), "knowledge-faiss", digest(s));
+  // Índices são criados em execução no volume persistente, fora do bundle.
+  join(resolve(/* turbopackIgnore: true */ process.env.DATA_DIR || "data"), "knowledge-faiss", digest(s));
 function normalize(vector: number[]) {
   const n = Math.sqrt(vector.reduce((a, v) => a + v * v, 0));
   return vector.map((v) => v / n);

@@ -49,6 +49,7 @@ export type IndexConfig = {
     provider: "openai" | "ollama" | "gemini" | "voyage";
     model: string;
     url: string;
+    credentialId?: string;
     apiKey?: string;
     configured?: boolean;
     batchSize?: number;

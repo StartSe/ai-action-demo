@@ -1,3 +1,4 @@
+import { resolveEmbeddingCredential } from "./tool-credential-store";
 import { FlowError } from "./flow-store";
 import { knowledgeUrl } from "./knowledge-http";
 import {
@@ -108,7 +109,29 @@ export function validatedIndexConfig(
       throw new FlowError("Credencial inválida.");
     if (value?.trim()) secrets[key] = value.trim();
   }
-  if (c.embeddings.provider !== "ollama" && !secrets.embeddingKey)
+  if (c.embeddings.apiKey?.trim()) delete c.embeddings.credentialId;
+  if (
+    c.embeddings.credentialId !== undefined &&
+    (typeof c.embeddings.credentialId !== "string" ||
+      c.embeddings.credentialId.length > 200)
+  )
+    throw new FlowError("Escolha uma credencial válida.");
+  if (c.embeddings.credentialId) {
+    const saved = resolveEmbeddingCredential(
+      c.embeddings.credentialId,
+      c.embeddings.provider,
+    );
+    if (saved.url !== c.embeddings.url.replace(/\/$/, ""))
+      throw new FlowError(
+        "O endereço precisa corresponder à credencial escolhida. Selecione a conexão novamente.",
+      );
+    delete secrets.embeddingKey;
+  }
+  if (
+    c.embeddings.provider !== "ollama" &&
+    !c.embeddings.credentialId &&
+    !secrets.embeddingKey
+  )
     throw new FlowError("Informe a chave do serviço de embeddings.");
   if (
     ["pinecone", "supabase"].includes(c.vectorStore.provider) &&
@@ -152,7 +175,8 @@ export function validatedIndexConfig(
       provider: c.embeddings.provider,
       model: c.embeddings.model,
       url: c.embeddings.url.replace(/\/$/, ""),
-      configured: !!secrets.embeddingKey,
+      credentialId: c.embeddings.credentialId || undefined,
+      configured: !!c.embeddings.credentialId || !!secrets.embeddingKey,
       batchSize: c.embeddings.batchSize,
       timeout: c.embeddings.timeout,
       stripNewLines: !!c.embeddings.stripNewLines,

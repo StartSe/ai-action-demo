@@ -12,6 +12,8 @@ import {
   type Flow,
   type Graph,
   type Run,
+  type RunPage,
+  type RunSummary,
 } from "./flow-types";
 export class FlowError extends Error {
   status: number;
@@ -24,7 +26,9 @@ function db() {
   const d = abrirBanco();
   d.exec(`CREATE TABLE IF NOT EXISTS flows (id TEXT PRIMARY KEY, body TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS flow_runs (id TEXT PRIMARY KEY, flow_id TEXT NOT NULL, status TEXT NOT NULL, body TEXT NOT NULL);
-    CREATE INDEX IF NOT EXISTS flow_runs_flow ON flow_runs(flow_id);`);
+    CREATE INDEX IF NOT EXISTS flow_runs_flow ON flow_runs(flow_id);
+    CREATE INDEX IF NOT EXISTS flow_runs_status ON flow_runs(status);
+    CREATE INDEX IF NOT EXISTS flow_runs_flow_status ON flow_runs(flow_id,status);`);
   return d;
 }
 export function validateGraph(value: unknown, executable = false): Graph {
@@ -310,6 +314,22 @@ export function listRuns(flowId?: string): Run[] {
           .all()
   ) as { body: string }[];
   return rows.map((r) => JSON.parse(r.body));
+}
+export function listRunPage({ page = 1, pageSize = 20, status = "all", flowId }: { page?: number; pageSize?: number; status?: string; flowId?: string } = {}): RunPage {
+  if (!Number.isSafeInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100)
+    throw new FlowError("Use uma página válida e entre 1 e 100 execuções por página.");
+  if (!["all", "running", "waiting", "completed", "failed", "cancelled"].includes(status)) throw new FlowError("Escolha um status de execução válido.");
+  const filters: string[] = [], params: string[] = [];
+  if (flowId) { filters.push("flow_id=?"); params.push(flowId); }
+  if (status !== "all") { filters.push("status=?"); params.push(status); }
+  const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
+  const d = db();
+  const total = Number((d.prepare(`SELECT count(*) AS total FROM flow_runs${where}`).get(...params) as { total: number }).total);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const actualPage = Math.min(page, totalPages);
+  // Retorna apenas as colunas da lista: grafo, saída e traces são carregados ao abrir o detalhe.
+  const rows = d.prepare(`SELECT id,flow_id AS flowId,status,json_extract(body,'$.name') AS name,substr(json_extract(body,'$.input'),1,100) AS input,json_extract(body,'$.demo') AS demo,json_extract(body,'$.createdAt') AS createdAt FROM flow_runs${where} ORDER BY rowid DESC LIMIT ? OFFSET ?`).all(...params,pageSize,(actualPage-1)*pageSize) as (Omit<RunSummary,"demo"> & {demo:number})[];
+  return { items: rows.map(row => ({ ...row, demo: !!row.demo })), total, totalPages, page: actualPage, pageSize };
 }
 export function claimRun(id: string) {
   const r = getRun(id);

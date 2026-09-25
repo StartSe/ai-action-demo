@@ -1,3 +1,6 @@
+import { embeddingCredentialProvider, embeddingCredentialKey, embeddingCredentialUrl } from "./embedding-credentials";
+import { knowledgeUrl } from "./knowledge-http";
+import type { IndexConfig } from "./knowledge-types";
 import { randomUUID } from "node:crypto";
 import { abrirBanco, getConfig, setConfig } from "./store";
 import { FlowError, listFlows } from "./flow-store";
@@ -69,31 +72,41 @@ export function saveToolCredential(input: unknown, id?: string): SavedToolCreden
   const entries = Object.entries(body.fields);
   if (entries.some(([key, value]) => !fields.some((f) => f.chave === key) || (value !== null && (typeof value !== "string" || value.length > 12000)))) throw new FlowError("Há campos inválidos na credencial.");
   if (existing?.id.startsWith("default:") && fields.some((f) => process.env[f.chave]?.trim())) throw new FlowError("Esta conexão foi definida no servidor. Crie uma nova credencial para usar outra conta.");
-  let data: Record<string, string> = {};
+  let data: Record<string, string> = Object.fromEntries(fields.filter(f => f.defaultValue).map(f => [f.chave, f.defaultValue!]));
   if (existing) { try { data = values(existing); } catch { /* Permite corrigir credencial perdida. */ } }
   for (const [key, value] of entries) {
     const field = fields.find((f) => f.chave === key)!;
     if (value === null || (!field.secret && value === "")) delete data[key];
     else if (typeof value === "string" && value.trim()) data[key] = value.trim();
   }
+  if (provider.startsWith("embedding_")) {
+    const urlField = fields.find(f => f.chave.endsWith("_URL"))!;
+    const url = data[urlField.chave];
+    if (!url || url.length > 2000) throw new FlowError("Informe o endereço do serviço de embeddings.");
+    knowledgeUrl(url);
+    data[urlField.chave] = url.replace(/\/$/, "");
+  }
   if (!configured(provider, data)) throw new FlowError("Preencha os campos obrigatórios para salvar a conexão.");
   const saved = { id: existing?.id || randomUUID(), name: name.trim(), provider };
   const d = db();
   if (!saved.id.startsWith("default:") && d.prepare("SELECT id FROM tool_credentials WHERE provider=? AND lower(name)=lower(?) AND id<>?").get(provider, saved.name, saved.id)) throw new FlowError("Já existe uma conexão com esse nome neste serviço. Escolha outro nome.");
-  d.exec("BEGIN");
+  d.exec("SAVEPOINT tool_credential_change");
   try {
     if (saved.id.startsWith("default:")) for (const field of fields) setConfig(field.chave, data[field.chave]);
     else {
       d.prepare("INSERT INTO tool_credentials VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name").run(saved.id, saved.name, provider);
       setConfig(secretKey(saved.id), JSON.stringify(data));
     }
-    d.exec("COMMIT");
-  } catch (error) { d.exec("ROLLBACK"); throw error; }
+    d.exec("RELEASE tool_credential_change");
+  } catch (error) { d.exec("ROLLBACK TO tool_credential_change"); d.exec("RELEASE tool_credential_change"); throw error; }
   return summary(saved);
 }
 export function deleteToolCredential(id: string) {
   const r = row(id);
   if (r.id.startsWith("default:") && schema(r.provider).some((f) => process.env[f.chave]?.trim())) throw new FlowError("A conexão padrão está definida no servidor e não pode ser removida aqui.");
+  const database = db();
+  if (database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='knowledge_bases'").get() && database.prepare("SELECT 1 FROM knowledge_bases WHERE json_extract(body,'$.config.embeddings.credentialId')=?").get(id))
+    throw new FlowError("Esta credencial está em uso por uma base de conhecimento. Troque a conexão da base antes de excluí-la.", 409);
   const used = listFlows().some((flow) => flow.graph.nodes.some((node) => readToolCards(node.data.config.tools || "", node.data.config.toolCards).some((card) => card.credentialId === id)));
   if (used) throw new FlowError("Esta credencial está em uso. Troque a conexão nos agentes antes de excluí-la.", 409);
   const active = db().prepare("SELECT body FROM flow_runs WHERE status IN ('running','waiting')").all() as { body: string }[];
@@ -102,12 +115,12 @@ export function deleteToolCredential(id: string) {
     return run.graph.nodes.some((node: { data: { config: Record<string, string> } }) => readToolCards(node.data.config.tools || "", node.data.config.toolCards).some((card) => card.credentialId === id));
   })) throw new FlowError("Há uma execução usando esta credencial. Aguarde a conclusão ou cancele a execução antes de excluir.", 409);
   const d = db();
-  d.exec("BEGIN");
+  d.exec("SAVEPOINT tool_credential_change");
   try {
     if (r.id.startsWith("default:")) for (const field of schema(r.provider)) setConfig(field.chave, null);
     else { d.prepare("DELETE FROM tool_credentials WHERE id=?").run(id); setConfig(secretKey(id), null); }
-    d.exec("COMMIT");
-  } catch (error) { d.exec("ROLLBACK"); throw error; }
+    d.exec("RELEASE tool_credential_change");
+  } catch (error) { d.exec("ROLLBACK TO tool_credential_change"); d.exec("RELEASE tool_credential_change"); throw error; }
 }
 export function withToolCredential<T>(id: string | undefined, provider: string | undefined, action: () => T): T {
   if (!id) return action(); // Compatibilidade com conexões já existentes.
@@ -123,4 +136,13 @@ export function withToolCredential<T>(id: string | undefined, provider: string |
     if (value) latest[key] = value; else delete latest[key];
     setConfig(secretKey(id), JSON.stringify(latest));
   } }, action);
+}
+
+// Apenas o servidor recebe a chave; o navegador usa o resumo sem segredos.
+export function resolveEmbeddingCredential(id: string, provider: IndexConfig["embeddings"]["provider"]) {
+  const r = row(id);
+  if (r.provider !== embeddingCredentialProvider(provider)) throw new FlowError("A credencial não pertence ao provedor de embeddings escolhido.");
+  const data = values(r);
+  if (!configured(r.provider, data)) throw new FlowError("Revise a credencial do serviço de embeddings.");
+  return { apiKey: data[embeddingCredentialKey(provider)] || undefined, url: data[embeddingCredentialUrl(provider)] };
 }

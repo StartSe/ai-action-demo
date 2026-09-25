@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   KNOWLEDGE_LOADERS,
   knowledgeLoaderIcon,
@@ -21,11 +21,10 @@ export function KnowledgeSourceDialog({
   baseId: string;
   source?: KnowledgeSource;
   onClose: () => void;
-  onSaved: (source: KnowledgeSource, process: boolean) => Promise<void>;
+  onSaved: (source: KnowledgeSource) => Promise<void>;
 }) {
   const [loaderId, setLoaderId] = useState(source?.loader || ""),
     [search, setSearch] = useState(""),
-    [name, setName] = useState(source?.name || ""),
     [config, setConfig] = useState<Record<string, string>>(
       source?.config || {},
     ),
@@ -39,14 +38,42 @@ export function KnowledgeSourceDialog({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [dirty, setDirty] = useState(false),
-    [discard, setDiscard] = useState(false);
+    [discard, setDiscard] = useState(false),
+    [dragging, setDragging] = useState(false);
+  const upload = useRef<HTMLInputElement>(null);
   const loader = knowledgeLoader(loaderId);
   const close = () => {
     if (busy) return;
     if (dirty) setDiscard(true);
     else onClose();
   };
-  async function save(process: boolean) {
+  function selectFiles(selected: File[]) {
+    if (!selected.length || busy) return;
+    if (
+      selected.length > 20 ||
+      selected.reduce((n, f) => n + f.size, 0) > 10 * 1024 * 1024
+    ) {
+      setError("Envie até 20 arquivos, somando no máximo 10 MB.");
+      return;
+    }
+    const extensions = loader?.accept
+      ?.split(",")
+      .map((ext) => ext.trim().toLowerCase());
+    if (
+      extensions &&
+      selected.some(
+        (file) =>
+          !extensions.some((ext) => file.name.toLowerCase().endsWith(ext)),
+      )
+    ) {
+      setError("Escolha arquivos nos formatos aceitos por esta fonte.");
+      return;
+    }
+    setFiles(selected);
+    setDirty(true);
+    setError("");
+  }
+  async function save() {
     setBusy(true);
     setError("");
     try {
@@ -60,7 +87,11 @@ export function KnowledgeSourceDialog({
       form.set(
         "source",
         JSON.stringify({
-          name,
+          name:
+            files[0]?.name ||
+            source?.fileNames[0] ||
+            source?.name ||
+            loader?.name,
           loader: loaderId,
           config,
           splitter,
@@ -76,7 +107,7 @@ export function KnowledgeSourceDialog({
       if (!response.ok)
         throw new Error(result.error || "Não foi possível salvar a fonte.");
       setDirty(false);
-      await onSaved(result, process);
+      await onSaved(result);
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "Não foi possível salvar a fonte.",
@@ -125,7 +156,6 @@ export function KnowledgeSourceDialog({
                   key={l.id}
                   onClick={() => {
                     setLoaderId(l.id);
-                    setName(l.name);
                     setDirty(true);
                   }}
                 >
@@ -157,7 +187,7 @@ export function KnowledgeSourceDialog({
             className="knowledge-form"
             onSubmit={(e) => {
               e.preventDefault();
-              void save(true);
+              void save();
             }}
             onChange={() => setDirty(true)}
           >
@@ -177,59 +207,69 @@ export function KnowledgeSourceDialog({
                 </button>
               )}
             </div>
-            <label>
-              Nome da fonte
-              <input
-                autoFocus
-                required
-                maxLength={100}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </label>
             {loader.accept && (
-              <label className="knowledge-upload">
-                <Icon name="upload" size={24} />
+              <div
+                className={`knowledge-upload${dragging ? " dragging" : ""}`}
+                role="button"
+                tabIndex={busy ? -1 : 0}
+                aria-label="Selecionar arquivos da fonte"
+                aria-disabled={busy}
+                onClick={() => {
+                  if (!busy) upload.current?.click();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    if (!busy) upload.current?.click();
+                  }
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (!busy) setDragging(true);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node))
+                    setDragging(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  selectFiles([...e.dataTransfer.files]);
+                }}
+              >
+                <Icon name="upload" size={28} />
                 <strong>
-                  {files.length
-                    ? `${files.length} arquivo(s) selecionado(s)`
-                    : source?.fileNames.length
-                      ? "Substituir arquivos"
-                      : "Escolher arquivos"}
+                  {dragging
+                    ? "Solte os arquivos aqui"
+                    : "Arraste os arquivos ou clique para selecionar"}
                 </strong>
                 <small>
                   {loader.accept.replaceAll(",", " · ")} · até 20 arquivos,
                   somando 10 MB
                 </small>
                 <input
+                  ref={upload}
                   type="file"
                   multiple
                   accept={loader.accept}
+                  hidden
+                  disabled={busy}
                   aria-label="Arquivos da fonte"
+                  onClick={(e) => e.stopPropagation()}
                   onChange={(e) => {
-                    const selected = [...(e.target.files || [])];
-                    if (
-                      selected.length > 20 ||
-                      selected.reduce((n, f) => n + f.size, 0) >
-                        10 * 1024 * 1024
-                    ) {
-                      setError(
-                        "Envie até 20 arquivos, somando no máximo 10 MB.",
-                      );
-                      e.target.value = "";
-                      return;
-                    }
-                    setFiles(selected);
-                    setError("");
+                    selectFiles([...(e.target.files || [])]);
+                    e.target.value = "";
                   }}
                 />
                 {(files.length
                   ? files.map((f) => f.name)
                   : source?.fileNames || []
                 ).map((f, i) => (
-                  <small key={i}>{f}</small>
+                  <small className="knowledge-upload-file" key={i}>
+                    {f}
+                  </small>
                 ))}
-              </label>
+              </div>
             )}
             {loader.fields.map((field) => (
               <label key={field.key}>
@@ -376,16 +416,11 @@ export function KnowledgeSourceDialog({
               </div>
             )}
             <div className="knowledge-form-actions">
-              <button
-                className="studio-button"
-                type="button"
-                disabled={busy}
-                onClick={() => void save(false)}
-              >
-                Salvar configuração
-              </button>
               <button className="studio-button primary" disabled={busy}>
-                {busy ? "Salvando…" : "Extrair e revisar"}
+                {busy && (
+                  <span className="knowledge-spinner" aria-hidden="true" />
+                )}
+                {busy ? "Salvando e extraindo…" : "Extrair e revisar"}
               </button>
             </div>
           </form>

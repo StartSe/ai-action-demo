@@ -805,7 +805,7 @@ test("trocar servidor não encaminha a credencial anterior e indexação interro
           embeddings: { ...config.embeddings, url: "https://other.example/v1" },
         },
       }),
-    /chave/,
+    /chave|credencial/,
   );
   assert.equal(
     store.indexKnowledgeConfig(b.id).embeddings.apiKey,

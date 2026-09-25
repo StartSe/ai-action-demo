@@ -5,11 +5,11 @@ Acesso pela tela inicial ou pelo menu **Base de Conhecimento**. A implementaçã
 ## Jornada
 
 1. **Criar base:** dê um nome e uma descrição para identificar o conteúdo.
-2. **Documentos:** escolha uma fonte, configure a conexão ou envie os arquivos e clique em **Extrair e revisar**. É possível salvar a configuração sem extrair ainda. A extração não gera embeddings.
+2. **Documentos:** escolha uma fonte, configure a conexão ou envie os arquivos e clique em **Extrair e revisar**. O botão salva a configuração e inicia a extração, que não gera embeddings.
 3. **Revisar fragmentos:** pesquise, edite o texto e os metadados ou remova trechos. A divisão pode ser recursiva ou por separador, com tamanho e sobreposição configuráveis. Reextrair substitui os fragmentos da fonte, inclusive suas edições manuais.
-4. **Embeddings:** configure OpenAI/API compatível ou Ollama, modelo, endereço e credencial. Essa conexão é independente do modelo do Agente. Uma assinatura ChatGPT não é usada como credencial de embeddings.
-5. **Vector Store:** use vetores persistidos localmente em SQLite ou um servidor Qdrant. Cada base e cada geração têm isolamento próprio.
-6. **Record Manager:** use SQLite para reaproveitar embeddings da indexação anterior ou desative para recalcular. O reaproveitamento exige texto, provedor, endereço e modelo iguais. Metadados editados permanecem associados ao trecho, mesmo quando seu vetor é reaproveitado.
+4. **Embeddings:** escolha Gemini, OpenAI, VoyageAI ou Ollama, modelo e conexão compartilhada no menu Credenciais. Essa conexão é independente do modelo do Agente. Uma assinatura ChatGPT não é usada como credencial de embeddings.
+5. **Vector Store:** escolha Faiss local ou um dos dez serviços remotos descritos na [comparação de provedores](KNOWLEDGE-FLOWISE.md). Cada base e cada geração têm isolamento próprio.
+6. **Record Manager:** use SQLite ou Postgres para reaproveitar embeddings da indexação anterior. O reaproveitamento exige texto, provedor, endereço, modelo e preparação iguais. Metadados editados permanecem associados ao trecho, mesmo quando seu vetor é reaproveitado.
 7. **Indexar base:** a nova geração só fica disponível após a conclusão. O histórico informa quantos embeddings foram gerados e reaproveitados. Alterações nas fontes/configuração exigem nova indexação antes de consultar.
 8. **Testar consulta:** digite uma pergunta para ver conteúdo, origem, metadados e pontuação dos trechos encontrados. Ajuste a quantidade e a pontuação mínima quando necessário.
 9. **Agente:** selecione a base no bloco, escolha **Retornar referências encontradas** e salve o fluxo. O sistema consulta a base antes da chamada ao modelo e acrescenta as referências ao final da resposta apenas quando essa opção está ativa. A lista descreve os trechos recuperados; não é uma comprovação de que o modelo citou cada um deles.
@@ -49,9 +49,9 @@ Tokens OAuth Google são informados na fonte e precisam ser atualizados quando e
 - Fragmentos de 100 a 8.000 caracteres; sobreposição menor que o tamanho. Busca de até 20.000 caracteres, com 1 a 20 resultados e pontuação mínima entre -1 e 1.
 - Cada extração/indexação tem limite de 10 minutos. Uma trava persistente impede operações concorrentes na mesma base; a expiração em 15 minutos permite recuperar um processo interrompido. O índice novo só substitui o anterior depois de completo.
 - Falhas de serviços aparecem na fonte ou no histórico. Credenciais e corpos de erro de provedores não entram nessas mensagens. Não há retorno silencioso a uma busca por palavras quando embeddings falham.
-- Excluir uma fonte remove seus vetores locais e do Qdrant; a base fica pendente de indexação. Excluir uma base vinculada a um Agente é recusado, com orientação para remover o vínculo.
-- Índices Qdrant anteriores são removidos após a troca. Limpeza que falhou fica registrada e pode ser repetida pela interface. A limpeza processa até cinco gerações por tentativa. Os índices antigos nunca entram na consulta ativa.
-- Fontes HTTP exigem endereços públicos e fixam a conexão no endereço DNS validado. Servidores de Embeddings/Qdrant configurados pelo administrador podem usar rede privada, para instalações locais. Ao mudar de serviço, a credencial anterior não é encaminhada ao novo endereço.
+- Excluir uma fonte remove seus vetores locais e do serviço configurado; a base fica pendente de indexação. Excluir uma base vinculada a um Agente é recusado, com orientação para remover o vínculo.
+- Índices anteriores são removidos após a troca. Limpeza que falhou fica registrada e pode ser repetida pela interface. A limpeza processa até cinco gerações por tentativa. Os índices antigos nunca entram na consulta ativa.
+- Fontes HTTP exigem endereços públicos e fixam a conexão no endereço DNS validado. Servidores de embeddings e bancos vetoriais configurados pelo administrador podem usar rede privada, para instalações locais. Ao mudar de serviço, a credencial anterior não é encaminhada ao novo endereço.
 
 ## Contratos e verificação
 
@@ -60,3 +60,9 @@ Os testes em `lib/knowledge.test.ts` exercitam arquivos PDF, DOCX, XLSX e PPTX r
 Contratos de referência: [embeddings OpenAI](https://developers.openai.com/api/docs/guides/embeddings), [Ollama embed](https://docs.ollama.com/api/embed), [Firecrawl scrape](https://docs.firecrawl.dev/api-reference/endpoint/scrape) e implementação local do [Document Store Flowise](https://github.com/FlowiseAI/Flowise/tree/main/packages/ui/src/views/docstore).
 
 Validação visual: biblioteca, catálogo dos 20 extratores, extração e revisão, configuração nas três etapas, indexação, consulta, histórico, edição/reindexação e seleção no Agente; desktop, 390 px e tema escuro. Os artefatos temporários da verificação ficam fora do repositório.
+
+## Fontes e credenciais na versão 0.13.0
+
+Arraste arquivos para a área de upload ou clique nela para selecionar. O nome da fonte usa o primeiro arquivo, incluindo a extensão; os demais arquivos continuam identificados na lista e nos metadados. **Extrair e revisar** salva os campos e inicia a extração. **Revisar** abre o modal amplo com busca, edição e exclusão dos trechos. **Reextrair** exibe progresso enquanto processa.
+
+Em Embeddings, selecione ou crie uma conexão do menu **Credenciais**. As chaves existentes são migradas sem alteração da revisão da base. Editar a chave atualiza o acesso das bases vinculadas; alterar o endereço requer reaplicar a conexão e reindexar. O app impede excluir credenciais em uso. Ollama pode funcionar sem autenticação. Consulte [os quatro provedores, onze bancos e recursos atuais](KNOWLEDGE-FLOWISE.md).

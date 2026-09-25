@@ -6,7 +6,7 @@ import { EmbedSecurity } from "./EmbedSecurity";
 import { ChatGPTUsage } from "./ChatGPTUsage";
 import { WhatsAppTerms } from "./WhatsAppTerms";
 import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
-import { ToolCredentialsManager } from "./ToolCredentialsManager";
+
 type CampoStatus = {
   chave: string;
   rotulo: string;
@@ -297,7 +297,7 @@ export function Connections() {
             )}
           </Card>
         </div>
-        <ToolCredentialsManager />
+
         <div className="settings-section-heading"><Icon name="chat" size={18} /><div><h2>Canais e voz</h2><p>Configure uma vez e vincule ao fluxo em Implantar.</p></div></div>
         <div className="settings-channels">
           <Card

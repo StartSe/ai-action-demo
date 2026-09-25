@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import type { SavedToolCredential } from "@/lib/tool-credential-store";
-import { CREDENTIAL_TOOL_CATALOG } from "@/lib/tool-presentation";
+import { CREDENTIAL_CATALOG } from "@/lib/tool-presentation";
 import { ToolLogo } from "./ToolSelect";
 import { Icon, IconButton, Modal, request } from "./StudioUI";
 import { ToolCredentialDialog } from "./ToolCredentialDialog";
@@ -25,10 +25,10 @@ export function ToolCredentialsManager() {
     catch (e) { setError(e instanceof Error ? e.message : "Não foi possível excluir a credencial."); }
     finally { setBusy(false); }
   }
-  const toolFor = (c: SavedToolCredential) => CREDENTIAL_TOOL_CATALOG.find((tool) => tool.provider === c.provider);
+  const toolFor = (c: SavedToolCredential) => CREDENTIAL_CATALOG.find((tool) => tool.provider === c.provider);
   const shown = items.filter((c) => `${c.name} ${c.providerLabel} ${toolFor(c)?.name || ""}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   return <section className="tool-credentials-manager" id="credenciais">
-    <div className="settings-section-heading"><Icon name="link" size={18} /><div><h2>Credenciais das ferramentas</h2><p>Guarde suas conexões e escolha qual conta cada agente usa.</p></div></div>
+    <div className="settings-section-heading"><Icon name="link" size={18} /><div><h2>Ferramentas e embeddings</h2><p>Guarde suas conexões e reutilize-as nos agentes e nas bases de conhecimento.</p></div></div>
     <div className="credential-manager-card">
       <div className="credential-manager-toolbar"><label>Buscar conexão<input type="search" value={query} placeholder="Nome ou serviço" onChange={(e) => setQuery(e.target.value)} /></label><button type="button" className="studio-button" onClick={() => setEditor("new")}><Icon name="plus" size={16} />Nova credencial</button></div>
       {loading && <p role="status">Carregando conexões…</p>}
@@ -41,7 +41,7 @@ export function ToolCredentialsManager() {
     </div>
     {editor && <ToolCredentialDialog credential={editor === "new" ? undefined : editor} onClose={() => setEditor(null)} onSaved={(c) => { setItems((all) => [...all.filter((o) => o.id !== c.id), c]); setEditor(null); }} />}
     {removing && <Modal title="Excluir credencial" onClose={() => { if (!busy) setRemoving(null); }}>
-      <p>Excluir a conexão “{removing.name}”? Os agentes que usam esta conta perderão o acesso.</p>
+      <p>Excluir a conexão “{removing.name}”? Conexões em uso por agentes ou bases de conhecimento precisam ser desvinculadas primeiro.</p>
       {error && <p className="studio-error" role="alert">{error}</p>}
       <div className="modal-actions"><button type="button" className="studio-button" disabled={busy} onClick={() => setRemoving(null)}>Cancelar</button><button type="button" className="studio-button destructive" disabled={busy} onClick={() => void remove()}>{busy ? "Excluindo…" : "Excluir credencial"}</button></div>
     </Modal>}

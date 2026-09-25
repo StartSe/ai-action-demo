@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { TOOL_CREDENTIALS, TOOL_CREDENTIAL_LABELS } from "@/lib/tool-credentials";
 import type { SavedToolCredential } from "@/lib/tool-credential-store";
-import { CREDENTIAL_TOOL_CATALOG } from "@/lib/tool-presentation";
+import { CREDENTIAL_CATALOG } from "@/lib/tool-presentation";
 import { ToolLogo, ToolSelect } from "./ToolSelect";
 import { Icon, Modal, request } from "./StudioUI";
 
@@ -10,12 +10,12 @@ export function ToolCredentialDialog({ provider: initialProvider = "", credentia
   provider?: string; credential?: SavedToolCredential; onSaved: (credential: SavedToolCredential) => void; onClose: () => void;
 }) {
   const [provider, setProvider] = useState(credential?.provider || initialProvider);
-  const [tool, setTool] = useState(CREDENTIAL_TOOL_CATALOG.find((item) => item.provider === (credential?.provider || initialProvider))?.id || "");
+  const [tool, setTool] = useState(CREDENTIAL_CATALOG.find((item) => item.provider === (credential?.provider || initialProvider))?.id || "");
   const [name, setName] = useState(credential?.name || "");
   const [draft, setDraft] = useState<Record<string, string | null>>({});
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const fields = credential?.fields || TOOL_CREDENTIALS[provider] || [];
-  const value = (key: string) => draft[key] ?? fields.find((field) => field.chave === key)?.valor ?? "";
+  const value = (key: string) => draft[key] ?? (fields.find((field) => field.chave === key)?.valor || fields.find((field) => field.chave === key)?.defaultValue || "");
   async function save() {
     setBusy(true); setError("");
     try {
@@ -38,7 +38,7 @@ export function ToolCredentialDialog({ provider: initialProvider = "", credentia
   }
   return <Modal title={provider ? <h2 className="credential-title"><ToolLogo id={tool || `interno:${provider}`} />{TOOL_CREDENTIAL_LABELS[provider] || provider}</h2> : "Nova credencial"} onClose={() => { if (!busy) onClose(); }} className="credential-dialog">
     <div className="node-fields">
-      {!credential && !initialProvider ? <ToolSelect value={tool} catalog={CREDENTIAL_TOOL_CATALOG} disabled={busy} onChange={(id) => { setTool(id); setProvider(CREDENTIAL_TOOL_CATALOG.find((item) => item.id === id)!.provider); setDraft({}); setError(""); }} /> : null}
+      {!credential && !initialProvider ? <ToolSelect label="Serviço" value={tool} catalog={CREDENTIAL_CATALOG} disabled={busy} onChange={(id) => { setTool(id); setProvider(CREDENTIAL_CATALOG.find((item) => item.id === id)!.provider); setDraft({}); setError(""); }} /> : null}
       {!!provider && <>
         <input aria-label="Nome da credencial" value={name} maxLength={100} placeholder="Nome da credencial" disabled={busy || credential?.legacy} onChange={(event) => setName(event.target.value)} />
         {fields.find((field) => field.link)?.link && <a className="credential-help" href={fields.find((field) => field.link)!.link} target="_blank" rel="noreferrer">Obter credencial {TOOL_CREDENTIAL_LABELS[provider]}</a>}

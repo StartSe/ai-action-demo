@@ -7,13 +7,11 @@ export function KnowledgeChunks({
   source,
   disabled,
   onChanged,
-  onClose,
 }: {
   baseId: string;
   source: KnowledgeSource;
   disabled: boolean;
   onChanged: () => Promise<void>;
-  onClose: () => void;
 }) {
   const [chunks, setChunks] = useState<Chunk[]>([]),
     [page, setPage] = useState(1),
@@ -92,16 +90,10 @@ export function KnowledgeChunks({
     <section className="knowledge-chunks">
       <div className="knowledge-section-title">
         <div>
-          <h2>Revisar fragmentos</h2>
           <p>
             {source.name} · {total} trecho(s)
           </p>
         </div>
-        <IconButton
-          icon="close"
-          label="Fechar revisão de fragmentos"
-          onClick={onClose}
-        />
       </div>
       <label className="studio-search">
         <Icon name="search" size={18} />

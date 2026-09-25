@@ -8,6 +8,7 @@ import {
   VECTOR_OPTIONS,
   embeddingDimensions,
 } from "@/lib/knowledge-providers";
+import { KnowledgeEmbeddingCredential } from "./KnowledgeEmbeddingCredential";
 import { KnowledgeProviderSelect } from "./KnowledgeProviderSelect";
 import { supabaseSetupSql } from "@/lib/knowledge-supabase-setup";
 export function KnowledgeIndexFields({
@@ -72,31 +73,23 @@ export function KnowledgeIndexFields({
             O tamanho dos vetores é configurado automaticamente para o modelo.
           </small>
         </label>
-        <label>
-          Chave de acesso{embedding.provider === "ollama" ? " (opcional)" : ""}
-          <input
-            autoComplete="new-password"
-            type="password"
-            required={embedding.provider !== "ollama" && !embedding.configured}
-            value={embedding.apiKey || ""}
-            placeholder={
-              embedding.configured
-                ? "Credencial salva · preencha para substituir"
-                : "Chave do serviço de embeddings"
-            }
-            onChange={(e) => embeddingChange({ apiKey: e.target.value })}
-          />
-        </label>
+        <KnowledgeEmbeddingCredential
+          key={embedding.provider}
+          embedding={embedding}
+          onChange={embeddingChange}
+        />
         <label>
           Endereço do serviço
           <input
             required
             type="url"
+            readOnly={!!embedding.credentialId}
             value={embedding.url}
             onChange={(e) =>
               embeddingChange({
                 url: e.target.value,
                 configured: false,
+                credentialId: undefined,
                 apiKey: "",
               })
             }

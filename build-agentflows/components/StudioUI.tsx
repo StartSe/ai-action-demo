@@ -26,6 +26,8 @@ export function useDismissMenus() {
   }, []);
 }
 export type IconName =
+  | "lock"
+  | "user"
   | "shield"
   | "flows"
   | "runs"
@@ -82,6 +84,8 @@ export type IconName =
   | "wave"
   | "mic-off";
 const paths: Record<string, ReactNode> = {
+  lock: <><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" /></>,
+  user: <><circle cx="12" cy="8" r="4" /><path d="M4 21v-2a8 8 0 0 1 16 0v2" /></>,
   shield: <><path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7z" /><path d="m8 12 3 3 5-6" /></>,
   flows: (
     <>
@@ -346,13 +350,30 @@ export function StudioShell({
   connected,
 }: {
   children: ReactNode;
-  active: "flows" | "runs" | "connections" | "knowledge";
+  active: "flows" | "runs" | "connections" | "knowledge" | "credentials";
   onConnect: () => void;
   connected?: boolean;
 }) {
   useDismissMenus();
   const router = useRouter();
   const [dark, setDark] = useState(false);
+  const [userName, setUserName] = useState("");
+  const [signingOut, setSigningOut] = useState(false), [accountError, setAccountError] = useState("");
+  const names = userName.trim().split(/\s+/).filter(Boolean);
+  const initials = names.length > 1 ? `${Array.from(names[0])[0]}${Array.from(names.at(-1)!)[0]}`.toLocaleUpperCase("pt-BR") : Array.from(names[0] || "").slice(0,2).join("").toLocaleUpperCase("pt-BR");
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/conta/perfil", { signal: controller.signal, cache: "no-store" }).then(async res => {
+      if (res.ok) { const data = await res.json(); if (!controller.signal.aborted && typeof data.usuario?.nome === "string") setUserName(data.usuario.nome); }
+    }).catch(() => {});
+    return () => controller.abort();
+  }, []);
+  function toggleTheme() {
+    const value = !dark;
+    setDark(value);
+    document.documentElement.dataset.studioTheme = value ? "dark" : "light";
+    localStorage.setItem("agentflows-theme", value ? "dark" : "light");
+  }
   useEffect(() => {
     const value = localStorage.getItem("agentflows-theme") === "dark";
     document.documentElement.dataset.studioTheme = value ? "dark" : "light";
@@ -362,6 +383,7 @@ export function StudioShell({
   return (
     <div className="studio-shell">
       <aside className="studio-nav">
+        <div className="studio-brand-group">
         <Link href="/" className="studio-brand">
           <span className="brand-mark">
             <Icon name="flows" size={23} />
@@ -370,7 +392,9 @@ export function StudioShell({
             Build<span className="brand-light"> Agentflows</span>
           </span>
         </Link>
-        <div className="studio-nav-label">Workspace</div>
+        <span className="studio-version-badge">{version}-beta</span>
+        </div>
+        <div className="studio-nav-label"><span>Workspace</span><button type="button" className="studio-theme-toggle" title={dark ? "Ativar tema claro" : "Ativar tema escuro"} aria-label={dark ? "Ativar tema claro" : "Ativar tema escuro"} onClick={toggleTheme}><Icon name={dark ? "sun" : "moon"} size={16} /></button></div>
         <nav>
           <Link className={active === "flows" ? "active" : ""} href="/">
             <Icon name="flows" />
@@ -383,6 +407,9 @@ export function StudioShell({
           <Link className={active === "knowledge" ? "active" : ""} href="/knowledge">
             <Icon name="book" />
             Base de Conhecimento
+          </Link>
+          <Link className={active === "credentials" ? "active" : ""} href="/credenciais">
+            <Icon name="lock" />Credenciais
           </Link>
           <Link
             className={active === "connections" ? "active" : ""}
@@ -400,35 +427,20 @@ export function StudioShell({
             <span>{connected ? "ChatGPT conectado" : "Conectar ChatGPT"}</span>
             <Icon name="link" size={16} />
           </button>
-          <div className="studio-nav-utilities">
-            <button
-              onClick={() => {
-                const value = !dark;
-                setDark(value);
-                document.documentElement.dataset.studioTheme = value
-                  ? "dark"
-                  : "light";
-                localStorage.setItem(
-                  "agentflows-theme",
-                  value ? "dark" : "light",
-                );
-              }}
-            >
-              <Icon name={dark ? "sun" : "moon"} size={17} />
-              {dark ? "Tema claro" : "Tema escuro"}
-            </button>
-            <button
-              title="Sair da conta"
-              aria-label="Sair da conta"
-              onClick={async () => {
-                await fetch("/api/conta/sair", { method: "POST" });
-                router.push("/entrar");
-              }}
-            >
-              <Icon name="logout" size={17} />
-            </button>
-          </div>
-          <small>Build Agentflows {version}</small>
+          <details className="canvas-menu studio-profile">
+            <summary aria-label={userName ? `Conta de ${userName}` : "Minha conta"} title={userName || "Minha conta"}>
+              <span className="studio-user-avatar">{initials || <Icon name="user" size={18} />}</span>
+              <span className="studio-profile-name">{userName || "Minha conta"}</span><Icon name="chevron" size={15} />
+            </summary>
+            <div className="studio-profile-menu">
+              {accountError && <p role="alert">{accountError}</p>}
+              <button type="button" disabled={signingOut} onClick={async () => {
+                setSigningOut(true); setAccountError("");
+                try { await request("/api/conta/sair", "POST"); router.push("/entrar"); router.refresh(); }
+                catch { setAccountError("Não foi possível sair. Tente novamente."); setSigningOut(false); }
+              }}><Icon name="logout" size={16} />{signingOut ? "Saindo…" : "Sair da conta"}</button>
+            </div>
+          </details>
         </div>
       </aside>
       <div className="studio-content">{children}</div>

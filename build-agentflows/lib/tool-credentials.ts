@@ -1,6 +1,8 @@
+import { EMBEDDING_PROVIDERS } from "./knowledge-providers";
+import { embeddingCredentialKey, embeddingCredentialUrl, embeddingCredentialProvider } from "./embedding-credentials";
 // Credenciais das ferramentas prontas (mesmos serviços do catálogo de ferramentas do Flowise).
 // Ficam no banco cifrado; a tela do Agente pede só o que a ferramenta escolhida precisa.
-export type Credential = { chave: string; rotulo: string; ajuda?: string; link?: string; secret?: boolean; optional?: boolean; definido?: boolean; valor?: string };
+export type Credential = { chave: string; rotulo: string; ajuda?: string; link?: string; secret?: boolean; optional?: boolean; definido?: boolean; valor?: string; defaultValue?: string };
 const oauth = (provider: string, label: string, link: string): Credential[] => [
   { chave: `TOOL_${provider}_TOKEN`, rotulo: `Token de acesso ${label}`, secret: true, link, ajuda: "Use as permissões dos serviços que deseja disponibilizar aos agentes." },
   { chave: `TOOL_${provider}_REFRESH_TOKEN`, rotulo: "Token de renovação (opcional)", secret: true, optional: true },
@@ -8,6 +10,10 @@ const oauth = (provider: string, label: string, link: string): Credential[] => [
   { chave: `TOOL_${provider}_CLIENT_SECRET`, rotulo: "Segredo do aplicativo (para renovar)", secret: true, optional: true },
 ];
 export const TOOL_CREDENTIALS: Record<string, Credential[]> = {
+  ...Object.fromEntries(EMBEDDING_PROVIDERS.map(p => [embeddingCredentialProvider(p.id), [
+    { chave: embeddingCredentialKey(p.id), rotulo: "Chave de acesso", secret: true, optional: p.id === "ollama", link: p.id === "openai" ? "https://platform.openai.com/api-keys" : p.id === "gemini" ? "https://aistudio.google.com/apikey" : p.id === "voyage" ? "https://dash.voyageai.com/" : undefined },
+    { chave: embeddingCredentialUrl(p.id), rotulo: "Endereço do serviço", defaultValue: p.url },
+  ]])) ,
   github_mcp: [{ chave: "TOOL_GITHUB_TOKEN", rotulo: "Token do Github", secret: true, link: "https://github.com/settings/tokens" }],
   postgres_mcp: [{ chave: "TOOL_POSTGRES_URL", rotulo: "URL de conexão PostgreSQL", secret: true }],
   custom_mcp: [{ chave: "TOOL_CUSTOM_MCP_URL", rotulo: "URL do servidor MCP" }, { chave: "TOOL_CUSTOM_MCP_TOKEN", rotulo: "Token de acesso", secret: true, optional: true }],
@@ -33,6 +39,7 @@ export const TOOL_CREDENTIALS: Record<string, Credential[]> = {
 };
 export const TOOL_CREDENTIAL_KEYS = Object.values(TOOL_CREDENTIALS).flatMap((l) => l.map((c) => c.chave));
 export const TOOL_CREDENTIAL_LABELS: Record<string, string> = {
+  ...Object.fromEntries(EMBEDDING_PROVIDERS.map(p => [embeddingCredentialProvider(p.id), p.name])),
   github_mcp: "Github MCP", postgres_mcp: "Postgres MCP", custom_mcp: "Custom MCP", composio: "Composio",
   google_workspace: "Google Workspace", microsoft: "Microsoft 365", e2b: "E2B", browserless: "Browserless", slack: "Slack", openapi: "API da empresa",
   tavily: "Tavily", searchapi: "SearchAPI", exa: "Exa", serper: "Serper", serpapi: "SerpAPI", brave: "Brave Search", google: "Google Custom Search", wolfram: "Wolfram Alpha", searxng: "SearXNG",

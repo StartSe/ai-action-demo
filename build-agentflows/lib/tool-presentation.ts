@@ -1,3 +1,4 @@
+import { EMBEDDING_CREDENTIAL_CATALOG } from "./embedding-credentials";
 // Catálogo visível no editor. IDs antigos continuam executáveis para preservar fluxos salvos.
 export const AGENT_TOOL_CATALOG = [
   { id: "interno:executar_fluxo", name: "Agent as a Tool", icon: "/tool-icons/executar_fluxo.svg" },
@@ -23,7 +24,7 @@ export const AGENT_TOOL_CATALOG = [
 export function toolTitle(tool: { name: string; label?: string; id?: string }) {
   return AGENT_TOOL_CATALOG.find((item) => item.id === (tool.id || `interno:${tool.name}`))?.name || tool.label || tool.name;
 }
-export function toolIcon(id: string) { return AGENT_TOOL_CATALOG.find((item) => item.id === id)?.icon; }
+export function toolIcon(id: string) { return [...AGENT_TOOL_CATALOG, ...EMBEDDING_CREDENTIAL_CATALOG].find((item) => item.id === id)?.icon; }
 
 // Uma credencial Brave atende à ferramenta HTTP e à versão MCP; Teams usa Microsoft.
 const CREDENTIAL_PROVIDERS: Record<string, string> = {
@@ -35,3 +36,5 @@ export const CREDENTIAL_TOOL_CATALOG = AGENT_TOOL_CATALOG.flatMap((tool) => {
   const provider = CREDENTIAL_PROVIDERS[tool.id.split(":")[1]];
   return provider ? [{ ...tool, provider }] : [];
 });
+
+export const CREDENTIAL_CATALOG = [...CREDENTIAL_TOOL_CATALOG, ...EMBEDDING_CREDENTIAL_CATALOG].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));

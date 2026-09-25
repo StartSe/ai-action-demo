@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## 0.13.0 — 25/09/2026
+
+- Upload de fontes por arrastar e soltar, teclado ou clique em toda a área; nome automático igual ao primeiro arquivo. Extrair e revisar salva a configuração, sem campo de nome nem botão adicional de salvar no modal.
+- Revisão de fragmentos em modal amplo, mantendo busca, metadados e edição; reextração com indicador de andamento; confirmação de exclusão com botão vermelho e ícone, sem Cancelar.
+- Menu Credenciais entre Base de Conhecimento e Configurações, com ferramentas e os quatro provedores de embedding. Conexões reutilizáveis por base, migração automática das chaves existentes, rotação de chaves e bloqueio de exclusão enquanto vinculadas.
+- Badge discreto com versão beta abaixo da marca, tema por ícone ao lado de Workspace, cadeado em Credenciais e perfil com iniciais, nome real da sessão e opção de sair.
+- Execuções com paginação e filtro no SQLite, 20/50/100 itens por página e detalhes carregados sob demanda. O contrato anterior utilizado pelo editor permanece compatível.
+- Testes de credenciais/migração, execução com chave atualizada, nomes de arquivo, paginação acima de 100 registros, payload reduzido e autenticação do perfil.
+
 ## 0.12.0 — 25/09/2026
 
 - Seletores de fontes, embeddings, bancos vetoriais e Record Managers com logos do Flowise, busca e layout adaptado aos temas do projeto.

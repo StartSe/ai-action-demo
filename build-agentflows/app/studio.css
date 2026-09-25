@@ -3802,3 +3802,46 @@
 .markdown-content th, .markdown-content td { border: 1px solid var(--studio-line); padding: 8px 10px; text-align: left; }
 .markdown-content th { background: var(--studio-primary-soft); }
 @media (max-width: 600px) { .trace-payloads { grid-template-columns: 1fr; } .trace-metrics { gap: 6px; } .trace-metrics > div { padding: 10px; } .trace-metrics strong { font-size: 13px; } }
+
+/* Identidade da instalação e conta no menu principal. */
+.studio-brand-group { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
+.studio-version-badge { margin-left: 45px; padding: 2px 6px; border-radius: 5px; background: #f0f1f4; color: #8a8e9b; font-size: 9px; font-weight: 500; line-height: 1.4; }
+:root[data-studio-theme="dark"] .studio-version-badge { background: #2d2f3a; color: #a3a6b4; }
+.studio-nav-label { display: flex; align-items: center; justify-content: space-between; margin-top: 28px; margin-right: 7px; }
+.studio-theme-toggle { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 7px; color: var(--studio-muted); background: transparent; }
+.studio-theme-toggle:hover { background: var(--studio-primary-soft); color: var(--studio-primary); }
+.studio-profile { position: relative; margin-top: 16px; width: 100%; }
+.studio-profile > summary { display: flex; align-items: center; gap: 10px; width: 100%; height: auto; padding: 7px 3px; list-style: none; color: var(--studio-ink); cursor: pointer; }
+.studio-profile > summary::-webkit-details-marker { display: none; }
+.studio-user-avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; background: var(--studio-primary-soft); color: var(--studio-primary); font-size: 11px; font-weight: 700; }
+.studio-profile-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
+.studio-profile > .studio-profile-menu { position: absolute; top: auto; bottom: calc(100% + 8px); left: 0; width: 100%; min-width: 160px; background: var(--studio-surface); border: 1px solid var(--studio-line); border-radius: 10px; padding: 6px; box-shadow: var(--studio-shadow); z-index: 30; }
+.studio-profile-menu button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px; border: 0; border-radius: 6px; background: transparent; color: var(--studio-ink); font-size: 12px; }
+.studio-profile-menu button:hover { background: var(--studio-primary-soft); }
+.studio-profile-menu p { padding: 8px; font-size: 11px; color: #c44453; }
+@media (max-width: 800px) {
+  .studio-nav { height: auto; flex-wrap: wrap; gap: 8px 14px; padding: 12px; }
+  .studio-brand-group { flex-shrink: 0; gap: 4px; }
+  .studio-version-badge { margin-left: 0; font-size: 8px; }
+  .studio-nav-label { display: flex; margin: 0 0 0 auto; gap: 8px; }
+  .studio-nav-bottom { display: block; margin: 0; }
+  .studio-nav-bottom .studio-account { display: none; }
+  .studio-profile { margin: 0; }
+  .studio-profile-name { max-width: 110px; }
+  .studio-profile > .studio-profile-menu { top: calc(100% + 8px); bottom: auto; right: 0; left: auto; }
+  .studio-nav nav { order: 4; flex: 0 0 100%; width: 100%; margin: 0; overflow-x: auto; }
+  .studio-nav nav a { flex-shrink: 0; min-height: 44px; }
+}
+@media (max-width: 450px) {
+  .studio-profile-name { max-width: 85px; font-size: 11px; }
+  .studio-nav { column-gap: 10px; }
+  .studio-nav-label { font-size: 9px; gap: 3px; }
+}
+.execution-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 22px; color: var(--studio-muted); font-size: 12px; }
+.execution-pagination > label { display: flex; align-items: center; gap: 8px; }
+.execution-pagination select { padding: 7px; color: var(--studio-ink); background: var(--studio-surface); border: 1px solid var(--studio-line); border-radius: 7px; }
+.execution-pagination > .studio-actions { margin-left: auto; }
+@media (max-width: 600px) { .execution-pagination > .studio-actions { margin: 0; width: 100%; justify-content: space-between; } }
+
+@media (max-width: 650px) { .studio-nav .studio-brand > span:last-child { display: none; } }
+.credential-manager-identity .tool-logo, .credential-dialog .tool-logo { width: 32px; height: 32px; flex-basis: 32px; padding: 4px; border-radius: 50%; background: #fff; }

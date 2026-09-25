@@ -9,8 +9,8 @@ export function ToolLogo({ id }: { id: string }) {
   return src ? <img className="tool-logo" src={src} alt="" width={24} height={24} /> : <Icon name="tool" size={24} />;
 }
 const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-export function ToolSelect({ value, used = [], catalog = AGENT_TOOL_CATALOG, disabled = false, onChange }: {
-  value: string; used?: string[]; catalog?: { id: string; name: string }[]; disabled?: boolean; onChange: (id: string) => void;
+export function ToolSelect({ value, used = [], catalog = AGENT_TOOL_CATALOG, disabled = false, label = "Ferramenta", onChange }: {
+  value: string; used?: string[]; catalog?: { id: string; name: string }[]; disabled?: boolean; label?: string; onChange: (id: string) => void;
 }) {
   const id = useId(), input = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false), [query, setQuery] = useState(""), [active, setActive] = useState(0);
@@ -21,8 +21,8 @@ export function ToolSelect({ value, used = [], catalog = AGENT_TOOL_CATALOG, dis
   return <div className="tool-select" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) { setOpen(false); setQuery(""); } }}>
     <div className="tool-select-input">
       <ToolLogo id={value} />
-      <input ref={input} disabled={disabled} role="combobox" aria-label="Ferramenta" aria-expanded={open} aria-controls={id} aria-autocomplete="list" aria-activedescendant={open && options[active] ? `${id}-${active}` : undefined}
-        value={open ? query : selected?.name || (value ? "Ferramenta anterior" : "")} placeholder={open ? "Buscar ferramenta…" : "Selecione uma ferramenta"}
+      <input ref={input} disabled={disabled} role="combobox" aria-label={label} aria-expanded={open} aria-controls={id} aria-autocomplete="list" aria-activedescendant={open && options[active] ? `${id}-${active}` : undefined}
+        value={open ? query : selected?.name || (value ? "Ferramenta anterior" : "")} placeholder={open ? `Buscar ${label.toLowerCase()}…` : `Selecionar ${label.toLowerCase()}`}
         onFocus={() => { setOpen(true); setQuery(""); setActive(0); }} onClick={() => setOpen(true)}
         onChange={(event) => { setQuery(event.target.value); setOpen(true); setActive(0); }}
         onKeyDown={(event) => {

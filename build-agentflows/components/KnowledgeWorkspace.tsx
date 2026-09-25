@@ -66,6 +66,7 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
     ),
     [deleteSource, setDeleteSource] = useState<KnowledgeSource | null>(null),
     [selectedSource, setSelectedSource] = useState(""),
+    [extractingSource, setExtractingSource] = useState(""),
     [config, setConfig] = useState<IndexConfig>(structuredClone(DEFAULT_INDEX)),
     [configDirty, setConfigDirty] = useState(false),
     [query, setQuery] = useState(""),
@@ -168,18 +169,23 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
     setConfigDirty(true);
   }
   async function processSource(source: KnowledgeSource) {
-    await act(`Extraindo ${source.name}…`, async () => {
-      const result = await request<{
-        warnings: string[];
-        documents: number;
-        chunks: number;
-      }>(`/api/knowledge/${id}/sources/${source.id}`, "POST");
-      setSelectedSource(source.id);
-      setStep(0);
-      setNotice(
-        `${result.documents} documento(s) extraído(s) em ${result.chunks} fragmento(s). ${result.warnings.join(" ") || "Revise o conteúdo antes de indexar."}`,
-      );
-    });
+    setExtractingSource(source.id);
+    try {
+      await act(`Extraindo ${source.name}…`, async () => {
+        const result = await request<{
+          warnings: string[];
+          documents: number;
+          chunks: number;
+        }>(`/api/knowledge/${id}/sources/${source.id}`, "POST");
+        setSelectedSource(source.id);
+        setStep(0);
+        setNotice(
+          `${result.documents} documento(s) extraído(s) em ${result.chunks} fragmento(s). ${result.warnings.join(" ") || "Revise o conteúdo antes de indexar."}`,
+        );
+      });
+    } finally {
+      setExtractingSource("");
+    }
   }
   const base = detail?.base;
   const sources = detail?.sources || [];
@@ -520,9 +526,20 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
                                 disabled={locked}
                                 onClick={() => void processSource(source)}
                               >
-                                {source.status === "processed"
-                                  ? "Reextrair"
-                                  : "Extrair"}
+                                {extractingSource === source.id ||
+                                source.status === "processing" ? (
+                                  <>
+                                    <span
+                                      className="knowledge-spinner"
+                                      aria-hidden="true"
+                                    />
+                                    Extraindo…
+                                  </>
+                                ) : source.status === "processed" ? (
+                                  "Reextrair"
+                                ) : (
+                                  "Extrair"
+                                )}
                               </button>
                               <IconButton
                                 icon="settings"
@@ -552,14 +569,20 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
                     </div>
                   </section>
                   {selected && (
-                    <KnowledgeChunks
-                      key={selected.id}
-                      baseId={base.id}
-                      source={selected}
-                      disabled={locked}
-                      onChanged={load}
+                    <Modal
+                      title="Revisar fragmentos"
+                      wide
+                      className="knowledge-review-modal"
                       onClose={() => setSelectedSource("")}
-                    />
+                    >
+                      <KnowledgeChunks
+                        key={selected.id}
+                        baseId={base.id}
+                        source={selected}
+                        disabled={locked}
+                        onChanged={load}
+                      />
+                    </Modal>
                   )}
                 </>
               )}
@@ -898,14 +921,7 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
           )}
           <div className="knowledge-form-actions">
             <button
-              className="studio-button"
-              disabled={!!busy}
-              onClick={() => setDeleteSource(null)}
-            >
-              Cancelar
-            </button>
-            <button
-              className="studio-button"
+              className="studio-button destructive"
               disabled={!!busy}
               onClick={() =>
                 void act("Excluindo fonte…", async () => {
@@ -913,6 +929,7 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
                     `/api/knowledge/${id}/sources/${deleteSource.id}`,
                     "DELETE",
                   );
+                  setSelectedSource("");
                   setDeleteSource(null);
                   setNotice(
                     "Fonte removida. Reindexe a base para atualizar as consultas.",
@@ -920,7 +937,8 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
                 })
               }
             >
-              Excluir fonte
+              <Icon name="trash" size={16} />
+              {busy ? "Excluindo…" : "Excluir fonte"}
             </button>
           </div>
         </Modal>
@@ -930,14 +948,10 @@ export function KnowledgeWorkspace({ id }: { id?: string }) {
           baseId={id}
           source={sourceDialog === "new" ? undefined : sourceDialog}
           onClose={() => setSourceDialog(null)}
-          onSaved={async (source, process) => {
+          onSaved={async (source) => {
             setSourceDialog(null);
             await load();
-            if (process) await processSource(source);
-            else
-              setNotice(
-                "Fonte salva. Extraia o conteúdo para revisar os fragmentos.",
-              );
+            await processSource(source);
           }}
         />
       )}

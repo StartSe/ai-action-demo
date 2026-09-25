@@ -1,6 +1,6 @@
 # Base de Conhecimento — comparação com Flowise
 
-Revisão da versão 0.12.0, em 25/09/2026. Referência: código local de `Flowise-main/packages/components/nodes` (documentloaders, embeddings, vectorstores e recordmanager) e catálogo `packages/components/models.json`.
+Revisão da versão 0.13.0, em 25/09/2026. Referência: código local de `Flowise-main/packages/components/nodes` (documentloaders, embeddings, vectorstores e recordmanager) e catálogo `packages/components/models.json`.
 
 A jornada principal está contemplada: extrair documentos, revisar e dividir o texto, gerar embeddings, indexar, evitar processamento repetido, consultar e entregar os trechos ao Agente. Os campos avançados não têm paridade integral com o Flowise.
 
@@ -10,7 +10,7 @@ A jornada principal está contemplada: extrair documentos, revisar e dividir o t
 | --- | --- | --- |
 | Fontes | 20 extratores com os logos da referência, campos por serviço, upload, credenciais cifradas, extração, metadados e revisão dos trechos. | Catálogo limitado às 20 fontes selecionadas. PDF digitalizado exige OCR prévio. Custom Document Loader executa no E2B. |
 | Divisão | Divisores recursivo e por caracteres, tamanho, sobreposição e separador; edição de conteúdo/metadados dos trechos. | Não inclui todos os divisores especializados, por tokens e semânticos do Flowise. |
-| Embeddings | Gemini, OpenAI, VoyageAI e Ollama, com logos e listas de modelos. Dimensões automáticas, URL configurável, credencial, lote, timeout e remoção opcional de quebras de linha. | Não há seletor de dimensões, encoding base64, cabeçalhos arbitrários, task type manual ou ajustes de GPU/threads do Ollama. Recuperação usa documento/query conforme o provedor. |
+| Embeddings | Gemini, OpenAI, VoyageAI e Ollama, com logos e listas de modelos. Credenciais compartilhadas no menu Credenciais. Dimensões automáticas, URL configurável, credencial, lote, timeout e remoção opcional de quebras de linha. | Não há seletor de dimensões, encoding base64, cabeçalhos arbitrários, task type manual ou ajustes de GPU/threads do Ollama. Recuperação usa documento/query conforme o provedor. |
 | Vector Store | Os 11 serviços abaixo recebem vetores reais e participam da consulta e exclusão. Top K, similaridade mínima, metadados e referências do documento. | Busca por similaridade de cosseno. Não expõe MMR, filtros arbitrários do usuário, busca híbrida, reranking nem todos os ajustes de índices de cada serviço. |
 | Record Manager | SQLite e Postgres, com logos, hash do conteúdo/configuração, reaproveitamento de embeddings e limpeza da versão anterior. Postgres permite tabela e namespace. | Limpeza completa por versão. Não expõe modos `none`/`incremental` nem `sourceIdKey` do Flowise. SQLite usa o banco persistente do app; fonte/base são identificadas automaticamente. |
 | Consulta no Agente | Recupera os trechos da versão publicada e pode incluir referências na resposta, com ChatGPT e OpenRouter. | É necessário salvar e indexar a configuração; uma falha na nova indexação preserva os dados da versão anterior, mas a consulta exige a base novamente indexada e pronta. |

@@ -185,3 +185,6 @@ export function template(example = false): Graph {
     ],
   };
 }
+
+export type RunSummary = Pick<Run, "id" | "flowId" | "name" | "status" | "demo" | "createdAt" | "input">;
+export type RunPage = { items: RunSummary[]; page: number; pageSize: number; total: number; totalPages: number };

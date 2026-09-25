@@ -1,3 +1,12 @@
+import {
+  saveToolCredential,
+  resolveEmbeddingCredential,
+} from "./tool-credential-store";
+import {
+  embeddingCredentialKey,
+  embeddingCredentialUrl,
+  embeddingCredentialProvider,
+} from "./embedding-credentials";
 import { validatedIndexConfig } from "./knowledge-config";
 import { randomUUID } from "node:crypto";
 import { abrirBanco, getConfig, setConfig } from "./store";
@@ -53,6 +62,43 @@ export function saveKnowledgeBaseRecord(base: KnowledgeBase) {
     )
     .run(base.id, JSON.stringify(base));
 }
+function migrateEmbeddingCredential(base: KnowledgeBase) {
+  if (base.config.embeddings.credentialId) return;
+  const secrets = getKnowledgeSecrets(base.id);
+  if (!secrets.embeddingKey) return;
+  const d = knowledgeDb();
+  d.exec("SAVEPOINT knowledge_embedding_credential");
+  try {
+    const embedding = base.config.embeddings;
+    const saved = saveToolCredential({
+      name: `${base.name.slice(0, 55)} · ${embedding.provider} · ${randomUUID().slice(0, 8)}`,
+      provider: embeddingCredentialProvider(embedding.provider),
+      fields: {
+        [embeddingCredentialKey(embedding.provider)]: secrets.embeddingKey,
+        [embeddingCredentialUrl(embedding.provider)]: embedding.url,
+      },
+    });
+    base.config.embeddings = {
+      ...embedding,
+      credentialId: saved.id,
+      configured: true,
+    };
+    delete secrets.embeddingKey;
+    setConfig(secretKey(base.id), JSON.stringify(secrets));
+    saveKnowledgeBaseRecord(base);
+    d.exec("RELEASE knowledge_embedding_credential");
+  } catch (error) {
+    d.exec("ROLLBACK TO knowledge_embedding_credential");
+    d.exec("RELEASE knowledge_embedding_credential");
+    throw error;
+  }
+}
+export function migrateKnowledgeCredentials() {
+  for (const row of knowledgeDb()
+    .prepare("SELECT body FROM knowledge_bases")
+    .all() as { body: string }[])
+    migrateEmbeddingCredential(JSON.parse(row.body));
+}
 export function getKnowledgeBase(id: string): KnowledgeBase {
   const base = fromRow<KnowledgeBase>(
     knowledgeDb()
@@ -61,6 +107,7 @@ export function getKnowledgeBase(id: string): KnowledgeBase {
   );
   if (!base)
     throw new FlowError("Esta base de conhecimento não existe mais.", 404);
+  migrateEmbeddingCredential(base);
   // A process restart cannot leave an apparently live indexing job forever.
   if (
     base.status === "indexing" &&
@@ -180,9 +227,22 @@ export function getKnowledgeSecrets(id: string): Record<string, string> {
 export function indexKnowledgeConfig(id: string): IndexConfig {
   const base = getKnowledgeBase(id);
   const secrets = getKnowledgeSecrets(id);
+  const saved = base.config.embeddings.credentialId
+    ? resolveEmbeddingCredential(
+        base.config.embeddings.credentialId,
+        base.config.embeddings.provider,
+      )
+    : undefined;
+  if (saved && saved.url !== base.config.embeddings.url)
+    throw new FlowError(
+      "O endereço da credencial foi alterado. Selecione a conexão novamente, salve e reindexe a base.",
+    );
   return {
     ...base.config,
-    embeddings: { ...base.config.embeddings, apiKey: secrets.embeddingKey },
+    embeddings: {
+      ...base.config.embeddings,
+      apiKey: saved?.apiKey || secrets.embeddingKey,
+    },
     vectorStore: {
       ...base.config.vectorStore,
       apiKey: secrets.vectorKey,
@@ -219,6 +279,7 @@ export function updateKnowledgeBase(
       );
       setConfig(secretKey(id), JSON.stringify(result.secrets));
       base.config = result.config;
+      migrateEmbeddingCredential(base);
       if (
         previous !== JSON.stringify(base.config) ||
         input.config.embeddings.apiKey?.trim() ||
@@ -339,7 +400,9 @@ export function saveKnowledgeSource(
     const source: KnowledgeSource = {
       id: sourceId,
       baseId,
-      name: title(input.name, "O nome da fonte"),
+      name: loader.accept
+        ? storedFiles[0].name
+        : title(input.name || loader.name, "O nome da fonte"),
       loader: loader.id,
       config: publicConfig,
       configuredSecrets: Object.keys(secretConfig),

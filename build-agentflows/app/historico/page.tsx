@@ -1,33 +1,96 @@
 "use client";
 import { useEffect, useState } from "react";
-import type { Run } from "@/lib/flow-types";
-import { Icon, Modal, StudioShell, request } from "@/components/StudioUI";
+import type { Run, RunPage } from "@/lib/flow-types";
+import { Icon, Modal, StudioShell } from "@/components/StudioUI";
 import { RunView, RUN_STATUS } from "@/components/RunView";
 import { ChatGPTConnection, useChatGPT } from "@/components/ChatGPTConnection";
 export default function Page() {
-  const [runs, setRuns] = useState<Run[]>([]),
-    [selected, setSelected] = useState<Run | null>(null),
-    [error, setError] = useState(""),
-    [loading, setLoading] = useState(true),
+  const [data, setData] = useState<RunPage>({
+    items: [],
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 1,
+  });
+  const [page, setPage] = useState(1),
+    [pageSize, setPageSize] = useState(20);
+  const [selectedId, setSelectedId] = useState(""),
+    [selected, setSelected] = useState<Run | null>(null);
+  const [error, setError] = useState(""),
+    [detailError, setDetailError] = useState("");
+  const [loading, setLoading] = useState(true),
     [filter, setFilter] = useState("all"),
-    [connect, setConnect] = useState(false);
+    [connect, setConnect] = useState(false),
+    [revision, setRevision] = useState(0);
   const { connection, setConnection } = useChatGPT();
   useEffect(() => {
-    const load = () =>
-      request<Run[]>("/api/runs")
-        .then((items) => {
-          setRuns(items);
-          setSelected((current) =>
-            current ? items.find((r) => r.id === current.id) || current : null,
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    async function load() {
+      try {
+        const response = await fetch(
+          `/api/runs?page=${page}&pageSize=${pageSize}&status=${filter}`,
+          { signal: controller.signal },
+        );
+        const result = await response.json();
+        if (!response.ok)
+          throw new Error(
+            result.error || "Não foi possível carregar as execuções.",
           );
-        })
-        .catch((e) => setError(e.message))
-        .finally(() => setLoading(false));
+        if (!controller.signal.aborted) {
+          setData(result);
+          setPage(result.page);
+          setError("");
+        }
+      } catch (e) {
+        if (!controller.signal.aborted) setError((e as Error).message);
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          timer = setTimeout(load, 3000);
+        }
+      }
+    }
     void load();
-    const t = setInterval(load, 3000);
-    return () => clearInterval(t);
-  }, []);
-  const filtered = runs.filter((r) => filter === "all" || r.status === filter);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [page, pageSize, filter, revision]);
+  useEffect(() => {
+    if (!selectedId) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    async function load() {
+      try {
+        const response = await fetch(`/api/runs/${selectedId}`, {
+          signal: controller.signal,
+        });
+        const result = await response.json();
+        if (!response.ok)
+          throw new Error(
+            result.error || "Não foi possível carregar esta execução.",
+          );
+        if (!controller.signal.aborted) {
+          setSelected(result);
+          setDetailError("");
+          if (["running", "waiting"].includes(result.status))
+            timer = setTimeout(load, 3000);
+        }
+      } catch (e) {
+        if (!controller.signal.aborted) setDetailError((e as Error).message);
+      }
+    }
+    void load();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [selectedId, revision]);
+  function changePage(next: number) {
+    setLoading(true);
+    setPage(next);
+  }
   return (
     <StudioShell
       active="runs"
@@ -46,7 +109,11 @@ export default function Page() {
             <select
               aria-label="Filtrar execuções"
               value={filter}
-              onChange={(e) => setFilter(e.target.value)}
+              onChange={(e) => {
+                setLoading(true);
+                setFilter(e.target.value);
+                setPage(1);
+              }}
             >
               <option value="all">Todos</option>
               {Object.entries(RUN_STATUS).map(([v, l]) => (
@@ -67,7 +134,7 @@ export default function Page() {
             <span className="studio-spinner" />
             Carregando execuções…
           </div>
-        ) : !filtered.length ? (
+        ) : !data.items.length ? (
           <div className="library-empty">
             <Icon name="runs" size={42} />
             <h2>Nenhuma execução encontrada</h2>
@@ -81,17 +148,21 @@ export default function Page() {
               <span>Modo</span>
               <span>Data</span>
             </div>
-            {filtered.map((r) => (
+            {data.items.map((r) => (
               <button
                 className="execution-row"
                 key={r.id}
-                onClick={() => setSelected(r)}
+                onClick={() => {
+                  setSelected(null);
+                  setDetailError("");
+                  setSelectedId(r.id);
+                }}
               >
                 <span>
                   <strong>{r.name}</strong>
-                  <small>{r.input.slice(0, 100)}</small>
+                  <small>{r.input}</small>
                 </span>
-                <span className={"execution-status " + r.status}>
+                <span className={`execution-status ${r.status}`}>
                   {RUN_STATUS[r.status]}
                 </span>
                 <span>{r.demo ? "Demonstração" : "ChatGPT"}</span>
@@ -100,21 +171,89 @@ export default function Page() {
             ))}
           </div>
         )}
+        <nav
+          className="execution-pagination"
+          aria-label="Paginação de execuções"
+        >
+          <label>
+            Por página
+            <select
+              aria-label="Execuções por página"
+              value={pageSize}
+              onChange={(e) => {
+                setLoading(true);
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+            >
+              {[20, 50, 100].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span aria-live="polite">
+            {data.total
+              ? `${(data.page - 1) * data.pageSize + 1}–${Math.min(data.page * data.pageSize, data.total)} de ${data.total}`
+              : "0 execuções"}
+          </span>
+          <div className="studio-actions">
+            <button
+              className="studio-button"
+              disabled={loading || page <= 1}
+              onClick={() => changePage(page - 1)}
+            >
+              Anterior
+            </button>
+            <span>
+              Página {data.page} de {data.totalPages}
+            </span>
+            <button
+              className="studio-button"
+              disabled={loading || page >= data.totalPages}
+              onClick={() => changePage(page + 1)}
+            >
+              Próxima
+            </button>
+          </div>
+        </nav>
       </main>
-      {selected && (
+      {selectedId && (
         <Modal
           title="Detalhes da execução"
           wide
-          onClose={() => setSelected(null)}
+          onClose={() => {
+            setSelectedId("");
+            setSelected(null);
+          }}
         >
-          <div className="test-user-message">{selected.input}</div>
-          <RunView
-            run={selected}
-            onChange={(r) => {
-              setSelected(r);
-              setRuns((items) => items.map((x) => (x.id === r.id ? r : x)));
-            }}
-          />
+          {detailError ? (
+            <>
+              <p className="studio-error" role="alert">
+                {detailError}
+              </p>
+              <button
+                className="studio-button"
+                onClick={() => setRevision((r) => r + 1)}
+              >
+                Tentar novamente
+              </button>
+            </>
+          ) : !selected ? (
+            <p role="status">Carregando detalhes…</p>
+          ) : (
+            <>
+              <div className="test-user-message">{selected.input}</div>
+              <RunView
+                run={selected}
+                onChange={(run) => {
+                  setSelected(run);
+                  setRevision((r) => r + 1);
+                }}
+              />
+            </>
+          )}
         </Modal>
       )}
       {connect && (
