@@ -185,6 +185,7 @@ export function FlowLibrary() {
             </button>
           </div>
         </header>
+        <Link href="/knowledge" className="knowledge-home-link"><span className="knowledge-symbol"><Icon name="book" size={23} /></span><span><strong>Base de Conhecimento</strong><small>Organize seus documentos e conecte esse conhecimento aos agentes.</small></span><Icon name="chevron" size={20} /></Link>
         {error && (
           <div className="studio-error" role="alert">
             {error}

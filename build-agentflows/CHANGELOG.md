@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## 0.11.0 — 25/09/2026
+
+- Base de Conhecimento na tela inicial e na navegação, seguindo a jornada Document Store do Flowise: fontes, extração, revisão dos fragmentos, Embeddings, Vector Store, Record Manager e teste de consulta.
+- Vinte opções de extração em ordem alfabética, com campos por serviço, envio de arquivos, credenciais cifradas, divisão configurável e metadados por fonte ou fragmento.
+- Embeddings OpenAI/API compatível e Ollama; vetores persistidos no app ou no Qdrant; Record Manager SQLite opcional para reaproveitar embeddings sem duplicar conteúdo.
+- Indexação com histórico e progresso, substituição atômica do índice, isolamento por base, limpeza de índices anteriores e recuperação de operações interrompidas.
+- Agente permite selecionar a base, ajustar a consulta e escolher se a resposta retorna as referências encontradas. A recuperação funciona com ChatGPT e OpenRouter.
+- Testes de extração, arquivos reais, contratos dos serviços, persistência, busca, reindexação, exclusão, falhas e execução nos dois motores; revisão visual no navegador em desktop, celular e tema escuro.
+
 ## 0.10.0 — 25/09/2026
 
 - Configurações > Credenciais usa o mesmo seletor com busca, nomes e ícones do bloco Agente, limitado às ferramentas que precisam de credencial. Conexões antigas continuam editáveis.

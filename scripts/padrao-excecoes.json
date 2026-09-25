@@ -26,7 +26,8 @@
     "app/api/setup/oauth/microsoft/callback/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT.",
     "app/api/setup/oauth/mcp/[prefixo]/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT.",
     "app/api/setup/oauth/mcp/[prefixo]/callback/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT.",
-    "app/api/setup/testar/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT."
+    "app/api/setup/testar/route.ts": "Endpoints antigos da suíte desativados: produto utiliza somente login ChatGPT.",
+    "proxy.ts": "Chat incorporado (desde 0.9.0): rotas embed e preview próprias, autenticação dos recursos públicos por tickets assinados e CORS por origem; configuração administrativa, fluxos e Base de Conhecimento continuam protegidos pela sessão da conta. Divergência preexistente, sem mudança no proxy na versão 0.11.0."
   },
   "prospeccao-ia": {
     "lib/ai.ts": "Seleção explícita entre OpenRouter e ChatGPT pelo Codex App Server (aiProvider); aiEnabled assíncrona pela conta conectada; askText/askJSON/askWithTools roteados pela conta, sem fallback entre elas.",

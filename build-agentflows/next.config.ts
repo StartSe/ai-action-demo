@@ -3,7 +3,7 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   outputFileTracingExcludes: { '/*': ['./data/**/*', './.env*'] },
   experimental: { proxyClientMaxBodySize: '11mb' },
-  serverExternalPackages: ['@openai/codex', 'unpdf', 'sharp', '@brave/brave-search-mcp-server', '@modelcontextprotocol/server-postgres'],
+  serverExternalPackages: ['@openai/codex', 'unpdf', 'officeparser', 'sharp', '@brave/brave-search-mcp-server', '@modelcontextprotocol/server-postgres'],
   outputFileTracingIncludes: {
     '/*': [
       './node_modules/@brave/brave-search-mcp-server/**/*',

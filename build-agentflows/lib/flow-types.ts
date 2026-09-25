@@ -89,6 +89,7 @@ export type Flow = {
   updatedAt: string;
 };
 export type Trace = {
+  knowledge?: { baseId: string; count: number; references: boolean };
   type?: "step" | "tool";
   status?: "running" | "completed" | "failed";
   input?: string;

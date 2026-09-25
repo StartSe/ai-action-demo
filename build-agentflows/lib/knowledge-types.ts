@@ -1,0 +1,116 @@
+export type KnowledgeField = {
+  key: string;
+  label: string;
+  type?: "secret" | "text" | "number" | "textarea";
+  required?: boolean;
+  placeholder?: string;
+  help?: string;
+};
+export type LoaderDefinition = {
+  id: string;
+  name: string;
+  description: string;
+  accept?: string;
+  fields: KnowledgeField[];
+};
+export type Document = {
+  pageContent: string;
+  metadata: Record<string, unknown>;
+};
+export type Chunk = Document & {
+  id: string;
+  sourceId: string;
+  ordinal: number;
+};
+export type SplitterConfig = {
+  kind: "recursive" | "character";
+  size: number;
+  overlap: number;
+  separator: string;
+};
+export type KnowledgeSource = {
+  id: string;
+  baseId: string;
+  name: string;
+  loader: string;
+  config: Record<string, string>;
+  configuredSecrets: string[];
+  fileNames: string[];
+  splitter: SplitterConfig;
+  metadata: Record<string, unknown>;
+  status: "draft" | "processing" | "processed" | "failed";
+  chunks: number;
+  characters: number;
+  updatedAt: string;
+  error?: string;
+};
+export type IndexConfig = {
+  embeddings: {
+    provider: "openai" | "ollama";
+    model: string;
+    url: string;
+    apiKey?: string;
+    configured?: boolean;
+  };
+  vectorStore: {
+    provider: "local" | "qdrant";
+    url: string;
+    apiKey?: string;
+    configured?: boolean;
+  };
+  recordManager: { provider: "none" | "sqlite" };
+};
+export type KnowledgeBase = {
+  id: string;
+  name: string;
+  description: string;
+  status: "empty" | "dirty" | "indexing" | "ready" | "failed";
+  revision: number;
+  indexedRevision?: number;
+  sources: number;
+  chunks: number;
+  indexedChunks: number;
+  config: IndexConfig;
+  updatedAt: string;
+  indexedAt?: string;
+  error?: string;
+};
+export type IndexRun = {
+  id: string;
+  baseId: string;
+  startedAt: string;
+  finishedAt?: string;
+  status: "running" | "completed" | "failed";
+  total: number;
+  embedded: number;
+  reused: number;
+  error?: string;
+};
+export type KnowledgeHit = Chunk & {
+  score: number;
+  baseId: string;
+  baseName: string;
+  sourceName: string;
+};
+export const DEFAULT_SPLITTER: SplitterConfig = {
+  kind: "recursive",
+  size: 1000,
+  overlap: 200,
+  separator: "\n\n",
+};
+export const DEFAULT_INDEX: IndexConfig = {
+  embeddings: {
+    provider: "openai",
+    model: "text-embedding-3-small",
+    url: "https://api.openai.com/v1",
+  },
+  vectorStore: { provider: "local", url: "" },
+  recordManager: { provider: "sqlite" },
+};
+export const KNOWLEDGE_STATUS: Record<KnowledgeBase["status"], string> = {
+  empty: "Sem documentos",
+  dirty: "Indexação pendente",
+  indexing: "Indexando",
+  ready: "Disponível",
+  failed: "Precisa de atenção",
+};

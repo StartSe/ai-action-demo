@@ -221,3 +221,7 @@ As limitações das rodadas anteriores sobre Gmail, Google/Microsoft, Browserles
 - Continuidade por contexto das últimas seis execuções da conversa; aprovação humana continua explícita.
 - Cancelamento e limpeza do microfone/áudio, respostas tardias ignoradas e estados de erro/repetição.
 - Testes do ciclo de voz e contexto, contratos ElevenLabs, navegador com MediaRecorder/Web Audio reais e áudio sintético; lint, build e verificadores antes de commit/push.
+
+# Rodada 8: Base de Conhecimento — 0.11.0
+
+O pedido de 25/09/2026 supera a exclusão histórica de RAG deste plano. A jornada Document Store do Flowise passa a fazer parte do produto: 20 extratores em ordem alfabética, revisão/edição de fragmentos, Embeddings, Vector Store, Record Manager, indexação com histórico, consulta e seleção no Agente com referências opcionais. Consulte KNOWLEDGE.md e KNOWLEDGE-PLAN.md para implementação e evidências.

@@ -1,4 +1,6 @@
 "use client";
+import { KnowledgeAgentFields } from "./KnowledgeAgentFields";
+import { knowledgeSettings } from "@/lib/knowledge-settings";
 import { useEffect, useState } from "react";
 import { conditionCriteria, COMPARISONS, type Criterion } from "@/lib/flow-conditions";
 import { BLOCKS, type Block, type Kind } from "@/lib/flow-types";
@@ -132,6 +134,12 @@ export function NodeDialog({
     setTimeout(() => setNameSaved(false), 1800);
   }
   function saveAndClose() {
+    if (k === "agent") {
+      try { knowledgeSettings(c); } catch (error) {
+        setCloseError((error as Error).message);
+        return false;
+      }
+    }
     if (k === "agent" || k === "llm") {
       try { memorySettings(c); } catch (error) {
         setCloseError((error as Error).message);
@@ -360,6 +368,7 @@ export function NodeDialog({
             )}
           </div>
         ))}
+        {k === "agent" && <KnowledgeAgentFields config={c} onChange={change} />}
         {(k === "agent" || k === "llm") && <section className="node-fields node-completion">
           <span className="node-completion-title">Ao concluir esta etapa</span>
           {updates.map((u, i) => <div className="node-field node-variable-card" role="group" aria-label={`Atualização de variável ${i + 1}`} key={i}>

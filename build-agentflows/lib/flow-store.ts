@@ -1,5 +1,6 @@
 import { conditionCriteria, COMPARISONS } from "./flow-conditions";
 import { memorySettings } from "./memory-settings";
+import { knowledgeSettings } from "./knowledge-settings";
 import { validateToolCards } from "./agent-tools";
 import { outputs } from "./flow-graph";
 import { randomUUID } from "node:crypto";
@@ -69,6 +70,7 @@ export function validateGraph(value: unknown, executable = false): Graph {
       try { memorySettings(n.data.config); } catch (error) { throw new FlowError((error as Error).message); }
     }
     if (n.data.kind === "agent") {
+      try { knowledgeSettings(n.data.config); } catch (error) { throw new FlowError((error as Error).message); }
       try { validateToolCards(n.data.config.toolCards); } catch (error) { throw new FlowError((error as Error).message); }
     }
     ids.add(n.id);

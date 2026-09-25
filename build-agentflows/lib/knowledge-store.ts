@@ -1,0 +1,600 @@
+import { randomUUID } from "node:crypto";
+import { abrirBanco, getConfig, setConfig } from "./store";
+import { FlowError, listFlows } from "./flow-store";
+import { knowledgeLoader } from "./knowledge-catalog";
+import {
+  DEFAULT_INDEX,
+  DEFAULT_SPLITTER,
+  type Chunk,
+  type IndexConfig,
+  type IndexRun,
+  type KnowledgeBase,
+  type KnowledgeSource,
+  type SplitterConfig,
+} from "./knowledge-types";
+import { validateSplitter, type SourceFile } from "./knowledge-loaders";
+import { knowledgeUrl } from "./knowledge-http";
+
+export function knowledgeDb() {
+  const d = abrirBanco();
+  d.exec(`CREATE TABLE IF NOT EXISTS knowledge_bases(id TEXT PRIMARY KEY, body TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS knowledge_sources(id TEXT PRIMARY KEY, base_id TEXT NOT NULL, body TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS knowledge_sources_base ON knowledge_sources(base_id);
+    CREATE TABLE IF NOT EXISTS knowledge_chunks(id TEXT PRIMARY KEY, base_id TEXT NOT NULL, source_id TEXT NOT NULL, body TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS knowledge_chunks_base ON knowledge_chunks(base_id);
+    CREATE TABLE IF NOT EXISTS knowledge_vectors(base_id TEXT NOT NULL, generation TEXT NOT NULL, chunk_id TEXT NOT NULL, hash TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(base_id,generation,chunk_id));
+    CREATE TABLE IF NOT EXISTS knowledge_indexes(base_id TEXT PRIMARY KEY, generation TEXT NOT NULL, body TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS knowledge_runs(id TEXT PRIMARY KEY, base_id TEXT NOT NULL, body TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS knowledge_locks(base_id TEXT PRIMARY KEY, token TEXT NOT NULL, expires INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS knowledge_cleanup(id TEXT PRIMARY KEY, base_id TEXT NOT NULL, body TEXT NOT NULL);`);
+  return d;
+}
+function transaction<T>(fn: () => T): T {
+  const d = knowledgeDb();
+  d.exec("BEGIN IMMEDIATE");
+  try {
+    const result = fn();
+    d.exec("COMMIT");
+    return result;
+  } catch (error) {
+    d.exec("ROLLBACK");
+    throw error;
+  }
+}
+function fromRow<T>(row: unknown): T | undefined {
+  return row ? (JSON.parse((row as { body: string }).body) as T) : undefined;
+}
+const secretKey = (id: string) => `KNOWLEDGE_${id}`;
+const now = () => new Date().toISOString();
+export function saveKnowledgeBaseRecord(base: KnowledgeBase) {
+  knowledgeDb()
+    .prepare(
+      "INSERT INTO knowledge_bases VALUES(?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body",
+    )
+    .run(base.id, JSON.stringify(base));
+}
+export function getKnowledgeBase(id: string): KnowledgeBase {
+  const base = fromRow<KnowledgeBase>(
+    knowledgeDb()
+      .prepare("SELECT body FROM knowledge_bases WHERE id=?")
+      .get(id),
+  );
+  if (!base)
+    throw new FlowError("Esta base de conhecimento não existe mais.", 404);
+  // A process restart cannot leave an apparently live indexing job forever.
+  if (
+    base.status === "indexing" &&
+    !knowledgeDb()
+      .prepare("SELECT 1 FROM knowledge_locks WHERE base_id=? AND expires>?")
+      .get(id, Date.now())
+  ) {
+    base.status = "failed";
+    base.error =
+      "A indexação foi interrompida. Tente novamente para continuar.";
+    saveKnowledgeBaseRecord(base);
+    for (const run of listKnowledgeRuns(id))
+      if (run.status === "running")
+        saveKnowledgeRun({
+          ...run,
+          status: "failed",
+          error: base.error,
+          finishedAt: now(),
+        });
+  }
+  if (
+    !knowledgeDb()
+      .prepare("SELECT 1 FROM knowledge_locks WHERE base_id=? AND expires>?")
+      .get(id, Date.now())
+  ) {
+    for (const source of listKnowledgeSources(id))
+      if (source.status === "processing") {
+        source.status = "failed";
+        source.error = "A extração foi interrompida. Tente novamente.";
+        saveKnowledgeSourceRecord(source);
+      }
+  }
+  return base;
+}
+export function listKnowledgeBases() {
+  return (
+    knowledgeDb().prepare("SELECT id FROM knowledge_bases").all() as {
+      id: string;
+    }[]
+  )
+    .map(({ id }) => getKnowledgeBase(id))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+export function assertKnowledgeUnlocked(id: string, token?: string) {
+  const lock = knowledgeDb()
+    .prepare("SELECT token FROM knowledge_locks WHERE base_id=? AND expires>?")
+    .get(id, Date.now()) as { token: string } | undefined;
+  if (lock && lock.token !== token)
+    throw new FlowError(
+      "Há uma operação em andamento nesta base. Aguarde a conclusão.",
+      409,
+    );
+}
+export async function withKnowledgeLock<T>(
+  id: string,
+  fn: (token: string) => Promise<T>,
+) {
+  getKnowledgeBase(id);
+  const token = randomUUID();
+  transaction(() => {
+    assertKnowledgeUnlocked(id);
+    knowledgeDb()
+      .prepare("INSERT OR REPLACE INTO knowledge_locks VALUES(?,?,?)")
+      .run(id, token, Date.now() + 900000);
+  });
+  try {
+    return await fn(token);
+  } finally {
+    knowledgeDb()
+      .prepare("DELETE FROM knowledge_locks WHERE base_id=? AND token=?")
+      .run(id, token);
+  }
+}
+function title(value: unknown, label: string) {
+  if (typeof value !== "string" || !value.trim() || value.trim().length > 100)
+    throw new FlowError(`${label} precisa ter de 1 a 100 caracteres.`);
+  return value.trim();
+}
+export function createKnowledgeBase(input: {
+  name?: unknown;
+  description?: unknown;
+}) {
+  const base: KnowledgeBase = {
+    id: randomUUID(),
+    name: title(input.name, "O nome"),
+    description:
+      typeof input.description === "string"
+        ? input.description.slice(0, 2000)
+        : "",
+    status: "empty",
+    revision: 0,
+    sources: 0,
+    chunks: 0,
+    indexedChunks: 0,
+    config: structuredClone(DEFAULT_INDEX),
+    updatedAt: now(),
+  };
+  saveKnowledgeBaseRecord(base);
+  return base;
+}
+export function touchKnowledgeBase(id: string) {
+  const base = getKnowledgeBase(id);
+  base.revision++;
+  base.updatedAt = now();
+  base.error = undefined;
+  const sources = listKnowledgeSources(id);
+  base.sources = sources.length;
+  base.chunks = sources.reduce((total, s) => total + s.chunks, 0);
+  base.status = base.chunks ? "dirty" : "empty";
+  saveKnowledgeBaseRecord(base);
+  return base;
+}
+export function getKnowledgeSecrets(id: string): Record<string, string> {
+  const text = getConfig(secretKey(id));
+  return text ? JSON.parse(text) : {};
+}
+export function indexKnowledgeConfig(id: string): IndexConfig {
+  const base = getKnowledgeBase(id);
+  const secrets = getKnowledgeSecrets(id);
+  return {
+    ...base.config,
+    embeddings: { ...base.config.embeddings, apiKey: secrets.embeddingKey },
+    vectorStore: { ...base.config.vectorStore, apiKey: secrets.vectorKey },
+  };
+}
+export function updateKnowledgeBase(
+  id: string,
+  input: { name?: unknown; description?: unknown; config?: IndexConfig },
+) {
+  return transaction(() => {
+    assertKnowledgeUnlocked(id);
+    const base = getKnowledgeBase(id);
+    if (input.name !== undefined) base.name = title(input.name, "O nome");
+    if (input.description !== undefined) {
+      if (
+        typeof input.description !== "string" ||
+        input.description.length > 2000
+      )
+        throw new FlowError("Use uma descrição de até 2.000 caracteres.");
+      base.description = input.description;
+    }
+    if (input.config !== undefined) {
+      const c = input.config;
+      if (
+        !c ||
+        !c.embeddings ||
+        !c.vectorStore ||
+        !c.recordManager ||
+        !["openai", "ollama"].includes(c.embeddings.provider) ||
+        !["local", "qdrant"].includes(c.vectorStore.provider) ||
+        !["none", "sqlite"].includes(c.recordManager.provider)
+      )
+        throw new FlowError("Escolha configurações válidas de indexação.");
+      c.embeddings.model = title(c.embeddings.model, "O modelo");
+      if (
+        typeof c.embeddings.url !== "string" ||
+        c.embeddings.url.length > 2000 ||
+        typeof c.vectorStore.url !== "string" ||
+        c.vectorStore.url.length > 2000
+      )
+        throw new FlowError("Confira os endereços dos serviços.");
+      knowledgeUrl(c.embeddings.url);
+      if (c.vectorStore.provider === "qdrant") knowledgeUrl(c.vectorStore.url);
+      const secrets = getKnowledgeSecrets(id);
+      const previous = JSON.stringify(base.config);
+      // Changing services must never forward an old provider's credential to the new server.
+      if (
+        c.embeddings.provider !== base.config.embeddings.provider ||
+        knowledgeUrl(c.embeddings.url).origin !==
+          knowledgeUrl(base.config.embeddings.url).origin
+      )
+        delete secrets.embeddingKey;
+      if (
+        c.vectorStore.provider !== base.config.vectorStore.provider ||
+        c.vectorStore.url !== base.config.vectorStore.url
+      )
+        delete secrets.vectorKey;
+      for (const [name, value] of [
+        ["embeddingKey", c.embeddings.apiKey],
+        ["vectorKey", c.vectorStore.apiKey],
+      ] as const) {
+        if (
+          value !== undefined &&
+          (typeof value !== "string" || value.length > 12000)
+        )
+          throw new FlowError("Chave de acesso inválida.");
+        if (value?.trim()) secrets[name] = value.trim();
+      }
+      if (c.embeddings.provider === "openai" && !secrets.embeddingKey)
+        throw new FlowError("Informe a chave do serviço de embeddings.");
+      setConfig(secretKey(id), JSON.stringify(secrets));
+      base.config = {
+        embeddings: {
+          provider: c.embeddings.provider,
+          model: c.embeddings.model,
+          url: c.embeddings.url.replace(/\/$/, ""),
+          configured: !!secrets.embeddingKey,
+        },
+        vectorStore: {
+          provider: c.vectorStore.provider,
+          url: c.vectorStore.url.replace(/\/$/, ""),
+          configured: !!secrets.vectorKey,
+        },
+        recordManager: { provider: c.recordManager.provider },
+      };
+      if (
+        previous !== JSON.stringify(base.config) ||
+        c.embeddings.apiKey?.trim() ||
+        c.vectorStore.apiKey?.trim()
+      ) {
+        base.revision++;
+        base.status = base.chunks ? "dirty" : "empty";
+      }
+    }
+    base.updatedAt = now();
+    saveKnowledgeBaseRecord(base);
+    return base;
+  });
+}
+export function listKnowledgeSources(baseId: string): KnowledgeSource[] {
+  return (
+    knowledgeDb()
+      .prepare(
+        "SELECT body FROM knowledge_sources WHERE base_id=? ORDER BY rowid",
+      )
+      .all(baseId) as { body: string }[]
+  ).map((row) => JSON.parse(row.body));
+}
+export function getKnowledgeSource(baseId: string, id: string) {
+  const source = fromRow<KnowledgeSource>(
+    knowledgeDb()
+      .prepare("SELECT body FROM knowledge_sources WHERE id=? AND base_id=?")
+      .get(id, baseId),
+  );
+  if (!source) throw new FlowError("Esta fonte não existe nesta base.", 404);
+  return source;
+}
+export function getKnowledgeSourcePrivate(baseId: string, id: string) {
+  const source = getKnowledgeSource(baseId, id);
+  const secrets = getKnowledgeSecrets(id);
+  return {
+    source,
+    config: {
+      ...source.config,
+      ...JSON.parse(secrets.config || "{}"),
+    } as Record<string, string>,
+    files: JSON.parse(secrets.files || "[]") as SourceFile[],
+  };
+}
+export function saveKnowledgeSource(
+  baseId: string,
+  input: {
+    name: string;
+    loader: string;
+    config: Record<string, string>;
+    splitter: SplitterConfig;
+    metadata: Record<string, unknown>;
+  },
+  files?: SourceFile[],
+  id?: string,
+) {
+  return transaction(() => {
+    getKnowledgeBase(baseId);
+    assertKnowledgeUnlocked(baseId);
+    const previous = id ? getKnowledgeSource(baseId, id) : undefined;
+    if (previous && previous.loader !== input.loader)
+      throw new FlowError("Crie outra fonte para trocar a opção de extração.");
+    const loader = knowledgeLoader(input.loader);
+    if (!loader) throw new FlowError("Escolha uma opção de extração.");
+    if (
+      !input.config ||
+      typeof input.config !== "object" ||
+      Array.isArray(input.config) ||
+      Object.entries(input.config).some(
+        ([k, v]) =>
+          !loader.fields.some((f) => f.key === k) ||
+          typeof v !== "string" ||
+          v.length > MAX_CONFIG_TEXT,
+      )
+    )
+      throw new FlowError("Há campos inválidos na fonte.");
+    if (
+      !input.metadata ||
+      typeof input.metadata !== "object" ||
+      Array.isArray(input.metadata) ||
+      JSON.stringify(input.metadata).length > 10000
+    )
+      throw new FlowError("Use metadados em um objeto JSON de até 10 KB.");
+    if (
+      files &&
+      (files.length > 20 ||
+        files.reduce((n, f) => n + Buffer.byteLength(f.data, "base64"), 0) >
+          10 * 1024 * 1024)
+    )
+      throw new FlowError(
+        "Envie até 20 arquivos, somando no máximo 10 MB.",
+        413,
+      );
+    const sourceId = previous?.id || randomUUID();
+    const secrets = previous ? getKnowledgeSecrets(sourceId) : {};
+    const secretConfig = JSON.parse(secrets.config || "{}") as Record<
+      string,
+      string
+    >;
+    const publicConfig: Record<string, string> = {};
+    for (const field of loader.fields) {
+      const value = input.config[field.key] || "";
+      if (field.type === "secret") {
+        if (value.trim()) secretConfig[field.key] = value.trim();
+      } else publicConfig[field.key] = value;
+      if (
+        field.required &&
+        !(field.type === "secret" ? secretConfig[field.key] : value)?.trim()
+      )
+        throw new FlowError(`Preencha ${field.label}.`);
+    }
+    const storedFiles =
+      files || (JSON.parse(secrets.files || "[]") as SourceFile[]);
+    if (loader.accept && !storedFiles.length)
+      throw new FlowError("Adicione os arquivos desta fonte.");
+    const source: KnowledgeSource = {
+      id: sourceId,
+      baseId,
+      name: title(input.name, "O nome da fonte"),
+      loader: loader.id,
+      config: publicConfig,
+      configuredSecrets: Object.keys(secretConfig),
+      fileNames: storedFiles.map((f) => f.name),
+      splitter: validateSplitter(input.splitter || DEFAULT_SPLITTER),
+      metadata: input.metadata,
+      status: "draft",
+      chunks: previous?.chunks || 0,
+      characters: previous?.characters || 0,
+      updatedAt: now(),
+    };
+    setConfig(
+      secretKey(sourceId),
+      JSON.stringify({
+        config: JSON.stringify(secretConfig),
+        files: JSON.stringify(storedFiles),
+      }),
+    );
+    knowledgeDb()
+      .prepare(
+        "INSERT INTO knowledge_sources VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body",
+      )
+      .run(sourceId, baseId, JSON.stringify(source));
+    touchKnowledgeBase(baseId);
+    return source;
+  });
+}
+const MAX_CONFIG_TEXT = 2_000_000;
+export function saveKnowledgeSourceRecord(source: KnowledgeSource) {
+  knowledgeDb()
+    .prepare("UPDATE knowledge_sources SET body=? WHERE id=? AND base_id=?")
+    .run(JSON.stringify(source), source.id, source.baseId);
+}
+export function replaceKnowledgeChunks(
+  baseId: string,
+  sourceId: string,
+  chunks: Chunk[],
+  lockToken: string,
+) {
+  return transaction(() => {
+    assertKnowledgeUnlocked(baseId, lockToken);
+    const source = getKnowledgeSource(baseId, sourceId);
+    const otherCount = Number(
+      (
+        knowledgeDb()
+          .prepare(
+            "SELECT count(*) n FROM knowledge_chunks WHERE base_id=? AND source_id<>?",
+          )
+          .get(baseId, sourceId) as { n: number }
+      ).n,
+    );
+    if (otherCount + chunks.length > 10000)
+      throw new FlowError(
+        "Esta base aceita até 10.000 fragmentos. Divida o conteúdo em mais bases.",
+      );
+    knowledgeDb()
+      .prepare("DELETE FROM knowledge_chunks WHERE source_id=? AND base_id=?")
+      .run(sourceId, baseId);
+    const insert = knowledgeDb().prepare(
+      "INSERT INTO knowledge_chunks VALUES(?,?,?,?)",
+    );
+    for (const chunk of chunks)
+      insert.run(chunk.id, baseId, sourceId, JSON.stringify(chunk));
+    source.status = "processed";
+    source.error = undefined;
+    source.chunks = chunks.length;
+    source.characters = chunks.reduce((n, c) => n + c.pageContent.length, 0);
+    source.updatedAt = now();
+    saveKnowledgeSourceRecord(source);
+    touchKnowledgeBase(baseId);
+    return source;
+  });
+}
+export function listKnowledgeChunks(
+  baseId: string,
+  sourceId?: string,
+): Chunk[] {
+  const rows = sourceId
+    ? knowledgeDb()
+        .prepare(
+          "SELECT body FROM knowledge_chunks WHERE base_id=? AND source_id=? ORDER BY rowid",
+        )
+        .all(baseId, sourceId)
+    : knowledgeDb()
+        .prepare(
+          "SELECT body FROM knowledge_chunks WHERE base_id=? ORDER BY rowid",
+        )
+        .all(baseId);
+  return (rows as { body: string }[]).map((r) => JSON.parse(r.body));
+}
+export function editKnowledgeChunk(
+  baseId: string,
+  id: string,
+  input: { pageContent: string; metadata: Record<string, unknown> } | null,
+) {
+  return transaction(() => {
+    assertKnowledgeUnlocked(baseId);
+    const chunk = fromRow<Chunk>(
+      knowledgeDb()
+        .prepare("SELECT body FROM knowledge_chunks WHERE base_id=? AND id=?")
+        .get(baseId, id),
+    );
+    if (!chunk) throw new FlowError("Fragmento não encontrado.", 404);
+    if (input) {
+      if (
+        typeof input.pageContent !== "string" ||
+        !input.pageContent.trim() ||
+        input.pageContent.length > 8000 ||
+        !input.metadata ||
+        typeof input.metadata !== "object" ||
+        Array.isArray(input.metadata) ||
+        JSON.stringify(input.metadata).length > 10000
+      )
+        throw new FlowError(
+          "Use texto de até 8.000 caracteres e metadados JSON de até 10 KB.",
+        );
+      knowledgeDb()
+        .prepare("UPDATE knowledge_chunks SET body=? WHERE id=? AND base_id=?")
+        .run(
+          JSON.stringify({
+            ...chunk,
+            pageContent: input.pageContent,
+            metadata: input.metadata,
+          }),
+          id,
+          baseId,
+        );
+    } else
+      knowledgeDb()
+        .prepare("DELETE FROM knowledge_chunks WHERE base_id=? AND id=?")
+        .run(baseId, id);
+    const source = getKnowledgeSource(baseId, chunk.sourceId);
+    const chunks = listKnowledgeChunks(baseId, source.id);
+    source.chunks = chunks.length;
+    source.characters = chunks.reduce((n, c) => n + c.pageContent.length, 0);
+    source.updatedAt = now();
+    saveKnowledgeSourceRecord(source);
+    touchKnowledgeBase(baseId);
+  });
+}
+export function deleteKnowledgeSource(
+  baseId: string,
+  id: string,
+  lockToken?: string,
+) {
+  return transaction(() => {
+    assertKnowledgeUnlocked(baseId, lockToken);
+    getKnowledgeSource(baseId, id);
+    knowledgeDb()
+      .prepare("DELETE FROM knowledge_sources WHERE id=? AND base_id=?")
+      .run(id, baseId);
+    knowledgeDb()
+      .prepare("DELETE FROM knowledge_chunks WHERE source_id=? AND base_id=?")
+      .run(id, baseId);
+    knowledgeDb()
+      .prepare(
+        "DELETE FROM knowledge_vectors WHERE base_id=? AND json_extract(body,'$.chunk.sourceId')=?",
+      )
+      .run(baseId, id);
+    setConfig(secretKey(id), null);
+    touchKnowledgeBase(baseId);
+  });
+}
+export function knowledgeBaseUsages(id: string) {
+  return listFlows()
+    .filter((f) =>
+      [f.graph, f.published].some((g) =>
+        g?.nodes.some(
+          (n) => n.data.kind === "agent" && n.data.config.knowledgeBase === id,
+        ),
+      ),
+    )
+    .map((f) => ({ id: f.id, name: f.name }));
+}
+export function deleteKnowledgeBaseRecords(id: string, token: string) {
+  transaction(() => {
+    assertKnowledgeUnlocked(id, token);
+    if (knowledgeBaseUsages(id).length)
+      throw new FlowError(
+        "Esta base está vinculada a um agente. Remova o vínculo nos fluxos antes de excluir.",
+        409,
+      );
+    for (const source of listKnowledgeSources(id))
+      setConfig(secretKey(source.id), null);
+    for (const table of [
+      "knowledge_sources",
+      "knowledge_chunks",
+      "knowledge_vectors",
+      "knowledge_indexes",
+      "knowledge_runs",
+      "knowledge_cleanup",
+    ])
+      knowledgeDb().prepare(`DELETE FROM ${table} WHERE base_id=?`).run(id);
+    knowledgeDb().prepare("DELETE FROM knowledge_bases WHERE id=?").run(id);
+    setConfig(secretKey(id), null);
+  });
+}
+export function saveKnowledgeRun(run: IndexRun) {
+  knowledgeDb()
+    .prepare(
+      "INSERT INTO knowledge_runs VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body",
+    )
+    .run(run.id, run.baseId, JSON.stringify(run));
+}
+export function listKnowledgeRuns(baseId: string): IndexRun[] {
+  return (
+    knowledgeDb()
+      .prepare(
+        "SELECT body FROM knowledge_runs WHERE base_id=? ORDER BY rowid DESC LIMIT 20",
+      )
+      .all(baseId) as { body: string }[]
+  ).map((r) => JSON.parse(r.body));
+}

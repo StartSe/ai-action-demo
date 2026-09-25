@@ -61,7 +61,7 @@ function arquivosLibParaVarrer(appId) {
   const libDir = join(raiz, appId, "lib");
   if (!existsSync(libDir)) return [];
   return readdirSync(libDir)
-    .filter((nome) => nome.endsWith(".ts") && nome !== "ai.ts")
+    .filter((nome) => nome.endsWith(".ts") && !/\.(test|spec)\.ts$/.test(nome) && nome !== "ai.ts")
     .map((nome) => join(libDir, nome));
 }
 

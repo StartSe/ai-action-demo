@@ -1,6 +1,6 @@
-# Build Agentflows — v0.10.0
+# Build Agentflows — v0.11.0
 
-Versão 0.10.0: detalhes das etapas em modal, consumo de tokens informado pelos provedores, respostas em Markdown e correção das ferramentas dos agentes conectados ao ChatGPT. Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
+Versão 0.11.0: Base de Conhecimento com 20 extratores, revisão de fragmentos, Embeddings, Vector Store, Record Manager e consulta no Agente com referências opcionais. Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
 
 Crie fluxos visuais de agentes de IA, teste cada etapa e publique versões que seus sistemas e assistentes podem executar. Aplicação independente da suíte **IA para Executivos**, inspirada na orquestração explícita de [AgentFlow V2 do Flowise](https://docs.flowiseai.com/using-flowise/agentflowv2).
 
@@ -46,6 +46,10 @@ A tela **Configurações** reúne o que os agentes podem usar:
 - **Ferramentas no Agente** (catálogo no espírito do Flowise): busca na web (Tavily, SearchApi, Exa, Serper, SerpApi, Brave, Google Custom Search, SearXNG), conhecimento (arXiv, Wolfram Alpha), web e dados (ler página, requisição HTTP sem endereços internos, extrair JSON), utilidades (data e hora, calculadora) e fluxos (executar outro fluxo publicado). WhatsApp e ligações não são ferramentas do Agente: entram no fluxo completo por Implantar. As que precisam de chave pedem a credencial ali mesmo, uma vez para todos os fluxos. Servidores MCP nomeados são gerenciados dentro do Agente: adicionar, editar, autorizar, testar e remover. As ferramentas saíram da tela Configurações.
 - **WhatsApp**: Z-API (QR Code), Meta oficial ou ZapperHub, conectados em Configurações. Z-API e ZapperHub exigem aceite dos termos com a marca StartSe, registrado por provedor, versão e data; a API recusa a gravação sem aceite e conexões antigas precisam aceitar antes de enviar ou processar mensagens. Meta oficial não exige esse aceite. Cada fluxo é vinculado ao número em **Implantar › WhatsApp**: mensagens recebidas em `/webhook/whatsapp?chave=…` executam o fluxo vinculado e a resposta volta pelo mesmo número; o endereço de avisos é cadastrado no provedor ao salvar (na Meta é colado no painel, com a mesma chave como valor de verificação).
 - **ElevenLabs**: só a chave em Configurações. No chat de teste: ditado e conversa contínua por voz; a voz é escolhida nas configurações do fluxo, pelo título no cabeçalho. Ligações por voz ficam em **Implantar › Ligações**: agente de conversa, número, segredo do aviso, vínculo do fluxo que recebe a transcrição (aviso assinado em `/webhook/elevenlabs`) e "Ligar agora" para prospecção ativa.
+
+## Base de Conhecimento
+
+A tela inicial e o menu dão acesso à jornada de fontes, extração, revisão de fragmentos, Embeddings, Vector Store, Record Manager e teste de busca. O bloco Agente pode consultar uma base e incluir ou ocultar as referências encontradas. Veja [a configuração, os 20 extratores e os limites](KNOWLEDGE.md).
 
 ## Stack
 
@@ -116,7 +120,7 @@ Variáveis opcionais: `DATA_DIR`, `PORT`, `HOSTNAME`, `CHAVE_MESTRA`, `FERRAMENT
 
 ## Recorte em relação ao Flowise
 
-Implementação própria simplificada, sem copiar código do Flowise. Não é um fork nem importa arquivos nativos do Flowise: importação/exportação usa `build-agentflows/v1`. Não inclui Chatflows, Agentflows v1, marketplace, bases vetoriais, documentos/RAG, código arbitrário no servidor do app, iteração de listas, execução paralela ou memória entre conversas. Cada execução tem estado próprio e percorre um caminho por vez. O limite é 60 blocos, 120 conexões, 150 etapas e 20 passagens por bloco de repetição. Operações externas já iniciadas podem concluir mesmo se a execução for cancelada; o cancelamento impede novos blocos.
+Implementação própria simplificada, sem copiar código do Flowise. Não é um fork nem importa arquivos nativos do Flowise: importação/exportação usa `build-agentflows/v1`. Não inclui Chatflows, Agentflows v1, marketplace, código arbitrário no servidor do app, iteração de listas, execução paralela ou memória entre conversas. Cada execução tem estado próprio e percorre um caminho por vez. O limite é 60 blocos, 120 conexões, 150 etapas e 20 passagens por bloco de repetição. Operações externas já iniciadas podem concluir mesmo se a execução for cancelada; o cancelamento impede novos blocos.
 
 ## Estrutura
 
